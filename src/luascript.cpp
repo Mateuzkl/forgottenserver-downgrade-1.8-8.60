@@ -3635,34 +3635,34 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 int LuaScriptInterface::luaPlayerIsLiveCasting(lua_State* L)
 {
 	// player:isLiveCasting()
-	Player* player = getUserdata<Player>(L, 1);
-	pushBoolean(L, player->isLiveCasting());
+	Player* player = Lua::getUserdata<Player>(L, 1);
+	Lua::pushBoolean(L, player->isLiveCasting());
 	return 1;
 }
 
 int LuaScriptInterface::luaPlayerStartLiveCasting(lua_State* L)
 {
 	// player:startLiveCasting(password)
-	Player* player = getUserdata<Player>(L, 1);
-	std::string password = getString(L, 2);
+	Player* player = Lua::getUserdata<Player>(L, 1);
+	std::string password = Lua::getString(L, 2);
 	player->startLiveCasting(password);
-	pushBoolean(L, player->isLiveCasting());
+	Lua::pushBoolean(L, player->isLiveCasting());
 	return 1;
 }
 
 int LuaScriptInterface::luaPlayerStopLiveCasting(lua_State* L)
 {
 	// player:stopLiveCasting()
-	Player* player = getUserdata<Player>(L, 1);
+	Player* player = Lua::getUserdata<Player>(L, 1);
 	player->stopLiveCasting();
-	pushBoolean(L, player->isLiveCasting() == false);
+	Lua::pushBoolean(L, player->isLiveCasting() == false);
 	return 1;
 }
 
 int LuaScriptInterface::luaPlayerGetReset(lua_State* L) // reset system
 {
 	// player:getReset()
-	Player* player = getUserdata<Player>(L, 1);
+	Player* player = Lua::getUserdata<Player>(L, 1);
 	if (player) {
 		lua_pushnumber(L, player->getReset());
 	} else {
@@ -3674,7 +3674,7 @@ int LuaScriptInterface::luaPlayerGetReset(lua_State* L) // reset system
 int LuaScriptInterface::luaPlayerDoReset(lua_State* L) // reset system
 {
 	// player:doReset()
-	Player* player = getUserdata<Player>(L, 1);
+	Player* player = Lua::getUserdata<Player>(L, 1);
 	if (player) {
 		player->doReset();
 		lua_pushboolean(L, true);
@@ -3687,9 +3687,9 @@ int LuaScriptInterface::luaPlayerDoReset(lua_State* L) // reset system
 int LuaScriptInterface::luaPlayerSetReset(lua_State* L) // reset system
 {
 	// player:setReset(reset)
-	Player* player = getUserdata<Player>(L, 1);
+	Player* player = Lua::getUserdata<Player>(L, 1);
 	if (player) {
-		uint32_t reset = getNumber<uint32_t>(L, 2);
+		uint32_t reset = Lua::getNumber<uint32_t>(L, 2);
 		player->setReset(reset);
 		lua_pushboolean(L, true);
 	} else {
@@ -3701,7 +3701,7 @@ int LuaScriptInterface::luaPlayerSetReset(lua_State* L) // reset system
 int LuaScriptInterface::luaPlayerReloadWarList(lua_State* L)
 {
 	// player:reloadWarList()
-	Player* player = getUserdata<Player>(L, 1);
+	Player* player = Lua::getUserdata<Player>(L, 1);
 	if (player) {
 		player->reloadWarList();
 		lua_pushboolean(L, true);
