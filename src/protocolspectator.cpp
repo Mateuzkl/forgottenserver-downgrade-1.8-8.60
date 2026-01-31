@@ -498,50 +498,62 @@ void ProtocolSpectator::parsePacket(NetworkMessage& msg)
 
 void ProtocolSpectator::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 {
-
-	int32_t count;
-	Item* ground = tile->getGround();
-	if (ground) {
+	int32_t count = 0;
+	if (const auto ground = tile->getGround()) {
 		msg.addItem(ground);
-		count = 1;
-	} else {
-		count = 0;
+		++count;
 	}
+
+	const bool isStacked = caster && (caster->getPosition() == tile->getPosition());
 
 	const TileItemVector* items = tile->getItemList();
 	if (items) {
 		for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
 			msg.addItem(*it);
 
-			if (++count == 10) {
-				return;
+			if (!isOTCv8) {
+				if (++count == 9 && isStacked) {
+					break;
+				} else if (count == MAX_STACKPOS_THINGS) {
+					return;
+				}
+			} else if (++count == MAX_STACKPOS_THINGS) {
+				break;
 			}
 		}
 	}
 
 	const CreatureVector* creatures = tile->getCreatures();
 	if (creatures) {
-		for (const Creature* creature : boost::adaptors::reverse(*creatures)) {
-			if (!caster->canSeeCreature(creature)) {
-				continue;
+		for (auto it = creatures->rbegin(), end = creatures->rend(); it != end; ++it) {
+			if (!isOTCv8 && count == 9 && isStacked) {
+				bool known;
+				uint32_t removedKnown;
+				checkCreatureAsKnown(caster->getID(), known, removedKnown);
+				AddCreature(msg, caster, known, removedKnown);
+			} else {
+				const Creature* creature = (*it);
+				if (!caster->canSeeCreature(creature)) {
+					continue;
+				}
+
+				bool known;
+				uint32_t removedKnown;
+				checkCreatureAsKnown(creature->getID(), known, removedKnown);
+				AddCreature(msg, creature, known, removedKnown);
 			}
 
-			bool known;
-			uint32_t removedKnown;
-			checkCreatureAsKnown(creature->getID(), known, removedKnown);
-			AddCreature(msg, creature, known, removedKnown);
-
-			if (++count == 10) {
+			if (++count == MAX_STACKPOS_THINGS && !isOTCv8) {
 				return;
 			}
 		}
 	}
 
-	if (items) {
+	if (items && count < MAX_STACKPOS_THINGS) {
 		for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
 			msg.addItem(*it);
 
-			if (++count == 10) {
+			if (++count == MAX_STACKPOS_THINGS) {
 				return;
 			}
 		}

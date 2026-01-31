@@ -1123,10 +1123,6 @@ void Creature::removeCondition(ConditionType_t type, ConditionId_t conditionId, 
 		}
 
 		it = conditions.erase(it);
-
-		condition->endCondition(this);
-		delete condition;
-
 		condition->endCondition(this);
 		delete condition;
 		onEndCondition(type);
