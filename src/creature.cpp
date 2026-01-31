@@ -1127,6 +1127,8 @@ void Creature::removeCondition(ConditionType_t type, ConditionId_t conditionId, 
 		condition->endCondition(this);
 		delete condition;
 
+		condition->endCondition(this);
+		delete condition;
 		onEndCondition(type);
 	}
 }
