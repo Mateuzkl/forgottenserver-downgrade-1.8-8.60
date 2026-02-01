@@ -472,6 +472,11 @@ void ProtocolSpectator::parsePacket(NetworkMessage& msg)
 		case 0x14: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::logout, getThis(), true, false))); break;
 		case 0x1D: sendPingBack(); break;
 		case 0x1E: break;
+		case 0x42:
+			if (isOTCv8) {
+				parseChangeAwareRange(msg);
+			}
+			break; // GameClientChangeAwareRange
 		case 0x64:
 		case 0x65:
 		case 0x66:
@@ -1039,6 +1044,26 @@ void ProtocolSpectator::sendAddCreature(const Creature* creature, const Position
 	msg.addByte(0x00); // can report bugs? (always false for spectators)
 
 	writeToOutputBuffer(msg);
+
+	if (isOTCv8) {
+		const int width = std::max(awareRange.width, 49);
+		const int height = std::max(awareRange.height, 29);
+
+		awareRange.width = std::min(Map::maxViewportX * 2 - 1,
+		                            std::min(Map::maxClientViewportX * 2 + 1, std::max(15, width)));
+		awareRange.height = std::min(Map::maxViewportY * 2 - 1,
+		                             std::min(Map::maxClientViewportY * 2 + 1, std::max(11, height)));
+
+		// numbers must be odd
+		if (awareRange.width % 2 != 1) {
+			awareRange.width -= 1;
+		}
+		if (awareRange.height % 2 != 1) {
+			awareRange.height -= 1;
+		}
+
+		sendAwareRange();
+	}
 
 	sendMapDescription(pos);
 
