@@ -231,10 +231,14 @@ experienceStages = {
 	{ minlevel = 101, multiplier = 3 }
 }
 
--- Speed
+-- Player speed
+-- NOTE: Most clients display speed at half its actual value (e.g. 1500 shows as 750).
+-- WARNING: Setting minSpeed too low can cause desync and other client issues.
 -- NOTE: maxPlayerSpeed is the absolute fastest a player can travel, it is not recommended to change this.
 -- 5000 for GODs, 900 for players.
-maxPlayerSpeed = 900
+playerSpeedPerLevel = 2
+playerMinSpeed = 120
+playerMaxSpeed = 900
 maxGodSpeed = 5000
 
 -- Rates

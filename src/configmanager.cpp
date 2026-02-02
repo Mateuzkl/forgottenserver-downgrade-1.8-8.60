@@ -389,18 +389,20 @@ bool ConfigManager::load()
 	integers[Integer::MAX_PROTOCOL_OUTFITS] = getGlobalInteger(L, "maxProtocolOutfits", 50);
 	integers[Integer::MOVE_CREATURE_INTERVAL] = getGlobalInteger(L, "MOVE_CREATURE_INTERVAL", MOVE_CREATURE_INTERVAL);
 	integers[Integer::RANGE_MOVE_CREATURE_INTERVAL] =
-	    getGlobalInteger(L, "RANGE_MOVE_CREATURE_INTERVAL", RANGE_MOVE_CREATURE_INTERVAL);
+		getGlobalInteger(L, "RANGE_MOVE_CREATURE_INTERVAL", RANGE_MOVE_CREATURE_INTERVAL);
 	integers[Integer::RANGE_USE_WITH_CREATURE_INTERVAL] =
-	    getGlobalInteger(L, "RANGE_USE_WITH_CREATURE_INTERVAL", RANGE_USE_WITH_CREATURE_INTERVAL);
+		getGlobalInteger(L, "RANGE_USE_WITH_CREATURE_INTERVAL", RANGE_USE_WITH_CREATURE_INTERVAL);
 	integers[Integer::RANGE_MOVE_ITEM_INTERVAL] =
-	    getGlobalInteger(L, "RANGE_MOVE_ITEM_INTERVAL", RANGE_MOVE_ITEM_INTERVAL);
+		getGlobalInteger(L, "RANGE_MOVE_ITEM_INTERVAL", RANGE_MOVE_ITEM_INTERVAL);
 	integers[Integer::RANGE_USE_ITEM_INTERVAL] =
-	    getGlobalInteger(L, "RANGE_USE_ITEM_INTERVAL", RANGE_USE_ITEM_INTERVAL);
+		getGlobalInteger(L, "RANGE_USE_ITEM_INTERVAL", RANGE_USE_ITEM_INTERVAL);
 	integers[Integer::RANGE_USE_ITEM_EX_INTERVAL] =
-	    getGlobalInteger(L, "RANGE_USE_ITEM_EX_INTERVAL", RANGE_USE_ITEM_EX_INTERVAL);
+		getGlobalInteger(L, "RANGE_USE_ITEM_EX_INTERVAL", RANGE_USE_ITEM_EX_INTERVAL);
 	integers[Integer::RANGE_ROTATE_ITEM_INTERVAL] =
-	    getGlobalInteger(L, "RANGE_ROTATE_ITEM_INTERVAL", RANGE_ROTATE_ITEM_INTERVAL);
-	integers[Integer::MAX_PLAYER_SPEED] = getGlobalInteger(L, "maxPlayerSpeed", 900);
+		getGlobalInteger(L, "RANGE_ROTATE_ITEM_INTERVAL", RANGE_ROTATE_ITEM_INTERVAL);
+	integers[Integer::PLAYER_SPEED_PER_LEVEL] = getGlobalInteger(L, "playerSpeedPerLevel", 2);
+	integers[Integer::PLAYER_MIN_SPEED] = getGlobalInteger(L, "playerMinSpeed", 120);
+	integers[Integer::PLAYER_MAX_SPEED] = getGlobalInteger(L, "playerMaxSpeed", 900);
 	integers[Integer::MAX_GOD_SPEED] = getGlobalInteger(L, "maxGodSpeed", 5000);
 
 	floats[REWARD_BASE_RATE] = getGlobalFloat(L, "rewardBaseRate", 1.0f);

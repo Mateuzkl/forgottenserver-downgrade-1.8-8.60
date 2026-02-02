@@ -41,6 +41,7 @@ void trimString(std::string& str) { boost::algorithm::trim(str); }
 MuteCountMap Player::muteCountMap;
 
 uint32_t Player::playerAutoID = 0x10000000;
+
 std::forward_list<Condition*> Player::storedConditionList;
 
 Player::Player(ProtocolGame_ptr p) : Creature(), lastPing(OTSYS_TIME()), lastPong(lastPing), client(std::move(p))
@@ -3490,6 +3491,27 @@ LightInfo Player::getCreatureLight() const
 		return internalLight;
 	}
 	return itemsLight;
+}
+
+int32_t Player::getStepSpeed() const
+{
+	if (group && group->access) {
+		return ConfigManager::getInteger(ConfigManager::MAX_GOD_SPEED);
+	}
+
+	const int32_t minSpeed = ConfigManager::getInteger(ConfigManager::PLAYER_MIN_SPEED);
+	const int32_t maxSpeed = ConfigManager::getInteger(ConfigManager::PLAYER_MAX_SPEED);
+	return std::max<int32_t>(minSpeed, std::min<int32_t>(maxSpeed, getSpeed()));
+}
+
+void Player::updateBaseSpeed()
+{
+	if (!hasFlag(PlayerFlag_SetMaxSpeed)) {
+		const int32_t speedPerLevel = ConfigManager::getInteger(ConfigManager::PLAYER_SPEED_PER_LEVEL);
+		baseSpeed = vocation->getBaseSpeed() + (speedPerLevel * (level - 1));
+	} else {
+		baseSpeed = ConfigManager::getInteger(ConfigManager::PLAYER_MAX_SPEED);
+	}
 }
 
 void Player::updateItemsLight(bool internal /*=false*/)

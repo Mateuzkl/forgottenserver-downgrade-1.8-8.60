@@ -1312,26 +1312,8 @@ private:
 
 	void updateItemsLight(bool internal = false);
 
-	int32_t getMaxSpeed() const
-	{
-		if (group && group->access) {
-			return ConfigManager::getInteger(ConfigManager::MAX_GOD_SPEED);
-		}
-		return ConfigManager::getInteger(ConfigManager::MAX_PLAYER_SPEED);
-	}
-
-	int32_t getStepSpeed() const override
-	{
-		return std::max<int32_t>(PLAYER_MIN_SPEED, std::min<int32_t>(getMaxSpeed(), getSpeed()));
-	}
-	void updateBaseSpeed()
-	{
-		if (!hasFlag(PlayerFlag_SetMaxSpeed)) {
-			baseSpeed = vocation->getBaseSpeed() + (2 * (level - 1));
-		} else {
-			baseSpeed = getMaxSpeed();
-		}
-	}
+	int32_t getStepSpeed() const override;
+	void updateBaseSpeed();
 
 	bool isPromoted() const;
 
