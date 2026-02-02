@@ -125,6 +125,7 @@ if(version >= 860) then
     g_game.enableFeature(GameSpritesU32)
     g_game.enableFeature(GameExtendedClientPing)
     g_game.enableFeature(GameChangeMapAwareRange)
+    g_game.enableFeature(GameDoublePlayerGoodsMoney)
 end
 ```
 
