@@ -12,7 +12,7 @@
 #include "position.h"
 #include "tile.h"
 
-using ConditionList = std::list<std::unique_ptr<Condition>>;
+using ConditionList = std::list<Condition*>;
 using CreatureEventList = std::list<CreatureEvent*>;
 
 enum slots_t : uint8_t

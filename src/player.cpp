@@ -476,7 +476,7 @@ float Player::getDefenseFactor() const
 uint16_t Player::getClientIcons() const
 {
 	uint16_t icons = 0;
-	for (const auto& condition : conditions) {
+	for (Condition* condition : conditions) {
 		if (!isSuppress(condition->getType())) {
 			icons |= condition->getIcons();
 		}
@@ -1627,7 +1627,7 @@ uint32_t Player::isMuted() const
 	}
 
 	int32_t muteTicks = 0;
-	for (const auto& condition : conditions) {
+	for (Condition* condition : conditions) {
 		if (condition->getType() == CONDITION_MUTED && condition->getTicks() > muteTicks) {
 			muteTicks = condition->getTicks();
 		}
@@ -2216,12 +2216,13 @@ void Player::death(Creature* lastHitCreature)
 
 		auto it = conditions.begin(), end = conditions.end();
 		while (it != end) {
-			Condition* condition = it->get();
+			Condition* condition = *it;
 			if (condition->isPersistent() && !condition->isConstant()) {
+				it = conditions.erase(it);
+
 				condition->endCondition(this);
 				onEndCondition(condition->getType());
-				it = conditions.erase(it);
-				// unique_ptr automatically deletes
+				delete condition;
 			} else {
 				++it;
 			}
@@ -2231,12 +2232,13 @@ void Player::death(Creature* lastHitCreature)
 
 		auto it = conditions.begin(), end = conditions.end();
 		while (it != end) {
-			Condition* condition = it->get();
+			Condition* condition = *it;
 			if (condition->isPersistent() && !condition->isConstant()) {
+				it = conditions.erase(it);
+
 				condition->endCondition(this);
 				onEndCondition(condition->getType());
-				it = conditions.erase(it);
-				// unique_ptr automatically deletes
+				delete condition;
 			} else {
 				++it;
 			}
@@ -4600,8 +4602,7 @@ size_t Player::getMaxDepotItems() const
 std::forward_list<Condition*> Player::getMuteConditions() const
 {
 	std::forward_list<Condition*> muteConditions;
-	auto it = muteConditions.before_begin();
-	for (const auto& condition : conditions) {
+	for (Condition* condition : conditions) {
 		if (condition->getTicks() <= 0) {
 			continue;
 		}
@@ -4611,7 +4612,7 @@ std::forward_list<Condition*> Player::getMuteConditions() const
 			continue;
 		}
 
-		it = muteConditions.insert_after(it, condition.get());
+		muteConditions.push_front(condition);
 	}
 	return muteConditions;
 }
