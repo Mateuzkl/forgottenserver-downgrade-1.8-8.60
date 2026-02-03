@@ -324,7 +324,7 @@ statsSlowLogTime = 0
 statsVerySlowLogTime = 0
 
 -- Admin Protocol
-adminPort = 7172
+adminPort = 7170
 adminPassword = "admin"
 adminLocalhostOnly = true
 adminRequireLogin = true

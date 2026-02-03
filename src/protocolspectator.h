@@ -119,6 +119,7 @@ class ProtocolSpectator final : public ProtocolGame
 		void sendCreatureLight(const Creature* creature);
 		void sendWorldLight(const LightInfo& lightInfo);
 		void sendMagicEffect(const Position& pos, uint16_t type);
+		void sendDistanceShoot(const Position& from, const Position& to, uint16_t type);
 
 		//tiles
 		void sendMapDescription(const Position& pos);

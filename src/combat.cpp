@@ -624,7 +624,7 @@ void Combat::postCombatEffects(Creature* caster, const Position& pos, const Comb
 	}
 }
 
-void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const Position& toPos, uint8_t effect)
+void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const Position& toPos, uint16_t effect)
 {
 	if (effect == CONST_ANI_WEAPONTYPE) {
 		if (!caster) {

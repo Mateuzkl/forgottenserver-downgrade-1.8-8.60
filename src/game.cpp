@@ -4652,7 +4652,7 @@ void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, u
 	}
 }
 
-void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uint8_t effect)
+void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uint16_t effect)
 {
 	SpectatorVec spectators, toPosSpectators;
 	map.getSpectators(spectators, fromPos, true, true);
@@ -4663,7 +4663,7 @@ void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uin
 }
 
 void Game::addDistanceEffect(const SpectatorVec& spectators, const Position& fromPos, const Position& toPos,
-                             uint8_t effect)
+                             uint16_t effect)
 {
 	for (Creature* spectator : spectators) {
 		assert(dynamic_cast<Player*>(spectator) != nullptr);

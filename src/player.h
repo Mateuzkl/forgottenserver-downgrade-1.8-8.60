@@ -847,7 +847,7 @@ public:
 			client->sendCreatureHealth(creature);
 		}
 	}
-	void sendDistanceShoot(const Position& from, const Position& to, unsigned char type) const
+	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type) const
 	{
 		if (client) {
 			client->sendDistanceShoot(from, to, type);

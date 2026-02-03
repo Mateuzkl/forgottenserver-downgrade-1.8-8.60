@@ -452,9 +452,9 @@ public:
 	                            TextColor_t color);
 	void addMagicEffect(const Position& pos, uint16_t effect);
 	static void addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect);
-	void addDistanceEffect(const Position& fromPos, const Position& toPos, uint8_t effect);
+	void addDistanceEffect(const Position& fromPos, const Position& toPos, uint16_t effect);
 	static void addDistanceEffect(const SpectatorVec& spectators, const Position& fromPos, const Position& toPos,
-	                              uint8_t effect);
+	                              uint16_t effect);
 
 	void setAccountStorageValue(const uint32_t accountId, const uint32_t key, const int32_t value);
 	int32_t getAccountStorageValue(const uint32_t accountId, const uint32_t key) const;

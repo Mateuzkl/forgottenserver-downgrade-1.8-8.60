@@ -844,6 +844,16 @@ void ProtocolSpectator::sendMagicEffect(const Position& pos, uint16_t type)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolSpectator::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
+{
+	NetworkMessage msg;
+	msg.addByte(0x85);
+	msg.addPosition(from);
+	msg.addPosition(to);
+	msg.add<uint16_t>(type);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolSpectator::sendStats()
 {
 	NetworkMessage msg;

@@ -83,7 +83,7 @@ enum MagicEffectClasses : uint16_t
 	CONST_ME_DRAGONHEAD = 70
 };
 
-enum ShootType_t : uint8_t
+enum ShootType_t : uint16_t
 {
 	CONST_ANI_NONE,
 
