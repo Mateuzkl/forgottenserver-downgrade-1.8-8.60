@@ -15,7 +15,8 @@ function event.onGainExperience(player, source, exp, rawExp)
 	end
 
 	-- Apply experience stage multiplier
-	exp = exp * Game.getExperienceStage(player:getLevel())
+	local stage = Game.getExperienceStage(player:getLevel())
+	exp = exp * stage
 
 	-- Stamina modifier
 	player:updateStamina()
@@ -37,3 +38,4 @@ function event.onGainExperience(player, source, exp, rawExp)
 end
 
 event:register()
+

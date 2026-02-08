@@ -118,6 +118,7 @@ if(version >= 860) then
     g_game.enableFeature(GameMagicEffectU16)
     g_game.enableFeature(GameDistanceEffectU16)
     g_game.enableFeature(GameDoubleHealth)
+    g_game.enableFeature(GameDoubleExperience)
     g_game.enableFeature(GameOfflineTrainingTime)
     g_game.enableFeature(GameDoubleSkills)
     g_game.enableFeature(GameBaseSkillU16)

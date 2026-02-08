@@ -1235,7 +1235,7 @@ void ProtocolSpectator::AddPlayerStats(NetworkMessage& msg)
 
 	msg.add<uint32_t>(caster->getFreeCapacity());
 
-	msg.add<uint32_t>(std::min<uint64_t>(caster->getExperience(), std::numeric_limits<int32_t>::max()));
+	msg.add<uint32_t>(static_cast<uint32_t>(std::min<uint64_t>(caster->getExperience(), std::numeric_limits<uint32_t>::max())));
 
 	msg.add<uint16_t>(caster->getLevel());
 	msg.addByte(caster->getLevelPercent());
