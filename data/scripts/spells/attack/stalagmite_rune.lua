@@ -20,8 +20,8 @@ end
 
 
 spell:group("attack")
-spell:id(2292)
-spell:runeId(2292)
+spell:id(3179)
+spell:runeId(3179)
 spell:name("Stalagmite Rune")
 spell:level(24)
 spell:needCasterTargetOrDirection(true)

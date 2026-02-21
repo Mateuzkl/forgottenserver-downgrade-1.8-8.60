@@ -22,8 +22,8 @@ end
 
 
 spell:group("attack")
-spell:id(2308)
-spell:runeId(2308)
+spell:id(3195)
+spell:runeId(3195)
 spell:name("Soulfire Rune")
 spell:level(27)
 spell:needCasterTargetOrDirection(true)

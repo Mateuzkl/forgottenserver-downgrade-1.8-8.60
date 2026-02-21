@@ -12,8 +12,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2277)
-spell:runeId(2277)
+spell:id(3164)
+spell:runeId(3164)
 spell:name("Energy Field Rune")
 spell:level(18)
 spell:cooldown(2 * 1000)

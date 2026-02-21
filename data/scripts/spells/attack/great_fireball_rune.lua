@@ -21,8 +21,8 @@ end
 
 
 spell:group("attack")
-spell:id(2304)
-spell:runeId(2304)
+spell:id(3191)
+spell:runeId(3191)
 spell:name("Great Fireball Rune")
 spell:level(30)
 spell:cooldown(2 * 1000)

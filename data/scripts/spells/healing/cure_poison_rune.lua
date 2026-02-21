@@ -13,8 +13,8 @@ end
 
 
 spell:group("healing")
-spell:id(2266)
-spell:runeId(2266)
+spell:id(3153)
+spell:runeId(3153)
 spell:name("Cure Poison Rune")
 spell:level(15)
 spell:needCasterTargetOrDirection(true)

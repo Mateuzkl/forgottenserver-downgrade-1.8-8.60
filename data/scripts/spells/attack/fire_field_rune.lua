@@ -11,8 +11,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2301)
-spell:runeId(2301)
+spell:id(3188)
+spell:runeId(3188)
 spell:name("Fire Field Rune")
 spell:level(15)
 spell:cooldown(2 * 1000)

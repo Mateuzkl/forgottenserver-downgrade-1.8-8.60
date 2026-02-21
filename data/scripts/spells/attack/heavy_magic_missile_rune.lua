@@ -20,8 +20,8 @@ end
 
 
 spell:group("attack")
-spell:id(2311)
-spell:runeId(2311)
+spell:id(3198)
+spell:runeId(3198)
 spell:name("Heavy Magic Missile Rune")
 spell:level(25)
 spell:needCasterTargetOrDirection(true)

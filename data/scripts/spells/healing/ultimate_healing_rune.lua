@@ -22,8 +22,8 @@ end
 
 
 spell:group("healing")
-spell:id(2273)
-spell:runeId(2273)
+spell:id(3160)
+spell:runeId(3160)
 spell:name("Ultimate Healing Rune")
 spell:level(24)
 spell:needCasterTargetOrDirection(true)

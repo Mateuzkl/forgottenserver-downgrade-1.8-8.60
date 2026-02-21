@@ -5,7 +5,7 @@ combat:setParameter(COMBAT_PARAM_TYPE, COMBAT_PHYSICALDAMAGE)
 combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_EXPLOSIONAREA)
 combat:setParameter(COMBAT_PARAM_DISTANCEEFFECT, CONST_ANI_EXPLOSION)
 combat:setParameter(COMBAT_PARAM_BLOCKARMOR, true)
-combat:setArea(createCombatArea(AREA_CROSS1X1))
+combat:setArea(createCombatArea(AREA_CIRCLE1X1))
 
 local function callback(player, level, magicLevel)
 	local min = (level / 5) + (magicLevel * 1.6) + 9
@@ -22,8 +22,8 @@ end
 
 
 spell:group("attack")
-spell:id(2313)
-spell:runeId(2313)
+spell:id(3200)
+spell:runeId(3200)
 spell:name("Explosion Rune")
 spell:level(31)
 spell:cooldown(2 * 1000)

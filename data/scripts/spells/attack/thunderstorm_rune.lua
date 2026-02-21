@@ -21,8 +21,8 @@ end
 
 
 spell:group("attack")
-spell:id(2315)
-spell:runeId(2315)
+spell:id(3202)
+spell:runeId(3202)
 spell:name("Thunderstorm Rune")
 spell:level(28)
 spell:cooldown(2 * 1000)

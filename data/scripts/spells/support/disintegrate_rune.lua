@@ -27,8 +27,8 @@ end
 
 
 spell:group("support")
-spell:id(2310)
-spell:runeId(2310)
+spell:id(3197)
+spell:runeId(3197)
 spell:name("Disintegrate Rune")
 spell:level(21)
 spell:range(1)

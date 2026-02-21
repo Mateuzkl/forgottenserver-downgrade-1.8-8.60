@@ -12,8 +12,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2303)
-spell:runeId(2303)
+spell:id(3190)
+spell:runeId(3190)
 spell:name("Fire Wall Rune")
 spell:level(33)
 spell:cooldown(2 * 1000)

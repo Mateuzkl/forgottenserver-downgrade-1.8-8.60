@@ -30,8 +30,8 @@ end
 
 
 spell:group("support")
-spell:id(2291)
-spell:runeId(2291)
+spell:id(3178)
+spell:runeId(3178)
 spell:name("Chameleon Rune")
 spell:level(27)
 spell:isSelfTarget(true)

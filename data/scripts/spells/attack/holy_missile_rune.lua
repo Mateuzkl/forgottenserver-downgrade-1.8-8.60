@@ -20,8 +20,8 @@ end
 
 
 spell:group("attack")
-spell:id(2295)
-spell:runeId(2295)
+spell:id(3182)
+spell:runeId(3182)
 spell:name("Holy Missile Rune")
 spell:level(27)
 spell:needCasterTargetOrDirection(true)

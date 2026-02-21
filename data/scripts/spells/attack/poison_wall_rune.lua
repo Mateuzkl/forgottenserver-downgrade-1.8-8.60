@@ -12,8 +12,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2289)
-spell:runeId(2289)
+spell:id(3176)
+spell:runeId(3176)
 spell:name("Poison Wall Rune")
 spell:level(29)
 spell:cooldown(2 * 1000)

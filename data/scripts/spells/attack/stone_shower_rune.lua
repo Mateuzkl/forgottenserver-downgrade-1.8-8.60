@@ -21,8 +21,8 @@ end
 
 
 spell:group("attack")
-spell:id(2288)
-spell:runeId(2288)
+spell:id(3175)
+spell:runeId(3175)
 spell:name("Stone Shower Rune")
 spell:level(28)
 spell:cooldown(2 * 1000)

@@ -27,8 +27,8 @@ end
 
 
 spell:group("support")
-spell:id(2316)
-spell:runeId(2316)
+spell:id(3203)
+spell:runeId(3203)
 spell:name("Animate Dead Rune")
 spell:level(27)
 spell:cooldown(2 * 1000)

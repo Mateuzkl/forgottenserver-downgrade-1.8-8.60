@@ -20,8 +20,8 @@ end
 
 
 spell:group("attack")
-spell:id(2271)
-spell:runeId(2271)
+spell:id(3158)
+spell:runeId(3158)
 spell:name("Icicle Rune")
 spell:level(28)
 spell:needCasterTargetOrDirection(true)

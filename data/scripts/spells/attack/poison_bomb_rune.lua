@@ -12,8 +12,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2286)
-spell:runeId(2286)
+spell:id(3173)
+spell:runeId(3173)
 spell:name("Poison Bomb Rune")
 spell:level(25)
 spell:cooldown(2 * 1000)

@@ -18,8 +18,8 @@ end
 
 
 spell:group("support")
-spell:id(2278)
-spell:runeId(2278)
+spell:id(3165)
+spell:runeId(3165)
 spell:name("Paralyze Rune")
 spell:level(54)
 spell:mana(1400)

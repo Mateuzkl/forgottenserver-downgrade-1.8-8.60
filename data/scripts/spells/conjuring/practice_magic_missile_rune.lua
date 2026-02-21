@@ -2,7 +2,7 @@
 -- script original
 local spell = Spell("instant")
 function spell.onCastSpell(creature, variant)
-	return creature:conjureItem(2260, 19392, 10)
+	return creature:conjureItem(3147, 17112, 10)
 end
 
 

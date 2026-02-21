@@ -20,8 +20,8 @@ end
 
 
 spell:group("attack")
-spell:id(2302)
-spell:runeId(2302)
+spell:id(3189)
+spell:runeId(3189)
 spell:name("Fireball Rune")
 spell:level(27)
 spell:needCasterTargetOrDirection(true)

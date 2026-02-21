@@ -20,8 +20,8 @@ end
 
 
 spell:group("attack")
-spell:id(2268)
-spell:runeId(2268)
+spell:id(3155)
+spell:runeId(3155)
 spell:name("Sudden Death Rune")
 spell:level(45)
 spell:needCasterTargetOrDirection(true)

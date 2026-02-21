@@ -21,8 +21,8 @@ end
 
 
 spell:group("attack")
-spell:id(2274)
-spell:runeId(2274)
+spell:id(3161)
+spell:runeId(3161)
 spell:name("Avalanche Rune")
 spell:level(30)
 spell:cooldown(2 * 1000)

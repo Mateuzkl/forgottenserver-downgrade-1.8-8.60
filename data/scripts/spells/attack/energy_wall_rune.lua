@@ -13,8 +13,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2279)
-spell:runeId(2279)
+spell:id(3166)
+spell:runeId(3166)
 spell:name("Energy Wall Rune")
 spell:level(41)
 spell:cooldown(2 * 1000)

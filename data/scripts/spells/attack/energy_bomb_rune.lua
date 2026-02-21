@@ -13,8 +13,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2262)
-spell:runeId(2262)
+spell:id(3149)
+spell:runeId(3149)
 spell:name("Energy Bomb Rune")
 spell:level(37)
 spell:cooldown(2 * 1000)

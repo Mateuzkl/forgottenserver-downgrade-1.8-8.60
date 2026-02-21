@@ -41,8 +41,8 @@ end
 
 
 spell:group("support")
-spell:id(2290)
-spell:runeId(2290)
+spell:id(3177)
+spell:runeId(3177)
 spell:name("Convince Creature Rune")
 spell:level(16)
 spell:needCasterTargetOrDirection(true)

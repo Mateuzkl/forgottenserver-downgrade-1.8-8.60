@@ -12,8 +12,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2305)
-spell:runeId(2305)
+spell:id(3192)
+spell:runeId(3192)
 spell:name("Fire Bomb Rune")
 spell:level(27)
 spell:cooldown(2 * 1000)

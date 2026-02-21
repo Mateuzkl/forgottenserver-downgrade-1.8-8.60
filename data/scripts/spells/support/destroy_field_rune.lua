@@ -18,8 +18,8 @@ end
 
 
 spell:group("support")
-spell:id(2261)
-spell:runeId(2261)
+spell:id(3148)
+spell:runeId(3148)
 spell:name("Destroy Field Rune")
 spell:level(17)
 spell:range(5)

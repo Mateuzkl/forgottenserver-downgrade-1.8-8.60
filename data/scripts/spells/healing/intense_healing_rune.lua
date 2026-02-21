@@ -22,8 +22,8 @@ end
 
 
 spell:group("healing")
-spell:id(2265)
-spell:runeId(2265)
+spell:id(3152)
+spell:runeId(3152)
 spell:name("Intense Healing Rune")
 spell:level(15)
 spell:needCasterTargetOrDirection(true)

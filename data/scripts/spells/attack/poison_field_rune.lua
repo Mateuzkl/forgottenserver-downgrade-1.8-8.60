@@ -11,8 +11,8 @@ function spell.onCastSpell(creature, variant, isHotkey)
 end
 
 spell:group("attack")
-spell:id(2285)
-spell:runeId(2285)
+spell:id(3172)
+spell:runeId(3172)
 spell:name("Poison Field Rune")
 spell:level(14)
 spell:cooldown(2 * 1000)

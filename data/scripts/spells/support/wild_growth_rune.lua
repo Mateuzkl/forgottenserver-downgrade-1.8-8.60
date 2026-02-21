@@ -11,8 +11,8 @@ end
 
 
 spell:group("support")
-spell:id(2269)
-spell:runeId(2269)
+spell:id(3156)
+spell:runeId(3156)
 spell:name("Wild Growth Rune")
 spell:level(27)
 spell:cooldown(2 * 1000)
