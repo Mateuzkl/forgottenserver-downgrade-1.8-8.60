@@ -47,7 +47,6 @@ local instruments = {
 		chance = 60,
 		remove = true
 	}, -- wooden whistle
-	[6572] = {effect = CONST_ME_SOUND_GREEN, text = "TOOOOOOT", transformId = 6573, decayId = 6572}, -- party trumpet
 	[6572] = {effect = CONST_ME_SOUND_GREEN, text = "TOOOOOOT", transformId = 6573, decayId = 6572} -- party trumpet
 }
 
@@ -78,5 +77,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	return true
 end
 
-action:id(2948, 2949, 2950, 14253, 2953, 2954, 2955, 2956, 3252, 2958, 2959, 2960, 2961, 2962, 2963, 2964, 3219, 3252, 3255, 3256, 3257, 3258, 3259, 3260, 3261, 2951, 2965, 2966, 3103, 5786, 6572, 6572)
+for itemId, _ in pairs(instruments) do
+	action:id(itemId)
+end
 action:register()

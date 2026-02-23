@@ -1,5 +1,3 @@
-local action = Action()
-
 local constructionKits = {
 	[2775] = 2374,
 	[2776] = 2378,
@@ -9,8 +7,6 @@ local constructionKits = {
 	[2780] = 2418,
 	[2781] = 2422,
 	[2782] = 2319,
-	[2812] = 11812,
-	[10207] = 2986,
 	[2785] = 2314,
 	[2786] = 2347,
 	[2787] = 2348,
@@ -54,6 +50,7 @@ local constructionKits = {
 	[10288] = 10286
 }
 
+local action = Action()
 function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	local kit = constructionKits[item.itemid]
 	if not kit then return false end
@@ -72,5 +69,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	return true
 end
 
-action:id(2775, 2776, 2777, 2778, 2779, 2780, 2781, 2782, 2812, 10207, 2785, 2786, 2787, 2788, 2789, 2790, 2791, 2792, 2793, 2794, 2795, 2796, 2797, 2798, 2799, 2800, 2801, 2802, 2803, 2804, 2805, 2806, 2807, 2808, 2809, 2810, 2811, 2812, 5086, 5087, 5088, 6114, 6115, 6371, 6372, 7864, 9061, 10207, 10209, 10216, 10288)
+for itemId, _ in pairs(constructionKits) do
+	action:id(itemId)
+end
 action:register()

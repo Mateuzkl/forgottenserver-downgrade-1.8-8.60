@@ -18,14 +18,15 @@ function changeGold.onUse(player, item, fromPosition, target, toPosition,
 end
 
 local currencyItems = Game.getCurrencyItems()
-for index, currency in pairs(currencyItems) do
-	local back, to = currencyItems[index - 1], currencyItems[index + 1]
-	local currencyId = currency:getId()
-	config[currencyId] = {
-		changeBack = back and back:getId(),
-		changeTo = to and to:getId()
-	}
-	changeGold:id(currencyId)
+if #currencyItems > 0 then
+	for index, currency in pairs(currencyItems) do
+		local back, to = currencyItems[index - 1], currencyItems[index + 1]
+		local currencyId = currency:getId()
+		config[currencyId] = {
+			changeBack = back and back:getId(),
+			changeTo = to and to:getId()
+		}
+		changeGold:id(currencyId)
+	end
+	changeGold:register()
 end
-
-changeGold:register()

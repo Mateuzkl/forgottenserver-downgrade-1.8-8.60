@@ -67,10 +67,9 @@ local equipment = {
     {id = 3100, slot = "ring"}, -- dragon scale mail
     {id = 6299, slot = "ring"}, -- death ring
     {id = 6300, slot = "ring"}, -- death ring
-    {id = 9392, slot = "ring", level = 100}, -- blister ring
+    {id = 9386, slot = "ring", level = 100}, -- elite draken mail
     {id = 9394, slot = "ring", level = 100}, -- prismatic ring
-    {id = 9394, slot = "ring", level = 100}, -- prismatic ring
-    {id = 9397, slot = "ring", level = 100}, -- prismatic ring
+    {id = 10323, slot = "ring", level = 10}, -- ring of healing
 
     -- Helmets
     {id = 3210, slot = "head", vocation = {"Sorcerer", "Master Sorcerer", "Druid", "Elder Druid"}}, -- hat of the mad
