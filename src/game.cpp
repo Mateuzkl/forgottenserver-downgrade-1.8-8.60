@@ -2244,14 +2244,6 @@ void Game::playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t f
 		return;
 	}
 
-	if (player->hasFlag(PlayerFlag_CanThrowFar)) {
-		player->resetIdleTime();
-		player->setNextActionTask(nullptr);
-
-		g_actions->useItemEx(player, fromPos, toPos, toStackPos, item, isHotkey);
-		player->maintainAttackFlow();
-		return;
-	}
 
 	Position walkToPos = fromPos;
 	ReturnValue ret = g_actions->canUse(player, fromPos);
@@ -2343,14 +2335,6 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
-	if (player->hasFlag(PlayerFlag_CanThrowFar)) {
-		player->resetIdleTime();
-		player->setNextActionTask(nullptr);
-
-		g_actions->useItem(player, pos, index, item, isHotkey);
-		player->maintainAttackFlow();
-		return;
-	}
 
 	ReturnValue ret = g_actions->canUse(player, pos);
 	if (ret != RETURNVALUE_NOERROR) {
@@ -2407,26 +2391,6 @@ void Game::playerUseWithCreature(uint32_t playerId, const Position& fromPos, uin
 		return;
 	}
 
-	if (player->hasFlag(PlayerFlag_CanThrowFar)) {
-		if (Thing* thing = internalGetThing(player, fromPos, fromStackPos, spriteId, STACKPOS_USEITEM)) {
-			Item* item = thing->getItem();
-			if (!item || !item->isUseable() || item->getClientID() != spriteId) {
-				player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
-				return;
-			}
-
-			player->resetIdleTime();
-			player->setNextActionTask(nullptr);
-			bool isHotkey = (fromPos.x == 0xFFFF && fromPos.y == 0 && fromPos.z == 0);
-			g_actions->useItemEx(player, fromPos, creature->getPosition(),
-			                     static_cast<uint8_t>(creature->getParent()->getThingIndex(creature)), item, isHotkey,
-			                     creature);
-			player->maintainAttackFlow();
-		} else {
-			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
-		}
-		return;
-	}
 
 	if (!creature->getPosition().isInRange(player->getPosition(), Map::maxClientViewportX - 1,
 	                                       Map::maxClientViewportY - 1, 0)) {
