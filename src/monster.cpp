@@ -244,15 +244,6 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 			onCreatureEnter(creature);
 		} else if (!canSeeNewPos && canSeeOldPos) {
 			onCreatureLeave(creature);
-		} else if (canSeeNewPos && canSeeOldPos) {
-			// Handle PZ entry/exit while creature remains visible
-			bool oldInPZ = oldTile && oldTile->getZone() == ZONE_PROTECTION;
-			bool newInPZ = newTile && newTile->getZone() == ZONE_PROTECTION;
-			if (!oldInPZ && newInPZ) {
-				onCreatureLeave(creature);
-			} else if (oldInPZ && !newInPZ) {
-				onCreatureEnter(creature);
-			}
 		}
 
 		if (canSeeNewPos && isSummon() && getMaster() == creature) {
@@ -433,7 +424,7 @@ void Monster::updateTargetList()
 	auto targetIterator = targetList.begin();
 	while (targetIterator != targetList.end()) {
 		Creature* creature = *targetIterator;
-		if (creature->isDead() || !canSee(creature->getPosition()) || creature->getZone() == ZONE_PROTECTION) {
+		if (creature->isDead() || !canSee(creature->getPosition())) {
 			creature->decrementReferenceCounter();
 			targetIterator = targetList.erase(targetIterator);
 		} else {
@@ -772,17 +763,26 @@ void Monster::setIdle(bool idle)
 
 void Monster::updateIdleStatus()
 {
-	bool idle = false;
-	if (!isSummon() && targetList.empty()) {
-		// check if there are aggressive conditions
-		idle = std::find_if(conditions.begin(), conditions.end(),
-		                    [](Condition* condition) { return condition->isAggressive(); }) == conditions.end();
-	}
+    bool idle = false;
+    if (!isSummon() && targetList.empty()) {
+        if (spawn && !position.isInRange(masterPos, 1, 1)) {
+            idle = false;
+        } else {
+            idle = std::find_if(conditions.begin(), conditions.end(),
+                                [](Condition* condition) { return condition->isAggressive(); }) == conditions.end();
+        }
+    }
 
-	setIdle(idle);
+    setIdle(idle);
 }
 
-void Monster::onAddCondition(ConditionType_t) { updateIdleStatus(); }
+void Monster::onAddCondition(ConditionType_t)
+{
+	updateIdleStatus();
+	if (isMapLoaded) {
+		updateMapCache();
+	}
+}
 
 void Monster::onEndCondition(ConditionType_t type)
 {
@@ -791,6 +791,9 @@ void Monster::onEndCondition(ConditionType_t type)
 	}
 
 	updateIdleStatus();
+	if (isMapLoaded) {
+		updateMapCache();
+	}
 }
 
 void Monster::onThink(uint32_t interval)
@@ -851,11 +854,6 @@ void Monster::onThink(uint32_t interval)
 					setFollowCreature(attackedCreature);
 				}
 			} else if (!targetList.empty()) {
-				// Clear stale followCreature (dead, removed, or in PZ)
-				if (followCreature && !isTarget(followCreature)) {
-					setFollowCreature(nullptr);
-					setAttackedCreature(nullptr);
-				}
 				if (!followCreature || !hasFollowPath) {
 					searchTarget();
 				} else if (isFleeing()) {
@@ -882,7 +880,6 @@ void Monster::doAttacking(uint32_t interval)
 	// unnecessary work evaluating spell lists and summon state.
 	if (!attackedCreature || attackedCreature == this) {
 		attackedCreature = nullptr;
-		setFollowCreature(nullptr);
 		return;
 	}
 
@@ -894,14 +891,12 @@ void Monster::doAttacking(uint32_t interval)
 		Creature* master = getMaster();
 		if (!master || master->isRemoved() || master->isDead()) {
 			attackedCreature = nullptr;
-			setFollowCreature(nullptr);
 			return;
 		}
 	}
 
 	if (attackedCreature->isRemoved() || attackedCreature->isDead()) {
 		attackedCreature = nullptr;
-		setFollowCreature(nullptr);
 		return;
 	}
 
@@ -920,7 +915,6 @@ void Monster::doAttacking(uint32_t interval)
 
 		if (!attackedCreature || attackedCreature->isRemoved() || attackedCreature->isDead()) {
 			attackedCreature = nullptr;
-			setFollowCreature(nullptr);
 			return;
 		}
 
@@ -933,7 +927,6 @@ void Monster::doAttacking(uint32_t interval)
 		if (canUseSpell(myPos, targetPos, spellBlock, interval, inRange, resetTicks)) {
 			if (!attackedCreature || attackedCreature->isRemoved() || attackedCreature->isDead()) {
 				attackedCreature = nullptr;
-				setFollowCreature(nullptr);
 				return;
 			}
 
@@ -954,7 +947,6 @@ void Monster::doAttacking(uint32_t interval)
 
 				if (!attackedCreature || attackedCreature->isRemoved() || attackedCreature->isDead()) {
 					attackedCreature = nullptr;
-					setFollowCreature(nullptr);
 					return;
 				}
 
@@ -966,7 +958,6 @@ void Monster::doAttacking(uint32_t interval)
 
 				if (!attackedCreature || attackedCreature->isRemoved() || attackedCreature->isDead()) {
 					attackedCreature = nullptr;
-					setFollowCreature(nullptr);
 					return;
 				}
 
@@ -988,7 +979,6 @@ void Monster::doAttacking(uint32_t interval)
 
 	if (!attackedCreature || attackedCreature->isRemoved() || attackedCreature->isDead()) {
 		attackedCreature = nullptr;
-		setFollowCreature(nullptr);
 		return;
 	}
 
@@ -1025,7 +1015,7 @@ bool Monster::canUseAttack(const Position& pos, const Creature* target) const
 }
 
 bool Monster::canUseSpell(const Position& pos, const Position& targetPos, const spellBlock_t& sb, uint32_t interval,
-                          bool& inRange, bool& resetTicks)
+                          bool& inRange, bool& resetTicks) const
 {
 	inRange = true;
 

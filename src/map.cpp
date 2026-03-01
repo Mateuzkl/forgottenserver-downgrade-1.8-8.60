@@ -150,10 +150,6 @@ void Map::setTile(uint16_t x, uint16_t y, uint8_t z, std::unique_ptr<Tile> newTi
 		tile = std::move(newTile);
 		// Clear cache since we now have real tile
 		tilePair.second = nullptr;
-		uint32_t idx = offsetX * FLOOR_SIZE + offsetY;
-		floor->soaFlags[idx]    = 0;
-		floor->soaHouseId[idx]  = 0;
-		floor->soaGroundId[idx] = 0;
 	}
 }
 
@@ -204,11 +200,6 @@ void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 	
 	// Also clear cache
 	tilePair.second = nullptr;
-
-	uint32_t idx = (x & FLOOR_MASK) * FLOOR_SIZE + (y & FLOOR_MASK);
-	floor->soaFlags[idx]    = 0;
-	floor->soaHouseId[idx]  = 0;
-	floor->soaGroundId[idx] = 0;
 }
 
 bool Map::placeCreature(const Position& centerPos, Creature* creature, bool extendedPos /* = false*/,
@@ -1125,17 +1116,6 @@ void Floor::setTileCache(uint16_t x, uint16_t y, const std::shared_ptr<BasicTile
 	uint32_t offsetX = x & FLOOR_MASK;
 	uint32_t offsetY = y & FLOOR_MASK;
 	tiles[offsetX][offsetY].second = basicTile;
-
-	uint32_t idx = offsetX * FLOOR_SIZE + offsetY;
-	if (basicTile) {
-		soaFlags[idx]    = basicTile->flags;
-		soaHouseId[idx]  = basicTile->houseId;
-		soaGroundId[idx] = basicTile->groundId;
-	} else {
-		soaFlags[idx]    = 0;
-		soaHouseId[idx]  = 0;
-		soaGroundId[idx] = 0;
-	}
 }
 
 std::shared_ptr<BasicTile> Floor::getTileCache(uint16_t x, uint16_t y) const {

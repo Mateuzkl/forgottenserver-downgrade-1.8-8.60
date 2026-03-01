@@ -1516,6 +1516,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CONST_ME_SMOKE);
 	registerEnum(CONST_ME_INSECTS);
 	registerEnum(CONST_ME_DRAGONHEAD);
+
 	registerEnum(CONST_ME_ORCSHAMAN);
 	registerEnum(CONST_ME_ORCSHAMAN_FIRE);
 	registerEnum(CONST_ME_THUNDER);

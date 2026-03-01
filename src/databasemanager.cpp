@@ -86,7 +86,7 @@ void DatabaseManager::updateDatabase()
 
 	// migrations logging
 	lua_register(L, "logMigration", LuaScriptInterface::luaLogMigration);
-	lua_register(L, "logInfo", LuaScriptInterface::luaLogMigration);
+	lua_register(L, "logInfo", LuaScriptInterface::luaLogMigration); // alias for backward compatibility
 
 	int32_t version = getDatabaseVersion();
 	do {

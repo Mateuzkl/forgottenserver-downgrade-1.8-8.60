@@ -60,8 +60,6 @@ inline constexpr int32_t FLOOR_MASK = (FLOOR_SIZE - 1);
 
 struct Floor
 {
-	static constexpr uint32_t FLOOR_TOTAL = FLOOR_SIZE * FLOOR_SIZE;
-
 	Floor() = default;
 	~Floor() = default;
 
@@ -69,25 +67,18 @@ struct Floor
 	Floor(const Floor&) = delete;
 	Floor& operator=(const Floor&) = delete;
 
+	// Pair: <Tile (real), BasicTile (cache)>
+	// BasicTile is stored during map load, real Tile is created on first access (lazy loading)
 	std::pair<std::unique_ptr<Tile>, std::shared_ptr<BasicTile>> tiles[FLOOR_SIZE][FLOOR_SIZE];
 
-	alignas(32) uint32_t soaFlags[FLOOR_TOTAL]{};
-	alignas(32) uint32_t soaHouseId[FLOOR_TOTAL]{};
-	alignas(32) uint16_t soaGroundId[FLOOR_TOTAL]{};
-
+	// Get tile, creating from cache if needed (z is needed for tile creation)
 	Tile* getTile(uint16_t x, uint16_t y, uint8_t z);
-	void setTileCache(uint16_t x, uint16_t y, const std::shared_ptr<BasicTile>& basicTile);
-	std::shared_ptr<BasicTile> getTileCache(uint16_t x, uint16_t y) const;
 
-	uint32_t getFlags(uint16_t x, uint16_t y) const {
-		return soaFlags[(x & FLOOR_MASK) * FLOOR_SIZE + (y & FLOOR_MASK)];
-	}
-	uint32_t getHouseId(uint16_t x, uint16_t y) const {
-		return soaHouseId[(x & FLOOR_MASK) * FLOOR_SIZE + (y & FLOOR_MASK)];
-	}
-	uint16_t getGroundId(uint16_t x, uint16_t y) const {
-		return soaGroundId[(x & FLOOR_MASK) * FLOOR_SIZE + (y & FLOOR_MASK)];
-	}
+	// Set tile cache (during map load)
+	void setTileCache(uint16_t x, uint16_t y, const std::shared_ptr<BasicTile>& basicTile);
+
+	// Get tile cache
+	std::shared_ptr<BasicTile> getTileCache(uint16_t x, uint16_t y) const;
 };
 
 class FrozenPathingConditionCall;
@@ -172,17 +163,10 @@ private:
 class Map
 {
 public:
-	// Standard 8.60 client viewport
+	static constexpr int32_t maxViewportX = 11; // min value: maxClientViewportX + 1
+	static constexpr int32_t maxViewportY = 11; // min value: maxClientViewportY + 1
 	static constexpr int32_t maxClientViewportX = 8;
 	static constexpr int32_t maxClientViewportY = 6;
-
-	// Extended viewport for OTCv8
-	static constexpr int32_t maxClientViewportX_OTCv8 = 14;
-	static constexpr int32_t maxClientViewportY_OTCv8 = 10;
-
-	// Server spectator range (must cover the largest possible viewport)
-	static constexpr int32_t maxViewportX = maxClientViewportX_OTCv8 + 2; // 16
-	static constexpr int32_t maxViewportY = maxClientViewportY_OTCv8 + 2; // 12
 
 	uint32_t clean() const;
 

@@ -19,7 +19,7 @@ public:
 	bool loadScripts(const std::string& folderName, bool isLib, bool reload);
 	LuaScriptInterface& getScriptInterface() { return scriptInterface; }
 
-void clearLoadedFiles() { loadedFiles.clear(); }
+	void clearLoadedFiles() { loadedFiles.clear(); }
 
 private:
 	LuaScriptInterface scriptInterface;

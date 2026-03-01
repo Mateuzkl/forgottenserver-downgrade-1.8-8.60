@@ -482,7 +482,6 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
                      const ItemType& it = Item::items[item->id];
                      if (it.isGroundTile()) {
                          tile->ground = MapCache::tryGetItemFromCache(item);
-                         tile->groundId = item->id;
                      } else {
                          tile->items.push_back(MapCache::tryGetItemFromCache(item));
                      }
@@ -503,7 +502,6 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
                 const ItemType& it = Item::items[item->id];
                 if (it.isGroundTile() && tile->ground == nullptr) {
                     tile->ground = item;
-                    tile->groundId = item->id;
                 } else {
                     tile->items.push_back(item);
                 }

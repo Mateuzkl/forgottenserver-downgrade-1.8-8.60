@@ -74,6 +74,7 @@ public:
 	bool canPushCreatures() const { return mType->info.canPushCreatures; }
 	bool isHostile() const { return mType->info.isHostile; }
 	bool isRewardBoss() const { return mType->info.isRewardBoss; }
+	bool isBoss() const { return isRewardBoss(); }
 	bool canSee(const Position& pos) const override;
 	bool canSeeInvisibility() const override { return isImmune(CONDITION_INVISIBLE); }
 	uint32_t getManaCost() const { return mType->info.manaCost; }
@@ -147,7 +148,7 @@ public:
 	void removeTarget(Creature* creature);
 
 private:
-	bool useCacheMap() const override { return true; }
+	bool useCacheMap() const override { return !randomStepping; }
 
 	CreatureHashSet friendList;
 	CreatureList targetList;
@@ -198,7 +199,7 @@ private:
 
 	bool canUseAttack(const Position& pos, const Creature* target) const;
 	bool canUseSpell(const Position& pos, const Position& targetPos, const spellBlock_t& sb, uint32_t interval,
-	                 bool& inRange, bool& resetTicks);
+	                 bool& inRange, bool& resetTicks) const;
 	bool getRandomStep(const Position& creaturePos, Direction& direction) const;
 	bool getDanceStep(const Position& creaturePos, Direction& direction, bool keepAttack = true,
 	                  bool keepDistance = true);

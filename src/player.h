@@ -655,13 +655,6 @@ public:
 	{
 		if (client) {
 			client->sendMoveCreature(creature, newPos, newStackPos, oldPos, oldStackPos, teleport);
-			if (isLiveCasting()) {
-				for (auto& spectator : spectators) {
-					if (spectator && spectator->isAcceptingPackets()) {
-						spectator->sendMoveCreature(creature, newPos, newStackPos, oldPos, oldStackPos, teleport);
-					}
-				}
-			}
 		}
 	}
 	void sendCreatureTurn(const Creature* creature)

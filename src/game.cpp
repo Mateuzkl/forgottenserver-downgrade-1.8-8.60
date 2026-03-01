@@ -17,8 +17,6 @@
 #include "items.h"
 #include "monster.h"
 #include "movement.h"
-#include "protocolgame.h"
-#include "protocolspectator.h"
 #include "pugicast.h"
 #include "decay.h"
 #include "scheduler.h"
@@ -31,6 +29,7 @@
 #include "logger.h"
 #include <fmt/format.h>
 #include <limits>
+#include "luascript.h"
 
 extern Actions* g_actions;
 extern Chat* g_chat;
@@ -44,6 +43,7 @@ extern Monsters g_monsters;
 extern MoveEvents* g_moveEvents;
 extern Weapons* g_weapons;
 extern Scripts* g_scripts;
+extern LuaEnvironment g_luaEnvironment;
 
 void Game::start(ServiceManager* manager)
 {
@@ -586,21 +586,10 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 
 	// send to client
 	size_t i = 0;
-	uint32_t creatureId = creature->getID();
 	for (Creature* spectator : spectators) {
 		if (Player* player = spectator->getPlayer()) {
 			if (player->canSeeCreature(creature)) {
 				player->sendRemoveTileThing(tilePosition, oldStackPosVector[i++]);
-				if (player->client) {
-					player->client->removeKnownCreature(creatureId);
-					if (player->isLiveCasting()) {
-						for (auto& castSpectator : player->spectators) {
-							if (castSpectator && castSpectator->isAcceptingPackets()) {
-								castSpectator->removeKnownCreature(creatureId);
-							}
-						}
-					}
-				}
 			}
 		}
 	}
@@ -2242,6 +2231,15 @@ void Game::playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t f
 		return;
 	}
 
+	if (player->hasFlag(PlayerFlag_CanThrowFar)) {
+		player->resetIdleTime();
+		player->setNextActionTask(nullptr);
+
+		g_actions->useItemEx(player, fromPos, toPos, toStackPos, item, isHotkey);
+		player->maintainAttackFlow();
+		return;
+	}
+
 	Position walkToPos = fromPos;
 	ReturnValue ret = g_actions->canUse(player, fromPos);
 	if (ret == RETURNVALUE_NOERROR) {
@@ -2332,6 +2330,15 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
+	if (player->hasFlag(PlayerFlag_CanThrowFar)) {
+		player->resetIdleTime();
+		player->setNextActionTask(nullptr);
+
+		g_actions->useItem(player, pos, index, item, isHotkey);
+		player->maintainAttackFlow();
+		return;
+	}
+
 	ReturnValue ret = g_actions->canUse(player, pos);
 	if (ret != RETURNVALUE_NOERROR) {
 		if (ret == RETURNVALUE_TOOFARAWAY) {
@@ -2384,6 +2391,27 @@ void Game::playerUseWithCreature(uint32_t playerId, const Position& fromPos, uin
 
 	Creature* creature = getCreatureByID(creatureId);
 	if (!creature) {
+		return;
+	}
+
+	if (player->hasFlag(PlayerFlag_CanThrowFar)) {
+		if (Thing* thing = internalGetThing(player, fromPos, fromStackPos, spriteId, STACKPOS_USEITEM)) {
+			Item* item = thing->getItem();
+			if (!item || !item->isUseable() || item->getClientID() != spriteId) {
+				player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
+				return;
+			}
+
+			player->resetIdleTime();
+			player->setNextActionTask(nullptr);
+			bool isHotkey = (fromPos.x == 0xFFFF && fromPos.y == 0 && fromPos.z == 0);
+			g_actions->useItemEx(player, fromPos, creature->getPosition(),
+			                     static_cast<uint8_t>(creature->getParent()->getThingIndex(creature)), item, isHotkey,
+			                     creature);
+			player->maintainAttackFlow();
+		} else {
+			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		}
 		return;
 	}
 
@@ -3491,6 +3519,33 @@ void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, s
 	if (muteTime > 0) {
 		player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You are still muted for {:d} seconds.", muteTime));
 		return;
+	}
+
+	if (!player->isAccessPlayer()) {
+		lua_State* L = g_luaEnvironment.getLuaState();
+		if (L) {
+			if (g_luaEnvironment.loadFile("data/anti-divulgacao.lua") == 0) {
+				lua_getglobal(L, "checkMessage");
+				if (lua_isfunction(L, -1)) {
+					lua_pushlstring(L, text.data(), text.length());
+					lua_pushboolean(L, player->isAccessPlayer());
+					
+					if (lua_pcall(L, 2, 2, 0) == 0) {
+						bool isBlocked = lua_toboolean(L, -2);
+						if (isBlocked) {
+							std::string replacement = lua_tostring(L, -1);
+							internalCreatureSay(player, TALKTYPE_SAY, replacement, false);
+							return;
+						}
+						lua_pop(L, 2);
+					} else {
+						lua_pop(L, 1);
+					}
+				} else {
+					lua_pop(L, 1);
+				}
+			}
+		}
 	}
 
 	if (!text.empty() && text.front() == '/' && player->isAccessPlayer()) {

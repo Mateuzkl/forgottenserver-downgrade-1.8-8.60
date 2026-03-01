@@ -54,7 +54,7 @@ class Item;
 class Tile;
 
 inline constexpr int32_t EVENT_CREATURECOUNT = 10;
-inline constexpr int32_t EVENT_CREATURE_THINK_INTERVAL = 250;
+inline constexpr int32_t EVENT_CREATURE_THINK_INTERVAL = 500;
 inline constexpr int32_t EVENT_CHECK_CREATURE_INTERVAL = (EVENT_CREATURE_THINK_INTERVAL / EVENT_CREATURECOUNT);
 
 class FrozenPathingConditionCall
@@ -245,7 +245,7 @@ public:
 
 	virtual bool challengeCreature(Creature*, bool) { return false; }
 
-	CreatureVector getKillers();
+	CreatureVector getKillers() const;
 	void onDeath();
 	virtual uint64_t getGainedExperience(Creature* attacker) const;
 	void addDamagePoints(Creature* attacker, int32_t damagePoints);

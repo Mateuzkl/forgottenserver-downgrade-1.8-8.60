@@ -319,7 +319,7 @@ void Creature::addEventWalk(bool firstStep)
 		g_game.checkCreatureWalk(getID());
 	}
 
-	eventWalk = g_scheduler.addEvent(createSchedulerTask(std::max<int64_t>(SCHEDULER_MINTICKS, ticks),
+	eventWalk = g_scheduler.addEvent(createSchedulerTask(ticks,
 	                                                     [id = getID()]() { g_game.checkCreatureWalk(id); }));
 }
 
@@ -558,7 +558,7 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 	}
 }
 
-CreatureVector Creature::getKillers()
+CreatureVector Creature::getKillers() const
 {
 	CreatureVector killers;
 	const int64_t timeNow = OTSYS_TIME();
