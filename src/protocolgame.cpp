@@ -345,6 +345,7 @@ void ProtocolGame::spectate(const std::string& name, const std::string& password
 
 	player->client->addSpectator(getThis());
 	acceptPackets = true;
+	sendWelcomeMessage();
 
 	OutputMessagePool::getInstance().addProtocolToAutosend(shared_from_this());
 }
@@ -603,10 +604,16 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				}
 				break; // GameClientExtendedPing
 			case 0x6F:
-			case 0x70:
 			case 0x71:
-			case 0x72:
 				g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::spectatorTurn, getThis(), recvbyte - 0x6F)));
+				break;
+			case 0x70: // Turn East - used for Next Cast (CTRL + RIGHT)
+				g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::parseSwitchCast, getThis(), uint8_t(1))));
+				break;
+			case 0x72: // Turn West - used for Prev Cast (CTRL + LEFT)
+				g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::parseSwitchCast, getThis(), uint8_t(0))));
+				break;
+			case 0x8C: parseLookAt(msg); break; // Look at tile/item
 				break;
 			case 0x96: parseSpectatorSay(msg); break;
 			case 0x97: g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::sendCastChannel, getThis()))); break;
@@ -1237,6 +1244,15 @@ void ProtocolGame::parseLookAt(NetworkMessage& msg)
 	Position pos = msg.getPosition();
 	msg.skipBytes(2); // spriteId
 	uint8_t stackpos = msg.getByte();
+
+	if (!player) {
+		return;
+	}
+
+	if (isSpectator && pos.x != 0xFFFF && !canSee(pos)) {
+		return;
+	}
+
 	g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION,
 	                     [=, playerID = player->getID()]() { g_game.playerLookAt(playerID, pos, stackpos); });
 }
@@ -3078,5 +3094,135 @@ void ProtocolGame::sendFeatures()
 		msg.addByte((uint8_t)feature.first);
 		msg.addByte(feature.second ? 1 : 0);
 	}
-	writeToOutputBuffer(msg, false);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::spectatorTurn(uint8_t direction)
+{
+	std::vector<std::string> candidates;
+	candidates.reserve(32);
+
+	for (auto& it : g_game.getPlayers()) {
+		if (it.second->isRemoved() || !it.second->client->protocol())
+			continue;
+
+		if (!it.second->client->isBroadcasting())
+			continue;
+
+		if (!it.second->client->password().empty())
+			continue;
+
+		if (it.second->client->isBanned(getIP()))
+			continue;
+
+		candidates.push_back(it.second->getName());
+	}
+
+	int index = 0;
+	std::sort(candidates.begin(), candidates.end());
+	for (int i = 0; i < (int)candidates.size(); ++i) {
+		if (candidates[i] == player->getName()) {
+			index = i;
+			break;
+		}
+	}
+
+	if (candidates.size() < 2) {
+		return;
+	}
+
+	int dir = 0;
+	if (direction == 0 || direction == 1) {
+		dir = 1;
+	}
+	if (direction == 2 || direction == 3) {
+		dir = -1;
+	}
+	if (index == 0 && dir == -1) {
+		dir = 0;
+	}
+
+	Player* _player = g_game.getPlayerByName(candidates[(index + dir) % candidates.size()]);
+	if (!_player || player == _player) {
+		return;
+	}
+
+	const auto& openedContainers = player->getOpenContainers();
+	for (const auto& it : openedContainers) {
+		sendCloseContainer(it.first);
+	}
+
+	player->client->removeSpectator(getThis());
+	player->decrementReferenceCounter();
+
+	player = _player;
+	player->incrementReferenceCounter();
+
+	knownCreatureSet.clear();
+	sendAddCreature(player, player->getPosition(), 0, CONST_ME_NONE);
+	sendCastChannel();
+	syncOpenContainers();
+
+	player->client->addSpectator(getThis());
+}
+
+void ProtocolGame::parseSpectatorSay(NetworkMessage& msg)
+{
+	std::string receiver;
+	uint16_t channelId;
+
+	SpeakClasses type = static_cast<SpeakClasses>(msg.getByte());
+	switch (type) {
+		case TALKTYPE_PRIVATE:
+		case TALKTYPE_PRIVATE_RED:
+			receiver = msg.getString();
+			channelId = 0;
+			break;
+
+		case TALKTYPE_CHANNEL_Y:
+		case TALKTYPE_CHANNEL_R1:
+		case TALKTYPE_CHANNEL_R2:
+			channelId = msg.get<uint16_t>();
+			break;
+
+		default:
+			channelId = 0;
+			break;
+	}
+
+	const std::string text(msg.getString());
+	if (text.length() > 255) {
+		return;
+	}
+
+	g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::spectatorSay, getThis(), text, channelId)));
+}
+
+void ProtocolGame::spectatorSay(const std::string text, uint16_t channelId)
+{
+	if (channelId != CHANNEL_CAST || !player->client) {
+		return;
+	}
+
+	player->client->spectatorSay(getThis(), text);
+}
+
+void ProtocolGame::sendCastChannel()
+{
+	if (!isOTCv8) {
+		return;
+	}
+
+	sendChannel(CHANNEL_CAST, "Cast Channel");
+}
+
+void ProtocolGame::syncOpenContainers()
+{
+	const auto& openContainers = player->getOpenContainers();
+	for (const auto& it : openContainers) {
+		auto openContainer = it.second;
+		auto container = openContainer.container;
+		bool hasParent = (dynamic_cast<const Container*>(container->getParent()) != nullptr);
+		sendContainer(it.first, container, hasParent, openContainer.index);
+	}
 }

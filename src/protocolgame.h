@@ -281,6 +281,9 @@ private:
 	void spectatorSay(const std::string text, uint16_t channelId);
 	void sendCastChannel();
 	void syncOpenContainers();
+	void parseSwitchCast(uint8_t direction); // 0 = previous, 1 = next
+	void sendWelcomeMessage();
+	void sendTextMessage(MessageClasses mclass, const std::string& message);
 
 	bool isSpectator = false;
 	std::string spectator_name = "";

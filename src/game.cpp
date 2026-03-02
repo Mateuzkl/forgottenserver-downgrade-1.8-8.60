@@ -5547,3 +5547,17 @@ std::optional<int64_t> Game::getStorageValue(uint32_t key) const
 	}
 	return std::make_optional(it->second);
 }
+
+std::vector<Player*> Game::getLiveCasters(std::string_view name) const
+{
+	std::vector<Player*> casters;
+	for (const auto& it : players) {
+		Player* player = it.second;
+		if (player && player->client && player->client->isBroadcasting()) {
+			if (name.empty() || boost::algorithm::icontains(player->getName(), name)) {
+				casters.push_back(player);
+			}
+		}
+	}
+	return casters;
+}

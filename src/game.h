@@ -482,6 +482,7 @@ public:
 
 	void addPlayer(Player* player);
 	void removePlayer(Player* player);
+	std::vector<Player*> getLiveCasters(std::string_view name) const;
 
 	void addNpc(Npc* npc);
 	void removeNpc(Npc* npc);
