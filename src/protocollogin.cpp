@@ -14,6 +14,8 @@
 #include "tools.h"
 
 #include <iomanip>
+#include <fmt/format.h>
+#include <utility>
 
 extern Game g_game;
 
@@ -90,6 +92,46 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	disconnect();
 }
 
+void ProtocolLogin::getCastList(const std::string& password)
+{
+	auto casts = IOLoginData::getCastList(password);
+	if (casts.empty()) {
+		disconnectClient("There are no casts available at this time.");
+		return;
+	}
+
+	auto output = OutputMessagePool::getOutputMessage();
+
+	// Add MOTD
+	output->addByte(0x14);
+	output->addString(fmt::format("{:d}\n{:s}", normal_random(1, 255), "                    !-Welcome to Cast System-!\n\nIt will show all active casts even with password.\n\nTo enter a cast with password you just have to\nput the password in the empty space.\n\nRemember that when you open cast without\npassword you will get 10% of Exp.\n\nAlso remember that to open cast, just say !cast on."));
+
+	// Add char list
+	output->addByte(0x64);
+
+	uint8_t limit = std::numeric_limits<uint8_t>::max();
+	output->addByte(static_cast<uint8_t>(std::min<size_t>(limit, casts.size())));
+
+	for (const auto& it : casts) {
+		if (limit == 0) {
+			break;
+		}
+
+		output->addString(it.first);
+		output->addString(it.second);
+		output->add<uint32_t>(getIP(ConfigManager::getString(ConfigManager::IP)));
+		output->add<uint16_t>(ConfigManager::getInteger(ConfigManager::GAME_PORT));
+		limit--;
+	}
+
+	//Add premium days
+	output->add<uint16_t>(0xFFFF);
+
+	send(output);
+
+	disconnect();
+}
+
 void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 {
 	if (g_game.getGameState() == GAME_STATE_SHUTDOWN) {
@@ -159,19 +201,16 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 
 	auto accountName = msg.getString();
 
-	if (accountName.empty()) {
-		disconnectClient("Invalid account name.");
-		return;
-	}
-
 	// Read and validate password from the message
 	auto password = msg.getString();
-	if (password.empty()) {
-		disconnectClient("Invalid password.");
-		return;
-	}
 
 	g_dispatcher.addTask([=, thisPtr = std::static_pointer_cast<ProtocolLogin>(shared_from_this()),
 	                      accountName = std::string{accountName},
-	                      password = std::string{password}]() { thisPtr->getCharacterList(accountName, password); });
+	                      password = std::string{password}]() {
+		if (accountName.empty()) {
+			thisPtr->getCastList(password);
+		} else {
+			thisPtr->getCharacterList(accountName, password);
+		}
+	});
 }

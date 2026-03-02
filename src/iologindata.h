@@ -19,13 +19,14 @@ public:
 	static bool loginserverAuthentication(std::string_view name, std::string_view password, Account& account);
 	static std::pair<uint32_t, uint32_t> gameworldAuthentication(std::string_view accountName,
 	                                                             std::string_view password,
-	                                                             std::string_view characterName);
+	                                                             std::string_view characterName, bool& cast);
 	static uint32_t getAccountIdByPlayerName(std::string_view playerName);
 	static uint32_t getAccountIdByPlayerId(uint32_t playerId);
 
 	static AccountType_t getAccountType(uint32_t accountId);
 	static void setAccountType(uint32_t accountId, AccountType_t accountType);
-	static void updateOnlineStatus(uint32_t guid, bool login);
+	static void updateOnlineStatus(uint32_t guid, bool login, bool broadcasting, const std::string& cast_password, const std::string& cast_description, uint32_t spectators);
+	static void removeOnlineStatus(uint32_t guid);
 	static bool preloadPlayer(Player* player);
 
 	static bool loadPlayerById(Player* player, uint32_t id);
@@ -61,6 +62,7 @@ public:
 	static bool accountNameExists(const std::string& name);
 
 	static GuildWarVector getWarList(uint32_t guildId);
+	static std::vector<std::pair<std::string, std::string>> getCastList(const std::string& password);
 
 private:
 	using ItemMap = std::map<uint32_t, std::pair<Item*, uint32_t>>;

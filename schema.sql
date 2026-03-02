@@ -294,9 +294,13 @@ CREATE TABLE IF NOT EXISTS `market_offers` (
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `players_online` (
-  `player_id` int NOT NULL,
-  PRIMARY KEY (`player_id`)
-) ENGINE=MEMORY DEFAULT CHARACTER SET=utf8;
+ `player_id` int(11) NOT NULL,
+  `broadcasting` tinyint(1) NOT NULL DEFAULT '0',
+  `password` varchar(40) NOT NULL DEFAULT '0',
+  `description` varchar(255) NOT NULL DEFAULT '',
+  `spectators` int(11) NOT NULL DEFAULT '0',
+  `protocol_version` int(4) NOT NULL DEFAULT '0'
+) ENGINE=MEMORY DEFAULT CHARSET=latin1;
 
 CREATE TABLE IF NOT EXISTS `player_deaths` (
   `player_id` int NOT NULL,

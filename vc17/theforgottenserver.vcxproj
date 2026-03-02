@@ -264,6 +264,7 @@
     <ClCompile Include="..\src\protocol.cpp" />
     <ClCompile Include="..\src\protocolgame.cpp" />
     <ClCompile Include="..\src\protocollogin.cpp" />
+    <ClCompile Include="..\src\protocolspectator.cpp" />
     <ClCompile Include="..\src\protocoladmin.cpp" />
     <ClCompile Include="..\src\raids.cpp" />
     <ClCompile Include="..\src\rewardchest.cpp" />
@@ -351,6 +352,7 @@
     <ClInclude Include="..\src\protocol.h" />
     <ClInclude Include="..\src\protocolgame.h" />
     <ClInclude Include="..\src\protocollogin.h" />
+    <ClInclude Include="..\src\protocolspectator.h" />
     <ClInclude Include="..\src\protocoladmin.h" />
     <ClInclude Include="..\src\pugicast.h" />
     <ClInclude Include="..\src\raids.h" />

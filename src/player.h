@@ -16,6 +16,7 @@
 #include "outfit.h"
 #include "party.h"
 #include "protocolgame.h"
+#include "protocolspectator.h"
 #include "rewardchest.h"
 #include "town.h"
 #include "vocation.h"
@@ -26,6 +27,7 @@ class House;
 class NetworkMessage;
 class Weapon;
 class ProtocolGame;
+class ProtocolSpectator;
 class Npc;
 class Party;
 class SchedulerTask;
@@ -1039,13 +1041,19 @@ public:
 
 	void updateRegeneration();
 
+	const std::map<uint8_t, OpenContainer>& getOpenContainers() const {
+			return openContainers;
+		}
+
+		ProtocolSpectator_ptr client;
+
 	void manageAccount(const std::string& text);
 	bool isAccountManager() const { return accountManager != ACCOUNT_MANAGER_NONE; }
 	AccountManagerMode getAccountManagerMode() const { return accountManager; }
 	void setAccountManagerMode(AccountManagerMode mode) { accountManager = mode; }
 	void setAccountManagerData(uint32_t accId) { managerData.accountId = accId; }
 
-	const auto& getOpenContainers() const { return openContainers; }
+
 
 	// for lua module
 	void setAccountType(AccountType_t newType) { accountType = newType; }
@@ -1203,7 +1211,6 @@ private:
 	Npc* shopOwner = nullptr;
 	Party* party = nullptr;
 	Player* tradePartner = nullptr;
-	ProtocolGame_ptr client;
 	SchedulerTask* walkTask = nullptr;
 	Town* town = nullptr;
 	Vocation* vocation = nullptr;
@@ -1319,6 +1326,7 @@ private:
 	friend class Actions;
 	friend class IOLoginData;
 	friend class ProtocolGame;
+	friend class ProtocolSpectator;
 };
 
 #endif

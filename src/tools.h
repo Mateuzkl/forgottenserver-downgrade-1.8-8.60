@@ -85,6 +85,8 @@ SpellGroup_t stringToSpellGroup(std::string_view value);
 
 const std::vector<Direction>& getShuffleDirections();
 
+std::string getVocationShortName(uint8_t vocationId);
+
 namespace tfs {
 
 #if __has_cpp_attribute(__cpp_lib_to_underlying)
