@@ -5,16 +5,6 @@ maxProtocolOutfits = 255
 dllCheckKick = true -- true = kick enabled, false = kick disabled (default)
 dllCheckKickTime = 5 -- time in seconds (optional usage)
 
--- Live Cast System
-liveCastEnabled = true
-liveCastProtocolPort = 7173
-liveCastMaxSpectators = 25
-
--- Cast EXP Bonus System
--- When enabled, casters receive bonus EXP while they have spectators
-castExpBonus = true -- enable/disable bonus
-castExpBonusPercent = 5 -- percentage bonus (5 = 5%)
-
 -- Reset System
 resetLevel = 510 -- min level to reset
 resetStats = 5 -- % more hp and mp on every reset ()

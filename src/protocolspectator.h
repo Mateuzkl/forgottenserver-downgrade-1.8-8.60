@@ -720,6 +720,14 @@ class ProtocolSpectator {
                 it->sendInventoryItem(slot, item);
         }
 
+        void parseLookAt(NetworkMessage &msg) {
+		    if (!owner) {
+			    return;
+		    }
+
+		    owner->parseLookAt(msg);
+	    }
+
         friend class ProtocolGame;
         friend class Player;
 
