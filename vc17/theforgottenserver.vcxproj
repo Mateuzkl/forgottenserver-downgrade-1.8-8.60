@@ -280,6 +280,7 @@
     <ClCompile Include="..\src\protocolstatus.cpp" />
     <ClCompile Include="..\src\talkaction.cpp" />
     <ClCompile Include="..\src\tasks.cpp" />
+    <ClCompile Include="..\src\thread_pool.cpp" />
     <ClCompile Include="..\src\teleport.cpp" />
     <ClCompile Include="..\src\thing.cpp" />
     <ClCompile Include="..\src\tile.cpp" />
@@ -373,6 +374,7 @@
     <ClInclude Include="..\src\teleport.h" />
     <ClInclude Include="..\src\thing.h" />
     <ClInclude Include="..\src\thread_holder_base.h" />
+    <ClInclude Include="..\src\thread_pool.h" />
     <ClInclude Include="..\src\tile.h" />
     <ClInclude Include="..\src\tools.h" />
     <ClInclude Include="..\src\town.h" />

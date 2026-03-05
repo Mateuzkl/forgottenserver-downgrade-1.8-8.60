@@ -105,6 +105,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/stats.cpp
 	${CMAKE_CURRENT_LIST_DIR}/talkaction.cpp
 	${CMAKE_CURRENT_LIST_DIR}/tasks.cpp
+	${CMAKE_CURRENT_LIST_DIR}/thread_pool.cpp
 	${CMAKE_CURRENT_LIST_DIR}/teleport.cpp
 	${CMAKE_CURRENT_LIST_DIR}/thing.cpp
 	${CMAKE_CURRENT_LIST_DIR}/tile.cpp
@@ -197,6 +198,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/teleport.h
 	${CMAKE_CURRENT_LIST_DIR}/thing.h
 	${CMAKE_CURRENT_LIST_DIR}/thread_holder_base.h
+	${CMAKE_CURRENT_LIST_DIR}/thread_pool.h
 	${CMAKE_CURRENT_LIST_DIR}/tile.h
 	${CMAKE_CURRENT_LIST_DIR}/tools.h
 	${CMAKE_CURRENT_LIST_DIR}/town.h

@@ -19,7 +19,8 @@
 #include "scriptmanager.h"
 #include "server.h"
 #include "signals.h"
-#include "luascript.h"	
+#include "luascript.h"
+#include "thread_pool.h"
 
 #include <fmt/format.h>
 #include <fmt/color.h>
@@ -65,6 +66,8 @@ void mainLoader(ServiceManager* services)
 	}
 
 	setupLoggerSignalHandlers();
+
+	g_threadPool.start();
 
 	srand(static_cast<unsigned int>(OTSYS_TIME()));
 #ifdef _WIN32
@@ -304,6 +307,7 @@ void startServer()
 	serviceManager.run();
 	} else {
 		LOG_INFO(">> No services running. The server is NOT online.");
+		g_threadPool.shutdown();
 		g_scheduler.shutdown();
 		g_databaseTasks.shutdown();
 		g_dispatcher.shutdown();
@@ -324,6 +328,7 @@ void startServer()
 #ifdef STATS_ENABLED
 	g_stats.join();
 #endif
+	// ThreadPool uses jthread — auto-joins in shutdown(), no manual join needed
 
 }
 
