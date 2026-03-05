@@ -30,6 +30,7 @@
 #include <fmt/format.h>
 #include <limits>
 #include "luascript.h"
+#include "save_manager.h"
 
 extern Actions* g_actions;
 extern Chat* g_chat;
@@ -120,9 +121,7 @@ void Game::setGameState(GameState_t newState)
 			map.spawns.clear();
 
 			saveMotdNum();
-			LOG_INFO(">> Saving game state...");
 			saveGameState();
-			LOG_INFO(">> Game state saved successfully.");
 
 			g_dispatcher.addTask([this]() { shutdown(); });
 
@@ -166,22 +165,11 @@ void Game::saveGameState()
 		setGameState(GAME_STATE_MAINTAIN);
 	}
 
-	LOG_INFO(">> Saving server...");
-
-	if (!saveGameStorageValues()) {
-		LOG_ERROR("[Error - Game::saveGameState] Failed to save game storage values.");
-	}
-
-	if (!saveAccountStorageValues()) {
-		LOG_ERROR("[Error - Game::saveGameState] Failed to save account-level storage values.");
-	}
-
 	for (const auto& it : players) {
 		it.second->loginPosition = it.second->getPosition();
-		IOLoginData::savePlayer(it.second);
 	}
 
-	Map::save();
+	g_saveManager.saveAll();
 
 	g_databaseTasks.flush();
 

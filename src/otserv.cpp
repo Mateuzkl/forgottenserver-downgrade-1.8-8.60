@@ -316,6 +316,9 @@ void startServer()
 #endif
 	}
 
+	// Shutdown ThreadPool first - async map saves need DB connection alive
+	g_threadPool.shutdown();
+
 	// Cleanup Lua environment before shutting down threads
 	LuaEnvironment::shutdown();
 
@@ -328,7 +331,6 @@ void startServer()
 #ifdef STATS_ENABLED
 	g_stats.join();
 #endif
-	// ThreadPool uses jthread — auto-joins in shutdown(), no manual join needed
 
 }
 

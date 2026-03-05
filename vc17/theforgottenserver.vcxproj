@@ -269,6 +269,7 @@
     <ClCompile Include="..\src\raids.cpp" />
     <ClCompile Include="..\src\rewardchest.cpp" />
     <ClCompile Include="..\src\rsa.cpp" />
+    <ClCompile Include="..\src\save_manager.cpp" />
     <ClCompile Include="..\src\scheduler.cpp" />
     <ClCompile Include="..\src\script.cpp" />
     <ClCompile Include="..\src\scriptmanager.cpp" />
@@ -359,6 +360,7 @@
     <ClInclude Include="..\src\raids.h" />
     <ClInclude Include="..\src\rewardchest.h" />
     <ClInclude Include="..\src\rsa.h" />
+    <ClInclude Include="..\src\save_manager.h" />
     <ClInclude Include="..\src\scheduler.h" />
     <ClInclude Include="..\src\script.h" />
     <ClInclude Include="..\src\scriptmanager.h" />
