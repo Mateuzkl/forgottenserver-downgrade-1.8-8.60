@@ -1611,11 +1611,15 @@ void Player::onThink(uint32_t interval)
 	Creature::onThink(interval);
 
 	if (client && getIP() == 0) {
-		if (ghostModeStartTime == 0) {
-			ghostModeStartTime = OTSYS_TIME();
-		} else if (OTSYS_TIME() - ghostModeStartTime >= 60000) {
-			kickPlayer(true);
-			return;
+		if (hasCondition(CONDITION_INFIGHT)) {
+			ghostModeStartTime = 0;
+		} else {
+			if (ghostModeStartTime == 0) {
+				ghostModeStartTime = OTSYS_TIME();
+			} else if (OTSYS_TIME() - ghostModeStartTime >= 60000) {
+				kickPlayer(true);
+				return;
+			}
 		}
 	} else {
 		ghostModeStartTime = 0;
@@ -1648,7 +1652,7 @@ void Player::onThink(uint32_t interval)
 		addMessageBuffer();
 	}
 
-	if (!getTile()->hasFlag(TILESTATE_NOLOGOUT) && !isAccessPlayer() && !(client && client->protocol() && client->protocol()->isSpectator)) {
+	if (!getTile()->hasFlag(TILESTATE_NOLOGOUT) && !isAccessPlayer() && !(client && client->protocol() && client->protocol()->isSpectator) && !hasCondition(CONDITION_INFIGHT)) {
 		idleTime += interval;
 		const int32_t kickAfterMinutes = getInteger(ConfigManager::KICK_AFTER_MINUTES);
 		if (idleTime > (kickAfterMinutes * 60000) + 60000) {
@@ -1659,6 +1663,10 @@ void Player::onThink(uint32_t interval)
 			    fmt::format(
 			        "There was no variation in your behaviour for {:d} minutes. You will be disconnected in one minute if there is no change in your actions until then.",
 			        kickAfterMinutes)));
+		}
+	} else {
+		if (hasCondition(CONDITION_INFIGHT)) {
+			idleTime = 0;
 		}
 	}
 
