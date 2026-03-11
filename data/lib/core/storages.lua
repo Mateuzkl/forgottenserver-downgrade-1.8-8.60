@@ -21,8 +21,7 @@ PlayerStorageKeys = {
     firstItems = 30025,
     isCasting = 30030,
     isCastingPassword = 30031,
-
- 
+    rewardExercise = 90705,
 }
 
 

@@ -62,6 +62,7 @@ function exerciseTraining.onUse(player, item, fromPosition, target, toPosition, 
 
 		onExerciseTraining[playerId] = {}
 		if not onExerciseTraining[playerId].event then
+			player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You started training with an exercise weapon.")
 			onExerciseTraining[playerId].event = addEvent(ExerciseEvent, 0, playerId, targetPos,
 			                                              item.itemid, targetId)
 			onExerciseTraining[playerId].dummyPos = targetPos
