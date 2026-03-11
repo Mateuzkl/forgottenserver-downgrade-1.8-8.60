@@ -17,47 +17,30 @@
 
 class Creature;
 
-struct alignas(16) ChunkKey {
-	int32_t minRangeX, maxRangeX, minRangeY, maxRangeY;
-	uint16_t x, y;
-	uint8_t z;
-	bool multifloor, onlyPlayers;
-	uint8_t padding[5] = {}; // ensure deterministic padding for memcmp
+struct SpectatorsCache {
+	struct FloorData {
+		bool hasFloor{false};
+		bool hasMultiFloor{false};
+		SpectatorVec floor;
+		SpectatorVec multiFloor;
+	};
 
-	bool operator==(const ChunkKey& other) const noexcept {
-		return std::memcmp(this, &other, sizeof(ChunkKey)) == 0;
-	}
+	int32_t minRangeX{0};
+	int32_t maxRangeX{0};
+	int32_t minRangeY{0};
+	int32_t maxRangeY{0};
+
+	FloorData creatures;
+	FloorData monsters;
+	FloorData npcs;
+	FloorData players;
 };
 
-struct ChunkKeyHash {
-	std::size_t operator()(const ChunkKey& key) const noexcept {
-		std::size_t hash = 0;
-		hash_combine(hash, key.minRangeX);
-		hash_combine(hash, key.maxRangeX);
-		hash_combine(hash, key.minRangeY);
-		hash_combine(hash, key.maxRangeY);
-		hash_combine(hash, key.x);
-		hash_combine(hash, key.y);
-		hash_combine(hash, key.z);
-		hash_combine(hash, key.multifloor);
-		hash_combine(hash, key.onlyPlayers);
-		return hash;
-	}
-
-private:
-	template <typename T>
-	static void hash_combine(std::size_t& seed, const T& v) {
-		seed ^= std::hash<T>{}(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+struct PositionHasher {
+	std::size_t operator()(const Position& pos) const {
+		return std::hash<uint32_t>()(static_cast<uint32_t>(pos.x) | (static_cast<uint32_t>(pos.y) << 16)) ^ (std::hash<uint8_t>()(pos.z) << 1);
 	}
 };
-
-struct ChunkKeyEqual {
-	bool operator()(const ChunkKey& lhs, const ChunkKey& rhs) const noexcept {
-		return std::memcmp(&lhs, &rhs, sizeof(ChunkKey)) == 0;
-	}
-};
-
-using ChunkCache = std::unordered_map<ChunkKey, SpectatorVec, ChunkKeyHash, ChunkKeyEqual>;
 
 inline constexpr int32_t MAP_MAX_LAYERS = 16;
 
@@ -97,7 +80,7 @@ private:
 	int_fast32_t closedNodes;
 };
 
-using SpectatorCache = std::map<Position, SpectatorVec>;
+using SpectatorCache = std::unordered_map<Position, SpectatorsCache, PositionHasher>;
 
 inline constexpr int32_t FLOOR_BITS = 3;
 inline constexpr int32_t FLOOR_SIZE = (1 << FLOOR_BITS);
@@ -272,11 +255,9 @@ public:
 
 	void getSpectators(SpectatorVec& spectators, const Position& centerPos, bool multifloor = false,
 	                   bool onlyPlayers = false, int32_t minRangeX = 0, int32_t maxRangeX = 0, int32_t minRangeY = 0,
-	                   int32_t maxRangeY = 0);
+	                   int32_t maxRangeY = 0, bool onlyMonsters = false, bool onlyNpcs = false);
 
 	void clearSpectatorCache();
-	void clearPlayersSpectatorCache();
-	void clearChunkSpectatorCache();
 
 	/**
 	 * Checks if you can throw an object to that position
@@ -331,9 +312,7 @@ public:
 	Houses houses;
 
 private:
-	SpectatorCache spectatorCache;
-	SpectatorCache playersSpectatorCache;
-	ChunkCache chunksSpectatorCache;
+	SpectatorCache spectatorsCache;
 
 	QTreeNode root;
 
@@ -345,7 +324,7 @@ private:
 
 	void getSpectatorsInternal(SpectatorVec& spectators, const Position& centerPos, int32_t minRangeX,
 	                           int32_t maxRangeX, int32_t minRangeY, int32_t maxRangeY, int32_t minRangeZ,
-	                           int32_t maxRangeZ, bool onlyPlayers) const;
+	                           int32_t maxRangeZ, bool onlyPlayers, bool onlyMonsters, bool onlyNpcs) const;
 
 	friend class Game;
 	friend class IOMap;
