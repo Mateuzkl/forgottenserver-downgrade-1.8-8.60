@@ -1070,7 +1070,7 @@ int luaPlayerSetHarmony(lua_State* L)
 	// player:setHarmony(value)
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
-		int32_t value = getInteger<int32_t>(L, 2);
+		uint8_t value = getNumber<uint8_t>(L, 2, 0);
 		player->setHarmony(value);
 		pushBoolean(L, true);
 	} else {
@@ -1084,9 +1084,60 @@ int luaPlayerAddHarmony(lua_State* L)
 	// player:addHarmony(value)
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
-		int32_t value = getInteger<int32_t>(L, 2);
-		player->setHarmony(player->getHarmony() + value);
+		uint8_t value = getNumber<uint8_t>(L, 2, 0);
+		player->addHarmony(value);
 		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerRemoveHarmony(lua_State* L)
+{
+	// player:removeHarmony(value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		uint8_t value = getNumber<uint8_t>(L, 2, 0);
+		player->removeHarmony(value);
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerIsSerene(lua_State* L)
+{
+	// player:isSerene()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		pushBoolean(L, player->isSerene());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetSerene(lua_State* L)
+{
+	// player:setSerene(serene)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		player->setSerene(getBoolean(L, 2, true));
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetSereneCooldown(lua_State* L)
+{
+	// player:getSereneCooldown()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushnumber(L, player->getSereneCooldown());
 	} else {
 		lua_pushnil(L);
 	}
@@ -1100,6 +1151,32 @@ int luaPlayerSetSereneCooldown(lua_State* L)
 	if (player) {
 		uint64_t addTime = getNumber<uint64_t>(L, 2, 0);
 		player->setSereneCooldown(addTime);
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetVirtue(lua_State* L)
+{
+	// player:getVirtue()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, static_cast<int>(player->getVirtue()));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetVirtue(lua_State* L)
+{
+	// player:setVirtue(virtue)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		uint8_t virtue = getNumber<uint8_t>(L, 2, 0);
+		player->setVirtue(static_cast<VirtueMonk_t>(virtue));
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -3186,7 +3263,13 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getHarmony", luaPlayerGetHarmony);
 	registerMethod("Player", "setHarmony", luaPlayerSetHarmony);
 	registerMethod("Player", "addHarmony", luaPlayerAddHarmony);
+	registerMethod("Player", "removeHarmony", luaPlayerRemoveHarmony);
+	registerMethod("Player", "isSerene", luaPlayerIsSerene);
+	registerMethod("Player", "setSerene", luaPlayerSetSerene);
+	registerMethod("Player", "getSereneCooldown", luaPlayerGetSereneCooldown);
 	registerMethod("Player", "setSereneCooldown", luaPlayerSetSereneCooldown);
+	registerMethod("Player", "getVirtue", luaPlayerGetVirtue);
+	registerMethod("Player", "setVirtue", luaPlayerSetVirtue);
 	registerMethod("Player", "clearSpellCooldowns", luaPlayerClearSpellCooldowns);
 
 	registerMethod("Player", "getBankBalance", luaPlayerGetBankBalance);

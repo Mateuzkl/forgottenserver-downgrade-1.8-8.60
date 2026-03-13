@@ -64,6 +64,7 @@ void Game::start(ServiceManager* manager)
 		g_scheduler.addEvent(createSchedulerTask(EVENT_LIGHTINTERVAL, [this]() { checkLight(); }));
 	}
 	g_scheduler.addEvent(createSchedulerTask(EVENT_CREATURE_THINK_INTERVAL, [this]() { checkCreatures(0); }));
+	g_scheduler.addEvent(createSchedulerTask(1000, [this]() { checkSereneStatus(); }));
 }
 
 GameState_t Game::getGameState() const { return gameState; }
@@ -3829,6 +3830,69 @@ void Game::checkCreatures(size_t index)
 #ifdef STATS_ENABLED
 	g_stats.playersOnline = getPlayersOnline();
 #endif
+}
+
+void Game::checkSereneStatus()
+{
+	g_scheduler.addEvent(createSchedulerTask(1000, [this]() { checkSereneStatus(); }));
+
+	for (const auto& [id, player] : getPlayers()) {
+		if (!player || !player->isMonk()) {
+			continue;
+		}
+
+		// Forced serene via cooldown (Focus Serenity spell)
+		if (player->getSereneCooldown() > 0) {
+			player->setSerene(true);
+			continue;
+		}
+
+		// Check natural serene conditions:
+		// 1) No nearby party members, OR
+		// 2) Fewer than 6 non-summoned monsters around
+		const Party* party = player->getParty();
+		bool hasNearbyPartyMembers = false;
+
+		if (party) {
+			const Position& pos = player->getPosition();
+			const Player* leader = party->getLeader();
+			if (leader && leader != player) {
+				const Position& lpos = leader->getPosition();
+				if (pos.z == lpos.z && std::max(
+					std::abs(pos.x - lpos.x), std::abs(pos.y - lpos.y)) <= 10) {
+					hasNearbyPartyMembers = true;
+				}
+			}
+			if (!hasNearbyPartyMembers) {
+				for (Player* member : const_cast<Party*>(party)->getMembers()) {
+					if (member == player) continue;
+					const Position& mpos = member->getPosition();
+					if (pos.z == mpos.z && std::max(
+						std::abs(pos.x - mpos.x), std::abs(pos.y - mpos.y)) <= 10) {
+						hasNearbyPartyMembers = true;
+						break;
+					}
+				}
+			}
+		}
+
+		bool notBoxed = true;
+		SpectatorVec spectators;
+		map.getSpectators(spectators, player->getPosition(), false, false, 7, 7, 5, 5);
+		int monsterCount = 0;
+		for (Creature* spec : spectators) {
+			if (spec->getMonster() && !spec->getMaster()) {
+				if (++monsterCount >= 6) {
+					notBoxed = false;
+					break;
+				}
+			}
+		}
+
+		bool condition1 = !party || !hasNearbyPartyMembers;
+		bool condition2 = notBoxed;
+		player->setSerene(condition1 && condition2);
+	}
 }
 
 void Game::changeSpeed(Creature* creature, int32_t varSpeedDelta)

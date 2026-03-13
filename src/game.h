@@ -437,6 +437,7 @@ public:
 	void updateCreatureWalk(uint32_t creatureId);
 	void checkCreatureAttack(uint32_t creatureId);
 	void checkCreatures(size_t index);
+	void checkSereneStatus();
 
 	bool combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* target, bool checkDefense, bool checkArmor,
 	                    bool field, bool ignoreResistances = false);

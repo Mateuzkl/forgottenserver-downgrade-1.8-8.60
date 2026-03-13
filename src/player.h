@@ -23,6 +23,13 @@
 
 #include <bitset>
 
+enum VirtueMonk_t : uint8_t {
+	VIRTUE_NONE = 0,
+	VIRTUE_HARMONY = 1,
+	VIRTUE_JUSTICE = 2,
+	VIRTUE_SUSTAIN = 3,
+};
+
 class House;
 class NetworkMessage;
 class Weapon;
@@ -250,8 +257,19 @@ public:
 	void removeBlessing(uint8_t blessing) { blessings.reset(blessing); }
 	bool hasBlessing(uint8_t blessing) const { return blessings.test(blessing); }
 
-	int32_t getHarmony() const { return harmonyPoints; }
-	void setHarmony(int32_t value) { harmonyPoints = value; }
+	uint8_t getHarmony() const { return m_harmony; }
+	void setHarmony(uint8_t value) {
+		uint8_t minHarmony = (getVirtue() == VIRTUE_HARMONY) ? 1 : 0;
+		m_harmony = static_cast<uint8_t>(std::clamp<int>(value, minHarmony, 5));
+	}
+	void addHarmony(uint8_t value) { setHarmony(m_harmony + value); }
+	void removeHarmony(uint8_t value) {
+		int newVal = static_cast<int>(m_harmony) - static_cast<int>(value);
+		setHarmony(static_cast<uint8_t>(std::max(newVal, 0)));
+	}
+
+	bool isSerene() const { return m_serene; }
+	void setSerene(bool serene) { m_serene = serene; }
 
 	uint64_t getSereneCooldown() const {
 		uint64_t now = OTSYS_TIME();
@@ -262,6 +280,20 @@ public:
 	}
 	void setSereneCooldown(uint64_t addTime) {
 		m_serene_cooldown = OTSYS_TIME() + addTime;
+	}
+
+	VirtueMonk_t getVirtue() const { return m_virtue; }
+	void setVirtue(VirtueMonk_t virtue) {
+		switch (virtue) {
+			case VIRTUE_HARMONY:
+			case VIRTUE_JUSTICE:
+			case VIRTUE_SUSTAIN:
+				m_virtue = virtue;
+				break;
+			default:
+				m_virtue = VIRTUE_NONE;
+				break;
+		}
 	}
 
 	void clearCooldowns();
@@ -1309,8 +1341,10 @@ private:
 	bool tokenLocked = false;
 	bool staminaPzActive = false;
 	bool staminaTrainerActive = false;
-	int32_t harmonyPoints = 0;
+	uint8_t m_harmony = 0;
+	bool m_serene = false;
 	uint64_t m_serene_cooldown = 0;
+	VirtueMonk_t m_virtue = VIRTUE_NONE;
 
 	AccountManagerMode accountManager{ACCOUNT_MANAGER_NONE};
 	std::array<bool, 15> managerTalkState{};
