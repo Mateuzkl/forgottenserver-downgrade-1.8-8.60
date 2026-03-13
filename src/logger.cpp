@@ -13,6 +13,7 @@
 #include <io.h>
 #define write _write
 #define STDERR_FILENO 2
+using ssize_t = ptrdiff_t;
 #else
 #include <unistd.h>
 #endif

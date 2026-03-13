@@ -82,6 +82,9 @@
     <ClCompile Include="..\src\inbox.cpp" />
     <ClCompile Include="..\src\mapcache.cpp" />
     <ClCompile Include="..\src\stats.cpp" />
+    <ClCompile Include="..\src\protocolspectator.cpp" />
+    <ClCompile Include="..\src\save_manager.cpp" />
+    <ClCompile Include="..\src\thread_pool.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\luaactions.cpp">
@@ -277,6 +280,9 @@
     <ClInclude Include="..\src\inbox.h" />
     <ClInclude Include="..\src\mapcache.h" />
     <ClInclude Include="..\src\stats.h" />
+    <ClInclude Include="..\src\protocolspectator.h" />
+    <ClInclude Include="..\src\save_manager.h" />
+    <ClInclude Include="..\src\thread_pool.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="theforgottenserver.rc" />
