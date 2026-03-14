@@ -3,8 +3,8 @@ condition:setOutfit({ lookType = AVATAR_LOOKTYPE_NATURE })
 
 local avatarBonus = Condition(CONDITION_ATTRIBUTES)
 avatarBonus:setParameter(CONDITION_PARAM_SUBID, 267)
-avatarBonus:setParameter(CONDITION_PARAM_SPECIALSKILL_CRITICALHITCHANCE, 10)
-avatarBonus:setParameter(CONDITION_PARAM_SPECIALSKILL_CRITICALHITAMOUNT, 50)
+avatarBonus:setParameter(CONDITION_PARAM_SPECIALSKILL_CRITICALHITCHANCE, 1000)
+avatarBonus:setParameter(CONDITION_PARAM_SPECIALSKILL_CRITICALHITAMOUNT, 5000)
 
 local spell = Spell("instant")
 

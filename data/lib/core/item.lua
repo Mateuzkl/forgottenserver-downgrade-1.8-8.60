@@ -436,15 +436,12 @@ do
 		do
 			for skill, value in pairs(abilities.specialSkills) do
 				if value ~= 0 then
-					-- add + symbol to special skill "amount" fields
-					if skill-1 < 6 and skill % 2 == 0 and not (skill-1 == SPECIALSKILL_CRITICALHITAMOUNT) then
-						value = string.format("%+d", value/100)
-					elseif skill-1 < 6 and skill % 2 == 1 then
-						value = fmt("%+d", value)
-					elseif skill - 1 >= 6 then
-						-- fatal, dodge, momentum coming from the item natively
-						-- (stats coming from tier are near tier info)
+					if skill - 1 >= 6 then
+						-- fatal, dodge, momentum
 						value = fmt("%0.2f", value / 100)
+					else
+						-- critical chance, critical amount, leech chance, leech amount
+						value = fmt("%+.2f", value / 100)
 					end
 
 					descriptions[#descriptions + 1] = fmt("%s %s%%", getSpecialSkillName(skill - 1), value)
