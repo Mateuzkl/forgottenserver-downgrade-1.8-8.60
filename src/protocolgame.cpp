@@ -2445,8 +2445,6 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	// player light level
 	sendCreatureLight(creature);
 
-	player->sendIcons();
-
 	const std::forward_list<VIPEntry>& vipEntries = IOLoginData::getVIPEntries(player->getAccount());
 	for (const VIPEntry& entry : vipEntries) {
 		Player* vipPlayer = g_game.getPlayerByGUID(entry.guid);
@@ -2454,6 +2452,8 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 		sendVIP(entry.guid, entry.name,
 		        static_cast<VipStatus_t>((vipPlayer && (!vipPlayer->isInGhostMode() || player->isAccessPlayer()))));
 	}
+
+	player->sendIcons();
 }
 
 void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& newPos, int32_t newStackPos,

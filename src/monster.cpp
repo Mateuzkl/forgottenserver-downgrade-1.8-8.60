@@ -1988,10 +1988,30 @@ bool Monster::getCombatValues(int32_t& min, int32_t& max)
 
 void Monster::updateLookDirection()
 {
-	if (attackedCreature) {
-		Direction newDir = getDirectionTo(getPosition(), attackedCreature->getPosition(), false);
-		g_game.internalCreatureTurn(this, newDir);
+	if (!attackedCreature) {
+		return;
 	}
+
+	auto lookDirection = DIRECTION_NONE;
+
+	const auto& currentPosition = getPosition();
+	const auto& targetPosition = attackedCreature->getPosition();
+
+	auto offsetX = targetPosition.getOffsetX(currentPosition);
+	auto absOffsetX = std::abs(offsetX);
+
+	auto offsetY = targetPosition.getOffsetY(currentPosition);
+	auto absOffsetY = std::abs(offsetY);
+
+	if (absOffsetX > absOffsetY) {
+		lookDirection = (offsetX < 0) ? DIRECTION_WEST : DIRECTION_EAST;
+	} else if (absOffsetY > absOffsetX) {
+		lookDirection = (offsetY < 0) ? DIRECTION_NORTH : DIRECTION_SOUTH;
+	} else {
+		lookDirection = (offsetX < 0) ? DIRECTION_WEST : DIRECTION_EAST;
+	}
+
+	g_game.internalCreatureTurn(this, lookDirection);
 }
 
 void Monster::dropLoot(Container* corpse, Creature*)
