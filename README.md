@@ -4,14 +4,16 @@
 
 ### 🐱 [Based nekiro downgrade.](https://github.com/nekiro/TFS-1.5-Downgrades)
 
-**Version: TFS 1.7 | Protocol: 8.60**  
+**Version: TFS 1.8 | Protocol: 8.60**  
 _Developed by MillhioreBT & Mateuzkl_
+
+> TFS 1.8 for 8.60 client — full DAT system, ClientID only, no ServerID mapping, reads assets.dat directly like Canary/Crystal/Black Tek.
 
 ---
 
 ## 🚀 Overview
 
-This is a **custom modified version** of The Forgotten Server, downgraded to protocol 8.60 but running on the modern TFS 1.7 engine. It includes numerous exclusive systems and improvements.
+This is a **custom modified version** of The Forgotten Server, downgraded to protocol 8.60 but running on the modern TFS 1.8 engine. It includes numerous exclusive systems and improvements.
 
 ---
 
@@ -92,8 +94,8 @@ sudo apt install git cmake build-essential libluajit-5.1-dev libmysqlclient-dev 
 sudo apt install libmimalloc-dev -y
 
 # Clone and compile
-git clone -b Revscrypt-full --single-branch https://github.com/Mateuzkl/forgottenserver-downgrade-1.7-8.60.git
-cd forgottenserver-downgrade-1.7-8.60
+git clone -b Revscrypt-full --single-branch https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60.git
+cd forgottenserver-downgrade-1.8-8.60
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
@@ -214,7 +216,7 @@ Possuo diversos sistemas bônus de alto nível prontos (como **Market Idêntico 
 
 ### 🤝 Como Apoiar o Projeto
 
-Se você deseja ver este projeto evoluir, receber novas atualizações, correções e sistemas exclusivos, sua contribuição é essencial. Doações incentivam a manutenção e o aprimoramento contínuo da base TFS 1.7.
+Se você deseja ver este projeto evoluir, receber novas atualizações, correções e sistemas exclusivos, sua contribuição é essencial. Doações incentivam a manutenção e o aprimoramento contínuo da base TFS 1.8.
 
 **Chave PIX (Aleatória) para Doações:**
 Basta copiar a chave abaixo e colar no seu banco na opção **Chave Aleatória**. Você pode doar o valor que quiser!
