@@ -302,9 +302,11 @@ bool Spawn::spawnMonster(uint32_t spawnId, spawnBlock_t sb, bool startup /* = fa
 bool Spawn::spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& pos, Direction dir,
                          bool startup /*= false*/)
 {
-	std::unique_ptr<Monster> monster_ptr(new Monster(mType));
-	if (!g_events->eventMonsterOnSpawn(monster_ptr.get(), pos, startup, false)) {
-		return false;
+	auto monster_ptr = std::make_unique<Monster>(mType);
+	Monster* monster = monster_ptr.get();
+
+	if (!g_events->eventMonsterOnSpawn(monster, pos, startup, false)) {
+    	return false;
 	}
 
 	Position finalPos = pos;
@@ -319,7 +321,7 @@ bool Spawn::spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& p
 		// If there is a player blocking the tile, attempt to place the monster
 		// on an adjacent free tile (search radius 1). If none found, fallback
 		// to forced placement (compatibility).
-		if (g_game.placeCreature(monster_ptr.get(), finalPos, false, false)) {
+		if (g_game.placeCreature(monster, finalPos, false, false)) {
 			// placed on original position
 		} else {
 			bool placed = false;
@@ -331,7 +333,7 @@ bool Spawn::spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& p
 							continue;
 						}
 						Position tryPos(pos.x + dx, pos.y + dy, pos.z);
-						if (g_game.placeCreature(monster_ptr.get(), tryPos, false, false)) {
+						if (g_game.placeCreature(monster, tryPos, false, false)) {
 							finalPos = tryPos;
 							placed = true;
 						}
@@ -341,14 +343,14 @@ bool Spawn::spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& p
 			
 			// If not placed yet, attempt the old forced placement as a fallback.
 			if (!placed) {
-				if (!g_game.placeCreature(monster_ptr.get(), finalPos, false, true)) {
+				if (!g_game.placeCreature(monster, finalPos, false, true)) {
 					return false;
 				}
 			}
 		}
 	}
 
-	Monster* monster = monster_ptr.release();
+	monster_ptr.release();
 	monster->setDirection(dir);
 	monster->setSpawn(this);
 	monster->setMasterPos(finalPos);
