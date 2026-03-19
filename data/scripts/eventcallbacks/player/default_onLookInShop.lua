@@ -4,8 +4,6 @@ event.onLookInShop = function(player, itemType, count, description)
 	local description = "You see " .. itemType:getItemDescription()
 	if player:getGroup():getAccess() then
 		description = string.format("%s\nItem ID: %d", description, itemType:getId())
-		description = string.format("%s\nClient ID: %d", description,
-		                            itemType:getClientId())
 
 		local transformEquipId = itemType:getTransformEquipId()
 		local transformDeEquipId = itemType:getTransformDeEquipId()

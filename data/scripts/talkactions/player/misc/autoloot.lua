@@ -97,7 +97,9 @@ function talkaction.onSay(player, words, param)
 	             "--------------------------------------------------\n\n" ..
 	             "Free Account slots: " .. limitFree .. "\n" ..
 	             "Premium Account Slots: " .. limitPremium .. "\n\n" ..
-	             "-- Gold Pouch --\n" ..
+				 "___________Gold Pouch___________\n\n" ..
+	             "Buy: !buy gold pouch (50.000 gold)\n" ..
+	             "An infinite bag to hold your loot items.\n\n" ..
 	             "Free: 30 slots max (no extra pages)\n" ..
 	             "VIP: Unlimited slots (infinite pages)"
 

@@ -478,10 +478,44 @@ do
 		end
 
 		-- damage reflection
-		-- to do
 		do
 			local reflectPercent = abilities.reflectPercent
 			local reflectChance = abilities.reflectChance
+
+			local allPercent = reflectPercent[1] --[[@as integer?]]
+			local allChance = reflectChance[1] --[[@as integer?]]
+			for elem = 2, #reflectPercent do
+				if allPercent ~= reflectPercent[elem] then allPercent = nil; break end
+			end
+			if allPercent then
+				for elem = 2, #reflectChance do
+					if allChance ~= reflectChance[elem] then allChance = nil; break end
+				end
+			end
+
+			if allPercent and allPercent ~= 0 then
+				if allChance and allChance ~= 0 then
+					descriptions[#descriptions + 1] = fmt("reflect all %+d%% (chance: %d%%)", allPercent, allChance)
+				else
+					descriptions[#descriptions + 1] = fmt("reflect all %+d%%", allPercent)
+				end
+			else
+				local reflections = {}
+				for element, value in pairs(reflectPercent) do
+					if value ~= 0 then
+						local chance = reflectChance[element] or 0
+						if chance ~= 0 then
+							reflections[#reflections + 1] = fmt("%s %+d%% (chance: %d%%)", getCombatName(2 ^ (element - 1)), value, chance)
+						else
+							reflections[#reflections + 1] = fmt("%s %+d%%", getCombatName(2 ^ (element - 1)), value)
+						end
+					end
+				end
+
+				if #reflections > 0 then
+					descriptions[#descriptions + 1] = fmt("reflect %s", concat(reflections, ", "))
+				end
+			end
 		end
 
 		-- boost percent

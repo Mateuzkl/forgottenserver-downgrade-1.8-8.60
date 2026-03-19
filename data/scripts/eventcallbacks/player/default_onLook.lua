@@ -12,9 +12,8 @@ event.onLook = function(self, thing, position, distance, description)
 	if self:getGroup():getAccess() then
 		if thing:isItem() then
 			local itemType = thing:getType()
-			local clientId = itemType:getClientId()
 			
-			description = string.format("%s\nItem ID: %d, Client ID: %d", description, thing:getId(), clientId)
+			description = string.format("%s\nItem ID: %d", description, thing:getId())
 
 			local actionId = thing:getActionId()
 			if actionId ~= 0 then
