@@ -276,7 +276,7 @@ bool Spawn::findPlayer(const Position& pos)
 	return false;
 }
 
-bool Spawn::spawnMonster(uint32_t spawnId, spawnBlock_t sb, bool startup /* = false*/)
+bool Spawn::spawnMonster(uint32_t spawnId, const spawnBlock_t& sb, bool startup /* = false*/)
 {
 	bool isBlocked = !startup && findPlayer(sb.pos);
 	size_t monstersCount = sb.mTypes.size(), blockedMonsters = 0;
@@ -414,7 +414,6 @@ void Spawn::checkSpawn()
 			});
 			const bool showPoff = playerBlocking && !anyIgnoresBlock;
 			scheduleSpawn(spawnId, effectDuration, showPoff);
-			break;
 		}
 	}
 
@@ -426,7 +425,7 @@ void Spawn::checkSpawn()
 void Spawn::scheduleSpawn(uint32_t spawnId, uint32_t interval, bool blocked)
 {
 	auto it = spawnMap.find(spawnId);
-	if (interval <= 0 || it == spawnMap.end()) {
+	if (interval == 0 || it == spawnMap.end()) {
 		if (it == spawnMap.end()) {
 			return;
 		}
@@ -489,12 +488,15 @@ void Spawn::scheduleSpawn(uint32_t spawnId, uint32_t interval, bool blocked)
 
 void Spawn::cleanup()
 {
-	std::erase_if(spawnedMap, [](auto& it) {
+	std::erase_if(spawnedMap, [this](auto& it) {
 		auto& [spawnId, monster] = it;
 		if (!monster->isRemoved()) {
 			return false;
 		}
-		monster->decrementReferenceCounter(); // decrement before erase
+		if (auto mapIt = spawnMap.find(spawnId); mapIt != spawnMap.end()) {
+			mapIt->second.lastSpawn = monster->getRemovedTime();
+		}
+		monster->decrementReferenceCounter();
 		return true;
 	});
 }
@@ -509,7 +511,7 @@ void Spawn::clearMonsters()
 	spawnedMap.clear();
 }
 
-bool Spawn::addBlock(spawnBlock_t sb)
+bool Spawn::addBlock(const spawnBlock_t& sb)
 {
 	interval = std::min(interval, sb.interval);
 	spawnMap[spawnMap.size() + 1] = sb;

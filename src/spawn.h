@@ -34,7 +34,7 @@ public:
 	Spawn(const Spawn&) = delete;
 	Spawn& operator=(const Spawn&) = delete;
 
-	bool addBlock(spawnBlock_t sb);
+	bool addBlock(const spawnBlock_t& sb);
 	bool addMonster(const std::string& name, const Position& pos, Direction dir, uint32_t interval);
 	void removeMonster(Monster* monster);
 
@@ -52,7 +52,7 @@ public:
 
 private:
 	// map of the spawned creatures
-	using SpawnedMap = std::multimap<uint32_t, Monster*>;
+	using SpawnedMap = std::map<uint32_t, Monster*>;
 	SpawnedMap spawnedMap;
 
 	// map of creatures in the spawn
@@ -65,7 +65,7 @@ private:
 	uint32_t checkSpawnEvent = 0;
 
 	static bool findPlayer(const Position& pos);
-	bool spawnMonster(uint32_t spawnId, spawnBlock_t sb, bool startup = false);
+	bool spawnMonster(uint32_t spawnId, const spawnBlock_t& sb, bool startup = false);
 	bool spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& pos, Direction dir, bool startup = false);
 	void checkSpawn();
 	void scheduleSpawn(uint32_t spawnId, uint32_t interval, bool blocked = false);

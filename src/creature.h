@@ -102,7 +102,12 @@ public:
 	virtual CreatureType_t getType() const = 0;
 
 	virtual void setID() = 0;
-	void setRemoved() { isInternalRemoved = true; }
+	void setRemoved()
+	{
+		isInternalRemoved = true;
+		removedTime = OTSYS_TIME();
+	}
+	int64_t getRemovedTime() const { return removedTime; }
 
 	uint32_t getID() const { return id; }
 	virtual void removeList() = 0;
@@ -424,6 +429,7 @@ protected:
 	GuildEmblems_t emblem = GUILDEMBLEM_NONE;
 
 	bool isInternalRemoved = false;
+	int64_t removedTime = 0;
 	bool isUpdatingPath = false;
 	bool creatureCheck = false;
 	bool inCheckCreaturesVector = false;
