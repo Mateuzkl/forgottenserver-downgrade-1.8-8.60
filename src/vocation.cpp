@@ -5,11 +5,11 @@
 
 #include "vocation.h"
 
+#include "logger.h"
 #include "player.h"
 #include "pugicast.h"
-#include "pugicast.h"
 #include "tools.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 bool Vocations::loadFromXml()
@@ -74,7 +74,8 @@ bool Vocations::loadFromXml()
 			} else if (caseInsensitiveEqual(attrName, "skillloss") || caseInsensitiveEqual(attrName, "lossskill")) {
 				voc.setLossSkill(attrNode.as_bool());
 			} else {
-				LOG_WARN(fmt::format("[Notice - Vocations::loadFromXml] Unknown attribute: \"{}\" for vocation: {}", attrName, voc.id));
+				LOG_WARN(fmt::format("[Notice - Vocations::loadFromXml] Unknown attribute: \"{}\" for vocation: {}",
+				                     attrName, voc.id));
 			}
 		}
 
@@ -85,10 +86,12 @@ bool Vocations::loadFromXml()
 					if (skillId <= SKILL_LAST) {
 						voc.skillMultipliers[skillId] = pugi::cast<double>(childNode.attribute("multiplier").value());
 					} else {
-						LOG_WARN(fmt::format("[Notice - Vocations::loadFromXml] No valid skill id: {} for vocation: {}", skillId, voc.id));
+						LOG_WARN(fmt::format("[Notice - Vocations::loadFromXml] No valid skill id: {} for vocation: {}",
+						                     skillId, voc.id));
 					}
 				} else {
-					LOG_WARN(fmt::format("[Notice - Vocations::loadFromXml] Missing skill id for vocation: {}", voc.id));
+					LOG_WARN(
+					    fmt::format("[Notice - Vocations::loadFromXml] Missing skill id for vocation: {}", voc.id));
 				}
 			} else if (caseInsensitiveEqual(childNode.name(), "formula")) {
 				if ((attr = childNode.attribute("meleeDamage"))) {
@@ -113,10 +116,10 @@ bool Vocations::loadFromXml()
 			}
 		}
 	}
-	
+
 	size_t vocationCount = vocationsMap.size();
 	LOG_INFO(fmt::format(">> Loading Vocations [\033[1;32m{}\033[0m]...", vocationCount));
-	
+
 	return true;
 }
 

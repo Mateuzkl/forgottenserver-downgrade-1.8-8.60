@@ -3,6 +3,8 @@
 
 #include "otpch.h"
 
+#include "protocolgame.h"
+
 #include "actions.h"
 #include "ban.h"
 #include "configmanager.h"
@@ -11,7 +13,6 @@
 #include "iologindata.h"
 #include "outputmessage.h"
 #include "player.h"
-#include "protocolgame.h"
 #include "scheduler.h"
 
 #include <unordered_set>
@@ -290,8 +291,7 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 
 		auto clientRef = foundPlayer->client;
 		if (clientRef && clientRef->protocol()) {
-			clientRef->disconnectClient(
-			    "You are already logged in.\nSomeone is trying to access your account?");
+			clientRef->disconnectClient("You are already logged in.\nSomeone is trying to access your account?");
 			clientRef->disconnect();
 			clientRef->setOwner(nullptr);
 			g_scheduler.addEvent(
@@ -308,7 +308,7 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 
 void ProtocolGame::spectate(const std::string& name, const std::string& password)
 {
-	//dispatcher thread
+	// dispatcher thread
 	if (isConnectionExpired()) {
 		return;
 	}
@@ -512,7 +512,9 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	bool cast = false;
 	auto authPair = IOLoginData::gameworldAuthentication(accountName, password, characterName, cast);
 	if (cast) {
-		g_dispatcher.addTask([thisPtr = getThis(), name = std::string(characterName), pass = std::string(password)]() { thisPtr->spectate(name, pass); });
+		g_dispatcher.addTask([thisPtr = getThis(), name = std::string(characterName), pass = std::string(password)]() {
+			thisPtr->spectate(name, pass);
+		});
 		return;
 	}
 	uint32_t accountId = authPair.first;
@@ -612,9 +614,11 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		}
 	}
 
-		if (isSpectator) {
+	if (isSpectator) {
 		switch (recvbyte) {
-			case 0x14: g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->disconnect(); }); break;
+			case 0x14:
+				g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->disconnect(); });
+				break;
 			case 0x32:
 				if (isOTCv8) {
 					parseExtendedOpcode(msg);
@@ -635,10 +639,16 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			case 0x72: // Turn West - used for Prev Cast (CTRL + LEFT)
 				g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->parseSwitchCast(uint8_t(0)); });
 				break;
-			case 0x8C: parseLookAt(msg); break; // Look at tile/item
+			case 0x8C:
+				parseLookAt(msg);
+				break; // Look at tile/item
 				break;
-			case 0x96: parseSpectatorSay(msg); break;
-			case 0x97: g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->sendCastChannel(); }); break;
+			case 0x96:
+				parseSpectatorSay(msg);
+				break;
+			case 0x97:
+				g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->sendCastChannel(); });
+				break;
 			default:
 				g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->sendCancelWalk(); });
 				break;
@@ -690,16 +700,16 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				parseAutoWalk(msg);
 			} else {
 				static constexpr Direction moveDirections[] = {
-					DIRECTION_NORTH,     // 0x65
-					DIRECTION_EAST,      // 0x66
-					DIRECTION_SOUTH,     // 0x67
-					DIRECTION_WEST,      // 0x68
+				    DIRECTION_NORTH, // 0x65
+				    DIRECTION_EAST,  // 0x66
+				    DIRECTION_SOUTH, // 0x67
+				    DIRECTION_WEST,  // 0x68
 				};
 				static constexpr Direction diagDirections[] = {
-					DIRECTION_NORTHEAST, // 0x6A
-					DIRECTION_SOUTHEAST, // 0x6B
-					DIRECTION_SOUTHWEST, // 0x6C
-					DIRECTION_NORTHWEST, // 0x6D
+				    DIRECTION_NORTHEAST, // 0x6A
+				    DIRECTION_SOUTHEAST, // 0x6B
+				    DIRECTION_SOUTHWEST, // 0x6C
+				    DIRECTION_NORTHWEST, // 0x6D
 				};
 
 				Direction dir;
@@ -2824,7 +2834,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	uint8_t direction = static_cast<uint8_t>(creature->getDirection());
 	if (direction > 3) {
-			direction = DIRECTION_SOUTH;
+		direction = DIRECTION_SOUTH;
 	}
 	msg.addByte(direction);
 
@@ -3160,17 +3170,13 @@ void ProtocolGame::spectatorTurn(uint8_t direction)
 	candidates.reserve(32);
 
 	for (auto& it : g_game.getPlayers()) {
-		if (it.second->isRemoved() || !it.second->client->protocol())
-			continue;
+		if (it.second->isRemoved() || !it.second->client->protocol()) continue;
 
-		if (!it.second->client->isBroadcasting())
-			continue;
+		if (!it.second->client->isBroadcasting()) continue;
 
-		if (!it.second->client->password().empty())
-			continue;
+		if (!it.second->client->password().empty()) continue;
 
-		if (it.second->client->isBanned(getIP()))
-			continue;
+		if (it.second->client->isBanned(getIP())) continue;
 
 		candidates.push_back(it.second->getName());
 	}
@@ -3252,7 +3258,8 @@ void ProtocolGame::parseSpectatorSay(NetworkMessage& msg)
 		return;
 	}
 
-	g_dispatcher.addTask([thisPtr = getThis(), text = std::string(text), channelId]() { thisPtr->spectatorSay(text, channelId); });
+	g_dispatcher.addTask(
+	    [thisPtr = getThis(), text = std::string(text), channelId]() { thisPtr->spectatorSay(text, channelId); });
 }
 
 void ProtocolGame::spectatorSay(const std::string text, uint16_t channelId)
@@ -3264,11 +3271,7 @@ void ProtocolGame::spectatorSay(const std::string text, uint16_t channelId)
 	player->client->spectatorSay(getThis(), text);
 }
 
-void ProtocolGame::sendCastChannel()
-{
-	
-	sendChannel(CHANNEL_CAST, "Cast Channel");
-}
+void ProtocolGame::sendCastChannel() { sendChannel(CHANNEL_CAST, "Cast Channel"); }
 
 void ProtocolGame::syncOpenContainers()
 {
@@ -3283,10 +3286,11 @@ void ProtocolGame::syncOpenContainers()
 
 void ProtocolGame::sendWelcomeMessage()
 {
-	std::string message = "Welcome to the Live Cast System!\n\n"
-		"Do you know you can use CTRL + ARROWS to switch casts?\n\n"
-		"Voce sabia que pode usar CTRL + SETAS para alternar casts?\n\n"
-		"Type /commands in the cast channel to see available commands.";
+	std::string message =
+	    "Welcome to the Live Cast System!\n\n"
+	    "Do you know you can use CTRL + ARROWS to switch casts?\n\n"
+	    "Voce sabia que pode usar CTRL + SETAS para alternar casts?\n\n"
+	    "Type /commands in the cast channel to see available commands.";
 	TextMessage textMessage(MESSAGE_EVENT_ADVANCE, message);
 	sendTextMessage(textMessage);
 }
@@ -3309,13 +3313,15 @@ void ProtocolGame::parseSwitchCast(uint8_t direction)
 			Player* newCaster = casters[0];
 			if (newCaster && newCaster != player) {
 				player->client->removeSpectator(getThis());
-				player->client->sendCastMessage(spectator_name, spectator_name + " has left the cast.", TALKTYPE_CHANNEL_O);
+				player->client->sendCastMessage(spectator_name, spectator_name + " has left the cast.",
+				                                TALKTYPE_CHANNEL_O);
 				knownCreatureSet.clear();
 				player = newCaster;
 				player->client->addSpectator(getThis());
 				sendAddCreature(player, player->getPosition(), 0, CONST_ME_NONE);
 				syncOpenContainers();
-				player->client->sendCastMessage(spectator_name, spectator_name + " has joined the cast.", TALKTYPE_CHANNEL_O);
+				player->client->sendCastMessage(spectator_name, spectator_name + " has joined the cast.",
+				                                TALKTYPE_CHANNEL_O);
 				sendMagicEffect(player->getPosition(), CONST_ME_TELEPORT);
 			}
 		}

@@ -1,7 +1,6 @@
 // Copyright 2023 The Forgotten Server Authors. All rights reserved.
 // Use of this source code is governed by the GPL-2.0 License that can be found in the LICENSE file.
 
-
 #ifndef FS_IOLOGINDATA_H
 #define FS_IOLOGINDATA_H
 
@@ -25,7 +24,8 @@ public:
 
 	static AccountType_t getAccountType(uint32_t accountId);
 	static void setAccountType(uint32_t accountId, AccountType_t accountType);
-	static void updateOnlineStatus(uint32_t guid, bool login, bool broadcasting, const std::string& cast_password, const std::string& cast_description, uint32_t spectators);
+	static void updateOnlineStatus(uint32_t guid, bool login, bool broadcasting, const std::string& cast_password,
+	                               const std::string& cast_description, uint32_t spectators);
 	static void removeOnlineStatus(uint32_t guid);
 	static bool preloadPlayer(Player* player);
 
@@ -33,7 +33,8 @@ public:
 	static bool loadPlayerByName(Player* player, std::string_view name);
 	static bool loadPlayer(Player* player, DBResult_ptr result);
 	static bool savePlayer(Player* player);
-	static bool addRewardItems(uint32_t playerId, const ItemBlockList& itemList, DBInsert& query_insert, PropWriteStream& propWriteStream);
+	static bool addRewardItems(uint32_t playerId, const ItemBlockList& itemList, DBInsert& query_insert,
+	                           PropWriteStream& propWriteStream);
 	static uint32_t getGuidByName(std::string_view name);
 	static bool getGuidByNameEx(uint32_t& guid, bool& specialVip, std::string& name);
 	static bool saveAutoLootConfig(Player* player);
@@ -41,7 +42,7 @@ public:
 	static std::string_view getNameByGuid(uint32_t guid);
 	static bool formatPlayerName(std::string& name);
 	static void increaseBankBalance(uint32_t guid, uint64_t bankBalance);
-	static 	bool hasBiddedOnHouse(uint32_t guid_guild);
+	static bool hasBiddedOnHouse(uint32_t guid_guild);
 
 	static std::forward_list<VIPEntry> getVIPEntries(uint32_t accountId);
 	static void addVIPEntry(uint32_t accountId, uint32_t guid);

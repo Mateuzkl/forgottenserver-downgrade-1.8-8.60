@@ -6,11 +6,12 @@
 #include "connection.h"
 
 #include "configmanager.h"
+#include "logger.h"
 #include "outputmessage.h"
 #include "protocol.h"
 #include "scheduler.h"
 #include "server.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 Connection_ptr ConnectionManager::createConnection(boost::asio::io_context& io_context,
@@ -19,7 +20,8 @@ Connection_ptr ConnectionManager::createConnection(boost::asio::io_context& io_c
 	std::lock_guard<std::mutex> lockClass(connectionManagerLock);
 
 	if (connections.size() >= MAX_CONNECTIONS_TOTAL) {
-		LOG_WARN(fmt::format("[ConnectionManager] Max connections ({}) reached. Rejecting new connection.", MAX_CONNECTIONS_TOTAL));
+		LOG_WARN(fmt::format("[ConnectionManager] Max connections ({}) reached. Rejecting new connection.",
+		                     MAX_CONNECTIONS_TOTAL));
 		return nullptr;
 	}
 

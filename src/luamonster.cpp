@@ -241,22 +241,22 @@ int luaMonsterRemoveFriend(lua_State* L)
 
 int luaMonsterSetType(lua_State* L)
 {
-    // monster:setType(name[, restoreHealth = false])
-    Monster* monster = getUserdata<Monster>(L, 1);
-    if (!monster) {
-        lua_pushnil(L);
-        return 1;
-    }
+	// monster:setType(name[, restoreHealth = false])
+	Monster* monster = getUserdata<Monster>(L, 1);
+	if (!monster) {
+		lua_pushnil(L);
+		return 1;
+	}
 
 	MonsterType* monsterType = g_monsters.getMonsterType(getString(L, 2));
-    if (!monsterType) {
-        lua_pushnil(L);
-        return 1;
-    }
+	if (!monsterType) {
+		lua_pushnil(L);
+		return 1;
+	}
 
 	bool restoreHealth = getBoolean(L, 3, false);
-    pushBoolean(L, monster->setType(monsterType, restoreHealth));
-    return 1;
+	pushBoolean(L, monster->setType(monsterType, restoreHealth));
+	return 1;
 }
 
 int luaMonsterGetFriendList(lua_State* L)

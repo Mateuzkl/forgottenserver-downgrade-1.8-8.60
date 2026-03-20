@@ -199,8 +199,7 @@ void BedItem::wakeUp(Player* player)
 void BedItem::regeneratePlayer(Player* player) const
 {
 	const auto now = system_clock::now();
-	const auto currentTime = static_cast<uint64_t>(
-		duration_cast<seconds>(now.time_since_epoch()).count());
+	const auto currentTime = static_cast<uint64_t>(duration_cast<seconds>(now.time_since_epoch()).count());
 
 	if (currentTime <= sleepStart) {
 		return;
@@ -216,8 +215,7 @@ void BedItem::regeneratePlayer(Player* player) const
 			const auto ticksInSeconds = static_cast<uint32_t>(condition->getTicks() / 1000);
 			regen = std::min(ticksInSeconds, sleptTime) / REGEN_INTERVAL_SECONDS;
 
-			const auto newRegenTicks = condition->getTicks() -
-				static_cast<int32_t>(regen * REGEN_TICKS_PER_INTERVAL);
+			const auto newRegenTicks = condition->getTicks() - static_cast<int32_t>(regen * REGEN_TICKS_PER_INTERVAL);
 
 			if (newRegenTicks <= 0) {
 				player->removeCondition(condition);
@@ -232,9 +230,7 @@ void BedItem::regeneratePlayer(Player* player) const
 		player->changeMana(regen);
 	}
 
-	const int32_t soulRegen = static_cast<int32_t>(
-		sleptTime / SOUL_REGEN_INTERVAL_SECONDS
-	);
+	const int32_t soulRegen = static_cast<int32_t>(sleptTime / SOUL_REGEN_INTERVAL_SECONDS);
 	player->changeSoul(soulRegen);
 }
 
@@ -259,8 +255,7 @@ void BedItem::updateAppearance(const Player* player)
 void BedItem::internalSetSleeper(const Player* player)
 {
 	sleeperGUID = player->getGUID();
-	sleepStart = static_cast<uint64_t>(
-		duration_cast<seconds>(system_clock::now().time_since_epoch()).count());
+	sleepStart = static_cast<uint64_t>(duration_cast<seconds>(system_clock::now().time_since_epoch()).count());
 
 	setSpecialDescription(fmt::format("{} is sleeping there.", player->getName()));
 }

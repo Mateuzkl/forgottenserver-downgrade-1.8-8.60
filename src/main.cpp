@@ -38,11 +38,11 @@ static bool argumentsHandler(const std::vector<std::string_view>& args)
 
 int main(int argc, const char** argv)
 {
-    std::vector<std::string_view> args(argv, argv + argc);
+	std::vector<std::string_view> args(argv, argv + argc);
 	if (!argumentsHandler(args)) {
 		return 1;
 	}
 
-    startServer();
-    return 0;
+	startServer();
+	return 0;
 }

@@ -1,7 +1,6 @@
 // Copyright 2023 The Forgotten Server Authors. All rights reserved.
 // Use of this source code is governed by the GPL-2.0 License that can be found in the LICENSE file.
 
-
 #include "otpch.h"
 
 #include "luascript.h"
@@ -14,7 +13,9 @@
 #include "depotchest.h"
 #include "events.h"
 #include "game.h"
+#include "globalevent.h"
 #include "housetile.h"
+#include "logger.h"
 #include "luavariant.h"
 #include "matrixarea.h"
 #include "monster.h"
@@ -26,9 +27,8 @@
 #include "spectators.h"
 #include "spells.h"
 #include "teleport.h"
-#include "logger.h"
+
 #include <fmt/format.h>
-#include "globalevent.h"
 
 extern GlobalEvents* g_globalEvents;
 
@@ -283,13 +283,13 @@ bool LuaScriptInterface::reInitState()
 
 void LuaEnvironment::shutdown()
 {
-    // Force garbage collection before closing
-    if (g_luaEnvironment.luaState) {
-        lua_gc(g_luaEnvironment.luaState, LUA_GCCOLLECT, 0);
-    }
+	// Force garbage collection before closing
+	if (g_luaEnvironment.luaState) {
+		lua_gc(g_luaEnvironment.luaState, LUA_GCCOLLECT, 0);
+	}
 
-    // Close the main Lua state
-    g_luaEnvironment.closeState();
+	// Close the main Lua state
+	g_luaEnvironment.closeState();
 }
 
 /// Same as lua_pcall, but adds stack trace to error strings in called function.
@@ -585,7 +585,9 @@ bool LuaScriptInterface::callFunction(int params)
 	}
 
 #ifdef STATS_ENABLED
-	uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - time_point).count();
+	uint64_t ns =
+	    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - time_point)
+	        .count();
 	g_stats.addLuaStats(new Stat(ns, getFileByIdForStats(scriptId), ""));
 #endif
 
@@ -1265,9 +1267,10 @@ void LuaScriptInterface::registerFunctions()
 
 	registerGlobalVariable("ACCOUNT_MANAGER_NONE", static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_NONE));
 	registerGlobalVariable("ACCOUNT_MANAGER_NEW", static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_NEW));
-	registerGlobalVariable("ACCOUNT_MANAGER_ACCOUNT", static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_ACCOUNT));
-	registerGlobalVariable("ACCOUNT_MANAGER_NAMELOCK", static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_NAMELOCK));
-
+	registerGlobalVariable("ACCOUNT_MANAGER_ACCOUNT",
+	                       static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_ACCOUNT));
+	registerGlobalVariable("ACCOUNT_MANAGER_NAMELOCK",
+	                       static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_NAMELOCK));
 
 	registerEnum(AMMO_NONE);
 	registerEnum(AMMO_BOLT);
@@ -1535,8 +1538,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CONST_ME_CRITICAL_HIT);
 	registerEnum(CONST_ME_PLUNGING_FISH);
 	registerEnum(CONST_ME_BLUE_ENERGY_SPARK);
-	registerEnum(CONST_ME_ORANGE_ENERGY_SPARK)
-	registerEnum(CONST_ME_GREEN_ENERGY_SPARK);
+	registerEnum(CONST_ME_ORANGE_ENERGY_SPARK) registerEnum(CONST_ME_GREEN_ENERGY_SPARK);
 	registerEnum(CONST_ME_PINK_ENERGY_SPARK);
 	registerEnum(CONST_ME_WHITE_ENERGY_SPARK);
 	registerEnum(CONST_ME_YELLOW_ENERGY_SPARK);
@@ -1997,12 +1999,10 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(FLUID_TEA);
 	registerEnum(FLUID_MEAD);
 
-	registerEnum(GUILDEMBLEM_NONE)
-	registerEnum(GUILDEMBLEM_ALLY)
-	registerEnum(GUILDEMBLEM_ENEMY)
-	registerEnum(GUILDEMBLEM_NEUTRAL)
+	registerEnum(GUILDEMBLEM_NONE) registerEnum(GUILDEMBLEM_ALLY) registerEnum(GUILDEMBLEM_ENEMY)
+	    registerEnum(GUILDEMBLEM_NEUTRAL)
 
-	registerEnum(TALKTYPE_SAY);
+	        registerEnum(TALKTYPE_SAY);
 	registerEnum(TALKTYPE_WHISPER);
 	registerEnum(TALKTYPE_YELL);
 	registerEnum(TALKTYPE_CHANNEL_Y);
@@ -2111,7 +2111,6 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(GUILDLEVEL_MEMBER);
 	registerEnum(GUILDLEVEL_VICE);
 	registerEnum(GUILDLEVEL_LEADER);
-
 
 	// Use with player:addMapMark
 	registerEnum(MAPMARK_TICK);
@@ -2418,7 +2417,7 @@ void LuaScriptInterface::registerFunctions()
 	registerXML();
 
 	registerMethod("Player", "getReset", LuaScriptInterface::luaPlayerGetReset); // reset system
-	registerMethod("Player", "doReset", LuaScriptInterface::luaPlayerDoReset); // reset system
+	registerMethod("Player", "doReset", LuaScriptInterface::luaPlayerDoReset);   // reset system
 	registerMethod("Player", "setReset", LuaScriptInterface::luaPlayerSetReset); // reset system
 	registerMethod("Player", "reloadWarList", LuaScriptInterface::luaPlayerReloadWarList);
 }
@@ -3603,9 +3602,9 @@ bool LuaEnvironment::closeState()
 		return false;
 	}
 
-    // Force full garbage collection before cleanup to release Lua-managed memory
-    lua_gc(luaState, LUA_GCCOLLECT, 0);
-    lua_gc(luaState, LUA_GCCOLLECT, 0); 
+	// Force full garbage collection before cleanup to release Lua-managed memory
+	lua_gc(luaState, LUA_GCCOLLECT, 0);
+	lua_gc(luaState, LUA_GCCOLLECT, 0);
 
 	for (const auto& combatEntry : combatIdMap) {
 		clearCombatObjects(combatEntry.first);
@@ -3628,11 +3627,11 @@ bool LuaEnvironment::closeState()
 	timerEvents.clear();
 	cacheFiles.clear();
 
-    // Release event table reference
-    if (eventTableRef != -1) {
-        luaL_unref(luaState, LUA_REGISTRYINDEX, eventTableRef);
-        eventTableRef = -1;
-    }
+	// Release event table reference
+	if (eventTableRef != -1) {
+		luaL_unref(luaState, LUA_REGISTRYINDEX, eventTableRef);
+		eventTableRef = -1;
+	}
 
 	lua_close(luaState);
 	luaState = nullptr;

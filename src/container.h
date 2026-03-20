@@ -51,12 +51,8 @@ public:
 	virtual DepotLocker* getDepotLocker() { return nullptr; }
 	virtual const DepotLocker* getDepotLocker() const { return nullptr; }
 
-	virtual RewardChest* getRewardChest() {
-		return nullptr;
-	}
-	virtual const RewardChest* getRewardChest() const {
-		return nullptr;
-	}
+	virtual RewardChest* getRewardChest() { return nullptr; }
+	virtual const RewardChest* getRewardChest() const { return nullptr; }
 
 	Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
 	bool unserializeItemNode(OTB::Loader& loader, const OTB::Node& node, PropStream& propStream) override;

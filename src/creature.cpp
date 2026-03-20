@@ -319,8 +319,7 @@ void Creature::addEventWalk(bool firstStep)
 		g_game.checkCreatureWalk(getID());
 	}
 
-	eventWalk = g_scheduler.addEvent(createSchedulerTask(ticks,
-	                                                     [id = getID()]() { g_game.checkCreatureWalk(id); }));
+	eventWalk = g_scheduler.addEvent(createSchedulerTask(ticks, [id = getID()]() { g_game.checkCreatureWalk(id); }));
 }
 
 void Creature::stopEventWalk()

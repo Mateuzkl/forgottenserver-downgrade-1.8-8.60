@@ -8,10 +8,11 @@
 #include "configmanager.h"
 #include "events.h"
 #include "game.h"
+#include "logger.h"
 #include "monster.h"
 #include "pugicast.h"
 #include "scheduler.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Monsters g_monsters;
@@ -51,11 +52,14 @@ bool Spawns::loadFromXml(std::string_view filename)
 		}
 
 		if (radius > 30) {
-			LOG_WARN(fmt::format("[Warning - Spawns::loadFromXml] Radius size bigger than 30 at position: {}, consider lowering it.", centerPos));
+			LOG_WARN(fmt::format(
+			    "[Warning - Spawns::loadFromXml] Radius size bigger than 30 at position: {}, consider lowering it.",
+			    centerPos));
 		}
 
 		if (!spawnNode.first_child()) {
-			LOG_WARN(fmt::format("[Warning - Spawns::loadFromXml] Empty spawn at position: {} with radius: {}.", centerPos, radius));
+			LOG_WARN(fmt::format("[Warning - Spawns::loadFromXml] Empty spawn at position: {} with radius: {}.",
+			                     centerPos, radius));
 			continue;
 		}
 
@@ -69,10 +73,14 @@ bool Spawns::loadFromXml(std::string_view filename)
 
 				int32_t interval = pugi::cast<int32_t>(childNode.attribute("spawntime").value()) * 1000;
 				if (interval < MINSPAWN_INTERVAL) {
-					LOG_WARN(fmt::format("[Warning - Spawns::loadFromXml] {} spawntime can not be less than {} seconds.", pos, MINSPAWN_INTERVAL / 1000));
+					LOG_WARN(
+					    fmt::format("[Warning - Spawns::loadFromXml] {} spawntime can not be less than {} seconds.",
+					                pos, MINSPAWN_INTERVAL / 1000));
 					continue;
 				} else if (interval > MAXSPAWN_INTERVAL) {
-					LOG_WARN(fmt::format("[Warning - Spawns::loadFromXml] {} spawntime can not be more than {} seconds.", pos, MAXSPAWN_INTERVAL / 1000));
+					LOG_WARN(
+					    fmt::format("[Warning - Spawns::loadFromXml] {} spawntime can not be more than {} seconds.",
+					                pos, MAXSPAWN_INTERVAL / 1000));
 					continue;
 				}
 
@@ -98,7 +106,8 @@ bool Spawns::loadFromXml(std::string_view filename)
 
 					MonsterType* mType = g_monsters.getMonsterType(nameAttribute.as_string());
 					if (!mType) {
-						LOG_WARN(fmt::format("[Warning - Spawn::loadFromXml] {} can not find {}", pos, nameAttribute.as_string()));
+						LOG_WARN(fmt::format("[Warning - Spawn::loadFromXml] {} can not find {}", pos,
+						                     nameAttribute.as_string()));
 						continue;
 					}
 
@@ -111,7 +120,9 @@ bool Spawns::loadFromXml(std::string_view filename)
 					if (chance + totalChance > 100) {
 						chance = 100 - totalChance;
 						totalChance = 100;
-						LOG_WARN(fmt::format("[Warning - Spawns::loadFromXml] {} {} total chance for set can not be higher than 100.", mType->name, pos));
+						LOG_WARN(fmt::format(
+						    "[Warning - Spawns::loadFromXml] {} {} total chance for set can not be higher than 100.",
+						    mType->name, pos));
 					} else {
 						totalChance += chance;
 					}
@@ -155,9 +166,13 @@ bool Spawns::loadFromXml(std::string_view filename)
 					spawn.addMonster(nameAttribute.as_string(), pos, dir, static_cast<uint32_t>(interval));
 				} else {
 					if (interval < MINSPAWN_INTERVAL) {
-						LOG_WARN(fmt::format("[Warning - Spawns::loadFromXml] {} {} spawntime can not be less than {} seconds.", nameAttribute.as_string(), pos, MINSPAWN_INTERVAL / 1000));
+						LOG_WARN(fmt::format(
+						    "[Warning - Spawns::loadFromXml] {} {} spawntime can not be less than {} seconds.",
+						    nameAttribute.as_string(), pos, MINSPAWN_INTERVAL / 1000));
 					} else {
-						LOG_WARN(fmt::format("[Warning - Spawns::loadFromXml] {} {} spawntime can not be more than {} seconds.", nameAttribute.as_string(), pos, MAXSPAWN_INTERVAL / 1000));
+						LOG_WARN(fmt::format(
+						    "[Warning - Spawns::loadFromXml] {} {} spawntime can not be more than {} seconds.",
+						    nameAttribute.as_string(), pos, MAXSPAWN_INTERVAL / 1000));
 					}
 				}
 			} else if (caseInsensitiveEqual(childNode.name(), "npc")) {
@@ -195,7 +210,8 @@ void Spawns::startup()
 
 	for (Npc* npc : npcList) {
 		if (!g_game.placeCreature(npc, npc->getMasterPos(), false, true)) {
-			LOG_WARN(fmt::format("[Warning - Spawns::startup] Couldn't spawn npc \"{}\" on position: {}.", npc->getName(), npc->getMasterPos()));
+			LOG_WARN(fmt::format("[Warning - Spawns::startup] Couldn't spawn npc \"{}\" on position: {}.",
+			                     npc->getName(), npc->getMasterPos()));
 			delete npc;
 		}
 	}
@@ -306,14 +322,15 @@ bool Spawn::spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& p
 	Monster* monster = monster_ptr.get();
 
 	if (!g_events->eventMonsterOnSpawn(monster, pos, startup, false)) {
-    	return false;
+		return false;
 	}
 
 	Position finalPos = pos;
 	if (startup) {
 		// No need to send out events to the surrounding since there is no one out there to listen!
 		if (!g_game.internalPlaceCreature(monster_ptr.get(), pos, true)) {
-			LOG_WARN(fmt::format("[Warning - Spawns::startup] Couldn't spawn monster \"{}\" on position: {}.", monster_ptr->getName(), finalPos ));
+			LOG_WARN(fmt::format("[Warning - Spawns::startup] Couldn't spawn monster \"{}\" on position: {}.",
+			                     monster_ptr->getName(), finalPos));
 			return false;
 		}
 	} else {
@@ -340,7 +357,7 @@ bool Spawn::spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& p
 					}
 				}
 			}
-			
+
 			// If not placed yet, attempt the old forced placement as a fallback.
 			if (!placed) {
 				if (!g_game.placeCreature(monster, finalPos, false, true)) {
@@ -378,7 +395,10 @@ void Spawn::checkSpawn()
 	uint32_t spawnCount = 0;
 	const int64_t now = OTSYS_TIME();
 	const int64_t rate = std::max<int64_t>(1, ConfigManager::getInteger(ConfigManager::RATE_SPAWN));
-	const uint32_t effectDuration = ConfigManager::getBoolean(ConfigManager::SPAWN_START_EFFECT_ENABLED) ? static_cast<uint32_t>(ConfigManager::getInteger(ConfigManager::RATE_START_EFFECT)) : 0;
+	const uint32_t effectDuration =
+	    ConfigManager::getBoolean(ConfigManager::SPAWN_START_EFFECT_ENABLED)
+	        ? static_cast<uint32_t>(ConfigManager::getInteger(ConfigManager::RATE_START_EFFECT))
+	        : 0;
 
 	for (auto& [spawnId, sb] : spawnMap) {
 		if (spawnedMap.contains(spawnId)) {
@@ -391,9 +411,8 @@ void Spawn::checkSpawn()
 			// If there is a player blocking and no monster in the set ignores the block,
 			// we show POFF and retry on the next cycle (no teleport effect).
 			bool playerBlocking = findPlayer(sb.pos);
-			bool anyIgnoresBlock = std::ranges::any_of(sb.mTypes, [](const auto& pair) {
-				return pair.first->info.isIgnoringSpawnBlock;
-			});
+			bool anyIgnoresBlock =
+			    std::ranges::any_of(sb.mTypes, [](const auto& pair) { return pair.first->info.isIgnoringSpawnBlock; });
 
 			if (playerBlocking && !anyIgnoresBlock) {
 				if (++spawnCount == 1) {
@@ -443,7 +462,6 @@ void Spawn::scheduleSpawn(uint32_t spawnId, uint32_t interval, bool blocked)
 			}
 		}
 
-
 		spawnMonster(spawnId, sb);
 		sb.effectInitialInterval = 0;
 		return;
@@ -475,7 +493,8 @@ void Spawn::scheduleSpawn(uint32_t spawnId, uint32_t interval, bool blocked)
 	nextDelay = std::max<uint32_t>(nextDelay, static_cast<uint32_t>(SCHEDULER_MINTICKS));
 
 	uint32_t remaining = (interval > nextDelay) ? (interval - nextDelay) : 0;
-	g_scheduler.addEvent(nextDelay, [this, spawnId, remaining, blocked]() { scheduleSpawn(spawnId, remaining, blocked); });
+	g_scheduler.addEvent(nextDelay,
+	                     [this, spawnId, remaining, blocked]() { scheduleSpawn(spawnId, remaining, blocked); });
 }
 
 void Spawn::cleanup()

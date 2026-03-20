@@ -6,10 +6,10 @@
 #include "chat.h"
 
 #include "game.h"
-#include "pugicast.h"
+#include "logger.h"
 #include "pugicast.h"
 #include "scheduler.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Chat* g_chat;
@@ -271,7 +271,8 @@ bool Chat::load()
 					channel.onJoinEvent = scriptInterface.getEvent("onJoin");
 					channel.onLeaveEvent = scriptInterface.getEvent("onLeave");
 				} else {
-					LOG_WARN(fmt::format("[Warning - Chat::load] Can not load script: {}", scriptAttribute.as_string()));
+					LOG_WARN(
+					    fmt::format("[Warning - Chat::load] Can not load script: {}", scriptAttribute.as_string()));
 				}
 			}
 

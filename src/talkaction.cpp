@@ -5,9 +5,9 @@
 
 #include "talkaction.h"
 
+#include "logger.h"
 #include "player.h"
 #include "pugicast.h"
-#include "logger.h"
 
 TalkActions::TalkActions() : scriptInterface("TalkAction Interface") { scriptInterface.initState(); }
 
@@ -106,7 +106,7 @@ TalkActionResult TalkActions::playerSaySpell(Player* player, SpeakClasses type, 
 		if (it->second.executeSay(player, words, param, type)) {
 			return TalkActionResult::CONTINUE;
 		}
-			return TalkActionResult::BREAK;
+		return TalkActionResult::BREAK;
 	}
 	return TalkActionResult::CONTINUE;
 }

@@ -116,12 +116,8 @@ public:
 	uint32_t getManaCost(const Player* player) const;
 	uint32_t getSoulCost() const { return soul; }
 	void setSoulCost(uint32_t s) { soul = s; }
-		uint32_t getReqReset() const {
-			return reset;
-		}
-		void setRequiredReset(uint32_t r) {
-			reset = r;
-		}
+	uint32_t getReqReset() const { return reset; }
+	void setRequiredReset(uint32_t r) { reset = r; }
 	uint32_t getLevel() const { return level; }
 	void setLevel(uint32_t lvl) { level = lvl; }
 	uint32_t getMagicLevel() const { return magLevel; }

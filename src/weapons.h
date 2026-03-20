@@ -102,12 +102,8 @@ public:
 
 	uint32_t getSoul() const { return soul; }
 	void setSoul(uint32_t s) { soul = s; }
-	uint32_t getReqReset() const {
-		return reset;
-	}
-	void setRequiredReset(uint32_t r) {
-		reset = r;
-	}
+	uint32_t getReqReset() const { return reset; }
+	void setRequiredReset(uint32_t r) { reset = r; }
 	uint8_t getBreakChance() const { return breakChance; }
 	void setBreakChance(uint8_t b) { breakChance = b; }
 

@@ -24,31 +24,31 @@
 
 class Decay
 {
-	public:
-		static constexpr size_t DEFAULT_RESERVE_SIZE = 32;
+public:
+	static constexpr size_t DEFAULT_RESERVE_SIZE = 32;
 
-		void startDecay(Item* item, int32_t duration);
-		void stopDecay(Item* item, int64_t timestamp) noexcept;
+	void startDecay(Item* item, int32_t duration);
+	void stopDecay(Item* item, int64_t timestamp) noexcept;
 
-		[[nodiscard]] bool hasDecayingItems() const noexcept { return !decayMap.empty(); }
+	[[nodiscard]] bool hasDecayingItems() const noexcept { return !decayMap.empty(); }
 
-		[[nodiscard]] size_t getDecayBucketCount() const noexcept { return decayMap.size(); }
+	[[nodiscard]] size_t getDecayBucketCount() const noexcept { return decayMap.size(); }
 
-		[[nodiscard]] size_t getTotalDecayingItems() const noexcept;
+	[[nodiscard]] size_t getTotalDecayingItems() const noexcept;
 
-	private:
-		using DecayTimestamp = int64_t;
-		using ItemRef = Item*;
-		using DecayBucket = std::vector<ItemRef>;
+private:
+	using DecayTimestamp = int64_t;
+	using ItemRef = Item*;
+	using DecayBucket = std::vector<ItemRef>;
 
-		void checkDecay() noexcept;
-		void processDecayBatch(std::span<ItemRef const> items) noexcept;
-		void scheduleNextCheck(DecayTimestamp nextTimestamp) noexcept;
+	void checkDecay() noexcept;
+	void processDecayBatch(std::span<ItemRef const> items) noexcept;
+	void scheduleNextCheck(DecayTimestamp nextTimestamp) noexcept;
 
-		[[nodiscard]] static constexpr int32_t clampSchedulerDuration(int32_t duration) noexcept;
+	[[nodiscard]] static constexpr int32_t clampSchedulerDuration(int32_t duration) noexcept;
 
-		uint64_t eventId {0};
-		std::map<DecayTimestamp, DecayBucket> decayMap;
+	uint64_t eventId{0};
+	std::map<DecayTimestamp, DecayBucket> decayMap;
 };
 
 extern Decay g_decay;

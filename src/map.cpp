@@ -10,10 +10,11 @@
 #include "game.h"
 #include "iomap.h"
 #include "iomapserialize.h"
+#include "logger.h"
 #include "mapcache.h"
 #include "monster.h"
 #include "spectators.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Game g_game;
@@ -33,14 +34,16 @@ bool Map::loadMap(const std::string& identifier, bool loadHouses)
 
 		IOMapSerialize::loadHouseInfo();
 		IOMapSerialize::loadHouseItems(this);
-		
-		LOG_INFO(fmt::format(">> Loaded [\033[1;33m{}\033[0m] towns with [\033[1;33m{}\033[0m] houses in total", towns.getTowns().size(), houses.getHouses().size()));
+
+		LOG_INFO(fmt::format(">> Loaded [\033[1;33m{}\033[0m] towns with [\033[1;33m{}\033[0m] houses in total",
+		                     towns.getTowns().size(), houses.getHouses().size()));
 	}
 
 	if (!IOMap::loadSpawns(this)) {
 		LOG_WARN("[Warning - Map::loadMap] Failed to load spawn data.");
 	} else {
-		LOG_INFO(fmt::format(">> Loaded [\033[1;33m{}\033[0m] npcs and spawned [\033[1;33m{}\033[0m] monsters", spawns.getNpcCount(), spawns.getMonsterCount()));
+		LOG_INFO(fmt::format(">> Loaded [\033[1;33m{}\033[0m] npcs and spawned [\033[1;33m{}\033[0m] monsters",
+		                     spawns.getNpcCount(), spawns.getMonsterCount()));
 	}
 	return true;
 }
@@ -84,7 +87,7 @@ Tile* Map::getTile(uint16_t x, uint16_t y, uint8_t z) const
 	if (!floor) {
 		return nullptr;
 	}
-	
+
 	// Use lazy loading: get tile from cache if real tile doesn't exist
 	return floor->getTile(x, y, z);
 }
@@ -193,11 +196,11 @@ void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 			g_game.internalRemoveItem(ground);
 			tile->setGround(nullptr);
 		}
-		
+
 		// Reset unique_ptr to delete the tile
 		tile.reset();
 	}
-	
+
 	// Also clear cache
 	tilePair.second = nullptr;
 }
@@ -211,9 +214,10 @@ bool Map::placeCreature(const Position& centerPos, Creature* creature, bool exte
 	Tile* tile = getTile(centerPos.x, centerPos.y, centerPos.z);
 	if (tile) {
 		placeInPZ = tile->hasFlag(TILESTATE_PROTECTIONZONE);
-        uint32_t flags = FLAG_IGNOREBLOCKITEM;
-    ReturnValue ret = tile->queryAdd(0, *creature, 1, flags);
-    foundTile = forceLogin || ret == RETURNVALUE_NOERROR || ret == RETURNVALUE_PLAYERISNOTINVITED || ret == RETURNVALUE_ONLYGUILDMEMBERSMAYENTER;
+		uint32_t flags = FLAG_IGNOREBLOCKITEM;
+		ReturnValue ret = tile->queryAdd(0, *creature, 1, flags);
+		foundTile = forceLogin || ret == RETURNVALUE_NOERROR || ret == RETURNVALUE_PLAYERISNOTINVITED ||
+		            ret == RETURNVALUE_ONLYGUILDMEMBERSMAYENTER;
 	} else {
 		placeInPZ = false;
 		foundTile = false;
@@ -423,7 +427,8 @@ void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& center
 
 void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, bool multifloor /*= false*/,
                         bool onlyPlayers /*= false*/, int32_t minRangeX /*= 0*/, int32_t maxRangeX /*= 0*/,
-                        int32_t minRangeY /*= 0*/, int32_t maxRangeY /*= 0*/, bool onlyMonsters /*= false*/, bool onlyNpcs /*= false*/)
+                        int32_t minRangeY /*= 0*/, int32_t maxRangeY /*= 0*/, bool onlyMonsters /*= false*/,
+                        bool onlyNpcs /*= false*/)
 {
 	if (centerPos.z >= MAP_MAX_LAYERS) {
 		return;
@@ -434,8 +439,8 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
 	minRangeY = (minRangeY == 0 ? -maxViewportY : -minRangeY);
 	maxRangeY = (maxRangeY == 0 ? maxViewportY : maxRangeY);
 
-	bool cacheResult = (minRangeX == -maxViewportX && maxRangeX == maxViewportX &&
-	                    minRangeY == -maxViewportY && maxRangeY == maxViewportY);
+	bool cacheResult = (minRangeX == -maxViewportX && maxRangeX == maxViewportX && minRangeY == -maxViewportY &&
+	                    maxRangeY == maxViewportY);
 
 	SpectatorVec* cacheOpt = nullptr;
 	bool* hasCacheOpt = nullptr;
@@ -498,7 +503,7 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
 	if (cacheResult) {
 		auto [iter, inserted] = spectatorsCache.try_emplace(centerPos);
 		auto& entry = iter->second;
-		
+
 		entry.minRangeX = minRangeX;
 		entry.maxRangeX = maxRangeX;
 		entry.minRangeY = minRangeY;
@@ -592,41 +597,39 @@ namespace {
 
 bool Map::checkSightLine(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint8_t z) const
 {
-    if (x0 == x1 && y0==y1) {
-        return true;
-    }
+	if (x0 == x1 && y0 == y1) {
+		return true;
+	}
 
-    Position start(x0,y0,z);
-    Position destination(x1,y1,z);
+	Position start(x0, y0, z);
+	Position destination(x1, y1, z);
 
-    const int8_t mx = start.x < destination.x ? 1 : start.x == destination.x ? 0
-        : -1;
-    const int8_t my = start.y < destination.y ? 1 : start.y == destination.y ? 0
-        : -1;
+	const int8_t mx = start.x < destination.x ? 1 : start.x == destination.x ? 0 : -1;
+	const int8_t my = start.y < destination.y ? 1 : start.y == destination.y ? 0 : -1;
 
-    int32_t A = destination.getOffsetY(start);
-    int32_t B = start.getOffsetX(destination);
-    int32_t C = -(A * destination.x + B * destination.y);
+	int32_t A = destination.getOffsetY(start);
+	int32_t B = start.getOffsetX(destination);
+	int32_t C = -(A * destination.x + B * destination.y);
 
-    while (start.x != destination.x || start.y != destination.y) {
-        int32_t move_hor = std::abs(A * (start.x + mx) + B * (start.y) + C);
-        int32_t move_ver = std::abs(A * (start.x) + B * (start.y + my) + C);
-        int32_t move_cross = std::abs(A * (start.x + mx) + B * (start.y + my) + C);
+	while (start.x != destination.x || start.y != destination.y) {
+		int32_t move_hor = std::abs(A * (start.x + mx) + B * (start.y) + C);
+		int32_t move_ver = std::abs(A * (start.x) + B * (start.y + my) + C);
+		int32_t move_cross = std::abs(A * (start.x + mx) + B * (start.y + my) + C);
 
-        if (start.y != destination.y && (start.x == destination.x || move_hor > move_ver || move_hor > move_cross)) {
-            start.y += my;
-        }
+		if (start.y != destination.y && (start.x == destination.x || move_hor > move_ver || move_hor > move_cross)) {
+			start.y += my;
+		}
 
-        if (start.x != destination.x && (start.y == destination.y || move_ver > move_hor || move_ver > move_cross)) {
-            start.x += mx;
-        }
+		if (start.x != destination.x && (start.y == destination.y || move_ver > move_hor || move_ver > move_cross)) {
+			start.x += mx;
+		}
 
-        if (!g_game.map.isTileClear(start.x, start.y, start.z)) {
-            return false;
-        }
-    }
+		if (!g_game.map.isTileClear(start.x, start.y, start.z)) {
+			return false;
+		}
+	}
 
-    return true;
+	return true;
 }
 
 bool Map::isSightClear(const Position& fromPos, const Position& toPos, bool sameFloor /*= false*/) const
@@ -639,7 +642,8 @@ bool Map::isSightClear(const Position& fromPos, const Position& toPos, bool same
 		}
 
 		// sight is clear or sameFloor is enabled
-		bool sightClear = checkSightLine(fromPos.x, fromPos.y, toPos.x, toPos.y, fromPos.z) || checkSightLine(toPos.x, toPos.y, fromPos.x, fromPos.y, fromPos.z);
+		bool sightClear = checkSightLine(fromPos.x, fromPos.y, toPos.x, toPos.y, fromPos.z) ||
+		                  checkSightLine(toPos.x, toPos.y, fromPos.x, fromPos.y, fromPos.z);
 		if (sightClear || sameFloor) {
 			return sightClear;
 		}
@@ -1095,7 +1099,8 @@ uint32_t Map::clean() const
 		g_game.setGameState(GAME_STATE_NORMAL);
 	}
 
-	LOG_INFO(fmt::format("> CLEAN: Removed {} item{} from {} tile{} in {} seconds.", count, count != 1 ? "s" : "", tiles, tiles != 1 ? "s" : "", (OTSYS_TIME() - start) / (1000.)));
+	LOG_INFO(fmt::format("> CLEAN: Removed {} item{} from {} tile{} in {} seconds.", count, count != 1 ? "s" : "",
+	                     tiles, tiles != 1 ? "s" : "", (OTSYS_TIME() - start) / (1000.)));
 	return count;
 }
 
@@ -1103,38 +1108,41 @@ uint32_t Map::clean() const
 // Floor methods for lazy loading
 // ============================================================================
 
-Tile* Floor::getTile(uint16_t x, uint16_t y, uint8_t z) {
+Tile* Floor::getTile(uint16_t x, uint16_t y, uint8_t z)
+{
 	uint32_t offsetX = x & FLOOR_MASK;
 	uint32_t offsetY = y & FLOOR_MASK;
-	
+
 	auto& tilePair = tiles[offsetX][offsetY];
-	
+
 	// If real tile exists, return it
 	if (tilePair.first) {
 		return tilePair.first.get();
 	}
-	
+
 	// If no cache, return nullptr
 	if (!tilePair.second) {
 		return nullptr;
 	}
-	
+
 	// Lazy loading: create real tile from cache
 	const auto& basicTile = tilePair.second;
-	
+
 	tilePair.first = MapCacheUtils::createTileFromBasic(basicTile, x, y, z, g_game.map.houses);
 	tilePair.second = nullptr; // Clear cache
-	
+
 	return tilePair.first.get();
 }
 
-void Floor::setTileCache(uint16_t x, uint16_t y, const std::shared_ptr<BasicTile>& basicTile) {
+void Floor::setTileCache(uint16_t x, uint16_t y, const std::shared_ptr<BasicTile>& basicTile)
+{
 	uint32_t offsetX = x & FLOOR_MASK;
 	uint32_t offsetY = y & FLOOR_MASK;
 	tiles[offsetX][offsetY].second = basicTile;
 }
 
-std::shared_ptr<BasicTile> Floor::getTileCache(uint16_t x, uint16_t y) const {
+std::shared_ptr<BasicTile> Floor::getTileCache(uint16_t x, uint16_t y) const
+{
 	uint32_t offsetX = x & FLOOR_MASK;
 	uint32_t offsetY = y & FLOOR_MASK;
 	return tiles[offsetX][offsetY].second;
@@ -1144,7 +1152,8 @@ std::shared_ptr<BasicTile> Floor::getTileCache(uint16_t x, uint16_t y) const {
 // Map::setBasicTile - store tile in cache during map load
 // ============================================================================
 
-void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<BasicTile>& basicTile) {
+void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<BasicTile>& basicTile)
+{
 	if (z >= MAP_MAX_LAYERS) {
 		LOG_ERROR(fmt::format("ERROR: Attempt to set tile cache on invalid coordinate {}!", Position(x, y, z)));
 		return;

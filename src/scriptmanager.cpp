@@ -9,12 +9,12 @@
 #include "chat.h"
 #include "events.h"
 #include "globalevent.h"
+#include "logger.h"
 #include "movement.h"
 #include "script.h"
 #include "spells.h"
 #include "talkaction.h"
 #include "weapons.h"
-#include "logger.h"
 
 Actions* g_actions = nullptr;
 CreatureEvents* g_creatureEvents = nullptr;
@@ -55,7 +55,7 @@ bool ScriptingManager::loadPreItems()
 
 	if (!g_weapons) g_weapons = new Weapons();
 	if (!g_moveEvents) g_moveEvents = new MoveEvents();
-	
+
 	return true;
 }
 

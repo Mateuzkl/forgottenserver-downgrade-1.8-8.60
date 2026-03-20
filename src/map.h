@@ -12,14 +12,16 @@
 #include "spawn.h"
 #include "town.h"
 
+#include <absl/container/flat_hash_map.h>
 #include <cstring>
 #include <unordered_map>
-#include <absl/container/flat_hash_map.h>
 
 class Creature;
 
-struct SpectatorsCache {
-	struct FloorData {
+struct SpectatorsCache
+{
+	struct FloorData
+	{
 		bool hasFloor{false};
 		bool hasMultiFloor{false};
 		SpectatorVec floor;
@@ -37,8 +39,10 @@ struct SpectatorsCache {
 	FloorData players;
 };
 
-struct PositionHasher {
-	std::size_t operator()(const Position& pos) const {
+struct PositionHasher
+{
+	std::size_t operator()(const Position& pos) const
+	{
 		std::size_t h = 0;
 		hash_combine(h, pos.x);
 		hash_combine(h, pos.y);
@@ -200,7 +204,6 @@ public:
 	static constexpr int32_t maxViewportY = 11; // min value: maxClientViewportY + 1
 	static constexpr int32_t maxClientViewportX = 8;
 	static constexpr int32_t maxClientViewportY = 6;
-
 
 	uint32_t clean() const;
 

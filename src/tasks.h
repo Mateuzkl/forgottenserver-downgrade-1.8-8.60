@@ -5,9 +5,9 @@
 #ifndef FS_TASKS_H
 #define FS_TASKS_H
 
+#include "stats.h"
 #include "thread_holder_base.h"
 #include "thread_pool.h"
-#include "stats.h"
 
 using TaskFunc = std::function<void(void)>;
 constexpr int DISPATCHER_TASK_EXPIRATION = 2000;
@@ -21,13 +21,14 @@ class Task
 public:
 	// DO NOT allocate this class on the stack
 	explicit Task(TaskFunc&& f, const std::string& _description, const std::string& _extraDescription) :
-	description(_description), extraDescription(_extraDescription), func(std::move(f)) {}
+	    description(_description), extraDescription(_extraDescription), func(std::move(f))
+	{}
 
 	Task(uint32_t ms, TaskFunc&& f, const std::string& _description, const std::string& _extraDescription) :
-		description(_description), 
-		extraDescription(_extraDescription),
-		expiration(std::chrono::steady_clock::now() + std::chrono::milliseconds(ms)),
-		func(std::move(f))
+	    description(_description),
+	    extraDescription(_extraDescription),
+	    expiration(std::chrono::steady_clock::now() + std::chrono::milliseconds(ms)),
+	    func(std::move(f))
 	{}
 
 	virtual ~Task() = default;
@@ -56,7 +57,8 @@ private:
 };
 
 Task* createTaskWithStats(TaskFunc&& f, const std::string& description, const std::string& extraDescription);
-Task* createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description, const std::string& extraDescription);
+Task* createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description,
+                          const std::string& extraDescription);
 
 class Dispatcher : public ThreadHolder<Dispatcher>
 {
@@ -75,20 +77,17 @@ public:
 	void addTask(uint32_t expiration, TaskFunc&& f) { addTask(createTimedTask(expiration, std::move(f))); }
 
 	// Async dispatch: run func on ThreadPool, then dispatch callback with result on Dispatcher thread
-	template<typename Func, typename Callback>
-	void asyncTask(Func&& func, Callback&& callback) {
+	template <typename Func, typename Callback>
+	void asyncTask(Func&& func, Callback&& callback)
+	{
 		g_threadPool.detach_task([this, f = std::forward<Func>(func), cb = std::forward<Callback>(callback)]() {
 			auto result = f();
-			addTask([cb = std::move(cb), result = std::move(result)]() mutable {
-				cb(std::move(result));
-			});
+			addTask([cb = std::move(cb), result = std::move(result)]() mutable { cb(std::move(result)); });
 		});
 	}
 
 	// Fire-and-forget async: run func on ThreadPool with no callback
-	void asyncTask(TaskFunc&& func) {
-		g_threadPool.detach_task(std::move(func));
-	}
+	void asyncTask(TaskFunc&& func) { g_threadPool.detach_task(std::move(func)); }
 
 	void shutdown();
 

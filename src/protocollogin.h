@@ -31,9 +31,10 @@ public:
 private:
 	LoginAttemptLimiter() = default;
 
-	struct AttemptInfo {
+	struct AttemptInfo
+	{
 		uint32_t failures = 0;
-		int64_t blockUntil = 0;  // OTSYS_TIME value
+		int64_t blockUntil = 0; // OTSYS_TIME value
 		int64_t firstAttempt = 0;
 	};
 
@@ -42,7 +43,7 @@ private:
 
 	static constexpr uint32_t MAX_FAILURES = 5;
 	static constexpr int64_t WINDOW_MS = 60000;      // 60 seconds
-	static constexpr int64_t BLOCK_TIME_MS = 300000;  // 5 minutes
+	static constexpr int64_t BLOCK_TIME_MS = 300000; // 5 minutes
 };
 
 class ProtocolLogin : public Protocol

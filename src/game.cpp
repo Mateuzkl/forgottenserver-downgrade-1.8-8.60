@@ -11,26 +11,27 @@
 #include "creature.h"
 #include "creatureevent.h"
 #include "databasetasks.h"
+#include "decay.h"
 #include "events.h"
 #include "globalevent.h"
 #include "iologindata.h"
 #include "items.h"
+#include "logger.h"
+#include "luascript.h"
 #include "monster.h"
 #include "movement.h"
 #include "pugicast.h"
-#include "decay.h"
+#include "save_manager.h"
 #include "scheduler.h"
 #include "script.h"
 #include "server.h"
-#include "stats.h"
 #include "spells.h"
+#include "stats.h"
 #include "talkaction.h"
 #include "weapons.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 #include <limits>
-#include "luascript.h"
-#include "save_manager.h"
 
 extern Actions* g_actions;
 extern Chat* g_chat;
@@ -105,7 +106,7 @@ void Game::setGameState(GameState_t newState)
 
 		case GAME_STATE_SHUTDOWN: {
 			LOG_INFO(">> Starting shutdown sequence...");
-			
+
 			g_globalEvents->save();
 			g_globalEvents->shutdown();
 			LOG_INFO(">> Global events saved and shutdown.");
@@ -696,10 +697,10 @@ void Game::playerMoveCreature(Player* player, Creature* movingCreature, const Po
 	if (!player->canDoAction()) {
 		uint32_t delay = player->getNextActionTime();
 		SchedulerTask* task =
-		    createSchedulerTask(delay, ([=, this, playerID = player->getID(), movingCreatureID = movingCreature->getID(),
-		                                toPos = toTile->getPosition()]() {
-			    playerMoveCreatureByID(playerID, movingCreatureID, movingCreatureOrigPos, toPos);
-		    }));
+		    createSchedulerTask(delay, ([=, this, playerID = player->getID(),
+		                                 movingCreatureID = movingCreature->getID(), toPos = toTile->getPosition()]() {
+			                        playerMoveCreatureByID(playerID, movingCreatureID, movingCreatureOrigPos, toPos);
+		                        }));
 		player->setNextActionTask(task);
 		return;
 	}
@@ -721,7 +722,7 @@ void Game::playerMoveCreature(Player* player, Creature* movingCreature, const Po
 			SchedulerTask* task = createSchedulerTask(
 			    static_cast<uint32_t>(getInteger(ConfigManager::RANGE_MOVE_CREATURE_INTERVAL)),
 			    ([=, this, playerID = player->getID(), movingCreatureID = movingCreature->getID(),
-			     toPos = toTile->getPosition()] {
+			      toPos = toTile->getPosition()] {
 				    playerMoveCreatureByID(playerID, movingCreatureID, movingCreatureOrigPos, toPos);
 			    }));
 			player->setNextWalkActionTask(task);
@@ -912,9 +913,10 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
 				delay = static_cast<uint32_t>(remaining);
 			}
 		}
-		SchedulerTask* task = createSchedulerTask(delay, ([=, this, playerID = player->getID()]() {
-			playerMoveItemByPlayerID(playerID, fromPos, spriteId, fromStackPos, toPos, count);
-		}));
+		SchedulerTask* task =
+		    createSchedulerTask(delay, ([=, this, playerID = player->getID()]() {
+			                        playerMoveItemByPlayerID(playerID, fromPos, spriteId, fromStackPos, toPos, count);
+		                        }));
 		player->setNextActionTask(task);
 		return;
 	}
@@ -1044,7 +1046,8 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
 
 		if (fromPlayer) {
 			if (!player->canMoveOwnItems(item)) {
-				player->sendTextMessage(MESSAGE_EVENT_ADVANCE, "[TOKEN]: To move your items out, disable token security!");
+				player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
+				                        "[TOKEN]: To move your items out, disable token security!");
 				player->sendCancelMessage(RETURNVALUE_ITEMSTOKENPROTECTED);
 				return;
 			}
@@ -1146,7 +1149,8 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
 		player->sendCancelMessage(ret);
 	} else {
 		if (Condition* c = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON,
-		            getInteger(ConfigManager::ACTIONS_DELAY_INTERVAL), 0, false, EXHAUST_MOVEITEM)) {
+		                                              getInteger(ConfigManager::ACTIONS_DELAY_INTERVAL), 0, false,
+		                                              EXHAUST_MOVEITEM)) {
 			player->addCondition(c);
 		}
 	}
@@ -1190,7 +1194,6 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 					}
 				}
 			}
-
 		}
 	}
 
@@ -1219,7 +1222,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		const Tile* toTile = toCylinder->getTile();
 		if (toTile) {
 			const auto& blockedIds = ConfigManager::getBlockedTeleportIds();
-			
+
 			// Check ground item for teleport
 			const Item* ground = toTile->getGround();
 			if (ground) {
@@ -1250,7 +1253,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 
 	// Check for reward containers
 	if (Container* toContainer = dynamic_cast<Container*>(toCylinder)) {
-		                		if (toContainer->isRewardCorpse() || toContainer->getID() == ITEM_REWARD_CONTAINER) {
+		if (toContainer->isRewardCorpse() || toContainer->getID() == ITEM_REWARD_CONTAINER) {
 			return RETURNVALUE_NOTPOSSIBLE;
 		}
 
@@ -1265,12 +1268,13 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		}
 	}
 
-	if (actorPlayer && (item->getID() == ITEM_GOLD_POUCH || (dynamic_cast<Container*>(item) && [](Container* c) -> bool {
-		for (ContainerIterator it = c->iterator(); it.hasNext(); it.advance()) {
-			if ((*it)->getID() == ITEM_GOLD_POUCH) return true;
-		}
-		return false;
-	}(dynamic_cast<Container*>(item))))) {
+	if (actorPlayer &&
+	    (item->getID() == ITEM_GOLD_POUCH || (dynamic_cast<Container*>(item) && [](Container* c) -> bool {
+		     for (ContainerIterator it = c->iterator(); it.hasNext(); it.advance()) {
+			     if ((*it)->getID() == ITEM_GOLD_POUCH) return true;
+		     }
+		     return false;
+	     }(dynamic_cast<Container*>(item))))) {
 		Cylinder* destParent = toCylinder;
 		bool isInsidePlayer = false;
 		while (destParent) {
@@ -2295,8 +2299,9 @@ void Game::playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t f
 	if (!player->canDoAction()) {
 		uint32_t delay = player->getNextActionTime();
 		SchedulerTask* task = createSchedulerTask(delay, ([=, this]() {
-			playerUseItemEx(playerId, fromPos, fromStackPos, fromSpriteId, toPos, toStackPos, toSpriteId);
-		}));
+			                                          playerUseItemEx(playerId, fromPos, fromStackPos, fromSpriteId,
+			                                                          toPos, toStackPos, toSpriteId);
+		                                          }));
 		player->setNextActionTask(task);
 		return;
 	}
@@ -2707,9 +2712,9 @@ void Game::playerRequestTrade(uint32_t playerId, const Position& pos, uint8_t st
 	if (getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
 		if (const auto tile = tradeItem->getTile()) {
 			if (const auto houseTile = tile->getHouseTile()) {
-			if (!tradeItem->getTopParent()->getCreature() && !houseTile->getHouse()->isInvited(player)) {
-				player->sendCancelMessage(RETURNVALUE_PLAYERISNOTINVITED);
-				return;
+				if (!tradeItem->getTopParent()->getCreature() && !houseTile->getHouse()->isInvited(player)) {
+					player->sendCancelMessage(RETURNVALUE_PLAYERISNOTINVITED);
+					return;
 				}
 			}
 		}
@@ -2730,9 +2735,9 @@ void Game::playerRequestTrade(uint32_t playerId, const Position& pos, uint8_t st
 				playerAutoWalk(playerID, listDir);
 			});
 
-			SchedulerTask* task = createSchedulerTask(RANGE_REQUEST_TRADE_INTERVAL, ([=, this]() {
-				playerRequestTrade(playerId, pos, stackPos, tradePlayerId, spriteId);
-			}));
+			SchedulerTask* task = createSchedulerTask(
+			    RANGE_REQUEST_TRADE_INTERVAL,
+			    ([=, this]() { playerRequestTrade(playerId, pos, stackPos, tradePlayerId, spriteId); }));
 			player->setNextWalkActionTask(task);
 		} else {
 			player->sendCancelMessage(RETURNVALUE_THEREISNOWAY);
@@ -3502,7 +3507,7 @@ void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, s
 				if (lua_isfunction(L, -1)) {
 					lua_pushlstring(L, text.data(), text.length());
 					lua_pushboolean(L, player->isAccessPlayer());
-					
+
 					if (lua_pcall(L, 2, 2, 0) == 0) {
 						bool isBlocked = lua_toboolean(L, -2);
 						if (isBlocked) {
@@ -3894,8 +3899,7 @@ void Game::checkSereneStatus()
 			const Player* leader = party->getLeader();
 			if (leader && leader != player) {
 				const Position& lpos = leader->getPosition();
-				if (pos.z == lpos.z && std::max(
-					std::abs(pos.x - lpos.x), std::abs(pos.y - lpos.y)) <= 10) {
+				if (pos.z == lpos.z && std::max(std::abs(pos.x - lpos.x), std::abs(pos.y - lpos.y)) <= 10) {
 					hasNearbyPartyMembers = true;
 				}
 			}
@@ -3903,8 +3907,7 @@ void Game::checkSereneStatus()
 				for (Player* member : const_cast<Party*>(party)->getMembers()) {
 					if (member == player) continue;
 					const Position& mpos = member->getPosition();
-					if (pos.z == mpos.z && std::max(
-						std::abs(pos.x - mpos.x), std::abs(pos.y - mpos.y)) <= 10) {
+					if (pos.z == mpos.z && std::max(std::abs(pos.x - mpos.x), std::abs(pos.y - mpos.y)) <= 10) {
 						hasNearbyPartyMembers = true;
 						break;
 					}
@@ -3951,7 +3954,7 @@ void Game::setCreatureSpeed(Creature* creature, int32_t speed)
 {
 	creature->setBaseSpeed(speed);
 
-	//send to clients
+	// send to clients
 	SpectatorVec spectators;
 	map.getSpectators(spectators, creature->getPosition(), false, true);
 	for (Creature* spectator : spectators) {
@@ -4185,7 +4188,6 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 	const Position& targetPos = target->getPosition();
 	if (damage.primary.value > 0) {
-
 		Player* attackerPlayer;
 		if (attacker) {
 			attackerPlayer = attacker->getPlayer();
@@ -4221,10 +4223,12 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 				if (monster && monster->isRewardBoss()) {
 					const Position& playerPos = target->getPosition();
 					const Position& monsterPos = monster->getPosition();
-					double distBetweenTargetAndBoss = std::sqrt(std::pow(playerPos.x - monsterPos.x, 2) + std::pow(playerPos.y - monsterPos.y, 2));
+					double distBetweenTargetAndBoss =
+					    std::sqrt(std::pow(playerPos.x - monsterPos.x, 2) + std::pow(playerPos.y - monsterPos.y, 2));
 					if (distBetweenTargetAndBoss < 7) {
 						uint32_t playerGuid = target->getPlayer()->getGUID();
-						rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageTaken += realHealthChange * ConfigManager::getFloat(ConfigManager::REWARD_RATE_HEALING_DONE);
+						rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageTaken +=
+						    realHealthChange * ConfigManager::getFloat(ConfigManager::REWARD_RATE_HEALING_DONE);
 					}
 				}
 			}
@@ -4304,8 +4308,10 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		damage.secondary.value = std::abs(damage.secondary.value);
 
 		if (targetPlayer && targetPlayer->isAvatarActive()) {
-			damage.primary.value -= static_cast<int32_t>(std::ceil(damage.primary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
-			damage.secondary.value -= static_cast<int32_t>(std::ceil(damage.secondary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+			damage.primary.value -=
+			    static_cast<int32_t>(std::ceil(damage.primary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+			damage.secondary.value -=
+			    static_cast<int32_t>(std::ceil(damage.secondary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
 		}
 
 		int32_t healthChange = damage.primary.value + damage.secondary.value;
@@ -4345,10 +4351,14 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 				                static_cast<TextColor_t>(getInteger(ConfigManager::MANA_GAIN_COLOUR)));
 
 				for (Creature* spectator : spectators) {
-				if (!spectator) { continue; }
+					if (!spectator) {
+						continue;
+					}
 					assert(dynamic_cast<Player*>(spectator) != nullptr);
 					Player* tmpPlayer = static_cast<Player*>(spectator);
-				if (!tmpPlayer) { continue; }
+					if (!tmpPlayer) {
+						continue;
+					}
 					if (tmpPlayer->getPosition().z != targetPos.z) {
 						continue;
 					}
@@ -4506,29 +4516,30 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			}
 		}
 
-			// rewardboss player attacking boss
-			if (target && target->getMonster() && target->getMonster()->isRewardBoss()) {
-				uint32_t monsterId = target->getMonster()->getID();
-				if (rewardBossTracking.find(monsterId) == rewardBossTracking.end()) {
-					rewardBossTracking[monsterId] = RewardBossContributionInfo();
-				}
-				if (attacker && attacker->getPlayer()) {
-					uint32_t playerGuid = attacker->getPlayer()->getGUID();
-					rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageDone += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_DONE);
-				}
+		// rewardboss player attacking boss
+		if (target && target->getMonster() && target->getMonster()->isRewardBoss()) {
+			uint32_t monsterId = target->getMonster()->getID();
+			if (rewardBossTracking.find(monsterId) == rewardBossTracking.end()) {
+				rewardBossTracking[monsterId] = RewardBossContributionInfo();
 			}
-			// rewardboss boss attacking player
-			if (attacker && attacker->getMonster() && attacker->getMonster()->isRewardBoss()) {
-				uint32_t monsterId = attacker->getMonster()->getID();
-				if (rewardBossTracking.find(monsterId) == rewardBossTracking.end()) {
-					rewardBossTracking[monsterId] = RewardBossContributionInfo();
-				}
-				if (target->getPlayer()) {
-					uint32_t playerGuid = target->getPlayer()->getGUID();
-					rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageTaken += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_TAKEN);
-				}
+			if (attacker && attacker->getPlayer()) {
+				uint32_t playerGuid = attacker->getPlayer()->getGUID();
+				rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageDone +=
+				    realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_DONE);
 			}
-	
+		}
+		// rewardboss boss attacking player
+		if (attacker && attacker->getMonster() && attacker->getMonster()->isRewardBoss()) {
+			uint32_t monsterId = attacker->getMonster()->getID();
+			if (rewardBossTracking.find(monsterId) == rewardBossTracking.end()) {
+				rewardBossTracking[monsterId] = RewardBossContributionInfo();
+			}
+			if (target->getPlayer()) {
+				uint32_t playerGuid = target->getPlayer()->getGUID();
+				rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageTaken +=
+				    realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_TAKEN);
+			}
+		}
 
 		if (realDamage >= targetHealth) {
 			for (CreatureEvent* creatureEvent : target->getCreatureEvents(CREATURE_EVENT_PREPAREDEATH)) {
@@ -4854,7 +4865,9 @@ void Game::internalDecayItem(Item* item)
 	} else {
 		ReturnValue ret = internalRemoveItem(item);
 		if (ret != RETURNVALUE_NOERROR) {
-			LOG_ERROR(fmt::format("[Debug - Game::internalDecayItem] internalDecayItem failed, error code: {}, item id: {}", static_cast<uint32_t>(ret), item->getID()));
+			LOG_ERROR(
+			    fmt::format("[Debug - Game::internalDecayItem] internalDecayItem failed, error code: {}, item id: {}",
+			                static_cast<uint32_t>(ret), item->getID()));
 		}
 	}
 }
@@ -5035,8 +5048,6 @@ void Game::updatePlayerShield(Player* player)
 		static_cast<Player*>(spectator)->sendCreatureShield(player);
 	}
 }
-
-
 
 void Game::loadMotdNum()
 {
@@ -5349,7 +5360,8 @@ void Game::playerAnswerModalWindow(uint32_t playerId, uint32_t modalWindowId, ui
 	// offline training, hard-coded
 	if (modalWindowId == std::numeric_limits<uint32_t>::max()) {
 		if (button == 1) {
-			if (choice == SKILL_SWORD || choice == SKILL_AXE || choice == SKILL_CLUB || choice == SKILL_DISTANCE || choice == SKILL_MAGLEVEL) {
+			if (choice == SKILL_SWORD || choice == SKILL_AXE || choice == SKILL_CLUB || choice == SKILL_DISTANCE ||
+			    choice == SKILL_MAGLEVEL) {
 				BedItem* bedItem = player->getBedItem();
 				if (bedItem && bedItem->sleep(player)) {
 					player->setOfflineTrainingSkill(choice);
@@ -5404,12 +5416,12 @@ Guild_ptr Game::getGuild(uint32_t id) const
 	return it->second;
 }
 
-void Game::addGuild(Guild_ptr guild) 
+void Game::addGuild(Guild_ptr guild)
 {
-  if (!guild) {
-     return;
-   }
-   
+	if (!guild) {
+		return;
+	}
+
 	guilds[guild->getId()] = guild;
 }
 
@@ -5479,10 +5491,7 @@ void Game::removeUniqueItem(uint16_t uniqueId)
 	}
 }
 
-void Game::resetDamageTracking(uint32_t monsterId)
-{
-	rewardBossTracking.erase(monsterId);
-}
+void Game::resetDamageTracking(uint32_t monsterId) { rewardBossTracking.erase(monsterId); }
 
 bool Game::reload(ReloadTypes_t reloadType)
 {
@@ -5594,7 +5603,7 @@ bool Game::reload(ReloadTypes_t reloadType)
 			g_globalEvents->clear(true);
 			g_spells->clear(true);
 			g_weapons->clear(true);
-			
+
 			g_spells->reload();
 			g_monsters.reload();
 			g_actions->reload();

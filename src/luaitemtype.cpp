@@ -945,7 +945,6 @@ int luaItemTypeGetTier(lua_State* L)
 	return 1;
 }
 
-
 int luaItemTypeGetElementalBond(lua_State* L)
 {
 	// itemType:getElementalBond()

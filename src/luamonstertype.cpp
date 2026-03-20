@@ -3,11 +3,12 @@
 
 #include "otpch.h"
 
+#include "logger.h"
 #include "luascript.h"
 #include "monsters.h"
 #include "script.h"
 #include "spells.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Monsters g_monsters;
@@ -489,7 +490,8 @@ int luaMonsterTypeCombatImmunities(lua_State* L)
 				monsterType->info.damageImmunities |= COMBAT_MANADRAIN;
 				pushBoolean(L, true);
 			} else {
-				LOG_WARN(fmt::format("[Warning - Monsters::loadMonster] Unknown immunity name {} for monster: {}", immunity, monsterType->name));
+				LOG_WARN(fmt::format("[Warning - Monsters::loadMonster] Unknown immunity name {} for monster: {}",
+				                     immunity, monsterType->name));
 				lua_pushnil(L);
 			}
 		}
@@ -548,7 +550,8 @@ int luaMonsterTypeConditionImmunities(lua_State* L)
 				monsterType->info.conditionImmunities |= CONDITION_BLEEDING;
 				pushBoolean(L, true);
 			} else {
-				LOG_WARN(fmt::format("[Warning - Monsters::loadMonster] Unknown immunity name {} for monster: {}", immunity, monsterType->name));
+				LOG_WARN(fmt::format("[Warning - Monsters::loadMonster] Unknown immunity name {} for monster: {}",
+				                     immunity, monsterType->name));
 				lua_pushnil(L);
 			}
 		}
@@ -599,7 +602,8 @@ int luaMonsterTypeAddAttack(lua_State* L)
 			if (g_monsters.deserializeSpell(spell, sb, monsterType->name)) {
 				monsterType->info.attackSpells.push_back(std::move(sb));
 			} else {
-				LOG_WARN(fmt::format("{} [Warning - Monsters::loadMonster] Cant load spell. {}", monsterType->name, spell->name));
+				LOG_WARN(fmt::format("{} [Warning - Monsters::loadMonster] Cant load spell. {}", monsterType->name,
+				                     spell->name));
 			}
 		} else {
 			lua_pushnil(L);
@@ -651,7 +655,8 @@ int luaMonsterTypeAddDefense(lua_State* L)
 			if (g_monsters.deserializeSpell(spell, sb, monsterType->name)) {
 				monsterType->info.defenseSpells.push_back(std::move(sb));
 			} else {
-				LOG_WARN(fmt::format("{} [Warning - Monsters::loadMonster] Cant load spell. {}", monsterType->name, spell->name));
+				LOG_WARN(fmt::format("{} [Warning - Monsters::loadMonster] Cant load spell. {}", monsterType->name,
+				                     spell->name));
 			}
 		} else {
 			lua_pushnil(L);

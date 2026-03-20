@@ -17,51 +17,49 @@ using namespace std::chrono_literals;
 
 // Inline constexpr constants avoid ODR issues and are friendly to headers/optimizations
 inline constexpr uint16_t OUTPUTMESSAGE_FREE_LIST_CAPACITY = 2048;
-inline constexpr auto	 OUTPUTMESSAGE_AUTOSEND_DELAY = 10ms;
+inline constexpr auto OUTPUTMESSAGE_AUTOSEND_DELAY = 10ms;
 
-	/**
-	 * Sends all buffered messages to the protocols
-	 *
-	 * @param bufferedProtocols Pointer to the protocol vector (non-null)
-	 * @note Must be called only from the dispatcher thread
-	 * @note Marked as noexcept - failures will cause std::terminate
-	 */
+/**
+ * Sends all buffered messages to the protocols
+ *
+ * @param bufferedProtocols Pointer to the protocol vector (non-null)
+ * @note Must be called only from the dispatcher thread
+ * @note Marked as noexcept - failures will cause std::terminate
+ */
 void sendAll(std::vector<Protocol_ptr>* bufferedProtocols) noexcept;
 
-	/**
-	 * Schedules the next automatic sending of messages
-	 *
-	 * @param bufferedProtocols Pointer to the protocol vector
-	 * @note Must be called only from the dispatcher thread
-	 */
+/**
+ * Schedules the next automatic sending of messages
+ *
+ * @param bufferedProtocols Pointer to the protocol vector
+ * @note Must be called only from the dispatcher thread
+ */
 void scheduleSendAll(std::vector<Protocol_ptr>* bufferedProtocols) noexcept
 {
-		g_scheduler.addEvent(createSchedulerTask(
-			static_cast<int>(OUTPUTMESSAGE_AUTOSEND_DELAY.count()),
-			[bufferedProtocols]() { sendAll(bufferedProtocols); }
-		));
-	}
+	g_scheduler.addEvent(createSchedulerTask(static_cast<int>(OUTPUTMESSAGE_AUTOSEND_DELAY.count()),
+	                                         [bufferedProtocols]() { sendAll(bufferedProtocols); }));
+}
 
 void sendAll(std::vector<Protocol_ptr>* bufferedProtocols) noexcept
 {
-		// dispatcher thread
-		if (!bufferedProtocols || bufferedProtocols->empty()) [[unlikely]] {
-			return;
-		}
+	// dispatcher thread
+	if (!bufferedProtocols || bufferedProtocols->empty()) [[unlikely]] {
+		return;
+	}
 
-		// Sends the current buffer of each protocol, if present
-		for (auto& protocol : *bufferedProtocols) {
-			auto& msg = protocol->getCurrentBuffer();
-			if (msg) [[likely]] {
-				protocol->send(std::move(msg));
-			}
-		}
-
-		// Reschedule only if there are still buffered protocols
-		if (!bufferedProtocols->empty()) [[likely]] {
-			scheduleSendAll(bufferedProtocols);
+	// Sends the current buffer of each protocol, if present
+	for (auto& protocol : *bufferedProtocols) {
+		auto& msg = protocol->getCurrentBuffer();
+		if (msg) [[likely]] {
+			protocol->send(std::move(msg));
 		}
 	}
+
+	// Reschedule only if there are still buffered protocols
+	if (!bufferedProtocols->empty()) [[likely]] {
+		scheduleSendAll(bufferedProtocols);
+	}
+}
 } // namespace
 
 void OutputMessagePool::addProtocolToAutosend(Protocol_ptr protocol)

@@ -5,10 +5,10 @@
 
 #include "mounts.h"
 
-#include "pugicast.h"
+#include "logger.h"
 #include "pugicast.h"
 #include "tools.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 bool Mounts::reload()
@@ -29,7 +29,8 @@ bool Mounts::loadFromXml()
 	for (auto mountNode : doc.child("mounts").children()) {
 		uint16_t nodeId = pugi::cast<uint16_t>(mountNode.attribute("id").value());
 		if (nodeId == 0 || nodeId > std::numeric_limits<uint16_t>::max()) {
-			LOG_WARN(fmt::format("[Notice - Mounts::loadFromXml] Mount id \"{}\" is not within 1 and 65535 range", nodeId));
+			LOG_WARN(
+			    fmt::format("[Notice - Mounts::loadFromXml] Mount id \"{}\" is not within 1 and 65535 range", nodeId));
 			continue;
 		}
 

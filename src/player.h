@@ -23,7 +23,8 @@
 
 #include <bitset>
 
-enum VirtueMonk_t : uint8_t {
+enum VirtueMonk_t : uint8_t
+{
 	VIRTUE_NONE = 0,
 	VIRTUE_HARMONY = 1,
 	VIRTUE_JUSTICE = 2,
@@ -260,12 +261,14 @@ public:
 	bool hasBlessing(uint8_t blessing) const { return blessings.test(blessing); }
 
 	uint8_t getHarmony() const { return m_harmony; }
-	void setHarmony(uint8_t value) {
+	void setHarmony(uint8_t value)
+	{
 		uint8_t minHarmony = (getVirtue() == VIRTUE_HARMONY) ? 1 : 0;
 		m_harmony = static_cast<uint8_t>(std::clamp<int>(value, minHarmony, 5));
 	}
 	void addHarmony(uint8_t value) { setHarmony(m_harmony + value); }
-	void removeHarmony(uint8_t value) {
+	void removeHarmony(uint8_t value)
+	{
 		int newVal = static_cast<int>(m_harmony) - static_cast<int>(value);
 		setHarmony(static_cast<uint8_t>(std::max(newVal, 0)));
 	}
@@ -273,19 +276,19 @@ public:
 	bool isSerene() const { return m_serene; }
 	void setSerene(bool serene) { m_serene = serene; }
 
-	uint64_t getSereneCooldown() const {
+	uint64_t getSereneCooldown() const
+	{
 		uint64_t now = OTSYS_TIME();
 		if (m_serene_cooldown > now) {
 			return m_serene_cooldown - now;
 		}
 		return 0;
 	}
-	void setSereneCooldown(uint64_t addTime) {
-		m_serene_cooldown = OTSYS_TIME() + addTime;
-	}
+	void setSereneCooldown(uint64_t addTime) { m_serene_cooldown = OTSYS_TIME() + addTime; }
 
 	VirtueMonk_t getVirtue() const { return m_virtue; }
-	void setVirtue(VirtueMonk_t virtue) {
+	void setVirtue(VirtueMonk_t virtue)
+	{
 		switch (virtue) {
 			case VIRTUE_HARMONY:
 			case VIRTUE_JUSTICE:
@@ -373,7 +376,8 @@ public:
 	bool isKnight() const { return vocation->getId() == 4 || vocation->getFromVocation() == 4; }
 	bool isMonk() const { return vocation->getId() == 9 || vocation->getFromVocation() == 9; }
 
-	bool isAvatarActive() const {
+	bool isAvatarActive() const
+	{
 		auto val = getStorageValue(AVATAR_TIMER_STORAGE);
 		return val.has_value() && val.value() > static_cast<int64_t>(OTSYS_TIME());
 	}
@@ -1129,8 +1133,6 @@ public:
 	AccountManagerMode getAccountManagerMode() const { return accountManager; }
 	void setAccountManagerMode(AccountManagerMode mode) { accountManager = mode; }
 	void setAccountManagerData(uint32_t accId) { managerData.accountId = accId; }
-
-
 
 	// for lua module
 	void setAccountType(AccountType_t newType) { accountType = newType; }

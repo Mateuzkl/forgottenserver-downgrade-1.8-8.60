@@ -4,12 +4,12 @@
 #include "otpch.h"
 
 #include "bed.h"
+#include "database.h"
 #include "game.h"
 #include "house.h"
 #include "iologindata.h"
 #include "iomapserialize.h"
 #include "luascript.h"
-#include "database.h"
 
 extern Game g_game;
 
@@ -676,7 +676,6 @@ int luaHouseGetRequiredReset(lua_State* L)
 	}
 	return 1;
 }
-
 
 int luaHouseClearProtectionGuests(lua_State* L)
 {

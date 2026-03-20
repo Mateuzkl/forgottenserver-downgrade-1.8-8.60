@@ -13,8 +13,6 @@ struct BanInfo
 	time_t expiresAt;
 };
 
-
-
 class IOBan
 {
 public:

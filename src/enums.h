@@ -144,7 +144,6 @@ enum OperatingSystem_t : uint8_t
 	CLIENTOS_OTCLIENT_WINDOWS = 11,
 	CLIENTOS_OTCLIENT_MAC = 12,
 
-
 	// by default OTCv8 uses CLIENTOS_WINDOWS for backward compatibility
 	// for correct value enable g_game.enableFeature(GameExtendedOpcode)
 	// in modules/game_features/features.lua
@@ -691,7 +690,7 @@ enum MonstersEvent_t : uint8_t
 struct Reflect
 {
 	Reflect() = default;
-	Reflect(uint16_t percent, uint16_t chance) : percent(percent), chance(chance) {};
+	Reflect(uint16_t percent, uint16_t chance) : percent(percent), chance(chance){};
 
 	Reflect& operator+=(const Reflect& other)
 	{

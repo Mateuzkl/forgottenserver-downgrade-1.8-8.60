@@ -18,23 +18,24 @@ public:
 	[[nodiscard]] constexpr uint32_t getDelay() const noexcept { return delay; }
 
 private:
-	SchedulerTask(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription) : Task(std::move(f), description, extraDescription), delay(delay) {}
-	
+	SchedulerTask(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription) :
+	    Task(std::move(f), description, extraDescription), delay(delay)
+	{}
+
 	uint32_t eventId = 0;
 	uint32_t delay = 0;
 
 	friend SchedulerTask* createSchedulerTaskWithStats(uint32_t, TaskFunc&&, const std::string&, const std::string&);
 };
 
-SchedulerTask* createSchedulerTaskWithStats(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription);
+SchedulerTask* createSchedulerTaskWithStats(uint32_t delay, TaskFunc&& f, const std::string& description,
+                                            const std::string& extraDescription);
 
 class Scheduler : public ThreadHolder<Scheduler>
 {
 public:
 	uint32_t addEvent(SchedulerTask* task);
-	uint32_t addEvent(uint32_t delay, TaskFunc&& f) {
-		return addEvent(createSchedulerTask(delay, std::move(f)));
-	}
+	uint32_t addEvent(uint32_t delay, TaskFunc&& f) { return addEvent(createSchedulerTask(delay, std::move(f))); }
 	void stopEvent(uint32_t eventId) noexcept;
 
 	void shutdown() noexcept;

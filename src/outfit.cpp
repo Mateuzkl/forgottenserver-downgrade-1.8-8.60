@@ -5,10 +5,10 @@
 
 #include "outfit.h"
 
-#include "pugicast.h"
+#include "logger.h"
 #include "pugicast.h"
 #include "tools.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 bool Outfits::loadFromXml()

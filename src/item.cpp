@@ -11,10 +11,10 @@
 #include "game.h"
 #include "house.h"
 #include "mailbox.h"
+#include "rewardchest.h"
 #include "spells.h"
 #include "teleport.h"
 #include "trashholder.h"
-#include "rewardchest.h"
 
 extern Game g_game;
 extern Spells* g_spells;
@@ -135,11 +135,11 @@ Item* Item::CreateItem(PropStream& propStream)
 
 std::unique_ptr<Item> Item::CreateItemSafe(const uint16_t type, uint16_t count)
 {
-    return std::unique_ptr<Item>(CreateItem(type, count));
+	return std::unique_ptr<Item>(CreateItem(type, count));
 }
 std::unique_ptr<Item> Item::CreateItemSafe(PropStream& propStream)
 {
-    return std::unique_ptr<Item>(CreateItem(propStream));
+	return std::unique_ptr<Item>(CreateItem(propStream));
 }
 
 Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
@@ -174,15 +174,9 @@ Item::Item(const Item& i) : Thing(), id(i.id), count(i.count), loadedFromMap(i.l
 	}
 }
 
-Item::~Item()
-{
-	g_validItems.erase(this);
-}
+Item::~Item() { g_validItems.erase(this); }
 
-bool isValidItemPointer(Item* item)
-{
-	return item && g_validItems.count(item) > 0;
-}
+bool isValidItemPointer(Item* item) { return item && g_validItems.count(item) > 0; }
 
 Item* Item::clone() const
 {
@@ -268,10 +262,10 @@ void Item::setID(uint16_t newid)
 	uint32_t newDuration = normal_random(it.decayTimeMin, it.decayTimeMax) * 1000;
 
 	if (newDuration == 0 && !it.stopTime && it.decayTo < 0) {
-	//We'll get called startDecay anyway so let's schedule it - actually not in all casses
-	if (hasAttribute(ITEM_ATTRIBUTE_DECAYSTATE)) {
-		setDecaying(DECAYING_STOPPING);
-	}
+		// We'll get called startDecay anyway so let's schedule it - actually not in all casses
+		if (hasAttribute(ITEM_ATTRIBUTE_DECAYSTATE)) {
+			setDecaying(DECAYING_STOPPING);
+		}
 		removeAttribute(ITEM_ATTRIBUTE_DURATION);
 	}
 
@@ -719,8 +713,6 @@ Attr_ReadValue Item::readAttr(AttrTypes_t attr, PropStream& propStream)
 			break;
 		}
 
-
-
 		// Teleport class
 		case ATTR_TELE_DEST: {
 			if (!propStream.skip(5)) {
@@ -1014,8 +1006,6 @@ std::string Item::getNameDescription() const
 	return getNameDescription(it, this);
 }
 
-
-
 std::string Item::getWeightDescription(const ItemType& it, uint32_t weight, uint32_t count /*= 1*/)
 {
 	std::ostringstream ss;
@@ -1287,7 +1277,4 @@ const bool& ItemAttributes::CustomAttribute::get<bool>()
 	return emptyBool;
 }
 
-void Item::stopDecaying()
-{
-	g_game.stopDecay(this);
-}
+void Item::stopDecaying() { g_game.stopDecay(this); }

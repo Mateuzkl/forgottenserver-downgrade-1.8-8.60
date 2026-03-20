@@ -9,14 +9,13 @@ uint32_t Scheduler::addEvent(SchedulerTask* task)
 {
 	// check if the event has a valid id
 	if (task->getEventId() == 0) {
-		uint32_t id = lastEventId.fetch_add(1,
-			std::memory_order_relaxed) + 1;
+		uint32_t id = lastEventId.fetch_add(1, std::memory_order_relaxed) + 1;
 		task->setEventId(id);
 	}
 
 	boost::asio::post(io_context, [this, task]() {
 		// insert the event id in the list of active events
-		auto [it, inserted] = eventIdTimerMap.emplace(task->getEventId(), boost::asio::steady_timer{ io_context });
+		auto [it, inserted] = eventIdTimerMap.emplace(task->getEventId(), boost::asio::steady_timer{io_context});
 		auto& timer = it->second;
 
 		timer.expires_after(std::chrono::milliseconds(task->getDelay()));
@@ -30,8 +29,8 @@ uint32_t Scheduler::addEvent(SchedulerTask* task)
 			}
 
 			g_dispatcher.addTask(task);
-			});
 		});
+	});
 
 	return task->getEventId();
 }
@@ -63,7 +62,8 @@ void Scheduler::shutdown() noexcept
 	});
 }
 
-SchedulerTask* createSchedulerTaskWithStats(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription)
+SchedulerTask* createSchedulerTaskWithStats(uint32_t delay, TaskFunc&& f, const std::string& description,
+                                            const std::string& extraDescription)
 {
 	return new SchedulerTask(delay, std::move(f), description, extraDescription);
 }

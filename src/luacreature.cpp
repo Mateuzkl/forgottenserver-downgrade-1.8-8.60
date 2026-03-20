@@ -680,15 +680,14 @@ int luaCreatureSetEmblem(lua_State* L)
 	Creature* creature = getUserdata<Creature>(L, 1);
 	if (creature) {
 		creature->setGuildEmblem(getNumber<GuildEmblems_t>(L, 2));
-		// g_game.updatePlayerShield(creature->getPlayer()); // already handled by creature->setGuildEmblem -> game->updateCreatureEmblem
+		// g_game.updatePlayerShield(creature->getPlayer()); // already handled by creature->setGuildEmblem ->
+		// game->updateCreatureEmblem
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
 	}
 	return 1;
 }
-
-
 
 int luaCreatureGetOutfit(lua_State* L)
 {

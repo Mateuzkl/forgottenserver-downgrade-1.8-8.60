@@ -5,10 +5,10 @@
 
 #include "baseevents.h"
 
-#include "pugicast.h"
+#include "logger.h"
 #include "pugicast.h"
 #include "tools.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern LuaEnvironment g_luaEnvironment;
@@ -42,7 +42,8 @@ bool BaseEvents::loadFromXml()
 		}
 
 		if (!event->configureEvent(node)) {
-			std::string warningMsg = fmt::format("[Warning - BaseEvents::loadFromXml] Failed to configure event: {}", node.name());
+			std::string warningMsg =
+			    fmt::format("[Warning - BaseEvents::loadFromXml] Failed to configure event: {}", node.name());
 			if (node.attribute("name")) {
 				warningMsg += fmt::format(" (name: {})", node.attribute("name").as_string());
 			}
@@ -114,7 +115,8 @@ bool Event::checkScript(std::string_view basePath, std::string_view scriptsName,
 
 	int32_t id = testInterface->getEvent(getScriptEventName());
 	if (id == -1) {
-		LOG_WARN(fmt::format("[Warning - Event::checkScript] Event {} not found. {}", getScriptEventName(), scriptFile));
+		LOG_WARN(
+		    fmt::format("[Warning - Event::checkScript] Event {} not found. {}", getScriptEventName(), scriptFile));
 		return false;
 	}
 	return true;

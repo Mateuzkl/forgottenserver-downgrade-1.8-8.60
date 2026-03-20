@@ -7,6 +7,7 @@
 
 #include "game.h"
 #include "logger.h"
+
 #include <fmt/format.h>
 
 extern Game g_game;

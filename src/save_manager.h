@@ -21,8 +21,14 @@ public:
 	void saveMapAsync();
 
 	[[nodiscard]] bool isSaving() const noexcept { return saving.load(std::memory_order_relaxed); }
-	[[nodiscard]] uint64_t getLastSaveTime() const noexcept { return lastSaveDurationMs.load(std::memory_order_relaxed); }
-	[[nodiscard]] uint32_t getLastPlayerCount() const noexcept { return lastPlayersSaved.load(std::memory_order_relaxed); }
+	[[nodiscard]] uint64_t getLastSaveTime() const noexcept
+	{
+		return lastSaveDurationMs.load(std::memory_order_relaxed);
+	}
+	[[nodiscard]] uint32_t getLastPlayerCount() const noexcept
+	{
+		return lastPlayersSaved.load(std::memory_order_relaxed);
+	}
 
 private:
 	std::atomic<bool> saving{false};

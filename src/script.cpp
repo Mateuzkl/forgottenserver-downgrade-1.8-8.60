@@ -6,10 +6,10 @@
 #include "script.h"
 
 #include "configmanager.h"
+#include "logger.h"
 
 #include <fmt/color.h>
 #include <fmt/ranges.h>
-#include "logger.h"
 
 extern LuaEnvironment g_luaEnvironment;
 

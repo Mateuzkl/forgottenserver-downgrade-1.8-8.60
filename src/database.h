@@ -4,10 +4,11 @@
 #ifndef FS_DATABASE_H
 #define FS_DATABASE_H
 
-#include "pugicast.h"
-#include <mysql/mysql.h>
 #include "logger.h"
+#include "pugicast.h"
+
 #include <fmt/format.h>
+#include <mysql/mysql.h>
 
 class DBResult;
 using DBResult_ptr = std::shared_ptr<DBResult>;

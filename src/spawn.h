@@ -83,7 +83,8 @@ public:
 	bool isStarted() const { return started; }
 
 	size_t getNpcCount() const { return std::distance(npcList.begin(), npcList.end()); }
-	size_t getMonsterCount() const {
+	size_t getMonsterCount() const
+	{
 		size_t count = 0;
 		for (const auto& spawn : spawnList) {
 			count += spawn.getMonsterCount();

@@ -418,7 +418,6 @@ public:
 	ConditionSpellCooldown* clone() const override { return new ConditionSpellCooldown(*this); }
 };
 
-
 class ConditionSpellGroupCooldown final : public ConditionGeneric
 {
 public:

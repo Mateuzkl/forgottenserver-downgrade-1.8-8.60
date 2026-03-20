@@ -574,11 +574,11 @@ enum item_t : uint16_t
 
 enum AvatarLookType_t : uint16_t
 {
-	AVATAR_LOOKTYPE_STEEL = 1593,    // Knight - Avatar of Steel
-	AVATAR_LOOKTYPE_LIGHT = 1594,    // Paladin - Avatar of Light
-	AVATAR_LOOKTYPE_STORM = 1595,    // Sorcerer - Avatar of Storm
-	AVATAR_LOOKTYPE_NATURE = 1596,   // Druid - Avatar of Nature
-	AVATAR_LOOKTYPE_BALANCE = 1823,  // Monk - Avatar of Balance
+	AVATAR_LOOKTYPE_STEEL = 1593,   // Knight - Avatar of Steel
+	AVATAR_LOOKTYPE_LIGHT = 1594,   // Paladin - Avatar of Light
+	AVATAR_LOOKTYPE_STORM = 1595,   // Sorcerer - Avatar of Storm
+	AVATAR_LOOKTYPE_NATURE = 1596,  // Druid - Avatar of Nature
+	AVATAR_LOOKTYPE_BALANCE = 1823, // Monk - Avatar of Balance
 };
 
 enum PlayerFlags : uint64_t
@@ -659,7 +659,8 @@ enum ReloadTypes_t : uint8_t
 };
 
 // OTCv8 features (from src/client/const.h)
-enum GameFeature {
+enum GameFeature
+{
 	GameProtocolChecksum = 1,
 	GameAccountNames = 2,
 	GameChallengeOnLogin = 3,

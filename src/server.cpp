@@ -7,12 +7,12 @@
 
 #include "ban.h"
 #include "configmanager.h"
+#include "logger.h"
 #include "outputmessage.h"
 #include "scheduler.h"
-#include "logger.h"
-#include <fmt/format.h>
-
 #include "tools.h"
+
+#include <fmt/format.h>
 
 namespace {
 struct ConnectBlock
@@ -20,7 +20,7 @@ struct ConnectBlock
 	uint64_t lastAttempt;
 	uint64_t blockTime = 0;
 	uint32_t count = 1;
-	uint32_t totalBlocks = 0;  // escalation counter
+	uint32_t totalBlocks = 0; // escalation counter
 };
 
 // Cleanup stale entries periodically to prevent memory growth
@@ -32,7 +32,7 @@ void cleanupConnectMap(std::map<uint32_t, ConnectBlock>& ipConnectMap, uint64_t 
 	}
 	lastCleanup = currentTime;
 
-	for (auto it = ipConnectMap.begin(); it != ipConnectMap.end(); ) {
+	for (auto it = ipConnectMap.begin(); it != ipConnectMap.end();) {
 		// Remove entries idle for more than 5 minutes
 		if (currentTime - it->second.lastAttempt > 300000) {
 			it = ipConnectMap.erase(it);
@@ -79,9 +79,9 @@ bool acceptConnection(const uint32_t clientIP)
 			if (connectBlock.totalBlocks >= 10) {
 				blockDuration = 300000; // 5 minutes
 			} else if (connectBlock.totalBlocks >= 5) {
-				blockDuration = 60000;  // 1 minute
+				blockDuration = 60000; // 1 minute
 			} else if (connectBlock.totalBlocks >= 3) {
-				blockDuration = 15000;  // 15 seconds
+				blockDuration = 15000; // 15 seconds
 			}
 
 			if (timeDiff <= 500) {
@@ -98,7 +98,7 @@ bool acceptConnection(const uint32_t clientIP)
 	}
 	return true;
 }
-}
+} // namespace
 
 ServiceManager::~ServiceManager() { stop(); }
 
@@ -163,9 +163,8 @@ void ServicePort::accept()
 		// Max connections reached — schedule retry after a brief delay
 		auto timer = std::make_shared<boost::asio::steady_timer>(io_context);
 		timer->expires_after(std::chrono::milliseconds(100));
-		timer->async_wait([timer, thisPtr = shared_from_this()](const boost::system::error_code&) {
-			thisPtr->accept();
-		});
+		timer->async_wait(
+		    [timer, thisPtr = shared_from_this()](const boost::system::error_code&) { thisPtr->accept(); });
 		return;
 	}
 
@@ -251,10 +250,9 @@ void ServicePort::open(uint16_t port)
 	try {
 		if (getBoolean(ConfigManager::BIND_ONLY_GLOBAL_ADDRESS)) {
 			acceptor.reset(new boost::asio::ip::tcp::acceptor(
-			    io_context,
-			    boost::asio::ip::tcp::endpoint(boost::asio::ip::address(boost::asio::ip::make_address_v4(
-			                                       std::string{getString(ConfigManager::IP)})),
-			                                   serverPort)));
+			    io_context, boost::asio::ip::tcp::endpoint(boost::asio::ip::address(boost::asio::ip::make_address_v4(
+			                                                   std::string{getString(ConfigManager::IP)})),
+			                                               serverPort)));
 		} else {
 			acceptor.reset(new boost::asio::ip::tcp::acceptor(
 			    io_context, boost::asio::ip::tcp::endpoint(

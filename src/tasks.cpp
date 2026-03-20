@@ -19,7 +19,8 @@ Task* createTaskWithStats(TaskFunc&& f, const std::string& description, const st
 	return new Task(std::move(f), "", "");
 }
 
-Task* createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description, const std::string& extraDescription)
+Task* createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description,
+                          const std::string& extraDescription)
 {
 	if (g_stats.isEnabled()) {
 		return new Task(expiration, std::move(f), description, extraDescription);
@@ -29,97 +30,98 @@ Task* createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& 
 
 void Dispatcher::threadMain()
 {
-    // Capture thread ID for isDispatcherThread() checks
-    threadId = std::this_thread::get_id();
+	// Capture thread ID for isDispatcherThread() checks
+	threadId = std::this_thread::get_id();
 
-    std::vector<Task*> tmpTaskList;
-    tmpTaskList.reserve(128);
+	std::vector<Task*> tmpTaskList;
+	tmpTaskList.reserve(128);
 
 #ifdef STATS_ENABLED
-    std::chrono::high_resolution_clock::time_point time_point;
+	std::chrono::high_resolution_clock::time_point time_point;
 #endif
 
-    while (getState() != THREAD_STATE_TERMINATED) {
+	while (getState() != THREAD_STATE_TERMINATED) {
 #ifdef STATS_ENABLED
-        if (g_stats.isEnabled()) {
-            time_point = std::chrono::high_resolution_clock::now();
-        }
-        taskSignal.acquire();
-        if (g_stats.isEnabled()) {
-            g_stats.dispatcherWaitTime(dispatcherId) += std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::high_resolution_clock::now() - time_point
-            ).count();
-        }
+		if (g_stats.isEnabled()) {
+			time_point = std::chrono::high_resolution_clock::now();
+		}
+		taskSignal.acquire();
+		if (g_stats.isEnabled()) {
+			g_stats.dispatcherWaitTime(dispatcherId) += std::chrono::duration_cast<std::chrono::nanoseconds>(
+			                                                std::chrono::high_resolution_clock::now() - time_point)
+			                                                .count();
+		}
 #else
-        taskSignal.acquire();
+		taskSignal.acquire();
 #endif
 
-        if (getState() == THREAD_STATE_TERMINATED) {
-            break;
-        }
+		if (getState() == THREAD_STATE_TERMINATED) {
+			break;
+		}
 
-        // Drain all pending signals to coalesce multiple wakeups into one pass
-        while (taskSignal.try_acquire()) {
-            // consume extra signals
-        }
+		// Drain all pending signals to coalesce multiple wakeups into one pass
+		while (taskSignal.try_acquire()) {
+			// consume extra signals
+		}
 
-        // Critical section: move tasks to the temporary list
-        {
-            std::lock_guard<std::mutex> lockGuard(taskLock);
-            if (!taskList.empty()) {
-                tmpTaskList.swap(taskList);
-            }
-        }
+		// Critical section: move tasks to the temporary list
+		{
+			std::lock_guard<std::mutex> lockGuard(taskLock);
+			if (!taskList.empty()) {
+				tmpTaskList.swap(taskList);
+			}
+		}
 
-        // Process all available tasks
-        for (Task* task : tmpTaskList) {
+		// Process all available tasks
+		for (Task* task : tmpTaskList) {
 #if defined(STATS_ENABLED) || defined(SLOW_TASK_DETECTION)
-            auto taskStart = std::chrono::high_resolution_clock::now();
+			auto taskStart = std::chrono::high_resolution_clock::now();
 #endif
 
 #ifdef STATS_ENABLED
-            if (g_stats.isEnabled()) {
-                time_point = taskStart;
-            }
+			if (g_stats.isEnabled()) {
+				time_point = taskStart;
+			}
 #endif
-            if (!task->hasExpired()) {
-                ++dispatcherCycle;
-                ++totalTasksProcessed;
-                (*task)();
+			if (!task->hasExpired()) {
+				++dispatcherCycle;
+				++totalTasksProcessed;
+				(*task)();
 
 #ifdef SLOW_TASK_DETECTION
-                // Slow task detection (disabled in production with -DENABLE_SLOW_TASK_DETECTION=OFF)
-                auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::high_resolution_clock::now() - taskStart
-                ).count();
+				// Slow task detection (disabled in production with -DENABLE_SLOW_TASK_DETECTION=OFF)
+				auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+				                   std::chrono::high_resolution_clock::now() - taskStart)
+				                   .count();
 
-                if (static_cast<uint64_t>(elapsed) > SLOW_TASK_THRESHOLD_NS) {
-                    ++slowTaskCount;
-                    auto elapsedMs = elapsed / 1'000'000;
-                    if (!task->description.empty()) {
-                        LOG_WARN(">> Slow task detected: {}ms [{}] {}", elapsedMs, task->description, task->extraDescription);
-                    } else {
-                        LOG_WARN(">> Slow task detected: {}ms [unknown]", elapsedMs);
-                    }
-                }
+				if (static_cast<uint64_t>(elapsed) > SLOW_TASK_THRESHOLD_NS) {
+					++slowTaskCount;
+					auto elapsedMs = elapsed / 1'000'000;
+					if (!task->description.empty()) {
+						LOG_WARN(">> Slow task detected: {}ms [{}] {}", elapsedMs, task->description,
+						         task->extraDescription);
+					} else {
+						LOG_WARN(">> Slow task detected: {}ms [unknown]", elapsedMs);
+					}
+				}
 #endif
-            }
+			}
 
 #ifdef STATS_ENABLED
-            if (g_stats.isEnabled()) {
-                task->executionTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::high_resolution_clock::now() - time_point
-                ).count();
-                g_stats.addDispatcherTask(dispatcherId, task);
-            } else {
-                delete task;
-            }
+			if (g_stats.isEnabled()) {
+				task->executionTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+				                          std::chrono::high_resolution_clock::now() - time_point)
+				                          .count();
+				g_stats.addDispatcherTask(dispatcherId, task);
+			} else {
+				delete task;
+			}
 #else
-            delete task;
+			delete task;
 #endif
-        }
-        tmpTaskList.clear();
-    }
+		}
+		tmpTaskList.clear();
+	}
 }
 
 void Dispatcher::addTask(Task* task)
@@ -144,9 +146,7 @@ void Dispatcher::addTask(Task* task)
 
 void Dispatcher::shutdown()
 {
-	Task* task = createTaskWithStats([this]() {
-		setState(THREAD_STATE_TERMINATED);
-	}, "Dispatcher::shutdown", "");
+	Task* task = createTaskWithStats([this]() { setState(THREAD_STATE_TERMINATED); }, "Dispatcher::shutdown", "");
 
 	{
 		std::lock_guard<std::mutex> lockGuard(taskLock);

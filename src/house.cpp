@@ -9,8 +9,9 @@
 #include "configmanager.h"
 #include "game.h"
 #include "iologindata.h"
-#include "pugicast.h"
 #include "logger.h"
+#include "pugicast.h"
+
 #include <fmt/format.h>
 
 extern Game g_game;
@@ -23,7 +24,8 @@ void House::addTile(HouseTile* tile)
 	houseTiles.push_back(tile);
 }
 
-std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> House::initializeOwnerDataFromDatabase(uint32_t guid_guild, HouseType_t type)
+std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> House::initializeOwnerDataFromDatabase(
+    uint32_t guid_guild, HouseType_t type)
 {
 	if (guid_guild == 0) {
 		return std::make_tuple(0, 0, std::string{}, 0, std::string{});
@@ -35,13 +37,8 @@ std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> House::initia
 		std::ostringstream query;
 		query << "SELECT `id`, `name`, `account_id` FROM `players` WHERE `id`=" << guid_guild;
 		if (DBResult_ptr result = db.storeQuery(query.str())) {
-			return std::make_tuple(
-			    result->getNumber<uint32_t>("id"),
-			    result->getNumber<uint32_t>("account_id"),
-			    std::string(result->getString("name")),
-			    uint32_t{0},
-			    std::string{}
-			);
+			return std::make_tuple(result->getNumber<uint32_t>("id"), result->getNumber<uint32_t>("account_id"),
+			                       std::string(result->getString("name")), uint32_t{0}, std::string{});
 		}
 		throw std::runtime_error("Error in House::setOwner - Failed to find player GUID");
 	}
@@ -52,13 +49,9 @@ std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> House::initia
 	query << "FROM `guilds` as `g` INNER JOIN `players` AS `p` ON `g`.`ownerid` = `p`.`id` ";
 	query << "WHERE `g`.`id`=" << guid_guild;
 	if (DBResult_ptr result = db.storeQuery(query.str())) {
-		return std::make_tuple(
-		    result->getNumber<uint32_t>("ownerid"),
-		    result->getNumber<uint32_t>("account_id"),
-		    std::string(result->getString("name")),
-		    result->getNumber<uint32_t>("id"),
-		    std::string(result->getString("guild_name"))
-		);
+		return std::make_tuple(result->getNumber<uint32_t>("ownerid"), result->getNumber<uint32_t>("account_id"),
+		                       std::string(result->getString("name")), result->getNumber<uint32_t>("id"),
+		                       std::string(result->getString("guild_name")));
 	}
 	throw std::runtime_error("Error in House::setOwner - Failed to find guild ID");
 }
@@ -67,13 +60,13 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 {
 	if (updateDatabase && owner != guid_guild) {
 		Database& db = Database::getInstance();
-	bool resetProtection = (guid_guild == 0 || owner == 0);
-	if (resetProtection) {
-            db.executeQuery(fmt::format(
-                "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0, `is_protected` = 0 WHERE `id` = {:d}",
-                guid_guild, id));
-        setProtected(false);
-	} else {
+		bool resetProtection = (guid_guild == 0 || owner == 0);
+		if (resetProtection) {
+			db.executeQuery(fmt::format(
+			    "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0, `is_protected` = 0 WHERE `id` = {:d}",
+			    guid_guild, id));
+			setProtected(false);
+		} else {
 			db.executeQuery(fmt::format(
 			    "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0 WHERE `id` = {:d}",
 			    guid_guild, id));
@@ -149,7 +142,8 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 		uint32_t sqlAccountId = 0, sqlPlayerGuid = 0, sqlGuildId = 0;
 		std::string sqlPlayerName, sqlGuildName;
 		try {
-			std::tie(sqlPlayerGuid, sqlAccountId, sqlPlayerName, sqlGuildId, sqlGuildName) = initializeOwnerDataFromDatabase(guid_guild, type);
+			std::tie(sqlPlayerGuid, sqlAccountId, sqlPlayerName, sqlGuildId, sqlGuildName) =
+			    initializeOwnerDataFromDatabase(guid_guild, type);
 		} catch (const std::runtime_error& err) {
 			LOG_ERROR(fmt::format("{}", err.what()));
 			return;
@@ -172,9 +166,9 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 
 AccessHouseLevel_t House::getHouseAccessLevel(const Player* player) const
 {
-    if (!player) {
-        return HOUSE_OWNER;
-    }
+	if (!player) {
+		return HOUSE_OWNER;
+	}
 
 	if (player->hasFlag(PlayerFlag_CanEditHouses)) {
 		return HOUSE_OWNER;
@@ -191,19 +185,19 @@ AccessHouseLevel_t House::getHouseAccessLevel(const Player* player) const
 		if (guid == owner) {
 			return HOUSE_OWNER;
 		}
-    } else { // HOUSE_TYPE_GUILDHALL
-        const auto& guild = player->getGuild();
-        uint32_t guid = player->getGUID();
-        if (guild && guild->getId() == owner) {
-            if (guild->getOwnerGUID() == guid) {
-                return HOUSE_OWNER;
-            }
-            if (player->getGuildRank() == guild->getRankByLevel(2)) {
-                return HOUSE_SUBOWNER;
-            }
-            return HOUSE_GUEST;
-        }
-    }
+	} else { // HOUSE_TYPE_GUILDHALL
+		const auto& guild = player->getGuild();
+		uint32_t guid = player->getGUID();
+		if (guild && guild->getId() == owner) {
+			if (guild->getOwnerGUID() == guid) {
+				return HOUSE_OWNER;
+			}
+			if (player->getGuildRank() == guild->getRankByLevel(2)) {
+				return HOUSE_SUBOWNER;
+			}
+			return HOUSE_GUEST;
+		}
+	}
 
 	if (subOwnerList.isInList(player)) {
 		return HOUSE_SUBOWNER;
@@ -297,7 +291,9 @@ bool House::transferToDepot() const
 		if (!guild) {
 			guild = IOGuild::loadGuild(owner);
 			if (!guild) {
-				LOG_WARN(fmt::format("Warning: [Houses::transferToDepot] Failed to find guild associated to guildhall = {}. Guild = {}", id, owner));
+				LOG_WARN(fmt::format(
+				    "Warning: [Houses::transferToDepot] Failed to find guild associated to guildhall = {}. Guild = {}",
+				    id, owner));
 				return false;
 			}
 		}
@@ -355,7 +351,8 @@ bool House::transferToDepot(Player* player) const
 						if (Container* sub = child->getContainer()) {
 							subContainers.push_back(sub);
 						} else if (child->isPickupable()) {
-							g_game.internalMoveItem(child->getParent(), player->getInbox(), INDEX_WHEREEVER, child, child->getItemCount(), nullptr, FLAG_NOLIMIT);
+							g_game.internalMoveItem(child->getParent(), player->getInbox(), INDEX_WHEREEVER, child,
+							                        child->getItemCount(), nullptr, FLAG_NOLIMIT);
 						}
 					}
 				}
@@ -372,14 +369,16 @@ bool House::transferToDepot(Player* player) const
 			}
 
 			if (processedItem->isPickupable()) {
-				g_game.internalMoveItem(processedItem->getParent(), player->getInbox(), INDEX_WHEREEVER, processedItem, processedItem->getItemCount(), nullptr, FLAG_NOLIMIT);
+				g_game.internalMoveItem(processedItem->getParent(), player->getInbox(), INDEX_WHEREEVER, processedItem,
+				                        processedItem->getItemCount(), nullptr, FLAG_NOLIMIT);
 			} else if (Container* container = processedItem->getContainer()) {
 				std::vector<Item*> contents;
 				for (Item* content : container->getItemList()) {
 					contents.push_back(content);
 				}
 				for (Item* content : contents) {
-					g_game.internalMoveItem(content->getParent(), player->getInbox(), INDEX_WHEREEVER, content, content->getItemCount(), nullptr, FLAG_NOLIMIT);
+					g_game.internalMoveItem(content->getParent(), player->getInbox(), INDEX_WHEREEVER, content,
+					                        content->getItemCount(), nullptr, FLAG_NOLIMIT);
 				}
 			}
 		}
@@ -666,21 +665,21 @@ void Door::setHouse(House* house)
 
 bool Door::canUse(const Player* player)
 {
-    if (!house) {
-        return true;
-    }
+	if (!house) {
+		return true;
+	}
 
-    if (house->getType() == HOUSE_TYPE_GUILDHALL) {
-        if (house->getHouseAccessLevel(player) >= HOUSE_GUEST) {
-            return true;
-        }
-    } else {
-        if (house->getHouseAccessLevel(player) >= HOUSE_SUBOWNER) {
-            return true;
-        }
-    }
+	if (house->getType() == HOUSE_TYPE_GUILDHALL) {
+		if (house->getHouseAccessLevel(player) >= HOUSE_GUEST) {
+			return true;
+		}
+	} else {
+		if (house->getHouseAccessLevel(player) >= HOUSE_SUBOWNER) {
+			return true;
+		}
+	}
 
-    return accessList->isInList(player);
+	return accessList->isInList(player);
 }
 
 void Door::setAccessList(std::string_view textlist)
@@ -720,8 +719,7 @@ void House::updateDoorDescription() const
 
 	if (owner != 0) {
 		description << ownerName << " owns this " << houseType << ".";
-	}
-	else {
+	} else {
 		description << "Nobody owns this " << houseType << ".";
 
 		const int32_t housePrice = getInteger(ConfigManager::HOUSE_PRICE);
@@ -779,7 +777,8 @@ bool Houses::loadHousesXML(const std::string& filename)
 		                  pugi::cast<uint16_t>(houseNode.attribute("entryy").value()),
 		                  pugi::cast<uint16_t>(houseNode.attribute("entryz").value()));
 		if (entryPos.x == 0 && entryPos.y == 0 && entryPos.z == 0) {
-			LOG_WARN(fmt::format("[Warning - Houses::loadHousesXML] House entry not set - Name: {} - House id: {}", house->getName(), houseId));
+			LOG_WARN(fmt::format("[Warning - Houses::loadHousesXML] House entry not set - Name: {} - House id: {}",
+			                     house->getName(), houseId));
 		}
 		house->setEntryPos(entryPos);
 
@@ -874,13 +873,13 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 					int32_t daysLeft = 7 - house->getPayRentWarnings();
 
 					Item* letter = Item::CreateItem(ITEM_LETTER_STAMPED);
-				std::string period = getRentPeriod(rentPeriod);
+					std::string period = getRentPeriod(rentPeriod);
 
-				letter->setText(fmt::format(
-				    "Warning! \nThe {:s} rent of {:d} gold for your house \"{:s}\" is payable. Have it within {:d} days or you will lose this house.",
-				    period, house->getRent(), house->getName(), daysLeft));
-				g_game.internalAddItem(player.getInbox(), letter, INDEX_WHEREEVER, FLAG_NOLIMIT);
-				house->setPayRentWarnings(house->getPayRentWarnings() + 1);
+					letter->setText(fmt::format(
+					    "Warning! \nThe {:s} rent of {:d} gold for your house \"{:s}\" is payable. Have it within {:d} days or you will lose this house.",
+					    period, house->getRent(), house->getName(), daysLeft));
+					g_game.internalAddItem(player.getInbox(), letter, INDEX_WHEREEVER, FLAG_NOLIMIT);
+					house->setPayRentWarnings(house->getPayRentWarnings() + 1);
 				} else {
 					house->setOwner(0, true, &player);
 				}
@@ -898,13 +897,15 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 			}
 
 			if (guild->getBankBalance() >= rent) {
-				LOG_INFO(fmt::format("[Info - Houses::payHouses] Paying rent info - Name: {} - Guild: {} - Balance {} - Rent {} - New balance {}",
-					house->getName(), guild->getName(), guild->getBankBalance(), rent, guild->getBankBalance() - rent));
+				LOG_INFO(fmt::format(
+				    "[Info - Houses::payHouses] Paying rent info - Name: {} - Guild: {} - Balance {} - Rent {} - New balance {}",
+				    house->getName(), guild->getName(), guild->getBankBalance(), rent, guild->getBankBalance() - rent));
 				guild->setBankBalance(guild->getBankBalance() - rent);
 
 				Database& db = Database::getInstance();
 				std::ostringstream query;
-				query << "INSERT INTO `guild_transactions` (`guild_id`,`type`,`category`,`balance`,`time`) VALUES (" << ownerId << ",\"WITHDRAW\",\"RENT\"," << rent << "," << currentTime << ");";
+				query << "INSERT INTO `guild_transactions` (`guild_id`,`type`,`category`,`balance`,`time`) VALUES ("
+				      << ownerId << ",\"WITHDRAW\",\"RENT\"," << rent << "," << currentTime << ");";
 				db.executeQuery(query.str());
 
 				time_t paidUntil = increasePaidUntil(rentPeriod, currentTime);
@@ -915,7 +916,8 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 					// Player doesn't exist, reset house owner
 					house->setOwner(0);
 					std::ostringstream ss;
-					ss << "Error: Guild " << guild->getName() << " has an owner that does not exist: " << guild->getOwnerGUID();
+					ss << "Error: Guild " << guild->getName()
+					   << " has an owner that does not exist: " << guild->getOwnerGUID();
 					LOG_ERROR(ss.str());
 					continue;
 				}
@@ -924,16 +926,16 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 					int32_t daysLeft = 7 - house->getPayRentWarnings();
 
 					Item* letter = Item::CreateItem(ITEM_LETTER_STAMPED);
-				std::string period = getRentPeriod(rentPeriod);
+					std::string period = getRentPeriod(rentPeriod);
 
-				letter->setText(fmt::format(
-				    "Warning! \nThe {:s} rent of {:d} gold for your guildhall \"{:s}\" is payable. Have it within {:d} days or you will lose this guildhall.",
-				    period, house->getRent(), house->getName(), daysLeft));
-				DepotLocker* depot = player.getDepotLocker(town->getID());
-				if (depot) {
-					g_game.internalAddItem(depot, letter, INDEX_WHEREEVER, FLAG_NOLIMIT);
-				}
-				house->setPayRentWarnings(house->getPayRentWarnings() + 1);
+					letter->setText(fmt::format(
+					    "Warning! \nThe {:s} rent of {:d} gold for your guildhall \"{:s}\" is payable. Have it within {:d} days or you will lose this guildhall.",
+					    period, house->getRent(), house->getName(), daysLeft));
+					DepotLocker* depot = player.getDepotLocker(town->getID());
+					if (depot) {
+						g_game.internalAddItem(depot, letter, INDEX_WHEREEVER, FLAG_NOLIMIT);
+					}
+					house->setPayRentWarnings(house->getPayRentWarnings() + 1);
 				} else {
 					house->setOwner(0, true, &player);
 				}

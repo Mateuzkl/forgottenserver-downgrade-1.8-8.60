@@ -3,10 +3,11 @@
 
 #include "otpch.h"
 
+#include "logger.h"
 #include "luascript.h"
 #include "script.h"
 #include "weapons.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Weapons* g_weapons;
@@ -116,7 +117,7 @@ int luaWeaponRegister(lua_State* L)
 		}
 
 		weapon->configureWeapon(it);
-		
+
 		pushBoolean(L, g_weapons->registerLuaEvent(weapon));
 		*weaponPtr = nullptr;
 	} else {

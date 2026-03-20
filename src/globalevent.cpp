@@ -6,11 +6,11 @@
 #include "globalevent.h"
 
 #include "configmanager.h"
+#include "logger.h"
 #include "pugicast.h"
 #include "scheduler.h"
-#include "scheduler.h"
 #include "tools.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 GlobalEvents::GlobalEvents() : scriptInterface("GlobalEvent Interface") { scriptInterface.initState(); }
@@ -76,7 +76,8 @@ bool GlobalEvents::registerEvent(Event_ptr event, const pugi::xml_node&)
 		}
 	}
 
-	LOG_WARN(fmt::format("[Warning - GlobalEvents::configureEvent] Duplicate registered globalevent with name: {}", globalEvent->getName()));
+	LOG_WARN(fmt::format("[Warning - GlobalEvents::configureEvent] Duplicate registered globalevent with name: {}",
+	                     globalEvent->getName()));
 	return false;
 }
 
@@ -106,7 +107,8 @@ bool GlobalEvents::registerLuaEvent(GlobalEvent* event)
 		}
 	}
 
-	LOG_WARN(fmt::format("[Warning - GlobalEvents::configureEvent] Duplicate registered globalevent with name: {}", globalEvent->getName()));
+	LOG_WARN(fmt::format("[Warning - GlobalEvents::configureEvent] Duplicate registered globalevent with name: {}",
+	                     globalEvent->getName()));
 	return false;
 }
 
@@ -145,11 +147,11 @@ void GlobalEvents::timer()
 		++it;
 	}
 
-	 // FIX: Cancel previous event before scheduling a new one
-    if (timerEventId != 0) {
-        g_scheduler.stopEvent(timerEventId);
-        timerEventId = 0;
-    }
+	// FIX: Cancel previous event before scheduling a new one
+	if (timerEventId != 0) {
+		g_scheduler.stopEvent(timerEventId);
+		timerEventId = 0;
+	}
 
 	if (nextScheduledTime != std::numeric_limits<int64_t>::max()) {
 		timerEventId = g_scheduler.addEvent(createSchedulerTask(nextScheduledTime, [this]() { timer(); }));
@@ -183,11 +185,11 @@ void GlobalEvents::think()
 		globalEvent.setNextExecution(now + nextExecutionTime);
 	}
 
-		// FIX: Cancel thinkEventId before scheduling a new one
-		if (thinkEventId != 0) {
-			g_scheduler.stopEvent(thinkEventId);
-			thinkEventId = 0;
-		}
+	// FIX: Cancel thinkEventId before scheduling a new one
+	if (thinkEventId != 0) {
+		g_scheduler.stopEvent(thinkEventId);
+		thinkEventId = 0;
+	}
 
 	if (nextScheduledTime != std::numeric_limits<int64_t>::max()) {
 		thinkEventId = g_scheduler.addEvent(createSchedulerTask(nextScheduledTime, [this]() { think(); }));
@@ -233,7 +235,7 @@ GlobalEvent::GlobalEvent(LuaScriptInterface* interface) : Event(interface) {}
 
 bool GlobalEvent::configureEvent(const pugi::xml_node& node)
 {
-    pugi::xml_attribute nameAttribute = node.attribute("name");
+	pugi::xml_attribute nameAttribute = node.attribute("name");
 	if (!nameAttribute) {
 		LOG_ERROR("[Error - GlobalEvent::configureEvent] Missing name for a globalevent");
 		return false;
@@ -248,7 +250,9 @@ bool GlobalEvent::configureEvent(const pugi::xml_node& node)
 
 		int32_t hour = params.front();
 		if (hour < 0 || hour > 23) {
-			LOG_ERROR(fmt::format("[Error - GlobalEvent::configureEvent] Invalid hour \"{}\" for globalevent with name: {}", attr.as_string(), name));
+			LOG_ERROR(
+			    fmt::format("[Error - GlobalEvent::configureEvent] Invalid hour \"{}\" for globalevent with name: {}",
+			                attr.as_string(), name));
 			return false;
 		}
 
@@ -259,14 +263,18 @@ bool GlobalEvent::configureEvent(const pugi::xml_node& node)
 		if (params.size() > 1) {
 			min = params[1];
 			if (min < 0 || min > 59) {
-				LOG_ERROR(fmt::format("[Error - GlobalEvent::configureEvent] Invalid minute \"{}\" for globalevent with name: {}", attr.as_string(), name));
+				LOG_ERROR(fmt::format(
+				    "[Error - GlobalEvent::configureEvent] Invalid minute \"{}\" for globalevent with name: {}",
+				    attr.as_string(), name));
 				return false;
 			}
 
 			if (params.size() > 2) {
 				sec = params[2];
 				if (sec < 0 || sec > 59) {
-					LOG_ERROR(fmt::format("[Error - GlobalEvent::configureEvent] Invalid second \"{}\" for globalevent with name: {}", attr.as_string(), name));
+					LOG_ERROR(fmt::format(
+					    "[Error - GlobalEvent::configureEvent] Invalid second \"{}\" for globalevent with name: {}",
+					    attr.as_string(), name));
 					return false;
 				}
 			}
@@ -301,7 +309,9 @@ bool GlobalEvent::configureEvent(const pugi::xml_node& node)
 		} else if (caseInsensitiveEqual(value, "save")) {
 			eventType = GLOBALEVENT_SAVE;
 		} else {
-			LOG_ERROR(fmt::format("[Error - GlobalEvent::configureEvent] No valid type \"{}\" for globalevent with name {}", attr.as_string(), name));
+			LOG_ERROR(
+			    fmt::format("[Error - GlobalEvent::configureEvent] No valid type \"{}\" for globalevent with name {}",
+			                attr.as_string(), name));
 			return false;
 		}
 	} else if ((attr = node.attribute("interval"))) {

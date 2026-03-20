@@ -20,6 +20,7 @@
 #include <boost/lockfree/stack.hpp>
 #include <boost/variant.hpp>
 #include <cassert>
+#include <chrono>
 #include <concepts>
 #include <condition_variable>
 #include <cstdint>
@@ -41,7 +42,10 @@
 #include <optional>
 #include <pugixml.hpp>
 #include <random>
+#include <ranges>
+#include <semaphore>
 #include <set>
+#include <span>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 #include <sstream>
@@ -55,9 +59,5 @@
 #include <valarray>
 #include <variant>
 #include <vector>
-#include <span>
-#include <ranges>
-#include <semaphore>
-#include <chrono>
 
 #endif // FS_OTPCH_H

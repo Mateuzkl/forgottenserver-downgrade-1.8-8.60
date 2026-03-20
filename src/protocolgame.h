@@ -275,7 +275,7 @@ private:
 	friend class Player;
 	friend class ProtocolSpectator;
 
-	//cast
+	// cast
 	void spectatorTurn(uint8_t direction);
 	void parseSpectatorSay(NetworkMessage& msg);
 	void spectatorSay(const std::string text, uint16_t channelId);
@@ -299,13 +299,21 @@ private:
 
 	// Helpers so we don't need to bind every time
 	template <typename Callable, typename... Args>
-	void addGameTaskWithStats(Callable&& function, const std::string& function_str, const std::string& extra_info, Args&&... args) {
-		g_dispatcher.addTask(createTaskWithStats(std::bind(std::forward<Callable>(function), &g_game, std::forward<Args>(args)...), function_str, extra_info));
+	void addGameTaskWithStats(Callable&& function, const std::string& function_str, const std::string& extra_info,
+	                          Args&&... args)
+	{
+		g_dispatcher.addTask(
+		    createTaskWithStats(std::bind(std::forward<Callable>(function), &g_game, std::forward<Args>(args)...),
+		                        function_str, extra_info));
 	}
 
 	template <typename Callable, typename... Args>
-	void addGameTaskTimedWithStats(uint32_t delay, Callable&& function, const std::string& function_str, const std::string& extra_info, Args&&... args) {
-		g_dispatcher.addTask(createTaskWithStats(delay, std::bind(std::forward<Callable>(function), &g_game, std::forward<Args>(args)...), function_str, extra_info));
+	void addGameTaskTimedWithStats(uint32_t delay, Callable&& function, const std::string& function_str,
+	                               const std::string& extra_info, Args&&... args)
+	{
+		g_dispatcher.addTask(createTaskWithStats(
+		    delay, std::bind(std::forward<Callable>(function), &g_game, std::forward<Args>(args)...), function_str,
+		    extra_info));
 	}
 
 	bool isOTCv8 = false;

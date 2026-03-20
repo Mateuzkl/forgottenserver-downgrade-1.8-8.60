@@ -6,13 +6,14 @@
 #include "configmanager.h"
 #include "events.h"
 #include "game.h"
+#include "logger.h"
 #include "luascript.h"
 #include "monster.h"
 #include "monsters.h"
 #include "script.h"
 #include "spells.h"
 #include "talkaction.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Events* g_events;

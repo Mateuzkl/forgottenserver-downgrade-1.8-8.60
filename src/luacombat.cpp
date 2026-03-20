@@ -209,29 +209,29 @@ int luaCombatSetCallback(lua_State* L)
 	}
 
 	auto key = getInteger<CallBackParam>(L, 2);
-	
+
 	if (!combat->setCallback(key)) {
 		reportErrorFunc(L, "Invalid callback parameter");
 		pushBoolean(L, false);
 		return 1;
 	}
-	
+
 	auto callback = combat->getCallback(key);
 	if (!callback) {
 		reportErrorFunc(L, "Failed to get callback");
 		pushBoolean(L, false);
 		return 1;
 	}
-	
+
 	auto* scriptInterface = LuaScriptInterface::getScriptEnv()->getScriptInterface();
 	if (!scriptInterface) {
 		reportErrorFunc(L, "Script interface not found");
 		pushBoolean(L, false);
 		return 1;
 	}
-	
+
 	bool success = false;
-	
+
 	if (isFunction(L, 3)) {
 		lua_pushvalue(L, 3);
 		success = callback->loadCallBack(scriptInterface);
@@ -243,7 +243,7 @@ int luaCombatSetCallback(lua_State* L)
 		pushBoolean(L, false);
 		return 1;
 	}
-	
+
 	if (!success) {
 		reportErrorFunc(L, LuaScriptInterface::getErrorDesc(LuaErrorCode::CALLBACK_NOT_FOUND));
 		pushBoolean(L, false);
@@ -253,7 +253,6 @@ int luaCombatSetCallback(lua_State* L)
 	pushBoolean(L, true);
 	return 1;
 }
-
 
 int luaCombatSetOrigin(lua_State* L)
 {

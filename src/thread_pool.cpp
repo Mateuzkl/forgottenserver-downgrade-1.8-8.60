@@ -25,9 +25,8 @@ void ThreadPool::start(uint32_t requestedThreads)
 		workers.emplace_back([this]() { workerMain(); });
 	}
 
-	LOG_INFO(fmt::format(">> {}: Running with {} threads.",
-		fmt::format(fg(fmt::color::cyan), "ThreadPool"),
-		fmt::format(fg(fmt::color::lime_green), "{}", threadCount)));
+	LOG_INFO(fmt::format(">> {}: Running with {} threads.", fmt::format(fg(fmt::color::cyan), "ThreadPool"),
+	                     fmt::format(fg(fmt::color::lime_green), "{}", threadCount)));
 }
 
 void ThreadPool::shutdown()
@@ -39,9 +38,8 @@ void ThreadPool::shutdown()
 		}
 	}
 
-	LOG_INFO(fmt::format(">> {}: {}",
-		fmt::format(fg(fmt::color::cyan), "ThreadPool"),
-		fmt::format(fg(fmt::color::yellow), "Shutting down...")));
+	LOG_INFO(fmt::format(">> {}: {}", fmt::format(fg(fmt::color::cyan), "ThreadPool"),
+	                     fmt::format(fg(fmt::color::yellow), "Shutting down...")));
 	condition.notify_all();
 
 	for (auto& worker : workers) {
@@ -50,9 +48,8 @@ void ThreadPool::shutdown()
 		}
 	}
 	workers.clear();
-	LOG_INFO(fmt::format(">> {}: {}",
-		fmt::format(fg(fmt::color::cyan), "ThreadPool"),
-		fmt::format(fg(fmt::color::lime_green), "All {} workers stopped.", threadCount)));
+	LOG_INFO(fmt::format(">> {}: {}", fmt::format(fg(fmt::color::cyan), "ThreadPool"),
+	                     fmt::format(fg(fmt::color::lime_green), "All {} workers stopped.", threadCount)));
 }
 
 ThreadPool::~ThreadPool()
@@ -81,9 +78,7 @@ void ThreadPool::workerMain()
 
 		{
 			std::unique_lock lock(queueMutex);
-			condition.wait(lock, [this]() {
-				return stopped.load(std::memory_order_relaxed) || !taskQueue.empty();
-			});
+			condition.wait(lock, [this]() { return stopped.load(std::memory_order_relaxed) || !taskQueue.empty(); });
 
 			if (stopped.load(std::memory_order_relaxed) && taskQueue.empty()) {
 				return;

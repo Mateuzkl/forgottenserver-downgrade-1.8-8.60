@@ -10,10 +10,10 @@
 
 /**
  * Lock-free free list wrapper
- * 
+ *
  * Provides a singleton free list per (size, capacity) combination
  * This allows different types of the same size to share the same pool
- * 
+ *
  * Modernized with [[nodiscard]] and noexcept specifications
  */
 
@@ -22,7 +22,8 @@ struct LockfreeFreeList
 {
 	using FreeList = boost::lockfree::stack<void*, boost::lockfree::capacity<CAPACITY>>;
 
-	[[nodiscard]] static FreeList& get() noexcept {
+	[[nodiscard]] static FreeList& get() noexcept
+	{
 		static FreeList freeList;
 		return freeList;
 	}
@@ -52,8 +53,9 @@ public:
 	using is_always_equal = std::true_type;
 
 	// Rebind is deprecated in C++17 but kept for backward compatibility
-	template<typename U>
-	struct rebind {
+	template <typename U>
+	struct rebind
+	{
 		using other = LockfreePoolingAllocator<U, CAPACITY>;
 	};
 
@@ -61,7 +63,8 @@ public:
 	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator&) noexcept = default;
 
 	template <typename U>
-	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator<U, CAPACITY>&) noexcept {}
+	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator<U, CAPACITY>&) noexcept
+	{}
 
 	/**
 	 * Allocate memory for n objects of type T
@@ -77,7 +80,8 @@ public:
 	 * @param n Number of objects to allocate
 	 * @return Pointer to allocated memory
 	 */
-	[[nodiscard]] T* allocate(size_type n) const {
+	[[nodiscard]] T* allocate(size_type n) const
+	{
 		// Block allocations bypass the pool
 		if (n != 1) [[unlikely]] {
 			return static_cast<T*>(operator new(n * sizeof(T)));
@@ -112,7 +116,8 @@ public:
 	 * @param p Pointer to memory to deallocate
 	 * @param n Number of objects being deallocated
 	 */
-	void deallocate(T* p, size_type n) const noexcept {
+	void deallocate(T* p, size_type n) const noexcept
+	{
 		// Block deallocations bypass the pool
 		if (n != 1) [[unlikely]] {
 			operator delete(p);

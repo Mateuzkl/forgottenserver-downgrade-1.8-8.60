@@ -4,13 +4,13 @@
 #include "otpch.h"
 
 #include "database.h"
-#include "stats.h"
 
 #include "configmanager.h"
-
-#include <mysql/errmsg.h>
 #include "logger.h"
+#include "stats.h"
+
 #include <fmt/format.h>
+#include <mysql/errmsg.h>
 
 static constexpr int MAX_RECONNECT_ATTEMPTS = 10;
 static constexpr unsigned int MYSQL_TIMEOUT_SECONDS = 30;
@@ -23,7 +23,8 @@ static tfs::detail::Mysql_ptr connectToDatabase(const bool retryIfError)
 retry:
 	if (!isFirstAttemptToConnect) {
 		if (retryIfError && retryCount >= MAX_RECONNECT_ATTEMPTS) {
-			LOG_ERROR(fmt::format("[Database] Failed to connect after {} attempts. Giving up.", MAX_RECONNECT_ATTEMPTS));
+			LOG_ERROR(
+			    fmt::format("[Database] Failed to connect after {} attempts. Giving up.", MAX_RECONNECT_ATTEMPTS));
 			return nullptr;
 		}
 		std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -87,13 +88,15 @@ static bool executeQuery(tfs::detail::Mysql_ptr& handle, std::string_view query,
 {
 	int retryCount = 0;
 	while (mysql_real_query(handle.get(), query.data(), query.length()) != 0) {
-		LOG_ERROR(fmt::format("[Error - mysql_real_query] Query: {}\nMessage: {}", query.substr(0, 256), mysql_error(handle.get())));
+		LOG_ERROR(fmt::format("[Error - mysql_real_query] Query: {}\nMessage: {}", query.substr(0, 256),
+		                      mysql_error(handle.get())));
 		const unsigned error = mysql_errno(handle.get());
 		if (!isLostConnectionError(error) || !retryIfLostConnection) {
 			return false;
 		}
 		if (++retryCount >= MAX_RECONNECT_ATTEMPTS) {
-			LOG_ERROR(fmt::format("[Database] Query retry limit ({}) reached. Aborting query.", MAX_RECONNECT_ATTEMPTS));
+			LOG_ERROR(
+			    fmt::format("[Database] Query retry limit ({}) reached. Aborting query.", MAX_RECONNECT_ATTEMPTS));
 			return false;
 		}
 		handle = connectToDatabase(true);
@@ -122,9 +125,9 @@ bool Database::connect()
 
 void Database::shutdown()
 {
-    Database& db = getInstance();
-    db.handle.reset();
-    mysql_library_end();
+	Database& db = getInstance();
+	db.handle.reset();
+	mysql_library_end();
 }
 
 bool Database::beginTransaction()
@@ -168,7 +171,9 @@ bool Database::executeQuery(std::string_view query)
 	mysql_free_result(mysql_res);
 
 #ifdef STATS_ENABLED
-	uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - time_point).count();
+	uint64_t ns =
+	    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - time_point)
+	        .count();
 	g_stats.addSqlStats(new Stat(ns, std::string(query.substr(0, 100)), std::string(query.substr(0, 256))));
 #endif
 
@@ -193,10 +198,12 @@ retry:
 	tfs::detail::MysqlResult_ptr res{mysql_store_result(handle.get())};
 
 #ifdef STATS_ENABLED
-	uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - time_point).count();
+	uint64_t ns =
+	    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - time_point)
+	        .count();
 	g_stats.addSqlStats(new Stat(ns, std::string(query.substr(0, 100)), std::string(query.substr(0, 256))));
 #endif
-	
+
 	if (!res) {
 		LOG_ERROR(fmt::format("[Error - mysql_store_result] Query: {}\nMessage: {}", query, mysql_error(handle.get())));
 		const unsigned error = mysql_errno(handle.get());

@@ -6,8 +6,9 @@
 #include "events.h"
 
 #include "item.h"
-#include "player.h"
 #include "logger.h"
+#include "player.h"
+
 #include <fmt/format.h>
 
 Events::Events() : scriptInterface("Event Interface") { scriptInterface.initState(); }
@@ -1028,7 +1029,7 @@ void Events::eventPlayerOnTradeCompleted(Player* player, Player* target, Item* i
 }
 
 void Events::eventPlayerOnGainExperience(Player* player, Creature* source, uint64_t& exp, uint64_t rawExp,
-                                        bool sendText)
+                                         bool sendText)
 {
 	// Player:onGainExperience(source, exp, rawExp, sendText)
 	// rawExp gives the original exp which is not multiplied

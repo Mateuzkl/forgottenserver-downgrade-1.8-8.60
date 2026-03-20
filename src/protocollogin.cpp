@@ -13,8 +13,8 @@
 #include "tasks.h"
 #include "tools.h"
 
-#include <iomanip>
 #include <fmt/format.h>
+#include <iomanip>
 #include <utility>
 
 extern Game g_game;
@@ -114,8 +114,9 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), account.characters.size());
 	bool hasAccountManager = ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER);
-	bool hasNamelock = ConfigManager::getBoolean(ConfigManager::NAMELOCK_MANAGER) && IOBan::accountHasNamelockedPlayer(account.id);
-	
+	bool hasNamelock =
+	    ConfigManager::getBoolean(ConfigManager::NAMELOCK_MANAGER) && IOBan::accountHasNamelockedPlayer(account.id);
+
 	if ((hasAccountManager && account.id != 1) || hasNamelock) {
 		size++;
 	}
@@ -123,7 +124,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	auto IP = getIP(getString(ConfigManager::IP));
 	auto serverName = getString(ConfigManager::SERVER_NAME);
 	auto gamePort = getInteger(ConfigManager::GAME_PORT);
-	
+
 	output->addByte(size);
 	if ((hasAccountManager && account.id != 1) || hasNamelock) {
 		output->addString("Account Manager");
@@ -168,7 +169,9 @@ void ProtocolLogin::getCastList(const std::string& password)
 
 	// Add MOTD
 	output->addByte(0x14);
-	output->addString(fmt::format("{:d}\n{:s}", normal_random(1, 255), "                    !-Welcome to Cast System-!\n\nIt will show all active casts even with password.\n\nTo enter a cast with password you just have to\nput the password in the empty space.\n\nRemember that when you open cast without\npassword you will get 10% of Exp.\n\nAlso remember that to open cast, just say !cast on."));
+	output->addString(fmt::format(
+	    "{:d}\n{:s}", normal_random(1, 255),
+	    "                    !-Welcome to Cast System-!\n\nIt will show all active casts even with password.\n\nTo enter a cast with password you just have to\nput the password in the empty space.\n\nRemember that when you open cast without\npassword you will get 10% of Exp.\n\nAlso remember that to open cast, just say !cast on."));
 
 	// Add char list
 	output->addByte(0x64);
@@ -188,7 +191,7 @@ void ProtocolLogin::getCastList(const std::string& password)
 		limit--;
 	}
 
-	//Add premium days
+	// Add premium days
 	output->add<uint16_t>(0xFFFF);
 
 	send(output);
@@ -276,8 +279,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	g_dispatcher.addTask([=, thisPtr = std::static_pointer_cast<ProtocolLogin>(shared_from_this()),
-	                      accountName = std::string{accountName},
-	                      password = std::string{password}]() {
+	                      accountName = std::string{accountName}, password = std::string{password}]() {
 		if (accountName.empty()) {
 			thisPtr->getCastList(password);
 		} else {

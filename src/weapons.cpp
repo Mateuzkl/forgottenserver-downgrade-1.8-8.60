@@ -8,9 +8,10 @@
 #include "combat.h"
 #include "configmanager.h"
 #include "game.h"
+#include "logger.h"
 #include "luavariant.h"
 #include "pugicast.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Game g_game;
@@ -168,11 +169,11 @@ bool Weapon::configureEvent(const pugi::xml_node& node)
 	if ((attr = node.attribute("soul"))) {
 		soul = pugi::cast<uint32_t>(attr.value());
 	}
-	
+
 	if ((attr = node.attribute("reset"))) {
 		reset = pugi::cast<uint32_t>(attr.value());
 	}
-	
+
 	if ((attr = node.attribute("prem"))) {
 		premium = attr.as_bool();
 	}
@@ -238,11 +239,11 @@ bool Weapon::configureEvent(const pugi::xml_node& node)
 	if (getReqMagLv() > 0) {
 		wieldInfo |= WIELDINFO_MAGLV;
 	}
-	
+
 	if (getReqReset() > 0) {
 		wieldInfo |= WIELDINFO_RESET;
 	}
-	
+
 	if (!vocationString.empty()) {
 		wieldInfo |= WIELDINFO_VOCREQ;
 	}
@@ -319,7 +320,8 @@ int32_t Weapon::playerWeaponCheck(Player* player, Creature* target, uint8_t shoo
 	if (player->getReset() < getReqReset()) {
 		if (!isWieldedUnproperly()) {
 			std::ostringstream ss;
-			ss << "You need " << getReqReset() << " resets to use this weapon. You currently have " << player->getReset() << " resets.";
+			ss << "You need " << getReqReset() << " resets to use this weapon. You currently have "
+			   << player->getReset() << " resets.";
 			player->sendTextMessage(MESSAGE_STATUS_SMALL, ss.str());
 			g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF);
 			return 0;
@@ -977,13 +979,9 @@ void WeaponWand::configureWeapon(const ItemType& it)
 int32_t WeaponWand::getWeaponDamage(const Player* player, const Creature*, const Item* item,
                                     bool maxDamage /*= false*/) const
 {
-
-	
 	int32_t maxValue = maxChange;
 	int32_t attackValue = std::max<int32_t>(0, item->getAttack());
-	
 
-	
 	if (attackValue != 0) {
 		int32_t magicLevel = player->getMagicLevel();
 		float attackFactor = player->getAttackFactor();
@@ -995,6 +993,5 @@ int32_t WeaponWand::getWeaponDamage(const Player* player, const Creature*, const
 
 	int32_t damage = maxDamage ? -maxValue : -normal_random(minChange, maxValue);
 
-	
 	return damage;
 }

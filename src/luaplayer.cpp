@@ -5,10 +5,10 @@
 
 #include "bed.h"
 #include "chat.h"
+#include "const.h"
 #include "game.h"
 #include "iologindata.h"
 #include "luascript.h"
-#include "const.h"
 #include "map.h"
 #include "mounts.h"
 #include "player.h"
@@ -64,7 +64,6 @@ int luaPlayerIsPlayer(lua_State* L)
 	pushBoolean(L, getUserdata<const Player>(L, 1) != nullptr);
 	return 1;
 }
-
 
 int luaPlayerGetGuid(lua_State* L)
 {
@@ -247,7 +246,7 @@ int luaPlayerGetRewardChest(lua_State* L)
 	}
 
 	RewardChest& rewardChest = player->getRewardChest();
-	
+
 	pushUserdata<Item>(L, &rewardChest);
 	setItemMetatable(L, -1, &rewardChest);
 
@@ -275,29 +274,29 @@ int luaPlayerGetInbox(lua_State* L)
 
 int luaPlayerGetProtectionTime(lua_State* L)
 {
-    // player:getProtectionTime()
-    Player* player = getUserdata<Player>(L, 1);
-    if (player) {
-        lua_pushnumber(L, player->getProtectionTime());
-    } else {
-        lua_pushnil(L);
-    }
-    return 1;
+	// player:getProtectionTime()
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		lua_pushnumber(L, player->getProtectionTime());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
 }
 
 int luaPlayerSetProtectionTime(lua_State* L)
 {
-    // player:setProtectionTime(time)
-    Player* player = getUserdata<Player>(L, 1);
-    if (!player) {
-        lua_pushnil(L);
-        return 1;
-    }
+	// player:setProtectionTime(time)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
 
-    uint16_t time = getNumber<uint16_t>(L, 2);
-    player->setProtectionTime(time);
-    pushBoolean(L, true);
-    return 1;
+	uint16_t time = getNumber<uint16_t>(L, 2);
+	player->setProtectionTime(time);
+	pushBoolean(L, true);
+	return 1;
 }
 
 int luaPlayerGetSkullTime(lua_State* L)
@@ -899,7 +898,7 @@ int luaPlayerSetGuildLevel(lua_State* L)
 	if (auto rank = guild->getRankByLevel(level)) {
 		player->setGuildRank(rank);
 		pushBoolean(L, true);
-		} else {
+	} else {
 		lua_pushnil(L);
 	}
 
@@ -1499,7 +1498,7 @@ int luaPlayerShowTextDialog(lua_State* L)
 		// Player::setWriteItem will add reference so we'll end up with 2 references
 		// and since we'll have 2 references the memory allocated will never be destroyed
 		// to avoid that we decrement one reference here
-	item->decrementReferenceCounter();
+		item->decrementReferenceCounter();
 	}
 	lua_pushinteger(L, player->getWindowTextId());
 	return 1;
@@ -2207,7 +2206,9 @@ int luaPlayerSetGhostMode(lua_State* L)
 				it.second->notifyStatusChange(player, VIPSTATUS_ONLINE);
 			}
 		}
-		IOLoginData::updateOnlineStatus(player->getGUID(), true, player->client->isBroadcasting(), player->client->password(), player->client->description(), player->client->spectatorList().size());
+		IOLoginData::updateOnlineStatus(player->getGUID(), true, player->client->isBroadcasting(),
+		                                player->client->password(), player->client->description(),
+		                                player->client->spectatorList().size());
 	}
 	pushBoolean(L, true);
 	return 1;
@@ -2636,7 +2637,7 @@ int luaPlayerIsNearBed(lua_State* L)
 	if (player) {
 		const Position& playerPos = player->getPosition();
 		Position lookPosition = playerPos;
-		
+
 		Direction direction = player->getDirection();
 		if (direction == DIRECTION_NORTH) {
 			lookPosition.y = lookPosition.y - 1;
@@ -2647,7 +2648,7 @@ int luaPlayerIsNearBed(lua_State* L)
 		} else if (direction == DIRECTION_WEST) {
 			lookPosition.x = lookPosition.x - 1;
 		}
-		
+
 		Tile* tile = g_game.map.getTile(lookPosition);
 		if (tile && tile->getBedItem()) {
 			pushBoolean(L, true);
@@ -2667,7 +2668,7 @@ int luaPlayerStartOfflineTraining(lua_State* L)
 	if (player) {
 		const Position& playerPos = player->getPosition();
 		Position lookPosition = playerPos;
-		
+
 		Direction direction = player->getDirection();
 		if (direction == DIRECTION_NORTH) {
 			lookPosition.y = lookPosition.y - 1;
@@ -2678,19 +2679,19 @@ int luaPlayerStartOfflineTraining(lua_State* L)
 		} else if (direction == DIRECTION_WEST) {
 			lookPosition.x = lookPosition.x - 1;
 		}
-		
+
 		Tile* tile = g_game.map.getTile(lookPosition);
 		BedItem* bed = nullptr;
 		if (tile) {
 			bed = tile->getBedItem();
 		}
-		
+
 		if (bed) {
 			if (!player->isPremium()) {
 				pushBoolean(L, false);
 				return 1;
 			}
-			
+
 			if (bed->trySleep(player)) {
 				player->setBedItem(bed);
 				BedItem* bedItem = player->getBedItem();
@@ -2746,7 +2747,6 @@ int luaOfflinePlayerRemove(lua_State* L)
 }
 int luaPlayerGetResetCount(lua_State* L)
 {
-
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
 		lua_pushinteger(L, player->getResetCount());
@@ -2758,7 +2758,6 @@ int luaPlayerGetResetCount(lua_State* L)
 
 int luaPlayerAddReset(lua_State* L)
 {
-
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
 		uint32_t count = getInteger<uint32_t>(L, 2);
@@ -2772,7 +2771,6 @@ int luaPlayerAddReset(lua_State* L)
 
 int luaPlayerSetResetCount(lua_State* L)
 {
-
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
 		uint32_t count = getInteger<uint32_t>(L, 2);
@@ -2786,7 +2784,6 @@ int luaPlayerSetResetCount(lua_State* L)
 
 int luaPlayerGetResetExpReduction(lua_State* L)
 {
-
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
 		lua_pushnumber(L, player->getResetExpReduction());
@@ -3191,11 +3188,11 @@ int LuaScriptInterface::luaPlayerSendCastChannelMessage(lua_State* L)
 
 void LuaScriptInterface::registerPlayer()
 {
-    // Player
-    registerClass("Player", "Creature", luaPlayerCreate);
-    registerMetaMethod("Player", "__eq", LuaScriptInterface::luaUserdataCompare);
+	// Player
+	registerClass("Player", "Creature", luaPlayerCreate);
+	registerMetaMethod("Player", "__eq", LuaScriptInterface::luaUserdataCompare);
 
-    registerMethod("Player", "isPlayer", luaPlayerIsPlayer);
+	registerMethod("Player", "isPlayer", luaPlayerIsPlayer);
 
 	registerMethod("Player", "getGuid", luaPlayerGetGuid);
 	registerMethod("Player", "getIp", luaPlayerGetIp);
@@ -3430,7 +3427,6 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "isAccountManager", luaPlayerIsAccountManager);
 	registerMethod("Player", "getAccountManagerMode", luaPlayerGetAccountManagerMode);
 
-
 	registerMethod("Player", "getResetCount", luaPlayerGetResetCount);
 	registerMethod("Player", "addReset", luaPlayerAddReset);
 	registerMethod("Player", "setResetCount", luaPlayerSetResetCount);
@@ -3467,5 +3463,3 @@ void LuaScriptInterface::registerPlayer()
 	registerMetaMethod("OfflinePlayer", "__gc", luaOfflinePlayerRemove);
 	registerMetaMethod("OfflinePlayer", "__close", luaOfflinePlayerRemove);
 }
-
-

@@ -4,9 +4,10 @@
 #include "otpch.h"
 
 #include "creatureevent.h"
+#include "logger.h"
 #include "luascript.h"
 #include "script.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern CreatureEvents* g_creatureEvents;
@@ -67,7 +68,8 @@ int luaCreatureEventType(lua_State* L)
 		} else if (tmpStr == "extendedopcode") {
 			creature->setEventType(CREATURE_EVENT_EXTENDED_OPCODE);
 		} else {
-			LOG_ERROR(fmt::format("[Error - CreatureEvent::configureLuaEvent] Invalid type for creature event: {}", typeName));
+			LOG_ERROR(fmt::format("[Error - CreatureEvent::configureLuaEvent] Invalid type for creature event: {}",
+			                      typeName));
 			pushBoolean(L, false);
 		}
 		creature->setLoaded(true);

@@ -8,64 +8,64 @@
 #include "bed.h"
 #include "game.h"
 #include "logger.h"
-#include <fmt/format.h>
 #include "stats.h"
-
 #include "tools.h"
+
+#include <fmt/format.h>
 
 extern Game g_game;
 
 void IOMapSerialize::loadHouseItems(Map* map)
 {
-    AutoStat stat("loadHouseItems", "full");
-    int64_t start = OTSYS_TIME();
-    
-    DBResult_ptr result = Database::getInstance().storeQuery(
-        "SELECT `house_id`, `data` FROM `tile_store` ORDER BY `house_id`"
-    );
-    
-    if (!result) {
-        return;
-    }
-    
-    size_t tileCount = 0;
-    size_t itemCount = 0;
-    
-    {
-        AutoStat statParse("loadHouseItems", "parse_tiles");
-        
-        do {
-            auto attr = result->getString("data");
-            PropStream propStream;
-            propStream.init(attr.data(), attr.size());
-            
-            uint16_t x, y;
-            uint8_t z;
-            if (!propStream.read<uint16_t>(x) || !propStream.read<uint16_t>(y) || !propStream.read<uint8_t>(z)) {
-                continue;
-            }
-            
-            Tile* tile = map->getTile(x, y, z);
-            if (!tile) {
-                continue;
-            }
-            
-            uint32_t item_count;
-            if (!propStream.read<uint32_t>(item_count)) {
-                continue;
-            }
-            
-            tileCount++;
-            itemCount += item_count;
-            
-            while (item_count--) {
-                loadItem(propStream, tile);
-            }
-        } while (result->next());
-    }
-    
-    LOG_INFO(fmt::format(">> Loaded house items in: [\033[1;33m{:.3f}\033[0m] s ([\033[1;33m{}\033[0m] tiles, [\033[1;33m{}\033[0m] items)", 
-                         (OTSYS_TIME() - start) / 1000., tileCount, itemCount));
+	AutoStat stat("loadHouseItems", "full");
+	int64_t start = OTSYS_TIME();
+
+	DBResult_ptr result =
+	    Database::getInstance().storeQuery("SELECT `house_id`, `data` FROM `tile_store` ORDER BY `house_id`");
+
+	if (!result) {
+		return;
+	}
+
+	size_t tileCount = 0;
+	size_t itemCount = 0;
+
+	{
+		AutoStat statParse("loadHouseItems", "parse_tiles");
+
+		do {
+			auto attr = result->getString("data");
+			PropStream propStream;
+			propStream.init(attr.data(), attr.size());
+
+			uint16_t x, y;
+			uint8_t z;
+			if (!propStream.read<uint16_t>(x) || !propStream.read<uint16_t>(y) || !propStream.read<uint8_t>(z)) {
+				continue;
+			}
+
+			Tile* tile = map->getTile(x, y, z);
+			if (!tile) {
+				continue;
+			}
+
+			uint32_t item_count;
+			if (!propStream.read<uint32_t>(item_count)) {
+				continue;
+			}
+
+			tileCount++;
+			itemCount += item_count;
+
+			while (item_count--) {
+				loadItem(propStream, tile);
+			}
+		} while (result->next());
+	}
+
+	LOG_INFO(fmt::format(
+	    ">> Loaded house items in: [\033[1;33m{:.3f}\033[0m] s ([\033[1;33m{}\033[0m] tiles, [\033[1;33m{}\033[0m] items)",
+	    (OTSYS_TIME() - start) / 1000., tileCount, itemCount));
 }
 
 bool IOMapSerialize::saveHouseItems()
@@ -127,7 +127,9 @@ bool IOMapSerialize::loadContainer(PropStream& propStream, Container* container)
 {
 	while (container->serializationCount > 0) {
 		if (!loadItem(propStream, container)) {
-			LOG_WARN(fmt::format("[Warning - IOMapSerialize::loadContainer] Unserialization error for container item: {}", container->getID()));
+			LOG_WARN(
+			    fmt::format("[Warning - IOMapSerialize::loadContainer] Unserialization error for container item: {}",
+			                container->getID()));
 			return false;
 		}
 		container->serializationCount--;
@@ -135,7 +137,8 @@ bool IOMapSerialize::loadContainer(PropStream& propStream, Container* container)
 
 	uint8_t endAttr;
 	if (!propStream.read<uint8_t>(endAttr) || endAttr != 0) {
-		LOG_WARN(fmt::format("[Warning - IOMapSerialize::loadContainer] Unserialization error for container item: {}", container->getID()));
+		LOG_WARN(fmt::format("[Warning - IOMapSerialize::loadContainer] Unserialization error for container item: {}",
+		                     container->getID()));
 		return false;
 	}
 	return true;
@@ -283,35 +286,37 @@ bool IOMapSerialize::loadHouseInfo()
 {
 	Database& db = Database::getInstance();
 
-	DBResult_ptr result = db.storeQuery("SELECT `id`, CAST(`type` as UNSIGNED) AS `type`, `owner`, `paid`, `warnings`, `is_protected` FROM `houses`");
+	DBResult_ptr result = db.storeQuery(
+	    "SELECT `id`, CAST(`type` as UNSIGNED) AS `type`, `owner`, `paid`, `warnings`, `is_protected` FROM `houses`");
 	if (!result) {
 		return false;
 	}
 
 	do {
-			House* house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("id"));
-			if (house) {
-				std::string_view typeStr = result->getString("type");
-				uint32_t typeVal = house->getType();
-				if (caseInsensitiveEqual(typeStr, "guildhall") || typeStr == "2") {
-					typeVal = HOUSE_TYPE_GUILDHALL;
-				} else if (caseInsensitiveEqual(typeStr, "house") || caseInsensitiveEqual(typeStr, "normal") || typeStr == "1") {
-					typeVal = (house->getType() == HOUSE_TYPE_GUILDHALL) ? HOUSE_TYPE_GUILDHALL : HOUSE_TYPE_NORMAL;
-				}
+		House* house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("id"));
+		if (house) {
+			std::string_view typeStr = result->getString("type");
+			uint32_t typeVal = house->getType();
+			if (caseInsensitiveEqual(typeStr, "guildhall") || typeStr == "2") {
+				typeVal = HOUSE_TYPE_GUILDHALL;
+			} else if (caseInsensitiveEqual(typeStr, "house") || caseInsensitiveEqual(typeStr, "normal") ||
+			           typeStr == "1") {
+				typeVal = (house->getType() == HOUSE_TYPE_GUILDHALL) ? HOUSE_TYPE_GUILDHALL : HOUSE_TYPE_NORMAL;
+			}
 			house->setType(static_cast<HouseType_t>(typeVal));
-        uint32_t ownerValue = result->getNumber<uint32_t>("owner");
-        house->setOwner(ownerValue, false);
-        std::string_view isProtectedRaw = result->getString("is_protected");
-        char isProtectedChar = isProtectedRaw.empty() ? '0' : isProtectedRaw[0];
-        bool protect = (isProtectedChar == '1');
-        if (ownerValue == 0) {
-            protect = false;
-        }
-        house->setProtected(protect);
+			uint32_t ownerValue = result->getNumber<uint32_t>("owner");
+			house->setOwner(ownerValue, false);
+			std::string_view isProtectedRaw = result->getString("is_protected");
+			char isProtectedChar = isProtectedRaw.empty() ? '0' : isProtectedRaw[0];
+			bool protect = (isProtectedChar == '1');
+			if (ownerValue == 0) {
+				protect = false;
+			}
+			house->setProtected(protect);
 			house->setPaidUntil(result->getNumber<time_t>("paid"));
 			house->setPayRentWarnings(result->getNumber<uint32_t>("warnings"));
 		}
-		} while (result->next());
+	} while (result->next());
 
 	result = db.storeQuery("SELECT `house_id`, `listid`, `list` FROM `house_lists`");
 	if (result) {
@@ -350,7 +355,8 @@ bool IOMapSerialize::saveHouseInfo()
 	}
 
 	std::ostringstream query;
-	query << "INSERT INTO `houses` (`id`, `type`, `owner`, `paid`, `warnings`, `is_protected`, `name`, `town_id`, `rent`, `size`, `beds`) VALUES ";
+	query
+	    << "INSERT INTO `houses` (`id`, `type`, `owner`, `paid`, `warnings`, `is_protected`, `name`, `town_id`, `rent`, `size`, `beds`) VALUES ";
 
 	bool notEmpty = false;
 	for (const auto& it : g_game.map.houses.getHouses()) {
@@ -358,10 +364,11 @@ bool IOMapSerialize::saveHouseInfo()
 		if (notEmpty) {
 			query << ",";
 		}
-		query << fmt::format("({:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d})",
-		                     house->getId(), static_cast<uint32_t>(house->getType()), house->getOwner(), house->getPaidUntil(), house->getPayRentWarnings(),
-		                     (house->getProtected() ? 1 : 0), db.escapeString(house->getName()), house->getTownId(), house->getRent(), house->getTiles().size(),
-		                     house->getBedCount());
+		query << fmt::format("({:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d})", house->getId(),
+		                     static_cast<uint32_t>(house->getType()), house->getOwner(), house->getPaidUntil(),
+		                     house->getPayRentWarnings(), (house->getProtected() ? 1 : 0),
+		                     db.escapeString(house->getName()), house->getTownId(), house->getRent(),
+		                     house->getTiles().size(), house->getBedCount());
 		notEmpty = true;
 	}
 

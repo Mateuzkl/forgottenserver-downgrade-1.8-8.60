@@ -5,6 +5,8 @@
 #ifndef FS_THREAD_POOL_H
 #define FS_THREAD_POOL_H
 
+#include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <future>
@@ -12,8 +14,6 @@
 #include <queue>
 #include <thread>
 #include <vector>
-#include <condition_variable>
-#include <atomic>
 
 class ThreadPool
 {

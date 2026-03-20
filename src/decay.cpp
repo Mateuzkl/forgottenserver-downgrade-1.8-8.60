@@ -20,6 +20,7 @@
 #include "otpch.h"
 
 #include "decay.h"
+
 #include "game.h"
 #include "scheduler.h"
 
@@ -142,11 +143,8 @@ void Decay::checkDecay() noexcept
 	while (it != decayMap.end() && it->first <= timestamp) {
 		auto& items = it->second;
 
-		expiredItems.insert(
-			expiredItems.end(),
-			std::make_move_iterator(items.begin()),
-			std::make_move_iterator(items.end())
-		);
+		expiredItems.insert(expiredItems.end(), std::make_move_iterator(items.begin()),
+		                    std::make_move_iterator(items.end()));
 
 		it = decayMap.erase(it);
 	}

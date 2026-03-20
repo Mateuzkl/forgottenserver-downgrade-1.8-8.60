@@ -4,11 +4,12 @@
 #include "otpch.h"
 
 #include "protocoladmin.h"
+
 #include "admin.h"
 #include "configmanager.h"
 #include "game.h"
-#include "scheduler.h"
 #include "outputmessage.h"
+#include "scheduler.h"
 #include "tasks.h"
 #include "tools.h" // For convertIPToString
 
@@ -80,7 +81,7 @@ void ProtocolAdmin::onRecvFirstMessage(NetworkMessage& /*msg*/)
 		output->add<uint32_t>(1); // version
 		output->addString("OTADMIN");
 
-		output->add<uint16_t>(Admin::getInstance().getPolicy()); // security policy
+		output->add<uint16_t>(Admin::getInstance().getPolicy());  // security policy
 		output->add<uint32_t>(Admin::getInstance().getOptions()); // protocol options(encryption, ...)
 		send(output);
 	}
@@ -176,7 +177,8 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 			if (state == NO_LOGGED_IN && ConfigManager::getBoolean(ConfigManager::ADMIN_REQUIRE_LOGIN)) {
 				std::string pass = std::string(msg.getString());
 				std::string word = std::string(ConfigManager::getString(ConfigManager::ADMIN_PASSWORD));
-				// _encrypt(word, false); // Removed encryption check for password comparision for now (assuming plain or pre-hashed)
+				// _encrypt(word, false); // Removed encryption check for password comparision for now (assuming plain
+				// or pre-hashed)
 				if (pass == word) {
 					state = LOGGED_IN;
 					output->addByte(AP_MSG_LOGIN_OK);
@@ -253,7 +255,8 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 					addLogLine(logMsg);
 
 					// Broadcast
-					std::string broadcastMsg = fmt::format("Server is shutting down in {} minutes: {}", minutes, reason);
+					std::string broadcastMsg =
+					    fmt::format("Server is shutting down in {} minutes: {}", minutes, reason);
 					g_game.broadcastMessage(broadcastMsg, MESSAGE_STATUS_WARNING);
 
 					// Schedule standard shutdown
@@ -291,7 +294,8 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 				case CMD_BROADCAST: {
 					std::string param = std::string(msg.getString());
 					addLogLine("broadcasting: " + param);
-					g_dispatcher.addTask([param = std::move(param)]() { g_game.broadcastMessage(param, MESSAGE_STATUS_WARNING); });
+					g_dispatcher.addTask(
+					    [param = std::move(param)]() { g_game.broadcastMessage(param, MESSAGE_STATUS_WARNING); });
 					output->addByte(AP_MSG_COMMAND_OK);
 					break;
 				}
@@ -313,14 +317,13 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 			break;
 		}
 
-
 		case AP_MSG_PING:
 			output->addByte(AP_MSG_PING_OK);
 			output->add<uint16_t>(g_game.getPlayersOnline());
 			// CPU usage placeholder (requires OS specific code)
 			// For now sending 0 to represent "unknown" or implementing basic load avg if possible
 			// Let's send 0 for now to avoid compilation errors on different platforms
-			output->addByte(0); 
+			output->addByte(0);
 			break;
 
 		case AP_MSG_KEEP_ALIVE:
@@ -347,7 +350,7 @@ void ProtocolAdmin::release()
 void ProtocolAdmin::adminCommandPayHouses()
 {
 	addLogLine("pay houses command received");
-	
+
 	auto output = OutputMessagePool::getOutputMessage();
 	if (output) {
 		output->addByte(AP_MSG_COMMAND_OK);
@@ -374,7 +377,7 @@ void ProtocolAdmin::adminCommandKickPlayer(const std::string& name)
 	Player* player = g_game.getPlayerByName(name);
 	if (player) {
 		g_game.kickPlayer(player->getID(), true); // Force kick
-		
+
 		addLogLine("kicking player " + player->getName());
 		output->addByte(AP_MSG_COMMAND_OK);
 	} else {

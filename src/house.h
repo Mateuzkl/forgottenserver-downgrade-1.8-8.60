@@ -137,7 +137,8 @@ public:
 	uint32_t getOwner() const { return owner; }
 	uint32_t getOwnerAccountId() const { return ownerAccountId; }
 
-	void updateOwnerName(const std::string& newName) {
+	void updateOwnerName(const std::string& newName)
+	{
 		ownerName = newName;
 		updateDoorDescription();
 	}
@@ -159,7 +160,7 @@ public:
 	uint32_t getId() const { return id; }
 	// Reset system functions
 	void setRequiredReset(uint32_t amount) { this->requiredReset = amount; }
-	uint32_t getRequiredReset() { return requiredReset;}
+	uint32_t getRequiredReset() { return requiredReset; }
 	const std::unordered_set<uint32_t>& getProtectionGuests() const { return protectionGuests; }
 	std::unordered_set<uint32_t>& getProtectionGuests() { return protectionGuests; }
 
@@ -195,7 +196,8 @@ public:
 	void setProtected(bool protect) { isProtected = protect; }
 
 private:
-	std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> initializeOwnerDataFromDatabase(uint32_t guid_guild, HouseType_t type);
+	std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> initializeOwnerDataFromDatabase(
+	    uint32_t guid_guild, HouseType_t type);
 	bool transferToDepot() const;
 	bool transferToDepot(Player* player) const;
 	void updateDoorDescription() const;

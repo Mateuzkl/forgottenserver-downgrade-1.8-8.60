@@ -435,8 +435,6 @@ ReturnValue Tile::queryAdd(int32_t, const Thing& thing, uint32_t, uint32_t flags
 			return RETURNVALUE_NOERROR;
 		}
 
-
-
 		if (hasBitSet(FLAG_PATHFINDING, flags) && hasFlag(TILESTATE_FLOORCHANGE | TILESTATE_TELEPORT)) {
 			return RETURNVALUE_NOTPOSSIBLE;
 		}
@@ -1281,7 +1279,9 @@ void Tile::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t 
 	g_game.map.getSpectators(spectators, getPosition(), true, true);
 	for (Creature* spectator : spectators) {
 		Player* player = spectator->getPlayer();
-		if (!player) { continue; }
+		if (!player) {
+			continue;
+		}
 		player->postAddNotification(thing, oldParent, index, LINK_NEAR);
 	}
 
@@ -1341,13 +1341,15 @@ void Tile::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32
 
 	for (Creature* spectator : spectators) {
 		Player* player = spectator->getPlayer();
-		if (!player) { continue; }
-	
+		if (!player) {
+			continue;
+		}
+
 		if (thingCount > TILE_UPDATE_THRESHOLD) {
 			// If the tile contains more than the defined threshold of things,
 			// send a full tile update to the player to keep the client’s view in sync
 			if (Player* spectatorPlayer = dynamic_cast<Player*>(spectator)) {
-    			spectatorPlayer->sendUpdateTile(this, tilePos);
+				spectatorPlayer->sendUpdateTile(this, tilePos);
 			}
 		}
 

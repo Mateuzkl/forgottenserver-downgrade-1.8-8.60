@@ -12,7 +12,8 @@ class Party;
 
 using PlayerVector = std::vector<Player*>;
 
-enum SharedExpStatus_t : uint8_t {
+enum SharedExpStatus_t : uint8_t
+{
 	SHAREDEXP_OK,
 	SHAREDEXP_TOOFARAWAY,
 	SHAREDEXP_LEVELDIFFTOOLARGE,

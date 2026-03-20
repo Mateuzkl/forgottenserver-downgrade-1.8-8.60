@@ -11,6 +11,7 @@
 #include "events.h"
 #include "game.h"
 #include "globalevent.h"
+#include "logger.h"
 #include "monster.h"
 #include "movement.h"
 #include "raids.h"
@@ -22,7 +23,6 @@
 
 #include <csignal>
 #include <fmt/format.h>
-#include "logger.h"
 
 extern Scheduler g_scheduler;
 extern DatabaseTasks g_databaseTasks;

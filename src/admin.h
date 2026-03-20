@@ -22,30 +22,30 @@ enum
 
 class Admin
 {
-	public:
-		virtual ~Admin();
-		static Admin& getInstance()
-		{
-			static Admin instance;
-			return instance;
-		}
+public:
+	virtual ~Admin();
+	static Admin& getInstance()
+	{
+		static Admin instance;
+		return instance;
+	}
 
-		bool addConnection();
-		void removeConnection();
+	bool addConnection();
+	void removeConnection();
 
-		uint16_t getPolicy() const;
-		uint32_t getOptions() const;
+	uint16_t getPolicy() const;
+	uint32_t getOptions() const;
 
-		static Item* createMail(const std::string& xmlData, std::string& name, uint32_t& depotId);
-		bool allow(uint32_t ip) const;
+	static Item* createMail(const std::string& xmlData, std::string& name, uint32_t& depotId);
+	bool allow(uint32_t ip) const;
 
-		bool isEncrypted() const { return encryptionEnabled; }
+	bool isEncrypted() const { return encryptionEnabled; }
 
-	protected:
-		Admin();
+protected:
+	Admin();
 
-		int32_t currentConnections;
-		bool encryptionEnabled;
+	int32_t currentConnections;
+	bool encryptionEnabled;
 };
 
 #endif

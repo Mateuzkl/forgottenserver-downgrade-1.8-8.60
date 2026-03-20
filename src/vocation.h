@@ -104,9 +104,7 @@ public:
 	std::optional<uint16_t> getVocationId(std::string_view name) const;
 	uint16_t getPromotedVocation(uint16_t vocationId) const;
 	const VocationMap& getVocations() const { return vocationsMap; }
-	const std::map<uint16_t, Vocation>& getVocationsMap() const {
-		return vocationsMap;
-	}
+	const std::map<uint16_t, Vocation>& getVocationsMap() const { return vocationsMap; }
 
 private:
 	VocationMap vocationsMap;

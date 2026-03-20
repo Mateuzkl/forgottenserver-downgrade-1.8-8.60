@@ -171,7 +171,7 @@ int luaItemRemove(lua_State* L)
 	ReturnValue ret = g_game.internalRemoveItem(item, count);
 
 	if (ret == RETURNVALUE_NOTPOSSIBLE) {
-		*itemPtr = nullptr;  // Reset the pointer to prevent future access.
+		*itemPtr = nullptr; // Reset the pointer to prevent future access.
 		lua_pushnil(L);
 	} else {
 		pushBoolean(L, ret == RETURNVALUE_NOERROR);
@@ -461,7 +461,8 @@ int luaItemSetAttribute(lua_State* L)
 				pushBoolean(L, false);
 				return 1;
 			}
-			default: break;
+			default:
+				break;
 		}
 
 		item->setIntAttr(attribute, getInteger<int64_t>(L, 3));

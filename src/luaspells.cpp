@@ -3,9 +3,10 @@
 
 #include "otpch.h"
 
+#include "logger.h"
 #include "luascript.h"
 #include "spells.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Spells* g_spells;
@@ -222,7 +223,7 @@ int luaSpellGroup(lua_State* L)
 			} else {
 				group = getInteger<SpellGroup_t>(L, 2);
 			}
-			
+
 			if (group != SPELLGROUP_NONE) {
 				spell->setGroup(group);
 				pushBoolean(L, true);
@@ -234,19 +235,19 @@ int luaSpellGroup(lua_State* L)
 		} else {
 			SpellGroup_t primaryGroup = SPELLGROUP_NONE;
 			SpellGroup_t secondaryGroup = SPELLGROUP_NONE;
-			
+
 			if (isString(L, 2)) {
 				primaryGroup = stringToSpellGroup(getString(L, 2));
 			} else {
 				primaryGroup = getInteger<SpellGroup_t>(L, 2);
 			}
-			
+
 			if (isString(L, 3)) {
 				secondaryGroup = stringToSpellGroup(getString(L, 3));
 			} else {
 				secondaryGroup = getInteger<SpellGroup_t>(L, 3);
 			}
-			
+
 			if (primaryGroup != SPELLGROUP_NONE) {
 				spell->setGroup(primaryGroup);
 				if (secondaryGroup != SPELLGROUP_NONE) {

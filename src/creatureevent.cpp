@@ -5,9 +5,9 @@
 
 #include "creatureevent.h"
 
+#include "logger.h"
 #include "player.h"
 #include "tools.h"
-#include "logger.h"
 
 CreatureEvents::CreatureEvents() : scriptInterface("CreatureScript Interface") { scriptInterface.initState(); }
 
@@ -172,7 +172,8 @@ bool CreatureEvent::configureEvent(const pugi::xml_node& node)
 
 	pugi::xml_attribute typeAttribute = node.attribute("type");
 	if (!typeAttribute) {
-		LOG_ERROR(fmt::format("[Error - CreatureEvent::configureEvent] Missing type for creature event: {}", eventName));
+		LOG_ERROR(
+		    fmt::format("[Error - CreatureEvent::configureEvent] Missing type for creature event: {}", eventName));
 		return false;
 	}
 
@@ -204,7 +205,8 @@ bool CreatureEvent::configureEvent(const pugi::xml_node& node)
 	} else if (tmpStr == "extendedopcode") {
 		type = CREATURE_EVENT_EXTENDED_OPCODE;
 	} else {
-		LOG_ERROR(fmt::format("[Error - CreatureEvent::configureEvent] Invalid type for creature event: {}", eventName));
+		LOG_ERROR(
+		    fmt::format("[Error - CreatureEvent::configureEvent] Invalid type for creature event: {}", eventName));
 		return false;
 	}
 

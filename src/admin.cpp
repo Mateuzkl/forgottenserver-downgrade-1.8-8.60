@@ -4,23 +4,20 @@
 #include "otpch.h"
 
 #include "admin.h"
+
 #include "configmanager.h"
 #include "connection.h"
 #include "iologindata.h"
 #include "logger.h"
 #include "pugicast.h"
-#include "town.h"
 #include "tools.h"
+#include "town.h"
 
 #include <fmt/format.h>
 
-Admin::Admin() : currentConnections(0), encryptionEnabled(false)
-{
-}
+Admin::Admin() : currentConnections(0), encryptionEnabled(false) {}
 
-Admin::~Admin()
-{
-}
+Admin::~Admin() {}
 
 bool Admin::addConnection()
 {
@@ -76,7 +73,7 @@ Item* Admin::createMail(const std::string& xmlData, std::string& name, uint32_t&
 	}
 
 	name = root.attribute("to").as_string();
-	
+
 	std::string townName = root.attribute("town").as_string();
 	if (!townName.empty()) {
 		Town* town = g_game.map.towns.getTown(townName);
@@ -85,7 +82,7 @@ Item* Admin::createMail(const std::string& xmlData, std::string& name, uint32_t&
 		}
 		depotId = town->getID();
 	} else {
-		return nullptr; 
+		return nullptr;
 	}
 
 	uint16_t itemId = root.attribute("id").as_uint(ITEM_PARCEL);
@@ -93,7 +90,7 @@ Item* Admin::createMail(const std::string& xmlData, std::string& name, uint32_t&
 	if (!mailItem) {
 		return nullptr;
 	}
-	
+
 	// if (mailItem->getContainer()) {
 	// 	// Mail content parsing disabled
 	// }
@@ -104,7 +101,7 @@ Item* Admin::createMail(const std::string& xmlData, std::string& name, uint32_t&
 bool Admin::allow(uint32_t ip) const
 {
 	if (!ConfigManager::getBoolean(ConfigManager::ADMIN_LOCALHOST_ONLY)) {
-		return true; 
+		return true;
 	}
 
 	if (ip == 0x0100007F) { // 127.0.0.1
@@ -117,5 +114,3 @@ bool Admin::allow(uint32_t ip) const
 
 	return false;
 }
-
-

@@ -3,9 +3,10 @@
 
 #include "otpch.h"
 
+#include "logger.h"
 #include "luascript.h"
 #include "monsters.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 namespace {

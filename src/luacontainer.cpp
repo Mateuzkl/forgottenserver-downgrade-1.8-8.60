@@ -19,9 +19,7 @@ int luaContainerCreate(lua_State* L)
 	Container* container = nullptr;
 
 	if (isNumber(L, 2)) {
-		container = LuaScriptInterface::getScriptEnv()->getContainerByUID(
-			getNumber<uint32_t>(L, 2)
-		);
+		container = LuaScriptInterface::getScriptEnv()->getContainerByUID(getNumber<uint32_t>(L, 2));
 	} else if (isUserdata(L, 2)) {
 		switch (getUserdataType(L, 2)) {
 			case LuaData_Item: {

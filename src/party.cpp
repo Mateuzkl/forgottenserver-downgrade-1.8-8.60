@@ -352,7 +352,7 @@ const char* getSharedExpReturnMessage(SharedExpStatus_t value)
 	}
 }
 
-}
+} // namespace
 
 bool Party::setSharedExperience(Player* player, bool sharedExpActive)
 {
@@ -412,7 +412,7 @@ SharedExpStatus_t Party::getMemberSharedExperienceStatus(const Player* player) c
 		return SHAREDEXP_LEVELDIFFTOOLARGE;
 	}
 
-	const int32_t range  = getInteger(ConfigManager::EXP_SHARE_RANGE);
+	const int32_t range = getInteger(ConfigManager::EXP_SHARE_RANGE);
 	const int32_t floors = getInteger(ConfigManager::EXP_SHARE_FLOORS);
 
 	if (!leader->getPosition().isInRange(player->getPosition(), range, range, floors)) {

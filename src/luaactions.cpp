@@ -168,7 +168,7 @@ int luaActionCheckFloor(lua_State* L)
 int luaActionPosition(lua_State* L)
 {
 	// action:position(position)
-    // action:position({position1, position2, ...})
+	// action:position({position1, position2, ...})
 	Action* action = getUserdata<Action>(L, 1);
 	if (!action) {
 		lua_pushnil(L);

@@ -83,8 +83,7 @@ private:
 	template <typename T>
 	void add_header(T add) noexcept
 	{
-		static_assert(std::is_trivially_copyable_v<T>,
-			"Header type must be trivially copyable");
+		static_assert(std::is_trivially_copyable_v<T>, "Header type must be trivially copyable");
 
 		if (outputBufferStart < sizeof(T)) [[unlikely]] {
 			assert(false && "Not enough space for header");

@@ -6,9 +6,9 @@
 #include "movement.h"
 
 #include "game.h"
-#include "game.h"
-#include "pugicast.h"
 #include "logger.h"
+#include "pugicast.h"
+
 #include <fmt/format.h>
 
 extern Game g_game;
@@ -584,7 +584,8 @@ bool MoveEvent::configureEvent(const pugi::xml_node& node)
 			} else if (tmpStr == "ammo") {
 				slot = SLOTP_AMMO;
 			} else {
-				LOG_WARN(fmt::format("[Warning - MoveEvent::configureMoveEvent] Unknown slot type: {}", slotAttribute.as_string()));
+				LOG_WARN(fmt::format("[Warning - MoveEvent::configureMoveEvent] Unknown slot type: {}",
+				                     slotAttribute.as_string()));
 			}
 		}
 
@@ -695,7 +696,7 @@ ReturnValue MoveEvent::EquipItem(MoveEvent* moveEvent, Player* player, Item* ite
 		if (player->getMagicLevel() < moveEvent->getReqMagLv()) {
 			return RETURNVALUE_NOTENOUGHMAGICLEVEL;
 		}
-		
+
 		const ItemType& it = Item::items[item->getID()];
 		if (player->getReset() < it.minReqReset) {
 			return RETURNVALUE_NOTENOUGHRESET;
@@ -747,7 +748,8 @@ ReturnValue MoveEvent::EquipItem(MoveEvent* moveEvent, Player* player, Item* ite
 	}
 
 	if (it.abilities->regeneration) {
-		Condition* condition = Condition::createCondition(static_cast<ConditionId_t>(slot), CONDITION_REGENERATION, -1, 0);
+		Condition* condition =
+		    Condition::createCondition(static_cast<ConditionId_t>(slot), CONDITION_REGENERATION, -1, 0);
 
 		if (it.abilities->healthGain != 0) {
 			condition->setParam(CONDITION_PARAM_HEALTHGAIN, it.abilities->healthGain);
@@ -828,7 +830,6 @@ ReturnValue MoveEvent::EquipItem(MoveEvent* moveEvent, Player* player, Item* ite
 	// Apply reduceSkillLoss
 	if (it.abilities->reduceSkillLoss != 0) {
 		player->totalReduceSkillLoss += it.abilities->reduceSkillLoss;
-
 	}
 
 	// experience rates
@@ -933,7 +934,6 @@ ReturnValue MoveEvent::DeEquipItem(MoveEvent*, Player* player, Item* item, slots
 	// Remove reduceSkillLoss
 	if (it.abilities->reduceSkillLoss != 0) {
 		player->totalReduceSkillLoss -= it.abilities->reduceSkillLoss;
-
 	}
 
 	// experience rates

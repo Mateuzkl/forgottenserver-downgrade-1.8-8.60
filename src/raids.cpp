@@ -7,10 +7,11 @@
 
 #include "configmanager.h"
 #include "game.h"
+#include "logger.h"
 #include "monster.h"
 #include "pugicast.h"
 #include "scheduler.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Game g_game;
@@ -53,12 +54,14 @@ bool Raids::loadFromXml()
 			file = attr.as_string();
 		} else {
 			file = fmt::format("raids/{:s}.xml", name);
-			LOG_WARN(fmt::format("[Warning - Raids::loadFromXml] File tag missing for raid {}. Using default: {}", name, file));
+			LOG_WARN(fmt::format("[Warning - Raids::loadFromXml] File tag missing for raid {}. Using default: {}", name,
+			                     file));
 		}
 
 		interval = pugi::cast<uint32_t>(raidNode.attribute("interval2").value()) * 60;
 		if (interval == 0) {
-			LOG_ERROR(fmt::format("[Error - Raids::loadFromXml] interval2 tag missing or zero (would divide by 0) for raid: {}", name));
+			LOG_ERROR(fmt::format(
+			    "[Error - Raids::loadFromXml] interval2 tag missing or zero (would divide by 0) for raid: {}", name));
 			continue;
 		}
 
@@ -100,10 +103,10 @@ bool Raids::startup()
 	setLastRaidEnd(OTSYS_TIME());
 
 	// Make sure not to duplicate the event.
-    if (checkRaidsEvent != 0) {
-        g_scheduler.stopEvent(checkRaidsEvent);
-        checkRaidsEvent = 0;
-    }
+	if (checkRaidsEvent != 0) {
+		g_scheduler.stopEvent(checkRaidsEvent);
+		checkRaidsEvent = 0;
+	}
 
 	checkRaidsEvent =
 	    g_scheduler.addEvent(createSchedulerTask(CHECK_RAIDS_INTERVAL * 1000, [this]() { checkRaids(); }));
@@ -114,25 +117,25 @@ bool Raids::startup()
 
 void Raids::shutdown()
 {
-    // Cancel the recursive verification event.
-    if (checkRaidsEvent != 0) {
-        g_scheduler.stopEvent(checkRaidsEvent);
-        checkRaidsEvent = 0;
-    }
-    
-    // For any running RAID
-    if (running) {
-        running->stopEvents();
-        running = nullptr;
-    }
-    
-    // Clear the raid list.
-    for (Raid* raid : raidList) {
-        delete raid;
-    }
-    raidList.clear();
-    
-    LOG_INFO("[Raids] Shutdown completed");
+	// Cancel the recursive verification event.
+	if (checkRaidsEvent != 0) {
+		g_scheduler.stopEvent(checkRaidsEvent);
+		checkRaidsEvent = 0;
+	}
+
+	// For any running RAID
+	if (running) {
+		running->stopEvents();
+		running = nullptr;
+	}
+
+	// Clear the raid list.
+	for (Raid* raid : raidList) {
+		delete raid;
+	}
+	raidList.clear();
+
+	LOG_INFO("[Raids] Shutdown completed");
 }
 
 void Raids::checkRaids()
@@ -158,10 +161,10 @@ void Raids::checkRaids()
 	}
 
 	// FIX: Cancel previous event before scheduling a new one
-    if (checkRaidsEvent != 0) {
-        g_scheduler.stopEvent(checkRaidsEvent);
-        checkRaidsEvent = 0;
-    }
+	if (checkRaidsEvent != 0) {
+		g_scheduler.stopEvent(checkRaidsEvent);
+		checkRaidsEvent = 0;
+	}
 
 	checkRaidsEvent =
 	    g_scheduler.addEvent(createSchedulerTask(CHECK_RAIDS_INTERVAL * 1000, [this]() { checkRaids(); }));
@@ -239,7 +242,8 @@ bool Raid::loadFromXml(const std::string& filename)
 		if (event->configureRaidEvent(eventNode)) {
 			raidEvents.push_back(event);
 		} else {
-			LOG_ERROR(fmt::format("[Error - Raid::loadFromXml] In file ({}), eventNode: {}", filename, eventNode.name()));
+			LOG_ERROR(
+			    fmt::format("[Error - Raid::loadFromXml] In file ({}), eventNode: {}", filename, eventNode.name()));
 			delete event;
 		}
 	}
@@ -348,11 +352,13 @@ bool AnnounceEvent::configureRaidEvent(const pugi::xml_node& eventNode)
 		} else if (tmpStrValue == "redconsole") {
 			messageType = MESSAGE_STATUS_CONSOLE_RED;
 		} else {
-			LOG_WARN(fmt::format("[Notice] Raid: Unknown type tag missing for announce event. Using default: {}", static_cast<uint32_t>(messageType)));
+			LOG_WARN(fmt::format("[Notice] Raid: Unknown type tag missing for announce event. Using default: {}",
+			                     static_cast<uint32_t>(messageType)));
 		}
 	} else {
 		messageType = MESSAGE_EVENT_ADVANCE;
-		LOG_WARN(fmt::format("[Notice] Raid: type tag missing for announce event. Using default: {}", static_cast<uint32_t>(messageType)));
+		LOG_WARN(fmt::format("[Notice] Raid: type tag missing for announce event. Using default: {}",
+		                     static_cast<uint32_t>(messageType)));
 	}
 	return true;
 }

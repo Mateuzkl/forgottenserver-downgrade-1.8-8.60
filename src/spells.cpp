@@ -9,10 +9,11 @@
 #include "configmanager.h"
 #include "events.h"
 #include "game.h"
+#include "logger.h"
 #include "luavariant.h"
 #include "monster.h"
 #include "pugicast.h"
-#include "logger.h"
+
 #include <fmt/format.h>
 
 extern Game g_game;
@@ -125,7 +126,8 @@ bool Spells::registerEvent(Event_ptr event, const pugi::xml_node&)
 	if (instant) {
 		auto result = instants.emplace(instant->getWords(), std::move(*instant));
 		if (!result.second) {
-			LOG_WARN(fmt::format("[Warning - Spells::registerEvent] Duplicate registered instant spell with words: {}", instant->getWords()));
+			LOG_WARN(fmt::format("[Warning - Spells::registerEvent] Duplicate registered instant spell with words: {}",
+			                     instant->getWords()));
 		}
 		return result.second;
 	}
@@ -134,7 +136,8 @@ bool Spells::registerEvent(Event_ptr event, const pugi::xml_node&)
 	if (rune) {
 		auto result = runes.emplace(rune->getRuneItemId(), std::move(*rune));
 		if (!result.second) {
-			LOG_WARN(fmt::format("[Warning - Spells::registerEvent] Duplicate registered rune with id: {}", rune->getRuneItemId()));
+			LOG_WARN(fmt::format("[Warning - Spells::registerEvent] Duplicate registered rune with id: {}",
+			                     rune->getRuneItemId()));
 		}
 		return result.second;
 	}
@@ -149,7 +152,9 @@ bool Spells::registerInstantLuaEvent(InstantSpell* event)
 		std::string words{instant->getWords()};
 		auto result = instants.emplace(words, std::move(*instant));
 		if (!result.second) {
-			LOG_WARN(fmt::format("[Warning - Spells::registerInstantLuaEvent] Duplicate registered instant spell with words: {}", words));
+			LOG_WARN(fmt::format(
+			    "[Warning - Spells::registerInstantLuaEvent] Duplicate registered instant spell with words: {}",
+			    words));
 		}
 		return result.second;
 	}
@@ -484,7 +489,8 @@ bool Spell::configureSpell(const pugi::xml_node& node)
 		} else if (tmpStrValue == "creature") {
 			blockingCreature = true;
 		} else {
-			LOG_WARN(fmt::format("[Warning - Spell::configureSpell] Blocktype \"{}\" does not exist.", attr.as_string()));
+			LOG_WARN(
+			    fmt::format("[Warning - Spell::configureSpell] Blocktype \"{}\" does not exist.", attr.as_string()));
 		}
 	}
 

@@ -143,17 +143,20 @@ public:
 
 	void setDuration(int32_t time) { setIntAttr(ITEM_ATTRIBUTE_DURATION, std::max<int32_t>(0, time)); }
 	void setDurationTimestamp(int64_t timestamp) { setIntAttr(ITEM_ATTRIBUTE_DURATION_TIMESTAMP, timestamp); }
-	int32_t getDuration() const {
+	int32_t getDuration() const
+	{
 		ItemDecayState_t decayState = getDecaying();
 		if (decayState == DECAYING_TRUE || decayState == DECAYING_STOPPING) {
-			return std::max<int32_t>(0, static_cast<int32_t>(getIntAttr(ITEM_ATTRIBUTE_DURATION_TIMESTAMP) - OTSYS_TIME()));
+			return std::max<int32_t>(
+			    0, static_cast<int32_t>(getIntAttr(ITEM_ATTRIBUTE_DURATION_TIMESTAMP) - OTSYS_TIME()));
 		} else {
 			return getIntAttr(ITEM_ATTRIBUTE_DURATION);
 		}
 	}
 
-	void setDecaying(ItemDecayState_t decayState) { 
-		setIntAttr(ITEM_ATTRIBUTE_DECAYSTATE, decayState); 
+	void setDecaying(ItemDecayState_t decayState)
+	{
+		setIntAttr(ITEM_ATTRIBUTE_DECAYSTATE, decayState);
 		if (decayState == DECAYING_FALSE) {
 			removeAttribute(ITEM_ATTRIBUTE_DURATION_TIMESTAMP);
 		}
@@ -416,7 +419,8 @@ private:
 	{
 		if (hasAttribute(ITEM_ATTRIBUTE_CUSTOM)) {
 			removeCustomAttribute(key);
-		} if (!getAttr(ITEM_ATTRIBUTE_CUSTOM).value.custom) {
+		}
+		if (!getAttr(ITEM_ATTRIBUTE_CUSTOM).value.custom) {
 			getAttr(ITEM_ATTRIBUTE_CUSTOM).value.custom = new CustomAttributeMap();
 		}
 		auto lowercaseKey = boost::algorithm::to_lower_copy(std::string{key});
@@ -427,7 +431,8 @@ private:
 	{
 		if (hasAttribute(ITEM_ATTRIBUTE_CUSTOM)) {
 			removeCustomAttribute(key);
-		} if (!getAttr(ITEM_ATTRIBUTE_CUSTOM).value.custom) {
+		}
+		if (!getAttr(ITEM_ATTRIBUTE_CUSTOM).value.custom) {
 			getAttr(ITEM_ATTRIBUTE_CUSTOM).value.custom = new CustomAttributeMap();
 		}
 		auto lowercaseKey = boost::algorithm::to_lower_copy(std::string{key});
@@ -478,7 +483,8 @@ private:
 	    ITEM_ATTRIBUTE_HITCHANCE | ITEM_ATTRIBUTE_SHOOTRANGE | ITEM_ATTRIBUTE_OWNER | ITEM_ATTRIBUTE_DURATION |
 	    ITEM_ATTRIBUTE_DECAYSTATE | ITEM_ATTRIBUTE_CORPSEOWNER | ITEM_ATTRIBUTE_CHARGES | ITEM_ATTRIBUTE_FLUIDTYPE |
 	    ITEM_ATTRIBUTE_DOORID | ITEM_ATTRIBUTE_DURATION_TIMESTAMP | ITEM_ATTRIBUTE_WRAPID | ITEM_ATTRIBUTE_STOREITEM |
-	    ITEM_ATTRIBUTE_ATTACK_SPEED | ITEM_ATTRIBUTE_CLASSIFICATION | ITEM_ATTRIBUTE_TIER | ITEM_ATTRIBUTE_REDUCESKILLLOSS;
+	    ITEM_ATTRIBUTE_ATTACK_SPEED | ITEM_ATTRIBUTE_CLASSIFICATION | ITEM_ATTRIBUTE_TIER |
+	    ITEM_ATTRIBUTE_REDUCESKILLLOSS;
 	const static uint32_t stringAttributeTypes = ITEM_ATTRIBUTE_DESCRIPTION | ITEM_ATTRIBUTE_TEXT |
 	                                             ITEM_ATTRIBUTE_WRITER | ITEM_ATTRIBUTE_NAME | ITEM_ATTRIBUTE_ARTICLE |
 	                                             ITEM_ATTRIBUTE_PLURALNAME;
@@ -686,10 +692,12 @@ public:
 
 	void setDuration(int32_t time) { setIntAttr(ITEM_ATTRIBUTE_DURATION, std::max<int32_t>(0, time)); }
 	void setDurationTimestamp(int64_t timestamp) { setIntAttr(ITEM_ATTRIBUTE_DURATION_TIMESTAMP, timestamp); }
-	int32_t getDuration() const {
+	int32_t getDuration() const
+	{
 		ItemDecayState_t decayState = getDecaying();
 		if (decayState == DECAYING_TRUE || decayState == DECAYING_STOPPING) {
-			return std::max<int32_t>(0, static_cast<int32_t>(getIntAttr(ITEM_ATTRIBUTE_DURATION_TIMESTAMP) - OTSYS_TIME()));
+			return std::max<int32_t>(
+			    0, static_cast<int32_t>(getIntAttr(ITEM_ATTRIBUTE_DURATION_TIMESTAMP) - OTSYS_TIME()));
 		} else {
 			return getIntAttr(ITEM_ATTRIBUTE_DURATION);
 		}
@@ -805,10 +813,7 @@ public:
 		return items[id].hitChance;
 	}
 
-	int32_t getReduceSkillLoss() const
-	{
-		return items[id].reduceSkillLoss;
-	}
+	int32_t getReduceSkillLoss() const { return items[id].reduceSkillLoss; }
 
 	uint32_t getWorth() const;
 	LightInfo getLightInfo() const;

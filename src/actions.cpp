@@ -3,28 +3,26 @@
 
 #include "otpch.h"
 
-#include <algorithm>
-
 #include "actions.h"
-
-#include <sstream>
-#include "logger.h"
-#include <fmt/format.h>
 
 #include "bed.h"
 #include "configmanager.h"
 #include "container.h"
 #include "enums.h"
 #include "game.h"
+#include "logger.h"
 #include "protocolgame.h"
 #include "pugicast.h"
-#include "spells.h"
 #include "rewardchest.h"
+#include "spells.h"
+
+#include <algorithm>
+#include <fmt/format.h>
+#include <sstream>
 
 extern Game g_game;
 extern Spells* g_spells;
 extern Actions* g_actions;
-
 
 Actions::Actions() : scriptInterface("Action Interface") { scriptInterface.initState(); }
 
@@ -94,7 +92,8 @@ bool Actions::registerEvent(Event_ptr event, const pugi::xml_node& node)
 		for (const auto& uid : uidList) {
 			auto result = uniqueItemMap.emplace(static_cast<uint16_t>(uid), *action);
 			if (!result.second) {
-				LOG_WARN(fmt::format("[Warning - Actions::registerEvent] Duplicate registered item with uniqueid: {}", uid));
+				LOG_WARN(
+				    fmt::format("[Warning - Actions::registerEvent] Duplicate registered item with uniqueid: {}", uid));
 				continue;
 			}
 
@@ -107,7 +106,8 @@ bool Actions::registerEvent(Event_ptr event, const pugi::xml_node& node)
 		for (const auto& aid : aidList) {
 			auto result = actionItemMap.emplace(static_cast<uint16_t>(aid), *action);
 			if (!result.second) {
-				LOG_WARN(fmt::format("[Warning - Actions::registerEvent] Duplicate registered item with actionid: {}", aid));
+				LOG_WARN(
+				    fmt::format("[Warning - Actions::registerEvent] Duplicate registered item with actionid: {}", aid));
 				continue;
 			}
 
@@ -122,7 +122,9 @@ bool Actions::registerEvent(Event_ptr event, const pugi::xml_node& node)
 			uint16_t toId = pugi::cast<uint16_t>(toIdAttribute.value());
 			for (; iterId <= toId; iterId++) {
 				if (!useItemMap.emplace(iterId, *action).second) {
-					LOG_WARN(fmt::format("[Warning - Actions::registerEvent] Duplicate registered item with id: {} in fromid: {}, toid: {}", iterId, fromId, toId));
+					LOG_WARN(fmt::format(
+					    "[Warning - Actions::registerEvent] Duplicate registered item with id: {} in fromid: {}, toid: {}",
+					    iterId, fromId, toId));
 					continue;
 				}
 
@@ -140,7 +142,9 @@ bool Actions::registerEvent(Event_ptr event, const pugi::xml_node& node)
 			uint16_t toUid = pugi::cast<uint16_t>(toUidAttribute.value());
 			for (; iterUid <= toUid; iterUid++) {
 				if (!uniqueItemMap.emplace(iterUid, *action).second) {
-					LOG_WARN(fmt::format("[Warning - Actions::registerEvent] Duplicate registered item with unique id: {} in fromuid: {}, touid: {}", iterUid, fromUid, toUid));
+					LOG_WARN(fmt::format(
+					    "[Warning - Actions::registerEvent] Duplicate registered item with unique id: {} in fromuid: {}, touid: {}",
+					    iterUid, fromUid, toUid));
 					continue;
 				}
 
@@ -158,7 +162,9 @@ bool Actions::registerEvent(Event_ptr event, const pugi::xml_node& node)
 			uint16_t toAid = pugi::cast<uint16_t>(toAidAttribute.value());
 			for (; iterAid <= toAid; iterAid++) {
 				if (!actionItemMap.emplace(iterAid, *action).second) {
-					LOG_WARN(fmt::format("[Warning - Actions::registerEvent] Duplicate registered item with action id: {} in fromaid: {}, toaid: {}", iterAid, fromAid, toAid));
+					LOG_WARN(fmt::format(
+					    "[Warning - Actions::registerEvent] Duplicate registered item with action id: {} in fromaid: {}, toaid: {}",
+					    iterAid, fromAid, toAid));
 					continue;
 				}
 
@@ -194,7 +200,9 @@ bool Actions::registerLuaEvent(Action* event)
 	bool success = false;
 	for (const auto& id : ids) {
 		if (!useItemMap.emplace(id, *action).second) {
-			LOG_WARN(fmt::format("[Warning - Actions::registerLuaEvent] Duplicate registered item with id: {} in range from id: {}, to id: {}", id, ids.front(), ids.back()));
+			LOG_WARN(fmt::format(
+			    "[Warning - Actions::registerLuaEvent] Duplicate registered item with id: {} in range from id: {}, to id: {}",
+			    id, ids.front(), ids.back()));
 			continue;
 		}
 
@@ -203,7 +211,9 @@ bool Actions::registerLuaEvent(Action* event)
 
 	for (const auto& id : uids) {
 		if (!uniqueItemMap.emplace(id, *action).second) {
-			LOG_WARN(fmt::format("[Warning - Actions::registerLuaEvent] Duplicate registered item with uid: {} in range from uid: {}, to uid: {}", id, uids.front(), uids.back()));
+			LOG_WARN(fmt::format(
+			    "[Warning - Actions::registerLuaEvent] Duplicate registered item with uid: {} in range from uid: {}, to uid: {}",
+			    id, uids.front(), uids.back()));
 			continue;
 		}
 
@@ -212,7 +222,9 @@ bool Actions::registerLuaEvent(Action* event)
 
 	for (const auto& id : aids) {
 		if (!actionItemMap.emplace(id, *action).second) {
-			LOG_WARN(fmt::format("[Warning - Actions::registerLuaEvent] Duplicate registered item with aid: {} in range from aid: {}, to aid: {}", id, aids.front(), aids.back()));
+			LOG_WARN(fmt::format(
+			    "[Warning - Actions::registerLuaEvent] Duplicate registered item with aid: {} in range from aid: {}, to aid: {}",
+			    id, aids.front(), aids.back()));
 			continue;
 		}
 
@@ -370,14 +382,14 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 			return RETURNVALUE_CANNOTUSETHISOBJECT;
 		}
 
-			if (bed->trySleep(player)) {
-				player->setBedItem(bed);
-				player->setOfflineTrainingSkill(Player::SKILL_OFFLINE_AUTO);
-				BedItem* bedItem = player->getBedItem();
-				if (bedItem) {
-					bedItem->sleep(player);
-				}
+		if (bed->trySleep(player)) {
+			player->setBedItem(bed);
+			player->setOfflineTrainingSkill(Player::SKILL_OFFLINE_AUTO);
+			BedItem* bedItem = player->getBedItem();
+			if (bedItem) {
+				bedItem->sleep(player);
 			}
+		}
 
 		return RETURNVALUE_NOERROR;
 	}
@@ -387,7 +399,8 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 			if (const auto tile = item->getTile()) {
 				if (const auto houseTile = tile->getHouseTile()) {
 					const auto house = houseTile->getHouse();
-					if (house && house->getProtected() && !item->getTopParent()->getCreature() && !house->canModifyItems(player)) {
+					if (house && house->getProtected() && !item->getTopParent()->getCreature() &&
+					    !house->canModifyItems(player)) {
 						return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
 					}
 				}
@@ -409,11 +422,12 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 		if (container->isRewardCorpse()) {
 			RewardChest& myRewardChest = player->getRewardChest();
 			for (Item* subItem : container->getItemList()) {
-				                                		if (subItem->getID() == ITEM_REWARD_CONTAINER) {
+				if (subItem->getID() == ITEM_REWARD_CONTAINER) {
 					int64_t rewardDate = subItem->getIntAttr(ITEM_ATTRIBUTE_DATE);
 					bool foundMatch = false;
 					for (Item* rewardItem : myRewardChest.getItemList()) {
-						                                		if (rewardItem->getID() == ITEM_REWARD_CONTAINER && rewardItem->getIntAttr(ITEM_ATTRIBUTE_DATE) == rewardDate) {
+						if (rewardItem->getID() == ITEM_REWARD_CONTAINER &&
+						    rewardItem->getIntAttr(ITEM_ATTRIBUTE_DATE) == rewardDate) {
 							foundMatch = true;
 							break;
 						}
@@ -423,8 +437,7 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 					}
 				}
 			}
-		}
-		else if (corpseOwner != 0 && !player->canOpenCorpse(corpseOwner)) {
+		} else if (corpseOwner != 0 && !player->canOpenCorpse(corpseOwner)) {
 			return RETURNVALUE_YOUARENOTTHEOWNER;
 		}
 
@@ -436,7 +449,7 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 				return RETURNVALUE_REWARDCHESTEMPTY;
 			}
 			for (Item* rewardItem : myRewardChest.getItemList()) {
-				                                		if (rewardItem->getID() == ITEM_REWARD_CONTAINER) {
+				if (rewardItem->getID() == ITEM_REWARD_CONTAINER) {
 					Container* rewardContainer = rewardItem->getContainer();
 					if (rewardContainer) {
 						rewardContainer->setParent(&myRewardChest);
@@ -444,13 +457,14 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 				}
 			}
 			openContainer = &myRewardChest;
-		}
-		                	else if (item->getID() == ITEM_REWARD_CONTAINER)  {				
+		} else if (item->getID() == ITEM_REWARD_CONTAINER) {
 			RewardChest& myRewardChest = player->getRewardChest();
 			int64_t rewardDate = item->getIntAttr(ITEM_ATTRIBUTE_DATE);
 			for (Item* rewardItem : myRewardChest.getItemList()) {
-				                        		if (rewardItem->getID() == ITEM_REWARD_CONTAINER && rewardItem->getIntAttr(ITEM_ATTRIBUTE_DATE) == rewardDate && rewardItem->getIntAttr(ITEM_ATTRIBUTE_REWARDID) == item->getIntAttr(ITEM_ATTRIBUTE_REWARDID)) {
-				  Container* rewardContainer = rewardItem->getContainer();
+				if (rewardItem->getID() == ITEM_REWARD_CONTAINER &&
+				    rewardItem->getIntAttr(ITEM_ATTRIBUTE_DATE) == rewardDate &&
+				    rewardItem->getIntAttr(ITEM_ATTRIBUTE_REWARDID) == item->getIntAttr(ITEM_ATTRIBUTE_REWARDID)) {
+					Container* rewardContainer = rewardItem->getContainer();
 					if (rewardContainer) {
 						rewardContainer->setParent(container->getRealParent());
 						openContainer = rewardContainer;
@@ -506,14 +520,14 @@ bool Actions::useItem(Player* player, const Position& pos, uint8_t index, Item* 
 {
 	bool fastPotions = getBoolean(ConfigManager::FAST_POTIONS_ENABLED);
 	const auto& fastPotionIds = ConfigManager::getFastPotionIds();
-	
+
 	// Check if item is in fast potion list
 	bool isFastPotion = false;
 	if (fastPotions && !fastPotionIds.empty()) {
 		uint16_t itemId = item->getID();
 		isFastPotion = std::find(fastPotionIds.begin(), fastPotionIds.end(), itemId) != fastPotionIds.end();
 	}
-	
+
 	if (!isFastPotion) {
 		if (player->hasCondition(CONDITION_EXHAUST_WEAPON, EXHAUST_OPENCONTAINER)) {
 			player->sendCancelMessage(RETURNVALUE_YOUAREEXHAUSTED);
@@ -521,7 +535,8 @@ bool Actions::useItem(Player* player, const Position& pos, uint8_t index, Item* 
 		}
 		if (!player->hasFlag(PlayerFlag_HasNoExhaustion)) {
 			int32_t cooldown = getInteger(ConfigManager::ACTIONS_DELAY_INTERVAL);
-			if (Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON, cooldown, 0, false, EXHAUST_OPENCONTAINER)) {
+			if (Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON,
+			                                                      cooldown, 0, false, EXHAUST_OPENCONTAINER)) {
 				player->addCondition(condition);
 			}
 			player->sendUseItemCooldown(cooldown);
@@ -538,7 +553,8 @@ bool Actions::useItem(Player* player, const Position& pos, uint8_t index, Item* 
 		if (const auto tile = item->getTile()) {
 			if (const auto houseTile = tile->getHouseTile()) {
 				const auto house = houseTile->getHouse();
-				if (house && house->getProtected() && !item->getTopParent()->getCreature() && !house->canModifyItems(player)) {
+				if (house && house->getProtected() && !item->getTopParent()->getCreature() &&
+				    !house->canModifyItems(player)) {
 					player->sendCancelMessage(RETURNVALUE_CANNOTMOVEITEMISPROTECTED);
 					return false;
 				}
@@ -576,8 +592,8 @@ bool Actions::useItemEx(Player* player, const Position& fromPos, const Position&
 {
 	uint16_t itemId = item->getID();
 	const auto& fastPotionIds = ConfigManager::getFastPotionIds();
-	bool isPotion = !fastPotionIds.empty() &&
-	                std::find(fastPotionIds.begin(), fastPotionIds.end(), itemId) != fastPotionIds.end();
+	bool isPotion =
+	    !fastPotionIds.empty() && std::find(fastPotionIds.begin(), fastPotionIds.end(), itemId) != fastPotionIds.end();
 
 	// Check exhaust per type
 	if (isPotion) {
@@ -586,7 +602,8 @@ bool Actions::useItemEx(Player* player, const Position& fromPos, const Position&
 			g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF);
 			return false;
 		}
-		if (getBoolean(ConfigManager::POTION_CAN_EXHAUST_ITEM) && player->hasCondition(CONDITION_EXHAUST_WEAPON, EXHAUST_USEITEM)) {
+		if (getBoolean(ConfigManager::POTION_CAN_EXHAUST_ITEM) &&
+		    player->hasCondition(CONDITION_EXHAUST_WEAPON, EXHAUST_USEITEM)) {
 			player->sendCancelMessage(RETURNVALUE_YOUAREEXHAUSTED);
 			return false;
 		}
@@ -601,19 +618,22 @@ bool Actions::useItemEx(Player* player, const Position& fromPos, const Position&
 	if (!player->hasFlag(PlayerFlag_HasNoExhaustion)) {
 		if (isPotion) {
 			int32_t potionCooldown = getInteger(ConfigManager::EXHAUST_POTION_INTERVAL);
-			if (Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON, potionCooldown, 0, false, EXHAUST_POTION)) {
+			if (Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON,
+			                                                      potionCooldown, 0, false, EXHAUST_POTION)) {
 				player->addCondition(condition);
 			}
 			if (getBoolean(ConfigManager::POTION_CAN_EXHAUST_ITEM)) {
 				int32_t itemCooldown = getInteger(ConfigManager::EX_ACTIONS_DELAY_INTERVAL);
-				if (Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON, itemCooldown, 0, false, EXHAUST_USEITEM)) {
+				if (Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON,
+				                                                      itemCooldown, 0, false, EXHAUST_USEITEM)) {
 					player->addCondition(condition);
 				}
 				player->sendUseItemCooldown(itemCooldown);
 			}
 		} else {
 			int32_t cooldown = getInteger(ConfigManager::EX_ACTIONS_DELAY_INTERVAL);
-			if (Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON, cooldown, 0, false, EXHAUST_USEITEM)) {
+			if (Condition* condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON,
+			                                                      cooldown, 0, false, EXHAUST_USEITEM)) {
 				player->addCondition(condition);
 			}
 			player->sendUseItemCooldown(cooldown);

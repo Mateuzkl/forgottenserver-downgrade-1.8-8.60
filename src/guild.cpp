@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "guild.h"
+
 #include "game.h"
 #include "tools.h"
 
@@ -69,13 +70,14 @@ void Guild::setBankBalance(uint64_t balance)
 Guild_ptr IOGuild::loadGuild(uint32_t guildId)
 {
 	Database& db = Database::getInstance();
-	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name`, `balance` FROM `guilds` WHERE `id` = {:d}", guildId));
+	DBResult_ptr result =
+	    db.storeQuery(fmt::format("SELECT `name`, `balance` FROM `guilds` WHERE `id` = {:d}", guildId));
 	if (!result) {
 		return nullptr;
 	}
 
 	const auto& guild = std::make_shared<Guild>(guildId, result->getString("name"));
-	
+
 	guild->loadBankBalance(result->getNumber<uint64_t>("balance"));
 
 	if (auto ranksResult = db.storeQuery(
@@ -169,9 +171,10 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 		// Validate frag limit
 		int32_t minFragLimit = getInteger(ConfigManager::GUILD_WAR_MIN_FRAG_LIMIT);
 		int32_t maxFragLimit = getInteger(ConfigManager::GUILD_WAR_MAX_FRAG_LIMIT);
-		
+
 		if (fragLimit < minFragLimit || fragLimit > maxFragLimit) {
-			player->sendCancelMessage(fmt::format("Frag limit must be between {:d} and {:d}.", minFragLimit, maxFragLimit));
+			player->sendCancelMessage(
+			    fmt::format("Frag limit must be between {:d} and {:d}.", minFragLimit, maxFragLimit));
 			return;
 		}
 
@@ -185,24 +188,32 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 			return;
 		}
 
-		DBResult_ptr checkResult = db.storeQuery(fmt::format("SELECT `id` FROM `guild_wars` WHERE (`guild1` = {:d} AND `guild2` = {:d}) AND `status` = 0", guild->getId(), enemyId));
+		DBResult_ptr checkResult = db.storeQuery(
+		    fmt::format("SELECT `id` FROM `guild_wars` WHERE (`guild1` = {:d} AND `guild2` = {:d}) AND `status` = 0",
+		                guild->getId(), enemyId));
 		if (checkResult) {
 			player->sendCancelMessage("You have already invited this guild.");
 			return;
 		}
 
-		query << "INSERT INTO `guild_wars` (`guild1`, `guild2`, `name1`, `name2`, `status`, `started`, `ended`, `fraglimit`, `payment`) VALUES (" 
-			  << guild->getId() << ", " << enemyId << ", " << db.escapeString(guild->getName()) << ", " << db.escapeString(enemyName) 
-			  << ", 0, " << std::time(nullptr) << ", " << (std::time(nullptr) + (durationDays * 86400)) << ", " << fragLimit << ", " << payment << ")";
-		
+		query
+		    << "INSERT INTO `guild_wars` (`guild1`, `guild2`, `name1`, `name2`, `status`, `started`, `ended`, `fraglimit`, `payment`) VALUES ("
+		    << guild->getId() << ", " << enemyId << ", " << db.escapeString(guild->getName()) << ", "
+		    << db.escapeString(enemyName) << ", 0, " << std::time(nullptr) << ", "
+		    << (std::time(nullptr) + (durationDays * 86400)) << ", " << fragLimit << ", " << payment << ")";
+
 		if (db.executeQuery(query.str())) {
-			g_game.broadcastMessage(fmt::format("{:s} has invited {:s} to war with {:d} frag limit.", guild->getName(), enemyName, fragLimit), MESSAGE_EVENT_ORANGE);
+			g_game.broadcastMessage(fmt::format("{:s} has invited {:s} to war with {:d} frag limit.", guild->getName(),
+			                                    enemyName, fragLimit),
+			                        MESSAGE_EVENT_ORANGE);
 		}
 
 	} else {
 		// all other actions require looking up the war entry
-		DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id`, `guild1`, `guild2`, `status`, `started`, `ended`, `payment`, `fraglimit` FROM `guild_wars` WHERE (`guild1` = {:d} AND `guild2` = {:d}) OR (`guild1` = {:d} AND `guild2` = {:d}) AND `status` IN (0, 1)", guild->getId(), enemyId, enemyId, guild->getId()));
-		
+		DBResult_ptr result = db.storeQuery(fmt::format(
+		    "SELECT `id`, `guild1`, `guild2`, `status`, `started`, `ended`, `payment`, `fraglimit` FROM `guild_wars` WHERE (`guild1` = {:d} AND `guild2` = {:d}) OR (`guild1` = {:d} AND `guild2` = {:d}) AND `status` IN (0, 1)",
+		    guild->getId(), enemyId, enemyId, guild->getId()));
+
 		if (!result) {
 			player->sendCancelMessage("There is no active invitation or war with this guild.");
 			return;
@@ -236,7 +247,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 				player->sendCancelMessage("Your guild balance is too low to accept this war.");
 				return;
 			}
-			
+
 			// Transfer payment logic could go here if payments are immediate, but usually stored for end.
 			// Just updating status for now as requested.
 
@@ -245,14 +256,14 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 
 			updateQuery << "`status` = 1, `started` = " << std::time(nullptr) << ", `ended` = " << newEnd;
 			msg = fmt::format("accepted the war against {:s}.", enemyName);
-			
+
 			if (db.executeQuery(updateQuery.str())) {
 				g_game.broadcastMessage(fmt::format("{:s} has {:s}", guild->getName(), msg), MESSAGE_EVENT_ORANGE);
-				
+
 				for (Player* member : guild->getMembersOnline()) {
 					member->reloadWarList(false);
 				}
-				
+
 				std::vector<Player*> enemyMembers;
 				if (auto enemyGuild = g_game.getGuild(enemyId)) {
 					for (Player* member : enemyGuild->getMembersOnline()) {
@@ -269,7 +280,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 				}
 			}
 			return;
-			
+
 		} else if (action == "reject") {
 			if (status != 0) {
 				player->sendCancelMessage("You cannot reject an active war.");
@@ -279,7 +290,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 				player->sendCancelMessage("You cannot reject your own invitation. Use cancel.");
 				return;
 			}
-			
+
 			updateQuery << "`status` = 2, `ended` = " << std::time(nullptr);
 			msg = fmt::format("rejected the war invitation from {:s}.", enemyName);
 
@@ -301,19 +312,19 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 				player->sendCancelMessage("This war is not active.");
 				return;
 			}
-			
+
 			// This logic handles "force end" or "surrender" depending on implementation.
 			// Setting status to 5 (ended).
 			updateQuery << "`status` = 5, `ended` = " << std::time(nullptr);
 			msg = fmt::format("ended the war with {:s}.", enemyName);
-			
+
 			if (db.executeQuery(updateQuery.str())) {
 				g_game.broadcastMessage(fmt::format("{:s} has {:s}", guild->getName(), msg), MESSAGE_EVENT_ORANGE);
 
 				for (Player* member : guild->getMembersOnline()) {
 					member->reloadWarList(false);
 				}
-				
+
 				std::vector<Player*> enemyMembers;
 				if (auto enemyGuild = g_game.getGuild(enemyId)) {
 					for (Player* member : enemyGuild->getMembersOnline()) {
@@ -330,7 +341,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 				}
 			}
 			return;
-		
+
 		} else {
 			player->sendCancelMessage("Unknown action.");
 			return;
@@ -359,34 +370,36 @@ void IOGuild::guildBalance(Player* player, const std::string& param)
 
 	std::string action(t[0]);
 	boost::algorithm::trim(action);
-	
+
 	if (action == "donate") {
 		if (t.size() < 2) {
 			player->sendChannelMessage("", "Usage: /balance donate amount", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
 			return;
 		}
-		
+
 		uint64_t amount = std::atoll(std::string(t[1]).c_str());
 		if (player->getBankBalance() < amount) {
-			player->sendChannelMessage("", "You do not have enough money in your bank account.", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
+			player->sendChannelMessage("", "You do not have enough money in your bank account.", TALKTYPE_CHANNEL_R1,
+			                           CHANNEL_GUILD);
 			return;
 		}
 
 		player->setBankBalance(player->getBankBalance() - amount);
 		guild->setBankBalance(guild->getBankBalance() + amount);
-		player->sendChannelMessage("", fmt::format("You have donated {:d} gold to the guild balance.", amount), TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
-		
+		player->sendChannelMessage("", fmt::format("You have donated {:d} gold to the guild balance.", amount),
+		                           TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
+
 	} else if (action == "pick") {
 		if (player->getGuildRank()->level < 3) {
 			player->sendChannelMessage("", "Only leader can pick money.", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
 			return;
 		}
-		
+
 		if (t.size() < 2) {
 			player->sendChannelMessage("", "Usage: /balance pick amount", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
 			return;
 		}
-		
+
 		uint64_t amount = std::atoll(std::string(t[1]).c_str());
 		if (guild->getBankBalance() < amount) {
 			player->sendChannelMessage("", "The guild does not have enough money.", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
@@ -395,7 +408,8 @@ void IOGuild::guildBalance(Player* player, const std::string& param)
 
 		guild->setBankBalance(guild->getBankBalance() - amount);
 		player->setBankBalance(player->getBankBalance() + amount);
-		player->sendChannelMessage("", fmt::format("You have picked {:d} gold from the guild balance.", amount), TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
+		player->sendChannelMessage("", fmt::format("You have picked {:d} gold from the guild balance.", amount),
+		                           TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
 
 	} else {
 		player->sendChannelMessage("", "Unknown action. Use donate or pick.", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
@@ -420,14 +434,13 @@ void IOGuild::registerGuildWarKill(Player* killer, Player* victim)
 	}
 
 	Database& db = Database::getInstance();
-	
+
 	// Check if there's an active war between these guilds
-	DBResult_ptr warResult = db.storeQuery(fmt::format(
-		"SELECT `id`, `guild1`, `guild2`, `name1`, `name2`, `fraglimit` FROM `guild_wars` "
-		"WHERE ((`guild1` = {:d} AND `guild2` = {:d}) OR (`guild1` = {:d} AND `guild2` = {:d})) "
-		"AND `status` = 1",
-		killerGuild->getId(), victimGuild->getId(), victimGuild->getId(), killerGuild->getId()
-	));
+	DBResult_ptr warResult = db.storeQuery(
+	    fmt::format("SELECT `id`, `guild1`, `guild2`, `name1`, `name2`, `fraglimit` FROM `guild_wars` "
+	                "WHERE ((`guild1` = {:d} AND `guild2` = {:d}) OR (`guild1` = {:d} AND `guild2` = {:d})) "
+	                "AND `status` = 1",
+	                killerGuild->getId(), victimGuild->getId(), victimGuild->getId(), killerGuild->getId()));
 
 	if (!warResult) {
 		return;
@@ -442,21 +455,20 @@ void IOGuild::registerGuildWarKill(Player* killer, Player* victim)
 
 	// Register the kill
 	std::ostringstream query;
-	query << "INSERT INTO `guild_war_kills` (`war_id`, `killer_guild`, `killer`, `victim`, `time`) VALUES ("
-		  << warId << ", " << killerGuild->getId() << ", " << killer->getGUID() << ", " 
-		  << victim->getGUID() << ", " << std::time(nullptr) << ")";
-	
+	query << "INSERT INTO `guild_war_kills` (`war_id`, `killer_guild`, `killer`, `victim`, `time`) VALUES (" << warId
+	      << ", " << killerGuild->getId() << ", " << killer->getGUID() << ", " << victim->getGUID() << ", "
+	      << std::time(nullptr) << ")";
+
 	if (!db.executeQuery(query.str())) {
 		return;
 	}
 
 	// Get current score
 	DBResult_ptr scoreResult = db.storeQuery(fmt::format(
-		"SELECT "
-		"(SELECT COUNT(*) FROM `guild_war_kills` WHERE `war_id` = {:d} AND `killer_guild` = {:d}) as guild1_kills, "
-		"(SELECT COUNT(*) FROM `guild_war_kills` WHERE `war_id` = {:d} AND `killer_guild` = {:d}) as guild2_kills",
-		warId, guild1, warId, guild2
-	));
+	    "SELECT "
+	    "(SELECT COUNT(*) FROM `guild_war_kills` WHERE `war_id` = {:d} AND `killer_guild` = {:d}) as guild1_kills, "
+	    "(SELECT COUNT(*) FROM `guild_war_kills` WHERE `war_id` = {:d} AND `killer_guild` = {:d}) as guild2_kills",
+	    warId, guild1, warId, guild2));
 
 	if (!scoreResult) {
 		return;
@@ -468,11 +480,10 @@ void IOGuild::registerGuildWarKill(Player* killer, Player* victim)
 	// Announce the kill if enabled
 	if (getBoolean(ConfigManager::GUILD_WAR_ANNOUNCE_KILLS)) {
 		g_game.broadcastMessage(
-			fmt::format("[Guild War] {:s} killed {:s}. Score: {:s} [{:d}] vs {:s} [{:d}] (Limit: {:d})",
-				killer->getName(), victim->getName(),
-				guild1Name, guild1Kills, guild2Name, guild2Kills, fragLimit),
-			MESSAGE_EVENT_ORANGE
-		);
+		    fmt::format("[Guild War] {:s} killed {:s}. Score: {:s} [{:d}] vs {:s} [{:d}] (Limit: {:d})",
+		                killer->getName(), victim->getName(), guild1Name, guild1Kills, guild2Name, guild2Kills,
+		                fragLimit),
+		    MESSAGE_EVENT_ORANGE);
 	}
 
 	// Check if war is finished
@@ -482,24 +493,22 @@ void IOGuild::registerGuildWarKill(Player* killer, Player* victim)
 
 		// Update war status
 		std::ostringstream updateQuery;
-		updateQuery << "UPDATE `guild_wars` SET `status` = 4, `ended` = " << std::time(nullptr) 
-					<< " WHERE `id` = " << warId;
+		updateQuery << "UPDATE `guild_wars` SET `status` = 4, `ended` = " << std::time(nullptr)
+		            << " WHERE `id` = " << warId;
 		db.executeQuery(updateQuery.str());
 
-		g_game.broadcastMessage(
-			fmt::format("[Guild War] {:s} has won the war against {:s}! Final score: {:d} - {:d}",
-				winnerName, (winnerGuild == guild1 ? guild2Name : guild1Name),
-				(winnerGuild == guild1 ? guild1Kills : guild2Kills),
-				(winnerGuild == guild1 ? guild2Kills : guild1Kills)),
-			MESSAGE_EVENT_ORANGE
-		);
+		g_game.broadcastMessage(fmt::format("[Guild War] {:s} has won the war against {:s}! Final score: {:d} - {:d}",
+		                                    winnerName, (winnerGuild == guild1 ? guild2Name : guild1Name),
+		                                    (winnerGuild == guild1 ? guild1Kills : guild2Kills),
+		                                    (winnerGuild == guild1 ? guild2Kills : guild1Kills)),
+		                        MESSAGE_EVENT_ORANGE);
 
 		// Reload war lists for all members
 		for (Player* member : killerGuild->getMembersOnline()) {
 			member->reloadWarList(false);
 			g_game.updateCreatureEmblem(member);
 		}
-		
+
 		for (Player* member : victimGuild->getMembersOnline()) {
 			member->reloadWarList(false);
 			g_game.updateCreatureEmblem(member);

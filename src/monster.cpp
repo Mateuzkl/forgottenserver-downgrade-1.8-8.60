@@ -793,13 +793,13 @@ void Monster::updateIdleStatus()
 					break;
 				}
 			}
-			
+
 			if (!playersNearby) {
-			    idle = true;
-			    walkingToSpawn = false; 
-			    listWalkDir.clear();
+				idle = true;
+				walkingToSpawn = false;
+				listWalkDir.clear();
 			} else {
-			    idle = false;
+				idle = false;
 			}
 		} else {
 			idle = std::find_if(conditions.begin(), conditions.end(),
@@ -1083,7 +1083,8 @@ void Monster::onThinkTarget(uint32_t interval)
 {
 	if (!isSummon()) {
 		// protection time
-		if (getAttackedCreature() && getAttackedCreature()->getPlayer() && getAttackedCreature()->getPlayer()->getProtectionTime() > 0) {
+		if (getAttackedCreature() && getAttackedCreature()->getPlayer() &&
+		    getAttackedCreature()->getPlayer()->getProtectionTime() > 0) {
 			setAttackedCreature(nullptr);
 			updateTargetList();
 			followCreature = nullptr;
