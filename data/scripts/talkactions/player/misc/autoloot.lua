@@ -1,5 +1,4 @@
 local talkaction = TalkAction("/autoloot", "!autoloot")
-
 function talkaction.onSay(player, words, param)
 	param = param:gsub("^%s*(.-)%s*$", "%1")
 
@@ -10,8 +9,12 @@ function talkaction.onSay(player, words, param)
 
 	if param == "on" then
 		if player.setAutoLootEnabled then
-			player:setAutoLootEnabled(true)
-			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "AutoLoot enabled.")
+			if player:isAutoLootEnabled() then
+				player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "AutoLoot is already enabled.")
+			else
+				player:setAutoLootEnabled(true)
+				player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "AutoLoot enabled.")
+			end
 		else
 			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Update source code to use this feature.")
 		end
@@ -20,8 +23,12 @@ function talkaction.onSay(player, words, param)
 
 	if param == "off" then
 		if player.setAutoLootEnabled then
-			player:setAutoLootEnabled(false)
-			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "AutoLoot disabled.")
+			if not player:isAutoLootEnabled() then
+				player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "AutoLoot is already disabled.")
+			else
+				player:setAutoLootEnabled(false)
+				player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "AutoLoot disabled.")
+			end
 		else
 			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Update source code to use this feature.")
 		end

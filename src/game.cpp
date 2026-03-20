@@ -3843,9 +3843,9 @@ void Game::checkCreatures(size_t index)
 	                                         ([=, this]() { checkCreatures((index + 1) % EVENT_CREATURECOUNT); })));
 
 	auto& checkCreatureList = checkCreatureLists[index];
-	auto it = checkCreatureList.begin(), end = checkCreatureList.end();
-	while (it != end) {
-		Creature* creature = *it;
+	size_t i = 0;
+	while (i < checkCreatureList.size()) {
+		Creature* creature = checkCreatureList[i];
 		if (creature->creatureCheck) {
 			if (!creature->isDead() && !creature->isRemoved()) {
 				creature->onThink(EVENT_CREATURE_THINK_INTERVAL);
@@ -3858,10 +3858,11 @@ void Game::checkCreatures(size_t index)
 					creature->executeConditions(EVENT_CREATURE_THINK_INTERVAL);
 				}
 			}
-			++it;
+			++i;
 		} else {
 			creature->inCheckCreaturesVector = false;
-			it = checkCreatureList.erase(it);
+			checkCreatureList[i] = checkCreatureList.back();
+			checkCreatureList.pop_back();
 			ReleaseCreature(creature);
 		}
 	}

@@ -546,7 +546,7 @@ private:
 	std::map<uint32_t, uint32_t> stages;
 	std::unordered_map<uint32_t, std::unordered_map<uint32_t, int32_t>> accountStorageMap;
 
-	std::list<Creature*> checkCreatureLists[EVENT_CREATURECOUNT];
+	std::vector<Creature*> checkCreatureLists[EVENT_CREATURECOUNT];
 
 	std::vector<Creature*> ToReleaseCreatures;
 	std::vector<Item*> ToReleaseItems;

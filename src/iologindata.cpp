@@ -1337,6 +1337,11 @@ bool IOLoginData::loadAutoLootConfig(Player* player)
 		if (propStream.read<uint8_t>(goldEnabled)) {
 			player->autolootConfig.goldEnabled = goldEnabled != 0;
 		}
+
+		uint8_t autoLootEnabled;
+		if (propStream.read<uint8_t>(autoLootEnabled)) {
+			player->autolootConfig.enabled = autoLootEnabled != 0;
+		}
 	}
 
 	return true;
@@ -1368,6 +1373,7 @@ bool IOLoginData::saveAutoLootConfig(Player* player)
 	propWriteStream.writeString(player->autolootConfig.text);
 	propWriteStream.write<uint8_t>(player->autolootConfig.lootAnything);
 	propWriteStream.write<uint8_t>(player->autolootConfig.goldEnabled);
+	propWriteStream.write<uint8_t>(player->autolootConfig.enabled ? 1 : 0);
 
 	std::string_view config = propWriteStream.getStream();
 	query << db.escapeBlob(config.data(), config.size()) << ')';
