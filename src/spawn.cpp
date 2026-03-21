@@ -411,12 +411,12 @@ void Spawn::startup()
 
 void Spawn::checkSpawn()
 {
-	checkSpawnEvent = 0;
-
 	// Guard: does not process or reschedule if the game is closing.
 	if (g_game.getGameState() >= GAME_STATE_SHUTDOWN) {
 		return;
 	}
+
+	checkSpawnEvent = 0;
 
 	cleanup();
 

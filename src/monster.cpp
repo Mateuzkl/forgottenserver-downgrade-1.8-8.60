@@ -1858,27 +1858,42 @@ void Monster::death(Creature*)
 			rewardContainer->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
 			bool hasLoot = false;
 			for (const auto& lootBlock : creatureLoot) {
+				// Skip items with invalid IDs — CreateItem would return a recycled/garbage pointer
+				if (lootBlock.id == 0) {
+					continue;
+				}
 				float adjustedChance =
 				    (lootBlock.chance * lootRate) * ConfigManager::getInteger(ConfigManager::RATE_LOOT);
 				if (lootBlock.unique && mostScoreContributor == playerId) {
 					// Ensure that the mostScoreContributor can receive multiple unique items
 					auto lootItem = Item::CreateItem(lootBlock.id, uniform_random(1, lootBlock.countmax));
+					if (!lootItem) {
+						continue;
+					}
 					const ItemType& itemType = Item::items[lootBlock.id];
 					if (!itemType.stackable) {
 						lootItem->setIntAttr(ITEM_ATTRIBUTE_DATE, currentTime);
 						lootItem->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
 					}
+					// internalAddThing sets parent but does NOT increment refcount.
+					// The container destructor calls decrementReferenceCounter() for each item,
+					// so we must NOT decrement here — doing so frees the item immediately and
+					// leaves the container with a dangling pointer.
 					rewardContainer->internalAddThing(lootItem);
 					hasLoot = true;
 				} else if (!lootBlock.unique) {
 					// Normal loot distribution for non-unique items
 					if (uniform_random(1, MAX_LOOTCHANCE) <= adjustedChance) {
 						auto lootItem = Item::CreateItem(lootBlock.id, uniform_random(1, lootBlock.countmax));
+						if (!lootItem) {
+							continue;
+						}
 						const ItemType& itemType = Item::items[lootBlock.id];
 						if (!itemType.stackable) {
 							lootItem->setIntAttr(ITEM_ATTRIBUTE_DATE, currentTime);
 							lootItem->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
 						}
+						// Same ownership rule: container owns the item, do NOT decrement here.
 						rewardContainer->internalAddThing(lootItem);
 						hasLoot = true;
 					}
@@ -1894,6 +1909,8 @@ void Monster::death(Creature*)
 						}
 						lootString += (*lootIt)->getNameDescription();
 					}
+					// internalAddThing does NOT increment refcount, so we must NOT decrement
+					// the creator's ref afterward — the reward chest destructor will do it.
 					player->getRewardChest().internalAddThing(rewardContainer);
 					player->sendTextMessage(MESSAGE_STATUS_DEFAULT,
 					                        "The following items dropped by " + getMonster()->getName() +
@@ -1909,9 +1926,17 @@ void Monster::death(Creature*)
 						itemList.emplace_back(currentPid, subItem);
 					}
 					IOLoginData::addRewardItems(playerId, itemList, rewardQuery, propWriteStream);
+					// Offline path: rewardContainer is not added to any in-game container,
+					// so we are the sole owner and must release our ref to avoid a leak.
+					// The destructor will properly free all child loot items.
+					rewardContainer->decrementReferenceCounter();
 				}
-			} else if (player) {
-				player->sendTextMessage(MESSAGE_STATUS_DEFAULT, "You did not receive any loot.");
+			} else {
+				// No loot was generated — release the unused container to avoid a memory leak.
+				rewardContainer->decrementReferenceCounter();
+				if (player) {
+					player->sendTextMessage(MESSAGE_STATUS_DEFAULT, "You did not receive any loot.");
+				}
 			}
 		}
 		g_game.resetDamageTracking(monsterId);
@@ -2028,6 +2053,9 @@ void Monster::dropLoot(Container* corpse, Creature*)
 		rewardContainer->setIntAttr(ITEM_ATTRIBUTE_DATE, currentTime);
 		rewardContainer->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
 		corpse->internalAddThing(rewardContainer);
+		// Fix: CreateItem sets refcount=1 (creator's ref). After handing ownership to the corpse
+		// container, we release our ref so the container becomes the sole owner.
+		rewardContainer->decrementReferenceCounter();
 	} else if (lootDrop) {
 		g_events->eventMonsterOnDropLoot(this, corpse);
 	}

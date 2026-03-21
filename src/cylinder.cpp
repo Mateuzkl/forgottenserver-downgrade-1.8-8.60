@@ -5,7 +5,9 @@
 
 #include "cylinder.h"
 
-VirtualCylinder* VirtualCylinder::virtualCylinder = new VirtualCylinder;
+// Fix: use static instance instead of heap allocation to avoid memory leak at shutdown
+static VirtualCylinder s_virtualCylinder;
+VirtualCylinder* VirtualCylinder::virtualCylinder = &s_virtualCylinder;
 
 int32_t Cylinder::getThingIndex(const Thing*) const { return -1; }
 

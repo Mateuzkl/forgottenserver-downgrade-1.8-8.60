@@ -1824,7 +1824,14 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 		}
 
 		newParent->postAddNotification(item, cylinder, newParent->getThingIndex(item));
-		item->startDecaying();
+		if (!item->isRemoved()) {
+			// Same Container/itemlist safety as the updateThing branch below.
+			if (item->getContainer()) {
+				g_game.startDecay(item);
+			} else {
+				item->startDecaying();
+			}
+		}
 		return item;
 	}
 
@@ -1857,8 +1864,20 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 					cylinder->postRemoveNotification(item, cylinder, itemIndex);
 					item->stopDecaying();
 					ReleaseItem(item);
-					newItem->startDecaying();
-					return newItem;
+					// replaceThing may not accept newItem — guard before startDecaying
+					// and release the orphaned allocation if it was not added.
+					if (cylinder->getThingIndex(newItem) != -1) {
+						if (!newItem->isRemoved()) {
+							if (newItem->getContainer()) {
+								g_game.startDecay(newItem);
+							} else {
+								newItem->startDecaying();
+							}
+						}
+						return newItem;
+					}
+					ReleaseItem(newItem);
+					return nullptr;
 				}
 				return transformItem(item, static_cast<uint16_t>(newItemId));
 			}
@@ -1881,7 +1900,25 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 
 			cylinder->updateThing(item, itemId, count);
 			cylinder->postAddNotification(item, cylinder, itemIndex);
-			item->startDecaying();
+			if (!item->isRemoved()) {
+				// For Container items, postRemoveNotification and postAddNotification
+				// fire Lua scripts (g_moveEvents->onItemMove) that can remove items
+				// from inside the container (auto-loot etc.), causing itemlist's
+				// std::deque to reallocate and free its old internal chunk array.
+				// Container::startDecaying() then iterates with a dangling end()
+				// iterator → SIGSEGV.
+				//
+				// g_game.startDecay(item) is correct and sufficient: it restarts
+				// only the container's own decay timer with the new item type's
+				// duration. Children's timers are already registered individually
+				// from when the container was first placed — re-registering them
+				// via startDecaying() would also incorrectly reset their timers.
+				if (item->getContainer()) {
+					g_game.startDecay(item);
+				} else {
+					item->startDecaying();
+				}
+			}
 			return item;
 		}
 	}
@@ -1906,9 +1943,24 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 	item->stopDecaying();
 	ReleaseItem(item);
 
-	newItem->startDecaying();
+	// replaceThing() may reject newItem (e.g. the cylinder is full or the
+	// tile rejects the item type).  When that happens getThingIndex() returns
+	// -1, meaning newItem was never adopted by the cylinder and has no owner.
+	// Without this guard the allocation leaks — Valgrid loss record 2,117.
+	if (cylinder->getThingIndex(newItem) != -1) {
+		if (!newItem->isRemoved()) {
+			if (newItem->getContainer()) {
+				g_game.startDecay(newItem);
+			} else {
+				newItem->startDecaying();
+			}
+		}
+		return newItem;
+	}
 
-	return newItem;
+	// newItem was not accepted — release it to avoid a definite memory leak.
+	ReleaseItem(newItem);
+	return nullptr;
 }
 
 ReturnValue Game::internalTeleport(Thing* thing, const Position& newPos, bool pushMove /* = true*/,
@@ -4094,19 +4146,22 @@ void Game::combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColo
 	switch (combatType) {
 		case COMBAT_PHYSICALDAMAGE: {
 			Item* splash = nullptr;
+			// Capture tile once — target may be removed between two getTile()
+			// calls, leaving a created splash with nowhere to go (definite leak).
+			Tile* targetTile = target->getTile();
 			switch (target->getRace()) {
 				case RACE_VENOM:
 					color = TEXTCOLOR_LIGHTGREEN;
 					effect = CONST_ME_HITBYPOISON;
-					splash = Item::CreateItem(ITEM_SMALLSPLASH, FLUID_SLIME);
+					if (targetTile) {
+						splash = Item::CreateItem(ITEM_SMALLSPLASH, FLUID_SLIME);
+					}
 					break;
 				case RACE_BLOOD:
 					color = TEXTCOLOR_RED;
 					effect = CONST_ME_DRAWBLOOD;
-					if (const Tile* tile = target->getTile()) {
-						if (!tile->hasFlag(TILESTATE_PROTECTIONZONE)) {
-							splash = Item::CreateItem(ITEM_SMALLSPLASH, FLUID_BLOOD);
-						}
+					if (targetTile && !targetTile->hasFlag(TILESTATE_PROTECTIONZONE)) {
+						splash = Item::CreateItem(ITEM_SMALLSPLASH, FLUID_BLOOD);
 					}
 					break;
 				case RACE_UNDEAD:
@@ -4128,8 +4183,13 @@ void Game::combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColo
 			}
 
 			if (splash) {
-				internalAddItem(target->getTile(), splash, INDEX_WHEREEVER, FLAG_NOLIMIT);
-				splash->startDecaying();
+				// targetTile is captured once and reused — same tile where the
+				// PZ check was made; splash is only created when tile != nullptr.
+				if (internalAddItem(targetTile, splash, INDEX_WHEREEVER, FLAG_NOLIMIT) == RETURNVALUE_NOERROR) {
+					splash->startDecaying();
+				} else {
+					ReleaseItem(splash);
+				}
 			}
 
 			break;
@@ -4953,6 +5013,16 @@ void Game::shutdown()
 
 	map.spawns.clear();
 	raids.clear();
+
+	// Release items pending in the decay queue AFTER map structures are
+	// cleared so that tile ownership of corpses/splashes is already gone
+	// before we decrement their reference counters.  g_decay.clear() calls
+	// ReleaseItem() on every pending item, pushing them into ToReleaseItems.
+	// The second cleanup() then calls decrementReferenceCounter() on each —
+	// the first cleanup() above ran before these items were enqueued and
+	// would have missed them.
+	g_decay.clear();
+	cleanup(); // flush items enqueued by g_decay.clear()
 
 	for (auto& checkCreatureList : checkCreatureLists) {
 		for (Creature* creature : checkCreatureList) {

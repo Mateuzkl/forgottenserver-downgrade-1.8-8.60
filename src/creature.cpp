@@ -686,14 +686,22 @@ bool Creature::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreatur
 		Tile* tile = getTile();
 
 		if (splash) {
-			g_game.internalAddItem(tile, splash, INDEX_WHEREEVER, FLAG_NOLIMIT);
-			g_game.startDecay(splash);
+			if (!tile || g_game.internalAddItem(tile, splash, INDEX_WHEREEVER, FLAG_NOLIMIT) != RETURNVALUE_NOERROR) {
+				g_game.ReleaseItem(splash);
+				splash = nullptr;
+			} else {
+				g_game.startDecay(splash);
+			}
 		}
 
 		Item* corpse = getCorpse(lastHitCreature, mostDamageCreature);
 		if (corpse) {
-			g_game.internalAddItem(tile, corpse, INDEX_WHEREEVER, FLAG_NOLIMIT);
-			g_game.startDecay(corpse);
+			if (!tile || g_game.internalAddItem(tile, corpse, INDEX_WHEREEVER, FLAG_NOLIMIT) != RETURNVALUE_NOERROR) {
+				g_game.ReleaseItem(corpse);
+				corpse = nullptr;
+			} else {
+				g_game.startDecay(corpse);
+			}
 		}
 
 		// scripting event - onDeath

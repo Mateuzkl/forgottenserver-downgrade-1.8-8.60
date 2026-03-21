@@ -22,6 +22,9 @@ Container::Container(uint16_t type, uint16_t size) : Item(type), maxSize(size)
 Container::~Container()
 {
 	for (Item* item : itemlist) {
+		if (!item) {
+			continue;
+		}
 		item->setParent(nullptr);
 		item->decrementReferenceCounter();
 	}
@@ -666,17 +669,56 @@ void Container::internalAddThing(uint32_t, Thing* thing)
 
 void Container::startDecaying()
 {
+	std::vector<Item*> snapshot;
+	std::queue<const Container*> pending;
+	pending.push(this);
+	while (!pending.empty()) {
+		const Container* c = pending.front();
+		pending.pop();
+		for (Item* item : c->itemlist) {
+			item->incrementReferenceCounter();
+			snapshot.push_back(item);
+			if (const Container* sub = item->getContainer()) {
+				pending.push(sub);
+			}
+		}
+	}
+
 	g_game.startDecay(this);
-	for (ContainerIterator it = iterator(); it.hasNext(); it.advance()) {
-		g_game.startDecay(*it);
+
+	for (Item* item : snapshot) {
+		if (!item->isRemoved()) {
+			g_game.startDecay(item);
+		}
+		g_game.ReleaseItem(item);
 	}
 }
 
 void Container::stopDecaying()
 {
 	g_game.stopDecay(this);
-	for (ContainerIterator it = iterator(); it.hasNext(); it.advance()) {
-		g_game.stopDecay(*it);
+
+	std::vector<Item*> snapshot;
+	std::queue<const Container*> pending;
+	pending.push(this);
+	while (!pending.empty()) {
+		const Container* c = pending.front();
+		pending.pop();
+		for (Item* item : c->itemlist) {
+			if (!item) {
+				continue;
+			}
+			snapshot.push_back(item);
+			if (const Container* sub = item->getContainer()) {
+				pending.push(sub);
+			}
+		}
+	}
+
+	for (Item* item : snapshot) {
+		if (!item->isRemoved()) {
+			g_game.stopDecay(item);
+		}
 	}
 }
 

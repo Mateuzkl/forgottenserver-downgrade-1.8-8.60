@@ -132,6 +132,25 @@ void Decay::stopDecay(Item* item, int64_t timestamp) noexcept
 	}
 }
 
+void Decay::clear() noexcept
+{
+	if (eventId != 0) {
+		g_scheduler.stopEvent(eventId);
+		eventId = 0;
+	}
+
+	for (auto& [timestamp, items] : decayMap) {
+		for (Item* item : items) {
+			if (!item) [[unlikely]] {
+				continue;
+			}
+			item->removeAttribute(ITEM_ATTRIBUTE_DECAYSTATE);
+			g_game.ReleaseItem(item);
+		}
+	}
+	decayMap.clear();
+}
+
 void Decay::checkDecay() noexcept
 {
 	const auto timestamp = OTSYS_TIME();
