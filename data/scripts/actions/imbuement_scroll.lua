@@ -295,7 +295,6 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         return true
     end
 
-    -- Fluxo via scrolls
     local freeSlots = equipment:getFreeImbuementSlots()
     if freeSlots == 0 then
         local total = equipment:getImbuementSlots()

@@ -8,6 +8,7 @@
 #include "combat.h"
 #include "configmanager.h"
 #include "game.h"
+#include "imbuement.h"
 #include "logger.h"
 #include "luavariant.h"
 #include "pugicast.h"
@@ -430,6 +431,33 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 		damage.secondary.type = getElementType();
 		damage.secondary.value = getElementDamage(player, target, item);
 		Combat::doTargetCombat(player, target, damage, params);
+
+		if (item->hasImbuements()) {
+			int32_t basePhysDamage = std::abs(damage.primary.value);
+			if (basePhysDamage > 0) {
+				for (auto& imbue : item->getImbuements()) {
+					if (!imbue->isDamage()) continue;
+					CombatType_t elemType = COMBAT_NONE;
+					switch (imbue->imbuetype) {
+						case ImbuementType::IMBUEMENT_TYPE_FIRE_DAMAGE:   elemType = COMBAT_FIREDAMAGE;   break;
+						case ImbuementType::IMBUEMENT_TYPE_EARTH_DAMAGE:  elemType = COMBAT_EARTHDAMAGE;  break;
+						case ImbuementType::IMBUEMENT_TYPE_ICE_DAMAGE:    elemType = COMBAT_ICEDAMAGE;    break;
+						case ImbuementType::IMBUEMENT_TYPE_ENERGY_DAMAGE: elemType = COMBAT_ENERGYDAMAGE; break;
+						case ImbuementType::IMBUEMENT_TYPE_DEATH_DAMAGE:  elemType = COMBAT_DEATHDAMAGE;  break;
+						case ImbuementType::IMBUEMENT_TYPE_HOLY_DAMAGE:   elemType = COMBAT_HOLYDAMAGE;   break;
+						default: break;
+					}
+					if (elemType == COMBAT_NONE) continue;
+					CombatDamage elemDamage;
+					elemDamage.origin = ORIGIN_IMBUEMENT;
+					elemDamage.primary.type = elemType;
+					elemDamage.primary.value = -(basePhysDamage * static_cast<int32_t>(imbue->value) / 100);
+					CombatParams elemParams;
+					elemParams.combatType = elemType;
+					Combat::doTargetCombat(player, target, elemDamage, elemParams);
+				}
+			}
+		}
 	}
 
 	onUsedWeapon(player, item, target->getTile());
