@@ -54,6 +54,7 @@ void Container::addItem(Item* item)
 	if (!item) {
 		return;
 	}
+	item->incrementReferenceCounter(); // ensure refcount >= 1 for items inside the container
 	itemlist.push_back(item);
 	item->setParent(this);
 }
@@ -451,6 +452,7 @@ void Container::addThing(int32_t index, Thing* thing)
 	}
 
 	item->setParent(this);
+	item->incrementReferenceCounter(); // ensure refcount >= 1 for items inside the container
 	itemlist.push_front(item);
 	updateItemWeight(item->getWeight());
 
@@ -514,6 +516,7 @@ void Container::replaceThing(uint32_t index, Thing* thing)
 
 	itemlist[index] = item;
 	item->setParent(this);
+	item->incrementReferenceCounter(); // increment refcount of the incoming item when it enters the container
 	updateItemWeight(-static_cast<int32_t>(replacedItem->getWeight()) + item->getWeight());
 	ammoCount += item->getItemCount();
 
@@ -523,6 +526,7 @@ void Container::replaceThing(uint32_t index, Thing* thing)
 	}
 
 	replacedItem->setParent(nullptr);
+	replacedItem->decrementReferenceCounter(); // decrement refcount of the replaced item when it leaves the container
 }
 
 void Container::removeThing(Thing* thing, uint32_t count)
@@ -562,6 +566,7 @@ void Container::removeThing(Thing* thing, uint32_t count)
 		}
 
 		item->setParent(nullptr);
+		item->decrementReferenceCounter(); // decrement refcount when item is fully removed from the container
 		itemlist.erase(itemlist.begin() + index);
 	}
 }
@@ -658,6 +663,7 @@ void Container::internalAddThing(uint32_t, Thing* thing)
 	}
 
 	item->setParent(this);
+	item->incrementReferenceCounter(); // ensure refcount >= 1 for items inside the container
 	itemlist.push_front(item);
 	updateItemWeight(item->getWeight());
 
