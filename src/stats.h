@@ -47,12 +47,16 @@ using statsMap = std::map<std::string, statsData>;
 class Stats : public ThreadHolder<Stats>
 {
 public:
+	~Stats();
+
 	void threadMain();
 	void shutdown() { setState(THREAD_STATE_TERMINATED); }
 
 	void setEnabled(bool enabled) { this->enabled = enabled; }
 
 	bool isEnabled() const { return enabled; }
+
+	bool isRunning() const { return getState() == THREAD_STATE_RUNNING; }
 
 	void addDispatcherTask(int index, Task* task);
 	void addLuaStats(Stat* stats);
@@ -111,13 +115,14 @@ public:
 	~AutoStat()
 	{
 		if (!stat) return;
-		try {
 			stat->executionTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
 			                          std::chrono::high_resolution_clock::now() - time_point)
 			                          .count();
 			stat->executionTime -= minusTime;
+
+		if (g_stats.isEnabled() && g_stats.isRunning()) {
 			g_stats.addSpecialStats(stat);
-		} catch (...) {
+		} else {
 			delete stat;
 		}
 	}

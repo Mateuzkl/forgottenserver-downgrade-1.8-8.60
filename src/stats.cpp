@@ -16,6 +16,17 @@ int64_t Stats::DUMP_INTERVAL = 30000;                // 30 sec
 uint32_t Stats::SLOW_EXECUTION_TIME = 10000000;      // 10 ms
 uint32_t Stats::VERY_SLOW_EXECUTION_TIME = 50000000; // 50 ms
 
+Stats::~Stats() {
+	for (auto& d : dispatchers) {
+		for (Task* t : d.queue) {
+			delete t;
+		}
+	}
+	for (Stat* s : lua.queue) { delete s; }
+	for (Stat* s : sql.queue) { delete s; }
+	for (Stat* s : special.queue) { delete s; }
+}
+
 AutoStatRecursive* AutoStatRecursive::activeStat = nullptr;
 
 void Stats::threadMain()

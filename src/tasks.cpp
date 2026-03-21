@@ -108,7 +108,7 @@ void Dispatcher::threadMain()
 			}
 
 #ifdef STATS_ENABLED
-			if (g_stats.isEnabled()) {
+			if (g_stats.isEnabled() && task->trackInStats) {
 				task->executionTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
 				                          std::chrono::high_resolution_clock::now() - time_point)
 				                          .count();
@@ -122,6 +122,19 @@ void Dispatcher::threadMain()
 		}
 		tmpTaskList.clear();
 	}
+
+    for (Task* task : tmpTaskList) {
+        delete task;
+    }
+    tmpTaskList.clear();
+
+    {
+        std::lock_guard<std::mutex> lockGuard(taskLock);
+        for (Task* task : taskList) {
+            delete task;
+        }
+        taskList.clear();
+    }
 }
 
 void Dispatcher::addTask(Task* task)
@@ -147,6 +160,8 @@ void Dispatcher::addTask(Task* task)
 void Dispatcher::shutdown()
 {
 	Task* task = createTaskWithStats([this]() { setState(THREAD_STATE_TERMINATED); }, "Dispatcher::shutdown", "");
+
+	task->trackInStats = false; // sentinel must always be freed by threadMain
 
 	{
 		std::lock_guard<std::mutex> lockGuard(taskLock);

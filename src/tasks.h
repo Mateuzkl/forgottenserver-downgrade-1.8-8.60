@@ -49,6 +49,8 @@ public:
 	const std::string extraDescription;
 	uint64_t executionTime = 0;
 
+	bool trackInStats = true;
+
 protected:
 	std::chrono::steady_clock::time_point expiration = SYSTEM_TIME_ZERO;
 

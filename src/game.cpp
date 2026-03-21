@@ -125,7 +125,11 @@ void Game::setGameState(GameState_t newState)
 			saveMotdNum();
 			saveGameState();
 
-			g_dispatcher.addTask([this]() { shutdown(); });
+			{
+				Task* shutdownTask = createTaskWithStats([this]() { shutdown(); }, "Game::shutdown", "setGameState");
+				shutdownTask->trackInStats = false;
+				g_dispatcher.addTask(shutdownTask);
+			}
 
 			g_scheduler.stop();
 			g_databaseTasks.stop();
@@ -4950,7 +4954,15 @@ void Game::shutdown()
 	map.spawns.clear();
 	raids.clear();
 
-	cleanup();
+	for (auto& checkCreatureList : checkCreatureLists) {
+		for (Creature* creature : checkCreatureList) {
+			creature->inCheckCreaturesVector = false;
+			creature->decrementReferenceCounter();
+		}
+		checkCreatureList.clear();
+	}
+
+	g_luaEnvironment.shutdown();
 
 	g_scheduler.shutdown();
 	g_databaseTasks.shutdown();
