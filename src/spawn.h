@@ -64,6 +64,9 @@ private:
 	uint32_t interval = 60000;
 	uint32_t checkSpawnEvent = 0;
 
+	// Without this, lambdas capturing `this` fire on freed memory.
+	std::vector<uint32_t> pendingSpawnEvents;
+
 	static bool findPlayer(const Position& pos);
 	bool spawnMonster(uint32_t spawnId, const spawnBlock_t& sb, bool startup = false);
 	bool spawnMonster(uint32_t spawnId, MonsterType* mType, const Position& pos, Direction dir, bool startup = false);
