@@ -232,6 +232,11 @@ void Spawns::clear()
 	}
 	spawnList.clear();
 
+	for (Npc* npc : npcList) {
+		delete npc;
+	}
+	npcList.clear();
+
 	loaded = false;
 	started = false;
 	filename.clear();
