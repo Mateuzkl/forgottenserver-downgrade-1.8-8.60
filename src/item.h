@@ -9,6 +9,7 @@
 #include "luascript.h"
 #include "thing.h"
 #include "tools.h"
+#include "imbuement.h"
 
 class BedItem;
 class Container;
@@ -94,6 +95,8 @@ enum AttrTypes_t
 	ATTR_REWARDID = 41,
 	ATTR_REFLECT = 42,
 	ATTR_BOOST = 43,
+	ATTR_IMBUESLOTS = 44,
+	ATTR_IMBUEMENTS = 45
 };
 
 enum Attr_ReadValue
@@ -727,6 +730,10 @@ public:
 		return items[id].decayTimeMax;
 	}
 
+	bool isEquipped() const;
+
+	void decayImbuements(bool infight);
+
 	static std::string getNameDescription(const ItemType& it, const Item* item = nullptr, int32_t subType = -1,
 	                                      bool addArticle = true);
 	static std::string getWeightDescription(const ItemType& it, uint32_t weight, uint32_t count = 1);
@@ -945,6 +952,19 @@ public:
 	const Tile* getTile() const override;
 	bool isRemoved() const override { return !parent || parent->isRemoved(); }
 
+	uint16_t getImbuementSlots() const;
+	uint16_t getFreeImbuementSlots() const;
+	bool canImbue() const;
+	bool addImbuementSlots(const uint16_t amount);
+	bool removeImbuementSlots(const uint16_t amount, const bool destroyImbues = false);
+	bool hasImbuementType(const ImbuementType imbuetype) const;
+	bool hasImbuement(const std::shared_ptr<Imbuement>& imbuement) const;
+	bool hasImbuements() const;
+	bool canApplyImbuement(uint16_t categoryId, uint8_t tier) const;
+	bool addImbuement(std::shared_ptr<Imbuement> imbuement, bool created = true);
+	bool removeImbuement(std::shared_ptr<Imbuement> imbuement, bool decayed = false);
+	std::vector<std::shared_ptr<Imbuement>>& getImbuements();
+
 protected:
 	Cylinder* parent = nullptr;
 
@@ -954,6 +974,9 @@ private:
 	std::string getWeightDescription(uint32_t weight) const;
 
 	std::unique_ptr<ItemAttributes> attributes;
+
+	uint16_t imbuementSlots = 0;
+	std::vector<std::shared_ptr<Imbuement>> imbuements;
 
 	uint32_t referenceCounter = 0;
 

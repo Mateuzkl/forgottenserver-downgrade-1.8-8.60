@@ -9,6 +9,7 @@
 #include "databasemanager.h"
 #include "databasetasks.h"
 #include "game.h"
+#include "imbuement.h"
 #include "logger.h"
 #include "luascript.h"
 #include "protocoladmin.h"
@@ -174,6 +175,12 @@ void mainLoader(ServiceManager* services)
 
 	if (!Item::items.loadFromXml()) {
 		startupErrorMessage("Unable to load items (XML)!");
+		return;
+	}
+
+	LOG_INFO(">> Loading imbuements");
+	if (!Imbuements::getInstance().loadFromXml()) {
+		startupErrorMessage("Unable to load imbuements!");
 		return;
 	}
 

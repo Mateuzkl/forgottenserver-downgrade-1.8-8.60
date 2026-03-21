@@ -64,6 +64,9 @@ ec.onRotateItem = {}
 -- Monster
 ec.onDropLoot = {}
 ec.onSpawn = {}
+-- Item
+ec.onImbue = {}
+ec.onRemoveImbue = {}
 
 local EventMeta = {
 	__newindex = function(self, key, callback)

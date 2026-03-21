@@ -932,4 +932,17 @@ void LuaScriptInterface::registerItem()
 	registerMethod("Item", "isMagicField", luaItemIsMagicField);
 	registerMethod("Item", "getMagicField", luaItemGetMagicField);
 	registerMethod("Item", "onStepInField", luaItemOnStepInField);
+
+	registerMethod("Item", "getImbuementSlots", LuaScriptInterface::luaItemGetImbuementSlots);
+	registerMethod("Item", "getFreeImbuementSlots", LuaScriptInterface::luaItemGetFreeImbuementSlots);
+	registerMethod("Item", "canImbue", LuaScriptInterface::luaItemCanImbue);
+	registerMethod("Item", "addImbuementSlots", LuaScriptInterface::luaItemAddImbuementSlots);
+	registerMethod("Item", "removeImbuementSlots", LuaScriptInterface::luaItemRemoveImbuementSlots);
+	registerMethod("Item", "hasImbuementType", LuaScriptInterface::luaItemHasImbuementType);
+	registerMethod("Item", "hasImbuement", LuaScriptInterface::luaItemHasImbuement);
+	registerMethod("Item", "hasImbuements", LuaScriptInterface::luaItemHasImbuements);
+	registerMethod("Item", "canApplyImbuement", LuaScriptInterface::luaItemCanApplyImbuement);
+	registerMethod("Item", "addImbuement", LuaScriptInterface::luaItemAddImbuement);
+	registerMethod("Item", "removeImbuement", LuaScriptInterface::luaItemRemoveImbuement);
+	registerMethod("Item", "getImbuements", LuaScriptInterface::luaItemGetImbuements);
 }

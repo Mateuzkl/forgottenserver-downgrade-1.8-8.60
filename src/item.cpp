@@ -7,18 +7,21 @@
 
 #include "actions.h"
 #include "bed.h"
+#include "scheduler.h"
 #include "container.h"
 #include "game.h"
 #include "house.h"
 #include "mailbox.h"
 #include "rewardchest.h"
 #include "spells.h"
+#include "events.h"
 #include "teleport.h"
 #include "trashholder.h"
 
 extern Game g_game;
 extern Spells* g_spells;
 extern Vocations g_vocations;
+extern Events* g_events;
 
 Items Item::items;
 
@@ -161,6 +164,10 @@ Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
 		} else {
 			setCharges(static_cast<uint16_t>(it.charges));
 		}
+	}
+
+	if (it.imbuementSlot != 0) {
+		addImbuementSlots(it.imbuementSlot);
 	}
 
 	setDefaultDuration();
@@ -541,6 +548,16 @@ Attr_ReadValue Item::readAttr(AttrTypes_t attr, PropStream& propStream)
 			break;
 		}
 
+		case ATTR_IMBUESLOTS: {
+			uint32_t slots;
+			if (!propStream.read<uint32_t>(slots)) {
+				return ATTR_READ_ERROR;
+			}
+
+			imbuementSlots = slots;
+			break;
+		}
+
 		case ATTR_DEFENSE: {
 			int32_t defense;
 			if (!propStream.read<int32_t>(defense)) {
@@ -637,6 +654,23 @@ Attr_ReadValue Item::readAttr(AttrTypes_t attr, PropStream& propStream)
 			}
 
 			setIntAttr(ITEM_ATTRIBUTE_TIER, tier);
+			break;
+		}
+
+		case ATTR_IMBUEMENTS: {
+			uint16_t size;
+			if (!propStream.read<uint16_t>(size)) {
+				return ATTR_READ_ERROR;
+			}
+
+			for (uint16_t i = 0; i < size; ++i) {
+				std::shared_ptr<Imbuement> imb = std::make_shared<Imbuement>();
+				if (!imb->unserialize(propStream)) {
+					return ATTR_READ_ERROR;
+				}
+
+				addImbuement(imb, false);
+			}
 			break;
 		}
 
@@ -881,6 +915,19 @@ void Item::serializeAttr(PropWriteStream& propWriteStream) const
 	if (hasAttribute(ITEM_ATTRIBUTE_DEFENSE)) {
 		propWriteStream.write<uint8_t>(ATTR_DEFENSE);
 		propWriteStream.write<int32_t>(getIntAttr(ITEM_ATTRIBUTE_DEFENSE));
+	}
+
+	if (getImbuementSlots() > 0) {
+		propWriteStream.write<uint8_t>(ATTR_IMBUESLOTS);
+		propWriteStream.write<uint32_t>(imbuementSlots);
+	}
+
+	if (!imbuements.empty()) {
+		propWriteStream.write<uint8_t>(ATTR_IMBUEMENTS);
+		propWriteStream.write<uint16_t>(static_cast<uint16_t>(imbuements.size()));
+		for (const auto& imb : imbuements) {
+			imb->serialize(propWriteStream);
+		}
 	}
 
 	if (hasAttribute(ITEM_ATTRIBUTE_EXTRADEFENSE)) {
@@ -1275,6 +1322,218 @@ const bool& ItemAttributes::CustomAttribute::get<bool>()
 	}
 
 	return emptyBool;
+}
+
+bool Item::isEquipped() const {
+	const Player* player = getHoldingPlayer();
+	if (player) {
+		for (uint32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; slot++) {
+			if (player->getInventoryItem(slot) == this) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+uint16_t Item::getImbuementSlots() const
+{
+	// item:getImbuementSlots() -- returns how many total slots
+	return imbuementSlots;
+}
+
+uint16_t Item::getFreeImbuementSlots() const
+{
+	const auto used = static_cast<uint16_t>(imbuements.size());
+	if (used >= imbuementSlots) {
+		return 0;
+	}
+	return imbuementSlots - used;
+}
+
+bool Item::canImbue() const
+{
+	// item:canImbue() -- returns true if item has slots that are free
+	return (imbuementSlots > 0 && imbuementSlots > imbuements.size()) ? true : false;
+}
+
+bool Item::addImbuementSlots(const uint16_t amount)
+{
+	// item:addImbuementSlots(amount) -- tries to add imbuement slot, returns true if successful
+	constexpr uint16_t limit = std::numeric_limits<uint16_t>::max(); // uint16_t size limit
+	const uint16_t currentSlots = static_cast<uint16_t>(imbuements.size());
+
+	if ((currentSlots + amount) >= limit)
+	{
+		std::cout << "Warning in call to Item:addImbuementSlots(). Total added would be more than supported memory limit!" << std::endl;
+		return false;
+	}
+
+	imbuementSlots += amount;
+	return true;
+}
+
+bool Item::removeImbuementSlots(const uint16_t amount, const bool destroyImbues)
+{
+	if (amount == 0 || amount > imbuementSlots) {
+		return false;
+	}
+
+	const uint16_t newSlotCount = imbuementSlots - amount;
+	const auto activeCount = static_cast<uint16_t>(imbuements.size());
+
+	if (activeCount > newSlotCount) {
+		if (!destroyImbues) {
+			// Not enough free slots, and we can't destroy
+			return false;
+		}
+		// Destroy excess imbuements from the end
+		const uint16_t excess = activeCount - newSlotCount;
+		for (uint16_t i = 0; i < excess; ++i) {
+			if (!imbuements.empty()) {
+				removeImbuement(imbuements.back(), false);
+			}
+		}
+	}
+
+	imbuementSlots = newSlotCount;
+	return true;
+}
+
+bool Item::hasImbuementType(const ImbuementType imbuetype) const
+{
+	// item:hasImbuementType(type)
+	return std::any_of(imbuements.begin(), imbuements.end(), [imbuetype](std::shared_ptr<Imbuement> elem) {
+		return elem->imbuetype == imbuetype;
+		});
+}
+
+bool Item::hasImbuement(const std::shared_ptr<Imbuement>& imbuement) const
+{
+	// item:hasImbuement(imbuement)
+	return std::any_of(imbuements.begin(), imbuements.end(), [&imbuement](const std::shared_ptr<Imbuement>& elem) {
+		return elem == imbuement;
+		});
+}
+
+
+bool Item::hasImbuements() const
+{
+	// item:hasImbuements() -- returns true if item has any imbuements
+	return imbuements.size() > 0;
+}
+
+// Maps category ID (from imbuements.xml) to the key string used in items.xml
+static const char* getCategoryKey(uint16_t categoryId) {
+	switch (categoryId) {
+		case 0:  return "elemental damage";
+		case 1:  return "life leech";
+		case 2:  return "mana leech";
+		case 3:  return "critical hit";
+		case 4:  return "elemental protection death";
+		case 5:  return "elemental protection earth";
+		case 6:  return "elemental protection fire";
+		case 7:  return "elemental protection ice";
+		case 8:  return "elemental protection energy";
+		case 9:  return "elemental protection holy";
+		case 10: return "increase speed";
+		case 11: return "skillboost axe";
+		case 12: return "skillboost sword";
+		case 13: return "skillboost club";
+		case 14: return "skillboost shielding";
+		case 15: return "skillboost distance";
+		case 16: return "skillboost magic level";
+		case 17: return "increase capacity";
+		case 18: return "skillboost fist";
+		case 19: return "paralysis removal";
+		default: return nullptr;
+	}
+}
+
+bool Item::canApplyImbuement(uint16_t categoryId, uint8_t tier) const
+{
+	const ItemType& it = items[id];
+	if (it.imbuementAllowedTypes.empty()) {
+		return false;
+	}
+
+	const char* key = getCategoryKey(categoryId);
+	if (!key) {
+		return false;
+	}
+
+	auto found = it.imbuementAllowedTypes.find(key);
+	if (found == it.imbuementAllowedTypes.end()) {
+		return false;
+	}
+
+	return tier <= found->second;
+}
+
+bool Item::addImbuement(std::shared_ptr<Imbuement>  imbuement, bool created)
+{
+	// item:addImbuement(imbuement) -- returns true if it successfully adds the imbuement
+	if (canImbue() && getFreeImbuementSlots() > 0 && g_events->eventItemOnImbue(this, imbuement, created))
+	{
+		imbuements.push_back(imbuement);
+		for (auto imbue : imbuements) {
+			if (imbue == imbuement) {
+				Player* player = const_cast<Player*>(getHoldingPlayer());
+				if (player && isEquipped()) {
+					player->addImbuementEffect(imbue);
+				}
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
+bool Item::removeImbuement(std::shared_ptr<Imbuement> imbuement, bool decayed)
+{
+	// item:removeImbuement(imbuement) -- returns true if it found and removed the imbuement
+	for (auto imbue : imbuements) {
+		if (imbue == imbuement) {
+			Player* player = const_cast<Player*>(getHoldingPlayer());
+			if (player && isEquipped()) {
+				player->removeImbuementEffect(imbue);
+			}
+			g_events->eventItemOnRemoveImbue(this, imbuement->imbuetype, decayed);
+			imbuements.erase(std::remove(imbuements.begin(), imbuements.end(), imbue), imbuements.end());
+			return true;
+		}
+	}
+	return false;
+}
+
+std::vector<std::shared_ptr<Imbuement>>& Item::getImbuements() {
+	return imbuements;
+}
+
+void Item::decayImbuements(bool infight) {
+	std::vector<std::shared_ptr<Imbuement>> expired;
+	for (auto& imbue : imbuements) {
+		if (imbue->isEquipDecay()) {
+			if (imbue->duration > 0) {
+				imbue->duration -= 1;
+			}
+			if (imbue->duration == 0) {
+				expired.push_back(imbue);
+				continue;
+			}
+		}
+		if (imbue->isInfightDecay() && infight) {
+			if (imbue->duration > 0) {
+				imbue->duration -= 1;
+			}
+			if (imbue->duration == 0) {
+				expired.push_back(imbue);
+			}
+		}
+	}
+	for (auto& imbue : expired) {
+		removeImbuement(imbue, true);
+	}
 }
 
 void Item::stopDecaying() { g_game.stopDecay(this); }

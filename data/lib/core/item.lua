@@ -211,6 +211,45 @@ do
 		[CONDITION_CURSED] = "curse immunity"
 	}
 
+	-- ====================== IMBUEMENT HELPERS ======================
+	-- Maps ImbuementType -> definition name from imbuements.xml
+	local IMBUEMENT_DEF_NAMES = {
+		[IMBUEMENT_TYPE_SWORD_SKILL]          = "Slash",
+		[IMBUEMENT_TYPE_AXE_SKILL]            = "Chop",
+		[IMBUEMENT_TYPE_CLUB_SKILL]           = "Bash",
+		[IMBUEMENT_TYPE_DISTANCE_SKILL]       = "Precision",
+		[IMBUEMENT_TYPE_SHIELD_SKILL]         = "Blockade",
+		[IMBUEMENT_TYPE_FIST_SKILL]           = "Punch",
+		[IMBUEMENT_TYPE_FISHING_SKILL]        = "Fish",
+		[IMBUEMENT_TYPE_MAGIC_LEVEL]          = "Epiphany",
+		[IMBUEMENT_TYPE_LIFE_LEECH]           = "Vampirism",
+		[IMBUEMENT_TYPE_MANA_LEECH]           = "Void",
+		[IMBUEMENT_TYPE_CRITICAL_CHANCE]      = "Strike",
+		[IMBUEMENT_TYPE_CRITICAL_AMOUNT]      = "Strike",
+		[IMBUEMENT_TYPE_FIRE_DAMAGE]          = "Scorch",
+		[IMBUEMENT_TYPE_EARTH_DAMAGE]         = "Venom",
+		[IMBUEMENT_TYPE_ICE_DAMAGE]           = "Frost",
+		[IMBUEMENT_TYPE_ENERGY_DAMAGE]        = "Electrify",
+		[IMBUEMENT_TYPE_DEATH_DAMAGE]         = "Reap",
+		[IMBUEMENT_TYPE_HOLY_DAMAGE]          = "Divine",
+		[IMBUEMENT_TYPE_FIRE_RESIST]          = "Dragon Hide",
+		[IMBUEMENT_TYPE_EARTH_RESIST]         = "Snake Skin",
+		[IMBUEMENT_TYPE_ICE_RESIST]           = "Quara Scale",
+		[IMBUEMENT_TYPE_ENERGY_RESIST]        = "Cloud Fabric",
+		[IMBUEMENT_TYPE_DEATH_RESIST]         = "Lich Shroud",
+		[IMBUEMENT_TYPE_HOLY_RESIST]          = "Demon Presence",
+		[IMBUEMENT_TYPE_PARALYSIS_DEFLECTION] = "Vibrancy",
+		[IMBUEMENT_TYPE_SPEED_BOOST]          = "Swiftness",
+		[IMBUEMENT_TYPE_CAPACITY_BOOST]       = "Featherweight",
+	}
+
+	-- Tier names: baseId -> display name
+	local IMBUEMENT_BASE_NAMES = {
+		[1] = "Basic",
+		[2] = "Intricate",
+		[3] = "Powerful",
+	}
+
 	-- first argument: Item, itemType or item id
 	local function internalItemGetDescription(item, lookDistance, subType, addArticle)
 		-- optional, but true by default
@@ -670,15 +709,29 @@ do
 		-- dot after primary attributes info
 		response[#response + 1] = "."
 
-		-- imbuements
+		-- imbuements (CrystalServer format)
 		do
-			local imbuementSlots = itemType:getImbuementSlot()
-			if imbuementSlots > 0 then
-				local slots = {}
-				for i = 1, imbuementSlots do
-					slots[#slots + 1] = "Empty Slot"
+			local totalSlots = isVirtual and itemType:getImbuementSlot() or item:getImbuementSlots()
+			if totalSlots > 0 then
+				local activeImbuements = not isVirtual and item:getImbuements() or nil
+				local activeCount = activeImbuements and #activeImbuements or 0
+				local parts = {}
+
+				for i = 1, totalSlots do
+					local imbue = activeImbuements and activeImbuements[i]
+					if imbue and imbue.getType then
+						local baseName = IMBUEMENT_BASE_NAMES[imbue:getBaseId()] or ""
+						local defName = IMBUEMENT_DEF_NAMES[imbue:getType()] or "Unknown"
+						local dur = imbue:getDuration()
+						local hours = math.floor(dur / 3600)
+						local minutes = math.floor((dur % 3600) / 60)
+						parts[#parts + 1] = fmt("%s %s %02d:%02dh", baseName, defName, hours, minutes)
+					else
+						parts[#parts + 1] = "Empty Slot"
+					end
 				end
-				response[#response + 1] = fmt("\nImbuements: (%s).", concat(slots, ", "))
+
+				response[#response + 1] = fmt("\nImbuements: (%s).", concat(parts, ", "))
 			end
 		end
 

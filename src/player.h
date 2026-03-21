@@ -431,6 +431,8 @@ public:
 	uint32_t getMaxMana() const { return std::max<int32_t>(0, manaMax + varStats[STAT_MAXMANAPOINTS]); }
 
 	Item* getInventoryItem(slots_t slot) const;
+	Item* getInventoryItem(uint32_t slot) const;
+	bool isInventorySlot(slots_t slot) const;
 
 	bool isItemAbilityEnabled(slots_t slot) const { return inventoryAbilities[slot]; }
 	void setItemAbility(slots_t slot, bool enabled) { inventoryAbilities[slot] = enabled; }
@@ -521,6 +523,16 @@ public:
 	bool closeShopWindow(bool sendCloseShopWindow = true);
 	bool updateSaleShopList(const Item* item);
 	bool hasShopItemForSale(uint32_t itemId, uint8_t subType) const;
+
+	bool isWearingImbuedItem() const {
+			for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+				Item* item = getInventoryItem(static_cast<slots_t>(slot));
+				if (item && item->hasImbuements()) {
+					return true;
+				}
+			}
+			return false;
+		}
 
 	void setChaseMode(bool mode);
 	void setFightMode(fightMode_t mode) { fightMode = mode; }
@@ -1120,6 +1132,10 @@ public:
 	void lootCorpse(Container* container);
 
 	void updateRegeneration();
+	void addItemImbuements(Item* item);
+	void removeItemImbuements(Item* item);
+	void removeImbuementEffect(std::shared_ptr<Imbuement> imbue);
+	void addImbuementEffect(std::shared_ptr<Imbuement> imbue);
 
 	const std::map<uint8_t, OpenContainer>& getOpenContainers() const { return openContainers; }
 

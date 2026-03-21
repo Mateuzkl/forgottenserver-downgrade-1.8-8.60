@@ -30,6 +30,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/housetile.cpp
 	${CMAKE_CURRENT_LIST_DIR}/inbox.cpp
 	${CMAKE_CURRENT_LIST_DIR}/iologindata.cpp
+	${CMAKE_CURRENT_LIST_DIR}/imbuement.cpp
 	${CMAKE_CURRENT_LIST_DIR}/iomap.cpp
 	${CMAKE_CURRENT_LIST_DIR}/iomapserialize.cpp
 	${CMAKE_CURRENT_LIST_DIR}/item.cpp
@@ -46,6 +47,7 @@ set(tfs_SRC
     ${CMAKE_CURRENT_LIST_DIR}/luaguild.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luahouse.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luaitem.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/luaimbuements.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luaitemtype.cpp
     ${CMAKE_CURRENT_LIST_DIR}/lualoot.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luamodalwindow.cpp
@@ -152,6 +154,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/house.h
 	${CMAKE_CURRENT_LIST_DIR}/housetile.h
 	${CMAKE_CURRENT_LIST_DIR}/iologindata.h
+	${CMAKE_CURRENT_LIST_DIR}/imbuement.h
 	${CMAKE_CURRENT_LIST_DIR}/iomap.h
 	${CMAKE_CURRENT_LIST_DIR}/iomapserialize.h
 	${CMAKE_CURRENT_LIST_DIR}/item.h

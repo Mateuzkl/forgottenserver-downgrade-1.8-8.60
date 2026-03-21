@@ -2262,6 +2262,42 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(SPELLGROUP_SUPPORT);
 	registerEnum(SPELLGROUP_SPECIAL);
 
+	// Imbuements
+	registerEnum(IMBUEMENT_TYPE_NONE);
+	registerEnum(IMBUEMENT_TYPE_FIRE_DAMAGE);
+	registerEnum(IMBUEMENT_TYPE_EARTH_DAMAGE);
+	registerEnum(IMBUEMENT_TYPE_ICE_DAMAGE);
+	registerEnum(IMBUEMENT_TYPE_ENERGY_DAMAGE);
+	registerEnum(IMBUEMENT_TYPE_DEATH_DAMAGE);
+	registerEnum(IMBUEMENT_TYPE_HOLY_DAMAGE);
+	registerEnum(IMBUEMENT_TYPE_LIFE_LEECH);
+	registerEnum(IMBUEMENT_TYPE_MANA_LEECH);
+	registerEnum(IMBUEMENT_TYPE_CRITICAL_CHANCE);
+	registerEnum(IMBUEMENT_TYPE_CRITICAL_AMOUNT);
+	registerEnum(IMBUEMENT_TYPE_FIRE_RESIST);
+	registerEnum(IMBUEMENT_TYPE_EARTH_RESIST);
+	registerEnum(IMBUEMENT_TYPE_ICE_RESIST);
+	registerEnum(IMBUEMENT_TYPE_ENERGY_RESIST);
+	registerEnum(IMBUEMENT_TYPE_HOLY_RESIST);
+	registerEnum(IMBUEMENT_TYPE_DEATH_RESIST);
+	registerEnum(IMBUEMENT_TYPE_PARALYSIS_DEFLECTION);
+	registerEnum(IMBUEMENT_TYPE_SPEED_BOOST);
+	registerEnum(IMBUEMENT_TYPE_CAPACITY_BOOST);
+	registerEnum(IMBUEMENT_TYPE_FIST_SKILL);
+	registerEnum(IMBUEMENT_TYPE_AXE_SKILL);
+	registerEnum(IMBUEMENT_TYPE_SWORD_SKILL);
+	registerEnum(IMBUEMENT_TYPE_CLUB_SKILL);
+	registerEnum(IMBUEMENT_TYPE_DISTANCE_SKILL);
+	registerEnum(IMBUEMENT_TYPE_FISHING_SKILL);
+	registerEnum(IMBUEMENT_TYPE_SHIELD_SKILL);
+	registerEnum(IMBUEMENT_TYPE_MAGIC_LEVEL);
+	registerEnum(IMBUEMENT_TYPE_LAST);
+
+	registerEnum(IMBUEMENT_DECAY_NONE);
+	registerEnum(IMBUEMENT_DECAY_EQUIPPED);
+	registerEnum(IMBUEMENT_DECAY_INFIGHT);
+	registerEnum(IMBUEMENT_DECAY_LAST);
+
 	// _G
 	registerGlobalVariable("INDEX_WHEREEVER", INDEX_WHEREEVER);
 	registerGlobalBoolean("VIRTUAL_PARENT", true);
@@ -2387,6 +2423,7 @@ void LuaScriptInterface::registerFunctions()
 	registerTile();
 	registerNetworkMessage();
 	registerItem();
+	registerImbuement();
 	registerContainer();
 	registerTeleport();
 	registerCreature();

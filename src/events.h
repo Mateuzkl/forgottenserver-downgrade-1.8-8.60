@@ -8,6 +8,7 @@
 #include "creature.h"
 #include "luascript.h"
 #include "networkmessage.h"
+#include "imbuement.h"
 
 class ItemType;
 class Party;
@@ -70,6 +71,10 @@ class Events
 		// Monster
 		int32_t monsterOnDropLoot = -1;
 		int32_t monsterOnSpawn = -1;
+
+		// Item
+		int32_t itemOnImbue = -1;
+		int32_t itemOnRemoveImbue = -1;
 	};
 
 public:
@@ -126,6 +131,10 @@ public:
 	// Monster
 	void eventMonsterOnDropLoot(Monster* monster, Container* corpse);
 	bool eventMonsterOnSpawn(Monster* monster, const Position& position, bool startup, bool artificial);
+
+	// Item
+	bool eventItemOnImbue(Item* item, std::shared_ptr<Imbuement> imbuement, bool created = true);
+	void eventItemOnRemoveImbue(Item* item, ImbuementType imbueType, bool decayed = false);
 
 	int32_t getScriptId(EventInfoId eventInfoId)
 	{

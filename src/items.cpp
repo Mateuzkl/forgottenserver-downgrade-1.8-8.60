@@ -208,6 +208,7 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"allowdistread", ITEM_PARSE_ALLOWDISTREAD},
     {"storeitem", ITEM_PARSE_STOREITEM},
     {"worth", ITEM_PARSE_WORTH},
+	{"imbuementslot", ITEM_PARSE_IMBUEMENTSLOT},
     {"stacksize", ITEM_PARSE_STACKSIZE},
     {"supply", ITEM_PARSE_SUPPLY},
     {"experienceratebase", ITEM_PARSE_EXPERIENCERATE_BASE},
@@ -217,7 +218,6 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"reduceskillloss", ITEM_PARSE_REDUCESKILLLOSS},
     {"elementalbond", ITEM_PARSE_ELEMENTALBOND},
     {"script", ITEM_PARSE_SCRIPT},
-    {"imbuementslot", ITEM_PARSE_IMBUEMENTSLOT},
 };
 
 const std::unordered_map<std::string, ItemTypes_t> ItemTypesMap = {{"key", ITEM_TYPE_KEY},
@@ -1947,6 +1947,21 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 
 				case ITEM_PARSE_IMBUEMENTSLOT: {
 					it.imbuementSlot = pugi::cast<uint16_t>(valueAttribute.value());
+					for (auto subAttributeNode : attributeNode.children()) {
+						pugi::xml_attribute subKeyAttribute = subAttributeNode.attribute("key");
+						if (!subKeyAttribute) {
+							continue;
+						}
+						pugi::xml_attribute subValueAttribute = subAttributeNode.attribute("value");
+						if (!subValueAttribute) {
+							continue;
+						}
+						std::string subKey = boost::algorithm::to_lower_copy<std::string>(subKeyAttribute.as_string());
+						uint8_t maxTier = pugi::cast<uint16_t>(subValueAttribute.value()) & 0xFF;
+						if (maxTier > 0) {
+							it.imbuementAllowedTypes[subKey] = maxTier;
+						}
+					}
 					break;
 				}
 

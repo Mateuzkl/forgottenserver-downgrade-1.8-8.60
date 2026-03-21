@@ -357,6 +357,7 @@ protected:
 	void registerTile();
 	void registerNetworkMessage();
 	void registerItem();
+	void registerImbuement();
 	void registerContainer();
 	void registerTeleport();
 	void registerCreature();
@@ -496,6 +497,41 @@ private:
 	static int luaPlayerSetReset(lua_State* L); // reset system
 	static int luaPlayerReloadWarList(lua_State* L);
 	static int luaPlayerSendAutoLootWindow(lua_State* L);
+
+	// Item Imbuement
+	static int luaItemGetImbuementSlots(lua_State* L);
+	static int luaItemGetFreeImbuementSlots(lua_State* L);
+	static int luaItemCanImbue(lua_State* L);
+	static int luaItemAddImbuementSlots(lua_State* L);
+	static int luaItemRemoveImbuementSlots(lua_State* L);
+	static int luaItemHasImbuementType(lua_State* L);
+	static int luaItemHasImbuement(lua_State* L);
+	static int luaItemHasImbuements(lua_State* L);
+	static int luaItemAddImbuement(lua_State* L);
+	static int luaItemRemoveImbuement(lua_State* L);
+	static int luaItemGetImbuements(lua_State* L);
+	static int luaItemCanApplyImbuement(lua_State* L);
+
+	// Imbuement
+	static int luaImbuementCreate(lua_State* L);
+	static int luaImbuementGetType(lua_State* L);
+	static int luaImbuementIsSkill(lua_State* L);
+	static int luaImbuementIsSpecialSkill(lua_State* L);
+	static int luaImbuementIsStat(lua_State* L);
+	static int luaImbuementIsDamage(lua_State* L);
+	static int luaImbuementIsResist(lua_State* L);
+	static int luaImbuementGetValue(lua_State* L);
+	static int luaImbuementSetValue(lua_State* L);
+	static int luaImbuementGetDuration(lua_State* L);
+	static int luaImbuementSetDuration(lua_State* L);
+	static int luaImbuementSetEquipDecay(lua_State* L);
+	static int luaImbuementSetInfightDecay(lua_State* L);
+	static int luaImbuementIsEquipDecay(lua_State* L);
+	static int luaImbuementIsInfightDecay(lua_State* L);
+	static int luaImbuementGetBaseId(lua_State* L);
+	static int luaGameGetImbuementByScroll(lua_State* L);
+	static int luaGameGetImbuementBases(lua_State* L);
+	static int luaGameGetImbuementCategories(lua_State* L);
 	static int luaPlayerGetAutoLootItemCount(lua_State* L);
 	static int luaPlayerSetAutoLootEnabled(lua_State* L);
 	static int luaPlayerIsAutoLootEnabled(lua_State* L);

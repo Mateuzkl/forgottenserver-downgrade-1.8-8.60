@@ -201,6 +201,7 @@
     <ClCompile Include="..\src\housetile.cpp" />
     <ClCompile Include="..\src\inbox.cpp" />
     <ClCompile Include="..\src\iologindata.cpp" />
+    <ClCompile Include="..\src\imbuement.cpp" />
     <ClCompile Include="..\src\iomap.cpp" />
     <ClCompile Include="..\src\iomapserialize.cpp" />
     <ClCompile Include="..\src\item.cpp" />
@@ -337,6 +338,7 @@
     <ClInclude Include="..\src\itemloader.h" />
     <ClInclude Include="..\src\logger.h" />
     <ClInclude Include="..\src\items.h" />
+    <ClCompile Include="..\src\imbuement.h" />
     <ClInclude Include="..\src\lockfree.h" />
     <ClInclude Include="..\src\luascript.h" />
     <ClInclude Include="..\src\mailbox.h" />
