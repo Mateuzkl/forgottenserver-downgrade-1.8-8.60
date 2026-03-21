@@ -99,14 +99,17 @@ void ConnectionManager::trackIPConnection(uint32_t ip)
 
 void Connection::close(bool force)
 {
-	// any thread
-	ConnectionManager::getInstance().releaseConnection(shared_from_this());
+	// Lock first — prevents double-close race condition during concurrent shutdown.
+	// Previously, releaseConnection was called outside the lock, allowing two threads
+	// to both pass the 'closed' check and corrupt ConnectionManager state.
 
 	std::lock_guard<std::recursive_mutex> lockClass(connectionLock);
 	if (closed) {
 		return;
 	}
 	closed = true;
+
+	ConnectionManager::getInstance().releaseConnection(shared_from_this());
 
 	if (protocol) {
 		g_dispatcher.addTask([protocol = protocol]() { protocol->release(); });

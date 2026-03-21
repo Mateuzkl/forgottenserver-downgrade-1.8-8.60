@@ -102,7 +102,13 @@ bool acceptConnection(const uint32_t clientIP)
 
 ServiceManager::~ServiceManager() { stop(); }
 
-void ServiceManager::die() { io_context.stop(); }
+void ServiceManager::die()
+{
+	// Close all connections before stopping the io_context.
+	// Without this, Connection destructors run after io_context is destroyed,
+	ConnectionManager::getInstance().closeAll();
+	io_context.stop();
+}
 
 void ServiceManager::run()
 {
