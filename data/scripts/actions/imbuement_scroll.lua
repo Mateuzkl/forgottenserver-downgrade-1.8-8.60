@@ -42,6 +42,12 @@ local TYPE_NAMES = {
     [IMBUEMENT_TYPE_CAPACITY_BOOST]       = "Capacity Boost",
 }
 
+local BASE_PRICES = {
+    [1] = 7500,
+    [2] = 60000,
+    [3] = 250000,
+}
+
 local function formatDuration(seconds)
     local hours = math.floor(seconds / 3600)
     local minutes = math.floor((seconds % 3600) / 60)
@@ -93,6 +99,12 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         return true
     end
 
+    local equipOwner = equipment:getAttribute(ITEM_ATTRIBUTE_OWNER)
+    if equipOwner and equipOwner ~= 0 and equipOwner ~= player:getId() then
+        player:sendTextMessage(MESSAGE_STATUS_SMALL, "This equipment does not belong to you.")
+        return true
+    end
+
     if #scrolls == 0 then
         player:sendTextMessage(MESSAGE_STATUS_SMALL, "Place imbuement scrolls on the workbench alongside the equipment.")
         return true
@@ -140,6 +152,21 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         end
     end
 
+    local totalCost = 0
+    for _, scroll in ipairs(scrolls) do
+        local price = BASE_PRICES[scroll.def.baseId] or 0
+        totalCost = totalCost + price
+    end
+
+    if totalCost > 0 then
+        if player:getMoney() < totalCost then
+            player:sendTextMessage(MESSAGE_STATUS_SMALL,
+                string.format("You need %d gold coins to apply these imbuements.", totalCost))
+            return true
+        end
+        player:removeMoney(totalCost)
+    end
+
     local applied = 0
     local appliedNames = {}
     for _, scroll in ipairs(scrolls) do
@@ -160,18 +187,21 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         scrolls[i].item:remove(1)
     end
 
+    item:remove(1)
+
     local totalImb = equipment:getImbuements()
     local totalSlots = equipment:getImbuementSlots()
     local defDuration = scrolls[1] and scrolls[1].def.duration or 72000
     player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
-        string.format("%d imbuement(s) applied: %s\nDuration: %s | Slots: %d/%d",
+        string.format("%d imbuement(s) applied: %s\nDuration: %s | Slots: %d/%d | Cost: %d gp",
             applied,
             table.concat(appliedNames, ", "),
             formatDuration(defDuration),
             totalImb and #totalImb or applied,
-            totalSlots))
+            totalSlots,
+            totalCost))
 
-    toPosition:sendMagicEffect(CONST_ME_MAGIC_GREEN)
+    toPosition:sendMagicEffect(199)
     return true
 end
 

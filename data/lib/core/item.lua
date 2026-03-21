@@ -709,7 +709,7 @@ do
 		-- dot after primary attributes info
 		response[#response + 1] = "."
 
-		-- imbuements (CrystalServer format)
+		-- imbuements
 		do
 			local totalSlots = isVirtual and itemType:getImbuementSlot() or item:getImbuementSlots()
 			if totalSlots > 0 then

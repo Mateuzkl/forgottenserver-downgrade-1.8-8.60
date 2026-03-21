@@ -83,6 +83,9 @@ function logoutMessage.onLogout(player)
     logger.info("%s%s has logged out.%s [Lvl: %d] [Voc: %s] [IP: %s]", prevColor, player:getName(), resetColor, level, vocation, ipStr)
     local playerId = player:getId()
     nextUseStaminaTime[playerId] = nil
+    if Game.getStorageValue(GlobalStorageKeys.workbenchOwner) == playerId then
+        Game.setStorageValue(GlobalStorageKeys.workbenchOwner, -1)
+    end
     return true
 end
 logoutMessage:register()
