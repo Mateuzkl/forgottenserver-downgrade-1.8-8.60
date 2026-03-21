@@ -13,22 +13,34 @@ uint32_t Scheduler::addEvent(SchedulerTask* task)
 		task->setEventId(id);
 	}
 
-	boost::asio::post(io_context, [this, task]() {
+	struct TaskGuard {
+		SchedulerTask* task;
+		bool released = false;
+		explicit TaskGuard(SchedulerTask* t) : task(t) {}
+		TaskGuard(const TaskGuard&) = delete;
+		TaskGuard& operator=(const TaskGuard&) = delete;
+		~TaskGuard() { if (!released) delete task; }
+	};
+	auto guard = std::make_shared<TaskGuard>(task);
+
+	boost::asio::post(io_context, [this, guard]() {
 		// insert the event id in the list of active events
-		auto [it, inserted] = eventIdTimerMap.emplace(task->getEventId(), boost::asio::steady_timer{io_context});
+		auto [it, inserted] = eventIdTimerMap.emplace(guard->task->getEventId(), boost::asio::steady_timer{ io_context });
 		auto& timer = it->second;
 
-		timer.expires_after(std::chrono::milliseconds(task->getDelay()));
-		timer.async_wait([this, task](const boost::system::error_code& error) {
-			eventIdTimerMap.erase(task->getEventId());
+		timer.expires_after(std::chrono::milliseconds(guard->task->getDelay()));
+		timer.async_wait([this, guard](const boost::system::error_code& error) {
+			eventIdTimerMap.erase(guard->task->getEventId());
 
 			if (error == boost::asio::error::operation_aborted || getState() == THREAD_STATE_TERMINATED) {
-				// the timer has been manually canceled(timer->cancel()) or Scheduler::shutdown has been called
-				delete task;
+				// the timer has been manually canceled(timer->cancel()) or Scheduler::shutdown has been called.
+				// guard destructor will delete the task.
 				return;
 			}
 
-			g_dispatcher.addTask(task);
+			// Transfer ownership to the dispatcher; guard must not delete.
+			guard->released = true;
+			g_dispatcher.addTask(guard->task);
 		});
 	});
 
