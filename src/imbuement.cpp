@@ -201,7 +201,7 @@ void Imbuements::resolveImbuementType(ImbuementDefinition& def)
 		else if (v == "manaleech")   { def.imbuementType = IMBUEMENT_TYPE_MANA_LEECH;   def.resolvedValue = def.bonus; }
 		else if (v == "critical") {
 			def.imbuementType = IMBUEMENT_TYPE_CRITICAL_CHANCE;
-			def.resolvedValue = def.chance; // chance field = critical chance
+			def.resolvedValue = (static_cast<uint32_t>(def.bonus) << 16) | (static_cast<uint32_t>(def.chance) & 0xFFFF);
 		}
 	}
 	else if (def.effectType == "damage") {

@@ -532,6 +532,7 @@ private:
 	static int luaGameGetImbuementByScroll(lua_State* L);
 	static int luaGameGetImbuementBases(lua_State* L);
 	static int luaGameGetImbuementCategories(lua_State* L);
+	static int luaGameGetImbuementDefinitions(lua_State* L);
 	static int luaPlayerGetAutoLootItemCount(lua_State* L);
 	static int luaPlayerSetAutoLootEnabled(lua_State* L);
 	static int luaPlayerIsAutoLootEnabled(lua_State* L);

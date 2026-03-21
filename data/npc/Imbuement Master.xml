@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<npc name="Imbuement Master" script="imbuement_master.lua" walkinterval="2000" floorchange="0">
+	<health now="100" max="100" />
+	<look type="130" head="95" body="116" legs="121" feet="115" addons="3" />
+	<parameters>
+		<parameter key="message_greet" value="Welcome, |PLAYERNAME|! I sell {imbuement} {scrolls}, the {etcher} tool, and all imbuement materials. Say {trade} to see my offers!" />
+	</parameters>
+</npc>

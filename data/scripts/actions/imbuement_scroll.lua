@@ -2,9 +2,14 @@ local ETCHER_ID = 51443
 local WORKBENCH_ID = 25334
 
 local SCROLL_IDS = {
+    -- Powerful (tier 3)
     51444, 51445, 51446, 51447, 51448, 51449, 51450, 51451,
     51452, 51453, 51454, 51455, 51456, 51457, 51458, 51459,
     51460, 51461, 51462, 51463, 51464, 51465, 51466, 51467,
+    -- Intricate (tier 2)
+    51724, 51725, 51726, 51727, 51728, 51729, 51730, 51731,
+    51732, 51733, 51734, 51735, 51736, 51737, 51738, 51739,
+    51740, 51741, 51742, 51743, 51744, 51745, 51746, 51747,
 }
 
 local VALID_SCROLLS = {}
@@ -48,10 +53,63 @@ local BASE_PRICES = {
     [3] = 250000,
 }
 
+local ALL_DEFS = Game.getImbuementDefinitions() or {}
+
 local function formatDuration(seconds)
     local hours = math.floor(seconds / 3600)
     local minutes = math.floor((seconds % 3600) / 60)
     return string.format("%dh %02dmin", hours, minutes)
+end
+
+local function findMaterialRecipes(availMap, equipment)
+    local bestByType = {}
+    for _, def in ipairs(ALL_DEFS) do
+        if #def.items > 0 and equipment:canApplyImbuement(def.categoryId, def.baseId) then
+            local satisfied = true
+            for _, req in ipairs(def.items) do
+                if (availMap[req.itemId] or 0) < req.count then
+                    satisfied = false
+                    break
+                end
+            end
+            if satisfied then
+                local itype = def.imbuementType
+                if not bestByType[itype] or def.baseId > bestByType[itype].baseId then
+                    bestByType[itype] = def
+                end
+            end
+        end
+    end
+
+    local candidates = {}
+    for _, def in pairs(bestByType) do
+        table.insert(candidates, def)
+    end
+    table.sort(candidates, function(a, b)
+        if a.baseId ~= b.baseId then return a.baseId > b.baseId end
+        return #a.items > #b.items
+    end)
+
+    local finalRecipes = {}
+    local reservedItems = {}
+    for _, def in ipairs(candidates) do
+        local canFit = true
+        for _, req in ipairs(def.items) do
+            local reserved = reservedItems[req.itemId] or 0
+            if (availMap[req.itemId] or 0) - reserved < req.count then
+                canFit = false
+                break
+            end
+        end
+        if canFit then
+            table.insert(finalRecipes, def)
+            for _, req in ipairs(def.items) do
+                reservedItems[req.itemId] = (reservedItems[req.itemId] or 0) + req.count
+            end
+        end
+    end
+
+    return finalRecipes
 end
 
 local action = Action()
@@ -67,28 +125,24 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         return true
     end
 
-    local equipment = nil
-    local scrolls = {}
     local size = container:getSize()
-
     if size == 0 then
-        player:sendTextMessage(MESSAGE_STATUS_SMALL, "The workbench is empty. Place equipment and scrolls.")
+        player:sendTextMessage(MESSAGE_STATUS_SMALL, "The workbench is empty. Place equipment and scrolls or crafting materials.")
         return true
     end
 
+    local equipment = nil
+    local equipIdx = -1
     for i = 0, size - 1 do
         local subItem = container:getItem(i)
         if subItem then
-            local scrollId = subItem:getId()
-            if VALID_SCROLLS[scrollId] then
-                local def = Game.getImbuementByScroll(scrollId)
-                if def then
-                    table.insert(scrolls, { item = subItem, def = def })
-                end
-            elseif not equipment then
+            local id = subItem:getId()
+            if not VALID_SCROLLS[id] then
                 local ok, slots = pcall(function() return subItem:getImbuementSlots() end)
                 if ok and slots and slots > 0 then
                     equipment = subItem
+                    equipIdx = i
+                    break
                 end
             end
         end
@@ -105,11 +159,143 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         return true
     end
 
+    local scrolls = {}
+    local materialItems = {}
+    for i = 0, size - 1 do
+        if i ~= equipIdx then
+            local subItem = container:getItem(i)
+            if subItem then
+                local id = subItem:getId()
+                if VALID_SCROLLS[id] then
+                    local def = Game.getImbuementByScroll(id)
+                    if def then
+                        table.insert(scrolls, { item = subItem, def = def })
+                    end
+                else
+                    table.insert(materialItems, subItem)
+                end
+            end
+        end
+    end
+
     if #scrolls == 0 then
-        player:sendTextMessage(MESSAGE_STATUS_SMALL, "Place imbuement scrolls on the workbench alongside the equipment.")
+        if #materialItems == 0 then
+            player:sendTextMessage(MESSAGE_STATUS_SMALL, "Place imbuement scrolls or crafting materials on the workbench alongside the equipment.")
+            return true
+        end
+
+        local availMap = {}
+        for _, it in ipairs(materialItems) do
+            local id = it:getId()
+            availMap[id] = (availMap[id] or 0) + it:getCount()
+        end
+
+        local recipes = findMaterialRecipes(availMap, equipment)
+        if #recipes == 0 then
+            player:sendTextMessage(MESSAGE_STATUS_SMALL, "The items on the workbench don't match any imbuement recipe for this equipment.")
+            return true
+        end
+
+        local freeSlots = equipment:getFreeImbuementSlots()
+        if freeSlots == 0 then
+            local total = equipment:getImbuementSlots()
+            player:sendTextMessage(MESSAGE_STATUS_SMALL,
+                string.format("The equipment has no free slots. (%d/%d)", total, total))
+            return true
+        end
+
+        if #recipes > freeSlots then
+            while #recipes > freeSlots do
+                table.remove(recipes)
+            end
+        end
+
+        local typesUsed = {}
+        local existingImbuements = equipment:getImbuements()
+        for _, imbue in ipairs(existingImbuements) do
+            typesUsed[imbue:getType()] = true
+        end
+        for _, def in ipairs(recipes) do
+            if typesUsed[def.imbuementType] then
+                local typeName = TYPE_NAMES[def.imbuementType] or "Unknown"
+                player:sendTextMessage(MESSAGE_STATUS_SMALL,
+                    string.format("The equipment already has '%s'. Remove it first.", typeName))
+                return true
+            end
+            typesUsed[def.imbuementType] = true
+        end
+
+        local totalCost = 0
+        for _, def in ipairs(recipes) do
+            totalCost = totalCost + (BASE_PRICES[def.baseId] or 0)
+        end
+        if totalCost > 0 and player:getMoney() < totalCost then
+            player:sendTextMessage(MESSAGE_STATUS_SMALL,
+                string.format("You need %d gold coins to apply these imbuements.", totalCost))
+            return true
+        end
+
+        local toConsume = {}
+        for _, def in ipairs(recipes) do
+            for _, req in ipairs(def.items) do
+                toConsume[req.itemId] = (toConsume[req.itemId] or 0) + req.count
+            end
+        end
+        for itemId, totalNeeded in pairs(toConsume) do
+            local remaining = totalNeeded
+            for _, it in ipairs(materialItems) do
+                if remaining <= 0 then break end
+                if it:getId() == itemId then
+                    local count = it:getCount()
+                    if count <= remaining then
+                        it:remove(count)
+                        remaining = remaining - count
+                    else
+                        it:remove(remaining)
+                        remaining = 0
+                    end
+                end
+            end
+        end
+
+        if totalCost > 0 then
+            player:removeMoney(totalCost)
+        end
+
+        local applied = 0
+        local appliedNames = {}
+        for _, def in ipairs(recipes) do
+            local imbuement = Imbuement(def.imbuementType, def.value, def.duration, def.decayType, def.baseId)
+            if equipment:addImbuement(imbuement) then
+                applied = applied + 1
+                table.insert(appliedNames, def.baseName .. " " .. def.name)
+            end
+        end
+
+        if applied == 0 then
+            player:sendTextMessage(MESSAGE_STATUS_SMALL, "Failed to apply imbuements. Unequip the item first.")
+            return true
+        end
+
+        item:remove(1)
+
+        local totalImb = equipment:getImbuements()
+        local totalSlots = equipment:getImbuementSlots()
+        local defDuration = recipes[1] and recipes[1].duration or 72000
+        player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
+            string.format("%d imbuement(s) applied: %s\nDuration: %s | Slots: %d/%d | Cost: %d gp",
+                applied,
+                table.concat(appliedNames, ", "),
+                formatDuration(defDuration),
+                totalImb and #totalImb or applied,
+                totalSlots,
+                totalCost))
+
+        toPosition:sendMagicEffect(199)
         return true
     end
 
+    -- Fluxo via scrolls
     local freeSlots = equipment:getFreeImbuementSlots()
     if freeSlots == 0 then
         local total = equipment:getImbuementSlots()

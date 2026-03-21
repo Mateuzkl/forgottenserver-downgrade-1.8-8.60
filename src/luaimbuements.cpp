@@ -458,6 +458,46 @@ int LuaScriptInterface::luaGameGetImbuementCategories(lua_State* L)
 	return 1;
 }
 
+// ============ Game.getImbuementDefinitions() ============
+int LuaScriptInterface::luaGameGetImbuementDefinitions(lua_State* L)
+{
+	// Game.getImbuementDefinitions() -> array of all imbuement definitions (including tier 1 with no scroll)
+	const auto& defs = Imbuements::getInstance().getDefinitions();
+	lua_createtable(L, static_cast<int>(defs.size()), 0);
+	int idx = 1;
+	for (const auto& def : defs) {
+		lua_createtable(L, 0, 16);
+		setField(L, "name", def.name);
+		setField(L, "baseName", def.baseName);
+		setField(L, "description", def.description);
+		setField(L, "baseId", def.baseId);
+		setField(L, "categoryId", def.categoryId);
+		setField(L, "iconId", def.iconId);
+		setField(L, "scrollId", def.scrollId);
+		setField(L, "premium", def.premium);
+		setField(L, "storage", def.storage);
+		setField(L, "price", def.price);
+		setField(L, "removeCost", def.removeCost);
+		setField(L, "duration", def.duration);
+		setField(L, "imbuementType", static_cast<uint32_t>(def.imbuementType));
+		setField(L, "decayType", static_cast<uint32_t>(def.decayType));
+		setField(L, "value", def.resolvedValue);
+
+		lua_createtable(L, static_cast<int>(def.items.size()), 0);
+		int itemIdx = 1;
+		for (const auto& req : def.items) {
+			lua_createtable(L, 0, 2);
+			setField(L, "itemId", req.itemId);
+			setField(L, "count", req.count);
+			lua_rawseti(L, -2, itemIdx++);
+		}
+		lua_setfield(L, -2, "items");
+
+		lua_rawseti(L, -2, idx++);
+	}
+	return 1;
+}
+
 // Registration
 
 void LuaScriptInterface::registerImbuement()
@@ -489,4 +529,7 @@ void LuaScriptInterface::registerImbuement()
 
 	// Game.getImbuementCategories() -> table
 	registerMethod("Game", "getImbuementCategories", LuaScriptInterface::luaGameGetImbuementCategories);
+
+	// Game.getImbuementDefinitions() -> array of all definitions (including tier 1 with no scroll)
+	registerMethod("Game", "getImbuementDefinitions", LuaScriptInterface::luaGameGetImbuementDefinitions);
 }

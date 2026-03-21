@@ -5247,9 +5247,13 @@ void Player::addItemImbuements(Item* item) {
 				case ImbuementType::IMBUEMENT_TYPE_LIFE_LEECH:
 					setVarSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT, static_cast<int32_t>(imbue->value));
 					break;
-				case ImbuementType::IMBUEMENT_TYPE_CRITICAL_CHANCE:
-					setVarSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE, static_cast<int32_t>(imbue->value));
+				case ImbuementType::IMBUEMENT_TYPE_CRITICAL_CHANCE: {
+					uint16_t chance = static_cast<uint16_t>(imbue->value & 0xFFFF);
+					uint16_t amount = static_cast<uint16_t>((imbue->value >> 16) & 0xFFFF);
+					setVarSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE, static_cast<int32_t>(chance));
+					setVarSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT, static_cast<int32_t>(amount));
 					break;
+				}
 				case ImbuementType::IMBUEMENT_TYPE_CRITICAL_AMOUNT:
 					setVarSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT, static_cast<int32_t>(imbue->value));
 					break;
@@ -5319,9 +5323,13 @@ void Player::removeItemImbuements(Item* item) {
 				case ImbuementType::IMBUEMENT_TYPE_LIFE_LEECH:
 					setVarSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT, -static_cast<int32_t>(imbue->value));
 					break;
-				case ImbuementType::IMBUEMENT_TYPE_CRITICAL_CHANCE:
-					setVarSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE, -static_cast<int32_t>(imbue->value));
+				case ImbuementType::IMBUEMENT_TYPE_CRITICAL_CHANCE: {
+					uint16_t critChance = static_cast<uint16_t>(imbue->value & 0xFFFF);
+					uint16_t critAmount = static_cast<uint16_t>((imbue->value >> 16) & 0xFFFF);
+					setVarSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE, -static_cast<int32_t>(critChance));
+					setVarSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT, -static_cast<int32_t>(critAmount));
 					break;
+				}
 				case ImbuementType::IMBUEMENT_TYPE_CRITICAL_AMOUNT:
 					setVarSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT, -static_cast<int32_t>(imbue->value));
 					break;
@@ -5390,9 +5398,13 @@ void Player::removeImbuementEffect(std::shared_ptr<Imbuement> imbue) {
 		case ImbuementType::IMBUEMENT_TYPE_LIFE_LEECH:
 			setVarSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT, -static_cast<int32_t>(imbue->value));
 			break;
-		case ImbuementType::IMBUEMENT_TYPE_CRITICAL_CHANCE:
-			setVarSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE, -static_cast<int32_t>(imbue->value));
+		case ImbuementType::IMBUEMENT_TYPE_CRITICAL_CHANCE: {
+			uint16_t chance = static_cast<uint16_t>(imbue->value & 0xFFFF);
+			uint16_t amount = static_cast<uint16_t>((imbue->value >> 16) & 0xFFFF);
+			setVarSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE, -static_cast<int32_t>(chance));
+			setVarSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT, -static_cast<int32_t>(amount));
 			break;
+		}
 		case ImbuementType::IMBUEMENT_TYPE_CRITICAL_AMOUNT:
 			setVarSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT, -static_cast<int32_t>(imbue->value));
 			break;
@@ -5459,9 +5471,13 @@ void Player::addImbuementEffect(std::shared_ptr<Imbuement> imbue) {
 		case ImbuementType::IMBUEMENT_TYPE_LIFE_LEECH:
 			setVarSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT, static_cast<int32_t>(imbue->value));
 			break;
-		case ImbuementType::IMBUEMENT_TYPE_CRITICAL_CHANCE:
-			setVarSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE, static_cast<int32_t>(imbue->value));
+		case ImbuementType::IMBUEMENT_TYPE_CRITICAL_CHANCE: {
+			uint16_t chance = static_cast<uint16_t>(imbue->value & 0xFFFF);
+			uint16_t amount = static_cast<uint16_t>((imbue->value >> 16) & 0xFFFF);
+			setVarSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE, static_cast<int32_t>(chance));
+			setVarSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT, static_cast<int32_t>(amount));
 			break;
+		}
 		case ImbuementType::IMBUEMENT_TYPE_CRITICAL_AMOUNT:
 			setVarSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT, static_cast<int32_t>(imbue->value));
 			break;
