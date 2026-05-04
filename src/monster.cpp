@@ -2080,7 +2080,15 @@ void Monster::death(Creature*)
 			rewardContainer->setIntAttr(ITEM_ATTRIBUTE_DATE, currentTime);
 			rewardContainer->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
 			bool hasLoot = false;
-			std::unordered_map<uint16_t, std::vector<std::shared_ptr<Item>>> stackableItems;
+
+			// FIX 1: Use uint32_t counters instead of shared_ptr vectors to avoid
+			// unnecessary heap allocations for stackable items.
+			std::unordered_map<uint16_t, uint32_t> stackableCounts;
+
+			// FIX 2: Keep shared_ptr ownership alive until internalAddThing() completes
+			// to prevent dangling raw pointers (UB/crash).
+			std::vector<std::shared_ptr<Item>> pendingItems;
+
 			for (const auto& lootBlock : creatureLoot) {
 				// Skip items with invalid IDs — CreateItem would return a recycled/garbage pointer
 				if (lootBlock.id == 0) {
@@ -2092,10 +2100,7 @@ void Monster::death(Creature*)
 					// Ensure that the mostScoreContributor can receive multiple unique items
 					const ItemType& itemType = Item::items[lootBlock.id];
 					if (itemType.stackable) {
-						auto lootItem = Item::CreateItem(lootBlock.id, uniform_random(1, lootBlock.countmax));
-						if (lootItem) {
-							stackableItems[lootBlock.id].push_back(std::move(lootItem));
-						}
+						stackableCounts[lootBlock.id] += uniform_random(1, lootBlock.countmax);
 						continue;
 					}
 
@@ -2104,22 +2109,17 @@ void Monster::death(Creature*)
 					if (!lootItem) {
 						continue;
 					}
-					if (!itemType.stackable) {
-						lootItem->setIntAttr(ITEM_ATTRIBUTE_DATE, currentTime);
-						lootItem->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
-					}
-					Item* rawLoot = lootItem.get();
-					rewardContainer->internalAddThing(rawLoot);
+					lootItem->setIntAttr(ITEM_ATTRIBUTE_DATE, currentTime);
+					lootItem->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
+					pendingItems.push_back(lootItem);
+					rewardContainer->internalAddThing(lootItem.get());
 					hasLoot = true;
 				} else if (!lootBlock.unique) {
 					// Normal loot distribution for non-unique items
 					if (uniform_random(1, MAX_LOOTCHANCE) <= adjustedChance) {
 						const ItemType& itemType = Item::items[lootBlock.id];
 						if (itemType.stackable) {
-							auto lootItem = Item::CreateItem(lootBlock.id, uniform_random(1, lootBlock.countmax));
-							if (lootItem) {
-								stackableItems[lootBlock.id].push_back(std::move(lootItem));
-							}
+							stackableCounts[lootBlock.id] += uniform_random(1, lootBlock.countmax);
 							continue;
 						}
 
@@ -2128,33 +2128,32 @@ void Monster::death(Creature*)
 						if (!lootItem) {
 							continue;
 						}
-						if (!itemType.stackable) {
-							lootItem->setIntAttr(ITEM_ATTRIBUTE_DATE, currentTime);
-							lootItem->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
-						}
-						Item* rawLoot = lootItem.get();
-						rewardContainer->internalAddThing(rawLoot);
+						lootItem->setIntAttr(ITEM_ATTRIBUTE_DATE, currentTime);
+						lootItem->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
+						pendingItems.push_back(lootItem);
+						rewardContainer->internalAddThing(lootItem.get());
 						hasLoot = true;
 					}
 				}
 			}
-			for (auto& [itemId, itemVec] : stackableItems) {
-				uint32_t totalCount = 0;
-				for (const auto& item : itemVec) {
-					totalCount += item->getItemCount();
-				}
 
+			// Flush accumulated stackable counts as batched items (max 100 per stack)
+			for (auto& [itemId, totalCount] : stackableCounts) {
 				while (totalCount > 0) {
 					uint32_t batch = std::min<uint32_t>(totalCount, 100u);
 					auto mergedItem = Item::CreateItem(itemId, batch);
 					if (mergedItem) {
-						Item* rawLoot = mergedItem.get();
-						rewardContainer->internalAddThing(rawLoot);
+						pendingItems.push_back(mergedItem);
+						rewardContainer->internalAddThing(mergedItem.get());
 						hasLoot = true;
 					}
 					totalCount -= batch;
 				}
 			}
+
+			// pendingItems goes out of scope here — safe because internalAddThing
+			// has already transferred ownership to the container by this point.
+
 			if (hasLoot) {
 				if (player) {
 					std::string lootString;
