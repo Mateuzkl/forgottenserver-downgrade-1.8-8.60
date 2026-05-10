@@ -249,7 +249,6 @@ enum CombatParam_t
 	COMBAT_PARAM_AGGRESSIVE,
 	COMBAT_PARAM_DISPEL,
 	COMBAT_PARAM_USECHARGES,
-	COMBAT_PARAM_CHAIN_EFFECT,
 };
 
 enum class CallBackParam
@@ -258,8 +257,6 @@ enum class CallBackParam
 	SKILLVALUE,
 	TARGETTILE,
 	TARGETCREATURE,
-	CHAINVALUE,
-	CHAINPICKER,
 };
 
 enum ConditionParam_t

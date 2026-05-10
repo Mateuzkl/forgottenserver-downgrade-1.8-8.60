@@ -274,16 +274,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 		damage.primary.value = (getWeaponDamage(player, target, item) * damageModifier) / 100;
 		damage.secondary.type = getElementType();
 		damage.secondary.value = getElementDamage(player, target, item);
-
-		if (player->checkChainSystem()) {
-			Combat chainCombat;
-			chainCombat.setupChain(g_weapons->getWeapon(item));
-			if (!chainCombat.doCombatChain(player, target, params.aggressive)) {
-				Combat::doTargetCombat(player, target, damage, params);
-			}
-		} else {
-			Combat::doTargetCombat(player, target, damage, params);
-		}
+		Combat::doTargetCombat(player, target, damage, params);
 		if (item->hasImbuements()) {
 			int32_t basePhysDamage = std::abs(damage.primary.value);
 			if (basePhysDamage > 0) {

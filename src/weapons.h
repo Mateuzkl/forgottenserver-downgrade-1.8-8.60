@@ -133,11 +133,6 @@ public:
 	WeaponType_t weaponType;
 	std::unordered_set<uint16_t> vocationWeaponSet;
 
-	void setChainSkillValue(double value) { m_chainSkillValue = value; }
-	double getChainSkillValue() const { return m_chainSkillValue; }
-	void setDisabledChain() { m_isDisabledChain = true; }
-	bool isChainDisabled() const { return m_isDisabledChain; }
-
 protected:
 	void internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const;
 	void internalUseWeapon(Player* player, Item* item, Tile* tile) const;
@@ -164,9 +159,6 @@ private:
 	bool premium = false;
 	bool wieldUnproperly = false;
 	std::string vocationString = "";
-
-	double m_chainSkillValue = 0.0;
-	bool m_isDisabledChain = false;
 
 	std::string_view getScriptEventName() const override final;
 

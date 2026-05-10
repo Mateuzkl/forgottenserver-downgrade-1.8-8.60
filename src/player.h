@@ -1208,9 +1208,6 @@ public:
 	bool isChasingEnabled() const { return chaseMode; }
 	bool isSecureModeEnabled() const { return secureMode; }
 
-	static constexpr uint32_t CHAIN_SYSTEM_STORAGE = 40001;
-	bool checkChainSystem() const;
-
 	bool hasDebugAssertSent() const { return client ? client->debugAssertSent : false; }
 
 	bool isOTCv8() const { return client ? client->isOTCv8 : false; }

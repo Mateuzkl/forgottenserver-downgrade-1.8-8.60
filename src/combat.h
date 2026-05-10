@@ -39,30 +39,6 @@ public:
 	void onTargetCombat(Creature* creature, Creature* target) const;
 };
 
-class ChainCallback final : public CallBack
-{
-public:
-	ChainCallback() = default;
-	ChainCallback(uint8_t chainTargets, uint8_t chainDistance, bool backtracking);
-
-	void getChainValues(Creature* creature, uint8_t& maxTargets, uint8_t& chainDistance, bool& backtracking);
-	void setFromLua(bool fromLua);
-
-private:
-	void onChainCombat(Creature* creature, uint8_t& chainTargets, uint8_t& chainDistance, bool& backtracking) const;
-
-	uint8_t m_chainDistance = 0;
-	uint8_t m_chainTargets = 0;
-	bool m_backtracking = false;
-	bool m_fromLua = false;
-};
-
-class ChainPickerCallback final : public CallBack
-{
-public:
-	bool onChainCombat(Creature* creature, Creature* target) const;
-};
-
 struct CombatParams
 {
 	CombatParams() = default;
@@ -76,8 +52,6 @@ struct CombatParams
 	std::unique_ptr<ValueCallback> valueCallback;
 	std::unique_ptr<TileCallback> tileCallback;
 	std::unique_ptr<TargetCallback> targetCallback;
-	std::unique_ptr<ChainCallback> chainCallback;
-	std::unique_ptr<ChainPickerCallback> chainPickerCallback;
 
 	uint16_t itemId = 0;
 
@@ -94,8 +68,6 @@ struct CombatParams
 	bool aggressive = true;
 	bool useCharges = false;
 	bool ignoreResistances = false;
-
-	uint8_t chainEffect = CONST_ME_NONE;
 };
 
 class AreaCombat
@@ -157,18 +129,7 @@ public:
 
 	void setOrigin(CombatOrigin origin) { params.origin = origin; }
 
-	void setupChain(class Weapon* weapon);
-	bool doCombatChain(Creature* caster, Creature* target, bool aggressive) const;
-	void setChainCallback(uint8_t chainTargets, uint8_t chainDistance, bool backtracking);
-
 private:
-	static void doChainEffect(const Position& origin, const Position& pos, uint8_t effect);
-	static std::vector<std::pair<Position, std::vector<uint32_t>>> pickChainTargets(
-	    Creature* caster, const CombatParams& params, uint8_t chainDistance, uint8_t maxTargets,
-	    bool aggressive, bool backtracking, Creature* initialTarget = nullptr);
-	static bool isValidChainTarget(Creature* caster, Creature* currentTarget, Creature* potentialTarget,
-	                               const CombatParams& params, bool aggressive);
-
 	static void combatTileEffects(const SpectatorVec& spectators, Creature* caster, Tile* tile,
 	                              const CombatParams& params);
 	CombatDamage getCombatDamage(Creature* creature, Creature* target) const;

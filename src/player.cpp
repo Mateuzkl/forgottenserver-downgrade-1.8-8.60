@@ -4823,16 +4823,6 @@ bool Player::isPremium() const
 
 void Player::setPremiumTime(time_t premiumEndsAt) { this->premiumEndsAt = premiumEndsAt; }
 
-bool Player::checkChainSystem() const
-{
-	if (!ConfigManager::getBoolean(ConfigManager::CHAIN_SYSTEM_ENABLED)) {
-		return false;
-	}
-
-	auto value = getStorageValue(CHAIN_SYSTEM_STORAGE);
-	return value.has_value() && value.value() == 1;
-}
-
 PartyShields_t Player::getPartyShield(const Player* player) const
 {
 	if (!player) {

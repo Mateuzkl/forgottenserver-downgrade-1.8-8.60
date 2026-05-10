@@ -349,7 +349,6 @@ bool ConfigManager::load()
 	booleans[Boolean::MARKET_SYSTEM_ENABLED] = getGlobalBoolean(L, "marketSystemEnabled", false);
 	booleans[Boolean::PREY_SYSTEM_ENABLED] = getGlobalBoolean(L, "preySystemEnabled", false);
 	booleans[Boolean::ALLOW_MOUNT_IN_PZ] = getGlobalBoolean(L, "allowMountInPz", false);
-	booleans[Boolean::CHAIN_SYSTEM_ENABLED] = getGlobalBoolean(L, "toggleChainSystem", true);
 
 	// Admin Config
 	booleans[Boolean::ADMIN_LOCALHOST_ONLY] = getGlobalBoolean(L, "adminLocalhostOnly", true);
@@ -477,13 +476,6 @@ bool ConfigManager::load()
 	floats[BOOSTED_LOOT_MULTIPLIER] = getGlobalFloat(L, "boostedLootMultiplier", 2.0f);
 	floats[BOOSTED_SPAWN_MULTIPLIER] = getGlobalFloat(L, "boostedSpawnMultiplier", 0.5f);
 
-	floats[COMBAT_CHAIN_SKILL_FORMULA_AXE] = getGlobalFloat(L, "combatChainSkillFormulaAxe", 0.9f);
-	floats[COMBAT_CHAIN_SKILL_FORMULA_CLUB] = getGlobalFloat(L, "combatChainSkillFormulaClub", 0.7f);
-	floats[COMBAT_CHAIN_SKILL_FORMULA_SWORD] = getGlobalFloat(L, "combatChainSkillFormulaSword", 1.1f);
-	floats[COMBAT_CHAIN_SKILL_FORMULA_FIST] = getGlobalFloat(L, "combatChainSkillFormulaFist", 1.0f);
-	floats[COMBAT_CHAIN_SKILL_FORMULA_DISTANCE] = getGlobalFloat(L, "combatChainSkillFormulaDistance", 0.9f);
-	floats[COMBAT_CHAIN_SKILL_FORMULA_WANDS_AND_RODS] = getGlobalFloat(L, "combatChainSkillFormulaWandsAndRods", 1.0f);
-
 	integers[Integer::NEW_PLAYER_SPAWN_POS_X] = getGlobalInteger(L, "newPlayerSpawnPosX", 0);
 	integers[Integer::NEW_PLAYER_SPAWN_POS_Y] = getGlobalInteger(L, "newPlayerSpawnPosY", 0);
 	integers[Integer::NEW_PLAYER_SPAWN_POS_Z] = getGlobalInteger(L, "newPlayerSpawnPosZ", 0);
@@ -524,8 +516,6 @@ bool ConfigManager::load()
 	// Guild War Config
 	integers[Integer::GUILD_WAR_MIN_FRAG_LIMIT] = getGlobalInteger(L, "guildWarMinFragLimit", 10);
 	integers[Integer::GUILD_WAR_MAX_FRAG_LIMIT] = getGlobalInteger(L, "guildWarMaxFragLimit", 1000);
-	integers[Integer::COMBAT_CHAIN_DELAY] = getGlobalInteger(L, "combatChainDelay", 50);
-	integers[Integer::COMBAT_CHAIN_TARGETS] = getGlobalInteger(L, "combatChainTargets", 5);
 	booleans[Boolean::GUILD_WAR_ANNOUNCE_KILLS] = getGlobalBoolean(L, "guildWarAnnounceKills", true);
 
 	strings[String::ADMIN_PASSWORD] = getGlobalString(L, "adminPassword", "");

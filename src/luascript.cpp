@@ -1411,16 +1411,12 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumClass(CallBackParam::SKILLVALUE);
 	registerEnumClass(CallBackParam::TARGETTILE);
 	registerEnumClass(CallBackParam::TARGETCREATURE);
-	registerEnumClass(CallBackParam::CHAINVALUE);
-	registerEnumClass(CallBackParam::CHAINPICKER);
 
 	// Global aliases for backwards compatibility
 	registerGlobalVariable("CALLBACK_PARAM_LEVELMAGICVALUE", static_cast<int64_t>(CallBackParam::LEVELMAGICVALUE));
 	registerGlobalVariable("CALLBACK_PARAM_SKILLVALUE", static_cast<int64_t>(CallBackParam::SKILLVALUE));
 	registerGlobalVariable("CALLBACK_PARAM_TARGETTILE", static_cast<int64_t>(CallBackParam::TARGETTILE));
 	registerGlobalVariable("CALLBACK_PARAM_TARGETCREATURE", static_cast<int64_t>(CallBackParam::TARGETCREATURE));
-	registerGlobalVariable("CALLBACK_PARAM_CHAINVALUE", static_cast<int64_t>(CallBackParam::CHAINVALUE));
-	registerGlobalVariable("CALLBACK_PARAM_CHAINPICKER", static_cast<int64_t>(CallBackParam::CHAINPICKER));
 
 	// ExperienceRateType
 	registerTable("ExperienceRateType");
@@ -1471,7 +1467,6 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(COMBAT_PARAM_AGGRESSIVE);
 	registerEnum(COMBAT_PARAM_DISPEL);
 	registerEnum(COMBAT_PARAM_USECHARGES);
-	registerEnum(COMBAT_PARAM_CHAIN_EFFECT);
 
 	registerEnum(CONDITION_NONE);
 	registerEnum(CONDITION_POISON);
