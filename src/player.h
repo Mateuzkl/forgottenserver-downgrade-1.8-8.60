@@ -755,7 +755,7 @@ public:
 			return;
 		}
 
-		if (stackpos >= 10 || tile->getThingCount() >= 10) {
+		if (stackpos >= MAX_STACKPOS_THINGS || tile->getThingCount() >= MAX_STACKPOS_THINGS) {
 			client->sendUpdateTile(tile, pos);
 			return;
 		}
@@ -774,7 +774,7 @@ public:
 			return;
 		}
 
-		if (stackpos >= 10 || tile->getThingCount() > 10) {
+		if (stackpos >= MAX_STACKPOS_THINGS || tile->getThingCount() > MAX_STACKPOS_THINGS) {
 			client->sendUpdateTile(tile, pos);
 			return;
 		}
@@ -800,7 +800,7 @@ public:
 		}
 
 		int32_t stackpos = tile->getClientIndexOfCreature(this, creature);
-		if (stackpos != -1 && stackpos < 10) {
+		if (stackpos != -1 && stackpos < MAX_STACKPOS_THINGS) {
 			client->sendUpdateTileCreature(creature->getPosition(), stackpos, creature);
 		} else {
 			client->sendUpdateTile(tile, creature->getPosition());
