@@ -461,7 +461,13 @@ void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<in
 	for (const auto& spectator : spectators.players()) {
 		Player* tmpPlayer = static_cast<Player*>(spectator.get());
 		if (InstanceUtils::canSeeItemInInstance(tmpPlayer->getInstanceID(), item)) {
-			tmpPlayer->sendRemoveTileThing(cylinderMapPos, oldStackPosVector[i]);
+			const int32_t oldStackPos = oldStackPosVector[i];
+
+			if (oldStackPos < 0 || oldStackPos >= MAX_STACKPOS_THINGS || getThingCount() >= MAX_STACKPOS_THINGS) {
+				tmpPlayer->sendUpdateTile(this, cylinderMapPos);
+			} else {
+				tmpPlayer->sendRemoveTileThing(cylinderMapPos, oldStackPos);
+			}
 		}
 		++i;
 	}

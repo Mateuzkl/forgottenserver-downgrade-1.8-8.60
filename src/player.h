@@ -746,22 +746,42 @@ public:
 	// send methods
 	void sendAddTileItem(const Tile* tile, const Position& pos, const Item* item)
 	{
-		if (client) {
-			int32_t stackpos = tile->getStackposOfItem(this, item);
-			if (stackpos != -1) {
-				client->sendAddTileItem(pos, stackpos, item);
-			}
+		if (!client) {
+			return;
 		}
+
+		int32_t stackpos = tile->getStackposOfItem(this, item);
+		if (stackpos == -1) {
+			return;
+		}
+
+		if (stackpos >= 10 || tile->getThingCount() >= 10) {
+			client->sendUpdateTile(tile, pos);
+			return;
+		}
+
+		client->sendAddTileItem(pos, stackpos, item);
 	}
+
 	void sendUpdateTileItem(const Tile* tile, const Position& pos, const Item* item)
 	{
-		if (client) {
-			int32_t stackpos = tile->getStackposOfItem(this, item);
-			if (stackpos != -1) {
-				client->sendUpdateTileItem(pos, stackpos, item);
-			}
+		if (!client) {
+			return;
 		}
+
+		int32_t stackpos = tile->getStackposOfItem(this, item);
+		if (stackpos == -1) {
+			return;
+		}
+
+		if (stackpos >= 10 || tile->getThingCount() > 10) {
+			client->sendUpdateTile(tile, pos);
+			return;
+		}
+
+		client->sendUpdateTileItem(pos, stackpos, item);
 	}
+
 	void sendRemoveTileThing(const Position& pos, int32_t stackpos)
 	{
 		if (stackpos != -1 && client) {
@@ -770,15 +790,20 @@ public:
 	}
 	void sendUpdateTileCreature(const Creature* creature)
 	{
-		if (client) {
-			auto tile = creature->getTile();
-			if (!tile) {
-				return;
-			}
-			uint32_t stackpos = tile->getClientIndexOfCreature(this, creature);
-			if (stackpos < 10) {
-				client->sendUpdateTileCreature(creature->getPosition(), stackpos, creature);
-			}
+		if (!client) {
+			return;
+		}
+
+		auto tile = creature->getTile();
+		if (!tile) {
+			return;
+		}
+
+		int32_t stackpos = tile->getClientIndexOfCreature(this, creature);
+		if (stackpos != -1 && stackpos < 10) {
+			client->sendUpdateTileCreature(creature->getPosition(), stackpos, creature);
+		} else {
+			client->sendUpdateTile(tile, creature->getPosition());
 		}
 	}
 	void sendUpdateTile(const Tile* tile, const Position& pos)

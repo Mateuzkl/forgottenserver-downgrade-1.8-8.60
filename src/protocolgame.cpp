@@ -1681,14 +1681,26 @@ void ProtocolGame::sendCreatureEmblem(const Creature* creature)
 	if (!canSee(creature)) {
 		return;
 	}
-	// Remove creature from client and re-add to update
+
+	const Tile* tile = creature->getTile();
+	if (!tile) {
+		return;
+	}
+
 	Position pos = creature->getPosition();
-	int32_t stackpos = creature->getTile()->getClientIndexOfCreature(player.get(), creature);
+	int32_t stackpos = tile->getClientIndexOfCreature(player.get(), creature);
+
+	if (stackpos < 0 || stackpos >= MAX_STACKPOS_THINGS) {
+		sendUpdateTile(tile, pos);
+		return;
+	}
+
 	sendRemoveTileThing(pos, stackpos);
+
 	NetworkMessage msg;
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
-	msg.addByte(stackpos);
+	msg.addByte(static_cast<uint8_t>(stackpos));
 	AddCreature(msg, creature, false, creature->getID());
 	writeToOutputBuffer(msg);
 }
@@ -2456,7 +2468,7 @@ void ProtocolGame::sendUpdateTileItem(const Position& pos, uint32_t stackpos, co
 
 void ProtocolGame::sendRemoveTileThing(const Position& pos, uint32_t stackpos)
 {
-	if (!canSee(pos)) {
+	if (stackpos >= MAX_STACKPOS_THINGS || !canSee(pos)) {
 		return;
 	}
 
@@ -2699,6 +2711,15 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 			writeToOutputBuffer(msg);
 		}
 	} else if (canSee(oldPos) && canSee(creature->getPosition())) {
+		if (!isOTC && newStackPos >= MAX_STACKPOS_THINGS) {
+			if (oldStackPos >= 0 && oldStackPos < MAX_STACKPOS_THINGS) {
+				sendRemoveTileThing(oldPos, oldStackPos);
+			} else {
+				sendUpdateTile(g_game.map.getTile(oldPos), oldPos);
+			}
+			return;
+		}
+
 		if (teleport || (oldPos.z == 7 && newPos.z >= 8) || oldStackPos >= MAX_STACKPOS_THINGS) {
 			sendRemoveTileThing(oldPos, oldStackPos);
 			sendAddCreature(creature, newPos, newStackPos);
