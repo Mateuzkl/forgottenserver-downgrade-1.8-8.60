@@ -823,6 +823,17 @@ local function getAttributesTier(itemId, attributes)
 	return math.max(0, math.min(10, tier))
 end
 
+local function getOfferTier(itemId, tier, attributes)
+	tier = math.max(0, math.min(10, tonumber(tier) or 0))
+	if tier == 0 and hasSerializedAttributes(attributes) then
+		local attributesTier = getAttributesTier(itemId, attributes)
+		if attributesTier > 0 then
+			return attributesTier
+		end
+	end
+	return tier
+end
+
 -- Collects the player's depot box containers for the current market depot.
 -- @param player The player whose market depot is queried.
 -- @return An array of depot box container objects present for that depot, ordered by ascending box index.
@@ -994,22 +1005,27 @@ local function collectDepotRemovals(player, itemId, amount, tier)
 		return nil
 	end
 
-	local tierFilter = nil
-	if tier ~= nil then
-		tierFilter = math.max(0, math.min(10, tonumber(tier) or 0))
-	end
+	local explicitTier = tier ~= nil
+	local tierFilter = explicitTier and math.max(0, math.min(10, tonumber(tier) or 0)) or 0
 
 	local removals = {}
 	local found = 0
 	for _, box in ipairs(getDepotBoxes(player)) do
 		for _, item in ipairs(box:getItems(true)) do
-			if item:getId() == itemId and (tierFilter == nil or getItemTier(item) == tierFilter) then
-				local count = math.min(amount - found, getItemTradeCount(item, itemType))
-				if count > 0 then
-					removals[#removals + 1] = { item = item, count = count }
-					found = found + count
-					if found >= amount then
-						return removals
+			local itemTier = getItemTier(item)
+			if item:getId() == itemId and itemTier == tierFilter then
+				local attributes = nil
+				if not explicitTier then
+					attributes = getMarketItemAttributes(item, itemType)
+				end
+				if explicitTier or not hasSerializedAttributes(attributes) then
+					local count = math.min(amount - found, getItemTradeCount(item, itemType))
+					if count > 0 then
+						removals[#removals + 1] = { item = item, count = count }
+						found = found + count
+						if found >= amount then
+							return removals
+						end
 					end
 				end
 			end
@@ -1334,10 +1350,7 @@ local function fetchOfferById(offerId)
 		attributes = getResultAttributes(resultId),
 		playerName = result.getDataString(resultId, "player_name")
 	}
-	local attributesTier = getAttributesTier(offer.itemId, offer.attributes)
-	if attributesTier > 0 then
-		offer.tier = attributesTier
-	end
+	offer.tier = getOfferTier(offer.itemId, offer.tier, offer.attributes)
 	result.free(resultId)
 	return offer
 end
@@ -1379,10 +1392,7 @@ local function fetchOffers(query)
 			playerName = result.getDataString(resultId, "player_name"),
 			state = MARKET_STATE_ACTIVE
 		}
-		local attributesTier = getAttributesTier(offers[#offers].itemId, offers[#offers].attributes)
-		if attributesTier > 0 then
-			offers[#offers].tier = attributesTier
-		end
+		offers[#offers].tier = getOfferTier(offers[#offers].itemId, offers[#offers].tier, offers[#offers].attributes)
 	until not result.next(resultId)
 
 	result.free(resultId)
@@ -2060,10 +2070,7 @@ function createHandler.onReceive(player, msg)
 			return
 		end
 		offerAttributes = attributes
-		local attributesTier = getAttributesTier(itemId, offerAttributes)
-		if attributesTier > 0 then
-			offerTier = attributesTier
-		end
+		offerTier = getOfferTier(itemId, offerTier, offerAttributes)
 		depotMap[itemId] = math.max(0, (depotMap[itemId] or 0) - amount)
 		if requestedTier ~= nil then
 			local tierKey = getDepotItemKey(itemId, requestedTier)
@@ -2320,10 +2327,7 @@ function acceptHandler.onReceive(player, msg)
 			return
 		end
 		deliveryAttributes = attributes
-		acceptedTier = getAttributesTier(offer.itemId, deliveryAttributes)
-		if acceptedTier == 0 then
-			acceptedTier = requestedOfferTier
-		end
+		acceptedTier = getOfferTier(offer.itemId, acceptedTier, deliveryAttributes)
 
 		depotMap[offer.itemId] = math.max(0, (depotMap[offer.itemId] or 0) - amount)
 		local acceptedTierKey = getDepotItemKey(offer.itemId, acceptedTier)

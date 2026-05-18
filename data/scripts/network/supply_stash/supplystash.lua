@@ -63,6 +63,23 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
+local function logError(message)
+	if logger and logger.error then
+		logger.error(message)
+	else
+		print(message)
+	end
+end
+
+local function runSchemaQuery(query, errorMessage)
+	local ok, result = pcall(db.query, query)
+	if not ok or not result then
+		logError("[SupplyStash] " .. errorMessage)
+		return false
+	end
+	return true
+end
+
 -- Checks whether a given column name exists in the specified database table.
 -- @param tableName The name of the database table to inspect.
 -- @param columnName The column name to look for (pattern is matched with SQL LIKE).
@@ -74,6 +91,28 @@ local function tableColumnExists(tableName, columnName)
 		return true
 	end
 	return false
+end
+
+local function tableForeignKeyExists(tableName, constraintName)
+	local resultId = db.storeQuery(
+		"SELECT `CONSTRAINT_NAME` FROM `information_schema`.`TABLE_CONSTRAINTS` WHERE `CONSTRAINT_SCHEMA` = DATABASE() " ..
+		"AND `TABLE_NAME` = " .. db.escapeString(tableName) ..
+		" AND `CONSTRAINT_NAME` = " .. db.escapeString(constraintName) ..
+		" AND `CONSTRAINT_TYPE` = 'FOREIGN KEY' LIMIT 1"
+	)
+	if resultId then
+		result.free(resultId)
+		return true
+	end
+	return false
+end
+
+local function addSupplyStashForeignKey(tableName, errorMessage)
+	return runSchemaQuery(
+		"ALTER TABLE `" .. tableName .. "` ADD CONSTRAINT `player_supplystash_player_fk` " ..
+		"FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE",
+		errorMessage
+	)
 end
 
 -- Returns the primary key column signature for the `player_supplystash` table as a comma-separated string.
@@ -106,34 +145,56 @@ end
 -- @return `true` if the table was successfully rebuilt and migrated, `false` otherwise.
 local function rebuildSupplyStashTable()
 	db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
-	if not db.query([[
+	local droppedOriginalForeignKey = false
+	if tableForeignKeyExists("player_supplystash", "player_supplystash_player_fk") then
+		if not runSchemaQuery("ALTER TABLE `player_supplystash` DROP FOREIGN KEY `player_supplystash_player_fk`", "Could not drop old supply stash foreign key for migration.") then
+			return false
+		end
+		droppedOriginalForeignKey = true
+	end
+
+	local function restoreOriginalForeignKey()
+		if droppedOriginalForeignKey and not tableForeignKeyExists("player_supplystash", "player_supplystash_player_fk") then
+			addSupplyStashForeignKey("player_supplystash", "Could not restore old supply stash foreign key after failed migration.")
+		end
+	end
+
+	if not runSchemaQuery([[
 		CREATE TABLE `player_supplystash_tier_migration` (
 			`player_id` INT NOT NULL,
 			`itemtype` SMALLINT UNSIGNED NOT NULL,
 			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			`amount` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`player_id`, `itemtype`, `tier`)
+			PRIMARY KEY (`player_id`, `itemtype`, `tier`),
+			CONSTRAINT `player_supplystash_player_fk`
+				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
+				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
-	]]) then
+	]], "Could not create tier migration table.") then
+		restoreOriginalForeignKey()
+		db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
 		return false
 	end
 
-	if not db.query([[
+	if not runSchemaQuery([[
 		INSERT INTO `player_supplystash_tier_migration` (`player_id`, `itemtype`, `tier`, `amount`)
-		SELECT `player_id`, `itemtype`, COALESCE(`tier`, 0), SUM(`amount`)
-		FROM `player_supplystash`
-		WHERE `amount` > 0
-		GROUP BY `player_id`, `itemtype`, COALESCE(`tier`, 0)
-	]]) then
+		SELECT ps.`player_id`, ps.`itemtype`, COALESCE(ps.`tier`, 0), SUM(ps.`amount`)
+		FROM `player_supplystash` ps
+		INNER JOIN `players` p ON p.`id` = ps.`player_id`
+		WHERE ps.`amount` > 0
+		GROUP BY ps.`player_id`, ps.`itemtype`, COALESCE(ps.`tier`, 0)
+	]], "Could not copy supply stash rows into tier migration table.") then
+		restoreOriginalForeignKey()
 		db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
 		return false
 	end
 
-	if not db.query("DROP TABLE `player_supplystash`") then
+	if not runSchemaQuery("DROP TABLE `player_supplystash`", "Could not drop old supply stash table.") then
+		restoreOriginalForeignKey()
 		db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
 		return false
 	end
-	return db.query("RENAME TABLE `player_supplystash_tier_migration` TO `player_supplystash`")
+	return runSchemaQuery("RENAME TABLE `player_supplystash_tier_migration` TO `player_supplystash`", "Could not rename tier migration table.")
 end
 
 -- Ensures the `player_supplystash` table has a composite primary key on `player_id,itemtype,tier`, altering or rebuilding the table if necessary.
@@ -144,7 +205,7 @@ local function ensureSupplyStashPrimaryKey()
 		return true
 	end
 
-	if db.query("ALTER TABLE `player_supplystash` DROP PRIMARY KEY, ADD PRIMARY KEY (`player_id`, `itemtype`, `tier`)") and
+	if runSchemaQuery("ALTER TABLE `player_supplystash` DROP PRIMARY KEY, ADD PRIMARY KEY (`player_id`, `itemtype`, `tier`)", "Could not alter supply stash primary key; trying table rebuild.") and
 			getSupplyStashPrimaryKeySignature() == "player_id,itemtype,tier" then
 		return true
 	end
@@ -157,7 +218,7 @@ end
 -- guarantees the `tier` column exists, and enforces the composite primary key (`player_id`, `itemtype`, `tier`)
 -- along with the foreign key constraint to `players(id)`.
 local function ensureTables()
-	db.query([[
+	if not runSchemaQuery([[
 		CREATE TABLE IF NOT EXISTS `player_supplystash` (
 			`player_id` INT NOT NULL,
 			`itemtype` SMALLINT UNSIGNED NOT NULL,
@@ -168,12 +229,20 @@ local function ensureTables()
 				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
-	]])
+	]], "Could not create supply stash table.") then
+		return false
+	end
 
 	if not tableColumnExists("player_supplystash", "tier") then
-		db.query("ALTER TABLE `player_supplystash` ADD COLUMN `tier` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `itemtype`")
+		if not runSchemaQuery("ALTER TABLE `player_supplystash` ADD COLUMN `tier` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `itemtype`", "Could not add tier column to supply stash table.") then
+			return false
+		end
 	end
-	ensureSupplyStashPrimaryKey()
+	if not ensureSupplyStashPrimaryKey() then
+		logError("[SupplyStash] Could not ensure supply stash primary key.")
+		return false
+	end
+	return true
 end
 
 -- Get the ItemType corresponding to the provided item id or nil when the id is invalid or the item type does not exist.
@@ -812,14 +881,20 @@ local function withdraw(player, itemId, amount, tier)
 		return true
 	end
 
+	if not removeStoredAmount(player, itemId, amount, tier) then
+		player:sendCancelMessage("Could not remove the items from your supply stash.")
+		sendStash(player)
+		return true
+	end
+
 	local delivered, reason = deliverToPlayer(player, itemId, amount, tier)
 	if not delivered then
+		addStoredAmount(player, itemId, amount, tier)
 		player:sendCancelMessage(reason)
 		sendStash(player)
 		return true
 	end
 
-	removeStoredAmount(player, itemId, amount, tier)
 	db.query("DELETE FROM `player_supplystash` WHERE `player_id` = " .. player:getGuid() .. " AND `amount` = 0")
 	sendStash(player)
 	return true
@@ -833,7 +908,10 @@ local handler = PacketHandler(OPCODE_SUPPLY_STASH_REQUEST)
 -- @param msg The incoming network message containing the action and any parameters.
 -- @return `true` to indicate the packet was handled.
 function handler.onReceive(player, msg)
-	ensureTables()
+	if not ensureTables() then
+		player:sendCancelMessage("Supply stash is temporarily unavailable.")
+		return true
+	end
 
 	local action = msg:getByte()
 	if not supportsCustomNetwork(player) then
@@ -868,7 +946,10 @@ CustomSupplyStash = {
 			return false
 		end
 
-		ensureTables()
+		if not ensureTables() then
+			player:sendCancelMessage("Supply stash is temporarily unavailable.")
+			return false
+		end
 		setSupplyStashDepotId(player, depotId or getPlayerLastDepotId(player))
 		return sendStash(player)
 	end,
