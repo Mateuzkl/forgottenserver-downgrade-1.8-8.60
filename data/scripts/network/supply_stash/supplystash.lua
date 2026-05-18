@@ -56,10 +56,17 @@ for _, itemId in ipairs({
 	end
 end
 
+-- Checks whether the given player is using OTClient network features.
+-- @param player The player object (may be nil).
+-- @return `true` if `player` exists and `player:isUsingOtClient()` is truthy, `false` otherwise.
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
+-- Checks whether a given column name exists in the specified database table.
+-- @param tableName The name of the database table to inspect.
+-- @param columnName The column name to look for (pattern is matched with SQL LIKE).
+-- @return `true` if the column exists in the table, `false` otherwise.
 local function tableColumnExists(tableName, columnName)
 	local resultId = db.storeQuery("SHOW COLUMNS FROM `" .. tableName .. "` LIKE " .. db.escapeString(columnName))
 	if resultId then
@@ -69,6 +76,8 @@ local function tableColumnExists(tableName, columnName)
 	return false
 end
 
+-- Returns the primary key column signature for the `player_supplystash` table as a comma-separated string.
+-- @return A string containing primary key column names in index order (e.g., "player_id,itemtype,tier"). Returns an empty string if the table has no PRIMARY index or cannot be queried.
 local function getSupplyStashPrimaryKeySignature()
 	local indexes = {}
 	local resultId = db.storeQuery("SHOW INDEX FROM `player_supplystash` WHERE `Key_name` = 'PRIMARY'")
@@ -93,6 +102,8 @@ local function getSupplyStashPrimaryKeySignature()
 	return table.concat(columns, ",")
 end
 
+-- Rebuilds the `player_supplystash` table to ensure a composite primary key that includes `tier` and migrates existing rows, aggregating amounts by `(player_id, itemtype, tier)`.
+-- @return `true` if the table was successfully rebuilt and migrated, `false` otherwise.
 local function rebuildSupplyStashTable()
 	db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
 	if not db.query([[
@@ -125,6 +136,9 @@ local function rebuildSupplyStashTable()
 	return db.query("RENAME TABLE `player_supplystash_tier_migration` TO `player_supplystash`")
 end
 
+-- Ensures the `player_supplystash` table has a composite primary key on `player_id,itemtype,tier`, altering or rebuilding the table if necessary.
+-- This may modify the database schema to enforce the correct primary key.
+-- @return `true` if the primary key is configured as `player_id,itemtype,tier`, `false` otherwise.
 local function ensureSupplyStashPrimaryKey()
 	if getSupplyStashPrimaryKeySignature() == "player_id,itemtype,tier" then
 		return true
@@ -138,6 +152,10 @@ local function ensureSupplyStashPrimaryKey()
 	return rebuildSupplyStashTable()
 end
 
+-- Ensures the database schema for the supply stash exists and is up-to-date.
+-- Creates the `player_supplystash` table if missing (columns: `player_id`, `itemtype`, `tier`, `amount`),
+-- guarantees the `tier` column exists, and enforces the composite primary key (`player_id`, `itemtype`, `tier`)
+-- along with the foreign key constraint to `players(id)`.
 local function ensureTables()
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `player_supplystash` (
@@ -158,6 +176,9 @@ local function ensureTables()
 	ensureSupplyStashPrimaryKey()
 end
 
+-- Get the ItemType corresponding to the provided item id or nil when the id is invalid or the item type does not exist.
+-- @param itemId Number or string convertible to a number representing the item id.
+-- @return The `ItemType` instance for the id, or `nil` if `itemId` is not a positive number or no item type exists for that id.
 local function getItemType(itemId)
 	itemId = tonumber(itemId) or 0
 	if itemId <= 0 then
@@ -324,6 +345,10 @@ local restrictedInstanceAttributes = {
 	ITEM_ATTRIBUTE_REWARDID
 }
 
+-- Returns the item's tier clamped to the range 0 through 10.
+-- If `item` is nil or does not expose `getTier`, returns 0.
+-- @param item The item instance (may be nil) which may implement `getTier`.
+-- @return number The tier as an integer between 0 and 10 inclusive.
 local function getItemTier(item)
 	if item and item.getTier then
 		return math.max(0, math.min(10, tonumber(item:getTier()) or 0))
@@ -331,6 +356,11 @@ local function getItemTier(item)
 	return 0
 end
 
+-- Determines whether an item instance is eligible to be stored in the supply stash.
+-- The check excludes containers, blocked or non-supply items, store/imbuement items, instances with restricted attributes,
+-- items with decay/timestamp attributes, and items with duration or charges that are present but not at their item-type maximums.
+-- @param item The item instance to evaluate.
+-- @return `true` if the item meets all eligibility requirements for stowing in the supply stash, `false` otherwise.
 local function isPristineSupplyItem(item)
 	if not item or item:isContainer() then
 		return false
@@ -400,6 +430,9 @@ local function normalizeDepotId(depotId)
 	return depotId
 end
 
+-- Obtains the player's last used depot ID and normalizes it to the range 0..0xFFFF.
+-- @param player The player object to query.
+-- @return The normalized depot ID (number between 0 and 65535). Returns 0 if the value is unavailable or an error occurs.
 local function getPlayerLastDepotId(player)
 	if player.getLastDepotId then
 		local ok, depotId = pcall(function()
@@ -412,10 +445,17 @@ local function getPlayerLastDepotId(player)
 	return 0
 end
 
+-- Set the active depot ID used for the player's supply stash session.
+-- @param player The player whose supply stash session will be updated.
+-- @param depotId The depot identifier to associate with the player; it will be normalized to the valid depot range.
 local function setSupplyStashDepotId(player, depotId)
 	supplyStashDepotSessions[player:getId()] = normalizeDepotId(depotId)
 end
 
+-- Get the active supply stash depot id for a player.
+-- Returns the session depot id set for the player if present; otherwise returns the player's last depot id.
+-- @param player The player object.
+-- @return number The depot id (normalized to 0..65535).
 local function getSupplyStashDepotId(player)
 	local depotId = supplyStashDepotSessions[player:getId()]
 	if depotId ~= nil then
@@ -424,6 +464,9 @@ local function getSupplyStashDepotId(player)
 	return getPlayerLastDepotId(player)
 end
 
+-- Collects the player's depot box instances for the currently selected depot session.
+-- @param player The player whose depot boxes will be retrieved.
+-- @return An array of depot box objects for indices 1..15 that exist for the player's selected depot (may be empty).
 local function getDepotBoxes(player)
 	local boxes = {}
 	local depotId = getSupplyStashDepotId(player)
@@ -436,6 +479,9 @@ local function getDepotBoxes(player)
 	return boxes
 end
 
+-- Retrieves stored supply stash rows for the given player, excluding entries with non-positive amounts and items that are not valid supply items.
+-- @param player The player whose stash rows to fetch.
+-- @return An array of tables { itemId = <number>, tier = <number>, amount = <number> } for each stored entry; `amount` is clamped to at most 0xFFFFFFFF.
 local function getRows(player)
 	local rows = {}
 	local resultId = db.storeQuery(
@@ -458,6 +504,10 @@ local function getRows(player)
 	return rows
 end
 
+-- Serialize and send the player's supply stash (including per-item tier and metadata) to the client.
+-- If the player does not support the custom network protocol, no message is sent.
+-- @param player The player to receive the stash payload.
+-- @return `true` if the stash message was sent to the player, `false` otherwise.
 local function sendStash(player)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -488,6 +538,11 @@ local function sendStash(player)
 	return msg:sendToPlayer(player)
 end
 
+-- Retrieves the stored amount for a specific item and tier in the player's supply stash.
+-- @param player The player whose stash is queried.
+-- @param itemId The item type id to query.
+-- @param tier Tier of the item; values are clamped to the range 0..10.
+-- @return The stored amount for the (itemId, tier) entry, or 0 if none exists.
 local function getStoredAmount(player, itemId, tier)
 	local amount = 0
 	tier = math.max(0, math.min(10, tonumber(tier) or 0))
@@ -502,6 +557,12 @@ local function getStoredAmount(player, itemId, tier)
 	return amount
 end
 
+-- Adds `amount` to the stored quantity for the given player's item and tier, creating a row if none exists.
+-- @param player The player whose stash will be modified.
+-- @param itemId The item type id to increment.
+-- @param amount The amount to add to the stored quantity.
+-- @param tier The item tier; values are clamped to the range 0..10.
+-- @return The database query result on success, `false` on failure.
 local function addStoredAmount(player, itemId, amount, tier)
 	tier = math.max(0, math.min(10, tonumber(tier) or 0))
 	return db.query(string.format(
@@ -511,6 +572,12 @@ local function addStoredAmount(player, itemId, amount, tier)
 	))
 end
 
+-- Decrease the stored quantity for a specific item and tier in a player's supply stash.
+-- @param player The player whose stash is modified.
+-- @param itemId The item type id to decrement.
+-- @param amount The quantity to subtract.
+-- @param tier The item tier; coerced to an integer in the range 0..10.
+-- @return The result of the database update query.
 local function removeStoredAmount(player, itemId, amount, tier)
 	tier = math.max(0, math.min(10, tonumber(tier) or 0))
 	return db.query(string.format(
@@ -555,6 +622,9 @@ local function collectDepotItems(player, list)
 	end
 end
 
+-- Determines whether the stash can accommodate the given additional unique item types without exceeding the maximum unique-item limit.
+-- @param amounts Table whose keys are strings in the form "itemId:tier" representing types to add; values are ignored.
+-- @return `true` if adding the unique keys in `amounts` to the player's current stored types stays within SUPPLY_STASH_MAX_UNIQUE_ITEMS, `false` otherwise.
 local function canAddUniqueTypes(player, amounts)
 	local rows = getRows(player)
 	local storedTypes = {}
@@ -571,6 +641,10 @@ local function canAddUniqueTypes(player, amounts)
 	return #rows + newTypes <= SUPPLY_STASH_MAX_UNIQUE_ITEMS
 end
 
+-- Stores all eligible supply items found in the player's depot boxes (1–15) and worn/backpack inventory into the player's supply stash.
+-- Aggregates amounts by item ID and tier, validates capacity, persists amounts, removes the source items, and rolls back on any failure.
+-- @param player The player whose items will be collected and stowed.
+-- @return `true` on completion (operation succeeds or is cancelled and the stash UI is refreshed).
 local function stowAll(player)
 	local items = {}
 	collectDepotItems(player, items)
@@ -646,11 +720,22 @@ local function stowAll(player)
 	return true
 end
 
+-- Checks whether the player has enough free capacity to carry the specified amount of an item type.
+-- @param player The player whose free capacity is checked.
+-- @param itemType The ItemType of the item being carried.
+-- @param amount The quantity of the item to carry.
+-- @return `true` if the player's free capacity is greater than or equal to the weight of the specified amount, `false` otherwise.
 local function canCarry(player, itemType, amount)
 	local weight = itemType:getWeight(amount)
 	return player:getFreeCapacity() >= weight
 end
 
+-- Attempts to create and add the requested amount of the specified item (with an optional tier) to the player's inventory.
+-- @param player The player who will receive the items.
+-- @param itemId The numeric item type identifier to deliver.
+-- @param amount The total quantity to deliver; stackable items may be split into multiple stacks.
+-- @param tier The tier to apply to created items; values are clamped to the range 0..10.
+-- @return `true` on success, `false` and an error message string on failure.
 local function deliverToPlayer(player, itemId, amount, tier)
 	local itemType = getItemType(itemId)
 	if not itemType then
@@ -692,6 +777,12 @@ local function deliverToPlayer(player, itemId, amount, tier)
 	return true
 end
 
+-- Withdraws a specified quantity of an item (optionally a tier) from the player's supply stash and delivers it to the player.
+-- @param player The player performing the withdrawal.
+-- @param itemId The item type id to withdraw.
+-- @param amount The number of items to withdraw (must be > 0 and ≤ SUPPLY_STASH_MAX_WITHDRAW).
+-- @param tier The item tier to withdraw (integer clamped to 0..10).
+-- @return `true` if the request was handled (success or user-facing failure), otherwise `false`.
 local function withdraw(player, itemId, amount, tier)
 	itemId = tonumber(itemId) or 0
 	amount = math.floor(tonumber(amount) or 0)
@@ -736,6 +827,11 @@ end
 
 local handler = PacketHandler(OPCODE_SUPPLY_STASH_REQUEST)
 
+-- Handles incoming supply stash request packets and dispatches open, stow-all, and withdraw actions.
+-- Ensures database tables exist, verifies the player uses the custom network client, and sends appropriate responses or cancel messages.
+-- @param player The player who sent the packet.
+-- @param msg The incoming network message containing the action and any parameters.
+-- @return `true` to indicate the packet was handled.
 function handler.onReceive(player, msg)
 	ensureTables()
 

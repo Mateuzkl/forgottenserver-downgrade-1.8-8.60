@@ -555,6 +555,18 @@ int luaItemGetCustomAttribute(lua_State* L)
 	return 1;
 }
 
+/**
+ * @brief Sets a custom attribute on an Item from Lua.
+ *
+ * Expects on the Lua stack: item userdata at index 1, a key at index 2 (integer or string),
+ * and a value at index 3 (integer/number, string, or boolean). Converts numeric values to
+ * integer or double depending on whether they have a fractional part and stores the value
+ * under the stringified key.
+ *
+ * @param L Lua state (stack: 1=item, 2=key, 3=value).
+ * @return Pushes `true` if the attribute was set successfully; pushes `nil` if the item is
+ * missing or if the key or value types are invalid.
+ */
 int luaItemSetCustomAttribute(lua_State* L)
 {
 	// item:setCustomAttribute(key, value)
@@ -596,6 +608,13 @@ int luaItemSetCustomAttribute(lua_State* L)
 	return 1;
 }
 
+/**
+ * @brief Serialize an item's attributes and push the serialized blob to Lua.
+ *
+ * If the first Lua argument is not a valid Item, `nil` is pushed.
+ *
+ * @return A Lua string containing the serialized attributes, or `nil` if the item argument is invalid.
+ */
 int luaItemSerializeAttributes(lua_State* L)
 {
 	// item:serializeAttributes()
@@ -612,6 +631,14 @@ int luaItemSerializeAttributes(lua_State* L)
 	return 1;
 }
 
+/**
+ * @brief Unserializes serialized item attributes from a Lua string into the item.
+ *
+ * Reads a binary string from the second Lua argument and applies it to the item userdata
+ * provided as the first argument by calling the item's unserializeAttr method.
+ *
+ * @return `true` if the attributes were successfully unserialized and applied, `false` otherwise;
+ *         `nil` if the first argument is not a valid item. */
 int luaItemUnserializeAttributes(lua_State* L)
 {
 	// item:unserializeAttributes(attributes)
@@ -629,6 +656,15 @@ int luaItemUnserializeAttributes(lua_State* L)
 	return 1;
 }
 
+/**
+ * @brief Removes a custom attribute from an item by key.
+ *
+ * Expects an Item userdata at stack index 1 and a custom attribute key at index 2.
+ * The key may be an integer or a string. If the item or key is invalid, `nil` is pushed.
+ *
+ * @param L Lua state.
+ * @return `true` if the attribute was removed, `false` if the attribute existed but was not removed, `nil` if the item or key argument is invalid.
+ */
 int luaItemRemoveCustomAttribute(lua_State* L)
 {
 	// item:removeCustomAttribute(key)
@@ -1116,6 +1152,15 @@ int LuaScriptInterface::luaItemGC(lua_State* L)
 	return 0;
 }
 
+/**
+ * @brief Register the Lua "Item" class and all its Item-specific bindings.
+ *
+ * Registers the "Item" userdata type, its metamethods (__eq, __gc) and the full
+ * set of Lua-accessible Item methods used by scripts, including parent/top-parent
+ * accessors, cloning/splitting/removal, attribute and custom-attribute (de)serialization,
+ * movement/transform/decay operations, magic-field interaction, reflection/boost APIs,
+ * instance/UID tracking, imbuement APIs, and Forge tier/classification/chance getters/setters.
+ */
 void LuaScriptInterface::registerItem()
 {
 	// Item

@@ -136,20 +136,30 @@ local function acquireMultipleLocks(keys)
 	return true
 end
 
+-- Releases each lock identified in `keys`.
+-- @param keys Array of lock key strings to release.
 local function releaseMultipleLocks(keys)
 	for _, key in ipairs(keys) do
 		releaseLock(key)
 	end
 end
 
+-- Determines whether the provided attributes value represents serialized attributes.
+-- @param attributes The attributes value to inspect (expected to be a string blob when serialized).
+-- @return `true` if `attributes` is a non-empty string, `false` otherwise.
 local function hasSerializedAttributes(attributes)
 	return type(attributes) == "string" and #attributes > 0
 end
 
+-- Provide a SQL literal representing an empty serialized attributes value.
+-- @return SQL expression for an empty attributes value; uses `db.escapeBlob("", 0)` when available, otherwise the empty-string literal `''`.
 local function emptyAttributesSql()
 	return db.escapeBlob and db.escapeBlob("", 0) or "''"
 end
 
+-- Escapes serialized item attributes for safe SQL insertion, or returns the SQL used to represent empty attributes.
+-- @param attributes Serialized attributes string, or nil/empty when there are no serialized attributes.
+-- @return SQL expression suitable for inserting the attributes into a query (`db.escapeBlob(attributes, #attributes)` is used when available, otherwise `db.escapeString(attributes)`); returns the database-specific empty-attributes SQL when attributes are not serialized.
 local function escapeAttributes(attributes)
 	if hasSerializedAttributes(attributes) then
 		return db.escapeBlob and db.escapeBlob(attributes, #attributes) or db.escapeString(attributes)
@@ -159,7 +169,12 @@ end
 
 -- Rollback a DB-claimed offer (used when delivery fails after DB claim).
 -- For full-amount offers (deleted): tries to re-INSERT with original data.
--- For partial offers (updated): restores the subtracted amount.
+-- Restores a market offer in the database after a previously claimed (deleted or reduced) offer.
+-- If `acceptedAmount` is greater than or equal to `offer.amount`, the full offer row is reinserted;
+-- otherwise the stored offer's `amount` is increased by `acceptedAmount`.
+-- @param offer Table representing the offer row (must include `id`, `playerId`, `sale`, `itemId`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`).
+-- @param acceptedAmount Number of units to restore to the offer.
+-- @return The result of the database query (truthy on success, `false` on failure).
 local function rollbackOfferClaim(offer, acceptedAmount)
 	if acceptedAmount >= offer.amount then
 		-- Full offer was DELETE'd — restore it
@@ -221,6 +236,9 @@ end
 
 local tableExistsCache = {}
 
+-- Determine whether a database table with the given name exists.
+-- @param name The name of the database table to check.
+-- @return `true` if the table exists, `false` otherwise.
 local function tableExists(name)
 	if tableExistsCache[name] ~= nil then
 		return tableExistsCache[name]
@@ -234,6 +252,8 @@ local function tableExists(name)
 	return exists
 end
 
+-- Checks whether a given column exists in the specified database table.
+-- @return `true` if the column exists in the table, `false` otherwise.
 local function columnExists(tableName, columnName)
 	local resultId = db.storeQuery("SHOW COLUMNS FROM `" .. tableName .. "` LIKE " .. db.escapeString(columnName))
 	if resultId ~= false then
@@ -243,6 +263,11 @@ local function columnExists(tableName, columnName)
 	return false
 end
 
+-- Ensures a column exists on a database table by adding it when missing.
+-- Does nothing if the table does not exist or the column is already present.
+-- @param tableName The name of the database table.
+-- @param columnName The name of the column to ensure exists.
+-- @param definition The SQL column definition (e.g. "INT NOT NULL DEFAULT 0").
 local function ensureColumn(tableName, columnName, definition)
 	if not tableExists(tableName) or columnExists(tableName, columnName) then
 		return
@@ -250,6 +275,11 @@ local function ensureColumn(tableName, columnName, definition)
 	db.query("ALTER TABLE `" .. tableName .. "` ADD COLUMN `" .. columnName .. "` " .. definition)
 end
 
+-- Retrieve the serialized attributes value for a given result row and column, if present.
+-- Prefers a stream-backed column when available; otherwise reads the column as a string.
+-- @param resultId The result row identifier returned by a query.
+-- @param columnName Optional column name to read (default: "attributes").
+-- @return The serialized attributes string when the column contains non-empty serialized data, `nil` otherwise.
 local function getResultAttributes(resultId, columnName)
 	columnName = columnName or "attributes"
 	if result.getStream then
@@ -267,6 +297,11 @@ local function getResultAttributes(resultId, columnName)
 	return nil
 end
 
+-- Ensures the market-related database schema exists and adds required columns.
+-- Creates `market_offers`, `market_history`, and `market_statistics` tables when absent,
+-- and guarantees the presence of `attributes` and `tier` columns on `market_offers`
+-- and the `tier` column on `market_history`.
+-- This function has no return value and performs schema mutations as side effects.
 local function ensureTables()
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `market_offers` (
@@ -693,6 +728,10 @@ local function getMarketDepotId(player)
 	return getPlayerLastDepotId(player)
 end
 
+-- Compute how many units of an item should be considered for trading based on stackability.
+-- @param item The item instance whose count may be used.
+-- @param itemType The item's type object; used to determine if the item is stackable.
+-- @return The tradeable quantity: the item's count (clamped to at least 0) when stackable, otherwise 1.
 local function getItemTradeCount(item, itemType)
 	if itemType:isStackable() then
 		return math.max(0, item:getCount() or 0)
@@ -700,6 +739,10 @@ local function getItemTradeCount(item, itemType)
 	return 1
 end
 
+-- Get the tier level of an item clamped between 0 and 10.
+-- If `item` is nil or does not expose `getTier`, returns 0.
+-- @param item The item instance to query (may be nil or lack `getTier`).
+-- @return The tier as an integer between 0 and 10 inclusive.
 local function getItemTier(item)
 	if item and item.getTier then
 		return math.max(0, math.min(10, tonumber(item:getTier()) or 0))
@@ -707,10 +750,19 @@ local function getItemTier(item)
 	return 0
 end
 
+-- Builds a stable map key for a depot item by combining its item ID and tier.
+-- @param itemId The numeric item type identifier.
+-- @param tier The item tier or value convertible to number; values are clamped to the range 0..10.
+-- @return A string in the form "itemId:tier" where `tier` is an integer between 0 and 10.
 local function getDepotItemKey(itemId, tier)
 	return tostring(itemId) .. ":" .. tostring(math.max(0, math.min(10, tonumber(tier) or 0)))
 end
 
+-- Get serialized attributes for an item when applicable.
+-- Returns the serialized attributes string only for non-stackable items that provide a non-empty serialization.
+-- @param item The item instance (must support `serializeAttributes`).
+-- @param itemType Optional itemType used to determine stackability; if provided and stackable, attributes are ignored.
+-- @return The serialized attributes `string` when present for a non-stackable item, `nil` otherwise.
 local function getMarketItemAttributes(item, itemType)
 	if not item or not item.serializeAttributes then
 		return nil
@@ -729,6 +781,11 @@ local function getMarketItemAttributes(item, itemType)
 	return attributes
 end
 
+-- Creates a game item instance and applies serialized attributes when provided.
+-- @param itemId number The item type id to create.
+-- @param count number The amount/count to create for stackable items.
+-- @param attributes string|nil Serialized attributes to apply to the created item, if any.
+-- @return Item|nil The created Item object, or `nil` if creation failed or provided serialized attributes could not be applied.
 local function createMarketItem(itemId, count, attributes)
 	local item = Game.createItem(itemId, count)
 	if not item then
@@ -744,6 +801,10 @@ local function createMarketItem(itemId, count, attributes)
 	return item
 end
 
+-- Determine the market item's tier from serialized attributes, clamped to 0..10.
+-- @param itemId The numeric item type id to evaluate.
+-- @param attributes Serialized item attributes string; when not serialized, tier is treated as 0.
+-- @return The item's tier as an integer between 0 and 10; returns 0 if attributes are not serialized or the item cannot be instantiated.
 local function getAttributesTier(itemId, attributes)
 	if not hasSerializedAttributes(attributes) then
 		return 0
@@ -762,6 +823,9 @@ local function getAttributesTier(itemId, attributes)
 	return math.max(0, math.min(10, tier))
 end
 
+-- Collects the player's depot box containers for the current market depot.
+-- @param player The player whose market depot is queried.
+-- @return An array of depot box container objects present for that depot, ordered by ascending box index.
 local function getDepotBoxes(player)
 	local boxes = {}
 	local depotId = getMarketDepotId(player)
@@ -796,6 +860,11 @@ end
 
 local itemTypeStackableCache = {}
 
+-- Builds a map of the player's depot item quantities, keyed by itemId and by itemId:tier.
+-- Aggregates counts across all depot boxes; non-stackable items count as 1 and stackable items use their stack count.
+-- Quantities are clamped to 65535.
+-- @param player The player whose depot inventory will be scanned.
+-- @return A table where keys are numeric item IDs and "itemId:tier" strings, and values are the corresponding aggregated amounts (0..65535).
 local function buildDepotItemMap(player)
 	local depotMap = {}
 	for _, box in ipairs(getDepotBoxes(player)) do
@@ -824,6 +893,15 @@ local function buildDepotItemMap(player)
 	return depotMap
 end
 
+-- Builds the list of catalog entries to send to a player when entering the market.
+-- Each entry represents a catalog item and the available amount the player has for a specific tier.
+-- @param depotMap Table mapping keys of the form "itemId:tier" to the available amount for that item/tier. If nil, treated as empty.
+-- @return Array of entry tables. Each entry has fields:
+--   - id (number): item type id
+--   - category (string): catalog category
+--   - name (string): display name
+--   - amount (number): available quantity for the given tier (0 if none)
+--   - tier (number): tier level (0..10)
 local function buildMarketEnterEntries(depotMap)
 	local entries = {}
 	depotMap = depotMap or {}
@@ -854,6 +932,13 @@ local function buildMarketEnterEntries(depotMap)
 	return entries
 end
 
+-- Adds the specified item(s) into the player's depot boxes if space and requirements allow.
+-- Attempts to place items across the player's depot boxes and respects stackability and serialized attributes rules.
+-- @param player The player whose depot will receive the items.
+-- @param itemId The item type id to add.
+-- @param amount The number of items to add; for items with serialized attributes this must be 1.
+-- @param attributes Optional serialized attributes string for the item instance; when present the function will add a single serialized item using no-limit placement.
+-- @return `true` if the full requested amount was added to the depot, `false` otherwise.
 local function addDepotItems(player, itemId, amount, attributes)
 	local itemType = ItemType(itemId)
 	if not itemType or itemType:getId() == 0 or amount <= 0 then
@@ -896,6 +981,13 @@ local function addDepotItems(player, itemId, amount, attributes)
 	return false
 end
 
+-- Collects up to `amount` removable items matching `itemId` (and optional `tier`) from the player's depot and returns the removal plan.
+-- The returned plan is an array of tables `{ item = <Item>, count = <number> }` describing which depot item instances to remove and how many units from each.
+-- @param player The player whose depot will be scanned.
+-- @param itemId The item type id to match.
+-- @param amount The total quantity to collect.
+-- @param tier Optional tier filter (0–10); when provided only items with this tier are considered.
+-- @return A removal plan array when at least `amount` units are found, or `nil` if the requested quantity is not available.
 local function collectDepotRemovals(player, itemId, amount, tier)
 	local itemType = ItemType(itemId)
 	if not itemType or itemType:getId() == 0 or amount <= 0 then
@@ -926,6 +1018,14 @@ local function collectDepotRemovals(player, itemId, amount, tier)
 	return nil
 end
 
+-- Remove up to `amount` items of `itemId` from the player's depot, optionally restricting to a specific `tier`.
+-- If any removed item contains serialized attributes, enforces one-at-a-time trading and returns those attributes.
+-- @param player Player object whose depot will be modified.
+-- @param itemId Numeric item type identifier to remove.
+-- @param amount Number of items to remove.
+-- @param tier Optional numeric tier to restrict removals to (0..10); pass nil to ignore tier.
+-- @return `true` and the stored serialized attributes (string) if removal succeeded.
+-- @return `false`, `nil`, and an error message string if removal failed or trading rules were violated.
 local function removeDepotItemsWithAttributes(player, itemId, amount, tier)
 	local removals = collectDepotRemovals(player, itemId, amount, tier)
 	if not removals then
@@ -957,11 +1057,19 @@ local function removeDepotItemsWithAttributes(player, itemId, amount, tier)
 	return true, storedAttributes
 end
 
+-- Attempts to remove the specified amount of an item from the player's depot for a market operation.
+-- @param player The player object whose depot will be scanned.
+-- @param itemId The item type id to remove.
+-- @param amount The quantity to remove.
+-- @return `true` if the requested amount was successfully removed/reserved, `false` otherwise.
 local function removeDepotItems(player, itemId, amount)
 	local ok = removeDepotItemsWithAttributes(player, itemId, amount)
 	return ok
 end
 
+-- Get the number of active market offers for a player.
+-- @param playerId The player's database id.
+-- @return The count of offers for the player, or `0` if the `market_offers` table is missing or the query fails.
 local function getMarketOfferCount(playerId)
 	if not tableExists("market_offers") then
 		return 0
@@ -987,6 +1095,10 @@ local function calculateFee(price, amount)
 	return fee
 end
 
+-- Compute the next sequential inbox `sid` for the given player.
+-- Queries `player_inboxitems` for the current maximum `sid` (defaulting to 100) and returns that value plus one.
+-- @param playerId The numeric player identifier.
+-- @return The next available inbox `sid` (integer).
 local function getNextInboxSid(playerId)
 	local sid = 100
 	local resultId = db.storeQuery("SELECT COALESCE(MAX(`sid`), 100) AS `sid` FROM `player_inboxitems` WHERE `player_id` = " .. playerId)
@@ -997,6 +1109,13 @@ local function getNextInboxSid(playerId)
 	return sid + 1
 end
 
+-- Insert item(s) into the player's inbox DB table, splitting into stack-sized rows and storing serialized attributes when present.
+-- Validates the item type and that the `player_inboxitems` table exists. If `attributes` are serialized, `amount` must be 1 and the attributes are stored in the row; otherwise the function splits `amount` into one or more rows using the item's stack size.
+-- @param playerId The numeric database id of the player receiving the item(s).
+-- @param itemId The item type id to insert.
+-- @param amount The total quantity to insert.
+-- @param attributes Serialized attributes string for the item instance, or nil/empty for no attributes.
+-- @return `true` if all necessary rows were successfully inserted, `false` on validation failure or any DB error.
 local function insertInboxItem(playerId, itemId, amount, attributes)
 	if not tableExists("player_inboxitems") then
 		return false
@@ -1039,6 +1158,13 @@ local function insertInboxItem(playerId, itemId, amount, attributes)
 	return true
 end
 
+-- Adds the specified item(s) into the provided inbox container, honoring stack sizes and serialized attributes.
+-- When `attributes` are serialized, a single unique item is created and inserted (requires `amount == 1`).
+-- @param inbox The inbox container object (must support `addItem`/`addItemEx` operations).
+-- @param itemId The item type id to add.
+-- @param amount The quantity to add (for serialized attributes this must be 1).
+-- @param attributes Serialized item attributes or `nil`. When present, attributes are applied to a single created item.
+-- @return `true` on success, `false` otherwise.
 local function addItemToInbox(inbox, itemId, amount, attributes)
 	local itemType = ItemType(itemId)
 	if not inbox or not itemType or itemType:getId() == 0 or amount <= 0 then
@@ -1075,6 +1201,10 @@ local function addItemToInbox(inbox, itemId, amount, attributes)
 	return true
 end
 
+-- Checks whether an item’s serialized attributes match the given serialized attributes.
+-- @param item Item object to compare; may be nil.
+-- @param attributes Serialized attribute string (or empty/non-serialized).
+-- @return `true` if `attributes` is not serialized or if `item` exists, supports `serializeAttributes`, and its serialized attributes equal `attributes`, `false` otherwise.
 local function itemMatchesAttributes(item, attributes)
 	if not hasSerializedAttributes(attributes) then
 		return true
@@ -1082,6 +1212,13 @@ local function itemMatchesAttributes(item, attributes)
 	return item and item.serializeAttributes and item:serializeAttributes() == attributes
 end
 
+-- Remove up to `amount` of the specified item from the player's inbox, matching both item ID and optional serialized `attributes`.
+-- Matches stackable counts and non-stackable items as needed; removal fails if the inbox does not contain the requested total.
+-- @param player The Player whose inbox will be scanned and modified.
+-- @param itemId The numeric item type ID to remove.
+-- @param amount The total quantity to remove (must be > 0).
+-- @param attributes Optional serialized attributes string to match specific item instances; pass `nil` to ignore attributes.
+-- @return `true` if the requested amount was successfully removed, `false` otherwise.
 local function removeInboxItems(player, itemId, amount, attributes)
 	local inbox = player:getInbox()
 	local itemType = ItemType(itemId)
@@ -1116,6 +1253,13 @@ local function removeInboxItems(player, itemId, amount, attributes)
 	return true
 end
 
+-- Delivers items to a player by adding them to their in-memory inbox when online or inserting them into the persistent DB inbox when offline.
+-- @param playerId The target player's numeric ID (used for DB insertion when the player is offline).
+-- @param playerName The target player's current name (used to resolve an online Player object); may be nil.
+-- @param itemId The item type ID to deliver.
+-- @param amount The quantity to deliver.
+-- @param attributes Serialized attributes string for the item when applicable, or nil.
+-- @return `true` if the items were successfully delivered (either added to the player's inbox or inserted into the DB), `false` otherwise.
 local function deliverItemToPlayer(playerId, playerName, itemId, amount, attributes)
 	local target = playerName and Player(playerName) or nil
 	if target then
@@ -1127,6 +1271,11 @@ local function deliverItemToPlayer(playerId, playerName, itemId, amount, attribu
 	return insertInboxItem(playerId, itemId, amount, attributes)
 end
 
+-- Credits `amount` to a player's bank balance, preferring an online player object when available.
+-- @param playerId Numeric player id used for the database update when the player is offline.
+-- @param playerName Optional player name; when provided and the player is online, updates their in-memory bank balance.
+-- @param amount The amount to credit; values less than or equal to 0 are treated as no-op and succeed.
+-- @return `true` on success; otherwise returns the database query result (truthy on success, falsy on failure).
 local function creditPlayerBank(playerId, playerName, amount)
 	if amount <= 0 then
 		return true
@@ -1141,6 +1290,16 @@ local function creditPlayerBank(playerId, playerName, amount)
 	return db.query("UPDATE `players` SET `balance` = `balance` + " .. amount .. " WHERE `id` = " .. playerId)
 end
 
+-- Records a market offer event in the `market_history` table.
+-- Inserts a history row if the `market_history` table exists; computes `expires_at` as `(created or now) + offerDuration` and clamps `tier` into the range 0..10.
+-- @param playerId Numeric id of the player who created or was affected by the offer.
+-- @param sale Numeric action code indicating buy or sell (e.g., `MARKET_ACTION_BUY` / `MARKET_ACTION_SELL`).
+-- @param itemId Numeric item type id involved in the offer.
+-- @param amount Number of items in the recorded event.
+-- @param price Price per item (used to record the total value in history rows).
+-- @param state Numeric history state code (e.g., `MARKET_STATE_ACCEPTED`, `MARKET_STATE_EXPIRED`, `MARKET_STATE_CANCELLED`).
+-- @param created Optional timestamp to use as the offer creation time; when omitted, the current time is used.
+-- @param tier Optional numeric tier for the item; will be coerced to an integer and clamped between 0 and 10.
 local function addHistory(playerId, sale, itemId, amount, price, state, created, tier)
 	if not tableExists("market_history") then
 		return
@@ -1153,6 +1312,9 @@ local function addHistory(playerId, sale, itemId, amount, price, state, created,
 		playerId .. ", " .. sale .. ", " .. itemId .. ", " .. amount .. ", " .. price .. ", " .. tier .. ", " .. expiresAt .. ", " .. now .. ", " .. state .. ")")
 end
 
+-- Retrieves a market offer by its database ID, resolving stored attributes and deriving the effective tier from those attributes when present.
+-- @param offerId The offer database ID.
+-- @return A table with fields: `id`, `playerId`, `sale`, `itemId`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`, `playerName`; or `nil` if the offer does not exist.
 local function fetchOfferById(offerId)
 	local resultId = db.storeQuery("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`id` = " .. offerId .. " LIMIT 1")
 	if resultId == false then
@@ -1180,6 +1342,21 @@ local function fetchOfferById(offerId)
 	return offer
 end
 
+-- Parses the result of an SQL query and returns a list of market offers built from its rows.
+-- @param query The SQL query string expected to select offer rows (columns: id, player_id, sale, itemtype, amount, created, anonymous, price, tier, player_name and any attributes blob).
+-- @return A numeric-indexed table of offer tables. Each offer contains:
+--   - id: offer id.
+--   - playerId: owner player id.
+--   - sale: action type (buy/sell code).
+--   - itemId: item type id.
+--   - amount: quantity.
+--   - created: creation timestamp.
+--   - anonymous: `true` if the offer is anonymous, `false` otherwise.
+--   - price: unit price.
+--   - tier: resolved tier (database `tier` field, overridden by derived tier from `attributes` when present).
+--   - attributes: serialized attributes blob (or `nil`).
+--   - playerName: owner name string.
+--   - state: offer state (set to `MARKET_STATE_ACTIVE` for returned rows).
 local function fetchOffers(query)
 	local offers = {}
 	local resultId = db.storeQuery(query)
@@ -1212,6 +1389,20 @@ local function fetchOffers(query)
 	return offers
 end
 
+-- Retrieve recent market history rows for the given player.
+-- @param playerId number The player's numeric id.
+-- @return table A list (array) of history entry tables ordered by most recent `inserted`. Each entry contains:
+--   - id: history row id.
+--   - playerId: owner player's id.
+--   - sale: action type (buy/sell code).
+--   - itemId: itemtype id.
+--   - amount: quantity involved.
+--   - created: insertion timestamp (`inserted`).
+--   - anonymous: `false` (placeholder; anonymity handled elsewhere).
+--   - price: unit price.
+--   - tier: item tier stored with the history row.
+--   - playerName: player name string (empty here).
+--   - state: history state code.
 local function fetchHistory(playerId)
 	local offers = {}
 	if not tableExists("market_history") then
@@ -1243,6 +1434,18 @@ local function fetchHistory(playerId)
 	return offers
 end
 
+-- Writes a market offer's serialized fields into the output packet.
+-- @param out Packet builder/writer object with methods like `addU32`, `addU16`, `addByte`, and `addString`.
+-- @param offer Table representing an offer. Expected keys:
+--   - id: offer identifier.
+--   - created: unix timestamp when the offer was created.
+--   - itemId: item type id.
+--   - tier: numeric tier (clamped to 0..10).
+--   - amount: quantity (clamped to 0..65535).
+--   - price: unit price (clamped to MARKET_MAX_PRICE).
+--   - anonymous: truthy to send `"Anonymous"` as the seller name.
+--   - playerName: seller name used when `anonymous` is falsy.
+--   - state: offer state code (defaults to MARKET_STATE_ACTIVE when absent).
 local function writeOffer(out, offer)
 	out:addU32(offer.id)
 	out:addU32(offer.created)
@@ -1522,6 +1725,10 @@ end
 
 local sendMarketDetail
 
+-- Sends the market browse response for the given browseId to the player, including separate buy and sell offer lists and item detail when applicable.
+-- @param player The player who will receive the browse response.
+-- @param browseId The requested browse identifier: a catalog item id, MARKET_REQUEST_MY_OFFERS, or MARKET_REQUEST_MY_HISTORY.
+-- @return `true` if the response packet was sent to the player, `false` if the player's client does not support the custom market network, or `nil` if the requested browseId is not tradable (no packet sent).
 local function sendMarketBrowse(player, browseId)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -1580,6 +1787,10 @@ end
 
 local offerCountCache = {}
 
+-- Sends the market "enter" catalog to the player's client, including current balance, active offer count, and available depot entries.
+-- @param player The player receiving the catalog.
+-- @param depotMap Optional map of available depot items; keys are either `"itemId"` or `"itemId:tier"` and values are available counts. If omitted, the player's depot is scanned to build this map.
+-- @return `true` if the catalog packet(s) were sent to the player, `false` if the player's client does not support the custom network protocol.
 local function sendMarketEnter(player, depotMap)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -1658,6 +1869,8 @@ local function refreshMarket(player, browseId, depotMap)
 	end
 end
 
+-- Expires market offers whose lifetime has elapsed, atomically claims them from the database, returns funds or items to the offer owners, and records the expiration in market history.
+-- Skips execution if the configured expire-check interval has not passed or if the `market_offers` table is absent. For each claimed offer this function attempts to credit the seller/buyer (money or item delivery), clears the per-player offer count cache on success, and on delivery failure restores the offer so it can be retried.
 local function expireOffers()
 	local now = os.time()
 	if now - lastExpireCheck < MARKET_EXPIRE_CHECK_INTERVAL or not tableExists("market_offers") then
@@ -1760,6 +1973,13 @@ end
 browseHandler:register()
 
 local createHandler = PacketHandler(OPCODE_MARKET_CREATE)
+-- Handle a client's request to create a market offer.
+-- Validates access, payload and cooldown; acquires a per-player lock; processes buy or sell flows
+-- (reserving money and/or removing items from the player's depot, including tiered/serialized attributes);
+-- inserts the offer into the database, refunds or restores resources on failure, notifies the player,
+-- and refreshes the market view.
+-- @param player The Player who sent the create-offer request.
+-- @param msg The incoming message/packet containing the offer payload.
 function createHandler.onReceive(player, msg)
 	if not ensureMarketAccess(player) then
 		return
@@ -1883,6 +2103,8 @@ end
 createHandler:register()
 
 local cancelHandler = PacketHandler(OPCODE_MARKET_CANCEL)
+-- Cancels a market offer owned by the calling player, returns the reserved goods or funds, records the cancellation in market history, and refreshes the player's offers view.
+-- The handler ensures the player still has market access, enforces action cooldowns, acquires locks to prevent concurrent races, atomically claims the offer from persistent storage, and attempts to deliver refunded items or restore bank balance. On failure to return items it logs an error; on success it notifies the player and updates the market listing.
 function cancelHandler.onReceive(player, msg)
 	if not ensureMarketAccess(player) then
 		return
@@ -1946,6 +2168,10 @@ end
 cancelHandler:register()
 
 local acceptHandler = PacketHandler(OPCODE_MARKET_ACCEPT)
+-- Handle an incoming "accept offer" request from a client: validate access and cooldown, claim the requested market offer atomically, perform the required item and/or money transfers with rollback on failure, record the accepted offer in history, clear related caches, and notify both parties.
+-- Performs pre-checks (offer existence and ownership), acquires locks (offer, acceptor, and owner) to avoid races, and enforces rules for tiered/custom-attribute offers.
+-- @param player The Player object that sent the accept request (the acceptor).
+-- @param msg The incoming network message; expected payload: offerId (u32) followed by amount (u16).
 function acceptHandler.onReceive(player, msg)
 	if not ensureMarketAccess(player) then
 		return
