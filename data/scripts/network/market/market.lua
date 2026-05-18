@@ -142,6 +142,21 @@ local function releaseMultipleLocks(keys)
 	end
 end
 
+local function hasSerializedAttributes(attributes)
+	return type(attributes) == "string" and #attributes > 0
+end
+
+local function emptyAttributesSql()
+	return db.escapeBlob and db.escapeBlob("", 0) or "''"
+end
+
+local function escapeAttributes(attributes)
+	if hasSerializedAttributes(attributes) then
+		return db.escapeBlob and db.escapeBlob(attributes, #attributes) or db.escapeString(attributes)
+	end
+	return emptyAttributesSql()
+end
+
 -- Rollback a DB-claimed offer (used when delivery fails after DB claim).
 -- For full-amount offers (deleted): tries to re-INSERT with original data.
 -- For partial offers (updated): restores the subtracted amount.
@@ -149,9 +164,11 @@ local function rollbackOfferClaim(offer, acceptedAmount)
 	if acceptedAmount >= offer.amount then
 		-- Full offer was DELETE'd — restore it
 		return db.query(
-			"INSERT INTO `market_offers` (`id`, `player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`) VALUES (" ..
+			"INSERT INTO `market_offers` (`id`, `player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`) VALUES (" ..
 			offer.id .. ", " .. offer.playerId .. ", " .. offer.sale .. ", " .. offer.itemId .. ", " ..
-			offer.amount .. ", " .. offer.created .. ", " .. (offer.anonymous and 1 or 0) .. ", " .. offer.price .. ")"
+			offer.amount .. ", " .. offer.created .. ", " .. (offer.anonymous and 1 or 0) .. ", " .. offer.price .. ", " ..
+			math.max(0, math.min(10, tonumber(offer.tier) or 0)) .. ", " ..
+			escapeAttributes(offer.attributes) .. ")"
 		)
 	else
 		-- Partial offer: restore subtracted amount
@@ -217,6 +234,39 @@ local function tableExists(name)
 	return exists
 end
 
+local function columnExists(tableName, columnName)
+	local resultId = db.storeQuery("SHOW COLUMNS FROM `" .. tableName .. "` LIKE " .. db.escapeString(columnName))
+	if resultId ~= false then
+		result.free(resultId)
+		return true
+	end
+	return false
+end
+
+local function ensureColumn(tableName, columnName, definition)
+	if not tableExists(tableName) or columnExists(tableName, columnName) then
+		return
+	end
+	db.query("ALTER TABLE `" .. tableName .. "` ADD COLUMN `" .. columnName .. "` " .. definition)
+end
+
+local function getResultAttributes(resultId, columnName)
+	columnName = columnName or "attributes"
+	if result.getStream then
+		local attributes, size = result.getStream(resultId, columnName)
+		if attributes and (tonumber(size) or 0) > 0 then
+			return attributes
+		end
+		return nil
+	end
+
+	local attributes = result.getDataString(resultId, columnName)
+	if hasSerializedAttributes(attributes) then
+		return attributes
+	end
+	return nil
+end
+
 local function ensureTables()
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `market_offers` (
@@ -228,11 +278,16 @@ local function ensureTables()
 			`created` INT UNSIGNED NOT NULL,
 			`anonymous` TINYINT(1) NOT NULL DEFAULT 0,
 			`price` INT UNSIGNED NOT NULL DEFAULT 0,
+			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			`attributes` MEDIUMBLOB NULL,
 			PRIMARY KEY (`id`),
 			KEY `idx_market_offers_itemtype_sale` (`itemtype`, `sale`),
 			KEY `idx_market_offers_player` (`player_id`)
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
+
+	ensureColumn("market_offers", "attributes", "MEDIUMBLOB NULL")
+	ensureColumn("market_offers", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
 
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `market_history` (
@@ -242,6 +297,7 @@ local function ensureTables()
 			`itemtype` SMALLINT UNSIGNED NOT NULL,
 			`amount` SMALLINT UNSIGNED NOT NULL,
 			`price` INT UNSIGNED NOT NULL DEFAULT 0,
+			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			`expires_at` INT UNSIGNED NOT NULL,
 			`inserted` INT UNSIGNED NOT NULL,
 			`state` TINYINT UNSIGNED NOT NULL,
@@ -249,6 +305,8 @@ local function ensureTables()
 			KEY `idx_market_history_player` (`player_id`)
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
+
+	ensureColumn("market_history", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
 
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `market_statistics` (
@@ -642,6 +700,68 @@ local function getItemTradeCount(item, itemType)
 	return 1
 end
 
+local function getItemTier(item)
+	if item and item.getTier then
+		return math.max(0, math.min(10, tonumber(item:getTier()) or 0))
+	end
+	return 0
+end
+
+local function getDepotItemKey(itemId, tier)
+	return tostring(itemId) .. ":" .. tostring(math.max(0, math.min(10, tonumber(tier) or 0)))
+end
+
+local function getMarketItemAttributes(item, itemType)
+	if not item or not item.serializeAttributes then
+		return nil
+	end
+
+	local attributes = item:serializeAttributes()
+	if not hasSerializedAttributes(attributes) then
+		return nil
+	end
+
+	-- Stackable market items are stored as quantity. Their normal count is
+	-- serialized too, so only non-stackable instance data is kept per offer.
+	if itemType and itemType:isStackable() then
+		return nil
+	end
+	return attributes
+end
+
+local function createMarketItem(itemId, count, attributes)
+	local item = Game.createItem(itemId, count)
+	if not item then
+		return nil
+	end
+
+	if hasSerializedAttributes(attributes) then
+		if not item.unserializeAttributes or not item:unserializeAttributes(attributes) then
+			item:remove()
+			return nil
+		end
+	end
+	return item
+end
+
+local function getAttributesTier(itemId, attributes)
+	if not hasSerializedAttributes(attributes) then
+		return 0
+	end
+
+	local item = createMarketItem(itemId, 1, attributes)
+	if not item then
+		return 0
+	end
+
+	local tier = 0
+	if item.getTier then
+		tier = tonumber(item:getTier()) or 0
+	end
+	item:remove()
+	return math.max(0, math.min(10, tier))
+end
+
 local function getDepotBoxes(player)
 	local boxes = {}
 	local depotId = getMarketDepotId(player)
@@ -692,17 +812,69 @@ local function buildDepotItemMap(player)
 			end
 			if itemTypeInfo.getId ~= 0 then
 				local count = itemTypeInfo.isStackable and math.max(0, item:getCount() or 0) or 1
-				local amount = (depotMap[itemId] or 0) + count
-				depotMap[itemId] = math.min(amount, 0xFFFF)
+				local tier = getItemTier(item)
+				local totalAmount = (depotMap[itemId] or 0) + count
+				local tierKey = getDepotItemKey(itemId, tier)
+				local tierAmount = (depotMap[tierKey] or 0) + count
+				depotMap[itemId] = math.min(totalAmount, 0xFFFF)
+				depotMap[tierKey] = math.min(tierAmount, 0xFFFF)
 			end
 		end
 	end
 	return depotMap
 end
 
-local function addDepotItems(player, itemId, amount)
+local function buildMarketEnterEntries(depotMap)
+	local entries = {}
+	depotMap = depotMap or {}
+
+	for _, entry in ipairs(marketItems) do
+		entries[#entries + 1] = {
+			id = entry.id,
+			category = entry.category,
+			name = entry.name,
+			amount = depotMap[getDepotItemKey(entry.id, 0)] or 0,
+			tier = 0
+		}
+
+		for tier = 1, 10 do
+			local amount = depotMap[getDepotItemKey(entry.id, tier)] or 0
+			if amount > 0 then
+				entries[#entries + 1] = {
+					id = entry.id,
+					category = entry.category,
+					name = entry.name,
+					amount = amount,
+					tier = tier
+				}
+			end
+		end
+	end
+
+	return entries
+end
+
+local function addDepotItems(player, itemId, amount, attributes)
 	local itemType = ItemType(itemId)
 	if not itemType or itemType:getId() == 0 or amount <= 0 then
+		return false
+	end
+
+	if hasSerializedAttributes(attributes) then
+		if amount ~= 1 then
+			return false
+		end
+
+		for _, box in ipairs(getDepotBoxes(player)) do
+			local item = createMarketItem(itemId, 1, attributes)
+			if item then
+				local ret = box:addItemEx(item, INDEX_WHEREEVER, FLAG_NOLIMIT)
+				if ret == RETURNVALUE_NOERROR then
+					return true
+				end
+				item:remove()
+			end
+		end
 		return false
 	end
 
@@ -724,17 +896,22 @@ local function addDepotItems(player, itemId, amount)
 	return false
 end
 
-local function collectDepotRemovals(player, itemId, amount)
+local function collectDepotRemovals(player, itemId, amount, tier)
 	local itemType = ItemType(itemId)
 	if not itemType or itemType:getId() == 0 or amount <= 0 then
 		return nil
+	end
+
+	local tierFilter = nil
+	if tier ~= nil then
+		tierFilter = math.max(0, math.min(10, tonumber(tier) or 0))
 	end
 
 	local removals = {}
 	local found = 0
 	for _, box in ipairs(getDepotBoxes(player)) do
 		for _, item in ipairs(box:getItems(true)) do
-			if item:getId() == itemId then
+			if item:getId() == itemId and (tierFilter == nil or getItemTier(item) == tierFilter) then
 				local count = math.min(amount - found, getItemTradeCount(item, itemType))
 				if count > 0 then
 					removals[#removals + 1] = { item = item, count = count }
@@ -749,10 +926,22 @@ local function collectDepotRemovals(player, itemId, amount)
 	return nil
 end
 
-local function removeDepotItems(player, itemId, amount)
-	local removals = collectDepotRemovals(player, itemId, amount)
+local function removeDepotItemsWithAttributes(player, itemId, amount, tier)
+	local removals = collectDepotRemovals(player, itemId, amount, tier)
 	if not removals then
-		return false
+		return false, nil, tier ~= nil and "You do not have enough items for this tier." or nil
+	end
+
+	local itemType = ItemType(itemId)
+	local storedAttributes = nil
+	for _, entry in ipairs(removals) do
+		local attributes = getMarketItemAttributes(entry.item, itemType)
+		if hasSerializedAttributes(attributes) then
+			if amount ~= 1 or entry.count ~= 1 then
+				return false, nil, "Tiered/custom items must be traded one at a time."
+			end
+			storedAttributes = attributes
+		end
 	end
 
 	local removed = 0
@@ -761,11 +950,16 @@ local function removeDepotItems(player, itemId, amount)
 			if removed > 0 then
 				addDepotItems(player, itemId, removed)
 			end
-			return false
+			return false, nil
 		end
 		removed = removed + entry.count
 	end
-	return true
+	return true, storedAttributes
+end
+
+local function removeDepotItems(player, itemId, amount)
+	local ok = removeDepotItemsWithAttributes(player, itemId, amount)
+	return ok
 end
 
 local function getMarketOfferCount(playerId)
@@ -803,7 +997,7 @@ local function getNextInboxSid(playerId)
 	return sid + 1
 end
 
-local function insertInboxItem(playerId, itemId, amount)
+local function insertInboxItem(playerId, itemId, amount, attributes)
 	if not tableExists("player_inboxitems") then
 		return false
 	end
@@ -811,6 +1005,17 @@ local function insertInboxItem(playerId, itemId, amount)
 	local itemType = ItemType(itemId)
 	if not itemType or itemType:getId() == 0 then
 		return false
+	end
+
+	if hasSerializedAttributes(attributes) then
+		if amount ~= 1 then
+			return false
+		end
+
+		local sid = getNextInboxSid(playerId)
+		local query = "INSERT INTO `player_inboxitems` (`player_id`, `sid`, `pid`, `itemtype`, `count`, `attributes`) VALUES (" ..
+			playerId .. ", " .. sid .. ", 0, " .. itemId .. ", 1, " .. escapeAttributes(attributes) .. ")"
+		return db.query(query)
 	end
 
 	local remaining = amount
@@ -821,9 +1026,9 @@ local function insertInboxItem(playerId, itemId, amount)
 			count = math.min(remaining, math.max(1, itemType:getStackSize()))
 		end
 
-		local attributes = db.escapeBlob and db.escapeBlob("", 0) or "''"
+		local attributesSql = emptyAttributesSql()
 		local query = "INSERT INTO `player_inboxitems` (`player_id`, `sid`, `pid`, `itemtype`, `count`, `attributes`) VALUES (" ..
-			playerId .. ", " .. sid .. ", 0, " .. itemId .. ", " .. count .. ", " .. attributes .. ")"
+			playerId .. ", " .. sid .. ", 0, " .. itemId .. ", " .. count .. ", " .. attributesSql .. ")"
 		if not db.query(query) then
 			return false
 		end
@@ -834,10 +1039,28 @@ local function insertInboxItem(playerId, itemId, amount)
 	return true
 end
 
-local function addItemToInbox(inbox, itemId, amount)
+local function addItemToInbox(inbox, itemId, amount, attributes)
 	local itemType = ItemType(itemId)
 	if not inbox or not itemType or itemType:getId() == 0 or amount <= 0 then
 		return false
+	end
+
+	if hasSerializedAttributes(attributes) then
+		if amount ~= 1 then
+			return false
+		end
+
+		local item = createMarketItem(itemId, 1, attributes)
+		if not item then
+			return false
+		end
+
+		local ret = inbox:addItemEx(item, INDEX_WHEREEVER, FLAG_NOLIMIT)
+		if ret ~= RETURNVALUE_NOERROR then
+			item:remove()
+			return false
+		end
+		return true
 	end
 
 	local stackSize = math.max(1, itemType:getStackSize())
@@ -852,7 +1075,14 @@ local function addItemToInbox(inbox, itemId, amount)
 	return true
 end
 
-local function removeInboxItems(player, itemId, amount)
+local function itemMatchesAttributes(item, attributes)
+	if not hasSerializedAttributes(attributes) then
+		return true
+	end
+	return item and item.serializeAttributes and item:serializeAttributes() == attributes
+end
+
+local function removeInboxItems(player, itemId, amount, attributes)
 	local inbox = player:getInbox()
 	local itemType = ItemType(itemId)
 	if not inbox or not itemType or itemType:getId() == 0 or amount <= 0 then
@@ -862,7 +1092,7 @@ local function removeInboxItems(player, itemId, amount)
 	local removals = {}
 	local found = 0
 	for _, item in ipairs(inbox:getItems(true)) do
-		if item:getId() == itemId then
+		if item:getId() == itemId and itemMatchesAttributes(item, attributes) then
 			local count = math.min(amount - found, getItemTradeCount(item, itemType))
 			if count > 0 then
 				removals[#removals + 1] = { item = item, count = count }
@@ -886,15 +1116,15 @@ local function removeInboxItems(player, itemId, amount)
 	return true
 end
 
-local function deliverItemToPlayer(playerId, playerName, itemId, amount)
+local function deliverItemToPlayer(playerId, playerName, itemId, amount, attributes)
 	local target = playerName and Player(playerName) or nil
 	if target then
 		local inbox = target:getInbox()
-		if addItemToInbox(inbox, itemId, amount) then
+		if addItemToInbox(inbox, itemId, amount, attributes) then
 			return true
 		end
 	end
-	return insertInboxItem(playerId, itemId, amount)
+	return insertInboxItem(playerId, itemId, amount, attributes)
 end
 
 local function creditPlayerBank(playerId, playerName, amount)
@@ -911,19 +1141,20 @@ local function creditPlayerBank(playerId, playerName, amount)
 	return db.query("UPDATE `players` SET `balance` = `balance` + " .. amount .. " WHERE `id` = " .. playerId)
 end
 
-local function addHistory(playerId, sale, itemId, amount, price, state, created)
+local function addHistory(playerId, sale, itemId, amount, price, state, created, tier)
 	if not tableExists("market_history") then
 		return
 	end
 
 	local now = os.time()
 	local expiresAt = (created or now) + getOfferDuration()
-	db.query("INSERT INTO `market_history` (`player_id`, `sale`, `itemtype`, `amount`, `price`, `expires_at`, `inserted`, `state`) VALUES (" ..
-		playerId .. ", " .. sale .. ", " .. itemId .. ", " .. amount .. ", " .. price .. ", " .. expiresAt .. ", " .. now .. ", " .. state .. ")")
+	tier = math.max(0, math.min(10, tonumber(tier) or 0))
+	db.query("INSERT INTO `market_history` (`player_id`, `sale`, `itemtype`, `amount`, `price`, `tier`, `expires_at`, `inserted`, `state`) VALUES (" ..
+		playerId .. ", " .. sale .. ", " .. itemId .. ", " .. amount .. ", " .. price .. ", " .. tier .. ", " .. expiresAt .. ", " .. now .. ", " .. state .. ")")
 end
 
 local function fetchOfferById(offerId)
-	local resultId = db.storeQuery("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`id` = " .. offerId .. " LIMIT 1")
+	local resultId = db.storeQuery("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`id` = " .. offerId .. " LIMIT 1")
 	if resultId == false then
 		return nil
 	end
@@ -937,8 +1168,14 @@ local function fetchOfferById(offerId)
 		created = result.getDataInt(resultId, "created"),
 		anonymous = result.getDataInt(resultId, "anonymous") ~= 0,
 		price = result.getDataInt(resultId, "price"),
+		tier = result.getDataInt(resultId, "tier"),
+		attributes = getResultAttributes(resultId),
 		playerName = result.getDataString(resultId, "player_name")
 	}
+	local attributesTier = getAttributesTier(offer.itemId, offer.attributes)
+	if attributesTier > 0 then
+		offer.tier = attributesTier
+	end
 	result.free(resultId)
 	return offer
 end
@@ -960,9 +1197,15 @@ local function fetchOffers(query)
 			created = result.getDataInt(resultId, "created"),
 			anonymous = result.getDataInt(resultId, "anonymous") ~= 0,
 			price = result.getDataInt(resultId, "price"),
+			tier = result.getDataInt(resultId, "tier"),
+			attributes = getResultAttributes(resultId),
 			playerName = result.getDataString(resultId, "player_name"),
 			state = MARKET_STATE_ACTIVE
 		}
+		local attributesTier = getAttributesTier(offers[#offers].itemId, offers[#offers].attributes)
+		if attributesTier > 0 then
+			offers[#offers].tier = attributesTier
+		end
 	until not result.next(resultId)
 
 	result.free(resultId)
@@ -975,7 +1218,7 @@ local function fetchHistory(playerId)
 		return offers
 	end
 
-	local resultId = db.storeQuery("SELECT `id`, `player_id`, `sale`, `itemtype`, `amount`, `price`, `inserted`, `state` FROM `market_history` WHERE `player_id` = " .. playerId .. " ORDER BY `inserted` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
+	local resultId = db.storeQuery("SELECT `id`, `player_id`, `sale`, `itemtype`, `amount`, `price`, `tier`, `inserted`, `state` FROM `market_history` WHERE `player_id` = " .. playerId .. " ORDER BY `inserted` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
 	if resultId == false then
 		return offers
 	end
@@ -990,6 +1233,7 @@ local function fetchHistory(playerId)
 			created = result.getDataInt(resultId, "inserted"),
 			anonymous = false,
 			price = result.getDataInt(resultId, "price"),
+			tier = result.getDataInt(resultId, "tier"),
 			playerName = "",
 			state = result.getDataInt(resultId, "state")
 		}
@@ -1003,6 +1247,7 @@ local function writeOffer(out, offer)
 	out:addU32(offer.id)
 	out:addU32(offer.created)
 	out:addU16(offer.itemId)
+	out:addByte(math.max(0, math.min(10, tonumber(offer.tier) or 0)))
 	out:addU16(clamp(offer.amount, 0, 0xFFFF))
 	out:addU32(clamp(offer.price, 0, MARKET_MAX_PRICE))
 	out:addString(offer.anonymous and "Anonymous" or (offer.playerName or ""))
@@ -1289,7 +1534,7 @@ local function sendMarketBrowse(player, browseId)
 	local playerId = player:getGuid()
 
 	if browseId == MARKET_REQUEST_MY_OFFERS then
-		local query = "SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`player_id` = " .. playerId .. " ORDER BY mo.`created` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS
+		local query = "SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`player_id` = " .. playerId .. " ORDER BY mo.`created` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS
 		for _, offer in ipairs(fetchOffers(query)) do
 			if offer.sale == MARKET_ACTION_BUY then
 				buyOffers[#buyOffers + 1] = offer
@@ -1306,8 +1551,8 @@ local function sendMarketBrowse(player, browseId)
 			end
 		end
 	elseif marketItemsById[browseId] then
-		buyOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_BUY .. " ORDER BY mo.`price` DESC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
-		sellOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_SELL .. " ORDER BY mo.`price` ASC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
+		buyOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_BUY .. " ORDER BY mo.`price` DESC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
+		sellOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_SELL .. " ORDER BY mo.`price` ASC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
 	else
 		sendMarketMessage(player, "This item cannot be traded on the market.")
 		return
@@ -1347,9 +1592,10 @@ local function sendMarketEnter(player, depotMap)
 		offers = clamp(getMarketOfferCount(playerGuid), 0, MARKET_MAX_OFFERS)
 		offerCountCache[playerGuid] = offers
 	end
-	local totalItems = #marketItems
 	local chunkIndex = 0
 	depotMap = depotMap or buildDepotItemMap(player)
+	local enterEntries = buildMarketEnterEntries(depotMap)
+	local totalItems = #enterEntries
 
 	for offset = 1, math.max(totalItems, 1), MARKET_CATALOG_CHUNK_SIZE do
 		local chunkEnd = math.min(offset + MARKET_CATALOG_CHUNK_SIZE - 1, totalItems)
@@ -1364,11 +1610,12 @@ local function sendMarketEnter(player, depotMap)
 		out:addU16(chunkCount)
 
 		for i = offset, chunkEnd do
-			local entry = marketItems[i]
+			local entry = enterEntries[i]
 			out:addU16(entry.id)
 			out:addByte(entry.category)
 			out:addString(entry.name)
-			out:addU16(math.min(depotMap[entry.id] or 0, 0xFFFF))
+			out:addU16(math.min(entry.amount or 0, 0xFFFF))
+			out:addByte(entry.tier or 0)
 		end
 
 		out:sendToPlayer(player)
@@ -1419,7 +1666,7 @@ local function expireOffers()
 	lastExpireCheck = now
 
 	local expiredBefore = now - getOfferDuration()
-	local offers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`created` <= " .. expiredBefore .. " ORDER BY mo.`created` ASC LIMIT 100")
+	local offers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`created` <= " .. expiredBefore .. " ORDER BY mo.`created` ASC LIMIT 100")
 	for _, offer in ipairs(offers) do
 		local offerKey = "offer:" .. offer.id
 		-- Skip offers currently being processed by another handler
@@ -1433,12 +1680,12 @@ local function expireOffers()
 				if offer.sale == MARKET_ACTION_BUY then
 					returned = creditPlayerBank(offer.playerId, offer.playerName, offer.price * offer.amount)
 				else
-					returned = deliverItemToPlayer(offer.playerId, offer.playerName, offer.itemId, offer.amount)
+					returned = deliverItemToPlayer(offer.playerId, offer.playerName, offer.itemId, offer.amount, offer.attributes)
 				end
 
 				if returned then
 					offerCountCache[offer.playerId] = nil
-					addHistory(offer.playerId, offer.sale, offer.itemId, offer.amount, offer.price, MARKET_STATE_EXPIRED, offer.created)
+					addHistory(offer.playerId, offer.sale, offer.itemId, offer.amount, offer.price, MARKET_STATE_EXPIRED, offer.created, offer.tier)
 				else
 					-- Delivery failed: restore the offer so it can be retried
 					rollbackOfferClaim(offer, offer.amount)
@@ -1539,6 +1786,10 @@ function createHandler.onReceive(player, msg)
 	local amount = msg:getU16()
 	local price = msg:getU32()
 	local anonymous = msg:getByte() ~= 0 and 1 or 0
+	local requestedTier = nil
+	if msg:len() - msg:tell() >= 1 then
+		requestedTier = math.max(0, math.min(10, tonumber(msg:getByte()) or 0))
+	end
 
 	local valid, errorMessage = validateOfferPayload(player, actionType, itemId, amount, price)
 	if not valid then
@@ -1551,6 +1802,8 @@ function createHandler.onReceive(player, msg)
 	local fee = calculateFee(price, amount)
 	local payment = nil
 	local depotMap = nil
+	local offerAttributes = nil
+	local offerTier = requestedTier or 0
 
 	if actionType == MARKET_ACTION_BUY then
 		if getPlayerTotalMoney(player) < totalPrice + fee then
@@ -1566,7 +1819,11 @@ function createHandler.onReceive(player, msg)
 		end
 	else
 		depotMap = buildDepotItemMap(player)
-		if (depotMap[itemId] or 0) < amount then
+		local availableAmount = depotMap[itemId] or 0
+		if requestedTier ~= nil then
+			availableAmount = depotMap[getDepotItemKey(itemId, requestedTier)] or 0
+		end
+		if availableAmount < amount then
 			releaseLock(playerKey)
 			sendMarketMessage(player, "You do not have enough items for this sell offer.")
 			return
@@ -1576,15 +1833,25 @@ function createHandler.onReceive(player, msg)
 			sendMarketMessage(player, "You do not have enough money to pay the market fee.")
 			return
 		end
-		if not removeDepotItems(player, itemId, amount) then
+		local reserved, attributes, reserveError = removeDepotItemsWithAttributes(player, itemId, amount, requestedTier)
+		if not reserved then
 			releaseLock(playerKey)
-			sendMarketMessage(player, "Could not reserve the items for this sell offer.")
+			sendMarketMessage(player, reserveError or "Could not reserve the items for this sell offer.")
 			return
 		end
+		offerAttributes = attributes
+		local attributesTier = getAttributesTier(itemId, offerAttributes)
+		if attributesTier > 0 then
+			offerTier = attributesTier
+		end
 		depotMap[itemId] = math.max(0, (depotMap[itemId] or 0) - amount)
+		if requestedTier ~= nil then
+			local tierKey = getDepotItemKey(itemId, requestedTier)
+			depotMap[tierKey] = math.max(0, (depotMap[tierKey] or 0) - amount)
+		end
 		payment = removePlayerMarketMoney(player, fee)
 		if not payment then
-			addDepotItems(player, itemId, amount)
+			addDepotItems(player, itemId, amount, offerAttributes)
 			releaseLock(playerKey)
 			sendMarketMessage(player, "Could not pay the market fee.")
 			return
@@ -1592,13 +1859,15 @@ function createHandler.onReceive(player, msg)
 	end
 
 	local now = os.time()
-	local ok = db.query("INSERT INTO `market_offers` (`player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`) VALUES (" ..
-		player:getGuid() .. ", " .. actionType .. ", " .. itemId .. ", " .. amount .. ", " .. now .. ", " .. anonymous .. ", " .. price .. ")")
+	local ok = db.query("INSERT INTO `market_offers` (`player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`) VALUES (" ..
+		player:getGuid() .. ", " .. actionType .. ", " .. itemId .. ", " .. amount .. ", " .. now .. ", " .. anonymous .. ", " .. price .. ", " ..
+		math.max(0, math.min(10, tonumber(offerTier) or 0)) .. ", " ..
+		escapeAttributes(offerAttributes) .. ")")
 	if not ok then
 		if actionType == MARKET_ACTION_BUY then
 			refundPlayerMarketMoney(player, payment)
 		else
-			addDepotItems(player, itemId, amount)
+			addDepotItems(player, itemId, amount, offerAttributes)
 			refundPlayerMarketMoney(player, payment)
 		end
 		releaseLock(playerKey)
@@ -1664,12 +1933,12 @@ function cancelHandler.onReceive(player, msg)
 		player:setBankBalance(player:getBankBalance() + offer.price * offer.amount)
 	else
 		-- Use deliverItemToPlayer (inbox/depot) instead of raw addItem
-		if not deliverItemToPlayer(player:getGuid(), player:getName(), offer.itemId, offer.amount) then
+		if not deliverItemToPlayer(player:getGuid(), player:getName(), offer.itemId, offer.amount, offer.attributes) then
 			logError("[CustomMarket] Failed to return cancelled sell offer " .. offer.id .. " items to player " .. player:getName())
 		end
 	end
 
-	addHistory(player:getGuid(), offer.sale, offer.itemId, offer.amount, offer.price, MARKET_STATE_CANCELLED, offer.created)
+	addHistory(player:getGuid(), offer.sale, offer.itemId, offer.amount, offer.price, MARKET_STATE_CANCELLED, offer.created, offer.tier)
 	releaseMultipleLocks({ offerKey, playerKey })
 	sendMarketMessage(player, "Market offer cancelled.")
 	refreshMarket(player, MARKET_REQUEST_MY_OFFERS)
@@ -1728,8 +1997,15 @@ function acceptHandler.onReceive(player, msg)
 	end
 
 	amount = clamp(amount, 1, offer.amount)
+	if hasSerializedAttributes(offer.attributes) and (amount ~= 1 or amount ~= offer.amount) then
+		releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
+		sendMarketMessage(player, "Tiered/custom market offers must be accepted in full.")
+		return
+	end
+
 	local totalPrice = amount * offer.price
 	local depotMap = nil
+	local acceptedTier = tonumber(offer.tier) or 0
 
 	-- ================================================================
 	-- STEP 1: Atomically claim the offer in DB BEFORE any item/money
@@ -1777,7 +2053,7 @@ function acceptHandler.onReceive(player, msg)
 			return
 		end
 
-		if not deliverItemToPlayer(player:getGuid(), player:getName(), offer.itemId, amount) then
+		if not deliverItemToPlayer(player:getGuid(), player:getName(), offer.itemId, amount, offer.attributes) then
 			refundPlayerMarketMoney(player, payment)
 			rollbackOfferClaim(offer, amount)
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
@@ -1787,7 +2063,7 @@ function acceptHandler.onReceive(player, msg)
 
 		if not creditPlayerBank(offer.playerId, offer.playerName, totalPrice) then
 			-- Critical: item already delivered to buyer — attempt to take it back
-			if not removeInboxItems(player, offer.itemId, amount) then
+			if not removeInboxItems(player, offer.itemId, amount, offer.attributes) then
 				logError("[CustomMarket] CRITICAL: Could not rollback inbox delivery for offer " ..
 					offer.id .. " player " .. player:getName())
 			end
@@ -1800,25 +2076,35 @@ function acceptHandler.onReceive(player, msg)
 
 	else
 		-- Acceptor (seller) provides item, receives money; buyer gets item
+		local deliveryAttributes = nil
 		depotMap = buildDepotItemMap(player)
-		if (depotMap[offer.itemId] or 0) < amount then
+		local requestedOfferTier = math.max(0, math.min(10, tonumber(offer.tier) or 0))
+		if (depotMap[getDepotItemKey(offer.itemId, requestedOfferTier)] or 0) < amount then
 			rollbackOfferClaim(offer, amount)
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 			sendMarketMessage(player, "You do not have enough items.")
 			return
 		end
 
-		if not removeDepotItems(player, offer.itemId, amount) then
+		local removed, attributes, removeError = removeDepotItemsWithAttributes(player, offer.itemId, amount, requestedOfferTier)
+		if not removed then
 			rollbackOfferClaim(offer, amount)
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
-			sendMarketMessage(player, "Could not remove the items.")
+			sendMarketMessage(player, removeError or "Could not remove the items.")
 			return
+		end
+		deliveryAttributes = attributes
+		acceptedTier = getAttributesTier(offer.itemId, deliveryAttributes)
+		if acceptedTier == 0 then
+			acceptedTier = requestedOfferTier
 		end
 
 		depotMap[offer.itemId] = math.max(0, (depotMap[offer.itemId] or 0) - amount)
+		local acceptedTierKey = getDepotItemKey(offer.itemId, acceptedTier)
+		depotMap[acceptedTierKey] = math.max(0, (depotMap[acceptedTierKey] or 0) - amount)
 
-		if not deliverItemToPlayer(offer.playerId, offer.playerName, offer.itemId, amount) then
-			addDepotItems(player, offer.itemId, amount)
+		if not deliverItemToPlayer(offer.playerId, offer.playerName, offer.itemId, amount, deliveryAttributes) then
+			addDepotItems(player, offer.itemId, amount, deliveryAttributes)
 			rollbackOfferClaim(offer, amount)
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 			sendMarketMessage(player, "Could not deliver the item to the buyer.")
@@ -1832,7 +2118,7 @@ function acceptHandler.onReceive(player, msg)
 	-- STEP 3: All transfers succeeded — record history and notify.
 	-- ================================================================
 	offerCountCache[offer.playerId] = nil
-	addHistory(offer.playerId, offer.sale, offer.itemId, amount, offer.price, MARKET_STATE_ACCEPTED, offer.created)
+	addHistory(offer.playerId, offer.sale, offer.itemId, amount, offer.price, MARKET_STATE_ACCEPTED, offer.created, acceptedTier)
 
 	releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 

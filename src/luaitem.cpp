@@ -596,6 +596,39 @@ int luaItemSetCustomAttribute(lua_State* L)
 	return 1;
 }
 
+int luaItemSerializeAttributes(lua_State* L)
+{
+	// item:serializeAttributes()
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (!item) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	PropWriteStream stream;
+	item->serializeAttr(stream);
+	std::string_view attributes = stream.getStream();
+	lua_pushlstring(L, attributes.data(), attributes.size());
+	return 1;
+}
+
+int luaItemUnserializeAttributes(lua_State* L)
+{
+	// item:unserializeAttributes(attributes)
+	Item* item = getItemUserdata<Item>(L, 1);
+	if (!item) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	size_t attributesSize = 0;
+	const char* attributes = luaL_checklstring(L, 2, &attributesSize);
+	PropStream stream;
+	stream.init(attributes, attributesSize);
+	pushBoolean(L, item->unserializeAttr(stream));
+	return 1;
+}
+
 int luaItemRemoveCustomAttribute(lua_State* L)
 {
 	// item:removeCustomAttribute(key)
@@ -1127,6 +1160,8 @@ void LuaScriptInterface::registerItem()
 	registerMethod("Item", "removeAttribute", luaItemRemoveAttribute);
 	registerMethod("Item", "getCustomAttribute", luaItemGetCustomAttribute);
 	registerMethod("Item", "setCustomAttribute", luaItemSetCustomAttribute);
+	registerMethod("Item", "serializeAttributes", luaItemSerializeAttributes);
+	registerMethod("Item", "unserializeAttributes", luaItemUnserializeAttributes);
 	registerMethod("Item", "removeCustomAttribute", luaItemRemoveCustomAttribute);
 
 	registerMethod("Item", "moveTo", luaItemMoveTo);

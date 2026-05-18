@@ -37,6 +37,8 @@ local CATEGORY_WANDS = 21
 local CATEGORY_CREATURE_PRODUCTS = 24
 local CATEGORY_FISTS = 25
 
+local supplyStashDepotSessions = {}
+
 local blockedItems = {}
 for _, itemId in ipairs({
 	_G.ITEM_GOLD_COIN,
@@ -58,18 +60,102 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
+local function tableColumnExists(tableName, columnName)
+	local resultId = db.storeQuery("SHOW COLUMNS FROM `" .. tableName .. "` LIKE " .. db.escapeString(columnName))
+	if resultId then
+		result.free(resultId)
+		return true
+	end
+	return false
+end
+
+local function getSupplyStashPrimaryKeySignature()
+	local indexes = {}
+	local resultId = db.storeQuery("SHOW INDEX FROM `player_supplystash` WHERE `Key_name` = 'PRIMARY'")
+	if resultId then
+		repeat
+			indexes[#indexes + 1] = {
+				seq = result.getDataInt(resultId, "Seq_in_index"),
+				column = result.getDataString(resultId, "Column_name")
+			}
+		until not result.next(resultId)
+		result.free(resultId)
+	end
+
+	table.sort(indexes, function(a, b)
+		return a.seq < b.seq
+	end)
+
+	local columns = {}
+	for _, index in ipairs(indexes) do
+		columns[#columns + 1] = index.column
+	end
+	return table.concat(columns, ",")
+end
+
+local function rebuildSupplyStashTable()
+	db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
+	if not db.query([[
+		CREATE TABLE `player_supplystash_tier_migration` (
+			`player_id` INT NOT NULL,
+			`itemtype` SMALLINT UNSIGNED NOT NULL,
+			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			`amount` INT UNSIGNED NOT NULL DEFAULT 0,
+			PRIMARY KEY (`player_id`, `itemtype`, `tier`)
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+	]]) then
+		return false
+	end
+
+	if not db.query([[
+		INSERT INTO `player_supplystash_tier_migration` (`player_id`, `itemtype`, `tier`, `amount`)
+		SELECT `player_id`, `itemtype`, COALESCE(`tier`, 0), SUM(`amount`)
+		FROM `player_supplystash`
+		WHERE `amount` > 0
+		GROUP BY `player_id`, `itemtype`, COALESCE(`tier`, 0)
+	]]) then
+		db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
+		return false
+	end
+
+	if not db.query("DROP TABLE `player_supplystash`") then
+		db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
+		return false
+	end
+	return db.query("RENAME TABLE `player_supplystash_tier_migration` TO `player_supplystash`")
+end
+
+local function ensureSupplyStashPrimaryKey()
+	if getSupplyStashPrimaryKeySignature() == "player_id,itemtype,tier" then
+		return true
+	end
+
+	if db.query("ALTER TABLE `player_supplystash` DROP PRIMARY KEY, ADD PRIMARY KEY (`player_id`, `itemtype`, `tier`)") and
+			getSupplyStashPrimaryKeySignature() == "player_id,itemtype,tier" then
+		return true
+	end
+
+	return rebuildSupplyStashTable()
+end
+
 local function ensureTables()
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `player_supplystash` (
 			`player_id` INT NOT NULL,
 			`itemtype` SMALLINT UNSIGNED NOT NULL,
+			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			`amount` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`player_id`, `itemtype`),
+			PRIMARY KEY (`player_id`, `itemtype`, `tier`),
 			CONSTRAINT `player_supplystash_player_fk`
 				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 	]])
+
+	if not tableColumnExists("player_supplystash", "tier") then
+		db.query("ALTER TABLE `player_supplystash` ADD COLUMN `tier` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `itemtype`")
+	end
+	ensureSupplyStashPrimaryKey()
 end
 
 local function getItemType(itemId)
@@ -235,9 +321,15 @@ local restrictedInstanceAttributes = {
 	ITEM_ATTRIBUTE_WRAPID,
 	ITEM_ATTRIBUTE_STOREITEM,
 	ITEM_ATTRIBUTE_ATTACK_SPEED,
-	ITEM_ATTRIBUTE_CLASSIFICATION,
 	ITEM_ATTRIBUTE_REWARDID
 }
+
+local function getItemTier(item)
+	if item and item.getTier then
+		return math.max(0, math.min(10, tonumber(item:getTier()) or 0))
+	end
+	return 0
+end
 
 local function isPristineSupplyItem(item)
 	if not item or item:isContainer() then
@@ -259,10 +351,6 @@ local function isPristineSupplyItem(item)
 	end
 
 	if item.hasImbuements and item:hasImbuements() then
-		return false
-	end
-
-	if item.getTier and (tonumber(item:getTier()) or 0) > 0 then
 		return false
 	end
 
@@ -324,9 +412,21 @@ local function getPlayerLastDepotId(player)
 	return 0
 end
 
+local function setSupplyStashDepotId(player, depotId)
+	supplyStashDepotSessions[player:getId()] = normalizeDepotId(depotId)
+end
+
+local function getSupplyStashDepotId(player)
+	local depotId = supplyStashDepotSessions[player:getId()]
+	if depotId ~= nil then
+		return depotId
+	end
+	return getPlayerLastDepotId(player)
+end
+
 local function getDepotBoxes(player)
 	local boxes = {}
-	local depotId = getPlayerLastDepotId(player)
+	local depotId = getSupplyStashDepotId(player)
 	for boxIndex = SUPPLY_STASH_DEPOT_BOX_FIRST, SUPPLY_STASH_DEPOT_BOX_LAST do
 		local box = player:getDepotBox(depotId, boxIndex)
 		if box then
@@ -339,16 +439,17 @@ end
 local function getRows(player)
 	local rows = {}
 	local resultId = db.storeQuery(
-		"SELECT `itemtype`, `amount` FROM `player_supplystash` WHERE `player_id` = " ..
-		player:getGuid() .. " AND `amount` > 0 ORDER BY `itemtype` ASC"
+		"SELECT `itemtype`, `tier`, `amount` FROM `player_supplystash` WHERE `player_id` = " ..
+		player:getGuid() .. " AND `amount` > 0 ORDER BY `itemtype` ASC, `tier` ASC"
 	)
 
 	if resultId then
 		repeat
 			local itemId = result.getDataInt(resultId, "itemtype")
+			local tier = result.getDataInt(resultId, "tier")
 			local amount = result.getDataLong and result.getDataLong(resultId, "amount") or result.getDataInt(resultId, "amount")
 			if isSupplyItem(itemId) and amount > 0 then
-				rows[#rows + 1] = {itemId = itemId, amount = math.min(amount, 0xFFFFFFFF)}
+				rows[#rows + 1] = {itemId = itemId, tier = tier, amount = math.min(amount, 0xFFFFFFFF)}
 			end
 		until not result.next(resultId)
 		result.free(resultId)
@@ -372,6 +473,7 @@ local function sendStash(player)
 	for i = 1, rowCount do
 		msg:addU16(rows[i].itemId)
 		msg:addU32(rows[i].amount)
+		msg:addByte(rows[i].tier or 0)
 	end
 	msg:addU16(math.min(freeSlots, 0xFFFF))
 	msg:addU16(SUPPLY_STASH_DETAILS_MARKER)
@@ -386,11 +488,12 @@ local function sendStash(player)
 	return msg:sendToPlayer(player)
 end
 
-local function getStoredAmount(player, itemId)
+local function getStoredAmount(player, itemId, tier)
 	local amount = 0
+	tier = math.max(0, math.min(10, tonumber(tier) or 0))
 	local resultId = db.storeQuery(
 		"SELECT `amount` FROM `player_supplystash` WHERE `player_id` = " ..
-		player:getGuid() .. " AND `itemtype` = " .. itemId .. " LIMIT 1"
+		player:getGuid() .. " AND `itemtype` = " .. itemId .. " AND `tier` = " .. tier .. " LIMIT 1"
 	)
 	if resultId then
 		amount = result.getDataLong and result.getDataLong(resultId, "amount") or result.getDataInt(resultId, "amount")
@@ -399,18 +502,20 @@ local function getStoredAmount(player, itemId)
 	return amount
 end
 
-local function addStoredAmount(player, itemId, amount)
+local function addStoredAmount(player, itemId, amount, tier)
+	tier = math.max(0, math.min(10, tonumber(tier) or 0))
 	return db.query(string.format(
-		"INSERT INTO `player_supplystash` (`player_id`, `itemtype`, `amount`) VALUES (%d, %d, %d) " ..
+		"INSERT INTO `player_supplystash` (`player_id`, `itemtype`, `tier`, `amount`) VALUES (%d, %d, %d, %d) " ..
 		"ON DUPLICATE KEY UPDATE `amount` = `amount` + VALUES(`amount`)",
-		player:getGuid(), itemId, amount
+		player:getGuid(), itemId, tier, amount
 	))
 end
 
-local function removeStoredAmount(player, itemId, amount)
+local function removeStoredAmount(player, itemId, amount, tier)
+	tier = math.max(0, math.min(10, tonumber(tier) or 0))
 	return db.query(string.format(
-		"UPDATE `player_supplystash` SET `amount` = `amount` - %d WHERE `player_id` = %d AND `itemtype` = %d AND `amount` >= %d",
-		amount, player:getGuid(), itemId, amount
+		"UPDATE `player_supplystash` SET `amount` = `amount` - %d WHERE `player_id` = %d AND `itemtype` = %d AND `tier` = %d AND `amount` >= %d",
+		amount, player:getGuid(), itemId, tier, amount
 	))
 end
 
@@ -454,12 +559,12 @@ local function canAddUniqueTypes(player, amounts)
 	local rows = getRows(player)
 	local storedTypes = {}
 	for _, row in ipairs(rows) do
-		storedTypes[row.itemId] = true
+		storedTypes[row.itemId .. ":" .. (row.tier or 0)] = true
 	end
 
 	local newTypes = 0
-	for itemId in pairs(amounts) do
-		if not storedTypes[itemId] then
+	for key in pairs(amounts) do
+		if not storedTypes[key] then
 			newTypes = newTypes + 1
 		end
 	end
@@ -469,9 +574,10 @@ end
 local function stowAll(player)
 	local items = {}
 	collectDepotItems(player, items)
+	collectPlayerInventory(player, items)
 
 	if #items == 0 then
-		player:sendCancelMessage("Put stashable items in Depot Locker boxes 1 to 15.")
+		player:sendCancelMessage("Put stashable items in your backpack or Depot Locker boxes 1 to 15.")
 		sendStash(player)
 		return true
 	end
@@ -479,7 +585,14 @@ local function stowAll(player)
 	local amounts = {}
 	for _, item in ipairs(items) do
 		local itemId = item:getId()
-		amounts[itemId] = (amounts[itemId] or 0) + getSupplyItemAmount(item)
+		local tier = getItemTier(item)
+		local key = itemId .. ":" .. tier
+		local entry = amounts[key]
+		if not entry then
+			entry = { itemId = itemId, tier = tier, amount = 0 }
+			amounts[key] = entry
+		end
+		entry.amount = entry.amount + getSupplyItemAmount(item)
 	end
 
 	if not canAddUniqueTypes(player, amounts) then
@@ -489,31 +602,33 @@ local function stowAll(player)
 	end
 
 	local addedAmounts = {}
-	for itemId, amount in pairs(amounts) do
-		if not addStoredAmount(player, itemId, amount) then
-			for addedItemId, addedAmount in pairs(addedAmounts) do
-				removeStoredAmount(player, addedItemId, addedAmount)
+	for key, entry in pairs(amounts) do
+		if not addStoredAmount(player, entry.itemId, entry.amount, entry.tier) then
+			for _, addedEntry in pairs(addedAmounts) do
+				removeStoredAmount(player, addedEntry.itemId, addedEntry.amount, addedEntry.tier)
 			end
 			cleanupEmptyRows(player)
 			player:sendCancelMessage("Could not store these items in your supply stash.")
 			sendStash(player)
 			return true
 		end
-		addedAmounts[itemId] = amount
+		addedAmounts[key] = entry
 	end
 
 	local remainingAmounts = {}
-	for itemId, amount in pairs(amounts) do
-		remainingAmounts[itemId] = amount
+	for key, entry in pairs(amounts) do
+		remainingAmounts[key] = { itemId = entry.itemId, tier = entry.tier, amount = entry.amount }
 	end
 
 	for _, item in ipairs(items) do
 		local itemId = item:getId()
+		local tier = getItemTier(item)
+		local key = itemId .. ":" .. tier
 		local amount = getSupplyItemAmount(item)
 		if not item:remove() then
-			for remainingItemId, remainingAmount in pairs(remainingAmounts) do
-				if remainingAmount > 0 then
-					removeStoredAmount(player, remainingItemId, remainingAmount)
+			for _, remainingEntry in pairs(remainingAmounts) do
+				if remainingEntry.amount > 0 then
+					removeStoredAmount(player, remainingEntry.itemId, remainingEntry.amount, remainingEntry.tier)
 				end
 			end
 			cleanupEmptyRows(player)
@@ -521,7 +636,9 @@ local function stowAll(player)
 			sendStash(player)
 			return true
 		end
-		remainingAmounts[itemId] = (remainingAmounts[itemId] or 0) - amount
+		if remainingAmounts[key] then
+			remainingAmounts[key].amount = (remainingAmounts[key].amount or 0) - amount
+		end
 	end
 
 	player:sendTextMessage(MESSAGE_STATUS_SMALL, "Supplies stowed.")
@@ -534,7 +651,7 @@ local function canCarry(player, itemType, amount)
 	return player:getFreeCapacity() >= weight
 end
 
-local function deliverToPlayer(player, itemId, amount)
+local function deliverToPlayer(player, itemId, amount, tier)
 	local itemType = getItemType(itemId)
 	if not itemType then
 		return false, "This item does not exist."
@@ -545,6 +662,7 @@ local function deliverToPlayer(player, itemId, amount)
 
 	local createdItems = {}
 	local remaining = amount
+	tier = math.max(0, math.min(10, tonumber(tier) or 0))
 	local stackSize = itemType:isStackable() and math.max(1, itemType:getStackSize()) or 1
 	while remaining > 0 do
 		local count = itemType:isStackable() and math.min(remaining, stackSize, SUPPLY_STACK_SIZE) or 1
@@ -554,6 +672,10 @@ local function deliverToPlayer(player, itemId, amount)
 				created:remove()
 			end
 			return false, "Could not create item."
+		end
+
+		if tier > 0 and item.setTier then
+			item:setTier(tier)
 		end
 
 		createdItems[#createdItems + 1] = item
@@ -570,9 +692,10 @@ local function deliverToPlayer(player, itemId, amount)
 	return true
 end
 
-local function withdraw(player, itemId, amount)
+local function withdraw(player, itemId, amount, tier)
 	itemId = tonumber(itemId) or 0
 	amount = math.floor(tonumber(amount) or 0)
+	tier = math.max(0, math.min(10, tonumber(tier) or 0))
 
 	if amount <= 0 or amount > SUPPLY_STASH_MAX_WITHDRAW then
 		player:sendCancelMessage("Invalid amount.")
@@ -592,21 +715,21 @@ local function withdraw(player, itemId, amount)
 		return true
 	end
 
-	if getStoredAmount(player, itemId) < amount then
+	if getStoredAmount(player, itemId, tier) < amount then
 		player:sendCancelMessage("You do not have enough items in your supply stash.")
 		sendStash(player)
 		return true
 	end
 
-	local delivered, reason = deliverToPlayer(player, itemId, amount)
+	local delivered, reason = deliverToPlayer(player, itemId, amount, tier)
 	if not delivered then
 		player:sendCancelMessage(reason)
 		sendStash(player)
 		return true
 	end
 
-	removeStoredAmount(player, itemId, amount)
-	db.query("DELETE FROM `player_supplystash` WHERE `amount` = 0")
+	removeStoredAmount(player, itemId, amount, tier)
+	db.query("DELETE FROM `player_supplystash` WHERE `player_id` = " .. player:getGuid() .. " AND `amount` = 0")
 	sendStash(player)
 	return true
 end
@@ -623,13 +746,18 @@ function handler.onReceive(player, msg)
 	end
 
 	if action == ACTION_OPEN then
+		setSupplyStashDepotId(player, getPlayerLastDepotId(player))
 		sendStash(player)
 	elseif action == ACTION_STOW_ALL then
 		stowAll(player)
 	elseif action == ACTION_WITHDRAW then
 		local itemId = msg:getU16()
 		local amount = msg:getU32()
-		withdraw(player, itemId, amount)
+		local tier = 0
+		if msg:len() - msg:tell() >= 1 then
+			tier = msg:getByte()
+		end
+		withdraw(player, itemId, amount, tier)
 	else
 		player:sendCancelMessage("Invalid supply stash action.")
 	end
@@ -639,12 +767,13 @@ end
 handler:register()
 
 CustomSupplyStash = {
-	open = function(player)
+	open = function(player, depotId)
 		if not supportsCustomNetwork(player) then
 			return false
 		end
 
 		ensureTables()
+		setSupplyStashDepotId(player, depotId or getPlayerLastDepotId(player))
 		return sendStash(player)
 	end,
 	stowAll = stowAll,

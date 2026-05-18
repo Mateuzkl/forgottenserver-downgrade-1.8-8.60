@@ -17,8 +17,16 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         return true
     end
 
+    local depotId = 0
+    if player.getLastDepotId then
+        local ok, value = pcall(function()
+            return player:getLastDepotId()
+        end)
+        depotId = tonumber(ok and value or nil) or 0
+    end
+
     local ok, err = pcall(function()
-        CustomSupplyStash.open(player)
+        CustomSupplyStash.open(player, depotId)
     end)
 
     if not ok then
