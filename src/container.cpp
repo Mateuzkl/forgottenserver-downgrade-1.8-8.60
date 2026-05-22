@@ -11,6 +11,7 @@
 
 #include "game.h"
 #include "iomap.h"
+#include "player.h"
 
 extern Game g_game;
 
@@ -220,18 +221,36 @@ bool Container::isHoldingItem(const Item* item) const
 	return false;
 }
 
+Player* Container::getHoldingPlayer() const
+{
+	const Cylinder* topParent = getTopParent();
+	if (!topParent) {
+		return nullptr;
+	}
+	Creature* creature = topParent->getCreature();
+	if (!creature) {
+		return nullptr;
+	}
+	return creature->getPlayer();
+}
+
 void Container::onAddContainerItem(Item* item) const
 {
+	// Fast path: container is directly held by a player — skip getSpectators.
+	if (Player* holdingPlayer = getHoldingPlayer()) {
+		holdingPlayer->sendAddContainerItem(this, item);
+		holdingPlayer->onAddContainerItem(item);
+		return;
+	}
+
+	// Slow path: container on ground or in depot/unowned cylinder — broadcast to spectators.
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, getPosition(), false, true, 1, 1, 1, 1);
 	spectators.partitionByType();
 
-	// send to client
 	for (const auto& spectator : spectators.players()) {
 		static_cast<Player*>(spectator.get())->sendAddContainerItem(this, item);
 	}
-
-	// event methods
 	for (const auto& spectator : spectators.players()) {
 		static_cast<Player*>(spectator.get())->onAddContainerItem(item);
 	}
@@ -239,16 +258,21 @@ void Container::onAddContainerItem(Item* item) const
 
 void Container::onUpdateContainerItem(uint32_t index, Item* oldItem, Item* newItem) const
 {
+	// Fast path: container is directly held by a player — skip getSpectators.
+	if (Player* holdingPlayer = getHoldingPlayer()) {
+		holdingPlayer->sendUpdateContainerItem(this, static_cast<uint16_t>(index), newItem);
+		holdingPlayer->onUpdateContainerItem(this, oldItem, newItem);
+		return;
+	}
+
+	// Slow path: container on ground or in depot/unowned cylinder — broadcast to spectators.
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, getPosition(), false, true, 1, 1, 1, 1);
 	spectators.partitionByType();
 
-	// send to client
 	for (const auto& spectator : spectators.players()) {
 		static_cast<Player*>(spectator.get())->sendUpdateContainerItem(this, static_cast<uint16_t>(index), newItem);
 	}
-
-	// event methods
 	for (const auto& spectator : spectators.players()) {
 		static_cast<Player*>(spectator.get())->onUpdateContainerItem(this, oldItem, newItem);
 	}
@@ -256,16 +280,21 @@ void Container::onUpdateContainerItem(uint32_t index, Item* oldItem, Item* newIt
 
 void Container::onRemoveContainerItem(uint32_t index, Item* item) const
 {
+	// Fast path: container is directly held by a player — skip getSpectators.
+	if (Player* holdingPlayer = getHoldingPlayer()) {
+		holdingPlayer->sendRemoveContainerItem(this, static_cast<uint16_t>(index));
+		holdingPlayer->onRemoveContainerItem(this, item);
+		return;
+	}
+
+	// Slow path: container on ground or in depot/unowned cylinder — broadcast to spectators.
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, getPosition(), false, true, 1, 1, 1, 1);
 	spectators.partitionByType();
 
-	// send change to client
 	for (const auto& spectator : spectators.players()) {
 		static_cast<Player*>(spectator.get())->sendRemoveContainerItem(this, static_cast<uint16_t>(index));
 	}
-
-	// event methods
 	for (const auto& spectator : spectators.players()) {
 		static_cast<Player*>(spectator.get())->onRemoveContainerItem(this, item);
 	}

@@ -4,73 +4,51 @@
 #ifndef FS_TOOLS_H
 #define FS_TOOLS_H
 
-#include "const.h"
 #include "enums.h"
 #include "position.h"
 
-#include <utility>
+#include <random>
 
 void printXMLError(std::string_view where, std::string_view fileName, const pugi::xml_parse_result& result);
 
 std::string transformToSHA1(std::string_view input);
 std::string transformToSHA1Hex(std::string_view input);
-std::string generateToken(const std::string& key, uint32_t ticks);
+
+std::string generateToken(std::string_view key, uint64_t counter, size_t length = 6);
 std::string generateRecoveryKey(int32_t fieldCount, int32_t fieldLength, bool mixCase = false);
 std::string generateSecurePassword(int32_t length = 12);
+
 bool validateAndFormatPlayerName(std::string& name);
-
-// case-insensitive comparator for std::map (O(log n) lookups)
-struct CILess
-{
-	bool operator()(const std::string& a, const std::string& b) const
-	{
-		return std::lexicographical_compare(
-				a.begin(), a.end(), b.begin(), b.end(),
-				[](char x, char y) { return std::tolower(static_cast<unsigned char>(x)) < std::tolower(static_cast<unsigned char>(y)); });
-	}
-};
-
-// checks that str1 is equivalent to str2 ignoring letter case
 bool caseInsensitiveEqual(std::string_view str1, std::string_view str2);
-
-// checks that str1 starts with str2 ignoring letter case
 bool caseInsensitiveStartsWith(std::string_view str, std::string_view prefix);
-
-void toLowerCaseString(std::string& source);
-std::string asLowerCaseString(std::string source);
-
-using StringVector = std::vector<std::string>;
-using IntegerVector = std::vector<int32_t>;
 
 std::vector<std::string_view> explodeString(std::string_view inString, std::string_view separator,
                                             int32_t limit = -1);
+using IntegerVector = std::vector<int32_t>;
 IntegerVector vectorAtoi(const std::vector<std::string_view>& stringVector);
-constexpr bool hasBitSet(uint32_t flag, uint32_t flags) { return (flags & flag) != 0; }
 
 std::mt19937& getRandomGenerator();
+void toLowerCaseString(std::string& source);
+std::string asLowerCaseString(std::string source);
+
 int32_t uniform_random(int32_t minNumber, int32_t maxNumber);
 int32_t normal_random(int32_t minNumber, int32_t maxNumber);
 bool boolean_random(double probability = 0.5);
 
+std::string convertIPToString(uint32_t ip);
+std::string formatDateShort(time_t time);
+
 Position getNextPosition(Direction direction, Position pos);
 Direction getDirectionTo(const Position& from, const Position& to, bool extended = true);
 
-std::string getFirstLine(std::string_view str);
-std::string getStringLine(std::string_view str, const int lineNumber);
-std::string formatValueK(int64_t value);
-
-std::string formatDateShort(time_t time);
-std::string convertIPToString(uint32_t ip);
-
 MagicEffectClasses getMagicEffect(const std::string& strValue);
 ShootType_t getShootType(const std::string& strValue);
+std::string getCombatName(CombatType_t combatType);
+TextColor_t getTextColorByName(std::string_view name, TextColor_t defaultColor);
 Ammo_t getAmmoType(const std::string& strValue);
 WeaponAction_t getWeaponAction(const std::string& strValue);
 Skulls_t getSkullType(const std::string& strValue);
 GuildEmblems_t getEmblemType(const std::string& strValue);
-std::string getCombatName(CombatType_t combatType);
-TextColor_t getTextColorByName(std::string_view name, TextColor_t defaultColor = TEXTCOLOR_WHITE);
-
 std::string getSkillName(uint8_t skillid);
 
 uint32_t adlerChecksum(const uint8_t* data, size_t length);
@@ -89,9 +67,20 @@ uint8_t clientFluidToServer(uint8_t clientFluid);
 
 itemAttrTypes stringToItemAttribute(std::string_view str);
 
+std::string getFirstLine(std::string_view str);
+std::string getStringLine(std::string_view str, int lineNumber);
+std::string formatValueK(int64_t value);
+
 std::string_view getReturnMessage(ReturnValue value);
 
+// OTSYS_TIME: returns milliseconds since steady_clock epoch.
+// Cached once per dispatcher cycle via UPDATE_OTSYS_TIME().
+// Falls back to a live clock call before the dispatcher initialises (cache == 0).
+void UPDATE_OTSYS_TIME();
 int64_t OTSYS_TIME();
+
+// OTSYS_NANOTIME: nanosecond precision via high_resolution_clock.
+// Not cached — only used in profiling paths, not hot game loops.
 int64_t OTSYS_NANOTIME();
 
 SpellGroup_t stringToSpellGroup(std::string_view value);
@@ -100,18 +89,42 @@ const std::vector<Direction>& getShuffleDirections();
 
 std::string getVocationShortName(uint8_t vocationId);
 
-namespace tfs {
-
-#if defined(__cpp_lib_to_underlying) && __cpp_lib_to_underlying >= 202102L
-
-inline constexpr auto to_underlying(auto e) noexcept { return std::to_underlying(e); }
-
-#else
-
-inline constexpr auto to_underlying(auto e) noexcept { return static_cast<std::underlying_type_t<decltype(e)>>(e); }
-
-#endif
-
-} // namespace tfs
+constexpr uint8_t clientToServerFluidMap[] = {
+    FLUID_NONE,
+    FLUID_WATER,
+    FLUID_MANA,
+    FLUID_BEER,
+    FLUID_WATER,
+    FLUID_BLOOD,
+    FLUID_SLIME,
+    FLUID_LEMONADE,
+    FLUID_MILK,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WINE,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_HEALTH,
+    FLUID_WATER,
+    FLUID_URINE,
+    FLUID_RUM,
+    FLUID_FRUITJUICE,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_WATER,
+    FLUID_COCONUTMILK,
+    FLUID_MEAD,
+    FLUID_TEAORHERBS,
+};
 
 #endif

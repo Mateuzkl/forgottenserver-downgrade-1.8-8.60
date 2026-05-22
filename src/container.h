@@ -13,6 +13,7 @@
 class Container;
 class DepotChest;
 class DepotLocker;
+class Player;
 class RewardChest;
 class StoreInbox;
 
@@ -93,6 +94,11 @@ public:
 	uint32_t getItemHoldingCount() const;
 	uint32_t getWeight() const override final;
 	uint64_t getWeightReductionContentWeight() const;
+
+	// Returns the Player holding this container at the top of the cylinder chain.
+	// Returns nullptr if the container is on the ground, in a depot locker without
+	// a direct creature owner, or the top parent is not a Player.
+	Player* getHoldingPlayer() const;
 
 	// cylinder implementations
 	virtual ReturnValue queryAdd(int32_t index, const Thing& thing, uint32_t count, uint32_t flags,
