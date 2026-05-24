@@ -292,7 +292,7 @@ bool Spawn::findPlayer(const Position& pos)
 
 bool Spawn::spawnMonster(uint32_t spawnId, const spawnBlock_t& sb, bool startup /* = false*/)
 {
-	bool isBlocked = !startup && findPlayer(sb.pos);
+	bool isBlocked = !startup && !ConfigManager::getBoolean(ConfigManager::MONSTER_OVERSPAWN) && findPlayer(sb.pos);
 	size_t monstersCount = sb.mTypes.size(), blockedMonsters = 0;
 
 	const auto spawnFunc = [&](bool roll) {
