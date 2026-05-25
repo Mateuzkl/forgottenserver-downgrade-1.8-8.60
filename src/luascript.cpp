@@ -877,8 +877,12 @@ void Lua::pushThing(lua_State* L, Thing* thing)
 	}
 
 	if (Item* item = thing->getItem()) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		if (auto itemRef = item->weak_from_this().lock()) {
+			pushSharedPtr(L, std::move(itemRef));
+			setItemMetatable(L, -1, item);
+		} else {
+			lua_pushnil(L);
+		}
 	} else if (Creature* creature = thing->getCreature()) {
 		pushUserdata<Creature>(L, creature);
 		setCreatureMetatable(L, -1, creature);
@@ -893,8 +897,12 @@ void Lua::pushCylinder(lua_State* L, Cylinder* cylinder)
 		pushUserdata<Creature>(L, creature);
 		setCreatureMetatable(L, -1, creature);
 	} else if (Item* parentItem = cylinder->getItem()) {
-		pushSharedPtr(L, parentItem->shared_from_this());
-		setItemMetatable(L, -1, parentItem);
+		if (auto parentItemRef = parentItem->weak_from_this().lock()) {
+			pushSharedPtr(L, std::move(parentItemRef));
+			setItemMetatable(L, -1, parentItem);
+		} else {
+			lua_pushnil(L);
+		}
 	} else if (Tile* tile = cylinder->getTile()) {
 		pushUserdata<Tile>(L, tile);
 		setMetatable(L, -1, "Tile");

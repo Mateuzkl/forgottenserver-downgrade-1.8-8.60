@@ -97,7 +97,7 @@ class HouseTransferItem final : public Item
 public:
 	[[nodiscard]] static std::shared_ptr<HouseTransferItem> createHouseTransferItem(House* house);
 
-	explicit HouseTransferItem(House* house);
+	explicit HouseTransferItem(std::shared_ptr<House> house);
 
 	void onTradeEvent(TradeEvents_t event, Player* owner) override;
 	bool canTransform() const override { return false; }

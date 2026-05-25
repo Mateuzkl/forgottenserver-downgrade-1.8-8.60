@@ -13,7 +13,16 @@
 
 extern Game g_game;
 
-HouseTile::HouseTile(uint16_t x, uint16_t y, uint8_t z, House* house) : DynamicTile(x, y, z), house(house->shared_from_this()) {}
+namespace {
+
+std::shared_ptr<House> getSharedHouse(House* house)
+{
+	return house ? house->weak_from_this().lock() : nullptr;
+}
+
+} // namespace
+
+HouseTile::HouseTile(uint16_t x, uint16_t y, uint8_t z, House* house) : DynamicTile(x, y, z), house(getSharedHouse(house)) {}
 
 void HouseTile::addThing(int32_t index, Thing* thing)
 {

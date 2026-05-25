@@ -201,6 +201,12 @@ endif()
 if (BUILD_TESTING)
     message(STATUS "Building unit tests")
     enable_testing()
+    add_test(
+        NAME build_source_list_parity
+        COMMAND ${CMAKE_COMMAND}
+            -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -P ${CMAKE_SOURCE_DIR}/tools/check-source-list-parity.cmake
+    )
 endif()
 
 # Option to disable unity builds

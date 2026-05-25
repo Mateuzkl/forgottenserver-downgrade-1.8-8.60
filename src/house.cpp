@@ -488,6 +488,10 @@ HouseTransferItem* House::getTransferItem()
 	}
 
 	auto newTransferItem = HouseTransferItem::createHouseTransferItem(this);
+	if (!newTransferItem) {
+		return nullptr;
+	}
+
 	transferItem = newTransferItem;
 	transfer_container.addThing(newTransferItem.get());
 	return newTransferItem.get();
@@ -502,11 +506,16 @@ void House::resetTransferItem()
 	}
 }
 
-HouseTransferItem::HouseTransferItem(House* house) : Item(0), house(house->shared_from_this()) {}
+HouseTransferItem::HouseTransferItem(std::shared_ptr<House> house) : Item(0), house(std::move(house)) {}
 
 std::shared_ptr<HouseTransferItem> HouseTransferItem::createHouseTransferItem(House* house)
 {
-	auto transferItem = std::make_shared<HouseTransferItem>(house);
+	auto houseRef = house ? house->weak_from_this().lock() : nullptr;
+	if (!houseRef) {
+		return nullptr;
+	}
+
+	auto transferItem = std::make_shared<HouseTransferItem>(houseRef);
 	transferItem->setID(ITEM_DOCUMENT_RO);
 	transferItem->setSubType(1);
 	transferItem->setSpecialDescription(fmt::format("It is a house transfer document for '{:s}'.", house->getName()));
@@ -676,7 +685,12 @@ void Door::setHouse(House* house)
 		return;
 	}
 
-	this->house = house->shared_from_this();
+	auto houseRef = house ? house->weak_from_this().lock() : nullptr;
+	if (!houseRef) {
+		return;
+	}
+
+	this->house = std::move(houseRef);
 
 	if (!accessList) {
 		accessList = std::make_unique<AccessList>();

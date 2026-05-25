@@ -11,6 +11,15 @@
 #include "logger.h"
 #include <fmt/format.h>
 
+namespace {
+
+std::shared_ptr<Item> getSharedItem(Item* item)
+{
+	return item ? item->weak_from_this().lock() : nullptr;
+}
+
+} // namespace
+
 Events::Events() : scriptInterface("Event Interface") { scriptInterface.initState(); }
 
 bool Events::load()
@@ -603,7 +612,7 @@ void Events::eventPlayerOnLook(Player* player, const Position& position, Thing* 
 		Lua::pushUserdata<Creature>(L, creature);
 		Lua::setCreatureMetatable(L, -1, creature);
 	} else if (Item* item = thing->getItem()) {
-		Lua::pushSharedPtr(L, item->shared_from_this());
+		Lua::pushSharedPtr(L, getSharedItem(item));
 		Lua::setItemMetatable(L, -1, item);
 	} else {
 		lua_pushnil(L);
@@ -668,7 +677,7 @@ void Events::eventPlayerOnLookInTrade(Player* player, Player* partner, Item* ite
 	Lua::pushUserdata<Player>(L, partner);
 	Lua::setMetatable(L, -1, "Player");
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
 	lua_pushinteger(L, lookDistance);
@@ -728,7 +737,7 @@ ReturnValue Events::eventPlayerOnMoveItem(Player* player, Item* item, uint16_t c
 	Lua::pushUserdata<Player>(L, player);
 	Lua::setMetatable(L, -1, "Player");
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
 	lua_pushinteger(L, count);
@@ -774,7 +783,7 @@ void Events::eventPlayerOnItemMoved(Player* player, Item* item, uint16_t count, 
 	Lua::pushUserdata<Player>(L, player);
 	Lua::setMetatable(L, -1, "Player");
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
 	lua_pushinteger(L, count);
@@ -964,7 +973,7 @@ bool Events::eventPlayerOnTradeRequest(Player* player, Player* target, Item* ite
 	Lua::pushUserdata<Player>(L, target);
 	Lua::setMetatable(L, -1, "Player");
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
 	return scriptInterface.callFunction(3);
@@ -994,10 +1003,10 @@ bool Events::eventPlayerOnTradeAccept(Player* player, Player* target, Item* item
 	Lua::pushUserdata<Player>(L, target);
 	Lua::setMetatable(L, -1, "Player");
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
-	Lua::pushSharedPtr(L, targetItem->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(targetItem));
 	Lua::setItemMetatable(L, -1, targetItem);
 
 	return scriptInterface.callFunction(4);
@@ -1027,10 +1036,10 @@ void Events::eventPlayerOnTradeCompleted(Player* player, Player* target, Item* i
 	Lua::pushUserdata<Player>(L, target);
 	Lua::setMetatable(L, -1, "Player");
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
-	Lua::pushSharedPtr(L, targetItem->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(targetItem));
 	Lua::setItemMetatable(L, -1, targetItem);
 
 	Lua::pushBoolean(L, isSuccess);
@@ -1201,7 +1210,7 @@ void Events::eventPlayerOnUpdateInventory(Player* player, Item* item, const slot
 	Lua::pushUserdata<Player>(L, player);
 	Lua::setMetatable(L, -1, "Player");
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
 	lua_pushinteger(L, slot);
@@ -1231,7 +1240,7 @@ void Events::eventPlayerOnRotateItem(Player* player, Item* item)
 	Lua::pushUserdata<Player>(L, player);
 	Lua::setMetatable(L, -1, "Player");
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
 	scriptInterface.callVoidFunction(2);
@@ -1312,7 +1321,7 @@ void Events::eventMonsterOnDropLoot(Monster* monster, Container* corpse)
 	Lua::pushUserdata<Monster>(L, monster);
 	Lua::setMetatable(L, -1, "Monster");
 
-	Lua::pushSharedPtr(L, corpse->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(corpse));
 	Lua::setMetatable(L, -1, "Container");
 
 	return scriptInterface.callVoidFunction(2);
@@ -1335,7 +1344,7 @@ bool Events::eventItemOnImbue(Item* item, std::shared_ptr<Imbuement> imbuement, 
 	lua_State* L = scriptInterface.getLuaState();
 	scriptInterface.pushFunction(info.itemOnImbue);
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
 	Lua::pushSharedPtr(L, imbuement);
@@ -1363,7 +1372,7 @@ void Events::eventItemOnRemoveImbue(Item* item, ImbuementType imbueType, bool de
 	lua_State* L = scriptInterface.getLuaState();
 	scriptInterface.pushFunction(info.itemOnRemoveImbue);
 
-	Lua::pushSharedPtr(L, item->shared_from_this());
+	Lua::pushSharedPtr(L, getSharedItem(item));
 	Lua::setItemMetatable(L, -1, item);
 
 	lua_pushnumber(L, static_cast<uint8_t>(imbueType));

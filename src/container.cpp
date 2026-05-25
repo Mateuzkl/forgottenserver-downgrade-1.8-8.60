@@ -12,7 +12,23 @@
 #include "game.h"
 #include "iomap.h"
 
+#include <queue>
+
 extern Game g_game;
+
+namespace {
+
+std::shared_ptr<Item> getSharedItem(Item* item)
+{
+	return item ? item->weak_from_this().lock() : nullptr;
+}
+
+std::shared_ptr<Container> getSharedContainer(Container* container)
+{
+	return std::dynamic_pointer_cast<Container>(getSharedItem(container));
+}
+
+} // namespace
 
 Container::Container(uint16_t type) : Container(type, items[type].maxItems) {}
 
@@ -64,10 +80,11 @@ void Container::addItem(const std::shared_ptr<Item>& item)
 
 void Container::addItem(Item* item)
 {
-	if (!item) {
+	auto itemRef = getSharedItem(item);
+	if (!itemRef) {
 		return;
 	}
-	addItem(item->shared_from_this());
+	addItem(itemRef);
 }
 
 Attr_ReadValue Container::readAttr(AttrTypes_t attr, PropStream& propStream)
@@ -584,8 +601,13 @@ void Container::addThing(int32_t index, Thing* thing)
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
+	auto itemRef = getSharedItem(item);
+	if (!itemRef) {
+		return /*RETURNVALUE_NOTPOSSIBLE*/;
+	}
+
 	item->setParent(this);
-	itemlist.push_front(item->shared_from_this());
+	itemlist.push_front(std::move(itemRef));
 	updateItemWeight(item->getWeight());
 
 	// send change to client
@@ -647,7 +669,12 @@ void Container::replaceThing(uint32_t index, Thing* thing)
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
-	itemlist[index] = item->shared_from_this();
+	auto itemRef = getSharedItem(item);
+	if (!itemRef) {
+		return /*RETURNVALUE_NOTPOSSIBLE*/;
+	}
+
+	itemlist[index] = std::move(itemRef);
 	item->setParent(this);
 	updateItemWeight(-static_cast<int32_t>(replacedItem->getWeight()) + item->getWeight());
 	ammoCount += item->getItemCount();
@@ -788,8 +815,13 @@ void Container::internalAddThing(uint32_t, Thing* thing)
 		return;
 	}
 
+	auto itemRef = getSharedItem(item);
+	if (!itemRef) {
+		return;
+	}
+
 	item->setParent(this);
-	itemlist.push_front(item->shared_from_this());
+	itemlist.push_front(std::move(itemRef));
 	updateItemWeight(item->getWeight());
 
 	if (getID() == ITEM_REWARD_CONTAINER && item->isStackable()) {
@@ -802,7 +834,10 @@ void Container::startDecaying()
 {
 	ItemVector snapshot = getItems(true);
 
-	g_game.startDecay(shared_from_this());
+	auto self = getSharedContainer(this);
+	if (self) {
+		g_game.startDecay(std::move(self));
+	}
 
 	for (const auto& item : snapshot) {
 		if (!item->isRemoved()) {
@@ -813,7 +848,9 @@ void Container::startDecaying()
 
 void Container::stopDecaying()
 {
-	g_game.stopDecay(shared_from_this());
+	if (auto self = getSharedContainer(this)) {
+		g_game.stopDecay(self);
+	}
 
 	ItemVector snapshot = getItems(true);
 	for (const auto& item : snapshot) {
@@ -838,9 +875,9 @@ size_t Container::size(const bool recursive /*= false*/) const
 ContainerIterator Container::iterator() const
 {
 	ContainerIterator cit;
-	ContainerQueue pending;
+	std::queue<const Container*> pending;
 
-	pending.emplace(this, [](const Container*) {});
+	pending.push(this);
 
 	while (!pending.empty()) {
 		auto container = pending.front();
@@ -853,7 +890,7 @@ ContainerIterator Container::iterator() const
 
 			cit.items.push_back(item);
 			if (auto subContainer = std::dynamic_pointer_cast<const Container>(item)) {
-				pending.push(std::move(subContainer));
+				pending.push(subContainer.get());
 			}
 		}
 	}

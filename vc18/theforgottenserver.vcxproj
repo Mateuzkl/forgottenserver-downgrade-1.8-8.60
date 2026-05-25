@@ -19,7 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <VCProjectVersion>16.0</VCProjectVersion>
+    <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{A10F9657-129F-0FEF-14CB-CEE0B0E5AA3E}</ProjectGuid>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
@@ -102,7 +102,7 @@
       <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
       <AdditionalIncludeDirectories>..\src;$(VcpkgRoot)include\%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:W0 /Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
     </ClCompile>
@@ -138,8 +138,8 @@
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
-      <AdditionalIncludeDirectories>..\src;$(VcpkgRoot)include\luajit;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>..\src;$(VcpkgRoot)include\%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp23</LanguageStandard>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:W0 %(AdditionalOptions)</AdditionalOptions>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
     </ClCompile>
@@ -360,6 +360,7 @@
     <ClInclude Include="..\src\kv\kv.h" />
     <ClInclude Include="..\src\kv\value_wrapper.h" />
     <ClInclude Include="..\src\lockfree.h" />
+    <ClInclude Include="..\src\luavariant.h" />
     <ClInclude Include="..\src\luascript.h" />
     <ClInclude Include="..\src\mailbox.h" />
     <ClInclude Include="..\src\map.h" />
@@ -372,6 +373,7 @@
     <ClInclude Include="..\src\networkmessage.h" />
     <ClInclude Include="..\src\npc.h" />
     <ClInclude Include="..\src\otpch.h" />
+    <ClInclude Include="..\src\otserv.h" />
     <ClInclude Include="..\src\outfit.h" />
     <ClInclude Include="..\src\outputmessage.h" />
     <ClInclude Include="..\src\party.h" />

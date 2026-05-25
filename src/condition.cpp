@@ -1896,7 +1896,11 @@ bool ConditionFeared::startCondition(Creature* creature)
 		return false;
 	}
 
-	auto creatureRef = creature->shared_from_this();
+	auto creatureRef = creature->weak_from_this().lock();
+	if (!creatureRef) {
+		return false;
+	}
+
 	std::vector<Direction> listDir;
 	if (getFleePath(creatureRef, listDir)) {
 		g_game.playerAutoWalk(creature->getID(), listDir);
@@ -1907,7 +1911,11 @@ bool ConditionFeared::startCondition(Creature* creature)
 bool ConditionFeared::executeCondition(Creature* creature, int32_t interval)
 {
 	if (creature->getPlayer()) {
-		auto creatureRef = creature->shared_from_this();
+		auto creatureRef = creature->weak_from_this().lock();
+		if (!creatureRef) {
+			return Condition::executeCondition(creature, interval);
+		}
+
 		std::vector<Direction> listDir;
 		if (getFleePath(creatureRef, listDir)) {
 			g_game.playerAutoWalk(creature->getID(), listDir);

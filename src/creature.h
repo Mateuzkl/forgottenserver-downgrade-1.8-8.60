@@ -107,8 +107,8 @@ public:
 
 	Creature* getCreature() override final { return this; }
 	const Creature* getCreature() const override final { return this; }
-	std::shared_ptr<Creature> asCreature() { return shared_from_this(); }
-	std::shared_ptr<const Creature> asCreature() const { return shared_from_this(); }
+	std::shared_ptr<Creature> asCreature() { return weak_from_this().lock(); }
+	std::shared_ptr<const Creature> asCreature() const { return weak_from_this().lock(); }
 
 	static bool isAlive(const Creature* c) { return liveCreatures.count(c) > 0; }
 	virtual Player* getPlayer() { return nullptr; }
@@ -351,7 +351,11 @@ public:
 	void setParent(Cylinder* cylinder) override final
 	{
 		if (cylinder) {
-			auto t = static_cast<Tile*>(cylinder)->shared_from_this();
+			auto t = static_cast<Tile*>(cylinder)->weak_from_this().lock();
+			if (!t) {
+				tile.reset();
+				return;
+			}
 			position = t->getPosition();
 			tile = t;
 		} else {

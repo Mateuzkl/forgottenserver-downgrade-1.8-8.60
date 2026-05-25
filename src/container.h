@@ -9,7 +9,6 @@
 #include "tile.h"
 
 #include <memory>
-#include <queue>
 #include <vector>
 
 class Container;
@@ -18,8 +17,6 @@ class DepotLocker;
 class RewardChest;
 class StoreInbox;
 class Player;
-
-using ContainerQueue = std::queue<std::shared_ptr<const Container>>;
 
 class ContainerIterator
 {

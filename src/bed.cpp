@@ -23,7 +23,7 @@ BedItem::BedItem(uint16_t id) : Item(id) { internalRemoveSleeper(); }
 void BedItem::setHouse(House* h) noexcept
 {
 	if (h) {
-		house = h->shared_from_this();
+		house = h->weak_from_this().lock();
 	} else {
 		house.reset();
 	}

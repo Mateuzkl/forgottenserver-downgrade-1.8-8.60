@@ -37,6 +37,26 @@ constexpr uint32_t CHAIN_SYSTEM_STORAGE = 40001;
 
 void trimString(std::string& str) { boost::algorithm::trim(str); }
 
+std::shared_ptr<Item> getSharedItem(Item* item)
+{
+	return item ? item->weak_from_this().lock() : nullptr;
+}
+
+std::shared_ptr<House> getSharedHouse(House* house)
+{
+	return house ? house->weak_from_this().lock() : nullptr;
+}
+
+std::shared_ptr<Npc> getSharedNpc(Npc* npc)
+{
+	return npc ? std::dynamic_pointer_cast<Npc>(npc->weak_from_this().lock()) : nullptr;
+}
+
+std::shared_ptr<Party> getSharedParty(Party* party)
+{
+	return party ? party->weak_from_this().lock() : nullptr;
+}
+
 // std::string asLowerCaseString(const std::string& str) { return boost::algorithm::to_lower_copy<std::string>(str); }
 
 // void toLowerCaseString(std::string& str) { boost::algorithm::to_lower(str); }
@@ -215,7 +235,7 @@ Player::~Player()
 
 void Player::setParty(Party* party)
 {
-	this->party = party ? party->shared_from_this() : std::shared_ptr<Party>();
+	this->party = getSharedParty(party);
 }
 
 bool Player::setVocation(uint16_t vocId)
@@ -1410,7 +1430,7 @@ void Player::setEditHouse(House* house, uint32_t listId /*= 0*/)
 {
 	windowTextId++;
 	if (house) {
-		editHouse = house->shared_from_this();
+		editHouse = getSharedHouse(house);
 	} else {
 		editHouse.reset();
 	}
@@ -1917,7 +1937,7 @@ void Player::openShopWindow(const std::list<ShopInfo>& shop)
 
 void Player::setShopOwner(Npc* owner, int32_t onBuy, int32_t onSell)
 {
-	shopOwner = owner ? std::dynamic_pointer_cast<Npc>(owner->shared_from_this()) : std::shared_ptr<Npc>();
+	shopOwner = getSharedNpc(owner);
 	purchaseCallback = onBuy;
 	saleCallback = onSell;
 }
@@ -3619,8 +3639,13 @@ void Player::addThing(int32_t index, Thing* thing)
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
+	auto itemRef = getSharedItem(item);
+	if (!itemRef) {
+		return /*RETURNVALUE_NOTPOSSIBLE*/;
+	}
+
 	item->setParent(this);
-	inventory[index] = item->shared_from_this();
+	inventory[index] = std::move(itemRef);
 
 	// send to client
 	sendInventoryItem(static_cast<slots_t>(index), item);
@@ -3664,6 +3689,11 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
+	auto itemRef = getSharedItem(item);
+	if (!itemRef) {
+		return /*RETURNVALUE_NOTPOSSIBLE*/;
+	}
+
 	// send to client
 	sendInventoryItem(static_cast<slots_t>(index), item);
 
@@ -3672,7 +3702,7 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 
 	item->setParent(this);
 
-	inventory[index] = item->shared_from_this();
+	inventory[index] = std::move(itemRef);
 }
 
 void Player::removeThing(Thing* thing, uint32_t count)
@@ -4026,7 +4056,12 @@ void Player::internalAddThing(uint32_t index, Thing* thing)
 			return;
 		}
 
-		inventory[index] = item->shared_from_this();
+		auto itemRef = getSharedItem(item);
+		if (!itemRef) {
+			return;
+		}
+
+		inventory[index] = std::move(itemRef);
 		item->setParent(this);
 	}
 }
@@ -5199,7 +5234,12 @@ bool Player::addPartyInvitation(Party* party)
 		}
 	}
 
-	invitePartyList.push_front(party->shared_from_this());
+	auto partyRef = getSharedParty(party);
+	if (!partyRef) {
+		return false;
+	}
+
+	invitePartyList.push_front(std::move(partyRef));
 	return true;
 }
 

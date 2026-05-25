@@ -380,6 +380,12 @@ bool Spawn::spawnMonster(uint32_t spawnId, const std::shared_ptr<MonsterType>& m
 		}
 	}
 
+	auto spawnRef = weak_from_this().lock();
+	if (!spawnRef) {
+		g_game.removeCreature(monster);
+		return false;
+	}
+
 	auto [it, inserted] = spawnedMap.insert({spawnId, g_game.getCreatureSharedRef<Monster>(monster)});
 	if (!inserted) {
 		g_game.removeCreature(monster);
@@ -387,7 +393,7 @@ bool Spawn::spawnMonster(uint32_t spawnId, const std::shared_ptr<MonsterType>& m
 	}
 
 	monster->setDirection(dir);
-	monster->setSpawn(shared_from_this());
+	monster->setSpawn(std::move(spawnRef));
 	monster->setMasterPos(finalPos);
 
 	spawnMap[spawnId].lastSpawn = OTSYS_TIME();

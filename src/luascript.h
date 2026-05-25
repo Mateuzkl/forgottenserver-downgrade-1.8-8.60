@@ -1040,7 +1040,9 @@ inline void getSpectators(lua_State* L, int32_t arg, SpectatorVec& spectators)
 {
 	if (isUserdata(L, arg)) {
 		if (T* creature = getUserdata<T>(L, arg)) {
-			spectators.emplace_back(creature->shared_from_this());
+			if (auto creatureRef = creature->weak_from_this().lock()) {
+				spectators.emplace_back(std::move(creatureRef));
+			}
 		}
 		return;
 	} else if (!isTable(L, arg)) {
@@ -1051,7 +1053,9 @@ inline void getSpectators(lua_State* L, int32_t arg, SpectatorVec& spectators)
 	while (lua_next(L, arg) != 0) {
 		if (isUserdata(L, -1)) {
 			if (T* creature = getUserdata<T>(L, -1)) {
-				spectators.emplace_back(creature->shared_from_this());
+				if (auto creatureRef = creature->weak_from_this().lock()) {
+					spectators.emplace_back(std::move(creatureRef));
+				}
 			}
 		}
 		lua_pop(L, 1);
