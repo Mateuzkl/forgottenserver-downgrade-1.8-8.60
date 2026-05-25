@@ -3461,13 +3461,13 @@ bool Game::internalStartTrade(Player* player, Player* tradePartner, Item* tradeI
 		return false;
 	}
 
-	player->setTradePartner(std::static_pointer_cast<Player>(getCreatureSharedRef(tradePartner)));
 	auto tradeItemRef = getItemSharedRef(tradeItem);
 	if (!tradeItemRef) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return false;
 	}
 	player->tradeItem = tradeItemRef;
+	player->setTradePartner(std::static_pointer_cast<Player>(getCreatureSharedRef(tradePartner)));
 	player->tradeState = TRADE_INITIATED;
 	tradeItems[tradeItem->weak_from_this()] = player->getID();
 
@@ -4802,7 +4802,15 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 		return true;
 	}
 
-	auto attackerRef = attacker ? attacker->weak_from_this().lock() : std::shared_ptr<Creature>();
+	std::shared_ptr<Creature> attackerRef;
+	if (attacker) {
+		attackerRef = attacker->weak_from_this().lock();
+		if (!attackerRef) {
+			LOG_ERROR(fmt::format("[Game::combatBlockHit] Failed to lock attacker shared reference: {}",
+			                      static_cast<const void*>(attacker)));
+			return true;
+		}
+	}
 
 	uint32_t targetInstanceId = target->getInstanceID();
 	const auto sendBlockEffect = [targetInstanceId](BlockType_t blockType, CombatType_t combatType,
@@ -5594,7 +5602,15 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 		return false;
 	}
 
-	auto attackerRef = attacker ? attacker->weak_from_this().lock() : std::shared_ptr<Creature>();
+	std::shared_ptr<Creature> attackerRef;
+	if (attacker) {
+		attackerRef = attacker->weak_from_this().lock();
+		if (!attackerRef) {
+			LOG_ERROR(fmt::format("[Game::combatChangeMana] Failed to lock attacker shared reference: {}",
+			                      static_cast<const void*>(attacker)));
+			return false;
+		}
+	}
 
 	if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED)) {
 		Monster* monster = attacker ? attacker->getMonster() : nullptr;

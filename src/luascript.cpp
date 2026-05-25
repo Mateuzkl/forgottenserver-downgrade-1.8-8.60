@@ -881,6 +881,10 @@ void Lua::pushThing(lua_State* L, Thing* thing)
 			pushSharedPtr(L, std::move(itemRef));
 			setItemMetatable(L, -1, item);
 		} else {
+#ifndef NDEBUG
+			LOG_WARN(fmt::format("[Lua::pushThing] Item has no shared ownership, pushing nil: {}",
+			                     static_cast<const void*>(item)));
+#endif
 			lua_pushnil(L);
 		}
 	} else if (Creature* creature = thing->getCreature()) {
