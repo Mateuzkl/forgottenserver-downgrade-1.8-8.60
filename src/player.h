@@ -112,6 +112,25 @@ inline constexpr int32_t AVATAR_TIMER_STORAGE = 50099;
 inline constexpr int32_t AVATAR_DAMAGE_REDUCTION_PERCENT = 10;
 inline constexpr int32_t DUAL_WIELD_DAMAGE_BOOST_STORAGE = 50001;
 
+// Proficiency Augment stub (for future integration)
+enum WeaponProficiencyPerkAugmentType_t : uint8_t {
+	PROFICIENCY_AUGMENTTYPE_NONE = 0,
+	PROFICIENCY_AUGMENTTYPE_BASE_DAMAGE = 2,
+	PROFICIENCY_AUGMENTTYPE_HEALING = 3,
+	PROFICIENCY_AUGMENTTYPE_COOLDOWN = 6,
+	PROFICIENCY_AUGMENTTYPE_INCREASED_DAMAGE = 9,
+	PROFICIENCY_AUGMENTTYPE_LIFE_LEECH = 14,
+	PROFICIENCY_AUGMENTTYPE_MANA_LEECH = 15,
+	PROFICIENCY_AUGMENTTYPE_CRITICAL_EXTRA_DAMAGE = 16,
+	PROFICIENCY_AUGMENTTYPE_CRITICAL_HIT_CHANCE = 17,
+};
+
+struct WeaponProficiencyAugment {
+	uint16_t spellId = 0;
+	WeaponProficiencyPerkAugmentType_t augmentType = PROFICIENCY_AUGMENTTYPE_NONE;
+	float value = 0.0f;
+};
+
 class Player final : public Creature, public Cylinder
 {
 public:
@@ -505,6 +524,16 @@ public:
 	std::shared_ptr<Item> getInventoryItemShared(uint32_t slot) const;
 	bool hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const;
 	bool isInventorySlot(slots_t slot) const;
+
+	// Augment system
+	std::vector<std::shared_ptr<Item>> getEquippedAugmentItems() const;
+	std::vector<std::shared_ptr<Item>> getEquippedAugmentItemsByType(Augment_t augmentType) const;
+	void applyItemAugments(CombatDamage& damage);
+	int32_t calculateAugmentCooldownReduction() const;
+
+	const std::string& getSpellNameCasting() const { return spellNameCasting; }
+	void setSpellNameCasting(std::string name) { spellNameCasting = std::move(name); }
+	void clearSpellNameCasting() { spellNameCasting.clear(); }
 
 	bool isItemAbilityEnabled(slots_t slot) const { return inventoryAbilities[slot]; }
 	void setItemAbility(slots_t slot, bool enabled) { inventoryAbilities[slot] = enabled; }
@@ -1522,6 +1551,7 @@ private:
 	int32_t offlineTrainingTime = 0;
 	int32_t idleTime = 0;
 	int32_t helmetCooldownReduction = 0;
+	std::string spellNameCasting;
 
 	uint16_t lastStatsTrainingTime = 0;
 	uint16_t staminaMinutes = 2520;

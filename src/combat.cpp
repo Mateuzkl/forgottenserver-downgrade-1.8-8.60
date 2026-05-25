@@ -1053,6 +1053,12 @@ void Combat::doCombat(Creature* caster, Creature* target) const
 	if (params.combatType != COMBAT_NONE) {
 		CombatDamage damage = getCombatDamage(caster, target);
 
+		// Apply item augments for spell-triggered combat
+		if (Player* attackerPlayer = caster ? caster->getPlayer() : nullptr) {
+			damage.instantSpellName = attackerPlayer->getSpellNameCasting();
+			attackerPlayer->applyItemAugments(damage);
+		}
+
 		bool canCombat =
 		    !params.aggressive || (caster != target && Combat::canDoCombat(caster, target) == RETURNVALUE_NOERROR);
 		if ((caster == target || canCombat) && params.impactEffect != CONST_ME_NONE) {
@@ -1123,6 +1129,13 @@ void Combat::doCombat(Creature* caster, const Position& position) const
 	// area combat callback function
 	if (params.combatType != COMBAT_NONE) {
 		CombatDamage damage = getCombatDamage(caster, nullptr);
+
+		// Apply item augments for spell-triggered combat
+		if (Player* attackerPlayer = caster ? caster->getPlayer() : nullptr) {
+			damage.instantSpellName = attackerPlayer->getSpellNameCasting();
+			attackerPlayer->applyItemAugments(damage);
+		}
+
 		doAreaCombat(caster, position, area.get(), damage, params);
 	} else {
 		auto tiles = caster ? getCombatArea(caster->getPosition(), position, area.get())

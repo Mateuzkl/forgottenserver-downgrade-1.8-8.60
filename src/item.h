@@ -1085,6 +1085,29 @@ public:
 	bool removeImbuement(std::shared_ptr<Imbuement> imbuement, bool decayed = false);
 	std::vector<std::shared_ptr<Imbuement>>& getImbuements();
 
+	// Augment accessors
+	std::vector<std::shared_ptr<AugmentInfo>> getAugments() const { return items[id].augments; }
+	std::vector<std::shared_ptr<AugmentInfo>> getAugmentsBySpellName(const std::string& spellName) const
+	{
+		std::vector<std::shared_ptr<AugmentInfo>> result;
+		for (const auto& aug : items[id].augments) {
+			if (aug->spellName == spellName) {
+				result.push_back(aug);
+			}
+		}
+		return result;
+	}
+	std::vector<std::shared_ptr<AugmentInfo>> getAugmentsBySpellNameAndType(const std::string& spellName, Augment_t augmentType) const
+	{
+		std::vector<std::shared_ptr<AugmentInfo>> result;
+		for (const auto& aug : items[id].augments) {
+			if (aug->spellName == spellName && aug->type == augmentType) {
+				result.push_back(aug);
+			}
+		}
+		return result;
+	}
+
 protected:
 	ObserverPtr<Cylinder> parent = nullptr;
 

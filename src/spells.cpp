@@ -606,22 +606,26 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
                 }
             }
 
+            // Apply augment cooldown reduction
+            int32_t augmentReduction = player->calculateAugmentCooldownReduction();
+            int32_t totalReduction = momentumReduction + augmentReduction;
+
             if (cooldown > 0) {
-                int32_t adjustedCooldown = std::max<int32_t>(1000, static_cast<int32_t>(cooldown) - momentumReduction);
+                int32_t adjustedCooldown = std::max<int32_t>(cooldown / 2, static_cast<int32_t>(cooldown) - totalReduction);
                 auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN,
                                                             adjustedCooldown, 0, false, spellId);
                 player->addCondition(std::move(condition));
             }
 
             if (groupCooldown > 0) {
-                int32_t adjustedGroupCooldown = std::max<int32_t>(1000, static_cast<int32_t>(groupCooldown) - momentumReduction);
+                int32_t adjustedGroupCooldown = std::max<int32_t>(groupCooldown / 2, static_cast<int32_t>(groupCooldown) - totalReduction);
                 auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
                                                             adjustedGroupCooldown, 0, false, group);
                 player->addCondition(std::move(condition));
             }
 
             if (secondaryGroupCooldown > 0) {
-                int32_t adjustedSecondaryGroupCooldown = std::max<int32_t>(1000, static_cast<int32_t>(secondaryGroupCooldown) - momentumReduction);
+                int32_t adjustedSecondaryGroupCooldown = std::max<int32_t>(secondaryGroupCooldown / 2, static_cast<int32_t>(secondaryGroupCooldown) - totalReduction);
                 auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLGROUPCOOLDOWN,
                                                             adjustedSecondaryGroupCooldown, 0, false, secondaryGroup);
                 player->addCondition(std::move(condition));
@@ -640,6 +644,9 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
 	if (harmony) {
 		player->setHarmony(0);
 	}
+
+	// Clear spell name for augment system after spell is fully processed
+	player->clearSpellNameCasting();
 }
 
 void Spell::postCastSpell(Player* player, uint32_t manaCost, uint32_t soulCost)
@@ -878,6 +885,11 @@ bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 		return false;
 	}
 
+	// Set spell name on player for augment system
+	if (Player* player = creature->getPlayer()) {
+		player->setSpellNameCasting(std::string(getName()));
+	}
+
 	ScriptEnvironment* env = scriptInterface->getScriptEnv();
 	env->setScriptId(scriptId, scriptInterface);
 
@@ -1028,6 +1040,11 @@ bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - RuneSpell::executeCastSpell] Call stack overflow");
 		return false;
+	}
+
+	// Set spell name on player for augment system
+	if (Player* player = creature->getPlayer()) {
+		player->setSpellNameCasting(std::string(getName()));
 	}
 
 	ScriptEnvironment* env = scriptInterface->getScriptEnv();

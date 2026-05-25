@@ -724,6 +724,7 @@ struct CombatDamage
 	bool dodge = false;
 	bool preyApplied = false;
 	float spellResetMultiplier = -1.0f;
+	std::string instantSpellName;
 };
 
 using ShopInfoList = std::list<ShopInfo>;

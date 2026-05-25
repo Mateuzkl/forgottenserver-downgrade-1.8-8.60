@@ -232,6 +232,32 @@ enum ItemParseAttributes_t
 	ITEM_PARSE_IMBUEMENTSLOT,
 	ITEM_PARSE_WRAPABLETO,
 	ITEM_PARSE_MANTRA,
+	ITEM_PARSE_AUGMENT,
+};
+
+enum class Augment_t : uint8_t {
+	None,
+	Base,
+	PowerfulImpact,
+	StrongImpact,
+	IncreasedDamage,
+	Cooldown,
+	CriticalExtraDamage,
+	CriticalHitChance,
+	LifeLeech,
+	ManaLeech,
+	MagicLevelHealing,
+	MagicLevelDamage,
+	SkillDamage
+};
+
+struct AugmentInfo {
+	AugmentInfo(std::string spellName, Augment_t type, int32_t value) :
+	    spellName(std::move(spellName)), type(type), value(value) { }
+
+	std::string spellName;
+	Augment_t type = Augment_t::None;
+	int32_t value = 0;
 };
 
 struct Abilities
@@ -347,6 +373,11 @@ public:
 
 	std::unique_ptr<Abilities> abilities;
 	std::unique_ptr<ConditionDamage> conditionDamage;
+	std::vector<std::shared_ptr<AugmentInfo>> augments;
+
+	void addAugment(std::string spellName, Augment_t augmentType, int32_t value) {
+		augments.emplace_back(std::make_shared<AugmentInfo>(std::move(spellName), augmentType, value));
+	}
 
 	uint32_t attackSpeed = 0;
 	uint32_t classification = 0;
@@ -477,6 +508,10 @@ public:
 	bool loadFromXml();
 	void parseItemNode(const pugi::xml_node& itemNode, uint16_t id);
 	void parseScriptAttribute(ItemType& it, const pugi::xml_node& attributeNode, const pugi::xml_attribute& valueAttribute);
+
+	static std::string parseAugmentDescription(const ItemType& it, bool ignoreDuplicate = false);
+	static std::string getAugmentNameByType(Augment_t augmentType);
+	static bool isAugmentWithoutValueDescription(Augment_t augmentType);
 
 	void buildInventoryList();
 	const InventoryVector& getInventory() const { return inventory; }

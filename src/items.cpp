@@ -14,6 +14,7 @@
 #include "logger.h"
 #include <fmt/format.h>
 #include <fstream>
+#include <sstream>
 #include <cstring>
 #include "configmanager.h"
 #include "itemloader.h"
@@ -226,6 +227,7 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"elementalbond", ITEM_PARSE_ELEMENTALBOND},
     {"script", ITEM_PARSE_SCRIPT},
     {"mantra", ITEM_PARSE_MANTRA},
+    {"augments", ITEM_PARSE_AUGMENT},
 };
 
 const std::unordered_map<std::string, ItemTypes_t> ItemTypesMap = {
@@ -1991,16 +1993,90 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 					break;
 				}
 
-				case ITEM_PARSE_MANTRA: {
-					int16_t value = pugi::cast<int16_t>(valueAttribute.value());
-					for (const CombatType_t combatType : MANTRA_COMBAT_TYPES) {
-						auto& mantraValue = abilities.mantraAbsorbValue[combatTypeToIndex(combatType)];
-						mantraValue = static_cast<int16_t>(std::clamp<int32_t>(
-						    static_cast<int32_t>(mantraValue) + value, std::numeric_limits<int16_t>::min(),
-						    std::numeric_limits<int16_t>::max()));
-					}
-					break;
+			case ITEM_PARSE_MANTRA: {
+				int16_t value = pugi::cast<int16_t>(valueAttribute.value());
+				for (const CombatType_t combatType : MANTRA_COMBAT_TYPES) {
+					auto& mantraValue = abilities.mantraAbsorbValue[combatTypeToIndex(combatType)];
+					mantraValue = static_cast<int16_t>(std::clamp<int32_t>(
+					    static_cast<int32_t>(mantraValue) + value, std::numeric_limits<int16_t>::min(),
+					    std::numeric_limits<int16_t>::max()));
 				}
+				break;
+			}
+
+			case ITEM_PARSE_AUGMENT: {
+				for (auto subAttributeNode : attributeNode.children()) {
+					pugi::xml_attribute subKeyAttribute = subAttributeNode.attribute("key");
+					if (!subKeyAttribute) {
+						continue;
+					}
+
+					pugi::xml_attribute subValueAttribute = subAttributeNode.attribute("value");
+					if (!subValueAttribute) {
+						continue;
+					}
+
+					std::string spellName = boost::algorithm::to_lower_copy<std::string>(subKeyAttribute.as_string());
+
+					std::string augmentTypeStr = subValueAttribute.as_string();
+					std::string pascalType;
+					bool capitalize = true;
+					for (char c : augmentTypeStr) {
+						if (c == ' ') {
+							capitalize = true;
+						} else if (capitalize) {
+							pascalType += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+							capitalize = false;
+						} else {
+							pascalType += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+						}
+					}
+
+					auto augmentType = Augment_t::None;
+					if (pascalType == "Base") augmentType = Augment_t::Base;
+					else if (pascalType == "PowerfulImpact") augmentType = Augment_t::PowerfulImpact;
+					else if (pascalType == "StrongImpact") augmentType = Augment_t::StrongImpact;
+					else if (pascalType == "IncreasedDamage") augmentType = Augment_t::IncreasedDamage;
+					else if (pascalType == "Cooldown") augmentType = Augment_t::Cooldown;
+					else if (pascalType == "CriticalExtraDamage") augmentType = Augment_t::CriticalExtraDamage;
+					else if (pascalType == "CriticalHitChance") augmentType = Augment_t::CriticalHitChance;
+					else if (pascalType == "LifeLeech") augmentType = Augment_t::LifeLeech;
+					else if (pascalType == "ManaLeech") augmentType = Augment_t::ManaLeech;
+					else if (pascalType == "MagicLevelHealing") augmentType = Augment_t::MagicLevelHealing;
+					else if (pascalType == "MagicLevelDamage") augmentType = Augment_t::MagicLevelDamage;
+					else if (pascalType == "SkillDamage") augmentType = Augment_t::SkillDamage;
+
+					if (augmentType == Augment_t::None) {
+						LOG_WARN(fmt::format("[Warning - Items::parseItemNode] Unknown augment type: {} for item: {}", augmentTypeStr, it.id));
+						continue;
+					}
+
+					int32_t value = 0;
+					for (auto valueNode : subAttributeNode.children()) {
+						pugi::xml_attribute valueKeyAttribute = valueNode.attribute("key");
+						if (!valueKeyAttribute || std::string_view(valueKeyAttribute.as_string()) != "value") {
+							continue;
+						}
+						pugi::xml_attribute valueValueAttribute = valueNode.attribute("value");
+						if (valueValueAttribute) {
+							value = pugi::cast<int32_t>(valueValueAttribute.value());
+						}
+					}
+
+					if (value == 0) {
+						if (augmentType == Augment_t::IncreasedDamage) {
+							value = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::AUGMENT_INCREASED_DAMAGE_PERCENT)) * 100;
+						} else if (augmentType == Augment_t::PowerfulImpact) {
+							value = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::AUGMENT_POWERFUL_IMPACT_PERCENT)) * 100;
+						} else if (augmentType == Augment_t::StrongImpact) {
+							value = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::AUGMENT_STRONG_IMPACT_PERCENT)) * 100;
+						}
+					}
+
+					it.addAugment(spellName, augmentType, value);
+				}
+				break;
+			}
 
 				default: {
 					// It should not ever get to here, only if you add a new key to the map and don't configure a case
@@ -2417,6 +2493,111 @@ std::string_view ItemType::getPluralName() const
 	pluralString.assign(name);
 	pluralString.push_back('s');
 	return pluralString;
+}
+
+bool Items::isAugmentWithoutValueDescription(Augment_t augmentType)
+{
+	switch (augmentType) {
+		case Augment_t::IncreasedDamage:
+		case Augment_t::PowerfulImpact:
+		case Augment_t::StrongImpact:
+			return true;
+		default:
+			return false;
+	}
+}
+
+std::string Items::getAugmentNameByType(Augment_t augmentType)
+{
+	switch (augmentType) {
+		case Augment_t::Base: return "Base Damage";
+		case Augment_t::PowerfulImpact: return "Powerful Impact";
+		case Augment_t::StrongImpact: return "Strong Impact";
+		case Augment_t::IncreasedDamage: return "Increased Damage";
+		case Augment_t::Cooldown: return "Cooldown Reduction";
+		case Augment_t::CriticalExtraDamage: return "Critical Extra Damage";
+		case Augment_t::CriticalHitChance: return "Critical Hit Chance";
+		case Augment_t::LifeLeech: return "Life Leech";
+		case Augment_t::ManaLeech: return "Mana Leech";
+		case Augment_t::MagicLevelHealing: return "Magic Level Healing";
+		case Augment_t::MagicLevelDamage: return "Magic Level Damage";
+		case Augment_t::SkillDamage: return "Skill Damage";
+		default: return "Unknown";
+	}
+}
+
+std::string Items::parseAugmentDescription(const ItemType& it, bool ignoreDuplicate)
+{
+	if (it.augments.empty()) {
+		return {};
+	}
+
+	std::ostringstream ss;
+	bool first = true;
+	for (const auto& aug : it.augments) {
+		if (!first) {
+			ss << ", ";
+		}
+		first = false;
+
+		std::string spellName = aug->spellName;
+		// Capitalize first letter of each word in spell name for display
+		bool cap = true;
+		for (auto& c : spellName) {
+			if (c == ' ') {
+				cap = true;
+			} else if (cap) {
+				c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+				cap = false;
+			}
+		}
+
+		ss << spellName << " -> ";
+
+		switch (aug->type) {
+			case Augment_t::Base:
+			case Augment_t::IncreasedDamage:
+			case Augment_t::PowerfulImpact:
+			case Augment_t::StrongImpact: {
+				double percent = aug->value / 100.0;
+				ss << fmt::format("{:+.2f}%", percent);
+				break;
+			}
+			case Augment_t::Cooldown: {
+				int32_t seconds = aug->value / 1000;
+				if (seconds > 0) {
+					ss << fmt::format("-{}s cooldown", seconds);
+				}
+				break;
+			}
+			case Augment_t::CriticalExtraDamage:
+				ss << fmt::format("+{} critical extra damage", aug->value);
+				break;
+			case Augment_t::CriticalHitChance:
+				ss << fmt::format("+{} critical hit chance", aug->value);
+				break;
+			case Augment_t::LifeLeech:
+				ss << fmt::format("+{} life leech", aug->value);
+				break;
+		case Augment_t::ManaLeech:
+			ss << fmt::format("+{} mana leech", aug->value);
+			break;
+		case Augment_t::MagicLevelHealing:
+		case Augment_t::MagicLevelDamage:
+		case Augment_t::SkillDamage: {
+			double percent = aug->value / 100.0;
+			ss << fmt::format("{:+.2f}%", percent);
+			break;
+		}
+		default:
+				ss << fmt::format("+{}", aug->value);
+				break;
+		}
+
+		ss << " " << getAugmentNameByType(aug->type);
+	}
+
+	return ss.str();
 }
 
 Items::~Items()

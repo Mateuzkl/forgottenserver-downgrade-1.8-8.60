@@ -489,6 +489,156 @@ bool Player::isInventorySlot(slots_t slot) const
 	return slot >= CONST_SLOT_FIRST && slot <= CONST_SLOT_LAST;
 }
 
+std::vector<std::shared_ptr<Item>> Player::getEquippedAugmentItems() const
+{
+	std::vector<std::shared_ptr<Item>> items;
+	for (uint32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		if (slot == CONST_SLOT_BACKPACK) {
+			continue;
+		}
+		const auto& item = inventory[slot];
+		if (item && !item->getAugments().empty()) {
+			items.push_back(item);
+		}
+	}
+	return items;
+}
+
+std::vector<std::shared_ptr<Item>> Player::getEquippedAugmentItemsByType(Augment_t augmentType) const
+{
+	std::vector<std::shared_ptr<Item>> items;
+	for (uint32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		if (slot == CONST_SLOT_BACKPACK) {
+			continue;
+		}
+		const auto& item = inventory[slot];
+		if (!item) {
+			continue;
+		}
+		for (const auto& aug : item->getAugments()) {
+			if (aug->type == augmentType) {
+				items.push_back(item);
+				break;
+			}
+		}
+	}
+	return items;
+}
+
+void Player::applyItemAugments(CombatDamage& damage)
+{
+	if (spellNameCasting.empty()) {
+		return;
+	}
+
+	std::string lowerSpellName = boost::algorithm::to_lower_copy(spellNameCasting);
+
+	for (uint32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		if (slot == CONST_SLOT_BACKPACK) {
+			continue;
+		}
+		const auto& item = inventory[slot];
+		if (!item) {
+			continue;
+		}
+
+		for (const auto& aug : item->getAugments()) {
+			if (aug->spellName != lowerSpellName) {
+				continue;
+			}
+
+			switch (aug->type) {
+				case Augment_t::Base:
+				case Augment_t::IncreasedDamage:
+				case Augment_t::PowerfulImpact:
+				case Augment_t::StrongImpact: {
+					double multiplier = 1.0 + (aug->value / 10000.0);
+					damage.primary.value = static_cast<int32_t>(std::round(damage.primary.value * multiplier));
+					damage.secondary.value = static_cast<int32_t>(std::round(damage.secondary.value * multiplier));
+					break;
+				}
+				case Augment_t::CriticalExtraDamage:
+					damage.critical = true;
+					break;
+				case Augment_t::CriticalHitChance:
+					damage.critical = true;
+					break;
+				case Augment_t::LifeLeech:
+				case Augment_t::ManaLeech:
+					break;
+				case Augment_t::MagicLevelHealing: {
+					if (damage.primary.value > 0) {
+						double percent = aug->value / 100.0;
+						int32_t bonus = static_cast<int32_t>(std::round(percent * static_cast<double>(magLevel)));
+						damage.primary.value += bonus;
+					}
+					break;
+				}
+				case Augment_t::MagicLevelDamage: {
+					if (damage.primary.value < 0) {
+						double percent = aug->value / 100.0;
+						int32_t bonus = static_cast<int32_t>(std::round(percent * static_cast<double>(magLevel)));
+						damage.primary.value -= bonus;
+					}
+					break;
+				}
+				case Augment_t::SkillDamage: {
+					int32_t skillLevel = 0;
+					// Auto-detect skill based on weapon type; wand/rod uses magic level
+					switch (getWeaponType()) {
+						case WEAPON_SWORD: skillLevel = getSkillLevel(SKILL_SWORD); break;
+						case WEAPON_AXE:   skillLevel = getSkillLevel(SKILL_AXE); break;
+						case WEAPON_CLUB:  skillLevel = getSkillLevel(SKILL_CLUB); break;
+						case WEAPON_DISTANCE: skillLevel = getSkillLevel(SKILL_DISTANCE); break;
+						case WEAPON_WAND:  skillLevel = static_cast<int32_t>(magLevel); break;
+						default: skillLevel = getSkillLevel(SKILL_FIST); break;
+					}
+					double percent = aug->value / 100.0;
+					int32_t bonus = static_cast<int32_t>(std::round(percent * static_cast<double>(skillLevel)));
+					if (damage.primary.value < 0) {
+						damage.primary.value -= bonus;
+					} else if (damage.primary.value > 0) {
+						damage.primary.value += bonus;
+					}
+					break;
+				}
+				default:
+					break;
+			}
+		}
+	}
+}
+
+int32_t Player::calculateAugmentCooldownReduction() const
+{
+	if (spellNameCasting.empty()) {
+		return 0;
+	}
+
+	std::string lowerSpellName = boost::algorithm::to_lower_copy(spellNameCasting);
+	int32_t reduction = 0;
+
+	for (uint32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		if (slot == CONST_SLOT_BACKPACK) {
+			continue;
+		}
+		const auto& item = inventory[slot];
+		if (!item) {
+			continue;
+		}
+
+		for (const auto& aug : item->getAugments()) {
+			if (aug->spellName == lowerSpellName && aug->type == Augment_t::Cooldown) {
+				reduction += aug->value;
+			}
+		}
+
+		// Also check proficiency augments (stub)
+	}
+
+	return reduction;
+}
+
 void Player::addConditionSuppressions(uint32_t conditions) { conditionSuppressions |= conditions; }
 
 void Player::removeConditionSuppressions(uint32_t conditions) { conditionSuppressions &= ~conditions; }
