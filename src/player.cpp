@@ -2508,7 +2508,7 @@ void Player::removeExperience(uint64_t exp, bool sendText /* = false*/)
 
 		SpectatorVec spectators;
 		g_game.map.getSpectators(spectators, position, false, true);
-		spectators = InstanceUtils::filterByInstance(spectators, getInstanceID());
+		InstanceUtils::filterByInstanceInPlace(spectators, getInstanceID());
 		g_game.addAnimatedText(spectators, std::to_string(lostExp), position, TEXTCOLOR_RED);
 		spectators.erase(this);
 		if (!spectators.empty()) {

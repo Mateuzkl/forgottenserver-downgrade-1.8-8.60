@@ -39,16 +39,16 @@ inline bool isPlayerInSameInstance(const Creature* player,
     return player && player->compareInstance(objectInstanceId);
 }
 
-inline SpectatorVec filterByInstance(const SpectatorVec &spectators,
-                                     uint32_t instanceId)
+inline void filterByInstanceInPlace(SpectatorVec &spectators,
+                                    uint32_t instanceId)
 {
-    SpectatorVec filtered;
-    for (const auto& spectator : spectators.players()) {
-        if (static_cast<const Player*>(spectator.get())->compareInstance(instanceId)) {
-            filtered.emplace_back(spectator);
-        }
+    if (instanceId == 0) {
+        return;
     }
-    return filtered;
+
+    spectators.filterPlayers([instanceId](const Player* player) {
+        return player && player->compareInstance(instanceId);
+    });
 }
 
 inline bool canInteract(const Creature *a, const Creature *b)

@@ -1144,7 +1144,7 @@ void Creature::onGainExperience(uint64_t gainExp, const std::shared_ptr<Creature
 
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, position, false, true);
-	spectators = InstanceUtils::filterByInstance(spectators, getInstanceID());
+	InstanceUtils::filterByInstanceInPlace(spectators, getInstanceID());
 	if (spectators.empty()) {
 		return;
 	}

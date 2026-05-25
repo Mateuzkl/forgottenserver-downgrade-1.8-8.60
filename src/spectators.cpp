@@ -21,3 +21,33 @@ void SpectatorVec::partitionByType()
 	monsterEnd_ = static_cast<size_t>(monstersEnd - vec.begin());
 	partitioned_ = true;
 }
+
+void SpectatorVec::filterPlayers(std::function<bool(const Player*)> pred)
+{
+	if (!partitioned_) {
+		partitionByType();
+	}
+	assert(partitioned_);
+
+	size_t writeIndex = 0;
+	for (size_t readIndex = 0; readIndex < playerEnd_; ++readIndex) {
+		const Player* player = vec[readIndex]->getPlayer();
+		if (!pred(player)) {
+			continue;
+		}
+
+		if (writeIndex != readIndex) {
+			std::swap(vec[writeIndex], vec[readIndex]);
+		}
+		++writeIndex;
+	}
+
+	const size_t removedPlayers = playerEnd_ - writeIndex;
+	if (removedPlayers == 0) {
+		return;
+	}
+
+	vec.erase(vec.begin() + writeIndex, vec.begin() + playerEnd_);
+	playerEnd_ = writeIndex;
+	monsterEnd_ -= removedPlayers;
+}

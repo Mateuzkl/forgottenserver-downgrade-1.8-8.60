@@ -1070,7 +1070,7 @@ bool ConditionRegeneration::executeCondition(Creature* creature, int32_t interva
 
 					SpectatorVec spectators;
 					g_game.map.getSpectators(spectators, player->getPosition(), false, true);
-					spectators = InstanceUtils::filterByInstance(spectators, player->getInstanceID());
+					InstanceUtils::filterByInstanceInPlace(spectators, player->getInstanceID());
 					g_game.addAnimatedText(spectators, fmt::format("{:+d}", realHealthGain), player->getPosition(),
 					                       static_cast<TextColor_t>(getInteger(ConfigManager::HEALTH_GAIN_COLOUR)));
 
@@ -1110,7 +1110,7 @@ bool ConditionRegeneration::executeCondition(Creature* creature, int32_t interva
 
 					SpectatorVec spectators;
 					g_game.map.getSpectators(spectators, player->getPosition(), false, true);
-					spectators = InstanceUtils::filterByInstance(spectators, player->getInstanceID());
+					InstanceUtils::filterByInstanceInPlace(spectators, player->getInstanceID());
 					g_game.addAnimatedText(spectators, fmt::format("{:+d}", realManaGain), player->getPosition(),
 					                       static_cast<TextColor_t>(getInteger(ConfigManager::MANA_GAIN_COLOUR)));
 

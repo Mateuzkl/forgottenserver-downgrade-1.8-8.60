@@ -5102,7 +5102,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			if (realHeal > 0) {
 				SpectatorVec spectators;
 				map.getSpectators(spectators, targetPos, false, true);
-				spectators = InstanceUtils::filterByInstance(spectators, target->getInstanceID());
+				InstanceUtils::filterByInstanceInPlace(spectators, target->getInstanceID());
 
 				addAnimatedText(spectators, fmt::format("{:d}", realHeal), targetPos,
 				                static_cast<TextColor_t>(getInteger(ConfigManager::HEALTH_GAIN_COLOUR)));
@@ -5192,7 +5192,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 			SpectatorVec spectators;
 			map.getSpectators(spectators, targetPos, false, true);
-			spectators = InstanceUtils::filterByInstance(spectators, target->getInstanceID());
+			InstanceUtils::filterByInstanceInPlace(spectators, target->getInstanceID());
 
 			addAnimatedText(spectators, fmt::format("{:d}", realHealthChange), targetPos,
                       		static_cast<TextColor_t>(getInteger(ConfigManager::HEALTH_GAIN_COLOUR)));
@@ -5307,7 +5307,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 				targetPlayer->drainMana(attackerRef, manaDamage);
 
 				map.getSpectators(spectators, targetPos, true, true);
-				spectators = InstanceUtils::filterByInstance(spectators, target->getInstanceID());
+				InstanceUtils::filterByInstanceInPlace(spectators, target->getInstanceID());
 				addMagicEffect(spectators, targetPos, CONST_ME_LOSEENERGY);
 
 				std::string spectatorMessage;
@@ -5405,7 +5405,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 		if (spectators.empty()) {
 			map.getSpectators(spectators, targetPos, true, true);
-			spectators = InstanceUtils::filterByInstance(spectators, target->getInstanceID());
+			InstanceUtils::filterByInstanceInPlace(spectators, target->getInstanceID());
 		}
 
 		message.primary.value = damage.primary.value;
@@ -5608,7 +5608,7 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 		if (realManaChange > 0) {
 			SpectatorVec spectators;
 			map.getSpectators(spectators, target->getPosition(), false, true);
-			spectators = InstanceUtils::filterByInstance(spectators, target->getInstanceID());
+			InstanceUtils::filterByInstanceInPlace(spectators, target->getInstanceID());
 
 			addAnimatedText(spectators, fmt::format("{:d}", realManaChange), target->getPosition(),
 			                static_cast<TextColor_t>(getInteger(ConfigManager::MANA_GAIN_COLOUR)));
@@ -5680,7 +5680,7 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 
 		SpectatorVec spectators;
 		map.getSpectators(spectators, targetPos, false, true);
-		spectators = InstanceUtils::filterByInstance(spectators, target->getInstanceID());
+		InstanceUtils::filterByInstanceInPlace(spectators, target->getInstanceID());
 
 		addAnimatedText(spectators, fmt::format("{:+d}", manaLoss), targetPos,
 				static_cast<TextColor_t>(getInteger(ConfigManager::MANA_LOSS_COLOUR)));
@@ -5730,7 +5730,7 @@ void Game::addCreatureHealth(const Creature* target)
 {
 	SpectatorVec spectators;
 	map.getSpectators(spectators, target->getPosition(), true, true);
-	spectators = InstanceUtils::filterByInstance(spectators, target->getInstanceID());
+	InstanceUtils::filterByInstanceInPlace(spectators, target->getInstanceID());
 	addCreatureHealth(spectators, target);
 }
 
@@ -5750,7 +5750,7 @@ void Game::addAnimatedText(std::string_view message, const Position& pos, TextCo
 	SpectatorVec spectators;
 	map.getSpectators(spectators, pos, true, true);
 	if (instanceId != 0) {
-		spectators = InstanceUtils::filterByInstance(spectators, instanceId);
+		InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	}
 	addAnimatedText(spectators, message, pos, color);
 }
@@ -5768,7 +5768,7 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 	SpectatorVec spectators;
 	map.getSpectators(spectators, pos, true, true);
 	if (instanceId != 0) {
-		spectators = InstanceUtils::filterByInstance(spectators, instanceId);
+		InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	}
 	addMagicEffect(spectators, pos, effect);
 }
@@ -5795,7 +5795,7 @@ void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uin
 	spectators.addSpectators(toPosSpectators);
 
 	if (instanceId != 0) {
-		spectators = InstanceUtils::filterByInstance(spectators, instanceId);
+		InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	}
 	addDistanceEffect(spectators, fromPos, toPos, effect);
 }

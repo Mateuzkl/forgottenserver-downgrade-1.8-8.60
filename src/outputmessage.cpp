@@ -41,6 +41,7 @@ void OutputMessagePool::sendAll() noexcept
 	protocols.swap(bufferedProtocols);
 
 	for (auto& protocol : protocols) {
+		protocol->inAutosend = false;
 		auto& msg = protocol->getCurrentBuffer();
 		if (msg) [[likely]] {
 			protocol->send(std::move(msg));
@@ -56,11 +57,12 @@ void OutputMessagePool::addProtocolToAutosend(Protocol_ptr protocol)
 {
 	// THREAD-SAFETY: Must be called from dispatcher thread only
 	// dispatcher thread
-	if (std::find(bufferedProtocols.begin(), bufferedProtocols.end(), protocol) != bufferedProtocols.end()) {
+	if (protocol->inAutosend) {
 		return;
 	}
 
-	bufferedProtocols.emplace_back(std::move(protocol));
+	auto& bufferedProtocol = bufferedProtocols.emplace_back(std::move(protocol));
+	bufferedProtocol->inAutosend = true;
 	if (!sendScheduled) [[unlikely]] {
 		scheduleSendAll(AUTOSEND_DELAY_DEFAULT);
 	}
@@ -73,6 +75,7 @@ void OutputMessagePool::removeProtocolFromAutosend(const Protocol_ptr& protocol)
 	auto it = std::find(bufferedProtocols.begin(), bufferedProtocols.end(), protocol);
 	if (it != bufferedProtocols.end()) [[likely]] {
 		// Swap-and-pop for O(1) removal - does not preserve order
+		(*it)->inAutosend = false;
 		std::swap(*it, bufferedProtocols.back());
 		bufferedProtocols.pop_back();
 	}
