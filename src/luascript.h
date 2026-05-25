@@ -6,6 +6,7 @@
 
 #include "database.h"
 #include "enums.h"
+#include "logger.h"
 #include "position.h"
 #include "spectators.h"
 
@@ -1035,6 +1036,15 @@ inline void pushSharedPtr(lua_State* L, T value, int nuvalue = 1)
 }
 
 // Extra
+inline void logSpectatorLockFailure([[maybe_unused]] int32_t arg, [[maybe_unused]] size_t entryIndex,
+                                    [[maybe_unused]] const void* creature)
+{
+#if !defined(NDEBUG) || defined(DEBUG_LOG)
+	LOG_DEBUG("[Lua::getSpectators] Failed to lock spectator shared reference at arg {}, entry {}, pointer {}",
+	          arg, entryIndex, creature);
+#endif
+}
+
 template <class T>
 inline void getSpectators(lua_State* L, int32_t arg, SpectatorVec& spectators)
 {
@@ -1042,6 +1052,9 @@ inline void getSpectators(lua_State* L, int32_t arg, SpectatorVec& spectators)
 		if (T* creature = getUserdata<T>(L, arg)) {
 			if (auto creatureRef = creature->weak_from_this().lock()) {
 				spectators.emplace_back(std::move(creatureRef));
+			} else {
+				logSpectatorLockFailure(arg, 0, creature);
+				spectators.emplaceNull();
 			}
 		}
 		return;
@@ -1050,11 +1063,16 @@ inline void getSpectators(lua_State* L, int32_t arg, SpectatorVec& spectators)
 	}
 
 	lua_pushnil(L);
+	size_t entryIndex = 0;
 	while (lua_next(L, arg) != 0) {
+		++entryIndex;
 		if (isUserdata(L, -1)) {
 			if (T* creature = getUserdata<T>(L, -1)) {
 				if (auto creatureRef = creature->weak_from_this().lock()) {
 					spectators.emplace_back(std::move(creatureRef));
+				} else {
+					logSpectatorLockFailure(arg, entryIndex, creature);
+					spectators.emplaceNull();
 				}
 			}
 		}

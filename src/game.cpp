@@ -4492,13 +4492,15 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 		}
 	} else {
 		spectators = (*spectatorsPtr);
-		spectators.partitionByType();
 	}
 
 	// send to client
 	const bool localPositionTalk = isLocalPositionTalk(type);
-	for (const auto& spectator : spectators.players()) {
-		Player* tmpPlayer = static_cast<Player*>(spectator.get());
+	for (const auto& spectator : spectators) {
+		Player* tmpPlayer = spectator ? spectator->getPlayer() : nullptr;
+		if (!tmpPlayer) {
+			continue;
+		}
 		if (localPositionTalk && areDifferentNonZeroInstances(tmpPlayer, creature)) {
 			continue;
 		}
@@ -4510,6 +4512,9 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 	// event method
 	if (!echo) {
 		for (const auto& spectator : spectators) {
+			if (!spectator) {
+				continue;
+			}
 			if (localPositionTalk && areDifferentNonZeroInstances(spectator.get(), creature)) {
 				continue;
 			}
@@ -5799,7 +5804,11 @@ void Game::addCreatureHealth(const Creature* target)
 void Game::addCreatureHealth(const SpectatorVec& spectators, const Creature* target)
 {
 	for (const auto& spectator : spectators) {
-		static_cast<Player*>(spectator.get())->sendCreatureHealth(target);
+		Player* player = spectator ? spectator->getPlayer() : nullptr;
+		if (!player) {
+			continue;
+		}
+		player->sendCreatureHealth(target);
 	}
 }
 
@@ -5821,7 +5830,11 @@ void Game::addAnimatedText(const SpectatorVec& spectators, std::string_view mess
                            TextColor_t color)
 {
 	for (const auto& spectator : spectators) {
-		static_cast<Player*>(spectator.get())->sendAnimatedText(message, pos, color);
+		Player* player = spectator ? spectator->getPlayer() : nullptr;
+		if (!player) {
+			continue;
+		}
+		player->sendAnimatedText(message, pos, color);
 	}
 }
 
@@ -5838,7 +5851,11 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect)
 {
 	for (const auto& spectator : spectators) {
-		static_cast<Player*>(spectator.get())->sendMagicEffect(pos, effect);
+		Player* player = spectator ? spectator->getPlayer() : nullptr;
+		if (!player) {
+			continue;
+		}
+		player->sendMagicEffect(pos, effect);
 	}
 }
 
@@ -5866,7 +5883,11 @@ void Game::addDistanceEffect(const SpectatorVec& spectators, const Position& fro
                              uint16_t effect)
 {
 	for (const auto& spectator : spectators) {
-		static_cast<Player*>(spectator.get())->sendDistanceShoot(fromPos, toPos, effect);
+		Player* player = spectator ? spectator->getPlayer() : nullptr;
+		if (!player) {
+			continue;
+		}
+		player->sendDistanceShoot(fromPos, toPos, effect);
 	}
 }
 

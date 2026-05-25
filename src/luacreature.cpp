@@ -1172,7 +1172,11 @@ int luaCreatureSendCreatureSquare(lua_State* L)
 		}
 
 		for (const auto& spectator : spectators) {
-			static_cast<Player*>(spectator.get())->sendCreatureSquare(creature, getInteger<SquareColor_t>(L, 2));
+			Player* player = spectator ? spectator->getPlayer() : nullptr;
+			if (!player) {
+				continue;
+			}
+			player->sendCreatureSquare(creature, getInteger<SquareColor_t>(L, 2));
 		}
 	} else {
 		lua_pushnil(L);
