@@ -513,6 +513,7 @@ public:
 	void startDecay(Item* item);
 	void startDecay(std::shared_ptr<Item> item);
 	void stopDecay(Item* item);
+	void stopDecay(const std::shared_ptr<Item>& item);
 	void internalDecayItem(std::shared_ptr<Item> item);
 
 	// Loot Highlight system

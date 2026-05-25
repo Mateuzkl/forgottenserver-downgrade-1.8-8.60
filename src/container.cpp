@@ -41,7 +41,7 @@ std::shared_ptr<Item> Container::clone() const
 	}
 	for (const auto& item : itemlist) {
 		auto clonedItem = item->clone();
-		clone->addItem(clonedItem.get());
+		clone->addItem(clonedItem);
 	}
 	clone->totalWeight = totalWeight;
 	return clone;
@@ -53,13 +53,21 @@ std::string Container::getName(bool addArticle /* = false*/) const
 	return getNameDescription(it, this, -1, addArticle);
 }
 
+void Container::addItem(const std::shared_ptr<Item>& item)
+{
+	if (!item) {
+		return;
+	}
+	itemlist.push_back(item);
+	item->setParent(this);
+}
+
 void Container::addItem(Item* item)
 {
 	if (!item) {
 		return;
 	}
-	itemlist.push_back(item->shared_from_this());
-	item->setParent(this);
+	addItem(item->shared_from_this());
 }
 
 Attr_ReadValue Container::readAttr(AttrTypes_t attr, PropStream& propStream)
@@ -101,7 +109,7 @@ bool Container::unserializeItemNode(OTB::Loader& loader, const OTB::Node& node, 
 			return false;
 		}
 
-		addItem(item.get());
+		addItem(item);
 		updateItemWeight(item->getWeight());
 	}
 	return true;
@@ -195,10 +203,15 @@ uint64_t Container::getWeightReductionContentWeight() const
 
 Item* Container::getItemByIndex(size_t index) const
 {
+	return getItemByIndexRef(index).get();
+}
+
+std::shared_ptr<Item> Container::getItemByIndexRef(size_t index) const
+{
 	if (index >= size()) {
 		return nullptr;
 	}
-	return itemlist[index].get();
+	return itemlist[index];
 }
 
 uint32_t Container::getItemHoldingCount() const
@@ -427,7 +440,8 @@ ReturnValue Container::queryMaxCount(int32_t index, const Thing& thing, uint32_t
 				++slotIndex;
 			}
 		} else {
-			const Item* destItem = getItemByIndex(index);
+			const auto destItemRef = getItemByIndexRef(index);
+			const Item* destItem = destItemRef.get();
 			if (item->equals(destItem) && destItem->getItemCount() < destItem->getStackSize()) {
 				if (queryAdd(index, *item, count, flags) == RETURNVALUE_NOERROR) {
 					n = destItem->getStackSize() - destItem->getItemCount();
@@ -521,7 +535,8 @@ Cylinder* Container::queryDestination(int32_t& index, const Thing& thing, Item**
 	}
 
 	if (index != INDEX_WHEREEVER) {
-		Item* itemFromIndex = getItemByIndex(index);
+		auto itemFromIndexRef = getItemByIndexRef(index);
+		Item* itemFromIndex = itemFromIndexRef.get();
 		if (itemFromIndex) {
 			*destItem = itemFromIndex;
 		}
@@ -626,12 +641,12 @@ void Container::replaceThing(uint32_t index, Thing* thing)
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
-	Item* replacedItem = getItemByIndex(index);
+	auto replacedItemRef = getItemByIndexRef(index);
+	Item* replacedItem = replacedItemRef.get();
 	if (!replacedItem) {
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
-	auto oldSp = itemlist[index]; // prevent destruction while we still use replacedItem
 	itemlist[index] = item->shared_from_this();
 	item->setParent(this);
 	updateItemWeight(-static_cast<int32_t>(replacedItem->getWeight()) + item->getWeight());
@@ -724,17 +739,12 @@ std::unordered_map<uint32_t, uint32_t>& Container::getAllItemTypeCount(std::unor
 
 ItemVector Container::getItems(bool recursive /*= false*/) const
 {
-	ItemVector containerItems;
 	if (recursive) {
-		for (ContainerIterator it = iterator(); it.hasNext(); it.advance()) {
-			containerItems.push_back((*it)->shared_from_this());
-		}
-	} else {
-		for (const auto& item : itemlist) {
-			containerItems.push_back(item);
-		}
+		ContainerIterator it = iterator();
+		return std::move(it.items);
 	}
-	return containerItems;
+
+	return {itemlist.begin(), itemlist.end()};
 }
 
 Thing* Container::getThing(size_t index) const { return getItemByIndex(index); }
@@ -790,48 +800,25 @@ void Container::internalAddThing(uint32_t, Thing* thing)
 
 void Container::startDecaying()
 {
-	std::vector<std::shared_ptr<Item>> snapshot;
-	std::queue<const Container*> pending;
-	pending.push(this);
-	while (!pending.empty()) {
-		const Container* c = pending.front();
-		pending.pop();
-		for (const auto& item : c->itemlist) {
-			snapshot.push_back(item);
-			if (const Container* sub = item->getContainer()) {
-				pending.push(sub);
-			}
-		}
-	}
+	ItemVector snapshot = getItems(true);
 
-	g_game.startDecay(this);
+	g_game.startDecay(shared_from_this());
 
 	for (const auto& item : snapshot) {
 		if (!item->isRemoved()) {
-			g_game.startDecay(item.get());
+			g_game.startDecay(item);
 		}
 	}
 }
 
 void Container::stopDecaying()
 {
-	g_game.stopDecay(this);
+	g_game.stopDecay(shared_from_this());
 
-	std::queue<const Container*> pending;
-	pending.push(this);
-	while (!pending.empty()) {
-		const Container* c = pending.front();
-		pending.pop();
-		for (const auto& item : c->itemlist) {
-			if (!item) {
-				continue;
-			}
-			if (!item->isRemoved()) {
-				g_game.stopDecay(item.get());
-			}
-			if (const Container* sub = item->getContainer()) {
-				pending.push(sub);
-			}
+	ItemVector snapshot = getItems(true);
+	for (const auto& item : snapshot) {
+		if (item && !item->isRemoved()) {
+			g_game.stopDecay(item);
 		}
 	}
 }
@@ -851,10 +838,28 @@ size_t Container::size(const bool recursive /*= false*/) const
 ContainerIterator Container::iterator() const
 {
 	ContainerIterator cit;
-	if (!itemlist.empty()) {
-		cit.over.push_back(this);
-		cit.cur = itemlist.begin();
+	ContainerQueue pending;
+
+	if (auto self = std::dynamic_pointer_cast<const Container>(weak_from_this().lock())) {
+		pending.push(std::move(self));
 	}
+
+	while (!pending.empty()) {
+		auto container = pending.front();
+		pending.pop();
+
+		for (const auto& item : container->itemlist) {
+			if (!item) {
+				continue;
+			}
+
+			cit.items.push_back(item);
+			if (auto subContainer = std::dynamic_pointer_cast<const Container>(item)) {
+				pending.push(std::move(subContainer));
+			}
+		}
+	}
+
 	return cit;
 }
 
@@ -868,24 +873,17 @@ bool Container::isRewardCorpse() const
 	return false;
 }
 
-Item* ContainerIterator::operator*() { return cur->get(); }
+Item* ContainerIterator::operator*() const
+{
+	if (!hasNext()) {
+		return nullptr;
+	}
+	return items[index].get();
+}
 
 void ContainerIterator::advance()
 {
-	if (Item* i = cur->get()) {
-		if (Container* c = i->getContainer()) {
-			if (!c->empty()) {
-				over.push_back(c);
-			}
-		}
-	}
-
-	++cur;
-
-	if (cur == over.front()->itemlist.end()) {
-		over.pop_front();
-		if (!over.empty()) {
-			cur = over.front()->itemlist.begin();
-		}
+	if (hasNext()) {
+		++index;
 	}
 }

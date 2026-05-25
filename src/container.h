@@ -8,7 +8,9 @@
 #include "item.h"
 #include "tile.h"
 
+#include <memory>
 #include <queue>
+#include <vector>
 
 class Container;
 class DepotChest;
@@ -17,19 +19,19 @@ class RewardChest;
 class StoreInbox;
 class Player;
 
-using ContainerQueue = std::queue<const Container*>;
+using ContainerQueue = std::queue<std::shared_ptr<const Container>>;
 
 class ContainerIterator
 {
 public:
-	bool hasNext() const { return !over.empty(); }
+	bool hasNext() const { return index < items.size(); }
 
 	void advance();
-	Item* operator*();
+	Item* operator*() const;
 
 private:
-	std::list<const Container*> over;
-	ItemDeque::const_iterator cur;
+	ItemVector items;
+	size_t index = 0;
 
 	friend class Container;
 };
@@ -86,8 +88,10 @@ public:
 
 	std::string getName(bool addArticle = false) const;
 
+	void addItem(const std::shared_ptr<Item>& item);
 	void addItem(Item* item);
 	Item* getItemByIndex(size_t index) const;
+	std::shared_ptr<Item> getItemByIndexRef(size_t index) const;
 	bool isHoldingItem(const Item* item) const;
 	bool isRewardCorpse() const;
 

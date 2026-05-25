@@ -5941,6 +5941,11 @@ void Game::stopDecay(Item* item)
 	}
 }
 
+void Game::stopDecay(const std::shared_ptr<Item>& item)
+{
+	stopDecay(item.get());
+}
+
 void Game::internalDecayItem(std::shared_ptr<Item> item)
 {
 	if (!item) [[unlikely]] {
