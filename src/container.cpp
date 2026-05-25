@@ -840,9 +840,7 @@ ContainerIterator Container::iterator() const
 	ContainerIterator cit;
 	ContainerQueue pending;
 
-	if (auto self = std::dynamic_pointer_cast<const Container>(weak_from_this().lock())) {
-		pending.push(std::move(self));
-	}
+	pending.emplace(this, [](const Container*) {});
 
 	while (!pending.empty()) {
 		auto container = pending.front();
