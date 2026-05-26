@@ -753,7 +753,7 @@ bool Game::placeCreature(Creature* creature, const Position& pos, bool extendedP
 	map.getSpectators(spectators, creature->getPosition(), true);
 	for (const auto& spectator : spectators.players()) {
 		Player* tmpPlayer = static_cast<Player*>(spectator.get());
-		if (!InstanceUtils::isPlayerInSameInstance(tmpPlayer, creature->getInstanceID())) {
+		if (!tmpPlayer->compareInstance(creature->getInstanceID())) {
 			continue;
 		}
 
@@ -763,7 +763,7 @@ bool Game::placeCreature(Creature* creature, const Position& pos, bool extendedP
 	}
 
 	for (const auto& spectator : spectators) {
-		if (!InstanceUtils::isPlayerInSameInstance(spectator.get(), creature->getInstanceID())) {
+		if (!spectator || !spectator->compareInstance(creature->getInstanceID())) {
 			continue;
 		}
 
@@ -817,7 +817,7 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 
 	// event method
 	for (const auto& spectator : spectators) {
-		if (!InstanceUtils::isPlayerInSameInstance(spectator.get(), creature->getInstanceID())) {
+		if (!spectator || !spectator->compareInstance(creature->getInstanceID())) {
 			continue;
 		}
 

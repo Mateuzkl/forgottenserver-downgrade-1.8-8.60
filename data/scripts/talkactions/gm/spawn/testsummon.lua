@@ -14,7 +14,7 @@ function talkaction.onSay(player, words, param)
 	local placed = 0
 
 	for i = 1, amount do
-		local monster = Game.createMonster(monsterName, position, true, false)
+		local monster = Game.createMonster(monsterName, position, true, false, CONST_ME_TELEPORT, player:getInstanceId())
 		if monster then
 			monster:getPosition():sendMagicEffect(CONST_ME_TELEPORT)
 			placed = placed + 1

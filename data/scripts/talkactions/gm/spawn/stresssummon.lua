@@ -28,7 +28,7 @@ function talkaction.onSay(player, words, param)
 				center.z
 			)
 
-			local monster = Game.createMonster(monsterName, pos)
+			local monster = Game.createMonster(monsterName, pos, false, false, CONST_ME_TELEPORT, player:getInstanceId())
 			if monster then
 				if player:addSummon(monster) then
 					placed = placed + 1

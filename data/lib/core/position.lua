@@ -119,6 +119,6 @@ function Position:notifySummonAppear(summon)
 	local spectators = Game.getSpectators(self)
 	for _, spectator in ipairs(spectators) do
 		local monster = spectator:getMonster()
-		if monster and monster ~= summon then monster:addTarget(summon) end
+		if monster and monster ~= summon and monster:canSeeCreature(summon) then monster:addTarget(summon) end
 	end
 end

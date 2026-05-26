@@ -357,7 +357,7 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 
 	// event method
 	for (const auto& spectator : spectators) {
-		if (!InstanceUtils::isPlayerInSameInstance(spectator.get(), creature.getInstanceID())) {
+		if (!spectator || !spectator->compareInstance(creature.getInstanceID())) {
 			continue;
 		}
 

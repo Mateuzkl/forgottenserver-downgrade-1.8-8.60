@@ -540,6 +540,10 @@ void Monster::removeFriend(Creature* creature)
 void Monster::addTarget(Creature* creature, bool pushFront /* = false*/)
 {
 	assert(creature != this);
+	if (!creature || !canSeeCreature(creature)) {
+		return;
+	}
+
 	auto weakRef = g_game.getCreatureWeakRef(creature);
 	if (weakRef.expired()) return;
 
@@ -574,7 +578,7 @@ void Monster::updateTargetList()
 
 	std::erase_if(targetList, [this](const auto& weakRef) {
 		auto creature = weakRef.lock();
-		return !creature || creature->isDead() || !canSee(creature->getPosition()) ||
+		return !creature || creature->isDead() || !canSee(creature->getPosition()) || !canSeeCreature(creature.get()) ||
 		       (!isFamiliar() && creature->getZone() == ZONE_PROTECTION) || !isOpponent(creature.get());
 	});
 
@@ -604,6 +608,10 @@ void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/)
 	}
 
 	if (!canSee(creature->getPosition())) {
+		return;
+	}
+
+	if (!canSeeCreature(creature)) {
 		return;
 	}
 

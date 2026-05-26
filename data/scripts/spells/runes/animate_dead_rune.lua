@@ -7,7 +7,7 @@ function spell.onCastSpell(creature, variant, isHotkey)
 		if corpse then
 			local itemType = corpse:getType()
 			if itemType:isCorpse() and itemType:isMovable() then
-				local monster = Game.createMonster("Skeleton", position)
+				local monster = Game.createMonster("Skeleton", position, false, false, CONST_ME_TELEPORT, creature:getInstanceId())
 				if monster then
 					corpse:remove()
 					creature:addSummon(monster)

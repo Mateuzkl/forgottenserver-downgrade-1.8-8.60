@@ -1377,7 +1377,7 @@ end
 function doSummonMonster(cid, name)
 	local player = Player(cid)
 	local position = player:getPosition()
-	local monster = Game.createMonster(name, position)
+	local monster = Game.createMonster(name, position, false, false, CONST_ME_TELEPORT, player:getInstanceId())
 	if monster then
 		player:addSummon(monster)
 		monster:getPosition():sendMagicEffect(CONST_ME_TELEPORT)

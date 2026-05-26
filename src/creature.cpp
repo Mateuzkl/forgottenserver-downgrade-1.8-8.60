@@ -97,10 +97,11 @@ bool Creature::canSee(const Position& pos) const
 
 bool Creature::canSeeCreature(const Creature* creature) const
 {
-	// OPTIMIZATION: Only check instances when both creatures actually have
-  	// a non-zero instance ID, avoiding the overhead in the common case.
-  	if (uint32_t theirInstance = creature->getInstanceID();
-    	theirInstance != 0 && !compareInstance(theirInstance)) {
+	if (!creature) {
+		return false;
+	}
+
+	if (getInstanceID() != creature->getInstanceID()) {
 		return false;
 	}
 
@@ -1244,6 +1245,10 @@ bool Creature::setMaster(Creature* newMaster)
 
 	if (!alreadySummoned) {
 		newMasterSummons.emplace_back(self);
+	}
+
+	if (getInstanceID() != newMaster->getInstanceID()) {
+		setInstanceID(newMaster->getInstanceID());
 	}
 
 	master = std::move(masterRef);

@@ -1134,12 +1134,15 @@ bool Player::canSee(const Position& pos) const
 
 bool Player::canSeeCreature(const Creature* creature) const
 {
+	if (!creature) {
+		return false;
+	}
+
 	if (creature == this) {
 		return true;
 	}
 
-	const uint32_t creatureInstanceId = creature->getInstanceID();
-	if (creatureInstanceId != 0 && !compareInstance(creatureInstanceId)) {
+	if (getInstanceID() != creature->getInstanceID()) {
 		return false;
 	}
 
@@ -1157,12 +1160,15 @@ bool Player::canSeeGhostMode(const Creature*) const { return group->access; }
 
 bool Player::canWalkthrough(const Creature* creature) const
 {
+	if (!creature) {
+		return false;
+	}
+
 	if (group->access || creature->isInGhostMode()) {
 		return true;
 	}
 
-	const uint32_t creatureInstanceId = creature->getInstanceID();
-	if (creatureInstanceId != 0 && !compareInstance(creatureInstanceId)) {
+	if (!compareInstance(creature->getInstanceID())) {
 		return true;
 	}
 
@@ -1190,12 +1196,15 @@ bool Player::canWalkthrough(const Creature* creature) const
 
 bool Player::canWalkthroughEx(const Creature* creature) const
 {
+	if (!creature) {
+		return false;
+	}
+
 	if (group->access) {
 		return true;
 	}
 
-	const uint32_t creatureInstanceId = creature->getInstanceID();
-	if (creatureInstanceId != 0 && !compareInstance(creatureInstanceId)) {
+	if (!compareInstance(creature->getInstanceID())) {
 		return true;
 	}
 

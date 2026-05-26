@@ -37,7 +37,7 @@ function spell.onCastSpell(creature, variant)
 	end
 
 	local position = creature:getPosition()
-	local summon = Game.createMonster(monsterName, position, true)
+	local summon = Game.createMonster(monsterName, position, true, false, CONST_ME_TELEPORT, creature:getInstanceId())
 	if not summon then
 		creature:sendCancelMessage(RETURNVALUE_NOTENOUGHROOM)
 		position:sendMagicEffect(CONST_ME_POFF)

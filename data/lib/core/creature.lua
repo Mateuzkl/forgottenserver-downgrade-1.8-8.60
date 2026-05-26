@@ -87,6 +87,9 @@ function Creature:addSummon(monster)
 	summon:setFollowCreature(nil)
 	summon:setDropLoot(false)
 	summon:setSkillLoss(false)
+	if summon:getInstanceId() ~= self:getInstanceId() then
+		summon:setInstanceIdRaw(self:getInstanceId())
+	end
 	summon:setMaster(self)
 
 	if self:isPlayer() then summon:getPosition():notifySummonAppear(summon) end
