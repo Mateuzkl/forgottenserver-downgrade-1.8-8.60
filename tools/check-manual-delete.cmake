@@ -25,7 +25,8 @@ foreach(source_file IN LISTS source_files)
             continue()
         endif()
 
-        if (scan_line MATCHES "(^|[^A-Za-z0-9_:])delete[ \t]*(\\[[ \t]*\\])?[ \t]*[^=;(]")
+        if (scan_line MATCHES "(^|[^A-Za-z0-9_:])delete[ \t]+[^=;(]" OR
+            scan_line MATCHES "(^|[^A-Za-z0-9_:])delete[ \t]*\\[[ \t]*\\][ \t]*[^=;(]")
             list(APPEND violations "${source_file}:${line_number}: ${source_line}")
         endif()
     endforeach()

@@ -1,6 +1,7 @@
 #ifndef TFS_STATS_H
 #define TFS_STATS_H
 
+#include "observer_ptr.h"
 #include "thread_holder_base.h"
 
 #ifdef STATS_ENABLED
@@ -133,8 +134,8 @@ public:
 	~AutoStatRecursive() noexcept;
 
 private:
-	static thread_local AutoStatRecursive* activeStat;
-	AutoStatRecursive* parent = nullptr; // non-owning
+	static thread_local ObserverPtr<AutoStatRecursive> activeStat;
+	ObserverPtr<AutoStatRecursive> parent = nullptr;
 };
 
 #endif

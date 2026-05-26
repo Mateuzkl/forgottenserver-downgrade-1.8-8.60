@@ -5,6 +5,7 @@
 #define FS_MONSTERS_H
 
 #include "creature.h"
+#include "observer_ptr.h"
 
 const uint32_t MAX_LOOTCHANCE = 100000;
 
@@ -69,7 +70,7 @@ struct spellBlock_t
 	spellBlock_t& operator=(spellBlock_t&& other) noexcept;
 
 	std::unique_ptr<BaseSpell> ownedSpell;
-	BaseSpell* spell = nullptr; // non-owning
+	ObserverPtr<BaseSpell> spell = nullptr;
 	uint32_t chance = 100;
 	uint32_t speed = 2000;
 	uint32_t range = 0;
@@ -97,7 +98,7 @@ class MonsterType
 {
 	struct MonsterInfo
 	{
-		LuaScriptInterface* scriptInterface; // non-owning
+		ObserverPtr<LuaScriptInterface> scriptInterface;
 
 		std::map<CombatType_t, int32_t> elementMap;
 

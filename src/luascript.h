@@ -7,6 +7,7 @@
 #include "database.h"
 #include "enums.h"
 #include "logger.h"
+#include "observer_ptr.h"
 #include "position.h"
 #include "spectators.h"
 
@@ -253,10 +254,10 @@ private:
 	using StorageMap = std::unordered_map<uint32_t, int32_t>;
 	using DBResultMap = std::unordered_map<uint32_t, DBResult_ptr>;
 
-	LuaScriptInterface* interface; // non-owning
+	ObserverPtr<LuaScriptInterface> interface;
 
 	// for npc scripts
-	Npc* curNpc = nullptr; // non-owning
+	ObserverPtr<Npc> curNpc = nullptr;
 
 	// temporary item list
 	static std::multimap<ScriptEnvironment*, std::shared_ptr<Item>> tempItems;
@@ -265,7 +266,7 @@ public:
 	static void clearTempItems();
 
 	// local item map
-	std::unordered_map<uint32_t, Item*> localMap; // non-owning: items managed by tempItems (shared_ptr)
+	std::unordered_map<uint32_t, ObserverPtr<Item>> localMap; // items managed by tempItems
 	uint32_t lastUID = std::numeric_limits<uint16_t>::max();
 
 	// script file id

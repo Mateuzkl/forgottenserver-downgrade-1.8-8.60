@@ -7045,7 +7045,7 @@ void Game::addGuild(Guild_ptr guild)
 
 void Game::removeGuild(uint32_t guildId) { guilds.erase(guildId); }
 
-void Game::internalRemoveItems(std::vector<Item*> itemList, uint32_t amount, bool stackable)
+void Game::internalRemoveItems(std::vector<ObserverPtr<Item>> itemList, uint32_t amount, bool stackable)
 {
 	if (stackable) {
 		for (Item* item : itemList) {
@@ -7369,9 +7369,9 @@ std::optional<int64_t> Game::getStorageValue(uint32_t key) const
 	return std::make_optional(it->second);
 }
 
-std::vector<Player*> Game::getLiveCasters(std::string_view name) const
+std::vector<ObserverPtr<Player>> Game::getLiveCasters(std::string_view name) const
 {
-	std::vector<Player*> casters;
+	std::vector<ObserverPtr<Player>> casters;
 	for (const auto& player : getPlayers()) {
 		if (player && player->client && player->client->isBroadcasting()) {
 			if (name.empty() || boost::algorithm::icontains(player->getName(), name)) {

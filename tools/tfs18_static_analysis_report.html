@@ -337,16 +337,16 @@
 
       <aside class="panel risk-card">
         <div class="risk-score">
-          <div class="dial"><span>92</span></div>
+          <div class="dial"><span>96</span></div>
           <div>
             <strong>Risco geral: baixo</strong>
-            <small>Os altos originais foram corrigidos ou mitigados; resta um médio de auditoria gradual.</small>
+            <small>Os altos e medios validos foram corrigidos ou mitigados; o restante fica como auditoria gradual.</small>
           </div>
         </div>
         <div class="legend">
           <span class="mini"><i class="dot red"></i>0 altos validos</span>
-          <span class="mini"><i class="dot yellow"></i>1 medio/backlog</span>
-          <span class="mini"><i class="dot green"></i>13 corrigidos/aceitos</span>
+          <span class="mini"><i class="dot yellow"></i>0 medios/backlog</span>
+          <span class="mini"><i class="dot green"></i>14 corrigidos/aceitos</span>
         </div>
       </aside>
     </header>
@@ -409,8 +409,8 @@
           </tr>
           <tr>
             <td>backlog restante</td>
-            <td><span class="severity medium">Backlog</span></td>
-            <td>Resta raw footprint como auditoria gradual; manual delete foi reclassificado por scan preciso e agora tem checagem estática.</td>
+            <td><span class="severity low">Mitigado</span></td>
+            <td>Raw footprint segue como auditoria gradual, mas observers principais foram marcados e ha checagens para manual delete e <code>.get()</code> async.</td>
           </tr>
         </table>
       </article>
@@ -475,9 +475,9 @@
           <tr><td><strong>Total smart direto</strong></td><td><strong>648</strong></td><td>não inclui aliases como <code>ItemPtr</code></td></tr>
           <tr><td><code>shared_from_this()</code></td><td>147</td><td>ponto sensível quando a origem pode ser raw</td></tr>
           <tr><td><code>weak_from_this()</code></td><td>17</td><td>mais seguro, mas pode retornar vazio</td></tr>
-          <tr><td><strong>raw pointer aprox.</strong></td><td><strong>6.281</strong></td><td>muitos são observers legítimos, mas exigem política</td></tr>
+          <tr><td><strong>raw pointer aprox.</strong></td><td><strong>6.281</strong></td><td>muitos sao observers legitimos; containers/campos principais agora usam <code>ObserverPtr</code></td></tr>
           <tr><td><code>operator/placement new</code> / <code>manual delete</code></td><td>7 / 0</td><td>sem <code>delete ptr</code>; raw storage restrito a allocator/Lua userdata</td></tr>
-          <tr><td><code>.get()</code></td><td>881</td><td>normal em interop, perigoso se guardado além do escopo</td></tr>
+          <tr><td><code>.get()</code></td><td>881</td><td>normal em interop; checagem bloqueia escape para lambda/scheduler</td></tr>
         </table>
       </article>
     </section>
@@ -524,7 +524,7 @@
       <article class="panel span-12">
         <div class="section-title">
           <h2>Risk Register</h2>
-          <span>status atualizado: altos originais corrigidos/mitigados; medio restante e backlog</span>
+          <span>status atualizado: altos e medios validos corrigidos/mitigados</span>
         </div>
         <table>
           <tr><th>#</th><th>Sev.</th><th>Área</th><th>Risco</th><th>Próxima ação recomendada</th></tr>
@@ -559,14 +559,14 @@
             <td>Nenhuma acao pendente.</td>
           </tr>
           <tr>
-            <td>7</td><td><span class="severity medium">Médio</span></td><td>raw footprint</td>
-            <td>6.281 ocorrências aproximadas de raw pointer tornam ownership implícito e dependente de disciplina local.</td>
-            <td>Marcar observers com alias/nome e APIs owning com smart pointer.</td>
+            <td>7</td><td><span class="severity low">Mitigado</span></td><td>raw footprint</td>
+            <td>6.281 ocorrencias aproximadas continuam existindo por compatibilidade, mas os containers/campos observer principais foram marcados com <code>ObserverPtr</code>.</td>
+            <td>Continuar auditoria pontual apenas quando o raw pointer for guardado alem do escopo ou cruzar async.</td>
           </tr>
           <tr>
             <td>8</td><td><span class="severity low">Mitigado</span></td><td>ObserverPtr</td>
-            <td><code>ObserverPtr&lt;T&gt;</code> é apenas <code>T*</code>; isso ajuda a documentar, mas não protege lifetime.</td>
-            <td>Comentário reforçado: continuar usando só para não-owning e nunca guardar/capturar em async sem guarda externa.</td>
+            <td><code>ObserverPtr&lt;T&gt;</code> e apenas <code>T*</code>; agora fica centralizado em <code>src/observer_ptr.h</code> e aplicado aos observers mais claros.</td>
+            <td>Continuar usando so para nao-owning e nunca guardar/capturar em async sem guarda externa.</td>
           </tr>
           <tr>
             <td>9</td><td><span class="severity low">Corrigido</span></td><td>manual delete</td>
@@ -589,9 +589,9 @@
             <td>Instalar <code>libboost-test-dev</code> e rodar ASAN/testes em fixes de <code>shared_from_this</code>, Lua e scheduler.</td>
           </tr>
           <tr>
-            <td>13</td><td><span class="severity low">Baixo</span></td><td><code>.get()</code></td>
-            <td>881 ocorrências. Muitas são ponte de API legado e não são bug por si só.</td>
-            <td>Não trocar em massa; auditar só onde o raw pointer é guardado.</td>
+            <td>13</td><td><span class="severity low">Mitigado</span></td><td><code>.get()</code></td>
+            <td>881 ocorrencias auditadas como interop/local na maior parte; nao ha <code>.get()</code> capturado em lambda ou passado por scheduler/task.</td>
+            <td>Manter <code>tools/check-shared-get-escapes.cmake</code> para bloquear regressao async.</td>
           </tr>
           <tr>
             <td>14</td><td><span class="severity low">Corrigido</span></td><td>workspace</td>
@@ -625,7 +625,7 @@
         <table>
           <tr><th>Prioridade</th><th>Ação</th></tr>
           <tr><td>1</td><td>Manter C++23/paridade em <code>vc18</code> e CMake.</td></tr>
-          <tr><td>2</td><td>Continuar auditoria gradual apenas onde raw pointer e guardado alem do escopo.</td></tr>
+          <tr><td>2</td><td>Continuar auditoria gradual apenas onde raw pointer e guardado alem do escopo ou cruza async.</td></tr>
           <tr><td>3</td><td>Criar testes Lua lifetime para userdata e callbacks assíncronos quando Boost.Test estiver disponivel.</td></tr>
           <tr><td>4</td><td>Rodar <code>asan-linux-tests</code> nos PRs de lifetime/decay em ambiente Linux completo.</td></tr>
           <tr><td>5</td><td>Manter arquivos locais temporarios fora do PR.</td></tr>
@@ -644,8 +644,8 @@
           <code>CMakeLists.txt</code>, <code>src/CMakeLists.txt</code>, <code>vc18/theforgottenserver.vcxproj</code>,
           <code>vcpkg.json</code>, <code>CMakePresets.json</code> e <code>build-release/CMakeCache.txt</code>.
           Tambem foram executados <code>cmake --build build-release -- -j2</code>, <code>git diff --check</code>,
-          <code>luac -p</code> nos scripts Lua alterados, a checagem de paridade CMake/VC18 e
-          <code>tools/check-manual-delete.cmake</code>.
+          <code>luac -p</code> nos scripts Lua alterados, a checagem de paridade CMake/VC18,
+          <code>tools/check-manual-delete.cmake</code> e <code>tools/check-shared-get-escapes.cmake</code>.
           O preset <code>asan-linux-tests</code> foi validado ate a resolucao do Lua 5.5; o WSL local nao tem
           <code>boost_unit_test_framework</code> instalado, entao o <code>ctest</code> completo fica dependente desse pacote.
         </div>

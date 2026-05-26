@@ -6,6 +6,7 @@
 
 #include "container.h"
 #include "housetile.h"
+#include "observer_ptr.h"
 #include "position.h"
 
 #include <memory>
@@ -89,8 +90,8 @@ enum HouseType_t
 	HOUSE_TYPE_GUILDHALL = 2,
 };
 
-using HouseTileList = std::list<HouseTile*>;
-using HouseBedItemList = std::list<BedItem*>;
+using HouseTileList = std::list<ObserverPtr<HouseTile>>;
+using HouseBedItemList = std::list<ObserverPtr<BedItem>>;
 
 class HouseTransferItem final : public Item
 {
@@ -174,7 +175,7 @@ public:
 
 	const HouseTileList& getTiles() const { return houseTiles; }
 
-	const std::set<Door*>& getDoors() const { return doorSet; }
+	const std::set<ObserverPtr<Door>>& getDoors() const { return doorSet; }
 
 	void addBed(BedItem* bed);
 	const HouseBedItemList& getBeds() const { return bedsList; }
@@ -206,7 +207,7 @@ private:
 	Container transfer_container{ITEM_LOCKER};
 
 	HouseTileList houseTiles;
-	std::set<Door*> doorSet;
+	std::set<ObserverPtr<Door>> doorSet;
 	HouseBedItemList bedsList;
 
 	std::string houseName;

@@ -12,6 +12,7 @@
 #include "creature.h"
 #include "luascript.h"
 #include "lua.hpp"
+#include "observer_ptr.h"
 
 class Npc;
 class NpcType;
@@ -91,7 +92,7 @@ public:
 	bool loaded = false;
 
 private:
-	Npc* npc = nullptr;
+	ObserverPtr<Npc> npc = nullptr;
 };
 
 class NpcType

@@ -254,6 +254,7 @@
     <ClInclude Include="..\src\movement.h" />
     <ClInclude Include="..\src\networkmessage.h" />
     <ClInclude Include="..\src\npc.h" />
+    <ClInclude Include="..\src\observer_ptr.h" />
     <ClInclude Include="..\src\otpch.h" />
     <ClInclude Include="..\src\otserv.h" />
     <ClInclude Include="..\src\outfit.h" />

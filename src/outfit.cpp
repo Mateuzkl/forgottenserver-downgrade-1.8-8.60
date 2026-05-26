@@ -185,9 +185,9 @@ const Outfit* Outfits::getOutfitByLookType(uint16_t lookType, PlayerSex_t sex) c
 	return nullptr;
 }
 
-std::vector<const Outfit*> Outfits::getOutfits(PlayerSex_t sex) const
+std::vector<ObserverPtr<const Outfit>> Outfits::getOutfits(PlayerSex_t sex) const
 {
-	std::vector<const Outfit*> sexOutfits;
+	std::vector<ObserverPtr<const Outfit>> sexOutfits;
 	for (const auto& it : outfits) {
 		if (it.second.sex == sex) {
 			sexOutfits.push_back(&it.second);

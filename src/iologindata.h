@@ -6,9 +6,10 @@
 
 #include "account.h"
 #include "database.h"
+#include "observer_ptr.h"
 #include "player.h"
 
-using ItemBlockList = std::list<std::pair<int32_t, Item*>>;
+using ItemBlockList = std::list<std::pair<int32_t, ObserverPtr<Item>>>;
 
 class IOLoginData
 {

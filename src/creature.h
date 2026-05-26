@@ -10,6 +10,7 @@
 #include "enums.h"
 #include "logger.h"
 #include "map.h"
+#include "observer_ptr.h"
 #include "position.h"
 #include "tile.h"
 
@@ -24,7 +25,7 @@
 class Creature;
 
 using ConditionList = std::vector<Condition_ptr>;
-using CreatureEventList = std::vector<CreatureEvent*>; // non-owning
+using CreatureEventList = std::vector<ObserverPtr<CreatureEvent>>;
 
 struct CreatureEventRegistration
 {

@@ -215,6 +215,12 @@ if (BUILD_TESTING)
             -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
             -P ${CMAKE_SOURCE_DIR}/tools/check-manual-delete.cmake
     )
+    add_test(
+        NAME check_shared_get_escapes
+        COMMAND ${CMAKE_COMMAND}
+            -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -P ${CMAKE_SOURCE_DIR}/tools/check-shared-get-escapes.cmake
+    )
 endif()
 
 # Option to disable unity builds

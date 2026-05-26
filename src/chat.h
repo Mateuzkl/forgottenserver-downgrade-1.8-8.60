@@ -8,6 +8,7 @@
 
 #include "const.h"
 #include "luascript.h"
+#include "observer_ptr.h"
 
 class Party;
 class Player;
@@ -86,7 +87,7 @@ private:
 	uint32_t owner = 0;
 };
 
-using ChannelList = std::list<ChatChannel*>;
+using ChannelList = std::list<ObserverPtr<ChatChannel>>;
 
 class Chat
 {
@@ -120,7 +121,7 @@ public:
 private:
 	std::unordered_map<uint16_t, ChatChannel> normalChannels;
 	std::unordered_map<uint16_t, PrivateChatChannel> privateChannels;
-	std::unordered_map<Party*, ChatChannel> partyChannels;
+	std::unordered_map<ObserverPtr<Party>, ChatChannel> partyChannels;
 	std::unordered_map<uint32_t, ChatChannel> guildChannels;
 
 	LuaScriptInterface scriptInterface;

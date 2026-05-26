@@ -6,6 +6,7 @@
 
 #include "baseevents.h"
 #include "const.h"
+#include "observer_ptr.h"
 #include "position.h"
 
 enum RaidState_t
@@ -79,7 +80,7 @@ private:
 	LuaScriptInterface scriptInterface{"Raid Interface"};
 
 	std::list<std::shared_ptr<Raid>> raidList;
-	Raid* running = nullptr; // non-owning
+	ObserverPtr<Raid> running = nullptr;
 	uint64_t lastRaidEnd = 0;
 	uint32_t checkRaidsEvent = 0;
 	bool loaded = false;
@@ -151,7 +152,7 @@ public:
 	Raid* getRaid() const { return raid; }
 
 private:
-	Raid* raid = nullptr; // non-owning
+	ObserverPtr<Raid> raid = nullptr;
 	uint32_t delay;
 };
 

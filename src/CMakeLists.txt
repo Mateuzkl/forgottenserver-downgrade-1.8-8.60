@@ -175,6 +175,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/items.h
 	${CMAKE_CURRENT_LIST_DIR}/lockfree.h
 	${CMAKE_CURRENT_LIST_DIR}/logger.h
+	${CMAKE_CURRENT_LIST_DIR}/observer_ptr.h
 	${CMAKE_CURRENT_LIST_DIR}/luascript.h
 	${CMAKE_CURRENT_LIST_DIR}/familiar.h
 	${CMAKE_CURRENT_LIST_DIR}/luavariant.h

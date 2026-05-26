@@ -5,6 +5,7 @@
 #define FS_OUTFIT_H
 
 #include "enums.h"
+#include "observer_ptr.h"
 
 struct OutfitEntry
 {
@@ -78,7 +79,7 @@ public:
 
 	const Outfit* getOutfitByLookType(uint16_t lookType) const;
 	const Outfit* getOutfitByLookType(uint16_t lookType, PlayerSex_t sex) const;
-	std::vector<const Outfit*> getOutfits(PlayerSex_t sex) const;
+	std::vector<ObserverPtr<const Outfit>> getOutfits(PlayerSex_t sex) const;
 	uint32_t getOutfitId(PlayerSex_t sex, uint16_t lookType) const;
 
 	bool addAttributes(uint32_t playerId, uint32_t outfitId, PlayerSex_t sex);

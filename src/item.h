@@ -8,6 +8,7 @@
 #include "cylinder.h"
 #include "items.h"
 #include "luascript.h"
+#include "observer_ptr.h"
 #include "thing.h"
 #include "tools.h"
 #include "imbuement.h"
@@ -189,7 +190,7 @@ public:
 
 		struct PushLuaVisitor : public boost::static_visitor<>
 		{
-			lua_State* L; // non-owning
+			ObserverPtr<lua_State> L;
 
 			explicit PushLuaVisitor(lua_State* L) : boost::static_visitor<>(), L(L) {}
 
@@ -1002,7 +1003,7 @@ public:
 	std::vector<std::shared_ptr<Imbuement>>& getImbuements();
 
 protected:
-	Cylinder* parent = nullptr;
+	ObserverPtr<Cylinder> parent = nullptr;
 
 	uint16_t id; // the same id as in ItemType
 

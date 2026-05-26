@@ -12,6 +12,7 @@
 #include "map.h"
 #include "mounts.h"
 #include "npc.h"
+#include "observer_ptr.h"
 #include "player.h"
 #include "position.h"
 #include "raids.h"
@@ -539,7 +540,7 @@ public:
 
 	void addPlayer(Player* player);
 	void removePlayer(Player* player);
-	std::vector<Player*> getLiveCasters(std::string_view name) const;
+	std::vector<ObserverPtr<Player>> getLiveCasters(std::string_view name) const;
 
 	void addNpc(Npc* npc);
 	void removeNpc(Npc* npc);
@@ -551,7 +552,7 @@ public:
 	void addGuild(Guild_ptr guild);
 	void removeGuild(uint32_t guildId);
 
-	void internalRemoveItems(std::vector<Item*> itemList, uint32_t amount, bool stackable);
+	void internalRemoveItems(std::vector<ObserverPtr<Item>> itemList, uint32_t amount, bool stackable);
 
 	[[nodiscard]] BedItem* getBedBySleeper(uint32_t guid);
 	void setBedSleeper(BedItem* bed, uint32_t guid);
