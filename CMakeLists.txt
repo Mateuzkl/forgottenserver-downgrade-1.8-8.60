@@ -209,6 +209,12 @@ if (BUILD_TESTING)
             -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
             -P ${CMAKE_SOURCE_DIR}/tools/check-source-list-parity.cmake
     )
+    add_test(
+        NAME check_manual_delete
+        COMMAND ${CMAKE_COMMAND}
+            -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -P ${CMAKE_SOURCE_DIR}/tools/check-manual-delete.cmake
+    )
 endif()
 
 # Option to disable unity builds

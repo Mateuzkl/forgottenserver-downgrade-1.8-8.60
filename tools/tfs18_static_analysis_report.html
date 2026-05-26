@@ -337,16 +337,16 @@
 
       <aside class="panel risk-card">
         <div class="risk-score">
-          <div class="dial"><span>84</span></div>
+          <div class="dial"><span>92</span></div>
           <div>
-            <strong>Risco geral: baixo-moderado</strong>
-            <small>Os altos originais foram corrigidos ou mitigados; restam dois médios de auditoria gradual.</small>
+            <strong>Risco geral: baixo</strong>
+            <small>Os altos originais foram corrigidos ou mitigados; resta um médio de auditoria gradual.</small>
           </div>
         </div>
         <div class="legend">
           <span class="mini"><i class="dot red"></i>0 altos validos</span>
-          <span class="mini"><i class="dot yellow"></i>2 medios/backlog</span>
-          <span class="mini"><i class="dot green"></i>12 corrigidos/aceitos</span>
+          <span class="mini"><i class="dot yellow"></i>1 medio/backlog</span>
+          <span class="mini"><i class="dot green"></i>13 corrigidos/aceitos</span>
         </div>
       </aside>
     </header>
@@ -410,7 +410,7 @@
           <tr>
             <td>backlog restante</td>
             <td><span class="severity medium">Backlog</span></td>
-            <td>Restam raw footprint e manual delete como auditoria gradual; ASAN/testes já têm preset dedicado e dependem de Boost.Test no ambiente.</td>
+            <td>Resta raw footprint como auditoria gradual; manual delete foi reclassificado por scan preciso e agora tem checagem estática.</td>
           </tr>
         </table>
       </article>
@@ -476,7 +476,7 @@
           <tr><td><code>shared_from_this()</code></td><td>147</td><td>ponto sensível quando a origem pode ser raw</td></tr>
           <tr><td><code>weak_from_this()</code></td><td>17</td><td>mais seguro, mas pode retornar vazio</td></tr>
           <tr><td><strong>raw pointer aprox.</strong></td><td><strong>6.281</strong></td><td>muitos são observers legítimos, mas exigem política</td></tr>
-          <tr><td><code>new</code> / <code>delete</code></td><td>51 / 172</td><td>há código legado/manual ainda relevante</td></tr>
+          <tr><td><code>operator/placement new</code> / <code>manual delete</code></td><td>7 / 0</td><td>sem <code>delete ptr</code>; raw storage restrito a allocator/Lua userdata</td></tr>
           <tr><td><code>.get()</code></td><td>881</td><td>normal em interop, perigoso se guardado além do escopo</td></tr>
         </table>
       </article>
@@ -524,7 +524,7 @@
       <article class="panel span-12">
         <div class="section-title">
           <h2>Risk Register</h2>
-          <span>status atualizado: altos originais corrigidos/mitigados; medios restantes sao backlog</span>
+          <span>status atualizado: altos originais corrigidos/mitigados; medio restante e backlog</span>
         </div>
         <table>
           <tr><th>#</th><th>Sev.</th><th>Área</th><th>Risco</th><th>Próxima ação recomendada</th></tr>
@@ -569,9 +569,9 @@
             <td>Comentário reforçado: continuar usando só para não-owning e nunca guardar/capturar em async sem guarda externa.</td>
           </tr>
           <tr>
-            <td>9</td><td><span class="severity medium">Médio</span></td><td>manual delete</td>
-            <td>172 ocorrências de <code>delete</code> aparecem no scan. Parte é destrutor/helper, mas ainda merece inspeção gradual.</td>
-            <td>Priorizar files com maior contagem: <code>iologindata.cpp</code>, <code>player.cpp</code>, headers de managers.</td>
+            <td>9</td><td><span class="severity low">Corrigido</span></td><td>manual delete</td>
+            <td>O scan antigo misturava <code>= delete</code>, strings Lua/textos e comentários. A auditoria precisa encontrou 0 expressões <code>delete ptr</code>; os 3 <code>operator delete</code> restantes ficam no allocator lock-free.</td>
+            <td>Manter <code>tools/check-manual-delete.cmake</code> nos testes para barrar regressão.</td>
           </tr>
           <tr>
             <td>10</td><td><span class="severity low">Mitigado</span></td><td>testes</td>
@@ -644,7 +644,8 @@
           <code>CMakeLists.txt</code>, <code>src/CMakeLists.txt</code>, <code>vc18/theforgottenserver.vcxproj</code>,
           <code>vcpkg.json</code>, <code>CMakePresets.json</code> e <code>build-release/CMakeCache.txt</code>.
           Tambem foram executados <code>cmake --build build-release -- -j2</code>, <code>git diff --check</code>,
-          <code>luac -p</code> nos scripts Lua alterados e a checagem de paridade CMake/VC18.
+          <code>luac -p</code> nos scripts Lua alterados, a checagem de paridade CMake/VC18 e
+          <code>tools/check-manual-delete.cmake</code>.
           O preset <code>asan-linux-tests</code> foi validado ate a resolucao do Lua 5.5; o WSL local nao tem
           <code>boost_unit_test_framework</code> instalado, entao o <code>ctest</code> completo fica dependente desse pacote.
         </div>
