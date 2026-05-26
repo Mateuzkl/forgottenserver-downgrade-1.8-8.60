@@ -1,19 +1,21 @@
 local WORKBENCH_ID = 27547
 local SUPPLY_STASH_ITEM_ID = ITEM_SUPPLY_STASH or 28750
-local WORKBENCH_POSITIONS = {
-	Position(1123, 1208, 7),
-	-- Position(0, 0, 0),
-	-- Position(0, 0, 0),
-	-- Position(0, 0, 0),
-}
 local ABANDON_TIME = 600000
 
-local function findWorkbench()
-	for _, pos in ipairs(WORKBENCH_POSITIONS) do
-		local tile = Tile(pos)
-		if tile then
-			local wb = tile:getItemById(WORKBENCH_ID)
-			if wb then return Container(wb.uid) end
+local function findWorkbench(position, instanceId)
+	local tile = Tile(position)
+	if not tile then
+		return nil
+	end
+
+	local items = tile:getItems()
+	if not items then
+		return nil
+	end
+
+	for _, item in ipairs(items) do
+		if item:getId() == WORKBENCH_ID and item:getInstanceId() == instanceId then
+			return Container(item.uid), item
 		end
 	end
 	return nil
@@ -73,20 +75,44 @@ event.onMoveItem = function(self, item, count, fromPosition, toPosition,
 	local isMovingFrom = fromCylinder and fromCylinder:isItem() and fromCylinder:getId() == WORKBENCH_ID
 
 	if isMovingTo then
-		item:setAttribute(ITEM_ATTRIBUTE_OWNER, self:getId())
-		Game.setStorageValue(GlobalStorageKeys.workbenchOwner, self:getId())
-		local storedEvent = Game.getStorageValue(GlobalStorageKeys.workbench)
-		if storedEvent and storedEvent > 0 then
-			stopEvent(storedEvent)
+		if not WorkbenchSessions.isSameInstance(toCylinder, self) then
+			self:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+			return RETURNVALUE_NOTPOSSIBLE
 		end
-		local eventId = addEvent(function(playerId)
-			local workbench = findWorkbench()
-			if not workbench then return end
+
+		if WorkbenchSessions.isInUseByOther(toCylinder, self) then
+			self:sendCancelMessage("This workbench is currently in use.")
+			return RETURNVALUE_NOTPOSSIBLE
+		end
+
+		local workbenchContainer = Container(toCylinder.uid)
+		local itemOwnerId = WorkbenchSessions.getOwnedItemOwner(workbenchContainer)
+		if itemOwnerId and itemOwnerId ~= self:getId() then
+			self:sendCancelMessage("This workbench is currently in use.")
+			return RETURNVALUE_NOTPOSSIBLE
+		end
+
+		item:setAttribute(ITEM_ATTRIBUTE_OWNER, self:getId())
+		local workbenchKey = WorkbenchSessions.reserve(toCylinder, self:getId())
+		if not workbenchKey then
+			item:removeAttribute(ITEM_ATTRIBUTE_OWNER)
+			return RETURNVALUE_NOTPOSSIBLE
+		end
+
+		local workbenchPosition = toCylinder:getPosition()
+		local workbenchInstanceId = toCylinder:getInstanceId()
+		local eventId = addEvent(function(playerId, key, x, y, z, instanceId)
+			local workbench = findWorkbench(Position(x, y, z), instanceId)
+			if not workbench then
+				WorkbenchSessions.clear(key, false)
+				return
+			end
+
 			local size = workbench:getSize()
 			for i = size - 1, 0, -1 do
 				local subItem = workbench:getItem(i)
 				if subItem and subItem:hasAttribute(ITEM_ATTRIBUTE_OWNER)
-					and subItem:getAttribute(ITEM_ATTRIBUTE_OWNER) == playerId then
+					and tonumber(subItem:getAttribute(ITEM_ATTRIBUTE_OWNER)) == playerId then
 					local player = Player(playerId)
 					if player then
 						local depot = player:getDepotChest(0, true)
@@ -99,14 +125,18 @@ event.onMoveItem = function(self, item, count, fromPosition, toPosition,
 					end
 				end
 			end
-			Game.setStorageValue(GlobalStorageKeys.workbench, -1)
-			Game.setStorageValue(GlobalStorageKeys.workbenchOwner, -1)
-		end, ABANDON_TIME, self:getId())
-		Game.setStorageValue(GlobalStorageKeys.workbench, eventId)
+			WorkbenchSessions.clear(key, false)
+		end, ABANDON_TIME, self:getId(), workbenchKey, workbenchPosition.x, workbenchPosition.y, workbenchPosition.z, workbenchInstanceId)
+		WorkbenchSessions.setEvent(workbenchKey, eventId)
 		return RETURNVALUE_NOERROR
 	end
 
 	if isMovingFrom then
+		if not WorkbenchSessions.isSameInstance(fromCylinder, self) then
+			self:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+			return RETURNVALUE_NOTPOSSIBLE
+		end
+
 		local ownerId = item:getAttribute(ITEM_ATTRIBUTE_OWNER)
 		if ownerId and ownerId ~= 0 and ownerId ~= "" then
 			if self:getId() ~= ownerId then
@@ -114,24 +144,9 @@ event.onMoveItem = function(self, item, count, fromPosition, toPosition,
 				return RETURNVALUE_NOTPOSSIBLE
 			end
 			item:removeAttribute(ITEM_ATTRIBUTE_OWNER)
-			local storedEvent = Game.getStorageValue(GlobalStorageKeys.workbench)
-			if storedEvent and storedEvent > 0 then
-				stopEvent(storedEvent)
-				Game.setStorageValue(GlobalStorageKeys.workbench, -1)
-			end
-			local workbench = findWorkbench()
-			if workbench then
-				local hasOwned = false
-				for i = 0, workbench:getSize() - 1 do
-					local sub = workbench:getItem(i)
-					if sub and sub:hasAttribute(ITEM_ATTRIBUTE_OWNER) then
-						hasOwned = true
-						break
-					end
-				end
-				if not hasOwned then
-					Game.setStorageValue(GlobalStorageKeys.workbenchOwner, -1)
-				end
+			local workbench = Container(fromCylinder.uid)
+			if not WorkbenchSessions.hasOwnedItems(workbench) then
+				WorkbenchSessions.clear(fromCylinder)
 			end
 		end
 		return RETURNVALUE_NOERROR

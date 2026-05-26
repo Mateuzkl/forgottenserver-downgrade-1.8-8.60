@@ -135,6 +135,16 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         return true
     end
 
+    if not WorkbenchSessions.isSameInstance(target, player) then
+        player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+        return true
+    end
+
+    if WorkbenchSessions.isInUseByOther(target, player) then
+        player:sendTextMessage(MESSAGE_STATUS_SMALL, "This workbench is currently in use.")
+        return true
+    end
+
     local size = container:getSize()
     if size == 0 then
         player:sendTextMessage(MESSAGE_STATUS_SMALL, "The workbench is empty. Place equipment and scrolls or crafting materials.")
