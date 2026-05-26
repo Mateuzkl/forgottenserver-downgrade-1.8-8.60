@@ -16,6 +16,7 @@
 #include "scriptmanager.h"
 #include "teleport.h"
 #include "trashholder.h"
+#include "logger.h"
 
 #include <algorithm>
 
@@ -31,6 +32,19 @@ std::shared_ptr<Creature> getSharedCreature(Creature* creature)
 std::shared_ptr<Item> getSharedItem(Item* item)
 {
 	return item ? item->weak_from_this().lock() : nullptr;
+}
+
+void logSharedCreatureLockFailure(std::string_view context, const Creature* creature)
+{
+	LOG_WARN("[Warning - {}] Failed to lock creature shared ownership. creature={}, id={}, name={}", context,
+	         static_cast<const void*>(creature), creature ? creature->getID() : 0,
+	         creature ? std::string_view(creature->getName()) : std::string_view{});
+}
+
+void logSharedItemLockFailure(std::string_view context, const Item* item)
+{
+	LOG_WARN("[Warning - {}] Failed to lock item shared ownership. item={}, id={}", context,
+	         static_cast<const void*>(item), item ? item->getID() : 0);
 }
 
 } // namespace
@@ -898,6 +912,7 @@ void Tile::addThing(int32_t, Thing* thing)
 	if (creature) {
 		auto creatureRef = getSharedCreature(creature);
 		if (!creatureRef) {
+			logSharedCreatureLockFailure("Tile::addThing", creature);
 			return;
 		}
 
@@ -914,6 +929,7 @@ void Tile::addThing(int32_t, Thing* thing)
 
 		auto itemRef = getSharedItem(item);
 		if (!itemRef) {
+			logSharedItemLockFailure("Tile::addThing", item);
 			return /*RETURNVALUE_NOTPOSSIBLE*/;
 		}
 
@@ -1044,6 +1060,7 @@ void Tile::replaceThing(uint32_t index, Thing* thing)
 
 	auto itemRef = getSharedItem(item);
 	if (!itemRef) {
+		logSharedItemLockFailure("Tile::replaceThing", item);
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
@@ -1507,6 +1524,7 @@ void Tile::internalAddThing(uint32_t, Thing* thing)
 	if (creature) {
 		auto creatureRef = getSharedCreature(creature);
 		if (!creatureRef) {
+			logSharedCreatureLockFailure("Tile::internalAddThing", creature);
 			return;
 		}
 
@@ -1523,6 +1541,7 @@ void Tile::internalAddThing(uint32_t, Thing* thing)
 
 		auto itemRef = getSharedItem(item);
 		if (!itemRef) {
+			logSharedItemLockFailure("Tile::internalAddThing", item);
 			return;
 		}
 

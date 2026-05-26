@@ -8,14 +8,17 @@
 #include "const.h"
 #include "creatureevent.h"
 #include "enums.h"
+#include "logger.h"
 #include "map.h"
 #include "position.h"
 #include "tile.h"
 
 #include <absl/container/flat_hash_map.h>
 
+#include <cassert>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class Creature;
@@ -353,7 +356,11 @@ public:
 		if (cylinder) {
 			auto t = static_cast<Tile*>(cylinder)->weak_from_this().lock();
 			if (!t) {
+				LOG_WARN("[Warning - Creature::setParent] Failed to lock tile shared ownership. creature={}, id={}, name={}",
+				         static_cast<const void*>(this), getID(), std::string_view(getName()));
+				assert(false && "Creature::setParent failed to lock tile shared ownership");
 				tile.reset();
+				position = {};
 				return;
 			}
 			position = t->getPosition();

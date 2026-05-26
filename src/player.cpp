@@ -42,6 +42,12 @@ std::shared_ptr<Item> getSharedItem(Item* item)
 	return item ? item->weak_from_this().lock() : nullptr;
 }
 
+void logSharedItemLockFailure(std::string_view context, const Item* item)
+{
+	LOG_WARN("[Warning - {}] Failed to lock item shared ownership. item={}, id={}", context,
+	         static_cast<const void*>(item), item ? item->getID() : 0);
+}
+
 std::shared_ptr<House> getSharedHouse(House* house)
 {
 	return house ? house->weak_from_this().lock() : nullptr;
@@ -3650,6 +3656,7 @@ void Player::addThing(int32_t index, Thing* thing)
 
 	auto itemRef = getSharedItem(item);
 	if (!itemRef) {
+		logSharedItemLockFailure("Player::addThing", item);
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
@@ -3688,7 +3695,8 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
-	Item* oldItem = getInventoryItem(static_cast<slots_t>(index));
+	std::shared_ptr<Item> oldItemRef = inventory[index];
+	Item* oldItem = oldItemRef.get();
 	if (!oldItem) {
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
@@ -3700,6 +3708,7 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 
 	auto itemRef = getSharedItem(item);
 	if (!itemRef) {
+		logSharedItemLockFailure("Player::replaceThing", item);
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
@@ -3712,6 +3721,9 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 	item->setParent(this);
 
 	inventory[index] = std::move(itemRef);
+	if (oldItem != item) {
+		oldItem->setParent(nullptr);
+	}
 }
 
 void Player::removeThing(Thing* thing, uint32_t count)
@@ -4067,6 +4079,7 @@ void Player::internalAddThing(uint32_t index, Thing* thing)
 
 		auto itemRef = getSharedItem(item);
 		if (!itemRef) {
+			logSharedItemLockFailure("Player::internalAddThing", item);
 			return;
 		}
 

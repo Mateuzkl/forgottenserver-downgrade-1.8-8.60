@@ -11,6 +11,7 @@
 
 #include "game.h"
 #include "iomap.h"
+#include "logger.h"
 
 #include <queue>
 
@@ -21,6 +22,12 @@ namespace {
 std::shared_ptr<Item> getSharedItem(Item* item)
 {
 	return item ? item->weak_from_this().lock() : nullptr;
+}
+
+void logSharedItemLockFailure(std::string_view context, const Item* item)
+{
+	LOG_WARN("[Warning - {}] Failed to lock item shared ownership. item={}, id={}", context,
+	         static_cast<const void*>(item), item ? item->getID() : 0);
 }
 
 std::shared_ptr<Container> getSharedContainer(Container* container)
@@ -82,6 +89,7 @@ void Container::addItem(Item* item)
 {
 	auto itemRef = getSharedItem(item);
 	if (!itemRef) {
+		logSharedItemLockFailure("Container::addItem", item);
 		return;
 	}
 	addItem(itemRef);
@@ -603,6 +611,7 @@ void Container::addThing(int32_t index, Thing* thing)
 
 	auto itemRef = getSharedItem(item);
 	if (!itemRef) {
+		logSharedItemLockFailure("Container::addThing", item);
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
@@ -671,6 +680,7 @@ void Container::replaceThing(uint32_t index, Thing* thing)
 
 	auto itemRef = getSharedItem(item);
 	if (!itemRef) {
+		logSharedItemLockFailure("Container::replaceThing", item);
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
@@ -817,6 +827,7 @@ void Container::internalAddThing(uint32_t, Thing* thing)
 
 	auto itemRef = getSharedItem(item);
 	if (!itemRef) {
+		logSharedItemLockFailure("Container::internalAddThing", item);
 		return;
 	}
 

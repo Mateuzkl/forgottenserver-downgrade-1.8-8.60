@@ -13,21 +13,9 @@
 
 namespace {
 
-std::shared_ptr<Item> getSharedItem(Item* item)
-{
-	return item ? item->weak_from_this().lock() : nullptr;
-}
-
 void pushSharedItem(lua_State* L, Item* item)
 {
-	auto shared = getSharedItem(item);
-	if (!shared) {
-		lua_pushnil(L);
-		return;
-	}
-
-	Lua::pushSharedPtr(L, shared);
-	Lua::setItemMetatable(L, -1, shared.get());
+	Lua::pushItem(L, item);
 }
 
 } // namespace
@@ -1322,8 +1310,7 @@ void Events::eventMonsterOnDropLoot(Monster* monster, Container* corpse)
 	Lua::pushUserdata<Monster>(L, monster);
 	Lua::setMetatable(L, -1, "Monster");
 
-	Lua::pushSharedPtr(L, getSharedItem(corpse));
-	Lua::setMetatable(L, -1, "Container");
+	pushSharedItem(L, corpse);
 
 	return scriptInterface.callVoidFunction(2);
 }
