@@ -263,8 +263,7 @@ int luaPlayerGetDepotChest(lua_State* L)
 	DepotChest* depotChest = player->getDepotChest(depotId, autoCreate);
 	if (depotChest) {
 		player->setLastDepotId(static_cast<uint16_t>(depotId)); // FIXME: workaround for #2251
-		pushSharedPtr(L, depotChest->shared_from_this());
-		setItemMetatable(L, -1, depotChest);
+		pushItem(L, depotChest);
 	} else {
 		pushBoolean(L, false);
 	}
@@ -289,8 +288,7 @@ int luaPlayerGetDepotBox(lua_State* L)
 				if (item->getID() == static_cast<uint16_t>(ITEM_DEPOT_BOX_1 + boxIndex - 1)) {
 					Container* box = item->getContainer();
 					if (box) {
-						pushSharedPtr(L, box->shared_from_this());
-						setItemMetatable(L, -1, box);
+						pushItem(L, box);
 						return 1;
 					}
 				}
@@ -325,8 +323,7 @@ int luaPlayerGetRewardChest(lua_State* L)
 
 	RewardChest& rewardChest = player->getRewardChest();
 
-	pushSharedPtr(L, rewardChest.shared_from_this());
-	setItemMetatable(L, -1, &rewardChest);
+	pushItem(L, &rewardChest);
 
 	return 1;
 }
@@ -342,8 +339,7 @@ int luaPlayerGetInbox(lua_State* L)
 
 	Inbox* inbox = player->getInbox();
 	if (inbox) {
-		pushSharedPtr(L, inbox->shared_from_this());
-		setItemMetatable(L, -1, inbox);
+		pushItem(L, inbox);
 	} else {
 		pushBoolean(L, false);
 	}
@@ -360,8 +356,7 @@ int luaPlayerGetStoreInbox(lua_State* L)
 	}
 
 	StoreInbox* storeInbox = player->getStoreInbox();
-	pushSharedPtr(L, storeInbox->shared_from_this());
-	setItemMetatable(L, -1, storeInbox);
+	pushItem(L, storeInbox);
 	return 1;
 }
 
@@ -827,8 +822,7 @@ int luaPlayerGetItemById(lua_State* L)
 
 	Item* item = g_game.findItemOfType(player, itemId, deepSearch, subType);
 	if (item) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}
@@ -1433,12 +1427,10 @@ int luaPlayerAddItem(lua_State* L)
 		Item* item = itemPtr.get();
 		if (hasTable) {
 			lua_pushinteger(L, i);
-			pushSharedPtr(L, item->shared_from_this());
-			setItemMetatable(L, -1, item);
+			pushItem(L, item);
 			lua_settable(L, -3);
 		} else {
-			pushSharedPtr(L, item->shared_from_this());
-			setItemMetatable(L, -1, item);
+			pushItem(L, item);
 		}
 	}
 	return 1;
@@ -1604,7 +1596,12 @@ int luaPlayerShowTextDialog(lua_State* L)
 	}
 
 	item->setParent(player);
-	player->setWriteItem(item->shared_from_this(), static_cast<uint16_t>(length));
+	auto itemRef = item->weak_from_this().lock();
+	if (!itemRef) {
+		lua_pushnil(L);
+		return 1;
+	}
+	player->setWriteItem(std::move(itemRef), static_cast<uint16_t>(length));
 	player->sendTextWindow(item, static_cast<uint16_t>(length), canWrite);
 	lua_pushinteger(L, player->getWindowTextId());
 	return 1;
@@ -1763,8 +1760,7 @@ int luaPlayerGetSlotItem(lua_State* L)
 
 	Item* item = thing->getItem();
 	if (item) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}

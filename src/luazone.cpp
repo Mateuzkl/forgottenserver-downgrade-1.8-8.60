@@ -169,8 +169,7 @@ int luaZoneGetGrounds(lua_State* L)
 			continue;
 		}
 
-		pushSharedPtr(L, ground->shared_from_this());
-		setItemMetatable(L, -1, ground);
+		pushItem(L, ground);
 		lua_rawseti(L, -2, ++index);
 	}
 

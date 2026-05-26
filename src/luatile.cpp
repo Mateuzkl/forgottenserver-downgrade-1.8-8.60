@@ -72,8 +72,7 @@ int luaTileGetGround(lua_State* L)
 	// tile:getGround()
 	Tile* tile = getUserdata<Tile>(L, 1);
 	if (tile && tile->getGround()) {
-		pushSharedPtr(L, tile->getGround()->shared_from_this());
-		setItemMetatable(L, -1, tile->getGround());
+		pushItem(L, tile->getGround());
 	} else {
 		lua_pushnil(L);
 	}
@@ -100,8 +99,7 @@ int luaTileGetThing(lua_State* L)
 		pushUserdata<Creature>(L, creature);
 		setCreatureMetatable(L, -1, creature);
 	} else if (Item* item = thing->getItem()) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}
@@ -140,8 +138,7 @@ int luaTileGetTopVisibleThing(lua_State* L)
 		pushUserdata<Creature>(L, visibleCreature);
 		setCreatureMetatable(L, -1, visibleCreature);
 	} else if (Item* visibleItem = thing->getItem()) {
-		pushSharedPtr(L, visibleItem->shared_from_this());
-		setItemMetatable(L, -1, visibleItem);
+		pushItem(L, visibleItem);
 	} else {
 		lua_pushnil(L);
 	}
@@ -159,8 +156,7 @@ int luaTileGetTopTopItem(lua_State* L)
 
 	Item* item = tile->getTopTopItem();
 	if (item) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}
@@ -178,8 +174,7 @@ int luaTileGetTopDownItem(lua_State* L)
 
 	Item* item = tile->getTopDownItem();
 	if (item) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}
@@ -197,8 +192,7 @@ int luaTileGetFieldItem(lua_State* L)
 
 	Item* item = tile->getFieldItem();
 	if (item) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}
@@ -228,8 +222,7 @@ int luaTileGetItemById(lua_State* L)
 
 	Item* item = g_game.findItemOfType(tile, itemId, false, subType);
 	if (item) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}
@@ -280,8 +273,7 @@ int luaTileGetItemByType(lua_State* L)
 	if (Item* item = tile->getGround()) {
 		const ItemType& it = Item::items[item->getID()];
 		if (it.type == itemType) {
-			pushSharedPtr(L, item->shared_from_this());
-			setItemMetatable(L, -1, item);
+			pushItem(L, item);
 			return 1;
 		}
 	}
@@ -318,8 +310,7 @@ int luaTileGetItemByTopOrder(lua_State* L)
 		return 1;
 	}
 
-	pushSharedPtr(L, item->shared_from_this());
-	setItemMetatable(L, -1, item);
+	pushItem(L, item);
 	return 1;
 }
 
@@ -720,8 +711,7 @@ int luaTileAddItem(lua_State* L)
 			item = mergedItem;
 		}
 
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}

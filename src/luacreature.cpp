@@ -625,7 +625,15 @@ int luaCreatureSetHealth(lua_State* L)
 		g_game.addCreatureHealth(creature);
 	} else {
 		Creature* attacker = getCreature(L, 3);
-		creature->drainHealth(attacker ? attacker->shared_from_this() : nullptr, creature->getHealth());
+		std::shared_ptr<Creature> attackerRef;
+		if (attacker) {
+			attackerRef = g_game.getCreatureSharedRef(attacker);
+			if (!attackerRef) {
+				pushBoolean(L, false);
+				return 1;
+			}
+		}
+		creature->drainHealth(std::move(attackerRef), creature->getHealth());
 	}
 
 	if (!creature->isDead()) {

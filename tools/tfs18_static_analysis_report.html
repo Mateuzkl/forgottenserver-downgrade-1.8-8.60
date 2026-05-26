@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TFS 1.8 Static Analysis Report</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111318;
+      --panel: #181c23;
+      --panel-2: #202632;
+      --line: #303847;
+      --text: #f1f5f9;
+      --muted: #aab4c3;
+      --green: #35d07f;
+      --blue: #58a6ff;
+      --yellow: #ffd166;
+      --red: #ff6b6b;
+      --violet: #b88cff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(88, 166, 255, 0.08), transparent 360px),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      line-height: 1.45;
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 48px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1.5fr 0.9fr;
+      gap: 20px;
+      align-items: stretch;
+      margin-bottom: 22px;
+    }
+
+    .hero,
+    .panel {
+      background: rgba(24, 28, 35, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 14px 50px rgba(0, 0, 0, 0.28);
+    }
+
+    .hero {
+      padding: 28px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 44%;
+      height: 100%;
+      background:
+        linear-gradient(135deg, transparent, rgba(53, 208, 127, 0.1)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 18px);
+      pointer-events: none;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: 34px;
+      letter-spacing: 0;
+      max-width: 680px;
+    }
+
+    .subtitle {
+      margin-top: 12px;
+      color: var(--muted);
+      max-width: 720px;
+      font-size: 15px;
+    }
+
+    .meta {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      background: #141821;
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .risk-card {
+      padding: 22px;
+      display: grid;
+      gap: 16px;
+      align-content: center;
+    }
+
+    .risk-score {
+      display: grid;
+      grid-template-columns: 104px 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .dial {
+      width: 104px;
+      height: 104px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        conic-gradient(var(--red) 0 36%, var(--yellow) 36% 68%, var(--green) 68% 100%);
+      position: relative;
+    }
+
+    .dial::before {
+      content: "";
+      position: absolute;
+      inset: 9px;
+      background: var(--panel);
+      border-radius: 50%;
+    }
+
+    .dial span {
+      position: relative;
+      font-size: 26px;
+      font-weight: 800;
+    }
+
+    .risk-card strong {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
+    .risk-card small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-title h2 {
+      font-size: 17px;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric {
+      display: grid;
+      gap: 6px;
+    }
+
+    .metric .value {
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .bar {
+      height: 9px;
+      background: #10141b;
+      border: 1px solid #263041;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar i {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue), var(--green));
+      border-radius: 999px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 10px 9px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      background: rgba(255,255,255,0.02);
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    code {
+      color: #c6e2ff;
+      background: #10141b;
+      border: 1px solid #263041;
+      border-radius: 5px;
+      padding: 2px 5px;
+      font-family: Consolas, Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .severity {
+      display: inline-flex;
+      min-width: 70px;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #101318;
+    }
+
+    .high { background: var(--red); }
+    .medium { background: var(--yellow); }
+    .low { background: var(--green); }
+
+    .note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .callout {
+      border-left: 3px solid var(--blue);
+      background: #151a22;
+      padding: 12px 14px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .mini {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--blue);
+    }
+
+    .dot.red { background: var(--red); }
+    .dot.yellow { background: var(--yellow); }
+    .dot.green { background: var(--green); }
+    .dot.violet { background: var(--violet); }
+
+    @media (max-width: 900px) {
+      header { grid-template-columns: 1fr; }
+      .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
+      h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <section class="hero">
+        <h1>TFS 1.8 Static Analysis: C++23, Lua 5.5, pointers e risco</h1>
+        <p class="subtitle">
+          Analise local do repositório <code>forgottenserver-downgrade-1.8-8.60</code>,
+          cobrindo <code>src</code>, <code>CMakeLists.txt</code>, <code>src/CMakeLists.txt</code>,
+          <code>vc18</code>, <code>vcpkg.json</code> e presets de build. Atualizado contra
+          a branch <code>codex/v18-lifetime-hardening</code> apos os fixes de lifetime,
+          instancias, summons e workbench.
+        </p>
+        <div class="meta">
+          <span class="pill">Branch: codex/v18-lifetime-hardening</span>
+          <span class="pill">CMake: C++23</span>
+          <span class="pill">Build cache: Lua 5.5.0</span>
+          <span class="pill">Atualizado com build Linux/WSL</span>
+        </div>
+      </section>
+
+      <aside class="panel risk-card">
+        <div class="risk-score">
+          <div class="dial"><span>72</span></div>
+          <div>
+            <strong>Risco geral: moderado</strong>
+            <small>Os altos originais foram corrigidos ou mitigados; o restante e backlog tecnico de testes, ASAN e auditoria gradual.</small>
+          </div>
+        </div>
+        <div class="legend">
+          <span class="mini"><i class="dot red"></i>0 altos validos</span>
+          <span class="mini"><i class="dot yellow"></i>5 medios/backlog</span>
+          <span class="mini"><i class="dot green"></i>9 corrigidos/aceitos</span>
+        </div>
+      </aside>
+    </header>
+
+    <section class="grid">
+      <article class="panel span-3 metric">
+        <div class="value">4.282</div>
+        <div class="label">arquivos rastreados por <code>rg --files</code></div>
+        <div class="bar"><i style="width: 100%"></i></div>
+      </article>
+      <article class="panel span-3 metric">
+        <div class="value">235</div>
+        <div class="label">arquivos C++/headers em <code>src</code></div>
+        <div class="bar"><i style="width: 62%"></i></div>
+      </article>
+      <article class="panel span-3 metric">
+        <div class="value">91.738</div>
+        <div class="label">linhas C++/headers em <code>src</code></div>
+        <div class="bar"><i style="width: 49%"></i></div>
+      </article>
+      <article class="panel span-3 metric">
+        <div class="value">368.065</div>
+        <div class="label">linhas Lua em <code>data</code></div>
+        <div class="bar"><i style="width: 86%"></i></div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel span-12">
+        <div class="section-title">
+          <h2>Status Atualizado</h2>
+          <span>revisado em 2026-05-26 contra o source atual</span>
+        </div>
+        <table>
+          <tr><th>Area</th><th>Status</th><th>Resultado</th></tr>
+          <tr>
+            <td>vc17/vc18</td>
+            <td><span class="severity low">Corrigido</span></td>
+            <td>Projeto Visual Studio foi movido para <code>vc18</code>, Win32/x64 usam <code>stdcpp23</code> e Release x64 inclui <code>$(VcpkgRoot)include</code>.</td>
+          </tr>
+          <tr>
+            <td>source lists</td>
+            <td><span class="severity low">Corrigido</span></td>
+            <td><code>tools/check-source-list-parity.cmake</code> valida paridade entre <code>src/CMakeLists.txt</code> e <code>vc18/theforgottenserver.vcxproj</code>.</td>
+          </tr>
+          <tr>
+            <td>Lua item bridge</td>
+            <td><span class="severity low">Corrigido</span></td>
+            <td>Arquivos <code>lua*.cpp</code> nao chamam mais <code>shared_from_this()</code>; itens/containers passam por <code>Lua::pushItem</code> com <code>weak_from_this().lock()</code>.</td>
+          </tr>
+          <tr>
+            <td>decay/scheduler</td>
+            <td><span class="severity low">Mitigado</span></td>
+            <td>Decay usa buckets de <code>weak_ptr&lt;Item&gt;</code> e valida lock no processamento; scheduler segue aceito por capturar IDs/weak refs nos fluxos auditados.</td>
+          </tr>
+          <tr>
+            <td>instancias</td>
+            <td><span class="severity low">Corrigido</span></td>
+            <td>Summons, visibilidade de criaturas, targeting e workbench/imbuement agora respeitam <code>instanceId</code> estrito.</td>
+          </tr>
+          <tr>
+            <td>backlog restante</td>
+            <td><span class="severity medium">Backlog</span></td>
+            <td>Rodar ASAN e testes unitarios depende de ambiente com Boost.Test; raw observers legados continuam sendo auditoria gradual, nao bug isolado.</td>
+          </tr>
+        </table>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel span-6">
+        <div class="section-title">
+          <h2>Build Matrix</h2>
+          <span>CMake, vcpkg e Visual Studio</span>
+        </div>
+        <table>
+          <tr><th>Área</th><th>Estado atual</th><th>Risco</th></tr>
+          <tr>
+            <td>CMake padrão</td>
+            <td><code>CMAKE_CXX_STANDARD 23</code>, <code>CXX_EXTENSIONS OFF</code></td>
+            <td><span class="severity low">OK</span></td>
+          </tr>
+          <tr>
+            <td>Lua</td>
+            <td><code>find_package(Lua "5.5" REQUIRED)</code>; cache local encontrou <code>LUA_VERSION_STRING=5.5.0</code></td>
+            <td><span class="severity medium">Médio</span></td>
+          </tr>
+          <tr>
+            <td>LuaJIT</td>
+            <td><code>USE_LUAJIT</code> existe e troca para <code>find_package(LuaJIT REQUIRED)</code></td>
+            <td><span class="severity low">Baixo</span></td>
+          </tr>
+          <tr>
+            <td>vc18 x64</td>
+            <td>Debug/Release x64 usam <code>stdcpp23</code></td>
+            <td><span class="severity low">OK</span></td>
+          </tr>
+          <tr>
+            <td>vc18 Win32</td>
+            <td>Debug/Release Win32 agora usam <code>stdcpp23</code>, alinhado ao CMake</td>
+            <td><span class="severity low">Corrigido</span></td>
+          </tr>
+          <tr>
+            <td>vc18 Release Win32</td>
+            <td>Includes agora usam <code>..\src;$(VcpkgRoot)include\%(AdditionalIncludeDirectories)</code>, igual as demais configs</td>
+            <td><span class="severity low">Corrigido</span></td>
+          </tr>
+          <tr>
+            <td>Testes</td>
+            <td><code>BUILD_TESTING OFF</code> por padrão; presets ASAN existem; testes ficam em <code>src/tests</code></td>
+            <td><span class="severity medium">Médio</span></td>
+          </tr>
+        </table>
+      </article>
+
+      <article class="panel span-6">
+        <div class="section-title">
+          <h2>Pointer Footprint</h2>
+          <span>contagem aproximada por regex em <code>src</code></span>
+        </div>
+        <table>
+          <tr><th>Categoria</th><th>Ocorrências</th><th>Leitura</th></tr>
+          <tr><td><code>std::shared_ptr&lt;...&gt;</code></td><td>419</td><td>ownership compartilhado já está bem presente</td></tr>
+          <tr><td><code>std::unique_ptr&lt;...&gt;</code></td><td>138</td><td>ownership exclusivo usado em scripts, tasks, map, atributos</td></tr>
+          <tr><td><code>std::weak_ptr&lt;...&gt;</code></td><td>91</td><td>bom sinal para ciclos Player/Creature/Item</td></tr>
+          <tr><td><strong>Total smart direto</strong></td><td><strong>648</strong></td><td>não inclui aliases como <code>ItemPtr</code></td></tr>
+          <tr><td><code>shared_from_this()</code></td><td>147</td><td>ponto sensível quando a origem pode ser raw</td></tr>
+          <tr><td><code>weak_from_this()</code></td><td>17</td><td>mais seguro, mas pode retornar vazio</td></tr>
+          <tr><td><strong>raw pointer aprox.</strong></td><td><strong>6.281</strong></td><td>muitos são observers legítimos, mas exigem política</td></tr>
+          <tr><td><code>new</code> / <code>delete</code></td><td>51 / 172</td><td>há código legado/manual ainda relevante</td></tr>
+          <tr><td><code>.get()</code></td><td>881</td><td>normal em interop, perigoso se guardado além do escopo</td></tr>
+        </table>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel span-7">
+        <div class="section-title">
+          <h2>Hotspots por raw pointer</h2>
+          <span>arquivos com maior densidade aproximada</span>
+        </div>
+        <table>
+          <tr><th>Arquivo</th><th>Raw aprox.</th><th>Comentário</th></tr>
+          <tr><td><code>src/luaplayer.cpp</code></td><td>488</td><td>ponte entre Lua e Player; alto cuidado com userdata</td></tr>
+          <tr><td><code>src/game.cpp</code></td><td>422</td><td>orquestra ownership, decay, trade, combat e scheduler</td></tr>
+          <tr><td><code>src/player.cpp</code></td><td>269</td><td>inventário, eventos, party, house, combat</td></tr>
+          <tr><td><code>src/luascript.h</code></td><td>255</td><td>templates de userdata, ponteiros e wrappers Lua</td></tr>
+          <tr><td><code>src/luascript.cpp</code></td><td>204</td><td>stack Lua, registry, callbacks e objetos temporários</td></tr>
+          <tr><td><code>src/luacreature.cpp</code></td><td>157</td><td>Creature exposto a script, risco de lifetime</td></tr>
+          <tr><td><code>src/events.cpp</code></td><td>152</td><td>muitos pushes para Lua e ponteiros de evento</td></tr>
+          <tr><td><code>src/tile.cpp</code></td><td>144</td><td>ownership de ground/items/creatures via shared_from_this</td></tr>
+        </table>
+      </article>
+
+      <article class="panel span-5">
+        <div class="section-title">
+          <h2>Smart Pointer Hotspots</h2>
+          <span>sinais de modernização já aplicada</span>
+        </div>
+        <table>
+          <tr><th>Arquivo</th><th>Sinais</th></tr>
+          <tr><td><code>src/game.cpp</code></td><td>62</td></tr>
+          <tr><td><code>src/player.h</code></td><td>43</td></tr>
+          <tr><td><code>src/game.h</code></td><td>42</td></tr>
+          <tr><td><code>src/player.cpp</code></td><td>41</td></tr>
+          <tr><td><code>src/item.cpp</code></td><td>39</td></tr>
+          <tr><td><code>src/creature.cpp</code></td><td>31</td></tr>
+          <tr><td><code>src/creature.h</code></td><td>28</td></tr>
+          <tr><td><code>src/luascript.h</code></td><td>21</td></tr>
+        </table>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel span-12">
+        <div class="section-title">
+          <h2>Risk Register</h2>
+          <span>status atualizado: altos originais corrigidos/mitigados; medios restantes sao backlog</span>
+        </div>
+        <table>
+          <tr><th>#</th><th>Sev.</th><th>Área</th><th>Risco</th><th>Próxima ação recomendada</th></tr>
+          <tr>
+            <td>1</td><td><span class="severity low">Corrigido</span></td><td>vc18</td>
+            <td>Win32 agora compila como <code>stdcpp23</code>, alinhado ao CMake e ao uso de recursos modernos.</td>
+            <td>Nenhuma acao pendente alem de manter a paridade.</td>
+          </tr>
+          <tr>
+            <td>2</td><td><span class="severity low">Mitigado</span></td><td>lifetime</td>
+            <td>Ingressos criticos de Item/Creature/Game/Tile/Container/Event/Lua foram convertidos para lock de <code>weak_from_this()</code> ou shared refs centrais.</td>
+            <td>Continuar auditoria gradual apenas onde raw pointer for guardado alem do escopo.</td>
+          </tr>
+          <tr>
+            <td>3</td><td><span class="severity low">Mitigado</span></td><td>Lua bridge</td>
+            <td><code>lua*.cpp</code> nao usa mais <code>shared_from_this()</code>; Item/Container userdata agora passa por <code>Lua::pushItem</code>.</td>
+            <td>Adicionar testes Lua de lifetime quando Boost.Test/ambiente de teste estiver disponivel.</td>
+          </tr>
+          <tr>
+            <td>4</td><td><span class="severity low">Mitigado</span></td><td>scheduler/decay</td>
+            <td>Decay usa <code>weak_ptr&lt;Item&gt;</code> nos buckets e valida lock no momento da execucao; fluxos auditados de scheduler capturam IDs/weak refs.</td>
+            <td>Validar com ASAN quando o ambiente permitir.</td>
+          </tr>
+          <tr>
+            <td>5</td><td><span class="severity medium">Médio</span></td><td>CMake Lua</td>
+            <td><code>find_package(Lua "5.5" REQUIRED)</code> depende de Lua 5.5 disponível. O cache local tem 5.5.0, mas vcpkg default pode variar por ambiente.</td>
+            <td>Documentar Lua 5.5 como requisito ou aceitar intervalo controlado se compatível.</td>
+          </tr>
+          <tr>
+            <td>6</td><td><span class="severity low">Corrigido</span></td><td>vc18 Lua</td>
+            <td>Release Win32/Release x64 usam o include vcpkg padrao, sem path exclusivo de <code>luajit</code>.</td>
+            <td>Nenhuma acao pendente.</td>
+          </tr>
+          <tr>
+            <td>7</td><td><span class="severity medium">Médio</span></td><td>raw footprint</td>
+            <td>6.281 ocorrências aproximadas de raw pointer tornam ownership implícito e dependente de disciplina local.</td>
+            <td>Marcar observers com alias/nome e APIs owning com smart pointer.</td>
+          </tr>
+          <tr>
+            <td>8</td><td><span class="severity medium">Médio</span></td><td>ObserverPtr</td>
+            <td><code>ObserverPtr&lt;T&gt;</code> é apenas <code>T*</code>; isso ajuda a documentar, mas não protege lifetime.</td>
+            <td>Continuar usando para não-owning, mas nunca guardar em tarefa assíncrona sem validação externa.</td>
+          </tr>
+          <tr>
+            <td>9</td><td><span class="severity medium">Médio</span></td><td>manual delete</td>
+            <td>172 ocorrências de <code>delete</code> aparecem no scan. Parte é destrutor/helper, mas ainda merece inspeção gradual.</td>
+            <td>Priorizar files com maior contagem: <code>iologindata.cpp</code>, <code>player.cpp</code>, headers de managers.</td>
+          </tr>
+          <tr>
+            <td>10</td><td><span class="severity medium">Médio</span></td><td>testes</td>
+            <td>Existem testes de lifetime, storage, matrix e xtea, mas <code>BUILD_TESTING</code> vem desligado.</td>
+            <td>Rodar preset ASAN/test em PRs de memory/lifetime.</td>
+          </tr>
+          <tr>
+            <td>11</td><td><span class="severity low">Corrigido</span></td><td>source lists</td>
+            <td>CMake e <code>vc18</code> ainda tem listas manuais, mas agora ha checagem automatica de paridade.</td>
+            <td>Manter <code>tools/check-source-list-parity.cmake</code> nos builds/PRs.</td>
+          </tr>
+          <tr>
+            <td>12</td><td><span class="severity low">Baixo</span></td><td>ASAN</td>
+            <td>Preset ASAN existe e está bem posicionado, mas não é build padrão.</td>
+            <td>Usar ASAN para validar fixes em <code>shared_from_this</code>, Lua e scheduler.</td>
+          </tr>
+          <tr>
+            <td>13</td><td><span class="severity low">Baixo</span></td><td><code>.get()</code></td>
+            <td>881 ocorrências. Muitas são ponte de API legado e não são bug por si só.</td>
+            <td>Não trocar em massa; auditar só onde o raw pointer é guardado.</td>
+          </tr>
+          <tr>
+            <td>14</td><td><span class="severity low">Baixo</span></td><td>workspace</td>
+            <td>Há arquivo não rastreado <code>data/raids/testraidSpawn.xml</code>; ele não entrou nesta análise de mudança de código.</td>
+            <td>Decidir se esse XML é teste local ou deve entrar em commit próprio.</td>
+          </tr>
+        </table>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel span-6">
+        <div class="section-title">
+          <h2>Conclusão Técnica</h2>
+          <span>estado atual</span>
+        </div>
+        <p class="note">
+          O projeto já está parcialmente modernizado: <code>Item</code>, <code>Creature</code>,
+          <code>Tile</code>, <code>House</code>, <code>Protocol</code> e outros tipos usam
+          <code>enable_shared_from_this</code>; o core também usa <code>weak_ptr</code> em mapas e ciclos.
+          Ainda assim, a camada histórica de TFS mantém muitas APIs raw por compatibilidade com Cylinder, Lua,
+          notificações e interop. O risco não é o raw pointer existir; o risco é ele virar ownership implícito.
+        </p>
+      </article>
+
+      <article class="panel span-6">
+        <div class="section-title">
+          <h2>Plano Recomendado</h2>
+          <span>ordem segura</span>
+        </div>
+        <table>
+          <tr><th>Prioridade</th><th>Ação</th></tr>
+          <tr><td>1</td><td>Manter C++23/paridade em <code>vc18</code> e CMake.</td></tr>
+          <tr><td>2</td><td>Continuar auditoria gradual apenas onde raw pointer e guardado alem do escopo.</td></tr>
+          <tr><td>3</td><td>Criar testes Lua lifetime para userdata e callbacks assíncronos quando Boost.Test estiver disponivel.</td></tr>
+          <tr><td>4</td><td>Rodar ASAN nos PRs de lifetime/decay em ambiente Linux completo.</td></tr>
+          <tr><td>5</td><td>Decidir se <code>data/raids/testraidSpawn.xml</code> e teste local ou deve virar commit proprio.</td></tr>
+        </table>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel span-12">
+        <div class="section-title">
+          <h2>Validação Executada</h2>
+          <span>analise estatica + validacao Linux/WSL</span>
+        </div>
+        <div class="callout">
+          Foram usados <code>rg --files</code>, <code>Select-String</code>, contagens por regex e leitura dos arquivos
+          <code>CMakeLists.txt</code>, <code>src/CMakeLists.txt</code>, <code>vc18/theforgottenserver.vcxproj</code>,
+          <code>vcpkg.json</code>, <code>CMakePresets.json</code> e <code>build-release/CMakeCache.txt</code>.
+          Tambem foram executados <code>cmake --build build-release -- -j2</code>, <code>git diff --check</code>,
+          <code>luac -p</code> nos scripts Lua alterados e a checagem de paridade CMake/VC18.
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

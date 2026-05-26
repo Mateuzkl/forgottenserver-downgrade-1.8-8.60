@@ -42,8 +42,7 @@ int luaContainerCreate(lua_State* L)
 		return 1;
 	}
 
-	pushSharedPtr(L, container->shared_from_this());
-	setMetatable(L, -1, "Container");
+	pushItem(L, container);
 	return 1;
 }
 
@@ -117,8 +116,7 @@ int luaContainerGetItem(lua_State* L)
 	uint32_t index = getInteger<uint32_t>(L, 2);
 	Item* item = container->getItemByIndex(index);
 	if (item) {
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}
@@ -196,8 +194,7 @@ int luaContainerAddItem(lua_State* L)
 			item = mergedItem;
 		}
 
-		pushSharedPtr(L, item->shared_from_this());
-		setItemMetatable(L, -1, item);
+		pushItem(L, item);
 	} else {
 		lua_pushnil(L);
 	}

@@ -627,12 +627,11 @@ int luaGameCreateItem(lua_State* L)
 			item = mergedItem;
 		}
 	} else {
-		LuaScriptInterface::getScriptEnv()->addTempItem(item->shared_from_this());
+		LuaScriptInterface::getScriptEnv()->addTempItem(itemPtr);
 		item->setParent(VirtualCylinder::virtualCylinder);
 	}
 
-	pushSharedPtr(L, item->shared_from_this());
-	setItemMetatable(L, -1, item);
+	pushItem(L, item);
 	return 1;
 }
 
@@ -682,12 +681,11 @@ int luaGameCreateContainer(lua_State* L)
 			return 1;
 		}
 	} else {
-		LuaScriptInterface::getScriptEnv()->addTempItem(container->shared_from_this());
+		LuaScriptInterface::getScriptEnv()->addTempItem(containerPtr);
 		container->setParent(VirtualCylinder::virtualCylinder);
 	}
 
-	pushSharedPtr(L, container->shared_from_this());
-	setMetatable(L, -1, "Container");
+	pushItem(L, container);
 	return 1;
 }
 

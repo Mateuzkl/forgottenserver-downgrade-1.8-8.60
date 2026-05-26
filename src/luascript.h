@@ -654,6 +654,7 @@ private:
 
 namespace Lua {
 // push/pop common structures
+bool pushItem(lua_State* L, Item* item);
 void pushThing(lua_State* L, Thing* thing);
 void pushVariant(lua_State* L, const LuaVariant& var);
 void pushString(lua_State* L, std::string_view value);
