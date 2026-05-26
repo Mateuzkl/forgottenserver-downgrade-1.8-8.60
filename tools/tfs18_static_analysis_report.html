@@ -337,16 +337,16 @@
 
       <aside class="panel risk-card">
         <div class="risk-score">
-          <div class="dial"><span>72</span></div>
+          <div class="dial"><span>84</span></div>
           <div>
-            <strong>Risco geral: moderado</strong>
-            <small>Os altos originais foram corrigidos ou mitigados; o restante e backlog tecnico de testes, ASAN e auditoria gradual.</small>
+            <strong>Risco geral: baixo-moderado</strong>
+            <small>Os altos originais foram corrigidos ou mitigados; restam dois médios de auditoria gradual.</small>
           </div>
         </div>
         <div class="legend">
           <span class="mini"><i class="dot red"></i>0 altos validos</span>
-          <span class="mini"><i class="dot yellow"></i>5 medios/backlog</span>
-          <span class="mini"><i class="dot green"></i>9 corrigidos/aceitos</span>
+          <span class="mini"><i class="dot yellow"></i>2 medios/backlog</span>
+          <span class="mini"><i class="dot green"></i>12 corrigidos/aceitos</span>
         </div>
       </aside>
     </header>
@@ -410,7 +410,7 @@
           <tr>
             <td>backlog restante</td>
             <td><span class="severity medium">Backlog</span></td>
-            <td>Rodar ASAN e testes unitarios depende de ambiente com Boost.Test; raw observers legados continuam sendo auditoria gradual, nao bug isolado.</td>
+            <td>Restam raw footprint e manual delete como auditoria gradual; ASAN/testes já têm preset dedicado e dependem de Boost.Test no ambiente.</td>
           </tr>
         </table>
       </article>
@@ -431,8 +431,8 @@
           </tr>
           <tr>
             <td>Lua</td>
-            <td><code>find_package(Lua "5.5" REQUIRED)</code>; cache local encontrou <code>LUA_VERSION_STRING=5.5.0</code></td>
-            <td><span class="severity medium">Médio</span></td>
+            <td><code>find_package(Lua "5.5" REQUIRED)</code>; README e CMake documentam o requisito Lua 5.5</td>
+            <td><span class="severity low">Documentado</span></td>
           </tr>
           <tr>
             <td>LuaJIT</td>
@@ -456,8 +456,8 @@
           </tr>
           <tr>
             <td>Testes</td>
-            <td><code>BUILD_TESTING OFF</code> por padrão; presets ASAN existem; testes ficam em <code>src/tests</code></td>
-            <td><span class="severity medium">Médio</span></td>
+            <td><code>BUILD_TESTING OFF</code> por padrão; preset <code>asan-linux-tests</code> cobre ASAN + testes para PRs de lifetime</td>
+            <td><span class="severity low">Mitigado</span></td>
           </tr>
         </table>
       </article>
@@ -584,9 +584,9 @@
             <td>Manter <code>tools/check-source-list-parity.cmake</code> nos builds/PRs.</td>
           </tr>
           <tr>
-            <td>12</td><td><span class="severity low">Baixo</span></td><td>ASAN</td>
-            <td>Preset ASAN existe e está bem posicionado, mas não é build padrão.</td>
-            <td>Usar ASAN para validar fixes em <code>shared_from_this</code>, Lua e scheduler.</td>
+            <td>12</td><td><span class="severity low">Mitigado</span></td><td>ASAN</td>
+            <td>Presets ASAN existem e agora há <code>asan-linux-tests</code> para validar PRs de lifetime com <code>BUILD_TESTING</code> ligado.</td>
+            <td>Instalar <code>libboost-test-dev</code> e rodar ASAN/testes em fixes de <code>shared_from_this</code>, Lua e scheduler.</td>
           </tr>
           <tr>
             <td>13</td><td><span class="severity low">Baixo</span></td><td><code>.get()</code></td>
