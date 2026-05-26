@@ -1595,12 +1595,12 @@ int luaPlayerShowTextDialog(lua_State* L)
 		length = std::max<int32_t>(text.size(), length);
 	}
 
-	item->setParent(player);
 	auto itemRef = item->weak_from_this().lock();
 	if (!itemRef) {
 		lua_pushnil(L);
 		return 1;
 	}
+	item->setParent(player);
 	player->setWriteItem(std::move(itemRef), static_cast<uint16_t>(length));
 	player->sendTextWindow(item, static_cast<uint16_t>(length), canWrite);
 	lua_pushinteger(L, player->getWindowTextId());

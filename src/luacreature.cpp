@@ -420,11 +420,12 @@ int luaCreatureSetMaster(lua_State* L)
 		}
 	}
 
-	if (masterRef && creatureRef->getInstanceID() != masterRef->getInstanceID()) {
+	const bool result = creatureRef->setMaster(masterRef.get());
+	if (result && masterRef && creatureRef->getInstanceID() != masterRef->getInstanceID()) {
 		updateCreatureInstance(creatureRef, masterRef->getInstanceID(), creatureRef->getPlayer() != nullptr);
 	}
 
-	pushBoolean(L, creatureRef->setMaster(masterRef.get()));
+	pushBoolean(L, result);
 	return 1;
 }
 
