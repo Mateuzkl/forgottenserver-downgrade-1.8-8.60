@@ -549,9 +549,9 @@
             <td>Validar com ASAN quando o ambiente permitir.</td>
           </tr>
           <tr>
-            <td>5</td><td><span class="severity medium">Médio</span></td><td>CMake Lua</td>
-            <td><code>find_package(Lua "5.5" REQUIRED)</code> depende de Lua 5.5 disponível. O cache local tem 5.5.0, mas vcpkg default pode variar por ambiente.</td>
-            <td>Documentar Lua 5.5 como requisito ou aceitar intervalo controlado se compatível.</td>
+            <td>5</td><td><span class="severity low">Documentado</span></td><td>CMake Lua</td>
+            <td><code>find_package(Lua "5.5" REQUIRED)</code> depende de Lua 5.5 disponível. O README documenta a instalação manual e o CMake agora emite uma mensagem explícita sobre o requisito.</td>
+            <td>Nenhuma ação imediata; manter LuaJIT como alternativa via <code>USE_LUAJIT</code>.</td>
           </tr>
           <tr>
             <td>6</td><td><span class="severity low">Corrigido</span></td><td>vc18 Lua</td>
@@ -564,9 +564,9 @@
             <td>Marcar observers com alias/nome e APIs owning com smart pointer.</td>
           </tr>
           <tr>
-            <td>8</td><td><span class="severity medium">Médio</span></td><td>ObserverPtr</td>
+            <td>8</td><td><span class="severity low">Mitigado</span></td><td>ObserverPtr</td>
             <td><code>ObserverPtr&lt;T&gt;</code> é apenas <code>T*</code>; isso ajuda a documentar, mas não protege lifetime.</td>
-            <td>Continuar usando para não-owning, mas nunca guardar em tarefa assíncrona sem validação externa.</td>
+            <td>Comentário reforçado: continuar usando só para não-owning e nunca guardar/capturar em async sem guarda externa.</td>
           </tr>
           <tr>
             <td>9</td><td><span class="severity medium">Médio</span></td><td>manual delete</td>
@@ -574,9 +574,9 @@
             <td>Priorizar files com maior contagem: <code>iologindata.cpp</code>, <code>player.cpp</code>, headers de managers.</td>
           </tr>
           <tr>
-            <td>10</td><td><span class="severity medium">Médio</span></td><td>testes</td>
-            <td>Existem testes de lifetime, storage, matrix e xtea, mas <code>BUILD_TESTING</code> vem desligado.</td>
-            <td>Rodar preset ASAN/test em PRs de memory/lifetime.</td>
+            <td>10</td><td><span class="severity low">Mitigado</span></td><td>testes</td>
+            <td>Existem testes de lifetime, storage, matrix e xtea, e agora há preset <code>asan-linux-tests</code> para PRs de memory/lifetime.</td>
+            <td>Instalar <code>libboost-test-dev</code>, rodar <code>cmake --preset asan-linux-tests</code>, build e <code>ctest --preset asan-linux-tests</code>.</td>
           </tr>
           <tr>
             <td>11</td><td><span class="severity low">Corrigido</span></td><td>source lists</td>
@@ -594,9 +594,9 @@
             <td>Não trocar em massa; auditar só onde o raw pointer é guardado.</td>
           </tr>
           <tr>
-            <td>14</td><td><span class="severity low">Baixo</span></td><td>workspace</td>
-            <td>Há arquivo não rastreado <code>data/raids/testraidSpawn.xml</code>; ele não entrou nesta análise de mudança de código.</td>
-            <td>Decidir se esse XML é teste local ou deve entrar em commit próprio.</td>
+            <td>14</td><td><span class="severity low">Corrigido</span></td><td>workspace</td>
+            <td>O arquivo local não rastreado <code>data/raids/testraidSpawn.xml</code> foi removido do workspace.</td>
+            <td>Nenhuma ação pendente; não foi adicionado ao PR.</td>
           </tr>
         </table>
       </article>
@@ -627,8 +627,8 @@
           <tr><td>1</td><td>Manter C++23/paridade em <code>vc18</code> e CMake.</td></tr>
           <tr><td>2</td><td>Continuar auditoria gradual apenas onde raw pointer e guardado alem do escopo.</td></tr>
           <tr><td>3</td><td>Criar testes Lua lifetime para userdata e callbacks assíncronos quando Boost.Test estiver disponivel.</td></tr>
-          <tr><td>4</td><td>Rodar ASAN nos PRs de lifetime/decay em ambiente Linux completo.</td></tr>
-          <tr><td>5</td><td>Decidir se <code>data/raids/testraidSpawn.xml</code> e teste local ou deve virar commit proprio.</td></tr>
+          <tr><td>4</td><td>Rodar <code>asan-linux-tests</code> nos PRs de lifetime/decay em ambiente Linux completo.</td></tr>
+          <tr><td>5</td><td>Manter arquivos locais temporarios fora do PR.</td></tr>
         </table>
       </article>
     </section>
@@ -645,6 +645,8 @@
           <code>vcpkg.json</code>, <code>CMakePresets.json</code> e <code>build-release/CMakeCache.txt</code>.
           Tambem foram executados <code>cmake --build build-release -- -j2</code>, <code>git diff --check</code>,
           <code>luac -p</code> nos scripts Lua alterados e a checagem de paridade CMake/VC18.
+          O preset <code>asan-linux-tests</code> foi validado ate a resolucao do Lua 5.5; o WSL local nao tem
+          <code>boost_unit_test_framework</code> instalado, entao o <code>ctest</code> completo fica dependente desse pacote.
         </div>
       </article>
     </section>

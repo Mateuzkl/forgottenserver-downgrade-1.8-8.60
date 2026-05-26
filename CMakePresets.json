@@ -24,8 +24,24 @@
 			"cacheVariables": {
 				"BUILD_TESTING": "OFF",
 				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_PREFIX_PATH": "/usr/local;$env{HOME}/.local",
 				"ENABLE_ASAN": "ON",
+				"LUA_INCLUDE_DIR": "/usr/local/include",
+				"LUA_LIBRARY": "/usr/local/lib/liblua.a",
+				"LUA_LIBRARIES": "/usr/local/lib/liblua.a;m;dl",
+				"LUA_VERSION_STRING": "5.5.0",
 				"USE_MIMALLOC": "OFF"
+			}
+		},
+		{
+			"name": "asan-linux-tests",
+			"inherits": [
+				"asan-linux"
+			],
+			"description": "Configure AddressSanitizer with unit tests for Linux/WSL lifetime PRs",
+			"binaryDir": "${sourceDir}/build-asan-linux-tests",
+			"cacheVariables": {
+				"BUILD_TESTING": "ON"
 			}
 		},
 		{
@@ -84,6 +100,11 @@
 			"configuration": "Debug"
 		},
 		{
+			"name": "asan-linux-tests",
+			"configurePreset": "asan-linux-tests",
+			"configuration": "Debug"
+		},
+		{
 			"name": "valgrind-linux",
 			"configurePreset": "valgrind-linux",
 			"configuration": "RelWithDebInfo"
@@ -111,6 +132,11 @@
 		{
 			"name": "asan-linux",
 			"configurePreset": "asan-linux",
+			"configuration": "Debug"
+		},
+		{
+			"name": "asan-linux-tests",
+			"configurePreset": "asan-linux-tests",
 			"configuration": "Debug"
 		},
 		{

@@ -469,6 +469,15 @@ cmake --build . -- -j"$(nproc)"
 | `-DUSE_MIMALLOC=ON` | Uses Microsoft's mimalloc allocator |
 | `-DCMAKE_PREFIX_PATH="/usr/local;$HOME/.local"` | Helps CMake find manual Lua and simdutf installs |
 
+For memory/lifetime pull requests, install the Boost.Test development package and run the Linux ASAN test preset:
+
+```bash
+sudo apt install -y libboost-test-dev
+cmake --preset asan-linux-tests
+cmake --build --preset asan-linux-tests -- -j"$(nproc)"
+ctest --preset asan-linux-tests --output-on-failure
+```
+
 Optional Linux tuning:
 
 ```bash
