@@ -971,9 +971,11 @@ int luaItemOnStepInField(lua_State* L)
 	Item* item = getItemUserdata<Item>(L, 1);
 	Creature* creature = getCreature(L, 2);
 	if (item && creature) {
-		MagicField* field = item->getMagicField();
-		if (field) {
-			field->onStepInField(creature);
+		auto itemRef = item->weak_from_this().lock();
+		auto creatureRef = creature->weak_from_this().lock();
+		auto field = std::dynamic_pointer_cast<MagicField>(itemRef);
+		if (field && creatureRef && !field->isRemoved() && !creatureRef->isRemoved()) {
+			field->onStepInField(creatureRef);
 			pushBoolean(L, true);
 		} else {
 			pushBoolean(L, false);

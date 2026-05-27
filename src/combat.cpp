@@ -17,6 +17,29 @@
 
 extern Game g_game;
 
+namespace {
+
+std::shared_ptr<Creature> lockCreature(Creature* creature)
+{
+	return creature ? creature->weak_from_this().lock() : nullptr;
+}
+
+bool isPlayerControlledCreature(const Creature* creature)
+{
+	if (!creature) {
+		return false;
+	}
+
+	if (creature->getPlayer()) {
+		return true;
+	}
+
+	auto master = creature->getMaster();
+	return master && master->getPlayer();
+}
+
+} // namespace
+
 std::vector<Tile*> getList(const MatrixArea& area, const Position& targetPos, const Direction dir)
 {
 	auto casterPos = getNextPosition(dir, targetPos);
@@ -179,7 +202,8 @@ bool Combat::isPlayerCombat(const Creature* target)
 		return true;
 	}
 
-	if (target->isSummon() && target->getMaster()->getPlayer()) {
+	auto master = target->getMaster();
+	if (target->isSummon() && master && master->getPlayer()) {
 		return true;
 	}
 
@@ -339,7 +363,8 @@ ReturnValue Combat::canDoCombat(Creature* attacker, Creature* target)
 		}
 
 		if (attacker->isSummon()) {
-			if (const Player* masterAttackerPlayer = attacker->getMaster()->getPlayer()) {
+			auto attackerMaster = attacker->getMaster();
+			if (const Player* masterAttackerPlayer = attackerMaster ? attackerMaster->getPlayer() : nullptr) {
 				if (masterAttackerPlayer->hasFlag(PlayerFlag_CannotAttackPlayer)) {
 					return RETURNVALUE_YOUMAYNOTATTACKTHISPLAYER;
 				}
@@ -359,7 +384,8 @@ ReturnValue Combat::canDoCombat(Creature* attacker, Creature* target)
 				return RETURNVALUE_YOUMAYNOTATTACKTHISCREATURE;
 			}
 
-			if (target->isSummon() && target->getMaster()->getPlayer() && target->getZone() == ZONE_NOPVP) {
+			auto targetMaster = target->getMaster();
+			if (target->isSummon() && targetMaster && targetMaster->getPlayer() && target->getZone() == ZONE_NOPVP) {
 				return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
 			}
 		} else if (const Monster* attackerMonster = attacker->getMonster()) {
@@ -380,14 +406,15 @@ ReturnValue Combat::canDoCombat(Creature* attacker, Creature* target)
 	}
 
 	if (g_game.getWorldType() == WORLD_TYPE_NO_PVP) {
-		if (attacker->getPlayer() || (attacker->isSummon() && attacker->getMaster()->getPlayer())) {
+		if (isPlayerControlledCreature(attacker)) {
 			if (target->getPlayer()) {
 				if (!isInPvpZone(attacker, target)) {
 					return RETURNVALUE_YOUMAYNOTATTACKTHISPLAYER;
 				}
 			}
 
-			if (target->isSummon() && target->getMaster()->getPlayer()) {
+			auto targetMaster = target->getMaster();
+			if (target->isSummon() && targetMaster && targetMaster->getPlayer()) {
 				if (!isInPvpZone(attacker, target)) {
 					return RETURNVALUE_YOUMAYNOTATTACKTHISCREATURE;
 				}
@@ -627,11 +654,11 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 		}
 
 		if (caster) {
-			Player* casterPlayer;
-			if (caster->isSummon()) {
-				casterPlayer = caster->getMaster()->getPlayer();
-			} else {
-				casterPlayer = caster->getPlayer();
+			Player* casterPlayer = caster->getPlayer();
+			std::shared_ptr<Creature> casterMaster;
+			if (!casterPlayer && caster->isSummon()) {
+				casterMaster = caster->getMaster();
+				casterPlayer = casterMaster ? casterMaster->getPlayer() : nullptr;
 			}
 
 			if (casterPlayer) {
@@ -651,21 +678,25 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 		}
 
 		auto itemPtr = Item::CreateItem(itemId);
-		if (caster) {
-			itemPtr->setOwner(caster->getID());
-			itemPtr->setInstanceID(caster->getInstanceID());
-		}
+		if (itemPtr) {
+			if (caster) {
+				itemPtr->setOwner(caster->getID());
+				itemPtr->setInstanceID(caster->getInstanceID());
+			}
 
-		ReturnValue ret = g_game.internalAddItem(tile, itemPtr.get());
-		if (ret == RETURNVALUE_NOERROR) {
-			g_game.startDecay(itemPtr.get());
+			ReturnValue ret = g_game.internalAddItem(tile, itemPtr.get());
+			if (ret == RETURNVALUE_NOERROR && !itemPtr->isRemoved()) {
+				g_game.startDecay(itemPtr.get());
 
-			MagicField* field = itemPtr->getMagicField();
-			if (field) {
-				if (CreatureVector* creatures = tile->getCreatures()) {
-					for (const auto& creature : *creatures) {
-						if (creature->getInstanceID() == itemPtr->getInstanceID()) {
-							field->onStepInField(creature.get());
+				auto field = std::dynamic_pointer_cast<MagicField>(itemPtr);
+				if (field) {
+					if (CreatureVector* creatures = tile->getCreatures()) {
+						const CreatureVector creatureRefs = *creatures;
+						for (const auto& creature : creatureRefs) {
+							if (creature && !creature->isRemoved() && creature->getTile() == tile &&
+							    creature->getInstanceID() == itemPtr->getInstanceID()) {
+								field->onStepInField(creature);
+							}
 						}
 					}
 				}
@@ -1844,7 +1875,8 @@ std::vector<std::pair<Position, std::vector<uint32_t>>> Combat::pickChainTargets
 						visited.insert(spectator->getID());
 						continue;
 					}
-					if (spectatorSummon && spectator->getMaster() && spectator->getMaster()->getPlayer()) {
+					auto spectatorMaster = spectator->getMaster();
+					if (spectatorSummon && spectatorMaster && spectatorMaster->getPlayer()) {
 						visited.insert(spectator->getID());
 						continue;
 					}
@@ -2029,19 +2061,29 @@ void Combat::setupChain(const Weapon* weapon)
 
 //**********************************************************//
 
-void MagicField::onStepInField(Creature* creature)
+void MagicField::onStepInField(const std::shared_ptr<Creature>& creature)
 {
+	if (!creature || creature->isRemoved()) {
+		return;
+	}
+
 	const ItemType& it = items[getID()];
 	if (it.conditionDamage) {
+		Tile* fieldTile = getTile();
+		if (!fieldTile) {
+			return;
+		}
+
 		auto conditionCopy = it.conditionDamage->clone();
 		uint32_t ownerId = getOwner();
 		if (ownerId) {
 			bool harmfulField = true;
 
-			if (g_game.getWorldType() == WORLD_TYPE_NO_PVP || getTile()->hasFlag(TILESTATE_NOPVPZONE)) {
-				Creature* owner = g_game.getCreatureByID(ownerId);
+			if (g_game.getWorldType() == WORLD_TYPE_NO_PVP || fieldTile->hasFlag(TILESTATE_NOPVPZONE)) {
+				auto owner = lockCreature(g_game.getCreatureByID(ownerId));
 				if (owner) {
-					if (owner->getPlayer() || (owner->isSummon() && owner->getMaster()->getPlayer())) {
+					auto ownerMaster = owner->getMaster();
+					if (owner->getPlayer() || (owner->isSummon() && ownerMaster && ownerMaster->getPlayer())) {
 						harmfulField = false;
 					}
 				}

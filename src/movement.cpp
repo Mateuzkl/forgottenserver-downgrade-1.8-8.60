@@ -423,12 +423,14 @@ std::string_view MoveEvent::getScriptEventName() const
 
 uint32_t MoveEvent::StepInField(Creature* creature, Item* item, const Position&)
 {
-	MagicField* field = item->getMagicField();
-	if (field) {
-		if (item->getInstanceID() != creature->getInstanceID()) {
+	auto itemRef = item ? item->weak_from_this().lock() : nullptr;
+	auto creatureRef = creature ? creature->weak_from_this().lock() : nullptr;
+	auto field = std::dynamic_pointer_cast<MagicField>(itemRef);
+	if (field && creatureRef && !field->isRemoved() && !creatureRef->isRemoved()) {
+		if (field->getInstanceID() != creatureRef->getInstanceID()) {
 			return 1;
 		}
-		field->onStepInField(creature);
+		field->onStepInField(creatureRef);
 		return 1;
 	}
 
@@ -439,15 +441,23 @@ uint32_t MoveEvent::StepOutField(Creature*, Item*, const Position&) { return 1; 
 
 uint32_t MoveEvent::AddItemField(Item* item, Item*, const Position&)
 {
-	if (MagicField* field = item->getMagicField()) {
-		Tile* tile = item->getTile();
+	auto itemRef = item ? item->weak_from_this().lock() : nullptr;
+	auto field = std::dynamic_pointer_cast<MagicField>(itemRef);
+	if (field && !field->isRemoved()) {
+		Tile* tile = field->getTile();
+		if (!tile) {
+			return 1;
+		}
+
 		if (CreatureVector* creatures = tile->getCreatures()) {
-			uint32_t fieldInstance = item->getInstanceID();
-			for (const auto& creature : *creatures) {
-				if (creature->getInstanceID() != fieldInstance) {
+			uint32_t fieldInstance = field->getInstanceID();
+			const CreatureVector creatureRefs = *creatures;
+			for (const auto& creature : creatureRefs) {
+				if (!creature || creature->isRemoved() || creature->getTile() != tile ||
+				    creature->getInstanceID() != fieldInstance) {
 					continue;
 				}
-				field->onStepInField(creature.get());
+				field->onStepInField(creature);
 			}
 		}
 		return 1;

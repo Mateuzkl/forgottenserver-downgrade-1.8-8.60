@@ -9,6 +9,8 @@
 #include "map.h"
 #include "thing.h"
 
+#include <memory>
+
 class Condition;
 class Creature;
 class MatrixArea;
@@ -213,7 +215,7 @@ public:
 		}
 		return 0;
 	}
-	void onStepInField(Creature* creature);
+	void onStepInField(const std::shared_ptr<Creature>& creature);
 
 private:
 	int64_t createTime;
