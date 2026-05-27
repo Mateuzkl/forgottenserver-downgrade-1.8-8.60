@@ -93,24 +93,29 @@ event.onDropLoot = function(self, corpse)
 		end
 
 		if player then
-			local preyLootText = preyLootBonus > 0 and (" (Prey Improved Loot +%d%%)"):format(preyLootBonus) or ""
-			local text = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
-			                                         corpse:getContentDescription(), preyLootText)
+			local lootGroupingEnabled = configManager.getBoolean(configKeys.LOOT_GROUPING_ENABLED)
+			if not lootGroupingEnabled then
+				local preyLootText = preyLootBonus > 0 and (" (Prey Improved Loot +%d%%)"):format(preyLootBonus) or ""
+				local text = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
+				                                         corpse:getContentDescription(), preyLootText)
+				local party = player:getParty()
+				if party then
+					party:broadcastPartyLoot(text)
+				else
+					sendLootMessage(player, text)
+				end
+			end
+		end
+	else
+		if not configManager.getBoolean(configKeys.LOOT_GROUPING_ENABLED) then
+			local text = ("Loot of %s: nothing (due to low stamina)"):format(
+				             mType:getNameDescription())
 			local party = player:getParty()
 			if party then
 				party:broadcastPartyLoot(text)
 			else
 				sendLootMessage(player, text)
 			end
-		end
-	else
-		local text = ("Loot of %s: nothing (due to low stamina)"):format(
-			             mType:getNameDescription())
-		local party = player:getParty()
-		if party then
-			party:broadcastPartyLoot(text)
-		else
-			sendLootMessage(player, text)
 		end
 	end
 end

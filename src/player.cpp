@@ -6107,6 +6107,129 @@ void Player::lootCorpse(Container* container)
 	}
 }
 
+void Player::addPendingLoot(std::string monsterName, Container* corpse)
+{
+	if (!corpse || monsterName.empty()) {
+		return;
+	}
+
+	std::string groupKey = std::to_string(id) + ":" + monsterName;
+	auto& group = m_pendingLootGroups[groupKey];
+
+	if (!group) {
+		group = std::make_shared<LootGroup>();
+		group->monsterName = std::move(monsterName);
+	}
+
+	group->killCount++;
+
+	for (ContainerIterator it = corpse->iterator(); it.hasNext(); it.advance()) {
+		Item* item = *it;
+		if (!item) {
+			continue;
+		}
+		group->items[item->getID()] += item->getItemCount();
+	}
+
+	if (group->flushEventId != 0) {
+		g_scheduler.stopEvent(group->flushEventId);
+	}
+
+	auto groupPtr = std::weak_ptr<LootGroup>(group);
+	std::string key = groupKey;
+	auto playerId = id;
+	group->flushEventId = g_scheduler.addEvent(500, [playerId, groupPtr, key]() {
+		auto sharedGroup = groupPtr.lock();
+		if (!sharedGroup) {
+			return;
+		}
+		auto player = g_game.getPlayerByID(playerId);
+		if (player) {
+			player->flushPendingLoot(key);
+		}
+	});
+}
+
+void Player::flushPendingLoot(const std::string& groupKey)
+{
+	auto it = m_pendingLootGroups.find(groupKey);
+	if (it == m_pendingLootGroups.end()) {
+		return;
+	}
+
+	auto& group = it->second;
+	if (!group || group->items.empty()) {
+		std::string text;
+		if (!group) {
+			m_pendingLootGroups.erase(it);
+			return;
+		}
+		text = "Loot of " + group->monsterName + ": nothing.";
+		const auto& party = getParty();
+		if (party && party->isSharedExperienceEnabled()) {
+			if (const auto& leader = party->getLeader()) {
+				leader->sendChannelMessage("", text, TALKTYPE_CHANNEL_O, 10);
+			}
+			for (auto& member : party->getMembers()) {
+				if (auto memberPtr = member.lock()) {
+					memberPtr->sendChannelMessage("", text, TALKTYPE_CHANNEL_O, 10);
+				}
+			}
+		} else {
+			sendChannelMessage("", text, TALKTYPE_CHANNEL_O, 10);
+		}
+		m_pendingLootGroups.erase(it);
+		return;
+	}
+
+	std::stringstream ss;
+	ss << "Loot of " << group->monsterName;
+
+	if (group->killCount > 1) {
+		ss << " (" << group->killCount << "x): ";
+	} else {
+		ss << ": ";
+	}
+
+	bool first = true;
+	for (auto& [itemId, count] : group->items) {
+		const ItemType& it = Item::items[itemId];
+		if (!first) {
+			ss << ", ";
+		}
+		first = false;
+		if (count > 1) {
+			ss << count << " " << it.getPluralName();
+		} else {
+			if (it.article.empty() || Item::items[itemId].stackable) {
+				ss << "1 " << it.name;
+			} else {
+				ss << it.article << " " << it.name;
+			}
+		}
+	}
+	ss << ".";
+
+	std::string text = ss.str();
+
+	const auto& party = getParty();
+	if (party && party->isSharedExperienceEnabled()) {
+		const auto& leader = party->getLeader();
+		if (leader) {
+			leader->sendChannelMessage("", text, TALKTYPE_CHANNEL_O, 10);
+		}
+		for (auto& member : party->getMembers()) {
+			if (auto memberPtr = member.lock()) {
+				memberPtr->sendChannelMessage("", text, TALKTYPE_CHANNEL_O, 10);
+			}
+		}
+	} else {
+		sendChannelMessage("", text, TALKTYPE_CHANNEL_O, 10);
+	}
+
+	m_pendingLootGroups.erase(it);
+}
+
 void Player::updateRegeneration()
 {
 	if (!vocation) {

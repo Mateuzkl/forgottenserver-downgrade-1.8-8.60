@@ -5,6 +5,7 @@
 
 #include "vocation.h"
 
+#include "configmanager.h"
 #include "player.h"
 #include "pugicast.h"
 #include "tools.h"
@@ -185,6 +186,35 @@ uint64_t Vocation::getReqSkillTries(skills_t skill, uint16_t level) const
 	if (skill > SKILL_LAST) {
 		return 0;
 	}
+
+	if (ConfigManager::getBoolean(ConfigManager::POWERLAW)) {
+		int64_t threshold = ConfigManager::getInteger(ConfigManager::POWER_LAW_SKILL_THRESHOLD);
+		if (threshold > 0 && level >= static_cast<uint16_t>(threshold)) {
+			double exponent = ConfigManager::getFloat(ConfigManager::POWER_LAW_EXPONENT);
+			double lastExpTries = skillBase[skill] *
+			    std::pow(skillMultipliers[skill],
+			             static_cast<int32_t>(static_cast<int64_t>(threshold) - (MINIMUM_SKILL_LEVEL + 2)));
+			double result =
+			    lastExpTries * std::pow(static_cast<double>(level) / static_cast<double>(threshold), exponent);
+
+			double prevReq;
+			if (level == static_cast<uint16_t>(threshold)) {
+				prevReq = lastExpTries;
+			} else {
+				prevReq = lastExpTries *
+				    std::pow(static_cast<double>(level - 1) / static_cast<double>(threshold), exponent);
+			}
+
+			if (result <= prevReq) {
+				result = prevReq + 1.0;
+			}
+			if (result > static_cast<double>(UINT64_MAX)) {
+				return UINT64_MAX;
+			}
+			return static_cast<uint64_t>(result);
+		}
+	}
+
 	return skillBase[skill] *
 	       std::pow(skillMultipliers[skill], static_cast<int32_t>(level - (MINIMUM_SKILL_LEVEL + 1)));
 }
@@ -194,6 +224,35 @@ uint64_t Vocation::getReqMana(uint32_t magLevel) const
 	if (magLevel == 0) {
 		return 0;
 	}
+
+	if (ConfigManager::getBoolean(ConfigManager::POWERLAW)) {
+		int64_t threshold = ConfigManager::getInteger(ConfigManager::POWER_LAW_MAGIC_THRESHOLD);
+		if (threshold > 0 && magLevel >= static_cast<uint32_t>(threshold)) {
+			double exponent = ConfigManager::getFloat(ConfigManager::POWER_LAW_EXPONENT);
+			double lastExpMana = 1600.0 *
+			    std::pow(static_cast<double>(manaMultiplier),
+			             static_cast<int32_t>(static_cast<int64_t>(threshold) - 2));
+			double result =
+			    lastExpMana * std::pow(static_cast<double>(magLevel) / static_cast<double>(threshold), exponent);
+
+			double prevReq;
+			if (magLevel == static_cast<uint32_t>(threshold)) {
+				prevReq = lastExpMana;
+			} else {
+				prevReq = lastExpMana *
+				    std::pow(static_cast<double>(magLevel - 1) / static_cast<double>(threshold), exponent);
+			}
+
+			if (result <= prevReq) {
+				result = prevReq + 1.0;
+			}
+			if (result > static_cast<double>(UINT64_MAX)) {
+				return UINT64_MAX;
+			}
+			return static_cast<uint64_t>(result);
+		}
+	}
+
 	return 1600 * std::pow(manaMultiplier, static_cast<int32_t>(magLevel - 1));
 }
 

@@ -1259,6 +1259,10 @@ public:
 	Container* getOrCreateGoldPouchPage(Container* pouch);
 	void lootCorpse(Container* container);
 
+	// Loot grouping
+	void addPendingLoot(std::string monsterName, Container* corpse);
+	void flushPendingLoot(const std::string& groupKey);
+
 	void updateRegeneration();
 	void addItemImbuements(Item* item, slots_t slot);
 	void removeItemImbuements(Item* item, slots_t slot);
@@ -1598,6 +1602,14 @@ private:
 	uint32_t getConditionSuppressions() const override { return conditionSuppressions; }
 	uint16_t getLookCorpse() const override;
 	void getPathSearchParams(const Creature* creature, FindPathParams& fpp) const override;
+
+	struct LootGroup {
+		std::string monsterName;
+		uint32_t killCount = 0;
+		std::unordered_map<uint16_t, uint32_t> items;
+		uint32_t flushEventId = 0;
+	};
+	std::unordered_map<std::string, std::shared_ptr<LootGroup>> m_pendingLootGroups;
 
 	friend class Game;
 	friend class Npc;

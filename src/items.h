@@ -391,6 +391,7 @@ public:
 	uint16_t imbuementSlot = 0;
 	uint16_t wrapableTo = 0;
 	std::unordered_map<std::string, uint8_t> imbuementAllowedTypes;
+	int16_t mantra = 0;
 	MagicEffectClasses magicEffect = CONST_ME_NONE;
 	Direction bedPartnerDir = DIRECTION_NONE;
 	WeaponType_t weaponType = WEAPON_NONE;

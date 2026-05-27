@@ -402,14 +402,14 @@ do
 		end
 
 		for _, item in ipairs(items) do
-			local itemType = resolveItemType(item.id or item.itemId or item.itemName or item.name, item.clientId)
+			local itemType = resolveItemType(item.id or item.itemId or item.itemid or item.itemName or item.itemname or item.name, item.clientId or item.clientid)
 			if itemType and itemType:getId() ~= 0 then
 				normalized[#normalized + 1] = {
 					id = itemType:getId(),
-					subType = item.subType or item.subtype or (itemType:isFluidContainer() and 0 or 1),
+					subType = item.subType or item.subtype or item.count or item.charges or (itemType:isFluidContainer() and 0 or 1),
 					buy = item.buy or 0,
 					sell = item.sell or 0,
-					name = item.itemName or item.name or itemType:getName(),
+					name = item.itemName or item.itemname or item.name or itemType:getName(),
 				}
 			end
 		end
@@ -841,7 +841,12 @@ do
 					return false
 				end
 
-				if not playerObj:removeItem(itemId, amount, subType, ignoreEquipped) then
+				local removeSubType = subType
+				if not ItemType(itemId):isFluidContainer() then
+					removeSubType = -1
+				end
+
+				if not playerObj:removeItem(itemId, amount, removeSubType, ignoreEquipped) then
 					return false
 				end
 
@@ -863,6 +868,9 @@ do
 
 	function Npc:openShopWindow(player, items, buyCallback, sellCallback)
 		if type(items) == "table" then
+			if buyCallback == nil and sellCallback == nil then
+				return openCompatShopWindow(self, player, items)
+			end
 			return compat.originalNpcOpenShopWindow(self, player, items, buyCallback, sellCallback)
 		end
 
