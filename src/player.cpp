@@ -77,6 +77,28 @@ uint16_t clampPreyDamagePercent(uint16_t value)
 	return std::min<uint16_t>(value, 100);
 }
 
+bool isMantraCombatType(CombatType_t combatType)
+{
+	switch (combatType) {
+		case COMBAT_ENERGYDAMAGE:
+		case COMBAT_FIREDAMAGE:
+		case COMBAT_EARTHDAMAGE:
+		case COMBAT_ICEDAMAGE:
+			return true;
+		default:
+			return false;
+	}
+}
+
+int16_t getItemTypeMantraValue(const ItemType& itemType, CombatType_t combatType)
+{
+	if (!itemType.abilities) {
+		return 0;
+	}
+
+	return itemType.abilities->mantraAbsorbValue[combatTypeToIndex(combatType)];
+}
+
 bool isDualWieldWeapon(const Item* item)
 {
 	if (!item || (item->getSlotPosition() & SLOTP_TWO_HAND)) {
@@ -578,6 +600,36 @@ int32_t Player::getArmor() const
 		}
 	}
 	return static_cast<int32_t>(armor * vocation->armorMultiplier);
+}
+
+int32_t Player::getMantraTotal() const
+{
+	int32_t mantraTotal = 0;
+	static constexpr slots_t mantraSlots[] = {CONST_SLOT_HEAD, CONST_SLOT_NECKLACE, CONST_SLOT_ARMOR,
+	                                          CONST_SLOT_LEGS, CONST_SLOT_RING,     CONST_SLOT_FEET};
+	for (const slots_t& slot : mantraSlots) {
+		if (!isItemAbilityEnabled(slot)) {
+			continue;
+		}
+
+		std::shared_ptr<Item> item = inventory[slot];
+		if (!item) {
+			continue;
+		}
+
+		const ItemType& itemType = Item::items[item->getID()];
+		mantraTotal += getItemTypeMantraValue(itemType, COMBAT_ENERGYDAMAGE);
+	}
+	if (isSerene()) {
+		mantraTotal *= 2;
+	}
+	return mantraTotal;
+}
+
+int16_t Player::getMantraAbsorbPercent(int32_t mantraTotal) const
+{
+	return static_cast<int16_t>(std::clamp<int32_t>(mantraTotal, std::numeric_limits<int16_t>::min(),
+	                                               std::numeric_limits<int16_t>::max()));
 }
 
 float Player::getMitigation() const
@@ -2669,10 +2721,10 @@ bool Player::hasShield() const
 
 BlockType_t Player::blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage,
                              bool checkDefense /* = false*/, bool checkArmor /* = false*/, bool field /* = false*/,
-                             bool ignoreResistances /* = false*/)
+                             bool ignoreResistances /* = false*/, CombatOrigin origin /* = ORIGIN_NONE */)
 {
 	BlockType_t blockType =
-	    Creature::blockHit(attacker, combatType, damage, checkDefense, checkArmor, field, ignoreResistances);
+	    Creature::blockHit(attacker, combatType, damage, checkDefense, checkArmor, field, ignoreResistances, origin);
 
 	if (attacker && combatType != COMBAT_HEALING) {
 		sendCreatureSquare(attacker.get(), SQ_COLOR_YELLOW);
@@ -2689,13 +2741,15 @@ BlockType_t Player::blockHit(const std::shared_ptr<Creature>& attacker, CombatTy
 
 	if (!ignoreResistances) {
 		Reflect reflect;
+		const int16_t mantraAbsorbPercent =
+		    origin != ORIGIN_CONDITION && isMantraCombatType(combatType) ? getMantraAbsorbPercent(getMantraTotal()) : 0;
 
 		for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_AMMO; ++slot) {
 			if (!isItemAbilityEnabled(static_cast<slots_t>(slot))) {
 				continue;
 			}
 
-			Item* item = inventory[slot].get();
+			std::shared_ptr<Item> item = inventory[slot];
 			if (!item) {
 				continue;
 			}
@@ -2710,13 +2764,18 @@ BlockType_t Player::blockHit(const std::shared_ptr<Creature>& attacker, CombatTy
 				continue;
 			}
 
+			int32_t totalAbsorbPercent = 0;
 			const int16_t& absorbPercent = it.abilities->absorbPercent[combatTypeToIndex(combatType)];
 			if (absorbPercent != 0) {
-				damage -= std::ceil(damage * (absorbPercent / 100.));
+				totalAbsorbPercent += absorbPercent;
+			}
+
+			if (totalAbsorbPercent != 0) {
+				damage -= std::ceil(damage * (totalAbsorbPercent / 100.));
 
 				uint16_t charges = item->getCharges();
 				if (charges != 0) {
-					g_game.transformItem(item, item->getID(), charges - 1);
+					g_game.transformItem(item.get(), item->getID(), charges - 1);
 				}
 			}
 
@@ -2729,7 +2788,7 @@ BlockType_t Player::blockHit(const std::shared_ptr<Creature>& attacker, CombatTy
 
 					uint16_t charges = item->getCharges();
 					if (charges != 0) {
-						g_game.transformItem(item, item->getID(), charges - 1);
+						g_game.transformItem(item.get(), item->getID(), charges - 1);
 					}
 				}
 			}
@@ -2771,6 +2830,10 @@ BlockType_t Player::blockHit(const std::shared_ptr<Creature>& attacker, CombatTy
 					}
 				}
 			}
+		}
+
+		if (mantraAbsorbPercent != 0) {
+			damage -= std::ceil(damage * (mantraAbsorbPercent / 100.));
 		}
 
 		if (attacker && reflect.chance > 0 && reflect.percent != 0 && uniform_random(1, 100) <= reflect.chance) {

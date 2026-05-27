@@ -231,6 +231,7 @@ enum ItemParseAttributes_t
 	ITEM_PARSE_SCRIPT,
 	ITEM_PARSE_IMBUEMENTSLOT,
 	ITEM_PARSE_WRAPABLETO,
+	ITEM_PARSE_MANTRA,
 };
 
 struct Abilities
@@ -278,6 +279,8 @@ struct Abilities
 
 	// drop bonus (percentage, 0-100)
 	int32_t dropBonus = 0;
+
+	std::array<int16_t, COMBAT_COUNT> mantraAbsorbValue = {0};
 
 	bool manaShield = false;
 	bool invisible = false;

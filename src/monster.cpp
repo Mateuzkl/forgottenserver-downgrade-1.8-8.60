@@ -1003,9 +1003,9 @@ void Monster::onFollowCreatureComplete(const Creature* creature)
 
 BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage,
                               bool checkDefense /* = false*/, bool checkArmor /* = false*/, bool field /* = false */,
-                              bool ignoreResistances /* = false */)
+                              bool ignoreResistances /* = false */, CombatOrigin origin /* = ORIGIN_NONE */)
 {
-	BlockType_t blockType = Creature::blockHit(attacker, combatType, damage, checkDefense, checkArmor, field, ignoreResistances);
+	BlockType_t blockType = Creature::blockHit(attacker, combatType, damage, checkDefense, checkArmor, field, ignoreResistances, origin);
 
 	if (damage != 0) {
 		int32_t elementMod = 0;

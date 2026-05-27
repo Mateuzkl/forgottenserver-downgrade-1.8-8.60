@@ -147,7 +147,7 @@ public:
 	bool isIgnoringFieldDamage() const { return ignoreFieldDamage; }
 
 	BlockType_t blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage, bool checkDefense = false,
-	                     bool checkArmor = false, bool field = false, bool ignoreResistances = false) override;
+	                     bool checkArmor = false, bool field = false, bool ignoreResistances = false, CombatOrigin origin = ORIGIN_NONE) override;
 
 	static uint32_t monsterAutoID;
 

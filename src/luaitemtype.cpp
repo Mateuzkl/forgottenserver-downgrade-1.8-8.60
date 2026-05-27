@@ -7,6 +7,7 @@
 #include "item.h"
 #include "items.h"
 #include "luascript.h"
+#include "tools.h"
 
 namespace {
 using namespace Lua;
@@ -481,6 +482,18 @@ int luaItemTypeGetArmor(lua_State* L)
 	return 1;
 }
 
+int luaItemTypeGetMantra(lua_State* L)
+{
+	// itemType:getMantra()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (itemType && itemType->abilities) {
+		lua_pushinteger(L, itemType->abilities->mantraAbsorbValue[combatTypeToIndex(COMBAT_ENERGYDAMAGE)]);
+	} else {
+		lua_pushinteger(L, 0);
+	}
+	return 1;
+}
+
 int luaItemTypeGetReduceSkillLoss(lua_State* L)
 {
 	// itemType:getReduceSkillLoss()
@@ -650,6 +663,14 @@ int luaItemTypeGetAbilities(lua_State* L)
 			lua_rawseti(L, -2, i + 1);
 		}
 		lua_setfield(L, -2, "absorbPercent");
+
+		// Mantra absorb percent
+		lua_createtable(L, 0, COMBAT_COUNT);
+		for (int32_t i = 0; i < COMBAT_COUNT; i++) {
+			lua_pushinteger(L, abilities.mantraAbsorbValue[i]);
+			lua_rawseti(L, -2, i + 1);
+		}
+		lua_setfield(L, -2, "mantraAbsorbValue");
 
 		// special magic level
 		lua_createtable(L, 0, COMBAT_COUNT);
@@ -1079,6 +1100,7 @@ void LuaScriptInterface::registerItemType()
 	registerMethod("ItemType", "getDefense", luaItemTypeGetDefense);
 	registerMethod("ItemType", "getExtraDefense", luaItemTypeGetExtraDefense);
 	registerMethod("ItemType", "getArmor", luaItemTypeGetArmor);
+	registerMethod("ItemType", "getMantra", luaItemTypeGetMantra);
 	registerMethod("ItemType", "getReduceSkillLoss", luaItemTypeGetReduceSkillLoss);
 	registerMethod("ItemType", "getDropBonus", luaItemTypeGetDropBonus);
 	registerMethod("ItemType", "getWeaponType", luaItemTypeGetWeaponType);

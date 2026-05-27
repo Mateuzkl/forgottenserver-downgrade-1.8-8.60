@@ -397,10 +397,23 @@ do
 			end
 		end
 
-		-- armor
+		-- armor and mantra
 		do
 			local arm = item:getArmor()
-			if arm > 0 then descriptions[#descriptions + 1] = fmt("Arm:%d", arm) end
+			local mantra = itemType:getMantra()
+			if arm > 0 or mantra ~= 0 then
+				local str = ""
+				if arm > 0 then
+					str = fmt("Arm:%d", arm)
+				end
+				if mantra ~= 0 then
+					if str ~= "" then
+						str = str .. " "
+					end
+					str = str .. fmt("Mantra: %d", mantra)
+				end
+				descriptions[#descriptions + 1] = str
+			end
 		end
 
 		-- skill loss reduction

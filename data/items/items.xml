@@ -73880,6 +73880,7 @@
 	</item>
 	<item id="50146" name="sanguine trousers">
 		<attribute key="armor" value="6" />
+		<attribute key="mantra" value="10" />
 		<attribute key="skillfist" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
 		<attribute key="absorbpercentphysical" value="4" />
@@ -73905,6 +73906,7 @@
 		</attribute>
 	</item>
 	<item id="50148" article="a" name="charged ethereal ring">
+		<attribute key="mantra" value="2" />
 		<attribute key="absorbpercentphysical" value="4" />
 		<attribute key="absorbpercentfire" value="4" />
 		<attribute key="absorbpercentearth" value="4" />
@@ -73991,6 +73993,7 @@
 		</attribute>
 	</item>
 	<item id="50154" article="an" name="enchanted merudri brooch">
+		<attribute key="mantra" value="2" />
 		<attribute key="weight" value="450" />
 		<attribute key="transformEquipTo" value="50155" />
 		<attribute key="stopduration" value="1" />
@@ -74002,6 +74005,7 @@
 		</attribute>
 	</item>
 	<item id="50155" article="an" name="enchanted merudri brooch">
+		<attribute key="mantra" value="2" />
 		<attribute key="skillfist" value="3" />
 		<attribute key="absorbpercentphysical" value="4" />
 		<attribute key="absorbpercentfire" value="15" />
@@ -74018,6 +74022,7 @@
 		</attribute>
 	</item>
 	<item id="50156" article="a" name="merudri brooch">
+		<attribute key="mantra" value="2" />
 		<attribute key="weight" value="450" />
 		<attribute key="script" value="moveevent">
 			<attribute key="level" value="220" />
@@ -74405,6 +74410,7 @@
 	</item>
 	<item id="50184" name="mutant hide trousers">
 		<attribute key="armor" value="6" />
+		<attribute key="mantra" value="8" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="absorbpercentphysical" value="2" />
@@ -74419,6 +74425,7 @@
 	</item>
 	<item id="50185" name="jade legs">
 		<attribute key="armor" value="5" />
+		<attribute key="mantra" value="7" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="absorbpercentice" value="4" />
@@ -74432,6 +74439,7 @@
 	</item>
 	<item id="50186" name="jungle survivor legs">
 		<attribute key="armor" value="5" />
+		<attribute key="mantra" value="6" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="absorbpercentfire" value="4" />
 		<attribute key="weight" value="5100" />
@@ -74444,6 +74452,7 @@
 	</item>
 	<item id="50187" name="legs of wisdom">
 		<attribute key="armor" value="4" />
+		<attribute key="mantra" value="5" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="absorbpercentenergy" value="3" />
 		<attribute key="weight" value="2600" />
@@ -74456,6 +74465,7 @@
 	</item>
 	<item id="50188" name="ethereal coned hat">
 		<attribute key="armor" value="7" />
+		<attribute key="mantra" value="12" />
 		<attribute key="skillfist" value="3" />
 		<attribute key="magiclevelpoints" value="2" />
 		<attribute key="absorbpercentphysical" value="4" />
@@ -74474,6 +74484,7 @@
 	</item>
 	<item id="50189" name="demon mengu">
 		<attribute key="armor" value="6" />
+		<attribute key="mantra" value="10" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="absorbpercentphysical" value="2" />
@@ -74492,6 +74503,7 @@
 	</item>
 	<item id="50190" name="dark vision bandana">
 		<attribute key="armor" value="5" />
+		<attribute key="mantra" value="8" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="absorbpercentenergy" value="4" />
 		<attribute key="weight" value="1100" />
@@ -74528,6 +74540,7 @@
 	</item>
 	<item id="50193" name="jade conical hat">
 		<attribute key="armor" value="5" />
+		<attribute key="mantra" value="500" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="absorbpercentice" value="4" />
 		<attribute key="weight" value="2100" />
@@ -74544,6 +74557,7 @@
 	</item>
 	<item id="50194" name="light bandana">
 		<attribute key="armor" value="3" />
+		<attribute key="mantra" value="2" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="weight" value="900" />
 		<attribute key="script" value="moveevent">
@@ -74553,6 +74567,7 @@
 		<attribute key="classification" value="1" />
 	</item>
 	<item id="50195" article="a" name="harmony amulet">
+		<attribute key="mantra" value="2" />
 		<attribute key="showattributes" value="1" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="weight" value="510" />
@@ -74732,6 +74747,7 @@
 	</item>
 	<item id="50254" name="soulgarb">
 		<attribute key="armor" value="11" />
+		<attribute key="mantra" value="17" />
 		<attribute key="skillfist" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
 		<attribute key="absorbpercentphysical" value="4" />
@@ -74755,6 +74771,7 @@
 	<item id="50255" name="stoic iks robe">
 		<attribute key="description" value="A robe worn by a separatis caste of the ancient Iks" />
 		<attribute key="armor" value="9" />
+		<attribute key="mantra" value="16" />
 		<attribute key="skillfist" value="4" />
 		<attribute key="absorbpercentphysical" value="2" />
 		<attribute key="absorbpercentenergy" value="5" />
@@ -74777,6 +74794,7 @@
 	<item id="50257" name="plain monk robe">
 		<attribute key="description" value="A plain variant of the traditional robe of Merudri monks" />
 		<attribute key="armor" value="6" />
+		<attribute key="mantra" value="7" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="weight" value="6500" />
 		<attribute key="imbuementslot" value="1">
@@ -74791,6 +74809,7 @@
 	<item id="50258" name="monk robe">
 		<attribute key="description" value="The traditional robe of a Merudri monk" />
 		<attribute key="armor" value="7" />
+		<attribute key="mantra" value="9" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="weight" value="7000" />
 		<attribute key="script" value="moveevent">
@@ -74814,6 +74833,7 @@
 	<item id="50260" name="death oyoroi">
 		<attribute key="description" value="A dark oyoroi with an even darker past. Worn and ragged from many a battle" />
 		<attribute key="armor" value="9" />
+		<attribute key="mantra" value="16" />
 		<attribute key="absorbpercentdeath" value="5" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="skillfist" value="4" />
@@ -74836,6 +74856,7 @@
 	<item id="50261" name="merudri nanbando">
 		<attribute key="description" value="A rare metal breastplate worn by early Merudri guardians" />
 		<attribute key="armor" value="7" />
+		<attribute key="mantra" value="13" />
 		<attribute key="skillfist" value="3" />
 		<attribute key="imbuementslot" value="1">
 			<attribute key="life leech" value="3" />
@@ -74857,6 +74878,7 @@
 	<item id="50262" name="naga tanko">
 		<attribute key="description" value="A metal tanko, originally manufactured and refined by the ancient Naga" />
 		<attribute key="armor" value="10" />
+		<attribute key="mantra" value="18" />
 		<attribute key="skillfist" value="3" />
 		<attribute key="magiclevelpoints" value="2" />
 		<attribute key="absorbpercentphysical" value="2" />
@@ -74880,6 +74902,7 @@
 	<item id="50263" name="merudri scale mail">
 		<attribute key="description" value="A magical mail with scales. Worn by ancient Merudri beast slayers" />
 		<attribute key="armor" value="7" />
+		<attribute key="mantra" value="13" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="absorbpercentfire" value="4" />
 		<attribute key="weight" value="2900" />
@@ -74893,6 +74916,7 @@
 	<item id="50264" name="merudri battle mail">
 		<attribute key="description" value="Mighty battle armament refined by Merudri master artisans" />
 		<attribute key="armor" value="10" />
+		<attribute key="mantra" value="17" />
 		<attribute key="skillfist" value="4" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="absorbpercentearth" value="10" />
@@ -74949,6 +74973,7 @@
 	<item id="50268" name="robe of enlightenment">
 		<attribute key="description" value="Traditional robe worn by pilgrims of the Three-Fold Path. Its design features elements of the natural appearance of moths" />
 		<attribute key="armor" value="8" />
+		<attribute key="mantra" value="15" />
 		<attribute key="skillfist" value="3" />
 		<attribute key="absorbpercentice" value="4" />
 		<attribute key="weight" value="2400" />
@@ -74970,6 +74995,7 @@
 	<item id="50269" name="legs of enlightenment">
 		<attribute key="description" value="Traditional legs worn by pilgrims of the Three-Fold Path. Its design features elements of the natural appearance of moths" />
 		<attribute key="armor" value="4" />
+		<attribute key="mantra" value="3" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="absorbpercentearth" value="3" />
 		<attribute key="weight" value="2100" />
@@ -75070,6 +75096,7 @@
 	<item id="50274" name="coned hat of enlightenment">
 		<attribute key="description" value="Traditional coned hat worn by pilgrims of the Three-Fold Path. Its design features elements of the natural appearance of moths" />
 		<attribute key="armor" value="4" />
+		<attribute key="mantra" value="4" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="weight" value="1000" />
 		<attribute key="imbuementslot" value="1">
@@ -75086,6 +75113,7 @@
 	<item id="50275" name="ghazbaran oyoroi">
 		<attribute key="description" value="A beastly oyoroi, folded and bolstered to withstand even the hardest blows" />
 		<attribute key="armor" value="8" />
+		<attribute key="mantra" value="12" />
 		<attribute key="skillfist" value="1" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="absorbpercentenergy" value="7" />
@@ -75101,6 +75129,7 @@
 	<item id="50276" name="gnomish cuirass">
 		<attribute key="description" value="Gnomish cuirass with intricate gems worked into it" />
 		<attribute key="armor" value="8" />
+		<attribute key="mantra" value="14" />
 		<attribute key="skillfist" value="3" />
 		<attribute key="absorbpercentphysical" value="2" />
 		<attribute key="weight" value="10000" />
@@ -75123,6 +75152,7 @@
 	<item id="50277" name="leaf robe">
 		<attribute key="description" value="Monk robe with mysticals leaves woven into it" />
 		<attribute key="armor" value="9" />
+		<attribute key="mantra" value="14" />
 		<attribute key="skillfist" value="4" />
 		<attribute key="absorbpercentearth" value="8" />
 		<attribute key="absorbpercentfire" value="-8" />
@@ -75137,6 +75167,7 @@
 	<item id="50278" name="magma robe">
 		<attribute key="description" value="Monk robe strengthened with plates of cooled magma" />
 		<attribute key="armor" value="9" />
+		<attribute key="mantra" value="14" />
 		<attribute key="skillfist" value="4" />
 		<attribute key="absorbpercentfire" value="8" />
 		<attribute key="absorbpercentice" value="-8" />
@@ -75151,6 +75182,7 @@
 	<item id="50279" name="energy robe">
 		<attribute key="description" value="Monk robe interwoven with mystical fabrics and brimming with energy" />
 		<attribute key="armor" value="9" />
+		<attribute key="mantra" value="14" />
 		<attribute key="skillfist" value="4" />
 		<attribute key="absorbpercentenergy" value="8" />
 		<attribute key="absorbpercentearth" value="-8" />
@@ -75165,6 +75197,7 @@
 	<item id="50280" name="ice robe">
 		<attribute key="description" value="Monk robe fortified with floes of century old unmelting ice" />
 		<attribute key="armor" value="9" />
+		<attribute key="mantra" value="14" />
 		<attribute key="skillfist" value="4" />
 		<attribute key="absorbpercentice" value="8" />
 		<attribute key="absorbpercentenergy" value="-8" />
@@ -75178,6 +75211,7 @@
 	</item>
 	<item id="50289" name="yalahari footwraps">
 		<attribute key="armor" value="1" />
+		<attribute key="mantra" value="1" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="absorbpercentdeath" value="3" />
 		<attribute key="weight" value="700" />
@@ -75503,6 +75537,7 @@
 	</item>
 	<item id="51261" name="norcferatu bonehood">
 		<attribute key="armor" value="5" />
+		<attribute key="mantra" value="8" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="absorbpercentphysical" value="2" />
 		<attribute key="absorbpercentice" value="5" />
@@ -75581,6 +75616,7 @@
 	</item>
 	<item id="51267" name="norcferatu fleshguards">
 		<attribute key="armor" value="5" />
+		<attribute key="mantra" value="6" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="absorbpercentdeath" value="4" />
 		<attribute key="weight" value="11500" />
@@ -75677,6 +75713,7 @@
 	<item id="51294" name="spirit bind">
 		<attribute key="description" value="A sturdy robe interwoven with ethereal spirits" />
 		<attribute key="armor" value="8" />
+		<attribute key="mantra" value="12" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="absorbpercentenergy" value="5" />
 		<attribute key="absorbpercentice" value="-5" />

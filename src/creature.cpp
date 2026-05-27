@@ -792,7 +792,7 @@ void Creature::drainHealth(const std::shared_ptr<Creature>& attacker, int32_t da
 
 BlockType_t Creature::blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage,
                                bool checkDefense /* = false */, bool checkArmor /* = false */, bool /* field = false */,
-                               bool /* ignoreResistances = false */)
+                               bool /* ignoreResistances = false */, CombatOrigin /* origin = ORIGIN_NONE */)
 {
 	BlockType_t blockType = BLOCK_NONE;
 

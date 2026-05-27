@@ -20,6 +20,10 @@
 
 namespace {
 
+constexpr CombatType_t MANTRA_COMBAT_TYPES[] = {
+    COMBAT_ENERGYDAMAGE, COMBAT_FIREDAMAGE, COMBAT_EARTHDAMAGE, COMBAT_ICEDAMAGE
+};
+
 const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributesMap = {
     {"type", ITEM_PARSE_TYPE},
     {"description", ITEM_PARSE_DESCRIPTION},
@@ -221,6 +225,7 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
 	{"drop", ITEM_PARSE_DROPBONUS},
     {"elementalbond", ITEM_PARSE_ELEMENTALBOND},
     {"script", ITEM_PARSE_SCRIPT},
+    {"mantra", ITEM_PARSE_MANTRA},
 };
 
 const std::unordered_map<std::string, ItemTypes_t> ItemTypesMap = {
@@ -1982,6 +1987,17 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 						if (maxTier > 0) {
 							it.imbuementAllowedTypes[subKey] = maxTier;
 						}
+					}
+					break;
+				}
+
+				case ITEM_PARSE_MANTRA: {
+					int16_t value = pugi::cast<int16_t>(valueAttribute.value());
+					for (const CombatType_t combatType : MANTRA_COMBAT_TYPES) {
+						auto& mantraValue = abilities.mantraAbsorbValue[combatTypeToIndex(combatType)];
+						mantraValue = static_cast<int16_t>(std::clamp<int32_t>(
+						    static_cast<int32_t>(mantraValue) + value, std::numeric_limits<int16_t>::min(),
+						    std::numeric_limits<int16_t>::max()));
 					}
 					break;
 				}

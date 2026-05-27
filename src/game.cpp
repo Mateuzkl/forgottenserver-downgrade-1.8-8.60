@@ -4863,7 +4863,7 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 	if (damage.primary.type != COMBAT_NONE) {
 		damage.primary.value = std::abs(damage.primary.value);
 		primaryBlockType = target->blockHit(attackerRef, damage.primary.type, damage.primary.value, checkDefense,
-		                                    checkArmor, field, ignoreResistances);
+		                                    checkArmor, field, ignoreResistances, damage.origin);
 
 		if (damage.primary.type != COMBAT_HEALING) {
 			damage.primary.value = -damage.primary.value;
@@ -4876,7 +4876,7 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 	if (damage.secondary.type != COMBAT_NONE) {
 		damage.secondary.value = std::abs(damage.secondary.value);
 		secondaryBlockType = target->blockHit(attackerRef, damage.secondary.type, damage.secondary.value, false, false,
-		                                      field, ignoreResistances);
+		                                      field, ignoreResistances, damage.origin);
 		if (damage.secondary.type != COMBAT_HEALING) {
 			damage.secondary.value = -damage.secondary.value;
 			sendBlockEffect(secondaryBlockType, damage.secondary.type, target->getPosition());

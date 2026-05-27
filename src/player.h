@@ -655,7 +655,7 @@ public:
 
 	bool isPzLocked() const { return pzLocked; }
 	BlockType_t blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage, bool checkDefense = false,
-	                     bool checkArmor = false, bool field = false, bool ignoreResistances = false) override;
+	                     bool checkArmor = false, bool field = false, bool ignoreResistances = false, CombatOrigin origin = ORIGIN_NONE) override;
 	void doAttacking(uint32_t interval) override;
 	bool hasExtraSwing() override { return lastAttack > 0 && ((OTSYS_TIME() - lastAttack) >= getAttackSpeed()); }
 	void maintainAttackFlow();
@@ -706,6 +706,9 @@ public:
 	void removeManaSpent(uint64_t amount, bool notify = false);
 	void addSkillAdvance(skills_t skill, uint64_t count, bool artificial = false);
 	void removeSkillTries(skills_t skill, uint64_t count, bool notify = false);
+
+	int32_t getMantraTotal() const;
+	int16_t getMantraAbsorbPercent(int32_t mantraTotal) const;
 
 	int32_t getArmor() const override;
 	int32_t getDefense() const override;
