@@ -1,17 +1,21 @@
 #ifndef TFS_MATRIXAREA
 #define TFS_MATRIXAREA
 
+#include <cstdint>
+#include <utility>
+#include <vector>
+
 class MatrixArea
 {
 	using Center = std::pair<uint32_t, uint32_t>;
-	using Container = std::valarray<bool>;
+	using Container = std::vector<uint8_t>;
 
 public:
 	MatrixArea() = default;
 	MatrixArea(uint32_t rows, uint32_t cols) : arr(rows * cols), rows{rows}, cols{cols} {}
 
 	bool operator()(uint32_t row, uint32_t col) const { return arr[row * cols + col]; }
-	bool& operator()(uint32_t row, uint32_t col) { return arr[row * cols + col]; }
+	uint8_t& operator()(uint32_t row, uint32_t col) { return arr[row * cols + col]; }
 
 	void setCenter(uint32_t y, uint32_t x) { center = std::make_pair(x, y); }
 	const Center& getCenter() const { return center; }
