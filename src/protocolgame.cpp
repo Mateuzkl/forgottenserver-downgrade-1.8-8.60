@@ -2815,7 +2815,7 @@ void ProtocolGame::sendTextWindow(uint32_t windowTextId, Item* item, uint16_t ma
 	NetworkMessage msg;
 	msg.addByte(0x96);
 	msg.add<uint32_t>(windowTextId);
-	msg.addItem(item, isOTC, useItemTierByte);
+	msg.addItemId(item->getID());
 
 	if (canWrite) {
 		msg.add<uint16_t>(maxlen);
@@ -2848,7 +2848,7 @@ void ProtocolGame::sendTextWindow(uint32_t windowTextId, uint16_t itemId, std::s
 	NetworkMessage msg;
 	msg.addByte(0x96);
 	msg.add<uint32_t>(windowTextId);
-	msg.addItem(itemId, 1, isOTC, useItemTierByte);
+	msg.addItemId(itemId);
 	msg.add<uint16_t>(text.size());
 	msg.addString(text);
 	msg.add<uint16_t>(0x00);
