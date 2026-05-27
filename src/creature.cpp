@@ -447,12 +447,14 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 
 				const Position& pos = summon->getPosition();
 				if (newPos.getDistanceZ(pos) > 2 || std::max(newPos.getDistanceX(pos), newPos.getDistanceY(pos)) > 30) {
-					// Player-owned summons follow their master instead of being despawned.
-					if (getPlayer()) {
+					const Monster* summonMonster = summon->getMonster();
+					const bool canTeleportPlayerSummon = ConfigManager::getBoolean(ConfigManager::TELEPORT_SUMMON) ||
+					                                     (summonMonster && summonMonster->isFamiliar());
+					if (getPlayer() && canTeleportPlayerSummon) {
 						summon->setInstanceID(getInstanceID());
 						g_game.internalTeleport(summon.get(), newPos, false, 0, CONST_ME_NONE);
 						g_game.addMagicEffect(newPos, CONST_ME_TELEPORT, summon->getInstanceID());
-					} else {
+					} else if (!getPlayer()) {
 						despawnList.push_front(summon.get());
 					}
 				}
