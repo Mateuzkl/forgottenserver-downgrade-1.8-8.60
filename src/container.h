@@ -85,8 +85,8 @@ public:
 
 	std::string getName(bool addArticle = false) const;
 
-	void addItem(const std::shared_ptr<Item>& item);
-	void addItem(Item* item);
+	bool addItem(const std::shared_ptr<Item>& item);
+	bool addItem(Item* item);
 	Item* getItemByIndex(size_t index) const;
 	std::shared_ptr<Item> getItemByIndexRef(size_t index) const;
 	bool isHoldingItem(const Item* item) const;

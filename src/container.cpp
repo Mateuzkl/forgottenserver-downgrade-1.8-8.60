@@ -76,23 +76,24 @@ std::string Container::getName(bool addArticle /* = false*/) const
 	return getNameDescription(it, this, -1, addArticle);
 }
 
-void Container::addItem(const std::shared_ptr<Item>& item)
+bool Container::addItem(const std::shared_ptr<Item>& item)
 {
 	if (!item) {
-		return;
+		return false;
 	}
 	itemlist.push_back(item);
 	item->setParent(this);
+	return true;
 }
 
-void Container::addItem(Item* item)
+bool Container::addItem(Item* item)
 {
 	auto itemRef = getSharedItem(item);
 	if (!itemRef) {
 		logSharedItemLockFailure("Container::addItem", item);
-		return;
+		return false;
 	}
-	addItem(itemRef);
+	return addItem(itemRef);
 }
 
 Attr_ReadValue Container::readAttr(AttrTypes_t attr, PropStream& propStream)
@@ -134,7 +135,9 @@ bool Container::unserializeItemNode(OTB::Loader& loader, const OTB::Node& node, 
 			return false;
 		}
 
-		addItem(item);
+		if (!addItem(item)) {
+			return false;
+		}
 		updateItemWeight(item->getWeight());
 	}
 	return true;
@@ -627,7 +630,9 @@ void Container::addThing(int32_t index, Thing* thing)
 
 void Container::addItemBack(Item* item)
 {
-	addItem(item);
+	if (!addItem(item)) {
+		return;
+	}
 	updateItemWeight(item->getWeight());
 
 	// send change to client
