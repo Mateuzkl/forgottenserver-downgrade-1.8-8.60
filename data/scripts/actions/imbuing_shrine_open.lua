@@ -97,7 +97,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 		return true
 	end
 
-	ImbuingWindow.openItem(player, selectedItem)
+	ImbuingWindow.openItem(player, selectedItem, nil, item:getPosition(), item)
 	return true
 end
 

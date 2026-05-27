@@ -11,6 +11,9 @@ event.onStepTile = function(self, fromPosition, toPosition)
 	if CustomForge and CustomForge.isOpen(self) then
 		CustomForge.close(self)
 	end
+	if ImbuingWindow and ImbuingWindow.onStepTile then
+		ImbuingWindow.onStepTile(self)
+	end
 	return true
 end
 

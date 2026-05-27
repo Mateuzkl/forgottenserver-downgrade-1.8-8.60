@@ -3,6 +3,7 @@ ImbuingWindow = ImbuingWindow or {}
 local WINDOW_OPCODE = 0xEB
 local CLOSE_OPCODE = 0xEC
 local RESOURCE_BALANCE_OPCODE = 0xEE
+local USE_RANGE = 1
 
 local SUCCESS_RATES = {
 	[1] = 90,
@@ -23,6 +24,71 @@ local definitionsByTypeBase = {}
 
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
+end
+
+local function copyPosition(position)
+	if not position then
+		return nil
+	end
+	return Position(position.x, position.y, position.z)
+end
+
+local function getThingPosition(thing)
+	if not thing or not thing.getPosition then
+		return nil
+	end
+
+	local ok, position = pcall(function()
+		return thing:getPosition()
+	end)
+	if ok then
+		return copyPosition(position)
+	end
+	return nil
+end
+
+local function getThingInstanceId(thing)
+	if not thing or not thing.getInstanceId then
+		return 0
+	end
+
+	local ok, instanceId = pcall(function()
+		return thing:getInstanceId()
+	end)
+	if ok then
+		return tonumber(instanceId) or 0
+	end
+	return 0
+end
+
+local function getPlayerPosition(player)
+	return player and copyPosition(player:getPosition()) or nil
+end
+
+local function setAccessContext(session, player, sourceThing, sourcePosition)
+	session.sourcePosition = copyPosition(sourcePosition) or getThingPosition(sourceThing) or getPlayerPosition(player)
+	session.sourceInstanceId = sourceThing and getThingInstanceId(sourceThing) or (player and player:getInstanceId() or 0)
+end
+
+local function isSessionInRange(player, session)
+	if not player or not session or not session.sourcePosition then
+		return true
+	end
+
+	if player:getInstanceId() ~= (session.sourceInstanceId or 0) then
+		return false
+	end
+	return player:getPosition():getDistance(session.sourcePosition) <= USE_RANGE
+end
+
+local function ensureSessionInRange(player)
+	local session = player and sessions[player:getId()] or nil
+	if not session or isSessionInRange(player, session) then
+		return true
+	end
+
+	ImbuingWindow.sendClose(player)
+	return false
 end
 
 local IMBUEMENT_BASE_NAMES = {
@@ -440,11 +506,13 @@ function ImbuingWindow.open(player, container, silent)
 		return true
 	end
 
-	sessions[player:getId()] = {container = container, item = item}
+	local session = {container = container, item = item}
+	setAccessContext(session, player, container)
+	sessions[player:getId()] = session
 	return sendWindow(player, item)
 end
 
-function ImbuingWindow.openItem(player, item, silent)
+function ImbuingWindow.openItem(player, item, silent, sourcePosition, sourceThing)
 	if not supportsCustomNetwork(player) then
 		if not silent then
 			player:sendCancelMessage("The imbuing window is only available on OTClient.")
@@ -479,12 +547,18 @@ function ImbuingWindow.openItem(player, item, silent)
 		return true
 	end
 
-	sessions[player:getId()] = {item = item, backpackOnly = true}
+	local session = {item = item, backpackOnly = true}
+	setAccessContext(session, player, sourceThing, sourcePosition)
+	sessions[player:getId()] = session
 	return sendWindow(player, item)
 end
 
 function ImbuingWindow.close(player)
 	clearSession(player)
+end
+
+function ImbuingWindow.onStepTile(player)
+	ensureSessionInRange(player)
 end
 
 function ImbuingWindow.sendClose(player)
@@ -502,6 +576,10 @@ end
 
 function ImbuingWindow.apply(player, slot, imbuementId, protection)
 	if not isEnabled() then
+		return
+	end
+
+	if not ensureSessionInRange(player) then
 		return
 	end
 
@@ -586,6 +664,10 @@ end
 
 function ImbuingWindow.clear(player, slot)
 	if not isEnabled() then
+		return
+	end
+
+	if not ensureSessionInRange(player) then
 		return
 	end
 
