@@ -1378,7 +1378,7 @@ int32_t Item::getRarityTier()
 	}
 	const auto* attr = getCustomAttribute("rarity.tier");
 	if (attr) {
-		return static_cast<int32_t>(attr->get<int64_t>());
+		return static_cast<int32_t>(attr->getInteger());
 	}
 	return 0;
 }
@@ -1397,7 +1397,7 @@ int64_t Item::getRarityStat(std::string_view stat)
 	key.append(stat);
 	const auto* attr = getCustomAttribute(key);
 	if (attr) {
-		return attr->get<int64_t>();
+		return attr->getInteger();
 	}
 	return 0;
 }

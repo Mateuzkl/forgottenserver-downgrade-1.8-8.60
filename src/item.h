@@ -255,6 +255,13 @@ public:
 
 		void pushToLua(lua_State* L) const { boost::apply_visitor(PushLuaVisitor(L), value); }
 
+		int64_t getInteger() const {
+			if (value.type() == typeid(int64_t)) {
+				return boost::get<int64_t>(value);
+			}
+			return 0;
+		}
+
 		struct SerializeVisitor : public boost::static_visitor<>
 		{
 			PropWriteStream& propWriteStream;
