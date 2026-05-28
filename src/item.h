@@ -877,10 +877,10 @@ public:
 	double getMomentumChance() const;
 	double getTranscendenceChance() const;
 
-	bool hasRarity() const;
-	int32_t getRarityTier() const;
+	bool hasRarity();
+	int32_t getRarityTier();
 	void setRarityTier(int32_t tier);
-	int64_t getRarityStat(std::string_view stat) const;
+	int64_t getRarityStat(std::string_view stat);
 	void setRarityStat(std::string_view stat, int64_t value);
 	void clearRarityStats();
 

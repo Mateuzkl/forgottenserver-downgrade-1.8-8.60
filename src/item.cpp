@@ -1366,12 +1366,12 @@ double Item::getTranscendenceChance() const
 		ConfigManager::getFloat(ConfigManager::FORGE_TRANSCENDENCE_C), tier);
 }
 
-bool Item::hasRarity() const
+bool Item::hasRarity()
 {
 	return getCustomAttribute("rarity.tier") != nullptr;
 }
 
-int32_t Item::getRarityTier() const
+int32_t Item::getRarityTier()
 {
 	if (!ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) {
 		return 0;
@@ -1391,7 +1391,7 @@ void Item::setRarityTier(int32_t tier)
 	setCustomAttribute("rarity.tier", static_cast<int64_t>(tier));
 }
 
-int64_t Item::getRarityStat(std::string_view stat) const
+int64_t Item::getRarityStat(std::string_view stat)
 {
 	std::string key = "rarity.stat.";
 	key.append(stat);

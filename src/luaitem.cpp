@@ -1148,7 +1148,7 @@ int LuaScriptInterface::luaItemGetTranscendenceChance(lua_State *L)
 
 int LuaScriptInterface::luaItemHasRarity(lua_State* L)
 {
-	const Item* item = getItemUserdata<const Item>(L, 1);
+	Item* item = getItemUserdata<Item>(L, 1);
 	if (item) {
 		pushBoolean(L, item->hasRarity());
 	} else {
@@ -1159,7 +1159,7 @@ int LuaScriptInterface::luaItemHasRarity(lua_State* L)
 
 int LuaScriptInterface::luaItemGetRarityTier(lua_State* L)
 {
-	const Item* item = getItemUserdata<const Item>(L, 1);
+	Item* item = getItemUserdata<Item>(L, 1);
 	if (item) {
 		lua_pushinteger(L, item->getRarityTier());
 	} else {
@@ -1186,7 +1186,7 @@ int LuaScriptInterface::luaItemSetRarityTier(lua_State* L)
 
 int LuaScriptInterface::luaItemGetRarityStat(lua_State* L)
 {
-	const Item* item = getItemUserdata<const Item>(L, 1);
+	Item* item = getItemUserdata<Item>(L, 1);
 	if (item) {
 		lua_pushinteger(L, item->getRarityStat(getString(L, 2)));
 	} else {
