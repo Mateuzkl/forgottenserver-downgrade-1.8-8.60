@@ -1,3 +1,5 @@
+dofile('data/scripts/systems/rarity/init.lua')
+
 -- This function load the table "CreateItemOnMap"from script "create_item.lua"
 -- Basically it works to create items on the map without the need to edit the map
 function CreateMapItem(tablename)

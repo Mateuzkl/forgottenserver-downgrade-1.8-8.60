@@ -1366,6 +1366,68 @@ double Item::getTranscendenceChance() const
 		ConfigManager::getFloat(ConfigManager::FORGE_TRANSCENDENCE_C), tier);
 }
 
+bool Item::hasRarity() const
+{
+	return getCustomAttribute("rarity.tier") != nullptr;
+}
+
+int32_t Item::getRarityTier() const
+{
+	if (!ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) {
+		return 0;
+	}
+	const auto* attr = getCustomAttribute("rarity.tier");
+	if (attr) {
+		return static_cast<int32_t>(attr->get<int64_t>());
+	}
+	return 0;
+}
+
+void Item::setRarityTier(int32_t tier)
+{
+	if (!ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) {
+		return;
+	}
+	setCustomAttribute("rarity.tier", static_cast<int64_t>(tier));
+}
+
+int64_t Item::getRarityStat(std::string_view stat) const
+{
+	std::string key = "rarity.stat.";
+	key.append(stat);
+	const auto* attr = getCustomAttribute(key);
+	if (attr) {
+		return attr->get<int64_t>();
+	}
+	return 0;
+}
+
+void Item::setRarityStat(std::string_view stat, int64_t value)
+{
+	std::string key = "rarity.stat.";
+	key.append(stat);
+	setCustomAttribute(key, value);
+}
+
+void Item::clearRarityStats()
+{
+	if (!attributes) {
+		return;
+	}
+	removeCustomAttribute("rarity.tier");
+	std::vector<std::string> toRemove;
+	if (auto* map = attributes->getCustomAttributeMap()) {
+		for (const auto& pair : *map) {
+			if (pair.first.starts_with("rarity.")) {
+				toRemove.push_back(pair.first);
+			}
+		}
+	}
+	for (const auto& key : toRemove) {
+		removeCustomAttribute(key);
+	}
+}
+
 std::string ItemAttributes::emptyString;
 int64_t ItemAttributes::emptyInt;
 double ItemAttributes::emptyDouble;

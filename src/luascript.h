@@ -574,6 +574,13 @@ private:
 	static int luaItemGetMomentumChance(lua_State *L);
 	static int luaItemGetTranscendenceChance(lua_State *L);
 
+	static int luaItemHasRarity(lua_State* L);
+	static int luaItemGetRarityTier(lua_State* L);
+	static int luaItemSetRarityTier(lua_State* L);
+	static int luaItemGetRarityStat(lua_State* L);
+	static int luaItemSetRarityStat(lua_State* L);
+	static int luaItemClearRarityStats(lua_State* L);
+
 	// Imbuement
 	static int luaImbuementCreate(lua_State* L);
 	static int luaImbuementGetType(lua_State* L);

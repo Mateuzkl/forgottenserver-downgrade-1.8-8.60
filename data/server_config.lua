@@ -44,3 +44,7 @@ powerlaw = false
 powerLawSkillThreshold = 350
 powerLawMagicThreshold = 200
 powerLawExponent = 0.3
+
+-- Rarity System
+-- Enable or disable the item rarity system (C++ + Lua).
+raritySystemEnabled = true

@@ -88,6 +88,7 @@ enum Boolean
 	ALLOW_DUAL_WIELDING,
 	RAID_SPAWN_FILE_ENABLED,
 	POWERLAW,
+	RARITY_SYSTEM_ENABLED,
 
 
 	LAST_BOOLEAN /* this must be the last one */

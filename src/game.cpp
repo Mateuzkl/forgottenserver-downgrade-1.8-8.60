@@ -15,6 +15,7 @@
 #include "globalevent.h"
 #include "instance_utils.h"
 #include "iologindata.h"
+#include "item.h"
 #include "items.h"
 #include "monster.h"
 #include "movement.h"
@@ -154,6 +155,96 @@ void closeContainersFromOtherInstances(Player* player)
 	for (uint8_t cid : closeList) {
 		player->closeContainer(cid);
 		player->sendCloseContainer(cid);
+	}
+}
+
+void processRarityOnKill(Player* player, Creature* target)
+{
+	if (!player || !target || !ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) return;
+
+	int64_t explosionChance = 0;
+	int64_t regenHp = 0;
+	int64_t regenMp = 0;
+	int64_t buffDamageChance = 0;
+	int64_t buffMaxHpChance = 0;
+	int64_t buffMaxMpChance = 0;
+
+	int64_t buffDuration = 30000;
+	int64_t buffCritChance = 1000;
+	int64_t buffCritAmount = 5000;
+	int64_t buffMaxHpPct = 5;
+	int64_t buffMaxMpPct = 5;
+
+	for (slots_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; slot = static_cast<slots_t>(static_cast<uint8_t>(slot) + 1)) {
+		auto* item = player->getInventoryItem(slot);
+		if (!item || item->getRarityTier() == 0) continue;
+
+		int64_t val = item->getRarityStat(Rarity::STAT_ON_KILL_EXPLOSION);
+		if (val > explosionChance) explosionChance = val;
+
+		regenHp += item->getRarityStat(Rarity::STAT_ON_KILL_REGEN_HP);
+		regenMp += item->getRarityStat(Rarity::STAT_ON_KILL_REGEN_MP);
+
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DAMAGE);
+		if (val > buffDamageChance) buffDamageChance = val;
+
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP);
+		if (val > buffMaxHpChance) buffMaxHpChance = val;
+
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP);
+		if (val > buffMaxMpChance) buffMaxMpChance = val;
+
+		int64_t itemBuffDuration = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DURATION);
+		if (itemBuffDuration > 0) buffDuration = itemBuffDuration;
+		int64_t itemCritChance = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_CHANCE);
+		if (itemCritChance > 0) buffCritChance = itemCritChance;
+		int64_t itemCritAmount = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_AMOUNT);
+		if (itemCritAmount > 0) buffCritAmount = itemCritAmount;
+		int64_t itemHpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP_PCT);
+		if (itemHpPct > 0) buffMaxHpPct = itemHpPct;
+		int64_t itemMpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP_PCT);
+		if (itemMpPct > 0) buffMaxMpPct = itemMpPct;
+	}
+
+	if (explosionChance > 0 && uniform_random(1, 100) <= explosionChance) {
+		g_game.addMagicEffect(target->getPosition(), CONST_ME_EXPLOSIONAREA);
+	}
+
+	if (regenHp > 0) {
+		CombatDamage healDamage;
+		healDamage.primary.type = COMBAT_HEALING;
+		healDamage.primary.value = static_cast<int32_t>(regenHp);
+		healDamage.origin = ORIGIN_NONE;
+		g_game.combatChangeHealth(nullptr, player, healDamage);
+	}
+
+	if (regenMp > 0) {
+		CombatDamage manaDamage;
+		manaDamage.primary.type = COMBAT_MANADRAIN;
+		manaDamage.primary.value = static_cast<int32_t>(regenMp);
+		manaDamage.origin = ORIGIN_NONE;
+		g_game.combatChangeMana(nullptr, player, manaDamage);
+	}
+
+	if (buffDamageChance > 0 && uniform_random(1, 100) <= buffDamageChance) {
+		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
+		condition->setParam(CONDITION_PARAM_SPECIALSKILL_CRITICALHITCHANCE, static_cast<int32_t>(buffCritChance));
+		condition->setParam(CONDITION_PARAM_SPECIALSKILL_CRITICALHITAMOUNT, static_cast<int32_t>(buffCritAmount));
+		player->addCondition(std::move(condition));
+	}
+
+	if (buffMaxHpChance > 0 && uniform_random(1, 100) <= buffMaxHpChance) {
+		int32_t hpBonus = static_cast<int32_t>(player->getMaxHealth() * (static_cast<float>(buffMaxHpPct) / 100.f));
+		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
+		condition->setParam(CONDITION_PARAM_STAT_MAXHITPOINTS, hpBonus);
+		player->addCondition(std::move(condition));
+	}
+
+	if (buffMaxMpChance > 0 && uniform_random(1, 100) <= buffMaxMpChance) {
+		int32_t mpBonus = static_cast<int32_t>(player->getMaxMana() * (static_cast<float>(buffMaxMpPct) / 100.f));
+		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
+		condition->setParam(CONDITION_PARAM_STAT_MAXMANAPOINTS, mpBonus);
+		player->addCondition(std::move(condition));
 	}
 }
 
@@ -5584,6 +5675,10 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 		target->drainHealth(attackerRef, realDamage);
 		addCreatureHealth(spectators, target);
+
+		if (target->isDead() && attackerPlayer) {
+			processRarityOnKill(attackerPlayer, target);
+		}
 
 		// onPlayerAttack callback
 		if (attackerPlayer) {

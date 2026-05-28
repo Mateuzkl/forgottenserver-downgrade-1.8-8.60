@@ -1146,6 +1146,79 @@ int LuaScriptInterface::luaItemGetTranscendenceChance(lua_State *L)
 	return 1;
 }
 
+int LuaScriptInterface::luaItemHasRarity(lua_State* L)
+{
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (item) {
+		pushBoolean(L, item->hasRarity());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int LuaScriptInterface::luaItemGetRarityTier(lua_State* L)
+{
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (item) {
+		lua_pushinteger(L, item->getRarityTier());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int LuaScriptInterface::luaItemSetRarityTier(lua_State* L)
+{
+	Item* item = getItemUserdata<Item>(L, 1);
+	if (item) {
+		if (!ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) {
+			pushBoolean(L, false);
+			return 1;
+		}
+		item->setRarityTier(getInteger<int32_t>(L, 2));
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int LuaScriptInterface::luaItemGetRarityStat(lua_State* L)
+{
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (item) {
+		lua_pushinteger(L, item->getRarityStat(getString(L, 2)));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int LuaScriptInterface::luaItemSetRarityStat(lua_State* L)
+{
+	Item* item = getItemUserdata<Item>(L, 1);
+	if (item) {
+		item->setRarityStat(getString(L, 2), getInteger<int64_t>(L, 3));
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int LuaScriptInterface::luaItemClearRarityStats(lua_State* L)
+{
+	Item* item = getItemUserdata<Item>(L, 1);
+	if (item) {
+		item->clearRarityStats();
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int LuaScriptInterface::luaItemGC(lua_State* L)
 {
 	auto* ptr = static_cast<std::shared_ptr<Item>*>(lua_touserdata(L, 1));
@@ -1262,4 +1335,11 @@ void LuaScriptInterface::registerItem()
 	registerMethod("Item", "getDodgeChance", LuaScriptInterface::luaItemGetDodgeChance);
 	registerMethod("Item", "getMomentumChance", LuaScriptInterface::luaItemGetMomentumChance);
 	registerMethod("Item", "getTranscendenceChance", LuaScriptInterface::luaItemGetTranscendenceChance);
+
+	registerMethod("Item", "hasRarity", LuaScriptInterface::luaItemHasRarity);
+	registerMethod("Item", "getRarityTier", LuaScriptInterface::luaItemGetRarityTier);
+	registerMethod("Item", "setRarityTier", LuaScriptInterface::luaItemSetRarityTier);
+	registerMethod("Item", "getRarityStat", LuaScriptInterface::luaItemGetRarityStat);
+	registerMethod("Item", "setRarityStat", LuaScriptInterface::luaItemSetRarityStat);
+	registerMethod("Item", "clearRarityStats", LuaScriptInterface::luaItemClearRarityStats);
 }
