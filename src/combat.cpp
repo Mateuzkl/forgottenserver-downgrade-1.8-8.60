@@ -48,21 +48,10 @@ inline constexpr std::array<slots_t, 5> RARITY_ATTACK_SLOTS = {
 	CONST_SLOT_LEFT, CONST_SLOT_RIGHT, CONST_SLOT_NECKLACE, CONST_SLOT_HEAD, CONST_SLOT_RING
 };
 
-int32_t getRaritySpellDamage(Player* player, const Item* item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
-{
-	int64_t dmgMin = item->getRarityStat(dmgMinKey);
-	int64_t dmgMax = item->getRarityStat(dmgMaxKey);
-	if (dmgMin <= 0 || dmgMax <= 0) return 0;
-	int64_t scaleLvl = item->getRarityStat(Rarity::STAT_SPELL_SCALE_LEVEL);
-	int64_t scaleMag = item->getRarityStat(Rarity::STAT_SPELL_SCALE_MAGIC);
-	int64_t divisor = item->getRarityStat(Rarity::STAT_SPELL_SCALE_DIVISOR);
-	if (divisor <= 0) divisor = 5;
-	int32_t scale = static_cast<int32_t>(((player->getLevel() * scaleLvl) + (player->getMagicLevel() * scaleMag)) / divisor);
-	return normal_random(static_cast<int32_t>(dmgMin) + scale, static_cast<int32_t>(dmgMax) + scale);
-}
+int32_t getRaritySpellDamage(Player* player, Item* item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
 
 void castRaritySpell(Player* player, Creature* target, CombatType_t combatType, CombatOrigin origin,
-                     const Item* item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
+                     Item* item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
 {
 	CombatDamage dmg;
 	dmg.primary.type = combatType;
@@ -94,7 +83,7 @@ void processRarityOnHitStat(Player* player, Creature* target, CombatDamage& dama
                             std::string_view statKey, CombatType_t combatType)
 {
 	int64_t chance = 0;
-	const Item* bestItem = nullptr;
+	Item* bestItem = nullptr;
 	for (slots_t slot : RARITY_ATTACK_SLOTS) {
 		if (auto* item = player->getInventoryItem(slot)) {
 			int64_t val = item->getRarityStat(statKey);
