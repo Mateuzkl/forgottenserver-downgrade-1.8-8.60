@@ -235,6 +235,7 @@ public:
 	// follow functions
 	std::shared_ptr<Creature> getFollowCreatureShared() const { return followCreature.lock(); }
 	virtual bool setFollowCreature(Creature* creature);
+	void requestFollowPathUpdate();
 
 	// follow events
 	virtual void onFollowCreature(const Creature*) {}

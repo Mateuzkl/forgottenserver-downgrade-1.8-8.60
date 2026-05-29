@@ -3990,7 +3990,6 @@ void Game::playerSetAttackedCreature(uint32_t playerId, uint32_t creatureId)
 	}
 
 	player->setAttackedCreature(attackCreature);
-	g_dispatcher.addTask([this, id = player->getID()]() { updateCreatureWalk(id); });
 }
 
 void Game::playerFollowCreature(uint32_t playerId, uint32_t creatureId)
@@ -4009,7 +4008,6 @@ void Game::playerFollowCreature(uint32_t playerId, uint32_t creatureId)
 	}
 
 	player->setAttackedCreature(nullptr);
-	g_dispatcher.addTask([this, id = player->getID()]() { updateCreatureWalk(id); });
 	player->setFollowCreature(followCreature);
 }
 
@@ -4541,6 +4539,7 @@ void Game::updateCreatureWalk(uint32_t creatureId)
 {
 	Creature* creature = getCreatureByID(creatureId);
 	if (creature && !creature->isRemoved() && !creature->isDead()) {
+		creature->isUpdatingPath = false;
 		creature->goToFollowCreature();
 	}
 }

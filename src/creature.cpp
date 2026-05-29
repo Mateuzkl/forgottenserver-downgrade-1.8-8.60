@@ -182,13 +182,8 @@ void Creature::onThink(uint32_t interval)
 		if (forceUpdateFollowPath || walkUpdateTicks >= 2000) {
 			walkUpdateTicks = 0;
 			forceUpdateFollowPath = false;
-			isUpdatingPath = true;
+			requestFollowPathUpdate();
 		}
-	}
-
-	if (isUpdatingPath) {
-		isUpdatingPath = false;
-		goToFollowCreature();
 	}
 
 	// scripting event - onThink
@@ -477,8 +472,7 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
 		if (hasFollowPath) {
-			isUpdatingPath = false;
-			g_dispatcher.addTask(createTask([id = getID()] { g_game.updateCreatureWalk(id); }));
+			requestFollowPathUpdate();
 		}
 
 		if (newPos.z != oldPos.z || !canSee(fc->getPosition())) {
@@ -967,15 +961,28 @@ void Creature::goToFollowCreature()
 	onFollowCreatureComplete(follow.get());
 }
 
+void Creature::requestFollowPathUpdate()
+{
+	if (isUpdatingPath || followCreature.expired()) {
+		return;
+	}
+
+	isUpdatingPath = true;
+	g_dispatcher.addTask(createTask([id = getID()] { g_game.updateCreatureWalk(id); }));
+}
+
 bool Creature::setFollowCreature(Creature* creature)
 {
 	if (creature) {
 		if (auto follow = followCreature.lock(); follow.get() == creature) {
+			requestFollowPathUpdate();
 			return true;
 		}
 
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
+			isUpdatingPath = false;
+			hasFollowPath = false;
 			followCreature.reset();
 			return false;
 		}
@@ -989,13 +996,16 @@ bool Creature::setFollowCreature(Creature* creature)
 		forceUpdateFollowPath = false;
 		auto creatureRef = getSharedCreature(creature);
 		if (!creatureRef) {
+			isUpdatingPath = false;
+			hasFollowPath = false;
 			followCreature.reset();
 			return false;
 		}
 		followCreature = creatureRef;
-		isUpdatingPath = true;
+		requestFollowPathUpdate();
 	} else {
 		isUpdatingPath = false;
+		hasFollowPath = false;
 		followCreature.reset();
 	}
 
