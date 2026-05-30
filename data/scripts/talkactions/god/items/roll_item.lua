@@ -37,18 +37,12 @@ function talkaction.onSay(player, words, param)
 		return false
 	end
 
-	local itemObj = Item(item:getId())
-	if not itemObj then
-		player:sendCancelMessage("Cannot find item.")
-		return false
-	end
-
-	local tier = rollRarity(itemObj, forcedTier, 0)
+	local tier = rollRarity(item, forcedTier, 0)
 	if tier > 0 then
 		local tierNames = { "rare", "epic", "legendary" }
 		pos:sendMagicEffect(CONST_ME_MAGIC_GREEN)
 		player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
-			string.format("Rolled %s rarity on %s.", tierNames[tier], itemObj:getNameDescription()))
+			string.format("Rolled %s rarity on %s.", tierNames[tier], item:getNameDescription()))
 	else
 		player:sendCancelMessage("Failed to roll rarity on this item (ineligible or roll missed).")
 	end

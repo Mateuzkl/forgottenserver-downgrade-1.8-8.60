@@ -211,23 +211,23 @@ void processRarityOnKill(ObserverPtr<Player> player, ObserverPtr<Creature> targe
 
 		double itemBuffDuration = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DURATION).value_or(0.0);
 		if (itemBuffDuration > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_DURATION, itemBuffDuration)) {
-			buffDuration = itemBuffDuration;
+			buffDuration = std::max(buffDuration, itemBuffDuration);
 		}
 		double itemCritChance = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_CHANCE).value_or(0.0);
 		if (itemCritChance > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_CRIT_CHANCE, itemCritChance)) {
-			buffCritChance = itemCritChance;
+			buffCritChance = std::max(buffCritChance, itemCritChance);
 		}
 		double itemCritAmount = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_AMOUNT).value_or(0.0);
 		if (itemCritAmount > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_CRIT_AMOUNT, itemCritAmount)) {
-			buffCritAmount = itemCritAmount;
+			buffCritAmount = std::max(buffCritAmount, itemCritAmount);
 		}
 		double itemHpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP_PCT).value_or(0.0);
 		if (itemHpPct > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXHP_PCT, itemHpPct)) {
-			buffMaxHpPct = itemHpPct;
+			buffMaxHpPct = std::max(buffMaxHpPct, itemHpPct);
 		}
 		double itemMpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP_PCT).value_or(0.0);
 		if (itemMpPct > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXMP_PCT, itemMpPct)) {
-			buffMaxMpPct = itemMpPct;
+			buffMaxMpPct = std::max(buffMaxMpPct, itemMpPct);
 		}
 	}
 

@@ -874,6 +874,34 @@ bool InstantSpell::internalCastSpell(Creature* creature, const LuaVariant& var)
 	return executeCastSpell(creature, var);
 }
 
+// RAII guard that restores spellNameCasting on scope exit.
+class SpellNameGuard {
+public:
+	SpellNameGuard(Player* player, std::string_view newName) : player_(player) {
+		if (player_) {
+			previous_ = player_->getSpellNameCasting();
+			player_->setSpellNameCasting(std::string(newName));
+		}
+	}
+
+	~SpellNameGuard() {
+		if (player_) {
+			if (previous_.empty()) {
+				player_->clearSpellNameCasting();
+			} else {
+				player_->setSpellNameCasting(previous_);
+			}
+		}
+	}
+
+	SpellNameGuard(const SpellNameGuard&) = delete;
+	SpellNameGuard& operator=(const SpellNameGuard&) = delete;
+
+private:
+	Player* player_;
+	std::string previous_;
+};
+
 bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 {
 	// onCastSpell(creature, var)
@@ -882,12 +910,7 @@ bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 		return false;
 	}
 
-	// Set spell name on player for augment system, preserving context for nested spells
-	std::string previousSpellName_inst;
-	if (Player* player = creature->getPlayer()) {
-		previousSpellName_inst = player->getSpellNameCasting();
-		player->setSpellNameCasting(std::string(getName()));
-	}
+	SpellNameGuard nameGuard(creature->getPlayer(), getName());
 
 	ScriptEnvironment* env = scriptInterface->getScriptEnv();
 	env->setScriptId(scriptId, scriptInterface);
@@ -901,18 +924,7 @@ bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 
 	Lua::pushVariant(L, var);
 
-	bool result = scriptInterface->callFunction(2);
-
-	// Restore previous spell name for nested spell support
-	if (Player* player = creature->getPlayer()) {
-		if (previousSpellName_inst.empty()) {
-			player->clearSpellNameCasting();
-		} else {
-			player->setSpellNameCasting(previousSpellName_inst);
-		}
-	}
-
-	return result;
+	return scriptInterface->callFunction(2);
 }
 
 bool InstantSpell::canCast(const Player* player) const
@@ -1052,12 +1064,7 @@ bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool
 		return false;
 	}
 
-	// Set spell name on player for augment system, preserving context for nested spells
-	std::string previousSpellName_rune;
-	if (Player* player = creature->getPlayer()) {
-		previousSpellName_rune = player->getSpellNameCasting();
-		player->setSpellNameCasting(std::string(getName()));
-	}
+	SpellNameGuard nameGuard(creature->getPlayer(), getName());
 
 	ScriptEnvironment* env = scriptInterface->getScriptEnv();
 	env->setScriptId(scriptId, scriptInterface);
@@ -1073,16 +1080,5 @@ bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool
 
 	Lua::pushBoolean(L, isHotkey);
 
-	bool result = scriptInterface->callFunction(3);
-
-	// Restore previous spell name for nested spell support
-	if (Player* player = creature->getPlayer()) {
-		if (previousSpellName_rune.empty()) {
-			player->clearSpellNameCasting();
-		} else {
-			player->setSpellNameCasting(previousSpellName_rune);
-		}
-	}
-
-	return result;
+	return scriptInterface->callFunction(3);
 }
