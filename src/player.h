@@ -112,25 +112,6 @@ inline constexpr int32_t AVATAR_TIMER_STORAGE = 50099;
 inline constexpr int32_t AVATAR_DAMAGE_REDUCTION_PERCENT = 10;
 inline constexpr int32_t DUAL_WIELD_DAMAGE_BOOST_STORAGE = 50001;
 
-// Proficiency Augment stub (for future integration)
-enum WeaponProficiencyPerkAugmentType_t : uint8_t {
-	PROFICIENCY_AUGMENTTYPE_NONE = 0,
-	PROFICIENCY_AUGMENTTYPE_BASE_DAMAGE = 2,
-	PROFICIENCY_AUGMENTTYPE_HEALING = 3,
-	PROFICIENCY_AUGMENTTYPE_COOLDOWN = 6,
-	PROFICIENCY_AUGMENTTYPE_INCREASED_DAMAGE = 9,
-	PROFICIENCY_AUGMENTTYPE_LIFE_LEECH = 14,
-	PROFICIENCY_AUGMENTTYPE_MANA_LEECH = 15,
-	PROFICIENCY_AUGMENTTYPE_CRITICAL_EXTRA_DAMAGE = 16,
-	PROFICIENCY_AUGMENTTYPE_CRITICAL_HIT_CHANCE = 17,
-};
-
-struct WeaponProficiencyAugment {
-	uint16_t spellId = 0;
-	WeaponProficiencyPerkAugmentType_t augmentType = PROFICIENCY_AUGMENTTYPE_NONE;
-	float value = 0.0f;
-};
-
 class Player final : public Creature, public Cylinder
 {
 public:

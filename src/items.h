@@ -509,7 +509,7 @@ public:
 	void parseItemNode(const pugi::xml_node& itemNode, uint16_t id);
 	void parseScriptAttribute(ItemType& it, const pugi::xml_node& attributeNode, const pugi::xml_attribute& valueAttribute);
 
-	static std::string parseAugmentDescription(const ItemType& it, bool ignoreDuplicate = false);
+	static std::string parseAugmentDescription(const ItemType& it);
 	static std::string getAugmentNameByType(Augment_t augmentType);
 	static bool isAugmentWithoutValueDescription(Augment_t augmentType);
 

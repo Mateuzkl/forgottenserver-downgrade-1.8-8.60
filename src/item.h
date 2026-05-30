@@ -1089,9 +1089,10 @@ public:
 	std::vector<std::shared_ptr<AugmentInfo>> getAugments() const { return items[id].augments; }
 	std::vector<std::shared_ptr<AugmentInfo>> getAugmentsBySpellName(const std::string& spellName) const
 	{
+		std::string lowerName = boost::algorithm::to_lower_copy(spellName);
 		std::vector<std::shared_ptr<AugmentInfo>> result;
 		for (const auto& aug : items[id].augments) {
-			if (aug->spellName == spellName) {
+			if (boost::algorithm::to_lower_copy(aug->spellName) == lowerName) {
 				result.push_back(aug);
 			}
 		}
@@ -1099,9 +1100,10 @@ public:
 	}
 	std::vector<std::shared_ptr<AugmentInfo>> getAugmentsBySpellNameAndType(const std::string& spellName, Augment_t augmentType) const
 	{
+		std::string lowerName = boost::algorithm::to_lower_copy(spellName);
 		std::vector<std::shared_ptr<AugmentInfo>> result;
 		for (const auto& aug : items[id].augments) {
-			if (aug->spellName == spellName && aug->type == augmentType) {
+			if (boost::algorithm::to_lower_copy(aug->spellName) == lowerName && aug->type == augmentType) {
 				result.push_back(aug);
 			}
 		}

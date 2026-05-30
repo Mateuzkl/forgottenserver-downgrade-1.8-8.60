@@ -725,6 +725,9 @@ struct CombatDamage
 	bool preyApplied = false;
 	float spellResetMultiplier = -1.0f;
 	std::string instantSpellName;
+	int32_t criticalDamage = 0;
+	int32_t lifeLeechChance = 0;
+	int32_t manaLeechChance = 0;
 };
 
 using ShopInfoList = std::list<ShopInfo>;

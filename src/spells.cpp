@@ -644,9 +644,6 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
 	if (harmony) {
 		player->setHarmony(0);
 	}
-
-	// Clear spell name for augment system after spell is fully processed
-	player->clearSpellNameCasting();
 }
 
 void Spell::postCastSpell(Player* player, uint32_t manaCost, uint32_t soulCost)
@@ -885,8 +882,10 @@ bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 		return false;
 	}
 
-	// Set spell name on player for augment system
+	// Set spell name on player for augment system, preserving context for nested spells
+	std::string previousSpellName_inst;
 	if (Player* player = creature->getPlayer()) {
+		previousSpellName_inst = player->getSpellNameCasting();
 		player->setSpellNameCasting(std::string(getName()));
 	}
 
@@ -902,7 +901,18 @@ bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 
 	Lua::pushVariant(L, var);
 
-	return scriptInterface->callFunction(2);
+	bool result = scriptInterface->callFunction(2);
+
+	// Restore previous spell name for nested spell support
+	if (Player* player = creature->getPlayer()) {
+		if (previousSpellName_inst.empty()) {
+			player->clearSpellNameCasting();
+		} else {
+			player->setSpellNameCasting(previousSpellName_inst);
+		}
+	}
+
+	return result;
 }
 
 bool InstantSpell::canCast(const Player* player) const
@@ -1042,8 +1052,10 @@ bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool
 		return false;
 	}
 
-	// Set spell name on player for augment system
+	// Set spell name on player for augment system, preserving context for nested spells
+	std::string previousSpellName_rune;
 	if (Player* player = creature->getPlayer()) {
+		previousSpellName_rune = player->getSpellNameCasting();
 		player->setSpellNameCasting(std::string(getName()));
 	}
 
@@ -1061,5 +1073,16 @@ bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool
 
 	Lua::pushBoolean(L, isHotkey);
 
-	return scriptInterface->callFunction(3);
+	bool result = scriptInterface->callFunction(3);
+
+	// Restore previous spell name for nested spell support
+	if (Player* player = creature->getPlayer()) {
+		if (previousSpellName_rune.empty()) {
+			player->clearSpellNameCasting();
+		} else {
+			player->setSpellNameCasting(previousSpellName_rune);
+		}
+	}
+
+	return result;
 }

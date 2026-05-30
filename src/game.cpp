@@ -5705,6 +5705,24 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			processRarityOnKill(attackerPlayer, target);
 		}
 
+		// Apply augment life/mana leech
+		if (attackerPlayer && !target->isDead()) {
+			int32_t totalDmg = std::abs(realDamage) + std::abs(damage.secondary.value);
+			if (damage.lifeLeechChance > 0) {
+				int32_t heal = static_cast<int32_t>(totalDmg * (damage.lifeLeechChance / 10000.0));
+				if (heal > 0) {
+					attackerPlayer->gainHealth(attackerRef, heal);
+				}
+			}
+			if (damage.manaLeechChance > 0) {
+				int32_t mana = static_cast<int32_t>(totalDmg * (damage.manaLeechChance / 10000.0));
+				if (mana > 0) {
+					attackerPlayer->changeMana(mana);
+				}
+			}
+			damage.leeched = true;
+		}
+
 		// onPlayerAttack callback
 		if (attackerPlayer) {
 			if (Monster* targetMonster = target->getMonster()) {

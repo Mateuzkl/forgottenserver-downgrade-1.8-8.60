@@ -527,11 +527,12 @@ std::vector<std::shared_ptr<Item>> Player::getEquippedAugmentItemsByType(Augment
 
 void Player::applyItemAugments(CombatDamage& damage)
 {
-	if (spellNameCasting.empty()) {
+	std::string_view spellName = damage.instantSpellName.empty() ? spellNameCasting : std::string_view(damage.instantSpellName);
+	if (spellName.empty()) {
 		return;
 	}
 
-	std::string lowerSpellName = boost::algorithm::to_lower_copy(spellNameCasting);
+	std::string lowerSpellName = boost::algorithm::to_lower_copy(std::string(spellName));
 
 	for (uint32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
 		if (slot == CONST_SLOT_BACKPACK) {
@@ -543,7 +544,7 @@ void Player::applyItemAugments(CombatDamage& damage)
 		}
 
 		for (const auto& aug : item->getAugments()) {
-			if (aug->spellName != lowerSpellName) {
+			if (boost::algorithm::to_lower_copy(aug->spellName) != lowerSpellName) {
 				continue;
 			}
 
@@ -558,18 +559,23 @@ void Player::applyItemAugments(CombatDamage& damage)
 					break;
 				}
 				case Augment_t::CriticalExtraDamage:
-					damage.critical = true;
+					damage.criticalDamage += aug->value;
 					break;
 				case Augment_t::CriticalHitChance:
-					damage.critical = true;
+					if (uniform_random(1, 10000) <= aug->value) {
+						damage.critical = true;
+					}
 					break;
 				case Augment_t::LifeLeech:
+					damage.lifeLeechChance += aug->value;
+					break;
 				case Augment_t::ManaLeech:
+					damage.manaLeechChance += aug->value;
 					break;
 				case Augment_t::MagicLevelHealing: {
 					if (damage.primary.value > 0) {
 						double percent = aug->value / 100.0;
-						int32_t bonus = static_cast<int32_t>(std::round(percent * static_cast<double>(magLevel)));
+						int32_t bonus = static_cast<int32_t>(std::round(percent * getMagicLevel()));
 						damage.primary.value += bonus;
 					}
 					break;
@@ -577,20 +583,21 @@ void Player::applyItemAugments(CombatDamage& damage)
 				case Augment_t::MagicLevelDamage: {
 					if (damage.primary.value < 0) {
 						double percent = aug->value / 100.0;
-						int32_t bonus = static_cast<int32_t>(std::round(percent * static_cast<double>(magLevel)));
+						int32_t bonus = static_cast<int32_t>(std::round(percent * getMagicLevel()));
 						damage.primary.value -= bonus;
 					}
 					break;
 				}
 				case Augment_t::SkillDamage: {
 					int32_t skillLevel = 0;
-					// Auto-detect skill based on weapon type; wand/rod uses magic level
 					switch (getWeaponType()) {
 						case WEAPON_SWORD: skillLevel = getSkillLevel(SKILL_SWORD); break;
 						case WEAPON_AXE:   skillLevel = getSkillLevel(SKILL_AXE); break;
 						case WEAPON_CLUB:  skillLevel = getSkillLevel(SKILL_CLUB); break;
 						case WEAPON_DISTANCE: skillLevel = getSkillLevel(SKILL_DISTANCE); break;
-						case WEAPON_WAND:  skillLevel = static_cast<int32_t>(magLevel); break;
+						case WEAPON_WAND:
+							skillLevel = static_cast<int32_t>(getMagicLevel()) + static_cast<int32_t>(getSpecialMagicLevel(damage.primary.type));
+							break;
 						default: skillLevel = getSkillLevel(SKILL_FIST); break;
 					}
 					double percent = aug->value / 100.0;
@@ -632,8 +639,6 @@ int32_t Player::calculateAugmentCooldownReduction() const
 				reduction += aug->value;
 			}
 		}
-
-		// Also check proficiency augments (stub)
 	}
 
 	return reduction;

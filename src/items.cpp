@@ -2526,7 +2526,7 @@ std::string Items::getAugmentNameByType(Augment_t augmentType)
 	}
 }
 
-std::string Items::parseAugmentDescription(const ItemType& it, bool /*ignoreDuplicate*/)
+std::string Items::parseAugmentDescription(const ItemType& it)
 {
 	if (it.augments.empty()) {
 		return {};
@@ -2554,6 +2554,8 @@ std::string Items::parseAugmentDescription(const ItemType& it, bool /*ignoreDupl
 
 		ss << spellName << " -> ";
 
+		bool wroteLabel = false;
+
 		switch (aug->type) {
 			case Augment_t::Base:
 			case Augment_t::IncreasedDamage:
@@ -2568,33 +2570,40 @@ std::string Items::parseAugmentDescription(const ItemType& it, bool /*ignoreDupl
 				if (seconds > 0) {
 					ss << fmt::format("-{}s cooldown", seconds);
 				}
+				wroteLabel = true;
 				break;
 			}
 			case Augment_t::CriticalExtraDamage:
-				ss << fmt::format("+{} critical extra damage", aug->value);
+				ss << fmt::format("+{}", aug->value);
+				wroteLabel = true;
 				break;
 			case Augment_t::CriticalHitChance:
-				ss << fmt::format("+{} critical hit chance", aug->value);
+				ss << fmt::format("+{}", aug->value);
+				wroteLabel = true;
 				break;
 			case Augment_t::LifeLeech:
-				ss << fmt::format("+{} life leech", aug->value);
+				ss << fmt::format("+{}", aug->value);
+				wroteLabel = true;
 				break;
-		case Augment_t::ManaLeech:
-			ss << fmt::format("+{} mana leech", aug->value);
-			break;
-		case Augment_t::MagicLevelHealing:
-		case Augment_t::MagicLevelDamage:
-		case Augment_t::SkillDamage: {
-			double percent = aug->value / 100.0;
-			ss << fmt::format("{:+.2f}%", percent);
-			break;
-		}
-		default:
+			case Augment_t::ManaLeech:
+				ss << fmt::format("+{}", aug->value);
+				wroteLabel = true;
+				break;
+			case Augment_t::MagicLevelHealing:
+			case Augment_t::MagicLevelDamage:
+			case Augment_t::SkillDamage: {
+				double percent = aug->value / 100.0;
+				ss << fmt::format("{:+.2f}%", percent);
+				break;
+			}
+			default:
 				ss << fmt::format("+{}", aug->value);
 				break;
 		}
 
-		ss << " " << getAugmentNameByType(aug->type);
+		if (!wroteLabel) {
+			ss << " " << getAugmentNameByType(aug->type);
+		}
 	}
 
 	return ss.str();
