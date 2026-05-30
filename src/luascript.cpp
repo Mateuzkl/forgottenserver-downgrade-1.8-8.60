@@ -2057,6 +2057,8 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CONST_SLOT_RING);
 	registerEnum(CONST_SLOT_AMMO);
 	registerEnum(CONST_SLOT_STORE_INBOX);
+	registerEnum(CONST_SLOT_FIRST);
+	registerEnum(CONST_SLOT_LAST);
 
 	registerEnum(CREATURE_EVENT_NONE);
 	registerEnum(CREATURE_EVENT_LOGIN);
