@@ -1468,6 +1468,29 @@ bool Events::eventRarityOnElementalDamage(Player* player, Item* item, double fir
 	return scriptInterface.callFunction(3);
 }
 
+bool Events::eventRarityOnDoubleDamage(Player* player)
+{
+	if (info.rarityOnDoubleDamage == -1) {
+		return true;
+	}
+
+	if (!scriptInterface.reserveScriptEnv()) {
+		LOG_ERROR("[Error - Events::eventRarityOnDoubleDamage] Call stack overflow");
+		return true;
+	}
+
+	ScriptEnvironment* env = scriptInterface.getScriptEnv();
+	env->setScriptId(info.rarityOnDoubleDamage, &scriptInterface);
+
+	lua_State* L = scriptInterface.getLuaState();
+	scriptInterface.pushFunction(info.rarityOnDoubleDamage);
+
+	Lua::pushUserdata<Player>(L, player);
+	Lua::setMetatable(L, -1, "Player");
+
+	return scriptInterface.callFunction(1);
+}
+
 bool Events::eventRarityOnKillProc(Player* player, Creature* target, Item* item, std::string_view statKey,
                                    double value)
 {
