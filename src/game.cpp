@@ -5707,7 +5707,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 		// Apply augment life/mana leech
 		if (attackerPlayer && !target->isDead()) {
-			int32_t totalDmg = std::abs(realDamage);
+			int32_t totalDmg = realDamage < 0 ? -realDamage : realDamage;
 			if (damage.lifeLeechChance > 0) {
 				int32_t heal = static_cast<int32_t>(totalDmg * (damage.lifeLeechChance / 10000.0));
 				if (heal > 0) {
