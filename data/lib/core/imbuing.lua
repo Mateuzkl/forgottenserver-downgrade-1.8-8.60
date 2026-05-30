@@ -4,6 +4,11 @@ local WINDOW_OPCODE = 0xEB
 local CLOSE_OPCODE = 0xEC
 local RESOURCE_BALANCE_OPCODE = 0xEE
 local USE_RANGE = 1
+local BLANK_IMBUEMENT_SCROLL_ID = 51442
+
+local IMBUEMENT_WINDOW_CHOICE = 0
+local IMBUEMENT_WINDOW_SELECT_ITEM = 1
+local IMBUEMENT_WINDOW_SCROLL = 2
 
 local SUCCESS_RATES = {
 	[1] = 90,
@@ -224,41 +229,43 @@ local function getItemName(itemId)
 	return name
 end
 
-local function writeImbuementInfo(msg, def)
+local function writeImbuementInfo(msg, def, includeBlankScroll)
 	msg:addU32(protocolId(def))
 	msg:addString(displayName(def))
 	msg:addString(def.description or "")
-	msg:addString(def.name or "")
+	msg:addByte(math.max(0, (tonumber(def.baseId) or 1) - 1))
 	msg:addU16(def.iconId or 0)
 	msg:addU32(def.duration or 0)
-	msg:addByte(def.premium and 1 or 0)
 
-	local items = def.items or {}
+	local items = {}
+	for _, req in ipairs(def.items or {}) do
+		items[#items + 1] = req
+	end
+	if includeBlankScroll then
+		items[#items + 1] = { itemId = BLANK_IMBUEMENT_SCROLL_ID, count = 1 }
+	end
+
 	msg:addByte(#items)
 	for _, req in ipairs(items) do
 		msg:addU16(req.itemId)
-		msg:addString(string.format("%dx %s", req.count, getItemName(req.itemId)))
+		msg:addString(getItemName(req.itemId))
 		msg:addU16(req.count)
 	end
 
 	msg:addU32(def.price or 0)
-	msg:addByte(getSuccessRate(def))
-	msg:addU32(getProtectionCost(def))
 end
 
 local function writeFallbackImbuementInfo(msg, imbuement)
 	msg:addU32(0)
-	local name, group = fallbackImbuementName(imbuement)
+	local name = fallbackImbuementName(imbuement)
+	local baseId = imbuement and tonumber(imbuement:getBaseId()) or 1
 	msg:addString(name)
 	msg:addString("")
-	msg:addString(group)
+	msg:addByte(math.max(0, baseId - 1))
 	msg:addU16(0)
 	msg:addU32(imbuement and imbuement:getDuration() or 0)
 	msg:addByte(0)
-	msg:addByte(0)
 	msg:addU32(0)
-	msg:addByte(getSuccessRate(imbuement))
-	msg:addU32(getProtectionCost(imbuement))
 end
 
 local function getActiveImbuements(item)
@@ -286,7 +293,23 @@ local function getApplicableDefinitions(item)
 	return list
 end
 
-local function writeNeededItems(msg, player, definitions)
+local function getScrollDefinitions()
+	ensureDefinitions()
+
+	local list = {}
+	for _, def in ipairs(cachedDefinitions) do
+		if tonumber(def.scrollId) and tonumber(def.scrollId) ~= 0 then
+			table.insert(list, def)
+		end
+	end
+	return list
+end
+
+local function getPlayerItemCount(player, itemId)
+	return math.min(player:getItemCount(itemId, -1, true), 0xFFFF)
+end
+
+local function writeNeededItems(msg, player, definitions, includeBlankScroll)
 	local itemIds = {}
 	local seen = {}
 
@@ -298,12 +321,16 @@ local function writeNeededItems(msg, player, definitions)
 			end
 		end
 	end
+	if includeBlankScroll and not seen[BLANK_IMBUEMENT_SCROLL_ID] then
+		seen[BLANK_IMBUEMENT_SCROLL_ID] = true
+		table.insert(itemIds, BLANK_IMBUEMENT_SCROLL_ID)
+	end
 
 	table.sort(itemIds)
 	msg:addU32(#itemIds)
 	for _, itemId in ipairs(itemIds) do
 		msg:addU16(itemId)
-		msg:addU16(math.min(player:getItemCount(itemId, -1, true), 0xFFFF))
+		msg:addU16(getPlayerItemCount(player, itemId))
 	end
 end
 
@@ -444,7 +471,13 @@ local function sendWindow(player, item)
 
 	local msg = NetworkMessage(player)
 	msg:addByte(WINDOW_OPCODE)
+	msg:addByte(IMBUEMENT_WINDOW_SELECT_ITEM)
+	msg:addByte(getPlayerItemCount(player, BLANK_IMBUEMENT_SCROLL_ID) > 0 and 1 or 0)
 	msg:addU16(item:getId())
+	local classification = item.getClassification and item:getClassification() or 0
+	if classification > 0 then
+		msg:addByte(item.getTier and item:getTier() or 0)
+	end
 	msg:addByte(math.min(slots, 3))
 
 	local activeImbuements = getActiveImbuements(item)
@@ -477,6 +510,93 @@ local function sendWindow(player, item)
 	return true
 end
 
+local function sendChoiceWindow(player)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	sendBalances(player)
+
+	local msg = NetworkMessage(player)
+	msg:addByte(WINDOW_OPCODE)
+	msg:addByte(IMBUEMENT_WINDOW_CHOICE)
+	msg:addByte(getPlayerItemCount(player, BLANK_IMBUEMENT_SCROLL_ID) > 0 and 1 or 0)
+	-- NOTE: client reads only U16 for CHOICE window (item id placeholder = 0)
+	msg:addU16(0)
+	msg:sendToPlayer(player)
+	return true
+end
+
+
+local function sendScrollWindow(player)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local definitions = getScrollDefinitions()
+	sendBalances(player)
+
+	local msg = NetworkMessage(player)
+	msg:addByte(WINDOW_OPCODE)
+	msg:addByte(IMBUEMENT_WINDOW_SCROLL)
+	msg:addByte(getPlayerItemCount(player, BLANK_IMBUEMENT_SCROLL_ID) > 0 and 1 or 0)
+	msg:addByte(1)
+	msg:addByte(0)
+	msg:addU16(#definitions)
+	for _, def in ipairs(definitions) do
+		writeImbuementInfo(msg, def, true)
+	end
+
+	writeNeededItems(msg, player, definitions, true)
+	msg:sendToPlayer(player)
+	return true
+end
+
+function ImbuingWindow.openChoice(player, silent, sourcePosition, sourceThing)
+	if not supportsCustomNetwork(player) then
+		if not silent then
+			player:sendCancelMessage("The imbuing window is only available on OTClient.")
+		end
+		return false
+	end
+
+	if not isEnabled() then
+		if not silent then
+			player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+		end
+		return false
+	end
+
+	local session = { mode = "choice" }
+	setAccessContext(session, player, sourceThing, sourcePosition)
+	sessions[player:getId()] = session
+	return sendChoiceWindow(player)
+end
+
+function ImbuingWindow.openScroll(player, silent, sourcePosition, sourceThing)
+	if not supportsCustomNetwork(player) then
+		if not silent then
+			player:sendCancelMessage("The imbuing window is only available on OTClient.")
+		end
+		return false
+	end
+
+	if not isEnabled() then
+		if not silent then
+			player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+		end
+		return false
+	end
+
+	local session = sessions[player:getId()] or {}
+	session.mode = "scroll"
+	if sourcePosition or sourceThing or not session.sourcePosition then
+		setAccessContext(session, player, sourceThing, sourcePosition)
+	end
+	sessions[player:getId()] = session
+	return sendScrollWindow(player)
+end
+
 function ImbuingWindow.open(player, container, silent)
 	if not supportsCustomNetwork(player) then
 		if not silent then
@@ -506,7 +626,7 @@ function ImbuingWindow.open(player, container, silent)
 		return true
 	end
 
-	local session = {container = container, item = item}
+	local session = {mode = "item", container = container, item = item}
 	setAccessContext(session, player, container)
 	sessions[player:getId()] = session
 	return sendWindow(player, item)
@@ -547,8 +667,14 @@ function ImbuingWindow.openItem(player, item, silent, sourcePosition, sourceThin
 		return true
 	end
 
-	local session = {item = item, backpackOnly = true}
-	setAccessContext(session, player, sourceThing, sourcePosition)
+	local previousSession = sessions[player:getId()]
+	local session = {mode = "item", item = item, backpackOnly = true}
+	if previousSession and previousSession.sourcePosition and not sourcePosition and not sourceThing then
+		session.sourcePosition = previousSession.sourcePosition
+		session.sourceInstanceId = previousSession.sourceInstanceId
+	else
+		setAccessContext(session, player, sourceThing, sourcePosition)
+	end
 	sessions[player:getId()] = session
 	return sendWindow(player, item)
 end
@@ -574,6 +700,54 @@ function ImbuingWindow.sendClose(player)
 	return sent
 end
 
+local function applyScrollImbuement(player, def)
+	if not def or not def.scrollId or def.scrollId == 0 then
+		player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+		sendScrollWindow(player)
+		return
+	end
+
+	for _, req in ipairs(def.items or {}) do
+		if player:getItemCount(req.itemId, -1, true) < req.count then
+			player:sendTextMessage(MESSAGE_STATUS_SMALL, "You do not have all required astral sources.")
+			sendScrollWindow(player)
+			return
+		end
+	end
+
+	if player:getItemCount(BLANK_IMBUEMENT_SCROLL_ID, -1, true) < 1 then
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "You need a blank imbuement scroll.")
+		sendScrollWindow(player)
+		return
+	end
+
+	local cost = def.price or 0
+	if cost > 0 and player:getMoney() + player:getBankBalance() < cost then
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "You do not have enough gold.")
+		sendScrollWindow(player)
+		return
+	end
+
+	for _, req in ipairs(def.items or {}) do
+		player:removeItem(req.itemId, req.count, -1, true)
+	end
+	player:removeItem(BLANK_IMBUEMENT_SCROLL_ID, 1, -1, true)
+
+	if cost > 0 then
+		player:removeTotalMoney(cost)
+	end
+
+	local created = player:addItem(def.scrollId, 1)
+	if not created then
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Failed to create imbuement scroll.")
+		sendScrollWindow(player)
+		return
+	end
+
+	player:sendTextMessage(MESSAGE_STATUS_SMALL, "Imbuement scroll created.")
+	sendScrollWindow(player)
+end
+
 function ImbuingWindow.apply(player, slot, imbuementId, protection)
 	if not isEnabled() then
 		return
@@ -583,17 +757,33 @@ function ImbuingWindow.apply(player, slot, imbuementId, protection)
 		return
 	end
 
-	local item = getSessionEquipment(player)
-	if not item then
-		ImbuingWindow.sendClose(player)
-		return
-	end
-
 	ensureDefinitions()
 	local def = definitionsById[imbuementId]
 	if not def then
 		player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
-		sendWindow(player, item)
+		local session = sessions[player:getId()]
+		if session and session.mode == "scroll" then
+			sendScrollWindow(player)
+		else
+			local item = getSessionEquipment(player)
+			if item then
+				sendWindow(player, item)
+			else
+				ImbuingWindow.sendClose(player)
+			end
+		end
+		return
+	end
+
+	local session = sessions[player:getId()]
+	if session and session.mode == "scroll" then
+		applyScrollImbuement(player, def)
+		return
+	end
+
+	local item = getSessionEquipment(player)
+	if not item then
+		ImbuingWindow.sendClose(player)
 		return
 	end
 

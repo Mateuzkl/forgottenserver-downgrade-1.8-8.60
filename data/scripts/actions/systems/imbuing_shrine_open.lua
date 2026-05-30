@@ -89,11 +89,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	end
 
 	if not selectedItem then
-		selectedItem = findPlayerBackpackItem(player)
-	end
-
-	if not selectedItem then
-		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Use an item with imbuement slots from your backpack on the imbuing shrine.")
+		ImbuingWindow.openChoice(player, nil, item:getPosition(), item)
 		return true
 	end
 
