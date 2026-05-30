@@ -21,7 +21,7 @@ end
 -- @return tier number (1-3), or 0 if no rarity was rolled / item ineligible
 -- =============================================================================
 function rollRarity(item, forcedTier, minTier)
-	if not item or item:isStackable() then
+	if not item or ItemType(item:getId()):isStackable() then
 		return 0
 	end
 
