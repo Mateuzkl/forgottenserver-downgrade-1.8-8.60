@@ -22,37 +22,13 @@ extern Game g_game;
 
 namespace {
 
-std::shared_ptr<Creature> lockCreature(Creature* creature)
-{
-	return creature ? creature->weak_from_this().lock() : nullptr;
-}
-
-bool isPlayerControlledCreature(const Creature* creature)
-{
-	if (!creature) {
-		return false;
-	}
-
-	if (creature->getPlayer()) {
-		return true;
-	}
-
-	auto master = creature->getMaster();
-	return master && master->getPlayer();
-}
-
-} // namespace
-
-extern LuaEnvironment g_luaEnvironment;
-
-namespace {
-
 inline constexpr std::array<slots_t, 5> RARITY_ATTACK_SLOTS = {
 	CONST_SLOT_LEFT, CONST_SLOT_RIGHT, CONST_SLOT_NECKLACE, CONST_SLOT_HEAD, CONST_SLOT_RING
 };
 inline constexpr std::span<const slots_t> RARITY_ATTACK_SLOTS_SPAN{RARITY_ATTACK_SLOTS};
 
-double getRaritySpellDamage(ObserverPtr<Player> player, ObserverPtr<Item> item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
+double getRaritySpellDamage(ObserverPtr<Player> player, ObserverPtr<Item> item, CombatType_t combatType,
+                            const std::string& dmgMinKey, const std::string& dmgMaxKey)
 {
 	double scaleLevel = item->getRarityStat(Rarity::STAT_SPELL_SCALE_LEVEL).value_or(0.0);
 	double scaleMagic = item->getRarityStat(Rarity::STAT_SPELL_SCALE_MAGIC).value_or(0.0);
@@ -65,7 +41,8 @@ double getRaritySpellDamage(ObserverPtr<Player> player, ObserverPtr<Item> item, 
 		baseDmg = uniform_random(static_cast<int32_t>(dmgMin), static_cast<int32_t>(dmgMax));
 	}
 
-	double scaled = (player->getLevel() * scaleLevel + player->getMagicLevel() * scaleMagic) / std::max<double>(divisor, 1.0);
+	int32_t effectiveML = getEffectiveMagicLevel(player, combatType);
+	double scaled = (player->getLevel() * scaleLevel + effectiveML * scaleMagic) / std::max<double>(divisor, 1.0);
 	return baseDmg + scaled;
 }
 
@@ -74,7 +51,7 @@ void castRaritySpell(ObserverPtr<Player> player, ObserverPtr<Creature> target, C
 {
 	CombatDamage dmg;
 	dmg.primary.type = combatType;
-	dmg.primary.value = static_cast<int32_t>(getRaritySpellDamage(player, item, dmgMinKey, dmgMaxKey));
+	dmg.primary.value = static_cast<int32_t>(getRaritySpellDamage(player, item, combatType, dmgMinKey, dmgMaxKey));
 	dmg.origin = origin;
 	if (auto* tp = target->getPlayer(); tp && player != tp) {
 		dmg.primary.value /= 2;
@@ -94,7 +71,7 @@ void processRarityOnAttackStat(ObserverPtr<Player> player, ObserverPtr<Creature>
 	std::string dmgMaxKey(statKey);
 	dmgMaxKey.append(Rarity::STAT_SPELL_DMG_MAX_SUFFIX);
 	if (chance >= 100.0 || uniform_random(1, 100) <= static_cast<int32_t>(std::min<double>(chance, 100.0))) {
-		double dmg = getRaritySpellDamage(player, weapon.get(), dmgMinKey, dmgMaxKey);
+		double dmg = getRaritySpellDamage(player, weapon.get(), combatType, dmgMinKey, dmgMaxKey);
 		if (g_events->eventRarityOnAttackProc(player, target, weapon.get(), statKey, combatType, dmg)) {
 			castRaritySpell(player, target, combatType, damage.origin, weapon.get(), dmgMinKey, dmgMaxKey);
 		}
@@ -118,7 +95,7 @@ void processRarityOnHitStat(ObserverPtr<Player> player, ObserverPtr<Creature> ta
 	std::string dmgMaxKey(statKey);
 	dmgMaxKey.append(Rarity::STAT_SPELL_DMG_MAX_SUFFIX);
 	if (best.first >= 100.0 || uniform_random(1, 100) <= static_cast<int32_t>(std::min<double>(best.first, 100.0))) {
-		double dmg = getRaritySpellDamage(player, best.second.get(), dmgMinKey, dmgMaxKey);
+		double dmg = getRaritySpellDamage(player, best.second.get(), combatType, dmgMinKey, dmgMaxKey);
 		if (g_events->eventRarityOnHitProc(player, target, best.second.get(), statKey, combatType, dmg)) {
 			castRaritySpell(player, target, combatType, damage.origin, best.second.get(), dmgMinKey, dmgMaxKey);
 		}
@@ -190,6 +167,41 @@ void processRarityDoubleDamage(ObserverPtr<Player> player, CombatDamage& damage)
 
 } // namespace
 
+static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatType)
+{
+	if (!player) {
+		return 0;
+	}
+
+	int32_t magicLevel = static_cast<int32_t>(player->getMagicLevel()) + static_cast<int32_t>(player->getSpecialMagicLevel(combatType));
+	return std::max<int32_t>(0, magicLevel);
+}
+
+extern LuaEnvironment g_luaEnvironment;
+
+namespace {
+
+std::shared_ptr<Creature> lockCreature(Creature* creature)
+{
+	return creature ? creature->weak_from_this().lock() : nullptr;
+}
+
+bool isPlayerControlledCreature(const Creature* creature)
+{
+	if (!creature) {
+		return false;
+	}
+
+	if (creature->getPlayer()) {
+		return true;
+	}
+
+	auto master = creature->getMaster();
+	return master && master->getPlayer();
+}
+
+} // namespace
+
 std::vector<Tile*> getList(const MatrixArea& area, const Position& targetPos, const Direction dir)
 {
 	auto casterPos = getNextPosition(dir, targetPos);
@@ -237,6 +249,102 @@ std::vector<Tile*> getCombatArea(const Position& centerPos, const Position& targ
 	return {tile};
 }
 
+namespace {
+
+uint32_t g_cleaveDefaultPercent = 30;
+uint32_t g_cleaveFistPercent = 20;
+bool g_cleaveConfigLoaded = false;
+
+void loadCleaveConfigFromLua()
+{
+	if (g_cleaveConfigLoaded) {
+		return;
+	}
+
+	lua_State* L = g_luaEnvironment.getLuaState();
+	if (!L) {
+		g_cleaveConfigLoaded = true;
+		return;
+	}
+
+	lua_getglobal(L, "CleaveSystem");
+	if (lua_istable(L, -1)) {
+		lua_getfield(L, -1, "defaultPercent");
+		if (lua_isnumber(L, -1)) {
+			g_cleaveDefaultPercent = static_cast<uint32_t>(lua_tonumber(L, -1));
+		}
+		lua_pop(L, 1);
+
+		lua_getfield(L, -1, "fistPercent");
+		if (lua_isnumber(L, -1)) {
+			g_cleaveFistPercent = static_cast<uint32_t>(lua_tonumber(L, -1));
+		}
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
+
+	g_cleaveConfigLoaded = true;
+}
+
+} // namespace
+
+uint32_t Combat::getCleaveDefaultPercent()
+{
+	loadCleaveConfigFromLua();
+	return g_cleaveDefaultPercent;
+}
+
+uint32_t Combat::getCleaveFistPercent()
+{
+	loadCleaveConfigFromLua();
+	return g_cleaveFistPercent;
+}
+
+void Combat::doCombatCleave(Creature* caster, Creature* primaryTarget, const CombatDamage& originalDamage,
+                            const CombatParams& params, uint32_t cleavePercent)
+{
+	if (cleavePercent == 0 || !caster) {
+		return;
+	}
+
+	const Position& casterPos = caster->getPosition();
+
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, casterPos, false, false);
+
+	for (const auto& spectator : spectators) {
+		Creature* creature = spectator.get();
+		if (!creature || creature == caster || creature == primaryTarget) {
+			continue;
+		}
+
+		const Position& targetPos = creature->getPosition();
+		if (targetPos.z != casterPos.z) {
+			continue;
+		}
+		if (std::abs(targetPos.x - casterPos.x) > 1 || std::abs(targetPos.y - casterPos.y) > 1) {
+			continue;
+		}
+
+		if (Combat::canDoCombat(caster, creature) != RETURNVALUE_NOERROR) {
+			continue;
+		}
+
+		CombatDamage cleaveDamage;
+		cleaveDamage.primary.type = originalDamage.primary.type;
+		cleaveDamage.primary.value = (originalDamage.primary.value * static_cast<int32_t>(cleavePercent)) / 100;
+		cleaveDamage.secondary.type = originalDamage.secondary.type;
+		cleaveDamage.secondary.value = (originalDamage.secondary.value * static_cast<int32_t>(cleavePercent)) / 100;
+		cleaveDamage.origin = originalDamage.origin;
+
+		CombatParams cleaveParams;
+		cleaveParams.impactEffect = params.impactEffect;
+		cleaveParams.combatType = params.combatType;
+
+		Combat::doTargetCombat(caster, creature, cleaveDamage, cleaveParams);
+	}
+}
+
 CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target) const
 {
 	CombatDamage damage;
@@ -252,7 +360,7 @@ CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target) const
 			if (params.valueCallback) {
 				params.valueCallback->getMinMaxValues(player, damage);
 			} else if (formulaType == COMBAT_FORMULA_LEVELMAGIC) {
-				int32_t levelFormula = player->getLevel() * 2 + player->getMagicLevel() * 3;
+				int32_t levelFormula = player->getLevel() * 2 + getEffectiveMagicLevel(player, damage.primary.type) * 3;
 				damage.primary.value =
 				    normal_random(std::fma(levelFormula, mina, minb), std::fma(levelFormula, maxa, maxb));
 			} else if (formulaType == COMBAT_FORMULA_SKILL) {
@@ -1539,7 +1647,7 @@ void ValueCallback::getMinMaxValues(Player* player, CombatDamage& damage) const
 		case COMBAT_FORMULA_LEVELMAGIC: {
 			// onGetPlayerMinMaxValues(player, level, maglevel)
 			lua_pushinteger(L, player->getLevel());
-			lua_pushinteger(L, player->getMagicLevel());
+			lua_pushinteger(L, getEffectiveMagicLevel(player, damage.primary.type));
 			parameters += 2;
 			break;
 		}

@@ -21,6 +21,61 @@ local damageKeys = {
 	[COMBAT_DEATHDAMAGE] = "deathDamage",
 }
 
+-- Tracks applied specialMagicLevel bonuses per player so they can be removed.
+local appliedDamageBonuses = {}
+
+function applyRarityDamageBonuses(player)
+	if not player or not player.addSpecialMagicLevel then
+		return
+	end
+
+	local key = player:getId()
+	-- Remove previous bonuses if any
+	if appliedDamageBonuses[key] then
+		for combatType, value in pairs(appliedDamageBonuses[key]) do
+			if value ~= 0 then
+				player:addSpecialMagicLevel(combatType, -value)
+			end
+		end
+	end
+
+	-- Aggregate from equipped items
+	local stats = getEquippedRarityStats(player)
+	local bonuses = {}
+	for combatType, statKey in pairs(damageKeys) do
+		local value = stats[statKey] or 0
+		if value > 0 then
+			bonuses[combatType] = math.floor(value)
+		end
+	end
+
+	-- Apply
+	for combatType, value in pairs(bonuses) do
+		player:addSpecialMagicLevel(combatType, value)
+	end
+
+	appliedDamageBonuses[key] = bonuses
+end
+
+function removeRarityDamageBonuses(player)
+	if not player or not player.addSpecialMagicLevel then
+		return
+	end
+
+	local key = player:getId()
+	local bonuses = appliedDamageBonuses[key]
+	if not bonuses then
+		return
+	end
+
+	for combatType, value in pairs(bonuses) do
+		if value ~= 0 then
+			player:addSpecialMagicLevel(combatType, -value)
+		end
+	end
+	appliedDamageBonuses[key] = nil
+end
+
 local function getEquippedRarityStats(player)
 	local stats = {}
 	for slot = CONST_SLOT_FIRST, CONST_SLOT_LAST do

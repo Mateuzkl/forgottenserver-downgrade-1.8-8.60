@@ -50,6 +50,9 @@ function rarityInventory.onInventoryUpdate(player, item, slot, equip)
 			end
 		end
 	end
+
+	-- Recalculate damage bonuses after any equip/unequip
+	applyRarityDamageBonuses(player)
 end
 rarityInventory:register()
 
@@ -63,6 +66,7 @@ function rarityLogin.onLogin(player)
 	-- Register combat events
 	player:registerEvent("rarityHealthChange")
 	player:registerEvent("rarityManaChange")
+	player:registerEvent("rarityLogout")
 
 	-- Apply rarity conditions from currently equipped items
 	for slot = CONST_SLOT_FIRST, CONST_SLOT_LAST do
@@ -71,6 +75,9 @@ function rarityLogin.onLogin(player)
 			itemAttributes(player, item, slot, true)
 		end
 	end
+
+	-- Apply damage bonuses
+	applyRarityDamageBonuses(player)
 
 	-- Fix health/mana if they exceed max due to rarity bonuses
 	local health = player:getHealth()
@@ -88,3 +95,13 @@ function rarityLogin.onLogin(player)
 	return true
 end
 rarityLogin:register()
+
+-- =============================================================================
+-- onLogout: Remove damage bonuses
+-- =============================================================================
+local rarityLogout = CreatureEvent("rarityLogout")
+function rarityLogout.onLogout(player)
+	removeRarityDamageBonuses(player)
+	return true
+end
+rarityLogout:register()
