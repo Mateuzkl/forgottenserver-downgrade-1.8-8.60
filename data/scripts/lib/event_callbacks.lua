@@ -62,6 +62,8 @@ ec.onGainSkillTries = {[3] = 1}
 ec.onUpdateInventory = {}
 ec.onRotateItem = {}
 ec.onFightModeChanged = {}
+ec.onUpdateInventory = {}
+ec.onInventoryUpdate = {}
 -- Monster
 ec.onDropLoot = {}
 ec.onSpawn = {}
