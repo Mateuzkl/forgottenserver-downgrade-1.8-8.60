@@ -194,7 +194,7 @@ function rollRarityContainer(container, forcedTier, minTier)
 
 	for _, item in ipairs(items) do
 		if item:isContainer() then
-			count = count + rollRarityContainer(Container(item:getId()), forcedTier, minTier)
+			count = count + rollRarityContainer(item, forcedTier, minTier)
 		else
 			local tier = rollRarity(item, forcedTier, minTier)
 			if tier > 0 then

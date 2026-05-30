@@ -635,7 +635,7 @@ int32_t Player::calculateAugmentCooldownReduction() const
 		}
 
 		for (const auto& aug : item->getAugments()) {
-			if (aug->spellName == lowerSpellName && aug->type == Augment_t::Cooldown) {
+			if (boost::algorithm::to_lower_copy(aug->spellName) == lowerSpellName && aug->type == Augment_t::Cooldown) {
 				reduction += aug->value;
 			}
 		}

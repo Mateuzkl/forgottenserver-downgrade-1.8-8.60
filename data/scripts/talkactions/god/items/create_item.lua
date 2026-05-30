@@ -16,7 +16,7 @@ local function createItemSafe(player, itemType, count, subType)
 		if itemType:isStackable() then
 			return player:addItem(itemType:getId(), count, canDrop, subType)
 		end
-		return player:addItem(itemType:getId(), subType, canDrop, count)
+		return player:addItem(itemType:getId(), count, canDrop, subType)
 	end
 
 	local result = tryCreate(true)

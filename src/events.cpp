@@ -1392,7 +1392,7 @@ bool Events::eventRarityOnAttackProc(Player* player, Creature* target, Item* ite
 
 	if (!scriptInterface.reserveScriptEnv()) {
 		LOG_ERROR("[Error - Events::eventRarityOnAttackProc] Call stack overflow");
-		return true;
+		return false;
 	}
 
 	ScriptEnvironment* env = scriptInterface.getScriptEnv();
@@ -1422,7 +1422,7 @@ bool Events::eventRarityOnHitProc(Player* player, Creature* target, Item* item, 
 
 	if (!scriptInterface.reserveScriptEnv()) {
 		LOG_ERROR("[Error - Events::eventRarityOnHitProc] Call stack overflow");
-		return true;
+		return false;
 	}
 
 	ScriptEnvironment* env = scriptInterface.getScriptEnv();
@@ -1451,7 +1451,7 @@ bool Events::eventRarityOnElementalDamage(Player* player, Item* item, double fir
 
 	if (!scriptInterface.reserveScriptEnv()) {
 		LOG_ERROR("[Error - Events::eventRarityOnElementalDamage] Call stack overflow");
-		return true;
+		return false;
 	}
 
 	ScriptEnvironment* env = scriptInterface.getScriptEnv();
@@ -1476,7 +1476,7 @@ bool Events::eventRarityOnDoubleDamage(Player* player)
 
 	if (!scriptInterface.reserveScriptEnv()) {
 		LOG_ERROR("[Error - Events::eventRarityOnDoubleDamage] Call stack overflow");
-		return true;
+		return false;
 	}
 
 	ScriptEnvironment* env = scriptInterface.getScriptEnv();
@@ -1500,7 +1500,7 @@ bool Events::eventRarityOnKillProc(Player* player, Creature* target, Item* item,
 
 	if (!scriptInterface.reserveScriptEnv()) {
 		LOG_ERROR("[Error - Events::eventRarityOnKillProc] Call stack overflow");
-		return true;
+		return false;
 	}
 
 	ScriptEnvironment* env = scriptInterface.getScriptEnv();

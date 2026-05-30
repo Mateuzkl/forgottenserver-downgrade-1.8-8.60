@@ -231,14 +231,14 @@ void processRarityOnKill(ObserverPtr<Player> player, ObserverPtr<Creature> targe
 		}
 	}
 
-	if (explosionChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(explosionChance)) {
-		g_game.addMagicEffect(target->getPosition(), CONST_ME_EXPLOSIONAREA);
+	if (explosionChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(std::round(explosionChance))) {
+		g_game.addMagicEffect(target->getPosition(), CONST_ME_EXPLOSIONAREA, target->getInstanceID());
 	}
 
 	if (regenHp > 0.0) {
 		CombatDamage healDamage;
 		healDamage.primary.type = COMBAT_HEALING;
-		healDamage.primary.value = static_cast<int32_t>(regenHp);
+		healDamage.primary.value = static_cast<int32_t>(std::round(regenHp));
 		healDamage.origin = ORIGIN_NONE;
 		g_game.combatChangeHealth(nullptr, player, healDamage);
 	}
@@ -246,26 +246,26 @@ void processRarityOnKill(ObserverPtr<Player> player, ObserverPtr<Creature> targe
 	if (regenMp > 0.0) {
 		CombatDamage manaDamage;
 		manaDamage.primary.type = COMBAT_MANADRAIN;
-		manaDamage.primary.value = static_cast<int32_t>(regenMp);
+		manaDamage.primary.value = static_cast<int32_t>(std::round(regenMp));
 		manaDamage.origin = ORIGIN_NONE;
 		g_game.combatChangeMana(nullptr, player, manaDamage);
 	}
 
-	if (buffDamageChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(buffDamageChance)) {
+	if (buffDamageChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(std::round(buffDamageChance))) {
 		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
 		condition->setParam(CONDITION_PARAM_SPECIALSKILL_CRITICALHITCHANCE, static_cast<int32_t>(buffCritChance));
 		condition->setParam(CONDITION_PARAM_SPECIALSKILL_CRITICALHITAMOUNT, static_cast<int32_t>(buffCritAmount));
 		player->addCondition(std::move(condition));
 	}
 
-	if (buffMaxHpChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(buffMaxHpChance)) {
+	if (buffMaxHpChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(std::round(buffMaxHpChance))) {
 		int32_t hpBonus = static_cast<int32_t>(player->getMaxHealth() * (static_cast<float>(buffMaxHpPct) / 100.f));
 		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
 		condition->setParam(CONDITION_PARAM_STAT_MAXHITPOINTS, hpBonus);
 		player->addCondition(std::move(condition));
 	}
 
-	if (buffMaxMpChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(buffMaxMpChance)) {
+	if (buffMaxMpChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(std::round(buffMaxMpChance))) {
 		int32_t mpBonus = static_cast<int32_t>(player->getMaxMana() * (static_cast<float>(buffMaxMpPct) / 100.f));
 		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
 		condition->setParam(CONDITION_PARAM_STAT_MAXMANAPOINTS, mpBonus);
@@ -5707,7 +5707,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 		// Apply augment life/mana leech
 		if (attackerPlayer && !target->isDead()) {
-			int32_t totalDmg = std::abs(realDamage) + std::abs(damage.secondary.value);
+			int32_t totalDmg = std::abs(realDamage);
 			if (damage.lifeLeechChance > 0) {
 				int32_t heal = static_cast<int32_t>(totalDmg * (damage.lifeLeechChance / 10000.0));
 				if (heal > 0) {

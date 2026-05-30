@@ -1188,7 +1188,12 @@ int LuaScriptInterface::luaItemGetRarityStat(lua_State* L)
 {
 	Item* item = getItemUserdata<Item>(L, 1);
 	if (item) {
-		lua_pushnumber(L, item->getRarityStat(getString(L, 2)).value_or(0.0));
+		auto opt = item->getRarityStat(getString(L, 2));
+		if (opt.has_value()) {
+			lua_pushnumber(L, *opt);
+		} else {
+			lua_pushnil(L);
+		}
 	} else {
 		lua_pushnil(L);
 	}

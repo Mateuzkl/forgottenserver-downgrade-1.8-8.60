@@ -1368,6 +1368,9 @@ double Item::getTranscendenceChance() const
 
 bool Item::hasRarity()
 {
+	if (!ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) {
+		return false;
+	}
 	return getCustomAttribute(std::string{Rarity::TIER}) != nullptr;
 }
 
@@ -1393,6 +1396,9 @@ void Item::setRarityTier(int32_t tier)
 
 std::optional<double> Item::getRarityStat(std::string_view stat)
 {
+	if (!ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) {
+		return std::nullopt;
+	}
 	const std::string key = Rarity::makeStatKey(stat);
 	const auto* attr = getCustomAttribute(key);
 	if (attr) {
@@ -1403,6 +1409,9 @@ std::optional<double> Item::getRarityStat(std::string_view stat)
 
 void Item::setRarityStat(std::string_view stat, double value)
 {
+	if (!ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) {
+		return;
+	}
 	setCustomAttribute(Rarity::makeStatKey(stat), value);
 }
 

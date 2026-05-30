@@ -64,7 +64,7 @@ function applyRarityDamageBonuses(player)
 	for combatType, statKey in pairs(damageKeys) do
 		local value = stats[statKey] or 0
 		if value > 0 then
-			bonuses[combatType] = math.floor(value)
+			bonuses[combatType] = value
 		end
 	end
 
@@ -84,7 +84,7 @@ end
 	for combatType, statKey in pairs(damageKeys) do
 		local value = stats[statKey] or 0
 		if value > 0 then
-			bonuses[combatType] = math.floor(value)
+			bonuses[combatType] = value
 		end
 	end
 

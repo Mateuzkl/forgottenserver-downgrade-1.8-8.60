@@ -775,13 +775,18 @@ int luaPlayerAddSpecialSkill(lua_State* L)
 int luaPlayerGetSpecialMagicLevel(lua_State* L)
 {
 	// player:getSpecialMagicLevel(combatType)
-	CombatType_t combatType = getInteger<CombatType_t>(L, 2);
 	const Player* player = getUserdata<const Player>(L, 1);
-	if (player) {
-		lua_pushinteger(L, player->getSpecialMagicLevel(combatType));
-	} else {
+	if (!player) {
 		lua_pushnil(L);
+		return 1;
 	}
+
+	CombatType_t combatType = getInteger<CombatType_t>(L, 2);
+	if (combatType >= COMBAT_COUNT) {
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_pushinteger(L, player->getSpecialMagicLevel(combatType));
 	return 1;
 }
 
@@ -794,7 +799,12 @@ int luaPlayerAddSpecialMagicLevel(lua_State* L)
 		return 1;
 	}
 
-	player->setSpecialMagicLevelSkill(getInteger<CombatType_t>(L, 2), getInteger<int16_t>(L, 3));
+	CombatType_t combatType = getInteger<CombatType_t>(L, 2);
+	if (combatType >= COMBAT_COUNT) {
+		lua_pushnil(L);
+		return 1;
+	}
+	player->setSpecialMagicLevelSkill(combatType, getInteger<int16_t>(L, 3));
 	player->sendSkills();
 	pushBoolean(L, true);
 	return 1;
