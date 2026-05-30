@@ -1,34 +1,50 @@
 ## Rarity System — Documentacao
 
-Sistema de raridade de itens para TFS 1.8 (protocolo 8.60). Engine em C++23, balance inteiramente configuravel em Lua via `data/scripts/systems/rarity/`.
+Sistema de raridade de itens para TFS 1.8 (protocolo 8.60). Engine em C++23 (smart pointers, `std::optional`, `std::span`), balance inteiramente configuravel em Lua via `data/scripts/systems/rarity/`.
 
 ---
 
 ### Arquitetura
 
 ```
-┌─ C++ (engine) ──────────────────────────────────────────────────────────┐
-│                                                                         │
-│  configmanager.h/cpp    toggle RARITY_SYSTEM_ENABLED (server_config.lua) │
-│  item.h/cpp             namespace Rarity (constantes) + Item methods    │
-│  combat.cpp             hooks: OnAttack, OnHit, DoubleDamage, EleDmg   │
-│  game.cpp               hook:  OnKill (explosion, regen, buffs)         │
-│  luascript.h/cpp        configKeys.RARITY_SYSTEM_ENABLED                │
-│  luaitem.cpp            bindings: hasRarity, [gs]etRarity[Tier|Stat]  │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─ C++23 (engine) ─────────────────────────────────────────────────────────┐
+│                                                                          │
+│  configmanager.h/cpp   toggle RARITY_SYSTEM_ENABLED (server_config.lua) │
+│  item.h/cpp            namespace Rarity (constantes) + Item methods     │
+│                          getRarityTier() → std::optional<int32_t>        │
+│                          getRarityStat() → std::optional<int64_t>        │
+│                          makeStatKey() com reserve() p/ perf             │
+│  combat.cpp            getRaritySpellDamage() (implementado)            │
+│                          processRarityOnAttack/OnHit/DoubleDmg/EleDmg   │
+│                          ObserverPtr<T> + shared_ptr capture            │
+│                          std::span<const slots_t> nos loops             │
+│                          std::max com std::pair p/ onHit best item      │
+│                          escala 100 (consistente com config %)          │
+│  game.cpp              processRarityOnKill()                            │
+│                          ObserverPtr<T> + shared_ptr capture            │
+│                          callback Lua por stat individual               │
+│  events.h/cpp          eventRarityOnAttack/Hit/Double/Ele/KillProc     │
+│                          integrado ao sistema Events (events.xml)       │
+│  luaitem.cpp           bindings: hasRarity, [gs]etRarity[Tier|Stat]    │
+│  observer_ptr.h        using ObserverPtr<T> = T* (non-owning alias)     │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 
-┌─ Lua (data/scripts/systems/rarity/) ────────────────────────────────────┐
-│                                                                         │
-│  init.lua         entry point, carrega modulos se toggle ON             │
-│  config.lua       tiers, atributos, elegibilidade, monster tiers        │
-│  balancing.lua    valores de balance (dano spells, duracao buffs, %)    │
+┌─ Lua (data/scripts/systems/rarity/) ─────────────────────────────────────┐
+│                                                                          │
+│  init.lua         entry point, carrega modulos se toggle ON              │
+│  config.lua       tiers, 45 atributos, elegibilidade, monster tiers     │
+│  balancing.lua    dano spells, duracao buffs — consumido pelo C++       │
 │  core.lua         rollRarity(), itemAttributes(), processMonsterLoot()  │
-│  combat.lua       creaturescripts healthChange / manaChange            │
-│  events.lua       onDropLoot, onInventoryUpdate, onLogin               │
+│  combat.lua       creaturescripts healthChange / manaChange             │
+│  events.lua       onDropLoot, onInventoryUpdate, onLogin                │
+│  callbacks.lua    exemplo de registro de eventcallbacks                  │
 │  helpers.lua      utilitarios                                           │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+│                                                                          │
+│  data/events/scripts/rarity.lua — dispatcher intermediario TFS         │
+│  data/scripts/lib/event_callbacks.lua — registros ec.onAttackProc etc  │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -44,6 +60,20 @@ Carregado via `data/startup/others/functions.lua`:
 ```lua
 dofile('data/scripts/systems/rarity/init.lua')
 ```
+
+---
+
+### C++23 — Gerenciamento de Memoria
+
+| Feature | Onde | Por que |
+|---------|------|---------|
+| `ObserverPtr<T>` | Todos os parametros de funcao | Documenta non-owning semantics |
+| `shared_ptr<Item>` | `getWeaponShared()`, `getInventoryItemShared()` | Lifetime garantido durante o proc |
+| `std::optional<int32_t>` | `getRarityTier()` | `nullopt` em vez de sentinela `0` |
+| `std::optional<int64_t>` | `getRarityStat()` | `nullopt` em vez de sentinela `0` |
+| `std::span<const slots_t>` | Loops de slot | Type-safe range iteration |
+| `std::max` + `std::pair` | `processRarityOnHitStat` | Algoritmo STL em vez de busca manual |
+| `[[nodiscard]]` | `hasRarity()`, `getRarityTier()`, `getRarityStat()` | Compilador avisa se retorno ignorado |
 
 ---
 
@@ -128,10 +158,10 @@ Qualquer custom item adicionado ao `items.xml` funciona automaticamente.
 | Defense | `defense` | `item:setAttribute(DEFENSE, base + value)` |
 | Armor | `armor` | `item:setAttribute(ARMOR, base + value)` |
 
-#### On Attack Spells (C++ hook em `combat.cpp:doTargetCombat`, antes do block check)
+#### On Attack Spells (C++ hook, escala 100 = %)
 
-| Atributo | statKey | Dano |
-|----------|---------|------|
+| Atributo | statKey | Formula de dano |
+|----------|---------|-----------------|
 | Cast Fire Strike on Attack | `onAttackFireStrike` | 20-45 + scale |
 | Cast Ice Strike on Attack | `onAttackIceStrike` | 15-35 + scale |
 | Cast Terra Strike on Attack | `onAttackTerraStrike` | 15-35 + scale |
@@ -139,10 +169,10 @@ Qualquer custom item adicionado ao `items.xml` funciona automaticamente.
 | Cast Energy Strike on Attack | `onAttackEnergyStrike` | 20-50 + scale |
 | Cast Divine Missile on Attack | `onAttackDivineMissile` | 20-40 + scale |
 
-#### On Hit Spells (C++ hook em `combat.cpp:doTargetCombat`, apos block check)
+#### On Hit Spells (C++ hook, escala 100 = %)
 
-| Atributo | statKey | Dano |
-|----------|---------|------|
+| Atributo | statKey | Formula de dano |
+|----------|---------|-----------------|
 | Cast Fire Strike on Hit | `onHitFireStrike` | 20-45 + scale |
 | Cast Ice Strike on Hit | `onHitIceStrike` | 15-35 + scale |
 | Cast Terra Strike on Hit | `onHitTerraStrike` | 15-35 + scale |
@@ -150,15 +180,20 @@ Qualquer custom item adicionado ao `items.xml` funciona automaticamente.
 | Cast Energy Strike on Hit | `onHitEnergyStrike` | 20-50 + scale |
 | Cast Divine Missile on Hit | `onHitDivineMissile` | 20-40 + scale |
 
-Formula de scale: `(level * spellScale.level + magicLevel * spellScale.magic) / spellScale.divisor`
+**Formula de scale** (implementada em `combat.cpp:getRaritySpellDamage`):
+```
+baseDmg = random(dmgMin, dmgMax)
+scaled  = (playerLevel * scaleLevel + magicLevel * scaleMagic) / divisor
+total   = baseDmg + scaled
+```
+Valores padrao em `balancing.lua` > `rarityBalancing.spellScale`: `level=2, magic=3, divisor=5`.
+Para level 100, magic 50: `(200 + 150) / 5 = 70` de bonus + base.
 
-Configuravel em `balancing.lua` > `rarityBalancing.spellScale`.
-
-#### Damage Modifiers (C++ hooks em `combat.cpp`)
+#### Damage Modifiers (C++ hooks, escala 100 = %)
 
 | Atributo | statKey | Efeito |
 |----------|---------|--------|
-| Double Damage | `doubleDamage` | chance de dobrar o dano |
+| Double Damage | `doubleDamage` | chance de dobrar dano (callback: `onDoubleDamage`) |
 | Physical Damage % | `physicalDamage` | bonus de dano fisico |
 | Fire Damage % | `fireDamage` | bonus de dano fire |
 | Ice Damage % | `iceDamage` | bonus de dano ice |
@@ -166,7 +201,7 @@ Configuravel em `balancing.lua` > `rarityBalancing.spellScale`.
 | Earth Damage % | `earthDamage` | bonus de dano earth |
 | Holy Damage % | `holyDamage` | bonus de dano holy |
 | Death Damage % | `deathDamage` | bonus de dano death |
-| Elemental Damage % | `elementalDamage` | bonus para todos elementos |
+| Elemental Damage % | `elementalDamage` | bonus para todos elementos (callback: `onElementalDamage`) |
 
 #### Protections (Lua creaturescript `healthChange`)
 
@@ -187,24 +222,94 @@ Configuravel em `balancing.lua` > `rarityBalancing.spellScale`.
 |----------|---------|--------|
 | Life Leech % | `lifeLeech` | % do dano convertido em heal |
 
-#### On Kill Effects (C++ hook em `game.cpp:combatChangeHealth`)
+#### On Kill Effects (C++ hook, escala 100 = %, callbacks: `onKillProc`)
 
 | Atributo | statKey | Efeito |
 |----------|---------|--------|
 | Explosion on Kill | `onKillExplosion` | efeito visual de explosao |
 | Regen HP on Kill | `onKillRegenHp` | cura flat ao matar |
 | Regen MP on Kill | `onKillRegenMp` | recupera mana ao matar |
-| Bonus Damage on Kill | `onKillBuffDamage` | buff temporario de crit (10% chance, +50% dmg) |
-| Bonus Max HP on Kill | `onKillBuffMaxHp` | buff temporario de +5% HP max |
-| Bonus Max MP on Kill | `onKillBuffMaxMp` | buff temporario de +5% MP max |
+| Bonus Damage on Kill | `onKillBuffDamage` | buff temporario de crit |
+| Bonus Max HP on Kill | `onKillBuffMaxHp` | +% HP max |
+| Bonus Max MP on Kill | `onKillBuffMaxMp` | +% MP max |
 
-Valores de buff (duracao, %) configuraveis em `balancing.lua` > `rarityBalancing.onKill`.
+Valores de buff em `balancing.lua` > `rarityBalancing.onKill` (consumidos pelo C++).
 
 #### Additional Loot (Lua `onDropLoot`)
 
 | Atributo | statKey | Efeito |
 |----------|---------|--------|
 | Additional Loot % | `additionalLoot` | chance de loot extra |
+
+---
+
+### Event Callbacks (C++ → Lua)
+
+Callbacks disparam **apenas quando o proc ocorre** (~4 chamadas/s sob carga), nao em todo hit.
+Seguem o padrao TFS `Events` + `hasEvent` + `Event()`.
+
+#### Callbacks disponiveis
+
+| Callback | Quando dispara | Parametros | Retorno |
+|----------|---------------|------------|---------|
+| `onAttackProc` | On-attack spell acertou | `player, target, item, statKey, combatType, damage` | `bool` |
+| `onHitProc` | On-hit spell acertou | `player, target, item, statKey, combatType, damage` | `bool` |
+| `onDoubleDamage` | Double damage ativou | `player` | `bool` |
+| `onElementalDamage` | Elemental damage aplicado | `player, item, fireDmg` | `bool` |
+| `onKillProc` | On-kill stat processado | `player, target, item, statKey, value` | `bool` |
+
+`true` = aplica comportamento padrao do C++ apos o callback.
+`false` = pula comportamento padrao (callback fez tratamento customizado).
+
+#### Exemplo de uso
+
+```lua
+-- data/scripts/myserver/rarity_hooks.lua
+local cb = Event()
+
+function cb.onAttackProc(player, target, item, statKey, combatType, damage)
+    if statKey == "onAttackFireStrike" then
+        target:getPosition():sendMagicEffect(CONST_ME_FIREAREA)
+        -- Aplica burn condition customizada
+        local burn = Condition(CONDITION_FIRE)
+        burn:setParameter(CONDITION_PARAM_DELAYED, 5)
+        burn:setParameter(CONDITION_PARAM_TICKS, 5000)
+        target:addCondition(burn)
+    end
+    return true
+end
+
+function cb.onKillProc(player, target, item, statKey, value)
+    if statKey == "onKillRegenHp" then
+        player:addHealth(value * 2)  -- dobro da cura
+        player:getPosition():sendMagicEffect(CONST_ME_MAGIC_GREEN)
+        return false  -- pula o heal padrao do C++
+    end
+    return true
+end
+
+function cb.onDoubleDamage(player)
+    player:say("DOUBLE DAMAGE!", TALKTYPE_MONSTER_SAY)
+    return true
+end
+
+cb:register()
+```
+
+Veja `data/scripts/systems/rarity/callbacks.lua` para o exemplo completo.
+
+#### Fluxo de execucao do callback
+
+```
+C++ processRarityOnAttackStat:
+  calcula chance → fez o roll → calcula damage
+    └─ g_events->eventRarityOnAttackProc(player, target, item, key, type, dmg)
+         └─ Lua: Rarity:onAttackProc() (rarity.lua — dispatcher TFS)
+              └─ hasEvent.onAttackProc? → Event.onAttackProc(...)
+                   └─ Itera callbacks registrados com Event()
+                        ├─ callback retorna false → C++ NAO casta spell padrao
+                        └─ callback retorna true  → C++ casta spell padrao
+```
 
 ---
 
@@ -226,7 +331,7 @@ rarity.stat.onKillBuffCritChance        = 1000           (10%)
 ...
 ```
 
-O C++ le esses valores em tempo de combate via `item:getRarityStat(key)`. Nenhum valor numerico e hardcoded no C++ — todos veem do Lua (config + balancing) e sao gravados no item durante o `rollRarity()`.
+O C++ le esses valores em tempo de combate via `item:getRarityStat(key)` (retorna `std::optional<int64_t>`, Lua recebe `.value_or(0)`). Nenhum valor numerico e hardcoded no C++ — todos veem do Lua (config + balancing) e sao gravados no item durante o `rollRarity()`.
 
 Serializacao automatica pelo TFS 1.8 — zero mudancas no schema do banco.
 
@@ -243,28 +348,36 @@ Monstro morre
             └─ rollRarity(item, nil, minTier)
                  ├─ Checa elegibilidade (filtra atributos)
                  ├─ Sorteia tier (rare/epic/legendary)
-                 ├─ Seleciona 1-2 stats aleatorios
+                 ├─ Seleciona 1-2 stats aleatorios (sem reposicao)
                  ├─ Grava stats + balancing via setRarityStat()
+                 ├─ Grava spell scale + DmgMin/DmgMax (consumido pelo C++)
+                 ├─ Grava onKill buff defaults
                  └─ Modifica base stats (attack/defense/armor)
 
 Jogador equipa item
   └─ onInventoryUpdate → itemAttributes(player, item, slot, equip)
-       ├─ Le getRarityStat() de cada stat
-       ├─ Cria ConditionAttributes (skills, HP, MP, ML, exp)
-       └─ Aplica/remove condicoes
+       ├─ Le getRarityStat() de cada stat (retorna number em Lua)
+       ├─ Cria ConditionAttributes (skills, HP, MP, ML, exp) com SUBID por slot
+       └─ Ao desequipar: remove condicoes + re-aplica as restantes
 
 Combate (C++)
   Combat::doTargetCombat
     ├─ processRarityOnAttack()     → le weapon, casta spell on-attack
-    ├─ [block check]
-    ├─ [forge dodge, critical, fatal]
-    ├─ processRarityOnHit()        → le equipped, casta spell on-hit
-    ├─ processRarityDoubleDamage() → chance de 2x dano
-    ├─ processRarityElementalDamage() → adiciona elemental ao dano
+    │    └─ getRaritySpellDamage() → formula level*scale + magic*scale + base
+    │    └─ Lua callback: onAttackProc (se registrado)
+    ├─ [block check + forge dodge/crit/fatal]
+    ├─ processRarityOnHit()        → le equipped slots, best chance wins
+    │    └─ Lua callback: onHitProc (se registrado)
+    ├─ processRarityDoubleDamage() → chance somada de todos os slots
+    │    └─ Lua callback: onDoubleDamage (se registrado)
+    ├─ processRarityElementalDamage() → adiciona fire/elemental ao dano
+    │    └─ Lua callback: onElementalDamage (se registrado)
     └─ Game::combatChangeHealth()
          ├─ [Lua healthChange] → resistencias, life leech
          ├─ Aplica dano
-         └─ processRarityOnKill()  → explosion, regen, buffs
+         └─ processRarityOnKill()  → itera slots, agrega stats
+              └─ Lua callback: onKillProc por stat (se registrado)
+                   false → pula efeito padrao daquele stat
 
 Jogador loga
   └─ rarityLogin.onLogin
@@ -278,8 +391,9 @@ Jogador loga
 
 ### Comando Admin
 
-`/roll` — aplica rarity forçada no item em frente ao jogador.
-`/roll rare|epic|legendary` — força o tier especifico.
+`/i [rare|epic|legendary] <itemname|id> [, tier N] [, count]` — cria item com rarity e/ou forge tier opcionais. Se o caster nao tiver container, adiciona uma backpack automaticamente.
+
+`/roll [rare|epic|legendary]` — aplica rarity forcada no item em frente ao jogador.
 
 ---
 
@@ -290,54 +404,64 @@ Jogador loga
 ["meuAtributo"] = {
     statKey = "meuAtributo",
     name = "Meu Atributo",
-    valueType = "static",
+    valueType = "static",        -- ou "percent"
     rare = {1, 5}, epic = {6, 10}, legendary = {11, 20},
     eligible = function(itemType) return itemType:isWeapon() end,
-    -- opcional para stats que precisam de condicao:
+    isPercent = false,           -- true se for %
     onEquip = function(player, slot, value, equip)
-        -- criar/remover Condition
+        -- criar/remover Condition (para stats de condicao)
     end,
 },
 ```
 
-2. Se for **stat de condicao** (skills, HP, MP, etc.) — o `onEquip` ja resolve.
+2. **Stat de condicao** (skills, HP, MP, etc.) — o `onEquip` resolve sozinho.
 
-3. Se for **efeito de combate** (spell, double damage, elemental) — adicionar:
+3. **Efeito de combate novo** (spell, double damage, elemental) — adicionar:
    - Constante em `item.h` no `namespace Rarity`
-   - Logica em `combat.cpp` (se for on-attack/hit/damage) ou `game.cpp` (se for on-kill)
+   - Logica em `combat.cpp` ou `game.cpp`
    - Chance no `config.lua` + valores de balance no `balancing.lua`
-   - Gravacao do valor no item em `core.lua` > `rollRarity()`
+   - Gravacao no item em `core.lua` > `rollRarity()`
 
-4. Se for **protecao/leech** — adicionar em `combat.lua` no creaturescript.
+4. **Protecao/leech** — adicionar em `combat.lua` no creaturescript + statKey em `config.lua`.
+
+5. **Event callback novo** — adicionar em `events.h/cpp` seguindo o padrao existente + entrada em `events.xml` + entry no `event_callbacks.lua`.
 
 ---
 
 ### Arquivos modificados
 
-#### C++ (8 arquivos)
+#### C++23 (9 arquivos)
 
 | Arquivo | Alteracao |
 |---------|-----------|
 | `src/configmanager.h` | + `RARITY_SYSTEM_ENABLED` no enum Boolean |
 | `src/configmanager.cpp` | + parse `raritySystemEnabled` |
-| `src/item.h` | + `namespace Rarity` (constantes de keys) + Item methods (hasRarity, get/setRarityTier/Stat, clearRarityStats) + move CustomAttributeMap e alias para public |
-| `src/item.cpp` | + implementacoes dos metodos de rarity |
-| `src/combat.cpp` | + anonymous namespace: processRarityOnAttack/Hit/DoubleDamage/ElementalDamage + hooks em doTargetCombat |
-| `src/game.cpp` | + anonymous namespace: processRarityOnKill + hook em combatChangeHealth + `#include "item.h"` |
-| `src/luaitem.cpp` | + 6 metodos Lua: hasRarity, [gs]etRarityTier, [gs]etRarityStat, clearRarityStats |
+| `src/item.h` | + `namespace Rarity` (constantes + `makeStatKey()`) + Item methods com `[[nodiscard]]` e `std::optional` |
+| `src/item.cpp` | + implementacoes (`Rarity::TIER`, `makeStatKey()`, `std::optional` returns) |
+| `src/combat.cpp` | + `getRaritySpellDamage()` + 4 rarity procs + 5 callbacks + `ObserverPtr` + `shared_ptr` + `std::span` + `std::max` |
+| `src/game.cpp` | + `processRarityOnKill()` + 11 callbacks Lua + `ObserverPtr` + `shared_ptr` |
+| `src/events.h` | + 5 campos + 5 metodos de rarity callback |
+| `src/events.cpp` | + loading XML + 5 implementacoes de invoke (~110 linhas) |
+| `src/player.h` | + `getWeaponShared()`, `getInventoryItemShared()` |
+| `src/player.cpp` | + implementacoes retornando `shared_ptr<Item>` |
+| `src/luaitem.cpp` | + 6 metodos Lua + check config em `setRarityStat` |
 | `src/luascript.h` | + 6 declaracoes de metodos |
 | `src/luascript.cpp` | + `RARITY_SYSTEM_ENABLED` global + configKeys |
 
-#### Lua (8 arquivos)
+#### Lua (11 arquivos)
 
 | Arquivo | Descricao |
 |---------|-----------|
-| `data/server_config.lua` | + `raritySystemEnabled = true` |
-| `data/startup/others/functions.lua` | + `dofile('data/scripts/systems/rarity/init.lua')` |
-| `data/scripts/systems/rarity/init.lua` | entry point |
-| `data/scripts/systems/rarity/config.lua` | tiers, atributos, monster tiers |
-| `data/scripts/systems/rarity/balancing.lua` | dano spells, duracao buffs, % |
+| `data/server_config.lua` | `raritySystemEnabled = true` |
+| `data/startup/others/functions.lua` | `dofile('data/scripts/systems/rarity/init.lua')` |
+| `data/scripts/systems/rarity/init.lua` | entry point, carrega 7 modulos |
+| `data/scripts/systems/rarity/config.lua` | tiers, 45 atributos, monster tiers |
+| `data/scripts/systems/rarity/balancing.lua` | spell damage, onKill — consumido pelo C++ |
 | `data/scripts/systems/rarity/core.lua` | rollRarity, itemAttributes, processMonsterLoot |
-| `data/scripts/systems/rarity/combat.lua` | healthChange / manaChange |
-| `data/scripts/systems/rarity/events.lua` | onDropLoot, onInventoryUpdate, onLogin |
-| `data/scripts/systems/rarity/helpers.lua` | utilitarios |
+| `data/scripts/systems/rarity/combat.lua` | healthChange (protecoes + life leech) |
+| `data/scripts/systems/rarity/events.lua` | onDropLoot, onInventoryUpdate, onLogin + docs callbacks |
+| `data/scripts/systems/rarity/callbacks.lua` | exemplo de registro de eventcallbacks |
+| `data/scripts/systems/rarity/helpers.lua` | `rarityDebug()` |
+| `data/events/scripts/rarity.lua` | dispatcher intermediario TFS (onAttackProc etc.) |
+| `data/scripts/lib/event_callbacks.lua` | +5 registros `ec.onAttackProc` etc. |
+| `data/events/events.xml` | +5 entradas `<event class="Rarity" ... />` |

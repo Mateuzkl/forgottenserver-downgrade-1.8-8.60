@@ -44,4 +44,11 @@
 	<!-- Monster methods -->
 	<event class="Monster" method="onDropLoot" enabled="1" />
 	<event class="Monster" method="onSpawn" enabled="1" />
+
+	<!-- Rarity methods -->
+	<event class="Rarity" method="onAttackProc" enabled="1" />
+	<event class="Rarity" method="onHitProc" enabled="1" />
+	<event class="Rarity" method="onDoubleDamage" enabled="1" />
+	<event class="Rarity" method="onElementalDamage" enabled="1" />
+	<event class="Rarity" method="onKillProc" enabled="1" />
 </events>

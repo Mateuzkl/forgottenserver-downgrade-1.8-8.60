@@ -742,3 +742,36 @@ rarityConfig.attributes = {
 		isPercent = true,
 	},
 }
+
+-- =============================================================================
+-- TYPE REFERENCE
+-- =============================================================================
+-- All numeric values support floats (double). Integer ranges use math.random();
+-- float ranges use math.random() * (max - min) via rollValue() in core.lua.
+--
+-- Attribute fields:
+--   statKey   : string  — key stored via item:setRarityStat(), matches C++ Rarity::
+--   name      : string  — display name in item description
+--   valueType : string  — "static" (flat number) | "percent" (% suffix on display)
+--   rare/epic/legendary : {number, number} — min/max roll range (accepts floats)
+--   eligible  : fn(itemType)→bool — which item types can roll this stat
+--   isPercent : bool  — true = display "%" suffix
+--   onEquip   : fn?  — optional, for condition-based stats (skills, HP, MP, etc.)
+--
+-- Tier fields:
+--   name             : string
+--   article          : string  — "a rare", "an epic", "a legendary"
+--   chance           : number  — out of 10000
+--   secondStatChance : number  — % chance to roll a second stat
+--   color            : number  — TEXTCOLOR_* constant
+--
+-- Monster tier fields:
+--   chance   : number    — % chance for rarity on this monster's loot
+--   minTier  : number    — 1=rare, 2=epic, 3=legendary
+--   monsters : {string}  — list of lowercase monster names
+--
+-- Examples:
+--   Flat int:      rare = {30, 60}
+--   Percent int:   rare = {5, 10}
+--   Float:         rare = {1.5, 3.7}     (e.g. 1.5% life leech)
+--   Hybrid:        epic = {80.5, 120}    (mix of float and int)

@@ -13,9 +13,20 @@
 #include "tools.h"
 #include "imbuement.h"
 
+#include <optional>
+
 namespace Rarity {
 
 inline constexpr std::string_view TIER = "rarity.tier";
+
+inline std::string makeStatKey(std::string_view stat)
+{
+	std::string key;
+	key.reserve(12 + stat.size());
+	key.append("rarity.stat.");
+	key.append(stat);
+	return key;
+}
 
 inline constexpr std::string_view STAT_ON_ATTACK_FIRE = "onAttackFireStrike";
 inline constexpr std::string_view STAT_ON_ATTACK_ICE = "onAttackIceStrike";
@@ -260,6 +271,16 @@ public:
 				return boost::get<int64_t>(value);
 			}
 			return 0;
+		}
+
+		double getDouble() const {
+			if (value.type() == typeid(double)) {
+				return boost::get<double>(value);
+			}
+			if (value.type() == typeid(int64_t)) {
+				return static_cast<double>(boost::get<int64_t>(value));
+			}
+			return 0.0;
 		}
 
 		struct SerializeVisitor : public boost::static_visitor<>
@@ -884,11 +905,11 @@ public:
 	double getMomentumChance() const;
 	double getTranscendenceChance() const;
 
-	bool hasRarity();
-	int32_t getRarityTier();
+	[[nodiscard]] bool hasRarity();
+	[[nodiscard]] std::optional<int32_t> getRarityTier();
 	void setRarityTier(int32_t tier);
-	int64_t getRarityStat(std::string_view stat);
-	void setRarityStat(std::string_view stat, int64_t value);
+	[[nodiscard]] std::optional<double> getRarityStat(std::string_view stat);
+	void setRarityStat(std::string_view stat, double value);
 	void clearRarityStats();
 
 	bool hasProperty(ITEMPROPERTY prop) const;

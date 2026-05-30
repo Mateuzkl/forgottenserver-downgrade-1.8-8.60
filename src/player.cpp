@@ -458,6 +458,22 @@ Item* Player::getInventoryItem(uint32_t slot) const
 	return inventory[slot].get();
 }
 
+std::shared_ptr<Item> Player::getInventoryItemShared(slots_t slot) const
+{
+	if (slot < CONST_SLOT_FIRST || slot > CONST_SLOT_LAST) {
+		return nullptr;
+	}
+	return inventory[slot];
+}
+
+std::shared_ptr<Item> Player::getInventoryItemShared(uint32_t slot) const
+{
+	if (slot < CONST_SLOT_FIRST || slot > CONST_SLOT_LAST) {
+		return nullptr;
+	}
+	return inventory[slot];
+}
+
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const
 {
 	if (!item || slot < CONST_SLOT_FIRST || slot > CONST_SLOT_LAST) {
@@ -529,6 +545,62 @@ Item* Player::getWeapon(bool ignoreAmmo /* = false*/) const
 	}
 
 	item = getWeapon(CONST_SLOT_RIGHT, ignoreAmmo);
+	if (item) {
+		return item;
+	}
+	return nullptr;
+}
+
+std::shared_ptr<Item> Player::getWeaponShared(slots_t slot, bool ignoreAmmo) const
+{
+	auto item = inventory[slot];
+	if (!item) {
+		return nullptr;
+	}
+
+	WeaponType_t weaponType = item->getWeaponType();
+	if (weaponType == WEAPON_NONE || weaponType == WEAPON_SHIELD || weaponType == WEAPON_AMMO || weaponType == WEAPON_QUIVER) {
+		return nullptr;
+	}
+
+	if (!ignoreAmmo && weaponType == WEAPON_DISTANCE) {
+		const ItemType& it = Item::items[item->getID()];
+		if (it.ammoType != AMMO_NONE) {
+			auto ammoItem = inventory[CONST_SLOT_AMMO];
+			if (!ammoItem || ammoItem->getAmmoType() != it.ammoType) {
+				auto rightItem = inventory[CONST_SLOT_RIGHT];
+				if (rightItem && rightItem->getWeaponType() == WEAPON_QUIVER) {
+					if (Container* quiverContainer = rightItem->getContainer()) {
+						for (const auto& containerItem : quiverContainer->getItemList()) {
+							if (containerItem->getAmmoType() == it.ammoType) {
+								const Weapon* quiverAmmoWeapon = g_weapons->getWeapon(containerItem.get());
+								if (quiverAmmoWeapon && quiverAmmoWeapon->ammoCheck(this)) {
+									return containerItem;
+								}
+							}
+						}
+					}
+				}
+				return nullptr;
+			}
+			item = ammoItem;
+		}
+	}
+	return item;
+}
+
+std::shared_ptr<Item> Player::getWeaponShared(bool ignoreAmmo /* = false*/) const
+{
+	if (isDualWielding()) {
+		return getWeaponShared(getAttackHand(), ignoreAmmo);
+	}
+
+	auto item = getWeaponShared(CONST_SLOT_LEFT, ignoreAmmo);
+	if (item) {
+		return item;
+	}
+
+	item = getWeaponShared(CONST_SLOT_RIGHT, ignoreAmmo);
 	if (item) {
 		return item;
 	}

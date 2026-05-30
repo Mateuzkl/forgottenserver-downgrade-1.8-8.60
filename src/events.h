@@ -76,6 +76,13 @@ class Events
 		// Item
 		int32_t itemOnImbue = -1;
 		int32_t itemOnRemoveImbue = -1;
+
+		// Rarity
+		int32_t rarityOnAttackProc = -1;
+		int32_t rarityOnHitProc = -1;
+		int32_t rarityOnDoubleDamage = -1;
+		int32_t rarityOnElementalDamage = -1;
+		int32_t rarityOnKillProc = -1;
 	};
 
 public:
@@ -137,6 +144,16 @@ public:
 	// Item
 	bool eventItemOnImbue(Item* item, std::shared_ptr<Imbuement> imbuement, bool created = true);
 	void eventItemOnRemoveImbue(Item* item, ImbuementType imbueType, bool decayed = false);
+
+	// Rarity
+	bool eventRarityOnAttackProc(Player* player, Creature* target, Item* item, std::string_view statKey,
+	                             CombatType_t combatType, double damage);
+	bool eventRarityOnHitProc(Player* player, Creature* target, Item* item, std::string_view statKey,
+	                          CombatType_t combatType, double damage);
+	bool eventRarityOnDoubleDamage(Player* player);
+	bool eventRarityOnElementalDamage(Player* player, Item* item, double fireDmg);
+	bool eventRarityOnKillProc(Player* player, Creature* target, Item* item, std::string_view statKey,
+	                           double value);
 
 	int32_t getScriptId(EventInfoId eventInfoId)
 	{

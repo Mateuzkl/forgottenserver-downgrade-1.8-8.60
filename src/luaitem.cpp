@@ -1161,7 +1161,7 @@ int LuaScriptInterface::luaItemGetRarityTier(lua_State* L)
 {
 	Item* item = getItemUserdata<Item>(L, 1);
 	if (item) {
-		lua_pushinteger(L, item->getRarityTier());
+		lua_pushinteger(L, item->getRarityTier().value_or(0));
 	} else {
 		lua_pushnil(L);
 	}
@@ -1188,7 +1188,7 @@ int LuaScriptInterface::luaItemGetRarityStat(lua_State* L)
 {
 	Item* item = getItemUserdata<Item>(L, 1);
 	if (item) {
-		lua_pushinteger(L, item->getRarityStat(getString(L, 2)));
+		lua_pushnumber(L, item->getRarityStat(getString(L, 2)).value_or(0.0));
 	} else {
 		lua_pushnil(L);
 	}
@@ -1199,7 +1199,11 @@ int LuaScriptInterface::luaItemSetRarityStat(lua_State* L)
 {
 	Item* item = getItemUserdata<Item>(L, 1);
 	if (item) {
-		item->setRarityStat(getString(L, 2), getInteger<int64_t>(L, 3));
+		if (!ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) {
+			pushBoolean(L, false);
+			return 1;
+		}
+		item->setRarityStat(getString(L, 2), getNumber<double>(L, 3));
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);

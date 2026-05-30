@@ -69,6 +69,13 @@ ec.onSpawn = {}
 ec.onImbue = {}
 ec.onRemoveImbue = {}
 
+-- Rarity
+ec.onAttackProc = {}
+ec.onHitProc = {}
+ec.onDoubleDamage = {}
+ec.onElementalDamage = {}
+ec.onKillProc = {}
+
 local EventMeta = {
 	__newindex = function(self, key, callback)
 		if not isScriptsInterface() then return end

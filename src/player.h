@@ -501,6 +501,8 @@ public:
 
 	Item* getInventoryItem(slots_t slot) const;
 	Item* getInventoryItem(uint32_t slot) const;
+	std::shared_ptr<Item> getInventoryItemShared(slots_t slot) const;
+	std::shared_ptr<Item> getInventoryItemShared(uint32_t slot) const;
 	bool hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const;
 	bool isInventorySlot(slots_t slot) const;
 
@@ -681,6 +683,8 @@ public:
 
 	Item* getWeapon(slots_t slot, bool ignoreAmmo) const;
 	Item* getWeapon(bool ignoreAmmo = false) const;
+	std::shared_ptr<Item> getWeaponShared(slots_t slot, bool ignoreAmmo) const;
+	std::shared_ptr<Item> getWeaponShared(bool ignoreAmmo = false) const;
 	WeaponType_t getWeaponType() const;
 	int32_t getWeaponSkill(const Item* item) const;
 	void getShieldAndWeapon(const Item*& shield, const Item*& weapon) const;

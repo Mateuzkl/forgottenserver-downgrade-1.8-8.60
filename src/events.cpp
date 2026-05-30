@@ -5,6 +5,7 @@
 
 #include "events.h"
 
+#include "combat.h"
 #include "item.h"
 #include "player.h"
 #include "imbuement.h"
@@ -148,6 +149,20 @@ bool Events::load()
 				info.itemOnRemoveImbue = event;
 			} else {
 				LOG_WARN(fmt::format("[Warning - Events::load] Unknown item method: {}", methodName));
+			}
+		} else if (className == "Rarity") {
+			if (methodName == "onAttackProc") {
+				info.rarityOnAttackProc = event;
+			} else if (methodName == "onHitProc") {
+				info.rarityOnHitProc = event;
+			} else if (methodName == "onDoubleDamage") {
+				info.rarityOnDoubleDamage = event;
+			} else if (methodName == "onElementalDamage") {
+				info.rarityOnElementalDamage = event;
+			} else if (methodName == "onKillProc") {
+				info.rarityOnKillProc = event;
+			} else {
+				LOG_WARN(fmt::format("[Warning - Events::load] Unknown rarity method: {}", methodName));
 			}
 		} else {
 			LOG_WARN(fmt::format("[Warning - Events::load] Unknown class: {}", className));
@@ -1365,4 +1380,119 @@ void Events::eventItemOnRemoveImbue(Item* item, ImbuementType imbueType, bool de
 	Lua::pushBoolean(L, decayed);
 
 	return scriptInterface.callVoidFunction(3);
+}
+
+// Rarity
+bool Events::eventRarityOnAttackProc(Player* player, Creature* target, Item* item, std::string_view statKey,
+                                     CombatType_t combatType, double damage)
+{
+	if (info.rarityOnAttackProc == -1) {
+		return true;
+	}
+
+	if (!scriptInterface.reserveScriptEnv()) {
+		LOG_ERROR("[Error - Events::eventRarityOnAttackProc] Call stack overflow");
+		return true;
+	}
+
+	ScriptEnvironment* env = scriptInterface.getScriptEnv();
+	env->setScriptId(info.rarityOnAttackProc, &scriptInterface);
+
+	lua_State* L = scriptInterface.getLuaState();
+	scriptInterface.pushFunction(info.rarityOnAttackProc);
+
+	Lua::pushUserdata<Player>(L, player);
+	Lua::setMetatable(L, -1, "Player");
+	Lua::pushUserdata<Creature>(L, target);
+	Lua::setCreatureMetatable(L, -1, target);
+	pushSharedItem(L, item);
+	lua_pushlstring(L, statKey.data(), statKey.size());
+	lua_pushinteger(L, combatType);
+	lua_pushnumber(L, damage);
+
+	return scriptInterface.callFunction(6);
+}
+
+bool Events::eventRarityOnHitProc(Player* player, Creature* target, Item* item, std::string_view statKey,
+                                  CombatType_t combatType, double damage)
+{
+	if (info.rarityOnHitProc == -1) {
+		return true;
+	}
+
+	if (!scriptInterface.reserveScriptEnv()) {
+		LOG_ERROR("[Error - Events::eventRarityOnHitProc] Call stack overflow");
+		return true;
+	}
+
+	ScriptEnvironment* env = scriptInterface.getScriptEnv();
+	env->setScriptId(info.rarityOnHitProc, &scriptInterface);
+
+	lua_State* L = scriptInterface.getLuaState();
+	scriptInterface.pushFunction(info.rarityOnHitProc);
+
+	Lua::pushUserdata<Player>(L, player);
+	Lua::setMetatable(L, -1, "Player");
+	Lua::pushUserdata<Creature>(L, target);
+	Lua::setCreatureMetatable(L, -1, target);
+	pushSharedItem(L, item);
+	lua_pushlstring(L, statKey.data(), statKey.size());
+	lua_pushinteger(L, combatType);
+	lua_pushnumber(L, damage);
+
+	return scriptInterface.callFunction(6);
+}
+
+bool Events::eventRarityOnElementalDamage(Player* player, Item* item, double fireDmg)
+{
+	if (info.rarityOnElementalDamage == -1) {
+		return true;
+	}
+
+	if (!scriptInterface.reserveScriptEnv()) {
+		LOG_ERROR("[Error - Events::eventRarityOnElementalDamage] Call stack overflow");
+		return true;
+	}
+
+	ScriptEnvironment* env = scriptInterface.getScriptEnv();
+	env->setScriptId(info.rarityOnElementalDamage, &scriptInterface);
+
+	lua_State* L = scriptInterface.getLuaState();
+	scriptInterface.pushFunction(info.rarityOnElementalDamage);
+
+	Lua::pushUserdata<Player>(L, player);
+	Lua::setMetatable(L, -1, "Player");
+	pushSharedItem(L, item);
+	lua_pushnumber(L, fireDmg);
+
+	return scriptInterface.callFunction(3);
+}
+
+bool Events::eventRarityOnKillProc(Player* player, Creature* target, Item* item, std::string_view statKey,
+                                   double value)
+{
+	if (info.rarityOnKillProc == -1) {
+		return true;
+	}
+
+	if (!scriptInterface.reserveScriptEnv()) {
+		LOG_ERROR("[Error - Events::eventRarityOnKillProc] Call stack overflow");
+		return true;
+	}
+
+	ScriptEnvironment* env = scriptInterface.getScriptEnv();
+	env->setScriptId(info.rarityOnKillProc, &scriptInterface);
+
+	lua_State* L = scriptInterface.getLuaState();
+	scriptInterface.pushFunction(info.rarityOnKillProc);
+
+	Lua::pushUserdata<Player>(L, player);
+	Lua::setMetatable(L, -1, "Player");
+	Lua::pushUserdata<Creature>(L, target);
+	Lua::setCreatureMetatable(L, -1, target);
+	pushSharedItem(L, item);
+	lua_pushlstring(L, statKey.data(), statKey.size());
+	lua_pushnumber(L, value);
+
+	return scriptInterface.callFunction(5);
 }

@@ -158,52 +158,166 @@ void closeContainersFromOtherInstances(Player* player)
 	}
 }
 
-void processRarityOnKill(Player* player, Creature* target)
+void processRarityOnKill(ObserverPtr<Player> player, ObserverPtr<Creature> target)
 {
 	if (!player || !target || !ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) return;
 
-	int64_t explosionChance = 0;
-	int64_t regenHp = 0;
-	int64_t regenMp = 0;
-	int64_t buffDamageChance = 0;
-	int64_t buffMaxHpChance = 0;
-	int64_t buffMaxMpChance = 0;
+	double explosionChance = 0.0;
+	double regenHp = 0.0;
+	double regenMp = 0.0;
+	double buffDamageChance = 0.0;
+	double buffMaxHpChance = 0.0;
+	double buffMaxMpChance = 0.0;
 
-	int64_t buffDuration = 30000;
-	int64_t buffCritChance = 1000;
-	int64_t buffCritAmount = 5000;
-	int64_t buffMaxHpPct = 5;
-	int64_t buffMaxMpPct = 5;
+	double buffDuration = 30000.0;
+	double buffCritChance = 1000.0;
+	double buffCritAmount = 5000.0;
+	double buffMaxHpPct = 5.0;
+	double buffMaxMpPct = 5.0;
 
 	for (slots_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; slot = static_cast<slots_t>(static_cast<uint8_t>(slot) + 1)) {
-		auto* item = player->getInventoryItem(slot);
-		if (!item || item->getRarityTier() == 0) continue;
+		auto item = player->getInventoryItemShared(slot);
+		if (!item || !item->getRarityTier()) continue;
 
-		int64_t val = item->getRarityStat(Rarity::STAT_ON_KILL_EXPLOSION);
-		if (val > explosionChance) explosionChance = val;
+		double val = item->getRarityStat(Rarity::STAT_ON_KILL_EXPLOSION).value_or(0.0);
+		if (val > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_EXPLOSION, val)) {
+			if (val > explosionChance) explosionChance = val;
+		}
 
-		regenHp += item->getRarityStat(Rarity::STAT_ON_KILL_REGEN_HP);
-		regenMp += item->getRarityStat(Rarity::STAT_ON_KILL_REGEN_MP);
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_REGEN_HP).value_or(0.0);
+		if (val > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_REGEN_HP, val)) {
+			regenHp += val;
+		}
 
-		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DAMAGE);
-		if (val > buffDamageChance) buffDamageChance = val;
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_REGEN_MP).value_or(0.0);
+		if (val > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_REGEN_MP, val)) {
+			regenMp += val;
+		}
 
-		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP);
-		if (val > buffMaxHpChance) buffMaxHpChance = val;
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DAMAGE).value_or(0.0);
+		if (val > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_DAMAGE, val)) {
+			if (val > buffDamageChance) buffDamageChance = val;
+		}
 
-		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP);
-		if (val > buffMaxMpChance) buffMaxMpChance = val;
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP).value_or(0.0);
+		if (val > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXHP, val)) {
+			if (val > buffMaxHpChance) buffMaxHpChance = val;
+		}
 
-		int64_t itemBuffDuration = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DURATION);
-		if (itemBuffDuration > 0) buffDuration = itemBuffDuration;
-		int64_t itemCritChance = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_CHANCE);
-		if (itemCritChance > 0) buffCritChance = itemCritChance;
-		int64_t itemCritAmount = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_AMOUNT);
-		if (itemCritAmount > 0) buffCritAmount = itemCritAmount;
-		int64_t itemHpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP_PCT);
-		if (itemHpPct > 0) buffMaxHpPct = itemHpPct;
-		int64_t itemMpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP_PCT);
-		if (itemMpPct > 0) buffMaxMpPct = itemMpPct;
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP).value_or(0.0);
+		if (val > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXMP, val)) {
+			if (val > buffMaxMpChance) buffMaxMpChance = val;
+		}
+
+		double itemBuffDuration = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DURATION).value_or(0.0);
+		if (itemBuffDuration > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_DURATION, itemBuffDuration)) {
+			buffDuration = itemBuffDuration;
+		}
+		double itemCritChance = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_CHANCE).value_or(0.0);
+		if (itemCritChance > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_CRIT_CHANCE, itemCritChance)) {
+			buffCritChance = itemCritChance;
+		}
+		double itemCritAmount = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_AMOUNT).value_or(0.0);
+		if (itemCritAmount > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_CRIT_AMOUNT, itemCritAmount)) {
+			buffCritAmount = itemCritAmount;
+		}
+		double itemHpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP_PCT).value_or(0.0);
+		if (itemHpPct > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXHP_PCT, itemHpPct)) {
+			buffMaxHpPct = itemHpPct;
+		}
+		double itemMpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP_PCT).value_or(0.0);
+		if (itemMpPct > 0.0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXMP_PCT, itemMpPct)) {
+			buffMaxMpPct = itemMpPct;
+		}
+	}
+
+	if (explosionChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(explosionChance)) {
+		g_game.addMagicEffect(target->getPosition(), CONST_ME_EXPLOSIONAREA);
+	}
+
+	if (regenHp > 0.0) {
+		CombatDamage healDamage;
+		healDamage.primary.type = COMBAT_HEALING;
+		healDamage.primary.value = static_cast<int32_t>(regenHp);
+		healDamage.origin = ORIGIN_NONE;
+		g_game.combatChangeHealth(nullptr, player, healDamage);
+	}
+
+	if (regenMp > 0.0) {
+		CombatDamage manaDamage;
+		manaDamage.primary.type = COMBAT_MANADRAIN;
+		manaDamage.primary.value = static_cast<int32_t>(regenMp);
+		manaDamage.origin = ORIGIN_NONE;
+		g_game.combatChangeMana(nullptr, player, manaDamage);
+	}
+
+	if (buffDamageChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(buffDamageChance)) {
+		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
+		condition->setParam(CONDITION_PARAM_SPECIALSKILL_CRITICALHITCHANCE, static_cast<int32_t>(buffCritChance));
+		condition->setParam(CONDITION_PARAM_SPECIALSKILL_CRITICALHITAMOUNT, static_cast<int32_t>(buffCritAmount));
+		player->addCondition(std::move(condition));
+	}
+
+	if (buffMaxHpChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(buffMaxHpChance)) {
+		int32_t hpBonus = static_cast<int32_t>(player->getMaxHealth() * (static_cast<float>(buffMaxHpPct) / 100.f));
+		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
+		condition->setParam(CONDITION_PARAM_STAT_MAXHITPOINTS, hpBonus);
+		player->addCondition(std::move(condition));
+	}
+
+	if (buffMaxMpChance > 0.0 && uniform_random(1, 100) <= static_cast<int32_t>(buffMaxMpChance)) {
+		int32_t mpBonus = static_cast<int32_t>(player->getMaxMana() * (static_cast<float>(buffMaxMpPct) / 100.f));
+		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_ATTRIBUTES, static_cast<int32_t>(buffDuration), 0, false, 0);
+		condition->setParam(CONDITION_PARAM_STAT_MAXMANAPOINTS, mpBonus);
+		player->addCondition(std::move(condition));
+	}
+}
+
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_REGEN_HP).value_or(0);
+		if (val > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_REGEN_HP, val)) {
+			regenHp += val;
+		}
+
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_REGEN_MP).value_or(0);
+		if (val > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_REGEN_MP, val)) {
+			regenMp += val;
+		}
+
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DAMAGE).value_or(0);
+		if (val > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_DAMAGE, val)) {
+			if (val > buffDamageChance) buffDamageChance = val;
+		}
+
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP).value_or(0);
+		if (val > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXHP, val)) {
+			if (val > buffMaxHpChance) buffMaxHpChance = val;
+		}
+
+		val = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP).value_or(0);
+		if (val > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXMP, val)) {
+			if (val > buffMaxMpChance) buffMaxMpChance = val;
+		}
+
+		int64_t itemBuffDuration = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_DURATION).value_or(0);
+		if (itemBuffDuration > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_DURATION, itemBuffDuration)) {
+			buffDuration = itemBuffDuration;
+		}
+		int64_t itemCritChance = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_CHANCE).value_or(0);
+		if (itemCritChance > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_CRIT_CHANCE, itemCritChance)) {
+			buffCritChance = itemCritChance;
+		}
+		int64_t itemCritAmount = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_CRIT_AMOUNT).value_or(0);
+		if (itemCritAmount > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_CRIT_AMOUNT, itemCritAmount)) {
+			buffCritAmount = itemCritAmount;
+		}
+		int64_t itemHpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXHP_PCT).value_or(0);
+		if (itemHpPct > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXHP_PCT, itemHpPct)) {
+			buffMaxHpPct = itemHpPct;
+		}
+		int64_t itemMpPct = item->getRarityStat(Rarity::STAT_ON_KILL_BUFF_MAXMP_PCT).value_or(0);
+		if (itemMpPct > 0 && g_events->eventRarityOnKillProc(player, target, item.get(), Rarity::STAT_ON_KILL_BUFF_MAXMP_PCT, itemMpPct)) {
+			buffMaxMpPct = itemMpPct;
+		}
 	}
 
 	if (explosionChance > 0 && uniform_random(1, 100) <= explosionChance) {

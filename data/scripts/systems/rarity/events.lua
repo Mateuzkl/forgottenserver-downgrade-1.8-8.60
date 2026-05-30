@@ -1,5 +1,24 @@
 -- Rarity Event Registrations
--- onDropLoot, onInventoryUpdate, onKill, onLogin hooks.
+-- onDropLoot, onInventoryUpdate, onLogin hooks.
+--
+-- === EVENT CALLBACKS (C++ → Lua, dispatched via events.xml + rarity.lua) ===
+-- These fire ONLY when a proc actually occurs (~4 calls/sec even under load).
+-- Register via Event() in any script file:
+--
+--   local cb = Event()
+--   cb.onAttackProc = function(player, target, item, statKey, combatType, damage)
+--       return true  -- false = skip default C++ behavior
+--   end
+--   cb:register()
+--
+-- Available callbacks:
+--   onAttackProc(player, target, item, statKey, combatType, damage) → bool
+--   onHitProc(player, target, item, statKey, combatType, damage) → bool
+--   onDoubleDamage(player) → bool
+--   onElementalDamage(player, item, fireDmg) → bool
+--   onKillProc(player, target, item, statKey, value) → bool
+--
+-- See callbacks.lua for a complete working example.
 
 -- =============================================================================
 -- onDropLoot: Roll rarity on monster corpse items

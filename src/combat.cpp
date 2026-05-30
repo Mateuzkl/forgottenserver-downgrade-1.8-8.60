@@ -15,6 +15,8 @@
 #include "pugicast.h"
 #include "weapons.h"
 
+#include <span>
+
 extern Game g_game;
 
 namespace {
@@ -47,15 +49,31 @@ namespace {
 inline constexpr std::array<slots_t, 5> RARITY_ATTACK_SLOTS = {
 	CONST_SLOT_LEFT, CONST_SLOT_RIGHT, CONST_SLOT_NECKLACE, CONST_SLOT_HEAD, CONST_SLOT_RING
 };
+inline constexpr std::span<const slots_t> RARITY_ATTACK_SLOTS_SPAN{RARITY_ATTACK_SLOTS};
 
-int32_t getRaritySpellDamage(Player* player, Item* item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
+double getRaritySpellDamage(ObserverPtr<Player> player, ObserverPtr<Item> item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
+{
+	double scaleLevel = item->getRarityStat(Rarity::STAT_SPELL_SCALE_LEVEL).value_or(0.0);
+	double scaleMagic = item->getRarityStat(Rarity::STAT_SPELL_SCALE_MAGIC).value_or(0.0);
+	double divisor = item->getRarityStat(Rarity::STAT_SPELL_SCALE_DIVISOR).value_or(1.0);
+	double dmgMin = item->getRarityStat(dmgMinKey).value_or(0.0);
+	double dmgMax = item->getRarityStat(dmgMaxKey).value_or(0.0);
 
-void castRaritySpell(Player* player, Creature* target, CombatType_t combatType, CombatOrigin origin,
-                     Item* item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
+	double baseDmg = (dmgMin + dmgMax) / 2.0;
+	if (dmgMax > dmgMin) {
+		baseDmg = uniform_random(static_cast<int32_t>(dmgMin), static_cast<int32_t>(dmgMax));
+	}
+
+	double scaled = (player->getLevel() * scaleLevel + player->getMagicLevel() * scaleMagic) / std::max<double>(divisor, 1.0);
+	return baseDmg + scaled;
+}
+
+void castRaritySpell(ObserverPtr<Player> player, ObserverPtr<Creature> target, CombatType_t combatType, CombatOrigin origin,
+                     ObserverPtr<Item> item, const std::string& dmgMinKey, const std::string& dmgMaxKey)
 {
 	CombatDamage dmg;
 	dmg.primary.type = combatType;
-	dmg.primary.value = getRaritySpellDamage(player, item, dmgMinKey, dmgMaxKey);
+	dmg.primary.value = static_cast<int32_t>(getRaritySpellDamage(player, item, dmgMinKey, dmgMaxKey));
 	dmg.origin = origin;
 	if (auto* tp = target->getPlayer(); tp && player != tp) {
 		dmg.primary.value /= 2;
@@ -63,44 +81,50 @@ void castRaritySpell(Player* player, Creature* target, CombatType_t combatType, 
 	g_game.combatChangeHealth(player, target, dmg);
 }
 
-void processRarityOnAttackStat(Player* player, Creature* target, CombatDamage& damage,
+void processRarityOnAttackStat(ObserverPtr<Player> player, ObserverPtr<Creature> target, CombatDamage& damage,
                                std::string_view statKey, CombatType_t combatType)
 {
-	auto* weapon = player->getWeapon();
+	auto weapon = player->getWeaponShared();
 	if (!weapon) return;
-	int64_t chance = weapon->getRarityStat(statKey);
-	if (chance <= 0) return;
+	double chance = weapon->getRarityStat(statKey).value_or(0.0);
+	if (chance <= 0.0) return;
 	std::string dmgMinKey(statKey);
 	dmgMinKey.append(Rarity::STAT_SPELL_DMG_MIN_SUFFIX);
 	std::string dmgMaxKey(statKey);
 	dmgMaxKey.append(Rarity::STAT_SPELL_DMG_MAX_SUFFIX);
-	if (uniform_random(1, 10000) <= static_cast<uint16_t>(chance)) {
-		castRaritySpell(player, target, combatType, damage.origin, weapon, dmgMinKey, dmgMaxKey);
-	}
-}
-
-void processRarityOnHitStat(Player* player, Creature* target, CombatDamage& damage,
-                            std::string_view statKey, CombatType_t combatType)
-{
-	int64_t chance = 0;
-	Item* bestItem = nullptr;
-	for (slots_t slot : RARITY_ATTACK_SLOTS) {
-		if (auto* item = player->getInventoryItem(slot)) {
-			int64_t val = item->getRarityStat(statKey);
-			if (val > chance) { chance = val; bestItem = item; }
+	if (chance >= 100.0 || uniform_random(1, 100) <= static_cast<int32_t>(std::min<double>(chance, 100.0))) {
+		double dmg = getRaritySpellDamage(player, weapon.get(), dmgMinKey, dmgMaxKey);
+		if (g_events->eventRarityOnAttackProc(player, target, weapon.get(), statKey, combatType, dmg)) {
+			castRaritySpell(player, target, combatType, damage.origin, weapon.get(), dmgMinKey, dmgMaxKey);
 		}
 	}
-	if (chance <= 0 || !bestItem) return;
+}
+
+void processRarityOnHitStat(ObserverPtr<Player> player, ObserverPtr<Creature> target, CombatDamage& damage,
+                            std::string_view statKey, CombatType_t combatType)
+{
+	std::pair<double, std::shared_ptr<Item>> best;
+	for (slots_t slot : RARITY_ATTACK_SLOTS_SPAN) {
+		if (auto item = player->getInventoryItemShared(slot)) {
+			if (auto stat = item->getRarityStat(statKey)) {
+				best = std::max(best, std::pair{*stat, item});
+			}
+		}
+	}
+	if (best.first <= 0.0 || !best.second) return;
 	std::string dmgMinKey(statKey);
 	dmgMinKey.append(Rarity::STAT_SPELL_DMG_MIN_SUFFIX);
 	std::string dmgMaxKey(statKey);
 	dmgMaxKey.append(Rarity::STAT_SPELL_DMG_MAX_SUFFIX);
-	if (uniform_random(1, 10000) <= static_cast<uint16_t>(chance)) {
-		castRaritySpell(player, target, combatType, damage.origin, bestItem, dmgMinKey, dmgMaxKey);
+	if (best.first >= 100.0 || uniform_random(1, 100) <= static_cast<int32_t>(std::min<double>(best.first, 100.0))) {
+		double dmg = getRaritySpellDamage(player, best.second.get(), dmgMinKey, dmgMaxKey);
+		if (g_events->eventRarityOnHitProc(player, target, best.second.get(), statKey, combatType, dmg)) {
+			castRaritySpell(player, target, combatType, damage.origin, best.second.get(), dmgMinKey, dmgMaxKey);
+		}
 	}
 }
 
-void processRarityOnAttack(Player* player, Creature* target, CombatDamage& damage)
+void processRarityOnAttack(ObserverPtr<Player> player, ObserverPtr<Creature> target, CombatDamage& damage)
 {
 	if (!player || !target || !ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) return;
 	processRarityOnAttackStat(player, target, damage, Rarity::STAT_ON_ATTACK_FIRE, COMBAT_FIREDAMAGE);
@@ -111,7 +135,7 @@ void processRarityOnAttack(Player* player, Creature* target, CombatDamage& damag
 	processRarityOnAttackStat(player, target, damage, Rarity::STAT_ON_ATTACK_DIVINE, COMBAT_HOLYDAMAGE);
 }
 
-void processRarityOnHit(Player* player, Creature* target, CombatDamage& damage)
+void processRarityOnHit(ObserverPtr<Player> player, ObserverPtr<Creature> target, CombatDamage& damage)
 {
 	if (!player || !target || !ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) return;
 	processRarityOnHitStat(player, target, damage, Rarity::STAT_ON_HIT_FIRE, COMBAT_FIREDAMAGE);
@@ -122,40 +146,44 @@ void processRarityOnHit(Player* player, Creature* target, CombatDamage& damage)
 	processRarityOnHitStat(player, target, damage, Rarity::STAT_ON_HIT_DIVINE, COMBAT_HOLYDAMAGE);
 }
 
-void processRarityElementalDamage(Player* player, CombatDamage& damage)
+void processRarityElementalDamage(ObserverPtr<Player> player, CombatDamage& damage)
 {
 	if (!player || !ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) return;
 	if (damage.primary.type == COMBAT_HEALING || damage.primary.type == COMBAT_MANADRAIN) return;
 
-	for (slots_t slot : RARITY_ATTACK_SLOTS) {
-		auto* item = player->getInventoryItem(slot);
+	for (slots_t slot : RARITY_ATTACK_SLOTS_SPAN) {
+		auto item = player->getInventoryItemShared(slot);
 		if (!item) continue;
 
-		int64_t fireDmg = item->getRarityStat(Rarity::STAT_FIRE_DAMAGE);
-		int64_t elementalDmg = item->getRarityStat(Rarity::STAT_ELEMENTAL_DAMAGE);
-		if (elementalDmg > 0 && fireDmg == 0) fireDmg = elementalDmg;
-		if (fireDmg > 0 && damage.secondary.type == COMBAT_NONE) {
-			damage.secondary.type = COMBAT_FIREDAMAGE;
-			damage.secondary.value = static_cast<int32_t>(fireDmg);
+		double fireDmg = item->getRarityStat(Rarity::STAT_FIRE_DAMAGE).value_or(0.0);
+		double elementalDmg = item->getRarityStat(Rarity::STAT_ELEMENTAL_DAMAGE).value_or(0.0);
+		if (elementalDmg > 0.0 && fireDmg == 0.0) fireDmg = elementalDmg;
+		if (fireDmg > 0.0 && damage.secondary.type == COMBAT_NONE) {
+			if (g_events->eventRarityOnElementalDamage(player, item.get(), fireDmg)) {
+				damage.secondary.type = COMBAT_FIREDAMAGE;
+				damage.secondary.value = static_cast<int32_t>(fireDmg);
+			}
 		}
 	}
 }
 
-void processRarityDoubleDamage(Player* player, CombatDamage& damage)
+void processRarityDoubleDamage(ObserverPtr<Player> player, CombatDamage& damage)
 {
 	if (!player || !ConfigManager::getBoolean(ConfigManager::RARITY_SYSTEM_ENABLED)) return;
 	if (damage.primary.type == COMBAT_HEALING || damage.primary.type == COMBAT_MANADRAIN) return;
 
-	int64_t totalChance = 0;
-	for (slots_t slot : RARITY_ATTACK_SLOTS) {
-		if (auto* item = player->getInventoryItem(slot)) {
-			totalChance += item->getRarityStat(Rarity::STAT_DOUBLE_DAMAGE);
+	double totalChance = 0.0;
+	for (slots_t slot : RARITY_ATTACK_SLOTS_SPAN) {
+		if (auto item = player->getInventoryItemShared(slot)) {
+			totalChance += item->getRarityStat(Rarity::STAT_DOUBLE_DAMAGE).value_or(0.0);
 		}
 	}
-	if (totalChance <= 0) return;
-	if (uniform_random(1, 10000) <= static_cast<uint16_t>(totalChance)) {
-		damage.primary.value *= 2;
-		damage.secondary.value *= 2;
+	if (totalChance <= 0.0) return;
+	if (totalChance >= 100.0 || uniform_random(1, 100) <= static_cast<int32_t>(std::min<double>(totalChance, 100.0))) {
+		if (g_events->eventRarityOnDoubleDamage(player)) {
+			damage.primary.value *= 2;
+			damage.secondary.value *= 2;
+		}
 	}
 }
 

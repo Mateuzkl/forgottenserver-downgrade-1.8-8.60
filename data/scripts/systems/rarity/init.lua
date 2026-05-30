@@ -11,5 +11,6 @@ dofile("data/scripts/systems/rarity/helpers.lua")
 dofile("data/scripts/systems/rarity/core.lua")
 dofile("data/scripts/systems/rarity/combat.lua")
 dofile("data/scripts/systems/rarity/events.lua")
+dofile("data/scripts/systems/rarity/callbacks.lua")
 
 print("[Rarity System] Loaded successfully")

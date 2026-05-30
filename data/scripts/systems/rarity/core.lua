@@ -2,6 +2,17 @@
 -- rollRarity, itemAttributes, and rollCondition functions.
 
 -- =============================================================================
+-- Roll a value in [min, max] range. Uses math.random() for integers,
+-- math.random() * (max - min) for floats.
+-- =============================================================================
+local function rollValue(min, max)
+	if min == math.floor(min) and max == math.floor(max) then
+		return math.random(min, max)
+	end
+	return min + math.random() * (max - min)
+end
+
+-- =============================================================================
 -- Roll rarity on a single item
 -- @param item The Item to roll rarity on
 -- @param forcedTier nil (natural roll), "rare"/"epic"/"legendary" (forced tier),
@@ -96,7 +107,7 @@ function rollRarity(item, forcedTier, minTier)
 		local range = attrDef[tierName]
 		if not range then break end
 
-		local value = math.random(range[1], range[2])
+		local value = rollValue(range[1], range[2])
 		rolledStats[attrKey] = value
 
 		-- Store via custom attribute
@@ -151,7 +162,11 @@ function rollRarity(item, forcedTier, minTier)
 			if attrDef.isPercent then
 				suffix = "%"
 			end
-			descParts[#descParts + 1] = "[" .. attrDef.name .. ": +" .. value .. suffix .. "]"
+			local displayValue = value
+			if math.floor(value) ~= value then
+				displayValue = string.format("%.1f", value)
+			end
+			descParts[#descParts + 1] = "[" .. attrDef.name .. ": +" .. displayValue .. suffix .. "]"
 		end
 	end
 
