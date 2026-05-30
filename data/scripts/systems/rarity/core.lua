@@ -210,15 +210,28 @@ end
 -- Apply/remove item rarity conditions when equipping/unequipping
 -- Called from onInventoryUpdate event
 -- =============================================================================
+
+-- Remove all rarity conditions for a specific slot only.
+-- Does NOT affect conditions on other slots.
+local function removeSlotConditions(player, slot)
+	-- Stat bonuses: subId = base + slot where base = 100, 200, ..., 1100
+	for base = 100, 1100, 100 do
+		player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, base + slot)
+	end
+	-- Experience: 1500 + slot
+	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, 1500 + slot)
+	-- MeleeSkills: 1200 + slot*10 + skill (SWORD=1, AXE=2, CLUB=3, FIST=4)
+	for skill = 1, 4 do
+		player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, 1200 + slot * 10 + skill)
+	end
+end
+
 function itemAttributes(player, item, slot, equip)
 	if not item or item:getRarityTier() == 0 then
 		return
 	end
 
-	-- Remove existing conditions for this slot
-	for subId = 100, 2000 do
-		player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, subId)
-	end
+	removeSlotConditions(player, slot)
 
 	if not equip then
 		return

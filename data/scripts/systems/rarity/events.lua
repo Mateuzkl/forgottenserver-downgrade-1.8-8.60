@@ -41,12 +41,8 @@ function rarityInventory.onInventoryUpdate(player, item, slot, equip)
 
 	itemAttributes(player, item, slot, equip)
 
-	-- If unequipping, also remove conditions for that slot
+	-- If unequipping, re-apply conditions from remaining equipped items
 	if not equip then
-		for subId = 100, 2000 do
-			player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, subId)
-		end
-		-- Re-apply conditions from remaining equipped items
 		for i = CONST_SLOT_FIRST, CONST_SLOT_LAST do
 			local otherItem = player:getSlotItem(i)
 			if otherItem and otherItem:getRarityTier() > 0 then
