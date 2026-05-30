@@ -6,6 +6,7 @@
 #include "combat.h"
 
 #include "configmanager.h"
+#include "events.h"
 #include "game.h"
 #include "instance_utils.h"
 #include "item.h"
