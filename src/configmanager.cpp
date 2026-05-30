@@ -635,9 +635,9 @@ bool ConfigManager::load()
 	integers[Integer::POWER_LAW_MAGIC_THRESHOLD] = getGlobalInteger(L, "powerLawMagicThreshold", 0);
 
 	// Augment System (validated to 0-100 range)
-	integers[Integer::AUGMENT_INCREASED_DAMAGE_PERCENT] = std::clamp(getGlobalInteger(L, "augmentIncreasedDamagePercent", 5), 0, 100);
-	integers[Integer::AUGMENT_POWERFUL_IMPACT_PERCENT] = std::clamp(getGlobalInteger(L, "augmentPowerfulImpactPercent", 10), 0, 100);
-	integers[Integer::AUGMENT_STRONG_IMPACT_PERCENT] = std::clamp(getGlobalInteger(L, "augmentStrongImpactPercent", 7), 0, 100);
+	integers[Integer::AUGMENT_INCREASED_DAMAGE_PERCENT] = std::clamp(static_cast<int32_t>(getGlobalInteger(L, "augmentIncreasedDamagePercent", 5)), 0, 100);
+	integers[Integer::AUGMENT_POWERFUL_IMPACT_PERCENT] = std::clamp(static_cast<int32_t>(getGlobalInteger(L, "augmentPowerfulImpactPercent", 10)), 0, 100);
+	integers[Integer::AUGMENT_STRONG_IMPACT_PERCENT] = std::clamp(static_cast<int32_t>(getGlobalInteger(L, "augmentStrongImpactPercent", 7)), 0, 100);
 
 	strings[String::ADMIN_PASSWORD] = getGlobalString(L, "adminPassword", "");
 	strings[String::ADMIN_ENCRYPTION] = getGlobalString(L, "adminEncryption", "");

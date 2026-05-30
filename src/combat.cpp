@@ -20,6 +20,16 @@
 
 extern Game g_game;
 
+static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatType)
+{
+	if (!player) {
+		return 0;
+	}
+
+	int32_t magicLevel = static_cast<int32_t>(player->getMagicLevel()) + static_cast<int32_t>(player->getSpecialMagicLevel(combatType));
+	return std::max<int32_t>(0, magicLevel);
+}
+
 namespace {
 
 inline constexpr std::array<slots_t, 5> RARITY_ATTACK_SLOTS = {
@@ -166,16 +176,6 @@ void processRarityDoubleDamage(ObserverPtr<Player> player, CombatDamage& damage)
 }
 
 } // namespace
-
-static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatType)
-{
-	if (!player) {
-		return 0;
-	}
-
-	int32_t magicLevel = static_cast<int32_t>(player->getMagicLevel()) + static_cast<int32_t>(player->getSpecialMagicLevel(combatType));
-	return std::max<int32_t>(0, magicLevel);
-}
 
 extern LuaEnvironment g_luaEnvironment;
 
