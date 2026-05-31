@@ -28,6 +28,39 @@ local playerCache = {}
 local catalogEntries
 local catalogByServerId = {}
 local serverIdByClientId = {}
+local proficiencyTableReady = false
+
+local function logError(message)
+	if logger and logger.error then
+		logger.error(message)
+	else
+		print(message)
+	end
+end
+
+local function ensureTables()
+	if proficiencyTableReady then
+		return true
+	end
+
+	local ok, success = pcall(db.query, [[
+		CREATE TABLE IF NOT EXISTS `player_weapon_proficiency` (
+			`player_id` int NOT NULL,
+			`item_id` smallint unsigned NOT NULL,
+			`experience` int unsigned NOT NULL DEFAULT '0',
+			`perks` varchar(64) NOT NULL DEFAULT '',
+			PRIMARY KEY (`player_id`, `item_id`),
+			FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+	]])
+	if not ok or not success then
+		logError("[WeaponProficiency] Failed to create player_weapon_proficiency table.")
+		return false
+	end
+
+	proficiencyTableReady = true
+	return true
+end
 
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
@@ -174,6 +207,10 @@ local function decodePerks(encoded)
 end
 
 local function saveState(guid, itemId, state)
+	if not ensureTables() then
+		return
+	end
+
 	db.asyncQuery(string.format(
 		"INSERT INTO `player_weapon_proficiency` (`player_id`, `item_id`, `experience`, `perks`) VALUES (%d, %d, %d, %s) " ..
 		"ON DUPLICATE KEY UPDATE `experience` = VALUES(`experience`), `perks` = VALUES(`perks`)",
@@ -189,21 +226,23 @@ local function loadProfile(player)
 	end
 
 	local profile = { weapons = {}, dirty = {} }
-	local resultId = db.storeQuery(
-		"SELECT `item_id`, `experience`, `perks` FROM `player_weapon_proficiency` WHERE `player_id` = " .. guid
-	)
-	if resultId then
-		repeat
-			local itemId = result.getDataInt(resultId, "item_id")
-			local canonicalId = canonicalizeServerId(itemId)
-			if canonicalId then
-				profile.weapons[canonicalId] = {
-					experience = math.max(0, result.getDataInt(resultId, "experience")),
-					perks = decodePerks(result.getDataString(resultId, "perks")),
-				}
-			end
-		until not result.next(resultId)
-		result.free(resultId)
+	if ensureTables() then
+		local resultId = db.storeQuery(
+			"SELECT `item_id`, `experience`, `perks` FROM `player_weapon_proficiency` WHERE `player_id` = " .. guid
+		)
+		if resultId then
+			repeat
+				local itemId = result.getDataInt(resultId, "item_id")
+				local canonicalId = canonicalizeServerId(itemId)
+				if canonicalId then
+					profile.weapons[canonicalId] = {
+						experience = math.max(0, result.getDataInt(resultId, "experience")),
+						perks = decodePerks(result.getDataString(resultId, "perks")),
+					}
+				end
+			until not result.next(resultId)
+			result.free(resultId)
+		end
 	end
 
 	playerCache[guid] = profile
