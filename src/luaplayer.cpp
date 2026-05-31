@@ -1838,6 +1838,20 @@ int luaPlayerGetSlotItem(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetWeaponProficiencyId(lua_State* L)
+{
+	// player:getWeaponProficiencyId()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const Item* weapon = player->getWeapon(true);
+	lua_pushinteger(L, weapon ? weapon->getID() : 0);
+	return 1;
+}
+
 int luaPlayerGetParty(lua_State* L)
 {
 	// player:getParty()
@@ -3999,6 +4013,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "closeChannel", luaPlayerCloseChannel);
 
 	registerMethod("Player", "getSlotItem", luaPlayerGetSlotItem);
+	registerMethod("Player", "getWeaponProficiencyId", luaPlayerGetWeaponProficiencyId);
 
 	registerMethod("Player", "getParty", luaPlayerGetParty);
 

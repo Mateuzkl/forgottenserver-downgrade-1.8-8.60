@@ -1,0 +1,463 @@
+WeaponProficiencySystem = WeaponProficiencySystem or {}
+
+local System = WeaponProficiencySystem
+
+local OPCODE_REQUEST = 0xB3
+local OPCODE_CATALOG = 0x5A
+local OPCODE_EXPERIENCE = 0x5C
+local OPCODE_INFO = 0xC4
+
+local ACTION_ITEM_INFO = 0
+local ACTION_LIST_INFO = 1
+local ACTION_RESET_PERKS = 2
+local ACTION_APPLY_PERKS = 3
+
+local MAX_PERK_LEVEL = 7
+local MAX_PERK_POSITION = 2
+local EXPERIENCE_GAIN_MULTIPLIER = 0.01
+local SAVE_DELAY_MS = 5000
+
+local EXPERIENCE_TABLES = {
+	regular = { 1750, 25000, 100000, 400000, 2000000, 8000000, 30000000, 60000000, 90000000 },
+	knight = { 1250, 20000, 80000, 300000, 1500000, 6000000, 20000000, 40000000, 60000000 },
+	crossbow = { 600, 8000, 30000, 150000, 650000, 2500000, 10000000, 20000000, 30000000 },
+}
+
+local WEAPON_CATALOG = dofile("data/scripts/network/proficiency/weapon_catalog.lua")
+local playerCache = {}
+local catalogEntries
+local catalogByServerId = {}
+local serverIdByClientId = {}
+
+local function supportsCustomNetwork(player)
+	return player and player.isUsingOtClient and player:isUsingOtClient()
+end
+
+local function getItemType(itemId)
+	local itemType = ItemType(itemId)
+	if not itemType or itemType:getId() == 0 then
+		return nil
+	end
+	return itemType
+end
+
+local function isValidWeaponId(itemId)
+	itemId = tonumber(itemId)
+	if not itemId or itemId <= 0 or itemId > 0xFFFF or itemId % 1 ~= 0 then
+		return false
+	end
+
+	local itemType = getItemType(itemId)
+	return itemType and itemType:getWeaponType() ~= WEAPON_NONE or false
+end
+
+local function ensureCatalog()
+	if catalogEntries then
+		return
+	end
+
+	catalogEntries = {}
+	local serverIds = {}
+	for serverId in pairs(WEAPON_CATALOG) do
+		serverIds[#serverIds + 1] = serverId
+	end
+	table.sort(serverIds)
+
+	for _, serverId in ipairs(serverIds) do
+		if isValidWeaponId(serverId) then
+			local itemType = getItemType(serverId)
+			local clientId = itemType:getClientId()
+			if clientId and clientId > 0 and clientId <= 0xFFFF then
+				local entry = catalogByServerId[serverIdByClientId[clientId]]
+				if not entry then
+					entry = {
+						serverId = serverId,
+						clientId = clientId,
+						category = WEAPON_CATALOG[serverId],
+						name = itemType:getName(),
+					}
+					catalogEntries[#catalogEntries + 1] = entry
+					serverIdByClientId[clientId] = serverId
+				end
+				catalogByServerId[serverId] = entry
+			end
+		end
+	end
+
+	table.sort(catalogEntries, function(left, right)
+		return left.clientId < right.clientId
+	end)
+end
+
+local function resolveServerId(clientId)
+	ensureCatalog()
+	return serverIdByClientId[tonumber(clientId) or 0]
+end
+
+local function canonicalizeServerId(serverId)
+	ensureCatalog()
+	local entry = catalogByServerId[tonumber(serverId) or 0]
+	return entry and entry.serverId or nil
+end
+
+local function getCatalogEntry(serverId)
+	ensureCatalog()
+	return catalogByServerId[serverId]
+end
+
+local function getExperienceTable(itemId)
+	local itemType = getItemType(itemId)
+	if not itemType then
+		return EXPERIENCE_TABLES.regular
+	end
+
+	local name = itemType:getName():lower()
+	if name:find("crossbow", 1, true) then
+		return EXPERIENCE_TABLES.crossbow
+	end
+
+	local weaponType = itemType:getWeaponType()
+	if weaponType == WEAPON_SWORD or weaponType == WEAPON_AXE or weaponType == WEAPON_CLUB then
+		return EXPERIENCE_TABLES.knight
+	end
+
+	return EXPERIENCE_TABLES.regular
+end
+
+local function getUnlockedLevelCount(itemId, experience)
+	local count = 0
+	local experienceTable = getExperienceTable(itemId)
+	for level = 1, MAX_PERK_LEVEL do
+		if experience >= experienceTable[level] then
+			count = level
+		end
+	end
+	return count
+end
+
+local function hasUnusedPerk(itemId, state)
+	local unlocked = getUnlockedLevelCount(itemId, state.experience)
+	local selected = 0
+	for level in pairs(state.perks) do
+		if level < unlocked then
+			selected = selected + 1
+		end
+	end
+	return selected < unlocked
+end
+
+local function encodePerks(perks)
+	local levels = {}
+	for level in pairs(perks) do
+		levels[#levels + 1] = level
+	end
+	table.sort(levels)
+
+	local encoded = {}
+	for _, level in ipairs(levels) do
+		encoded[#encoded + 1] = level .. ":" .. perks[level]
+	end
+	return table.concat(encoded, ",")
+end
+
+local function decodePerks(encoded)
+	local perks = {}
+	for entry in tostring(encoded or ""):gmatch("[^,]+") do
+		local level, position = entry:match("^(%d+):(%d+)$")
+		level = tonumber(level)
+		position = tonumber(position)
+		if level and position and level >= 0 and level < MAX_PERK_LEVEL and position >= 0 and position <= MAX_PERK_POSITION then
+			perks[level] = position
+		end
+	end
+	return perks
+end
+
+local function saveState(guid, itemId, state)
+	db.asyncQuery(string.format(
+		"INSERT INTO `player_weapon_proficiency` (`player_id`, `item_id`, `experience`, `perks`) VALUES (%d, %d, %d, %s) " ..
+		"ON DUPLICATE KEY UPDATE `experience` = VALUES(`experience`), `perks` = VALUES(`perks`)",
+		guid, itemId, state.experience, db.escapeString(encodePerks(state.perks))
+	))
+end
+
+local function loadProfile(player)
+	local guid = player:getGuid()
+	local cached = playerCache[guid]
+	if cached then
+		return cached
+	end
+
+	local profile = { weapons = {}, dirty = {} }
+	local resultId = db.storeQuery(
+		"SELECT `item_id`, `experience`, `perks` FROM `player_weapon_proficiency` WHERE `player_id` = " .. guid
+	)
+	if resultId then
+		repeat
+			local itemId = result.getDataInt(resultId, "item_id")
+			local canonicalId = canonicalizeServerId(itemId)
+			if canonicalId then
+				profile.weapons[canonicalId] = {
+					experience = math.max(0, result.getDataInt(resultId, "experience")),
+					perks = decodePerks(result.getDataString(resultId, "perks")),
+				}
+			end
+		until not result.next(resultId)
+		result.free(resultId)
+	end
+
+	playerCache[guid] = profile
+	player:registerEvent("WeaponProficiencyLogout")
+	return profile
+end
+
+local function flushProfile(guid)
+	local profile = playerCache[guid]
+	if not profile then
+		return
+	end
+
+	profile.saveEvent = nil
+	for itemId in pairs(profile.dirty) do
+		local state = profile.weapons[itemId]
+		if state then
+			saveState(guid, itemId, state)
+		end
+	end
+	profile.dirty = {}
+end
+
+local function queueSave(player, itemId)
+	local profile = loadProfile(player)
+	profile.dirty[itemId] = true
+	if not profile.saveEvent then
+		profile.saveEvent = addEvent(flushProfile, SAVE_DELAY_MS, player:getGuid())
+	end
+end
+
+local function getState(player, itemId)
+	local profile = loadProfile(player)
+	if not profile.weapons[itemId] then
+		profile.weapons[itemId] = { experience = 0, perks = {} }
+	end
+	return profile.weapons[itemId]
+end
+
+local function getEquippedWeaponId(player)
+	if player.getWeaponProficiencyId then
+		local itemId = canonicalizeServerId(player:getWeaponProficiencyId())
+		if itemId then
+			return itemId
+		end
+	end
+
+	for _, slot in ipairs({ CONST_SLOT_LEFT, CONST_SLOT_RIGHT }) do
+		local item = player:getSlotItem(slot)
+		local itemId = item and canonicalizeServerId(item:getId())
+		if itemId then
+			return itemId
+		end
+	end
+	return 0
+end
+
+local function sendInfo(player, itemId)
+	local entry = getCatalogEntry(itemId)
+	if not supportsCustomNetwork(player) or not entry then
+		return false
+	end
+
+	local state = getState(player, itemId)
+	local levels = {}
+	for level in pairs(state.perks) do
+		levels[#levels + 1] = level
+	end
+	table.sort(levels)
+
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_INFO)
+	out:addU16(entry.clientId)
+	out:addU32(state.experience)
+	out:addByte(math.min(#levels, 0xFF))
+	for index = 1, math.min(#levels, 0xFF) do
+		local level = levels[index]
+		out:addByte(level)
+		out:addByte(state.perks[level])
+	end
+	out:addU16(entry.category)
+	return out:sendToPlayer(player)
+end
+
+local function sendExperience(player, itemId)
+	local entry = getCatalogEntry(itemId)
+	if not supportsCustomNetwork(player) or not entry then
+		return false
+	end
+
+	local state = getState(player, itemId)
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_EXPERIENCE)
+	out:addU16(entry.clientId)
+	out:addU32(state.experience)
+	out:addByte(hasUnusedPerk(itemId, state) and 1 or 0)
+	return out:sendToPlayer(player)
+end
+
+local function sendCatalog(player)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	ensureCatalog()
+	local count = math.min(#catalogEntries, 0xFFFF)
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_CATALOG)
+	out:addU16(count)
+	for index = 1, count do
+		local entry = catalogEntries[index]
+		out:addU16(entry.clientId)
+		out:addU16(entry.category)
+		out:addString(entry.name)
+	end
+	return out:sendToPlayer(player)
+end
+
+local function sendAll(player)
+	sendCatalog(player)
+
+	local itemIds = {}
+	for itemId in pairs(loadProfile(player).weapons) do
+		itemIds[#itemIds + 1] = itemId
+	end
+	table.sort(itemIds)
+
+	for _, itemId in ipairs(itemIds) do
+		sendInfo(player, itemId)
+	end
+end
+
+local function clearPerks(player, itemId)
+	if not isValidWeaponId(itemId) then
+		return
+	end
+
+	local state = getState(player, itemId)
+	state.perks = {}
+	queueSave(player, itemId)
+	sendInfo(player, itemId)
+	sendExperience(player, itemId)
+end
+
+local function applyPerks(player, msg, itemId)
+	if not isValidWeaponId(itemId) or msg:len() - msg:tell() < 1 then
+		return
+	end
+
+	local state = getState(player, itemId)
+	local unlocked = getUnlockedLevelCount(itemId, state.experience)
+	local perks = {}
+	local count = msg:getByte()
+	for _ = 1, count do
+		if msg:len() - msg:tell() < 2 then
+			return
+		end
+		local level = msg:getByte()
+		local position = msg:getByte()
+		if level < unlocked and level < MAX_PERK_LEVEL and position <= MAX_PERK_POSITION then
+			perks[level] = position
+		end
+	end
+
+	state.perks = perks
+	queueSave(player, itemId)
+	sendInfo(player, itemId)
+	sendExperience(player, itemId)
+end
+
+function System.addExperience(player, source, experience, itemId, applyMultiplier)
+	if not player or (source and source.isPlayer and source:isPlayer()) then
+		return false
+	end
+
+	if itemId then
+		itemId = canonicalizeServerId(itemId) or resolveServerId(itemId)
+	else
+		itemId = getEquippedWeaponId(player)
+	end
+	if not isValidWeaponId(itemId) then
+		return false
+	end
+
+	experience = math.max(0, tonumber(experience) or 0)
+	if experience <= 0 then
+		return false
+	end
+	if applyMultiplier ~= false then
+		experience = math.floor(experience * EXPERIENCE_GAIN_MULTIPLIER)
+	end
+	experience = math.max(1, experience)
+
+	local state = getState(player, itemId)
+	local previousUnlocked = getUnlockedLevelCount(itemId, state.experience)
+	local experienceTable = getExperienceTable(itemId)
+	state.experience = math.min(experienceTable[#experienceTable], state.experience + experience)
+	queueSave(player, itemId)
+	sendExperience(player, itemId)
+
+	if getUnlockedLevelCount(itemId, state.experience) > previousUnlocked then
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your weapon proficiency has unlocked a new perk.")
+	end
+	return true
+end
+
+function System.clearPlayerCache(player)
+	if player then
+		local guid = player:getGuid()
+		local profile = playerCache[guid]
+		if profile then
+			if profile.saveEvent then
+				stopEvent(profile.saveEvent)
+			end
+			flushProfile(guid)
+			playerCache[guid] = nil
+		end
+	end
+end
+
+local requestHandler = PacketHandler(OPCODE_REQUEST)
+
+function requestHandler.onReceive(player, msg)
+	if not supportsCustomNetwork(player) or msg:len() - msg:tell() < 1 then
+		return
+	end
+
+	local action = msg:getByte()
+	if action == ACTION_LIST_INFO then
+		sendAll(player)
+		return
+	end
+
+	if msg:len() - msg:tell() < 2 then
+		return
+	end
+
+	local itemId = resolveServerId(msg:getU16())
+	if action == ACTION_ITEM_INFO then
+		sendInfo(player, itemId)
+	elseif action == ACTION_RESET_PERKS then
+		clearPerks(player, itemId)
+	elseif action == ACTION_APPLY_PERKS then
+		applyPerks(player, msg, itemId)
+	end
+end
+
+requestHandler:register()
+
+local logoutEvent = CreatureEvent("WeaponProficiencyLogout")
+
+function logoutEvent.onLogout(player)
+	System.clearPlayerCache(player)
+	return true
+end
+
+logoutEvent:register()
