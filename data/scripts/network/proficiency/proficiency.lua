@@ -23,14 +23,17 @@ local MAX_PERK_LEVEL = 7
 local MAX_PERK_POSITION = 2
 local EXPERIENCE_GAIN_MULTIPLIER = 0.01
 local SAVE_DELAY_MS = 5000
+local LIST_INFO_COOLDOWN_MS = 1000
 
+-- The first MAX_PERK_LEVEL thresholds unlock perk slots. The remaining
+-- thresholds keep mastery progression active until the final experience cap.
 local EXPERIENCE_TABLES = {
 	regular = { 1750, 25000, 100000, 400000, 2000000, 8000000, 30000000, 60000000, 90000000 },
 	knight = { 1250, 20000, 80000, 300000, 1500000, 6000000, 20000000, 40000000, 60000000 },
 	crossbow = { 600, 8000, 30000, 150000, 650000, 2500000, 10000000, 20000000, 30000000 },
 }
 
-local WEAPON_CATALOG = dofile("data/scripts/network/proficiency/weapon_catalog.lua")
+local WEAPON_CATALOG = dofile(DATA_DIRECTORY .. "/scripts/network/proficiency/weapon_catalog.lua")
 local playerCache = {}
 local catalogEntries
 local catalogByServerId = {}
@@ -165,6 +168,8 @@ local function getExperienceTable(itemId)
 end
 
 local function getUnlockedLevelCount(itemId, experience)
+	-- Stored and network perk levels are zero-based, while this count
+	-- represents how many perk slots are currently available.
 	local count = 0
 	local experienceTable = getExperienceTable(itemId)
 	for level = 1, MAX_PERK_LEVEL do
@@ -429,6 +434,9 @@ local function applyPerks(player, msg, itemId)
 	local unlocked = getUnlockedLevelCount(itemId, state.experience)
 	local perks = {}
 	local count = msg:getByte()
+	if count > MAX_PERK_LEVEL then
+		return
+	end
 	for _ = 1, count do
 		if msg:len() - msg:tell() < 2 then
 			return
@@ -465,8 +473,12 @@ function System.addExperience(player, source, experience, itemId, applyMultiplie
 	end
 	if applyMultiplier ~= false then
 		experience = math.floor(experience * EXPERIENCE_GAIN_MULTIPLIER)
+	else
+		experience = math.floor(experience)
 	end
-	experience = math.max(1, experience)
+	if experience <= 0 then
+		return false
+	end
 
 	local state = getState(player, itemId)
 	local previousUnlocked = getUnlockedLevelCount(itemId, state.experience)
@@ -506,6 +518,12 @@ function requestHandler.onReceive(player, msg)
 
 	local action = msg:getByte()
 	if action == ACTION_LIST_INFO then
+		local profile = loadProfile(player)
+		local now = os.mtime()
+		if profile.lastListInfoAt and now - profile.lastListInfoAt < LIST_INFO_COOLDOWN_MS then
+			return
+		end
+		profile.lastListInfoAt = now
 		sendAll(player)
 		return
 	end
