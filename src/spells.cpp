@@ -593,7 +593,7 @@ bool Spell::playerRuneSpellCheck(Player* player, const Position& toPos)
 
 void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDamage& damage) const
 {
-	if (!player || damage.instantSpellName.empty()) {
+	if (!ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED) || !player || damage.instantSpellName.empty()) {
 		return;
 	}
 
@@ -655,7 +655,7 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 
 int32_t Spell::calculateAugmentSpellCooldownReduction(const std::shared_ptr<Player>& player) const
 {
-	if (!player) {
+	if (!ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED) || !player) {
 		return 0;
 	}
 

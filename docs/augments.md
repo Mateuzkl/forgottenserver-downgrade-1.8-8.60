@@ -4,6 +4,12 @@ This port keeps Canary-style static item augments without rarity dependencies.
 Augments are read from `data/items/items.xml` and applied only while the item is
 equipped.
 
+Enable the feature in `config.lua`:
+
+```lua
+augmentSystemEnabled = true
+```
+
 ```xml
 <attribute key="augments" value="1">
 	<attribute key="fierce berserk" value="base damage">

@@ -143,6 +143,7 @@ bestiarySystemEnabled = false
 marketSystemEnabled = false
 preySystemEnabled = false
 weaponProficiencySystemEnabled = false
+augmentSystemEnabled = false
 monsterLevelEnabled = false
 
 -- Static item augment defaults. Item-specific values can override these in items.xml.

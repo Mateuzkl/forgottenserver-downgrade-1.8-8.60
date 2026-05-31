@@ -409,7 +409,7 @@ bool Items::isAugmentWithoutValueDescription(Augment_t augmentType)
 
 std::string ItemType::parseAugmentDescription() const
 {
-	if (augments.empty()) {
+	if (!ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED) || augments.empty()) {
 		return {};
 	}
 

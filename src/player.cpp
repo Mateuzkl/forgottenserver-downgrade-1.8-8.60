@@ -527,7 +527,8 @@ void Player::clearProficiencySpellAugments()
 
 void Player::addProficiencySpellAugment(uint16_t weaponId, uint16_t spellId, Augment_t augmentType, double value)
 {
-	if (weaponId == 0 || spellId == 0 || !std::isfinite(value)) {
+	if (!ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED) || weaponId == 0 || spellId == 0 ||
+	    !std::isfinite(value)) {
 		return;
 	}
 

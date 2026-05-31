@@ -7,6 +7,11 @@ end
 WeaponProficiencySystem = WeaponProficiencySystem or {}
 
 local System = WeaponProficiencySystem
+local augmentSystemConfigKey = configKeys and configKeys.AUGMENT_SYSTEM_ENABLED or AUGMENT_SYSTEM_ENABLED
+
+local function isAugmentSystemEnabled()
+	return configManager and augmentSystemConfigKey and configManager.getBoolean(augmentSystemConfigKey) or false
+end
 
 local OPCODE_REQUEST = 0xB3
 local OPCODE_CATALOG = 0x5A
@@ -51,6 +56,10 @@ local function logError(message)
 end
 
 local function loadProficiencyDefinitions()
+	if not isAugmentSystemEnabled() then
+		return
+	end
+
 	local file = io.open(DATA_DIRECTORY .. "/items/proficiencies.json", "r")
 	if not file then
 		logError("[WeaponProficiency] Failed to open data/items/proficiencies.json.")
@@ -362,6 +371,10 @@ refreshProfileSpellAugments = function(player, profile)
 	end
 
 	player:clearProficiencySpellAugments()
+	if not isAugmentSystemEnabled() then
+		return
+	end
+
 	profile = profile or playerCache[player:getGuid()]
 	if not profile then
 		return
