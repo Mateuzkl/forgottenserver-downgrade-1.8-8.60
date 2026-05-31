@@ -218,14 +218,45 @@ local function decodePerks(encoded)
 	return perks
 end
 
+local supportsAliasedUpsert
+
+local function canUseAliasedUpsert()
+	if supportsAliasedUpsert ~= nil then
+		return supportsAliasedUpsert
+	end
+
+	supportsAliasedUpsert = false
+	local resultId = db.storeQuery("SELECT VERSION() AS `version`")
+	if not resultId then
+		return false
+	end
+
+	local version = result.getString(resultId, "version")
+	result.free(resultId)
+	if version:lower():find("mariadb", 1, true) then
+		return false
+	end
+
+	local major, minor, patch = version:match("^(%d+)%.(%d+)%.(%d+)")
+	major, minor, patch = tonumber(major), tonumber(minor), tonumber(patch)
+	supportsAliasedUpsert = major and minor and patch and
+		(major > 8 or (major == 8 and (minor > 0 or patch >= 20))) or false
+	return supportsAliasedUpsert
+end
+
 local function saveState(guid, itemId, state)
 	if not ensureTables() then
 		return
 	end
 
+	local upsertClause = "ON DUPLICATE KEY UPDATE `experience` = VALUES(`experience`), `perks` = VALUES(`perks`)"
+	if canUseAliasedUpsert() then
+		upsertClause = "AS new ON DUPLICATE KEY UPDATE `experience` = new.`experience`, `perks` = new.`perks`"
+	end
+
 	db.asyncQuery(string.format(
 		"INSERT INTO `player_weapon_proficiency` (`player_id`, `item_id`, `experience`, `perks`) VALUES (%d, %d, %d, %s) " ..
-		"ON DUPLICATE KEY UPDATE `experience` = VALUES(`experience`), `perks` = VALUES(`perks`)",
+		upsertClause,
 		guid, itemId, state.experience, db.escapeString(encodePerks(state.perks))
 	))
 end
