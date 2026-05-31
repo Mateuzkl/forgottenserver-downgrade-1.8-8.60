@@ -3,6 +3,8 @@ ImbuingWindow = ImbuingWindow or {}
 local WINDOW_OPCODE = 0xEB
 local CLOSE_OPCODE = 0xEC
 local RESOURCE_BALANCE_OPCODE = 0xEE
+local RESOURCE_BANK_BALANCE = 0
+local RESOURCE_GOLD_EQUIPPED = 1
 local USE_RANGE = 1
 local BLANK_IMBUEMENT_SCROLL_ID = 51442
 
@@ -350,19 +352,27 @@ local function writeNeededItems(msg, player, definitions, includeBlankScroll)
 	end
 end
 
-local function sendBalances(player)
+local function sendResourceBalance(player, resourceType, value)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
 
+	local amount = value or 0
+	if amount < 0 then
+		amount = 0
+	end
+
 	local msg = NetworkMessage(player)
 	msg:addByte(RESOURCE_BALANCE_OPCODE)
-	msg:addByte(0)
-	msg:addU64(player:getBankBalance())
-	msg:addByte(RESOURCE_BALANCE_OPCODE)
-	msg:addByte(1)
-	msg:addU64(player:getMoney())
+	msg:addByte(resourceType)
+	msg:addU64(amount)
 	return msg:sendToPlayer(player)
+end
+
+local function sendBalances(player)
+	local bankSent = sendResourceBalance(player, RESOURCE_BANK_BALANCE, player:getBankBalance())
+	local inventorySent = sendResourceBalance(player, RESOURCE_GOLD_EQUIPPED, player:getMoney())
+	return bankSent and inventorySent
 end
 
 local function findEquipment(container)
@@ -483,7 +493,6 @@ local function sendWindow(player, item)
 	end
 
 	local definitions = getApplicableDefinitions(item)
-	sendBalances(player)
 
 	local msg = NetworkMessage(player)
 	msg:addByte(WINDOW_OPCODE)
@@ -519,8 +528,11 @@ local function sendWindow(player, item)
 	end
 
 	writeNeededItems(msg, player, definitions)
-	msg:sendToPlayer(player)
-	return true
+	local sent = msg:sendToPlayer(player)
+	if sent then
+		sendBalances(player)
+	end
+	return sent
 end
 
 local function sendChoiceWindow(player)
@@ -528,16 +540,17 @@ local function sendChoiceWindow(player)
 		return false
 	end
 
-	sendBalances(player)
-
 	local msg = NetworkMessage(player)
 	msg:addByte(WINDOW_OPCODE)
 	msg:addByte(IMBUEMENT_WINDOW_CHOICE)
 	msg:addByte(getPlayerItemCount(player, BLANK_IMBUEMENT_SCROLL_ID) > 0 and 1 or 0)
 	-- NOTE: client reads only U16 for CHOICE window (item id placeholder = 0)
 	msg:addU16(0)
-	msg:sendToPlayer(player)
-	return true
+	local sent = msg:sendToPlayer(player)
+	if sent then
+		sendBalances(player)
+	end
+	return sent
 end
 
 
@@ -547,7 +560,6 @@ local function sendScrollWindow(player)
 	end
 
 	local definitions = getScrollDefinitions()
-	sendBalances(player)
 
 	local msg = NetworkMessage(player)
 	msg:addByte(WINDOW_OPCODE)
@@ -561,8 +573,11 @@ local function sendScrollWindow(player)
 	end
 
 	writeNeededItems(msg, player, definitions, true)
-	msg:sendToPlayer(player)
-	return true
+	local sent = msg:sendToPlayer(player)
+	if sent then
+		sendBalances(player)
+	end
+	return sent
 end
 
 function ImbuingWindow.openChoice(player, silent, sourcePosition, sourceThing)
