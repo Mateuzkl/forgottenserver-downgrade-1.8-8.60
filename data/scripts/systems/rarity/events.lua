@@ -1,5 +1,7 @@
 -- Rarity Event Registrations
--- onDropLoot, onInventoryUpdate, onLogin hooks.
+-- onInventoryUpdate, onLogin hooks.
+-- Note: onDropLoot rarity roll moved to eventcallbacks/monster/default_onDropLoot.lua
+-- so ALL monsters are eligible (not just those in rarityConfig.monsterTiers).
 --
 -- === EVENT CALLBACKS (C++ → Lua, dispatched via events.xml + rarity.lua) ===
 -- These fire ONLY when a proc actually occurs (~4 calls/sec even under load).

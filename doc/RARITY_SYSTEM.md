@@ -35,9 +35,9 @@ Sistema de raridade de itens para TFS 1.8 (protocolo 8.60). Engine em C++23 (sma
 │  init.lua         entry point, carrega modulos se toggle ON              │
 │  config.lua       tiers, 45 atributos, elegibilidade, monster tiers     │
 │  balancing.lua    dano spells, duracao buffs — consumido pelo C++       │
-│  core.lua         rollRarity(), itemAttributes(), processMonsterLoot()  │
+│  core.lua         rollRarity(), rollRarityOnCorpse(), itemAttributes() │
 │  combat.lua       creaturescripts healthChange / manaChange             │
-│  events.lua       onDropLoot, onInventoryUpdate, onLogin                │
+│  events.lua       onInventoryUpdate, onLogin                            │
 │  callbacks.lua    exemplo de registro de eventcallbacks                  │
 │  helpers.lua      utilitarios                                           │
 │                                                                          │
@@ -91,23 +91,23 @@ Configuravel em `config.lua` > `rarityConfig.tiers`.
 
 ### Monster Tiers (Loot)
 
-Classificacao manual por nome do monstro:
+**Novo fluxo**: o roll de rarity foi movido para dentro do callback padrao de loot
+(`data/scripts/eventcallbacks/monster/default_onDropLoot.lua`). **Todo monstro** e elegivel,
+sem depender da lista `monsterTiers`.
+
+A configuracao de chance e tier minimo usa os defaults:
 
 ```lua
-rarityConfig.monsterTiers = {
-    boss = {
-        chance = 50,        -- 50% de chance do loot vir com rarity
-        minTier = 2,        -- minimo epic
-        monsters = {"orshabaal", "morgaroth", "ferumbras", ...},
-    },
-    miniboss = {
-        chance = 20,
-        minTier = 1,
-        monsters = {"black knight", "elder wyrm", ...},
-    },
-}
-rarityConfig.defaultMonsterChance = 5   -- monstros nao listados
+-- data/scripts/systems/rarity/config.lua
+rarityConfig.defaultMonsterChance = 5   -- % de chance de ativar rarity no loot
+rarityConfig.defaultMinTier = 1          -- tier minimo (1=rare, 2=epic, 3=legendary)
 ```
+
+O hook no `default_onDropLoot.lua` chama `rollRarityOnCorpse(corpse, chance, minTier)`,
+que ignora a classificacao `monsterTiers` e aplica a mesma chance para todos os monstros.
+
+A tabela `rarityConfig.monsterTiers` (boss/miniboss) permanece no `config.lua` como referencia,
+mas nao e mais usada pelo fluxo automatico de loot.
 
 ---
 
@@ -235,7 +235,7 @@ Para level 100, magic 50: `(200 + 150) / 5 = 70` de bonus + base.
 
 Valores de buff em `balancing.lua` > `rarityBalancing.onKill` (consumidos pelo C++).
 
-#### Additional Loot (Lua `onDropLoot`)
+#### Additional Loot
 
 | Atributo | statKey | Efeito |
 |----------|---------|--------|
@@ -341,18 +341,20 @@ Serializacao automatica pelo TFS 1.8 — zero mudancas no schema do banco.
 
 ```
 Monstro morre
-  └─ onDropLoot → processMonsterLoot(monster, corpse)
-       ├─ Verifica tier do monstro (config.lua monsterTiers)
-       ├─ Rolla chance de rarity
-       └─ Para cada item no corpse:
-            └─ rollRarity(item, nil, minTier)
-                 ├─ Checa elegibilidade (filtra atributos)
-                 ├─ Sorteia tier (rare/epic/legendary)
-                 ├─ Seleciona 1-2 stats aleatorios (sem reposicao)
-                 ├─ Grava stats + balancing via setRarityStat()
-                 ├─ Grava spell scale + DmgMin/DmgMax (consumido pelo C++)
-                 ├─ Grava onKill buff defaults
-                 └─ Modifica base stats (attack/defense/armor)
+  └─ default_onDropLoot.lua → cria itens de loot (comportamento padrao TFS)
+       └─ rollRarityOnCorpse(corpse, defaultMonsterChance, defaultMinTier)
+            ├─ Rolla chance (5% default, todos os monstros)
+            ├─ rollRarityContainer(corpse, nil, minTier)
+            │    └─ Para cada item no corpse:
+            │         └─ rollRarity(item, nil, minTier)
+            │              ├─ Checa elegibilidade (filtra atributos)
+            │              ├─ Sorteia tier (rare/epic/legendary)
+            │              ├─ Seleciona 1-2 stats aleatorios (sem reposicao)
+            │              ├─ Grava stats + balancing via setRarityStat()
+            │              ├─ Grava spell scale + DmgMin/DmgMax (consumido pelo C++)
+            │              ├─ Grava onKill buff defaults
+            │              └─ Modifica base stats (attack/defense/armor)
+            └─ Se count > 0 → popup "Rare loot!" + efeito visual
 
 Jogador equipa item
   └─ onInventoryUpdate → itemAttributes(player, item, slot, equip)
@@ -457,9 +459,10 @@ Jogador loga
 | `data/scripts/systems/rarity/init.lua` | entry point, carrega 7 modulos |
 | `data/scripts/systems/rarity/config.lua` | tiers, 45 atributos, monster tiers |
 | `data/scripts/systems/rarity/balancing.lua` | spell damage, onKill — consumido pelo C++ |
-| `data/scripts/systems/rarity/core.lua` | rollRarity, itemAttributes, processMonsterLoot |
+| `data/scripts/systems/rarity/core.lua` | rollRarity, rollRarityOnCorpse, itemAttributes |
 | `data/scripts/systems/rarity/combat.lua` | healthChange (protecoes + life leech) |
-| `data/scripts/systems/rarity/events.lua` | onDropLoot, onInventoryUpdate, onLogin + docs callbacks |
+| `data/scripts/systems/rarity/events.lua` | onInventoryUpdate, onLogin + docs callbacks |
+| `data/scripts/eventcallbacks/monster/default_onDropLoot.lua` | hook rollRarityOnCorpse propagado para todos os monstros |
 | `data/scripts/systems/rarity/callbacks.lua` | exemplo de registro de eventcallbacks |
 | `data/scripts/systems/rarity/helpers.lua` | `rarityDebug()` |
 | `data/events/scripts/rarity.lua` | dispatcher intermediario TFS (onAttackProc etc.) |
