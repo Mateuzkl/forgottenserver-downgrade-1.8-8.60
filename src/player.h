@@ -77,6 +77,17 @@ struct VIPEntry
 	std::string name;
 };
 
+struct ProficiencySpellAugmentBonus
+{
+	int32_t damagePercent = 0;
+	int32_t healingPercent = 0;
+	int32_t criticalDamage = 0;
+	int32_t criticalChance = 0;
+	int32_t lifeLeech = 0;
+	int32_t manaLeech = 0;
+	int32_t cooldownReduction = 0;
+};
+
 struct OpenContainer
 {
 	ContainerWeakPtr container;
@@ -501,6 +512,13 @@ public:
 
 	Item* getInventoryItem(slots_t slot) const;
 	Item* getInventoryItem(uint32_t slot) const;
+	std::shared_ptr<Item> getInventoryItemShared(slots_t slot) const;
+	std::vector<std::shared_ptr<Item>> getEquippedItems() const;
+	std::vector<std::shared_ptr<Item>> getEquippedAugmentItems() const;
+	std::vector<std::shared_ptr<Item>> getEquippedAugmentItemsByType(Augment_t augmentType) const;
+	void clearProficiencySpellAugments();
+	void addProficiencySpellAugment(uint16_t weaponId, uint16_t spellId, Augment_t augmentType, double value);
+	ProficiencySpellAugmentBonus getProficiencySpellAugmentBonus(uint16_t spellId) const;
 	bool hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const;
 	bool isInventorySlot(slots_t slot) const;
 
@@ -1464,6 +1482,7 @@ private:
 	std::shared_ptr<Group> group;
 	std::weak_ptr<Item> tradeItem;
 	std::shared_ptr<Item> inventory[CONST_SLOT_LAST + 1] = {};
+	std::unordered_map<uint16_t, std::unordered_map<uint16_t, ProficiencySpellAugmentBonus>> proficiencySpellAugments;
 	std::weak_ptr<Item> writeItem;
 	std::weak_ptr<House> editHouse;
 	std::weak_ptr<Npc> shopOwner;

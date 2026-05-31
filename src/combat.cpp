@@ -13,6 +13,7 @@
 #include "monster.h"
 #include "scriptmanager.h"
 #include "scheduler.h"
+#include "spells.h"
 #include "weapons.h"
 
 extern Game g_game;
@@ -102,6 +103,7 @@ CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target) const
 	CombatDamage damage;
 	damage.origin = params.origin;
 	damage.primary.type = params.combatType;
+	damage.instantSpellName = instantSpellName;
 	if (formulaType == COMBAT_FORMULA_DAMAGE) {
 		damage.primary.value = normal_random(static_cast<int32_t>(mina), static_cast<int32_t>(maxa));
 	} else if (creature) {
@@ -126,6 +128,14 @@ CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target) const
 				} else {
 					damage.primary.value = normal_random(minb, maxb);
 				}
+			}
+		}
+	}
+
+	if (creature && g_spells && !damage.instantSpellName.empty()) {
+		if (const auto player = std::dynamic_pointer_cast<Player>(creature->weak_from_this().lock())) {
+			if (const auto spell = g_spells->getInstantSpellByName(damage.instantSpellName)) {
+				spell->getCombatDataAugment(player, damage);
 			}
 		}
 	}
@@ -1003,8 +1013,13 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			}
 
 			if (!damage.critical && damage.primary.type != COMBAT_HEALING && damage.origin != ORIGIN_CONDITION) {
-				uint16_t chance = casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE);
-				uint16_t skill = casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT);
+				int32_t chance = std::clamp<int32_t>(
+				    static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE)) +
+				        damage.criticalChance,
+				    0, 10000);
+				int32_t skill = std::max<int32_t>(
+				    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT)) +
+				           damage.criticalDamage);
 				if (skill == 0 && chance > 0) {
 					skill = 5000;
 				}
@@ -1147,7 +1162,9 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 
 			if (casterPlayer->getHealth() < casterPlayer->getMaxHealth()) {
 				uint16_t chance = casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHCHANCE);
-				uint16_t skill = casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT);
+				int32_t skill = std::max<int32_t>(
+				    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT)) +
+				           damage.lifeLeech);
 				leechCombat.primary.type = COMBAT_HEALING;
 
 				if (skill > 0 && chance == 0) { chance = 10000; }
@@ -1160,7 +1177,9 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 
 			if (casterPlayer->getMana() < casterPlayer->getMaxMana()) {
 				uint16_t chance = casterPlayer->getSpecialSkill(SPECIALSKILL_MANALEECHCHANCE);
-				uint16_t skill = casterPlayer->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT);
+				int32_t skill = std::max<int32_t>(
+				    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT)) +
+				           damage.manaLeech);
 
 				if (skill > 0 && chance == 0) { chance = 10000; }
 				if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
@@ -1194,8 +1213,13 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 	int32_t criticalSecondary = 0;
 	if (!damage.critical && damage.primary.type != COMBAT_HEALING && casterPlayer &&
 	    damage.origin != ORIGIN_CONDITION) {
-		uint16_t chance = casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE);
-		uint16_t skill = casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT);
+		int32_t chance = std::clamp<int32_t>(
+		    static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE)) +
+		        damage.criticalChance,
+		    0, 10000);
+		int32_t skill = std::max<int32_t>(
+		    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT)) +
+		           damage.criticalDamage);
 
 		if (skill == 0 && chance > 0) { skill = 5000; }
 		if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
@@ -1324,7 +1348,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 
 				if (casterPlayer->getHealth() < casterPlayer->getMaxHealth()) {
 					uint16_t chance = casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHCHANCE);
-					uint16_t skill = casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT);
+					int32_t skill = std::max<int32_t>(
+					    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT)) +
+					           damage.lifeLeech);
 
 					if (skill > 0 && chance == 0) { chance = 10000; }
 					if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
@@ -1338,7 +1364,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 
 				if (casterPlayer->getMana() < casterPlayer->getMaxMana()) {
 					uint16_t chance = casterPlayer->getSpecialSkill(SPECIALSKILL_MANALEECHCHANCE);
-					uint16_t skill = casterPlayer->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT);
+					int32_t skill = std::max<int32_t>(
+					    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT)) +
+					           damage.manaLeech);
 
 					if (skill > 0 && chance == 0) { chance = 10000; }
 					if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {

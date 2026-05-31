@@ -320,6 +320,7 @@ int luaCombatExecute(lua_State* L)
 	Creature* creature = getCreature(L, 2);
 
 	const LuaVariant& variant = getVariant(L, 3);
+	combat->setInstantSpellName(variant.instantName);
 	switch (variant.type()) {
 		case VARIANT_NUMBER: {
 			Creature* target = g_game.getCreatureByID(variant.getNumber());

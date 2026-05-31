@@ -723,6 +723,11 @@ struct CombatDamage
 	bool fatal = false;
 	bool dodge = false;
 	bool preyApplied = false;
+	int32_t criticalDamage = 0;
+	int32_t criticalChance = 0;
+	int32_t lifeLeech = 0;
+	int32_t manaLeech = 0;
+	std::string instantSpellName;
 	float spellResetMultiplier = -1.0f;
 };
 

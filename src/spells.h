@@ -108,8 +108,8 @@ public:
 
 	std::string_view getName() const { return name; }
 	void setName(std::string_view newName) { name = newName; }
-	uint8_t getId() const { return spellId; }
-	void setId(uint8_t id) { spellId = id; }
+	uint16_t getId() const { return spellId; }
+	void setId(uint16_t id) { spellId = id; }
 
 	void postCastSpell(Player* player, bool finishedCast = true, bool payCost = true) const;
 	static void postCastSpell(Player* player, uint32_t manaCost, uint32_t soulCost);
@@ -169,6 +169,8 @@ public:
 
 	uint32_t getCooldown() const { return cooldown; }
 	void setCooldown(uint32_t cd) { cooldown = cd; }
+	void getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDamage& damage) const;
+	int32_t calculateAugmentSpellCooldownReduction(const std::shared_ptr<Player>& player) const;
 
 	int32_t getRange() const { return range; }
 	void setRange(int32_t r) { range = r; }
@@ -213,7 +215,7 @@ protected:
 	uint32_t magLevel = 0;
 	int32_t range = -1;
 
-	uint8_t spellId = 0;
+	uint16_t spellId = 0;
 
 	bool selfTarget = false;
 	bool needTarget = false;

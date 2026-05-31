@@ -226,6 +226,34 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"elementalbond", ITEM_PARSE_ELEMENTALBOND},
     {"script", ITEM_PARSE_SCRIPT},
     {"mantra", ITEM_PARSE_MANTRA},
+    {"augments", ITEM_PARSE_AUGMENTS},
+};
+
+const std::unordered_map<std::string, Augment_t> AugmentTypesMap = {
+    {"mana cost", Augment_t::ManaCost},
+    {"base damage", Augment_t::BaseDamage},
+    {"base healing", Augment_t::BaseHealing},
+    {"duration increased", Augment_t::DurationIncreased},
+    {"additional targets", Augment_t::AdditionalTargets},
+    {"cooldown", Augment_t::Cooldown},
+    {"secondary group cooldown", Augment_t::SecondaryGroupCooldown},
+    {"affected area enlarged", Augment_t::AffectedAreaEnlarged},
+    {"increased damage reduction", Augment_t::IncreasedDamageReduction},
+    {"enhanced effect", Augment_t::EnhancedEffect},
+    {"increased skill", Augment_t::IncreasedSkill},
+    {"life leech", Augment_t::LifeLeech},
+    {"mana leech", Augment_t::ManaLeech},
+    {"critical extra damage", Augment_t::CriticalExtraDamage},
+    {"critical hit chance", Augment_t::CriticalHitChance},
+    {"powerful impact", Augment_t::PowerfulImpact},
+    {"strong impact", Augment_t::StrongImpact},
+    {"increased damage", Augment_t::IncreasedDamage},
+};
+
+const std::unordered_map<Augment_t, ConfigManager::Integer> AugmentDefaultConfigKeys = {
+    {Augment_t::IncreasedDamage, ConfigManager::AUGMENT_INCREASED_DAMAGE_PERCENT},
+    {Augment_t::PowerfulImpact, ConfigManager::AUGMENT_POWERFUL_IMPACT_PERCENT},
+    {Augment_t::StrongImpact, ConfigManager::AUGMENT_STRONG_IMPACT_PERCENT},
 };
 
 const std::unordered_map<std::string, ItemTypes_t> ItemTypesMap = {
@@ -328,6 +356,102 @@ Direction getDirection(std::string_view string)
 }
 
 } // namespace
+
+std::string Items::getAugmentNameByType(Augment_t augmentType)
+{
+	switch (augmentType) {
+		case Augment_t::ManaCost:
+			return "mana cost";
+		case Augment_t::BaseDamage:
+			return "base damage";
+		case Augment_t::BaseHealing:
+			return "base healing";
+		case Augment_t::DurationIncreased:
+			return "duration increased";
+		case Augment_t::AdditionalTargets:
+			return "additional targets";
+		case Augment_t::Cooldown:
+			return "cooldown";
+		case Augment_t::SecondaryGroupCooldown:
+			return "secondary group cooldown";
+		case Augment_t::AffectedAreaEnlarged:
+			return "affected area enlarged";
+		case Augment_t::IncreasedDamageReduction:
+			return "increased damage reduction";
+		case Augment_t::EnhancedEffect:
+			return "enhanced effect";
+		case Augment_t::IncreasedSkill:
+			return "increased skill";
+		case Augment_t::LifeLeech:
+			return "life leech";
+		case Augment_t::ManaLeech:
+			return "mana leech";
+		case Augment_t::CriticalExtraDamage:
+			return "critical extra damage";
+		case Augment_t::CriticalHitChance:
+			return "critical hit chance";
+		case Augment_t::PowerfulImpact:
+			return "Powerful Impact";
+		case Augment_t::StrongImpact:
+			return "Strong Impact";
+		case Augment_t::IncreasedDamage:
+			return "Increased Damage";
+		default:
+			return "unknown";
+	}
+}
+
+bool Items::isAugmentWithoutValueDescription(Augment_t augmentType)
+{
+	return augmentType == Augment_t::IncreasedDamage || augmentType == Augment_t::PowerfulImpact ||
+	       augmentType == Augment_t::StrongImpact;
+}
+
+std::string ItemType::parseAugmentDescription() const
+{
+	if (augments.empty()) {
+		return {};
+	}
+
+	std::string description = "\nAugments: (";
+	bool first = true;
+	for (const auto& augment : augments) {
+		if (!augment) {
+			continue;
+		}
+
+		if (!first) {
+			description += ", ";
+		}
+		first = false;
+
+		std::string spellName = augment->spellName;
+		if (!spellName.empty()) {
+			spellName.front() = static_cast<char>(std::toupper(static_cast<unsigned char>(spellName.front())));
+		}
+		description += spellName + " -> ";
+
+		if (Items::isAugmentWithoutValueDescription(augment->type)) {
+			description += Items::getAugmentNameByType(augment->type);
+		} else if (augment->type == Augment_t::Cooldown) {
+			description += fmt::format("-{}s cooldown", augment->value / 1000);
+		} else {
+			description += fmt::format("{:+}% {}", augment->value, Items::getAugmentNameByType(augment->type));
+		}
+	}
+
+	if (first) {
+		return {};
+	}
+
+	description += ").";
+	return description;
+}
+
+void ItemType::addAugment(std::string spellName, Augment_t augmentType, int32_t value)
+{
+	augments.emplace_back(std::make_shared<AugmentInfo>(std::move(spellName), augmentType, value));
+}
 
 Items::Items()
 {
@@ -1998,6 +2122,60 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 						mantraValue = static_cast<int16_t>(std::clamp<int32_t>(
 						    static_cast<int32_t>(mantraValue) + value, std::numeric_limits<int16_t>::min(),
 						    std::numeric_limits<int16_t>::max()));
+					}
+					break;
+				}
+
+				case ITEM_PARSE_AUGMENTS: {
+					if (!valueAttribute.as_bool()) {
+						break;
+					}
+
+					for (const auto subAttributeNode : attributeNode.children()) {
+						const auto spellAttribute = subAttributeNode.attribute("key");
+						const auto typeAttribute = subAttributeNode.attribute("value");
+						if (!spellAttribute || !typeAttribute) {
+							continue;
+						}
+
+						const std::string spellName =
+						    boost::algorithm::to_lower_copy<std::string>(spellAttribute.as_string());
+						const std::string typeName =
+						    boost::algorithm::to_lower_copy<std::string>(typeAttribute.as_string());
+						const auto augmentIt = AugmentTypesMap.find(typeName);
+						if (augmentIt == AugmentTypesMap.end()) {
+							LOG_WARN(fmt::format("[Warning - Items::parseItemNode] Unknown augment type '{}' for item: {}",
+							                     typeAttribute.as_string(), it.id));
+							continue;
+						}
+
+						const Augment_t augmentType = augmentIt->second;
+						int32_t augmentValue = 0;
+						bool hasValue = false;
+
+						if (const auto defaultIt = AugmentDefaultConfigKeys.find(augmentType);
+						    defaultIt != AugmentDefaultConfigKeys.end()) {
+							augmentValue = static_cast<int32_t>(ConfigManager::getInteger(defaultIt->second));
+							hasValue = true;
+						}
+
+						for (const auto augmentValueNode : subAttributeNode.children()) {
+							if (const auto augmentValueAttribute = augmentValueNode.attribute("value")) {
+								augmentValue = pugi::cast<int32_t>(augmentValueAttribute.value());
+								hasValue = true;
+								break;
+							}
+						}
+
+						if (!hasValue) {
+							LOG_WARN(fmt::format("[Warning - Items::parseItemNode] Item '{}' has augment '{}' without a value",
+							                     it.name, spellName));
+							continue;
+						}
+
+						if (augmentType != Augment_t::None) {
+							it.addAugment(spellName, augmentType, augmentValue);
+						}
 					}
 					break;
 				}

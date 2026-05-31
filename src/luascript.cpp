@@ -840,8 +840,9 @@ ReturnValue LuaScriptInterface::callReturnValueFunction(int params)
 
 void Lua::pushVariant(lua_State* L, const LuaVariant& var)
 {
-	lua_createtable(L, 0, 2);
+	lua_createtable(L, 0, 3);
 	setField(L, "type", var.type());
+	setField(L, "instantName", var.instantName);
 	switch (var.type()) {
 		case VARIANT_NUMBER:
 			setField(L, "number", var.getNumber());
@@ -1142,6 +1143,8 @@ Outfit Lua::getOutfitClass(lua_State* L, int32_t arg)
 LuaVariant Lua::getVariant(lua_State* L, int32_t arg)
 {
 	LuaVariant var;
+	var.instantName = getFieldString(L, arg, "instantName");
+	lua_pop(L, 1);
 	switch (getField<LuaVariantType_t>(L, arg, "type")) {
 		case VARIANT_NUMBER: {
 			var.setNumber(getField<uint32_t>(L, arg, "number"));

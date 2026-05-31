@@ -39,6 +39,8 @@ local catalogEntries
 local catalogByServerId = {}
 local serverIdByClientId = {}
 local proficiencyTableReady = false
+local proficiencyDefinitionsById = {}
+local refreshProfileSpellAugments
 
 local function logError(message)
 	if logger and logger.error then
@@ -47,6 +49,32 @@ local function logError(message)
 		print(message)
 	end
 end
+
+local function loadProficiencyDefinitions()
+	local file = io.open(DATA_DIRECTORY .. "/items/proficiencies.json", "r")
+	if not file then
+		logError("[WeaponProficiency] Failed to open data/items/proficiencies.json.")
+		return
+	end
+
+	local content = file:read("*a")
+	file:close()
+
+	local ok, definitions = pcall(json.decode, content)
+	if not ok or type(definitions) ~= "table" then
+		logError("[WeaponProficiency] Failed to decode data/items/proficiencies.json.")
+		return
+	end
+
+	for _, definition in ipairs(definitions) do
+		local proficiencyId = tonumber(definition.ProficiencyId)
+		if proficiencyId then
+			proficiencyDefinitionsById[proficiencyId] = definition
+		end
+	end
+end
+
+loadProficiencyDefinitions()
 
 local function ensureTables()
 	if proficiencyTableReady then
@@ -290,6 +318,9 @@ local function loadProfile(player)
 
 	playerCache[guid] = profile
 	player:registerEvent("WeaponProficiencyLogout")
+	if refreshProfileSpellAugments then
+		refreshProfileSpellAugments(player, profile)
+	end
 	return profile
 end
 
@@ -323,6 +354,37 @@ local function getState(player, itemId)
 		profile.weapons[itemId] = { experience = 0, perks = {} }
 	end
 	return profile.weapons[itemId]
+end
+
+refreshProfileSpellAugments = function(player, profile)
+	if not player.clearProficiencySpellAugments or not player.addProficiencySpellAugment then
+		return
+	end
+
+	player:clearProficiencySpellAugments()
+	profile = profile or playerCache[player:getGuid()]
+	if not profile then
+		return
+	end
+
+	for itemId, state in pairs(profile.weapons) do
+		local entry = getCatalogEntry(itemId)
+		local definition = entry and proficiencyDefinitionsById[entry.category]
+		if definition and type(definition.Levels) == "table" then
+			for level, position in pairs(state.perks) do
+				local levelData = definition.Levels[level + 1]
+				local perk = levelData and levelData.Perks and levelData.Perks[position + 1]
+				if perk and tonumber(perk.Type) == 5 then
+					local spellId = tonumber(perk.SpellId)
+					local augmentType = tonumber(perk.AugmentType)
+					local value = tonumber(perk.Value)
+					if spellId and augmentType and value then
+						player:addProficiencySpellAugment(itemId, spellId, augmentType, value)
+					end
+				end
+			end
+		end
+	end
 end
 
 local function getEquippedWeaponId(player)
@@ -452,6 +514,7 @@ local function clearPerks(player, itemId)
 
 	local state = getState(player, itemId)
 	state.perks = {}
+	refreshProfileSpellAugments(player)
 	queueSave(player, itemId)
 	sendInfo(player, itemId)
 end
@@ -480,6 +543,7 @@ local function applyPerks(player, msg, itemId)
 	end
 
 	state.perks = perks
+	refreshProfileSpellAugments(player)
 	queueSave(player, itemId)
 	sendInfo(player, itemId)
 end
@@ -537,6 +601,9 @@ function System.clearPlayerCache(player)
 			flushProfile(guid)
 			playerCache[guid] = nil
 		end
+		if player.clearProficiencySpellAugments then
+			player:clearProficiencySpellAugments()
+		end
 	end
 end
 
@@ -574,6 +641,15 @@ function requestHandler.onReceive(player, msg)
 end
 
 requestHandler:register()
+
+local loginEvent = CreatureEvent("WeaponProficiencyLogin")
+
+function loginEvent.onLogin(player)
+	loadProfile(player)
+	return true
+end
+
+loginEvent:register()
 
 local logoutEvent = CreatureEvent("WeaponProficiencyLogout")
 

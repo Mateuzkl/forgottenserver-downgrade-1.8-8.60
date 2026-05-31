@@ -67765,6 +67765,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 			<attribute key="slot" value="hand" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43865" article="a" name="grand sanguine blade">
 		<attribute key="weaponType" value="sword" />
@@ -67790,6 +67795,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 			<attribute key="slot" value="hand" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43866" article="a" name="sanguine cudgel">
 		<attribute key="weaponType" value="club" />
@@ -67813,6 +67823,11 @@
 			<attribute key="weaponType" value="club" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 			<attribute key="slot" value="hand" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="43867" article="a" name="grand sanguine cudgel">
@@ -67838,6 +67853,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 			<attribute key="slot" value="hand" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43868" article="a" name="sanguine hatchet">
 		<attribute key="weaponType" value="axe" />
@@ -67861,6 +67881,11 @@
 			<attribute key="weaponType" value="axe" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 			<attribute key="slot" value="hand" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="43869" article="a" name="grand sanguine hatchet">
@@ -67886,6 +67911,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 			<attribute key="slot" value="hand" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43870" article="a" name="sanguine razor">
 		<attribute key="weaponType" value="sword" />
@@ -67906,6 +67936,11 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="sword" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="43871" article="a" name="grand sanguine razor">
@@ -67928,6 +67963,11 @@
 			<attribute key="weaponType" value="sword" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43872" article="a" name="sanguine bludgeon">
 		<attribute key="weaponType" value="club" />
@@ -67948,6 +67988,11 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="club" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="43873" article="a" name="grand sanguine bludgeon">
@@ -67970,6 +68015,11 @@
 			<attribute key="weaponType" value="club" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43874" article="a" name="sanguine battleaxe">
 		<attribute key="weaponType" value="axe" />
@@ -67990,6 +68040,11 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="axe" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="43875" article="a" name="grand sanguine battleaxe">
@@ -68012,6 +68067,11 @@
 			<attribute key="weaponType" value="axe" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43876" article="a" name="sanguine legs">
 		<attribute key="absorbpercentphysical" value="9" />
@@ -68027,6 +68087,14 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="avatar of steel" value="cooldown">
+				<attribute key="value" value="900000" />
+			</attribute>
+			<attribute key="fierce berserk" value="critical extra damage">
+				<attribute key="value" value="8" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43877" article="a" name="sanguine bow">
 		<attribute key="weaponType" value="distance" />
@@ -68050,6 +68118,11 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="distance" />
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="divine caldera" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="43878" article="a" name="grand sanguine bow">
@@ -68075,6 +68148,11 @@
 			<attribute key="weaponType" value="distance" />
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="divine caldera" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43879" article="a" name="sanguine crossbow">
 		<attribute key="weaponType" value="distance" />
@@ -68098,6 +68176,11 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="distance" />
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="divine caldera" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="43880" article="a" name="grand sanguine crossbow">
@@ -68123,6 +68206,11 @@
 			<attribute key="weaponType" value="distance" />
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="divine caldera" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43881" article="a" name="sanguine greaves">
 		<attribute key="absorbpercentphysical" value="7" />
@@ -68136,6 +68224,14 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="avatar of light" value="cooldown">
+				<attribute key="value" value="900000" />
+			</attribute>
+			<attribute key="divine caldera" value="critical extra damage">
+				<attribute key="value" value="8" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43882" article="a" name="sanguine coil">
 		<attribute key="weaponType" value="wand" />
@@ -68164,6 +68260,14 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="hell's core" value="base damage">
+				<attribute key="value" value="3"/>
+			</attribute>
+			<attribute key="energy wave" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43883" article="a" name="grand sanguine coil">
 		<attribute key="weaponType" value="wand" />
@@ -68191,6 +68295,14 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="hell's core" value="base damage">
+				<attribute key="value" value="6"/>
+			</attribute>
+			<attribute key="energy wave" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43884" name="sanguine boots">
 		<attribute key="absorbpercentphysical" value="2" />
@@ -68209,6 +68321,17 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="avatar of storm" value="cooldown">
+				<attribute key="value" value="900000" />
+			</attribute>
+			<attribute key="hell's core" value="critical extra damage">
+				<attribute key="value" value="8" />
+			</attribute>
+			<attribute key="energy wave" value="critical extra damage">
+				<attribute key="value" value="8" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43885" article="a" name="sanguine rod">
 		<attribute key="weaponType" value="wand" />
@@ -68234,6 +68357,14 @@
 			<attribute key="wandType" value="earth" />
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
+		</attribute>
+		<attribute key="augments" value="2">
+			<attribute key="eternal winter" value="base damage">
+				<attribute key="value" value="3"/>
+			</attribute>
+			<attribute key="terra wave" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="43886" article="a" name="grand sanguine rod">
@@ -68261,6 +68392,14 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
+		<attribute key="augments" value="2">
+			<attribute key="eternal winter" value="base damage">
+				<attribute key="value" value="6"/>
+			</attribute>
+			<attribute key="terra wave" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43887" article="a" name="sanguine galoshes">
 		<attribute key="absorbpercentphysical" value="2" />
@@ -68279,6 +68418,17 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="avatar of nature" value="cooldown">
+				<attribute key="value" value="900000" />
+			</attribute>
+			<attribute key="eternal winter" value="critical extra damage">
+				<attribute key="value" value="8" />
+			</attribute>
+			<attribute key="terra wave" value="critical extra damage">
+				<attribute key="value" value="8" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="43891" article="a" name="sacrificial plate">
 	</item>
@@ -68514,6 +68664,11 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="wrath of nature" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44620" name="stoic iks chestplate">
 		<attribute key="armor" value="16" />
@@ -68535,6 +68690,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="intense wound cleansing" value="cooldown">
+				<attribute key="value" value="120000" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44621" article="a" name="dauntless dragon scale armor">
 		<attribute key="armor" value="18" />
@@ -68558,6 +68718,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="front sweep" value="life leech">
+				<attribute key="value" value="4" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44622" article="an" name="unerring dragon scale armor">
 		<attribute key="armor" value="17" />
@@ -68580,6 +68745,11 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="strong ethereal spear" value="life leech">
+				<attribute key="value" value="4" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44623" article="an" name="arcane dragon robe">
 		<attribute key="armor" value="15" />
@@ -68602,6 +68772,11 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="energy wave" value="life leech">
+				<attribute key="value" value="5" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44624" article="an" name="mystical dragon robe">
 		<attribute key="armor" value="15" />
@@ -68624,6 +68799,11 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="terra wave" value="life leech">
+				<attribute key="value" value="3" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44636" name="stoic iks casque">
 		<attribute key="armor" value="8" />
@@ -68646,6 +68826,11 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="divine missile" value="base damage">
+				<attribute key="value" value="6"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44637" name="stoic iks headpiece">
 		<attribute key="armor" value="8" />
@@ -68667,6 +68852,11 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="wrath of nature" value="critical extra damage">
+				<attribute key="value" value="5" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44638" article="a" name="knight pedestal">
 	</item>
@@ -68690,6 +68880,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="intense wound cleansing" value="base healing">
+				<attribute key="value" value="50"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44643" name="stoic iks faulds">
 		<attribute key="armor" value="8" />
@@ -68702,6 +68897,14 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="great energy beam" value="base damage">
+				<attribute key="value" value="7"/>
+			</attribute>
+			<attribute key="great death beam" value="base damage">
+				<attribute key="value" value="7"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44648" name="stoic iks boots">
 		<attribute key="speed" value="15" />
@@ -68718,6 +68921,11 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="divine missile" value="critical extra damage">
+				<attribute key="value" value="5" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44649" name="stoic iks sandals">
 		<attribute key="armor" value="2" />
@@ -68734,6 +68942,14 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="great energy beam" value="critical extra damage">
+				<attribute key="value" value="5" />
+			</attribute>
+			<attribute key="great death beam" value="critical extra damage">
+				<attribute key="value" value="5" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="44651" article="a" name="dead dragolisk">
 		<attribute key="fluidsource" value="blood" />
@@ -68989,6 +69205,11 @@
 			<attribute key="slot" value="shield" />
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="ultimate flame strike" value="base damage">
+				<attribute key="value" value="33"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="45640" article="a" name="creamy grimoire">
 		<attribute key="description" value="This spellbook was made from pure white chocolate and is brimming with magical finesse." />
@@ -69009,6 +69230,11 @@
 			<attribute key="level" value="200" />
 			<attribute key="slot" value="shield" />
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="ultimate ice strike" value="base damage">
+				<attribute key="value" value="33"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="45641" article="a" name="candy necklace">
@@ -69060,6 +69286,11 @@
 			<attribute key="level" value="200" />
 			<attribute key="slot" value="shield" />
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="wound cleansing" value="base healing">
+				<attribute key="value" value="17"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="45644" article="a" name="candy-coated quiver">
@@ -69130,6 +69361,14 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="annihilation" value="cooldown">
+				<attribute key="value" value="8000" />
+			</attribute>
+			<attribute key="annihilation" value="critical extra damage">
+				<attribute key="value" value="14" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47369" article="an" name="amber greataxe">
 		<attribute key="weaponType" value="axe" />
@@ -69151,6 +69390,14 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="annihilation" value="cooldown">
+				<attribute key="value" value="8000" />
+			</attribute>
+			<attribute key="annihilation" value="critical extra damage">
+				<attribute key="value" value="14" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47370" article="an" name="amber bludgeon">
 		<attribute key="weaponType" value="club" />
@@ -69172,6 +69419,14 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="annihilation" value="cooldown">
+				<attribute key="value" value="8000" />
+			</attribute>
+			<attribute key="annihilation" value="critical extra damage">
+				<attribute key="value" value="14" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47371" article="an" name="amber bow">
 		<attribute key="weaponType" value="distance" />
@@ -69197,6 +69452,11 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="divine grenade" value="critical extra damage">
+				<attribute key="value" value="8" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47372" article="an" name="amber wand">
 		<attribute key="weaponType" value="wand" />
@@ -69222,6 +69482,11 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="rage of the skies" value="critical extra damage">
+				<attribute key="value" value="10" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47373" article="an" name="amber rod">
 		<attribute key="weaponType" value="wand" />
@@ -69247,6 +69512,11 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="strong ice wave" value="critical extra damage">
+				<attribute key="value" value="6" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47374" article="an" name="amber sabre">
 		<attribute key="weaponType" value="sword" />
@@ -69269,6 +69539,14 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="annihilation" value="cooldown">
+				<attribute key="value" value="8000" />
+			</attribute>
+			<attribute key="annihilation" value="critical extra damage">
+				<attribute key="value" value="14" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47375" article="an" name="amber axe">
 		<attribute key="weaponType" value="axe" />
@@ -69291,6 +69569,14 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="annihilation" value="cooldown">
+				<attribute key="value" value="8000" />
+			</attribute>
+			<attribute key="annihilation" value="critical extra damage">
+				<attribute key="value" value="14" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47376" article="an" name="amber cudgel">
 		<attribute key="weaponType" value="club" />
@@ -69313,6 +69599,14 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="annihilation" value="cooldown">
+				<attribute key="value" value="8000" />
+			</attribute>
+			<attribute key="annihilation" value="critical extra damage">
+				<attribute key="value" value="14" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47377" article="an" name="amber crossbow">
 		<attribute key="weaponType" value="distance" />
@@ -69338,6 +69632,11 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="divine missile" value="critical extra damage">
+				<attribute key="value" value="5" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="47379" article="a" name="large obelisk">
 	</item>
@@ -72676,6 +72975,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="front sweep" value="mana leech">
+				<attribute key="value" value="3" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="49532" article="a" name="hellstalker visor">
 		<attribute key="armor" value="10" />
@@ -72693,6 +72997,11 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="strong ethereal spear" value="mana leech">
+				<attribute key="value" value="3" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="49533" article="a" name="dreadfire headpiece">
 		<attribute key="armor" value="8" />
@@ -72710,6 +73019,11 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="energy wave" value="mana leech">
+				<attribute key="value" value="4" />
+			</attribute>
+		</attribute>
 	</item>
 	<item id="49534" article="a" name="demonfang mask">
 		<attribute key="armor" value="8" />
@@ -72727,6 +73041,11 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="terra wave" value="mana leech">
+				<attribute key="value" value="2" />
+			</attribute>
+		</attribute>
 	</item>
 	<item fromid="49535" toid="49547" name="stone floor">
 	</item>
@@ -73892,6 +74211,14 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="avatar of balance" value="cooldown">
+				<attribute key="value" value="900000"/>
+			</attribute>
+			<attribute key="chained penance" value="critical extra damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50147" article="a" name="charged ethereal ring">
 		<attribute key="weight" value="70" />
@@ -74052,6 +74379,11 @@
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="sweeping takedown" value="base damage">
+				<attribute key="value" value="4"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50158" article="a" name="grand sanguine claws">
 		<attribute key="weaponType" value="fist" />
@@ -74074,6 +74406,11 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="sweeping takedown" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="50159" article="a" name="soulkamas">
@@ -74334,6 +74671,11 @@
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="swift jab" value="critical extra damage">
+				<attribute key="value" value="10"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50176" article="a" name="depth claws">
 		<attribute key="weaponType" value="fist" />
@@ -74355,6 +74697,11 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="depth claws" value="base damage">
+				<attribute key="value" value="14"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="50181" article="a" name="pair of monk fists">
@@ -74500,6 +74847,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="flurry of blows" value="mana leech">
+				<attribute key="value" value="3"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50190" name="dark vision bandana">
 		<attribute key="armor" value="5" />
@@ -74620,6 +74972,14 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="Devastating Knockout" value="critical extra damage">
+				<attribute key="value" value="14"/>
+			</attribute>
+			<attribute key="Devastating Knockout" value="cooldown">
+				<attribute key="value" value="12000" />
+			</attribute>
 		</attribute>
 	</item>
 	<item id="50240" name="soulsoles">
@@ -74790,6 +75150,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="spirit mend" value="base healing">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50257" name="plain monk robe">
 		<attribute key="description" value="A plain variant of the traditional robe of Merudri monks" />
@@ -74829,6 +75194,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="2" />
+		<attribute key="augments" value="1">
+			<attribute key="mystic repulse" value="critical extra damage">
+				<attribute key="value" value="10"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50260" name="death oyoroi">
 		<attribute key="description" value="A dark oyoroi with an even darker past. Worn and ragged from many a battle" />
@@ -74874,6 +75244,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="2" />
+		<attribute key="augments" value="1">
+			<attribute key="greater flurry of blows" value="critical extra damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50262" name="naga tanko">
 		<attribute key="description" value="A metal tanko, originally manufactured and refined by the ancient Naga" />
@@ -74898,6 +75273,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="flurry of blows" value="life leech">
+				<attribute key="value" value="3"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50263" name="merudri scale mail">
 		<attribute key="description" value="A magical mail with scales. Worn by ancient Merudri beast slayers" />
@@ -74936,6 +75316,14 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="greater tiger clash" value="life leech">
+				<attribute key="value" value="5"/>
+			</attribute>
+			<attribute key="flurry of blows" value="life leech">
+				<attribute key="value" value="3"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50266" name="eldritch monk boots">
 		<attribute key="armor" value="2" />
@@ -74991,6 +75379,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="1" />
+		<attribute key="augments" value="1">
+			<attribute key="forceful uppercut" value="cooldown">
+				<attribute key="value" value="15000"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50269" name="legs of enlightenment">
 		<attribute key="description" value="Traditional legs worn by pilgrims of the Three-Fold Path. Its design features elements of the natural appearance of moths" />
@@ -75005,6 +75398,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="1" />
+		<attribute key="augments" value="1">
+			<attribute key="double jab" value="base damage">
+				<attribute key="value" value="12"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50270" article="a" name="bambus jo">
 		<attribute key="weaponType" value="fist" />
@@ -75048,6 +75446,11 @@
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="greater tiger clash" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50272" article="a" name="sai of enlightenment">
 		<attribute key="description" value="Traditional sai worn by pilgrims of the Three-Fold Path. Its design features elements of the natural appearance of moths" />
@@ -75069,6 +75472,11 @@
 			<attribute key="unproperly" value="true" />
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="greater tiger clash" value="base damage">
+				<attribute key="value" value="16"/>
+			</attribute>
 		</attribute>
 	</item>
 	<item id="50273" article="a" name="nunchaku of enlightenment">
@@ -75092,6 +75500,11 @@
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="greater tiger clash" value="base damage">
+				<attribute key="value" value="12"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50274" name="coned hat of enlightenment">
 		<attribute key="description" value="Traditional coned hat worn by pilgrims of the Three-Fold Path. Its design features elements of the natural appearance of moths" />
@@ -75109,6 +75522,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="1" />
+		<attribute key="augments" value="1">
+			<attribute key="chained penance" value="base damage">
+				<attribute key="value" value="6"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50275" name="ghazbaran oyoroi">
 		<attribute key="description" value="A beastly oyoroi, folded and bolstered to withstand even the hardest blows" />
@@ -75258,6 +75676,11 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="greater flurry of blows" value="base damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="50292" article="a" name="training wraps">
 		<attribute key="showCharges" value="1" />
@@ -75534,6 +75957,14 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="ethereal spear" value="base damage">
+				<attribute key="value" value="40"/>
+			</attribute>
+			<attribute key="ethereal spear" value="critical hit chance">
+				<attribute key="value" value="2"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51261" name="norcferatu bonehood">
 		<attribute key="armor" value="5" />
@@ -75552,6 +75983,14 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="greater tiger clash" value="base damage">
+				<attribute key="value" value="33"/>
+			</attribute>
+			<attribute key="greater tiger clash" value="critical extra damage">
+				<attribute key="value" value="10"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51262" name="norcferatu tuskplate">
 		<attribute key="armor" value="22" />
@@ -75566,6 +76005,14 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="brutal strike" value="cooldown">
+				<attribute key="value" value="2000"/>
+			</attribute>
+			<attribute key="brutal strike" value="critical extra damage">
+				<attribute key="value" value="10"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51263" name="norcferatu bloodhide">
 		<attribute key="armor" value="16" />
@@ -75577,6 +76024,14 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="ultimate energy strike" value="critical extra damage">
+				<attribute key="value" value="14"/>
+			</attribute>
+			<attribute key="ultimate energy strike" value="critical hit chance">
+				<attribute key="value" value="5"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51264" name="norcferatu bonecloak">
 		<attribute key="armor" value="16" />
@@ -75588,6 +76043,14 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="ultimate terra strike" value="critical extra damage">
+				<attribute key="value" value="14"/>
+			</attribute>
+			<attribute key="ultimate terra strike" value="critical hit chance">
+				<attribute key="value" value="5"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51265" name="norcferatu thornwraps">
 		<attribute key="armor" value="9" />
@@ -75601,6 +76064,14 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="ethereal spear" value="base damage">
+				<attribute key="value" value="40"/>
+			</attribute>
+			<attribute key="ethereal spear" value="critical extra damage">
+				<attribute key="value" value="8"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51266" name="norcferatu bloodstrider">
 		<attribute key="armor" value="8" />
@@ -75613,6 +76084,11 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="ultimate terra strike" value="base damage">
+				<attribute key="value" value="33"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51267" name="norcferatu fleshguards">
 		<attribute key="armor" value="5" />
@@ -75626,6 +76102,14 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="2">
+			<attribute key="greater tiger clash" value="critical hit chance">
+				<attribute key="value" value="2"/>
+			</attribute>
+			<attribute key="greater tiger clash" value="critical extra damage">
+				<attribute key="value" value="10"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51268" name="norcferatu goretrampers">
 		<attribute key="absorbpercentearth" value="5" />
@@ -75642,6 +76126,11 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="brutal strike" value="base damage">
+				<attribute key="value" value="33"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51269" name="norcferatu fangstompers">
 		<attribute key="armor" value="2" />
@@ -75654,6 +76143,11 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
+		<attribute key="augments" value="1">
+			<attribute key="ultimate energy strike" value="base damage">
+				<attribute key="value" value="33"/>
+			</attribute>
+		</attribute>
 	</item>
 	<item id="51270" name="ink blade">
 		<attribute key="showAttributes" value="1" />

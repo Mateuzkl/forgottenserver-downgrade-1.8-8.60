@@ -232,6 +232,41 @@ enum ItemParseAttributes_t
 	ITEM_PARSE_IMBUEMENTSLOT,
 	ITEM_PARSE_WRAPABLETO,
 	ITEM_PARSE_MANTRA,
+	ITEM_PARSE_AUGMENTS,
+};
+
+enum class Augment_t : uint8_t
+{
+	None = 0,
+	ManaCost = 1,
+	BaseDamage = 2,
+	BaseHealing = 3,
+	DurationIncreased = 4,
+	AdditionalTargets = 5,
+	Cooldown = 6,
+	SecondaryGroupCooldown = 7,
+	AffectedAreaEnlarged = 8,
+	IncreasedDamageReduction = 9,
+	EnhancedEffect = 12,
+	IncreasedSkill = 13,
+	LifeLeech = 14,
+	ManaLeech = 15,
+	CriticalExtraDamage = 16,
+	CriticalHitChance = 17,
+	PowerfulImpact = 100,
+	StrongImpact = 101,
+	IncreasedDamage = 102,
+};
+
+struct AugmentInfo
+{
+	AugmentInfo(std::string spellName, Augment_t type, int32_t value) :
+	    spellName(std::move(spellName)), type(type), value(value)
+	{}
+
+	std::string spellName;
+	Augment_t type;
+	int32_t value = 0;
 };
 
 struct Abilities
@@ -331,6 +366,8 @@ public:
 	}
 
 	std::string_view getPluralName() const;
+	std::string parseAugmentDescription() const;
+	void addAugment(std::string spellName, Augment_t augmentType, int32_t value);
 
 	itemgroup_t group = ITEM_GROUP_NONE;
 	ItemTypes_t type = ITEM_TYPE_NONE;
@@ -391,6 +428,7 @@ public:
 	uint16_t imbuementSlot = 0;
 	uint16_t wrapableTo = 0;
 	std::unordered_map<std::string, uint8_t> imbuementAllowedTypes;
+	std::vector<std::shared_ptr<AugmentInfo>> augments;
 	int16_t mantra = 0;
 	MagicEffectClasses magicEffect = CONST_ME_NONE;
 	Direction bedPartnerDir = DIRECTION_NONE;
@@ -482,6 +520,9 @@ public:
 	const InventoryVector& getInventory() const { return inventory; }
 
 	size_t size() const { return items.size(); }
+
+	static std::string getAugmentNameByType(Augment_t augmentType);
+	static bool isAugmentWithoutValueDescription(Augment_t augmentType);
 
 	NameMap nameToItems;
 	CurrencyMap currencyItems;

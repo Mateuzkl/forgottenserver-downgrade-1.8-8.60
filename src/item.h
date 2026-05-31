@@ -703,6 +703,28 @@ public:
 	const Player* getHoldingPlayer() const;
 
 	WeaponType_t getWeaponType() const { return items[id].weaponType; }
+	std::vector<std::shared_ptr<AugmentInfo>> getAugments() const { return items[id].augments; }
+	std::vector<std::shared_ptr<AugmentInfo>> getAugmentsBySpellNameAndType(std::string_view spellName,
+	                                                                       Augment_t augmentType) const
+	{
+		std::vector<std::shared_ptr<AugmentInfo>> augments;
+		for (const auto& augment : items[id].augments) {
+			if (augment && augment->type == augmentType && caseInsensitiveEqual(augment->spellName, spellName)) {
+				augments.emplace_back(augment);
+			}
+		}
+		return augments;
+	}
+	std::vector<std::shared_ptr<AugmentInfo>> getAugmentsBySpellName(std::string_view spellName) const
+	{
+		std::vector<std::shared_ptr<AugmentInfo>> augments;
+		for (const auto& augment : items[id].augments) {
+			if (augment && caseInsensitiveEqual(augment->spellName, spellName)) {
+				augments.emplace_back(augment);
+			}
+		}
+		return augments;
+	}
 	Ammo_t getAmmoType() const { return items[id].ammoType; }
 	uint8_t getShootRange() const
 	{

@@ -16,6 +16,8 @@ enum LuaVariantType_t
 class LuaVariant
 {
 public:
+	std::string instantName;
+
 	uint32_t getNumber() const { return std::get<VARIANT_NUMBER>(variant); }
 	const Position& getPosition() const { return std::get<VARIANT_POSITION>(variant); }
 	const Position& getTargetPosition() const { return std::get<VARIANT_TARGETPOSITION>(variant); }

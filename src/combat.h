@@ -163,6 +163,7 @@ public:
 	void postCombatEffects(Creature* caster, const Position& pos) const { postCombatEffects(caster, pos, params); }
 
 	void setOrigin(CombatOrigin origin) { params.origin = origin; }
+	void setInstantSpellName(std::string spellName) { instantSpellName = std::move(spellName); }
 
 	void setupChain(const class Weapon* weapon);
 	bool doCombatChain(Creature* caster, Creature* target, bool aggressive) const;
@@ -190,6 +191,7 @@ private:
 	double maxa = 0.0;
 	double maxb = 0.0;
 
+	std::string instantSpellName;
 	std::unique_ptr<AreaCombat> area;
 };
 

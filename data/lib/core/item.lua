@@ -785,6 +785,9 @@ do
 		-- dot after primary attributes info
 		response[#response + 1] = "."
 
+		local augmentDescription = itemType:getAugmentDescription()
+		if augmentDescription ~= "" then response[#response + 1] = augmentDescription end
+
 		-- imbuements
 		if configManager.getBoolean(configKeys.IMBUEMENT_SYSTEM_ENABLED) then
 			local totalSlots = isVirtual and itemType:getImbuementSlot() or item:getImbuementSlots()

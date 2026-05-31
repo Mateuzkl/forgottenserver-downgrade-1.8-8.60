@@ -1852,6 +1852,36 @@ int luaPlayerGetWeaponProficiencyId(lua_State* L)
 	return 1;
 }
 
+int luaPlayerClearProficiencySpellAugments(lua_State* L)
+{
+	// player:clearProficiencySpellAugments()
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->clearProficiencySpellAugments();
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddProficiencySpellAugment(lua_State* L)
+{
+	// player:addProficiencySpellAugment(weaponId, spellId, augmentType, value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addProficiencySpellAugment(getInteger<uint16_t>(L, 2), getInteger<uint16_t>(L, 3),
+	                                  static_cast<Augment_t>(getInteger<uint8_t>(L, 4)),
+	                                  getNumber<double>(L, 5));
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerGetParty(lua_State* L)
 {
 	// player:getParty()
@@ -4014,6 +4044,8 @@ void LuaScriptInterface::registerPlayer()
 
 	registerMethod("Player", "getSlotItem", luaPlayerGetSlotItem);
 	registerMethod("Player", "getWeaponProficiencyId", luaPlayerGetWeaponProficiencyId);
+	registerMethod("Player", "clearProficiencySpellAugments", luaPlayerClearProficiencySpellAugments);
+	registerMethod("Player", "addProficiencySpellAugment", luaPlayerAddProficiencySpellAugment);
 
 	registerMethod("Player", "getParty", luaPlayerGetParty);
 

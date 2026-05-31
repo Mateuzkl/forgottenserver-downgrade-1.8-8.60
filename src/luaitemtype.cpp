@@ -296,6 +296,18 @@ int luaItemTypeGetDescription(lua_State* L)
 	return 1;
 }
 
+int luaItemTypeGetAugmentDescription(lua_State* L)
+{
+	// itemType:getAugmentDescription()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (itemType) {
+		pushString(L, itemType->parseAugmentDescription());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaItemTypeGetSlotPosition(lua_State* L)
 {
 	// itemType:getSlotPosition()
@@ -1080,6 +1092,7 @@ void LuaScriptInterface::registerItemType()
 	registerMethod("ItemType", "getPluralName", luaItemTypeGetPluralName);
 	registerMethod("ItemType", "getArticle", luaItemTypeGetArticle);
 	registerMethod("ItemType", "getDescription", luaItemTypeGetDescription);
+	registerMethod("ItemType", "getAugmentDescription", luaItemTypeGetAugmentDescription);
 	registerMethod("ItemType", "getSlotPosition", luaItemTypeGetSlotPosition);
 
 	registerMethod("ItemType", "getCharges", luaItemTypeGetCharges);

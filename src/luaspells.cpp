@@ -178,7 +178,7 @@ int luaSpellId(lua_State* L)
 		if (lua_gettop(L) == 1) {
 			lua_pushinteger(L, spell->getId());
 		} else {
-			spell->setId(getInteger<uint8_t>(L, 2));
+			spell->setId(getInteger<uint16_t>(L, 2));
 			pushBoolean(L, true);
 		}
 	} else {

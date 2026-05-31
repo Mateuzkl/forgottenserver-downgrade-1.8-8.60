@@ -77,6 +77,13 @@ uint16_t clampPreyDamagePercent(uint16_t value)
 	return std::min<uint16_t>(value, 100);
 }
 
+void addClamped(int32_t& target, int64_t value)
+{
+	target = static_cast<int32_t>(std::clamp<int64_t>(static_cast<int64_t>(target) + value,
+	                                                 std::numeric_limits<int32_t>::min(),
+	                                                 std::numeric_limits<int32_t>::max()));
+}
+
 bool isMantraCombatType(CombatType_t combatType)
 {
 	switch (combatType) {
@@ -462,6 +469,117 @@ Item* Player::getInventoryItem(uint32_t slot) const
 		return nullptr;
 	}
 	return inventory[slot].get();
+}
+
+std::shared_ptr<Item> Player::getInventoryItemShared(slots_t slot) const
+{
+	if (slot < CONST_SLOT_FIRST || slot > CONST_SLOT_LAST) {
+		return nullptr;
+	}
+	return inventory[slot];
+}
+
+std::vector<std::shared_ptr<Item>> Player::getEquippedItems() const
+{
+	static constexpr slots_t slots[] = {
+	    CONST_SLOT_HEAD, CONST_SLOT_NECKLACE, CONST_SLOT_BACKPACK, CONST_SLOT_ARMOR, CONST_SLOT_RIGHT,
+	    CONST_SLOT_LEFT, CONST_SLOT_LEGS,     CONST_SLOT_FEET,     CONST_SLOT_RING,
+	};
+
+	std::vector<std::shared_ptr<Item>> equippedItems;
+	for (const slots_t slot : slots) {
+		if (const auto& item = inventory[slot]) {
+			equippedItems.emplace_back(item);
+		}
+	}
+	return equippedItems;
+}
+
+std::vector<std::shared_ptr<Item>> Player::getEquippedAugmentItems() const
+{
+	std::vector<std::shared_ptr<Item>> equippedAugmentItems;
+	for (const auto& item : getEquippedItems()) {
+		if (!item->getAugments().empty()) {
+			equippedAugmentItems.emplace_back(item);
+		}
+	}
+	return equippedAugmentItems;
+}
+
+std::vector<std::shared_ptr<Item>> Player::getEquippedAugmentItemsByType(Augment_t augmentType) const
+{
+	std::vector<std::shared_ptr<Item>> equippedAugmentItems;
+	for (const auto& item : getEquippedAugmentItems()) {
+		for (const auto& augment : item->getAugments()) {
+			if (augment && augment->type == augmentType) {
+				equippedAugmentItems.emplace_back(item);
+				break;
+			}
+		}
+	}
+	return equippedAugmentItems;
+}
+
+void Player::clearProficiencySpellAugments()
+{
+	proficiencySpellAugments.clear();
+}
+
+void Player::addProficiencySpellAugment(uint16_t weaponId, uint16_t spellId, Augment_t augmentType, double value)
+{
+	if (weaponId == 0 || spellId == 0 || !std::isfinite(value)) {
+		return;
+	}
+
+	auto& bonus = proficiencySpellAugments[weaponId][spellId];
+	switch (augmentType) {
+		case Augment_t::BaseDamage:
+			addClamped(bonus.damagePercent, std::lround(value * 100.0));
+			break;
+
+		case Augment_t::BaseHealing:
+			addClamped(bonus.healingPercent, std::lround(value * 100.0));
+			break;
+
+		case Augment_t::Cooldown:
+			addClamped(bonus.cooldownReduction, std::lround(std::abs(value) * 1000.0));
+			break;
+
+		case Augment_t::LifeLeech:
+			addClamped(bonus.lifeLeech, std::lround(value * 10000.0));
+			break;
+
+		case Augment_t::ManaLeech:
+			addClamped(bonus.manaLeech, std::lround(value * 10000.0));
+			break;
+
+		case Augment_t::CriticalExtraDamage:
+			addClamped(bonus.criticalDamage, std::lround(value * 10000.0));
+			break;
+
+		case Augment_t::CriticalHitChance:
+			addClamped(bonus.criticalChance, std::lround(value * 10000.0));
+			break;
+
+		default:
+			break;
+	}
+}
+
+ProficiencySpellAugmentBonus Player::getProficiencySpellAugmentBonus(uint16_t spellId) const
+{
+	const Item* weapon = getWeapon(true);
+	if (!weapon) {
+		return {};
+	}
+
+	const auto weaponIt = proficiencySpellAugments.find(weapon->getID());
+	if (weaponIt == proficiencySpellAugments.end()) {
+		return {};
+	}
+
+	const auto spellIt = weaponIt->second.find(spellId);
+	return spellIt != weaponIt->second.end() ? spellIt->second : ProficiencySpellAugmentBonus{};
 }
 
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const

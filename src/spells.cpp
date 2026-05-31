@@ -36,6 +36,13 @@ bool spellsIsFamiliarSpell(std::string_view name)
 {
 	return name.find("Familiar") != std::string_view::npos || name.find("familiar") != std::string_view::npos;
 }
+
+int32_t saturatingAdd(int32_t value, int64_t increase)
+{
+	return static_cast<int32_t>(std::clamp<int64_t>(static_cast<int64_t>(value) + increase,
+	                                               std::numeric_limits<int32_t>::min(),
+	                                               std::numeric_limits<int32_t>::max()));
+}
 } // namespace
 
 Spells::Spells() { scriptInterface.initState(); }
@@ -584,11 +591,96 @@ bool Spell::playerRuneSpellCheck(Player* player, const Position& toPos)
 	return true;
 }
 
+void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDamage& damage) const
+{
+	if (!player || damage.instantSpellName.empty()) {
+		return;
+	}
+
+	for (const auto& item : player->getEquippedAugmentItems()) {
+		for (const auto& augment : item->getAugmentsBySpellName(damage.instantSpellName)) {
+			if (!augment || augment->value == 0) {
+				continue;
+			}
+
+			switch (augment->type) {
+				case Augment_t::BaseDamage:
+				case Augment_t::BaseHealing:
+				case Augment_t::IncreasedDamage:
+				case Augment_t::PowerfulImpact:
+				case Augment_t::StrongImpact: {
+					const double percent = augment->value / 100.0;
+					damage.primary.value = saturatingAdd(damage.primary.value, damage.primary.value * percent);
+					damage.secondary.value = saturatingAdd(damage.secondary.value, damage.secondary.value * percent);
+					break;
+				}
+
+				case Augment_t::LifeLeech:
+					damage.lifeLeech = saturatingAdd(damage.lifeLeech, static_cast<int64_t>(augment->value) * 100);
+					break;
+
+				case Augment_t::ManaLeech:
+					damage.manaLeech = saturatingAdd(damage.manaLeech, static_cast<int64_t>(augment->value) * 100);
+					break;
+
+				case Augment_t::CriticalExtraDamage:
+					damage.criticalDamage =
+					    saturatingAdd(damage.criticalDamage, static_cast<int64_t>(augment->value) * 100);
+					break;
+
+				case Augment_t::CriticalHitChance:
+					damage.criticalChance =
+					    saturatingAdd(damage.criticalChance, static_cast<int64_t>(augment->value) * 100);
+					break;
+
+				default:
+					break;
+			}
+		}
+	}
+
+	const auto proficiencyBonus = player->getProficiencySpellAugmentBonus(getId());
+	const int32_t proficiencyPercent =
+	    damage.primary.type == COMBAT_HEALING ? proficiencyBonus.healingPercent : proficiencyBonus.damagePercent;
+	if (proficiencyPercent != 0) {
+		const double percent = proficiencyPercent / 100.0;
+		damage.primary.value = saturatingAdd(damage.primary.value, damage.primary.value * percent);
+		damage.secondary.value = saturatingAdd(damage.secondary.value, damage.secondary.value * percent);
+	}
+	damage.lifeLeech = saturatingAdd(damage.lifeLeech, proficiencyBonus.lifeLeech);
+	damage.manaLeech = saturatingAdd(damage.manaLeech, proficiencyBonus.manaLeech);
+	damage.criticalDamage = saturatingAdd(damage.criticalDamage, proficiencyBonus.criticalDamage);
+	damage.criticalChance = saturatingAdd(damage.criticalChance, proficiencyBonus.criticalChance);
+}
+
+int32_t Spell::calculateAugmentSpellCooldownReduction(const std::shared_ptr<Player>& player) const
+{
+	if (!player) {
+		return 0;
+	}
+
+	int32_t reduction = 0;
+	for (const auto& item : player->getEquippedAugmentItemsByType(Augment_t::Cooldown)) {
+		for (const auto& augment : item->getAugmentsBySpellNameAndType(getName(), Augment_t::Cooldown)) {
+			if (augment && augment->value > 0) {
+				reduction = saturatingAdd(reduction, augment->value);
+			}
+		}
+	}
+	reduction = saturatingAdd(reduction, player->getProficiencySpellAugmentBonus(getId()).cooldownReduction);
+	return reduction;
+}
+
 void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool payCost /*= true*/) const
 {
 	if (finishedCast) {
         if (!player->hasFlag(PlayerFlag_HasNoExhaustion)) {
             int32_t momentumReduction = 0;
+            int32_t augmentCooldownReduction = 0;
+
+            if (const auto playerRef = std::dynamic_pointer_cast<Player>(player->weak_from_this().lock())) {
+                augmentCooldownReduction = calculateAugmentSpellCooldownReduction(playerRef);
+            }
 
             Item* helmet = player->getInventoryItem(CONST_SLOT_HEAD);
             if (helmet && helmet->getTier() > 0) {
@@ -607,7 +699,8 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
             }
 
             if (cooldown > 0) {
-                int32_t adjustedCooldown = std::max<int32_t>(1000, static_cast<int32_t>(cooldown) - momentumReduction);
+                int32_t adjustedCooldown =
+                    std::max<int32_t>(1000, static_cast<int32_t>(cooldown) - momentumReduction - augmentCooldownReduction);
                 auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN,
                                                             adjustedCooldown, 0, false, spellId);
                 player->addCondition(std::move(condition));
@@ -680,6 +773,7 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param)
 	}
 
 	LuaVariant var;
+	var.instantName = getName();
 
 	if (selfTarget) {
 		var.setNumber(player->getID());
@@ -833,6 +927,7 @@ bool InstantSpell::canThrowSpell(const Creature* creature, const Creature* targe
 bool InstantSpell::castSpell(Creature* creature)
 {
 	LuaVariant var;
+	var.instantName = getName();
 
 	if (casterTargetOrDirection) {
 		auto target = creature->getAttackedCreatureShared();
@@ -859,6 +954,7 @@ bool InstantSpell::castSpell(Creature* creature, Creature* target)
 {
 	if (needTarget) {
 		LuaVariant var;
+		var.instantName = getName();
 		var.setNumber(target->getID());
 		return internalCastSpell(creature, var);
 	}
