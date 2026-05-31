@@ -1,3 +1,9 @@
+local proficiencySystemConfigKey = configKeys and configKeys.WEAPON_PROFICIENCY_SYSTEM_ENABLED or WEAPON_PROFICIENCY_SYSTEM_ENABLED
+if configManager and proficiencySystemConfigKey and not configManager.getBoolean(proficiencySystemConfigKey) then
+	WeaponProficiencySystem = nil
+	return
+end
+
 WeaponProficiencySystem = WeaponProficiencySystem or {}
 
 local System = WeaponProficiencySystem

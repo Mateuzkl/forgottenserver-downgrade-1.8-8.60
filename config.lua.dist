@@ -140,6 +140,7 @@ wheelSystemEnabled = false
 bestiarySystemEnabled = false
 marketSystemEnabled = false
 preySystemEnabled = false
+weaponProficiencySystemEnabled = false
 monsterLevelEnabled = false
 
 -- Configuration to allow mounting in Protection Zone (PZ)

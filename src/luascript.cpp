@@ -1574,6 +1574,7 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("BESTIARY_SYSTEM_ENABLED", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerGlobalVariable("MARKET_SYSTEM_ENABLED", ConfigManager::MARKET_SYSTEM_ENABLED);
 	registerGlobalVariable("PREY_SYSTEM_ENABLED", ConfigManager::PREY_SYSTEM_ENABLED);
+	registerGlobalVariable("WEAPON_PROFICIENCY_SYSTEM_ENABLED", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
 
 	registerGlobalVariable("ACCOUNT_MANAGER_NONE", static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_NONE));
 	registerGlobalVariable("ACCOUNT_MANAGER_NEW", static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_NEW));
@@ -2764,6 +2765,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MARKET_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::PREY_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MONSTER_LEVEL_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::LOOT_GROUPING_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::ALLOW_MOUNT_IN_PZ);
