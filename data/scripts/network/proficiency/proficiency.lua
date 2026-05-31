@@ -12,6 +12,7 @@ local OPCODE_REQUEST = 0xB3
 local OPCODE_CATALOG = 0x5A
 local OPCODE_EXPERIENCE = 0x5C
 local OPCODE_INFO = 0xC4
+local OPCODE_INFO_BATCH = 0xC5
 
 local ACTION_ITEM_INFO = 0
 local ACTION_LIST_INFO = 1
@@ -231,7 +232,7 @@ local function loadProfile(player)
 		return cached
 	end
 
-	local profile = { weapons = {}, dirty = {} }
+	local profile = { weapons = {}, dirty = {}, catalogSent = false }
 	if ensureTables() then
 		local resultId = db.storeQuery(
 			"SELECT `item_id`, `experience`, `perks` FROM `player_weapon_proficiency` WHERE `player_id` = " .. guid
@@ -306,21 +307,13 @@ local function getEquippedWeaponId(player)
 	return 0
 end
 
-local function sendInfo(player, itemId)
-	local entry = getCatalogEntry(itemId)
-	if not supportsCustomNetwork(player) or not entry then
-		return false
-	end
-
-	local state = getState(player, itemId)
+local function writeInfoPayload(out, entry, state)
 	local levels = {}
 	for level in pairs(state.perks) do
 		levels[#levels + 1] = level
 	end
 	table.sort(levels)
 
-	local out = NetworkMessage(player)
-	out:addByte(OPCODE_INFO)
 	out:addU16(entry.clientId)
 	out:addU32(state.experience)
 	out:addByte(math.min(#levels, 0xFF))
@@ -330,6 +323,17 @@ local function sendInfo(player, itemId)
 		out:addByte(state.perks[level])
 	end
 	out:addU16(entry.category)
+end
+
+local function sendInfo(player, itemId)
+	local entry = getCatalogEntry(itemId)
+	if not supportsCustomNetwork(player) or not entry then
+		return false
+	end
+
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_INFO)
+	writeInfoPayload(out, entry, getState(player, itemId))
 	return out:sendToPlayer(player)
 end
 
@@ -367,18 +371,42 @@ local function sendCatalog(player)
 	return out:sendToPlayer(player)
 end
 
+local function sendAllInfo(player, itemIds)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local entries = {}
+	for index = 1, math.min(#itemIds, 0xFFFF) do
+		local itemId = itemIds[index]
+		local entry = getCatalogEntry(itemId)
+		if entry then
+			entries[#entries + 1] = { itemId = itemId, entry = entry }
+		end
+	end
+
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_INFO_BATCH)
+	out:addU16(#entries)
+	for _, info in ipairs(entries) do
+		writeInfoPayload(out, info.entry, getState(player, info.itemId))
+	end
+	return out:sendToPlayer(player)
+end
+
 local function sendAll(player)
-	sendCatalog(player)
+	local profile = loadProfile(player)
+	if profile.catalogSent ~= true and sendCatalog(player) then
+		profile.catalogSent = true
+	end
 
 	local itemIds = {}
-	for itemId in pairs(loadProfile(player).weapons) do
+	for itemId in pairs(profile.weapons) do
 		itemIds[#itemIds + 1] = itemId
 	end
 	table.sort(itemIds)
 
-	for _, itemId in ipairs(itemIds) do
-		sendInfo(player, itemId)
-	end
+	sendAllInfo(player, itemIds)
 end
 
 local function clearPerks(player, itemId)
@@ -390,7 +418,6 @@ local function clearPerks(player, itemId)
 	state.perks = {}
 	queueSave(player, itemId)
 	sendInfo(player, itemId)
-	sendExperience(player, itemId)
 end
 
 local function applyPerks(player, msg, itemId)
@@ -416,7 +443,6 @@ local function applyPerks(player, msg, itemId)
 	state.perks = perks
 	queueSave(player, itemId)
 	sendInfo(player, itemId)
-	sendExperience(player, itemId)
 end
 
 function System.addExperience(player, source, experience, itemId, applyMultiplier)
@@ -451,6 +477,7 @@ function System.addExperience(player, source, experience, itemId, applyMultiplie
 
 	if getUnlockedLevelCount(itemId, state.experience) > previousUnlocked then
 		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your weapon proficiency has unlocked a new perk.")
+		sendInfo(player, itemId)
 	end
 	return true
 end
@@ -463,6 +490,7 @@ function System.clearPlayerCache(player)
 			if profile.saveEvent then
 				stopEvent(profile.saveEvent)
 			end
+			profile.catalogSent = false
 			flushProfile(guid)
 			playerCache[guid] = nil
 		end
