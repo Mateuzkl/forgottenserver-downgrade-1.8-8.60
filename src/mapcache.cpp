@@ -517,9 +517,10 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
         }
     }
     
-    // Parse nested items
+    // Parse nested items and Canary-style tile zone nodes
     for (auto& itemNode : tileNode.children) {
-        if (static_cast<OTBM_NodeTypes_t>(itemNode.type) == OTBM_NodeTypes_t::ITEM) {
+        const auto childNodeType = static_cast<OTBM_NodeTypes_t>(itemNode.type);
+        if (childNodeType == OTBM_NodeTypes_t::ITEM) {
             auto item = parseBasicItem(loaderptr, &itemNode, nullptr);
             if (item) {
                 const ItemType& it = Item::items[item->id];
@@ -527,6 +528,30 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
                     tile->ground = item;
                 } else {
                     tile->items.push_back(item);
+                }
+            }
+        } else if (childNodeType == OTBM_NodeTypes_t::TILE_ZONE) {
+            PropStream stream;
+            if (!loader.getProps(itemNode, stream)) {
+                LOG_ERROR("[MapCache] Failed to get props from tile zone node");
+                return nullptr;
+            }
+
+            uint16_t zoneCount = 0;
+            if (!stream.read<uint16_t>(zoneCount)) {
+                LOG_ERROR("[MapCache] Failed to read tile zone count");
+                return nullptr;
+            }
+
+            for (uint16_t i = 0; i < zoneCount; ++i) {
+                ZoneId zoneId = 0;
+                if (!stream.read<ZoneId>(zoneId)) {
+                    LOG_ERROR("[MapCache] Failed to read tile zone id");
+                    return nullptr;
+                }
+
+                if (zoneId != 0) {
+                    tile->zoneIds.emplace_back(zoneId);
                 }
             }
         }

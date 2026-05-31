@@ -52,6 +52,7 @@ enum class OTBM_NodeTypes_t : uint8_t {
     HOUSETILE = 14,
     WAYPOINTS = 15,
     WAYPOINT = 16,
+    TILE_ZONE = 19,
 };
 
 enum class OTBM_TileFlag_t : uint32_t {

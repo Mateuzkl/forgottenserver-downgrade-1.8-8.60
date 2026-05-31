@@ -350,9 +350,36 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                 }
             }
 
-            // Parse children items
+            // Parse children items and Canary-style tile zone nodes.
             for (auto& itemNode : tileNode.children) {
-                if (static_cast<OTBM_NodeTypes_t>(itemNode.type) != OTBM_NodeTypes_t::ITEM) {
+                const auto childNodeType = static_cast<OTBM_NodeTypes_t>(itemNode.type);
+                if (childNodeType == OTBM_NodeTypes_t::TILE_ZONE) {
+                    PropStream stream;
+                    if (!loader.getProps(itemNode, stream)) {
+                        setLastErrorString("Invalid tile zone node.");
+                        return false;
+                    }
+
+                    uint16_t zoneCount = 0;
+                    if (!stream.read<uint16_t>(zoneCount)) {
+                        setLastErrorString(fmt::format("[x:{:d}, y:{:d}, z:{:d}] Failed to read tile zone count.", x, y, z));
+                        return false;
+                    }
+
+                    for (uint16_t i = 0; i < zoneCount; ++i) {
+                        ZoneId zoneId = 0;
+                        if (!stream.read<ZoneId>(zoneId)) {
+                            setLastErrorString(fmt::format("[x:{:d}, y:{:d}, z:{:d}] Failed to read tile zone id.", x, y, z));
+                            return false;
+                        }
+                        if (zoneId != 0) {
+                            zoneIds.emplace_back(zoneId);
+                        }
+                    }
+                    continue;
+                }
+
+                if (childNodeType != OTBM_NodeTypes_t::ITEM) {
                     setLastErrorString(fmt::format("[x:{:d}, y:{:d}, z:{:d}] Unknown node type.", x, y, z));
                     return false;
                 }
