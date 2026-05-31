@@ -499,6 +499,7 @@ local function sendWindow(player, item)
 	msg:addByte(IMBUEMENT_WINDOW_SELECT_ITEM)
 	msg:addByte(getPlayerItemCount(player, BLANK_IMBUEMENT_SCROLL_ID) > 0 and 1 or 0)
 	msg:addU16(item:getId())
+	msg:addString(getItemName(item:getId()))
 	msg:addByte(item.getTier and item:getTier() or 0)
 	msg:addByte(math.min(slots, 3))
 

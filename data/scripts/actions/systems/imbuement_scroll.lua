@@ -415,3 +415,68 @@ end
 action:id(ETCHER_ID)
 action:allowFarUse(true)
 action:register()
+
+local directScrollAction = Action()
+function directScrollAction.onUse(player, item, fromPosition, target, toPosition, isHotkey)
+    if not isImbuementEnabled() then
+        player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+        player:getPosition():sendMagicEffect(CONST_ME_POFF)
+        return true
+    end
+
+    if not target or not target:isItem() then
+        player:sendTextMessage(MESSAGE_STATUS_SMALL, "Use the imbuement scroll on an item.")
+        return true
+    end
+
+    if target:getImbuementSlots() <= 0 then
+        player:sendTextMessage(MESSAGE_STATUS_SMALL, "This item is not imbuable.")
+        return true
+    end
+
+    local def = Game.getImbuementByScroll(item:getId())
+    if not def then
+        player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+        return true
+    end
+
+    if target:getFreeImbuementSlots() <= 0 then
+        player:sendTextMessage(MESSAGE_STATUS_SMALL, "The equipment has no free imbuement slots.")
+        return true
+    end
+
+    if target:hasImbuementType(def.imbuementType) then
+        local typeName = TYPE_NAMES[def.imbuementType] or def.name
+        player:sendTextMessage(MESSAGE_STATUS_SMALL,
+            string.format("The equipment already has '%s'. Remove it first.", typeName))
+        return true
+    end
+
+    if not target:canApplyImbuement(def.categoryId, def.baseId) then
+        local typeName = TYPE_NAMES[def.imbuementType] or def.name
+        player:sendTextMessage(MESSAGE_STATUS_SMALL,
+            string.format("This equipment does not accept imbuement '%s' (tier %d).", typeName, def.baseId))
+        return true
+    end
+
+    local imbuement = Imbuement(def.imbuementType, def.value, def.duration, def.decayType, def.baseId)
+    if not target:addImbuement(imbuement) then
+        player:sendTextMessage(MESSAGE_STATUS_SMALL, "Failed to apply imbuement. Unequip the item first.")
+        return true
+    end
+
+    item:remove(1)
+    player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
+        string.format("%s %s applied.\nDuration: %s | Slots: %d/%d",
+            def.baseName,
+            def.name,
+            formatDuration(def.duration),
+            #target:getImbuements(),
+            target:getImbuementSlots()))
+    return true
+end
+
+for _, scrollId in ipairs(SCROLL_IDS) do
+    directScrollAction:id(scrollId)
+end
+directScrollAction:register()
