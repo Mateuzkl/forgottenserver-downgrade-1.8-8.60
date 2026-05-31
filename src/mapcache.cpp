@@ -531,28 +531,10 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
                 }
             }
         } else if (childNodeType == OTBM_NodeTypes_t::TILE_ZONE) {
-            PropStream stream;
-            if (!loader.getProps(itemNode, stream)) {
-                LOG_ERROR("[MapCache] Failed to get props from tile zone node");
+            std::string errorType;
+            if (!IOMap::parseTileZoneNode(loader, itemNode, tile->zoneIds, errorType)) {
+                LOG_ERROR(fmt::format("[MapCache] {}", errorType));
                 return nullptr;
-            }
-
-            uint16_t zoneCount = 0;
-            if (!stream.read<uint16_t>(zoneCount)) {
-                LOG_ERROR("[MapCache] Failed to read tile zone count");
-                return nullptr;
-            }
-
-            for (uint16_t i = 0; i < zoneCount; ++i) {
-                ZoneId zoneId = 0;
-                if (!stream.read<ZoneId>(zoneId)) {
-                    LOG_ERROR("[MapCache] Failed to read tile zone id");
-                    return nullptr;
-                }
-
-                if (zoneId != 0) {
-                    tile->zoneIds.emplace_back(zoneId);
-                }
             }
         }
     }

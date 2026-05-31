@@ -354,27 +354,10 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
             for (auto& itemNode : tileNode.children) {
                 const auto childNodeType = static_cast<OTBM_NodeTypes_t>(itemNode.type);
                 if (childNodeType == OTBM_NodeTypes_t::TILE_ZONE) {
-                    PropStream stream;
-                    if (!loader.getProps(itemNode, stream)) {
-                        setLastErrorString("Invalid tile zone node.");
+                    std::string errorType;
+                    if (!parseTileZoneNode(loader, itemNode, zoneIds, errorType)) {
+                        setLastErrorString(fmt::format("[x:{:d}, y:{:d}, z:{:d}] {}", x, y, z, errorType));
                         return false;
-                    }
-
-                    uint16_t zoneCount = 0;
-                    if (!stream.read<uint16_t>(zoneCount)) {
-                        setLastErrorString(fmt::format("[x:{:d}, y:{:d}, z:{:d}] Failed to read tile zone count.", x, y, z));
-                        return false;
-                    }
-
-                    for (uint16_t i = 0; i < zoneCount; ++i) {
-                        ZoneId zoneId = 0;
-                        if (!stream.read<ZoneId>(zoneId)) {
-                            setLastErrorString(fmt::format("[x:{:d}, y:{:d}, z:{:d}] Failed to read tile zone id.", x, y, z));
-                            return false;
-                        }
-                        if (zoneId != 0) {
-                            zoneIds.emplace_back(zoneId);
-                        }
                     }
                     continue;
                 }
@@ -428,6 +411,10 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
 
             if (tile) {
                 tile->setFlag(static_cast<tileflags_t>(tileflags));
+
+                std::sort(zoneIds.begin(), zoneIds.end());
+                zoneIds.erase(std::unique(zoneIds.begin(), zoneIds.end()), zoneIds.end());
+                
                 tile->setZoneIds(std::move(zoneIds));
             }
 
@@ -528,6 +515,32 @@ bool IOMap::parseWaypoints(OTB::Loader& loader, const OTB::Node& waypointsNode, 
         }
 
         map.waypoints[std::string{name}] = Position(waypoint_coords.x, waypoint_coords.y, waypoint_coords.z);
+    }
+    return true;
+}
+
+bool IOMap::parseTileZoneNode(OTB::Loader& loader, const OTB::Node& zoneNode, std::vector<ZoneId>& zoneIds, std::string& errorType) {
+    PropStream stream;
+    if (!loader.getProps(zoneNode, stream)) {
+        errorType = "Invalid tile zone node.";
+        return false;
+    }
+
+    uint16_t zoneCount = 0;
+    if (!stream.read<uint16_t>(zoneCount)) {
+        errorType = "Failed to read tile zone count.";
+        return false;
+    }
+
+    for (uint16_t i = 0; i < zoneCount; ++i) {
+        ZoneId zoneId = 0;
+        if (!stream.read<ZoneId>(zoneId)) {
+            errorType = "Failed to read tile zone id.";
+            return false;
+        }
+        if (zoneId != 0) {
+            zoneIds.emplace_back(zoneId);
+        }
     }
     return true;
 }

@@ -142,6 +142,8 @@ public:
     std::string_view getLastErrorString() const { return errorString; }
     void setLastErrorString(std::string_view error) { errorString = error; }
 
+    static bool parseTileZoneNode(OTB::Loader& loader, const OTB::Node& zoneNode, std::vector<ZoneId>& zoneIds, std::string& errorType);
+
 private:
     bool parseMapDataAttributes(OTB::Loader& loader, const OTB::Node& mapNode, Map& map,
                                 const std::filesystem::path& fileName);
