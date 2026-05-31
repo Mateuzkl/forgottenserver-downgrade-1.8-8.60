@@ -31,24 +31,31 @@ local function getKillLimit(player)
 	return math.max(1, configManager.getNumber(configKeys.KILLS_TO_RED))
 end
 
-local function getUnjustifiedKills(player, seconds)
+local function getUnjustifiedKillCounts(player)
 	local now = os.time()
+	local dayStart = now - PERIOD_DAY
+	local weekStart = now - PERIOD_WEEK
+	local monthStart = now - PERIOD_MONTH
 	local resultId = db.storeQuery(
-		"SELECT COUNT(*) AS `kills` FROM `player_deaths` WHERE `killed_by` = " ..
-		db.escapeString(player:getName()) .. " AND `is_player` = 1 AND `unjustified` = 1 AND `time` >= " .. (now - seconds)
+		"SELECT " ..
+			"SUM(CASE WHEN `time` >= " .. dayStart .. " THEN 1 ELSE 0 END) AS `day_kills`, " ..
+			"SUM(CASE WHEN `time` >= " .. weekStart .. " THEN 1 ELSE 0 END) AS `week_kills`, " ..
+			"COUNT(*) AS `month_kills` " ..
+		"FROM `player_deaths` WHERE `killed_by` = " ..
+		db.escapeString(player:getName()) .. " AND `is_player` = 1 AND `unjustified` = 1 AND `time` >= " .. monthStart
 	)
 
-	local kills = 0
+	local dayKills, weekKills, monthKills = 0, 0, 0
 	if resultId then
-		kills = result.getDataInt(resultId, "kills")
+		dayKills = result.getDataInt(resultId, "day_kills") or 0
+		weekKills = result.getDataInt(resultId, "week_kills") or 0
+		monthKills = result.getDataInt(resultId, "month_kills") or 0
 		result.free(resultId)
 	end
-	return kills
+	return dayKills, weekKills, monthKills
 end
 
-local function getPeriodData(player, seconds)
-	local kills = getUnjustifiedKills(player, seconds)
-	local limit = getKillLimit(player)
+local function getPeriodData(kills, limit)
 	local percent = clamp(math.floor((kills * 100) / limit), 0, 100)
 	local remaining = clamp(limit - kills, 0, 255)
 	return percent, remaining
@@ -65,9 +72,11 @@ local function sendUnjustifiedPoints(player)
 		return false
 	end
 
-	local dayPercent, dayRemaining = getPeriodData(player, PERIOD_DAY)
-	local weekPercent, weekRemaining = getPeriodData(player, PERIOD_WEEK)
-	local monthPercent, monthRemaining = getPeriodData(player, PERIOD_MONTH)
+	local dayKills, weekKills, monthKills = getUnjustifiedKillCounts(player)
+	local limit = getKillLimit(player)
+	local dayPercent, dayRemaining = getPeriodData(dayKills, limit)
+	local weekPercent, weekRemaining = getPeriodData(weekKills, limit)
+	local monthPercent, monthRemaining = getPeriodData(monthKills, limit)
 	local skullTime = math.max(0, player:getSkullTime() or 0)
 
 	local msg = NetworkMessage(player)

@@ -422,6 +422,7 @@ bool ConfigManager::load()
 	booleans[Boolean::IMBUEMENT_SYSTEM_ENABLED] = getGlobalBoolean(L, "imbuementSystemEnabled", false);
 	booleans[Boolean::MONK_VOCATION_ENABLED] = getGlobalBoolean(L, "monkVocationEnabled", false);
 	booleans[Boolean::FAMILIAR_SYSTEM_ENABLED] = getGlobalBoolean(L, "familiarSystemEnabled", false);
+	booleans[Boolean::WHEEL_SYSTEM_ENABLED] = getGlobalBoolean(L, "wheelSystemEnabled", false);
 	booleans[Boolean::BESTIARY_SYSTEM_ENABLED] = getGlobalBoolean(L, "bestiarySystemEnabled", false);
 	booleans[Boolean::MARKET_SYSTEM_ENABLED] = getGlobalBoolean(L, "marketSystemEnabled", false);
 	booleans[Boolean::PREY_SYSTEM_ENABLED] = getGlobalBoolean(L, "preySystemEnabled", false);

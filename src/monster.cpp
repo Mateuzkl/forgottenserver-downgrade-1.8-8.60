@@ -641,7 +641,7 @@ void Monster::onCreatureEnter(Creature* creature)
 
 	onCreatureFound(creature, true);
 
-	if (creature->getPlayer()) {
+	if (creature->isPlayer()) {
 		// A player entered, we might need to notice other monsters now
 		updateTargetList();
 	}
@@ -694,7 +694,7 @@ bool Monster::isFriend(const Creature* creature) const
 		if (tmpPlayer && (tmpPlayer == master.get() || masterPlayer->isPartner(tmpPlayer))) {
 			return true;
 		}
-	} else if (creature->getMonster() && !creature->isSummon()) {
+	} else if (creature->isMonster() && !creature->isSummon()) {
 		if (isOpponent(creature)) {
 			return false;
 		}
@@ -717,7 +717,7 @@ bool Monster::isOpponent(const Creature* creature) const
 	}
 
 	if (mType->info.enemyFactions.count(creature->getFaction()) > 0) {
-		if (creature->getMonster() && !creature->isSummon() && !hasPlayerNearby(20)) {
+		if (creature->isMonster() && !creature->isSummon() && !hasPlayerNearby(20)) {
 			return false;
 		}
 		return true;
@@ -766,7 +766,7 @@ void Monster::onCreatureLeave(Creature* creature)
 		}
 	}
 
-	if (creature->getPlayer()) {
+	if (creature->isPlayer()) {
 		// A player left, we might need to stop fighting other monsters
 		updateTargetList();
 	}
@@ -1027,7 +1027,7 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 		ignoreFieldDamage = true;
 	} else if (damage > 0 && combatType != COMBAT_HEALING && attacker) {
 		const auto master = attacker->getMaster();
-		if (attacker->getPlayer() || (master && master->getPlayer())) {
+		if (attacker->isPlayer() || (master && master->isPlayer())) {
 			ignoreFieldDamage = true;
 		}
 	}
@@ -1746,7 +1746,7 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 		}
 	} else if ((isSummon() && isMasterInRange) || !followCreature.expired() || walkingToSpawn) {
 		auto master = getMaster();
-		if (!hasFollowPath && master && !master->getPlayer()) {
+		if (!hasFollowPath && master && !master->isPlayer()) {
 			randomStepping = true;
 			result = getRandomStep(getPosition(), direction);
 		} else {

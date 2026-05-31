@@ -117,6 +117,12 @@ bool isDualWieldWeapon(const Item* item)
 	}
 }
 
+bool isDistanceWeaponWithQuiverPair(const Item* distanceWeapon, const Item* quiver)
+{
+	return distanceWeapon && quiver && distanceWeapon->getWeaponType() == WEAPON_DISTANCE &&
+	       quiver->getWeaponType() == WEAPON_QUIVER;
+}
+
 int64_t getCustomAttributeInteger(const ItemAttributes::CustomAttribute* attr)
 {
 	if (!attr) {
@@ -872,10 +878,14 @@ float Player::getMitigation() const
 	getShieldAndWeapon(shield, weapon);
 
 	if (shield) {
-		return (shieldingSkill * vocation->primaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f;
+		return std::max(0.0f,
+		                ((shieldingSkill * vocation->primaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f) +
+		                    varMitigation);
 	}
 
-	return (shieldingSkill * vocation->secondaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f;
+	return std::max(0.0f,
+	                ((shieldingSkill * vocation->secondaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f) +
+	                    varMitigation);
 }
 
 void Player::getShieldAndWeapon(const Item*& shield, const Item*& weapon) const
@@ -2278,8 +2288,7 @@ void Player::onCreatureMove(Creature* creature, const Tile* newTile, const Posit
 
 	auto follow = followCreature.lock();
 	if (hasFollowPath && (creature == follow.get() || (creature == this && follow))) {
-		isUpdatingPath = false;
-		updateFollowPath();
+		requestFollowPathUpdate();
 	}
 
 	if (creature != this) {
@@ -3483,7 +3492,7 @@ ReturnValue Player::queryAdd(int32_t index, const Thing& thing, uint32_t count, 
 	const int32_t& slotPosition = item->getSlotPosition();
 	if ((slotPosition & SLOTP_HEAD) || (slotPosition & SLOTP_NECKLACE) || (slotPosition & SLOTP_BACKPACK) ||
 	    (slotPosition & SLOTP_ARMOR) || (slotPosition & SLOTP_LEGS) || (slotPosition & SLOTP_FEET) ||
-	    (slotPosition & SLOTP_RING)) {
+	    (slotPosition & SLOTP_RING) || (slotPosition & SLOTP_AMMO)) {
 		ret = RETURNVALUE_CANNOTBEDRESSED;
 	} else if (slotPosition & SLOTP_TWO_HAND) {
 		ret = RETURNVALUE_PUTTHISOBJECTINBOTHHANDS;
@@ -3604,7 +3613,8 @@ ReturnValue Player::queryAdd(int32_t index, const Thing& thing, uint32_t count, 
 						ret = RETURNVALUE_NOERROR;
 					}
 				} else if (slotPosition & SLOTP_TWO_HAND) {
-					if (inventory[CONST_SLOT_RIGHT] && inventory[CONST_SLOT_RIGHT].get() != item) {
+					const Item* rightItem = inventory[CONST_SLOT_RIGHT].get();
+					if (rightItem && rightItem != item && !isDistanceWeaponWithQuiverPair(item, rightItem)) {
 						ret = RETURNVALUE_BOTHHANDSNEEDTOBEFREE;
 					} else {
 						ret = RETURNVALUE_NOERROR;
@@ -6420,18 +6430,18 @@ void Player::flushPendingLoot(const std::string& groupKey)
 
 	bool first = true;
 	for (auto& [itemId, count] : group->items) {
-		const ItemType& it = Item::items[itemId];
+		const ItemType& itemType = Item::items[itemId];
 		if (!first) {
 			ss << ", ";
 		}
 		first = false;
 		if (count > 1) {
-			ss << count << " " << it.getPluralName();
+			ss << count << " " << itemType.getPluralName();
 		} else {
-			if (it.article.empty() || Item::items[itemId].stackable) {
-				ss << "1 " << it.name;
+			if (itemType.article.empty() || itemType.stackable) {
+				ss << "1 " << itemType.name;
 			} else {
-				ss << it.article << " " << it.name;
+				ss << itemType.article << " " << itemType.name;
 			}
 		}
 	}

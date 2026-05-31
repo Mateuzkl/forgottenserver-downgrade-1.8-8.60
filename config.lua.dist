@@ -136,6 +136,7 @@ forgeSystemEnabled = false
 imbuementSystemEnabled = false
 monkVocationEnabled = false
 familiarSystemEnabled = false
+wheelSystemEnabled = false
 bestiarySystemEnabled = false
 marketSystemEnabled = false
 preySystemEnabled = false

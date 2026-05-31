@@ -17,6 +17,7 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0x2F: // custom unjustified points
 		case 0x32: // extended opcode
 		case 0x48: // custom cyclopedia/bestiary
+		case 0x5F: // custom wheel of destiny window
 		case 0xA7: // custom fight mode sync
 		case 0xD1: // custom hunt analyzer
 		case 0xDB: // custom market

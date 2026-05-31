@@ -552,11 +552,23 @@ function Player:conjureItem(reagentId, conjureId, conjureCount, effect)
 		return false
 	end
 
-	if item:hasAttribute(ITEM_ATTRIBUTE_DURATION) then
-		item:decay()
+	if type(item) == "table" then
+		for _, subItem in ipairs(item) do
+			if subItem and type(subItem) == "userdata" and subItem.hasAttribute and subItem:hasAttribute(ITEM_ATTRIBUTE_DURATION) then
+				subItem:decay()
+			end
+		end
+	else
+		if item and type(item) == "userdata" and item.hasAttribute and item:hasAttribute(ITEM_ATTRIBUTE_DURATION) then
+			item:decay()
+		end
 	end
 
-	self:getPosition():sendMagicEffect(item:getType():isRune() and CONST_ME_MAGIC_RED or effect)
+	local isRune = false
+	if conjureId ~= 0 then
+		isRune = ItemType(conjureId):isRune()
+	end
+	self:getPosition():sendMagicEffect(isRune and CONST_ME_MAGIC_RED or effect)
 	return true
 end
 

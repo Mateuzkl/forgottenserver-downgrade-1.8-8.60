@@ -13,9 +13,9 @@ void SpectatorVec::partitionByType()
 		[](const auto& c) { return !c; }), vec.end());
 
 	auto playersEnd = std::partition(vec.begin(), vec.end(),
-		[](const auto& c) { return c->getPlayer() != nullptr; });
+		[](const auto& c) { return c->isPlayer(); });
 	auto monstersEnd = std::partition(playersEnd, vec.end(),
-		[](const auto& c) { return c->getMonster() != nullptr; });
+		[](const auto& c) { return c->isMonster(); });
 
 	playerEnd_ = static_cast<size_t>(playersEnd - vec.begin());
 	monsterEnd_ = static_cast<size_t>(monstersEnd - vec.begin());

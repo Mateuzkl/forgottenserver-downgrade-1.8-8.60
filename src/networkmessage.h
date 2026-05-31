@@ -116,7 +116,7 @@ public:
 	void addPosition(const Position& pos);
 	void addItemId(uint16_t itemId);
 	void addItem(uint16_t id, uint8_t count, bool sendTier = false, bool alwaysSendTier = false);
-	void addItem(const Item* item, bool sendTier = false, bool alwaysSendTier = false);
+	void addItem(const Item* item, bool sendTier = false, bool alwaysSendTier = false, bool sendQuiverCount = false);
 
 	MsgSize_t getLength() const { return info.length; }
 

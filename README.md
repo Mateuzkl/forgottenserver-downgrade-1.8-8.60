@@ -209,7 +209,7 @@ Configuration file: `data/scripts/magic-roulette-master/configroulette.lua`
 <details>
 <summary><b>Forge System</b></summary>
 
-![Forge System](forge.gif)
+![Forge System](tools/forge.gif)
 
 Fuse two identical items to upgrade one of them by **+1 Tier**. Failures destroy one item and keep the other at its current tier.
 
@@ -240,9 +240,9 @@ Materials: Forge Dust, Silver Tokens and Exalted Cores.
 
 Supports scroll-based imbuements and raw material crafting through an Etcher/workbench flow.
 
-![Scroll Method](imbuments_scroll.gif)
+![Scroll Method](tools/imbuments_scroll.gif)
 
-![Raw Materials Method](imbuments_items.gif)
+![Raw Materials Method](tools/imbuments_items.gif)
 
 | Feature | Description |
 |---|---|
@@ -314,25 +314,18 @@ Command:
 
 Some custom systems are disabled by default in `config.lua` and `config.lua.dist`, keeping the server closer to classic 8.60 behavior.
 
-```lua
-forgeSystemEnabled = false
-imbuementSystemEnabled = false
-monkVocationEnabled = false
-familiarSystemEnabled = false
-bestiarySystemEnabled = false
-marketSystemEnabled = false
-preySystemEnabled = false
-```
-
 | Config key | Default | Controls |
 |---|---|---|
 | `forgeSystemEnabled` | `false` | Forge tiers, commands, portal and item look text |
 | `imbuementSystemEnabled` | `false` | Imbuements, scrolls, workbench, portal and item look text |
 | `monkVocationEnabled` | `false` | Monk vocation behavior, outfits, spells and checks |
 | `familiarSystemEnabled` | `false` | Familiar summons, spells and remaining-time look text |
+| `wheelSystemEnabled` | `false` | Wheel of destiny, increase stats comp HP, mana, cap or mitigation. |
 | `bestiarySystemEnabled` | `false` | Custom Cyclopedia/Bestiary packets, kills, tracker and charms |
 | `marketSystemEnabled` | `false` | Custom OTC market packets, market tables and market depot item |
 | `preySystemEnabled` | `false` | Custom Prey packets, prey bonuses, timers and wildcard usage |
+item |
+| `monsterLevelEnabled` | `false` | Monsters with certain levels, increasing HP, damage, and experience |
 
 Set a system to `true` only when you want that feature active:
 
@@ -343,6 +336,7 @@ forgeSystemEnabled = false
 imbuementSystemEnabled = true
 monkVocationEnabled = false
 familiarSystemEnabled = false
+wheelSystemEnabled = false
 bestiarySystemEnabled = true
 marketSystemEnabled = false
 preySystemEnabled = false
@@ -516,23 +510,28 @@ Enable the required features for protocol 860 in `modules/game_features/game_fea
 if(version >= 860) then
     g_game.enableFeature(GameAttackSeq)
     g_game.enableFeature(GameBot)
-    g_game.enableFeature(GameExtendedOpcode)
+    g_game.enableFeature(GameExtendedOpcode)       
     g_game.enableFeature(GameSkillsBase)
     g_game.enableFeature(GamePlayerMounts)
     g_game.enableFeature(GameMagicEffectU16)
     g_game.enableFeature(GameDistanceEffectU16)
     g_game.enableFeature(GameDoubleHealth)
-    g_game.enableFeature(GameOfflineTrainingTime)
     g_game.enableFeature(GameDoubleSkills)
+    g_game.enableFeature(GameOfflineTrainingTime)
     g_game.enableFeature(GameBaseSkillU16)
     g_game.enableFeature(GameAdditionalSkills)
+    g_game.enableFeature(GameLeechAmount)
     g_game.enableFeature(GameIdleAnimations)
     g_game.enableFeature(GameEnhancedAnimations)
-    g_game.enableFeature(GameSpritesU32)
     g_game.enableFeature(GameExtendedClientPing)
-    g_game.enableFeature(GameDoublePlayerGoodsMoney)
+    g_game.enableFeature(GameSpritesU32)
+    g_game.enableFeature(GameDoublePlayerGoodsMoney) 
     g_game.enableFeature(GameCreatureIcons)
     g_game.enableFeature(GamePurseSlot)
+    g_game.enableFeature(GamePrey)
+    g_game.enableFeature(GameSpellList)
+    g_game.enableFeature(GameThingUpgradeClassification)
+    g_game.enableFeature(GameItemTierByte)
 end
 ```
 
@@ -553,6 +552,9 @@ Extended sprites:
 CIP client with mounts:
 
 - [Client 8.60 + DLL Mount](https://github.com/Mateuzkl/Client-cip-8.60-with-DLL-Mount)
+
+CIP client, future client (<span style="color: green;">Work Progress</span>)
+- [Forgotten Client (Alpha 1.0)](https://github.com/Mateuzkl/The-Forgotten-Client)
 
 ### Modified CIP DLL Options
 

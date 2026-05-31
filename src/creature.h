@@ -78,7 +78,6 @@ class Tile;
 inline constexpr int32_t EVENT_CREATURECOUNT = 10;
 inline constexpr int32_t EVENT_CREATURE_THINK_INTERVAL = 1000;
 inline constexpr int32_t EVENT_CHECK_CREATURE_INTERVAL = (EVENT_CREATURE_THINK_INTERVAL / EVENT_CREATURECOUNT);
-inline constexpr uint32_t FOLLOW_EVENT_INTERVAL = 100;
 
 class FrozenPathingConditionCall
 {
@@ -127,6 +126,12 @@ public:
 	virtual std::string getDescription(int32_t lookDistance) const = 0;
 
 	virtual CreatureType_t getType() const = 0;
+
+	// Raw type checks: no shared_from_this(), no dynamic_cast.
+	// Use for type-only checks; use getPlayer()/getMonster()/getNpc() when the pointer is needed.
+	[[nodiscard]] bool isPlayer() const noexcept { return getType() == CREATURETYPE_PLAYER; }
+	[[nodiscard]] bool isMonster() const noexcept { return getType() == CREATURETYPE_MONSTER; }
+	[[nodiscard]] bool isNpc() const noexcept { return getType() == CREATURETYPE_NPC; }
 
 	virtual void setID() = 0;
 	void setRemoved()
@@ -230,8 +235,7 @@ public:
 	// follow functions
 	std::shared_ptr<Creature> getFollowCreatureShared() const { return followCreature.lock(); }
 	virtual bool setFollowCreature(Creature* creature);
-	void updateFollowPath();
-	void completeEventFollowWalk() { eventFollowPath = 0; }
+	void requestFollowPathUpdate();
 
 	// follow events
 	virtual void onFollowCreature(const Creature*) {}
@@ -430,7 +434,6 @@ protected:
 	uint32_t id = 0;
 	uint32_t scriptEventsBitField = 0;
 	uint32_t eventWalk = 0;
-	uint32_t eventFollowPath = 0;
 	uint32_t walkUpdateTicks = 0;
 	uint32_t blockCount = 0;
 	uint32_t blockTicks = 0;

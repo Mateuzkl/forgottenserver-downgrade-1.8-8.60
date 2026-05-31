@@ -328,8 +328,16 @@ end
 
 function Player.isPromoted(self)
 	local vocation = self:getVocation()
-	local fromVocId = vocation:getDemotion():getId()
-	return vocation:getId() ~= fromVocId
+	if not vocation then
+		return false
+	end
+
+	local demotion = vocation:getDemotion()
+	if not demotion then
+		return false
+	end
+
+	return vocation:getId() ~= demotion:getId()
 end
 
 function Player.setAccountStorageValue(self, key, value)

@@ -202,6 +202,16 @@ bool isPlayerControlledCreature(const Creature* creature)
 
 } // namespace
 
+static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatType)
+{
+	if (!player) {
+		return 0;
+	}
+
+	int32_t magicLevel = static_cast<int32_t>(player->getMagicLevel()) + static_cast<int32_t>(player->getSpecialMagicLevel(combatType));
+	return std::max<int32_t>(0, magicLevel);
+}
+
 std::vector<Tile*> getList(const MatrixArea& area, const Position& targetPos, const Direction dir)
 {
 	auto casterPos = getNextPosition(dir, targetPos);
@@ -360,7 +370,7 @@ CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target) const
 			if (params.valueCallback) {
 				params.valueCallback->getMinMaxValues(player, damage);
 			} else if (formulaType == COMBAT_FORMULA_LEVELMAGIC) {
-				int32_t levelFormula = player->getLevel() * 2 + getEffectiveMagicLevel(player, damage.primary.type) * 3;
+				int32_t levelFormula = static_cast<int32_t>(player->getLevel()) * 2 + getEffectiveMagicLevel(player, damage.primary.type) * 3;
 				damage.primary.value =
 				    normal_random(std::fma(levelFormula, mina, minb), std::fma(levelFormula, maxa, maxb));
 			} else if (formulaType == COMBAT_FORMULA_SKILL) {

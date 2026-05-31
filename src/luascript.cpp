@@ -98,7 +98,6 @@ int luaSetMonsterLevelSkullRange(lua_State* L)
 	Lua::pushBoolean(L, true);
 	return 1;
 }
-
 int luaSetMonsterLevelBonus(lua_State* L)
 {
 	// setMonsterLevelBonus(bonusType, value)
@@ -995,12 +994,16 @@ void Lua::setItemMetatable(lua_State* L, int32_t index, const Item* item)
 
 void Lua::setCreatureMetatable(lua_State* L, int32_t index, const Creature* creature)
 {
-	if (creature->getPlayer()) {
+	if (creature->isPlayer()) {
 		luaL_getmetatable(L, "Player");
-	} else if (creature->getMonster()) {
+	} else if (creature->isMonster()) {
 		luaL_getmetatable(L, "Monster");
-	} else {
+	} else if (creature->isNpc()) {
 		luaL_getmetatable(L, "Npc");
+	} else {
+		assert(false && "Unknown creature type in Lua::setCreatureMetatable");
+		LOG_ERROR("[Lua::setCreatureMetatable] Unknown creature type: {}", static_cast<int32_t>(creature->getType()));
+		luaL_getmetatable(L, "Creature");
 	}
 	lua_setmetatable(L, index - 1);
 
@@ -1567,6 +1570,7 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("IMBUEMENT_SYSTEM_ENABLED", ConfigManager::IMBUEMENT_SYSTEM_ENABLED);
 	registerGlobalVariable("MONK_VOCATION_ENABLED", ConfigManager::MONK_VOCATION_ENABLED);
 	registerGlobalVariable("FAMILIAR_SYSTEM_ENABLED", ConfigManager::FAMILIAR_SYSTEM_ENABLED);
+	registerGlobalVariable("WHEEL_SYSTEM_ENABLED", ConfigManager::WHEEL_SYSTEM_ENABLED);
 	registerGlobalVariable("BESTIARY_SYSTEM_ENABLED", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerGlobalVariable("MARKET_SYSTEM_ENABLED", ConfigManager::MARKET_SYSTEM_ENABLED);
 	registerGlobalVariable("PREY_SYSTEM_ENABLED", ConfigManager::PREY_SYSTEM_ENABLED);
@@ -2758,6 +2762,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::IMBUEMENT_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MONK_VOCATION_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::FAMILIAR_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::WHEEL_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::CHAIN_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MARKET_SYSTEM_ENABLED);
@@ -4318,7 +4323,7 @@ void LuaScriptInterface::registerKV() {
 
 	// KV metatable for scoped userdata
 	registerClass("KV", "", nullptr);
-	registerMetaMethod("KV", "__gc", LuaScriptInterface::luaKVGC);
+	registerMetaMethod("KV", "__gc", LuaScriptInterface::luaSharedPtrGC<KV>);
 	registerMethod("KV", "scoped", LuaScriptInterface::luaKVScoped);
 	registerMethod("KV", "set", LuaScriptInterface::luaKVSet);
 	registerMethod("KV", "get", LuaScriptInterface::luaKVGet);
@@ -4433,12 +4438,4 @@ int LuaScriptInterface::luaKVKeys(lua_State* L) {
 		lua_rawseti(L, -2, ++index);
 	}
 	return 1;
-}
-
-int LuaScriptInterface::luaKVGC(lua_State* L) {
-	auto* ptr = static_cast<std::shared_ptr<KV>*>(lua_touserdata(L, 1));
-	if (ptr) {
-		std::destroy_at(ptr);
-	}
-	return 0;
 }

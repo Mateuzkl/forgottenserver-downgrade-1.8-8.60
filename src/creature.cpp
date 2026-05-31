@@ -37,11 +37,6 @@ Creature::~Creature()
 {
 	liveCreatures.erase(this);
 
-	if (eventFollowPath != 0) {
-		g_scheduler.stopEvent(eventFollowPath);
-		eventFollowPath = 0;
-	}
-
 	attackedCreature.reset();
 	followCreature.reset();
 	removeMaster();
@@ -187,13 +182,8 @@ void Creature::onThink(uint32_t interval)
 		if (forceUpdateFollowPath || walkUpdateTicks >= 2000) {
 			walkUpdateTicks = 0;
 			forceUpdateFollowPath = false;
-			isUpdatingPath = true;
+			requestFollowPathUpdate();
 		}
-	}
-
-	if (isUpdatingPath) {
-		isUpdatingPath = false;
-		goToFollowCreature();
 	}
 
 	// scripting event - onThink
@@ -482,8 +472,7 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
 		if (hasFollowPath) {
-			isUpdatingPath = false;
-			updateFollowPath();
+			requestFollowPathUpdate();
 		}
 
 		if (newPos.z != oldPos.z || !canSee(fc->getPosition())) {
@@ -972,32 +961,26 @@ void Creature::goToFollowCreature()
 	onFollowCreatureComplete(follow.get());
 }
 
-void Creature::updateFollowPath()
+void Creature::requestFollowPathUpdate()
 {
-	if (eventFollowPath != 0 || followCreature.expired()) {
+	if (isUpdatingPath || followCreature.expired()) {
 		return;
 	}
 
-	eventFollowPath = g_scheduler.addEvent(createSchedulerTask(FOLLOW_EVENT_INTERVAL, [id = getID()]() {
-		g_game.updateCreatureWalk(id);
-	}));
+	isUpdatingPath = true;
+	g_dispatcher.addTask(createTask([id = getID()] { g_game.updateCreatureWalk(id); }));
 }
 
 bool Creature::setFollowCreature(Creature* creature)
 {
 	if (creature) {
 		if (auto follow = followCreature.lock(); follow.get() == creature) {
-			updateFollowPath();
+			requestFollowPathUpdate();
 			return true;
 		}
 
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
-			if (eventFollowPath != 0) {
-				g_scheduler.stopEvent(eventFollowPath);
-				eventFollowPath = 0;
-			}
-
 			isUpdatingPath = false;
 			hasFollowPath = false;
 			followCreature.reset();
@@ -1013,21 +996,17 @@ bool Creature::setFollowCreature(Creature* creature)
 		forceUpdateFollowPath = false;
 		auto creatureRef = getSharedCreature(creature);
 		if (!creatureRef) {
+			isUpdatingPath = false;
+			hasFollowPath = false;
 			followCreature.reset();
 			return false;
 		}
 		followCreature = creatureRef;
-		isUpdatingPath = true;
-		updateFollowPath();
+		requestFollowPathUpdate();
 	} else {
-		if (eventFollowPath != 0) {
-			g_scheduler.stopEvent(eventFollowPath);
-			eventFollowPath = 0;
-		}
-
 		isUpdatingPath = false;
-		followCreature.reset();
 		hasFollowPath = false;
+		followCreature.reset();
 	}
 
 	onFollowCreature(creature);

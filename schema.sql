@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS `players` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`),
   FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
-  KEY `vocation` (`vocation`)
+  KEY `vocation` (`vocation`),
+  KEY `idx_players_deletion` (`deletion`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 INSERT INTO `players` (`id`, `name`, `group_id`, `account_id`, `level`, `vocation`, `health`, `healthmax`, `experience`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `currentmount`, `randomizemount`, `direction`, `maglevel`, `mana`, `manamax`, `manaspent`, `soul`, `town_id`, `posx`, `posy`, `posz`, `conditions`, `cap`, `sex`, `lastlogin`, `lastip`, `save`, `skull`, `skulltime`, `lastlogout`, `blessings`, `onlinetime`, `deletion`, `balance`, `offlinetraining_time`, `offlinetraining_skill`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`) VALUES
@@ -134,6 +135,7 @@ CREATE TABLE IF NOT EXISTS `ip_bans` (
   `expires_at` bigint NOT NULL,
   `banned_by` int NOT NULL,
   PRIMARY KEY (`ip`),
+  KEY `idx_ip_bans_expires_at` (`expires_at`),
   FOREIGN KEY (`banned_by`) REFERENCES `players` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
@@ -319,7 +321,8 @@ CREATE TABLE IF NOT EXISTS `player_deaths` (
   `mostdamage_unjustified` tinyint NOT NULL DEFAULT '0',
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE,
   KEY `killed_by` (`killed_by`),
-  KEY `mostdamage_by` (`mostdamage_by`)
+  KEY `mostdamage_by` (`mostdamage_by`),
+  KEY `idx_player_deaths_unjustified_kills` (`killed_by`(64), `is_player`, `unjustified`, `time`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `player_deaths_backup` (

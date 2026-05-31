@@ -146,6 +146,8 @@ private:
 	void onRemoveContainerItem(uint32_t index, Item* item) const;
 	std::shared_ptr<Player> getHoldingPlayerForNotification() const;
 
+	void updateAmmoCount(const Item* item, int32_t diff);
+	void sendQuiverInventoryUpdate() const;
 	void updateItemWeight(int32_t diff);
 	bool hasCapacityLimit() const;
 	uint32_t getFreeSlotsFor(const Item* item, uint32_t count) const;

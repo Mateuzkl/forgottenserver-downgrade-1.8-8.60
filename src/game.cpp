@@ -1151,22 +1151,22 @@ void Game::playerMoveCreature(Player* player, Creature* movingCreature, const Po
 
 	if (player != movingCreature) {
 		if (getBoolean(ConfigManager::PUSH_CREATURE_ZONE)) {
-			if (player->getZone() == ZONE_PROTECTION && movingCreature->getPlayer()) {
+			if (player->getZone() == ZONE_PROTECTION && movingCreature->isPlayer()) {
 				player->sendCancelMessage("You cannot move players who are in a Protection Zone.");
 				return;
 			}
 
-			if (player->getZone() == ZONE_NOPVP && movingCreature->getPlayer()) {
+			if (player->getZone() == ZONE_NOPVP && movingCreature->isPlayer()) {
 				player->sendCancelMessage("You cannot move players who are in a Zone No-PvP.");
 				return;
 			}
 
-			if (movingCreature->getZone() == ZONE_PROTECTION && movingCreature->getPlayer()) {
+			if (movingCreature->getZone() == ZONE_PROTECTION && movingCreature->isPlayer()) {
 				player->sendCancelMessage("You cannot move players who are in a Protection Zone.");
 				return;
 			}
 
-			if (movingCreature->getZone() == ZONE_NOPVP && movingCreature->getPlayer()) {
+			if (movingCreature->getZone() == ZONE_NOPVP && movingCreature->isPlayer()) {
 				player->sendCancelMessage("You cannot move players who are in a Zone No-PvP.");
 				return;
 			}
@@ -3124,7 +3124,7 @@ void Game::playerUseWithCreature(uint32_t playerId, const Position& fromPos, uin
 
 	bool isHotkey = (fromPos.x == 0xFFFF && fromPos.y == 0 && fromPos.z == 0);
 	if (!getBoolean(ConfigManager::AIMBOT_HOTKEY_ENABLED)) {
-		if (creature->getPlayer() || isHotkey) {
+		if (creature->isPlayer() || isHotkey) {
 			player->sendCancelMessage(RETURNVALUE_DIRECTPLAYERSHOOT);
 			return;
 		}
@@ -4654,12 +4654,8 @@ void Game::checkCreatureWalk(uint32_t creatureId)
 void Game::updateCreatureWalk(uint32_t creatureId)
 {
 	Creature* creature = getCreatureByID(creatureId);
-	if (!creature) {
-		return;
-	}
-
-	creature->completeEventFollowWalk();
-	if (!creature->isRemoved() && !creature->isDead()) {
+	if (creature && !creature->isRemoved() && !creature->isDead()) {
+		creature->isUpdatingPath = false;
 		creature->goToFollowCreature();
 	}
 }
@@ -4915,7 +4911,7 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 		return true;
 	}
 
-	if (target->getPlayer() && target->isInGhostMode()) {
+	if (target->isPlayer() && target->isInGhostMode()) {
 		return true;
 	}
 

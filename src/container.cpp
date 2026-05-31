@@ -56,6 +56,36 @@ Container::~Container()
 	}
 }
 
+void Container::updateAmmoCount(const Item* item, int32_t diff)
+{
+	if (!item || item->getWeaponType() != WEAPON_AMMO || diff == 0) {
+		return;
+	}
+
+	if (diff > 0) {
+		ammoCount += static_cast<uint32_t>(diff);
+		return;
+	}
+
+	ammoCount -= std::min<uint32_t>(ammoCount, static_cast<uint32_t>(-diff));
+}
+
+void Container::sendQuiverInventoryUpdate() const
+{
+	if (getWeaponType() != WEAPON_QUIVER) {
+		return;
+	}
+
+	Cylinder* parent = getParent();
+	Creature* creature = parent ? parent->getCreature() : nullptr;
+	Player* player = creature ? creature->getPlayer() : nullptr;
+	if (!player || player->getInventoryItem(CONST_SLOT_RIGHT) != this) {
+		return;
+	}
+
+	player->sendQuiverUpdate();
+}
+
 std::shared_ptr<Item> Container::clone() const
 {
 	auto clone = std::static_pointer_cast<Container>(Item::clone());
@@ -83,6 +113,7 @@ bool Container::addItem(const std::shared_ptr<Item>& item)
 	}
 	itemlist.push_back(item);
 	item->setParent(this);
+	updateAmmoCount(item.get(), item->getItemCount());
 	return true;
 }
 
@@ -620,11 +651,13 @@ void Container::addThing(int32_t index, Thing* thing)
 
 	item->setParent(this);
 	itemlist.push_front(std::move(itemRef));
+	updateAmmoCount(item, item->getItemCount());
 	updateItemWeight(item->getWeight());
 
 	// send change to client
 	if (getParent() && (getParent() != VirtualCylinder::virtualCylinder)) {
 		onAddContainerItem(item);
+		sendQuiverInventoryUpdate();
 	}
 }
 
@@ -638,6 +671,7 @@ void Container::addItemBack(Item* item)
 	// send change to client
 	if (getParent() && (getParent() != VirtualCylinder::virtualCylinder)) {
 		onAddContainerItem(item);
+		sendQuiverInventoryUpdate();
 	}
 }
 
@@ -654,15 +688,16 @@ void Container::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 	}
 
 	const int32_t oldWeight = item->getWeight();
-	ammoCount += count;
-	ammoCount -= item->getItemCount();
+	updateAmmoCount(item, -static_cast<int32_t>(item->getItemCount()));
 	item->setID(itemId);
 	item->setSubType(static_cast<uint16_t>(count));
+	updateAmmoCount(item, static_cast<int32_t>(item->getItemCount()));
 	updateItemWeight(-oldWeight + item->getWeight());
 
 	// send change to client
 	if (getParent()) {
 		onUpdateContainerItem(index, item, item);
+		sendQuiverInventoryUpdate();
 	}
 }
 
@@ -692,11 +727,13 @@ void Container::replaceThing(uint32_t index, Thing* thing)
 	itemlist[index] = std::move(itemRef);
 	item->setParent(this);
 	updateItemWeight(-static_cast<int32_t>(replacedItem->getWeight()) + item->getWeight());
-	ammoCount += item->getItemCount();
+	updateAmmoCount(replacedItem, -static_cast<int32_t>(replacedItem->getItemCount()));
+	updateAmmoCount(item, item->getItemCount());
 
 	// send change to client
 	if (getParent()) {
 		onUpdateContainerItem(index, replacedItem, item);
+		sendQuiverInventoryUpdate();
 	}
 
 	replacedItem->setParent(nullptr);
@@ -721,21 +758,23 @@ void Container::removeThing(Thing* thing, uint32_t count)
 	if (item->isStackable() && count != item->getItemCount()) {
 		uint8_t newCount = static_cast<uint8_t>(std::max<int32_t>(0, item->getItemCount() - count));
 		const int32_t oldWeight = item->getWeight();
-		ammoCount -= (item->getItemCount() - newCount);
+		updateAmmoCount(item, -static_cast<int32_t>(item->getItemCount() - newCount));
 		item->setItemCount(newCount);
 		updateItemWeight(-oldWeight + item->getWeight());
 
 		// send change to client
 		if (getParent()) {
 			onUpdateContainerItem(index, item, item);
+			sendQuiverInventoryUpdate();
 		}
 	} else {
 		updateItemWeight(-static_cast<int32_t>(item->getWeight()));
-		ammoCount -= item->getItemCount();
+		updateAmmoCount(item, -static_cast<int32_t>(item->getItemCount()));
 
 		// send change to client
 		if (getParent()) {
 			onRemoveContainerItem(index, item);
+			sendQuiverInventoryUpdate();
 		}
 
 		auto itemSp = *(itemlist.begin() + index); // prevent destruction during erase
@@ -838,6 +877,7 @@ void Container::internalAddThing(uint32_t, Thing* thing)
 
 	item->setParent(this);
 	itemlist.push_front(std::move(itemRef));
+	updateAmmoCount(item, item->getItemCount());
 	updateItemWeight(item->getWeight());
 
 	if (getID() == ITEM_REWARD_CONTAINER && item->isStackable()) {

@@ -120,12 +120,15 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 	}
 }
 
-void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier)
+void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount)
 {
 	addItemId(item->getID());
 
 	const ItemType& it = Item::items[item->getID()];
-	if (it.stackable) {
+	if (sendQuiverCount && item->getWeaponType() == WEAPON_QUIVER) {
+		const Container* quiver = item->getContainer();
+		addByte(static_cast<uint8_t>(std::min<uint32_t>(0xFF, quiver ? quiver->getAmmoCount() : 0)));
+	} else if (it.stackable) {
 		addByte(static_cast<uint8_t>(std::min<uint16_t>(0xFF, item->getItemCount())));
 	} else if (it.isSplash() || it.isFluidContainer()) {
 		addByte(fluidMap[item->getFluidType() & 7]);

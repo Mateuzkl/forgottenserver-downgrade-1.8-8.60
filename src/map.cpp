@@ -405,11 +405,11 @@ void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& center
 						continue;
 					}
 
-					if (onlyMonsters && !creature->getMonster()) {
+					if (onlyMonsters && !creature->isMonster()) {
 						continue;
 					}
 
-					if (onlyNpcs && !creature->getNpc()) {
+					if (onlyNpcs && !creature->isNpc()) {
 						continue;
 					}
 
@@ -1225,7 +1225,7 @@ void QTreeLeafNode::addCreature(Creature* c)
 {
 	creature_list.push_back(c->shared_from_this());
 
-	if (c->getPlayer()) {
+	if (c->isPlayer()) {
 		player_list.push_back(c->shared_from_this());
 	}
 }
@@ -1238,7 +1238,7 @@ void QTreeLeafNode::removeCreature(Creature* c)
 	*iter = creature_list.back();
 	creature_list.pop_back();
 
-	if (c->getPlayer()) {
+	if (c->isPlayer()) {
 		iter = std::find_if(player_list.begin(), player_list.end(),
 			[c](const auto& sp) { return sp.get() == c; });
 		assert(iter != player_list.end());
