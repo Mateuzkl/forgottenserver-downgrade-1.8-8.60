@@ -66,14 +66,12 @@ function action.onReceive(player, msg)
 		local stackpos = msg:getByte()
 		local item = getItemFromSelection(player, position, itemId, stackpos)
 		if item then
-			ImbuingWindow.openItem(player, item, true)
+			ImbuingWindow.openItem(player, item, false)
 		else
 			player:sendTextMessage(MESSAGE_STATUS_SMALL, "Select an item with imbuement slots from your backpack.")
 		end
 	elseif actionType == 2 then
 		ImbuingWindow.openScroll(player, true)
-	else
-		ImbuingWindow.openChoice(player, true)
 	end
 end
 

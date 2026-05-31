@@ -75,6 +75,22 @@ local function setAccessContext(session, player, sourceThing, sourcePosition)
 	session.sourceInstanceId = sourceThing and getThingInstanceId(sourceThing) or (player and player:getInstanceId() or 0)
 end
 
+local function hasExplicitAccessContext(sourceThing, sourcePosition)
+	return sourcePosition or getThingPosition(sourceThing)
+end
+
+local function rejectMissingAccessContext(player, silent)
+	if not silent then
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Use an imbuing shrine first.")
+	end
+	return false
+end
+
+local function copySessionAccessContext(session, sourceSession)
+	session.sourcePosition = copyPosition(sourceSession.sourcePosition)
+	session.sourceInstanceId = sourceSession.sourceInstanceId
+end
+
 local function isSessionInRange(player, session)
 	if not player or not session or not session.sourcePosition then
 		return true
@@ -474,10 +490,7 @@ local function sendWindow(player, item)
 	msg:addByte(IMBUEMENT_WINDOW_SELECT_ITEM)
 	msg:addByte(getPlayerItemCount(player, BLANK_IMBUEMENT_SCROLL_ID) > 0 and 1 or 0)
 	msg:addU16(item:getId())
-	local classification = item.getClassification and item:getClassification() or 0
-	if classification > 0 then
-		msg:addByte(item.getTier and item:getTier() or 0)
-	end
+	msg:addByte(item.getTier and item:getTier() or 0)
 	msg:addByte(math.min(slots, 3))
 
 	local activeImbuements = getActiveImbuements(item)
@@ -568,6 +581,10 @@ function ImbuingWindow.openChoice(player, silent, sourcePosition, sourceThing)
 	end
 
 	local session = { mode = "choice" }
+	if not hasExplicitAccessContext(sourceThing, sourcePosition) then
+		return rejectMissingAccessContext(player, silent)
+	end
+
 	setAccessContext(session, player, sourceThing, sourcePosition)
 	sessions[player:getId()] = session
 	return sendChoiceWindow(player)
@@ -588,11 +605,23 @@ function ImbuingWindow.openScroll(player, silent, sourcePosition, sourceThing)
 		return false
 	end
 
-	local session = sessions[player:getId()] or {}
-	session.mode = "scroll"
-	if sourcePosition or sourceThing or not session.sourcePosition then
+	local previousSession = sessions[player:getId()]
+	local session = { mode = "scroll" }
+	if sourcePosition or sourceThing then
+		if not hasExplicitAccessContext(sourceThing, sourcePosition) then
+			return rejectMissingAccessContext(player, silent)
+		end
 		setAccessContext(session, player, sourceThing, sourcePosition)
+	elseif previousSession and previousSession.sourcePosition then
+		if not isSessionInRange(player, previousSession) then
+			ImbuingWindow.sendClose(player)
+			return false
+		end
+		copySessionAccessContext(session, previousSession)
+	else
+		return rejectMissingAccessContext(player, silent)
 	end
+
 	sessions[player:getId()] = session
 	return sendScrollWindow(player)
 end
@@ -700,6 +729,17 @@ function ImbuingWindow.sendClose(player)
 	return sent
 end
 
+local function restoreScrollResources(player, def, cost)
+	for _, req in ipairs(def.items or {}) do
+		player:addItem(req.itemId, req.count)
+	end
+	player:addItem(BLANK_IMBUEMENT_SCROLL_ID, 1)
+
+	if cost > 0 then
+		player:addMoney(cost)
+	end
+end
+
 local function applyScrollImbuement(player, def)
 	if not def or not def.scrollId or def.scrollId == 0 then
 		player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
@@ -739,6 +779,7 @@ local function applyScrollImbuement(player, def)
 
 	local created = player:addItem(def.scrollId, 1)
 	if not created then
+		restoreScrollResources(player, def, cost)
 		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Failed to create imbuement scroll.")
 		sendScrollWindow(player)
 		return
