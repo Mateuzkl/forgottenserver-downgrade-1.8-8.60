@@ -21,18 +21,6 @@
 -- See callbacks.lua for a complete working example.
 
 -- =============================================================================
--- onDropLoot: Roll rarity on monster corpse items
--- =============================================================================
-local rarityDropLoot = Event()
-function rarityDropLoot.onDropLoot(monster, corpse)
-	if not RARITY_SYSTEM_ENABLED then return end
-	if not corpse then return end
-
-	processMonsterLoot(monster, corpse)
-end
-rarityDropLoot:register()
-
--- =============================================================================
 -- onInventoryUpdate: Apply/remove conditions when equipping/unequipping
 -- =============================================================================
 local rarityInventory = Event()

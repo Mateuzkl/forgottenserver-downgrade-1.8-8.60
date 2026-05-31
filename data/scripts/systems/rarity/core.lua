@@ -207,6 +207,32 @@ function rollRarityContainer(container, forcedTier, minTier)
 end
 
 -- =============================================================================
+-- Roll rarity on a corpse for all monsters (no monsterTiers check)
+-- Called from default_onDropLoot when RARITY_SYSTEM_ENABLED is true
+-- =============================================================================
+function rollRarityOnCorpse(corpse, chance, minTier)
+	if not RARITY_SYSTEM_ENABLED or not corpse then
+		return 0
+	end
+
+	if math.random(1, 100) > chance then
+		return 0
+	end
+
+	local count = rollRarityContainer(corpse, nil, minTier)
+
+	if count > 0 and rarityConfig.popupText and rarityConfig.animations then
+		local spectators = Game.getSpectators(corpse:getPosition(), false, true, 7, 7, 5, 5)
+		for _, spectator in ipairs(spectators) do
+			spectator:say("Rare loot!", TALKTYPE_MONSTER_SAY, false, spectator, corpse:getPosition())
+		end
+		corpse:getPosition():sendMagicEffect(rarityConfig.popupEffect)
+	end
+
+	return count
+end
+
+-- =============================================================================
 -- Apply/remove item rarity conditions when equipping/unequipping
 -- Called from onInventoryUpdate event
 -- =============================================================================

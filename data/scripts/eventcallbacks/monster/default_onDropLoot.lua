@@ -92,6 +92,11 @@ event.onDropLoot = function(self, corpse)
 			end
 		end
 
+		-- Rarity roll: all monsters when system is enabled
+		if RARITY_SYSTEM_ENABLED and corpse then
+			rollRarityOnCorpse(corpse, rarityConfig.defaultMonsterChance or 5, rarityConfig.defaultMinTier or 1)
+		end
+
 		if player then
 			local lootGroupingEnabled = configManager.getBoolean(configKeys.LOOT_GROUPING_ENABLED)
 			if not lootGroupingEnabled then
