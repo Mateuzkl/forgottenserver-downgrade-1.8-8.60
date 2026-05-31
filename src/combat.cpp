@@ -98,7 +98,7 @@ std::vector<Tile*> getCombatArea(const Position& centerPos, const Position& targ
 	return {tile};
 }
 
-CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target) const
+CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target, std::string_view instantSpellName) const
 {
 	CombatDamage damage;
 	damage.origin = params.origin;
@@ -803,17 +803,17 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
     }
 }
 
-void Combat::doCombat(Creature* caster, Creature* target) const
+void Combat::doCombat(Creature* caster, Creature* target, std::string_view instantSpellName) const
 {
 	if (params.chainCallback) {
-		if (doCombatChain(caster, target, params.aggressive)) {
+		if (doCombatChain(caster, target, params.aggressive, std::string(instantSpellName))) {
 			return;
 		}
 	}
 
 	// target combat callback function
 	if (params.combatType != COMBAT_NONE) {
-		CombatDamage damage = getCombatDamage(caster, target);
+		CombatDamage damage = getCombatDamage(caster, target, instantSpellName);
 
 		bool canCombat =
 		    !params.aggressive || (caster != target && Combat::canDoCombat(caster, target) == RETURNVALUE_NOERROR);
@@ -874,17 +874,17 @@ void Combat::doCombat(Creature* caster, Creature* target) const
 	}
 }
 
-void Combat::doCombat(Creature* caster, const Position& position) const
+void Combat::doCombat(Creature* caster, const Position& position, std::string_view instantSpellName) const
 {
 	if (params.chainCallback) {
-		if (doCombatChain(caster, nullptr, params.aggressive)) {
+		if (doCombatChain(caster, nullptr, params.aggressive, std::string(instantSpellName))) {
 			return;
 		}
 	}
 
 	// area combat callback function
 	if (params.combatType != COMBAT_NONE) {
-		CombatDamage damage = getCombatDamage(caster, nullptr);
+		CombatDamage damage = getCombatDamage(caster, nullptr, instantSpellName);
 		doAreaCombat(caster, position, area.get(), damage, params);
 	} else {
 		auto tiles = caster ? getCombatArea(caster->getPosition(), position, area.get())
@@ -1976,7 +1976,7 @@ std::vector<std::pair<Position, std::vector<uint32_t>>> Combat::pickChainTargets
 	return resultMap;
 }
 
-bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive) const
+bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, std::string instantSpellName) const
 {
 	if (!params.chainCallback) {
 		return false;
@@ -1999,7 +1999,8 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive) 
 		auto delay = i * std::max<int32_t>(SCHEDULER_MINTICKS, ConfigManager::getInteger(ConfigManager::COMBAT_CHAIN_DELAY));
 		++i;
 		for (const auto& to : toVector) {
-			g_scheduler.addEvent(delay, [self, casterId = caster ? caster->getID() : 0, to, from, capturedChainEffect]() {
+			g_scheduler.addEvent(delay, [self, casterId = caster ? caster->getID() : 0, to, from, capturedChainEffect,
+			                             instantSpellName]() {
 				Creature* resolvedCaster = g_game.getCreatureByID(casterId);
 				Creature* nextTarget = g_game.getCreatureByID(to);
 				if (!nextTarget) {
@@ -2007,7 +2008,7 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive) 
 				}
 				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect);
 				if (resolvedCaster) {
-					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget);
+					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget, instantSpellName);
 					bool canCombat = !self->params.aggressive ||
 					                 (resolvedCaster != nextTarget &&
 					                  Combat::canDoCombat(resolvedCaster, nextTarget) == RETURNVALUE_NOERROR);

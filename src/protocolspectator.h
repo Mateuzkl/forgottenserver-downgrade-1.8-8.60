@@ -877,7 +877,7 @@ class ProtocolSpectator {
                 it->sendModalWindow(modalWindow);
         }
 
-        void sendSpellCooldown(uint8_t spellId, uint32_t time) {
+        void sendSpellCooldown(uint16_t spellId, uint32_t time) {
             auto o = owner.lock();
             if (o)
                 o->sendSpellCooldown(spellId, time);

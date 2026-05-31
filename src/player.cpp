@@ -7638,8 +7638,8 @@ void Player::clearCooldowns()
 			condition->setTicks(0);
 			if (type == CONDITION_SPELLGROUPCOOLDOWN) {
 				sendSpellGroupCooldown(static_cast<SpellGroup_t>(subId), 0);
-			} else {
-				sendSpellCooldown(static_cast<uint8_t>(subId), 0);
+			} else if (subId <= std::numeric_limits<uint16_t>::max()) {
+				sendSpellCooldown(static_cast<uint16_t>(subId), 0);
 			}
 		}
 	}

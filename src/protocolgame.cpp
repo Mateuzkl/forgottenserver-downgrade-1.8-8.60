@@ -3011,15 +3011,15 @@ void ProtocolGame::sendAnimatedText(std::string_view message, const Position& po
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendSpellCooldown(uint8_t spellId, uint32_t time)
+void ProtocolGame::sendSpellCooldown(uint16_t spellId, uint32_t time)
 {
-	if (!isOTC) {
+	if (!isOTC || spellId > std::numeric_limits<uint8_t>::max()) {
 		return;
 	}
 
 	NetworkMessage msg;
 	msg.addByte(0xA4);
-	msg.addByte(spellId);
+	msg.addByte(static_cast<uint8_t>(spellId));
 	msg.add<uint32_t>(time);
 	writeToOutputBuffer(msg);
 }

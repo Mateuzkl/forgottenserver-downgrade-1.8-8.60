@@ -957,7 +957,7 @@ public:
 		}
 	}
 
-	void sendSpellCooldown(uint8_t spellId, uint32_t time)
+	void sendSpellCooldown(uint16_t spellId, uint32_t time)
 	{
 		if (client) {
 			client->sendSpellCooldown(spellId, time);
