@@ -434,6 +434,11 @@ function directScrollAction.onUse(player, item, fromPosition, target, toPosition
         return true
     end
 
+    if target:getTopParent() ~= player then
+        player:sendTextMessage(MESSAGE_STATUS_SMALL, "Use the imbuement scroll on an item from your inventory.")
+        return true
+    end
+
     local def = Game.getImbuementByScroll(item:getId())
     if not def then
         player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)

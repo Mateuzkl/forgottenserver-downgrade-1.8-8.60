@@ -44,32 +44,6 @@ local function isPlayerBackpackItem(player, thing)
 	return container and containerHasItem(container, thing)
 end
 
-local function findImbuableItem(container)
-	for _, item in ipairs(container:getItems()) do
-		if hasImbuementSlots(item) then
-			return item
-		end
-
-		local childContainer = item:getContainer()
-		if childContainer then
-			local found = findImbuableItem(childContainer)
-			if found then
-				return found
-			end
-		end
-	end
-	return nil
-end
-
-local function findPlayerBackpackItem(player)
-	local backpack = player:getSlotItem(CONST_SLOT_BACKPACK)
-	local container = backpack and backpack:getContainer()
-	if container then
-		return findImbuableItem(container)
-	end
-	return nil
-end
-
 local action = Action()
 
 function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)

@@ -3,8 +3,8 @@ local apply = PacketHandler(0xD5)
 function apply.onReceive(player, msg)
 	local slot = msg:getByte()
 	local imbuementId = msg:getU32()
-	local protection = msg:getByte() ~= 0
-	ImbuingWindow.apply(player, slot, imbuementId, protection)
+	msg:getByte() -- legacy protection flag
+	ImbuingWindow.apply(player, slot, imbuementId)
 end
 
 apply:register()

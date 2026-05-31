@@ -12,18 +12,6 @@ local IMBUEMENT_WINDOW_CHOICE = 0
 local IMBUEMENT_WINDOW_SELECT_ITEM = 1
 local IMBUEMENT_WINDOW_SCROLL = 2
 
-local SUCCESS_RATES = {
-	[1] = 90,
-	[2] = 70,
-	[3] = 50,
-}
-
-local PROTECTION_COSTS = {
-	[1] = 10000,
-	[2] = 30000,
-	[3] = 50000,
-}
-
 local sessions = {}
 local cachedDefinitions = nil
 local definitionsById = {}
@@ -196,22 +184,6 @@ local function displayName(def)
 		return def.baseName .. " " .. def.name
 	end
 	return def.name
-end
-
-local function getSuccessRate(defOrImbuement)
-	local baseId = defOrImbuement and tonumber(defOrImbuement.baseId)
-	if not baseId and defOrImbuement and defOrImbuement.getBaseId then
-		baseId = tonumber(defOrImbuement:getBaseId())
-	end
-	return SUCCESS_RATES[baseId] or 90
-end
-
-local function getProtectionCost(defOrImbuement)
-	local baseId = defOrImbuement and tonumber(defOrImbuement.baseId)
-	if not baseId and defOrImbuement and defOrImbuement.getBaseId then
-		baseId = tonumber(defOrImbuement:getBaseId())
-	end
-	return PROTECTION_COSTS[baseId] or PROTECTION_COSTS[1]
 end
 
 local function fallbackImbuementName(imbuement)
@@ -401,6 +373,11 @@ local function containerHasItem(container, target)
 	for i = 0, container:getSize() - 1 do
 		local item = container:getItem(i)
 		if item == target then
+			return true
+		end
+
+		local childContainer = item:getContainer()
+		if childContainer and containerHasItem(childContainer, target) then
 			return true
 		end
 	end
@@ -714,11 +691,19 @@ function ImbuingWindow.openItem(player, item, silent, sourcePosition, sourceThin
 
 	local previousSession = sessions[player:getId()]
 	local session = {mode = "item", item = item, backpackOnly = true}
-	if previousSession and previousSession.sourcePosition and not sourcePosition and not sourceThing then
-		session.sourcePosition = previousSession.sourcePosition
-		session.sourceInstanceId = previousSession.sourceInstanceId
-	else
+	if sourcePosition or sourceThing then
+		if not hasExplicitAccessContext(sourceThing, sourcePosition) then
+			return rejectMissingAccessContext(player, silent)
+		end
 		setAccessContext(session, player, sourceThing, sourcePosition)
+	elseif previousSession and previousSession.sourcePosition then
+		if not isSessionInRange(player, previousSession) then
+			ImbuingWindow.sendClose(player)
+			return false
+		end
+		copySessionAccessContext(session, previousSession)
+	else
+		return rejectMissingAccessContext(player, silent)
 	end
 	sessions[player:getId()] = session
 	return sendWindow(player, item)
@@ -805,7 +790,7 @@ local function applyScrollImbuement(player, def)
 	sendScrollWindow(player)
 end
 
-function ImbuingWindow.apply(player, slot, imbuementId, protection)
+function ImbuingWindow.apply(player, slot, imbuementId)
 	if not isEnabled() then
 		return
 	end
@@ -868,25 +853,8 @@ function ImbuingWindow.apply(player, slot, imbuementId, protection)
 	end
 
 	local cost = def.price or 0
-	if protection then
-		cost = cost + getProtectionCost(def)
-	end
 	if cost > 0 and player:getMoney() + player:getBankBalance() < cost then
 		player:sendTextMessage(MESSAGE_STATUS_SMALL, "You do not have enough gold.")
-		sendWindow(player, item)
-		return
-	end
-
-	local success = protection or math.random(100) <= getSuccessRate(def)
-	if not success then
-		for _, req in ipairs(def.items or {}) do
-			player:removeItem(req.itemId, req.count, -1, true)
-		end
-		if cost > 0 then
-			player:removeTotalMoney(cost)
-		end
-
-		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Imbuement failed.")
 		sendWindow(player, item)
 		return
 	end
