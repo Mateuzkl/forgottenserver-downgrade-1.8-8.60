@@ -2,14 +2,15 @@ version: '{build}'
 image: Visual Studio 2022
 
 skip_branch_with_pr: true
-shallow_clone: true
-clone_depth: 1
 
 platform:
   - x64
 
 configuration:
   - Release
+
+matrix:
+  fast_finish: false
 
 only_commits:
   files:
@@ -21,31 +22,35 @@ only_commits:
     - vcpkg-configuration.json
     - CMakeLists.txt
 
+skip_commits:
+  message: /\[skip ci\]|\[skip appveyor\]/
+
 environment:
   VCPKG_ROOT: C:\Tools\vcpkg
   VCPKG_DEFAULT_TRIPLET: x64-windows
   VCPKG_DEFAULT_BINARY_CACHE: C:\Users\appveyor\AppData\Local\vcpkg\archives
 
 install:
+  - cmd: git fetch --tags --force
   - cmd: cd /d %VCPKG_ROOT%
   - cmd: vcpkg version
   - cmd: cd /d %APPVEYOR_BUILD_FOLDER%
   - cmd: vcpkg install --triplet %VCPKG_DEFAULT_TRIPLET%
 
 before_build:
-  - if not exist build mkdir build
-  - cd build
-  - cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
+  - cmd: if not exist build mkdir build
+  - cmd: cd build
+  - cmd: cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
 
 build:
   parallel: true
 
 build_script:
-  - cmake --build . --config %CONFIGURATION% --parallel
+  - cmd: cmake --build . --config %CONFIGURATION% --parallel
 
 after_build:
-  - cd %APPVEYOR_BUILD_FOLDER%
-  - 7z a -tzip TFS.zip -r .\build\%CONFIGURATION%\*.exe -ir!.\build\%CONFIGURATION%\*.dll
+  - cmd: cd %APPVEYOR_BUILD_FOLDER%
+  - cmd: 7z a -tzip TFS.zip -r .\build\%CONFIGURATION%\*.exe -ir!.\build\%CONFIGURATION%\*.dll
 
 cache:
   - C:\Users\appveyor\AppData\Local\vcpkg\archives
