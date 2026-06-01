@@ -8,6 +8,7 @@ local OPCODE_WHEEL_SAVE = 0x62
 local OPCODE_WHEEL_GEM_ACTION = 0xE7
 local OPCODE_WHEEL_WINDOW = 0x5F
 local OPCODE_RESOURCE_BALANCE = 0xEE
+local OPCODE_WHEEL_SKILLS = 0x91
 
 local WHEEL_MIN_LEVEL = 51
 local WHEEL_POINTS_PER_LEVEL = 1
@@ -118,6 +119,139 @@ local WHEEL_CONVICTION_VALUES = {
 	lifeleech = 75,
 	manaleech = 25,
 	skill = 1,
+}
+
+local AUGMENT_TYPE = {
+	MANA_COST = 1,
+	BASE_DAMAGE = 2,
+	BASE_HEALING = 3,
+	DURATION_INCREASED = 4,
+	ADDITIONAL_TARGETS = 5,
+	COOLDOWN = 6,
+	SECONDARY_GROUP_COOLDOWN = 7,
+	AFFECTED_AREA_ENLARGED = 8,
+	INCREASED_DAMAGE_REDUCTION = 9,
+	LIFE_LEECH = 14,
+	MANA_LEECH = 15,
+	CRITICAL_EXTRA_DAMAGE = 16,
+	CRITICAL_HIT_CHANCE = 17,
+}
+
+local FOCUS_MAGE_SPELLS = { "Eternal Winter", "Hell's Core", "Rage of the Skies", "Wrath of Nature" }
+
+-- Kept in the same order as Canary's wheel spell table. Each spell_N node exists
+-- twice on the wheel: completing one unlocks grade I and completing both unlocks grade II.
+local WHEEL_SPELL_BONUSES = {
+	[1] = {
+		spell_1 = { names = { "Front Sweep" }, grades = {
+			{ { AUGMENT_TYPE.LIFE_LEECH, 0.05 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.14 } },
+		} },
+		spell_2 = { names = { "Groundshaker" }, grades = {
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.125 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -2 } },
+		} },
+		spell_3 = { names = { "Chivalrous Challenge" }, grades = {
+			{ { AUGMENT_TYPE.MANA_COST, -20 } },
+			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 1 } },
+		} },
+		spell_4 = { names = { "Intense Wound Cleansing" }, grades = {
+			{ { AUGMENT_TYPE.BASE_HEALING, 1.25 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -300 } },
+		} },
+		spell_5 = { names = { "Fierce Berserk" }, grades = {
+			{ { AUGMENT_TYPE.MANA_COST, -30 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.10 } },
+		} },
+	},
+	[2] = {
+		spell_1 = { names = { "Sharpshooter" }, grades = {
+			{ { AUGMENT_TYPE.SECONDARY_GROUP_COOLDOWN, -8 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -6 } },
+		} },
+		spell_2 = { names = { "Strong Ethereal Spear" }, grades = {
+			{ { AUGMENT_TYPE.COOLDOWN, -2 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 3.80 } },
+		} },
+		spell_3 = { names = { "Divine Dazzle" }, grades = {
+			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 1 } },
+			{ { AUGMENT_TYPE.DURATION_INCREASED, 4 }, { AUGMENT_TYPE.COOLDOWN, -4 } },
+		} },
+		spell_4 = { names = { "Swift Foot" }, grades = {
+			{ { AUGMENT_TYPE.SECONDARY_GROUP_COOLDOWN, -8 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -6 } },
+		} },
+		spell_5 = { names = { "Divine Caldera" }, grades = {
+			{ { AUGMENT_TYPE.MANA_COST, -20 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.085 } },
+		} },
+	},
+	[3] = {
+		spell_1 = { names = FOCUS_MAGE_SPELLS, grades = {
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.05 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -4 }, { AUGMENT_TYPE.SECONDARY_GROUP_COOLDOWN, -4 } },
+		} },
+		spell_2 = { names = { "Magic Shield" }, grades = {
+			{},
+			{ { AUGMENT_TYPE.COOLDOWN, -6 } },
+		} },
+		spell_3 = { names = { "Sap Strength" }, grades = {
+			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
+			{ { AUGMENT_TYPE.INCREASED_DAMAGE_REDUCTION, 0.01 } },
+		} },
+		spell_4 = { names = { "Energy Wave" }, grades = {
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.05 } },
+			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
+		} },
+		spell_5 = { names = { "Great Fire Wave" }, grades = {
+			{ { AUGMENT_TYPE.CRITICAL_EXTRA_DAMAGE, 0.15 }, { AUGMENT_TYPE.CRITICAL_HIT_CHANCE, 0.10 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.05 } },
+		} },
+	},
+	[4] = {
+		spell_1 = { names = { "Strong Ice Wave" }, grades = {
+			{ { AUGMENT_TYPE.MANA_LEECH, 0.03 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.10 } },
+		} },
+		spell_2 = { names = { "Mass Healing" }, grades = {
+			{ { AUGMENT_TYPE.BASE_HEALING, 0.04 } },
+			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
+		} },
+		spell_3 = { names = { "Nature's Embrace" }, grades = {
+			{ { AUGMENT_TYPE.BASE_HEALING, 0.11 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -10 } },
+		} },
+		spell_4 = { names = { "Terra Wave" }, grades = {
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.065 } },
+			{ { AUGMENT_TYPE.LIFE_LEECH, 0.05 } },
+		} },
+		spell_5 = { names = { "Heal Friend" }, grades = {
+			{ { AUGMENT_TYPE.MANA_COST, -10 } },
+			{ { AUGMENT_TYPE.BASE_HEALING, 0.055 } },
+		} },
+	},
+	[5] = {
+		spell_1 = { names = { "Sweeping Takedown" }, grades = {
+			{ { AUGMENT_TYPE.MANA_LEECH, 0.03 } },
+			{ { AUGMENT_TYPE.CRITICAL_EXTRA_DAMAGE, 0.25 }, { AUGMENT_TYPE.CRITICAL_HIT_CHANCE, 0.10 } },
+		} },
+		spell_2 = { names = { "Mass Spirit Mend" }, grades = {
+			{ { AUGMENT_TYPE.BASE_HEALING, 0.08 } },
+			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
+		} },
+		spell_3 = { names = { "Mystic Repulse" }, grades = {
+			{ { AUGMENT_TYPE.COOLDOWN, -4 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.40 } },
+		} },
+		spell_4 = { names = { "Chained Penance" }, grades = {
+			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 1 } },
+			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 2 } },
+		} },
+		spell_5 = { names = { "Flurry of Blows" }, grades = {
+			{ { AUGMENT_TYPE.LIFE_LEECH, 0.05 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.12 } },
+		} },
+	},
 }
 
 local WHEEL_APPLIED_SPECIAL_MAGIC = {}
@@ -412,6 +546,30 @@ local function addSpecialMagicBonus(bonuses, combatType, value)
 	bonuses.specialMagic[combatType] = (bonuses.specialMagic[combatType] or 0) + value
 end
 
+local function addWheelSpellGrade(bonuses, conviction)
+	bonuses.spellGrades[conviction] = (bonuses.spellGrades[conviction] or 0) + 1
+end
+
+local function buildWheelSpellAugments(bonuses, vocationId)
+	local vocationSpells = WHEEL_SPELL_BONUSES[vocationId] or {}
+	for conviction, grade in pairs(bonuses.spellGrades) do
+		local spell = vocationSpells[conviction]
+		if spell then
+			for _, spellName in ipairs(spell.names) do
+				for index = 1, math.min(grade, #spell.grades) do
+					for _, augment in ipairs(spell.grades[index]) do
+						bonuses.spellAugments[#bonuses.spellAugments + 1] = {
+							spellName = spellName,
+							augmentType = augment[1],
+							value = augment[2],
+						}
+					end
+				end
+			end
+		end
+	end
+end
+
 local function calculateWheelBonuses(player, points)
 	local vocationId = getWheelVocation(player)
 	local bonuses = {
@@ -426,6 +584,8 @@ local function calculateWheelBonuses(player, points)
 		manaLeech = 0,
 		mitigation = 0,
 		specialMagic = {},
+		spellGrades = {},
+		spellAugments = {},
 	}
 
 	if vocationId == 0 then
@@ -470,10 +630,13 @@ local function calculateWheelBonuses(player, points)
 			elseif conviction == "special_1" and vocationId == 2 then
 				addSpecialMagicBonus(bonuses, COMBAT_HOLYDAMAGE, 3)
 				addSpecialMagicBonus(bonuses, COMBAT_HEALING, 3)
+			elseif WHEEL_SPELL_BONUSES[vocationId] and WHEEL_SPELL_BONUSES[vocationId][conviction] then
+				addWheelSpellGrade(bonuses, conviction)
 			end
 		end
 	end
 
+	buildWheelSpellAugments(bonuses, vocationId)
 	return bonuses
 end
 
@@ -504,6 +667,9 @@ end
 
 local function removeWheelBonuses(player)
 	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, WHEEL_CONDITION_SUBID, true)
+	if player.clearWheelSpellAugments then
+		player:clearWheelSpellAugments()
+	end
 	removeAppliedSpecialMagic(player)
 	removeAppliedMitigation(player)
 
@@ -523,12 +689,60 @@ local function setConditionBonus(condition, parameter, value)
 	return false
 end
 
+local WHEEL_SKILL_ABSORBS = {
+	physical = COMBAT_PHYSICALDAMAGE,
+	fire = COMBAT_FIREDAMAGE,
+	earth = COMBAT_EARTHDAMAGE,
+	energy = COMBAT_ENERGYDAMAGE,
+	ice = COMBAT_ICEDAMAGE,
+	holy = COMBAT_HOLYDAMAGE,
+	death = COMBAT_DEATHDAMAGE,
+	healing = COMBAT_HEALING,
+	drown = COMBAT_DROWNDAMAGE,
+	lifedrain = COMBAT_LIFEDRAIN,
+	manadrain = COMBAT_MANADRAIN,
+}
+
+local function sendWheelSkillStats(player)
+	if not supportsCustomNetwork(player) or not player.sendExtendedOpcode then
+		return false
+	end
+
+	local absorbs = {}
+	if player.getCombatAbsorbPercent then
+		for name, combatType in pairs(WHEEL_SKILL_ABSORBS) do
+			absorbs[name] = player:getCombatAbsorbPercent(combatType) / 100
+		end
+	end
+
+	return player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, json.encode({
+		lifeLeech = player:getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT) / 10000,
+		manaLeech = player:getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT) / 10000,
+		criticalChance = player:getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE) / 10000,
+		criticalDamage = player:getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT) / 10000,
+		defense = player.getDefense and player:getDefense() or 0,
+		armor = player.getArmor and player:getArmor() or 0,
+		mitigation = player:getMitigation() / 100,
+		absorbs = absorbs,
+	}))
+end
+
+function Player.wheelSendSkillStats(self)
+	return sendWheelSkillStats(self)
+end
+
 local function applyWheelBonuses(player)
 	removeWheelBonuses(player)
 
 	local profile = loadProfile(player)
 	local bonuses = calculateWheelBonuses(player, profile.points)
+	local spellGrades = bonuses.spellGrades
+	local spellAugments = bonuses.spellAugments
+	bonuses.spellGrades = nil
+	bonuses.spellAugments = nil
 	wheelKV(player):set("bonusStats", bonuses)
+	bonuses.spellGrades = spellGrades
+	bonuses.spellAugments = spellAugments
 
 	local condition = Condition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT)
 	condition:setParameter(CONDITION_PARAM_SUBID, WHEEL_CONDITION_SUBID)
@@ -547,6 +761,12 @@ local function applyWheelBonuses(player)
 
 	if hasConditionBonus then
 		player:addCondition(condition)
+	end
+
+	if player.addWheelSpellAugment then
+		for _, augment in ipairs(bonuses.spellAugments) do
+			player:addWheelSpellAugment(augment.spellName, augment.augmentType, augment.value)
+		end
 	end
 
 	local key = getWheelPlayerKey(player)
@@ -581,6 +801,7 @@ local function applyWheelBonuses(player)
 	appliedStore:set("updatedAt", os.time())
 
 	player:reloadData()
+	sendWheelSkillStats(player)
 	return bonuses
 end
 

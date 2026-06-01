@@ -17,6 +17,9 @@ end
 local ec = Event()
 function ec.onUpdateInventory(player, item, slot, equip)
     applyLeechChance(player, item, equip)
+    if player.wheelSendSkillStats then
+        player:wheelSendSkillStats()
+    end
     return true
 end
 ec:register()

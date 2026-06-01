@@ -171,6 +171,8 @@ public:
 	void setCooldown(uint32_t cd) { cooldown = cd; }
 	void getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDamage& damage) const;
 	int32_t calculateAugmentSpellCooldownReduction(const std::shared_ptr<Player>& player) const;
+	int32_t calculateAugmentSpellSecondaryGroupCooldownReduction(const std::shared_ptr<Player>& player) const;
+	int32_t calculateAugmentSpellManaCostReduction(const Player* player) const;
 
 	int32_t getRange() const { return range; }
 	void setRange(int32_t r) { range = r; }

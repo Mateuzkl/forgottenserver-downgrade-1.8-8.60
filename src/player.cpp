@@ -84,6 +84,50 @@ void addClamped(int32_t& target, int64_t value)
 	                                                 std::numeric_limits<int32_t>::max()));
 }
 
+void addSpellAugmentBonus(ProficiencySpellAugmentBonus& bonus, Augment_t augmentType, double value)
+{
+	switch (augmentType) {
+		case Augment_t::ManaCost:
+			addClamped(bonus.manaCostPercent, std::lround(std::abs(value)));
+			break;
+
+		case Augment_t::BaseDamage:
+			addClamped(bonus.damagePercent, std::lround(value * 100.0));
+			break;
+
+		case Augment_t::BaseHealing:
+			addClamped(bonus.healingPercent, std::lround(value * 100.0));
+			break;
+
+		case Augment_t::Cooldown:
+			addClamped(bonus.cooldownReduction, std::lround(std::abs(value) * 1000.0));
+			break;
+
+		case Augment_t::SecondaryGroupCooldown:
+			addClamped(bonus.secondaryGroupCooldownReduction, std::lround(std::abs(value) * 1000.0));
+			break;
+
+		case Augment_t::LifeLeech:
+			addClamped(bonus.lifeLeech, std::lround(value * 10000.0));
+			break;
+
+		case Augment_t::ManaLeech:
+			addClamped(bonus.manaLeech, std::lround(value * 10000.0));
+			break;
+
+		case Augment_t::CriticalExtraDamage:
+			addClamped(bonus.criticalDamage, std::lround(value * 10000.0));
+			break;
+
+		case Augment_t::CriticalHitChance:
+			addClamped(bonus.criticalChance, std::lround(value * 10000.0));
+			break;
+
+		default:
+			break;
+	}
+}
+
 bool isMantraCombatType(CombatType_t combatType)
 {
 	switch (combatType) {
@@ -533,38 +577,7 @@ void Player::addProficiencySpellAugment(uint16_t weaponId, uint16_t spellId, Aug
 	}
 
 	auto& bonus = proficiencySpellAugments[weaponId][spellId];
-	switch (augmentType) {
-		case Augment_t::BaseDamage:
-			addClamped(bonus.damagePercent, std::lround(value * 100.0));
-			break;
-
-		case Augment_t::BaseHealing:
-			addClamped(bonus.healingPercent, std::lround(value * 100.0));
-			break;
-
-		case Augment_t::Cooldown:
-			addClamped(bonus.cooldownReduction, std::lround(std::abs(value) * 1000.0));
-			break;
-
-		case Augment_t::LifeLeech:
-			addClamped(bonus.lifeLeech, std::lround(value * 10000.0));
-			break;
-
-		case Augment_t::ManaLeech:
-			addClamped(bonus.manaLeech, std::lround(value * 10000.0));
-			break;
-
-		case Augment_t::CriticalExtraDamage:
-			addClamped(bonus.criticalDamage, std::lround(value * 10000.0));
-			break;
-
-		case Augment_t::CriticalHitChance:
-			addClamped(bonus.criticalChance, std::lround(value * 10000.0));
-			break;
-
-		default:
-			break;
-	}
+	addSpellAugmentBonus(bonus, augmentType, value);
 }
 
 ProficiencySpellAugmentBonus Player::getProficiencySpellAugmentBonus(uint16_t spellId) const
@@ -581,6 +594,26 @@ ProficiencySpellAugmentBonus Player::getProficiencySpellAugmentBonus(uint16_t sp
 
 	const auto spellIt = weaponIt->second.find(spellId);
 	return spellIt != weaponIt->second.end() ? spellIt->second : ProficiencySpellAugmentBonus{};
+}
+
+void Player::clearWheelSpellAugments()
+{
+	wheelSpellAugments.clear();
+}
+
+void Player::addWheelSpellAugment(std::string spellName, Augment_t augmentType, double value)
+{
+	if (!ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED) || spellName.empty() || !std::isfinite(value)) {
+		return;
+	}
+
+	addSpellAugmentBonus(wheelSpellAugments[std::move(spellName)], augmentType, value);
+}
+
+ProficiencySpellAugmentBonus Player::getWheelSpellAugmentBonus(std::string_view spellName) const
+{
+	const auto it = wheelSpellAugments.find(std::string(spellName));
+	return it != wheelSpellAugments.end() ? it->second : ProficiencySpellAugmentBonus{};
 }
 
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const
@@ -725,6 +758,60 @@ int32_t Player::getArmor() const
 		}
 	}
 	return static_cast<int32_t>(armor * vocation->armorMultiplier);
+}
+
+int32_t Player::getCombatAbsorbPercent(CombatType_t combatType) const
+{
+	int32_t total = 0;
+	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_AMMO; ++slot) {
+		if (!isItemAbilityEnabled(static_cast<slots_t>(slot))) {
+			continue;
+		}
+
+		const std::shared_ptr<Item>& item = inventory[slot];
+		if (!item) {
+			continue;
+		}
+
+		const ItemType& itemType = Item::items[item->getID()];
+		if (itemType.abilities) {
+			total += itemType.abilities->absorbPercent[combatTypeToIndex(combatType)];
+		}
+
+		for (const auto& imbuement : item->getImbuements()) {
+			if (!imbuement) {
+				continue;
+			}
+
+			switch (imbuement->imbuetype) {
+				case ImbuementType::IMBUEMENT_TYPE_FIRE_RESIST:
+					if (combatType == COMBAT_FIREDAMAGE) total += imbuement->value;
+					break;
+				case ImbuementType::IMBUEMENT_TYPE_EARTH_RESIST:
+					if (combatType == COMBAT_EARTHDAMAGE) total += imbuement->value;
+					break;
+				case ImbuementType::IMBUEMENT_TYPE_ICE_RESIST:
+					if (combatType == COMBAT_ICEDAMAGE) total += imbuement->value;
+					break;
+				case ImbuementType::IMBUEMENT_TYPE_ENERGY_RESIST:
+					if (combatType == COMBAT_ENERGYDAMAGE) total += imbuement->value;
+					break;
+				case ImbuementType::IMBUEMENT_TYPE_DEATH_RESIST:
+					if (combatType == COMBAT_DEATHDAMAGE) total += imbuement->value;
+					break;
+				case ImbuementType::IMBUEMENT_TYPE_HOLY_RESIST:
+					if (combatType == COMBAT_HOLYDAMAGE) total += imbuement->value;
+					break;
+				default:
+					break;
+			}
+		}
+	}
+
+	if (isMantraCombatType(combatType)) {
+		total += getMantraAbsorbPercent(getMantraTotal());
+	}
+	return total;
 }
 
 int32_t Player::getMantraTotal() const

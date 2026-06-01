@@ -829,6 +829,42 @@ int luaPlayerGetMitigation(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetArmor(lua_State* L)
+{
+	// player:getArmor()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getArmor());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetDefense(lua_State* L)
+{
+	// player:getDefense()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getDefense());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetCombatAbsorbPercent(lua_State* L)
+{
+	// player:getCombatAbsorbPercent(combatType)
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getCombatAbsorbPercent(getInteger<CombatType_t>(L, 2)));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerAddMitigation(lua_State* L)
 {
 	// player:addMitigation(value)
@@ -1878,6 +1914,35 @@ int luaPlayerAddProficiencySpellAugment(lua_State* L)
 	player->addProficiencySpellAugment(getInteger<uint16_t>(L, 2), getInteger<uint16_t>(L, 3),
 	                                  static_cast<Augment_t>(getInteger<uint8_t>(L, 4)),
 	                                  getNumber<double>(L, 5));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerClearWheelSpellAugments(lua_State* L)
+{
+	// player:clearWheelSpellAugments()
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->clearWheelSpellAugments();
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddWheelSpellAugment(lua_State* L)
+{
+	// player:addWheelSpellAugment(spellName, augmentType, value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addWheelSpellAugment(getString(L, 2), static_cast<Augment_t>(getInteger<uint8_t>(L, 3)),
+	                             getNumber<double>(L, 4));
 	pushBoolean(L, true);
 	return 1;
 }
@@ -3974,6 +4039,9 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getSpecialMagicLevel", luaPlayerGetSpecialMagicLevel);
 	registerMethod("Player", "addSpecialMagicLevel", luaPlayerAddSpecialMagicLevel);
 	registerMethod("Player", "getMitigation", luaPlayerGetMitigation);
+	registerMethod("Player", "getArmor", luaPlayerGetArmor);
+	registerMethod("Player", "getDefense", luaPlayerGetDefense);
+	registerMethod("Player", "getCombatAbsorbPercent", luaPlayerGetCombatAbsorbPercent);
 	registerMethod("Player", "addMitigation", luaPlayerAddMitigation);
 
 	registerMethod("Player", "getItemCount", luaPlayerGetItemCount);
@@ -4046,6 +4114,8 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getWeaponProficiencyId", luaPlayerGetWeaponProficiencyId);
 	registerMethod("Player", "clearProficiencySpellAugments", luaPlayerClearProficiencySpellAugments);
 	registerMethod("Player", "addProficiencySpellAugment", luaPlayerAddProficiencySpellAugment);
+	registerMethod("Player", "clearWheelSpellAugments", luaPlayerClearWheelSpellAugments);
+	registerMethod("Player", "addWheelSpellAugment", luaPlayerAddWheelSpellAugment);
 
 	registerMethod("Player", "getParty", luaPlayerGetParty);
 

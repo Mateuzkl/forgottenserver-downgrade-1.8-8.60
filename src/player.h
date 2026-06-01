@@ -85,7 +85,9 @@ struct ProficiencySpellAugmentBonus
 	int32_t criticalChance = 0;
 	int32_t lifeLeech = 0;
 	int32_t manaLeech = 0;
+	int32_t manaCostPercent = 0;
 	int32_t cooldownReduction = 0;
+	int32_t secondaryGroupCooldownReduction = 0;
 };
 
 struct OpenContainer
@@ -519,6 +521,9 @@ public:
 	void clearProficiencySpellAugments();
 	void addProficiencySpellAugment(uint16_t weaponId, uint16_t spellId, Augment_t augmentType, double value);
 	ProficiencySpellAugmentBonus getProficiencySpellAugmentBonus(uint16_t spellId) const;
+	void clearWheelSpellAugments();
+	void addWheelSpellAugment(std::string spellName, Augment_t augmentType, double value);
+	ProficiencySpellAugmentBonus getWheelSpellAugmentBonus(std::string_view spellName) const;
 	bool hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const;
 	bool isInventorySlot(slots_t slot) const;
 
@@ -724,6 +729,7 @@ public:
 
 	int32_t getArmor() const override;
 	int32_t getDefense() const override;
+	int32_t getCombatAbsorbPercent(CombatType_t combatType) const;
 
 	float getMitigation() const override;
 	void addMitigation(float modifier) { varMitigation += modifier; }
@@ -1483,6 +1489,7 @@ private:
 	std::weak_ptr<Item> tradeItem;
 	std::shared_ptr<Item> inventory[CONST_SLOT_LAST + 1] = {};
 	std::unordered_map<uint16_t, std::unordered_map<uint16_t, ProficiencySpellAugmentBonus>> proficiencySpellAugments;
+	std::unordered_map<std::string, ProficiencySpellAugmentBonus> wheelSpellAugments;
 	std::weak_ptr<Item> writeItem;
 	std::weak_ptr<House> editHouse;
 	std::weak_ptr<Npc> shopOwner;
