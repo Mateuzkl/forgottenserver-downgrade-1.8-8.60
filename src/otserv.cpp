@@ -55,9 +55,10 @@ void startupErrorMessage(std::string_view errorStr)
 std::string formatFeatureStatus(std::string_view name, ConfigManager::Boolean key)
 {
 	const bool enabled = ConfigManager::getBoolean(key);
-	return fmt::format("{} [{}]", name,
-	                   fmt::format(fg(enabled ? fmt::color::lime_green : fmt::color::yellow),
-	                               enabled ? "ON" : "OFF"));
+	const auto color = enabled ? fmt::color::lime_green : fmt::color::yellow;
+	const auto* status = enabled ? "ON" : "OFF";
+
+	return fmt::format("{} [{}]", name, fmt::format(fg(color), "{}", status));
 }
 
 void printFeatureStatus()
