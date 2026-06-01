@@ -1,14 +1,15 @@
 version: '{build}'
 image: Visual Studio 2022
 
+skip_branch_with_pr: true
+shallow_clone: true
+clone_depth: 1
+
 platform:
   - x64
 
 configuration:
   - Release
-
-matrix:
-  fast_finish: false
 
 only_commits:
   files:
@@ -23,12 +24,10 @@ only_commits:
 environment:
   VCPKG_ROOT: C:\Tools\vcpkg
   VCPKG_DEFAULT_TRIPLET: x64-windows
+  VCPKG_DEFAULT_BINARY_CACHE: C:\Users\appveyor\AppData\Local\vcpkg\archives
 
 install:
   - cmd: cd /d %VCPKG_ROOT%
-  - cmd: git fetch --all --tags --prune
-  - cmd: git pull
-  - cmd: bootstrap-vcpkg.bat
   - cmd: vcpkg version
   - cmd: cd /d %APPVEYOR_BUILD_FOLDER%
   - cmd: vcpkg install --triplet %VCPKG_DEFAULT_TRIPLET%
@@ -49,7 +48,8 @@ after_build:
   - 7z a -tzip TFS.zip -r .\build\%CONFIGURATION%\*.exe -ir!.\build\%CONFIGURATION%\*.dll
 
 cache:
-  - c:\tools\vcpkg\installed\
+  - C:\Users\appveyor\AppData\Local\vcpkg\archives
+  - C:\Tools\vcpkg\installed -> vcpkg.json, vcpkg-configuration.json
 
 artifacts:
   - path: build\**\tfs*.exe
