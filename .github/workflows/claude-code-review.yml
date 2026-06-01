@@ -1,34 +1,62 @@
-name: Claude Code Review
+name: Build Docker Image (Linux)
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - ".github/workflows/docker-image.yml"
+      - "src/**"
+      - "cmake/**"
+      - "data/**"
+      - "vc17/**"
+      - CMakeLists.txt
+      - vcpkg.json
+      - vcpkg-configuration.json
+
   pull_request:
-    types: [opened, synchronize, reopened]
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - ".github/workflows/docker-image.yml"
+      - "src/**"
+      - "cmake/**"
+      - "data/**"
+      - "vc17/**"
+      - CMakeLists.txt
+      - vcpkg.json
+      - vcpkg-configuration.json
+
   workflow_dispatch:
 
-jobs:
-  claude-review-disabled:
-    if: |
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.user.login == github.repository_owner) ||
-      ((github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
-       github.event.comment.user.login == github.repository_owner &&
-       contains(github.event.comment.body, '@claude')) ||
-      github.event_name == 'workflow_dispatch'
+concurrency:
+  group: docker-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-    runs-on: ubuntu-latest
+jobs:
+  build:
+    name: Docker build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
 
     steps:
-      - name: Claude Code Review disabled
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker version
+        run: docker version
+
+      - name: Build Docker image
         run: |
-          echo "Claude Code Review is disabled because this repository only allows GitHub-owned or Mateuzkl-owned actions."
-          echo "anthropics/claude-code-action@v1 is currently blocked by repository Actions permissions."
-          echo "Use CodeRabbit or enable third-party actions in repository settings if Claude is needed."
+          docker build \
+            --pull \
+            --file ./Dockerfile \
+            --tag tfs-linux:latest \
+            .
