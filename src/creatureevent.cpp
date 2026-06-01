@@ -50,13 +50,13 @@ bool CreatureEvents::registerLuaEvent(CreatureEvent* event)
 	}
 
 	// if not, register it normally
-	creatureEvents.emplace(boost::algorithm::to_lower_copy(creatureEvent->getName()), std::move(*creatureEvent));
+	creatureEvents.emplace(asLowerCaseString(creatureEvent->getName()), std::move(*creatureEvent));
 	return true;
 }
 
 CreatureEvent* CreatureEvents::getEventByName(std::string_view name, bool forceLoaded /*= true*/)
 {
-	std::string key = boost::algorithm::to_lower_copy(std::string{name});
+	std::string key = asLowerCaseString(std::string{name});
 
 	auto it = creatureEvents.find(key);
 	if (it != creatureEvents.end()) {

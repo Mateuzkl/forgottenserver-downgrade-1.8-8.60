@@ -31,7 +31,7 @@ public:
 		return instance;
 	}
 
-	Connection_ptr createConnection(boost::asio::io_context& io_context, ConstServicePort_ptr servicePort);
+	Connection_ptr createConnection(asio::io_context& io_context, ConstServicePort_ptr servicePort);
 	void releaseConnection(const Connection_ptr& connection);
 	void closeAll();
 	void releaseAllProtocols();
@@ -62,8 +62,8 @@ public:
 		FORCE_CLOSE = true
 	};
 
-	Connection(boost::asio::io_context& io_context, ConstServicePort_ptr service_port) :
-	    strand(boost::asio::make_strand(io_context)),
+	Connection(asio::io_context& io_context, ConstServicePort_ptr service_port) :
+	    strand(asio::make_strand(io_context)),
 	    readTimer(strand),
 	    writeTimer(strand),
 	    service_port(std::move(service_port)),
@@ -85,26 +85,26 @@ public:
 	uint32_t getLastIp() const { return lastIp; }
 
 private:
-	void parseHeader(const boost::system::error_code& error);
-	void parsePacket(const boost::system::error_code& error);
+	void parseHeader(const asio::error_code& error);
+	void parsePacket(const asio::error_code& error);
 
-	void onWriteOperation(const boost::system::error_code& error);
+	void onWriteOperation(const asio::error_code& error);
 
-	static void handleTimeout(ConnectionWeak_ptr connectionWeak, const boost::system::error_code& error);
+	static void handleTimeout(ConnectionWeak_ptr connectionWeak, const asio::error_code& error);
 
 	void closeSocket();
 	void closeLocked(bool force);
 	void internalSend(const OutputMessage_ptr& msg);
 	uint32_t getIPLocked();
 
-	boost::asio::ip::tcp::socket& getSocket() { return socket; }
+	asio::ip::tcp::socket& getSocket() { return socket; }
 	friend class ServicePort;
 
 	NetworkMessage msg;
 
-	boost::asio::strand<boost::asio::io_context::executor_type> strand;
-	boost::asio::steady_timer readTimer;
-	boost::asio::steady_timer writeTimer;
+	asio::strand<asio::io_context::executor_type> strand;
+	asio::steady_timer readTimer;
+	asio::steady_timer writeTimer;
 
 	std::recursive_mutex connectionLock;
 
@@ -113,7 +113,7 @@ private:
 	ConstServicePort_ptr service_port;
 	Protocol_ptr protocol;
 
-	boost::asio::ip::tcp::socket socket;
+	asio::ip::tcp::socket socket;
 
 	time_t timeConnected;
 	uint32_t packetsSent = 0;

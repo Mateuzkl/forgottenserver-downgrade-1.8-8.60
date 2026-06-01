@@ -44,9 +44,9 @@ public:
 
 private:
 	std::atomic<uint32_t> lastEventId{0};
-	boost::asio::io_context io_context;
-	boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work{io_context.get_executor()};
-	std::unordered_map<uint32_t, boost::asio::steady_timer> eventIdTimerMap;
+	asio::io_context io_context;
+	asio::executor_work_guard<asio::io_context::executor_type> work{io_context.get_executor()};
+	std::unordered_map<uint32_t, asio::steady_timer> eventIdTimerMap;
 };
 
 extern Scheduler g_scheduler;

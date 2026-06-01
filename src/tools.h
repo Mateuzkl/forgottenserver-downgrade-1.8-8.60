@@ -36,8 +36,17 @@ bool caseInsensitiveEqual(std::string_view str1, std::string_view str2);
 // checks that str1 starts with str2 ignoring letter case
 bool caseInsensitiveStartsWith(std::string_view str, std::string_view prefix);
 
+bool caseInsensitiveContains(std::string_view str, std::string_view needle);
+
+void trimString(std::string& source);
+void trimLeftString(std::string& source);
+std::string asTrimmedString(std::string_view source);
+
 void toLowerCaseString(std::string& source);
-std::string asLowerCaseString(std::string source);
+std::string asLowerCaseString(std::string_view source);
+void toUpperCaseString(std::string& source);
+std::string asUpperCaseString(std::string_view source);
+void replaceString(std::string& source, std::string_view search, std::string_view replacement);
 
 using StringVector = std::vector<std::string>;
 using IntegerVector = std::vector<int32_t>;

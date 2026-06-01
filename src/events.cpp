@@ -42,7 +42,7 @@ bool Events::load()
 		const std::string& className = eventNode.attribute("class").as_string();
 		auto res = classes.insert(className);
 		if (res.second) {
-			const std::string& lowercase = boost::algorithm::to_lower_copy<std::string>(className);
+			const std::string& lowercase = asLowerCaseString(className);
 			if (scriptInterface.loadFile("data/events/scripts/" + lowercase + ".lua") != 0) {
 				LOG_WARN(fmt::format("[Warning - Events::load] Can not load script: {}.lua", lowercase));
 				LOG_WARN(scriptInterface.getLastLuaError());

@@ -296,7 +296,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 
 	std::string action(t[0]);
 	std::string enemyNameStr(t[1]);
-	boost::algorithm::trim(enemyNameStr);
+	trimString(enemyNameStr);
 
 	uint32_t enemyId = getGuildIdByName(enemyNameStr);
 	if (enemyId == 0) {
@@ -488,7 +488,7 @@ void IOGuild::guildBalance(Player* player, const std::string& param)
 	}
 
 	std::string action(t[0]);
-	boost::algorithm::trim(action);
+	trimString(action);
 	
 	if (action == "donate") {
 		if (t.size() < 2) {

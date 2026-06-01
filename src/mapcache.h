@@ -11,7 +11,7 @@ class Tile;
 class House;
 struct Position;
 
-// Hash combine utility (similar to boost::hash_combine)
+// Hash combine utility for composite keys.
 inline void hash_combine(size_t& seed, size_t value) {
     seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }

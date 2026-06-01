@@ -191,7 +191,7 @@ bool Monsters::deserializeSpell(MonsterSpell* spell, spellBlock_t& sb, const std
 			}
 		}
 
-		std::string tmpName = boost::algorithm::to_lower_copy<std::string>(spell->name);
+		std::string tmpName = asLowerCaseString(spell->name);
 
 		if (tmpName == "melee") {
 			sb.isMelee = true;
@@ -385,7 +385,7 @@ bool MonsterType::loadCallback(LuaScriptInterface* scriptInterface)
 
 MonsterType* Monsters::getMonsterType(const std::string& name)
 {
-	std::string lowerCaseName = boost::algorithm::to_lower_copy<std::string>(name);
+	std::string lowerCaseName = asLowerCaseString(name);
 
 	auto it = monsters.find(lowerCaseName);
 	if (it == monsters.end()) {
@@ -396,7 +396,7 @@ MonsterType* Monsters::getMonsterType(const std::string& name)
 
 std::shared_ptr<MonsterType> Monsters::getSharedMonsterType(const std::string& name)
 {
-	std::string lowerCaseName = boost::algorithm::to_lower_copy<std::string>(name);
+	std::string lowerCaseName = asLowerCaseString(name);
 
 	auto it = monsters.find(lowerCaseName);
 	if (it == monsters.end()) {

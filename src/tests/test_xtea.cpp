@@ -1,12 +1,10 @@
-#define BOOST_TEST_MODULE xtea
-
 #include "../otpch.h"
 
 #include "../xtea.h"
 
-#include <boost/test/unit_test.hpp>
+#include "test_support.h"
 
-BOOST_AUTO_TEST_CASE(test_xtea_expand_key)
+TEST_CASE(test_xtea_expand_key)
 {
 	auto expected = xtea::round_keys{
 	    0xdeadbeef, 0x7ce538a8, 0x7ce538a8, 0x1b1cb261, 0x1b1cb261, 0xb9542c1a, 0xb9542c1a, 0x578ba5d3,
@@ -20,25 +18,27 @@ BOOST_AUTO_TEST_CASE(test_xtea_expand_key)
 
 	auto actual = xtea::expand_key({0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef});
 
-	BOOST_TEST(actual == expected);
+	CHECK(actual == expected);
 }
 
-BOOST_AUTO_TEST_CASE(test_xtea_encrypt)
+TEST_CASE(test_xtea_encrypt)
 {
 	auto expected = std::vector<uint8_t>{0xb5, 0x8c, 0xf2, 0xfa, 0xe0, 0xc0, 0x40, 0x09};
 	auto data = std::vector<uint8_t>{0xef, 0xbe, 0xad, 0xde, 0xef, 0xbe, 0xad, 0xde};
 
 	xtea::encrypt(data.data(), data.size(), xtea::expand_key({0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef}));
 
-	BOOST_TEST(data == expected);
+	CHECK(data == expected);
 }
 
-BOOST_AUTO_TEST_CASE(test_xtea_decrypt)
+TEST_CASE(test_xtea_decrypt)
 {
 	auto expected = std::vector<uint8_t>{0xef, 0xbe, 0xad, 0xde, 0xef, 0xbe, 0xad, 0xde};
 	auto data = std::vector<uint8_t>{0xb5, 0x8c, 0xf2, 0xfa, 0xe0, 0xc0, 0x40, 0x09};
 
 	xtea::decrypt(data.data(), data.size(), xtea::expand_key({0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef}));
 
-	BOOST_TEST(data == expected);
+	CHECK(data == expected);
 }
+
+TFS_TEST_MAIN()

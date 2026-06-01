@@ -36,7 +36,7 @@ int luaMoveEventType(lua_State* L)
 	MoveEvent* moveevent = getUserdata<MoveEvent>(L, 1);
 	if (moveevent) {
 		std::string typeName = getString(L, 2);
-		std::string tmpStr = boost::algorithm::to_lower_copy<std::string>(typeName);
+		std::string tmpStr = asLowerCaseString(typeName);
 		if (tmpStr == "stepin") {
 			moveevent->setEventType(MOVE_EVENT_STEP_IN);
 			moveevent->stepFunction = moveevent->StepInField;
@@ -107,7 +107,7 @@ int luaMoveEventSlot(lua_State* L)
 	}
 
 	if (moveevent->getEventType() == MOVE_EVENT_EQUIP || moveevent->getEventType() == MOVE_EVENT_DEEQUIP) {
-		std::string slotName = boost::algorithm::to_lower_copy<std::string>(getString(L, 2));
+		std::string slotName = asLowerCaseString(getString(L, 2));
 		if (slotName == "head") {
 			moveevent->setSlot(SLOTP_HEAD);
 		} else if (slotName == "necklace") {
@@ -215,7 +215,7 @@ int luaMoveEventVocation(lua_State* L)
 		}
 		if (showInDescription) {
 			if (moveevent->getVocationString().empty()) {
-				tmp = boost::algorithm::to_lower_copy<std::string>(getString(L, 2));
+				tmp = asLowerCaseString(getString(L, 2));
 				tmp += "s";
 				moveevent->setVocationString(tmp);
 			} else {
@@ -225,7 +225,7 @@ int luaMoveEventVocation(lua_State* L)
 				} else {
 					tmp += ", ";
 				}
-				tmp += boost::algorithm::to_lower_copy<std::string>(getString(L, 2));
+				tmp += asLowerCaseString(getString(L, 2));
 				tmp += "s";
 				moveevent->setVocationString(tmp);
 			}

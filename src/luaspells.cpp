@@ -57,7 +57,7 @@ int luaSpellCreate(lua_State* L)
 			return 1;
 		}
 
-		std::string tmp = boost::algorithm::to_lower_copy<std::string>(arg);
+		std::string tmp = asLowerCaseString(arg);
 		if (tmp == "instant") {
 			spellType = SPELL_INSTANT;
 		} else if (tmp == "rune") {

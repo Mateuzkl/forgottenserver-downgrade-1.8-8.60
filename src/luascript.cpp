@@ -3773,10 +3773,10 @@ int LuaScriptInterface::luaIsScriptsInterface(lua_State* L)
 
 std::string LuaScriptInterface::escapeString(std::string s)
 {
-	boost::algorithm::replace_all(s, "\\", "\\\\");
-	boost::algorithm::replace_all(s, "\"", "\\\"");
-	boost::algorithm::replace_all(s, "'", "\\'");
-	boost::algorithm::replace_all(s, "[[", "\\[[");
+	replaceString(s, "\\", "\\\\");
+	replaceString(s, "\"", "\\\"");
+	replaceString(s, "'", "\\'");
+	replaceString(s, "[[", "\\[[");
 	return s;
 }
 
@@ -4228,7 +4228,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 	lua_rawgeti(luaState, LUA_REGISTRYINDEX, timerEventDesc.function);
 
 	// push parameters
-	for (auto parameter : boost::adaptors::reverse(timerEventDesc.parameters)) {
+	for (auto parameter : std::views::reverse(timerEventDesc.parameters)) {
 		lua_rawgeti(luaState, LUA_REGISTRYINDEX, parameter);
 		if (lua_getmetatable(luaState, -1) == 0) {
 			continue;

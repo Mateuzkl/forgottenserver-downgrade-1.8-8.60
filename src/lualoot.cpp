@@ -36,7 +36,7 @@ int luaLootSetId(lua_State* L)
 			loot->lootBlock.id = getInteger<uint16_t>(L, 2);
 		} else {
 			auto name = getString(L, 2);
-			auto ids = Item::items.nameToItems.equal_range(boost::algorithm::to_lower_copy<std::string>(name));
+			auto ids = Item::items.nameToItems.equal_range(asLowerCaseString(name));
 
 			if (ids.first == Item::items.nameToItems.cend()) {
 				LOG_WARN(fmt::format("[Warning - Loot:setId] Unknown loot item \"{}\"", name));
@@ -143,7 +143,7 @@ int luaLootSetIdFromName(lua_State* L)
 	Loot* loot = getUserdata<Loot>(L, 1);
 	if (loot && isString(L, 2)) {
 		auto name = getString(L, 2);
-		auto ids = Item::items.nameToItems.equal_range(boost::algorithm::to_lower_copy<std::string>(name));
+		auto ids = Item::items.nameToItems.equal_range(asLowerCaseString(name));
 
 		if (ids.first == Item::items.nameToItems.cend()) {
 			LOG_WARN(fmt::format("[Warning - Loot:setIdFromName] Unknown loot item \"{}\"", name));

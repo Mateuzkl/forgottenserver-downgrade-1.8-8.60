@@ -22,9 +22,9 @@ uint32_t Scheduler::addEvent(std::unique_ptr<SchedulerTask> task)
 	};
 	auto holder = std::make_shared<TaskHolder>(std::move(task));
 
-	boost::asio::post(io_context, [this, holder]() {
+	asio::post(io_context, [this, holder]() {
 		// insert the event id in the list of active events
-		auto [it, inserted] = eventIdTimerMap.emplace(holder->task->getEventId(), boost::asio::steady_timer{ io_context });
+		auto [it, inserted] = eventIdTimerMap.emplace(holder->task->getEventId(), asio::steady_timer{ io_context });
 			if (!inserted) {
       			return;
     		}
@@ -32,10 +32,10 @@ uint32_t Scheduler::addEvent(std::unique_ptr<SchedulerTask> task)
 		auto& timer = it->second;
 
 		timer.expires_after(std::chrono::milliseconds(holder->task->getDelay()));
-		timer.async_wait([this, holder](const boost::system::error_code& error) {
+		timer.async_wait([this, holder](const asio::error_code& error) {
 			eventIdTimerMap.erase(holder->task->getEventId());
 
-			if (error == boost::asio::error::operation_aborted || getState() == THREAD_STATE_TERMINATED) {
+			if (error == asio::error::operation_aborted || getState() == THREAD_STATE_TERMINATED) {
 				// the timer has been manually canceled(timer->cancel()) or Scheduler::shutdown has been called.
 				// holder destructor will clean up the task via unique_ptr.
 				return;
@@ -55,7 +55,7 @@ void Scheduler::stopEvent(uint32_t eventId) noexcept
 		return;
 	}
 
-	boost::asio::post(io_context, [this, eventId]() {
+	asio::post(io_context, [this, eventId]() {
 		// search the event id
 		if (auto it = eventIdTimerMap.find(eventId); it != eventIdTimerMap.end()) {
 			it->second.cancel();
@@ -66,7 +66,7 @@ void Scheduler::stopEvent(uint32_t eventId) noexcept
 void Scheduler::shutdown() noexcept
 {
 	setState(THREAD_STATE_TERMINATED);
-	boost::asio::post(io_context, [this]() {
+	asio::post(io_context, [this]() {
 		// cancel all active timers
 		for (auto& [eventId, timer] : eventIdTimerMap) {
 			timer.cancel();

@@ -258,7 +258,7 @@ uint64_t Item::getItemUID() const noexcept
 	if (!attr) [[unlikely]] {
 		return 0;
 	}
-	if (const auto* val = boost::get<int64_t>(&attr->value)) {
+	if (const auto* val = std::get_if<int64_t>(&attr->value)) {
 		return static_cast<uint64_t>(*val);
 	}
 	return 0;
@@ -1481,8 +1481,8 @@ void Item::startDecaying() { g_game.startDecay(this); }
 template <>
 const std::string& ItemAttributes::CustomAttribute::get<std::string>()
 {
-	if (value.type() == typeid(std::string)) {
-		return boost::get<std::string>(value);
+	if (const auto* attribute = std::get_if<std::string>(&value)) {
+		return *attribute;
 	}
 
 	return emptyString;
@@ -1491,8 +1491,8 @@ const std::string& ItemAttributes::CustomAttribute::get<std::string>()
 template <>
 const int64_t& ItemAttributes::CustomAttribute::get<int64_t>()
 {
-	if (value.type() == typeid(int64_t)) {
-		return boost::get<int64_t>(value);
+	if (const auto* attribute = std::get_if<int64_t>(&value)) {
+		return *attribute;
 	}
 
 	return emptyInt;
@@ -1501,8 +1501,8 @@ const int64_t& ItemAttributes::CustomAttribute::get<int64_t>()
 template <>
 const double& ItemAttributes::CustomAttribute::get<double>()
 {
-	if (value.type() == typeid(double)) {
-		return boost::get<double>(value);
+	if (const auto* attribute = std::get_if<double>(&value)) {
+		return *attribute;
 	}
 
 	return emptyDouble;
@@ -1511,8 +1511,8 @@ const double& ItemAttributes::CustomAttribute::get<double>()
 template <>
 const bool& ItemAttributes::CustomAttribute::get<bool>()
 {
-	if (value.type() == typeid(bool)) {
-		return boost::get<bool>(value);
+	if (const auto* attribute = std::get_if<bool>(&value)) {
+		return *attribute;
 	}
 
 	return emptyBool;

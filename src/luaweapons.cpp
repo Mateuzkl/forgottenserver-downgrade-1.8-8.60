@@ -66,7 +66,7 @@ int luaWeaponAction(lua_State* L)
 	Weapon* weapon = getUserdata<Weapon>(L, 1);
 	if (weapon) {
 		std::string typeName = getString(L, 2);
-		std::string tmpStr = boost::algorithm::to_lower_copy<std::string>(typeName);
+		std::string tmpStr = asLowerCaseString(typeName);
 		if (tmpStr == "removecount") {
 			weapon->action = WEAPONACTION_REMOVECOUNT;
 		} else if (tmpStr == "removecharge") {
@@ -282,7 +282,7 @@ int luaWeaponElement(lua_State* L)
 	if (weapon) {
 		if (!getInteger<CombatType_t>(L, 2)) {
 			std::string element = getString(L, 2);
-			std::string tmpStrValue = boost::algorithm::to_lower_copy<std::string>(element);
+			std::string tmpStrValue = asLowerCaseString(element);
 			if (tmpStrValue == "earth") {
 				weapon->params.combatType = COMBAT_EARTHDAMAGE;
 			} else if (tmpStrValue == "ice") {
@@ -335,7 +335,7 @@ int luaWeaponVocation(lua_State* L)
 
 		if (showInDescription) {
 			if (weapon->getVocationString().empty()) {
-				tmp = boost::algorithm::to_lower_copy<std::string>(getString(L, 2));
+				tmp = asLowerCaseString(getString(L, 2));
 				tmp += "s";
 				weapon->setVocationString(tmp);
 			} else {
@@ -345,7 +345,7 @@ int luaWeaponVocation(lua_State* L)
 				} else {
 					tmp += ", ";
 				}
-				tmp += boost::algorithm::to_lower_copy<std::string>(getString(L, 2));
+				tmp += asLowerCaseString(getString(L, 2));
 				tmp += "s";
 				weapon->setVocationString(tmp);
 			}
@@ -609,7 +609,7 @@ int luaWeaponExtraElement(lua_State* L)
 
 		if (!getInteger<CombatType_t>(L, 3)) {
 			std::string element = getString(L, 3);
-			std::string tmpStrValue = boost::algorithm::to_lower_copy<std::string>(element);
+			std::string tmpStrValue = asLowerCaseString(element);
 			if (tmpStrValue == "earth") {
 				it.abilities.get()->elementType = COMBAT_EARTHDAMAGE;
 			} else if (tmpStrValue == "ice") {

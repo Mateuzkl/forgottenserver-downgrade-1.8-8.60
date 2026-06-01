@@ -15,15 +15,11 @@
 #include <array>
 #include <atomic>
 #include <bitset>
-#include <boost/algorithm/string.hpp>
-#include <boost/asio.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
-#include <boost/lockfree/stack.hpp>
-#include <boost/variant.hpp>
-#include <boost/range/adaptor/reversed.hpp>
+#include <asio.hpp>
 #include <cassert>
 #include <concepts>
 #include <condition_variable>
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <deque>
@@ -38,6 +34,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <mio/mmap.hpp>
 #include <mutex>
 #include <mysql/mysql.h>
 #include <optional>

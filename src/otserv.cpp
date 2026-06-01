@@ -101,6 +101,19 @@ constexpr std::string_view getLuaRuntimeName()
 #endif
 }
 
+std::string getCompilerName()
+{
+#if defined(__clang__)
+	return fmt::format("Clang {}", __clang_version__);
+#elif defined(_MSC_VER)
+	return fmt::format("MSVC {}", _MSC_VER);
+#elif defined(__GNUC__)
+	return fmt::format("GCC {}", __VERSION__);
+#else
+	return "unknown";
+#endif
+}
+
 void mainLoader(const std::shared_ptr<ServiceManager>& services)
 {
 	// dispatcher thread
@@ -290,7 +303,7 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	}
 
 	LOG_INFO(">> Checking world type... ");
-	auto worldType = boost::algorithm::to_lower_copy<std::string>(std::string{getString(ConfigManager::WORLD_TYPE)});
+	auto worldType = asLowerCaseString(std::string{getString(ConfigManager::WORLD_TYPE)});
 	if (worldType == "pvp") {
 		g_game.setWorldType(WORLD_TYPE_PVP);
 	} else if (worldType == "no-pvp") {
@@ -304,7 +317,7 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 		                getString(ConfigManager::WORLD_TYPE)));
 		return;
 	}
-	LOG_INFO(fmt::format(">> {}", boost::algorithm::to_upper_copy(worldType)));
+	LOG_INFO(fmt::format(">> {}", asUpperCaseString(worldType)));
 
 	LOG_INFO(">> Loading map");
 	if (!g_game.loadMainMap(std::string{getString(ConfigManager::MAP_NAME)})) {
@@ -325,7 +338,7 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 
 	RentPeriod_t rentPeriod;
 	auto strRentPeriod =
-		boost::algorithm::to_lower_copy<std::string>(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
+		asLowerCaseString(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
 
 	if (strRentPeriod == "yearly") {
 		rentPeriod = RENTPERIOD_YEARLY;
@@ -457,13 +470,13 @@ void printServerVersion()
 {
 #if defined(GIT_RETRIEVED_STATE) && GIT_RETRIEVED_STATE
 	LOG_INFO(fmt::format(fg(fmt::color::cyan), "=== {} | {} ===", STATUS_SERVER_NAME, GIT_DESCRIBE));
-	LOG_INFO(fmt::format("Build: {} | Git {} ({})", BOOST_COMPILER, GIT_SHORT_SHA1, GIT_COMMIT_DATE_ISO8601));
+	LOG_INFO(fmt::format("Build: {} | Git {} ({})", getCompilerName(), GIT_SHORT_SHA1, GIT_COMMIT_DATE_ISO8601));
 #if GIT_IS_DIRTY
 	LOG_INFO("*** DIRTY - NOT OFFICIAL RELEASE ***");
 #endif
 #else
 	LOG_INFO(fmt::format(fg(fmt::color::cyan), "=== {} | Version {} ===", STATUS_SERVER_NAME, STATUS_SERVER_VERSION));
-	LOG_INFO(fmt::format("Build: {}", BOOST_COMPILER));
+	LOG_INFO(fmt::format("Build: {}", getCompilerName()));
 #endif
 	LOG_INFO(fmt::format("Runtime: {} {} | {} | {}", __DATE__, __TIME__, getPlatformName(), getLuaRuntimeName()));
 	LOG_INFO(fmt::format("Credits: {} | Nekiro / MillhioreBT", STATUS_SERVER_DEVELOPERS));

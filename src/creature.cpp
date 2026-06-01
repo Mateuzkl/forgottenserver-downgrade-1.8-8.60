@@ -1548,7 +1548,7 @@ bool Creature::registerCreatureEvent(std::string_view name)
 	}
 
 	CreatureEventType_t type = event->getEventType();
-	const std::string normalizedName = boost::algorithm::to_lower_copy(std::string{name});
+	const std::string normalizedName = asLowerCaseString(std::string{name});
 	if (hasEventRegistered(type)) {
 		for (const auto& creatureEvent : eventsList) {
 			if (creatureEvent.name == normalizedName && creatureEvent.type == type) {
@@ -1575,7 +1575,7 @@ bool Creature::unregisterCreatureEvent(std::string_view name)
 		return false;
 	}
 
-	const std::string normalizedName = boost::algorithm::to_lower_copy(std::string{name});
+	const std::string normalizedName = asLowerCaseString(std::string{name});
 
 	std::erase_if(eventsList, [&normalizedName, type](const auto& event) {
 		return event.name == normalizedName && event.type == type;

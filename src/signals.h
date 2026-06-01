@@ -4,14 +4,14 @@
 #ifndef FS_SIGNALHANDLINGTHREAD_H
 #define FS_SIGNALHANDLINGTHREAD_H
 
-#include <boost/asio.hpp>
+#include <asio.hpp>
 
 class Signals
 {
-	boost::asio::signal_set set;
+	asio::signal_set set;
 
 public:
-	explicit Signals(boost::asio::io_context& service);
+	explicit Signals(asio::io_context& service);
 
 private:
 	void asyncWait();

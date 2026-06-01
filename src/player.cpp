@@ -35,8 +35,6 @@ extern Vocations g_vocations;
 namespace {
 constexpr uint32_t CHAIN_SYSTEM_STORAGE = 40001;
 
-void trimString(std::string& str) { boost::algorithm::trim(str); }
-
 std::shared_ptr<Item> getSharedItem(Item* item)
 {
 	return item ? item->weak_from_this().lock() : nullptr;
@@ -62,10 +60,6 @@ std::shared_ptr<Party> getSharedParty(Party* party)
 {
 	return party ? party->weak_from_this().lock() : nullptr;
 }
-
-// std::string asLowerCaseString(const std::string& str) { return boost::algorithm::to_lower_copy<std::string>(str); }
-
-// void toLowerCaseString(std::string& str) { boost::algorithm::to_lower(str); }
 
 bool playerIsMonkVocation(const Vocation* vocation)
 {
@@ -180,17 +174,17 @@ int64_t getCustomAttributeInteger(const ItemAttributes::CustomAttribute* attr)
 		return 0;
 	}
 
-	if (const auto* value = boost::get<int64_t>(&attr->value)) {
+	if (const auto* value = std::get_if<int64_t>(&attr->value)) {
 		return *value;
 	}
-	if (const auto* value = boost::get<double>(&attr->value)) {
+	if (const auto* value = std::get_if<double>(&attr->value)) {
 		return static_cast<int64_t>(*value);
 	}
-	if (const auto* value = boost::get<bool>(&attr->value)) {
+	if (const auto* value = std::get_if<bool>(&attr->value)) {
 		return *value ? 1 : 0;
 	}
-	if (const auto* value = boost::get<std::string>(&attr->value)) {
-		std::string text = boost::algorithm::trim_copy(*value);
+	if (const auto* value = std::get_if<std::string>(&attr->value)) {
+		std::string text = asTrimmedString(*value);
 		if (text.empty()) {
 			return 0;
 		}

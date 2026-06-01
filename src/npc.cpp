@@ -559,7 +559,7 @@ bool NpcType::loadFromXml()
 	}
 
 	if ((attr = npcNode.attribute("skull"))) {
-		skull = getSkullType(boost::algorithm::to_lower_copy<std::string>(attr.as_string()));
+		skull = getSkullType(asLowerCaseString(attr.as_string()));
 	}
 
 	pugi::xml_node healthNode = npcNode.child("health");

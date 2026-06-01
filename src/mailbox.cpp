@@ -24,7 +24,7 @@ bool parseMailAddress(std::string_view text, std::string& receiver, std::string&
 		const size_t count = lineEnd == std::string_view::npos ? std::string_view::npos : lineEnd - lineStart;
 
 		std::string line{text.substr(lineStart, count)};
-		boost::algorithm::trim(line);
+		trimString(line);
 
 		if (firstLine) {
 			// Keep legacy mailbox semantics: the first address line must contain the receiver.

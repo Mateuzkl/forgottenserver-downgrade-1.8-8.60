@@ -159,7 +159,7 @@ void dispatchSignalHandler(int signal)
 
 } // namespace
 
-Signals::Signals(boost::asio::io_context& service) : set(service)
+Signals::Signals(asio::io_context& service) : set(service)
 {
 	set.add(SIGINT);
 	set.add(SIGTERM);
@@ -178,7 +178,7 @@ Signals::Signals(boost::asio::io_context& service) : set(service)
 
 void Signals::asyncWait()
 {
-	set.async_wait([this](const boost::system::error_code& err, int signal) {
+	set.async_wait([this](const asio::error_code& err, int signal) {
 		if (err) {
 			LOG_ERROR(fmt::format("Signal handling error: {}", err.message()));
 			return;

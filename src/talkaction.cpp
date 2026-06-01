@@ -55,7 +55,7 @@ TalkActionResult TalkActions::playerSaySpell(Player* player, SpeakClasses type, 
 				++it;
 				continue;
 			}
-			boost::algorithm::trim_left(param);
+			trimLeftString(param);
 
 			auto separator = it->second.getSeparator();
 			if (separator != " ") {

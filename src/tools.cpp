@@ -249,13 +249,29 @@ bool validateAndFormatPlayerName(std::string& name)
 bool caseInsensitiveEqual(std::string_view str1, std::string_view str2)
 {
 	return str1.size() == str2.size() &&
-	       std::equal(str1.begin(), str1.end(), str2.begin(), [](char a, char b) { return tolower(a) == tolower(b); });
+	       std::equal(str1.begin(), str1.end(), str2.begin(), [](char a, char b) {
+		       return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+	       });
 }
 
 bool caseInsensitiveStartsWith(std::string_view str, std::string_view prefix)
 {
 	return str.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), str.begin(),
-	                                                 [](char a, char b) { return tolower(a) == tolower(b); });
+	                                                 [](char a, char b) {
+		                                                 return std::tolower(static_cast<unsigned char>(a)) ==
+		                                                        std::tolower(static_cast<unsigned char>(b));
+	                                                 });
+}
+
+bool caseInsensitiveContains(std::string_view str, std::string_view needle)
+{
+	if (needle.empty()) {
+		return true;
+	}
+
+	return std::search(str.begin(), str.end(), needle.begin(), needle.end(), [](char a, char b) {
+		       return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+	       }) != str.end();
 }
 
 std::vector<std::string_view> explodeString(std::string_view inString, std::string_view separator,
@@ -291,13 +307,66 @@ std::mt19937& getRandomGenerator()
 
 void toLowerCaseString(std::string& source)
 {
-	std::transform(source.begin(), source.end(), source.begin(), tolower);
+	std::transform(source.begin(), source.end(), source.begin(), [](char ch) {
+		return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+	});
 }
 
-std::string asLowerCaseString(std::string source)
+std::string asLowerCaseString(std::string_view source)
 {
-	toLowerCaseString(source);
-	return source;
+	std::string result{source};
+	toLowerCaseString(result);
+	return result;
+}
+
+void toUpperCaseString(std::string& source)
+{
+	std::transform(source.begin(), source.end(), source.begin(), [](char ch) {
+		return static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+	});
+}
+
+std::string asUpperCaseString(std::string_view source)
+{
+	std::string result{source};
+	toUpperCaseString(result);
+	return result;
+}
+
+void trimLeftString(std::string& source)
+{
+	source.erase(source.begin(), std::find_if(source.begin(), source.end(), [](char ch) {
+		             return !std::isspace(static_cast<unsigned char>(ch));
+	             }));
+}
+
+void trimString(std::string& source)
+{
+	trimLeftString(source);
+	source.erase(std::find_if(source.rbegin(), source.rend(), [](char ch) {
+		             return !std::isspace(static_cast<unsigned char>(ch));
+	             }).base(),
+	             source.end());
+}
+
+std::string asTrimmedString(std::string_view source)
+{
+	std::string result{source};
+	trimString(result);
+	return result;
+}
+
+void replaceString(std::string& source, std::string_view search, std::string_view replacement)
+{
+	if (search.empty()) {
+		return;
+	}
+
+	size_t position = 0;
+	while ((position = source.find(search, position)) != std::string::npos) {
+		source.replace(position, search.size(), replacement);
+		position += replacement.size();
+	}
 }
 
 int32_t uniform_random(int32_t minNumber, int32_t maxNumber)
@@ -1411,7 +1480,7 @@ int64_t OTSYS_NANOTIME()
 
 SpellGroup_t stringToSpellGroup(std::string_view value)
 {
-	auto tmpStr = boost::algorithm::to_lower_copy<std::string>(std::string{value});
+	auto tmpStr = asLowerCaseString(std::string{value});
 	if (tmpStr == "attack" || tmpStr == "1") {
 		return SPELLGROUP_ATTACK;
 	} else if (tmpStr == "healing" || tmpStr == "2") {

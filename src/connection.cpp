@@ -13,7 +13,7 @@
 #include "logger.h"
 #include <fmt/format.h>
 
-Connection_ptr ConnectionManager::createConnection(boost::asio::io_context& io_context,
+Connection_ptr ConnectionManager::createConnection(asio::io_context& io_context,
                                                    ConstServicePort_ptr servicePort)
 {
 	std::scoped_lock lockClass(connectionManagerLock);
@@ -54,10 +54,10 @@ void ConnectionManager::closeAll()
 
 	for (const auto& connection : connections) {
 		try {
-			boost::system::error_code error;
-			connection->socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, error);
+			asio::error_code error;
+			connection->socket.shutdown(asio::ip::tcp::socket::shutdown_both, error);
 			connection->socket.close(error);
-		} catch (boost::system::system_error&) {
+		} catch (std::system_error&) {
 		}
 	}
 	connections.clear();
@@ -146,10 +146,10 @@ void Connection::closeSocket()
 		try {
 			readTimer.cancel();
 			writeTimer.cancel();
-			boost::system::error_code error;
-			socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, error);
+			asio::error_code error;
+			socket.shutdown(asio::ip::tcp::socket::shutdown_both, error);
 			socket.close(error);
-		} catch (boost::system::system_error& e) {
+		} catch (std::system_error& e) {
 			LOG_NETWORK(fmt::format("Error - Connection::closeSocket: {}", e.what()));
 		}
 	}
@@ -171,23 +171,23 @@ void Connection::accept()
 	try {
 		readTimer.expires_after(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
 		readTimer.async_wait(
-		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const boost::system::error_code& error) {
+		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const asio::error_code& error) {
 			    Connection::handleTimeout(thisPtr, error);
 		    });
 
 		// Read size of the first packet
-		boost::asio::async_read(
-		    socket, boost::asio::buffer(msg.getBuffer(), NetworkMessage::HEADER_LENGTH),
-		    [thisPtr = shared_from_this()](const boost::system::error_code& error, auto /*bytes_transferred*/) {
+		asio::async_read(
+		    socket, asio::buffer(msg.getBuffer(), NetworkMessage::HEADER_LENGTH),
+		    [thisPtr = shared_from_this()](const asio::error_code& error, auto /*bytes_transferred*/) {
 			    thisPtr->parseHeader(error);
 		    });
-	} catch (boost::system::system_error& e) {
+	} catch (std::system_error& e) {
 		LOG_NETWORK(fmt::format("Error - Connection::accept: {}", e.what()));
 		closeLocked(FORCE_CLOSE);
 	}
 }
 
-void Connection::parseHeader(const boost::system::error_code& error)
+void Connection::parseHeader(const asio::error_code& error)
 {
 	std::scoped_lock lockClass(connectionLock);
 	readTimer.cancel();
@@ -220,24 +220,24 @@ void Connection::parseHeader(const boost::system::error_code& error)
 	try {
 		readTimer.expires_after(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
 		readTimer.async_wait(
-		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const boost::system::error_code& error) {
+		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const asio::error_code& error) {
 			    Connection::handleTimeout(thisPtr, error);
 		    });
 
 		// Read packet content
 		msg.setLength(size + NetworkMessage::HEADER_LENGTH);
-		boost::asio::async_read(
-		    socket, boost::asio::buffer(msg.getBodyBuffer(), size),
-		    [thisPtr = shared_from_this()](const boost::system::error_code& error, auto /*bytes_transferred*/) {
+		asio::async_read(
+		    socket, asio::buffer(msg.getBodyBuffer(), size),
+		    [thisPtr = shared_from_this()](const asio::error_code& error, auto /*bytes_transferred*/) {
 			    thisPtr->parsePacket(error);
 		    });
-	} catch (boost::system::system_error& e) {
+	} catch (std::system_error& e) {
 		LOG_NETWORK(fmt::format("Error - Connection::parseHeader: {}", e.what()));
 		closeLocked(FORCE_CLOSE);
 	}
 }
 
-void Connection::parsePacket(const boost::system::error_code& error)
+void Connection::parsePacket(const asio::error_code& error)
 {
 	std::scoped_lock lockClass(connectionLock);
 	readTimer.cancel();
@@ -288,17 +288,17 @@ void Connection::parsePacket(const boost::system::error_code& error)
 	try {
 		readTimer.expires_after(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
 		readTimer.async_wait(
-		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const boost::system::error_code& error) {
+		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const asio::error_code& error) {
 			    Connection::handleTimeout(thisPtr, error);
 		    });
 
 		// Wait to the next packet
-		boost::asio::async_read(
-		    socket, boost::asio::buffer(msg.getBuffer(), NetworkMessage::HEADER_LENGTH),
-		    [thisPtr = shared_from_this()](const boost::system::error_code& error, auto /*bytes_transferred*/) {
+		asio::async_read(
+		    socket, asio::buffer(msg.getBuffer(), NetworkMessage::HEADER_LENGTH),
+		    [thisPtr = shared_from_this()](const asio::error_code& error, auto /*bytes_transferred*/) {
 			    thisPtr->parseHeader(error);
 		    });
-	} catch (boost::system::system_error& e) {
+	} catch (std::system_error& e) {
 		LOG_NETWORK(fmt::format("Error - Connection::parsePacket: {}", e.what()));
 		closeLocked(FORCE_CLOSE);
 	}
@@ -315,9 +315,9 @@ void Connection::send(const OutputMessage_ptr& msg)
 	messageQueue.emplace_back(msg);
 	if (noPendingWrite) {
 		try {
-			boost::asio::post(socket.get_executor(),
+			asio::post(socket.get_executor(),
 			                  [thisPtr = shared_from_this(), msg] { thisPtr->internalSend(msg); });
-		} catch (const boost::system::system_error& e) {
+		} catch (const std::system_error& e) {
 			LOG_NETWORK(fmt::format("Error - Connection::send: {}", e.what()));
 			messageQueue.clear();
 			closeLocked(FORCE_CLOSE);
@@ -331,16 +331,16 @@ void Connection::internalSend(const OutputMessage_ptr& msg)
 	try {
 		writeTimer.expires_after(std::chrono::seconds(CONNECTION_WRITE_TIMEOUT));
 		writeTimer.async_wait(
-		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const boost::system::error_code& error) {
+		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const asio::error_code& error) {
 			    Connection::handleTimeout(thisPtr, error);
 		    });
 
-		boost::asio::async_write(
-		    socket, boost::asio::buffer(msg->getOutputBuffer(), msg->getLength()),
-		    [thisPtr = shared_from_this()](const boost::system::error_code& error, auto /*bytes_transferred*/) {
+		asio::async_write(
+		    socket, asio::buffer(msg->getOutputBuffer(), msg->getLength()),
+		    [thisPtr = shared_from_this()](const asio::error_code& error, auto /*bytes_transferred*/) {
 			    thisPtr->onWriteOperation(error);
 		    });
-	} catch (boost::system::system_error& e) {
+	} catch (std::system_error& e) {
 		LOG_NETWORK(fmt::format("Error - Connection::internalSend: {}", e.what()));
 		close(FORCE_CLOSE);
 	}
@@ -355,8 +355,8 @@ uint32_t Connection::getIP()
 uint32_t Connection::getIPLocked()
 {
 	// Must be called with connectionLock held, or from a safe context.
-	boost::system::error_code error;
-	const boost::asio::ip::tcp::endpoint endpoint = socket.remote_endpoint(error);
+	asio::error_code error;
+	const asio::ip::tcp::endpoint endpoint = socket.remote_endpoint(error);
 	if (error) {
 		return 0;
 	}
@@ -364,7 +364,7 @@ uint32_t Connection::getIPLocked()
 	return htonl(endpoint.address().to_v4().to_uint());
 }
 
-void Connection::onWriteOperation(const boost::system::error_code& error)
+void Connection::onWriteOperation(const asio::error_code& error)
 {
 	std::scoped_lock lockClass(connectionLock);
 	writeTimer.cancel();
@@ -383,9 +383,9 @@ void Connection::onWriteOperation(const boost::system::error_code& error)
 	}
 }
 
-void Connection::handleTimeout(ConnectionWeak_ptr connectionWeak, const boost::system::error_code& error)
+void Connection::handleTimeout(ConnectionWeak_ptr connectionWeak, const asio::error_code& error)
 {
-	if (error == boost::asio::error::operation_aborted) {
+	if (error == asio::error::operation_aborted) {
 		// The timer has been manually canceled
 		return;
 	}

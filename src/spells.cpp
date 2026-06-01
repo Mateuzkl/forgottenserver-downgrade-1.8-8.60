@@ -54,7 +54,7 @@ TalkActionResult Spells::playerSaySpell(Player* player, std::string& words)
 	std::string str_words = words;
 
 	// strip trailing spaces
-	boost::algorithm::trim(str_words);
+	trimString(str_words);
 
 	InstantSpell* instantSpell = getInstantSpell(str_words);
 
@@ -101,7 +101,7 @@ TalkActionResult Spells::playerSaySpell(Player* player, std::string& words)
 
 				param = paramText.substr(loc1 + 1, loc2 - loc1 - 1);
 			} else {
-				boost::algorithm::trim(paramText);
+				trimString(paramText);
 				loc1 = paramText.find(' ', 0);
 				if (loc1 == std::string::npos) {
 					param = paramText;

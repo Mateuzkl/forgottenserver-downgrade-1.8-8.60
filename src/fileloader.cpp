@@ -11,15 +11,21 @@ namespace OTB {
 
 constexpr Identifier wildcard = {{'\0', '\0', '\0', '\0'}};
 
-Loader::Loader(const std::string& fileName, const Identifier& acceptedIdentifier) : fileContents(fileName)
+Loader::Loader(const std::string& fileName, const Identifier& acceptedIdentifier)
 {
+	std::error_code error;
+	fileContents.map(fileName, error);
+	if (error) {
+		throw InvalidOTBFormat{};
+	}
+
 	constexpr auto minimalSize = sizeof(Identifier) + sizeof(Node::START) + sizeof(Node::type) + sizeof(Node::END);
 	if (fileContents.size() <= minimalSize) {
 		throw InvalidOTBFormat{};
 	}
 
 	Identifier fileIdentifier;
-	std::copy(fileContents.begin(), fileContents.begin() + fileIdentifier.size(), fileIdentifier.begin());
+	std::copy(fileContents.data(), fileContents.data() + fileIdentifier.size(), fileIdentifier.begin());
 	if (fileIdentifier != acceptedIdentifier && fileIdentifier != wildcard) {
 		throw InvalidOTBFormat{};
 	}
@@ -36,7 +42,8 @@ static Node& getCurrentNode(const NodeStack& nodeStack)
 
 const Node& Loader::parseTree()
 {
-	auto it = fileContents.begin() + sizeof(Identifier);
+	const auto contentEnd = fileContents.data() + fileContents.size();
+	auto it = fileContents.data() + sizeof(Identifier);
 	if (static_cast<uint8_t>(*it) != Node::START) {
 		throw InvalidOTBFormat{};
 	}
@@ -45,7 +52,7 @@ const Node& Loader::parseTree()
 	NodeStack parseStack;
 	parseStack.push(&root);
 
-	for (; it != fileContents.end(); ++it) {
+	for (; it != contentEnd; ++it) {
 		switch (static_cast<uint8_t>(*it)) {
 			case Node::START: {
 				auto& currentNode = getCurrentNode(parseStack);
@@ -54,7 +61,7 @@ const Node& Loader::parseTree()
 				}
 				currentNode.children.emplace_back();
 				auto& child = currentNode.children.back();
-				if (++it == fileContents.end()) {
+				if (++it == contentEnd) {
 					throw InvalidOTBFormat{};
 				}
 				child.type = *it;
@@ -71,7 +78,7 @@ const Node& Loader::parseTree()
 				break;
 			}
 			case Node::ESCAPE: {
-				if (++it == fileContents.end()) {
+				if (++it == contentEnd) {
 					throw InvalidOTBFormat{};
 				}
 				break;

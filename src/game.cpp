@@ -566,7 +566,7 @@ Creature* Game::getCreatureByName(std::string_view s)
 		return nullptr;
 	}
 
-	const std::string lowerCaseName = boost::algorithm::to_lower_copy(std::string{s});
+	const std::string lowerCaseName = asLowerCaseString(std::string{s});
 
 	{
 		std::shared_lock<std::shared_mutex> lock(playersMutex);
@@ -629,7 +629,7 @@ std::shared_ptr<Player> Game::getPlayerByName(std::string_view s)
 	}
 
 	std::shared_lock<std::shared_mutex> lock(playersMutex);
-	auto it = mappedPlayerNames.find(boost::algorithm::to_lower_copy<std::string>(std::string{s}));
+	auto it = mappedPlayerNames.find(asLowerCaseString(std::string{s}));
 	if (it == mappedPlayerNames.end()) {
 		return nullptr;
 	}
@@ -658,7 +658,7 @@ ReturnValue Game::getPlayerByNameWildcard(std::string_view s, std::shared_ptr<Pl
 	}
 
 	if (s.back() == '~') {
-		auto query = boost::algorithm::to_lower_copy<std::string>(std::string{s.substr(0, strlen - 1)});
+		auto query = asLowerCaseString(std::string{s.substr(0, strlen - 1)});
 		std::string result;
 		ReturnValue ret;
 		
@@ -4347,7 +4347,7 @@ bool Game::playerYell(Player* player, std::string_view text)
 		player->addCondition(std::move(condition));
 	}
 
-	internalCreatureSay(player, TALKTYPE_YELL, boost::algorithm::to_upper_copy(std::string{text}), false);
+	internalCreatureSay(player, TALKTYPE_YELL, asUpperCaseString(std::string{text}), false);
 	return true;
 }
 
@@ -6966,7 +6966,7 @@ void Game::addPlayer(Player* player)
 		return;
 	}
 
-	const std::string& lowercase_name = boost::algorithm::to_lower_copy<std::string>(player->getName());
+	const std::string& lowercase_name = asLowerCaseString(player->getName());
 	
 	{
 		std::unique_lock<std::shared_mutex> lock(playersMutex);
@@ -6985,7 +6985,7 @@ void Game::removePlayer(Player* player)
 	// Spy cleanup: stop any spy sessions involving this player
 	g_spy.onPlayerDisconnect(player->getID());
 
-	const std::string& lowercase_name = boost::algorithm::to_lower_copy<std::string>(player->getName());
+	const std::string& lowercase_name = asLowerCaseString(player->getName());
 	
 	{
 		std::unique_lock<std::shared_mutex> lock(playersMutex);
@@ -7370,7 +7370,7 @@ std::vector<ObserverPtr<Player>> Game::getLiveCasters(std::string_view name) con
 	std::vector<ObserverPtr<Player>> casters;
 	for (const auto& player : getPlayers()) {
 		if (player && player->client && player->client->isBroadcasting()) {
-			if (name.empty() || boost::algorithm::icontains(player->getName(), name)) {
+			if (name.empty() || caseInsensitiveContains(player->getName(), name)) {
 				casters.push_back(player.get());
 			}
 		}

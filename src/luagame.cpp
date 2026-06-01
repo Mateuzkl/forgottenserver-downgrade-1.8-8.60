@@ -798,7 +798,7 @@ int luaGameCreateMonsterType(lua_State* L)
 
 	MonsterType* monsterType = g_monsters.getMonsterType(name);
 	if (!monsterType) {
-		auto& ptr = g_monsters.monsters[boost::algorithm::to_lower_copy<std::string>(name)];
+		auto& ptr = g_monsters.monsters[asLowerCaseString(name)];
 		if (!ptr) {
 			ptr = std::make_shared<MonsterType>();
 		}

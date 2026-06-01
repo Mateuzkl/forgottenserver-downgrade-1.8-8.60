@@ -128,7 +128,7 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 		}
 	} else {
 		auto strRentPeriod =
-		    boost::algorithm::to_lower_copy<std::string>(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
+		    asLowerCaseString(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
 		time_t currentTime = time(nullptr);
 		if (strRentPeriod == "yearly") {
 			currentTime += 24 * 60 * 60 * 365;
@@ -575,7 +575,7 @@ void AccessList::parseList(std::string_view list)
 			break;
 		}
 
-		boost::algorithm::trim(line);
+		trimString(line);
 
 		if (line.empty() || line.front() == '#' || line.length() > 100) {
 			continue;

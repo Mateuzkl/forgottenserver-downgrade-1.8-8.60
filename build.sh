@@ -19,6 +19,7 @@ BOOST_PREFIX="/opt/boost_${BOOST_UNDERSCORE}"
 
 SIMDUTF_DIR="${HOME}/.cache/tfs-build/simdutf"
 SIMDUTF_PREFIX="${HOME}/.local"
+MIO_DIR="${HOME}/.cache/tfs-build/mio"
 
 BUILD_DIR="build-release"
 OUTPUT_BIN=""
@@ -101,6 +102,10 @@ declare -A MSG_PT=(
   [simdutf_ok]="simdutf ja esta instalado em %s"
   [simdutf_install]="instalando simdutf em %s"
   [simdutf_pull_warn]="Nao consegui atualizar simdutf por git pull; vou continuar com a copia local."
+  [mio_ok]="mio ja esta instalado em %s"
+  [mio_install]="instalando mio em %s"
+  [mio_pull_warn]="Nao consegui atualizar mio por git pull; vou continuar com a copia local."
+  [section_mio]="Verificando mio"
   [clean_build]="limpando pasta de build: %s"
   [configure_retry]="CMake falhou. Limpando cache de build e tentando uma vez novamente."
   [build_done]="Build finalizado."
@@ -159,6 +164,10 @@ declare -A MSG_EN=(
   [simdutf_ok]="simdutf is already installed at %s"
   [simdutf_install]="installing simdutf at %s"
   [simdutf_pull_warn]="Could not update simdutf with git pull; continuing with local copy."
+  [mio_ok]="mio is already installed at %s"
+  [mio_install]="installing mio at %s"
+  [mio_pull_warn]="Could not update mio with git pull; continuing with local copy."
+  [section_mio]="Checking mio"
   [clean_build]="cleaning build directory: %s"
   [configure_retry]="CMake failed. Cleaning the build cache and trying once again."
   [build_done]="Build finished."
@@ -217,6 +226,10 @@ declare -A MSG_ES=(
   [simdutf_ok]="simdutf ya esta instalado en %s"
   [simdutf_install]="instalando simdutf en %s"
   [simdutf_pull_warn]="No pude actualizar simdutf con git pull; continuo con la copia local."
+  [mio_ok]="mio ya esta instalado en %s"
+  [mio_install]="instalando mio en %s"
+  [mio_pull_warn]="No pude actualizar mio con git pull; continuo con la copia local."
+  [section_mio]="Verificando mio"
   [clean_build]="limpiando carpeta de build: %s"
   [configure_retry]="CMake fallo. Limpiando cache de build e intentando una vez mas."
   [build_done]="Build finalizado."
@@ -620,6 +633,7 @@ install_common_deps() {
     zlib1g-dev
     libbz2-dev
     libicu-dev
+    libasio-dev
   )
 
   apt_install_missing "${packages[@]}"
@@ -1012,6 +1026,40 @@ ensure_simdutf() {
   cmake --install build
 }
 
+mio_config_exists() {
+  [[ -f "${SIMDUTF_PREFIX}/lib/cmake/mio/mio-config.cmake" ]] || \
+    [[ -f "${SIMDUTF_PREFIX}/lib/cmake/mio/mioConfig.cmake" ]] || \
+    [[ -f "${SIMDUTF_PREFIX}/share/cmake/mio/mioConfig.cmake" ]]
+}
+
+ensure_mio() {
+  section section_mio
+
+  if mio_config_exists; then
+    ok "$(printf "$(msg mio_ok)" "${SIMDUTF_PREFIX}")"
+    return
+  fi
+
+  sayf mio_install "${SIMDUTF_PREFIX}"
+  mkdir -p "$(dirname "${MIO_DIR}")"
+
+  if [[ -d "${MIO_DIR}/.git" ]]; then
+    cd "${MIO_DIR}"
+    git pull --ff-only || warn "$(msg mio_pull_warn)"
+  else
+    rm -rf "${MIO_DIR}"
+    git clone https://github.com/mandreyel/mio.git "${MIO_DIR}"
+    cd "${MIO_DIR}"
+  fi
+
+  cmake -S . -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX="${SIMDUTF_PREFIX}"
+
+  cmake --build build --parallel "${JOBS}"
+  cmake --install build
+}
+
 prepare_repo() {
   section section_repo
 
@@ -1157,6 +1205,7 @@ build_tfs() {
   fi
 
   mkdir -p "$(dirname "${OUTPUT_BIN}")"
+  rm -f "${OUTPUT_BIN}"
   cp -f "${BUILD_DIR}/tfs" "${OUTPUT_BIN}"
   chmod +x "${OUTPUT_BIN}"
 
@@ -1187,6 +1236,7 @@ main() {
     ensure_boost
     ensure_lua_55
     ensure_simdutf
+    ensure_mio
   fi
 
   if [[ "${SKIP_BUILD}" -eq 1 ]]; then

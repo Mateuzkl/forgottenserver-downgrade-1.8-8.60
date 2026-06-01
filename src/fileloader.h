@@ -7,8 +7,8 @@
 class PropStream;
 
 namespace OTB {
-using MappedFile = boost::iostreams::mapped_file_source;
-using ContentIt = MappedFile::iterator;
+using MappedFile = mio::mmap_source;
+using ContentIt = const char*;
 using Identifier = std::array<char, 4>;
 
 struct Node
