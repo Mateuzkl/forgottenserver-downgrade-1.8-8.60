@@ -1,65 +1,95 @@
-version: '{build}'
-image: Visual Studio 2022
+name: Lua syntax check, lint, and format
 
-skip_branch_with_pr: true
+on:
+  push:
+    branches:
+      - main
+      - "v*"
+    paths:
+      - ".github/workflows/lua-check.yml"
+      - "config.lua.dist"
+      - "data/**/*.lua"
 
-platform:
-  - x64
+  pull_request:
+    branches:
+      - main
+      - "v*"
+    paths:
+      - ".github/workflows/lua-check.yml"
+      - "config.lua.dist"
+      - "data/**/*.lua"
 
-configuration:
-  - Release
+  workflow_dispatch:
 
-matrix:
-  fast_finish: false
+concurrency:
+  group: lua-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-only_commits:
-  files:
-    - /src/
-    - /vc17/
-    - .appveyor.yml
-    - /cmake/
-    - vcpkg.json
-    - vcpkg-configuration.json
-    - CMakeLists.txt
+jobs:
+  luac:
+    name: Lua syntax check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
 
-skip_commits:
-  message: /\[skip ci\]|\[skip appveyor\]/
+    permissions:
+      contents: read
 
-environment:
-  VCPKG_ROOT: C:\Tools\vcpkg
-  VCPKG_DEFAULT_TRIPLET: x64-windows
-  VCPKG_DEFAULT_BINARY_CACHE: C:\Users\appveyor\AppData\Local\vcpkg\archives
+    steps:
+      - uses: actions/checkout@v4
 
-install:
-  - cmd: git fetch --tags --force
-  - cmd: cd /d %VCPKG_ROOT%
-  - cmd: vcpkg version
-  - cmd: cd /d %APPVEYOR_BUILD_FOLDER%
-  - cmd: vcpkg install --triplet %VCPKG_DEFAULT_TRIPLET%
+      - name: Install Lua
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
 
-before_build:
-  - cmd: if not exist build mkdir build
-  - cmd: cd build
-  - cmd: cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
+      - name: Test Lua syntax
+        run: |
+          luac5.4 -p config.lua.dist
+          find data/ -type f -name '*.lua' -print0 | xargs -0 -r -n1 luac5.4 -p
 
-build:
-  parallel: true
+  lint:
+    name: Lua lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [luac]
+    continue-on-error: true
 
-build_script:
-  - cmd: cmake --build . --config %CONFIGURATION% --parallel
+    permissions:
+      contents: read
 
-after_build:
-  - cmd: cd %APPVEYOR_BUILD_FOLDER%
-  - cmd: 7z a -tzip TFS.zip -r .\build\%CONFIGURATION%\*.exe -ir!.\build\%CONFIGURATION%\*.dll
+    steps:
+      - uses: actions/checkout@v4
 
-cache:
-  - C:\Users\appveyor\AppData\Local\vcpkg\archives
-  - C:\Tools\vcpkg\installed -> vcpkg.json, vcpkg-configuration.json
+      - name: Install Luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 luarocks
+          sudo luarocks install luacheck
 
-artifacts:
-  - path: build\**\tfs*.exe
-  - path: build\**\*.dll
-  - path: TFS.zip
+      - name: Run Luacheck
+        run: luacheck data config.lua.dist
 
-test: off
-deploy: off
+  format:
+    name: Lua format check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [luac]
+    continue-on-error: true
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LuaFormatter
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 luarocks cmake g++
+          sudo luarocks install --server=https://luarocks.org/dev luaformatter
+
+      - name: Check Lua formatting
+        run: |
+          find data/ -type f -name '*.lua' -print0 | xargs -0 -r -n1 luaformatter -i
+          git diff
+          git diff --exit-code
