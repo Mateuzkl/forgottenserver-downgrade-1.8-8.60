@@ -7,7 +7,7 @@ on:
     paths:
       - Dockerfile
       - .dockerignore
-      - ".github/workflows/docker-build.yml"
+      - ".github/workflows/docker-image.yml"
       - "src/**"
       - "cmake/**"
       - "data/**"
@@ -22,7 +22,7 @@ on:
     paths:
       - Dockerfile
       - .dockerignore
-      - ".github/workflows/docker-build.yml"
+      - ".github/workflows/docker-image.yml"
       - "src/**"
       - "cmake/**"
       - "data/**"
@@ -34,13 +34,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: docker-build-${{ github.ref }}
+  group: docker-image-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     name: Docker build
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     permissions:
       contents: read
