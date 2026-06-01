@@ -16,6 +16,7 @@
 
 #include <fmt/format.h>
 #include <fstream>
+#include <charconv>
 
 #if LUA_VERSION_NUM >= 502
 #undef lua_strlen
