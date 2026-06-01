@@ -171,6 +171,7 @@ private:
 	void sendCancelTarget();
 	void sendCreatureOutfit(const Creature* creature, const Outfit_t& outfit);
 	void sendStats();
+	void sendBasicData();
 	void sendTextMessage(const TextMessage& message);
 	void sendReLoginWindow();
 

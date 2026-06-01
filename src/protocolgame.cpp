@@ -1831,6 +1831,26 @@ void ProtocolGame::sendStats()
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendBasicData()
+{
+	NetworkMessage msg;
+	msg.addByte(0x9F);
+
+	// premium
+	msg.addByte(player->isPremium() ? 0x01 : 0x00);
+
+	// vocation
+	msg.addByte(static_cast<uint8_t>(player->getVocationId()));
+
+	// prey - OTC client expects 1 byte for prey status when GamePrey feature is enabled
+	msg.addByte(0x00);
+
+	// spells - send known spells count + ids
+	msg.add<uint16_t>(0); // spell count = 0 (protocol 8.60 doesn't use this packet for spells)
+
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendTextMessage(const TextMessage& message)
 {
 	NetworkMessage msg;
@@ -2604,6 +2624,10 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 
 	sendStats();
 	sendSkills();
+
+	if (isOTC) {
+		sendBasicData();
+	}
 
 	sendWorldLight(g_game.getWorldLightInfo());
 	sendCreatureLight(creature);
