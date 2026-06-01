@@ -2,28 +2,60 @@ name: Build Docker Image (Linux)
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - ".github/workflows/docker-build.yml"
+      - "src/**"
+      - "cmake/**"
+      - "data/**"
+      - "vc17/**"
+      - CMakeLists.txt
+      - vcpkg.json
+      - vcpkg-configuration.json
+
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - ".github/workflows/docker-build.yml"
+      - "src/**"
+      - "cmake/**"
+      - "data/**"
+      - "vc17/**"
+      - CMakeLists.txt
+      - vcpkg.json
+      - vcpkg-configuration.json
+
   workflow_dispatch:
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    name: Docker build
     runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Show Docker version
+        run: docker version
 
       - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          tags: tfs-linux:latest
+        run: |
+          docker build \
+            --pull \
+            --file ./Dockerfile \
+            --tag tfs-linux:latest \
+            .
