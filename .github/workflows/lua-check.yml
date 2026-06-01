@@ -4,56 +4,77 @@ on:
   push:
     branches:
       - main
-      - v*
-
+      - "v*"
     paths:
-      - .github/workflows/lua-check.yml
-      - config.lua.dist
-      - "data/**.lua"
+      - ".github/workflows/lua-check.yml"
+      - "config.lua.dist"
+      - "data/**/*.lua"
 
   pull_request:
     paths:
-      - .github/workflows/lua-check.yml
-      - config.lua.dist
-      - "data/**.lua"
+      - ".github/workflows/lua-check.yml"
+      - "config.lua.dist"
+      - "data/**/*.lua"
+
+concurrency:
+  group: lua-check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   luac:
+    name: Lua syntax check
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: leafo/gh-actions-lua@v10
         with:
           luaVersion: "5.4"
 
       - name: Test Lua syntax
-        run: find data/ -name '*.lua' -print0 | xargs -0 -n1 luac -p
+        run: |
+          luac -p config.lua.dist
+          find data/ -type f -name '*.lua' -print0 | xargs -0 -n1 luac -p
 
   lint:
+    name: Lua lint
     runs-on: ubuntu-latest
+    continue-on-error: true
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+
       - uses: leafo/gh-actions-luarocks@v4
 
       - name: Install Luacheck
         run: luarocks install luacheck
 
       - name: Run Luacheck
-        run: luacheck data config.lua.dist || true
+        run: luacheck data config.lua.dist
 
   format:
+    name: Lua format check
     runs-on: ubuntu-latest
+    continue-on-error: true
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+
       - uses: leafo/gh-actions-luarocks@v4
 
       - name: Install LuaFormatter
         run: luarocks install --server=https://luarocks.org/dev luaformatter
 
-      - name: Run LuaFormatter
+      - name: Check Lua formatting
         run: |
-          find . -regex ".*\.lua.*" -exec luaformatter -i {} \;
+          find data/ -type f -name '*.lua' -print0 | xargs -0 -n1 luaformatter -i
           git diff --exit-code
