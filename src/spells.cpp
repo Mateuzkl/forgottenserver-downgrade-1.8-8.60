@@ -595,11 +595,11 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 {
 	const bool augmentSystemEnabled = ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	const bool wheelSystemEnabled = ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED);
-	if ((!augmentSystemEnabled && !wheelSystemEnabled) || !player || damage.instantSpellName.empty()) {
+	if ((!augmentSystemEnabled && !wheelSystemEnabled) || !player) {
 		return;
 	}
 
-	if (augmentSystemEnabled) {
+	if (augmentSystemEnabled && !damage.instantSpellName.empty()) {
 		for (const auto& item : player->getEquippedAugmentItems()) {
 			for (const auto& augment : item->getAugmentsBySpellName(damage.instantSpellName)) {
 				if (!augment || augment->value == 0) {

@@ -68087,7 +68087,7 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="avatar of steel" value="cooldown">
 				<attribute key="value" value="900000" />
 			</attribute>
@@ -68224,7 +68224,7 @@
 			<attribute key="vocation" value="Paladin;true, Royal Paladin" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="avatar of light" value="cooldown">
 				<attribute key="value" value="900000" />
 			</attribute>
@@ -68321,7 +68321,7 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="3">
 			<attribute key="avatar of storm" value="cooldown">
 				<attribute key="value" value="900000" />
 			</attribute>
@@ -68418,7 +68418,7 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="3">
 			<attribute key="avatar of nature" value="cooldown">
 				<attribute key="value" value="900000" />
 			</attribute>
@@ -68942,7 +68942,7 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="great energy beam" value="critical extra damage">
 				<attribute key="value" value="5" />
 			</attribute>
@@ -69361,7 +69361,7 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="annihilation" value="cooldown">
 				<attribute key="value" value="8000" />
 			</attribute>
@@ -69390,7 +69390,7 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="annihilation" value="cooldown">
 				<attribute key="value" value="8000" />
 			</attribute>
@@ -69419,7 +69419,7 @@
 			<attribute key="vocation" value="Knight;true, Elite Knight" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="annihilation" value="cooldown">
 				<attribute key="value" value="8000" />
 			</attribute>
@@ -69539,7 +69539,7 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="annihilation" value="cooldown">
 				<attribute key="value" value="8000" />
 			</attribute>
@@ -69569,7 +69569,7 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="annihilation" value="cooldown">
 				<attribute key="value" value="8000" />
 			</attribute>
@@ -69599,7 +69599,7 @@
 			<attribute key="slot" value="hand" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="annihilation" value="cooldown">
 				<attribute key="value" value="8000" />
 			</attribute>
@@ -74211,7 +74211,7 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="avatar of balance" value="cooldown">
 				<attribute key="value" value="900000"/>
 			</attribute>
@@ -74973,7 +74973,7 @@
 			<attribute key="weaponType" value="fist" />
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="Devastating Knockout" value="critical extra damage">
 				<attribute key="value" value="14"/>
 			</attribute>
@@ -75316,7 +75316,7 @@
 			<attribute key="vocation" value="Monk;true, Exalted Monk" />
 		</attribute>
 		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
+		<attribute key="augments" value="2">
 			<attribute key="greater tiger clash" value="life leech">
 				<attribute key="value" value="5"/>
 			</attribute>

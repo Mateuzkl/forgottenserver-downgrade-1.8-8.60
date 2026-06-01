@@ -587,7 +587,18 @@ ProficiencySpellAugmentBonus Player::getProficiencySpellAugmentBonus(uint16_t sp
 		return {};
 	}
 
-	const auto weaponIt = proficiencySpellAugments.find(weapon->getID());
+	uint16_t weaponId = weapon->getID();
+	auto weaponIt = proficiencySpellAugments.find(weaponId);
+	if (weaponIt == proficiencySpellAugments.end()) {
+		// Lua groups catalog aliases by client id before caching the canonical server id.
+		const uint16_t clientId = Item::items[weaponId].id;
+		for (auto it = proficiencySpellAugments.begin(); it != proficiencySpellAugments.end(); ++it) {
+			if (Item::items[it->first].id == clientId) {
+				weaponIt = it;
+				break;
+			}
+		}
+	}
 	if (weaponIt == proficiencySpellAugments.end()) {
 		return {};
 	}

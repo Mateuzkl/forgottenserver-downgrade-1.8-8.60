@@ -82,6 +82,8 @@ constexpr std::string_view getPlatformName()
 	return "x64";
 #elif defined(__i386__) || defined(_M_IX86) || defined(_X86_)
 	return "x86";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+	return "ARM64";
 #elif defined(__arm__)
 	return "ARM";
 #else
