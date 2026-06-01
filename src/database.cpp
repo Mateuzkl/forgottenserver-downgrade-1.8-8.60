@@ -8,7 +8,11 @@
 
 #include "configmanager.h"
 
-#include <mysql/errmsg.h>
+#if __has_include(<mariadb/errmsg.h>)
+#  include <mariadb/errmsg.h>
+#else
+#  include <mysql/errmsg.h>
+#endif
 #include "logger.h"
 #include <fmt/format.h>
 #include <algorithm>
@@ -56,8 +60,16 @@ static tfs::detail::Mysql_ptr connectToDatabase(const bool retryIfError)
 
 #else
 		{
+			#if defined(MARIADB_VERSION_ID)
+			bool ssl_enforce = false;
+			bool ssl_verify  = false;
+			mysql_options(handle.get(), MYSQL_OPT_SSL_ENFORCE, &ssl_enforce);
+			mysql_options(handle.get(), MYSQL_OPT_SSL_VERIFY_SERVER_CERT, &ssl_verify);
+		    mysql_ssl_set(handle.get(), nullptr, nullptr, nullptr, nullptr, nullptr);
+#else
 			unsigned int ssl_mode = SSL_MODE_DISABLED;
 			mysql_options(handle.get(), MYSQL_OPT_SSL_MODE, &ssl_mode);
+#endif
 		}
 #endif
 
@@ -165,8 +177,16 @@ bool Database::reconnect()
 	}
 #else
 	{
+#if defined(MARIADB_VERSION_ID)
+		bool ssl_enforce = false;
+		bool ssl_verify  = false;
+		mysql_options(newHandle.get(), MYSQL_OPT_SSL_ENFORCE, &ssl_enforce);
+		mysql_options(newHandle.get(), MYSQL_OPT_SSL_VERIFY_SERVER_CERT, &ssl_verify);
+		mysql_ssl_set(newHandle.get(), nullptr, nullptr, nullptr, nullptr, nullptr);
+#else
 		unsigned int ssl_mode = SSL_MODE_DISABLED;
 		mysql_options(newHandle.get(), MYSQL_OPT_SSL_MODE, &ssl_mode);
+#endif
 	}
 #endif
 
