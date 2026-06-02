@@ -541,7 +541,7 @@
           <tr>
             <td>3</td><td><span class="severity low">Mitigado</span></td><td>Lua bridge</td>
             <td><code>lua*.cpp</code> nao usa mais <code>shared_from_this()</code>; Item/Container userdata agora passa por <code>Lua::pushItem</code>.</td>
-            <td>Adicionar testes Lua de lifetime quando Boost.Test/ambiente de teste estiver disponivel.</td>
+            <td>Adicionar testes Lua de lifetime quando o ambiente de teste estiver disponivel.</td>
           </tr>
           <tr>
             <td>4</td><td><span class="severity low">Mitigado</span></td><td>scheduler/decay</td>
@@ -576,7 +576,7 @@
           <tr>
             <td>10</td><td><span class="severity low">Mitigado</span></td><td>testes</td>
             <td>Existem testes de lifetime, storage, matrix e xtea, e agora há preset <code>asan-linux-tests</code> para PRs de memory/lifetime.</td>
-            <td>Instalar <code>libboost-test-dev</code>, rodar <code>cmake --preset asan-linux-tests</code>, build e <code>ctest --preset asan-linux-tests</code>.</td>
+            <td>Rodar <code>cmake --preset asan-linux-tests</code>, build e <code>ctest --preset asan-linux-tests</code>.</td>
           </tr>
           <tr>
             <td>11</td><td><span class="severity low">Corrigido</span></td><td>source lists</td>
@@ -586,7 +586,7 @@
           <tr>
             <td>12</td><td><span class="severity low">Mitigado</span></td><td>ASAN</td>
             <td>Presets ASAN existem e agora há <code>asan-linux-tests</code> para validar PRs de lifetime com <code>BUILD_TESTING</code> ligado.</td>
-            <td>Instalar <code>libboost-test-dev</code> e rodar ASAN/testes em fixes de <code>shared_from_this</code>, Lua e scheduler.</td>
+            <td>Rodar ASAN/testes em fixes de <code>shared_from_this</code>, Lua e scheduler.</td>
           </tr>
           <tr>
             <td>13</td><td><span class="severity low">Mitigado</span></td><td><code>.get()</code></td>
@@ -626,7 +626,7 @@
           <tr><th>Prioridade</th><th>Ação</th></tr>
           <tr><td>1</td><td>Manter C++23/paridade em <code>vc18</code> e CMake.</td></tr>
           <tr><td>2</td><td>Continuar auditoria gradual apenas onde raw pointer e guardado alem do escopo ou cruza async.</td></tr>
-          <tr><td>3</td><td>Criar testes Lua lifetime para userdata e callbacks assíncronos quando Boost.Test estiver disponivel.</td></tr>
+          <tr><td>3</td><td>Criar testes Lua lifetime para userdata e callbacks assíncronos quando o ambiente de teste estiver disponivel.</td></tr>
           <tr><td>4</td><td>Rodar <code>asan-linux-tests</code> nos PRs de lifetime/decay em ambiente Linux completo.</td></tr>
           <tr><td>5</td><td>Manter arquivos locais temporarios fora do PR.</td></tr>
         </table>
@@ -646,8 +646,7 @@
           Tambem foram executados <code>cmake --build build-release -- -j2</code>, <code>git diff --check</code>,
           <code>luac -p</code> nos scripts Lua alterados, a checagem de paridade CMake/VC18,
           <code>tools/check-manual-delete.cmake</code> e <code>tools/check-shared-get-escapes.cmake</code>.
-          O preset <code>asan-linux-tests</code> foi validado ate a resolucao do Lua 5.5; o WSL local nao tem
-          <code>boost_unit_test_framework</code> instalado, entao o <code>ctest</code> completo fica dependente desse pacote.
+          O preset <code>asan-linux-tests</code> usa o harness interno dos testes e nao depende de bibliotecas de teste externas.
         </div>
       </article>
     </section>

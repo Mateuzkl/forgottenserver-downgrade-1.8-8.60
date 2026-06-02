@@ -357,7 +357,7 @@ chmod +x build.sh
 ./build.sh
 ```
 
-The script detects your Ubuntu version, lets you choose the language, installs missing dependencies, prepares Lua 5.5, Boost, simdutf and builds the server in Release mode.
+The script detects your Ubuntu version, lets you choose the language, installs missing dependencies, prepares Lua 5.5, `simdutf`, `mio` and builds the server in Release mode.
 
 Useful examples:
 
@@ -380,9 +380,9 @@ Manual compilation notes are kept below only for advanced/custom setups.
 Manual build requirements:
 
 - Ubuntu 24.04 is recommended.
-- Ubuntu 22.04 works, but its system Boost can be older than the required version when HTTP support is enabled. In that case, use `./build.sh` or install a newer Boost manually.
+- Ubuntu 22.04 and Ubuntu 24.04 are supported.
 - Lua 5.5 is installed manually because Ubuntu does not ship it as a normal apt package.
-- `simdutf` is installed manually into `$HOME/.local`.
+- `simdutf` and `mio` are installed manually into `$HOME/.local`.
 
 Install system dependencies:
 
@@ -391,10 +391,8 @@ sudo apt update
 sudo apt install -y \
   git wget cmake build-essential pkg-config \
   libmysqlclient-dev \
-  libboost-system-dev libboost-iostreams-dev libboost-filesystem-dev \
-  libboost-locale-dev libboost-regex-dev libboost-json-dev \
   libpugixml-dev libfmt-dev libssl-dev libspdlog-dev libmimalloc-dev \
-  libabsl-dev
+  libabsl-dev libasio-dev zlib1g-dev
 ```
 
 Install Lua 5.5:
@@ -431,6 +429,17 @@ cmake --build build -- -j"$(nproc)"
 cmake --install build
 ```
 
+Install `mio`:
+
+```bash
+cd ~
+git clone https://github.com/mandreyel/mio.git
+cd mio
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/.local
+cmake --build build -- -j"$(nproc)"
+cmake --install build
+```
+
 Build the server in Release mode:
 
 ```bash
@@ -461,12 +470,11 @@ cmake --build . -- -j"$(nproc)"
 | `-DDISABLE_STATS=1` | Removes runtime stats overhead |
 | `-DENABLE_SLOW_TASK_DETECTION=ON` | Enables slow task diagnostics |
 | `-DUSE_MIMALLOC=ON` | Uses Microsoft's mimalloc allocator |
-| `-DCMAKE_PREFIX_PATH="/usr/local;$HOME/.local"` | Helps CMake find manual Lua and simdutf installs |
+| `-DCMAKE_PREFIX_PATH="/usr/local;$HOME/.local"` | Helps CMake find manual Lua, simdutf and mio installs |
 
-For memory/lifetime pull requests, install the Boost.Test development package and run the Linux ASAN test preset:
+For memory/lifetime pull requests, run the Linux ASAN test preset:
 
 ```bash
-sudo apt install -y libboost-test-dev
 cmake --preset asan-linux-tests
 cmake --build --preset asan-linux-tests -- -j"$(nproc)"
 ctest --preset asan-linux-tests --output-on-failure

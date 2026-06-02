@@ -9,14 +9,6 @@ LUA_URL="https://www.lua.org/ftp/${LUA_TARBALL}"
 LUA_SHA256="57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d"
 LUA_PREFIX="/usr/local"
 
-BOOST_VERSION="1.83.0"
-BOOST_UNDERSCORE="1_83_0"
-BOOST_VERSION_NUMBER="108300"
-BOOST_TARBALL="boost_${BOOST_UNDERSCORE}.tar.gz"
-BOOST_URL="https://archives.boost.io/release/${BOOST_VERSION}/source/${BOOST_TARBALL}"
-BOOST_SHA256="c0685b68dd44cc46574cce86c4e17c0f611b15e195be9848dfd0769a0a207628"
-BOOST_PREFIX="/opt/boost_${BOOST_UNDERSCORE}"
-
 SIMDUTF_DIR="${HOME}/.cache/tfs-build/simdutf"
 SIMDUTF_PREFIX="${HOME}/.local"
 MIO_DIR="${HOME}/.cache/tfs-build/mio"
@@ -35,7 +27,6 @@ NONINTERACTIVE=0
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APT_UPDATED=0
-BOOST_MODE="system"
 SUDO=()
 
 if [[ -t 1 ]]; then
@@ -60,7 +51,7 @@ fi
 
 declare -A MSG_PT=(
   [banner_title]="Assistente de build TFS 1.8 - 8.60"
-  [banner_subtitle]="Ubuntu/WSL, dependencias, Lua 5.5, Boost e CMake"
+  [banner_subtitle]="Ubuntu/WSL, dependencias, Lua 5.5, Asio, mio e CMake"
   [choose_lang]="Escolha o idioma:"
   [language_set]="Idioma: Portugues"
   [detect_system]="Sistema detectado"
@@ -71,7 +62,6 @@ declare -A MSG_PT=(
   [using_ubuntu]="Usando configuracao para Ubuntu %s"
   [section_preflight]="Verificando ambiente"
   [section_deps]="Verificando dependencias apt"
-  [section_boost]="Verificando Boost"
   [section_lua]="Verificando Lua 5.5"
   [section_simdutf]="Verificando simdutf"
   [section_repo]="Verificando projeto TFS"
@@ -86,13 +76,8 @@ declare -A MSG_PT=(
   [cmake_too_old]="CMake precisa ser >= 3.20. Versao encontrada: %s"
   [project_ok]="CMakeLists.txt encontrado em: %s"
   [project_clone]="CMakeLists.txt nao encontrado. Clonando repositorio..."
-  [project_lua_warn]="Aviso: nao encontrei find_package(Lua \"5.5\") no CMakeLists.txt."
-  [project_summary]="CMake pede: C++23, Lua 5.5, OpenSSL 3, simdutf, absl, fmt, spdlog, pugixml, MySQL e Boost."
-  [boost_system_ok]="Boost do sistema esta OK: %s"
-  [boost_manual_ok]="Boost manual ja esta OK em %s"
-  [boost_manual_install]="instalando Boost %s manualmente em %s"
-  [boost_system_old]="Boost do sistema ausente ou antigo. Usando Boost manual."
-  [boost_ldconfig]="registrando %s no ldconfig"
+  [project_lua_warn]="Aviso: nao encontrei a configuracao do Lua 5.5 no CMakeLists.txt."
+  [project_summary]="CMake pede: C++23, Lua 5.5, OpenSSL 3, Asio, mio, simdutf, absl, fmt, spdlog, pugixml e MySQL."
   [lua_ok]="Lua 5.5 ja esta OK em %s"
   [lua_pc_ok]="pkg-config do Lua 5.5 pronto: %s"
   [lua_pc_verify_failed]="pkg-config nao conseguiu validar Lua 5.5: %s"
@@ -122,7 +107,7 @@ declare -A MSG_PT=(
 
 declare -A MSG_EN=(
   [banner_title]="TFS 1.8 - 8.60 build assistant"
-  [banner_subtitle]="Ubuntu/WSL, dependencies, Lua 5.5, Boost and CMake"
+  [banner_subtitle]="Ubuntu/WSL, dependencies, Lua 5.5, Asio, mio and CMake"
   [choose_lang]="Choose language:"
   [language_set]="Language: English"
   [detect_system]="Detected system"
@@ -133,7 +118,6 @@ declare -A MSG_EN=(
   [using_ubuntu]="Using Ubuntu %s configuration"
   [section_preflight]="Checking environment"
   [section_deps]="Checking apt dependencies"
-  [section_boost]="Checking Boost"
   [section_lua]="Checking Lua 5.5"
   [section_simdutf]="Checking simdutf"
   [section_repo]="Checking TFS project"
@@ -148,13 +132,8 @@ declare -A MSG_EN=(
   [cmake_too_old]="CMake must be >= 3.20. Found: %s"
   [project_ok]="CMakeLists.txt found at: %s"
   [project_clone]="CMakeLists.txt not found. Cloning repository..."
-  [project_lua_warn]="Warning: find_package(Lua \"5.5\") was not found in CMakeLists.txt."
-  [project_summary]="CMake requires: C++23, Lua 5.5, OpenSSL 3, simdutf, absl, fmt, spdlog, pugixml, MySQL and Boost."
-  [boost_system_ok]="System Boost is OK: %s"
-  [boost_manual_ok]="Manual Boost is already OK at %s"
-  [boost_manual_install]="installing Boost %s manually at %s"
-  [boost_system_old]="System Boost is missing or old. Using manual Boost."
-  [boost_ldconfig]="registering %s in ldconfig"
+  [project_lua_warn]="Warning: Lua 5.5 configuration was not found in CMakeLists.txt."
+  [project_summary]="CMake requires: C++23, Lua 5.5, OpenSSL 3, Asio, mio, simdutf, absl, fmt, spdlog, pugixml and MySQL."
   [lua_ok]="Lua 5.5 is already OK at %s"
   [lua_pc_ok]="Lua 5.5 pkg-config is ready: %s"
   [lua_pc_verify_failed]="pkg-config could not validate Lua 5.5: %s"
@@ -184,7 +163,7 @@ declare -A MSG_EN=(
 
 declare -A MSG_ES=(
   [banner_title]="Asistente de build TFS 1.8 - 8.60"
-  [banner_subtitle]="Ubuntu/WSL, dependencias, Lua 5.5, Boost y CMake"
+  [banner_subtitle]="Ubuntu/WSL, dependencias, Lua 5.5, Asio, mio y CMake"
   [choose_lang]="Elige el idioma:"
   [language_set]="Idioma: Espanol"
   [detect_system]="Sistema detectado"
@@ -195,7 +174,6 @@ declare -A MSG_ES=(
   [using_ubuntu]="Usando configuracion para Ubuntu %s"
   [section_preflight]="Verificando entorno"
   [section_deps]="Verificando dependencias apt"
-  [section_boost]="Verificando Boost"
   [section_lua]="Verificando Lua 5.5"
   [section_simdutf]="Verificando simdutf"
   [section_repo]="Verificando proyecto TFS"
@@ -210,13 +188,8 @@ declare -A MSG_ES=(
   [cmake_too_old]="CMake debe ser >= 3.20. Version encontrada: %s"
   [project_ok]="CMakeLists.txt encontrado en: %s"
   [project_clone]="CMakeLists.txt no encontrado. Clonando repositorio..."
-  [project_lua_warn]="Aviso: no encontre find_package(Lua \"5.5\") en CMakeLists.txt."
-  [project_summary]="CMake pide: C++23, Lua 5.5, OpenSSL 3, simdutf, absl, fmt, spdlog, pugixml, MySQL y Boost."
-  [boost_system_ok]="Boost del sistema esta OK: %s"
-  [boost_manual_ok]="Boost manual ya esta OK en %s"
-  [boost_manual_install]="instalando Boost %s manualmente en %s"
-  [boost_system_old]="Boost del sistema falta o es antiguo. Usando Boost manual."
-  [boost_ldconfig]="registrando %s en ldconfig"
+  [project_lua_warn]="Aviso: no encontre la configuracion de Lua 5.5 en CMakeLists.txt."
+  [project_summary]="CMake pide: C++23, Lua 5.5, OpenSSL 3, Asio, mio, simdutf, absl, fmt, spdlog, pugixml y MySQL."
   [lua_ok]="Lua 5.5 ya esta OK en %s"
   [lua_pc_ok]="pkg-config de Lua 5.5 listo: %s"
   [lua_pc_verify_failed]="pkg-config no pudo validar Lua 5.5: %s"
@@ -631,123 +604,10 @@ install_common_deps() {
     libmimalloc-dev
     libabsl-dev
     zlib1g-dev
-    libbz2-dev
-    libicu-dev
     libasio-dev
   )
 
   apt_install_missing "${packages[@]}"
-}
-
-install_boost_apt() {
-  local -a packages=(
-    libboost-system-dev
-    libboost-iostreams-dev
-    libboost-locale-dev
-    libboost-json-dev
-  )
-
-  apt_install_missing "${packages[@]}"
-}
-
-boost_header_number() {
-  local header="$1"
-  [[ -f "${header}" ]] || return 1
-  awk '/#define BOOST_VERSION / {print $3}' "${header}"
-}
-
-boost_system_ok() {
-  local header="/usr/include/boost/version.hpp"
-  local number
-  number="$(boost_header_number "${header}")" || return 1
-  [[ "${number}" =~ ^[0-9]+$ ]] || return 1
-  ((number >= BOOST_VERSION_NUMBER))
-}
-
-boost_manual_ok() {
-  local header="${BOOST_PREFIX}/include/boost/version.hpp"
-  local number comp
-  number="$(boost_header_number "${header}")" || return 1
-  [[ "${number}" =~ ^[0-9]+$ ]] || return 1
-  ((number >= BOOST_VERSION_NUMBER)) || return 1
-
-  for comp in system iostreams locale json; do
-    find "${BOOST_PREFIX}/lib" -maxdepth 1 \( -name "libboost_${comp}.so*" -o -name "libboost_${comp}.a" \) -print -quit 2>/dev/null | grep -q .
-  done
-}
-
-register_boost_ldconfig() {
-  local conf="/etc/ld.so.conf.d/boost_${BOOST_UNDERSCORE}.conf"
-  sayf boost_ldconfig "${BOOST_PREFIX}/lib"
-  printf '%s\n' "${BOOST_PREFIX}/lib" | "${SUDO[@]}" tee "${conf}" >/dev/null
-  "${SUDO[@]}" ldconfig
-}
-
-install_boost_manual() {
-  sayf boost_manual_install "${BOOST_VERSION}" "${BOOST_PREFIX}"
-
-  cd /tmp
-  rm -rf "boost_${BOOST_UNDERSCORE}" "${BOOST_TARBALL}"
-
-  wget -O "${BOOST_TARBALL}" "${BOOST_URL}"
-  printf '%s  %s\n' "${BOOST_SHA256}" "${BOOST_TARBALL}" | sha256sum -c -
-
-  tar -xzf "${BOOST_TARBALL}"
-  cd "boost_${BOOST_UNDERSCORE}"
-
-  ./bootstrap.sh \
-    --prefix="${BOOST_PREFIX}" \
-    --with-libraries=system,iostreams,locale,json
-
-  "${SUDO[@]}" ./b2 \
-    -j"${JOBS}" \
-    install \
-    link=shared \
-    threading=multi \
-    runtime-link=shared \
-    cxxstd=17
-
-  register_boost_ldconfig
-}
-
-ensure_boost() {
-  section section_boost
-
-  if [[ "${UBUNTU_TARGET}" == "24.04" ]]; then
-    install_boost_apt
-    if boost_system_ok; then
-      ok "$(printf "$(msg boost_system_ok)" "/usr/include")"
-      BOOST_MODE="system"
-      return
-    fi
-    warn "$(msg boost_system_old)"
-  fi
-
-  if boost_manual_ok; then
-    ok "$(printf "$(msg boost_manual_ok)" "${BOOST_PREFIX}")"
-    BOOST_MODE="manual"
-    register_boost_ldconfig
-    return
-  fi
-
-  if [[ "${UBUNTU_TARGET}" == "22.04" ]] && boost_system_ok; then
-    ok "$(printf "$(msg boost_system_ok)" "/usr/include")"
-    BOOST_MODE="system"
-    return
-  fi
-
-  install_boost_manual
-  BOOST_MODE="manual"
-}
-
-detect_existing_boost_mode() {
-  if boost_system_ok; then
-    BOOST_MODE="system"
-  elif boost_manual_ok; then
-    BOOST_MODE="manual"
-  else
-    BOOST_MODE="system"
-  fi
 }
 
 lua_header_declares_55() {
@@ -1073,7 +933,8 @@ prepare_repo() {
     cd forgottenserver-downgrade-1.8-8.60
   fi
 
-  if grep -q 'find_package(Lua "5.5" REQUIRED)' CMakeLists.txt; then
+  if grep -q 'set(TFS_LUA_REQUIRED_VERSION "5.5")' CMakeLists.txt &&
+    grep -q 'find_package(Lua "${TFS_LUA_REQUIRED_VERSION}" REQUIRED)' CMakeLists.txt; then
     info "$(msg project_summary)"
   else
     warn "$(msg project_lua_warn)"
@@ -1129,10 +990,6 @@ safe_remove_build_dir() {
 cmake_prefix_path() {
   local -a prefixes=("${LUA_PREFIX}" "${SIMDUTF_PREFIX}")
 
-  if [[ "${BOOST_MODE}" == "manual" ]]; then
-    prefixes=("${BOOST_PREFIX}" "${prefixes[@]}")
-  fi
-
   local IFS=';'
   printf '%s' "${prefixes[*]}"
 }
@@ -1156,13 +1013,6 @@ configure_tfs() {
     -DLUA_VERSION_STRING="${LUA_VERSION}"
     -DCMAKE_PREFIX_PATH="${prefix_path}"
   )
-
-  if [[ "${BOOST_MODE}" == "manual" ]]; then
-    args+=(
-      -DBOOST_ROOT="${BOOST_PREFIX}"
-      -DBoost_NO_SYSTEM_PATHS=ON
-    )
-  fi
 
   if ! cmake -Wno-dev "${args[@]}"; then
     warn "$(msg configure_retry)"
@@ -1229,11 +1079,9 @@ main() {
   prepare_repo
 
   if [[ "${SKIP_DEPS}" -eq 1 ]]; then
-    detect_existing_boost_mode
     warn "$(msg skip_deps)"
   else
     install_common_deps
-    ensure_boost
     ensure_lua_55
     ensure_simdutf
     ensure_mio

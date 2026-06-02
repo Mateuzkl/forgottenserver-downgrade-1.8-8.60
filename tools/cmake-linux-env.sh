@@ -1,21 +1,16 @@
 #!/usr/bin/env bash
 
 # Shared Linux/WSL CMake cache arguments for helper builds.
-# These match the manual Lua 5.5 and simdutf locations prepared by build.sh.
+# These match the manual Lua 5.5, simdutf and mio locations prepared by build.sh.
 
 TFS_LUA_VERSION="${TFS_LUA_VERSION:-5.5.0}"
 TFS_LUA_PREFIX="${TFS_LUA_PREFIX:-/usr/local}"
 TFS_LUA_INCLUDE_DIR="${TFS_LUA_INCLUDE_DIR:-${TFS_LUA_PREFIX}/include}"
 TFS_LUA_LIBRARY="${TFS_LUA_LIBRARY:-${TFS_LUA_PREFIX}/lib/liblua.a}"
 TFS_SIMDUTF_PREFIX="${TFS_SIMDUTF_PREFIX:-${HOME}/.local}"
-TFS_BOOST_PREFIX="${TFS_BOOST_PREFIX:-/opt/boost_1_83_0}"
 
 tfs_linux_cmake_prefix_path() {
 	local -a prefixes=()
-
-	if [[ -d "${TFS_BOOST_PREFIX}" ]]; then
-		prefixes+=("${TFS_BOOST_PREFIX}")
-	fi
 
 	prefixes+=("${TFS_LUA_PREFIX}" "${TFS_SIMDUTF_PREFIX}")
 
@@ -39,10 +34,6 @@ tfs_append_linux_cmake_cache_args() {
 		-DLUA_VERSION_STRING="${TFS_LUA_VERSION}"
 		-DCMAKE_PREFIX_PATH="${prefix_path}"
 	)
-
-	if [[ -d "${TFS_BOOST_PREFIX}" ]]; then
-		cmake_args_ref+=(-DBOOST_ROOT="${TFS_BOOST_PREFIX}")
-	fi
 }
 
 tfs_check_lua55_paths() {
