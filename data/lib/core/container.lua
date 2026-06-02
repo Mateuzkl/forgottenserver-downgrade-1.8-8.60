@@ -61,12 +61,14 @@ function Container:createLootItem(lootItem)
 	return true
 end
 
-function Container:getContentDescription()
+function Container:getContentDescription(colorizedLootValue)
 	local items = self:getItems()
 	if items and #items > 0 then
 		local loot = {}
 		for _, lootItem in ipairs(items) do
-			loot[#loot + 1] = lootItem:getNameDescription(lootItem:getSubType(), true)
+			local description = lootItem:getNameDescription(lootItem:getSubType(), true)
+			if colorizedLootValue then description = ("{%d|%s}"):format(lootItem:getId(), description) end
+			loot[#loot + 1] = description
 		end
 
 		return table.concat(loot, ", ")

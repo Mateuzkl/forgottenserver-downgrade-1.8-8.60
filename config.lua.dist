@@ -146,6 +146,9 @@ preySystemEnabled = false
 weaponProficiencySystemEnabled = false
 augmentSystemEnabled = false
 monsterLevelEnabled = false
+enableColorizedLootValue = false
+enableItemTierDisplay = false
+enableItemUpgradeClassification = false
 
 -- Static item augment defaults. Item-specific values can override these in items.xml.
 augmentIncreasedDamagePercent = 5

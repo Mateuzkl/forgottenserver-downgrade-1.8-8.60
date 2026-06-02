@@ -462,6 +462,9 @@ bool ConfigManager::load()
 	booleans[Boolean::RAID_SPAWN_FILE_ENABLED] = getGlobalBoolean(L, "raidSpawnFileEnabled", true);
 	booleans[Boolean::POWERLAW] = getGlobalBoolean(L, "powerlaw", false);
 	booleans[Boolean::ASTRA_CLIENT_ONLY] = getGlobalBoolean(L, "astraClientOnly", false);
+	booleans[Boolean::COLORIZED_LOOT_VALUE] = getGlobalBoolean(L, "enableColorizedLootValue", false);
+	booleans[Boolean::ITEM_TIER_DISPLAY] = getGlobalBoolean(L, "enableItemTierDisplay", false);
+	booleans[Boolean::ITEM_UPGRADE_CLASSIFICATION] = getGlobalBoolean(L, "enableItemUpgradeClassification", false);
 
 	// Admin Config
 	booleans[Boolean::ADMIN_LOCALHOST_ONLY] = getGlobalBoolean(L, "adminLocalhostOnly", true);

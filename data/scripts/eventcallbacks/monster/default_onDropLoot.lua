@@ -97,7 +97,8 @@ event.onDropLoot = function(self, corpse)
 			if not lootGroupingEnabled then
 				local preyLootText = preyLootBonus > 0 and (" (Prey Improved Loot +%d%%)"):format(preyLootBonus) or ""
 				local text = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
-				                                         corpse:getContentDescription(), preyLootText)
+				                                         corpse:getContentDescription(configManager.getBoolean(configKeys.COLORIZED_LOOT_VALUE)),
+				                                         preyLootText)
 				local party = player:getParty()
 				if party then
 					party:broadcastPartyLoot(text)

@@ -1059,8 +1059,12 @@ int LuaScriptInterface::luaItemSetTier(lua_State *L)
 			pushBoolean(L, false);
 			return 1;
 		}
+		if (!lua_isnumber(L, 2)) {
+			pushBoolean(L, false);
+			return 1;
+		}
 
-		item->setTier(getInteger<uint8_t>(L, 2));
+		item->setTier(static_cast<uint8_t>(std::clamp<int32_t>(getInteger<int32_t>(L, 2), 0, 10)));
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);

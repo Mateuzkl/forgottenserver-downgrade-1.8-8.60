@@ -5,6 +5,7 @@
 
 #include "networkmessage.h"
 
+#include "configmanager.h"
 #include "container.h"
 #include "creature.h"
 
@@ -115,7 +116,8 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 		addByte(fluidMap[count & 7]);
 	}
 
-	if (sendTier && (alwaysSendTier || it.classification > 0)) {
+	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
+	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
 		addByte(static_cast<uint8_t>(it.tier));
 	}
 }
@@ -134,7 +136,8 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 		addByte(fluidMap[item->getFluidType() & 7]);
 	}
 
-	if (sendTier && (alwaysSendTier || it.classification > 0)) {
+	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
+	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
 		addByte(item->getTier());
 	}
 }

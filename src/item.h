@@ -829,7 +829,7 @@ public:
 		if (!ConfigManager::getBoolean(ConfigManager::FORGE_SYSTEM_ENABLED)) {
 			return;
 		}
-		setIntAttr(ITEM_ATTRIBUTE_TIER, tier);
+		setIntAttr(ITEM_ATTRIBUTE_TIER, std::min<uint8_t>(tier, 10));
 	}
 	uint8_t getClassification() const
 	{

@@ -3500,7 +3500,7 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::AdditionalSkills] = true;
 	features[GameFeature::ExtendedClientPing] = true;
 	features[GameFeature::CreatureIcons] = true;
-	if (useItemTierByte) {
+	if (useItemTierByte && getBoolean(ConfigManager::ITEM_TIER_DISPLAY)) {
 		features[GameFeature::ItemTierByte] = true;
 	}
 
