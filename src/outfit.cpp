@@ -13,6 +13,12 @@
 #include "logger.h"
 #include <fmt/format.h>
 
+bool Outfits::reload()
+{
+	outfits.clear();
+	return loadFromXml();
+}
+
 bool Outfits::loadFromXml()
 {
 	pugi::xml_document doc;

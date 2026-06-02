@@ -28,6 +28,9 @@ local reloadTypes = {
 	["monster"] = RELOAD_TYPE_MONSTERS,
 	["monsters"] = RELOAD_TYPE_MONSTERS,
 
+	["outfit"] = RELOAD_TYPE_OUTFITS,
+	["outfits"] = RELOAD_TYPE_OUTFITS,
+
 	["mount"] = RELOAD_TYPE_MOUNTS,
 	["mounts"] = RELOAD_TYPE_MOUNTS,
 

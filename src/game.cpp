@@ -7200,6 +7200,11 @@ bool Game::reload(ReloadTypes_t reloadType)
 			LOG_INFO("Monsters reloaded successfully.");
 			return true;
 		}
+		case RELOAD_TYPE_OUTFITS: {
+			bool result = Outfits::getInstance().reload();
+			if (result) LOG_INFO("Outfits reloaded successfully.");
+			return result;
+		}
 		case RELOAD_TYPE_MOUNTS: {
 			bool result = mounts.reload();
 			if (result) LOG_INFO("Mounts reloaded successfully.");

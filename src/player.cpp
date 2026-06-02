@@ -1883,12 +1883,22 @@ void Player::onCreatureAppear(Creature* creature, bool isLogin)
 		storedConditionList.clear();
 
 		if (defaultOutfit.lookAddons >= getInteger(ConfigManager::MAX_ADDON_ATTRIBUTES)) {
-			uint32_t outfitId = Outfits::getInstance().getOutfitId(sex, defaultOutfit.lookType);
-			if (outfitAttributes) {
-				Outfits::getInstance().removeAttributes(getID(), outfitId, sex);
-				outfitAttributes = false;
+			const Outfit* outfit = Outfits::getInstance().getOutfitByLookType(defaultOutfit.lookType, sex);
+			if (outfit) {
+				uint32_t outfitId = Outfits::getInstance().getOutfitId(sex, defaultOutfit.lookType);
+				if (outfitAttributes) {
+					Outfits::getInstance().removeAttributes(getID(), outfitId, sex);
+					outfitAttributes = false;
+				}
+				outfitAttributes = Outfits::getInstance().addAttributes(getID(), outfitId, sex);
+			} else {
+				// Outfit no longer exists after reload, remove old attributes
+				if (outfitAttributes) {
+					uint32_t outfitId = Outfits::getInstance().getOutfitId(sex, defaultOutfit.lookType);
+					Outfits::getInstance().removeAttributes(getID(), outfitId, sex);
+					outfitAttributes = false;
+				}
 			}
-			outfitAttributes = Outfits::getInstance().addAttributes(getID(), outfitId, sex);
 		}
 
 		updateRegeneration();

@@ -75,6 +75,7 @@ public:
 		return instance;
 	}
 
+	bool reload();
 	bool loadFromXml();
 
 	const Outfit* getOutfitByLookType(uint16_t lookType) const;
