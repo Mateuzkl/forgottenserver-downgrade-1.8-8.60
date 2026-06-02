@@ -2415,6 +2415,27 @@ CustomMarket = {
 		itemId = tonumber(itemId) or 0
 		return marketItemsById[itemId] ~= nil
 	end,
+	getDescriptions = function(itemId)
+		return buildMarketDescriptions(tonumber(itemId) or 0)
+	end,
+	getAveragePrice = function(itemId)
+		itemId = tonumber(itemId) or 0
+		local stats = fetchMarketStatistics(itemId, MARKET_ACTION_SELL)
+		if #stats == 0 then
+			stats = fetchMarketStatistics(itemId, MARKET_ACTION_BUY)
+		end
+
+		local transactions = 0
+		local totalPrice = 0
+		for _, stat in ipairs(stats) do
+			transactions = transactions + (tonumber(stat.transactions) or 0)
+			totalPrice = totalPrice + (tonumber(stat.totalPrice) or 0)
+		end
+		if transactions <= 0 then
+			return 0
+		end
+		return math.floor(totalPrice / transactions)
+	end,
 	browse = sendMarketBrowse,
 	updateStatistics = refreshMarketStatistics
 }

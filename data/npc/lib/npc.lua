@@ -395,7 +395,7 @@ do
 		return itemType and itemType:getId() or currency
 	end
 
-	local function registerItemShopPrice(itemId, buy, sell)
+	local function registerItemShopPrice(itemId, buy, sell, npcName)
 		local itemType = ItemType(itemId)
 		if not itemType or itemType:getId() == 0 or not itemType.setBuyPrice then
 			return
@@ -409,9 +409,12 @@ do
 		if sell > 0 then
 			itemType:setSellPrice(sell)
 		end
+		if ItemPriceRegistry and ItemPriceRegistry.register then
+			ItemPriceRegistry.register(itemId, buy, sell, npcName)
+		end
 	end
 
-	local function normalizeShopItems(items)
+	local function normalizeShopItems(items, npcName)
 		local normalized = {}
 		if type(items) ~= "table" then
 			return normalized
@@ -420,7 +423,7 @@ do
 		for _, item in ipairs(items) do
 			local itemType = resolveItemType(item.id or item.itemId or item.itemid or item.itemName or item.itemname or item.name, item.clientId or item.clientid)
 			if itemType and itemType:getId() ~= 0 then
-				registerItemShopPrice(itemType:getId(), item.buy, item.sell)
+				registerItemShopPrice(itemType:getId(), item.buy, item.sell, npcName)
 				normalized[#normalized + 1] = {
 					id = itemType:getId(),
 					subType = item.subType or item.subtype or item.count or item.charges or (itemType:isFluidContainer() and 0 or 1),
@@ -798,7 +801,7 @@ do
 			return false
 		end
 
-		local shopItems = normalizeShopItems(itemsTable)
+		local shopItems = normalizeShopItems(itemsTable, npc:getName())
 		local currency = npcData.currency or 0
 		local onBuyItem = npcData.onBuyItem
 		local onSellItem = npcData.onSellItem
@@ -951,7 +954,7 @@ do
 		local npcName = npcConfig.name or self:name()
 		local compatData = RevNpcTypeCompatGetData and RevNpcTypeCompatGetData(self) or {}
 		local handler = NpcHandler.__modernCompatLastCreated
-		local shopItems = normalizeShopItems(npcConfig.shop)
+		local shopItems = normalizeShopItems(npcConfig.shop, npcName)
 		local currency = resolveCurrencyId(npcConfig.currency)
 		local speechBubble = npcConfig.speechBubble or npcConfig.speechbubble or 0
 

@@ -578,6 +578,10 @@ if Modules == nil then
         if sell > 0 then
             itemType:setSellPrice(sell)
         end
+        if ItemPriceRegistry and ItemPriceRegistry.register then
+            local npc = Npc()
+            ItemPriceRegistry.register(itemId, buy, sell, npc and npc:getName() or "NPC")
+        end
     end
 
     -- Creates a new instance of ShopModule

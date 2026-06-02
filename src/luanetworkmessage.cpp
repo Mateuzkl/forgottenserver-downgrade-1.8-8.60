@@ -24,6 +24,8 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0xA7: // custom fight mode sync
 		case 0xBA: // native hunting task base data
 		case 0xBB: // native hunting task slot data
+		case 0xC6: // custom item values
+		case 0xC7: // custom item details
 		case 0xD1: // custom hunt analyzer
 		case 0xDB: // custom market
 		case 0xEB: // imbuing window

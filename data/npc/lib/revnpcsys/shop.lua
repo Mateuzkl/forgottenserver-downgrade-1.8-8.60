@@ -31,7 +31,7 @@
 
 -- Make sure we are not overloading on reload
 if not NpcShop then
-    local function registerItemShopPrice(itemId, buy, sell)
+    local function registerItemShopPrice(itemId, buy, sell, npcName)
         local itemType = ItemType(itemId)
         if not itemType or itemType:getId() == 0 or not itemType.setBuyPrice then
             return
@@ -44,6 +44,9 @@ if not NpcShop then
         end
         if sell > 0 then
             itemType:setSellPrice(sell)
+        end
+        if ItemPriceRegistry and ItemPriceRegistry.register then
+            ItemPriceRegistry.register(itemId, buy, sell, npcName)
         end
     end
 
@@ -64,7 +67,8 @@ if not NpcShop then
             if not self[npcName][topic] then
                 self[npcName][topic] = {
                     items = {},
-                    discounts = {}
+                    discounts = {},
+                    npcName = npcName
                 }
                 setmetatable(self[npcName][topic], {__index = NpcShop})
             end
@@ -93,7 +97,7 @@ if not NpcShop then
                             name = itemId
                             itemId = ItemType(itemId):getId()
                         end
-                        registerItemShopPrice(itemId, items.buy, items.sell)
+                        registerItemShopPrice(itemId, items.buy, items.sell, self.npcName)
                         local itemSubtype = items.subType
                         if itemSubtype == nil then
                             itemSubtype = items.subtype
@@ -135,7 +139,7 @@ if not NpcShop then
                         name = id
                         id = ItemType(id):getId()
                     end
-                    registerItemShopPrice(id, buy, sell)
+                    registerItemShopPrice(id, buy, sell, self.npcName)
                     table.insert(self.items, {
                         id = id, name = name, buy = buy, sell = sell, subtype = subType == nil and nil or subType
                     })
