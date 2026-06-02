@@ -15,11 +15,35 @@
 #include "logger.h"
 #include <fmt/format.h>
 
+#include <limits>
+#include <optional>
+
 extern Monsters g_monsters;
 extern Game g_game;
 
 inline constexpr int32_t MINSPAWN_INTERVAL = 10 * 1000;           // 10 seconds to match RME
 inline constexpr int32_t MAXSPAWN_INTERVAL = 24 * 60 * 60 * 1000; // 1 day
+
+namespace {
+std::optional<Position> getSpawnPosition(const Position& centerPos, const pugi::xml_node& childNode,
+                                         int16_t z, std::string_view context)
+{
+	const int32_t xOffset = pugi::cast<int32_t>(childNode.attribute("x").value());
+	const int32_t yOffset = pugi::cast<int32_t>(childNode.attribute("y").value());
+	const int32_t x = static_cast<int32_t>(centerPos.x) + xOffset;
+	const int32_t y = static_cast<int32_t>(centerPos.y) + yOffset;
+
+	if (x < 0 || x > std::numeric_limits<uint16_t>::max() ||
+	    y < 0 || y > std::numeric_limits<uint16_t>::max() ||
+	    z < 0 || z > std::numeric_limits<uint8_t>::max()) {
+		LOG_WARN(fmt::format("[Warning - {}] Spawn position ({}, {}, {}) is outside the supported coordinate range.",
+		                     context, x, y, z));
+		return std::nullopt;
+	}
+
+	return Position(static_cast<uint16_t>(x), static_cast<uint16_t>(y), static_cast<uint8_t>(z));
+}
+} // namespace
 
 Spawns::~Spawns()
 {
@@ -71,8 +95,11 @@ bool Spawns::loadFromXml(std::string_view filename)
 
 		for (auto& childNode : spawnNode.children()) {
 			if (caseInsensitiveEqual(childNode.name(), "monsters")) {
-				Position pos(centerPos.x + pugi::cast<uint16_t>(childNode.attribute("x").value()),
-				             centerPos.y + pugi::cast<uint16_t>(childNode.attribute("y").value()), centerPos.z);
+				auto spawnPos = getSpawnPosition(centerPos, childNode, centerPos.z, "Spawns::loadFromXml");
+				if (!spawnPos) {
+					continue;
+				}
+				const Position& pos = *spawnPos;
 
 				int32_t interval = pugi::cast<int32_t>(childNode.attribute("spawntime").value()) * 1000;
 				if (interval < MINSPAWN_INTERVAL) {
@@ -155,8 +182,11 @@ bool Spawns::loadFromXml(std::string_view filename)
 					dir = DIRECTION_NORTH;
 				}
 
-				Position pos(centerPos.x + pugi::cast<uint16_t>(childNode.attribute("x").value()),
-				             centerPos.y + pugi::cast<uint16_t>(childNode.attribute("y").value()), centerPos.z);
+				auto spawnPos = getSpawnPosition(centerPos, childNode, centerPos.z, "Spawns::loadFromXml");
+				if (!spawnPos) {
+					continue;
+				}
+				const Position& pos = *spawnPos;
 				int32_t interval = pugi::cast<int32_t>(childNode.attribute("spawntime").value()) * 1000;
 				if (interval >= MINSPAWN_INTERVAL && interval <= MAXSPAWN_INTERVAL) {
 					spawn.addMonster(nameAttribute.as_string(), pos, dir, static_cast<uint32_t>(interval));
@@ -188,10 +218,12 @@ bool Spawns::loadFromXml(std::string_view filename)
 					npc->setInstanceID(pugi::cast<uint32_t>(instanceIdAttribute.value()));
 				}
 
-				npc->setMasterPos(
-				    Position(centerPos.x + pugi::cast<uint16_t>(childNode.attribute("x").value()),
-				             centerPos.y + pugi::cast<uint16_t>(childNode.attribute("y").value()), centerPos.z),
-				    radius);
+				auto spawnPos = getSpawnPosition(centerPos, childNode, centerPos.z, "Spawns::loadFromXml");
+				if (!spawnPos) {
+					continue;
+				}
+
+				npc->setMasterPos(*spawnPos, radius);
 				npcList.push_front(std::move(npc));
 			}
 		}
@@ -254,8 +286,11 @@ bool Spawns::loadFromMonsterNpcXml(std::string_view filename)
 					dir = static_cast<Direction>(pugi::cast<uint16_t>(directionAttribute.value()));
 				}
 
-				Position pos(centerPos.x + pugi::cast<uint16_t>(childNode.attribute("x").value()),
-				             centerPos.y + pugi::cast<uint16_t>(childNode.attribute("y").value()), childZ);
+				auto spawnPos = getSpawnPosition(centerPos, childNode, childZ, "Spawns::loadFromMonsterNpcXml");
+				if (!spawnPos) {
+					continue;
+				}
+				const Position& pos = *spawnPos;
 				int32_t interval = pugi::cast<int32_t>(childNode.attribute("spawntime").value()) * 1000;
 				if (interval >= MINSPAWN_INTERVAL && interval <= MAXSPAWN_INTERVAL) {
 					spawn.addMonster(nameAttribute.as_string(), pos, dir, static_cast<uint32_t>(interval));
@@ -287,10 +322,12 @@ bool Spawns::loadFromMonsterNpcXml(std::string_view filename)
 					npc->setInstanceID(pugi::cast<uint32_t>(instanceIdAttribute.value()));
 				}
 
-				npc->setMasterPos(
-				    Position(centerPos.x + pugi::cast<uint16_t>(childNode.attribute("x").value()),
-				             centerPos.y + pugi::cast<uint16_t>(childNode.attribute("y").value()), childZ),
-				    radius);
+				auto spawnPos = getSpawnPosition(centerPos, childNode, childZ, "Spawns::loadFromMonsterNpcXml");
+				if (!spawnPos) {
+					continue;
+				}
+
+				npc->setMasterPos(*spawnPos, radius);
 				npcList.push_front(std::move(npc));
 			}
 		}

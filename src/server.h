@@ -9,6 +9,8 @@
 #include "logger.h"
 #include <fmt/format.h>
 
+#include <atomic>
+
 class Protocol;
 
 class ServiceBase
@@ -66,7 +68,8 @@ private:
 	std::vector<Service_ptr> services;
 
 	uint16_t serverPort = 0;
-	bool pendingStart = false;
+	std::atomic_bool pendingStart = false;
+	std::atomic_bool stopped = false;
 };
 
 class ServiceManager

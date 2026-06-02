@@ -130,7 +130,7 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 		auto strRentPeriod =
 		    asLowerCaseString(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
 		time_t currentTime = time(nullptr);
-		if (strRentPeriod == "yearly") {
+		if (strRentPeriod == "yearly" || strRentPeriod == "annual") {
 			currentTime += 24 * 60 * 60 * 365;
 		} else if (strRentPeriod == "monthly") {
 			currentTime += 24 * 60 * 60 * 30;

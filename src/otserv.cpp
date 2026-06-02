@@ -340,7 +340,7 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	auto strRentPeriod =
 		asLowerCaseString(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
 
-	if (strRentPeriod == "yearly") {
+	if (strRentPeriod == "yearly" || strRentPeriod == "annual") {
 		rentPeriod = RENTPERIOD_YEARLY;
 	} else if (strRentPeriod == "weekly") {
 		rentPeriod = RENTPERIOD_WEEKLY;

@@ -583,9 +583,7 @@ Creature* Game::getCreatureByName(std::string_view s)
 		}
 
 		auto& name = creature->getName();
-		return lowerCaseName.size() == name.size() &&
-		       std::equal(lowerCaseName.begin(), lowerCaseName.end(), name.begin(),
-		                  [](char a, char b) { return a == std::tolower(b); });
+		return caseInsensitiveEqual(lowerCaseName, name);
 	};
 
 	{

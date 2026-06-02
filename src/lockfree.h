@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <functional>
 #include <mutex>
+#include <system_error>
 #include <vector>
 
 /**
@@ -45,25 +46,34 @@ struct LockfreeFreeList
 	public:
 		bool pop(void*& p) noexcept
 		{
-			std::lock_guard lock(mutex);
-			if (size == 0) {
+			try {
+				std::lock_guard lock(mutex);
+				if (size == 0) {
+					p = nullptr;
+					return false;
+				}
+
+				p = items[--size];
+				return true;
+			} catch (const std::system_error&) {
 				p = nullptr;
 				return false;
 			}
-
-			p = items[--size];
-			return true;
 		}
 
 		bool bounded_push(void* p) noexcept
 		{
-			std::lock_guard lock(mutex);
-			if (size >= CAPACITY) {
+			try {
+				std::lock_guard lock(mutex);
+				if (size >= CAPACITY) {
+					return false;
+				}
+
+				items[size++] = p;
+				return true;
+			} catch (const std::system_error&) {
 				return false;
 			}
-
-			items[size++] = p;
-			return true;
 		}
 
 	private:

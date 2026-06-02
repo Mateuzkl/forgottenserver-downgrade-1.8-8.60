@@ -1054,9 +1054,14 @@ build_tfs() {
     die "Build finished, but ${BUILD_DIR}/tfs was not found"
   fi
 
+  local built_binary
+  built_binary="$(absolute_path "${BUILD_DIR}/tfs")"
+
   mkdir -p "$(dirname "${OUTPUT_BIN}")"
-  rm -f "${OUTPUT_BIN}"
-  cp -f "${BUILD_DIR}/tfs" "${OUTPUT_BIN}"
+  if [[ "${OUTPUT_BIN}" != "${built_binary}" ]]; then
+    rm -f "${OUTPUT_BIN}"
+    cp -f "${built_binary}" "${OUTPUT_BIN}"
+  fi
   chmod +x "${OUTPUT_BIN}"
 
   verify_binary_links "${OUTPUT_BIN}"

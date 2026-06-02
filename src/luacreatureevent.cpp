@@ -67,6 +67,7 @@ int luaCreatureEventType(lua_State* L)
 		} else {
 			LOG_ERROR(fmt::format("[Error - CreatureEvent::configureLuaEvent] Invalid type for creature event: {}", typeName));
 			pushBoolean(L, false);
+			return 1;
 		}
 		creature->setLoaded(true);
 		pushBoolean(L, true);

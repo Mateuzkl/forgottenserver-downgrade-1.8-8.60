@@ -216,7 +216,7 @@ TEST_CASE(test_MatrixArea_rotate180)
 	CHECK(m(2, 0));
 	CHECK(m(2, 1));
 	CHECK(m(2, 2));
-	CHECK(m(2, 2));
+	CHECK(m(2, 3));
 }
 
 TEST_CASE(test_MatrixArea_rotate270)

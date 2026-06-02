@@ -56,7 +56,7 @@ bool CreatureEvents::registerLuaEvent(CreatureEvent* event)
 
 CreatureEvent* CreatureEvents::getEventByName(std::string_view name, bool forceLoaded /*= true*/)
 {
-	std::string key = asLowerCaseString(std::string{name});
+	std::string key = asLowerCaseString(name);
 
 	auto it = creatureEvents.find(key);
 	if (it != creatureEvents.end()) {

@@ -58,6 +58,7 @@ int luaMoveEventType(lua_State* L)
 		} else {
 			LOG_ERROR(fmt::format("[MoveEvent::configureMoveEvent] No valid event name {}", typeName));
 			pushBoolean(L, false);
+			return 1;
 		}
 		pushBoolean(L, true);
 	} else {

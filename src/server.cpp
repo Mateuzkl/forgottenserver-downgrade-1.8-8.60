@@ -174,7 +174,7 @@ std::string ServicePort::get_protocol_names() const
 
 void ServicePort::accept()
 {
-	if (!acceptor) {
+	if (stopped.load() || !acceptor || !acceptor->is_open()) {
 		return;
 	}
 
@@ -226,9 +226,8 @@ void ServicePort::onAccept(Connection_ptr connection, const asio::error_code& er
 
 		accept();
 	} else if (error != asio::error::operation_aborted) {
-		if (!pendingStart) {
+		if (!stopped.load() && !pendingStart.exchange(true)) {
 			close();
-			pendingStart = true;
 			g_scheduler.addEvent(createSchedulerTask(
 			    15000, ([serverPort = this->serverPort, service = std::weak_ptr<ServicePort>(shared_from_this())]() {
 				    openAcceptor(service, serverPort);
@@ -252,21 +251,29 @@ Protocol_ptr ServicePort::make_protocol(bool checksummed, NetworkMessage& msg, c
 	return nullptr;
 }
 
-void ServicePort::onStopServer() { close(); }
+void ServicePort::onStopServer()
+{
+	stopped.store(true);
+	close();
+}
 
 void ServicePort::openAcceptor(std::weak_ptr<ServicePort> weak_service, uint16_t port)
 {
-	if (auto service = weak_service.lock()) {
+	if (auto service = weak_service.lock(); service && !service->stopped.load()) {
 		service->open(port);
 	}
 }
 
 void ServicePort::open(uint16_t port)
 {
+	if (stopped.load()) {
+		return;
+	}
+
 	close();
 
 	serverPort = port;
-	pendingStart = false;
+	pendingStart.store(false);
 
 	try {
 		if (getBoolean(ConfigManager::BIND_ONLY_GLOBAL_ADDRESS)) {
@@ -295,10 +302,12 @@ void ServicePort::open(uint16_t port)
 			LOG_ERROR("\x1b[31mThen start the server again.\x1b[0m");
 		}
 
-		pendingStart = true;
-		g_scheduler.addEvent(createSchedulerTask(
-		    15000,
-		    ([port, service = std::weak_ptr<ServicePort>(shared_from_this())]() { openAcceptor(service, port); })));
+		if (!stopped.load()) {
+			pendingStart.store(true);
+			g_scheduler.addEvent(createSchedulerTask(
+			    15000,
+			    ([port, service = std::weak_ptr<ServicePort>(shared_from_this())]() { openAcceptor(service, port); })));
+		}
 	}
 }
 

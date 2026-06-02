@@ -239,6 +239,11 @@ public:
 			}
 
 			switch (pos) {
+				case 0: { // std::monostate
+					value = std::monostate{};
+					break;
+				}
+
 				case 1: { // std::string
 					auto [str, ok] = propStream.readString();
 					if (!ok) {

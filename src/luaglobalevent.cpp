@@ -55,6 +55,7 @@ int luaGlobalEventType(lua_State* L)
 		} else {
 			LOG_ERROR(fmt::format("[Error - CreatureEvent::configureLuaEvent] Invalid type for global event: {}", typeName));
 			pushBoolean(L, false);
+			return 1;
 		}
 		pushBoolean(L, true);
 	} else {
