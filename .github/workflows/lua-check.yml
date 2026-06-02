@@ -37,6 +37,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Lua
         run: |
@@ -61,6 +63,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Luacheck
         run: |
@@ -69,7 +73,16 @@ jobs:
           sudo luarocks install luacheck
 
       - name: Run Luacheck
-        run: luacheck data config.lua.dist
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+        run: |
+          mapfile -d '' files < <(
+            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" HEAD -- config.lua.dist data/ |
+              grep -zE '(^config\.lua\.dist$|\.lua$)' || true
+          )
+          if ((${#files[@]})); then
+            printf '%s\0' "${files[@]}" | xargs -0 -r luacheck
+          fi
 
   format:
     name: Lua format check
@@ -84,6 +97,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install LuaFormatter
         run: |
@@ -92,7 +107,15 @@ jobs:
           sudo luarocks install --server=https://luarocks.org/dev luaformatter
 
       - name: Check Lua formatting
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: |
-          find data/ -type f -name '*.lua' -print0 | xargs -0 -r -n1 luaformatter -i
+          mapfile -d '' files < <(
+            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" HEAD -- data/ |
+              grep -zE '\.lua$' || true
+          )
+          if ((${#files[@]})); then
+            printf '%s\0' "${files[@]}" | xargs -0 -r -n1 lua-format -i
+          fi
           git diff
           git diff --exit-code

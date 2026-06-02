@@ -11,7 +11,7 @@ on:
       - "src/**"
       - "cmake/**"
       - "data/**"
-      - "vc17/**"
+      - "vc18/**"
       - CMakeLists.txt
       - vcpkg.json
       - vcpkg-configuration.json
@@ -26,7 +26,7 @@ on:
       - "src/**"
       - "cmake/**"
       - "data/**"
-      - "vc17/**"
+      - "vc18/**"
       - CMakeLists.txt
       - vcpkg.json
       - vcpkg-configuration.json
