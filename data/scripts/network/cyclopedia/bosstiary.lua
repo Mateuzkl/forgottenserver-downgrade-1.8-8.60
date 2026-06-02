@@ -95,6 +95,17 @@ local function contains(list, value)
 	return false
 end
 
+local function writeCreatureInfo(out, entry)
+	local outfit = entry and entry.outfit or {}
+	out:addString(entry and entry.name or "?")
+	out:addU16(clamp(outfit.type or 0, 0, 0xFFFF))
+	out:addByte(clamp(outfit.head or 0, 0, 0xFF))
+	out:addByte(clamp(outfit.body or 0, 0, 0xFF))
+	out:addByte(clamp(outfit.legs or 0, 0, 0xFF))
+	out:addByte(clamp(outfit.feet or 0, 0, 0xFF))
+	out:addByte(clamp(outfit.addons or 0, 0, 0xFF))
+end
+
 local function sendBaseData(player)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -140,6 +151,7 @@ local function sendWindow(player)
 		out:addU32(clamp(kills[entry.raceId] or 0, 0, 0xFFFFFFFF))
 		out:addByte(0)
 		out:addByte(contains(tracker, entry.raceId) and 1 or 0)
+		writeCreatureInfo(out, entry)
 	end
 	return out:sendToPlayer(player)
 end

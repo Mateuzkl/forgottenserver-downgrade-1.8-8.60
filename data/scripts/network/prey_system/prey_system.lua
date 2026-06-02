@@ -51,6 +51,10 @@ local PREY_STORAGE_AUTO_BONUS_BASE = 780000
 local PREY_STORAGE_LOCK_BASE = 780100
 local PREY_AUTO_BONUS_COST = 1
 local PREY_LOCK_COST = 5
+local TASK_HUNTING_REROLL_COST_PER_LEVEL = 200
+local TASK_HUNTING_REMOVE_COST_PER_LEVEL = 200
+local TASK_HUNTING_WILDCARD_SELECT_COST = 5
+local TASK_HUNTING_REWARD_REROLL_COST = 1
 local RESOURCE_BANK = 0
 local RESOURCE_INVENTORY = 1
 local RESOURCE_PREY = 10
@@ -365,6 +369,16 @@ local function setStorageFlag(player, baseStorage, slot, enabled)
 	player:setStorageValue(baseStorage + slot, enabled and 1 or -1)
 end
 
+local function getSlotLockType(player, slot)
+	if getStorageFlag(player, PREY_STORAGE_AUTO_BONUS_BASE, slot) then
+		return 1
+	end
+	if getStorageFlag(player, PREY_STORAGE_LOCK_BASE, slot) then
+		return 2
+	end
+	return 0
+end
+
 local function sendResourceBalance(player, resourceType, value)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -432,6 +446,7 @@ local function getMonsterOutfit(name)
 	local outfit = monsterType:outfit()
 	return {
 		lookType = outfit.lookType or 21,
+		lookTypeEx = outfit.lookTypeEx or 0,
 		lookHead = outfit.lookHead or 0,
 		lookBody = outfit.lookBody or 0,
 		lookLegs = outfit.lookLegs or 0,
@@ -445,6 +460,10 @@ local function writeMonster(out, name)
 
 	local outfit = getMonsterOutfit(name)
 	out:addU16(outfit.lookType)
+	if outfit.lookType == 0 then
+		out:addU16(outfit.lookTypeEx or 0)
+		return
+	end
 	out:addByte(outfit.lookHead)
 	out:addByte(outfit.lookBody)
 	out:addByte(outfit.lookLegs)
@@ -529,7 +548,6 @@ local function writeSlot(out, player, slot, slotData)
 		for _, name in ipairs(list) do
 			writeMonster(out, name)
 		end
-		out:addU16(getTimeUntilFreeReroll(slotData))
 	elseif slotData.state == PREY_STATE_ACTIVE then
 		out:addByte(PREY_NATIVE_STATE_ACTIVE)
 		writeMonster(out, slotData.monster_name)
@@ -537,17 +555,23 @@ local function writeSlot(out, player, slot, slotData)
 		out:addU16(slotData.bonus_value)
 		out:addByte(math.max(1, math.min(10, math.ceil(slotData.bonus_value / 5))))
 		out:addU16(slotData.time_left)
-		out:addU16(getTimeUntilFreeReroll(slotData))
 	else
 		out:addByte(PREY_NATIVE_STATE_INACTIVE)
-		out:addU16(getTimeUntilFreeReroll(slotData))
 	end
+	out:addU32(getTimeUntilFreeReroll(slotData))
+	out:addByte(getSlotLockType(player, slot))
 end
 
 local function sendPreyPrices(player)
 	local out = NetworkMessage(player)
 	out:addByte(PREY_NATIVE_OPCODE_PRICES)
 	out:addU32(getListRerollCost(player))
+	out:addByte(PREY_AUTO_BONUS_COST)
+	out:addByte(PREY_LOCK_COST)
+	out:addU32(math.max(0, player:getLevel() * TASK_HUNTING_REROLL_COST_PER_LEVEL))
+	out:addU32(math.max(0, player:getLevel() * TASK_HUNTING_REMOVE_COST_PER_LEVEL))
+	out:addByte(TASK_HUNTING_WILDCARD_SELECT_COST)
+	out:addByte(TASK_HUNTING_REWARD_REROLL_COST)
 	return out:sendToPlayer(player)
 end
 
