@@ -98,6 +98,38 @@ local CONVERGENCE_PRICES = {
 
 local TRANSFER_PRICES = CONVERGENCE_PRICES
 
+local FORGE_DATA_CACHE = {}
+local FORGE_CACHE_TIMEOUT = 5000
+
+local function invalidateForgeCache(player)
+	local playerId = player:getGuid()
+	if FORGE_DATA_CACHE[playerId] then
+		FORGE_DATA_CACHE[playerId] = nil
+	end
+end
+
+local function getCachedForgeData(player)
+	local playerId = player:getGuid()
+	local cache = FORGE_DATA_CACHE[playerId]
+
+	if cache and (os.mtime() - cache.timestamp) < FORGE_CACHE_TIMEOUT then
+		return cache.fusionData, cache.fusionConvergenceData, cache.transferData, cache.transferConvergenceData
+	end
+
+	return nil
+end
+
+local function setCachedForgeData(player, fusionData, fusionConvergenceData, transferData, transferConvergenceData)
+	local playerId = player:getGuid()
+	FORGE_DATA_CACHE[playerId] = {
+		fusionData = fusionData,
+		fusionConvergenceData = fusionConvergenceData,
+		transferData = transferData,
+		transferConvergenceData = transferConvergenceData,
+		timestamp = os.mtime()
+	}
+end
+
 local DUST_TO_SLIVERS = 60
 local SLIVERS_GENERATED = 3
 local SLIVERS_TO_CORE = 50
@@ -473,12 +505,17 @@ local function subItemCount(subItems)
 end
 
 local function buildForgeData(player)
+	local fusionData, fusionConvergenceData, transferData, transferConvergenceData = getCachedForgeData(player)
+	if fusionData then
+		return fusionData, fusionConvergenceData, transferData, transferConvergenceData
+	end
+
 	local items = collectForgeItems(player)
 	local entries = countEntries(items)
-	local fusionData = {}
-	local fusionConvergenceData = {}
-	local transferData = {}
-	local transferConvergenceData = {}
+	fusionData = {}
+	fusionConvergenceData = {}
+	transferData = {}
+	transferConvergenceData = {}
 
 	for _, entry in pairs(entries) do
 		local maxTier = CLASS_MAX_TIER[entry.classification] or 0
@@ -551,6 +588,8 @@ local function buildForgeData(player)
 			))
 		end
 	end
+
+	setCachedForgeData(player, fusionData, fusionConvergenceData, transferData, transferConvergenceData)
 
 	return fusionData, fusionConvergenceData, transferData, transferConvergenceData
 end
@@ -955,6 +994,7 @@ local function handleFusion(player, msg)
 
 		addHistory(player, HISTORY_FUSION, historyDetails)
 		sendFusionResult(player, convergence, success, otherItemId, otherTier, itemId, resultTier, resultType, itemResult, tierResult, resultCount)
+		invalidateForgeCache(player)
 		refreshForge(player)
 		return true
 	end)
@@ -1016,6 +1056,7 @@ local function handleTransfer(player, msg)
 
 		addHistory(player, HISTORY_TRANSFER, string.format("Transfer %d tier %d -> %d tier %d", sourceId, sourceTier, targetItemId, resultTier))
 		sendTransferResult(player, convergence, true, sourceId, sourceTier, targetItemId, resultTier)
+		invalidateForgeCache(player)
 		refreshForge(player)
 		return true
 	end)
@@ -1084,6 +1125,7 @@ local function handleConvert(player, msg)
 			return false
 		end
 
+		invalidateForgeCache(player)
 		refreshForge(player)
 		return true
 	end)
@@ -1152,6 +1194,7 @@ local forgeSessionCleanup = CreatureEvent("CustomForgeSessionCleanup")
 function forgeSessionCleanup.onLogout(player)
 	forgeOpenSessions[player:getId()] = nil
 	forgeLocks[player:getGuid()] = nil
+	invalidateForgeCache(player)
 	return true
 end
 forgeSessionCleanup:register()
