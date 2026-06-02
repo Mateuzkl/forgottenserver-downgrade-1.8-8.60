@@ -14,8 +14,21 @@ monster.outfit = {
 	lookMount = 0,
 }
 
-monster.health = 100
-monster.maxHealth = 100
+monster.raceId = 2711
+monster.Bestiary = {
+	class = "Undead",
+	race = BESTY_RACE_UNDEAD,
+	toKill = 500,
+	FirstUnlock = 25,
+	SecondUnlock = 250,
+	CharmsPoints = 15,
+	Stars = 2,
+	Occurrence = 1,
+	Locations = "Newhaven Crypts, Corrupted Chambers.",
+}
+
+monster.health = 450
+monster.maxHealth = 450
 monster.race = "undead"
 monster.corpse = 52113
 monster.speed = 25
@@ -38,7 +51,7 @@ monster.flags = {
 	hostile = true,
 	convinceable = false,
 	pushable = true,
-	rewardBoss = false,
+	rewardBoss = true,
 	illusionable = false,
 	canPushItems = true,
 	canPushCreatures = false,

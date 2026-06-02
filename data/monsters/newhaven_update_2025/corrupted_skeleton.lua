@@ -40,7 +40,9 @@ monster.changeTarget = {
 }
 
 monster.strategiesTarget = {
-	nearest = 100,
+	nearest = 70,
+	health = 10,
+	damage = 20,
 }
 
 monster.flags = {

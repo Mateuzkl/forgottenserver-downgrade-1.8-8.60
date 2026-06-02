@@ -14,8 +14,21 @@ monster.outfit = {
 	lookMount = 0,
 }
 
-monster.health = 100
-monster.maxHealth = 100
+monster.raceId = 2710
+monster.Bestiary = {
+	class = "Humanoid",
+	race = BESTY_RACE_HUMANOID,
+	toKill = 500,
+	FirstUnlock = 25,
+	SecondUnlock = 250,
+	CharmsPoints = 15,
+	Stars = 2,
+	Occurrence = 1,
+	Locations = "Muglex Clan Camp, Newhaven Underground.",
+}
+
+monster.health = 500
+monster.maxHealth = 500
 monster.race = "blood"
 monster.corpse = 52117
 monster.speed = 100
@@ -44,7 +57,7 @@ monster.flags = {
 	canPushCreatures = false,
 	staticAttackChance = 90,
 	targetDistance = 1,
-	runHealth = 30,
+	runHealth = 0,
 	healthHidden = false,
 	isBlockable = false,
 	canWalkOnEnergy = false,
@@ -88,7 +101,7 @@ monster.loot = {
 }
 
 monster.attacks = {
-	{ name = "melee", interval = 2000, chance = 100, skill = 25, attack = 30 },
+	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -80 },
 	-- Earth damage attacks (as per wiki info about Muglex Clan Chief using earth damage)
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_EARTHDAMAGE, minDamage = -15, maxDamage = -40, range = 5, shootEffect = CONST_ANI_SMALLEARTH, effect = CONST_ME_POISONAREA, target = true },
 	{ name = "combat", interval = 2000, chance = 12, type = COMBAT_EARTHDAMAGE, minDamage = -20, maxDamage = -45, radius = 3, effect = CONST_ME_POISONAREA, target = false },
