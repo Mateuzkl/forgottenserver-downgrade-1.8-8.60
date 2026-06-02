@@ -146,6 +146,13 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 		return true
 	end
 
+	local bosstiaryEntry = CustomBosstiary and CustomBosstiary.getMonsterForCreature and
+		CustomBosstiary.getMonsterForCreature(creature)
+	if bosstiaryEntry then
+		CustomBosstiary.addKill(players, bosstiaryEntry)
+		return true
+	end
+
 	local entry, raceId = getBestiaryEntryForCreature(creature)
 	if not entry then
 		return true
@@ -169,6 +176,9 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 		end
 		if newProgress > oldProgress then
 			sendBestiaryUnlockMessage(player, entry, newProgress)
+		end
+		if HuntingTasks and HuntingTasks.addKill then
+			HuntingTasks.addKill(player, raceId)
 		end
 	end
 	return true

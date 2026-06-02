@@ -18,13 +18,20 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0x32: // extended opcode
 		case 0x48: // custom cyclopedia/bestiary
 		case 0x5F: // custom wheel of destiny window
+		case 0x61: // native bosstiary base data
+		case 0x62: // native bosstiary slots
+		case 0x73: // native bosstiary window
 		case 0xA7: // custom fight mode sync
+		case 0xBA: // native hunting task base data
+		case 0xBB: // native hunting task slot data
 		case 0xD1: // custom hunt analyzer
 		case 0xDB: // custom market
 		case 0xEB: // imbuing window
 		case 0xEC: // close imbuing
 		case 0xED: // custom prey
 		case 0xEE: // resource balance
+		case 0xE8: // native prey slot data
+		case 0xE9: // native prey prices
 		case 0xF0: // custom quest log
 		case 0xF1: // custom quest line
 		case 0xFD: // custom store

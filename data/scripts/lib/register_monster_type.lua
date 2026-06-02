@@ -40,7 +40,9 @@ end
 MonsterType.register = function(self, mask)
 	local result = registerMonsterType(self, mask)
 	if isBossScriptSource() then self:isBoss(true) end
-	if CustomBestiary and CustomBestiary.registerMonster and CustomBestiary.registerMonster(self, mask) then
+	local registeredBestiary = CustomBestiary and CustomBestiary.registerMonster and CustomBestiary.registerMonster(self, mask)
+	local registeredBosstiary = CustomBosstiary and CustomBosstiary.registerMonster and CustomBosstiary.registerMonster(self, mask)
+	if registeredBestiary or registeredBosstiary then
 		self:registerEvent("CustomBestiaryKill")
 	end
 	return result

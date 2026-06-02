@@ -18,20 +18,22 @@ local PREY_OPCODE_SELECT = 0xE9
 local PREY_OPCODE_LIST_REROLL = 0xEA
 local PREY_OPCODE_BONUS_REROLL = 0xEB
 local PREY_OPCODE_CLEAR = 0xEC
-local PREY_OPCODE_SEND = 0xED
 local PREY_OPCODE_TOGGLE_AUTO = 0xD8
 local PREY_OPCODE_TOGGLE_LOCK = 0xD9
 local PREY_OPCODE_RESOURCE_BALANCE = 0xEE
-
-local PREY_SEND_ERROR = 0x00
-local PREY_SEND_FULL = 0x01
-local PREY_SEND_UPDATE = 0x02
+local PREY_NATIVE_OPCODE_REQUEST = 0xED
+local PREY_NATIVE_OPCODE_DATA = 0xE8
+local PREY_NATIVE_OPCODE_PRICES = 0xE9
 
 local PREY_STATE_EMPTY = 0
 local PREY_STATE_LIST_SELECTION = 1
 local PREY_STATE_BONUS_SELECTION = 2
 local PREY_STATE_ACTIVE = 3
 local PREY_STATE_INACTIVE = 4
+
+local PREY_NATIVE_STATE_INACTIVE = 1
+local PREY_NATIVE_STATE_ACTIVE = 2
+local PREY_NATIVE_STATE_SELECTION = 3
 
 local PREY_BONUS_NONE = 0
 local PREY_BONUS_DMG_BOOST = 1
@@ -47,8 +49,6 @@ local PREY_LIST_REROLL_COST_PER_LEVEL = 150
 local PREY_TICK_INTERVAL = 1000
 local PREY_STORAGE_AUTO_BONUS_BASE = 780000
 local PREY_STORAGE_LOCK_BASE = 780100
-local PREY_FLAG_AUTO_BONUS = 1
-local PREY_FLAG_LOCKED = 2
 local PREY_AUTO_BONUS_COST = 1
 local PREY_LOCK_COST = 5
 local RESOURCE_BANK = 0
@@ -365,20 +365,6 @@ local function setStorageFlag(player, baseStorage, slot, enabled)
 	player:setStorageValue(baseStorage + slot, enabled and 1 or -1)
 end
 
-local function getSlotFlags(player, slot)
-	local flags = 0
-	local locked = getStorageFlag(player, PREY_STORAGE_LOCK_BASE, slot)
-	local autoBonus = getStorageFlag(player, PREY_STORAGE_AUTO_BONUS_BASE, slot)
-
-	if autoBonus then
-		flags = flags + PREY_FLAG_AUTO_BONUS
-	end
-	if locked then
-		flags = flags + PREY_FLAG_LOCKED
-	end
-	return flags
-end
-
 local function sendResourceBalance(player, resourceType, value)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -426,11 +412,8 @@ local function sendError(player, message)
 		return false
 	end
 
-	local out = NetworkMessage(player)
-	out:addByte(PREY_OPCODE_SEND)
-	out:addByte(PREY_SEND_ERROR)
-	out:addString(message)
-	return out:sendToPlayer(player)
+	player:sendTextMessage(MESSAGE_STATUS_SMALL, message)
+	return false
 end
 
 local function getMonsterOutfit(name)
@@ -538,27 +521,34 @@ end
 local function writeSlot(out, player, slot, slotData)
 	normalizeSlot(slotData)
 	ensureSelectionList(player, slot, slotData)
-	out:addByte(slotData.state)
-	out:addU32(getTimeUntilFreeReroll(slotData))
-	if slotData.state == PREY_STATE_EMPTY then
-		return
-	elseif slotData.state == PREY_STATE_LIST_SELECTION then
+	out:addByte(slot)
+	if slotData.state == PREY_STATE_LIST_SELECTION then
+		out:addByte(PREY_NATIVE_STATE_SELECTION)
 		local list = slotData.list_monsters or {}
 		out:addByte(#list)
 		for _, name in ipairs(list) do
 			writeMonster(out, name)
 		end
-	elseif slotData.state == PREY_STATE_BONUS_SELECTION then
-		writeMonster(out, slotData.monster_name)
+		out:addU16(getTimeUntilFreeReroll(slotData))
 	elseif slotData.state == PREY_STATE_ACTIVE then
+		out:addByte(PREY_NATIVE_STATE_ACTIVE)
 		writeMonster(out, slotData.monster_name)
-		out:addByte(slotData.bonus_type)
-		out:addByte(slotData.bonus_value)
-		out:addU32(slotData.time_left)
-		out:addByte(getSlotFlags(player, slot))
-	elseif slotData.state == PREY_STATE_INACTIVE then
-		writeMonster(out, slotData.monster_name)
+		out:addByte(math.max(0, slotData.bonus_type - 1))
+		out:addU16(slotData.bonus_value)
+		out:addByte(math.max(1, math.min(10, math.ceil(slotData.bonus_value / 5))))
+		out:addU16(slotData.time_left)
+		out:addU16(getTimeUntilFreeReroll(slotData))
+	else
+		out:addByte(PREY_NATIVE_STATE_INACTIVE)
+		out:addU16(getTimeUntilFreeReroll(slotData))
 	end
+end
+
+local function sendPreyPrices(player)
+	local out = NetworkMessage(player)
+	out:addByte(PREY_NATIVE_OPCODE_PRICES)
+	out:addU32(getListRerollCost(player))
+	return out:sendToPlayer(player)
 end
 
 local function sendFullPrey(player, sendBalances)
@@ -567,20 +557,21 @@ local function sendFullPrey(player, sendBalances)
 	end
 
 	local prey = getPlayerPrey(player)
-	local out = NetworkMessage(player)
-	out:addByte(PREY_OPCODE_SEND)
-	out:addByte(PREY_SEND_FULL)
-	out:addByte(prey.wildcards)
-	out:addU32(getListRerollCost(player))
 	for slot = 0, PREY_SLOTS - 1 do
+		local out = NetworkMessage(player)
+		out:addByte(PREY_NATIVE_OPCODE_DATA)
 		writeSlot(out, player, slot, prey.slots[slot])
+		out:sendToPlayer(player)
 	end
 	syncPreyCombatBonuses(player, prey)
-	local sent = out:sendToPlayer(player)
+	sendPreyPrices(player)
 	if sendBalances ~= false then
 		sendPreyBalances(player)
 	end
-	return sent
+	if HuntingTasks and HuntingTasks.sendAll then
+		HuntingTasks.sendAll(player)
+	end
+	return true
 end
 
 local function sendSlotUpdate(player, slot)
@@ -590,11 +581,7 @@ local function sendSlotUpdate(player, slot)
 
 	local prey = getPlayerPrey(player)
 	local out = NetworkMessage(player)
-	out:addByte(PREY_OPCODE_SEND)
-	out:addByte(PREY_SEND_UPDATE)
-	out:addByte(prey.wildcards)
-	out:addU32(getListRerollCost(player))
-	out:addByte(slot)
+	out:addByte(PREY_NATIVE_OPCODE_DATA)
 	writeSlot(out, player, slot, prey.slots[slot])
 	syncPreyCombatBonuses(player, prey)
 	local sent = out:sendToPlayer(player)
@@ -987,3 +974,127 @@ function PreySystem.initSlot(player, slot)
 	end
 	return false
 end
+
+local function nativeSelectMonster(player, slot, listIndex)
+	local prey = getPlayerPrey(player)
+	local slotData = prey.slots[slot]
+	if not slotData or slotData.state ~= PREY_STATE_LIST_SELECTION then
+		return sendError(player, "This slot is not in list selection.")
+	end
+	if listIndex < 0 or listIndex >= #(slotData.list_monsters or {}) then
+		return sendError(player, "Invalid list index.")
+	end
+
+	slotData.state = PREY_STATE_BONUS_SELECTION
+	slotData.monster_name = slotData.list_monsters[listIndex + 1]
+	slotData.list_monsters = {}
+	sendSlotUpdate(player, slot)
+
+	local playerId = player:getId()
+	addEvent(function()
+		local delayedPlayer = Player(playerId)
+		if not delayedPlayer then
+			return
+		end
+		local delayedPrey = getPlayerPrey(delayedPlayer)
+		local delayedSlot = delayedPrey.slots[slot]
+		if delayedSlot.state ~= PREY_STATE_BONUS_SELECTION then
+			return
+		end
+		delayedSlot.bonus_type = rollBonusType()
+		delayedSlot.bonus_value = rollBonusValue(nil)
+		delayedSlot.time_left = PREY_DURATION_SECS
+		delayedSlot.state = PREY_STATE_ACTIVE
+		sendSlotUpdate(delayedPlayer, slot)
+		sendActiveBonusMessage(delayedPlayer, delayedSlot)
+	end, 300)
+end
+
+local function nativeListReroll(player, slot)
+	local prey = getPlayerPrey(player)
+	local slotData = prey.slots[slot]
+	local now = os.time()
+	local isFree = not slotData.list_reroll_used or now >= slotData.reroll_at
+	if isFree then
+		slotData.list_reroll_used = true
+		slotData.reroll_at = now + PREY_REROLL_CD
+	else
+		local cost = getListRerollCost(player)
+		if not removePlayerGold(player, cost) then
+			return sendError(player, "You do not have enough gold to reroll the prey list.")
+		end
+	end
+
+	slotData.state = PREY_STATE_LIST_SELECTION
+	slotData.monster_name = ""
+	slotData.bonus_type = PREY_BONUS_NONE
+	slotData.bonus_value = 0
+	slotData.time_left = 0
+	slotData.list_monsters = PreyMonsters.generateList(player:getLevel(), getOtherSlotMonsters(prey, slot))
+	sendSlotUpdate(player, slot)
+	sendPreyBalances(player)
+end
+
+local function nativeBonusReroll(player, slot)
+	local prey = getPlayerPrey(player)
+	prey.wildcards = getPlayerBonusRerolls(player)
+	if prey.wildcards < 1 then
+		return sendError(player, "You do not have enough Prey Wildcards.")
+	end
+
+	local slotData = prey.slots[slot]
+	if slotData.state ~= PREY_STATE_ACTIVE and slotData.state ~= PREY_STATE_BONUS_SELECTION then
+		return sendError(player, "This slot does not have an active bonus to reroll.")
+	end
+
+	prey.wildcards = setPlayerBonusRerolls(player, prey.wildcards - 1)
+	rerollBonus(slotData)
+	slotData.time_left = PREY_DURATION_SECS
+	slotData.state = PREY_STATE_ACTIVE
+	sendSlotUpdate(player, slot)
+	sendActiveBonusMessage(player, slotData)
+	sendPreyBalances(player)
+end
+
+local nativeActionHandler = PacketHandler(PREY_OPCODE_BONUS_REROLL)
+function nativeActionHandler.onReceive(player, msg)
+	if msg:len() - msg:tell() < 2 then
+		return
+	end
+
+	local slot = msg:getByte()
+	local action = msg:getByte()
+	if slot >= PREY_SLOTS then
+		return sendError(player, "Invalid slot.")
+	end
+
+	if action == 0 then
+		return nativeListReroll(player, slot)
+	elseif action == 1 then
+		return nativeBonusReroll(player, slot)
+	elseif action == 2 then
+		if msg:len() - msg:tell() < 1 then
+			return
+		end
+		return nativeSelectMonster(player, slot, msg:getByte())
+	elseif action == 5 then
+		if msg:len() - msg:tell() < 1 then
+			return
+		end
+		local option = msg:getByte()
+		setStorageFlag(player, PREY_STORAGE_AUTO_BONUS_BASE, slot, option == 1)
+		setStorageFlag(player, PREY_STORAGE_LOCK_BASE, slot, option == 2)
+		return sendSlotUpdate(player, slot)
+	end
+
+	return sendError(player, "Unsupported prey action.")
+end
+nativeActionHandler:register()
+
+local nativeRequestHandler = PacketHandler(PREY_NATIVE_OPCODE_REQUEST)
+function nativeRequestHandler.onReceive(player, msg)
+	initializeEmptySlots(player)
+	sendFullPrey(player)
+	saveAllSlots(player)
+end
+nativeRequestHandler:register()

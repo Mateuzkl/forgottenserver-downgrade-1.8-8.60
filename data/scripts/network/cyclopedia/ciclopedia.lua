@@ -290,7 +290,7 @@ end
 
 local function writeCreatureInfo(out, entry)
 	local outfit = entry and entry.outfit or {}
-	out:addString(entry and entry.name or "Unknown")
+	out:addString(entry and entry.name or "?")
 	out:addU16(clamp(outfit.type or 0, 0, 0xFFFF))
 	out:addByte(clamp(outfit.head or 0, 0, 0xFF))
 	out:addByte(clamp(outfit.body or 0, 0, 0xFF))
@@ -393,7 +393,11 @@ local function sendBestiaryOverviewEntries(player, title, entries)
 		local progress = CustomBestiary.getProgress(entry, kills[entry.raceId] or 0)
 		out:addU16(entry.raceId)
 		if progress <= 0 then
+			-- Astra renders undiscovered creatures as silhouettes, but still expects
+			-- a cached placeholder for every overview entry.
+			out:addByte(1)
 			out:addByte(0)
+			writeCreatureInfo(out, nil)
 		else
 			out:addByte(math.min(progress + 1, 0xFF))
 			out:addByte(math.min(progress, 0xFF))
