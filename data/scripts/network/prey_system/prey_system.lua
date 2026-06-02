@@ -571,9 +571,6 @@ local function sendFullPrey(player, sendBalances)
 	if sendBalances ~= false then
 		sendPreyBalances(player)
 	end
-	if HuntingTasks and HuntingTasks.sendAll then
-		HuntingTasks.sendAll(player)
-	end
 	return true
 end
 

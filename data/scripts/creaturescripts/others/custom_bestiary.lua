@@ -177,9 +177,6 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 		if newProgress > oldProgress then
 			sendBestiaryUnlockMessage(player, entry, newProgress)
 		end
-		if HuntingTasks and HuntingTasks.addKill then
-			HuntingTasks.addKill(player, raceId)
-		end
 	end
 	return true
 end
