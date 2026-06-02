@@ -22,6 +22,7 @@ local PREY_OPCODE_TOGGLE_AUTO = 0xD8
 local PREY_OPCODE_TOGGLE_LOCK = 0xD9
 local PREY_OPCODE_RESOURCE_BALANCE = 0xEE
 local PREY_NATIVE_OPCODE_REQUEST = 0xED
+local PREY_NATIVE_OPCODE_ACTION = 0xEB
 local PREY_NATIVE_OPCODE_DATA = 0xE8
 local PREY_NATIVE_OPCODE_PRICES = 0xE9
 
@@ -1038,9 +1039,21 @@ local function nativeBonusReroll(player, slot)
 	sendPreyBalances(player)
 end
 
-local nativeActionHandler = PacketHandler(PREY_NATIVE_OPCODE_REQUEST)
+local nativeRequestHandler = PacketHandler(PREY_NATIVE_OPCODE_REQUEST)
+function nativeRequestHandler.onReceive(player, msg)
+	initializeEmptySlots(player)
+	sendFullPrey(player)
+	saveAllSlots(player)
+end
+nativeRequestHandler:register()
+
+local nativeActionHandler = PacketHandler(PREY_NATIVE_OPCODE_ACTION)
 function nativeActionHandler.onReceive(player, msg)
-	if msg:len() - msg:tell() < 2 then
+	local remaining = msg:len() - msg:tell()
+	if remaining == 1 then
+		return nativeBonusReroll(player, msg:getByte())
+	end
+	if remaining < 2 then
 		return
 	end
 
