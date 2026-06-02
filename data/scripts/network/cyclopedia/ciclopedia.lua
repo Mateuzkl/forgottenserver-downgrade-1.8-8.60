@@ -393,11 +393,10 @@ local function sendBestiaryOverviewEntries(player, title, entries)
 		local progress = CustomBestiary.getProgress(entry, kills[entry.raceId] or 0)
 		out:addU16(entry.raceId)
 		if progress <= 0 then
-			-- Astra renders undiscovered creatures as silhouettes, but still expects
-			-- a cached placeholder for every overview entry.
+			-- Astra paints undiscovered creatures with the black outfit shader.
 			out:addByte(1)
 			out:addByte(0)
-			writeCreatureInfo(out, nil)
+			writeCreatureInfo(out, entry)
 		else
 			out:addByte(math.min(progress + 1, 0xFF))
 			out:addByte(math.min(progress, 0xFF))
