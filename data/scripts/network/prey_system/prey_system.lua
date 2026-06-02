@@ -749,29 +749,7 @@ function bonusRerollHandler.onReceive(player, msg)
 		return
 	end
 
-	local slot = msg:getByte()
-	if slot >= PREY_SLOTS then
-		return sendError(player, "Invalid slot.")
-	end
-
-	local prey = getPlayerPrey(player)
-	prey.wildcards = getPlayerBonusRerolls(player)
-	if prey.wildcards < 1 then
-		return sendError(player, "You do not have enough Prey Wildcards.")
-	end
-
-	local slotData = prey.slots[slot]
-	if slotData.state ~= PREY_STATE_ACTIVE and slotData.state ~= PREY_STATE_BONUS_SELECTION then
-		return sendError(player, "This slot does not have an active bonus to reroll.")
-	end
-
-	prey.wildcards = setPlayerBonusRerolls(player, prey.wildcards - 1)
-	rerollBonus(slotData)
-	slotData.time_left = PREY_DURATION_SECS
-	slotData.state = PREY_STATE_ACTIVE
-	sendSlotUpdate(player, slot)
-	sendActiveBonusMessage(player, slotData)
-	sendPreyBalances(player)
+	nativeBonusReroll(player, msg:getByte())
 end
 bonusRerollHandler:register()
 
@@ -1036,10 +1014,57 @@ local function nativeListReroll(player, slot)
 end
 
 local function nativeBonusReroll(player, slot)
+	if slot < 0 or slot >= PREY_SLOTS then
+		return sendError(player, "Invalid slot.")
+	end
+
 	local prey = getPlayerPrey(player)
 	prey.wildcards = getPlayerBonusRerolls(player)
 	if prey.wildcards < 1 then
 		return sendError(player, "You do not have enough Prey Wildcards.")
+	end
+
+	local slotData = prey.slots[slot]
+	if slotData.state ~= PREY_STATE_ACTIVE and slotData.state ~= PREY_STATE_BONUS_SELECTION then
+		return sendError(player, "This slot does not have an active bonus to reroll.")
+	end
+
+	prey.wildcards = setPlayerBonusRerolls(player, prey.wildcards - 1)
+	rerollBonus(slotData)
+	slotData.time_left = PREY_DURATION_SECS
+	slotData.state = PREY_STATE_ACTIVE
+	sendSlotUpdate(player, slot)
+	sendActiveBonusMessage(player, slotData)
+	sendPreyBalances(player)
+end
+
+local nativeActionHandler = PacketHandler(PREY_NATIVE_OPCODE_REQUEST)
+function nativeActionHandler.onReceive(player, msg)
+	if msg:len() - msg:tell() < 2 then
+		return
+	end
+
+	local action = msg:getByte()
+	local slot = msg:getByte()
+	if slot >= PREY_SLOTS then
+		return sendError(player, "Invalid slot.")
+	end
+
+	if action == 0 then
+		if msg:len() - msg:tell() < 1 then
+			return
+		end
+		nativeSelectMonster(player, slot, msg:getByte())
+	elseif action == 1 then
+		nativeListReroll(player, slot)
+	elseif action == 2 then
+		nativeBonusReroll(player, slot)
+	end
+end
+nativeActionHandler:register()
+
+PreySystem.sendWindow = sendFullPrey
+PreySystem.sendSlots = sendFullPreyer, "You do not have enough Prey Wildcards.")
 	end
 
 	local slotData = prey.slots[slot]

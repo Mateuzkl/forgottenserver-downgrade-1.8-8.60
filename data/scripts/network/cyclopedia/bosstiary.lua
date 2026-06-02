@@ -345,13 +345,12 @@ slotActionHandler:register()
 
 local trackerHandler = PacketHandler(OPCODE_BOSSTIARY_TRACKER)
 function trackerHandler.onReceive(player, msg)
-	if msg:len() - msg:tell() < 3 then
+	if msg:len() - msg:tell() < 5 then
 		return
 	end
-	toggleTracker(player, msg:getU16(), msg:getByte() == 1)
+	toggleTracker(player, msg:getU32(), msg:getByte() == 1)
 end
 trackerHandler:register()
 
 CustomBosstiary.sendWindow = sendWindow
 CustomBosstiary.sendSlots = sendSlots
-CustomBosstiary.ensureTables()

@@ -15,4 +15,5 @@ dofile('data/startup/tables/tile.lua')
 dofile('data/startup/tables/tile_pick.lua')
 dofile('data/startup/tables/writeable.lua')
 dofile('data/startup/tables/storage_keys_update.lua')
+dofile('data/startup/tables/bosstiary.lua')
 

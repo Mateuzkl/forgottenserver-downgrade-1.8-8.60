@@ -166,7 +166,6 @@ function CustomBosstiary.addKill(players, entry)
 		return false
 	end
 
-	CustomBosstiary.ensureTables()
 	local boosted = CustomBosstiary.getBoostedMonster()
 	local increment = boosted and boosted.raceId == entry.raceId and 2 or 1
 	for playerGuid, player in pairs(players or {}) do

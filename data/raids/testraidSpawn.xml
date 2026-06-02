@@ -1,863 +1,782 @@
 <?xml version="1.0"?>
 <spawns>
-	<spawn centerx="982" centery="967" centerz="7" radius="1">
+	<spawn centerx="1012" centery="981" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1014" centery="961" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="973" centery="996" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1017" centery="977" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="977" centery="998" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="963" centery="968" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="974" centery="970" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1012" centery="941" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="965" centery="976" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="961" centery="967" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="998" centery="968" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="961" centery="982" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="970" centery="972" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1004" centery="939" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1000" centery="959" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1009" centery="966" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="959" centery="961" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="988" centery="1007" centerz="7" radius="1">
+	<spawn centerx="1014" centery="947" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1009" centery="943" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1039" centery="937" centerz="7" radius="1">
+	<spawn centerx="1000" centery="950" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1009" centery="968" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="963" centery="962" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="986" centery="993" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="972" centery="990" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="978" centery="1002" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1039" centery="935" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="987" centery="973" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="974" centery="949" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="975" centery="944" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1014" centery="996" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="988" centery="933" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1022" centery="992" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="978" centery="956" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="981" centery="1009" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="995" centery="992" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1000" centery="957" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1027" centery="975" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="983" centery="975" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1024" centery="962" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="986" centery="983" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1017" centery="971" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1006" centery="998" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="979" centery="1008" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="959" centery="980" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1000" centery="953" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1002" centery="966" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1000" centery="963" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="976" centery="1000" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="988" centery="952" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="979" centery="988" centerz="7" radius="1">
+	<spawn centerx="998" centery="961" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1008" centery="940" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="995" centery="933" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="999" centery="978" centerz="7" radius="1">
+	<spawn centerx="999" centery="976" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
 		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="999" centery="975" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1017" centery="966" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="977" centery="992" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1013" centery="968" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="984" centery="968" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="976" centery="950" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="985" centery="991" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1001" centery="966" centerz="7" radius="1">
+	<spawn centerx="969" centery="960" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="959" centery="983" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="989" centery="952" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="979" centery="991" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1013" centery="963" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="991" centery="944" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1015" centery="968" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="973" centery="949" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1016" centery="980" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1016" centery="941" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="962" centery="957" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1013" centery="961" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1013" centery="938" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1014" centery="935" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="971" centery="1008" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="988" centery="1009" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1017" centery="962" centerz="7" radius="1">
+	<spawn centerx="1000" centery="988" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1029" centery="983" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1001" centery="961" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1013" centery="952" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1030" centery="979" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="992" centery="949" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="998" centery="984" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1007" centery="950" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1023" centery="949" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="976" centery="1001" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="973" centery="997" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1022" centery="993" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1007" centery="979" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="964" centery="961" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="976" centery="947" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="962" centery="1005" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="968" centery="1008" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="982" centery="995" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1025" centery="964" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1018" centery="978" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="986" centery="973" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1013" centery="948" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1012" centery="988" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="976" centery="997" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="985" centery="962" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1000" centery="991" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1023" centery="965" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1012" centery="950" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1010" centery="951" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="968" centery="973" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1001" centery="938" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="973" centery="995" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1038" centery="933" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="986" centery="988" centerz="7" radius="1">
+	<spawn centerx="1038" centery="940" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="999" centery="986" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1013" centery="941" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="982" centery="983" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="992" centery="1003" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1022" centery="989" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="992" centery="952" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="937" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="988" centery="941" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1034" centery="932" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="969" centery="977" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="964" centery="1007" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="965" centery="1003" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1004" centery="940" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1014" centery="954" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="966" centery="957" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1006" centery="946" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="983" centery="971" centerz="7" radius="1">
+	<spawn centerx="1022" centery="942" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="978" centery="996" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="978" centery="989" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="970" centery="1002" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1039" centery="945" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="964" centery="1009" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1015" centery="944" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1023" centery="989" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="986" centery="970" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="998" centery="948" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="959" centery="1004" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1017" centery="981" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1021" centery="952" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="999" centery="979" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1013" centery="964" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="987" centery="1007" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1018" centery="963" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="967" centery="966" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="975" centery="994" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="974" centery="979" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="985" centery="990" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="996" centery="953" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="969" centery="990" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="960" centery="1006" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1003" centery="981" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1011" centery="989" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="978" centery="965" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="981" centery="952" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="982" centery="969" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1020" centery="963" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="976" centery="950" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="984" centery="934" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1010" centery="999" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="977" centery="970" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="980" centery="966" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1013" centery="983" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1015" centery="966" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="974" centery="993" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1015" centery="982" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="994" centery="1009" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="984" centery="953" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="982" centery="975" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="986" centery="942" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="962" centery="1003" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1024" centery="991" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1037" centery="929" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1016" centery="971" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="968" centery="983" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="966" centery="980" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="979" centery="986" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="973" centery="988" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1017" centery="952" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1009" centery="968" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1018" centery="975" centerz="7" radius="1">
+	<spawn centerx="973" centery="945" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="978" centery="1002" centerz="7" radius="1">
+	<spawn centerx="965" centery="957" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="960" centery="960" centerz="7" radius="1">
+	<spawn centerx="968" centery="957" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="960" centery="1001" centerz="7" radius="1">
+	<spawn centerx="1012" centery="945" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1036" centery="932" centerz="7" radius="1">
+	<spawn centerx="963" centery="1004" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="960" centery="942" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="972" centery="957" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="981" centery="954" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1027" centery="957" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1013" centery="954" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1027" centery="965" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1014" centery="969" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1005" centery="945" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="991" centery="982" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1000" centery="970" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="964" centery="959" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1004" centery="951" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="959" centery="1008" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1024" centery="956" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="985" centery="950" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="991" centery="943" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="968" centery="974" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="990" centery="933" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1002" centery="945" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="997" centery="951" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="964" centery="979" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="982" centery="981" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1012" centery="939" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="980" centery="993" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="975" centery="942" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="989" centery="990" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="997" centery="1005" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1006" centery="944" centerz="7" radius="1">
+	<spawn centerx="1014" centery="988" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1002" centery="951" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="994" centery="1002" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1029" centery="986" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1015" centery="959" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="979" centery="933" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="974" centery="958" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="986" centery="963" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="971" centery="946" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1023" centery="980" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1009" centery="982" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="976" centery="1004" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="959" centery="983" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1021" centery="979" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="959" centery="1002" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="959" centery="945" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="971" centery="996" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1022" centery="982" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1020" centery="981" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="996" centery="974" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="998" centery="968" centerz="7" radius="1">
+	<spawn centerx="969" centery="968" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1016" centery="996" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="992" centery="981" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="983" centery="973" centerz="7" radius="1">
+	<spawn centerx="982" centery="966" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1019" centery="980" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="993" centery="975" centerz="7" radius="1">
+	<spawn centerx="980" centery="965" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1011" centery="968" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="999" centery="972" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="991" centery="1008" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="952" centerz="7" radius="1">
+	<spawn centerx="1005" centery="935" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="1008" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1019" centery="973" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="976" centery="954" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1009" centery="997" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="962" centery="965" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1001" centery="1006" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1003" centery="981" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1007" centery="948" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="956" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="982" centery="981" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="959" centery="999" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="939" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="999" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="970" centery="985" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1009" centery="945" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="992" centery="1001" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1024" centery="943" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1039" centery="939" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="994" centery="981" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="989" centery="982" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1023" centery="995" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1001" centery="989" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="995" centery="951" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="998" centery="982" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="981" centery="1001" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1020" centery="969" centerz="7" radius="1">
+	<spawn centerx="1019" centery="971" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1001" centery="981" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="992" centery="946" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="971" centery="1007" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="990" centery="975" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="968" centery="1007" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="998" centery="984" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1024" centery="943" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="981" centery="961" centerz="7" radius="1">
+	<spawn centerx="978" centery="968" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1001" centery="980" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="964" centerz="7" radius="1">
+	<spawn centerx="974" centery="977" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="984" centery="956" centerz="7" radius="1">
+	<spawn centerx="975" centery="938" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="972" centery="991" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="981" centery="978" centerz="7" radius="1">
+	<spawn centerx="983" centery="999" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1020" centery="963" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1004" centery="935" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1001" centery="936" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="998" centery="953" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1003" centery="967" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="954" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="975" centery="939" centerz="7" radius="1">
+	<spawn centerx="994" centery="935" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="975" centery="1009" centerz="7" radius="1">
+	<spawn centerx="985" centery="967" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="982" centery="1008" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1001" centery="973" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1011" centery="979" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="983" centery="1002" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="974" centery="947" centerz="7" radius="1">
+	<spawn centerx="982" centery="950" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1007" centery="945" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="976" centery="1009" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="981" centery="973" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1018" centery="943" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1017" centery="975" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="977" centery="947" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1002" centery="1006" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1005" centery="1005" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="986" centery="952" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="994" centery="982" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1017" centery="952" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="987" centery="981" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="999" centery="950" centerz="7" radius="1">
+	<spawn centerx="1019" centery="958" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="989" centery="1004" centerz="7" radius="1">
+	<spawn centerx="1013" centery="952" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="983" centery="961" centerz="7" radius="1">
+	<spawn centerx="1015" centery="963" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="980" centery="1007" centerz="7" radius="1">
+	<spawn centerx="993" centery="948" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1017" centery="964" centerz="7" radius="1">
+	<spawn centerx="1016" centery="936" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1008" centery="952" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1021" centery="996" centerz="7" radius="1">
+	<spawn centerx="984" centery="952" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="995" centery="992" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1026" centery="966" centerz="7" radius="1">
+	<spawn centerx="977" centery="954" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1022" centery="959" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1001" centery="951" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1010" centery="966" centerz="7" radius="1">
+	<spawn centerx="982" centery="934" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1021" centery="978" centerz="7" radius="1">
+	<spawn centerx="991" centery="948" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1023" centery="967" centerz="7" radius="1">
+	<spawn centerx="992" centery="941" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="992" centery="947" centerz="7" radius="1">
+	<spawn centerx="1003" centery="991" centerz="7" radius="1">
+		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1001" centery="975" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="976" centery="1005" centerz="7" radius="1">
+	<spawn centerx="988" centery="941" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1017" centery="946" centerz="7" radius="1">
+	<spawn centerx="1001" centery="936" centerz="7" radius="1">
 		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1006" centery="1002" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1005" centery="1004" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	<spawn centerx="973" centery="994" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1014" centery="945" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+	<spawn centerx="1022" centery="962" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="989" centery="950" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1004" centery="1006" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1021" centery="947" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="982" centery="969" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="980" centery="996" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="975" centery="1007" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="980" centery="969" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="997" centery="961" centerz="7" radius="1">
-		<monster name="Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1007" centery="940" centerz="7" radius="1">
+	<spawn centerx="1009" centery="998" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="-1" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1000" centery="942" centerz="7" radius="1">
+	<spawn centerx="1012" centery="995" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="973" centery="957" centerz="7" radius="1">
+	<spawn centerx="978" centery="1000" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1025" centery="988" centerz="7" radius="1">
+	<spawn centerx="1018" centery="961" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="993" centery="944" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="1006" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1023" centery="962" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1002" centery="984" centerz="7" radius="1">
+	<spawn centerx="1017" centery="996" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="983" centery="964" centerz="7" radius="1">
+	<spawn centerx="982" centery="963" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1004" centery="951" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1008" centery="982" centerz="7" radius="1">
+	<spawn centerx="982" centery="977" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1001" centery="987" centerz="7" radius="1">
+	<spawn centerx="1020" centery="940" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="-1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="986" centery="986" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1008" centery="970" centerz="7" radius="1">
+	<spawn centerx="983" centery="1009" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="982" centery="955" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="974" centery="972" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="973" centery="1006" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1009" centery="964" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="981" centery="950" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1004" centery="948" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="983" centery="998" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="988" centery="934" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1024" centery="980" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1021" centery="975" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Cave Rat" x="1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="996" centery="949" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1002" centery="944" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="982" centery="952" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="983" centery="979" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="999" centery="980" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1000" centery="955" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1007" centery="942" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1021" centery="981" centerz="7" radius="1">
-		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="978" centery="968" centerz="7" radius="1">
+	<spawn centerx="983" centery="954" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="981" centery="987" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1011" centery="947" centerz="7" radius="1">
+	<spawn centerx="984" centery="957" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Cave Rat" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1022" centery="976" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="972" centery="945" centerz="7" radius="1">
+	<spawn centerx="988" centery="1009" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1002" centery="946" centerz="7" radius="1">
+	<spawn centerx="974" centery="952" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="988" centery="1002" centerz="7" radius="1">
+	<spawn centerx="988" centery="961" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="982" centery="957" centerz="7" radius="1">
+	<spawn centerx="1021" centery="996" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1022" centery="991" centerz="7" radius="1">
+	<spawn centerx="993" centery="943" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1000" centery="958" centerz="7" radius="1">
+	<spawn centerx="982" centery="1007" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="986" centery="967" centerz="7" radius="1">
+	<spawn centerx="972" centery="986" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="989" centery="1002" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1013" centery="967" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="977" centery="943" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="976" centery="1006" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1000" centery="972" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1000" centery="966" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1014" centery="935" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="974" centery="1006" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1007" centery="982" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1014" centery="957" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1010" centery="1000" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="976" centery="989" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1024" centery="991" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="1000" centery="984" centerz="7" radius="1">
+		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1003" centery="984" centerz="7" radius="1">
 		<monster name="Cave Rat" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 </spawns>
