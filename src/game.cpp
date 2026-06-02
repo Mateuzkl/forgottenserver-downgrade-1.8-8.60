@@ -7201,8 +7201,38 @@ bool Game::reload(ReloadTypes_t reloadType)
 			return true;
 		}
 		case RELOAD_TYPE_OUTFITS: {
+			// First, remove outfit attributes from all online players
+			for (const auto& player : getPlayers()) {
+				if (player->outfitAttributes) {
+					const Outfit_t defaultOutfit = player->getDefaultOutfit();
+					PlayerSex_t sex = player->getSex();
+					uint32_t outfitId = Outfits::getInstance().getOutfitId(sex, defaultOutfit.lookType);
+					if (outfitId != 0) {
+						Outfits::getInstance().removeAttributes(player->getID(), outfitId, sex);
+					}
+					player->outfitAttributes = false;
+				}
+			}
+			
+			// Reload the outfit catalog
 			bool result = Outfits::getInstance().reload();
-			if (result) LOG_INFO("Outfits reloaded successfully.");
+			
+			// Reapply outfit attributes to online players based on new catalog
+			if (result) {
+				for (const auto& player : getPlayers()) {
+					const Outfit_t defaultOutfit = player->getDefaultOutfit();
+					PlayerSex_t sex = player->getSex();
+					if (defaultOutfit.lookAddons >= getInteger(ConfigManager::MAX_ADDON_ATTRIBUTES)) {
+						const Outfit* outfit = Outfits::getInstance().getOutfitByLookType(defaultOutfit.lookType, sex);
+						if (outfit) {
+							uint32_t outfitId = Outfits::getInstance().getOutfitId(sex, defaultOutfit.lookType);
+							player->outfitAttributes = Outfits::getInstance().addAttributes(player->getID(), outfitId, sex);
+						}
+					}
+				}
+				LOG_INFO("Outfits reloaded successfully.");
+			}
+			
 			return result;
 		}
 		case RELOAD_TYPE_MOUNTS: {

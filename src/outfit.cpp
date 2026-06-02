@@ -15,8 +15,15 @@
 
 bool Outfits::reload()
 {
-	outfits.clear();
-	return loadFromXml();
+	std::unordered_map<uint16_t, Outfit> tempOutfits;
+	std::swap(outfits, tempOutfits);
+	
+	if (loadFromXml()) {
+		return true;
+	}
+
+	std::swap(outfits, tempOutfits);
+	return false;
 }
 
 bool Outfits::loadFromXml()

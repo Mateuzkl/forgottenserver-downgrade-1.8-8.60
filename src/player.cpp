@@ -1894,8 +1894,6 @@ void Player::onCreatureAppear(Creature* creature, bool isLogin)
 			} else {
 				// Outfit no longer exists after reload, remove old attributes
 				if (outfitAttributes) {
-					uint32_t outfitId = Outfits::getInstance().getOutfitId(sex, defaultOutfit.lookType);
-					Outfits::getInstance().removeAttributes(getID(), outfitId, sex);
 					outfitAttributes = false;
 				}
 			}
