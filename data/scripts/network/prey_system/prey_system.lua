@@ -51,10 +51,6 @@ local PREY_STORAGE_AUTO_BONUS_BASE = 780000
 local PREY_STORAGE_LOCK_BASE = 780100
 local PREY_AUTO_BONUS_COST = 1
 local PREY_LOCK_COST = 5
-local TASK_HUNTING_REROLL_COST_PER_LEVEL = 200
-local TASK_HUNTING_REMOVE_COST_PER_LEVEL = 200
-local TASK_HUNTING_WILDCARD_SELECT_COST = 5
-local TASK_HUNTING_REWARD_REROLL_COST = 1
 local RESOURCE_BANK = 0
 local RESOURCE_INVENTORY = 1
 local RESOURCE_PREY = 10
@@ -369,16 +365,6 @@ local function setStorageFlag(player, baseStorage, slot, enabled)
 	player:setStorageValue(baseStorage + slot, enabled and 1 or -1)
 end
 
-local function getSlotLockType(player, slot)
-	if getStorageFlag(player, PREY_STORAGE_AUTO_BONUS_BASE, slot) then
-		return 1
-	end
-	if getStorageFlag(player, PREY_STORAGE_LOCK_BASE, slot) then
-		return 2
-	end
-	return 0
-end
-
 local function sendResourceBalance(player, resourceType, value)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -558,20 +544,13 @@ local function writeSlot(out, player, slot, slotData)
 	else
 		out:addByte(PREY_NATIVE_STATE_INACTIVE)
 	end
-	out:addU32(getTimeUntilFreeReroll(slotData))
-	out:addByte(getSlotLockType(player, slot))
+	out:addU16(getTimeUntilFreeReroll(slotData))
 end
 
 local function sendPreyPrices(player)
 	local out = NetworkMessage(player)
 	out:addByte(PREY_NATIVE_OPCODE_PRICES)
 	out:addU32(getListRerollCost(player))
-	out:addByte(PREY_AUTO_BONUS_COST)
-	out:addByte(PREY_LOCK_COST)
-	out:addU32(math.max(0, player:getLevel() * TASK_HUNTING_REROLL_COST_PER_LEVEL))
-	out:addU32(math.max(0, player:getLevel() * TASK_HUNTING_REMOVE_COST_PER_LEVEL))
-	out:addByte(TASK_HUNTING_WILDCARD_SELECT_COST)
-	out:addByte(TASK_HUNTING_REWARD_REROLL_COST)
 	return out:sendToPlayer(player)
 end
 
