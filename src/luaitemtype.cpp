@@ -385,6 +385,81 @@ int luaItemTypeGetWorth(lua_State* L)
 	return 1;
 }
 
+int luaItemTypeGetBuyPrice(lua_State* L)
+{
+	// itemType:getBuyPrice()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (!itemType) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, itemType->buyPrice);
+	return 1;
+}
+
+int luaItemTypeGetSellPrice(lua_State* L)
+{
+	// itemType:getSellPrice()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (!itemType) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, itemType->sellPrice);
+	return 1;
+}
+
+int luaItemTypeGetDefaultPrice(lua_State* L)
+{
+	// itemType:getDefaultPrice()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (!itemType) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, itemType->sellPrice > 0 ? itemType->sellPrice : itemType->buyPrice);
+	return 1;
+}
+
+int luaItemTypeSetBuyPrice(lua_State* L)
+{
+	// itemType:setBuyPrice(price)
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (!itemType) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	ItemType& mutableItemType = Item::items.getItemType(itemType->id);
+	const int64_t price = getInteger<int64_t>(L, 2, 0);
+	if (price > 0) {
+		mutableItemType.buyPrice = std::max(mutableItemType.buyPrice, static_cast<uint32_t>(price));
+	}
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaItemTypeSetSellPrice(lua_State* L)
+{
+	// itemType:setSellPrice(price)
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (!itemType) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	ItemType& mutableItemType = Item::items.getItemType(itemType->id);
+	const int64_t price = getInteger<int64_t>(L, 2, 0);
+	if (price > 0) {
+		mutableItemType.sellPrice = std::max(mutableItemType.sellPrice, static_cast<uint32_t>(price));
+	}
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaItemTypeGetStackSize(lua_State* L)
 {
 	// itemType:getStackSize()
@@ -1100,6 +1175,12 @@ void LuaScriptInterface::registerItemType()
 	registerMethod("ItemType", "getCapacity", luaItemTypeGetCapacity);
 	registerMethod("ItemType", "getWeight", luaItemTypeGetWeight);
 	registerMethod("ItemType", "getWorth", luaItemTypeGetWorth);
+	registerMethod("ItemType", "getBuyPrice", luaItemTypeGetBuyPrice);
+	registerMethod("ItemType", "getSellPrice", luaItemTypeGetSellPrice);
+	registerMethod("ItemType", "getDefaultPrice", luaItemTypeGetDefaultPrice);
+	registerMethod("ItemType", "getDefaultValue", luaItemTypeGetDefaultPrice);
+	registerMethod("ItemType", "setBuyPrice", luaItemTypeSetBuyPrice);
+	registerMethod("ItemType", "setSellPrice", luaItemTypeSetSellPrice);
 	registerMethod("ItemType", "getStackSize", luaItemTypeGetStackSize);
 
 	registerMethod("ItemType", "getHitChance", luaItemTypeGetHitChance);

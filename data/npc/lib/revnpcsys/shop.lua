@@ -31,6 +31,22 @@
 
 -- Make sure we are not overloading on reload
 if not NpcShop then
+    local function registerItemShopPrice(itemId, buy, sell)
+        local itemType = ItemType(itemId)
+        if not itemType or itemType:getId() == 0 or not itemType.setBuyPrice then
+            return
+        end
+
+        buy = tonumber(buy) or 0
+        sell = tonumber(sell) or 0
+        if buy > 0 then
+            itemType:setBuyPrice(buy)
+        end
+        if sell > 0 then
+            itemType:setSellPrice(sell)
+        end
+    end
+
     -- If NpcShop doesn't exist, it's created as an empty table
     NpcShop = {}
     -- The metatable is set up to call the function when NpcShop is called
@@ -77,6 +93,7 @@ if not NpcShop then
                             name = itemId
                             itemId = ItemType(itemId):getId()
                         end
+                        registerItemShopPrice(itemId, items.buy, items.sell)
                         local itemSubtype = items.subType
                         if itemSubtype == nil then
                             itemSubtype = items.subtype
@@ -118,6 +135,7 @@ if not NpcShop then
                         name = id
                         id = ItemType(id):getId()
                     end
+                    registerItemShopPrice(id, buy, sell)
                     table.insert(self.items, {
                         id = id, name = name, buy = buy, sell = sell, subtype = subType == nil and nil or subType
                     })

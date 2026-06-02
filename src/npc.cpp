@@ -28,6 +28,19 @@ extern LuaEnvironment g_luaEnvironment;
 
 uint32_t Npc::npcAutoID = 0x80000000;
 
+namespace {
+void registerItemShopPrice(const ShopInfo& item)
+{
+	ItemType& itemType = Item::items.getItemType(item.itemId);
+	if (item.buyPrice > 0) {
+		itemType.buyPrice = std::max(itemType.buyPrice, static_cast<uint32_t>(item.buyPrice));
+	}
+	if (item.sellPrice > 0) {
+		itemType.sellPrice = std::max(itemType.sellPrice, static_cast<uint32_t>(item.sellPrice));
+	}
+}
+} // namespace
+
 // ─── Npcs namespace ───────────────────────────────────────────────────────────
 
 namespace Npcs {
@@ -1312,6 +1325,7 @@ int NpcScriptInterface::luaOpenShopWindow(lua_State* L)
 		item.sellPrice = Lua::getField<int64_t>(L, tableIndex, "sell");
 		item.realName = Lua::getFieldString(L, tableIndex, "name");
 
+		registerItemShopPrice(item);
 		items.push_back(item);
 		lua_pop(L, 6);
 	}
@@ -1530,6 +1544,7 @@ int NpcScriptInterface::luaNpcOpenShopWindow(lua_State* L)
 		item.sellPrice = Lua::getField<int64_t>(L, tableIndex, "sell");
 		item.realName = Lua::getFieldString(L, tableIndex, "name");
 
+		registerItemShopPrice(item);
 		items.push_back(item);
 		lua_pop(L, 6);
 	}

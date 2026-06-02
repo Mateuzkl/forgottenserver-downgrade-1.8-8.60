@@ -69,7 +69,7 @@ local function writeContainerItems(out, container, depth)
 			writeContainerItems(out, childContainer, depth + 1)
 		else
 			out:addByte(clampByte(item and item:getCount() or 0))
-			out:addU16(clampU16(item and item:getWorth() or 0))
+			out:addU16(clampU16(item and item.getDefaultPrice and item:getDefaultPrice() or item and item:getWorth() or 0))
 			out:addString(item and item:getName() or "")
 		end
 	end

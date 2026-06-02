@@ -61,13 +61,23 @@ function Container:createLootItem(lootItem)
 	return true
 end
 
+local function getLootItemValue(item)
+	local itemType = item and ItemType(item:getId())
+	if not itemType or itemType:getId() == 0 then
+		return 0
+	end
+
+	local value = itemType.getDefaultPrice and itemType:getDefaultPrice() or itemType:getWorth()
+	return (tonumber(value) or 0) * math.max(1, item:getCount())
+end
+
 function Container:getContentDescription(colorizedLootValue)
 	local items = self:getItems()
 	if items and #items > 0 then
 		local loot = {}
 		for _, lootItem in ipairs(items) do
 			local description = lootItem:getNameDescription(lootItem:getSubType(), true)
-			if colorizedLootValue then description = ("{%d|%s}"):format(lootItem:getId(), description) end
+			if colorizedLootValue then description = ("{%d:%d|%s}"):format(lootItem:getId(), getLootItemValue(lootItem), description) end
 			loot[#loot + 1] = description
 		end
 

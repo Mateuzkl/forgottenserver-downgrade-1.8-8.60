@@ -410,6 +410,8 @@ public:
 	int32_t runeMagLevel = 0;
 	int32_t runeLevel = 0;
 	uint64_t worth = 0;
+	uint32_t buyPrice = 0;
+	uint32_t sellPrice = 0;
 
 	CombatType_t combatType = COMBAT_NONE;
 

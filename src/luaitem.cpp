@@ -300,6 +300,48 @@ int luaItemGetWorth(lua_State* L)
 	return 1;
 }
 
+int luaItemGetBuyPrice(lua_State* L)
+{
+	// item:getBuyPrice()
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (!item) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const ItemType& itemType = Item::items[item->getID()];
+	lua_pushinteger(L, itemType.buyPrice);
+	return 1;
+}
+
+int luaItemGetSellPrice(lua_State* L)
+{
+	// item:getSellPrice()
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (!item) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const ItemType& itemType = Item::items[item->getID()];
+	lua_pushinteger(L, itemType.sellPrice);
+	return 1;
+}
+
+int luaItemGetDefaultPrice(lua_State* L)
+{
+	// item:getDefaultPrice()
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (!item) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const ItemType& itemType = Item::items[item->getID()];
+	lua_pushinteger(L, itemType.sellPrice > 0 ? itemType.sellPrice : itemType.buyPrice);
+	return 1;
+}
+
 int luaItemGetSubType(lua_State* L)
 {
 	// item:getSubType()
@@ -1196,6 +1238,10 @@ void LuaScriptInterface::registerItem()
 	registerMethod("Item", "getWeight", luaItemGetWeight);
 	registerMethod("Item", "getWeightDescription", luaItemGetWeightDescription);
 	registerMethod("Item", "getWorth", luaItemGetWorth);
+	registerMethod("Item", "getBuyPrice", luaItemGetBuyPrice);
+	registerMethod("Item", "getSellPrice", luaItemGetSellPrice);
+	registerMethod("Item", "getDefaultPrice", luaItemGetDefaultPrice);
+	registerMethod("Item", "getDefaultValue", luaItemGetDefaultPrice);
 
 	registerMethod("Item", "getSubType", luaItemGetSubType);
 

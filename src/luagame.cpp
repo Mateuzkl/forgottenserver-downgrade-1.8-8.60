@@ -364,6 +364,31 @@ int luaGameGetCurrencyItems(lua_State* L)
 	return 1;
 }
 
+int luaGameGetItemPrices(lua_State* L)
+{
+	// Game.getItemPrices()
+	lua_createtable(L, 0, 0);
+
+	for (size_t id = 0, size = Item::items.size(); id < size; ++id) {
+		const ItemType& itemType = Item::items.getItemType(id);
+		if (itemType.id == 0) {
+			continue;
+		}
+
+		uint64_t value = itemType.sellPrice > 0 ? itemType.sellPrice : itemType.buyPrice;
+		if (value == 0 && itemType.worth > 0) {
+			value = itemType.worth;
+		}
+		if (value == 0) {
+			continue;
+		}
+
+		lua_pushinteger(L, value);
+		lua_rawseti(L, -2, itemType.id);
+	}
+	return 1;
+}
+
 int luaGameGetItemTypeByClientId(lua_State* L)
 {
 	// Game.getItemTypeByClientId(clientId)
@@ -1212,6 +1237,7 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "getNpcCount", luaGameGetNpcCount);
 	registerMethod("Game", "getMonsterTypes", luaGameGetMonsterTypes);
 	registerMethod("Game", "getCurrencyItems", luaGameGetCurrencyItems);
+	registerMethod("Game", "getItemPrices", luaGameGetItemPrices);
 	registerMethod("Game", "getItemTypeByClientId", luaGameGetItemTypeByClientId);
 	registerMethod("Game", "getTalkActions", luaGameGetTalkActions);
 

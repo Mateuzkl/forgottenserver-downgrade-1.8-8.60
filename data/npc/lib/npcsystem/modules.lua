@@ -564,6 +564,22 @@ if Modules == nil then
     -- Add it to the parseable module list.
     Modules.parseableModules["module_shop"] = ShopModule
 
+    local function registerItemShopPrice(itemId, buy, sell)
+        local itemType = ItemType(itemId)
+        if not itemType or itemType:getId() == 0 or not itemType.setBuyPrice then
+            return
+        end
+
+        buy = tonumber(buy) or 0
+        sell = tonumber(sell) or 0
+        if buy > 0 then
+            itemType:setBuyPrice(buy)
+        end
+        if sell > 0 then
+            itemType:setSellPrice(sell)
+        end
+    end
+
     -- Creates a new instance of ShopModule
     function ShopModule:new()
         local obj = {}
@@ -860,6 +876,7 @@ if Modules == nil then
             if itemSubType == nil then itemSubType = 1 end
             local it = ItemType(itemid)
             if it:getId() ~= 0 then
+                registerItemShopPrice(itemid, cost, 0)
                 local shopItem = self:getShopItem(itemid, itemSubType)
                 if shopItem == nil then
                     self.npcHandler.shopItems[#self.npcHandler.shopItems + 1] =
@@ -940,6 +957,7 @@ if Modules == nil then
     --	realName - The real, full name for the item. Will be used as ITEMNAME in MESSAGE_ONBUY and MESSAGE_ONSELL if defined. Default value is nil (ItemType(itemId):getName() will be used)
     function ShopModule:addBuyableItemContainer(names, container, itemid, cost,
                                                 subType, realName)
+        registerItemShopPrice(itemid, cost, 0)
         if names then
             for i, name in pairs(names) do
                 local parameters = {
@@ -975,6 +993,7 @@ if Modules == nil then
             if itemSubType == nil then itemSubType = 0 end
             local it = ItemType(itemid)
             if it:getId() ~= 0 then
+                registerItemShopPrice(itemid, 0, cost)
                 local shopItem = self:getShopItem(itemid, itemSubType)
                 if shopItem == nil then
                     self.npcHandler.shopItems[#self.npcHandler.shopItems + 1] =

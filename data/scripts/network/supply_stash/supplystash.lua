@@ -13,7 +13,7 @@ local SUPPLY_STASH_MAX_WITHDRAW_NON_STACKABLE = 100
 local SUPPLY_STACK_SIZE = 100
 local SUPPLY_STASH_DEPOT_BOX_FIRST = 1
 local SUPPLY_STASH_DEPOT_BOX_LAST = 15
-local SUPPLY_STASH_DETAILS_MARKER = 0x5353
+local SUPPLY_STASH_DETAILS_MARKER = 0x5354
 
 local CATEGORY_ARMORS = 1
 local CATEGORY_AMULETS = 2
@@ -343,7 +343,7 @@ local function getSupplyItemCategory(itemType)
 		return CATEGORY_AMULETS
 	elseif itemType:isRing() then
 		return CATEGORY_RINGS
-	elseif itemType:getWorth() > 0 then
+	elseif (itemType.getDefaultPrice and itemType:getDefaultPrice() > 0) or itemType:getWorth() > 0 then
 		return CATEGORY_VALUABLES
 	end
 
@@ -603,6 +603,7 @@ local function sendStash(player)
 		msg:addString(itemType and itemType:getName() or "")
 		msg:addU16(itemType and getSupplyItemCategory(itemType) or CATEGORY_OTHERS)
 		msg:addByte(itemType and itemType:isStackable() and 1 or 0)
+		msg:addU32(itemType and itemType.getDefaultPrice and itemType:getDefaultPrice() or 0)
 	end
 	return msg:sendToPlayer(player)
 end

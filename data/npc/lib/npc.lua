@@ -395,6 +395,22 @@ do
 		return itemType and itemType:getId() or currency
 	end
 
+	local function registerItemShopPrice(itemId, buy, sell)
+		local itemType = ItemType(itemId)
+		if not itemType or itemType:getId() == 0 or not itemType.setBuyPrice then
+			return
+		end
+
+		buy = tonumber(buy) or 0
+		sell = tonumber(sell) or 0
+		if buy > 0 then
+			itemType:setBuyPrice(buy)
+		end
+		if sell > 0 then
+			itemType:setSellPrice(sell)
+		end
+	end
+
 	local function normalizeShopItems(items)
 		local normalized = {}
 		if type(items) ~= "table" then
@@ -404,6 +420,7 @@ do
 		for _, item in ipairs(items) do
 			local itemType = resolveItemType(item.id or item.itemId or item.itemid or item.itemName or item.itemname or item.name, item.clientId or item.clientid)
 			if itemType and itemType:getId() ~= 0 then
+				registerItemShopPrice(itemType:getId(), item.buy, item.sell)
 				normalized[#normalized + 1] = {
 					id = itemType:getId(),
 					subType = item.subType or item.subtype or item.count or item.charges or (itemType:isFluidContainer() and 0 or 1),

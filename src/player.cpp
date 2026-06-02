@@ -6460,7 +6460,8 @@ void Player::flushPendingLoot(const std::string& groupKey)
 		}
 		first = false;
 		if (colorizedLootValue) {
-			ss << "{" << itemId << "|";
+			const uint64_t itemValue = static_cast<uint64_t>(itemType.sellPrice > 0 ? itemType.sellPrice : itemType.buyPrice) * count;
+			ss << "{" << itemId << ":" << itemValue << "|";
 		}
 		if (count > 1) {
 			ss << count << " " << itemType.getPluralName();
