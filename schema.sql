@@ -445,7 +445,7 @@ CREATE TABLE IF NOT EXISTS player_bosstiary (
   slot_two int NOT NULL DEFAULT 0,
   remove_times int NOT NULL DEFAULT 0,
   PRIMARY KEY (player_id)
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+);
 
 CREATE TABLE IF NOT EXISTS player_bosstiary_tracker (
   player_id int NOT NULL,
@@ -453,7 +453,7 @@ CREATE TABLE IF NOT EXISTS player_bosstiary_tracker (
   slot tinyint NOT NULL DEFAULT 0,
   PRIMARY KEY (player_id, bossid),
   KEY idx_player_bosstiary_tracker_slot (player_id, slot)
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+);
 
 CREATE TABLE IF NOT EXISTS player_hunting_tasks (
   player_id int NOT NULL,
@@ -467,13 +467,13 @@ CREATE TABLE IF NOT EXISTS player_hunting_tasks (
   reroll_at bigint NOT NULL DEFAULT 0,
   disabled_until bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (player_id, slot)
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+);
 
-CREATE TABLE IF NOT EXISTS `player_hunting_task_points` (
-  `player_id` int NOT NULL,
-  `points` bigint unsigned NOT NULL DEFAULT 0,
-  PRIMARY KEY (`player_id`)
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+CREATE TABLE IF NOT EXISTS player_hunting_task_points (
+  player_id int NOT NULL,
+  points bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (player_id)
+);
 
 CREATE TABLE IF NOT EXISTS `player_outfits` (
   `player_id` int NOT NULL DEFAULT '0',
@@ -526,36 +526,37 @@ CREATE TABLE IF NOT EXISTS `towns` (
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-INSERT INTO `server_config` (`config`, `value`) VALUES ('db_version', '46'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO server_config (config, value) VALUES ('db_version', '46'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
-CREATE TABLE IF NOT EXISTS `guild_transactions` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `guild_id` int(11) NOT NULL,
-  `guild_associated` int(11) DEFAULT NULL,
-  `player_associated` int(11) DEFAULT NULL,
-  `type` ENUM('DEPOSIT', 'WITHDRAW') NOT NULL,
-  `category` ENUM ('OTHER', 'RENT', 'MATERIAL', 'SERVICES', 'REVENUE', 'CONTRIBUTION') NOT NULL DEFAULT 'OTHER',
-  `balance` bigint(20) UNSIGNED NOT NULL DEFAULT '0',
-  `time` bigint(20) NOT NULL,
-  PRIMARY KEY (`id`),
-  FOREIGN KEY (`guild_id`) REFERENCES `guilds`(`id`) ON DELETE CASCADE,
-  FOREIGN KEY (`guild_associated`) REFERENCES `guilds`(`id`) ON DELETE SET NULL,
-  FOREIGN KEY (`player_associated`) REFERENCES `players`(`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+CREATE TABLE IF NOT EXISTS guild_transactions (
+  id int NOT NULL AUTO_INCREMENT,
+  guild_id int NOT NULL,
+  guild_associated int DEFAULT NULL,
+  player_associated int DEFAULT NULL,
+  type ENUM('DEPOSIT', 'WITHDRAW') NOT NULL,
+  category ENUM ('OTHER', 'RENT', 'MATERIAL', 'SERVICES', 'REVENUE', 'CONTRIBUTION') NOT NULL DEFAULT 'OTHER',
+  balance bigint NOT NULL DEFAULT 0,
+  time bigint NOT NULL,
+  PRIMARY KEY (id),
+  FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE,
+  FOREIGN KEY (guild_associated) REFERENCES guilds(id) ON DELETE SET NULL,
+  FOREIGN KEY (player_associated) REFERENCES players(id) ON DELETE SET NULL
+);
 
-DROP TRIGGER IF EXISTS `ondelete_players`;
-DROP TRIGGER IF EXISTS `oncreate_guilds`;
+DROP TRIGGER IF EXISTS ondelete_players;
+DROP TRIGGER IF EXISTS oncreate_guilds;
 
 DELIMITER //
-CREATE TRIGGER `ondelete_players` BEFORE DELETE ON `players`
+CREATE TRIGGER ondelete_players BEFORE DELETE ON players
  FOR EACH ROW BEGIN
-    UPDATE `houses` SET `owner` = 0 WHERE `owner` = OLD.`id`;
+    UPDATE houses SET owner = 0 WHERE owner = OLD.id;
 END //
 
-CREATE TRIGGER `oncreate_guilds` AFTER INSERT ON `guilds`
+CREATE TRIGGER oncreate_guilds AFTER INSERT ON guilds
  FOR EACH ROW BEGIN
-    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('the Leader', 3, NEW.`id`);
-    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('a Vice-Leader', 2, NEW.`id`);
-    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('a Member', 1, NEW.`id`);
+    INSERT INTO guild_ranks (name, level, guild_id) VALUES ('the Leader', 3, NEW.id);
+    INSERT INTO guild_ranks (name, level, guild_id) VALUES ('a Vice-Leader', 2, NEW.id);
+    INSERT INTO guild_ranks (name, level, guild_id) VALUES ('a Member', 1, NEW.id);
 END //
 DELIMITER ;
+
