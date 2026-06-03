@@ -528,23 +528,6 @@ CREATE TABLE IF NOT EXISTS `towns` (
 
 INSERT INTO `server_config` (`config`, `value`) VALUES ('db_version', '46'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
-DROP TRIGGER IF EXISTS `ondelete_players`;
-DROP TRIGGER IF EXISTS `oncreate_guilds`;
-
-DELIMITER //
-CREATE TRIGGER `ondelete_players` BEFORE DELETE ON `players`
- FOR EACH ROW BEGIN
-    UPDATE `houses` SET `owner` = 0 WHERE `owner` = OLD.`id`;
-END
-//
-CREATE TRIGGER `oncreate_guilds` AFTER INSERT ON `guilds`
- FOR EACH ROW BEGIN
-    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('the Leader', 3, NEW.`id`);
-    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('a Vice-Leader', 2, NEW.`id`);
-    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('a Member', 1, NEW.`id`);
-END
-//
-
 CREATE TABLE IF NOT EXISTS `guild_transactions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `guild_id` int(11) NOT NULL,
@@ -558,5 +541,21 @@ CREATE TABLE IF NOT EXISTS `guild_transactions` (
   FOREIGN KEY (`guild_id`) REFERENCES `guilds`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`guild_associated`) REFERENCES `guilds`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`player_associated`) REFERENCES `players`(`id`) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+
+DROP TRIGGER IF EXISTS `ondelete_players`;
+DROP TRIGGER IF EXISTS `oncreate_guilds`;
+
+DELIMITER //
+CREATE TRIGGER `ondelete_players` BEFORE DELETE ON `players`
+ FOR EACH ROW BEGIN
+    UPDATE `houses` SET `owner` = 0 WHERE `owner` = OLD.`id`;
+END //
+
+CREATE TRIGGER `oncreate_guilds` AFTER INSERT ON `guilds`
+ FOR EACH ROW BEGIN
+    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('the Leader', 3, NEW.`id`);
+    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('a Vice-Leader', 2, NEW.`id`);
+    INSERT INTO `guild_ranks` (`name`, `level`, `guild_id`) VALUES ('a Member', 1, NEW.`id`);
+END //
 DELIMITER ;
