@@ -572,11 +572,15 @@ if Modules == nil then
 
         buy = tonumber(buy) or 0
         sell = tonumber(sell) or 0
+
+        -- Merge by max to prevent last-loaded NPC from overwriting higher prices
         if buy > 0 then
-            itemType:setBuyPrice(buy)
+            local currentBuy = itemType.getBuyPrice and itemType:getBuyPrice() or 0
+            itemType:setBuyPrice(math.max(currentBuy, buy))
         end
         if sell > 0 then
-            itemType:setSellPrice(sell)
+            local currentSell = itemType.getSellPrice and itemType:getSellPrice() or 0
+            itemType:setSellPrice(math.max(currentSell, sell))
         end
         if ItemPriceRegistry and ItemPriceRegistry.register then
             local npc = Npc()
