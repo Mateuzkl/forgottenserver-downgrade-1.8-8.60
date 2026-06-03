@@ -529,7 +529,7 @@ CREATE TABLE IF NOT EXISTS `towns` (
 INSERT INTO server_config (config, value) VALUES ('db_version', '46'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 CREATE TABLE IF NOT EXISTS guild_transactions (
-  id int NOT NULL AUTO_INCREMENT,
+  id SERIAL PRIMARY KEY,
   guild_id int NOT NULL,
   guild_associated int DEFAULT NULL,
   player_associated int DEFAULT NULL,
@@ -537,26 +537,20 @@ CREATE TABLE IF NOT EXISTS guild_transactions (
   category ENUM ('OTHER', 'RENT', 'MATERIAL', 'SERVICES', 'REVENUE', 'CONTRIBUTION') NOT NULL DEFAULT 'OTHER',
   balance bigint NOT NULL DEFAULT 0,
   time bigint NOT NULL,
-  PRIMARY KEY (id),
   FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE,
   FOREIGN KEY (guild_associated) REFERENCES guilds(id) ON DELETE SET NULL,
   FOREIGN KEY (player_associated) REFERENCES players(id) ON DELETE SET NULL
 );
 
-DROP TRIGGER IF EXISTS ondelete_players;
-DROP TRIGGER IF EXISTS oncreate_guilds;
-
-DELIMITER //
 CREATE TRIGGER ondelete_players BEFORE DELETE ON players
- FOR EACH ROW BEGIN
-    UPDATE houses SET owner = 0 WHERE owner = OLD.id;
-END //
+ FOR EACH ROW
+ UPDATE houses SET owner = 0 WHERE owner = OLD.id;
 
 CREATE TRIGGER oncreate_guilds AFTER INSERT ON guilds
- FOR EACH ROW BEGIN
-    INSERT INTO guild_ranks (name, level, guild_id) VALUES ('the Leader', 3, NEW.id);
-    INSERT INTO guild_ranks (name, level, guild_id) VALUES ('a Vice-Leader', 2, NEW.id);
-    INSERT INTO guild_ranks (name, level, guild_id) VALUES ('a Member', 1, NEW.id);
-END //
-DELIMITER ;
+ FOR EACH ROW
+ INSERT INTO guild_ranks (name, level, guild_id) VALUES 
+   ('the Leader', 3, NEW.id),
+   ('a Vice-Leader', 2, NEW.id),
+   ('a Member', 1, NEW.id);
+
 
