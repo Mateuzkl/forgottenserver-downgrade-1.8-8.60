@@ -403,6 +403,22 @@ do
 
 		buy = tonumber(buy) or 0
 		sell = tonumber(sell) or 0
+
+		-- Convert token prices to gold equivalent when NPC uses custom currency
+		if npcName then
+			local npcData = compat.npcConfigs[npcName] or compat.npcConfigs[npcName:lower()]
+			if npcData and npcData.currency and npcData.currency ~= 0 then
+				local currencyType = ItemType(npcData.currency)
+				if currencyType and currencyType:getId() ~= 0 then
+					local worth = currencyType:getWorth()
+					if worth and worth > 0 then
+						buy = buy * worth
+						sell = sell * worth
+					end
+				end
+			end
+		end
+
 		if buy > 0 then
 			itemType:setBuyPrice(buy)
 		end

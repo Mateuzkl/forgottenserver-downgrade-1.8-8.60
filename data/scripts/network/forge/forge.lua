@@ -1138,6 +1138,7 @@ local function openForge(player)
 	end
 
 	debugForge(player, "open start")
+	invalidateForgeCache(player)
 	forgeOpenSessions[player:getId()] = true
 	local initSent = sendForgeInit(player)
 	local dataSent = refreshForge(player)
@@ -1153,6 +1154,7 @@ local function closeForge(player)
 
 	debugForge(player, "close")
 	forgeOpenSessions[player:getId()] = nil
+	invalidateForgeCache(player)
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_FORGE_SEND)
 	out:addByte(RESPONSE_CLOSE)
