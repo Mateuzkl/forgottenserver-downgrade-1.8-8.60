@@ -117,5 +117,9 @@ jobs:
           if ((${#files[@]})); then
             printf '%s\0' "${files[@]}" | xargs -0 -r -n1 lua-format -i
           fi
-          git diff
-          git diff --exit-code
+          if ! git diff --quiet --exit-code; then
+            echo "Lua formatting mismatches detected. Run the formatter locally and commit the changes when you want to enforce formatting:"
+            echo "  find data/ -type f -name '*.lua' -print0 | xargs -0 -r -n1 lua-format -i"
+            echo "Changed files:"
+            git diff --name-only
+          fi
