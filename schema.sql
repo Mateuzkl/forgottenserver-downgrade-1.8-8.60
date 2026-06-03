@@ -542,15 +542,13 @@ CREATE TABLE IF NOT EXISTS guild_transactions (
   FOREIGN KEY (player_associated) REFERENCES players(id) ON DELETE SET NULL
 );
 
-CREATE TRIGGER ondelete_players BEFORE DELETE ON players
+/*!50003 CREATE TRIGGER ondelete_players BEFORE DELETE ON players
  FOR EACH ROW
- UPDATE houses SET owner = 0 WHERE owner = OLD.id;
+ UPDATE houses SET owner = 0 WHERE owner = OLD.id */;
 
-CREATE TRIGGER oncreate_guilds AFTER INSERT ON guilds
+/*!50003 CREATE TRIGGER oncreate_guilds AFTER INSERT ON guilds
  FOR EACH ROW
  INSERT INTO guild_ranks (name, level, guild_id) VALUES 
    ('the Leader', 3, NEW.id),
    ('a Vice-Leader', 2, NEW.id),
-   ('a Member', 1, NEW.id);
-
-
+   ('a Member', 1, NEW.id) */;
