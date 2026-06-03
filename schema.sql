@@ -438,35 +438,35 @@ CREATE TABLE IF NOT EXISTS `player_weapon_proficiency` (
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-CREATE TABLE IF NOT EXISTS `player_bosstiary` (
-  `player_id` int NOT NULL,
-  `points` int unsigned NOT NULL DEFAULT 0,
-  `slot_one` int unsigned NOT NULL DEFAULT 0,
-  `slot_two` int unsigned NOT NULL DEFAULT 0,
-  `remove_times` int unsigned NOT NULL DEFAULT 0,
-  PRIMARY KEY (`player_id`)
+CREATE TABLE IF NOT EXISTS player_bosstiary (
+  player_id int NOT NULL,
+  points int unsigned NOT NULL DEFAULT 0,
+  slot_one int unsigned NOT NULL DEFAULT 0,
+  slot_two int unsigned NOT NULL DEFAULT 0,
+  remove_times int unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (player_id)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-CREATE TABLE IF NOT EXISTS `player_bosstiary_tracker` (
-  `player_id` int NOT NULL,
-  `bossid` int unsigned NOT NULL,
-  `slot` tinyint unsigned NOT NULL DEFAULT 0,
-  PRIMARY KEY (`player_id`, `bossid`),
-  KEY `idx_player_bosstiary_tracker_slot` (`player_id`, `slot`)
+CREATE TABLE IF NOT EXISTS player_bosstiary_tracker (
+  player_id int NOT NULL,
+  bossid int unsigned NOT NULL,
+  slot tinyint unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (player_id, bossid),
+  KEY idx_player_bosstiary_tracker_slot (player_id, slot)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-CREATE TABLE IF NOT EXISTS `player_hunting_tasks` (
-  `player_id` int NOT NULL,
-  `slot` tinyint unsigned NOT NULL,
-  `state` tinyint unsigned NOT NULL DEFAULT 2,
-  `raceid` smallint unsigned NOT NULL DEFAULT 0,
-  `race_list` text NOT NULL,
-  `rarity` tinyint unsigned NOT NULL DEFAULT 1,
-  `upgraded` tinyint(1) NOT NULL DEFAULT 0,
-  `kills` int unsigned NOT NULL DEFAULT 0,
-  `reroll_at` bigint unsigned NOT NULL DEFAULT 0,
-  `disabled_until` bigint unsigned NOT NULL DEFAULT 0,
-  PRIMARY KEY (`player_id`, `slot`)
+CREATE TABLE IF NOT EXISTS player_hunting_tasks (
+  player_id int NOT NULL,
+  slot tinyint unsigned NOT NULL,
+  state tinyint unsigned NOT NULL DEFAULT 2,
+  raceid smallint unsigned NOT NULL DEFAULT 0,
+  race_list text NOT NULL,
+  rarity tinyint unsigned NOT NULL DEFAULT 1,
+  upgraded tinyint(1) NOT NULL DEFAULT 0,
+  kills int unsigned NOT NULL DEFAULT 0,
+  reroll_at bigint unsigned NOT NULL DEFAULT 0,
+  disabled_until bigint unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (player_id, slot)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `player_hunting_task_points` (

@@ -396,7 +396,8 @@ local function sendBestiaryOverviewEntries(player, title, entries)
 			-- Astra paints undiscovered creatures with the black outfit shader.
 			out:addByte(1)
 			out:addByte(0)
-			writeCreatureInfo(out, entry)
+			local masked = { name = "?", outfit = entry.outfit }
+			writeCreatureInfo(out, masked)
 		else
 			out:addByte(math.min(progress + 1, 0xFF))
 			out:addByte(math.min(progress, 0xFF))

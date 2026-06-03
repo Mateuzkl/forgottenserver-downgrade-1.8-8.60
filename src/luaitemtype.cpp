@@ -420,7 +420,13 @@ int luaItemTypeGetDefaultPrice(lua_State* L)
 		return 1;
 	}
 
-	lua_pushinteger(L, itemType->sellPrice > 0 ? itemType->sellPrice : itemType->buyPrice);
+	if (itemType->sellPrice > 0) {
+		lua_pushinteger(L, itemType->sellPrice);
+	} else if (itemType->buyPrice > 0) {
+		lua_pushinteger(L, itemType->buyPrice);
+	} else {
+		lua_pushinteger(L, itemType->worth);
+	}
 	return 1;
 }
 
@@ -436,7 +442,10 @@ int luaItemTypeSetBuyPrice(lua_State* L)
 	ItemType& mutableItemType = Item::items.getItemType(itemType->id);
 	const int64_t price = getInteger<int64_t>(L, 2, 0);
 	if (price > 0) {
-		mutableItemType.buyPrice = std::max(mutableItemType.buyPrice, static_cast<uint32_t>(price));
+		const uint32_t safePrice = price > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())
+		                         ? std::numeric_limits<uint32_t>::max()
+		                         : static_cast<uint32_t>(price);
+		mutableItemType.buyPrice = std::max(mutableItemType.buyPrice, safePrice);
 	}
 	pushBoolean(L, true);
 	return 1;
@@ -454,7 +463,10 @@ int luaItemTypeSetSellPrice(lua_State* L)
 	ItemType& mutableItemType = Item::items.getItemType(itemType->id);
 	const int64_t price = getInteger<int64_t>(L, 2, 0);
 	if (price > 0) {
-		mutableItemType.sellPrice = std::max(mutableItemType.sellPrice, static_cast<uint32_t>(price));
+		const uint32_t safePrice = price > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())
+		                         ? std::numeric_limits<uint32_t>::max()
+		                         : static_cast<uint32_t>(price);
+		mutableItemType.sellPrice = std::max(mutableItemType.sellPrice, safePrice);
 	}
 	pushBoolean(L, true);
 	return 1;

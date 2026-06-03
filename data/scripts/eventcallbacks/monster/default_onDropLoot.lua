@@ -96,14 +96,40 @@ event.onDropLoot = function(self, corpse)
 			local lootGroupingEnabled = configManager.getBoolean(configKeys.LOOT_GROUPING_ENABLED)
 			if not lootGroupingEnabled then
 				local preyLootText = preyLootBonus > 0 and (" (Prey Improved Loot +%d%%)"):format(preyLootBonus) or ""
-				local text = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
-				                                         corpse:getContentDescription(configManager.getBoolean(configKeys.COLORIZED_LOOT_VALUE)),
-				                                         preyLootText)
+				local useColorized = configManager.getBoolean(configKeys.COLORIZED_LOOT_VALUE)
 				local party = player:getParty()
-				if party then
-					party:broadcastPartyLoot(text)
+				if useColorized then
+					-- Per-receiver message: colorized for OtClient, plain for others
+					local colorizedText = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
+					                                                   corpse:getContentDescription(true),
+					                                                   preyLootText)
+					local plainText = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
+					                                               corpse:getContentDescription(false),
+					                                               preyLootText)
+					if party then
+						local members = party:getMembers()
+						local leader = party:getLeader()
+						if leader then
+							local leaderText = (leader.isUsingOtClient and leader:isUsingOtClient()) and colorizedText or plainText
+							sendLootMessage(leader, leaderText)
+						end
+						for _, member in ipairs(members) do
+							local memberText = (member.isUsingOtClient and member:isUsingOtClient()) and colorizedText or plainText
+							sendLootMessage(member, memberText)
+						end
+					else
+						local playerText = (player.isUsingOtClient and player:isUsingOtClient()) and colorizedText or plainText
+						sendLootMessage(player, playerText)
+					end
 				else
-					sendLootMessage(player, text)
+					local text = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
+					                                          corpse:getContentDescription(false),
+					                                          preyLootText)
+					if party then
+						party:broadcastPartyLoot(text)
+					else
+						sendLootMessage(player, text)
+					end
 				end
 			end
 		end

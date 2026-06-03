@@ -338,7 +338,13 @@ int luaItemGetDefaultPrice(lua_State* L)
 	}
 
 	const ItemType& itemType = Item::items[item->getID()];
-	lua_pushinteger(L, itemType.sellPrice > 0 ? itemType.sellPrice : itemType.buyPrice);
+	if (itemType.sellPrice > 0) {
+		lua_pushinteger(L, itemType.sellPrice);
+	} else if (itemType.buyPrice > 0) {
+		lua_pushinteger(L, itemType.buyPrice);
+	} else {
+		lua_pushinteger(L, itemType.worth);
+	}
 	return 1;
 }
 
