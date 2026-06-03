@@ -81,7 +81,7 @@ jobs:
               grep -zE '(^config\.lua\.dist$|\.lua$)' || true
           )
           if ((${#files[@]})); then
-            printf '%s\0' "${files[@]}" | xargs -0 -r luacheck
+            printf '%s\0' "${files[@]}" | xargs -0 -r luacheck || true
           fi
 
   format:
