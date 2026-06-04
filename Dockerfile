@@ -11,7 +11,13 @@ ENV PATH="${VCPKG_ROOT}:${PATH}"
 # Instalar dependencias del proyecto
 WORKDIR /usr/src/forgottenserver-downgrade
 COPY vcpkg.json ./
-RUN /opt/vcpkg/vcpkg install --triplet x64-linux
+# Pre-seed Lua's distfile to avoid transient vcpkg download timeouts in CI.
+RUN set -eux; \
+    mkdir -p /opt/vcpkg/downloads; \
+    curl -fL --retry 10 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 600 \
+        -o /opt/vcpkg/downloads/lua-5.5.0.tar.gz \
+        https://www.lua.org/ftp/lua-5.5.0.tar.gz; \
+    /opt/vcpkg/vcpkg install --triplet x64-linux
 # Copiar el resto del código
 COPY cmake /usr/src/forgottenserver-downgrade/cmake/
 COPY src /usr/src/forgottenserver-downgrade/src/
