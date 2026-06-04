@@ -47,7 +47,12 @@ public:
 
 	NetworkMessage() = default;
 
-	void reset() { info = {}; }
+	void reset()
+	{
+		info.length = 0;
+		info.position = INITIAL_BUFFER_POSITION;
+		info.overrun = false;
+	}
 
 	// simply read functions for incoming message
 	uint8_t getByte()
