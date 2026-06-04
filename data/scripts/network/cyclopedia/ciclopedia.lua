@@ -22,6 +22,7 @@ local MAX_TRACKER_SLOTS = 5
 local CHARM_REMOVE_COST = 10000
 local BESTIARY_DETAIL_FULL = 4
 local BESTIARY_SEARCH_PREFIX = "__search__:"
+local MAX_CYCLOPEDIA_CLASS_LENGTH = 80
 
 local killCache = {}
 local charmCache = {}
@@ -693,8 +694,15 @@ function categoryHandler.onReceive(player, msg)
 		return
 	end
 
-	msg:getByte()
-	local className = msg:getString()
+	if NetworkGuard.readByte(msg) == nil then
+		return
+	end
+
+	local className = NetworkGuard.readString(msg, MAX_CYCLOPEDIA_CLASS_LENGTH)
+	if not className then
+		return
+	end
+
 	if className:sub(1, #BESTIARY_SEARCH_PREFIX) == BESTIARY_SEARCH_PREFIX then
 		sendBestiarySearch(player, className:sub(#BESTIARY_SEARCH_PREFIX + 1))
 	else
@@ -709,7 +717,12 @@ function monsterHandler.onReceive(player, msg)
 		return
 	end
 
-	sendBestiaryMonster(player, msg:getU16())
+	local raceId = NetworkGuard.readU16(msg)
+	if not raceId then
+		return
+	end
+
+	sendBestiaryMonster(player, raceId)
 end
 monsterHandler:register()
 
@@ -719,9 +732,13 @@ function charmHandler.onReceive(player, msg)
 		return
 	end
 
-	local charmId = msg:getByte()
-	local action = msg:getByte()
-	local raceId = msg:getU16()
+	local charmId = NetworkGuard.readByte(msg)
+	local action = NetworkGuard.readByte(msg)
+	local raceId = NetworkGuard.readU16(msg)
+	if charmId == nil or action == nil or not raceId then
+		return
+	end
+
 	handleCharmAction(player, charmId, action, raceId)
 end
 charmHandler:register()
@@ -732,7 +749,12 @@ function trackerHandler.onReceive(player, msg)
 		return
 	end
 
-	toggleTracker(player, msg:getU16())
+	local raceId = NetworkGuard.readU16(msg)
+	if not raceId then
+		return
+	end
+
+	toggleTracker(player, raceId)
 end
 trackerHandler:register()
 

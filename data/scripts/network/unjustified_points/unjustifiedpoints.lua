@@ -96,7 +96,18 @@ end
 local handler = PacketHandler(OPCODE_UNJUSTIFIED_REQUEST)
 
 function handler.onReceive(player, msg)
-	local action = msg:getByte()
+	if not supportsCustomNetwork(player) then
+		return true
+	end
+	if not NetworkGuard.cooldown(player, "unjustified-points", 1000) then
+		return true
+	end
+
+	local action = NetworkGuard.readByte(msg)
+	if not action then
+		return true
+	end
+
 	if action == ACTION_REFRESH then
 		sendUnjustifiedPoints(player)
 	end

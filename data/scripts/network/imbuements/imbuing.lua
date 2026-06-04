@@ -1,9 +1,20 @@
 local apply = PacketHandler(0xD5)
 
 function apply.onReceive(player, msg)
-	local slot = msg:getByte()
-	local imbuementId = msg:getU32()
-	msg:getByte() -- legacy protection flag
+	if not NetworkGuard.cooldown(player, "imbuing-apply", 500) then
+		return
+	end
+	if not NetworkGuard.canRead(msg, 6) then
+		return
+	end
+
+	local slot = NetworkGuard.readByte(msg)
+	local imbuementId = NetworkGuard.readU32(msg)
+	NetworkGuard.readByte(msg) -- legacy protection flag
+	if slot == nil or not imbuementId then
+		return
+	end
+
 	ImbuingWindow.apply(player, slot, imbuementId)
 end
 
@@ -12,7 +23,16 @@ apply:register()
 local clear = PacketHandler(0xD6)
 
 function clear.onReceive(player, msg)
-	ImbuingWindow.clear(player, msg:getByte())
+	if not NetworkGuard.cooldown(player, "imbuing-clear", 500) then
+		return
+	end
+
+	local slot = NetworkGuard.readByte(msg)
+	if slot == nil then
+		return
+	end
+
+	ImbuingWindow.clear(player, slot)
 end
 
 clear:register()
@@ -20,6 +40,9 @@ clear:register()
 local close = PacketHandler(0xD7)
 
 function close.onReceive(player, msg)
+	if not NetworkGuard.cooldown(player, "imbuing-close", 250) then
+		return
+	end
 	ImbuingWindow.close(player)
 end
 
@@ -59,11 +82,27 @@ local function getItemFromSelection(player, position, itemId, stackpos)
 end
 
 function action.onReceive(player, msg)
-	local actionType = msg:getByte()
+	if not NetworkGuard.cooldown(player, "imbuing-action", 250) then
+		return
+	end
+
+	local actionType = NetworkGuard.readByte(msg)
+	if not actionType then
+		return
+	end
+
 	if actionType == 1 then
-		local position = msg:getPosition()
-		local itemId = msg:getU16()
-		local stackpos = msg:getByte()
+		if not NetworkGuard.canRead(msg, 8) then
+			return
+		end
+
+		local position = NetworkGuard.readPosition(msg)
+		local itemId = NetworkGuard.readU16(msg)
+		local stackpos = NetworkGuard.readByte(msg)
+		if not position or not itemId or stackpos == nil then
+			return
+		end
+
 		local item = getItemFromSelection(player, position, itemId, stackpos)
 		if item then
 			ImbuingWindow.openItem(player, item, false)

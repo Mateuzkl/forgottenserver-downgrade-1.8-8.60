@@ -312,7 +312,16 @@ loginEvent:register()
 local itemDetailsHandler = PacketHandler(OPCODE_ITEM_DETAILS)
 
 function itemDetailsHandler.onReceive(player, msg)
-	return sendItemDetails(player, msg:getU16())
+	if not NetworkGuard.cooldown(player, "item-details", 300) then
+		return false
+	end
+
+	local itemId = NetworkGuard.readU16(msg)
+	if not itemId then
+		return false
+	end
+
+	return sendItemDetails(player, itemId)
 end
 
 itemDetailsHandler:register()

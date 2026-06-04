@@ -559,7 +559,11 @@ function buyHandler.onReceive(player, msg)
 		return
 	end
 
-	local offerId = msg:getU32()
+	local offerId = NetworkGuard.readU32(msg)
+	if not offerId then
+		return
+	end
+
 	local offer = storeItemsById[offerId]
 	if not offer then
 		sendStoreError(player, "Offer not found.")
@@ -568,11 +572,11 @@ function buyHandler.onReceive(player, msg)
 
 	local extra = {}
 	if offer.oftype == "changename" then
-		if msg:len() - msg:tell() < 2 then
+		extra.name = NetworkGuard.readString(msg, MAX_CHARACTER_NAME_LENGTH)
+		if not extra.name then
 			sendStoreError(player, "You need to choose a new character name.")
 			return
 		end
-		extra.name = msg:getString()
 	end
 
 	local coins = player:getTibiaCoins()
@@ -619,8 +623,18 @@ function transferHandler.onReceive(player, msg)
 		return
 	end
 
-	local targetName = trim(msg:getString())
-	local amount = msg:getU32()
+	local targetName = NetworkGuard.readString(msg, MAX_TARGET_NAME_LENGTH)
+	if not targetName or not NetworkGuard.canRead(msg, 4) then
+		sendStoreError(player, "Target player not found.")
+		return
+	end
+
+	targetName = trim(targetName)
+	local amount = NetworkGuard.readU32(msg)
+	if not amount then
+		sendStoreError(player, "Invalid amount.")
+		return
+	end
 
 	if targetName == "" or #targetName > MAX_TARGET_NAME_LENGTH then
 		sendStoreError(player, "Target player not found.")

@@ -909,14 +909,28 @@ local handler = PacketHandler(OPCODE_SUPPLY_STASH_REQUEST)
 -- @param msg The incoming network message containing the action and any parameters.
 -- @return `true` to indicate the packet was handled.
 function handler.onReceive(player, msg)
-	if not ensureTables() then
-		player:sendCancelMessage("Supply stash is temporarily unavailable.")
+	if not supportsCustomNetwork(player) then
+		player:sendCancelMessage("The supply stash is only available on OTClient.")
 		return true
 	end
 
-	local action = msg:getByte()
-	if not supportsCustomNetwork(player) then
-		player:sendCancelMessage("The supply stash is only available on OTClient.")
+	local action = NetworkGuard.readByte(msg)
+	if not action then
+		return true
+	end
+
+	local cooldown = 300
+	if action == ACTION_STOW_ALL then
+		cooldown = 1000
+	elseif action == ACTION_WITHDRAW then
+		cooldown = 500
+	end
+	if not NetworkGuard.cooldown(player, "supply-stash:" .. action, cooldown) then
+		return true
+	end
+
+	if not ensureTables() then
+		player:sendCancelMessage("Supply stash is temporarily unavailable.")
 		return true
 	end
 
@@ -926,11 +940,19 @@ function handler.onReceive(player, msg)
 	elseif action == ACTION_STOW_ALL then
 		stowAll(player)
 	elseif action == ACTION_WITHDRAW then
-		local itemId = msg:getU16()
-		local amount = msg:getU32()
+		if not NetworkGuard.canRead(msg, 6) then
+			return true
+		end
+
+		local itemId = NetworkGuard.readU16(msg)
+		local amount = NetworkGuard.readU32(msg)
+		if not itemId or not amount then
+			return true
+		end
+
 		local tier = 0
-		if msg:len() - msg:tell() >= 1 then
-			tier = msg:getByte()
+		if NetworkGuard.canRead(msg, 1) then
+			tier = NetworkGuard.readByte(msg) or 0
 		end
 		withdraw(player, itemId, amount, tier)
 	else
