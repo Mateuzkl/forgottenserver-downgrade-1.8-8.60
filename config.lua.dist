@@ -149,6 +149,8 @@ monsterLevelEnabled = false
 enableColorizedLootValue = false
 enableItemTierDisplay = false
 enableItemUpgradeClassification = false
+enableQuickLoot = false
+quickLootMaxCorpses = 30
 
 -- Static item augment defaults. Item-specific values can override these in items.xml.
 augmentIncreasedDamagePercent = 5

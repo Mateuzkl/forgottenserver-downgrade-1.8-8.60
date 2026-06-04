@@ -157,6 +157,155 @@ void closeContainersFromOtherInstances(Player* player)
 	}
 }
 
+struct QuickLootResult
+{
+	uint32_t movedItems = 0;
+	bool hadLoot = false;
+	ReturnValue failure = RETURNVALUE_NOERROR;
+};
+
+bool isQuickLootCorpseType(const Container* container)
+{
+	if (!container) {
+		return false;
+	}
+
+	if (container->isRewardCorpse()) {
+		return true;
+	}
+
+	const ItemType& type = Item::items[container->getID()];
+	return type.corpseType != RACE_NONE || container->getCorpseOwner() != 0;
+}
+
+ReturnValue getQuickLootContainerReturn(const Player* player, const Container* container)
+{
+	if (!player || !container || !isQuickLootCorpseType(container)) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+
+	if (container->hasAttribute(ITEM_ATTRIBUTE_UNIQUEID) || container->hasAttribute(ITEM_ATTRIBUTE_ACTIONID)) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+
+	if (container->isRewardCorpse()) {
+		return RETURNVALUE_NOERROR;
+	}
+
+	const uint32_t owner = container->getCorpseOwner();
+	if (owner != 0 && !player->canOpenCorpse(owner) && !player->hasFlag(PlayerFlag_CanEditHouses)) {
+		return RETURNVALUE_YOUARENOTTHEOWNER;
+	}
+	return RETURNVALUE_NOERROR;
+}
+
+bool shouldQuickLootItem(const Player* player, const Item* item)
+{
+	if (!player || !item || !item->isPickupable()) {
+		return false;
+	}
+
+	const bool listed = player->isQuickLootListedItem(item);
+	if (player->getQuickLootFilter() == QUICKLOOTFILTER_ACCEPTEDLOOT) {
+		return listed;
+	}
+	return !listed;
+}
+
+Container* getQuickLootDestination(Player* player)
+{
+	if (!player || !player->getQuickLootFallbackToMainContainer()) {
+		return nullptr;
+	}
+
+	Item* backpackItem = player->getInventoryItem(CONST_SLOT_BACKPACK);
+	return backpackItem ? backpackItem->getContainer() : nullptr;
+}
+
+QuickLootResult collectQuickLootContainer(Game& game, Player* player, Container* container)
+{
+	QuickLootResult result;
+	const ReturnValue containerRet = getQuickLootContainerReturn(player, container);
+	if (containerRet != RETURNVALUE_NOERROR) {
+		result.failure = containerRet;
+		return result;
+	}
+
+	Container* destination = getQuickLootDestination(player);
+	if (!destination) {
+		result.failure = RETURNVALUE_CONTAINERNOTENOUGHROOM;
+		return result;
+	}
+
+	std::vector<Item*> lootItems;
+	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
+		Item* item = *it;
+		if (!item || item->isRemoved() || !shouldQuickLootItem(player, item)) {
+			continue;
+		}
+
+		result.hadLoot = true;
+		lootItems.push_back(item);
+	}
+
+	for (Item* item : lootItems) {
+		if (!item || item->isRemoved()) {
+			continue;
+		}
+
+		Cylinder* fromCylinder = item->getParent();
+		if (!fromCylinder || fromCylinder == destination) {
+			continue;
+		}
+
+		ReturnValue ret = game.internalMoveItem(fromCylinder, destination, INDEX_WHEREEVER, item,
+		                                        item->getItemCount(), nullptr, 0, player);
+		if (ret == RETURNVALUE_NOERROR) {
+			++result.movedItems;
+		} else if (result.failure == RETURNVALUE_NOERROR) {
+			result.failure = ret;
+		}
+	}
+
+	return result;
+}
+
+uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, uint32_t maxCorpses,
+                              bool& foundCorpse, ReturnValue& firstFailure)
+{
+	Tile* tile = game.map.getTile(pos);
+	if (!tile) {
+		firstFailure = RETURNVALUE_NOTPOSSIBLE;
+		return 0;
+	}
+
+	const TileItemVector* itemList = tile->getItemList();
+	if (!itemList) {
+		return 0;
+	}
+
+	uint32_t lootedCorpses = 0;
+	for (const auto& itemRef : *itemList) {
+		if (lootedCorpses >= maxCorpses) {
+			break;
+		}
+
+		Container* container = itemRef ? itemRef->getContainer() : nullptr;
+		if (!isQuickLootCorpseType(container)) {
+			continue;
+		}
+
+		foundCorpse = true;
+		QuickLootResult result = collectQuickLootContainer(game, player, container);
+		if (result.movedItems > 0) {
+			++lootedCorpses;
+		} else if (result.failure != RETURNVALUE_NOERROR && firstFailure == RETURNVALUE_NOERROR) {
+			firstFailure = result.failure;
+		}
+	}
+	return lootedCorpses;
+}
+
 } // namespace
 
 void Game::start(const std::shared_ptr<ServiceManager>& manager)
@@ -2946,6 +3095,189 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		player->lootCorpse(itemRef->getContainer());
 	}
 	player->maintainAttackFlow();
+}
+
+void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,
+                           bool lootAllCorpses)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	if (!player->canDoAction()) {
+		const uint32_t delay = player->getNextActionTime();
+		auto task = createSchedulerTask(delay, ([this, playerId, pos, itemId, stackPos, lootAllCorpses]() {
+			playerQuickLoot(playerId, pos, itemId, stackPos, lootAllCorpses);
+		}));
+		player->setNextActionTask(std::move(task));
+		return;
+	}
+
+	if (!player->hasFlag(PlayerFlag_CanThrowFar) && pos.x != 0xFFFF &&
+	    !pos.isInRange(player->getPosition(), 1, 1, 0)) {
+		std::vector<Direction> listDir;
+		if (player->getPathTo(pos, listDir, 0, 1, true, true)) {
+			g_dispatcher.addTask([=, this, playerID = player->getID(), listDir = std::move(listDir)]() {
+				playerAutoWalk(playerID, listDir);
+			});
+
+			auto task = createSchedulerTask(
+			    static_cast<uint32_t>(getInteger(ConfigManager::RANGE_USE_ITEM_INTERVAL)),
+			    ([this, playerId, pos, itemId, stackPos, lootAllCorpses]()
+			     { playerQuickLoot(playerId, pos, itemId, stackPos, lootAllCorpses); }));
+			player->setNextWalkActionTask(std::move(task));
+		} else {
+			player->sendCancelMessage(RETURNVALUE_THEREISNOWAY);
+		}
+		return;
+	}
+
+	player->resetIdleTime();
+	player->setNextActionTask(nullptr);
+
+	const uint32_t maxQuickLootCorpses = static_cast<uint32_t>(
+	    std::max<int64_t>(1, ConfigManager::getInteger(ConfigManager::QUICK_LOOT_MAX_CORPSES)));
+	if (lootAllCorpses && pos.x != 0xFFFF) {
+		bool foundCorpse = false;
+		ReturnValue firstFailure = RETURNVALUE_NOERROR;
+		const uint32_t lootedCorpses = collectQuickLootTile(*this, player, pos, maxQuickLootCorpses, foundCorpse,
+		                                                    firstFailure);
+		if (foundCorpse) {
+			if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
+				player->sendCancelMessage(firstFailure);
+			} else if (lootedCorpses > 1) {
+				player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You looted {:d} corpses.", lootedCorpses));
+			}
+			player->maintainAttackFlow();
+			return;
+		}
+	}
+
+	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_USEITEM);
+	if (!thing) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	Item* item = thing->getItem();
+	if (!item) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (!InstanceUtils::isPlayerInSameInstance(player, item->getInstanceID())) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (Container* container = item->getContainer()) {
+		QuickLootResult result = collectQuickLootContainer(*this, player, container);
+		if (result.movedItems == 0 && result.failure != RETURNVALUE_NOERROR) {
+			player->sendCancelMessage(result.failure);
+		}
+		player->maintainAttackFlow();
+		return;
+	}
+
+	auto* sourceContainer = dynamic_cast<Container*>(item->getParent());
+	if (!sourceContainer) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	ReturnValue containerRet = getQuickLootContainerReturn(player, sourceContainer);
+	if (containerRet != RETURNVALUE_NOERROR) {
+		player->sendCancelMessage(containerRet);
+		return;
+	}
+
+	if (!shouldQuickLootItem(player, item)) {
+		return;
+	}
+
+	Container* destination = getQuickLootDestination(player);
+	if (!destination) {
+		player->sendCancelMessage(RETURNVALUE_CONTAINERNOTENOUGHROOM);
+		return;
+	}
+
+	ReturnValue ret = internalMoveItem(sourceContainer, destination, INDEX_WHEREEVER, item, item->getItemCount(),
+	                                   nullptr, 0, player);
+	if (ret != RETURNVALUE_NOERROR) {
+		player->sendCancelMessage(ret);
+	}
+	player->maintainAttackFlow();
+}
+
+void Game::playerLootNearby(uint32_t playerId)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	if (!player->canDoAction()) {
+		const uint32_t delay = player->getNextActionTime();
+		auto task = createSchedulerTask(delay, ([this, playerId]() { playerLootNearby(playerId); }));
+		player->setNextActionTask(std::move(task));
+		return;
+	}
+
+	player->resetIdleTime();
+	player->setNextActionTask(nullptr);
+
+	const uint32_t maxQuickLootCorpses = static_cast<uint32_t>(
+	    std::max<int64_t>(1, ConfigManager::getInteger(ConfigManager::QUICK_LOOT_MAX_CORPSES)));
+	const Position& playerPos = player->getPosition();
+	uint32_t lootedCorpses = 0;
+	bool foundCorpse = false;
+	ReturnValue firstFailure = RETURNVALUE_NOERROR;
+
+	for (int32_t x = -1; x <= 1 && lootedCorpses < maxQuickLootCorpses; ++x) {
+		for (int32_t y = -1; y <= 1 && lootedCorpses < maxQuickLootCorpses; ++y) {
+			Position tilePos(
+			    static_cast<uint16_t>(static_cast<int32_t>(playerPos.x) + x),
+			    static_cast<uint16_t>(static_cast<int32_t>(playerPos.y) + y),
+			    playerPos.z);
+			lootedCorpses += collectQuickLootTile(*this, player, tilePos,
+			                                      maxQuickLootCorpses - lootedCorpses, foundCorpse, firstFailure);
+		}
+	}
+
+	if (!foundCorpse) {
+		player->sendCancelMessage("No lootable corpses nearby.");
+	} else if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
+		player->sendCancelMessage(firstFailure);
+	} else if (lootedCorpses > 1) {
+		player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You looted {:d} corpses.", lootedCorpses));
+	}
+	player->maintainAttackFlow();
+}
+
+void Game::playerSetQuickLootFallback(uint32_t playerId, bool fallback)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	player->setQuickLootFallbackToMainContainer(fallback);
+	player->sendLootContainers();
+}
+
+void Game::playerQuickLootBlackWhitelist(uint32_t playerId, QuickLootFilter_t filter, std::vector<uint16_t> itemIds)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	player->setQuickLootBlackWhitelist(filter, std::move(itemIds));
 }
 
 void Game::playerUseWithCreature(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint32_t creatureId,

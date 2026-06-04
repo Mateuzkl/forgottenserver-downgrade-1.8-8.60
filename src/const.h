@@ -802,6 +802,7 @@ enum class GameFeature : uint8_t {
 	PacketSizeU32 = 110,
 	PacketCompression = 111,
 
+	QuickLootFlags = 123,
 	ThingUpgradeClassification = 130,
 	ItemTierByte = 131,
 

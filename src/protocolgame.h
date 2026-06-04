@@ -111,6 +111,9 @@ private:
 	void parseCloseContainer(NetworkMessage& msg);
 	void parseUpArrowContainer(NetworkMessage& msg);
 	void parseUpdateContainer(NetworkMessage& msg);
+	void parseQuickLoot(NetworkMessage& msg);
+	void parseLootContainer(NetworkMessage& msg);
+	void parseQuickLootBlackWhitelist(NetworkMessage& msg);
 	void parseTextWindow(NetworkMessage& msg);
 	void parseHouseWindow(NetworkMessage& msg);
 
@@ -231,6 +234,7 @@ private:
 
 	void sendContainer(uint8_t cid, const Container* container, bool hasParent, uint16_t firstIndex);
 	void sendCloseContainer(uint8_t cid);
+	void sendLootContainers();
 
 	// inventory
 	void sendInventoryItem(slots_t slot, const Item* item);
@@ -273,6 +277,7 @@ private:
 
 	// OTCv8
 	void sendFeatures();
+	bool shouldSendQuickLootFlags() const;
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 

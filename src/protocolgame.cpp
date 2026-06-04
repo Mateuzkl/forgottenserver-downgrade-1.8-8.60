@@ -83,6 +83,19 @@ bool looksLikeLegacyRuleViolationReport(const uint8_t* payload, std::size_t rema
 	return true;
 }
 
+std::size_t getUnreadBytes(const NetworkMessage& msg)
+{
+	const std::size_t endPosition = static_cast<std::size_t>(msg.getLength()) + NetworkMessage::INITIAL_BUFFER_POSITION;
+	const std::size_t currentPosition = msg.getBufferPosition();
+	return currentPosition < endPosition ? endPosition - currentPosition : 0;
+}
+
+void skipUnreadBytes(NetworkMessage& msg)
+{
+	const auto unread = std::min<std::size_t>(getUnreadBytes(msg), std::numeric_limits<int16_t>::max());
+	msg.skipBytes(static_cast<int16_t>(unread));
+}
+
 uint8_t getRuleViolationTypeFromLegacyAction(uint8_t action)
 {
 	if (action == 6) {
@@ -210,6 +223,11 @@ void ProtocolGame::release()
 
 	OutputMessagePool::getInstance().removeProtocolFromAutosend(shared_from_this());
 	Protocol::release();
+}
+
+bool ProtocolGame::shouldSendQuickLootFlags() const
+{
+	return isAstraClient && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
 }
 
 void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem)
@@ -472,6 +490,7 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	}
 	sendAddCreature(player.get(), player->getPosition(), 0);
 	sendDllCheck();
+	sendLootContainers();
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	player->resetIdleTime();
@@ -916,6 +935,33 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break;
 		case 0x8E: /* join aggression */
 			break;
+		case 0x8F:
+			if (shouldSendQuickLootFlags()) {
+				parseQuickLoot(msg);
+			} else {
+				g_dispatcher.addTask([=, playerID = player->getID(), message = std::make_shared<NetworkMessage>(msg)]() {
+					g_game.parsePlayerNetworkMessage(playerID, recvbyte, std::make_unique<NetworkMessage>(*message));
+				});
+			}
+			break;
+		case 0x90:
+			if (shouldSendQuickLootFlags()) {
+				parseLootContainer(msg);
+			} else {
+				g_dispatcher.addTask([=, playerID = player->getID(), message = std::make_shared<NetworkMessage>(msg)]() {
+					g_game.parsePlayerNetworkMessage(playerID, recvbyte, std::make_unique<NetworkMessage>(*message));
+				});
+			}
+			break;
+		case 0x91:
+			if (shouldSendQuickLootFlags()) {
+				parseQuickLootBlackWhitelist(msg);
+			} else {
+				g_dispatcher.addTask([=, playerID = player->getID(), message = std::make_shared<NetworkMessage>(msg)]() {
+					g_game.parsePlayerNetworkMessage(playerID, recvbyte, std::make_unique<NetworkMessage>(*message));
+				});
+			}
+			break;
 		case 0x96:
 			parseSay(msg);
 			break;
@@ -1029,10 +1075,11 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 {
 	const uint32_t playerInstanceId = player->getInstanceID();
+	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
 	int32_t count;
 	Item* ground = tile->getGround();
 	if (ground) {
-		msg.addItem(ground, isOTC, useItemTierByte, isOTC);
+		msg.addItem(ground, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
 		count = 1;
 	} else {
 		count = 0;
@@ -1044,7 +1091,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), isOTC, useItemTierByte, isOTC);
+			msg.addItem(it->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
 			count++;
 			if (count == 9 && tile->getPosition() == player->getPosition()) {
 				break;
@@ -1089,7 +1136,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), isOTC, useItemTierByte, isOTC);
+			msg.addItem(it->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
 			if (++count == MAX_STACKPOS_THINGS) {
 				return;
 			}
@@ -1412,6 +1459,106 @@ void ProtocolGame::parseUpdateContainer(NetworkMessage& msg)
 {
 	uint8_t cid = msg.getByte();
 	g_dispatcher.addTask([=, playerID = player->getID()]() { g_game.playerUpdateContainer(playerID, cid); });
+}
+
+void ProtocolGame::parseQuickLoot(NetworkMessage& msg)
+{
+	if (!player || !shouldSendQuickLootFlags()) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	if (getUnreadBytes(msg) < 6) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	const uint8_t variant = msg.getByte();
+	Position pos = msg.getPosition();
+
+	if (variant == 2) {
+		g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerLootNearby(playerID); });
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	if (getUnreadBytes(msg) < 3) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	uint16_t itemId = msg.get<uint16_t>();
+	uint8_t stackpos = msg.getByte();
+	const bool lootAllCorpses = variant == 1;
+	g_dispatcher.addTask([=, playerID = player->getID()]() {
+		g_game.playerQuickLoot(playerID, pos, itemId, stackpos, lootAllCorpses);
+	});
+}
+
+void ProtocolGame::parseLootContainer(NetworkMessage& msg)
+{
+	if (!player || !shouldSendQuickLootFlags()) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	uint8_t action = msg.getByte();
+	switch (action) {
+		case 0:
+		case 4:
+			msg.getByte(); // category
+			msg.getPosition();
+			msg.get<uint16_t>(); // item id
+			msg.getByte(); // stackpos
+			g_dispatcher.addTask([playerID = player->getID()]() {
+				if (auto playerRef = g_game.getPlayerByID(playerID)) {
+					playerRef->sendLootContainers();
+				}
+			});
+			break;
+		case 1:
+		case 2:
+		case 5:
+		case 6:
+			msg.getByte(); // category
+			g_dispatcher.addTask([playerID = player->getID()]() {
+				if (auto playerRef = g_game.getPlayerByID(playerID)) {
+					playerRef->sendLootContainers();
+				}
+			});
+			break;
+		case 3: {
+			bool useMainAsFallback = msg.getByte() == 1;
+			g_dispatcher.addTask([=, playerID = player->getID()]() {
+				g_game.playerSetQuickLootFallback(playerID, useMainAsFallback);
+			});
+			break;
+		}
+		default:
+			skipUnreadBytes(msg);
+			break;
+	}
+}
+
+void ProtocolGame::parseQuickLootBlackWhitelist(NetworkMessage& msg)
+{
+	if (!player || !shouldSendQuickLootFlags()) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	auto filter = static_cast<QuickLootFilter_t>(msg.getByte());
+	uint16_t size = std::min<uint16_t>(msg.get<uint16_t>(), 4096);
+	std::vector<uint16_t> listedItems;
+	listedItems.reserve(size);
+
+	for (uint16_t i = 0; i < size && getUnreadBytes(msg) >= sizeof(uint16_t); ++i) {
+		listedItems.push_back(msg.get<uint16_t>());
+	}
+
+	g_dispatcher.addTask([=, playerID = player->getID(), listedItems = std::move(listedItems)]() mutable {
+		g_game.playerQuickLootBlackWhitelist(playerID, filter, std::move(listedItems));
+	});
 }
 
 void ProtocolGame::parseThrow(NetworkMessage& msg)
@@ -1993,7 +2140,8 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 
 	msg.addByte(cid);
 
-	msg.addItem(container, isOTC, useItemTierByte, isOTC);
+	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
+	msg.addItem(container, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
 	msg.addString(container->getName());
 
 	msg.addByte(static_cast<uint8_t>(container->capacity()));
@@ -2006,8 +2154,22 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 	const ItemDeque& itemList = container->getItemList();
 	for (ItemDeque::const_iterator cit = itemList.begin() + firstIndex, end = itemList.end(); i < 0xFF && cit != end;
 	     ++cit, ++i) {
-		msg.addItem(cit->get(), isOTC, useItemTierByte, isOTC);
+		msg.addItem(cit->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
 	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendLootContainers()
+{
+	if (!player || !shouldSendQuickLootFlags()) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0xC0);
+	msg.addByte(player->getQuickLootFallbackToMainContainer() ? 1 : 0);
+	msg.addByte(0); // managed loot containers
+	msg.addByte(0); // managed obtain containers
 	writeToOutputBuffer(msg);
 }
 
@@ -2144,6 +2306,7 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 	}
 
 	msg.addString(traderName);
+	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
 
 	if (const Container* tradeContainer = item->getContainer()) {
 		std::list<const Container*> listContainer{tradeContainer};
@@ -2163,11 +2326,11 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 
 		msg.addByte(itemList.size());
 		for (const Item* listItem : itemList) {
-			msg.addItem(listItem, isOTC, useItemTierByte, isOTC);
+			msg.addItem(listItem, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
 		}
 	} else {
 		msg.addByte(0x01);
-		msg.addItem(item, isOTC, useItemTierByte, isOTC);
+		msg.addItem(item, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
 	}
 	writeToOutputBuffer(msg);
 }
@@ -2507,7 +2670,7 @@ void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, isOTC, useItemTierByte, isOTC);
+	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -2525,7 +2688,7 @@ void ProtocolGame::sendUpdateTileItem(const Position& pos, uint32_t stackpos, co
 	msg.addByte(0x6B);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, isOTC, useItemTierByte, isOTC);
+	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -2802,7 +2965,7 @@ void ProtocolGame::sendInventoryItem(slots_t slot, const Item* item)
 	if (item) {
 		msg.addByte(0x78);
 		msg.addByte(slot);
-		msg.addItem(item, isOTC, useItemTierByte, isOTC);
+		msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
 	} else {
 		msg.addByte(0x79);
 		msg.addByte(slot);
@@ -2851,7 +3014,7 @@ void ProtocolGame::sendAddContainerItem(uint8_t cid, const Item* item)
 	NetworkMessage msg;
 	msg.addByte(0x70);
 	msg.addByte(cid);
-	msg.addItem(item, isOTC, useItemTierByte, isOTC);
+	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -2861,7 +3024,7 @@ void ProtocolGame::sendUpdateContainerItem(uint8_t cid, uint16_t slot, const Ite
 	msg.addByte(0x71);
 	msg.addByte(cid);
 	msg.addByte(slot);
-	msg.addItem(item, isOTC, useItemTierByte, isOTC);
+	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3500,6 +3663,9 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::AdditionalSkills] = true;
 	features[GameFeature::ExtendedClientPing] = true;
 	features[GameFeature::CreatureIcons] = true;
+	if (shouldSendQuickLootFlags()) {
+		features[GameFeature::QuickLootFlags] = true;
+	}
 	if (useItemTierByte && getBoolean(ConfigManager::ITEM_TIER_DISPLAY)) {
 		features[GameFeature::ItemTierByte] = true;
 	}
@@ -3789,7 +3955,7 @@ void ProtocolGame::sendImbuementDurations(slots_t updatedSlot, const Item* updat
 		const Item* item = p.second;
 
 		msg.addByte(static_cast<uint8_t>(slot));
-		msg.addItem(item, isOTC, useItemTierByte, isOTC);
+		msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
 
 		uint16_t totalSlots = item->getImbuementSlots();
 		msg.addByte(static_cast<uint8_t>(totalSlots));

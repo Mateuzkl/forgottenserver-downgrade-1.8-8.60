@@ -6377,6 +6377,30 @@ void Player::lootCorpse(Container* container)
 	}
 }
 
+void Player::sendLootContainers() const
+{
+	if (client) {
+		client->sendLootContainers();
+	}
+}
+
+bool Player::isQuickLootListedItem(const Item* item) const
+{
+	return item && quickLootListItemIds.contains(item->getID());
+}
+
+void Player::setQuickLootBlackWhitelist(QuickLootFilter_t filter, std::vector<uint16_t> itemIds)
+{
+	quickLootFilter = filter == QUICKLOOTFILTER_ACCEPTEDLOOT ? QUICKLOOTFILTER_ACCEPTEDLOOT : QUICKLOOTFILTER_SKIPPEDLOOT;
+	quickLootListItemIds.clear();
+	quickLootListItemIds.reserve(itemIds.size());
+	for (uint16_t itemId : itemIds) {
+		if (itemId != 0) {
+			quickLootListItemIds.insert(itemId);
+		}
+	}
+}
+
 void Player::addPendingLoot(std::string monsterName, Container* corpse)
 {
 	if (!corpse || monsterName.empty()) {

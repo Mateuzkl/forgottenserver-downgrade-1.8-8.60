@@ -106,6 +106,12 @@ enum MarketAction_t
 	MARKETACTION_SELL = 1,
 };
 
+enum QuickLootFilter_t : uint8_t
+{
+	QUICKLOOTFILTER_SKIPPEDLOOT = 0,
+	QUICKLOOTFILTER_ACCEPTEDLOOT = 1,
+};
+
 enum MarketOfferState_t
 {
 	OFFERSTATE_ACTIVE = 0,

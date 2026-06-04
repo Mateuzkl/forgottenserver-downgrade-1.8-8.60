@@ -1010,6 +1010,7 @@ public:
 			client->sendInventoryItem(slot, item);
 		}
 	}
+	void sendLootContainers() const;
 
 	void sendImbuementDurations()
 	{
@@ -1288,6 +1289,11 @@ public:
 	Container* findGoldPouch() const;
 	Container* getOrCreateGoldPouchPage(Container* pouch);
 	void lootCorpse(Container* container);
+	bool isQuickLootListedItem(const Item* item) const;
+	QuickLootFilter_t getQuickLootFilter() const { return quickLootFilter; }
+	void setQuickLootBlackWhitelist(QuickLootFilter_t filter, std::vector<uint16_t> itemIds);
+	void setQuickLootFallbackToMainContainer(bool fallback) { quickLootFallbackToMainContainer = fallback; }
+	bool getQuickLootFallbackToMainContainer() const { return quickLootFallbackToMainContainer; }
 
 	// Loot grouping
 	void addPendingLoot(std::string monsterName, Container* corpse);
@@ -1472,6 +1478,7 @@ private:
 	LightInfo itemsLight;
 	Position loginPosition;
 	AutoLootConfig autolootConfig;
+	std::unordered_set<uint16_t> quickLootListItemIds;
 
 	time_t lastLoginSaved = 0;
 	time_t lastLogout = 0;
@@ -1551,6 +1558,8 @@ private:
 	int32_t offlineTrainingTime = 0;
 	int32_t idleTime = 0;
 	int32_t helmetCooldownReduction = 0;
+	QuickLootFilter_t quickLootFilter = QUICKLOOTFILTER_SKIPPEDLOOT;
+	bool quickLootFallbackToMainContainer = true;
 	int32_t temporaryDeathLossReduction = 0;
 
 	uint16_t lastStatsTrainingTime = 0;

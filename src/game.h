@@ -399,6 +399,11 @@ public:
 	void playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPos, uint8_t index, uint16_t spriteId);
 	void playerUseWithCreature(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint32_t creatureId,
 	                           uint16_t spriteId);
+	void playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,
+	                     bool lootAllCorpses);
+	void playerLootNearby(uint32_t playerId);
+	void playerSetQuickLootFallback(uint32_t playerId, bool fallback);
+	void playerQuickLootBlackWhitelist(uint32_t playerId, QuickLootFilter_t filter, std::vector<uint16_t> itemIds);
 	void playerCloseContainer(uint32_t playerId, uint8_t cid);
 	void playerMoveUpContainer(uint32_t playerId, uint8_t cid);
 	void playerUpdateContainer(uint32_t playerId, uint8_t cid);
