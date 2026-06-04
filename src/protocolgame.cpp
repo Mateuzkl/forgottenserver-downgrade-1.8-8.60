@@ -348,6 +348,10 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 		}
 
 		player->setOperatingSystem(operatingSystem);
+		player->client->isOTCv8 = isOTCv8;
+		player->client->isMehah = isMehah;
+		player->client->isOTC = isOTC;
+		player->client->isAstraClient = isAstraClient;
 
 		if (!g_game.placeCreature(player.get(), player->getLoginPosition())) {
 			if (!g_game.placeCreature(player.get(), player->getTemplePosition(), false, true)) {
@@ -499,6 +503,10 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	} else {
 		player->client->setOwner(getThis());
 	}
+	player->client->isOTCv8 = isOTCv8;
+	player->client->isMehah = isMehah;
+	player->client->isOTC = isOTC;
+	player->client->isAstraClient = isAstraClient;
 	sendAddCreature(player.get(), player->getPosition(), 0);
 	sendDllCheck();
 	sendLootContainers();

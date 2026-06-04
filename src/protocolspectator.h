@@ -975,6 +975,7 @@ class ProtocolSpectator {
         bool isOTCv8 = false;
         bool isMehah = false;
 	    bool isOTC = false;
+        bool isAstraClient = false;
         std::string cast_password = "";
         std::string cast_description = "";
 

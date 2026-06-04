@@ -23,7 +23,7 @@ local MARKET_DETAIL_NAMES = {
 }
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function colorizedLootEnabled()
