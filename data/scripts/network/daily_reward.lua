@@ -396,7 +396,9 @@ local function claimReward(player, msg)
 	if not NetworkGuard.canRead(msg, 1) then
 		return sendClaimError(player, "Invalid daily reward request.")
 	end
-	NetworkGuard.readByte(msg)
+	local fromShrine = NetworkGuard.readByte(msg)
+	-- Astra sends this shrine/shortcut flag before the selected item list.
+	-- Claims currently use the same validation path either way, but the byte must be consumed.
 
 	local selectedItems = parseSelectedItems(msg)
 	if not selectedItems then

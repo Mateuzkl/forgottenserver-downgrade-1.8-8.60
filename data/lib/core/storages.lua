@@ -28,7 +28,7 @@ PlayerStorageKeys = {
     dailyRewardLastDay = 90720,
     dailyRewardIndex = 90721,
     dailyRewardStreak = 90722,
-    dailyRewardJokerTokens = 90724,
+    dailyRewardJokerTokens = 90723,
 
     -- Forge system
     forgeDust = 10000,
