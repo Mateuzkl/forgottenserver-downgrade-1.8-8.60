@@ -96,6 +96,16 @@ void skipUnreadBytes(NetworkMessage& msg)
 	msg.skipBytes(static_cast<int16_t>(unread));
 }
 
+bool requireUnreadBytes(NetworkMessage& msg, std::size_t required)
+{
+	if (getUnreadBytes(msg) >= required) {
+		return true;
+	}
+
+	skipUnreadBytes(msg);
+	return false;
+}
+
 uint8_t getRuleViolationTypeFromLegacyAction(uint8_t action)
 {
 	if (action == 6) {
@@ -345,6 +355,7 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 				return;
 			}
 		}
+		sendLootContainers();
 
 		if (isOTC) {
 			player->registerCreatureEvent("ExtendedOpcode");
@@ -1468,8 +1479,7 @@ void ProtocolGame::parseQuickLoot(NetworkMessage& msg)
 		return;
 	}
 
-	if (getUnreadBytes(msg) < 6) {
-		skipUnreadBytes(msg);
+	if (!requireUnreadBytes(msg, 6)) {
 		return;
 	}
 
@@ -1482,8 +1492,7 @@ void ProtocolGame::parseQuickLoot(NetworkMessage& msg)
 		return;
 	}
 
-	if (getUnreadBytes(msg) < 3) {
-		skipUnreadBytes(msg);
+	if (!requireUnreadBytes(msg, 3)) {
 		return;
 	}
 
@@ -1502,10 +1511,18 @@ void ProtocolGame::parseLootContainer(NetworkMessage& msg)
 		return;
 	}
 
+	if (!requireUnreadBytes(msg, 1)) {
+		return;
+	}
+
 	uint8_t action = msg.getByte();
 	switch (action) {
 		case 0:
-		case 4:
+		case 4: {
+			if (!requireUnreadBytes(msg, 9)) {
+				return;
+			}
+
 			msg.getByte(); // category
 			msg.getPosition();
 			msg.get<uint16_t>(); // item id
@@ -1516,10 +1533,15 @@ void ProtocolGame::parseLootContainer(NetworkMessage& msg)
 				}
 			});
 			break;
+		}
 		case 1:
 		case 2:
 		case 5:
 		case 6:
+			if (!requireUnreadBytes(msg, 1)) {
+				return;
+			}
+
 			msg.getByte(); // category
 			g_dispatcher.addTask([playerID = player->getID()]() {
 				if (auto playerRef = g_game.getPlayerByID(playerID)) {
@@ -1528,6 +1550,10 @@ void ProtocolGame::parseLootContainer(NetworkMessage& msg)
 			});
 			break;
 		case 3: {
+			if (!requireUnreadBytes(msg, 1)) {
+				return;
+			}
+
 			bool useMainAsFallback = msg.getByte() == 1;
 			g_dispatcher.addTask([=, playerID = player->getID()]() {
 				g_game.playerSetQuickLootFallback(playerID, useMainAsFallback);
@@ -1547,12 +1573,27 @@ void ProtocolGame::parseQuickLootBlackWhitelist(NetworkMessage& msg)
 		return;
 	}
 
-	auto filter = static_cast<QuickLootFilter_t>(msg.getByte());
-	uint16_t size = std::min<uint16_t>(msg.get<uint16_t>(), 4096);
+	if (!requireUnreadBytes(msg, 3)) {
+		return;
+	}
+
+	const uint8_t filterByte = msg.getByte();
+	if (filterByte != QUICKLOOTFILTER_SKIPPEDLOOT && filterByte != QUICKLOOTFILTER_ACCEPTEDLOOT) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	auto filter = static_cast<QuickLootFilter_t>(filterByte);
+	const uint16_t size = msg.get<uint16_t>();
+	if (size > 4096 || getUnreadBytes(msg) < static_cast<std::size_t>(size) * sizeof(uint16_t)) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
 	std::vector<uint16_t> listedItems;
 	listedItems.reserve(size);
 
-	for (uint16_t i = 0; i < size && getUnreadBytes(msg) >= sizeof(uint16_t); ++i) {
+	for (uint16_t i = 0; i < size; ++i) {
 		listedItems.push_back(msg.get<uint16_t>());
 	}
 

@@ -713,6 +713,7 @@ ReturnValue Tile::queryAdd(int32_t, const Thing& thing, uint32_t, uint32_t flags
 		}
 
 		if (hasFlag(TILESTATE_TRASHHOLDER) && item->hasProperty(CONST_PROP_MOVEABLE)) {
+			// Trash holders intentionally accept movable items before floor and blocking checks.
 			return RETURNVALUE_NOERROR;
 		}
 

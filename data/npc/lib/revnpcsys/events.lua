@@ -184,7 +184,7 @@ if not NpcEvents then
         local focus = NpcFocus(npc)
         local talkQueue = NpcTalkQueue(npc)
         local currentFocus = focus:getCurrentFocus()
-        if currentFocus and currentFocus:getId() ~= creature:getId() and not focus:isFocused(creature) then
+        if currentFocus and currentFocus:getId() ~= creature:getId() then
             return
         end
 

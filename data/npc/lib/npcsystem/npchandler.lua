@@ -178,10 +178,7 @@ if NpcHandler == nil then
     end
 
     function NpcHandler:getFocus()
-        for _, focus in pairs(self:getNpcState().focuses) do
-            if focus then return focus end
-        end
-        return nil
+        return self:getNpcState().focuses[1]
     end
 
     -- Function used to change the focus of this npc.

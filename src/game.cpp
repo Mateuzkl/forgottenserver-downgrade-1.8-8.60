@@ -178,21 +178,32 @@ bool isQuickLootCorpseType(const Container* container)
 	return type.corpseType != RACE_NONE || container->getCorpseOwner() != 0;
 }
 
+const Container* getQuickLootCorpseContainer(const Container* container)
+{
+	for (auto* current = container; current; current = dynamic_cast<const Container*>(current->getParent())) {
+		if (isQuickLootCorpseType(current)) {
+			return current;
+		}
+	}
+	return nullptr;
+}
+
 ReturnValue getQuickLootContainerReturn(const Player* player, const Container* container)
 {
-	if (!player || !container || !isQuickLootCorpseType(container)) {
+	const Container* corpseContainer = getQuickLootCorpseContainer(container);
+	if (!player || !corpseContainer) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	if (container->hasAttribute(ITEM_ATTRIBUTE_UNIQUEID) || container->hasAttribute(ITEM_ATTRIBUTE_ACTIONID)) {
+	if (corpseContainer->hasAttribute(ITEM_ATTRIBUTE_UNIQUEID) || corpseContainer->hasAttribute(ITEM_ATTRIBUTE_ACTIONID)) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	if (container->isRewardCorpse()) {
+	if (corpseContainer->isRewardCorpse()) {
 		return RETURNVALUE_NOERROR;
 	}
 
-	const uint32_t owner = container->getCorpseOwner();
+	const uint32_t owner = corpseContainer->getCorpseOwner();
 	if (owner != 0 && !player->canOpenCorpse(owner) && !player->hasFlag(PlayerFlag_CanEditHouses)) {
 		return RETURNVALUE_YOUARENOTTHEOWNER;
 	}
@@ -258,9 +269,16 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, Container*
 			continue;
 		}
 
+		const uint16_t originalCount = item->getItemCount();
 		ReturnValue ret = game.internalMoveItem(fromCylinder, destination, INDEX_WHEREEVER, item,
-		                                        item->getItemCount(), nullptr, 0, player);
+		                                        originalCount, nullptr, 0, player);
 		if (ret == RETURNVALUE_NOERROR) {
+			++result.movedItems;
+			continue;
+		}
+
+		const uint16_t remainingCount = item->isRemoved() ? 0 : item->getItemCount();
+		if (remainingCount < originalCount) {
 			++result.movedItems;
 		} else if (result.failure == RETURNVALUE_NOERROR) {
 			result.failure = ret;
@@ -3277,7 +3295,7 @@ void Game::playerQuickLootBlackWhitelist(uint32_t playerId, QuickLootFilter_t fi
 		return;
 	}
 
-	player->setQuickLootBlackWhitelist(filter, std::move(itemIds));
+	player->setQuickLootBlackWhitelist(filter, itemIds);
 }
 
 void Game::playerUseWithCreature(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint32_t creatureId,

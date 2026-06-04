@@ -6389,7 +6389,7 @@ bool Player::isQuickLootListedItem(const Item* item) const
 	return item && quickLootListItemIds.contains(item->getID());
 }
 
-void Player::setQuickLootBlackWhitelist(QuickLootFilter_t filter, std::vector<uint16_t> itemIds)
+void Player::setQuickLootBlackWhitelist(QuickLootFilter_t filter, const std::vector<uint16_t>& itemIds)
 {
 	quickLootFilter = filter == QUICKLOOTFILTER_ACCEPTEDLOOT ? QUICKLOOTFILTER_ACCEPTEDLOOT : QUICKLOOTFILTER_SKIPPEDLOOT;
 	quickLootListItemIds.clear();

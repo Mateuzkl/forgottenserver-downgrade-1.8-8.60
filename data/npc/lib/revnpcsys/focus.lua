@@ -16,7 +16,7 @@
 
 ---@class NpcFocus
 ---@field focus table<number, number>
----@field currentFocus Player
+---@field currentFocus number|nil
 ---@field addFocus fun(player: Player)
 ---@field isFocused fun(player: Player): boolean
 ---@field removeFocus fun(player: Player)

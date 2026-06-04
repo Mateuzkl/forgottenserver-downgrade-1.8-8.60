@@ -1291,7 +1291,7 @@ public:
 	void lootCorpse(Container* container);
 	bool isQuickLootListedItem(const Item* item) const;
 	QuickLootFilter_t getQuickLootFilter() const { return quickLootFilter; }
-	void setQuickLootBlackWhitelist(QuickLootFilter_t filter, std::vector<uint16_t> itemIds);
+	void setQuickLootBlackWhitelist(QuickLootFilter_t filter, const std::vector<uint16_t>& itemIds);
 	void setQuickLootFallbackToMainContainer(bool fallback) { quickLootFallbackToMainContainer = fallback; }
 	bool getQuickLootFallbackToMainContainer() const { return quickLootFallbackToMainContainer; }
 
