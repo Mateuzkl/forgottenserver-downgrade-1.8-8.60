@@ -25,6 +25,10 @@ PlayerStorageKeys = {
     guildLeaderChatCooldown = 50001,
     expColor = 50100,
     healthDisplay = 50101,
+    dailyRewardLastDay = 90720,
+    dailyRewardIndex = 90721,
+    dailyRewardStreak = 90722,
+    dailyRewardJokerTokens = 90724,
 
     -- Forge system
     forgeDust = 10000,

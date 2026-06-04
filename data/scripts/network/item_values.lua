@@ -227,9 +227,16 @@ local function getDefaultBuyPrice(itemId)
 	return 0
 end
 
-local function sendItemValues(playerId)
+local function sendItemValues(playerId, attempt)
+	attempt = tonumber(attempt) or 1
 	local player = Player(playerId)
-	if not supportsCustomNetwork(player) or not Game.getItemPrices then
+	if not player or not Game.getItemPrices then
+		return
+	end
+	if not supportsCustomNetwork(player) then
+		if attempt < 6 then
+			addEvent(sendItemValues, 1000, playerId, attempt + 1)
+		end
 		return
 	end
 	if not colorizedLootEnabled() then
@@ -303,7 +310,7 @@ end
 local loginEvent = CreatureEvent("ItemValuesLogin")
 
 function loginEvent.onLogin(player)
-	addEvent(sendItemValues, 1000, player:getId())
+	addEvent(sendItemValues, 1000, player:getId(), 1)
 	return true
 end
 
