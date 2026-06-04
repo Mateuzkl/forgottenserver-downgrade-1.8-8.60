@@ -728,6 +728,10 @@ do
 
 		function NpcHandler:onCreatureSay(creature, messageType, message)
 			local playerId = getPlayerId(creature)
+			if self.isConversationMessage and not self:isConversationMessage(messageType) then
+				return false
+			end
+
 			if playerId == 0 then
 				return compat.originalNpcHandlerOnCreatureSay(self, creature, messageType, message)
 			end

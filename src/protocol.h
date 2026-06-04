@@ -65,11 +65,13 @@ protected:
 private:
 	friend class Connection;
 	friend class ConnectionManager;
+	friend class OutputMessagePool;
 
 	OutputMessage_ptr outputBuffer;
 
 	const ConnectionWeak_ptr connection;
 	xtea::round_keys key;
+	bool inAutosend = false;
 	bool encryptionEnabled = false;
 	bool checksumEnabled = true;
 	bool rawMessages = false;

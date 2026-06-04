@@ -4,10 +4,17 @@
 #ifndef FS_SPECTATORS_H
 #define FS_SPECTATORS_H
 
+#include <absl/container/flat_hash_set.h>
+
+#include <algorithm>
+#include <cassert>
+#include <functional>
 #include <memory>
 #include <span>
+#include <vector>
 
 class Creature;
+class Player;
 
 class SpectatorVec
 {
@@ -20,11 +27,16 @@ public:
 
 	void addSpectators(const SpectatorVec& spectators)
 	{
+		absl::flat_hash_set<Creature*> existing;
+		existing.reserve(vec.size() + spectators.vec.size());
+		for (const auto& spectator : vec) {
+			existing.insert(spectator.get());
+		}
+
 		for (const auto& spectator : spectators.vec) {
-			if (std::find(vec.begin(), vec.end(), spectator) != vec.end()) {
-				continue;
+			if (existing.insert(spectator.get()).second) {
+				vec.emplace_back(spectator);
 			}
-			vec.emplace_back(spectator);
 		}
 		partitioned_ = false;
 	}
@@ -42,6 +54,7 @@ public:
 	}
 
 	void partitionByType();
+	void filterPlayers(std::function<bool(const Player*)> pred);
 
 	std::span<std::shared_ptr<Creature>> players() {
 		assert(partitioned_);

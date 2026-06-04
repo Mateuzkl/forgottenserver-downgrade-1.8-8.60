@@ -712,6 +712,10 @@ ReturnValue Tile::queryAdd(int32_t, const Thing& thing, uint32_t, uint32_t flags
 			return RETURNVALUE_ITEMCANNOTBEMOVEDTHERE;
 		}
 
+		if (hasFlag(TILESTATE_TRASHHOLDER) && item->hasProperty(CONST_PROP_MOVEABLE)) {
+			return RETURNVALUE_NOERROR;
+		}
+
 		bool itemIsHangable = item->isHangable();
 		if (ground == nullptr && !itemIsHangable) {
 			return RETURNVALUE_NOTPOSSIBLE;

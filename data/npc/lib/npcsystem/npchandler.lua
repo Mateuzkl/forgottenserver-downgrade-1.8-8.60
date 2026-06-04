@@ -172,6 +172,18 @@ if NpcHandler == nil then
         self.keywordHandler = newHandler
     end
 
+    function NpcHandler:isConversationMessage(msgtype)
+        return msgtype == TALKTYPE_SAY or msgtype == TALKTYPE_WHISPER or
+                   msgtype == TALKTYPE_YELL or msgtype == TALKTYPE_PRIVATE_PN
+    end
+
+    function NpcHandler:getFocus()
+        for _, focus in pairs(self:getNpcState().focuses) do
+            if focus then return focus end
+        end
+        return nil
+    end
+
     -- Function used to change the focus of this npc.
     function NpcHandler:addFocus(newFocus)
         if self:isFocused(newFocus) then return end
@@ -429,6 +441,12 @@ if NpcHandler == nil then
     -- Handles onCreatureSay events. If you with to handle this yourself, please use the CALLBACK_CREATURE_SAY callback.
     function NpcHandler:onCreatureSay(creature, msgtype, msg)
         local cid = creature:getId()
+        if not self:isConversationMessage(msgtype) then return false end
+
+        local isFocused = self:isFocused(cid)
+        local currentFocus = self:getFocus()
+        if currentFocus and not isFocused then return false end
+
         local callback = self:getCallback(CALLBACK_CREATURE_SAY)
         if callback == nil or callback(cid, msgtype, msg) then
             if self:processModuleCallback(CALLBACK_CREATURE_SAY, cid, msgtype,
@@ -436,8 +454,7 @@ if NpcHandler == nil then
                 if not self:isInRange(cid) then return end
 
                 if self.keywordHandler then
-                    if self:isFocused(cid) and msgtype == TALKTYPE_PRIVATE_PN or
-                        not self:isFocused(cid) then
+                    if isFocused or not currentFocus then
                         local ret = self.keywordHandler:processMessage(cid, msg)
                         if not ret then
                             local callback = self:getCallback(

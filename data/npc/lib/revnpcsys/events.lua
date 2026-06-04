@@ -39,6 +39,11 @@
 if not NpcEvents then
     -- If NpcEvents doesn't exist, it's created as an empty table
     NpcEvents = {}
+
+    local function isConversationMessage(messageType)
+        return messageType == TALKTYPE_SAY or messageType == TALKTYPE_WHISPER or
+                   messageType == TALKTYPE_YELL or messageType == TALKTYPE_PRIVATE_PN
+    end
     -- onAppear function is called when an NPC appears to a creature (player) or when the creature appears to the NPC.
     -- It executes the onAppearCallback function of the NPC if it is defined.
     ---@param npc Npc The NPC that appeared.
@@ -141,8 +146,8 @@ if not NpcEvents then
                     selfTurn(DIRECTION_WEST)
                 end
             else
-                local playerGuid,_ = next(focus.focus)
-                focus.currentFocus = playerGuid
+                local playerId,_ = next(focus.focus)
+                focus.currentFocus = playerId
             end
         end
 
@@ -168,12 +173,20 @@ if not NpcEvents then
             return
         end
 
+        if not isConversationMessage(messageType) then
+            return
+        end
+
         local normalMessage = message
         local message = message:lower()
         -- initlialize the handler, focus and talkQueue
         local handler = NpcsHandler(npc)
         local focus = NpcFocus(npc)
         local talkQueue = NpcTalkQueue(npc)
+        local currentFocus = focus:getCurrentFocus()
+        if currentFocus and currentFocus:getId() ~= creature:getId() and not focus:isFocused(creature) then
+            return
+        end
 
         if focus:isFocused(creature) then
             -- If the player is focused, the NPC will say goodbye if the player says a farewell word
