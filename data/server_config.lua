@@ -1,6 +1,15 @@
 -- Server-only configuration.
 -- MyAAC reads config.lua, so keep advanced Lua values and server-only toggles here.
 
+-- Astra/client protocol
+-- NOTE: maxProtocolOutfits only applies to Cip client; OTC will use 255.
+maxProtocolOutfits = 255
+-- Minimum addons required to grant outfit attributes from data/XML/outfits.xml.
+maxAddonAttributes = 3
+dllCheckKick = true
+dllCheckKickTime = 5
+astraClientOnly = true
+
 -- Dual Wielding
 -- NOTE: dualWieldingSpeedRate = 200 means dual-wielding attacks twice as fast
 -- dualWieldingDamageRate = 60 means each hit deals 60% of normal damage

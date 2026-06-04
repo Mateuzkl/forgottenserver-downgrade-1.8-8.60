@@ -1,17 +1,4 @@
--- Protocol things
--- NOTE: The maximum number of outfits only applies to cip client, OTC will use 255
-maxProtocolOutfits = 255
-
--- Addon things
--- NOTE: The minimum number of addons required to grant outfit attributes.
--- Attributes are defined in: data/XML/outfits.xml
-maxAddonAttributes = 3
-
-dllCheckKick = true -- true = kick enabled, false = kick disabled (default)
-dllCheckKickTime = 5 -- time in seconds (optional usage)
-astraClientOnly = false -- true = only AstraClient can pass login
-
--- Server-only custom configuration is in data/server_config.lua.
+-- Astra/client protocol configuration is in data/server_config.lua.
 
 Autoloot_enabled = true
 AutoBank = true
