@@ -41,6 +41,17 @@ struct LoginBoostedEntry {
 	}
 };
 
+std::string getBoostedBossDateKey()
+{
+	const std::time_t now = std::time(nullptr);
+	const std::tm* localTime = std::localtime(&now);
+	if (!localTime) {
+		return {};
+	}
+
+	return fmt::format("{:04}-{:02}-{:02}", localTime->tm_year + 1900, localTime->tm_mon + 1, localTime->tm_mday);
+}
+
 LoginBoostedEntry getBoostedCreatureLoginEntry()
 {
 	LoginBoostedEntry entry;
@@ -69,13 +80,15 @@ LoginBoostedEntry getBoostedBossLoginEntry()
 		return entry;
 	}
 
-	const std::time_t now = std::time(nullptr);
-	const std::tm* localTime = std::localtime(&now);
-	const uint16_t today = localTime ? static_cast<uint16_t>(localTime->tm_mday) : 0;
+	const std::string today = getBoostedBossDateKey();
+	if (today.empty()) {
+		return entry;
+	}
+
 	const auto result = db.storeQuery(fmt::format(
 	    "SELECT `boostname`, `raceid`, `looktype`, `lookhead`, `lookbody`, `looklegs`, `lookfeet`, `lookaddons` "
-	    "FROM `boosted_boss` WHERE `date` = '{}' AND `raceid` <> '0' LIMIT 1",
-	    today));
+	    "FROM `boosted_boss` WHERE `date` = {:s} AND `raceid` <> '0' LIMIT 1",
+	    db.escapeString(today)));
 	if (!result) {
 		return entry;
 	}
