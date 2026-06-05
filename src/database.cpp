@@ -213,12 +213,19 @@ bool Database::establishConnection(ConnectionContext& ctx, const bool retryIfErr
 Database::ConnectionContext& Database::getContext() const
 {
 	thread_local ConnectionContext* tlsContext = nullptr;
+	thread_local std::unique_ptr<ConnectionContext> failedContext;
 	if (tlsContext) {
 		return *tlsContext;
 	}
 
 	auto context = std::make_unique<ConnectionContext>();
 	ConnectionContext* contextPtr = context.get();
+	if (!establishConnection(*contextPtr, false)) {
+		failedContext = std::move(context);
+		LOG_ERROR("Database: failed to open MySQL connection.");
+		return *failedContext;
+	}
+
 	size_t connectionNumber = 0;
 	{
 		std::scoped_lock lock{connectionsMutex};
@@ -226,14 +233,9 @@ Database::ConnectionContext& Database::getContext() const
 		connectionNumber = connections.size();
 	}
 
-	if (establishConnection(*contextPtr, false)) {
-		tlsContext = contextPtr;
-		LOG_INFO(fmt::format("Database: opened MySQL connection #{}.", connectionNumber));
-	} else {
-		LOG_ERROR(fmt::format("Database: failed to open MySQL connection #{}.", connectionNumber));
-	}
-
-	return *contextPtr;
+	tlsContext = contextPtr;
+	LOG_INFO(fmt::format("Database: opened MySQL connection #{}.", connectionNumber));
+	return *tlsContext;
 }
 
 bool Database::reconnect(ConnectionContext& ctx) const
