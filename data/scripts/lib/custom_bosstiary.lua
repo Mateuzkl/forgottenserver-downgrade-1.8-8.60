@@ -47,6 +47,10 @@ local function isArchfoeBoss(entry)
 	return entry and entry.category == boostedBossCategory
 end
 
+local function getBoostedBossDateKey()
+	return os.date("%Y-%m-%d")
+end
+
 local function normalizeOutfit(outfit)
 	if type(outfit) ~= "table" then
 		return {type = 0, typeEx = 0, head = 0, body = 0, legs = 0, feet = 0, addons = 0}
@@ -204,7 +208,7 @@ function CustomBosstiary.addKill(players, entry)
 
 	local boostedBoss = CustomBosstiary.getBoostedBoss()
 	local isBoosted = boostedBoss and boostedBoss.raceId == entry.raceId
-	local increment = isBoosted and CustomBosstiary.getBoostedBossKillBonus() or 1
+	local increment = isBoosted and math.max(CustomBosstiary.getBoostedBossKillBonus(), 1) or 1
 
 	for playerGuid, player in pairs(players or {}) do
 		local oldKills = 0
@@ -237,7 +241,7 @@ end
 function CustomBosstiary.loadBoostedBoss()
 	CustomBosstiary.ensureTables()
 
-	local today = tostring(tonumber(os.date("%d")) or 0)
+	local today = getBoostedBossDateKey()
 	local resultId = db.storeQuery("SELECT `date`, `boostname`, `raceid`, `looktype`, `lookhead`, `lookbody`, `looklegs`, `lookfeet`, `lookaddons`, `lookmount` FROM `boosted_boss` WHERE `date` = " .. db.escapeString(today) .. " LIMIT 1")
 	if not resultId then
 		CustomBosstiary.pickNewBoostedBoss()
@@ -280,8 +284,7 @@ function CustomBosstiary.setBoostedBoss(entry)
 		return false
 	end
 
-	CustomBosstiary.boostedBoss = entry
-	local today = tostring(tonumber(os.date("%d")) or 0)
+	local today = getBoostedBossDateKey()
 	local outfit = entry.outfit or {}
 	db.query("DELETE FROM `boosted_boss` WHERE `date` <> " .. db.escapeString(today))
 
@@ -300,6 +303,7 @@ function CustomBosstiary.setBoostedBoss(entry)
 		return false
 	end
 
+	CustomBosstiary.boostedBoss = entry
 	db.query("UPDATE `player_bosstiary` SET `slot_one` = 0 WHERE `slot_one` = " .. entry.raceId)
 	db.query("UPDATE `player_bosstiary` SET `slot_two` = 0 WHERE `slot_two` = " .. entry.raceId)
 	return true

@@ -8,10 +8,21 @@ local function secondsUntilMidnight()
 	return math.max(1, os.time(date) - now)
 end
 
+local function logBoostedBossError(message)
+	if logger and logger.error then
+		logger.error("%s", "[BoostedBoss] " .. message)
+	else
+		print("[BoostedBoss] " .. message)
+	end
+end
+
 local function scheduleNextBoostedBoss()
 	addEvent(function()
 		if CustomBosstiary and CustomBosstiary.pickNewBoostedBoss then
-			CustomBosstiary.pickNewBoostedBoss()
+			local ok, err = pcall(CustomBosstiary.pickNewBoostedBoss)
+			if not ok then
+				logBoostedBossError("CustomBosstiary.pickNewBoostedBoss failed: " .. tostring(err))
+			end
 		end
 		scheduleNextBoostedBoss()
 	end, secondsUntilMidnight() * 1000)
