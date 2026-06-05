@@ -8,6 +8,16 @@
 #include <mysql/mysql.h>
 #include "logger.h"
 #include <fmt/format.h>
+#include <cassert>
+#include <cstdint>
+#include <exception>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <map>
+#include <string>
+#include <string_view>
+#include <vector>
 
 class DBResult;
 using DBResult_ptr = std::shared_ptr<DBResult>;
@@ -91,7 +101,7 @@ public:
 	 *
 	 * @return id on success, 0 if last query did not result on any rows with auto_increment keys
 	 */
-	uint64_t getLastInsertId() const { return static_cast<uint64_t>(mysql_insert_id(handle.get())); }
+	uint64_t getLastInsertId() const;
 
 	/**
 	 * Get database engine version
@@ -100,13 +110,28 @@ public:
 	 */
 	static const char* getClientVersion() { return mysql_get_client_info(); }
 
-	uint64_t getMaxPacketSize() const { return maxPacketSize; }
+	uint64_t getMaxPacketSize() const;
+
+	[[nodiscard]] bool lastQueryWasDeadlock() const;
+
+	void beginQueryCapture(std::vector<std::string>* buffer);
+	void endQueryCapture();
 
 	/**
 	 * Shutdown the database connection and cleanup MySQL library.
 	 * Should be called before program termination.
 	 */
 	static void shutdown();
+
+	struct ConnectionParams
+	{
+		std::string host;
+		std::string user;
+		std::string password;
+		std::string database;
+		std::string socket;
+		int port = 0;
+	};
 
 private:
 	/**
@@ -120,29 +145,53 @@ private:
 	bool rollback();
 	bool commit();
 
+	struct ConnectionContext
+	{
+		ConnectionContext() = default;
+		ConnectionContext(const ConnectionContext&) = delete;
+		ConnectionContext& operator=(const ConnectionContext&) = delete;
+		ConnectionContext(ConnectionContext&&) = delete;
+		ConnectionContext& operator=(ConnectionContext&&) = delete;
+		~ConnectionContext() = default;
+
+		tfs::detail::Mysql_ptr handle = nullptr;
+		uint64_t maxPacketSize = 1048576;
+		unsigned int lastErrno = 0;
+		bool inTransaction = false;
+	};
+
+	ConnectionContext& getContext() const;
+	bool establishConnection(ConnectionContext& ctx, bool retryIfError) const;
 	/**
-	 * Reconnects to the database using saved credentials.
-	 * Replaces the current handle on success.
+	 * Reconnects the calling thread's database context using saved credentials.
+	 * Replaces that thread's handle on success.
 	 * @return true on successful reconnect, false on error.
 	 */
-	bool reconnect();
+	bool reconnect(ConnectionContext& ctx) const;
 
-	tfs::detail::Mysql_ptr handle = nullptr;
-	std::recursive_mutex databaseLock;
-	std::unique_lock<std::recursive_mutex> transactionLock;
-	uint64_t maxPacketSize = 1048576;
-	// Do not retry queries if we are in the middle of a transaction
-	bool retryQueries = true;
-
-	// Saved connection credentials used by reconnect()
-	std::string dbHost;
-	std::string dbUser;
-	std::string dbPass;
-	std::string dbName;
-	std::string dbSocket;
-	int dbPort = 0;
+	mutable std::optional<ConnectionParams> connectionParams;
+	mutable std::mutex connectionsMutex;
+	mutable std::vector<std::unique_ptr<ConnectionContext>> connections;
+	bool libraryInitialized = false;
 
 	friend class DBTransaction;
+};
+
+class QueryCaptureScope
+{
+public:
+	explicit QueryCaptureScope(std::vector<std::string>& buffer)
+	{
+		Database::getInstance().beginQueryCapture(&buffer);
+	}
+
+	~QueryCaptureScope()
+	{
+		Database::getInstance().endQueryCapture();
+	}
+
+	QueryCaptureScope(const QueryCaptureScope&) = delete;
+	QueryCaptureScope& operator=(const QueryCaptureScope&) = delete;
 };
 
 class DBResult
@@ -237,8 +286,65 @@ public:
 			return false;
 		}
 
+		if (!Database::getInstance().commit()) {
+			return false;
+		}
+
 		state = STATE_COMMIT;
-		return Database::getInstance().commit();
+		return true;
+	}
+
+	bool rollback()
+	{
+		if (state != STATE_START) {
+			return false;
+		}
+
+		state = STATE_NO_START;
+		return Database::getInstance().rollback();
+	}
+
+	static constexpr uint8_t TRANSACTION_MAX_ATTEMPTS = 3;
+
+	template <typename Func>
+	static bool executeWithinTransactionRollbackOnFailure(const Func& callback)
+	{
+		for (uint8_t attempt = 1; attempt <= TRANSACTION_MAX_ATTEMPTS; ++attempt) {
+			DBTransaction transaction;
+			if (!transaction.begin()) {
+				LOG_ERROR("[DBTransaction] Failed to begin transaction.");
+				return false;
+			}
+
+			try {
+				if (!callback()) {
+					transaction.rollback();
+					if (Database::getInstance().lastQueryWasDeadlock() && attempt < TRANSACTION_MAX_ATTEMPTS) {
+						LOG_WARN(fmt::format("[DBTransaction] Transaction deadlock/lock timeout, retrying ({}/{})",
+						                     attempt, TRANSACTION_MAX_ATTEMPTS));
+						continue;
+					}
+					return false;
+				}
+
+				if (transaction.commit()) {
+					return true;
+				}
+
+				if (Database::getInstance().lastQueryWasDeadlock() && attempt < TRANSACTION_MAX_ATTEMPTS) {
+					LOG_WARN(fmt::format("[DBTransaction] Transaction commit deadlock/lock timeout, retrying ({}/{})",
+					                     attempt, TRANSACTION_MAX_ATTEMPTS));
+					continue;
+				}
+				return false;
+			} catch (const std::exception& e) {
+				transaction.rollback();
+				LOG_ERROR(fmt::format("[DBTransaction] Exception during transaction: {}", e.what()));
+				return false;
+			}
+		}
+
+		return false;
 	}
 
 private:

@@ -20,6 +20,8 @@
 
 #include <map>
 #include <shared_mutex>
+#include <unordered_map>
+#include <unordered_set>
 #include <absl/container/flat_hash_map.h>
 
 class ServiceManager;
@@ -211,6 +213,9 @@ public:
 	 * \returns A shared pointer to the player
 	 */
 	[[nodiscard]] std::shared_ptr<Player> getPlayerByAccount(uint32_t acc);
+	bool reserveLogin(uint32_t guid);
+	void releaseLogin(uint32_t guid);
+	bool isLoginPending(uint32_t guid) const;
 
 	/**
 	 * Place Creature on the map without sending out events to the surrounding.
@@ -685,6 +690,7 @@ private:
 	std::unordered_map<std::string, std::weak_ptr<Player>> mappedPlayerNames;
 	std::unordered_map<uint32_t, std::weak_ptr<Player>> mappedPlayerGuids;
 	mutable std::shared_mutex playersMutex;
+	std::unordered_set<uint32_t> pendingLogins;
 	std::unordered_map<uint32_t, Guild_ptr> guilds;
 	std::unordered_map<uint16_t, std::weak_ptr<Item>> uniqueItems;
 	std::unordered_map<uint32_t, std::unordered_map<uint32_t, int32_t>> accountStorageMap;

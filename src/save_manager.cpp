@@ -11,6 +11,7 @@
 #include "iomapserialize.h"
 #include "logger.h"
 #include "thread_pool.h"
+#include "tasks.h"
 #include "kv/kv.h"
 
 extern Game g_game;
@@ -59,17 +60,13 @@ void SaveManager::saveAll()
 		LOG_ERROR("[SaveManager] Failed to save KV store.");
 	}
 
-	// Save all online players (on dispatcher thread - must be serial for thread safety)
+	// Build all online players on dispatcher and flush SQL on the thread pool.
 	uint32_t playerCount = 0;
-	uint32_t failCount = 0;
 	const auto& players = g_game.getPlayers();
 
 	for (const auto& player : players) {
-		if (IOLoginData::savePlayer(player.get())) {
+		if (schedulePlayerFlush(player.get())) {
 			playerCount++;
-		} else {
-			failCount++;
-			LOG_ERROR(fmt::format("[SaveManager] Failed to save player: {}", player->getName()));
 		}
 	}
 
@@ -93,18 +90,10 @@ void SaveManager::saveAll()
 	lastSaveDurationMs.store(static_cast<uint64_t>(durationMs), std::memory_order_relaxed);
 	lastPlayersSaved.store(playerCount, std::memory_order_relaxed);
 
-	if (failCount > 0) {
-		LOG_INFO(fmt::format(">> {}: Saved {} players ({} failed) in {}",
-			fmt::format(fg(fmt::color::magenta), "SaveManager"),
-			fmt::format(fg(fmt::color::lime_green), "{}", playerCount),
-			fmt::format(fg(fmt::color::red), "{}", failCount),
-			fmt::format(fg(fmt::color::cyan), "{}ms", durationMs)));
-	} else {
-		LOG_INFO(fmt::format(">> {}: Saved {} players in {} (map saving async)",
-			fmt::format(fg(fmt::color::magenta), "SaveManager"),
-			fmt::format(fg(fmt::color::lime_green), "{}", playerCount),
-			fmt::format(fg(fmt::color::cyan), "{}ms", durationMs)));
-	}
+	LOG_INFO(fmt::format(">> {}: Queued {} player save(s) in {} (map/player SQL flushing async)",
+		fmt::format(fg(fmt::color::magenta), "SaveManager"),
+		fmt::format(fg(fmt::color::lime_green), "{}", playerCount),
+		fmt::format(fg(fmt::color::cyan), "{}ms", durationMs)));
 
 	saving.store(false);
 }
@@ -116,20 +105,65 @@ bool SaveManager::savePlayer(Player* player)
 	}
 
 	auto startTime = std::chrono::high_resolution_clock::now();
-	bool success = IOLoginData::savePlayer(player);
+	const bool queued = schedulePlayerFlush(player);
 	auto endTime = std::chrono::high_resolution_clock::now();
 	auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
-	if (success) {
-		LOG_INFO(fmt::format(">> {}: Player {} saved in {}",
+	if (queued) {
+		LOG_INFO(fmt::format(">> {}: Player {} save queued in {}",
 			fmt::format(fg(fmt::color::magenta), "SaveManager"),
 			fmt::format(fg(fmt::color::lime_green), "{}", player->getName()),
 			fmt::format(fg(fmt::color::cyan), "{}ms", durationMs)));
-	} else {
-		LOG_ERROR(fmt::format("[SaveManager] Failed to save player: {}", player->getName()));
 	}
 
-	return success;
+	return queued;
+}
+
+bool SaveManager::schedulePlayerFlush(Player* player)
+{
+	if (!player) {
+		return false;
+	}
+
+	auto queries = IOLoginData::buildPlayerSave(player);
+	if (!queries) {
+		LOG_ERROR(fmt::format("[SaveManager] Failed to build save for player: {}", player->getName()));
+		return false;
+	}
+
+	const uint32_t guid = player->getGUID();
+	const std::string name = player->getName();
+	if (flushInFlight.contains(guid)) {
+		pendingFlushes[guid] = std::make_pair(name, std::move(*queries));
+		return true;
+	}
+
+	flushInFlight.insert(guid);
+	g_threadPool.detach_task([this, guid, name, q = std::move(*queries)]() {
+		if (!IOLoginData::flushPlayerSave(q)) {
+			LOG_ERROR(fmt::format("[SaveManager] Failed to flush save for player: {}", name));
+		}
+		g_dispatcher.addTask([this, guid]() { onPlayerFlushed(guid); });
+	});
+	return true;
+}
+
+void SaveManager::onPlayerFlushed(uint32_t guid)
+{
+	auto it = pendingFlushes.find(guid);
+	if (it == pendingFlushes.end()) {
+		flushInFlight.erase(guid);
+		return;
+	}
+
+	auto [name, queries] = std::move(it->second);
+	pendingFlushes.erase(it);
+	g_threadPool.detach_task([this, guid, name, q = std::move(queries)]() {
+		if (!IOLoginData::flushPlayerSave(q)) {
+			LOG_ERROR(fmt::format("[SaveManager] Failed to flush queued save for player: {}", name));
+		}
+		g_dispatcher.addTask([this, guid]() { onPlayerFlushed(guid); });
+	});
 }
 
 void SaveManager::saveMapAsync()

@@ -8,6 +8,8 @@
 #include "database.h"
 #include "observer_ptr.h"
 #include "player.h"
+#include <optional>
+#include <vector>
 
 using ItemBlockList = std::list<std::pair<int32_t, ObserverPtr<Item>>>;
 
@@ -29,10 +31,13 @@ public:
 	static void removeOnlineStatus(uint32_t guid);
 	static bool preloadPlayer(Player* player);
 
-	static bool loadPlayerById(Player* player, uint32_t id);
+	static bool loadPlayerById(Player* player, uint32_t id, bool deferWorldData = false);
 	static bool loadPlayerByName(Player* player, std::string_view name);
-	static bool loadPlayer(Player* player, DBResult_ptr result);
+	static bool loadPlayer(Player* player, DBResult_ptr result, bool deferWorldData = false);
+	static void loadPlayerWorldData(Player* player);
 	static bool savePlayer(Player* player);
+	static std::optional<std::vector<std::string>> buildPlayerSave(Player* player);
+	static bool flushPlayerSave(const std::vector<std::string>& queries);
 	static bool addRewardItems(uint32_t playerId, const ItemBlockList& itemList, DBInsert& query_insert, PropWriteStream& propWriteStream);
 	static uint32_t getGuidByName(std::string_view name);
 	static bool getGuidByNameEx(uint32_t& guid, bool& specialVip, std::string& name);
@@ -69,6 +74,8 @@ private:
 
 	static void loadItems(ItemMap& itemMap, DBResult_ptr result);
 	static void cleanupItemMap(ItemMap& itemMap);
+	static void loadPlayerGuild(Player* player);
+	static bool savePlayerQueries(Player* player);
 	static bool saveItems(const Player* player, const ItemBlockList& itemList, DBInsert& query_insert,
 	                      PropWriteStream& propWriteStream);
 };

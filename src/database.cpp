@@ -13,6 +13,13 @@
 #else
 #  include <mysql/errmsg.h>
 #endif
+
+#ifndef ER_LOCK_DEADLOCK
+#define ER_LOCK_DEADLOCK 1213
+#endif
+#ifndef ER_LOCK_WAIT_TIMEOUT
+#define ER_LOCK_WAIT_TIMEOUT 1205
+#endif
 #include "logger.h"
 #include <fmt/format.h>
 #include <algorithm>
@@ -22,7 +29,19 @@ static constexpr int MAX_RECONNECT_ATTEMPTS = 10;
 static constexpr unsigned int MYSQL_TIMEOUT_SECONDS = 30;
 static constexpr uint64_t DB_INSERT_PACKET_SAFETY_MARGIN = 4096;
 
-static tfs::detail::Mysql_ptr connectToDatabase(const bool retryIfError)
+namespace {
+thread_local std::vector<std::string>* tlsQueryCapture = nullptr;
+
+struct ThreadCleanup
+{
+	~ThreadCleanup()
+	{
+		mysql_thread_end();
+	}
+};
+} // namespace
+
+static tfs::detail::Mysql_ptr connectToDatabase(const Database::ConnectionParams& params, const bool retryIfError)
 {
 	for (int retryCount = 0; ; ++retryCount) {
 		if (retryCount > 0) {
@@ -74,10 +93,9 @@ static tfs::detail::Mysql_ptr connectToDatabase(const bool retryIfError)
 #endif
 
 		// connects to database
-		if (!mysql_real_connect(handle.get(), getString(ConfigManager::MYSQL_HOST).data(),
-		                        getString(ConfigManager::MYSQL_USER).data(), getString(ConfigManager::MYSQL_PASS).data(),
-		                        getString(ConfigManager::MYSQL_DB).data(), getInteger(ConfigManager::SQL_PORT),
-		                        getString(ConfigManager::MYSQL_SOCK).data(), 0)) {
+		const char* socket = params.socket.empty() ? nullptr : params.socket.c_str();
+		if (!mysql_real_connect(handle.get(), params.host.c_str(), params.user.c_str(), params.password.c_str(),
+		                        params.database.c_str(), static_cast<unsigned int>(params.port), socket, 0)) {
 			LOG_ERROR(fmt::format("MySQL Error Message: {}", mysql_error(handle.get())));
 			continue;
 		}
@@ -129,140 +147,212 @@ static bool executeQuery(tfs::detail::Mysql_ptr& handle, std::string_view query,
 
 bool Database::connect()
 {
-	// Save credentials so reconnect() can restore the connection later
-	dbHost   = getString(ConfigManager::MYSQL_HOST);
-	dbUser   = getString(ConfigManager::MYSQL_USER);
-	dbPass   = getString(ConfigManager::MYSQL_PASS);
-	dbName   = getString(ConfigManager::MYSQL_DB);
-	dbPort   = getInteger(ConfigManager::SQL_PORT);
-	dbSocket = getString(ConfigManager::MYSQL_SOCK);
+	static std::once_flag libraryInitFlag;
+	std::call_once(libraryInitFlag, [this]() {
+		if (mysql_library_init(0, nullptr, nullptr) != 0) {
+			LOG_ERROR("Failed to initialize the MySQL client library.");
+			return;
+		}
 
-	auto newHandle = connectToDatabase(false);
-	if (!newHandle) {
+		libraryInitialized = true;
+		LOG_INFO("Database running in per-thread connection mode (one MySQL connection per worker thread).");
+	});
+
+	if (!libraryInitialized) {
 		return false;
 	}
 
-	handle = std::move(newHandle);
-	DBResult_ptr result = storeQuery("SHOW VARIABLES LIKE 'max_allowed_packet'");
-	if (result) {
-		maxPacketSize = result->getNumber<uint64_t>("Value");
+	connectionParams = ConnectionParams{
+		getString(ConfigManager::MYSQL_HOST),
+		getString(ConfigManager::MYSQL_USER),
+		getString(ConfigManager::MYSQL_PASS),
+		getString(ConfigManager::MYSQL_DB),
+		getString(ConfigManager::MYSQL_SOCK),
+		static_cast<int>(getInteger(ConfigManager::SQL_PORT))
+	};
+
+	ConnectionContext& ctx = getContext();
+	if (!ctx.handle) {
+		return false;
 	}
+
 	return true;
 }
 
-bool Database::reconnect()
+bool Database::establishConnection(ConnectionContext& ctx, const bool retryIfError) const
+{
+	if (!connectionParams) {
+		LOG_ERROR("Database connection parameters not initialized.");
+		return false;
+	}
+
+	(void)mysql_thread_init();
+	static thread_local ThreadCleanup threadCleanup;
+
+	ctx.handle = connectToDatabase(*connectionParams, retryIfError);
+	ctx.lastErrno = 0;
+	ctx.inTransaction = false;
+	if (!ctx.handle) {
+		return false;
+	}
+
+	static constexpr std::string_view maxPacketQuery = "SHOW VARIABLES LIKE 'max_allowed_packet'";
+	if (mysql_real_query(ctx.handle.get(), maxPacketQuery.data(), maxPacketQuery.size()) == 0) {
+		tfs::detail::MysqlResult_ptr res{mysql_store_result(ctx.handle.get())};
+		if (res) {
+			DBResult result{std::move(res)};
+			if (result.hasNext()) {
+				ctx.maxPacketSize = result.getNumber<uint64_t>("Value");
+			}
+		}
+	}
+
+	return true;
+}
+
+Database::ConnectionContext& Database::getContext() const
+{
+	thread_local ConnectionContext* tlsContext = nullptr;
+	if (tlsContext) {
+		return *tlsContext;
+	}
+
+	auto context = std::make_unique<ConnectionContext>();
+	ConnectionContext* contextPtr = context.get();
+	size_t connectionNumber = 0;
+	{
+		std::scoped_lock lock{connectionsMutex};
+		connections.push_back(std::move(context));
+		connectionNumber = connections.size();
+	}
+
+	if (establishConnection(*contextPtr, false)) {
+		tlsContext = contextPtr;
+		LOG_INFO(fmt::format("Database: opened MySQL connection #{}.", connectionNumber));
+	} else {
+		LOG_ERROR(fmt::format("Database: failed to open MySQL connection #{}.", connectionNumber));
+	}
+
+	return *contextPtr;
+}
+
+bool Database::reconnect(ConnectionContext& ctx) const
 {
 	LOG_WARN("[Database::reconnect] Lost connection, attempting reconnect...");
 
-	tfs::detail::Mysql_ptr newHandle{mysql_init(nullptr)};
-	if (!newHandle) {
-		LOG_ERROR("[Database::reconnect] mysql_init failed.");
-		return false;
+	ctx.handle.reset();
+	const bool success = establishConnection(ctx, true);
+	if (success) {
+		LOG_INFO("[Database::reconnect] Reconnected successfully.");
 	}
-
-	// Restore same timeouts as the initial connect
-	{
-		unsigned int readTimeout  = MYSQL_TIMEOUT_SECONDS;
-		unsigned int writeTimeout = MYSQL_TIMEOUT_SECONDS;
-		mysql_options(newHandle.get(), MYSQL_OPT_READ_TIMEOUT,  &readTimeout);
-		mysql_options(newHandle.get(), MYSQL_OPT_WRITE_TIMEOUT, &writeTimeout);
-	}
-
-#if defined(_WIN32)
-	{
-		bool ssl_enforce = false;
-		bool ssl_verify  = false;
-		mysql_options(newHandle.get(), MYSQL_OPT_SSL_ENFORCE,             &ssl_enforce);
-		mysql_options(newHandle.get(), MYSQL_OPT_SSL_VERIFY_SERVER_CERT,  &ssl_verify);
-	}
-#else
-	{
-#if defined(MARIADB_VERSION_ID)
-		bool ssl_enforce = false;
-		bool ssl_verify  = false;
-		mysql_options(newHandle.get(), MYSQL_OPT_SSL_ENFORCE, &ssl_enforce);
-		mysql_options(newHandle.get(), MYSQL_OPT_SSL_VERIFY_SERVER_CERT, &ssl_verify);
-		mysql_ssl_set(newHandle.get(), nullptr, nullptr, nullptr, nullptr, nullptr);
-#else
-		unsigned int ssl_mode = SSL_MODE_DISABLED;
-		mysql_options(newHandle.get(), MYSQL_OPT_SSL_MODE, &ssl_mode);
-#endif
-	}
-#endif
-
-	const char* sock = dbSocket.empty() ? nullptr : dbSocket.c_str();
-	if (!mysql_real_connect(newHandle.get(), dbHost.c_str(), dbUser.c_str(), dbPass.c_str(),
-	                        dbName.c_str(), static_cast<unsigned int>(dbPort), sock, 0)) {
-		LOG_ERROR(fmt::format("[Database::reconnect] failed: {}", mysql_error(newHandle.get())));
-		return false;
-	}
-
-	handle = std::move(newHandle);
-	LOG_INFO("[Database::reconnect] Reconnected successfully.");
-	return true;
+	return success;
 }
 
 void Database::shutdown()
 {
     Database& db = getInstance();
-    db.handle.reset();
-    mysql_library_end();
+	{
+		std::scoped_lock lock{db.connectionsMutex};
+		if (!db.connections.empty()) {
+			LOG_INFO(fmt::format("Database: closing {} MySQL connection(s).", db.connections.size()));
+		}
+		db.connections.clear();
+	}
+
+	if (db.libraryInitialized) {
+		db.libraryInitialized = false;
+		mysql_library_end();
+	}
 }
 
 bool Database::beginTransaction()
 {
-	transactionLock = std::unique_lock(databaseLock);
+	ConnectionContext& ctx = getContext();
+	ctx.lastErrno = 0;
 	const bool result = executeQuery("START TRANSACTION");
-	retryQueries = !result;
-	if (!result) {
-		transactionLock.unlock();
+	if (result) {
+		ctx.inTransaction = true;
 	}
 	return result;
 }
 
 bool Database::rollback()
 {
-	const bool result = executeQuery("ROLLBACK");
-	retryQueries = true;
-	transactionLock.unlock();
+	ConnectionContext& ctx = getContext();
+	if (!ctx.handle) {
+		LOG_ERROR("Database not initialized.");
+		return false;
+	}
+
+	const bool result = mysql_rollback(ctx.handle.get()) == 0;
+	if (!result) {
+		ctx.lastErrno = mysql_errno(ctx.handle.get());
+		LOG_ERROR(fmt::format("[Error - mysql_rollback] Message: {}", mysql_error(ctx.handle.get())));
+	}
+	ctx.inTransaction = false;
 	return result;
 }
 
 bool Database::commit()
 {
-	const bool result = executeQuery("COMMIT");
-	retryQueries = true;
-	transactionLock.unlock();
+	ConnectionContext& ctx = getContext();
+	if (!ctx.handle) {
+		LOG_ERROR("Database not initialized.");
+		return false;
+	}
+
+	const bool result = mysql_commit(ctx.handle.get()) == 0;
+	if (!result) {
+		ctx.lastErrno = mysql_errno(ctx.handle.get());
+		LOG_ERROR(fmt::format("[Error - mysql_commit] Message: {}", mysql_error(ctx.handle.get())));
+	}
+	ctx.inTransaction = false;
 	return result;
 }
 
 bool Database::executeQuery(std::string_view query)
 {
-	std::scoped_lock lockGuard(databaseLock);
+	if (tlsQueryCapture) {
+		tlsQueryCapture->emplace_back(query);
+		return true;
+	}
+
+	ConnectionContext& ctx = getContext();
+	if (!ctx.handle) {
+		LOG_ERROR("Database not initialized.");
+		return false;
+	}
+
 #ifdef STATS_ENABLED
 	std::chrono::steady_clock::time_point time_point = std::chrono::steady_clock::now();
 #endif
 
-	bool success = ::executeQuery(handle, query, false);
+	bool success = ::executeQuery(ctx.handle, query, false);
 
 	if (!success) {
-		const unsigned int mysqlError = mysql_errno(handle.get());
-		if (retryQueries && isLostConnectionError(mysqlError)) {
+		const unsigned int mysqlError = mysql_errno(ctx.handle.get());
+		ctx.lastErrno = mysqlError;
+		if (!ctx.inTransaction && isLostConnectionError(mysqlError)) {
 			LOG_WARN(fmt::format("[Database::executeQuery] Lost connection (error {}), attempting reconnect...", mysqlError));
-			if (reconnect()) {
-				success = ::executeQuery(handle, query, false);
+			if (reconnect(ctx)) {
+				success = ::executeQuery(ctx.handle, query, false);
 				if (!success) {
-					logQueryError(handle, query);
+					ctx.lastErrno = mysql_errno(ctx.handle.get());
+					logQueryError(ctx.handle, query);
+				} else {
+					ctx.lastErrno = 0;
 				}
 			}
 		} else {
-			logQueryError(handle, query);
+			logQueryError(ctx.handle, query);
 		}
+	} else {
+		ctx.lastErrno = 0;
 	}
 
 	// executeQuery can be called with command that produces result (e.g. SELECT)
 	// we have to store that result, even though we do not need it, otherwise handle will get blocked
-	auto mysql_res = mysql_store_result(handle.get());
+	auto mysql_res = mysql_store_result(ctx.handle.get());
 	mysql_free_result(mysql_res);
 
 #ifdef STATS_ENABLED
@@ -275,7 +365,11 @@ bool Database::executeQuery(std::string_view query)
 
 DBResult_ptr Database::storeQuery(std::string_view query)
 {
-	std::scoped_lock lockGuard(databaseLock);
+	ConnectionContext& ctx = getContext();
+	if (!ctx.handle) {
+		LOG_ERROR("Database not initialized.");
+		return nullptr;
+	}
 
 #ifdef STATS_ENABLED
 	std::chrono::steady_clock::time_point time_point = std::chrono::steady_clock::now();
@@ -283,29 +377,34 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 
 	tfs::detail::MysqlResult_ptr res;
 
-	if (!::executeQuery(handle, query, false)) {
-		const unsigned int mysqlError = mysql_errno(handle.get());
-		if (!retryQueries || !isLostConnectionError(mysqlError)) {
-			logQueryError(handle, query);
+	if (!::executeQuery(ctx.handle, query, false)) {
+		const unsigned int mysqlError = mysql_errno(ctx.handle.get());
+		ctx.lastErrno = mysqlError;
+		if (ctx.inTransaction || !isLostConnectionError(mysqlError)) {
+			logQueryError(ctx.handle, query);
 			return nullptr;
 		}
 		// Lost connection: reconnect once and retry.
 		LOG_WARN(fmt::format("[Database::storeQuery] Lost connection (error {}), attempting reconnect...", mysqlError));
-		if (!reconnect()) {
+		if (!reconnect(ctx)) {
 			return nullptr;
 		}
-		if (!::executeQuery(handle, query, false)) {
-			logQueryError(handle, query);
+		if (!::executeQuery(ctx.handle, query, false)) {
+			ctx.lastErrno = mysql_errno(ctx.handle.get());
+			logQueryError(ctx.handle, query);
 			return nullptr;
 		}
+		ctx.lastErrno = 0;
+	} else {
+		ctx.lastErrno = 0;
 	}
 
 	// we should call that every time as someone would call executeQuery('SELECT...')
 	// as it is described in MySQL manual: "it doesn't hurt" :P
-	res.reset(mysql_store_result(handle.get()));
+	res.reset(mysql_store_result(ctx.handle.get()));
 
 	if (!res) {
-		LOG_ERROR(fmt::format("[Error - mysql_store_result] Query: {}\nMessage: {}", query, mysql_error(handle.get())));
+		LOG_ERROR(fmt::format("[Error - mysql_store_result] Query: {}\nMessage: {}", query, mysql_error(ctx.handle.get())));
 		return nullptr;
 	}
 
@@ -322,10 +421,49 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 	return result;
 }
 
+uint64_t Database::getLastInsertId() const
+{
+	ConnectionContext& ctx = getContext();
+	if (!ctx.handle) {
+		LOG_ERROR("Database connection not established, cannot get last insert id.");
+		return 0;
+	}
+	return mysql_insert_id(ctx.handle.get());
+}
+
+uint64_t Database::getMaxPacketSize() const
+{
+	return getContext().maxPacketSize;
+}
+
+bool Database::lastQueryWasDeadlock() const
+{
+	const unsigned int error = getContext().lastErrno;
+	return error == ER_LOCK_DEADLOCK || error == ER_LOCK_WAIT_TIMEOUT;
+}
+
+void Database::beginQueryCapture(std::vector<std::string>* buffer)
+{
+	assert(tlsQueryCapture == nullptr && "nested query capture is not supported");
+	tlsQueryCapture = buffer;
+}
+
+void Database::endQueryCapture()
+{
+	assert(tlsQueryCapture != nullptr && "endQueryCapture without matching begin");
+	tlsQueryCapture = nullptr;
+}
+
 std::string Database::escapeString(std::string_view s) const { return escapeBlob(s.data(), s.length()); }
 
 std::string Database::escapeBlob(const char* s, uint32_t length) const
 {
+	ConnectionContext& ctx = getContext();
+	if (!ctx.handle) {
+		LOG_ERROR("Database connection not established, cannot escape blob.");
+		return "''";
+	}
+
 	// the worst case is 2n + 1
 	size_t maxLength = (length * 2) + 1;
 
@@ -335,7 +473,7 @@ std::string Database::escapeBlob(const char* s, uint32_t length) const
 
 	if (length != 0) {
 		std::vector<char> output(maxLength);
-		const unsigned long escapedLength = mysql_real_escape_string(handle.get(), output.data(), s, length);
+		const unsigned long escapedLength = mysql_real_escape_string(ctx.handle.get(), output.data(), s, length);
 		escaped.append(output.data(), escapedLength);
 	}
 

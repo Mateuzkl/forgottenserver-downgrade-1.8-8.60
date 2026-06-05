@@ -270,14 +270,14 @@ bool IOLoginData::preloadPlayer(Player* player)
 	return true;
 }
 
-bool IOLoginData::loadPlayerById(Player* player, uint32_t id)
+bool IOLoginData::loadPlayerById(Player* player, uint32_t id, bool deferWorldData)
 {
 	Database& db = Database::getInstance();
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash` FROM `players` WHERE `id` = {:d}",
-	        id)));
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
+	        id)), deferWorldData);
 }
 
 bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
@@ -286,7 +286,7 @@ bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash` FROM `players` WHERE `name` = {:s}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
 	        db.escapeString(name))));
 }
 
@@ -311,7 +311,73 @@ GuildWarVector IOLoginData::getWarList(uint32_t guildId)
 	return guildWarVector;
 }
 
-bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result)
+void IOLoginData::loadPlayerGuild(Player* player)
+{
+	if (!player) {
+		return;
+	}
+
+	Database& db = Database::getInstance();
+	DBResult_ptr result = db.storeQuery(
+	    fmt::format("SELECT `guild_id`, `rank_id`, `nick` FROM `guild_membership` WHERE `player_id` = {:d}",
+	                player->getGUID()));
+	if (!result) {
+		return;
+	}
+
+	uint32_t guildId = result->getNumber<uint32_t>("guild_id");
+	uint32_t playerRankId = result->getNumber<uint32_t>("rank_id");
+	player->guildNick = result->getString("nick");
+
+	auto guild = g_game.getGuild(guildId);
+	if (!guild) {
+		guild = IOGuild::loadGuild(guildId);
+		if (guild) {
+			g_game.addGuild(guild);
+		} else {
+			LOG_WARN(fmt::format("[Warning - IOLoginData::loadPlayerGuild] {} has Guild ID {} which doesn't exist",
+			                     player->name, guildId));
+		}
+	}
+
+	if (!guild) {
+		return;
+	}
+
+	player->guild = guild;
+	auto rank = guild->getRankById(playerRankId);
+	if (!rank) {
+		result = db.storeQuery(fmt::format("SELECT `id`, `name`, `level` FROM `guild_ranks` WHERE `id` = {:d}",
+		                                   playerRankId));
+		if (result) {
+			guild->addRank(result->getNumber<uint32_t>("id"), result->getString("name"),
+			               result->getNumber<uint16_t>("level"));
+		}
+
+		rank = guild->getRankById(playerRankId);
+		if (!rank) {
+			player->guild.reset();
+			g_game.removeGuild(guildId);
+			return;
+		}
+	}
+
+	player->guildRank = rank;
+	player->guildWarVector = getWarList(guildId);
+
+	result = db.storeQuery(fmt::format("SELECT COUNT(*) AS `members` FROM `guild_membership` WHERE `guild_id` = {:d}",
+	                                   guildId));
+	if (result) {
+		guild->setMemberCount(result->getNumber<uint32_t>("members"));
+	}
+}
+
+void IOLoginData::loadPlayerWorldData(Player* player)
+{
+	loadPlayerGuild(player);
+}
+
+bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorldData)
 {
 	if (!result) {
 		return false;
@@ -338,6 +404,7 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result)
 		return false;
 	}
 	player->setGroup(g_game.groups.getSharedGroup(result->getNumber<uint16_t>("group_id")));
+	player->setSaveFlag(result->getNumber<uint16_t>("save") != 0);
 
 	player->bankBalance = result->getNumber<uint64_t>("balance");
 
@@ -476,49 +543,8 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result)
 		player->skills[i].percent = Player::getBasisPointLevel(skillTries, nextSkillTries) / 100;
 	}
 
-	if ((result = db.storeQuery(
-	         fmt::format("SELECT `guild_id`, `rank_id`, `nick` FROM `guild_membership` WHERE `player_id` = {:d}",
-	                     player->getGUID())))) {
-		uint32_t guildId = result->getNumber<uint32_t>("guild_id");
-		uint32_t playerRankId = result->getNumber<uint32_t>("rank_id");
-		player->guildNick = result->getString("nick");
-
-		auto guild = g_game.getGuild(guildId);
-		if (!guild) {
-			guild = IOGuild::loadGuild(guildId);
-			if (guild) {
-				g_game.addGuild(guild);
-			} else {
-				LOG_WARN(fmt::format("[Warning - IOLoginData::loadPlayer] {} has Guild ID {} which doesn't exist", player->name, guildId));
-			}
-		}
-
-		if (guild) {
-			player->guild = guild;
-			auto rank = guild->getRankById(playerRankId);
-			if (!rank) {
-				if ((result = db.storeQuery(fmt::format(
-				         "SELECT `id`, `name`, `level` FROM `guild_ranks` WHERE `id` = {:d}", playerRankId)))) {
-					guild->addRank(result->getNumber<uint32_t>("id"), result->getString("name"),
-					               result->getNumber<uint16_t>("level"));
-				}
-
-				rank = guild->getRankById(playerRankId);
-				if (!rank) {
-					player->guild.reset();
-					g_game.removeGuild(guildId);
-				}
-			}
-
-			player->guildRank = rank;
-
-			player->guildWarVector = getWarList(guildId);
-
-			if ((result = db.storeQuery(fmt::format(
-			         "SELECT COUNT(*) AS `members` FROM `guild_membership` WHERE `guild_id` = {:d}", guildId)))) {
-				guild->setMemberCount(result->getNumber<uint32_t>("members"));
-			}
-		}
+	if (!deferWorldData) {
+		loadPlayerGuild(player);
 	}
 
 	if ((result = db.storeQuery(fmt::format("SELECT `player_id`, `name` FROM `player_spells` WHERE `player_id` = {:d}",
@@ -943,7 +969,54 @@ bool IOLoginData::addRewardItems(uint32_t playerId, const ItemBlockList& itemLis
     return query_insert.execute();
 }
 
+std::optional<std::vector<std::string>> IOLoginData::buildPlayerSave(Player* player)
+{
+	if (!player) {
+		return std::nullopt;
+	}
+
+	std::vector<std::string> queries;
+	try {
+		QueryCaptureScope capture{queries};
+		if (!savePlayerQueries(player)) {
+			return std::nullopt;
+		}
+	} catch (const std::exception& e) {
+		LOG_ERROR(fmt::format("[IOLoginData::buildPlayerSave] Exception: {}", e.what()));
+		return std::nullopt;
+	}
+
+	return queries;
+}
+
+bool IOLoginData::flushPlayerSave(const std::vector<std::string>& queries)
+{
+	return DBTransaction::executeWithinTransactionRollbackOnFailure([&queries]() {
+		Database& db = Database::getInstance();
+		for (const auto& query : queries) {
+			if (!db.executeQuery(query)) {
+				return false;
+			}
+		}
+		return true;
+	});
+}
+
 bool IOLoginData::savePlayer(Player* player)
+{
+	auto queries = buildPlayerSave(player);
+	if (!queries) {
+		return false;
+	}
+
+	const bool success = flushPlayerSave(*queries);
+	if (success) {
+		player->clearStorageDirty();
+	}
+	return success;
+}
+
+bool IOLoginData::savePlayerQueries(Player* player)
 {
 	AutoStat stat("savePlayer", "full");
 
@@ -953,13 +1026,7 @@ bool IOLoginData::savePlayer(Player* player)
 
 	Database& db = Database::getInstance();
 
-	DBResult_ptr result =
-	    db.storeQuery(fmt::format("SELECT `save` FROM `players` WHERE `id` = {:d}", player->getGUID()));
-	if (!result) {
-		return false;
-	}
-
-	if (result->getNumber<uint16_t>("save") == 0) {
+	if (!player->getSaveFlag()) {
 		return db.executeQuery(fmt::format("UPDATE `players` SET `lastlogin` = {:d}, `lastip` = {:d} WHERE `id` = {:d}",
 		                                   player->lastLoginSaved, player->lastIP, player->getGUID()));
 	}
@@ -1064,11 +1131,6 @@ bool IOLoginData::savePlayer(Player* player)
 	query << "`token_protected` = " << (player->isTokenProtected() ? 1 : 0) << ',';
 	query << "`token_hash` = " << db.escapeString(player->getTokenHash());
 	query << " WHERE `id` = " << player->getGUID();
-
-	DBTransaction transaction;
-	if (!transaction.begin()) {
-		return false;
-	}
 
 	if (!db.executeQuery(query.str())) {
 		return false;
@@ -1342,13 +1404,6 @@ bool IOLoginData::savePlayer(Player* player)
 		}
 	}
 
-	// End the transaction
-	AutoStat statCommit("savePlayer", "commit");
-	if (!transaction.commit()) {
-		return false;
-	}
-
-	player->clearStorageDirty();
 	return true;
 }
 

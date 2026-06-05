@@ -5,6 +5,11 @@
 #ifndef FS_SAVE_MANAGER_H
 #define FS_SAVE_MANAGER_H
 
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 class Player;
 
 class SaveManager
@@ -21,10 +26,15 @@ public:
 	[[nodiscard]] uint32_t getLastPlayerCount() const noexcept { return lastPlayersSaved.load(std::memory_order_relaxed); }
 
 private:
+	bool schedulePlayerFlush(Player* player);
+	void onPlayerFlushed(uint32_t guid);
+
 	std::atomic<bool> saving{false};
 	std::atomic<uint64_t> lastSaveDurationMs{0};
 	std::atomic<uint32_t> lastPlayersSaved{0};
 	std::atomic<int64_t> lastSaveTimestamp{0};
+	std::unordered_set<uint32_t> flushInFlight;
+	std::unordered_map<uint32_t, std::pair<std::string, std::vector<std::string>>> pendingFlushes;
 
 	static constexpr int64_t MIN_SAVE_INTERVAL_MS = 2000;
 };

@@ -860,6 +860,21 @@ std::shared_ptr<Player> Game::getPlayerByAccount(uint32_t acc)
 	return nullptr;
 }
 
+bool Game::reserveLogin(uint32_t guid)
+{
+	return pendingLogins.emplace(guid).second;
+}
+
+void Game::releaseLogin(uint32_t guid)
+{
+	pendingLogins.erase(guid);
+}
+
+bool Game::isLoginPending(uint32_t guid) const
+{
+	return pendingLogins.contains(guid);
+}
+
 std::vector<std::shared_ptr<Player>> Game::getPlayers() const
 {
 	std::vector<std::shared_ptr<Player>> onlinePlayers;
