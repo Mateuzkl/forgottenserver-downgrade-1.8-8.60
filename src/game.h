@@ -691,6 +691,7 @@ private:
 	std::unordered_map<uint32_t, std::weak_ptr<Player>> mappedPlayerGuids;
 	mutable std::shared_mutex playersMutex;
 	std::unordered_set<uint32_t> pendingLogins;
+	mutable std::shared_mutex pendingLoginsMutex;
 	std::unordered_map<uint32_t, Guild_ptr> guilds;
 	std::unordered_map<uint16_t, std::weak_ptr<Item>> uniqueItems;
 	std::unordered_map<uint32_t, std::unordered_map<uint32_t, int32_t>> accountStorageMap;

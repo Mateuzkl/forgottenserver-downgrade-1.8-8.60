@@ -306,6 +306,10 @@ public:
 
 	static constexpr uint8_t TRANSACTION_MAX_ATTEMPTS = 3;
 
+	// DBTransaction may run callback up to TRANSACTION_MAX_ATTEMPTS when
+	// Database::lastQueryWasDeadlock() reports a deadlock or lock timeout.
+	// The callback must be side-effect free or idempotent: only re-applicable DB
+	// statements, no external I/O, and no non-DB state mutations.
 	template <typename Func>
 	static bool executeWithinTransactionRollbackOnFailure(const Func& callback)
 	{

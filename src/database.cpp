@@ -34,11 +34,44 @@ thread_local std::vector<std::string>* tlsQueryCapture = nullptr;
 
 struct ThreadCleanup
 {
+	bool init()
+	{
+		if (initialized) {
+			return true;
+		}
+
+		if (mysql_thread_init() != 0) {
+			return false;
+		}
+
+		initialized = true;
+		return true;
+	}
+
+	void shutdown()
+	{
+		if (!initialized) {
+			return;
+		}
+
+		mysql_thread_end();
+		initialized = false;
+	}
+
 	~ThreadCleanup()
 	{
-		mysql_thread_end();
+		shutdown();
 	}
+
+private:
+	bool initialized = false;
 };
+
+ThreadCleanup& getThreadCleanup()
+{
+	static thread_local ThreadCleanup cleanup;
+	return cleanup;
+}
 } // namespace
 
 static tfs::detail::Mysql_ptr connectToDatabase(const Database::ConnectionParams& params, const bool retryIfError)
@@ -186,8 +219,10 @@ bool Database::establishConnection(ConnectionContext& ctx, const bool retryIfErr
 		return false;
 	}
 
-	(void)mysql_thread_init();
-	static thread_local ThreadCleanup threadCleanup;
+	if (!getThreadCleanup().init()) {
+		LOG_ERROR(">> Database: failed to initialize MySQL thread state.");
+		return false;
+	}
 
 	ctx.handle = connectToDatabase(*connectionParams, retryIfError);
 	ctx.lastErrno = 0;
@@ -262,8 +297,9 @@ void Database::shutdown()
 	}
 
 	if (db.libraryInitialized) {
-		db.libraryInitialized = false;
+		getThreadCleanup().shutdown();
 		mysql_library_end();
+		db.libraryInitialized = false;
 	}
 }
 

@@ -65,13 +65,14 @@ void SaveManager::saveAll()
 	const auto& players = g_game.getPlayers();
 
 	for (const auto& player : players) {
-		if (schedulePlayerFlush(player.get())) {
+		if (schedulePlayerFlush(player.get(), true)) {
 			playerCount++;
 		}
 	}
 
 	// Save map ASYNC on ThreadPool (house info + house items = pure SQL, no game state access)
-	g_threadPool.detach_task([]() {
+	beginTrackedFlush();
+	g_threadPool.detach_task([this]() {
 		bool mapSaved = false;
 		for (uint32_t tries = 0; tries < 3; tries++) {
 			if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
@@ -82,6 +83,7 @@ void SaveManager::saveAll()
 		if (!mapSaved) {
 			LOG_ERROR("[SaveManager] Failed to save map data after 3 retries.");
 		}
+		completeTrackedFlush();
 	});
 
 	auto endTime = std::chrono::high_resolution_clock::now();
@@ -95,12 +97,16 @@ void SaveManager::saveAll()
 		fmt::format(fg(fmt::color::lime_green), "{}", playerCount),
 		fmt::format(fg(fmt::color::cyan), "{}ms", durationMs)));
 
-	saving.store(false);
 }
 
 bool SaveManager::savePlayer(Player* player)
 {
 	if (!player) {
+		return false;
+	}
+
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[SaveManager] savePlayer must be called on the dispatcher thread.");
 		return false;
 	}
 
@@ -119,9 +125,14 @@ bool SaveManager::savePlayer(Player* player)
 	return queued;
 }
 
-bool SaveManager::schedulePlayerFlush(Player* player)
+bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = false */)
 {
 	if (!player) {
+		return false;
+	}
+
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[SaveManager] schedulePlayerFlush must run on the dispatcher thread.");
 		return false;
 	}
 
@@ -134,36 +145,72 @@ bool SaveManager::schedulePlayerFlush(Player* player)
 	const uint32_t guid = player->getGUID();
 	const std::string name = player->getName();
 	if (flushInFlight.contains(guid)) {
-		pendingFlushes[guid] = std::make_pair(name, std::move(*queries));
+		if (trackSaveAll) {
+			beginTrackedFlush();
+		}
+		if (auto it = pendingFlushes.find(guid); it != pendingFlushes.end() && it->second.trackedBySaveAll) {
+			completeTrackedFlush();
+		}
+		pendingFlushes[guid] = PendingPlayerFlush{name, std::move(*queries), trackSaveAll};
 		return true;
 	}
 
 	flushInFlight.insert(guid);
-	g_threadPool.detach_task([this, guid, name, q = std::move(*queries)]() {
+	if (trackSaveAll) {
+		beginTrackedFlush();
+	}
+	g_threadPool.detach_task([this, guid, name, q = std::move(*queries), trackSaveAll]() {
 		if (!IOLoginData::flushPlayerSave(q)) {
 			LOG_ERROR(fmt::format("[SaveManager] Failed to flush save for player: {}", name));
 		}
-		g_dispatcher.addTask([this, guid]() { onPlayerFlushed(guid); });
+		g_dispatcher.addTask([this, guid, trackSaveAll]() { onPlayerFlushed(guid, trackSaveAll); });
 	});
 	return true;
 }
 
-void SaveManager::onPlayerFlushed(uint32_t guid)
+void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll)
 {
+	if (trackedBySaveAll) {
+		completeTrackedFlush();
+	}
+
 	auto it = pendingFlushes.find(guid);
 	if (it == pendingFlushes.end()) {
 		flushInFlight.erase(guid);
 		return;
 	}
 
-	auto [name, queries] = std::move(it->second);
+	PendingPlayerFlush pending = std::move(it->second);
 	pendingFlushes.erase(it);
-	g_threadPool.detach_task([this, guid, name, q = std::move(queries)]() {
-		if (!IOLoginData::flushPlayerSave(q)) {
+	g_threadPool.detach_task([this, guid, pending = std::move(pending)]() mutable {
+		std::string name = std::move(pending.name);
+		std::vector<std::string> queries = std::move(pending.queries);
+		const bool trackSaveAll = pending.trackedBySaveAll;
+		if (!IOLoginData::flushPlayerSave(queries)) {
 			LOG_ERROR(fmt::format("[SaveManager] Failed to flush queued save for player: {}", name));
 		}
-		g_dispatcher.addTask([this, guid]() { onPlayerFlushed(guid); });
+		g_dispatcher.addTask([this, guid, trackSaveAll]() { onPlayerFlushed(guid, trackSaveAll); });
 	});
+}
+
+void SaveManager::beginTrackedFlush() noexcept
+{
+	pendingSaveFlushes.fetch_add(1, std::memory_order_relaxed);
+}
+
+void SaveManager::completeTrackedFlush() noexcept
+{
+	uint32_t current = pendingSaveFlushes.load(std::memory_order_acquire);
+	while (current != 0) {
+		if (pendingSaveFlushes.compare_exchange_weak(current, current - 1, std::memory_order_acq_rel)) {
+			if (current == 1) {
+				saving.store(false, std::memory_order_release);
+			}
+			return;
+		}
+	}
+
+	saving.store(false, std::memory_order_release);
 }
 
 void SaveManager::saveMapAsync()

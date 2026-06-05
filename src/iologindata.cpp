@@ -329,11 +329,13 @@ void IOLoginData::loadPlayerGuild(Player* player)
 	uint32_t playerRankId = result->getNumber<uint32_t>("rank_id");
 	player->guildNick = result->getString("nick");
 
+	bool guildLoadedHere = false;
 	auto guild = g_game.getGuild(guildId);
 	if (!guild) {
 		guild = IOGuild::loadGuild(guildId);
 		if (guild) {
 			g_game.addGuild(guild);
+			guildLoadedHere = true;
 		} else {
 			LOG_WARN(fmt::format("[Warning - IOLoginData::loadPlayerGuild] {} has Guild ID {} which doesn't exist",
 			                     player->name, guildId));
@@ -357,7 +359,11 @@ void IOLoginData::loadPlayerGuild(Player* player)
 		rank = guild->getRankById(playerRankId);
 		if (!rank) {
 			player->guild.reset();
-			g_game.removeGuild(guildId);
+			if (guildLoadedHere) {
+				g_game.removeGuild(guildId);
+			}
+			LOG_WARN(fmt::format("[Warning - IOLoginData::loadPlayerGuild] {} has invalid rank ID {} for Guild ID {}",
+			                     player->name, playerRankId, guildId));
 			return;
 		}
 	}

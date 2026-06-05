@@ -862,16 +862,19 @@ std::shared_ptr<Player> Game::getPlayerByAccount(uint32_t acc)
 
 bool Game::reserveLogin(uint32_t guid)
 {
+	std::unique_lock<std::shared_mutex> lock(pendingLoginsMutex);
 	return pendingLogins.emplace(guid).second;
 }
 
 void Game::releaseLogin(uint32_t guid)
 {
+	std::unique_lock<std::shared_mutex> lock(pendingLoginsMutex);
 	pendingLogins.erase(guid);
 }
 
 bool Game::isLoginPending(uint32_t guid) const
 {
+	std::shared_lock<std::shared_mutex> lock(pendingLoginsMutex);
 	return pendingLogins.contains(guid);
 }
 

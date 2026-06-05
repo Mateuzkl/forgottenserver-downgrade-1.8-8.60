@@ -431,6 +431,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 			return;
 		}
 	}
+	sendDllCheck();
 	sendLootContainers();
 
 	if (isOTC) {
