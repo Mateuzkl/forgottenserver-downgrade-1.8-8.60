@@ -715,9 +715,8 @@ bool AreaSpawnEvent::executeEvent()
 			}
 
 			if (!placed) {
-				LOG_WARN(fmt::format(fg(fmt::color::red),
-				                     "[RAIDS] Area spawn could not place monster {} after {} tries",
-				                     spawn.name, MAXIMUM_TRIES_PER_MONSTER));
+				LOG_RAID("Area spawn could not place monster {} after {} tries",
+				         spawn.name, MAXIMUM_TRIES_PER_MONSTER);
 			}
 		}
 	}

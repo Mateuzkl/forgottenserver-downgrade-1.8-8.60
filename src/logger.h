@@ -85,6 +85,7 @@ public:
 	virtual void statsWarning(std::string_view msg) = 0;
 	virtual void mapCache(std::string_view msg) = 0;
 	virtual void network(std::string_view msg) = 0;
+	virtual void raid(std::string_view msg) = 0;
 
 	template <typename... Args>
 	void trace(fmt::format_string<Args...> fmt, Args&&... args)
@@ -170,6 +171,12 @@ public:
 		network(fmt::format(fmt, std::forward<Args>(args)...));
 	}
 
+	template <typename... Args>
+	void raid(fmt::format_string<Args...> fmt, Args&&... args)
+	{
+		raid(fmt::format(fmt, std::forward<Args>(args)...));
+	}
+
 	template <typename F>
 	auto profile(std::string_view name, F&& func)
 	{
@@ -251,6 +258,10 @@ void loggerSignalHandler(int signal);
 #define LOG_NETWORK(...) \
 	do { \
 		if (isLoggerInitialized()) g_logger().network(__VA_ARGS__); \
+	} while (0)
+#define LOG_RAID(...) \
+	do { \
+		if (isLoggerInitialized()) g_logger().raid(__VA_ARGS__); \
 	} while (0)
 
 template <typename T>
