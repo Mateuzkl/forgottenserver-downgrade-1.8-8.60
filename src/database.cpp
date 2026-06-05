@@ -163,11 +163,11 @@ bool Database::connect()
 	}
 
 	connectionParams = ConnectionParams{
-		getString(ConfigManager::MYSQL_HOST),
-		getString(ConfigManager::MYSQL_USER),
-		getString(ConfigManager::MYSQL_PASS),
-		getString(ConfigManager::MYSQL_DB),
-		getString(ConfigManager::MYSQL_SOCK),
+		std::string(getString(ConfigManager::MYSQL_HOST)),
+		std::string(getString(ConfigManager::MYSQL_USER)),
+		std::string(getString(ConfigManager::MYSQL_PASS)),
+		std::string(getString(ConfigManager::MYSQL_DB)),
+		std::string(getString(ConfigManager::MYSQL_SOCK)),
 		static_cast<int>(getInteger(ConfigManager::SQL_PORT))
 	};
 
