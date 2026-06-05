@@ -11,7 +11,6 @@ extern Dispatcher g_dispatcher;
 
 void DatabaseTasks::start()
 {
-	db.connect();
 	ThreadHolder::start();
 }
 
@@ -54,14 +53,15 @@ void DatabaseTasks::addTask(std::string query, std::function<void(DBResult_ptr, 
 
 void DatabaseTasks::runTask(const DatabaseTask& task)
 {
+	Database& database = Database::getInstance();
 	bool success;
 	DBResult_ptr result;
 	if (task.store) {
-		result = db.storeQuery(task.query);
+		result = database.storeQuery(task.query);
 		success = true;
 	} else {
 		result = nullptr;
-		success = db.executeQuery(task.query);
+		success = database.executeQuery(task.query);
 	}
 
 	if (task.callback) {

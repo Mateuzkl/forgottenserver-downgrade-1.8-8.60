@@ -47,7 +47,7 @@ static tfs::detail::Mysql_ptr connectToDatabase(const Database::ConnectionParams
 		if (retryCount > 0) {
 			if (!retryIfError || retryCount > MAX_RECONNECT_ATTEMPTS) {
 				if (retryIfError) {
-					LOG_ERROR(fmt::format("[Database] Failed to connect after {} attempts. Giving up.", MAX_RECONNECT_ATTEMPTS));
+					LOG_ERROR(fmt::format(">> Database: failed to connect after {} attempts. Giving up.", MAX_RECONNECT_ATTEMPTS));
 				}
 				return nullptr;
 			}
@@ -56,7 +56,7 @@ static tfs::detail::Mysql_ptr connectToDatabase(const Database::ConnectionParams
 
 		tfs::detail::Mysql_ptr handle{mysql_init(nullptr)};
 		if (!handle) {
-			LOG_ERROR("Failed to initialize MySQL connection handle.");
+			LOG_ERROR(">> Database: failed to initialize MySQL connection handle.");
 			continue;
 		}
 
@@ -155,7 +155,7 @@ bool Database::connect()
 		}
 
 		libraryInitialized = true;
-		LOG_INFO("Database running in per-thread connection mode (one MySQL connection per worker thread).");
+		LOG_INFO(">> Database running in per-thread connection mode (one MySQL connection per worker thread).");
 	});
 
 	if (!libraryInitialized) {
@@ -182,7 +182,7 @@ bool Database::connect()
 bool Database::establishConnection(ConnectionContext& ctx, const bool retryIfError) const
 {
 	if (!connectionParams) {
-		LOG_ERROR("Database connection parameters not initialized.");
+		LOG_ERROR(">> Database: connection parameters not initialized.");
 		return false;
 	}
 
@@ -222,7 +222,7 @@ Database::ConnectionContext& Database::getContext() const
 	ConnectionContext* contextPtr = context.get();
 	if (!establishConnection(*contextPtr, false)) {
 		failedContext = std::move(context);
-		LOG_ERROR("Database: failed to open MySQL connection.");
+		LOG_ERROR(">> Database: failed to open MySQL connection.");
 		return *failedContext;
 	}
 
@@ -234,18 +234,18 @@ Database::ConnectionContext& Database::getContext() const
 	}
 
 	tlsContext = contextPtr;
-	LOG_INFO(fmt::format("Database: opened MySQL connection #{}.", connectionNumber));
+	LOG_INFO(fmt::format(">> Database: opened MySQL connection #{}.", connectionNumber));
 	return *tlsContext;
 }
 
 bool Database::reconnect(ConnectionContext& ctx) const
 {
-	LOG_WARN("[Database::reconnect] Lost connection, attempting reconnect...");
+	LOG_WARN(">> Database: lost connection, attempting reconnect...");
 
 	ctx.handle.reset();
 	const bool success = establishConnection(ctx, true);
 	if (success) {
-		LOG_INFO("[Database::reconnect] Reconnected successfully.");
+		LOG_INFO(">> Database: reconnected successfully.");
 	}
 	return success;
 }
@@ -256,7 +256,7 @@ void Database::shutdown()
 	{
 		std::scoped_lock lock{db.connectionsMutex};
 		if (!db.connections.empty()) {
-			LOG_INFO(fmt::format("Database: closing {} MySQL connection(s).", db.connections.size()));
+			LOG_INFO(fmt::format(">> Database: closing {} MySQL connection(s).", db.connections.size()));
 		}
 		db.connections.clear();
 	}
@@ -282,7 +282,7 @@ bool Database::rollback()
 {
 	ConnectionContext& ctx = getContext();
 	if (!ctx.handle) {
-		LOG_ERROR("Database not initialized.");
+		LOG_ERROR(">> Database: not initialized.");
 		return false;
 	}
 
@@ -299,7 +299,7 @@ bool Database::commit()
 {
 	ConnectionContext& ctx = getContext();
 	if (!ctx.handle) {
-		LOG_ERROR("Database not initialized.");
+		LOG_ERROR(">> Database: not initialized.");
 		return false;
 	}
 
@@ -321,7 +321,7 @@ bool Database::executeQuery(std::string_view query)
 
 	ConnectionContext& ctx = getContext();
 	if (!ctx.handle) {
-		LOG_ERROR("Database not initialized.");
+		LOG_ERROR(">> Database: not initialized.");
 		return false;
 	}
 
@@ -335,7 +335,7 @@ bool Database::executeQuery(std::string_view query)
 		const unsigned int mysqlError = mysql_errno(ctx.handle.get());
 		ctx.lastErrno = mysqlError;
 		if (!ctx.inTransaction && isLostConnectionError(mysqlError)) {
-			LOG_WARN(fmt::format("[Database::executeQuery] Lost connection (error {}), attempting reconnect...", mysqlError));
+			LOG_WARN(fmt::format(">> Database: lost connection during executeQuery (error {}), attempting reconnect...", mysqlError));
 			if (reconnect(ctx)) {
 				success = ::executeQuery(ctx.handle, query, false);
 				if (!success) {
@@ -369,7 +369,7 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 {
 	ConnectionContext& ctx = getContext();
 	if (!ctx.handle) {
-		LOG_ERROR("Database not initialized.");
+		LOG_ERROR(">> Database: not initialized.");
 		return nullptr;
 	}
 
@@ -387,7 +387,7 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 			return nullptr;
 		}
 		// Lost connection: reconnect once and retry.
-		LOG_WARN(fmt::format("[Database::storeQuery] Lost connection (error {}), attempting reconnect...", mysqlError));
+		LOG_WARN(fmt::format(">> Database: lost connection during storeQuery (error {}), attempting reconnect...", mysqlError));
 		if (!reconnect(ctx)) {
 			return nullptr;
 		}
@@ -427,7 +427,7 @@ uint64_t Database::getLastInsertId() const
 {
 	ConnectionContext& ctx = getContext();
 	if (!ctx.handle) {
-		LOG_ERROR("Database connection not established, cannot get last insert id.");
+		LOG_ERROR(">> Database: connection not established, cannot get last insert id.");
 		return 0;
 	}
 	return mysql_insert_id(ctx.handle.get());
@@ -462,7 +462,7 @@ std::string Database::escapeBlob(const char* s, uint32_t length) const
 {
 	ConnectionContext& ctx = getContext();
 	if (!ctx.handle) {
-		LOG_ERROR("Database connection not established, cannot escape blob.");
+		LOG_ERROR(">> Database: connection not established, cannot escape blob.");
 		return "''";
 	}
 
