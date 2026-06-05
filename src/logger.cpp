@@ -159,6 +159,12 @@ public:
 			raidLogger_ = std::make_shared<spdlog::logger>("tfs_raid", console_sink_raid);
 			raidLogger_->set_level(spdlog::level::info);
 
+			auto console_sink_threadpool = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+			console_sink_threadpool->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+
+			threadPoolLogger_ = std::make_shared<spdlog::logger>("tfs_threadpool", console_sink_threadpool);
+			threadPoolLogger_->set_level(spdlog::level::info);
+
 			logger_->info("=== TFS Logger Initialized ===");
 			logger_->info("Log file: {}", timestampedPath_);
 			logger_->flush();
@@ -289,6 +295,24 @@ public:
 		}
 	}
 
+	void threadPool(std::string_view msg) override
+	{
+		if (threadPoolLogger_) {
+			threadPoolLogger_->info("\033[36m[ThreadPool]\033[0m \033[37m{}\033[0m", msg);
+		}
+
+		if (logger_) {
+			std::string formattedMsg = fmt::format("[ThreadPool] {}", msg);
+			for (auto& sink : logger_->sinks()) {
+				auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
+				if (fileSink) {
+					spdlog::details::log_msg logMsg("tfs", spdlog::level::info, formattedMsg);
+					fileSink->log(logMsg);
+				}
+			}
+		}
+	}
+
 protected:
 	void log(LogLevel level, std::string_view msg) override
 	{
@@ -335,6 +359,7 @@ private:
 	std::shared_ptr<spdlog::logger> mapCacheLogger_;
 	std::shared_ptr<spdlog::logger> networkLogger_;
 	std::shared_ptr<spdlog::logger> raidLogger_;
+	std::shared_ptr<spdlog::logger> threadPoolLogger_;
 	std::string timestampedPath_;
 };
 

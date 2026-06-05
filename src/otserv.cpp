@@ -418,7 +418,7 @@ void startServer()
 			fmt::format(fg(fmt::color::lime_green), "{}", getInteger(ConfigManager::GAME_PORT)),
 			fmt::format(fg(fmt::color::lime_green), "{}", getString(ConfigManager::IP)));
 		if (networkThreads > 1) {
-			LOG_NETWORK(">> I/O threads: {}", networkThreads);
+			LOG_THREADPOOL(">> I/O thread pool ready: {} workers", networkThreads);
 		}
 		LOG_INFO("");
 		LOG_INFO(">> {} Server Online!", getString(ConfigManager::SERVER_NAME));
