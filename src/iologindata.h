@@ -9,6 +9,7 @@
 #include "observer_ptr.h"
 #include "player.h"
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 using ItemBlockList = std::list<std::pair<int32_t, ObserverPtr<Item>>>;
@@ -36,8 +37,15 @@ public:
 	static bool loadPlayer(Player* player, DBResult_ptr result, bool deferWorldData = false);
 	static void loadPlayerWorldData(Player* player);
 	static bool savePlayer(Player* player);
-	static std::optional<std::vector<std::string>> buildPlayerSave(Player* player);
-	static bool flushPlayerSave(const std::vector<std::string>& queries);
+	struct PlayerSaveSnapshot
+	{
+		std::vector<std::string> queries;
+		uint64_t storageSnapshotId = 0;
+		std::unordered_set<uint32_t> snapshotModifiedKeys;
+		std::unordered_set<uint32_t> snapshotRemovedKeys;
+	};
+	static std::optional<PlayerSaveSnapshot> buildPlayerSave(Player* player);
+	static bool flushPlayerSave(const PlayerSaveSnapshot& snapshot);
 	static bool addRewardItems(uint32_t playerId, const ItemBlockList& itemList, DBInsert& query_insert, PropWriteStream& propWriteStream);
 	static uint32_t getGuidByName(std::string_view name);
 	static bool getGuidByNameEx(uint32_t& guid, bool& specialVip, std::string& name);

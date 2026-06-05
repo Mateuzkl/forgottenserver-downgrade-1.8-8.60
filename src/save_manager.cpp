@@ -7,7 +7,6 @@
 #include "save_manager.h"
 
 #include "game.h"
-#include "iologindata.h"
 #include "iomapserialize.h"
 #include "logger.h"
 #include "thread_pool.h"
@@ -20,7 +19,7 @@ SaveManager g_saveManager;
 
 void SaveManager::saveAll()
 {
-	if (saving.exchange(true)) {
+	if (isSaving() || saving.exchange(true)) {
 		LOG_INFO(fmt::format(">> {}: {}",
 			fmt::format(fg(fmt::color::magenta), "SaveManager"),
 			fmt::format(fg(fmt::color::yellow), "Save already in progress, skipping.")));
@@ -136,8 +135,8 @@ bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = fal
 		return false;
 	}
 
-	auto queries = IOLoginData::buildPlayerSave(player);
-	if (!queries) {
+	auto save = IOLoginData::buildPlayerSave(player);
+	if (!save) {
 		LOG_ERROR(fmt::format("[SaveManager] Failed to build save for player: {}", player->getName()));
 		return false;
 	}
@@ -151,7 +150,7 @@ bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = fal
 		if (auto it = pendingFlushes.find(guid); it != pendingFlushes.end() && it->second.trackedBySaveAll) {
 			completeTrackedFlush();
 		}
-		pendingFlushes[guid] = PendingPlayerFlush{name, std::move(*queries), trackSaveAll};
+		pendingFlushes[guid] = PendingPlayerFlush{name, std::move(*save), trackSaveAll};
 		return true;
 	}
 
@@ -159,17 +158,24 @@ bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = fal
 	if (trackSaveAll) {
 		beginTrackedFlush();
 	}
-	g_threadPool.detach_task([this, guid, name, q = std::move(*queries), trackSaveAll]() {
-		if (!IOLoginData::flushPlayerSave(q)) {
+	g_threadPool.detach_task([this, guid, name, save = std::move(*save), trackSaveAll]() mutable {
+		const bool success = IOLoginData::flushPlayerSave(save);
+		if (!success) {
 			LOG_ERROR(fmt::format("[SaveManager] Failed to flush save for player: {}", name));
 		}
-		g_dispatcher.addTask([this, guid, trackSaveAll]() { onPlayerFlushed(guid, trackSaveAll); });
+		g_dispatcher.addTask([this, guid, trackSaveAll, success, save = std::move(save)]() mutable {
+			onPlayerFlushed(guid, trackSaveAll, success, std::move(save));
+		});
 	});
 	return true;
 }
 
-void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll)
+void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll, bool success, IOLoginData::PlayerSaveSnapshot save)
 {
+	if (success) {
+		acknowledgePlayerSave(guid, save);
+	}
+
 	if (trackedBySaveAll) {
 		completeTrackedFlush();
 	}
@@ -184,13 +190,27 @@ void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll)
 	pendingFlushes.erase(it);
 	g_threadPool.detach_task([this, guid, pending = std::move(pending)]() mutable {
 		std::string name = std::move(pending.name);
-		std::vector<std::string> queries = std::move(pending.queries);
+		IOLoginData::PlayerSaveSnapshot save = std::move(pending.save);
 		const bool trackSaveAll = pending.trackedBySaveAll;
-		if (!IOLoginData::flushPlayerSave(queries)) {
+		const bool success = IOLoginData::flushPlayerSave(save);
+		if (!success) {
 			LOG_ERROR(fmt::format("[SaveManager] Failed to flush queued save for player: {}", name));
 		}
-		g_dispatcher.addTask([this, guid, trackSaveAll]() { onPlayerFlushed(guid, trackSaveAll); });
+		g_dispatcher.addTask([this, guid, trackSaveAll, success, save = std::move(save)]() mutable {
+			onPlayerFlushed(guid, trackSaveAll, success, std::move(save));
+		});
 	});
+}
+
+void SaveManager::acknowledgePlayerSave(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save)
+{
+	if (auto player = g_game.getPlayerByGUID(guid)) {
+		player->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
+			save.storageSnapshotId,
+			save.snapshotModifiedKeys,
+			save.snapshotRemovedKeys
+		});
+	}
 }
 
 void SaveManager::beginTrackedFlush() noexcept

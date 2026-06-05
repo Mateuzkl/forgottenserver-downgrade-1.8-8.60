@@ -975,12 +975,13 @@ bool IOLoginData::addRewardItems(uint32_t playerId, const ItemBlockList& itemLis
     return query_insert.execute();
 }
 
-std::optional<std::vector<std::string>> IOLoginData::buildPlayerSave(Player* player)
+std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Player* player)
 {
 	if (!player) {
 		return std::nullopt;
 	}
 
+	const Player::StorageDirtySnapshot storageSnapshot = player->getStorageDirtySnapshot();
 	std::vector<std::string> queries;
 	try {
 		QueryCaptureScope capture{queries};
@@ -992,14 +993,19 @@ std::optional<std::vector<std::string>> IOLoginData::buildPlayerSave(Player* pla
 		return std::nullopt;
 	}
 
-	return queries;
+	return PlayerSaveSnapshot{
+		std::move(queries),
+		storageSnapshot.snapshotId,
+		storageSnapshot.modifiedKeys,
+		storageSnapshot.removedKeys
+	};
 }
 
-bool IOLoginData::flushPlayerSave(const std::vector<std::string>& queries)
+bool IOLoginData::flushPlayerSave(const PlayerSaveSnapshot& snapshot)
 {
-	return DBTransaction::executeWithinTransactionRollbackOnFailure([&queries]() {
+	return DBTransaction::executeWithinTransactionRollbackOnFailure([&snapshot]() {
 		Database& db = Database::getInstance();
-		for (const auto& query : queries) {
+		for (const auto& query : snapshot.queries) {
 			if (!db.executeQuery(query)) {
 				return false;
 			}
@@ -1017,7 +1023,11 @@ bool IOLoginData::savePlayer(Player* player)
 
 	const bool success = flushPlayerSave(*queries);
 	if (success) {
-		player->clearStorageDirty();
+		player->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
+			queries->storageSnapshotId,
+			queries->snapshotModifiedKeys,
+			queries->snapshotRemovedKeys
+		});
 	}
 	return success;
 }

@@ -1395,12 +1395,43 @@ void Player::setStorageValue(const uint32_t key, const std::optional<int64_t> va
 		modifiedStorageKeys.erase(key);
 		removedStorageKeys.insert(key);
 	}
+	storageDirtyKeyRevisions[key] = ++storageDirtyRevision;
+}
+
+Player::StorageDirtySnapshot Player::getStorageDirtySnapshot() const
+{
+	return StorageDirtySnapshot{storageDirtyRevision, modifiedStorageKeys, removedStorageKeys};
+}
+
+void Player::acknowledgeStorageDirty(const StorageDirtySnapshot& snapshot)
+{
+	auto acknowledgeKey = [this, snapshotId = snapshot.snapshotId](uint32_t key) {
+		const auto versionIt = storageDirtyKeyRevisions.find(key);
+		if (versionIt != storageDirtyKeyRevisions.end() && versionIt->second > snapshotId) {
+			return;
+		}
+
+		modifiedStorageKeys.erase(key);
+		removedStorageKeys.erase(key);
+		if (versionIt != storageDirtyKeyRevisions.end()) {
+			storageDirtyKeyRevisions.erase(versionIt);
+		}
+	};
+
+	for (const uint32_t key : snapshot.modifiedKeys) {
+		acknowledgeKey(key);
+	}
+
+	for (const uint32_t key : snapshot.removedKeys) {
+		acknowledgeKey(key);
+	}
 }
 
 void Player::clearStorageDirty()
 {
 	modifiedStorageKeys.clear();
 	removedStorageKeys.clear();
+	storageDirtyKeyRevisions.clear();
 }
 
 bool Player::canSee(const Position& pos) const

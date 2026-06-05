@@ -9,7 +9,8 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
+
+#include "iologindata.h"
 
 class Player;
 
@@ -33,13 +34,14 @@ private:
 	struct PendingPlayerFlush
 	{
 		std::string name;
-		std::vector<std::string> queries;
+		IOLoginData::PlayerSaveSnapshot save;
 		bool trackedBySaveAll = false;
 	};
 
 	// Player state snapshots and flush queue bookkeeping must run on the dispatcher thread.
 	bool schedulePlayerFlush(Player* player, bool trackSaveAll = false);
-	void onPlayerFlushed(uint32_t guid, bool trackedBySaveAll);
+	void onPlayerFlushed(uint32_t guid, bool trackedBySaveAll, bool success, IOLoginData::PlayerSaveSnapshot save);
+	void acknowledgePlayerSave(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save);
 	void beginTrackedFlush() noexcept;
 	void completeTrackedFlush() noexcept;
 
