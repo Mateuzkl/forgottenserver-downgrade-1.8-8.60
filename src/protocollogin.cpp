@@ -11,17 +11,112 @@
 #include "database.h"
 #include "game.h"
 #include "iologindata.h"
+#include "monsters.h"
 #include "outputmessage.h"
 #include "tasks.h"
 #include "tools.h"
 #include "vocation.h"
 
+#include <ctime>
 #include <fmt/format.h>
 #include <limits>
 #include <vector>
 
 extern Game g_game;
+extern Monsters g_monsters;
 extern Vocations g_vocations;
+
+namespace {
+
+constexpr uint8_t ASTRA_LOGIN_BOOSTED_INFO_MARKER = 0xA1;
+
+struct LoginBoostedEntry {
+	uint32_t raceId = 0;
+	std::string name;
+	Outfit_t outfit;
+
+	bool isValid() const
+	{
+		return raceId != 0 && !name.empty() && outfit.lookType != 0;
+	}
+};
+
+LoginBoostedEntry getBoostedCreatureLoginEntry()
+{
+	LoginBoostedEntry entry;
+	const auto& boostedCreatureName = g_game.getBoostedCreature();
+	if (boostedCreatureName.empty()) {
+		return entry;
+	}
+
+	const auto* monsterType = g_monsters.getMonsterType(boostedCreatureName);
+	if (!monsterType) {
+		return entry;
+	}
+
+	entry.raceId = monsterType->raceId;
+	entry.name = monsterType->name;
+	entry.outfit = monsterType->info.outfit;
+	entry.outfit.lookType = AstraClient::sanitize860OutfitLookType(entry.outfit.lookType);
+	return entry;
+}
+
+LoginBoostedEntry getBoostedBossLoginEntry()
+{
+	LoginBoostedEntry entry;
+	auto& db = Database::getInstance();
+	if (!db.storeQuery("SHOW TABLES LIKE 'boosted_boss'")) {
+		return entry;
+	}
+
+	const std::time_t now = std::time(nullptr);
+	const std::tm* localTime = std::localtime(&now);
+	const uint16_t today = localTime ? static_cast<uint16_t>(localTime->tm_mday) : 0;
+	const auto result = db.storeQuery(fmt::format(
+	    "SELECT `boostname`, `raceid`, `looktype`, `lookhead`, `lookbody`, `looklegs`, `lookfeet`, `lookaddons` "
+	    "FROM `boosted_boss` WHERE `date` = '{}' AND `raceid` <> '0' LIMIT 1",
+	    today));
+	if (!result) {
+		return entry;
+	}
+
+	entry.raceId = result->getNumber<uint32_t>("raceid");
+	entry.name = std::string{result->getString("boostname")};
+	entry.outfit.lookType = AstraClient::sanitize860OutfitLookType(result->getNumber<uint16_t>("looktype"));
+	entry.outfit.lookHead = result->getNumber<uint8_t>("lookhead");
+	entry.outfit.lookBody = result->getNumber<uint8_t>("lookbody");
+	entry.outfit.lookLegs = result->getNumber<uint8_t>("looklegs");
+	entry.outfit.lookFeet = result->getNumber<uint8_t>("lookfeet");
+	entry.outfit.lookAddons = result->getNumber<uint8_t>("lookaddons");
+
+	return entry;
+}
+
+void addBoostedLoginEntry(const OutputMessage_ptr& output, const LoginBoostedEntry& entry)
+{
+	output->addByte(entry.isValid() ? 1 : 0);
+	if (!entry.isValid()) {
+		return;
+	}
+
+	output->add<uint32_t>(entry.raceId);
+	output->addString(entry.name);
+	output->add<uint16_t>(entry.outfit.lookType);
+	output->addByte(entry.outfit.lookHead);
+	output->addByte(entry.outfit.lookBody);
+	output->addByte(entry.outfit.lookLegs);
+	output->addByte(entry.outfit.lookFeet);
+	output->addByte(entry.outfit.lookAddons);
+}
+
+void addAstraLoginBoostedInfo(const OutputMessage_ptr& output)
+{
+	output->addByte(ASTRA_LOGIN_BOOSTED_INFO_MARKER);
+	addBoostedLoginEntry(output, getBoostedCreatureLoginEntry());
+	addBoostedLoginEntry(output, getBoostedBossLoginEntry());
+}
+
+} // namespace
 
 // --- Brute Force Protection ---
 
@@ -209,6 +304,10 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 		} else {
 			output->add<uint16_t>(0);
 		}
+	}
+
+	if (isAstraClient) {
+		addAstraLoginBoostedInfo(output);
 	}
 
 	send(output);

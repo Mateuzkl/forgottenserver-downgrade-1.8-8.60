@@ -2858,6 +2858,8 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::BOOSTED_EXP_MULTIPLIER);
 	registerEnumIn("configKeys", ConfigManager::BOOSTED_LOOT_MULTIPLIER);
 	registerEnumIn("configKeys", ConfigManager::BOOSTED_SPAWN_MULTIPLIER);
+	registerEnumIn("configKeys", ConfigManager::BOOSTED_BOSS_LOOT_BONUS);
+	registerEnumIn("configKeys", ConfigManager::BOOSTED_BOSS_KILL_BONUS);
 	registerEnumIn("configKeys", ConfigManager::DEFAULT_EXP_COLOR);
 
 	// os

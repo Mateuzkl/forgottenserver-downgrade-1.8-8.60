@@ -83,7 +83,7 @@ local function getFinishedBosses(kills)
 end
 
 local function getBoostedBoss()
-	return CustomBosstiary.getBoostedMonster()
+	return CustomBosstiary.getBoostedBoss()
 end
 
 local function contains(list, value)
@@ -239,7 +239,9 @@ local function sendSlots(player)
 	out:addByte(boostedBoss and 1 or 0)
 	out:addU32(boostedBoss and boostedBoss.raceId or 0)
 	if boostedBoss then
-		sendSlotBytes(out, boostedBoss, kills[boostedBoss.raceId] or 0, currentBonus + 50, 2, false, 0)
+		local boostedLootBonus = currentBonus + CustomBosstiary.getBoostedBossLootBonus()
+		local boostedKillBonus = CustomBosstiary.getBoostedBossKillBonus()
+		sendSlotBytes(out, boostedBoss, kills[boostedBoss.raceId] or 0, boostedLootBonus, boostedKillBonus, false, 0)
 	end
 	writeOptionalCreatureInfo(out, boostedBoss)
 

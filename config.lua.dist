@@ -12,6 +12,8 @@ AutoLoot_MaxItemPremium = 10
 boostedExpMultiplier = 2.0       -- XP multiplier for boosted creature
 boostedLootMultiplier = 2.0      -- Loot rolls for boosted creature
 boostedSpawnMultiplier = 0.5     -- Spawn interval factor (0.5 = half the time)
+boostedBossLootBonus = 250       -- Loot bonus percent for boosted boss
+boostedBossKillBonus = 3         -- Bosstiary kill multiplier for boosted boss
 
 -- Account Manager
 accountManager = true

@@ -58,8 +58,9 @@ function loginBoosted.onLogin(player)
 			string.format("Today's boosted creature is: %s. Double XP, double loot, spawns twice as fast!", boosted))
 	end
 
-	if player.isUsingAstraClient and player:isUsingAstraClient() and CustomBosstiary and CustomBosstiary.getBoostedMonster then
-		local boostedBoss = CustomBosstiary.getBoostedMonster()
+	-- Boosted Boss is persisted by CustomBosstiary and sent to Astra through login and Bosstiary protocols.
+	if player.isUsingAstraClient and player:isUsingAstraClient() and CustomBosstiary and CustomBosstiary.getBoostedBoss then
+		local boostedBoss = CustomBosstiary.getBoostedBoss()
 		if boostedBoss and boostedBoss.name then
 			player:sendTextMessage(MESSAGE_EVENT_ADVANCE,
 				string.format("Today's boosted boss is: %s. Extra loot and extra Bosstiary kills!", boostedBoss.name))

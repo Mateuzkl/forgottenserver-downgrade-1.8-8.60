@@ -595,6 +595,8 @@ bool ConfigManager::load()
 	floats[BOOSTED_EXP_MULTIPLIER] = getGlobalFloat(L, "boostedExpMultiplier", 2.0f);
 	floats[BOOSTED_LOOT_MULTIPLIER] = getGlobalFloat(L, "boostedLootMultiplier", 2.0f);
 	floats[BOOSTED_SPAWN_MULTIPLIER] = getGlobalFloat(L, "boostedSpawnMultiplier", 0.5f);
+	integers[Integer::BOOSTED_BOSS_LOOT_BONUS] = getGlobalInteger(L, "boostedBossLootBonus", 250);
+	integers[Integer::BOOSTED_BOSS_KILL_BONUS] = getGlobalInteger(L, "boostedBossKillBonus", 3);
 
 	floats[COMBAT_CHAIN_SKILL_FORMULA_AXE] = getGlobalFloat(L, "combatChainSkillFormulaAxe", 0.9f);
 	floats[COMBAT_CHAIN_SKILL_FORMULA_CLUB] = getGlobalFloat(L, "combatChainSkillFormulaClub", 0.7f);

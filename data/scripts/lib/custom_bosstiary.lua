@@ -6,6 +6,7 @@ end
 CustomBosstiary = CustomBosstiary or {}
 CustomBosstiary.monstersByRaceId = CustomBosstiary.monstersByRaceId or {}
 CustomBosstiary.monstersByName = CustomBosstiary.monstersByName or {}
+CustomBosstiary.boostedBoss = CustomBosstiary.boostedBoss or nil
 
 local thresholds = {
 	[1] = {25, 100, 300},
@@ -19,6 +20,8 @@ local rewards = {
 	[3] = {10, 30, 60},
 }
 
+local boostedBossCategory = RARITY_ARCHFOE or 2
+
 local function clamp(value, minValue, maxValue)
 	value = tonumber(value) or minValue
 	if value < minValue then
@@ -28,6 +31,20 @@ local function clamp(value, minValue, maxValue)
 		return maxValue
 	end
 	return value
+end
+
+local function getConfigNumber(key, fallback)
+	if configManager and configManager.getNumber and configKeys and configKeys[key] ~= nil then
+		local value = tonumber(configManager.getNumber(configKeys[key]))
+		if value then
+			return value
+		end
+	end
+	return fallback
+end
+
+local function isArchfoeBoss(entry)
+	return entry and entry.category == boostedBossCategory
 end
 
 local function normalizeOutfit(outfit)
@@ -76,6 +93,25 @@ function CustomBosstiary.ensureTables()
 			KEY `idx_player_bosstiary_tracker_slot` (`player_id`, `slot`)
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
+
+	db.query([[
+		CREATE TABLE IF NOT EXISTS `boosted_boss` (
+			`boostname` TEXT,
+			`date` varchar(250) NOT NULL DEFAULT '',
+			`raceid` varchar(250) NOT NULL DEFAULT '',
+			`looktype` int(11) NOT NULL DEFAULT "136",
+			`lookfeet` int(11) NOT NULL DEFAULT "0",
+			`looklegs` int(11) NOT NULL DEFAULT "0",
+			`lookhead` int(11) NOT NULL DEFAULT "0",
+			`lookbody` int(11) NOT NULL DEFAULT "0",
+			`lookaddons` int(11) NOT NULL DEFAULT "0",
+			`lookmount` int(11) DEFAULT "0",
+			PRIMARY KEY (`date`)
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
+	]])
+
+	-- Insert default row if not exists
+	db.query([[INSERT IGNORE INTO `boosted_boss` (`date`, `boostname`, `raceid`) VALUES ('0', 'default', '0')]])
 end
 
 function CustomBosstiary.registerMonster(monsterType, mask)
@@ -166,8 +202,10 @@ function CustomBosstiary.addKill(players, entry)
 		return false
 	end
 
-	local boosted = CustomBosstiary.getBoostedMonster()
-	local increment = boosted and boosted.raceId == entry.raceId and 2 or 1
+	local boostedBoss = CustomBosstiary.getBoostedBoss()
+	local isBoosted = boostedBoss and boostedBoss.raceId == entry.raceId
+	local increment = isBoosted and CustomBosstiary.getBoostedBossKillBonus() or 1
+
 	for playerGuid, player in pairs(players or {}) do
 		local oldKills = 0
 		local resultId = db.storeQuery("SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = " ..
@@ -191,6 +229,119 @@ function CustomBosstiary.addKill(players, entry)
 					awardedPoints .. " boss points.")
 			end
 		end
+
 	end
 	return true
+end
+
+function CustomBosstiary.loadBoostedBoss()
+	CustomBosstiary.ensureTables()
+
+	local today = tostring(tonumber(os.date("%d")) or 0)
+	local resultId = db.storeQuery("SELECT `date`, `boostname`, `raceid`, `looktype`, `lookhead`, `lookbody`, `looklegs`, `lookfeet`, `lookaddons`, `lookmount` FROM `boosted_boss` WHERE `date` = " .. db.escapeString(today) .. " LIMIT 1")
+	if not resultId then
+		CustomBosstiary.pickNewBoostedBoss()
+		return
+	end
+
+	local savedName = result.getDataString(resultId, "boostname")
+	local savedRaceId = tonumber(result.getDataString(resultId, "raceid")) or 0
+	local entry = CustomBosstiary.getMonster(savedRaceId)
+	if isArchfoeBoss(entry) then
+		CustomBosstiary.boostedBoss = {
+			name = savedName ~= "" and savedName or entry.name,
+			raceId = savedRaceId,
+			category = entry.category,
+			outfit = {
+				type = tonumber(result.getDataInt(resultId, "looktype")) or entry.outfit.type or 0,
+				typeEx = 0,
+				head = tonumber(result.getDataInt(resultId, "lookhead")) or entry.outfit.head or 0,
+				body = tonumber(result.getDataInt(resultId, "lookbody")) or entry.outfit.body or 0,
+				legs = tonumber(result.getDataInt(resultId, "looklegs")) or entry.outfit.legs or 0,
+				feet = tonumber(result.getDataInt(resultId, "lookfeet")) or entry.outfit.feet or 0,
+				addons = tonumber(result.getDataInt(resultId, "lookaddons")) or entry.outfit.addons or 0,
+				mount = tonumber(result.getDataInt(resultId, "lookmount")) or 0,
+			}
+		}
+	else
+		result.free(resultId)
+		CustomBosstiary.pickNewBoostedBoss()
+		return
+	end
+	result.free(resultId)
+end
+
+function CustomBosstiary.getBoostedBoss()
+	return CustomBosstiary.boostedBoss
+end
+
+function CustomBosstiary.setBoostedBoss(entry)
+	if not entry then
+		return false
+	end
+
+	CustomBosstiary.boostedBoss = entry
+	local today = tostring(tonumber(os.date("%d")) or 0)
+	local outfit = entry.outfit or {}
+	db.query("DELETE FROM `boosted_boss` WHERE `date` <> " .. db.escapeString(today))
+
+	local query = string.format(
+		"INSERT INTO `boosted_boss` (`date`, `boostname`, `raceid`, `looktype`, `lookhead`, `lookbody`, `looklegs`, `lookfeet`, `lookaddons`, `lookmount`) " ..
+		"VALUES (%s, %s, '%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d') " ..
+		"ON DUPLICATE KEY UPDATE `boostname` = VALUES(`boostname`), `raceid` = VALUES(`raceid`), `looktype` = VALUES(`looktype`), " ..
+		"`lookhead` = VALUES(`lookhead`), `lookbody` = VALUES(`lookbody`), `looklegs` = VALUES(`looklegs`), " ..
+		"`lookfeet` = VALUES(`lookfeet`), `lookaddons` = VALUES(`lookaddons`), `lookmount` = VALUES(`lookmount`)",
+		db.escapeString(today), db.escapeString(entry.name), entry.raceId,
+		outfit.type or 0, outfit.head or 0, outfit.body or 0, outfit.legs or 0,
+		outfit.feet or 0, outfit.addons or 0, outfit.mount or 0
+	)
+
+	if not db.query(query) then
+		return false
+	end
+
+	db.query("UPDATE `player_bosstiary` SET `slot_one` = 0 WHERE `slot_one` = " .. entry.raceId)
+	db.query("UPDATE `player_bosstiary` SET `slot_two` = 0 WHERE `slot_two` = " .. entry.raceId)
+	return true
+end
+
+function CustomBosstiary.pickNewBoostedBoss()
+	local archfoeBosses = {}
+	local registeredBossCount = 0
+	for _, entry in pairs(CustomBosstiary.monstersByRaceId) do
+		registeredBossCount = registeredBossCount + 1
+		if isArchfoeBoss(entry) then
+			archfoeBosses[#archfoeBosses + 1] = entry
+		end
+	end
+
+	if registeredBossCount <= 1 or #archfoeBosses == 0 then
+		CustomBosstiary.boostedBoss = nil
+		return false
+	end
+
+	local selected = archfoeBosses[math.random(1, #archfoeBosses)]
+	return CustomBosstiary.setBoostedBoss(selected)
+end
+
+function CustomBosstiary.isBoostedBoss(entryOrRaceId)
+	local boostedBoss = CustomBosstiary.getBoostedBoss()
+	if not boostedBoss then
+		return false
+	end
+
+	local raceId = tonumber(entryOrRaceId)
+	if type(entryOrRaceId) == "table" then
+		raceId = entryOrRaceId.raceId
+	end
+
+	return boostedBoss.raceId == raceId
+end
+
+function CustomBosstiary.getBoostedBossLootBonus()
+	return getConfigNumber("BOOSTED_BOSS_LOOT_BONUS", 250)
+end
+
+function CustomBosstiary.getBoostedBossKillBonus()
+	return getConfigNumber("BOOSTED_BOSS_KILL_BONUS", 3)
 end

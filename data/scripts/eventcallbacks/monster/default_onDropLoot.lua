@@ -52,10 +52,19 @@ event.onDropLoot = function(self, corpse)
 	if not player or staminaOk then
 		local monsterLoot = mType:getLoot()
 		local rolls = 1
-		
+
 		local boostedCreature = Game.getBoostedCreature()
 		if boostedCreature and boostedCreature:lower() == mType:getName():lower() then
 			rolls = math.max(1, math.floor(configManager.getFloat(configKeys.BOOSTED_LOOT_MULTIPLIER)))
+		end
+
+		-- Boosted Boss loot bonus
+		if CustomBosstiary and CustomBosstiary.isBoostedBoss then
+			local mTypeRaceId = mType:raceId()
+			if CustomBosstiary.isBoostedBoss(mTypeRaceId) then
+				local boostedBossLootBonus = CustomBosstiary.getBoostedBossLootBonus()
+				rolls = math.max(1, math.floor(rolls * (1 + boostedBossLootBonus / 100)))
+			end
 		end
 
 		for roll = 1, rolls do
