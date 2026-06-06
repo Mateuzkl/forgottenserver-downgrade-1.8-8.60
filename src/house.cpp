@@ -323,7 +323,9 @@ bool House::transferToDepot() const
 
 	transferToDepot(targetPlayer);
 	if (needsSave) {
-		g_saveManager.savePlayerSync(&tmpPlayer);
+		if (!g_saveManager.savePlayerSync(&tmpPlayer)) {
+			LOG_ERROR("[House::transferToDepot] Failed to save temporary player data.");
+		}
 	}
 	return true;
 }
@@ -921,7 +923,9 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 				}
 			}
 
-			g_saveManager.savePlayerSync(&player);
+			if (!g_saveManager.savePlayerSync(&player)) {
+				LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
+			}
 		} else { // HOUSE_TYPE_GUILDHALL
 			auto guild = g_game.getGuild(ownerId);
 			if (!guild) {
@@ -973,7 +977,9 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 					house->setOwner(0, true, &player);
 				}
 
-				g_saveManager.savePlayerSync(&player);
+				if (!g_saveManager.savePlayerSync(&player)) {
+				LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
+			}
 			}
 		}
 	}

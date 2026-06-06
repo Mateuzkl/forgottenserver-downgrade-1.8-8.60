@@ -10,12 +10,12 @@
 
 struct DatabaseTask
 {
-	DatabaseTask(std::string_view query, std::function<void(DBResult_ptr, bool)>&& callback, bool store) :
+	DatabaseTask(std::string_view query, std::function<void(DBResult_ptr, bool, uint64_t)>&& callback, bool store) :
 	    query{query}, callback{std::move(callback)}, store{store}
 	{}
 
 	std::string query;
-	std::function<void(DBResult_ptr, bool)> callback;
+	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
 	bool store;
 };
 
@@ -27,7 +27,7 @@ public:
 	void flush();
 	void shutdown();
 
-	void addTask(std::string query, std::function<void(DBResult_ptr, bool)> callback = nullptr, bool store = false);
+	void addTask(std::string query, std::function<void(DBResult_ptr, bool, uint64_t)> callback = nullptr, bool store = false);
 
 	void threadMain();
 

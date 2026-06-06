@@ -159,12 +159,18 @@ bool Mailbox::sendItem(Item* item) const
 			return false;
 		}
 
-		if (g_game.internalMoveItem(item->getParent(), inbox, INDEX_WHEREEVER, item, item->getItemCount(), nullptr,
-		                            FLAG_NOLIMIT) == RETURNVALUE_NOERROR) {
+	auto* originalParent = item->getParent();
+	auto originalIndex = originalParent ? originalParent->getThingIndex(item) : -1;
+	if (g_game.internalMoveItem(originalParent, inbox, INDEX_WHEREEVER, item, item->getItemCount(), nullptr,
+	                            FLAG_NOLIMIT) == RETURNVALUE_NOERROR) {
+		if (g_saveManager.savePlayerSync(&tmpPlayer)) {
 			g_game.transformItem(item, item->getID() + 1);
-			g_saveManager.savePlayerSync(&tmpPlayer);
 			return true;
 		}
+		g_game.internalMoveItem(inbox, originalParent, originalIndex, item, item->getItemCount(), nullptr,
+		                        FLAG_NOLIMIT);
+		return false;
+	}
 	}
 	return false;
 }

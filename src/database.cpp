@@ -390,8 +390,10 @@ bool Database::executeQuery(std::string_view query)
 
 	// executeQuery can be called with command that produces result (e.g. SELECT)
 	// we have to store that result, even though we do not need it, otherwise handle will get blocked
-	auto mysql_res = mysql_store_result(ctx.handle.get());
-	mysql_free_result(mysql_res);
+	if (success) {
+		auto mysql_res = mysql_store_result(ctx.handle.get());
+		mysql_free_result(mysql_res);
+	}
 
 	// Track raw SQL transaction state to prevent reconnect during transactions
 	if (success) {
@@ -412,8 +414,24 @@ bool Database::executeQuery(std::string_view query)
 
 		if (cmd == "START" || cmd == "BEGIN") {
 			ctx.inTransaction = true;
-		} else if (cmd == "COMMIT" || cmd == "ROLLBACK") {
+		} else if (cmd == "COMMIT") {
 			ctx.inTransaction = false;
+		} else if (cmd == "ROLLBACK") {
+			// ROLLBACK TO SAVEPOINT does not end the transaction
+			auto afterFirst = q.substr(firstWord.size());
+			while (!afterFirst.empty() && (afterFirst.front() == ' ' || afterFirst.front() == '\t' || afterFirst.front() == '\n' || afterFirst.front() == '\r')) {
+				afterFirst.remove_prefix(1);
+			}
+			auto secondEnd = afterFirst.find(' ');
+			std::string_view secondWord = (secondEnd == std::string_view::npos) ? afterFirst : afterFirst.substr(0, secondEnd);
+			char upper2[3];
+			size_t len2 = std::min(secondWord.size(), sizeof(upper2));
+			for (size_t i = 0; i < len2; ++i) {
+				upper2[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(secondWord[i])));
+			}
+			if (len2 < 2 || std::string_view{upper2, len2} != "TO") {
+				ctx.inTransaction = false;
+			}
 		}
 	}
 

@@ -135,7 +135,38 @@ bool SaveManager::savePlayerSync(Player* player)
 		return false;
 	}
 
-	return IOLoginData::savePlayer(player);
+	const uint32_t guid = player->getGUID();
+
+	if (flushInFlight.contains(guid)) {
+		auto save = IOLoginData::buildPlayerSave(player);
+		if (!save) {
+			return false;
+		}
+		pendingFlushes[guid] = PendingPlayerFlush{player->getName(), std::move(*save), false};
+		return true;
+	}
+
+	auto save = IOLoginData::buildPlayerSave(player);
+	if (!save) {
+		return false;
+	}
+
+	flushInFlight.insert(guid);
+	bool success = false;
+	for (uint32_t tries = 0; tries < 3; ++tries) {
+		if (IOLoginData::flushPlayerSave(*save)) {
+			player->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
+				save->storageSnapshotId,
+				save->snapshotModifiedKeys,
+				save->snapshotRemovedKeys
+			});
+			success = true;
+			break;
+		}
+	}
+	flushInFlight.erase(guid);
+
+	return success;
 }
 
 bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = false */)

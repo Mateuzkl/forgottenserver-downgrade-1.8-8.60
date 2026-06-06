@@ -34,7 +34,7 @@ void DatabaseTasks::threadMain()
 	}
 }
 
-void DatabaseTasks::addTask(std::string query, std::function<void(DBResult_ptr, bool)> callback /* = nullptr*/,
+void DatabaseTasks::addTask(std::string query, std::function<void(DBResult_ptr, bool, uint64_t)> callback /* = nullptr*/,
                             bool store /* = false*/)
 {
 	bool signal = false;
@@ -64,8 +64,10 @@ void DatabaseTasks::runTask(const DatabaseTask& task)
 		success = database.executeQuery(task.query);
 	}
 
+	uint64_t affectedRows = database.getAffectedRows();
+
 	if (task.callback) {
-		g_dispatcher.addTask([=, callback = task.callback]() { callback(result, success); });
+		g_dispatcher.addTask([=, callback = task.callback]() { callback(result, success, affectedRows); });
 	}
 }
 

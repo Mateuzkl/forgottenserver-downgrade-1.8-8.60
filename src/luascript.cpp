@@ -3846,11 +3846,11 @@ int LuaScriptInterface::luaDatabaseAsyncExecute(lua_State* L)
 	if (Database::getInstance().isInTransaction()) {
 		luaL_error(L, "Cannot use async queries inside a database transaction. Use synchronous db.query() instead.");
 	}
-	std::function<void(DBResult_ptr, bool)> callback;
+	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
 	if (lua_gettop(L) > 1) {
 		int32_t ref = luaL_ref(L, LUA_REGISTRYINDEX);
 		auto scriptId = getScriptEnv()->getScriptId();
-		callback = [ref, scriptId](DBResult_ptr, bool success) {
+		callback = [ref, scriptId](DBResult_ptr, bool success, uint64_t affectedRows) {
 			lua_State* luaState = g_luaEnvironment.getLuaState();
 			if (!luaState) {
 				return;
@@ -3863,9 +3863,10 @@ int LuaScriptInterface::luaDatabaseAsyncExecute(lua_State* L)
 
 			lua_rawgeti(luaState, LUA_REGISTRYINDEX, ref);
 			Lua::pushBoolean(luaState, success);
+			lua_pushinteger(luaState, affectedRows);
 			auto env = getScriptEnv();
 			env->setScriptId(scriptId, &g_luaEnvironment);
-			g_luaEnvironment.callFunction(1);
+			g_luaEnvironment.callFunction(2);
 
 			luaL_unref(luaState, LUA_REGISTRYINDEX, ref);
 		};
@@ -3889,11 +3890,11 @@ int LuaScriptInterface::luaDatabaseAsyncStoreQuery(lua_State* L)
 	if (Database::getInstance().isInTransaction()) {
 		luaL_error(L, "Cannot use async queries inside a database transaction. Use synchronous db.storeQuery() instead.");
 	}
-	std::function<void(DBResult_ptr, bool)> callback;
+	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
 	if (lua_gettop(L) > 1) {
 		int32_t ref = luaL_ref(L, LUA_REGISTRYINDEX);
 		auto scriptId = getScriptEnv()->getScriptId();
-		callback = [ref, scriptId](DBResult_ptr result, bool) {
+		callback = [ref, scriptId](DBResult_ptr result, bool, uint64_t affectedRows) {
 			lua_State* luaState = g_luaEnvironment.getLuaState();
 			if (!luaState) {
 				return;
@@ -3907,12 +3908,14 @@ int LuaScriptInterface::luaDatabaseAsyncStoreQuery(lua_State* L)
 			lua_rawgeti(luaState, LUA_REGISTRYINDEX, ref);
 			if (result) {
 				lua_pushinteger(luaState, ScriptEnvironment::addResult(result));
+				lua_pushinteger(luaState, affectedRows);
 			} else {
 				Lua::pushBoolean(luaState, false);
+				lua_pushinteger(luaState, 0);
 			}
 			auto env = getScriptEnv();
 			env->setScriptId(scriptId, &g_luaEnvironment);
-			g_luaEnvironment.callFunction(1);
+			g_luaEnvironment.callFunction(2);
 
 			luaL_unref(luaState, LUA_REGISTRYINDEX, ref);
 		};
