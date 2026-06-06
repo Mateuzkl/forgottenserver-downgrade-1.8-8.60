@@ -3829,6 +3829,10 @@ const luaL_Reg LuaScriptInterface::luaDatabaseTable[] = {
     {"escapeBlob", LuaScriptInterface::luaDatabaseEscapeBlob},
     {"lastInsertId", LuaScriptInterface::luaDatabaseLastInsertId},
     {"tableExists", LuaScriptInterface::luaDatabaseTableExists},
+    {"beginTransaction", LuaScriptInterface::luaDatabaseBeginTransaction},
+    {"commit", LuaScriptInterface::luaDatabaseCommit},
+    {"rollback", LuaScriptInterface::luaDatabaseRollback},
+    {"affectedRows", LuaScriptInterface::luaDatabaseAffectedRows},
     {nullptr, nullptr}};
 
 int LuaScriptInterface::luaDatabaseExecute(lua_State* L)
@@ -3933,6 +3937,30 @@ int LuaScriptInterface::luaDatabaseLastInsertId(lua_State* L)
 int LuaScriptInterface::luaDatabaseTableExists(lua_State* L)
 {
 	Lua::pushBoolean(L, DatabaseManager::tableExists(Lua::getString(L, -1)));
+	return 1;
+}
+
+int LuaScriptInterface::luaDatabaseBeginTransaction(lua_State* L)
+{
+	Lua::pushBoolean(L, Database::getInstance().beginTransaction());
+	return 1;
+}
+
+int LuaScriptInterface::luaDatabaseCommit(lua_State* L)
+{
+	Lua::pushBoolean(L, Database::getInstance().commit());
+	return 1;
+}
+
+int LuaScriptInterface::luaDatabaseRollback(lua_State* L)
+{
+	Lua::pushBoolean(L, Database::getInstance().rollback());
+	return 1;
+}
+
+int LuaScriptInterface::luaDatabaseAffectedRows(lua_State* L)
+{
+	lua_pushinteger(L, Database::getInstance().getAffectedRows());
 	return 1;
 }
 

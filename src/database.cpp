@@ -393,6 +393,29 @@ bool Database::executeQuery(std::string_view query)
 	auto mysql_res = mysql_store_result(ctx.handle.get());
 	mysql_free_result(mysql_res);
 
+	// Track raw SQL transaction state to prevent reconnect during transactions
+	if (success) {
+		std::string_view q{query};
+		auto trimLeft = [](std::string_view s) {
+			while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\n' || s.front() == '\r')) {
+				s.remove_prefix(1);
+			}
+			return s;
+		};
+		q = trimLeft(q);
+		constexpr auto cmdSize = std::min(sizeof("START TRANSACTION"), sizeof("ROLLBACK"));
+		char upper[cmdSize];
+		for (size_t i = 0; i < cmdSize && i < q.size(); ++i) {
+			upper[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(q[i])));
+		}
+		std::string_view cmd{upper, cmdSize > q.size() ? q.size() : cmdSize - 1};
+		if (cmd == "START" || cmd == "BEGIN") {
+			ctx.inTransaction = true;
+		} else if (cmd == "COMMIT" || cmd == "ROLLB") {
+			ctx.inTransaction = false;
+		}
+	}
+
 #ifdef STATS_ENABLED
 	uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - time_point).count();
 	g_stats.addSqlStats(std::make_unique<Stat>(ns, std::string(query.substr(0, 100)), std::string(query.substr(0, 256))));
@@ -472,6 +495,15 @@ uint64_t Database::getLastInsertId() const
 uint64_t Database::getMaxPacketSize() const
 {
 	return getContext().maxPacketSize;
+}
+
+uint64_t Database::getAffectedRows() const
+{
+	ConnectionContext& ctx = getContext();
+	if (!ctx.handle) {
+		return 0;
+	}
+	return mysql_affected_rows(ctx.handle.get());
 }
 
 bool Database::lastQueryWasDeadlock() const

@@ -361,7 +361,7 @@ public:
 	static std::string escapeString(std::string string);
 
 	static const luaL_Reg luaConfigManagerTable[5];
-	static const luaL_Reg luaDatabaseTable[9];
+	static const luaL_Reg luaDatabaseTable[13];
 	static const luaL_Reg luaResultTable[6];
 
 	static int protectedCall(lua_State* L, int nargs, int nresults);
@@ -524,6 +524,10 @@ private:
 	static int luaDatabaseEscapeBlob(lua_State* L);
 	static int luaDatabaseLastInsertId(lua_State* L);
 	static int luaDatabaseTableExists(lua_State* L);
+	static int luaDatabaseBeginTransaction(lua_State* L);
+	static int luaDatabaseCommit(lua_State* L);
+	static int luaDatabaseRollback(lua_State* L);
+	static int luaDatabaseAffectedRows(lua_State* L);
 
 
 	static int luaResultGetNumber(lua_State* L);

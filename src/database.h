@@ -112,6 +112,8 @@ public:
 
 	uint64_t getMaxPacketSize() const;
 
+	uint64_t getAffectedRows() const;
+
 	[[nodiscard]] bool lastQueryWasDeadlock() const;
 
 	void beginQueryCapture(std::vector<std::string>* buffer);
@@ -122,6 +124,10 @@ public:
 	 * Should be called before program termination.
 	 */
 	static void shutdown();
+
+	bool beginTransaction();
+	bool rollback();
+	bool commit();
 
 	struct ConnectionParams
 	{
@@ -134,17 +140,6 @@ public:
 	};
 
 private:
-	/**
-	 * Transaction related methods.
-	 *
-	 * Methods for starting, committing and rolling back transaction. Each of the returns boolean value.
-	 *
-	 * @return true on success, false on error
-	 */
-	bool beginTransaction();
-	bool rollback();
-	bool commit();
-
 	struct ConnectionContext
 	{
 		ConnectionContext() = default;
