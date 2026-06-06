@@ -128,6 +128,7 @@ public:
 	bool beginTransaction();
 	bool rollback();
 	bool commit();
+	[[nodiscard]] bool isInTransaction() const;
 
 	struct ConnectionParams
 	{

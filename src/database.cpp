@@ -396,22 +396,23 @@ bool Database::executeQuery(std::string_view query)
 	// Track raw SQL transaction state to prevent reconnect during transactions
 	if (success) {
 		std::string_view q{query};
-		auto trimLeft = [](std::string_view s) {
-			while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\n' || s.front() == '\r')) {
-				s.remove_prefix(1);
-			}
-			return s;
-		};
-		q = trimLeft(q);
-		constexpr auto cmdSize = std::min(sizeof("START TRANSACTION"), sizeof("ROLLBACK"));
-		char upper[cmdSize];
-		for (size_t i = 0; i < cmdSize && i < q.size(); ++i) {
-			upper[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(q[i])));
+		while (!q.empty() && (q.front() == ' ' || q.front() == '\t' || q.front() == '\n' || q.front() == '\r')) {
+			q.remove_prefix(1);
 		}
-		std::string_view cmd{upper, cmdSize > q.size() ? q.size() : cmdSize - 1};
+
+		auto wordEnd = q.find(' ');
+		std::string_view firstWord = (wordEnd == std::string_view::npos) ? q : q.substr(0, wordEnd);
+
+		char upper[9];
+		size_t len = std::min(firstWord.size(), sizeof(upper));
+		for (size_t i = 0; i < len; ++i) {
+			upper[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(firstWord[i])));
+		}
+		std::string_view cmd{upper, len};
+
 		if (cmd == "START" || cmd == "BEGIN") {
 			ctx.inTransaction = true;
-		} else if (cmd == "COMMIT" || cmd == "ROLLB") {
+		} else if (cmd == "COMMIT" || cmd == "ROLLBACK") {
 			ctx.inTransaction = false;
 		}
 	}
@@ -495,6 +496,11 @@ uint64_t Database::getLastInsertId() const
 uint64_t Database::getMaxPacketSize() const
 {
 	return getContext().maxPacketSize;
+}
+
+bool Database::isInTransaction() const
+{
+	return getContext().inTransaction;
 }
 
 uint64_t Database::getAffectedRows() const

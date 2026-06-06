@@ -101,6 +101,8 @@ local CFG = {
 local MSG_BLUE = MESSAGE_STATUS_CONSOLE_BLUE or MESSAGE_EVENT_ADVANCE or 19
 local MSG_RED = MESSAGE_STATUS_CONSOLE_RED or MESSAGE_STATUS_WARNING or MSG_BLUE
 
+local activeRun = false
+
 -- ============================================================================
 -- UTILIDADES
 -- ============================================================================
@@ -265,22 +267,13 @@ local function runPhase1(player, runId)
     local elapsedTX = (os.clock() - t1)
     local qpsTX = nb / (elapsedTX + 1e-9)
 
-    -- ── 1c: LAST_INSERT_ID — verifica affinity de conexão ────────────────────
-    local safeLabel2 = sqlString("ph1_lastid_probe")
-    db.query(string.format(
-        "INSERT INTO `%s` (`run_id`,`phase`,`seq`,`label`,`ts`) VALUES (%d,1,%d,%s,%d)",
-        STRESS_TABLE, runId, n + nb + 1, safeLabel2, os.time()
-    ))
-    local lastId = 0
-    -- Query the actual inserted row to get its ID
-    local lidRes = db.storeQuery(string.format(
-        "SELECT `id` FROM `%s` WHERE `run_id`=%d AND `phase`=1 AND `seq`=%d ORDER BY `id` DESC LIMIT 1",
-        STRESS_TABLE, runId, n + nb + 1
-    ))
-    if lidRes and type(lidRes) == "userdata" then
-        lastId = lidRes:getNumber("id")
-        lidRes:free()
-    end
+	-- ── 1c: LAST_INSERT_ID — verifica affinity de conexão ────────────────────
+	local safeLabel2 = sqlString("ph1_lastid_probe")
+	db.query(string.format(
+		"INSERT INTO `%s` (`run_id`,`phase`,`seq`,`label`,`ts`) VALUES (%d,1,%d,%s,%d)",
+		STRESS_TABLE, runId, n + nb + 1, safeLabel2, os.time()
+	))
+	local lastId = db.lastInsertId()
 
     -- ── Resultado ─────────────────────────────────────────────────────────────
     if fail == 0 and txOk and lastId > 0 then
@@ -564,27 +557,37 @@ local function runPhase4(player, runId)
         totalExpected = totalExpected + (inc * inserted)
 
         for r = 1, rows do
-            local seqTarget = r
-            addEvent(function(tbl, rId, seqNum, increment)
-                -- SELECT...FOR UPDATE: adquire row-lock explicitamente antes do UPDATE.
-                -- Dois workers tentando FOR UPDATE na mesma linha em ordens opostas
-                -- geram deadlock real → lastQueryWasDeadlock() = true → retry ativa.
+            local seqA = r
+            local seqB = (r % rows) + 1
+            addEvent(function(tbl, rId, a, b, increment)
+                -- SELECT ... FOR UPDATE em duas linhas com ordem de lock oposta
+                -- para gerar deadlock real entre workers concorrentes.
+                local first = increment % 2 == 1 and a or b
+                local second = increment % 2 == 1 and b or a
                 db.query("START TRANSACTION")
-                local lockRes = db.storeQuery(string.format(
+                local lockRes1 = db.storeQuery(string.format(
                     "SELECT `counter` FROM `%s` WHERE `run_id`=%d AND `phase`=4 AND `seq`=%d FOR UPDATE",
-                    tbl, rId, seqNum
+                    tbl, rId, first
                 ))
-                if lockRes and type(lockRes) == "userdata" then
-                    lockRes:free()
+                local lockRes2 = db.storeQuery(string.format(
+                    "SELECT `counter` FROM `%s` WHERE `run_id`=%d AND `phase`=4 AND `seq`=%d FOR UPDATE",
+                    tbl, rId, second
+                ))
+                if lockRes1 and type(lockRes1) == "userdata"
+                   and lockRes2 and type(lockRes2) == "userdata" then
+                    lockRes1:free()
+                    lockRes2:free()
                     db.query(string.format(
-                        "UPDATE `%s` SET `counter`=`counter`+%d, `ts`=%d WHERE `run_id`=%d AND `phase`=4 AND `seq`=%d",
-                        tbl, increment, os.time(), rId, seqNum
+                        "UPDATE `%s` SET `counter`=`counter`+%d, `ts`=%d WHERE `run_id`=%d AND `phase`=4 AND `seq` IN (%d,%d)",
+                        tbl, increment, os.time(), rId, first, second
                     ))
                     db.query("COMMIT")
                 else
+                    if lockRes1 and type(lockRes1) == "userdata" then lockRes1:free() end
+                    if lockRes2 and type(lockRes2) == "userdata" then lockRes2:free() end
                     db.query("ROLLBACK")
                 end
-            end, 0, STRESS_TABLE, runId, seqTarget, inc)
+            end, 0, STRESS_TABLE, runId, seqA, seqB, inc)
         end
     end
 
@@ -1507,9 +1510,13 @@ function stressTalkAction.onSay(player, words, param)
         return true
     end
 
-    -- ── CLEAN ────────────────────────────────────────────────────────────────
-    if cmd == "clean" then
-        if teardownTable() then
+	-- ── CLEAN ────────────────────────────────────────────────────────────────
+	if cmd == "clean" then
+		if activeRun then
+			log(player, "Stress em andamento — aguarde a conclusao antes de limpar.")
+			return true
+		end
+		if teardownTable() then
             log(player, "Tabela stress_pr69 removida.")
         else
             logFail(player, "Falha ao remover tabela (talvez ja nao exista).")
@@ -1523,12 +1530,20 @@ function stressTalkAction.onSay(player, words, param)
         return true
     end
 
-    local runId = os.time() % 65535
+	local runId = os.time() % 65535
 
-    -- ── FASE INDIVIDUAL ───────────────────────────────────────────────────────
-    local phaseNum = tonumber(cmd)
-    if phaseNum then
-        if phaseNum ~= 6 and phaseNum ~= 10 then
+	-- ── FASE INDIVIDUAL ───────────────────────────────────────────────────────
+	local args = {}
+	for w in (param or ""):gmatch("%S+") do args[#args + 1] = w end
+	local phaseNum = tonumber(args[1])
+	local explicitRunId = tonumber(args[2])
+	if explicitRunId then runId = explicitRunId end
+	if phaseNum then
+		if activeRun then
+			log(player, "Stress em andamento — aguarde a conclusao antes de iniciar nova fase.")
+			return true
+		end
+		if phaseNum ~= 6 and phaseNum ~= 10 then
             if not setupTable() then
                 logFail(player, "Falha ao criar tabela de stress. Abortando.")
                 return true
@@ -1553,8 +1568,13 @@ function stressTalkAction.onSay(player, words, param)
     end
 
     -- ── START — todas as fases ────────────────────────────────────────────────
-    if cmd == "" or cmd == "start" or cmd == "all" then
-        log(player, string.format(
+	if cmd == "" or cmd == "start" or cmd == "all" then
+		if activeRun then
+			log(player, "Stress ja em andamento — aguarde a conclusao.")
+			return true
+		end
+		activeRun = true
+		log(player, string.format(
             "=== Stress DB PR#69 | run_id=%d | 11 fases | iniciando ===", runId
         ))
 
@@ -1603,16 +1623,17 @@ function stressTalkAction.onSay(player, words, param)
                 and "ALL PASS"
                 or string.format("%d/%d PASS", passed, total)
 
-            if passed == total then
-                logPass(p, string.format(
-                    "=== STRESS COMPLETO: %s | wall ~%.0fms ===", status, wall
-                ))
-            else
-                logFail(p, string.format(
-                    "=== STRESS COMPLETO: %s | wall ~%.0fms — revise os FAILs! ===",
-                    status, wall
-                ))
-            end
+			if passed == total then
+				logPass(p, string.format(
+					"=== STRESS COMPLETO: %s | wall ~%.0fms ===", status, wall
+				))
+			else
+				logFail(p, string.format(
+					"=== STRESS COMPLETO: %s | wall ~%.0fms — revise os FAILs! ===",
+					status, wall
+				))
+			end
+			activeRun = false
 
         end, settleTime, player:getId(), runId, wallStart, results)
 
