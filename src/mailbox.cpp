@@ -7,6 +7,7 @@
 
 #include "game.h"
 #include "iologindata.h"
+#include "save_manager.h"
 
 extern Game g_game;
 
@@ -161,7 +162,7 @@ bool Mailbox::sendItem(Item* item) const
 		if (g_game.internalMoveItem(item->getParent(), inbox, INDEX_WHEREEVER, item, item->getItemCount(), nullptr,
 		                            FLAG_NOLIMIT) == RETURNVALUE_NOERROR) {
 			g_game.transformItem(item, item->getID() + 1);
-			IOLoginData::savePlayer(&tmpPlayer);
+			g_saveManager.savePlayerSync(&tmpPlayer);
 			return true;
 		}
 	}

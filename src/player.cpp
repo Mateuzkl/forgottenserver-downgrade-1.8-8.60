@@ -22,6 +22,7 @@
 #include "npc.h"
 #include "party.h"
 #include "rewardchest.h"
+#include "save_manager.h"
 #include "scriptmanager.h"
 #include "scheduler.h"
 #include "logger.h"
@@ -2243,7 +2244,7 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 
 		bool saved = false;
 		for (uint32_t tries = 0; tries < 3; ++tries) {
-			if (IOLoginData::savePlayer(this)) {
+			if (g_saveManager.savePlayerSync(this)) {
 				saved = true;
 				break;
 			}

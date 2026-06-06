@@ -124,6 +124,20 @@ bool SaveManager::savePlayer(Player* player)
 	return queued;
 }
 
+bool SaveManager::savePlayerSync(Player* player)
+{
+	if (!player) {
+		return false;
+	}
+
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[SaveManager] savePlayerSync must be called on the dispatcher thread.");
+		return false;
+	}
+
+	return IOLoginData::savePlayer(player);
+}
+
 bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = false */)
 {
 	if (!player) {

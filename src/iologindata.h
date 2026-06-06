@@ -36,7 +36,6 @@ public:
 	static bool loadPlayerByName(Player* player, std::string_view name);
 	static bool loadPlayer(Player* player, DBResult_ptr result, bool deferWorldData = false);
 	static void loadPlayerWorldData(Player* player);
-	static bool savePlayer(Player* player);
 	struct PlayerSaveSnapshot
 	{
 		std::vector<std::string> queries;
@@ -78,11 +77,14 @@ public:
 	static std::vector<std::pair<std::string, std::string>> getCastList(const std::string& password);
 
 private:
+	friend class SaveManager;
+
 	using ItemMap = std::map<uint32_t, std::pair<std::shared_ptr<Item>, uint32_t>>;
 
 	static void loadItems(ItemMap& itemMap, DBResult_ptr result);
 	static void cleanupItemMap(ItemMap& itemMap);
 	static void loadPlayerGuild(Player* player);
+	static bool savePlayer(Player* player);
 	static bool savePlayerQueries(Player* player);
 	static bool saveItems(const Player* player, const ItemBlockList& itemList, DBInsert& query_insert,
 	                      PropWriteStream& propWriteStream);

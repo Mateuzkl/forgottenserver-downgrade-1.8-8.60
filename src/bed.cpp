@@ -8,6 +8,7 @@
 #include "game.h"
 #include "house.h"
 #include "iologindata.h"
+#include "save_manager.h"
 #include "scheduler.h"
 
 using namespace std::chrono;
@@ -178,7 +179,7 @@ void BedItem::wakeUp(Player* player)
 			Player regenPlayer(nullptr);
 			if (IOLoginData::loadPlayerById(&regenPlayer, sleeperGUID)) {
 				regeneratePlayer(&regenPlayer);
-				IOLoginData::savePlayer(&regenPlayer);
+				g_saveManager.savePlayerSync(&regenPlayer);
 			}
 		} else {
 			regeneratePlayer(player);

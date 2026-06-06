@@ -22,6 +22,7 @@ public:
 	void saveAll();
 	bool savePlayer(Player* player);
 	void saveMapAsync();
+	bool savePlayerSync(Player* player);
 
 	[[nodiscard]] bool isSaving() const noexcept
 	{

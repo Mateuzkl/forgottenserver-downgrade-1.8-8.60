@@ -8,6 +8,7 @@
 #include "configmanager.h"
 #include "game.h"
 #include "iologindata.h"
+#include "save_manager.h"
 #include "luascript.h"
 #include "const.h"
 #include "map.h"
@@ -2385,7 +2386,7 @@ int luaPlayerSave(lua_State* L)
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
 		player->setLoginPosition(player->getPosition());
-		pushBoolean(L, IOLoginData::savePlayer(player));
+		pushBoolean(L, g_saveManager.savePlayerSync(player));
 	} else {
 		lua_pushnil(L);
 	}
