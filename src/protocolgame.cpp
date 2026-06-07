@@ -2199,6 +2199,50 @@ void ProtocolGame::sendIcons(uint16_t icons)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
+{
+	if (!player || !isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0xA2);
+	msg.add<uint64_t>(icons);
+	msg.addByte(static_cast<uint8_t>(bakragoreIcon));
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCreatureIcon(const Creature* creature)
+{
+	if (!creature || !player || !isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x8B);
+	msg.add<uint32_t>(creature->getID());
+	msg.addByte(14); // type = creature icons
+	AddCreatureIcon(msg, creature);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::AddCreatureIcon(NetworkMessage& msg, const Creature* creature)
+{
+	if (!creature) {
+		return;
+	}
+
+	const auto& icons = creature->getIcons();
+	const size_t count = std::min<size_t>(icons.size(), 3);
+	msg.addByte(static_cast<uint8_t>(count));
+	for (size_t i = 0; i < count; ++i) {
+		const auto& icon = icons[i];
+		msg.addByte(icon.serialize());
+		msg.addByte(static_cast<uint8_t>(icon.category));
+		msg.add<uint16_t>(icon.count);
+	}
+}
+
 void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool hasParent, uint16_t firstIndex)
 {
 	NetworkMessage msg;

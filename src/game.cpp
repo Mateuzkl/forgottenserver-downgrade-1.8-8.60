@@ -6864,6 +6864,14 @@ void Game::updateCreatureEmblem(Creature* creature)
 	}
 }
 
+void Game::updateCreatureIcon(const Player* spectator, const Creature* creature)
+{
+	if (!spectator || !creature) {
+		return;
+	}
+	spectator->sendCreatureIcon(creature);
+}
+
 void Game::updateCreatureSkull(const Creature* creature)
 {
 	// Allow influenced monsters to show skull in any world type

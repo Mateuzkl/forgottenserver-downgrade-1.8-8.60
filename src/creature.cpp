@@ -1745,6 +1745,22 @@ void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value, bool 
 	g_events->eventCreatureOnUpdateStorage(this, key, oldValue, value, isSpawn);
 }
 
+void Creature::iconChanged()
+{
+	const Tile* tile = getTile();
+	if (!tile) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, tile->getPosition(), true);
+	for (const auto& spectator : spectators) {
+		if (auto player = spectator->getPlayer()) {
+			g_game.updateCreatureIcon(player, this);
+		}
+	}
+}
+
 std::optional<int64_t> Creature::getStorageValue(uint32_t key) const
 {
 	auto it = storageMap.find(key);

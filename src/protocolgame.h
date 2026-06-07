@@ -157,6 +157,7 @@ private:
 	void sendToChannel(const Creature* creature, SpeakClasses type, std::string_view text, uint16_t channelId);
 	void sendPrivateMessage(const Player* speaker, SpeakClasses type, std::string_view text);
 	void sendIcons(uint16_t icons);
+	void sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon = IconBakragore_None);
 	void sendFYIBox(std::string_view message);
 
 	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type);
@@ -185,6 +186,7 @@ private:
 	void sendCreatureShield(const Creature* creature);
 	void sendCreatureSkull(const Creature* creature);
 	void sendCreatureEmblem(const Creature* creature);
+	void sendCreatureIcon(const Creature* creature);
 
 	void sendShop(const ShopInfoList& itemList);
 	void sendCloseShop();
@@ -261,6 +263,7 @@ private:
 	void AddPlayerSkills(NetworkMessage& msg);
 	void AddWorldLight(NetworkMessage& msg, LightInfo lightInfo);
 	void AddCreatureLight(NetworkMessage& msg, const Creature* creature);
+	void AddCreatureIcon(NetworkMessage& msg, const Creature* creature);
 
 	// tiles
 	static void RemoveTileThing(NetworkMessage& msg, const Position& pos, uint32_t stackpos);

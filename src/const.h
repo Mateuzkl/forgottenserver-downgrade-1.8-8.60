@@ -453,6 +453,132 @@ enum Icons_t
 	ICON_BLEEDING = 1 << 15,
 };
 
+enum PlayerIcon_t : uint64_t
+{
+	PlayerIcon_Poison        = 1ULL << 0,
+	PlayerIcon_Burn          = 1ULL << 1,
+	PlayerIcon_Energy        = 1ULL << 2,
+	PlayerIcon_Drunk         = 1ULL << 3,
+	PlayerIcon_ManaShield    = 1ULL << 4,
+	PlayerIcon_Paralyze      = 1ULL << 5,
+	PlayerIcon_Haste         = 1ULL << 6,
+	PlayerIcon_Swords        = 1ULL << 7,
+	PlayerIcon_Drowning      = 1ULL << 8,
+	PlayerIcon_Freezing      = 1ULL << 9,
+	PlayerIcon_Dazzled       = 1ULL << 10,
+	PlayerIcon_Cursed        = 1ULL << 11,
+	PlayerIcon_PartyBuff     = 1ULL << 12,
+	PlayerIcon_RedSwords     = 1ULL << 13,
+	PlayerIcon_Pigeon        = 1ULL << 14,
+	PlayerIcon_Bleeding      = 1ULL << 15,
+	PlayerIcon_LesserHex     = 1ULL << 16,
+	PlayerIcon_IntenseHex    = 1ULL << 17,
+	PlayerIcon_GreaterHex    = 1ULL << 18,
+	PlayerIcon_Rooted        = 1ULL << 19,
+	PlayerIcon_Feared        = 1ULL << 20,
+	PlayerIcon_GoshnarTaint1 = 1ULL << 21,
+	PlayerIcon_GoshnarTaint2 = 1ULL << 22,
+	PlayerIcon_GoshnarTaint3 = 1ULL << 23,
+	PlayerIcon_GoshnarTaint4 = 1ULL << 24,
+	PlayerIcon_GoshnarTaint5 = 1ULL << 25,
+	PlayerIcon_NewManaShield = 1ULL << 26,
+	PlayerIcon_Agony         = 1ULL << 27,
+	PlayerIcon_Powerless     = 1ULL << 28,
+	PlayerIcon_MentorOther   = 1ULL << 29,
+};
+
+enum IconBakragore_t : uint8_t
+{
+	IconBakragore_None  = 0,
+	IconBakragore_Taint1 = 1,
+	IconBakragore_Taint2 = 2,
+	IconBakragore_Taint3 = 3,
+	IconBakragore_Taint4 = 4,
+	IconBakragore_Taint5 = 5,
+	IconBakragore_Taint6 = 6,
+	IconBakragore_Taint7 = 7,
+	IconBakragore_Taint8 = 8,
+	IconBakragore_Taint9 = 9,
+};
+
+enum CreatureIconCategory_t : uint8_t
+{
+	CreatureIconCategory_Quests = 0,
+	CreatureIconCategory_Modifications = 1,
+};
+
+enum CreatureIconModifications_t : uint8_t
+{
+	CreatureIconModifications_None = 0,
+	CreatureIconModifications_HigherDamageReceived,
+	CreatureIconModifications_LowerDamageDealt,
+	CreatureIconModifications_TurnedMelee,
+	CreatureIconModifications_Influenced,
+	CreatureIconModifications_Fiendish,
+	CreatureIconModifications_ReducedHealth,
+	CreatureIconModifications_ReducedHealthExclamation,
+};
+
+enum CreatureIconQuests_t : uint8_t
+{
+	CreatureIconQuests_None = 0,
+	CreatureIconQuests_WhiteCross,
+	CreatureIconQuests_RedCross,
+	CreatureIconQuests_RedBall,
+	CreatureIconQuests_GreenBall,
+	CreatureIconQuests_RedGreenBall,
+	CreatureIconQuests_GreenShield,
+	CreatureIconQuests_YellowShield,
+	CreatureIconQuests_BlueShield,
+	CreatureIconQuests_PurpleShield,
+	CreatureIconQuests_RedShield,
+	CreatureIconQuests_Dove,
+	CreatureIconQuests_Energy,
+	CreatureIconQuests_Earth,
+	CreatureIconQuests_Water,
+	CreatureIconQuests_Fire,
+	CreatureIconQuests_Ice,
+	CreatureIconQuests_ArrowUp,
+	CreatureIconQuests_ArrowDown,
+	CreatureIconQuests_ExclamationMark,
+	CreatureIconQuests_QuestionMark,
+	CreatureIconQuests_CancelMark,
+	CreatureIconQuests_Hazard,
+	CreatureIconQuests_BrownSkull,
+	CreatureIconQuests_BloodDrop,
+};
+
+struct CreatureIcon
+{
+	CreatureIcon() = default;
+
+	explicit CreatureIcon(CreatureIconModifications_t mod, uint16_t count = 0) :
+		category(CreatureIconCategory_Modifications), modification(mod), count(count) {}
+
+	explicit CreatureIcon(CreatureIconQuests_t q, uint16_t count = 0) :
+		category(CreatureIconCategory_Quests), quest(q), count(count) {}
+
+	CreatureIconCategory_t category = CreatureIconCategory_Quests;
+	CreatureIconModifications_t modification = CreatureIconModifications_None;
+	CreatureIconQuests_t quest = CreatureIconQuests_None;
+	uint16_t count = 0;
+
+	bool isNone() const {
+		return modification == CreatureIconModifications_None && quest == CreatureIconQuests_None;
+	}
+
+	bool isSet() const {
+		return !isNone();
+	}
+
+	uint8_t serialize() const {
+		if (category == CreatureIconCategory_Modifications) {
+			return static_cast<uint8_t>(modification);
+		}
+		return static_cast<uint8_t>(quest);
+	}
+};
+
 enum WeaponType_t : uint8_t
 {
 	WEAPON_NONE,
@@ -805,6 +931,7 @@ enum class GameFeature : uint8_t {
 	QuickLootFlags = 123,
 	ThingUpgradeClassification = 130,
 	ItemTierByte = 131,
+	AstraCreatureIcons = 133,
 
 	Last = 132
 };

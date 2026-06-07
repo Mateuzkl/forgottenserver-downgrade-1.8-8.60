@@ -1081,6 +1081,39 @@ uint16_t Player::getClientIcons() const
 	return icon_bitset.to_ulong();
 }
 
+uint64_t Player::getClientIcons64() const
+{
+	uint64_t icons = 0;
+	for (const auto& condition : conditions) {
+		if (!isSuppress(condition->getType())) {
+			icons |= condition->getIcons();
+		}
+	}
+
+	if (pzLocked) {
+		icons |= static_cast<uint64_t>(PlayerIcon_RedSwords);
+	}
+
+	if (const Tile* playerTile = getTile(); playerTile && playerTile->hasFlag(TILESTATE_PROTECTIONZONE)) {
+		icons |= static_cast<uint64_t>(PlayerIcon_Pigeon);
+		if (icons & static_cast<uint64_t>(PlayerIcon_Swords)) {
+			icons &= ~static_cast<uint64_t>(PlayerIcon_Swords);
+		}
+	}
+
+	return icons;
+}
+
+IconBakragore_t Player::getBakragoreIcon() const
+{
+	for (const auto& condition : conditions) {
+		if (condition->getType() == CONDITION_GOSHNARTAINT) {
+			return static_cast<IconBakragore_t>(condition->getSubId());
+		}
+	}
+	return IconBakragore_None;
+}
+
 void Player::updateInventoryWeight()
 {
 	inventoryWeight = 0;

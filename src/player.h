@@ -232,6 +232,9 @@ public:
 	bool isInWarList(uint32_t guildId) const;
 
 	uint16_t getClientIcons() const;
+	uint64_t getClientIcons64() const;
+	IconBakragore_t getBakragoreIcon() const;
+	void updateClientIcons();
 
 	const GuildWarVector& getGuildWarVector() const { return guildWarVector; }
 
@@ -796,6 +799,13 @@ public:
 		}
 	}
 
+	void sendCreatureIcon(const Creature* creature) const
+	{
+		if (client) {
+			client->sendCreatureIcon(creature);
+		}
+	}
+
 	void checkSkullTicks(int64_t ticks);
 
 	bool canWear(uint32_t lookType, uint8_t addons) const;
@@ -1108,7 +1118,12 @@ public:
 	void sendClosePrivate(uint16_t channelId);
 	void sendIcons() const
 	{
-		if (client) {
+		if (!client) {
+			return;
+		}
+		if (client->isAstraClient) {
+			client->sendIcons(getClientIcons64(), getBakragoreIcon());
+		} else {
 			client->sendIcons(getClientIcons());
 		}
 	}

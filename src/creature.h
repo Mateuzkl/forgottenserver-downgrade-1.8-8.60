@@ -17,6 +17,7 @@
 #include <absl/container/flat_hash_map.h>
 
 #include <cassert>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -495,8 +496,42 @@ protected:
 	friend class Map;
 	friend class LuaScriptInterface;
 
+public:
+	std::vector<CreatureIcon> getIcons() const {
+		std::vector<CreatureIcon> icons;
+		icons.reserve(creatureIcons.size());
+		for (const auto& [_, icon] : creatureIcons) {
+			if (icon.isSet()) {
+				icons.emplace_back(icon);
+			}
+		}
+		return icons;
+	}
+
+	void setIcon(const std::string& key, CreatureIcon icon) {
+		creatureIcons[key] = icon;
+		iconChanged();
+	}
+
+	void removeIcon(const std::string& key) {
+		creatureIcons.erase(key);
+		iconChanged();
+	}
+
+	void clearIcons() {
+		creatureIcons.clear();
+		iconChanged();
+	}
+
+	void iconChanged();
+
+	bool hasIcon(const std::string& key) const {
+		return creatureIcons.find(key) != creatureIcons.end();
+	}
+
 private:
 	StorageMap storageMap;
+	std::map<std::string, CreatureIcon> creatureIcons;
 
 	static std::unordered_set<const Creature*> liveCreatures;
 };
