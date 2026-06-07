@@ -11,7 +11,7 @@ function findInfluenced.onSay(player, words, param)
     end
 
     if #list == 0 then
-        player:sendTextMessage(MESSAGE_EVENT_ORANGE,
+        player:sendTextMessage(MESSAGE_STATUS_WARNING,
             "There are no active influenced or fiendish creatures at the moment.")
         return false
     end
@@ -31,7 +31,7 @@ function findInfluenced.onSay(player, words, param)
     end
 
     if not closest then
-        player:sendTextMessage(MESSAGE_EVENT_ORANGE,
+        player:sendTextMessage(MESSAGE_STATUS_WARNING,
             "There are no active influenced or fiendish creatures at the moment.")
         return false
     end
