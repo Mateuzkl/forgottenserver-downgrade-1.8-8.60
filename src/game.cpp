@@ -6874,6 +6874,26 @@ void Game::updateCreatureIcon(const Player* spectator, const Creature* creature)
 	spectator->sendCreatureIcon(creature);
 }
 
+void Game::updateCreatureIcon(const Creature* creature)
+{
+	if (!creature) {
+		return;
+	}
+
+	const Tile* tile = creature->getTile();
+	if (!tile) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	map.getSpectators(spectators, tile->getPosition(), true);
+	for (const auto& spectator : spectators) {
+		if (auto player = spectator->getPlayer()) {
+			updateCreatureIcon(player, creature);
+		}
+	}
+}
+
 void Game::updateCreatureSkull(const Creature* creature)
 {
 	// Allow influenced monsters to show skull in any world type

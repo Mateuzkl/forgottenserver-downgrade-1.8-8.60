@@ -1748,20 +1748,7 @@ void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value, bool 
 void Creature::iconChanged()
 {
 	std::cout << "[CreatureIcon] iconChanged cid=" << getID() << " icons=" << getIcons().size() << std::endl;
-	const Tile* tile = getTile();
-	if (!tile) {
-		std::cout << "[CreatureIcon] iconChanged cid=" << getID() << " NO TILE, skipping" << std::endl;
-		return;
-	}
-
-	SpectatorVec spectators;
-	g_game.map.getSpectators(spectators, tile->getPosition(), true);
-	std::cout << "[CreatureIcon] iconChanged cid=" << getID() << " spectators=" << spectators.size() << std::endl;
-	for (const auto& spectator : spectators) {
-		if (auto player = spectator->getPlayer()) {
-			g_game.updateCreatureIcon(player, this);
-		}
-	}
+	g_game.updateCreatureIcon(this);
 }
 
 std::optional<int64_t> Creature::getStorageValue(uint32_t key) const

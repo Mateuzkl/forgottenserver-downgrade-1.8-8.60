@@ -122,12 +122,14 @@ Skulls_t Monster::getSkull() const
 void Monster::setInfluenced(bool v)
 {
 	influenced = v;
+	setIcon("forge", CreatureIcon(v ? CreatureIconModifications_Influenced : CreatureIconModifications_None));
 	g_game.updateCreatureSkull(this);
 }
 
 void Monster::setFiendish(bool v)
 {
 	fiendish = v;
+	setIcon("forge", CreatureIcon(v ? CreatureIconModifications_Fiendish : CreatureIconModifications_None));
 	g_game.updateCreatureSkull(this);
 }
 
