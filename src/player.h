@@ -234,7 +234,6 @@ public:
 	uint16_t getClientIcons() const;
 	uint64_t getClientIcons64() const;
 	IconBakragore_t getBakragoreIcon() const;
-	void updateClientIcons();
 
 	const GuildWarVector& getGuildWarVector() const { return guildWarVector; }
 

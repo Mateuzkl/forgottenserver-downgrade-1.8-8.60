@@ -4,9 +4,9 @@
 local creatureIconTest = TalkAction("/testcreatureicon")
 
 local iconNames = {
-	[CreatureIconQuests_Hazard] = "Hazard (Rotten Charge)",
-	[CreatureIconQuests_BloodDrop] = "Blood Drop",
-	[CreatureIconQuests_BrownSkull] = "Brown Skull",
+	[22] = "Hazard (Rotten Charge)",
+	[24] = "Blood Drop",
+	[23] = "Brown Skull",
 	[CreatureIconQuests_WhiteCross] = "White Cross",
 	[CreatureIconQuests_RedCross] = "Red Cross",
 	[CreatureIconModifications_Fiendish] = "Fiendish",
@@ -59,8 +59,8 @@ local testRotten = TalkAction("/testrotten")
 
 function testRotten.onSay(player, words, param)
 	local count = tonumber(param) or 1
-	-- Hazard = CreatureIconQuests_Hazard (23), Quests category (0)
-	player:setIcon("rotten", 0, 23, count)
+	-- Hazard = 22 (Quests category = 0)
+	player:setIcon("rotten", 0, 22, count)
 	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, string.format("Rotten Charge icon set with count=%d", count))
 	return false
 end

@@ -1520,4 +1520,5 @@ void LuaScriptInterface::registerCreature()
 	registerMethod("Creature", "setIcon", luaCreatureSetIcon);
 	registerMethod("Creature", "removeIcon", luaCreatureRemoveIcon);
 	registerMethod("Creature", "getIcons", luaCreatureGetIcons);
+	registerMethod("Creature", "sendCreatureIcon", luaCreatureSendCreatureIcon);
 }
