@@ -3464,6 +3464,10 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	}
 
 	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
+
+	if (isAstraClient) {
+		AddCreatureIcon(msg, creature);
+	}
 }
 
 void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
