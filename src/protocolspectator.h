@@ -339,6 +339,27 @@ class ProtocolSpectator {
                 spy->sendIcons(icons);
         }
 
+        void sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon = IconBakragore_None) {
+            auto o = owner.lock();
+            if (o)
+                o->sendIcons(icons, bakragoreIcon);
+
+            for (auto &it : spectators)
+                it->sendIcons(icons, bakragoreIcon);
+
+            for (auto &spy : spyClients_)
+                spy->sendIcons(icons, bakragoreIcon);
+        }
+
+        void sendCreatureIcon(const Creature* creature) {
+            auto o = owner.lock();
+            if (o)
+                o->sendCreatureIcon(creature);
+
+            for (auto &it : spectators)
+                it->sendCreatureIcon(creature);
+        }
+
         void sendDistanceShoot(const Position &from, const Position &to, uint16_t type) {
             auto o = owner.lock();
             if (o)

@@ -1106,11 +1106,6 @@ uint64_t Player::getClientIcons64() const
 
 IconBakragore_t Player::getBakragoreIcon() const
 {
-	for (const auto& condition : conditions) {
-		if (condition->getType() == CONDITION_GOSHNARTAINT) {
-			return static_cast<IconBakragore_t>(condition->getSubId());
-		}
-	}
 	return IconBakragore_None;
 }
 
