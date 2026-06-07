@@ -1006,7 +1006,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break;
 		case 0x8E: /* join aggression */
 			break;
-		case 0x8F:
+				case 0x8F:
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLoot(msg);
 			} else {
@@ -1015,6 +1015,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				});
 			}
 			break;
+
 		case 0x90:
 			if (shouldSendQuickLootFlags()) {
 				parseLootContainer(msg);
@@ -1024,6 +1025,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				});
 			}
 			break;
+
 		case 0x91:
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLootBlackWhitelist(msg);
