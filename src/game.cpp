@@ -6896,13 +6896,13 @@ void Game::updateCreatureIcon(const Creature* creature)
 
 void Game::updateCreatureSkull(const Creature* creature)
 {
-	// Allow influenced monsters to show skull in any world type
-	bool isInfluencedMonster = false;
+	// Allow influenced/fiendish monsters to show skull in any world type
+	bool isForgeMonster = false;
 	if (const Monster* monster = creature->getMonster()) {
-		isInfluencedMonster = monster->isInfluenced();
+		isForgeMonster = monster->isInfluenced() || monster->isFiendish();
 	}
 
-	if (!isInfluencedMonster && getWorldType() != WORLD_TYPE_PVP) {
+	if (!isForgeMonster && getWorldType() != WORLD_TYPE_PVP) {
 		return;
 	}
 

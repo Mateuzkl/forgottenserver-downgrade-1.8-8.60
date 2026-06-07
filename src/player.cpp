@@ -5231,10 +5231,13 @@ Skulls_t Player::getSkullClient(const Creature* creature) const
 		return SKULL_NONE;
 	}
 
-	// Influenced monsters always show green skull regardless of world type
+	// Influenced/fiendish: OTC gets skull, Astra gets creature icon via 0x8B
 	if (const Monster* monster = creature->getMonster()) {
-		if (monster->isInfluenced()) {
-			return SKULL_GREEN;
+		if (monster->isInfluenced() || monster->isFiendish()) {
+			if (isAstraClient()) {
+				return SKULL_NONE;
+			}
+			return monster->isInfluenced() ? SKULL_GREEN : SKULL_RED;
 		}
 	}
 

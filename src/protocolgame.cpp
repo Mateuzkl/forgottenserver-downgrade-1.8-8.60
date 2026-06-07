@@ -2007,13 +2007,13 @@ void ProtocolGame::sendCreatureShield(const Creature* creature)
 
 void ProtocolGame::sendCreatureSkull(const Creature* creature)
 {
-	// Allow influenced monsters to show skull in any world type
-	bool isInfluencedMonster = false;
+	// Allow influenced/fiendish monsters to show skull regardless of world type
+	bool isForgeMonster = false;
 	if (const Monster* monster = creature->getMonster()) {
-		isInfluencedMonster = monster->isInfluenced();
+		isForgeMonster = monster->isInfluenced() || monster->isFiendish();
 	}
 
-	if (!isInfluencedMonster && g_game.getWorldType() != WORLD_TYPE_PVP) {
+	if (!isForgeMonster && g_game.getWorldType() != WORLD_TYPE_PVP) {
 		return;
 	}
 
