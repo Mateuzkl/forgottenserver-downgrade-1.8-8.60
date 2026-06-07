@@ -277,21 +277,58 @@ local function runPhase1(player, runId)
     local elapsedTX = (os.clock() - t1)
     local qpsTX = nb / (elapsedTX + 1e-9)
 
-	-- ── 1c: LAST_INSERT_ID - verifica affinity de conexão ────────────────────
-	local safeLabel2 = sqlString("ph1_lastid_probe")
-	db.query(string.format(
-		"INSERT INTO `%s` (`run_id`,`phase`,`seq`,`label`,`ts`) VALUES (%d,1,%d,%s,%d)",
-		STRESS_TABLE, runId, n + nb + 1, safeLabel2, os.time()
-	))
-	local lastId = db.lastInsertId()
+    -- ── 1c: LAST_INSERT_ID - verifica affinity de conexão (worker thread) ──
+    -- Runs on scheduler thread via addEvent to exercise per-thread ConnectionContext
+    local playerId = player:getId()
+    local runIdC = runId
+    local failC = fail
+    local txOkC = txOk
+    local elapsedACC = elapsedAC
+    local elapsedTXC = elapsedTX
+    local qpsACC = qpsAC
+    local qpsTXC = qpsTX
+    local nC = n
+    local nbC = nb
 
-    -- ── Resultado ─────────────────────────────────────────────────────────────
-    if fail == 0 and txOk and lastId > 0 then
-        logPass(player, string.format(
-            "Phase 1: AC=%d/%d (%.0f q/s | %.1fms) | TX=%d (%.0f q/s | %.1fms) | LAST_INSERT_ID=%d",
+    addEvent(function(pId, rId, nVal, nbVal, failVal, txOkVal, elapsedAC, elapsedTX, qpsAC, qpsTX)
+        local p = safePlayer(pId)
+        if not p then return end
+
+        local safeLabel2 = sqlString("ph1_lastid_probe")
+        db.query(string.format(
+            "INSERT INTO `%s` (`run_id`,`phase`,`seq`,`label`,`ts`) VALUES (%d,1,%d,%s,%d)",
+            STRESS_TABLE, rId, nVal + nbVal + 1, safeLabel2, os.time()
+        ))
+        local lastId = db.lastInsertId()
+
+        if failVal == 0 and txOkVal and lastId > 0 then
+            logPass(p, string.format(
+                "Phase 1: AC=%d/%d (%.0f q/s | %.1fms) | TX=%d (%.0f q/s | %.1fms) | LAST_INSERT_ID=%d",
+                nVal, nVal, qpsAC, elapsedAC * 1000,
+                nbVal, qpsTX, elapsedTX * 1000,
+                lastId
+            ))
+        else
+            if failVal > 0 then
+                logFail(p, string.format("Phase 1: %d INSERTs falharam - verifique ConnectionContext.", failVal))
+            end
+            if not txOkVal then
+                logFail(p, "Phase 1: INSERT dentro de transacao falhou - START TRANSACTION/COMMIT com problema.")
+            end
+            if lastId == 0 then
+                logFail(p, "Phase 1: LAST_INSERT_ID=0 - getLastInsertId() pode estar retornando de conexao errada!")
+            end
+        end
+    end, 1, playerId, runIdC, nC, nbC, failC, txOkC, elapsedACC, elapsedTXC, qpsACC, qpsTXC)
+
+    -- Phase 1c runs async; return early (pass/fail reported via callback above)
+
+    -- ── Resultado (Phases 1a + 1b) ────────────────────────────────────────────
+    if fail == 0 and txOk then
+        logInfo(player, string.format(
+            "Phase 1a-b: AC=%d/%d (%.0f q/s | %.1fms) | TX=%d (%.0f q/s | %.1fms) | Phase 1c async...",
             ok, n, qpsAC, elapsedAC * 1000,
-            nb, qpsTX, elapsedTX * 1000,
-            lastId
+            nb, qpsTX, elapsedTX * 1000
         ))
     else
         if fail > 0 then
@@ -300,12 +337,9 @@ local function runPhase1(player, runId)
         if not txOk then
             logFail(player, "Phase 1: INSERT dentro de transacao falhou - START TRANSACTION/COMMIT com problema.")
         end
-        if lastId == 0 then
-            logFail(player, "Phase 1: LAST_INSERT_ID=0 - getLastInsertId() pode estar retornando de conexao errada!")
-        end
     end
 
-    return fail == 0 and txOk and lastId > 0
+    return fail == 0 and txOk
 end
 
 -- ============================================================================

@@ -143,7 +143,7 @@ bool SaveManager::savePlayerSync(Player* player)
 			return false;
 		}
 		pendingFlushes[guid] = PendingPlayerFlush{player->getName(), std::move(*save), false};
-		return true; // queued behind in-flight flush, will be processed via onPlayerFlushed
+		return false; // enqueued behind in-flight flush; save will complete via onPlayerFlushed
 	}
 
 	auto save = IOLoginData::buildPlayerSave(player);
@@ -203,15 +203,7 @@ bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = fal
 	if (trackSaveAll) {
 		beginTrackedFlush();
 	}
-	g_threadPool.detach_task([this, guid, name, save = std::move(*save), trackSaveAll]() mutable {
-		const bool success = IOLoginData::flushPlayerSave(save);
-		if (!success) {
-			LOG_ERROR(fmt::format("[SaveManager] Failed to flush save for player: {}", name));
-		}
-		g_dispatcher.addTask([this, guid, trackSaveAll, success, save = std::move(save)]() mutable {
-			onPlayerFlushed(guid, trackSaveAll, success, std::move(save));
-		});
-	});
+	dispatchPlayerFlush(guid, PendingPlayerFlush{name, std::move(*save), trackSaveAll});
 	return true;
 }
 
@@ -233,14 +225,21 @@ void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll, bool suc
 
 	PendingPlayerFlush pending = std::move(it->second);
 	pendingFlushes.erase(it);
+	dispatchPlayerFlush(guid, std::move(pending));
+}
+
+void SaveManager::dispatchPlayerFlush(uint32_t guid, PendingPlayerFlush pending)
+{
 	g_threadPool.detach_task([this, guid, pending = std::move(pending)]() mutable {
 		std::string name = std::move(pending.name);
 		IOLoginData::PlayerSaveSnapshot save = std::move(pending.save);
 		const bool trackSaveAll = pending.trackedBySaveAll;
+
 		const bool success = IOLoginData::flushPlayerSave(save);
 		if (!success) {
-			LOG_ERROR(fmt::format("[SaveManager] Failed to flush queued save for player: {}", name));
+			LOG_ERROR(fmt::format("[SaveManager] Failed to flush save for player: {}", name));
 		}
+
 		g_dispatcher.addTask([this, guid, trackSaveAll, success, save = std::move(save)]() mutable {
 			onPlayerFlushed(guid, trackSaveAll, success, std::move(save));
 		});

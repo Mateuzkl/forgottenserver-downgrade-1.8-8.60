@@ -881,6 +881,12 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		return;
 	}
 
+	auto dispatchPlayerNetworkMessage = [&](uint8_t byte, NetworkMessage& message) {
+		g_dispatcher.addTask([=, playerID = player->getID(), message = tfs::net::make_network_message(message)]() {
+			g_game.parsePlayerNetworkMessage(playerID, byte, message);
+		});
+	};
+
 	switch (recvbyte) {
 		case 0x14:
 			g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->logout(true, false); });
@@ -1010,9 +1016,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLoot(msg);
 			} else {
-				g_dispatcher.addTask([=, playerID = player->getID(), message = tfs::net::make_network_message(msg)]() {
-					g_game.parsePlayerNetworkMessage(playerID, recvbyte, message);
-				});
+				dispatchPlayerNetworkMessage(recvbyte, msg);
 			}
 			break;
 
@@ -1020,9 +1024,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseLootContainer(msg);
 			} else {
-				g_dispatcher.addTask([=, playerID = player->getID(), message = tfs::net::make_network_message(msg)]() {
-					g_game.parsePlayerNetworkMessage(playerID, recvbyte, message);
-				});
+				dispatchPlayerNetworkMessage(recvbyte, msg);
 			}
 			break;
 
@@ -1030,9 +1032,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLootBlackWhitelist(msg);
 			} else {
-				g_dispatcher.addTask([=, playerID = player->getID(), message = tfs::net::make_network_message(msg)]() {
-					g_game.parsePlayerNetworkMessage(playerID, recvbyte, message);
-				});
+				dispatchPlayerNetworkMessage(recvbyte, msg);
 			}
 			break;
 		case 0x96:
@@ -1110,9 +1110,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			parseBugReport(msg);
 			break;
 		case 0xE7: /* thank you / custom wheel gem action */
-			g_dispatcher.addTask([=, playerID = player->getID(), message = tfs::net::make_network_message(msg)]() {
-				g_game.parsePlayerNetworkMessage(playerID, recvbyte, message);
-			});
+			dispatchPlayerNetworkMessage(recvbyte, msg);
 			break;
 		case 0xF2:
 			parseRuleViolationReport(msg);
@@ -1123,20 +1121,14 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		case 0xFA: /* custom store history */
 		case 0xFB: /* custom store open */
 		case 0xFC: /* custom store buy */
-			g_dispatcher.addTask([=, playerID = player->getID(), message = tfs::net::make_network_message(msg)]() {
-				g_game.parsePlayerNetworkMessage(playerID, recvbyte, message);
-			});
+			dispatchPlayerNetworkMessage(recvbyte, msg);
 			break;
 		case 0xF9:
 			parseModalWindowAnswer(msg);
 			break;
 
 		default:
-			// we cannot pass a unique_ptr as capture here because
-			// std::function requires the callable object to be *copyable*
-			g_dispatcher.addTask([=, playerID = player->getID(), message = tfs::net::make_network_message(msg)]() {
-				g_game.parsePlayerNetworkMessage(playerID, recvbyte, message);
-			});
+			dispatchPlayerNetworkMessage(recvbyte, msg);
 			break;
 	}
 

@@ -149,6 +149,7 @@ void clearNpcTypes();
 const std::map<std::string, std::shared_ptr<NpcType>>& getNpcTypes();
 std::shared_ptr<NpcType> getNpcType(const std::string& name);
 NpcScriptInterface* getScriptInterface();
+std::shared_ptr<Npc> makeScriptHandle(Npc* npc);
 static const int32_t ViewportX = 15 * 2 + 2; // Approximate or use Map constants if available
 static const int32_t ViewportY = 11 * 2 + 2;
 } // namespace Npcs

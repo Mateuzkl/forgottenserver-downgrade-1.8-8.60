@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 BUILD_DIR="build-bench"
 JOBS="${JOBS:-$(nproc 2>/dev/null || printf '2')}"
-CLEAN_BUILD=1
+CLEAN_BUILD=0
 FILTER=""
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,7 +29,7 @@ parse_args() {
 	while (($#)); do
 		case "$1" in
 			--clean)
-CLEAN_BUILD=0
+				CLEAN_BUILD=1
 				shift
 				;;
 			--filter)

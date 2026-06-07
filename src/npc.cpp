@@ -329,8 +329,7 @@ NpcScriptInterface* getScriptInterface()
 
 } // namespace Npcs
 
-namespace {
-std::shared_ptr<Npc> makeNpcScriptHandle(Npc* npc)
+std::shared_ptr<Npc> Npcs::makeScriptHandle(Npc* npc)
 {
 	if (!npc) {
 		return nullptr;
@@ -342,7 +341,6 @@ std::shared_ptr<Npc> makeNpcScriptHandle(Npc* npc)
 
 	return std::shared_ptr<Npc>(npc, [](Npc*) {});
 }
-} // namespace
 
 // ─── Npc ──────────────────────────────────────────────────────────────────────
 
@@ -1605,7 +1603,7 @@ NpcEventsHandler::NpcEventsHandler(const std::string& file, Npc* npcPtr) :
 	// Create a temporary shared_ptr for loadFile; it goes out of scope here
 	// so enable_shared_from_this can be properly re-initialized when the
 	// owning shared_ptr is created later.
-	auto npcHandle = makeNpcScriptHandle(npcPtr);
+	auto npcHandle = Npcs::makeScriptHandle(npcPtr);
 	loaded = scriptInterface->loadFile("data/npc/scripts/" + file, npcHandle) == 0;
 	if (!loaded) {
 		LOG_WARN(fmt::format("[Warning - NpcScript::NpcScript] Can not load script: {}", file));

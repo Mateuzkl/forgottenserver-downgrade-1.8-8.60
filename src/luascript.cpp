@@ -63,18 +63,30 @@ extern Vocations g_vocations;
 namespace {
 constexpr int32_t KV_MAX_LUA_RECURSION = 32;
 
-std::shared_ptr<Npc> makeScriptNpcHandle(Npc* npc)
+static int pushAsyncTransactionError(lua_State* L, std::string_view syncApiName)
 {
-	if (!npc) {
+	lua_pushnil(L);
+	lua_pushfstring(L, "Cannot use async queries inside a database transaction. Use synchronous %s instead.", std::string(syncApiName).c_str());
+	return 2;
+}
+
+static void finishAsyncDatabaseCallback(lua_State* luaState, int32_t ref, uint32_t scriptId, int32_t nargs)
+{
+	auto env = getScriptEnv();
+	env->setScriptId(scriptId, &g_luaEnvironment);
+	g_luaEnvironment.callFunction(nargs);
+	luaL_unref(luaState, LUA_REGISTRYINDEX, ref);
+}
+
+static Player* getRequiredPlayerOrPushFalse(lua_State* L, int32_t index)
+{
+	Player* player = Lua::getPlayer(L, index);
+	if (!player) {
+		reportErrorFunc(L, getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
+		Lua::pushBoolean(L, false);
 		return nullptr;
 	}
-
-	if (auto creatureRef = g_game.getCreatureSharedRef(npc)) {
-		return std::static_pointer_cast<Npc>(creatureRef);
-	}
-
-	// XML NPC scripts may execute before the NPC is registered in g_game.
-	return std::shared_ptr<Npc>(npc, [](Npc*) {});
+	return player;
 }
 
 int luaSetMonsterLevelSkullRange(lua_State* L)
@@ -515,7 +527,7 @@ int LuaScriptInterface::protectedCall(lua_State* L, int nargs, int nresults)
 
 int32_t LuaScriptInterface::loadFile(std::string_view file, Npc* npc /* = nullptr*/)
 {
-	return loadFile(file, makeScriptNpcHandle(npc));
+	return loadFile(file, Npcs::makeScriptHandle(npc));
 }
 
 int32_t LuaScriptInterface::loadFile(std::string_view file, const std::shared_ptr<Npc>& npc)
@@ -3088,10 +3100,8 @@ int LuaScriptInterface::luaDoPlayerAddItem(lua_State* L)
 	// doPlayerAddItem(cid, itemid, <optional: default: 1> count/subtype, <optional: default: 1> canDropOnMap)
 	// doPlayerAddItem(cid, itemid, <optional: default: 1> count, <optional: default: 1> canDropOnMap, <optional:
 	// default: 1>subtype)
-	Player* player = Lua::getPlayer(L, 1);
+	Player* player = getRequiredPlayerOrPushFalse(L, 1);
 	if (!player) {
-		reportErrorFunc(L, getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
-		Lua::pushBoolean(L, false);
 		return 1;
 	}
 
@@ -3702,17 +3712,13 @@ int LuaScriptInterface::luaCleanMap(lua_State* L)
 int LuaScriptInterface::luaIsInWar(lua_State* L)
 {
 	// isInWar(cid, target)
-	Player* player = Lua::getPlayer(L, 1);
+	Player* player = getRequiredPlayerOrPushFalse(L, 1);
 	if (!player) {
-		reportErrorFunc(L, getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
-		Lua::pushBoolean(L, false);
 		return 1;
 	}
 
-	Player* targetPlayer = Lua::getPlayer(L, 2);
+	Player* targetPlayer = getRequiredPlayerOrPushFalse(L, 2);
 	if (!targetPlayer) {
-		reportErrorFunc(L, getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
-		Lua::pushBoolean(L, false);
 		return 1;
 	}
 
@@ -3844,9 +3850,7 @@ int LuaScriptInterface::luaDatabaseExecute(lua_State* L)
 int LuaScriptInterface::luaDatabaseAsyncExecute(lua_State* L)
 {
 	if (Database::getInstance().isInTransaction()) {
-		lua_pushnil(L);
-		lua_pushstring(L, "Cannot use async queries inside a database transaction. Use synchronous db.query() instead.");
-		return 2;
+		return pushAsyncTransactionError(L, "db.query()");
 	}
 	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
 	if (lua_gettop(L) > 1) {
@@ -3866,11 +3870,7 @@ int LuaScriptInterface::luaDatabaseAsyncExecute(lua_State* L)
 			lua_rawgeti(luaState, LUA_REGISTRYINDEX, ref);
 			Lua::pushBoolean(luaState, success);
 			lua_pushinteger(luaState, affectedRows);
-			auto env = getScriptEnv();
-			env->setScriptId(scriptId, &g_luaEnvironment);
-			g_luaEnvironment.callFunction(2);
-
-			luaL_unref(luaState, LUA_REGISTRYINDEX, ref);
+			finishAsyncDatabaseCallback(luaState, ref, scriptId, 2);
 		};
 	}
 	g_databaseTasks.addTask(Lua::getString(L, -1), callback);
@@ -3890,9 +3890,7 @@ int LuaScriptInterface::luaDatabaseStoreQuery(lua_State* L)
 int LuaScriptInterface::luaDatabaseAsyncStoreQuery(lua_State* L)
 {
 	if (Database::getInstance().isInTransaction()) {
-		lua_pushnil(L);
-		lua_pushstring(L, "Cannot use async queries inside a database transaction. Use synchronous db.storeQuery() instead.");
-		return 2;
+		return pushAsyncTransactionError(L, "db.storeQuery()");
 	}
 	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
 	if (lua_gettop(L) > 1) {
@@ -3917,11 +3915,7 @@ int LuaScriptInterface::luaDatabaseAsyncStoreQuery(lua_State* L)
 				Lua::pushBoolean(luaState, false);
 				lua_pushinteger(luaState, 0);
 			}
-			auto env = getScriptEnv();
-			env->setScriptId(scriptId, &g_luaEnvironment);
-			g_luaEnvironment.callFunction(2);
-
-			luaL_unref(luaState, LUA_REGISTRYINDEX, ref);
+			finishAsyncDatabaseCallback(luaState, ref, scriptId, 2);
 		};
 	}
 	g_databaseTasks.addTask(Lua::getString(L, -1), callback, true);

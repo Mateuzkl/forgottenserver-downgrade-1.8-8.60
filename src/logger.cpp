@@ -210,17 +210,7 @@ public:
 		if (statsLoggerConsole_) {
 			statsLoggerConsole_->info("\033[38;5;208m[STATS]\033[0m {}", msg);
 		}
-
-		if (logger_) {
-			std::string formattedMsg = fmt::format("[STATS] {}", msg);
-			for (auto& sink : logger_->sinks()) {
-				auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
-				if (fileSink) {
-					spdlog::details::log_msg logMsg("tfs", spdlog::level::info, formattedMsg);
-					fileSink->log(logMsg);
-				}
-			}
-		}
+		writeToMainFileSink(spdlog::level::info, fmt::format("[STATS] {}", msg));
 	}
 
 	void statsWarning(std::string_view msg) override
@@ -228,17 +218,7 @@ public:
 		if (statsWarningLogger_) {
 			statsWarningLogger_->info("{} {}", fmt::format(fg(fmt::color::yellow), "[WARNING STATS]"), msg);
 		}
-
-		if (logger_) {
-			std::string formattedMsg = fmt::format("[WARNING STATS] {}", msg);
-			for (auto& sink : logger_->sinks()) {
-				auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
-				if (fileSink) {
-					spdlog::details::log_msg logMsg("tfs", spdlog::level::warn, formattedMsg);
-					fileSink->log(logMsg);
-				}
-			}
-		}
+		writeToMainFileSink(spdlog::level::warn, fmt::format("[WARNING STATS] {}", msg));
 	}
 
 	void mapCache(std::string_view msg) override
@@ -246,17 +226,7 @@ public:
 		if (mapCacheLogger_) {
 			mapCacheLogger_->info("{}", msg);
 		}
-
-		if (logger_) {
-			std::string formattedMsg = fmt::format("{}", msg);
-			for (auto& sink : logger_->sinks()) {
-				auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
-				if (fileSink) {
-					spdlog::details::log_msg logMsg("tfs", spdlog::level::info, formattedMsg);
-					fileSink->log(logMsg);
-				}
-			}
-		}
+		writeToMainFileSink(spdlog::level::info, fmt::format("{}", msg));
 	}
 
 	void network(std::string_view msg) override
@@ -264,17 +234,7 @@ public:
 		if (networkLogger_) {
 			networkLogger_->info("\033[38;5;135m[Network]\033[0m {}", msg);
 		}
-
-		if (logger_) {
-			std::string formattedMsg = fmt::format("[Network] {}", msg);
-			for (auto& sink : logger_->sinks()) {
-				auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
-				if (fileSink) {
-					spdlog::details::log_msg logMsg("tfs", spdlog::level::info, formattedMsg);
-					fileSink->log(logMsg);
-				}
-			}
-		}
+		writeToMainFileSink(spdlog::level::info, fmt::format("[Network] {}", msg));
 	}
 
 	void raid(std::string_view msg) override
@@ -282,17 +242,7 @@ public:
 		if (raidLogger_) {
 			raidLogger_->info("\033[31m[RAIDS]\033[0m \033[37m{}\033[0m", msg);
 		}
-
-		if (logger_) {
-			std::string formattedMsg = fmt::format("[RAIDS] {}", msg);
-			for (auto& sink : logger_->sinks()) {
-				auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
-				if (fileSink) {
-					spdlog::details::log_msg logMsg("tfs", spdlog::level::warn, formattedMsg);
-					fileSink->log(logMsg);
-				}
-			}
-		}
+		writeToMainFileSink(spdlog::level::warn, fmt::format("[RAIDS] {}", msg));
 	}
 
 	void threadPool(std::string_view msg) override
@@ -300,17 +250,7 @@ public:
 		if (threadPoolLogger_) {
 			threadPoolLogger_->info("\033[36m[ThreadPool]\033[0m \033[37m{}\033[0m", msg);
 		}
-
-		if (logger_) {
-			std::string formattedMsg = fmt::format("[ThreadPool] {}", msg);
-			for (auto& sink : logger_->sinks()) {
-				auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
-				if (fileSink) {
-					spdlog::details::log_msg logMsg("tfs", spdlog::level::info, formattedMsg);
-					fileSink->log(logMsg);
-				}
-			}
-		}
+		writeToMainFileSink(spdlog::level::info, fmt::format("[ThreadPool] {}", msg));
 	}
 
 protected:
@@ -320,17 +260,7 @@ protected:
 			if (migrationsLogger_) {
 				migrationsLogger_->info("\033[36m[migrations]\033[0m {}", msg);
 			}
-
-			if (logger_) {
-				std::string formatted = fmt::format("[migrations] {}", msg);
-				for (auto& sink : logger_->sinks()) {
-					auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
-					if (fileSink) {
-						spdlog::details::log_msg logMsg("tfs", spdlog::level::info, formatted);
-						fileSink->log(logMsg);
-					}
-				}
-			}
+			writeToMainFileSink(spdlog::level::info, fmt::format("[migrations] {}", msg));
 			return;
 		}
 
@@ -361,6 +291,20 @@ private:
 	std::shared_ptr<spdlog::logger> raidLogger_;
 	std::shared_ptr<spdlog::logger> threadPoolLogger_;
 	std::string timestampedPath_;
+
+	void writeToMainFileSink(spdlog::level::level_enum level, std::string_view formattedMsg)
+	{
+		if (!logger_) {
+			return;
+		}
+		for (auto& sink : logger_->sinks()) {
+			auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
+			if (fileSink) {
+				spdlog::details::log_msg logMsg("tfs", level, formattedMsg);
+				fileSink->log(logMsg);
+			}
+		}
+	}
 };
 
 static std::unique_ptr<Logger> loggerInstance;

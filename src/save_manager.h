@@ -45,6 +45,7 @@ private:
 	void acknowledgePlayerSave(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save);
 	void beginTrackedFlush() noexcept;
 	void completeTrackedFlush() noexcept;
+	void dispatchPlayerFlush(uint32_t guid, PendingPlayerFlush pending);
 
 	std::atomic<bool> saving{false};
 	std::atomic<uint32_t> pendingSaveFlushes{0};

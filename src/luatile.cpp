@@ -40,9 +40,8 @@ int luaTileCreate(lua_State* L)
 int luaTileRemove(lua_State* L)
 {
 	// tile:remove()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -83,9 +82,8 @@ int luaTileGetThing(lua_State* L)
 {
 	// tile:getThing(index)
 	int32_t index = getInteger<int32_t>(L, 2);
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -122,9 +120,8 @@ int luaTileGetTopVisibleThing(lua_State* L)
 {
 	// tile:getTopVisibleThing([creature])
 	Creature* creature = getCreature(L, 2);
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -148,9 +145,8 @@ int luaTileGetTopVisibleThing(lua_State* L)
 int luaTileGetTopTopItem(lua_State* L)
 {
 	// tile:getTopTopItem()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -166,9 +162,8 @@ int luaTileGetTopTopItem(lua_State* L)
 int luaTileGetTopDownItem(lua_State* L)
 {
 	// tile:getTopDownItem()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -184,9 +179,8 @@ int luaTileGetTopDownItem(lua_State* L)
 int luaTileGetFieldItem(lua_State* L)
 {
 	// tile:getFieldItem()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -202,9 +196,8 @@ int luaTileGetFieldItem(lua_State* L)
 int luaTileGetItemById(lua_State* L)
 {
 	// tile:getItemById(itemId[, subType = -1])
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -232,9 +225,8 @@ int luaTileGetItemById(lua_State* L)
 int luaTileGetItemByType(lua_State* L)
 {
 	// tile:getItemByType(itemType)
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -296,9 +288,8 @@ int luaTileGetItemByType(lua_State* L)
 int luaTileGetItemByTopOrder(lua_State* L)
 {
 	// tile:getItemByTopOrder(topOrder)
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -317,9 +308,8 @@ int luaTileGetItemByTopOrder(lua_State* L)
 int luaTileGetItemCountById(lua_State* L)
 {
 	// tile:getItemCountById(itemId[, subType = -1])
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -343,9 +333,8 @@ int luaTileGetItemCountById(lua_State* L)
 int luaTileGetBottomCreature(lua_State* L)
 {
 	// tile:getBottomCreature()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -363,9 +352,8 @@ int luaTileGetBottomCreature(lua_State* L)
 int luaTileGetTopCreature(lua_State* L)
 {
 	// tile:getTopCreature()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -383,9 +371,8 @@ int luaTileGetTopCreature(lua_State* L)
 int luaTileGetBottomVisibleCreature(lua_State* L)
 {
 	// tile:getBottomVisibleCreature(creature)
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -408,9 +395,8 @@ int luaTileGetBottomVisibleCreature(lua_State* L)
 int luaTileGetTopVisibleCreature(lua_State* L)
 {
 	// tile:getTopVisibleCreature(creature)
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -433,9 +419,8 @@ int luaTileGetTopVisibleCreature(lua_State* L)
 int luaTileGetItems(lua_State* L)
 {
 	// tile:getItems()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -459,9 +444,8 @@ int luaTileGetItems(lua_State* L)
 int luaTileGetItemCount(lua_State* L)
 {
 	// tile:getItemCount()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -484,9 +468,8 @@ int luaTileGetDownItemCount(lua_State* L)
 int luaTileGetTopItemCount(lua_State* L)
 {
 	// tile:getTopItemCount()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -497,9 +480,8 @@ int luaTileGetTopItemCount(lua_State* L)
 int luaTileGetCreatures(lua_State* L)
 {
 	// tile:getCreatures()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -523,9 +505,8 @@ int luaTileGetCreatures(lua_State* L)
 int luaTileGetCreatureCount(lua_State* L)
 {
 	// tile:getCreatureCount()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -536,9 +517,8 @@ int luaTileGetCreatureCount(lua_State* L)
 int luaTileHasProperty(lua_State* L)
 {
 	// tile:hasProperty(property[, item])
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -561,9 +541,8 @@ int luaTileHasProperty(lua_State* L)
 int luaTileGetThingIndex(lua_State* L)
 {
 	// tile:getThingIndex(thing)
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -592,9 +571,8 @@ int luaTileHasFlag(lua_State* L)
 int luaTileGetZoneIds(lua_State* L)
 {
 	// tile:getZoneIds()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -612,9 +590,8 @@ int luaTileGetZoneIds(lua_State* L)
 int luaTileHasZone(lua_State* L)
 {
 	// tile:hasZone([zoneId | zone])
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -640,9 +617,8 @@ int luaTileHasZone(lua_State* L)
 int luaTileQueryAdd(lua_State* L)
 {
 	// tile:queryAdd(thing[, flags])
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -659,9 +635,8 @@ int luaTileQueryAdd(lua_State* L)
 int luaTileAddItem(lua_State* L)
 {
 	// tile:addItem(itemId[, count/subType = 1[, flags = 0]])
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -727,9 +702,8 @@ int luaTileAddItemEx(lua_State* L)
 		return 1;
 	}
 
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 
@@ -751,9 +725,8 @@ int luaTileAddItemEx(lua_State* L)
 int luaTileGetHouse(lua_State* L)
 {
 	// tile:getHouse()
-	Tile* tile = getUserdata<Tile>(L, 1);
+	Tile* tile = getUserdataOrPushNil<Tile>(L, 1);
 	if (!tile) {
-		lua_pushnil(L);
 		return 1;
 	}
 

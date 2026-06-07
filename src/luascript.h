@@ -893,10 +893,26 @@ inline T* getUserdata(lua_State* L, int32_t arg, const bool checkType = true)
 	return *userdata;
 }
 
+template <typename T>
+T* getUserdataOrPushNil(lua_State* L, int32_t index)
+{
+	T* value = getUserdata<T>(L, index);
+	if (!value) {
+		lua_pushnil(L);
+	}
+	return value;
+}
+
 template <class T>
 inline std::shared_ptr<T>& getSharedPtr(lua_State* L, int32_t arg)
 {
-	return *static_cast<std::shared_ptr<T>*>(lua_touserdata(L, arg));
+	static thread_local std::shared_ptr<T> sentinel;
+	void* ud = lua_touserdata(L, arg);
+	if (!ud) {
+		sentinel.reset();
+		return sentinel;
+	}
+	return *static_cast<std::shared_ptr<T>*>(ud);
 }
 
 template <class T>
