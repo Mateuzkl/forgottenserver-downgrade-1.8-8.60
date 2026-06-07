@@ -8,6 +8,7 @@
 #include "configmanager.h"
 #include "container.h"
 #include "creature.h"
+#include "lockfree.h"
 
 #include <simdutf.h>
 
@@ -149,4 +150,21 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
 		addByte(item->getTier());
 	}
+}
+
+namespace {
+
+const uint16_t NETWORKMESSAGE_FREE_LIST_CAPACITY = 2048;
+
+} // namespace
+
+std::shared_ptr<NetworkMessage> tfs::net::make_network_message()
+{
+	return std::allocate_shared<NetworkMessage>(LockfreePoolingAllocator<void, NETWORKMESSAGE_FREE_LIST_CAPACITY>());
+}
+
+std::shared_ptr<NetworkMessage> tfs::net::make_network_message(const NetworkMessage& other)
+{
+	return std::allocate_shared<NetworkMessage>(LockfreePoolingAllocator<void, NETWORKMESSAGE_FREE_LIST_CAPACITY>(),
+	                                            other);
 }

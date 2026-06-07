@@ -6,6 +6,8 @@
 
 #include "const.h"
 
+#include <memory>
+
 class Item;
 class Creature;
 class Player;
@@ -13,7 +15,7 @@ struct Position;
 class RSA;
 
 class NetworkMessage;
-using NetworkMessage_ptr = std::unique_ptr<NetworkMessage>;
+using NetworkMessage_ptr = std::shared_ptr<NetworkMessage>;
 
 class NetworkMessage
 {
@@ -180,5 +182,12 @@ private:
 		return true;
 	}
 };
+
+namespace tfs::net {
+
+std::shared_ptr<NetworkMessage> make_network_message();
+std::shared_ptr<NetworkMessage> make_network_message(const NetworkMessage& other);
+
+} // namespace tfs::net
 
 #endif // FS_NETWORKMESSAGE_H

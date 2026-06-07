@@ -1174,7 +1174,7 @@ void Events::eventPlayerOnNetworkMessage(Player* player, uint8_t recvByte, Netwo
 
 	lua_pushinteger(L, recvByte);
 
-	Lua::pushOwnedUserdata<NetworkMessage>(L, std::move(msg));
+	Lua::pushSharedPtr(L, msg);
 	Lua::setMetatable(L, -1, "NetworkMessage");
 
 	scriptInterface.callVoidFunction(3);

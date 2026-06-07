@@ -1065,6 +1065,16 @@ inline void pushSharedPtr(lua_State* L, T value, int nuvalue = 1)
 	new (lua_newuserdatauv(L, sizeof(T), nuvalue)) T(std::move(value));
 }
 
+template <class T>
+inline int luaSharedPtrDelete(lua_State* L)
+{
+	auto ptr = static_cast<std::shared_ptr<T>*>(lua_touserdata(L, 1));
+	if (ptr) {
+		ptr->reset();
+	}
+	return 0;
+}
+
 // Extra
 inline void logSpectatorLockFailure([[maybe_unused]] int32_t arg, [[maybe_unused]] size_t entryIndex,
                                     [[maybe_unused]] const void* creature)
