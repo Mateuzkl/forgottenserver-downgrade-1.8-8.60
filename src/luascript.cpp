@@ -1707,6 +1707,44 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CONDITION_FEARED);
 	registerEnum(CONDITION_AGONY);
 
+	registerEnum(CreatureIconCategory_Quests);
+	registerEnum(CreatureIconCategory_Modifications);
+
+	registerEnum(CreatureIconModifications_None);
+	registerEnum(CreatureIconModifications_HigherDamageReceived);
+	registerEnum(CreatureIconModifications_LowerDamageDealt);
+	registerEnum(CreatureIconModifications_TurnedMelee);
+	registerEnum(CreatureIconModifications_Influenced);
+	registerEnum(CreatureIconModifications_Fiendish);
+	registerEnum(CreatureIconModifications_ReducedHealth);
+	registerEnum(CreatureIconModifications_ReducedHealthExclamation);
+
+	registerEnum(CreatureIconQuests_None);
+	registerEnum(CreatureIconQuests_WhiteCross);
+	registerEnum(CreatureIconQuests_RedCross);
+	registerEnum(CreatureIconQuests_RedBall);
+	registerEnum(CreatureIconQuests_GreenBall);
+	registerEnum(CreatureIconQuests_RedGreenBall);
+	registerEnum(CreatureIconQuests_GreenShield);
+	registerEnum(CreatureIconQuests_YellowShield);
+	registerEnum(CreatureIconQuests_BlueShield);
+	registerEnum(CreatureIconQuests_PurpleShield);
+	registerEnum(CreatureIconQuests_RedShield);
+	registerEnum(CreatureIconQuests_Dove);
+	registerEnum(CreatureIconQuests_Energy);
+	registerEnum(CreatureIconQuests_Earth);
+	registerEnum(CreatureIconQuests_Water);
+	registerEnum(CreatureIconQuests_Fire);
+	registerEnum(CreatureIconQuests_Ice);
+	registerEnum(CreatureIconQuests_ArrowUp);
+	registerEnum(CreatureIconQuests_ArrowDown);
+	registerEnum(CreatureIconQuests_ExclamationMark);
+	registerEnum(CreatureIconQuests_QuestionMark);
+	registerEnum(CreatureIconQuests_CancelMark);
+	registerEnum(CreatureIconQuests_Hazard);
+	registerEnum(CreatureIconQuests_BrownSkull);
+	registerEnum(CreatureIconQuests_BloodDrop);
+
 	registerEnum(CONDITIONID_DEFAULT);
 	registerEnum(CONDITIONID_COMBAT);
 	registerEnum(CONDITIONID_HEAD);

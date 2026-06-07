@@ -19,7 +19,7 @@ function creatureIconTest.onSay(player, words, param)
 	if param == "" then
 		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "Usage: /testcreatureicon category,iconId,count")
 		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "  category: 0=Quests, 1=Modifications")
-		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "  Example: /testcreatureicon 0,23,3 # Hazard + count 3")
+		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "  Example: /testcreatureicon 0,22,3 # Hazard + count 3")
 		return false
 	end
 
