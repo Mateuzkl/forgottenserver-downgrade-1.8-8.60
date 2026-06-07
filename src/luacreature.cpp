@@ -1402,6 +1402,20 @@ int luaCreatureGetIcons(lua_State* L)
 	return 1;
 }
 
+int luaCreatureClearIcons(lua_State* L)
+{
+	// creature:clearIcons()
+	Creature* creature = getCreature(L, 1);
+	if (!creature) {
+		reportErrorFunc(L, LuaScriptInterface::getErrorDesc(LuaErrorCode::CREATURE_NOT_FOUND));
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
+	creature->clearIcons();
+	Lua::pushBoolean(L, true);
+	return 1;
+}
+
 int luaCreatureSendCreatureIcon(lua_State* L)
 {
 	// creature:sendCreatureIcon() — send icon update to all spectators
@@ -1519,6 +1533,7 @@ void LuaScriptInterface::registerCreature()
 
 	registerMethod("Creature", "setIcon", luaCreatureSetIcon);
 	registerMethod("Creature", "removeIcon", luaCreatureRemoveIcon);
+	registerMethod("Creature", "clearIcons", luaCreatureClearIcons);
 	registerMethod("Creature", "getIcons", luaCreatureGetIcons);
 	registerMethod("Creature", "sendCreatureIcon", luaCreatureSendCreatureIcon);
 }

@@ -1,6 +1,4 @@
 -- Test Creature Icons system
--- /testcreatureicon {category} {iconId} {count}
-
 local creatureIconTest = TalkAction("/testcreatureicon")
 
 local iconNames = {
@@ -37,8 +35,8 @@ function creatureIconTest.onSay(player, words, param)
 	return false
 end
 
-creatureIconTest:separator(" ")
-creatureIconTest:groupType("god")
+creatureIconTest:accountType(6)
+creatureIconTest:access(true)
 creatureIconTest:register()
 
 -- Clear all icons
@@ -50,37 +48,35 @@ function creatureIconClear.onSay(player, words, param)
 	return false
 end
 
-creatureIconClear:separator(" ")
-creatureIconClear:groupType("god")
+creatureIconClear:accountType(6)
+creatureIconClear:access(true)
 creatureIconClear:register()
 
--- Test Rotten Charge (Hazard quest icon)
+-- Rotten Charge
 local testRotten = TalkAction("/testrotten")
 
 function testRotten.onSay(player, words, param)
 	local count = tonumber(param) or 1
-	-- Hazard = 22 (Quests category = 0)
 	player:setIcon("rotten", 0, 22, count)
 	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, string.format("Rotten Charge icon set with count=%d", count))
 	return false
 end
 
-testRotten:separator(" ")
-testRotten:groupType("god")
+testRotten:accountType(6)
+testRotten:access(true)
 testRotten:register()
 
--- Test Forge (Fiendish icon)
+-- Forge icon
 local testForge = TalkAction("/testforge")
 
 function testForge.onSay(player, words, param)
-	local iconType = tonumber(param) or 5 -- Fiendish=5 default
-	-- Fiendish = CreatureIconModifications_Fiendish (5), Modifications category (1)
+	local iconType = tonumber(param) or 5
 	player:setIcon("forge", 1, iconType, 0)
 	local name = iconType == 5 and "Fiendish" or (iconType == 4 and "Influenced" or "Unknown")
 	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, string.format("Forge %s icon set", name))
 	return false
 end
 
-testForge:separator(" ")
-testForge:groupType("god")
+testForge:accountType(6)
+testForge:access(true)
 testForge:register()
