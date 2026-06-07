@@ -83,6 +83,19 @@
 				"CMAKE_BUILD_TYPE": "Debug",
 				"ENABLE_ASAN": "ON"
 			}
+		},
+		{
+			"name": "vcpkg-benchmarks",
+			"inherits": [
+				"vcpkg"
+			],
+			"description": "Configure with vcpkg and benchmarks enabled",
+			"binaryDir": "${sourceDir}/build-bench",
+			"cacheVariables": {
+				"BUILD_BENCHMARKING": "ON",
+				"BUILD_TESTING": "ON",
+				"CMAKE_BUILD_TYPE": "Release"
+			}
 		}
 	],
 	"buildPresets": [
@@ -118,6 +131,11 @@
 			"name": "asan-vcpkg",
 			"configurePreset": "asan-vcpkg",
 			"configuration": "Debug"
+		},
+		{
+			"name": "vcpkg-benchmarks",
+			"configurePreset": "vcpkg-benchmarks",
+			"configuration": "Release"
 		}
 	],
 	"testPresets": [
@@ -153,6 +171,11 @@
 			"name": "asan-vcpkg",
 			"configurePreset": "asan-vcpkg",
 			"configuration": "Debug"
+		},
+		{
+			"name": "vcpkg-benchmarks",
+			"configurePreset": "vcpkg-benchmarks",
+			"configuration": "Release"
 		}
 	]
 }
