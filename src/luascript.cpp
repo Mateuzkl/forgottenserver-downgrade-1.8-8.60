@@ -3841,6 +3841,7 @@ const luaL_Reg LuaScriptInterface::luaDatabaseTable[] = {
     {"commit", LuaScriptInterface::luaDatabaseCommit},
     {"rollback", LuaScriptInterface::luaDatabaseRollback},
     {"affectedRows", LuaScriptInterface::luaDatabaseAffectedRows},
+    {"transaction", LuaScriptInterface::luaDatabaseTransaction},
     {nullptr, nullptr}};
 
 int LuaScriptInterface::luaDatabaseExecute(lua_State* L)
@@ -3982,6 +3983,37 @@ int LuaScriptInterface::luaDatabaseRollback(lua_State* L)
 int LuaScriptInterface::luaDatabaseAffectedRows(lua_State* L)
 {
 	lua_pushinteger(L, Database::getInstance().getAffectedRows());
+	return 1;
+}
+
+int LuaScriptInterface::luaDatabaseTransaction(lua_State* L)
+{
+	if (!Lua::isFunction(L, 1)) {
+		reportErrorFunc(L, "db.transaction expects a function argument");
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
+
+	auto* env = getScriptEnv();
+	if (!Database::getInstance().beginTransaction()) {
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
+	env->hasOpenTransaction = true;
+
+	lua_pushvalue(L, 1);
+	int32_t ret = protectedCall(L, 0, 0);
+	if (ret != 0) {
+		Database::getInstance().rollback();
+		env->hasOpenTransaction = false;
+		reportError(nullptr, Lua::popString(L));
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
+
+	bool success = Database::getInstance().commit();
+	env->hasOpenTransaction = false;
+	Lua::pushBoolean(L, success);
 	return 1;
 }
 
