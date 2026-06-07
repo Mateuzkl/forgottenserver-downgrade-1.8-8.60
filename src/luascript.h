@@ -275,6 +275,7 @@ public:
 	int32_t scriptId;
 	int32_t callbackId;
 	bool timerEvent;
+	bool hasOpenTransaction = false;
 
 	// result map
 	static uint32_t lastResultId;
@@ -343,6 +344,7 @@ public:
 		// Rollback any open transaction leaked by the script that just ended
 		if (Database::getInstance().isInTransaction()) {
 			Database::getInstance().rollback();
+			scriptEnv[scriptEnvIndex].hasOpenTransaction = false;
 		}
 		scriptEnv[scriptEnvIndex--].resetEnv();
 	}

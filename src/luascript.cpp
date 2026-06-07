@@ -59,6 +59,7 @@ template const Container* getItemUserdata<const Container>(lua_State*, int32_t);
 
 extern Game g_game;
 extern Vocations g_vocations;
+extern LuaEnvironment g_luaEnvironment;
 
 namespace {
 constexpr int32_t KV_MAX_LUA_RECURSION = 32;
@@ -72,7 +73,7 @@ static int pushAsyncTransactionError(lua_State* L, std::string_view syncApiName)
 
 static void finishAsyncDatabaseCallback(lua_State* luaState, int32_t ref, uint32_t scriptId, int32_t nargs)
 {
-	auto env = getScriptEnv();
+	auto env = LuaScriptInterface::getScriptEnv();
 	env->setScriptId(scriptId, &g_luaEnvironment);
 	g_luaEnvironment.callFunction(nargs);
 	luaL_unref(luaState, LUA_REGISTRYINDEX, ref);
@@ -82,7 +83,7 @@ static Player* getRequiredPlayerOrPushFalse(lua_State* L, int32_t index)
 {
 	Player* player = Lua::getPlayer(L, index);
 	if (!player) {
-		reportErrorFunc(L, getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
+		reportErrorFunc(L, LuaScriptInterface::getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
 		Lua::pushBoolean(L, false);
 		return nullptr;
 	}
@@ -258,6 +259,7 @@ void ScriptEnvironment::resetEnv()
 	scriptId = 0;
 	callbackId = 0;
 	timerEvent = false;
+	hasOpenTransaction = false;
 	interface = nullptr;
 	curNpc = nullptr;
 	localMap.clear();
@@ -3949,19 +3951,31 @@ int LuaScriptInterface::luaDatabaseTableExists(lua_State* L)
 
 int LuaScriptInterface::luaDatabaseBeginTransaction(lua_State* L)
 {
-	Lua::pushBoolean(L, Database::getInstance().beginTransaction());
+	bool success = Database::getInstance().beginTransaction();
+	if (success) {
+		getScriptEnv()->hasOpenTransaction = true;
+	}
+	Lua::pushBoolean(L, success);
 	return 1;
 }
 
 int LuaScriptInterface::luaDatabaseCommit(lua_State* L)
 {
-	Lua::pushBoolean(L, Database::getInstance().commit());
+	bool success = Database::getInstance().commit();
+	if (success) {
+		getScriptEnv()->hasOpenTransaction = false;
+	}
+	Lua::pushBoolean(L, success);
 	return 1;
 }
 
 int LuaScriptInterface::luaDatabaseRollback(lua_State* L)
 {
-	Lua::pushBoolean(L, Database::getInstance().rollback());
+	bool success = Database::getInstance().rollback();
+	if (success) {
+		getScriptEnv()->hasOpenTransaction = false;
+	}
+	Lua::pushBoolean(L, success);
 	return 1;
 }
 

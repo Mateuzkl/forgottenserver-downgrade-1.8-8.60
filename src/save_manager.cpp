@@ -142,7 +142,11 @@ bool SaveManager::savePlayerSync(Player* player)
 		if (!save) {
 			return false;
 		}
-		pendingFlushes[guid] = PendingPlayerFlush{player->getName(), std::move(*save), false};
+		bool tracked = false;
+		if (auto it = pendingFlushes.find(guid); it != pendingFlushes.end()) {
+			tracked = it->second.trackedBySaveAll;
+		}
+		pendingFlushes[guid] = PendingPlayerFlush{player->getName(), std::move(*save), tracked};
 		return false; // enqueued behind in-flight flush; save will complete via onPlayerFlushed
 	}
 
@@ -189,13 +193,15 @@ bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = fal
 	const uint32_t guid = player->getGUID();
 	const std::string name = player->getName();
 	if (flushInFlight.contains(guid)) {
-		if (trackSaveAll) {
+		bool oldTracked = false;
+		if (auto it = pendingFlushes.find(guid); it != pendingFlushes.end()) {
+			oldTracked = it->second.trackedBySaveAll;
+		}
+		bool newTracked = oldTracked | trackSaveAll;
+		if (trackSaveAll && !oldTracked) {
 			beginTrackedFlush();
 		}
-		if (auto it = pendingFlushes.find(guid); it != pendingFlushes.end() && it->second.trackedBySaveAll) {
-			completeTrackedFlush();
-		}
-		pendingFlushes[guid] = PendingPlayerFlush{name, std::move(*save), trackSaveAll};
+		pendingFlushes[guid] = PendingPlayerFlush{name, std::move(*save), newTracked};
 		return true;
 	}
 
