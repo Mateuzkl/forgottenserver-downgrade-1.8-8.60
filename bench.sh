@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 BUILD_DIR="build-bench"
 JOBS="${JOBS:-$(nproc 2>/dev/null || printf '2')}"
-CLEAN_BUILD=0
+CLEAN_BUILD=1
 FILTER=""
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -80,6 +80,7 @@ main() {
 		-DLUA_VERSION_STRING=5.5.0 \
 		-DDISABLE_STATS=1 \
 		-DENABLE_NATIVE_OPTIMIZATIONS=OFF \
+		-DCMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE=OFF \
 		-Wno-dev
 
 	echo "Building benchmarks..."
