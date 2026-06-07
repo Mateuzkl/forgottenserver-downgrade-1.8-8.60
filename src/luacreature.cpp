@@ -1386,10 +1386,11 @@ int luaCreatureGetIcons(lua_State* L)
 	const auto& icons = creature->getIcons();
 	lua_newtable(L);
 	int index = 1;
-	for (const auto& [key, icon] : creature->creatureIcons) {
+	for (const auto& icon : icons) {
+		if (!icon.isSet()) {
+			continue;
+		}
 		lua_newtable(L);
-		Lua::pushString(L, key);
-		lua_setfield(L, -2, "key");
 		lua_pushinteger(L, static_cast<int32_t>(icon.category));
 		lua_setfield(L, -2, "category");
 		lua_pushinteger(L, icon.serialize());
@@ -1397,51 +1398,6 @@ int luaCreatureGetIcons(lua_State* L)
 		lua_pushinteger(L, icon.count);
 		lua_setfield(L, -2, "count");
 		lua_rawseti(L, -2, index++);
-	}
-	return 1;
-}
-
-int luaPlayerSendIconBakragore(lua_State* L)
-{
-	// player:sendIconBakragore(iconId)
-	Player* player = Lua::getPlayer(L, 1);
-	if (!player) {
-		reportErrorFunc(L, LuaScriptInterface::getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
-		Lua::pushBoolean(L, false);
-		return 1;
-	}
-
-	uint8_t iconType = Lua::getInteger<uint8_t>(L, 2);
-	if (iconType > 9) {
-		reportErrorFunc(L, "sendIconBakragore: icon must be 1-9");
-		Lua::pushBoolean(L, false);
-		return 1;
-	}
-
-	if (auto client = player->getClient()) {
-		client->sendIcons(player->getClientIcons64(), static_cast<IconBakragore_t>(iconType));
-		Lua::pushBoolean(L, true);
-	} else {
-		Lua::pushBoolean(L, false);
-	}
-	return 1;
-}
-
-int luaPlayerRemoveIconBakragore(lua_State* L)
-{
-	// player:removeIconBakragore()
-	Player* player = Lua::getPlayer(L, 1);
-	if (!player) {
-		reportErrorFunc(L, LuaScriptInterface::getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
-		Lua::pushBoolean(L, false);
-		return 1;
-	}
-
-	if (auto client = player->getClient()) {
-		client->sendIcons(player->getClientIcons64(), IconBakragore_None);
-		Lua::pushBoolean(L, true);
-	} else {
-		Lua::pushBoolean(L, false);
 	}
 	return 1;
 }
