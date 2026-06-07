@@ -260,3 +260,7 @@ add_custom_target(format COMMAND /usr/bin/clang-format -style=file -i ${tfs_HDR}
 if (BUILD_TESTING)
 	add_subdirectory(tests)
 endif()
+
+if (BUILD_BENCHMARKING)
+	add_subdirectory(benchs)
+endif()

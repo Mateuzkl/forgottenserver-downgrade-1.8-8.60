@@ -47,6 +47,12 @@
     "unit-tests": {
       "description": "Build unit tests",
       "dependencies": []
+    },
+    "benchmarks": {
+      "description": "Build benchmarks",
+      "dependencies": [
+        "benchmark"
+      ]
     }
   },
   "default-features": [
