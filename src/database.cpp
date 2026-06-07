@@ -541,7 +541,7 @@ uint64_t Database::getAffectedRows() const
 		return 0;
 	}
 	const auto rows = mysql_affected_rows(ctx.handle.get());
-	if (rows == static_cast<decltype(rows)>(-1) || ctx.lastErrno != 0) {
+	if (rows == static_cast<std::remove_const_t<decltype(rows)>>(-1) || ctx.lastErrno != 0) {
 		return 0;
 	}
 	return static_cast<uint64_t>(rows);
