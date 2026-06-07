@@ -29,7 +29,7 @@ parse_args() {
 	while (($#)); do
 		case "$1" in
 			--clean)
-				CLEAN_BUILD=1
+CLEAN_BUILD=0
 				shift
 				;;
 			--filter)
@@ -71,7 +71,6 @@ main() {
 	echo "Configuring CMake with BUILD_BENCHMARKING=ON..."
 	cmake -S . -B "${BUILD_DIR}" \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DBUILD_TESTING=ON \
 		-DBUILD_BENCHMARKING=ON \
 		-DCMAKE_PREFIX_PATH="/usr/local;${HOME}/.local" \
 		-DLUA_INCLUDE_DIR=/usr/local/include \

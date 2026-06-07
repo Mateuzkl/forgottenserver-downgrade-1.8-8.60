@@ -58,7 +58,7 @@ void DatabaseTasks::runTask(const DatabaseTask& task)
 	DBResult_ptr result;
 	if (task.store) {
 		result = database.storeQuery(task.query);
-		success = true;
+		success = (result != nullptr);
 	} else {
 		result = nullptr;
 		success = database.executeQuery(task.query);

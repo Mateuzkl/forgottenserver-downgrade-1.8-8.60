@@ -3844,7 +3844,9 @@ int LuaScriptInterface::luaDatabaseExecute(lua_State* L)
 int LuaScriptInterface::luaDatabaseAsyncExecute(lua_State* L)
 {
 	if (Database::getInstance().isInTransaction()) {
-		luaL_error(L, "Cannot use async queries inside a database transaction. Use synchronous db.query() instead.");
+		lua_pushnil(L);
+		lua_pushstring(L, "Cannot use async queries inside a database transaction. Use synchronous db.query() instead.");
+		return 2;
 	}
 	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
 	if (lua_gettop(L) > 1) {
@@ -3888,7 +3890,9 @@ int LuaScriptInterface::luaDatabaseStoreQuery(lua_State* L)
 int LuaScriptInterface::luaDatabaseAsyncStoreQuery(lua_State* L)
 {
 	if (Database::getInstance().isInTransaction()) {
-		luaL_error(L, "Cannot use async queries inside a database transaction. Use synchronous db.storeQuery() instead.");
+		lua_pushnil(L);
+		lua_pushstring(L, "Cannot use async queries inside a database transaction. Use synchronous db.storeQuery() instead.");
+		return 2;
 	}
 	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
 	if (lua_gettop(L) > 1) {

@@ -398,11 +398,15 @@ bool Database::executeQuery(std::string_view query)
 	// Track raw SQL transaction state to prevent reconnect during transactions
 	if (success) {
 		std::string_view q{query};
-		while (!q.empty() && (q.front() == ' ' || q.front() == '\t' || q.front() == '\n' || q.front() == '\r')) {
+		auto isDelim = [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ';'; };
+		while (!q.empty() && isDelim(q.front())) {
 			q.remove_prefix(1);
 		}
 
-		auto wordEnd = q.find(' ');
+		auto wordEnd = std::string_view::npos;
+		for (size_t i = 0; i < q.size(); ++i) {
+			if (isDelim(q[i])) { wordEnd = i; break; }
+		}
 		std::string_view firstWord = (wordEnd == std::string_view::npos) ? q : q.substr(0, wordEnd);
 
 		char upper[9];
@@ -419,10 +423,13 @@ bool Database::executeQuery(std::string_view query)
 		} else if (cmd == "ROLLBACK") {
 			// ROLLBACK TO SAVEPOINT does not end the transaction
 			auto afterFirst = q.substr(firstWord.size());
-			while (!afterFirst.empty() && (afterFirst.front() == ' ' || afterFirst.front() == '\t' || afterFirst.front() == '\n' || afterFirst.front() == '\r')) {
+			while (!afterFirst.empty() && isDelim(afterFirst.front())) {
 				afterFirst.remove_prefix(1);
 			}
-			auto secondEnd = afterFirst.find(' ');
+			auto secondEnd = std::string_view::npos;
+			for (size_t i = 0; i < afterFirst.size(); ++i) {
+				if (isDelim(afterFirst[i])) { secondEnd = i; break; }
+			}
 			std::string_view secondWord = (secondEnd == std::string_view::npos) ? afterFirst : afterFirst.substr(0, secondEnd);
 			char upper2[3];
 			size_t len2 = std::min(secondWord.size(), sizeof(upper2));

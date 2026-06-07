@@ -143,7 +143,7 @@ bool SaveManager::savePlayerSync(Player* player)
 			return false;
 		}
 		pendingFlushes[guid] = PendingPlayerFlush{player->getName(), std::move(*save), false};
-		return true;
+		return true; // queued behind in-flight flush, will be processed via onPlayerFlushed
 	}
 
 	auto save = IOLoginData::buildPlayerSave(player);

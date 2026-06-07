@@ -1558,6 +1558,7 @@ function stressTalkAction.onSay(player, words, param)
 		if phaseNum ~= 6 and phaseNum ~= 10 then
             if not setupTable() then
                 logFail(player, "Falha ao criar tabela de stress. Abortando.")
+                activeRun = false
                 return false
             end
         end
@@ -1623,9 +1624,12 @@ function stressTalkAction.onSay(player, words, param)
             REPORT_DELAY + 2200
         ) + 800
 
-        addEvent(function(pid, rId, wStart, r)
-            local p = safePlayer(pid)
-            if not p then return end
+		addEvent(function(pid, rId, wStart, r)
+			local p = safePlayer(pid)
+			if not p then
+				activeRun = false
+				return
+			end
 
             r[6] = runPhase6(p, rId)
 
