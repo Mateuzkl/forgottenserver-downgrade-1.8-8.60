@@ -1747,7 +1747,6 @@ void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value, bool 
 
 void Creature::iconChanged()
 {
-	std::cout << "[CreatureIcon] iconChanged cid=" << getID() << " icons=" << getIcons().size() << std::endl;
 	g_game.updateCreatureIcon(this);
 }
 

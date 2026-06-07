@@ -6866,8 +6866,6 @@ void Game::updateCreatureEmblem(Creature* creature)
 
 void Game::updateCreatureIcon(const Player* spectator, const Creature* creature)
 {
-	std::cout << "[Game] updateCreatureIcon spectator=" << spectator->getName()
-	          << " creature=" << creature->getID() << " name=" << creature->getName() << std::endl;
 	if (!spectator || !creature) {
 		return;
 	}

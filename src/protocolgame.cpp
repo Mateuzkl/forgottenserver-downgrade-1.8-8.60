@@ -2214,10 +2214,7 @@ void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
 
 void ProtocolGame::sendCreatureIcon(const Creature* creature)
 {
-	std::cout << "[Protocol] sendCreatureIcon cid=" << creature->getID()
-	          << " isAstra=" << isAstraClient << std::endl;
 	if (!creature || !player || !isAstraClient) {
-		std::cout << "[Protocol] sendCreatureIcon SKIPPED" << std::endl;
 		return;
 	}
 
@@ -2227,7 +2224,6 @@ void ProtocolGame::sendCreatureIcon(const Creature* creature)
 	msg.addByte(14); // type = creature icons
 	AddCreatureIcon(msg, creature);
 	writeToOutputBuffer(msg);
-	std::cout << "[Protocol] sendCreatureIcon cid=" << creature->getID() << " SENT" << std::endl;
 }
 
 void ProtocolGame::AddCreatureIcon(NetworkMessage& msg, const Creature* creature)
@@ -2238,8 +2234,6 @@ void ProtocolGame::AddCreatureIcon(NetworkMessage& msg, const Creature* creature
 
 	const auto& icons = creature->getIcons();
 	const size_t count = std::min<size_t>(icons.size(), 3);
-	std::cout << "[Protocol] AddCreatureIcon cid=" << creature->getID()
-	          << " totalIcons=" << icons.size() << " sent=" << count << std::endl;
 	msg.addByte(static_cast<uint8_t>(count));
 	for (size_t i = 0; i < count; ++i) {
 		const auto& icon = icons[i];
@@ -3472,8 +3466,6 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
 
 	if (isAstraClient) {
-		std::cout << "[Protocol] AddCreature cid=" << creature->getID()
-		          << " adding icons, isAstra=" << isAstraClient << std::endl;
 		AddCreatureIcon(msg, creature);
 	}
 }
