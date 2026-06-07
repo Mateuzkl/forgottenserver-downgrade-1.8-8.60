@@ -112,6 +112,8 @@ public:
 
 	uint64_t getMaxPacketSize() const;
 
+	unsigned int getLastErrno() const { return getContext().lastErrno; }
+
 	uint64_t getAffectedRows() const;
 
 	[[nodiscard]] bool lastQueryWasDeadlock() const;

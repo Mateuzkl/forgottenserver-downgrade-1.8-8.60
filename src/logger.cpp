@@ -300,8 +300,14 @@ private:
 		for (auto& sink : logger_->sinks()) {
 			auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
 			if (fileSink) {
-				spdlog::details::log_msg logMsg("tfs", level, formattedMsg);
-				fileSink->log(logMsg);
+				try {
+					spdlog::details::log_msg logMsg("tfs", level, formattedMsg);
+					fileSink->log(logMsg);
+				} catch (const std::exception& e) {
+					fmt::print(stderr, "[LOGGER] writeToMainFileSink({}) I/O error: {}\n", static_cast<int>(level), e.what());
+				} catch (...) {
+					fmt::print(stderr, "[LOGGER] writeToMainFileSink({}) unknown I/O error\n", static_cast<int>(level));
+				}
 			}
 		}
 	}

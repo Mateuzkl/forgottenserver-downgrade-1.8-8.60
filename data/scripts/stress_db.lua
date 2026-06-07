@@ -594,6 +594,13 @@ local function runPhase4(player, runId)
         return false
     end
 
+    if inserted ~= rows then
+        logFail(player, string.format(
+            "Phase 4: Inconsistencia - inserted=%d != rows=%d. Abortando.", inserted, rows
+        ))
+        return false
+    end
+
     -- Calcula total esperado e dispara bursts de UPDATE com FOR UPDATE
     -- NOTA: cada UPDATE afeta 2 rows (seq IN (first, second)), então totalExpected *= 2
     local totalExpected = 0

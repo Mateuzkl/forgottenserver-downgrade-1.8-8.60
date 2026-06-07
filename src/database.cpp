@@ -540,7 +540,11 @@ uint64_t Database::getAffectedRows() const
 	if (!ctx.handle) {
 		return 0;
 	}
-	return mysql_affected_rows(ctx.handle.get());
+	const auto rows = mysql_affected_rows(ctx.handle.get());
+	if (rows == static_cast<decltype(rows)>(-1) || ctx.lastErrno != 0) {
+		return 0;
+	}
+	return static_cast<uint64_t>(rows);
 }
 
 bool Database::lastQueryWasDeadlock() const

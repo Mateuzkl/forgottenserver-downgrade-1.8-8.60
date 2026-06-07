@@ -340,6 +340,10 @@ public:
 	static void resetScriptEnv()
 	{
 		assert(scriptEnvIndex >= 0);
+		// Rollback any open transaction leaked by the script that just ended
+		if (Database::getInstance().isInTransaction()) {
+			Database::getInstance().rollback();
+		}
 		scriptEnv[scriptEnvIndex--].resetEnv();
 	}
 
