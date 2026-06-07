@@ -510,6 +510,9 @@ public:
 
 	void setIcon(const std::string& key, CreatureIcon icon) {
 		creatureIcons[key] = icon;
+		std::cout << "[CreatureIcon] setIcon cid=" << getID() << " key=" << key
+		          << " cat=" << (int)icon.category << " iconId=" << (int)icon.serialize()
+		          << " count=" << icon.count << std::endl;
 		iconChanged();
 	}
 
