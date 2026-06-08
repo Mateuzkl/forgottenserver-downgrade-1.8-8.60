@@ -443,7 +443,11 @@ public:
 	uint32_t getMagicLevel() const { return std::max<int32_t>(0, magLevel + varStats[STAT_MAGICPOINTS]); }
 	uint32_t getSpecialMagicLevel(CombatType_t type) const
 	{
-		return std::max<int32_t>(0, specialMagicLevelSkill[combatTypeToIndex(type)]);
+		int32_t base = specialMagicLevelSkill[combatTypeToIndex(type)];
+		if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			base += static_cast<int32_t>(weaponProficiency().getSpecializedMagic(type));
+		}
+		return std::max<int32_t>(0, base);
 	}
 	int32_t getExperienceRate(ExperienceRateType type) const { return experienceRate[static_cast<size_t>(type)]; }
 	uint32_t getBaseMagicLevel() const { return magLevel; }
@@ -717,6 +721,10 @@ public:
 	}
 	uint16_t getSkillLevel(uint8_t skill) const
 	{
+		if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			return static_cast<uint16_t>(std::max<int32_t>(0, skills[skill].level + varSkills[skill] +
+			                                static_cast<int32_t>(weaponProficiency().getSkillBonus(static_cast<skills_t>(skill)))));
+		}
 		return static_cast<uint16_t>(std::max<int32_t>(0, skills[skill].level + varSkills[skill]));
 	}
 	uint16_t getSpecialMagicLevelSkill(CombatType_t type) const
