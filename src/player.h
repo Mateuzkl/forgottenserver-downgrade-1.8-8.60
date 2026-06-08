@@ -440,7 +440,14 @@ public:
 	uint32_t getReset() const { return reset; }
 	void setReset(uint32_t newReset) { reset = newReset; }
 	uint8_t getLevelPercent() const { return levelPercent; }
-	uint32_t getMagicLevel() const { return std::max<int32_t>(0, magLevel + varStats[STAT_MAGICPOINTS]); }
+	uint32_t getMagicLevel() const
+	{
+		int32_t ml = magLevel + varStats[STAT_MAGICPOINTS];
+		if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			ml += static_cast<int32_t>(weaponProficiency().getSkillBonus(SKILL_MAGLEVEL));
+		}
+		return std::max<int32_t>(0, ml);
+	}
 	uint32_t getSpecialMagicLevel(CombatType_t type) const
 	{
 		int32_t base = specialMagicLevelSkill[combatTypeToIndex(type)];
