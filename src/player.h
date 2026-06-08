@@ -21,6 +21,7 @@
 #include "storeinbox.h"
 #include "town.h"
 #include "vocation.h"
+#include "weapon_proficiency.h"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -539,6 +540,10 @@ public:
 	void clearWheelSpellAugments();
 	void addWheelSpellAugment(std::string spellName, Augment_t augmentType, double value);
 	ProficiencySpellAugmentBonus getWheelSpellAugmentBonus(std::string_view spellName) const;
+
+	WeaponProficiency& weaponProficiency() { return *m_weaponProficiency; }
+	const WeaponProficiency& weaponProficiency() const { return *m_weaponProficiency; }
+
 	bool hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const;
 	bool isInventorySlot(slots_t slot) const;
 
@@ -1010,6 +1015,13 @@ public:
 	{
 		if (client) {
 			client->sendUseItemCooldown(time);
+		}
+	}
+
+	void sendExtendedOpcode(uint8_t opcode, std::string_view data)
+	{
+		if (client) {
+			client->sendExtendedOpcode(opcode, data);
 		}
 	}
 
@@ -1532,6 +1544,7 @@ private:
 	std::shared_ptr<Item> inventory[CONST_SLOT_LAST + 1] = {};
 	std::unordered_map<uint16_t, std::unordered_map<uint16_t, ProficiencySpellAugmentBonus>> proficiencySpellAugments;
 	std::unordered_map<std::string, ProficiencySpellAugmentBonus> wheelSpellAugments;
+	std::unique_ptr<WeaponProficiency> m_weaponProficiency;
 	std::weak_ptr<Item> writeItem;
 	std::weak_ptr<House> editHouse;
 	std::weak_ptr<Npc> shopOwner;

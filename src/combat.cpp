@@ -137,6 +137,14 @@ CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target, std::
 			if (const auto spell = g_spells->getInstantSpellByName(damage.instantSpellName)) {
 				spell->getCombatDataAugment(player, damage);
 			}
+
+			if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+				if (damage.primary.type == COMBAT_HEALING) {
+					player->weaponProficiency().applySkillSpellPercentage(damage, true);
+				} else {
+					player->weaponProficiency().applySkillSpellPercentage(damage);
+				}
+			}
 		}
 	}
 	return damage;
@@ -1006,6 +1014,11 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 
 		if (casterPlayer) {
 			Player* targetPlayer = target ? target->getPlayer() : nullptr;
+
+			if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+				casterPlayer->weaponProficiency().applySkillAutoAttackPercentage(damage);
+			}
+
 			if (targetPlayer && casterPlayer != targetPlayer && targetPlayer->getSkull() != SKULL_BLACK &&
 			    damage.primary.type != COMBAT_HEALING) {
 				damage.primary.value /= 2;
@@ -1013,6 +1026,12 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			}
 
 			if (!damage.critical && damage.primary.type != COMBAT_HEALING && damage.origin != ORIGIN_CONDITION) {
+				if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+					casterPlayer->weaponProficiency().applyAutoAttackCritical(damage);
+					casterPlayer->weaponProficiency().applyRunesCritical(damage, params.aggressive);
+					casterPlayer->weaponProficiency().applyElementCritical(damage);
+				}
+
 				int32_t chance = std::clamp<int32_t>(
 				    static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE)) +
 				        damage.criticalChance,
@@ -1050,9 +1069,25 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			}
 		}
 
+		if (casterPlayer && ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::LIFE, WeaponProficiencyGain_t::HIT);
+			casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::MANA, WeaponProficiencyGain_t::HIT);
+		}
+
 		if (params.resetDamageMultiplier >= 0.0f) {
 			damage.spellResetMultiplier = params.resetDamageMultiplier;
 		}
+
+		if (casterPlayer && ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			if (Monster* targetMonster = target ? target->getMonster() : nullptr) {
+				auto monsterRef = targetMonster->weak_from_this().lock();
+				if (monsterRef) {
+					casterPlayer->weaponProficiency().applyBestiaryDamage(damage, std::static_pointer_cast<Monster>(monsterRef));
+					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damage, std::static_pointer_cast<Monster>(monsterRef));
+				}
+			}
+		}
+
 		success = g_game.combatChangeHealth(caster, target, damage);
 	} else {
 		success = g_game.combatChangeMana(caster, target, damage);

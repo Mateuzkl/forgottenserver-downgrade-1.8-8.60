@@ -363,6 +363,12 @@ class ProtocolSpectator {
                 spy->sendCreatureIcon(creature);
         }
 
+        void sendExtendedOpcode(uint8_t opcode, std::string_view data) {
+            auto o = owner.lock();
+            if (o)
+                o->sendExtendedOpcode(opcode, data);
+        }
+
         void sendDistanceShoot(const Position &from, const Position &to, uint16_t type) {
             auto o = owner.lock();
             if (o)

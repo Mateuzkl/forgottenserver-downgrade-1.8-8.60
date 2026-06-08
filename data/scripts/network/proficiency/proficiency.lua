@@ -85,6 +85,23 @@ end
 
 loadProficiencyDefinitions()
 
+-- Element mapping: Cipbia unshifted index -> TFS CombatType_t (bitmask)
+local CIPBIA_TO_COMBAT = {
+	[0]  = COMBAT_PHYSICALDAMAGE,
+	[1]  = COMBAT_FIREDAMAGE,
+	[2]  = COMBAT_EARTHDAMAGE,
+	[3]  = COMBAT_ENERGYDAMAGE,
+	[4]  = COMBAT_ICEDAMAGE,
+	[5]  = COMBAT_HOLYDAMAGE,
+	[6]  = COMBAT_DEATHDAMAGE,
+	[7]  = COMBAT_HEALING,
+	[8]  = COMBAT_DROWNDAMAGE,
+	[9]  = COMBAT_LIFEDRAIN,
+	[10] = COMBAT_MANADRAIN,
+	[11] = COMBAT_AGONYDAMAGE,
+	[18] = COMBAT_HEALING,
+}
+
 local function ensureTables()
 	if proficiencyTableReady then
 		return true
@@ -366,11 +383,16 @@ local function getState(player, itemId)
 end
 
 refreshProfileSpellAugments = function(player, profile)
-	if not player.clearProficiencySpellAugments or not player.addProficiencySpellAugment then
+	if not player.clearProficiencySpellAugments
+	   or not player.addProficiencySpellAugment
+	   or not player.resetWeaponProficiencyStats
+	   or not player.applyWeaponProficiencyPerk then
 		return
 	end
 
 	player:clearProficiencySpellAugments()
+	player:resetWeaponProficiencyStats()
+
 	if not isAugmentSystemEnabled() then
 		return
 	end
@@ -380,23 +402,76 @@ refreshProfileSpellAugments = function(player, profile)
 		return
 	end
 
+	-- Cipbia skill ID -> TFS skills_t (Cipbia: 1=Fist, 2=Club, 3=Sword, 4=Axe,
+	-- 5=Distance, 6=Shielding, 7=Fishing, 8=Magic)
+	-- TFS: SKILL_FIST=0, SKILL_CLUB=1, SKILL_SWORD=2, SKILL_AXE=3,
+	-- SKILL_DISTANCE=4, SKILL_SHIELD=5, SKILL_FISHING=6, SKILL_MAGLEVEL=7
+	local function cipbiaSkillToTfs(cipbiaSkill)
+		if not cipbiaSkill then return 0 end
+		return math.max(0, cipbiaSkill - 1)
+	end
+
+	local function getElementFromJson(perk)
+		local shifted = tonumber(perk.ElementId) or tonumber(perk.DamageType)
+		if not shifted or shifted == 0 then
+			return COMBAT_NONE
+		end
+		-- undoShift: trailingZeros - 2
+		local unshifted = 0
+		local n = shifted
+		while n > 0 and (n % 2) == 0 do
+			unshifted = unshifted + 1
+			n = n / 2
+		end
+		unshifted = unshifted - 2
+		if unshifted < 0 then
+			return COMBAT_NONE
+		end
+		return CIPBIA_TO_COMBAT[unshifted] or COMBAT_NONE
+	end
+
+	local equippedId = getEquippedWeaponId(player)
+
 	for itemId, state in pairs(profile.weapons) do
 		local entry = getCatalogEntry(itemId)
 		local definition = entry and proficiencyDefinitionsById[entry.category]
 		if definition and type(definition.Levels) == "table" then
+			local isEquipped = (itemId == equippedId)
 			for level, position in pairs(state.perks) do
 				local levelData = definition.Levels[level + 1]
 				local perk = levelData and levelData.Perks and levelData.Perks[position + 1]
-				if perk and tonumber(perk.Type) == 5 then
-					local spellId = tonumber(perk.SpellId)
-					local augmentType = tonumber(perk.AugmentType)
+				if perk then
+					local perkType = tonumber(perk.Type)
 					local value = tonumber(perk.Value)
-					if spellId and augmentType and value then
-						player:addProficiencySpellAugment(itemId, spellId, augmentType, value)
+					if perkType and value then
+						if perkType == 5 then
+							-- Type 5 (Spell Augment): always register for lookup
+							local spellId = tonumber(perk.SpellId)
+							local augmentType = tonumber(perk.AugmentType)
+							if spellId and augmentType then
+								player:addProficiencySpellAugment(itemId, spellId, augmentType, value)
+							end
+						elseif isEquipped then
+							-- All other perks: only active when weapon is equipped
+							local spellId = tonumber(perk.SpellId) or 0
+							local augmentType = tonumber(perk.AugmentType) or 0
+							local skillId = cipbiaSkillToTfs(tonumber(perk.SkillId))
+							local element = getElementFromJson(perk)
+							local range = tonumber(perk.Range) or 0
+							local bestiaryId = tonumber(perk.BestiaryId) or 0
+							player:applyWeaponProficiencyPerk(perkType, value, spellId, augmentType, skillId, element, range, bestiaryId)
+						end
 					end
 				end
 			end
 		end
+	end
+
+	if player.sendSkills then
+		player:sendSkills()
+	end
+	if player.wheelSendSkillStats then
+		player:wheelSendSkillStats()
 	end
 end
 

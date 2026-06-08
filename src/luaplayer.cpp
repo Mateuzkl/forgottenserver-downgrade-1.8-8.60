@@ -1987,6 +1987,60 @@ int luaPlayerAddWheelSpellAugment(lua_State* L)
 	return 1;
 }
 
+int luaPlayerResetWeaponProficiencyStats(lua_State* L)
+{
+	// player:resetWeaponProficiencyStats()
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->weaponProficiency().resetStats();
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerApplyWeaponProficiencyPerk(lua_State* L)
+{
+	// player:applyWeaponProficiencyPerk(perkType, value[, spellId, augmentType, skillId, element, range, bestiaryId])
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	uint8_t perkType = getInteger<uint8_t>(L, 2);
+	double value = getNumber<double>(L, 3);
+	uint16_t spellId = getInteger<uint16_t>(L, 4, 0);
+	uint8_t augmentType = getInteger<uint8_t>(L, 5, 0);
+	skills_t skillId = static_cast<skills_t>(getInteger<uint8_t>(L, 6, SKILL_FIST));
+	CombatType_t element = static_cast<CombatType_t>(getInteger<uint16_t>(L, 7, COMBAT_NONE));
+	uint8_t range = getInteger<uint8_t>(L, 8, 0);
+	uint16_t bestiaryId = getInteger<uint16_t>(L, 9, 0);
+
+	player->weaponProficiency().applyPerk(perkType, value, spellId, augmentType, skillId, element, range, bestiaryId);
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerSendExtendedOpcode(lua_State* L)
+{
+	// player:sendExtendedOpcode(opcode, data)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	uint8_t opcode = getInteger<uint8_t>(L, 2);
+	auto data = getString(L, 3);
+
+	player->sendExtendedOpcode(opcode, data);
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerGetParty(lua_State* L)
 {
 	// player:getParty()
@@ -4172,6 +4226,9 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addProficiencySpellAugment", luaPlayerAddProficiencySpellAugment);
 	registerMethod("Player", "clearWheelSpellAugments", luaPlayerClearWheelSpellAugments);
 	registerMethod("Player", "addWheelSpellAugment", luaPlayerAddWheelSpellAugment);
+	registerMethod("Player", "resetWeaponProficiencyStats", luaPlayerResetWeaponProficiencyStats);
+	registerMethod("Player", "applyWeaponProficiencyPerk", luaPlayerApplyWeaponProficiencyPerk);
+	registerMethod("Player", "sendExtendedOpcode", luaPlayerSendExtendedOpcode);
 
 	registerMethod("Player", "getParty", luaPlayerGetParty);
 
