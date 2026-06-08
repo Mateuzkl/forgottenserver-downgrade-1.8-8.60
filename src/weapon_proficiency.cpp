@@ -150,7 +150,7 @@ uint32_t WeaponProficiency::getSkillBonus(skills_t type) const
 
 void WeaponProficiency::addSpecializedMagic(CombatType_t type, double_t value)
 {
-	if (type == COMBAT_NONE) {
+	if (!isEnabled() || !std::isfinite(value)) {
 		return;
 	}
 	const size_t index = combatTypeToIndex(type);
@@ -350,10 +350,6 @@ void WeaponProficiency::applySkillPercentageBonus(uint8_t perkType, skills_t ski
 
 void WeaponProficiency::applyAutoAttackCritical(CombatDamage& damage) const
 {
-	if (!isEnabled()) {
-		return;
-	}
-
 	if (damage.origin == ORIGIN_WAND) {
 		return;
 	}
@@ -373,7 +369,7 @@ void WeaponProficiency::applyAutoAttackCritical(CombatDamage& damage) const
 
 void WeaponProficiency::applyRunesCritical(CombatDamage& damage, bool aggressive) const
 {
-	if (!isEnabled() || !aggressive) {
+	if (!aggressive) {
 		return;
 	}
 
@@ -387,10 +383,6 @@ void WeaponProficiency::applyRunesCritical(CombatDamage& damage, bool aggressive
 
 void WeaponProficiency::applyElementCritical(CombatDamage& damage) const
 {
-	if (!isEnabled()) {
-		return;
-	}
-
 	const size_t index = combatTypeToIndex(damage.primary.type);
 	if (index < m_elementCritical.size()) {
 		const auto& ec = m_elementCritical[index];
@@ -403,7 +395,7 @@ void WeaponProficiency::applyElementCritical(CombatDamage& damage) const
 
 void WeaponProficiency::applyBestiaryDamage(CombatDamage& damage, const std::shared_ptr<Monster>& monster) const
 {
-	if (!isEnabled() || !monster) {
+	if (!monster) {
 		return;
 	}
 
@@ -420,7 +412,7 @@ void WeaponProficiency::applyBestiaryDamage(CombatDamage& damage, const std::sha
 
 void WeaponProficiency::applyPowerfulFoeDamage(CombatDamage& damage, const std::shared_ptr<Monster>& monster) const
 {
-	if (!isEnabled() || !monster || m_powerfulFoeDamage <= 0) {
+	if (!monster || m_powerfulFoeDamage <= 0) {
 		return;
 	}
 
@@ -439,10 +431,6 @@ void WeaponProficiency::applyDamageMultiplier(CombatDamage& damage, double_t mul
 
 void WeaponProficiency::applySkillAutoAttackPercentage(CombatDamage& damage) const
 {
-	if (!isEnabled()) {
-		return;
-	}
-
 	if (damage.origin != ORIGIN_MELEE && damage.origin != ORIGIN_RANGED) {
 		return;
 	}
@@ -460,10 +448,6 @@ void WeaponProficiency::applySkillAutoAttackPercentage(CombatDamage& damage) con
 
 void WeaponProficiency::applySkillSpellPercentage(CombatDamage& damage, bool healing) const
 {
-	if (!isEnabled()) {
-		return;
-	}
-
 	if (damage.instantSpellName.empty()) {
 		return;
 	}
@@ -483,10 +467,6 @@ void WeaponProficiency::applySkillSpellPercentage(CombatDamage& damage, bool hea
 
 void WeaponProficiency::applyOn(WeaponProficiencyHealth_t healthType, WeaponProficiencyGain_t gainType) const
 {
-	if (!isEnabled()) {
-		return;
-	}
-
 	using enum WeaponProficiencyBonus_t;
 	using enum WeaponProficiencyHealth_t;
 	using enum WeaponProficiencyGain_t;
