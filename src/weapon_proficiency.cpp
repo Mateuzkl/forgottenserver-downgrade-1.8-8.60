@@ -388,7 +388,7 @@ void WeaponProficiency::applyRunesCritical(CombatDamage& damage, bool aggressive
 		return;
 	}
 
-	if (!damage.instantSpellName.empty()) {
+	if (!damage.instantSpellName.empty() && damage.origin == ORIGIN_SPELL) {
 		damage.criticalChance = saturatingAdd(damage.criticalChance,
 		                                      static_cast<int64_t>(std::llround(m_runesCritical.chance * 10000.0)));
 		damage.criticalDamage = saturatingAdd(damage.criticalDamage,

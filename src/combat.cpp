@@ -1249,10 +1249,12 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 
 	if (wpEnabled) {
 		casterPlayer->weaponProficiency().applySkillAutoAttackPercentage(damage);
-		if (damage.primary.type == COMBAT_HEALING) {
-			casterPlayer->weaponProficiency().applySkillSpellPercentage(damage, true);
-		} else {
-			casterPlayer->weaponProficiency().applySkillSpellPercentage(damage);
+		if (damage.instantSpellName.empty()) {
+			if (damage.primary.type == COMBAT_HEALING) {
+				casterPlayer->weaponProficiency().applySkillSpellPercentage(damage, true);
+			} else {
+				casterPlayer->weaponProficiency().applySkillSpellPercentage(damage);
+			}
 		}
 	}
 

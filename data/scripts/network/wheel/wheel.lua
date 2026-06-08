@@ -720,15 +720,41 @@ local function sendWheelSkillStats(player)
 		end
 	end
 
+	local defense = player.getDefense and player:getDefense() or 0
+	local armor = player.getArmor and player:getArmor() or 0
+
+	local damageAndHealing = 0
+	local attackValue = 0
+	local attackElement = 0
+
+	local weapon = player:getSlotItem(CONST_SLOT_LEFT)
+	if not weapon or weapon:getId() == 0 then
+		weapon = player:getSlotItem(CONST_SLOT_RIGHT)
+	end
+
+	if weapon and weapon:getId() ~= 0 then
+		local it = ItemType(weapon:getId())
+		attackValue = it:getAttack() or 0
+		attackElement = 0
+	else
+		attackValue = 7
+		attackElement = 0
+	end
+
+	damageAndHealing = attackValue
+
 	return player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, json.encode({
 		lifeLeech = lifeLeech,
 		manaLeech = manaLeech,
 		criticalChance = criticalChance,
 		criticalDamage = criticalDamage,
-		defense = player.getDefense and player:getDefense() or 0,
-		armor = player.getArmor and player:getArmor() or 0,
+		defense = defense,
+		armor = armor,
 		mitigation = player:getMitigation() / 100,
 		absorbs = absorbs,
+		damageAndHealing = damageAndHealing,
+		attackValue = attackValue,
+		attackElement = attackElement,
 	}))
 end
 

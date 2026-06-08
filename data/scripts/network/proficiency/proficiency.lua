@@ -420,13 +420,35 @@ refreshProfileSpellAugments = function(player, profile)
 		return
 	end
 
-	-- Cipbia skill ID -> TFS skills_t (Cipbia: 1=Fist, 2=Club, 3=Sword, 4=Axe,
-	-- 5=Distance, 6=Shielding, 7=Fishing, 8=Magic)
-	-- TFS: SKILL_FIST=0, SKILL_CLUB=1, SKILL_SWORD=2, SKILL_AXE=3,
-	-- SKILL_DISTANCE=4, SKILL_SHIELD=5, SKILL_FISHING=6, SKILL_MAGLEVEL=7
+	-- Cipbia skill ID -> TFS skills_t (non-linear mapping from Canary's CipbiaSkills_t)
+	local CIPBIA_SKILL_TO_TFS = {
+		[1]  = SKILL_MAGLEVEL,
+		[6]  = SKILL_SHIELD,
+		[7]  = SKILL_DISTANCE,
+		[8]  = SKILL_SWORD,
+		[9]  = SKILL_CLUB,
+		[10] = SKILL_AXE,
+		[11] = SKILL_FIST,
+		[13] = SKILL_FISHING,
+	}
+
+	-- Market category -> Proficiency ID (matches client getProficiencyIdFromCategory)
+	local MARKET_CATEGORY_TO_PROFICIENCY = {
+		[17] = 8,  -- Axes → Sanguine 1H Axe
+		[18] = 9,  -- Clubs → Sanguine 1H Club
+		[19] = 13, -- Distance → Sanguine 2H Bow
+		[20] = 6,  -- Swords → Sanguine 1H Sword
+		[21] = 15, -- Wands/Rods → Sanguine 1H Wand
+		[27] = 14, -- Fist → Sanguine 2H Fist
+	}
+
+	local function categoryToProficiencyId(category)
+		return MARKET_CATEGORY_TO_PROFICIENCY[category] or category
+	end
+
 	local function cipbiaSkillToTfs(cipbiaSkill)
 		if not cipbiaSkill then return 0 end
-		return math.max(0, cipbiaSkill - 1)
+		return CIPBIA_SKILL_TO_TFS[cipbiaSkill] or 0
 	end
 
 	local function getElementFromJson(perk)
@@ -450,9 +472,11 @@ refreshProfileSpellAugments = function(player, profile)
 
 	local equippedId = getEquippedWeaponId(player)
 
+	local perkCount = 0
 	for itemId, state in pairs(profile.weapons) do
 		local entry = getCatalogEntry(itemId)
-		local definition = entry and proficiencyDefinitionsById[entry.category]
+		local proficiencyId = categoryToProficiencyId(entry and entry.category)
+		local definition = proficiencyDefinitionsById[proficiencyId]
 		if definition and type(definition.Levels) == "table" then
 			local isEquipped = (itemId == equippedId)
 			for level, position in pairs(state.perks) do
@@ -461,6 +485,7 @@ refreshProfileSpellAugments = function(player, profile)
 				if perk then
 					local perkType = tonumber(perk.Type)
 					local value = tonumber(perk.Value)
+					local rawSkillId = tonumber(perk.SkillId)
 					if perkType and value then
 						if perkType == 5 then
 							-- Type 5 (Spell Augment): always register for lookup
@@ -470,10 +495,9 @@ refreshProfileSpellAugments = function(player, profile)
 								player:addProficiencySpellAugment(itemId, spellId, augmentType, value)
 							end
 						elseif isEquipped then
-							-- All other perks: only active when weapon is equipped
 							local spellId = tonumber(perk.SpellId) or 0
 							local augmentType = tonumber(perk.AugmentType) or 0
-							local skillId = cipbiaSkillToTfs(tonumber(perk.SkillId))
+							local skillId = cipbiaSkillToTfs(rawSkillId)
 							local element = getElementFromJson(perk)
 							local range = tonumber(perk.Range) or 0
 							local bestiaryId = tonumber(perk.BestiaryId) or 0

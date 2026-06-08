@@ -276,6 +276,18 @@ int luaItemGetWeight(lua_State* L)
 	return 1;
 }
 
+int luaItemGetAttack(lua_State* L)
+{
+	// item:getAttack()
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (item) {
+		lua_pushinteger(L, item->getAttack());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaItemGetWeightDescription(lua_State* L)
 {
 	// item:getWeightDescription()
@@ -1242,6 +1254,7 @@ void LuaScriptInterface::registerItem()
 	registerMethod("Item", "getCharges", luaItemGetCharges);
 	registerMethod("Item", "getFluidType", luaItemGetFluidType);
 	registerMethod("Item", "getWeight", luaItemGetWeight);
+	registerMethod("Item", "getAttack", luaItemGetAttack);
 	registerMethod("Item", "getWeightDescription", luaItemGetWeightDescription);
 	registerMethod("Item", "getWorth", luaItemGetWorth);
 	registerMethod("Item", "getBuyPrice", luaItemGetBuyPrice);

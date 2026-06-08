@@ -928,6 +928,36 @@ std::string getSkillName(uint8_t skillid)
 	}
 }
 
+skills_t getSkillsFromCipbiaSkill(uint8_t cipbiaSkill)
+{
+	switch (cipbiaSkill) {
+		case 1:  return SKILL_MAGLEVEL;  // MagicLevel
+		case 6:  return SKILL_SHIELD;    // Shield
+		case 7:  return SKILL_DISTANCE;  // Distance
+		case 8:  return SKILL_SWORD;     // Sword
+		case 9:  return SKILL_CLUB;      // Club
+		case 10: return SKILL_AXE;       // Axe
+		case 11: return SKILL_FIST;      // Fist
+		case 13: return SKILL_FISHING;   // Fishing
+		default: return SKILL_FIST;
+	}
+}
+
+uint8_t getCipbiaSkillFromSkills(skills_t skill)
+{
+	switch (skill) {
+		case SKILL_MAGLEVEL:  return 1;  // MagicLevel
+		case SKILL_SHIELD:    return 6;  // Shield
+		case SKILL_DISTANCE:  return 7;  // Distance
+		case SKILL_SWORD:     return 8;  // Sword
+		case SKILL_CLUB:      return 9;  // Club
+		case SKILL_AXE:       return 10; // Axe
+		case SKILL_FIST:      return 11; // Fist
+		case SKILL_FISHING:   return 13; // Fishing
+		default:              return 0;
+	}
+}
+
 uint32_t adlerChecksum(const uint8_t* data, size_t length)
 {
 	if (length > NETWORKMESSAGE_MAXSIZE) {

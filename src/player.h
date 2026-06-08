@@ -444,7 +444,8 @@ public:
 	{
 		int32_t ml = magLevel + varStats[STAT_MAGICPOINTS];
 		if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
-			ml += static_cast<int32_t>(weaponProficiency().getSkillBonus(SKILL_MAGLEVEL));
+			int32_t bonus = static_cast<int32_t>(weaponProficiency().getSkillBonus(SKILL_MAGLEVEL));
+			ml += bonus;
 		}
 		return std::max<int32_t>(0, ml);
 	}
@@ -728,11 +729,12 @@ public:
 	}
 	uint16_t getSkillLevel(uint8_t skill) const
 	{
+		int32_t base = skills[skill].level + varSkills[skill];
 		if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
-			return static_cast<uint16_t>(std::max<int32_t>(0, skills[skill].level + varSkills[skill] +
-			                                static_cast<int32_t>(weaponProficiency().getSkillBonus(static_cast<skills_t>(skill)))));
+			int32_t bonus = static_cast<int32_t>(weaponProficiency().getSkillBonus(static_cast<skills_t>(skill)));
+			return static_cast<uint16_t>(std::max<int32_t>(0, base + bonus));
 		}
-		return static_cast<uint16_t>(std::max<int32_t>(0, skills[skill].level + varSkills[skill]));
+		return static_cast<uint16_t>(std::max<int32_t>(0, base));
 	}
 	uint16_t getSpecialMagicLevelSkill(CombatType_t type) const
 	{

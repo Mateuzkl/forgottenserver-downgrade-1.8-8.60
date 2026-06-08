@@ -82,6 +82,9 @@ TextColor_t getTextColorByName(std::string_view name, TextColor_t defaultColor =
 
 std::string getSkillName(uint8_t skillid);
 
+skills_t getSkillsFromCipbiaSkill(uint8_t cipbiaSkill);
+uint8_t getCipbiaSkillFromSkills(skills_t skill);
+
 uint32_t adlerChecksum(const uint8_t* data, size_t length);
 
 std::string ucfirst(std::string str);
