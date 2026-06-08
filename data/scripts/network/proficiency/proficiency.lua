@@ -382,6 +382,24 @@ local function getState(player, itemId)
 	return profile.weapons[itemId]
 end
 
+local function getEquippedWeaponId(player)
+	if player.getWeaponProficiencyId then
+		local itemId = canonicalizeServerId(player:getWeaponProficiencyId())
+		if itemId then
+			return itemId
+		end
+	end
+
+	for _, slot in ipairs({ CONST_SLOT_LEFT, CONST_SLOT_RIGHT }) do
+		local item = player:getSlotItem(slot)
+		local itemId = item and canonicalizeServerId(item:getId())
+		if itemId then
+			return itemId
+		end
+	end
+	return 0
+end
+
 refreshProfileSpellAugments = function(player, profile)
 	if not player.clearProficiencySpellAugments
 	   or not player.addProficiencySpellAugment
@@ -473,24 +491,6 @@ refreshProfileSpellAugments = function(player, profile)
 	if player.wheelSendSkillStats then
 		player:wheelSendSkillStats()
 	end
-end
-
-local function getEquippedWeaponId(player)
-	if player.getWeaponProficiencyId then
-		local itemId = canonicalizeServerId(player:getWeaponProficiencyId())
-		if itemId then
-			return itemId
-		end
-	end
-
-	for _, slot in ipairs({ CONST_SLOT_LEFT, CONST_SLOT_RIGHT }) do
-		local item = player:getSlotItem(slot)
-		local itemId = item and canonicalizeServerId(item:getId())
-		if itemId then
-			return itemId
-		end
-	end
-	return 0
 end
 
 local function writeInfoPayload(out, entry, state)
