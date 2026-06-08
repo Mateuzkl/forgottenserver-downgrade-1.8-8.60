@@ -3800,6 +3800,14 @@ void ProtocolGame::sendNewPing(uint32_t pingId)
 
 void ProtocolGame::sendExtendedOpcode(uint8_t opcode, std::string_view data)
 {
+	if (!isOTCv8 && !isOTC && !isAstraClient) {
+		return;
+	}
+
+	if (data.size() > 65535) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x32);
 	msg.addByte(opcode);
