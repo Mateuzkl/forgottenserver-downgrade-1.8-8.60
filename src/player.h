@@ -800,9 +800,10 @@ public:
 
 	void sendCreatureIcon(const Creature* creature) const
 	{
-		if (client) {
-			client->sendCreatureIcon(creature);
+		if (!client) {
+			return;
 		}
+		client->sendCreatureIcon(creature);
 	}
 
 	void checkSkullTicks(int64_t ticks);
@@ -1120,7 +1121,11 @@ public:
 		if (!client) {
 			return;
 		}
-		client->sendIcons(getClientIcons());
+		if (client->isAstraClient) {
+			client->sendIcons(getClientIcons64(), getBakragoreIcon());
+		} else {
+			client->sendIcons(getClientIcons());
+		}
 	}
 	void sendMagicEffect(const Position& pos, uint16_t type) const
 	{

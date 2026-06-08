@@ -6884,11 +6884,14 @@ void Game::updateCreatureIcon(const Creature* creature)
 	}
 
 	SpectatorVec spectators;
-	map.getSpectators(spectators, tile->getPosition(), true);
-	for (const auto& spectator : spectators) {
-		if (auto player = spectator->getPlayer()) {
-			updateCreatureIcon(player, creature);
+	map.getSpectators(spectators, tile->getPosition(), true, true);
+	const uint32_t creatureInstance = creature->getInstanceID();
+	for (const auto& spectator : spectators.players()) {
+		Player* p = static_cast<Player*>(spectator.get());
+		if (!p->compareInstance(creatureInstance)) {
+			continue;
 		}
+		p->sendCreatureIcon(creature);
 	}
 }
 

@@ -17,7 +17,7 @@ function findInfluenced.onSay(player, words, param)
     end
 
     local playerPos = player:getPosition()
-    local closest = nil
+    local closest = list[1]
     local closestDist = math.huge
 
     for _, monster in ipairs(list) do
@@ -28,12 +28,6 @@ function findInfluenced.onSay(player, words, param)
             closestDist = dist
             closest = monster
         end
-    end
-
-    if not closest then
-        player:sendTextMessage(MESSAGE_STATUS_WARNING,
-            "There are no active influenced or fiendish creatures at the moment.")
-        return false
     end
 
     local mPos = closest:getPosition()
@@ -64,5 +58,5 @@ function findInfluenced.onSay(player, words, param)
     return false
 end
 findInfluenced:exhaustion(6000)
-findInfluenced:exhaustionMessage("Please wait {time}s before using the command findIncluenced again.", MESSAGE_STATUS_SMALL)
+findInfluenced:exhaustionMessage("Please wait {time}s before using the command findInfluenced again.", MESSAGE_STATUS_SMALL)
 findInfluenced:register()

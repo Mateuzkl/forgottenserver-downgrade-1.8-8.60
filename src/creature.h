@@ -509,24 +509,39 @@ public:
 	}
 
 	void setIcon(const std::string& key, CreatureIcon icon) {
+		if (icon.isNone()) {
+			if (creatureIcons.erase(key)) {
+				iconChanged();
+			}
+			return;
+		}
+		auto it = creatureIcons.find(key);
+		if (it != creatureIcons.end() && it->second.serialize() == icon.serialize()
+		    && it->second.category == icon.category && it->second.count == icon.count) {
+			return; // no change
+		}
 		creatureIcons[key] = icon;
 		iconChanged();
 	}
 
 	void removeIcon(const std::string& key) {
-		creatureIcons.erase(key);
-		iconChanged();
+		if (creatureIcons.erase(key)) {
+			iconChanged();
+		}
 	}
 
 	void clearIcons() {
-		creatureIcons.clear();
-		iconChanged();
+		if (!creatureIcons.empty()) {
+			creatureIcons.clear();
+			iconChanged();
+		}
 	}
 
 	void iconChanged();
 
 	bool hasIcon(const std::string& key) const {
-		return creatureIcons.find(key) != creatureIcons.end();
+		auto it = creatureIcons.find(key);
+		return it != creatureIcons.end() && it->second.isSet();
 	}
 
 private:

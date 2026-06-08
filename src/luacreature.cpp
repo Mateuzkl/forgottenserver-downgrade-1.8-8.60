@@ -1342,6 +1342,11 @@ int luaCreatureSetIcon(lua_State* L)
 
 	std::string key = Lua::getString(L, 2);
 	CreatureIconCategory_t category = Lua::getInteger<CreatureIconCategory_t>(L, 3);
+	if (category != CreatureIconCategory_Quests && category != CreatureIconCategory_Modifications) {
+		reportErrorFunc(L, "setIcon: category must be CreatureIconCategory_Quests (0) or CreatureIconCategory_Modifications (1)");
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
 	uint8_t iconId = Lua::getInteger<uint8_t>(L, 4);
 	uint16_t count = Lua::getInteger<uint16_t>(L, 5, 0);
 

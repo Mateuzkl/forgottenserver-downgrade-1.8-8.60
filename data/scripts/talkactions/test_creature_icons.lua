@@ -34,7 +34,7 @@ function creatureIconTest.onSay(player, words, param)
 		iconName, catName, count))
 	return false
 end
-
+creatureIconTest:separator(" ")
 creatureIconTest:accountType(6)
 creatureIconTest:access(true)
 creatureIconTest:register()
@@ -47,7 +47,7 @@ function creatureIconClear.onSay(player, words, param)
 	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "All creature icons cleared.")
 	return false
 end
-
+creatureIconClear:separator(" ")
 creatureIconClear:accountType(6)
 creatureIconClear:access(true)
 creatureIconClear:register()
@@ -61,7 +61,7 @@ function testRotten.onSay(player, words, param)
 	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, string.format("Rotten Charge icon set with count=%d", count))
 	return false
 end
-
+testRotten:separator(" ")
 testRotten:accountType(6)
 testRotten:access(true)
 testRotten:register()
@@ -71,12 +71,16 @@ local testForge = TalkAction("/testforge")
 
 function testForge.onSay(player, words, param)
 	local iconType = tonumber(param) or 5
+	if iconType ~= 4 and iconType ~= 5 then
+		player:sendTextMessage(MESSAGE_STATUS_WARNING, "Invalid forge icon type. Use 4 (Influenced) or 5 (Fiendish).")
+		return false
+	end
 	player:setIcon("forge", 1, iconType, 0)
-	local name = iconType == 5 and "Fiendish" or (iconType == 4 and "Influenced" or "Unknown")
+	local name = iconType == 5 and "Fiendish" or "Influenced"
 	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, string.format("Forge %s icon set", name))
 	return false
 end
-
+testForge:separator(" ")
 testForge:accountType(6)
 testForge:access(true)
 testForge:register()

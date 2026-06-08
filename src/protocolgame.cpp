@@ -2218,10 +2218,14 @@ void ProtocolGame::sendCreatureIcon(const Creature* creature)
 		return;
 	}
 
+	if (!canSee(creature)) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x8B);
 	msg.add<uint32_t>(creature->getID());
-	msg.addByte(14); // type = creature icons
+	msg.addByte(14);
 	AddCreatureIcon(msg, creature);
 	writeToOutputBuffer(msg);
 }

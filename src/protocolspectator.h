@@ -358,6 +358,9 @@ class ProtocolSpectator {
 
             for (auto &it : spectators)
                 it->sendCreatureIcon(creature);
+
+            for (auto &spy : spyClients_)
+                spy->sendCreatureIcon(creature);
         }
 
         void sendDistanceShoot(const Position &from, const Position &to, uint16_t type) {
