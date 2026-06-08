@@ -346,6 +346,7 @@ private:
 	bool isMehah = false;
 	bool isOTC = false;
 	bool isAstraClient = false;
+	bool supportsAstraCreatureIcons() const { return isAstraClient; }
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;
 	bool useItemTierByte = false;

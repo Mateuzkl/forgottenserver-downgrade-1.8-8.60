@@ -2201,7 +2201,7 @@ void ProtocolGame::sendIcons(uint16_t icons)
 
 void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
 {
-	if (!player || !isAstraClient) {
+	if (!player || !supportsAstraCreatureIcons()) {
 		return;
 	}
 
@@ -2214,7 +2214,7 @@ void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
 
 void ProtocolGame::sendCreatureIcon(const Creature* creature)
 {
-	if (!creature || !player || !isAstraClient) {
+	if (!creature || !player || !supportsAstraCreatureIcons()) {
 		return;
 	}
 
@@ -3469,7 +3469,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
 
-	if (isAstraClient) {
+	if (supportsAstraCreatureIcons()) {
 		AddCreatureIcon(msg, creature);
 	}
 }
