@@ -872,9 +872,11 @@ class ProtocolSpectator {
         }
 
         void sendLootContainers() {
-            auto o = owner.lock();
-            if (o)
-                o->sendLootContainers();
+            if (isAstraClient) {
+                auto o = owner.lock();
+                if (o)
+                    o->sendLootContainers();
+            }
         }
 
         void sendCreatureEmblem(const Creature* creature) {

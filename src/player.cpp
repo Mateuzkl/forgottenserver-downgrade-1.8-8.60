@@ -6410,7 +6410,7 @@ void Player::lootCorpse(Container* container)
 
 void Player::sendLootContainers() const
 {
-	if (client) {
+	if (client && isAstraClient()) {
 		client->sendLootContainers();
 	}
 }
