@@ -2024,23 +2024,6 @@ int luaPlayerApplyWeaponProficiencyPerk(lua_State* L)
 	return 1;
 }
 
-int luaPlayerSendExtendedOpcode(lua_State* L)
-{
-	// player:sendExtendedOpcode(opcode, data)
-	Player* player = getUserdata<Player>(L, 1);
-	if (!player) {
-		lua_pushnil(L);
-		return 1;
-	}
-
-	uint8_t opcode = getInteger<uint8_t>(L, 2);
-	auto data = getString(L, 3);
-
-	player->sendExtendedOpcode(opcode, data);
-	pushBoolean(L, true);
-	return 1;
-}
-
 int luaPlayerGetParty(lua_State* L)
 {
 	// player:getParty()
@@ -4228,7 +4211,6 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addWheelSpellAugment", luaPlayerAddWheelSpellAugment);
 	registerMethod("Player", "resetWeaponProficiencyStats", luaPlayerResetWeaponProficiencyStats);
 	registerMethod("Player", "applyWeaponProficiencyPerk", luaPlayerApplyWeaponProficiencyPerk);
-	registerMethod("Player", "sendExtendedOpcode", luaPlayerSendExtendedOpcode);
 
 	registerMethod("Player", "getParty", luaPlayerGetParty);
 

@@ -708,6 +708,11 @@ local function sendWheelSkillStats(player)
 		return false
 	end
 
+	local lifeLeech = player:getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT) / 10000
+	local manaLeech = player:getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT) / 10000
+	local criticalChance = player:getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE) / 10000
+	local criticalDamage = player:getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT) / 10000
+
 	local absorbs = {}
 	if player.getCombatAbsorbPercent then
 		for name, combatType in pairs(WHEEL_SKILL_ABSORBS) do
@@ -716,10 +721,10 @@ local function sendWheelSkillStats(player)
 	end
 
 	return player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, json.encode({
-		lifeLeech = player:getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT) / 10000,
-		manaLeech = player:getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT) / 10000,
-		criticalChance = player:getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE) / 10000,
-		criticalDamage = player:getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT) / 10000,
+		lifeLeech = lifeLeech,
+		manaLeech = manaLeech,
+		criticalChance = criticalChance,
+		criticalDamage = criticalDamage,
 		defense = player.getDefense and player:getDefense() or 0,
 		armor = player.getArmor and player:getArmor() or 0,
 		mitigation = player:getMitigation() / 100,
