@@ -44,6 +44,15 @@ void WeaponProficiency::resetStats()
 	m_perfectShot = {};
 	m_bestiaryDamage.clear();
 	m_skillPercentages.clear();
+
+	if (m_lifeLeechAdded != 0) {
+		m_player.setVarSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT, -m_lifeLeechAdded);
+		m_lifeLeechAdded = 0;
+	}
+	if (m_manaLeechAdded != 0) {
+		m_player.setVarSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT, -m_manaLeechAdded);
+		m_manaLeechAdded = 0;
+	}
 }
 
 void WeaponProficiency::applyPerk(uint8_t perkType, double_t value, uint16_t /*spellId*/,
@@ -93,7 +102,13 @@ void WeaponProficiency::applyPerk(uint8_t perkType, double_t value, uint16_t /*s
 			SpecialSkills_t specialSkill = (perkType == static_cast<uint8_t>(LIFE_LEECH))
 			    ? SPECIALSKILL_LIFELEECHAMOUNT
 			    : SPECIALSKILL_MANALEECHAMOUNT;
-			m_player.setVarSpecialSkill(specialSkill, static_cast<int32_t>(std::llround(value * 10000.0)));
+			int32_t amount = static_cast<int32_t>(std::llround(value * 10000.0));
+			m_player.setVarSpecialSkill(specialSkill, amount);
+			if (perkType == static_cast<uint8_t>(LIFE_LEECH)) {
+				m_lifeLeechAdded += amount;
+			} else {
+				m_manaLeechAdded += amount;
+			}
 			break;
 		}
 

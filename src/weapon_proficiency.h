@@ -165,6 +165,9 @@ private:
 	double_t m_powerfulFoeDamage = 0;
 	WeaponProficiencyPerfectShotBonus m_perfectShot;
 
+	int32_t m_lifeLeechAdded = 0;
+	int32_t m_manaLeechAdded = 0;
+
 	std::unordered_map<uint16_t, double_t> m_bestiaryDamage;
 	std::unordered_map<skills_t, SkillPercentage> m_skillPercentages;
 };
