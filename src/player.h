@@ -541,8 +541,8 @@ public:
 	void addWheelSpellAugment(std::string spellName, Augment_t augmentType, double value);
 	ProficiencySpellAugmentBonus getWheelSpellAugmentBonus(std::string_view spellName) const;
 
-	WeaponProficiency& weaponProficiency() { return *m_weaponProficiency; }
-	const WeaponProficiency& weaponProficiency() const { return *m_weaponProficiency; }
+	WeaponProficiency& weaponProficiency() { assert(m_weaponProficiency); return *m_weaponProficiency; }
+	const WeaponProficiency& weaponProficiency() const { assert(m_weaponProficiency); return *m_weaponProficiency; }
 
 	bool hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const;
 	bool isInventorySlot(slots_t slot) const;
