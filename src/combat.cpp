@@ -978,6 +978,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 	}
 
 	Player* casterPlayer = caster ? caster->getPlayer() : nullptr;
+	const bool wpEnabled = casterPlayer && ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
 
 	bool success = false;
 	if (damage.primary.type != COMBAT_MANADRAIN) {
@@ -1015,7 +1016,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 		if (casterPlayer) {
 			Player* targetPlayer = target ? target->getPlayer() : nullptr;
 
-			if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			if (wpEnabled) {
 				casterPlayer->weaponProficiency().applySkillAutoAttackPercentage(damage);
 			}
 
@@ -1026,7 +1027,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			}
 
 			if (!damage.critical && damage.primary.type != COMBAT_HEALING && damage.origin != ORIGIN_CONDITION) {
-				if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+				if (wpEnabled) {
 					casterPlayer->weaponProficiency().applyAutoAttackCritical(damage);
 					casterPlayer->weaponProficiency().applyRunesCritical(damage, params.aggressive);
 					casterPlayer->weaponProficiency().applyElementCritical(damage);
@@ -1069,7 +1070,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			}
 		}
 
-		if (casterPlayer && ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+		if (casterPlayer && wpEnabled) {
 			casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::LIFE, WeaponProficiencyGain_t::HIT);
 			casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::MANA, WeaponProficiencyGain_t::HIT);
 		}
@@ -1078,7 +1079,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			damage.spellResetMultiplier = params.resetDamageMultiplier;
 		}
 
-		if (casterPlayer && ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+		if (casterPlayer && wpEnabled) {
 			if (Monster* targetMonster = target ? target->getMonster() : nullptr) {
 				auto monsterRef = targetMonster->weak_from_this().lock();
 				if (monsterRef) {
