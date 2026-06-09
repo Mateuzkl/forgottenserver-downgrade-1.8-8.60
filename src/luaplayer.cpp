@@ -2840,7 +2840,7 @@ int luaPlayerGetWeaponAttackValue(lua_State* L)
 		attack = it.maxHitChance;
 	}
 
-	if (attack <= 0) {
+	if (attack <= 0 && g_weapons) {
 		const WeaponWand* wand = dynamic_cast<const WeaponWand*>(g_weapons->getWeapon(weapon));
 		if (wand) {
 			attack = wand->getMaxChange();

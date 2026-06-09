@@ -1029,6 +1029,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			if (!damage.critical && damage.primary.type != COMBAT_HEALING && damage.origin != ORIGIN_CONDITION) {
 				if (wpEnabled) {
 					casterPlayer->weaponProficiency().applyAutoAttackCritical(damage);
+					casterPlayer->weaponProficiency().applyGeneralCritical(damage);
 					casterPlayer->weaponProficiency().applyRunesCritical(damage, params.aggressive);
 					casterPlayer->weaponProficiency().applyElementCritical(damage);
 				}
@@ -1093,6 +1094,11 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 		if (casterPlayer && wpEnabled && damage.primary.type != COMBAT_HEALING && damage.primary.type != COMBAT_MANADRAIN) {
 			casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::LIFE, WeaponProficiencyGain_t::HIT);
 			casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::MANA, WeaponProficiencyGain_t::HIT);
+		}
+
+		if (casterPlayer && wpEnabled && target && target->getHealth() <= 0) {
+			casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::LIFE, WeaponProficiencyGain_t::KILL);
+			casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::MANA, WeaponProficiencyGain_t::KILL);
 		}
 
 		if (damage.blockType == BLOCK_NONE || damage.blockType == BLOCK_ARMOR) {
@@ -1264,6 +1270,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 	    damage.origin != ORIGIN_CONDITION) {
 		if (wpEnabled) {
 			casterPlayer->weaponProficiency().applyAutoAttackCritical(damage);
+			casterPlayer->weaponProficiency().applyGeneralCritical(damage);
 			casterPlayer->weaponProficiency().applyRunesCritical(damage, params.aggressive);
 			casterPlayer->weaponProficiency().applyElementCritical(damage);
 		}
@@ -1394,6 +1401,11 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			if (casterPlayer && wpEnabled && damageCopy.primary.type != COMBAT_HEALING && damageCopy.primary.type != COMBAT_MANADRAIN) {
 				casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::LIFE, WeaponProficiencyGain_t::HIT);
 				casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::MANA, WeaponProficiencyGain_t::HIT);
+			}
+
+			if (casterPlayer && wpEnabled && creature && creature->getHealth() <= 0) {
+				casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::LIFE, WeaponProficiencyGain_t::KILL);
+				casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::MANA, WeaponProficiencyGain_t::KILL);
 			}
 
 			if (damage.blockType == BLOCK_NONE || damage.blockType == BLOCK_ARMOR) {

@@ -148,9 +148,13 @@ double_t WeaponProficiency::getStat(WeaponProficiencyBonus_t stat) const
 
 void WeaponProficiency::addSkillBonus(skills_t type, double_t value)
 {
+	const auto rounded = std::llround(value);
+	if (rounded <= 0 || !std::isfinite(value)) {
+		return;
+	}
 	const auto index = static_cast<size_t>(type);
 	if (index < m_skills.size()) {
-		m_skills[index] += static_cast<uint32_t>(std::llround(value));
+		m_skills[index] += static_cast<uint32_t>(rounded);
 	}
 }
 
@@ -165,7 +169,7 @@ uint32_t WeaponProficiency::getSkillBonus(skills_t type) const
 
 void WeaponProficiency::addSpecializedMagic(CombatType_t type, double_t value)
 {
-	if (!isEnabled() || !std::isfinite(value)) {
+	if (!std::isfinite(value)) {
 		return;
 	}
 	const size_t index = combatTypeToIndex(type);
@@ -375,11 +379,16 @@ void WeaponProficiency::applyAutoAttackCritical(CombatDamage& damage) const
 		damage.criticalDamage = saturatingAdd(damage.criticalDamage,
 		                                      static_cast<int64_t>(std::llround(m_autoAttackCritical.damage * 10000.0)));
 	}
+}
 
-	damage.criticalChance = saturatingAdd(damage.criticalChance,
-	                                      static_cast<int64_t>(std::llround(m_generalCritical.chance * 10000.0)));
-	damage.criticalDamage = saturatingAdd(damage.criticalDamage,
-	                                      static_cast<int64_t>(std::llround(m_generalCritical.damage * 10000.0)));
+void WeaponProficiency::applyGeneralCritical(CombatDamage& damage) const
+{
+	if (m_generalCritical.chance > 0 || m_generalCritical.damage > 0) {
+		damage.criticalChance = saturatingAdd(damage.criticalChance,
+		                                      static_cast<int64_t>(std::llround(m_generalCritical.chance * 10000.0)));
+		damage.criticalDamage = saturatingAdd(damage.criticalDamage,
+		                                      static_cast<int64_t>(std::llround(m_generalCritical.damage * 10000.0)));
+	}
 }
 
 void WeaponProficiency::applyRunesCritical(CombatDamage& damage, bool aggressive) const
@@ -491,7 +500,7 @@ void WeaponProficiency::applyOn(WeaponProficiencyHealth_t healthType, WeaponProf
 	if (healthType == LIFE) {
 		value = getStat(gainType == HIT ? LIFE_GAIN_ON_HIT : LIFE_GAIN_ON_KILL);
 		if (value > 0) {
-			m_player.gainHealth(std::shared_ptr<Creature>(), static_cast<int32_t>(std::llround(value)));
+			m_player.gainHealth(nullptr, static_cast<int32_t>(std::llround(value)));
 		}
 	} else if (healthType == MANA) {
 		value = getStat(gainType == HIT ? MANA_GAIN_ON_HIT : MANA_GAIN_ON_KILL);

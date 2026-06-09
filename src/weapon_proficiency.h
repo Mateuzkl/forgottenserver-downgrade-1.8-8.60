@@ -123,6 +123,7 @@ public:
 
 	// Combat application — called from combat/game code when system is enabled
 	void applyAutoAttackCritical(CombatDamage& damage) const;
+	void applyGeneralCritical(CombatDamage& damage) const;
 	void applyRunesCritical(CombatDamage& damage, bool aggressive) const;
 	void applyElementCritical(CombatDamage& damage) const;
 	void applyBestiaryDamage(CombatDamage& damage, const std::shared_ptr<Monster>& monster) const;

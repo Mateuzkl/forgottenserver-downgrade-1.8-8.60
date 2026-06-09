@@ -448,8 +448,8 @@ refreshProfileSpellAugments = function(player, profile)
 	end
 
 	local function cipbiaSkillToTfs(cipbiaSkill)
-		if not cipbiaSkill then return 0 end
-		return CIPBIA_SKILL_TO_TFS[cipbiaSkill] or 0
+		if not cipbiaSkill then return SKILL_FIST end
+		return CIPBIA_SKILL_TO_TFS[cipbiaSkill] or SKILL_FIST
 	end
 
 	local function getElementFromJson(perk)
