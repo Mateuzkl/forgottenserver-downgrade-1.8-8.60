@@ -701,6 +701,14 @@ function System.addExperience(player, source, experience, itemId, applyMultiplie
 	return true
 end
 
+function System.sendEquippedExperience(player)
+	local itemId = getEquippedWeaponId(player)
+	if itemId and itemId ~= 0 then
+		sendExperience(player, itemId)
+		sendInfo(player, itemId)
+	end
+end
+
 function System.clearPlayerCache(player)
 	if player then
 		local guid = player:getGuid()
@@ -758,6 +766,11 @@ local loginEvent = CreatureEvent("WeaponProficiencyLogin")
 
 function loginEvent.onLogin(player)
 	loadProfile(player)
+	local itemId = getEquippedWeaponId(player)
+	if itemId and itemId ~= 0 then
+		sendExperience(player, itemId)
+		sendInfo(player, itemId)
+	end
 	return true
 end
 
