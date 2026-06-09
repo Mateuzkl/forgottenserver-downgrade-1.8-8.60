@@ -57,7 +57,7 @@ jobs:
           echo "57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d lua.tar.gz" | sha256sum -c
           tar xzf lua.tar.gz
           cd lua-5.5.0
-          make -j$(nproc) linux-readline
+          make -j$(nproc) linux MYCFLAGS="-fPIC"
           sudo make install INSTALL_TOP=/usr/local
           cd ..
           rm -rf lua-5.5.0 lua.tar.gz
