@@ -139,7 +139,8 @@ public:
 	void applyOn(WeaponProficiencyHealth_t healthType, WeaponProficiencyGain_t gainType) const;
 
 private:
-	static constexpr size_t TRACKED_SKILL_COUNT = static_cast<size_t>(SKILL_MAGLEVEL) + 1;
+	static constexpr size_t TRACKED_SKILL_COUNT = static_cast<size_t>(SKILL_MAGLEVEL) + 1; // covers SKILL_FIST(0)..SKILL_MAGLEVEL(7)
+	static_assert(SKILL_MAGLEVEL > SKILL_FISHING, "TRACKED_SKILL_COUNT assumes SKILL_MAGLEVEL is the last combat skill");
 
 	void addStat(WeaponProficiencyBonus_t stat, double_t value);
 	void addSkillBonus(skills_t type, double_t value);

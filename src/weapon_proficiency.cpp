@@ -113,8 +113,13 @@ void WeaponProficiency::applyPerk(uint8_t perkType, double_t value, uint16_t /*s
 		}
 
 		case PERFECT_SHOT_DAMAGE:
-			m_perfectShot.range = range;
-			m_perfectShot.damage = value;
+			if (m_perfectShot.range == 0 || m_perfectShot.range == range) {
+				m_perfectShot.range = range;
+				m_perfectShot.damage += value;
+			} else if (value > m_perfectShot.damage) {
+				m_perfectShot.range = range;
+				m_perfectShot.damage = value;
+			}
 			break;
 
 		case SKILL_PERCENTAGE_AUTO_ATTACK:
@@ -465,7 +470,6 @@ void WeaponProficiency::applySkillAutoAttackPercentage(CombatDamage& damage) con
 			const int32_t extra = static_cast<int32_t>(
 			    std::ceil(m_player.getSkillLevel(sp.skill) * sp.autoAttack));
 			damage.primary.value += extra;
-			damage.secondary.value += extra;
 		}
 	}
 }
@@ -484,7 +488,6 @@ void WeaponProficiency::applySkillSpellPercentage(CombatDamage& damage, bool hea
 			const int32_t extra = static_cast<int32_t>(
 			    std::ceil(m_player.getSkillLevel(sp.skill) * value));
 			damage.primary.value += extra;
-			damage.secondary.value += extra;
 		}
 	}
 }
