@@ -684,7 +684,7 @@ Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 
 void Player::sendMonkData()
 {
-	if (!client) {
+	if (!client || !client->isAstraClient) {
 		return;
 	}
 	std::string json = fmt::format(
