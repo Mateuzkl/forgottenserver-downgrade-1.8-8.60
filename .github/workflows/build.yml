@@ -78,7 +78,7 @@ jobs:
 
       - name: Build mio from source
         run: |
-          git clone --depth 1 --branch v1.0.0 https://github.com/mandreyel/mio.git
+          git clone --depth 1 https://github.com/mandreyel/mio.git
           cd mio
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
