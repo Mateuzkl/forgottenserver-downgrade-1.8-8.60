@@ -164,20 +164,21 @@ local function ensureCatalog()
 		if isValidWeaponId(serverId) then
 			local itemType = getItemType(serverId)
 			local clientId = itemType:getClientId()
-			if clientId and clientId > 0 and clientId <= 0xFFFF then
-				local entry = catalogByServerId[serverIdByClientId[clientId]]
-				if not entry then
-					entry = {
-						serverId = serverId,
-						clientId = clientId,
-						category = WEAPON_CATALOG[serverId],
-						name = itemType:getName(),
-					}
-					catalogEntries[#catalogEntries + 1] = entry
-					serverIdByClientId[clientId] = serverId
-				end
-				catalogByServerId[serverId] = entry
+			if not clientId or clientId == 0 or clientId > 0xFFFF then
+				clientId = serverId
 			end
+			local entry = catalogByServerId[serverIdByClientId[clientId]]
+			if not entry then
+				entry = {
+					serverId = serverId,
+					clientId = clientId,
+					category = WEAPON_CATALOG[serverId],
+					name = itemType:getName(),
+				}
+				catalogEntries[#catalogEntries + 1] = entry
+				serverIdByClientId[clientId] = serverId
+			end
+			catalogByServerId[serverId] = entry
 		end
 	end
 

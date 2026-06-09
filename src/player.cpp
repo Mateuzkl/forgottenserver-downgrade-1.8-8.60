@@ -682,6 +682,24 @@ Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 	return item;
 }
 
+void Player::sendMonkData()
+{
+	if (!client) {
+		return;
+	}
+	std::string json = fmt::format(
+		"{{"
+		"\"harmony\":{},"
+		"\"serene\":{},"
+		"\"virtue\":{}"
+		"}}",
+		m_harmony,
+		m_serene,
+		static_cast<uint8_t>(m_virtue)
+	);
+	client->sendExtendedOpcode(0x92, json);
+}
+
 Item* Player::getWeapon(bool ignoreAmmo /* = false*/) const
 {
 	if (isDualWielding()) {

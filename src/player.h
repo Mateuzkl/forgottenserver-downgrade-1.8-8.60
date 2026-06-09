@@ -348,6 +348,7 @@ public:
 	void setHarmony(uint8_t value) {
 		uint8_t minHarmony = (getVirtue() == VIRTUE_HARMONY) ? 1 : 0;
 		m_harmony = static_cast<uint8_t>(std::clamp<int>(value, minHarmony, 5));
+		sendMonkData();
 	}
 	void addHarmony(uint8_t value) { setHarmony(m_harmony + value); }
 	void removeHarmony(uint8_t value) {
@@ -356,7 +357,7 @@ public:
 	}
 
 	bool isSerene() const { return m_serene; }
-	void setSerene(bool serene) { m_serene = serene; }
+	void setSerene(bool serene) { m_serene = serene; sendMonkData(); }
 
 	uint64_t getSereneCooldown() const {
 		uint64_t now = OTSYS_TIME();
@@ -381,7 +382,10 @@ public:
 				m_virtue = VIRTUE_NONE;
 				break;
 		}
+		sendMonkData();
 	}
+
+	void sendMonkData();
 
 	void clearCooldowns();
 
