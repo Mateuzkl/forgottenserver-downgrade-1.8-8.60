@@ -45,6 +45,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Forca o toolchain MSVC: o runner tem MinGW no PATH e o CMake o escolhia,
+      # mas as deps do vcpkg sao MSVC (.lib) -> mistura GCC+MSVC quebrava o link
+      # (ex.: flag MSVC -ignore:4221 chegando no g++). cl casa com as libs do vcpkg.
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Create vcpkg binary cache directory
         run: mkdir -p "${{ github.workspace }}/vcpkg_cache"
         shell: bash
@@ -69,7 +77,7 @@ jobs:
         with:
           configurePreset: vcpkg
           buildPreset: vcpkg
-          cmakeArgs: '-DCMAKE_BUILD_TYPE=Release'
+          cmakeArgs: '-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl'
 
       - name: Upload build logs
         uses: actions/upload-artifact@v4
