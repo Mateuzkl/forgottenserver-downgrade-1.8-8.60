@@ -281,6 +281,11 @@ add_subdirectory(src)
 add_executable(tfs ${tfs_MAIN})
 target_link_libraries(tfs tfslib ZLIB::ZLIB OpenSSL::Crypto absl::flat_hash_map)
 
+# Embed the application icon on Windows (rc.exe compiles the .rc -> MAINICON)
+if (WIN32)
+    target_sources(tfs PRIVATE ${CMAKE_SOURCE_DIR}/vc18/theforgottenserver.rc)
+endif()
+
 # Link mimalloc if enabled
 if (USE_MIMALLOC AND NOT WIN32)
     if (mimalloc_FOUND)

@@ -77,7 +77,7 @@ jobs:
         with:
           configurePreset: vcpkg
           buildPreset: vcpkg
-          configurePresetAdditionalArgs: "['-GNinja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl']"
+          configurePresetAdditionalArgs: "['-GNinja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl', '-DVCPKG_TARGET_TRIPLET=x64-windows-static']"
 
       - name: Upload build logs
         uses: actions/upload-artifact@v4
@@ -90,6 +90,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tfs-windows-${{ github.sha }}
-          path: |
-            ${{ github.workspace }}/build/tfs.exe
-            ${{ github.workspace }}/build/*.dll
+          path: ${{ github.workspace }}/build/tfs.exe
