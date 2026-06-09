@@ -1289,10 +1289,10 @@ LuaDataType Lua::getUserdataType(lua_State* L, int32_t arg)
 
 std::optional<uint8_t> Lua::getBlessingId(lua_State* L, int32_t arg)
 {
-	int8_t blessing = getInteger<int8_t>(L, arg) - 1;
-	if (blessing < 0 || blessing >= PLAYER_MAX_BLESSINGS) {
+	uint8_t blessing = getInteger<uint8_t>(L, arg);
+	if (blessing < 1 || blessing > PLAYER_MAX_BLESSINGS) {
 		reportErrorFunc(
-		    L, fmt::format("Invalid blessing id: {} (must be between 1 and {})", blessing + 1, PLAYER_MAX_BLESSINGS));
+		    L, fmt::format("Invalid blessing id: {} (must be between 1 and {})", blessing, PLAYER_MAX_BLESSINGS));
 		return std::nullopt;
 	}
 

@@ -151,7 +151,7 @@ auto findClient(uint32_t guid)
 		}
 	}
 
-	return std::make_pair(waitList.end(), slot);
+	return std::make_pair(waitList.end(), static_cast<std::size_t>(0));
 }
 
 constexpr int64_t getWaitTime(std::size_t slot)
@@ -231,6 +231,79 @@ std::size_t clientLogin(const Player& player)
 } // namespace
 
 ProtocolGame::~ProtocolGame() = default;
+
+void ProtocolGame::sendBlessingWindow()
+{
+	if (!player || !isAstraClient) return;
+
+	NetworkMessage msg;
+	msg.addByte(0x9B);
+	msg.addByte(0x08);
+
+	for (uint8_t i = 1; i <= 8; i++) {
+		msg.add<uint16_t>(1 << i);
+		msg.addByte(player->getBlessingCount(i));
+		msg.addByte(0);
+	}
+
+	uint8_t blessCount = player->getBlessingReduction();
+	bool isPromoted = player->isPromoted();
+	uint8_t skillReduction = blessCount * 8;
+	uint8_t promotionReduction = isPromoted ? 30 : 0;
+	uint8_t minReduction = skillReduction + promotionReduction;
+	uint8_t maxPvpReduction = 80 + (2 * blessCount) - (blessCount / 3);
+	if (blessCount == 5) maxPvpReduction -= 1;
+	if (isPromoted) maxPvpReduction += 6;
+
+	msg.addByte(isPromoted ? 1 : 0);
+	msg.addByte(30);
+	msg.addByte(minReduction);
+	msg.addByte(maxPvpReduction);
+	msg.addByte(minReduction);
+
+	bool hasSkull = player->getSkull() == SKULL_RED || player->getSkull() == SKULL_BLACK;
+	auto amulet = player->getInventoryItem(CONST_SLOT_NECKLACE);
+	bool usingAol = amulet && amulet->getID() == ITEM_AMULETOFLOSS;
+
+	if (hasSkull) {
+		msg.addByte(100); msg.addByte(100);
+	} else if (usingAol) {
+		msg.addByte(0); msg.addByte(0);
+	} else {
+		msg.addByte(static_cast<uint8_t>(player->getEquipmentLossPercent(true)));
+		msg.addByte(static_cast<uint8_t>(player->getEquipmentLossPercent(false)));
+	}
+	msg.addByte(hasSkull ? 1 : 0);
+	msg.addByte(usingAol ? 1 : 0);
+
+	// Death history log
+	auto& deathLog = player->getDeathLog();
+	msg.addByte(static_cast<uint8_t>(deathLog.size()));
+	for (const auto& entry : deathLog) {
+		msg.add<uint32_t>(entry.timestamp);
+		msg.addByte(entry.color);
+		msg.addString(entry.message);
+	}
+
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendBlessStatus()
+{
+	if (!player || !isAstraClient) return;
+
+	uint8_t totalCount = 0;
+	for (uint8_t i = 2; i <= 8; i++) {
+		if (player->hasBlessing(i)) totalCount++;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x9C);
+	bool glow = player->getVocationId() > 0 && (totalCount >= 4 || player->getLevel() < 21);
+	msg.add<uint16_t>(glow ? 1 : 0);
+	msg.addByte(totalCount >= 6 ? 3 : (totalCount >= 4 ? 2 : 1));
+	writeToOutputBuffer(msg);
+}
 
 void ProtocolGame::release()
 {
@@ -1088,6 +1161,13 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break;
 		case 0xBE:
 			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerCancelAttackAndFollow(playerID); });
+			break;
+		case 0xCF:
+			if (isAstraClient) {
+				g_dispatcher.addTask([thisPtr = getThis()]() {
+					thisPtr->sendBlessingWindow();
+				});
+			}
 			break;
 		case 0xC9: /* update tile */
 			break;
@@ -2966,6 +3046,10 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 
 	if (isAstraClient && (player->getVocationId() == 9 || player->getVocationId() == 10)) {
 		player->sendMonkData();
+	}
+
+	if (isAstraClient) {
+		player->sendBlessStatus();
 	}
 
 	sendWorldLight(g_game.getWorldLightInfo());

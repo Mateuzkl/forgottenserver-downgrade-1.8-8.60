@@ -276,7 +276,7 @@ bool IOLoginData::loadPlayerById(Player* player, uint32_t id, bool deferWorldDat
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
 	        id)), deferWorldData);
 }
 
@@ -286,7 +286,7 @@ bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
 	        db.escapeString(name))));
 }
 
@@ -437,7 +437,26 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 
 	player->soul = result->getNumber<uint16_t>("soul");
 	player->capacity = result->getNumber<uint32_t>("cap") * 100;
-	player->blessings = result->getNumber<uint16_t>("blessings");
+	// Load blessings: try individual columns first, fall back to old bitmask
+	uint16_t oldBlessMask = result->getNumber<uint16_t>("blessings");
+	for (int i = 1; i <= 8; i++) {
+		auto colName = fmt::format("blessings{}", i);
+		player->blessings[i] = result->getNumber<uint16_t>(colName.c_str());
+	}
+	// If new columns are all 0 but old bitmask has values, migrate from bitmask
+	if (oldBlessMask > 0) {
+		bool hasNewBlessings = false;
+		for (int i = 1; i <= 8; i++) {
+			if (player->blessings[i] > 0) { hasNewBlessings = true; break; }
+		}
+		if (!hasNewBlessings) {
+			for (int i = 1; i <= 5; i++) {
+				if (oldBlessMask & (1 << (i - 1))) {
+					player->blessings[i] = 1;
+				}
+			}
+		}
+	}
 
 	auto conditions = result->getString("conditions");
 	PropStream propStream;
@@ -1143,7 +1162,10 @@ bool IOLoginData::savePlayerQueries(Player* player)
 	if (!player->isOffline()) {
 		query << "`onlinetime` = `onlinetime` + " << (time(nullptr) - player->lastLoginSaved) << ',';
 	}
-	query << "`blessings` = " << player->blessings.to_ulong() << ',';
+	for (int i = 1; i <= 8; i++) {
+		query << "`blessings" << i << "` = " << static_cast<uint16_t>(player->getBlessingCount(i)) << ',';
+	}
+	query << "`blessings` = " << static_cast<uint16_t>(0) << ',';
 	query << "`token_protected` = " << (player->isTokenProtected() ? 1 : 0) << ',';
 	query << "`token_hash` = " << db.escapeString(player->getTokenHash());
 	query << " WHERE `id` = " << player->getGUID();
@@ -1751,7 +1773,7 @@ bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint
 	query << "INSERT INTO `players` (`name`, `group_id`, `account_id`, `level`, `vocation`, `health`, `healthmax`, `experience`, "
 		  << "`lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `direction`, `maglevel`, `mana`, `manamax`, "
 		  << "`manaspent`, `soul`, `town_id`, `posx`, `posy`, `posz`, `cap`, `sex`, `lastlogin`, `lastip`, `save`, `skull`, "
-		  << "`skulltime`, `lastlogout`, `blessings`, `onlinetime`, `deletion`, `balance`, `offlinetraining_time`, `offlinetraining_skill`, "
+		  << "`skulltime`, `lastlogout`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `onlinetime`, `deletion`, `balance`, `offlinetraining_time`, `offlinetraining_skill`, "
 		  << "`stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, "
 		  << "`skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, "
 		  << "`skill_fishing`, `skill_fishing_tries`) VALUES (";

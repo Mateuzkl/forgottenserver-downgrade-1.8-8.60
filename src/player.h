@@ -22,6 +22,8 @@
 #include "town.h"
 #include "vocation.h"
 #include "weapon_proficiency.h"
+#include <array>
+#include <vector>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -81,6 +83,13 @@ struct VIPEntry
 	std::string name;
 };
 
+struct DeathLogEntry
+{
+	uint32_t timestamp = 0;
+	uint8_t color = 0;    // 0 = white (loss), 1 = red (blood)
+	std::string message;
+};
+
 struct ProficiencySpellAugmentBonus
 {
 	int32_t damagePercent = 0;
@@ -123,7 +132,7 @@ struct AutoLootConfig
 using MuteCountMap = std::unordered_map<uint32_t, uint32_t>;
 
 inline constexpr int32_t PLAYER_MIN_SPEED = 10;
-inline constexpr int32_t PLAYER_MAX_BLESSINGS = 5;
+inline constexpr int32_t PLAYER_MAX_BLESSINGS = 8;
 
 inline constexpr int32_t AVATAR_TIMER_STORAGE = 50099;
 inline constexpr int32_t AVATAR_DAMAGE_REDUCTION_PERCENT = 10;
@@ -340,9 +349,16 @@ public:
 
 	bool hasFlag(PlayerFlags value) const { return (group->flags & value) != 0; }
 
-	void addBlessing(uint8_t blessing) { blessings.set(blessing); }
-	void removeBlessing(uint8_t blessing) { blessings.reset(blessing); }
-	bool hasBlessing(uint8_t blessing) const { return blessings.test(blessing); }
+	void addBlessing(uint8_t blessing, uint8_t count = 1);
+	void removeBlessing(uint8_t blessing, uint8_t count = 1);
+	bool hasBlessing(uint8_t blessing) const;
+	uint8_t getBlessingCount(uint8_t blessing) const;
+	void sendBlessStatus();
+	double getEquipmentLossPercent(bool isContainer) const;
+	uint8_t getBlessingReduction() const;
+
+	const std::vector<DeathLogEntry>& getDeathLog() const { return m_deathLog; }
+	void addDeathLog(uint32_t timestamp, uint8_t color, std::string_view message);
 
 	uint8_t getHarmony() const { return m_harmony; }
 	void setHarmony(uint8_t value) {
@@ -1638,7 +1654,8 @@ private:
 	uint32_t staminaTrainerDelayMs = 0;
 
 	uint8_t soul = 0;
-	std::bitset<PLAYER_MAX_BLESSINGS + 1> blessings;
+	std::array<uint8_t, PLAYER_MAX_BLESSINGS + 1> blessings{};
+	std::vector<DeathLogEntry> m_deathLog;
 	uint8_t levelPercent = 0;
 	uint8_t magLevelPercent = 0;
 

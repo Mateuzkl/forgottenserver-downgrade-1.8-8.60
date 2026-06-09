@@ -2286,7 +2286,7 @@ int luaPlayerHasBlessing(lua_State* L)
 
 int luaPlayerAddBlessing(lua_State* L)
 {
-	// player:addBlessing(blessing)
+	// player:addBlessing(blessing[, count])
 	auto blessing = getBlessingId(L, 2);
 	Player* player = getUserdata<Player>(L, 1);
 	if (!player || !blessing) {
@@ -2294,19 +2294,15 @@ int luaPlayerAddBlessing(lua_State* L)
 		return 1;
 	}
 
-	if (player->hasBlessing(blessing.value())) {
-		pushBoolean(L, false);
-		return 1;
-	}
-
-	player->addBlessing(blessing.value());
+	uint8_t count = getInteger<uint8_t>(L, 3, 1);
+	player->addBlessing(blessing.value(), count);
 	pushBoolean(L, true);
 	return 1;
 }
 
 int luaPlayerRemoveBlessing(lua_State* L)
 {
-	// player:removeBlessing(blessing)
+	// player:removeBlessing(blessing[, count])
 	auto blessing = getBlessingId(L, 2);
 	Player* player = getUserdata<Player>(L, 1);
 	if (!player || !blessing) {
@@ -2314,13 +2310,35 @@ int luaPlayerRemoveBlessing(lua_State* L)
 		return 1;
 	}
 
-	if (!player->hasBlessing(blessing.value())) {
-		pushBoolean(L, false);
-		return 1;
-	}
-
-	player->removeBlessing(blessing.value());
+	uint8_t count = getInteger<uint8_t>(L, 3, 1);
+	player->removeBlessing(blessing.value(), count);
 	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerGetBlessingCount(lua_State* L)
+{
+	// player:getBlessingCount(blessing)
+	auto blessing = getBlessingId(L, 2);
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player && blessing) {
+		lua_pushinteger(L, player->getBlessingCount(blessing.value()));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSendBlessStatus(lua_State* L)
+{
+	// player:sendBlessStatus()
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		player->sendBlessStatus();
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
 	return 1;
 }
 
@@ -4289,6 +4307,8 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "hasBlessing", luaPlayerHasBlessing);
 	registerMethod("Player", "addBlessing", luaPlayerAddBlessing);
 	registerMethod("Player", "removeBlessing", luaPlayerRemoveBlessing);
+	registerMethod("Player", "getBlessingCount", luaPlayerGetBlessingCount);
+	registerMethod("Player", "sendBlessStatus", luaPlayerSendBlessStatus);
 
 	registerMethod("Player", "canLearnSpell", luaPlayerCanLearnSpell);
 	registerMethod("Player", "learnSpell", luaPlayerLearnSpell);

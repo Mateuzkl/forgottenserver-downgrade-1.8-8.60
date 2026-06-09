@@ -700,6 +700,62 @@ void Player::sendMonkData()
 	client->sendExtendedOpcode(0x92, json);
 }
 
+void Player::addBlessing(uint8_t blessing, uint8_t count)
+{
+	if (blessing > PLAYER_MAX_BLESSINGS || blessings[blessing] == 255) return;
+	blessings[blessing] = static_cast<uint8_t>(std::min(255, blessings[blessing] + count));
+}
+
+void Player::removeBlessing(uint8_t blessing, uint8_t count)
+{
+	if (blessing > PLAYER_MAX_BLESSINGS) return;
+	blessings[blessing] = static_cast<uint8_t>(std::max(0, blessings[blessing] - count));
+}
+
+bool Player::hasBlessing(uint8_t blessing) const
+{
+	if (blessing > PLAYER_MAX_BLESSINGS) return false;
+	return blessings[blessing] > 0;
+}
+
+uint8_t Player::getBlessingCount(uint8_t blessing) const
+{
+	if (blessing > PLAYER_MAX_BLESSINGS) return 0;
+	return blessings[blessing];
+}
+
+void Player::addDeathLog(uint32_t timestamp, uint8_t color, std::string_view message)
+{
+	DeathLogEntry entry;
+	entry.timestamp = timestamp;
+	entry.color = color;
+	entry.message = message;
+	m_deathLog.push_back(entry);
+	// Keep only last 5 entries
+	while (m_deathLog.size() > 5) {
+		m_deathLog.erase(m_deathLog.begin());
+	}
+}
+
+void Player::sendBlessStatus()
+{
+	if (!client || !client->isAstraClient) {
+		return;
+	}
+
+	uint8_t totalCount = 0;
+	for (uint8_t i = 2; i <= 8; i++) {
+		if (hasBlessing(i)) totalCount++;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x9C);
+	bool glow = getVocationId() > 0 && (totalCount >= 4 || getLevel() < 21);
+	msg.add<uint16_t>(glow ? 1 : 0);
+	msg.addByte(totalCount >= 7 ? 3 : (totalCount >= 5 ? 2 : 1));
+	client->writeToOutputBuffer(msg);
+}
+
 Item* Player::getWeapon(bool ignoreAmmo /* = false*/) const
 {
 	if (isDualWielding()) {
@@ -3283,15 +3339,19 @@ void Player::death(Creature* lastHitCreature)
 			}
 		}
 
-		if (blessings.test(5)) {
-			if (lastHitPlayer) {
-				blessings.reset(5);
-			} else {
-				blessings.reset();
-				blessings.set(5);
+		// Consume blessings on death (Crystal/Canary-style)
+		bool hasTOF = blessings[1] > 0; // Twist of Fate = blessing 1
+		if (hasTOF && lastHitPlayer) {
+			blessings[1] = std::max<uint8_t>(0, blessings[1] - 1);
+		} else if (hasTOF) {
+			for (int i = 1; i <= PLAYER_MAX_BLESSINGS; i++) {
+				blessings[i] = 0;
 			}
+			blessings[1] = 1; // Keep TOF
 		} else {
-			blessings.reset();
+			for (int i = 1; i <= PLAYER_MAX_BLESSINGS; i++) {
+				blessings[i] = 0;
+			}
 		}
 
 		if (getSkull() == SKULL_BLACK) {
@@ -3308,6 +3368,14 @@ void Player::death(Creature* lastHitCreature)
 		sendStats();
 		sendSkills();
 		sendReLoginWindow();
+
+		// Add death log entry for blessing history
+		std::string deathMsg = "Died at Level " + std::to_string(level);
+		if (lastHitCreature) {
+			deathMsg += " by " + lastHitCreature->getNameDescription();
+		}
+		addDeathLog(static_cast<uint32_t>(OTSYS_TIME() / 1000), 0, deathMsg);
+
 		g_creatureEvents->playerLogout(this);
 	} else {
 		setSkillLoss(true);
@@ -3322,6 +3390,12 @@ void Player::death(Creature* lastHitCreature)
 		onThink(EVENT_CREATURE_THINK_INTERVAL);
 		onIdleStatus();
 		sendStats();
+
+		std::string deathMsg = "Died at Level " + std::to_string(level);
+		if (lastHitCreature) {
+			deathMsg += " by " + lastHitCreature->getNameDescription();
+		}
+		addDeathLog(static_cast<uint32_t>(OTSYS_TIME() / 1000), 1, deathMsg);
 	}
 	clearTemporaryDeathLossReduction();
 }
@@ -5421,19 +5495,21 @@ void Player::checkSkullTicks(int64_t ticks)
 
 bool Player::isPromoted() const
 {
-	uint16_t promotedVocation = g_vocations.getPromotedVocation(vocation->getId());
-	return promotedVocation == VOCATION_NONE && vocation->getId() != promotedVocation;
+	return vocation->getFromVocation() != vocation->getId();
 }
 
 double Player::getLostPercent() const
 {
 	int64_t deathLosePercent = getInteger(ConfigManager::DEATH_LOSE_PERCENT);
+
+	uint8_t blessCount = getBlessingReduction();
+
 	if (deathLosePercent != -1) {
 		if (isPromoted()) {
 			deathLosePercent -= 3;
 		}
 
-		deathLosePercent -= blessings.count();
+		deathLosePercent -= blessCount;
 		deathLosePercent -= totalReduceSkillLoss;
 
 		return std::max<int32_t>(0, deathLosePercent) / 100.;
@@ -5452,10 +5528,34 @@ double Player::getLostPercent() const
 	if (isPromoted()) {
 		percentReduction += 30;
 	}
-	percentReduction += blessings.count() * 8;
+	percentReduction += blessCount * 8;
 	percentReduction += totalReduceSkillLoss;
 
 	return lossPercent * (1 - (percentReduction / 100.)) / 100.;
+}
+
+uint8_t Player::getBlessingReduction() const
+{
+	uint8_t count = 0;
+	for (int i = 2; i <= PLAYER_MAX_BLESSINGS; i++) {
+		if (blessings[i] > 0) count++;
+	}
+	return count;
+}
+
+double Player::getEquipmentLossPercent(bool isContainer) const
+{
+	uint8_t blessCount = getBlessingReduction();
+	float lossPercent = 0;
+	switch (blessCount) {
+		case 0: lossPercent = 10; break;
+		case 1: lossPercent = 7; break;
+		case 2: lossPercent = 4.5; break;
+		case 3: lossPercent = 2.5; break;
+		case 4: lossPercent = 1; break;
+		default: lossPercent = 0; break;
+	}
+	return isContainer ? lossPercent * 10 : lossPercent;
 }
 
 void Player::learnInstantSpell(std::string_view spellName)
