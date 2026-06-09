@@ -77,7 +77,7 @@ jobs:
         with:
           configurePreset: vcpkg
           buildPreset: vcpkg
-          configurePresetAdditionalArgs: "['-GNinja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl', '-DVCPKG_TARGET_TRIPLET=x64-windows-static']"
+          configurePresetAdditionalArgs: "['-GNinja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl', '-DVCPKG_TARGET_TRIPLET=x64-windows-static', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded']"
 
       - name: Upload build logs
         uses: actions/upload-artifact@v4
