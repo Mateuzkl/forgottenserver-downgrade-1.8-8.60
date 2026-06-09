@@ -77,7 +77,7 @@ jobs:
         with:
           configurePreset: vcpkg
           buildPreset: vcpkg
-          cmakeArgs: '-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl'
+          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl']"
 
       - name: Upload build logs
         uses: actions/upload-artifact@v4
