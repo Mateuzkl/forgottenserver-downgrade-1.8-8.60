@@ -19,6 +19,7 @@
 #include "tile.h"
 #include "vocation.h"
 #include "familiar.h"
+#include "weapons.h"
 #include "kv/kv.h"
 
 extern Game g_game;
@@ -2792,6 +2793,46 @@ int luaPlayerSetAttackSpeed(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetWeaponAttackValue(lua_State* L)
+{
+	// player:getWeaponAttackValue()
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const Item* weapon = player->getWeapon(true);
+	if (!weapon) {
+		lua_pushinteger(L, 0);
+		return 1;
+	}
+
+	int32_t attack = weapon->getAttack();
+	const ItemType& it = Item::items[weapon->getID()];
+
+	if (it.weaponType == WEAPON_DISTANCE && it.ammoType != AMMO_NONE) {
+		const Item* ammo = player->getWeapon(false);
+		if (ammo && ammo != weapon) {
+			attack += ammo->getAttack();
+		}
+	}
+
+	if (attack <= 0 && it.maxHitChance > 0) {
+		attack = it.maxHitChance;
+	}
+
+	if (attack <= 0) {
+		const WeaponWand* wand = dynamic_cast<const WeaponWand*>(g_weapons->getWeapon(weapon));
+		if (wand) {
+			attack = wand->getMaxChange();
+		}
+	}
+
+	lua_pushinteger(L, std::max<int32_t>(0, attack));
+	return 1;
+}
+
 int luaPlayerGetAttackSpeed(lua_State* L)
 {
 	// player:getAttackSpeed()
@@ -4287,6 +4328,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "setFightingModes", luaPlayerSetFightMode);
 	registerMethod("Player", "stopWalk", luaPlayerStopWalk);
 
+	registerMethod("Player", "getWeaponAttackValue", luaPlayerGetWeaponAttackValue);
 	registerMethod("Player", "getAttackSpeed", luaPlayerGetAttackSpeed);
 	registerMethod("Player", "setAttackSpeed", luaPlayerSetAttackSpeed);
 

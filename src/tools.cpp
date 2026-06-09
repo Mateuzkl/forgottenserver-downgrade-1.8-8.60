@@ -939,7 +939,7 @@ skills_t getSkillsFromCipbiaSkill(uint8_t cipbiaSkill)
 		case 10: return SKILL_AXE;       // Axe
 		case 11: return SKILL_FIST;      // Fist
 		case 13: return SKILL_FISHING;   // Fishing
-		default: return SKILL_FIST;
+		default: return SKILL_FIST;      // unknown/unmapped Cipbia value
 	}
 }
 
@@ -954,7 +954,7 @@ uint8_t getCipbiaSkillFromSkills(skills_t skill)
 		case SKILL_AXE:       return 10; // Axe
 		case SKILL_FIST:      return 11; // Fist
 		case SKILL_FISHING:   return 13; // Fishing
-		default:              return 0;
+		default:              return 0;  // unknown/unmapped skill
 	}
 }
 

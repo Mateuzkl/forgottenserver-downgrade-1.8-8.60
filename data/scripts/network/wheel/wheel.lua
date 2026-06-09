@@ -703,6 +703,30 @@ local WHEEL_SKILL_ABSORBS = {
 	manadrain = COMBAT_MANADRAIN,
 }
 
+local COMBAT_TO_CIPBIA_ELEMENT = {
+	[COMBAT_PHYSICALDAMAGE] = 0,
+	[COMBAT_FIREDAMAGE] = 1,
+	[COMBAT_EARTHDAMAGE] = 2,
+	[COMBAT_ENERGYDAMAGE] = 3,
+	[COMBAT_ICEDAMAGE] = 4,
+	[COMBAT_HOLYDAMAGE] = 5,
+	[COMBAT_DEATHDAMAGE] = 6,
+	[COMBAT_HEALING] = 7,
+	[COMBAT_DROWNDAMAGE] = 8,
+	[COMBAT_LIFEDRAIN] = 9,
+	[COMBAT_MANADRAIN] = 10,
+	[COMBAT_AGONYDAMAGE] = 11,
+}
+
+local SHOOT_TO_CIPBIA_ELEMENT = {
+	[CONST_ANI_FIRE] = 1,
+	[CONST_ANI_ENERGY] = 3,       [CONST_ANI_ENERGYBALL] = 3,
+	[CONST_ANI_SMALLICE] = 4,     [CONST_ANI_ICE] = 4,
+	[CONST_ANI_SMALLEARTH] = 2,   [CONST_ANI_EARTH] = 2, [CONST_ANI_EARTHARROW] = 2,
+	[CONST_ANI_DEATH] = 6,        [CONST_ANI_SUDDENDEATH] = 6,
+	[CONST_ANI_SMALLHOLY] = 5,    [CONST_ANI_HOLY] = 5,
+}
+
 local function sendWheelSkillStats(player)
 	if not supportsCustomNetwork(player) or not player.sendExtendedOpcode then
 		return false
@@ -726,6 +750,8 @@ local function sendWheelSkillStats(player)
 	local damageAndHealing = 0
 	local attackValue = 0
 	local attackElement = 0
+	local convertedValue = 0
+	local convertedElement = 0
 
 	local weapon = player:getSlotItem(CONST_SLOT_LEFT)
 	if not weapon or weapon:getId() == 0 then
@@ -734,8 +760,25 @@ local function sendWheelSkillStats(player)
 
 	if weapon and weapon:getId() ~= 0 then
 		local it = ItemType(weapon:getId())
-		attackValue = it:getAttack() or 0
-		attackElement = 0
+		attackValue = player:getWeaponAttackValue() or 0
+
+		local elemCombatType = it:getElementType()
+		local elemDamage = it:getElementDamage() or 0
+		local shootType = it:getShootType()
+
+		if elemCombatType and elemCombatType ~= COMBAT_NONE then
+			attackElement = COMBAT_TO_CIPBIA_ELEMENT[elemCombatType] or 0
+			local baseAtk = attackValue
+			local totalAtk = baseAtk + elemDamage
+			if totalAtk > 0 and elemDamage > 0 then
+				convertedValue = elemDamage / totalAtk
+				convertedElement = attackElement
+			end
+		elseif shootType and shootType ~= CONST_ANI_NONE then
+			attackElement = SHOOT_TO_CIPBIA_ELEMENT[shootType] or 0
+		else
+			attackElement = 0
+		end
 	else
 		attackValue = 7
 		attackElement = 0
@@ -755,6 +798,8 @@ local function sendWheelSkillStats(player)
 		damageAndHealing = damageAndHealing,
 		attackValue = attackValue,
 		attackElement = attackElement,
+		convertedValue = convertedValue,
+		convertedElement = convertedElement,
 	}))
 end
 

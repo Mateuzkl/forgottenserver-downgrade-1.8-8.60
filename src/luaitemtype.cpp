@@ -1007,6 +1007,18 @@ int luaItemTypeGetElementDamage(lua_State* L)
 	return 1;
 }
 
+int luaItemTypeGetShootType(lua_State* L)
+{
+	// itemType:getShootType()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (itemType) {
+		lua_pushinteger(L, itemType->shootType);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaItemTypeGetTransformEquipId(lua_State* L)
 {
 	// itemType:getTransformEquipId()
@@ -1213,6 +1225,7 @@ void LuaScriptInterface::registerItemType()
 
 	registerMethod("ItemType", "getElementType", luaItemTypeGetElementType);
 	registerMethod("ItemType", "getElementDamage", luaItemTypeGetElementDamage);
+	registerMethod("ItemType", "getShootType", luaItemTypeGetShootType);
 	registerMethod("ItemType", "getElementalBond", luaItemTypeGetElementalBond);
 
 	registerMethod("ItemType", "getTransformEquipId", luaItemTypeGetTransformEquipId);
