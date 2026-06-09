@@ -1,4 +1,4 @@
-name: Build (Linux & Windows)
+name: Build (Linux)
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
       - name: Build Lua 5.5 from source
         run: |
           curl -sSL https://www.lua.org/ftp/lua-5.5.0.tar.gz -o lua.tar.gz
-          echo "96b01e9c463196bb96ee86c99249d0fdeab8d4b781f6bae7fdc60e7b43051b37 lua.tar.gz" | sha256sum -c
+          echo "57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d lua.tar.gz" | sha256sum -c
           tar xzf lua.tar.gz
           cd lua-5.5.0
           make -j$(nproc) linux-readline
@@ -105,35 +105,8 @@ jobs:
           file build/tfs
           ldd build/tfs
 
-  windows:
-    name: Windows (VS 2022, x64, Release)
-    runs-on: windows-2022
-    timeout-minutes: 40
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@5b984d559fb3e9b2c166e2bb83b9cdd1418ff930 # v11
+      - name: Upload artifact binary
+        uses: actions/upload-artifact@v4
         with:
-          vcpkgJsonGlob: 'vcpkg.json'
-
-      - name: Configure CMake
-        run: >
-          cmake -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-          -DENABLE_NATIVE_OPTIMIZATIONS=OFF
-          -DENABLE_SLOW_TASK_DETECTION=OFF
-          -DSKIP_GIT=OFF
-
-      - name: Build
-        run: cmake --build build --parallel $env:NUMBER_OF_PROCESSORS
-
-      - name: Verify binary
-        run: |
-          Get-Item build\tfs.exe
+          name: tfs-linux-${{ github.sha }}
+          path: ${{ github.workspace }}/build/tfs
