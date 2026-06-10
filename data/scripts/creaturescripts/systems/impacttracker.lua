@@ -19,7 +19,7 @@ end
 
 local function sendImpactTracker(player, analyzerType, amount, effect, targetName)
     if not player or not amount or amount == 0 then return end
-    if player:getStorageValue(STORAGE_MEHAH_CLIENT) ~= 1 then return end
+    if player:getStorageValue(STORAGE_MEHAH_CLIENT) ~= 1 and not player:isUsingOtClient() then return end
     local out = NetworkMessage(player)
     out:addByte(0xCC) -- OPCODE_IMPACT_TRACKER
     out:addByte(analyzerType) -- 0: HEAL, 1: DAMAGE_DEALT, 2: DAMAGE_RECEIVED

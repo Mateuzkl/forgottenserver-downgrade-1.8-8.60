@@ -122,7 +122,7 @@ local function sendHuntAnalyzerKill(player, monster, corpse)
 	writeContainerItems(out, corpse)
 	out:sendToPlayer(player)
 
-	if player:getStorageValue(STORAGE_MEHAH_CLIENT) == 1 then
+	if player:getStorageValue(STORAGE_MEHAH_CLIENT) == 1 or supportsHuntAnalyzer(player) then
 		sendLootStatsRecursive(player, corpse)
 	end
 end
