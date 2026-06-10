@@ -114,9 +114,9 @@ function sendPartyAnalyzerToAll(leader)
 	end
 end
 
--- Creature event: add loot value when party member loots a corpse
-local partyLootEvent = CreatureEvent("PartyAnalyzerLoot")
-function partyLootEvent.onDropLoot(monster, corpse)
+-- Drop event: add loot value when party member loots a corpse
+local partyLootDrop = Event()
+function partyLootDrop.onDropLoot(monster, corpse)
 	local owner = Player(corpse:getCorpseOwner())
 	if not owner then return end
 	local leader = getPartyLeader(owner)
@@ -142,7 +142,7 @@ function partyLootEvent.onDropLoot(monster, corpse)
 	data.loot = data.loot + addContainerValue(corpse)
 	sendPartyAnalyzerToAll(leader)
 end
-partyLootEvent:register(HUNT_ANALYZER_DROP_TRIGGER or 100)
+partyLootDrop:register(100)
 
 -- Health/mana change: track healing received
 local partyHealEvent = CreatureEvent("PartyAnalyzerHeal")
