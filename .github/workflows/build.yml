@@ -78,8 +78,9 @@ jobs:
 
       - name: Build mio from source
         run: |
-          git clone --depth 1 https://github.com/mandreyel/mio.git
+          git clone https://github.com/mandreyel/mio.git
           cd mio
+          git checkout 8b6b7d878c89e81614d05edca7936de41ccdd2da
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr/local
@@ -110,7 +111,7 @@ jobs:
           ldd build/tfs
 
       - name: Upload artifact binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: tfs-linux-${{ github.sha }}
           path: ${{ github.workspace }}/build/tfs
