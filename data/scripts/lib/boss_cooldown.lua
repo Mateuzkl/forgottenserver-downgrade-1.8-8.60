@@ -30,7 +30,7 @@ end
 function Player:getBossCooldown(bossNameOrId)
 	local scope = getKVScope(bossNameOrId)
 	if not scope then
-		return false
+		return 0
 	end
 	local kv = self:kv()
 	if not kv then
@@ -57,5 +57,8 @@ end
 
 function Player:canFightBoss(bossNameOrId)
 	local cooldown = self:getBossCooldown(bossNameOrId)
+	if not cooldown or cooldown == false then
+		return true
+	end
 	return cooldown <= os.time()
 end

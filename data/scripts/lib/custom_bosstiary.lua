@@ -221,6 +221,8 @@ function CustomBosstiary.addKill(players, entry)
 		if resultId ~= false then
 			newKills = result.getDataInt(resultId, "kills")
 			result.free(resultId)
+		else
+			print("[Warning] CustomBosstiary.addKill: failed to read kills for player " .. playerGuid .. " raceid " .. entry.raceId)
 		end
 
 		local oldKills = math.max(0, newKills - increment)

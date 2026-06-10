@@ -5,7 +5,7 @@
 local OPCODE_BOSS_COOLDOWN = 0x2C
 
 local function isOTC(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player:isUsingOtClient()
 end
 
 local function getBossOutfit(lookType)
@@ -73,7 +73,7 @@ local function sendCooldowns(player)
 
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_BOSS_COOLDOWN)
-	out:addByte(#activeBosses)
+	out:addByte(math.min(#activeBosses, 255))
 	for _, boss in ipairs(activeBosses) do
 		out:addU16(boss.id)
 		out:addU32(boss.cooldown)

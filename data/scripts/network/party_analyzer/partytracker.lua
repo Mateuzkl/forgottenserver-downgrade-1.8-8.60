@@ -81,7 +81,7 @@ local function sendPartyAnalyzer(player)
 		end
 	end
 
-	local out = NetworkMessage(leader)
+	local out = NetworkMessage(player)
 	out:addByte(OPCODE_PARTY_ANALYZER)
 	out:addU32(session.startTime)
 	out:addU32(leader:getId())
@@ -154,14 +154,14 @@ function partyHealEvent.onHealthChange(creature, attacker, primaryDamage, primar
 	local session = getOrCreateSession(leader)
 	if not session then return primaryDamage, primaryType, secondaryDamage, secondaryType end
 
-	if primaryDamage < 0 then -- healing
+	if primaryDamage > 0 then -- healing
 		local data = getOrCreateMemberData(session, creature:getId(), creature:getName())
-		data.healing = data.healing + math.abs(primaryDamage)
+		data.healing = data.healing + primaryDamage
 		sendPartyAnalyzerToAll(leader)
 	end
-	if secondaryDamage and secondaryDamage < 0 then
+	if secondaryDamage and secondaryDamage > 0 then
 		local data = getOrCreateMemberData(session, creature:getId(), creature:getName())
-		data.healing = data.healing + math.abs(secondaryDamage)
+		data.healing = data.healing + secondaryDamage
 		sendPartyAnalyzerToAll(leader)
 	end
 
@@ -182,6 +182,44 @@ end
 partyRefreshEvent:interval(5000)
 partyRefreshEvent:register()
 
+-- Logout: clear party sessions for the player
+local partyLogoutEvent = CreatureEvent("PartyAnalyzerLogout")
+function partyLogoutEvent.onLogout(player)
+	local leaderId = player:getId()
+	if partySessions[leaderId] then
+		partySessions[leaderId] = nil
+		sendPartyAnalyzerToAll(player)
+	end
+	return true
+end
+partyLogoutEvent:register()
+
+-- Periodic cleanup: remove sessions for offline/no-members leaders
+local partyCleanupEvent = GlobalEvent("PartyAnalyzerCleanup")
+function partyCleanupEvent.onThink(interval)
+	for leaderId, session in pairs(partySessions) do
+		local leader = Player(leaderId)
+		if not leader or not leader:getParty() then
+			partySessions[leaderId] = nil
+		else
+			local hasOnline = false
+			local members = getPartyMembers(leader)
+			for _, m in pairs(members) do
+				if m:isOnline() then
+					hasOnline = true
+					break
+				end
+			end
+			if not hasOnline then
+				partySessions[leaderId] = nil
+			end
+		end
+	end
+	return true
+end
+partyCleanupEvent:interval(60000)
+partyCleanupEvent:register()
+
 -- Login: send current party state
 local partyLoginEvent = CreatureEvent("PartyAnalyzerLogin")
 function partyLoginEvent.onLogin(player)
@@ -199,8 +237,8 @@ function partyLoginEvent.onLogin(player)
 end
 partyLoginEvent:register()
 
--- Packet handler: client requests (0x2C)
-local handler = PacketHandler(0x2C)
+-- Packet handler: client requests (0x2E, client→server - does NOT collide with 0x2C server→client boss cooldown)
+local handler = PacketHandler(0x2E)
 function handler.onReceive(player, msg)
 	if not isOTC(player) then return true end
 	local action = msg:getByte()
