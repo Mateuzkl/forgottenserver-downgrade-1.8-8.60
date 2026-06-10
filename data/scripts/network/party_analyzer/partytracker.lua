@@ -169,103 +169,18 @@ function partyHealEvent.onHealthChange(creature, attacker, primaryDamage, primar
 end
 partyHealEvent:register()
 
--- Track damage dealt by party members using the existing impact tracker
--- We hook into the impact tracker's send function to also update party session
-local originalSendImpactTracker = _G.sendImpactTracker
-if originalSendImpactTracker then
-	_G.sendImpactTracker = function(player, analyzerType, amount, effect, targetName)
-		originalSendImpactTracker(player, analyzerType, amount, effect, targetName)
-
-		if analyzerType == 1 then -- DAMAGE_DEALT
-			local leader = getPartyLeader(player)
-			if leader then
-				local session = partySessions[leader:getId()]
-				if session then
-					local data = session.members[player:getId()]
-					if data then
-						data.damage = data.damage + amount
-						sendPartyAnalyzerToAll(leader)
-					end
-				end
-			end
-		end
-	end
-end
-
--- Track supply usage
-local originalSendSupplyTracker = _G.sendSupplyTracker
-if originalSendSupplyTracker then
-	_G.sendSupplyTracker = function(player, item)
-		originalSendSupplyTracker(player, item)
-
-		local leader = getPartyLeader(player)
-		if leader then
-			local session = partySessions[leader:getId()]
-			if session then
-				local data = session.members[player:getId()]
-				if data then
-					local itemType = ItemType(item:getId())
-					local price = itemType and (itemType:getDefaultPrice() or itemType:getBuyPrice()) or 0
-					data.supplies = data.supplies + price
-					sendPartyAnalyzerToAll(leader)
-				end
-			end
-		end
-	end
-end
-
--- Packet handler: client requests loot type change (0x2C = ClientPartyAnalyzerRequest)
-local REQUEST_OPCODE = 0x2C
-local handler = PacketHandler(REQUEST_OPCODE)
-function handler.onReceive(player, msg)
-	if not isOTC(player) then return true end
-	local action = msg:getByte()
-	if action == 0 then -- Reset session
-		if isPartyLeader(player) then
-			partySessions[player:getId()] = nil
-			sendPartyAnalyzerToAll(player)
-		end
-	elseif action == 1 then -- Change loot type
-		if isPartyLeader(player) then
-			local session = getOrCreateSession(player)
-			if session then
-				session.lootType = session.lootType == 0 and 1 or 0
-				sendPartyAnalyzerToAll(player)
-			end
+-- Periodic party state update: sends current session to all OTC members every 5s
+local partyRefreshEvent = GlobalEvent("PartyAnalyzerPeriodic")
+function partyRefreshEvent.onThink(interval)
+	for _, player in ipairs(Game.getPlayers()) do
+		if isOTC(player) and getPartyLeader(player) then
+			sendPartyAnalyzer(player)
 		end
 	end
 	return true
 end
-handler:register()
-
--- Party join/leave: send update to all members
-local function onPartyChange(player)
-	if not isOTC(player) then return end
-	local leader = getPartyLeader(player)
-	if leader then
-		sendPartyAnalyzerToAll(leader)
-	else
-		-- Player left party, send update to remaining leader
-		for leaderId, session in pairs(partySessions) do
-			local leaderPlayer = Player(leaderId)
-			if leaderPlayer then
-				sendPartyAnalyzerToAll(leaderPlayer)
-			end
-		end
-	end
-end
-
-local partyJoinEvent = CreatureEvent("PartyAnalyzerJoin")
-function partyJoinEvent.onJoinParty(player)
-	addEvent(onPartyChange, 1000, player:getId())
-end
-partyJoinEvent:register()
-
-local partyLeaveEvent = CreatureEvent("PartyAnalyzerLeave")
-function partyLeaveEvent.onLeaveParty(player)
-	addEvent(onPartyChange, 1000, player:getId())
-end
-partyLeaveEvent:register()
+partyRefreshEvent:interval(5000)
+partyRefreshEvent:register()
 
 -- Login: send current party state
 local partyLoginEvent = CreatureEvent("PartyAnalyzerLogin")
@@ -283,6 +198,29 @@ function partyLoginEvent.onLogin(player)
 	return true
 end
 partyLoginEvent:register()
+
+-- Packet handler: client requests (0x2C)
+local handler = PacketHandler(0x2C)
+function handler.onReceive(player, msg)
+	if not isOTC(player) then return true end
+	local action = msg:getByte()
+	if action == 0 then
+		if isPartyLeader(player) then
+			partySessions[player:getId()] = nil
+			sendPartyAnalyzerToAll(player)
+		end
+	elseif action == 1 then
+		if isPartyLeader(player) then
+			local session = getOrCreateSession(player)
+			if session then
+				session.lootType = session.lootType == 0 and 1 or 0
+				sendPartyAnalyzerToAll(player)
+			end
+		end
+	end
+	return true
+end
+handler:register()
 
 PartyAnalyzer = {
 	send = sendPartyAnalyzer,
