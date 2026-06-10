@@ -706,9 +706,17 @@ function killEvent.onKill(player, target)
 end
 killEvent:register()
 
+local logoutEvent = CreatureEvent("BattlePassLogout")
+function logoutEvent.onLogout(player)
+	lastRequest[player:getGuid()] = nil
+	return true
+end
+logoutEvent:register()
+
 local loginEvent = CreatureEvent("BattlePassLogin")
 function loginEvent.onLogin(player)
 	player:registerEvent("BattlePassKill")
+	player:registerEvent("BattlePassLogout")
 	return true
 end
 loginEvent:register()
