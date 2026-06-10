@@ -125,6 +125,15 @@ end
 
 function Player.sendExtendedOpcode(self, opcode, buffer)
 	if not self:isUsingOtClient() then return false end
+	buffer = buffer or ""
+	if type(buffer) ~= "string" then
+		buffer = tostring(buffer)
+	end
+	-- NetworkMessage::addString silently refuses strings above 8192 bytes.
+	-- Avoid sending a malformed packet containing only 0x32 + opcode.
+	if #buffer > 8192 then
+		return false
+	end
 
 	local networkMessage<close> = NetworkMessage()
 	networkMessage:addByte(0x32)

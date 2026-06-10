@@ -8,6 +8,10 @@
         <offer id="1004" name="360 Days of Premium Time" icon="360_days" price="3000" eid="0" itemid="0" type="premium" value="360" count="360" description="Adds 360 days of Premium Time to your account immediately."/>
     </category>
 
+    <category name="Battle Pass" icon="store_premium" description="Deluxe Battle Pass unlocks the premium reward track for the current Battle Pass season. It is activated immediately for the purchasing character.">
+        <offer id="9001" name="Deluxe Battle Pass" icon="store_premium" price="250" eid="0" itemid="0" type="battlepass" value="1" count="1" description="Unlocks the Deluxe Battle Pass reward track for the current season."/>
+    </category>
+
     <category name="Consumables" icon="store_consumables" description="Consumables and character protection services."/>
 
     <category name="Prey Wildcards" icon="store_prey">

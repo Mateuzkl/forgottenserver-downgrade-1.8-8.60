@@ -381,6 +381,14 @@ local function deliverOffer(player, offer, extra)
 		return nil
 	end
 
+	if offer.oftype == "battlepass" then
+		if not BattlePassSystem or not BattlePassSystem.purchasePremium then
+			return "Battle Pass system is not available."
+		end
+
+		return BattlePassSystem.purchasePremium(player, true)
+	end
+
 	if offer.oftype == "blessing" or offer.oftype == "bless" then
 		if offer.value == -1 then
 			local added = false
