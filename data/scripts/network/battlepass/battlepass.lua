@@ -23,6 +23,13 @@ local config = {
 	deluxePrice = 250,
 }
 
+local REQUEST_COOLDOWN_SECONDS = 1
+local rateLimitedActions = {
+	getMissions = true,
+	getRewards = true,
+}
+local lastRequest = {}
+
 local freeRewardSteps = {
 	[3] = true, [6] = true, [9] = true, [12] = true, [15] = true, [18] = true,
 	[21] = true, [24] = true, [27] = true, [30] = true, [33] = true, [36] = true,
@@ -240,9 +247,6 @@ local function getDailyMissionBySlot(state, slot, dailyKey)
 		local daySeed = tonumber(dailyKey) or math.floor(os.time() / DAY_SECONDS)
 		local firstIndex = (daySeed % #dailyMissionPool) + 1
 		local secondIndex = ((firstIndex + 3) % #dailyMissionPool) + 1
-		if secondIndex == firstIndex then
-			secondIndex = (secondIndex % #dailyMissionPool) + 1
-		end
 
 		state.dailySlots["1"] = dailyMissionPool[firstIndex].id
 		state.dailySlots["2"] = dailyMissionPool[secondIndex].id
@@ -281,9 +285,6 @@ end
 local function buildMissionsPayload(player, state, season, daily)
 	local currentRewardStep = getCurrentRewardStep(state.points)
 	local nextStepPoints = math.min((currentRewardStep + 1) * config.pointsPerStep, config.maxStep * config.pointsPerStep)
-	if nextStepPoints <= 0 then
-		nextStepPoints = config.pointsPerStep
-	end
 
 	local dailyMissions = {}
 	for _, mission in ipairs(getActiveDailyMissions(state, daily.key)) do
@@ -353,12 +354,16 @@ local function sendMoneyResources(player)
 	return bankSent and inventorySent
 end
 
-function BattlePassSystem.sendMissions(player)
-	local state, store, season, daily = loadState(player)
+local function sendMissionState(player, state, season, daily)
 	local payload = buildMissionsPayload(player, state, season, daily)
-	saveState(store, state)
 	sendMoneyResources(player)
 	return sendOpcode(player, "missions", payload)
+end
+
+function BattlePassSystem.sendMissions(player)
+	local state, store, season, daily = loadState(player)
+	saveState(store, state)
+	return sendMissionState(player, state, season, daily)
 end
 
 local function makeReward(step, freeReward)
@@ -375,11 +380,18 @@ local function makeReward(step, freeReward)
 		rewardId = rewardId,
 		rewardType = 1,
 		freeReward = freeReward,
+		-- TODO: Replace the placeholder Crystal Coin rewards with the final season reward table.
 		itemId = 3043,
 		count = count,
 		charges = 0,
 		stuck = false,
 	}
+end
+
+local function setRewardClaimState(reward, state)
+	local claimed = state.claimed[tostring(reward.rewardId)] == true
+	reward.hasClaimedReward = claimed
+	reward.hasClamedReward = claimed
 end
 
 local function buildRewardSteps(state)
@@ -389,12 +401,12 @@ local function buildRewardSteps(state)
 
 		if freeRewardSteps[step] then
 			local freeReward = makeReward(step, true)
-			freeReward.hasClamedReward = state.claimed[tostring(freeReward.rewardId)] == true
+			setRewardClaimState(freeReward, state)
 			table.insert(rewards, freeReward)
 		end
 
 		local premiumReward = makeReward(step, false)
-		premiumReward.hasClamedReward = state.claimed[tostring(premiumReward.rewardId)] == true
+		setRewardClaimState(premiumReward, state)
 		table.insert(rewards, premiumReward)
 
 		table.insert(steps, {
@@ -556,8 +568,7 @@ function BattlePassSystem.rerollDailyMission(player, data)
 	end
 
 	saveState(store, state)
-	sendMoneyResources(player)
-	BattlePassSystem.sendMissions(player)
+	sendMissionState(player, state, season, daily)
 	return true
 end
 
@@ -611,7 +622,7 @@ function BattlePassSystem.onKill(player, target)
 
 	if changed then
 		saveState(store, state)
-		BattlePassSystem.sendMissions(player)
+		sendMissionState(player, state, season, daily)
 		if getCurrentRewardStep(state.points) > previousStep then
 			BattlePassSystem.sendRewards(player)
 		end
@@ -620,7 +631,7 @@ function BattlePassSystem.onKill(player, target)
 end
 
 function BattlePassSystem.purchasePremium(player, skipCoinCharge)
-	local state, store = loadState(player)
+	local state, store, season, daily = loadState(player)
 	if isPremiumActive(state) then
 		return "You already have the Deluxe Battle Pass for this season."
 	end
@@ -632,9 +643,31 @@ function BattlePassSystem.purchasePremium(player, skipCoinCharge)
 	state.premium = true
 	saveState(store, state)
 	player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Deluxe Battle Pass purchased.")
-	BattlePassSystem.sendMissions(player)
+	sendMissionState(player, state, season, daily)
 	BattlePassSystem.sendRewards(player)
 	return nil
+end
+
+local function isRateLimited(player, action)
+	if not rateLimitedActions[action] then
+		return false
+	end
+
+	local guid = player:getGuid()
+	local requests = lastRequest[guid]
+	if not requests then
+		requests = {}
+		lastRequest[guid] = requests
+	end
+
+	local now = os.time()
+	local last = requests[action]
+	if last and now - last < REQUEST_COOLDOWN_SECONDS then
+		return true
+	end
+
+	requests[action] = now
+	return false
 end
 
 function BattlePassSystem.onExtendedOpcode(player, buffer)
@@ -645,6 +678,9 @@ function BattlePassSystem.onExtendedOpcode(player, buffer)
 
 	local action = payload.action
 	local data = type(payload.data) == "table" and payload.data or {}
+	if isRateLimited(player, action) then
+		return true
+	end
 
 	if action == "getMissions" then
 		BattlePassSystem.sendMissions(player)
@@ -673,7 +709,6 @@ killEvent:register()
 local loginEvent = CreatureEvent("BattlePassLogin")
 function loginEvent.onLogin(player)
 	player:registerEvent("BattlePassKill")
-	loadState(player)
 	return true
 end
 loginEvent:register()
