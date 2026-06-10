@@ -81,12 +81,15 @@ local function sendPartyAnalyzer(player)
 		end
 	end
 
+	local onlineMemberCount = 0
+	for _ in pairs(onlineMembers) do onlineMemberCount = onlineMemberCount + 1 end
+
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_PARTY_ANALYZER)
 	out:addU32(session.startTime)
 	out:addU32(leader:getId())
 	out:addByte(session.lootType)
-	out:addByte(#onlineMembers)
+	out:addByte(math.min(onlineMemberCount, 255))
 	for id, m in pairs(onlineMembers) do
 		local data = session.members[id] or {loot=0, supplies=0, damage=0, healing=0}
 		out:addU32(id)
@@ -97,7 +100,7 @@ local function sendPartyAnalyzer(player)
 		out:addU64(data.healing)
 	end
 	out:addByte(0) -- online flag
-	out:addByte(#onlineMembers)
+	out:addByte(math.min(onlineMemberCount, 255))
 	for id, m in pairs(onlineMembers) do
 		out:addU32(id)
 		out:addString(m:getName())
