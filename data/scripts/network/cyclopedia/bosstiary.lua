@@ -240,7 +240,7 @@ local function sendSlots(player)
 	out:addU32(boostedBoss and boostedBoss.raceId or 0)
 	if boostedBoss then
 		local boostedLootBonus = currentBonus + CustomBosstiary.getBoostedBossLootBonus()
-		local boostedKillBonus = CustomBosstiary.getBoostedBossKillBonus()
+		local boostedKillBonus = 1 + CustomBosstiary.getBoostedBossKillBonus()
 		sendSlotBytes(out, boostedBoss, kills[boostedBoss.raceId] or 0, boostedLootBonus, boostedKillBonus, false, 0)
 	end
 	writeOptionalCreatureInfo(out, boostedBoss)

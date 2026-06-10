@@ -1,71 +1,96 @@
 -- data/scripts/network/boss_cooldown/bosscooldown.lua
 -- Boss Cooldown Tracker - sends boss cooldown list to AstraClient (opcode 0x2C)
--- Requires boss kills tracked via storage values (bossName_storage pattern)
+-- Uses KV store (player:kv() -> boss.cooldown.<raceId>)
 
 local OPCODE_BOSS_COOLDOWN = 0x2C
 
--- Format: bossId, storageKey, bossName, lookType
--- Add your boss entries here. storageKey is the cooldown storage for this boss.
-local BOSS_LIST = {
-	-- Example entries - customize for your server
-	-- {id = 1, storage = 45000, name = "Orshabaal", lookType = 111},
-	-- {id = 2, storage = 45001, name = "Morgaroth", lookType = 112},
-	-- {id = 3, storage = 45002, name = "Ghazbaran", lookType = 113},
-}
-
-local sendCooldowns
-
 local function isOTC(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function getBossOutfit(lookType)
 	local mt = MonsterType(lookType)
-	if not mt then
-		return {type = lookType or 0, head = 0, body = 0, legs = 0, feet = 0, addons = 0}
+	if mt then
+		local outfit = mt:getOutfit()
+		if outfit then
+			return {
+				type = outfit.lookType or lookType,
+				head = outfit.lookHead or 0,
+				body = outfit.lookBody or 0,
+				legs = outfit.lookLegs or 0,
+				feet = outfit.lookFeet or 0,
+				addons = outfit.lookAddons or 0,
+			}
+		end
 	end
-	local outfit = mt:getOutfit()
-	if not outfit then
-		return {type = lookType or 0, head = 0, body = 0, legs = 0, feet = 0, addons = 0}
-	end
-	return {
-		type = outfit.lookType or 0,
-		head = outfit.lookHead or 0,
-		body = outfit.lookBody or 0,
-		legs = outfit.lookLegs or 0,
-		feet = outfit.lookFeet or 0,
-		addons = outfit.lookAddons or 0,
-	}
+	return {type = lookType, head = 0, body = 0, legs = 0, feet = 0, addons = 0}
 end
 
-sendCooldowns = function(player)
+local function getBossList()
+	local bosses = {}
+	if CustomBosstiary and CustomBosstiary.monstersByRaceId then
+		for raceId, entry in pairs(CustomBosstiary.monstersByRaceId) do
+			bosses[#bosses + 1] = {
+				raceId = raceId,
+				name = entry.name,
+				outfit = entry.outfit or {},
+			}
+		end
+	end
+	table.sort(bosses, function(a, b) return a.raceId < b.raceId end)
+	return bosses
+end
+
+local function sendCooldowns(player)
 	if not player or not isOTC(player) then return false end
-	if #BOSS_LIST == 0 then return false end
+
+	local kv = player:kv()
+	if not kv then return false end
 
 	local now = os.time()
+	local cooldownKV = kv:scoped("boss.cooldown")
+	local activeBosses = {}
+	local bosses = getBossList()
+
+	for _, boss in ipairs(bosses) do
+		local key = tostring(boss.raceId)
+		local cooldownEnd = cooldownKV:get(key) or 0
+		if cooldownEnd > now then
+			local outfit
+			if boss.outfit and boss.outfit.type then
+				outfit = boss.outfit
+			else
+				outfit = getBossOutfit(boss.outfit and boss.outfit.lookType or 136)
+			end
+			activeBosses[#activeBosses + 1] = {
+				id = boss.raceId,
+				cooldown = cooldownEnd,
+				name = boss.name,
+				outfit = outfit,
+			}
+		end
+	end
+
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_BOSS_COOLDOWN)
-	out:addByte(#BOSS_LIST)
-	for _, boss in ipairs(BOSS_LIST) do
-		local cooldownEnd = player:getStorageValue(boss.storage)
-		local cooldownStamp = (cooldownEnd and cooldownEnd > 0 and cooldownEnd > now) and cooldownEnd or 0
-		local outfit = getBossOutfit(boss.lookType)
+	out:addByte(#activeBosses)
+	for _, boss in ipairs(activeBosses) do
 		out:addU16(boss.id)
-		out:addU32(cooldownStamp)
+		out:addU32(boss.cooldown)
 		out:addString(boss.name)
-		out:addU16(outfit.type)
-		out:addByte(outfit.head)
-		out:addByte(outfit.body)
-		out:addByte(outfit.legs)
-		out:addByte(outfit.feet)
-		out:addByte(outfit.addons)
+		out:addU16(boss.outfit.type)
+		out:addByte(boss.outfit.head)
+		out:addByte(boss.outfit.body)
+		out:addByte(boss.outfit.legs)
+		out:addByte(boss.outfit.feet)
+		out:addByte(boss.outfit.addons)
 	end
 	return out:sendToPlayer(player)
 end
 
--- Login event: send cooldowns on login
-local bossLoginEvent = CreatureEvent("BossCooldownLogin")
-function bossLoginEvent.onLogin(player)
+-- Login event
+local bossLogin = CreatureEvent("BossCooldownLogin")
+function bossLogin.onLogin(player)
 	if not isOTC(player) then return true end
 	addEvent(function(pid)
 		local p = Player(pid)
@@ -73,21 +98,18 @@ function bossLoginEvent.onLogin(player)
 	end, 3000, player:getId())
 	return true
 end
-bossLoginEvent:register()
+bossLogin:register()
 
--- Periodic refresh: send every 60s to online OTC players
-local bossRefreshEvent = GlobalEvent("BossCooldownPeriodic")
-function bossRefreshEvent.onThink(interval)
+-- Periodic refresh every 30s
+local bossRefresh = GlobalEvent("BossCooldownPeriodic")
+function bossRefresh.onThink(interval)
 	for _, player in ipairs(Game.getPlayers()) do
-		if isOTC(player) then
-			sendCooldowns(player)
-		end
+		sendCooldowns(player)
 	end
 	return true
 end
-bossRefreshEvent:interval(60000)
-bossRefreshEvent:register()
+bossRefresh:interval(30000)
+bossRefresh:register()
 
-BossCooldown = {
-	send = sendCooldowns,
-}
+BossCooldown = BossCooldown or {}
+BossCooldown.send = sendCooldowns

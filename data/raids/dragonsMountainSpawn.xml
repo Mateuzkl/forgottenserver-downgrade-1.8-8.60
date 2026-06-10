@@ -1,337 +1,331 @@
 <?xml version="1.0"?>
 <spawns>
-	<spawn centerx="1133" centery="1120" centerz="7" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1138" centery="1121" centerz="7" radius="1">
+	<spawn centerx="1128" centery="1130" centerz="7" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1153" centery="1109" centerz="7" radius="1">
+	<spawn centerx="1129" centery="1120" centerz="7" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1135" centery="1114" centerz="7" radius="1">
+	<spawn centerx="1131" centery="1122" centerz="7" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1128" centery="1119" centerz="7" radius="1">
+	<spawn centerx="1143" centery="1106" centerz="7" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1159" centery="1114" centerz="7" radius="1">
+	<spawn centerx="1132" centery="1115" centerz="7" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1134" centery="1110" centerz="7" radius="1">
+		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1147" centery="1105" centerz="7" radius="1">
+		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1134" centery="1117" centerz="7" radius="1">
+		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Lord Hatchling" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1134" centery="1120" centerz="7" radius="1">
+		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Dragon Lord Hatchling" x="1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="1" y="1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1155" centery="1111" centerz="7" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1135" centery="1120" centerz="7" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1164" centery="1118" centerz="7" radius="1">
+	<spawn centerx="1140" centery="1110" centerz="7" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1157" centery="1114" centerz="7" radius="1">
+	<spawn centerx="1159" centery="1113" centerz="7" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1140" centery="1126" centerz="7" radius="1">
-		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1140" centery="1108" centerz="7" radius="1">
-		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1160" centery="1112" centerz="7" radius="1">
-		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1153" centery="1111" centerz="7" radius="1">
-		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1168" centery="1109" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Hatchling" x="0" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1166" centery="1130" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1119" centery="1117" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1170" centery="1120" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1145" centery="1133" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1116" centery="1118" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1127" centery="1100" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Hatchling" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1153" centery="1095" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1155" centery="1135" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Hatchling" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1126" centery="1128" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1169" centery="1118" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1119" centery="1113" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1157" centery="1129" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1170" centery="1107" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1148" centery="1097" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1168" centery="1106" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1170" centery="1112" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1158" centery="1115" centerz="6" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1138" centery="1133" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1124" centery="1127" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1156" centery="1114" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1168" centery="1121" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1169" centery="1126" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1158" centery="1094" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1136" centery="1130" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1161" centery="1130" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1152" centery="1143" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1134" centery="1102" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1173" centery="1107" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1134" centery="1131" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1157" centery="1118" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1153" centery="1114" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Hatchling" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1119" centery="1115" centerz="6" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1152" centery="1108" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1153" centery="1113" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1159" centery="1122" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1165" centery="1108" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1123" centery="1121" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1126" centery="1118" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1144" centery="1109" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1163" centery="1121" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Hatchling" x="-1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1139" centery="1118" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1127" centery="1108" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1138" centery="1115" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon" x="1" y="1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1126" centery="1121" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1149" centery="1110" centerz="5" radius="1">
-		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1159" centery="1109" centerz="5" radius="1">
+	<spawn centerx="1170" centery="1111" centerz="6" radius="1">
 		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Dragon Hatchling" x="1" y="1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1128" centery="1115" centerz="5" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	<spawn centerx="1158" centery="1129" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1163" centery="1124" centerz="5" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	<spawn centerx="1136" centery="1097" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1126" centery="1124" centerz="5" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	<spawn centerx="1169" centery="1119" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon" x="1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1136" centery="1108" centerz="5" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	<spawn centerx="1143" centery="1096" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon" x="-1" y="1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1166" centery="1115" centerz="5" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	<spawn centerx="1141" centery="1100" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1166" centery="1119" centerz="5" radius="1">
-		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	<spawn centerx="1120" centery="1125" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1150" centery="1097" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Dragon Hatchling" x="1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1163" centery="1109" centerz="5" radius="1">
+	<spawn centerx="1119" centery="1127" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1146" centery="1098" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1171" centery="1109" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1136" centery="1101" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1133" centery="1116" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1155" centery="1093" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1170" centery="1124" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="-1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1137" centery="1115" centerz="6" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1166" centery="1105" centerz="6" radius="1">
 		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1141" centery="1108" centerz="5" radius="1">
+	<spawn centerx="1160" centery="1130" centerz="6" radius="1">
 		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1141" centery="1112" centerz="5" radius="1">
+	<spawn centerx="1155" centery="1116" centerz="6" radius="1">
 		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1137" centery="1118" centerz="5" radius="1">
+	<spawn centerx="1157" centery="1112" centerz="6" radius="1">
 		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1166" centery="1117" centerz="5" radius="1">
+	<spawn centerx="1128" centery="1128" centerz="6" radius="1">
 		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1155" centery="1115" centerz="5" radius="1">
+	<spawn centerx="1150" centery="1109" centerz="6" radius="1">
 		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1163" centery="1119" centerz="5" radius="1">
+	<spawn centerx="1118" centery="1122" centerz="6" radius="1">
 		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1155" centery="1107" centerz="4" radius="1">
+	<spawn centerx="1152" centery="1109" centerz="6" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1160" centery="1100" centerz="6" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1147" centery="1134" centerz="6" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1132" centery="1100" centerz="6" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1116" centery="1119" centerz="6" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1137" centery="1119" centerz="6" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1159" centery="1114" centerz="6" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1151" centery="1107" centerz="6" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1150" centery="1109" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1162" centery="1123" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1163" centery="1112" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1123" centery="1119" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1126" centery="1114" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1145" centery="1110" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1167" centery="1114" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="-1" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1167" centery="1117" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1123" centery="1117" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1140" centery="1111" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1124" centery="1122" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="1" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="0" y="1" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1136" centery="1107" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon" x="0" y="-1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1133" centery="1109" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon" x="0" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="-1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1155" centery="1109" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1142" centery="1108" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Hatchling" x="1" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1167" centery="1112" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1124" centery="1114" centerz="5" radius="1">
+		<monster name="Dragon" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1139" centery="1119" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1125" centery="1117" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1152" centery="1110" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1147" centery="1108" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1161" centery="1111" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1159" centery="1106" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1158" centery="1108" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1154" centery="1114" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1131" centery="1110" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1143" centery="1111" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1141" centery="1113" centerz="5" radius="1">
+		<monster name="Dragon Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1155" centery="1122" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1136" centery="1113" centerz="4" radius="1">
+	<spawn centerx="1159" centery="1119" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Lord Hatchling" x="1" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1159" centery="1122" centerz="4" radius="1">
+	<spawn centerx="1159" centery="1114" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Lord Hatchling" x="-1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1139" centery="1108" centerz="4" radius="1">
+	<spawn centerx="1155" centery="1105" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Dragon Lord Hatchling" x="0" y="1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1156" centery="1103" centerz="4" radius="1">
+	<spawn centerx="1158" centery="1122" centerz="4" radius="1">
+		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1154" centery="1128" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Dragon Lord" x="-1" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Lord" x="0" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1134" centery="1115" centerz="4" radius="1">
+	<spawn centerx="1137" centery="1111" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1133" centery="1119" centerz="4" radius="1">
+	<spawn centerx="1138" centery="1107" centerz="4" radius="1">
+		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Lord Hatchling" x="1" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1130" centery="1117" centerz="4" radius="1">
+		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1134" centery="1120" centerz="4" radius="1">
+		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1157" centery="1112" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 	<spawn centerx="1156" centery="1126" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1131" centery="1123" centerz="4" radius="1">
+	<spawn centerx="1143" centery="1105" centerz="4" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="0" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Lord Hatchling" x="0" y="1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1152" centery="1128" centerz="4" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1130" centery="1118" centerz="4" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1150" centery="1127" centerz="4" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1159" centery="1118" centerz="4" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1135" centery="1124" centerz="4" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="-1" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1148" centery="1104" centerz="4" radius="1">
+	<spawn centerx="1152" centery="1102" centerz="4" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1133" centery="1113" centerz="4" radius="1">
+	<spawn centerx="1157" centery="1103" centerz="4" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1142" centery="1106" centerz="4" radius="1">
+	<spawn centerx="1146" centery="1104" centerz="4" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="1" y="-1" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Lord Hatchling" x="1" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1153" centery="1102" centerz="4" radius="1">
-		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1146" centery="1105" centerz="4" radius="1">
+	<spawn centerx="1135" centery="1123" centerz="4" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1160" centery="1116" centerz="4" radius="1">
+	<spawn centerx="1154" centery="1108" centerz="4" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1148" centery="1128" centerz="4" radius="1">
+	<spawn centerx="1137" centery="1124" centerz="4" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1156" centery="1100" centerz="4" radius="1">
+	<spawn centerx="1131" centery="1122" centerz="4" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1137" centery="1125" centerz="4" radius="1">
+	<spawn centerx="1150" centery="1100" centerz="4" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1151" centery="1113" centerz="3" radius="1">
+	<spawn centerx="1148" centery="1103" centerz="4" radius="1">
+		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1152" centery="1123" centerz="3" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1151" centery="1123" centerz="3" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord" x="1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1155" centery="1115" centerz="3" radius="1">
-		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-	</spawn>
-	<spawn centerx="1153" centery="1112" centerz="3" radius="1">
+	<spawn centerx="1155" centery="1116" centerz="3" radius="1">
 		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1141" centery="1121" centerz="3" radius="1">
+	<spawn centerx="1152" centery="1111" centerz="3" radius="1">
+		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1142" centery="1125" centerz="3" radius="1">
+		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1142" centery="1113" centerz="3" radius="1">
+		<monster name="Dragon Lord" x="0" y="0" z="0" spawntime="60" direction="2" />
+		<monster name="Dragon Lord Hatchling" x="0" y="1" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1154" centery="1114" centerz="3" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 		<monster name="Dragon Lord Hatchling" x="-1" y="-1" z="0" spawntime="60" direction="2" />
-		<monster name="Dragon Lord Hatchling" x="0" y="-1" z="0" spawntime="60" direction="2" />
 	</spawn>
-	<spawn centerx="1154" centery="1119" centerz="3" radius="1">
+	<spawn centerx="1153" centery="1118" centerz="3" radius="1">
+		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
+	</spawn>
+	<spawn centerx="1142" centery="1123" centerz="3" radius="1">
 		<monster name="Dragon Lord Hatchling" x="0" y="0" z="0" spawntime="60" direction="2" />
 	</spawn>
 </spawns>

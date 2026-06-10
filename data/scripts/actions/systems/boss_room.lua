@@ -22,7 +22,6 @@ local PLAYER_TILES = {
     Position(1100, 955, 13),
 }
 
-local COOLDOWN_STORAGE = 45890
 local COOLDOWN_TIME = 3600
 
 local instanceCounter = 30000
@@ -120,9 +119,9 @@ function leverAction.onUse(player, item, fromPosition, target, toPosition, isHot
 
     local blocked = {}
     for _, p in ipairs(playersOnTiles) do
-        local pLastUse = p:getStorageValue(COOLDOWN_STORAGE)
-        if pLastUse and pLastUse > 0 and (now - pLastUse) < COOLDOWN_TIME then
-            local pRemaining = COOLDOWN_TIME - (now - pLastUse)
+        local cooldownEnd = p:getBossCooldown(BOSS_NAME)
+        if cooldownEnd and cooldownEnd > now then
+            local pRemaining = cooldownEnd - now
             local pMinutes = math.ceil(pRemaining / 60)
             blocked[#blocked + 1] = p:getName()
             p:getPosition():sendMagicEffect(CONST_ME_TUTORIALARROW)
@@ -204,7 +203,7 @@ function bossDeathEvent.onDeath(creature, corpse, killer, mostDamageKiller, last
     for _, spec in ipairs(spectators) do
         if spec:isPlayer() and spec:getInstanceId() == instanceId then
             if damageMap[spec:getId()] then
-                spec:setStorageValue(COOLDOWN_STORAGE, now)
+                spec:setBossCooldown(BOSS_NAME, now + COOLDOWN_TIME)
                 spec:sendTextMessage(MESSAGE_EVENT_ORANGE,
                     "[Boss Room] Congratulations! The boss has been defeated. Your cooldown has started.")
             end

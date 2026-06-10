@@ -211,19 +211,20 @@ function CustomBosstiary.addKill(players, entry)
 	local increment = isBoosted and math.max(CustomBosstiary.getBoostedBossKillBonus(), 1) or 1
 
 	for playerGuid, player in pairs(players or {}) do
-		local oldKills = 0
-		local resultId = db.storeQuery("SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = " ..
-			playerGuid .. " AND `raceid` = " .. entry.raceId)
-		if resultId ~= false then
-			oldKills = result.getDataInt(resultId, "kills")
-			result.free(resultId)
-		end
-
-		local newKills = oldKills + increment
-		local awardedPoints = CustomBosstiary.getAwardedPoints(entry, oldKills, newKills)
 		db.query("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
 			playerGuid .. ", " .. entry.raceId .. ", " .. increment .. ") ON DUPLICATE KEY UPDATE `kills` = `kills` + " .. increment)
 		db.query("INSERT IGNORE INTO `player_bosstiary` (`player_id`) VALUES (" .. playerGuid .. ")")
+
+		local newKills = 0
+		local resultId = db.storeQuery("SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = " ..
+			playerGuid .. " AND `raceid` = " .. entry.raceId)
+		if resultId ~= false then
+			newKills = result.getDataInt(resultId, "kills")
+			result.free(resultId)
+		end
+
+		local oldKills = math.max(0, newKills - increment)
+		local awardedPoints = CustomBosstiary.getAwardedPoints(entry, oldKills, newKills)
 		if awardedPoints > 0 then
 			db.query("UPDATE `player_bosstiary` SET `points` = `points` + " .. awardedPoints ..
 				" WHERE `player_id` = " .. playerGuid)
@@ -233,7 +234,6 @@ function CustomBosstiary.addKill(players, entry)
 					awardedPoints .. " boss points.")
 			end
 		end
-
 	end
 	return true
 end
