@@ -14,7 +14,12 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 {
 	switch (opcode) {
 		case 0x29: // custom supply stash
+		case 0x2B: // custom party hunt analyzer
+		case 0x2C: // custom boss cooldown
+		case 0x2D: // custom charm activated
 		case 0x2F: // custom unjustified points
+		case 0x30: // custom imbuement activated
+		case 0x31: // custom special skill activated
 		case 0x32: // extended opcode
 		case 0x48: // custom cyclopedia/bestiary
 		case 0x5F: // custom wheel of destiny window
