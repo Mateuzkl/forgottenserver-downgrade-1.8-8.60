@@ -1717,7 +1717,7 @@ local function refreshMarketStatistics()
 		"CASE WHEN SUM(`amount`) > 0 THEN FLOOR((SUM(`price` * `amount`) / SUM(`amount`)) * COUNT(*)) ELSE 0 END AS `total_price`, " ..
 		"MAX(`price`) AS `highest_price`, MIN(`price`) AS `lowest_price` FROM `market_history` " ..
 		"WHERE `state` = " .. MARKET_STATE_ACCEPTED .. " AND `inserted` >= " .. firstDay ..
-		" GROUP BY `itemtype`, `sale`, FLOOR(`inserted` / 86400)"
+		" GROUP BY `itemtype`, `sale`, FLOOR(`inserted` / 86400) * 86400"
 	)
 end
 

@@ -447,6 +447,26 @@ CREATE TABLE IF NOT EXISTS player_bosstiary (
   PRIMARY KEY (player_id)
 );
 
+CREATE TABLE IF NOT EXISTS `player_rewarditems` (
+  `player_id` int NOT NULL,
+  `sid` int NOT NULL COMMENT 'range 0-100 will be reserved for adding items to player who are offline and all > 100 is for items saved from reward chest',
+  `pid` int NOT NULL DEFAULT '0',
+  `itemtype` smallint unsigned NOT NULL,
+  `count` smallint NOT NULL DEFAULT '0',
+  `attributes` blob NOT NULL,
+  UNIQUE KEY `player_id_2` (`player_id`, `sid`),
+  FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `player_save_async_pending` (
+  `guid` INT NOT NULL,
+  `query_index` INT UNSIGNED NOT NULL,
+  `query_text` LONGBLOB NOT NULL,
+  `created_at` BIGINT NOT NULL,
+  PRIMARY KEY (`guid`, `query_index`),
+  FOREIGN KEY (`guid`) REFERENCES `players`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS player_bosstiary_tracker (
   player_id int NOT NULL,
   bossid int NOT NULL,
