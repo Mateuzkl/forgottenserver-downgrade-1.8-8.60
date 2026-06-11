@@ -380,6 +380,56 @@ local function writeMissionList(out, missions)
 	end
 end
 
+local function writeThingValues(out, values)
+	values = type(values) == "table" and values or {}
+	local count = math.min(#values, 0xFFFF)
+	writeU16(out, count)
+	for index = 1, count do
+		local value = values[index] or {}
+		writeU16(out, value.thingId)
+		writeString(out, value.thingName)
+	end
+end
+
+local function writeOutfitGroups(out, groups)
+	groups = type(groups) == "table" and groups or {}
+	local groupIds = {}
+	for key, outfits in pairs(groups) do
+		local groupId = tonumber(key)
+		if groupId and groupId >= 0 and groupId <= 0xFF and type(outfits) == "table" and #outfits > 0 then
+			groupIds[#groupIds + 1] = groupId
+		end
+	end
+	table.sort(groupIds)
+
+	local groupCount = math.min(#groupIds, 0xFF)
+	out:addByte(groupCount)
+	for index = 1, groupCount do
+		local groupId = groupIds[index]
+		local outfits = groups[groupId] or groups[tostring(groupId)] or {}
+		local outfitCount = math.min(#outfits, 0xFF)
+		out:addByte(groupId)
+		out:addByte(outfitCount)
+		for outfitIndex = 1, outfitCount do
+			local outfit = outfits[outfitIndex] or {}
+			writeU16(out, outfit.looktype or outfit.thingId or outfit.type)
+			writeString(out, outfit.name or outfit.thingName)
+		end
+	end
+end
+
+local function writeRewardItems(out, items)
+	items = type(items) == "table" and items or {}
+	local count = math.min(#items, 0xFFFF)
+	writeU16(out, count)
+	for index = 1, count do
+		local item = items[index] or {}
+		writeU16(out, item.itemId)
+		writeU16(out, item.count)
+		writeBool(out, item.stuck)
+	end
+end
+
 local function sendBattlePassMessage(player, response, writer)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -522,6 +572,13 @@ function BattlePassSystem.sendRewards(player)
 					writeU16(out, reward.charges)
 					writeBool(out, reward.stuck)
 					writeBool(out, reward.hasClaimedReward or reward.hasClamedReward)
+					writeU32(out, reward.durationTime)
+					out:addByte(clamp(reward.addons, 0, 0xFF))
+					writeThingValues(out, reward.randomValues)
+					writeThingValues(out, reward.choosableValues)
+					writeOutfitGroups(out, reward.maleOutfit)
+					writeOutfitGroups(out, reward.femaleOutfit)
+					writeRewardItems(out, reward.items)
 				end
 			end
 		end) or sent
