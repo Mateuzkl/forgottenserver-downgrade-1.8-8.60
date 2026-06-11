@@ -703,13 +703,21 @@ void Player::sendMonkData()
 void Player::addBlessing(uint8_t blessing, uint8_t count)
 {
 	if (blessing < 1 || blessing > PLAYER_MAX_BLESSINGS || blessings[blessing] == 255) return;
+	const uint8_t oldCount = blessings[blessing];
 	blessings[blessing] = static_cast<uint8_t>(std::min(255, blessings[blessing] + count));
+	if (blessings[blessing] != oldCount) {
+		sendBlessStatus();
+	}
 }
 
 void Player::removeBlessing(uint8_t blessing, uint8_t count)
 {
 	if (blessing < 1 || blessing > PLAYER_MAX_BLESSINGS) return;
+	const uint8_t oldCount = blessings[blessing];
 	blessings[blessing] = static_cast<uint8_t>(std::max(0, blessings[blessing] - count));
+	if (blessings[blessing] != oldCount) {
+		sendBlessStatus();
+	}
 }
 
 bool Player::hasBlessing(uint8_t blessing) const

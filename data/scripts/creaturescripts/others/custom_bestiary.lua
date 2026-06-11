@@ -171,6 +171,9 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 		if CustomBestiary.invalidatePlayer then
 			CustomBestiary.invalidatePlayer(playerGuid)
 		end
+		if CustomBestiary.sendTracker then
+			CustomBestiary.sendTracker(player)
+		end
 		if oldKills < entry.toKill and newKills >= entry.toKill then
 			addPlayerCharmPoints(playerGuid, entry.charmPoints)
 		end

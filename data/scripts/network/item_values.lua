@@ -316,6 +316,15 @@ end
 
 loginEvent:register()
 
+local reconnectEvent = CreatureEvent("ItemValuesReconnect")
+
+function reconnectEvent.onReconnect(player)
+	addEvent(sendItemValues, 250, player:getId(), 1)
+	return true
+end
+
+reconnectEvent:register()
+
 local itemDetailsHandler = PacketHandler(OPCODE_ITEM_DETAILS)
 
 function itemDetailsHandler.onReceive(player, msg)
