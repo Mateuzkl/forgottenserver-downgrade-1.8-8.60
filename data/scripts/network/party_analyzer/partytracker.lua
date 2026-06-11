@@ -99,7 +99,7 @@ local function sendPartyAnalyzer(player)
 		out:addU64(data.damage)
 		out:addU64(data.healing)
 	end
-	out:addByte(0) -- online flag
+	out:addByte(1) -- has names flag: o bloco de nomes é sempre escrito abaixo
 	out:addByte(math.min(onlineMemberCount, 255))
 	for id, m in pairs(onlineMembers) do
 		out:addU32(id)
