@@ -127,7 +127,10 @@ local function ensureTables()
 end
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+	-- Os opcodes 0x5A/0x5B/0x5C/0xC4 são dialeto do AstraClient; outros
+	-- clients OTC (ex.: Redemption) não os parseiam e descartam mensagens
+	-- de até 14KB de catálogo no login (mesma razão do gate do #89).
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function getItemType(itemId)

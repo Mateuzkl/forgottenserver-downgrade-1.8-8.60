@@ -121,8 +121,12 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 		addByte(0);
 	}
 
-	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
-	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
+	// O tier byte só é parseável por quem negociou o dialeto (marker
+	// OTCv8TierByte -> alwaysSendTier). O ramo por classification pressupunha
+	// um client 13.x+ que conhece classification pelo .dat — impossível num
+	// servidor 860-only; para os demais clients OTC o byte extra dessincroniza
+	// o stream (ex.: 0x6E de containers no OTClient Redemption).
+	if (sendTier && alwaysSendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY)) {
 		addByte(static_cast<uint8_t>(it.tier));
 	}
 }
@@ -146,8 +150,8 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 		addByte(0);
 	}
 
-	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
-	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
+	// Ver comentário no overload acima: tier byte apenas com dialeto negociado.
+	if (sendTier && alwaysSendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY)) {
 		addByte(item->getTier());
 	}
 }
