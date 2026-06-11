@@ -1,14 +1,24 @@
 BattlePassSystem = BattlePassSystem or {}
 
-local BATTLEPASS_OPCODE = 225
+local BATTLEPASS_REQUEST_OPCODE = 0x36
+local BATTLEPASS_SEND_OPCODE = 0x37
 local RESOURCE_BALANCE_OPCODE = 0xEE
 local RESOURCE_BANK = 0
 local RESOURCE_INVENTORY = 1
-local EXTENDED_OPCODE_MAX_STRING_LENGTH = 8192
 local REWARD_STEPS_PER_CHUNK = 20
 
+local REQUEST_GET_MISSIONS = 1
+local REQUEST_GET_REWARDS = 2
+local REQUEST_REROLL = 3
+local REQUEST_REDEEM = 4
+local REQUEST_BUY_PREMIUM = 5
+
+local RESPONSE_MISSIONS = 1
+local RESPONSE_REWARDS = 2
+local RESPONSE_ERROR = 3
+
 local function supportsCustomNetwork(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local DAY_SECONDS = 24 * 60 * 60
@@ -315,27 +325,6 @@ local function buildMissionsPayload(player, state, season, daily)
 	}
 end
 
-local function sendOpcode(player, action, data)
-	if not player or not player.sendExtendedOpcode then
-		return false
-	end
-
-	local ok, buffer = pcall(json.encode, {
-		action = action,
-		data = data or {},
-	})
-	if not ok or type(buffer) ~= "string" then
-		return false
-	end
-
-	if #buffer > EXTENDED_OPCODE_MAX_STRING_LENGTH then
-		print(string.format("[Battle Pass] Refusing oversized extended opcode payload (%s, %d bytes).", action, #buffer))
-		return false
-	end
-
-	return player:sendExtendedOpcode(BATTLEPASS_OPCODE, buffer)
-end
-
 local function sendResourceBalance(player, resourceType, value)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -348,6 +337,69 @@ local function sendResourceBalance(player, resourceType, value)
 	return msg:sendToPlayer(player)
 end
 
+local function writeString(out, value)
+	out:addString(tostring(value or ""))
+end
+
+local function writeBool(out, value)
+	out:addByte(value and 1 or 0)
+end
+
+local function writeU16(out, value)
+	out:addU16(clamp(value, 0, 0xFFFF))
+end
+
+local function writeU32(out, value)
+	out:addU32(clamp(value, 0, 0xFFFFFFFF))
+end
+
+local function writeOutfit(out, outfit)
+	outfit = outfit or {}
+	writeU16(out, outfit.type)
+	out:addByte(clamp(outfit.head, 0, 0xFF))
+	out:addByte(clamp(outfit.body, 0, 0xFF))
+	out:addByte(clamp(outfit.legs, 0, 0xFF))
+	out:addByte(clamp(outfit.feet, 0, 0xFF))
+	out:addByte(clamp(outfit.addons, 0, 0xFF))
+end
+
+local function writeMission(out, mission)
+	writeString(out, mission.missionId)
+	writeString(out, mission.missionName)
+	writeString(out, mission.missionDescription)
+	writeU32(out, mission.currentProgress)
+	writeU32(out, mission.maxProgress)
+	writeU16(out, mission.rewardPoints)
+end
+
+local function writeMissionList(out, missions)
+	missions = type(missions) == "table" and missions or {}
+	writeU16(out, #missions)
+	for index = 1, math.min(#missions, 0xFFFF) do
+		writeMission(out, missions[index])
+	end
+end
+
+local function sendBattlePassMessage(player, response, writer)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local out = NetworkMessage(player)
+	out:addByte(BATTLEPASS_SEND_OPCODE)
+	out:addByte(response)
+	if writer then
+		writer(out)
+	end
+	return out:sendToPlayer(player)
+end
+
+local function sendBattlePassError(player, message)
+	return sendBattlePassMessage(player, RESPONSE_ERROR, function(out)
+		writeString(out, message)
+	end)
+end
+
 local function sendMoneyResources(player)
 	local bankSent = sendResourceBalance(player, RESOURCE_BANK, player:getBankBalance())
 	local inventorySent = sendResourceBalance(player, RESOURCE_INVENTORY, player:getMoney())
@@ -357,7 +409,21 @@ end
 local function sendMissionState(player, state, season, daily)
 	local payload = buildMissionsPayload(player, state, season, daily)
 	sendMoneyResources(player)
-	return sendOpcode(player, "missions", payload)
+	return sendBattlePassMessage(player, RESPONSE_MISSIONS, function(out)
+		writeOutfit(out, payload.playerOutfit)
+		writeU32(out, payload.beginTime)
+		writeU32(out, payload.endTime)
+		writeU32(out, payload.points)
+		writeU32(out, payload.rerollPrice)
+		writeU32(out, payload.deluxePrice)
+		writeBool(out, payload.battlePassActive)
+		writeU16(out, payload.currentRewardStep)
+		writeU32(out, payload.nextStepPoints)
+		writeU32(out, payload.dailyBeginTime)
+		writeU32(out, payload.dailyEndTime)
+		writeMissionList(out, payload.dailyMissions)
+		writeMissionList(out, payload.generalMissions)
+	end)
 end
 
 function BattlePassSystem.sendMissions(player)
@@ -423,7 +489,12 @@ function BattlePassSystem.sendRewards(player)
 	saveState(store, state)
 
 	if #rewards == 0 then
-		return sendOpcode(player, "rewards", rewards)
+		return sendBattlePassMessage(player, RESPONSE_REWARDS, function(out)
+			writeBool(out, false)
+			writeU16(out, 1)
+			writeU16(out, 0)
+			writeU16(out, 0)
+		end)
 	end
 
 	local sent = false
@@ -433,12 +504,27 @@ function BattlePassSystem.sendRewards(player)
 			table.insert(steps, rewards[index])
 		end
 
-		sent = sendOpcode(player, "rewards", {
-			chunk = true,
-			first = first,
-			total = #rewards,
-			steps = steps,
-		}) or sent
+		sent = sendBattlePassMessage(player, RESPONSE_REWARDS, function(out)
+			writeBool(out, true)
+			writeU16(out, first)
+			writeU16(out, #rewards)
+			writeU16(out, #steps)
+			for _, step in ipairs(steps) do
+				writeU16(out, step.stepId)
+				out:addByte(math.min(#step.rewards, 0xFF))
+				for index = 1, math.min(#step.rewards, 0xFF) do
+					local reward = step.rewards[index]
+					writeU32(out, reward.rewardId)
+					out:addByte(clamp(reward.rewardType, 0, 0xFF))
+					writeBool(out, reward.freeReward)
+					writeU16(out, reward.itemId)
+					writeU16(out, reward.count)
+					writeU16(out, reward.charges)
+					writeBool(out, reward.stuck)
+					writeBool(out, reward.hasClaimedReward or reward.hasClamedReward)
+				end
+			end
+		end) or sent
 	end
 	return sent
 end
@@ -670,14 +756,7 @@ local function isRateLimited(player, action)
 	return false
 end
 
-function BattlePassSystem.onExtendedOpcode(player, buffer)
-	local ok, payload = pcall(json.decode, buffer)
-	if not ok or type(payload) ~= "table" then
-		return true
-	end
-
-	local action = payload.action
-	local data = type(payload.data) == "table" and payload.data or {}
+local function handleBattlePassRequest(player, action, data)
 	if isRateLimited(player, action) then
 		return true
 	end
@@ -694,11 +773,59 @@ function BattlePassSystem.onExtendedOpcode(player, buffer)
 		local errorMessage = BattlePassSystem.purchasePremium(player)
 		if errorMessage then
 			player:sendCancelMessage("[Battle Pass] " .. errorMessage)
+			sendBattlePassError(player, errorMessage)
 			BattlePassSystem.sendMissions(player)
 		end
 	end
 	return true
 end
+
+local battlePassHandler = PacketHandler(BATTLEPASS_REQUEST_OPCODE)
+function battlePassHandler.onReceive(player, msg)
+	if not supportsCustomNetwork(player) then
+		return true
+	end
+
+	local request = NetworkGuard.readByte(msg)
+	if not request then
+		return true
+	end
+
+	if request == REQUEST_GET_MISSIONS then
+		return handleBattlePassRequest(player, "getMissions", {})
+	elseif request == REQUEST_GET_REWARDS then
+		return handleBattlePassRequest(player, "getRewards", {})
+	elseif request == REQUEST_REROLL then
+		local missionId = NetworkGuard.readString(msg, 128)
+		if not missionId then
+			sendBattlePassError(player, "Invalid mission.")
+			return true
+		end
+		return handleBattlePassRequest(player, "reroll", { missionId = missionId })
+	elseif request == REQUEST_REDEEM then
+		local index = NetworkGuard.readU16(msg)
+		local rewardId = NetworkGuard.readU32(msg)
+		local objectId = NetworkGuard.readU32(msg)
+		if not index or not rewardId or not objectId then
+			sendBattlePassError(player, "Invalid reward.")
+			return true
+		end
+		if objectId == 0 then
+			objectId = -1
+		end
+		return handleBattlePassRequest(player, "redeem", {
+			index = index,
+			rewardId = rewardId,
+			objectId = objectId,
+		})
+	elseif request == REQUEST_BUY_PREMIUM then
+		return handleBattlePassRequest(player, "buyPremium", {})
+	end
+
+	sendBattlePassError(player, "Unknown request.")
+	return true
+end
+battlePassHandler:register()
 
 local killEvent = CreatureEvent("BattlePassKill")
 function killEvent.onKill(player, target)

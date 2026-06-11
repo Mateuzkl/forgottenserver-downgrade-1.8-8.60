@@ -49,6 +49,7 @@ bool isAstraOnlyLuaOpcode(uint8_t opcode)
 {
 	switch (opcode) {
 		case 0x2C: // custom boss cooldown
+		case 0x37: // custom battle pass
 		case 0x9B: // blessing window
 		case 0x9C: // blessing status
 		case 0xC0: // managed quick-loot containers
