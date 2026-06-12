@@ -60,6 +60,9 @@ function serverstartup.onStartup()
 	logInfo(">> Loaded all actions in the map")
 	logInfo(">> Loaded all uniques in the map")
 
+	logInfo(">> Spawning Hirelings")
+	HirelingsInit()
+
 	-- load map trainers
 	--Game.loadMap("data/world/trainers/trainers-custom.otbm")
 	logInfo(">> Loaded map trainers")

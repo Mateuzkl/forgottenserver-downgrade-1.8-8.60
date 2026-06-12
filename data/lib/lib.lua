@@ -8,3 +8,7 @@ dofile(CORE_DIRECTORY .. '/lib/compat/compat.lua')
 dofile(CORE_DIRECTORY .. '/lib/debugging/dump.lua')
 
 dofile(CORE_DIRECTORY .. '/lib/functions/load.lua')
+
+-- Hireling system
+dofile(CORE_DIRECTORY .. '/lib/hireling_lib.lua')
+dofile(CORE_DIRECTORY .. '/lib/hireling_items.lua')
