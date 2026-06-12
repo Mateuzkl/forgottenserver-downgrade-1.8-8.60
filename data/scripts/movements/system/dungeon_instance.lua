@@ -203,7 +203,8 @@ function entryMovement.onStepIn(creature, item, position, fromPosition)
 
         local dest = p:getClosestFreePosition(PLAYER_DEST, false)
         if dest.x == 0 then dest = PLAYER_DEST end
-        p:teleportTo(dest)
+        p:teleportTo(dest, false, CONST_ME_NONE)
+        dest:sendMagicEffect(CONST_ME_TELEPORT, instanceId)
 
     end
 
