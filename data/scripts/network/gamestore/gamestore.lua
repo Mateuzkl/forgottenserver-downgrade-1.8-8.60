@@ -35,6 +35,28 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
+local function playerOwnsMount(player, mountId)
+	if player.ownsMount then
+		local ok, owned = pcall(function()
+			return player:ownsMount(mountId)
+		end)
+		if ok then
+			return owned == true
+		end
+	end
+
+	if player.hasMount then
+		local ok, owned = pcall(function()
+			return player:hasMount(mountId)
+		end)
+		if ok then
+			return owned == true
+		end
+	end
+
+	return false
+end
+
 local function logInfo(message)
 	if logger and logger.info then
 		logger.info(message)
@@ -453,7 +475,7 @@ local function deliverOffer(player, offer, extra)
 	end
 
 	if offer.oftype == "mount" then
-		if player:ownsMount(offer.value) then
+		if playerOwnsMount(player, offer.value) then
 			return "You already have this mount."
 		end
 
