@@ -72,6 +72,33 @@ bool isInsideStoreInbox(const Cylinder* cylinder)
 	return false;
 }
 
+bool isCarriedByCreature(const Cylinder* cylinder)
+{
+	if (!cylinder) {
+		return false;
+	}
+
+	if (cylinder->getCreature()) {
+		return true;
+	}
+
+	const Item* item = cylinder->getItem();
+	if (!item) {
+		return false;
+	}
+
+	const Cylinder* topParent = item->getTopParent();
+	return topParent && topParent->getCreature();
+}
+
+uint32_t getDestinationInstanceId(const Player* actor, const Cylinder* destination)
+{
+	if (!actor || !destination || isCarriedByCreature(destination) || !destination->getTile()) {
+		return 0;
+	}
+	return actor->getInstanceID();
+}
+
 std::string getDamageAnimatedText(int32_t value)
 {
 	if (getBoolean(ConfigManager::MODIFY_DAMAGE_IN_K)) {
@@ -550,7 +577,7 @@ Thing* Game::internalGetThing(Player* player, const Position& pos, int32_t index
 			}
 
 			case STACKPOS_MOVE: {
-				Item* item = tile->getTopDownItem();
+				Item* item = tile->getTopDownItem(player->getInstanceID());
 				if (item && item->isMoveable()) {
 					thing = item;
 				} else {
@@ -560,19 +587,19 @@ Thing* Game::internalGetThing(Player* player, const Position& pos, int32_t index
 			}
 
 			case STACKPOS_USEITEM: {
-				thing = tile->getUseItem(index);
+				thing = tile->getUseItem(index, player);
 				break;
 			}
 
 			case STACKPOS_TOPDOWN_ITEM: {
-				thing = tile->getTopDownItem();
+				thing = tile->getTopDownItem(player->getInstanceID());
 				break;
 			}
 
 			case STACKPOS_USETARGET: {
 				thing = tile->getTopVisibleCreature(player);
 				if (!thing) {
-					thing = tile->getUseItem(index);
+					thing = tile->getUseItem(index, player);
 				}
 				break;
 			}
@@ -1407,42 +1434,24 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
 	player->setNextActionTask(nullptr);
 
 	if (item == nullptr) {
-		if (fromPos.x != 0xFFFF) {
-			if (Tile* tile = map.getTile(fromPos)) {
-				if (const TileItemVector* items = tile->getItemList()) {
-					for (const auto& itemRef : *items) {
-						Item* tileItem = itemRef.get();
-						if (tileItem->getClientID() == spriteId) {
-							if (tileItem->getInstanceID() == 0 || player->compareInstance(tileItem->getInstanceID())) {
-								item = tileItem;
-								break;
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if (!item) {
-			uint8_t fromIndex = 0;
-			if (fromPos.x == 0xFFFF) {
-				if (fromPos.y & 0x40) {
-					fromIndex = fromPos.z;
-				} else {
-					fromIndex = static_cast<uint8_t>(fromPos.y);
-				}
+		uint8_t fromIndex = 0;
+		if (fromPos.x == 0xFFFF) {
+			if (fromPos.y & 0x40) {
+				fromIndex = fromPos.z;
 			} else {
-				fromIndex = fromStackPos;
+				fromIndex = static_cast<uint8_t>(fromPos.y);
 			}
-
-			Thing* thing = internalGetThing(player, fromPos, fromIndex, 0, STACKPOS_MOVE);
-			if (!thing || !thing->getItem()) {
-				player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
-				return;
-			}
-
-			item = thing->getItem();
+		} else {
+			fromIndex = fromStackPos;
 		}
+
+		Thing* thing = internalGetThing(player, fromPos, fromIndex, 0, STACKPOS_MOVE);
+		if (!thing || !thing->getItem()) {
+			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+			return;
+		}
+
+		item = thing->getItem();
 	}
 
 	if (item->getClientID() != spriteId) {
@@ -1450,6 +1459,9 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
 		return;
 	}
 
+	if (item->getTopParent() == player) {
+		item->setInstanceID(0);
+	}
 	if (!InstanceUtils::isPlayerInSameInstance(player, item->getInstanceID())) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
@@ -1695,6 +1707,10 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
                                    const Position* fromPos /*= nullptr*/, const Position* toPos /*= nullptr*/)
 {
 	Player* actorPlayer = actor ? actor->getPlayer() : nullptr;
+	if (actorPlayer && item->getTopParent() == actorPlayer) {
+		item->setInstanceID(0);
+	}
+	const uint32_t sourceInstanceId = item->getInstanceID();
 	if (actorPlayer && !InstanceUtils::isPlayerInSameInstance(actorPlayer, item->getInstanceID())) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
@@ -1751,6 +1767,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 			break;
 		}
 	}
+	const uint32_t destinationInstanceId = getDestinationInstanceId(actorPlayer, toCylinder);
 
 	if (actorPlayer) {
 		const ReturnValue storeInboxLockRet = getStoreInboxLockedItemMoveReturn(item);
@@ -1931,8 +1948,8 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 
 		if (item->equals(toItem)) {
 			n = std::min<uint32_t>(toItem->getStackSize() - toItem->getItemCount(), m);
-			if (actorPlayer && toCylinder->getTile()) {
-				toItem->setInstanceID(actorPlayer->getInstanceID());
+			if (actorPlayer) {
+				toItem->setInstanceID(destinationInstanceId);
 			}
 			toCylinder->updateThing(toItem, toItem->getID(), toItem->getItemCount() + n);
 			updateItem = toItem;
@@ -1957,14 +1974,20 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 
 	// add item
 	if (moveItem /*m - n > 0*/) {
-		if (actorPlayer && toCylinder->getTile()) {
-			moveItem->setInstanceID(actorPlayer->getInstanceID());
+		if (actorPlayer) {
+			moveItem->setInstanceID(destinationInstanceId);
 		}
 		toCylinder->addThing(index, moveItem);
 	}
 
 	if (itemIndex != -1) {
-		fromCylinder->postRemoveNotification(item, toCylinder, itemIndex);
+		if (moveItem == item && actorPlayer) {
+			item->setInstanceID(sourceInstanceId);
+			fromCylinder->postRemoveNotification(item, toCylinder, itemIndex);
+			item->setInstanceID(destinationInstanceId);
+		} else {
+			fromCylinder->postRemoveNotification(item, toCylinder, itemIndex);
+		}
 	}
 
 	if (moveItem) {
@@ -2866,31 +2889,12 @@ void Game::playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t f
 		return;
 	}
 
-	Item* item = nullptr;
-	if (fromPos.x != 0xFFFF) {
-		if (Tile* tile = map.getTile(fromPos)) {
-			if (const TileItemVector* items = tile->getItemList()) {
-				for (const auto& itemRef : *items) {
-					Item* tileItem = itemRef.get();
-					if (tileItem->getClientID() == fromSpriteId) {
-						if (tileItem->getInstanceID() == 0 || player->compareInstance(tileItem->getInstanceID())) {
-							item = tileItem;
-							break;
-						}
-					}
-				}
-			}
-		}
+	Thing* thing = internalGetThing(player, fromPos, fromStackPos, fromSpriteId, STACKPOS_USEITEM);
+	if (!thing) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
 	}
-
-	if (!item) {
-		Thing* thing = internalGetThing(player, fromPos, fromStackPos, fromSpriteId, STACKPOS_USEITEM);
-		if (!thing) {
-			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
-			return;
-		}
-		item = thing->getItem();
-	}
+	Item* item = thing->getItem();
 	if (!item || !item->isUseable()) {
 		player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
 		return;
@@ -3015,31 +3019,12 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
-	Item* item = nullptr;
-	if (pos.x != 0xFFFF) {
-		if (Tile* tile = map.getTile(pos)) {
-			if (const TileItemVector* items = tile->getItemList()) {
-				for (const auto& itemRef : *items) {
-					Item* tileItem = itemRef.get();
-					if (tileItem->getClientID() == spriteId) {
-						if (tileItem->getInstanceID() == 0 || player->compareInstance(tileItem->getInstanceID())) {
-							item = tileItem;
-							break;
-						}
-					}
-				}
-			}
-		}
+	Thing* thing = internalGetThing(player, pos, stackPos, spriteId, STACKPOS_USEITEM);
+	if (!thing) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
 	}
-
-	if (!item) {
-		Thing* thing = internalGetThing(player, pos, stackPos, spriteId, STACKPOS_USEITEM);
-		if (!thing) {
-			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
-			return;
-		}
-		item = thing->getItem();
-	}
+	Item* item = thing->getItem();
 	if (!item || item->isUseable()) {
 		player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
 		return;
@@ -4243,6 +4228,12 @@ void Game::playerLookAt(uint32_t playerId, const Position& pos, uint8_t stackPos
 
 	Thing* thing = internalGetThing(player, pos, stackPos, 0, STACKPOS_LOOK);
 	if (!thing) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (const Item* item = thing->getItem();
+	    item && !InstanceUtils::canSeeItemInInstance(player->getInstanceID(), item)) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}

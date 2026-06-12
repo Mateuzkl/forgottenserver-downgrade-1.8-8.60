@@ -752,10 +752,13 @@ void Npc::onCreatureSay(Creature* creature, SpeakClasses type, std::string_view 
 
 	// only players for script events
 	Player* player = creature->getPlayer();
-	if (player) {
-		if (npcEventHandler) {
-			npcEventHandler->onCreatureSay(player, type, text);
-		}
+	if (!player || !compareInstance(player->getInstanceID()) ||
+	    !getPosition().isInRange(player->getPosition(), Npcs::TalkRadius, Npcs::TalkRadius, 0)) {
+		return;
+	}
+
+	if (npcEventHandler) {
+		npcEventHandler->onCreatureSay(player, type, text);
 	}
 }
 

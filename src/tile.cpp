@@ -374,6 +374,18 @@ Item* Tile::getTopDownItem() const
 	return nullptr;
 }
 
+Item* Tile::getTopDownItem(uint32_t instanceId) const
+{
+	if (const TileItemVector* items = getItemList()) {
+		for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
+			if (InstanceUtils::canSeeItemInInstance(instanceId, it->get())) {
+				return it->get();
+			}
+		}
+	}
+	return nullptr;
+}
+
 Item* Tile::getTopTopItem() const
 {
 	if (const TileItemVector* items = getItemList()) {
@@ -412,6 +424,10 @@ Thing* Tile::getTopVisibleThing(const Creature* creature)
 	if (items) {
 		for (ItemVector::const_iterator it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end;
 		     ++it) {
+			if (creature && !InstanceUtils::canSeeItemInInstance(creature->getInstanceID(), it->get())) {
+				continue;
+			}
+
 			const ItemType& iit = Item::items[(*it)->getID()];
 			if (!iit.lookThrough) {
 				return it->get();
@@ -421,6 +437,10 @@ Thing* Tile::getTopVisibleThing(const Creature* creature)
 		for (auto it = ItemVector::const_reverse_iterator(items->getEndTopItem()),
 		          end = ItemVector::const_reverse_iterator(items->getBeginTopItem());
 		     it != end; ++it) {
+			if (creature && !InstanceUtils::canSeeItemInInstance(creature->getInstanceID(), it->get())) {
+				continue;
+			}
+
 			const ItemType& iit = Item::items[(*it)->getID()];
 			if (!iit.lookThrough) {
 				return it->get();
@@ -813,7 +833,7 @@ ReturnValue Tile::queryRemove(const Thing& thing, uint32_t count, uint32_t flags
 	return RETURNVALUE_NOERROR;
 }
 
-Tile* Tile::queryDestination(int32_t&, const Thing&, Item** destItem, uint32_t& flags)
+Tile* Tile::queryDestination(int32_t&, const Thing& thing, Item** destItem, uint32_t& flags)
 {
 	Tile* destTile = nullptr;
 	*destItem = nullptr;
@@ -902,7 +922,7 @@ Tile* Tile::queryDestination(int32_t&, const Thing&, Item** destItem, uint32_t& 
 	}
 
 	if (destTile) {
-		Thing* destThing = destTile->getTopDownItem();
+		Thing* destThing = destTile->getTopDownItem(thing.getInstanceID());
 		if (destThing) {
 			*destItem = destThing->getItem();
 		}
@@ -1436,6 +1456,56 @@ Thing* Tile::getThing(size_t index) const
 	return nullptr;
 }
 
+Thing* Tile::getThing(const Player* player, size_t index) const
+{
+	if (!player) {
+		return getThing(index);
+	}
+
+	if (ground) {
+		if (index == 0) {
+			return ground.get();
+		}
+		--index;
+	}
+
+	const uint32_t instanceId = player->getInstanceID();
+	const TileItemVector* items = getItemList();
+	if (items) {
+		for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
+			if (!InstanceUtils::canSeeItemInInstance(instanceId, it->get())) {
+				continue;
+			}
+			if (index-- == 0) {
+				return it->get();
+			}
+		}
+	}
+
+	if (const CreatureVector* creatures = getCreatures()) {
+		for (auto it = creatures->rbegin(), end = creatures->rend(); it != end; ++it) {
+			if (!player->canSeeCreature(it->get())) {
+				continue;
+			}
+			if (index-- == 0) {
+				return it->get();
+			}
+		}
+	}
+
+	if (items) {
+		for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
+			if (!InstanceUtils::canSeeItemInInstance(instanceId, it->get())) {
+				continue;
+			}
+			if (index-- == 0) {
+				return it->get();
+			}
+		}
+	}
+	return nullptr;
+}
+
 void Tile::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index,
                                cylinderlink_t link /*= LINK_OWNER*/)
 {
@@ -1711,7 +1781,7 @@ void Tile::resetTileFlags(const Item* item)
 
 bool Tile::isMoveableBlocking() const { return !ground || hasFlag(TILESTATE_BLOCKSOLID); }
 
-Item* Tile::getUseItem(int32_t index) const
+Item* Tile::getUseItem(int32_t index, const Player* player) const
 {
 	const TileItemVector* items = getItemList();
 
@@ -1721,7 +1791,7 @@ Item* Tile::getUseItem(int32_t index) const
 	}
 
 	// try getting thing by index
-	if (Thing* thing = getThing(index)) {
+	if (Thing* thing = player ? getThing(player, index) : getThing(index)) {
 		Item* thingItem = thing->getItem();
 		if (thingItem) {
 			return thingItem;
@@ -1729,19 +1799,27 @@ Item* Tile::getUseItem(int32_t index) const
 	}
 
 	// try getting top movable item
-	Item* topDownItem = getTopDownItem();
+	Item* topDownItem = player ? getTopDownItem(player->getInstanceID()) : getTopDownItem();
 	if (topDownItem) {
 		return topDownItem;
 	}
 
 	// try getting door
 	for (auto it = items->rbegin(), end = items->rend(); it != end; ++it) {
+		if (player && !InstanceUtils::canSeeItemInInstance(player->getInstanceID(), it->get())) {
+			continue;
+		}
 		if ((*it)->getDoor()) {
 			return (*it)->getItem();
 		}
 	}
 
-	return items->begin()->get();
+	for (const auto& item : *items) {
+		if (!player || InstanceUtils::canSeeItemInInstance(player->getInstanceID(), item.get())) {
+			return item.get();
+		}
+	}
+	return ground.get();
 }
 
 void Tile::setZoneIds(std::vector<ZoneId> newZoneIds)

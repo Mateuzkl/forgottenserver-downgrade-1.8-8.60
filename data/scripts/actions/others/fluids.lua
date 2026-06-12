@@ -51,10 +51,10 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 				player:addCondition(poison)
 			elseif item.type == FLUID_MANA then
 				player:addMana(math.random(50, 150))
-				fromPosition:sendMagicEffect(CONST_ME_MAGIC_BLUE)
+				fromPosition:sendMagicEffect(CONST_ME_MAGIC_BLUE, player:getInstanceId())
 			elseif item.type == FLUID_LIFE then
 				player:addHealth(60)
-				fromPosition:sendMagicEffect(CONST_ME_MAGIC_BLUE)
+				fromPosition:sendMagicEffect(CONST_ME_MAGIC_BLUE, player:getInstanceId())
 			end
 			player:say(fluidMessage[item.type] or "Gulp.", TALKTYPE_MONSTER_SAY)
 			item:transform(item:getId(), FLUID_NONE)

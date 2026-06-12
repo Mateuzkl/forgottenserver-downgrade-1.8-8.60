@@ -58,9 +58,12 @@ int luaPositionIsSightClear(lua_State* L)
 
 int luaPositionSendMagicEffect(lua_State* L)
 {
-	// position:sendMagicEffect(magicEffect[, players = {}])
+	// position:sendMagicEffect(magicEffect[, players = {}|instanceId])
 	SpectatorVec spectators;
-	if (lua_gettop(L) >= 3) {
+	uint32_t instanceId = 0;
+	if (lua_isnumber(L, 3)) {
+		instanceId = getInteger<uint32_t>(L, 3);
+	} else if (lua_gettop(L) >= 3) {
 		getSpectators<Player>(L, 3, spectators);
 	}
 
@@ -75,7 +78,7 @@ int luaPositionSendMagicEffect(lua_State* L)
 	if (!spectators.empty()) {
 		Game::addMagicEffect(spectators, position, magicEffect);
 	} else {
-		g_game.addMagicEffect(position, magicEffect);
+		g_game.addMagicEffect(position, magicEffect, instanceId);
 	}
 
 	pushBoolean(L, true);
@@ -84,9 +87,12 @@ int luaPositionSendMagicEffect(lua_State* L)
 
 int luaPositionSendDistanceEffect(lua_State* L)
 {
-	// position:sendDistanceEffect(positionEx, distanceEffect[, players = {}])
+	// position:sendDistanceEffect(positionEx, distanceEffect[, players = {}|instanceId])
 	SpectatorVec spectators;
-	if (lua_gettop(L) >= 4) {
+	uint32_t instanceId = 0;
+	if (lua_isnumber(L, 4)) {
+		instanceId = getInteger<uint32_t>(L, 4);
+	} else if (lua_gettop(L) >= 4) {
 		getSpectators<Player>(L, 4, spectators);
 	}
 
@@ -96,7 +102,7 @@ int luaPositionSendDistanceEffect(lua_State* L)
 	if (!spectators.empty()) {
 		Game::addDistanceEffect(spectators, position, positionEx, distanceEffect);
 	} else {
-		g_game.addDistanceEffect(position, positionEx, distanceEffect);
+		g_game.addDistanceEffect(position, positionEx, distanceEffect, instanceId);
 	}
 
 	pushBoolean(L, true);

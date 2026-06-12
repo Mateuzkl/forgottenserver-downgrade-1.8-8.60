@@ -144,7 +144,7 @@ function potionsAction.onUse(player, item, fromPosition, target, toPosition, isH
 	if potion.condition then
 		player:addCondition(potion.condition)
 		player:say(potion.text, TALKTYPE_MONSTER_SAY)
-		player:getPosition():sendMagicEffect(potion.effect)
+		player:getPosition():sendMagicEffect(potion.effect, player:getInstanceId())
 
 	elseif potion.transform then
 		local reward = potion.transform[math.random(#potion.transform)]
@@ -158,7 +158,7 @@ function potionsAction.onUse(player, item, fromPosition, target, toPosition, isH
 		else
 			Game.createItem(reward, 1, fromPosition)
 		end
-		item:getPosition():sendMagicEffect(potion.effect)
+		item:getPosition():sendMagicEffect(potion.effect, player:getInstanceId())
 		if sendSupplyTracker then sendSupplyTracker(player, item) end
 		item:remove(1)
 		return true
@@ -179,7 +179,7 @@ function potionsAction.onUse(player, item, fromPosition, target, toPosition, isH
 
 		player:addAchievementProgress("Potion Addict", 100000)
 		target:say("Aaaah...", TALKTYPE_MONSTER_SAY)
-		target:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
+		target:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE, target:getInstanceId())
 	end
 
 	if not configManager.getBoolean(configKeys.REMOVE_POTION_CHARGES) then

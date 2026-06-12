@@ -11,6 +11,7 @@
 #include "zones.h"
 
 class Creature;
+class Player;
 class Teleport;
 class TrashHolder;
 class Mailbox;
@@ -161,6 +162,7 @@ public:
 	const Creature* getBottomVisibleCreature(const Creature* creature) const;
 	Item* getTopTopItem() const;
 	Item* getTopDownItem() const;
+	Item* getTopDownItem(uint32_t instanceId) const;
 	bool isMoveableBlocking() const;
 	Thing* getTopVisibleThing(const Creature* creature);
 	Item* getItemByTopOrder(int32_t topOrder);
@@ -233,6 +235,7 @@ public:
 	size_t getLastIndex() const override final;
 	uint32_t getItemTypeCount(uint16_t itemId, int32_t subType = -1, bool ignoreEquipped = false) const override final;
 	Thing* getThing(size_t index) const override final;
+	Thing* getThing(const Player* player, size_t index) const;
 
 	void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index,
 	                         cylinderlink_t link = LINK_OWNER) override final;
@@ -246,7 +249,7 @@ public:
 
 	bool isRemoved() const override final { return false; }
 
-	Item* getUseItem(int32_t index) const;
+	Item* getUseItem(int32_t index, const Player* player = nullptr) const;
 
 	Item* getGround() const { return ground.get(); }
 	void setGround(const std::shared_ptr<Item>& item) { ground = item; }
