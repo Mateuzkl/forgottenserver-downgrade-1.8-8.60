@@ -19,7 +19,8 @@ public:
 	                     Creature* actor = nullptr) const override;
 	ReturnValue queryRemove(const Thing& thing, uint32_t count, uint32_t flags,
 	                        Creature* actor = nullptr) const override;
-	Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags) override;
+	Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+	                           uint32_t destinationInstanceId) override;
 
 	void postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index,
 	                         cylinderlink_t link = LINK_OWNER) override;

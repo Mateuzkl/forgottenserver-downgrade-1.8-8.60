@@ -473,6 +473,7 @@ public:
 	Item& operator=(const Item&) = delete;
 
 	bool equals(const Item* otherItem) const;
+	bool equalsIgnoringInstance(const Item* otherItem) const;
 
 	Item* getItem() override final { return this; }
 	const Item* getItem() const override final { return this; }

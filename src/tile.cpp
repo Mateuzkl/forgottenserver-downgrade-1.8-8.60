@@ -833,7 +833,8 @@ ReturnValue Tile::queryRemove(const Thing& thing, uint32_t count, uint32_t flags
 	return RETURNVALUE_NOERROR;
 }
 
-Tile* Tile::queryDestination(int32_t&, const Thing& thing, Item** destItem, uint32_t& flags)
+Tile* Tile::queryDestination(int32_t&, const Thing& thing, Item** destItem, uint32_t& flags,
+                             uint32_t destinationInstanceId)
 {
 	Tile* destTile = nullptr;
 	*destItem = nullptr;
@@ -922,9 +923,26 @@ Tile* Tile::queryDestination(int32_t&, const Thing& thing, Item** destItem, uint
 	}
 
 	if (destTile) {
-		Thing* destThing = destTile->getTopDownItem(thing.getInstanceID());
-		if (destThing) {
-			*destItem = destThing->getItem();
+		const Item* movingItem = thing.getItem();
+		if (movingItem && movingItem->isStackable() && !hasBitSet(FLAG_IGNOREAUTOSTACK, flags)) {
+			if (const TileItemVector* items = destTile->getItemList()) {
+				for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
+					Item* candidate = it->get();
+					if (candidate != movingItem && candidate->getInstanceID() == destinationInstanceId &&
+					    candidate->equalsIgnoringInstance(movingItem) &&
+					    candidate->getItemCount() < candidate->getStackSize()) {
+						*destItem = candidate;
+						break;
+					}
+				}
+			}
+		} else if (const TileItemVector* items = destTile->getItemList()) {
+			for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
+				if ((*it)->getInstanceID() == destinationInstanceId) {
+					*destItem = it->get();
+					break;
+				}
+			}
 		}
 	}
 	return destTile;

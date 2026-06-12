@@ -81,7 +81,8 @@ public:
 	 * this method can modify the flags
 	 * \returns Cylinder returns the destination cylinder
 	 */
-	virtual Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags) = 0;
+	virtual Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+	                                   uint32_t destinationInstanceId) = 0;
 
 	/**
 	 * Add the object to the cylinder
@@ -207,7 +208,9 @@ public:
 	{
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
-	virtual Cylinder* queryDestination(int32_t&, const Thing&, Item**, uint32_t&) override { return nullptr; }
+	virtual Cylinder* queryDestination(int32_t&, const Thing&, Item**, uint32_t&, uint32_t) override {
+		return nullptr;
+	}
 
 	virtual void addThing(Thing*) override {}
 	virtual void addThing(int32_t, Thing*) override {}

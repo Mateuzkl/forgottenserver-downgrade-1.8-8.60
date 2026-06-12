@@ -178,7 +178,7 @@ int luaContainerAddItem(lua_State* L)
 	if (item->isStackable()) {
 		int32_t destinationIndex = index;
 		uint32_t destinationFlags = flags;
-		container->queryDestination(destinationIndex, *item, &mergedItem, destinationFlags);
+		container->queryDestination(destinationIndex, *item, &mergedItem, destinationFlags, 0);
 		if (!(mergedItem && mergedItem->equals(item) && mergedItem->getItemCount() < mergedItem->getStackSize())) {
 			mergedItem = nullptr;
 		}

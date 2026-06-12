@@ -275,7 +275,7 @@ bool Map::placeCreature(const Position& centerPos, Creature* creature, bool exte
 	uint32_t flags = 0;
 	Item* toItem = nullptr;
 
-	Cylinder* toCylinder = tile->queryDestination(index, *creature, &toItem, flags);
+	Cylinder* toCylinder = tile->queryDestination(index, *creature, &toItem, flags, creature->getInstanceID());
 	toCylinder->internalAddThing(creature);
 
 	const Position& dest = toCylinder->getPosition();

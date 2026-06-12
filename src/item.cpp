@@ -298,11 +298,16 @@ std::shared_ptr<Item> Item::clone() const
 
 bool Item::equals(const Item* otherItem) const
 {
-	if (!otherItem || id != otherItem->id) {
+	if (!otherItem || getInstanceID() != otherItem->getInstanceID()) {
 		return false;
 	}
 
-	if (getInstanceID() != otherItem->getInstanceID()) {
+	return equalsIgnoringInstance(otherItem);
+}
+
+bool Item::equalsIgnoringInstance(const Item* otherItem) const
+{
+	if (!otherItem || id != otherItem->id) {
 		return false;
 	}
 

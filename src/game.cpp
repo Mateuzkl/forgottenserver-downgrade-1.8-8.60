@@ -1369,7 +1369,8 @@ ReturnValue Game::internalMoveCreature(Creature& creature, Tile& toTile, uint32_
 	Tile* fromCylinder = nullptr;
 	uint32_t n = 0;
 
-	while ((subCylinder = toCylinder->queryDestination(index, creature, &toItem, flags)) != toCylinder) {
+	while ((subCylinder = toCylinder->queryDestination(index, creature, &toItem, flags,
+	                                                    creature.getInstanceID())) != toCylinder) {
 		map.moveCreature(creature, *subCylinder);
 
 		if (creature.getParent() != subCylinder) {
@@ -1707,11 +1708,11 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
                                    const Position* fromPos /*= nullptr*/, const Position* toPos /*= nullptr*/)
 {
 	Player* actorPlayer = actor ? actor->getPlayer() : nullptr;
-	if (isCarriedByCreature(item->getParent())) {
+	const uint32_t sourceInstanceId = isCarriedByCreature(item->getParent()) ? 0 : item->getInstanceID();
+	if (item->getInstanceID() != sourceInstanceId) {
 		item->setInstanceID(0);
 	}
-	const uint32_t sourceInstanceId = item->getInstanceID();
-	if (actorPlayer && !InstanceUtils::isPlayerInSameInstance(actorPlayer, item->getInstanceID())) {
+	if (actorPlayer && !InstanceUtils::isPlayerInSameInstance(actorPlayer, sourceInstanceId)) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
@@ -1757,17 +1758,19 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 
 	Cylinder* subCylinder;
 	int floorN = 0;
+	uint32_t destinationInstanceId = getDestinationInstanceId(actorPlayer, toCylinder, sourceInstanceId);
 
-	while ((subCylinder = toCylinder->queryDestination(index, *item, &toItem, flags)) != toCylinder) {
+	while ((subCylinder = toCylinder->queryDestination(index, *item, &toItem, flags,
+	                                                    destinationInstanceId)) != toCylinder) {
 		toCylinder = subCylinder;
 		flags = 0;
+		destinationInstanceId = getDestinationInstanceId(actorPlayer, toCylinder, sourceInstanceId);
 
 		// to prevent infinite loop
 		if (++floorN >= MAP_MAX_LAYERS) {
 			break;
 		}
 	}
-	const uint32_t destinationInstanceId = getDestinationInstanceId(actorPlayer, toCylinder, sourceInstanceId);
 
 	if (actorPlayer) {
 		const ReturnValue storeInboxLockRet = getStoreInboxLockedItemMoveReturn(item);
@@ -1946,9 +1949,9 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	if (item->isStackable()) {
 		uint32_t n;
 
-		if (item->equals(toItem)) {
+		if (toItem && toItem->getInstanceID() == destinationInstanceId &&
+		    item->equalsIgnoringInstance(toItem)) {
 			n = std::min<uint32_t>(toItem->getStackSize() - toItem->getItemCount(), m);
-			toItem->setInstanceID(destinationInstanceId);
 			toCylinder->updateThing(toItem, toItem->getID(), toItem->getItemCount() + n);
 			updateItem = toItem;
 		} else {
@@ -2047,7 +2050,8 @@ ReturnValue Game::internalAddItem(Cylinder* toCylinder, Item* item, int32_t inde
 
 	Cylinder* destCylinder = toCylinder;
 	Item* toItem = nullptr;
-	toCylinder = toCylinder->queryDestination(index, *item, &toItem, flags);
+	const uint32_t destinationInstanceId = getDestinationInstanceId(nullptr, toCylinder, item->getInstanceID());
+	toCylinder = toCylinder->queryDestination(index, *item, &toItem, flags, destinationInstanceId);
 
 	// check if we can add this item
 	ReturnValue ret = toCylinder->queryAdd(index, *item, item->getItemCount(), flags);

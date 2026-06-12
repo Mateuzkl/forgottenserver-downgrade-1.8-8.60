@@ -52,11 +52,12 @@ ReturnValue DepotChest::queryRemove(const Thing& thing, uint32_t count, uint32_t
 	return Container::queryRemove(thing, count, flags, actor);
 }
 
-Cylinder* DepotChest::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags)
+Cylinder* DepotChest::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+                                       uint32_t destinationInstanceId)
 {
 	const Item* item = thing.getItem();
 	if (item && item->getID() >= ITEM_DEPOT_BOX_1 && item->getID() <= ITEM_DEPOT_BOX_17) {
-		return Container::queryDestination(index, thing, destItem, flags);
+		return Container::queryDestination(index, thing, destItem, flags, destinationInstanceId);
 	}
 
 	if (index == INDEX_WHEREEVER) {
@@ -66,13 +67,13 @@ Cylinder* DepotChest::queryDestination(int32_t& index, const Thing& thing, Item*
 				if (box && box->getItemHoldingCount() < box->capacity()) {
 					index = INDEX_WHEREEVER;
 					*destItem = nullptr;
-					return box->queryDestination(index, thing, destItem, flags);
+					return box->queryDestination(index, thing, destItem, flags, destinationInstanceId);
 				}
 			}
 		}
 	}
 
-	return Container::queryDestination(index, thing, destItem, flags);
+	return Container::queryDestination(index, thing, destItem, flags, destinationInstanceId);
 }
 
 void DepotChest::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t)

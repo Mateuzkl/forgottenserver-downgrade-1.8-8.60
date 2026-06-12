@@ -48,7 +48,7 @@ ReturnValue Teleport::queryRemove(const Thing&, uint32_t, uint32_t, Creature* /*
 	return RETURNVALUE_NOERROR;
 }
 
-Cylinder* Teleport::queryDestination(int32_t&, const Thing&, Item**, uint32_t&) { return this; }
+Cylinder* Teleport::queryDestination(int32_t&, const Thing&, Item**, uint32_t&, uint32_t) { return this; }
 
 void Teleport::addThing(Thing* thing) { return addThing(0, thing); }
 

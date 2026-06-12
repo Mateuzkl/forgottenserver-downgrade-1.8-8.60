@@ -3989,7 +3989,8 @@ ReturnValue Player::queryRemove(const Thing& thing, uint32_t count, uint32_t fla
 	return RETURNVALUE_NOERROR;
 }
 
-Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags)
+Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+                                   uint32_t destinationInstanceId)
 {
 	if (index == 0 /*drop to capacity window*/ || index == INDEX_WHEREEVER) {
 		*destItem = nullptr;
@@ -4018,7 +4019,8 @@ Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** de
 				if (autoStack && isStackable) {
 					// try find an already existing item to stack with
 					if (queryAdd(slotIndex, *item, item->getItemCount(), 0) == RETURNVALUE_NOERROR) {
-						if (inventoryItem->equals(item) &&
+						if (inventoryItem->getInstanceID() == destinationInstanceId &&
+						    inventoryItem->equalsIgnoringInstance(item) &&
 						    inventoryItem->getItemCount() < inventoryItem->getStackSize()) {
 							index = slotIndex;
 							*destItem = inventoryItem;
@@ -4078,7 +4080,8 @@ Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** de
 				}
 
 				// try find an already existing item to stack with
-				if (tmpItem->equals(item) && tmpItem->getItemCount() < tmpItem->getStackSize()) {
+				if (tmpItem->getInstanceID() == destinationInstanceId && tmpItem->equalsIgnoringInstance(item) &&
+				    tmpItem->getItemCount() < tmpItem->getStackSize()) {
 					index = n;
 					*destItem = tmpItem.get();
 					return tmpContainer;

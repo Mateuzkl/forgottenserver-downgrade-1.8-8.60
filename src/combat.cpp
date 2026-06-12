@@ -806,7 +806,7 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 			}
 			g_game.addDistanceEffect(filtered, fromPos, toPos, effect);
 		} else {
-			g_game.addDistanceEffect(fromPos, toPos, effect);
+			g_game.addDistanceEffect(fromPos, toPos, effect, 0);
 		}
 	}
 }

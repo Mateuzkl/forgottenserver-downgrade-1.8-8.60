@@ -25,7 +25,7 @@ ReturnValue TrashHolder::queryRemove(const Thing&, uint32_t, uint32_t, Creature*
 	return RETURNVALUE_NOTPOSSIBLE;
 }
 
-Cylinder* TrashHolder::queryDestination(int32_t&, const Thing&, Item**, uint32_t&) { return this; }
+Cylinder* TrashHolder::queryDestination(int32_t&, const Thing&, Item**, uint32_t&, uint32_t) { return this; }
 
 void TrashHolder::addThing(Thing* thing) { return addThing(0, thing); }
 

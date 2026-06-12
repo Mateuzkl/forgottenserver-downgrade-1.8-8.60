@@ -1,5 +1,7 @@
 local OPCODE_REQUEST_OUTFIT = 0xD2
 local OPCODE_CHANGE_OUTFIT = 0xD3
+local HIRELING_MARKER = { 0x48, 0x52, 0x4C, 0x47 }
+local HIRELING_TARGET_TYPE = 1
 
 local function hirelingProtocolEnabled(player)
 	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
@@ -23,6 +25,15 @@ local function readHirelingOutfit(msg)
 	return outfit
 end
 
+local function readHirelingHeader(msg)
+	for _, expected in ipairs(HIRELING_MARKER) do
+		if NetworkGuard.readByte(msg) ~= expected then
+			return false
+		end
+	end
+	return NetworkGuard.readByte(msg) == HIRELING_TARGET_TYPE
+end
+
 local requestHandler = PacketHandler(OPCODE_REQUEST_OUTFIT)
 
 function requestHandler.onReceive(player, msg)
@@ -30,9 +41,7 @@ function requestHandler.onReceive(player, msg)
 		return
 	end
 
-	local targetType = NetworkGuard.readByte(msg)
-	if not targetType or targetType == 0 then
-		player:sendOutfitWindow()
+	if not readHirelingHeader(msg) then
 		return
 	end
 
@@ -65,8 +74,7 @@ function changeHandler.onReceive(player, msg)
 		return
 	end
 
-	local targetType = NetworkGuard.readByte(msg)
-	if not targetType or targetType == 0 then
+	if not readHirelingHeader(msg) then
 		return
 	end
 

@@ -560,7 +560,8 @@ ReturnValue Container::queryRemove(const Thing& thing, uint32_t count, uint32_t 
 	return RETURNVALUE_NOERROR;
 }
 
-Cylinder* Container::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags)
+Cylinder* Container::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+                                      uint32_t destinationInstanceId)
 {
 	if (index == 254 /*move up*/) {
 		index = INDEX_WHEREEVER;
@@ -611,7 +612,8 @@ Cylinder* Container::queryDestination(int32_t& index, const Thing& thing, Item**
 	bool autoStack = !hasBitSet(FLAG_IGNOREAUTOSTACK, flags);
 	if (autoStack && item->isStackable() && item->getParent() != this) {
 		if (auto tmpItem = *destItem) {
-			if (tmpItem->equals(item) && tmpItem->getItemCount() < tmpItem->getStackSize()) {
+			if (tmpItem->getInstanceID() == destinationInstanceId && tmpItem->equalsIgnoringInstance(item) &&
+			    tmpItem->getItemCount() < tmpItem->getStackSize()) {
 				return this;
 			}
 		}
@@ -619,7 +621,8 @@ Cylinder* Container::queryDestination(int32_t& index, const Thing& thing, Item**
 		// try find a suitable item to stack with
 		uint32_t n = 0;
 		for (const auto& listItem : itemlist) {
-			if (listItem.get() != item && listItem->equals(item) && listItem->getItemCount() < listItem->getStackSize()) {
+			if (listItem.get() != item && listItem->getInstanceID() == destinationInstanceId &&
+			    listItem->equalsIgnoringInstance(item) && listItem->getItemCount() < listItem->getStackSize()) {
 				*destItem = listItem.get();
 				index = n;
 				return this;

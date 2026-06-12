@@ -103,7 +103,8 @@ public:
 	                          uint32_t flags) const override final;
 	ReturnValue queryRemove(const Thing& thing, uint32_t count, uint32_t flags,
 	                        Creature* actor = nullptr) const override;
-	virtual Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags) override;
+	virtual Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+	                                   uint32_t destinationInstanceId) override;
 
 	void addThing(Thing* thing) override final;
 	void addThing(int32_t index, Thing* thing) override final;

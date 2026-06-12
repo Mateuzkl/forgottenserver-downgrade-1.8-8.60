@@ -76,7 +76,7 @@ ReturnValue Mailbox::queryRemove(const Thing&, uint32_t, uint32_t, Creature* /*=
 	return RETURNVALUE_NOTPOSSIBLE;
 }
 
-Cylinder* Mailbox::queryDestination(int32_t&, const Thing&, Item**, uint32_t&) { return this; }
+Cylinder* Mailbox::queryDestination(int32_t&, const Thing&, Item**, uint32_t&, uint32_t) { return this; }
 
 void Mailbox::addThing(Thing* thing) { return addThing(0, thing); }
 

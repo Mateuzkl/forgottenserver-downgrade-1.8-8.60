@@ -631,7 +631,7 @@ void Spawn::scheduleSpawn(uint32_t spawnId, uint32_t interval, bool /*blocked*/)
 	spawnBlock_t& sb = it->second;
 
 	if (interval > 0) {
-		g_game.addMagicEffect(sb.pos, CONST_ME_TELEPORT);
+		g_game.addMagicEffect(sb.pos, CONST_ME_TELEPORT, 0);
 
 		uint32_t timeBetweenEffects = ConfigManager::getInteger(ConfigManager::RATE_BETWEEN_EFFECT);
 		uint32_t totalDuration = sb.effectInitialInterval;
@@ -662,7 +662,7 @@ void Spawn::scheduleSpawn(uint32_t spawnId, uint32_t interval, bool /*blocked*/)
 				auto mapIt = spawnMap.find(spawnId);
 				if (mapIt != spawnMap.end()) {
 					if (!spawnMonster(spawnId, mapIt->second)) {
-						g_game.addMagicEffect(mapIt->second.pos, CONST_ME_SMALL_WHITE_ENERGYSHOCK);
+						g_game.addMagicEffect(mapIt->second.pos, CONST_ME_SMALL_WHITE_ENERGYSHOCK, 0);
 					}
 					mapIt->second.effectInitialInterval = 0;
 				}

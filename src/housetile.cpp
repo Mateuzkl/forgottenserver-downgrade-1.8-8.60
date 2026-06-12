@@ -105,7 +105,8 @@ ReturnValue HouseTile::queryAdd(int32_t index, const Thing& thing, uint32_t coun
 	return Tile::queryAdd(index, thing, count, flags, actor);
 }
 
-Tile* HouseTile::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags)
+Tile* HouseTile::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+                                  uint32_t destinationInstanceId)
 {
 	if (const Creature* creature = thing.getCreature()) {
 		if (const Player* player = creature->getPlayer()) {
@@ -128,7 +129,7 @@ Tile* HouseTile::queryDestination(int32_t& index, const Thing& thing, Item** des
 		}
 	}
 
-	return Tile::queryDestination(index, thing, destItem, flags);
+	return Tile::queryDestination(index, thing, destItem, flags, destinationInstanceId);
 }
 
 ReturnValue HouseTile::queryRemove(const Thing& thing, uint32_t count, uint32_t flags,

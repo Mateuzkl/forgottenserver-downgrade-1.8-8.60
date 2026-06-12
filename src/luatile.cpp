@@ -670,7 +670,7 @@ int luaTileAddItem(lua_State* L)
 	if (item->isStackable()) {
 		int32_t destinationIndex = INDEX_WHEREEVER;
 		uint32_t destinationFlags = flags;
-		tile->queryDestination(destinationIndex, *item, &mergedItem, destinationFlags);
+		tile->queryDestination(destinationIndex, *item, &mergedItem, destinationFlags, item->getInstanceID());
 		if (!(mergedItem && mergedItem->equals(item) && mergedItem->getItemCount() < mergedItem->getStackSize())) {
 			mergedItem = nullptr;
 		}

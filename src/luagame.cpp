@@ -632,7 +632,7 @@ int luaGameCreateItem(lua_State* L)
 		if (item->isStackable()) {
 			int32_t destinationIndex = INDEX_WHEREEVER;
 			uint32_t addFlags = FLAG_NOLIMIT;
-			tile->queryDestination(destinationIndex, *item, &mergedItem, addFlags);
+			tile->queryDestination(destinationIndex, *item, &mergedItem, addFlags, item->getInstanceID());
 			if (!(mergedItem && mergedItem->equals(item) && mergedItem->getItemCount() < mergedItem->getStackSize())) {
 				mergedItem = nullptr;
 			}
