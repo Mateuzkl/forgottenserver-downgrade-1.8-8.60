@@ -63,7 +63,7 @@ local function doResetAnnihilator(leverPos)
             local t = Tile(Position(x, y, config.quest_range.fromPos.z))
             if not t then goto continue end
 
-            for _, creature in pairs(t:getCreatures()) do
+            for _, creature in pairs(t:getCreatures() or {}) do
                 if creature:isPlayer() then
                     creature:teleportTo(config.quest_range.exit)
                     config.quest_range.exit:sendMagicEffect(CONST_ME_TELEPORT)
