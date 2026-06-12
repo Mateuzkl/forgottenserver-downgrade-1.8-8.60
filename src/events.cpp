@@ -6,6 +6,7 @@
 #include "events.h"
 
 #include "item.h"
+#include "monster.h"
 #include "player.h"
 #include "imbuement.h"
 #include "logger.h"
@@ -177,7 +178,7 @@ bool Events::eventMonsterOnSpawn(Monster* monster, const Position& position, boo
 
 	Lua::pushUserdata<Monster>(L, monster);
 	Lua::setMetatable(L, -1, "Monster");
-	Lua::pushPosition(L, position);
+	Lua::pushPosition(L, position, 0, monster->getInstanceID());
 	Lua::pushBoolean(L, startup);
 	Lua::pushBoolean(L, artificial);
 
@@ -617,7 +618,7 @@ void Events::eventPlayerOnLook(Player* player, const Position& position, Thing* 
 		lua_pushnil(L);
 	}
 
-	Lua::pushPosition(L, position, stackpos);
+	Lua::pushPosition(L, position, stackpos, player->getInstanceID());
 	lua_pushinteger(L, lookDistance);
 
 	scriptInterface.callVoidFunction(4);
@@ -738,8 +739,8 @@ ReturnValue Events::eventPlayerOnMoveItem(Player* player, Item* item, uint16_t c
 	pushSharedItem(L, item);
 
 	lua_pushinteger(L, count);
-	Lua::pushPosition(L, fromPosition);
-	Lua::pushPosition(L, toPosition);
+	Lua::pushPosition(L, fromPosition, 0, player->getInstanceID());
+	Lua::pushPosition(L, toPosition, 0, player->getInstanceID());
 
 	Lua::pushCylinder(L, fromCylinder);
 	Lua::pushCylinder(L, toCylinder);
@@ -783,8 +784,8 @@ void Events::eventPlayerOnItemMoved(Player* player, Item* item, uint16_t count, 
 	pushSharedItem(L, item);
 
 	lua_pushinteger(L, count);
-	Lua::pushPosition(L, fromPosition);
-	Lua::pushPosition(L, toPosition);
+	Lua::pushPosition(L, fromPosition, 0, player->getInstanceID());
+	Lua::pushPosition(L, toPosition, 0, player->getInstanceID());
 
 	Lua::pushCylinder(L, fromCylinder);
 	Lua::pushCylinder(L, toCylinder);
@@ -818,8 +819,8 @@ bool Events::eventPlayerOnMoveCreature(Player* player, Creature* creature, const
 	Lua::pushUserdata<Creature>(L, creature);
 	Lua::setCreatureMetatable(L, -1, creature);
 
-	Lua::pushPosition(L, fromPosition);
-	Lua::pushPosition(L, toPosition);
+	Lua::pushPosition(L, fromPosition, 0, creature->getInstanceID());
+	Lua::pushPosition(L, toPosition, 0, creature->getInstanceID());
 
 	return scriptInterface.callFunction(4);
 }
@@ -844,8 +845,8 @@ bool Events::eventPlayerOnStepTile(Player* player, const Position& fromPosition,
 
 	Lua::pushUserdata<Player>(L, player);
 	Lua::setMetatable(L, -1, "Player");
-	Lua::pushPosition(L, fromPosition);
-	Lua::pushPosition(L, toPosition);
+	Lua::pushPosition(L, fromPosition, 0, player->getInstanceID());
+	Lua::pushPosition(L, toPosition, 0, player->getInstanceID());
 
 	bool result = scriptInterface.callFunction(3);
 

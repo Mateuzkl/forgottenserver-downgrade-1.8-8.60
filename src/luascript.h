@@ -1047,7 +1047,7 @@ void pushBoolean(lua_State* L, bool value);
 void pushCombatDamage(lua_State* L, const CombatDamage& damage);
 void pushInstantSpell(lua_State* L, const InstantSpell& spell);
 void pushSpell(lua_State* L, const Spell& spell);
-void pushPosition(lua_State* L, const Position& position, int32_t stackpos = 0);
+void pushPosition(lua_State* L, const Position& position, int32_t stackpos = 0, uint32_t instanceId = 0);
 void pushOutfit(lua_State* L, const Outfit_t& outfit);
 void pushOutfit(lua_State* L, const Outfit* outfit);
 void pushMount(lua_State* L, const Mount* mount);

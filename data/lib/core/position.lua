@@ -1,11 +1,21 @@
 local mt = rawgetmetatable("Position")
 
+local function mergeInstanceId(lhs, rhs)
+	if lhs.instanceId and lhs.instanceId ~= 0 then
+		return lhs.instanceId
+	end
+	if rhs.instanceId and rhs.instanceId ~= 0 then
+		return rhs.instanceId
+	end
+	return 0
+end
+
 ---@param lhs Position
 ---@param rhs Position
 function mt.__add(lhs, rhs)
 	local stackpos = lhs.stackpos or rhs.stackpos
 	return Position(lhs.x + (rhs.x or 0), lhs.y + (rhs.y or 0), lhs.z + (rhs.z or 0),
-	                stackpos)
+	                stackpos, mergeInstanceId(lhs, rhs))
 end
 
 ---@param lhs Position
@@ -13,7 +23,7 @@ end
 function mt.__sub(lhs, rhs)
 	local stackpos = lhs.stackpos or rhs.stackpos
 	return Position(lhs.x - (rhs.x or 0), lhs.y - (rhs.y or 0), lhs.z - (rhs.z or 0),
-	                stackpos)
+	                stackpos, mergeInstanceId(lhs, rhs))
 end
 
 ---@param lhs Position

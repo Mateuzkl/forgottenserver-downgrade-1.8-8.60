@@ -550,10 +550,10 @@ bool Action::executeUse(Player* player, const std::shared_ptr<Item>& item, const
 	Lua::setMetatable(L, -1, "Player");
 
 	Lua::pushThing(L, item.get());
-	Lua::pushPosition(L, fromPosition);
+	Lua::pushPosition(L, fromPosition, 0, player->getInstanceID());
 
 	Lua::pushThing(L, target);
-	Lua::pushPosition(L, toPosition);
+	Lua::pushPosition(L, toPosition, 0, player->getInstanceID());
 
 	Lua::pushBoolean(L, isHotkey);
 	return scriptInterface->callFunction(6);

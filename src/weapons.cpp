@@ -179,7 +179,7 @@ int32_t Weapon::playerWeaponCheck(Player* player, Creature* target, uint8_t shoo
 			std::ostringstream ss;
 			ss << "You need " << getReqReset() << " resets to use this weapon. You currently have " << player->getReset() << " resets.";
 			player->sendTextMessage(MESSAGE_STATUS_SMALL, ss.str());
-			g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF);
+			g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF, player->getInstanceID());
 			return 0;
 		}
 		damageModifier = damageModifier / 2;
@@ -334,7 +334,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Tile* tile) const
 		executeUseWeapon(player, var);
 	} else {
 		Combat::postCombatEffects(player, tile->getPosition(), params);
-		g_game.addMagicEffect(tile->getPosition(), CONST_ME_POFF);
+		g_game.addMagicEffect(tile->getPosition(), CONST_ME_POFF, player->getInstanceID());
 	}
 
 	onUsedWeapon(player, item, tile);

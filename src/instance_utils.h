@@ -40,12 +40,8 @@ inline bool isPlayerInSameInstance(const Creature* player,
 }
 
 inline void filterByInstanceInPlace(SpectatorVec &spectators,
-                                    uint32_t instanceId)
+                                     uint32_t instanceId)
 {
-    if (instanceId == 0) {
-        return;
-    }
-
     spectators.filterPlayers([instanceId](const Player* player) {
         return player && player->compareInstance(instanceId);
     });
@@ -65,12 +61,12 @@ inline bool canInteract(const Creature *a, const Creature *b)
 }
 
 inline void sendMagicEffectToInstance(const SpectatorVec &spectators,
-                                      const Position &pos, uint8_t effect,
-                                      uint32_t instanceId)
+                                       const Position &pos, uint8_t effect,
+                                       uint32_t instanceId)
 {
     for (const auto& spectator : spectators.players()) {
         Player *p = static_cast<Player*>(spectator.get());
-        if (instanceId == 0 || p->compareInstance(instanceId)) {
+        if (p->compareInstance(instanceId)) {
             p->sendMagicEffect(pos, effect);
         }
     }

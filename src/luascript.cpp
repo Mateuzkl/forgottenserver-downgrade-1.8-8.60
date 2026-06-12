@@ -1340,14 +1340,15 @@ void Lua::pushSpell(lua_State* L, const Spell& spell)
 	setMetatable(L, -1, "Spell");
 }
 
-void Lua::pushPosition(lua_State* L, const Position& position, int32_t stackpos /* = 0*/)
+void Lua::pushPosition(lua_State* L, const Position& position, int32_t stackpos /* = 0*/, uint32_t instanceId /* = 0*/)
 {
-	lua_createtable(L, 0, 4);
+	lua_createtable(L, 0, 5);
 
 	setField(L, "x", position.x);
 	setField(L, "y", position.y);
 	setField(L, "z", position.z);
 	setField(L, "stackpos", stackpos);
+	setField(L, "instanceId", instanceId);
 
 	setMetatable(L, -1, "Position");
 }

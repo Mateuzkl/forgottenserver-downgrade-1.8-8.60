@@ -12,10 +12,32 @@ extern Game g_game;
 namespace {
 using namespace Lua;
 
+uint32_t getPositionInstanceId(lua_State* L, int32_t arg)
+{
+	lua_getfield(L, arg, "instanceId");
+	uint32_t instanceId = 0;
+	if (!lua_isnil(L, -1)) {
+		instanceId = getInteger<uint32_t>(L, -1);
+	}
+	lua_pop(L, 1);
+	return instanceId;
+}
+
+bool hasAudienceArgument(lua_State* L, int32_t arg)
+{
+	if (lua_gettop(L) < arg || lua_isnil(L, arg)) {
+		return false;
+	}
+	if (lua_isboolean(L, arg) && !getBoolean(L, arg)) {
+		return false;
+	}
+	return true;
+}
+
 // Position
 int luaPositionCreate(lua_State* L)
 {
-	// Position([x = 0[, y = 0[, z = 0[, stackpos = 0]]]])
+	// Position([x = 0[, y = 0[, z = 0[, stackpos = 0[, instanceId = 0]]]]])
 	// Position([position])
 	if (lua_gettop(L) <= 1) {
 		pushPosition(L, Position());
@@ -23,16 +45,19 @@ int luaPositionCreate(lua_State* L)
 	}
 
 	int32_t stackpos;
+	uint32_t instanceId = 0;
 	if (isTable(L, 2)) {
 		const Position& position = getPosition(L, 2, stackpos);
-		pushPosition(L, position, stackpos);
+		instanceId = getPositionInstanceId(L, 2);
+		pushPosition(L, position, stackpos, instanceId);
 	} else {
 		uint16_t x = getInteger<uint16_t>(L, 2, 0);
 		uint16_t y = getInteger<uint16_t>(L, 3, 0);
 		uint8_t z = getInteger<uint8_t>(L, 4, 0);
 		stackpos = getInteger<int32_t>(L, 5, 0);
+		instanceId = getInteger<uint32_t>(L, 6, 0);
 
-		pushPosition(L, Position(x, y, z), stackpos);
+		pushPosition(L, Position(x, y, z), stackpos, instanceId);
 	}
 	return 1;
 }
@@ -60,10 +85,11 @@ int luaPositionSendMagicEffect(lua_State* L)
 {
 	// position:sendMagicEffect(magicEffect[, players = {}|instanceId])
 	SpectatorVec spectators;
-	uint32_t instanceId = 0;
+	const bool hasExplicitAudience = hasAudienceArgument(L, 3);
+	uint32_t instanceId = hasExplicitAudience ? 0 : getPositionInstanceId(L, 1);
 	if (lua_isnumber(L, 3)) {
 		instanceId = getInteger<uint32_t>(L, 3);
-	} else if (lua_gettop(L) >= 3) {
+	} else if (hasExplicitAudience) {
 		getSpectators<Player>(L, 3, spectators);
 	}
 
@@ -89,10 +115,11 @@ int luaPositionSendDistanceEffect(lua_State* L)
 {
 	// position:sendDistanceEffect(positionEx, distanceEffect[, players = {}|instanceId])
 	SpectatorVec spectators;
-	uint32_t instanceId = 0;
+	const bool hasExplicitAudience = hasAudienceArgument(L, 4);
+	uint32_t instanceId = hasExplicitAudience ? 0 : getPositionInstanceId(L, 1);
 	if (lua_isnumber(L, 4)) {
 		instanceId = getInteger<uint32_t>(L, 4);
-	} else if (lua_gettop(L) >= 4) {
+	} else if (hasExplicitAudience) {
 		getSpectators<Player>(L, 4, spectators);
 	}
 

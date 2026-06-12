@@ -777,8 +777,8 @@ bool MoveEvent::executeStep(Creature* creature, Item* item, const Position& pos,
 	Lua::pushUserdata<Creature>(L, creature);
 	Lua::setCreatureMetatable(L, -1, creature);
 	Lua::pushThing(L, item);
-	Lua::pushPosition(L, pos);
-	Lua::pushPosition(L, creature->getLastPosition());
+	Lua::pushPosition(L, pos, 0, creature->getInstanceID());
+	Lua::pushPosition(L, creature->getLastPosition(), 0, creature->getInstanceID());
 	if (zoneId != 0) {
 		lua_pushinteger(L, zoneId);
 		return scriptInterface->callFunction(5);
@@ -848,7 +848,7 @@ bool MoveEvent::executeAddRemItem(Item* item, Item* tileItem, const Position& po
 	scriptInterface->pushFunction(scriptId);
 	Lua::pushThing(L, item);
 	Lua::pushThing(L, tileItem);
-	Lua::pushPosition(L, pos);
+	Lua::pushPosition(L, pos, 0, item ? item->getInstanceID() : 0);
 
 	return scriptInterface->callFunction(3);
 }

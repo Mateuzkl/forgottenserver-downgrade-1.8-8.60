@@ -549,7 +549,7 @@ int luaCreatureGetPosition(lua_State* L)
 	// creature:getPosition()
 	const Creature* creature = getUserdata<const Creature>(L, 1);
 	if (creature) {
-		pushPosition(L, creature->getPosition());
+		pushPosition(L, creature->getPosition(), 0, creature->getInstanceID());
 	} else {
 		lua_pushnil(L);
 	}

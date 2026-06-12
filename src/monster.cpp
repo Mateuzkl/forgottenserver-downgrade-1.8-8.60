@@ -375,8 +375,8 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 		Lua::pushUserdata<Creature>(L, creature);
 		Lua::setCreatureMetatable(L, -1, creature);
 
-		Lua::pushPosition(L, oldPos);
-		Lua::pushPosition(L, newPos);
+		Lua::pushPosition(L, oldPos, 0, creature->getInstanceID());
+		Lua::pushPosition(L, newPos, 0, creature->getInstanceID());
 
 		scriptInterface->callFunction(4);
 	}
@@ -1678,6 +1678,7 @@ void Monster::pushItems(Tile* tile)
 	if (TileItemVector* items = tile->getItemList()) {
 		uint32_t moveCount = 0;
 		uint32_t removeCount = 0;
+		std::vector<uint32_t> effectInstances;
 
 		int32_t downItemSize = tile->getDownItemCount();
 		for (int32_t i = downItemSize; --i >= 0;) {
@@ -1686,14 +1687,23 @@ void Monster::pushItems(Tile* tile)
 			    (item->hasProperty(CONST_PROP_BLOCKPATH) || item->hasProperty(CONST_PROP_BLOCKSOLID))) {
 				if (moveCount < 20 && Monster::pushItem(item)) {
 					++moveCount;
-				} else if (g_game.internalRemoveItem(item) == RETURNVALUE_NOERROR) {
+				} else {
+					uint32_t itemInstanceId = item->getInstanceID();
+					if (g_game.internalRemoveItem(item) != RETURNVALUE_NOERROR) {
+						continue;
+					}
+					if (std::find(effectInstances.begin(), effectInstances.end(), itemInstanceId) == effectInstances.end()) {
+						effectInstances.push_back(itemInstanceId);
+					}
 					++removeCount;
 				}
 			}
 		}
 
 		if (removeCount > 0) {
-			g_game.addMagicEffect(tile->getPosition(), CONST_ME_BLOCKHIT);
+			for (uint32_t instanceId : effectInstances) {
+				g_game.addMagicEffect(tile->getPosition(), CONST_ME_BLOCKHIT, instanceId);
+			}
 		}
 	}
 }
@@ -1719,6 +1729,7 @@ void Monster::pushCreatures(Tile* tile)
 	if (CreatureVector* creatures = tile->getCreatures()) {
 		uint32_t removeCount = 0;
 		Monster* lastPushedMonster = nullptr;
+		std::vector<uint32_t> effectInstances;
 
 		for (size_t i = 0; i < creatures->size();) {
 			Monster* monster = creatures->at(i)->getMonster();
@@ -1730,6 +1741,10 @@ void Monster::pushCreatures(Tile* tile)
 
 				monster->changeHealth(-monster->getHealth());
 				monster->setDropLoot(false);
+				uint32_t monsterInstanceId = monster->getInstanceID();
+				if (std::find(effectInstances.begin(), effectInstances.end(), monsterInstanceId) == effectInstances.end()) {
+					effectInstances.push_back(monsterInstanceId);
+				}
 				removeCount++;
 			}
 
@@ -1737,7 +1752,9 @@ void Monster::pushCreatures(Tile* tile)
 		}
 
 		if (removeCount > 0) {
-			g_game.addMagicEffect(tile->getPosition(), CONST_ME_BLOCKHIT);
+			for (uint32_t instanceId : effectInstances) {
+				g_game.addMagicEffect(tile->getPosition(), CONST_ME_BLOCKHIT, instanceId);
+			}
 		}
 	}
 }

@@ -169,7 +169,7 @@ public:
 	void setChainCallback(uint8_t chainTargets, uint8_t chainDistance, bool backtracking);
 
 private:
-	static void doChainEffect(const Position& origin, const Position& pos, uint8_t effect);
+	static void doChainEffect(const Position& origin, const Position& pos, uint8_t effect, uint32_t instanceId);
 	static std::vector<std::pair<Position, std::vector<uint32_t>>> pickChainTargets(
 	    Creature* caster, const CombatParams& params, uint8_t chainDistance, uint8_t maxTargets,
 	    bool aggressive, bool backtracking, Creature* initialTarget = nullptr);

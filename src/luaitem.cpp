@@ -413,7 +413,7 @@ int luaItemGetPosition(lua_State* L)
 	// item:getPosition()
 	const Item* item = getItemUserdata<const Item>(L, 1);
 	if (item) {
-		pushPosition(L, item->getPosition());
+		pushPosition(L, item->getPosition(), 0, item->getInstanceID());
 	} else {
 		lua_pushnil(L);
 	}

@@ -6167,9 +6167,7 @@ void Game::addAnimatedText(std::string_view message, const Position& pos, TextCo
 
 	SpectatorVec spectators;
 	map.getSpectators(spectators, pos, true, true);
-	if (instanceId != 0) {
-		InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
-	}
+	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	addAnimatedText(spectators, message, pos, color);
 }
 
@@ -6189,9 +6187,7 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 {
 	SpectatorVec spectators;
 	map.getSpectators(spectators, pos, true, true);
-	if (instanceId != 0) {
-		InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
-	}
+	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	addMagicEffect(spectators, pos, effect);
 }
 
@@ -6220,9 +6216,7 @@ void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uin
 	map.getSpectators(toPosSpectators, toPos, true, true);
 	spectators.addSpectators(toPosSpectators);
 
-	if (instanceId != 0) {
-		InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
-	}
+	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	addDistanceEffect(spectators, fromPos, toPos, effect);
 }
 

@@ -1707,8 +1707,8 @@ void NpcEventsHandler::onCreatureMove(Creature* creature, const Position& oldPos
 	scriptInterface->pushFunction(creatureMoveEvent);
 	Lua::pushUserdata<Creature>(L, creature);
 	Lua::setCreatureMetatable(L, -1, creature);
-	Lua::pushPosition(L, oldPos);
-	Lua::pushPosition(L, newPos);
+	Lua::pushPosition(L, oldPos, 0, creature->getInstanceID());
+	Lua::pushPosition(L, newPos, 0, creature->getInstanceID());
 	scriptInterface->callVoidFunction(3);
 }
 

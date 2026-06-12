@@ -747,9 +747,9 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 			}
 			Game::addMagicEffect(filtered, tile->getPosition(), params.impactEffect);
 		} else {
-			Game::addMagicEffect(spectators, tile->getPosition(), params.impactEffect);
-        }
-    }
+			g_game.addMagicEffect(tile->getPosition(), params.impactEffect, 0);
+		}
+	}
 }
 
 void Combat::postCombatEffects(Creature* caster, const Position& pos, const CombatParams& params)
@@ -807,8 +807,8 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 			g_game.addDistanceEffect(filtered, fromPos, toPos, effect);
 		} else {
 			g_game.addDistanceEffect(fromPos, toPos, effect);
-        }
-    }
+		}
+	}
 }
 
 void Combat::doCombat(Creature* caster, Creature* target, std::string_view instantSpellName) const
@@ -836,7 +836,7 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 				}
 			}
 			Game::addMagicEffect(filtered, target->getPosition(), params.impactEffect);
-        }
+		}
 
 		if (canCombat) {
 			doTargetCombat(caster, target, damage, params);
@@ -1583,7 +1583,7 @@ void TileCallback::onTileCombat(Creature* creature, Tile* tile) const
 	} else {
 		lua_pushnil(L);
 	}
-	Lua::pushPosition(L, tile->getPosition());
+	Lua::pushPosition(L, tile->getPosition(), 0, creature ? creature->getInstanceID() : 0);
 
 	scriptInterface->callFunction(2);
 }
@@ -1908,14 +1908,14 @@ void Combat::setChainCallback(uint8_t chainTargets, uint8_t chainDistance, bool 
 	params.chainCallback = std::make_unique<ChainCallback>(chainTargets, chainDistance, backtracking);
 }
 
-void Combat::doChainEffect(const Position& origin, const Position& pos, uint8_t effect)
+void Combat::doChainEffect(const Position& origin, const Position& pos, uint8_t effect, uint32_t instanceId)
 {
 	if (effect == CONST_ME_NONE) {
 		return;
 	}
 
-	g_game.addMagicEffect(origin, effect);
-	g_game.addMagicEffect(pos, effect);
+	g_game.addMagicEffect(origin, effect, instanceId);
+	g_game.addMagicEffect(pos, effect, instanceId);
 }
 
 bool Combat::isValidChainTarget(Creature* caster, Creature* currentTarget, Creature* potentialTarget,
@@ -2089,7 +2089,7 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 				if (!nextTarget) {
 					return;
 				}
-				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect);
+				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect, nextTarget->getInstanceID());
 				if (resolvedCaster) {
 					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget, instantSpellName);
 					bool canCombat = !self->params.aggressive ||
