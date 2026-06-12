@@ -278,8 +278,8 @@ public:
 	virtual bool isImmune(CombatType_t type) const;
 	virtual bool isSuppress(ConditionType_t type) const;
 	virtual uint32_t getDamageImmunities() const { return 0; }
-	virtual uint32_t getConditionImmunities() const { return 0; }
-	virtual uint32_t getConditionSuppressions() const { return 0; }
+	virtual uint64_t getConditionImmunities() const { return 0; }
+	virtual uint64_t getConditionSuppressions() const { return 0; }
 	virtual bool isAttackable() const { return true; }
 
 	virtual void changeHealth(int32_t healthChange, bool sendHealthChange = true);

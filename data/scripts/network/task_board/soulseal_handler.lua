@@ -58,6 +58,10 @@ function soulSealActionHandler.onReceive(player, msg)
         return
     end
 
+    if not player.isUsingAstraClient or not player:isUsingAstraClient() then
+        return
+    end
+
     -- Read raceId (U16) — matches AstraClient sendSoulSealsAction wire format
     if (msg:len() - msg:tell()) < 2 then
         return -- Invalid payload

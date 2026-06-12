@@ -251,7 +251,7 @@ private:
 	uint16_t getLookCorpse() const override { return mType->info.lookcorpse; }
 	void dropLoot(Container* corpse, Creature* lastHitCreature) override;
 	uint32_t getDamageImmunities() const override { return mType->info.damageImmunities; }
-	uint32_t getConditionImmunities() const override { return mType->info.conditionImmunities; }
+	uint64_t getConditionImmunities() const override { return mType->info.conditionImmunities; }
 	void getPathSearchParams(const Creature* creature, FindPathParams& fpp) const override;
 
 	friend class LuaScriptInterface;

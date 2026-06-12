@@ -126,7 +126,7 @@ class MonsterType
 		uint32_t staticAttackChance = 95;
 		uint32_t maxSummons = 0;
 		uint32_t changeTargetSpeed = 0;
-		uint32_t conditionImmunities = 0;
+		uint64_t conditionImmunities = 0;
 		uint32_t damageImmunities = 0;
 		uint32_t baseSpeed = 200;
 

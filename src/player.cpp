@@ -697,9 +697,9 @@ bool Player::isInventorySlot(slots_t slot) const
 	return slot >= CONST_SLOT_FIRST && slot <= CONST_SLOT_LAST;
 }
 
-void Player::addConditionSuppressions(uint32_t conditions) { conditionSuppressions |= conditions; }
+void Player::addConditionSuppressions(uint64_t conditions) { conditionSuppressions |= conditions; }
 
-void Player::removeConditionSuppressions(uint32_t conditions) { conditionSuppressions &= ~conditions; }
+void Player::removeConditionSuppressions(uint64_t conditions) { conditionSuppressions &= ~conditions; }
 
 Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 {

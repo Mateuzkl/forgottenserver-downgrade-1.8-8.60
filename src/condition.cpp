@@ -11,6 +11,8 @@
 #include "player.h"
 #include "tools.h"
 
+#include <limits>
+
 extern Game g_game;
 
 bool Condition::setParam(ConditionParam_t param, int32_t value)
@@ -88,6 +90,16 @@ bool Condition::unserializeProp(ConditionAttr_t attr, PropStream& propStream)
 			return true;
 		}
 
+		case CONDITIONATTR_TYPE64: {
+			uint64_t value;
+			if (!propStream.read<uint64_t>(value)) {
+				return false;
+			}
+
+			conditionType = static_cast<ConditionType_t>(value);
+			return true;
+		}
+
 		case CONDITIONATTR_ID: {
 			int32_t value;
 			if (!propStream.read<int32_t>(value)) {
@@ -150,8 +162,14 @@ bool Condition::unserializeProp(ConditionAttr_t attr, PropStream& propStream)
 
 void Condition::serialize(PropWriteStream& propWriteStream)
 {
-	propWriteStream.write<uint8_t>(CONDITIONATTR_TYPE);
-	propWriteStream.write<uint32_t>(conditionType);
+	const uint64_t typeValue = static_cast<uint64_t>(conditionType);
+	if (typeValue > std::numeric_limits<uint32_t>::max()) {
+		propWriteStream.write<uint8_t>(CONDITIONATTR_TYPE64);
+		propWriteStream.write<uint64_t>(typeValue);
+	} else {
+		propWriteStream.write<uint8_t>(CONDITIONATTR_TYPE);
+		propWriteStream.write<uint32_t>(static_cast<uint32_t>(typeValue));
+	}
 
 	propWriteStream.write<uint8_t>(CONDITIONATTR_ID);
 	propWriteStream.write<uint32_t>(id);
@@ -260,6 +278,10 @@ Condition_ptr Condition::createCondition(ConditionId_t id, ConditionType_t type,
 		case CONDITION_PACIFIED:
 		case CONDITION_MANASHIELD:
 		case CONDITION_CLIPORT:
+		case CONDITION_LESSERHEX:
+		case CONDITION_INTENSEHEX:
+		case CONDITION_GREATERHEX:
+		case CONDITION_POWERLESS:
 			return std::make_unique<ConditionGeneric>(id, type, ticks, buff, subId, aggressive);
 
 		default:
@@ -270,16 +292,26 @@ Condition_ptr Condition::createCondition(ConditionId_t id, ConditionType_t type,
 Condition_ptr Condition::createCondition(PropStream& propStream)
 {
 	uint8_t attr;
-	if (!propStream.read<uint8_t>(attr) || attr != CONDITIONATTR_TYPE) {
+	if (!propStream.read<uint8_t>(attr)) {
 		return nullptr;
 	}
 
-	uint32_t type;
-	if (!propStream.read<uint32_t>(type)) {
+	uint64_t type;
+	if (attr == CONDITIONATTR_TYPE) {
+		uint32_t value;
+		if (!propStream.read<uint32_t>(value)) {
+			return nullptr;
+		}
+		type = value;
+	} else if (attr == CONDITIONATTR_TYPE64) {
+		if (!propStream.read<uint64_t>(type)) {
+			return nullptr;
+		}
+	} else {
 		return nullptr;
 	}
 
-	if (type == 0 || (type & (type - 1)) != 0 || type > CONDITION_AGONY) {
+	if (type == 0 || (type & (type - 1)) != 0) {
 		return nullptr;
 	}
 

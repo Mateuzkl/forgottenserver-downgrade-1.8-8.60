@@ -622,8 +622,8 @@ public:
 	int32_t getHelmetCooldownReduction() const { return helmetCooldownReduction; }
 	void setHelmetCooldownReduction(int32_t value) { helmetCooldownReduction = value; }
 
-	void addConditionSuppressions(uint32_t conditions);
-	void removeConditionSuppressions(uint32_t conditions);
+	void addConditionSuppressions(uint64_t conditions);
+	void removeConditionSuppressions(uint64_t conditions);
 
 	DepotChest* getDepotChest(uint32_t depotId, bool autoCreate);
 	DepotLocker* getDepotLocker(uint32_t depotId);
@@ -1615,8 +1615,8 @@ private:
 	uint32_t inventoryWeight = 0;
 	uint32_t capacity = 40000;
 	uint32_t damageImmunities = 0;
-	uint32_t conditionImmunities = 0;
-	uint32_t conditionSuppressions = 0;
+	uint64_t conditionImmunities = 0;
+	uint64_t conditionSuppressions = 0;
 	uint32_t level = 1;
 	uint32_t reset = 0; // reset system
 	int32_t resetAttackSpeedBonus = 0;
@@ -1739,8 +1739,8 @@ private:
 		return skillLoss ? static_cast<uint64_t>(experience * getLostPercent()) : 0;
 	}
 	uint32_t getDamageImmunities() const override { return damageImmunities; }
-	uint32_t getConditionImmunities() const override { return conditionImmunities; }
-	uint32_t getConditionSuppressions() const override { return conditionSuppressions; }
+	uint64_t getConditionImmunities() const override { return conditionImmunities; }
+	uint64_t getConditionSuppressions() const override { return conditionSuppressions; }
 	uint16_t getLookCorpse() const override;
 	void getPathSearchParams(const Creature* creature, FindPathParams& fpp) const override;
 

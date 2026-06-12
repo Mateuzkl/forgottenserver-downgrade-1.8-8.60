@@ -16,14 +16,17 @@ function onUpdateDatabase()
 			.. " AND `TABLE_NAME` = 'players'"
 			.. " AND `COLUMN_NAME` = " .. db.escapeString(col.name)
 		)
-		if resultId ~= false then
-			local exists = result.getNumber(resultId, "count") > 0
-			result.free(resultId)
-			if not exists then
-				if not db.query(col.query) then
-					logMigration("Failed to add column `" .. col.name .. "` to `players`")
-					return false
-				end
+		if resultId == false then
+			logMigration("Failed to check existence of column `" .. col.name .. "` in `players`")
+			return false
+		end
+
+		local exists = result.getNumber(resultId, "count") > 0
+		result.free(resultId)
+		if not exists then
+			if not db.query(col.query) then
+				logMigration("Failed to add column `" .. col.name .. "` to `players`")
+				return false
 			end
 		end
 	end

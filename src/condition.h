@@ -51,6 +51,7 @@ enum ConditionAttr_t
 	CONDITIONATTR_MANAGAINPERCENT,
 	CONDITIONATTR_CONSTANT,
 	CONDITIONATTR_ENDTIME, // only use if the condition is constant
+	CONDITIONATTR_TYPE64,
 
 	// reserved for serialization
 	CONDITIONATTR_END = 254,

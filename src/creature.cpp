@@ -1473,12 +1473,12 @@ bool Creature::isImmune(CombatType_t type) const
 
 bool Creature::isImmune(ConditionType_t type) const
 {
-	return hasBitSet(static_cast<uint32_t>(type), getConditionImmunities());
+	return hasBitSet(static_cast<uint64_t>(type), getConditionImmunities());
 }
 
 bool Creature::isSuppress(ConditionType_t type) const
 {
-	return hasBitSet(static_cast<uint32_t>(type), getConditionSuppressions());
+	return hasBitSet(static_cast<uint64_t>(type), getConditionSuppressions());
 }
 
 int64_t Creature::getStepDuration(Direction dir) const

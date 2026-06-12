@@ -278,8 +278,8 @@ struct Abilities
 	uint32_t manaGainPercent = 0;
 	uint32_t manaTicks = 0;
 
-	uint32_t conditionImmunities = 0;
-	uint32_t conditionSuppressions = 0;
+	uint64_t conditionImmunities = 0;
+	uint64_t conditionSuppressions = 0;
 
 	// stats modifiers
 	std::array<int32_t, STAT_LAST + 1> stats = {0};

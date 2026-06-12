@@ -1,6 +1,6 @@
 ﻿-- Task Board Network Module — Main Entry Point
 -- Wires together protocol, bounty, weekly, shop, and resource balance modules.
--- Opcodes: 0x5F (client->server), 0x5B/0xBA/0xEE (server->client via protocol module).
+-- Opcodes: 0x5F (client->server), 0x53/0xBA/0xEE (server->client via protocol module).
 --
 -- Uses native bytes only. No JSON, no extended opcodes.
 -- Only sends modern bytes to AstraClient (IsAstraClient guard in protocol layer).
@@ -90,7 +90,7 @@ local OPCODE_TASK_BOARD_ACTION = 0x5F
 local taskBoardActionHandler = PacketHandler(OPCODE_TASK_BOARD_ACTION)
 
 function taskBoardActionHandler.onReceive(player, msg)
-	if not player then return end
+	if not player or not player.isUsingAstraClient or not player:isUsingAstraClient() then return end
 
 	local payload = protocol.parseTaskBoardAction(msg)
 	if not payload then

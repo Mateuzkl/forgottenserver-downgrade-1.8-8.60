@@ -474,7 +474,7 @@ int luaPlayerAddConditionSuppressions(lua_State* L)
 	// player:addConditionSuppressions(conditions)
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
-		player->addConditionSuppressions(getInteger<uint32_t>(L, 2));
+		player->addConditionSuppressions(getInteger<uint64_t>(L, 2));
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -487,7 +487,7 @@ int luaPlayerRemoveConditionSuppressions(lua_State* L)
 	// player:removeConditionSuppressions(conditions)
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
-		player->removeConditionSuppressions(getInteger<uint32_t>(L, 2));
+		player->removeConditionSuppressions(getInteger<uint64_t>(L, 2));
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);

@@ -55,6 +55,7 @@ std::vector<std::string_view> explodeString(std::string_view inString, std::stri
                                             int32_t limit = -1);
 IntegerVector vectorAtoi(const std::vector<std::string_view>& stringVector);
 constexpr bool hasBitSet(uint32_t flag, uint32_t flags) { return (flags & flag) != 0; }
+constexpr bool hasBitSet(uint64_t flag, uint64_t flags) { return (flags & flag) != 0; }
 
 std::mt19937& getRandomGenerator();
 int32_t uniform_random(int32_t minNumber, int32_t maxNumber);

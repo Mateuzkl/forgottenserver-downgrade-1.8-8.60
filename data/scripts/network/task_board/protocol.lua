@@ -1,5 +1,5 @@
 -- Task Board Protocol: byte-level serialization following Crystal Server/AstraClient wire format.
--- Opcodes: 0x5B (server->client, subtype byte), 0x5F (client->server, action byte),
+-- Opcodes: 0x53 (server->client, subtype byte), 0x5F (client->server, action byte),
 --           0xBA (soulseals), 0xEE (resource balance).
 -- All send functions use NetworkMessage. All receive handlers use PacketHandler + NetworkGuard.
 
@@ -14,7 +14,7 @@ TaskBoardProtocol.RESOURCE_TASK_HUNTING = RESOURCE_TASK_HUNTING
 TaskBoardProtocol.RESOURCE_BOUNTY_POINTS = RESOURCE_BOUNTY_POINTS
 TaskBoardProtocol.RESOURCE_SOULSEALS_POINTS = RESOURCE_SOULSEALS_POINTS
 
--- Task board option sub-types (opcode 0x5B first byte after opcode)
+-- Task board option sub-types (opcode 0x53 first byte after opcode)
 local TASK_BOARD_BOUNTY = 0x00
 local TASK_BOARD_WEEKLY = 0x01
 local TASK_BOARD_HUNT_SHOP = 0x02
@@ -63,7 +63,7 @@ local OPCODE_SOUL_SEALS = 0xBA
 local OPCODE_RESOURCE_BALANCE = 0xEE
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function clamp(value, minValue, maxValue)
@@ -94,7 +94,7 @@ function TaskBoardProtocol.sendResourceBalance(player, resourceType, amount)
 end
 
 -- ============================================
--- BOUNTY TASK DATA (opcode 0x5B, subType 0x00)
+-- BOUNTY TASK DATA (opcode 0x53, subType 0x00)
 -- ============================================
 
 function TaskBoardProtocol.sendBountyTaskData(player, data)
@@ -154,7 +154,7 @@ function TaskBoardProtocol.sendBountyTaskData(player, data)
 end
 
 -- ============================================
--- WEEKLY TASK DATA (opcode 0x5B, subType 0x01)
+-- WEEKLY TASK DATA (opcode 0x53, subType 0x01)
 -- ============================================
 
 function TaskBoardProtocol.sendWeeklyTaskData(player, data)
@@ -208,7 +208,7 @@ function TaskBoardProtocol.sendWeeklyTaskData(player, data)
 end
 
 -- ============================================
--- HUNTING SHOP DATA (opcode 0x5B, subType 0x02)
+-- HUNTING SHOP DATA (opcode 0x53, subType 0x02)
 -- ============================================
 
 function TaskBoardProtocol.sendHuntingTaskShopData(player, offers, taskHuntingPoints)

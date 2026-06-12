@@ -16,7 +16,7 @@ condition:setParameter(CONDITION_PARAM_SKILL_FISTPERCENT, 150)
 condition:setParameter(CONDITION_PARAM_SKILL_CLUBPERCENT, 150)
 condition:setParameter(CONDITION_PARAM_SKILL_SWORDPERCENT, 150)
 condition:setParameter(CONDITION_PARAM_SKILL_AXEPERCENT, 150)
-condition:setParameter(CONDITION_PARAM_SKILL_DISTANCE, 150)
+condition:setParameter(CONDITION_PARAM_SKILL_DISTANCEPERCENT, 150)
 condition:setParameter(CONDITION_PARAM_STAT_MAGICPOINTSPERCENT, 150)
 combat:setCondition(condition)
 
