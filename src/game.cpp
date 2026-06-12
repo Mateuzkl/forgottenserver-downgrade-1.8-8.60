@@ -91,12 +91,12 @@ bool isCarriedByCreature(const Cylinder* cylinder)
 	return topParent && topParent->getCreature();
 }
 
-uint32_t getDestinationInstanceId(const Player* actor, const Cylinder* destination)
+uint32_t getDestinationInstanceId(const Player* actor, const Cylinder* destination, uint32_t sourceInstanceId)
 {
-	if (!actor || !destination || isCarriedByCreature(destination) || !destination->getTile()) {
+	if (!destination || isCarriedByCreature(destination) || !destination->getTile()) {
 		return 0;
 	}
-	return actor->getInstanceID();
+	return actor ? actor->getInstanceID() : sourceInstanceId;
 }
 
 std::string getDamageAnimatedText(int32_t value)
@@ -1707,7 +1707,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
                                    const Position* fromPos /*= nullptr*/, const Position* toPos /*= nullptr*/)
 {
 	Player* actorPlayer = actor ? actor->getPlayer() : nullptr;
-	if (actorPlayer && item->getTopParent() == actorPlayer) {
+	if (isCarriedByCreature(item->getParent())) {
 		item->setInstanceID(0);
 	}
 	const uint32_t sourceInstanceId = item->getInstanceID();
@@ -1767,7 +1767,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 			break;
 		}
 	}
-	const uint32_t destinationInstanceId = getDestinationInstanceId(actorPlayer, toCylinder);
+	const uint32_t destinationInstanceId = getDestinationInstanceId(actorPlayer, toCylinder, sourceInstanceId);
 
 	if (actorPlayer) {
 		const ReturnValue storeInboxLockRet = getStoreInboxLockedItemMoveReturn(item);
@@ -1948,9 +1948,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 
 		if (item->equals(toItem)) {
 			n = std::min<uint32_t>(toItem->getStackSize() - toItem->getItemCount(), m);
-			if (actorPlayer) {
-				toItem->setInstanceID(destinationInstanceId);
-			}
+			toItem->setInstanceID(destinationInstanceId);
 			toCylinder->updateThing(toItem, toItem->getID(), toItem->getItemCount() + n);
 			updateItem = toItem;
 		} else {
@@ -1974,14 +1972,12 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 
 	// add item
 	if (moveItem /*m - n > 0*/) {
-		if (actorPlayer) {
-			moveItem->setInstanceID(destinationInstanceId);
-		}
+		moveItem->setInstanceID(destinationInstanceId);
 		toCylinder->addThing(index, moveItem);
 	}
 
 	if (itemIndex != -1) {
-		if (moveItem == item && actorPlayer) {
+		if (moveItem == item) {
 			item->setInstanceID(sourceInstanceId);
 			fromCylinder->postRemoveNotification(item, toCylinder, itemIndex);
 			item->setInstanceID(destinationInstanceId);

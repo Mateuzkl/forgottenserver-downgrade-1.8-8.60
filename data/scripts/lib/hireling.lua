@@ -173,6 +173,74 @@ local function addHirelingLampToInbox(player, hireling)
 	return lamp
 end
 
+local function persistHirelingReturn(owner, hireling)
+	local previousState = {
+		active = hireling.active,
+		cid = hireling.cid,
+		position = {
+			x = hireling.posx,
+			y = hireling.posy,
+			z = hireling.posz
+		}
+	}
+	local lamp
+	local committed = false
+	local failureReason = "Failed to return the hireling to its lamp."
+
+	local ok, err = pcall(function()
+		lamp = addHirelingLampToInbox(owner, hireling)
+		if not lamp then
+			failureReason = "You don't have enough room in your store inbox."
+			return
+		end
+
+		hireling.active = 0
+		hireling.cid = -1
+		hireling:setPosition({ x = 0, y = 0, z = 0 })
+
+		if not hireling:save() then
+			return
+		end
+
+		if not owner.save or not owner:save() then
+			return
+		end
+
+		committed = true
+	end)
+
+	if committed then
+		return true
+	end
+
+	local lampRollbackOk = pcall(function()
+		if lamp and lamp.remove then
+			lamp:remove()
+		end
+	end)
+	local stateRollbackOk = pcall(function()
+		hireling.active = previousState.active
+		hireling.cid = previousState.cid
+		hireling:setPosition(previousState.position)
+	end)
+
+	local hirelingRollbackOk, hirelingRollbackResult = pcall(function()
+		return hireling:save()
+	end)
+	local ownerRollbackOk, ownerRollbackResult = pcall(function()
+		return owner.save and owner:save()
+	end)
+
+	if not lampRollbackOk or not stateRollbackOk or not hirelingRollbackOk or not hirelingRollbackResult or
+		not ownerRollbackOk or not ownerRollbackResult then
+		logError("[Hireling] Failed to persist rollback while returning hireling id " .. tostring(hireling:getId()) .. ".")
+	end
+	if not ok then
+		logError("[Hireling] Failed to return hireling id " .. tostring(hireling:getId()) .. ": " .. tostring(err))
+	end
+	return false, failureReason
+end
+
 local function ensureHirelingNpcType(npcName)
 	if not createHirelingType then
 		local ok, err = pcall(dofile, "data/npc/crystalserver/shops/mixed/hireling.lua")
@@ -205,25 +273,17 @@ local function returnHirelingToOwnerInbox(hireling)
 		return false
 	end
 
-	local lamp = addHirelingLampToInbox(owner, hireling)
-	if owner.save then
-		owner:save()
-	end
+	local npc = hireling.cid and Npc(hireling.cid) or nil
+	local returned = persistHirelingReturn(owner, hireling)
 	releaseOwnerPlayer(owner, isOffline)
-
-	if not lamp then
+	if not returned then
 		return false
 	end
 
-	local npc = hireling.cid and Npc(hireling.cid) or nil
 	if npc then
 		npc:remove()
 	end
 
-	hireling.active = 0
-	hireling.cid = -1
-	hireling:setPosition({ x = 0, y = 0, z = 0 })
-	hireling:save()
 	return true
 end
 
@@ -474,7 +534,7 @@ function Hireling:spawn()
 end
 
 function Hireling:returnToLamp(playerId)
-	if self.active ~= 1 then
+	if self.active ~= 1 or self._returning then
 		return false
 	end
 
@@ -487,22 +547,25 @@ function Hireling:returnToLamp(playerId)
 		return false
 	end
 
-	self.active = 0
+	self._returning = true
 	local hirelingId = self:getId()
 	local npcId = self.cid
 	addEvent(function(ownerGuid, delayedHirelingId, delayedNpcId)
 		local owner = Player(ownerGuid)
 		local hireling = getHirelingById(delayedHirelingId)
 		if not owner or not hireling then
+			if hireling then
+				hireling._returning = nil
+			end
 			return
 		end
 
 		local npc = Npc(delayedNpcId)
-		if not addHirelingLampToInbox(owner, hireling) then
+		local returned, failureReason = persistHirelingReturn(owner, hireling)
+		if not returned then
 			owner:getPosition():sendMagicEffect(CONST_ME_POFF)
-			owner:sendTextMessage(MESSAGE_FAILURE, "You don't have enough room in your store inbox.")
-			hireling.active = 1
-			hireling:save()
+			owner:sendTextMessage(MESSAGE_FAILURE, failureReason)
+			hireling._returning = nil
 			return
 		end
 
@@ -512,9 +575,7 @@ function Hireling:returnToLamp(playerId)
 			npc:remove()
 		end
 
-		hireling.cid = -1
-		hireling:setPosition({ x = 0, y = 0, z = 0 })
-		hireling:save()
+		hireling._returning = nil
 	end, 1000, player:getGuid(), hirelingId, npcId)
 	return true
 end
