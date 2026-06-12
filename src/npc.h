@@ -228,7 +228,7 @@ public:
 
 	uint8_t getSpeechBubble() const { return speechBubble; }
 	void setSpeechBubble(const uint8_t bubble) { 
-		if (bubble < SPEECHBUBBLE_LAST) {
+		if (bubble <= SPEECHBUBBLE_QUESTTRADER || bubble == SPEECHBUBBLE_HIRELING) {
 			speechBubble = bubble;
 		}
 	}

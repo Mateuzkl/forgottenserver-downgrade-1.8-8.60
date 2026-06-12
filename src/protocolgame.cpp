@@ -113,6 +113,32 @@ bool requireUnreadBytes(NetworkMessage& msg, std::size_t required)
 	return false;
 }
 
+bool canUseAstraHirelingProtocol(bool isAstraClient)
+{
+	return isAstraClient && getBoolean(ConfigManager::HIRELING_SYSTEM_ENABLED) &&
+	       getBoolean(ConfigManager::ASTRA_HIRELING_PROTOCOL_ENABLED);
+}
+
+bool isHirelingOutfitRequestPacket(const NetworkMessage& msg, bool isAstraClient)
+{
+	if (!canUseAstraHirelingProtocol(isAstraClient) || getUnreadBytes(msg) < 5) {
+		return false;
+	}
+
+	const uint8_t* payload = msg.getBuffer() + msg.getBufferPosition();
+	return payload[0] != 0;
+}
+
+bool isHirelingOutfitChangePacket(const NetworkMessage& msg, bool isAstraClient)
+{
+	if (!canUseAstraHirelingProtocol(isAstraClient) || getUnreadBytes(msg) < 12) {
+		return false;
+	}
+
+	const uint8_t* payload = msg.getBuffer() + msg.getBufferPosition();
+	return payload[0] != 0;
+}
+
 uint8_t getRuleViolationTypeFromLegacyAction(uint8_t action)
 {
 	if (action == 6) {
@@ -1245,11 +1271,19 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break;
 
 		case 0xD2:
-			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerRequestOutfit(playerID); });
+			if (isHirelingOutfitRequestPacket(msg, isAstraClient)) {
+				dispatchPlayerNetworkMessage(recvbyte, msg);
+			} else {
+				g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerRequestOutfit(playerID); });
+			}
 			break;
 
 		case 0xD3:
-			parseSetOutfit(msg);
+			if (isHirelingOutfitChangePacket(msg, isAstraClient)) {
+				dispatchPlayerNetworkMessage(recvbyte, msg);
+			} else {
+				parseSetOutfit(msg);
+			}
 			break;
 
 		case 0xDC:

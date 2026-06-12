@@ -17,6 +17,7 @@ local RESP_HISTORY = 0x03
 local STORE_ACTION_DELAY = 2
 local MAX_TARGET_NAME_LENGTH = 50
 local MAX_CHARACTER_NAME_LENGTH = 20
+local MAX_HIRELING_NAME_LENGTH = 20
 local MAX_CHARACTER_NAME_WORDS = 5
 local CHANGE_NAME_KICK_DELAY = 3000
 local CHANGE_NAME_SUCCESS_MESSAGE = "Your character name has been changed. You will be disconnected in 3 seconds. Please log in again to use your new name."
@@ -33,6 +34,22 @@ local lastTransfer = {}
 
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
+end
+
+local function isHirelingOfferType(oftype)
+	oftype = tostring(oftype or ""):lower()
+	return oftype == "hireling" or oftype == "hireling_skill" or oftype == "hireling_outfit"
+end
+
+local function isHirelingCategory(category)
+	local name = tostring(category and category.name or ""):lower()
+	return name == "hirelings" or name == "hireling dresses"
+end
+
+local function supportsHirelingStore(player)
+	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
+		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
+		player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function playerOwnsMount(player, mountId)
@@ -369,14 +386,34 @@ local function sendStoreCatalog(player)
 		return false
 	end
 
+	local visibleCategories = {}
+	for _, cat in ipairs(storeCategories) do
+		local visibleOffers = {}
+		for _, offer in ipairs(cat.offers) do
+			if not isHirelingOfferType(offer.oftype) or supportsHirelingStore(player) then
+				visibleOffers[#visibleOffers + 1] = offer
+			end
+		end
+
+		if #visibleOffers > 0 or not isHirelingCategory(cat) then
+			visibleCategories[#visibleCategories + 1] = {
+				name = cat.name,
+				icon = cat.icon,
+				parent = cat.parent,
+				description = cat.description,
+				offers = visibleOffers
+			}
+		end
+	end
+
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_STORE_SEND)
 	out:addByte(RESP_CATALOG)
 
 	out:addU32(player:getTibiaCoins())
-	out:addU16(#storeCategories)
+	out:addU16(#visibleCategories)
 
-	for _, cat in ipairs(storeCategories) do
+	for _, cat in ipairs(visibleCategories) do
 		out:addString(cat.name)
 		out:addString(cat.icon)
 		out:addString(cat.parent)
@@ -570,6 +607,60 @@ local function deliverOffer(player, offer, extra)
 		return nil
 	end
 
+	if offer.oftype == "hireling" then
+		if not supportsHirelingStore(player) then
+			return "Hireling purchases are only available on AstraClient."
+		end
+
+		if not player.addNewHireling then
+			return "Hireling system is not available."
+		end
+
+		local hireling, err = player:addNewHireling(extra and extra.name or "", extra and extra.sex or HIRELING_SEX.MALE)
+		if not hireling then
+			return err or "Failed to create hireling."
+		end
+
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your hireling lamp was sent to your Store Inbox.")
+		return nil
+	end
+
+	if offer.oftype == "hireling_skill" then
+		if not supportsHirelingStore(player) then
+			return "Hireling purchases are only available on AstraClient."
+		end
+
+		local skillName = GetHirelingSkillNameById(offer.value > 0 and offer.value or offer.eid)
+		if not skillName then
+			return "Invalid hireling skill."
+		end
+
+		if player:hasHirelingSkill(skillName) then
+			return "You already have this hireling skill."
+		end
+
+		player:enableHirelingSkill(skillName)
+		return nil
+	end
+
+	if offer.oftype == "hireling_outfit" then
+		if not supportsHirelingStore(player) then
+			return "Hireling purchases are only available on AstraClient."
+		end
+
+		local outfitName = GetHirelingOutfitNameById(offer.value > 0 and offer.value or offer.eid)
+		if not outfitName then
+			return "Invalid hireling dress."
+		end
+
+		if player:hasHirelingOutfit(outfitName) then
+			return "You already have this hireling dress."
+		end
+
+		player:enableHirelingOutfit(outfitName)
+		return nil
+	end
+
 	return "Invalid offer type."
 end
 
@@ -627,6 +718,18 @@ function buyHandler.onReceive(player, msg)
 		extra.name = NetworkGuard.readString(msg, MAX_CHARACTER_NAME_LENGTH)
 		if not extra.name then
 			sendStoreError(player, "You need to choose a new character name.")
+			return
+		end
+	elseif offer.oftype == "hireling" then
+		extra.name = NetworkGuard.readString(msg, MAX_HIRELING_NAME_LENGTH)
+		if not extra.name then
+			sendStoreError(player, "You need to choose a hireling name.")
+			return
+		end
+
+		extra.sex = NetworkGuard.readByte(msg)
+		if extra.sex == nil then
+			sendStoreError(player, "You need to choose a hireling sex.")
 			return
 		end
 	end

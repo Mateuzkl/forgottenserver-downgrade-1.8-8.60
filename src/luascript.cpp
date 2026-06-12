@@ -2461,6 +2461,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(SPEECHBUBBLE_TRADE);
 	registerEnum(SPEECHBUBBLE_QUEST);
 	registerEnum(SPEECHBUBBLE_QUESTTRADER);
+	registerEnum(SPEECHBUBBLE_HIRELING);
 
 	registerEnum(TALKTYPE_SAY);
 	registerEnum(TALKTYPE_WHISPER);
@@ -2831,6 +2832,8 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MONSTER_LEVEL_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::LOOT_GROUPING_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::HIRELING_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::ASTRA_HIRELING_PROTOCOL_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::COLORIZED_LOOT_VALUE);
 	registerEnumIn("configKeys", ConfigManager::ITEM_TIER_DISPLAY);
 	registerEnumIn("configKeys", ConfigManager::ITEM_UPGRADE_CLASSIFICATION);

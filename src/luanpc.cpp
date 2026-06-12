@@ -107,8 +107,8 @@ int luaNpcSetSpeechBubble(lua_State* L)
 	
 	uint8_t bubbleType = getInteger<uint8_t>(L, 2);
 	
-	if (bubbleType >= SPEECHBUBBLE_LAST) {
-		reportErrorFunc(L, "Invalid speech bubble type. Valid values: 0-4 (SPEECHBUBBLE_NONE to SPEECHBUBBLE_QUESTTRADER)");
+	if (bubbleType > SPEECHBUBBLE_QUESTTRADER && bubbleType != SPEECHBUBBLE_HIRELING) {
+		reportErrorFunc(L, "Invalid speech bubble type. Valid values: 0-4 or 7 (SPEECHBUBBLE_HIRELING)");
 		pushBoolean(L, false);
 		return 1;
 	}

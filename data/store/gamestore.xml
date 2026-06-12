@@ -71,6 +71,26 @@
         <offer id="7004" name="Black Sheep" icon="" price="450" eid="371" itemid="0" type="mount" value="4" count="1" description="Unlocks the Black Sheep mount."/>
     </category>
 
+    <category name="Hirelings" parent="Cosmetics" icon="store_hirelings" description="Hirelings are personal NPC assistants for houses. They are delivered as lamps to the purchasing character's Store Inbox.">
+        <offer id="11001" name="Hireling Apprentice" icon="" price="150" eid="1108" itemid="0" type="hireling" value="0" count="1" description="Creates a hireling lamp for your Store Inbox. The lamp can only be used in a house owned by the purchasing character."/>
+        <offer id="11002" name="Hireling Banker" icon="" price="250" eid="1110" itemid="0" type="hireling_skill" value="1001" count="1" description="Gives your hirelings the banker skill."/>
+        <offer id="11003" name="Hireling Cook" icon="" price="900" eid="1114" itemid="0" type="hireling_skill" value="1002" count="1" description="Gives your hirelings the cooking skill."/>
+        <offer id="11004" name="Hireling Steward" icon="" price="250" eid="1116" itemid="0" type="hireling_skill" value="1003" count="1" description="Gives your hirelings the steward skill."/>
+        <offer id="11005" name="Hireling Trader" icon="" price="250" eid="1112" itemid="0" type="hireling_skill" value="1004" count="1" description="Gives your hirelings the trader skill."/>
+    </category>
+
+    <category name="Hireling Dresses" parent="Cosmetics" icon="store_hireling_dresses" description="Dresses can only be used by hirelings of the purchasing character. Colours can be changed in the hireling outfit window.">
+        <offer id="12001" name="Banker Dress" icon="" price="500" eid="1110" itemid="0" type="hireling_outfit" value="2001" count="1" description="Unlocks the Banker Dress for your hirelings."/>
+        <offer id="12002" name="Trader Dress" icon="" price="500" eid="1112" itemid="0" type="hireling_outfit" value="2004" count="1" description="Unlocks the Trader Dress for your hirelings."/>
+        <offer id="12003" name="Cook Dress" icon="" price="500" eid="1114" itemid="0" type="hireling_outfit" value="2002" count="1" description="Unlocks the Cook Dress for your hirelings."/>
+        <offer id="12004" name="Steward Dress" icon="" price="500" eid="1116" itemid="0" type="hireling_outfit" value="2003" count="1" description="Unlocks the Steward Dress for your hirelings."/>
+        <offer id="12005" name="Servant Dress" icon="" price="300" eid="1118" itemid="0" type="hireling_outfit" value="2005" count="1" description="Unlocks the Servant Dress for your hirelings."/>
+        <offer id="12006" name="Hydra Dress" icon="" price="900" eid="1130" itemid="0" type="hireling_outfit" value="2006" count="1" description="Unlocks the Hydra Dress for your hirelings."/>
+        <offer id="12007" name="Ferumbras Dress" icon="" price="900" eid="1132" itemid="0" type="hireling_outfit" value="2007" count="1" description="Unlocks the Ferumbras Dress for your hirelings."/>
+        <offer id="12008" name="Bonelord Dress" icon="" price="900" eid="1124" itemid="0" type="hireling_outfit" value="2008" count="1" description="Unlocks the Bonelord Dress for your hirelings."/>
+        <offer id="12009" name="Dragon Dress" icon="" price="900" eid="1126" itemid="0" type="hireling_outfit" value="2009" count="1" description="Unlocks the Dragon Dress for your hirelings."/>
+    </category>
+
     <category name="Extras" icon="store_extras" description="Extra services for your character."/>
 
     <category name="Extra Services" parent="Extras" icon="store_services" description="Character services are applied directly to the purchasing character.">
