@@ -477,10 +477,21 @@ local function deliverOffer(player, offer, extra)
 	end
 
 	if offer.oftype == "item" and offer.itemid > 0 then
-		local added = player:addItem(offer.itemid, offer.count, true)
-		if not added then
-			return "Failed to deliver item. Check your inventory."
+		local inbox = player:getStoreInbox()
+		if not inbox then
+			return "Your store inbox is not available."
 		end
+
+		local item = Game.createItem(offer.itemid, offer.count)
+		if not item then
+			return "Failed to create item."
+		end
+
+		if inbox:addItemEx(item) ~= RETURNVALUE_NOERROR then
+			item:remove()
+			return "Your store inbox is full."
+		end
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your item was sent to your store inbox.")
 		return nil
 	end
 
