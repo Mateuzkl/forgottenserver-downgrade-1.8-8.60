@@ -710,6 +710,8 @@ function System.sendEquippedExperience(player)
 	end
 end
 
+-- Validates the player, then synchronizes equipped spell augments and experience/perks
+-- through refreshProfileSpellAugments and System.sendEquippedExperience.
 function System.refreshEquippedPerks(player)
 	if not player then
 		return

@@ -501,6 +501,14 @@ local function makeReward(step, freeReward)
 		count = count,
 		charges = 0,
 		stuck = false,
+		hasClaimedReward = false,
+		durationTime = 0,
+		addons = 0,
+		randomValues = {},
+		choosableValues = {},
+		maleOutfit = {},
+		femaleOutfit = {},
+		items = {},
 	}
 end
 
