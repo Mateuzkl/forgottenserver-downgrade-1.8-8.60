@@ -2218,7 +2218,7 @@ int luaPlayerHasMount(lua_State* L)
 	if (isInteger(L, 2)) {
 		mount = g_game.mounts.getMountByID(getInteger<uint16_t>(L, 2));
 	} else {
-		mount = g_game.mounts.getMountByName(getString(L, 2));
+		mount = g_game.mounts.getMountByName(getStringView(L, 2));
 	}
 
 	if (mount) {
@@ -2242,7 +2242,7 @@ int luaPlayerOwnsMount(lua_State* L)
 	if (isInteger(L, 2)) {
 		mount = g_game.mounts.getMountByID(getInteger<uint16_t>(L, 2));
 	} else {
-		mount = g_game.mounts.getMountByName(getString(L, 2));
+		mount = g_game.mounts.getMountByName(getStringView(L, 2));
 	}
 
 	if (mount) {
