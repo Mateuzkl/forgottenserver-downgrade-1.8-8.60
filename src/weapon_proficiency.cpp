@@ -13,7 +13,7 @@
 
 namespace {
 
-int32_t saturatingAdd(int32_t value, int64_t increase)
+int32_t saturatingAddWeapon(int32_t value, int64_t increase)
 {
 	return static_cast<int32_t>(std::clamp<int64_t>(static_cast<int64_t>(value) + increase,
 	                                               std::numeric_limits<int32_t>::min(),
@@ -379,9 +379,9 @@ void WeaponProficiency::applyAutoAttackCritical(CombatDamage& damage) const
 	}
 
 	if (damage.origin == ORIGIN_MELEE || damage.origin == ORIGIN_RANGED) {
-		damage.criticalChance = saturatingAdd(damage.criticalChance,
+		damage.criticalChance = saturatingAddWeapon(damage.criticalChance,
 		                                      static_cast<int64_t>(std::llround(m_autoAttackCritical.chance * 10000.0)));
-		damage.criticalDamage = saturatingAdd(damage.criticalDamage,
+		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage,
 		                                      static_cast<int64_t>(std::llround(m_autoAttackCritical.damage * 10000.0)));
 	}
 }
@@ -389,9 +389,9 @@ void WeaponProficiency::applyAutoAttackCritical(CombatDamage& damage) const
 void WeaponProficiency::applyGeneralCritical(CombatDamage& damage) const
 {
 	if (m_generalCritical.chance > 0 || m_generalCritical.damage > 0) {
-		damage.criticalChance = saturatingAdd(damage.criticalChance,
+		damage.criticalChance = saturatingAddWeapon(damage.criticalChance,
 		                                      static_cast<int64_t>(std::llround(m_generalCritical.chance * 10000.0)));
-		damage.criticalDamage = saturatingAdd(damage.criticalDamage,
+		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage,
 		                                      static_cast<int64_t>(std::llround(m_generalCritical.damage * 10000.0)));
 	}
 }
@@ -403,9 +403,9 @@ void WeaponProficiency::applyRunesCritical(CombatDamage& damage, bool aggressive
 	}
 
 	if (!damage.instantSpellName.empty() && damage.origin == ORIGIN_SPELL) {
-		damage.criticalChance = saturatingAdd(damage.criticalChance,
+		damage.criticalChance = saturatingAddWeapon(damage.criticalChance,
 		                                      static_cast<int64_t>(std::llround(m_runesCritical.chance * 10000.0)));
-		damage.criticalDamage = saturatingAdd(damage.criticalDamage,
+		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage,
 		                                      static_cast<int64_t>(std::llround(m_runesCritical.damage * 10000.0)));
 	}
 }
@@ -415,9 +415,9 @@ void WeaponProficiency::applyElementCritical(CombatDamage& damage) const
 	const size_t index = combatTypeToIndex(damage.primary.type);
 	if (index < m_elementCritical.size()) {
 		const auto& ec = m_elementCritical[index];
-		damage.criticalChance = saturatingAdd(damage.criticalChance,
+		damage.criticalChance = saturatingAddWeapon(damage.criticalChance,
 		                                      static_cast<int64_t>(std::llround(ec.chance * 10000.0)));
-		damage.criticalDamage = saturatingAdd(damage.criticalDamage,
+		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage,
 		                                      static_cast<int64_t>(std::llround(ec.damage * 10000.0)));
 	}
 }
