@@ -493,11 +493,18 @@ function WeeklyTasks.sendWeeklyData(player)
 	-- Build delivery tasks for protocol
 	local deliveryTasks = {}
 	for _, dt in ipairs(data.deliveryTasks) do
+		local required = dt.required or dt.amount or 0
+		local delivered = dt.delivered == 1
+		local available = 0
+		if dt.itemId then
+			available = player:getItemTypeCount(dt.itemId) or 0
+		end
+
 		deliveryTasks[#deliveryTasks + 1] = {
 			itemId = dt.itemId,
-			amount = dt.amount or 0,
-			required = dt.required or 0,
-			available = dt.available or 0,
+			amount = delivered and required or 0,
+			required = required,
+			available = available,
 			grade = dt.grade or 0,
 		}
 	end

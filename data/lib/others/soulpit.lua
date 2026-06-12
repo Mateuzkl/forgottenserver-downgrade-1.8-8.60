@@ -282,6 +282,7 @@ function SoulPit.buildSoulsealEntries()
         table.insert(entries, {
             raceId = raceId,
             name = monster.name or ("Creature " .. tostring(raceId)),
+            outfit = monster.outfit,
             stars = stars,
             cost = cost,
             mastered = false,

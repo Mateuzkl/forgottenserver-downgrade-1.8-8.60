@@ -73,6 +73,57 @@ local function clamp(value, minValue, maxValue)
 	return value
 end
 
+local function normalizeOutfit(outfit)
+	outfit = type(outfit) == "table" and outfit or {}
+	return {
+		type = clamp(outfit.type or outfit.lookType or 0, 0, 0xFFFF),
+		head = clamp(outfit.head or outfit.lookHead or 0, 0, 0xFF),
+		body = clamp(outfit.body or outfit.lookBody or 0, 0, 0xFF),
+		legs = clamp(outfit.legs or outfit.lookLegs or 0, 0, 0xFF),
+		feet = clamp(outfit.feet or outfit.lookFeet or 0, 0, 0xFF),
+		addons = clamp(outfit.addons or outfit.lookAddons or 0, 0, 0xFF),
+	}
+end
+
+local function getMonsterDisplay(raceId, fallbackName, fallbackOutfit)
+	raceId = tonumber(raceId) or 0
+	local entry = nil
+	if raceId > 0 and CustomBestiary and CustomBestiary.getMonster then
+		entry = CustomBestiary.getMonster(raceId)
+	end
+
+	return {
+		name = (entry and entry.name) or fallbackName or (raceId > 0 and ("Creature " .. tostring(raceId)) or ""),
+		outfit = normalizeOutfit((entry and entry.outfit) or fallbackOutfit),
+	}
+end
+
+local function writeMonsterDisplay(out, raceId, fallbackName, fallbackOutfit)
+	local display = getMonsterDisplay(raceId, fallbackName, fallbackOutfit)
+	local outfit = display.outfit or {}
+	out:addString(display.name or "")
+	out:addU16(clamp(outfit.type or 0, 0, 0xFFFF))
+	out:addByte(clamp(outfit.head or 0, 0, 0xFF))
+	out:addByte(clamp(outfit.body or 0, 0, 0xFF))
+	out:addByte(clamp(outfit.legs or 0, 0, 0xFF))
+	out:addByte(clamp(outfit.feet or 0, 0, 0xFF))
+	out:addByte(clamp(outfit.addons or 0, 0, 0xFF))
+end
+
+local function getClientItemId(itemId)
+	itemId = tonumber(itemId) or 0
+	if itemId <= 0 then
+		return 0
+	end
+
+	local itemType = ItemType(itemId)
+	local clientId = itemType and itemType:getClientId() or 0
+	if clientId and clientId > 0 then
+		return clientId
+	end
+	return itemId
+end
+
 -- ============================================
 -- RESOURCE BALANCE (opcode 0xEE)
 -- ============================================
@@ -114,7 +165,9 @@ function TaskBoardProtocol.sendBountyTaskData(player, data)
 	local creatures = data.creatures or {}
 	for i = 1, 3 do
 		local c = creatures[i] or {}
-		out:addU16(clamp(c.raceId or 0, 0, 0xFFFF))
+		local raceId = clamp(c.raceId or 0, 0, 0xFFFF)
+		out:addU16(raceId)
+		writeMonsterDisplay(out, raceId, c.name, c.outfit)
 		out:addU16(clamp(c.kills or 0, 0, 0xFFFF))
 		out:addU16(clamp(c.required or 0, 0, 0xFFFF))
 		out:addU16(clamp(c.reward or 0, 0, 0xFFFF))
@@ -174,7 +227,9 @@ function TaskBoardProtocol.sendWeeklyTaskData(player, data)
 	local killTasks = data.killTasks or {}
 	out:addByte(clamp(#killTasks, 0, 0xFF))
 	for _, kt in ipairs(killTasks) do
-		out:addU16(clamp(kt.raceId or 0, 0, 0xFFFF))
+		local raceId = clamp(kt.raceId or 0, 0, 0xFFFF)
+		out:addU16(raceId)
+		writeMonsterDisplay(out, raceId, kt.name, kt.outfit)
 		out:addU16(clamp(kt.kills or 0, 0, 0xFFFF))
 		out:addU16(clamp(kt.required or 0, 0, 0xFFFF))
 		out:addByte(clamp(kt.grade or 0, 0, 0xFF))
@@ -185,6 +240,7 @@ function TaskBoardProtocol.sendWeeklyTaskData(player, data)
 	out:addByte(clamp(#deliveryTasks, 0, 0xFF))
 	for _, dt in ipairs(deliveryTasks) do
 		out:addU16(clamp(dt.itemId or 0, 0, 0xFFFF))
+		out:addU16(clamp(dt.clientId or getClientItemId(dt.itemId), 0, 0xFFFF))
 		out:addByte(clamp(dt.amount or 0, 0, 0xFF))
 		out:addByte(clamp(dt.required or 0, 0, 0xFF))
 		out:addU32(clamp(dt.available or 0, 0, 0xFFFFFFFF))
@@ -235,14 +291,14 @@ function TaskBoardProtocol.sendHuntingTaskShopData(player, offers, taskHuntingPo
 
 		-- type-specific fields
 		if offer.type == 0 then -- item
-			out:addU16(clamp(offer.itemId or 0, 0, 0xFFFF))
+			out:addU16(clamp(offer.clientId or getClientItemId(offer.itemId), 0, 0xFFFF))
 		elseif offer.type == 1 then -- mount
-			out:addU16(clamp(offer.mountId or 0, 0, 0xFFFF))
+			out:addU16(clamp(offer.mountClientId or offer.mountId or 0, 0, 0xFFFF))
 		elseif offer.type == 2 then -- outfit
 			out:addU16(clamp(offer.outfitId or 0, 0, 0xFFFF))
 			out:addU16(clamp(offer.addons or 0, 0, 0xFFFF))
 		elseif offer.type == 3 then -- item double
-			out:addU16(clamp(offer.itemId or 0, 0, 0xFFFF))
+			out:addU16(clamp(offer.clientId or getClientItemId(offer.itemId), 0, 0, 0xFFFF))
 		elseif offer.type == 5 then -- weekly expansion
 			out:addByte(0) -- placeholder
 		end
@@ -270,8 +326,9 @@ function TaskBoardProtocol.sendSoulSealsData(player, entries, balance)
 	out:addU16(clamp(count, 0, 0xFFFF))
 
 	for _, entry in ipairs(entries or {}) do
-		out:addU16(clamp(entry.raceId or 0, 0, 0xFFFF))
-		out:addString(entry.name or "?")
+		local raceId = clamp(entry.raceId or 0, 0, 0xFFFF)
+		out:addU16(raceId)
+		writeMonsterDisplay(out, raceId, entry.name or "?", entry.outfit)
 		out:addByte(clamp(entry.stars or 0, 0, 0xFF))
 		out:addU32(clamp(entry.cost or 0, 0, 0xFFFFFFFF))
 		out:addByte(entry.mastered and 1 or 0)

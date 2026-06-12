@@ -17,6 +17,34 @@ local function getPlayerGuid(player)
 	return player:getGuid()
 end
 
+local function getItemClientId(itemId)
+	itemId = tonumber(itemId) or 0
+	if itemId <= 0 then
+		return 0
+	end
+
+	local itemType = ItemType(itemId)
+	local clientId = itemType and itemType:getClientId() or 0
+	if clientId and clientId > 0 then
+		return clientId
+	end
+	return itemId
+end
+
+local function getMountClientId(mountId)
+	mountId = tonumber(mountId) or 0
+	if mountId <= 0 or not Game.getMounts then
+		return mountId
+	end
+
+	for _, mount in ipairs(Game.getMounts()) do
+		if tonumber(mount.id) == mountId then
+			return tonumber(mount.clientId) or mountId
+		end
+	end
+	return mountId
+end
+
 -- Shop offers are loaded externally and set via setOffers()
 local shopOffers = {}
 
@@ -47,7 +75,9 @@ function HuntingShop.sendShopData(player)
 			purchased = false,
 			type = offer.type or OFFER_ITEM,
 			itemId = offer.itemId,
+			clientId = getItemClientId(offer.itemId),
 			mountId = offer.mountId,
+			mountClientId = getMountClientId(offer.mountId),
 			outfitId = offer.outfitId,
 			addons = offer.addons or 0,
 		}
