@@ -233,14 +233,20 @@ local function sendOpenRewardWall(player, fromShrine)
 	return out:sendToPlayer(player)
 end
 
-local function openRewardWall(player)
+DailyRewardSystem = DailyRewardSystem or {}
+
+function DailyRewardSystem.openRewardWall(player, fromShrine)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
 
 	ensureDailyRewardSchema()
 	sendDailyReward(player)
-	return sendOpenRewardWall(player, true)
+	return sendOpenRewardWall(player, fromShrine ~= false)
+end
+
+local function openRewardWall(player)
+	return DailyRewardSystem.openRewardWall(player, true)
 end
 
 local function sendRewardHistory(player)

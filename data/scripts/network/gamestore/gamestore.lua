@@ -20,6 +20,10 @@ local MAX_CHARACTER_NAME_LENGTH = 20
 local MAX_CHARACTER_NAME_WORDS = 5
 local CHANGE_NAME_KICK_DELAY = 3000
 local CHANGE_NAME_SUCCESS_MESSAGE = "Your character name has been changed. You will be disconnected in 3 seconds. Please log in again to use your new name."
+local STORE_HOME_BANNER_DELAY = 10
+local STORE_HOME_BANNERS = {
+	{image = "/images/store/home/banner_exercisedummies", action = 0, target = 0}
+}
 
 local storeCategories = {}
 local storeItemsById = {}
@@ -369,6 +373,14 @@ local function sendStoreCatalog(player)
 		end
 	end
 
+	out:addByte(#STORE_HOME_BANNERS)
+	for _, banner in ipairs(STORE_HOME_BANNERS) do
+		out:addString(banner.image)
+		out:addByte(banner.action)
+		out:addU32(banner.target)
+	end
+	out:addByte(STORE_HOME_BANNER_DELAY)
+
 	return out:sendToPlayer(player)
 end
 
@@ -441,7 +453,7 @@ local function deliverOffer(player, offer, extra)
 	end
 
 	if offer.oftype == "mount" then
-		if player:hasMount(offer.value) then
+		if player:ownsMount(offer.value) then
 			return "You already have this mount."
 		end
 
@@ -535,7 +547,6 @@ local openHandler = PacketHandler(OPCODE_STORE_OPEN)
 
 function openHandler.onReceive(player, msg)
 	sendStoreCatalog(player)
-	sendStoreHistory(player)
 end
 
 openHandler:register()

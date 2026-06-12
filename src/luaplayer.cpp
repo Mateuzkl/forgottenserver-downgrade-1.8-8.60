@@ -2229,6 +2229,30 @@ int luaPlayerHasMount(lua_State* L)
 	return 1;
 }
 
+int luaPlayerOwnsMount(lua_State* L)
+{
+	// player:ownsMount(mountId or mountName)
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	Mount* mount = nullptr;
+	if (isInteger(L, 2)) {
+		mount = g_game.mounts.getMountByID(getInteger<uint16_t>(L, 2));
+	} else {
+		mount = g_game.mounts.getMountByName(getString(L, 2));
+	}
+
+	if (mount) {
+		pushBoolean(L, player->ownsMount(mount));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerToggleMount(lua_State* L)
 {
 	// player:toggleMount(mount)
@@ -4353,6 +4377,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addMount", luaPlayerAddMount);
 	registerMethod("Player", "removeMount", luaPlayerRemoveMount);
 	registerMethod("Player", "hasMount", luaPlayerHasMount);
+	registerMethod("Player", "ownsMount", luaPlayerOwnsMount);
 	registerMethod("Player", "toggleMount", luaPlayerToggleMount);
 
 	registerMethod("Player", "getPremiumEndsAt", luaPlayerGetPremiumEndsAt);

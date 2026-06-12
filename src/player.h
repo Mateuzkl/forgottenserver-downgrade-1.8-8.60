@@ -183,6 +183,7 @@ public:
 	bool changeMount(uint16_t mountId, bool checkList = true);
 	bool tameMount(uint16_t mountId);
 	bool untameMount(uint16_t mountId);
+	bool ownsMount(const Mount* mount) const;
 	bool hasMount(const Mount* mount) const;
 	bool hasMounts() const;
 	void dismount();

@@ -5936,7 +5936,7 @@ bool Player::toggleMount(bool mount)
 bool Player::tameMount(uint16_t mountId)
 {
 	Mount* mount = g_game.mounts.getMountByID(mountId);
-	if (!mount || hasMount(mount)) {
+	if (!mount || ownsMount(mount)) {
 		return false;
 	}
 
@@ -5947,7 +5947,7 @@ bool Player::tameMount(uint16_t mountId)
 bool Player::untameMount(uint16_t mountId)
 {
 	Mount* mount = g_game.mounts.getMountByID(mountId);
-	if (!mount || hasMount(mount)) {
+	if (!mount || !ownsMount(mount)) {
 		return false;
 	}
 
@@ -5965,6 +5965,11 @@ bool Player::untameMount(uint16_t mountId)
 	return true;
 }
 
+bool Player::ownsMount(const Mount* mount) const
+{
+	return mount && mounts.contains(mount->id);
+}
+
 bool Player::hasMount(const Mount* mount) const
 {
 	if (isAccessPlayer()) {
@@ -5975,7 +5980,7 @@ bool Player::hasMount(const Mount* mount) const
 		return false;
 	}
 
-	return mounts.contains(mount->id);
+	return ownsMount(mount);
 }
 
 bool Player::hasMounts() const
