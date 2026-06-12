@@ -183,10 +183,6 @@ if not NpcEvents then
         local handler = NpcsHandler(npc)
         local focus = NpcFocus(npc)
         local talkQueue = NpcTalkQueue(npc)
-        local currentFocus = focus:getCurrentFocus()
-        if currentFocus and currentFocus:getId() ~= creature:getId() then
-            return
-        end
 
         if focus:isFocused(creature) then
             -- If the player is focused, the NPC will say goodbye if the player says a farewell word
