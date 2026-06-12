@@ -289,13 +289,13 @@ function Hireling:save()
 end
 
 function Hireling:spawn()
-	self.active = 1
 	local pos = self:getPosition()
 	local npc = Game.createNpc("Hireling", pos)
 	if not npc then
 		DebugPrint('Error spawning Hireling: ' .. self:getName())
 		return
 	end
+	self.active = 1
 	npc:setOutfit(self:getOutfit())
 	npc:setSpeechBubble(0)
 	self:setCreature(npc:getId())
@@ -486,9 +486,17 @@ function Player:addNewHireling(name, sex)
 		return false
 	end
 
+	local lamp = inbox:addItem(HIRELING_LAMP_ID, 1)
+	if not lamp then
+		self:getPosition():sendMagicEffect(CONST_ME_POFF)
+		self:sendTextMessage(MESSAGE_INFO_DESCR, "You don't have enough room in your inbox.")
+		return false
+	end
+
 	local saved = PersistHireling(hireling)
 	if not saved then
 		DebugPrint('Error saving Hireling:' .. name .. ' - player:' .. self:getName())
+		lamp:remove()
 		return false
 	end
 
@@ -497,7 +505,6 @@ function Player:addNewHireling(name, sex)
 	end
 	table.insert(PLAYER_HIRELINGS[self:getGuid()], hireling)
 	table.insert(HIRELINGS, hireling)
-	local lamp = inbox:addItem(HIRELING_LAMP_ID, 1)
 	lamp:setAttribute(ITEM_ATTRIBUTE_DESCRIPTION, "This mysterious lamp summons your very own personal hireling.\nThis item cannot be traded.\nThis magic lamp is the home of " .. hireling:getName() .. ".")
 	lamp:setSpecialAttribute(HIRELING_ATTRIBUTE, hireling:getId())
 	hireling.active = 0

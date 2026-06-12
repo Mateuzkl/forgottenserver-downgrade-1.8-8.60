@@ -163,7 +163,7 @@ HIRELING_GOODS = {
 	},
 	DISTANCE = {
 		{ name = "arrow", id = 2544, buy = 2 },
-		{ name = "bolt", id = 2580, buy = 4 },
+		{ name = "bolt", id = 2543, buy = 4 },
 		{ name = "bow", id = 2456, buy = 400, sell = 100 },
 		{ name = "crossbow", id = 2455, buy = 500, sell = 120 },
 		{ name = "crystalline arrow", id = 18304, buy = 20 },

@@ -17,7 +17,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 		return false
 	elseif house:getOwnerGuid() ~= player:getGuid() then
 		player:getPosition():sendMagicEffect(CONST_ME_POFF)
-		player:sendTextMessage(MESSAGE_INFO_DESCR, "You cannot spawn a hireling on another's person house.")
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "You cannot spawn a hireling in another person's house.")
 		return false
 	end
 
@@ -25,6 +25,10 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	if not hireling then
 		player:getPosition():sendMagicEffect(CONST_ME_POFF)
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "This hireling no longer exists.")
+		return false
+	elseif hireling:getOwnerId() ~= player:getGuid() then
+		player:getPosition():sendMagicEffect(CONST_ME_POFF)
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "You are not the owner of this hireling.")
 		return false
 	end
 
