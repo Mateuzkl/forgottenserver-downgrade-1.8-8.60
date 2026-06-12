@@ -6,7 +6,14 @@ if not configManager or not configManager.getBoolean or not configManager.getBoo
 	return
 end
 
-local dropCallback = EventCallback()
+if not SoulPit then
+	dofile("data/lib/others/soulpit.lua")
+end
+if not SoulPit then
+	return
+end
+
+local dropCallback = Event()
 
 function dropCallback.onDropLoot(monster, corpse)
 	if not monster or not corpse then

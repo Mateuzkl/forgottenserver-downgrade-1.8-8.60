@@ -394,6 +394,10 @@ bool Spell::playerSpellCheck(Player* player) const
 		return false;
 	}
 
+	if (group == SPELLGROUP_ATTACK && player->hasCondition(CONDITION_POWERLESS)) {
+		return false;
+	}
+
 	if ((aggressive || pzLock) && !player->hasFlag(PlayerFlag_IgnoreProtectionZone) &&
 	    player->getZone() == ZONE_PROTECTION) {
 		player->sendCancelMessage(RETURNVALUE_ACTIONNOTPERMITTEDINPROTECTIONZONE);

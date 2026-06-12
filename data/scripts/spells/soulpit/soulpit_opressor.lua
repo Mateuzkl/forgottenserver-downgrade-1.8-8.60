@@ -24,7 +24,7 @@ combatRoot:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_GROUNDSHAKER)
 
 local conditionRoot = Condition(CONDITION_ROOTED)
 conditionRoot:setParameter(CONDITION_PARAM_TICKS, 3000)
-combatRoot:setCondition(conditionRoot)
+combatRoot:addCondition(conditionRoot)
 
 local combatFear = Combat()
 combatFear:setParameter(COMBAT_PARAM_TYPE, COMBAT_UNDEFINEDDAMAGE)
@@ -36,7 +36,7 @@ combatFear:setArea(createCombatArea({
 	{0, 0, 0, 0, 0},
 }))
 combatFear:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_FEAR)
-combatFear:setCondition(createConditionObject(CONDITION_FEARED, 3000))
+combatFear:addCondition(createConditionObject(CONDITION_FEARED, 3000))
 
 local spell = Spell(SPELL_INSTANT)
 

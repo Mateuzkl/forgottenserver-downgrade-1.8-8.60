@@ -8,8 +8,12 @@ combat:setParameter(COMBAT_PARAM_TYPE, COMBAT_UNDEFINEDDAMAGE)
 combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_EXPLOSIONHIT)
 
 local condition = Condition(CONDITION_POWERLESS)
+if not condition then
+	print("[Warning - soulpit_powerless.lua] CONDITION_POWERLESS is not available.")
+	return
+end
 condition:setParameter(CONDITION_PARAM_TICKS, 3000)
-combat:setCondition(condition)
+combat:addCondition(condition)
 
 local spell = Spell(SPELL_INSTANT)
 

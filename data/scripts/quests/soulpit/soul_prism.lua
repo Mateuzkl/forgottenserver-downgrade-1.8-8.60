@@ -6,6 +6,13 @@ if not configManager or not configManager.getBoolean or not configManager.getBoo
 	return
 end
 
+if not SoulPit then
+	dofile("data/lib/others/soulpit.lua")
+end
+if not SoulPit then
+	return
+end
+
 local soulPrism = Action()
 
 local function deliverTransformedCore(player, item, target, newCoreId, message)

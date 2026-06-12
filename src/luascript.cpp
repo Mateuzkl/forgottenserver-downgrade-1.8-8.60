@@ -1723,6 +1723,10 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CONDITION_CLIPORT);
 	registerEnum(CONDITION_SPELLCOOLDOWN);
 	registerEnum(CONDITION_SPELLGROUPCOOLDOWN);
+	registerEnum(CONDITION_LESSERHEX);
+	registerEnum(CONDITION_INTENSEHEX);
+	registerEnum(CONDITION_GREATERHEX);
+	registerEnum(CONDITION_POWERLESS);
 	registerEnum(CreatureIconCategory_Quests);
 	registerEnum(CreatureIconCategory_Modifications);
 

@@ -5,6 +5,13 @@ if not configManager or not configManager.getBoolean or not configManager.getBoo
 	return
 end
 
+if not SoulPit then
+	dofile("data/lib/others/soulpit.lua")
+end
+if not SoulPit then
+	return
+end
+
 -- Entrance: teleport into arena
 local enterArena = MoveEvent()
 
