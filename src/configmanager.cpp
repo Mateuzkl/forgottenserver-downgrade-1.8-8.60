@@ -750,6 +750,11 @@ bool ConfigManager::load()
 	integers[Integer::CONNECTION_RATE_LIMIT_ALLOWED] = getGlobalInteger(L, "connectionRateLimitAllowed", 10);
 	integers[Integer::CONNECTION_RATE_LIMIT_MS] = getGlobalInteger(L, "connectionRateLimitMS", 500);
 
+	// Reactor Limits
+	integers[Integer::REACTOR_MAX_TASKS_PER_CYCLE] = getGlobalInteger(L, "reactorMaxTasksPerCycle", 500);
+	integers[Integer::REACTOR_TIME_BUDGET_MS] = getGlobalInteger(L, "reactorTimeBudgetMS", 5);
+	integers[Integer::REACTOR_MAX_INBOX_SIZE] = getGlobalInteger(L, "reactorMaxInboxSize", 100000);
+
 	loaded = true;
 	// ownedL destructor calls lua_close via LuaStateDeleter
 

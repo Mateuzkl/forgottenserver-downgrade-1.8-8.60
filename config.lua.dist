@@ -94,6 +94,14 @@ networkThreads = 2
 connectionRateLimitAllowed = 10
 connectionRateLimitMS = 500
 
+-- Reactor Limits Config
+-- NOTE: reactorMaxTasksPerCycle: max tasks executed per reactor cycle before deferring (0 = unlimited)
+-- NOTE: reactorTimeBudgetMS: max time in ms the reactor can spend executing tasks per cycle (0 = unlimited)
+-- NOTE: reactorMaxInboxSize: max queued tasks before dropping new ones
+reactorMaxTasksPerCycle = 500
+reactorTimeBudgetMS = 5
+reactorMaxInboxSize = 100000
+
 -- Deaths
 -- NOTE: Leave deathLosePercent as -1 if you want to use the default
 -- death penalty formula. For the old formula, set it to 10. For
