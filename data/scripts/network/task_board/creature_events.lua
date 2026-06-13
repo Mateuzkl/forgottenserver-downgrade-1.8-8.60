@@ -77,6 +77,7 @@ taskBoardKill:register()
 local taskBoardLogin = CreatureEvent("TaskBoardLogin")
 
 function taskBoardLogin.onLogin(player)
+	player:registerEvent("TaskBoardKill")
 	local playerGuid = player:getGuid()
 
 	-- All point fields loaded by iologindata.cpp from the players table.
