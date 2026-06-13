@@ -4,6 +4,10 @@ local function sendLootMessage(player, text)
 	player:sendChannelMessage("", text, TALKTYPE_CHANNEL_O, CHANNEL_LOOT)
 end
 
+local function formatHundredthsPercent(value)
+	return string.format("%.2f", (tonumber(value) or 0) / 100):gsub("0+$", ""):gsub("%.$", "")
+end
+
 -- Applies the player's drop bonus (equipped items) to the loot chance.
 -- Returns true if the item should be added, false otherwise.
 local function rollWithDropBonus(lootChance, player)
@@ -43,6 +47,7 @@ event.onDropLoot = function(self, corpse)
 
 	local player = Player(corpse:getCorpseOwner())
 	local mType = self:getType()
+	local mTypeRaceId = mType:raceId()
 
 	local staminaOk = true
 	if player and configManager.getBoolean(configKeys.STAMINA_SYSTEM) then
@@ -60,7 +65,6 @@ event.onDropLoot = function(self, corpse)
 
 		-- Boosted Boss loot bonus
 		if CustomBosstiary and CustomBosstiary.isBoostedBoss then
-			local mTypeRaceId = mType:raceId()
 			if CustomBosstiary.isBoostedBoss(mTypeRaceId) then
 				local boostedBossLootBonus = CustomBosstiary.getBoostedBossLootBonus()
 				rolls = math.max(1, math.floor(rolls * (1 + boostedBossLootBonus / 100)))
@@ -101,20 +105,36 @@ event.onDropLoot = function(self, corpse)
 			end
 		end
 
+		local bountyLootBonus = 0
+		if player and TaskBoard and TaskBoard.getBountyTalismanBonus then
+			bountyLootBonus = TaskBoard.getBountyTalismanBonus(player, mTypeRaceId, 2)
+			if bountyLootBonus > 0 and math.random(1, 10000) <= bountyLootBonus then
+				for i = 1, #monsterLoot do
+					local lootItem = monsterLoot[i]
+					local chance = lootItem.chance or 100000
+					if chance >= 100000 or rollWithDropBonus(chance, player) then
+						createGuaranteedLootItem(corpse, lootItem)
+					end
+				end
+			end
+		end
+
 		if player then
 			local lootGroupingEnabled = configManager.getBoolean(configKeys.LOOT_GROUPING_ENABLED)
 			if not lootGroupingEnabled then
 				local preyLootText = preyLootBonus > 0 and (" (Prey Improved Loot +%d%%)"):format(preyLootBonus) or ""
+				local bountyLootText = bountyLootBonus > 0 and
+					(" (Bounty More Loot +%s%%)"):format(formatHundredthsPercent(bountyLootBonus)) or ""
 				local useColorized = configManager.getBoolean(configKeys.COLORIZED_LOOT_VALUE)
 				local party = player:getParty()
 				if useColorized then
 					-- Per-receiver message: colorized for AstraClient, plain for others
-					local colorizedText = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
+					local colorizedText = ("Loot of %s: %s%s%s."):format(mType:getNameDescription(),
 					                                                   corpse:getContentDescription(true),
-					                                                   preyLootText)
-					local plainText = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
+					                                                   preyLootText, bountyLootText)
+					local plainText = ("Loot of %s: %s%s%s."):format(mType:getNameDescription(),
 					                                               corpse:getContentDescription(false),
-					                                               preyLootText)
+					                                               preyLootText, bountyLootText)
 					if party then
 						local members = party:getMembers()
 						local leader = party:getLeader()
@@ -131,9 +151,9 @@ event.onDropLoot = function(self, corpse)
 						sendLootMessage(player, playerText)
 					end
 				else
-					local text = ("Loot of %s: %s%s."):format(mType:getNameDescription(),
+					local text = ("Loot of %s: %s%s%s."):format(mType:getNameDescription(),
 					                                          corpse:getContentDescription(false),
-					                                          preyLootText)
+					                                          preyLootText, bountyLootText)
 					if party then
 						party:broadcastPartyLoot(text)
 					else

@@ -63,10 +63,8 @@ local STAR_FILTERS = {
 	[DIFFICULTY_MASTER] = { min = 4, max = 6 },
 }
 
--- Talisman bonus scaling
-local TALISMAN_BONUS_BASE = 2.5 -- 2.5% base per level
-local TALISMAN_BONUS_CAP = 50   -- 50% cap for damage/lifeleech/loot
-local TALISMAN_BESTIARY_CAP = 100 -- 100% cap for bestiary
+local TALISMAN_STANDARD_MAX_LEVEL = 166
+local TALISMAN_BESTIARY_MAX_LEVEL = 180
 
 local function clamp(value, minValue, maxValue)
 	value = tonumber(value) or minValue
@@ -775,8 +773,47 @@ end
 local function getTalismanUpgradeCost(pathIndex, data)
 	local talisman = data.talismans[pathIndex + 1]
 	local currentTier = talisman.tier or 0
-	-- Cost scales with tier: base 50 + 25 per level
-	return 50 + (currentTier * 25)
+	return 5 + (currentTier * 12)
+end
+
+local function getTalismanMaxLevel(pathIndex)
+	return pathIndex == TALISMAN_BESTIARY and TALISMAN_BESTIARY_MAX_LEVEL or TALISMAN_STANDARD_MAX_LEVEL
+end
+
+local function getTalismanBonusHundredths(level, pathIndex)
+	level = math.max(0, tonumber(level) or 0)
+	if level == 0 then
+		return 0
+	end
+
+	if pathIndex == TALISMAN_BESTIARY then
+		if level <= 20 then
+			return level * 100
+		end
+		return math.min(2000 + ((level - 20) * 50), 10000)
+	end
+
+	if level <= 26 then
+		return 250 + ((level - 1) * 50)
+	end
+	return math.min(1500 + ((level - 26) * 25), 5000)
+end
+
+function BountyTasks.getTalismanBonus(player, raceId, pathIndex)
+	pathIndex = tonumber(pathIndex)
+	raceId = tonumber(raceId) or 0
+	if not player or pathIndex == nil or pathIndex < 0 or pathIndex > 3 or raceId <= 0 then
+		return 0
+	end
+
+	local data = loadBountyData(getPlayerGuid(player))
+	local activeTask = data.activeTask
+	if data.state ~= STATE_ACTIVE or not activeTask or activeTask.raceId ~= raceId then
+		return 0
+	end
+
+	local talisman = data.talismans[pathIndex + 1]
+	return getTalismanBonusHundredths(talisman and talisman.tier or 0, pathIndex)
 end
 
 function BountyTasks.talismanUpgrade(player, pathIndex)
@@ -791,10 +828,7 @@ function BountyTasks.talismanUpgrade(player, pathIndex)
 	local talisman = data.talismans[pathIndex + 1]
 	if not talisman then return false end
 
-	-- Cap check
-	local cap = (pathIndex == TALISMAN_BESTIARY) and TALISMAN_BESTIARY_CAP or TALISMAN_BONUS_CAP
-	local maxTiers = math.floor(cap / TALISMAN_BONUS_BASE)
-	if talisman.tier >= maxTiers then
+	if talisman.tier >= getTalismanMaxLevel(pathIndex) then
 		return false -- Already at cap
 	end
 
@@ -876,9 +910,7 @@ function BountyTasks.sendBountyData(player, includeAvailableCreatures)
 	local talismans = {}
 	for i = 1, 4 do
 		local t = data.talismans[i] or { tier = 0, upgrade = 0 }
-		local cap = (i - 1 == TALISMAN_BESTIARY) and TALISMAN_BESTIARY_CAP or TALISMAN_BONUS_CAP
-		local maxTiers = math.floor(cap / TALISMAN_BONUS_BASE)
-		local reachedCap = (t.tier >= maxTiers)
+		local reachedCap = t.tier >= getTalismanMaxLevel(i - 1)
 
 		talismans[i] = {
 			tier1 = t.tier,

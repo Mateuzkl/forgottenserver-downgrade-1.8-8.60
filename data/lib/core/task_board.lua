@@ -101,3 +101,11 @@ end
 function TaskBoard.hasWeeklyReducedItems(player)
     return TaskBoard.getTimedBoostRemaining(player, TaskBoard.Storage.WEEKLY_REDUCED_ITEMS_UNTIL) > 0
 end
+
+function TaskBoard.getBountyTalismanBonus(player, raceId, pathIndex)
+    local bounty = _TASK_BOARD_BOUNTY_MODULE
+    if not bounty or not bounty.getTalismanBonus then
+        return 0
+    end
+    return bounty.getTalismanBonus(player, raceId, pathIndex)
+end
