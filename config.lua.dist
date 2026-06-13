@@ -98,6 +98,11 @@ connectionRateLimitMS = 500
 -- NOTE: reactorMaxTasksPerCycle: max tasks executed per reactor cycle before deferring (0 = unlimited)
 -- NOTE: reactorTimeBudgetMS: max time in ms the reactor can spend executing tasks per cycle (0 = unlimited)
 -- NOTE: reactorMaxInboxSize: max queued tasks before dropping new ones
+--
+-- Presets:
+--   Low    (small VPS / few players):   reactorMaxTasksPerCycle = 250,  reactorTimeBudgetMS = 3,   reactorMaxInboxSize = 50000
+--   Normal (default / moderate load):   reactorMaxTasksPerCycle = 500,  reactorTimeBudgetMS = 5,   reactorMaxInboxSize = 100000
+--   High   (dedicated / heavy load):    reactorMaxTasksPerCycle = 1000, reactorTimeBudgetMS = 15,  reactorMaxInboxSize = 200000
 reactorMaxTasksPerCycle = 500
 reactorTimeBudgetMS = 5
 reactorMaxInboxSize = 100000
