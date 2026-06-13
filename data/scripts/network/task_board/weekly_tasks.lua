@@ -497,7 +497,7 @@ function WeeklyTasks.sendWeeklyData(player)
 		local delivered = dt.delivered == 1
 		local available = 0
 		if dt.itemId then
-			available = player:getItemTypeCount(dt.itemId) or 0
+			available = player:getItemCount(dt.itemId) or 0
 		end
 
 		deliveryTasks[#deliveryTasks + 1] = {

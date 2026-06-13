@@ -31,8 +31,16 @@ local function deliverTransformedCore(player, item, target, newCoreId, message)
 
 	if not item:remove(1) then
 		added:remove(1)
-		player:addItem(targetId, 1)
-		player:sendTextMessage(MESSAGE_INFO_DESCR, "Could not consume the exalted core.")
+		local restored = player:addItem(targetId, 1)
+		if not restored then
+			local tile = Tile(player:getPosition())
+			if tile then
+				Game.createItem(targetId, 1, player:getPosition())
+			end
+			player:sendTextMessage(MESSAGE_INFO_DESCR, "Could not consume the exalted core. The soul core was placed on the ground.")
+		else
+			player:sendTextMessage(MESSAGE_INFO_DESCR, "Could not consume the exalted core.")
+		end
 		return false
 	end
 

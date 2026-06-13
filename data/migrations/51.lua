@@ -1,5 +1,5 @@
 function onUpdateDatabase()
-	logMigration("Updating database to version 51 (task hunting/bounty/soulseals columns in players)")
+	logMigration("Updating database to version 52 (task hunting/bounty/soulseals columns in players)")
 
 	-- Add task hunting / bounty / soulseals point columns to the players table
 	local columns = {
@@ -16,7 +16,7 @@ function onUpdateDatabase()
 			.. " AND `TABLE_NAME` = 'players'"
 			.. " AND `COLUMN_NAME` = " .. db.escapeString(col.name)
 		)
-		if resultId == false then
+		if not resultId then
 			logMigration("Failed to check existence of column `" .. col.name .. "` in `players`")
 			return false
 		end
