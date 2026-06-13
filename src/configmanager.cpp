@@ -751,9 +751,13 @@ bool ConfigManager::load()
 	integers[Integer::CONNECTION_RATE_LIMIT_MS] = getGlobalInteger(L, "connectionRateLimitMS", 500);
 
 	// Reactor Limits
-	integers[Integer::REACTOR_MAX_TASKS_PER_CYCLE] = std::max<int64_t>(0, getGlobalInteger(L, "reactorMaxTasksPerCycle", 500));
-	integers[Integer::REACTOR_TIME_BUDGET_MS] = std::max<int64_t>(0, getGlobalInteger(L, "reactorTimeBudgetMS", 5));
-	integers[Integer::REACTOR_MAX_INBOX_SIZE] = std::max<int64_t>(1, getGlobalInteger(L, "reactorMaxInboxSize", 100000));
+	integers[Integer::REACTOR_MAX_TASKS_PER_CYCLE] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxTasksPerCycle", 500),
+	                        0, std::numeric_limits<uint32_t>::max());
+	integers[Integer::REACTOR_TIME_BUDGET_MS] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorTimeBudgetMS", 5), 0, 1000);
+	integers[Integer::REACTOR_MAX_INBOX_SIZE] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxInboxSize", 100000), 1, 10'000'000);
 
 	loaded = true;
 	// ownedL destructor calls lua_close via LuaStateDeleter
