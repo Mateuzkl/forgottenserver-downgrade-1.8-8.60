@@ -36,6 +36,21 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
+local taskBoardOfferTypes = {
+	bounty_kill_boost = true,
+	weekly_kill_boost = true,
+	weekly_reduced_items = true,
+	weekly_task_expansion = true,
+}
+
+local function isTaskBoardOfferType(offerType)
+	return taskBoardOfferTypes[tostring(offerType or ""):lower()] == true
+end
+
+local function supportsTaskBoardStore(player)
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+end
+
 local function isHirelingOfferType(oftype)
 	oftype = tostring(oftype or ""):lower()
 	return oftype == "hireling" or oftype == "hireling_skill" or oftype == "hireling_outfit"
@@ -44,6 +59,10 @@ end
 local function isHirelingCategory(category)
 	local name = tostring(category and category.name or ""):lower()
 	return name == "hirelings" or name == "hireling dresses"
+end
+
+local function isTaskBoardCategory(category)
+	return tostring(category and category.name or ""):lower() == "task hunt"
 end
 
 local function supportsHirelingStore(player)
@@ -390,12 +409,14 @@ local function sendStoreCatalog(player)
 	for _, cat in ipairs(storeCategories) do
 		local visibleOffers = {}
 		for _, offer in ipairs(cat.offers) do
-			if not isHirelingOfferType(offer.oftype) or supportsHirelingStore(player) then
+			local taskBoardVisible = not isTaskBoardOfferType(offer.oftype) or supportsTaskBoardStore(player)
+			local hirelingVisible = not isHirelingOfferType(offer.oftype) or supportsHirelingStore(player)
+			if taskBoardVisible and hirelingVisible then
 				visibleOffers[#visibleOffers + 1] = offer
 			end
 		end
 
-		if #visibleOffers > 0 or not isHirelingCategory(cat) then
+		if #visibleOffers > 0 or (not isHirelingCategory(cat) and not isTaskBoardCategory(cat)) then
 			visibleCategories[#visibleCategories + 1] = {
 				name = cat.name,
 				icon = cat.icon,
@@ -444,6 +465,45 @@ local function sendStoreCatalog(player)
 end
 
 local function deliverOffer(player, offer, extra)
+	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player) then
+		return "This offer is only available on AstraClient."
+	end
+
+	if offer.oftype == "bounty_kill_boost" then
+		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.BOUNTY_KILL_BOOST_UNTIL, offer.value) then
+			return "Failed to activate the bounty kill boost."
+		end
+		return nil
+	end
+
+	if offer.oftype == "weekly_kill_boost" then
+		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.WEEKLY_KILL_BOOST_UNTIL, offer.value) then
+			return "Failed to activate the weekly kill boost."
+		end
+		return nil
+	end
+
+	if offer.oftype == "weekly_reduced_items" then
+		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.WEEKLY_REDUCED_ITEMS_UNTIL, offer.value) then
+			return "Failed to activate reduced weekly item amounts."
+		end
+		if _TASK_BOARD_WEEKLY_MODULE and _TASK_BOARD_WEEKLY_MODULE.applyReducedItems then
+			_TASK_BOARD_WEEKLY_MODULE.applyReducedItems(player)
+		end
+		return nil
+	end
+
+	if offer.oftype == "weekly_task_expansion" then
+		if player:hasWeeklyExpansion() then
+			return "You already have the Permanent Weekly Task Expansion."
+		end
+		player:setWeeklyExpansion(true)
+		if _TASK_BOARD_WEEKLY_MODULE and _TASK_BOARD_WEEKLY_MODULE.applyExpansion then
+			_TASK_BOARD_WEEKLY_MODULE.applyExpansion(player)
+		end
+		return nil
+	end
+
 	if offer.oftype == "premium" then
 		if offer.value <= 0 then
 			return "Invalid premium amount."
@@ -710,6 +770,10 @@ function buyHandler.onReceive(player, msg)
 	local offer = storeItemsById[offerId]
 	if not offer then
 		sendStoreError(player, "Offer not found.")
+		return
+	end
+	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player) then
+		sendStoreError(player, "This offer is only available on AstraClient.")
 		return
 	end
 

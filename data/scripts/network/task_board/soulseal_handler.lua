@@ -42,6 +42,7 @@ function SoulSealHandler.sendSoulSealsData(player)
         return false -- No bestiary data available
     end
 
+    TaskBoard.sendResourceBalance(player, TaskBoard.Resources.SOULSEALS_POINTS)
     local balance = player:getSoulsealsPoints()
     return protocol.sendSoulSealsData(player, entries, balance)
 end

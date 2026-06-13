@@ -1,62 +1,56 @@
--- Weekly Task Delivery Items Configuration
--- Mapped by difficulty tier (0=Beginner, 1=Adept, 2=Expert, 3=Master)
--- Each entry: { itemId = X, amount = Y }
--- Add your server's item IDs here.
+-- Weekly Task delivery items from Crystal Server's Task Board list.
+-- IDs are valid item IDs from this server's items.xml.
 
 return {
-	-- Beginner (difficulty 0)
 	[0] = {
-		{ itemId = 2461, amount = 5 },  -- Dragon Egg (example)
-		{ itemId = 2464, amount = 5 },  -- Chain Armor
-		{ itemId = 2465, amount = 5 },  -- Brass Armor
-		{ itemId = 2378, amount = 10 }, -- Plate Legs
-		{ itemId = 2398, amount = 10 }, -- Mace
-		{ itemId = 2416, amount = 10 }, -- Two Handed Sword
-		{ itemId = 2413, amount = 10 }, -- Broadsword
-		{ itemId = 2672, amount = 5 },  -- Wolf Paw
-		{ itemId = 2229, amount = 5 },  -- Skull
-		{ itemId = 2643, amount = 10 }, -- Orc Leather
+		{ itemId = 811, amount = 20 },  -- Terra Mantle
+		{ itemId = 813, amount = 20 },  -- Terra Boots
+		{ itemId = 818, amount = 20 },  -- Magma Boots
+		{ itemId = 819, amount = 20 },  -- Glacier Shoes
+		{ itemId = 820, amount = 20 },  -- Lightning Boots
+		{ itemId = 821, amount = 20 },  -- Magma Legs
+		{ itemId = 824, amount = 20 },  -- Glacier Robe
+		{ itemId = 825, amount = 20 },  -- Lightning Robe
+		{ itemId = 826, amount = 20 },  -- Magma Coat
+		{ itemId = 827, amount = 20 },  -- Magma Monocle
 	},
 
-	-- Adept (difficulty 1)
 	[1] = {
-		{ itemId = 2488, amount = 5 },  -- Crown Armor
-		{ itemId = 2502, amount = 5 },  -- Dwarven Shield
-		{ itemId = 2438, amount = 5 },  -- Daramanian Mace
-		{ itemId = 2458, amount = 10 }, -- Knight Axe
-		{ itemId = 2426, amount = 10 }, -- Obsidian Lance
-		{ itemId = 2424, amount = 10 }, -- Halberd
-		{ itemId = 2672, amount = 10 }, -- Wolf Paw
-		{ itemId = 5925, amount = 5 },  -- Holy Orchid
-		{ itemId = 5908, amount = 10 }, -- Demonic Essence
-		{ itemId = 2472, amount = 10 }, -- Plate Armor
+		{ itemId = 828, amount = 20 },  -- Lightning Headband
+		{ itemId = 829, amount = 20 },  -- Glacier Mask
+		{ itemId = 830, amount = 20 },  -- Terra Hood
+		{ itemId = 3234, amount = 50 }, -- Cookbook
+		{ itemId = 3269, amount = 20 }, -- Halberd
+		{ itemId = 3275, amount = 20 }, -- Double Axe
+		{ itemId = 3291, amount = 50 }, -- Knife
+		{ itemId = 3292, amount = 50 }, -- Combat Knife
+		{ itemId = 3301, amount = 20 }, -- Broadsword
+		{ itemId = 3306, amount = 20 }, -- Golden Sickle
 	},
 
-	-- Expert (difficulty 2)
 	[2] = {
-		{ itemId = 2472, amount = 10 }, -- Plate Armor
-		{ itemId = 2490, amount = 5 },  -- Dark Armor
-		{ itemId = 2498, amount = 5 },  -- Royal Helmet
-		{ itemId = 2516, amount = 5 },  -- Dragon Shield
-		{ itemId = 2430, amount = 5 },  -- Dragon Lance
-		{ itemId = 5877, amount = 5 },  -- Green Mushroom
-		{ itemId = 5908, amount = 10 }, -- Demonic Essence
-		{ itemId = 5958, amount = 10 }, -- Piece of Dead King
-		{ itemId = 2535, amount = 10 }, -- Plate Shield
-		{ itemId = 2487, amount = 10 }, -- Crown Legs
+		{ itemId = 3307, amount = 20 }, -- Scimitar
+		{ itemId = 3316, amount = 20 }, -- Orcish Axe
+		{ itemId = 3318, amount = 20 }, -- Knight Axe
+		{ itemId = 3320, amount = 20 }, -- Fire Axe
+		{ itemId = 3322, amount = 20 }, -- Dragon Hammer
+		{ itemId = 3330, amount = 20 }, -- Heavy Machete
+		{ itemId = 3333, amount = 20 }, -- Crystal Mace
+		{ itemId = 3337, amount = 50 }, -- Bone Club
+		{ itemId = 3342, amount = 20 }, -- War Axe
+		{ itemId = 3346, amount = 20 }, -- Ripper Lance
 	},
 
-	-- Master (difficulty 3)
 	[3] = {
-		{ itemId = 2493, amount = 5 },  -- Demon Helmet
-		{ itemId = 2509, amount = 5 },  -- Mastermind Shield
-		{ itemId = 2400, amount = 5 },  -- Magic Sword
-		{ itemId = 2523, amount = 5 },  -- Golden Legs
-		{ itemId = 5904, amount = 5 },  -- Vampire Dust
-		{ itemId = 5958, amount = 10 }, -- Piece of Dead King
-		{ itemId = 2476, amount = 10 }, -- Knight Armor
-		{ itemId = 2475, amount = 10 }, -- Warrior Helmet
-		{ itemId = 2518, amount = 10 }, -- Beholder Shield
-		{ itemId = 5925, amount = 10 }, -- Holy Orchid
+		{ itemId = 3364, amount = 10 }, -- Golden Legs
+		{ itemId = 3371, amount = 20 }, -- Knight Legs
+		{ itemId = 3373, amount = 20 }, -- Strange Helmet
+		{ itemId = 3413, amount = 20 }, -- Battle Shield
+		{ itemId = 3415, amount = 20 }, -- Guardian Shield
+		{ itemId = 3421, amount = 20 }, -- Dark Shield
+		{ itemId = 3429, amount = 20 }, -- Black Shield
+		{ itemId = 3509, amount = 50 }, -- Inkwell
+		{ itemId = 3557, amount = 20 }, -- Plate Legs
+		{ itemId = 3575, amount = 20 }, -- Wood Cape
 	},
 }

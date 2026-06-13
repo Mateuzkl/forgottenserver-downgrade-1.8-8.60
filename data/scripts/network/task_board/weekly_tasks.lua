@@ -20,16 +20,8 @@ local HTP_PER_KILL = {
 }
 
 -- HTP multiplier based on completed task count
-local HTP_MULTIPLIER = {
-	[0] = 1,  [1] = 1,  [2] = 2,
-	[3] = 3,  [4] = 5,  [5] = 5,
-	[6] = 5,  [7] = 8,  [8] = 8,
-	[9] = 8,  [10] = 8, [11] = 8,
-	[12] = 8, [13] = 8, [14] = 8,
-	[15] = 8, [16] = 8, [17] = 8,
-}
-
 local SOULSEALS_PER_TASK = 1
+local HTP_PER_DELIVERY = 75
 local DELIVERY_EXP_BASE = 75
 
 -- Any creature totals by difficulty
@@ -57,6 +49,25 @@ local DELIVERY_TASKS_EXPANSION = 9
 -- Weekday constants (Lua: 1=Sunday, 2=Monday, ..., 7=Saturday)
 local DEFAULT_RESET_DAY = 1 -- Sunday
 
+local LEGACY_DELIVERY_ITEM_IDS = {
+	[DIFFICULTY_BEGINNER] = {
+		[2461] = 811, [2464] = 813, [2465] = 818, [2378] = 819, [2398] = 820,
+		[2416] = 821, [2413] = 824, [2672] = 825, [2229] = 826, [2643] = 827,
+	},
+	[DIFFICULTY_ADEPT] = {
+		[2488] = 828, [2502] = 829, [2438] = 830, [2458] = 3234, [2426] = 3269,
+		[2424] = 3275, [2672] = 3291, [5925] = 3292, [5908] = 3301, [2472] = 3306,
+	},
+	[DIFFICULTY_EXPERT] = {
+		[2472] = 3307, [2490] = 3316, [2498] = 3318, [2516] = 3320, [2430] = 3322,
+		[5877] = 3330, [5908] = 3333, [5958] = 3337, [2535] = 3342, [2487] = 3346,
+	},
+	[DIFFICULTY_MASTER] = {
+		[2493] = 3364, [2509] = 3371, [2400] = 3373, [2523] = 3413, [5904] = 3415,
+		[5958] = 3421, [2476] = 3429, [2475] = 3509, [2518] = 3557, [5925] = 3575,
+	},
+}
+
 local function clamp(value, minValue, maxValue)
 	value = tonumber(value) or minValue
 	if value < minValue then return minValue end
@@ -66,6 +77,42 @@ end
 
 local function getPlayerGuid(player)
 	return player:getGuid()
+end
+
+local function syncSoulsealBalance(player, data)
+	local balance = player:getSoulsealsPoints()
+	local legacyBalance = tonumber(data.soulsealsPoints) or 0
+	if balance == 0 and legacyBalance > 0 then
+		player:setSoulsealsPoints(legacyBalance)
+		balance = legacyBalance
+	end
+	data.soulsealsPoints = balance
+	return balance
+end
+
+local function getRewardMultiplier(completedTasks)
+	if completedTasks >= 17 then return 8 end
+	if completedTasks >= 13 then return 5 end
+	if completedTasks >= 9 then return 3 end
+	if completedTasks >= 5 then return 2 end
+	return 1
+end
+
+local function recalculateRewards(data)
+	local completedKills = data.completedKillTasks or 0
+	local completedDeliveries = data.completedDeliveryTasks or 0
+	local totalCompleted = completedKills + completedDeliveries
+	local basePoints =
+		(completedKills * (HTP_PER_KILL[data.difficulty] or HTP_PER_KILL[DIFFICULTY_BEGINNER])) +
+		(completedDeliveries * HTP_PER_DELIVERY)
+
+	data.rewardHTP = basePoints * getRewardMultiplier(totalCompleted)
+	data.rewardSoulseals = totalCompleted * SOULSEALS_PER_TASK
+	data.needsReward = totalCompleted > 0
+end
+
+local function getCurrentWeek()
+	return os.date("%Y-%U")
 end
 
 -- ============================================
@@ -134,6 +181,10 @@ local function loadWeeklyData(playerGuid)
 		local dtStr = result.getDataString(resultId, "delivery_tasks") or "[]"
 		local dtSuccess, dtData = pcall(function() return json.decode(dtStr) end)
 		data.deliveryTasks = (dtSuccess and type(dtData) == "table") and dtData or {}
+		local legacyIds = LEGACY_DELIVERY_ITEM_IDS[data.difficulty] or {}
+		for _, task in ipairs(data.deliveryTasks) do
+			task.itemId = legacyIds[tonumber(task.itemId)] or task.itemId
+		end
 
 		result.free(resultId)
 	end
@@ -183,7 +234,7 @@ function WeeklyTasks.shouldReset(playerGuid)
 	if not data then data = loadWeeklyData(playerGuid) end
 
 	-- Compare current week identifier against stored week
-	local currentWeek = os.date("%Y-%U") -- ISO year-week
+	local currentWeek = getCurrentWeek()
 	if not data.lastWeek or data.lastWeek ~= currentWeek then
 		return true
 	end
@@ -193,6 +244,7 @@ end
 function WeeklyTasks.performWeeklyReset(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
+	data.hasExpansion = player:hasWeeklyExpansion()
 
 	-- Distribute pending rewards first
 	if data.needsReward then
@@ -213,6 +265,7 @@ function WeeklyTasks.performWeeklyReset(player)
 	data.rewardSoulseals = 0
 	data.needsReward = false
 	data.weeklyProgressFinished = 0
+	data.lastWeek = getCurrentWeek()
 
 	saveWeeklyData(playerGuid)
 	return true
@@ -221,6 +274,8 @@ end
 function WeeklyTasks.distributeRewards(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
+	syncSoulsealBalance(player, data)
+	recalculateRewards(data)
 
 	if not data.needsReward then return false end
 	if data.rewardHTP <= 0 and data.rewardSoulseals <= 0 then
@@ -238,8 +293,7 @@ function WeeklyTasks.distributeRewards(player)
 	-- Give soulseals
 	if data.rewardSoulseals > 0 then
 		player:addSoulsealsPoints(data.rewardSoulseals)
-		-- Keep Lua cache as authoritative (loaded from DB, C++ is just a mirror)
-		data.soulsealsPoints = (data.soulsealsPoints or 0) + data.rewardSoulseals
+		data.soulsealsPoints = player:getSoulsealsPoints()
 		protocol.sendResourceBalance(player, protocol.RESOURCE_SOULSEALS_POINTS, data.soulsealsPoints)
 	end
 
@@ -257,6 +311,7 @@ function WeeklyTasks.selectDifficulty(player, difficulty)
 
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
+	data.hasExpansion = player:hasWeeklyExpansion()
 
 	-- Can only set once per week; block if progress is already finished
 	if data.weeklyProgressFinished == 1 then
@@ -271,6 +326,7 @@ end
 function WeeklyTasks.generateTasks(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
+	data.hasExpansion = player:hasWeeklyExpansion()
 
 	local difficulty = data.difficulty or DIFFICULTY_BEGINNER
 	local hasExpansion = data.hasExpansion
@@ -325,20 +381,27 @@ function WeeklyTasks.generateTasks(player)
 
 		for i = 1, math.min(deliveryCount, #shuffled) do
 			local item = shuffled[i]
+			local required = item.amount or 1
+			local reduced = TaskBoard.hasWeeklyReducedItems(player)
+			if reduced then
+				required = math.max(1, math.ceil(required / 2))
+			end
 			data.deliveryTasks[#data.deliveryTasks + 1] = {
 				index = i - 1,
 				itemId = item.itemId,
-				amount = item.amount or 1,
-				required = item.amount or 1,
+				amount = required,
+				required = required,
 				available = 0,
 				collectedItems = 0,
 				delivered = 0,
 				grade = 0,
+				reduced = reduced,
 			}
 		end
 	end
 
 	data.deliveryTaskRewardExp = deliveryCount * DELIVERY_EXP_BASE
+	data.lastWeek = getCurrentWeek()
 
 	saveWeeklyData(playerGuid)
 	return true
@@ -355,15 +418,27 @@ function WeeklyTasks.onKill(player, raceId)
 	if #data.killTasks == 0 then return false end
 
 	local updated = false
+	local matchedTask = false
+	local killMultiplier = TaskBoard.getWeeklyKillMultiplier(player)
 
 	-- Any creature counter
-	data.anyCreatureCurrent = math.min((data.anyCreatureCurrent or 0) + 1, data.anyCreatureTotal or 0)
+	local oldAnyCreatureCurrent = data.anyCreatureCurrent or 0
+	data.anyCreatureCurrent = math.min(oldAnyCreatureCurrent + killMultiplier, data.anyCreatureTotal or 0)
+	updated = data.anyCreatureCurrent ~= oldAnyCreatureCurrent
+	if oldAnyCreatureCurrent < data.anyCreatureTotal and data.anyCreatureCurrent >= data.anyCreatureTotal then
+		data.completedKillTasks = (data.completedKillTasks or 0) + 1
+		matchedTask = true
+		if data.killTaskRewardExp > 0 and #data.killTasks > 0 then
+			player:addExperience(math.floor(data.killTaskRewardExp / #data.killTasks), true)
+		end
+	end
 
 	-- Check kill tasks
 	for _, kt in ipairs(data.killTasks) do
 		if kt.raceId == raceId and kt.kills < kt.required then
-			kt.kills = kt.kills + 1
+			kt.kills = math.min(kt.kills + killMultiplier, kt.required)
 			updated = true
+			matchedTask = true
 
 			if kt.kills >= kt.required then
 				data.completedKillTasks = (data.completedKillTasks or 0) + 1
@@ -378,26 +453,21 @@ function WeeklyTasks.onKill(player, raceId)
 		end
 	end
 
-	if updated then
-		-- Calculate pending rewards
-		local totalCompleted = (data.completedKillTasks or 0) + (data.completedDeliveryTasks or 0)
-		local htpMult = HTP_MULTIPLIER[totalCompleted] or 1
-
-		data.rewardHTP = totalCompleted * (HTP_PER_KILL[data.difficulty] * htpMult)
-		data.rewardSoulseals = totalCompleted * SOULSEALS_PER_TASK
-		data.needsReward = true
+	if matchedTask then
+		recalculateRewards(data)
 
 		-- Check if all tasks done
-		local killTaskCount = data.hasExpansion and KILL_TASKS_EXPANSION or KILL_TASKS_NORMAL
-		local deliveryTaskCount = data.hasExpansion and DELIVERY_TASKS_EXPANSION or DELIVERY_TASKS_NORMAL
-		local allKillDone = (data.completedKillTasks or 0) >= math.min(killTaskCount, #data.killTasks)
-		local allDeliveryDone = (data.completedDeliveryTasks or 0) >= math.min(deliveryTaskCount, #data.deliveryTasks)
+		local allKillDone = (data.completedKillTasks or 0) >= (#data.killTasks + 1)
+		local allDeliveryDone = (data.completedDeliveryTasks or 0) >= #data.deliveryTasks
 
 		if allKillDone and allDeliveryDone then
 			data.weeklyProgressFinished = 1
 		end
+	end
 
+	if updated then
 		saveWeeklyData(playerGuid)
+		WeeklyTasks.sendWeeklyData(player)
 	end
 
 	return updated
@@ -438,24 +508,18 @@ function WeeklyTasks.deliverTask(player, taskIndex)
 				player:addExperience(expPerTask, true)
 			end
 
-			-- Recalculate rewards
-			local totalCompleted = (data.completedKillTasks or 0) + (data.completedDeliveryTasks or 0)
-			local htpMult = HTP_MULTIPLIER[totalCompleted] or 1
-			data.rewardHTP = totalCompleted * (HTP_PER_KILL[data.difficulty] * htpMult)
-			data.rewardSoulseals = totalCompleted * SOULSEALS_PER_TASK
-			data.needsReward = true
+			recalculateRewards(data)
 
 			-- Check completion
-			local killTaskCount = data.hasExpansion and KILL_TASKS_EXPANSION or KILL_TASKS_NORMAL
-			local deliveryTaskCount = data.hasExpansion and DELIVERY_TASKS_EXPANSION or DELIVERY_TASKS_NORMAL
-			local allKillDone = (data.completedKillTasks or 0) >= math.min(killTaskCount, #data.killTasks)
-			local allDeliveryDone = (data.completedDeliveryTasks or 0) >= math.min(deliveryTaskCount, #data.deliveryTasks)
+			local allKillDone = (data.completedKillTasks or 0) >= (#data.killTasks + 1)
+			local allDeliveryDone = (data.completedDeliveryTasks or 0) >= #data.deliveryTasks
 
 			if allKillDone and allDeliveryDone then
 				data.weeklyProgressFinished = 1
 			end
 
 			saveWeeklyData(playerGuid)
+			WeeklyTasks.sendWeeklyData(player)
 			return true
 		end
 	end
@@ -471,6 +535,35 @@ function WeeklyTasks.setDeliveryItems(items)
 	WeeklyTasks.deliveryItems = items
 end
 
+function WeeklyTasks.applyReducedItems(player)
+	local playerGuid = getPlayerGuid(player)
+	local data = loadWeeklyData(playerGuid)
+	local changed = false
+
+	for _, task in ipairs(data.deliveryTasks) do
+		if task.delivered ~= 1 and not task.reduced then
+			task.required = math.max(1, math.ceil((task.required or task.amount or 1) / 2))
+			task.amount = task.required
+			task.reduced = true
+			changed = true
+		end
+	end
+
+	if changed then
+		saveWeeklyData(playerGuid)
+		WeeklyTasks.sendWeeklyData(player)
+	end
+	return changed
+end
+
+function WeeklyTasks.applyExpansion(player)
+	local playerGuid = getPlayerGuid(player)
+	local data = loadWeeklyData(playerGuid)
+	data.hasExpansion = player:hasWeeklyExpansion()
+	saveWeeklyData(playerGuid)
+	return WeeklyTasks.sendWeeklyData(player)
+end
+
 -- ============================================
 -- SEND TO CLIENT
 -- ============================================
@@ -478,6 +571,13 @@ end
 function WeeklyTasks.sendWeeklyData(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
+	if data.lastWeek and data.lastWeek ~= "" and data.lastWeek ~= getCurrentWeek() and #data.killTasks > 0 then
+		WeeklyTasks.performWeeklyReset(player)
+		data = loadWeeklyData(playerGuid)
+	end
+	data.hasExpansion = player:hasWeeklyExpansion()
+	syncSoulsealBalance(player, data)
+	TaskBoard.sendAll(player)
 
 	-- Build kill tasks for protocol
 	local killTasks = {}
@@ -539,6 +639,9 @@ end
 
 function WeeklyTasks.saveOnLogout(player)
 	local playerGuid = getPlayerGuid(player)
+	local data = loadWeeklyData(playerGuid)
+	data.hasExpansion = player:hasWeeklyExpansion()
+	syncSoulsealBalance(player, data)
 	saveWeeklyData(playerGuid)
 	invalidateCache(playerGuid)
 end
@@ -553,8 +656,8 @@ function WeeklyTasks.checkRewardsOnLogin(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
 
-	if data.needsReward then
-		WeeklyTasks.distributeRewards(player)
+	if data.lastWeek and data.lastWeek ~= "" and data.lastWeek ~= getCurrentWeek() and #data.killTasks > 0 then
+		WeeklyTasks.performWeeklyReset(player)
 	end
 end
 

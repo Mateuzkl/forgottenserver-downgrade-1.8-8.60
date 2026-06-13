@@ -57,11 +57,7 @@ if soulsealsEnabled then
 	end
 end
 
--- Resource balance
-local resourceBalance = dofile("data/scripts/network/task_board/resource_balance.lua")
-if resourceBalance and resourceBalance.setProtocol then
-	resourceBalance.setProtocol(protocol)
-end
+local resourceBalance = TaskBoard
 
 -- ============================================
 -- LOAD CONFIG DATA

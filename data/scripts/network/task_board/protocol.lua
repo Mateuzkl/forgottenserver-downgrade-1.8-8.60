@@ -6,9 +6,9 @@
 local TaskBoardProtocol = {}
 
 -- Resource type constants matching Crystal ServerDefinitions.hpp
-local RESOURCE_TASK_HUNTING = 0x32
-local RESOURCE_BOUNTY_POINTS = 0x56
-local RESOURCE_SOULSEALS_POINTS = 0x57
+local RESOURCE_TASK_HUNTING = TaskBoard.Resources.TASK_HUNTING
+local RESOURCE_BOUNTY_POINTS = TaskBoard.Resources.BOUNTY_POINTS
+local RESOURCE_SOULSEALS_POINTS = TaskBoard.Resources.SOULSEALS_POINTS
 
 TaskBoardProtocol.RESOURCE_TASK_HUNTING = RESOURCE_TASK_HUNTING
 TaskBoardProtocol.RESOURCE_BOUNTY_POINTS = RESOURCE_BOUNTY_POINTS
@@ -129,19 +129,7 @@ end
 -- ============================================
 
 function TaskBoardProtocol.sendResourceBalance(player, resourceType, amount)
-	if not supportsCustomNetwork(player) then
-		return false
-	end
-
-	local out = NetworkMessage(player)
-	out:addByte(OPCODE_RESOURCE_BALANCE)
-	out:addByte(clamp(resourceType, 0, 0xFF))
-	if resourceType == RESOURCE_BOUNTY_POINTS or resourceType == RESOURCE_SOULSEALS_POINTS then
-		out:addU32(clamp(amount, 0, 0xFFFFFFFF))
-	else
-		out:addU64(amount)
-	end
-	return out:sendToPlayer(player)
+	return TaskBoard.sendResourceBalance(player, resourceType, amount)
 end
 
 -- ============================================
@@ -152,6 +140,8 @@ function TaskBoardProtocol.sendBountyTaskData(player, data)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
+
+	TaskBoard.sendAll(player)
 
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_TASK_BOARD_SEND)
