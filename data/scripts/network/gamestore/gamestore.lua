@@ -47,8 +47,20 @@ local function isTaskBoardOfferType(offerType)
 	return taskBoardOfferTypes[tostring(offerType or ""):lower()] == true
 end
 
-local function supportsTaskBoardStore(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+local function isTaskBoardOfferEnabled(offerType)
+	offerType = tostring(offerType or ""):lower()
+	if not configManager.getBoolean(configKeys.TASK_HUNTING_SYSTEM_ENABLED) then
+		return false
+	end
+	if offerType == "bounty_kill_boost" then
+		return configManager.getBoolean(configKeys.BOUNTY_TASKS_ENABLED)
+	end
+	return configManager.getBoolean(configKeys.WEEKLY_TASKS_ENABLED)
+end
+
+local function supportsTaskBoardStore(player, offerType)
+	return player and player.isUsingAstraClient and player:isUsingAstraClient() and
+		isTaskBoardOfferEnabled(offerType)
 end
 
 local function isHirelingOfferType(oftype)
@@ -409,7 +421,8 @@ local function sendStoreCatalog(player)
 	for _, cat in ipairs(storeCategories) do
 		local visibleOffers = {}
 		for _, offer in ipairs(cat.offers) do
-			local taskBoardVisible = not isTaskBoardOfferType(offer.oftype) or supportsTaskBoardStore(player)
+			local taskBoardVisible = not isTaskBoardOfferType(offer.oftype) or
+				supportsTaskBoardStore(player, offer.oftype)
 			local hirelingVisible = not isHirelingOfferType(offer.oftype) or supportsHirelingStore(player)
 			if taskBoardVisible and hirelingVisible then
 				visibleOffers[#visibleOffers + 1] = offer
@@ -465,8 +478,8 @@ local function sendStoreCatalog(player)
 end
 
 local function deliverOffer(player, offer, extra)
-	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player) then
-		return "This offer is only available on AstraClient."
+	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player, offer.oftype) then
+		return "This Task Hunt offer is not available."
 	end
 
 	if offer.oftype == "bounty_kill_boost" then
@@ -772,8 +785,12 @@ function buyHandler.onReceive(player, msg)
 		sendStoreError(player, "Offer not found.")
 		return
 	end
-	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player) then
-		sendStoreError(player, "This offer is only available on AstraClient.")
+	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player, offer.oftype) then
+		sendStoreError(player, "This Task Hunt offer is not available.")
+		return
+	end
+	if isHirelingOfferType(offer.oftype) and not supportsHirelingStore(player) then
+		sendStoreError(player, "The hireling system is not available.")
 		return
 	end
 

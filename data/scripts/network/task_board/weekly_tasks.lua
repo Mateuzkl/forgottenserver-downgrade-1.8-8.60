@@ -81,11 +81,6 @@ end
 
 local function syncSoulsealBalance(player, data)
 	local balance = player:getSoulsealsPoints()
-	local legacyBalance = tonumber(data.soulsealsPoints) or 0
-	if balance == 0 and legacyBalance > 0 then
-		player:setSoulsealsPoints(legacyBalance)
-		balance = legacyBalance
-	end
 	data.soulsealsPoints = balance
 	return balance
 end
@@ -111,8 +106,25 @@ local function recalculateRewards(data)
 	data.needsReward = totalCompleted > 0
 end
 
+local function hasWeeklyProgress(data)
+	return #data.killTasks > 0 or
+		#data.deliveryTasks > 0 or
+		(data.anyCreatureCurrent or 0) > 0 or
+		(data.completedKillTasks or 0) > 0 or
+		(data.completedDeliveryTasks or 0) > 0 or
+		(data.weeklyProgressFinished or 0) > 0 or
+		data.needsReward == true
+end
+
 local function getCurrentWeek()
-	return os.date("%Y-%U")
+	local current = os.date("*t")
+	local currentWeekday = tonumber(os.date("%w")) + 1
+	local daysSinceReset = (currentWeekday - DEFAULT_RESET_DAY) % 7
+	current.day = current.day - daysSinceReset
+	current.hour = 0
+	current.min = 0
+	current.sec = 0
+	return os.date("%Y-%m-%d", os.time(current))
 end
 
 -- ============================================
@@ -342,8 +354,10 @@ function WeeklyTasks.generateTasks(player)
 	data.killTasks = {}
 	if CustomBestiary and CustomBestiary.monstersByRaceId then
 		local eligible = {}
-		for raceId, _ in pairs(CustomBestiary.monstersByRaceId) do
-			eligible[#eligible + 1] = raceId
+		for raceId, entry in pairs(CustomBestiary.monstersByRaceId) do
+			if (tonumber(entry.experience) or 0) > 0 then
+				eligible[#eligible + 1] = raceId
+			end
 		end
 
 		-- Shuffle and pick
@@ -571,7 +585,7 @@ end
 function WeeklyTasks.sendWeeklyData(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
-	if data.lastWeek and data.lastWeek ~= "" and data.lastWeek ~= getCurrentWeek() and #data.killTasks > 0 then
+	if data.lastWeek and data.lastWeek ~= "" and data.lastWeek ~= getCurrentWeek() and hasWeeklyProgress(data) then
 		WeeklyTasks.performWeeklyReset(player)
 		data = loadWeeklyData(playerGuid)
 	end
@@ -656,7 +670,7 @@ function WeeklyTasks.checkRewardsOnLogin(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
 
-	if data.lastWeek and data.lastWeek ~= "" and data.lastWeek ~= getCurrentWeek() and #data.killTasks > 0 then
+	if data.lastWeek and data.lastWeek ~= "" and data.lastWeek ~= getCurrentWeek() and hasWeeklyProgress(data) then
 		WeeklyTasks.performWeeklyReset(player)
 	end
 end

@@ -481,11 +481,6 @@ bool ConfigManager::load()
 		booleans[Boolean::WEEKLY_TASKS_ENABLED] = false;
 		booleans[Boolean::SOULSEALS_SYSTEM_ENABLED] = false;
 	}
-	// Soulseals depends on weekly tasks
-	if (!booleans[Boolean::WEEKLY_TASKS_ENABLED]) {
-		booleans[Boolean::SOULSEALS_SYSTEM_ENABLED] = false;
-	}
-
 	// Stress Reactor
 	booleans[Boolean::STRESS_TEST] = getGlobalBoolean(L, "stressTest", false);
 	booleans[Boolean::STRESS_TEST_SEND] = getGlobalBoolean(L, "stressTestSend", true);

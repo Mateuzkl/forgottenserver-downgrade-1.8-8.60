@@ -81,11 +81,6 @@ end
 
 local function syncBountyBalance(player, data)
 	local balance = player:getBountyPoints()
-	local legacyBalance = tonumber(data.bountyPoints) or 0
-	if balance == 0 and legacyBalance > 0 then
-		player:setBountyPoints(legacyBalance)
-		balance = legacyBalance
-	end
 	data.bountyPoints = balance
 	return balance
 end
@@ -297,14 +292,31 @@ local function getEligibleRaceIds(difficulty)
 	for raceId, entry in pairs(CustomBestiary.monstersByRaceId) do
 		local stars = entry.stars or 0
 		if stars >= starFilter.min and stars <= starFilter.max then
-			-- Must have name and be a valid creature
-			if entry.name and entry.name ~= "" then
+			-- Match Crystal: task creatures must grant experience.
+			if entry.name and entry.name ~= "" and (tonumber(entry.experience) or 0) > 0 then
 				eligible[#eligible + 1] = raceId
 			end
 		end
 	end
 
 	return eligible
+end
+
+local function getPreferredCreatureRaceIds()
+	if not CustomBestiary or not CustomBestiary.monstersByRaceId then
+		return {}
+	end
+
+	local raceIds = {}
+	for raceId, entry in pairs(CustomBestiary.monstersByRaceId) do
+		local numericRaceId = tonumber(raceId)
+		if numericRaceId and numericRaceId > 0 and numericRaceId <= 0xFFFF and
+			entry.name and entry.name ~= "" and (tonumber(entry.experience) or 0) > 0 then
+			raceIds[#raceIds + 1] = numericRaceId
+		end
+	end
+	table.sort(raceIds)
+	return raceIds
 end
 
 -- Check if a raceId is in unwanted list
@@ -649,8 +661,11 @@ function BountyTasks.unlockPreferredSlot(player, _)
 	end
 
 	local cost = PREFERRED_SLOT_COSTS[slot] or 0
-	if cost > 0 and not player:removeBountyPoints(cost) then
-		return false
+	if cost > 0 then
+		if not player:removeBountyPoints(cost) then
+			return false
+		end
+		protocol.sendResourceBalance(player, protocol.RESOURCE_BOUNTY_POINTS, player:getBountyPoints())
 	end
 
 	data.preferredLists[slot].active = true
@@ -677,6 +692,7 @@ function BountyTasks.clearPreferred(player, slot)
 	if not player:removeBountyPoints(PREFERRED_CLEAR_COST) then
 		return false
 	end
+	protocol.sendResourceBalance(player, protocol.RESOURCE_BOUNTY_POINTS, player:getBountyPoints())
 
 	data.preferredLists[slot].preferredRaceId = 0
 	data.bountyPoints = player:getBountyPoints()
@@ -700,6 +716,7 @@ function BountyTasks.clearUnwanted(player, slot)
 	if not player:removeBountyPoints(PREFERRED_CLEAR_COST) then
 		return false
 	end
+	protocol.sendResourceBalance(player, protocol.RESOURCE_BOUNTY_POINTS, player:getBountyPoints())
 
 	data.preferredLists[slot].unwantedRaceId = 0
 	data.bountyPoints = player:getBountyPoints()
@@ -789,6 +806,7 @@ function BountyTasks.talismanUpgrade(player, pathIndex)
 	if not player:removeBountyPoints(cost) then
 		return false
 	end
+	protocol.sendResourceBalance(player, protocol.RESOURCE_BOUNTY_POINTS, player:getBountyPoints())
 
 	data.bountyPoints = player:getBountyPoints()
 	talisman.tier = talisman.tier + 1
@@ -804,7 +822,7 @@ end
 -- SEND TO CLIENT
 -- ============================================
 
-function BountyTasks.sendBountyData(player)
+function BountyTasks.sendBountyData(player, includeAvailableCreatures)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadBountyData(playerGuid)
 	syncBountyBalance(player, data)
@@ -882,6 +900,7 @@ function BountyTasks.sendBountyData(player)
 		talismans = talismans,
 		preferredSlots = MAX_PREFERRED_SLOTS,
 		preferred = data.preferredLists,
+		availableRaceIds = includeAvailableCreatures and getPreferredCreatureRaceIds() or {},
 	}
 
 	return protocol.sendBountyTaskData(player, protocolData)

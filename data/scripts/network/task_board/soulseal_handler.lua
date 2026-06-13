@@ -11,10 +11,6 @@ if not configManager.getBoolean(configKeys.TASK_HUNTING_SYSTEM_ENABLED) then
     return
 end
 
-if not configManager.getBoolean(configKeys.WEEKLY_TASKS_ENABLED) then
-    return
-end
-
 if not configManager.getBoolean(configKeys.SOULSEALS_SYSTEM_ENABLED) then
     return
 end

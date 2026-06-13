@@ -164,6 +164,9 @@ function taskBoardActionHandler.onReceive(player, msg)
 		if soulseal and soulseal.sendSoulsealsData then
 			soulseal.sendSoulsealsData(player)
 		end
+	elseif option == 18 then -- Open Preferred List
+		if not bountyEnabled then return end
+		if bounty then bounty.sendBountyData(player, true) end
 	end
 end
 

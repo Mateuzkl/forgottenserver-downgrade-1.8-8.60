@@ -38,6 +38,7 @@ local ACTION_CLEAR_UNWANTED = 14
 local ACTION_ASSIGN_PREFERRED = 15
 local ACTION_ASSIGN_UNWANTED = 16
 local ACTION_OPEN_SOULSEAL = 17
+local ACTION_OPEN_PREFERRED = 18
 
 TaskBoardProtocol.ACTION_OPEN_BOUNTY = ACTION_OPEN_BOUNTY
 TaskBoardProtocol.ACTION_OPEN_WEEKLY = ACTION_OPEN_WEEKLY
@@ -57,6 +58,7 @@ TaskBoardProtocol.ACTION_CLEAR_UNWANTED = ACTION_CLEAR_UNWANTED
 TaskBoardProtocol.ACTION_ASSIGN_PREFERRED = ACTION_ASSIGN_PREFERRED
 TaskBoardProtocol.ACTION_ASSIGN_UNWANTED = ACTION_ASSIGN_UNWANTED
 TaskBoardProtocol.ACTION_OPEN_SOULSEAL = ACTION_OPEN_SOULSEAL
+TaskBoardProtocol.ACTION_OPEN_PREFERRED = ACTION_OPEN_PREFERRED
 
 local OPCODE_TASK_BOARD_SEND = 0x53
 local OPCODE_SOUL_SEALS = 0xBA
@@ -191,6 +193,16 @@ function TaskBoardProtocol.sendBountyTaskData(player, data)
 		out:addByte(p.active and 1 or 0)
 		out:addU16(clamp(p.preferredRaceId or 0, 0, 0xFFFF))
 		out:addU16(clamp(p.unwantedRaceId or 0, 0, 0xFFFF))
+	end
+
+	-- Full creature catalog used by the Preferred List UI.
+	local availableRaceIds = data.availableRaceIds or {}
+	local availableCount = math.min(#availableRaceIds, 0xFFFF)
+	out:addU16(availableCount)
+	for i = 1, availableCount do
+		local raceId = clamp(availableRaceIds[i], 0, 0xFFFF)
+		out:addU16(raceId)
+		writeMonsterDisplay(out, raceId)
 	end
 
 	return out:sendToPlayer(player)
