@@ -21,7 +21,7 @@ function dropCallback.onDropLoot(monster, corpse)
 	end
 
 	-- Only fiendish monsters drop soul cores
-	if monster:getMonsterForgeClassification() ~= FORGE_FIENDISH_MONSTER then
+	if not monster:isFiendish() then
 		return
 	end
 
