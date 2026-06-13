@@ -300,7 +300,7 @@ function TaskBoardProtocol.sendHuntingTaskShopData(player, offers, taskHuntingPo
 			out:addU16(clamp(offer.outfitId or 0, 0, 0xFFFF))
 			out:addU16(clamp(offer.addons or 0, 0, 0xFFFF))
 		elseif offer.type == 3 then -- item double
-			out:addU16(clamp(offer.clientId or getClientItemId(offer.itemId), 0, 0, 0xFFFF))
+			out:addU16(clamp(offer.clientId or getClientItemId(offer.itemId), 0, 0xFFFF))
 		elseif offer.type == 5 then -- weekly expansion
 			out:addByte(0) -- placeholder
 		end
