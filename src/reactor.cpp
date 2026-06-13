@@ -301,8 +301,8 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		}
 
 		if (timeBudget.count() > 0 && std::chrono::steady_clock::now() - cycleStart >= timeBudget) {
-			LOG_WARN("[TaskReactor] time budget exceeded ({} ms), deferring {} tasks",
-			         timeBudget.count(), readyTasks.size() - tasksExecuted);
+		LOG_REACTOR("time budget exceeded ({} ms), deferring {} tasks",
+		            timeBudget.count(), readyTasks.size() - tasksExecuted);
 			break;
 		}
 

@@ -462,7 +462,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	if (isAstraClient_) {
-		LOG_INFO("[AstraClient] Client accepted");
+		LOG_INFO(">> [AstraClient] Client accepted");
 	}
 
 	// Brute force check before dispatching login task

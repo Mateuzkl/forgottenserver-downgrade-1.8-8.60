@@ -852,7 +852,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 			disconnectClient(AstraClient::REQUIRED_MESSAGE);
 			return;
 		}
-		LOG_INFO("[AstraClient] Client accepted");
+		LOG_INFO(">> [AstraClient] Client accepted");
 	}
 
 	if (isOTC) {
