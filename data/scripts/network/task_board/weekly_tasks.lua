@@ -374,9 +374,9 @@ local function appendKillTasks(data, targetCount)
 
 	local eligible = {}
 	for raceId, entry in pairs(CustomBestiary.monstersByRaceId) do
-		raceId = tonumber(raceId)
-		if raceId and raceId > 0 and not usedRaceIds[raceId] and (tonumber(entry.experience) or 0) > 0 then
-			eligible[#eligible + 1] = raceId
+		local numericRaceId = tonumber(raceId)
+		if numericRaceId and numericRaceId > 0 and not usedRaceIds[numericRaceId] and (tonumber(entry.experience) or 0) > 0 then
+			eligible[#eligible + 1] = numericRaceId
 		end
 	end
 	shuffle(eligible)
