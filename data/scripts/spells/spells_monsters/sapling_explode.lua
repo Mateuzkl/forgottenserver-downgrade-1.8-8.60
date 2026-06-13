@@ -14,7 +14,7 @@ end
 local spell = Spell("instant")
 
 function spell.onCastSpell(creature, var)
-	addEvent(removeSapling, 1, creature.uid)
+	addEvent(removeSapling, 1, creature:getId())
 	return combat:execute(creature, var)
 end
 

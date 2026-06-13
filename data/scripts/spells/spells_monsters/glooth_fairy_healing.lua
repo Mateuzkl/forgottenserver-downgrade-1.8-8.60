@@ -10,8 +10,12 @@ function spell.onCastSpell(creature, var)
 	if creature:getHealth() < creature:getMaxHealth() * 0.1 and not creature:getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT, 88888) then
 		creature:addCondition(condition)
 		addEvent(function(cid)
-			creature:addHealth(math.random(7500, 8000))
-			creature:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
+			local c = Creature(cid)
+			if not c then
+				return false
+			end
+			c:addHealth(math.random(7500, 8000))
+			c:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 			return true
 		end, 10 * 1000, creature:getId())
 	end

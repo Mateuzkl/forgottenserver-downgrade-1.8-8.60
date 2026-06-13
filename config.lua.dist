@@ -532,3 +532,16 @@ combatChainSkillFormulaSword = 1.1
 combatChainSkillFormulaFist = 1.0
 combatChainSkillFormulaDistance = 0.9
 combatChainSkillFormulaWandsAndRods = 1.0
+
+-- Lua Garbage Collector
+luaGcMode = "generational"
+luaGcAutoTune = true
+luaGcLogEnabled = false
+luaGcLogInterval = 60000
+luaGcStepEnabled = true
+luaGcStepInterval = 1000
+luaGcStepSize = 200
+luaGcFullCollectOnStartup = true
+luaGcFullCollectOnShutdown = true
+luaGcWarnMemoryKb = 262144
+luaGcCriticalMemoryKb = 524288

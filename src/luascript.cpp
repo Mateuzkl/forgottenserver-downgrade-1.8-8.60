@@ -9,6 +9,7 @@
 #include "chat.h"
 #include "configmanager.h"
 #include "databasemanager.h"
+#include "lua_gc_monitor.h"
 #include "databasetasks.h"
 #include "depotchest.h"
 #include "events.h"
@@ -507,11 +508,6 @@ bool LuaScriptInterface::reInitState()
 
 void LuaEnvironment::shutdown()
 {
-    if (g_luaEnvironment.luaState) {
-		lua_gc(g_luaEnvironment.luaState, LUA_GCCOLLECT, 0);
-		lua_gc(g_luaEnvironment.luaState, LUA_GCCOLLECT, 0);
-    }
-
 	// Close the main Lua state
     g_luaEnvironment.closeState();
 }
@@ -4229,6 +4225,7 @@ bool LuaEnvironment::initState()
 	}
 
 	luaL_openlibs(luaState);
+	LuaGcMonitor::configure(luaState);
 	registerFunctions();
 
 	runningEventId = EVENT_ID_USER;
@@ -4248,9 +4245,9 @@ bool LuaEnvironment::closeState()
 		return false;
 	}
 
-    // Force full garbage collection before cleanup to release Lua-managed memory
-    lua_gc(luaState, LUA_GCCOLLECT, 0);
-    lua_gc(luaState, LUA_GCCOLLECT, 0); 
+	if (ConfigManager::getBoolean(ConfigManager::LUA_GC_FULL_COLLECT_ON_SHUTDOWN)) {
+		LuaGcMonitor::fullCollect(luaState, "shutdown");
+	}
 
 	for (const auto& combatEntry : combatIdMap) {
 		clearCombatObjects(combatEntry.first);

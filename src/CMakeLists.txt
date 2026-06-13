@@ -37,44 +37,45 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/iomapserialize.cpp
 	${CMAKE_CURRENT_LIST_DIR}/item.cpp
 	${CMAKE_CURRENT_LIST_DIR}/items.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaactions.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luacombat.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luacondition.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luacontainer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luacreature.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luacreatureevent.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luagame.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaglobalevent.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luagroup.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaguild.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luahouse.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaitem.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaimbuements.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaitemtype.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/lualoot.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luamodalwindow.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luamonster.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luamonsterspell.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luamonstertype.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luamoveevent.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luanetworkmessage.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luanpc.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaoutfit.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaparty.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaplayer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaposition.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luazone.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaactions.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luacombat.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luacondition.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luacontainer.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luacreature.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luacreatureevent.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luagame.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaglobalevent.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luagroup.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaguild.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luahouse.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaitem.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaimbuements.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaitemtype.cpp
+	${CMAKE_CURRENT_LIST_DIR}/lualoot.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luamodalwindow.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luamonster.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luamonsterspell.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luamonstertype.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luamoveevent.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luanetworkmessage.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luanpc.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaoutfit.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaparty.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaplayer.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaposition.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luazone.cpp
+	${CMAKE_CURRENT_LIST_DIR}/lua_gc_monitor.cpp
 	${CMAKE_CURRENT_LIST_DIR}/logger.cpp
 	${CMAKE_CURRENT_LIST_DIR}/luascript.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaspells.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luatalkaction.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luateleport.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luatile.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luatown.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luavariant.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luavocation.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaweapons.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/luaxml.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaspells.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luatalkaction.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luateleport.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luatile.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luatown.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luavariant.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luavocation.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaweapons.cpp
+	${CMAKE_CURRENT_LIST_DIR}/luaxml.cpp
 	${CMAKE_CURRENT_LIST_DIR}/familiar.cpp
 	${CMAKE_CURRENT_LIST_DIR}/mailbox.cpp
 	${CMAKE_CURRENT_LIST_DIR}/map.cpp
@@ -181,6 +182,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/logger.h
 	${CMAKE_CURRENT_LIST_DIR}/observer_ptr.h
 	${CMAKE_CURRENT_LIST_DIR}/luascript.h
+	${CMAKE_CURRENT_LIST_DIR}/lua_gc_monitor.h
 	${CMAKE_CURRENT_LIST_DIR}/familiar.h
 	${CMAKE_CURRENT_LIST_DIR}/luavariant.h
 	${CMAKE_CURRENT_LIST_DIR}/mailbox.h

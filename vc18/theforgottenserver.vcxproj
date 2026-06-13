@@ -254,6 +254,7 @@
     <ClCompile Include="..\src\luaweapons.cpp" />
     <ClCompile Include="..\src\luaxml.cpp" />
     <ClCompile Include="..\src\luazone.cpp" />
+    <ClCompile Include="..\src\lua_gc_monitor.cpp" />
     <ClCompile Include="..\src\mailbox.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\map.cpp" />
@@ -358,6 +359,7 @@
     <ClInclude Include="..\src\item.h" />
     <ClInclude Include="..\src\itemloader.h" />
     <ClInclude Include="..\src\logger.h" />
+    <ClInclude Include="..\src\lua_gc_monitor.h" />
     <ClInclude Include="..\src\items.h" />
     <ClInclude Include="..\src\imbuement.h" />
     <ClInclude Include="..\src\instance_utils.h" />

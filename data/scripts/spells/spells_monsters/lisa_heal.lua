@@ -11,9 +11,13 @@ function spell.onCastSpell(creature, var)
 		creature:say("Lisa takes a final breath before she's healing up!", TALKTYPE_MONSTER_SAY)
 		creature:addCondition(condition)
 		addEvent(function(cid)
-			creature:addHealth(math.random(18000, 23000))
-			creature:say("Lisa healed up!", TALKTYPE_MONSTER_SAY)
-			creature:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
+			local c = Creature(cid)
+			if not c then
+				return false
+			end
+			c:addHealth(math.random(18000, 23000))
+			c:say("Lisa healed up!", TALKTYPE_MONSTER_SAY)
+			c:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 			return true
 		end, 6 * 1000, creature:getId())
 	end

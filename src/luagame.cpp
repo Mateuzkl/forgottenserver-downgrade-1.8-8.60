@@ -7,6 +7,7 @@
 #include "events.h"
 #include "game.h"
 #include "luascript.h"
+#include "lua_gc_monitor.h"
 #include "monster.h"
 #include "monsters.h"
 #include "npc.h"
@@ -1206,6 +1207,34 @@ int luaGameSetWorldTime(lua_State* L)
 	return 1;
 }
 
+int luaGameGetLuaMemoryUsage(lua_State* L)
+{
+	// Game.getLuaMemoryUsage()
+	lua_pushinteger(L, LuaGcMonitor::getMemoryKb(g_luaEnvironment.getLuaState()));
+	return 1;
+}
+
+int luaGameCollectLuaGarbage(lua_State* L)
+{
+	// Game.collectLuaGarbage()
+	LuaGcMonitor::fullCollect(g_luaEnvironment.getLuaState(), "Lua API call");
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaGameStepLuaGarbage(lua_State* L)
+{
+	// Game.stepLuaGarbage([size])
+	int32_t size = getInteger<int32_t>(L, 1, 0);
+	if (size > 0) {
+		lua_gc(g_luaEnvironment.getLuaState(), LUA_GCSTEP, size);
+	} else {
+		LuaGcMonitor::step(g_luaEnvironment.getLuaState());
+	}
+	pushBoolean(L, true);
+	return 1;
+}
+
 } // namespace
 
 void LuaScriptInterface::registerGame()
@@ -1300,4 +1329,9 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "stopSpy", luaGameStopSpy);
 	registerMethod("Game", "spyInventory", luaGameSpyInventory);
 	registerMethod("Game", "stopSpyInventory", luaGameStopSpyInventory);
+
+	// Lua GC
+	registerMethod("Game", "getLuaMemoryUsage", luaGameGetLuaMemoryUsage);
+	registerMethod("Game", "collectLuaGarbage", luaGameCollectLuaGarbage);
+	registerMethod("Game", "stepLuaGarbage", luaGameStepLuaGarbage);
 }

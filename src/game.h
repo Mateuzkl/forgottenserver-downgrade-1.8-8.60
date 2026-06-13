@@ -540,6 +540,7 @@ public:
 	void updateWorldTime();
 	void setWorldTime(int16_t time);
 	void checkLight();
+	void checkLuaGc();
 	LightState_t getLightState() const;
 	void saveMotdNum() const;
 	std::string_view getMotdHash() const { return motdHash; }

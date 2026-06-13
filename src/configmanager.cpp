@@ -510,6 +510,11 @@ bool ConfigManager::load()
 	booleans[Boolean::ADMIN_REQUIRE_LOGIN] = getGlobalBoolean(L, "adminRequireLogin", true);
 	booleans[Boolean::ADMIN_LOGS] = getGlobalBoolean(L, "adminLogs", false);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", true);
+	booleans[Boolean::LUA_GC_AUTO_TUNE] = getGlobalBoolean(L, "luaGcAutoTune", true);
+	booleans[Boolean::LUA_GC_LOG_ENABLED] = getGlobalBoolean(L, "luaGcLogEnabled", false);
+	booleans[Boolean::LUA_GC_STEP_ENABLED] = getGlobalBoolean(L, "luaGcStepEnabled", true);
+	booleans[Boolean::LUA_GC_FULL_COLLECT_ON_STARTUP] = getGlobalBoolean(L, "luaGcFullCollectOnStartup", true);
+	booleans[Boolean::LUA_GC_FULL_COLLECT_ON_SHUTDOWN] = getGlobalBoolean(L, "luaGcFullCollectOnShutdown", true);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");
 	strings[String::SERVER_NAME] = getGlobalString(L, "serverName", "");
@@ -522,6 +527,7 @@ bool ConfigManager::load()
 	strings[String::NPC_SYSTEM] = getGlobalString(L, "npcSystem", "tfs");
 	strings[String::DUAL_WIELDING_MODE] = getGlobalString(L, "dualWieldingMode", "allweapons");
 	strings[String::RAID_SPAWNFILE_DIRECTORY] = getGlobalString(L, "raidSpawnFileDirectory", "data/raids");
+	strings[String::LUA_GC_MODE] = getGlobalString(L, "luaGcMode", "generational");
 
 	Monster::despawnRange = getGlobalInteger(L, "deSpawnRange", 2);
 	Monster::despawnRadius = getGlobalInteger(L, "deSpawnRadius", 50);
@@ -749,6 +755,11 @@ bool ConfigManager::load()
 	integers[Integer::NETWORK_THREADS] = getGlobalInteger(L, "networkThreads", 2);
 	integers[Integer::CONNECTION_RATE_LIMIT_ALLOWED] = getGlobalInteger(L, "connectionRateLimitAllowed", 10);
 	integers[Integer::CONNECTION_RATE_LIMIT_MS] = getGlobalInteger(L, "connectionRateLimitMS", 500);
+	integers[Integer::LUA_GC_LOG_INTERVAL] = getGlobalInteger(L, "luaGcLogInterval", 60000);
+	integers[Integer::LUA_GC_STEP_INTERVAL] = getGlobalInteger(L, "luaGcStepInterval", 1000);
+	integers[Integer::LUA_GC_STEP_SIZE] = getGlobalInteger(L, "luaGcStepSize", 200);
+	integers[Integer::LUA_GC_WARN_MEMORY_KB] = getGlobalInteger(L, "luaGcWarnMemoryKb", 262144);
+	integers[Integer::LUA_GC_CRITICAL_MEMORY_KB] = getGlobalInteger(L, "luaGcCriticalMemoryKb", 524288);
 
 	loaded = true;
 	// ownedL destructor calls lua_close via LuaStateDeleter
