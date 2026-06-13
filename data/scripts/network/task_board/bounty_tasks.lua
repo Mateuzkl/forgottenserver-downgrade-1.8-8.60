@@ -932,8 +932,11 @@ function BountyTasks.sendBountyData(player, includeAvailableCreatures)
 		talismans = talismans,
 		preferredSlots = MAX_PREFERRED_SLOTS,
 		preferred = data.preferredLists,
-		availableRaceIds = includeAvailableCreatures and getPreferredCreatureRaceIds() or {},
+		preferredClearCost = PREFERRED_CLEAR_COST,
 	}
+	if includeAvailableCreatures then
+		protocolData.availableRaceIds = getPreferredCreatureRaceIds()
+	end
 
 	return protocol.sendBountyTaskData(player, protocolData)
 end

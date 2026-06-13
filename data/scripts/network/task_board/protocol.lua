@@ -63,6 +63,7 @@ TaskBoardProtocol.ACTION_OPEN_PREFERRED = ACTION_OPEN_PREFERRED
 local OPCODE_TASK_BOARD_SEND = 0x53
 local OPCODE_SOUL_SEALS = 0xBA
 local OPCODE_RESOURCE_BALANCE = 0xEE
+local BOUNTY_EXTENSION_MARKER = 0x5441534B424F4152
 
 local function supportsCustomNetwork(player)
 	return player and player.isUsingAstraClient and player:isUsingAstraClient()
@@ -195,14 +196,18 @@ function TaskBoardProtocol.sendBountyTaskData(player, data)
 		out:addU16(clamp(p.unwantedRaceId or 0, 0, 0xFFFF))
 	end
 
-	-- Full creature catalog used by the Preferred List UI.
-	local availableRaceIds = data.availableRaceIds or {}
-	local availableCount = math.min(#availableRaceIds, 0xFFFF)
-	out:addU16(availableCount)
-	for i = 1, availableCount do
-		local raceId = clamp(availableRaceIds[i], 0, 0xFFFF)
-		out:addU16(raceId)
-		writeMonsterDisplay(out, raceId)
+	-- Optional, marked extension used by the Preferred List UI.
+	if data.availableRaceIds ~= nil then
+		local availableRaceIds = data.availableRaceIds
+		local availableCount = math.min(#availableRaceIds, 0xFFFF)
+		out:addU64(BOUNTY_EXTENSION_MARKER)
+		out:addU16(clamp(data.preferredClearCost or 0, 0, 0xFFFF))
+		out:addU16(availableCount)
+		for i = 1, availableCount do
+			local raceId = clamp(availableRaceIds[i], 0, 0xFFFF)
+			out:addU16(raceId)
+			writeMonsterDisplay(out, raceId)
+		end
 	end
 
 	return out:sendToPlayer(player)
