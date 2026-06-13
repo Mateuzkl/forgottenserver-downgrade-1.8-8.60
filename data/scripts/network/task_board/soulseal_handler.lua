@@ -24,12 +24,28 @@ local protocol -- set by init.lua
 
 local SoulSealHandler = {}
 
+local function isNearSoulpitObelisk(player)
+    local playerPosition = player and player:getPosition()
+    local obeliskPosition = SoulPit and SoulPit.obeliskPos
+    if not playerPosition or not obeliskPosition or playerPosition.z ~= obeliskPosition.z then
+        return false
+    end
+
+    return math.abs(playerPosition.x - obeliskPosition.x) <= 1
+        and math.abs(playerPosition.y - obeliskPosition.y) <= 1
+end
+
 -- ============================================
 -- SOULSEAL DATA (send creature list to client)
 -- ============================================
 
 function SoulSealHandler.sendSoulSealsData(player)
     if not protocol or not player then
+        return false
+    end
+
+    if not isNearSoulpitObelisk(player) then
+        player:sendTextMessage(MESSAGE_INFO_DESCR, "Stand next to the Soulpit obelisk to open Soulseals.")
         return false
     end
 
@@ -56,6 +72,11 @@ function soulSealActionHandler.onReceive(player, msg)
     end
 
     if not player.isUsingAstraClient or not player:isUsingAstraClient() then
+        return
+    end
+
+    if not isNearSoulpitObelisk(player) then
+        player:sendTextMessage(MESSAGE_INFO_DESCR, "Stand next to the Soulpit obelisk to start a fight.")
         return
     end
 

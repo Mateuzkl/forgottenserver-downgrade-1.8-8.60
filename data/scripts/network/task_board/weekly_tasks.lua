@@ -117,8 +117,9 @@ local function hasWeeklyProgress(data)
 end
 
 local function getCurrentWeek()
-	local current = os.date("*t")
-	local currentWeekday = tonumber(os.date("%w")) + 1
+	local now = os.time()
+	local current = os.date("*t", now)
+	local currentWeekday = tonumber(os.date("%w", now)) + 1
 	local daysSinceReset = (currentWeekday - DEFAULT_RESET_DAY) % 7
 	current.day = current.day - daysSinceReset
 	current.hour = 0
@@ -139,6 +140,24 @@ end
 
 function WeeklyTasks.invalidateCache(playerGuid)
 	invalidateCache(playerGuid)
+end
+
+local function normalizeLegacyTaskExperience(data)
+	local difficulty = data.difficulty or DIFFICULTY_BEGINNER
+	local killExpBase = (HTP_PER_KILL[difficulty] or HTP_PER_KILL[DIFFICULTY_BEGINNER]) * 10
+	local normalKillExp = KILL_TASKS_NORMAL * killExpBase
+	local expansionKillExp = KILL_TASKS_EXPANSION * killExpBase
+	local normalDeliveryExp = DELIVERY_TASKS_NORMAL * DELIVERY_EXP_BASE
+	local expansionDeliveryExp = DELIVERY_TASKS_EXPANSION * DELIVERY_EXP_BASE
+
+	if #data.killTasks > 0
+		and (data.killTaskRewardExp == normalKillExp or data.killTaskRewardExp == expansionKillExp) then
+		data.killTaskRewardExp = math.floor(data.killTaskRewardExp / #data.killTasks)
+	end
+	if #data.deliveryTasks > 0
+		and (data.deliveryTaskRewardExp == normalDeliveryExp or data.deliveryTaskRewardExp == expansionDeliveryExp) then
+		data.deliveryTaskRewardExp = math.floor(data.deliveryTaskRewardExp / #data.deliveryTasks)
+	end
 end
 
 local function loadWeeklyData(playerGuid)
@@ -199,6 +218,7 @@ local function loadWeeklyData(playerGuid)
 		end
 
 		result.free(resultId)
+		normalizeLegacyTaskExperience(data)
 	end
 
 	weeklyCache[playerGuid] = data
@@ -335,6 +355,101 @@ function WeeklyTasks.selectDifficulty(player, difficulty)
 	return WeeklyTasks.sendWeeklyData(player)
 end
 
+local function shuffle(values)
+	for i = #values, 2, -1 do
+		local j = math.random(i)
+		values[i], values[j] = values[j], values[i]
+	end
+end
+
+local function appendKillTasks(data, targetCount)
+	if not CustomBestiary or not CustomBestiary.monstersByRaceId then
+		return
+	end
+
+	local usedRaceIds = {}
+	for _, task in ipairs(data.killTasks) do
+		usedRaceIds[tonumber(task.raceId) or 0] = true
+	end
+
+	local eligible = {}
+	for raceId, entry in pairs(CustomBestiary.monstersByRaceId) do
+		raceId = tonumber(raceId)
+		if raceId and raceId > 0 and not usedRaceIds[raceId] and (tonumber(entry.experience) or 0) > 0 then
+			eligible[#eligible + 1] = raceId
+		end
+	end
+	shuffle(eligible)
+
+	local killReq = KILL_REQUIREMENTS[data.difficulty] or KILL_REQUIREMENTS[DIFFICULTY_BEGINNER]
+	for _, raceId in ipairs(eligible) do
+		if #data.killTasks >= targetCount then
+			break
+		end
+		data.killTasks[#data.killTasks + 1] = {
+			raceId = raceId,
+			kills = 0,
+			required = math.random(killReq.min, killReq.max),
+			grade = 0,
+		}
+	end
+end
+
+local function appendDeliveryTasks(player, data, targetCount)
+	local items = WeeklyTasks.deliveryItems and WeeklyTasks.deliveryItems[data.difficulty] or {}
+	if #items == 0 then
+		return
+	end
+
+	local usedItemIds = {}
+	for _, task in ipairs(data.deliveryTasks) do
+		usedItemIds[tonumber(task.itemId) or 0] = true
+	end
+
+	local eligible = {}
+	for _, item in ipairs(items) do
+		if item.itemId and not usedItemIds[item.itemId] then
+			eligible[#eligible + 1] = item
+		end
+	end
+	shuffle(eligible)
+
+	local reduced = TaskBoard.hasWeeklyReducedItems(player)
+	for _, item in ipairs(eligible) do
+		if #data.deliveryTasks >= targetCount then
+			break
+		end
+
+		local required = item.amount or 1
+		if reduced then
+			required = math.max(1, math.ceil(required / 2))
+		end
+
+		data.deliveryTasks[#data.deliveryTasks + 1] = {
+			index = #data.deliveryTasks,
+			itemId = item.itemId,
+			amount = required,
+			required = required,
+			available = 0,
+			collectedItems = 0,
+			delivered = 0,
+			grade = 0,
+			reduced = reduced,
+		}
+	end
+end
+
+local function recalculateTaskExperience(data, killBudgetCount, deliveryBudgetCount)
+	local difficulty = data.difficulty or DIFFICULTY_BEGINNER
+	local killTaskCount = #data.killTasks
+	local deliveryTaskCount = #data.deliveryTasks
+	local totalKillExp = killBudgetCount * ((HTP_PER_KILL[difficulty] or HTP_PER_KILL[DIFFICULTY_BEGINNER]) * 10)
+	local totalDeliveryExp = deliveryBudgetCount * DELIVERY_EXP_BASE
+
+	data.killTaskRewardExp = killTaskCount > 0 and math.floor(totalKillExp / killTaskCount) or 0
+	data.deliveryTaskRewardExp = deliveryTaskCount > 0 and math.floor(totalDeliveryExp / deliveryTaskCount) or 0
+end
+
 function WeeklyTasks.generateTasks(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
@@ -352,69 +467,12 @@ function WeeklyTasks.generateTasks(player)
 
 	-- Generate kill tasks
 	data.killTasks = {}
-	if CustomBestiary and CustomBestiary.monstersByRaceId then
-		local eligible = {}
-		for raceId, entry in pairs(CustomBestiary.monstersByRaceId) do
-			if (tonumber(entry.experience) or 0) > 0 then
-				eligible[#eligible + 1] = raceId
-			end
-		end
-
-		-- Shuffle and pick
-		for i = #eligible, 2, -1 do
-			local j = math.random(i)
-			eligible[i], eligible[j] = eligible[j], eligible[i]
-		end
-
-		local killReq = KILL_REQUIREMENTS[difficulty]
-		for i = 1, math.min(killCount, #eligible) do
-			local raceId = eligible[i]
-			local required = math.random(killReq.min, killReq.max)
-			data.killTasks[#data.killTasks + 1] = {
-				raceId = raceId,
-				kills = 0,
-				required = required,
-				grade = 0,
-			}
-		end
-	end
-
-	-- Calculate kill exp reward
-	data.killTaskRewardExp = killCount * (HTP_PER_KILL[difficulty] * 10)
+	appendKillTasks(data, killCount)
 
 	-- Generate delivery tasks
 	data.deliveryTasks = {}
-	if WeeklyTasks.deliveryItems then
-		local items = WeeklyTasks.deliveryItems[difficulty] or {}
-		local shuffled = {}
-		for i = 1, #items do shuffled[i] = items[i] end
-		for i = #shuffled, 2, -1 do
-			local j = math.random(i)
-			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-		end
-
-		for i = 1, math.min(deliveryCount, #shuffled) do
-			local item = shuffled[i]
-			local required = item.amount or 1
-			local reduced = TaskBoard.hasWeeklyReducedItems(player)
-			if reduced then
-				required = math.max(1, math.ceil(required / 2))
-			end
-			data.deliveryTasks[#data.deliveryTasks + 1] = {
-				index = i - 1,
-				itemId = item.itemId,
-				amount = required,
-				required = required,
-				available = 0,
-				collectedItems = 0,
-				delivered = 0,
-				grade = 0,
-				reduced = reduced,
-			}
-		end
-	end
-
-	data.deliveryTaskRewardExp = deliveryCount * DELIVERY_EXP_BASE
+	appendDeliveryTasks(player, data, deliveryCount)
+	recalculateTaskExperience(data, killCount, deliveryCount)
 	data.lastWeek = getCurrentWeek()
 
 	saveWeeklyData(playerGuid)
@@ -442,8 +500,8 @@ function WeeklyTasks.onKill(player, raceId)
 	if oldAnyCreatureCurrent < data.anyCreatureTotal and data.anyCreatureCurrent >= data.anyCreatureTotal then
 		data.completedKillTasks = (data.completedKillTasks or 0) + 1
 		matchedTask = true
-		if data.killTaskRewardExp > 0 and #data.killTasks > 0 then
-			player:addExperience(math.floor(data.killTaskRewardExp / #data.killTasks), true)
+		if data.killTaskRewardExp > 0 then
+			player:addExperience(data.killTaskRewardExp, true)
 		end
 	end
 
@@ -459,8 +517,7 @@ function WeeklyTasks.onKill(player, raceId)
 				kt.grade = 1 -- Mark completed
 				-- Give kill exp
 				if data.killTaskRewardExp > 0 then
-					local expPerTask = math.floor(data.killTaskRewardExp / (#data.killTasks))
-					player:addExperience(expPerTask, true)
+					player:addExperience(data.killTaskRewardExp, true)
 				end
 			end
 			break
@@ -518,8 +575,7 @@ function WeeklyTasks.deliverTask(player, taskIndex)
 
 			-- Give delivery exp
 			if data.deliveryTaskRewardExp > 0 then
-				local expPerTask = math.floor(data.deliveryTaskRewardExp / (#data.deliveryTasks))
-				player:addExperience(expPerTask, true)
+				player:addExperience(data.deliveryTaskRewardExp, true)
 			end
 
 			recalculateRewards(data)
@@ -574,6 +630,21 @@ function WeeklyTasks.applyExpansion(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
 	data.hasExpansion = player:hasWeeklyExpansion()
+
+	if data.hasExpansion and (#data.killTasks > 0 or #data.deliveryTasks > 0) then
+		local oldKillCount = #data.killTasks
+		local oldDeliveryCount = #data.deliveryTasks
+
+		appendKillTasks(data, KILL_TASKS_EXPANSION)
+		appendDeliveryTasks(player, data, DELIVERY_TASKS_EXPANSION)
+		recalculateTaskExperience(data, KILL_TASKS_EXPANSION, DELIVERY_TASKS_EXPANSION)
+
+		if #data.killTasks > oldKillCount or #data.deliveryTasks > oldDeliveryCount then
+			data.weeklyProgressFinished = 0
+		end
+		recalculateRewards(data)
+	end
+
 	saveWeeklyData(playerGuid)
 	return WeeklyTasks.sendWeeklyData(player)
 end
