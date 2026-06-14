@@ -3313,11 +3313,71 @@ int LuaScriptInterface::luaGetWorldUpTime(lua_State* L)
 int LuaScriptInterface::luaGetSubTypeName(lua_State* L)
 {
 	// getSubTypeName(subType)
-	int32_t subType = Lua::getInteger<int32_t>(L, 1);
-	if (subType > 0) {
-		Lua::pushString(L, Item::items[subType].name);
-	} else {
-		lua_pushnil(L);
+	const FluidTypes_t subType = Lua::getInteger<FluidTypes_t>(L, 1);
+	switch (subType) {
+		case FLUID_WATER:
+			Lua::pushString(L, "water");
+			break;
+		case FLUID_BLOOD:
+			Lua::pushString(L, "blood");
+			break;
+		case FLUID_BEER:
+			Lua::pushString(L, "beer");
+			break;
+		case FLUID_SLIME:
+			Lua::pushString(L, "slime");
+			break;
+		case FLUID_LEMONADE:
+			Lua::pushString(L, "lemonade");
+			break;
+		case FLUID_MILK:
+			Lua::pushString(L, "milk");
+			break;
+		case FLUID_MANA:
+			Lua::pushString(L, "manafluid");
+			break;
+		case FLUID_INK:
+			Lua::pushString(L, "ink");
+			break;
+		case FLUID_LIFE:
+			Lua::pushString(L, "lifefluid");
+			break;
+		case FLUID_OIL:
+			Lua::pushString(L, "oil");
+			break;
+		case FLUID_URINE:
+			Lua::pushString(L, "urine");
+			break;
+		case FLUID_COCONUTMILK:
+			Lua::pushString(L, "coconut milk");
+			break;
+		case FLUID_WINE:
+			Lua::pushString(L, "wine");
+			break;
+		case FLUID_MUD:
+			Lua::pushString(L, "mud");
+			break;
+		case FLUID_FRUITJUICE:
+			Lua::pushString(L, "fruit juice");
+			break;
+		case FLUID_LAVA:
+			Lua::pushString(L, "lava");
+			break;
+		case FLUID_RUM:
+			Lua::pushString(L, "rum");
+			break;
+		case FLUID_SWAMP:
+			Lua::pushString(L, "swamp");
+			break;
+		case FLUID_TEA:
+			Lua::pushString(L, "tea");
+			break;
+		case FLUID_MEAD:
+			Lua::pushString(L, "mead");
+			break;
+		default:
+			lua_pushnil(L);
+			break;
 	}
 	return 1;
 }
