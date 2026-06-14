@@ -2,6 +2,7 @@
 
 #include "configmanager.h"
 #include "otserv.h"
+#include "outputmessage.h"
 #include "tools.h"
 
 static bool argumentsHandler(const std::vector<std::string_view>& args)
@@ -44,5 +45,6 @@ int main(int argc, const char** argv)
 	}
 
     startServer();
+    OutputMessagePool::drainPool();
     return 0;
 }
