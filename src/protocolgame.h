@@ -297,6 +297,7 @@ private:
 	// OTCv8
 	void sendFeatures();
 	bool shouldSendQuickLootFlags() const;
+	bool shouldSendItemTierByte() const;
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 

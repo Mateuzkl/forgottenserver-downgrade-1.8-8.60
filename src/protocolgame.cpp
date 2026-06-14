@@ -378,6 +378,11 @@ bool ProtocolGame::shouldSendQuickLootFlags() const
 	return isAstraClient && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
 }
 
+bool ProtocolGame::shouldSendItemTierByte() const
+{
+	return useItemTierByte && getBoolean(ConfigManager::ITEM_TIER_DISPLAY);
+}
+
 void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem)
 {
 	// OTCv8 and Mehah features and extended opcodes
@@ -1361,10 +1366,11 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 {
 	const uint32_t playerInstanceId = player->getInstanceID();
 	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
+	const bool sendItemTierByte = shouldSendItemTierByte();
 	int32_t count;
 	Item* ground = tile->getGround();
 	if (ground) {
-		msg.addItem(ground, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+		msg.addItem(ground, sendItemTierByte, true, isOTC, sendQuickLootFlags);
 		count = 1;
 	} else {
 		count = 0;
@@ -1376,7 +1382,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+			msg.addItem(it->get(), sendItemTierByte, true, isOTC, sendQuickLootFlags);
 			count++;
 			if (count == 9 && tile->getPosition() == player->getPosition()) {
 				break;
@@ -1421,7 +1427,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+			msg.addItem(it->get(), sendItemTierByte, true, isOTC, sendQuickLootFlags);
 			if (++count == MAX_STACKPOS_THINGS) {
 				return;
 			}
@@ -2558,7 +2564,8 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 	msg.addByte(cid);
 
 	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
-	msg.addItem(container, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+	const bool sendItemTierByte = shouldSendItemTierByte();
+	msg.addItem(container, sendItemTierByte, true, isOTC, sendQuickLootFlags);
 	msg.addString(container->getName());
 
 	msg.addByte(static_cast<uint8_t>(container->capacity()));
@@ -2571,7 +2578,7 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 	const ItemDeque& itemList = container->getItemList();
 	for (ItemDeque::const_iterator cit = itemList.begin() + firstIndex, end = itemList.end(); i < 0xFF && cit != end;
 	     ++cit, ++i) {
-		msg.addItem(cit->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+		msg.addItem(cit->get(), sendItemTierByte, true, isOTC, sendQuickLootFlags);
 	}
 	writeToOutputBuffer(msg);
 }
@@ -2724,6 +2731,7 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 
 	msg.addString(traderName);
 	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
+	const bool sendItemTierByte = shouldSendItemTierByte();
 
 	if (const Container* tradeContainer = item->getContainer()) {
 		std::list<const Container*> listContainer{tradeContainer};
@@ -2743,11 +2751,11 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 
 		msg.addByte(itemList.size());
 		for (const Item* listItem : itemList) {
-			msg.addItem(listItem, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+			msg.addItem(listItem, sendItemTierByte, true, isOTC, sendQuickLootFlags);
 		}
 	} else {
 		msg.addByte(0x01);
-		msg.addItem(item, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+		msg.addItem(item, sendItemTierByte, true, isOTC, sendQuickLootFlags);
 	}
 	writeToOutputBuffer(msg);
 }
@@ -3087,7 +3095,7 @@ void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+	msg.addItem(item, shouldSendItemTierByte(), true, isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3105,7 +3113,7 @@ void ProtocolGame::sendUpdateTileItem(const Position& pos, uint32_t stackpos, co
 	msg.addByte(0x6B);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+	msg.addItem(item, shouldSendItemTierByte(), true, isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3390,7 +3398,7 @@ void ProtocolGame::sendInventoryItem(slots_t slot, const Item* item)
 	if (item) {
 		msg.addByte(0x78);
 		msg.addByte(slot);
-		msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+		msg.addItem(item, shouldSendItemTierByte(), true, isOTC, shouldSendQuickLootFlags());
 	} else {
 		msg.addByte(0x79);
 		msg.addByte(slot);
@@ -3439,7 +3447,7 @@ void ProtocolGame::sendAddContainerItem(uint8_t cid, const Item* item)
 	NetworkMessage msg;
 	msg.addByte(0x70);
 	msg.addByte(cid);
-	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+	msg.addItem(item, shouldSendItemTierByte(), true, isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3449,7 +3457,7 @@ void ProtocolGame::sendUpdateContainerItem(uint8_t cid, uint16_t slot, const Ite
 	msg.addByte(0x71);
 	msg.addByte(cid);
 	msg.addByte(slot);
-	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+	msg.addItem(item, shouldSendItemTierByte(), true, isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3672,9 +3680,9 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 	msg.addByte(1);
 	msg.addString(item ? item->getName() : std::string_view(itemType.name));
 	if (item) {
-		msg.addItem(item.get(), isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+		msg.addItem(item.get(), shouldSendItemTierByte(), true, isOTC, shouldSendQuickLootFlags());
 	} else {
-		msg.addItem(itemId, itemCount, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+		msg.addItem(itemId, itemCount, shouldSendItemTierByte(), true, shouldSendQuickLootFlags());
 	}
 	msg.addByte(0);
 
@@ -4279,7 +4287,7 @@ void ProtocolGame::parseNewPing(NetworkMessage& msg)
 // OTCv8 and Mehah
 void ProtocolGame::sendFeatures()
 {
-	if (!isOTCv8 && !isMehah && !isAstraClient) return;
+	if (!isOTCv8 && !isAstraClient) return;
 
 	std::unordered_map<GameFeature, bool> features;
 	features[GameFeature::ExtendedOpcode] = true;
@@ -4295,12 +4303,9 @@ void ProtocolGame::sendFeatures()
 	if (isAstraClient) {
 		features[GameFeature::PlayerFamiliars] = true;
 	}
-	if (shouldSendQuickLootFlags()) {
-		features[GameFeature::QuickLootFlags] = true;
-	}
-	if (useItemTierByte && getBoolean(ConfigManager::ITEM_TIER_DISPLAY)) {
-		features[GameFeature::ItemTierByte] = true;
-	}
+	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();
+	features[GameFeature::ThingUpgradeClassification] = false;
+	features[GameFeature::ItemTierByte] = shouldSendItemTierByte();
 
 	if (features.empty()) return;
 
@@ -4587,7 +4592,7 @@ void ProtocolGame::sendImbuementDurations(slots_t updatedSlot, const Item* updat
 		const Item* item = p.second;
 
 		msg.addByte(static_cast<uint8_t>(slot));
-		msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+		msg.addItem(item, shouldSendItemTierByte(), true, isOTC, shouldSendQuickLootFlags());
 
 		uint16_t totalSlots = item->getImbuementSlots();
 		msg.addByte(static_cast<uint8_t>(totalSlots));
