@@ -448,6 +448,7 @@ bool ConfigManager::load()
 	booleans[Boolean::BESTIARY_SYSTEM_ENABLED] = getGlobalBoolean(L, "bestiarySystemEnabled", false);
 	booleans[Boolean::MARKET_SYSTEM_ENABLED] = getGlobalBoolean(L, "marketSystemEnabled", false);
 	booleans[Boolean::PREY_SYSTEM_ENABLED] = getGlobalBoolean(L, "preySystemEnabled", false);
+	booleans[Boolean::BATTLEPASS_SYSTEM_ENABLED] = getGlobalBoolean(L, "battlePassSystemEnabled", false);
 	booleans[Boolean::WEAPON_PROFICIENCY_SYSTEM_ENABLED] = getGlobalBoolean(L, "weaponProficiencySystemEnabled", false);
 	booleans[Boolean::AUGMENT_SYSTEM_ENABLED] = getGlobalBoolean(L, "augmentSystemEnabled", false);
 	booleans[Boolean::MONSTER_LEVEL_ENABLED] = getGlobalBoolean(L, "monsterLevelEnabled", false);

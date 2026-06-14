@@ -3777,9 +3777,9 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	msg.addPosition(position);
 	msg.add<uint16_t>(itemId);
 	msg.addByte(stackPos);
+	msg.addByte(static_cast<uint8_t>(getAttribute("LookDirection", DIRECTION_SOUTH)));
 	msg.addByte(static_cast<uint8_t>(getAttribute("PodiumVisible", 1) != 0));
 	msg.addByte(static_cast<uint8_t>(getAttribute("MonsterVisible", currentRaceId != 0) != 0));
-	msg.addByte(static_cast<uint8_t>(getAttribute("LookDirection", DIRECTION_SOUTH)));
 	writeToOutputBuffer(msg);
 }
 
@@ -4279,7 +4279,7 @@ void ProtocolGame::parseNewPing(NetworkMessage& msg)
 // OTCv8 and Mehah
 void ProtocolGame::sendFeatures()
 {
-	if ((!isOTCv8 && !isAstraClient) || (isMehah && !isAstraClient)) return;
+	if (!isOTCv8 && !isMehah && !isAstraClient) return;
 
 	std::unordered_map<GameFeature, bool> features;
 	features[GameFeature::ExtendedOpcode] = true;

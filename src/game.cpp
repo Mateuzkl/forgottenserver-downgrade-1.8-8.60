@@ -3035,7 +3035,7 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
-	if (player->isAstraClient() && (isMonsterPodiumId(item->getID()) || isMonsterPodiumId(spriteId))) {
+	if (player->isAstraClient() && isMonsterPodiumId(item->getID())) {
 		if (pos.x == 0xFFFF || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
 			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
 			return;
@@ -3175,7 +3175,7 @@ void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Posi
 
 	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_TOPDOWN_ITEM);
 	Item* item = thing ? thing->getItem() : nullptr;
-	if (!item || (!isMonsterPodiumId(item->getID()) && !isMonsterPodiumId(itemId)) ||
+	if (!item || !isMonsterPodiumId(item->getID()) ||
 	    !pos.isInRange(player->getPosition(), 1, 1, 0)) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
@@ -3205,6 +3205,11 @@ void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Posi
 	} else {
 		item->removeCustomAttribute("LookType");
 		item->removeCustomAttribute("LookTypeEx");
+		item->removeCustomAttribute("LookHead");
+		item->removeCustomAttribute("LookBody");
+		item->removeCustomAttribute("LookLegs");
+		item->removeCustomAttribute("LookFeet");
+		item->removeCustomAttribute("LookAddons");
 	}
 
 	item->setCustomAttribute("PodiumVisible", static_cast<int64_t>(podiumVisible));

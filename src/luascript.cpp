@@ -1139,6 +1139,7 @@ Outfit_t Lua::getOutfit(lua_State* L, int32_t arg)
 
 	outfit.lookTypeEx = getField<uint16_t>(L, arg, "lookTypeEx");
 	outfit.lookType = getField<uint16_t>(L, arg, "lookType");
+	outfit.lookFamiliar = getField<uint16_t>(L, arg, "lookFamiliar");
 
 	lua_pop(L, 8);
 	return outfit;
@@ -1364,6 +1365,7 @@ void Lua::pushOutfit(lua_State* L, const Outfit_t& outfit)
 	setField(L, "lookLegs", outfit.lookLegs);
 	setField(L, "lookFeet", outfit.lookFeet);
 	setField(L, "lookAddons", outfit.lookAddons);
+	setField(L, "lookFamiliar", outfit.lookFamiliar);
 }
 
 void Lua::pushOutfit(lua_State* L, const Outfit* outfit)
@@ -1593,6 +1595,7 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("BESTIARY_SYSTEM_ENABLED", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerGlobalVariable("MARKET_SYSTEM_ENABLED", ConfigManager::MARKET_SYSTEM_ENABLED);
 	registerGlobalVariable("PREY_SYSTEM_ENABLED", ConfigManager::PREY_SYSTEM_ENABLED);
+	registerGlobalVariable("BATTLEPASS_SYSTEM_ENABLED", ConfigManager::BATTLEPASS_SYSTEM_ENABLED);
 	registerGlobalVariable("WEAPON_PROFICIENCY_SYSTEM_ENABLED", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
 	registerGlobalVariable("AUGMENT_SYSTEM_ENABLED", ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	registerGlobalVariable("COLORIZED_LOOT_VALUE", ConfigManager::COLORIZED_LOOT_VALUE);
@@ -2833,6 +2836,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MARKET_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::PREY_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::BATTLEPASS_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MONSTER_LEVEL_ENABLED);

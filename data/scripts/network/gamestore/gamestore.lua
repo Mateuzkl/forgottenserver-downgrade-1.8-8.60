@@ -77,6 +77,19 @@ local function isTaskBoardCategory(category)
 	return tostring(category and category.name or ""):lower() == "task hunt"
 end
 
+local function isBattlePassOfferType(offerType)
+	return tostring(offerType or ""):lower() == "battlepass"
+end
+
+local function isBattlePassCategory(category)
+	return tostring(category and category.name or ""):lower() == "battle pass"
+end
+
+local function supportsBattlePassStore(player)
+	return configManager.getBoolean(configKeys.BATTLEPASS_SYSTEM_ENABLED) and
+		player and player.isUsingAstraClient and player:isUsingAstraClient()
+end
+
 local function supportsHirelingStore(player)
 	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
 		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
@@ -424,12 +437,14 @@ local function sendStoreCatalog(player)
 			local taskBoardVisible = not isTaskBoardOfferType(offer.oftype) or
 				supportsTaskBoardStore(player, offer.oftype)
 			local hirelingVisible = not isHirelingOfferType(offer.oftype) or supportsHirelingStore(player)
-			if taskBoardVisible and hirelingVisible then
+			local battlePassVisible = not isBattlePassOfferType(offer.oftype) or supportsBattlePassStore(player)
+			if taskBoardVisible and hirelingVisible and battlePassVisible then
 				visibleOffers[#visibleOffers + 1] = offer
 			end
 		end
 
-		if #visibleOffers > 0 or (not isHirelingCategory(cat) and not isTaskBoardCategory(cat)) then
+		if #visibleOffers > 0 or
+			(not isHirelingCategory(cat) and not isTaskBoardCategory(cat) and not isBattlePassCategory(cat)) then
 			visibleCategories[#visibleCategories + 1] = {
 				name = cat.name,
 				icon = cat.icon,
@@ -480,6 +495,9 @@ end
 local function deliverOffer(player, offer, extra)
 	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player, offer.oftype) then
 		return "This Task Hunt offer is not available."
+	end
+	if isBattlePassOfferType(offer.oftype) and not supportsBattlePassStore(player) then
+		return "Battle Pass system is not available."
 	end
 
 	if offer.oftype == "bounty_kill_boost" then
@@ -791,6 +809,10 @@ function buyHandler.onReceive(player, msg)
 	end
 	if isHirelingOfferType(offer.oftype) and not supportsHirelingStore(player) then
 		sendStoreError(player, "The hireling system is not available.")
+		return
+	end
+	if isBattlePassOfferType(offer.oftype) and not supportsBattlePassStore(player) then
+		sendStoreError(player, "Battle Pass system is not available.")
 		return
 	end
 

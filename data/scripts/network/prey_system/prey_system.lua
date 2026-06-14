@@ -68,6 +68,10 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
+local function supportsAstraPreyExtension(player)
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+end
+
 local function isPreySlotUnlocked(player, slot)
 	return slot ~= PREY_PERMANENT_SLOT
 		or player:getStorageValue(PREY_STORAGE_PERMANENT_SLOT) == 1
@@ -549,7 +553,9 @@ local function writeSlot(out, player, slot, slotData)
 		out:addByte(PREY_NATIVE_STATE_LOCKED)
 		out:addByte(PREY_NATIVE_UNLOCK_STORE)
 		out:addU16(0)
-		out:addU32(PREY_PERMANENT_SLOT_COST)
+		if supportsAstraPreyExtension(player) then
+			out:addU32(PREY_PERMANENT_SLOT_COST)
+		end
 		return
 	end
 
