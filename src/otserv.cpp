@@ -402,6 +402,11 @@ void startServer()
 	g_reactor.setTimeBudget(std::chrono::milliseconds(getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS)));
 	g_reactor.setMaxInboxSize(static_cast<size_t>(getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE)));
 
+	LOG_INFO(">> Reactor limits: maxTasks={}, timeBudget={}ms, maxInbox={}",
+	    getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE),
+	    getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS),
+	    getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE));
+
 	std::jthread serviceThread;
 
 	if (serviceManager->is_running()) {
