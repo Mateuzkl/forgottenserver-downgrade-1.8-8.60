@@ -352,6 +352,20 @@ private:
 		return std::get_if<CustomAttributeMap>(&getAttr(ITEM_ATTRIBUTE_CUSTOM).value);
 	}
 
+	const CustomAttributeMap* getCustomAttributeMap() const
+	{
+		if (!hasAttribute(ITEM_ATTRIBUTE_CUSTOM)) {
+			return nullptr;
+		}
+
+		const Attribute* attr = getExistingAttr(ITEM_ATTRIBUTE_CUSTOM);
+		if (!attr) {
+			return nullptr;
+		}
+
+		return std::get_if<CustomAttributeMap>(&attr->value);
+	}
+
 	template <typename R>
 	void setCustomAttribute(int64_t key, R value)
 	{
@@ -392,13 +406,13 @@ private:
 		std::get<CustomAttributeMap>(attr.value).emplace(lowercaseKey, value);
 	}
 
-	const CustomAttribute* getCustomAttribute(int64_t key)
+	const CustomAttribute* getCustomAttribute(int64_t key) const
 	{
 		auto tmp = std::to_string(key);
 		return getCustomAttribute(tmp);
 	}
 
-	const CustomAttribute* getCustomAttribute(const std::string& key)
+	const CustomAttribute* getCustomAttribute(const std::string& key) const
 	{
 		if (const CustomAttributeMap* customAttrMap = getCustomAttributeMap()) {
 			auto it = customAttrMap->find(asLowerCaseString(key));
@@ -536,20 +550,20 @@ public:
 		getAttributes()->setCustomAttribute(key, value);
 	}
 
-	const ItemAttributes::CustomAttribute* getCustomAttribute(int64_t key)
+	const ItemAttributes::CustomAttribute* getCustomAttribute(int64_t key) const
 	{
 		if (!attributes) {
 			return nullptr;
 		}
-		return getAttributes()->getCustomAttribute(key);
+		return attributes->getCustomAttribute(key);
 	}
 
-	const ItemAttributes::CustomAttribute* getCustomAttribute(const std::string& key)
+	const ItemAttributes::CustomAttribute* getCustomAttribute(const std::string& key) const
 	{
 		if (!attributes) {
 			return nullptr;
 		}
-		return getAttributes()->getCustomAttribute(key);
+		return attributes->getCustomAttribute(key);
 	}
 
 	bool removeCustomAttribute(int64_t key)

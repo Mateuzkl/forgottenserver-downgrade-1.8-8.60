@@ -3044,7 +3044,7 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
-	if (item->isUseable()) {
+	if (!item->isUseable()) {
 		player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
 		return;
 	}
@@ -3145,6 +3145,17 @@ void Game::playerInspectItem(uint32_t playerId, const Position& pos)
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
+	if (!InstanceUtils::canSeeItemInInstance(player->getInstanceID(), item)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	const Position thingPos = thing->getPosition();
+	if (!player->canSee(thingPos)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
 	auto itemRef = getItemSharedRef(item);
 	if (!itemRef) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
@@ -3180,6 +3191,11 @@ void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Posi
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
+	auto itemRef = getItemSharedRef(item);
+	if (!itemRef) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
 
 	MonsterType* monsterType = raceId == 0 ? nullptr : g_monsters.getMonsterType(raceId);
 	if (raceId != 0 && !monsterType) {
@@ -3188,36 +3204,43 @@ void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Posi
 	}
 
 	if (raceId != 0) {
-		item->setCustomAttribute("PodiumMonsterRaceId", static_cast<int64_t>(raceId));
+		itemRef->setCustomAttribute("PodiumMonsterRaceId", static_cast<int64_t>(raceId));
 	} else {
-		item->removeCustomAttribute("PodiumMonsterRaceId");
+		itemRef->removeCustomAttribute("PodiumMonsterRaceId");
 	}
 
 	if (monsterType && creatureVisible) {
 		const Outfit_t& outfit = monsterType->info.outfit;
-		item->setCustomAttribute("LookType", static_cast<int64_t>(outfit.lookType));
-		item->setCustomAttribute("LookTypeEx", static_cast<int64_t>(outfit.lookTypeEx));
-		item->setCustomAttribute("LookHead", static_cast<int64_t>(outfit.lookHead));
-		item->setCustomAttribute("LookBody", static_cast<int64_t>(outfit.lookBody));
-		item->setCustomAttribute("LookLegs", static_cast<int64_t>(outfit.lookLegs));
-		item->setCustomAttribute("LookFeet", static_cast<int64_t>(outfit.lookFeet));
-		item->setCustomAttribute("LookAddons", static_cast<int64_t>(outfit.lookAddons));
+		itemRef->setCustomAttribute("LookType", static_cast<int64_t>(outfit.lookType));
+		itemRef->setCustomAttribute("LookTypeEx", static_cast<int64_t>(outfit.lookTypeEx));
+		itemRef->setCustomAttribute("LookHead", static_cast<int64_t>(outfit.lookHead));
+		itemRef->setCustomAttribute("LookBody", static_cast<int64_t>(outfit.lookBody));
+		itemRef->setCustomAttribute("LookLegs", static_cast<int64_t>(outfit.lookLegs));
+		itemRef->setCustomAttribute("LookFeet", static_cast<int64_t>(outfit.lookFeet));
+		itemRef->setCustomAttribute("LookAddons", static_cast<int64_t>(outfit.lookAddons));
 	} else {
-		item->removeCustomAttribute("LookType");
-		item->removeCustomAttribute("LookTypeEx");
-		item->removeCustomAttribute("LookHead");
-		item->removeCustomAttribute("LookBody");
-		item->removeCustomAttribute("LookLegs");
-		item->removeCustomAttribute("LookFeet");
-		item->removeCustomAttribute("LookAddons");
+		itemRef->removeCustomAttribute("LookType");
+		itemRef->removeCustomAttribute("LookTypeEx");
+		itemRef->removeCustomAttribute("LookHead");
+		itemRef->removeCustomAttribute("LookBody");
+		itemRef->removeCustomAttribute("LookLegs");
+		itemRef->removeCustomAttribute("LookFeet");
+		itemRef->removeCustomAttribute("LookAddons");
 	}
 
-	item->setCustomAttribute("PodiumVisible", static_cast<int64_t>(podiumVisible));
-	item->setCustomAttribute("MonsterVisible", static_cast<int64_t>(creatureVisible));
-	item->setCustomAttribute("LookDirection", static_cast<int64_t>(direction));
+	itemRef->setCustomAttribute("PodiumVisible", static_cast<int64_t>(podiumVisible));
+	itemRef->setCustomAttribute("MonsterVisible", static_cast<int64_t>(creatureVisible));
+	itemRef->setCustomAttribute("LookDirection", static_cast<int64_t>(direction));
 
 	if (Tile* tile = map.getTile(pos)) {
-		player->sendUpdateTileItem(tile, pos, item);
+		SpectatorVec spectators;
+		map.getSpectators(spectators, pos, true, true);
+		for (const auto& spectator : spectators.players()) {
+			Player* tmpPlayer = static_cast<Player*>(spectator.get());
+			if (InstanceUtils::canSeeItemInInstance(tmpPlayer->getInstanceID(), itemRef.get())) {
+				tmpPlayer->sendUpdateTileItem(tile, pos, itemRef.get());
+			}
+		}
 	}
 }
 

@@ -3744,7 +3744,7 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	}
 
 	auto getAttribute = [podium](std::string_view key, int64_t defaultValue = 0) {
-		const auto* attribute = const_cast<Item*>(podium)->getCustomAttribute(std::string(key));
+		const auto* attribute = podium->getCustomAttribute(std::string(key));
 		if (!attribute) {
 			return defaultValue;
 		}

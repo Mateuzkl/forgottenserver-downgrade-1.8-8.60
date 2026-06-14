@@ -254,7 +254,7 @@ uint64_t Item::getItemUID() const noexcept
 	if (!attributes) [[unlikely]] {
 		return 0;
 	}
-	const auto* attr = const_cast<Item*>(this)->getCustomAttribute("__uid");
+	const auto* attr = getCustomAttribute("__uid");
 	if (!attr) [[unlikely]] {
 		return 0;
 	}
