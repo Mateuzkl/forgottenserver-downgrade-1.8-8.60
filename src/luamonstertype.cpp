@@ -1358,8 +1358,14 @@ int luaMonsterTypeFaction(lua_State* L)
 		if (lua_gettop(L) == 1) {
 			lua_pushinteger(L, monsterType->info.faction);
 		} else {
-			monsterType->info.faction = getInteger<Faction_t>(L, 2);
-			pushBoolean(L, true);
+			const int32_t faction = getInteger<int32_t>(L, 2);
+			if (faction < FACTION_DEFAULT || faction > FACTION_LAST) {
+				reportErrorFunc(L, "Invalid faction");
+				pushBoolean(L, false);
+			} else {
+				monsterType->info.faction = static_cast<Faction_t>(faction);
+				pushBoolean(L, true);
+			}
 		}
 	} else {
 		lua_pushnil(L);
@@ -1388,7 +1394,12 @@ int luaMonsterTypeEnemyFactions(lua_State* L)
 		if (lua_istable(L, 2)) {
 			lua_pushnil(L);
 			while (lua_next(L, 2) != 0) {
-				monsterType->info.enemyFactions.insert(getInteger<Faction_t>(L, -1));
+				if (lua_isnumber(L, -1)) {
+					const int32_t faction = getInteger<int32_t>(L, -1);
+					if (faction >= FACTION_DEFAULT && faction <= FACTION_LAST) {
+						monsterType->info.enemyFactions.insert(static_cast<Faction_t>(faction));
+					}
+				}
 				lua_pop(L, 1);
 			}
 		}

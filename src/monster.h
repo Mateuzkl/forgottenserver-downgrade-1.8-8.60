@@ -71,7 +71,9 @@ public:
 
 	const Position& getMasterPos() const { return masterPos; }
 	void setMasterPos(Position pos) { masterPos = pos; }
-	Faction_t getFaction() const override { return mType->info.faction; }
+	Faction_t getFaction() const override;
+	bool isEnemyFaction(Faction_t faction) const;
+	bool canAttackByFaction(const Creature* creature) const;
 
 	RaceType_t getRace() const override { return mType->info.race; }
 	int32_t getArmor() const override { return mType->info.armor; }

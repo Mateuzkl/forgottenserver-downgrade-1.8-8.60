@@ -680,14 +680,65 @@ bool Monster::hasPlayerNearby(int32_t range /* = 20*/) const
 	return cachedPlayerNearby;
 }
 
+Faction_t Monster::getFaction() const
+{
+	if (auto master = getMaster()) {
+		return master->getFaction();
+	}
+	return mType->info.faction;
+}
+
+bool Monster::isEnemyFaction(Faction_t faction) const
+{
+	if (auto master = getMaster()) {
+		if (const Monster* masterMonster = master->getMonster()) {
+			return masterMonster->isEnemyFaction(faction);
+		}
+	}
+
+	return mType->info.enemyFactions.find(faction) != mType->info.enemyFactions.end();
+}
+
+bool Monster::canAttackByFaction(const Creature* creature) const
+{
+	if (!creature || !ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) ||
+	    getFaction() == FACTION_DEFAULT) {
+		return false;
+	}
+
+	const Monster* targetMonster = creature->getMonster();
+	if (!targetMonster || creature->isSummon()) {
+		return false;
+	}
+
+	if (ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY) && !hasPlayerNearby(20)) {
+		return false;
+	}
+
+	return isEnemyFaction(targetMonster->getFaction());
+}
+
 bool Monster::isFriend(const Creature* creature) const
 {
+	if (!creature) {
+		return false;
+	}
+
 	if (creature == this) {
 		return true;
 	}
 
-	if (mType->info.faction != FACTION_DEFAULT && mType->info.faction == creature->getFaction()) {
-		return true;
+	if (ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM)) {
+		if (const Monster* otherMonster = creature->getMonster(); otherMonster && !creature->isSummon()) {
+			if (isEnemyFaction(otherMonster->getFaction())) {
+				return false;
+			}
+
+			const Faction_t myFaction = getFaction();
+			if (myFaction != FACTION_DEFAULT && myFaction == otherMonster->getFaction()) {
+				return true;
+			}
+		}
 	}
 
 	auto master = getMaster();
@@ -709,9 +760,6 @@ bool Monster::isFriend(const Creature* creature) const
 			return true;
 		}
 	} else if (creature->isMonster() && !creature->isSummon()) {
-		if (isOpponent(creature)) {
-			return false;
-		}
 		return true;
 	}
 
@@ -720,31 +768,36 @@ bool Monster::isFriend(const Creature* creature) const
 
 bool Monster::isOpponent(const Creature* creature) const
 {
-	if (creature == this) {
+	if (!creature || creature == this || creature->isRemoved() || creature->isDead()) {
 		return false;
 	}
 
-	auto creatureMaster = creature->getMaster();
-	if ((creature->getPlayer() && !creature->getPlayer()->hasFlag(PlayerFlag_IgnoredByMonsters)) ||
-	    (creatureMaster && creatureMaster->getPlayer())) {
-		return true;
+	if (creature->getNpc()) {
+		return false;
 	}
 
-	if (mType->info.enemyFactions.count(creature->getFaction()) > 0) {
-		if (creature->isMonster() && !creature->isSummon() && !hasPlayerNearby(20)) {
-			return false;
-		}
-		return true;
+	const Player* player = creature->getPlayer();
+	if (player && player->hasFlag(PlayerFlag_IgnoredByMonsters)) {
+		return false;
 	}
 
 	auto master = getMaster();
-	if (isSummon() && master && master->getPlayer()) {
-		if (creature != master.get()) {
-			return true;
-		}
+	const bool selfIsPlayerSummon = isSummon() && master && master->getPlayer();
+	if (selfIsPlayerSummon) {
+		return creature != master.get();
 	}
 
-	return false;
+	auto creatureMaster = creature->getMaster();
+	const Player* creatureMasterPlayer = creatureMaster ? creatureMaster->getPlayer() : nullptr;
+	if (creatureMasterPlayer && creatureMasterPlayer->hasFlag(PlayerFlag_IgnoredByMonsters)) {
+		return false;
+	}
+
+	if (player || creatureMasterPlayer) {
+		return true;
+	}
+
+	return canAttackByFaction(creature);
 }
 
 bool Monster::isFamiliar() const
@@ -792,7 +845,7 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		return false;
 	}
 
-	std::vector<Creature*> resultList;
+	std::vector<std::shared_ptr<Creature>> resultList;
 	resultList.reserve(targetList.size());
 	const Position& myPos = getPosition();
 
@@ -805,14 +858,24 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		auto follow = followCreature.lock();
 		if (follow.get() != creature.get() && isTarget(creature.get())) {
 			if (searchType == TARGETSEARCH_RANDOM || canUseAttack(myPos, creature.get())) {
-				resultList.push_back(creature.get());
+				resultList.push_back(std::move(creature));
+			}
+		}
+	}
+
+	if (ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) &&
+	    ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_PREFER_PLAYERS)) {
+		for (const auto& creature : resultList) {
+			auto master = creature->getMaster();
+			if ((creature->getPlayer() || (master && master->getPlayer())) && selectTarget(creature.get())) {
+				return true;
 			}
 		}
 	}
 
 	switch (searchType) {
 		case TARGETSEARCH_NEAREST: {
-			Creature* target = nullptr;
+			std::shared_ptr<Creature> target;
 			if (!resultList.empty()) {
 				auto it = resultList.begin();
 				target = *it;
@@ -821,7 +884,7 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 					const Position& targetPosition = target->getPosition();
 					int32_t minRange = myPos.getDistanceX(targetPosition) + myPos.getDistanceY(targetPosition);
 					do {
-						Creature* creature = *it;
+						const auto& creature = *it;
 						if (!creature || creature->isRemoved() || !creature->getTile()) {
 							continue;
 						}
@@ -847,23 +910,23 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 
 					const Position& pos = creature->getPosition();
 					if (int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos); distance < minRange) {
-						target = creature.get();
+						target = creature;
 						minRange = distance;
 					}
 				}
 			}
 
-			if (target && selectTarget(target)) {
+			if (target && selectTarget(target.get())) {
 				return true;
 			}
 			break;
 		}
 
 		case TARGETSEARCH_HEALTH: {
-			Creature* target = nullptr;
+			std::shared_ptr<Creature> target;
 			int32_t minHealth = std::numeric_limits<int32_t>::max();
 			if (!resultList.empty()) {
-				for (Creature* creature : resultList) {
+				for (const auto& creature : resultList) {
 					if (int32_t health = creature->getHealth(); health < minHealth) {
 						target = creature;
 						minHealth = health;
@@ -877,23 +940,23 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 					}
 
 					if (int32_t health = creature->getHealth(); health < minHealth) {
-						target = creature.get();
+						target = creature;
 						minHealth = health;
 					}
 				}
 			}
 
-			if (target && selectTarget(target)) {
+			if (target && selectTarget(target.get())) {
 				return true;
 			}
 			break;
 		}
 
 		case TARGETSEARCH_DAMAGE: {
-			Creature* target = nullptr;
+			std::shared_ptr<Creature> target;
 			int32_t maxDamage = -1;
 			if (!resultList.empty()) {
-				for (Creature* creature : resultList) {
+				for (const auto& creature : resultList) {
 					auto it = damageMap.find(creature->getID());
 					if (it != damageMap.end()) {
 						if (it->second.total > maxDamage) {
@@ -912,14 +975,14 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 					auto it = damageMap.find(creature->getID());
 					if (it != damageMap.end()) {
 						if (it->second.total > maxDamage) {
-							target = creature.get();
+							target = creature;
 							maxDamage = it->second.total;
 						}
 					}
 				}
 			}
 
-			if (target && selectTarget(target)) {
+			if (target && selectTarget(target.get())) {
 				return true;
 			}
 			break;
@@ -930,7 +993,7 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		case TARGETSEARCH_RANDOM:
 		default: {
 			if (!resultList.empty()) {
-				return selectTarget(resultList[uniform_random(0, resultList.size() - 1)]);
+				return selectTarget(resultList[uniform_random(0, resultList.size() - 1)].get());
 			}
 
 			if (searchType == TARGETSEARCH_ATTACKRANGE) {

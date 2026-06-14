@@ -452,6 +452,10 @@ bool ConfigManager::load()
 	booleans[Boolean::WEAPON_PROFICIENCY_SYSTEM_ENABLED] = getGlobalBoolean(L, "weaponProficiencySystemEnabled", false);
 	booleans[Boolean::AUGMENT_SYSTEM_ENABLED] = getGlobalBoolean(L, "augmentSystemEnabled", false);
 	booleans[Boolean::MONSTER_LEVEL_ENABLED] = getGlobalBoolean(L, "monsterLevelEnabled", false);
+	booleans[Boolean::MONSTER_FACTION_SYSTEM] = getGlobalBoolean(L, "monsterFactionSystem", false);
+	booleans[Boolean::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY] =
+	    getGlobalBoolean(L, "monsterFactionRequirePlayerNearby", false);
+	booleans[Boolean::MONSTER_FACTION_PREFER_PLAYERS] = getGlobalBoolean(L, "monsterFactionPreferPlayers", true);
 	booleans[Boolean::LOOT_GROUPING_ENABLED] = getGlobalBoolean(L, "lootGroupingEnabled", true);
 	booleans[Boolean::ALLOW_MOUNT_IN_PZ] = getGlobalBoolean(L, "allowMountInPz", false);
 	booleans[Boolean::CHAIN_SYSTEM_ENABLED] = getGlobalBoolean(L, "toggleChainSystem", true);

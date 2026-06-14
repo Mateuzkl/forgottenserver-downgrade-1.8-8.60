@@ -150,6 +150,7 @@ public:
 
 	Player* getPlayer() override { return this; }
 	const Player* getPlayer() const override { return this; }
+	Faction_t getFaction() const override { return FACTION_PLAYER; }
 
 	void setID() override
 	{
