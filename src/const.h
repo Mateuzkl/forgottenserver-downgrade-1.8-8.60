@@ -546,6 +546,7 @@ enum CreatureIconQuests_t : uint8_t
 	CreatureIconQuests_Hazard,
 	CreatureIconQuests_BrownSkull,
 	CreatureIconQuests_BloodDrop,
+	CreatureIconQuests_Familiar,
 };
 
 struct CreatureIcon
@@ -654,6 +655,15 @@ enum GuildEmblems_t : uint8_t
 	GUILDEMBLEM_ALLY = 1,
 	GUILDEMBLEM_ENEMY = 2,
 	GUILDEMBLEM_NEUTRAL = 3
+};
+
+enum InspectObjectTypes_t : uint8_t
+{
+	INSPECT_NORMALOBJECT = 0,
+	INSPECT_NPCTRADE = 1,
+	INSPECT_PLAYERTRADE = 2,
+	INSPECT_CYCLOPEDIA = 3,
+	INSPECT_PROFICIENCY = 4
 };
 
 enum item_t : uint16_t
@@ -932,8 +942,9 @@ enum class GameFeature : uint8_t {
 	ThingUpgradeClassification = 130,
 	ItemTierByte = 131,
 	AstraCreatureIcons = 133,
+	PlayerFamiliars = 138,
 
-	Last = 133
+	Last = 138
 };
 
 inline constexpr int32_t CHANNEL_GUILD = 0x00;

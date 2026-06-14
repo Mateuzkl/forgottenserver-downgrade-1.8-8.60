@@ -1764,6 +1764,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CreatureIconQuests_Hazard);
 	registerEnum(CreatureIconQuests_BrownSkull);
 	registerEnum(CreatureIconQuests_BloodDrop);
+	registerEnum(CreatureIconQuests_Familiar);
 
 	registerEnum(CONDITIONID_DEFAULT);
 	registerEnum(CONDITIONID_COMBAT);

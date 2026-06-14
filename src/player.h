@@ -1303,6 +1303,19 @@ public:
 			client->sendOutfitWindow();
 		}
 	}
+	void sendItemInspection(std::shared_ptr<Item> item = nullptr, uint16_t itemId = 0, uint8_t itemCount = 1,
+	                        uint8_t inspectionType = INSPECT_NORMALOBJECT)
+	{
+		if (client) {
+			client->sendItemInspection(item, itemId, itemCount, inspectionType);
+		}
+	}
+	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos)
+	{
+		if (client) {
+			client->sendMonsterPodiumWindow(podium, position, itemId, stackPos);
+		}
+	}
 	void sendCloseContainer(uint8_t cid)
 	{
 		if (client) {

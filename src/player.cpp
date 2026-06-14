@@ -5446,6 +5446,9 @@ Skulls_t Player::getSkullClient(const Creature* creature) const
 
 	// Influenced/fiendish: OTC gets skull, Astra gets creature icon via 0x8B
 	if (const Monster* monster = creature->getMonster()) {
+		if (monster->isFamiliar() && isAstraClient()) {
+			return SKULL_NONE;
+		}
 		if (monster->isInfluenced() || monster->isFiendish()) {
 			if (isAstraClient()) {
 				return SKULL_NONE;

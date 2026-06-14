@@ -144,6 +144,11 @@ ReturnValue getStoreInboxLockedItemMoveReturn(const Item* item)
 	return RETURNVALUE_NOERROR;
 }
 
+bool isMonsterPodiumId(uint16_t itemId)
+{
+	return itemId == 38707 || itemId == 42367 || itemId == 42368;
+}
+
 int64_t getMoveItemExhaustionDelay(const Position& toPos)
 {
 	if (ConfigManager::getBoolean(ConfigManager::SEPARATE_RING_NECKLACE_EXHAUSTION) && toPos.x == 0xFFFF &&
@@ -3025,7 +3030,21 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 	Item* item = thing->getItem();
-	if (!item || item->isUseable()) {
+	if (!item) {
+		player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
+		return;
+	}
+
+	if (player->isAstraClient() && (isMonsterPodiumId(item->getID()) || isMonsterPodiumId(spriteId))) {
+		if (pos.x == 0xFFFF || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
+			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
+			return;
+		}
+		player->sendMonsterPodiumWindow(item, pos, spriteId, stackPos);
+		return;
+	}
+
+	if (item->isUseable()) {
 		player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
 		return;
 	}
@@ -3110,6 +3129,91 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		player->lootCorpse(itemRef->getContainer());
 	}
 	player->maintainAttackFlow();
+}
+
+void Game::playerInspectItem(uint32_t playerId, const Position& pos)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !player->isAstraClient()) {
+		return;
+	}
+
+	Thing* thing = internalGetThing(player, pos, 0, 0, STACKPOS_TOPDOWN_ITEM);
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+	auto itemRef = getItemSharedRef(item);
+	if (!itemRef) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+	player->sendItemInspection(itemRef, itemRef->getID(), static_cast<uint8_t>(std::min<uint16_t>(0xFF, itemRef->getItemCount())),
+	                           INSPECT_NORMALOBJECT);
+}
+
+void Game::playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !player->isAstraClient() || itemId >= Item::items.size() || Item::items[itemId].id == 0) {
+		return;
+	}
+	player->sendItemInspection(nullptr, itemId, itemCount, inspectionType);
+}
+
+void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Position& pos, uint8_t stackPos,
+                                  uint16_t itemId, uint8_t direction, bool podiumVisible, bool creatureVisible)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !player->isAstraClient() || pos.x == 0xFFFF || direction > DIRECTION_WEST) {
+		return;
+	}
+
+	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_TOPDOWN_ITEM);
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item || (!isMonsterPodiumId(item->getID()) && !isMonsterPodiumId(itemId)) ||
+	    !pos.isInRange(player->getPosition(), 1, 1, 0)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	MonsterType* monsterType = raceId == 0 ? nullptr : g_monsters.getMonsterType(raceId);
+	if (raceId != 0 && !monsterType) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (raceId != 0) {
+		item->setCustomAttribute("PodiumMonsterRaceId", static_cast<int64_t>(raceId));
+	} else {
+		item->removeCustomAttribute("PodiumMonsterRaceId");
+	}
+
+	if (monsterType && creatureVisible) {
+		const Outfit_t& outfit = monsterType->info.outfit;
+		item->setCustomAttribute("LookType", static_cast<int64_t>(outfit.lookType));
+		item->setCustomAttribute("LookTypeEx", static_cast<int64_t>(outfit.lookTypeEx));
+		item->setCustomAttribute("LookHead", static_cast<int64_t>(outfit.lookHead));
+		item->setCustomAttribute("LookBody", static_cast<int64_t>(outfit.lookBody));
+		item->setCustomAttribute("LookLegs", static_cast<int64_t>(outfit.lookLegs));
+		item->setCustomAttribute("LookFeet", static_cast<int64_t>(outfit.lookFeet));
+		item->setCustomAttribute("LookAddons", static_cast<int64_t>(outfit.lookAddons));
+	} else {
+		item->removeCustomAttribute("LookType");
+		item->removeCustomAttribute("LookTypeEx");
+	}
+
+	item->setCustomAttribute("PodiumVisible", static_cast<int64_t>(podiumVisible));
+	item->setCustomAttribute("MonsterVisible", static_cast<int64_t>(creatureVisible));
+	item->setCustomAttribute("LookDirection", static_cast<int64_t>(direction));
+
+	if (Tile* tile = map.getTile(pos)) {
+		player->sendUpdateTileItem(tile, pos, item);
+	}
 }
 
 void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,
