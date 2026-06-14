@@ -1704,8 +1704,16 @@ void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 
 void ProtocolGame::parseInspectionObject(NetworkMessage& msg)
 {
+	if (!requireUnreadBytes(msg, 1)) {
+		return;
+	}
+
 	const uint8_t inspectionType = msg.getByte();
 	if (inspectionType == INSPECT_NORMALOBJECT) {
+		if (!requireUnreadBytes(msg, 5)) {
+			return;
+		}
+
 		const Position position = msg.getPosition();
 		g_dispatcher.addTask([playerID = player->getID(), position]() {
 			g_game.playerInspectItem(playerID, position);
@@ -1718,6 +1726,10 @@ void ProtocolGame::parseInspectionObject(NetworkMessage& msg)
 		return;
 	}
 
+	if (!requireUnreadBytes(msg, 3)) {
+		return;
+	}
+
 	const uint16_t itemId = msg.get<uint16_t>();
 	const uint8_t itemCount = msg.getByte();
 	g_dispatcher.addTask([playerID = player->getID(), itemId, itemCount, inspectionType]() {
@@ -1727,6 +1739,10 @@ void ProtocolGame::parseInspectionObject(NetworkMessage& msg)
 
 void ProtocolGame::parseSetMonsterPodium(NetworkMessage& msg)
 {
+	if (!requireUnreadBytes(msg, 15)) {
+		return;
+	}
+
 	const uint32_t raceId = msg.get<uint32_t>();
 	const Position position = msg.getPosition();
 	const uint16_t itemId = msg.get<uint16_t>();
