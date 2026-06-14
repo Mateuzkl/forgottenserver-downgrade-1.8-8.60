@@ -784,7 +784,15 @@ bool Monster::isOpponent(const Creature* creature) const
 	auto master = getMaster();
 	const bool selfIsPlayerSummon = isSummon() && master && master->getPlayer();
 	if (selfIsPlayerSummon) {
-		return creature != master.get();
+		const Player* masterPlayer = master->getPlayer();
+		const Player* targetPlayer = player;
+		if (!targetPlayer) {
+			auto targetMaster = creature->getMaster();
+			targetPlayer = targetMaster ? targetMaster->getPlayer() : nullptr;
+		}
+
+		return creature != master.get() &&
+		       (!targetPlayer || (targetPlayer != masterPlayer && !masterPlayer->isPartner(targetPlayer)));
 	}
 
 	auto creatureMaster = creature->getMaster();
