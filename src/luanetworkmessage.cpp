@@ -32,6 +32,7 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0xEB: // imbuing window
 		case 0xEC: // close imbuing
 		case 0xED: // custom prey
+		case 0xEE: // resource balance
 		case 0xE8: // native prey slot data
 		case 0xE9: // native prey prices
 		case 0xF0: // custom quest log
@@ -56,7 +57,6 @@ bool isAstraOnlyLuaOpcode(uint8_t opcode)
 		case 0xC6: // custom item values
 		case 0xC7: // custom item details
 		case 0xCF: // quick-loot statistics
-		case 0xEE: // resource balance
 			return true;
 		default:
 			return false;
