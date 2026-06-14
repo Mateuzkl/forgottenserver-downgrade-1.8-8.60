@@ -298,6 +298,8 @@ private:
 	void sendFeatures();
 	bool shouldSendQuickLootFlags() const;
 	bool shouldSendItemTierByte() const;
+	bool shouldSendThingUpgradeClassification() const;
+	bool shouldSendItemTierData() const;
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 
