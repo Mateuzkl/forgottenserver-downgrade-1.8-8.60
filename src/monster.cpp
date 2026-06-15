@@ -1089,6 +1089,20 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 	}
 
 	// lets just pick the first target in the list
+	if (preferPlayers) {
+		for (const auto& weakRef : targetList) {
+			auto target = weakRef.lock();
+			if (!target || target->isRemoved() || !target->getTile()) {
+				continue;
+			}
+
+			auto follow = followCreature.lock();
+			if (follow.get() != target.get() && isTarget(target.get()) && isPlayerTarget(target) && selectTarget(target.get())) {
+				return true;
+			}
+		}
+	}
+
 	for (const auto& weakRef : targetList) {
 		auto target = weakRef.lock();
 		if (!target || target->isRemoved() || !target->getTile()) {
