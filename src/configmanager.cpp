@@ -454,7 +454,7 @@ bool ConfigManager::load()
 	booleans[Boolean::MONSTER_LEVEL_ENABLED] = getGlobalBoolean(L, "monsterLevelEnabled", false);
 	booleans[Boolean::MONSTER_FACTION_SYSTEM] = getGlobalBoolean(L, "monsterFactionSystem", false);
 	booleans[Boolean::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY] =
-	    getGlobalBoolean(L, "monsterFactionRequirePlayerNearby", false);
+	    getGlobalBoolean(L, "monsterFactionRequirePlayerNearby", true);
 	booleans[Boolean::MONSTER_FACTION_PREFER_PLAYERS] = getGlobalBoolean(L, "monsterFactionPreferPlayers", true);
 	booleans[Boolean::LOOT_GROUPING_ENABLED] = getGlobalBoolean(L, "lootGroupingEnabled", true);
 	booleans[Boolean::ALLOW_MOUNT_IN_PZ] = getGlobalBoolean(L, "allowMountInPz", false);
