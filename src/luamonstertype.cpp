@@ -1396,7 +1396,7 @@ int luaMonsterTypeEnemyFactions(lua_State* L)
 			while (lua_next(L, 2) != 0) {
 				if (lua_isnumber(L, -1)) {
 					const int32_t faction = getInteger<int32_t>(L, -1);
-					if (faction >= FACTION_DEFAULT && faction <= FACTION_LAST) {
+					if (faction > FACTION_DEFAULT && faction <= FACTION_LAST) {
 						monsterType->info.enemyFactions.insert(static_cast<Faction_t>(faction));
 					}
 				}

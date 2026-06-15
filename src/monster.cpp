@@ -690,6 +690,10 @@ Faction_t Monster::getFaction() const
 
 bool Monster::isEnemyFaction(Faction_t faction) const
 {
+	if (faction == FACTION_DEFAULT) {
+		return false;
+	}
+
 	if (auto master = getMaster()) {
 		if (const Monster* masterMonster = master->getMonster()) {
 			return masterMonster->isEnemyFaction(faction);
@@ -856,6 +860,24 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 	std::vector<std::shared_ptr<Creature>> resultList;
 	resultList.reserve(targetList.size());
 	const Position& myPos = getPosition();
+	const bool preferPlayers = ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) &&
+	                           ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_PREFER_PLAYERS);
+	const auto isPlayerTarget = [](const std::shared_ptr<Creature>& creature) {
+		if (!creature) {
+			return false;
+		}
+
+		if (creature->getPlayer()) {
+			return true;
+		}
+
+		auto master = creature->getMaster();
+		return master && master->getPlayer();
+	};
+	const auto preferCandidate = [&](const std::shared_ptr<Creature>& candidate,
+	                                 const std::shared_ptr<Creature>& current) {
+		return preferPlayers && isPlayerTarget(candidate) && !isPlayerTarget(current);
+	};
 
 	for (const auto& weakRef : targetList) {
 		auto creature = weakRef.lock();
@@ -867,16 +889,6 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		if (follow.get() != creature.get() && isTarget(creature.get())) {
 			if (searchType == TARGETSEARCH_RANDOM || canUseAttack(myPos, creature.get())) {
 				resultList.push_back(std::move(creature));
-			}
-		}
-	}
-
-	if (ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) &&
-	    ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_PREFER_PLAYERS)) {
-		for (const auto& creature : resultList) {
-			auto master = creature->getMaster();
-			if ((creature->getPlayer() || (master && master->getPlayer())) && selectTarget(creature.get())) {
-				return true;
 			}
 		}
 	}
@@ -898,7 +910,8 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 						}
 
 						const Position& pos = creature->getPosition();
-						if (int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos); distance < minRange) {
+						const int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos);
+						if (distance < minRange || (distance == minRange && preferCandidate(creature, target))) {
 							target = creature;
 							minRange = distance;
 						}
@@ -917,7 +930,8 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 					}
 
 					const Position& pos = creature->getPosition();
-					if (int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos); distance < minRange) {
+					const int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos);
+					if (distance < minRange || (distance == minRange && preferCandidate(creature, target))) {
 						target = creature;
 						minRange = distance;
 					}
@@ -935,7 +949,8 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 			int32_t minHealth = std::numeric_limits<int32_t>::max();
 			if (!resultList.empty()) {
 				for (const auto& creature : resultList) {
-					if (int32_t health = creature->getHealth(); health < minHealth) {
+					const int32_t health = creature->getHealth();
+					if (health < minHealth || (health == minHealth && preferCandidate(creature, target))) {
 						target = creature;
 						minHealth = health;
 					}
@@ -947,7 +962,8 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 						continue;
 					}
 
-					if (int32_t health = creature->getHealth(); health < minHealth) {
+					const int32_t health = creature->getHealth();
+					if (health < minHealth || (health == minHealth && preferCandidate(creature, target))) {
 						target = creature;
 						minHealth = health;
 					}
@@ -967,7 +983,8 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 				for (const auto& creature : resultList) {
 					auto it = damageMap.find(creature->getID());
 					if (it != damageMap.end()) {
-						if (it->second.total > maxDamage) {
+						if (it->second.total > maxDamage ||
+						    (it->second.total == maxDamage && preferCandidate(creature, target))) {
 							target = creature;
 							maxDamage = it->second.total;
 						}
@@ -982,7 +999,8 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 
 					auto it = damageMap.find(creature->getID());
 					if (it != damageMap.end()) {
-						if (it->second.total > maxDamage) {
+						if (it->second.total > maxDamage ||
+						    (it->second.total == maxDamage && preferCandidate(creature, target))) {
 							target = creature;
 							maxDamage = it->second.total;
 						}
@@ -1001,6 +1019,19 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		case TARGETSEARCH_RANDOM:
 		default: {
 			if (!resultList.empty()) {
+				if (preferPlayers) {
+					std::vector<std::shared_ptr<Creature>> playerTargets;
+					playerTargets.reserve(resultList.size());
+					for (const auto& creature : resultList) {
+						if (isPlayerTarget(creature)) {
+							playerTargets.push_back(creature);
+						}
+					}
+					if (!playerTargets.empty()) {
+						return selectTarget(playerTargets[uniform_random(0, playerTargets.size() - 1)].get());
+					}
+				}
+
 				return selectTarget(resultList[uniform_random(0, resultList.size() - 1)].get());
 			}
 
@@ -1058,9 +1089,9 @@ bool Monster::selectBlockerTarget()
 		return false;
 	}
 
-	Creature* blocker = tile->getTopCreature();
-	if (blocker && blocker != fc.get() && isOpponent(blocker)) {
-		return selectTarget(blocker);
+	auto blocker = g_game.getCreatureSharedRef(tile->getTopCreature());
+	if (blocker && blocker != fc && isOpponent(blocker.get())) {
+		return selectTarget(blocker.get());
 	}
 
 	return false;
