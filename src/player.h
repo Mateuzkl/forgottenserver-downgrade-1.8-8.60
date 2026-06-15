@@ -22,6 +22,7 @@
 #include "town.h"
 #include "vocation.h"
 #include "weapon_proficiency.h"
+#include "kv/kv.h"
 #include <array>
 #include <vector>
 
@@ -1448,6 +1449,8 @@ public:
 
 	bool checkChainSystem() const;
 	bool checkCleaveSystem() const;
+
+	mutable std::shared_ptr<KV> cachedPlayerSettings_;
 
 	bool hasDebugAssertSent() const { return client ? client->debugAssertSent : false; }
 
