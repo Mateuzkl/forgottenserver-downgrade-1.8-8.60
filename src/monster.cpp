@@ -603,6 +603,8 @@ void Monster::updateTargetList()
 	for (const auto& spectator : spectators) {
 		onCreatureFound(spectator.get());
 	}
+
+	clearFactionTargetIfNotAllowed();
 }
 
 void Monster::clearTargetList()
@@ -657,6 +659,7 @@ void Monster::onCreatureEnter(Creature* creature)
 
 	if (creature->isPlayer()) {
 		// A player entered, we might need to notice other monsters now
+		lastPlayerNearbyCheck = 0;
 		updateTargetList();
 	}
 }
@@ -705,21 +708,62 @@ bool Monster::isEnemyFaction(Faction_t faction) const
 
 bool Monster::canAttackByFaction(const Creature* creature) const
 {
-	if (!creature || !ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) ||
-	    getFaction() == FACTION_DEFAULT) {
+	return isFactionCombatAllowed() && isFactionCombatTarget(creature);
+}
+
+bool Monster::isFactionCombatTarget(const Creature* creature) const
+{
+	if (!creature || getFaction() == FACTION_DEFAULT) {
 		return false;
 	}
 
 	const Monster* targetMonster = creature->getMonster();
-	if (!targetMonster || creature->isSummon()) {
+	return targetMonster && !creature->isSummon() && isEnemyFaction(targetMonster->getFaction());
+}
+
+bool Monster::isFactionCombatAllowed() const
+{
+	if (!ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) || getFaction() == FACTION_DEFAULT) {
 		return false;
 	}
 
-	if (ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY) && !hasPlayerNearby(20)) {
+	return !ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY) || hasPlayerNearby(20);
+}
+
+bool Monster::clearFactionTargetIfNotAllowed()
+{
+	const auto hasFactionTarget = [this](const std::weak_ptr<Creature>& weakRef) {
+		auto creature = weakRef.lock();
+		return creature && isFactionCombatTarget(creature.get());
+	};
+
+	const bool hasCurrentFactionTarget = hasFactionTarget(attackedCreature) || hasFactionTarget(followCreature) ||
+	                                     std::any_of(targetList.begin(), targetList.end(), hasFactionTarget);
+	if (!hasCurrentFactionTarget || isFactionCombatAllowed()) {
 		return false;
 	}
 
-	return isEnemyFaction(targetMonster->getFaction());
+	bool changed = false;
+	if (hasFactionTarget(attackedCreature)) {
+		setAttackedCreature(nullptr);
+		changed = true;
+	}
+	if (hasFactionTarget(followCreature)) {
+		setFollowCreature(nullptr);
+		changed = true;
+	}
+
+	const size_t oldSize = targetList.size();
+	std::erase_if(targetList, [this](const auto& weakRef) {
+		auto creature = weakRef.lock();
+		return !creature || isFactionCombatTarget(creature.get());
+	});
+	changed = changed || targetList.size() != oldSize;
+
+	if (changed) {
+		updateIdleStatus();
+	}
+	return changed;
 }
 
 bool Monster::isFriend(const Creature* creature) const
@@ -847,6 +891,7 @@ void Monster::onCreatureLeave(Creature* creature)
 
 	if (creature->isPlayer()) {
 		// A player left, we might need to stop fighting other monsters
+		lastPlayerNearbyCheck = 0;
 		updateTargetList();
 	}
 }
@@ -1177,6 +1222,12 @@ bool Monster::selectTarget(Creature* creature)
 		return false;
 	}
 
+	if (isFactionCombatTarget(creature) && !isFactionCombatAllowed()) {
+		removeTarget(creature);
+		updateIdleStatus();
+		return false;
+	}
+
 	if (creature->getPlayer()) {
 		if (creature->getPlayer()->getProtectionTime() > 0) {
 			return false;
@@ -1276,6 +1327,7 @@ void Monster::onThink(uint32_t interval)
 			setIdle(true);
 		}
 	} else {
+		clearFactionTargetIfNotAllowed();
 		updateIdleStatus();
 
 		if (!isIdle) {
@@ -1392,6 +1444,11 @@ void Monster::doAttacking(uint32_t interval)
 
 	if (ac->isRemoved() || ac->isDead()) {
 		attackedCreature.reset();
+		return;
+	}
+
+	if (isFactionCombatTarget(ac.get()) && !isFactionCombatAllowed()) {
+		clearFactionTargetIfNotAllowed();
 		return;
 	}
 

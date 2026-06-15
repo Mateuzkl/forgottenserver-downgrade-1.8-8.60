@@ -214,6 +214,9 @@ private:
 	void onCreatureLeave(Creature* creature);
 	bool selectBlockerTarget();
 	void onCreatureFound(Creature* creature, bool pushFront = false);
+	bool isFactionCombatTarget(const Creature* creature) const;
+	bool isFactionCombatAllowed() const;
+	bool clearFactionTargetIfNotAllowed();
 
 	void updateLookDirection();
 	mutable uint64_t lastPlayerNearbyCheck = 0;
