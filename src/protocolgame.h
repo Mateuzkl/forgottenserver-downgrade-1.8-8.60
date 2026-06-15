@@ -297,6 +297,7 @@ private:
 	// OTCv8
 	void sendFeatures();
 	bool shouldSendQuickLootFlags() const;
+	bool shouldSendItemLootHighlight() const;
 	bool shouldSendItemTierByte() const;
 	bool shouldSendThingUpgradeClassification() const;
 	bool shouldSendItemTierData() const;

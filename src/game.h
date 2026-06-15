@@ -728,7 +728,7 @@ private:
 
 	std::unordered_set<Position, PositionHasher> tilesToClean;
 
-	// Loot Highlight: maps corpse item lifetime to scheduler event ID
+	// Loot Highlight: maps corpse item lifetime to scheduler event ID for non-Astra clients.
 	LootHighlightEventMap lootHighlightEvents;
 
 	ModalWindow offlineTrainingWindow{std::numeric_limits<uint32_t>::max(), "Train while you sleep",

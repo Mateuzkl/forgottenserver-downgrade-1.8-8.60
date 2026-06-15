@@ -106,7 +106,8 @@ void NetworkMessage::addItemId(uint16_t itemId)
 	add<uint16_t>(clientId);
 }
 
-void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags)
+void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
+                             bool sendLootHighlight)
 {
 	addItemId(id);
 
@@ -120,6 +121,9 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 	if (sendQuickLootFlags && it.isContainer()) {
 		addByte(0);
 	}
+	if (sendLootHighlight && it.isContainer()) {
+		addByte(0);
+	}
 
 	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
 	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
@@ -128,7 +132,7 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 }
 
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
-                             bool sendQuickLootFlags)
+                             bool sendQuickLootFlags, bool sendLootHighlight)
 {
 	addItemId(item->getID());
 
@@ -144,6 +148,9 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 
 	if (sendQuickLootFlags && it.isContainer()) {
 		addByte(0);
+	}
+	if (sendLootHighlight && it.isContainer()) {
+		addByte(item->hasLootHighlight() ? 1 : 0);
 	}
 
 	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&

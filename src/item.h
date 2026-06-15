@@ -524,6 +524,8 @@ public:
 	}
 	void setIntAttr(itemAttrTypes type, int64_t value) { getAttributes()->setIntAttr(type, value); }
 	void increaseIntAttr(itemAttrTypes type, int64_t value) { getAttributes()->increaseIntAttr(type, value); }
+	void setLootHighlight(bool value) { lootHighlight = value; }
+	bool hasLootHighlight() const { return lootHighlight; }
 
 	void removeAttribute(itemAttrTypes type)
 	{
@@ -1059,7 +1061,9 @@ private:
 
 	bool loadedFromMap = false;
 
-	// Don't add variables here, use the ItemAttribute class.
+	bool lootHighlight = false;
+
+	// Don't add persistent variables here, use the ItemAttribute class.
 	friend class Decay;
 };
 

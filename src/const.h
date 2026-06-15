@@ -943,8 +943,9 @@ enum class GameFeature : uint8_t {
 	ItemTierByte = 131,
 	AstraCreatureIcons = 133,
 	PlayerFamiliars = 138,
+	ItemLootHighlight = 139,
 
-	Last = 138
+	Last = 139
 };
 
 inline constexpr int32_t CHANNEL_GUILD = 0x00;
