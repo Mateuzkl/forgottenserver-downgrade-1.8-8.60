@@ -226,12 +226,10 @@ void Imbuements::resolveImbuementType(ImbuementDefinition& def)
 	}
 	else if (def.effectType == "speed") {
 		def.imbuementType = IMBUEMENT_TYPE_SPEED_BOOST;
-		def.decayType = IMBUEMENT_DECAY_EQUIPPED;
 		def.resolvedValue = def.value;
 	}
 	else if (def.effectType == "capacity") {
 		def.imbuementType = IMBUEMENT_TYPE_CAPACITY_BOOST;
-		def.decayType = IMBUEMENT_DECAY_EQUIPPED;
 		def.resolvedValue = def.value;
 	}
 	else if (def.effectType == "vibrancy") {

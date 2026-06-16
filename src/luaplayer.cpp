@@ -3361,7 +3361,7 @@ int luaPlayerSetXpBoostPercent(lua_State* L)
 		return 1;
 	}
 
-	player->setXpBoostPercent(getInteger<uint16_t>(L, 2));
+	player->setXpBoostPercent(getInteger<int32_t>(L, 2));
 	player->sendStats();
 	pushBoolean(L, true);
 	return 1;

@@ -633,7 +633,10 @@ public:
 
 	void setExperienceRate(ExperienceRateType type, int32_t rate) { experienceRate[static_cast<size_t>(type)] = rate; }
 	void addExperienceRate(ExperienceRateType type, int32_t rate) { experienceRate[static_cast<size_t>(type)] += rate; }
-	void setXpBoostPercent(uint16_t percent) { xpBoostPercent = percent; }
+	void setXpBoostPercent(int32_t percent)
+	{
+		xpBoostPercent = static_cast<uint16_t>(std::clamp<int32_t>(percent, 0, 255));
+	}
 	void setXpBoostTime(uint16_t timeLeft)
 	{
 		xpBoostTime = timeLeft;

@@ -4049,6 +4049,7 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 		msg.add<uint16_t>(player->getOfflineTrainingTime() / 60 / 1000);
 		if (isAstraClient) {
 			msg.add<uint16_t>(player->getXpBoostTime());
+			// 0x00 means boost is active and cannot be bought; 0x01 means the client may buy one.
 			msg.addByte(player->getXpBoostTime() > 0 ? 0x00 : 0x01);
 		}
 	}

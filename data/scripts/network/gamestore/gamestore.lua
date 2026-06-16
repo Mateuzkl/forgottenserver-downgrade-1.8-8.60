@@ -570,7 +570,6 @@ local function deliverOffer(player, offer, extra)
 		local duration = offer.value > 0 and offer.value or XP_BOOST_DEFAULT_SECONDS
 		player:setXpBoostPercent(XP_BOOST_PERCENT)
 		player:setXpBoostTime(math.min(65535, duration))
-		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your XP Boost is now active.")
 		return nil
 	end
 
@@ -862,21 +861,13 @@ function buyHandler.onReceive(player, msg)
 
 	local coins = player:getTibiaCoins()
 	if coins < offer.price then
-		if isXpBoostOfferType(offer.oftype) then
-			player:sendTextMessage(MESSAGE_STATUS_SMALL, "Not enough Tibia Coins.")
-		else
-			sendStoreError(player, "Not enough Tibia Coins.")
-		end
+		sendStoreError(player, "Not enough Tibia Coins.")
 		return
 	end
 
 	local deliveryError = deliverOffer(player, offer, extra)
 	if deliveryError then
-		if isXpBoostOfferType(offer.oftype) then
-			player:sendTextMessage(MESSAGE_STATUS_SMALL, deliveryError)
-		else
-			sendStoreError(player, deliveryError)
-		end
+		sendStoreError(player, deliveryError)
 		return
 	end
 
@@ -887,6 +878,7 @@ function buyHandler.onReceive(player, msg)
 
 	if isXpBoostOfferType(offer.oftype) then
 		player:sendStats()
+		sendStoreSuccess(player, offerId, "Your XP Boost is now active.")
 	elseif offer.oftype == "changename" then
 		sendStoreSuccess(player, offerId, CHANGE_NAME_SUCCESS_MESSAGE)
 		scheduleChangeNameKick(player)
