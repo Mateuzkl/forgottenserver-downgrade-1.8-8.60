@@ -46,7 +46,8 @@ local QUICKLOOTFILTER_SKIPPEDLOOT = 0
 local QUICKLOOTFILTER_ACCEPTEDLOOT = 1
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return configManager.getBoolean(configKeys.QUICK_LOOT_ENABLED) and
+		player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function getObjectCategoryName(category)

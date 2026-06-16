@@ -1194,7 +1194,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLoot(msg);
 			} else {
-				dispatchPlayerNetworkMessage(recvbyte, msg);
+				skipUnreadBytes(msg);
 			}
 			break;
 
@@ -1202,7 +1202,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseLootContainer(msg);
 			} else {
-				dispatchPlayerNetworkMessage(recvbyte, msg);
+				skipUnreadBytes(msg);
 			}
 			break;
 
@@ -1210,7 +1210,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLootBlackWhitelist(msg);
 			} else {
-				dispatchPlayerNetworkMessage(recvbyte, msg);
+				skipUnreadBytes(msg);
 			}
 			break;
 
