@@ -175,6 +175,10 @@ registerMonsterType.flags = function(mtype, mask)
 		if mask.flags.staticAttackChance then
 			mtype:staticAttackChance(mask.flags.staticAttackChance)
 		end
+		local critChance = mask.flags.critChance or mask.flags.criticalChance
+		if critChance ~= nil then
+			mtype:critChance(critChance)
+		end
 		if mask.flags.canWalkOnEnergy ~= nil then
 			mtype:canWalkOnEnergy(mask.flags.canWalkOnEnergy)
 		end
@@ -309,6 +313,24 @@ registerMonsterType.elements = function(mtype, mask)
 		for _, element in pairs(mask.elements) do
 			if element.type and element.percent then
 				mtype:addElement(element.type, element.percent)
+			end
+		end
+	end
+end
+registerMonsterType.reflects = function(mtype, mask)
+	if type(mask.reflects) == "table" then
+		for _, reflect in pairs(mask.reflects) do
+			if reflect.type and reflect.percent then
+				mtype:addReflect(reflect.type, reflect.percent)
+			end
+		end
+	end
+end
+registerMonsterType.heals = function(mtype, mask)
+	if type(mask.heals) == "table" then
+		for _, heal in pairs(mask.heals) do
+			if heal.type and heal.percent then
+				mtype:addHealing(heal.type, heal.percent)
 			end
 		end
 	end

@@ -1176,6 +1176,29 @@ void Monster::onFollowCreatureComplete(const Creature* creature)
 	}
 }
 
+int32_t Monster::getReflectPercent(CombatType_t combatType) const
+{
+	auto it = mType->info.reflectMap.find(combatType);
+	if (it == mType->info.reflectMap.end()) {
+		return 0;
+	}
+	return it->second;
+}
+
+int32_t Monster::getHealingCombatValue(CombatType_t combatType) const
+{
+	auto it = mType->info.healingMap.find(combatType);
+	if (it == mType->info.healingMap.end()) {
+		return 0;
+	}
+	return it->second;
+}
+
+uint16_t Monster::getCriticalChance() const
+{
+	return mType->info.critChance;
+}
+
 BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage,
                               bool checkDefense /* = false*/, bool checkArmor /* = false*/, bool field /* = false */,
                               bool ignoreResistances /* = false */, CombatOrigin origin /* = ORIGIN_NONE */)
@@ -1194,6 +1217,31 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 			if (damage <= 0) {
 				damage = 0;
 				blockType = BLOCK_ARMOR;
+			}
+		}
+	}
+
+	if (!ignoreResistances && damage > 0 && combatType != COMBAT_HEALING) {
+		const int32_t healingPercent = getHealingCombatValue(combatType);
+		if (healingPercent > 0) {
+			const int32_t healValue = static_cast<int32_t>(std::ceil(damage * (healingPercent / 100.)));
+			damage = 0;
+
+			if (healValue > 0) {
+				CombatDamage healDamage;
+				healDamage.primary.type = COMBAT_HEALING;
+				healDamage.primary.value = healValue;
+				healDamage.origin = ORIGIN_NONE;
+				g_game.combatChangeHealth(attacker ? attacker.get() : nullptr, this, healDamage);
+			}
+		} else if (origin != ORIGIN_REFLECT && attacker) {
+			const int32_t reflectPercent = getReflectPercent(combatType);
+			if (reflectPercent > 0) {
+				CombatDamage reflectDamage;
+				reflectDamage.primary.type = combatType;
+				reflectDamage.primary.value = -static_cast<int32_t>(std::ceil(damage * (reflectPercent / 100.)));
+				reflectDamage.origin = ORIGIN_REFLECT;
+				g_game.combatChangeHealth(this, attacker.get(), reflectDamage);
 			}
 		}
 	}

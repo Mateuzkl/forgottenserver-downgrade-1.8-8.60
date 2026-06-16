@@ -149,6 +149,9 @@ public:
 	bool getDistanceStep(const Position& targetPos, Direction& direction, bool flee = false);
 	bool isTargetNearby() const { return stepDuration >= 1; }
 	bool isIgnoringFieldDamage() const { return ignoreFieldDamage; }
+	int32_t getReflectPercent(CombatType_t combatType) const;
+	int32_t getHealingCombatValue(CombatType_t combatType) const;
+	uint16_t getCriticalChance() const;
 
 	BlockType_t blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage, bool checkDefense = false,
 	                     bool checkArmor = false, bool field = false, bool ignoreResistances = false, CombatOrigin origin = ORIGIN_NONE) override;

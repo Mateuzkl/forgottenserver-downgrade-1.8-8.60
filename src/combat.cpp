@@ -39,6 +39,21 @@ bool isPlayerControlledCreature(const Creature* creature)
 	return master && master->getPlayer();
 }
 
+bool rollMonsterCritical(const Monster* monster, const CombatDamage& damage, int32_t& skill)
+{
+	if (!monster || damage.critical || damage.primary.type == COMBAT_HEALING || damage.origin == ORIGIN_CONDITION) {
+		return false;
+	}
+
+	const int32_t chance = std::clamp<int32_t>(
+	    static_cast<int32_t>(monster->getCriticalChance()) * 100 + damage.criticalChance, 0, 10000);
+	skill = std::max<int32_t>(0, damage.criticalDamage);
+	if (skill == 0 && chance > 0) {
+		skill = 5000;
+	}
+	return chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance;
+}
+
 } // namespace
 
 static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatType)
@@ -1069,6 +1084,13 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 					}
 				}
 			}
+		} else if (Monster* casterMonster = caster ? caster->getMonster() : nullptr) {
+			int32_t skill = 0;
+			if (rollMonsterCritical(casterMonster, damage, skill)) {
+				damage.primary.value += std::round(damage.primary.value * (skill / 10000.));
+				damage.secondary.value += std::round(damage.secondary.value * (skill / 10000.));
+				damage.critical = true;
+			}
 		}
 
 		if (params.resetDamageMultiplier >= 0.0f) {
@@ -1285,6 +1307,13 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 
 		if (skill == 0 && chance > 0) { skill = 5000; }
 		if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
+			criticalPrimary = std::round(damage.primary.value * (skill / 10000.));
+			criticalSecondary = std::round(damage.secondary.value * (skill / 10000.));
+			damage.critical = true;
+		}
+	} else if (Monster* casterMonster = caster ? caster->getMonster() : nullptr) {
+		int32_t skill = 0;
+		if (rollMonsterCritical(casterMonster, damage, skill)) {
 			criticalPrimary = std::round(damage.primary.value * (skill / 10000.));
 			criticalSecondary = std::round(damage.secondary.value * (skill / 10000.));
 			damage.critical = true;
