@@ -1233,7 +1233,7 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 					healDamage.primary.type = COMBAT_HEALING;
 					healDamage.primary.value = healValue;
 					healDamage.origin = ORIGIN_NONE;
-					g_game.combatChangeHealth(attacker, self, healDamage);
+					g_game.combatChangeHealth(self, self, healDamage);
 				}
 			}
 		} else if (origin != ORIGIN_REFLECT && attacker) {

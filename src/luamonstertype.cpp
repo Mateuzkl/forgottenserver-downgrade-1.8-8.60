@@ -745,7 +745,10 @@ int luaMonsterTypeAddReflect(lua_State* L)
 	MonsterType* monsterType = getUserdata<MonsterType>(L, 1);
 	if (monsterType) {
 		CombatType_t element = getInteger<CombatType_t>(L, 2);
-		monsterType->info.reflectMap[element] = getInteger<int32_t>(L, 3);
+		int32_t percent = getInteger<int32_t>(L, 3);
+		if (percent < 0) percent = 0;
+		if (percent > 100) percent = 100;
+		monsterType->info.reflectMap[element] = percent;
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -759,7 +762,10 @@ int luaMonsterTypeAddHealing(lua_State* L)
 	MonsterType* monsterType = getUserdata<MonsterType>(L, 1);
 	if (monsterType) {
 		CombatType_t element = getInteger<CombatType_t>(L, 2);
-		monsterType->info.healingMap[element] = getInteger<int32_t>(L, 3);
+		int32_t percent = getInteger<int32_t>(L, 3);
+		if (percent < 0) percent = 0;
+		if (percent > 100) percent = 100;
+		monsterType->info.healingMap[element] = percent;
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);

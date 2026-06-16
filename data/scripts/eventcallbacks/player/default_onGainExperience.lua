@@ -60,7 +60,7 @@ function event.onGainExperience(player, source, exp, rawExp, sendText)
 	local lowLevelRate = player:getExperienceRate(ExperienceRateType.LOW_LEVEL)
 	if lowLevelRate ~= 100 then exp = exp * lowLevelRate / 100 end
 
-	if player.getXpBoostTime and player:getXpBoostTime() > 0 then
+	if player.getXpBoostTime and player:getXpBoostTime() > 0 and player:getStamina() > 840 then
 		local xpBoostPercent = player:getXpBoostPercent()
 		if xpBoostPercent > 0 then
 			exp = exp * (100 + xpBoostPercent) / 100
