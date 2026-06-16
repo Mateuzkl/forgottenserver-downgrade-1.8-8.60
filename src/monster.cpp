@@ -1228,20 +1228,24 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 			damage = 0;
 
 			if (healValue > 0) {
-				CombatDamage healDamage;
-				healDamage.primary.type = COMBAT_HEALING;
-				healDamage.primary.value = healValue;
-				healDamage.origin = ORIGIN_NONE;
-				g_game.combatChangeHealth(attacker ? attacker.get() : nullptr, this, healDamage);
+				if (auto self = asCreature()) {
+					CombatDamage healDamage;
+					healDamage.primary.type = COMBAT_HEALING;
+					healDamage.primary.value = healValue;
+					healDamage.origin = ORIGIN_NONE;
+					g_game.combatChangeHealth(attacker, self, healDamage);
+				}
 			}
 		} else if (origin != ORIGIN_REFLECT && attacker) {
 			const int32_t reflectPercent = getReflectPercent(combatType);
 			if (reflectPercent > 0) {
-				CombatDamage reflectDamage;
-				reflectDamage.primary.type = combatType;
-				reflectDamage.primary.value = -static_cast<int32_t>(std::ceil(damage * (reflectPercent / 100.)));
-				reflectDamage.origin = ORIGIN_REFLECT;
-				g_game.combatChangeHealth(this, attacker.get(), reflectDamage);
+				if (auto self = asCreature()) {
+					CombatDamage reflectDamage;
+					reflectDamage.primary.type = combatType;
+					reflectDamage.primary.value = -static_cast<int32_t>(std::ceil(damage * (reflectPercent / 100.)));
+					reflectDamage.origin = ORIGIN_REFLECT;
+					g_game.combatChangeHealth(self, attacker, reflectDamage);
+				}
 			}
 		}
 	}

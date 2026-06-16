@@ -502,6 +502,8 @@ public:
 	void combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColor_t& color, uint8_t& effect);
 
 	bool combatChangeHealth(Creature* attacker, Creature* target, CombatDamage& damage);
+	bool combatChangeHealth(const std::shared_ptr<Creature>& attacker, const std::shared_ptr<Creature>& target,
+	                        CombatDamage& damage);
 	bool combatChangeMana(Creature* attacker, Creature* target, CombatDamage& damage);
 	void applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer, Player* targetPlayer);
 

@@ -6075,6 +6075,12 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 	return true;
 }
 
+bool Game::combatChangeHealth(const std::shared_ptr<Creature>& attacker, const std::shared_ptr<Creature>& target,
+                              CombatDamage& damage)
+{
+	return combatChangeHealth(attacker.get(), target.get(), damage);
+}
+
 bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& damage)
 {
 	Player* targetPlayer = target->getPlayer();
