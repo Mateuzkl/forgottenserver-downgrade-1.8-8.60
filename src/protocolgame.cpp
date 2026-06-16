@@ -4022,6 +4022,14 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	msg.add<uint16_t>(static_cast<uint16_t>(player->getLevel()));
 	msg.addByte(player->getLevelPercent());
 
+	if (isAstraClient) {
+		msg.add<uint16_t>(player->getBaseXpGain());
+		msg.add<uint16_t>(0); // voucher XP boost
+		msg.add<uint16_t>(player->getDisplayGrindingXpBoost());
+		msg.add<uint16_t>(player->getDisplayXpBoostPercent());
+		msg.add<uint16_t>(player->getStaminaXpBoost());
+	}
+
 	msg.add<uint32_t>(mana);
 	msg.add<uint32_t>(maxMana);
 
@@ -4039,6 +4047,10 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	if (isOTC) {
 		msg.add<uint16_t>(player->getBaseSpeed() / 2);
 		msg.add<uint16_t>(player->getOfflineTrainingTime() / 60 / 1000);
+		if (isAstraClient) {
+			msg.add<uint16_t>(player->getXpBoostTime());
+			msg.addByte(player->getXpBoostTime() > 0 ? 0x00 : 0x01);
+		}
 	}
 
 	/*msg.add<uint16_t>(player->getBaseSpeed() / 2);
@@ -4342,6 +4354,7 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::ExtendedClientPing] = true;
 	features[GameFeature::CreatureIcons] = true;
 	if (isAstraClient) {
+		features[GameFeature::ExperienceBonus] = true;
 		features[GameFeature::PlayerFamiliars] = true;
 	}
 	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();

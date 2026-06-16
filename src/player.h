@@ -22,7 +22,9 @@
 #include "town.h"
 #include "vocation.h"
 #include "weapon_proficiency.h"
+#include <algorithm>
 #include <array>
+#include <limits>
 #include <vector>
 
 #include <unordered_map>
@@ -499,6 +501,21 @@ public:
 		return std::max<int32_t>(0, base);
 	}
 	int32_t getExperienceRate(ExperienceRateType type) const { return experienceRate[static_cast<size_t>(type)]; }
+	uint16_t getBaseXpGain() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::BASE), 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getDisplayGrindingXpBoost() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::LOW_LEVEL) - 100, 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getXpBoostPercent() const { return xpBoostPercent; }
+	uint16_t getDisplayXpBoostPercent() const { return xpBoostTime > 0 ? xpBoostPercent : 0; }
+	uint16_t getStaminaXpBoost() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::STAMINA), 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getXpBoostTime() const { return xpBoostTime; }
 	uint32_t getBaseMagicLevel() const { return magLevel; }
 	uint8_t getMagicLevelPercent() const { return magLevelPercent; }
 	uint8_t getSoul() const { return soul; }
@@ -616,6 +633,14 @@ public:
 
 	void setExperienceRate(ExperienceRateType type, int32_t rate) { experienceRate[static_cast<size_t>(type)] = rate; }
 	void addExperienceRate(ExperienceRateType type, int32_t rate) { experienceRate[static_cast<size_t>(type)] += rate; }
+	void setXpBoostPercent(uint16_t percent) { xpBoostPercent = percent; }
+	void setXpBoostTime(uint16_t timeLeft)
+	{
+		xpBoostTime = timeLeft;
+		if (xpBoostTime == 0) {
+			xpBoostPercent = 0;
+		}
+	}
 
 	void setVarStats(stats_t stat, int32_t modifier);
 	int32_t getDefaultStats(stats_t stat) const;
@@ -1674,6 +1699,8 @@ private:
 
 	uint16_t lastStatsTrainingTime = 0;
 	uint16_t staminaMinutes = 2520;
+	uint16_t xpBoostTime = 0;
+	uint16_t xpBoostPercent = 0;
 	uint16_t protectionTime = 10;
 	uint16_t maxWriteLen = 0;
 	int16_t lastDepotId = -1;

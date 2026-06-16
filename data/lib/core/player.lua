@@ -382,6 +382,19 @@ end
 do
 	if not nextUseStaminaTime then nextUseStaminaTime = {} end
 
+	local function useXpBoost(player, seconds)
+		if not player.getXpBoostTime or not player.setXpBoostTime then return end
+
+		local boostTime = player:getXpBoostTime()
+		if boostTime <= 0 then return end
+
+		if player:getStamina() <= 840 then
+			return
+		end
+
+		player:setXpBoostTime(math.max(0, boostTime - seconds))
+	end
+
 	local function useStamina(player)
 		local staminaMinutes = player:getStamina()
 		if staminaMinutes == 0 then return end
@@ -400,9 +413,11 @@ do
 				staminaMinutes = 0
 			end
 			nextUseStaminaTime[playerId] = currentTime + 120
+			useXpBoost(player, 120)
 		else
 			staminaMinutes = staminaMinutes - 1
 			nextUseStaminaTime[playerId] = currentTime + 60
+			useXpBoost(player, 60)
 		end
 		player:setStamina(math.floor(staminaMinutes))
 	end

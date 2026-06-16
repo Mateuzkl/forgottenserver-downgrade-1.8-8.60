@@ -276,7 +276,7 @@ bool IOLoginData::loadPlayerById(Player* player, uint32_t id, bool deferWorldDat
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
 	        id)), deferWorldData);
 }
 
@@ -286,7 +286,7 @@ bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
 	        db.escapeString(name))));
 }
 
@@ -551,6 +551,8 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	}
 
 	player->staminaMinutes = result->getNumber<uint16_t>("stamina");
+	player->setXpBoostPercent(result->getNumber<uint16_t>("xpboost_value"));
+	player->setXpBoostTime(result->getNumber<uint16_t>("xpboost_stamina"));
 
 	static const std::string skillNames[] = {"skill_fist", "skill_club",      "skill_sword",  "skill_axe",
 	                                         "skill_dist", "skill_shielding", "skill_fishing"};
@@ -1146,6 +1148,8 @@ bool IOLoginData::savePlayerQueries(Player* player)
 	query << "`bounty_points` = " << player->bountyPoints << ',';
 	query << "`soulseals_points` = " << player->soulsealsPoints << ',';
 	query << "`has_weekly_expansion` = " << (player->m_hasWeeklyExpansion ? 1 : 0) << ',';
+	query << "`xpboost_value` = " << player->getXpBoostPercent() << ',';
+	query << "`xpboost_stamina` = " << player->getXpBoostTime() << ',';
 	query << "`offlinetraining_time` = " << player->getOfflineTrainingTime() / 1000 << ',';
 	query << "`offlinetraining_skill` = " << player->getOfflineTrainingSkill() << ',';
 	query << "`stamina` = " << player->getStaminaMinutes() << ',';

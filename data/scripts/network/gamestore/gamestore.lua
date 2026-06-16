@@ -22,6 +22,8 @@ local MAX_CHARACTER_NAME_WORDS = 5
 local CHANGE_NAME_KICK_DELAY = 3000
 local CHANGE_NAME_SUCCESS_MESSAGE = "Your character name has been changed. You will be disconnected in 3 seconds. Please log in again to use your new name."
 local STORE_HOME_BANNER_DELAY = 10
+local XP_BOOST_PERCENT = 50
+local XP_BOOST_DEFAULT_SECONDS = 3600
 local STORE_HOME_BANNERS = {
 	{image = "/images/store/home/banner_exercisedummies", action = 0, target = 0}
 }
@@ -79,6 +81,11 @@ end
 
 local function isBattlePassOfferType(offerType)
 	return tostring(offerType or ""):lower() == "battlepass"
+end
+
+local function isXpBoostOfferType(offerType)
+	offerType = tostring(offerType or ""):lower()
+	return offerType == "expboost" or offerType == "xpboost"
 end
 
 local function isBattlePassCategory(category)
@@ -551,6 +558,22 @@ local function deliverOffer(player, offer, extra)
 		return BattlePassSystem.purchasePremium(player, true)
 	end
 
+	if isXpBoostOfferType(offer.oftype) then
+		if not player.getXpBoostTime or not player.setXpBoostTime or not player.setXpBoostPercent then
+			return "XP Boost is not available."
+		end
+
+		if player:getXpBoostTime() > 0 then
+			return "You already have an active XP boost."
+		end
+
+		local duration = offer.value > 0 and offer.value or XP_BOOST_DEFAULT_SECONDS
+		player:setXpBoostPercent(XP_BOOST_PERCENT)
+		player:setXpBoostTime(math.min(65535, duration))
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your XP Boost is now active.")
+		return nil
+	end
+
 	if offer.oftype == "blessing" or offer.oftype == "bless" then
 		if offer.value == -1 then
 			local added = false
@@ -839,13 +862,21 @@ function buyHandler.onReceive(player, msg)
 
 	local coins = player:getTibiaCoins()
 	if coins < offer.price then
-		sendStoreError(player, "Not enough Tibia Coins.")
+		if isXpBoostOfferType(offer.oftype) then
+			player:sendTextMessage(MESSAGE_STATUS_SMALL, "Not enough Tibia Coins.")
+		else
+			sendStoreError(player, "Not enough Tibia Coins.")
+		end
 		return
 	end
 
 	local deliveryError = deliverOffer(player, offer, extra)
 	if deliveryError then
-		sendStoreError(player, deliveryError)
+		if isXpBoostOfferType(offer.oftype) then
+			player:sendTextMessage(MESSAGE_STATUS_SMALL, deliveryError)
+		else
+			sendStoreError(player, deliveryError)
+		end
 		return
 	end
 
@@ -854,7 +885,9 @@ function buyHandler.onReceive(player, msg)
 	local historyCount = offer.oftype == "item" and offer.count or (offer.oftype == "prey_wildcard" and offer.value or 1)
 	addStoreHistory(player:getAccountId(), player:getGuid(), offer.name, -offer.price, historyCount, nil)
 
-	if offer.oftype == "changename" then
+	if isXpBoostOfferType(offer.oftype) then
+		player:sendStats()
+	elseif offer.oftype == "changename" then
 		sendStoreSuccess(player, offerId, CHANGE_NAME_SUCCESS_MESSAGE)
 		scheduleChangeNameKick(player)
 	else
