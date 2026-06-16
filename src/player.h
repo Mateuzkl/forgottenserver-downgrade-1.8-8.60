@@ -46,6 +46,7 @@ class Party;
 class SchedulerTask;
 class Bed;
 class Guild;
+class KV;
 
 enum skillsid_t
 {
@@ -1450,7 +1451,7 @@ public:
 	bool checkChainSystem() const;
 	bool checkCleaveSystem() const;
 
-	mutable std::shared_ptr<KV> cachedPlayerSettings_;
+	void resetCachedSettings() { cachedPlayerSettings_ = nullptr; }
 
 	bool hasDebugAssertSent() const { return client ? client->debugAssertSent : false; }
 
@@ -1482,6 +1483,8 @@ public:
 	int32_t totalDropBonus = 0;
 
 private:
+	mutable std::shared_ptr<KV> cachedPlayerSettings_;
+
 	struct PreyCombatBonus {
 		uint16_t damageBoost = 0;
 		uint16_t damageReduction = 0;

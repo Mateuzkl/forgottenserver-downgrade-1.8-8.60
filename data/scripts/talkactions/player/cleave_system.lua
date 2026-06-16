@@ -18,9 +18,11 @@ function cleaveTalk.onSay(player, words, param)
 	param = param:trim():lower()
 	if param == "on" then
 		settings:set("cleaveSystem", true)
+		player:resetCachedSettings()
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "Cleave system enabled.")
 	elseif param == "off" then
 		settings:set("cleaveSystem", false)
+		player:resetCachedSettings()
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "Cleave system disabled.")
 	else
 		local enabled = settings:get("cleaveSystem")

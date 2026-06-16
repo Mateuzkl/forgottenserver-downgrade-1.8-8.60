@@ -4447,6 +4447,7 @@ int LuaScriptInterface::luaPlayerSendCastChannelMessage(lua_State* L)
 }
 
 int luaPlayerKV(lua_State* L);
+int luaPlayerResetCachedSettings(lua_State* L);
 
 void LuaScriptInterface::registerPlayer()
 {
@@ -4818,6 +4819,7 @@ void LuaScriptInterface::registerPlayer()
 
 	// KV
 	registerMethod("Player", "kv", luaPlayerKV);
+	registerMethod("Player", "resetCachedSettings", luaPlayerResetCachedSettings);
 
 	// OfflinePlayer
 	registerClass("OfflinePlayer", "Player", luaOfflinePlayerCreate);
@@ -4836,5 +4838,18 @@ int luaPlayerKV(lua_State* L) {
 	auto scoped = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", player->getGUID()));
 	LuaScriptInterface::pushSharedPtrCopy(L, scoped);
 	Lua::setMetatable(L, -1, "KV");
+	return 1;
+}
+
+int luaPlayerResetCachedSettings(lua_State* L) {
+	// player:resetCachedSettings()
+	Player* player = Lua::getPlayer(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->resetCachedSettings();
+	pushBoolean(L, true);
 	return 1;
 }

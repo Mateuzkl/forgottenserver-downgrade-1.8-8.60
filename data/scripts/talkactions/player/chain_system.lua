@@ -31,15 +31,18 @@ function chainSystem.onSay(player, words, param)
 	param = param:trim():lower()
 	if param == "on" then
 		settings:set("chainSystem", true)
+		player:resetCachedSettings()
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "Chain system enabled.")
 	elseif param == "off" then
 		settings:set("chainSystem", false)
+		player:resetCachedSettings()
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "Chain system disabled.")
 	else
 		local enabled = settings:get("chainSystem")
 		if enabled == nil then
 			enabled = player:getStorageValue(chainStorage) == 1
 			settings:set("chainSystem", enabled)
+			player:resetCachedSettings()
 		end
 		local stateText = (enabled == true) and "enabled" or "disabled"
 		player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("Chain system: %s. Use !chain on or !chain off.", stateText))
