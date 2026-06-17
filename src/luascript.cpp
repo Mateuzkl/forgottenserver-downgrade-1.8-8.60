@@ -1587,6 +1587,7 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("STORAGE_FAMILIAR_TIMER_60", STORAGE_FAMILIAR_TIMER_60);
 	registerGlobalVariable("STORAGE_EXP_COLOR", STORAGE_EXP_COLOR);
 	registerGlobalVariable("STORAGE_HEALTH_DISPLAY", STORAGE_HEALTH_DISPLAY);
+	registerGlobalVariable("STORAGE_EMOTE_SPELLS", STORAGE_EMOTE_SPELLS);
 	registerGlobalVariable("FORGE_SYSTEM_ENABLED", ConfigManager::FORGE_SYSTEM_ENABLED);
 	registerGlobalVariable("IMBUEMENT_SYSTEM_ENABLED", ConfigManager::IMBUEMENT_SYSTEM_ENABLED);
 	registerGlobalVariable("MONK_VOCATION_ENABLED", ConfigManager::MONK_VOCATION_ENABLED);

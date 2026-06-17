@@ -25,6 +25,7 @@ PlayerStorageKeys = {
     guildLeaderChatCooldown = 50001,
     expColor = 50100,
     healthDisplay = 50101,
+    emoteSpells = 50102,
     taskBoardBountyKillBoostUntil = 50200,
     taskBoardWeeklyKillBoostUntil = 50201,
     taskBoardWeeklyReducedItemsUntil = 50202,
@@ -54,6 +55,7 @@ PlayerStorageKeys = {
 
 STORAGE_EXP_COLOR = PlayerStorageKeys.expColor
 STORAGE_HEALTH_DISPLAY = PlayerStorageKeys.healthDisplay
+STORAGE_EMOTE_SPELLS = PlayerStorageKeys.emoteSpells
 
 GlobalStorageKeys = {
     workbench = 30050,

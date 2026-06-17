@@ -358,7 +358,8 @@ public:
 	 * \param text The text to say
 	 */
 	bool internalCreatureSay(Creature* creature, SpeakClasses type, std::string_view text, bool ghostMode,
-	                         SpectatorVec* spectatorsPtr = nullptr, const Position* pos = nullptr, bool echo = false);
+	                         SpectatorVec* spectatorsPtr = nullptr, const Position* pos = nullptr, bool echo = false,
+	                         bool emoteSpell = false);
 
 	void loadPlayersRecord();
 	void checkPlayersRecord();

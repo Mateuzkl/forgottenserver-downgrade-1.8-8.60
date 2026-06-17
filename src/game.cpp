@@ -11,6 +11,7 @@
 #include "creature.h"
 #include "creatureevent.h"
 #include "databasetasks.h"
+#include "enums.h"
 #include "events.h"
 #include "globalevent.h"
 #include "instance_utils.h"
@@ -4759,11 +4760,7 @@ bool Game::playerSaySpell(Player* player, SpeakClasses type, std::string_view te
 
 	result = g_spells->playerSaySpell(player, words, forceCastOnFoot);
 	if (result == TalkActionResult::BREAK) {
-		if (!getBoolean(ConfigManager::EMOTE_SPELLS)) {
-			return internalCreatureSay(player, TALKTYPE_SAY, words, false);
-		} else {
-			return internalCreatureSay(player, TALKTYPE_MONSTER_SAY, words, false);
-		}
+		return internalCreatureSay(player, TALKTYPE_SAY, words, false, nullptr, nullptr, false, true);
 
 	} else if (result == TalkActionResult::FAILED) {
 		return true;
@@ -4948,7 +4945,7 @@ bool Game::internalCreatureTurn(Creature* creature, Direction dir)
 
 bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::string_view text, bool ghostMode,
                                SpectatorVec* spectatorsPtr /* = nullptr*/, const Position* pos /* = nullptr*/,
-                               bool echo /* = false*/)
+                               bool echo /* = false*/, bool emoteSpell /* = false*/)
 {
 	if (text.empty()) {
 		return false;
@@ -4979,6 +4976,19 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 
 	// send to client
 	const bool localPositionTalk = isLocalPositionTalk(type);
+	const auto getSpectatorType = [type, emoteSpell](const Player* spectator) {
+		if (!emoteSpell || !spectator) {
+			return type;
+		}
+
+		const auto emoteSpellsStorage = spectator->getStorageValue(STORAGE_EMOTE_SPELLS);
+		if (emoteSpellsStorage) {
+			return emoteSpellsStorage.value() == 1 ? TALKTYPE_MONSTER_SAY : TALKTYPE_SAY;
+		}
+
+		return getBoolean(ConfigManager::EMOTE_SPELLS) ? TALKTYPE_MONSTER_SAY : TALKTYPE_SAY;
+	};
+
 	for (const auto& spectator : spectators) {
 		Player* tmpPlayer = spectator ? spectator->getPlayer() : nullptr;
 		if (!tmpPlayer) {
@@ -4988,7 +4998,7 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 			continue;
 		}
 		if (!ghostMode || tmpPlayer->canSeeCreature(creature)) {
-			tmpPlayer->sendCreatureSay(creature, type, text, pos);
+			tmpPlayer->sendCreatureSay(creature, getSpectatorType(tmpPlayer), text, pos);
 		}
 	}
 
@@ -5001,9 +5011,11 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 			if (localPositionTalk && areDifferentNonZeroInstances(spectator.get(), creature)) {
 				continue;
 			}
-			spectator->onCreatureSay(creature, type, text);
+			const Player* spectatorPlayer = spectator->getPlayer();
+			const SpeakClasses spectatorType = getSpectatorType(spectatorPlayer);
+			spectator->onCreatureSay(creature, spectatorType, text);
 			if (creature != spectator.get()) {
-				g_events->eventCreatureOnHear(spectator.get(), creature, text, type);
+				g_events->eventCreatureOnHear(spectator.get(), creature, text, spectatorType);
 			}
 		}
 	}
