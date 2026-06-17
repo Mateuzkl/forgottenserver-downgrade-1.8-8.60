@@ -4983,7 +4983,8 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 
 		if (spectator) {
 			const auto emoteSpellsStorage = spectator->getStorageValue(STORAGE_EMOTE_SPELLS);
-			if (emoteSpellsStorage) {
+			// std::optional(0) has a value and means explicitly disabled; -1 means unset.
+			if (emoteSpellsStorage && emoteSpellsStorage.value() != -1) {
 				return emoteSpellsStorage.value() == 1 ? TALKTYPE_MONSTER_SAY : TALKTYPE_SAY;
 			}
 		}
