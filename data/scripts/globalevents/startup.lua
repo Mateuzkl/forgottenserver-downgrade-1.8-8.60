@@ -9,7 +9,7 @@ function serverstartup.onStartup()
 	-- Action and unique tables
 	-- Chest table
 	loadLuaMapAction(ChestAction)
-	loadLuaMapUnique(ChestUnique)
+	loadLuaMapUnique(ChestUnique) -- Disabled: quest scripts handle these UIDs
 	-- -- Corpse table
 	loadLuaMapAction(CorpseAction)
 	loadLuaMapUnique(CorpseUnique)
@@ -34,7 +34,7 @@ function serverstartup.onStartup()
 	loadLuaMapAction(ItemUnmoveableAction)
 	-- -- Lever table
 	loadLuaMapAction(LeverAction)
-	loadLuaMapUnique(LeverUnique)
+	loadLuaMapUnique(LeverUnique) -- Disabled: quest scripts handle these UIDs
 
 	-- -- Teleport (magic forcefields) table
 	loadLuaMapAction(TeleportAction)

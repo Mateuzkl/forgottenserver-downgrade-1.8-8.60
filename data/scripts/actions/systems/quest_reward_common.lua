@@ -21,11 +21,6 @@ Noodles ****]]
 
 local achievementTable = {
 	-- [chestUniqueId] = "Achievement name",
-	-- Annihilator
-	[6085] = "Annihilator",
-	[6086] = "Annihilator",
-	[6087] = "Annihilator",
-	[6088] = "Annihilator"
 }
 
 local function playerAddItem(params, item)

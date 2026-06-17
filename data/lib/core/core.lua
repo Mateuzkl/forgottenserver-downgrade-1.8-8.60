@@ -17,10 +17,11 @@ dofile(CORE_DIRECTORY .. "/lib/core/imbuing.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/party.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/player.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/position.lua")
-dofile(CORE_DIRECTORY .. "/lib/core/quests.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/spells.lua")
 -- Note: The library of storages must be loaded previously to the other libraries.
 dofile(CORE_DIRECTORY .. "/lib/core/storages.lua")
+dofile(CORE_DIRECTORY .. "/lib/core/storages_crystal.lua")
+dofile(CORE_DIRECTORY .. "/lib/core/quests.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/task_board.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/workbench.lua")
 

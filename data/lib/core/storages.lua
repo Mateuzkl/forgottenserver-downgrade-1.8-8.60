@@ -6,7 +6,6 @@ Reserved storage ranges:
 - 40000 to 45000+ reserved for house protection system
 ]] --
 PlayerStorageKeys = {
-    annihilatorReward = 30015,
     promotion = 30018,
     delayLargeSeaShell = 30019,
     firstRod = 30020,
