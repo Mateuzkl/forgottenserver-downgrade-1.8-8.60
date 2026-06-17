@@ -39,6 +39,7 @@ enum LuaDataType
 	LuaData_Condition,
 
 	LuaData_Combat,
+	LuaData_ChatChannel,
 	LuaData_Group,
 	LuaData_Guild,
 	LuaData_House,
@@ -81,6 +82,7 @@ inline constexpr LuaDataType LuaDataTypeByClass = LuaData_Unknown;
 class Action;
 class AreaCombat;
 class Combat;
+class ChatChannel;
 class Condition;
 class Container;
 class Container;
@@ -151,6 +153,7 @@ NEW_LUA_DATA_TYPE(Tile)
 NEW_LUA_DATA_TYPE(Condition)
 
 NEW_LUA_DATA_TYPE(Combat)
+NEW_LUA_DATA_TYPE(ChatChannel)
 NEW_LUA_DATA_TYPE(Group)
 NEW_LUA_DATA_TYPE(Guild)
 NEW_LUA_DATA_TYPE(House)
@@ -428,6 +431,7 @@ protected:
 	void registerHouse();
 	void registerItemType();
 	void registerCombat();
+	void registerChatChannel();
 	void registerCondition();
 	void registerOutfit();
 	void registerMonsterType();

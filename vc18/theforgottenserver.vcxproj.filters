@@ -103,6 +103,9 @@
     <ClCompile Include="..\src\luaactions.cpp">
       <Filter>Lua Modules</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\luachatchannel.cpp">
+      <Filter>Lua Modules</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\luacombat.cpp">
       <Filter>Lua Modules</Filter>
     </ClCompile>

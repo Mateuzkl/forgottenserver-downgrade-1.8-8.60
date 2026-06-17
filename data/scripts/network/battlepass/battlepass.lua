@@ -1,3 +1,8 @@
+if not configManager.getBoolean(configKeys.BATTLEPASS_SYSTEM_ENABLED) then
+	BattlePassSystem = nil
+	return
+end
+
 BattlePassSystem = BattlePassSystem or {}
 
 local BATTLEPASS_REQUEST_OPCODE = 0x36

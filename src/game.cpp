@@ -11,6 +11,7 @@
 #include "creature.h"
 #include "creatureevent.h"
 #include "databasetasks.h"
+#include "enums.h"
 #include "events.h"
 #include "globalevent.h"
 #include "instance_utils.h"
@@ -142,6 +143,11 @@ ReturnValue getStoreInboxLockedItemMoveReturn(const Item* item)
 		}
 	}
 	return RETURNVALUE_NOERROR;
+}
+
+bool isMonsterPodiumId(uint16_t itemId)
+{
+	return itemId == 38707 || itemId == 42367 || itemId == 42368;
 }
 
 int64_t getMoveItemExhaustionDelay(const Position& toPos)
@@ -3025,7 +3031,21 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 	Item* item = thing->getItem();
-	if (!item || item->isUseable()) {
+	if (!item) {
+		player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
+		return;
+	}
+
+	if (player->isAstraClient() && isMonsterPodiumId(item->getID())) {
+		if (pos.x == 0xFFFF || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
+			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
+			return;
+		}
+		player->sendMonsterPodiumWindow(item, pos, spriteId, stackPos);
+		return;
+	}
+
+	if (item->isUseable()) {
 		player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
 		return;
 	}
@@ -3110,6 +3130,119 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		player->lootCorpse(itemRef->getContainer());
 	}
 	player->maintainAttackFlow();
+}
+
+void Game::playerInspectItem(uint32_t playerId, const Position& pos)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !player->isAstraClient()) {
+		return;
+	}
+
+	Thing* thing = internalGetThing(player, pos, 0, 0, STACKPOS_TOPDOWN_ITEM);
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+	if (!InstanceUtils::canSeeItemInInstance(player->getInstanceID(), item)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	const Position thingPos = thing->getPosition();
+	if (!player->canSee(thingPos)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	auto itemRef = getItemSharedRef(item);
+	if (!itemRef) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+	player->sendItemInspection(itemRef, itemRef->getID(), static_cast<uint8_t>(std::min<uint16_t>(0xFF, itemRef->getItemCount())),
+	                           INSPECT_NORMALOBJECT);
+}
+
+void Game::playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !player->isAstraClient() || itemId >= Item::items.size() || Item::items[itemId].id == 0) {
+		return;
+	}
+	player->sendItemInspection(nullptr, itemId, itemCount, inspectionType);
+}
+
+void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Position& pos, uint8_t stackPos,
+                                  uint16_t itemId, uint8_t direction, bool podiumVisible, bool creatureVisible)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !player->isAstraClient() || pos.x == 0xFFFF || direction > DIRECTION_WEST) {
+		return;
+	}
+
+	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_TOPDOWN_ITEM);
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item || !isMonsterPodiumId(item->getID()) ||
+	    !pos.isInRange(player->getPosition(), 1, 1, 0)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+	auto itemRef = getItemSharedRef(item);
+	if (!itemRef) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	MonsterType* monsterType = raceId == 0 ? nullptr : g_monsters.getMonsterType(raceId);
+	if (raceId != 0 && !monsterType) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (raceId != 0) {
+		itemRef->setCustomAttribute("PodiumMonsterRaceId", static_cast<int64_t>(raceId));
+	} else {
+		itemRef->removeCustomAttribute("PodiumMonsterRaceId");
+	}
+
+	if (monsterType && creatureVisible) {
+		const Outfit_t& outfit = monsterType->info.outfit;
+		itemRef->setCustomAttribute("LookType", static_cast<int64_t>(outfit.lookType));
+		itemRef->setCustomAttribute("LookTypeEx", static_cast<int64_t>(outfit.lookTypeEx));
+		itemRef->setCustomAttribute("LookHead", static_cast<int64_t>(outfit.lookHead));
+		itemRef->setCustomAttribute("LookBody", static_cast<int64_t>(outfit.lookBody));
+		itemRef->setCustomAttribute("LookLegs", static_cast<int64_t>(outfit.lookLegs));
+		itemRef->setCustomAttribute("LookFeet", static_cast<int64_t>(outfit.lookFeet));
+		itemRef->setCustomAttribute("LookAddons", static_cast<int64_t>(outfit.lookAddons));
+	} else {
+		itemRef->removeCustomAttribute("LookType");
+		itemRef->removeCustomAttribute("LookTypeEx");
+		itemRef->removeCustomAttribute("LookHead");
+		itemRef->removeCustomAttribute("LookBody");
+		itemRef->removeCustomAttribute("LookLegs");
+		itemRef->removeCustomAttribute("LookFeet");
+		itemRef->removeCustomAttribute("LookAddons");
+	}
+
+	itemRef->setCustomAttribute("PodiumVisible", static_cast<int64_t>(podiumVisible));
+	itemRef->setCustomAttribute("MonsterVisible", static_cast<int64_t>(creatureVisible));
+	itemRef->setCustomAttribute("LookDirection", static_cast<int64_t>(direction));
+
+	if (Tile* tile = map.getTile(pos)) {
+		SpectatorVec spectators;
+		map.getSpectators(spectators, pos, true, true);
+		for (const auto& spectator : spectators.players()) {
+			Player* tmpPlayer = static_cast<Player*>(spectator.get());
+			if (InstanceUtils::canSeeItemInInstance(tmpPlayer->getInstanceID(), itemRef.get())) {
+				tmpPlayer->sendUpdateTileItem(tile, pos, itemRef.get());
+			}
+		}
+	}
 }
 
 void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,
@@ -4627,11 +4760,7 @@ bool Game::playerSaySpell(Player* player, SpeakClasses type, std::string_view te
 
 	result = g_spells->playerSaySpell(player, words, forceCastOnFoot);
 	if (result == TalkActionResult::BREAK) {
-		if (!getBoolean(ConfigManager::EMOTE_SPELLS)) {
-			return internalCreatureSay(player, TALKTYPE_SAY, words, false);
-		} else {
-			return internalCreatureSay(player, TALKTYPE_MONSTER_SAY, words, false);
-		}
+		return internalCreatureSay(player, TALKTYPE_SAY, words, false, nullptr, nullptr, false, true);
 
 	} else if (result == TalkActionResult::FAILED) {
 		return true;
@@ -4816,7 +4945,7 @@ bool Game::internalCreatureTurn(Creature* creature, Direction dir)
 
 bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::string_view text, bool ghostMode,
                                SpectatorVec* spectatorsPtr /* = nullptr*/, const Position* pos /* = nullptr*/,
-                               bool echo /* = false*/)
+                               bool echo /* = false*/, bool emoteSpell /* = false*/)
 {
 	if (text.empty()) {
 		return false;
@@ -4847,6 +4976,22 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 
 	// send to client
 	const bool localPositionTalk = isLocalPositionTalk(type);
+	const auto getSpectatorType = [type, emoteSpell](const Player* spectator) {
+		if (!emoteSpell) {
+			return type;
+		}
+
+		if (spectator) {
+			const auto emoteSpellsStorage = spectator->getStorageValue(STORAGE_EMOTE_SPELLS);
+			// std::optional(0) has a value and means explicitly disabled; -1 means unset.
+			if (emoteSpellsStorage && emoteSpellsStorage.value() != -1) {
+				return emoteSpellsStorage.value() == 1 ? TALKTYPE_MONSTER_SAY : TALKTYPE_SAY;
+			}
+		}
+
+		return getBoolean(ConfigManager::EMOTE_SPELLS) ? TALKTYPE_MONSTER_SAY : TALKTYPE_SAY;
+	};
+
 	for (const auto& spectator : spectators) {
 		Player* tmpPlayer = spectator ? spectator->getPlayer() : nullptr;
 		if (!tmpPlayer) {
@@ -4856,7 +5001,7 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 			continue;
 		}
 		if (!ghostMode || tmpPlayer->canSeeCreature(creature)) {
-			tmpPlayer->sendCreatureSay(creature, type, text, pos);
+			tmpPlayer->sendCreatureSay(creature, getSpectatorType(tmpPlayer), text, pos);
 		}
 	}
 
@@ -4869,9 +5014,11 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 			if (localPositionTalk && areDifferentNonZeroInstances(spectator.get(), creature)) {
 				continue;
 			}
-			spectator->onCreatureSay(creature, type, text);
+			const Player* spectatorPlayer = spectator->getPlayer();
+			const SpeakClasses spectatorType = getSpectatorType(spectatorPlayer);
+			spectator->onCreatureSay(creature, spectatorType, text);
 			if (creature != spectator.get()) {
-				g_events->eventCreatureOnHear(spectator.get(), creature, text, type);
+				g_events->eventCreatureOnHear(spectator.get(), creature, text, spectatorType);
 			}
 		}
 	}
@@ -5941,6 +6088,12 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 	}
 
 	return true;
+}
+
+bool Game::combatChangeHealth(const std::shared_ptr<Creature>& attacker, const std::shared_ptr<Creature>& target,
+                              CombatDamage& damage)
+{
+	return combatChangeHealth(attacker.get(), target.get(), damage);
 }
 
 bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& damage)
@@ -7673,6 +7826,10 @@ bool Game::reload(ReloadTypes_t reloadType)
 			g_spells->clear(true);
 			g_scripts->clearLoadedFiles();
 			g_scripts->loadScripts("scripts", false, true);
+			if (!g_chat->load()) {
+				LOG_ERROR("Failed to reload chat channels.");
+				return false;
+			}
 			g_monsters.reload();
 			g_scripts->loadScripts("monsters", false, true);
 			g_creatureEvents->removeInvalidEvents();
@@ -7704,9 +7861,12 @@ bool Game::reload(ReloadTypes_t reloadType)
 			mounts.reload();
 			g_globalEvents->reload();
 			g_events->load();
-			g_chat->load();
 			g_scripts->clearLoadedFiles();
 			g_scripts->loadScripts("scripts", false, true);
+			if (!g_chat->load()) {
+				LOG_ERROR("Failed to reload chat channels.");
+				return false;
+			}
 			g_monsters.reload();
 			g_scripts->loadScripts("monsters", false, true);
 			g_creatureEvents->removeInvalidEvents();

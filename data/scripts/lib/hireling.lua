@@ -800,6 +800,7 @@ function Player:sendHirelingOutfitWindow(hireling)
 		msg:addByte(outfit.lookAddons)
 	end
 	msg:addU16(outfit.lookMount or 0)
+	msg:addU16(0) -- familiar looktype (Astra outfit extension)
 
 	local availableOutfits = hireling:getAvailableOutfits(true)
 	msg:addByte(math.min(#availableOutfits, 255))

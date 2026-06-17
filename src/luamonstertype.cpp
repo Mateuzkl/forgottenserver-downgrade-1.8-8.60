@@ -739,6 +739,40 @@ int luaMonsterTypeAddElement(lua_State* L)
 	return 1;
 }
 
+int luaMonsterTypeAddReflect(lua_State* L)
+{
+	// monsterType:addReflect(type, percent)
+	MonsterType* monsterType = getUserdata<MonsterType>(L, 1);
+	if (monsterType) {
+		CombatType_t element = getInteger<CombatType_t>(L, 2);
+		int32_t percent = getInteger<int32_t>(L, 3);
+		if (percent < 0) percent = 0;
+		if (percent > 100) percent = 100;
+		monsterType->info.reflectMap[element] = percent;
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaMonsterTypeAddHealing(lua_State* L)
+{
+	// monsterType:addHealing(type, percent)
+	MonsterType* monsterType = getUserdata<MonsterType>(L, 1);
+	if (monsterType) {
+		CombatType_t element = getInteger<CombatType_t>(L, 2);
+		int32_t percent = getInteger<int32_t>(L, 3);
+		if (percent < 0) percent = 0;
+		if (percent > 100) percent = 100;
+		monsterType->info.healingMap[element] = percent;
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaMonsterTypeGetVoices(lua_State* L)
 {
 	// monsterType:getVoices()
@@ -1237,6 +1271,23 @@ int luaMonsterTypeStaticAttackChance(lua_State* L)
 	return 1;
 }
 
+int luaMonsterTypeCritChance(lua_State* L)
+{
+	// get: monsterType:critChance() set: monsterType:critChance(chance)
+	MonsterType* monsterType = getUserdata<MonsterType>(L, 1);
+	if (monsterType) {
+		if (lua_gettop(L) == 1) {
+			lua_pushinteger(L, monsterType->info.critChance);
+		} else {
+			monsterType->info.critChance = getInteger<uint16_t>(L, 2);
+			pushBoolean(L, true);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaMonsterTypeTargetDistance(lua_State* L)
 {
 	// get: monsterType:targetDistance() set: monsterType:targetDistance(distance)
@@ -1358,8 +1409,14 @@ int luaMonsterTypeFaction(lua_State* L)
 		if (lua_gettop(L) == 1) {
 			lua_pushinteger(L, monsterType->info.faction);
 		} else {
-			monsterType->info.faction = getInteger<Faction_t>(L, 2);
-			pushBoolean(L, true);
+			const int32_t faction = getInteger<int32_t>(L, 2);
+			if (faction < FACTION_DEFAULT || faction > FACTION_LAST) {
+				reportErrorFunc(L, "Invalid faction");
+				pushBoolean(L, false);
+			} else {
+				monsterType->info.faction = static_cast<Faction_t>(faction);
+				pushBoolean(L, true);
+			}
 		}
 	} else {
 		lua_pushnil(L);
@@ -1388,7 +1445,12 @@ int luaMonsterTypeEnemyFactions(lua_State* L)
 		if (lua_istable(L, 2)) {
 			lua_pushnil(L);
 			while (lua_next(L, 2) != 0) {
-				monsterType->info.enemyFactions.insert(getInteger<Faction_t>(L, -1));
+				if (lua_isnumber(L, -1)) {
+					const int32_t faction = getInteger<int32_t>(L, -1);
+					if (faction > FACTION_DEFAULT && faction <= FACTION_LAST) {
+						monsterType->info.enemyFactions.insert(static_cast<Faction_t>(faction));
+					}
+				}
 				lua_pop(L, 1);
 			}
 		}
@@ -1493,6 +1555,8 @@ void LuaScriptInterface::registerMonsterType()
 
 	registerMethod("MonsterType", "getElementList", luaMonsterTypeGetElementList);
 	registerMethod("MonsterType", "addElement", luaMonsterTypeAddElement);
+	registerMethod("MonsterType", "addReflect", luaMonsterTypeAddReflect);
+	registerMethod("MonsterType", "addHealing", luaMonsterTypeAddHealing);
 
 	registerMethod("MonsterType", "getVoices", luaMonsterTypeGetVoices);
 	registerMethod("MonsterType", "addVoice", luaMonsterTypeAddVoice);
@@ -1528,6 +1592,8 @@ void LuaScriptInterface::registerMonsterType()
 	registerMethod("MonsterType", "light", luaMonsterTypeLight);
 
 	registerMethod("MonsterType", "staticAttackChance", luaMonsterTypeStaticAttackChance);
+	registerMethod("MonsterType", "critChance", luaMonsterTypeCritChance);
+	registerMethod("MonsterType", "criticalChance", luaMonsterTypeCritChance);
 	registerMethod("MonsterType", "targetDistance", luaMonsterTypeTargetDistance);
 	registerMethod("MonsterType", "yellChance", luaMonsterTypeYellChance);
 	registerMethod("MonsterType", "yellSpeedTicks", luaMonsterTypeYellSpeedTicks);

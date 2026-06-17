@@ -25,7 +25,6 @@ struct LockfreePoolRegistry
 	}
 	static void drainAll() {
 		for (auto& fn : drains()) fn();
-		drains().clear();
 	}
 };
 
@@ -44,6 +43,14 @@ struct LockfreeFreeList
 	class FreeList
 	{
 	public:
+		~FreeList()
+		{
+			void* p;
+			while (pop(p)) {
+				operator delete(p);
+			}
+		}
+
 		bool pop(void*& p) noexcept
 		{
 			try {

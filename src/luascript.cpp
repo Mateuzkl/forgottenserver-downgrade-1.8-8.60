@@ -1139,6 +1139,7 @@ Outfit_t Lua::getOutfit(lua_State* L, int32_t arg)
 
 	outfit.lookTypeEx = getField<uint16_t>(L, arg, "lookTypeEx");
 	outfit.lookType = getField<uint16_t>(L, arg, "lookType");
+	outfit.lookFamiliar = getField<uint16_t>(L, arg, "lookFamiliar");
 
 	lua_pop(L, 8);
 	return outfit;
@@ -1364,6 +1365,7 @@ void Lua::pushOutfit(lua_State* L, const Outfit_t& outfit)
 	setField(L, "lookLegs", outfit.lookLegs);
 	setField(L, "lookFeet", outfit.lookFeet);
 	setField(L, "lookAddons", outfit.lookAddons);
+	setField(L, "lookFamiliar", outfit.lookFamiliar);
 }
 
 void Lua::pushOutfit(lua_State* L, const Outfit* outfit)
@@ -1585,6 +1587,7 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("STORAGE_FAMILIAR_TIMER_60", STORAGE_FAMILIAR_TIMER_60);
 	registerGlobalVariable("STORAGE_EXP_COLOR", STORAGE_EXP_COLOR);
 	registerGlobalVariable("STORAGE_HEALTH_DISPLAY", STORAGE_HEALTH_DISPLAY);
+	registerGlobalVariable("STORAGE_EMOTE_SPELLS", STORAGE_EMOTE_SPELLS);
 	registerGlobalVariable("FORGE_SYSTEM_ENABLED", ConfigManager::FORGE_SYSTEM_ENABLED);
 	registerGlobalVariable("IMBUEMENT_SYSTEM_ENABLED", ConfigManager::IMBUEMENT_SYSTEM_ENABLED);
 	registerGlobalVariable("MONK_VOCATION_ENABLED", ConfigManager::MONK_VOCATION_ENABLED);
@@ -1593,6 +1596,7 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("BESTIARY_SYSTEM_ENABLED", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerGlobalVariable("MARKET_SYSTEM_ENABLED", ConfigManager::MARKET_SYSTEM_ENABLED);
 	registerGlobalVariable("PREY_SYSTEM_ENABLED", ConfigManager::PREY_SYSTEM_ENABLED);
+	registerGlobalVariable("BATTLEPASS_SYSTEM_ENABLED", ConfigManager::BATTLEPASS_SYSTEM_ENABLED);
 	registerGlobalVariable("WEAPON_PROFICIENCY_SYSTEM_ENABLED", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
 	registerGlobalVariable("AUGMENT_SYSTEM_ENABLED", ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	registerGlobalVariable("COLORIZED_LOOT_VALUE", ConfigManager::COLORIZED_LOOT_VALUE);
@@ -1764,6 +1768,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CreatureIconQuests_Hazard);
 	registerEnum(CreatureIconQuests_BrownSkull);
 	registerEnum(CreatureIconQuests_BloodDrop);
+	registerEnum(CreatureIconQuests_Familiar);
 
 	registerEnum(CONDITIONID_DEFAULT);
 	registerEnum(CONDITIONID_COMBAT);
@@ -2832,6 +2837,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MARKET_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::PREY_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::BATTLEPASS_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MONSTER_LEVEL_ENABLED);
@@ -2960,6 +2966,7 @@ void LuaScriptInterface::registerFunctions()
 	registerHouse();
 	registerItemType();
 	registerCombat();
+	registerChatChannel();
 	registerCondition();
 	registerOutfit();
 	registerMonsterType();
@@ -3044,6 +3051,7 @@ void LuaScriptInterface::registerClass(const std::string& className, const std::
 	    {"Condition", LuaData_Condition},
 
 	    {"Combat", LuaData_Combat},
+	    {"ChatChannel", LuaData_ChatChannel},
 	    {"Group", LuaData_Group},
 	    {"Guild", LuaData_Guild},
 	    {"House", LuaData_House},
@@ -3307,11 +3315,71 @@ int LuaScriptInterface::luaGetWorldUpTime(lua_State* L)
 int LuaScriptInterface::luaGetSubTypeName(lua_State* L)
 {
 	// getSubTypeName(subType)
-	int32_t subType = Lua::getInteger<int32_t>(L, 1);
-	if (subType > 0) {
-		Lua::pushString(L, Item::items[subType].name);
-	} else {
-		lua_pushnil(L);
+	const FluidTypes_t subType = Lua::getInteger<FluidTypes_t>(L, 1);
+	switch (subType) {
+		case FLUID_WATER:
+			Lua::pushString(L, "water");
+			break;
+		case FLUID_BLOOD:
+			Lua::pushString(L, "blood");
+			break;
+		case FLUID_BEER:
+			Lua::pushString(L, "beer");
+			break;
+		case FLUID_SLIME:
+			Lua::pushString(L, "slime");
+			break;
+		case FLUID_LEMONADE:
+			Lua::pushString(L, "lemonade");
+			break;
+		case FLUID_MILK:
+			Lua::pushString(L, "milk");
+			break;
+		case FLUID_MANA:
+			Lua::pushString(L, "manafluid");
+			break;
+		case FLUID_INK:
+			Lua::pushString(L, "ink");
+			break;
+		case FLUID_LIFE:
+			Lua::pushString(L, "lifefluid");
+			break;
+		case FLUID_OIL:
+			Lua::pushString(L, "oil");
+			break;
+		case FLUID_URINE:
+			Lua::pushString(L, "urine");
+			break;
+		case FLUID_COCONUTMILK:
+			Lua::pushString(L, "coconut milk");
+			break;
+		case FLUID_WINE:
+			Lua::pushString(L, "wine");
+			break;
+		case FLUID_MUD:
+			Lua::pushString(L, "mud");
+			break;
+		case FLUID_FRUITJUICE:
+			Lua::pushString(L, "fruit juice");
+			break;
+		case FLUID_LAVA:
+			Lua::pushString(L, "lava");
+			break;
+		case FLUID_RUM:
+			Lua::pushString(L, "rum");
+			break;
+		case FLUID_SWAMP:
+			Lua::pushString(L, "swamp");
+			break;
+		case FLUID_TEA:
+			Lua::pushString(L, "tea");
+			break;
+		case FLUID_MEAD:
+			Lua::pushString(L, "mead");
+			break;
+		default:
+			lua_pushnil(L);
+			break;
 	}
 	return 1;
 }

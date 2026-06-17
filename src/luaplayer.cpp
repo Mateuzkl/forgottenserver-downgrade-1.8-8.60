@@ -3339,6 +3339,62 @@ int luaPlayerSetExperienceRate(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetXpBoostPercent(lua_State* L)
+{
+	// player:getXpBoostPercent()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, player->getXpBoostPercent());
+	return 1;
+}
+
+int luaPlayerSetXpBoostPercent(lua_State* L)
+{
+	// player:setXpBoostPercent(percent)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setXpBoostPercent(getInteger<int32_t>(L, 2));
+	player->sendStats();
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerGetXpBoostTime(lua_State* L)
+{
+	// player:getXpBoostTime()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, player->getXpBoostTime());
+	return 1;
+}
+
+int luaPlayerSetXpBoostTime(lua_State* L)
+{
+	// player:setXpBoostTime(timeLeft)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setXpBoostTime(getInteger<uint16_t>(L, 2));
+	player->sendStats();
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerIsUsingOtcV8(lua_State* L)
 {
 	// player:isUsingOtcV8()
@@ -4731,6 +4787,10 @@ void LuaScriptInterface::registerPlayer()
 
 	registerMethod("Player", "getExperienceRate", luaPlayerGetExperienceRate);
 	registerMethod("Player", "setExperienceRate", luaPlayerSetExperienceRate);
+	registerMethod("Player", "getXpBoostPercent", luaPlayerGetXpBoostPercent);
+	registerMethod("Player", "setXpBoostPercent", luaPlayerSetXpBoostPercent);
+	registerMethod("Player", "getXpBoostTime", luaPlayerGetXpBoostTime);
+	registerMethod("Player", "setXpBoostTime", luaPlayerSetXpBoostTime);
 
 	registerMethod("Player", "isUsingOtcV8", luaPlayerIsUsingOtcV8);
 	registerMethod("Player", "isUsingAstraClient", luaPlayerIsUsingAstraClient);

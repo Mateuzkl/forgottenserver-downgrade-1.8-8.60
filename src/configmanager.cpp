@@ -448,9 +448,14 @@ bool ConfigManager::load()
 	booleans[Boolean::BESTIARY_SYSTEM_ENABLED] = getGlobalBoolean(L, "bestiarySystemEnabled", false);
 	booleans[Boolean::MARKET_SYSTEM_ENABLED] = getGlobalBoolean(L, "marketSystemEnabled", false);
 	booleans[Boolean::PREY_SYSTEM_ENABLED] = getGlobalBoolean(L, "preySystemEnabled", false);
+	booleans[Boolean::BATTLEPASS_SYSTEM_ENABLED] = getGlobalBoolean(L, "battlePassSystemEnabled", false);
 	booleans[Boolean::WEAPON_PROFICIENCY_SYSTEM_ENABLED] = getGlobalBoolean(L, "weaponProficiencySystemEnabled", false);
 	booleans[Boolean::AUGMENT_SYSTEM_ENABLED] = getGlobalBoolean(L, "augmentSystemEnabled", false);
 	booleans[Boolean::MONSTER_LEVEL_ENABLED] = getGlobalBoolean(L, "monsterLevelEnabled", false);
+	booleans[Boolean::MONSTER_FACTION_SYSTEM] = getGlobalBoolean(L, "monsterFactionSystem", false);
+	booleans[Boolean::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY] =
+	    getGlobalBoolean(L, "monsterFactionRequirePlayerNearby", true);
+	booleans[Boolean::MONSTER_FACTION_PREFER_PLAYERS] = getGlobalBoolean(L, "monsterFactionPreferPlayers", true);
 	booleans[Boolean::LOOT_GROUPING_ENABLED] = getGlobalBoolean(L, "lootGroupingEnabled", true);
 	booleans[Boolean::ALLOW_MOUNT_IN_PZ] = getGlobalBoolean(L, "allowMountInPz", false);
 	booleans[Boolean::CHAIN_SYSTEM_ENABLED] = getGlobalBoolean(L, "toggleChainSystem", true);
@@ -513,9 +518,11 @@ bool ConfigManager::load()
 	booleans[Boolean::ADMIN_LOCALHOST_ONLY] = getGlobalBoolean(L, "adminLocalhostOnly", true);
 	booleans[Boolean::ADMIN_REQUIRE_LOGIN] = getGlobalBoolean(L, "adminRequireLogin", true);
 	booleans[Boolean::ADMIN_LOGS] = getGlobalBoolean(L, "adminLogs", false);
+	booleans[Boolean::LOG_TO_FILE] = getGlobalBoolean(L, "logToFile", false);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", true);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");
+	strings[String::LOG_LEVEL] = getGlobalString(L, "logLevel", "info");
 	strings[String::SERVER_NAME] = getGlobalString(L, "serverName", "");
 	strings[String::OWNER_NAME] = getGlobalString(L, "ownerName", "");
 	strings[String::OWNER_EMAIL] = getGlobalString(L, "ownerEmail", "");
@@ -753,6 +760,15 @@ bool ConfigManager::load()
 	integers[Integer::NETWORK_THREADS] = getGlobalInteger(L, "networkThreads", 2);
 	integers[Integer::CONNECTION_RATE_LIMIT_ALLOWED] = getGlobalInteger(L, "connectionRateLimitAllowed", 10);
 	integers[Integer::CONNECTION_RATE_LIMIT_MS] = getGlobalInteger(L, "connectionRateLimitMS", 500);
+
+	// Reactor Limits
+	integers[Integer::REACTOR_MAX_TASKS_PER_CYCLE] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxTasksPerCycle", 500),
+	                        0, std::numeric_limits<uint32_t>::max());
+	integers[Integer::REACTOR_TIME_BUDGET_MS] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorTimeBudgetMS", 5), 0, 1000);
+	integers[Integer::REACTOR_MAX_INBOX_SIZE] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxInboxSize", 100000), 1, 10'000'000);
 
 	loaded = true;
 	// ownedL destructor calls lua_close via LuaStateDeleter

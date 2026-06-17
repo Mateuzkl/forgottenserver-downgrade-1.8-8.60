@@ -13,16 +13,19 @@
 #include "save_manager.h"
 #include "instance_utils.h"
 #include "monster.h"
+#include "monsters.h"
 #include "outputmessage.h"
 #include "player.h"
 #include "protocolgame.h"
 #include "imbuement.h"
+#include "familiar.h"
 #include "scheduler.h"
 #include "scriptmanager.h"
 #include "thread_pool.h"
 
 uint32_t ProtocolGame::spectatorId = 1;
 std::set<std::string> ProtocolGame::spectatorNames;
+extern Monsters g_monsters;
 
 namespace {
 
@@ -373,6 +376,22 @@ void ProtocolGame::release()
 bool ProtocolGame::shouldSendQuickLootFlags() const
 {
 	return isAstraClient && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
+}
+
+bool ProtocolGame::shouldSendItemTierByte() const
+{
+	return useItemTierByte && getBoolean(ConfigManager::ITEM_TIER_DISPLAY);
+}
+
+bool ProtocolGame::shouldSendThingUpgradeClassification() const
+{
+	return isMehah && getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
+	       getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION);
+}
+
+bool ProtocolGame::shouldSendItemTierData() const
+{
+	return shouldSendItemTierByte() || shouldSendThingUpgradeClassification();
 }
 
 void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem)
@@ -1175,7 +1194,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLoot(msg);
 			} else {
-				dispatchPlayerNetworkMessage(recvbyte, msg);
+				skipUnreadBytes(msg);
 			}
 			break;
 
@@ -1183,7 +1202,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseLootContainer(msg);
 			} else {
-				dispatchPlayerNetworkMessage(recvbyte, msg);
+				skipUnreadBytes(msg);
 			}
 			break;
 
@@ -1191,7 +1210,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLootBlackWhitelist(msg);
 			} else {
-				dispatchPlayerNetworkMessage(recvbyte, msg);
+				skipUnreadBytes(msg);
 			}
 			break;
 
@@ -1217,6 +1236,12 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 
 		case 0x9E:
 			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerCloseNpcChannel(playerID); });
+			break;
+
+		case 0x9F:
+			if (isAstraClient) {
+				parseSetMonsterPodium(msg);
+			}
 			break;
 
 		case 0xA1:
@@ -1280,6 +1305,12 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 
 		case 0xCA:
 			parseUpdateContainer(msg);
+			break;
+
+		case 0xCD:
+			if (isAstraClient) {
+				parseInspectionObject(msg);
+			}
 			break;
 
 		case 0xD2:
@@ -1346,10 +1377,12 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 {
 	const uint32_t playerInstanceId = player->getInstanceID();
 	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
+	const bool sendItemTierByte = shouldSendItemTierByte();
+	const bool sendItemTierData = shouldSendItemTierData();
 	int32_t count;
 	Item* ground = tile->getGround();
 	if (ground) {
-		msg.addItem(ground, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+		msg.addItem(ground, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags);
 		count = 1;
 	} else {
 		count = 0;
@@ -1361,7 +1394,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags);
 			count++;
 			if (count == 9 && tile->getPosition() == player->getPosition()) {
 				break;
@@ -1406,7 +1439,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags);
 			if (++count == MAX_STACKPOS_THINGS) {
 				return;
 			}
@@ -1660,7 +1693,69 @@ void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 	} else {
 		newOutfit.lookMount = 0;
 	}
+	if (isAstraClient) {
+		const uint16_t requestedFamiliar = msg.get<uint16_t>();
+		const auto familiar = Familiar::getFamiliarInfo(player.get());
+		newOutfit.lookFamiliar =
+		    familiar && requestedFamiliar == familiar->lookType ? requestedFamiliar : 0;
+	}
 	g_dispatcher.addTask([=, playerID = player->getID()]() { g_game.playerChangeOutfit(playerID, newOutfit); });
+}
+
+void ProtocolGame::parseInspectionObject(NetworkMessage& msg)
+{
+	if (!requireUnreadBytes(msg, 1)) {
+		return;
+	}
+
+	const uint8_t inspectionType = msg.getByte();
+	if (inspectionType == INSPECT_NORMALOBJECT) {
+		if (!requireUnreadBytes(msg, 5)) {
+			return;
+		}
+
+		const Position position = msg.getPosition();
+		g_dispatcher.addTask([playerID = player->getID(), position]() {
+			g_game.playerInspectItem(playerID, position);
+		});
+		return;
+	}
+
+	if (inspectionType != INSPECT_NPCTRADE && inspectionType != INSPECT_CYCLOPEDIA &&
+	    inspectionType != INSPECT_PROFICIENCY) {
+		return;
+	}
+
+	if (!requireUnreadBytes(msg, 3)) {
+		return;
+	}
+
+	const uint16_t itemId = msg.get<uint16_t>();
+	const uint8_t itemCount = msg.getByte();
+	g_dispatcher.addTask([playerID = player->getID(), itemId, itemCount, inspectionType]() {
+		g_game.playerInspectItem(playerID, itemId, itemCount, inspectionType);
+	});
+}
+
+void ProtocolGame::parseSetMonsterPodium(NetworkMessage& msg)
+{
+	if (!requireUnreadBytes(msg, 15)) {
+		return;
+	}
+
+	const uint32_t raceId = msg.get<uint32_t>();
+	const Position position = msg.getPosition();
+	const uint16_t itemId = msg.get<uint16_t>();
+	const uint8_t stackPos = msg.getByte();
+	const uint8_t direction = msg.getByte();
+	const bool podiumVisible = msg.getByte() != 0;
+	const bool creatureVisible = msg.getByte() != 0;
+
+	g_dispatcher.addTask([playerID = player->getID(), raceId, position, stackPos, itemId, direction,
+	                      podiumVisible, creatureVisible]() {
+		g_game.playerSetMonsterPodium(playerID, raceId, position, stackPos, itemId, direction,
+		                              podiumVisible, creatureVisible);
+	});
 }
 
 void ProtocolGame::parseUseItem(NetworkMessage& msg)
@@ -2184,6 +2279,13 @@ void ProtocolGame::sendCreatureEmblem(const Creature* creature)
 	if (!canSee(creature)) {
 		return;
 	}
+
+	if (isAstraClient) {
+		if (const Monster* monster = creature->getMonster(); monster && monster->isFamiliar()) {
+			return;
+		}
+	}
+
 	// Remove creature from client and re-add to update
 	Position pos = creature->getPosition();
 	int32_t stackpos = creature->getTile()->getClientIndexOfCreature(player.get(), creature);
@@ -2490,7 +2592,9 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 	msg.addByte(cid);
 
 	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
-	msg.addItem(container, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+	const bool sendItemTierByte = shouldSendItemTierByte();
+	const bool sendItemTierData = shouldSendItemTierData();
+	msg.addItem(container, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags);
 	msg.addString(container->getName());
 
 	msg.addByte(static_cast<uint8_t>(container->capacity()));
@@ -2503,7 +2607,7 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 	const ItemDeque& itemList = container->getItemList();
 	for (ItemDeque::const_iterator cit = itemList.begin() + firstIndex, end = itemList.end(); i < 0xFF && cit != end;
 	     ++cit, ++i) {
-		msg.addItem(cit->get(), isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+		msg.addItem(cit->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags);
 	}
 	writeToOutputBuffer(msg);
 }
@@ -2656,6 +2760,8 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 
 	msg.addString(traderName);
 	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
+	const bool sendItemTierByte = shouldSendItemTierByte();
+	const bool sendItemTierData = shouldSendItemTierData();
 
 	if (const Container* tradeContainer = item->getContainer()) {
 		std::list<const Container*> listContainer{tradeContainer};
@@ -2675,11 +2781,11 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 
 		msg.addByte(itemList.size());
 		for (const Item* listItem : itemList) {
-			msg.addItem(listItem, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+			msg.addItem(listItem, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags);
 		}
 	} else {
 		msg.addByte(0x01);
-		msg.addItem(item, isOTC, useItemTierByte, isOTC, sendQuickLootFlags);
+		msg.addItem(item, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags);
 	}
 	writeToOutputBuffer(msg);
 }
@@ -3019,7 +3125,7 @@ void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3037,7 +3143,7 @@ void ProtocolGame::sendUpdateTileItem(const Position& pos, uint32_t stackpos, co
 	msg.addByte(0x6B);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3322,7 +3428,7 @@ void ProtocolGame::sendInventoryItem(slots_t slot, const Item* item)
 	if (item) {
 		msg.addByte(0x78);
 		msg.addByte(slot);
-		msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags());
 	} else {
 		msg.addByte(0x79);
 		msg.addByte(slot);
@@ -3371,7 +3477,7 @@ void ProtocolGame::sendAddContainerItem(uint8_t cid, const Item* item)
 	NetworkMessage msg;
 	msg.addByte(0x70);
 	msg.addByte(cid);
-	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3381,7 +3487,7 @@ void ProtocolGame::sendUpdateContainerItem(uint8_t cid, uint16_t slot, const Ite
 	msg.addByte(0x71);
 	msg.addByte(cid);
 	msg.addByte(slot);
-	msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags());
 	writeToOutputBuffer(msg);
 }
 
@@ -3492,6 +3598,13 @@ void ProtocolGame::sendOutfitWindow()
 	}
 
 	AddOutfit(msg, currentOutfit);
+	if (isAstraClient) {
+		const auto familiar = Familiar::getFamiliarInfo(player.get());
+		if (!familiar || currentOutfit.lookFamiliar != familiar->lookType) {
+			currentOutfit.lookFamiliar = 0;
+		}
+		msg.add<uint16_t>(currentOutfit.lookFamiliar);
+	}
 
 	std::vector<ProtocolOutfit> protocolOutfits;
 	if (player->isAccessPlayer()) {
@@ -3524,7 +3637,7 @@ void ProtocolGame::sendOutfitWindow()
 	std::ranges::sort(protocolOutfits,
 	          [](const ProtocolOutfit& a, const ProtocolOutfit& b) { return a.lookType < b.lookType; });
 
-	if (isOTC) {
+	if (isOTC || isAstra860) {
 		msg.addByte(static_cast<uint8_t>(protocolOutfits.size()));
 	} else {
 		msg.add<uint16_t>(static_cast<uint16_t>(protocolOutfits.size()));
@@ -3536,7 +3649,7 @@ void ProtocolGame::sendOutfitWindow()
 		msg.addByte(outfit.addons);
 	}
 
-	if (isOTC || getVersion() != 861) {
+	if (isOTC || isAstra860 || getVersion() != 861) {
 		std::vector<const Mount*> mounts;
 		for (const auto& [id, mount] : g_game.mounts.getMounts()) {
 			if (player->hasMount(&mount)) {
@@ -3551,6 +3664,161 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
+	if (isAstraClient) {
+		const auto familiar = Familiar::getFamiliarInfo(player.get());
+		msg.add<uint16_t>(familiar ? 1 : 0);
+		if (familiar) {
+			msg.add<uint16_t>(familiar->lookType);
+			msg.addString(familiar->name);
+			msg.addByte(0);
+		}
+	}
+
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType)
+{
+	if (!isAstraClient) {
+		return;
+	}
+
+	if (item) {
+		itemId = item->getID();
+	}
+
+	if (itemId >= Item::items.size()) {
+		return;
+	}
+
+	const ItemType& itemType = Item::items[itemId];
+	if (itemType.id == 0) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x76);
+	msg.addByte(0);
+	if (inspectionType == INSPECT_CYCLOPEDIA) {
+		msg.addByte(1);
+	} else if (inspectionType == INSPECT_PROFICIENCY) {
+		msg.addByte(2);
+	} else {
+		msg.addByte(0);
+	}
+	msg.add<uint32_t>(player->getID());
+	msg.addByte(1);
+	msg.addString(item ? item->getName() : std::string_view(itemType.name));
+	if (item) {
+		msg.addItem(item.get(), shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags());
+	} else {
+		msg.addItem(itemId, itemCount, shouldSendItemTierData(), shouldSendItemTierByte(),
+		            shouldSendQuickLootFlags());
+	}
+	msg.addByte(0);
+
+	std::vector<std::pair<std::string, std::string>> descriptions;
+	if (!itemType.description.empty()) {
+		descriptions.emplace_back("Description", itemType.description);
+	}
+	if (item) {
+		const std::string weight = item->getWeightDescription();
+		if (!weight.empty()) {
+			descriptions.emplace_back("Weight", weight);
+		}
+	}
+
+	msg.addByte(static_cast<uint8_t>(descriptions.size()));
+	for (const auto& [detail, description] : descriptions) {
+		msg.addString(detail);
+		msg.addString(description);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId,
+                                            uint8_t stackPos)
+{
+	if (!isAstraClient || !podium) {
+		return;
+	}
+
+	auto getAttribute = [podium](std::string_view key, int64_t defaultValue = 0) {
+		const auto* attribute = podium->getCustomAttribute(std::string(key));
+		if (!attribute) {
+			return defaultValue;
+		}
+		if (const auto* value = std::get_if<int64_t>(&attribute->value)) {
+			return *value;
+		}
+		if (const auto* value = std::get_if<bool>(&attribute->value)) {
+			return static_cast<int64_t>(*value);
+		}
+		return defaultValue;
+	};
+
+	Outfit_t currentOutfit;
+	currentOutfit.lookType = static_cast<uint16_t>(getAttribute("LookType"));
+	currentOutfit.lookTypeEx = static_cast<uint16_t>(getAttribute("LookTypeEx"));
+	currentOutfit.lookHead = static_cast<uint8_t>(getAttribute("LookHead"));
+	currentOutfit.lookBody = static_cast<uint8_t>(getAttribute("LookBody"));
+	currentOutfit.lookLegs = static_cast<uint8_t>(getAttribute("LookLegs"));
+	currentOutfit.lookFeet = static_cast<uint8_t>(getAttribute("LookFeet"));
+	currentOutfit.lookAddons = static_cast<uint8_t>(getAttribute("LookAddons"));
+
+	const uint16_t currentRaceId = static_cast<uint16_t>(getAttribute("PodiumMonsterRaceId"));
+	const bool bossPodium = itemId == 38707;
+
+	std::map<uint16_t, const MonsterType*> availableMonsters;
+	for (const auto& [_, monsterType] : g_monsters.monsters) {
+		if (monsterType && monsterType->raceId > 0 && monsterType->raceId <= std::numeric_limits<uint16_t>::max()) {
+			availableMonsters.insert_or_assign(static_cast<uint16_t>(monsterType->raceId), monsterType.get());
+		}
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0xC2);
+	msg.add<uint16_t>(currentOutfit.lookType);
+	if (currentOutfit.lookType != 0) {
+		msg.addByte(currentOutfit.lookHead);
+		msg.addByte(currentOutfit.lookBody);
+		msg.addByte(currentOutfit.lookLegs);
+		msg.addByte(currentOutfit.lookFeet);
+		msg.addByte(currentOutfit.lookAddons);
+	} else {
+		msg.add<uint16_t>(currentOutfit.lookTypeEx);
+	}
+	msg.add<uint16_t>(0);
+	msg.addByte(bossPodium);
+	const size_t monsterCount = std::min<size_t>(availableMonsters.size(), std::numeric_limits<uint16_t>::max());
+	msg.add<uint16_t>(static_cast<uint16_t>(monsterCount));
+	size_t sentMonsters = 0;
+	for (const auto& [raceId, monsterType] : availableMonsters) {
+		if (sentMonsters++ >= monsterCount) {
+			break;
+		}
+		msg.add<uint16_t>(raceId);
+		if (bossPodium) {
+			msg.addString(monsterType->name);
+			const Outfit_t& outfit = monsterType->info.outfit;
+			msg.add<uint16_t>(outfit.lookType);
+			if (outfit.lookType != 0) {
+				msg.addByte(outfit.lookHead);
+				msg.addByte(outfit.lookBody);
+				msg.addByte(outfit.lookLegs);
+				msg.addByte(outfit.lookFeet);
+				msg.addByte(outfit.lookAddons);
+			} else {
+				msg.add<uint16_t>(outfit.lookTypeEx);
+			}
+		}
+	}
+	msg.addPosition(position);
+	msg.add<uint16_t>(itemId);
+	msg.addByte(stackPos);
+	msg.addByte(static_cast<uint8_t>(getAttribute("LookDirection", DIRECTION_SOUTH)));
+	msg.addByte(static_cast<uint8_t>(getAttribute("PodiumVisible", 1) != 0));
+	msg.addByte(static_cast<uint8_t>(getAttribute("MonsterVisible", currentRaceId != 0) != 0));
 	writeToOutputBuffer(msg);
 }
 
@@ -3677,9 +3945,19 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	msg.addByte(player->getSkullClient(creature));
 	msg.addByte(player->getPartyShield(otherPlayer));
 
-		if (!known) {
+	if (!known) {
+		auto addCreatureEmblem = [this, &msg, creature](GuildEmblems_t emblem) {
+			if (isAstraClient) {
+				if (const Monster* monster = creature->getMonster(); monster && monster->isFamiliar()) {
+					msg.addByte(GUILDEMBLEM_NONE);
+					return;
+				}
+			}
+			msg.addByte(emblem);
+		};
+
 		if (otherPlayer) {
-			msg.addByte(player->getGuildEmblem(otherPlayer));
+			addCreatureEmblem(player->getGuildEmblem(otherPlayer));
 		} else {
 			if (creature->isSummon()) {
 				auto master = creature->getMaster();
@@ -3687,18 +3965,18 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 					Player* masterPlayer = master->getPlayer();
 					if (masterPlayer) {
 						if (player.get() == masterPlayer) {
-							msg.addByte(GUILDEMBLEM_ALLY);
+							addCreatureEmblem(GUILDEMBLEM_ALLY);
 						} else {
-							msg.addByte(GUILDEMBLEM_ENEMY);
+							addCreatureEmblem(GUILDEMBLEM_ENEMY);
 						}
 					} else {
-						msg.addByte(creature->getEmblem());
+						addCreatureEmblem(creature->getEmblem());
 					}
 				} else {
-					msg.addByte(creature->getEmblem());
+					addCreatureEmblem(creature->getEmblem());
 				}
 			} else {
-				msg.addByte(creature->getEmblem());
+				addCreatureEmblem(creature->getEmblem());
 			}
 		}
 	}
@@ -3744,6 +4022,14 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	msg.add<uint16_t>(static_cast<uint16_t>(player->getLevel()));
 	msg.addByte(player->getLevelPercent());
 
+	if (isAstraClient) {
+		msg.add<uint16_t>(player->getBaseXpGain());
+		msg.add<uint16_t>(0); // voucher XP boost
+		msg.add<uint16_t>(player->getDisplayGrindingXpBoost());
+		msg.add<uint16_t>(player->getDisplayXpBoostPercent());
+		msg.add<uint16_t>(player->getStaminaXpBoost());
+	}
+
 	msg.add<uint32_t>(mana);
 	msg.add<uint32_t>(maxMana);
 
@@ -3761,6 +4047,11 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	if (isOTC) {
 		msg.add<uint16_t>(player->getBaseSpeed() / 2);
 		msg.add<uint16_t>(player->getOfflineTrainingTime() / 60 / 1000);
+		if (isAstraClient) {
+			msg.add<uint16_t>(player->getXpBoostTime());
+			// 0x00 means boost is active and cannot be bought; 0x01 means the client may buy one.
+			msg.addByte(player->getXpBoostTime() > 0 ? 0x00 : 0x01);
+		}
 	}
 
 	/*msg.add<uint16_t>(player->getBaseSpeed() / 2);
@@ -4040,7 +4331,17 @@ void ProtocolGame::parseNewPing(NetworkMessage& msg)
 // OTCv8 and Mehah
 void ProtocolGame::sendFeatures()
 {
-	if (!isOTCv8 || isMehah) return;
+	if (isMehah && !isOTCv8) {
+		NetworkMessage msg;
+		msg.addByte(0x43);
+		msg.add<uint16_t>(1);
+		msg.addByte(86); // Mehah GameThingUpgradeClassification
+		msg.addByte(shouldSendThingUpgradeClassification() ? 1 : 0);
+		writeToOutputBuffer(msg);
+		return;
+	}
+
+	if (!isOTCv8 && !isAstraClient) return;
 
 	std::unordered_map<GameFeature, bool> features;
 	features[GameFeature::ExtendedOpcode] = true;
@@ -4053,12 +4354,13 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::AdditionalSkills] = true;
 	features[GameFeature::ExtendedClientPing] = true;
 	features[GameFeature::CreatureIcons] = true;
-	if (shouldSendQuickLootFlags()) {
-		features[GameFeature::QuickLootFlags] = true;
+	if (isAstraClient) {
+		features[GameFeature::ExperienceBonus] = true;
+		features[GameFeature::PlayerFamiliars] = true;
 	}
-	if (useItemTierByte && getBoolean(ConfigManager::ITEM_TIER_DISPLAY)) {
-		features[GameFeature::ItemTierByte] = true;
-	}
+	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();
+	features[GameFeature::ThingUpgradeClassification] = false;
+	features[GameFeature::ItemTierByte] = shouldSendItemTierByte();
 
 	if (features.empty()) return;
 
@@ -4345,7 +4647,7 @@ void ProtocolGame::sendImbuementDurations(slots_t updatedSlot, const Item* updat
 		const Item* item = p.second;
 
 		msg.addByte(static_cast<uint8_t>(slot));
-		msg.addItem(item, isOTC, useItemTierByte, isOTC, shouldSendQuickLootFlags());
+		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags());
 
 		uint16_t totalSlots = item->getImbuementSlots();
 		msg.addByte(static_cast<uint8_t>(totalSlots));

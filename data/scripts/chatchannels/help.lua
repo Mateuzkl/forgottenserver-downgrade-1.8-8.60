@@ -1,10 +1,13 @@
-local CHANNEL_HELP = 7
+local help = ChatChannel(9, "Help")
+help:public(true)
+
+local CHANNEL_HELP = 9
 
 local muted = Condition(CONDITION_CHANNELMUTEDTICKS, CONDITIONID_DEFAULT)
 muted:setParameter(CONDITION_PARAM_SUBID, CHANNEL_HELP)
 muted:setParameter(CONDITION_PARAM_TICKS, 3600000)
 
-function onSpeak(player, type, message)
+function help.onSpeak(player, type, message)
 	local playerAccountType = player:getAccountType()
 	if player:getLevel() == 1 and playerAccountType == ACCOUNT_TYPE_NORMAL then
 		player:sendCancelMessage(
@@ -19,7 +22,6 @@ function onSpeak(player, type, message)
 		return false
 	end
 
-	local playerAccountType = player:getAccountType()
 	if playerAccountType >= ACCOUNT_TYPE_TUTOR then
 		if string.sub(message, 1, 6) == "!mute " then
 			local targetName = string.sub(message, 7)
@@ -90,3 +92,5 @@ function onSpeak(player, type, message)
 	end
 	return type
 end
+
+help:register()

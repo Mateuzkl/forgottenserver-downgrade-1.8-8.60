@@ -25,6 +25,11 @@ std::shared_ptr<Creature> lockCreature(Creature* creature)
 	return creature ? creature->weak_from_this().lock() : nullptr;
 }
 
+std::shared_ptr<Monster> lockMonster(Creature* creature)
+{
+	return std::dynamic_pointer_cast<Monster>(lockCreature(creature));
+}
+
 bool isPlayerControlledCreature(const Creature* creature)
 {
 	if (!creature) {
@@ -37,6 +42,21 @@ bool isPlayerControlledCreature(const Creature* creature)
 
 	auto master = creature->getMaster();
 	return master && master->getPlayer();
+}
+
+bool rollMonsterCritical(const std::shared_ptr<Monster>& monster, const CombatDamage& damage, int32_t& skill)
+{
+	if (!monster || damage.critical || damage.primary.type == COMBAT_HEALING || damage.origin == ORIGIN_CONDITION) {
+		return false;
+	}
+
+	const int32_t chance = std::clamp<int32_t>(
+	    static_cast<int32_t>(monster->getCriticalChance()) * 100 + damage.criticalChance, 0, 10000);
+	skill = std::max<int32_t>(0, damage.criticalDamage);
+	if (skill == 0 && chance > 0) {
+		skill = 5000;
+	}
+	return chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance;
 }
 
 } // namespace
@@ -1142,6 +1162,13 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 					}
 				}
 			}
+		} else if (auto casterMonster = lockMonster(caster)) {
+			int32_t skill = 0;
+			if (rollMonsterCritical(casterMonster, damage, skill)) {
+				damage.primary.value += std::round(damage.primary.value * (skill / 10000.));
+				damage.secondary.value += std::round(damage.secondary.value * (skill / 10000.));
+				damage.critical = true;
+			}
 		}
 
 		if (params.resetDamageMultiplier >= 0.0f) {
@@ -1149,12 +1176,9 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 		}
 
 		if (casterPlayer && wpEnabled) {
-			if (Monster* targetMonster = target ? target->getMonster() : nullptr) {
-				auto monsterRef = targetMonster->weak_from_this().lock();
-				if (monsterRef) {
-					casterPlayer->weaponProficiency().applyBestiaryDamage(damage, std::static_pointer_cast<Monster>(monsterRef));
-					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damage, std::static_pointer_cast<Monster>(monsterRef));
-				}
+			if (auto targetMonster = lockMonster(target)) {
+				casterPlayer->weaponProficiency().applyBestiaryDamage(damage, targetMonster);
+				casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damage, targetMonster);
 			}
 		}
 
@@ -1362,6 +1386,13 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			criticalSecondary = std::round(damage.secondary.value * (skill / 10000.));
 			damage.critical = true;
 		}
+	} else if (auto casterMonster = lockMonster(caster)) {
+		int32_t skill = 0;
+		if (rollMonsterCritical(casterMonster, damage, skill)) {
+			criticalPrimary = std::round(damage.primary.value * (skill / 10000.));
+			criticalSecondary = std::round(damage.secondary.value * (skill / 10000.));
+			damage.critical = true;
+		}
 	}
 
 	int32_t maxX = 0;
@@ -1456,12 +1487,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			}
 
 			if (casterPlayer && wpEnabled) {
-				if (Monster* targetMonster = creature->getMonster()) {
-					auto monsterRef = targetMonster->weak_from_this().lock();
-					if (monsterRef) {
-						casterPlayer->weaponProficiency().applyBestiaryDamage(damageCopy, std::static_pointer_cast<Monster>(monsterRef));
-						casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damageCopy, std::static_pointer_cast<Monster>(monsterRef));
-					}
+				if (auto targetMonster = std::dynamic_pointer_cast<Monster>(creature)) {
+					casterPlayer->weaponProficiency().applyBestiaryDamage(damageCopy, targetMonster);
+					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damageCopy, targetMonster);
 				}
 			}
 

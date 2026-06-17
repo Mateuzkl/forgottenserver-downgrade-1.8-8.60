@@ -220,7 +220,7 @@ protected:
 
 Logger& g_logger();
 bool initLogger(LogLevel level = LogLevel::INFO, std::string_view filePath = "data/logs/server.log",
-                size_t rotateSize = 5 * 1024 * 1024, size_t rotateFiles = 3);
+                size_t rotateSize = 5 * 1024 * 1024, size_t rotateFiles = 3, bool logToFile = false);
 void shutdownLogger();
 bool isLoggerInitialized();
 LogLevel parseLogLevel(std::string_view level);

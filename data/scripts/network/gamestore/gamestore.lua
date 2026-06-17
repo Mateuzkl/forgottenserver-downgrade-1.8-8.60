@@ -22,6 +22,8 @@ local MAX_CHARACTER_NAME_WORDS = 5
 local CHANGE_NAME_KICK_DELAY = 3000
 local CHANGE_NAME_SUCCESS_MESSAGE = "Your character name has been changed. You will be disconnected in 3 seconds. Please log in again to use your new name."
 local STORE_HOME_BANNER_DELAY = 10
+local XP_BOOST_PERCENT = 50
+local XP_BOOST_DEFAULT_SECONDS = 3600
 local STORE_HOME_BANNERS = {
 	{image = "/images/store/home/banner_exercisedummies", action = 0, target = 0}
 }
@@ -75,6 +77,24 @@ end
 
 local function isTaskBoardCategory(category)
 	return tostring(category and category.name or ""):lower() == "task hunt"
+end
+
+local function isBattlePassOfferType(offerType)
+	return tostring(offerType or ""):lower() == "battlepass"
+end
+
+local function isXpBoostOfferType(offerType)
+	offerType = tostring(offerType or ""):lower()
+	return offerType == "expboost" or offerType == "xpboost"
+end
+
+local function isBattlePassCategory(category)
+	return tostring(category and category.name or ""):lower() == "battle pass"
+end
+
+local function supportsBattlePassStore(player)
+	return configManager.getBoolean(configKeys.BATTLEPASS_SYSTEM_ENABLED) and
+		player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function supportsHirelingStore(player)
@@ -424,12 +444,14 @@ local function sendStoreCatalog(player)
 			local taskBoardVisible = not isTaskBoardOfferType(offer.oftype) or
 				supportsTaskBoardStore(player, offer.oftype)
 			local hirelingVisible = not isHirelingOfferType(offer.oftype) or supportsHirelingStore(player)
-			if taskBoardVisible and hirelingVisible then
+			local battlePassVisible = not isBattlePassOfferType(offer.oftype) or supportsBattlePassStore(player)
+			if taskBoardVisible and hirelingVisible and battlePassVisible then
 				visibleOffers[#visibleOffers + 1] = offer
 			end
 		end
 
-		if #visibleOffers > 0 or (not isHirelingCategory(cat) and not isTaskBoardCategory(cat)) then
+		if #visibleOffers > 0 or
+			(not isHirelingCategory(cat) and not isTaskBoardCategory(cat) and not isBattlePassCategory(cat)) then
 			visibleCategories[#visibleCategories + 1] = {
 				name = cat.name,
 				icon = cat.icon,
@@ -481,6 +503,9 @@ local function deliverOffer(player, offer, extra)
 	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player, offer.oftype) then
 		return "This Task Hunt offer is not available."
 	end
+	if isBattlePassOfferType(offer.oftype) and not supportsBattlePassStore(player) then
+		return "Battle Pass system is not available."
+	end
 
 	if offer.oftype == "bounty_kill_boost" then
 		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.BOUNTY_KILL_BOOST_UNTIL, offer.value) then
@@ -531,6 +556,21 @@ local function deliverOffer(player, offer, extra)
 		end
 
 		return BattlePassSystem.purchasePremium(player, true)
+	end
+
+	if isXpBoostOfferType(offer.oftype) then
+		if not player.getXpBoostTime or not player.setXpBoostTime or not player.setXpBoostPercent then
+			return "XP Boost is not available."
+		end
+
+		if player:getXpBoostTime() > 0 then
+			return "You already have an active XP boost."
+		end
+
+		local duration = offer.value > 0 and offer.value or XP_BOOST_DEFAULT_SECONDS
+		player:setXpBoostPercent(XP_BOOST_PERCENT)
+		player:setXpBoostTime(math.min(65535, duration))
+		return nil
 	end
 
 	if offer.oftype == "blessing" or offer.oftype == "bless" then
@@ -793,6 +833,10 @@ function buyHandler.onReceive(player, msg)
 		sendStoreError(player, "The hireling system is not available.")
 		return
 	end
+	if isBattlePassOfferType(offer.oftype) and not supportsBattlePassStore(player) then
+		sendStoreError(player, "Battle Pass system is not available.")
+		return
+	end
 
 	local extra = {}
 	if offer.oftype == "changename" then
@@ -832,7 +876,10 @@ function buyHandler.onReceive(player, msg)
 	local historyCount = offer.oftype == "item" and offer.count or (offer.oftype == "prey_wildcard" and offer.value or 1)
 	addStoreHistory(player:getAccountId(), player:getGuid(), offer.name, -offer.price, historyCount, nil)
 
-	if offer.oftype == "changename" then
+	if isXpBoostOfferType(offer.oftype) then
+		player:sendStats()
+		sendStoreSuccess(player, offerId, "Your XP Boost is now active.")
+	elseif offer.oftype == "changename" then
 		sendStoreSuccess(player, offerId, CHANGE_NAME_SUCCESS_MESSAGE)
 		scheduleChangeNameKick(player)
 	else

@@ -101,24 +101,29 @@ bool checkDiskSpace(const std::string& path, size_t minSpaceBytes = 50 * 1024 * 
 class LogWithSpdLog final : public Logger
 {
 public:
-	LogWithSpdLog(std::string_view filePath, size_t rotateSize, size_t rotateFiles)
+	LogWithSpdLog(std::string_view filePath, size_t rotateSize, size_t rotateFiles, bool logToFile)
 	{
 		try {
-			timestampedPath_ = generateLogFileName(filePath);
-
-			if (!checkDiskSpace(timestampedPath_)) {
-				fmt::print(stderr, "Warning: Low disk space for logging\n");
-			}
-
 			auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 			console_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
 
-			auto file_sink =
-			    std::make_shared<spdlog::sinks::rotating_file_sink_mt>(timestampedPath_, rotateSize, rotateFiles);
-			file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
-			file_sink->set_level(spdlog::level::trace);
+			std::vector<spdlog::sink_ptr> sinks{console_sink};
 
-			std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
+			if (logToFile) {
+				timestampedPath_ = generateLogFileName(filePath);
+
+				if (!checkDiskSpace(timestampedPath_)) {
+					fmt::print(stderr, "Warning: Low disk space for logging\n");
+				}
+
+				auto file_sink =
+				    std::make_shared<spdlog::sinks::rotating_file_sink_mt>(timestampedPath_, rotateSize, rotateFiles);
+				file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+				file_sink->set_level(spdlog::level::trace);
+
+				sinks.push_back(file_sink);
+			}
+
 			logger_ = std::make_shared<spdlog::logger>("tfs", sinks.begin(), sinks.end());
 			logger_->set_level(spdlog::level::trace);
 			logger_->flush_on(spdlog::level::info);
@@ -171,8 +176,12 @@ public:
 		reactorLogger_ = std::make_shared<spdlog::logger>("tfs_reactor", console_sink_reactor);
 		reactorLogger_->set_level(spdlog::level::info);
 
-			logger_->info("=== TFS Logger Initialized ===");
-			logger_->info("Log file: {}", timestampedPath_);
+			if (logToFile) {
+				logger_->info("=== TFS Logger Initialized ===");
+				logger_->info("Log file: {}", timestampedPath_);
+			} else {
+				logger_->info("=== TFS Logger Initialized (Console Only) ===");
+			}
 			logger_->flush();
 
 		} catch (const std::exception& e) {
@@ -281,7 +290,7 @@ protected:
 		if (!logger_ || !logger_->should_log(toSpd(level))) return;
 
 		try {
-			if (level >= LogLevel::ERRORR && !checkDiskSpace(timestampedPath_)) {
+			if (level >= LogLevel::ERRORR && !timestampedPath_.empty() && !checkDiskSpace(timestampedPath_)) {
 				fmt::print(stderr, "[DISK FULL] {}\n", msg);
 			}
 
@@ -345,7 +354,7 @@ Logger& g_logger()
 	return *loggerInstance;
 }
 
-bool initLogger(LogLevel level, std::string_view filePath, size_t rotateSize, size_t rotateFiles)
+bool initLogger(LogLevel level, std::string_view filePath, size_t rotateSize, size_t rotateFiles, bool logToFile)
 {
 	std::scoped_lock lock(loggerMutex);
 
@@ -357,7 +366,7 @@ bool initLogger(LogLevel level, std::string_view filePath, size_t rotateSize, si
 	}
 
 	try {
-		loggerInstance = std::make_unique<LogWithSpdLog>(filePath, rotateSize, rotateFiles);
+		loggerInstance = std::make_unique<LogWithSpdLog>(filePath, rotateSize, rotateFiles, logToFile);
 		loggerInstance->setLevel(level);
 		loggerInitialized.store(true, std::memory_order_release);
 

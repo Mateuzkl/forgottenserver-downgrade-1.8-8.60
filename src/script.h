@@ -17,6 +17,7 @@ public:
 	LuaScriptInterface& getScriptInterface() { return scriptInterface; }
 
 	void clearLoadedFiles() { loadedFiles.clear(); }
+	void clearLoadedFiles(const std::string& folderName);
 
 private:
 	LuaScriptInterface scriptInterface;

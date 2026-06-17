@@ -1,8 +1,10 @@
-function canJoin(player)
+local gamemaster = ChatChannel(8, "Gamemaster")
+
+function gamemaster.canJoin(player)
 	return player:getAccountType() >= ACCOUNT_TYPE_GAMEMASTER
 end
 
-function onSpeak(player, type, message)
+function gamemaster.onSpeak(player, type, message)
 	local playerAccountType = player:getAccountType()
 	if type == TALKTYPE_CHANNEL_Y then
 		if playerAccountType == ACCOUNT_TYPE_GOD then type = TALKTYPE_CHANNEL_O end
@@ -16,3 +18,5 @@ function onSpeak(player, type, message)
 	end
 	return type
 end
+
+gamemaster:register()

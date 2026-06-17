@@ -8,6 +8,7 @@
 #include "game.h"
 #include "pugicast.h"
 #include "scheduler.h"
+#include "script.h"
 #include "scriptmanager.h"
 #include "logger.h"
 #include <fmt/format.h>
@@ -137,7 +138,7 @@ bool ChatChannel::executeCanJoinEvent(const Player& player)
 	}
 
 	// canJoin(player)
-	LuaScriptInterface* scriptInterface = g_chat->getScriptInterface();
+	LuaScriptInterface* scriptInterface = this->scriptInterface ? this->scriptInterface : g_chat->getScriptInterface();
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - CanJoinChannelEvent::execute] Call stack overflow");
 		return false;
@@ -162,7 +163,7 @@ void ChatChannel::executeOnJoinEvent(const Player& player)
 	}
 
 	// onJoin(player)
-	LuaScriptInterface* scriptInterface = g_chat->getScriptInterface();
+	LuaScriptInterface* scriptInterface = this->scriptInterface ? this->scriptInterface : g_chat->getScriptInterface();
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - OnJoinChannelEvent::execute] Call stack overflow");
 		return;
@@ -187,7 +188,7 @@ bool ChatChannel::executeOnLeaveEvent(const Player& player)
 	}
 
 	// onLeave(player)
-	LuaScriptInterface* scriptInterface = g_chat->getScriptInterface();
+	LuaScriptInterface* scriptInterface = this->scriptInterface ? this->scriptInterface : g_chat->getScriptInterface();
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - OnLeaveChannelEvent::execute] Call stack overflow");
 		return false;
@@ -212,7 +213,7 @@ bool ChatChannel::executeOnSpeakEvent(const Player& player, SpeakClasses& type, 
 	}
 
 	// onSpeak(player, type, message)
-	LuaScriptInterface* scriptInterface = g_chat->getScriptInterface();
+	LuaScriptInterface* scriptInterface = this->scriptInterface ? this->scriptInterface : g_chat->getScriptInterface();
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - OnSpeakChannelEvent::execute] Call stack overflow");
 		return false;
@@ -259,69 +260,52 @@ Chat::Chat() : scriptInterface("Chat Interface"), dummyPrivate(CHANNEL_PRIVATE, 
 
 bool Chat::load()
 {
-	pugi::xml_document doc;
-	pugi::xml_parse_result result = doc.load_file("data/chatchannels/chatchannels.xml");
-	if (!result) {
-		printXMLError("Error - Chat::load", "data/chatchannels/chatchannels.xml", result);
+	g_scripts->clearLoadedFiles("scripts/chatchannels");
+	clear();
+	const bool result = g_scripts->loadScripts("scripts/chatchannels", false, true);
+	LOG_INFO(fmt::format("Loaded {:d} chat channels.", normalChannels.size()));
+	return result;
+}
+
+bool Chat::registerLuaChannel(std::unique_ptr<ChatChannel> channel)
+{
+	if (!channel) {
 		return false;
 	}
 
-	for (auto channelNode : doc.child("channels").children()) {
-		uint16_t channelId = pugi::cast<uint16_t>(channelNode.attribute("id").value());
-		std::string channelName = channelNode.attribute("name").as_string();
-		bool isPublic = channelNode.attribute("public").as_bool();
-		pugi::xml_attribute scriptAttribute = channelNode.attribute("script");
+	const uint16_t channelId = channel->id;
+	auto it = normalChannels.find(channelId);
+	if (it != normalChannels.end()) {
+		LOG_WARN(fmt::format("[Warning - Chat::registerLuaChannel] Duplicate channel id {:d}. Replacing previous channel.", channelId));
+		UsersMap tempUserMap = std::move(it->second.users);
+		it->second = std::move(*channel);
+		usersToRestore[channelId] = std::move(tempUserMap);
+	} else {
+		it = normalChannels.emplace(channelId, std::move(*channel)).first;
+	}
 
-		auto it = normalChannels.find(channelId);
-		if (it != normalChannels.end()) {
-			ChatChannel& channel = it->second;
-			channel.publicChannel = isPublic;
-			channel.name = channelName;
-
-			if (scriptAttribute) {
-				if (scriptInterface.loadFile("data/chatchannels/scripts/" + std::string(scriptAttribute.as_string())) ==
-				    0) {
-					channel.onSpeakEvent = scriptInterface.getEvent("onSpeak");
-					channel.canJoinEvent = scriptInterface.getEvent("canJoin");
-					channel.onJoinEvent = scriptInterface.getEvent("onJoin");
-					channel.onLeaveEvent = scriptInterface.getEvent("onLeave");
-				} else {
-					LOG_WARN(fmt::format("[Warning - Chat::load] Can not load script: {}", scriptAttribute.as_string()));
-				}
+	if (auto restoreIt = usersToRestore.find(it->first); restoreIt != usersToRestore.end()) {
+		for (const auto& pair : restoreIt->second) {
+			auto restoredPlayer = pair.second.lock();
+			if (!restoredPlayer) {
+				restoredPlayer = g_game.getCreatureSharedRef<Player>(pair.first);
 			}
-
-			UsersMap tempUserMap = std::move(channel.users);
-			for (const auto& pair : tempUserMap) {
-				auto player = pair.second.lock();
-				if (!player) {
-					player = g_game.getCreatureSharedRef<Player>(pair.first);
-				}
-
-				if (player) {
-					channel.addUser(player);
-				}
-			}
-			continue;
-		}
-
-		ChatChannel channel(channelId, channelName);
-		channel.publicChannel = isPublic;
-
-		if (scriptAttribute) {
-			if (scriptInterface.loadFile(fmt::format("data/chatchannels/scripts/{}", scriptAttribute.as_string())) ==
-			    0) {
-				channel.onSpeakEvent = scriptInterface.getEvent("onSpeak");
-				channel.canJoinEvent = scriptInterface.getEvent("canJoin");
-				channel.onJoinEvent = scriptInterface.getEvent("onJoin");
-				channel.onLeaveEvent = scriptInterface.getEvent("onLeave");
-			} else {
-				LOG_WARN(fmt::format("[Warning - Chat::load] Can not load script: {}", scriptAttribute.as_string()));
+			if (restoredPlayer) {
+				it->second.users[restoredPlayer->getID()] = restoredPlayer;
 			}
 		}
-
-		normalChannels[channel.id] = channel;
+		usersToRestore.erase(restoreIt);
 	}
 	return true;
+}
+
+void Chat::clear()
+{
+	usersToRestore.clear();
+	for (auto& [channelId, channel] : normalChannels) {
+		usersToRestore.emplace(channelId, std::move(channel.users));
+	}
+	normalChannels.clear();
 }
 
 ChatChannel* Chat::createChannel(const Player& player, uint16_t channelId)

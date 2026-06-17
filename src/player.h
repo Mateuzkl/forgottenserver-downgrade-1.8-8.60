@@ -23,7 +23,9 @@
 #include "vocation.h"
 #include "weapon_proficiency.h"
 #include "kv/kv.h"
+#include <algorithm>
 #include <array>
+#include <limits>
 #include <vector>
 
 #include <unordered_map>
@@ -152,6 +154,7 @@ public:
 
 	Player* getPlayer() override { return this; }
 	const Player* getPlayer() const override { return this; }
+	Faction_t getFaction() const override { return FACTION_PLAYER; }
 
 	void setID() override
 	{
@@ -500,6 +503,21 @@ public:
 		return std::max<int32_t>(0, base);
 	}
 	int32_t getExperienceRate(ExperienceRateType type) const { return experienceRate[static_cast<size_t>(type)]; }
+	uint16_t getBaseXpGain() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::BASE), 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getDisplayGrindingXpBoost() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::LOW_LEVEL) - 100, 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getXpBoostPercent() const { return xpBoostPercent; }
+	uint16_t getDisplayXpBoostPercent() const { return xpBoostTime > 0 ? xpBoostPercent : 0; }
+	uint16_t getStaminaXpBoost() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::STAMINA), 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getXpBoostTime() const { return xpBoostTime; }
 	uint32_t getBaseMagicLevel() const { return magLevel; }
 	uint8_t getMagicLevelPercent() const { return magLevelPercent; }
 	uint8_t getSoul() const { return soul; }
@@ -617,6 +635,17 @@ public:
 
 	void setExperienceRate(ExperienceRateType type, int32_t rate) { experienceRate[static_cast<size_t>(type)] = rate; }
 	void addExperienceRate(ExperienceRateType type, int32_t rate) { experienceRate[static_cast<size_t>(type)] += rate; }
+	void setXpBoostPercent(int32_t percent)
+	{
+		xpBoostPercent = static_cast<uint16_t>(std::clamp<int32_t>(percent, 0, 255));
+	}
+	void setXpBoostTime(uint16_t timeLeft)
+	{
+		xpBoostTime = timeLeft;
+		if (xpBoostTime == 0) {
+			xpBoostPercent = 0;
+		}
+	}
 
 	void setVarStats(stats_t stat, int32_t modifier);
 	int32_t getDefaultStats(stats_t stat) const;
@@ -1305,6 +1334,19 @@ public:
 			client->sendOutfitWindow();
 		}
 	}
+	void sendItemInspection(std::shared_ptr<Item> item = nullptr, uint16_t itemId = 0, uint8_t itemCount = 1,
+	                        uint8_t inspectionType = INSPECT_NORMALOBJECT)
+	{
+		if (client) {
+			client->sendItemInspection(item, itemId, itemCount, inspectionType);
+		}
+	}
+	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos)
+	{
+		if (client) {
+			client->sendMonsterPodiumWindow(podium, position, itemId, stackPos);
+		}
+	}
 	void sendCloseContainer(uint8_t cid)
 	{
 		if (client) {
@@ -1667,6 +1709,8 @@ private:
 
 	uint16_t lastStatsTrainingTime = 0;
 	uint16_t staminaMinutes = 2520;
+	uint16_t xpBoostTime = 0;
+	uint16_t xpBoostPercent = 0;
 	uint16_t protectionTime = 10;
 	uint16_t maxWriteLen = 0;
 	int16_t lastDepotId = -1;

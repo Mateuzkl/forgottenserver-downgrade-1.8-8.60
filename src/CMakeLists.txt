@@ -38,6 +38,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/item.cpp
 	${CMAKE_CURRENT_LIST_DIR}/items.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luaactions.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/luachatchannel.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luacombat.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luacondition.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luacontainer.cpp

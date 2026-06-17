@@ -218,6 +218,7 @@
     <ClCompile Include="..\src\kv\value_wrapper.cpp" />
     <ClCompile Include="..\src\logger.cpp" />
     <ClCompile Include="..\src\luaactions.cpp" />
+    <ClCompile Include="..\src\luachatchannel.cpp" />
     <ClCompile Include="..\src\luacombat.cpp" />
     <ClCompile Include="..\src\luacondition.cpp" />
     <ClCompile Include="..\src\luacontainer.cpp" />

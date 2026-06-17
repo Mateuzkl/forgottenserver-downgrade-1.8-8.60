@@ -358,7 +358,8 @@ public:
 	 * \param text The text to say
 	 */
 	bool internalCreatureSay(Creature* creature, SpeakClasses type, std::string_view text, bool ghostMode,
-	                         SpectatorVec* spectatorsPtr = nullptr, const Position* pos = nullptr, bool echo = false);
+	                         SpectatorVec* spectatorsPtr = nullptr, const Position* pos = nullptr, bool echo = false,
+	                         bool emoteSpell = false);
 
 	void loadPlayersRecord();
 	void checkPlayersRecord();
@@ -402,6 +403,10 @@ public:
 	void playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint16_t fromSpriteId,
 	                     const Position& toPos, uint8_t toStackPos, uint16_t toSpriteId);
 	void playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPos, uint8_t index, uint16_t spriteId);
+	void playerInspectItem(uint32_t playerId, const Position& pos);
+	void playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType);
+	void playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Position& pos, uint8_t stackPos,
+	                            uint16_t itemId, uint8_t direction, bool podiumVisible, bool creatureVisible);
 	void playerUseWithCreature(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint32_t creatureId,
 	                           uint16_t spriteId);
 	void playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,
@@ -498,6 +503,8 @@ public:
 	void combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColor_t& color, uint8_t& effect);
 
 	bool combatChangeHealth(Creature* attacker, Creature* target, CombatDamage& damage);
+	bool combatChangeHealth(const std::shared_ptr<Creature>& attacker, const std::shared_ptr<Creature>& target,
+	                        CombatDamage& damage);
 	bool combatChangeMana(Creature* attacker, Creature* target, CombatDamage& damage);
 	void applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer, Player* targetPlayer);
 

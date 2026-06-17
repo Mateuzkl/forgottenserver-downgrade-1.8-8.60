@@ -1,5 +1,6 @@
 local classes = {
-	Action, CreatureEvent, Spell, TalkAction, MoveEvent, GlobalEvent, Weapon
+	Action, CreatureEvent, Spell, TalkAction, MoveEvent, GlobalEvent, Weapon,
+	ChatChannel
 }
 
 for _, class in ipairs(classes) do

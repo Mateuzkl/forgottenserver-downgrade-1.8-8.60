@@ -173,7 +173,7 @@ public:
 	virtual bool canSeeInvisibility() const { return false; }
 	virtual bool isInGhostMode() const { return false; }
 	virtual bool canSeeGhostMode(const Creature*) const { return false; }
-	virtual Faction_t getFaction() const { return FACTION_PLAYER; }
+	virtual Faction_t getFaction() const { return FACTION_DEFAULT; }
 
 	int32_t getWalkDelay(Direction dir) const;
 	int32_t getWalkDelay() const;

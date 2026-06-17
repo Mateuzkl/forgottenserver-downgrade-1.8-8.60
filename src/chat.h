@@ -44,6 +44,17 @@ public:
 	bool executeCanJoinEvent(const Player& player);
 	bool executeOnLeaveEvent(const Player& player);
 	bool executeOnSpeakEvent(const Player& player, SpeakClasses& type, std::string_view message);
+	void setScriptInterface(ObserverPtr<LuaScriptInterface> interface) { scriptInterface = interface; }
+	void setCanJoinEvent(int32_t event) { canJoinEvent = event; }
+	void setOnJoinEvent(int32_t event) { onJoinEvent = event; }
+	void setOnLeaveEvent(int32_t event) { onLeaveEvent = event; }
+	void setOnSpeakEvent(int32_t event) { onSpeakEvent = event; }
+	void setPublicChannel(bool value) { publicChannel = value; }
+
+	int32_t getCanJoinEvent() const { return canJoinEvent; }
+	int32_t getOnJoinEvent() const { return onJoinEvent; }
+	int32_t getOnLeaveEvent() const { return onLeaveEvent; }
+	int32_t getOnSpeakEvent() const { return onSpeakEvent; }
 
 protected:
 	UsersMap users;
@@ -57,6 +68,7 @@ private:
 	int32_t onJoinEvent = -1;
 	int32_t onLeaveEvent = -1;
 	int32_t onSpeakEvent = -1;
+	ObserverPtr<LuaScriptInterface> scriptInterface = nullptr;
 
 	bool publicChannel = false;
 
@@ -99,6 +111,8 @@ public:
 	Chat& operator=(const Chat&) = delete;
 
 	bool load();
+	bool registerLuaChannel(std::unique_ptr<ChatChannel> channel);
+	void clear();
 
 	[[nodiscard]] ChatChannel* createChannel(const Player& player, uint16_t channelId);
 	bool deleteChannel(const Player& player, uint16_t channelId);
@@ -117,12 +131,14 @@ public:
 	[[nodiscard]] PrivateChatChannel* getPrivateChannel(const Player& player);
 
 	LuaScriptInterface* getScriptInterface() { return &scriptInterface; }
+	size_t getNormalChannelCount() const { return normalChannels.size(); }
 
 private:
 	std::unordered_map<uint16_t, ChatChannel> normalChannels;
 	std::unordered_map<uint16_t, PrivateChatChannel> privateChannels;
 	std::unordered_map<ObserverPtr<Party>, ChatChannel> partyChannels;
 	std::unordered_map<uint32_t, ChatChannel> guildChannels;
+	std::unordered_map<uint16_t, UsersMap> usersToRestore;
 
 	LuaScriptInterface scriptInterface;
 

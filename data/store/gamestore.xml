@@ -12,6 +12,10 @@
         <offer id="9001" name="Deluxe Battle Pass" icon="store_premium" price="250" eid="0" itemid="0" type="battlepass" value="1" count="1" description="Unlocks the Deluxe Battle Pass reward track for the current season."/>
     </category>
 
+    <category name="Boosts" icon="xp_boost" description="Temporary boosts applied directly to your character.">
+        <offer id="65583" name="XP Boost" icon="xp_boost" price="30" eid="0" itemid="0" type="expboost" value="3600" count="1" description="Increases experience gained from hunting by 50 percent for one hour of hunting time."/>
+    </category>
+
     <category name="Consumables" icon="store_consumables" description="Consumables and character protection services."/>
 
     <category name="Prey Wildcards" icon="store_prey">

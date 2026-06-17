@@ -479,6 +479,7 @@ inline constexpr int32_t STORAGE_FAMILIAR_TIMER_10 = 845233;
 inline constexpr int32_t STORAGE_FAMILIAR_TIMER_60 = 845234;
 inline constexpr int32_t STORAGE_EXP_COLOR = 50100;
 inline constexpr int32_t STORAGE_HEALTH_DISPLAY = 50101;
+inline constexpr int32_t STORAGE_EMOTE_SPELLS = 50102;
 
 enum ReturnValue
 {
@@ -612,6 +613,7 @@ struct Outfit_t
 	uint16_t lookType = 0;
 	uint16_t lookTypeEx = 0;
 	uint16_t lookMount = 0;
+	uint16_t lookFamiliar = 0;
 	uint8_t lookHead = 0;
 	uint8_t lookBody = 0;
 	uint8_t lookLegs = 0;

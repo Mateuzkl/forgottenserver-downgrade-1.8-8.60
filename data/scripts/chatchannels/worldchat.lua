@@ -1,4 +1,7 @@
-function onSpeak(player, type, message)
+local worldChat = ChatChannel(3, "World Chat")
+worldChat:public(true)
+
+function worldChat.onSpeak(player, type, message)
 	local playerAccountType = player:getAccountType()
 	if player:getLevel() == 1 and playerAccountType < ACCOUNT_TYPE_GAMEMASTER then
 		player:sendCancelMessage(
@@ -20,3 +23,5 @@ function onSpeak(player, type, message)
 	end
 	return type
 end
+
+worldChat:register()

@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS `players` (
   `offlinetraining_time` smallint unsigned NOT NULL DEFAULT '43200',
   `offlinetraining_skill` int NOT NULL DEFAULT '-1',
   `stamina` smallint unsigned NOT NULL DEFAULT '2520',
+  `xpboost_stamina` smallint unsigned NOT NULL DEFAULT '0',
+  `xpboost_value` tinyint unsigned NOT NULL DEFAULT '0',
   `skill_fist` int unsigned NOT NULL DEFAULT 10,
   `skill_fist_tries` bigint unsigned NOT NULL DEFAULT 0,
   `skill_club` int unsigned NOT NULL DEFAULT 10,

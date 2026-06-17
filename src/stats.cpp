@@ -331,6 +331,11 @@ void Stats::parseSpecialQueue(std::forward_list<std::unique_ptr<Stat>>& queue) {
 }
 
 void Stats::writeSlowInfo(const std::string& file, uint64_t executionTime, const std::string& description, const std::string& extraDescription) {
+	if (!ConfigManager::getBoolean(ConfigManager::LOG_TO_FILE)) {
+		LOG_STATS("Execution time: {} ms - {} - {}", (executionTime / 1000000), description, extraDescription);
+		return;
+	}
+
 	std::ofstream out(std::string("data/logs/stats/") + file, std::ofstream::out | std::ofstream::app);
 	if (!out.is_open()) {
 		LOG_STATS_WARNING("Can't open {} (check if directory exists)", (std::string("data/logs/stats/") + file));
@@ -351,6 +356,20 @@ void Stats::writeStats(const std::string& file, const statsMap& stats, const std
 	if (DUMP_INTERVAL <= 0) {
 		return;
 	}
+
+	if (!extraInfo.empty()) {
+		// Use LOG_INFO for console summary, removing the trailing newline if present as logger adds it
+		std::string infoCopy = extraInfo;
+		if (!infoCopy.empty() && infoCopy.back() == '\n') {
+			infoCopy.pop_back();
+		}
+		LOG_STATS("{}", infoCopy);
+	}
+
+	if (!ConfigManager::getBoolean(ConfigManager::LOG_TO_FILE)) {
+		return;
+	}
+
 	const int64_t effectiveIntervalMs = std::max<int64_t>(1, intervalMs > 0 ? intervalMs : DUMP_INTERVAL);
 
 	std::ofstream out(std::string("data/logs/stats/") + file, std::ofstream::out | std::ofstream::app);
@@ -363,15 +382,6 @@ void Stats::writeStats(const std::string& file, const statsMap& stats, const std
 		return;
 	}
 	out << "[" << formatDateShort(time(nullptr)) << "]\n";
-
-	if (!extraInfo.empty()) {
-		// Use LOG_INFO for console summary, removing the trailing newline if present as logger adds it
-		std::string infoCopy = extraInfo;
-		if (!infoCopy.empty() && infoCopy.back() == '\n') {
-			infoCopy.pop_back();
-		}
-		LOG_STATS("{}", infoCopy); 
-	}
 
 	std::vector<std::pair<std::string, statsData>> pairs;
 	for (auto& it : stats)

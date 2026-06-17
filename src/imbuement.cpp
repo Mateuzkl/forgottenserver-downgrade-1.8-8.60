@@ -184,8 +184,8 @@ bool Imbuements::loadFromXml()
 
 void Imbuements::resolveImbuementType(ImbuementDefinition& def)
 {
-	// Default decay: skills/leech/critical/damage = INFIGHT, speed/capacity = EQUIPPED
-	def.decayType = IMBUEMENT_DECAY_INFIGHT;
+	// Imbuement time is consumed while the item is equipped.
+	def.decayType = IMBUEMENT_DECAY_EQUIPPED;
 
 	if (def.effectType == "skill") {
 		const std::string& v = def.effectValue;
@@ -226,12 +226,10 @@ void Imbuements::resolveImbuementType(ImbuementDefinition& def)
 	}
 	else if (def.effectType == "speed") {
 		def.imbuementType = IMBUEMENT_TYPE_SPEED_BOOST;
-		def.decayType = IMBUEMENT_DECAY_EQUIPPED;
 		def.resolvedValue = def.value;
 	}
 	else if (def.effectType == "capacity") {
 		def.imbuementType = IMBUEMENT_TYPE_CAPACITY_BOOST;
-		def.decayType = IMBUEMENT_DECAY_EQUIPPED;
 		def.resolvedValue = def.value;
 	}
 	else if (def.effectType == "vibrancy") {

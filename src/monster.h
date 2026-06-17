@@ -71,7 +71,9 @@ public:
 
 	const Position& getMasterPos() const { return masterPos; }
 	void setMasterPos(Position pos) { masterPos = pos; }
-	Faction_t getFaction() const override { return mType->info.faction; }
+	Faction_t getFaction() const override;
+	bool isEnemyFaction(Faction_t faction) const;
+	bool canAttackByFaction(const Creature* creature) const;
 
 	RaceType_t getRace() const override { return mType->info.race; }
 	int32_t getArmor() const override { return mType->info.armor; }
@@ -147,6 +149,9 @@ public:
 	bool getDistanceStep(const Position& targetPos, Direction& direction, bool flee = false);
 	bool isTargetNearby() const { return stepDuration >= 1; }
 	bool isIgnoringFieldDamage() const { return ignoreFieldDamage; }
+	int32_t getReflectPercent(CombatType_t combatType) const;
+	int32_t getHealingCombatValue(CombatType_t combatType) const;
+	uint16_t getCriticalChance() const;
 
 	BlockType_t blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage, bool checkDefense = false,
 	                     bool checkArmor = false, bool field = false, bool ignoreResistances = false, CombatOrigin origin = ORIGIN_NONE) override;
@@ -212,6 +217,9 @@ private:
 	void onCreatureLeave(Creature* creature);
 	bool selectBlockerTarget();
 	void onCreatureFound(Creature* creature, bool pushFront = false);
+	bool isFactionCombatTarget(const Creature* creature) const;
+	bool isFactionCombatAllowed() const;
+	bool clearFactionTargetIfNotAllowed();
 
 	void updateLookDirection();
 	mutable uint64_t lastPlayerNearbyCheck = 0;

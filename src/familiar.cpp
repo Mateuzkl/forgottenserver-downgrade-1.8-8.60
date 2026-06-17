@@ -78,15 +78,21 @@ static void RemoveFamiliar(uint32_t creatureId, uint32_t playerId)
 		player->setStorageValue(STORAGE_FAMILIAR_SUMMON_TIME, std::optional<int64_t>(-1));
 	}
 }
-std::string getFamiliarName(const Player* player)
+std::optional<FamiliarInfo> getFamiliarInfo(const Player* player)
 {
-    if (!ConfigManager::getBoolean(ConfigManager::FAMILIAR_SYSTEM_ENABLED)) return {};
-    if (!player || !player->getVocation()) return {};
+    if (!ConfigManager::getBoolean(ConfigManager::FAMILIAR_SYSTEM_ENABLED)) return std::nullopt;
+    if (!player || !player->getVocation()) return std::nullopt;
     uint32_t base = player->getVocation()->getFromVocation();
     if (base == 0) base = player->getVocation()->getId();
     auto it = FAMILIAR_ID.find(base);
-    if (it == FAMILIAR_ID.end()) return {};
-    return it->second.name;
+    if (it == FAMILIAR_ID.end()) return std::nullopt;
+    return FamiliarInfo{static_cast<uint16_t>(it->second.id), it->second.name};
+}
+
+std::string getFamiliarName(const Player* player)
+{
+    const auto familiar = getFamiliarInfo(player);
+    return familiar ? familiar->name : std::string{};
 }
 
 bool dispellFamiliar(Player* player)
@@ -156,6 +162,7 @@ bool createFamiliar(Player* player, const std::string& familiarName, uint32_t ti
     monster->setMaster(player);
     // mark summon with guild emblem (ally = green badge)
     monster->setGuildEmblem(GUILDEMBLEM_ALLY);
+    monster->setIcon("familiar", CreatureIcon(CreatureIconQuests_Familiar));
     int32_t delta = static_cast<int32_t>(player->getSpeed()) - static_cast<int32_t>(monster->getBaseSpeed());
     if (delta < 0) delta = 0;
     g_game.changeSpeed(monster.get(), delta);
