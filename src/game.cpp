@@ -4977,13 +4977,15 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 	// send to client
 	const bool localPositionTalk = isLocalPositionTalk(type);
 	const auto getSpectatorType = [type, emoteSpell](const Player* spectator) {
-		if (!emoteSpell || !spectator) {
+		if (!emoteSpell) {
 			return type;
 		}
 
-		const auto emoteSpellsStorage = spectator->getStorageValue(STORAGE_EMOTE_SPELLS);
-		if (emoteSpellsStorage) {
-			return emoteSpellsStorage.value() == 1 ? TALKTYPE_MONSTER_SAY : TALKTYPE_SAY;
+		if (spectator) {
+			const auto emoteSpellsStorage = spectator->getStorageValue(STORAGE_EMOTE_SPELLS);
+			if (emoteSpellsStorage) {
+				return emoteSpellsStorage.value() == 1 ? TALKTYPE_MONSTER_SAY : TALKTYPE_SAY;
+			}
 		}
 
 		return getBoolean(ConfigManager::EMOTE_SPELLS) ? TALKTYPE_MONSTER_SAY : TALKTYPE_SAY;
