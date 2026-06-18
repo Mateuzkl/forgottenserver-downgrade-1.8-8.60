@@ -104,15 +104,6 @@ bool isOwnedOrOpenContainer(const Player* player, const Container* container)
 	return false;
 }
 
-void sendAstraPlayerInventorySnapshotLater(uint32_t playerId)
-{
-	g_dispatcher.addTask([playerId]() {
-		if (auto player = g_game.getPlayerByID(playerId)) {
-			player->sendAstraPlayerInventorySnapshot();
-		}
-	});
-}
-
 void addSpellAugmentBonus(ProficiencySpellAugmentBonus& bonus, Augment_t augmentType, double value)
 {
 	switch (augmentType) {
@@ -2580,7 +2571,7 @@ void Player::onAddContainerItem(const Item* item)
 		}
 	}
 	if (client && (isOwnedInventoryItem(this, item) || isOwnedOrOpenContainer(this, container))) {
-		sendAstraPlayerInventorySnapshot();
+		scheduleAstraPlayerInventorySnapshot();
 	}
 
 	checkTradeState(item);
@@ -2592,7 +2583,7 @@ void Player::onUpdateContainerItem(const Container* container, const Item* oldIt
 	                                             isOwnedInventoryItem(this, oldItem) ||
 	                                             isOwnedInventoryItem(this, newItem));
 	if (oldItem == newItem && updatesAstraInventory) {
-		sendAstraPlayerInventorySnapshot();
+		scheduleAstraPlayerInventorySnapshot();
 	}
 
 	if (oldItem != newItem) {
@@ -2607,7 +2598,7 @@ void Player::onUpdateContainerItem(const Container* container, const Item* oldIt
 void Player::onRemoveContainerItem(const Container* container, const Item* item)
 {
 	if (client && (isOwnedOrOpenContainer(this, container) || isOwnedInventoryItem(this, item))) {
-		sendAstraPlayerInventorySnapshotLater(getID());
+		scheduleAstraPlayerInventorySnapshot();
 	}
 
 	if (tradeState != TRADE_TRANSFER) {
@@ -2698,6 +2689,27 @@ void Player::sendAstraPlayerInventorySnapshot() const
 	if (const ProtocolGame_ptr protocol = client->protocol()) {
 		protocol->sendPlayerInventory();
 	}
+}
+
+void Player::scheduleAstraPlayerInventorySnapshot()
+{
+	if (astraPlayerInventorySnapshotScheduled) {
+		return;
+	}
+
+	astraPlayerInventorySnapshotScheduled = true;
+	const uint32_t playerId = getID();
+	g_dispatcher.addTask([playerId]() {
+		if (auto player = g_game.getPlayerByID(playerId)) {
+			player->flushAstraPlayerInventorySnapshot();
+		}
+	});
+}
+
+void Player::flushAstraPlayerInventorySnapshot()
+{
+	astraPlayerInventorySnapshotScheduled = false;
+	sendAstraPlayerInventorySnapshot();
 }
 
 void Player::checkTradeState(const Item* item)
@@ -4271,7 +4283,7 @@ void Player::addThing(int32_t index, Thing* thing)
 
 	// send to client
 	sendInventoryItem(static_cast<slots_t>(index), item);
-	sendAstraPlayerInventorySnapshot();
+	scheduleAstraPlayerInventorySnapshot();
 }
 
 void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
@@ -4294,7 +4306,7 @@ void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 
 	// event methods
 	onUpdateInventoryItem(item, item);
-	sendAstraPlayerInventorySnapshot();
+	scheduleAstraPlayerInventorySnapshot();
 }
 
 void Player::replaceThing(uint32_t index, Thing* thing)
@@ -4332,7 +4344,7 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 	if (oldItem != item) {
 		oldItem->setParent(nullptr);
 	}
-	sendAstraPlayerInventorySnapshot();
+	scheduleAstraPlayerInventorySnapshot();
 }
 
 void Player::removeThing(Thing* thing, uint32_t count)
@@ -4357,7 +4369,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 			item->setParent(nullptr);
 			inventory[index].reset();
-			sendAstraPlayerInventorySnapshot();
+			scheduleAstraPlayerInventorySnapshot();
 		} else {
 			uint8_t newCount = static_cast<uint8_t>(std::max<int32_t>(0, item->getItemCount() - count));
 			item->setItemCount(newCount);
@@ -4367,7 +4379,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 			// event methods
 			onUpdateInventoryItem(item, item);
-			sendAstraPlayerInventorySnapshot();
+			scheduleAstraPlayerInventorySnapshot();
 		}
 	} else {
 		// send change to client
@@ -4378,7 +4390,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 		item->setParent(nullptr);
 		inventory[index].reset();
-		sendAstraPlayerInventorySnapshot();
+		scheduleAstraPlayerInventorySnapshot();
 	}
 }
 

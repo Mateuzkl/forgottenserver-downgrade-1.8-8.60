@@ -2770,7 +2770,7 @@ void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= 
 	}
 
 	player->setNextAction(OTSYS_TIME() + getMoveItemExhaustionDelay(Position(0xFFFF, slot, 0)));
-	player->sendAstraPlayerInventorySnapshot();
+	player->scheduleAstraPlayerInventorySnapshot();
 }
 
 void Game::playerMove(uint32_t playerId, Direction direction)
