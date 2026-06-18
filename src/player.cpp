@@ -2693,13 +2693,16 @@ bool Player::canReceiveAstraItemState() const
 
 void Player::sendAstraPlayerInventorySnapshot() const
 {
-	if (!canReceiveAstraItemState()) {
+	if (!client) {
 		return;
 	}
 
-	if (const ProtocolGame_ptr protocol = client->protocol()) {
-		protocol->sendPlayerInventory();
+	const ProtocolGame_ptr protocol = client->protocol();
+	if (!protocol || !protocol->canSendAstraItemState()) {
+		return;
 	}
+
+	protocol->sendPlayerInventory();
 }
 
 void Player::scheduleAstraPlayerInventorySnapshot()
