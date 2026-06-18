@@ -538,6 +538,11 @@ public:
 	bool isMagicWallOldViewEnabled() const { return magicWallOldViewEnabled; }
 	void setMagicWallOldViewEnabled(bool enabled, bool sendRefresh = true);
 
+	bool isEffectsDisabled() const { return effectsDisabled; }
+	void setEffectsDisabled(bool disabled) { effectsDisabled = disabled; }
+	bool isDistanceShootsDisabled() const { return distanceShootsDisabled; }
+	void setDistanceShootsDisabled(bool disabled) { distanceShootsDisabled = disabled; }
+
 	static bool isMagicWallItemId(uint16_t itemId)
 	{
 		return itemId == ITEM_MAGICWALL;
@@ -1773,6 +1778,8 @@ private:
 	std::string tokenHash;
 	bool tokenLocked = false;
 	bool magicWallOldViewEnabled = false;
+	bool effectsDisabled = false;
+	bool distanceShootsDisabled = false;
 	bool staminaPzActive = false;
 	bool staminaTrainerActive = false;
 	bool astraPlayerInventorySnapshotScheduled = false;

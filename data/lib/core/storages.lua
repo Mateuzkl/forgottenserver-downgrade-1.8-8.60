@@ -27,6 +27,8 @@ PlayerStorageKeys = {
     healthDisplay = 50101,
     emoteSpells = 50102,
     magicWallOldView = 50103,
+    effectsToggle = 50104,
+    distanceShootsToggle = 50105,
     taskBoardBountyKillBoostUntil = 50200,
     taskBoardWeeklyKillBoostUntil = 50201,
     taskBoardWeeklyReducedItemsUntil = 50202,
@@ -58,6 +60,8 @@ STORAGE_EXP_COLOR = PlayerStorageKeys.expColor
 STORAGE_HEALTH_DISPLAY = PlayerStorageKeys.healthDisplay
 STORAGE_EMOTE_SPELLS = PlayerStorageKeys.emoteSpells
 STORAGE_MAGIC_WALL_OLD_VIEW = PlayerStorageKeys.magicWallOldView
+STORAGE_EFFECTS_TOGGLE = PlayerStorageKeys.effectsToggle
+STORAGE_DISTANCE_SHOOTS_TOGGLE = PlayerStorageKeys.distanceShootsToggle
 
 GlobalStorageKeys = {
     workbench = 30050,

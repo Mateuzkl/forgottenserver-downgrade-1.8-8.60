@@ -3189,6 +3189,10 @@ void ProtocolGame::sendDllCheck()
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
 {
+	if (player && player->isDistanceShootsDisabled()) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x85);
 	msg.addPosition(from);
@@ -3200,6 +3204,10 @@ void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, u
 void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 {
 	if (!canSee(pos)) {
+		return;
+	}
+
+	if (player && player->isEffectsDisabled()) {
 		return;
 	}
 

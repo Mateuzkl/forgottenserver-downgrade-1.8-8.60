@@ -4150,6 +4150,54 @@ int luaPlayerIsMagicWallOldViewEnabled(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSetEffectsDisabled(lua_State* L)
+{
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		bool disabled = getBoolean(L, 2);
+		player->setEffectsDisabled(disabled);
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerIsEffectsDisabled(lua_State* L)
+{
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		pushBoolean(L, player->isEffectsDisabled());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetDistanceShootsDisabled(lua_State* L)
+{
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		bool disabled = getBoolean(L, 2);
+		player->setDistanceShootsDisabled(disabled);
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerIsDistanceShootsDisabled(lua_State* L)
+{
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		pushBoolean(L, player->isDistanceShootsDisabled());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerGetHelmetCooldownReduction(lua_State *L)
 {
 	// player:getHelmetCooldownReduction()
@@ -4895,6 +4943,12 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "refreshWorldView", luaPlayerRefreshWorldView);
 	registerMethod("Player", "setMagicWallOldView", luaPlayerSetMagicWallOldView);
 	registerMethod("Player", "isMagicWallOldViewEnabled", luaPlayerIsMagicWallOldViewEnabled);
+
+	// Effect toggle
+	registerMethod("Player", "setEffectsDisabled", luaPlayerSetEffectsDisabled);
+	registerMethod("Player", "isEffectsDisabled", luaPlayerIsEffectsDisabled);
+	registerMethod("Player", "setDistanceShootsDisabled", luaPlayerSetDistanceShootsDisabled);
+	registerMethod("Player", "isDistanceShootsDisabled", luaPlayerIsDistanceShootsDisabled);
 
 	// Forge Momentum
 	registerMethod("Player", "getHelmetCooldownReduction", luaPlayerGetHelmetCooldownReduction);
