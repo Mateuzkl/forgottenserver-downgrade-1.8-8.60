@@ -68,6 +68,7 @@ public:
 	void logout(bool displayEffect, bool forced);
 
 	uint16_t getVersion() const { return version; }
+	bool canSendAstraItemState() const;
 
 	static uint32_t spectatorId;
 	static std::set<std::string> spectatorNames;

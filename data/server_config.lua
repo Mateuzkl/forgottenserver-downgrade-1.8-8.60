@@ -9,6 +9,8 @@ maxAddonAttributes = 3
 dllCheckKick = true
 dllCheckKickTime = 5
 astraClientOnly = false
+-- Server-controlled Astra item state protocol: duration, charges and packed inventory snapshot.
+astraItemStateEnabled = true
 hirelingSystemEnabled = true
 astraHirelingProtocolEnabled = true
 

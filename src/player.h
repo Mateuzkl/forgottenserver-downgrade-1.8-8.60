@@ -1181,6 +1181,7 @@ public:
 	// inventory
 	void onUpdateInventoryItem(Item* oldItem, Item* newItem);
 	void onRemoveInventoryItem(Item* item);
+	bool canReceiveAstraItemState() const;
 	void sendAstraPlayerInventorySnapshot() const;
 	void scheduleAstraPlayerInventorySnapshot();
 

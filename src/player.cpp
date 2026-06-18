@@ -2570,7 +2570,7 @@ void Player::onAddContainerItem(const Item* item)
 			}
 		}
 	}
-	if (client && (isOwnedInventoryItem(this, item) || isOwnedOrOpenContainer(this, container))) {
+	if (canReceiveAstraItemState() && (isOwnedInventoryItem(this, item) || isOwnedOrOpenContainer(this, container))) {
 		scheduleAstraPlayerInventorySnapshot();
 	}
 
@@ -2579,9 +2579,10 @@ void Player::onAddContainerItem(const Item* item)
 
 void Player::onUpdateContainerItem(const Container* container, const Item* oldItem, const Item* newItem)
 {
-	const bool updatesAstraInventory = client && (isOwnedOrOpenContainer(this, container) ||
-	                                             isOwnedInventoryItem(this, oldItem) ||
-	                                             isOwnedInventoryItem(this, newItem));
+	const bool updatesAstraInventory = canReceiveAstraItemState() &&
+	                                   (isOwnedOrOpenContainer(this, container) ||
+	                                    isOwnedInventoryItem(this, oldItem) ||
+	                                    isOwnedInventoryItem(this, newItem));
 	if (oldItem == newItem && updatesAstraInventory) {
 		scheduleAstraPlayerInventorySnapshot();
 	}
@@ -2597,7 +2598,7 @@ void Player::onUpdateContainerItem(const Container* container, const Item* oldIt
 
 void Player::onRemoveContainerItem(const Container* container, const Item* item)
 {
-	if (client && (isOwnedOrOpenContainer(this, container) || isOwnedInventoryItem(this, item))) {
+	if (canReceiveAstraItemState() && (isOwnedOrOpenContainer(this, container) || isOwnedInventoryItem(this, item))) {
 		scheduleAstraPlayerInventorySnapshot();
 	}
 
@@ -2680,9 +2681,19 @@ void Player::onRemoveInventoryItem(Item* item)
 	}
 }
 
-void Player::sendAstraPlayerInventorySnapshot() const
+bool Player::canReceiveAstraItemState() const
 {
 	if (!client) {
+		return false;
+	}
+
+	const ProtocolGame_ptr protocol = client->protocol();
+	return protocol && protocol->canSendAstraItemState();
+}
+
+void Player::sendAstraPlayerInventorySnapshot() const
+{
+	if (!canReceiveAstraItemState()) {
 		return;
 	}
 
@@ -2693,6 +2704,10 @@ void Player::sendAstraPlayerInventorySnapshot() const
 
 void Player::scheduleAstraPlayerInventorySnapshot()
 {
+	if (!canReceiveAstraItemState()) {
+		return;
+	}
+
 	if (astraPlayerInventorySnapshotScheduled) {
 		return;
 	}
