@@ -9,6 +9,8 @@
 #include "protocol.h"
 #include "tasks.h"
 
+enum FieldType : uint8_t;
+
 class NetworkMessage;
 class Player;
 class Game;
@@ -228,6 +230,7 @@ private:
 
 	// tiles
 	void sendMapDescription(const Position& pos);
+	void sendFieldUpdates(const Position& center, FieldType mask);
 	void refreshWorldView();
 	void refreshMagicWallViews();
 

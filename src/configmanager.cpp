@@ -512,6 +512,8 @@ bool ConfigManager::load()
 	booleans[Boolean::STRESS_TEST_SHUTDOWN_SEND] = getGlobalBoolean(L, "stressTestShutdownSend", true);
 	booleans[Boolean::CLEAVE_SYSTEM_ENABLED] = getGlobalBoolean(L, "cleavesystem", true);
 
+	booleans[Boolean::FIELD_REGISTRY_METRICS] = getGlobalBoolean(L, "fieldRegistryMetrics", false);
+
 	integers[Integer::CLEAVE_DEFAULT_PERCENT] = std::clamp<int64_t>(getGlobalInteger(L, "cleaveDefaultPercent", 30), 0, 100);
 	integers[Integer::CLEAVE_FIST_PERCENT] = std::clamp<int64_t>(getGlobalInteger(L, "cleaveFistPercent", 20), 0, 100);
 

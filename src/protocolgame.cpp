@@ -22,6 +22,7 @@
 #include "scheduler.h"
 #include "scriptmanager.h"
 #include "thread_pool.h"
+#include "field_registry.h"
 
 #include <limits>
 #include <map>
@@ -3214,6 +3215,28 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendFieldUpdates(const Position& center, FieldType mask)
+{
+	int32_t minx = center.x - Map::maxClientViewportX;
+	int32_t miny = center.y - Map::maxClientViewportY;
+	int32_t maxx = center.x + (Map::maxClientViewportX + 1);
+	int32_t maxy = center.y + (Map::maxClientViewportY + 1);
+
+	if (minx < 0) minx = 0;
+	if (miny < 0) miny = 0;
+
+	Position minPos(static_cast<uint16_t>(minx), static_cast<uint16_t>(miny), static_cast<uint8_t>(center.z));
+	Position maxPos(static_cast<uint16_t>(maxx), static_cast<uint16_t>(maxy), static_cast<uint8_t>(center.z));
+
+	auto positions = FieldRegistry::instance().getPositionsInRange(minPos, maxPos, static_cast<int16_t>(center.z), mask);
+	for (const Position& p : positions) {
+		Tile* tile = g_game.map.getTile(p.x, p.y, p.z);
+		if (tile) {
+			sendUpdateTile(tile, p);
+		}
+	}
+}
+
 void ProtocolGame::sendCreatureHealth(const Creature* creature)
 {
 	NetworkMessage msg;
@@ -3246,6 +3269,7 @@ void ProtocolGame::sendMapDescription(const Position& pos)
 	GetMapDescription(pos.x - Map::maxClientViewportX, pos.y - Map::maxClientViewportY, pos.z,
 	                  (Map::maxClientViewportX * 2) + 2, (Map::maxClientViewportY * 2) + 2, msg);
 	writeToOutputBuffer(msg);
+	sendFieldUpdates(pos, static_cast<FieldType>(FIELD_MAGICWALL | FIELD_FIRE | FIELD_POISON | FIELD_ENERGY | FIELD_WILDGROWTH));
 }
 
 void ProtocolGame::refreshWorldView()

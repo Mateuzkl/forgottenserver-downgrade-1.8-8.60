@@ -540,6 +540,9 @@ adminEncryptionData = ""
 adminLogs = true
 adminConnectionsLimit = 1
 
+-- FieldRegistry: enable periodic metrics logging (reads/writes/adds/removes/lock times)
+fieldRegistryMetrics = false
+
 -- Chain System
 -- Chain system allows attacks to bounce from target to nearby targets
 toggleChainSystem = true
