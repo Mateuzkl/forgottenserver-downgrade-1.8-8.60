@@ -2653,10 +2653,6 @@ ReturnValue validateHotkeyEquip(Player* player, Item* item, slots_t slot)
 		return RETURNVALUE_ITEMCANNOTBEMOVEDTHERE;
 	}
 
-	if (!player->hasCapacity(item, item->getItemCount())) {
-		return RETURNVALUE_NOTENOUGHCAPACITY;
-	}
-
 	return g_moveEvents->onPlayerEquip(player, item, slot, true);
 }
 
