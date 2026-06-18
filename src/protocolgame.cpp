@@ -667,6 +667,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 
 	IOLoginData::loadPlayerWorldData(player.get());
 
+	player->client->setOwner(getThis());
 	player->setOperatingSystem(operatingSystem);
 	player->client->isOTCv8 = isOTCv8;
 	player->client->isMehah = isMehah;
