@@ -258,11 +258,12 @@ bool Weapon::useFist(Player* player, Creature* target)
 	damage.primary.value = -normal_random(0, maxDamage);
 
 	CombatDamage cleaveSnapshot = damage;
+	uint32_t targetId = target->getID();
 	Combat::doTargetCombat(player, target, damage, params);
 	if (player->checkCleaveSystem()) {
 		uint32_t cleavePercent = Combat::getCleaveFistPercent();
 		if (cleavePercent > 0) {
-			Combat::doCombatCleave(player, target, cleaveSnapshot, params, cleavePercent);
+			Combat::doCombatCleave(player, targetId, cleaveSnapshot, params, cleavePercent);
 		}
 	}
 	if (!player->hasFlag(PlayerFlag_NotGainSkill) && player->getAddAttackSkill()) {
@@ -294,6 +295,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 		damage.secondary.value = (getElementDamage(player, target, item) * damageModifier) / 100;
 
 		CombatDamage cleaveSnapshot = damage;
+		uint32_t targetId = target->getID();
 
 		if (player->checkChainSystem()) {
 			auto chainCombat = std::make_shared<Combat>();
@@ -313,7 +315,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 				cleavePercent = Combat::getCleaveDefaultPercent();
 			}
 			if (cleavePercent > 0) {
-				Combat::doCombatCleave(player, target, cleaveSnapshot, params, cleavePercent);
+				Combat::doCombatCleave(player, targetId, cleaveSnapshot, params, cleavePercent);
 			}
 		}
 

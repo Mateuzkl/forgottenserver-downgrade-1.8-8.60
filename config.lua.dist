@@ -559,4 +559,4 @@ combatChainSkillFormulaWandsAndRods = 1.0
 -- Cleave allows melee attacks to deal area damage to monsters around the player.
 -- Enabled by default for Knights, Elite Knights, Monks, and Exalted Monks.
 -- Turn on/off per player via !cleave talkaction.
--- Cleave percentage and fist percentage are configured in data/scripts/systems/cleave.lua
+-- Cleave percentage and fist percentage are configured in data/server_config.lua (cleaveDefaultPercent / cleaveFistPercent)

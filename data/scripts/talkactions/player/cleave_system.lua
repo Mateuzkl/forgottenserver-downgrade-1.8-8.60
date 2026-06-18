@@ -32,7 +32,7 @@ function cleaveTalk.onSay(player, words, param)
 		local stateText = (enabled == true) and "enabled" or "disabled"
 		player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("Cleave system: %s. Use !cleave on or !cleave off.", stateText))
 	end
-	return false
+	return true
 end
 
 cleaveTalk:separator(" ")

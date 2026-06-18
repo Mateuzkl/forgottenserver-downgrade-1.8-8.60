@@ -47,7 +47,7 @@ function chainSystem.onSay(player, words, param)
 		local stateText = (enabled == true) and "enabled" or "disabled"
 		player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("Chain system: %s. Use !chain on or !chain off.", stateText))
 	end
-	return false
+	return true
 end
 
 chainSystem:separator(" ")

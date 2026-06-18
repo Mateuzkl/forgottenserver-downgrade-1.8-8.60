@@ -128,7 +128,7 @@ uint32_t Combat::getCleaveFistPercent()
 	return static_cast<uint32_t>(ConfigManager::getInteger(ConfigManager::CLEAVE_FIST_PERCENT));
 }
 
-void Combat::doCombatCleave(Creature* caster, Creature* primaryTarget, const CombatDamage& originalDamage,
+void Combat::doCombatCleave(Creature* caster, uint32_t primaryTargetId, const CombatDamage& originalDamage,
                             const CombatParams& params, uint32_t cleavePercent)
 {
 	if (cleavePercent == 0 || !caster) {
@@ -138,8 +138,10 @@ void Combat::doCombatCleave(Creature* caster, Creature* primaryTarget, const Com
 	const uint32_t casterId = caster->getID();
 	const Position casterPos = caster->getPosition();
 
+	// onlyMonsters=true guarantees players are never returned, so cleave never hits players even in open-PvP zones.
+	// The getMaster check below still guards against player summons/familiars (which also satisfy isMonster()).
 	SpectatorVec spectators;
-	g_game.map.getSpectators(spectators, casterPos, false, false);
+	g_game.map.getSpectators(spectators, casterPos, false, false, 1, 1, 1, 1, true);
 
 	for (const auto& spectator : spectators) {
 		Creature* resolvedCaster = g_game.getCreatureByID(casterId);
@@ -148,23 +150,11 @@ void Combat::doCombatCleave(Creature* caster, Creature* primaryTarget, const Com
 		}
 
 		Creature* creature = spectator.get();
-		if (!creature || creature == resolvedCaster || creature == primaryTarget) {
-			continue;
-		}
-
-		const Position& targetPos = creature->getPosition();
-		if (targetPos.z != casterPos.z) {
-			continue;
-		}
-		if (std::abs(targetPos.x - casterPos.x) > 1 || std::abs(targetPos.y - casterPos.y) > 1) {
+		if (!creature || creature == resolvedCaster || creature->getID() == primaryTargetId) {
 			continue;
 		}
 
 		if (Combat::canDoCombat(resolvedCaster, creature) != RETURNVALUE_NOERROR) {
-			continue;
-		}
-
-		if (!creature->getMonster()) {
 			continue;
 		}
 
