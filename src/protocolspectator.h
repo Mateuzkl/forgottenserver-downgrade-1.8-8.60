@@ -728,6 +728,19 @@ class ProtocolSpectator {
                 spy->refreshWorldView();
         }
 
+        void refreshMagicWallViews()
+        {
+            auto o = owner.lock();
+            if (o)
+                o->refreshMagicWallViews();
+
+            for (auto &it : spectators)
+                it->refreshMagicWallViews();
+
+            for (auto &spy : spyClients_)
+                spy->refreshMagicWallViews();
+        }
+
 
         void sendAddTileItem(const Position& pos, uint32_t stackpos, const Item* item) {
             auto o = owner.lock();

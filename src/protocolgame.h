@@ -229,6 +229,7 @@ private:
 	// tiles
 	void sendMapDescription(const Position& pos);
 	void refreshWorldView();
+	void refreshMagicWallViews();
 
 	void sendAddTileItem(const Position& pos, uint32_t stackpos, const Item* item);
 	void sendUpdateTileItem(const Position& pos, uint32_t stackpos, const Item* item);

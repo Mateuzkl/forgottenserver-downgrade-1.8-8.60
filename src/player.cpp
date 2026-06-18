@@ -461,6 +461,18 @@ bool Player::unlockWithToken(const std::string& token)
 	return false;
 }
 
+void Player::setMagicWallOldViewEnabled(bool enabled, bool sendRefresh)
+{
+	if (magicWallOldViewEnabled == enabled) {
+		return;
+	}
+	magicWallOldViewEnabled = enabled;
+
+	if (sendRefresh && client) {
+		client->refreshMagicWallViews();
+	}
+}
+
 bool Player::isPushable() const
 {
 	if (isAccountManager()) {

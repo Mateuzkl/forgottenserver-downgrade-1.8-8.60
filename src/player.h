@@ -535,6 +535,14 @@ public:
 	void setTokenLocked(bool locked) { tokenLocked = locked; }
 	bool unlockWithToken(const std::string& token);
 
+	bool isMagicWallOldViewEnabled() const { return magicWallOldViewEnabled; }
+	void setMagicWallOldViewEnabled(bool enabled, bool sendRefresh = true);
+
+	static bool isMagicWallItemId(uint16_t itemId)
+	{
+		return itemId == ITEM_MAGICWALL;
+	}
+
 	bool setVocation(uint16_t vocId);
 	uint16_t getVocationId() const { return vocation->getId(); }
 	bool isSorcerer() const { return vocation->getId() == 1 || vocation->getFromVocation() == 1; }
@@ -975,6 +983,13 @@ public:
 	{
 		if (client) {
 			client->refreshWorldView();
+		}
+	}
+
+	void refreshMagicWallViews()
+	{
+		if (client) {
+			client->refreshMagicWallViews();
 		}
 	}
 
@@ -1757,6 +1772,7 @@ private:
 	bool tokenProtected = false;
 	std::string tokenHash;
 	bool tokenLocked = false;
+	bool magicWallOldViewEnabled = false;
 	bool staminaPzActive = false;
 	bool staminaTrainerActive = false;
 	bool astraPlayerInventorySnapshotScheduled = false;

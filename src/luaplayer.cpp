@@ -4123,6 +4123,33 @@ int luaPlayerRefreshWorldView(lua_State *L)
 	return 1;
 }
 
+int luaPlayerSetMagicWallOldView(lua_State* L)
+{
+	// player:setMagicWallOldView(enabled, [sendRefresh = true])
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		bool enabled = getBoolean(L, 2);
+		bool sendRefresh = getBoolean(L, 3, true);
+		player->setMagicWallOldViewEnabled(enabled, sendRefresh);
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerIsMagicWallOldViewEnabled(lua_State* L)
+{
+	// player:isMagicWallOldViewEnabled()
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		pushBoolean(L, player->isMagicWallOldViewEnabled());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerGetHelmetCooldownReduction(lua_State *L)
 {
 	// player:getHelmetCooldownReduction()
@@ -4866,6 +4893,8 @@ void LuaScriptInterface::registerPlayer()
 
 	// Instance system
 	registerMethod("Player", "refreshWorldView", luaPlayerRefreshWorldView);
+	registerMethod("Player", "setMagicWallOldView", luaPlayerSetMagicWallOldView);
+	registerMethod("Player", "isMagicWallOldViewEnabled", luaPlayerIsMagicWallOldViewEnabled);
 
 	// Forge Momentum
 	registerMethod("Player", "getHelmetCooldownReduction", luaPlayerGetHelmetCooldownReduction);
