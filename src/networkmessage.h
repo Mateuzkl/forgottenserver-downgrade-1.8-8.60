@@ -125,7 +125,7 @@ public:
 	void addItem(uint16_t id, uint8_t count, bool sendTier = false, bool alwaysSendTier = false,
 	             bool sendQuickLootFlags = false);
 	void addItem(const Item* item, bool sendTier = false, bool alwaysSendTier = false, bool sendQuiverCount = false,
-	             bool sendQuickLootFlags = false);
+	             bool sendQuickLootFlags = false, bool sendAstraItemState = false);
 
 	MsgSize_t getLength() const { return info.length; }
 

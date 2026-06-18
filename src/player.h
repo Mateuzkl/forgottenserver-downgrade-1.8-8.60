@@ -1181,6 +1181,7 @@ public:
 	// inventory
 	void onUpdateInventoryItem(Item* oldItem, Item* newItem);
 	void onRemoveInventoryItem(Item* item);
+	void sendAstraPlayerInventorySnapshot() const;
 
 	void sendCancelMessage(std::string_view msg) const
 	{

@@ -380,6 +380,7 @@ public:
 	// Implementation of player invoked events
 	void playerMoveThing(uint32_t playerId, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
 	                     const Position& toPos, uint8_t count);
+	void playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier = false, uint8_t tier = 0);
 	void playerMoveCreatureByID(uint32_t playerId, uint32_t movingCreatureId, const Position& movingCreatureOrigPos,
 	                            const Position& toPos);
 	void playerMoveCreature(Player* player, Creature* movingCreature, const Position& movingCreatureOrigPos,

@@ -109,6 +109,7 @@ private:
 	void parseRuleViolationReport(NetworkMessage& msg);
 
 	void parseThrow(NetworkMessage& msg);
+	void parseHotkeyEquip(NetworkMessage& msg);
 	void parseUseItemEx(NetworkMessage& msg);
 	void parseUseWithCreature(NetworkMessage& msg);
 	void parseUseItem(NetworkMessage& msg);
@@ -250,6 +251,7 @@ private:
 
 	// inventory
 	void sendInventoryItem(slots_t slot, const Item* item);
+	void sendPlayerInventory();
 	void sendImbuementDurations(slots_t updatedSlot = CONST_SLOT_WHEREEVER, const Item* updatedItem = nullptr);
 
 	// messages

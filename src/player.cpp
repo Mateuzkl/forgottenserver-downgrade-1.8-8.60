@@ -79,6 +79,40 @@ void addClamped(int32_t& target, int64_t value)
 	                                                 std::numeric_limits<int32_t>::max()));
 }
 
+bool isOwnedInventoryItem(const Player* player, const Item* item)
+{
+	return player && item && item->getTopParent() == player;
+}
+
+bool isOwnedOrOpenContainer(const Player* player, const Container* container)
+{
+	if (!player || !container) {
+		return false;
+	}
+
+	if (container->getTopParent() == player) {
+		return true;
+	}
+
+	for (const auto& it : player->getOpenContainers()) {
+		auto openContainer = it.second.container.lock();
+		if (openContainer.get() == container) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void sendAstraPlayerInventorySnapshotLater(uint32_t playerId)
+{
+	g_dispatcher.addTask([playerId]() {
+		if (auto player = g_game.getPlayerByID(playerId)) {
+			player->sendAstraPlayerInventorySnapshot();
+		}
+	});
+}
+
 void addSpellAugmentBonus(ProficiencySpellAugmentBonus& bonus, Augment_t augmentType, double value)
 {
 	switch (augmentType) {
@@ -2535,12 +2569,37 @@ void Player::onCreatureMove(Creature* creature, const Tile* newTile, const Posit
 }
 
 // container
-void Player::onAddContainerItem(const Item* item) { checkTradeState(item); }
+void Player::onAddContainerItem(const Item* item)
+{
+	const Container* container = nullptr;
+	if (item) {
+		if (const Cylinder* parent = item->getParent()) {
+			if (const Item* parentItem = parent->getItem()) {
+				container = parentItem->getContainer();
+			}
+		}
+	}
+	if (client && (isOwnedInventoryItem(this, item) || isOwnedOrOpenContainer(this, container))) {
+		sendAstraPlayerInventorySnapshot();
+	}
+
+	checkTradeState(item);
+}
 
 void Player::onUpdateContainerItem(const Container* container, const Item* oldItem, const Item* newItem)
 {
+	const bool updatesAstraInventory = client && (isOwnedOrOpenContainer(this, container) ||
+	                                             isOwnedInventoryItem(this, oldItem) ||
+	                                             isOwnedInventoryItem(this, newItem));
+	if (oldItem == newItem && updatesAstraInventory) {
+		sendAstraPlayerInventorySnapshot();
+	}
+
 	if (oldItem != newItem) {
 		onRemoveContainerItem(container, oldItem);
+		if (updatesAstraInventory) {
+			sendAstraPlayerInventorySnapshot();
+		}
 	}
 
 	if (tradeState != TRADE_TRANSFER) {
@@ -2550,6 +2609,10 @@ void Player::onUpdateContainerItem(const Container* container, const Item* oldIt
 
 void Player::onRemoveContainerItem(const Container* container, const Item* item)
 {
+	if (client && (isOwnedOrOpenContainer(this, container) || isOwnedInventoryItem(this, item))) {
+		sendAstraPlayerInventorySnapshotLater(getID());
+	}
+
 	if (tradeState != TRADE_TRANSFER) {
 		checkTradeState(item);
 
@@ -2626,6 +2689,17 @@ void Player::onRemoveInventoryItem(Item* item)
 				g_game.internalCloseTrade(this);
 			}
 		}
+	}
+}
+
+void Player::sendAstraPlayerInventorySnapshot() const
+{
+	if (!client) {
+		return;
+	}
+
+	if (const ProtocolGame_ptr protocol = client->protocol()) {
+		protocol->sendPlayerInventory();
 	}
 }
 
@@ -4200,6 +4274,7 @@ void Player::addThing(int32_t index, Thing* thing)
 
 	// send to client
 	sendInventoryItem(static_cast<slots_t>(index), item);
+	sendAstraPlayerInventorySnapshot();
 }
 
 void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
@@ -4222,6 +4297,7 @@ void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 
 	// event methods
 	onUpdateInventoryItem(item, item);
+	sendAstraPlayerInventorySnapshot();
 }
 
 void Player::replaceThing(uint32_t index, Thing* thing)
@@ -4259,6 +4335,7 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 	if (oldItem != item) {
 		oldItem->setParent(nullptr);
 	}
+	sendAstraPlayerInventorySnapshot();
 }
 
 void Player::removeThing(Thing* thing, uint32_t count)
@@ -4283,6 +4360,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 			item->setParent(nullptr);
 			inventory[index].reset();
+			sendAstraPlayerInventorySnapshot();
 		} else {
 			uint8_t newCount = static_cast<uint8_t>(std::max<int32_t>(0, item->getItemCount() - count));
 			item->setItemCount(newCount);
@@ -4292,6 +4370,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 			// event methods
 			onUpdateInventoryItem(item, item);
+			sendAstraPlayerInventorySnapshot();
 		}
 	} else {
 		// send change to client
@@ -4302,6 +4381,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 		item->setParent(nullptr);
 		inventory[index].reset();
+		sendAstraPlayerInventorySnapshot();
 	}
 }
 

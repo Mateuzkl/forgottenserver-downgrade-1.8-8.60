@@ -128,7 +128,7 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 }
 
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
-                             bool sendQuickLootFlags)
+                             bool sendQuickLootFlags, bool sendAstraItemState)
 {
 	addItemId(item->getID());
 
@@ -149,6 +149,30 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
 	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
 		addByte(item->getTier());
+	}
+
+	if (sendAstraItemState) {
+		const bool hasDuration = (it.showDuration || item->hasAttribute(ITEM_ATTRIBUTE_DURATION) ||
+		                          item->hasAttribute(ITEM_ATTRIBUTE_DURATION_TIMESTAMP)) &&
+		                         item->getDuration() > 0;
+		addByte(hasDuration ? 1 : 0);
+		if (hasDuration) {
+			add<uint32_t>(static_cast<uint32_t>(std::max<int32_t>(0, item->getDuration()) / 1000));
+			addByte(it.stopTime ? 1 : 0);
+		}
+
+		uint32_t charges = 0;
+		if (it.charges != 0) {
+			charges = item->getSubType();
+		} else if (it.showCharges || item->hasAttribute(ITEM_ATTRIBUTE_CHARGES)) {
+			charges = item->getCharges();
+		}
+
+		addByte(charges > 0 ? 1 : 0);
+		if (charges > 0) {
+			add<uint32_t>(charges);
+			addByte((it.charges != 0 && charges == it.charges) ? 1 : 0);
+		}
 	}
 }
 

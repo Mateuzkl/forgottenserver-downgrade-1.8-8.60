@@ -2581,10 +2581,14 @@ ReturnValue Game::internalTeleport(Thing* thing, const Position& newPos, bool pu
 	return RETURNVALUE_NOTPOSSIBLE;
 }
 
-Item* searchForItem(Container* container, uint16_t itemId)
+Item* searchForItem(Container* container, uint16_t itemId, bool hasTier = false, uint8_t tier = 0)
 {
+	if (!container) {
+		return nullptr;
+	}
+
 	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-		if ((*it)->getID() == itemId) {
+		if ((*it)->getID() == itemId && (!hasTier || (*it)->getTier() == tier)) {
 			return *it;
 		}
 	}
@@ -2620,7 +2624,105 @@ slots_t getSlotType(const ItemType& it)
 	return slot;
 }
 
+bool isHotkeyEquippedItem(const Item* slotItem, uint16_t itemId, bool hasTier, uint8_t tier)
+{
+	if (!slotItem || (hasTier && slotItem->getTier() != tier)) {
+		return false;
+	}
+
+	if (slotItem->getID() == itemId) {
+		return true;
+	}
+
+	const ItemType& hotkeyType = Item::items[itemId];
+	const ItemType& equippedType = Item::items[slotItem->getID()];
+	return hotkeyType.transformEquipTo == slotItem->getID() || equippedType.transformDeEquipTo == itemId;
+}
+
 // Implementation of player invoked events
+void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= false*/, uint8_t tier /*= 0*/)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player) {
+		return;
+	}
+
+	const ItemType& it = Item::items[itemId];
+	slots_t slot = getSlotType(it);
+
+	if (!player->canDoAction()) {
+		const uint32_t delay = player->getNextActionTime();
+		auto task = createSchedulerTask(delay, ([this, playerId, itemId, hasTier, tier]() {
+			playerEquipItem(playerId, itemId, hasTier, tier);
+		}));
+		player->setNextActionTask(std::move(task));
+		return;
+	}
+
+	if (player->hasCondition(CONDITION_FEARED)) {
+		player->sendTextMessage(MESSAGE_STATUS_SMALL, "You are feared.");
+		return;
+	}
+
+	Item* backpackItem = player->getInventoryItem(CONST_SLOT_BACKPACK);
+	Container* backpack = backpackItem ? backpackItem->getContainer() : nullptr;
+	Item* slotItem = player->getInventoryItem(slot);
+	Item* equipItem = searchForItem(backpack, itemId, hasTier, tier);
+
+	ReturnValue ret = RETURNVALUE_NOERROR;
+	if (isHotkeyEquippedItem(slotItem, itemId, hasTier, tier)) {
+		if (!backpack) {
+			player->sendCancelMessage(RETURNVALUE_NOTENOUGHROOM);
+			return;
+		}
+		ret = internalMoveItem(slotItem->getParent(), backpack, INDEX_WHEREEVER, slotItem, slotItem->getItemCount(), nullptr, 0, player);
+	} else if (equipItem) {
+		Item* rightItem = player->getInventoryItem(CONST_SLOT_RIGHT);
+		if (it.weaponType == WEAPON_AMMO) {
+			if (rightItem && rightItem->getWeaponType() == WEAPON_QUIVER) {
+				ret = internalMoveItem(equipItem->getParent(), rightItem->getContainer(), INDEX_WHEREEVER, equipItem, equipItem->getItemCount(), nullptr, 0, player);
+			}
+		} else {
+			Item* leftItem = player->getInventoryItem(CONST_SLOT_LEFT);
+			const int32_t slotPosition = equipItem->getSlotPosition();
+			if ((slotPosition & SLOTP_LEFT) && (slotPosition & SLOTP_TWO_HAND) && rightItem && rightItem->getWeaponType() != WEAPON_QUIVER) {
+				if (!backpack) {
+					player->sendCancelMessage(RETURNVALUE_NOTENOUGHROOM);
+					return;
+				}
+				ret = internalMoveItem(rightItem->getParent(), backpack, INDEX_WHEREEVER, rightItem, rightItem->getItemCount(), nullptr, 0, player);
+				if (ret != RETURNVALUE_NOERROR) {
+					player->sendCancelMessage(ret);
+					return;
+				}
+			}
+
+			if (slot == CONST_SLOT_RIGHT && it.weaponType != WEAPON_QUIVER && leftItem && leftItem->getSlotPosition() & SLOTP_TWO_HAND) {
+				if (!backpack) {
+					player->sendCancelMessage(RETURNVALUE_NOTENOUGHROOM);
+					return;
+				}
+				ret = internalMoveItem(leftItem->getParent(), backpack, INDEX_WHEREEVER, leftItem, leftItem->getItemCount(), nullptr, 0, player);
+				if (ret != RETURNVALUE_NOERROR) {
+					player->sendCancelMessage(ret);
+					return;
+				}
+			}
+
+			ret = internalMoveItem(equipItem->getParent(), player, slot, equipItem, equipItem->getItemCount(), nullptr, 0, player);
+		}
+	}
+
+	if (ret != RETURNVALUE_NOERROR) {
+		player->sendCancelMessage(ret);
+		return;
+	}
+
+	player->setNextAction(OTSYS_TIME() + getMoveItemExhaustionDelay(Position(0xFFFF, slot, 0)));
+	player->sendAstraPlayerInventorySnapshot();
+}
+
 void Game::playerMove(uint32_t playerId, Direction direction)
 {
 	auto playerRef = getPlayerByID(playerId);
