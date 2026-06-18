@@ -2639,12 +2639,37 @@ bool isHotkeyEquippedItem(const Item* slotItem, uint16_t itemId, bool hasTier, u
 	return hotkeyType.transformEquipTo == slotItem->getID() || equippedType.transformDeEquipTo == itemId;
 }
 
+ReturnValue validateHotkeyEquip(Player* player, Item* item, slots_t slot)
+{
+	if (!item) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+
+	if (!item->isPickupable()) {
+		return RETURNVALUE_CANNOTPICKUP;
+	}
+
+	if (item->isStoreItem()) {
+		return RETURNVALUE_ITEMCANNOTBEMOVEDTHERE;
+	}
+
+	if (!player->hasCapacity(item, item->getItemCount())) {
+		return RETURNVALUE_NOTENOUGHCAPACITY;
+	}
+
+	return g_moveEvents->onPlayerEquip(player, item, slot, true);
+}
+
 // Implementation of player invoked events
 void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= false*/, uint8_t tier /*= 0*/)
 {
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
 	if (!player) {
+		return;
+	}
+
+	if (itemId == 0 || itemId >= Item::items.size()) {
 		return;
 	}
 
@@ -2671,6 +2696,8 @@ void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= 
 	Item* equipItem = searchForItem(backpack, itemId, hasTier, tier);
 
 	ReturnValue ret = RETURNVALUE_NOERROR;
+	Item* restoreRightItem = nullptr;
+	Item* restoreLeftItem = nullptr;
 	if (isHotkeyEquippedItem(slotItem, itemId, hasTier, tier)) {
 		if (!backpack) {
 			player->sendCancelMessage(RETURNVALUE_NOTENOUGHROOM);
@@ -2682,13 +2709,21 @@ void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= 
 		if (it.weaponType == WEAPON_AMMO) {
 			if (rightItem && rightItem->getWeaponType() == WEAPON_QUIVER) {
 				ret = internalMoveItem(equipItem->getParent(), rightItem->getContainer(), INDEX_WHEREEVER, equipItem, equipItem->getItemCount(), nullptr, 0, player);
+			} else {
+				ret = internalMoveItem(equipItem->getParent(), player, CONST_SLOT_AMMO, equipItem, equipItem->getItemCount(), nullptr, 0, player);
 			}
 		} else {
 			Item* leftItem = player->getInventoryItem(CONST_SLOT_LEFT);
 			const int32_t slotPosition = equipItem->getSlotPosition();
-			if ((slotPosition & SLOTP_LEFT) && (slotPosition & SLOTP_TWO_HAND) && rightItem && rightItem->getWeaponType() != WEAPON_QUIVER) {
+			const bool equipTwoHandedLeft = (slotPosition & SLOTP_LEFT) && (slotPosition & SLOTP_TWO_HAND);
+			if (equipTwoHandedLeft && rightItem && rightItem->getWeaponType() != WEAPON_QUIVER) {
 				if (!backpack) {
 					player->sendCancelMessage(RETURNVALUE_NOTENOUGHROOM);
+					return;
+				}
+				ret = validateHotkeyEquip(player, equipItem, slot);
+				if (ret != RETURNVALUE_NOERROR) {
+					player->sendCancelMessage(ret);
 					return;
 				}
 				ret = internalMoveItem(rightItem->getParent(), backpack, INDEX_WHEREEVER, rightItem, rightItem->getItemCount(), nullptr, 0, player);
@@ -2696,11 +2731,18 @@ void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= 
 					player->sendCancelMessage(ret);
 					return;
 				}
+				restoreRightItem = rightItem;
 			}
 
-			if (slot == CONST_SLOT_RIGHT && it.weaponType != WEAPON_QUIVER && leftItem && leftItem->getSlotPosition() & SLOTP_TWO_HAND) {
+			if (slot == CONST_SLOT_RIGHT && it.weaponType != WEAPON_QUIVER && leftItem &&
+			    (leftItem->getSlotPosition() & SLOTP_TWO_HAND)) {
 				if (!backpack) {
 					player->sendCancelMessage(RETURNVALUE_NOTENOUGHROOM);
+					return;
+				}
+				ret = validateHotkeyEquip(player, equipItem, slot);
+				if (ret != RETURNVALUE_NOERROR) {
+					player->sendCancelMessage(ret);
 					return;
 				}
 				ret = internalMoveItem(leftItem->getParent(), backpack, INDEX_WHEREEVER, leftItem, leftItem->getItemCount(), nullptr, 0, player);
@@ -2708,6 +2750,7 @@ void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= 
 					player->sendCancelMessage(ret);
 					return;
 				}
+				restoreLeftItem = leftItem;
 			}
 
 			ret = internalMoveItem(equipItem->getParent(), player, slot, equipItem, equipItem->getItemCount(), nullptr, 0, player);
@@ -2715,6 +2758,14 @@ void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= 
 	}
 
 	if (ret != RETURNVALUE_NOERROR) {
+		if (restoreLeftItem && !restoreLeftItem->isRemoved()) {
+			internalMoveItem(restoreLeftItem->getParent(), player, CONST_SLOT_LEFT, restoreLeftItem,
+			                 restoreLeftItem->getItemCount(), nullptr, 0, player);
+		}
+		if (restoreRightItem && !restoreRightItem->isRemoved()) {
+			internalMoveItem(restoreRightItem->getParent(), player, CONST_SLOT_RIGHT, restoreRightItem,
+			                 restoreRightItem->getItemCount(), nullptr, 0, player);
+		}
 		player->sendCancelMessage(ret);
 		return;
 	}

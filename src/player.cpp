@@ -2597,9 +2597,6 @@ void Player::onUpdateContainerItem(const Container* container, const Item* oldIt
 
 	if (oldItem != newItem) {
 		onRemoveContainerItem(container, oldItem);
-		if (updatesAstraInventory) {
-			sendAstraPlayerInventorySnapshot();
-		}
 	}
 
 	if (tradeState != TRADE_TRANSFER) {

@@ -74,7 +74,7 @@ void addPlayerInventoryItem(PlayerInventoryCounts& counts, const Item* item)
 	counts[key] += getPlayerInventoryItemAmount(item);
 
 	if (const Container* container = item->getContainer()) {
-		for (const auto& child : container->getItems(true)) {
+		for (const auto& child : container->getItems(false)) {
 			addPlayerInventoryItem(counts, child.get());
 		}
 	}
@@ -1847,6 +1847,10 @@ void ProtocolGame::parseHotkeyEquip(NetworkMessage& msg)
 	}
 
 	uint16_t itemId = msg.get<uint16_t>();
+	if (itemId == 0 || itemId >= Item::items.size()) {
+		return;
+	}
+
 	uint8_t tier = 0;
 	bool hasTier = getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
 	               (useItemTierByte || (getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) &&
