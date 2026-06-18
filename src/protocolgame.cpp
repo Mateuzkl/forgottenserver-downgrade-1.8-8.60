@@ -1192,7 +1192,11 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			                     [playerID = player->getID()]() { g_game.playerTurn(playerID, DIRECTION_WEST); });
 			break;
 		case 0x77:
-			parseHotkeyEquip(msg);
+			if (isAstraClient) {
+				parseHotkeyEquip(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 		case 0x78:
 			parseThrow(msg);
@@ -1842,12 +1846,18 @@ void ProtocolGame::parseUseItem(NetworkMessage& msg)
 
 void ProtocolGame::parseHotkeyEquip(NetworkMessage& msg)
 {
-	if (!player || player->isAccountManager()) {
+	if (!player || !isAstraClient || player->isAccountManager()) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	if (!requireUnreadBytes(msg, 2)) {
 		return;
 	}
 
 	uint16_t itemId = msg.get<uint16_t>();
-	if (itemId == 0 || itemId >= Item::items.size()) {
+	if (itemId == 0 || itemId >= Item::items.size() || Item::items[itemId].id == 0) {
+		skipUnreadBytes(msg);
 		return;
 	}
 
@@ -1856,6 +1866,9 @@ void ProtocolGame::parseHotkeyEquip(NetworkMessage& msg)
 	               (useItemTierByte || (getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) &&
 	                                   Item::items[itemId].classification > 0));
 	if (hasTier) {
+		if (!requireUnreadBytes(msg, 1)) {
+			return;
+		}
 		tier = msg.getByte();
 	}
 
@@ -3537,7 +3550,7 @@ void ProtocolGame::sendInventoryItem(slots_t slot, const Item* item)
 
 void ProtocolGame::sendPlayerInventory()
 {
-	if (!player || !isAstraClient) {
+	if (!player || !isAstraClient || isSpectator) {
 		return;
 	}
 
@@ -3549,8 +3562,12 @@ void ProtocolGame::sendPlayerInventory()
 	NetworkMessage msg;
 	msg.addByte(0xF5);
 	constexpr std::size_t astraInventorySlotMarkers = 11;
-	const std::size_t totalItems = std::min<std::size_t>(
-	    counts.size() + astraInventorySlotMarkers, std::numeric_limits<uint16_t>::max());
+	const std::size_t inventoryEntries = counts.size() + astraInventorySlotMarkers;
+	if (inventoryEntries > std::numeric_limits<uint16_t>::max()) {
+		LOG_WARN("[AstraInventory] Inventory snapshot truncated for player {}", player->getName());
+	}
+
+	const std::size_t totalItems = std::min<std::size_t>(inventoryEntries, std::numeric_limits<uint16_t>::max());
 	msg.add<uint16_t>(static_cast<uint16_t>(totalItems));
 
 	std::size_t written = 0;

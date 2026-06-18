@@ -2751,6 +2751,9 @@ void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /*= 
 
 			ret = internalMoveItem(equipItem->getParent(), player, slot, equipItem, equipItem->getItemCount(), nullptr, 0, player);
 		}
+	} else {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
 	}
 
 	if (ret != RETURNVALUE_NOERROR) {
