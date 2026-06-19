@@ -302,8 +302,7 @@ CREATE TABLE IF NOT EXISTS `house_lists` (
   `listid` int NOT NULL,
   `list` text NOT NULL,
   KEY `idx_house_lists_world_id` (`world_id`),
-  FOREIGN KEY (`house_id`, `world_id`) REFERENCES `houses` (`id`, `world_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_house_lists_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  FOREIGN KEY (`house_id`, `world_id`) REFERENCES `houses` (`id`, `world_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `house_guests` (
@@ -313,8 +312,7 @@ CREATE TABLE IF NOT EXISTS `house_guests` (
   PRIMARY KEY (`house_id`, `player_id`, `world_id`),
   KEY `idx_house_guests_world_id` (`world_id`),
   FOREIGN KEY (`house_id`, `world_id`) REFERENCES `houses` (`id`, `world_id`) ON DELETE CASCADE,
-  FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_house_guests_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `market_history` (

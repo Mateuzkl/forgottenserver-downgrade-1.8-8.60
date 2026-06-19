@@ -20,6 +20,7 @@ WorldType_t GameWorlds::parseWorldType(std::string_view value)
 	if (type == "pvp-enforced" || type == "hardcore") {
 		return WORLD_TYPE_PVP_ENFORCED;
 	}
+	std::cout << "[Warning] Unknown world type '" << value << "', falling back to PVP." << std::endl;
 	return WORLD_TYPE_PVP;
 }
 
@@ -48,7 +49,8 @@ bool GameWorlds::ensureDefaultWorld()
 	    "INSERT IGNORE INTO `worlds` (`id`, `name`, `type`, `motd`, `location`, `ip`, `port`, `port_status`, `creation`) "
 	    "VALUES ({:d}, {:s}, {:s}, {:s}, {:s}, {:s}, {:d}, {:d}, UNIX_TIMESTAMP())",
 	    worldId, db.escapeString(ConfigManager::getString(ConfigManager::WORLD_NAME)),
-	    db.escapeString(ConfigManager::getString(ConfigManager::WORLD_TYPE)),
+	    db.escapeString(GameWorlds::getWorldTypeName(
+	        GameWorlds::parseWorldType(ConfigManager::getString(ConfigManager::WORLD_TYPE)))),
 	    db.escapeString(ConfigManager::getString(ConfigManager::MOTD)),
 	    db.escapeString(ConfigManager::getString(ConfigManager::WORLD_LOCATION)),
 	    db.escapeString(ConfigManager::getString(ConfigManager::WORLD_IP)),

@@ -99,7 +99,7 @@ function serverstartup.onStartup()
 
 	local resultId = db.storeQuery(
 		                 "SELECT `id`, `highest_bidder`, `last_bid`, (SELECT `balance` FROM `players` WHERE `players`.`id` = `highest_bidder`) AS `balance` FROM `houses` WHERE `owner` = 0 AND `bid_end` != 0 AND `bid_end` < " ..
-			                 os.time())
+			                 os.time() .. (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) and (" AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)) or ""))
 	if resultId ~= false then
 		repeat
 			local house = House(result.getNumber(resultId, "id"))
@@ -109,12 +109,12 @@ function serverstartup.onStartup()
 				local lastBid = result.getNumber(resultId, "last_bid")
 				if balance >= lastBid then
 					db.query("UPDATE `players` SET `balance` = " .. (balance - lastBid) ..
-						         " WHERE `id` = " .. highestBidder)
+						         " WHERE `id` = " .. highestBidder .. (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) and (" AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)) or ""))
 					house:setOwnerGuid(highestBidder)
 				end
 				db.asyncQuery(
 					"UPDATE `houses` SET `last_bid` = 0, `bid_end` = 0, `highest_bidder` = 0, `bid` = 0 WHERE `id` = " ..
-						house:getId())
+						house:getId() .. (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) and (" AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)) or ""))
 			end
 		until not result.next(resultId)
 		result.free(resultId)

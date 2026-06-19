@@ -242,7 +242,6 @@ function onUpdateDatabase()
 		{ "players", "fk_players_world" }, { "account_viplist", "fk_account_viplist_world" },
 		{ "guilds", "fk_guilds_world" }, { "guild_wars", "fk_guild_wars_world" },
 		{ "guild_war_kills", "fk_guild_war_kills_world" }, { "houses", "fk_houses_world" },
-		{ "house_lists", "fk_house_lists_world" }, { "house_guests", "fk_house_guests_world" },
 		{ "market_offers", "fk_market_offers_world" }, { "market_history", "fk_market_history_world" },
 		{ "player_deaths", "fk_player_deaths_world" }, { "player_deaths_backup", "fk_player_deaths_backup_world" },
 	}
