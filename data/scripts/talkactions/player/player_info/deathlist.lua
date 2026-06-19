@@ -2,7 +2,7 @@ local talkaction = TalkAction("!deathlist")
 
 local function worldWhere()
 	if configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) then
-		return " AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)
+		return " AND `world_id` = " .. math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1)
 	end
 	return ""
 end

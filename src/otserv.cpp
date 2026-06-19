@@ -371,12 +371,17 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	LOG_INFO(">> Checking world type... ");
 	std::string worldType;
 	if (ConfigManager::getBoolean(ConfigManager::MULTI_WORLD_ENABLED)) {
-		if (!g_game.getWorlds().ensureDefaultWorld() || !g_game.getWorlds().load()) {
+		const auto worldId = static_cast<uint16_t>(ConfigManager::getInteger(ConfigManager::WORLD_ID));
+		if (worldId == 1 && !g_game.getWorlds().ensureDefaultWorld()) {
+			startupErrorMessage("multiWorld enabled but failed to bootstrap default world 1.");
+			return;
+		}
+
+		if (!g_game.getWorlds().load()) {
 			startupErrorMessage("multiWorld enabled but the worlds table could not be loaded. Run database migrations first.");
 			return;
 		}
 
-		const auto worldId = static_cast<uint16_t>(ConfigManager::getInteger(ConfigManager::WORLD_ID));
 		g_game.getWorlds().setCurrentWorld(worldId);
 		const auto* currentWorld = g_game.getCurrentWorld();
 		if (!currentWorld) {

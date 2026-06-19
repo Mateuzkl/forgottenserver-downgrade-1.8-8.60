@@ -172,7 +172,10 @@ local function sendHighscores(player, requestType, categoryId, vocationId, world
 
 	local rows = loadRows(category.column, vocationCondition, page, entriesPerPage)
 	local serverName = getServerName()
-	local selectedWorld = (Game and Game.getWorldName and Game.getWorldName()) or (worldName ~= "" and worldName or "All Game Worlds")
+	local multiWorldEnabled = configManager and configKeys and configKeys.MULTI_WORLD_ENABLED
+		and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED)
+	local selectedWorld = (multiWorldEnabled and Game and Game.getWorldName and Game.getWorldName())
+		or (worldName ~= "" and worldName or "All Game Worlds")
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_HIGHSCORES)
 	out:addByte(0)

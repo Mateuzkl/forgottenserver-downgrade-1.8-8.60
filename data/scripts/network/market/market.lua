@@ -306,6 +306,22 @@ local function ensureColumn(tableName, columnName, definition)
 	db.query("ALTER TABLE `" .. tableName .. "` ADD COLUMN `" .. columnName .. "` " .. definition)
 end
 
+local function indexExists(tableName, indexName)
+	local resultId = db.storeQuery("SHOW INDEX FROM `" .. tableName .. "` WHERE `Key_name` = " .. db.escapeString(indexName))
+	if resultId == false then
+		return false
+	end
+	result.free(resultId)
+	return true
+end
+
+local function ensureIndex(tableName, indexName, definition)
+	if not tableExists(tableName) or indexExists(tableName, indexName) then
+		return
+	end
+	db.query("ALTER TABLE `" .. tableName .. "` ADD " .. definition)
+end
+
 local function ensureMarketStatisticsWorldKey()
 	if not tableExists("market_statistics") or not columnExists("market_statistics", "world_id") then
 		return
@@ -318,7 +334,7 @@ local function ensureMarketStatisticsWorldKey()
 
 	local hasWorldId = false
 	repeat
-		if result.getDataString(resultId, "Column_name") == "world_id" then
+		if result.getString(resultId, "Column_name") == "world_id" then
 			hasWorldId = true
 			break
 		end
@@ -372,14 +388,16 @@ local function ensureTables()
 			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			`attributes` MEDIUMBLOB NULL,
 			PRIMARY KEY (`id`),
-			KEY `idx_market_offers_itemtype_sale` (`itemtype`, `sale`),
-			KEY `idx_market_offers_player` (`player_id`)
+			KEY `idx_market_offers_world_itemtype_sale` (`world_id`, `itemtype`, `sale`),
+			KEY `idx_market_offers_world_player` (`world_id`, `player_id`)
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
 
 	ensureColumn("market_offers", "attributes", "MEDIUMBLOB NULL")
 	ensureColumn("market_offers", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
 	ensureColumn("market_offers", "world_id", "SMALLINT UNSIGNED NOT NULL DEFAULT 1")
+	ensureIndex("market_offers", "idx_market_offers_world_itemtype_sale", "INDEX `idx_market_offers_world_itemtype_sale` (`world_id`, `itemtype`, `sale`)")
+	ensureIndex("market_offers", "idx_market_offers_world_player", "INDEX `idx_market_offers_world_player` (`world_id`, `player_id`)")
 
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `market_history` (
@@ -395,12 +413,13 @@ local function ensureTables()
 			`inserted` INT UNSIGNED NOT NULL,
 			`state` TINYINT UNSIGNED NOT NULL,
 			PRIMARY KEY (`id`),
-			KEY `idx_market_history_player` (`player_id`)
+			KEY `idx_market_history_world_player` (`world_id`, `player_id`, `sale`)
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
 
 	ensureColumn("market_history", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
 	ensureColumn("market_history", "world_id", "SMALLINT UNSIGNED NOT NULL DEFAULT 1")
+	ensureIndex("market_history", "idx_market_history_world_player", "INDEX `idx_market_history_world_player` (`world_id`, `player_id`, `sale`)")
 
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `market_statistics` (

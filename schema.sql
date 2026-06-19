@@ -348,7 +348,8 @@ CREATE TABLE IF NOT EXISTS `market_offers` (
   PRIMARY KEY (`id`),
   KEY `sale` (`sale`,`itemtype`),
   KEY `created` (`created`),
-  KEY `idx_market_offers_world_sale_item` (`world_id`, `sale`, `itemtype`),
+  KEY `idx_market_offers_world_itemtype_sale` (`world_id`, `itemtype`, `sale`),
+  KEY `idx_market_offers_world_player` (`world_id`, `player_id`),
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_market_offers_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;

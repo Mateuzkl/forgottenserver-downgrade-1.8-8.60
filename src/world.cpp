@@ -9,6 +9,8 @@
 #include "database.h"
 #include "tools.h"
 
+#include <algorithm>
+
 WorldType_t GameWorlds::parseWorldType(std::string_view value)
 {
 	const auto type = asLowerCaseString(std::string(value));
