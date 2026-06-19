@@ -230,7 +230,6 @@ private:
 
 	// tiles
 	void sendMapDescription(const Position& pos);
-	void sendFieldUpdates(const Position& center, FieldType mask);
 	void refreshWorldView();
 	void refreshMagicWallViews();
 

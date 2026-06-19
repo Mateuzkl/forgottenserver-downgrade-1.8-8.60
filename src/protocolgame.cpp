@@ -3223,27 +3223,6 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendFieldUpdates(const Position& center, FieldType mask)
-{
-	int32_t minx = center.x - Map::maxClientViewportX;
-	int32_t miny = center.y - Map::maxClientViewportY;
-	int32_t maxx = center.x + (Map::maxClientViewportX + 1);
-	int32_t maxy = center.y + (Map::maxClientViewportY + 1);
-
-	if (minx < 0) minx = 0;
-	if (miny < 0) miny = 0;
-
-	Position minPos(static_cast<uint16_t>(minx), static_cast<uint16_t>(miny), static_cast<uint8_t>(center.z));
-	Position maxPos(static_cast<uint16_t>(maxx), static_cast<uint16_t>(maxy), static_cast<uint8_t>(center.z));
-
-	auto positions = FieldRegistry::instance().getPositionsInRange(minPos, maxPos, static_cast<int16_t>(center.z), mask);
-	for (const Position& p : positions) {
-		Tile* tile = g_game.map.getTile(p.x, p.y, p.z);
-		if (tile) {
-			sendUpdateTile(tile, p);
-		}
-	}
-}
 
 void ProtocolGame::sendCreatureHealth(const Creature* creature)
 {
@@ -3401,6 +3380,8 @@ void ProtocolGame::refreshMagicWallViews()
 
 	if (minx < 0) minx = 0;
 	if (miny < 0) miny = 0;
+	if (maxx > 65534) maxx = 65534;
+	if (maxy > 65534) maxy = 65534;
 
 	Position minPos(static_cast<uint16_t>(minx), static_cast<uint16_t>(miny), static_cast<uint8_t>(centerPos.z));
 	Position maxPos(static_cast<uint16_t>(maxx), static_cast<uint16_t>(maxy), static_cast<uint8_t>(centerPos.z));
