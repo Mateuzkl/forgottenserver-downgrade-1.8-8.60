@@ -10,7 +10,6 @@
 #include "databasetasks.h"
 #include "game.h"
 #include "imbuement.h"
-#include "field_registry.h"
 #include "logger.h"
 #include "outputmessage.h"
 #include "protocollogin.h"
@@ -433,8 +432,6 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 
 	g_game.start(services);
 	g_game.setGameState(GAME_STATE_NORMAL);
-
-	FieldRegistry::instance().startMetricsLogger(30);
 
 	// Pre-warm the OutputMessage pool to avoid operator new() on first connections
 	OutputMessagePool::prewarmPool(128);

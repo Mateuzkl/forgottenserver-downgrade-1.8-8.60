@@ -135,8 +135,6 @@ enum Boolean
 	SOULSEALS_SYSTEM_ENABLED,
 	CLEAVE_SYSTEM_ENABLED,
 
-	FIELD_REGISTRY_METRICS,
-
 	LAST_BOOLEAN /* this must be the last one */
 };
 

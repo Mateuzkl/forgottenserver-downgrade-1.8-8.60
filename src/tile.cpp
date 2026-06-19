@@ -502,8 +502,8 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 		spectator->onUpdateTileItem(this, cylinderMapPos, oldItem, oldType, newItem, newType);
 	}
 
-	const FieldType oldFtype = getFieldTypeFromItemId(oldItem->getID());
-	const FieldType newFtype = getFieldTypeFromItemId(newItem->getID());
+	const FieldType oldFtype = getFieldTypeFromItemId(oldType.id);
+	const FieldType newFtype = getFieldTypeFromItemId(newType.id);
 
 	if (oldFtype != newFtype) {
 		if (oldFtype != FIELD_NONE) {
