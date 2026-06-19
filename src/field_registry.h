@@ -32,6 +32,7 @@ enum FieldType : uint8_t {
 	FIELD_POISON = 1 << 2,
 	FIELD_ENERGY = 1 << 3,
 	FIELD_WILDGROWTH = 1 << 4,
+	FIELD_UNKNOWN_MAGICFIELD = 1 << 5,
 };
 
 inline FieldType operator|(FieldType a, FieldType b) { return static_cast<FieldType>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b)); }
@@ -126,17 +127,22 @@ public:
 		if (itz == map_.end()) return out;
 
 		out.reserve(32);
-		for (const auto& kv : itz->second) {
-			if (out.size() >= FIELD_REGISTRY_MAX_POSITIONS) break;
-			auto xy = unhashXY(kv.first);
-			uint32_t x = xy.first;
-			uint32_t y = xy.second;
-			if (x < static_cast<uint32_t>(minPos.x) || x > static_cast<uint32_t>(maxPos.x)) continue;
-			if (y < static_cast<uint32_t>(minPos.y) || y > static_cast<uint32_t>(maxPos.y)) continue;
-			if (typeMask != FIELD_NONE) {
-				if ((kv.second & static_cast<uint8_t>(typeMask)) == 0) continue;
+		for (uint32_t x = minPos.x; x <= maxPos.x; ++x) {
+			for (uint32_t y = minPos.y; y <= maxPos.y; ++y) {
+				if (out.size() >= FIELD_REGISTRY_MAX_POSITIONS) {
+					break;
+				}
+				uint64_t key = hashXY(static_cast<uint16_t>(x), static_cast<uint16_t>(y));
+				auto it = itz->second.find(key);
+				if (it != itz->second.end()) {
+					if (typeMask != FIELD_NONE) {
+						if ((it->second & static_cast<uint8_t>(typeMask)) == 0) {
+							continue;
+						}
+					}
+					out.emplace_back(static_cast<uint16_t>(x), static_cast<uint16_t>(y), static_cast<uint8_t>(z));
+				}
 			}
-			out.emplace_back(static_cast<uint16_t>(x), static_cast<uint16_t>(y), static_cast<uint8_t>(z));
 		}
 
 		if (enabled) {
@@ -324,7 +330,7 @@ inline FieldType getFieldTypeFromItemId(uint16_t itemId)
 					LOG_WARN("[FieldRegistry] Unknown magic field item ID {}. Add it to getFieldTypeFromItemId() in field_registry.h.", itemId);
 				}
 			}
-			return static_cast<FieldType>(FIELD_MAGICWALL | FIELD_FIRE | FIELD_POISON | FIELD_ENERGY | FIELD_WILDGROWTH);
+			return FIELD_UNKNOWN_MAGICFIELD;
 		}
 	}
 

@@ -545,7 +545,7 @@ public:
 
 	static bool isMagicWallItemId(uint16_t itemId)
 	{
-		return itemId == ITEM_MAGICWALL;
+		return itemId == ITEM_MAGICWALL || itemId == ITEM_MAGICWALL_SAFE || itemId == ITEM_MAGICWALL_PERSISTENT || itemId == ITEM_MAGICWALL_NOPVP;
 	}
 
 	bool setVocation(uint16_t vocId);

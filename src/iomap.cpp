@@ -334,9 +334,10 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
 
                             if (tile) {
                                 uint16_t itemId = item->getID();
-                                transferMapItem(tile, item);
-                                if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
-                                    FieldRegistry::instance().addPosition(Position(x, y, z), ft);
+                                if (transferMapItem(tile, item)) {
+                                    if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
+                                        FieldRegistry::instance().addPosition(Position(x, y, z), ft);
+                                    }
                                 }
                             } else if (item->isGroundTile()) {
                                 ground_item = std::move(item);
@@ -344,9 +345,10 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                                 uint16_t itemId = item->getID();
                                 tilePtr = createTile(ground_item, item.get(), x, y, z);
                                 tile = tilePtr.get();
-                                transferMapItem(tile, item);
-                                if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
-                                    FieldRegistry::instance().addPosition(Position(x, y, z), ft);
+                                if (transferMapItem(tile, item)) {
+                                    if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
+                                        FieldRegistry::instance().addPosition(Position(x, y, z), ft);
+                                    }
                                 }
                             }
                         }
@@ -403,9 +405,10 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
 
                     if (tile) {
                         uint16_t itemId = item->getID();
-                        transferMapItem(tile, item);
-                        if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
-                            FieldRegistry::instance().addPosition(Position(x, y, z), ft);
+                        if (transferMapItem(tile, item)) {
+                            if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
+                                FieldRegistry::instance().addPosition(Position(x, y, z), ft);
+                            }
                         }
                     } else if (item->isGroundTile()) {
                         ground_item = std::move(item);
@@ -413,9 +416,10 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                         uint16_t itemId = item->getID();
                         tilePtr = createTile(ground_item, item.get(), x, y, z);
                         tile = tilePtr.get();
-                        transferMapItem(tile, item);
-                        if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
-                            FieldRegistry::instance().addPosition(Position(x, y, z), ft);
+                        if (transferMapItem(tile, item)) {
+                            if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
+                                FieldRegistry::instance().addPosition(Position(x, y, z), ft);
+                            }
                         }
                     }
                 }

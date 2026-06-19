@@ -3277,7 +3277,6 @@ void ProtocolGame::sendMapDescription(const Position& pos)
 	GetMapDescription(pos.x - Map::maxClientViewportX, pos.y - Map::maxClientViewportY, pos.z,
 	                  (Map::maxClientViewportX * 2) + 2, (Map::maxClientViewportY * 2) + 2, msg);
 	writeToOutputBuffer(msg);
-	sendFieldUpdates(pos, static_cast<FieldType>(FIELD_MAGICWALL | FIELD_FIRE | FIELD_POISON | FIELD_ENERGY | FIELD_WILDGROWTH));
 }
 
 void ProtocolGame::refreshWorldView()
@@ -3395,23 +3394,32 @@ void ProtocolGame::refreshMagicWallViews()
 	}
 
 	const Position& centerPos = player->getPosition();
-	for (int32_t dx = -Map::maxClientViewportX; dx <= Map::maxClientViewportX + 1; ++dx) {
-		for (int32_t dy = -Map::maxClientViewportY; dy <= Map::maxClientViewportY + 1; ++dy) {
-			Position pos(centerPos.x + dx, centerPos.y + dy, centerPos.z);
-			Tile* tile = g_game.map.getTile(pos);
-			if (!tile) {
-				continue;
-			}
-			const TileItemVector* itemList = tile->getItemList();
-			if (!itemList) {
-				continue;
-			}
-			for (const auto& itemPtr : *itemList) {
-				if (itemPtr && Player::isMagicWallItemId(itemPtr->getID())) {
-					auto stackpos = tile->getStackposOfItem(player.get(), itemPtr.get());
-					if (stackpos != -1) {
-						sendUpdateTileItem(pos, static_cast<uint32_t>(stackpos), itemPtr.get());
-					}
+	int32_t minx = centerPos.x - Map::maxClientViewportX;
+	int32_t miny = centerPos.y - Map::maxClientViewportY;
+	int32_t maxx = centerPos.x + (Map::maxClientViewportX + 1);
+	int32_t maxy = centerPos.y + (Map::maxClientViewportY + 1);
+
+	if (minx < 0) minx = 0;
+	if (miny < 0) miny = 0;
+
+	Position minPos(static_cast<uint16_t>(minx), static_cast<uint16_t>(miny), static_cast<uint8_t>(centerPos.z));
+	Position maxPos(static_cast<uint16_t>(maxx), static_cast<uint16_t>(maxy), static_cast<uint8_t>(centerPos.z));
+
+	auto positions = FieldRegistry::instance().getPositionsInRange(minPos, maxPos, static_cast<int16_t>(centerPos.z), FIELD_MAGICWALL);
+	for (const Position& p : positions) {
+		Tile* tile = g_game.map.getTile(p);
+		if (!tile) {
+			continue;
+		}
+		const TileItemVector* itemList = tile->getItemList();
+		if (!itemList) {
+			continue;
+		}
+		for (const auto& itemPtr : *itemList) {
+			if (itemPtr && Player::isMagicWallItemId(itemPtr->getID())) {
+				auto stackpos = tile->getStackposOfItem(player.get(), itemPtr.get());
+				if (stackpos != -1) {
+					sendUpdateTileItem(p, static_cast<uint32_t>(stackpos), itemPtr.get());
 				}
 			}
 		}
