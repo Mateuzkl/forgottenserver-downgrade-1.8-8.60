@@ -48,9 +48,6 @@ stairJumpExhaustion = 2000
 experienceByKillingPlayers = false
 pzLockSkullAttacker = false
 allowAutoAttackWithoutExhaustion = true
--- false = monsters ignore targets in protection zone and stay idle if they have no other target.
--- true = monsters can target/react to creatures in protection zone.
-monsterTargetPzCreatures = false
 
 -- Protection Time
 -- Grants protection upon connection if monsters are nearby, to give you a grace period; if you move or attack, the protection is deactivated.
