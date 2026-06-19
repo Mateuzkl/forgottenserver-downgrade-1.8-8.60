@@ -585,15 +585,18 @@ void Monster::removeTarget(Creature* creature)
 
 void Monster::updateTargetList()
 {
+	const bool targetProtectionZoneCreatures = ConfigManager::getBoolean(ConfigManager::MONSTER_TARGET_PZ_CREATURES);
+
 	std::erase_if(friendList, [this](const auto& weakRef) {
 		auto creature = weakRef.lock();
 		return !creature || creature->isDead() || !canSee(creature->getPosition());
 	});
 
-	std::erase_if(targetList, [this](const auto& weakRef) {
+	std::erase_if(targetList, [this, targetProtectionZoneCreatures](const auto& weakRef) {
 		auto creature = weakRef.lock();
 		return !creature || creature->isDead() || !canSee(creature->getPosition()) || !canSeeCreature(creature.get()) ||
-		       (!isFamiliar() && creature->getZone() == ZONE_PROTECTION) || !isOpponent(creature.get());
+		       (!targetProtectionZoneCreatures && !isFamiliar() && creature->getZone() == ZONE_PROTECTION) ||
+		       !isOpponent(creature.get());
 	});
 
 	SpectatorVec spectators;
@@ -636,7 +639,8 @@ void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/)
 	}
 
 	if (isOpponent(creature)) {
-		if (!isFamiliar() && creature->getZone() == ZONE_PROTECTION) {
+		if (!ConfigManager::getBoolean(ConfigManager::MONSTER_TARGET_PZ_CREATURES) && !isFamiliar() &&
+		    creature->getZone() == ZONE_PROTECTION) {
 			return;
 		}
 		addTarget(creature, pushFront);
@@ -1271,8 +1275,9 @@ bool Monster::isTarget(const Creature* creature) const
 		return false;
 	}
 
-	if (creature->isRemoved() || !creature->isAttackable() || creature->getZone() == ZONE_PROTECTION ||
-	    !canSeeCreature(creature)) {
+	const bool blockedByProtectionZone = !ConfigManager::getBoolean(ConfigManager::MONSTER_TARGET_PZ_CREATURES) &&
+	                                     !isFamiliar() && creature->getZone() == ZONE_PROTECTION;
+	if (creature->isRemoved() || !creature->isAttackable() || blockedByProtectionZone || !canSeeCreature(creature)) {
 		return false;
 	}
 

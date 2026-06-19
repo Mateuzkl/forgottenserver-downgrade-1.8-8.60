@@ -419,6 +419,7 @@ bool ConfigManager::load()
 	booleans[Boolean::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS] = getGlobalBoolean(L, "onlyInvitedCanMoveHouseItems", true);
 	booleans[Boolean::REMOVE_ON_DESPAWN] = getGlobalBoolean(L, "removeOnDespawn", true);
 	booleans[Boolean::MONSTER_OVERSPAWN] = getGlobalBoolean(L, "monsterOverspawn", false);
+	booleans[Boolean::MONSTER_TARGET_PZ_CREATURES] = getGlobalBoolean(L, "monsterTargetPzCreatures", false);
 	booleans[Boolean::MANASHIELD_BREAKABLE] = getGlobalBoolean(L, "useBreakableManaShield", false);
 	booleans[Boolean::BED_OFFLINE_TRAINING] = getGlobalBoolean(L, "bedOfflineTraining", true);
 	booleans[Boolean::ALLOW_AUTO_ATTACK_WITHOUT_EXHAUSTION] =
