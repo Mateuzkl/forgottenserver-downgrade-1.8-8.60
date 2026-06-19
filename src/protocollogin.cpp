@@ -214,7 +214,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 
 	auto output = OutputMessagePool::getOutputMessage();
 
-	std::string motd = getString(ConfigManager::MOTD);
+	std::string motd{getString(ConfigManager::MOTD)};
 	if (g_game.isMultiWorldEnabled()) {
 		if (const auto* world = g_game.getCurrentWorld(); world && !world->motd.empty()) {
 			motd = world->motd;
@@ -304,7 +304,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	}
 
 	auto IP = getIP(getString(ConfigManager::IP));
-	const std::string serverName = getString(ConfigManager::SERVER_NAME);
+	const std::string serverName{getString(ConfigManager::SERVER_NAME)};
 	const auto gamePort = static_cast<uint16_t>(getInteger(ConfigManager::GAME_PORT));
 
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), characters.size());
