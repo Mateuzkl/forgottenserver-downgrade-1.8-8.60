@@ -636,9 +636,6 @@ void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/)
 	}
 
 	if (isOpponent(creature)) {
-		if (!isFamiliar() && creature->getZone() == ZONE_PROTECTION) {
-			return;
-		}
 		addTarget(creature, pushFront);
 	}
 
