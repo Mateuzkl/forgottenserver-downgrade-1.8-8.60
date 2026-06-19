@@ -7,6 +7,8 @@ ROOT_BIN="${ROOT_DIR}/tfs"
 BUILD_BIN="${BUILD_DIR}/tfs"
 LOG_FILE="valgrind-definitive.log"
 JOBS="${JOBS:-$(nproc)}"
+VALGRIND_ERROR_EXITCODE="${TFS_VALGRIND_ERROR_EXITCODE:-99}"
+VALGRIND_SHOW_LEAK_KINDS="${TFS_VALGRIND_SHOW_LEAK_KINDS:-definite}"
 
 source "${ROOT_DIR}/tools/cmake-linux-env.sh"
 
@@ -45,10 +47,13 @@ cp "${BUILD_BIN}" "${ROOT_BIN}"
 chmod +x "${ROOT_BIN}"
 
 echo "Running definitive Valgrind memcheck. Log: ${ROOT_DIR}/${LOG_FILE}"
+echo "Valgrind error exit code: ${VALGRIND_ERROR_EXITCODE}"
+echo "Valgrind leak kinds: ${VALGRIND_SHOW_LEAK_KINDS}"
 valgrind \
 	--tool=memcheck \
 	--leak-check=full \
-	--show-leak-kinds=definite \
+	--show-leak-kinds="${VALGRIND_SHOW_LEAK_KINDS}" \
+	--error-exitcode="${VALGRIND_ERROR_EXITCODE}" \
 	--track-origins=yes \
 	--num-callers=50 \
 	--leak-resolution=high \
