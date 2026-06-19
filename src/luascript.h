@@ -341,6 +341,8 @@ public:
 		return scriptEnv + scriptEnvIndex;
 	}
 
+	static bool hasScriptEnv() { return scriptEnvIndex >= 0 && scriptEnvIndex < 16; }
+
 	static bool reserveScriptEnv() { return ++scriptEnvIndex < 16; }
 
 	static void resetScriptEnv()

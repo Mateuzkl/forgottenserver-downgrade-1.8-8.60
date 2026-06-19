@@ -375,7 +375,7 @@ void Spawns::clear()
 	}
 	spawnList.clear();
 
-	// unique_ptr delete automatically
+	// shared_ptr entries release automatically when no active references remain.
 	npcList.clear();
 
 	loaded = false;

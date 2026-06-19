@@ -405,7 +405,7 @@ std::shared_ptr<Npc> Npc::createNpc(const std::string& name)
 		}
 	} else {
 		// Traditional XML NPC: load script file for events
-		npc->npcEventHandler = std::make_unique<NpcEventsHandler>(npcType->scriptFilename, npc.get());
+		npc->npcEventHandler = std::make_unique<NpcEventsHandler>(npcType->scriptFilename, npc);
 	}
 	npc->npcEventHandler->setNpc(npc.get());
 
@@ -435,8 +435,14 @@ bool Npc::load()
 	}
 
 	loadNpcTypeInfo();
-	npcEventHandler = std::make_unique<NpcEventsHandler>(npcType->scriptFilename, this);
-	npcEventHandler->setNpc(this);
+	auto npcRef = std::static_pointer_cast<Npc>(weak_from_this().lock());
+	if (!npcRef) {
+		LOG_ERROR(fmt::format("[Error - Npc::load] NPC '{}' is not owned by a shared_ptr.", getName()));
+		return false;
+	}
+
+	npcEventHandler = std::make_unique<NpcEventsHandler>(npcType->scriptFilename, npcRef);
+	npcEventHandler->setNpc(npcRef);
 
 	loaded = true;
 	return loaded;
@@ -1600,11 +1606,10 @@ int NpcScriptInterface::luaNpcCloseShopWindow(lua_State* L)
 	return 1;
 }
 
-NpcEventsHandler::NpcEventsHandler(const std::string& file, Npc* npcPtr) :
-    scriptInterface(Npcs::scriptInterface), npc(npcPtr)
+NpcEventsHandler::NpcEventsHandler(const std::string& file, const std::shared_ptr<Npc>& npcPtr) :
+    scriptInterface(Npcs::scriptInterface), npc(npcPtr.get())
 {
-	auto npcHandle = Npcs::makeScriptHandle(npcPtr);
-	loaded = scriptInterface->loadFile("data/npc/scripts/" + file, npcHandle) == 0;
+	loaded = scriptInterface->loadFile("data/npc/scripts/" + file, npcPtr) == 0;
 	if (!loaded) {
 		LOG_WARN(fmt::format("[Warning - NpcScript::NpcScript] Can not load script: {}", file));
 		LOG_WARN(scriptInterface->getLastLuaError());

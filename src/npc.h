@@ -58,7 +58,7 @@ private:
 class NpcEventsHandler
 {
 public:
-	NpcEventsHandler(const std::string& file, Npc* npc);
+	NpcEventsHandler(const std::string& file, const std::shared_ptr<Npc>& npc);
 	NpcEventsHandler();
 	~NpcEventsHandler();
 

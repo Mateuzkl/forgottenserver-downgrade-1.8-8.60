@@ -143,10 +143,14 @@ void Combat::doCombatCleave(Creature* caster, uint32_t primaryTargetId, const Co
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, casterPos, false, false, 1, 1, 1, 1, true);
 
+	auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
+	Creature* resolvedCaster = resolvedCasterRef.get();
+	if (!resolvedCaster || resolvedCaster->isRemoved()) {
+		return;
+	}
+
 	for (const auto& spectator : spectators) {
-		auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
-		Creature* resolvedCaster = resolvedCasterRef.get();
-		if (!resolvedCaster) {
+		if (resolvedCaster->isRemoved()) {
 			break;
 		}
 

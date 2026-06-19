@@ -1272,7 +1272,17 @@ Creature* Lua::getCreature(lua_State* L, int32_t arg)
 	if (isUserdata(L, arg)) {
 		return getUserdata<Creature>(L, arg);
 	}
-	Creature* creature = LuaScriptInterface::getScriptEnv()->getCreatureByUID(getInteger<uint32_t>(L, arg));
+
+	const uint32_t creatureId = getInteger<uint32_t>(L, arg);
+	std::shared_ptr<Creature> creatureRef;
+	Creature* creature = nullptr;
+	if (LuaScriptInterface::hasScriptEnv()) {
+		creature = LuaScriptInterface::getScriptEnv()->getCreatureByUID(creatureId);
+	} else {
+		creatureRef = g_game.getCreatureByIDShared(creatureId);
+		creature = creatureRef.get();
+	}
+
 	if (!creature || !Creature::isAlive(creature) || creature->isRemoved()) {
 		return nullptr;
 	}
@@ -4509,7 +4519,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 					lua_pop(luaState, 1);
 				}
 
-				if (!Lua::getCreature(luaState, -1)) {
+				if (!Lua::getValidatedCreatureUserdata(luaState, -1)) {
 					lua_pushnil(luaState);
 					lua_replace(luaState, -2);
 				}
