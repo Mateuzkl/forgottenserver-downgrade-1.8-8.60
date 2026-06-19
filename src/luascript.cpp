@@ -829,6 +829,7 @@ bool LuaScriptInterface::callFunction(int params)
 	lua_pop(luaState, 1);
 	if ((lua_gettop(luaState) + params + 1) != size) {
 		LuaScriptInterface::reportError(nullptr, "Stack size changed!");
+		lua_settop(luaState, size - params - 1);
 	}
 
 #ifdef STATS_ENABLED
@@ -849,6 +850,7 @@ void LuaScriptInterface::callVoidFunction(int params)
 
 	if ((lua_gettop(luaState) + params + 1) != size) {
 		LuaScriptInterface::reportError(nullptr, "Stack size changed!");
+		lua_settop(luaState, size - params - 1);
 	}
 
 	resetScriptEnv();
@@ -864,6 +866,7 @@ ReturnValue LuaScriptInterface::callReturnValueFunction(int params)
 
 	if ((lua_gettop(luaState) + params + 1) != size) {
 		LuaScriptInterface::reportError(nullptr, "Stack size changed!");
+		lua_settop(luaState, size - params - 1);
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
@@ -4460,6 +4463,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 	// push parameters
 	for (auto parameter : std::views::reverse(timerEventDesc.parameters)) {
 		lua_rawgeti(luaState, LUA_REGISTRYINDEX, parameter);
+		const int parameterStackTop = lua_gettop(luaState);
 		if (lua_getmetatable(luaState, -1) == 0) {
 			continue;
 		}
@@ -4528,6 +4532,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 				break;
 			}
 		}
+		lua_settop(luaState, parameterStackTop);
 	}
 
 	// call the function
@@ -4535,7 +4540,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 		ScriptEnvironment* env = getScriptEnv();
 		env->setTimerEvent();
 		env->setScriptId(timerEventDesc.scriptId, this);
-		callFunction(timerEventDesc.parameters.size());
+		callVoidFunction(timerEventDesc.parameters.size());
 	} else {
 		LOG_ERROR("[Error - LuaScriptInterface::executeTimerEvent] Call stack overflow");
 	}
