@@ -536,9 +536,12 @@ bool ConfigManager::load()
 	strings[String::LOCATION] = getGlobalString(L, "location", "");
 	strings[String::MOTD] = getGlobalString(L, "motd", "");
 	strings[String::WORLD_TYPE] = getGlobalString(L, "worldType", "pvp");
-	strings[String::WORLD_NAME] = getGlobalString(L, "worldName", getGlobalString(L, "serverName", "Forgotten"));
-	strings[String::WORLD_LOCATION] = getGlobalString(L, "worldLocation", getGlobalString(L, "location", "South America"));
-	strings[String::WORLD_IP] = getGlobalString(L, "worldIp", getGlobalString(L, "ip", "127.0.0.1"));
+	const std::string defaultWorldName = getGlobalString(L, "serverName", "Forgotten");
+	const std::string defaultWorldLocation = getGlobalString(L, "location", "South America");
+	const std::string defaultWorldIp = getGlobalString(L, "ip", "127.0.0.1");
+	strings[String::WORLD_NAME] = getGlobalString(L, "worldName", defaultWorldName.c_str());
+	strings[String::WORLD_LOCATION] = getGlobalString(L, "worldLocation", defaultWorldLocation.c_str());
+	strings[String::WORLD_IP] = getGlobalString(L, "worldIp", defaultWorldIp.c_str());
 	strings[String::NPC_SYSTEM] = getGlobalString(L, "npcSystem", "tfs");
 	strings[String::DUAL_WIELDING_MODE] = getGlobalString(L, "dualWieldingMode", "allweapons");
 	strings[String::RAID_SPAWNFILE_DIRECTORY] = getGlobalString(L, "raidSpawnFileDirectory", "data/raids");
