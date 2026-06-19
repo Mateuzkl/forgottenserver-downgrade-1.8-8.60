@@ -1,7 +1,11 @@
 local startup = GlobalEvent("ServerStartup")
 function startup.onStartup()
-    db.query("TRUNCATE TABLE `players_online`")
-    db.asyncQuery("DELETE FROM `guild_wars` WHERE `status` = 0")
+    if configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) then
+        db.query("DELETE FROM `players_online` WHERE `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID))
+    else
+        db.query("TRUNCATE TABLE `players_online`")
+    end
+    db.asyncQuery("DELETE FROM `guild_wars` WHERE `status` = 0" .. (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) and (" AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)) or ""))
     db.asyncQuery("DELETE FROM `players` WHERE `deletion` != 0 AND `deletion` < " .. os.time())
     db.asyncQuery("DELETE FROM `ip_bans` WHERE `expires_at` != 0 AND `expires_at` <= " .. os.time())
 

@@ -2888,6 +2888,8 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::SOULPIT_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::SOULSEALS_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::CLEAVE_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::MULTI_WORLD_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::MULTI_WORLD_LOGIN_SERVER);
 
 	registerEnumIn("configKeys", ConfigManager::MAP_NAME);
 	registerEnumIn("configKeys", ConfigManager::HOUSE_RENT_PERIOD);
@@ -2899,6 +2901,9 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::IP);
 	registerEnumIn("configKeys", ConfigManager::MOTD);
 	registerEnumIn("configKeys", ConfigManager::WORLD_TYPE);
+	registerEnumIn("configKeys", ConfigManager::WORLD_NAME);
+	registerEnumIn("configKeys", ConfigManager::WORLD_LOCATION);
+	registerEnumIn("configKeys", ConfigManager::WORLD_IP);
 	registerEnumIn("configKeys", ConfigManager::MYSQL_HOST);
 	registerEnumIn("configKeys", ConfigManager::MYSQL_USER);
 	registerEnumIn("configKeys", ConfigManager::MYSQL_PASS);
@@ -2935,6 +2940,9 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::GAME_PORT);
 	registerEnumIn("configKeys", ConfigManager::LOGIN_PORT);
 	registerEnumIn("configKeys", ConfigManager::STATUS_PORT);
+	registerEnumIn("configKeys", ConfigManager::WORLD_ID);
+	registerEnumIn("configKeys", ConfigManager::WORLD_GAME_PORT);
+	registerEnumIn("configKeys", ConfigManager::WORLD_STATUS_PORT);
 	registerEnumIn("configKeys", ConfigManager::STAIRHOP_DELAY);
 	registerEnumIn("configKeys", ConfigManager::MARKET_OFFER_DURATION);
 	registerEnumIn("configKeys", ConfigManager::EXP_SHARE_RANGE);

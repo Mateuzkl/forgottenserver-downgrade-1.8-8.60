@@ -998,7 +998,15 @@ bool House::addProtectionGuest(uint32_t playerId)
 	if (result.second) {
 		Database& db = Database::getInstance();
 		std::ostringstream query;
-		query << "INSERT INTO `house_guests` (`house_id`, `player_id`) VALUES (" << id << ", " << playerId << ")";
+		query << "INSERT INTO `house_guests` (`house_id`, `player_id`";
+		if (g_game.isMultiWorldEnabled()) {
+			query << ", `world_id`";
+		}
+		query << ") VALUES (" << id << ", " << playerId;
+		if (g_game.isMultiWorldEnabled()) {
+			query << ", " << g_game.getCurrentWorldId();
+		}
+		query << ')';
 		return db.executeQuery(query.str());
 	}
 	return false;
@@ -1013,6 +1021,9 @@ bool House::removeProtectionGuest(uint32_t playerId)
 		Database& db = Database::getInstance();
 		std::ostringstream query;
 		query << "DELETE FROM `house_guests` WHERE `house_id` = " << id << " AND `player_id` = " << playerId;
+		if (g_game.isMultiWorldEnabled()) {
+			query << " AND `world_id` = " << g_game.getCurrentWorldId();
+		}
 		return db.executeQuery(query.str());
 	}
 	return false;
@@ -1031,6 +1042,9 @@ void House::clearProtectionGuests()
 		Database& db = Database::getInstance();
 		std::ostringstream query;
 		query << "DELETE FROM `house_guests` WHERE `house_id` = " << id;
+		if (g_game.isMultiWorldEnabled()) {
+			query << " AND `world_id` = " << g_game.getCurrentWorldId();
+		}
 		db.executeQuery(query.str());
 	}
 }

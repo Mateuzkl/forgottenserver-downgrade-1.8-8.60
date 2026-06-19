@@ -564,6 +564,24 @@ int luaGameGetWorldType(lua_State* L)
 	return 1;
 }
 
+int luaGameGetWorldId(lua_State* L)
+{
+	// Game.getWorldId()
+	lua_pushinteger(L, g_game.getCurrentWorldId());
+	return 1;
+}
+
+int luaGameGetWorldName(lua_State* L)
+{
+	// Game.getWorldName()
+	if (const auto* world = g_game.getCurrentWorld()) {
+		pushString(L, world->name);
+	} else {
+		pushString(L, ConfigManager::getString(ConfigManager::SERVER_NAME));
+	}
+	return 1;
+}
+
 int luaGameSetWorldType(lua_State* L)
 {
 	// Game.setWorldType(type)
@@ -1252,6 +1270,8 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "setGameState", luaGameSetGameState);
 
 	registerMethod("Game", "getWorldType", luaGameGetWorldType);
+	registerMethod("Game", "getWorldId", luaGameGetWorldId);
+	registerMethod("Game", "getWorldName", luaGameGetWorldName);
 	registerMethod("Game", "setWorldType", luaGameSetWorldType);
 
 	registerMethod("Game", "getItemAttributeByName", luaGameGetItemAttributeByName);

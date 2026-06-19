@@ -17,6 +17,7 @@
 #include "position.h"
 #include "raids.h"
 #include "wildcardtree.h"
+#include "world.h"
 
 #include <map>
 #include <shared_mutex>
@@ -37,13 +38,6 @@ enum stackPosType_t
 	STACKPOS_TOPDOWN_ITEM,
 	STACKPOS_USEITEM,
 	STACKPOS_USETARGET,
-};
-
-enum WorldType_t
-{
-	WORLD_TYPE_NO_PVP = 1,
-	WORLD_TYPE_PVP = 2,
-	WORLD_TYPE_PVP_ENFORCED = 3,
 };
 
 enum GameState_t
@@ -119,7 +113,12 @@ public:
 	}
 
 	void setWorldType(WorldType_t type);
-	WorldType_t getWorldType() const { return worldType; }
+	WorldType_t getWorldType() const;
+	GameWorlds& getWorlds() { return worlds; }
+	const GameWorlds& getWorlds() const { return worlds; }
+	const WorldInfo* getCurrentWorld() const;
+	uint16_t getCurrentWorldId() const;
+	bool isMultiWorldEnabled() const;
 
 	Cylinder* internalGetCylinder(Player* player, const Position& pos) const;
 	Thing* internalGetThing(Player* player, const Position& pos, int32_t index, uint32_t spriteId,
@@ -763,6 +762,7 @@ private:
 
 	std::atomic<GameState_t> gameState{GAME_STATE_NORMAL};
 	WorldType_t worldType = WORLD_TYPE_PVP;
+	GameWorlds worlds;
 
 	// Atomic counters for thread-safe reads from protocol/status threads
 	std::atomic<size_t> playersOnline{0};

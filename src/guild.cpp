@@ -40,6 +40,11 @@ uint64_t parseUint64OrZero(std::string_view value)
 	}
 }
 
+std::string guildWorldFilter()
+{
+	return g_game.isMultiWorldEnabled() ? fmt::format(" AND `world_id` = {:d}", g_game.getCurrentWorldId()) : "";
+}
+
 struct GuildWarRefreshContext {
 	Guild_ptr guild;
 	PlayerRefVector members;
@@ -226,14 +231,14 @@ void Guild::setBankBalance(uint64_t balance)
 	bankBalance = balance;
 	Database& db = Database::getInstance();
 	std::ostringstream query;
-	query << "UPDATE `guilds` SET `balance`=" << bankBalance << " WHERE `id`=" << id;
+	query << "UPDATE `guilds` SET `balance`=" << bankBalance << " WHERE `id`=" << id << guildWorldFilter();
 	db.executeQuery(query.str());
 }
 
 Guild_ptr IOGuild::loadGuild(uint32_t guildId)
 {
 	Database& db = Database::getInstance();
-	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name`, `balance` FROM `guilds` WHERE `id` = {:d}", guildId));
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name`, `balance` FROM `guilds` WHERE `id` = {:d}{:s}", guildId, guildWorldFilter()));
 	if (!result) {
 		return nullptr;
 	}
@@ -258,7 +263,7 @@ uint32_t IOGuild::getGuildIdByName(std::string_view name)
 	Database& db = Database::getInstance();
 
 	DBResult_ptr result =
-	    db.storeQuery(fmt::format("SELECT `id` FROM `guilds` WHERE `name` = {:s}", db.escapeString(name)));
+	    db.storeQuery(fmt::format("SELECT `id` FROM `guilds` WHERE `name` = {:s}{:s}", db.escapeString(name), guildWorldFilter()));
 	if (!result) {
 		return 0;
 	}
@@ -268,7 +273,7 @@ uint32_t IOGuild::getGuildIdByName(std::string_view name)
 std::string IOGuild::getGuildNameById(uint32_t id)
 {
 	Database& db = Database::getInstance();
-	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name` FROM `guilds` WHERE `id` = {:d}", id));
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name` FROM `guilds` WHERE `id` = {:d}{:s}", id, guildWorldFilter()));
 	if (!result) {
 		return "";
 	}
@@ -349,15 +354,23 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 			return;
 		}
 
-		DBResult_ptr checkResult = db.storeQuery(fmt::format("SELECT `id` FROM `guild_wars` WHERE (`guild1` = {:d} AND `guild2` = {:d}) AND `status` = 0", guild->getId(), enemyId));
+		DBResult_ptr checkResult = db.storeQuery(fmt::format("SELECT `id` FROM `guild_wars` WHERE (`guild1` = {:d} AND `guild2` = {:d}) AND `status` = 0{:s}", guild->getId(), enemyId, guildWorldFilter()));
 		if (checkResult) {
 			player->sendCancelMessage("You have already invited this guild.");
 			return;
 		}
 
-		query << "INSERT INTO `guild_wars` (`guild1`, `guild2`, `name1`, `name2`, `status`, `started`, `ended`, `fraglimit`, `payment`) VALUES (" 
+		query << "INSERT INTO `guild_wars` (`guild1`, `guild2`, `name1`, `name2`, `status`, `started`, `ended`, `fraglimit`, `payment";
+		if (g_game.isMultiWorldEnabled()) {
+			query << "`, `world_id";
+		}
+		query << "`) VALUES ("
 			  << guild->getId() << ", " << enemyId << ", " << db.escapeString(guild->getName()) << ", " << db.escapeString(enemyName) 
-			  << ", 0, " << std::time(nullptr) << ", " << (std::time(nullptr) + (durationDays * 86400)) << ", " << fragLimit << ", " << payment << ")";
+			  << ", 0, " << std::time(nullptr) << ", " << (std::time(nullptr) + (durationDays * 86400)) << ", " << fragLimit << ", " << payment;
+		if (g_game.isMultiWorldEnabled()) {
+			query << ", " << g_game.getCurrentWorldId();
+		}
+		query << ')';
 		
 		if (db.executeQuery(query.str())) {
 			g_game.broadcastMessage(fmt::format("{:s} has invited {:s} to war with {:d} frag limit.", guild->getName(), enemyName, fragLimit), MESSAGE_EVENT_ORANGE);
@@ -365,7 +378,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 
 	} else {
 		// all other actions require looking up the war entry
-		DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id`, `guild1`, `guild2`, `status`, `started`, `ended`, `payment`, `fraglimit` FROM `guild_wars` WHERE (`guild1` = {:d} AND `guild2` = {:d}) OR (`guild1` = {:d} AND `guild2` = {:d}) AND `status` IN (0, 1)", guild->getId(), enemyId, enemyId, guild->getId()));
+		DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id`, `guild1`, `guild2`, `status`, `started`, `ended`, `payment`, `fraglimit` FROM `guild_wars` WHERE ((`guild1` = {:d} AND `guild2` = {:d}) OR (`guild1` = {:d} AND `guild2` = {:d})) AND `status` IN (0, 1){:s}", guild->getId(), enemyId, enemyId, guild->getId(), guildWorldFilter()));
 		
 		if (!result) {
 			player->sendCancelMessage("There is no active invitation or war with this guild.");
@@ -409,7 +422,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 
 			updateQuery << "`status` = 1, `started` = " << std::time(nullptr) << ", `ended` = " << newEnd;
 			msg = fmt::format("accepted the war against {:s}.", enemyName);
-			updateQuery << " WHERE `id` = " << warId;
+			updateQuery << " WHERE `id` = " << warId << guildWorldFilter();
 			
 			if (db.executeQuery(updateQuery.str())) {
 				g_game.broadcastMessage(fmt::format("{:s} has {:s}", guild->getName(), msg), MESSAGE_EVENT_ORANGE);
@@ -453,7 +466,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 			// Setting status to 5 (ended).
 			updateQuery << "`status` = 5, `ended` = " << std::time(nullptr);
 			msg = fmt::format("ended the war with {:s}.", enemyName);
-			updateQuery << " WHERE `id` = " << warId;
+			updateQuery << " WHERE `id` = " << warId << guildWorldFilter();
 			
 			if (db.executeQuery(updateQuery.str())) {
 				g_game.broadcastMessage(fmt::format("{:s} has {:s}", guild->getName(), msg), MESSAGE_EVENT_ORANGE);
@@ -466,7 +479,7 @@ void IOGuild::guildWar(Player* player, const std::string& param)
 			return;
 		}
 
-		updateQuery << " WHERE `id` = " << warId;
+		updateQuery << " WHERE `id` = " << warId << guildWorldFilter();
 		if (db.executeQuery(updateQuery.str())) {
 			g_game.broadcastMessage(fmt::format("{:s} has {:s}", guild->getName(), msg), MESSAGE_EVENT_ORANGE);
 		}
@@ -555,8 +568,8 @@ void IOGuild::registerGuildWarKill(Player* killer, Player* victim)
 	DBResult_ptr warResult = db.storeQuery(fmt::format(
 		"SELECT `id`, `guild1`, `guild2`, `name1`, `name2`, `fraglimit` FROM `guild_wars` "
 		"WHERE ((`guild1` = {:d} AND `guild2` = {:d}) OR (`guild1` = {:d} AND `guild2` = {:d})) "
-		"AND `status` = 1",
-		killerGuild->getId(), victimGuild->getId(), victimGuild->getId(), killerGuild->getId()
+		"AND `status` = 1{:s}",
+		killerGuild->getId(), victimGuild->getId(), victimGuild->getId(), killerGuild->getId(), guildWorldFilter()
 	));
 
 	if (!warResult) {
@@ -572,9 +585,17 @@ void IOGuild::registerGuildWarKill(Player* killer, Player* victim)
 
 	// Register the kill
 	std::ostringstream query;
-	query << "INSERT INTO `guild_war_kills` (`war_id`, `killer_guild`, `killer`, `victim`, `time`) VALUES ("
+	query << "INSERT INTO `guild_war_kills` (`war_id`, `killer_guild`, `killer`, `victim`, `time";
+	if (g_game.isMultiWorldEnabled()) {
+		query << "`, `world_id";
+	}
+	query << "`) VALUES ("
 		  << warId << ", " << killerGuild->getId() << ", " << killer->getGUID() << ", " 
-		  << victim->getGUID() << ", " << std::time(nullptr) << ")";
+		  << victim->getGUID() << ", " << std::time(nullptr);
+	if (g_game.isMultiWorldEnabled()) {
+		query << ", " << g_game.getCurrentWorldId();
+	}
+	query << ')';
 	
 	if (!db.executeQuery(query.str())) {
 		return;
@@ -583,9 +604,9 @@ void IOGuild::registerGuildWarKill(Player* killer, Player* victim)
 	// Get current score
 	DBResult_ptr scoreResult = db.storeQuery(fmt::format(
 		"SELECT "
-		"(SELECT COUNT(*) FROM `guild_war_kills` WHERE `war_id` = {:d} AND `killer_guild` = {:d}) as guild1_kills, "
-		"(SELECT COUNT(*) FROM `guild_war_kills` WHERE `war_id` = {:d} AND `killer_guild` = {:d}) as guild2_kills",
-		warId, guild1, warId, guild2
+		"(SELECT COUNT(*) FROM `guild_war_kills` WHERE `war_id` = {:d} AND `killer_guild` = {:d}{:s}) as guild1_kills, "
+		"(SELECT COUNT(*) FROM `guild_war_kills` WHERE `war_id` = {:d} AND `killer_guild` = {:d}{:s}) as guild2_kills",
+		warId, guild1, guildWorldFilter(), warId, guild2, guildWorldFilter()
 	));
 
 	if (!scoreResult) {
@@ -613,7 +634,7 @@ void IOGuild::registerGuildWarKill(Player* killer, Player* victim)
 		// Update war status
 		std::ostringstream updateQuery;
 		updateQuery << "UPDATE `guild_wars` SET `status` = 4, `ended` = " << std::time(nullptr) 
-					<< " WHERE `id` = " << warId;
+					<< " WHERE `id` = " << warId << guildWorldFilter();
 		db.executeQuery(updateQuery.str());
 
 		g_game.broadcastMessage(

@@ -115,6 +115,11 @@ function getPlayerDatabaseInfo(name_or_guid)
 		return false
 	end
 
+	local multiWorld = configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED)
+	if multiWorld then
+		sql_where = sql_where .. " AND `p`.`world_id`=" .. configManager.getNumber(configKeys.WORLD_ID)
+	end
+
 	local sql_query = [[
 		SELECT
 			`p`.`id` as `guid`,
@@ -152,14 +157,17 @@ function getPlayerDatabaseInfo(name_or_guid)
 		FROM `players` AS `p`
 		LEFT JOIN `players_online` AS `po`
 			ON `p`.`id` = `po`.`player_id`
+			AND (]] .. (multiWorld and "`po`.`world_id` = `p`.`world_id`" or "1 = 1") .. [[)
 		LEFT JOIN `guild_membership` AS `gm`
 			ON `p`.`id` = `gm`.`player_id`
 		LEFT JOIN `guilds` AS `g`
 			ON `gm`.`guild_id` = `g`.`id`
+			AND (]] .. (multiWorld and "`g`.`world_id` = `p`.`world_id`" or "1 = 1") .. [[)
 		LEFT JOIN `guild_ranks` AS `gr`
 			ON `gm`.`rank_id` = `gr`.`id`
 		LEFT JOIN `houses` AS `h`
 			ON `p`.`id` = `h`.`owner`
+			AND (]] .. (multiWorld and "`h`.`world_id` = `p`.`world_id`" or "1 = 1") .. [[)
 	]] .. sql_where
 
 	local query = db.storeQuery(sql_query)

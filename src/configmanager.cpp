@@ -378,6 +378,9 @@ bool ConfigManager::load()
 		}
 
 		integers[Integer::STATUS_PORT] = getGlobalInteger(L, "statusProtocolPort", 7171);
+		integers[Integer::WORLD_ID] = std::clamp<int64_t>(getGlobalInteger(L, "worldId", 1), 1, std::numeric_limits<uint16_t>::max());
+		integers[Integer::WORLD_GAME_PORT] = std::clamp<int64_t>(getGlobalInteger(L, "worldGamePort", integers[Integer::GAME_PORT]), 1, std::numeric_limits<uint16_t>::max());
+		integers[Integer::WORLD_STATUS_PORT] = std::clamp<int64_t>(getGlobalInteger(L, "worldStatusPort", integers[Integer::STATUS_PORT]), 1, std::numeric_limits<uint16_t>::max());
 		integers[Integer::ADMIN_PORT] = getGlobalInteger(L, "adminPort", 7170); // Default admin port to 7170
 
 		integers[Integer::MARKET_OFFER_DURATION] = getGlobalInteger(L, "marketOfferDuration", 30 * 24 * 60 * 60);
@@ -413,6 +416,8 @@ bool ConfigManager::load()
 	booleans[Boolean::PREMIUM_TO_SEND_PRIVATE] = getGlobalBoolean(L, "premiumToSendPrivate", false);
 	booleans[Boolean::FORCE_MONSTERTYPE_LOAD] = getGlobalBoolean(L, "forceMonsterTypesOnLoad", true);
 	booleans[Boolean::DEFAULT_WORLD_LIGHT] = getGlobalBoolean(L, "defaultWorldLight", true);
+	booleans[Boolean::MULTI_WORLD_ENABLED] = getGlobalBoolean(L, "multiWorld", false);
+	booleans[Boolean::MULTI_WORLD_LOGIN_SERVER] = getGlobalBoolean(L, "multiWorldLoginServer", true);
 	booleans[Boolean::HOUSE_OWNED_BY_ACCOUNT] = getGlobalBoolean(L, "houseOwnedByAccount", false);
 	booleans[Boolean::CLEAN_PROTECTION_ZONES] = getGlobalBoolean(L, "cleanProtectionZones", false);
 	booleans[Boolean::HOUSE_DOOR_SHOW_PRICE] = getGlobalBoolean(L, "houseDoorShowPrice", true);
@@ -531,6 +536,9 @@ bool ConfigManager::load()
 	strings[String::LOCATION] = getGlobalString(L, "location", "");
 	strings[String::MOTD] = getGlobalString(L, "motd", "");
 	strings[String::WORLD_TYPE] = getGlobalString(L, "worldType", "pvp");
+	strings[String::WORLD_NAME] = getGlobalString(L, "worldName", getGlobalString(L, "serverName", "Forgotten"));
+	strings[String::WORLD_LOCATION] = getGlobalString(L, "worldLocation", getGlobalString(L, "location", "South America"));
+	strings[String::WORLD_IP] = getGlobalString(L, "worldIp", getGlobalString(L, "ip", "127.0.0.1"));
 	strings[String::NPC_SYSTEM] = getGlobalString(L, "npcSystem", "tfs");
 	strings[String::DUAL_WIELDING_MODE] = getGlobalString(L, "dualWieldingMode", "allweapons");
 	strings[String::RAID_SPAWNFILE_DIRECTORY] = getGlobalString(L, "raidSpawnFileDirectory", "data/raids");

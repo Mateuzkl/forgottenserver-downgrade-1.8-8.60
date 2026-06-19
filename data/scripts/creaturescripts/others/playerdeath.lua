@@ -1,6 +1,27 @@
 local deathListEnabled = true
 local maxDeathRecords = 5
-local playerDeathQuery = "INSERT INTO `player_deaths` (`player_id`, `time`, `level`, `killed_by`, `is_player`, `mostdamage_by`, `mostdamage_is_player`, `unjustified`, `mostdamage_unjustified`) VALUES (%d, %d, %d, %s, %d, %s, %d, %d, %d)"
+
+local function isMultiWorld()
+    return configManager and configKeys and configKeys.MULTI_WORLD_ENABLED
+        and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) or false
+end
+
+local function currentWorldId()
+    return isMultiWorld() and math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1) or 1
+end
+
+local function worldWhere()
+    return isMultiWorld() and (" AND `world_id` = " .. currentWorldId()) or ""
+end
+
+local function insertDeath(playerGuid, timeNow, level, killerName, byPlayer, mostDamageName, byPlayerMostDamage, lastUnjustified, mostDamageUnjustified)
+    if isMultiWorld() then
+        return string.format("INSERT INTO `player_deaths` (`player_id`, `time`, `level`, `killed_by`, `is_player`, `mostdamage_by`, `mostdamage_is_player`, `unjustified`, `mostdamage_unjustified`, `world_id`) VALUES (%d, %d, %d, %s, %d, %s, %d, %d, %d, %d)",
+            playerGuid, timeNow, level, killerName, byPlayer, mostDamageName, byPlayerMostDamage, lastUnjustified, mostDamageUnjustified, currentWorldId())
+    end
+    return string.format("INSERT INTO `player_deaths` (`player_id`, `time`, `level`, `killed_by`, `is_player`, `mostdamage_by`, `mostdamage_is_player`, `unjustified`, `mostdamage_unjustified`) VALUES (%d, %d, %d, %s, %d, %s, %d, %d, %d)",
+        playerGuid, timeNow, level, killerName, byPlayer, mostDamageName, byPlayerMostDamage, lastUnjustified, mostDamageUnjustified)
+end
 
 local function getKiller(killer)
     if not killer then
@@ -20,7 +41,7 @@ local function getKiller(killer)
 end
 
 local function playerDeathSuccess(playerId, playerName, killerId, playerGuid, byPlayer, killerName, playerGuildId, killerGuildId, timeNow)
-    local resultId = db.storeQuery("SELECT `player_id` FROM `player_deaths` WHERE `player_id` = " .. playerGuid)
+    local resultId = db.storeQuery("SELECT `player_id` FROM `player_deaths` WHERE `player_id` = " .. playerGuid .. worldWhere())
     if not resultId then
         return
     end
@@ -35,7 +56,7 @@ local function playerDeathSuccess(playerId, playerName, killerId, playerGuid, by
 
     local limit = deathRecords - maxDeathRecords
     if limit > 0 then
-        db.asyncQuery(string.format("DELETE FROM `player_deaths` WHERE `player_id` = %d ORDER BY `time` LIMIT %d", playerGuid, limit))
+        db.asyncQuery("DELETE FROM `player_deaths` WHERE `player_id` = " .. playerGuid .. worldWhere() .. " ORDER BY `time` LIMIT " .. limit)
     end
 
     -- Guild war kills are now handled in C++ (src/player.cpp and src/guild.cpp)
@@ -90,8 +111,7 @@ function playerDeath.onDeath(player, corpse, killer, mostDamageKiller, lastHitUn
     local killerGuildId = killerGuild and killerGuild:getId() or 0
     local killerId = byPlayer and realKiller and realKiller:getId() or 0
 
-    db.asyncQuery(string.format(
-        playerDeathQuery,
+    db.asyncQuery(insertDeath(
         playerGuid, timeNow, player:getLevel(),
         db.escapeString(killerName), byPlayer and 1 or 0,
         db.escapeString(killerNameMostDamage), byPlayerMostDamage and 1 or 0,

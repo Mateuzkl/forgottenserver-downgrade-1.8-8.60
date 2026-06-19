@@ -292,8 +292,9 @@ void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile)
 bool IOMapSerialize::loadHouseInfo()
 {
 	Database& db = Database::getInstance();
+	const std::string worldFilter = g_game.isMultiWorldEnabled() ? fmt::format(" WHERE `world_id` = {:d}", g_game.getCurrentWorldId()) : "";
 
-	DBResult_ptr result = db.storeQuery("SELECT `id`, CAST(`type` as UNSIGNED) AS `type`, `owner`, `paid`, `warnings`, `is_protected` FROM `houses`");
+	DBResult_ptr result = db.storeQuery("SELECT `id`, CAST(`type` as UNSIGNED) AS `type`, `owner`, `paid`, `warnings`, `is_protected` FROM `houses`" + worldFilter);
 	if (!result) {
 		return false;
 	}
@@ -323,7 +324,7 @@ bool IOMapSerialize::loadHouseInfo()
 		}
 	} while (result->next());
 
-	result = db.storeQuery("SELECT `house_id`, `listid`, `list` FROM `house_lists`");
+	result = db.storeQuery("SELECT `house_id`, `listid`, `list` FROM `house_lists`" + worldFilter);
 	if (result) {
 		do {
 			House* house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("house_id"));
@@ -334,7 +335,7 @@ bool IOMapSerialize::loadHouseInfo()
 	}
 
 	// Load house protection guests
-	result = db.storeQuery("SELECT `house_id`, `player_id` FROM `house_guests`");
+	result = db.storeQuery("SELECT `house_id`, `player_id` FROM `house_guests`" + worldFilter);
 	if (result) {
 		do {
 			House* house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("house_id"));
@@ -349,18 +350,24 @@ bool IOMapSerialize::loadHouseInfo()
 bool IOMapSerialize::saveHouseInfo()
 {
 	Database& db = Database::getInstance();
+	const bool multiWorld = g_game.isMultiWorldEnabled();
+	const auto worldId = g_game.getCurrentWorldId();
 
 	DBTransaction transaction;
 	if (!transaction.begin()) {
 		return false;
 	}
 
-	if (!db.executeQuery("DELETE FROM `house_lists`")) {
+	if (!db.executeQuery("DELETE FROM `house_lists`" + (multiWorld ? fmt::format(" WHERE `world_id` = {:d}", worldId) : ""))) {
 		return false;
 	}
 
 	std::ostringstream query;
-	query << "INSERT INTO `houses` (`id`, `type`, `owner`, `paid`, `warnings`, `is_protected`, `name`, `town_id`, `rent`, `size`, `beds`) VALUES ";
+	query << "INSERT INTO `houses` (`id`, `type`, `owner`, `paid`, `warnings`, `is_protected`, `name`, `town_id`, `rent`, `size`, `beds";
+	if (multiWorld) {
+		query << "`, `world_id";
+	}
+	query << "`) VALUES ";
 
 	bool notEmpty = false;
 	for (const auto& it : g_game.map.houses.getHouses()) {
@@ -368,10 +375,14 @@ bool IOMapSerialize::saveHouseInfo()
 		if (notEmpty) {
 			query << ",";
 		}
-		query << fmt::format("({:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d})",
+		query << fmt::format("({:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d}",
 		                     house->getId(), static_cast<uint32_t>(house->getType()), house->getOwner(), house->getPaidUntil(), house->getPayRentWarnings(),
 		                     (house->getProtected() ? 1 : 0), db.escapeString(house->getName()), house->getTownId(), house->getRent(), house->getTiles().size(),
 		                     house->getBedCount());
+		if (multiWorld) {
+			query << fmt::format(", {:d}", worldId);
+		}
+		query << ')';
 		notEmpty = true;
 	}
 
@@ -393,7 +404,7 @@ bool IOMapSerialize::saveHouseInfo()
 		}
 	}
 
-	DBInsert stmt("INSERT INTO `house_lists` (`house_id`, `listid` , `list`) VALUES ");
+	DBInsert stmt(multiWorld ? "INSERT INTO `house_lists` (`house_id`, `listid`, `list`, `world_id`) VALUES " : "INSERT INTO `house_lists` (`house_id`, `listid`, `list`) VALUES ");
 
 	for (const auto& it : g_game.map.houses.getHouses()) {
 		House* house = it.second.get();
@@ -401,16 +412,20 @@ bool IOMapSerialize::saveHouseInfo()
 		auto listText = house->getAccessList(GUEST_LIST).value_or("");
 
 		if (!listText.empty()) {
-			if (!stmt.addRow(fmt::format("{:d}, {}, {:s}", house->getId(), tfs::to_underlying(GUEST_LIST),
-			                             db.escapeString(listText)))) {
+			const auto row = multiWorld
+			                     ? fmt::format("{:d}, {}, {:s}, {:d}", house->getId(), tfs::to_underlying(GUEST_LIST), db.escapeString(listText), worldId)
+			                     : fmt::format("{:d}, {}, {:s}", house->getId(), tfs::to_underlying(GUEST_LIST), db.escapeString(listText));
+			if (!stmt.addRow(row)) {
 				return false;
 			}
 		}
 
 		listText = house->getAccessList(SUBOWNER_LIST).value_or("");
 		if (!listText.empty()) {
-			if (!stmt.addRow(fmt::format("{:d}, {}, {:s}", house->getId(), tfs::to_underlying(SUBOWNER_LIST),
-			                             db.escapeString(listText)))) {
+			const auto row = multiWorld
+			                     ? fmt::format("{:d}, {}, {:s}, {:d}", house->getId(), tfs::to_underlying(SUBOWNER_LIST), db.escapeString(listText), worldId)
+			                     : fmt::format("{:d}, {}, {:s}", house->getId(), tfs::to_underlying(SUBOWNER_LIST), db.escapeString(listText));
+			if (!stmt.addRow(row)) {
 				return false;
 			}
 		}
@@ -418,8 +433,10 @@ bool IOMapSerialize::saveHouseInfo()
 		for (Door* door : house->getDoors()) {
 			listText = door->getAccessList().value_or("");
 			if (!listText.empty()) {
-				if (!stmt.addRow(fmt::format("{:d}, {:d}, {:s}", house->getId(), door->getDoorId(),
-				                             db.escapeString(listText)))) {
+				const auto row = multiWorld
+				                     ? fmt::format("{:d}, {:d}, {:s}, {:d}", house->getId(), door->getDoorId(), db.escapeString(listText), worldId)
+				                     : fmt::format("{:d}, {:d}, {:s}", house->getId(), door->getDoorId(), db.escapeString(listText));
+				if (!stmt.addRow(row)) {
 					return false;
 				}
 			}
