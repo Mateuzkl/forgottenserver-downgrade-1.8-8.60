@@ -251,6 +251,7 @@ public:
 	Npc* getNpc() const { return curNpc; }
 
 	Thing* getThingByUID(uint32_t uid);
+	Creature* getCreatureByUID(uint32_t uid);
 	Item* getItemByUID(uint32_t uid);
 	Container* getContainerByUID(uint32_t uid);
 	void removeItemByUID(uint32_t uid);
@@ -272,6 +273,7 @@ public:
 
 	// local item map
 	std::unordered_map<uint32_t, ObserverPtr<Item>> localMap; // items managed by tempItems
+	std::vector<std::shared_ptr<Creature>> localCreatureRefs;
 	uint32_t lastUID = std::numeric_limits<uint16_t>::max();
 
 	// script file id

@@ -335,16 +335,16 @@ std::shared_ptr<Npc> Npcs::makeScriptHandle(Npc* npc)
 		return nullptr;
 	}
 
-	if (auto creatureRef = g_game.getCreatureSharedRef(npc)) {
+	if (auto creatureRef = npc->weak_from_this().lock()) {
 		return std::static_pointer_cast<Npc>(creatureRef);
 	}
 
-	return std::shared_ptr<Npc>(npc, [](Npc*) {});
+	return nullptr;
 }
 
 // ─── Npc ──────────────────────────────────────────────────────────────────────
 
-std::unique_ptr<Npc> Npc::createNpc(const std::string& name)
+std::shared_ptr<Npc> Npc::createNpc(const std::string& name)
 {
 	// Hybrid NPC system: first check if the NPC was registered via Lua (RevScript),
 	// if not found, fall back to the traditional XML system.
@@ -382,7 +382,7 @@ std::unique_ptr<Npc> Npc::createNpc(const std::string& name)
 			name, npcType->defaultOutfit.lookType));
 	}
 
-	auto npc = std::make_unique<Npc>(name);
+	auto npc = std::make_shared<Npc>(name);
 	npc->setName(npcType->name);
 	npc->loaded = true;
 	npc->npcType = npcType;
@@ -1603,9 +1603,6 @@ int NpcScriptInterface::luaNpcCloseShopWindow(lua_State* L)
 NpcEventsHandler::NpcEventsHandler(const std::string& file, Npc* npcPtr) :
     scriptInterface(Npcs::scriptInterface), npc(npcPtr)
 {
-	// Create a temporary shared_ptr for loadFile; it goes out of scope here
-	// so enable_shared_from_this can be properly re-initialized when the
-	// owning shared_ptr is created later.
 	auto npcHandle = Npcs::makeScriptHandle(npcPtr);
 	loaded = scriptInterface->loadFile("data/npc/scripts/" + file, npcHandle) == 0;
 	if (!loaded) {

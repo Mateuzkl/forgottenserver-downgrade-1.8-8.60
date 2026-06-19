@@ -17,9 +17,11 @@ int luaNpcCreate(lua_State* L)
 {
 	// Npc([id or name or userdata])
 	Npc* npc;
+	std::shared_ptr<Npc> npcRef;
 	if (lua_gettop(L) >= 2) {
 		if (isInteger(L, 2)) {
-			npc = g_game.getNpcByID(getInteger<uint32_t>(L, 2));
+			npcRef = g_game.getNpcByIDShared(getInteger<uint32_t>(L, 2));
+			npc = npcRef.get();
 		} else if (isString(L, 2)) {
 			npc = g_game.getNpcByName(getString(L, 2));
 		} else if (isUserdata(L, 2)) {

@@ -740,6 +740,21 @@ Npc* Game::getNpcByID(uint32_t id)
 	return npc.get();
 }
 
+std::shared_ptr<Creature> Game::getCreatureByIDShared(uint32_t id) const
+{
+	return getCreatureSharedRef(id);
+}
+
+std::shared_ptr<Monster> Game::getMonsterByIDShared(uint32_t id) const
+{
+	return std::dynamic_pointer_cast<Monster>(getCreatureSharedRef(id));
+}
+
+std::shared_ptr<Npc> Game::getNpcByIDShared(uint32_t id) const
+{
+	return std::dynamic_pointer_cast<Npc>(getCreatureSharedRef(id));
+}
+
 std::shared_ptr<Player> Game::getPlayerByID(uint32_t id)
 {
 	if (id == 0) {
@@ -1086,7 +1101,8 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 
 void Game::executeDeath(uint32_t creatureId)
 {
-	Creature* creature = getCreatureByID(creatureId);
+	auto creatureRef = getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	if (creature && !creature->isRemoved()) {
 		creature->onDeath();
 	}
@@ -1155,7 +1171,8 @@ void Game::playerMoveCreatureByID(uint32_t playerId, uint32_t movingCreatureId, 
 		return;
 	}
 
-	Creature* movingCreature = getCreatureByID(movingCreatureId);
+	auto movingCreatureRef = getCreatureByIDShared(movingCreatureId);
+	Creature* movingCreature = movingCreatureRef.get();
 	if (!movingCreature) {
 		return;
 	}
@@ -3589,7 +3606,8 @@ void Game::playerUseWithCreature(uint32_t playerId, const Position& fromPos, uin
 		return;
 	}
 
-	Creature* creature = getCreatureByID(creatureId);
+	auto creatureRef = getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	if (!creature) {
 		return;
 	}
@@ -4550,7 +4568,8 @@ void Game::playerLookInBattleList(uint32_t playerId, uint32_t creatureId)
 		return;
 	}
 
-	Creature* creature = getCreatureByID(creatureId);
+	auto creatureRef = getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	if (!creature) {
 		return;
 	}
@@ -4603,7 +4622,8 @@ void Game::playerSetAttackedCreature(uint32_t playerId, uint32_t creatureId)
 		return;
 	}
 
-	Creature* attackCreature = getCreatureByID(creatureId);
+	auto attackCreatureRef = getCreatureByIDShared(creatureId);
+	Creature* attackCreature = attackCreatureRef.get();
 	if (!attackCreature) {
 		player->setAttackedCreature(nullptr);
 		player->sendCancelTarget();
@@ -4636,7 +4656,8 @@ void Game::playerFollowCreature(uint32_t playerId, uint32_t creatureId)
 		return;
 	}
 
-	Creature *followCreature = getCreatureByID(creatureId);
+	auto followCreatureRef = getCreatureByIDShared(creatureId);
+	Creature* followCreature = followCreatureRef.get();
 	if (followCreature && !InstanceUtils::canInteract(player, followCreature)) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		player->sendCancelTarget();
@@ -5179,7 +5200,8 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 
 void Game::checkCreatureWalk(uint32_t creatureId)
 {
-	Creature* creature = getCreatureByID(creatureId);
+	auto creatureRef = getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	if (creature && !creature->isRemoved() && !creature->isDead()) {
 		creature->onWalk();
 	}
@@ -5187,7 +5209,8 @@ void Game::checkCreatureWalk(uint32_t creatureId)
 
 void Game::updateCreatureWalk(uint32_t creatureId)
 {
-	Creature* creature = getCreatureByID(creatureId);
+	auto creatureRef = getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	if (creature && !creature->isRemoved() && !creature->isDead()) {
 		creature->isUpdatingPath = false;
 		creature->goToFollowCreature();
@@ -5196,7 +5219,8 @@ void Game::updateCreatureWalk(uint32_t creatureId)
 
 void Game::checkCreatureAttack(uint32_t creatureId)
 {
-	Creature* creature = getCreatureByID(creatureId);
+	auto creatureRef = getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	if (creature && !creature->isRemoved() && !creature->isDead()) {
 		creature->onAttacking(0);
 	}
@@ -5875,7 +5899,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		// rewardboss healing contribution
 		if (target && target->getPlayer()) {
 			for (const auto& [monsterId, rewardInfo] : g_game.rewardBossTracking) {
-				Monster* monster = getMonsterByID(monsterId);
+				auto monsterRef = getMonsterByIDShared(monsterId);
+				Monster* monster = monsterRef.get();
 				if (monster && monster->isRewardBoss()) {
 					const Position& playerPos = target->getPosition();
 					const Position& monsterPos = monster->getPosition();
@@ -7583,7 +7608,8 @@ bool Game::playerStopSpyInventory(uint32_t godPlayerId)
 void Game::forceAddCondition(uint32_t creatureId, Condition* condition)
 {
 	Condition_ptr condPtr(condition);
-	Creature* creature = getCreatureByID(creatureId);
+	auto creatureRef = getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	if (!creature) {
 		return;
 	}
@@ -7593,7 +7619,8 @@ void Game::forceAddCondition(uint32_t creatureId, Condition* condition)
 
 void Game::forceRemoveCondition(uint32_t creatureId, ConditionType_t type)
 {
-	Creature* creature = getCreatureByID(creatureId);
+	auto creatureRef = getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	if (!creature) {
 		return;
 	}

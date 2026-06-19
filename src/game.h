@@ -150,6 +150,7 @@ public:
 	 * \returns A Creature pointer to the creature
 	 */
 	[[nodiscard]] Creature* getCreatureByID(uint32_t id);
+	[[nodiscard]] std::shared_ptr<Creature> getCreatureByIDShared(uint32_t id) const;
 
 	/**
 	 * Returns a monster based on the unique creature identifier
@@ -157,6 +158,7 @@ public:
 	 * \returns A Monster pointer to the monster
 	 */
 	[[nodiscard]] Monster* getMonsterByID(uint32_t id);
+	[[nodiscard]] std::shared_ptr<Monster> getMonsterByIDShared(uint32_t id) const;
 
 	/**
 	 * Returns an npc based on the unique creature identifier
@@ -164,6 +166,7 @@ public:
 	 * \returns A NPC pointer to the npc
 	 */
 	[[nodiscard]] Npc* getNpcByID(uint32_t id);
+	[[nodiscard]] std::shared_ptr<Npc> getNpcByIDShared(uint32_t id) const;
 
 	/**
 	 * Returns a player based on the unique creature identifier

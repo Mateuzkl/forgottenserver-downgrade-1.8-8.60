@@ -81,8 +81,10 @@ int luaCreatureCreate(lua_State* L)
 {
 	// Creature(id or name or userdata)
 	Creature* creature;
+	std::shared_ptr<Creature> creatureRef;
 	if (isInteger(L, 2)) {
-		creature = g_game.getCreatureByID(getInteger<uint32_t>(L, 2));
+		creatureRef = g_game.getCreatureByIDShared(getInteger<uint32_t>(L, 2));
+		creature = creatureRef.get();
 	} else if (isString(L, 2)) {
 		creature = g_game.getCreatureByName(getString(L, 2));
 	} else if (isUserdata(L, 2)) {

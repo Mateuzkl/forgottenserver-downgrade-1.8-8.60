@@ -98,7 +98,7 @@ public:
 	}
 
 private:
-	std::forward_list<std::unique_ptr<Npc>> npcList;
+	std::forward_list<std::shared_ptr<Npc>> npcList;
 	std::forward_list<std::shared_ptr<Spawn>> spawnList;
 	
 	std::string filename;

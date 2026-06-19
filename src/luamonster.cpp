@@ -20,8 +20,10 @@ int luaMonsterCreate(lua_State* L)
 {
 	// Monster(id or userdata)
 	Monster* monster;
+	std::shared_ptr<Monster> monsterRef;
 	if (isInteger(L, 2)) {
-		monster = g_game.getMonsterByID(getInteger<uint32_t>(L, 2));
+		monsterRef = g_game.getMonsterByIDShared(getInteger<uint32_t>(L, 2));
+		monster = monsterRef.get();
 	} else if (isUserdata(L, 2)) {
 		monster = getUserdata<Monster>(L, 2);
 	} else {

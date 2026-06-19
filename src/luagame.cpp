@@ -749,12 +749,11 @@ int luaGameCreateMonster(lua_State* L)
 int luaGameCreateNpc(lua_State* L)
 {
 	// Game.createNpc(npcName, position[, extended = false[, force = false[, magicEffect = CONST_ME_TELEPORT[, instanceId = 0]]]])
-	auto npcUnique = Npc::createNpc(getString(L, 1));
-	if (!npcUnique) {
+	auto npc = Npc::createNpc(getString(L, 1));
+	if (!npc) {
 		lua_pushnil(L);
 		return 1;
 	}
-	std::shared_ptr<Npc> npc(std::move(npcUnique));
 
 	const Position& position = getPosition(L, 2);
 	bool extended = getBoolean(L, 3, false);

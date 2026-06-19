@@ -264,6 +264,7 @@ void ScriptEnvironment::resetEnv()
 	interface = nullptr;
 	curNpc = nullptr;
 	localMap.clear();
+	localCreatureRefs.clear();
 	tempResults.clear();
 
 	std::erase_if(tempItems, [this](auto& entry) {
@@ -355,7 +356,7 @@ void ScriptEnvironment::insertItem(uint32_t uid, Item* item)
 Thing* ScriptEnvironment::getThingByUID(uint32_t uid)
 {
 	if (uid >= 0x10000000) {
-		return g_game.getCreatureByID(uid);
+		return getCreatureByUID(uid);
 	}
 
 	if (uid <= std::numeric_limits<uint16_t>::max()) {
@@ -374,6 +375,23 @@ Thing* ScriptEnvironment::getThingByUID(uint32_t uid)
 		}
 	}
 	return nullptr;
+}
+
+Creature* ScriptEnvironment::getCreatureByUID(uint32_t uid)
+{
+	auto creatureRef = g_game.getCreatureByIDShared(uid);
+	Creature* creature = creatureRef.get();
+	if (!creature) {
+		return nullptr;
+	}
+
+	auto it = std::find_if(localCreatureRefs.begin(), localCreatureRefs.end(), [creature](const auto& ref) {
+		return ref.get() == creature;
+	});
+	if (it == localCreatureRefs.end()) {
+		localCreatureRefs.push_back(std::move(creatureRef));
+	}
+	return creature;
 }
 
 Item* ScriptEnvironment::getItemByUID(uint32_t uid)
@@ -1251,7 +1269,7 @@ Creature* Lua::getCreature(lua_State* L, int32_t arg)
 	if (isUserdata(L, arg)) {
 		return getUserdata<Creature>(L, arg);
 	}
-	Creature* creature = g_game.getCreatureByID(getInteger<uint32_t>(L, arg));
+	Creature* creature = LuaScriptInterface::getScriptEnv()->getCreatureByUID(getInteger<uint32_t>(L, arg));
 	if (!creature || !Creature::isAlive(creature) || creature->isRemoved()) {
 		return nullptr;
 	}
@@ -4455,9 +4473,9 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 			case LuaData_Monster:
 			case LuaData_Npc: {
 				auto replaceCreatureParameter = [this](uint32_t creatureId) {
-					if (auto creature = g_game.getCreatureByID(creatureId)) {
-						Lua::pushUserdata<Creature>(luaState, creature);
-						Lua::setCreatureMetatable(luaState, -1, creature);
+					if (auto creature = g_game.getCreatureByIDShared(creatureId)) {
+						Lua::pushUserdata<Creature>(luaState, creature.get());
+						Lua::setCreatureMetatable(luaState, -1, creature.get());
 					} else {
 						lua_pushnil(luaState);
 					}

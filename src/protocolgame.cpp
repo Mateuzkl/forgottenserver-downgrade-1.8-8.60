@@ -1597,7 +1597,8 @@ std::pair<bool, uint32_t> ProtocolGame::isKnownCreature(uint32_t id)
 
 	if (knownCreatureSet.size() > 250) {
 		auto unseenIt = std::find_if(knownCreatureSet.begin(), knownCreatureSet.end(), [this](uint32_t creatureId) {
-			Creature* creature = g_game.getCreatureByID(creatureId);
+			auto creatureRef = g_game.getCreatureByIDShared(creatureId);
+			Creature* creature = creatureRef.get();
 			return !canSee(creature);
 		});
 		if (unseenIt != knownCreatureSet.end()) {

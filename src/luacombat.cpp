@@ -322,7 +322,8 @@ int luaCombatExecute(lua_State* L)
 	const LuaVariant& variant = getVariant(L, 3);
 	switch (variant.type()) {
 		case VARIANT_NUMBER: {
-			Creature* target = g_game.getCreatureByID(variant.getNumber());
+			auto targetRef = g_game.getCreatureByIDShared(variant.getNumber());
+			Creature* target = targetRef.get();
 			if (!target) {
 				pushBoolean(L, false);
 				return 1;

@@ -503,11 +503,10 @@ CreatureVector Creature::getKillers() const
 	const int64_t timeNow = OTSYS_TIME();
 	const int64_t inFightTicks = getInteger(ConfigManager::PZ_LOCKED);
 	for (const auto& it : damageMap) {
-		Creature* attacker = g_game.getCreatureByID(it.first);
+		auto attackerRef = g_game.getCreatureByIDShared(it.first);
+		Creature* attacker = attackerRef.get();
 		if (attacker && attacker != this && timeNow - it.second.ticks <= inFightTicks) {
-			if (auto attackerRef = getSharedCreature(attacker)) {
-				killers.push_back(std::move(attackerRef));
-			}
+			killers.push_back(std::move(attackerRef));
 		}
 	}
 	return killers;
@@ -535,11 +534,8 @@ void Creature::onDeath()
 	int32_t mostDamage = 0;
 	std::unordered_map<std::shared_ptr<Creature>, uint64_t> experienceMap;
 	for (const auto& it : damageMap) {
-		if (Creature* attackerRaw = g_game.getCreatureByID(it.first)) {
-			auto attacker = getSharedCreature(attackerRaw);
-			if (!attacker) {
-				continue;
-			}
+		auto attacker = g_game.getCreatureByIDShared(it.first);
+		if (attacker) {
 			CountBlock_t cb = it.second;
 			if ((cb.total > mostDamage && (timeNow - cb.ticks <= inFightTicks))) {
 				mostDamage = cb.total;

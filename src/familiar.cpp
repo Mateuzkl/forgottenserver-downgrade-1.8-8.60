@@ -56,7 +56,8 @@ static void SendMessageFunction(uint32_t playerId, const std::string& message)
 
 static void RemoveFamiliar(uint32_t creatureId, uint32_t playerId)
 {
-	Creature* creature = g_game.getCreatureByID(creatureId);
+	auto creatureRef = g_game.getCreatureByIDShared(creatureId);
+	Creature* creature = creatureRef.get();
 	auto playerRef = g_game.getPlayerByID(playerId);
 	Player* player = playerRef.get();
 	if (!creature || !player) {

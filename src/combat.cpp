@@ -144,7 +144,8 @@ void Combat::doCombatCleave(Creature* caster, uint32_t primaryTargetId, const Co
 	g_game.map.getSpectators(spectators, casterPos, false, false, 1, 1, 1, 1, true);
 
 	for (const auto& spectator : spectators) {
-		Creature* resolvedCaster = g_game.getCreatureByID(casterId);
+		auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
+		Creature* resolvedCaster = resolvedCasterRef.get();
 		if (!resolvedCaster) {
 			break;
 		}
@@ -2175,8 +2176,10 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 		for (const auto& to : toVector) {
 			g_scheduler.addEvent(delay, [self, casterId = caster ? caster->getID() : 0, to, from, capturedChainEffect,
 			                             instantSpellName]() {
-				Creature* resolvedCaster = g_game.getCreatureByID(casterId);
-				Creature* nextTarget = g_game.getCreatureByID(to);
+				auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
+				Creature* resolvedCaster = resolvedCasterRef.get();
+				auto nextTargetRef = g_game.getCreatureByIDShared(to);
+				Creature* nextTarget = nextTargetRef.get();
 				if (!nextTarget) {
 					return;
 				}
@@ -2293,7 +2296,7 @@ void MagicField::onStepInField(const std::shared_ptr<Creature>& creature)
 			bool harmfulField = true;
 
 			if (g_game.getWorldType() == WORLD_TYPE_NO_PVP || fieldTile->hasFlag(TILESTATE_NOPVPZONE)) {
-				auto owner = lockCreature(g_game.getCreatureByID(ownerId));
+				auto owner = g_game.getCreatureByIDShared(ownerId);
 				if (owner) {
 					auto ownerMaster = owner->getMaster();
 					if (owner->getPlayer() || (owner->isSummon() && ownerMaster && ownerMaster->getPlayer())) {

@@ -1165,7 +1165,8 @@ bool RuneSpell::executeUse(Player* player, const std::shared_ptr<Item>& item, co
 	postCastSpell(player);
 
 	if (var.isNumber()) {
-		target = g_game.getCreatureByID(var.getNumber());
+		auto targetRef = g_game.getCreatureByIDShared(var.getNumber());
+		target = targetRef.get();
 		if (getPzLock() && target) {
 			if (Creature* targetCreature = target->getCreature()) {
 				player->onAttackedCreature(targetCreature->shared_from_this());
