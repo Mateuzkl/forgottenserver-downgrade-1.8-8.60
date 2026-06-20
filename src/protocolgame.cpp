@@ -5056,6 +5056,8 @@ void ProtocolGame::sendAstraItemTooltip(const AstraItemTooltip::Request& request
 		const int32_t duration = item->getDuration();
 		if (duration > 0) {
 			durationSeconds = static_cast<uint32_t>(duration / 1000);
+			// "Paused" means anything other than actively counting down, which
+			// intentionally includes the pending/stopping decay states.
 			durationPaused = item->getDecaying() == DECAYING_TRUE ? 0 : 1;
 			hasDuration = true;
 		}
@@ -5120,6 +5122,8 @@ void ProtocolGame::sendAstraItemTooltip(const AstraItemTooltip::Request& request
 		payload.addString(type.vocationString);
 	}
 	if (hasImbuements) {
+		// Wire format caps the slot count at one byte. Real items have only a
+		// handful of imbuement slots, so the clamp never triggers in practice.
 		payload.addByte(static_cast<uint8_t>(std::min<uint16_t>(imbuementSlots, 255)));
 		const uint8_t count = static_cast<uint8_t>(std::min<size_t>(imbuements.size(), 255));
 		payload.addByte(count);
@@ -5155,6 +5159,14 @@ void ProtocolGame::sendAstraItemTooltip(const AstraItemTooltip::Request& request
 	}
 	if (isContainer) {
 		payload.add<uint16_t>(containerCapacity);
+	}
+
+	// NetworkMessage::addBytes silently drops payloads larger than 8192 bytes;
+	// sending STATUS_OK with a length prefix but no body would desync the client,
+	// so bail with an error status instead. A normal tooltip is far below this.
+	if (payload.getLength() > 8192) {
+		sendStatus(STATUS_INVALID);
+		return;
 	}
 
 	NetworkMessage msg;
