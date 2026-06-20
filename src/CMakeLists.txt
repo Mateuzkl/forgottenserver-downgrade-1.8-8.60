@@ -183,7 +183,6 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/observer_ptr.h
 	${CMAKE_CURRENT_LIST_DIR}/luascript.h
 	${CMAKE_CURRENT_LIST_DIR}/familiar.h
-	${CMAKE_CURRENT_LIST_DIR}/field_registry.h
 	${CMAKE_CURRENT_LIST_DIR}/luavariant.h
 	${CMAKE_CURRENT_LIST_DIR}/mailbox.h
 	${CMAKE_CURRENT_LIST_DIR}/map.h

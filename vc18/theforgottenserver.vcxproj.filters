@@ -311,7 +311,6 @@
     <ClInclude Include="..\src\thread_pool.h" />
     <ClInclude Include="..\src\imbuement.h" />
     <ClInclude Include="..\src\familiar.h" />
-    <ClInclude Include="..\src\field_registry.h" />
     <ClInclude Include="..\src\spy.h" />
     <ClInclude Include="..\src\stress_test.h" />
     <ClInclude Include="..\src\zones.h" />

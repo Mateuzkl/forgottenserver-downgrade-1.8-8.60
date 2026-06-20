@@ -7,7 +7,6 @@
 #include "mapcache.h"
 #include "logger.h"
 #include "zones.h"
-#include "field_registry.h"
 
 /*
 OTBM_ROOTV1
@@ -333,23 +332,13 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                             }
 
                             if (tile) {
-                                uint16_t itemId = item->getID();
-                                if (transferMapItem(tile, item)) {
-                                    if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
-                                        FieldRegistry::instance().addPosition(Position(x, y, z), ft);
-                                    }
-                                }
+                                transferMapItem(tile, item);
                             } else if (item->isGroundTile()) {
                                 ground_item = std::move(item);
                             } else {
-                                uint16_t itemId = item->getID();
                                 tilePtr = createTile(ground_item, item.get(), x, y, z);
                                 tile = tilePtr.get();
-                                if (transferMapItem(tile, item)) {
-                                    if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
-                                        FieldRegistry::instance().addPosition(Position(x, y, z), ft);
-                                    }
-                                }
+                                transferMapItem(tile, item);
                             }
                         }
                         break;
@@ -404,23 +393,13 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                     }
 
                     if (tile) {
-                        uint16_t itemId = item->getID();
-                        if (transferMapItem(tile, item)) {
-                            if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
-                                FieldRegistry::instance().addPosition(Position(x, y, z), ft);
-                            }
-                        }
+                        transferMapItem(tile, item);
                     } else if (item->isGroundTile()) {
                         ground_item = std::move(item);
                     } else {
-                        uint16_t itemId = item->getID();
                         tilePtr = createTile(ground_item, item.get(), x, y, z);
                         tile = tilePtr.get();
-                        if (transferMapItem(tile, item)) {
-                            if (FieldType ft = getFieldTypeFromItemId(itemId); ft != FIELD_NONE) {
-                                FieldRegistry::instance().addPosition(Position(x, y, z), ft);
-                            }
-                        }
+                        transferMapItem(tile, item);
                     }
                 }
             }

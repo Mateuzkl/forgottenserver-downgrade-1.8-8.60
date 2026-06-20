@@ -17,7 +17,6 @@
 #include "teleport.h"
 #include "trashholder.h"
 #include "logger.h"
-#include "field_registry.h"
 
 #include <algorithm>
 
@@ -469,11 +468,6 @@ void Tile::onAddTileItem(Item* item)
 		}
 	}
 
-	const FieldType ftype = getFieldTypeFromItemId(item->getID());
-	if (ftype != FIELD_NONE) {
-		FieldRegistry::instance().addPosition(cylinderMapPos, ftype);
-	}
-
 	if ((!hasFlag(TILESTATE_PROTECTIONZONE) || getBoolean(ConfigManager::CLEAN_PROTECTION_ZONES)) &&
 	    item->isCleanable()) {
 		if (!getHouseTile()) {
@@ -502,28 +496,6 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 		spectator->onUpdateTileItem(this, cylinderMapPos, oldItem, oldType, newItem, newType);
 	}
 
-	const FieldType oldFtype = getFieldTypeFromItemId(oldType.id);
-	const FieldType newFtype = getFieldTypeFromItemId(newType.id);
-
-	if (oldFtype != newFtype) {
-		if (oldFtype != FIELD_NONE) {
-			bool stillHasOldField = false;
-			if (TileItemVector* items = getItemList()) {
-				for (const auto& it : *items) {
-					if (it && it.get() != oldItem && getFieldTypeFromItemId(it->getID()) == oldFtype) {
-						stillHasOldField = true;
-						break;
-					}
-				}
-			}
-			if (!stillHasOldField) {
-				FieldRegistry::instance().removePosition(cylinderMapPos, oldFtype);
-			}
-		}
-		if (newFtype != FIELD_NONE) {
-			FieldRegistry::instance().addPosition(cylinderMapPos, newFtype);
-		}
-	}
 }
 
 void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item)
@@ -546,22 +518,6 @@ void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<in
 	// event methods
 	for (const auto& spectator : spectators) {
 		spectator->onRemoveTileItem(this, cylinderMapPos, iType, item);
-	}
-
-	const FieldType ftype = getFieldTypeFromItemId(item->getID());
-	if (ftype != FIELD_NONE) {
-		bool stillHasField = false;
-		if (TileItemVector* items = getItemList()) {
-			for (const auto& it : *items) {
-				if (it && it.get() != item && getFieldTypeFromItemId(it->getID()) == ftype) {
-					stillHasField = true;
-					break;
-				}
-			}
-		}
-		if (!stillHasField) {
-			FieldRegistry::instance().removePosition(cylinderMapPos, ftype);
-		}
 	}
 
 	if (!hasFlag(TILESTATE_PROTECTIONZONE) || getBoolean(ConfigManager::CLEAN_PROTECTION_ZONES)) {

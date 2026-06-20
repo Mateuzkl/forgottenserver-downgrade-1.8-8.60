@@ -22,7 +22,6 @@
 #include "scheduler.h"
 #include "scriptmanager.h"
 #include "thread_pool.h"
-#include "field_registry.h"
 
 #include <limits>
 #include <map>
@@ -3383,24 +3382,23 @@ void ProtocolGame::refreshMagicWallViews()
 	if (maxx > 65534) maxx = 65534;
 	if (maxy > 65534) maxy = 65534;
 
-	Position minPos(static_cast<uint16_t>(minx), static_cast<uint16_t>(miny), static_cast<uint8_t>(centerPos.z));
-	Position maxPos(static_cast<uint16_t>(maxx), static_cast<uint16_t>(maxy), static_cast<uint8_t>(centerPos.z));
-
-	auto positions = FieldRegistry::instance().getPositionsInRange(minPos, maxPos, static_cast<int16_t>(centerPos.z), FIELD_MAGICWALL);
-	for (const Position& p : positions) {
-		Tile* tile = g_game.map.getTile(p);
-		if (!tile) {
-			continue;
-		}
-		const TileItemVector* itemList = tile->getItemList();
-		if (!itemList) {
-			continue;
-		}
-		for (const auto& itemPtr : *itemList) {
-			if (itemPtr && Player::isMagicWallItemId(itemPtr->getID())) {
-				auto stackpos = tile->getStackposOfItem(player.get(), itemPtr.get());
-				if (stackpos != -1) {
-					sendUpdateTileItem(p, static_cast<uint32_t>(stackpos), itemPtr.get());
+	for (int32_t x = minx; x <= maxx; ++x) {
+		for (int32_t y = miny; y <= maxy; ++y) {
+			Position pos(static_cast<uint16_t>(x), static_cast<uint16_t>(y), centerPos.z);
+			Tile* tile = g_game.map.getTile(pos);
+			if (!tile) {
+				continue;
+			}
+			const TileItemVector* itemList = tile->getItemList();
+			if (!itemList) {
+				continue;
+			}
+			for (const auto& itemPtr : *itemList) {
+				if (itemPtr && Player::isMagicWallItemId(itemPtr->getID())) {
+					auto stackpos = tile->getStackposOfItem(player.get(), itemPtr.get());
+					if (stackpos != -1) {
+						sendUpdateTileItem(pos, static_cast<uint32_t>(stackpos), itemPtr.get());
+					}
 				}
 			}
 		}

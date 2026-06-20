@@ -161,7 +161,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
       <AdditionalIncludeDirectories>..\src;$(VcpkgRoot)include\%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:W0 /wd4702 %(AdditionalOptions)</AdditionalOptions>
@@ -345,7 +345,6 @@
     <ClInclude Include="..\src\enums.h" />
     <ClInclude Include="..\src\events.h" />
     <ClInclude Include="..\src\familiar.h" />
-    <ClInclude Include="..\src\field_registry.h" />
     <ClInclude Include="..\src\fileloader.h" />
     <ClInclude Include="..\src\game.h" />
     <ClInclude Include="..\src\globalevent.h" />

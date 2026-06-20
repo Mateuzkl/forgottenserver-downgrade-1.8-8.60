@@ -9,8 +9,6 @@
 #include "protocol.h"
 #include "tasks.h"
 
-enum FieldType : uint8_t;
-
 class NetworkMessage;
 class Player;
 class Game;
