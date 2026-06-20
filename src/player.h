@@ -1783,7 +1783,13 @@ private:
 		std::string string1;
 		std::string string2;
 		std::string accountName;
+		uint16_t worldId{0};
 	} managerData;
+
+	// Account Manager multi-world character creation helpers (implemented in player.cpp)
+	bool accountManagerNeedsWorldStep() const;
+	std::string accountManagerWorldPrompt() const;
+	void accountManagerCreateCharacter();
 
 	void updateItemsLight(bool internal = false);
 

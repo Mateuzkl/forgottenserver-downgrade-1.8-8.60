@@ -22,6 +22,22 @@ Characters assigned to that server need `world_id = 2`. Character IDs remain
 globally unique, so child tables such as `player_items`, depot and inbox data
 continue to be isolated through `player_id`.
 
+### Choosing the world in the Account Manager
+
+When `multiWorld = true` and more than one row exists in `worlds`, the in-game
+Account Manager adds an extra step to character creation: after the name, sex
+and (optional) vocation are confirmed it asks *"In which world should this
+character be created?"* and lists the available worlds by id and name. The
+answer (id number or world name) is stored as the new character's `world_id`,
+so a player connected to the world 1 login service can create a character
+directly on world 2, 3, etc. With a single world (or `multiWorld = false`) the
+step is skipped and the legacy flow is preserved.
+
+The per-account character limit and the name-availability prompt during name
+entry are still evaluated against the world hosting the Account Manager; the
+authoritative per-world name check happens at creation time, so a duplicate
+name in the chosen world fails the creation safely.
+
 ## Example configurations
 
 World 1 owns the shared login service:

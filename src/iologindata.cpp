@@ -1796,11 +1796,25 @@ bool IOLoginData::setRecoveryKey(uint32_t accountId, const std::string& recovery
 	return db.executeQuery(fmt::format("UPDATE `accounts` SET `secret` = {:s} WHERE `id` = {:d}", db.escapeString(hashedKey), accountId));
 }
 
-bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex)
+bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex,
+                               uint16_t worldId)
 {
 	Database& db = Database::getInstance();
 
-	if (playerNameExists(name)) {
+	// When multi-world is enabled the character may be created in a world other
+	// than the one running this process (e.g. the Account Manager lives on world
+	// 1 but the player picked world 2). worldId == 0 keeps the legacy behaviour
+	// of using the current process world. Name uniqueness is per (name, world_id),
+	// so the existence check must target the chosen world.
+	const uint16_t targetWorldId =
+	    g_game.isMultiWorldEnabled() ? (worldId != 0 ? worldId : g_game.getCurrentWorldId()) : 0;
+
+	if (g_game.isMultiWorldEnabled()) {
+		if (db.storeQuery(fmt::format("SELECT `id` FROM `players` WHERE `name` = {:s} AND `world_id` = {:d}",
+		                              db.escapeString(name), targetWorldId))) {
+			return false;
+		}
+	} else if (playerNameExists(name)) {
 		return false;
 	}
 
@@ -1838,7 +1852,7 @@ bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint
 		  << ", " << cap << ", " << static_cast<uint16_t>(sex) << ", 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 43200, -1, 2520, "
 		  << "10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0";
 	if (g_game.isMultiWorldEnabled()) {
-		query << ", " << g_game.getCurrentWorldId();
+		query << ", " << targetWorldId;
 	}
 	query << ')';
 

@@ -7369,13 +7369,55 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 	sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 }
 
+bool Player::accountManagerNeedsWorldStep() const
+{
+	// Only prompt for a world when multi-world is enabled and there is an actual
+	// choice to make. With a single world the legacy flow (current world) is kept.
+	return g_game.isMultiWorldEnabled() && g_game.getWorlds().getWorlds().size() > 1;
+}
+
+std::string Player::accountManagerWorldPrompt() const
+{
+	std::ostringstream prompt;
+	prompt << "In which world should this character be created? Type the world name or number: ";
+	bool first = true;
+	for (const auto& world : g_game.getWorlds().getWorlds()) {
+		if (!first) {
+			prompt << ", ";
+		}
+		prompt << world.id << " - " << world.name;
+		first = false;
+	}
+	prompt << '.';
+	return prompt.str();
+}
+
+void Player::accountManagerCreateCharacter()
+{
+	std::ostringstream msg;
+	managerTalkState[1] = true;
+	for (int8_t i = 2; i <= 14; i++) {
+		managerTalkState[i] = false;
+	}
+
+	// managerData.vocationId/sex/worldId were validated by the conversation flow;
+	// createPlayer re-checks name uniqueness within the chosen world.
+	if (IOLoginData::createPlayer(managerData.accountId, managerData.string1,
+	                              static_cast<uint16_t>(managerData.vocationId), managerData.sex, managerData.worldId)) {
+		msg << "Your character has been created.";
+	} else {
+		msg << "Your character couldn't be created, please try again.";
+	}
+	sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+}
+
 void Player::handleAccountManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
 	msg << "Account Manager: ";
 
 	if (checkText(text, "cancel") || checkText(text, "account")) {
 		managerTalkState[1] = true;
-		for (int8_t i = 2; i <= 12; i++) {
+		for (int8_t i = 2; i <= 14; i++) {
 			managerTalkState[i] = false;
 		}
 		msg << "Do you want to change your 'password', 'recovery key', 'character' or 'delete'?";
@@ -7412,7 +7454,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		}
 
 		managerTalkState[1] = true;
-		for (int8_t i = 2; i <= 12; i++) {
+		for (int8_t i = 2; i <= 14; i++) {
 			managerTalkState[i] = false;
 		}
 
@@ -7447,7 +7489,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		return;
 	} else if (checkText(text, "yes") && managerTalkState[5]) {
 		managerTalkState[1] = true;
-		for (int8_t i = 2; i <= 12; i++) {
+		for (int8_t i = 2; i <= 14; i++) {
 			managerTalkState[i] = false;
 		}
 
@@ -7457,7 +7499,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		return;
 	} else if (checkText(text, "no") && managerTalkState[5]) {
 		managerTalkState[1] = true;
-		for (int8_t i = 2; i <= 12; i++) {
+		for (int8_t i = 2; i <= 14; i++) {
 			managerTalkState[i] = false;
 		}
 		msg << "Then not.";
@@ -7467,7 +7509,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		std::vector<std::string> characters = IOLoginData::getPlayersByAccountId(managerData.accountId);
 		if (characters.size() >= 15) {
 			managerTalkState[1] = true;
-			for (int8_t i = 2; i <= 12; i++) {
+			for (int8_t i = 2; i <= 14; i++) {
 				managerTalkState[i] = false;
 			}
 			msg << "Your account reached the limit of 15 players; you can {delete} a character if you want to create a new one.";
@@ -7568,15 +7610,15 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 			}
 			msg << ".";
 		} else if (!IOLoginData::playerNameExists(managerData.string1)) {
-			managerTalkState[1] = true;
-			for (int8_t i = 2; i <= 12; i++) {
-				managerTalkState[i] = false;
-			}
-
-			if (IOLoginData::createPlayer(managerData.accountId, managerData.string1, 1, managerData.sex)) {
-				msg << "Your character has been created.";
+			managerData.vocationId = 1;
+			if (accountManagerNeedsWorldStep()) {
+				managerTalkState[9] = false;
+				managerTalkState[13] = true;
+				msg << accountManagerWorldPrompt();
 			} else {
-				msg << "Your character couldn't be created, please try again.";
+				managerData.worldId = 0;
+				accountManagerCreateCharacter();
+				return;
 			}
 		} else {
 			managerTalkState[6] = true;
@@ -7606,19 +7648,21 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		return;
 	} else if (checkText(text, "yes") && managerTalkState[12]) {
 		if (!IOLoginData::playerNameExists(managerData.string1)) {
-			managerTalkState[1] = true;
-			for (int8_t i = 2; i <= 12; i++) {
-				managerTalkState[i] = false;
-			}
-
 			Vocation* vocation = g_vocations.getVocation(managerData.vocationId);
 			if (!vocation) {
+				managerTalkState[1] = true;
+				for (int8_t i = 2; i <= 14; i++) {
+					managerTalkState[i] = false;
+				}
 				msg << "Your character couldn't be created due to an invalid vocation, please try again.";
-			} else if (IOLoginData::createPlayer(managerData.accountId, managerData.string1, managerData.vocationId,
-			                                     managerData.sex)) {
-				msg << "Your character has been created.";
+			} else if (accountManagerNeedsWorldStep()) {
+				managerTalkState[12] = false;
+				managerTalkState[13] = true;
+				msg << accountManagerWorldPrompt();
 			} else {
-				msg << "Your character couldn't be created, please try again.";
+				managerData.worldId = 0;
+				accountManagerCreateCharacter();
+				return;
 			}
 		} else {
 			managerTalkState[6] = true;
@@ -7632,6 +7676,45 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		managerTalkState[11] = true;
 		managerTalkState[12] = false;
 		msg << "No? Then what would you like to be?";
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+		return;
+	} else if (managerTalkState[13]) {
+		const WorldInfo* chosen = nullptr;
+
+		bool numeric = !text.empty() && text.size() <= 5;
+		if (numeric) {
+			for (char c : text) {
+				if (c < '0' || c > '9') {
+					numeric = false;
+					break;
+				}
+			}
+		}
+		if (numeric) {
+			const int value = std::stoi(text);
+			if (value > 0 && value <= 65535) {
+				chosen = g_game.getWorlds().getWorld(static_cast<uint16_t>(value));
+			}
+		}
+		if (!chosen) {
+			const std::string wanted = asLowerCaseString(text);
+			for (const auto& world : g_game.getWorlds().getWorlds()) {
+				if (asLowerCaseString(world.name) == wanted) {
+					chosen = &world;
+					break;
+				}
+			}
+		}
+
+		if (!chosen) {
+			msg << "I don't know that world. " << accountManagerWorldPrompt();
+		} else {
+			managerData.worldId = chosen->id;
+			managerTalkState[13] = false;
+			accountManagerCreateCharacter();
+			return;
+		}
+
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
 	} else if (checkText(text, "recovery key") && managerTalkState[1]) {
@@ -7650,7 +7733,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		}
 
 		managerTalkState[1] = true;
-		for (int8_t i = 2; i <= 12; i++) {
+		for (int8_t i = 2; i <= 14; i++) {
 			managerTalkState[i] = false;
 		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
@@ -7658,7 +7741,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 	} else if (checkText(text, "no") && managerTalkState[10]) {
 		msg << "Then not.";
 		managerTalkState[1] = true;
-		for (int8_t i = 2; i <= 12; i++) {
+		for (int8_t i = 2; i <= 14; i++) {
 			managerTalkState[i] = false;
 		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
@@ -7919,7 +8002,7 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			// Account already exists, switch to ACCOUNT mode
 			accountManager = ACCOUNT_MANAGER_ACCOUNT;
 			managerTalkState[1] = true;
-			for (int8_t i = 2; i <= 12; i++) {
+			for (int8_t i = 2; i <= 14; i++) {
 				managerTalkState[i] = false;
 			}
 			std::vector<std::string> characters = IOLoginData::getPlayersByAccountId(managerData.accountId);
