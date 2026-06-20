@@ -72,16 +72,21 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 {
 	if (updateDatabase && owner != guid_guild) {
 		Database& db = Database::getInstance();
+		// House ids come from the map and repeat across worlds (composite PK id, world_id),
+		// so ownership writes must be scoped to the current world.
+		const std::string worldClause = g_game.isMultiWorldEnabled()
+		                                    ? fmt::format(" AND `world_id` = {:d}", g_game.getCurrentWorldId())
+		                                    : "";
 	bool resetProtection = (guid_guild == 0 || owner == 0);
 	if (resetProtection) {
             db.executeQuery(fmt::format(
-                "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0, `is_protected` = 0 WHERE `id` = {:d}",
-                guid_guild, id));
+                "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0, `is_protected` = 0 WHERE `id` = {:d}{:s}",
+                guid_guild, id, worldClause));
         setProtected(false);
 	} else {
 			db.executeQuery(fmt::format(
-			    "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0 WHERE `id` = {:d}",
-			    guid_guild, id));
+			    "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0 WHERE `id` = {:d}{:s}",
+			    guid_guild, id, worldClause));
 		}
 	}
 

@@ -34,6 +34,26 @@ local storeItemsById = {}
 local lastBuy = {}
 local lastTransfer = {}
 
+local function isMultiWorld()
+	return configManager and configKeys and configKeys.MULTI_WORLD_ENABLED
+		and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) or false
+end
+
+local function currentWorldId()
+	return isMultiWorld() and math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1) or 1
+end
+
+-- Appends an AND predicate; callers must already have a WHERE clause.
+local function worldWhere(alias)
+	if not isMultiWorld() then
+		return ""
+	end
+	if alias and alias ~= "" then
+		return " AND `" .. alias .. "`.`world_id` = " .. currentWorldId()
+	end
+	return " AND `world_id` = " .. currentWorldId()
+end
+
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
@@ -248,7 +268,7 @@ local function isValidCharacterName(name)
 end
 
 local function characterNameExists(name)
-	local resultId = db.storeQuery("SELECT `id` FROM `players` WHERE LOWER(`name`) = LOWER(" .. db.escapeString(name) .. ") LIMIT 1")
+	local resultId = db.storeQuery("SELECT `id` FROM `players` WHERE LOWER(`name`) = LOWER(" .. db.escapeString(name) .. ")" .. worldWhere() .. " LIMIT 1")
 	if resultId ~= false then
 		result.free(resultId)
 		return true
@@ -687,9 +707,9 @@ local function deliverOffer(player, offer, extra)
 		end
 
 		local oldName = player:getName()
-		db.query("UPDATE `players` SET `name` = " .. db.escapeString(newName) .. " WHERE `id` = " .. player:getGuid())
-		db.query("UPDATE `player_deaths` SET `killed_by` = " .. db.escapeString(newName) .. ", `mostdamage_by` = " .. db.escapeString(newName) .. " WHERE `killed_by` = " .. db.escapeString(oldName) .. " OR `mostdamage_by` = " .. db.escapeString(oldName))
-		db.query("UPDATE `player_deaths_backup` SET `killed_by` = " .. db.escapeString(newName) .. ", `mostdamage_by` = " .. db.escapeString(newName) .. " WHERE `killed_by` = " .. db.escapeString(oldName) .. " OR `mostdamage_by` = " .. db.escapeString(oldName))
+		db.query("UPDATE `players` SET `name` = " .. db.escapeString(newName) .. " WHERE `id` = " .. player:getGuid() .. worldWhere())
+		db.query("UPDATE `player_deaths` SET `killed_by` = " .. db.escapeString(newName) .. ", `mostdamage_by` = " .. db.escapeString(newName) .. " WHERE (`killed_by` = " .. db.escapeString(oldName) .. " OR `mostdamage_by` = " .. db.escapeString(oldName) .. ")" .. worldWhere())
+		db.query("UPDATE `player_deaths_backup` SET `killed_by` = " .. db.escapeString(newName) .. ", `mostdamage_by` = " .. db.escapeString(newName) .. " WHERE (`killed_by` = " .. db.escapeString(oldName) .. " OR `mostdamage_by` = " .. db.escapeString(oldName) .. ")" .. worldWhere())
 
 		if db.tableExists and db.tableExists("change_name_history") then
 			db.query("INSERT INTO `change_name_history` (`player_id`, `last_name`, `current_name`, `changed_name_in`) VALUES (" .. player:getGuid() .. ", " .. db.escapeString(oldName) .. ", " .. db.escapeString(newName) .. ", " .. os.time() .. ")")
@@ -938,7 +958,7 @@ function transferHandler.onReceive(player, msg)
 	local targetAccountId = 0
 	local storedTargetName = ""
 	local targetCoins = 0
-	local resultId = db.storeQuery("SELECT p.`id`, p.`account_id`, p.`name`, a.`tibia_coins` FROM `players` p JOIN `accounts` a ON a.`id` = p.`account_id` WHERE p.`name` = " .. db.escapeString(targetName) .. " LIMIT 1")
+	local resultId = db.storeQuery("SELECT p.`id`, p.`account_id`, p.`name`, a.`tibia_coins` FROM `players` p JOIN `accounts` a ON a.`id` = p.`account_id` WHERE p.`name` = " .. db.escapeString(targetName) .. worldWhere("p") .. " LIMIT 1")
 	if resultId ~= false then
 		targetGuid = result.getDataInt(resultId, "id")
 		targetAccountId = result.getDataInt(resultId, "account_id")

@@ -8,6 +8,13 @@ local PERIOD_DAY = 24 * 60 * 60
 local PERIOD_WEEK = 7 * 24 * 60 * 60
 local PERIOD_MONTH = 30 * 24 * 60 * 60
 
+local function worldWhere()
+	if configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) then
+		return " AND `world_id` = " .. math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1)
+	end
+	return ""
+end
+
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
@@ -42,7 +49,7 @@ local function getUnjustifiedKillCounts(player)
 			"SUM(CASE WHEN `time` >= " .. weekStart .. " THEN 1 ELSE 0 END) AS `week_kills`, " ..
 			"COUNT(*) AS `month_kills` " ..
 		"FROM `player_deaths` WHERE `killed_by` = " ..
-		db.escapeString(player:getName()) .. " AND `is_player` = 1 AND `unjustified` = 1 AND `time` >= " .. monthStart
+		db.escapeString(player:getName()) .. " AND `is_player` = 1 AND `unjustified` = 1 AND `time` >= " .. monthStart .. worldWhere()
 	)
 
 	local dayKills, weekKills, monthKills = 0, 0, 0

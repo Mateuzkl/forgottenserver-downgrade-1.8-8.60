@@ -6023,6 +6023,9 @@ void Player::reloadWarList(bool updateVisuals)
 	Database& db = Database::getInstance();
 	std::ostringstream query;
 	query << "SELECT `guild1`, `guild2` FROM `guild_wars` WHERE (`guild1` = " << guild->getId() << " OR `guild2` = " << guild->getId() << ") AND `status` = 1";
+	if (g_game.isMultiWorldEnabled()) {
+		query << " AND `world_id` = " << g_game.getCurrentWorldId();
+	}
 
 	DBResult_ptr result = db.storeQuery(query.str());
 	if (result) {

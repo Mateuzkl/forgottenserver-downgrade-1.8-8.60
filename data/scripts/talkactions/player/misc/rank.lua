@@ -8,6 +8,13 @@ local exhaustvalue = 78692 -- storage to prevent spam
 local exhausttime = 3 -- wait time (seconds)
 local maxgroup = 1 -- up to which group_id to include (1 = normal players)
 
+local function worldWhere()
+    if configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) then
+        return " AND `world_id` = " .. math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1)
+    end
+    return ""
+end
+
 -- rank aliases
 local ranks = {
     ['level'] = 1, ['lvl'] = 1, ['exp'] = 1, ['xp'] = 1,
@@ -86,7 +93,7 @@ end
 local function getTopFraggers(vocs, limit)
     limit = limit or top
     local fraggers = {}
-    local resultId = db.storeQuery("SELECT `killed_by` FROM `player_deaths` WHERE `is_player` = 1")
+    local resultId = db.storeQuery("SELECT `killed_by` FROM `player_deaths` WHERE `is_player` = 1" .. worldWhere())
     if resultId then
         repeat
             local killer = result.getDataString(resultId, "killed_by")
@@ -109,7 +116,7 @@ local function getTopFraggers(vocs, limit)
         if not v[2] then break end
 
         if vocs then
-            local resultVoc = db.storeQuery("SELECT `vocation` FROM `players` WHERE `name` = " .. db.escapeString(v[2]) .. " LIMIT 1")
+            local resultVoc = db.storeQuery("SELECT `vocation` FROM `players` WHERE `name` = " .. db.escapeString(v[2]) .. worldWhere() .. " LIMIT 1")
             if resultVoc then
                 local vocId = result.getDataInt(resultVoc, "vocation")
                 result.free(resultVoc)
@@ -174,9 +181,10 @@ function rank.onSay(player, words, param)
     end
 
     local query = string.format(
-        "SELECT `name`, %s FROM `players` WHERE `group_id` <= %d%s ORDER BY `%s` DESC LIMIT %d",
+        "SELECT `name`, %s FROM `players` WHERE `group_id` <= %d%s%s ORDER BY `%s` DESC LIMIT %d",
         table.concat(fields, ", "),
         maxgroup,
+        worldWhere(),
         voc[split[2]] and (" AND `vocation` IN (" .. table.concat(voc[split[2]], ",") .. ")") or "",
         stats[rankIndex][#stats[rankIndex]],
         top
