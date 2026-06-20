@@ -4871,15 +4871,11 @@ void ProtocolGame::parseAstraItemTooltipRequest(NetworkMessage& msg)
 			}
 			break;
 		case SOURCE_ACTIONBAR:
-			if (requireUnreadBytes(msg, 4)) {
+			if (requireUnreadBytes(msg, 5)) {
 				request.actionbarId = msg.getByte();
 				request.actionbarSlot = msg.getByte();
 				request.fallbackClientId = msg.get<uint16_t>();
-				if (requireUnreadBytes(msg, 1)) {
-					request.fallbackTier = msg.getByte();
-				} else {
-					ok = false;
-				}
+				request.fallbackTier = msg.getByte();
 			} else {
 				ok = false;
 			}
