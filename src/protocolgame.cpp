@@ -7,6 +7,8 @@
 #include "astraclient.h"
 #include "ban.h"
 #include "configmanager.h"
+#include "container.h"
+#include "tools.h"
 #include "creatureevent.h"
 #include "game.h"
 #include "iologindata.h"
@@ -1215,6 +1217,9 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			} else {
 				skipUnreadBytes(msg);
 			}
+			break;
+		case AstraItemTooltip::ClientOpcodeRequest: // 0x35, AstraClient binary item tooltip
+			parseAstraItemTooltipRequest(msg);
 			break;
 		case 0x78:
 			parseThrow(msg);
@@ -4546,6 +4551,7 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();
 	features[GameFeature::ThingUpgradeClassification] = false;
 	features[GameFeature::ItemTierByte] = shouldSendItemTierByte();
+	features[GameFeature::AstraItemTooltip] = canSendAstraItemTooltip();
 
 	if (features.empty()) return;
 
@@ -4556,6 +4562,613 @@ void ProtocolGame::sendFeatures()
 		msg.addByte(static_cast<uint8_t>(feature.first));
 		msg.addByte(feature.second ? 1 : 0);
 	}
+	writeToOutputBuffer(msg);
+}
+
+// ─── Astra item tooltip (binary, server-authoritative; see astraitemtooltip.h) ──
+namespace {
+
+using namespace AstraItemTooltip;
+
+std::string capitalizeFirst(std::string text)
+{
+	if (!text.empty() && text.front() >= 'a' && text.front() <= 'z') {
+		text.front() = static_cast<char>(text.front() - ('a' - 'A'));
+	}
+	return text;
+}
+
+// Port of the reference formatItemType(): map an ItemType to one UI bucket byte.
+uint8_t resolveTooltipCategory(const ItemType& it)
+{
+	if (it.weaponType == WEAPON_SHIELD) {
+		return CATEGORY_SHIELD;
+	}
+
+	const uint16_t slot = static_cast<uint16_t>(it.slotPosition & ~(SLOTP_LEFT | SLOTP_RIGHT));
+	const bool twoHand = (slot & SLOTP_TWO_HAND) != 0;
+
+	switch (it.weaponType) {
+		case WEAPON_SWORD: return twoHand ? CATEGORY_TWO_HANDED_SWORD : CATEGORY_SWORD;
+		case WEAPON_CLUB: return twoHand ? CATEGORY_TWO_HANDED_CLUB : CATEGORY_CLUB;
+		case WEAPON_AXE: return twoHand ? CATEGORY_TWO_HANDED_AXE : CATEGORY_AXE;
+		case WEAPON_DISTANCE: return CATEGORY_DISTANCE;
+		case WEAPON_WAND: return CATEGORY_WAND;
+		default: break;
+	}
+
+	if (slot & SLOTP_HEAD) return CATEGORY_HELMET;
+	if (slot & SLOTP_NECKLACE) return CATEGORY_NECKLACE;
+	if (slot & SLOTP_ARMOR) return CATEGORY_ARMOR;
+	if (slot & SLOTP_LEGS) return CATEGORY_LEGS;
+	if (slot & SLOTP_FEET) return CATEGORY_BOOTS;
+	if (slot & SLOTP_RING) return CATEGORY_RING;
+	if ((slot & SLOTP_AMMO) && it.ammoType != AMMO_NONE) return CATEGORY_AMMUNITION;
+	if (it.isRune()) return CATEGORY_RUNE;
+	if (it.isContainer()) return CATEGORY_CONTAINER;
+	if (it.isFluidContainer()) return CATEGORY_POTION;
+	if (it.isUseable()) return CATEGORY_USABLE;
+	return CATEGORY_COMMON;
+}
+
+const char* specialSkillName(uint8_t skill)
+{
+	switch (skill) {
+		case SPECIALSKILL_CRITICALHITCHANCE: return "Critical Hit Chance";
+		case SPECIALSKILL_CRITICALHITAMOUNT: return "Critical Extra Damage";
+		case SPECIALSKILL_LIFELEECHCHANCE: return "Life Leech Chance";
+		case SPECIALSKILL_LIFELEECHAMOUNT: return "Life Leech Amount";
+		case SPECIALSKILL_MANALEECHCHANCE: return "Mana Leech Chance";
+		case SPECIALSKILL_MANALEECHAMOUNT: return "Mana Leech Amount";
+		default: return "";
+	}
+}
+
+const char* statName(uint8_t stat)
+{
+	switch (stat) {
+		case STAT_MAXHITPOINTS: return "Hit Points";
+		case STAT_MAXMANAPOINTS: return "Mana Points";
+		case STAT_MAGICPOINTS: return "Magic Level";
+		case STAT_CAPACITY: return "Capacity";
+		default: return "";
+	}
+}
+
+const char* imbuementTierName(uint16_t baseId)
+{
+	switch (baseId) {
+		case 1: return "Basic";
+		case 2: return "Intricate";
+		case 3: return "Powerful";
+		default: return "";
+	}
+}
+
+const char* imbuementTypeName(ImbuementType type)
+{
+	switch (type) {
+		case IMBUEMENT_TYPE_FIRE_DAMAGE: return "Fire Damage";
+		case IMBUEMENT_TYPE_EARTH_DAMAGE: return "Earth Damage";
+		case IMBUEMENT_TYPE_ICE_DAMAGE: return "Ice Damage";
+		case IMBUEMENT_TYPE_ENERGY_DAMAGE: return "Energy Damage";
+		case IMBUEMENT_TYPE_DEATH_DAMAGE: return "Death Damage";
+		case IMBUEMENT_TYPE_HOLY_DAMAGE: return "Holy Damage";
+		case IMBUEMENT_TYPE_LIFE_LEECH: return "Life Leech";
+		case IMBUEMENT_TYPE_MANA_LEECH: return "Mana Leech";
+		case IMBUEMENT_TYPE_CRITICAL_CHANCE: return "Critical Hit Chance";
+		case IMBUEMENT_TYPE_CRITICAL_AMOUNT: return "Critical Extra Damage";
+		case IMBUEMENT_TYPE_FIRE_RESIST: return "Fire Protection";
+		case IMBUEMENT_TYPE_EARTH_RESIST: return "Earth Protection";
+		case IMBUEMENT_TYPE_ICE_RESIST: return "Ice Protection";
+		case IMBUEMENT_TYPE_ENERGY_RESIST: return "Energy Protection";
+		case IMBUEMENT_TYPE_HOLY_RESIST: return "Holy Protection";
+		case IMBUEMENT_TYPE_DEATH_RESIST: return "Death Protection";
+		case IMBUEMENT_TYPE_PARALYSIS_DEFLECTION: return "Paralysis Deflection";
+		case IMBUEMENT_TYPE_SPEED_BOOST: return "Swiftness (Speed)";
+		case IMBUEMENT_TYPE_CAPACITY_BOOST: return "Capacity";
+		case IMBUEMENT_TYPE_FIST_SKILL: return "Fist Fighting";
+		case IMBUEMENT_TYPE_AXE_SKILL: return "Axe Fighting";
+		case IMBUEMENT_TYPE_SWORD_SKILL: return "Sword Fighting";
+		case IMBUEMENT_TYPE_CLUB_SKILL: return "Club Fighting";
+		case IMBUEMENT_TYPE_DISTANCE_SKILL: return "Distance Fighting";
+		case IMBUEMENT_TYPE_FISHING_SKILL: return "Fishing";
+		case IMBUEMENT_TYPE_SHIELD_SKILL: return "Shielding";
+		case IMBUEMENT_TYPE_MAGIC_LEVEL: return "Magic Level";
+		default: return "Imbuement";
+	}
+}
+
+const char* augmentName(Augment_t type)
+{
+	switch (type) {
+		case Augment_t::ManaCost: return "Mana Cost";
+		case Augment_t::BaseDamage: return "Base Damage";
+		case Augment_t::BaseHealing: return "Base Healing";
+		case Augment_t::DurationIncreased: return "Duration";
+		case Augment_t::AdditionalTargets: return "Additional Targets";
+		case Augment_t::Cooldown: return "Cooldown";
+		case Augment_t::SecondaryGroupCooldown: return "Secondary Cooldown";
+		case Augment_t::AffectedAreaEnlarged: return "Affected Area";
+		case Augment_t::IncreasedDamageReduction: return "Damage Reduction";
+		case Augment_t::EnhancedEffect: return "Enhanced Effect";
+		case Augment_t::IncreasedSkill: return "Skill";
+		case Augment_t::LifeLeech: return "Life Leech";
+		case Augment_t::ManaLeech: return "Mana Leech";
+		case Augment_t::CriticalExtraDamage: return "Critical Extra Damage";
+		case Augment_t::CriticalHitChance: return "Critical Hit Chance";
+		case Augment_t::PowerfulImpact: return "Powerful Impact";
+		case Augment_t::StrongImpact: return "Strong Impact";
+		case Augment_t::IncreasedDamage: return "Increased Damage";
+		default: return "Effect";
+	}
+}
+
+std::string formatAugmentLine(const AugmentInfo& augment)
+{
+	const std::string spell = capitalizeFirst(augment.spellName);
+	if (augment.type == Augment_t::Cooldown) {
+		return fmt::format("{} -> -{}s Cooldown", spell, augment.value / 1000);
+	}
+	if (augment.type == Augment_t::PowerfulImpact || augment.type == Augment_t::StrongImpact ||
+	    augment.type == Augment_t::EnhancedEffect) {
+		return fmt::format("{} -> {}", spell, augmentName(augment.type));
+	}
+	return fmt::format("{} -> {:+}% {}", spell, augment.value, augmentName(augment.type));
+}
+
+// Turn an ItemType's abilities into readable "+N Skill" lines, the way the
+// reference Lua did, but entirely server-side so the client never guesses.
+std::vector<std::string> buildImplicitLines(const ItemType& type)
+{
+	std::vector<std::string> lines;
+	const Abilities* abilities = type.abilities.get();
+	if (!abilities) {
+		return lines;
+	}
+
+	if (abilities->elementType != COMBAT_NONE && abilities->elementDamage > 0) {
+		std::string combat = getCombatName(abilities->elementType);
+		if (!combat.empty()) {
+			lines.push_back(fmt::format("+{} {} Damage", abilities->elementDamage, capitalizeFirst(combat)));
+		}
+	}
+
+	// Elemental protections: collapse to "Protection All" when uniform.
+	int16_t uniform = abilities->absorbPercent[0];
+	for (size_t i = 1; i < COMBAT_COUNT; ++i) {
+		if (abilities->absorbPercent[i] != uniform) {
+			uniform = 0;
+			break;
+		}
+	}
+	if (uniform != 0) {
+		lines.push_back(fmt::format("Protection All {:+}%", uniform));
+	} else {
+		for (size_t i = 0; i < COMBAT_COUNT; ++i) {
+			const int16_t value = abilities->absorbPercent[i];
+			if (value != 0) {
+				std::string combat = getCombatName(indexToCombatType(i));
+				if (!combat.empty()) {
+					lines.push_back(fmt::format("Protection {} {:+}%", capitalizeFirst(combat), value));
+				}
+			}
+		}
+	}
+
+	for (uint8_t skill = SKILL_FIRST; skill <= SKILL_LAST; ++skill) {
+		const int32_t value = abilities->skills[skill];
+		if (value != 0) {
+			lines.push_back(fmt::format("{} {:+}", capitalizeFirst(getSkillName(skill)), value));
+		}
+	}
+
+	for (uint8_t skill = SPECIALSKILL_FIRST; skill <= SPECIALSKILL_LAST; ++skill) {
+		const int32_t value = abilities->specialSkills[skill];
+		if (value != 0) {
+			lines.push_back(fmt::format("{} {:+}%", specialSkillName(skill), value));
+		}
+	}
+
+	for (uint8_t stat = STAT_FIRST; stat <= STAT_LAST; ++stat) {
+		if (*statName(stat) == '\0') {
+			continue;
+		}
+		const int32_t flat = abilities->stats[stat];
+		if (flat != 0) {
+			lines.push_back(fmt::format("{} {:+}", statName(stat), flat));
+		}
+		const int32_t percent = abilities->statsPercent[stat];
+		if (percent != 0) {
+			lines.push_back(fmt::format("{} {:+}%", statName(stat), percent - 100));
+		}
+	}
+
+	for (size_t i = 0; i < COMBAT_COUNT; ++i) {
+		const int16_t value = abilities->specialMagicLevelSkill[i];
+		if (value != 0) {
+			std::string combat = getCombatName(indexToCombatType(i));
+			if (!combat.empty()) {
+				lines.push_back(fmt::format("Magic Level {} {:+}", capitalizeFirst(combat), value));
+			}
+		}
+	}
+
+	for (size_t i = 0; i < COMBAT_COUNT; ++i) {
+		const int16_t value = abilities->boostPercent[i];
+		if (value != 0) {
+			std::string combat = getCombatName(indexToCombatType(i));
+			if (!combat.empty()) {
+				lines.push_back(fmt::format("{} Damage {:+}%", capitalizeFirst(combat), value));
+			}
+		}
+	}
+
+	if (abilities->speed != 0) {
+		lines.push_back(fmt::format("Speed {:+}", abilities->speed));
+	}
+	if (abilities->manaShield) {
+		lines.emplace_back("Magic Shield");
+	}
+	if (abilities->invisible) {
+		lines.emplace_back("Invisibility");
+	}
+	if (abilities->regeneration) {
+		if (abilities->healthGain > 0) {
+			lines.push_back(fmt::format("Regenerate +{} HP", abilities->healthGain));
+		}
+		if (abilities->manaGain > 0) {
+			lines.push_back(fmt::format("Regenerate +{} Mana", abilities->manaGain));
+		}
+	}
+
+	return lines;
+}
+
+} // namespace
+
+bool ProtocolGame::canSendAstraItemTooltip() const
+{
+	if (!player || !player->client || !isAstraClient || isSpectator ||
+	    !getBoolean(ConfigManager::ASTRA_ITEM_TOOLTIP_ENABLED)) {
+		return false;
+	}
+
+	// Only the real owner protocol may serve tooltips (rejects cast/spy clones).
+	const ProtocolGame_ptr ownerProtocol = player->client->protocol();
+	return ownerProtocol.get() == this;
+}
+
+void ProtocolGame::parseAstraItemTooltipRequest(NetworkMessage& msg)
+{
+	using namespace AstraItemTooltip;
+
+	// Fixed header: requestId(1) + sourceType(1) + clientId(2). Bounds-checked.
+	if (!requireUnreadBytes(msg, 4)) {
+		return;
+	}
+
+	Request request;
+	request.requestId = msg.getByte();
+	request.sourceType = msg.getByte();
+	request.clientId = msg.get<uint16_t>();
+
+	bool ok = true;
+	switch (request.sourceType) {
+		case SOURCE_INVENTORY:
+			if (requireUnreadBytes(msg, 1)) {
+				request.inventorySlot = msg.getByte();
+			} else {
+				ok = false;
+			}
+			break;
+		case SOURCE_CONTAINER:
+			if (requireUnreadBytes(msg, 3)) {
+				request.containerId = msg.getByte();
+				request.slotIndex = msg.get<uint16_t>();
+			} else {
+				ok = false;
+			}
+			break;
+		case SOURCE_ACTIONBAR:
+			if (requireUnreadBytes(msg, 4)) {
+				request.actionbarId = msg.getByte();
+				request.actionbarSlot = msg.getByte();
+				request.fallbackClientId = msg.get<uint16_t>();
+				if (requireUnreadBytes(msg, 1)) {
+					request.fallbackTier = msg.getByte();
+				} else {
+					ok = false;
+				}
+			} else {
+				ok = false;
+			}
+			break;
+		case SOURCE_GENERIC:
+			if (requireUnreadBytes(msg, 1)) {
+				request.tier = msg.getByte();
+			} else {
+				ok = false;
+			}
+			break;
+		case SOURCE_GROUND:
+			break; // reserved; no extra bytes, denied on the game thread
+		default:
+			ok = false;
+			break;
+	}
+
+	// Cheap gates on the network thread. Heavy resolution waits for the game thread.
+	if (!ok || !isAstraClient || isSpectator || !getBoolean(ConfigManager::ASTRA_ITEM_TOOLTIP_ENABLED)) {
+		return;
+	}
+
+	// Per-connection flood guard. Packet parsing is serialized per connection,
+	// so this read-modify-write needs no extra synchronization.
+	const int64_t now = OTSYS_TIME();
+	if (now - lastAstraItemTooltipTime < REQUEST_COOLDOWN_MS) {
+		return;
+	}
+	lastAstraItemTooltipTime = now;
+
+	g_dispatcher.addTask([thisPtr = getThis(), request]() { thisPtr->sendAstraItemTooltip(request); });
+}
+
+void ProtocolGame::sendAstraItemTooltip(const AstraItemTooltip::Request& request)
+{
+	using namespace AstraItemTooltip;
+
+	if (!canSendAstraItemTooltip()) {
+		return;
+	}
+
+	const auto sendStatus = [this, &request](uint8_t status) {
+		NetworkMessage msg;
+		msg.addByte(ServerOpcodeResponse);
+		msg.addByte(request.requestId);
+		msg.addByte(status);
+		writeToOutputBuffer(msg);
+	};
+
+	Item* item = nullptr;
+	bool allowInstanceData = false;
+	uint16_t lookupClientId = request.clientId;
+	uint8_t visualTier = request.tier;
+
+	switch (request.sourceType) {
+		case SOURCE_INVENTORY: {
+			if (request.inventorySlot < CONST_SLOT_FIRST || request.inventorySlot > CONST_SLOT_LAST) {
+				sendStatus(STATUS_INVALID);
+				return;
+			}
+			item = player->getInventoryItem(static_cast<slots_t>(request.inventorySlot));
+			allowInstanceData = true;
+			break;
+		}
+		case SOURCE_CONTAINER: {
+			Container* container = player->getContainerByID(request.containerId);
+			if (!container) {
+				sendStatus(STATUS_DENIED);
+				return;
+			}
+			const uint16_t index = static_cast<uint16_t>(player->getContainerIndex(request.containerId) + request.slotIndex);
+			item = container->getItemByIndex(index);
+			allowInstanceData = true;
+			break;
+		}
+		case SOURCE_ACTIONBAR: {
+			lookupClientId = request.fallbackClientId ? request.fallbackClientId : request.clientId;
+			visualTier = request.fallbackTier;
+			break; // static ItemType data only — no proven ownership
+		}
+		case SOURCE_GENERIC: {
+			lookupClientId = request.clientId;
+			visualTier = request.tier;
+			break; // static ItemType data only
+		}
+		case SOURCE_GROUND:
+		default:
+			sendStatus(STATUS_DENIED);
+			return;
+	}
+
+	if (allowInstanceData) {
+		if (!item) {
+			sendStatus(STATUS_NOT_FOUND);
+			return;
+		}
+		// Cross-check against what the client believed it hovered. Defeats stale
+		// paging/desync and keeps a tampered request from fishing other slots.
+		if (request.clientId != 0 && item->getID() != request.clientId) {
+			sendStatus(STATUS_NOT_FOUND);
+			return;
+		}
+		lookupClientId = item->getID();
+	} else {
+		if (lookupClientId == 0 || lookupClientId >= Item::items.size()) {
+			sendStatus(STATUS_NOT_FOUND);
+			return;
+		}
+		item = nullptr;
+	}
+
+	const ItemType& type = Item::items[lookupClientId];
+	if (type.id == 0) {
+		sendStatus(STATUS_NOT_FOUND);
+		return;
+	}
+
+	// ── Resolve effective values (live instance override beats static type) ──
+	const int32_t attack = item ? item->getAttack() : type.attack;
+	const int32_t defense = item ? item->getDefense() : type.defense;
+	const int32_t extraDefense = item ? item->getExtraDefense() : type.extraDefense;
+	const int32_t armor = item ? item->getArmor() : type.armor;
+	const int32_t hitChance = item ? item->getHitChance() : type.hitChance;
+	const int32_t shootRange = item ? item->getShootRange() : type.shootRange;
+
+	const bool isWeapon = type.weaponType != WEAPON_NONE && type.weaponType != WEAPON_SHIELD;
+	const bool isArmor = armor != 0 ||
+	                     (type.slotPosition & (SLOTP_HEAD | SLOTP_ARMOR | SLOTP_LEGS | SLOTP_FEET | SLOTP_NECKLACE | SLOTP_RING)) != 0;
+	const bool hasStats = attack != 0 || defense != 0 || extraDefense != 0 || armor != 0 || hitChance != 0 ||
+	                      type.weaponType == WEAPON_DISTANCE;
+
+	const uint16_t requiredLevel = static_cast<uint16_t>(std::min<uint32_t>(type.minReqLevel, 0xFFFFu));
+	const uint16_t requiredMagic = static_cast<uint16_t>(std::min<uint32_t>(type.minReqMagicLevel, 0xFFFFu));
+	const bool hasRequirements = requiredLevel > 0 || requiredMagic > 0 || !type.vocationString.empty();
+
+	const std::vector<std::string> implicits = buildImplicitLines(type);
+
+	// Imbuements (live instance only).
+	std::vector<Imbuement*> imbuements;
+	uint16_t imbuementSlots = 0;
+	if (item) {
+		imbuementSlots = item->getImbuementSlots();
+		if (item->hasImbuements()) {
+			for (const auto& imbue : item->getImbuements()) {
+				if (imbue) {
+					imbuements.push_back(imbue.get());
+				}
+			}
+		}
+	}
+	const bool hasImbuements = imbuementSlots > 0 || !imbuements.empty();
+
+	// Augments (type-level, gated by the augment system config).
+	std::vector<const AugmentInfo*> augments;
+	if (getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED)) {
+		for (const auto& augment : type.augments) {
+			if (augment) {
+				augments.push_back(augment.get());
+			}
+		}
+	}
+	const bool hasAugments = !augments.empty();
+
+	// Charges.
+	uint32_t charges = 0;
+	if (item) {
+		charges = item->getCharges();
+	} else if (type.showCharges) {
+		charges = type.charges;
+	}
+	const bool hasCharges = charges > 0;
+
+	// Duration (live decay state included).
+	uint32_t durationSeconds = 0;
+	uint8_t durationPaused = 0;
+	bool hasDuration = false;
+	if (item && (type.showDuration || item->hasAttribute(ITEM_ATTRIBUTE_DURATION))) {
+		const int32_t duration = item->getDuration();
+		if (duration > 0) {
+			durationSeconds = static_cast<uint32_t>(duration / 1000);
+			durationPaused = item->getDecaying() == DECAYING_TRUE ? 0 : 1;
+			hasDuration = true;
+		}
+	}
+
+	// Container capacity.
+	uint16_t containerCapacity = 0;
+	const bool isContainer = type.isContainer();
+	if (isContainer) {
+		if (item) {
+			const Container* container = item->getContainer();
+			containerCapacity = container ? static_cast<uint16_t>(container->capacity()) : type.maxItems;
+		} else {
+			containerCapacity = type.maxItems;
+		}
+	}
+
+	const uint8_t tier = item ? item->getTier() : visualTier;
+	const uint8_t classification = item ? item->getClassification() : static_cast<uint8_t>(type.classification);
+	const std::string itemName = item ? std::string{item->getName()} : type.name;
+	const uint32_t weight = item ? item->getWeight() : type.weight;
+
+	uint32_t flags = 0;
+	if (item) flags |= FLAG_HAS_INSTANCE_DATA;
+	if (hasStats) flags |= FLAG_HAS_STATS;
+	if (hasRequirements) flags |= FLAG_HAS_REQUIREMENTS;
+	if (hasImbuements) flags |= FLAG_HAS_IMBUEMENTS;
+	if (hasAugments) flags |= FLAG_HAS_AUGMENTS;
+	if (!implicits.empty()) flags |= FLAG_HAS_IMPLICITS;
+	if (hasCharges) flags |= FLAG_HAS_CHARGES;
+	if (hasDuration) flags |= FLAG_HAS_DURATION;
+	if (isContainer) flags |= FLAG_IS_CONTAINER;
+	if (isWeapon) flags |= FLAG_IS_WEAPON;
+	if (isArmor) flags |= FLAG_IS_ARMOR;
+
+	// ── Build the payload separately so we can length-prefix it. The prefix lets
+	//    the client always re-align, eliminating any chance of packet desync. ──
+	NetworkMessage payload;
+	payload.add<uint16_t>(lookupClientId);
+	payload.add<uint16_t>(lookupClientId); // serverId == clientId on this protocol
+	payload.addByte(request.sourceType);
+	payload.add<uint32_t>(flags);
+	payload.addString(itemName);
+	payload.addString(type.description);
+	payload.add<uint32_t>(weight);
+	payload.addByte(resolveTooltipCategory(type));
+	payload.addByte(static_cast<uint8_t>(type.weaponType));
+	payload.addByte(classification);
+	payload.addByte(tier);
+
+	if (hasStats) {
+		payload.add<int32_t>(attack);
+		payload.add<int32_t>(defense);
+		payload.add<int32_t>(extraDefense);
+		payload.add<int32_t>(armor);
+		payload.add<int32_t>(hitChance);
+		payload.add<int32_t>(shootRange);
+	}
+	if (hasRequirements) {
+		payload.add<uint16_t>(requiredLevel);
+		payload.add<uint16_t>(requiredMagic);
+		payload.addString(type.vocationString);
+	}
+	if (hasImbuements) {
+		payload.addByte(static_cast<uint8_t>(std::min<uint16_t>(imbuementSlots, 255)));
+		const uint8_t count = static_cast<uint8_t>(std::min<size_t>(imbuements.size(), 255));
+		payload.addByte(count);
+		for (uint8_t i = 0; i < count; ++i) {
+			const Imbuement* imbue = imbuements[i];
+			const std::string tierText = imbuementTierName(imbue->baseId);
+			const std::string typeText = imbuementTypeName(imbue->imbuetype);
+			payload.addString(tierText.empty() ? typeText : tierText + ' ' + typeText);
+			payload.add<uint32_t>(imbue->duration);
+			payload.addByte(static_cast<uint8_t>(imbue->baseId));
+		}
+	}
+	if (hasAugments) {
+		const uint8_t count = static_cast<uint8_t>(std::min<size_t>(augments.size(), 255));
+		payload.addByte(count);
+		for (uint8_t i = 0; i < count; ++i) {
+			payload.addString(formatAugmentLine(*augments[i]));
+		}
+	}
+	if (!implicits.empty()) {
+		const uint8_t count = static_cast<uint8_t>(std::min<size_t>(implicits.size(), 255));
+		payload.addByte(count);
+		for (uint8_t i = 0; i < count; ++i) {
+			payload.addString(implicits[i]);
+		}
+	}
+	if (hasCharges) {
+		payload.add<uint32_t>(charges);
+	}
+	if (hasDuration) {
+		payload.add<uint32_t>(durationSeconds);
+		payload.addByte(durationPaused);
+	}
+	if (isContainer) {
+		payload.add<uint16_t>(containerCapacity);
+	}
+
+	NetworkMessage msg;
+	msg.addByte(ServerOpcodeResponse);
+	msg.addByte(request.requestId);
+	msg.addByte(STATUS_OK);
+	msg.add<uint16_t>(payload.getLength());
+	msg.addBytes(reinterpret_cast<const char*>(payload.getBuffer()) + NetworkMessage::INITIAL_BUFFER_POSITION,
+	             payload.getLength());
 	writeToOutputBuffer(msg);
 }
 

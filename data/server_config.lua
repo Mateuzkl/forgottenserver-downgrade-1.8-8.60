@@ -11,6 +11,9 @@ dllCheckKickTime = 5
 astraClientOnly = false
 -- Server-controlled Astra item state protocol: duration, charges and packed inventory snapshot.
 astraItemStateEnabled = true
+-- Server-authoritative binary item tooltip for the AstraClient (GameAstraItemTooltip feature).
+-- When false the feature is never announced, requests are ignored and no tooltip packet is sent.
+astraItemTooltipEnabled = true
 hirelingSystemEnabled = true
 astraHirelingProtocolEnabled = true
 
