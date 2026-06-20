@@ -4551,7 +4551,9 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();
 	features[GameFeature::ThingUpgradeClassification] = false;
 	features[GameFeature::ItemTierByte] = shouldSendItemTierByte();
-	features[GameFeature::AstraItemTooltip] = canSendAstraItemTooltip();
+	if (canSendAstraItemTooltip()) {
+		features[GameFeature::AstraItemTooltip] = true;
+	}
 
 	if (features.empty()) return;
 
@@ -4929,7 +4931,6 @@ void ProtocolGame::sendAstraItemTooltip(const AstraItemTooltip::Request& request
 	Item* item = nullptr;
 	bool allowInstanceData = false;
 	uint16_t lookupClientId = request.clientId;
-	uint8_t visualTier = request.tier;
 
 	switch (request.sourceType) {
 		case SOURCE_INVENTORY: {
@@ -4954,12 +4955,10 @@ void ProtocolGame::sendAstraItemTooltip(const AstraItemTooltip::Request& request
 		}
 		case SOURCE_ACTIONBAR: {
 			lookupClientId = request.fallbackClientId ? request.fallbackClientId : request.clientId;
-			visualTier = request.fallbackTier;
 			break; // static ItemType data only — no proven ownership
 		}
 		case SOURCE_GENERIC: {
 			lookupClientId = request.clientId;
-			visualTier = request.tier;
 			break; // static ItemType data only
 		}
 		case SOURCE_GROUND:
@@ -5006,7 +5005,7 @@ void ProtocolGame::sendAstraItemTooltip(const AstraItemTooltip::Request& request
 	const bool isArmor = armor != 0 ||
 	                     (type.slotPosition & (SLOTP_HEAD | SLOTP_ARMOR | SLOTP_LEGS | SLOTP_FEET | SLOTP_NECKLACE | SLOTP_RING)) != 0;
 	const bool hasStats = attack != 0 || defense != 0 || extraDefense != 0 || armor != 0 || hitChance != 0 ||
-	                      type.weaponType == WEAPON_DISTANCE;
+	                      shootRange > 1 || type.weaponType == WEAPON_DISTANCE;
 
 	const uint16_t requiredLevel = static_cast<uint16_t>(std::min<uint32_t>(type.minReqLevel, 0xFFFFu));
 	const uint16_t requiredMagic = static_cast<uint16_t>(std::min<uint32_t>(type.minReqMagicLevel, 0xFFFFu));
@@ -5074,7 +5073,7 @@ void ProtocolGame::sendAstraItemTooltip(const AstraItemTooltip::Request& request
 		}
 	}
 
-	const uint8_t tier = item ? item->getTier() : visualTier;
+	const uint8_t tier = item ? item->getTier() : static_cast<uint8_t>(type.tier);
 	const uint8_t classification = item ? item->getClassification() : static_cast<uint8_t>(type.classification);
 	const std::string itemName = item ? std::string{item->getName()} : type.name;
 	const uint32_t weight = item ? item->getWeight() : type.weight;
