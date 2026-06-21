@@ -57,13 +57,15 @@ struct Outfit
 
 struct ProtocolOutfit
 {
-	ProtocolOutfit(std::string_view name, uint16_t lookType, uint8_t addons) :
-	    name{name}, lookType{lookType}, addons{addons}
+	ProtocolOutfit(std::string_view name, uint16_t lookType, uint8_t addons, uint8_t mode = 0, uint32_t storeOfferId = 0) :
+	    name{name}, lookType{lookType}, addons{addons}, mode{mode}, storeOfferId{storeOfferId}
 	{}
 
 	std::string name;
 	uint16_t lookType;
 	uint8_t addons;
+	uint8_t mode;
+	uint32_t storeOfferId;
 };
 
 class Outfits

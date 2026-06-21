@@ -477,11 +477,16 @@ local function sendStoreCatalog(player)
 		out:addU16(#cat.offers)
 
 		for _, offer in ipairs(cat.offers) do
+			local displayId = offer.eid
+			if offer.oftype == "outfit" and player:getSex() == PLAYERSEX_FEMALE and offer.femalevalue > 0 then
+				displayId = offer.femalevalue
+			end
+
 			out:addU32(offer.id)
 			out:addString(offer.name)
 			out:addString(offer.icon)
 			out:addU32(offer.price)
-			out:addU16(offer.eid)
+			out:addU16(displayId)
 			out:addU16(offer.count)
 			out:addString(offer.description)
 			out:addString(offer.oftype)
