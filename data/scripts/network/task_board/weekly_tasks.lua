@@ -509,19 +509,20 @@ function WeeklyTasks.onKill(player, raceId)
 
 	-- Any creature counter
 	local oldAnyCreatureCurrent = data.anyCreatureCurrent or 0
-	data.anyCreatureCurrent = math.min(oldAnyCreatureCurrent + killMultiplier, data.anyCreatureTotal or 0)
+	local anyCreatureTotal = data.anyCreatureTotal or 0
+	data.anyCreatureCurrent = math.min(oldAnyCreatureCurrent + killMultiplier, anyCreatureTotal)
 	updated = data.anyCreatureCurrent ~= oldAnyCreatureCurrent
+	local anyCompletedNow = oldAnyCreatureCurrent < anyCreatureTotal and data.anyCreatureCurrent >= anyCreatureTotal
 	if updated then
-		local anyCompletedNow = oldAnyCreatureCurrent < data.anyCreatureTotal and data.anyCreatureCurrent >= data.anyCreatureTotal
 		shouldSave = shouldSave or shouldPersistKillProgress(oldAnyCreatureCurrent, data.anyCreatureCurrent, anyCompletedNow)
 		killUpdates[#killUpdates + 1] = {
 			raceId = 0,
 			current = data.anyCreatureCurrent,
-			total = data.anyCreatureTotal or 0,
-			completed = data.anyCreatureCurrent >= (data.anyCreatureTotal or 0),
+			total = anyCreatureTotal,
+			completed = data.anyCreatureCurrent >= anyCreatureTotal,
 		}
 	end
-	if oldAnyCreatureCurrent < data.anyCreatureTotal and data.anyCreatureCurrent >= data.anyCreatureTotal then
+	if anyCompletedNow then
 		data.completedKillTasks = (data.completedKillTasks or 0) + 1
 		matchedTask = true
 		shouldFullSync = true
