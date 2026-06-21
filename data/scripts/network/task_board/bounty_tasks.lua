@@ -502,15 +502,15 @@ function BountyTasks.onLogin(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadBountyData(playerGuid)
 
+	sendBountyBalances(player, data)
+
 	-- Do not generate a new selection list on login just for the tracker.
 	-- Only push live state that already exists, so Kill Tracker can show it
 	-- without requiring the player to reopen the Task Hunt window.
 	if data.state == STATE_ACTIVE or data.state == STATE_COMPLETED then
-		-- sendBountyData already syncs balances, so avoid a second send/read here.
 		return BountyTasks.sendBountyData(player)
 	end
 
-	sendBountyBalances(player, data)
 	return true
 end
 
@@ -703,10 +703,10 @@ function BountyTasks.onKill(player, raceId)
 		saveBountyData(playerGuid)
 	end
 
-	if completedNow then
+	if protocol and protocol.sendBountyKillUpdate then
+		protocol.sendBountyKillUpdate(player, raceId, currentKills, requiredKills, completedNow)
+	elseif completedNow then
 		BountyTasks.sendBountyData(player)
-	elseif protocol and protocol.sendBountyKillUpdate then
-		protocol.sendBountyKillUpdate(player, raceId, currentKills, requiredKills, false)
 	end
 	return true
 end

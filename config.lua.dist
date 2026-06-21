@@ -102,9 +102,9 @@ connectionRateLimitMS = 500
 -- Presets:
 --   Low    (small VPS / few players):   250 / 3  / 50000
 --   Normal (moderate load):             500 / 5  / 100000
---   High   (default / heavy load):      1000 / 15 / 200000
+--   High   (default / heavy load):      1000 / 25 / 200000
 reactorMaxTasksPerCycle = 1000
-reactorTimeBudgetMS = 15
+reactorTimeBudgetMS = 25
 reactorMaxInboxSize = 200000
 
 -- Deaths

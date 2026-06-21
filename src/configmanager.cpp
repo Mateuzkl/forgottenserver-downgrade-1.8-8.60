@@ -767,7 +767,7 @@ bool ConfigManager::load()
 	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxTasksPerCycle", 1000),
 	                        0, std::numeric_limits<uint32_t>::max());
 	integers[Integer::REACTOR_TIME_BUDGET_MS] =
-	    std::clamp<int64_t>(getGlobalInteger(L, "reactorTimeBudgetMS", 15), 0, 1000);
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorTimeBudgetMS", 25), 0, 1000);
 	integers[Integer::REACTOR_MAX_INBOX_SIZE] =
 	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxInboxSize", 200000), 1, 10'000'000);
 

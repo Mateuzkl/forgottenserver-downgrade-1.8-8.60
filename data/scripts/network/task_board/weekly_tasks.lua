@@ -575,9 +575,7 @@ function WeeklyTasks.onKill(player, raceId)
 		if shouldSave or shouldFullSync then
 			saveWeeklyData(playerGuid)
 		end
-		-- A full sync already encodes the completed state, so skip the
-		-- lightweight kill-update packets when a full sync is queued.
-		if protocol and protocol.sendWeeklyKillUpdate and not shouldFullSync then
+		if protocol and protocol.sendWeeklyKillUpdate then
 			for _, update in ipairs(killUpdates) do
 				protocol.sendWeeklyKillUpdate(player, update.raceId, update.current, update.total, update.completed)
 			end
