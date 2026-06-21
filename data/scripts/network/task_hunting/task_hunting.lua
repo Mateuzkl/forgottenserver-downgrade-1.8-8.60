@@ -47,9 +47,12 @@ local FREE_REROLL_SECONDS = 20 * 60 * 60
 local REROLL_PRICE_PER_LEVEL = 200
 local WILDCARD_SELECT_PRICE = 5
 local WILDCARD_REWARD_REROLL_PRICE = 1
+local RESOURCE_BANK = 0
+local RESOURCE_INVENTORY_GOLD = 1
+local RESOURCE_PREY_WILDCARDS = 10
 
 local taskCache = {}
-local schemaReady = false
+local schemaReady = nil
 
 local function debug(message, ...)
 	if TaskHunting.DEBUG then
@@ -67,11 +70,11 @@ local function clamp(value, minimum, maximum)
 end
 
 local function ensureSchema()
-	if schemaReady then
+	if schemaReady == true then
 		return true
 	end
 
-	local ok = db.query([[
+	local tableReady = db.query([[
 		CREATE TABLE IF NOT EXISTS `player_task_hunting` (
 			`player_id` INT NOT NULL,
 			`slot` TINYINT UNSIGNED NOT NULL,
@@ -80,6 +83,7 @@ local function ensureSchema()
 			`current_kills` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
 			`rarity` TINYINT UNSIGNED NOT NULL DEFAULT 1,
 			`upgraded` TINYINT(1) NOT NULL DEFAULT 0,
+			`wildcard` TINYINT(1) NOT NULL DEFAULT 0,
 			`race_list` TEXT NOT NULL,
 			`free_reroll_at` BIGINT NOT NULL DEFAULT 0,
 			PRIMARY KEY (`player_id`, `slot`),
@@ -87,8 +91,40 @@ local function ensureSchema()
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
 
-	schemaReady = ok and true or false
-	return schemaReady
+	local function columnExists(tableName, columnName)
+		local resultId = db.storeQuery(
+			"SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE()" ..
+			" AND TABLE_NAME = " .. db.escapeString(tableName) ..
+			" AND COLUMN_NAME = " .. db.escapeString(columnName) .. " LIMIT 1")
+		if resultId == false then
+			return false
+		end
+		result.free(resultId)
+		return true
+	end
+
+	local function ensureColumn(tableName, columnName, ddl)
+		if columnExists(tableName, columnName) then
+			return true
+		end
+		return db.query(ddl)
+	end
+
+	local wildcardColumnReady = ensureColumn(
+		"player_task_hunting",
+		"wildcard",
+		"ALTER TABLE `player_task_hunting` ADD `wildcard` TINYINT(1) NOT NULL DEFAULT 0 AFTER `upgraded`")
+	local preyWildcardColumnReady = ensureColumn(
+		"players",
+		"bonus_rerolls",
+		"ALTER TABLE `players` ADD `bonus_rerolls` BIGINT UNSIGNED NOT NULL DEFAULT 0")
+
+	schemaReady = tableReady and wildcardColumnReady and preyWildcardColumnReady and true or nil
+	if not schemaReady then
+		print("[TaskHunting] Database schema is not ready; will retry on next use.")
+		return false
+	end
+	return true
 end
 
 local function defaultSlot()
@@ -98,6 +134,7 @@ local function defaultSlot()
 		currentKills = 0,
 		rarity = 1,
 		upgraded = false,
+		wildcard = false,
 		raceList = {},
 		freeRerollAt = 0,
 	}
@@ -159,6 +196,7 @@ local function loadTaskData(player)
 					currentKills = result.getDataInt(resultId, "current_kills"),
 					rarity = clamp(result.getDataInt(resultId, "rarity"), 1, 5),
 					upgraded = result.getDataInt(resultId, "upgraded") ~= 0,
+					wildcard = result.getDataInt(resultId, "wildcard") ~= 0,
 					raceList = parseRaceList(result.getDataString(resultId, "race_list")),
 					freeRerollAt = result.getDataLong(resultId, "free_reroll_at"),
 				}
@@ -178,12 +216,15 @@ local function saveSlot(player, slot)
 		return false
 	end
 
+	-- TFS db.escapeString returns a quoted SQL string literal.
+	local serializedRaceList = db.escapeString(serializeRaceList(slotData.raceList))
+
 	return db.query(string.format(
-		"INSERT INTO `player_task_hunting` (`player_id`, `slot`, `state`, `selected_raceid`, `current_kills`, `rarity`, `upgraded`, `race_list`, `free_reroll_at`) " ..
-		"VALUES (%d, %d, %d, %d, %d, %d, %d, %s, %d) " ..
+		"INSERT INTO `player_task_hunting` (`player_id`, `slot`, `state`, `selected_raceid`, `current_kills`, `rarity`, `upgraded`, `wildcard`, `race_list`, `free_reroll_at`) " ..
+		"VALUES (%d, %d, %d, %d, %d, %d, %d, %d, %s, %d) " ..
 		"ON DUPLICATE KEY UPDATE `state` = VALUES(`state`), `selected_raceid` = VALUES(`selected_raceid`), " ..
 		"`current_kills` = VALUES(`current_kills`), `rarity` = VALUES(`rarity`), `upgraded` = VALUES(`upgraded`), " ..
-		"`race_list` = VALUES(`race_list`), `free_reroll_at` = VALUES(`free_reroll_at`)",
+		"`wildcard` = VALUES(`wildcard`), `race_list` = VALUES(`race_list`), `free_reroll_at` = VALUES(`free_reroll_at`)",
 		player:getGuid(),
 		slot,
 		clamp(slotData.state, STATE_LOCKED, STATE_REDEEM),
@@ -191,7 +232,8 @@ local function saveSlot(player, slot)
 		clamp(slotData.currentKills, 0, 0xFFFF),
 		clamp(slotData.rarity, 1, 5),
 		slotData.upgraded and 1 or 0,
-		db.escapeString(serializeRaceList(slotData.raceList)),
+		slotData.wildcard and 1 or 0,
+		serializedRaceList,
 		math.max(0, tonumber(slotData.freeRerollAt) or 0)
 	))
 end
@@ -346,6 +388,22 @@ local function generateRaceList(player, data, slot)
 	return selected
 end
 
+local function generateWildcardRaceList(data, slot)
+	if not CustomBestiary or not CustomBestiary.monstersByRaceId then
+		return {}
+	end
+
+	local excluded = collectExcludedRaceIds(data, slot)
+	local raceList = {}
+	for candidateRaceId, entry in pairs(CustomBestiary.monstersByRaceId) do
+		if not excluded[candidateRaceId] and (entry.experience or 0) > 0 then
+			raceList[#raceList + 1] = candidateRaceId
+		end
+	end
+	table.sort(raceList)
+	return raceList
+end
+
 local function ensureSlotReady(player, data, slot)
 	local slotData = data.slots[slot]
 	if not slotData then
@@ -363,10 +421,12 @@ local function ensureSlotReady(player, data, slot)
 		slotData.currentKills = 0
 		slotData.rarity = 1
 		slotData.upgraded = false
+		slotData.wildcard = false
 		slotData.raceList = {}
 	end
 
 	if slotData.state == STATE_SELECT and #slotData.raceList == 0 then
+		slotData.wildcard = false
 		slotData.raceList = generateRaceList(player, data, slot)
 	end
 	return slotData
@@ -383,7 +443,7 @@ local function getPlayerWildcards(player)
 end
 
 local function setPlayerWildcards(player, value)
-	value = clamp(value, 0, 255)
+	value = math.floor(math.max(0, tonumber(value) or 0))
 	db.query("UPDATE `players` SET `bonus_rerolls` = " .. value .. " WHERE `id` = " .. player:getGuid())
 	return value
 end
@@ -427,11 +487,7 @@ local function sendResourceBalance(player, resourceType, amount)
 	local out = NetworkMessage(player)
 	out:addByte(0xEE)
 	out:addByte(resourceType)
-	if resourceType == TaskBoard.Resources.TASK_HUNTING then
-		out:addU64(math.max(0, tonumber(amount) or 0))
-	else
-		out:addU64(math.max(0, tonumber(amount) or 0))
-	end
+	out:addU64(math.max(0, tonumber(amount) or 0))
 	return out:sendToPlayer(player)
 end
 
@@ -439,9 +495,9 @@ local function sendBalances(player)
 	if not supportsAstra(player) then
 		return false
 	end
-	sendResourceBalance(player, 0, player:getBankBalance())
-	sendResourceBalance(player, 1, player:getMoney())
-	sendResourceBalance(player, 10, getPlayerWildcards(player))
+	sendResourceBalance(player, RESOURCE_BANK, player:getBankBalance())
+	sendResourceBalance(player, RESOURCE_INVENTORY_GOLD, player:getMoney())
+	sendResourceBalance(player, RESOURCE_PREY_WILDCARDS, getPlayerWildcards(player))
 	sendResourceBalance(player, TaskBoard.Resources.TASK_HUNTING, player:getTaskHuntingPoints())
 	return true
 end
@@ -522,7 +578,8 @@ function TaskHunting.sendSlotData(player, slot)
 	if state == STATE_LOCKED then
 		out:addByte(lockType)
 	elseif state == STATE_SELECT or state == STATE_WILDCARD then
-		writeRaceList(out, slotData.raceList, getBestiaryKills(player))
+		local raceList = state == STATE_WILDCARD and generateWildcardRaceList(data, slot) or slotData.raceList
+		writeRaceList(out, raceList, getBestiaryKills(player))
 	elseif state == STATE_ACTIVE or state == STATE_REDEEM then
 		local entry = CustomBestiary and CustomBestiary.getMonster(slotData.selectedRaceId)
 		local option = getRewardOption(entry, slotData.rarity)
@@ -570,6 +627,7 @@ local function resetSlot(player, data, slot)
 	slotData.currentKills = 0
 	slotData.rarity = 1
 	slotData.upgraded = false
+	slotData.wildcard = false
 	slotData.raceList = generateRaceList(player, data, slot)
 end
 
@@ -588,6 +646,9 @@ local function rerollReward(slotData)
 		return
 	end
 
+	-- Paying a reward reroll always improves the current grade. The maximum
+	-- intentionally shrinks for higher rarities so the roll cannot downgrade
+	-- or stay at the same grade.
 	local maximum = ({ [1] = 70, [2] = 45, [3] = 20 })[slotData.rarity] or 100
 	local chance = math.random(0, maximum)
 	if chance <= 5 then
@@ -596,10 +657,8 @@ local function rerollReward(slotData)
 		slotData.rarity = 4
 	elseif chance <= 45 then
 		slotData.rarity = 3
-	elseif chance <= 70 then
-		slotData.rarity = 2
 	else
-		slotData.rarity = 1
+		slotData.rarity = 2
 	end
 end
 
@@ -650,24 +709,23 @@ local function handleAction(player, slot, action, wantsUpgrade, raceId)
 		if slotData.state ~= STATE_SELECT then
 			return sendFailure(player, "This slot cannot select a wildcard creature now.")
 		end
+		local wildcardRaceList = generateWildcardRaceList(data, slot)
+		if #wildcardRaceList == 0 then
+			return sendFailure(player, "There are no valid wildcard creatures for this slot.")
+		end
 		if not removePlayerWildcards(player, WILDCARD_SELECT_PRICE) then
 			return sendFailure(player, "You do not have enough Prey Wildcards.")
 		end
 		slotData.state = STATE_WILDCARD
+		slotData.wildcard = true
 		slotData.raceList = {}
-		local excluded = collectExcludedRaceIds(data, slot)
-		for candidateRaceId, entry in pairs((CustomBestiary and CustomBestiary.monstersByRaceId) or {}) do
-			if not excluded[candidateRaceId] and (entry.experience or 0) > 0 then
-				slotData.raceList[#slotData.raceList + 1] = candidateRaceId
-			end
-		end
-		table.sort(slotData.raceList)
 
 	elseif action == ACTION_SELECT then
 		if slotData.state ~= STATE_SELECT and slotData.state ~= STATE_WILDCARD then
 			return sendFailure(player, "This slot is not waiting for a creature selection.")
 		end
-		if not containsRace(slotData.raceList, raceId) then
+		local availableRaceList = slotData.state == STATE_WILDCARD and generateWildcardRaceList(data, slot) or slotData.raceList
+		if not containsRace(availableRaceList, raceId) then
 			return sendFailure(player, "That creature is not available for this slot.")
 		end
 		local entry = CustomBestiary and CustomBestiary.getMonster(raceId)
@@ -680,6 +738,7 @@ local function handleAction(player, slot, action, wantsUpgrade, raceId)
 		slotData.selectedRaceId = raceId
 		slotData.currentKills = 0
 		slotData.rarity = 1
+		slotData.wildcard = false
 		slotData.raceList = {}
 
 	elseif action == ACTION_REMOVE then

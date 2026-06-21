@@ -31,12 +31,21 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0xEB: // imbuing window
 		case 0xEC: // close imbuing
 		case 0xED: // custom prey
-		case 0xEE: // resource balance
 		case 0xE8: // native prey slot data
 		case 0xE9: // native prey prices
 		case 0xF0: // custom quest log
 		case 0xF1: // custom quest line
 		case 0xFD: // custom store
+			return true;
+		default:
+			return false;
+	}
+}
+
+bool isOtcOrAstraLuaOpcode(uint8_t opcode)
+{
+	switch (opcode) {
+		case 0xEE: // resource balance
 			return true;
 		default:
 			return false;
@@ -72,6 +81,9 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
 	if (isAstraOnlyLuaOpcode(opcode)) {
 		return player.isAstraClient();
+	}
+	if (isOtcOrAstraLuaOpcode(opcode)) {
+		return player.isOTC() || player.isAstraClient();
 	}
 	return !isOtcOnlyLuaOpcode(opcode) || player.isOTC();
 }

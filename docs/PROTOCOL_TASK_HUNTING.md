@@ -17,6 +17,13 @@ explicitly disabled for Astra sessions, so `0xBB` is unambiguous for the
 Astra Task Hunting parser. Classic non-Astra clients retain their legacy
 anti-DLL packet and never receive Task Hunting packets.
 
+## Deployment note
+
+Deploy the server and AstraClient protocol changes together. SoulSeal data was
+moved from the old standalone `0xBA` path to Task Board `0x53` subtype `0x03`
+so Task Hunting can own `0xBA`/`0xBB`. A server with this change requires a
+client that routes Task Board subtype `0x03` to the SoulSeal parser.
+
 ## Task Hunting slot states
 
 | State | Value | Extra payload before reroll time |

@@ -635,6 +635,11 @@ function BountyTasks.claimReward(player)
 		player:addBountyPoints(rewardBountyPts)
 	end
 	data.rerollTokens = rerollsAfter
+	if data.rerollTokens >= MAX_REROLL_TOKENS then
+		data.rerollMode = REROLL_LIMIT_REACHED
+	elseif data.rerollTokens > 0 and data.rerollMode == REROLL_LIMIT_REACHED then
+		data.rerollMode = REROLL_TIMER_RUNNING
+	end
 	data.bountyPoints = player:getBountyPoints()
 
 	player:sendTextMessage(MESSAGE_STATUS_DEFAULT, string.format(
@@ -904,7 +909,6 @@ end
 function BountyTasks.sendBountyData(player, includeAvailableCreatures)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadBountyData(playerGuid)
-	syncBountyBalance(player, data)
 	sendBountyBalances(player, data)
 
 	-- Build creature list for protocol

@@ -9,12 +9,15 @@ local TaskBoardProtocol = {}
 local RESOURCE_TASK_HUNTING = TaskBoard.Resources.TASK_HUNTING
 local RESOURCE_BOUNTY_POINTS = TaskBoard.Resources.BOUNTY_POINTS
 local RESOURCE_SOULSEALS_POINTS = TaskBoard.Resources.SOULSEALS_POINTS
-local RESOURCE_BOUNTY_REROLL_POINTS = 0x5F -- Astra ResourceTypes.BOUNTY_REROLL_POINTS
+-- AstraClient modules/gamelib/const.lua: ResourceTypes.BOUNTY_REROLL_POINTS = 95.
+-- This value intentionally equals the C2S Task Board opcode byte, but it is
+-- carried inside the unrelated S2C 0xEE resource-balance packet.
+local RESOURCE_BOUNTY_REROLL_POINTS_RAW_VALUE = 0x5F
 
 TaskBoardProtocol.RESOURCE_TASK_HUNTING = RESOURCE_TASK_HUNTING
 TaskBoardProtocol.RESOURCE_BOUNTY_POINTS = RESOURCE_BOUNTY_POINTS
 TaskBoardProtocol.RESOURCE_SOULSEALS_POINTS = RESOURCE_SOULSEALS_POINTS
-TaskBoardProtocol.RESOURCE_BOUNTY_REROLL_POINTS = RESOURCE_BOUNTY_REROLL_POINTS
+TaskBoardProtocol.RESOURCE_BOUNTY_REROLL_POINTS = RESOURCE_BOUNTY_REROLL_POINTS_RAW_VALUE
 
 -- Task board option sub-types (opcode 0x53 first byte after opcode)
 local TASK_BOARD_BOUNTY = 0x00

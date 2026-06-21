@@ -191,7 +191,6 @@ TaskBoardWeeklyTasks = weekly
 TaskBoardHuntingShop = shop
 TaskBoardSoulSealHandler = soulseal
 TaskBoardResourceBalance = resourceBalance
-TaskHuntingSystem = taskHunting
 _TASK_HUNTING_MODULE = taskHunting
 
 -- Also expose for other scripts

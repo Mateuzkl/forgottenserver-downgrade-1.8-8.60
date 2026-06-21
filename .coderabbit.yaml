@@ -1,4 +1,4 @@
-language: cpp
+language: en
 
 build:
   compile_commands: compile_commands.json

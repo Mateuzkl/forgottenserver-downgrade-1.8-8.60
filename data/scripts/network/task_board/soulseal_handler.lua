@@ -27,8 +27,15 @@ local function isNearSoulpitObelisk(player)
 		and math.abs(playerPosition.y - obeliskPosition.y) <= 1
 end
 
+local function isAstraPlayer(player)
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+end
+
 function SoulSealHandler.sendSoulSealsData(player)
 	if not protocol or not player then
+		return false
+	end
+	if not isAstraPlayer(player) then
 		return false
 	end
 	if not isNearSoulpitObelisk(player) then
@@ -46,7 +53,7 @@ function SoulSealHandler.sendSoulSealsData(player)
 end
 
 function SoulSealHandler.startFight(player, raceId)
-	if not player or not SoulPit or not player.isUsingAstraClient or not player:isUsingAstraClient() then
+	if not SoulPit or not isAstraPlayer(player) then
 		return false
 	end
 	if not isNearSoulpitObelisk(player) then
@@ -75,9 +82,10 @@ function SoulSealHandler.startFight(player, raceId)
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "Cannot determine soulseal cost for this creature.")
 		return false
 	end
-	if player:getSoulsealsPoints() < cost then
+	local soulsealBalance = player:getSoulsealsPoints()
+	if soulsealBalance < cost then
 		player:sendTextMessage(MESSAGE_INFO_DESCR, string.format(
-			"You need %d soulseal points to fight %s. You have %d.", cost, monster.name, player:getSoulsealsPoints()))
+			"You need %d soulseal points to fight %s. You have %d.", cost, monster.name, soulsealBalance))
 		return false
 	end
 	if not MonsterType(monster.name) then
@@ -93,13 +101,17 @@ function SoulSealHandler.startFight(player, raceId)
 		protocol.sendResourceBalance(player, protocol.RESOURCE_SOULSEALS_POINTS, player:getSoulsealsPoints())
 	end
 
-	local started, err = SoulPit.startEncounter(player, monster.name)
+	local ok, started, err = pcall(SoulPit.startEncounter, player, monster.name)
+	if not ok then
+		err = started
+		started = false
+	end
 	if not started then
 		player:addSoulsealsPoints(cost)
 		if protocol and protocol.sendResourceBalance then
 			protocol.sendResourceBalance(player, protocol.RESOURCE_SOULSEALS_POINTS, player:getSoulsealsPoints())
 		end
-		player:sendTextMessage(MESSAGE_INFO_DESCR, err or "Failed to start Soulpit encounter.")
+		player:sendTextMessage(MESSAGE_INFO_DESCR, tostring(err or "Failed to start Soulpit encounter."))
 		return false
 	end
 
