@@ -45,6 +45,7 @@ local MAX_REROLL_TOKENS = 10
 local INITIAL_REROLL_TOKENS = 3
 local BOUNTY_REWARD_REROLL_TOKENS = 1
 local KILL_SAVE_INTERVAL = 5
+local ITEM_BOUNTY_TALISMAN = 51978
 local FREE_REROLL_COOLDOWN = 20 * 60 * 60 -- 20 hours in seconds
 local PREFERRED_SLOT_COSTS = { 0, 300, 600, 900, 1200 }
 local PREFERRED_CLEAR_COST = 10
@@ -111,6 +112,15 @@ local function shouldPersistKillProgress(previousKills, currentKills, completedN
 		return true
 	end
 	return math.floor(previousKills / KILL_SAVE_INTERVAL) ~= math.floor(currentKills / KILL_SAVE_INTERVAL)
+end
+
+local function isBountyTalismanEquipped(player)
+	if not player or not player.getInventoryItem then
+		return false
+	end
+
+	local item = player:getInventoryItem(CONST_SLOT_AMMO)
+	return item and item:getId() == ITEM_BOUNTY_TALISMAN
 end
 
 -- ============================================
@@ -876,6 +886,9 @@ function BountyTasks.getTalismanBonus(player, raceId, pathIndex)
 	pathIndex = tonumber(pathIndex)
 	raceId = tonumber(raceId) or 0
 	if not player or pathIndex == nil or pathIndex < 0 or pathIndex > 3 or raceId <= 0 then
+		return 0
+	end
+	if not isBountyTalismanEquipped(player) then
 		return 0
 	end
 

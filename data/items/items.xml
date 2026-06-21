@@ -76866,6 +76866,11 @@
 	<item id="51747" article="a" name="intricate void scroll">
 		<attribute key="weight" value="250" />
 	</item>
+	<item id="51978" article="a" name="bounty talisman">
+		<attribute key="description" value="A mysterious talisman, studded with colourful jewels, that can be upgraded to grant bonuses against Bounty Task creatures." />
+		<attribute key="weight" value="75" />
+		<attribute key="slotType" value="ammo" />
+	</item>
 	<item id="65000" name="QA non-stackable test item">
 		<attribute key="weight" value="100" />
 	</item>
