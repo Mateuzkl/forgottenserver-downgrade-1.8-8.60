@@ -113,6 +113,7 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 
 	const ItemType& it = Item::items[id];
 	if (sendAstraQuiverCountU16 && it.weaponType == WEAPON_QUIVER) {
+		// This overload only has the caller-provided subtype/count; real quiver ammo count is sent by the Item* overload.
 		add<uint16_t>(count);
 	} else if (it.stackable) {
 		addByte(count);
