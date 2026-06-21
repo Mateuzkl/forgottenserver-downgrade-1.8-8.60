@@ -4327,6 +4327,23 @@ void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 	scheduleAstraPlayerInventorySnapshot();
 }
 
+void Player::refreshThing(Thing* thing)
+{
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item) {
+		return;
+	}
+
+	const int32_t index = getThingIndex(thing);
+	if (index == -1) {
+		return;
+	}
+
+	sendInventoryItem(static_cast<slots_t>(index), item);
+	onUpdateInventoryItem(item, item);
+	scheduleAstraPlayerInventorySnapshot();
+}
+
 void Player::replaceThing(uint32_t index, Thing* thing)
 {
 	if (index > CONST_SLOT_LAST) {

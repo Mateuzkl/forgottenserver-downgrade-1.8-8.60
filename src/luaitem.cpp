@@ -16,6 +16,12 @@ using namespace Lua;
 
 void refreshClientItemState(Item* item, itemAttrTypes attribute)
 {
+	if (!item) {
+		return;
+	}
+
+	// Decay state controls server-side scheduling; charges and duration are the
+	// mutable item state serialized for the client.
 	if (attribute == ITEM_ATTRIBUTE_CHARGES || attribute == ITEM_ATTRIBUTE_DURATION) {
 		g_game.refreshItem(item);
 	}

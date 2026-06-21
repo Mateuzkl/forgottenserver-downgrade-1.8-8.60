@@ -704,6 +704,23 @@ void Container::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 	}
 }
 
+void Container::refreshThing(Thing* thing)
+{
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item) {
+		return;
+	}
+
+	const int32_t index = getThingIndex(thing);
+	if (index == -1) {
+		return;
+	}
+
+	if (getParent()) {
+		onUpdateContainerItem(index, item, item);
+	}
+}
+
 void Container::replaceThing(uint32_t index, Thing* thing)
 {
 	if (!thing) {

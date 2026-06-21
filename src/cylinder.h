@@ -106,6 +106,12 @@ public:
 	virtual void updateThing(Thing* thing, uint16_t itemId, uint32_t count) = 0;
 
 	/**
+	 * Notify observers that an item's runtime state changed without changing its
+	 * id or subtype. Cylinders that expose items to clients override this.
+	 */
+	virtual void refreshThing(Thing*) {}
+
+	/**
 	 * Replace an object with a new
 	 * \param index is the position to change (inventory slot/container position)
 	 * \param thing is the object to update

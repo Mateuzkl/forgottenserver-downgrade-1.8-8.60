@@ -2564,10 +2564,10 @@ void Game::refreshItem(Item* item)
 		return;
 	}
 
-	// updateThing notifies the owning player/container or map spectators. It also
-	// serializes the current Astra item state, so direct Lua attribute updates are
-	// visible immediately instead of waiting for another inventory change or relog.
-	cylinder->updateThing(item, item->getID(), item->getSubType());
+	// Refreshing notifies the owning player/container or map spectators without
+	// writing the subtype back into the item. That preserves removed attributes
+	// such as charges while still serializing current Astra item state.
+	cylinder->refreshThing(item);
 }
 
 ReturnValue Game::internalTeleport(Thing* thing, const Position& newPos, bool pushMove /* = true*/,

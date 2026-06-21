@@ -1093,6 +1093,21 @@ void Tile::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 	onUpdateTileItem(item, oldType, item, newType);
 }
 
+void Tile::refreshThing(Thing* thing)
+{
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item) {
+		return;
+	}
+
+	if (getThingIndex(thing) == -1) {
+		return;
+	}
+
+	const ItemType& itemType = Item::items[item->getID()];
+	onUpdateTileItem(item, itemType, item, itemType);
+}
+
 void Tile::replaceThing(uint32_t index, Thing* thing)
 {
 	int32_t pos = index;
