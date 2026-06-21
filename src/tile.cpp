@@ -495,6 +495,7 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 	for (const auto& spectator : spectators) {
 		spectator->onUpdateTileItem(this, cylinderMapPos, oldItem, oldType, newItem, newType);
 	}
+
 }
 
 void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item)

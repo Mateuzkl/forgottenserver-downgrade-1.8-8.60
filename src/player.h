@@ -535,6 +535,19 @@ public:
 	void setTokenLocked(bool locked) { tokenLocked = locked; }
 	bool unlockWithToken(const std::string& token);
 
+	bool isMagicWallOldViewEnabled() const { return magicWallOldViewEnabled; }
+	void setMagicWallOldViewEnabled(bool enabled, bool sendRefresh = true);
+
+	bool isEffectsDisabled() const { return effectsDisabled; }
+	void setEffectsDisabled(bool disabled) { effectsDisabled = disabled; }
+	bool isDistanceShootsDisabled() const { return distanceShootsDisabled; }
+	void setDistanceShootsDisabled(bool disabled) { distanceShootsDisabled = disabled; }
+
+	static bool isMagicWallItemId(uint16_t itemId)
+	{
+		return itemId == ITEM_MAGICWALL || itemId == ITEM_MAGICWALL_SAFE || itemId == ITEM_MAGICWALL_PERSISTENT || itemId == ITEM_MAGICWALL_NOPVP;
+	}
+
 	bool setVocation(uint16_t vocId);
 	uint16_t getVocationId() const { return vocation->getId(); }
 	bool isSorcerer() const { return vocation->getId() == 1 || vocation->getFromVocation() == 1; }
@@ -975,6 +988,13 @@ public:
 	{
 		if (client) {
 			client->refreshWorldView();
+		}
+	}
+
+	void refreshMagicWallViews()
+	{
+		if (client) {
+			client->refreshMagicWallViews();
 		}
 	}
 
@@ -1758,6 +1778,9 @@ private:
 	bool tokenProtected = false;
 	std::string tokenHash;
 	bool tokenLocked = false;
+	bool magicWallOldViewEnabled = false;
+	bool effectsDisabled = false;
+	bool distanceShootsDisabled = false;
 	bool staminaPzActive = false;
 	bool staminaTrainerActive = false;
 	bool astraPlayerInventorySnapshotScheduled = false;

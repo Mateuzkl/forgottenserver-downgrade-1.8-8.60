@@ -1468,10 +1468,15 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 	const bool sendItemTierByte = shouldSendItemTierByte();
 	const bool sendItemTierData = shouldSendItemTierData();
 	const bool sendAstraItemState = canSendAstraItemState();
+	const bool customView = player->isMagicWallOldViewEnabled();
 	int32_t count;
 	Item* ground = tile->getGround();
 	if (ground) {
-		msg.addItem(ground, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState);
+		if (customView && Player::isMagicWallItemId(ground->getID())) {
+			msg.addItem(ITEM_MAGICWALL_OLD, 1, false, sendItemTierByte);
+		} else {
+			msg.addItem(ground, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState);
+		}
 		count = 1;
 	} else {
 		count = 0;
@@ -1483,7 +1488,12 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState);
+			Item* tileItem = it->get();
+			if (customView && Player::isMagicWallItemId(tileItem->getID())) {
+				msg.addItem(ITEM_MAGICWALL_OLD, 1, false, sendItemTierByte);
+			} else {
+				msg.addItem(tileItem, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState);
+			}
 			count++;
 			if (count == 9 && tile->getPosition() == player->getPosition()) {
 				break;
@@ -1528,7 +1538,12 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState);
+			Item* downItem = it->get();
+			if (customView && Player::isMagicWallItemId(downItem->getID())) {
+				msg.addItem(ITEM_MAGICWALL_OLD, 1, false, sendItemTierByte);
+			} else {
+				msg.addItem(downItem, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState);
+			}
 			if (++count == MAX_STACKPOS_THINGS) {
 				return;
 			}
@@ -3174,6 +3189,10 @@ void ProtocolGame::sendDllCheck()
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
 {
+	if (player && player->isDistanceShootsDisabled()) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x85);
 	msg.addPosition(from);
@@ -3188,6 +3207,10 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 		return;
 	}
 
+	if (player && player->isEffectsDisabled()) {
+		return;
+	}
+
 	Tile* tile = g_game.map.getTile(pos);
 	if (!tile || !tile->getGround()) {
 		return;
@@ -3199,6 +3222,7 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 	msg.add<uint16_t>(type);
 	writeToOutputBuffer(msg);
 }
+
 
 void ProtocolGame::sendCreatureHealth(const Creature* creature)
 {
@@ -3254,8 +3278,13 @@ void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-	            canSendAstraItemState());
+	if (player->isMagicWallOldViewEnabled() && Player::isMagicWallItemId(item->getID())) {
+		msg.addItem(ITEM_MAGICWALL_OLD, 1, false, shouldSendItemTierByte());
+	} else {
+		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+		            canSendAstraItemState());
+	}
+
 	writeToOutputBuffer(msg);
 }
 
@@ -3273,8 +3302,13 @@ void ProtocolGame::sendUpdateTileItem(const Position& pos, uint32_t stackpos, co
 	msg.addByte(0x6B);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-	            canSendAstraItemState());
+	if (player->isMagicWallOldViewEnabled() && Player::isMagicWallItemId(item->getID())) {
+		msg.addItem(ITEM_MAGICWALL_OLD, 1, false, shouldSendItemTierByte());
+	} else {
+		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+		            canSendAstraItemState());
+	}
+
 	writeToOutputBuffer(msg);
 }
 
@@ -3330,6 +3364,46 @@ void ProtocolGame::sendUpdateTile(const Tile* tile, const Position& pos)
 	}
 
 	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::refreshMagicWallViews()
+{
+	if (!player) {
+		return;
+	}
+
+	const Position& centerPos = player->getPosition();
+	int32_t minx = centerPos.x - Map::maxClientViewportX;
+	int32_t miny = centerPos.y - Map::maxClientViewportY;
+	int32_t maxx = centerPos.x + (Map::maxClientViewportX + 1);
+	int32_t maxy = centerPos.y + (Map::maxClientViewportY + 1);
+
+	if (minx < 0) minx = 0;
+	if (miny < 0) miny = 0;
+	if (maxx > 65534) maxx = 65534;
+	if (maxy > 65534) maxy = 65534;
+
+	for (int32_t x = minx; x <= maxx; ++x) {
+		for (int32_t y = miny; y <= maxy; ++y) {
+			Position pos(static_cast<uint16_t>(x), static_cast<uint16_t>(y), centerPos.z);
+			Tile* tile = g_game.map.getTile(pos);
+			if (!tile) {
+				continue;
+			}
+			const TileItemVector* itemList = tile->getItemList();
+			if (!itemList) {
+				continue;
+			}
+			for (const auto& itemPtr : *itemList) {
+				if (itemPtr && Player::isMagicWallItemId(itemPtr->getID())) {
+					auto stackpos = tile->getStackposOfItem(player.get(), itemPtr.get());
+					if (stackpos != -1) {
+						sendUpdateTileItem(pos, static_cast<uint32_t>(stackpos), itemPtr.get());
+					}
+				}
+			}
+		}
+	}
 }
 
 void ProtocolGame::sendFightModes()

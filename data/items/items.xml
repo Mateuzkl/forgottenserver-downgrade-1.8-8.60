@@ -63232,6 +63232,15 @@
 	<item id="37576" article="a" name="vessel of Devovorga">
 		<attribute key="weight" value="900" />
 	</item>
+	<item id="37577" article="a" name="magic wall">
+		<attribute key="type" value="magicfield" />
+		<attribute key="blocking" value="1" />
+		<attribute key="duration" value="20" />
+		<attribute key="decayTo" value="0" />
+		<attribute key="script" value="moveevent">
+			<attribute key="eventType" value="stepin" />
+		</attribute>
+	</item>
 	<item fromid="37580" toid="37582" name="string of fairy lights">
 		<attribute key="weight" value="1200" />
 	</item>
