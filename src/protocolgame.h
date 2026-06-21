@@ -4,6 +4,7 @@
 #ifndef FS_PROTOCOLGAME_H
 #define FS_PROTOCOLGAME_H
 
+#include "astraitemtooltip.h"
 #include "chat.h"
 #include "creature.h"
 #include "protocol.h"
@@ -306,6 +307,13 @@ private:
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 
+	// Astra item tooltip (server-authoritative, binary; see astraitemtooltip.h).
+	// canSend gates feature announcement and every served request; parse runs on
+	// the network thread, sendAstraItemTooltip runs on the game thread.
+	bool canSendAstraItemTooltip() const;
+	void parseAstraItemTooltipRequest(NetworkMessage& msg);
+	void sendAstraItemTooltip(const AstraItemTooltip::Request& request);
+
 	friend class Player;
 	friend class ProtocolSpectator;
 	friend class SpySystem;
@@ -371,6 +379,7 @@ private:
 	bool imbuementTrackerOpen = false;
 	int64_t nextCastSwitchTime = 0;
 	int64_t nextCastSwitchCooldownMessageTime = 0;
+	int64_t lastAstraItemTooltipTime = 0; // per-connection flood guard for tooltip requests
 
 	uint32_t dllCheckSequence = 0;
 
