@@ -946,8 +946,9 @@ enum class GameFeature : uint8_t {
 	PlayerFamiliars = 138,
 	DisplayItemCharges = 139,
 	PackedPlayerInventory = 140,
+	AstraQuiverCountU16 = 141,
 
-	Last = 140
+	Last = 141
 };
 
 inline constexpr int32_t CHANNEL_GUILD = 0x00;

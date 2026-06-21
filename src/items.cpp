@@ -69,6 +69,10 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"transformdeequipto", ITEM_PARSE_TRANSFORMDEEQUIPTO},
     {"duration", ITEM_PARSE_DURATION},
     {"showduration", ITEM_PARSE_SHOWDURATION},
+    {"wearout", ITEM_PARSE_WEAROUT},
+    {"clockexpire", ITEM_PARSE_CLOCKEXPIRE},
+    {"expire", ITEM_PARSE_EXPIRE},
+    {"expirestop", ITEM_PARSE_EXPIRESTOP},
     {"charges", ITEM_PARSE_CHARGES},
     {"showcharges", ITEM_PARSE_SHOWCHARGES},
     {"showattributes", ITEM_PARSE_SHOWATTRIBUTES},
@@ -1105,6 +1109,26 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 
 				case ITEM_PARSE_SHOWDURATION: {
 					it.showDuration = valueAttribute.as_bool();
+					break;
+				}
+
+				case ITEM_PARSE_WEAROUT: {
+					it.wearOut = valueAttribute.as_bool();
+					break;
+				}
+
+				case ITEM_PARSE_CLOCKEXPIRE: {
+					it.clockExpire = valueAttribute.as_bool();
+					break;
+				}
+
+				case ITEM_PARSE_EXPIRE: {
+					it.expire = valueAttribute.as_bool();
+					break;
+				}
+
+				case ITEM_PARSE_EXPIRESTOP: {
+					it.expireStop = valueAttribute.as_bool();
 					break;
 				}
 

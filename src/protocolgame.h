@@ -69,6 +69,7 @@ public:
 
 	uint16_t getVersion() const { return version; }
 	bool canSendAstraItemState() const;
+	bool shouldSendAstraQuiverCountU16() const;
 
 	static uint32_t spectatorId;
 	static std::set<std::string> spectatorNames;

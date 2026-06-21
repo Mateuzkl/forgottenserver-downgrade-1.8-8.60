@@ -86,6 +86,10 @@ enum ItemParseAttributes_t
 	ITEM_PARSE_TRANSFORMDEEQUIPTO,
 	ITEM_PARSE_DURATION,
 	ITEM_PARSE_SHOWDURATION,
+	ITEM_PARSE_WEAROUT,
+	ITEM_PARSE_CLOCKEXPIRE,
+	ITEM_PARSE_EXPIRE,
+	ITEM_PARSE_EXPIRESTOP,
 	ITEM_PARSE_CHARGES,
 	ITEM_PARSE_SHOWCHARGES,
 	ITEM_PARSE_SHOWATTRIBUTES,
@@ -460,6 +464,10 @@ public:
 	bool ignoreBlocking = false;
 	bool allowPickupable = false;
 	bool showDuration = false;
+	bool wearOut = false;
+	bool clockExpire = false;
+	bool expire = false;
+	bool expireStop = false;
 	bool showCharges = false;
 	bool showAttributes = false;
 	bool replaceable = true;
