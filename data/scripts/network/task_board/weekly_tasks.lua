@@ -45,6 +45,7 @@ local KILL_TASKS_NORMAL = 5
 local KILL_TASKS_EXPANSION = 8
 local DELIVERY_TASKS_NORMAL = 6
 local DELIVERY_TASKS_EXPANSION = 9
+local KILL_SAVE_INTERVAL = 5
 
 -- Weekday constants (Lua: 1=Sunday, 2=Monday, ..., 7=Saturday)
 local DEFAULT_RESET_DAY = 1 -- Sunday
@@ -83,6 +84,16 @@ local function syncSoulsealBalance(player, data)
 	local balance = player:getSoulsealsPoints()
 	data.soulsealsPoints = balance
 	return balance
+end
+
+local function shouldPersistKillProgress(previousKills, currentKills, completedNow)
+	if completedNow then
+		return true
+	end
+	if KILL_SAVE_INTERVAL <= 1 then
+		return true
+	end
+	return math.floor(previousKills / KILL_SAVE_INTERVAL) ~= math.floor(currentKills / KILL_SAVE_INTERVAL)
 end
 
 local function getRewardMultiplier(completedTasks)
@@ -491,15 +502,30 @@ function WeeklyTasks.onKill(player, raceId)
 
 	local updated = false
 	local matchedTask = false
+	local shouldSave = false
+	local shouldFullSync = false
+	local killUpdates = {}
 	local killMultiplier = TaskBoard.getWeeklyKillMultiplier(player)
 
 	-- Any creature counter
 	local oldAnyCreatureCurrent = data.anyCreatureCurrent or 0
-	data.anyCreatureCurrent = math.min(oldAnyCreatureCurrent + killMultiplier, data.anyCreatureTotal or 0)
+	local anyCreatureTotal = data.anyCreatureTotal or 0
+	data.anyCreatureCurrent = math.min(oldAnyCreatureCurrent + killMultiplier, anyCreatureTotal)
 	updated = data.anyCreatureCurrent ~= oldAnyCreatureCurrent
-	if oldAnyCreatureCurrent < data.anyCreatureTotal and data.anyCreatureCurrent >= data.anyCreatureTotal then
+	local anyCompletedNow = oldAnyCreatureCurrent < anyCreatureTotal and data.anyCreatureCurrent >= anyCreatureTotal
+	if updated then
+		shouldSave = shouldSave or shouldPersistKillProgress(oldAnyCreatureCurrent, data.anyCreatureCurrent, anyCompletedNow)
+		killUpdates[#killUpdates + 1] = {
+			raceId = 0,
+			current = data.anyCreatureCurrent,
+			total = anyCreatureTotal,
+			completed = data.anyCreatureCurrent >= anyCreatureTotal,
+		}
+	end
+	if anyCompletedNow then
 		data.completedKillTasks = (data.completedKillTasks or 0) + 1
 		matchedTask = true
+		shouldFullSync = true
 		if data.killTaskRewardExp > 0 then
 			player:addExperience(data.killTaskRewardExp, true)
 		end
@@ -508,13 +534,23 @@ function WeeklyTasks.onKill(player, raceId)
 	-- Check kill tasks
 	for _, kt in ipairs(data.killTasks) do
 		if kt.raceId == raceId and kt.kills < kt.required then
+			local previousKills = kt.kills or 0
 			kt.kills = math.min(kt.kills + killMultiplier, kt.required)
 			updated = true
 			matchedTask = true
+			local completedNow = previousKills < kt.required and kt.kills >= kt.required
+			shouldSave = shouldSave or shouldPersistKillProgress(previousKills, kt.kills, completedNow)
+			killUpdates[#killUpdates + 1] = {
+				raceId = kt.raceId,
+				current = kt.kills,
+				total = kt.required,
+				completed = kt.kills >= kt.required,
+			}
 
-			if kt.kills >= kt.required then
+			if completedNow then
 				data.completedKillTasks = (data.completedKillTasks or 0) + 1
 				kt.grade = 1 -- Mark completed
+				shouldFullSync = true
 				-- Give kill exp
 				if data.killTaskRewardExp > 0 then
 					player:addExperience(data.killTaskRewardExp, true)
@@ -537,8 +573,17 @@ function WeeklyTasks.onKill(player, raceId)
 	end
 
 	if updated then
-		saveWeeklyData(playerGuid)
-		WeeklyTasks.sendWeeklyData(player)
+		if shouldSave or shouldFullSync then
+			saveWeeklyData(playerGuid)
+		end
+		if protocol and protocol.sendWeeklyKillUpdate then
+			for _, update in ipairs(killUpdates) do
+				protocol.sendWeeklyKillUpdate(player, update.raceId, update.current, update.total, update.completed)
+			end
+		end
+		if shouldFullSync then
+			WeeklyTasks.sendWeeklyData(player)
+		end
 	end
 
 	return updated

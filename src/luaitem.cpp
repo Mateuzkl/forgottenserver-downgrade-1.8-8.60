@@ -14,6 +14,19 @@ extern Game g_game;
 namespace {
 using namespace Lua;
 
+void refreshClientItemState(Item* item, itemAttrTypes attribute)
+{
+	if (!item) {
+		return;
+	}
+
+	// Decay state controls server-side scheduling; charges and duration are the
+	// mutable item state serialized for the client.
+	if (attribute == ITEM_ATTRIBUTE_CHARGES || attribute == ITEM_ATTRIBUTE_DURATION) {
+		g_game.refreshItem(item);
+	}
+}
+
 // Item
 int luaItemCreate(lua_State* L)
 {
@@ -532,6 +545,7 @@ int luaItemSetAttribute(lua_State* L)
 				item->setDecaying(DECAYING_PENDING);
 				item->setDuration(getInteger<int32_t>(L, 3));
 				g_game.startDecay(item);
+				refreshClientItemState(item, attribute);
 				pushBoolean(L, true);
 				return 1;
 			}
@@ -544,6 +558,7 @@ int luaItemSetAttribute(lua_State* L)
 		}
 
 		item->setIntAttr(attribute, getInteger<int64_t>(L, 3));
+		refreshClientItemState(item, attribute);
 		pushBoolean(L, true);
 	} else if (ItemAttributes::isStrAttrType(attribute)) {
 		item->setStrAttr(attribute, getString(L, 3));
@@ -580,6 +595,7 @@ int luaItemRemoveAttribute(lua_State* L)
 				g_game.stopDecay(item);
 			}
 			item->removeAttribute(attribute);
+			refreshClientItemState(item, attribute);
 		} else {
 			reportErrorFunc(L, "Attempt to erase protected key \"duration timestamp\"");
 		}

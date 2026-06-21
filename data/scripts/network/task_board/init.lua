@@ -1,6 +1,7 @@
-﻿-- Task Board Network Module — Main Entry Point
+-- Task Board Network Module — Main Entry Point
 -- Wires together protocol, bounty, weekly, shop, and resource balance modules.
--- Opcodes: 0x5F (client->server), 0x53/0xBA/0xEE (server->client via protocol module).
+-- Opcodes: 0x5F (client->server), 0x53/0xEE (Task Board server->client).
+-- Task Hunting is loaded separately and owns 0xBA/0xBB.
 --
 -- Uses native bytes only. No JSON, no extended opcodes.
 -- Only sends modern bytes to AstraClient (IsAstraClient guard in protocol layer).
@@ -58,6 +59,10 @@ if soulsealsEnabled then
 end
 
 local resourceBalance = TaskBoard
+
+-- Global-like Task Hunting uses its own native protocol and state. It must be
+-- loaded after TaskBoard so its resource type is available to the sync path.
+local taskHunting = dofile("data/scripts/network/task_hunting/task_hunting.lua")
 
 -- ============================================
 -- LOAD CONFIG DATA
@@ -167,6 +172,9 @@ function taskBoardActionHandler.onReceive(player, msg)
 	elseif option == 18 then -- Open Preferred List
 		if not bountyEnabled then return end
 		if bounty then bounty.sendBountyData(player, true) end
+	elseif option == 19 then -- SoulSeal fight (U16 raceId)
+		if not soulsealsEnabled then return end
+		if soulseal and soulseal.startFight then soulseal.startFight(player, payload.raceId) end
 	end
 end
 
@@ -183,6 +191,7 @@ TaskBoardWeeklyTasks = weekly
 TaskBoardHuntingShop = shop
 TaskBoardSoulSealHandler = soulseal
 TaskBoardResourceBalance = resourceBalance
+_TASK_HUNTING_MODULE = taskHunting
 
 -- Also expose for other scripts
 if bounty then

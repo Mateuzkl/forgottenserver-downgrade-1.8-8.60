@@ -224,6 +224,7 @@ public:
 	void addThing(int32_t index, Thing* thing) override;
 
 	void updateThing(Thing* thing, uint16_t itemId, uint32_t count) override final;
+	void refreshThing(Thing* thing) override final;
 	void replaceThing(uint32_t index, Thing* thing) override final;
 
 	void removeThing(Thing* thing, uint32_t count) override final;

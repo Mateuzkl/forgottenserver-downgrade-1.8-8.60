@@ -2831,7 +2831,7 @@ void Player::onThink(uint32_t interval)
 	}
 
 	const int64_t timeNow = OTSYS_TIME();
-	if (client && !client->isOTCv8 && getIP() != 0 && getBoolean(ConfigManager::DLL_CHECK_KICK)) {
+	if (client && !client->isOTC && !client->isAstraClient && getIP() != 0 && getBoolean(ConfigManager::DLL_CHECK_KICK)) {
 		int64_t checkInterval = getInteger(ConfigManager::DLL_CHECK_KICK_TIME) * 1000;
 		if (timeNow - lastDllCheck >= checkInterval) {
 			lastDllCheck = timeNow;
@@ -4323,6 +4323,23 @@ void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 	sendInventoryItem(static_cast<slots_t>(index), item);
 
 	// event methods
+	onUpdateInventoryItem(item, item);
+	scheduleAstraPlayerInventorySnapshot();
+}
+
+void Player::refreshThing(Thing* thing)
+{
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item) {
+		return;
+	}
+
+	const int32_t index = getThingIndex(thing);
+	if (index == -1) {
+		return;
+	}
+
+	sendInventoryItem(static_cast<slots_t>(index), item);
 	onUpdateInventoryItem(item, item);
 	scheduleAstraPlayerInventorySnapshot();
 }

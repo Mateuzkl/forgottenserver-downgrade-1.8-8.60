@@ -2553,6 +2553,23 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 	return nullptr;
 }
 
+void Game::refreshItem(Item* item)
+{
+	if (!item || item->isRemoved()) {
+		return;
+	}
+
+	Cylinder* cylinder = item->getParent();
+	if (!cylinder || cylinder == VirtualCylinder::virtualCylinder || cylinder->getThingIndex(item) == -1) {
+		return;
+	}
+
+	// Refreshing notifies the owning player/container or map spectators without
+	// writing the subtype back into the item. That preserves removed attributes
+	// such as charges while still serializing current Astra item state.
+	cylinder->refreshThing(item);
+}
+
 ReturnValue Game::internalTeleport(Thing* thing, const Position& newPos, bool pushMove /* = true*/,
                                    uint32_t flags /*= 0*/,
                                    MagicEffectClasses magicEffect /*= CONST_ME_TELEPORT*/)

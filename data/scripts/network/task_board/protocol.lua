@@ -1,6 +1,6 @@
 -- Task Board Protocol: byte-level serialization following Crystal Server/AstraClient wire format.
 -- Opcodes: 0x53 (server->client, subtype byte), 0x5F (client->server, action byte),
---           0xBA (soulseals), 0xEE (resource balance).
+--           0xEE (resource balance). Task Hunting owns 0xBA/0xBB.
 -- All send functions use NetworkMessage. All receive handlers use PacketHandler + NetworkGuard.
 
 local TaskBoardProtocol = {}
@@ -9,15 +9,23 @@ local TaskBoardProtocol = {}
 local RESOURCE_TASK_HUNTING = TaskBoard.Resources.TASK_HUNTING
 local RESOURCE_BOUNTY_POINTS = TaskBoard.Resources.BOUNTY_POINTS
 local RESOURCE_SOULSEALS_POINTS = TaskBoard.Resources.SOULSEALS_POINTS
+-- AstraClient modules/gamelib/const.lua: ResourceTypes.BOUNTY_REROLL_POINTS = 95.
+-- This value intentionally equals the C2S Task Board opcode byte, but it is
+-- carried inside the unrelated S2C 0xEE resource-balance packet.
+local RESOURCE_BOUNTY_REROLL_POINTS_RAW_VALUE = 0x5F
 
 TaskBoardProtocol.RESOURCE_TASK_HUNTING = RESOURCE_TASK_HUNTING
 TaskBoardProtocol.RESOURCE_BOUNTY_POINTS = RESOURCE_BOUNTY_POINTS
 TaskBoardProtocol.RESOURCE_SOULSEALS_POINTS = RESOURCE_SOULSEALS_POINTS
+TaskBoardProtocol.RESOURCE_BOUNTY_REROLL_POINTS = RESOURCE_BOUNTY_REROLL_POINTS_RAW_VALUE
 
 -- Task board option sub-types (opcode 0x53 first byte after opcode)
 local TASK_BOARD_BOUNTY = 0x00
 local TASK_BOARD_WEEKLY = 0x01
 local TASK_BOARD_HUNT_SHOP = 0x02
+local TASK_BOARD_SOUL_SEALS = 0x03
+local TASK_BOARD_BOUNTY_KILL_UPDATE = 0x04
+local TASK_BOARD_WEEKLY_KILL_UPDATE = 0x05
 
 -- Client action options (opcode 0x5F first byte)
 local ACTION_OPEN_BOUNTY = 0
@@ -39,6 +47,7 @@ local ACTION_ASSIGN_PREFERRED = 15
 local ACTION_ASSIGN_UNWANTED = 16
 local ACTION_OPEN_SOULSEAL = 17
 local ACTION_OPEN_PREFERRED = 18
+local ACTION_SOULSEAL_FIGHT = 19
 
 TaskBoardProtocol.ACTION_OPEN_BOUNTY = ACTION_OPEN_BOUNTY
 TaskBoardProtocol.ACTION_OPEN_WEEKLY = ACTION_OPEN_WEEKLY
@@ -59,9 +68,16 @@ TaskBoardProtocol.ACTION_ASSIGN_PREFERRED = ACTION_ASSIGN_PREFERRED
 TaskBoardProtocol.ACTION_ASSIGN_UNWANTED = ACTION_ASSIGN_UNWANTED
 TaskBoardProtocol.ACTION_OPEN_SOULSEAL = ACTION_OPEN_SOULSEAL
 TaskBoardProtocol.ACTION_OPEN_PREFERRED = ACTION_OPEN_PREFERRED
+TaskBoardProtocol.ACTION_SOULSEAL_FIGHT = ACTION_SOULSEAL_FIGHT
+
+TaskBoardProtocol.TASK_BOARD_BOUNTY = TASK_BOARD_BOUNTY
+TaskBoardProtocol.TASK_BOARD_WEEKLY = TASK_BOARD_WEEKLY
+TaskBoardProtocol.TASK_BOARD_HUNT_SHOP = TASK_BOARD_HUNT_SHOP
+TaskBoardProtocol.TASK_BOARD_SOUL_SEALS = TASK_BOARD_SOUL_SEALS
+TaskBoardProtocol.TASK_BOARD_BOUNTY_KILL_UPDATE = TASK_BOARD_BOUNTY_KILL_UPDATE
+TaskBoardProtocol.TASK_BOARD_WEEKLY_KILL_UPDATE = TASK_BOARD_WEEKLY_KILL_UPDATE
 
 local OPCODE_TASK_BOARD_SEND = 0x53
-local OPCODE_SOUL_SEALS = 0xBA
 local OPCODE_RESOURCE_BALANCE = 0xEE
 local BOUNTY_EXTENSION_MARKER = 0x5441534B424F4152
 
@@ -133,6 +149,29 @@ end
 
 function TaskBoardProtocol.sendResourceBalance(player, resourceType, amount)
 	return TaskBoard.sendResourceBalance(player, resourceType, amount)
+end
+
+local function sendKillUpdate(player, subType, raceId, currentKills, totalKills, isCompleted)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_TASK_BOARD_SEND)
+	out:addByte(subType)
+	out:addU16(clamp(raceId or 0, 0, 0xFFFF))
+	out:addU16(clamp(currentKills or 0, 0, 0xFFFF))
+	out:addU16(clamp(totalKills or 0, 0, 0xFFFF))
+	out:addByte(isCompleted and 1 or 0)
+	return out:sendToPlayer(player)
+end
+
+function TaskBoardProtocol.sendBountyKillUpdate(player, raceId, currentKills, totalKills, isCompleted)
+	return sendKillUpdate(player, TASK_BOARD_BOUNTY_KILL_UPDATE, raceId, currentKills, totalKills, isCompleted)
+end
+
+function TaskBoardProtocol.sendWeeklyKillUpdate(player, raceId, currentKills, totalKills, isCompleted)
+	return sendKillUpdate(player, TASK_BOARD_WEEKLY_KILL_UPDATE, raceId, currentKills, totalKills, isCompleted)
 end
 
 -- ============================================
@@ -316,7 +355,7 @@ function TaskBoardProtocol.sendHuntingTaskShopData(player, offers, taskHuntingPo
 end
 
 -- ============================================
--- SOUL SEALS DATA (opcode 0xBA)
+-- SOUL SEALS DATA (opcode 0x53, subType 0x03)
 -- ============================================
 
 function TaskBoardProtocol.sendSoulSealsData(player, entries, balance)
@@ -325,7 +364,8 @@ function TaskBoardProtocol.sendSoulSealsData(player, entries, balance)
 	end
 
 	local out = NetworkMessage(player)
-	out:addByte(OPCODE_SOUL_SEALS)
+	out:addByte(OPCODE_TASK_BOARD_SEND)
+	out:addByte(TASK_BOARD_SOUL_SEALS)
 
 	out:addU32(clamp(balance or 0, 0, 0xFFFFFFFF))
 
@@ -416,6 +456,12 @@ function TaskBoardProtocol.parseTaskBoardAction(msg)
 		payload.slot = NetworkGuard.readU16(msg)
 		payload.raceId = NetworkGuard.readU16(msg)
 		if payload.slot == nil or payload.raceId == nil then return nil end
+
+	elseif option == ACTION_SOULSEAL_FIGHT then
+		-- payload: raceId U16
+		if (msg:len() - msg:tell()) < 2 then return nil end
+		payload.raceId = NetworkGuard.readU16(msg)
+		if payload.raceId == nil then return nil end
 	end
 
 	return payload

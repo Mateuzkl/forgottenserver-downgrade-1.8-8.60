@@ -26,18 +26,26 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0x62: // native bosstiary slots
 		case 0x73: // native bosstiary window
 		case 0xA7: // custom fight mode sync
-		case 0xBB: // native hunting task slot data
 		case 0xD1: // custom hunt analyzer
 		case 0xDB: // custom market
 		case 0xEB: // imbuing window
 		case 0xEC: // close imbuing
 		case 0xED: // custom prey
-		case 0xEE: // resource balance
 		case 0xE8: // native prey slot data
 		case 0xE9: // native prey prices
 		case 0xF0: // custom quest log
 		case 0xF1: // custom quest line
 		case 0xFD: // custom store
+			return true;
+		default:
+			return false;
+	}
+}
+
+bool isOtcOrAstraLuaOpcode(uint8_t opcode)
+{
+	switch (opcode) {
+		case 0xEE: // resource balance
 			return true;
 		default:
 			return false;
@@ -52,7 +60,8 @@ bool isAstraOnlyLuaOpcode(uint8_t opcode)
 		case 0x53: // task board data
 		case 0x9B: // blessing window
 		case 0x9C: // blessing status
-		case 0xBA: // soulseal data
+		case 0xBA: // native hunting task base data
+		case 0xBB: // native hunting task slot data
 		case 0xC0: // managed quick-loot containers
 		case 0xC6: // custom item values
 		case 0xC7: // custom item details
@@ -72,6 +81,9 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
 	if (isAstraOnlyLuaOpcode(opcode)) {
 		return player.isAstraClient();
+	}
+	if (isOtcOrAstraLuaOpcode(opcode)) {
+		return player.isOTC() || player.isAstraClient();
 	}
 	return !isOtcOnlyLuaOpcode(opcode) || player.isOTC();
 }

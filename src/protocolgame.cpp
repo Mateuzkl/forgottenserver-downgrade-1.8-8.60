@@ -3218,7 +3218,9 @@ void ProtocolGame::sendDllCheck()
 		return;
 	}
 
-	if (isOTC) {
+	// 0xBB is Task Hunting data for Astra. The legacy DLL check uses the same
+	// opcode only for the classic 8.60 client and must never reach Astra.
+	if (isOTC || isAstraClient) {
 		return;
 	}
 

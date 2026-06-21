@@ -43,6 +43,9 @@ local MAX_CREATURES = 3
 local MAX_PREFERRED_SLOTS = 5
 local MAX_REROLL_TOKENS = 10
 local INITIAL_REROLL_TOKENS = 3
+local BOUNTY_REWARD_REROLL_TOKENS = 1
+local KILL_SAVE_INTERVAL = 5
+local ITEM_BOUNTY_TALISMAN = 51978
 local FREE_REROLL_COOLDOWN = 20 * 60 * 60 -- 20 hours in seconds
 local PREFERRED_SLOT_COSTS = { 0, 300, 600, 900, 1200 }
 local PREFERRED_CLEAR_COST = 10
@@ -81,6 +84,43 @@ local function syncBountyBalance(player, data)
 	local balance = player:getBountyPoints()
 	data.bountyPoints = balance
 	return balance
+end
+
+local function sendRerollBalance(player, data)
+	if protocol and protocol.RESOURCE_BOUNTY_REROLL_POINTS then
+		protocol.sendResourceBalance(player, protocol.RESOURCE_BOUNTY_REROLL_POINTS, data.rerollTokens or 0)
+	end
+end
+
+local function sendBountyBalances(player, data)
+	if not protocol then
+		return
+	end
+
+	syncBountyBalance(player, data)
+	if protocol.RESOURCE_BOUNTY_POINTS then
+		protocol.sendResourceBalance(player, protocol.RESOURCE_BOUNTY_POINTS, data.bountyPoints or 0)
+	end
+	sendRerollBalance(player, data)
+end
+
+local function shouldPersistKillProgress(previousKills, currentKills, completedNow)
+	if completedNow then
+		return true
+	end
+	if KILL_SAVE_INTERVAL <= 1 then
+		return true
+	end
+	return math.floor(previousKills / KILL_SAVE_INTERVAL) ~= math.floor(currentKills / KILL_SAVE_INTERVAL)
+end
+
+local function isBountyTalismanEquipped(player)
+	if not player or not player.getInventoryItem then
+		return false
+	end
+
+	local item = player:getInventoryItem(CONST_SLOT_AMMO)
+	return item and item:getId() == ITEM_BOUNTY_TALISMAN
 end
 
 -- ============================================
@@ -468,6 +508,22 @@ function BountyTasks.openBounty(player)
 	return BountyTasks.sendBountyData(player)
 end
 
+function BountyTasks.onLogin(player)
+	local playerGuid = getPlayerGuid(player)
+	local data = loadBountyData(playerGuid)
+
+	sendBountyBalances(player, data)
+
+	-- Do not generate a new selection list on login just for the tracker.
+	-- Only push live state that already exists, so Kill Tracker can show it
+	-- without requiring the player to reopen the Task Hunt window.
+	if data.state == STATE_ACTIVE or data.state == STATE_COMPLETED then
+		return BountyTasks.sendBountyData(player)
+	end
+
+	return true
+end
+
 function BountyTasks.changeDifficulty(player, difficulty)
 	if difficulty == nil or difficulty < 0 or difficulty > 3 then
 		return false
@@ -515,6 +571,7 @@ function BountyTasks.rerollTasks(player)
 	data.creaturesList = generateCreatureList(data)
 
 	saveBountyData(playerGuid)
+	sendRerollBalance(player, data)
 	return BountyTasks.openBounty(player)
 end
 
@@ -528,6 +585,7 @@ function BountyTasks.claimDailyReroll(player)
 		data.rerollMode = REROLL_TIMER_RUNNING
 		data.rerollTokens = math.min(data.rerollTokens + 1, MAX_REROLL_TOKENS)
 		saveBountyData(playerGuid)
+		sendRerollBalance(player, data)
 		return BountyTasks.sendBountyData(player)
 	end
 
@@ -587,6 +645,9 @@ function BountyTasks.claimReward(player)
 	-- Give rewards
 	local rewardExp = active.rewardExp or 0
 	local rewardBountyPts = active.rewardBountyPoints or 0
+	local rerollsBefore = data.rerollTokens or 0
+	local rerollsAfter = math.min(rerollsBefore + BOUNTY_REWARD_REROLL_TOKENS, MAX_REROLL_TOKENS)
+	local rewardRerolls = rerollsAfter - rerollsBefore
 
 	if rewardExp > 0 then
 		player:addExperience(rewardExp, true)
@@ -594,10 +655,20 @@ function BountyTasks.claimReward(player)
 	if rewardBountyPts > 0 then
 		player:addBountyPoints(rewardBountyPts)
 	end
+	data.rerollTokens = rerollsAfter
+	if data.rerollTokens >= MAX_REROLL_TOKENS then
+		data.rerollMode = REROLL_LIMIT_REACHED
+	elseif data.rerollTokens > 0 and data.rerollMode == REROLL_LIMIT_REACHED then
+		data.rerollMode = REROLL_TIMER_RUNNING
+	end
 	data.bountyPoints = player:getBountyPoints()
 
 	player:sendTextMessage(MESSAGE_STATUS_DEFAULT, string.format(
-		"You have claimed your bounty task reward! (+%d exp, +%d bounty points)", rewardExp, rewardBountyPts))
+		"You have claimed your bounty task reward! (+%d exp, +%d bounty points, +%d reroll token%s)",
+		rewardExp,
+		rewardBountyPts,
+		rewardRerolls,
+		rewardRerolls == 1 and "" or "s"))
 
 	-- Reset state
 	data.state = STATE_NONE
@@ -606,7 +677,7 @@ function BountyTasks.claimReward(player)
 	saveBountyData(playerGuid)
 
 	-- Notify client of new bounty points
-	protocol.sendResourceBalance(player, protocol.RESOURCE_BOUNTY_POINTS, player:getBountyPoints())
+	sendBountyBalances(player, data)
 
 	-- Generate new creature list immediately (like Crystal Server)
 	BountyTasks.openBounty(player)
@@ -623,18 +694,30 @@ function BountyTasks.onKill(player, raceId)
 	if data.activeTask.raceId ~= raceId then return false end
 
 	local killMultiplier = TaskBoard.getBountyKillMultiplier(player)
-	data.activeTask.currentKills = math.min(
-		(data.activeTask.currentKills or 0) + killMultiplier,
-		data.activeTask.requiredKills
-	)
+	local previousKills = data.activeTask.currentKills or 0
+	local requiredKills = data.activeTask.requiredKills or 0
+	local currentKills = math.min(previousKills + killMultiplier, requiredKills)
+	if currentKills <= previousKills then
+		return false
+	end
 
-	if data.activeTask.currentKills >= data.activeTask.requiredKills then
+	data.activeTask.currentKills = currentKills
+
+	local completedNow = previousKills < requiredKills and currentKills >= requiredKills
+	if completedNow then
 		data.activeTask.claimState = CLAIM_REWARD_NO_CLICK
 		data.state = STATE_COMPLETED
 	end
 
-	saveBountyData(playerGuid)
-	BountyTasks.sendBountyData(player)
+	if shouldPersistKillProgress(previousKills, currentKills, completedNow) then
+		saveBountyData(playerGuid)
+	end
+
+	if protocol and protocol.sendBountyKillUpdate then
+		protocol.sendBountyKillUpdate(player, raceId, currentKills, requiredKills, completedNow)
+	elseif completedNow then
+		BountyTasks.sendBountyData(player)
+	end
 	return true
 end
 
@@ -805,6 +888,9 @@ function BountyTasks.getTalismanBonus(player, raceId, pathIndex)
 	if not player or pathIndex == nil or pathIndex < 0 or pathIndex > 3 or raceId <= 0 then
 		return 0
 	end
+	if not isBountyTalismanEquipped(player) then
+		return 0
+	end
 
 	local data = loadBountyData(getPlayerGuid(player))
 	local activeTask = data.activeTask
@@ -859,7 +945,7 @@ end
 function BountyTasks.sendBountyData(player, includeAvailableCreatures)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadBountyData(playerGuid)
-	syncBountyBalance(player, data)
+	sendBountyBalances(player, data)
 
 	-- Build creature list for protocol
 	local creatures = {}
