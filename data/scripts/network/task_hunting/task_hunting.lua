@@ -659,6 +659,9 @@ local function rerollReward(slotData)
 	elseif chance <= 45 then
 		slotData.rarity = 3
 	else
+		-- For rarity 2 (maximum = 45) this branch is intentionally unreachable:
+		-- the random range is fully covered above, guaranteeing the grade always
+		-- improves. It only applies to rarity 1 (maximum = 70/100).
 		slotData.rarity = 2
 	end
 end
