@@ -337,6 +337,12 @@ public:
 	Item* transformItem(Item* item, uint16_t newId, int32_t newCount = -1);
 
 	/**
+	 * Re-sends an item after one of its runtime attributes changes without a
+	 * transform (for example, charges or duration changed from Lua).
+	 */
+	void refreshItem(Item* item);
+
+	/**
 	 * Teleports an object to another position
 	 * \param thing is the object to teleport
 	 * \param newPos is the new position
