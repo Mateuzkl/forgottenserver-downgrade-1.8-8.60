@@ -435,7 +435,7 @@ local function writeThingValues(out, values)
 		local value = values[index] or {}
 		local thingId = tonumber(value.thingId) or 0
 		writeU16(out, thingId)
-		writeString(out, value.thingName)
+		writeString(out, value.thingName or "")
 	end
 end
 
