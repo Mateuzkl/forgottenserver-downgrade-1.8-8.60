@@ -24,6 +24,10 @@ local function getResourceBalance()
 	return TaskBoardResourceBalance
 end
 
+local function getTaskHuntingModule()
+	return _TASK_HUNTING_MODULE
+end
+
 -- ============================================
 -- ON KILL
 -- ============================================
@@ -64,6 +68,12 @@ function taskBoardKill.onKill(player, target, lastHit)
 		end
 	end
 
+	-- Global-like Task Hunting tracks its own slots independently of Bounty.
+	local taskHunting = getTaskHuntingModule()
+	if taskHunting and taskHunting.onKill then
+		taskHunting.onKill(player, raceId)
+	end
+
 	return true
 end
 
@@ -89,7 +99,14 @@ function taskBoardLogin.onLogin(player)
 		end
 	end
 
-	-- Send resource balances (use GUID to re-acquire player after delay)
+	-- Send 0xBA and every 0xBB slot in the same login flow. Do not defer this
+	-- path: the Astra Hunting Task UI may be opened right after login.
+	local taskHunting = getTaskHuntingModule()
+	if taskHunting and taskHunting.onLogin then
+		taskHunting.onLogin(player)
+	end
+
+	-- Task Board balances remain separate from the global Task Hunting sync.
 	local rb = getResourceBalance()
 	if rb then
 		addEvent(function()
@@ -98,6 +115,16 @@ function taskBoardLogin.onLogin(player)
 				rb.sendAll(p)
 			end
 		end, 1000) -- delay 1s for client to be ready
+	end
+
+	if bountyEnabled then
+		addEvent(function()
+			local p = Player(playerGuid)
+			local bounty = getBountyModule()
+			if p and bounty and bounty.onLogin then
+				bounty.onLogin(p)
+			end
+		end, 1100)
 	end
 
 	return true
@@ -113,6 +140,11 @@ taskBoardLogin:register()
 local taskBoardLogout = CreatureEvent("TaskBoardLogout")
 
 function taskBoardLogout.onLogout(player)
+	local taskHunting = getTaskHuntingModule()
+	if taskHunting and taskHunting.onLogout then
+		taskHunting.onLogout(player)
+	end
+
 	if bountyEnabled then
 		local bounty = getBountyModule()
 		if bounty and bounty.saveOnLogout then

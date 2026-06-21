@@ -2831,7 +2831,7 @@ void Player::onThink(uint32_t interval)
 	}
 
 	const int64_t timeNow = OTSYS_TIME();
-	if (client && !client->isOTCv8 && getIP() != 0 && getBoolean(ConfigManager::DLL_CHECK_KICK)) {
+	if (client && !client->isOTCv8 && !client->isAstraClient && getIP() != 0 && getBoolean(ConfigManager::DLL_CHECK_KICK)) {
 		int64_t checkInterval = getInteger(ConfigManager::DLL_CHECK_KICK_TIME) * 1000;
 		if (timeNow - lastDllCheck >= checkInterval) {
 			lastDllCheck = timeNow;
