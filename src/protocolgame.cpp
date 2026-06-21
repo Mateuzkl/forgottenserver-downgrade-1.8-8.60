@@ -4634,6 +4634,7 @@ void ProtocolGame::sendFeatures()
 		features[GameFeature::PlayerFamiliars] = true;
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
+		features[GameFeature::AstraOutfitStoreMode] = true;
 	}
 	if (canSendAstraItemState()) {
 		features[GameFeature::DisplayItemDuration] = true;
