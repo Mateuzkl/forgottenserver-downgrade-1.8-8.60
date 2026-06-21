@@ -47,6 +47,7 @@ local FREE_REROLL_SECONDS = 20 * 60 * 60
 local REROLL_PRICE_PER_LEVEL = 200
 local WILDCARD_SELECT_PRICE = 5
 local WILDCARD_REWARD_REROLL_PRICE = 1
+local KILL_SAVE_INTERVAL = 5
 local RESOURCE_BANK = 0
 local RESOURCE_INVENTORY_GOLD = 1
 local RESOURCE_PREY_WILDCARDS = 10
@@ -667,6 +668,16 @@ local function sendFailure(player, message)
 	return false
 end
 
+local function shouldPersistKillProgress(previousKills, currentKills, completedNow)
+	if completedNow then
+		return true
+	end
+	if KILL_SAVE_INTERVAL <= 1 then
+		return true
+	end
+	return math.floor(previousKills / KILL_SAVE_INTERVAL) ~= math.floor(currentKills / KILL_SAVE_INTERVAL)
+end
+
 local function handleAction(player, slot, action, wantsUpgrade, raceId)
 	if slot < 0 or slot >= SLOT_COUNT then
 		return sendFailure(player, "Invalid slot.")
@@ -807,12 +818,16 @@ function TaskHunting.onKill(player, raceId)
 				return false
 			end
 			local requiredKills = slotData.upgraded and option.secondKills or option.firstKills
-			slotData.currentKills = math.min(requiredKills, slotData.currentKills + 1)
-			if slotData.currentKills >= requiredKills then
+			local previousKills = slotData.currentKills or 0
+			slotData.currentKills = math.min(requiredKills, previousKills + 1)
+			local completedNow = previousKills < requiredKills and slotData.currentKills >= requiredKills
+			if completedNow then
 				slotData.state = STATE_REDEEM
 				player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "Your Hunting Task is complete. Claim its reward in the Hunting Task window.")
 			end
-			saveSlot(player, slot)
+			if shouldPersistKillProgress(previousKills, slotData.currentKills, completedNow) then
+				saveSlot(player, slot)
+			end
 			TaskHunting.sendSlotData(player, slot)
 			return true
 		end

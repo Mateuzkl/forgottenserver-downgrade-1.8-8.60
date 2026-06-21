@@ -44,6 +44,7 @@ local MAX_PREFERRED_SLOTS = 5
 local MAX_REROLL_TOKENS = 10
 local INITIAL_REROLL_TOKENS = 3
 local BOUNTY_REWARD_REROLL_TOKENS = 1
+local KILL_SAVE_INTERVAL = 5
 local FREE_REROLL_COOLDOWN = 20 * 60 * 60 -- 20 hours in seconds
 local PREFERRED_SLOT_COSTS = { 0, 300, 600, 900, 1200 }
 local PREFERRED_CLEAR_COST = 10
@@ -100,6 +101,16 @@ local function sendBountyBalances(player, data)
 		protocol.sendResourceBalance(player, protocol.RESOURCE_BOUNTY_POINTS, data.bountyPoints or 0)
 	end
 	sendRerollBalance(player, data)
+end
+
+local function shouldPersistKillProgress(previousKills, currentKills, completedNow)
+	if completedNow then
+		return true
+	end
+	if KILL_SAVE_INTERVAL <= 1 then
+		return true
+	end
+	return math.floor(previousKills / KILL_SAVE_INTERVAL) ~= math.floor(currentKills / KILL_SAVE_INTERVAL)
 end
 
 -- ============================================
@@ -673,18 +684,30 @@ function BountyTasks.onKill(player, raceId)
 	if data.activeTask.raceId ~= raceId then return false end
 
 	local killMultiplier = TaskBoard.getBountyKillMultiplier(player)
-	data.activeTask.currentKills = math.min(
-		(data.activeTask.currentKills or 0) + killMultiplier,
-		data.activeTask.requiredKills
-	)
+	local previousKills = data.activeTask.currentKills or 0
+	local requiredKills = data.activeTask.requiredKills or 0
+	local currentKills = math.min(previousKills + killMultiplier, requiredKills)
+	if currentKills <= previousKills then
+		return false
+	end
 
-	if data.activeTask.currentKills >= data.activeTask.requiredKills then
+	data.activeTask.currentKills = currentKills
+
+	local completedNow = previousKills < requiredKills and currentKills >= requiredKills
+	if completedNow then
 		data.activeTask.claimState = CLAIM_REWARD_NO_CLICK
 		data.state = STATE_COMPLETED
 	end
 
-	saveBountyData(playerGuid)
-	BountyTasks.sendBountyData(player)
+	if shouldPersistKillProgress(previousKills, currentKills, completedNow) then
+		saveBountyData(playerGuid)
+	end
+
+	if completedNow then
+		BountyTasks.sendBountyData(player)
+	elseif protocol and protocol.sendBountyKillUpdate then
+		protocol.sendBountyKillUpdate(player, raceId, currentKills, requiredKills, false)
+	end
 	return true
 end
 

@@ -8,7 +8,7 @@ Hunting Task packet shapes consumed by AstraClient.
 | Server -> client | `0xBA` | Task Hunting base data: creature difficulty, rewards and current prices. |
 | Server -> client | `0xBB` | One Task Hunting slot state. Login sends all three immediately after `0xBA`. |
 | Client -> server | `0xBA` | Task Hunting action: `slot(U8), action(U8), upgraded(U8), raceId(U16)`. |
-| Server -> client | `0x53` | Custom Task Board data. Subtypes: `0x00` Bounty, `0x01` Weekly, `0x02` Hunting Shop, `0x03` SoulSeal. |
+| Server -> client | `0x53` | Custom Task Board data. Subtypes: `0x00` Bounty, `0x01` Weekly, `0x02` Hunting Shop, `0x03` SoulSeal, `0x04` Bounty kill update, `0x05` Weekly kill update. |
 | Client -> server | `0x5F` | Custom Task Board action. SoulSeal fight is action `19` with `raceId(U16)`. |
 | Server -> client | `0xEE` | Resource balance. |
 

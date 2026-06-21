@@ -24,6 +24,8 @@ local TASK_BOARD_BOUNTY = 0x00
 local TASK_BOARD_WEEKLY = 0x01
 local TASK_BOARD_HUNT_SHOP = 0x02
 local TASK_BOARD_SOUL_SEALS = 0x03
+local TASK_BOARD_BOUNTY_KILL_UPDATE = 0x04
+local TASK_BOARD_WEEKLY_KILL_UPDATE = 0x05
 
 -- Client action options (opcode 0x5F first byte)
 local ACTION_OPEN_BOUNTY = 0
@@ -72,6 +74,8 @@ TaskBoardProtocol.TASK_BOARD_BOUNTY = TASK_BOARD_BOUNTY
 TaskBoardProtocol.TASK_BOARD_WEEKLY = TASK_BOARD_WEEKLY
 TaskBoardProtocol.TASK_BOARD_HUNT_SHOP = TASK_BOARD_HUNT_SHOP
 TaskBoardProtocol.TASK_BOARD_SOUL_SEALS = TASK_BOARD_SOUL_SEALS
+TaskBoardProtocol.TASK_BOARD_BOUNTY_KILL_UPDATE = TASK_BOARD_BOUNTY_KILL_UPDATE
+TaskBoardProtocol.TASK_BOARD_WEEKLY_KILL_UPDATE = TASK_BOARD_WEEKLY_KILL_UPDATE
 
 local OPCODE_TASK_BOARD_SEND = 0x53
 local OPCODE_RESOURCE_BALANCE = 0xEE
@@ -145,6 +149,29 @@ end
 
 function TaskBoardProtocol.sendResourceBalance(player, resourceType, amount)
 	return TaskBoard.sendResourceBalance(player, resourceType, amount)
+end
+
+local function sendKillUpdate(player, subType, raceId, currentKills, totalKills, isCompleted)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_TASK_BOARD_SEND)
+	out:addByte(subType)
+	out:addU16(clamp(raceId or 0, 0, 0xFFFF))
+	out:addU16(clamp(currentKills or 0, 0, 0xFFFF))
+	out:addU16(clamp(totalKills or 0, 0, 0xFFFF))
+	out:addByte(isCompleted and 1 or 0)
+	return out:sendToPlayer(player)
+end
+
+function TaskBoardProtocol.sendBountyKillUpdate(player, raceId, currentKills, totalKills, isCompleted)
+	return sendKillUpdate(player, TASK_BOARD_BOUNTY_KILL_UPDATE, raceId, currentKills, totalKills, isCompleted)
+end
+
+function TaskBoardProtocol.sendWeeklyKillUpdate(player, raceId, currentKills, totalKills, isCompleted)
+	return sendKillUpdate(player, TASK_BOARD_WEEKLY_KILL_UPDATE, raceId, currentKills, totalKills, isCompleted)
 end
 
 -- ============================================
