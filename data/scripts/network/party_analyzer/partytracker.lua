@@ -196,15 +196,10 @@ partyLogoutEvent:register()
 -- Periodic cleanup: remove sessions for offline/no-members leaders
 local partyCleanupEvent = GlobalEvent("PartyAnalyzerCleanup")
 function partyCleanupEvent.onThink(interval)
-	for leaderId, session in pairs(partySessions) do
+	for leaderId in pairs(partySessions) do
 		local leader = Player(leaderId)
 		if not leader or not leader:getParty() then
 			partySessions[leaderId] = nil
-		else
-			local members = getPartyMembers(leader)
-			if not next(members) then
-				partySessions[leaderId] = nil
-			end
 		end
 	end
 	return true
