@@ -285,8 +285,8 @@ std::optional<bool> Monster::getWalkCache(const Position& pos) const
 		return true;
 	}
 
-	const int32_t dx = Position::getOffsetX(pos, myPos);
-	const int32_t dy = Position::getOffsetY(pos, myPos);
+	const int32_t dx = pos.getOffsetX(myPos);
+	const int32_t dy = pos.getOffsetY(myPos);
 	if (std::abs(dx) > maxWalkCacheWidth || std::abs(dy) > maxWalkCacheHeight) {
 		return std::nullopt;
 	}
@@ -326,7 +326,7 @@ void Monster::updateTileCache(const Tile* tile, const Position& pos) const
 		return;
 	}
 
-	updateTileCache(tile, Position::getOffsetX(pos, myPos), Position::getOffsetY(pos, myPos));
+	updateTileCache(tile, pos.getOffsetX(myPos), pos.getOffsetY(myPos));
 }
 
 void Monster::onAttackedCreatureDisappear(bool) { attackTicks = 0; }
