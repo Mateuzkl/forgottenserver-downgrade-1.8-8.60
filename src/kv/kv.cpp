@@ -237,7 +237,7 @@ std::vector<std::string> KVStore::loadPrefix(const std::string &prefix) {
 	}
 
 	std::string keySearch = db.escapeString(escaped + "%");
-	const auto query = fmt::format("SELECT `key_name` FROM `kv_store` WHERE `key_name` LIKE {} ESCAPE '\\'", keySearch);
+	const auto query = fmt::format("SELECT `key_name` FROM `kv_store` WHERE `key_name` LIKE {} ESCAPE '\\\\'", keySearch);
 	const auto result = db.storeQuery(query);
 	if (result == nullptr) {
 		return keys;

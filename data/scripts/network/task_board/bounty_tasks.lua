@@ -524,6 +524,14 @@ function BountyTasks.onLogin(player)
 	return true
 end
 
+function BountyTasks.preload(player)
+	if not player then
+		return false
+	end
+	loadBountyData(getPlayerGuid(player))
+	return true
+end
+
 function BountyTasks.changeDifficulty(player, difficulty)
 	if difficulty == nil or difficulty < 0 or difficulty > 3 then
 		return false

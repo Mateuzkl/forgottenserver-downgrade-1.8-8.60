@@ -86,22 +86,32 @@ void Dispatcher::executeTask(std::unique_ptr<Task> task)
 
 	UPDATE_OTSYS_TIME();
 
-#if defined(STATS_ENABLED) || defined(SLOW_TASK_DETECTION)
-	const auto taskStart = std::chrono::steady_clock::now();
+	const bool slowTaskWarning = getBoolean(ConfigManager::SLOW_TASK_WARNING);
+	uint64_t slowThresholdNs = SLOW_TASK_THRESHOLD_NS;
+	if (slowTaskWarning) {
+		const int64_t reactorBudgetMs = getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS);
+		if (reactorBudgetMs > 0) {
+			slowThresholdNs = static_cast<uint64_t>(reactorBudgetMs) * 1'000'000;
+		}
+	}
+#ifdef STATS_ENABLED
+	const bool shouldMeasure = true;
+#else
+	const bool shouldMeasure = slowTaskWarning;
 #endif
+	const auto taskStart = shouldMeasure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
 	dispatcherCycle.fetch_add(1, std::memory_order_relaxed);
 	totalTasksProcessed.fetch_add(1, std::memory_order_relaxed);
 	(*task)();
 
-#ifdef SLOW_TASK_DETECTION
-	const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-	    std::chrono::steady_clock::now() - taskStart).count();
-	const uint64_t elapsedNs = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
+	if (shouldMeasure) {
+		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+		    std::chrono::steady_clock::now() - taskStart).count();
+		const uint64_t elapsedNs = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
 
-	if (elapsedNs > SLOW_TASK_THRESHOLD_NS && !task->skipSlowDetection) {
-		slowTaskCount.fetch_add(1, std::memory_order_relaxed);
-		if (getBoolean(ConfigManager::SLOW_TASK_WARNING)) {
+		if (slowTaskWarning && elapsedNs > slowThresholdNs && !task->skipSlowDetection) {
+			slowTaskCount.fetch_add(1, std::memory_order_relaxed);
 			const auto elapsedMs = elapsedNs / 1'000'000;
 			if (!task->description.empty()) {
 				LOG_WARN(">> Slow task detected: {}ms [{}] {}", elapsedMs, task->description, task->extraDescription);
@@ -109,15 +119,11 @@ void Dispatcher::executeTask(std::unique_ptr<Task> task)
 				LOG_WARN(">> Slow task detected: {}ms [unknown]", elapsedMs);
 			}
 		}
-	}
-#endif
 
 #ifdef STATS_ENABLED
-	if (g_stats.isEnabled() && g_stats.isRunning() && task->trackInStats) {
-		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-		    std::chrono::steady_clock::now() - taskStart).count();
-		const uint64_t executionTime = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
-		g_stats.addDispatcherStat(0, std::make_unique<Stat>(executionTime, task->description, task->extraDescription));
-	}
+		if (g_stats.isEnabled() && g_stats.isRunning() && task->trackInStats) {
+			g_stats.addDispatcherStat(0, std::make_unique<Stat>(elapsedNs, task->description, task->extraDescription));
+		}
 #endif
+	}
 }

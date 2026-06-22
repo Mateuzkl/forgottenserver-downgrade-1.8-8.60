@@ -387,6 +387,14 @@ local function sendLootStats(player, itemId, count)
 	return msg:sendToPlayer(player)
 end
 
+local function getMaxQuickLootCorpses()
+	local maxCorpses = configManager.getNumber(configKeys.QUICK_LOOT_MAX_CORPSES)
+	if not maxCorpses or maxCorpses <= 0 then
+		return 30
+	end
+	return maxCorpses
+end
+
 local function findDestinationContainerCached(player, category, cache)
 	local containerId = getManagedContainer(player, category, true)
 
@@ -486,7 +494,20 @@ local function lootCorpse(player, corpse)
 	sendLootContainers(player)
 end
 
-local function findCorpsesOnTile(tile)
+local function canPlayerLootCorpse(player, corpse)
+	if not corpse then
+		return false
+	end
+
+	local owner = corpse:getCorpseOwner()
+	if owner == 0 then
+		return true
+	end
+
+	return owner == player:getId() or player:getAccountType() >= ACCOUNT_TYPE_GAMEMASTER
+end
+
+local function findCorpsesOnTile(tile, maxCorpses, player)
 	if not tile then
 		return {}
 	end
@@ -503,7 +524,12 @@ local function findCorpsesOnTile(tile)
 			if container then
 				local owner = container:getCorpseOwner()
 				if owner ~= 0 or item:getId() == ITEM_REWARD_CONTAINER then
-					table.insert(corpses, container)
+					if not player or canPlayerLootCorpse(player, container) then
+						table.insert(corpses, container)
+						if maxCorpses and #corpses >= maxCorpses then
+							break
+						end
+					end
 				end
 			end
 		end
@@ -512,25 +538,12 @@ local function findCorpsesOnTile(tile)
 	return corpses
 end
 
-local function canPlayerLootCorpse(player, corpse)
-	if not corpse then
-		return false
-	end
-
-	local owner = corpse:getCorpseOwner()
-	if owner == 0 then
-		return true
-	end
-
-	return owner == player:getId() or player:getAccountType() >= ACCOUNT_TYPE_GAMEMASTER
-end
-
 local function lootCorpsesOnTile(player, tile, maxCorpses)
 	if not tile then
 		return 0
 	end
 
-	local corpses = findCorpsesOnTile(tile)
+	local corpses = findCorpsesOnTile(tile, maxCorpses, player)
 	local lootedCount = 0
 
 	for _, corpse in ipairs(corpses) do
@@ -589,10 +602,6 @@ local function lootCorpseAuto(filterPlayer, destPlayer, corpse)
 		::continue::
 	end
 
-	if totalLooted > 0 then
-		sendLootContainers(destPlayer)
-	end
-
 	return totalLooted
 end
 
@@ -603,9 +612,13 @@ function killEvent.onKill(player, target)
 		return true
 	end
 
+	local settings = player:kv():scoped("settings")
+	if not settings:get("quickLoot") then
+		return true
+	end
+
 	local killerId = player:getId()
 	local targetPos = target:getPosition()
-	local targetName = target:getName()
 
 	addEvent(function()
 		local killer = Player(killerId)
@@ -616,8 +629,8 @@ function killEvent.onKill(player, target)
 			return
 		end
 
-		local settings = killer:kv():scoped("settings")
-		if not settings:get("quickLoot") then
+		local delayedSettings = killer:kv():scoped("settings")
+		if not delayedSettings:get("quickLoot") then
 			return
 		end
 
@@ -638,7 +651,8 @@ function killEvent.onKill(player, target)
 			end
 		end
 
-		local corpses = findCorpsesOnTile(tile)
+		local maxCorpses = getMaxQuickLootCorpses()
+		local corpses = findCorpsesOnTile(tile, maxCorpses, killer)
 		local totalLooted = 0
 
 		for _, corpse in ipairs(corpses) do
@@ -649,6 +663,7 @@ function killEvent.onKill(player, target)
 		end
 
 		if totalLooted > 0 then
+			sendLootContainers(recipient)
 			recipient:sendTextMessage(MESSAGE_STATUS_DEFAULT, "You looted " .. totalLooted .. " items via QuickLoot.")
 		end
 	end, 500)
@@ -666,10 +681,7 @@ function quickLootHandler.onReceive(player, msg)
 	local variant = msg:getByte()
 	local pos = msg:getPosition()
 
-	local maxCorpses = configManager.getNumber(configKeys.QUICK_LOOT_MAX_CORPSES)
-	if not maxCorpses or maxCorpses <= 0 then
-		maxCorpses = 30
-	end
+	local maxCorpses = getMaxQuickLootCorpses()
 
 	if variant == 2 then
 		-- Loot nearby (3x3 area)

@@ -49,6 +49,9 @@ function Player:setBossCooldown(bossNameOrId, time)
 		return false
 	end
 	local result = kv:set(scope, time)
+	if BossCooldown and BossCooldown.rememberKey then
+		BossCooldown.rememberKey(self, scope, time)
+	end
 	if BossCooldown and BossCooldown.send then
 		BossCooldown.send(self)
 	end

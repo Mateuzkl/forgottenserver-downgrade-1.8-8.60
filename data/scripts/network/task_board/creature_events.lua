@@ -99,6 +99,13 @@ function taskBoardLogin.onLogin(player)
 		end
 	end
 
+	if bountyEnabled then
+		local bounty = getBountyModule()
+		if bounty and bounty.preload then
+			bounty.preload(player)
+		end
+	end
+
 	-- Send 0xBA and every 0xBB slot in the same login flow. Do not defer this
 	-- path: the Astra Hunting Task UI may be opened right after login.
 	local taskHunting = getTaskHuntingModule()

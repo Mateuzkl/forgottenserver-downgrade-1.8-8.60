@@ -512,7 +512,7 @@ startupDatabaseOptimization = false
 
 -- Logging
 -- logToFile: true = save logs to data/logs/server.log, false = console only (default: false)
-logToFile = false
+logToFile = true
 -- logLevel: trace, debug, info, warning, error, critical (default: info)
 logLevel = "info"
 -- Status Server Information
@@ -523,12 +523,12 @@ location = "Sweden"
 
 -- Server Statistics
 -- time in seconds: 30 = 30 seconds, 0 = disabled
-statsDumpInterval = 0
+statsDumpInterval = 10
 -- time in milliseconds: 50 = 0.05 sec, 0 = disabled
-statsSlowLogTime = 0
-slowTaskWarning = false
+statsSlowLogTime = 5
+slowTaskWarning = true
 -- time in milliseconds: 500 = 0.5 sec, 0 = disabled
-statsVerySlowLogTime = 0
+statsVerySlowLogTime = 25
 
 -- Admin Protocol
 adminPort = 7170

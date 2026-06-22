@@ -103,6 +103,25 @@ end
 
 expTrackerLogout:register()
 
+local function getKillText(monsters, totalCount)
+	local firstName
+	local monsterTypes = 0
+
+	for monsterName in pairs(monsters) do
+		firstName = firstName or monsterName
+		monsterTypes = monsterTypes + 1
+		if monsterTypes > 1 then
+			break
+		end
+	end
+
+	if monsterTypes == 1 then
+		return totalCount > 1 and (totalCount .. " " .. firstName .. "s") or firstName
+	end
+
+	return totalCount .. " creatures"
+end
+
 function message.onGainExperience(self, source, exp, rawExp, sendText)
 	if sendText and exp ~= 0 then
 		local monsterName = source and source:getName() or "Unknown"
@@ -116,46 +135,63 @@ function message.onGainExperience(self, source, exp, rawExp, sendText)
 			end
 		end
 
-		if not expTracker[playerGuid] then expTracker[playerGuid] = {} end
-		if not expTracker[playerGuid][monsterName] then expTracker[playerGuid][monsterName] = { totalExp = 0, count = 0, timer = 0, preyXpBonus = 0 } end
-
-		expTracker[playerGuid][monsterName].totalExp = expTracker[playerGuid][monsterName].totalExp + exp
-		expTracker[playerGuid][monsterName].count = expTracker[playerGuid][monsterName].count + 1
-		expTracker[playerGuid][monsterName].timer = os.time()
-		if preyXpBonus > 0 then
-			expTracker[playerGuid][monsterName].preyXpBonus = preyXpBonus
+		if not expTracker[playerGuid] then
+			expTracker[playerGuid] = { monsters = {}, eventId = nil }
 		end
 
-		addEvent(function()
+		local playerTracker = expTracker[playerGuid]
+		if not playerTracker.monsters[monsterName] then
+			playerTracker.monsters[monsterName] = { totalExp = 0, count = 0, preyXpBonus = 0 }
+		end
+
+		local trackerState = playerTracker.monsters[monsterName]
+		trackerState.totalExp = trackerState.totalExp + exp
+		trackerState.count = trackerState.count + 1
+		if preyXpBonus > 0 then
+			trackerState.preyXpBonus = preyXpBonus
+		end
+
+		if playerTracker.eventId then
+			return exp
+		end
+
+		playerTracker.eventId = addEvent(function()
+			local tracker = expTracker[playerGuid]
+			if tracker then
+				tracker.eventId = nil
+			end
+
 			local player = Player(playerId)
 			if not player then return end
-
-			local tracker = expTracker[playerGuid] and expTracker[playerGuid][monsterName]
 			if not tracker then return end
 
-			local expValue = math.floor(tracker.totalExp)
-			local count = tracker.count
+			local monsters = tracker.monsters
+			tracker.monsters = {}
+
+			local expValue = 0
+			local count = 0
+			local preyBonus = 0
+			for _, monsterTracker in pairs(monsters) do
+				expValue = expValue + (monsterTracker.totalExp or 0)
+				count = count + (monsterTracker.count or 0)
+				preyBonus = math.max(preyBonus, monsterTracker.preyXpBonus or 0)
+			end
+			expValue = math.floor(expValue)
 
 			if expValue > 0 then
 				local expString = getExperienceText(expValue)
 				local preySuffix = ""
-				if tracker.preyXpBonus and tracker.preyXpBonus > 0 then
-					preySuffix = string.format(" (Prey Bonus XP +%d%%)", tracker.preyXpBonus)
+				if preyBonus > 0 then
+					preySuffix = string.format(" (Prey Bonus XP +%d%%)", preyBonus)
 				end
 
-				local killText
-				if count > 1 then
-					killText = count .. " " .. monsterName .. "s"
-				else
-					killText = monsterName
-				end
-
+				local killText = getKillText(monsters, count)
 				local message = "You gained " .. expString .. " for killing " .. killText .. preySuffix .. "."
 
 				player:sendTextMessage(MESSAGE_STATUS_DEFAULT, message)
 
 				local playerInstanceId = player:getInstanceId()
-				local spectators = Game.getSpectators(player:getPosition(), false, true)
+				local spectators = Game.getSpectators(player:getPosition(), false, true, 8, 8, 6, 6)
 				local filtered = {}
 				for _, spectator in ipairs(spectators) do
 					if playerInstanceId == 0 or spectator:getInstanceId() == playerInstanceId then
@@ -171,10 +207,6 @@ function message.onGainExperience(self, source, exp, rawExp, sendText)
 					end
 				end
 			end
-
-			tracker.totalExp = 0
-			tracker.count = 0
-			tracker.preyXpBonus = 0
 		end, 50)
 	end
 	return exp

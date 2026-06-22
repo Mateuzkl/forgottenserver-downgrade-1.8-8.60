@@ -29,6 +29,7 @@
 #include "stress_test.h"
 #include "teleport.h"
 #include "logger.h"
+#include "tasks.h"
 #include <fmt/format.h>
 #include "globalevent.h"
 
@@ -809,14 +810,27 @@ int LuaScriptInterface::luaErrorHandler(lua_State* L)
 
 bool LuaScriptInterface::callFunction(int params)
 {
-#ifdef STATS_ENABLED
 	int32_t scriptId;
 	int32_t callbackId;
 	bool timerEvent;
 	LuaScriptInterface* scriptInterface;
 	getScriptEnv()->getEventInfo(scriptId, scriptInterface, callbackId, timerEvent);
-	std::chrono::steady_clock::time_point time_point = std::chrono::steady_clock::now();
+	(void)callbackId;
+	(void)timerEvent;
+	const bool slowTaskWarning = getBoolean(ConfigManager::SLOW_TASK_WARNING);
+	uint64_t slowThresholdNs = SLOW_TASK_THRESHOLD_NS;
+	if (slowTaskWarning) {
+		const int64_t reactorBudgetMs = getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS);
+		if (reactorBudgetMs > 0) {
+			slowThresholdNs = static_cast<uint64_t>(reactorBudgetMs) * 1'000'000;
+		}
+	}
+#ifdef STATS_ENABLED
+	const bool shouldMeasure = true;
+#else
+	const bool shouldMeasure = slowTaskWarning;
 #endif
+	const auto time_point = shouldMeasure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
 	bool result = false;
 	int size = lua_gettop(luaState);
@@ -832,10 +846,21 @@ bool LuaScriptInterface::callFunction(int params)
 		lua_settop(luaState, size - params - 1);
 	}
 
+	if (shouldMeasure) {
+		const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+		    std::chrono::steady_clock::now() - time_point).count();
+		if (slowTaskWarning && ns > slowThresholdNs) {
+			const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
+			                                           getFileByIdForStats(scriptId);
+			LOG_WARN(">> Slow Lua callback detected: {}ms [{}]",
+			         ns / 1'000'000, scriptFile);
+		}
 #ifdef STATS_ENABLED
-	uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - time_point).count();
-	g_stats.addLuaStats(std::make_unique<Stat>(ns, getFileByIdForStats(scriptId), ""));
+		const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
+		                                           getFileByIdForStats(scriptId);
+		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
 #endif
+	}
 
 	resetScriptEnv();
 	return result;
@@ -843,6 +868,28 @@ bool LuaScriptInterface::callFunction(int params)
 
 void LuaScriptInterface::callVoidFunction(int params)
 {
+	int32_t scriptId;
+	int32_t callbackId;
+	bool timerEvent;
+	LuaScriptInterface* scriptInterface;
+	getScriptEnv()->getEventInfo(scriptId, scriptInterface, callbackId, timerEvent);
+	(void)callbackId;
+	(void)timerEvent;
+	const bool slowTaskWarning = getBoolean(ConfigManager::SLOW_TASK_WARNING);
+	uint64_t slowThresholdNs = SLOW_TASK_THRESHOLD_NS;
+	if (slowTaskWarning) {
+		const int64_t reactorBudgetMs = getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS);
+		if (reactorBudgetMs > 0) {
+			slowThresholdNs = static_cast<uint64_t>(reactorBudgetMs) * 1'000'000;
+		}
+	}
+#ifdef STATS_ENABLED
+	const bool shouldMeasure = true;
+#else
+	const bool shouldMeasure = slowTaskWarning;
+#endif
+	const auto time_point = shouldMeasure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+
 	int size = lua_gettop(luaState);
 	if (protectedCall(luaState, params, 0) != 0) {
 		LuaScriptInterface::reportError(nullptr, Lua::popString(luaState));
@@ -851,6 +898,22 @@ void LuaScriptInterface::callVoidFunction(int params)
 	if ((lua_gettop(luaState) + params + 1) != size) {
 		LuaScriptInterface::reportError(nullptr, "Stack size changed!");
 		lua_settop(luaState, size - params - 1);
+	}
+
+	if (shouldMeasure) {
+		const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+		    std::chrono::steady_clock::now() - time_point).count();
+		if (slowTaskWarning && ns > slowThresholdNs) {
+			const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
+			                                           getFileByIdForStats(scriptId);
+			LOG_WARN(">> Slow Lua callback detected: {}ms [{}]",
+			         ns / 1'000'000, scriptFile);
+		}
+#ifdef STATS_ENABLED
+		const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
+		                                           getFileByIdForStats(scriptId);
+		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
+#endif
 	}
 
 	resetScriptEnv();
@@ -2941,6 +3004,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::EXP_SHARE_FLOORS);
 	registerEnumIn("configKeys", ConfigManager::EXP_FROM_PLAYERS_LEVEL_RANGE);
 	registerEnumIn("configKeys", ConfigManager::MAX_PACKETS_PER_SECOND);
+	registerEnumIn("configKeys", ConfigManager::QUICK_LOOT_MAX_CORPSES);
 	registerEnumIn("configKeys", ConfigManager::STAMINA_REGEN_MINUTE);
 	registerEnumIn("configKeys", ConfigManager::STAMINA_REGEN_PREMIUM);
 	registerEnumIn("configKeys", ConfigManager::STAMINA_TRAINER);

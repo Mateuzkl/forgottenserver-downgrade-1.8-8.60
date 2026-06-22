@@ -216,6 +216,54 @@ rebuildEarnedPoints = function(playerGuid, kills)
 	finishedCache[playerGuid] = finished
 end
 
+local function updateKillCache(playerGuid, raceId, amount)
+	playerGuid = tonumber(playerGuid) or 0
+	raceId = tonumber(raceId) or 0
+	amount = tonumber(amount) or 0
+	if playerGuid <= 0 or raceId <= 0 or amount == 0 then
+		return false
+	end
+
+	local kills = killCache[playerGuid]
+	if not kills then
+		earnedPointsCache[playerGuid] = nil
+		finishedCache[playerGuid] = nil
+		return false
+	end
+
+	kills[raceId] = math.max(0, (kills[raceId] or 0) + amount)
+	rebuildEarnedPoints(playerGuid, kills)
+	return true
+end
+
+local function getKillCount(playerGuid, raceId)
+	playerGuid = tonumber(playerGuid) or 0
+	raceId = tonumber(raceId) or 0
+	if playerGuid <= 0 or raceId <= 0 then
+		return 0
+	end
+
+	local kills = loadKillMap(playerGuid)
+	return kills[raceId] or 0
+end
+
+local function preloadPlayer(playerGuid)
+	playerGuid = tonumber(playerGuid) or 0
+	if playerGuid <= 0 then
+		return false
+	end
+
+	loadKillMap(playerGuid)
+	loadTrackerList(playerGuid)
+	return true
+end
+
+if CustomBestiary then
+	CustomBestiary.updateKillCache = updateKillCache
+	CustomBestiary.getKillCount = getKillCount
+	CustomBestiary.preloadPlayer = preloadPlayer
+end
+
 local function getSpentCharmPoints(charms)
 	local spent = 0
 	for charmId, state in pairs(charms) do
@@ -559,7 +607,28 @@ local function sendTracker(player)
 	return out:sendToPlayer(player)
 end
 
+local function sendTrackerIfTracked(player, raceId)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	raceId = tonumber(raceId) or 0
+	if raceId <= 0 then
+		return false
+	end
+
+	local tracker = loadTrackerList(getPlayerGuid(player))
+	for _, trackedRaceId in ipairs(tracker) do
+		if trackedRaceId == raceId then
+			return sendTracker(player)
+		end
+	end
+
+	return false
+end
+
 CustomBestiary.sendTracker = sendTracker
+CustomBestiary.sendTrackerIfTracked = sendTrackerIfTracked
 CustomBestiary.sendProgress = sendBestiaryProgress
 
 local function toggleTracker(player, raceId)
@@ -767,6 +836,9 @@ bestiaryLogout:register()
 
 local bestiaryLogin = CreatureEvent("CustomBestiaryLogin")
 function bestiaryLogin.onLogin(player)
+	if CustomBestiary and CustomBestiary.preloadPlayer then
+		CustomBestiary.preloadPlayer(player:getGuid())
+	end
 	player:registerEvent("CustomBestiaryLogout")
 	return true
 end

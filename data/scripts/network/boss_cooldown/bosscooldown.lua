@@ -3,6 +3,14 @@
 -- Uses KV store (player:kv() -> boss.cooldown.<raceId>)
 
 local OPCODE_BOSS_COOLDOWN = 0x2C
+local PERIODIC_REFRESH_INTERVAL = 5 * 60 * 1000
+local PERIODIC_REFRESH_PLAYER_DELAY = 100
+
+BossCooldown = BossCooldown or {}
+
+local bossListCache
+local bossByRaceIdCache
+local playerCooldownKeyCache = {}
 
 local function supportsAstraClient(player)
 	return player and player.isUsingAstraClient and player:isUsingAstraClient()
@@ -26,19 +34,120 @@ local function getBossOutfit(lookType)
 	return {type = lookType, head = 0, body = 0, legs = 0, feet = 0, addons = 0}
 end
 
-local function getBossList()
+local function normalizeBossOutfit(entry)
+	if entry.outfit and entry.outfit.type then
+		return entry.outfit
+	end
+	return getBossOutfit(entry.outfit and entry.outfit.lookType or 136)
+end
+
+local function buildBossCache()
 	local bosses = {}
+	local bossesByRaceId = {}
 	if CustomBosstiary and CustomBosstiary.monstersByRaceId then
 		for raceId, entry in pairs(CustomBosstiary.monstersByRaceId) do
-			bosses[#bosses + 1] = {
+			local boss = {
 				raceId = raceId,
+				key = tostring(raceId),
 				name = entry.name,
-				outfit = entry.outfit or {},
+				outfit = normalizeBossOutfit(entry),
 			}
+			bosses[#bosses + 1] = boss
+			bossesByRaceId[raceId] = boss
 		end
 	end
 	table.sort(bosses, function(a, b) return a.raceId < b.raceId end)
-	return bosses
+	bossListCache = bosses
+	bossByRaceIdCache = bossesByRaceId
+end
+
+local function getBossList()
+	if not bossListCache then
+		buildBossCache()
+	end
+	return bossListCache
+end
+
+local function getBossByRaceId()
+	if not bossByRaceIdCache then
+		buildBossCache()
+	end
+	return bossByRaceIdCache
+end
+
+local function getCooldownKeys(cooldownKV)
+	local ok, keys = pcall(function()
+		return cooldownKV:keys()
+	end)
+	if ok and type(keys) == "table" then
+		return keys
+	end
+	return nil
+end
+
+local function getPlayerCooldownKeyCache(player, cooldownKV)
+	local guid = player:getGuid()
+	local cachedKeys = playerCooldownKeyCache[guid]
+	if cachedKeys then
+		return cachedKeys
+	end
+
+	local cooldownKeys = getCooldownKeys(cooldownKV)
+	if not cooldownKeys then
+		return nil
+	end
+
+	cachedKeys = {}
+	for _, key in ipairs(cooldownKeys) do
+		local raceId = tonumber(key)
+		if raceId then
+			cachedKeys[tostring(raceId)] = true
+		end
+	end
+	playerCooldownKeyCache[guid] = cachedKeys
+	return cachedKeys
+end
+
+local function appendActiveBoss(activeBosses, boss, cooldownEnd, now)
+	if not boss or not cooldownEnd or cooldownEnd <= now then
+		return
+	end
+
+	activeBosses[#activeBosses + 1] = {
+		id = boss.raceId,
+		cooldown = cooldownEnd,
+		name = boss.name,
+		outfit = boss.outfit,
+	}
+end
+
+local function getActiveBossCooldowns(player, cooldownKV)
+	local now = os.time()
+	local activeBosses = {}
+	local cooldownKeys = getPlayerCooldownKeyCache(player, cooldownKV)
+
+	if cooldownKeys then
+		local bossesByRaceId = getBossByRaceId()
+		for key in pairs(cooldownKeys) do
+			local raceId = tonumber(key)
+			local boss = raceId and bossesByRaceId[raceId]
+			if boss then
+				local cooldownEnd = cooldownKV:get(key) or 0
+				if cooldownEnd > now then
+					appendActiveBoss(activeBosses, boss, cooldownEnd, now)
+				else
+					cooldownKeys[key] = nil
+				end
+			end
+		end
+	else
+		for _, boss in ipairs(getBossList()) do
+			appendActiveBoss(activeBosses, boss, cooldownKV:get(boss.key) or 0, now)
+		end
+	end
+
+	table.sort(activeBosses, function(a, b) return a.id < b.id end)
+	return activeBosses
 end
 
 local function sendCooldowns(player)
@@ -47,34 +156,15 @@ local function sendCooldowns(player)
 	local kv = player:kv()
 	if not kv then return false end
 
-	local now = os.time()
 	local cooldownKV = kv:scoped("boss.cooldown")
-	local activeBosses = {}
-	local bosses = getBossList()
-
-	for _, boss in ipairs(bosses) do
-		local key = tostring(boss.raceId)
-		local cooldownEnd = cooldownKV:get(key) or 0
-		if cooldownEnd > now then
-			local outfit
-			if boss.outfit and boss.outfit.type then
-				outfit = boss.outfit
-			else
-				outfit = getBossOutfit(boss.outfit and boss.outfit.lookType or 136)
-			end
-			activeBosses[#activeBosses + 1] = {
-				id = boss.raceId,
-				cooldown = cooldownEnd,
-				name = boss.name,
-				outfit = outfit,
-			}
-		end
-	end
+	local activeBosses = getActiveBossCooldowns(player, cooldownKV)
 
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_BOSS_COOLDOWN)
-	out:addByte(math.min(#activeBosses, 255))
-	for _, boss in ipairs(activeBosses) do
+	local bossCount = math.min(#activeBosses, 255)
+	out:addByte(bossCount)
+	for i = 1, bossCount do
+		local boss = activeBosses[i]
 		out:addU16(boss.id)
 		out:addU32(boss.cooldown)
 		out:addString(boss.name)
@@ -88,28 +178,72 @@ local function sendCooldowns(player)
 	return out:sendToPlayer(player)
 end
 
+local function scheduleCooldownRefresh(playerId, delay)
+	addEvent(function(pid)
+		local player = Player(pid)
+		if player then
+			sendCooldowns(player)
+		end
+	end, delay, playerId)
+end
+
 -- Login event
 local bossLogin = CreatureEvent("BossCooldownLogin")
 function bossLogin.onLogin(player)
 	if not supportsAstraClient(player) then return true end
-	addEvent(function(pid)
-		local p = Player(pid)
-		if p then sendCooldowns(p) end
-	end, 3000, player:getId())
+	scheduleCooldownRefresh(player:getId(), 3000)
 	return true
 end
 bossLogin:register()
 
--- Periodic refresh every 30s
+local bossLogout = CreatureEvent("BossCooldownLogout")
+function bossLogout.onLogout(player)
+	playerCooldownKeyCache[player:getGuid()] = nil
+	return true
+end
+bossLogout:register()
+
+-- Lightweight safety refresh. Real updates are pushed by Player:setBossCooldown().
 local bossRefresh = GlobalEvent("BossCooldownPeriodic")
 function bossRefresh.onThink(interval)
+	local delay = 0
 	for _, player in ipairs(Game.getPlayers()) do
-		sendCooldowns(player)
+		if supportsAstraClient(player) then
+			scheduleCooldownRefresh(player:getId(), delay)
+			delay = delay + PERIODIC_REFRESH_PLAYER_DELAY
+		end
 	end
 	return true
 end
-bossRefresh:interval(30000)
+bossRefresh:interval(PERIODIC_REFRESH_INTERVAL)
 bossRefresh:register()
 
-BossCooldown = BossCooldown or {}
+function BossCooldown.invalidateCache()
+	bossListCache = nil
+	bossByRaceIdCache = nil
+end
+
+function BossCooldown.rememberKey(player, scope, cooldownEnd)
+	if not player or not scope then
+		return
+	end
+
+	local cachedKeys = playerCooldownKeyCache[player:getGuid()]
+	if not cachedKeys then
+		return
+	end
+
+	local raceId = tostring(scope):match("^boss%.cooldown%.(.+)$")
+	if not raceId then
+		playerCooldownKeyCache[player:getGuid()] = nil
+		return
+	end
+
+	if cooldownEnd and cooldownEnd > os.time() then
+		cachedKeys[tostring(raceId)] = true
+	else
+		cachedKeys[tostring(raceId)] = nil
+	end
+end
+
 BossCooldown.send = sendCooldowns
