@@ -172,7 +172,7 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 		uint32_t charges = 0;
 		if (it.charges != 0) {
 			charges = item->getSubType();
-		} else if (it.showCharges) {
+		} else if (it.showCharges || item->hasAttribute(ITEM_ATTRIBUTE_CHARGES)) {
 			charges = item->getCharges();
 		}
 

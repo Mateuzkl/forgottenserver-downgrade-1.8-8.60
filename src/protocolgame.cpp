@@ -97,10 +97,9 @@ StoreOutfitOfferMap loadStoreOutfitOffers()
 	return offers;
 }
 
-const StoreOutfitOfferMap& getStoreOutfitOffers()
+StoreOutfitOfferMap getStoreOutfitOffers()
 {
-	static const StoreOutfitOfferMap offers = loadStoreOutfitOffers();
-	return offers;
+	return loadStoreOutfitOffers();
 }
 
 uint32_t getPlayerInventoryItemAmount(const Item* item)
@@ -3867,7 +3866,7 @@ void ProtocolGame::sendOutfitWindow()
 		protocolOutfits.emplace_back("Gamemaster", 75, 0);
 	}
 
-	const auto& storeOutfitOffers = getStoreOutfitOffers();
+	const auto storeOutfitOffers = getStoreOutfitOffers();
 	size_t maxProtocolOutfits = static_cast<size_t>(getInteger(ConfigManager::MAX_PROTOCOL_OUTFITS));
 	if (isOTC) {
 		maxProtocolOutfits = std::min<size_t>(maxProtocolOutfits, std::numeric_limits<uint8_t>::max());
@@ -3876,7 +3875,7 @@ void ProtocolGame::sendOutfitWindow()
 	}
 
 	for (const Outfit* outfit : outfits) {
-		if (isHiddenOutfit(outfit)) {
+		if (!outfit || isHiddenOutfit(outfit)) {
 			continue;
 		}
 
@@ -3885,13 +3884,15 @@ void ProtocolGame::sendOutfitWindow()
 		uint32_t storeOfferId = 0;
 		if (player->getOutfitAddons(*outfit, addons)) {
 			// available outfit
-		} else if (isAstra860 && outfit->from == "store") {
-			mode = 1;
-			addons = 3;
-			if (const auto offerIt = storeOutfitOffers.find(outfit->lookType); offerIt != storeOutfitOffers.end()) {
-				addons = offerIt->second.addons;
-				storeOfferId = offerIt->second.offerId;
+		} else if (isAstra860) {
+			const auto offerIt = storeOutfitOffers.find(outfit->lookType);
+			if (offerIt == storeOutfitOffers.end()) {
+				continue;
 			}
+
+			mode = 1;
+			addons = offerIt->second.addons;
+			storeOfferId = offerIt->second.offerId;
 		} else {
 			continue;
 		}
