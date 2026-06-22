@@ -579,6 +579,7 @@ end
 
 local getOtherSlotMonsters
 local buildWildcardRaceIds
+local preyMonsterNamesByRaceId
 
 local function ensureSelectionList(player, slot, slotData)
 	if slotData.state ~= PREY_STATE_LIST_SELECTION then
@@ -733,18 +734,23 @@ local function getPreyMonsterNameByRaceId(raceId)
 		return nil
 	end
 
-	for _, name in ipairs(PreyMonsters.getAllNames()) do
-		if getMonsterRaceId(name) == raceId then
-			return name
+	if not preyMonsterNamesByRaceId then
+		preyMonsterNamesByRaceId = {}
+		for _, name in ipairs(PreyMonsters.getAllNames()) do
+			local monsterRaceId = getMonsterRaceId(name)
+			if monsterRaceId then
+				preyMonsterNamesByRaceId[monsterRaceId] = name
+			end
 		end
 	end
-	return nil
+
+	return preyMonsterNamesByRaceId[raceId]
 end
 
 buildWildcardRaceIds = function(player, prey, slot)
 	local raceIds = {}
 	local seen = {}
-	local names = PreyMonsters.getAllNames(player:getLevel())
+	local names = PreyMonsters.getAllNames(player:getLevel(), getOtherSlotMonsters(player, prey, slot))
 	for _, name in ipairs(names) do
 		local raceId = getMonsterRaceId(name)
 		if raceId and not seen[raceId] then
@@ -1231,12 +1237,16 @@ local function nativeRequestAllMonsters(player, slot)
 	end
 
 	local prey = getPlayerPrey(player)
+	local slotData = prey.slots[slot]
+	if slotData.state == PREY_STATE_WILDCARD_SELECTION then
+		return sendError(player, "You are already selecting a creature from the list.")
+	end
+
 	prey.wildcards = getPlayerBonusRerolls(player)
 	if prey.wildcards < PREY_LOCK_COST then
 		return sendError(player, "You do not have enough Prey Wildcards.")
 	end
 
-	local slotData = prey.slots[slot]
 	if #buildWildcardRaceIds(player, prey, slot) == 0 then
 		return sendError(player, "Could not build the Prey creature list.")
 	end

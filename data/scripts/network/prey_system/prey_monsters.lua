@@ -174,6 +174,7 @@ function PreyMonsters.generateList(playerLevel, excludeNames)
 end
 
 function PreyMonsters.getAllNames(playerLevel, excludeNames)
+	playerLevel = playerLevel or 0
 	excludeNames = excludeNames or {}
 	local excluded = {}
 	for _, name in ipairs(excludeNames) do
