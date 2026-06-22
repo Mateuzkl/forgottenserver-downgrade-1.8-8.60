@@ -1,7 +1,7 @@
 name: Build with vcpkg
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: build-vcpkg-${{ github.workflow_ref }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -31,6 +31,8 @@ on:
       - CMakePresets.json
       - vcpkg.json
 
+  workflow_dispatch:
+
 jobs:
   build-windows:
     name: Windows
@@ -41,17 +43,13 @@ jobs:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/x64-windows-static-release
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg_cache
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
-      # sccache uses the built-in GitHub Actions cache backend; it manages its own entries
       SCCACHE_GHA_ENABLED: "true"
 
     steps:
       - uses: actions/checkout@v4
 
-      # Forca o toolchain MSVC: o runner tem MinGW no PATH e o CMake o escolhia,
-      # mas as deps do vcpkg sao MSVC (.lib) -> mistura GCC+MSVC quebrava o link
-      # (ex.: flag MSVC -ignore:4221 chegando no g++). cl casa com as libs do vcpkg.
       - name: Setup MSVC environment
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x64
 
@@ -69,13 +67,14 @@ jobs:
           key: vcpkg-windows-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
           restore-keys: |
             vcpkg-windows-
+
       - name: Run vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgJsonGlob: 'vcpkg.json'
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@9e326ebed976843c9932b3aa0e021c6f50310eb4 # v0.0.6
+        uses: mozilla-actions/sccache-action@9e326ebed976843c9932b3aa0e021c6f50310eb4
 
       - name: Build with CMake
         uses: lukka/run-cmake@v10.9
