@@ -331,9 +331,9 @@ void Monster::updateTileCache(const Tile* tile, const Position& pos) const
 
 void Monster::onAttackedCreatureDisappear(bool) { attackTicks = 0; }
 
-void Monster::onAddTileItem(const Tile* tile, const Position& pos)
+void Monster::onAddTileItem(const Tile* tile, const Position& pos, const Item* item)
 {
-	if (isWalkCacheLoaded) {
+	if (isWalkCacheLoaded && item && canAffectWalkCache(Item::items[item->getID()])) {
 		updateTileCache(tile, pos);
 	}
 }
@@ -341,15 +341,14 @@ void Monster::onAddTileItem(const Tile* tile, const Position& pos)
 void Monster::onUpdateTileItem(const Tile* tile, const Position& pos, const Item*, const ItemType& oldType,
                                const Item*, const ItemType& newType)
 {
-	if (isWalkCacheLoaded && (oldType.blockSolid || oldType.blockPathFind || oldType.isGroundTile() ||
-	                          newType.blockSolid || newType.blockPathFind || newType.isGroundTile())) {
+	if (isWalkCacheLoaded && (canAffectWalkCache(oldType) || canAffectWalkCache(newType))) {
 		updateTileCache(tile, pos);
 	}
 }
 
 void Monster::onRemoveTileItem(const Tile* tile, const Position& pos, const ItemType& itemType, const Item*)
 {
-	if (isWalkCacheLoaded && (itemType.blockSolid || itemType.blockPathFind || itemType.isGroundTile())) {
+	if (isWalkCacheLoaded && canAffectWalkCache(itemType)) {
 		updateTileCache(tile, pos);
 	}
 }
@@ -359,7 +358,8 @@ void Monster::onCreatureAppear(Creature* creature, bool isLogin)
 	Creature::onCreatureAppear(creature, isLogin);
 
 	if (creature != this && isWalkCacheLoaded) {
-		updateTileCache(creature->getTile(), creature->getPosition());
+		const Position& creaturePos = creature->getPosition();
+		updateTileCache(g_game.map.getTile(creaturePos), creaturePos);
 	}
 
 	if (mType->info.creatureAppearEvent != -1) {
@@ -404,10 +404,13 @@ void Monster::onCreatureAppear(Creature* creature, bool isLogin)
 
 void Monster::onRemoveCreature(Creature* creature, bool isLogout)
 {
+	const bool updateWalkCache = creature != this && isWalkCacheLoaded;
+	const Position creaturePos = creature->getPosition();
+
 	Creature::onRemoveCreature(creature, isLogout);
 
-	if (creature != this && isWalkCacheLoaded) {
-		updateTileCache(creature->getTile(), creature->getPosition());
+	if (updateWalkCache) {
+		updateTileCache(g_game.map.getTile(creaturePos), creaturePos);
 	}
 
 	if (mType->info.creatureDisappearEvent != -1) {
@@ -472,10 +475,13 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 					}
 				}
 
+				// Vertical movement refreshes one edge row; do not shift that fresh row again
+				// when the same step also moves horizontally.
+				const int32_t horizontalStartY = dy < 0 ? 1 : 0;
+				const int32_t horizontalEndY = dy > 0 ? mapWalkHeight - 2 : mapWalkHeight - 1;
+
 				if (dx > 0) {
-					const int32_t startY = dy > 0 ? dy : 0;
-					const int32_t endY = dy < 0 ? mapWalkHeight - 1 + dy : mapWalkHeight - 1;
-					for (int32_t y = startY; y <= endY; ++y) {
+					for (int32_t y = horizontalStartY; y <= horizontalEndY; ++y) {
 						const std::size_t rowBase = static_cast<std::size_t>(y) * mapWalkWidth;
 						for (int32_t x = 0; x < mapWalkWidth - 1; ++x) {
 							localMapCache[rowBase + x] = localMapCache[rowBase + x + 1];
@@ -486,9 +492,7 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 						                maxWalkCacheWidth, y);
 					}
 				} else if (dx < 0) {
-					const int32_t startY = dy > 0 ? dy : 0;
-					const int32_t endY = dy < 0 ? mapWalkHeight - 1 + dy : mapWalkHeight - 1;
-					for (int32_t y = startY; y <= endY; ++y) {
+					for (int32_t y = horizontalStartY; y <= horizontalEndY; ++y) {
 						const std::size_t rowBase = static_cast<std::size_t>(y) * mapWalkWidth;
 						for (int32_t x = mapWalkWidth - 2; x >= 0; --x) {
 							localMapCache[rowBase + x + 1] = localMapCache[rowBase + x];

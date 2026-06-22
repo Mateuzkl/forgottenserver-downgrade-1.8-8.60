@@ -5,10 +5,11 @@
 #define FS_MONSTER_H
 
 #include <bitset>
+#include <cassert>
 #include <cstddef>
 #include <optional>
 
-#include "map.h"
+#include "map_constants.h"
 #include "monsters.h"
 #include "tile.h"
 
@@ -112,7 +113,7 @@ public:
 
 	void onAttackedCreatureDisappear(bool isLogout) override;
 
-	void onAddTileItem(const Tile* tile, const Position& pos) override;
+	void onAddTileItem(const Tile* tile, const Position& pos, const Item* item) override;
 	void onUpdateTileItem(const Tile* tile, const Position& pos, const Item* oldItem, const ItemType& oldType,
 	                      const Item* newItem, const ItemType& newType) override;
 	void onRemoveTileItem(const Tile* tile, const Position& pos, const ItemType& itemType, const Item* item) override;
@@ -223,8 +224,8 @@ private:
 	uint8_t influencedLevel = 0;
 	bool fiendish = false;
 
-	static constexpr int32_t mapWalkWidth = Map::maxViewportX * 2 + 1;
-	static constexpr int32_t mapWalkHeight = Map::maxViewportY * 2 + 1;
+	static constexpr int32_t mapWalkWidth = MapConstants::maxViewportX * 2 + 1;
+	static constexpr int32_t mapWalkHeight = MapConstants::maxViewportY * 2 + 1;
 	static constexpr int32_t maxWalkCacheWidth = (mapWalkWidth - 1) / 2;
 	static constexpr int32_t maxWalkCacheHeight = (mapWalkHeight - 1) / 2;
 	static constexpr std::size_t mapWalkCacheSize = static_cast<std::size_t>(mapWalkWidth) * mapWalkHeight;
@@ -263,6 +264,10 @@ private:
 	bool getDanceStep(const Position& creaturePos, Direction& direction, bool keepAttack = true,
 	                  bool keepDistance = true);
 	bool canWalkTo(Position pos, Direction direction) const;
+	static bool canAffectWalkCache(const ItemType& itemType)
+	{
+		return itemType.blockSolid || itemType.blockPathFind || itemType.isGroundTile() || itemType.isMagicField();
+	}
 	bool usesWalkCache() const { return !randomStepping; }
 	void invalidateWalkCache() noexcept { isWalkCacheLoaded = false; }
 	void setIgnoreFieldDamage(bool value)
@@ -275,8 +280,10 @@ private:
 	void updateMapCache() const;
 	void updateTileCache(const Tile* tile, int32_t dx, int32_t dy) const;
 	void updateTileCache(const Tile* tile, const Position& pos) const;
-	static constexpr std::size_t getWalkCacheIndex(int32_t dx, int32_t dy)
+	[[nodiscard]] static std::size_t getWalkCacheIndex(int32_t dx, int32_t dy)
 	{
+		assert(dx >= -maxWalkCacheWidth && dx <= maxWalkCacheWidth && dy >= -maxWalkCacheHeight &&
+		       dy <= maxWalkCacheHeight);
 		return static_cast<std::size_t>(maxWalkCacheHeight + dy) * mapWalkWidth +
 		       static_cast<std::size_t>(maxWalkCacheWidth + dx);
 	}

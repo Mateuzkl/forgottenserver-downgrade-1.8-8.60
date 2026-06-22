@@ -469,7 +469,7 @@ void Tile::onAddTileItem(Item* item)
 	}
 
 	for (const auto& spectator : spectators) {
-		spectator->onAddTileItem(this, cylinderMapPos);
+		spectator->onAddTileItem(this, cylinderMapPos, item);
 	}
 
 	if ((!hasFlag(TILESTATE_PROTECTIONZONE) || getBoolean(ConfigManager::CLEAN_PROTECTION_ZONES)) &&
