@@ -29,14 +29,10 @@ end
 local DAY_SECONDS = 24 * 60 * 60
 local WEEK_SECONDS = 7 * DAY_SECONDS
 
-local config = {
-	seasonAnchor = os.time({ year = 2024, month = 1, day = 1, hour = 10, min = 0, sec = 0 }),
-	seasonWeeks = 5,
-	maxStep = 50,
-	pointsPerStep = 100,
-	dailyRerollBasePrice = 1000,
-	deluxePrice = 250,
-}
+local config = BattlePassConfig
+if type(config) ~= "table" then
+	error("Battle Pass configuration was not loaded. Check data/scripts/lib/reward_battlepass.lua")
+end
 
 local REQUEST_COOLDOWN_SECONDS = 1
 local rateLimitedActions = {
@@ -45,55 +41,14 @@ local rateLimitedActions = {
 }
 local lastRequest = {}
 
-local freeRewardSteps = {
-	[3] = true, [6] = true, [9] = true, [12] = true, [15] = true, [18] = true,
-	[21] = true, [24] = true, [27] = true, [30] = true, [33] = true, [36] = true,
-	[39] = true, [42] = true, [45] = true, [48] = true, [49] = true, [50] = true,
-}
-
-local dailyMissionPool = {
-	{ id = "daily_any_50", name = "Daily Hunt", description = "Kill 50 creatures.", rewardPoints = 50, maxProgress = 50, targets = "*" },
-	{ id = "daily_any_100", name = "Daily Grinder", description = "Kill 100 creatures.", rewardPoints = 75, maxProgress = 100, targets = "*" },
-	{ id = "daily_rotworm", name = "Rotworm Cleanup", description = "Kill 40 rotworms.", rewardPoints = 50, maxProgress = 40, targets = { "rotworm", "carrion worm" } },
-	{ id = "daily_troll", name = "Troll Patrol", description = "Kill 40 trolls.", rewardPoints = 50, maxProgress = 40, targets = { "troll", "swamp troll", "frost troll" } },
-	{ id = "daily_orc", name = "Orc Skirmish", description = "Kill 40 orcs.", rewardPoints = 60, maxProgress = 40, targets = { "orc", "orc spearman", "orc warrior", "orc berserker", "orc leader" } },
-	{ id = "daily_cyclops", name = "One-Eyed Trouble", description = "Kill 20 cyclops.", rewardPoints = 60, maxProgress = 20, targets = { "cyclops", "cyclops smith", "cyclops drone" } },
-	{ id = "daily_dragon", name = "Dragon Pressure", description = "Kill 10 dragons or dragon lords.", rewardPoints = 75, maxProgress = 10, targets = { "dragon", "dragon lord" } },
-}
-
-local generalMissions = {
-	{ id = "season_any_150", name = "Fresh Start", description = "Kill 150 creatures during this season.", rewardPoints = 100, maxProgress = 150, targets = "*" },
-	{ id = "season_rotworm_120", name = "Tunnel Sweep", description = "Kill 120 rotworms.", rewardPoints = 100, maxProgress = 120, targets = { "rotworm", "carrion worm" } },
-	{ id = "season_troll_120", name = "Troll Breaker", description = "Kill 120 trolls.", rewardPoints = 100, maxProgress = 120, targets = { "troll", "swamp troll", "frost troll" } },
-	{ id = "season_goblin_120", name = "Goblin Control", description = "Kill 120 goblins.", rewardPoints = 100, maxProgress = 120, targets = { "goblin", "goblin assassin", "goblin leader", "goblin scavenger" } },
-	{ id = "season_minotaur_120", name = "Maze Breaker", description = "Kill 120 minotaurs.", rewardPoints = 100, maxProgress = 120, targets = { "minotaur", "minotaur archer", "minotaur guard", "minotaur mage" } },
-	{ id = "season_orc_150", name = "Orc Campaign", description = "Kill 150 orcs.", rewardPoints = 100, maxProgress = 150, targets = { "orc", "orc spearman", "orc warrior", "orc berserker", "orc leader", "orc warlord" } },
-	{ id = "season_dwarf_120", name = "Dwarf Advance", description = "Kill 120 dwarves.", rewardPoints = 100, maxProgress = 120, targets = { "dwarf", "dwarf soldier", "dwarf guard", "dwarf geomancer" } },
-	{ id = "season_amazon_100", name = "Amazon Trail", description = "Kill 100 amazons or valkyries.", rewardPoints = 100, maxProgress = 100, targets = { "amazon", "valkyrie" } },
-	{ id = "season_undead_150", name = "Restless Dead", description = "Kill 150 undead creatures.", rewardPoints = 100, maxProgress = 150, targets = { "skeleton", "ghoul", "crypt shambler", "mummy", "vampire", "lich" } },
-	{ id = "season_larva_120", name = "Desert Nest", description = "Kill 120 larvas or scarabs.", rewardPoints = 100, maxProgress = 120, targets = { "larva", "scarab", "ancient scarab" } },
-	{ id = "season_slime_80", name = "Slime Splitter", description = "Kill 80 slimes.", rewardPoints = 100, maxProgress = 80, targets = { "slime" } },
-
-	{ id = "season_any_350", name = "Battle Routine", description = "Kill 350 creatures during this season.", rewardPoints = 200, maxProgress = 350, targets = "*" },
-	{ id = "season_cyclops_100", name = "Cyclops Camp", description = "Kill 100 cyclops.", rewardPoints = 200, maxProgress = 100, targets = { "cyclops", "cyclops smith", "cyclops drone" } },
-	{ id = "season_dragon_80", name = "Dragon Hunter", description = "Kill 80 dragons.", rewardPoints = 200, maxProgress = 80, targets = { "dragon" } },
-	{ id = "season_gs_40", name = "Web Cleaner", description = "Kill 40 giant spiders.", rewardPoints = 200, maxProgress = 40, targets = { "giant spider" } },
-	{ id = "season_vampire_60", name = "Night Watch", description = "Kill 60 vampires.", rewardPoints = 200, maxProgress = 60, targets = { "vampire", "vampire bride", "vampire viscount" } },
-	{ id = "season_necro_60", name = "Necromancer Hunt", description = "Kill 60 necromancers or priests.", rewardPoints = 200, maxProgress = 60, targets = { "necromancer", "priestess", "blood priest" } },
-	{ id = "season_hero_50", name = "Hero Trial", description = "Kill 50 heroes or black knights.", rewardPoints = 200, maxProgress = 50, targets = { "hero", "black knight" } },
-	{ id = "season_beholder_80", name = "Evil Eyes", description = "Kill 80 beholders.", rewardPoints = 200, maxProgress = 80, targets = { "beholder", "elder beholder", "bonelord", "elder bonelord" } },
-	{ id = "season_dragon_lord_40", name = "Dragon Lord Hunt", description = "Kill 40 dragon lords.", rewardPoints = 200, maxProgress = 40, targets = { "dragon lord" } },
-	{ id = "season_hydra_30", name = "Hydra Heads", description = "Kill 30 hydras.", rewardPoints = 200, maxProgress = 30, targets = { "hydra" } },
-	{ id = "season_serpent_30", name = "Serpent Strike", description = "Kill 30 serpent spawns.", rewardPoints = 200, maxProgress = 30, targets = { "serpent spawn" } },
-
-	{ id = "season_any_800", name = "Season Veteran", description = "Kill 800 creatures during this season.", rewardPoints = 300, maxProgress = 800, targets = "*" },
-	{ id = "season_demon_25", name = "Demon Contract", description = "Kill 25 demons.", rewardPoints = 300, maxProgress = 25, targets = { "demon" } },
-	{ id = "season_dragon_family_200", name = "Wyrm Scale", description = "Kill 200 dragons, dragon lords or wyrms.", rewardPoints = 300, maxProgress = 200, targets = { "dragon", "dragon lord", "wyrm" } },
-	{ id = "season_strong_120", name = "Stronghold Breaker", description = "Kill 120 strong creatures.", rewardPoints = 300, maxProgress = 120, targets = { "warlock", "demon", "hydra", "serpent spawn", "frost dragon", "behemoth" } },
-}
-
+local dailyFreeMissions = config.dailyMissions and config.dailyMissions.free or {}
+local dailyDeluxeMissions = config.dailyMissions and config.dailyMissions.deluxe or {}
+local generalMissions = config.generalMissions or {}
 local missionById = {}
-for _, mission in ipairs(dailyMissionPool) do
+for _, mission in ipairs(dailyFreeMissions) do
+	missionById[mission.id] = mission
+end
+for _, mission in ipairs(dailyDeluxeMissions) do
 	missionById[mission.id] = mission
 end
 for _, mission in ipairs(generalMissions) do
@@ -115,27 +70,42 @@ local function clamp(value, minValue, maxValue)
 	return value
 end
 
-local function getSeason()
-	local now = os.time()
-	local seasonLength = config.seasonWeeks * WEEK_SECONDS
-	local seasonIndex = 1
+local function getSeasonStore()
+	return kv.scoped("battlepass"):scoped("season")
+end
 
-	if now >= config.seasonAnchor then
-		seasonIndex = math.floor((now - config.seasonAnchor) / seasonLength) + 1
+local function getSeason()
+	local seasonConfig = config.season or {}
+	local store = getSeasonStore()
+	local configuredId = tostring(seasonConfig.id or "season")
+	local activeConfigId = store:get("configId")
+	local epoch = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonEpoch)) or -1
+	local beginTime = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonStartedAt)) or -1
+
+	if activeConfigId ~= configuredId or epoch < 1 or beginTime < 1 then
+		epoch = math.max(1, epoch + 1)
+		beginTime = tonumber(seasonConfig.startsAt) or 0
+		if beginTime <= 0 then
+			beginTime = os.time()
+		end
+		Game.setStorageValue(GlobalStorageKeys.battlePassSeasonEpoch, epoch)
+		Game.setStorageValue(GlobalStorageKeys.battlePassSeasonStartedAt, beginTime)
+		store:set("configId", configuredId)
 	end
 
-	local beginTime = config.seasonAnchor + ((seasonIndex - 1) * seasonLength)
+	local durationDays = math.max(1, tonumber(seasonConfig.durationDays) or 35)
 	return {
-		id = "astra-season-" .. seasonIndex,
+		id = configuredId .. ":" .. epoch,
+		epoch = epoch,
 		beginTime = beginTime,
-		endTime = beginTime + seasonLength,
+		endTime = beginTime + durationDays * DAY_SECONDS,
 	}
 end
 
 local function getDailyWindow()
 	local now = os.time()
 	local date = os.date("*t", now)
-	local beginTime = os.time({ year = date.year, month = date.month, day = date.day, hour = 10, min = 0, sec = 0 })
+	local beginTime = os.time({ year = date.year, month = date.month, day = date.day, hour = tonumber(config.season.resetHour) or 10, min = 0, sec = 0 })
 	if now < beginTime then
 		beginTime = beginTime - DAY_SECONDS
 	end
@@ -158,9 +128,10 @@ local function ensureStateTables(state)
 	state.dailyAwarded = type(state.dailyAwarded) == "table" and state.dailyAwarded or {}
 	state.dailySlots = type(state.dailySlots) == "table" and state.dailySlots or {}
 	state.claimed = type(state.claimed) == "table" and state.claimed or {}
-	state.points = clamp(state.points, 0, config.maxStep * config.pointsPerStep)
+	state.points = clamp(state.points, 0, config.season.maxStep * config.season.pointsPerStep)
 	state.rerollCounter = tonumber(state.rerollCounter) or 0
 	state.premium = state.premium == true
+	state.completed = state.completed == true or state.points >= config.season.maxStep * config.season.pointsPerStep
 end
 
 local function resetStateForSeason(season)
@@ -176,6 +147,7 @@ local function resetStateForSeason(season)
 		dailyAwarded = {},
 		claimed = {},
 		rerollCounter = 0,
+		completed = false,
 	}
 end
 
@@ -187,6 +159,7 @@ local function loadState(player)
 
 	if type(state) ~= "table" or state.seasonId ~= season.id then
 		state = resetStateForSeason(season)
+		player:setStorageValue(PlayerStorageKeys.battlePassSeasonEpoch, season.epoch)
 	else
 		ensureStateTables(state)
 	end
@@ -227,8 +200,9 @@ local function setMissionAwarded(state, mission, daily)
 end
 
 local function addBattlePassPoints(state, amount)
-	local maxPoints = config.maxStep * config.pointsPerStep
+	local maxPoints = config.season.maxStep * config.season.pointsPerStep
 	state.points = clamp((tonumber(state.points) or 0) + amount, 0, maxPoints)
+	state.completed = state.points >= maxPoints
 end
 
 local function missionMatches(mission, monsterName)
@@ -253,21 +227,24 @@ local function getMissionPayload(state, mission, daily)
 		missionDescription = mission.description,
 		currentProgress = progress,
 		maxProgress = mission.maxProgress,
-		rewardPoints = mission.rewardPoints,
+		rewardPoints = mission.points,
 	}
 end
 
 local function getDailyMissionBySlot(state, slot, dailyKey)
-	if not state.dailySlots[tostring(slot)] then
-		local daySeed = tonumber(dailyKey) or math.floor(os.time() / DAY_SECONDS)
-		local firstIndex = (daySeed % #dailyMissionPool) + 1
-		local secondIndex = ((firstIndex + 3) % #dailyMissionPool) + 1
-
-		state.dailySlots["1"] = dailyMissionPool[firstIndex].id
-		state.dailySlots["2"] = dailyMissionPool[secondIndex].id
+	local pool = slot == 1 and dailyFreeMissions or dailyDeluxeMissions
+	if #pool == 0 then
+		return nil
 	end
 
-	return missionById[state.dailySlots[tostring(slot)]]
+	local key = tostring(slot)
+	if not state.dailySlots[key] then
+		local daySeed = tonumber(dailyKey) or math.floor(os.time() / DAY_SECONDS)
+		local index = ((daySeed + slot * 7) % #pool) + 1
+		state.dailySlots[key] = pool[index].id
+	end
+
+	return missionById[state.dailySlots[key]]
 end
 
 local function getActiveDailyMissions(state, dailyKey)
@@ -294,12 +271,23 @@ local function isPremiumActive(state)
 end
 
 local function getCurrentRewardStep(points)
-	return math.min(config.maxStep, math.floor((tonumber(points) or 0) / config.pointsPerStep))
+	return math.min(config.season.maxStep, math.floor((tonumber(points) or 0) / config.season.pointsPerStep))
+end
+
+local function getCurrentWeek(season)
+	if os.time() < season.beginTime then
+		return 0
+	end
+	return math.max(1, math.min(math.ceil((os.time() - season.beginTime + 1) / WEEK_SECONDS), math.ceil((season.endTime - season.beginTime) / WEEK_SECONDS)))
+end
+
+local function isGeneralMissionUnlocked(mission, season)
+	return tonumber(mission.unlockWeek) == nil or tonumber(mission.unlockWeek) <= getCurrentWeek(season)
 end
 
 local function buildMissionsPayload(player, state, season, daily)
 	local currentRewardStep = getCurrentRewardStep(state.points)
-	local nextStepPoints = math.min((currentRewardStep + 1) * config.pointsPerStep, config.maxStep * config.pointsPerStep)
+	local nextStepPoints = math.min((currentRewardStep + 1) * config.season.pointsPerStep, config.season.maxStep * config.season.pointsPerStep)
 
 	local dailyMissions = {}
 	for _, mission in ipairs(getActiveDailyMissions(state, daily.key)) do
@@ -310,7 +298,9 @@ local function buildMissionsPayload(player, state, season, daily)
 
 	local generalPayload = {}
 	for _, mission in ipairs(generalMissions) do
-		table.insert(generalPayload, getMissionPayload(state, mission, false))
+		if isGeneralMissionUnlocked(mission, season) then
+			table.insert(generalPayload, getMissionPayload(state, mission, false))
+		end
 	end
 
 	return {
@@ -318,8 +308,8 @@ local function buildMissionsPayload(player, state, season, daily)
 		beginTime = season.beginTime,
 		endTime = season.endTime,
 		points = state.points,
-		rerollPrice = config.dailyRerollBasePrice,
-		deluxePrice = config.deluxePrice,
+		rerollPrice = config.reroll.goldPerLevel,
+		deluxePrice = config.deluxe.price,
 		battlePassActive = isPremiumActive(state),
 		currentRewardStep = currentRewardStep,
 		nextStepPoints = nextStepPoints,
@@ -422,7 +412,11 @@ local function makeItemThingValues(items)
 	items = type(items) == "table" and items or {}
 	for index = 1, math.min(#items, 0xFFFF) do
 		local item = items[index] or {}
-		values[index] = makeItemThingValue(item.itemId or item.thingId, item.itemName or item.thingName)
+		if type(item) == "table" then
+			values[index] = makeItemThingValue(item.itemId or item.thingId, item.itemName or item.thingName)
+		else
+			values[index] = makeItemThingValue(item)
+		end
 	end
 	return values
 end
@@ -524,40 +518,117 @@ local function sendMissionState(player, state, season, daily)
 	end)
 end
 
+local function getRequirementError(player)
+	local requirements = config.requirements or {}
+	if player:getLevel() < (tonumber(requirements.minimumLevel) or 8) then
+		return string.format("You need level %d to use the Battle Pass.", tonumber(requirements.minimumLevel) or 8)
+	end
+	if requirements.requireVocation then
+		local vocation = player:getVocation()
+		if not vocation or vocation:getId() <= 0 then
+			return "You need to choose a vocation to use the Battle Pass."
+		end
+	end
+	return nil
+end
+
 function BattlePassSystem.sendMissions(player)
+	local requirementError = getRequirementError(player)
+	if requirementError then
+		player:sendCancelMessage("[Battle Pass] " .. requirementError)
+		return sendBattlePassError(player, requirementError)
+	end
 	local state, store, season, daily = loadState(player)
 	saveState(store, state)
 	return sendMissionState(player, state, season, daily)
 end
 
-local function makeReward(step, freeReward)
-	local rewardId = step * 10 + (freeReward and 1 or 2)
-	local count = freeReward and math.max(1, math.floor(step / 6)) or math.max(1, math.floor(step / 3))
+local rewardTypes = {
+	item = 1,
+	randomItem = 2,
+	randomMount = 3,
+	exercise = 4,
+	doubleSkill = 5,
+	level = 6,
+	prey = 7,
+	xpBoost = 8,
+	regeneration = 9,
+	overloadForge = 10,
+	instantReward = 11,
+	boostedExercise = 12,
+	charms = 13,
+	outfit = 14,
+	extraSkill = 15,
+	elementalOutfit = 16,
+	multiItem = 17,
+	choiceItem = 18,
+}
 
-	if step >= 45 then
-		count = count + (freeReward and 2 or 5)
-	elseif step >= 30 then
-		count = count + (freeReward and 1 or 3)
+local function makeMountValues(mounts)
+	local values = {}
+	for index, mount in ipairs(mounts or {}) do
+		values[index] = {
+			thingId = tonumber(mount.looktype) or 0,
+			thingName = tostring(mount.name or "Mount"),
+		}
+	end
+	return values
+end
+
+local function makeOutfitValues(outfits)
+	local values = {}
+	for index, outfit in ipairs(outfits or {}) do
+		values[index] = {
+			thingId = tonumber(outfit.looktype) or 0,
+			thingName = tostring(outfit.name or "Outfit"),
+		}
+	end
+	return values
+end
+
+local function makeReward(step, freeReward, definition)
+	if type(definition) ~= "table" then
+		return nil
 	end
 
-	return {
-		rewardId = rewardId,
-		rewardType = 1,
+	local rewardType = rewardTypes[definition.type]
+	if not rewardType then
+		print(string.format("[Battle Pass] Invalid reward type '%s' at step %d.", tostring(definition.type), step))
+		return nil
+	end
+
+	local reward = {
+		rewardId = step * 10 + (freeReward and 1 or 2),
+		rewardType = rewardType,
 		freeReward = freeReward,
-		-- TODO: Replace the placeholder Crystal Coin rewards with the final season reward table.
-		itemId = 3043,
-		count = count,
-		charges = 0,
-		stuck = false,
+		itemId = tonumber(definition.itemId) or 0,
+		count = math.max(1, tonumber(definition.count) or 1),
+		charges = math.max(0, tonumber(definition.charges) or 0),
+		stuck = definition.stuck == true,
 		hasClaimedReward = false,
-		durationTime = 0,
-		addons = 0,
+		durationTime = math.max(0, tonumber(definition.durationHours) or 0),
+		addons = math.max(0, tonumber(definition.addons) or 0),
 		randomValues = {},
 		choosableValues = {},
-		maleOutfit = {},
-		femaleOutfit = {},
-		items = {},
+		maleOutfit = definition.maleOutfit or {},
+		femaleOutfit = definition.femaleOutfit or {},
+		items = definition.items or {},
+		definition = definition,
 	}
+
+	if definition.type == "randomMount" then
+		reward.randomValues = makeMountValues(definition.mounts)
+	elseif definition.type == "outfit" then
+		reward.randomValues = makeOutfitValues(definition.male)
+		if #reward.randomValues == 0 then
+			reward.randomValues = makeOutfitValues(definition.female)
+		end
+	elseif definition.type == "elementalOutfit" then
+		reward.maleOutfit = definition.maleOutfit or {}
+		reward.femaleOutfit = definition.femaleOutfit or {}
+	end
+
+	return reward
 end
 
 local function setRewardClaimState(reward, state)
@@ -568,18 +639,25 @@ end
 
 local function buildRewardSteps(state)
 	local steps = {}
-	for step = 1, config.maxStep do
+	for step = 1, config.season.maxStep do
 		local rewards = {}
+		local configuredStep = config.rewards[step] or {}
 
-		if freeRewardSteps[step] then
-			local freeReward = makeReward(step, true)
+		if configuredStep.free then
+			local freeReward = makeReward(step, true, configuredStep.free)
+			if freeReward then
 			setRewardClaimState(freeReward, state)
 			table.insert(rewards, freeReward)
+			end
 		end
 
-		local premiumReward = makeReward(step, false)
-		setRewardClaimState(premiumReward, state)
-		table.insert(rewards, premiumReward)
+		if configuredStep.deluxe then
+			local premiumReward = makeReward(step, false, configuredStep.deluxe)
+			if premiumReward then
+				setRewardClaimState(premiumReward, state)
+				table.insert(rewards, premiumReward)
+			end
+		end
 
 		table.insert(steps, {
 			stepId = step,
@@ -590,6 +668,10 @@ local function buildRewardSteps(state)
 end
 
 function BattlePassSystem.sendRewards(player)
+	local requirementError = getRequirementError(player)
+	if requirementError then
+		return sendBattlePassError(player, requirementError)
+	end
 	local state, store = loadState(player)
 	local rewards = buildRewardSteps(state)
 	saveState(store, state)
@@ -625,11 +707,11 @@ function BattlePassSystem.sendRewards(player)
 					if reward.rewardType == 1 then
 						randomValues = {makeItemThingValue(reward.itemId, reward.itemName)}
 					elseif reward.rewardType == 2 or reward.rewardType == 4 or reward.rewardType == 12 then
-						randomValues = makeItemThingValues(reward.randomValues)
+						randomValues = makeItemThingValues(reward.definition.items or reward.definition.choices)
 					elseif reward.rewardType == 17 then
 						randomValues = makeItemThingValues(reward.items)
 					elseif reward.rewardType == 18 then
-						choosableValues = makeItemThingValues(reward.choosableValues)
+						choosableValues = makeItemThingValues(reward.definition.choices)
 					end
 					writeU32(out, reward.rewardId)
 					out:addByte(clamp(reward.rewardType, 0, 0xFF))
@@ -656,31 +738,183 @@ end
 local function findReward(step, rewardId)
 	step = tonumber(step) or 0
 	rewardId = tonumber(rewardId) or 0
-	if step < 1 or step > config.maxStep then
+	if step < 1 or step > config.season.maxStep then
 		return nil
 	end
 
-	if freeRewardSteps[step] then
-		local freeReward = makeReward(step, true)
+	local configuredStep = config.rewards[step] or {}
+	if configuredStep.free then
+		local freeReward = makeReward(step, true, configuredStep.free)
 		if freeReward.rewardId == rewardId then
 			return freeReward
 		end
 	end
 
-	local premiumReward = makeReward(step, false)
-	if premiumReward.rewardId == rewardId then
-		return premiumReward
+	if configuredStep.deluxe then
+		local premiumReward = makeReward(step, false, configuredStep.deluxe)
+		if premiumReward.rewardId == rewardId then
+			return premiumReward
+		end
 	end
 	return nil
 end
 
+local function resolveItemChoice(itemIds, objectId)
+	for _, itemId in ipairs(itemIds or {}) do
+		local clientId = select(1, getItemTypeInfo(itemId))
+		if objectId == itemId or objectId == clientId then
+			return itemId
+		end
+	end
+	return nil
+end
+
+local function addItemsToBattlePassInbox(player, items)
+	local inbox = player:getStoreInbox()
+	if not inbox then
+		return false, "Your Battle Pass inbox is not available."
+	end
+
+	local neededSlots = 0
+	for _, entry in ipairs(items) do
+		local itemType = ItemType(entry.itemId)
+		if not itemType or itemType:getId() ~= entry.itemId then
+			return false, "This season has an invalid reward item configured."
+		end
+		neededSlots = neededSlots + (itemType:isStackable() and 1 or entry.count)
+	end
+	if inbox:getEmptySlots() < neededSlots then
+		return false, "Your Battle Pass inbox does not have enough room for this reward."
+	end
+
+	for _, entry in ipairs(items) do
+		local itemType = ItemType(entry.itemId)
+		local deliveries = itemType:isStackable() and 1 or entry.count
+		local amount = itemType:isStackable() and entry.count or 1
+		for _ = 1, deliveries do
+			local item = Game.createItem(entry.itemId, amount)
+			if not item then
+				return false, "Could not create the reward item."
+			end
+			if entry.charges and entry.charges > 0 then
+				item:setAttribute(ITEM_ATTRIBUTE_CHARGES, entry.charges)
+			end
+			if inbox:addItemEx(item, INDEX_WHEREEVER, FLAG_NOLIMIT) ~= RETURNVALUE_NOERROR then
+				item:remove()
+				return false, "Your Battle Pass inbox does not have enough room for this reward."
+			end
+		end
+	end
+	return true
+end
+
+local function rewardSkillParameter(skillId)
+	local parameters = {
+		[0] = CONDITION_PARAM_SKILL_FIST,
+		[1] = CONDITION_PARAM_SKILL_CLUB,
+		[2] = CONDITION_PARAM_SKILL_SWORD,
+		[3] = CONDITION_PARAM_SKILL_AXE,
+		[4] = CONDITION_PARAM_SKILL_DISTANCE,
+		[5] = CONDITION_PARAM_SKILL_SHIELD,
+		[13] = CONDITION_PARAM_STAT_MAGICPOINTS,
+	}
+	return parameters[skillId]
+end
+
 local function deliverReward(player, reward, objectId)
-	if reward.rewardType == 1 then
-		local added = player:addItem(reward.itemId, reward.count, true)
-		if not added then
-			return false, "Failed to deliver item. Check your inventory."
+	local definition = reward.definition
+	if definition.type == "item" then
+		return addItemsToBattlePassInbox(player, { { itemId = reward.itemId, count = reward.count, charges = reward.charges } })
+	elseif definition.type == "randomItem" then
+		local items = definition.items or {}
+		if #items == 0 then
+			return false, "This season has an empty random-item reward."
+		end
+		local itemId = items[math.random(#items)]
+		return addItemsToBattlePassInbox(player, { { itemId = itemId, count = reward.count, charges = reward.charges } })
+	elseif definition.type == "exercise" or definition.type == "boostedExercise" or definition.type == "choiceItem" then
+		local itemId = resolveItemChoice(definition.choices, objectId)
+		if not itemId then
+			return false, "Choose a valid reward item first."
+		end
+		return addItemsToBattlePassInbox(player, { { itemId = itemId, count = reward.count, charges = reward.charges } })
+	elseif definition.type == "multiItem" then
+		return addItemsToBattlePassInbox(player, definition.items)
+	elseif definition.type == "randomMount" then
+		local available = {}
+		for _, mount in ipairs(definition.mounts or {}) do
+			if mount.id and not player:hasMount(mount.id) then
+				table.insert(available, mount)
+			end
+		end
+		if #available == 0 then
+			return false, "You already own every mount in this reward."
+		end
+		if not player:addMount(available[math.random(#available)].id) then
+			return false, "Could not add the selected mount."
 		end
 		return true
+	elseif definition.type == "outfit" then
+		local outfits = player:getSex() == PLAYERSEX_FEMALE and definition.female or definition.male
+		if #outfits == 0 then
+			outfits = definition.male or definition.female or {}
+		end
+		for _, outfit in ipairs(outfits) do
+			if definition.addons and definition.addons > 0 then
+				player:addOutfitAddon(outfit.looktype, definition.addons)
+			else
+				player:addOutfit(outfit.looktype)
+			end
+		end
+		return #outfits > 0, #outfits > 0 and nil or "This season has an empty outfit reward."
+	elseif definition.type == "level" then
+		return player:addLevel(reward.count), "Could not add the level reward."
+	elseif definition.type == "prey" then
+		if not PreySystem or not PreySystem.addWildcards or not PreySystem.addWildcards(player, reward.count) then
+			return false, "Prey System is not available."
+		end
+		return true
+	elseif definition.type == "charms" then
+		if not db.query("UPDATE `players` SET `charmpoints` = `charmpoints` + " .. reward.count .. " WHERE `id` = " .. player:getGuid()) then
+			return false, "Could not add charm points."
+		end
+		return true
+	elseif definition.type == "xpBoost" then
+		if not player.getXpBoostTime or not player.setXpBoostTime or not player.setXpBoostPercent then
+			return false, "XP Boost is not available."
+		end
+		local duration = math.min(65535, reward.durationTime * 60 * 60)
+		player:setXpBoostPercent(math.max(player:getXpBoostPercent(), tonumber(definition.percent) or 50))
+		player:setXpBoostTime(math.min(65535, player:getXpBoostTime() + duration))
+		return true
+	elseif definition.type == "regeneration" then
+		local vocation = player:getVocation()
+		if not vocation then
+			return false, "You need a vocation to receive this reward."
+		end
+		local condition = Condition(CONDITION_REGENERATION, CONDITIONID_DEFAULT)
+		condition:setParameter(CONDITION_PARAM_SUBID, 43000 + reward.rewardId)
+		condition:setParameter(CONDITION_PARAM_TICKS, reward.durationTime * 60 * 60 * 1000)
+		condition:setParameter(CONDITION_PARAM_HEALTHGAIN, vocation:getHealthGainAmount())
+		condition:setParameter(CONDITION_PARAM_HEALTHTICKS, vocation:getHealthGainTicks())
+		condition:setParameter(CONDITION_PARAM_MANAGAIN, vocation:getManaGainAmount())
+		condition:setParameter(CONDITION_PARAM_MANATICKS, vocation:getManaGainTicks())
+		return player:addCondition(condition), "Could not add the regeneration reward."
+	elseif definition.type == "doubleSkill" then
+		local now = os.time()
+		local currentUntil = tonumber(player:getStorageValue(PlayerStorageKeys.battlePassDoubleSkillUntil)) or 0
+		player:setStorageValue(PlayerStorageKeys.battlePassDoubleSkillUntil, math.max(now, currentUntil) + reward.durationTime * 60 * 60)
+		return true
+	elseif definition.type == "extraSkill" then
+		local skillParameter = rewardSkillParameter(objectId)
+		if not skillParameter then
+			return false, "Choose a valid skill first."
+		end
+		local condition = Condition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT)
+		condition:setParameter(CONDITION_PARAM_SUBID, 44000 + reward.rewardId)
+		condition:setParameter(CONDITION_PARAM_TICKS, reward.durationTime * 60 * 60 * 1000)
+		condition:setParameter(skillParameter, reward.count)
+		return player:addCondition(condition), "Could not add the skill reward."
 	end
 
 	return false, "Unsupported reward type."
@@ -736,6 +970,10 @@ function BattlePassSystem.rerollDailyMission(player, data)
 	end
 
 	local state, store, season, daily = loadState(player)
+	if state.completed or os.time() < season.beginTime or os.time() >= season.endTime then
+		player:sendCancelMessage("[Battle Pass] This season is not accepting mission progress.")
+		return false
+	end
 	getActiveDailyMissions(state, daily.key)
 
 	local slotKey = nil
@@ -750,32 +988,50 @@ function BattlePassSystem.rerollDailyMission(player, data)
 		player:sendCancelMessage("[Battle Pass] This daily mission is not active.")
 		return false
 	end
-
-	local cost = config.dailyRerollBasePrice * player:getLevel()
-	if cost > 0 and not player:removeMoneyBank(cost) then
-		player:sendCancelMessage("[Battle Pass] You do not have enough gold for this reroll.")
+	if slotKey == "2" and not isPremiumActive(state) then
+		player:sendCancelMessage("[Battle Pass] Deluxe Battle Pass is required for this mission.")
 		return false
 	end
 
-	state.rerollCounter = (tonumber(state.rerollCounter) or 0) + 1
+	local pool = slotKey == "1" and dailyFreeMissions or dailyDeluxeMissions
+	if #pool < 2 then
+		player:sendCancelMessage("[Battle Pass] This mission cannot be rerolled right now.")
+		return false
+	end
+
+	local nextRerollCounter = (tonumber(state.rerollCounter) or 0) + 1
 	local used = {}
 	for _, activeMissionId in pairs(state.dailySlots) do
 		used[activeMissionId] = true
 	end
 
-	local startIndex = ((state.rerollCounter + tonumber(slotKey)) % #dailyMissionPool) + 1
-	for offset = 0, #dailyMissionPool - 1 do
-		local index = ((startIndex + offset - 1) % #dailyMissionPool) + 1
-		local candidate = dailyMissionPool[index]
+	local replacement = nil
+	local startIndex = ((nextRerollCounter + tonumber(slotKey)) % #pool) + 1
+	for offset = 0, #pool - 1 do
+		local index = ((startIndex + offset - 1) % #pool) + 1
+		local candidate = pool[index]
 		if candidate and not used[candidate.id] then
-			state.dailySlots[slotKey] = candidate.id
-			state.dailyProgress[missionId] = nil
-			state.dailyAwarded[missionId] = nil
-			state.dailyProgress[candidate.id] = nil
-			state.dailyAwarded[candidate.id] = nil
+			replacement = candidate
 			break
 		end
 	end
+	if not replacement then
+		player:sendCancelMessage("[Battle Pass] There is no different mission available to reroll.")
+		return false
+	end
+
+	local cost = (tonumber(config.reroll.goldPerLevel) or 800) * player:getLevel()
+	if cost > 0 and not player:removeMoneyBank(cost) then
+		player:sendCancelMessage("[Battle Pass] You do not have enough gold for this reroll.")
+		return false
+	end
+
+	state.rerollCounter = nextRerollCounter
+	state.dailySlots[slotKey] = replacement.id
+	state.dailyProgress[missionId] = nil
+	state.dailyAwarded[missionId] = nil
+	state.dailyProgress[replacement.id] = nil
+	state.dailyAwarded[replacement.id] = nil
 
 	saveState(store, state)
 	sendMissionState(player, state, season, daily)
@@ -797,8 +1053,8 @@ local function updateMissionProgress(player, state, mission, daily, monsterName)
 
 	if current >= mission.maxProgress and not wasMissionAwarded(state, mission, daily) then
 		setMissionAwarded(state, mission, daily)
-		addBattlePassPoints(state, mission.rewardPoints)
-		player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Mission completed: " .. mission.name .. " (+" .. mission.rewardPoints .. " points).")
+		addBattlePassPoints(state, mission.points)
+		player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Mission completed: " .. mission.name .. " (+" .. mission.points .. " points).")
 	end
 
 	return true
@@ -812,9 +1068,12 @@ function BattlePassSystem.onKill(player, target)
 	if target:getMaster() then
 		return true
 	end
+	if getRequirementError(player) then
+		return true
+	end
 
 	local state, store, season, daily = loadState(player)
-	if os.time() >= season.endTime then
+	if state.completed or os.time() < season.beginTime or os.time() >= season.endTime then
 		return true
 	end
 
@@ -822,12 +1081,18 @@ function BattlePassSystem.onKill(player, target)
 	local changed = false
 	local previousStep = getCurrentRewardStep(state.points)
 
-	for _, mission in ipairs(getActiveDailyMissions(state, daily.key)) do
-		changed = updateMissionProgress(player, state, mission, true, monsterName) or changed
+	local dailyMissions = getActiveDailyMissions(state, daily.key)
+	if not state.completed and dailyMissions[1] then
+		changed = updateMissionProgress(player, state, dailyMissions[1], true, monsterName) or changed
+	end
+	if not state.completed and isPremiumActive(state) and dailyMissions[2] then
+		changed = updateMissionProgress(player, state, dailyMissions[2], true, monsterName) or changed
 	end
 
 	for _, mission in ipairs(generalMissions) do
-		changed = updateMissionProgress(player, state, mission, false, monsterName) or changed
+		if not state.completed and isGeneralMissionUnlocked(mission, season) then
+			changed = updateMissionProgress(player, state, mission, false, monsterName) or changed
+		end
 	end
 
 	if changed then
@@ -841,12 +1106,19 @@ function BattlePassSystem.onKill(player, target)
 end
 
 function BattlePassSystem.purchasePremium(player, skipCoinCharge)
+	local requirementError = getRequirementError(player)
+	if requirementError then
+		return requirementError
+	end
 	local state, store, season, daily = loadState(player)
+	if os.time() < season.beginTime or os.time() >= season.endTime then
+		return "The Battle Pass season is not active."
+	end
 	if isPremiumActive(state) then
 		return "You already have the Deluxe Battle Pass for this season."
 	end
 
-	if not skipCoinCharge and not player:removeTibiaCoins(config.deluxePrice) then
+	if not skipCoinCharge and not player:removeTibiaCoins(config.deluxe.price) then
 		return "Not enough Tibia Coins."
 	end
 
@@ -856,6 +1128,39 @@ function BattlePassSystem.purchasePremium(player, skipCoinCharge)
 	sendMissionState(player, state, season, daily)
 	BattlePassSystem.sendRewards(player)
 	return nil
+end
+
+function BattlePassSystem.resetPlayer(player)
+	if not player then
+		return false, "Player not found."
+	end
+	getStore(player):remove("state")
+	player:setStorageValue(PlayerStorageKeys.battlePassSeasonEpoch, -1)
+	local state, store, season, daily = loadState(player)
+	saveState(store, state)
+	if supportsCustomNetwork(player) then
+		sendMissionState(player, state, season, daily)
+		BattlePassSystem.sendRewards(player)
+	end
+	return true
+end
+
+function BattlePassSystem.startNewSeason()
+	local seasonStore = getSeasonStore()
+	local currentEpoch = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonEpoch)) or 0
+	Game.setStorageValue(GlobalStorageKeys.battlePassSeasonEpoch, math.max(1, currentEpoch + 1))
+	Game.setStorageValue(GlobalStorageKeys.battlePassSeasonStartedAt, os.time())
+	seasonStore:set("configId", tostring(config.season.id or "season"))
+
+	for _, onlinePlayer in ipairs(Game.getPlayers()) do
+		BattlePassSystem.resetPlayer(onlinePlayer)
+		onlinePlayer:sendTextMessage(MESSAGE_EVENT_ADVANCE, "[Battle Pass] A new season has started. Your Battle Pass progress was reset.")
+	end
+	return getSeason()
+end
+
+function BattlePassSystem.getSeasonInfo()
+	return getSeason()
 end
 
 local function isRateLimited(player, action)

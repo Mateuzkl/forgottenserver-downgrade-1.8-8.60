@@ -1,0 +1,69 @@
+local talk = TalkAction("/battlepass")
+
+local function usage(player)
+	player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
+		"Usage: /battlepass status | newseason | reset <player> | sync <player>")
+end
+
+function talk.onSay(player, words, param)
+	if not player:getGroup():getAccess() then
+		return true
+	end
+	if not BattlePassSystem then
+		player:sendCancelMessage("Battle Pass system is disabled.")
+		return false
+	end
+
+	local action, targetName = param:match("^(%S+)%s*(.*)$")
+	action = (action or "status"):lower()
+	targetName = (targetName or ""):trim()
+
+	if action == "status" then
+		local season = BattlePassSystem.getSeasonInfo()
+		player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
+			string.format("Battle Pass: %s (epoch %d), starts %s, ends %s.", season.id, season.epoch,
+				os.date("%Y-%m-%d %H:%M", season.beginTime), os.date("%Y-%m-%d %H:%M", season.endTime)))
+		return false
+	end
+
+	if action == "newseason" then
+		local season = BattlePassSystem.startNewSeason()
+		player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
+			string.format("New Battle Pass season started: %s.", season.id))
+		return false
+	end
+
+	if action == "reset" or action == "sync" then
+		if targetName == "" then
+			usage(player)
+			return false
+		end
+
+		local target = Player(targetName)
+		if not target then
+			player:sendCancelMessage("Player must be online.")
+			return false
+		end
+
+		if action == "reset" then
+			local ok, errorMessage = BattlePassSystem.resetPlayer(target)
+			if not ok then
+				player:sendCancelMessage(errorMessage or "Could not reset Battle Pass state.")
+				return false
+			end
+			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Battle Pass state reset for " .. target:getName() .. ".")
+		else
+			BattlePassSystem.sendMissions(target)
+			BattlePassSystem.sendRewards(target)
+			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Battle Pass sent to " .. target:getName() .. ".")
+		end
+		return false
+	end
+
+	usage(player)
+	return false
+end
+
+talk:separator(" ")
+talk:access(true)
+talk:register()

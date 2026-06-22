@@ -34,6 +34,12 @@ PlayerStorageKeys = {
     dailyRewardStreak = 90722,
     dailyRewardJokerTokens = 90723,
 
+    -- Battle Pass
+    -- The detailed state is persisted in player KV under the "battlepass" scope.
+    -- These numeric storages are intentionally reserved for timers/version markers.
+    battlePassSeasonEpoch = 90730,
+    battlePassDoubleSkillUntil = 90731,
+
     -- Forge system
     forgeDust = 10000,
     forgeDustLimit = 10001,
@@ -62,6 +68,8 @@ GlobalStorageKeys = {
     workbenchOwner = 30051,
     boostedCreatureIndex = 90001,
     boostedCreatureDay = 90002,
+    battlePassSeasonEpoch = 90500,
+    battlePassSeasonStartedAt = 90501,
 }
 
 AccountStorageKeys = {}
