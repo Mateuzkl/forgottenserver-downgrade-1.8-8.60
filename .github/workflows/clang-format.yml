@@ -35,7 +35,7 @@ jobs:
 
       - name: Run clang format lint
         if: ${{ github.ref != 'refs/heads/master' }}
-        uses: DoozyX/clang-format-lint-action@v0.16.2
+        uses: DoozyX/clang-format-lint-action@v0.18.2
         with:
           source: "source"
           extensions: "cpp,hpp,h"
