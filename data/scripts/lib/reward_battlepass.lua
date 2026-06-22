@@ -21,8 +21,11 @@ BattlePassConfig = {
 		startsAt = 0,
 		durationDays = 35,
 		resetHour = 10,
-		maxStep = 50,
-		pointsPerStep = 100,
+		-- The existing Season 2 mission pool can award 6,775 points. Eighty
+		-- points per step keeps the 80-level track attainable without changing
+		-- the published mission values.
+		maxStep = 80,
+		pointsPerStep = 80,
 	},
 
 	deluxe = {
@@ -31,6 +34,24 @@ BattlePassConfig = {
 
 	reroll = {
 		goldPerLevel = 800,
+	},
+
+	-- The shop unlocks when the player completes level 80. From then until the
+	-- season ends, completed daily missions award their normal point value as
+	-- shop points. `shopPoints` can be added to an individual daily mission to
+	-- override that amount. All catalog data is seasonal and lives here.
+	shop = {
+		items = {
+			{ id = 1, type = "mount", title = "Black Sheep Mount", description = "A dark and dependable companion.", price = 250, mountId = 4, looktype = 371 },
+			{ id = 2, type = "mount", title = "Crystal Wolf Mount", description = "A fierce crystalline wolf mount.", price = 900, mountId = 16, looktype = 390 },
+			{ id = 3, type = "mount", title = "Dragonling Mount", description = "Ride a young dragonling into battle.", price = 1500, mountId = 31, looktype = 506 },
+			{ id = 4, type = "item", title = "Stamina Extension", description = "One stamina extension delivered to your Store Inbox.", price = 350, itemId = 36725, count = 1, repeatable = true },
+			{ id = 5, type = "item", title = "Training Dummy", description = "A training dummy delivered to your Store Inbox.", price = 700, itemId = 28558, count = 1, repeatable = true },
+			{ id = 6, type = "item", title = "Durable Exercise Weapon", description = "A durable exercise weapon for your training.", price = 900, itemId = 35279, count = 1, repeatable = true },
+			{ id = 7, type = "prey", title = "Prey Wildcards", description = "Receive two Prey wildcards.", price = 200, count = 2, repeatable = true },
+			{ id = 8, type = "charms", title = "Charm Points", description = "Receive 50 charm points.", price = 600, count = 50, repeatable = true },
+			{ id = 9, type = "outfit", title = "Dragon Slayer Outfit", description = "Unlock the Dragon Slayer outfit with the first addon.", price = 1800, male = { { looktype = 1289, name = "Dragon Slayer" } }, female = { { looktype = 1289, name = "Dragon Slayer" } }, addons = 1 },
+		},
 	},
 
 	dailyMissions = {
@@ -161,3 +182,27 @@ reward[47] = { deluxe = item(36726) }
 reward[48] = { free = { type = "doubleSkill", durationHours = 12 }, deluxe = { type = "doubleSkill", durationHours = 12 } }
 reward[49] = { free = { type = "xpBoost", durationHours = 2, percent = 50 }, deluxe = item(36725) }
 reward[50] = { free = { type = "level", count = 2 }, deluxe = { type = "outfit", male = { { looktype = 1289, name = "Dragon Slayer" } }, female = { { looktype = 1289, name = "Dragon Slayer" } }, addons = 3 } }
+
+-- Levels 51-80 keep the same supported reward types and only use ids that
+-- exist in this data pack. Change this table freely for a later season.
+local extendedRewards = {
+	{ free = item(3043, 5), deluxe = item(36725) },
+	{ deluxe = { type = "prey", count = 3 } },
+	{ free = exercise(exerciseWeapons, 3600), deluxe = exercise(durableWeapons, 3600, true) },
+	{ deluxe = { type = "charms", count = 50 } },
+	{ free = { type = "doubleSkill", durationHours = 3 }, deluxe = { type = "regeneration", durationHours = 6 } },
+	{ deluxe = item(28558) },
+	{ free = randomItem({ 3043, 2160 }, 2), deluxe = { type = "xpBoost", durationHours = 2, percent = 50 } },
+	{ deluxe = { type = "randomMount", mounts = { { id = 4, looktype = 371, name = "Black Sheep" }, { id = 16, looktype = 390, name = "Crystal Wolf" }, { id = 31, looktype = 506, name = "Dragonling" } } } },
+	{ free = { type = "prey", count = 2 }, deluxe = item(36726) },
+	{ deluxe = { type = "multiItem", items = { { itemId = 36725, count = 1 }, { itemId = 3043, count = 3 } } } },
+}
+
+for step = 51, 80 do
+	reward[step] = extendedRewards[((step - 51) % #extendedRewards) + 1]
+end
+
+reward[80] = {
+	free = { type = "level", count = 2 },
+	deluxe = { type = "outfit", male = { { looktype = 1289, name = "Dragon Slayer" } }, female = { { looktype = 1289, name = "Dragon Slayer" } }, addons = 3 },
+}

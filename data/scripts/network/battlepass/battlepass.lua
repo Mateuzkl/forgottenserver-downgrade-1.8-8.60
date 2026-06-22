@@ -17,10 +17,13 @@ local REQUEST_GET_REWARDS = 2
 local REQUEST_REROLL = 3
 local REQUEST_REDEEM = 4
 local REQUEST_BUY_PREMIUM = 5
+local REQUEST_GET_SHOP = 6
+local REQUEST_BUY_SHOP = 7
 
 local RESPONSE_MISSIONS = 1
 local RESPONSE_REWARDS = 2
 local RESPONSE_ERROR = 3
+local RESPONSE_SHOP = 4
 
 local function supportsCustomNetwork(player)
 	return player and player.isUsingAstraClient and player:isUsingAstraClient()
@@ -38,6 +41,7 @@ local REQUEST_COOLDOWN_SECONDS = 1
 local rateLimitedActions = {
 	getMissions = true,
 	getRewards = true,
+	getShop = true,
 }
 local lastRequest = {}
 
@@ -128,10 +132,12 @@ local function ensureStateTables(state)
 	state.dailyAwarded = type(state.dailyAwarded) == "table" and state.dailyAwarded or {}
 	state.dailySlots = type(state.dailySlots) == "table" and state.dailySlots or {}
 	state.claimed = type(state.claimed) == "table" and state.claimed or {}
+	state.shopPurchases = type(state.shopPurchases) == "table" and state.shopPurchases or {}
 	state.points = clamp(state.points, 0, config.season.maxStep * config.season.pointsPerStep)
+	state.shopPoints = clamp(state.shopPoints, 0, 0xFFFFFFFF)
 	state.rerollCounter = tonumber(state.rerollCounter) or 0
 	state.premium = state.premium == true
-	state.completed = state.completed == true or state.points >= config.season.maxStep * config.season.pointsPerStep
+	state.completed = state.points >= config.season.maxStep * config.season.pointsPerStep
 end
 
 local function resetStateForSeason(season)
@@ -146,6 +152,8 @@ local function resetStateForSeason(season)
 		dailyProgress = {},
 		dailyAwarded = {},
 		claimed = {},
+		shopPurchases = {},
+		shopPoints = 0,
 		rerollCounter = 0,
 		completed = false,
 	}
@@ -203,6 +211,10 @@ local function addBattlePassPoints(state, amount)
 	local maxPoints = config.season.maxStep * config.season.pointsPerStep
 	state.points = clamp((tonumber(state.points) or 0) + amount, 0, maxPoints)
 	state.completed = state.points >= maxPoints
+end
+
+local function addShopPoints(state, amount)
+	state.shopPoints = clamp((tonumber(state.shopPoints) or 0) + amount, 0, 0xFFFFFFFF)
 end
 
 local function missionMatches(mission, monsterName)
@@ -421,6 +433,58 @@ local function makeItemThingValues(items)
 	return values
 end
 
+local shopTypes = {
+	item = 1,
+	mount = 2,
+	outfit = 3,
+	prey = 4,
+	charms = 5,
+}
+
+local function getShopEntries()
+	local shop = config.shop
+	return type(shop) == "table" and type(shop.items) == "table" and shop.items or {}
+end
+
+local function getShopEntry(shopId)
+	shopId = tonumber(shopId) or 0
+	for _, entry in ipairs(getShopEntries()) do
+		if tonumber(entry.id) == shopId then
+			return entry
+		end
+	end
+	return nil
+end
+
+local function getShopOutfit(player, entry)
+	local outfits = player:getSex() == PLAYERSEX_FEMALE and entry.female or entry.male
+	if type(outfits) ~= "table" or #outfits == 0 then
+		outfits = entry.male or entry.female or {}
+	end
+	return outfits[1]
+end
+
+local function isShopEntryPurchased(player, state, entry)
+	if entry.repeatable == true then
+		return false
+	end
+
+	local shopId = tostring(tonumber(entry.id) or 0)
+	if state.shopPurchases[shopId] == true then
+		return true
+	end
+	if entry.type == "mount" and tonumber(entry.mountId) and player:hasMount(tonumber(entry.mountId)) then
+		return true
+	end
+	if entry.type == "outfit" then
+		local outfit = getShopOutfit(player, entry)
+		if outfit and outfit.looktype and player:hasOutfit(outfit.looktype, tonumber(entry.addons) or 0) then
+			return true
+		end
+	end
+	return false
+end
+
 local function writeThingValues(out, values)
 	values = type(values) == "table" and values or {}
 	local count = math.min(#values, 0xFFFF)
@@ -530,6 +594,37 @@ local function getRequirementError(player)
 		end
 	end
 	return nil
+end
+
+function BattlePassSystem.sendShop(player)
+	local requirementError = getRequirementError(player)
+	if requirementError then
+		return sendBattlePassError(player, requirementError)
+	end
+
+	local state, store = loadState(player)
+	local entries = getShopEntries()
+	saveState(store, state)
+
+	return sendBattlePassMessage(player, RESPONSE_SHOP, function(out)
+		writeU32(out, state.shopPoints)
+		writeBool(out, state.completed)
+		writeU16(out, #entries)
+		for _, entry in ipairs(entries) do
+			local itemClientId = select(1, getItemTypeInfo(entry.itemId))
+			local outfit = entry.type == "outfit" and getShopOutfit(player, entry) or nil
+			writeU16(out, entry.id)
+			writeString(out, entry.title or entry.name or "Battle Pass Offer")
+			writeString(out, entry.description or "")
+			writeU32(out, entry.price)
+			out:addByte(clamp(shopTypes[entry.type] or 0, 0, 0xFF))
+			writeBool(out, entry.repeatable == true)
+			writeBool(out, isShopEntryPurchased(player, state, entry))
+			writeU16(out, itemClientId)
+			writeU16(out, entry.looktype or (outfit and outfit.looktype) or 0)
+			out:addByte(clamp(entry.addons, 0, 0xFF))
+		end
+	end)
 end
 
 function BattlePassSystem.sendMissions(player)
@@ -920,6 +1015,88 @@ local function deliverReward(player, reward, objectId)
 	return false, "Unsupported reward type."
 end
 
+local function deliverShopEntry(player, entry)
+	if entry.type == "item" then
+		return addItemsToBattlePassInbox(player, {
+			{ itemId = tonumber(entry.itemId) or 0, count = math.max(1, tonumber(entry.count) or 1), charges = math.max(0, tonumber(entry.charges) or 0) },
+		})
+	elseif entry.type == "mount" then
+		local mountId = tonumber(entry.mountId) or 0
+		if mountId <= 0 or player:hasMount(mountId) then
+			return false, "You already own this mount."
+		end
+		return player:addMount(mountId), "Could not add this mount."
+	elseif entry.type == "outfit" then
+		local outfit = getShopOutfit(player, entry)
+		if not outfit or not outfit.looktype then
+			return false, "This season has an invalid outfit configured."
+		end
+		local addons = math.max(0, tonumber(entry.addons) or 0)
+		if addons > 0 then
+			player:addOutfitAddon(outfit.looktype, addons)
+		else
+			player:addOutfit(outfit.looktype)
+		end
+		return true
+	elseif entry.type == "prey" then
+		local count = math.max(1, tonumber(entry.count) or 1)
+		if not PreySystem or not PreySystem.addWildcards or not PreySystem.addWildcards(player, count) then
+			return false, "Prey System is not available."
+		end
+		return true
+	elseif entry.type == "charms" then
+		local count = math.max(1, tonumber(entry.count) or 1)
+		if not db.query("UPDATE `players` SET `charmpoints` = `charmpoints` + " .. count .. " WHERE `id` = " .. player:getGuid()) then
+			return false, "Could not add charm points."
+		end
+		return true
+	end
+
+	return false, "Unsupported Battle Pass shop offer."
+end
+
+function BattlePassSystem.purchaseShopEntry(player, shopId)
+	local requirementError = getRequirementError(player)
+	if requirementError then
+		return false, requirementError
+	end
+
+	local state, store, season = loadState(player)
+	if os.time() < season.beginTime or os.time() >= season.endTime then
+		return false, "The Battle Pass season is not active."
+	end
+	if not state.completed then
+		return false, string.format("Complete Battle Pass level %d before using the shop.", config.season.maxStep)
+	end
+
+	local entry = getShopEntry(shopId)
+	if not entry then
+		return false, "Battle Pass shop offer not found."
+	end
+	if isShopEntryPurchased(player, state, entry) then
+		return false, "You already own this offer."
+	end
+
+	local price = math.max(0, tonumber(entry.price) or 0)
+	if state.shopPoints < price then
+		return false, "You do not have enough Battle Pass shop points."
+	end
+
+	local delivered, errorMessage = deliverShopEntry(player, entry)
+	if not delivered then
+		return false, errorMessage or "Could not deliver this offer."
+	end
+
+	state.shopPoints = state.shopPoints - price
+	if entry.repeatable ~= true then
+		state.shopPurchases[tostring(tonumber(entry.id) or 0)] = true
+	end
+	saveState(store, state)
+	player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Shop offer purchased.")
+	BattlePassSystem.sendShop(player)
+	return true
+end
+
 function BattlePassSystem.redeemReward(player, data)
 	local step = tonumber(data and data.index) or 0
 	local rewardId = tonumber(data and data.rewardId) or 0
@@ -970,7 +1147,7 @@ function BattlePassSystem.rerollDailyMission(player, data)
 	end
 
 	local state, store, season, daily = loadState(player)
-	if state.completed or os.time() < season.beginTime or os.time() >= season.endTime then
+	if os.time() < season.beginTime or os.time() >= season.endTime then
 		player:sendCancelMessage("[Battle Pass] This season is not accepting mission progress.")
 		return false
 	end
@@ -1053,8 +1230,15 @@ local function updateMissionProgress(player, state, mission, daily, monsterName)
 
 	if current >= mission.maxProgress and not wasMissionAwarded(state, mission, daily) then
 		setMissionAwarded(state, mission, daily)
-		addBattlePassPoints(state, mission.points)
-		player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Mission completed: " .. mission.name .. " (+" .. mission.points .. " points).")
+		if state.completed and daily then
+			local shopPoints = math.max(0, tonumber(mission.shopPoints) or tonumber(mission.points) or 0)
+			addShopPoints(state, shopPoints)
+			player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Daily mission completed: " .. mission.name .. " (+" .. shopPoints .. " shop points).")
+		else
+			local battlePassPoints = math.max(0, tonumber(mission.points) or 0)
+			addBattlePassPoints(state, battlePassPoints)
+			player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Mission completed: " .. mission.name .. " (+" .. battlePassPoints .. " points).")
+		end
 	end
 
 	return true
@@ -1073,7 +1257,7 @@ function BattlePassSystem.onKill(player, target)
 	end
 
 	local state, store, season, daily = loadState(player)
-	if state.completed or os.time() < season.beginTime or os.time() >= season.endTime then
+	if os.time() < season.beginTime or os.time() >= season.endTime then
 		return true
 	end
 
@@ -1082,10 +1266,10 @@ function BattlePassSystem.onKill(player, target)
 	local previousStep = getCurrentRewardStep(state.points)
 
 	local dailyMissions = getActiveDailyMissions(state, daily.key)
-	if not state.completed and dailyMissions[1] then
+	if dailyMissions[1] then
 		changed = updateMissionProgress(player, state, dailyMissions[1], true, monsterName) or changed
 	end
-	if not state.completed and isPremiumActive(state) and dailyMissions[2] then
+	if isPremiumActive(state) and dailyMissions[2] then
 		changed = updateMissionProgress(player, state, dailyMissions[2], true, monsterName) or changed
 	end
 
@@ -1100,6 +1284,9 @@ function BattlePassSystem.onKill(player, target)
 		sendMissionState(player, state, season, daily)
 		if getCurrentRewardStep(state.points) > previousStep then
 			BattlePassSystem.sendRewards(player)
+		end
+		if state.completed then
+			BattlePassSystem.sendShop(player)
 		end
 	end
 	return true
@@ -1141,6 +1328,7 @@ function BattlePassSystem.resetPlayer(player)
 	if supportsCustomNetwork(player) then
 		sendMissionState(player, state, season, daily)
 		BattlePassSystem.sendRewards(player)
+		BattlePassSystem.sendShop(player)
 	end
 	return true
 end
@@ -1194,10 +1382,19 @@ local function handleBattlePassRequest(player, action, data)
 		BattlePassSystem.sendMissions(player)
 	elseif action == "getRewards" then
 		BattlePassSystem.sendRewards(player)
+	elseif action == "getShop" then
+		BattlePassSystem.sendShop(player)
 	elseif action == "reroll" then
 		BattlePassSystem.rerollDailyMission(player, data)
 	elseif action == "redeem" then
 		BattlePassSystem.redeemReward(player, data)
+	elseif action == "buyShop" then
+		local success, errorMessage = BattlePassSystem.purchaseShopEntry(player, data.shopId)
+		if not success then
+			player:sendCancelMessage("[Battle Pass] " .. errorMessage)
+			sendBattlePassError(player, errorMessage)
+			BattlePassSystem.sendShop(player)
+		end
 	elseif action == "buyPremium" or action == "buyDeluxe" or action == "purchasePremium" then
 		local errorMessage = BattlePassSystem.purchasePremium(player)
 		if errorMessage then
@@ -1224,6 +1421,8 @@ function battlePassHandler.onReceive(player, msg)
 		return handleBattlePassRequest(player, "getMissions", {})
 	elseif request == REQUEST_GET_REWARDS then
 		return handleBattlePassRequest(player, "getRewards", {})
+	elseif request == REQUEST_GET_SHOP then
+		return handleBattlePassRequest(player, "getShop", {})
 	elseif request == REQUEST_REROLL then
 		local missionId = NetworkGuard.readString(msg, 128)
 		if not missionId then
@@ -1247,6 +1446,13 @@ function battlePassHandler.onReceive(player, msg)
 			rewardId = rewardId,
 			objectId = objectId,
 		})
+	elseif request == REQUEST_BUY_SHOP then
+		local shopId = NetworkGuard.readU16(msg)
+		if not shopId or shopId <= 0 then
+			sendBattlePassError(player, "Invalid Battle Pass shop offer.")
+			return true
+		end
+		return handleBattlePassRequest(player, "buyShop", { shopId = shopId })
 	elseif request == REQUEST_BUY_PREMIUM then
 		return handleBattlePassRequest(player, "buyPremium", {})
 	end
