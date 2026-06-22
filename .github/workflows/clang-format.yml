@@ -44,7 +44,7 @@ jobs:
 
       - name: Run add and commit
         if: ${{ github.ref != 'refs/heads/master' }}
-        uses: EndBug/add-and-commit@v9
+        uses: EndBug/add-and-commit@v10
         with:
           author_name: GitHub Actions
           author_email: github-actions[bot]@users.noreply.github.com
