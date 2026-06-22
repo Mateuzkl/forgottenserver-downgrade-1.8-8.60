@@ -116,7 +116,7 @@ local function getKillText(monsters, totalCount)
 	end
 
 	if monsterTypes == 1 then
-		return totalCount > 1 and (totalCount .. " " .. firstName .. "s") or firstName
+		return totalCount > 1 and (totalCount .. " creatures") or firstName
 	end
 
 	return totalCount .. " creatures"

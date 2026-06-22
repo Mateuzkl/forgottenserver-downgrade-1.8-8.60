@@ -550,10 +550,8 @@ local function lootCorpsesOnTile(player, tile, maxCorpses)
 		if lootedCount >= maxCorpses then
 			break
 		end
-		if canPlayerLootCorpse(player, corpse) then
-			lootCorpse(player, corpse)
-			lootedCount = lootedCount + 1
-		end
+		lootCorpse(player, corpse)
+		lootedCount = lootedCount + 1
 	end
 
 	return lootedCount

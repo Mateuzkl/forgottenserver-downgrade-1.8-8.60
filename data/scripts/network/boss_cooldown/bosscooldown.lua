@@ -235,6 +235,9 @@ function BossCooldown.rememberKey(player, scope, cooldownEnd)
 
 	local raceId = tostring(scope):match("^boss%.cooldown%.(.+)$")
 	if not raceId then
+		if logger and logger.warn then
+			logger.warn("[BossCooldown] Invalid cooldown scope '%s' for player %s (guid %d); invalidating cache.", tostring(scope), player:getName(), player:getGuid())
+		end
 		playerCooldownKeyCache[player:getGuid()] = nil
 		return
 	end
