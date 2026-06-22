@@ -111,22 +111,37 @@ namespace {
 constexpr uint8_t AstraItemFlagEquipable = 1 << 0;
 constexpr uint8_t AstraItemFlagAmmo = 1 << 1;
 
+bool isAstraItemMetadataEquipable(const ItemType& it)
+{
+	return it.weaponType != WEAPON_NONE || it.ammoType != AMMO_NONE || it.attack != 0 || it.defense != 0 ||
+	       it.extraDefense != 0 || it.armor != 0 || (it.slotPosition & SLOTP_NECKLACE) != 0 ||
+	       (it.slotPosition & SLOTP_RING) != 0 || (it.slotPosition & SLOTP_AMMO) != 0 ||
+	       (it.slotPosition & SLOTP_FEET) != 0 || (it.slotPosition & SLOTP_HEAD) != 0 ||
+	       (it.slotPosition & SLOTP_ARMOR) != 0 || (it.slotPosition & SLOTP_LEGS) != 0;
+}
+
 uint8_t getAstraItemMetadataFlags(const ItemType& it)
 {
 	uint8_t flags = 0;
 	if (it.weaponType == WEAPON_AMMO) {
 		flags |= AstraItemFlagAmmo;
 	}
-	if (it.weaponType != WEAPON_NONE || it.slotPosition != SLOTP_HAND) {
+	if (isAstraItemMetadataEquipable(it)) {
 		flags |= AstraItemFlagEquipable;
 	}
 	return flags;
 }
 
+void addAstraItemMetadata(NetworkMessage& msg, const ItemType& it)
+{
+	msg.add<uint16_t>(it.slotPosition);
+	msg.addByte(getAstraItemMetadataFlags(it));
+}
+
 } // namespace
 
 void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
-                             bool sendAstraQuiverCountU16)
+                             bool sendAstraItemState, bool sendAstraQuiverCountU16)
 {
 	addItemId(id);
 
@@ -147,6 +162,12 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
 	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
 		addByte(static_cast<uint8_t>(it.tier));
+	}
+
+	if (sendAstraItemState) {
+		addByte(0); // no instance duration is available in the id/count overload
+		addByte(0); // no instance charges are available in the id/count overload
+		addAstraItemMetadata(*this, it);
 	}
 }
 
@@ -201,8 +222,7 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 			addByte((it.charges != 0 && charges == it.charges) ? 1 : 0);
 		}
 
-		add<uint16_t>(it.slotPosition);
-		addByte(getAstraItemMetadataFlags(it));
+		addAstraItemMetadata(*this, it);
 	}
 }
 
