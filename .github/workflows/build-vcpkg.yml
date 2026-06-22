@@ -60,7 +60,7 @@ jobs:
         shell: bash
 
       - name: Get latest CMake
-        uses: lukka/get-cmake@v4.3.2
+        uses: lukka/get-cmake@v4.3.4
 
       - name: Cache vcpkg binary packages
         uses: actions/cache@v4
