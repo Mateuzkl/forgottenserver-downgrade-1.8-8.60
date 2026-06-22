@@ -75,7 +75,7 @@ jobs:
           vcpkgJsonGlob: 'vcpkg.json'
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@676c0e67b665684f17941acf5cc3af83bcf10228 # v0.0.6
+        uses: mozilla-actions/sccache-action@9e326ebed976843c9932b3aa0e021c6f50310eb4 # v0.0.6
 
       - name: Build with CMake
         uses: lukka/run-cmake@v10.9
