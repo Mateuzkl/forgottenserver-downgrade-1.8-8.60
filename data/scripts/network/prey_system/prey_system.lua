@@ -595,7 +595,7 @@ local function ensureSelectionList(player, slot, slotData)
 	return true
 end
 
-local function writeSlot(out, player, slot, slotData)
+local function writeSlot(out, player, slot, slotData, wildcardRaceIds)
 	out:addByte(slot)
 	if not isPreySlotUnlocked(player, slot) then
 		out:addByte(PREY_NATIVE_STATE_LOCKED)
@@ -618,7 +618,7 @@ local function writeSlot(out, player, slot, slotData)
 		end
 	elseif slotData.state == PREY_STATE_WILDCARD_SELECTION then
 		out:addByte(PREY_NATIVE_STATE_WILDCARD)
-		local raceIds = buildWildcardRaceIds(player, getPlayerPrey(player), slot)
+		local raceIds = wildcardRaceIds or buildWildcardRaceIds(player, getPlayerPrey(player), slot)
 		out:addU16(#raceIds)
 		for _, raceId in ipairs(raceIds) do
 			out:addU16(raceId)
@@ -663,7 +663,7 @@ local function sendFullPrey(player, sendBalances)
 	return true
 end
 
-local function sendSlotUpdate(player, slot)
+local function sendSlotUpdate(player, slot, wildcardRaceIds)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
@@ -671,7 +671,7 @@ local function sendSlotUpdate(player, slot)
 	local prey = getPlayerPrey(player)
 	local out = NetworkMessage(player)
 	out:addByte(PREY_NATIVE_OPCODE_DATA)
-	writeSlot(out, player, slot, prey.slots[slot])
+	writeSlot(out, player, slot, prey.slots[slot], wildcardRaceIds)
 	syncPreyCombatBonuses(player, prey)
 	local sent = out:sendToPlayer(player)
 	saveSlotToDB(player:getGuid(), slot, prey.slots[slot], prey.wildcards)
@@ -1247,7 +1247,8 @@ local function nativeRequestAllMonsters(player, slot)
 		return sendError(player, "You do not have enough Prey Wildcards.")
 	end
 
-	if #buildWildcardRaceIds(player, prey, slot) == 0 then
+	local raceIds = buildWildcardRaceIds(player, prey, slot)
+	if #raceIds == 0 then
 		return sendError(player, "Could not build the Prey creature list.")
 	end
 
@@ -1256,7 +1257,7 @@ local function nativeRequestAllMonsters(player, slot)
 	slotData.monster_name = ""
 	slotData.list_monsters = {}
 	slotData.time_left = 0
-	sendSlotUpdate(player, slot)
+	sendSlotUpdate(player, slot, raceIds)
 	sendPreyBalances(player)
 end
 
