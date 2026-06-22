@@ -4655,6 +4655,7 @@ void ProtocolGame::sendFeatures()
 		features[GameFeature::DisplayItemDuration] = true;
 		features[GameFeature::DisplayItemCharges] = true;
 		features[GameFeature::PackedPlayerInventory] = true;
+		features[GameFeature::AstraItemMetadata] = true;
 	}
 	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();
 	features[GameFeature::ThingUpgradeClassification] = false;

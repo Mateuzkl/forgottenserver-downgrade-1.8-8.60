@@ -106,6 +106,25 @@ void NetworkMessage::addItemId(uint16_t itemId)
 	add<uint16_t>(clientId);
 }
 
+namespace {
+
+constexpr uint8_t AstraItemFlagEquipable = 1 << 0;
+constexpr uint8_t AstraItemFlagAmmo = 1 << 1;
+
+uint8_t getAstraItemMetadataFlags(const ItemType& it)
+{
+	uint8_t flags = 0;
+	if (it.weaponType == WEAPON_AMMO) {
+		flags |= AstraItemFlagAmmo;
+	}
+	if (it.weaponType != WEAPON_NONE || it.slotPosition != SLOTP_HAND) {
+		flags |= AstraItemFlagEquipable;
+	}
+	return flags;
+}
+
+} // namespace
+
 void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
                              bool sendAstraQuiverCountU16)
 {
@@ -181,6 +200,9 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 			add<uint32_t>(charges);
 			addByte((it.charges != 0 && charges == it.charges) ? 1 : 0);
 		}
+
+		add<uint16_t>(it.slotPosition);
+		addByte(getAstraItemMetadataFlags(it));
 	}
 }
 
