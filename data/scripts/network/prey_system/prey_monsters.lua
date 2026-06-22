@@ -172,3 +172,22 @@ function PreyMonsters.generateList(playerLevel, excludeNames)
 	end
 	return result
 end
+
+function PreyMonsters.getAllNames(playerLevel, excludeNames)
+	excludeNames = excludeNames or {}
+	local excluded = {}
+	for _, name in ipairs(excludeNames) do
+		excluded[name:lower()] = true
+	end
+
+	local eligible = {}
+	local seen = {}
+	for _, monster in ipairs(monsterPool) do
+		addCandidate(eligible, seen, excluded, monster, playerLevel, false, true)
+	end
+
+	table.sort(eligible, function(a, b)
+		return a:lower() < b:lower()
+	end)
+	return eligible
+end

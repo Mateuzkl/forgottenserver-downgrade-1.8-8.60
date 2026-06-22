@@ -21,6 +21,7 @@ local PREY_OPCODE_CLEAR = 0xEC
 local PREY_OPCODE_TOGGLE_AUTO = 0xD8
 local PREY_OPCODE_TOGGLE_LOCK = 0xD9
 local PREY_OPCODE_RESOURCE_BALANCE = 0xEE
+local PREY_NATIVE_OPCODE_TIME_LEFT = 0xE7
 local PREY_NATIVE_OPCODE_REQUEST = 0xED
 local PREY_NATIVE_OPCODE_ACTION = 0xEB
 local PREY_NATIVE_OPCODE_DATA = 0xE8
@@ -31,12 +32,23 @@ local PREY_STATE_LIST_SELECTION = 1
 local PREY_STATE_BONUS_SELECTION = 2
 local PREY_STATE_ACTIVE = 3
 local PREY_STATE_INACTIVE = 4
+local PREY_STATE_WILDCARD_SELECTION = 5
 
 local PREY_NATIVE_STATE_LOCKED = 0
 local PREY_NATIVE_STATE_INACTIVE = 1
 local PREY_NATIVE_STATE_ACTIVE = 2
 local PREY_NATIVE_STATE_SELECTION = 3
+local PREY_NATIVE_STATE_WILDCARD = 5
 local PREY_NATIVE_UNLOCK_STORE = 1
+local PREY_NATIVE_BONUS_NONE = 4
+
+local PREY_NATIVE_ACTION_LIST_REROLL = 0
+local PREY_NATIVE_ACTION_BONUS_REROLL = 1
+local PREY_NATIVE_ACTION_MONSTER_SELECTION = 2
+local PREY_NATIVE_ACTION_REQUEST_ALL_MONSTERS = 3
+local PREY_NATIVE_ACTION_CHANGE_FROM_ALL = 4
+local PREY_NATIVE_ACTION_LOCK_PREY = 5
+local PREY_NATIVE_ACTION_UNLOCK_PERMANENT = 6
 
 local PREY_BONUS_NONE = 0
 local PREY_BONUS_DMG_BOOST = 1
@@ -465,6 +477,19 @@ local function getMonsterOutfit(name)
 	}
 end
 
+local function getMonsterRaceId(name)
+	local monsterType = name and name ~= "" and MonsterType(name)
+	if not monsterType then
+		return nil
+	end
+
+	local raceId = tonumber(monsterType:raceId()) or 0
+	if raceId <= 0 or raceId > 0xFFFF then
+		return nil
+	end
+	return raceId
+end
+
 local function writeMonster(out, name)
 	out:addString(name or "")
 
@@ -517,6 +542,27 @@ local function getTimeUntilFreeReroll(slotData)
 	return math.max(0, math.ceil(((slotData.reroll_at or 0) - os.time()) / 60))
 end
 
+local function getNativeBonusType(slotData)
+	if not slotData or slotData.bonus_type == PREY_BONUS_NONE then
+		return PREY_NATIVE_BONUS_NONE
+	end
+	return math.max(0, slotData.bonus_type - 1)
+end
+
+local function getNativeBonusValue(slotData)
+	if not slotData or slotData.bonus_type == PREY_BONUS_NONE then
+		return 0
+	end
+	return math.max(0, slotData.bonus_value or 0)
+end
+
+local function getNativeBonusGrade(slotData)
+	if not slotData or slotData.bonus_type == PREY_BONUS_NONE then
+		return 0
+	end
+	return math.max(1, math.min(10, math.ceil((slotData.bonus_value or 0) / 5)))
+end
+
 local function normalizeSlot(slotData)
 	if slotData.state == PREY_STATE_EMPTY then
 		slotData.state = PREY_STATE_LIST_SELECTION
@@ -532,6 +578,7 @@ local function normalizeSlot(slotData)
 end
 
 local getOtherSlotMonsters
+local buildWildcardRaceIds
 
 local function ensureSelectionList(player, slot, slotData)
 	if slotData.state ~= PREY_STATE_LIST_SELECTION then
@@ -568,12 +615,19 @@ local function writeSlot(out, player, slot, slotData)
 		for _, name in ipairs(list) do
 			writeMonster(out, name)
 		end
+	elseif slotData.state == PREY_STATE_WILDCARD_SELECTION then
+		out:addByte(PREY_NATIVE_STATE_WILDCARD)
+		local raceIds = buildWildcardRaceIds(player, getPlayerPrey(player), slot)
+		out:addU16(#raceIds)
+		for _, raceId in ipairs(raceIds) do
+			out:addU16(raceId)
+		end
 	elseif slotData.state == PREY_STATE_ACTIVE then
 		out:addByte(PREY_NATIVE_STATE_ACTIVE)
 		writeMonster(out, slotData.monster_name)
-		out:addByte(math.max(0, slotData.bonus_type - 1))
-		out:addU16(slotData.bonus_value)
-		out:addByte(math.max(1, math.min(10, math.ceil(slotData.bonus_value / 5))))
+		out:addByte(getNativeBonusType(slotData))
+		out:addU16(getNativeBonusValue(slotData))
+		out:addByte(getNativeBonusGrade(slotData))
 		out:addU16(slotData.time_left)
 	else
 		out:addByte(PREY_NATIVE_STATE_INACTIVE)
@@ -623,6 +677,18 @@ local function sendSlotUpdate(player, slot)
 	return sent
 end
 
+local function sendPreyTimeLeft(player, slot, timeLeft)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local out = NetworkMessage(player)
+	out:addByte(PREY_NATIVE_OPCODE_TIME_LEFT)
+	out:addByte(slot)
+	out:addU16(math.max(0, math.min(0xFFFF, timeLeft or 0)))
+	return out:sendToPlayer(player)
+end
+
 getOtherSlotMonsters = function(player, prey, excludedSlot)
 	local names = {}
 	for slot = 0, PREY_SLOTS - 1 do
@@ -637,6 +703,58 @@ getOtherSlotMonsters = function(player, prey, excludedSlot)
 		end
 	end
 	return names
+end
+
+local function isMonsterUsedByOtherSlot(player, prey, excludedSlot, monsterName)
+	local lowerName = (monsterName or ""):lower()
+	for slot = 0, PREY_SLOTS - 1 do
+		if slot ~= excludedSlot and isPreySlotUnlocked(player, slot) then
+			local slotData = prey.slots[slot]
+			if (slotData.monster_name or ""):lower() == lowerName then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function isWildcardRaceAvailable(player, prey, slot, raceId)
+	for _, availableRaceId in ipairs(buildWildcardRaceIds(player, prey, slot)) do
+		if availableRaceId == raceId then
+			return true
+		end
+	end
+	return false
+end
+
+local function getPreyMonsterNameByRaceId(raceId)
+	raceId = tonumber(raceId) or 0
+	if raceId <= 0 then
+		return nil
+	end
+
+	for _, name in ipairs(PreyMonsters.getAllNames()) do
+		if getMonsterRaceId(name) == raceId then
+			return name
+		end
+	end
+	return nil
+end
+
+buildWildcardRaceIds = function(player, prey, slot)
+	local raceIds = {}
+	local seen = {}
+	local names = PreyMonsters.getAllNames(player:getLevel())
+	for _, name in ipairs(names) do
+		local raceId = getMonsterRaceId(name)
+		if raceId and not seen[raceId] then
+			seen[raceId] = true
+			table.insert(raceIds, raceId)
+		end
+	end
+
+	table.sort(raceIds)
+	return raceIds
 end
 
 local function initializeSlot(player, slot)
@@ -921,6 +1039,8 @@ local function preyTick()
 								slotData.state = PREY_STATE_INACTIVE
 							end
 							sendSlotUpdate(player, slot)
+						else
+							sendPreyTimeLeft(player, slot, slotData.time_left)
 						end
 					end
 				end
@@ -1105,6 +1225,65 @@ local function nativeBonusReroll(player, slot)
 	sendPreyBalances(player)
 end
 
+local function nativeRequestAllMonsters(player, slot)
+	if not requirePreySlotUnlocked(player, slot) then
+		return false
+	end
+
+	local prey = getPlayerPrey(player)
+	prey.wildcards = getPlayerBonusRerolls(player)
+	if prey.wildcards < PREY_LOCK_COST then
+		return sendError(player, "You do not have enough Prey Wildcards.")
+	end
+
+	local slotData = prey.slots[slot]
+	if #buildWildcardRaceIds(player, prey, slot) == 0 then
+		return sendError(player, "Could not build the Prey creature list.")
+	end
+
+	prey.wildcards = setPlayerBonusRerolls(player, prey.wildcards - PREY_LOCK_COST)
+	slotData.state = PREY_STATE_WILDCARD_SELECTION
+	slotData.monster_name = ""
+	slotData.list_monsters = {}
+	slotData.time_left = 0
+	sendSlotUpdate(player, slot)
+	sendPreyBalances(player)
+end
+
+local function nativeChangeFromAll(player, slot, raceId)
+	if not requirePreySlotUnlocked(player, slot) then
+		return false
+	end
+
+	local monsterName = getPreyMonsterNameByRaceId(raceId)
+	if not monsterName then
+		return sendError(player, "Invalid Prey creature.")
+	end
+
+	local prey = getPlayerPrey(player)
+	local slotData = prey.slots[slot]
+	if slotData.state ~= PREY_STATE_WILDCARD_SELECTION then
+		return sendError(player, "There is no active Prey creature list for this slot.")
+	end
+	if not isWildcardRaceAvailable(player, prey, slot, raceId) then
+		return sendError(player, "Invalid Prey creature.")
+	end
+	if isMonsterUsedByOtherSlot(player, prey, slot, monsterName) then
+		return sendError(player, "This creature is already used by another Prey slot.")
+	end
+
+	slotData.monster_name = monsterName
+	slotData.list_monsters = {}
+	if slotData.bonus_type == PREY_BONUS_NONE or (slotData.bonus_value or 0) <= 0 then
+		rerollBonus(slotData)
+	end
+	slotData.time_left = PREY_DURATION_SECS
+	slotData.state = PREY_STATE_ACTIVE
+	sendSlotUpdate(player, slot)
+	sendActiveBonusMessage(player, slotData)
+	sendPreyBalances(player)
+end
+
 local nativeRequestHandler = PacketHandler(PREY_NATIVE_OPCODE_REQUEST)
 function nativeRequestHandler.onReceive(player, msg)
 	initializeEmptySlots(player)
@@ -1164,23 +1343,30 @@ function nativeActionHandler.onReceive(player, msg)
 	if slot >= PREY_SLOTS then
 		return sendError(player, "Invalid slot.")
 	end
-	if action == 6 then
+	if action == PREY_NATIVE_ACTION_UNLOCK_PERMANENT then
 		return unlockPermanentPreySlot(player, slot)
 	end
 	if not requirePreySlotUnlocked(player, slot) then
 		return false
 	end
 
-	if action == 0 then
+	if action == PREY_NATIVE_ACTION_LIST_REROLL then
 		return nativeListReroll(player, slot)
-	elseif action == 1 then
+	elseif action == PREY_NATIVE_ACTION_BONUS_REROLL then
 		return nativeBonusReroll(player, slot)
-	elseif action == 2 then
+	elseif action == PREY_NATIVE_ACTION_MONSTER_SELECTION then
 		if msg:len() - msg:tell() < 1 then
 			return
 		end
 		return nativeSelectMonster(player, slot, msg:getByte())
-	elseif action == 5 then
+	elseif action == PREY_NATIVE_ACTION_REQUEST_ALL_MONSTERS then
+		return nativeRequestAllMonsters(player, slot)
+	elseif action == PREY_NATIVE_ACTION_CHANGE_FROM_ALL then
+		if msg:len() - msg:tell() < 2 then
+			return
+		end
+		return nativeChangeFromAll(player, slot, msg:getU16())
+	elseif action == PREY_NATIVE_ACTION_LOCK_PREY then
 		if msg:len() - msg:tell() < 1 then
 			return
 		end
