@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload build logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: logs-windows-${{ github.sha }}
           path: |
@@ -99,7 +99,7 @@ jobs:
             vcpkg/buildtrees/**/*.log
 
       - name: Upload artifact binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tfs-windows-${{ github.sha }}
           path: build/tfs.exe
