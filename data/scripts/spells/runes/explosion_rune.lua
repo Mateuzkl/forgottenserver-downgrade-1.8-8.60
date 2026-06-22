@@ -3,7 +3,7 @@ combat:setParameter(COMBAT_PARAM_TYPE, COMBAT_PHYSICALDAMAGE)
 combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_EXPLOSIONAREA)
 combat:setParameter(COMBAT_PARAM_DISTANCEEFFECT, CONST_ANI_EXPLOSION)
 combat:setParameter(COMBAT_PARAM_BLOCKARMOR, true)
-combat:setArea(createCombatArea(AREA_CIRCLE1X1))
+combat:setArea(createCombatArea(AREA_SQUARE1X1)) -- Phase I rebalance: area 5 -> 9 squares
 
 local function callback(player, level, magicLevel)
 	local min = (level / 5) + (magicLevel * 1.6) + 9

@@ -38,6 +38,21 @@ enum VirtueMonk_t : uint8_t {
 	VIRTUE_SUSTAIN = 3,
 };
 
+enum Stance_t : uint8_t {
+	STANCE_NONE = 0,
+	STANCE_PROTECTOR = 1,
+	STANCE_BLOOD_RAGE = 2,
+	STANCE_DIVINE_DEFIANCE = 3,
+	STANCE_SHARPSHOOTER = 4,
+	STANCE_EXPOSE_WEAKNESS = 5,
+	STANCE_SAP_STRENGTH = 6,
+	STANCE_MASTER_OF_FLAMES = 7,
+	STANCE_MASTER_OF_THUNDER = 8,
+	STANCE_MASTER_OF_DECAY = 9,
+	STANCE_SHARED_CONSERVATION = 10,
+	STANCE_ELEMENTAL_SYNTHESIS = 11,
+};
+
 class House;
 class NetworkMessage;
 class Weapon;
@@ -428,6 +443,13 @@ public:
 
 	void sendMonkData();
 
+	Stance_t getStance() const { return m_stancePrimary; }
+	Stance_t getElementalStance() const { return m_stanceElemental; }
+	bool setStance(Stance_t stance);
+	bool setElementalStance(Stance_t stance);
+	void persistStances() const;
+	static bool isElementalStance(Stance_t stance);
+
 	void clearCooldowns();
 
 	bool isOffline() const { return (getID() == 0); }
@@ -484,6 +506,14 @@ public:
 	uint32_t getLevel() const { return level; }
 	uint32_t getReset() const { return reset; }
 	void setReset(uint32_t newReset) { reset = newReset; }
+	void setSpellAimPosition(const Position& pos)
+	{
+		m_spellAimPosition = pos;
+		m_hasSpellAimPosition = true;
+	}
+	void clearSpellAimPosition() { m_hasSpellAimPosition = false; }
+	bool hasSpellAimPosition() const { return m_hasSpellAimPosition; }
+	const Position& getSpellAimPosition() const { return m_spellAimPosition; }
 	uint8_t getLevelPercent() const { return levelPercent; }
 	uint32_t getMagicLevel() const
 	{
@@ -499,6 +529,12 @@ public:
 		int32_t base = specialMagicLevelSkill[combatTypeToIndex(type)];
 		if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
 			base += static_cast<int32_t>(weaponProficiency().getSpecializedMagic(type));
+		}
+		if (m_stancePrimary == STANCE_DIVINE_DEFIANCE && (type == COMBAT_HOLYDAMAGE || type == COMBAT_HEALING)) {
+			base += static_cast<int32_t>(getSkillLevel(SKILL_DISTANCE) * 0.075);
+		}
+		if (m_stancePrimary == STANCE_ELEMENTAL_SYNTHESIS && (type == COMBAT_ICEDAMAGE || type == COMBAT_EARTHDAMAGE)) {
+			base += static_cast<int32_t>(getMagicLevel() * 0.10);
 		}
 		return std::max<int32_t>(0, base);
 	}
@@ -1768,6 +1804,10 @@ private:
 	int64_t rootImmunityEnd = 0;
 	int64_t fearImmunityEnd = 0;
 	VirtueMonk_t m_virtue = VIRTUE_NONE;
+	Stance_t m_stancePrimary = STANCE_NONE;
+	Stance_t m_stanceElemental = STANCE_NONE;
+	Position m_spellAimPosition;
+	bool m_hasSpellAimPosition = false;
 	bool loading = false;
 
 	AccountManagerMode accountManager{ACCOUNT_MANAGER_NONE};

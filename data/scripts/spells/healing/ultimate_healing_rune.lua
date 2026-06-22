@@ -15,6 +15,13 @@ combat:setCallback(CallBackParam.LEVELMAGICVALUE, callback)
 
 local spell = Spell("rune")
 function spell.onCastSpell(creature, variant, isHotkey)
+	local target = Creature(variant:getNumber())
+	if target and target:getId() ~= creature:getId() then
+		creature:sendCancelMessage("You may only use this rune on yourself.")
+		creature:getPosition():sendMagicEffect(CONST_ME_POFF)
+		return false
+	end
+
 	return combat:execute(creature, variant)
 end
 

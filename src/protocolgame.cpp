@@ -2237,6 +2237,22 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 	}
 
 	auto text = msg.getString();
+	if (getUnreadBytes(msg) >= 1) {
+		const uint8_t aimMode = msg.getByte();
+		if (aimMode != 0 && getUnreadBytes(msg) >= 6) {
+			Position aimPos;
+			aimPos.x = msg.get<uint16_t>();
+			aimPos.y = msg.get<uint16_t>();
+			aimPos.z = msg.getByte();
+			msg.getByte(); // sequence byte
+			player->setSpellAimPosition(aimPos);
+		} else {
+			player->clearSpellAimPosition();
+			skipUnreadBytes(msg);
+		}
+	} else {
+		player->clearSpellAimPosition();
+	}
 	const bool forceCastOnFoot = consumeHelperCastOnFoot();
 	if (text.length() > 255) {
 		return;

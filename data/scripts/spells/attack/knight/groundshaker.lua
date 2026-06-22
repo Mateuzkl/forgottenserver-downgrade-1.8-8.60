@@ -22,7 +22,7 @@ spell:id(113)
 spell:name("Groundshaker")
 spell:words("exori mas")
 spell:level(33)
-spell:mana(160)
+spell:mana(200) -- Phase A rebalance: 160 -> 200
 spell:needWeapon(true)
 spell:isPremium(true)
 spell:cooldown(3 * 1000)

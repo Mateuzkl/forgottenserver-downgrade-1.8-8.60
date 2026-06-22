@@ -22,7 +22,7 @@ spell:id(109)
 spell:name("Fierce Berserk")
 spell:words("exori gran")
 spell:level(90)
-spell:mana(340)
+spell:mana(360) -- Phase A rebalance: 340 -> 360
 spell:needWeapon(true)
 spell:isPremium(true)
 spell:cooldown(2 * 1000)

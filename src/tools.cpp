@@ -768,7 +768,12 @@ ShootTypeNames shootTypeNames = {
 	{"spectralbolt", CONST_ANI_SPECTRALBOLT},
 	{"royalstar", CONST_ANI_ROYALSTAR},
 	{"candycane", CONST_ANI_CANDYCANE},
-	{"cherrybomb", CONST_ANI_CHERRYBOMB}
+	{"cherrybomb", CONST_ANI_CHERRYBOMB},
+	{"shatterstormarrow", CONST_ANI_SHATTERSTORMARROW},
+	{"firestormarrow", CONST_ANI_FIRESTORMARROW},
+	{"terrastormarrow", CONST_ANI_TERRASTORMARROW},
+	{"froststormarrow", CONST_ANI_FROSTSTORMARROW},
+	{"thunderstormarrow", CONST_ANI_THUNDERSTORMARROW}
 };
 
 CombatTypeNames combatTypeNames = {
@@ -1519,6 +1524,8 @@ SpellGroup_t stringToSpellGroup(std::string_view value)
 		return SPELLGROUP_SUPPORT;
 	} else if (tmpStr == "special" || tmpStr == "4") {
 		return SPELLGROUP_SPECIAL;
+	} else if (tmpStr == "stance" || tmpStr == "11") {
+		return SPELLGROUP_STANCE;
 	}
 
 	return SPELLGROUP_NONE;

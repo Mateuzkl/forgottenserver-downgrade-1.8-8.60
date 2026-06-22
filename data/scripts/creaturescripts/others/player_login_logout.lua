@@ -71,6 +71,19 @@ function loginMessage.onLogin(player)
 
     player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Mount] Use Ctrl+M to mount or dismount your mount.")
 
+    -- Vocation Adjustment: restore active stances from the previous session.
+    if player.getStance and player.setStance and player.setElementalStance then
+        local stanceKv = player:kv():scoped("stance")
+        local primary = stanceKv:get("primary")
+        if primary and primary > 0 then
+            player:setStance(primary)
+        end
+        local elemental = stanceKv:get("elemental")
+        if elemental and elemental > 0 then
+            player:setElementalStance(elemental)
+        end
+    end
+
     return true
 end
 loginMessage:register()

@@ -15,7 +15,7 @@ local function creatureArrayListChain(startCreature, maxTargets)
 	while #creaturesArray < maxTargets do
 		local bestMonsterId = nil
 		local bestPathLength = math.huge
-		local range = 2
+		local range = 3 -- Vocation Adjustment: jump range +1 (2 -> 3); chains to the closest target
 
 		local spectators = Game.getSpectators(currentCreature:getPosition(), false, false, range, range, range, range)
 		for _, candidate in ipairs(spectators) do

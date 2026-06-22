@@ -784,6 +784,54 @@ void Player::sendMonkData()
 	client->sendExtendedOpcode(0x92, json);
 }
 
+bool Player::isElementalStance(Stance_t stance)
+{
+	return stance == STANCE_MASTER_OF_FLAMES || stance == STANCE_MASTER_OF_THUNDER ||
+	       stance == STANCE_MASTER_OF_DECAY;
+}
+
+bool Player::setStance(Stance_t stance)
+{
+	if (isElementalStance(stance)) {
+		return false;
+	}
+
+	if (stance != STANCE_NONE) {
+		const bool compatible =
+		    ((stance == STANCE_PROTECTOR || stance == STANCE_BLOOD_RAGE) && isKnight()) ||
+		    ((stance == STANCE_DIVINE_DEFIANCE || stance == STANCE_SHARPSHOOTER) && isPaladin()) ||
+		    ((stance == STANCE_EXPOSE_WEAKNESS || stance == STANCE_SAP_STRENGTH) && isSorcerer()) ||
+		    ((stance == STANCE_SHARED_CONSERVATION || stance == STANCE_ELEMENTAL_SYNTHESIS) && isDruid());
+		if (!compatible) {
+			return false;
+		}
+	}
+
+	m_stancePrimary = stance;
+	persistStances();
+	sendSkills();
+	return true;
+}
+
+bool Player::setElementalStance(Stance_t stance)
+{
+	if (stance != STANCE_NONE && (!isSorcerer() || !isElementalStance(stance))) {
+		return false;
+	}
+
+	m_stanceElemental = stance;
+	persistStances();
+	sendSkills();
+	return true;
+}
+
+void Player::persistStances() const
+{
+	auto stanceKv = KVStore::getInstance().scoped("player")->scoped(std::to_string(getGUID()))->scoped("stance");
+	stanceKv->set("primary", static_cast<int32_t>(m_stancePrimary));
+	stanceKv->set("elemental", static_cast<int32_t>(m_stanceElemental));
+}
+
 void Player::addBlessing(uint8_t blessing, uint8_t count)
 {
 	if (blessing < 1 || blessing > PLAYER_MAX_BLESSINGS || blessings[blessing] == 255) return;

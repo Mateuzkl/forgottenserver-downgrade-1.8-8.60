@@ -45,17 +45,61 @@ local combatTypes = {
 	["earth"] = combatEarth,
 }
 
+-- Vocation Adjustment: wheel Flurry of Blows grade I augment enlarges the affected area.
+local AREA_WAVE_WOD = {
+	{ 0, 0, 1, 0, 0 },
+	{ 0, 1, 1, 1, 0 },
+	{ 1, 1, 1, 1, 1 },
+	{ 1, 1, 3, 1, 1 },
+	{ 1, 1, 0, 1, 1 },
+}
+local combatPhysicalWOD = Combat()
+combatPhysicalWOD:setParameter(COMBAT_PARAM_TYPE, COMBAT_PHYSICALDAMAGE)
+combatPhysicalWOD:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_WHITE_FLURRYOFBLOWS)
+combatPhysicalWOD:setArea(createCombatArea(AREA_WAVE_WOD))
+function onGetFormulaValuesPhysicalWOD(player, skill, weaponDamage, attackFactor)
+	return onGetFormulaValuesPhysical(player, skill, weaponDamage, attackFactor)
+end
+combatPhysicalWOD:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesPhysicalWOD")
+local combatEnergyWOD = Combat()
+combatEnergyWOD:setParameter(COMBAT_PARAM_TYPE, COMBAT_ENERGYDAMAGE)
+combatEnergyWOD:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_PINK_FLURRYOFBLOWS)
+combatEnergyWOD:setArea(createCombatArea(AREA_WAVE_WOD))
+function onGetFormulaValuesEnergyWOD(player, skill, weaponDamage, attackFactor)
+	return onGetFormulaValuesEnergy(player, skill, weaponDamage, attackFactor)
+end
+combatEnergyWOD:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesEnergyWOD")
+local combatEarthWOD = Combat()
+combatEarthWOD:setParameter(COMBAT_PARAM_TYPE, COMBAT_EARTHDAMAGE)
+combatEarthWOD:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_GREEN_FLURRYOFBLOWS)
+combatEarthWOD:setArea(createCombatArea(AREA_WAVE_WOD))
+function onGetFormulaValuesEarthWOD(player, skill, weaponDamage, attackFactor)
+	return onGetFormulaValuesEarth(player, skill, weaponDamage, attackFactor)
+end
+combatEarthWOD:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesEarthWOD")
+local combatTypesWOD = {
+	["physical"] = combatPhysicalWOD,
+	["energy"] = combatEnergyWOD,
+	["earth"] = combatEarthWOD,
+}
+
 local spell = Spell("instant")
 
 function spell.onCastSpell(creature, var)
-	local combat = combatPhysical
+	local types = combatTypes
+	local player = creature:getPlayer()
+	if player and player.getWheelSpellAdditionalArea and player:getWheelSpellAdditionalArea("Flurry of Blows") then
+		types = combatTypesWOD
+	end
+
+	local combat = types["physical"]
 	local weapon = creature:getSlotItem(CONST_SLOT_LEFT)
 	if weapon then
 		local itemType = weapon:getType()
 		if itemType and itemType.getElementalBond then
 			local elementalBondType = itemType:getElementalBond():lower()
 			if elementalBondType then
-				combat = combatTypes[elementalBondType] or combat
+				combat = types[elementalBondType] or combat
 			end
 		end
 	end

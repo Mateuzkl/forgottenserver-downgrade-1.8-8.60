@@ -22,7 +22,7 @@ spell:id(100)
 spell:name("Berserk")
 spell:words("exori")
 spell:level(35)
-spell:mana(115)
+spell:mana(125) -- Phase A rebalance: 115 -> 125
 spell:needWeapon(true)
 spell:isPremium(true)
 spell:cooldown(1 * 1500)

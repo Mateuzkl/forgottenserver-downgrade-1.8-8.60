@@ -2199,6 +2199,11 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CONST_ANI_ROYALSTAR);
 	registerEnum(CONST_ANI_CANDYCANE);
 	registerEnum(CONST_ANI_CHERRYBOMB);
+	registerEnum(CONST_ANI_SHATTERSTORMARROW);
+	registerEnum(CONST_ANI_FIRESTORMARROW);
+	registerEnum(CONST_ANI_TERRASTORMARROW);
+	registerEnum(CONST_ANI_FROSTSTORMARROW);
+	registerEnum(CONST_ANI_THUNDERSTORMARROW);
 	registerEnum(CONST_ANI_WEAPONTYPE);
 
 	registerEnum(CONST_PROP_BLOCKSOLID);
@@ -2838,6 +2843,20 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(SPELLGROUP_HEALING);
 	registerEnum(SPELLGROUP_SUPPORT);
 	registerEnum(SPELLGROUP_SPECIAL);
+	registerEnum(SPELLGROUP_STANCE);
+
+	registerEnum(STANCE_NONE);
+	registerEnum(STANCE_PROTECTOR);
+	registerEnum(STANCE_BLOOD_RAGE);
+	registerEnum(STANCE_DIVINE_DEFIANCE);
+	registerEnum(STANCE_SHARPSHOOTER);
+	registerEnum(STANCE_EXPOSE_WEAKNESS);
+	registerEnum(STANCE_SAP_STRENGTH);
+	registerEnum(STANCE_MASTER_OF_FLAMES);
+	registerEnum(STANCE_MASTER_OF_THUNDER);
+	registerEnum(STANCE_MASTER_OF_DECAY);
+	registerEnum(STANCE_SHARED_CONSERVATION);
+	registerEnum(STANCE_ELEMENTAL_SYNTHESIS);
 
 	// Imbuements
 	registerEnum(IMBUEMENT_TYPE_NONE);

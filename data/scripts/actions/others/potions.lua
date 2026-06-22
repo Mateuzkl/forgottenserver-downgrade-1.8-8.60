@@ -57,10 +57,9 @@ local potionData = {
 	},
 	[238] = {
 		mana = {150, 250},
-		vocations = {1, 2, 3, 5, 6, 7, 9, 10},
 		level = 80,
 		flask = 284,
-		description = "Only druids, sorcerers, monks and paladins of level 80 or above may drink this fluid."
+		description = "Only players of level 80 or above may drink this fluid."
 	},
 	[23373] = {
 		mana = {450, 550},
@@ -113,6 +112,26 @@ local potionData = {
 		level = 200,
 		flask = 284,
 		description = "Only knights and monks of level 200 or above may drink this fluid."
+	},
+	-- Vocation Adjustment mana potions
+	[53162] = {
+		mana = {240, 360},
+		vocations = {1, 2, 3, 5, 6, 7, 9, 10},
+		level = 100,
+		flask = 284,
+		description = "Only paladins, monks, sorcerers and druids of level 100 or above may drink this fluid."
+	},
+	[53163] = {
+		mana = {240, 360},
+		level = 130,
+		flask = 284,
+		description = "Only players of level 130 or above may drink this fluid."
+	},
+	[53164] = {
+		mana = {425, 575},
+		level = 200,
+		flask = 284,
+		description = "Only players of level 200 or above may drink this fluid."
 	},
 	[7644] = {
 		antidote = true,

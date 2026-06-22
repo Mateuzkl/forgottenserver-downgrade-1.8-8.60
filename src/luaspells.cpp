@@ -659,6 +659,30 @@ int luaSpellNeedDirection(lua_State* L)
 }
 
 // only for InstantSpells
+int luaSpellNeedPosition(lua_State* L)
+{
+	// spell:needPosition(bool)
+	InstantSpell* spell = dynamic_cast<InstantSpell*>(getUserdata<Spell>(L, 1));
+	if (spell) {
+		// if spell != SPELL_INSTANT, it means that this actually is no InstantSpell, so we return nil
+		if (spell->spellType != SPELL_INSTANT) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		if (lua_gettop(L) == 1) {
+			pushBoolean(L, spell->getNeedPosition());
+		} else {
+			spell->setNeedPosition(getBoolean(L, 2));
+			pushBoolean(L, true);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+// only for InstantSpells
 int luaSpellHasParams(lua_State* L)
 {
 	// spell:hasParams(bool)
@@ -977,6 +1001,7 @@ void LuaScriptInterface::registerSpells()
 	// only for InstantSpell
 	registerMethod("Spell", "words", luaSpellWords);
 	registerMethod("Spell", "needDirection", luaSpellNeedDirection);
+	registerMethod("Spell", "needPosition", luaSpellNeedPosition);
 	registerMethod("Spell", "hasParams", luaSpellHasParams);
 	registerMethod("Spell", "hasPlayerNameParam", luaSpellHasPlayerNameParam);
 	registerMethod("Spell", "needCasterTargetOrDirection", luaSpellNeedCasterTargetOrDirection);

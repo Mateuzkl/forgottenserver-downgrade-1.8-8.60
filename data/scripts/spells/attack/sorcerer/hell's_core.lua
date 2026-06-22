@@ -1,19 +1,35 @@
-local combat = Combat()
-combat:setParameter(COMBAT_PARAM_TYPE, COMBAT_FIREDAMAGE)
-combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_FIREAREA)
-combat:setArea(createCombatArea(AREA_CIRCLE5X5))
-
 local function callback(player, level, magicLevel)
 	local min = (level / 5) + (magicLevel * 8) + 50
 	local max = (level / 5) + (magicLevel * 12) + 75
 	return -min, -max
 end
 
-combat:setCallback(CallBackParam.LEVELMAGICVALUE, callback)
+local function createCombat(combatType, effect)
+	local combat = Combat()
+	combat:setParameter(COMBAT_PARAM_TYPE, combatType)
+	combat:setParameter(COMBAT_PARAM_EFFECT, effect)
+	combat:setArea(createCombatArea(AREA_CIRCLE5X5))
+	combat:setCallback(CallBackParam.LEVELMAGICVALUE, callback)
+	return combat
+end
+
+local combat = createCombat(COMBAT_FIREDAMAGE, CONST_ME_FIREAREA)
+local combatThunder = createCombat(COMBAT_ENERGYDAMAGE, 337)
+local combatDecay = createCombat(COMBAT_DEATHDAMAGE, 338)
 
 local spell = Spell("instant")
-function spell.onCastSpell(creature, variant) return combat:execute(creature, variant) end
-
+function spell.onCastSpell(creature, variant)
+	local player = creature:getPlayer()
+	if player then
+		local stance = player:getElementalStance()
+		if stance == STANCE_MASTER_OF_THUNDER then
+			return combatThunder:execute(creature, variant)
+		elseif stance == STANCE_MASTER_OF_DECAY then
+			return combatDecay:execute(creature, variant)
+		end
+	end
+	return combat:execute(creature, variant)
+end
 
 spell:group("attack")
 spell:id(114)

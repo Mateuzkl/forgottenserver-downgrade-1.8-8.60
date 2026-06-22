@@ -1,7 +1,12 @@
 local event = Event()
 
 function event.onShareExperience(party, exp, rawExp)
-	local sharedExperienceMultiplier = 1.20 -- 20%
+	local partyVocationBonus = {
+		[1] = 1.20, -- same vocation: +20%
+		[2] = 1.35, -- 2 different vocations: +35%
+		[3] = 1.70, -- 3 different vocations: +70%
+		[4] = 2.00, -- 4 different vocations: +100%
+	}
 	local vocationsIds = {}
 
 	local vocationId = party:getLeader():getVocation():getBase():getId()
@@ -14,9 +19,7 @@ function event.onShareExperience(party, exp, rawExp)
 	end
 
 	local size = #vocationsIds
-	if size > 1 then
-		sharedExperienceMultiplier = 1.0 + ((size * (5 * (size - 1) + 10)) / 100)
-	end
+	local sharedExperienceMultiplier = partyVocationBonus[size] or partyVocationBonus[4]
 
 	exp = math.ceil((exp * sharedExperienceMultiplier) / (#party:getMembers() + 1))
 	return exp

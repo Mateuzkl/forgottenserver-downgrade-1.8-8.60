@@ -263,6 +263,8 @@ public:
 	void setHasPlayerNameParam(bool p) { hasPlayerNameParam = p; }
 	bool getNeedDirection() const { return needDirection; }
 	void setNeedDirection(bool n) { needDirection = n; }
+	bool getNeedPosition() const { return needPosition; }
+	void setNeedPosition(bool n) { needPosition = n; }
 	bool getNeedCasterTargetOrDirection() const { return casterTargetOrDirection; }
 	void setNeedCasterTargetOrDirection(bool d) { casterTargetOrDirection = d; }
 	bool getBlockWalls() const { return checkLineOfSight; }
@@ -276,6 +278,7 @@ private:
 	bool internalCastSpell(Creature* creature, const LuaVariant& var);
 
 	bool needDirection = false;
+	bool needPosition = false;
 	bool hasParam = false;
 	bool hasPlayerNameParam = false;
 	bool checkLineOfSight = true;

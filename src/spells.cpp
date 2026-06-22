@@ -977,6 +977,8 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool fo
 	} else {
 		if (needDirection) {
 			var.setPosition(Spells::getCasterPosition(player, player->getDirection()));
+		} else if (needPosition && player->hasSpellAimPosition()) {
+			var.setPosition(player->getSpellAimPosition());
 		} else {
 			var.setPosition(player->getPosition());
 		}
