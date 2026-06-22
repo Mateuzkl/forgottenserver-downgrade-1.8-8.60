@@ -63,7 +63,7 @@ jobs:
         uses: lukka/get-cmake@v4.3.2
 
       - name: Cache vcpkg binary packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/vcpkg_cache
           key: vcpkg-windows-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
