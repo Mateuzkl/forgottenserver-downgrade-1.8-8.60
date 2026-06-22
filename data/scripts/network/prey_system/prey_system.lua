@@ -39,6 +39,7 @@ local PREY_NATIVE_STATE_INACTIVE = 1
 local PREY_NATIVE_STATE_ACTIVE = 2
 local PREY_NATIVE_STATE_SELECTION = 3
 local PREY_NATIVE_STATE_WILDCARD = 5
+local PREY_NATIVE_STATE_WILDCARD_WITH_MONSTERS = 6
 local PREY_NATIVE_UNLOCK_STORE = 1
 local PREY_NATIVE_BONUS_NONE = 4
 
@@ -393,6 +394,22 @@ local function setStorageFlag(player, baseStorage, slot, enabled)
 	player:setStorageValue(baseStorage + slot, enabled and 1 or -1)
 end
 
+local function getPreyLockType(player, slot)
+	if getStorageFlag(player, PREY_STORAGE_AUTO_BONUS_BASE, slot) then
+		return 1
+	end
+	if getStorageFlag(player, PREY_STORAGE_LOCK_BASE, slot) then
+		return 2
+	end
+	return 0
+end
+
+local function writePreyLockType(out, player, slot)
+	if supportsAstraPreyExtension(player) then
+		out:addByte(getPreyLockType(player, slot))
+	end
+end
+
 local function sendResourceBalance(player, resourceType, value)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -579,6 +596,7 @@ end
 
 local getOtherSlotMonsters
 local buildWildcardRaceIds
+local getPreyMonsterNameByRaceId
 local preyMonsterNamesByRaceId
 
 local function ensureSelectionList(player, slot, slotData)
@@ -601,6 +619,7 @@ local function writeSlot(out, player, slot, slotData, wildcardRaceIds)
 		out:addByte(PREY_NATIVE_STATE_LOCKED)
 		out:addByte(PREY_NATIVE_UNLOCK_STORE)
 		out:addU16(0)
+		writePreyLockType(out, player, slot)
 		if supportsAstraPreyExtension(player) then
 			out:addU32(PREY_PERMANENT_SLOT_COST)
 		end
@@ -617,11 +636,15 @@ local function writeSlot(out, player, slot, slotData, wildcardRaceIds)
 			writeMonster(out, name)
 		end
 	elseif slotData.state == PREY_STATE_WILDCARD_SELECTION then
-		out:addByte(PREY_NATIVE_STATE_WILDCARD)
+		local includeMonsterData = supportsAstraPreyExtension(player)
+		out:addByte(includeMonsterData and PREY_NATIVE_STATE_WILDCARD_WITH_MONSTERS or PREY_NATIVE_STATE_WILDCARD)
 		local raceIds = wildcardRaceIds or buildWildcardRaceIds(player, getPlayerPrey(player), slot)
 		out:addU16(#raceIds)
 		for _, raceId in ipairs(raceIds) do
 			out:addU16(raceId)
+			if includeMonsterData then
+				writeMonster(out, getPreyMonsterNameByRaceId(raceId))
+			end
 		end
 	elseif slotData.state == PREY_STATE_ACTIVE then
 		out:addByte(PREY_NATIVE_STATE_ACTIVE)
@@ -634,6 +657,7 @@ local function writeSlot(out, player, slot, slotData, wildcardRaceIds)
 		out:addByte(PREY_NATIVE_STATE_INACTIVE)
 	end
 	out:addU16(getTimeUntilFreeReroll(slotData))
+	writePreyLockType(out, player, slot)
 end
 
 local function sendPreyPrices(player)
@@ -728,7 +752,7 @@ local function isWildcardRaceAvailable(player, prey, slot, raceId)
 	return false
 end
 
-local function getPreyMonsterNameByRaceId(raceId)
+getPreyMonsterNameByRaceId = function(raceId)
 	raceId = tonumber(raceId) or 0
 	if raceId <= 0 then
 		return nil
