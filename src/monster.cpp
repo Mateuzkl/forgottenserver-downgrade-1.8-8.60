@@ -266,11 +266,101 @@ bool Monster::canWalkOnFieldType(CombatType_t combatType) const
 	}
 }
 
+std::optional<bool> Monster::getWalkCache(const Position& pos) const
+{
+	if (!usesWalkCache()) {
+		return std::nullopt;
+	}
+
+	if (!isWalkCacheLoaded) {
+		updateMapCache();
+	}
+
+	const Position& myPos = getPosition();
+	if (myPos.z != pos.z) {
+		return false;
+	}
+
+	if (pos == myPos) {
+		return true;
+	}
+
+	const int32_t dx = Position::getOffsetX(pos, myPos);
+	const int32_t dy = Position::getOffsetY(pos, myPos);
+	if (std::abs(dx) > maxWalkCacheWidth || std::abs(dy) > maxWalkCacheHeight) {
+		return std::nullopt;
+	}
+
+	return localMapCache[getWalkCacheIndex(dx, dy)];
+}
+
+void Monster::updateMapCache() const
+{
+	isWalkCacheLoaded = false;
+
+	const Position& myPos = getPosition();
+	for (int32_t dy = -maxWalkCacheHeight; dy <= maxWalkCacheHeight; ++dy) {
+		for (int32_t dx = -maxWalkCacheWidth; dx <= maxWalkCacheWidth; ++dx) {
+			const Position pos(myPos.x + dx, myPos.y + dy, myPos.z);
+			updateTileCache(g_game.map.getTile(pos), dx, dy);
+		}
+	}
+
+	isWalkCacheLoaded = true;
+}
+
+void Monster::updateTileCache(const Tile* tile, int32_t dx, int32_t dy) const
+{
+	if (std::abs(dx) > maxWalkCacheWidth || std::abs(dy) > maxWalkCacheHeight) {
+		return;
+	}
+
+	constexpr uint32_t flags = FLAG_PATHFINDING | FLAG_IGNOREFIELDDAMAGE;
+	localMapCache[getWalkCacheIndex(dx, dy)] = tile && tile->queryAdd(0, *this, 1, flags) == RETURNVALUE_NOERROR;
+}
+
+void Monster::updateTileCache(const Tile* tile, const Position& pos) const
+{
+	const Position& myPos = getPosition();
+	if (pos.z != myPos.z) {
+		return;
+	}
+
+	updateTileCache(tile, Position::getOffsetX(pos, myPos), Position::getOffsetY(pos, myPos));
+}
+
 void Monster::onAttackedCreatureDisappear(bool) { attackTicks = 0; }
+
+void Monster::onAddTileItem(const Tile* tile, const Position& pos)
+{
+	if (isWalkCacheLoaded) {
+		updateTileCache(tile, pos);
+	}
+}
+
+void Monster::onUpdateTileItem(const Tile* tile, const Position& pos, const Item*, const ItemType& oldType,
+                               const Item*, const ItemType& newType)
+{
+	if (isWalkCacheLoaded && (oldType.blockSolid || oldType.blockPathFind || oldType.isGroundTile() ||
+	                          newType.blockSolid || newType.blockPathFind || newType.isGroundTile())) {
+		updateTileCache(tile, pos);
+	}
+}
+
+void Monster::onRemoveTileItem(const Tile* tile, const Position& pos, const ItemType& itemType, const Item*)
+{
+	if (isWalkCacheLoaded && (itemType.blockSolid || itemType.blockPathFind || itemType.isGroundTile())) {
+		updateTileCache(tile, pos);
+	}
+}
 
 void Monster::onCreatureAppear(Creature* creature, bool isLogin)
 {
 	Creature::onCreatureAppear(creature, isLogin);
+
+	if (creature != this && isWalkCacheLoaded) {
+		updateTileCache(creature->getTile(), creature->getPosition());
+	}
 
 	if (mType->info.creatureAppearEvent != -1) {
 		// onCreatureAppear(self, creature)
@@ -316,6 +406,10 @@ void Monster::onRemoveCreature(Creature* creature, bool isLogout)
 {
 	Creature::onRemoveCreature(creature, isLogout);
 
+	if (creature != this && isWalkCacheLoaded) {
+		updateTileCache(creature->getTile(), creature->getPosition());
+	}
+
 	if (mType->info.creatureDisappearEvent != -1) {
 		// onCreatureDisappear(self, creature)
 		LuaScriptInterface* scriptInterface = mType->info.scriptInterface;
@@ -353,6 +447,67 @@ void Monster::onRemoveCreature(Creature* creature, bool isLogout)
 void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Position& newPos, const Tile* oldTile,
                              const Position& oldPos, bool teleport)
 {
+	if (isWalkCacheLoaded) {
+		if (creature == this) {
+			const int32_t dx = newPos.x - oldPos.x;
+			const int32_t dy = newPos.y - oldPos.y;
+			const int32_t dz = newPos.z - oldPos.z;
+
+			if (teleport || dz != 0 || std::abs(dx) > 1 || std::abs(dy) > 1) {
+				updateMapCache();
+			} else {
+				const Position& myPos = getPosition();
+
+				if (dy < 0) {
+					localMapCache <<= mapWalkWidth;
+					for (int32_t x = -maxWalkCacheWidth; x <= maxWalkCacheWidth; ++x) {
+						updateTileCache(g_game.map.getTile(myPos.x + x, myPos.y - maxWalkCacheHeight, myPos.z), x,
+						                -maxWalkCacheHeight);
+					}
+				} else if (dy > 0) {
+					localMapCache >>= mapWalkWidth;
+					for (int32_t x = -maxWalkCacheWidth; x <= maxWalkCacheWidth; ++x) {
+						updateTileCache(g_game.map.getTile(myPos.x + x, myPos.y + maxWalkCacheHeight, myPos.z), x,
+						                maxWalkCacheHeight);
+					}
+				}
+
+				if (dx > 0) {
+					const int32_t startY = dy > 0 ? dy : 0;
+					const int32_t endY = dy < 0 ? mapWalkHeight - 1 + dy : mapWalkHeight - 1;
+					for (int32_t y = startY; y <= endY; ++y) {
+						const std::size_t rowBase = static_cast<std::size_t>(y) * mapWalkWidth;
+						for (int32_t x = 0; x < mapWalkWidth - 1; ++x) {
+							localMapCache[rowBase + x] = localMapCache[rowBase + x + 1];
+						}
+					}
+					for (int32_t y = -maxWalkCacheHeight; y <= maxWalkCacheHeight; ++y) {
+						updateTileCache(g_game.map.getTile(myPos.x + maxWalkCacheWidth, myPos.y + y, myPos.z),
+						                maxWalkCacheWidth, y);
+					}
+				} else if (dx < 0) {
+					const int32_t startY = dy > 0 ? dy : 0;
+					const int32_t endY = dy < 0 ? mapWalkHeight - 1 + dy : mapWalkHeight - 1;
+					for (int32_t y = startY; y <= endY; ++y) {
+						const std::size_t rowBase = static_cast<std::size_t>(y) * mapWalkWidth;
+						for (int32_t x = mapWalkWidth - 2; x >= 0; --x) {
+							localMapCache[rowBase + x + 1] = localMapCache[rowBase + x];
+						}
+					}
+					for (int32_t y = -maxWalkCacheHeight; y <= maxWalkCacheHeight; ++y) {
+						updateTileCache(g_game.map.getTile(myPos.x - maxWalkCacheWidth, myPos.y + y, myPos.z),
+						                -maxWalkCacheWidth, y);
+					}
+				}
+
+				updateTileCache(oldTile, oldPos);
+			}
+		} else {
+			updateTileCache(newTile, newPos);
+			updateTileCache(oldTile, oldPos);
+		}
+	}
+
 	Creature::onCreatureMove(creature, newTile, newPos, oldTile, oldPos, teleport);
 
 	if (mType->info.creatureMoveEvent != -1) {
@@ -1248,11 +1403,11 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 	}
 
 	if (field) {
-		ignoreFieldDamage = true;
+		setIgnoreFieldDamage(true);
 	} else if (damage > 0 && combatType != COMBAT_HEALING && attacker) {
 		const auto master = attacker->getMaster();
 		if (attacker->isPlayer() || (master && master->isPlayer())) {
-			ignoreFieldDamage = true;
+			setIgnoreFieldDamage(true);
 		}
 	}
 
@@ -1349,7 +1504,7 @@ void Monster::onAddCondition(ConditionType_t)
 void Monster::onEndCondition(ConditionType_t type)
 {
 	if (type == CONDITION_FIRE || type == CONDITION_ENERGY || type == CONDITION_POISON) {
-		ignoreFieldDamage = false;
+		setIgnoreFieldDamage(false);
 	}
 
 	updateIdleStatus();
@@ -1397,7 +1552,7 @@ void Monster::onThink(uint32_t interval)
 			addEventWalk();
 
 			if (getAttackedCreatureShared() && getTimeSinceLastMove() >= 3000) {
-				ignoreFieldDamage = true;
+				setIgnoreFieldDamage(true);
 			}
 
 			if (isSummon()) {
@@ -1994,6 +2149,7 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 	if (!walkingToSpawn && (followCreature.expired() || !hasFollowPath) && (!isSummon() || !isMasterInRange)) {
 		if (getTimeSinceLastMove() >= EVENT_CREATURE_THINK_INTERVAL) {
 			randomStepping = true;
+			invalidateWalkCache();
 			// choose a random direction
 			result = getRandomStep(getPosition(), direction);
 		}
@@ -2001,6 +2157,7 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 		auto master = getMaster();
 		if (!hasFollowPath && master && !master->isPlayer()) {
 			randomStepping = true;
+			invalidateWalkCache();
 			result = getRandomStep(getPosition(), direction);
 		} else {
 			randomStepping = false;
@@ -2013,7 +2170,7 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 				}
 
 				if (ignoreFieldDamage) {
-					ignoreFieldDamage = false;
+					setIgnoreFieldDamage(false);
 				}
 				// target dancing
 				if (auto ac = attackedCreature.lock(); ac && ac == followCreature.lock()) {

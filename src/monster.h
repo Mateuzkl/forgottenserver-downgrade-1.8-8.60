@@ -4,6 +4,11 @@
 #ifndef FS_MONSTER_H
 #define FS_MONSTER_H
 
+#include <bitset>
+#include <cstddef>
+#include <optional>
+
+#include "map.h"
 #include "monsters.h"
 #include "tile.h"
 
@@ -103,9 +108,14 @@ public:
 	uint32_t getManaCost() const { return mType->info.manaCost; }
 	void setSpawn(std::shared_ptr<Spawn> newSpawn) { spawn = newSpawn; }
 	bool canWalkOnFieldType(CombatType_t combatType) const;
+	std::optional<bool> getWalkCache(const Position& pos) const;
 
 	void onAttackedCreatureDisappear(bool isLogout) override;
 
+	void onAddTileItem(const Tile* tile, const Position& pos) override;
+	void onUpdateTileItem(const Tile* tile, const Position& pos, const Item* oldItem, const ItemType& oldType,
+	                      const Item* newItem, const ItemType& newType) override;
+	void onRemoveTileItem(const Tile* tile, const Position& pos, const ItemType& itemType, const Item* item) override;
 	void onCreatureAppear(Creature* creature, bool isLogin) override;
 	void onRemoveCreature(Creature* creature, bool isLogout) override;
 	void onCreatureMove(Creature* creature, const Tile* newTile, const Position& newPos, const Tile* oldTile,
@@ -213,6 +223,15 @@ private:
 	uint8_t influencedLevel = 0;
 	bool fiendish = false;
 
+	static constexpr int32_t mapWalkWidth = Map::maxViewportX * 2 + 1;
+	static constexpr int32_t mapWalkHeight = Map::maxViewportY * 2 + 1;
+	static constexpr int32_t maxWalkCacheWidth = (mapWalkWidth - 1) / 2;
+	static constexpr int32_t maxWalkCacheHeight = (mapWalkHeight - 1) / 2;
+	static constexpr std::size_t mapWalkCacheSize = static_cast<std::size_t>(mapWalkWidth) * mapWalkHeight;
+
+	mutable std::bitset<mapWalkCacheSize> localMapCache;
+	mutable bool isWalkCacheLoaded = false;
+
 	void onCreatureEnter(Creature* creature);
 	void onCreatureLeave(Creature* creature);
 	bool selectBlockerTarget();
@@ -244,6 +263,23 @@ private:
 	bool getDanceStep(const Position& creaturePos, Direction& direction, bool keepAttack = true,
 	                  bool keepDistance = true);
 	bool canWalkTo(Position pos, Direction direction) const;
+	bool usesWalkCache() const { return !randomStepping; }
+	void invalidateWalkCache() noexcept { isWalkCacheLoaded = false; }
+	void setIgnoreFieldDamage(bool value)
+	{
+		if (ignoreFieldDamage != value) {
+			ignoreFieldDamage = value;
+			invalidateWalkCache();
+		}
+	}
+	void updateMapCache() const;
+	void updateTileCache(const Tile* tile, int32_t dx, int32_t dy) const;
+	void updateTileCache(const Tile* tile, const Position& pos) const;
+	static constexpr std::size_t getWalkCacheIndex(int32_t dx, int32_t dy)
+	{
+		return static_cast<std::size_t>(maxWalkCacheHeight + dy) * mapWalkWidth +
+		       static_cast<std::size_t>(maxWalkCacheWidth + dx);
+	}
 	void fleeFromTarget(const Position& targetPos, Direction& direction);
 
 	static bool pushItem(Item* item);

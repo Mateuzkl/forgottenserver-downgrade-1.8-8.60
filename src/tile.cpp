@@ -468,6 +468,10 @@ void Tile::onAddTileItem(Item* item)
 		}
 	}
 
+	for (const auto& spectator : spectators) {
+		spectator->onAddTileItem(this, cylinderMapPos);
+	}
+
 	if ((!hasFlag(TILESTATE_PROTECTIONZONE) || getBoolean(ConfigManager::CLEAN_PROTECTION_ZONES)) &&
 	    item->isCleanable()) {
 		if (!getHouseTile()) {
