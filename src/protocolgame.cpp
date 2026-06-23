@@ -4237,17 +4237,15 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	if (!known) {
 		auto addCreatureEmblem = [this, &msg, creature](GuildEmblems_t emblem) {
-			if (isAstraClient) {
-				if (const Monster* monster = creature->getMonster(); monster && monster->isFamiliar()) {
-					msg.addByte(GUILDEMBLEM_NONE);
-					return;
-				}
-			} else {
+			if (!isAstraClient) {
 				if (emblem == GUILDEMBLEM_MEMBER) {
 					emblem = GUILDEMBLEM_ALLY;
 				} else if (emblem == GUILDEMBLEM_OTHER) {
 					emblem = GUILDEMBLEM_NEUTRAL;
 				}
+			} else if (const Monster* monster = creature->getMonster(); monster && monster->isFamiliar()) {
+				msg.addByte(GUILDEMBLEM_NONE);
+				return;
 			}
 			msg.addByte(emblem);
 		};

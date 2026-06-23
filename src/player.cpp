@@ -6020,7 +6020,7 @@ GuildEmblems_t Player::getGuildEmblem(const Player* player, bool useGuildMembers
 	}
 
 	const auto guild = getGuild();
-	if (useGuildMembershipEmblems && player->getGuildWarVector().empty()) {
+	if (guild && useGuildMembershipEmblems && player->getGuildWarVector().empty()) {
 		if (guild == playerGuild) {
 			return GUILDEMBLEM_MEMBER;
 		}
