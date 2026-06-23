@@ -169,6 +169,7 @@ run_cppcheck() {
     "-j${jobs}"
     "--project=${COMPILE_COMMANDS}"
     --std=c++23
+    -D__cpp_lib_move_only_function=202110L
     --enable=warning,style,performance,portability
     --inline-suppr
     --suppress=missingIncludeSystem

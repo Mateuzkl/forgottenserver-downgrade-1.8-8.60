@@ -16,9 +16,9 @@ struct Node
 	using ChildrenVector = std::vector<Node>;
 
 	ChildrenVector children;
-	ContentIt propsBegin;
-	ContentIt propsEnd;
-	uint8_t type;
+	ContentIt propsBegin = nullptr;
+	ContentIt propsEnd = nullptr;
+	uint8_t type = 0;
 	enum NodeChar : uint8_t
 	{
 		ESCAPE = 0xFD,

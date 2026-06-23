@@ -35,6 +35,7 @@ jobs:
           cppcheck src \
             --enable=warning,style,performance,portability \
             --std=c++23 \
+            -D__cpp_lib_move_only_function=202110L \
             --inline-suppr \
             --suppress=missingIncludeSystem \
             --suppressions-list=.cppcheck-suppressions.txt \
