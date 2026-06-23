@@ -204,5 +204,5 @@ end
 
 reward[80] = {
 	free = { type = "level", count = 2 },
-	deluxe = { type = "outfit", male = { { looktype = 1289, name = "Dragon Slayer" } }, female = { { looktype = 1289, name = "Dragon Slayer" } }, addons = 3 },
+	deluxe = { type = "charms", count = 250 },
 }

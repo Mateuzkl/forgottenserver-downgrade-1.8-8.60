@@ -68,7 +68,8 @@ function talk.onSay(player, words, param)
 		elseif action == "sync" then
 			local missionsSent = BattlePassSystem.sendMissions(target)
 			local rewardsSent = missionsSent and BattlePassSystem.sendRewards(target)
-			if missionsSent and rewardsSent then
+			local shopSent = rewardsSent and BattlePassSystem.sendShop(target)
+			if missionsSent and rewardsSent and shopSent then
 				player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Battle Pass sent to " .. target:getName() .. ".")
 			else
 				player:sendCancelMessage("Could not send Battle Pass to " .. target:getName() .. ".")

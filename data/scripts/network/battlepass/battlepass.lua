@@ -334,7 +334,7 @@ local function buildMissionsPayload(player, state, season, daily)
 		beginTime = season.beginTime,
 		endTime = season.endTime,
 		points = state.points,
-		rerollPrice = config.reroll.goldPerLevel,
+		rerollPrice = (tonumber(config.reroll.goldPerLevel) or 800) * player:getLevel(),
 		deluxePrice = config.deluxe.price,
 		battlePassActive = isPremiumActive(state),
 		currentRewardStep = currentRewardStep,
@@ -653,7 +653,6 @@ end
 function BattlePassSystem.sendMissions(player)
 	local requirementError = getRequirementError(player)
 	if requirementError then
-		player:sendCancelMessage("[Battle Pass] " .. requirementError)
 		return sendBattlePassError(player, requirementError)
 	end
 	local state, store, season, daily = loadState(player)
@@ -752,7 +751,6 @@ end
 local function setRewardClaimState(reward, state)
 	local claimed = state.claimed[tostring(reward.rewardId)] == true
 	reward.hasClaimedReward = claimed
-	reward.hasClamedReward = claimed
 end
 
 local function buildRewardSteps(state)
@@ -838,7 +836,7 @@ function BattlePassSystem.sendRewards(player)
 					writeU16(out, reward.count)
 					writeU16(out, reward.charges)
 					writeBool(out, reward.stuck)
-					writeBool(out, reward.hasClaimedReward or reward.hasClamedReward)
+					writeBool(out, reward.hasClaimedReward)
 					writeU32(out, reward.durationTime)
 					out:addByte(clamp(reward.addons, 0, 0xFF))
 					writeThingValues(out, randomValues)
@@ -973,18 +971,27 @@ local function deliverReward(player, reward, objectId)
 		end
 		return true
 	elseif definition.type == "outfit" then
-		local outfits = player:getSex() == PLAYERSEX_FEMALE and definition.female or definition.male
+		local primaryOutfits = player:getSex() == PLAYERSEX_FEMALE and definition.female or definition.male
+		local fallbackOutfits = player:getSex() == PLAYERSEX_FEMALE and definition.male or definition.female
+		local outfits = primaryOutfits or fallbackOutfits or {}
+		if #outfits == 0 and fallbackOutfits and fallbackOutfits ~= outfits then
+			outfits = fallbackOutfits
+		end
 		if #outfits == 0 then
-			outfits = definition.male or definition.female or {}
+			return false, "This season has an empty outfit reward."
 		end
 		for _, outfit in ipairs(outfits) do
+			local delivered
 			if definition.addons and definition.addons > 0 then
-				player:addOutfitAddon(outfit.looktype, definition.addons)
+				delivered = player:addOutfitAddon(outfit.looktype, definition.addons)
 			else
-				player:addOutfit(outfit.looktype)
+				delivered = player:addOutfit(outfit.looktype)
+			end
+			if delivered == false then
+				return false, "Could not add this outfit."
 			end
 		end
-		return #outfits > 0, #outfits > 0 and nil or "This season has an empty outfit reward."
+		return true
 	elseif definition.type == "level" then
 		return player:addLevel(reward.count), "Could not add the level reward."
 	elseif definition.type == "prey" then
@@ -1297,6 +1304,8 @@ function BattlePassSystem.onKill(player, target)
 	local monsterName = target:getName()
 	local changed = false
 	local previousStep = getCurrentRewardStep(state.points)
+	local wasCompleted = state.completed
+	local previousShopPoints = state.shopPoints
 
 	local dailyMissions = getActiveDailyMissions(state, daily.key)
 	if dailyMissions[1] then
@@ -1318,7 +1327,7 @@ function BattlePassSystem.onKill(player, target)
 		if getCurrentRewardStep(state.points) > previousStep then
 			BattlePassSystem.sendRewards(player)
 		end
-		if state.completed then
+		if (not wasCompleted and state.completed) or state.shopPoints ~= previousShopPoints then
 			BattlePassSystem.sendShop(player)
 		end
 	end
@@ -1378,8 +1387,7 @@ function BattlePassSystem.addShopPoints(player, amount)
 
 	local state, store, season, daily = loadState(player)
 	if not state.completed then
-		state.points = config.season.maxStep * config.season.pointsPerStep
-		ensureStateTables(state)
+		return false, string.format("Complete Battle Pass level %d before adding shop points. Use /battlepass unlockshop <player> for testing.", config.season.maxStep)
 	end
 	addShopPoints(state, amount)
 	saveState(store, state)
