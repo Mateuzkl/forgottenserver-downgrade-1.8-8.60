@@ -42,6 +42,7 @@ local rateLimitedActions = {
 	getMissions = true,
 	getRewards = true,
 	getShop = true,
+	buyShop = true,
 }
 local lastRequest = {}
 
@@ -51,7 +52,7 @@ local generalMissions = config.generalMissions or {}
 local missionById = {}
 local function registerMission(mission, poolName)
 	if type(mission) ~= "table" or not mission.id then
-		return
+		error(string.format("[Battle Pass] Malformed mission in %s. Every mission must be a table with an id.", poolName))
 	end
 	if missionById[mission.id] then
 		error(string.format("[Battle Pass] Duplicate mission id '%s' in %s.", tostring(mission.id), poolName))
@@ -630,7 +631,10 @@ function BattlePassSystem.sendShop(player)
 		writeBool(out, state.completed)
 		writeU16(out, #entries)
 		for _, entry in ipairs(entries) do
-			local itemClientId = select(1, getItemTypeInfo(entry.itemId))
+			local itemClientId = 0
+			if entry.type == "item" then
+				itemClientId = select(1, getItemTypeInfo(entry.itemId))
+			end
 			local outfit = entry.type == "outfit" and getShopOutfit(player, entry) or nil
 			writeU16(out, entry.id)
 			writeString(out, entry.title or entry.name or "Battle Pass Offer")
@@ -1050,13 +1054,18 @@ local function deliverShopEntry(player, entry)
 		if not outfit or not outfit.looktype then
 			return false, "This season has an invalid outfit configured."
 		end
-		local addons = math.max(0, tonumber(entry.addons) or 0)
-		if addons > 0 then
-			player:addOutfitAddon(outfit.looktype, addons)
-		else
-			player:addOutfit(outfit.looktype)
+		local looktype = tonumber(outfit.looktype) or 0
+		if looktype <= 0 then
+			return false, "This season has an invalid outfit configured."
 		end
-		return true
+		local addons = math.max(0, tonumber(entry.addons) or 0)
+		local delivered
+		if addons > 0 then
+			delivered = player:addOutfitAddon(looktype, addons)
+		else
+			delivered = player:addOutfit(looktype)
+		end
+		return delivered, "Could not add this outfit."
 	elseif entry.type == "prey" then
 		local count = math.max(1, tonumber(entry.count) or 1)
 		if not PreySystem or not PreySystem.addWildcards or not PreySystem.addWildcards(player, count) then
@@ -1168,6 +1177,11 @@ function BattlePassSystem.rerollDailyMission(player, data)
 	local state, store, season, daily = loadState(player)
 	if os.time() < season.beginTime or os.time() >= season.endTime then
 		player:sendCancelMessage("[Battle Pass] This season is not accepting mission progress.")
+		return false
+	end
+	local requirementError = getRequirementError(player)
+	if requirementError then
+		player:sendCancelMessage("[Battle Pass] " .. requirementError)
 		return false
 	end
 	getActiveDailyMissions(state, daily.key)
