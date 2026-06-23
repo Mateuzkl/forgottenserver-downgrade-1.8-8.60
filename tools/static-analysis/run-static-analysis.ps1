@@ -36,9 +36,20 @@ if ($Help) {
 }
 
 $scriptParent = Split-Path -Parent $PSScriptRoot
-$repositoryRoot = (& git -C $scriptParent rev-parse --show-toplevel 2>$null).Trim()
+$repositoryRoot = $null
+$git = Get-Command git -ErrorAction SilentlyContinue
+if ($git) {
+    $gitRootOutput = & $git.Source -C $scriptParent rev-parse --show-toplevel 2>$null
+    if (-not [string]::IsNullOrWhiteSpace($gitRootOutput)) {
+        $repositoryRoot = $gitRootOutput.Trim()
+    }
+}
 if ([string]::IsNullOrWhiteSpace($repositoryRoot)) {
-    throw 'Unable to locate the Git repository root.'
+    $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+}
+if (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot 'CMakeLists.txt') -PathType Leaf) -or
+    -not (Test-Path -LiteralPath (Join-Path $repositoryRoot 'src') -PathType Container)) {
+    throw 'Unable to locate the project root.'
 }
 
 $buildDirectory = Join-Path $repositoryRoot 'build-analysis'
@@ -115,13 +126,20 @@ function Invoke-Cppcheck {
         return
     }
 
+    $jobs = [Environment]::ProcessorCount
+    if ($jobs -lt 1) {
+        $jobs = 2
+    }
     $commonArguments = @(
+        "-j$jobs",
         "--project=$compileCommands",
+        '--std=c++23',
         '--enable=warning,style,performance,portability',
         '--inline-suppr',
         '--suppress=missingIncludeSystem',
         "--suppressions-list=$(Join-Path $repositoryRoot '.cppcheck-suppressions.txt')",
         "-i$(Join-Path $repositoryRoot 'build-analysis')",
+        "-i$(Join-Path $repositoryRoot 'vcpkg_installed')",
         "-i$(Join-Path $repositoryRoot 'build')",
         "-i$(Join-Path $repositoryRoot '.git')",
         "-i$(Join-Path $repositoryRoot 'data')",
@@ -198,15 +216,13 @@ function Invoke-ClangTidy {
     }
 
     Set-Content -LiteralPath $report -Value '' -Encoding utf8
+    $sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $repositoryRoot 'src') -Recurse -File |
+        Where-Object { $_.Extension -in '.cpp', '.cc', '.cxx' })
     $status = 0
-    Get-ChildItem -LiteralPath (Join-Path $repositoryRoot 'src') -Recurse -File |
-        Where-Object { $_.Extension -in '.cpp', '.cc', '.cxx' } |
-        ForEach-Object {
-            & $clangTidy.Source -p $buildDirectory $_.FullName *>> $report
-            if ($LASTEXITCODE -ne 0) {
-                $status = $LASTEXITCODE
-            }
-        }
+    if ($sourceFiles.Count -gt 0) {
+        & $clangTidy.Source -p $buildDirectory @($sourceFiles.FullName) *>> $report
+        $status = $LASTEXITCODE
+    }
     if ($status -ne 0) {
         $script:analysisFailures++
     }

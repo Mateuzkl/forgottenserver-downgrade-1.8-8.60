@@ -19,7 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Install analysis tools
         run: |
@@ -32,20 +34,22 @@ jobs:
           mkdir -p analysis-reports
           cppcheck src \
             --enable=warning,style,performance,portability \
+            --std=c++23 \
             --inline-suppr \
             --suppress=missingIncludeSystem \
             --suppressions-list=.cppcheck-suppressions.txt \
-            -ibuild-analysis -ibuild -i.git -idata -imodules -iscreenshots -idocs \
+            -ibuild-analysis -ivcpkg_installed -ibuild -i.git -idata -imodules -iscreenshots -idocs \
             --template='{file}:{line}:{column}: {severity}: {message} [{id}]' \
             2> analysis-reports/cppcheck.txt
 
       - name: Run Lizard baseline
+        if: always()
         run: |
           lizard -V -C 20 -L 180 -a 8 src > analysis-reports/lizard.txt || true
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: static-analysis-reports
           path: analysis-reports/

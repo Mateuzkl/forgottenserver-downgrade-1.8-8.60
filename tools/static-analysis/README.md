@@ -26,8 +26,10 @@ python3 -m pip install --user lizard
 ```
 
 Garanta que `~/.local/bin` esteja no `PATH` para usar o executavel `lizard`.
-As dependencias de compilacao normais do TFS continuam sendo necessarias para o
-CMake gerar `build-analysis/compile_commands.json`.
+Antes de executar a analise completa, conclua tambem os
+[pre-requisitos de compilacao do TFS](../../README.md#compilation), incluindo
+Lua 5.5, `simdutf`, `mio` e as bibliotecas de desenvolvimento listadas no guia.
+Eles sao necessarios para o CMake gerar `build-analysis/compile_commands.json`.
 
 ## Como rodar
 
@@ -91,7 +93,8 @@ Revise primeiro os achados com maior risco:
 5. loops com custo alto ou alocacoes repetidas.
 
 Registre falsos positivos revisados em `.cppcheck-suppressions.txt` de forma
-especifica por arquivo e linha, com uma justificativa. Nao acrescente
+especifica por arquivo e linha. O arquivo aceita apenas regras de supressao
+validas do Cppcheck; mantenha a justificativa no commit ou no PR. Nao acrescente
 supressoes amplas para silenciar uma categoria inteira.
 
 ## CI inicial

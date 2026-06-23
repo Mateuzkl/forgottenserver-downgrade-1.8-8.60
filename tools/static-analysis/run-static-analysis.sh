@@ -24,9 +24,15 @@ EOF
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(git -C "${SCRIPT_DIR}/../.." rev-parse --show-toplevel 2>/dev/null || true)"
+ROOT_DIR=""
+if command -v git >/dev/null 2>&1; then
+  ROOT_DIR="$(git -C "${SCRIPT_DIR}/../.." rev-parse --show-toplevel 2>/dev/null || true)"
+fi
 if [[ -z "${ROOT_DIR}" ]]; then
-  echo "Unable to locate the Git repository root." >&2
+  ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+fi
+if [[ ! -f "${ROOT_DIR}/CMakeLists.txt" || ! -d "${ROOT_DIR}/src" ]]; then
+  echo "Unable to locate the project root." >&2
   exit 1
 fi
 
@@ -134,13 +140,19 @@ configure_analysis_build() {
 run_cppcheck() {
   local text_report="${REPORT_DIR}/cppcheck.txt"
   local xml_report="${REPORT_DIR}/cppcheck.xml"
+  local jobs
+  jobs="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)"
+  [[ "${jobs}" =~ ^[1-9][0-9]*$ ]] || jobs=2
   local -a common_args=(
+    "-j${jobs}"
     "--project=${COMPILE_COMMANDS}"
+    --std=c++23
     --enable=warning,style,performance,portability
     --inline-suppr
     --suppress=missingIncludeSystem
     "--suppressions-list=${ROOT_DIR}/.cppcheck-suppressions.txt"
     "-i${ROOT_DIR}/build-analysis"
+    "-i${ROOT_DIR}/vcpkg_installed"
     "-i${ROOT_DIR}/build"
     "-i${ROOT_DIR}/.git"
     "-i${ROOT_DIR}/data"
@@ -232,11 +244,15 @@ run_clang_tidy() {
   fi
 
   : > "${report}"
-  local source_file
   local status=0
+  local source_file
+  local -a source_files=()
   while IFS= read -r -d '' source_file; do
-    clang-tidy -p "${BUILD_DIR}" "${source_file}" >> "${report}" 2>&1 || status=$?
+    source_files+=("${source_file}")
   done < <(find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' \) -print0)
+  if [[ ${#source_files[@]} -gt 0 ]]; then
+    clang-tidy -p "${BUILD_DIR}" "${source_files[@]}" >> "${report}" 2>&1 || status=$?
+  fi
   if [[ ${status} -ne 0 ]]; then
     ANALYSIS_FAILURES=$((ANALYSIS_FAILURES + 1))
   fi

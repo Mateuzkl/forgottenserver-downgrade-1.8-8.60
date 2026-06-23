@@ -1,6 +1,0 @@
-# Keep this baseline intentionally empty.
-#
-# Add only reviewed false positives in the format supported by Cppcheck, for
-# example: nullPointer:src/example.cpp:42
-# Include a short rationale in a preceding comment and prefer a line-specific
-# suppression over a project-wide one.
