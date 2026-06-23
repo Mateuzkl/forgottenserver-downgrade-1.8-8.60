@@ -17,6 +17,7 @@ local RESP_BESTIARY_DATA = 0x01
 local RESP_BESTIARY_OVERVIEW = 0x02
 local RESP_BESTIARY_MONSTER = 0x03
 local RESP_TRACKER = 0x05
+local RESP_BESTIARY_PROGRESS = 0x06
 
 local MAX_TRACKER_SLOTS = 5
 local CHARM_REMOVE_COST = 10000
@@ -557,12 +558,34 @@ local function sendBestiaryMonster(player, raceId)
 end
 
 local function sendBestiaryProgress(player, raceId, killCount)
-	local entry = CustomBestiary.getMonster(raceId)
-	if not entry then
-		return
+	if not supportsCustomNetwork(player) then
+		return false
 	end
 
-	sendBestiaryOverview(player, entry.class)
+	local entry = CustomBestiary.getMonster(raceId)
+	if not entry then
+		return false
+	end
+
+	local playerGuid = getPlayerGuid(player)
+	local kills = loadKillMap(playerGuid)
+	local charms = loadCharmMap(playerGuid)
+	killCount = tonumber(killCount) or kills[entry.raceId] or 0
+	local progress = CustomBestiary.getProgress(entry, killCount)
+
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_CYCLOPEDIA_SEND)
+	out:addByte(RESP_BESTIARY_PROGRESS)
+	out:addU16(entry.raceId)
+	out:addByte(clamp(progress, 0, 0xFF))
+	out:addU32(clamp(killCount, 0, 0xFFFFFFFF))
+	out:addU16(entry.firstUnlock)
+	out:addU16(entry.secondUnlock)
+	out:addU16(entry.toKill)
+	writeCreatureInfo(out, entry)
+	out:addU32(clamp(getStoredCharmBalance(playerGuid, kills, charms), 0, 0xFFFFFFFF))
+	out:addU32(clamp(getGoldBalance(player), 0, 0xFFFFFFFF))
+	return out:sendToPlayer(player)
 end
 
 local function sendTracker(player)

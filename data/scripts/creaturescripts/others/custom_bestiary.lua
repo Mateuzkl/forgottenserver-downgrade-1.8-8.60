@@ -182,6 +182,9 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 		if oldKills < entry.toKill and newKills >= entry.toKill then
 			addPlayerCharmPoints(playerGuid, entry.charmPoints)
 		end
+		if CustomBestiary.sendProgress then
+			CustomBestiary.sendProgress(player, raceId, newKills)
+		end
 		if newProgress > oldProgress then
 			sendBestiaryUnlockMessage(player, entry, newProgress)
 		end
