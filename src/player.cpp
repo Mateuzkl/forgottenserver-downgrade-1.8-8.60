@@ -6034,6 +6034,7 @@ GuildEmblems_t Player::getGuildEmblem(const Player* player, bool useGuildMembers
 	if (guild && useGuildMembershipEmblems) {
 		return GUILDEMBLEM_OTHER;
 	}
+
 	return GUILDEMBLEM_NEUTRAL;
 }
 

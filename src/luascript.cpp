@@ -2142,6 +2142,14 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CONST_ME_SMALLGREEN_ENERGY_SPARK);
 	registerEnum(CONST_ME_SMALLPINK_ENERGY_SPARK);
 
+	// 15.12 - Weapon Attack Effects
+	registerEnum(CONST_ME_SWORD_ATTACK);
+	registerEnum(CONST_ME_CLUB_ATTACK);
+	registerEnum(CONST_ME_AXE_ATTACK);
+	registerEnum(CONST_ME_MONK_STAFF_ATTACK);
+	registerEnum(CONST_ME_MONK_DAGGERS_ATTACK);
+	registerEnum(CONST_ME_FIST_ATTACK);
+
 	registerEnum(CONST_ANI_NONE);
 	registerEnum(CONST_ANI_SPEAR);
 	registerEnum(CONST_ANI_BOLT);
