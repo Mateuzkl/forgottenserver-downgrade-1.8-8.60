@@ -49,14 +49,24 @@ local dailyFreeMissions = config.dailyMissions and config.dailyMissions.free or 
 local dailyDeluxeMissions = config.dailyMissions and config.dailyMissions.deluxe or {}
 local generalMissions = config.generalMissions or {}
 local missionById = {}
-for _, mission in ipairs(dailyFreeMissions) do
+local function registerMission(mission, poolName)
+	if type(mission) ~= "table" or not mission.id then
+		return
+	end
+	if missionById[mission.id] then
+		error(string.format("[Battle Pass] Duplicate mission id '%s' in %s.", tostring(mission.id), poolName))
+	end
 	missionById[mission.id] = mission
+end
+
+for _, mission in ipairs(dailyFreeMissions) do
+	registerMission(mission, "daily free missions")
 end
 for _, mission in ipairs(dailyDeluxeMissions) do
-	missionById[mission.id] = mission
+	registerMission(mission, "daily deluxe missions")
 end
 for _, mission in ipairs(generalMissions) do
-	missionById[mission.id] = mission
+	registerMission(mission, "general missions")
 end
 
 local function normalizeName(name)
@@ -86,7 +96,7 @@ local function getSeason()
 	local epoch = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonEpoch)) or -1
 	local beginTime = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonStartedAt)) or -1
 
-	if activeConfigId ~= configuredId or epoch < 1 or beginTime < 1 then
+	if epoch < 1 or beginTime < 1 then
 		epoch = math.max(1, epoch + 1)
 		beginTime = tonumber(seasonConfig.startsAt) or 0
 		if beginTime <= 0 then
@@ -94,6 +104,9 @@ local function getSeason()
 		end
 		Game.setStorageValue(GlobalStorageKeys.battlePassSeasonEpoch, epoch)
 		Game.setStorageValue(GlobalStorageKeys.battlePassSeasonStartedAt, beginTime)
+	end
+
+	if activeConfigId ~= configuredId then
 		store:set("configId", configuredId)
 	end
 
@@ -529,10 +542,16 @@ local function writeRewardItems(out, items)
 	local count = math.min(#items, 0xFFFF)
 	writeU16(out, count)
 	for index = 1, count do
-		local item = items[index] or {}
-		writeU16(out, item.itemId)
-		writeU16(out, item.count)
-		writeBool(out, item.stuck)
+		local item = items[index]
+		if type(item) == "table" then
+			writeU16(out, item.itemId or item.thingId)
+			writeU16(out, item.count)
+			writeBool(out, item.stuck)
+		else
+			writeU16(out, item)
+			writeU16(out, 1)
+			writeBool(out, false)
+		end
 	end
 end
 
@@ -840,14 +859,14 @@ local function findReward(step, rewardId)
 	local configuredStep = config.rewards[step] or {}
 	if configuredStep.free then
 		local freeReward = makeReward(step, true, configuredStep.free)
-		if freeReward.rewardId == rewardId then
+		if freeReward and freeReward.rewardId == rewardId then
 			return freeReward
 		end
 	end
 
 	if configuredStep.deluxe then
 		local premiumReward = makeReward(step, false, configuredStep.deluxe)
-		if premiumReward.rewardId == rewardId then
+		if premiumReward and premiumReward.rewardId == rewardId then
 			return premiumReward
 		end
 	end
@@ -1331,6 +1350,25 @@ function BattlePassSystem.resetPlayer(player)
 		BattlePassSystem.sendShop(player)
 	end
 	return true
+end
+
+function BattlePassSystem.addShopPoints(player, amount)
+	if not player then
+		return false, "Player not found."
+	end
+
+	amount = math.floor(tonumber(amount) or 0)
+	if amount <= 0 then
+		return false, "Amount must be greater than zero."
+	end
+
+	local state, store = loadState(player)
+	addShopPoints(state, amount)
+	saveState(store, state)
+	if supportsCustomNetwork(player) then
+		BattlePassSystem.sendShop(player)
+	end
+	return true, state.shopPoints
 end
 
 function BattlePassSystem.startNewSeason()

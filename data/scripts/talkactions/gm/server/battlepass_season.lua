@@ -2,7 +2,7 @@ local talk = TalkAction("/battlepass")
 
 local function usage(player)
 	player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
-		"Usage: /battlepass status | newseason | reset <player> | sync <player>")
+		"Usage: /battlepass status | newseason | reset <player> | sync <player> | shopcoins|coins <player> <amount>")
 end
 
 function talk.onSay(player, words, param)
@@ -17,6 +17,7 @@ function talk.onSay(player, words, param)
 	local action, targetName = param:match("^(%S+)%s*(.*)$")
 	action = (action or "status"):lower()
 	targetName = (targetName or ""):trim()
+	local isShopCoinsAction = action == "shopcoins" or action == "coins" or action == "addcoins"
 
 	if action == "status" then
 		local season = BattlePassSystem.getSeasonInfo()
@@ -33,10 +34,21 @@ function talk.onSay(player, words, param)
 		return false
 	end
 
-	if action == "reset" or action == "sync" then
+	if action == "reset" or action == "sync" or isShopCoinsAction then
 		if targetName == "" then
 			usage(player)
 			return false
+		end
+
+		local amount
+		if isShopCoinsAction then
+			targetName, amount = targetName:match("^(.-)%s+(%d+)$")
+			targetName = (targetName or ""):trim()
+			amount = tonumber(amount)
+			if targetName == "" or not amount then
+				usage(player)
+				return false
+			end
 		end
 
 		local target = Player(targetName)
@@ -52,10 +64,22 @@ function talk.onSay(player, words, param)
 				return false
 			end
 			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Battle Pass state reset for " .. target:getName() .. ".")
+		elseif action == "sync" then
+			local missionsSent = BattlePassSystem.sendMissions(target)
+			local rewardsSent = BattlePassSystem.sendRewards(target)
+			if missionsSent and rewardsSent then
+				player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Battle Pass sent to " .. target:getName() .. ".")
+			else
+				player:sendCancelMessage("Could not send Battle Pass to " .. target:getName() .. ".")
+			end
 		else
-			BattlePassSystem.sendMissions(target)
-			BattlePassSystem.sendRewards(target)
-			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Battle Pass sent to " .. target:getName() .. ".")
+			local ok, balanceOrError = BattlePassSystem.addShopPoints(target, amount)
+			if not ok then
+				player:sendCancelMessage(balanceOrError or "Could not add Battle Pass shop points.")
+				return false
+			end
+			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
+				string.format("Added %d Battle Pass shop points to %s. New balance: %d.", amount, target:getName(), balanceOrError))
 		end
 		return false
 	end
