@@ -1371,6 +1371,23 @@ function BattlePassSystem.addShopPoints(player, amount)
 	return true, state.shopPoints
 end
 
+function BattlePassSystem.unlockShop(player)
+	if not player then
+		return false, "Player not found."
+	end
+
+	local state, store, season, daily = loadState(player)
+	state.points = config.season.maxStep * config.season.pointsPerStep
+	ensureStateTables(state)
+	saveState(store, state)
+	if supportsCustomNetwork(player) then
+		sendMissionState(player, state, season, daily)
+		BattlePassSystem.sendRewards(player)
+		BattlePassSystem.sendShop(player)
+	end
+	return true
+end
+
 function BattlePassSystem.startNewSeason()
 	local seasonStore = getSeasonStore()
 	local currentEpoch = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonEpoch)) or 0
