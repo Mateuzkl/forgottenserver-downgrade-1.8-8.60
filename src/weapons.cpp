@@ -340,13 +340,13 @@ uint16_t Weapon::getWeaponAttackEffect(const Item* item) const {
 
 void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const
 {
-    WeaponType_t weaponType = item ? item->getWeaponType() : WEAPON_FIST;
+	WeaponType_t weaponType = item ? item->getWeaponType() : WEAPON_FIST;
 
-    if (weaponType == WEAPON_SWORD || weaponType == WEAPON_CLUB ||
-        weaponType == WEAPON_AXE   || weaponType == WEAPON_FIST)
-    {
-        g_game.addMagicEffect(target->getPosition(), getWeaponAttackEffect(item));
-    }
+	if (weaponType == WEAPON_SWORD || weaponType == WEAPON_CLUB ||
+		weaponType == WEAPON_AXE   || weaponType == WEAPON_FIST)
+	{
+		g_game.addMagicEffect(target->getPosition(), getWeaponAttackEffect(item), target->getInstanceID());
+	}
 
 	if (scripted) {
 		LuaVariant var;
