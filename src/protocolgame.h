@@ -28,11 +28,11 @@ struct TextMessage
 	MessageClasses type = MESSAGE_STATUS_DEFAULT;
 	std::string text;
 	Position position;
-	uint16_t channelId;
+	uint16_t channelId = 0;
 	struct
 	{
 		int32_t value = 0;
-		TextColor_t color;
+		TextColor_t color = TEXTCOLOR_NONE;
 	} primary, secondary;
 
 	TextMessage() = default;

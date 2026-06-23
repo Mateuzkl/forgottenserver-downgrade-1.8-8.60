@@ -153,7 +153,7 @@ public:
 
 private:
 	ObserverPtr<Raid> raid = nullptr;
-	uint32_t delay;
+	uint32_t delay = 0;
 };
 
 class AnnounceEvent final : public RaidEvent

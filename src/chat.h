@@ -59,7 +59,7 @@ public:
 protected:
 	UsersMap users;
 
-	uint16_t id;
+	uint16_t id = 0;
 
 private:
 	std::string name;

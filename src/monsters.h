@@ -186,9 +186,9 @@ public:
 
 	std::string name;
 	std::string nameDescription;
-	uint32_t raceId;
+	uint32_t raceId = 0;
 
-	MonsterInfo info;
+	MonsterInfo info{};
 
 	void loadLoot(MonsterType* monsterType, LootBlock lootBlock);
 };

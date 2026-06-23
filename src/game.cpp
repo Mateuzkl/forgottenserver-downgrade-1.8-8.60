@@ -2048,7 +2048,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		} else if (moveItem && !moveItem->isRemoved()) {
 			g_events->eventPlayerOnItemMoved(actorPlayer, moveItem, static_cast<uint16_t>(count), *fromPos, *toPos,
 			                                 fromCylinder, toCylinder);
-		} else if (item && !item->isRemoved()) {
+		} else if (!item->isRemoved()) {
 			g_events->eventPlayerOnItemMoved(actorPlayer, item, static_cast<uint16_t>(count), *fromPos, *toPos,
 			                                 fromCylinder, toCylinder);
 		}
@@ -2354,7 +2354,7 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 		const uint64_t worth = it.first;
 
 		uint32_t currencyCoins = money / worth;
-		if (currencyCoins <= 0) {
+		if (currencyCoins == 0) {
 			continue;
 		}
 
@@ -5914,7 +5914,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		realHealthChange = target->getHealth() - realHealthChange;
 
 		// rewardboss healing contribution
-		if (target && target->getPlayer()) {
+		if (target->getPlayer()) {
 			for (const auto& [monsterId, rewardInfo] : g_game.rewardBossTracking) {
 				auto monsterRef = getMonsterByIDShared(monsterId);
 				Monster* monster = monsterRef.get();

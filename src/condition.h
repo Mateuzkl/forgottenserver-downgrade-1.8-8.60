@@ -131,16 +131,16 @@ public:
 protected:
 	virtual bool updateCondition(const Condition* addCondition);
 
-	int64_t endTime;
-	uint32_t subId;
-	int32_t ticks;
-	ConditionType_t conditionType;
-	bool isBuff;
-	bool aggressive;
+	int64_t endTime = 0;
+	uint32_t subId = 0;
+	int32_t ticks = 0;
+	ConditionType_t conditionType = CONDITION_NONE;
+	bool isBuff = false;
+	bool aggressive = false;
 	bool constant = false;
 
 private:
-	ConditionId_t id;
+	ConditionId_t id = CONDITIONID_DEFAULT;
 };
 
 class ConditionGeneric : public Condition

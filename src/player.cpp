@@ -2138,9 +2138,7 @@ void Player::onCreatureAppear(Creature* creature, bool isLogin)
 				outfitAttributes = Outfits::getInstance().addAttributes(getID(), outfitId, sex);
 			} else {
 				// Outfit no longer exists after reload, remove old attributes
-				if (outfitAttributes) {
-					outfitAttributes = false;
-				}
+				outfitAttributes = false;
 			}
 		}
 
@@ -2333,7 +2331,7 @@ void Player::updateStaminaRegen(int64_t timePassed)
 				sendTextMessage(MESSAGE_STATUS_SMALL, "You are no longer refilling stamina, because your stamina is already full.");
 			}
 		}
-	} else if (staminaPzActive) {
+	} else {
 		staminaPzActive = false;
 	}
 

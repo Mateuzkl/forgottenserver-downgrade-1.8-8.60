@@ -2678,11 +2678,15 @@ void ProtocolGame::sendCreatePrivateChannel(uint16_t channelId, std::string_view
 
 void ProtocolGame::sendChannelsDialog()
 {
+	if (!player) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0xAB);
 
 	const ChannelList& list = g_chat->getChannelList(*player);
-	if (player && player->client->isBroadcasting()) {
+	if (player->client->isBroadcasting()) {
 		msg.addByte(list.size() + 1);
 		msg.add<uint16_t>(CHANNEL_CAST);
 		msg.addString("Cast Channel");

@@ -669,14 +669,14 @@ struct MarketOfferEx
 	    playerName(std::move(other.playerName))
 	{}
 
-	uint32_t id;
-	uint32_t playerId;
-	uint32_t timestamp;
-	uint32_t price;
-	uint16_t amount;
-	uint16_t counter;
-	uint16_t itemId;
-	MarketAction_t type;
+	uint32_t id = 0;
+	uint32_t playerId = 0;
+	uint32_t timestamp = 0;
+	uint32_t price = 0;
+	uint16_t amount = 0;
+	uint16_t counter = 0;
+	uint16_t itemId = 0;
+	MarketAction_t type = MARKETACTION_BUY;
 	std::string playerName;
 };
 

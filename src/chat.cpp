@@ -470,7 +470,7 @@ bool Chat::talkToChannel(const Player& player, SpeakClasses type, std::string_vi
 		const auto& rank = player.getGuildRank();
 		if (rank && rank->level > 1) {
 			type = TALKTYPE_CHANNEL_O;
-		} else if (type != TALKTYPE_CHANNEL_Y) {
+		} else {
 			type = TALKTYPE_CHANNEL_Y;
 		}
 	} else if (channelId == CHANNEL_PRIVATE || channelId == CHANNEL_PARTY) {
