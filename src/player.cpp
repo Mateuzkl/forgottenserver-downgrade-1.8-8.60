@@ -6020,19 +6020,20 @@ GuildEmblems_t Player::getGuildEmblem(const Player* player, bool useGuildMembers
 	}
 
 	const auto guild = getGuild();
-	if (guild && useGuildMembershipEmblems && player->getGuildWarVector().empty()) {
-		if (guild == playerGuild) {
-			return GUILDEMBLEM_MEMBER;
-		}
-		return GUILDEMBLEM_OTHER;
-	}
-
-	if (guild == playerGuild) {
-		return GUILDEMBLEM_ALLY;
-	} else if (isInWar(player)) {
+	if (isInWar(player)) {
 		return GUILDEMBLEM_ENEMY;
 	}
 
+	if (guild == playerGuild) {
+		if (useGuildMembershipEmblems) {
+			return GUILDEMBLEM_MEMBER;
+		}
+		return GUILDEMBLEM_ALLY;
+	}
+
+	if (guild && useGuildMembershipEmblems) {
+		return GUILDEMBLEM_OTHER;
+	}
 	return GUILDEMBLEM_NEUTRAL;
 }
 
