@@ -1362,10 +1362,16 @@ function BattlePassSystem.addShopPoints(player, amount)
 		return false, "Amount must be greater than zero."
 	end
 
-	local state, store = loadState(player)
+	local state, store, season, daily = loadState(player)
+	if not state.completed then
+		state.points = config.season.maxStep * config.season.pointsPerStep
+		ensureStateTables(state)
+	end
 	addShopPoints(state, amount)
 	saveState(store, state)
 	if supportsCustomNetwork(player) then
+		sendMissionState(player, state, season, daily)
+		BattlePassSystem.sendRewards(player)
 		BattlePassSystem.sendShop(player)
 	end
 	return true, state.shopPoints
