@@ -30,6 +30,9 @@ Antes de executar a analise completa, conclua tambem os
 [pre-requisitos de compilacao do TFS](../../README.md#compilation), incluindo
 Lua 5.5, `simdutf`, `mio` e as bibliotecas de desenvolvimento listadas no guia.
 Eles sao necessarios para o CMake gerar `build-analysis/compile_commands.json`.
+No Ubuntu/WSL, o runner segue os mesmos caminhos do `build.sh`: Lua 5.5 em
+`/usr/local` e dependencias locais em `~/.local`. Em uma instalacao diferente,
+defina `TFS_LUA_PREFIX` e `TFS_LOCAL_PREFIX` antes de executa-lo.
 
 ## Como rodar
 

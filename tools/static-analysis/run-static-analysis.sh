@@ -39,6 +39,8 @@ fi
 BUILD_DIR="${ROOT_DIR}/build-analysis"
 REPORT_DIR="${ROOT_DIR}/analysis-reports"
 COMPILE_COMMANDS="${BUILD_DIR}/compile_commands.json"
+TFS_LUA_PREFIX="${TFS_LUA_PREFIX:-/usr/local}"
+TFS_LOCAL_PREFIX="${TFS_LOCAL_PREFIX:-${HOME}/.local}"
 RUN_CPPCHECK=true
 RUN_CLANG_TIDY=true
 RUN_LIZARD=true
@@ -114,18 +116,38 @@ configure_analysis_build() {
     return
   fi
 
-  echo "==> Configuring analysis build"
-  if cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
+  local prefix_path="${TFS_LUA_PREFIX};${TFS_LOCAL_PREFIX}"
+  local -a cmake_args=(
+    -S "${ROOT_DIR}"
+    -B "${BUILD_DIR}"
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DENABLE_UNITY_BUILD=OFF \
     -DENABLE_NATIVE_OPTIMIZATIONS=OFF \
     -DSKIP_GIT=ON \
+    -DHTTP=ON \
     -DDISABLE_STATS=1 \
+    -DENABLE_SLOW_TASK_DETECTION=OFF \
+    -DUSE_MIMALLOC=ON \
     -DENABLE_ASAN=OFF \
     -DBUILD_TESTING=OFF \
-    -DBUILD_BENCHMARKING=OFF \
-    > "${REPORT_DIR}/configuration.txt" 2>&1; then
+    -DBUILD_BENCHMARKING=OFF
+  )
+  if [[ -n "${CMAKE_PREFIX_PATH:-}" ]]; then
+    prefix_path="${CMAKE_PREFIX_PATH};${prefix_path}"
+  fi
+  cmake_args+=("-DCMAKE_PREFIX_PATH=${prefix_path}")
+  if [[ -f "${TFS_LUA_PREFIX}/include/lua.h" && -f "${TFS_LUA_PREFIX}/lib/liblua.a" ]]; then
+    cmake_args+=(
+      "-DLUA_INCLUDE_DIR=${TFS_LUA_PREFIX}/include"
+      "-DLUA_LIBRARY=${TFS_LUA_PREFIX}/lib/liblua.a"
+      "-DLUA_LIBRARIES=${TFS_LUA_PREFIX}/lib/liblua.a;m;dl"
+      -DLUA_VERSION_STRING=5.5.0
+    )
+  fi
+
+  echo "==> Configuring analysis build"
+  if cmake -Wno-dev "${cmake_args[@]}" > "${REPORT_DIR}/configuration.txt" 2>&1; then
     if [[ -f "${COMPILE_COMMANDS}" ]]; then
       BUILD_READY=true
       return
@@ -261,19 +283,25 @@ run_clang_tidy() {
 run_lizard() {
   local report="${REPORT_DIR}/lizard.txt"
   local raw_report="${REPORT_DIR}/lizard-raw.txt"
-  if ! command -v lizard >/dev/null 2>&1; then
+  local -a lizard_command=()
+  if command -v lizard >/dev/null 2>&1; then
+    lizard_command=(lizard)
+  elif command -v python3 >/dev/null 2>&1 && python3 -c 'import lizard' >/dev/null 2>&1; then
+    lizard_command=(python3 -m lizard)
+  else
     write_skipped_report "${report}" "Lizard is not installed; install it to generate this report."
     return
   fi
 
   echo "==> Running Lizard"
   local status=0
-  lizard -V -C 20 -L 180 -a 8 "${ROOT_DIR}/src" > "${raw_report}" 2>&1 || status=$?
+  "${lizard_command[@]}" -V -C 20 -L 180 -a 8 "${ROOT_DIR}/src" > "${raw_report}" 2>&1 || status=$?
   {
     cat "${raw_report}"
     printf '\nTop 30 functions by cyclomatic complexity:\n'
     awk 'NF >= 6 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { print }' "${raw_report}" \
       | sort -k2,2nr -k1,1nr \
+      | awk '!seen[$0]++' \
       | head -n 30
   } > "${report}"
   rm -f "${raw_report}"
@@ -286,19 +314,25 @@ run_lizard() {
 
 run_iwyu() {
   local report="${REPORT_DIR}/iwyu.txt"
+  local iwyu_tool=""
   if [[ "${BUILD_READY}" != true ]]; then
     write_skipped_report "${report}" "IWYU was skipped because compile_commands.json is unavailable."
     return
   fi
   if command -v iwyu_tool.py >/dev/null 2>&1; then
+    iwyu_tool="iwyu_tool.py"
+  elif command -v iwyu_tool >/dev/null 2>&1; then
+    iwyu_tool="iwyu_tool"
+  fi
+  if [[ -n "${iwyu_tool}" ]]; then
     echo "==> Running IWYU"
-    if ! iwyu_tool.py -p "${BUILD_DIR}" > "${report}" 2>&1; then
+    if ! "${iwyu_tool}" -p "${BUILD_DIR}" > "${report}" 2>&1; then
       ANALYSIS_FAILURES=$((ANALYSIS_FAILURES + 1))
     fi
     return
   fi
   if command -v include-what-you-use >/dev/null 2>&1; then
-    write_skipped_report "${report}" "include-what-you-use is installed, but iwyu_tool.py was not found to drive compile_commands.json. Install the IWYU tools package."
+    write_skipped_report "${report}" "include-what-you-use is installed, but no iwyu_tool driver was found for compile_commands.json. Install the IWYU tools package."
     return
   fi
   write_skipped_report "${report}" "IWYU is not installed; this optional report was skipped."

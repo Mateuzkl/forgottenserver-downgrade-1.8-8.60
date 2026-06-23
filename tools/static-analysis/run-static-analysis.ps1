@@ -96,7 +96,10 @@ function Configure-AnalysisBuild {
         '-DENABLE_UNITY_BUILD=OFF' `
         '-DENABLE_NATIVE_OPTIMIZATIONS=OFF' `
         '-DSKIP_GIT=ON' `
+        '-DHTTP=ON' `
         '-DDISABLE_STATS=1' `
+        '-DENABLE_SLOW_TASK_DETECTION=OFF' `
+        '-DUSE_MIMALLOC=ON' `
         '-DENABLE_ASAN=OFF' `
         '-DBUILD_TESTING=OFF' `
         '-DBUILD_BENCHMARKING=OFF' *> $configurationReport
@@ -242,8 +245,10 @@ function Invoke-Lizard {
     $status = $LASTEXITCODE
     Get-Content -LiteralPath $rawReport | Set-Content -LiteralPath $report -Encoding utf8
     Add-Content -LiteralPath $report -Value "`nTop 30 functions by cyclomatic complexity:"
+    $seenLines = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     Select-String -LiteralPath $rawReport -Pattern '^\s*(\d+)\s+(\d+)\s+\d+\s+\d+\s+\d+\s+.+' |
         Sort-Object { [int]$_.Matches[0].Groups[2].Value } -Descending |
+        Where-Object { $seenLines.Add($_.Line) } |
         Select-Object -First 30 |
         ForEach-Object { Add-Content -LiteralPath $report -Value $_.Line }
     Remove-Item -LiteralPath $rawReport -Force
@@ -262,6 +267,9 @@ function Invoke-Iwyu {
     }
 
     $iwyuTool = Get-Command iwyu_tool.py -ErrorAction SilentlyContinue
+    if (-not $iwyuTool) {
+        $iwyuTool = Get-Command iwyu_tool -ErrorAction SilentlyContinue
+    }
     if ($iwyuTool) {
         Write-Host '==> Running IWYU'
         & $iwyuTool.Source -p $buildDirectory *> $report
@@ -271,7 +279,7 @@ function Invoke-Iwyu {
         return
     }
     if (Get-Command include-what-you-use -ErrorAction SilentlyContinue) {
-        Write-SkippedReport $report 'include-what-you-use is installed, but iwyu_tool.py was not found to drive compile_commands.json. Install the IWYU tools package.'
+        Write-SkippedReport $report 'include-what-you-use is installed, but no iwyu_tool driver was found for compile_commands.json. Install the IWYU tools package.'
         return
     }
     Write-SkippedReport $report 'IWYU is not installed; this optional report was skipped.'
