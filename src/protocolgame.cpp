@@ -4242,12 +4242,18 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 					msg.addByte(GUILDEMBLEM_NONE);
 					return;
 				}
+			} else {
+				if (emblem == GUILDEMBLEM_MEMBER) {
+					emblem = GUILDEMBLEM_ALLY;
+				} else if (emblem == GUILDEMBLEM_OTHER) {
+					emblem = GUILDEMBLEM_NEUTRAL;
+				}
 			}
 			msg.addByte(emblem);
 		};
 
 		if (otherPlayer) {
-			addCreatureEmblem(player->getGuildEmblem(otherPlayer));
+			addCreatureEmblem(player->getGuildEmblem(otherPlayer, isAstraClient));
 		} else {
 			if (creature->isSummon()) {
 				auto master = creature->getMaster();

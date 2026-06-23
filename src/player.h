@@ -367,7 +367,7 @@ public:
 	void removePartyInvitation(Party* party);
 	void clearPartyInvitations();
 
-	GuildEmblems_t getGuildEmblem(const Player* player) const;
+	GuildEmblems_t getGuildEmblem(const Player* player, bool useGuildMembershipEmblems = false) const;
 	void reloadWarList(bool updateVisuals = true);
 
 	uint64_t getSpentMana() const { return manaSpent; }

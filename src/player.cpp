@@ -6004,7 +6004,7 @@ void Player::clearPartyInvitations()
 	invitePartyList.clear();
 }
 
-GuildEmblems_t Player::getGuildEmblem(const Player* player) const
+GuildEmblems_t Player::getGuildEmblem(const Player* player, bool useGuildMembershipEmblems) const
 {
 	if (!player) {
 		return GUILDEMBLEM_NONE;
@@ -6019,7 +6019,15 @@ GuildEmblems_t Player::getGuildEmblem(const Player* player) const
 		return GUILDEMBLEM_NONE;
 	}
 
-	if (getGuild() == playerGuild) {
+	const auto guild = getGuild();
+	if (useGuildMembershipEmblems && player->getGuildWarVector().empty()) {
+		if (guild == playerGuild) {
+			return GUILDEMBLEM_MEMBER;
+		}
+		return GUILDEMBLEM_OTHER;
+	}
+
+	if (guild == playerGuild) {
 		return GUILDEMBLEM_ALLY;
 	} else if (isInWar(player)) {
 		return GUILDEMBLEM_ENEMY;

@@ -819,6 +819,7 @@ SkullNames skullNames = {
 EmblemNames emblemNames = {
 	{"none", GUILDEMBLEM_NONE},   {"ally", GUILDEMBLEM_ALLY},
 	{"enemy", GUILDEMBLEM_ENEMY}, {"neutral", GUILDEMBLEM_NEUTRAL},
+	{"member", GUILDEMBLEM_MEMBER}, {"other", GUILDEMBLEM_OTHER},
 };
 
 MagicEffectClasses getMagicEffect(const std::string& strValue)

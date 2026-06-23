@@ -2558,6 +2558,8 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(GUILDEMBLEM_ALLY);
 	registerEnum(GUILDEMBLEM_ENEMY);
 	registerEnum(GUILDEMBLEM_NEUTRAL);
+	registerEnum(GUILDEMBLEM_MEMBER);
+	registerEnum(GUILDEMBLEM_OTHER);
 
 	registerEnum(SPEECHBUBBLE_NONE);
 	registerEnum(SPEECHBUBBLE_NORMAL);
