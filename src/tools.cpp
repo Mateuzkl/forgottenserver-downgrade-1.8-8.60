@@ -709,7 +709,19 @@ MagicEffectNames magicEffectNames = {
     {"smallpinkenergyshock", CONST_ME_SMALL_PINK_ENERGYSHOCK},
     {"smallwhiteenergyspark", CONST_ME_SMALLWHITE_ENERGY_SPARK},
     {"smallgreenenergyspark", CONST_ME_SMALLGREEN_ENERGY_SPARK},
-    {"smallpinkenergyspark", CONST_ME_SMALLPINK_ENERGY_SPARK}
+    {"smallpinkenergyspark", CONST_ME_SMALLPINK_ENERGY_SPARK},
+	{"sword", CONST_ME_SWORD_ATTACK},
+	{"swordattack", CONST_ME_SWORD_ATTACK},
+	{"club", CONST_ME_CLUB_ATTACK},
+	{"clubattack", CONST_ME_CLUB_ATTACK},
+	{"axe", CONST_ME_AXE_ATTACK},
+	{"axeattack", CONST_ME_AXE_ATTACK},
+	{"fist", CONST_ME_FIST_ATTACK},
+	{"fistattack", CONST_ME_FIST_ATTACK},
+	{"monkstaff", CONST_ME_MONK_STAFF_ATTACK},
+	{"monkstaffattack", CONST_ME_MONK_STAFF_ATTACK},
+	{"monkdaggers", CONST_ME_MONK_DAGGERS_ATTACK},
+	{"monkdaggersattack", CONST_ME_MONK_DAGGERS_ATTACK},
 };
 
 ShootTypeNames shootTypeNames = {
@@ -818,7 +830,6 @@ SkullNames skullNames = {
 
 EmblemNames emblemNames = {
 	{"none", GUILDEMBLEM_NONE},   {"ally", GUILDEMBLEM_ALLY},
-	{"enemy", GUILDEMBLEM_ENEMY}, {"neutral", GUILDEMBLEM_NEUTRAL},
 	{"member", GUILDEMBLEM_MEMBER}, {"other", GUILDEMBLEM_OTHER},
 };
 

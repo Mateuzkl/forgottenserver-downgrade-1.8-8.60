@@ -273,15 +273,87 @@ bool Weapon::useFist(Player* player, Creature* target)
 	return true;
 }
 
+namespace {
+    uint8_t markWeaponType(WeaponType_t weaponType) {
+        switch (weaponType) {
+            case WEAPON_SWORD: return 1;
+            case WEAPON_CLUB:  return 2;
+            case WEAPON_AXE:   return 3;
+            case WEAPON_FIST:  return 4;
+            default:           return 4; // fallback fist
+        }
+    }
+}
+
+uint16_t Weapon::getWeaponAttackEffect(const Item* item) const {
+    if (!item) {
+        return CONST_ME_FIST_ATTACK; // Fist attack when no weapon
+    }
+
+	const WeaponType_t weaponType = item->getWeaponType();
+
+	// Determine attack effect based on weapon type
+	switch (weaponType) {
+		case WEAPON_SWORD:
+			return CONST_ME_SWORD_ATTACK;
+
+		case WEAPON_CLUB:
+			return CONST_ME_CLUB_ATTACK;
+
+		case WEAPON_AXE:
+			return CONST_ME_AXE_ATTACK;
+
+		case WEAPON_FIST: {
+			switch (item->getID()) {
+				// Staff weapons
+				case ITEM_BAMBO_JO:
+				case ITEM_COBRA_BO:
+				case ITEM_DRACHAKU:
+				case ITEM_JO_STAFF:
+				case ITEM_LIGHT_JO_STAFF:
+				case ITEM_NUNCHAKU_OF_DESTRUCTION:
+				case ITEM_NUNCHAKU_OF_ENLIGHTENMENT:
+				case ITEM_SIMPLE_JO_STAFF:
+					return CONST_ME_MONK_STAFF_ATTACK;
+
+				// Dagger weapons
+				case ITEM_AMBER_KUSARIGAMA:
+				case ITEM_CRUDE_UMBRAL_KATAR:
+				case ITEM_FALCON_SAI:
+				case ITEM_NAGA_KATAR:
+				case ITEM_SAI_OF_ENLIGHTENMENT:
+				case ITEM_SAI:
+				case ITEM_SOULKAMAS:
+				case ITEM_TRADITIONAL_SAI:
+				case ITEM_UMBRAL_KATAR:
+				case ITEM_MASTER_UMBRAL_KATAR:
+					return CONST_ME_MONK_DAGGERS_ATTACK;
+				default:
+					return CONST_ME_FIST_ATTACK;
+			}
+		}
+
+		default:
+			return CONST_ME_NONE;
+	}
+}
+
 void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const
 {
+	WeaponType_t weaponType = item ? item->getWeaponType() : WEAPON_FIST;
+
+	if (weaponType == WEAPON_SWORD || weaponType == WEAPON_CLUB ||
+		weaponType == WEAPON_AXE   || weaponType == WEAPON_FIST)
+	{
+		g_game.addMagicEffect(target->getPosition(), getWeaponAttackEffect(item), target->getInstanceID());
+	}
+
 	if (scripted) {
 		LuaVariant var;
 		var.setNumber(target->getID());
 		executeUseWeapon(player, var);
 	} else {
 		CombatDamage damage;
-		WeaponType_t weaponType = item->getWeaponType();
 		if (weaponType == WEAPON_AMMO || weaponType == WEAPON_DISTANCE) {
 			damage.origin = ORIGIN_RANGED;
 		} else if (weaponType == WEAPON_WAND) {
