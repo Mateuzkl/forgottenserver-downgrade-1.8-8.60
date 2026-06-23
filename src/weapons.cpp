@@ -274,7 +274,7 @@ bool Weapon::useFist(Player* player, Creature* target)
 }
 
 namespace {
-    uint8_t markWeaponType(WeaponType_t weaponType) {
+    [[maybe_unused]] uint8_t markWeaponType(WeaponType_t weaponType) {
         switch (weaponType) {
             case WEAPON_SWORD: return 1;
             case WEAPON_CLUB:  return 2;
