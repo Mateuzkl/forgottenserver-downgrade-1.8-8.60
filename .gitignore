@@ -205,3 +205,8 @@ tfs
 # Others
 *.emmyrc.jsondata/scripts/meus/
 build-valgrind-linux/
+build-analysis/
+analysis-reports/
+compile_commands.json
+*.plist
+*.sarif

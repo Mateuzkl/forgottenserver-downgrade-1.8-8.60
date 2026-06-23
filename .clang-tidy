@@ -1,0 +1,23 @@
+---
+# Conservative baseline for the C++23 TFS codebase. This file reports issues;
+# it never enables automatic fixes on its own.
+Checks: >
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  readability-*,
+  -modernize-use-trailing-return-type,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-vararg,
+  -hicpp-vararg,
+  -fuchsia-*,
+  -altera-*,
+  -llvm-header-guard,
+  -llvmlibc-*
+WarningsAsErrors: ''
+HeaderFilterRegex: '^(?!.*[\\/](build|build-analysis|vcpkg_installed|data|docs)[\\/]).*$'
+FormatStyle: none
+...
