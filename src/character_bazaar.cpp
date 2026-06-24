@@ -327,13 +327,16 @@ bool createAuction(Player* player, uint32_t startPrice, uint32_t durationSeconds
 			reason = "You do not have enough transferable Tibia Coins for the auction fee.";
 			return false;
 		}
+		const Outfit_t outfit = player->getCurrentOutfit();
 		if (!db.executeQuery(fmt::format(
 		        "INSERT INTO `character_auctions` (`player_id`, `player_name`, `seller_account_id`, `start_price`, "
 		        "`current_bid`, `auction_fee`, `commission_percent`, `status`, `created_at`, `end_at`, `description`, "
-		        "`snapshot_level`, `snapshot_vocation`) VALUES ({:d}, {:s}, {:d}, {:d}, 0, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d})",
+		        "`snapshot_level`, `snapshot_vocation`, `vocation`, `level`, `looktype`, `lookaddons`, `lookhead`, "
+		        "`lookbody`, `looklegs`, `lookfeet`) VALUES ({:d}, {:s}, {:d}, {:d}, 0, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:d})",
 		        playerId, db.escapeString(player->getName()), accountId, startPrice, getAuctionFee(), getCommissionPercent(),
 		        AUCTION_STATUS_ACTIVE, currentTime, currentTime + durationSeconds, db.escapeString(safeDescription),
-		        player->getLevel(), player->getVocationId()))) {
+		        player->getLevel(), player->getVocationId(), player->getVocationId(), player->getLevel(),
+		        outfit.lookType, outfit.lookAddons, outfit.lookHead, outfit.lookBody, outfit.lookLegs, outfit.lookFeet))) {
 			reason = "The auction could not be created.";
 			return false;
 		}

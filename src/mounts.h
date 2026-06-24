@@ -4,6 +4,8 @@
 #ifndef FS_MOUNTS_H
 #define FS_MOUNTS_H
 
+#include "enums.h"
+
 struct Mount
 {
 	Mount(uint16_t id, uint16_t clientId, std::string_view name, int32_t speed, bool premium) :
