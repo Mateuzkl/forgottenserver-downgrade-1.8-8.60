@@ -202,6 +202,8 @@ public:
 
 	void setGUID(uint32_t guid) { this->guid = guid; }
 	uint32_t getGUID() const { return guid; }
+	void setWorldId(uint16_t worldId) { this->worldId = worldId; }
+	uint16_t getWorldId() const { return worldId; }
 	bool getSaveFlag() const { return saveFlag; }
 	void setSaveFlag(bool value) { saveFlag = value; }
 	bool canSeeInvisibility() const override { return hasFlag(PlayerFlag_CanSenseInvisibility) || group->access; }
@@ -1688,6 +1690,7 @@ private:
 	uint32_t MessageBufferTicks = 0;
 	uint32_t accountNumber = 0;
 	uint32_t guid = 0;
+	uint16_t worldId = 1;
 	bool saveFlag = true;
 	uint32_t windowTextId = 0;
 	uint32_t editListId = 0;
@@ -1781,7 +1784,13 @@ private:
 		std::string string1;
 		std::string string2;
 		std::string accountName;
+		uint16_t worldId{0};
 	} managerData;
+
+	// Account Manager multi-world character creation helpers (implemented in player.cpp)
+	bool accountManagerNeedsWorldStep() const;
+	std::string accountManagerWorldPrompt() const;
+	void accountManagerCreateCharacter();
 
 	void updateItemsLight(bool internal = false);
 

@@ -77,6 +77,12 @@ void ProtocolStatus::onRecvFirstMessage(NetworkMessage& msg)
 void ProtocolStatus::sendStatusString()
 {
 	auto output = OutputMessagePool::getOutputMessage();
+	const auto* currentWorld = g_game.getCurrentWorld();
+	const std::string worldName = currentWorld ? currentWorld->name : std::string(getString(ConfigManager::SERVER_NAME));
+	const std::string worldIp = currentWorld ? currentWorld->ip : std::string(getString(ConfigManager::IP));
+	const std::string worldLocation = currentWorld ? currentWorld->locationName : std::string(getString(ConfigManager::LOCATION));
+	const std::string worldMotd = currentWorld && !currentWorld->motd.empty() ? currentWorld->motd : std::string(getString(ConfigManager::MOTD));
+	const uint16_t worldPort = currentWorld ? currentWorld->gamePort : static_cast<uint16_t>(getInteger(ConfigManager::LOGIN_PORT));
 
 	setRawMessages(true);
 
@@ -91,10 +97,10 @@ void ProtocolStatus::sendStatusString()
 	pugi::xml_node serverinfo = tsqp.append_child("serverinfo");
 	uint64_t uptime = (OTSYS_TIME() - ProtocolStatus::start) / 1000;
 	serverinfo.append_attribute("uptime") = std::to_string(uptime).c_str();
-	serverinfo.append_attribute("ip") = getString(ConfigManager::IP).data();
-	serverinfo.append_attribute("servername") = getString(ConfigManager::SERVER_NAME).data();
-	serverinfo.append_attribute("port") = std::to_string(getInteger(ConfigManager::LOGIN_PORT)).c_str();
-	serverinfo.append_attribute("location") = getString(ConfigManager::LOCATION).data();
+	serverinfo.append_attribute("ip") = worldIp.c_str();
+	serverinfo.append_attribute("servername") = worldName.c_str();
+	serverinfo.append_attribute("port") = std::to_string(worldPort).c_str();
+	serverinfo.append_attribute("location") = worldLocation.c_str();
 	serverinfo.append_attribute("url") = getString(ConfigManager::URL).data();
 	serverinfo.append_attribute("server") = STATUS_SERVER_NAME;
 	serverinfo.append_attribute("version") = STATUS_SERVER_VERSION;
@@ -150,7 +156,7 @@ void ProtocolStatus::sendStatusString()
 	map.append_attribute("height") = std::to_string(mapHeight).c_str();
 
 	pugi::xml_node motd = tsqp.append_child("motd");
-	motd.text() = getString(ConfigManager::MOTD).data();
+	motd.text() = worldMotd.c_str();
 
 	std::ostringstream ss;
 	doc.save(ss, "", pugi::format_raw);
@@ -164,12 +170,18 @@ void ProtocolStatus::sendStatusString()
 void ProtocolStatus::sendInfo(uint16_t requestedInfo, std::string_view characterName)
 {
 	auto output = OutputMessagePool::getOutputMessage();
+	const auto* currentWorld = g_game.getCurrentWorld();
+	const std::string worldName = currentWorld ? currentWorld->name : std::string(getString(ConfigManager::SERVER_NAME));
+	const std::string worldIp = currentWorld ? currentWorld->ip : std::string(getString(ConfigManager::IP));
+	const std::string worldLocation = currentWorld ? currentWorld->locationName : std::string(getString(ConfigManager::LOCATION));
+	const std::string worldMotd = currentWorld && !currentWorld->motd.empty() ? currentWorld->motd : std::string(getString(ConfigManager::MOTD));
+	const uint16_t worldPort = currentWorld ? currentWorld->gamePort : static_cast<uint16_t>(getInteger(ConfigManager::LOGIN_PORT));
 
 	if (requestedInfo & REQUEST_BASIC_SERVER_INFO) {
 		output->addByte(0x10);
-		output->addString(getString(ConfigManager::SERVER_NAME));
-		output->addString(getString(ConfigManager::IP));
-		output->addString(std::to_string(getInteger(ConfigManager::LOGIN_PORT)));
+		output->addString(worldName);
+		output->addString(worldIp);
+		output->addString(std::to_string(worldPort));
 	}
 
 	if (requestedInfo & REQUEST_OWNER_SERVER_INFO) {
@@ -180,8 +192,8 @@ void ProtocolStatus::sendInfo(uint16_t requestedInfo, std::string_view character
 
 	if (requestedInfo & REQUEST_MISC_SERVER_INFO) {
 		output->addByte(0x12);
-		output->addString(getString(ConfigManager::MOTD));
-		output->addString(getString(ConfigManager::LOCATION));
+		output->addString(worldMotd);
+		output->addString(worldLocation);
 		output->addString(getString(ConfigManager::URL));
 		output->add<uint64_t>((OTSYS_TIME() - ProtocolStatus::start) / 1000);
 	}

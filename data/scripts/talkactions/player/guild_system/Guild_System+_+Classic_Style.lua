@@ -34,6 +34,25 @@ local GUILD_CONFIG = {
 -- Utility functions
 local GuildUtils = {}
 
+function GuildUtils.isMultiWorld()
+    return configManager and configKeys and configKeys.MULTI_WORLD_ENABLED
+        and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) or false
+end
+
+function GuildUtils.worldId()
+    return GuildUtils.isMultiWorld() and math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1) or 1
+end
+
+function GuildUtils.worldWhere(alias)
+    if not GuildUtils.isMultiWorld() then
+        return ""
+    end
+    if alias and alias ~= "" then
+        return " AND " .. alias .. ".world_id = " .. GuildUtils.worldId()
+    end
+    return " AND world_id = " .. GuildUtils.worldId()
+end
+
 function GuildUtils.sendMessage(player, message, messageType, usePopup)
     if usePopup then
         player:popupFYI(message)
@@ -73,8 +92,8 @@ function GuildUtils.getTargetId(targetName, guildId)
         SELECT p.id 
         FROM players p 
         INNER JOIN guild_membership gm ON p.id = gm.player_id 
-        WHERE p.name = %s AND gm.guild_id = %d
-    ]], db.escapeString(targetName), guildId))
+        WHERE p.name = %s AND gm.guild_id = %d%s
+    ]], db.escapeString(targetName), guildId, GuildUtils.worldWhere("p")))
     
     if not query then
         return nil
@@ -86,7 +105,7 @@ function GuildUtils.getTargetId(targetName, guildId)
 end
 
 function GuildUtils.getPlayerId(playerName)
-    local query = db.storeQuery("SELECT id FROM players WHERE name = " .. db.escapeString(playerName))
+    local query = db.storeQuery("SELECT id FROM players WHERE name = " .. db.escapeString(playerName) .. GuildUtils.worldWhere())
     if not query then
         return nil
     end
@@ -166,7 +185,7 @@ function createGuild.onSay(player, words, param, type)
         return false
     end
     
-    local query = db.storeQuery("SELECT id FROM guilds WHERE name = " .. db.escapeString(guildName))
+    local query = db.storeQuery("SELECT id FROM guilds WHERE name = " .. db.escapeString(guildName) .. GuildUtils.worldWhere())
     if query then
         result.free(query)
         GuildUtils.sendMessage(player, "A guild with this name already exists.")
@@ -176,7 +195,7 @@ function createGuild.onSay(player, words, param, type)
     local playerId = player:getGuid()
     
     -- Verify player exists in database
-    query = db.storeQuery("SELECT id FROM players WHERE id = " .. playerId)
+    query = db.storeQuery("SELECT id FROM players WHERE id = " .. playerId .. GuildUtils.worldWhere())
     if not query then
         GuildUtils.sendMessage(player, "Error verifying your character in the database.")
         return false
@@ -184,12 +203,17 @@ function createGuild.onSay(player, words, param, type)
     result.free(query)
     
     -- Create guild in database
-    db.query(string.format("INSERT INTO guilds (name, ownerid, creationdata) VALUES (%s, %d, %d)",
-        db.escapeString(guildName), playerId, os.time()))
+    if GuildUtils.isMultiWorld() then
+        db.query(string.format("INSERT INTO guilds (name, ownerid, creationdata, world_id) VALUES (%s, %d, %d, %d)",
+            db.escapeString(guildName), playerId, os.time(), GuildUtils.worldId()))
+    else
+        db.query(string.format("INSERT INTO guilds (name, ownerid, creationdata) VALUES (%s, %d, %d)",
+            db.escapeString(guildName), playerId, os.time()))
+    end
     
     -- Get newly created guild ID
     local guildId = 0
-    query = db.storeQuery("SELECT id FROM guilds WHERE name = " .. db.escapeString(guildName))
+    query = db.storeQuery("SELECT id FROM guilds WHERE name = " .. db.escapeString(guildName) .. GuildUtils.worldWhere())
     if query then
         guildId = result.getNumber(query, "id")
         result.free(query)

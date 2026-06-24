@@ -128,6 +128,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/weapon_proficiency.cpp
 	${CMAKE_CURRENT_LIST_DIR}/weapons.cpp
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.cpp
+	${CMAKE_CURRENT_LIST_DIR}/world.cpp
 	${CMAKE_CURRENT_LIST_DIR}/xtea.cpp
 	${CMAKE_CURRENT_LIST_DIR}/zones.cpp
 )
@@ -238,6 +239,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/weapon_proficiency.h
 	${CMAKE_CURRENT_LIST_DIR}/weapons.h
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.h
+	${CMAKE_CURRENT_LIST_DIR}/world.h
 	${CMAKE_CURRENT_LIST_DIR}/xtea.h
 	${CMAKE_CURRENT_LIST_DIR}/zones.h
 )

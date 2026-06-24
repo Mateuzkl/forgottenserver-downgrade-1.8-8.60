@@ -19,6 +19,23 @@
 extern Game g_game;
 extern Vocations g_vocations;
 
+namespace {
+
+std::string worldFilter(std::string_view alias = {})
+{
+	if (!g_game.isMultiWorldEnabled()) {
+		return {};
+	}
+
+	const auto worldId = g_game.getCurrentWorldId();
+	if (alias.empty()) {
+		return fmt::format(" AND `world_id` = {:d}", worldId);
+	}
+	return fmt::format(" AND `{}`.`world_id` = {:d}", alias, worldId);
+}
+
+} // namespace
+
 Account IOLoginData::loadAccount(uint32_t accno)
 {
 	Account account;
@@ -112,8 +129,8 @@ std::pair<uint32_t, uint32_t> IOLoginData::gameworldAuthentication(std::string_v
     Database& db = Database::getInstance();
     
     std::string query = fmt::format(
-        "SELECT `a`.`id` AS `account_id`, UNHEX(`a`.`password`) AS `password`, `a`.`secret`, `p`.`id` AS `character_id` FROM `accounts` `a` JOIN `players` `p` ON `a`.`id` = `p`.`account_id` WHERE LOWER(`a`.`name`) = LOWER({:s}) AND LOWER(`p`.`name`) = LOWER({:s}) AND `p`.`deletion` = 0",
-        db.escapeString(accountName), db.escapeString(characterName));
+        "SELECT `a`.`id` AS `account_id`, UNHEX(`a`.`password`) AS `password`, `a`.`secret`, `p`.`id` AS `character_id` FROM `accounts` `a` JOIN `players` `p` ON `a`.`id` = `p`.`account_id` WHERE LOWER(`a`.`name`) = LOWER({:s}) AND LOWER(`p`.`name`) = LOWER({:s}) AND `p`.`deletion` = 0{:s}",
+        db.escapeString(accountName), db.escapeString(characterName), worldFilter("p"));
     
     DBResult_ptr result = db.storeQuery(query);
     if (!result) {
@@ -132,7 +149,7 @@ std::pair<uint32_t, uint32_t> IOLoginData::gameworldAuthentication(std::string_v
 
         // Special-case: Account Manager selection from non-1 account
         if (ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER) && characterName == "Account Manager" && fallbackAccountId != 1) {
-            DBResult_ptr accMgrRes = db.storeQuery("SELECT `id` FROM `players` WHERE `name` = 'Account Manager' AND `account_id` = 1 AND `deletion` = 0");
+            DBResult_ptr accMgrRes = db.storeQuery("SELECT `id` FROM `players` WHERE `name` = 'Account Manager' AND `account_id` = 1 AND `deletion` = 0" + worldFilter());
             if (!accMgrRes) {
                 return {};
             }
@@ -140,10 +157,16 @@ std::pair<uint32_t, uint32_t> IOLoginData::gameworldAuthentication(std::string_v
 			return {fallbackAccountId, accountManagerId};
         }
 
+		// A game server must never silently substitute a character from its own
+		// world when the client selected a character belonging to another one.
+		if (g_game.isMultiWorldEnabled()) {
+			return {};
+		}
+
         // Pick the first character from this account if specific character was not found/matched
         DBResult_ptr firstCharRes = db.storeQuery(fmt::format(
-            "SELECT `id`, `name` FROM `players` WHERE `account_id` = {:d} AND `deletion` = 0 ORDER BY `name` ASC LIMIT 1",
-            fallbackAccountId));
+            "SELECT `id`, `name` FROM `players` WHERE `account_id` = {:d} AND `deletion` = 0{:s} ORDER BY `name` ASC LIMIT 1",
+            fallbackAccountId, worldFilter()));
         if (!firstCharRes) {
             return {};
         }
@@ -161,7 +184,7 @@ std::pair<uint32_t, uint32_t> IOLoginData::gameworldAuthentication(std::string_v
 	uint32_t characterId = result->getNumber<uint32_t>("character_id");
 
 	if (ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER) && characterName == "Account Manager" && accountId != 1) {
-        result = db.storeQuery("SELECT `id` FROM `players` WHERE `name` = 'Account Manager' AND `account_id` = 1 AND `deletion` = 0");
+        result = db.storeQuery("SELECT `id` FROM `players` WHERE `name` = 'Account Manager' AND `account_id` = 1 AND `deletion` = 0" + worldFilter());
         if (!result) {
             return {};
         }
@@ -178,7 +201,7 @@ uint32_t IOLoginData::getAccountIdByPlayerName(std::string_view playerName)
 	Database& db = Database::getInstance();
 
 	DBResult_ptr result = db.storeQuery(
-	    fmt::format("SELECT `account_id` FROM `players` WHERE `name` = {:s}", db.escapeString(playerName)));
+	    fmt::format("SELECT `account_id` FROM `players` WHERE `name` = {:s}{:s}", db.escapeString(playerName), worldFilter()));
 	if (!result) {
 		return 0;
 	}
@@ -189,7 +212,7 @@ uint32_t IOLoginData::getAccountIdByPlayerId(uint32_t playerId)
 {
 	Database& db = Database::getInstance();
 
-	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `account_id` FROM `players` WHERE `id` = {:d}", playerId));
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `account_id` FROM `players` WHERE `id` = {:d}{:s}", playerId, worldFilter()));
 	if (!result) {
 		return 0;
 	}
@@ -225,15 +248,22 @@ void IOLoginData::updateOnlineStatus(uint32_t guid, bool login, bool broadcastin
 	Database& db = Database::getInstance();
 	std::ostringstream query;
 	if (login) {
-		query << "INSERT INTO `players_online` (`player_id`, `broadcasting`, `password`, `description`, `spectators`) VALUES "
-			"(" << guid << ", " << broadcasting << ", " << db.escapeString(cast_password) << ", " << db.escapeString(cast_description) << ", " << spectators << ")";
+		query << "INSERT INTO `players_online` (`player_id`, `broadcasting`, `password`, `description`, `spectators";
+		if (g_game.isMultiWorldEnabled()) {
+			query << "`, `world_id";
+		}
+		query << "`) VALUES (" << guid << ", " << broadcasting << ", " << db.escapeString(cast_password) << ", " << db.escapeString(cast_description) << ", " << spectators;
+		if (g_game.isMultiWorldEnabled()) {
+			query << ", " << g_game.getCurrentWorldId();
+		}
+		query << ')';
 	} else {
 		query << "UPDATE `players_online` SET "
 			"`broadcasting` = " << broadcasting << ", "
 			"`password` = " << db.escapeString(cast_password) << ", "
 			"`description` = " << db.escapeString(cast_description) << ", "
 			"`spectators` = " << spectators << " "
-			" WHERE `player_id` = " << guid;
+			" WHERE `player_id` = " << guid << worldFilter();
 	}
 	db.executeQuery(query.str());
 }
@@ -243,7 +273,7 @@ void IOLoginData::removeOnlineStatus(uint32_t guid)
 	if (ConfigManager::getBoolean(ConfigManager::ALLOW_CLONES)) {
 		return;
 	}
-	Database::getInstance().executeQuery(fmt::format("DELETE FROM `players_online` WHERE `player_id` = {:d}", guid));
+	Database::getInstance().executeQuery(fmt::format("DELETE FROM `players_online` WHERE `player_id` = {:d}{:s}", guid, worldFilter()));
 }
 
 bool IOLoginData::preloadPlayer(Player* player)
@@ -251,8 +281,8 @@ bool IOLoginData::preloadPlayer(Player* player)
 	Database& db = Database::getInstance();
 
 	DBResult_ptr result = db.storeQuery(fmt::format(
-	    "SELECT `p`.`name`, `p`.`account_id`, `p`.`group_id`, `a`.`type`, `a`.`premium_ends_at` FROM `players` as `p` JOIN `accounts` as `a` ON `a`.`id` = `p`.`account_id` WHERE `p`.`id` = {:d} AND `p`.`deletion` = 0",
-	    player->getGUID()));
+	    "SELECT `p`.`name`, `p`.`account_id`, `p`.`group_id`, `a`.`type`, `a`.`premium_ends_at`{:s} FROM `players` as `p` JOIN `accounts` as `a` ON `a`.`id` = `p`.`account_id` WHERE `p`.`id` = {:d} AND `p`.`deletion` = 0{:s}",
+	    g_game.isMultiWorldEnabled() ? ", `p`.`world_id`" : "", player->getGUID(), worldFilter("p")));
 	if (!result) {
 		return false;
 	}
@@ -267,6 +297,9 @@ bool IOLoginData::preloadPlayer(Player* player)
 	player->accountNumber = result->getNumber<uint32_t>("account_id");
 	player->accountType = static_cast<AccountType_t>(result->getNumber<uint16_t>("type"));
 	player->premiumEndsAt = result->getNumber<time_t>("premium_ends_at");
+	if (g_game.isMultiWorldEnabled()) {
+		player->setWorldId(result->getNumber<uint16_t>("world_id"));
+	}
 	return true;
 }
 
@@ -276,8 +309,8 @@ bool IOLoginData::loadPlayerById(Player* player, uint32_t id, bool deferWorldDat
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
-	        id)), deferWorldData);
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save`{:s} FROM `players` WHERE `id` = {:d}{:s}",
+	        g_game.isMultiWorldEnabled() ? ", `world_id`" : "", id, worldFilter())), deferWorldData);
 }
 
 bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
@@ -286,15 +319,15 @@ bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
-	        db.escapeString(name))));
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save`{:s} FROM `players` WHERE `name` = {:s}{:s}",
+	        g_game.isMultiWorldEnabled() ? ", `world_id`" : "", db.escapeString(name), worldFilter())));
 }
 
 GuildWarVector IOLoginData::getWarList(uint32_t guildId)
 {
 	DBResult_ptr result = Database::getInstance().storeQuery(fmt::format(
-	    "SELECT `guild1`, `guild2` FROM `guild_wars` WHERE (`guild1` = {:d} OR `guild2` = {:d}) AND `status` = 1",
-	    guildId, guildId));
+	    "SELECT `guild1`, `guild2` FROM `guild_wars` WHERE (`guild1` = {:d} OR `guild2` = {:d}) AND `status` = 1{:s}",
+	    guildId, guildId, worldFilter()));
 	if (!result) {
 		return {};
 	}
@@ -397,6 +430,9 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	Account acc = loadAccount(accno);
 
 	player->setGUID(result->getNumber<uint32_t>("id"));
+	if (g_game.isMultiWorldEnabled()) {
+		player->setWorldId(result->getNumber<uint16_t>("world_id"));
+	}
 	player->name = result->getString("name");
 	player->accountNumber = accno;
 
@@ -862,8 +898,8 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	}
 
 	// load vip list
-	if ((result = db.storeQuery(fmt::format("SELECT `player_id` FROM `account_viplist` WHERE `account_id` = {:d}",
-	                                        player->getAccount())))) {
+	if ((result = db.storeQuery(fmt::format("SELECT `player_id` FROM `account_viplist` WHERE `account_id` = {:d}{:s}",
+	                                        player->getAccount(), worldFilter())))) {
 		do {
 			player->addVIPInternal(result->getNumber<uint32_t>("player_id"));
 		} while (result->next());
@@ -1068,8 +1104,8 @@ bool IOLoginData::savePlayerQueries(Player* player)
 	Database& db = Database::getInstance();
 
 	if (!player->getSaveFlag()) {
-		return db.executeQuery(fmt::format("UPDATE `players` SET `lastlogin` = {:d}, `lastip` = {:d} WHERE `id` = {:d}",
-		                                   player->lastLoginSaved, player->lastIP, player->getGUID()));
+		return db.executeQuery(fmt::format("UPDATE `players` SET `lastlogin` = {:d}, `lastip` = {:d} WHERE `id` = {:d}{:s}",
+		                                   player->lastLoginSaved, player->lastIP, player->getGUID(), worldFilter()));
 	}
 
 	// serialize conditions
@@ -1180,7 +1216,7 @@ bool IOLoginData::savePlayerQueries(Player* player)
 	query << "`blessings` = " << static_cast<uint16_t>(0) << ',';
 	query << "`token_protected` = " << (player->isTokenProtected() ? 1 : 0) << ',';
 	query << "`token_hash` = " << db.escapeString(player->getTokenHash());
-	query << " WHERE `id` = " << player->getGUID();
+	query << " WHERE `id` = " << player->getGUID() << worldFilter();
 
 	if (!db.executeQuery(query.str())) {
 		return false;
@@ -1562,7 +1598,7 @@ bool IOLoginData::saveAutoLootConfig(Player* player)
 std::string_view IOLoginData::getNameByGuid(uint32_t guid)
 {
 	DBResult_ptr result =
-	    Database::getInstance().storeQuery(fmt::format("SELECT `name` FROM `players` WHERE `id` = {:d}", guid));
+	    Database::getInstance().storeQuery(fmt::format("SELECT `name` FROM `players` WHERE `id` = {:d}{:s}", guid, worldFilter()));
 	if (!result) {
 		return {};
 	}
@@ -1574,7 +1610,7 @@ uint32_t IOLoginData::getGuidByName(std::string_view name)
 	Database& db = Database::getInstance();
 
 	DBResult_ptr result =
-	    db.storeQuery(fmt::format("SELECT `id` FROM `players` WHERE `name` = {:s}", db.escapeString(name)));
+	    db.storeQuery(fmt::format("SELECT `id` FROM `players` WHERE `name` = {:s}{:s}", db.escapeString(name), worldFilter()));
 	if (!result) {
 		return 0;
 	}
@@ -1586,7 +1622,7 @@ bool IOLoginData::getGuidByNameEx(uint32_t& guid, bool& specialVip, std::string&
 	Database& db = Database::getInstance();
 
 	DBResult_ptr result = db.storeQuery(fmt::format(
-	    "SELECT `name`, `id`, `group_id`, `account_id` FROM `players` WHERE `name` = {:s}", db.escapeString(name)));
+	    "SELECT `name`, `id`, `group_id`, `account_id` FROM `players` WHERE `name` = {:s}{:s}", db.escapeString(name), worldFilter()));
 	if (!result) {
 		return false;
 	}
@@ -1611,7 +1647,7 @@ bool IOLoginData::formatPlayerName(std::string& name)
 	Database& db = Database::getInstance();
 
 	DBResult_ptr result =
-	    db.storeQuery(fmt::format("SELECT `name` FROM `players` WHERE `name` = {:s}", db.escapeString(name)));
+	    db.storeQuery(fmt::format("SELECT `name` FROM `players` WHERE `name` = {:s}{:s}", db.escapeString(name), worldFilter()));
 	if (!result) {
 		return false;
 	}
@@ -1664,13 +1700,13 @@ void IOLoginData::cleanupItemMap(ItemMap& itemMap)
 void IOLoginData::increaseBankBalance(uint32_t guid, uint64_t bankBalance)
 {
 	Database::getInstance().executeQuery(
-	    fmt::format("UPDATE `players` SET `balance` = `balance` + {:d} WHERE `id` = {:d}", bankBalance, guid));
+	    fmt::format("UPDATE `players` SET `balance` = `balance` + {:d} WHERE `id` = {:d}{:s}", bankBalance, guid, worldFilter()));
 }
 
 bool IOLoginData::hasBiddedOnHouse(uint32_t guid_guild)
 {
 	Database& db = Database::getInstance();
-	return db.storeQuery(fmt::format("SELECT `id` FROM `houses` WHERE `highest_bidder` = {:d} LIMIT 1", guid_guild)).get() !=
+	return db.storeQuery(fmt::format("SELECT `id` FROM `houses` WHERE `highest_bidder` = {:d}{:s} LIMIT 1", guid_guild, worldFilter())).get() !=
 	       nullptr;
 }
 
@@ -1679,8 +1715,8 @@ std::forward_list<VIPEntry> IOLoginData::getVIPEntries(uint32_t accountId)
 	std::forward_list<VIPEntry> entries;
 
 	DBResult_ptr result = Database::getInstance().storeQuery(fmt::format(
-	    "SELECT `player_id`, (SELECT `name` FROM `players` WHERE `id` = `player_id`) AS `name` FROM `account_viplist` WHERE `account_id` = {:d}",
-	    accountId));
+	    "SELECT `v`.`player_id`, (SELECT `name` FROM `players` WHERE `id` = `v`.`player_id`{:s}) AS `name` FROM `account_viplist` `v` WHERE `v`.`account_id` = {:d}{:s}",
+	    worldFilter(), accountId, worldFilter("v")));
 	if (result) {
 		do {
 			entries.emplace_front(result->getNumber<uint32_t>("player_id"), result->getString("name"));
@@ -1693,13 +1729,15 @@ void IOLoginData::addVIPEntry(uint32_t accountId, uint32_t guid)
 {
 	Database& db = Database::getInstance();
 	db.executeQuery(
-	    fmt::format("INSERT INTO `account_viplist` (`account_id`, `player_id`) VALUES ({:d}, {:d})", accountId, guid));
+	    fmt::format("INSERT INTO `account_viplist` (`account_id`, `player_id`{:s}) VALUES ({:d}, {:d}{:s})",
+	                g_game.isMultiWorldEnabled() ? ", `world_id`" : "", accountId, guid,
+	                g_game.isMultiWorldEnabled() ? fmt::format(", {:d}", g_game.getCurrentWorldId()) : ""));
 }
 
 void IOLoginData::removeVIPEntry(uint32_t accountId, uint32_t guid)
 {
 	Database::getInstance().executeQuery(
-	    fmt::format("DELETE FROM `account_viplist` WHERE `account_id` = {:d} AND `player_id` = {:d}", accountId, guid));
+	    fmt::format("DELETE FROM `account_viplist` WHERE `account_id` = {:d} AND `player_id` = {:d}{:s}", accountId, guid, worldFilter()));
 }
 
 void IOLoginData::updatePremiumTime(uint32_t accountId, time_t endTime)
@@ -1758,11 +1796,25 @@ bool IOLoginData::setRecoveryKey(uint32_t accountId, const std::string& recovery
 	return db.executeQuery(fmt::format("UPDATE `accounts` SET `secret` = {:s} WHERE `id` = {:d}", db.escapeString(hashedKey), accountId));
 }
 
-bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex)
+bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex,
+                               uint16_t worldId)
 {
 	Database& db = Database::getInstance();
 
-	if (playerNameExists(name)) {
+	// When multi-world is enabled the character may be created in a world other
+	// than the one running this process (e.g. the Account Manager lives on world
+	// 1 but the player picked world 2). worldId == 0 keeps the legacy behaviour
+	// of using the current process world. Name uniqueness is per (name, world_id),
+	// so the existence check must target the chosen world.
+	const uint16_t targetWorldId =
+	    g_game.isMultiWorldEnabled() ? (worldId != 0 ? worldId : g_game.getCurrentWorldId()) : 0;
+
+	if (g_game.isMultiWorldEnabled()) {
+		if (db.storeQuery(fmt::format("SELECT `id` FROM `players` WHERE `name` = {:s} AND `world_id` = {:d}",
+		                              db.escapeString(name), targetWorldId))) {
+			return false;
+		}
+	} else if (playerNameExists(name)) {
 		return false;
 	}
 
@@ -1788,13 +1840,21 @@ bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint
 		  << "`skulltime`, `lastlogout`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `onlinetime`, `deletion`, `balance`, `offlinetraining_time`, `offlinetraining_skill`, "
 		  << "`stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, "
 		  << "`skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, "
-		  << "`skill_fishing`, `skill_fishing_tries`) VALUES (";
+		  << "`skill_fishing`, `skill_fishing_tries`";
+	if (g_game.isMultiWorldEnabled()) {
+		query << ", `world_id`";
+	}
+	query << ") VALUES (";
 
 	query << db.escapeString(name) << ", 1, " << accountId << ", " << level << ", " << vocationId << ", "
 		  << health << ", " << health << ", " << experience << ", 0, 0, 0, 0, " << lookType << ", 0, 2, " << magicLevel << ", "
 		  << mana << ", " << mana << ", 0, 0, " << townId << ", " << posX << ", " << posY << ", " << posZ
 		  << ", " << cap << ", " << static_cast<uint16_t>(sex) << ", 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 43200, -1, 2520, "
-		  << "10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0)";
+		  << "10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0";
+	if (g_game.isMultiWorldEnabled()) {
+		query << ", " << targetWorldId;
+	}
+	query << ')';
 
 	return db.executeQuery(query.str());
 }
@@ -1807,14 +1867,14 @@ bool IOLoginData::deletePlayer(uint32_t playerId)
 	}
 
 	Database& db = Database::getInstance();
-	return db.executeQuery(fmt::format("UPDATE `players` SET `deletion` = {:d} WHERE `id` = {:d}", static_cast<uint64_t>(time(nullptr) + 86400), playerId));
+	return db.executeQuery(fmt::format("UPDATE `players` SET `deletion` = {:d} WHERE `id` = {:d}{:s}", static_cast<uint64_t>(time(nullptr) + 86400), playerId, worldFilter()));
 }
 
 std::vector<std::string> IOLoginData::getPlayersByAccountId(uint32_t accountId)
 {
 	std::vector<std::string> players;
 	Database& db = Database::getInstance();
-	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name` FROM `players` WHERE `account_id` = {:d} AND `deletion` = 0 AND `name` != 'Account Manager' ORDER BY `name` ASC", accountId));
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name` FROM `players` WHERE `account_id` = {:d} AND `deletion` = 0 AND `name` != 'Account Manager'{:s} ORDER BY `name` ASC", accountId, worldFilter()));
 	if (result) {
 		do {
 			players.push_back(std::string{result->getString("name")});
@@ -1826,7 +1886,7 @@ std::vector<std::string> IOLoginData::getPlayersByAccountId(uint32_t accountId)
 bool IOLoginData::playerNameExists(const std::string& name)
 {
 	Database& db = Database::getInstance();
-	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id` FROM `players` WHERE `name` = {:s}", db.escapeString(name)));
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id` FROM `players` WHERE `name` = {:s}{:s}", db.escapeString(name), worldFilter()));
 	return result != nullptr;
 }
 
@@ -1841,7 +1901,7 @@ std::vector<std::pair<std::string, std::string>> IOLoginData::getCastList(const 
 {
 	Database& db = Database::getInstance();
 	std::vector<std::pair<std::string, std::string>> vec;
-	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `players`.`name`, `players`.`level`, `players`.`vocation`, `players_online`.`description` FROM `players` LEFT JOIN `players_online` ON `players`.`id` = `players_online`.`player_id` WHERE `players_online`.`broadcasting` = 1 AND `players_online`.`password` = {:s}", db.escapeString(password)));
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `players`.`name`, `players`.`level`, `players`.`vocation`, `players_online`.`description` FROM `players` LEFT JOIN `players_online` ON `players`.`id` = `players_online`.`player_id` WHERE `players_online`.`broadcasting` = 1 AND `players_online`.`password` = {:s}{:s}{:s}", db.escapeString(password), worldFilter("players"), worldFilter("players_online")));
 	if (result) {
 		do {
 			std::string description = std::string{result->getString("description")};

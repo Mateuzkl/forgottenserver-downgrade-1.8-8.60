@@ -1,10 +1,18 @@
 local guildWarExpire = GlobalEvent("GuildWarExpire")
+
+local function worldWhere()
+    if configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) then
+        return " AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)
+    end
+    return ""
+end
+
 function guildWarExpire.onThink(interval)
     local now = os.time()
     local resultId = db.storeQuery(string.format(
         "SELECT `id`, `guild1`, `guild2`, `name1`, `name2` FROM `guild_wars`" ..
-        " WHERE `status` = 1 AND `ended` > 0 AND `ended` < %d",
-        now
+        " WHERE `status` = 1 AND `ended` > 0 AND `ended` < %d%s",
+        now, worldWhere()
     ))
 
     if not resultId then
@@ -19,8 +27,8 @@ function guildWarExpire.onThink(interval)
         local name2    = result.getString(resultId, "name2")
 
         local killResult = db.storeQuery(string.format(
-            "SELECT COUNT(*) AS total FROM `guild_war_kills` WHERE `war_id` = %d",
-            warId
+            "SELECT COUNT(*) AS total FROM `guild_war_kills` WHERE `war_id` = %d%s",
+            warId, worldWhere()
         ))
 
         local hasKills = false
@@ -31,8 +39,8 @@ function guildWarExpire.onThink(interval)
 
         if not hasKills then
             local updated = db.query(string.format(
-                "UPDATE `guild_wars` SET `status` = 5, `ended` = %d WHERE `id` = %d AND `status` = 1",
-                now, warId
+                "UPDATE `guild_wars` SET `status` = 5, `ended` = %d WHERE `id` = %d AND `status` = 1%s",
+                now, warId, worldWhere()
             ))
 
             if updated then

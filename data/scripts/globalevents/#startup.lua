@@ -1,7 +1,11 @@
 local startup = GlobalEvent("ServerStartup")
 function startup.onStartup()
-    db.query("TRUNCATE TABLE `players_online`")
-    db.asyncQuery("DELETE FROM `guild_wars` WHERE `status` = 0")
+    if configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) then
+        db.query("DELETE FROM `players_online` WHERE `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID))
+    else
+        db.query("TRUNCATE TABLE `players_online`")
+    end
+    db.asyncQuery("DELETE FROM `guild_wars` WHERE `status` = 0" .. (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) and (" AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)) or ""))
     db.asyncQuery("DELETE FROM `players` WHERE `deletion` != 0 AND `deletion` < " .. os.time())
     db.asyncQuery("DELETE FROM `ip_bans` WHERE `expires_at` != 0 AND `expires_at` <= " .. os.time())
 
@@ -18,7 +22,7 @@ function startup.onStartup()
         result.free(resultId)
     end
 
-    local resultId = db.storeQuery("SELECT `id`, `highest_bidder`, `last_bid`, (SELECT `balance` FROM `players` WHERE `players`.`id` = `highest_bidder`) AS `balance` FROM `houses` WHERE `owner` = 0 AND `bid_end` != 0 AND `bid_end` < " .. os.time())
+    local resultId = db.storeQuery("SELECT `id`, `highest_bidder`, `last_bid`, (SELECT `balance` FROM `players` WHERE `players`.`id` = `highest_bidder`) AS `balance` FROM `houses` WHERE `owner` = 0 AND `bid_end` != 0 AND `bid_end` < " .. os.time() .. (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) and (" AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)) or ""))
     if resultId ~= false then
         repeat
             local house = House(result.getNumber(resultId, "id"))
@@ -27,10 +31,10 @@ function startup.onStartup()
                 local balance = result.getNumber(resultId, "balance")
                 local lastBid = result.getNumber(resultId, "last_bid")
                 if balance >= lastBid then
-                    db.query("UPDATE `players` SET `balance` = " .. (balance - lastBid) .. " WHERE `id` = " .. highestBidder)
+                    db.query("UPDATE `players` SET `balance` = " .. (balance - lastBid) .. " WHERE `id` = " .. highestBidder .. (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) and (" AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)) or ""))
                     house:setOwnerGuid(highestBidder)
                 end
-                db.asyncQuery("UPDATE `houses` SET `last_bid` = 0, `bid_end` = 0, `highest_bidder` = 0, `bid` = 0 WHERE `id` = " .. house:getId())
+                db.asyncQuery("UPDATE `houses` SET `last_bid` = 0, `bid_end` = 0, `highest_bidder` = 0, `bid` = 0 WHERE `id` = " .. house:getId() .. (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) and (" AND `world_id` = " .. configManager.getNumber(configKeys.WORLD_ID)) or ""))
             end
         until not result.next(resultId)
         result.free(resultId)

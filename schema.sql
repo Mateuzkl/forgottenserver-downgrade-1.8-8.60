@@ -16,8 +16,26 @@ CREATE TABLE IF NOT EXISTS `accounts` (
 INSERT INTO `accounts` (`id`, `name`, `password`, `secret`, `type`, `premium_ends_at`, `email`, `creation`, `tibia_coins`, `points_second`) VALUES
 (1, '1', '356a192b7913b04c54574d18c28d46e6395428ab', NULL, 1, 0, '', 0, 0, 0);
 
+CREATE TABLE IF NOT EXISTS `worlds` (
+  `id` smallint unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(80) NOT NULL,
+  `type` enum('no-pvp','pvp','pvp-enforced','retro-pvp','retro-hardcore') NOT NULL DEFAULT 'pvp',
+  `motd` varchar(255) NOT NULL DEFAULT '',
+  `location` varchar(32) NOT NULL DEFAULT 'South America',
+  `ip` varchar(45) NOT NULL DEFAULT '127.0.0.1',
+  `port` smallint unsigned NOT NULL DEFAULT 7172,
+  `port_status` smallint unsigned NOT NULL DEFAULT 7171,
+  `creation` int unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `worlds_name_unique` (`name`)
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+
+INSERT INTO `worlds` (`id`, `name`, `type`, `motd`, `location`, `ip`, `port`, `port_status`, `creation`) VALUES
+(1, 'Forgotten', 'pvp', '', 'South America', '127.0.0.1', 7172, 7171, UNIX_TIMESTAMP());
+
 CREATE TABLE IF NOT EXISTS `players` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `name` varchar(255) NOT NULL,
   `group_id` int NOT NULL DEFAULT '1',
   `account_id` int NOT NULL DEFAULT '0',
@@ -88,10 +106,13 @@ CREATE TABLE IF NOT EXISTS `players` (
   `token_protected` tinyint NOT NULL DEFAULT '0',
   `token_hash` varchar(64) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `name` (`name`),
+  UNIQUE KEY `players_name_world_unique` (`name`, `world_id`),
   FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_players_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   KEY `vocation` (`vocation`),
-  KEY `idx_players_deletion` (`deletion`)
+  KEY `idx_players_deletion` (`deletion`),
+  KEY `idx_players_world_id` (`world_id`),
+  KEY `idx_players_account_world` (`account_id`, `world_id`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 INSERT INTO `players` (`id`, `name`, `group_id`, `account_id`, `level`, `vocation`, `health`, `healthmax`, `experience`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `currentmount`, `randomizemount`, `direction`, `maglevel`, `mana`, `manamax`, `manaspent`, `soul`, `town_id`, `posx`, `posy`, `posz`, `conditions`, `cap`, `sex`, `lastlogin`, `lastip`, `save`, `skull`, `skulltime`, `lastlogout`, `blessings`, `onlinetime`, `deletion`, `balance`, `offlinetraining_time`, `offlinetraining_skill`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`) VALUES
@@ -158,10 +179,12 @@ CREATE TABLE IF NOT EXISTS `player_namelocks` (
 CREATE TABLE IF NOT EXISTS `account_viplist` (
   `account_id` int NOT NULL COMMENT 'id of account whose viplist entry it is',
   `player_id` int NOT NULL COMMENT 'id of target player of viplist entry',
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `description` varchar(128) NOT NULL DEFAULT '',
-  UNIQUE KEY `account_player_index` (`account_id`,`player_id`),
+  UNIQUE KEY `account_player_world_unique` (`account_id`,`player_id`,`world_id`),
   FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
-  FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+  FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_account_viplist_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `game_storage` (
@@ -172,15 +195,18 @@ CREATE TABLE IF NOT EXISTS `game_storage` (
 
 CREATE TABLE IF NOT EXISTS `guilds` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `name` varchar(255) NOT NULL,
   `ownerid` int NOT NULL,
   `creationdata` int NOT NULL,
   `motd` varchar(255) NOT NULL DEFAULT '',
   `balance` bigint(20) UNSIGNED NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
-  UNIQUE KEY (`name`),
+  UNIQUE KEY `guilds_name_world_unique` (`name`, `world_id`),
   UNIQUE KEY (`ownerid`),
-  FOREIGN KEY (`ownerid`) REFERENCES `players`(`id`) ON DELETE CASCADE
+  FOREIGN KEY (`ownerid`) REFERENCES `players`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_guilds_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  KEY `idx_guilds_world_id` (`world_id`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `guild_invites` (
@@ -213,6 +239,7 @@ CREATE TABLE IF NOT EXISTS `guild_membership` (
 
 CREATE TABLE IF NOT EXISTS `guild_wars` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `guild1` int NOT NULL DEFAULT '0',
   `guild2` int NOT NULL DEFAULT '0',
   `name1` varchar(255) NOT NULL,
@@ -224,11 +251,14 @@ CREATE TABLE IF NOT EXISTS `guild_wars` (
   `payment` bigint NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `guild1` (`guild1`),
-  KEY `guild2` (`guild2`)
+  KEY `guild2` (`guild2`),
+  KEY `idx_guild_wars_world_id` (`world_id`),
+  CONSTRAINT `fk_guild_wars_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `guild_war_kills` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `war_id` int NOT NULL,
   `killer_guild` int NOT NULL,
   `killer` int NOT NULL,
@@ -237,11 +267,14 @@ CREATE TABLE IF NOT EXISTS `guild_war_kills` (
   PRIMARY KEY (`id`),
   KEY `war_id` (`war_id`),
   KEY `killer_guild` (`killer_guild`),
-  FOREIGN KEY (`war_id`) REFERENCES `guild_wars` (`id`) ON DELETE CASCADE
+  FOREIGN KEY (`war_id`) REFERENCES `guild_wars` (`id`) ON DELETE CASCADE,
+  KEY `idx_guild_war_kills_world_id` (`world_id`),
+  CONSTRAINT `fk_guild_war_kills_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `houses` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `owner` int NOT NULL,
   `type` varchar(32) NOT NULL DEFAULT 'House',
   `paid` int unsigned NOT NULL DEFAULT '0',
@@ -256,29 +289,36 @@ CREATE TABLE IF NOT EXISTS `houses` (
   `highest_bidder` int NOT NULL DEFAULT '0',
   `size` int NOT NULL DEFAULT '0',
   `beds` int NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`),
+  PRIMARY KEY (`id`, `world_id`),
   KEY `owner` (`owner`),
-  KEY `town_id` (`town_id`)
+  KEY `town_id` (`town_id`),
+  KEY `idx_houses_world_id` (`world_id`),
+  CONSTRAINT `fk_houses_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `house_lists` (
   `house_id` int NOT NULL,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `listid` int NOT NULL,
   `list` text NOT NULL,
-  FOREIGN KEY (`house_id`) REFERENCES `houses` (`id`) ON DELETE CASCADE
+  KEY `idx_house_lists_world_id` (`world_id`),
+  FOREIGN KEY (`house_id`, `world_id`) REFERENCES `houses` (`id`, `world_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `house_guests` (
   `house_id` int NOT NULL,
   `player_id` int NOT NULL,
-  PRIMARY KEY (`house_id`, `player_id`),
-  FOREIGN KEY (`house_id`) REFERENCES `houses` (`id`) ON DELETE CASCADE,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
+  PRIMARY KEY (`house_id`, `player_id`, `world_id`),
+  KEY `idx_house_guests_world_id` (`world_id`),
+  FOREIGN KEY (`house_id`, `world_id`) REFERENCES `houses` (`id`, `world_id`) ON DELETE CASCADE,
   FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `market_history` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `player_id` int NOT NULL,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `sale` tinyint NOT NULL DEFAULT '0',
   `itemtype` smallint unsigned NOT NULL,
   `amount` smallint unsigned NOT NULL,
@@ -288,12 +328,15 @@ CREATE TABLE IF NOT EXISTS `market_history` (
   `state` tinyint unsigned NOT NULL,
   PRIMARY KEY (`id`),
   KEY `player_id` (`player_id`, `sale`),
-  FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
+  KEY `idx_market_history_world_player` (`world_id`, `player_id`, `sale`),
+  FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_market_history_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `market_offers` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `player_id` int NOT NULL,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `sale` tinyint NOT NULL DEFAULT '0',
   `itemtype` smallint unsigned NOT NULL,
   `amount` smallint unsigned NOT NULL,
@@ -303,20 +346,26 @@ CREATE TABLE IF NOT EXISTS `market_offers` (
   PRIMARY KEY (`id`),
   KEY `sale` (`sale`,`itemtype`),
   KEY `created` (`created`),
-  FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
+  KEY `idx_market_offers_world_itemtype_sale` (`world_id`, `itemtype`, `sale`),
+  KEY `idx_market_offers_world_player` (`world_id`, `player_id`),
+  FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_market_offers_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `players_online` (
  `player_id` int(11) NOT NULL,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `broadcasting` tinyint(1) NOT NULL DEFAULT '0',
   `password` varchar(40) NOT NULL DEFAULT '0',
   `description` varchar(255) NOT NULL DEFAULT '',
   `spectators` int(11) NOT NULL DEFAULT '0',
-  `protocol_version` int(4) NOT NULL DEFAULT '0'
+  `protocol_version` int(4) NOT NULL DEFAULT '0',
+  KEY `idx_players_online_world_id` (`world_id`)
 ) ENGINE=MEMORY DEFAULT CHARSET=latin1;
 
 CREATE TABLE IF NOT EXISTS `player_deaths` (
   `player_id` int NOT NULL,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `time` bigint unsigned NOT NULL DEFAULT '0',
   `level` int NOT NULL DEFAULT '1',
   `killed_by` varchar(255) NOT NULL,
@@ -328,11 +377,13 @@ CREATE TABLE IF NOT EXISTS `player_deaths` (
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE,
   KEY `killed_by` (`killed_by`),
   KEY `mostdamage_by` (`mostdamage_by`),
-  KEY `idx_player_deaths_unjustified_kills` (`killed_by`(64), `is_player`, `unjustified`, `time`)
+  KEY `idx_player_deaths_unjustified_kills` (`killed_by`(64), `is_player`, `unjustified`, `time`),
+  CONSTRAINT `fk_player_deaths_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `player_deaths_backup` (
   `player_id` int NOT NULL,
+  `world_id` smallint unsigned NOT NULL DEFAULT 1,
   `time` bigint unsigned NOT NULL DEFAULT '0',
   `level` int NOT NULL DEFAULT '1',
   `killed_by` varchar(255) NOT NULL,
@@ -343,7 +394,8 @@ CREATE TABLE IF NOT EXISTS `player_deaths_backup` (
   `mostdamage_unjustified` tinyint NOT NULL DEFAULT '0',
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE,
   KEY `killed_by` (`killed_by`),
-  KEY `mostdamage_by` (`mostdamage_by`)
+  KEY `mostdamage_by` (`mostdamage_by`),
+  CONSTRAINT `fk_player_deaths_backup_world` FOREIGN KEY (`world_id`) REFERENCES `worlds` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `change_name_history` (

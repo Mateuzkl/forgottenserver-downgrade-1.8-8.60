@@ -214,7 +214,12 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 
 	auto output = OutputMessagePool::getOutputMessage();
 
-	auto motd = getString(ConfigManager::MOTD);
+	std::string motd{getString(ConfigManager::MOTD)};
+	if (g_game.isMultiWorldEnabled()) {
+		if (const auto* world = g_game.getCurrentWorld(); world && !world->motd.empty()) {
+			motd = world->motd;
+		}
+	}
 	if (!motd.empty()) {
 		// Add MOTD
 		output->addByte(0x14);
@@ -231,23 +236,46 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 		uint8_t lookFeet = 76;
 		uint8_t lookAddons = 0;
 		std::string vocation = "None";
+		uint16_t worldId = 1;
+		std::string worldName;
+		std::string worldIp;
+		uint16_t worldPort = 0;
 	};
 
 	std::vector<CharacterListEntry> characters;
 	bool hasAccountManager = ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER);
+	if (g_game.isMultiWorldEnabled() && g_game.getCurrentWorldId() != 1) {
+		// The default schema seeds Account Manager in world 1 only.
+		hasAccountManager = false;
+	}
 	bool hasNamelock = ConfigManager::getBoolean(ConfigManager::NAMELOCK_MANAGER) && IOBan::accountHasNamelockedPlayer(account.id);
 
 	if ((hasAccountManager && account.id != 1) || hasNamelock) {
 		CharacterListEntry accountManager;
 		accountManager.name = "Account Manager";
 		accountManager.vocation = "Account Manager";
+		if (const auto* world = g_game.getCurrentWorld()) {
+			accountManager.worldId = world->id;
+			accountManager.worldName = world->name;
+			accountManager.worldIp = world->ip;
+			accountManager.worldPort = world->gamePort;
+		}
 		characters.push_back(std::move(accountManager));
 	}
 
 	Database& db = Database::getInstance();
-	DBResult_ptr result = db.storeQuery(fmt::format(
-	    "SELECT `name`, `level`, `vocation`, `looktype`, `lookhead`, `lookbody`, `looklegs`, `lookfeet`, `lookaddons` FROM `players` WHERE `account_id` = {:d} AND `deletion` = 0 ORDER BY `name` ASC",
-	    account.id));
+	DBResult_ptr result;
+	if (g_game.isMultiWorldEnabled()) {
+		result = db.storeQuery(fmt::format(
+		    "SELECT `p`.`name`, `p`.`level`, `p`.`vocation`, `p`.`looktype`, `p`.`lookhead`, `p`.`lookbody`, `p`.`looklegs`, `p`.`lookfeet`, `p`.`lookaddons`, `p`.`world_id`, `w`.`name` AS `world_name`, `w`.`ip` AS `world_ip`, `w`.`port` AS `world_port` "
+		    "FROM `players` `p` INNER JOIN `worlds` `w` ON `w`.`id` = `p`.`world_id` "
+		    "WHERE `p`.`account_id` = {:d} AND `p`.`deletion` = 0 ORDER BY `w`.`id` ASC, `p`.`name` ASC",
+		    account.id));
+	} else {
+		result = db.storeQuery(fmt::format(
+		    "SELECT `name`, `level`, `vocation`, `looktype`, `lookhead`, `lookbody`, `looklegs`, `lookfeet`, `lookaddons` FROM `players` WHERE `account_id` = {:d} AND `deletion` = 0 ORDER BY `name` ASC",
+		    account.id));
+	}
 	if (result) {
 		do {
 			CharacterListEntry character;
@@ -259,6 +287,12 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 			character.lookLegs = result->getNumber<uint8_t>("looklegs");
 			character.lookFeet = result->getNumber<uint8_t>("lookfeet");
 			character.lookAddons = result->getNumber<uint8_t>("lookaddons");
+			if (g_game.isMultiWorldEnabled()) {
+				character.worldId = result->getNumber<uint16_t>("world_id");
+				character.worldName = result->getString("world_name");
+				character.worldIp = result->getString("world_ip");
+				character.worldPort = result->getNumber<uint16_t>("world_port");
+			}
 
 			const uint16_t vocationId = result->getNumber<uint16_t>("vocation");
 			if (const auto* vocation = g_vocations.getVocation(vocationId)) {
@@ -270,8 +304,8 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	}
 
 	auto IP = getIP(getString(ConfigManager::IP));
-	auto serverName = getString(ConfigManager::SERVER_NAME);
-	auto gamePort = getInteger(ConfigManager::GAME_PORT);
+	const std::string serverName{getString(ConfigManager::SERVER_NAME)};
+	const auto gamePort = static_cast<uint16_t>(getInteger(ConfigManager::GAME_PORT));
 
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), characters.size());
 
@@ -282,9 +316,9 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 		for (uint8_t i = 0; i < size; ++i) {
 			const auto& character = characters[i];
 			output->addString(character.name);
-			output->addString(serverName);
-			output->add<uint32_t>(IP);
-			output->add<uint16_t>(gamePort);
+			output->addString(character.worldName.empty() ? serverName : character.worldName);
+			output->add<uint32_t>(character.worldIp.empty() ? IP : getIP(character.worldIp));
+			output->add<uint16_t>(character.worldPort == 0 ? gamePort : character.worldPort);
 			output->add<uint16_t>(character.lookType);
 			output->addByte(character.lookHead);
 			output->addByte(character.lookBody);
@@ -301,9 +335,9 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 		for (uint8_t i = 0; i < size; ++i) {
 			const auto& character = characters[i];
 			output->addString(character.name);
-			output->addString(serverName);
-			output->add<uint32_t>(IP);
-			output->add<uint16_t>(gamePort);
+			output->addString(character.worldName.empty() ? serverName : character.worldName);
+			output->add<uint32_t>(character.worldIp.empty() ? IP : getIP(character.worldIp));
+			output->add<uint16_t>(character.worldPort == 0 ? gamePort : character.worldPort);
 		}
 	}
 
@@ -355,8 +389,13 @@ void ProtocolLogin::getCastList(const std::string& password)
 
 		output->addString(it.first);
 		output->addString(it.second);
-		output->add<uint32_t>(getIP(ConfigManager::getString(ConfigManager::IP)));
-		output->add<uint16_t>(ConfigManager::getInteger(ConfigManager::GAME_PORT));
+		if (const auto* world = g_game.getCurrentWorld()) {
+			output->add<uint32_t>(getIP(world->ip));
+			output->add<uint16_t>(world->gamePort);
+		} else {
+			output->add<uint32_t>(getIP(ConfigManager::getString(ConfigManager::IP)));
+			output->add<uint16_t>(ConfigManager::getInteger(ConfigManager::GAME_PORT));
+		}
 		limit--;
 	}
 

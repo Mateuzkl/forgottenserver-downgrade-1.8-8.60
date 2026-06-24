@@ -1,5 +1,12 @@
 local talkaction = TalkAction("!deathlist")
 
+local function worldWhere()
+	if configManager and configKeys and configKeys.MULTI_WORLD_ENABLED and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) then
+		return " AND `world_id` = " .. math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1)
+	end
+	return ""
+end
+
 local function getArticle(str)
 	return str:find("[AaEeIiOoUuYy]") == 1 and "an" or "a"
 end
@@ -23,7 +30,7 @@ end
 function talkaction.onSay(player, words, param)
 	local resultId = db.storeQuery(
 		                 "SELECT `id`, `name` FROM `players` WHERE `name` = " ..
-			                 db.escapeString(param))
+			                 db.escapeString(param) .. worldWhere())
 	if resultId ~= false then
 		local targetGUID = result.getNumber(resultId, "id")
 		local targetName = result.getString(resultId, "name")
@@ -33,7 +40,7 @@ function talkaction.onSay(player, words, param)
 
 		local resultId = db.storeQuery(
 			                 "SELECT `time`, `level`, `killed_by`, `is_player` FROM `player_deaths` WHERE `player_id` = " ..
-				                 targetGUID .. " ORDER BY `time` DESC")
+			                 targetGUID .. worldWhere() .. " ORDER BY `time` DESC")
 		if resultId ~= false then
 			repeat
 				if str ~= "" then breakline = "\n" end
@@ -69,4 +76,3 @@ end
 
 talkaction:separator(" ")
 talkaction:register()
-

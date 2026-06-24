@@ -167,6 +167,37 @@ local function escapeAttributes(attributes)
 	return emptyAttributesSql()
 end
 
+local function isMultiWorld()
+	return configManager and configKeys and configKeys.MULTI_WORLD_ENABLED
+		and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) or false
+end
+
+local function currentWorldId()
+	if not isMultiWorld() then
+		return 1
+	end
+	return math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1)
+end
+
+-- Appends an AND predicate; callers must already have a WHERE clause.
+local function worldWhere(alias)
+	if not isMultiWorld() then
+		return ""
+	end
+	if alias and alias ~= "" then
+		return " AND `" .. alias .. "`.`world_id` = " .. currentWorldId()
+	end
+	return " AND `world_id` = " .. currentWorldId()
+end
+
+local function worldColumns()
+	return isMultiWorld() and ", `world_id`" or ""
+end
+
+local function worldValues()
+	return isMultiWorld() and (", " .. currentWorldId()) or ""
+end
+
 -- Rollback a DB-claimed offer (used when delivery fails after DB claim).
 -- For full-amount offers (deleted): tries to re-INSERT with original data.
 -- Restores a market offer in the database after a previously claimed (deleted or reduced) offer.
@@ -179,17 +210,17 @@ local function rollbackOfferClaim(offer, acceptedAmount)
 	if acceptedAmount >= offer.amount then
 		-- Full offer was DELETE'd — restore it
 		return db.query(
-			"INSERT INTO `market_offers` (`id`, `player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`) VALUES (" ..
+			"INSERT INTO `market_offers` (`id`, `player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`" .. worldColumns() .. ") VALUES (" ..
 			offer.id .. ", " .. offer.playerId .. ", " .. offer.sale .. ", " .. offer.itemId .. ", " ..
 			offer.amount .. ", " .. offer.created .. ", " .. (offer.anonymous and 1 or 0) .. ", " .. offer.price .. ", " ..
 			math.max(0, math.min(10, tonumber(offer.tier) or 0)) .. ", " ..
-			escapeAttributes(offer.attributes) .. ")"
+			escapeAttributes(offer.attributes) .. worldValues() .. ")"
 		)
 	else
 		-- Partial offer: restore subtracted amount
 		return db.query(
 			"UPDATE `market_offers` SET `amount` = `amount` + " .. acceptedAmount ..
-			" WHERE `id` = " .. offer.id
+			" WHERE `id` = " .. offer.id .. worldWhere()
 		)
 	end
 end
@@ -275,6 +306,46 @@ local function ensureColumn(tableName, columnName, definition)
 	db.query("ALTER TABLE `" .. tableName .. "` ADD COLUMN `" .. columnName .. "` " .. definition)
 end
 
+local function indexExists(tableName, indexName)
+	local resultId = db.storeQuery("SHOW INDEX FROM `" .. tableName .. "` WHERE `Key_name` = " .. db.escapeString(indexName))
+	if resultId == false then
+		return false
+	end
+	result.free(resultId)
+	return true
+end
+
+local function ensureIndex(tableName, indexName, definition)
+	if not tableExists(tableName) or indexExists(tableName, indexName) then
+		return
+	end
+	db.query("ALTER TABLE `" .. tableName .. "` ADD " .. definition)
+end
+
+local function ensureMarketStatisticsWorldKey()
+	if not tableExists("market_statistics") or not columnExists("market_statistics", "world_id") then
+		return
+	end
+
+	local resultId = db.storeQuery("SHOW INDEX FROM `market_statistics` WHERE `Key_name` = 'PRIMARY'")
+	if resultId == false then
+		return
+	end
+
+	local hasWorldId = false
+	repeat
+		if result.getString(resultId, "Column_name") == "world_id" then
+			hasWorldId = true
+			break
+		end
+	until not result.next(resultId)
+	result.free(resultId)
+
+	if not hasWorldId then
+		db.query("ALTER TABLE `market_statistics` DROP PRIMARY KEY, ADD PRIMARY KEY (`itemtype`, `world_id`, `sale`, `day`)")
+	end
+end
+
 -- Retrieve the serialized attributes value for a given result row and column, if present.
 -- Prefers a stream-backed column when available; otherwise reads the column as a string.
 -- @param resultId The result row identifier returned by a query.
@@ -307,6 +378,7 @@ local function ensureTables()
 		CREATE TABLE IF NOT EXISTS `market_offers` (
 			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
 			`player_id` INT NOT NULL,
+			`world_id` SMALLINT UNSIGNED NOT NULL DEFAULT 1,
 			`sale` TINYINT(1) NOT NULL DEFAULT 0,
 			`itemtype` SMALLINT UNSIGNED NOT NULL,
 			`amount` SMALLINT UNSIGNED NOT NULL,
@@ -316,18 +388,22 @@ local function ensureTables()
 			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			`attributes` MEDIUMBLOB NULL,
 			PRIMARY KEY (`id`),
-			KEY `idx_market_offers_itemtype_sale` (`itemtype`, `sale`),
-			KEY `idx_market_offers_player` (`player_id`)
+			KEY `idx_market_offers_world_itemtype_sale` (`world_id`, `itemtype`, `sale`),
+			KEY `idx_market_offers_world_player` (`world_id`, `player_id`)
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
 
 	ensureColumn("market_offers", "attributes", "MEDIUMBLOB NULL")
 	ensureColumn("market_offers", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
+	ensureColumn("market_offers", "world_id", "SMALLINT UNSIGNED NOT NULL DEFAULT 1")
+	ensureIndex("market_offers", "idx_market_offers_world_itemtype_sale", "INDEX `idx_market_offers_world_itemtype_sale` (`world_id`, `itemtype`, `sale`)")
+	ensureIndex("market_offers", "idx_market_offers_world_player", "INDEX `idx_market_offers_world_player` (`world_id`, `player_id`)")
 
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `market_history` (
 			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
 			`player_id` INT NOT NULL,
+			`world_id` SMALLINT UNSIGNED NOT NULL DEFAULT 1,
 			`sale` TINYINT(1) NOT NULL DEFAULT 0,
 			`itemtype` SMALLINT UNSIGNED NOT NULL,
 			`amount` SMALLINT UNSIGNED NOT NULL,
@@ -337,24 +413,29 @@ local function ensureTables()
 			`inserted` INT UNSIGNED NOT NULL,
 			`state` TINYINT UNSIGNED NOT NULL,
 			PRIMARY KEY (`id`),
-			KEY `idx_market_history_player` (`player_id`)
+			KEY `idx_market_history_world_player` (`world_id`, `player_id`, `sale`)
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
 
 	ensureColumn("market_history", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
+	ensureColumn("market_history", "world_id", "SMALLINT UNSIGNED NOT NULL DEFAULT 1")
+	ensureIndex("market_history", "idx_market_history_world_player", "INDEX `idx_market_history_world_player` (`world_id`, `player_id`, `sale`)")
 
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `market_statistics` (
 			`itemtype` SMALLINT UNSIGNED NOT NULL,
+			`world_id` SMALLINT UNSIGNED NOT NULL DEFAULT 1,
 			`sale` TINYINT(1) NOT NULL DEFAULT 0,
 			`day` INT UNSIGNED NOT NULL,
 			`transactions` INT UNSIGNED NOT NULL DEFAULT 0,
 			`total_price` BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			`highest_price` INT UNSIGNED NOT NULL DEFAULT 0,
 			`lowest_price` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`itemtype`, `sale`, `day`)
+			PRIMARY KEY (`itemtype`, `world_id`, `sale`, `day`)
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
 	]])
+	ensureColumn("market_statistics", "world_id", "SMALLINT UNSIGNED NOT NULL DEFAULT 1")
+	ensureMarketStatisticsWorldKey()
 end
 
 local function getOfferDuration()
@@ -1091,7 +1172,7 @@ local function getMarketOfferCount(playerId)
 		return 0
 	end
 
-	local resultId = db.storeQuery("SELECT COUNT(*) AS `total` FROM `market_offers` WHERE `player_id` = " .. playerId)
+	local resultId = db.storeQuery("SELECT COUNT(*) AS `total` FROM `market_offers` WHERE `player_id` = " .. playerId .. worldWhere())
 	if resultId == false then
 		return 0
 	end
@@ -1324,15 +1405,15 @@ local function addHistory(playerId, sale, itemId, amount, price, state, created,
 	local now = os.time()
 	local expiresAt = (created or now) + getOfferDuration()
 	tier = math.max(0, math.min(10, tonumber(tier) or 0))
-	db.query("INSERT INTO `market_history` (`player_id`, `sale`, `itemtype`, `amount`, `price`, `tier`, `expires_at`, `inserted`, `state`) VALUES (" ..
-		playerId .. ", " .. sale .. ", " .. itemId .. ", " .. amount .. ", " .. price .. ", " .. tier .. ", " .. expiresAt .. ", " .. now .. ", " .. state .. ")")
+	db.query("INSERT INTO `market_history` (`player_id`, `sale`, `itemtype`, `amount`, `price`, `tier`, `expires_at`, `inserted`, `state`" .. worldColumns() .. ") VALUES (" ..
+		playerId .. ", " .. sale .. ", " .. itemId .. ", " .. amount .. ", " .. price .. ", " .. tier .. ", " .. expiresAt .. ", " .. now .. ", " .. state .. worldValues() .. ")")
 end
 
 -- Retrieves a market offer by its database ID, resolving stored attributes and deriving the effective tier from those attributes when present.
 -- @param offerId The offer database ID.
 -- @return A table with fields: `id`, `playerId`, `sale`, `itemId`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`, `playerName`; or `nil` if the offer does not exist.
 local function fetchOfferById(offerId)
-	local resultId = db.storeQuery("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`id` = " .. offerId .. " LIMIT 1")
+	local resultId = db.storeQuery("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`id` = " .. offerId .. worldWhere("mo") .. worldWhere("p") .. " LIMIT 1")
 	if resultId == false then
 		return nil
 	end
@@ -1419,7 +1500,7 @@ local function fetchHistory(playerId)
 		return offers
 	end
 
-	local resultId = db.storeQuery("SELECT `id`, `player_id`, `sale`, `itemtype`, `amount`, `price`, `tier`, `inserted`, `state` FROM `market_history` WHERE `player_id` = " .. playerId .. " ORDER BY `inserted` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
+	local resultId = db.storeQuery("SELECT `id`, `player_id`, `sale`, `itemtype`, `amount`, `price`, `tier`, `inserted`, `state` FROM `market_history` WHERE `player_id` = " .. playerId .. worldWhere() .. " ORDER BY `inserted` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
 	if resultId == false then
 		return offers
 	end
@@ -1680,7 +1761,7 @@ local function fetchMarketStatistics(itemId, actionType)
 	local since = os.time() - (MARKET_STATISTICS_DAYS * 24 * 60 * 60)
 	local firstDay = math.floor(since / 86400) * 86400
 	local query = "SELECT `day`, `transactions`, `total_price`, `highest_price`, `lowest_price` FROM `market_statistics` " ..
-		"WHERE `itemtype` = " .. itemId .. " AND `sale` = " .. actionType .. " AND `day` >= " .. firstDay ..
+		"WHERE `itemtype` = " .. itemId .. " AND `sale` = " .. actionType .. " AND `day` >= " .. firstDay .. worldWhere() ..
 		" ORDER BY `day` ASC LIMIT " .. MARKET_STATISTICS_DAYS
 
 	local resultId = db.storeQuery(query)
@@ -1709,8 +1790,19 @@ local function refreshMarketStatistics()
 
 	local since = os.time() - (MARKET_STATISTICS_DAYS * 24 * 60 * 60)
 	local firstDay = math.floor(since / 86400) * 86400
-	db.query("DELETE FROM `market_statistics`")
+	if isMultiWorld() then
+		db.query("DELETE FROM `market_statistics` WHERE `world_id` = " .. currentWorldId())
+		return db.query(
+			"REPLACE INTO `market_statistics` (`itemtype`, `world_id`, `sale`, `day`, `transactions`, `total_price`, `highest_price`, `lowest_price`) " ..
+			"SELECT `itemtype`, " .. currentWorldId() .. ", `sale`, FLOOR(`inserted` / 86400) * 86400 AS `stat_day`, COUNT(*) AS `transactions`, " ..
+			"CASE WHEN SUM(`amount`) > 0 THEN FLOOR((SUM(`price` * `amount`) / SUM(`amount`)) * COUNT(*)) ELSE 0 END AS `total_price`, " ..
+			"MAX(`price`) AS `highest_price`, MIN(`price`) AS `lowest_price` FROM `market_history` " ..
+			"WHERE `state` = " .. MARKET_STATE_ACCEPTED .. " AND `inserted` >= " .. firstDay .. worldWhere() ..
+			" GROUP BY `itemtype`, `sale`, FLOOR(`inserted` / 86400) * 86400"
+		)
+	end
 
+	db.query("DELETE FROM `market_statistics`")
 	return db.query(
 		"REPLACE INTO `market_statistics` (`itemtype`, `sale`, `day`, `transactions`, `total_price`, `highest_price`, `lowest_price`) " ..
 		"SELECT `itemtype`, `sale`, FLOOR(`inserted` / 86400) * 86400 AS `stat_day`, COUNT(*) AS `transactions`, " ..
@@ -1751,7 +1843,7 @@ local function sendMarketBrowse(player, browseId)
 	local playerId = player:getGuid()
 
 	if browseId == MARKET_REQUEST_MY_OFFERS then
-		local query = "SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`player_id` = " .. playerId .. " ORDER BY mo.`created` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS
+		local query = "SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`player_id` = " .. playerId .. worldWhere("mo") .. worldWhere("p") .. " ORDER BY mo.`created` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS
 		for _, offer in ipairs(fetchOffers(query)) do
 			if offer.sale == MARKET_ACTION_BUY then
 				buyOffers[#buyOffers + 1] = offer
@@ -1768,8 +1860,8 @@ local function sendMarketBrowse(player, browseId)
 			end
 		end
 	elseif marketItemsById[browseId] then
-		buyOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_BUY .. " ORDER BY mo.`price` DESC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
-		sellOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_SELL .. " ORDER BY mo.`price` ASC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
+		buyOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_BUY .. worldWhere("mo") .. worldWhere("p") .. " ORDER BY mo.`price` DESC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
+		sellOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_SELL .. worldWhere("mo") .. worldWhere("p") .. " ORDER BY mo.`price` ASC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
 	else
 		sendMarketMessage(player, "This item cannot be traded on the market.")
 		return
@@ -1889,7 +1981,7 @@ local function expireOffers()
 	lastExpireCheck = now
 
 	local expiredBefore = now - getOfferDuration()
-	local offers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`created` <= " .. expiredBefore .. " ORDER BY mo.`created` ASC LIMIT 100")
+	local offers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`created` <= " .. expiredBefore .. worldWhere("mo") .. worldWhere("p") .. " ORDER BY mo.`created` ASC LIMIT 100")
 	for _, offer in ipairs(offers) do
 		local offerKey = "offer:" .. offer.id
 		-- Skip offers currently being processed by another handler
@@ -1897,7 +1989,7 @@ local function expireOffers()
 			logInfo("[CustomMarket] Skipping expire for locked offer " .. offer.id)
 		else
 			-- Atomically claim the offer before returning goods
-			local claimed = db.query("DELETE FROM `market_offers` WHERE `id` = " .. offer.id)
+			local claimed = db.query("DELETE FROM `market_offers` WHERE `id` = " .. offer.id .. worldWhere())
 			if claimed then
 				local returned = true
 				if offer.sale == MARKET_ACTION_BUY then
@@ -2086,10 +2178,10 @@ function createHandler.onReceive(player, msg)
 	end
 
 	local now = os.time()
-	local ok = db.query("INSERT INTO `market_offers` (`player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`) VALUES (" ..
+	local ok = db.query("INSERT INTO `market_offers` (`player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`" .. worldColumns() .. ") VALUES (" ..
 		player:getGuid() .. ", " .. actionType .. ", " .. itemId .. ", " .. amount .. ", " .. now .. ", " .. anonymous .. ", " .. price .. ", " ..
 		math.max(0, math.min(10, tonumber(offerTier) or 0)) .. ", " ..
-		escapeAttributes(offerAttributes) .. ")")
+		escapeAttributes(offerAttributes) .. worldValues() .. ")")
 	if not ok then
 		if actionType == MARKET_ACTION_BUY then
 			refundPlayerMarketMoney(player, payment)
@@ -2150,7 +2242,7 @@ function cancelHandler.onReceive(player, msg)
 	end
 
 	-- Atomically claim (delete) the offer BEFORE returning goods
-	if not db.query("DELETE FROM `market_offers` WHERE `id` = " .. offer.id .. " AND `player_id` = " .. player:getGuid()) then
+	if not db.query("DELETE FROM `market_offers` WHERE `id` = " .. offer.id .. " AND `player_id` = " .. player:getGuid() .. worldWhere()) then
 		releaseMultipleLocks({ offerKey, playerKey })
 		sendMarketMessage(player, "Could not cancel the market offer.")
 		return
@@ -2249,13 +2341,13 @@ function acceptHandler.onReceive(player, msg)
 		-- Full accept: DELETE with amount guard so a concurrent op can't sneak in
 		dbClaimed = db.query(
 			"DELETE FROM `market_offers` WHERE `id` = " .. offer.id ..
-			" AND `amount` = " .. offer.amount
+			" AND `amount` = " .. offer.amount .. worldWhere()
 		)
 	else
 		-- Partial accept: UPDATE with guard that amount is still sufficient
 		dbClaimed = db.query(
 			"UPDATE `market_offers` SET `amount` = `amount` - " .. amount ..
-			" WHERE `id` = " .. offer.id .. " AND `amount` >= " .. amount
+			" WHERE `id` = " .. offer.id .. " AND `amount` >= " .. amount .. worldWhere()
 		)
 	end
 

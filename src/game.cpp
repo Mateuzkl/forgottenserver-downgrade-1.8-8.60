@@ -384,6 +384,31 @@ GameState_t Game::getGameState() const { return gameState.load(std::memory_order
 
 void Game::setWorldType(WorldType_t type) { worldType = type; }
 
+WorldType_t Game::getWorldType() const
+{
+	if (isMultiWorldEnabled()) {
+		if (const auto* world = worlds.getCurrentWorld()) {
+			return world->type;
+		}
+	}
+	return worldType;
+}
+
+const WorldInfo* Game::getCurrentWorld() const
+{
+	return worlds.getCurrentWorld();
+}
+
+uint16_t Game::getCurrentWorldId() const
+{
+	return isMultiWorldEnabled() ? worlds.getCurrentWorldId() : 1;
+}
+
+bool Game::isMultiWorldEnabled() const
+{
+	return ConfigManager::getBoolean(ConfigManager::MULTI_WORLD_ENABLED);
+}
+
 void Game::registerInstanceArea(uint32_t instanceId, const Position& fromPos, const Position& toPos)
 {
 	if (instanceId == 0) {

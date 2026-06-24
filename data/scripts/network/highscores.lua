@@ -48,10 +48,22 @@ local function clamp(value, minValue, maxValue)
 end
 
 local function getServerName()
+	if Game and Game.getWorldName and configManager and configKeys and configKeys.MULTI_WORLD_ENABLED
+		and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED) then
+		return Game.getWorldName()
+	end
 	if configManager and configKeys and configKeys.SERVER_NAME then
 		return configManager.getString(configKeys.SERVER_NAME)
 	end
 	return "Astra"
+end
+
+local function worldWhere()
+	if not (configManager and configKeys and configKeys.MULTI_WORLD_ENABLED
+		and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED)) then
+		return ""
+	end
+	return " AND `world_id` = " .. math.max(1, tonumber(configManager.getNumber(configKeys.WORLD_ID)) or 1)
 end
 
 local function getVocationCondition(vocationId)
@@ -64,7 +76,7 @@ local function getVocationCondition(vocationId)
 end
 
 local function getTotalRows(vocationCondition)
-	local query = "SELECT COUNT(*) AS `total` FROM `players` WHERE `group_id` <= 1 AND `deletion` = 0" .. vocationCondition
+	local query = "SELECT COUNT(*) AS `total` FROM `players` WHERE `group_id` <= 1 AND `deletion` = 0" .. worldWhere() .. vocationCondition
 	local resultId = db.storeQuery(query)
 	if resultId == false then
 		return 0
@@ -81,14 +93,14 @@ local function getPlayerRank(playerGuid, column, vocationCondition)
 			SELECT `id`, (@rank := @rank + 1) AS `rank`
 			FROM (
 				SELECT `id` FROM `players`
-				WHERE `group_id` <= 1 AND `deletion` = 0%s
+				WHERE `group_id` <= 1 AND `deletion` = 0%s%s
 				ORDER BY `%s` DESC, `level` DESC, `name` ASC
 			) AS `ordered_players`
 			CROSS JOIN (SELECT @rank := 0) AS `rank_init`
 		) AS `ranked_players`
 		WHERE `id` = %d
 		LIMIT 1
-	]], vocationCondition, column, playerGuid)
+	]], worldWhere(), vocationCondition, column, playerGuid)
 
 	local resultId = db.storeQuery(query)
 	if resultId == false then
@@ -108,13 +120,13 @@ local function loadRows(column, vocationCondition, page, entriesPerPage)
 			FROM (
 				SELECT `id`, `name`, `level`, `vocation`, `%s`
 				FROM `players`
-				WHERE `group_id` <= 1 AND `deletion` = 0%s
+				WHERE `group_id` <= 1 AND `deletion` = 0%s%s
 				ORDER BY `%s` DESC, `level` DESC, `name` ASC
 			) AS `ordered_players`
 			CROSS JOIN (SELECT @rank := 0) AS `rank_init`
 		) AS `ranked_players`
 		WHERE `rank` > %d AND `rank` <= %d
-	]], column, column, vocationCondition, column, offset, offset + entriesPerPage)
+	]], column, column, worldWhere(), vocationCondition, column, offset, offset + entriesPerPage)
 
 	local rows = {}
 	local resultId = db.storeQuery(query)
@@ -160,7 +172,10 @@ local function sendHighscores(player, requestType, categoryId, vocationId, world
 
 	local rows = loadRows(category.column, vocationCondition, page, entriesPerPage)
 	local serverName = getServerName()
-	local selectedWorld = worldName ~= "" and worldName or "All Game Worlds"
+	local multiWorldEnabled = configManager and configKeys and configKeys.MULTI_WORLD_ENABLED
+		and configManager.getBoolean(configKeys.MULTI_WORLD_ENABLED)
+	local selectedWorld = (multiWorldEnabled and Game and Game.getWorldName and Game.getWorldName())
+		or (worldName ~= "" and worldName or "All Game Worlds")
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_HIGHSCORES)
 	out:addByte(0)

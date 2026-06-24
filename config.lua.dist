@@ -33,6 +33,7 @@ generateAccountNumber = false
 -- Combat settings
 -- NOTE: valid values for worldType are: "pvp", "no-pvp" and "pvp-enforced"
 worldType = "pvp"
+
 hotkeyAimbotEnabled = true
 protectionLevel = 1
 killsToRedSkull = 3
@@ -81,6 +82,19 @@ statusTimeout = 5000
 statusCountMaxPlayersPerIp = 0
 replaceKickOnLogin = true
 maxPacketsPerSecond = 25
+
+-- Multi World
+-- Set multiWorld to true to run one server process per `worldId` against the same database.
+-- World data and character routing are read from the `worlds` table after the migration runs.
+multiWorld = false
+multiWorldLoginServer = true
+worldId = 1
+-- These values seed the configured world when it does not yet exist in `worlds`.
+worldName = serverName
+worldLocation = "South America"
+worldIp = ip
+worldGamePort = gameProtocolPort
+worldStatusPort = statusProtocolPort
 
 -- Connection Limits Config
 -- NOTE: maxConnections: maximum total concurrent connections (0 = no limit)

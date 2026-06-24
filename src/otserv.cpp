@@ -369,19 +369,44 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	}
 
 	LOG_INFO(">> Checking world type... ");
-	auto worldType = asLowerCaseString(std::string{getString(ConfigManager::WORLD_TYPE)});
-	if (worldType == "pvp") {
-		g_game.setWorldType(WORLD_TYPE_PVP);
-	} else if (worldType == "no-pvp") {
-		g_game.setWorldType(WORLD_TYPE_NO_PVP);
-	} else if (worldType == "pvp-enforced") {
-		g_game.setWorldType(WORLD_TYPE_PVP_ENFORCED);
+	std::string worldType;
+	if (ConfigManager::getBoolean(ConfigManager::MULTI_WORLD_ENABLED)) {
+		const auto worldId = static_cast<uint16_t>(ConfigManager::getInteger(ConfigManager::WORLD_ID));
+		if (worldId == 1 && !g_game.getWorlds().ensureDefaultWorld()) {
+			startupErrorMessage("multiWorld enabled but failed to bootstrap default world 1.");
+			return;
+		}
+
+		if (!g_game.getWorlds().load()) {
+			startupErrorMessage("multiWorld enabled but the worlds table could not be loaded. Run database migrations first.");
+			return;
+		}
+
+		g_game.getWorlds().setCurrentWorld(worldId);
+		const auto* currentWorld = g_game.getCurrentWorld();
+		if (!currentWorld) {
+			startupErrorMessage(fmt::format("multiWorld enabled but worldId {} was not found in table worlds", worldId));
+			return;
+		}
+
+		g_game.setWorldType(currentWorld->type);
+		worldType = GameWorlds::getWorldTypeName(currentWorld->type);
+		LOG_INFO(fmt::format(">> World {} ({})", currentWorld->id, currentWorld->name));
 	} else {
-		LOG_INFO("\n");
-		startupErrorMessage(
-		    fmt::format("Unknown world type: {:s}, valid world types are: pvp, no-pvp and pvp-enforced.",
-		                getString(ConfigManager::WORLD_TYPE)));
-		return;
+		worldType = asLowerCaseString(std::string{getString(ConfigManager::WORLD_TYPE)});
+		if (worldType == "pvp" || worldType == "open" || worldType == "open-pvp") {
+			g_game.setWorldType(WORLD_TYPE_PVP);
+		} else if (worldType == "no-pvp" || worldType == "nopvp" || worldType == "optional") {
+			g_game.setWorldType(WORLD_TYPE_NO_PVP);
+		} else if (worldType == "pvp-enforced" || worldType == "hardcore") {
+			g_game.setWorldType(WORLD_TYPE_PVP_ENFORCED);
+		} else {
+			LOG_INFO("\n");
+			startupErrorMessage(
+			    fmt::format("Unknown world type: {:s}, valid world types are: pvp, no-pvp and pvp-enforced.",
+			                getString(ConfigManager::WORLD_TYPE)));
+			return;
+		}
 	}
 	LOG_INFO(fmt::format(">> {}", asUpperCaseString(worldType)));
 
@@ -395,11 +420,19 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	g_game.setGameState(GAME_STATE_INIT);
 
 	// Game client protocols
-	services->add<ProtocolGame>(static_cast<uint16_t>(getInteger(ConfigManager::GAME_PORT)));
-	services->add<ProtocolLogin>(static_cast<uint16_t>(getInteger(ConfigManager::LOGIN_PORT)));
+	uint16_t gamePort = static_cast<uint16_t>(getInteger(ConfigManager::GAME_PORT));
+	uint16_t statusPort = static_cast<uint16_t>(getInteger(ConfigManager::STATUS_PORT));
+	if (const auto* currentWorld = g_game.getCurrentWorld()) {
+		gamePort = currentWorld->gamePort;
+		statusPort = currentWorld->statusPort;
+	}
+	services->add<ProtocolGame>(gamePort);
+	if (!g_game.isMultiWorldEnabled() || ConfigManager::getBoolean(ConfigManager::MULTI_WORLD_LOGIN_SERVER)) {
+		services->add<ProtocolLogin>(static_cast<uint16_t>(getInteger(ConfigManager::LOGIN_PORT)));
+	}
 
 	// OT protocols
-	services->add<ProtocolStatus>(static_cast<uint16_t>(getInteger(ConfigManager::STATUS_PORT)));
+	services->add<ProtocolStatus>(statusPort);
 	services->add<ProtocolAdmin>(static_cast<uint16_t>(getInteger(ConfigManager::ADMIN_PORT)));
 
 	RentPeriod_t rentPeriod;
