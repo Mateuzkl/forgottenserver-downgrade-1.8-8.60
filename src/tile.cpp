@@ -7,6 +7,7 @@
 
 #include "combat.h"
 #include "configmanager.h"
+#include "container.h"
 #include "creature.h"
 #include "game.h"
 #include "instance_utils.h"
@@ -45,17 +46,6 @@ void logSharedItemLockFailure(std::string_view context, const Item* item)
 {
 	LOG_WARN("[Warning - {}] Failed to lock item shared ownership. item={}, id={}", context,
 	         static_cast<const void*>(item), item ? item->getID() : 0);
-}
-
-bool isBrowseFieldVisibleItem(const Item* item)
-{
-	if (!item || item->hasAttribute(ITEM_ATTRIBUTE_UNIQUEID)) {
-		return false;
-	}
-
-	return item->getContainer() || item->hasProperty(CONST_PROP_MOVEABLE) ||
-	       (Item::items[item->getID()].wrapableTo != 0 && !item->hasProperty(CONST_PROP_MOVEABLE) &&
-	        !item->hasProperty(CONST_PROP_BLOCKPATH));
 }
 
 } // namespace

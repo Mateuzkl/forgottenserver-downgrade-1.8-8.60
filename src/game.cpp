@@ -1168,7 +1168,7 @@ void Game::cleanupBrowseFields()
 	};
 
 	for (auto it = browseFields.begin(); it != browseFields.end();) {
-		if (it->first.expired() || !it->second || !isOpenByAnyPlayer(it->second.get())) {
+		if (!it->second || !isOpenByAnyPlayer(it->second.get())) {
 			it = browseFields.erase(it);
 			continue;
 		}
@@ -3451,6 +3451,14 @@ void Game::playerBrowseField(uint32_t playerId, const Position& pos)
 		return;
 	}
 
+	const uint8_t dummyContainerId = 0x0F - static_cast<uint8_t>((pos.x % 3) * 3 + (pos.y % 3));
+	if (Container* openContainer = player->getContainerByID(dummyContainerId)) {
+		player->onCloseContainer(openContainer);
+		player->closeContainer(dummyContainerId);
+		player->sendCloseContainer(dummyContainerId);
+		releaseBrowseFieldContainer(openContainer);
+	}
+
 	auto container = getBrowseFieldContainer(tileRef.get());
 	if (!container) {
 		container = Container::createBrowseField(tileRef);
@@ -3459,15 +3467,6 @@ void Game::playerBrowseField(uint32_t playerId, const Position& pos)
 			return;
 		}
 		browseFields[tileRef] = container;
-	}
-
-	const uint8_t dummyContainerId = 0x0F - static_cast<uint8_t>((pos.x % 3) * 3 + (pos.y % 3));
-	if (Container* openContainer = player->getContainerByID(dummyContainerId)) {
-		player->onCloseContainer(openContainer);
-		player->closeContainer(dummyContainerId);
-		player->sendCloseContainer(dummyContainerId);
-		releaseBrowseFieldContainer(openContainer);
-		return;
 	}
 
 	player->addContainer(dummyContainerId, container.get());

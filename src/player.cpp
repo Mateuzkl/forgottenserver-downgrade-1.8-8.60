@@ -2002,21 +2002,22 @@ void Player::sendAddContainerItem(const Container* container, const Item* item)
 		}
 
 		uint16_t slot = openContainer.index;
+		const Item* itemToSend = item;
 		if (container->getID() == ITEM_BROWSEFIELD && container->size() > 0) {
 			const uint16_t containerSize = static_cast<uint16_t>(container->size() - 1);
 			const uint16_t pageEnd = openContainer.index + static_cast<uint16_t>(container->capacity()) - 1;
 			if (containerSize > pageEnd) {
 				slot = pageEnd;
-				item = container->getItemByIndex(pageEnd);
+				itemToSend = container->getItemByIndex(pageEnd);
 			} else {
 				slot = containerSize;
 			}
 		} else if (openContainer.index >= container->capacity()) {
-			item = container->getItemByIndex(openContainer.index);
+			itemToSend = container->getItemByIndex(openContainer.index);
 		}
 
-		if (item) {
-			client->sendAddContainerItem(it->first, slot, item);
+		if (itemToSend) {
+			client->sendAddContainerItem(it->first, slot, itemToSend);
 		}
 		++it;
 	}
@@ -2082,7 +2083,10 @@ void Player::sendRemoveContainerItem(const Container* container, uint16_t slot)
 			sendContainer(it->first, container, false, firstIndex);
 		}
 
-		const Item* lastItem = container->getItemByIndex(firstIndex + static_cast<uint16_t>(container->capacity()));
+		const uint32_t capacity = container->capacity();
+		const Item* lastItem = capacity > 0 ?
+		                           container->getItemByIndex(firstIndex + static_cast<uint16_t>(capacity - 1)) :
+		                           nullptr;
 		client->sendRemoveContainerItem(it->first, std::max<uint16_t>(slot, firstIndex), lastItem);
 		++it;
 	}

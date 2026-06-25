@@ -18,6 +18,8 @@ class RewardChest;
 class StoreInbox;
 class Player;
 
+bool isBrowseFieldVisibleItem(const Item* item);
+
 class ContainerIterator
 {
 public:

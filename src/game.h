@@ -740,7 +740,7 @@ private:
 
 	using TradeItemMap = std::map<std::weak_ptr<Item>, uint32_t, std::owner_less<std::weak_ptr<Item>>>;
 	using LootHighlightEventMap = std::map<std::weak_ptr<Item>, uint32_t, std::owner_less<std::weak_ptr<Item>>>;
-	using BrowseFieldMap = std::map<std::weak_ptr<Tile>, std::shared_ptr<Container>, std::owner_less<std::weak_ptr<Tile>>>;
+	using BrowseFieldMap = std::map<std::shared_ptr<Tile>, std::shared_ptr<Container>, std::owner_less<std::shared_ptr<Tile>>>;
 
 	// list of items that are in trading state, mapped to the player
 	TradeItemMap tradeItems;

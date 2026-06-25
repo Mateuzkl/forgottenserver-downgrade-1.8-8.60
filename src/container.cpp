@@ -30,6 +30,13 @@ void logSharedItemLockFailure(std::string_view context, const Item* item)
 	         static_cast<const void*>(item), item ? item->getID() : 0);
 }
 
+std::shared_ptr<Container> getSharedContainer(Container* container)
+{
+	return std::dynamic_pointer_cast<Container>(getSharedItem(container));
+}
+
+} // namespace
+
 bool isBrowseFieldVisibleItem(const Item* item)
 {
 	if (!item || item->hasAttribute(ITEM_ATTRIBUTE_UNIQUEID)) {
@@ -37,16 +44,8 @@ bool isBrowseFieldVisibleItem(const Item* item)
 	}
 
 	return item->getContainer() || item->hasProperty(CONST_PROP_MOVEABLE) ||
-	       (Item::items[item->getID()].wrapableTo != 0 && !item->hasProperty(CONST_PROP_MOVEABLE) &&
-	        !item->hasProperty(CONST_PROP_BLOCKPATH));
+	       (Item::items[item->getID()].wrapableTo != 0 && !item->hasProperty(CONST_PROP_BLOCKPATH));
 }
-
-std::shared_ptr<Container> getSharedContainer(Container* container)
-{
-	return std::dynamic_pointer_cast<Container>(getSharedItem(container));
-}
-
-} // namespace
 
 Container::Container(uint16_t type) : Container(type, items[type].maxItems) {}
 

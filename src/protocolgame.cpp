@@ -1498,11 +1498,19 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break;
 
 		case 0xCB:
-			parseBrowseField(msg);
+			if (shouldSendContainerPagination()) {
+				parseBrowseField(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 
 		case 0xCC:
-			parseSeekInContainer(msg);
+			if (shouldSendContainerPagination()) {
+				parseSeekInContainer(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 
 		case 0xCD:
