@@ -357,7 +357,6 @@ bool createAuction(Player* player, uint32_t startPrice, uint32_t durationSeconds
 	}
 
 	reason = fmt::format("Auction #{:d} created. You will now be logged out.", auctionId);
-	player->save();
 	const uint32_t creatureId = player->getID();
 	g_dispatcher.addTask([creatureId]() { g_game.kickPlayer(creatureId, true); });
 	return true;
