@@ -18,6 +18,67 @@
 extern Game g_game;
 extern Vocations g_vocations;
 
+namespace {
+
+int32_t getPerfectShotDamageForRange(const Item* item, uint8_t range)
+{
+	if (!item || range == 0 || item->getPerfectShotRange() != range) {
+		return 0;
+	}
+
+	return item->getPerfectShotDamage();
+}
+
+int32_t getPerfectShotDamage(const Player* player, const Item* attackingItem, const Creature* target)
+{
+	if (!player || !target || player->getPosition().z != target->getPosition().z) {
+		return 0;
+	}
+
+	const Position& playerPos = player->getPosition();
+	const Position& targetPos = target->getPosition();
+	const auto distanceX = static_cast<uint8_t>(std::min<uint32_t>(playerPos.getDistanceX(targetPos), 255));
+	const auto distanceY = static_cast<uint8_t>(std::min<uint32_t>(playerPos.getDistanceY(targetPos), 255));
+
+	int32_t perfectShotDamage = getPerfectShotDamageForRange(attackingItem, distanceX);
+	if (distanceY != distanceX) {
+		perfectShotDamage += getPerfectShotDamageForRange(attackingItem, distanceY);
+	}
+
+	for (const auto& equippedItem : player->getEquippedItems()) {
+		if (!equippedItem || equippedItem.get() == attackingItem) {
+			continue;
+		}
+
+		perfectShotDamage += getPerfectShotDamageForRange(equippedItem.get(), distanceX);
+		if (distanceY != distanceX) {
+			perfectShotDamage += getPerfectShotDamageForRange(equippedItem.get(), distanceY);
+		}
+	}
+
+	return perfectShotDamage;
+}
+
+void applyPerfectShotDamage(const Player* player, const Item* item, const Creature* target, CombatDamage& damage)
+{
+	if (damage.origin != ORIGIN_RANGED && damage.origin != ORIGIN_WAND) {
+		return;
+	}
+
+	const int32_t perfectShotDamage = getPerfectShotDamage(player, item, target);
+	if (perfectShotDamage <= 0) {
+		return;
+	}
+
+	if (damage.primary.value <= 0) {
+		damage.primary.value -= perfectShotDamage;
+	} else {
+		damage.primary.value += perfectShotDamage;
+	}
+}
+
+} // namespace
+
 Weapons::Weapons() { scriptInterface.initState(); }
 
 Weapons::~Weapons() { clear(false); }
@@ -365,6 +426,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 		damage.primary.value = (getWeaponDamage(player, target, item) * damageModifier) / 100;
 		damage.secondary.type = getElementType();
 		damage.secondary.value = (getElementDamage(player, target, item) * damageModifier) / 100;
+		applyPerfectShotDamage(player, item, target, damage);
 
 		CombatDamage cleaveSnapshot = damage;
 		uint32_t targetId = target->getID();

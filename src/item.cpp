@@ -1306,6 +1306,18 @@ uint16_t Item::getBoostPercent(CombatType_t combatType, bool total /* = true */)
 	return boostPercent;
 }
 
+int32_t Item::getPerfectShotDamage() const
+{
+	const ItemType& it = Item::items[id];
+	return it.abilities ? it.abilities->perfectShotDamage : 0;
+}
+
+uint8_t Item::getPerfectShotRange() const
+{
+	const ItemType& it = Item::items[id];
+	return it.abilities ? it.abilities->perfectShotRange : 0;
+}
+
 static double quadraticPoly(double a, double b, double c, uint8_t tier)
 {
 	return a* tier* tier + b* tier + c;

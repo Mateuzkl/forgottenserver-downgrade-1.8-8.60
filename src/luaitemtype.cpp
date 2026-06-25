@@ -707,6 +707,8 @@ int luaItemTypeGetAbilities(lua_State* L)
 		setField(L, "speed", abilities.speed);
 		setField(L, "elementDamage", abilities.elementDamage);
 		setField(L, "elementType", abilities.elementType);
+		setField(L, "perfectShotDamage", abilities.perfectShotDamage);
+		setField(L, "perfectShotRange", abilities.perfectShotRange);
 
 		lua_pushboolean(L, abilities.manaShield);
 		lua_setfield(L, -2, "manaShield");

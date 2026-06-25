@@ -5,7 +5,7 @@ local tools = {
 	{ ids = {3456}, callback = onUsePick },
 	{ ids = {3003, 646}, callback = onUseRope },
 	{ ids = {3453}, callback = onUseScythe },
-	{ ids = {3457, 5710}, callback = onUseShovel }
+	{ ids = {3457, 5710, 7883, 7894, 15689, 19203, 21373, 36981}, callback = onUseShovel }
 }
 
 for _, tool in ipairs(tools) do

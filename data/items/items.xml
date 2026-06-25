@@ -60794,6 +60794,8 @@
 		<attribute key="showattributes" value="1" />
 		<attribute key="containersize" value="8" />
 		<attribute key="weight" value="2200" />
+		<attribute key="perfectshotdamage" value="20" />
+		<attribute key="perfectshotrange" value="4" />
 		<attribute key="script" value="moveevent">
 			<attribute key="level" value="250" />
 			<attribute key="slot" value="right-hand" />
@@ -60816,8 +60818,11 @@
 	<item id="36668" article="a" name="eldritch wand">
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="fire" />
+		<attribute key="range" value="4" />
 		<attribute key="absorbpercentenergy" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="perfectshotdamage" value="65" />
+		<attribute key="perfectshotrange" value="4" />
 		<attribute key="weight" value="3600" />
 		<attribute key="imbuementslot" value="2">
 			<attribute key="mana leech" value="3" />
@@ -60841,8 +60846,11 @@
 		<attribute key="description" value="Refined by the legendary artisan Gnomaurum" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="fire" />
+		<attribute key="range" value="4" />
 		<attribute key="absorbpercentenergy" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="perfectshotdamage" value="65" />
+		<attribute key="perfectshotrange" value="4" />
 		<attribute key="weight" value="3700" />
 		<attribute key="imbuementslot" value="2">
 			<attribute key="mana leech" value="3" />
@@ -64055,6 +64063,8 @@
 		<attribute key="showattributes" value="1" />
 		<attribute key="containersize" value="12" />
 		<attribute key="weight" value="2000" />
+		<attribute key="perfectshotdamage" value="20" />
+		<attribute key="perfectshotrange" value="3" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="script" value="moveevent">
 			<attribute key="level" value="400" />

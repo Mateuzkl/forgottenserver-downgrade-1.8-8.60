@@ -527,6 +527,17 @@ do
 			end
 		end
 
+		-- perfect shot
+		do
+			if abilities.perfectShotDamage ~= 0 and abilities.perfectShotRange ~= 0 then
+				descriptions[#descriptions + 1] = fmt(
+					"perfect shot %+d at range %d",
+					abilities.perfectShotDamage,
+					abilities.perfectShotRange
+				)
+			end
+		end
+
 		-- experience rates
 		do
 			for type, rate in ipairs(abilities.experienceRate) do

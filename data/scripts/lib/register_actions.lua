@@ -20,8 +20,12 @@ local Itemsgrinder = {
 	[16122] = {item_id = 21507, effect = CONST_ME_GREENSMOKE} -- Pinch of crystal dust
 }
 
-local holes = {
-	593, 606, 608, 867, 21341
+local shovelHoles = {
+	[593] = 594,
+	[606] = 607,
+	[608] = 609,
+	[867] = 868,
+	[21341] = 21342
 }
 
 local fruits = {
@@ -184,15 +188,15 @@ function onUseShovel(player, item, fromPosition, target, toPosition, isHotkey)
 	if not ground then return false end
 
 	local groundId = ground:getId()
-	local openHoleId = holes[groundId]
+	local openHoleId = shovelHoles[groundId]
 	if openHoleId then
 		ground:transform(openHoleId)
 		ground:decay()
 		toPosition.z = toPosition.z + 1
 		tile:relocateTo(toPosition)
 		player:addAchievementProgress("The Undertaker", 500)
-	elseif table.contains(holes, target.itemid) then
-		target:transform(holes, target.itemid)
+	elseif shovelHoles[target.itemid] then
+		target:transform(shovelHoles[target.itemid])
 		target:decay()
 		player:addAchievementProgress("The Undertaker", 500)
 	elseif table.contains(sandIds, groundId) then

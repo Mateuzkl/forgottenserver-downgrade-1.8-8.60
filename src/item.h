@@ -829,6 +829,9 @@ public:
 	void setBoostPercent(CombatType_t combatType, uint16_t value) { getAttributes()->boostPercent[combatType] = value; }
 	uint16_t getBoostPercent(CombatType_t combatType, bool total = true) const;
 
+	int32_t getPerfectShotDamage() const;
+	uint8_t getPerfectShotRange() const;
+
 	uint8_t getTier() const
 	{
 		if (!ConfigManager::getBoolean(ConfigManager::FORGE_SYSTEM_ENABLED)) {

@@ -190,6 +190,16 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"magiclevelphysical", ITEM_PARSE_MAGICLEVELPHYSICAL},
     {"magiclevelhealing", ITEM_PARSE_MAGICLEVELHEALING},
     {"magiclevelundefined", ITEM_PARSE_MAGICLEVELUNDEFINED},
+    {"perfectshotdamage", ITEM_PARSE_PERFECTSHOTDAMAGE},
+    {"perfectshotrange", ITEM_PARSE_PERFECTSHOTRANGE},
+    {"deathmagiclevelpoints", ITEM_PARSE_MAGICLEVELDEATH},
+    {"energymagiclevelpoints", ITEM_PARSE_MAGICLEVELENERGY},
+    {"earthmagiclevelpoints", ITEM_PARSE_MAGICLEVELPOISON},
+    {"firemagiclevelpoints", ITEM_PARSE_MAGICLEVELFIRE},
+    {"icemagiclevelpoints", ITEM_PARSE_MAGICLEVELICE},
+    {"holymagiclevelpoints", ITEM_PARSE_MAGICLEVELHOLY},
+    {"healingmagiclevelpoints", ITEM_PARSE_MAGICLEVELHEALING},
+    {"physicalmagiclevelpoints", ITEM_PARSE_MAGICLEVELPHYSICAL},
     {"suppressdrunk", ITEM_PARSE_SUPPRESSDRUNK},
     {"suppressenergy", ITEM_PARSE_SUPPRESSENERGY},
     {"suppressfire", ITEM_PARSE_SUPPRESSFIRE},
@@ -1775,6 +1785,17 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 				case ITEM_PARSE_MAGICLEVELUNDEFINED: {
 					abilities.specialMagicLevelSkill[combatTypeToIndex(COMBAT_UNDEFINEDDAMAGE)] +=
 					    pugi::cast<int16_t>(valueAttribute.value());
+					break;
+				}
+
+				case ITEM_PARSE_PERFECTSHOTDAMAGE: {
+					abilities.perfectShotDamage = pugi::cast<int32_t>(valueAttribute.value());
+					break;
+				}
+
+				case ITEM_PARSE_PERFECTSHOTRANGE: {
+					abilities.perfectShotRange = static_cast<uint8_t>(
+					    std::min<uint16_t>(pugi::cast<uint16_t>(valueAttribute.value()), 255));
 					break;
 				}
 
