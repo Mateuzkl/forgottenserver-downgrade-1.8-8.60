@@ -186,7 +186,6 @@
     <ClCompile Include="..\src\character_bazaar.cpp" />
     <ClCompile Include="..\src\chat.cpp" />
     <ClCompile Include="..\src\combat.cpp" />
-    <ClCompile Include="..\src\character_bazaar.cpp" />
     <ClCompile Include="..\src\condition.cpp" />
     <ClCompile Include="..\src\configmanager.cpp" />
     <ClCompile Include="..\src\connection.cpp" />
@@ -333,7 +332,7 @@
     <ClInclude Include="..\src\condition.h" />
     <ClInclude Include="..\src\configmanager.h" />
     <ClInclude Include="..\src\connection.h" />
-   <ClCompile Include="..\src\character_bazaar.h" />
+    <ClInclude Include="..\src\container.h" />
     <ClInclude Include="..\src\const.h" />
     <ClInclude Include="..\src\container.h" />
     <ClInclude Include="..\src\creature.h" />
