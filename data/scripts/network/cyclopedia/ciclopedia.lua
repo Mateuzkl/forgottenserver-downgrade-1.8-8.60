@@ -697,6 +697,21 @@ local function handleCharmAction(player, charmId, action, raceId)
 		return
 	end
 
+	if Game.handleBestiaryCharmAction then
+		local success, message = Game.handleBestiaryCharmAction(player, charmId, action, raceId)
+		if message and message ~= "" then
+			sendMessage(player, message)
+		end
+		if success then
+			invalidatePlayer(playerGuid)
+			if CustomBestiary.refreshPlayerCharms then
+				CustomBestiary.refreshPlayerCharms(player)
+			end
+			sendBestiaryData(player)
+		end
+		return
+	end
+
 	local kills = loadKillMap(playerGuid)
 	local charms = loadCharmMap(playerGuid)
 	local state = charms[charmId]

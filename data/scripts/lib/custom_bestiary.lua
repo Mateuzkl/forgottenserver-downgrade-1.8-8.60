@@ -18,31 +18,31 @@ CustomBestiary.fallbackCreatureLookType = CustomBestiary.fallbackCreatureLookTyp
 local classesDirty = false
 
 CustomBestiary.charmRunes = {
-	{id = 0, name = "Wound", description = "Your attacks have a 5% chance to deal physical damage equal to 5% of the target's initial hit points.", price = 600},
-	{id = 1, name = "Enflame", description = "Your attacks have a 5% chance to deal fire damage equal to 5% of the target's initial hit points.", price = 600},
-	{id = 2, name = "Poison", description = "Your attacks have a 5% chance to deal earth damage equal to 5% of the target's initial hit points.", price = 600},
-	{id = 3, name = "Freeze", description = "Your attacks have a 5% chance to deal ice damage equal to 5% of the target's initial hit points.", price = 600},
-	{id = 4, name = "Zap", description = "Your attacks have a 5% chance to deal energy damage equal to 5% of the target's initial hit points.", price = 600},
-	{id = 5, name = "Curse", description = "Your attacks have a 5% chance to deal death damage equal to 5% of the target's initial hit points.", price = 600},
-	{id = 6, name = "Cripple", description = "Your attacks have a 6% chance to paralyze the target for 10 seconds.", price = 500},
-	{id = 7, name = "Parry", description = "Each time you take damage, you have a 5% chance to reflect it back to the aggressor.", price = 700},
-	{id = 8, name = "Dodge", description = "Grants a 5% chance to dodge an attack.", price = 700},
-	{id = 9, name = "Adrenaline Burst", description = "Each time you're hit you have a 6% chance to trigger a burst of adrenaline, boosting your speed by 150% for 10 seconds.", price = 500},
-	{id = 10, name = "Numb", description = "After being attacked, you have a 6% chance to paralyze the aggresor for 10 seconds.", price = 500},
-	{id = 11, name = "Cleanse", description = "Each time you're hit, you have a 6% chance to cleanse one random negative status effect and gain temporary immunity to it for 11 seconds.", price = 500},
-	{id = 12, name = "Bless", description = "Blesses you, reducing skill and experience loss by 6% when killed by the chosen creature.", price = 500},
-	{id = 13, name = "Scavenge", description = "Increases your chance of successfully skinning/ dusting a skinnable/ dustable creature by 60%.", price = 500},
-	{id = 14, name = "Gut", description = "Gutting the creature yiels 6% more creature products.", price = 500},
-	{id = 15, name = "Low Blow", description = "Adds 4% critical hit chance to attacks with critical hit weapons.", price = 1200},
-	{id = 16, name = "Divine Wrath", description = "Your attacks have a 5% chance to deal holy damage equal to 5% of the target's initial hit points.", price = 1500},
-	{id = 17, name = "Vampiric Embrace", description = "Increases your current life leech by 1.6%.", price = 1500},
-	{id = 18, name = "Void's Call", description = "Increases your current mana leech by 0.8%.", price = 1500},
-	{id = 19, name = "Savage Blow", description = "Adds 20% critical extra damage to attacks with critical hit weapons.", price = 1200},
-	{id = 20, name = "Fatal Hold", description = "Your attacks have a 30% chance to prevent creatures from fleeing due to low health for 30 seconds.", price = 500},
-	{id = 21, name = "Void Inversion", description = "20% chance to gain mana instead of losing it when taking mana drain damage.", price = 500},
-	{id = 22, name = "Carnage", description = "Killing a monster has 10% chance to deal physical damage equal to 15% of its maximum health to all monsters in small radius.", price = 2000},
-	{id = 23, name = "Overpower", description = "Your attacks have a 5% chance to deal damage equal to 5% of your maximum health.", price = 2000},
-	{id = 24, name = "Overflux", description = "Your attacks have a 5% chance to deal damage equal to 2.5% of your maximum mana.", price = 2000}
+	{id = 0, name = "Wound", description = "Your attacks have a 5% chance to deal physical damage equal to 5% of the target's initial hit points.", price = 240},
+	{id = 1, name = "Enflame", description = "Your attacks have a 5% chance to deal fire damage equal to 5% of the target's initial hit points.", price = 400},
+	{id = 2, name = "Poison", description = "Your attacks have a 5% chance to deal earth damage equal to 5% of the target's initial hit points.", price = 240},
+	{id = 3, name = "Freeze", description = "Your attacks have a 5% chance to deal ice damage equal to 5% of the target's initial hit points.", price = 320},
+	{id = 4, name = "Zap", description = "Your attacks have a 5% chance to deal energy damage equal to 5% of the target's initial hit points.", price = 320},
+	{id = 5, name = "Curse", description = "Your attacks have a 5% chance to deal death damage equal to 5% of the target's initial hit points.", price = 360},
+	{id = 6, name = "Cripple", description = "Your attacks have a 6% chance to paralyze the target for 10 seconds.", price = 100},
+	{id = 7, name = "Parry", description = "Each time you take damage, you have a 5% chance to reflect it back to the aggressor.", price = 400},
+	{id = 8, name = "Dodge", description = "Grants a 5% chance to dodge an attack.", price = 240},
+	{id = 9, name = "Adrenaline Burst", description = "Each time you're hit you have a 6% chance to trigger a burst of adrenaline, boosting your speed by 150% for 10 seconds.", price = 100},
+	{id = 10, name = "Numb", description = "After being attacked, you have a 6% chance to paralyze the aggresor for 10 seconds.", price = 100},
+	{id = 11, name = "Cleanse", description = "Each time you're hit, you have a 6% chance to cleanse one random negative status effect and gain temporary immunity to it for 11 seconds.", price = 100},
+	{id = 12, name = "Bless", description = "Blesses you, reducing skill and experience loss by 6% when killed by the chosen creature.", price = 100},
+	{id = 13, name = "Scavenge", description = "Increases your chance of successfully skinning/ dusting a skinnable/ dustable creature by 60%.", price = 100},
+	{id = 14, name = "Gut", description = "Gutting the creature yiels 6% more creature products.", price = 100},
+	{id = 15, name = "Low Blow", description = "Adds 4% critical hit chance to attacks with critical hit weapons.", price = 800},
+	{id = 16, name = "Divine Wrath", description = "Your attacks have a 5% chance to deal holy damage equal to 5% of the target's initial hit points.", price = 600},
+	{id = 17, name = "Vampiric Embrace", description = "Increases your current life leech by 1.6%.", price = 100},
+	{id = 18, name = "Void's Call", description = "Increases your current mana leech by 0.8%.", price = 100},
+	{id = 19, name = "Savage Blow", description = "Adds 20% critical extra damage to attacks with critical hit weapons.", price = 800},
+	{id = 20, name = "Fatal Hold", description = "Your attacks have a 30% chance to prevent creatures from fleeing due to low health for 30 seconds.", price = 100},
+	{id = 21, name = "Void Inversion", description = "20% chance to gain mana instead of losing it when taking mana drain damage.", price = 100},
+	{id = 22, name = "Carnage", description = "Killing a monster has 10% chance to deal physical damage equal to 15% of its maximum health to all monsters in small radius.", price = 600},
+	{id = 23, name = "Overpower", description = "Your attacks have a 5% chance to deal damage equal to 5% of your maximum health.", price = 600},
+	{id = 24, name = "Overflux", description = "Your attacks have a 5% chance to deal damage equal to 2.5% of your maximum mana.", price = 600}
 }
 
 local charmById = {}
@@ -256,6 +256,11 @@ function CustomBestiary.registerMonster(monsterType, mask)
 	}
 
 	CustomBestiary.monstersByRaceId[raceId] = entry
+	if Game.registerBestiaryMonsterData then
+		Game.registerBestiaryMonsterData(entry.raceId, entry.name, entry.toKill, entry.charmPoints,
+			entry.outfit.type or 0, entry.outfit.head or 0, entry.outfit.body or 0,
+			entry.outfit.legs or 0, entry.outfit.feet or 0, entry.outfit.addons or 0)
+	end
 	local corpseId = tonumber(mask.corpse) or callMonsterMethod(monsterType, "corpseId", 0) or 0
 	if corpseId > 0 then
 		CustomBestiary.corpseRaceById[corpseId] = raceId

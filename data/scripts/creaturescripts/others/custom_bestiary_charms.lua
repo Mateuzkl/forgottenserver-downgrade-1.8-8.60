@@ -30,6 +30,39 @@ local CHARM = {
 	OVERFLUX = 24
 }
 
+local CHARM_CATEGORY = {
+	MAJOR = "major",
+	MINOR = "minor"
+}
+
+local charmCategories = {
+	[CHARM.WOUND] = CHARM_CATEGORY.MAJOR,
+	[CHARM.ENFLAME] = CHARM_CATEGORY.MAJOR,
+	[CHARM.POISON] = CHARM_CATEGORY.MAJOR,
+	[CHARM.FREEZE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.ZAP] = CHARM_CATEGORY.MAJOR,
+	[CHARM.CURSE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.CRIPPLE] = CHARM_CATEGORY.MINOR,
+	[CHARM.PARRY] = CHARM_CATEGORY.MAJOR,
+	[CHARM.DODGE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.ADRENALINE] = CHARM_CATEGORY.MINOR,
+	[CHARM.NUMB] = CHARM_CATEGORY.MINOR,
+	[CHARM.CLEANSE] = CHARM_CATEGORY.MINOR,
+	[CHARM.BLESS] = CHARM_CATEGORY.MINOR,
+	[CHARM.SCAVENGE] = CHARM_CATEGORY.MINOR,
+	[CHARM.GUT] = CHARM_CATEGORY.MINOR,
+	[CHARM.LOW_BLOW] = CHARM_CATEGORY.MAJOR,
+	[CHARM.DIVINE_WRATH] = CHARM_CATEGORY.MAJOR,
+	[CHARM.VAMPIRIC] = CHARM_CATEGORY.MINOR,
+	[CHARM.VOID_CALL] = CHARM_CATEGORY.MINOR,
+	[CHARM.SAVAGE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.FATAL_HOLD] = CHARM_CATEGORY.MINOR,
+	[CHARM.VOID_INVERSION] = CHARM_CATEGORY.MINOR,
+	[CHARM.CARNAGE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.OVERPOWER] = CHARM_CATEGORY.MAJOR,
+	[CHARM.OVERFLUX] = CHARM_CATEGORY.MAJOR
+}
+
 local damageCharms = {
 	[CHARM.WOUND] = COMBAT_PHYSICALDAMAGE,
 	[CHARM.ENFLAME] = COMBAT_FIREDAMAGE,
@@ -92,7 +125,11 @@ local function getPlayerCharms(player)
 		repeat
 			local charmId = result.getDataInt(resultId, "charm_id")
 			local raceId = result.getDataInt(resultId, "raceid")
-			charms.byRace[raceId] = charmId
+			local category = charmCategories[charmId]
+			if category then
+				charms.byRace[raceId] = charms.byRace[raceId] or {}
+				charms.byRace[raceId][category] = charmId
+			end
 			if charmId == CHARM.LOW_BLOW or charmId == CHARM.SAVAGE or charmId == CHARM.VAMPIRIC or charmId == CHARM.VOID_CALL then
 				charms.special[#charms.special + 1] = charmId
 			end
@@ -104,11 +141,15 @@ local function getPlayerCharms(player)
 	return charms
 end
 
-local function getCharmForRace(player, raceId)
+local function getCharmForRace(player, raceId, category)
 	if not player or raceId <= 0 then
 		return nil
 	end
-	return getPlayerCharms(player).byRace[raceId]
+	local entry = getPlayerCharms(player).byRace[raceId]
+	if type(entry) == "table" then
+		return category and entry[category] or entry[CHARM_CATEGORY.MAJOR] or entry[CHARM_CATEGORY.MINOR]
+	end
+	return entry
 end
 
 local function removeSpecials(player)
@@ -155,7 +196,7 @@ end
 
 function CustomBestiary.getToolCharmBonuses(player, corpseId)
 	local raceId = CustomBestiary.corpseRaceById[tonumber(corpseId) or 0] or 0
-	local charmId = getCharmForRace(player, raceId)
+	local charmId = getCharmForRace(player, raceId, CHARM_CATEGORY.MINOR)
 	return {
 		scavenge = charmId == CHARM.SCAVENGE,
 		gut = charmId == CHARM.GUT
@@ -254,39 +295,45 @@ function charmHealth.onHealthChange(creature, attacker, primaryDamage, primaryTy
 	if creature and creature:isMonster() then
 		local player = getPlayerFromCreature(attacker)
 		local raceId = getRaceId(creature)
-		local charmId = getCharmForRace(player, raceId)
-		if charmId and isDamage(primaryDamage, primaryType) then
-			local combatType = damageCharms[charmId]
+		if isDamage(primaryDamage, primaryType) then
+			local majorCharmId = getCharmForRace(player, raceId, CHARM_CATEGORY.MAJOR)
+			local combatType = damageCharms[majorCharmId]
 			if combatType and roll(5) then
 				local entry = CustomBestiary.getMonster(raceId)
 				local baseHealth = entry and entry.health or creature:getMaxHealth()
 				doCharmDamage(player, creature, combatType, math.max(1, math.floor(baseHealth * 0.05)), CONST_ME_DRAWBLOOD)
-			elseif charmId == CHARM.CRIPPLE and roll(6) then
+			elseif majorCharmId == CHARM.OVERPOWER and roll(5) then
+				doCharmDamage(player, creature, COMBAT_PHYSICALDAMAGE, math.max(1, math.floor(player:getMaxHealth() * 0.05)), CONST_ME_DRAWBLOOD)
+			elseif majorCharmId == CHARM.OVERFLUX and roll(5) then
+				doCharmDamage(player, creature, COMBAT_ENERGYDAMAGE, math.max(1, math.floor(player:getMaxMana() * 0.025)), CONST_ME_ENERGYHIT)
+			end
+
+			local minorCharmId = getCharmForRace(player, raceId, CHARM_CATEGORY.MINOR)
+			if minorCharmId == CHARM.CRIPPLE and roll(6) then
 				addParalyze(creature, 10000)
-			elseif charmId == CHARM.FATAL_HOLD and roll(30) and creature.blockFleeing then
+			elseif minorCharmId == CHARM.FATAL_HOLD and roll(30) and creature.blockFleeing then
 				creature:blockFleeing(30000)
 				creature:getPosition():sendMagicEffect(CONST_ME_WHITE_TIGERCLASH)
-			elseif charmId == CHARM.OVERPOWER and roll(5) then
-				doCharmDamage(player, creature, COMBAT_PHYSICALDAMAGE, math.max(1, math.floor(player:getMaxHealth() * 0.05)), CONST_ME_DRAWBLOOD)
-			elseif charmId == CHARM.OVERFLUX and roll(5) then
-				doCharmDamage(player, creature, COMBAT_ENERGYDAMAGE, math.max(1, math.floor(player:getMaxMana() * 0.025)), CONST_ME_ENERGYHIT)
 			end
 		end
 	elseif creature and creature:isPlayer() then
 		local raceId = getRaceId(attacker)
-		local charmId = getCharmForRace(creature, raceId)
-		if charmId and isDamage(primaryDamage, primaryType) then
-			if charmId == CHARM.DODGE and roll(5) then
+		if isDamage(primaryDamage, primaryType) then
+			local majorCharmId = getCharmForRace(creature, raceId, CHARM_CATEGORY.MAJOR)
+			if majorCharmId == CHARM.DODGE and roll(5) then
 				creature:getPosition():sendMagicEffect(CONST_ME_WHITE_EXPLOSIONHIT)
 				return 0, primaryType, 0, secondaryType
-			elseif charmId == CHARM.PARRY and roll(5) and attacker then
+			elseif majorCharmId == CHARM.PARRY and roll(5) and attacker then
 				local reflected = math.abs(primaryDamage) + math.abs(secondaryDamage)
 				doCharmDamage(creature, attacker, primaryType ~= COMBAT_NONE and primaryType or COMBAT_PHYSICALDAMAGE, reflected, CONST_ME_DRAWBLOOD)
-			elseif charmId == CHARM.ADRENALINE and roll(6) then
+			end
+
+			local minorCharmId = getCharmForRace(creature, raceId, CHARM_CATEGORY.MINOR)
+			if minorCharmId == CHARM.ADRENALINE and roll(6) then
 				addAdrenaline(creature)
-			elseif charmId == CHARM.NUMB and roll(6) then
+			elseif minorCharmId == CHARM.NUMB and roll(6) then
 				addParalyze(attacker, 10000)
-			elseif charmId == CHARM.CLEANSE and roll(6) then
+			elseif minorCharmId == CHARM.CLEANSE and roll(6) then
 				cleanse(creature)
 			end
 		end
@@ -299,7 +346,7 @@ charmHealth:register()
 local charmMana = CreatureEvent("CustomBestiaryCharmMana")
 function charmMana.onManaChange(creature, attacker, primaryDamage, primaryType, secondaryDamage, secondaryType, origin)
 	if creature and creature:isPlayer() and primaryType == COMBAT_MANADRAIN then
-		local charmId = getCharmForRace(creature, getRaceId(attacker))
+		local charmId = getCharmForRace(creature, getRaceId(attacker), CHARM_CATEGORY.MINOR)
 		if charmId == CHARM.VOID_INVERSION and primaryDamage < 0 and roll(20) then
 			creature:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 			return math.abs(primaryDamage), COMBAT_MANADRAIN, math.abs(secondaryDamage), secondaryType
@@ -315,7 +362,7 @@ function charmDeath.onDeath(creature, corpse, killer, mostDamageKiller, lastHitU
 	if not player or not creature or not creature:isMonster() then
 		return true
 	end
-	if getCharmForRace(player, getRaceId(creature)) == CHARM.CARNAGE and roll(10) then
+	if getCharmForRace(player, getRaceId(creature), CHARM_CATEGORY.MAJOR) == CHARM.CARNAGE and roll(10) then
 		local damage = math.max(1, math.floor(creature:getMaxHealth() * 0.15))
 		local spectators = Game.getSpectators(creature:getPosition(), false, false, 2, 2, 2, 2)
 		creature:getPosition():sendMagicEffect(CONST_ME_EXPLOSIONAREA)
@@ -332,7 +379,7 @@ charmDeath:register()
 
 local charmPrepareDeath = CreatureEvent("CustomBestiaryCharmPrepareDeath")
 function charmPrepareDeath.onPrepareDeath(player, killer)
-	if player and player:isPlayer() and getCharmForRace(player, getRaceId(killer)) == CHARM.BLESS and player.setTemporaryDeathLossReduction then
+	if player and player:isPlayer() and getCharmForRace(player, getRaceId(killer), CHARM_CATEGORY.MINOR) == CHARM.BLESS and player.setTemporaryDeathLossReduction then
 		player:setTemporaryDeathLossReduction(6)
 	end
 	return true
