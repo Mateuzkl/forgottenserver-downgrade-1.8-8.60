@@ -1111,6 +1111,79 @@ void Game::executeDeath(uint32_t creatureId)
 	}
 }
 
+std::shared_ptr<Container> Game::getBrowseFieldContainer(Tile* tile)
+{
+	auto tileRef = getTileSharedRef(tile);
+	if (!tileRef) {
+		return nullptr;
+	}
+
+	auto it = browseFields.find(tileRef);
+	if (it == browseFields.end()) {
+		return nullptr;
+	}
+
+	if (!it->second) {
+		browseFields.erase(it);
+		return nullptr;
+	}
+
+	return it->second;
+}
+
+std::shared_ptr<Tile> Game::getBrowseFieldTile(const Cylinder* cylinder)
+{
+	const Item* item = cylinder ? cylinder->getItem() : nullptr;
+	const Container* container = item ? item->getContainer() : nullptr;
+	if (!container || container->getID() != ITEM_BROWSEFIELD) {
+		return nullptr;
+	}
+
+	Cylinder* parent = container->getParent();
+	Tile* tile = parent ? parent->getTile() : nullptr;
+	auto tileRef = getTileSharedRef(tile);
+	if (!tileRef) {
+		return nullptr;
+	}
+
+	auto it = browseFields.find(tileRef);
+	if (it == browseFields.end() || it->second.get() != container) {
+		return nullptr;
+	}
+	return tileRef;
+}
+
+void Game::cleanupBrowseFields()
+{
+	auto isOpenByAnyPlayer = [this](const Container* container) {
+		for (const auto& onlinePlayer : getPlayers()) {
+			for (const auto& [cid, openContainer] : onlinePlayer->getOpenContainers()) {
+				(void)cid;
+				if (openContainer.container.lock().get() == container) {
+					return true;
+				}
+			}
+		}
+		return false;
+	};
+
+	for (auto it = browseFields.begin(); it != browseFields.end();) {
+		if (it->first.expired() || !it->second || !isOpenByAnyPlayer(it->second.get())) {
+			it = browseFields.erase(it);
+			continue;
+		}
+		++it;
+	}
+}
+
+void Game::releaseBrowseFieldContainer(const Container* container)
+{
+	if (!container || container->getID() != ITEM_BROWSEFIELD) {
+		return;
+	}
+	cleanupBrowseFields();
+}
+
 void Game::playerMoveThing(uint32_t playerId, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
                            const Position& toPos, uint8_t count)
 {
@@ -1733,6 +1806,11 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
                                    Creature* actor /* = nullptr*/, Item* tradeItem /* = nullptr*/,
                                    const Position* fromPos /*= nullptr*/, const Position* toPos /*= nullptr*/)
 {
+	std::shared_ptr<Tile> browseFieldTile = getBrowseFieldTile(fromCylinder);
+	if (browseFieldTile) {
+		fromCylinder = browseFieldTile.get();
+	}
+
 	Player* actorPlayer = actor ? actor->getPlayer() : nullptr;
 	const uint32_t sourceInstanceId = isCarriedByCreature(item->getParent()) ? 0 : item->getInstanceID();
 	if (item->getInstanceID() != sourceInstanceId) {
@@ -2166,6 +2244,11 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
+	std::shared_ptr<Tile> browseFieldTile = getBrowseFieldTile(cylinder);
+	if (browseFieldTile) {
+		cylinder = browseFieldTile.get();
+	}
+
 	if (count == -1) {
 		count = item->getItemCount();
 	}
@@ -2389,6 +2472,11 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 		return nullptr;
 	}
 
+	std::shared_ptr<Tile> browseFieldTile = getBrowseFieldTile(cylinder);
+	if (browseFieldTile) {
+		cylinder = browseFieldTile.get();
+	}
+
 	int32_t itemIndex = cylinder->getThingIndex(item);
 	if (itemIndex == -1) {
 		return item;
@@ -2563,6 +2651,11 @@ void Game::refreshItem(Item* item)
 	}
 
 	Cylinder* cylinder = item->getParent();
+	std::shared_ptr<Tile> browseFieldTile = getBrowseFieldTile(cylinder);
+	if (browseFieldTile) {
+		cylinder = browseFieldTile.get();
+	}
+
 	if (!cylinder || cylinder == VirtualCylinder::virtualCylinder || cylinder->getThingIndex(item) == -1) {
 		return;
 	}
@@ -3321,6 +3414,66 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 	player->maintainAttackFlow();
 }
 
+void Game::playerBrowseField(uint32_t playerId, const Position& pos)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player) {
+		return;
+	}
+
+	const Position& playerPos = player->getPosition();
+	if (playerPos.z != pos.z) {
+		player->sendCancelMessage(playerPos.z > pos.z ? RETURNVALUE_FIRSTGOUPSTAIRS : RETURNVALUE_FIRSTGODOWNSTAIRS);
+		return;
+	}
+
+	if (!playerPos.isInRange(pos, 1, 1)) {
+		std::vector<Direction> listDir;
+		if (player->getPathTo(pos, listDir, 0, 1, true, true)) {
+			g_dispatcher.addTask([this, playerId, listDir = std::move(listDir)]() {
+				playerAutoWalk(playerId, listDir);
+			});
+
+			auto task = createSchedulerTask(
+			    static_cast<uint32_t>(RANGE_BROWSE_FIELD_INTERVAL),
+			    ([this, playerId, pos]() { playerBrowseField(playerId, pos); }));
+			player->setNextWalkActionTask(std::move(task));
+		} else {
+			player->sendCancelMessage(RETURNVALUE_THEREISNOWAY);
+		}
+		return;
+	}
+
+	auto tileRef = getTileSharedRef(map.getTile(pos));
+	if (!tileRef) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	auto container = getBrowseFieldContainer(tileRef.get());
+	if (!container) {
+		container = Container::createBrowseField(tileRef);
+		if (!container) {
+			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+			return;
+		}
+		browseFields[tileRef] = container;
+	}
+
+	const uint8_t dummyContainerId = 0x0F - static_cast<uint8_t>((pos.x % 3) * 3 + (pos.y % 3));
+	if (Container* openContainer = player->getContainerByID(dummyContainerId)) {
+		player->onCloseContainer(openContainer);
+		player->closeContainer(dummyContainerId);
+		player->sendCloseContainer(dummyContainerId);
+		releaseBrowseFieldContainer(openContainer);
+		return;
+	}
+
+	player->addContainer(dummyContainerId, container.get());
+	player->sendContainer(dummyContainerId, container.get(), false, 0);
+}
+
 void Game::playerInspectItem(uint32_t playerId, const Position& pos)
 {
 	auto playerRef = getPlayerByID(playerId);
@@ -3781,8 +3934,10 @@ void Game::playerCloseContainer(uint32_t playerId, uint8_t cid)
 		return;
 	}
 
+	Container* container = player->getContainerByID(cid);
 	player->closeContainer(cid);
 	player->sendCloseContainer(cid);
+	releaseBrowseFieldContainer(container);
 }
 
 void Game::playerMoveUpContainer(uint32_t playerId, uint8_t cid)
@@ -7721,6 +7876,7 @@ void Game::removePlayer(Player* player)
 		players.erase(player->getID());
 		playersOnline.store(players.size(), std::memory_order_relaxed);
 	}
+	cleanupBrowseFields();
 }
 
 void Game::addNpc(Npc* npc)

@@ -47,6 +47,17 @@ void logSharedItemLockFailure(std::string_view context, const Item* item)
 	         static_cast<const void*>(item), item ? item->getID() : 0);
 }
 
+bool isBrowseFieldVisibleItem(const Item* item)
+{
+	if (!item || item->hasAttribute(ITEM_ATTRIBUTE_UNIQUEID)) {
+		return false;
+	}
+
+	return item->getContainer() || item->hasProperty(CONST_PROP_MOVEABLE) ||
+	       (Item::items[item->getID()].wrapableTo != 0 && !item->hasProperty(CONST_PROP_MOVEABLE) &&
+	        !item->hasProperty(CONST_PROP_BLOCKPATH));
+}
+
 } // namespace
 
 StaticTile real_nullptr_tile(0xFFFF, 0xFFFF, 0xFF);
@@ -453,6 +464,13 @@ Thing* Tile::getTopVisibleThing(const Creature* creature)
 
 void Tile::onAddTileItem(Item* item)
 {
+	if (isBrowseFieldVisibleItem(item)) {
+		if (auto browseField = g_game.getBrowseFieldContainer(this)) {
+			browseField->addItemBack(item);
+			item->setParent(this);
+		}
+	}
+
 	setTileFlags(item);
 
 	const Position& cylinderMapPos = getPosition();
@@ -478,6 +496,22 @@ void Tile::onAddTileItem(Item* item)
 
 void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newItem, const ItemType& newType)
 {
+	if (auto browseField = g_game.getBrowseFieldContainer(this)) {
+		if (isBrowseFieldVisibleItem(newItem)) {
+			const int32_t index = browseField->getThingIndex(oldItem);
+			if (index != -1) {
+				browseField->replaceThing(static_cast<uint32_t>(index), newItem);
+			} else {
+				browseField->addItemBack(newItem);
+			}
+			newItem->setParent(this);
+		} else if (isBrowseFieldVisibleItem(oldItem)) {
+			Cylinder* oldParent = oldItem->getParent();
+			browseField->removeThing(oldItem, oldItem->getItemCount());
+			oldItem->setParent(oldParent);
+		}
+	}
+
 	const Position& cylinderMapPos = getPosition();
 
 	SpectatorVec spectators;
@@ -499,6 +533,12 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 
 void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item)
 {
+	if (isBrowseFieldVisibleItem(item)) {
+		if (auto browseField = g_game.getBrowseFieldContainer(this)) {
+			browseField->removeThing(item, item->getItemCount());
+		}
+	}
+
 	resetTileFlags(item);
 
 	const Position& cylinderMapPos = getPosition();

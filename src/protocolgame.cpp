@@ -1492,6 +1492,10 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			parseUpdateContainer(msg);
 			break;
 
+		case 0xCB:
+			parseBrowseField(msg);
+			break;
+
 		case 0xCD:
 			if (isAstraClient) {
 				parseInspectionObject(msg);
@@ -2007,6 +2011,18 @@ void ProtocolGame::parseUseItem(NetworkMessage& msg)
 	uint8_t index = msg.getByte();
 	g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, [=, playerID = player->getID()]() {
 		g_game.playerUseItem(playerID, pos, stackpos, index, spriteId);
+	});
+}
+
+void ProtocolGame::parseBrowseField(NetworkMessage& msg)
+{
+	if (player->isAccountManager() || !requireUnreadBytes(msg, 5)) {
+		return;
+	}
+
+	const Position pos = msg.getPosition();
+	g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, [playerID = player->getID(), pos]() {
+		g_game.playerBrowseField(playerID, pos);
 	});
 }
 
@@ -4714,6 +4730,7 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::AdditionalSkills] = true;
 	features[GameFeature::ExtendedClientPing] = true;
 	features[GameFeature::CreatureIcons] = true;
+	features[GameFeature::BrowseField] = true;
 	if (isAstraClient) {
 		features[GameFeature::ExperienceBonus] = true;
 		features[GameFeature::PlayerFamiliars] = true;

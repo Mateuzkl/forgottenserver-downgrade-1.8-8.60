@@ -413,6 +413,7 @@ public:
 	void playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint16_t fromSpriteId,
 	                     const Position& toPos, uint8_t toStackPos, uint16_t toSpriteId);
 	void playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPos, uint8_t index, uint16_t spriteId);
+	void playerBrowseField(uint32_t playerId, const Position& pos);
 	void playerInspectItem(uint32_t playerId, const Position& pos);
 	void playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType);
 	void playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Position& pos, uint8_t stackPos,
@@ -691,6 +692,11 @@ public:
 		return tile ? tile->weak_from_this().lock() : nullptr;
 	}
 
+	std::shared_ptr<Container> getBrowseFieldContainer(Tile* tile);
+	std::shared_ptr<Tile> getBrowseFieldTile(const Cylinder* cylinder);
+	void releaseBrowseFieldContainer(const Container* container);
+	void cleanupBrowseFields();
+
 
 private:
 	StorageMap storageMap;
@@ -733,9 +739,11 @@ private:
 
 	using TradeItemMap = std::map<std::weak_ptr<Item>, uint32_t, std::owner_less<std::weak_ptr<Item>>>;
 	using LootHighlightEventMap = std::map<std::weak_ptr<Item>, uint32_t, std::owner_less<std::weak_ptr<Item>>>;
+	using BrowseFieldMap = std::map<std::weak_ptr<Tile>, std::shared_ptr<Container>, std::owner_less<std::weak_ptr<Tile>>>;
 
 	// list of items that are in trading state, mapped to the player
 	TradeItemMap tradeItems;
+	BrowseFieldMap browseFields;
 
 	std::unordered_map<uint32_t, std::weak_ptr<BedItem>> bedSleepersMap;
 

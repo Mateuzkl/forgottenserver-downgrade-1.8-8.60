@@ -40,6 +40,8 @@ public:
 	Container(uint16_t type, uint16_t size);
 	~Container();
 
+	static std::shared_ptr<Container> createBrowseField(const TilePtr& tile);
+
 	// non-copyable
 	Container(const Container&) = delete;
 	Container& operator=(const Container&) = delete;

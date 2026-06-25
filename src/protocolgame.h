@@ -115,6 +115,7 @@ private:
 	void parseUseItemEx(NetworkMessage& msg);
 	void parseUseWithCreature(NetworkMessage& msg);
 	void parseUseItem(NetworkMessage& msg);
+	void parseBrowseField(NetworkMessage& msg);
 	void parseCloseContainer(NetworkMessage& msg);
 	void parseUpArrowContainer(NetworkMessage& msg);
 	void parseUpdateContainer(NetworkMessage& msg);
