@@ -116,6 +116,7 @@ private:
 	void parseUseWithCreature(NetworkMessage& msg);
 	void parseUseItem(NetworkMessage& msg);
 	void parseBrowseField(NetworkMessage& msg);
+	void parseSeekInContainer(NetworkMessage& msg);
 	void parseCloseContainer(NetworkMessage& msg);
 	void parseUpArrowContainer(NetworkMessage& msg);
 	void parseUpdateContainer(NetworkMessage& msg);
@@ -246,8 +247,10 @@ private:
 
 	// containers
 	void sendAddContainerItem(uint8_t cid, const Item* item);
+	void sendAddContainerItem(uint8_t cid, uint16_t slot, const Item* item);
 	void sendUpdateContainerItem(uint8_t cid, uint16_t slot, const Item* item);
 	void sendRemoveContainerItem(uint8_t cid, uint16_t slot);
+	void sendRemoveContainerItem(uint8_t cid, uint16_t slot, const Item* lastItem);
 
 	void sendContainer(uint8_t cid, const Container* container, bool hasParent, uint16_t firstIndex);
 	void sendCloseContainer(uint8_t cid);
@@ -303,6 +306,7 @@ private:
 	// OTCv8
 	void sendFeatures();
 	bool shouldSendQuickLootFlags() const;
+	bool shouldSendContainerPagination() const;
 	bool shouldSendItemTierByte() const;
 	bool shouldSendThingUpgradeClassification() const;
 	bool shouldSendItemTierData() const;

@@ -3474,6 +3474,28 @@ void Game::playerBrowseField(uint32_t playerId, const Position& pos)
 	player->sendContainer(dummyContainerId, container.get(), false, 0);
 }
 
+void Game::playerSeekInContainer(uint32_t playerId, uint8_t containerId, uint16_t index)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player) {
+		return;
+	}
+
+	Container* container = player->getContainerByID(containerId);
+	if (!container || !container->hasPagination() || container->capacity() == 0) {
+		return;
+	}
+
+	if ((index % container->capacity()) != 0 || index >= container->size()) {
+		return;
+	}
+
+	const bool hasParent = dynamic_cast<const Container*>(container->getParent()) != nullptr;
+	player->setContainerIndex(containerId, index);
+	player->sendContainer(containerId, container, hasParent, index);
+}
+
 void Game::playerInspectItem(uint32_t playerId, const Position& pos)
 {
 	auto playerRef = getPlayerByID(playerId);
