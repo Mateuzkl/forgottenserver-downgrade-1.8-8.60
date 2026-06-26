@@ -43,12 +43,19 @@ int32_t getPerfectShotDamage(const Player* player, const Item* attackingItem, co
 
 	int32_t perfectShotDamage = getPerfectShotDamageForRange(attackingItem, distance);
 
-	for (const auto& equippedItem : player->getEquippedItems()) {
-		if (!equippedItem || equippedItem.get() == attackingItem) {
+	// Mirror the other per-item combat bonuses (absorb/reflect/boost): walk the equipped slots in
+	// place, skipping slots whose item abilities are disabled, instead of allocating a vector per shot.
+	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_AMMO; ++slot) {
+		if (!player->isItemAbilityEnabled(static_cast<slots_t>(slot))) {
 			continue;
 		}
 
-		perfectShotDamage += getPerfectShotDamageForRange(equippedItem.get(), distance);
+		const Item* equippedItem = player->getInventoryItem(static_cast<slots_t>(slot));
+		if (!equippedItem || equippedItem == attackingItem) {
+			continue;
+		}
+
+		perfectShotDamage += getPerfectShotDamageForRange(equippedItem, distance);
 	}
 
 	return perfectShotDamage;
@@ -65,9 +72,9 @@ void applyPerfectShotDamage(const Player* player, const Item* item, const Creatu
 		return;
 	}
 
-	if (damage.primary.value <= 0) {
+	if (damage.primary.value < 0) {
 		damage.primary.value -= perfectShotDamage;
-	} else {
+	} else if (damage.primary.value > 0) {
 		damage.primary.value += perfectShotDamage;
 	}
 }
