@@ -2174,9 +2174,7 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 					return false;
 				}
 
-				if (ignoreFieldDamage) {
-					setIgnoreFieldDamage(false);
-				}
+				ignoreFieldDamage = false;
 				// target dancing
 				if (auto ac = attackedCreature.lock(); ac && ac == followCreature.lock()) {
 					if (isFleeing()) {
