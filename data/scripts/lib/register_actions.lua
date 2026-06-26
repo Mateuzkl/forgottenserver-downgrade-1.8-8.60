@@ -195,7 +195,7 @@ function onUseShovel(player, item, fromPosition, target, toPosition, isHotkey)
 		toPosition.z = toPosition.z + 1
 		tile:relocateTo(toPosition)
 		player:addAchievementProgress("The Undertaker", 500)
-	elseif shovelHoles[target.itemid] then
+	elseif target and target:isItem() and shovelHoles[target.itemid] then
 		target:transform(shovelHoles[target.itemid])
 		target:decay()
 		player:addAchievementProgress("The Undertaker", 500)
