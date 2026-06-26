@@ -713,8 +713,13 @@ const Tile* Map::canWalkTo(const Creature& creature, const Position& pos) const
 {
 	Tile* tile = getTile(pos.x, pos.y, pos.z);
 	if (const Monster* monster = creature.getMonster()) {
-		if (const auto cachedWalkable = monster->getWalkCache(pos)) {
-			return *cachedWalkable ? tile : nullptr;
+		// A damaging magic field's walkability also depends on volatile monster state
+		// (isIgnoringFieldDamage + hasBeenAttacked) that the walk cache cannot track, so always
+		// re-query field tiles live instead of trusting a possibly-stale cached bit.
+		if (!tile || !tile->hasFlag(TILESTATE_MAGICFIELD)) {
+			if (const auto cachedWalkable = monster->getWalkCache(pos)) {
+				return *cachedWalkable ? tile : nullptr;
+			}
 		}
 	}
 

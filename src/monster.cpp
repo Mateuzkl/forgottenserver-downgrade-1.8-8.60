@@ -272,13 +272,10 @@ std::optional<bool> Monster::getWalkCache(const Position& pos) const
 		return std::nullopt;
 	}
 
-	if (!isWalkCacheLoaded) {
-		updateMapCache();
-	}
-
 	const Position& myPos = getPosition();
 	if (myPos.z != pos.z) {
-		return false;
+		// The cache only models same-floor offsets; let canWalkTo fall back to queryAdd.
+		return std::nullopt;
 	}
 
 	if (pos == myPos) {
@@ -289,6 +286,10 @@ std::optional<bool> Monster::getWalkCache(const Position& pos) const
 	const int32_t dy = pos.getOffsetY(myPos);
 	if (std::abs(dx) > maxWalkCacheWidth || std::abs(dy) > maxWalkCacheHeight) {
 		return std::nullopt;
+	}
+
+	if (!isWalkCacheLoaded) {
+		updateMapCache();
 	}
 
 	return localMapCache[getWalkCacheIndex(dx, dy)];

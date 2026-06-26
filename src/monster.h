@@ -266,17 +266,16 @@ private:
 	bool canWalkTo(Position pos, Direction direction) const;
 	static bool canAffectWalkCache(const ItemType& itemType)
 	{
-		return itemType.blockSolid || itemType.blockPathFind || itemType.isGroundTile() || itemType.isMagicField();
+		// Mirror the predicates Tile::queryAdd uses under FLAG_PATHFINDING: solid/pathfind/ground/magic-field,
+		// plus teleport and floor-change items (TILESTATE_TELEPORT/FLOORCHANGE make queryAdd return NOTPOSSIBLE).
+		return itemType.blockSolid || itemType.blockPathFind || itemType.isGroundTile() || itemType.isMagicField() ||
+		       itemType.isTeleport() || itemType.floorChange != 0;
 	}
 	bool usesWalkCache() const { return !randomStepping; }
 	void invalidateWalkCache() noexcept { isWalkCacheLoaded = false; }
-	void setIgnoreFieldDamage(bool value)
-	{
-		if (ignoreFieldDamage != value) {
-			ignoreFieldDamage = value;
-			invalidateWalkCache();
-		}
-	}
+	// Plain setter: the walk cache never trusts magic-field tiles (Map::canWalkTo re-queries them live),
+	// and no other cached tile depends on ignoreFieldDamage, so changing it must not invalidate the cache.
+	void setIgnoreFieldDamage(bool value) { ignoreFieldDamage = value; }
 	void updateMapCache() const;
 	void updateTileCache(const Tile* tile, int32_t dx, int32_t dy) const;
 	void updateTileCache(const Tile* tile, const Position& pos) const;
