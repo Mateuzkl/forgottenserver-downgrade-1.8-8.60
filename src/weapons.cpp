@@ -20,7 +20,7 @@ extern Vocations g_vocations;
 
 namespace {
 
-int32_t getPerfectShotDamageForRange(const Item* item, uint8_t range)
+int32_t getPerfectShotDamageForRange(const Item* item, int32_t range)
 {
 	if (!item || range == 0 || item->getPerfectShotRange() != range) {
 		return 0;
@@ -39,8 +39,7 @@ int32_t getPerfectShotDamage(const Player* player, const Item* attackingItem, co
 	const Position& targetPos = target->getPosition();
 	// Tibia uses Chebyshev distance for ranged attacks, so the perfect shot only triggers when the
 	// greater of the two axis distances matches the configured range exactly.
-	const auto distance = static_cast<uint8_t>(
-	    std::min<uint32_t>(std::max(playerPos.getDistanceX(targetPos), playerPos.getDistanceY(targetPos)), 255));
+	const int32_t distance = std::max(playerPos.getDistanceX(targetPos), playerPos.getDistanceY(targetPos));
 
 	int32_t perfectShotDamage = getPerfectShotDamageForRange(attackingItem, distance);
 

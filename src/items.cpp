@@ -1794,8 +1794,8 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 				}
 
 				case ITEM_PARSE_PERFECTSHOTRANGE: {
-					abilities.perfectShotRange = static_cast<uint8_t>(
-					    std::min<int32_t>(std::max<int32_t>(pugi::cast<int32_t>(valueAttribute.value()), 0), 255));
+					abilities.perfectShotRange =
+					    static_cast<uint8_t>(std::clamp<int32_t>(pugi::cast<int32_t>(valueAttribute.value()), 0, 255));
 					break;
 				}
 

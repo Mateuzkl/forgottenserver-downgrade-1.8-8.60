@@ -306,6 +306,7 @@ struct Abilities
 
 	std::array<Reflect, COMBAT_COUNT> reflect;
 
+	// perfect shot
 	int32_t perfectShotDamage = 0;
 	uint8_t perfectShotRange = 0;
 
