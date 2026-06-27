@@ -114,7 +114,7 @@ public:
 	uint8_t speechBubble = 0;
 
 	uint32_t walkTicks = 1500;
-	uint32_t baseSpeed = 100;
+	uint32_t baseSpeed = 55;
 
 	int32_t masterRadius = 2;
 	int32_t health = 100;

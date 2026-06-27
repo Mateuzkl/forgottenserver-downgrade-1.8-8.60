@@ -453,8 +453,8 @@ spawnMultiplier = 1
 -- WARNING: Setting minSpeed too low can cause desync and other client issues.
 -- NOTE: maxPlayerSpeed is the absolute fastest a player can travel, it is not recommended to change this.
 -- 5000 for GODs, 900 for players.
-playerSpeedPerLevel = 2
-playerMinSpeed = 120
+playerSpeedPerLevel = 1
+playerMinSpeed = 10
 playerMaxSpeed = 900
 maxGodSpeed = 5000
 

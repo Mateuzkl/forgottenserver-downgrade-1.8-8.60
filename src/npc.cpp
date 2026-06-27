@@ -460,7 +460,7 @@ void Npc::reset(bool reload)
 	m_focusCreature.reset();
 	speechBubble = 0;
 	moneyType = 0;
-	baseSpeed = 100;
+	baseSpeed = 55;
 
 	npcEventHandler.reset();
 
@@ -552,7 +552,7 @@ bool NpcType::loadFromXml()
 	if ((attr = npcNode.attribute("speed"))) {
 		baseSpeed = pugi::cast<uint32_t>(attr.value());
 	} else {
-		baseSpeed = 100;
+		baseSpeed = 55;
 	}
 
 	if ((attr = npcNode.attribute("pushable"))) {
