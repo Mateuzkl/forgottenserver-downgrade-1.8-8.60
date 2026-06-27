@@ -290,7 +290,7 @@ function TaskBoardProtocol.sendWeeklyTaskData(player, data)
 		out:addByte(clamp(dt.amount or 0, 0, 0xFF))
 		out:addByte(clamp(dt.required or 0, 0, 0xFF))
 		out:addU32(clamp(dt.available or 0, 0, 0xFFFFFFFF))
-		out:addByte(clamp(dt.grade or 0, 0, 0xFF))
+		out:addByte(clamp(dt.delivered or dt.claimed or 0, 0, 0xFF))
 	end
 
 	-- difficulty / reward data

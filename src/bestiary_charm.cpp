@@ -422,8 +422,11 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 			return { false, "Could not reset charms." };
 		}
 		if (!removeGold(player, resetCost)) {
-			restoreCharmStatesAndResources(playerGuid, states, charmPoints, minorEchoes, maxMinorEchoes);
+			const bool restored = restoreCharmStatesAndResources(playerGuid, states, charmPoints, minorEchoes, maxMinorEchoes);
 			invalidatePlayer(playerGuid);
+			if (!restored) {
+				return { false, "Could not charge gold or restore charm state." };
+			}
 			return { false, "Could not charge gold for resetting charms." };
 		}
 		invalidatePlayer(playerGuid);
@@ -495,8 +498,11 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 			return { false, "Could not remove this charm." };
 		}
 		if (!removeGold(player, removeCost)) {
-			restoreCharmStates(playerGuid, states);
+			const bool restored = restoreCharmStates(playerGuid, states);
 			invalidatePlayer(playerGuid);
+			if (!restored) {
+				return { false, "Could not charge gold or restore charm state." };
+			}
 			return { false, "Could not charge gold for removing this charm." };
 		}
 		invalidatePlayer(playerGuid);
