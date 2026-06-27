@@ -5,6 +5,7 @@
 
 #include "combat.h"
 
+#include "bestiary_charm.h"
 #include "configmanager.h"
 #include "events.h"
 #include "game.h"
@@ -20,6 +21,11 @@ extern Game g_game;
 
 namespace {
 
+constexpr uint8_t CHARM_LOW_BLOW = 15;
+constexpr uint8_t CHARM_VAMPIRIC = 17;
+constexpr uint8_t CHARM_VOID_CALL = 18;
+constexpr uint8_t CHARM_SAVAGE = 19;
+
 std::shared_ptr<Creature> lockCreature(Creature* creature)
 {
 	return creature ? creature->weak_from_this().lock() : nullptr;
@@ -28,6 +34,25 @@ std::shared_ptr<Creature> lockCreature(Creature* creature)
 std::shared_ptr<Monster> lockMonster(Creature* creature)
 {
 	return std::dynamic_pointer_cast<Monster>(lockCreature(creature));
+}
+
+uint16_t getMonsterRaceId(const Monster* monster)
+{
+	if (!monster) {
+		return 0;
+	}
+
+	const MonsterType* monsterType = monster->getMonsterType();
+	return monsterType ? static_cast<uint16_t>(monsterType->raceId) : 0;
+}
+
+int32_t getCharmBonusBasisPoints(const Player& player, uint16_t raceId, uint8_t charmId)
+{
+	const uint8_t tier = g_bestiaryCharmSystem.getAssignedCharmTier(player, charmId, raceId);
+	if (tier == 0) {
+		return 0;
+	}
+	return static_cast<int32_t>(std::lround(g_bestiaryCharmSystem.getCharmBonus(charmId, tier) * 100.0));
 }
 
 bool isPlayerControlledCreature(const Creature* creature)
@@ -1122,20 +1147,31 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 					casterPlayer->weaponProficiency().applyElementCritical(damage);
 				}
 
-				int32_t chance = std::clamp<int32_t>(
+				const uint16_t targetRaceId = target ? getMonsterRaceId(target->getMonster()) : 0;
+				const int32_t lowBlowBonus = targetRaceId != 0 ? getCharmBonusBasisPoints(*casterPlayer, targetRaceId, CHARM_LOW_BLOW) : 0;
+				const int32_t savageBonus = targetRaceId != 0 ? getCharmBonusBasisPoints(*casterPlayer, targetRaceId, CHARM_SAVAGE) : 0;
+				const int32_t baseChance = std::clamp<int32_t>(
 				    static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE)) +
 				        damage.criticalChance,
 				    0, 10000);
+				const int32_t chance = std::clamp<int32_t>(baseChance + lowBlowBonus, 0, 10000);
 				int32_t skill = std::max<int32_t>(
 				    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT)) +
-				           damage.criticalDamage);
+				           damage.criticalDamage + savageBonus);
 				if (skill == 0 && chance > 0) {
 					skill = 5000;
 				}
-				if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
+				const int32_t roll = uniform_random(1, 10000);
+				if (chance > 0 && skill > 0 && roll <= chance) {
 					damage.primary.value += std::round(damage.primary.value * (skill / 10000.));
 					damage.secondary.value += std::round(damage.secondary.value * (skill / 10000.));
 					damage.critical = true;
+					if (lowBlowBonus > 0 && roll > baseChance) {
+						casterPlayer->sendCharmActivated(CHARM_LOW_BLOW);
+					}
+					if (savageBonus > 0) {
+						casterPlayer->sendCharmActivated(CHARM_SAVAGE);
+					}
 				}
 			}
 
@@ -1293,12 +1329,17 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			leechCombat.leeched = true;
 
 			int32_t totalDamage = std::abs(damage.primary.value + damage.secondary.value);
+			const uint16_t targetRaceId = target ? getMonsterRaceId(target->getMonster()) : 0;
 
 			if (casterPlayer->getHealth() < casterPlayer->getMaxHealth()) {
 				uint16_t chance = casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHCHANCE);
 				int32_t skill = std::max<int32_t>(
 				    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT)) +
 				           damage.lifeLeech);
+				const int32_t vampiricBonus = targetRaceId != 0 ? getCharmBonusBasisPoints(*casterPlayer, targetRaceId, CHARM_VAMPIRIC) : 0;
+				if (skill > 0 && vampiricBonus > 0) {
+					skill += vampiricBonus;
+				}
 				leechCombat.primary.type = COMBAT_HEALING;
 
 				if (skill > 0 && chance == 0) { chance = 10000; }
@@ -1306,6 +1347,9 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 					leechCombat.primary.value = std::round(totalDamage * (skill / 10000.));
 					g_game.combatChangeHealth(nullptr, casterPlayer, leechCombat);
 					casterPlayer->sendMagicEffect(casterPlayer->getPosition(), CONST_ME_MAGIC_RED);
+					if (vampiricBonus > 0) {
+						casterPlayer->sendCharmActivated(CHARM_VAMPIRIC);
+					}
 				}
 			}
 
@@ -1314,12 +1358,19 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 				int32_t skill = std::max<int32_t>(
 				    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT)) +
 				           damage.manaLeech);
+				const int32_t voidCallBonus = targetRaceId != 0 ? getCharmBonusBasisPoints(*casterPlayer, targetRaceId, CHARM_VOID_CALL) : 0;
+				if (skill > 0 && voidCallBonus > 0) {
+					skill += voidCallBonus;
+				}
 
 				if (skill > 0 && chance == 0) { chance = 10000; }
 				if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
 					leechCombat.primary.value = std::round(totalDamage * (skill / 10000.));
 					g_game.combatChangeMana(nullptr, casterPlayer, leechCombat);
 					casterPlayer->sendMagicEffect(casterPlayer->getPosition(), CONST_ME_MAGIC_BLUE);
+					if (voidCallBonus > 0) {
+						casterPlayer->sendCharmActivated(CHARM_VOID_CALL);
+					}
 				}
 			}
 		}
@@ -1462,9 +1513,44 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			}
 		}
 
+		uint16_t targetRaceId = 0;
+		if (casterPlayer) {
+			if (const auto targetMonster = std::dynamic_pointer_cast<Monster>(creature)) {
+				targetRaceId = getMonsterRaceId(targetMonster.get());
+			}
+		}
+
+		int32_t targetCriticalPrimary = criticalPrimary;
+		int32_t targetCriticalSecondary = criticalSecondary;
+		if (casterPlayer && targetRaceId != 0 && !damageCopy.critical &&
+		    damageCopy.primary.type != COMBAT_HEALING && damage.origin != ORIGIN_CONDITION) {
+			const int32_t lowBlowBonus = getCharmBonusBasisPoints(*casterPlayer, targetRaceId, CHARM_LOW_BLOW);
+			int32_t skill = std::max<int32_t>(
+			    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT)) +
+			           damage.criticalDamage);
+			if (skill == 0 && lowBlowBonus > 0) {
+				skill = 5000;
+			}
+			if (lowBlowBonus > 0 && skill > 0 && uniform_random(1, 10000) <= lowBlowBonus) {
+				targetCriticalPrimary = std::round(damageCopy.primary.value * (skill / 10000.));
+				targetCriticalSecondary = std::round(damageCopy.secondary.value * (skill / 10000.));
+				damageCopy.critical = true;
+				casterPlayer->sendCharmActivated(CHARM_LOW_BLOW);
+			}
+		}
+
+		if (casterPlayer && targetRaceId != 0 && damageCopy.critical) {
+			const int32_t savageBonus = getCharmBonusBasisPoints(*casterPlayer, targetRaceId, CHARM_SAVAGE);
+			if (savageBonus > 0) {
+				targetCriticalPrimary += std::round(damageCopy.primary.value * (savageBonus / 10000.));
+				targetCriticalSecondary += std::round(damageCopy.secondary.value * (savageBonus / 10000.));
+				casterPlayer->sendCharmActivated(CHARM_SAVAGE);
+			}
+		}
+
 		if (damageCopy.critical) {
-			damageCopy.primary.value += playerCombatReduced ? criticalPrimary / 2 : criticalPrimary;
-			damageCopy.secondary.value += playerCombatReduced ? criticalSecondary / 2 : criticalSecondary;
+			damageCopy.primary.value += playerCombatReduced ? targetCriticalPrimary / 2 : targetCriticalPrimary;
+			damageCopy.secondary.value += playerCombatReduced ? targetCriticalSecondary / 2 : targetCriticalSecondary;
 			SpectatorVec critSpectators;
 			g_game.map.getSpectators(critSpectators, creature->getPosition(), true, true);
 			InstanceUtils::sendMagicEffectToInstance(
@@ -1530,6 +1616,10 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 					int32_t skill = std::max<int32_t>(
 					    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT)) +
 					           damage.lifeLeech);
+					const int32_t vampiricBonus = targetRaceId != 0 ? getCharmBonusBasisPoints(*casterPlayer, targetRaceId, CHARM_VAMPIRIC) : 0;
+					if (skill > 0 && vampiricBonus > 0) {
+						skill += vampiricBonus;
+					}
 
 					if (skill > 0 && chance == 0) { chance = 10000; }
 					if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
@@ -1538,6 +1628,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 						    targetsCount);
 						g_game.combatChangeHealth(nullptr, casterPlayer, leechCombat);
 						casterPlayer->sendMagicEffect(casterPlayer->getPosition(), CONST_ME_MAGIC_RED);
+						if (vampiricBonus > 0) {
+							casterPlayer->sendCharmActivated(CHARM_VAMPIRIC);
+						}
 					}
 				}
 
@@ -1546,6 +1639,10 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 					int32_t skill = std::max<int32_t>(
 					    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT)) +
 					           damage.manaLeech);
+					const int32_t voidCallBonus = targetRaceId != 0 ? getCharmBonusBasisPoints(*casterPlayer, targetRaceId, CHARM_VOID_CALL) : 0;
+					if (skill > 0 && voidCallBonus > 0) {
+						skill += voidCallBonus;
+					}
 
 					if (skill > 0 && chance == 0) { chance = 10000; }
 					if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
@@ -1554,6 +1651,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 						    targetsCount);
 						g_game.combatChangeMana(nullptr, casterPlayer, leechCombat);
 						casterPlayer->sendMagicEffect(casterPlayer->getPosition(), CONST_ME_MAGIC_BLUE);
+						if (voidCallBonus > 0) {
+							casterPlayer->sendCharmActivated(CHARM_VOID_CALL);
+						}
 					}
 				}
 			}

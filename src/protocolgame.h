@@ -260,6 +260,7 @@ private:
 	void sendInventoryItem(slots_t slot, const Item* item);
 	void sendPlayerInventory();
 	void sendImbuementDurations(slots_t updatedSlot = CONST_SLOT_WHEREEVER, const Item* updatedItem = nullptr);
+	void sendCharmActivated(uint8_t charmId);
 
 	// messages
 	void sendModalWindow(const ModalWindow& modalWindow);

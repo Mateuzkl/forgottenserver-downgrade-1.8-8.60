@@ -1208,18 +1208,30 @@ int luaGameSetWorldTime(lua_State* L)
 
 int luaGameRegisterBestiaryMonsterData(lua_State* L)
 {
-	// Game.registerBestiaryMonsterData(raceId, name, toKill, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
+	// Game.registerBestiaryMonsterData(raceId, name, toKill, secondUnlock, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
 	BestiaryCreatureInfo info;
 	info.raceId = getInteger<uint16_t>(L, 1);
 	info.name = getString(L, 2);
 	info.toKill = getInteger<uint32_t>(L, 3);
-	info.charmPoints = getInteger<uint16_t>(L, 4);
-	info.lookType = getInteger<uint16_t>(L, 5, 0);
-	info.lookHead = getInteger<uint8_t>(L, 6, 0);
-	info.lookBody = getInteger<uint8_t>(L, 7, 0);
-	info.lookLegs = getInteger<uint8_t>(L, 8, 0);
-	info.lookFeet = getInteger<uint8_t>(L, 9, 0);
-	info.lookAddons = getInteger<uint8_t>(L, 10, 0);
+	if (lua_gettop(L) >= 11) {
+		info.secondUnlock = getInteger<uint32_t>(L, 4);
+		info.charmPoints = getInteger<uint16_t>(L, 5);
+		info.lookType = getInteger<uint16_t>(L, 6, 0);
+		info.lookHead = getInteger<uint8_t>(L, 7, 0);
+		info.lookBody = getInteger<uint8_t>(L, 8, 0);
+		info.lookLegs = getInteger<uint8_t>(L, 9, 0);
+		info.lookFeet = getInteger<uint8_t>(L, 10, 0);
+		info.lookAddons = getInteger<uint8_t>(L, 11, 0);
+	} else {
+		info.secondUnlock = info.toKill;
+		info.charmPoints = getInteger<uint16_t>(L, 4);
+		info.lookType = getInteger<uint16_t>(L, 5, 0);
+		info.lookHead = getInteger<uint8_t>(L, 6, 0);
+		info.lookBody = getInteger<uint8_t>(L, 7, 0);
+		info.lookLegs = getInteger<uint8_t>(L, 8, 0);
+		info.lookFeet = getInteger<uint8_t>(L, 9, 0);
+		info.lookAddons = getInteger<uint8_t>(L, 10, 0);
+	}
 
 	g_bestiaryCharmSystem.registerMonster(info);
 	pushBoolean(L, true);

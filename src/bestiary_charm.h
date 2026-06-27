@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 class Player;
 
@@ -23,6 +24,7 @@ struct BestiaryCreatureInfo
 	uint16_t raceId = 0;
 	std::string name;
 	uint32_t toKill = 0;
+	uint32_t secondUnlock = 0;
 	uint16_t charmPoints = 0;
 	uint16_t lookType = 0;
 	uint8_t lookHead = 0;
@@ -46,25 +48,35 @@ public:
 
 	[[nodiscard]] bool isMajorCharm(uint8_t charmId) const;
 	[[nodiscard]] bool isMinorCharm(uint8_t charmId) const;
+	[[nodiscard]] uint8_t getAssignedCharmTier(const Player& player, uint8_t charmId, uint16_t raceId) const;
+	[[nodiscard]] double getCharmBonus(uint8_t charmId, uint8_t tier) const;
 
 private:
 	struct CharmState
 	{
 		bool unlocked = false;
+		uint8_t tier = 0;
 		uint16_t raceId = 0;
 	};
 
 	using CharmStateMap = std::unordered_map<uint8_t, CharmState>;
+	using PlayerCharmStateCache = std::unordered_map<uint32_t, CharmStateMap>;
 
 	[[nodiscard]] CharmStateMap loadCharmStates(uint32_t playerGuid) const;
+	[[nodiscard]] const CharmStateMap& getCachedCharmStates(uint32_t playerGuid) const;
 	[[nodiscard]] uint32_t getKillCount(uint32_t playerGuid, uint16_t raceId) const;
 	[[nodiscard]] uint32_t getCharmPoints(uint32_t playerGuid) const;
 	[[nodiscard]] bool setCharmPoints(uint32_t playerGuid, uint32_t points) const;
+	[[nodiscard]] std::pair<uint32_t, uint32_t> getMinorCharmEchoes(uint32_t playerGuid) const;
+	[[nodiscard]] bool setMinorCharmEchoes(uint32_t playerGuid, uint32_t echoes, uint32_t maxEchoes) const;
 	[[nodiscard]] bool removeGold(Player& player, uint64_t amount) const;
 	[[nodiscard]] uint8_t getAssignedCharmCount(const CharmStateMap& states) const;
+	[[nodiscard]] uint32_t getSpentMajorCharmPoints(const CharmStateMap& states) const;
 	[[nodiscard]] std::optional<std::reference_wrapper<const BestiaryCreatureInfo>> getMonster(uint16_t raceId) const;
+	void invalidatePlayer(uint32_t playerGuid) const;
 
 	std::unordered_map<uint16_t, BestiaryCreatureInfo> monstersByRaceId;
+	mutable PlayerCharmStateCache charmStateCache;
 };
 
 extern BestiaryCharmSystem g_bestiaryCharmSystem;

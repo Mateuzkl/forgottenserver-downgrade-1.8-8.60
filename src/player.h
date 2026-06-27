@@ -1239,6 +1239,12 @@ public:
 			client->sendMagicEffect(pos, type);
 		}
 	}
+	void sendCharmActivated(uint8_t charmId) const
+	{
+		if (client) {
+			client->sendCharmActivated(charmId);
+		}
+	}
 	void sendPing();
 	void sendStats();
 	void sendSkills() const

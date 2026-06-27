@@ -990,6 +990,18 @@ class ProtocolSpectator {
                 o->sendImbuementDurations();
         }
 
+        void sendCharmActivated(uint8_t charmId) {
+            auto o = owner.lock();
+            if (o)
+                o->sendCharmActivated(charmId);
+
+            for (auto &it : spectators)
+                it->sendCharmActivated(charmId);
+
+            for (auto &spy : spyClients_)
+                spy->sendCharmActivated(charmId);
+        }
+
         void parseLookAt(NetworkMessage &msg) {
 		    auto o = owner.lock();
 		    if (!o) {

@@ -86,29 +86,43 @@ local function getCharmToolBonuses(player, target)
 	if CustomBestiary and CustomBestiary.getToolCharmBonuses and target then
 		return CustomBestiary.getToolCharmBonuses(player, target.itemid)
 	end
-	return { scavenge = false, gut = false }
+	return { scavenge = 0, scavengeCharmId = 0, gut = 0, gutCharmId = 0 }
+end
+
+local function notifyCharmActivated(player, charmId)
+	if not player or not charmId or charmId <= 0 then
+		return
+	end
+	if MiscAnalyzer and MiscAnalyzer.sendCharm and MiscAnalyzer.sendCharm(player, charmId) then
+		return
+	end
+	if player.sendCharmActivated then
+		player:sendCharmActivated(charmId)
+	end
 end
 
 local function getEffectiveChance(chance, bonuses)
 	chance = tonumber(chance) or 0
-	if bonuses.scavenge then
-		chance = math.floor(chance * 1.6)
+	local scavengeBonus = tonumber(bonuses.scavenge) or 0
+	if scavengeBonus > 0 then
+		chance = math.floor(chance * (1 + scavengeBonus / 100))
 	end
 	return math.min(chance, 100000)
 end
 
 local function getProductAmount(amount, bonuses)
 	amount = amount or 1
-	if not bonuses.gut then
-		return amount
+	local gutBonus = tonumber(bonuses.gut) or 0
+	if gutBonus <= 0 then
+		return amount, 0
 	end
 
-	local extra = amount * 0.06
+	local extra = amount * gutBonus / 100
 	local extraAmount = math.floor(extra)
 	if math.random() < (extra - extraAmount) then
 		extraAmount = extraAmount + 1
 	end
-	return amount + extraAmount
+	return amount + extraAmount, extraAmount
 end
 
 function skinning.onUse(player, item, fromPosition, target, toPosition, isHotkey)
@@ -143,6 +157,7 @@ function skinning.onUse(player, item, fromPosition, target, toPosition, isHotkey
 					effect = CONST_ME_HITAREA
 					added = true
 				end
+				notifyCharmActivated(player, charmBonuses.scavengeCharmId)
 				break
 			end
 		end
@@ -160,6 +175,7 @@ function skinning.onUse(player, item, fromPosition, target, toPosition, isHotkey
 				player:addAchievement("Ice Sculptor")
 				player:addAchievementProgress("Cold as Ice", 10)
 			end
+			notifyCharmActivated(player, charmBonuses.scavengeCharmId)
 			target:transform(skin.newItem, 1)
 			effect = CONST_ME_HITAREA
 		else
@@ -168,7 +184,12 @@ function skinning.onUse(player, item, fromPosition, target, toPosition, isHotkey
 			else
 				player:addAchievementProgress("Skin-Deep", 500)
 			end
-			player:addItem(skin.newItem, getProductAmount(skin.amount or 1, charmBonuses))
+			local amount, extraAmount = getProductAmount(skin.amount or 1, charmBonuses)
+			notifyCharmActivated(player, charmBonuses.scavengeCharmId)
+			if extraAmount > 0 then
+				notifyCharmActivated(player, charmBonuses.gutCharmId)
+			end
+			player:addItem(skin.newItem, amount)
 		end
 	else
 		if table.contains({7441, 7442, 7444, 7445}, target.itemid) then

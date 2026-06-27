@@ -6,12 +6,12 @@ local OPCODE_CHARM_ACTIVATED = 0x2D
 local OPCODE_IMBUEMENT_ACTIVATED = 0x30
 local OPCODE_SPECIAL_SKILL_ACTIVATED = 0x31
 
-local function isOTC(player)
-	return player and player:isUsingOtClient()
+local function isAstra(player)
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function sendOpcode(player, opcode)
-	if not player or not isOTC(player) then return false end
+	if not player or not isAstra(player) then return false end
 	local out = NetworkMessage(player)
 	out:addByte(opcode)
 	return out

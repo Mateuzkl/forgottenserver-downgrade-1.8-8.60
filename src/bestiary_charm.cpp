@@ -23,35 +23,36 @@ struct BestiaryCharmDefinition
 {
 	uint8_t id = 0;
 	BestiaryCharmCategory category = BestiaryCharmCategory::Major;
-	uint16_t price = 0;
+	std::array<uint16_t, 3> prices {};
+	std::array<double, 3> bonuses {};
 };
 
 constexpr std::array<BestiaryCharmDefinition, 25> charmDefinitions = {{
-	{0, BestiaryCharmCategory::Major, 240},
-	{1, BestiaryCharmCategory::Major, 400},
-	{2, BestiaryCharmCategory::Major, 240},
-	{3, BestiaryCharmCategory::Major, 320},
-	{4, BestiaryCharmCategory::Major, 320},
-	{5, BestiaryCharmCategory::Major, 360},
-	{6, BestiaryCharmCategory::Minor, 100},
-	{7, BestiaryCharmCategory::Major, 400},
-	{8, BestiaryCharmCategory::Major, 240},
-	{9, BestiaryCharmCategory::Minor, 100},
-	{10, BestiaryCharmCategory::Minor, 100},
-	{11, BestiaryCharmCategory::Minor, 100},
-	{12, BestiaryCharmCategory::Minor, 100},
-	{13, BestiaryCharmCategory::Minor, 100},
-	{14, BestiaryCharmCategory::Minor, 100},
-	{15, BestiaryCharmCategory::Major, 800},
-	{16, BestiaryCharmCategory::Major, 600},
-	{17, BestiaryCharmCategory::Minor, 100},
-	{18, BestiaryCharmCategory::Minor, 100},
-	{19, BestiaryCharmCategory::Major, 800},
-	{20, BestiaryCharmCategory::Minor, 100},
-	{21, BestiaryCharmCategory::Minor, 100},
-	{22, BestiaryCharmCategory::Major, 600},
-	{23, BestiaryCharmCategory::Major, 600},
-	{24, BestiaryCharmCategory::Major, 600},
+	{0, BestiaryCharmCategory::Major, {240, 360, 1200}, {5, 10, 11}},
+	{1, BestiaryCharmCategory::Major, {400, 600, 2000}, {5, 10, 11}},
+	{2, BestiaryCharmCategory::Major, {240, 360, 1200}, {5, 10, 11}},
+	{3, BestiaryCharmCategory::Major, {320, 480, 1600}, {5, 10, 11}},
+	{4, BestiaryCharmCategory::Major, {320, 480, 1600}, {5, 10, 11}},
+	{5, BestiaryCharmCategory::Major, {360, 540, 1800}, {5, 10, 11}},
+	{6, BestiaryCharmCategory::Minor, {100, 150, 225}, {6, 9, 12}},
+	{7, BestiaryCharmCategory::Major, {400, 600, 2000}, {5, 10, 11}},
+	{8, BestiaryCharmCategory::Major, {240, 360, 1200}, {5, 10, 11}},
+	{9, BestiaryCharmCategory::Minor, {100, 150, 225}, {6, 9, 12}},
+	{10, BestiaryCharmCategory::Minor, {100, 150, 225}, {6, 9, 12}},
+	{11, BestiaryCharmCategory::Minor, {100, 150, 225}, {6, 9, 12}},
+	{12, BestiaryCharmCategory::Minor, {100, 150, 225}, {6, 9, 12}},
+	{13, BestiaryCharmCategory::Minor, {100, 150, 225}, {60, 90, 120}},
+	{14, BestiaryCharmCategory::Minor, {100, 150, 225}, {6, 9, 12}},
+	{15, BestiaryCharmCategory::Major, {800, 1200, 4000}, {4, 8, 9}},
+	{16, BestiaryCharmCategory::Major, {600, 900, 3000}, {5, 10, 11}},
+	{17, BestiaryCharmCategory::Minor, {100, 150, 225}, {1.6, 2.4, 3.2}},
+	{18, BestiaryCharmCategory::Minor, {100, 150, 225}, {0.8, 1.2, 1.6}},
+	{19, BestiaryCharmCategory::Major, {800, 1200, 4000}, {20, 40, 44}},
+	{20, BestiaryCharmCategory::Minor, {100, 150, 225}, {30, 45, 60}},
+	{21, BestiaryCharmCategory::Minor, {100, 150, 225}, {20, 30, 40}},
+	{22, BestiaryCharmCategory::Major, {600, 900, 3000}, {10, 20, 22}},
+	{23, BestiaryCharmCategory::Major, {600, 900, 3000}, {5, 10, 11}},
+	{24, BestiaryCharmCategory::Major, {600, 900, 3000}, {5, 10, 11}},
 }};
 
 std::optional<BestiaryCharmDefinition> getCharmDefinition(uint8_t charmId)
@@ -74,6 +75,29 @@ bool sameCategory(uint8_t leftCharmId, uint8_t rightCharmId)
 	return left && right && left->category == right->category;
 }
 
+uint16_t getCharmPriceForTier(const BestiaryCharmDefinition& charm, uint8_t tier)
+{
+	if (tier >= charm.prices.size()) {
+		return 0;
+	}
+	return charm.prices[tier];
+}
+
+uint32_t getSpentCharmPointsForTier(const BestiaryCharmDefinition& charm, uint8_t tier)
+{
+	uint32_t spent = 0;
+	const uint8_t cappedTier = std::min<uint8_t>(tier, static_cast<uint8_t>(charm.prices.size()));
+	for (uint8_t index = 0; index < cappedTier; ++index) {
+		spent += charm.prices[index];
+	}
+	return spent;
+}
+
+uint32_t getMinorEchoRewardForMajorTier(uint8_t tier)
+{
+	return 25 * tier * tier + 25 * tier + 50;
+}
+
 } // namespace
 
 BestiaryCharmSystem g_bestiaryCharmSystem;
@@ -86,6 +110,9 @@ void BestiaryCharmSystem::registerMonster(BestiaryCreatureInfo info)
 
 	if (info.name.empty()) {
 		info.name = "?";
+	}
+	if (info.secondUnlock == 0 || info.secondUnlock > info.toKill) {
+		info.secondUnlock = info.toKill;
 	}
 
 	monstersByRaceId[info.raceId] = std::move(info);
@@ -112,6 +139,29 @@ bool BestiaryCharmSystem::isMinorCharm(uint8_t charmId) const
 	return definition && definition->category == BestiaryCharmCategory::Minor;
 }
 
+uint8_t BestiaryCharmSystem::getAssignedCharmTier(const Player& player, uint8_t charmId, uint16_t raceId) const
+{
+	if (raceId == 0 || !getCharmDefinition(charmId)) {
+		return 0;
+	}
+
+	const auto& states = getCachedCharmStates(player.getGUID());
+	const auto it = states.find(charmId);
+	if (it == states.end() || it->second.tier == 0 || it->second.raceId != raceId) {
+		return 0;
+	}
+	return it->second.tier;
+}
+
+double BestiaryCharmSystem::getCharmBonus(uint8_t charmId, uint8_t tier) const
+{
+	const auto definition = getCharmDefinition(charmId);
+	if (!definition || tier == 0 || tier > definition->bonuses.size()) {
+		return 0.0;
+	}
+	return definition->bonuses[tier - 1];
+}
+
 BestiaryCharmSystem::CharmStateMap BestiaryCharmSystem::loadCharmStates(uint32_t playerGuid) const
 {
 	CharmStateMap states;
@@ -124,13 +174,29 @@ BestiaryCharmSystem::CharmStateMap BestiaryCharmSystem::loadCharmStates(uint32_t
 
 	do {
 		const uint8_t charmId = result->getNumber<uint8_t>("charm_id");
+		const uint8_t tier = std::min<uint8_t>(result->getNumber<uint16_t>("unlocked"), 3);
 		CharmState state;
-		state.unlocked = result->getNumber<uint16_t>("unlocked") != 0;
+		state.tier = tier;
+		state.unlocked = tier > 0;
 		state.raceId = result->getNumber<uint16_t>("raceid");
 		states[charmId] = state;
 	} while (result->next());
 
 	return states;
+}
+
+const BestiaryCharmSystem::CharmStateMap& BestiaryCharmSystem::getCachedCharmStates(uint32_t playerGuid) const
+{
+	const auto [it, inserted] = charmStateCache.try_emplace(playerGuid);
+	if (inserted) {
+		it->second = loadCharmStates(playerGuid);
+	}
+	return it->second;
+}
+
+void BestiaryCharmSystem::invalidatePlayer(uint32_t playerGuid) const
+{
+	charmStateCache.erase(playerGuid);
 }
 
 uint32_t BestiaryCharmSystem::getKillCount(uint32_t playerGuid, uint16_t raceId) const
@@ -152,6 +218,28 @@ bool BestiaryCharmSystem::setCharmPoints(uint32_t playerGuid, uint32_t points) c
 {
 	return Database::getInstance().executeQuery(
 	    fmt::format("UPDATE `players` SET `charmpoints` = {:d} WHERE `id` = {:d}", points, playerGuid));
+}
+
+std::pair<uint32_t, uint32_t> BestiaryCharmSystem::getMinorCharmEchoes(uint32_t playerGuid) const
+{
+	Database& db = Database::getInstance();
+	db.executeQuery(fmt::format("INSERT IGNORE INTO `player_bestiary_resources` (`player_id`) VALUES ({:d})", playerGuid));
+	auto result = db.storeQuery(fmt::format(
+	    "SELECT `minor_charm_echoes`, `max_minor_charm_echoes` FROM `player_bestiary_resources` WHERE `player_id` = {:d}",
+	    playerGuid));
+	if (!result) {
+		return {0, 0};
+	}
+	return {result->getNumber<uint32_t>("minor_charm_echoes"), result->getNumber<uint32_t>("max_minor_charm_echoes")};
+}
+
+bool BestiaryCharmSystem::setMinorCharmEchoes(uint32_t playerGuid, uint32_t echoes, uint32_t maxEchoes) const
+{
+	return Database::getInstance().executeQuery(fmt::format(
+	    "INSERT INTO `player_bestiary_resources` (`player_id`, `minor_charm_echoes`, `max_minor_charm_echoes`) "
+	    "VALUES ({:d}, {:d}, {:d}) ON DUPLICATE KEY UPDATE `minor_charm_echoes` = VALUES(`minor_charm_echoes`), "
+	    "`max_minor_charm_echoes` = VALUES(`max_minor_charm_echoes`)",
+	    playerGuid, echoes, maxEchoes));
 }
 
 bool BestiaryCharmSystem::removeGold(Player& player, uint64_t amount) const
@@ -182,11 +270,25 @@ uint8_t BestiaryCharmSystem::getAssignedCharmCount(const CharmStateMap& states) 
 {
 	uint8_t count = 0;
 	for (const auto& [charmId, state] : states) {
-		if (getCharmDefinition(charmId) && state.unlocked && state.raceId > 0) {
+		if (getCharmDefinition(charmId) && state.tier > 0 && state.raceId > 0) {
 			++count;
 		}
 	}
 	return count;
+}
+
+uint32_t BestiaryCharmSystem::getSpentMajorCharmPoints(const CharmStateMap& states) const
+{
+	uint32_t spent = 0;
+	for (const auto& [charmId, state] : states) {
+		const auto charm = getCharmDefinition(charmId);
+		if (!charm || charm->category != BestiaryCharmCategory::Major || state.tier == 0) {
+			continue;
+		}
+
+		spent += getSpentCharmPointsForTier(*charm, state.tier);
+	}
+	return spent;
 }
 
 BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player, uint8_t charmId, uint8_t action, uint16_t raceId) const
@@ -202,27 +304,55 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 	const CharmState currentState = stateIt != states.end() ? stateIt->second : CharmState {};
 
 	if (action == 0) {
-		if (currentState.unlocked) {
-			return { false, "This charm is already unlocked." };
+		if (currentState.tier >= 3) {
+			return { false, "This charm is already fully unlocked." };
 		}
 
-		const uint32_t charmPoints = getCharmPoints(playerGuid);
-		if (charmPoints < charm->price) {
-			return { false, "You do not have enough charm points." };
+		const uint8_t nextTier = currentState.tier + 1;
+		const uint16_t price = getCharmPriceForTier(*charm, currentState.tier);
+		if (price == 0) {
+			return { false, "This charm cannot be upgraded." };
 		}
 
-		const bool updated = DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
-			Database& db = Database::getInstance();
-			return db.executeQuery(fmt::format(
-			           "INSERT INTO `player_bestiary_charms` (`player_id`, `charm_id`, `unlocked`, `raceid`) "
-			           "VALUES ({:d}, {:d}, 1, 0) ON DUPLICATE KEY UPDATE `unlocked` = 1",
-			           playerGuid, charmId)) &&
-			       setCharmPoints(playerGuid, charmPoints - charm->price);
-		});
+		bool updated = false;
+		if (charm->category == BestiaryCharmCategory::Major) {
+			const uint32_t charmPoints = getCharmPoints(playerGuid);
+			if (charmPoints < price) {
+				return { false, "You do not have enough charm points." };
+			}
+
+			const auto [minorEchoes, maxMinorEchoes] = getMinorCharmEchoes(playerGuid);
+			const uint32_t echoReward = getMinorEchoRewardForMajorTier(currentState.tier);
+			updated = DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
+				Database& db = Database::getInstance();
+				return db.executeQuery(fmt::format(
+				           "INSERT INTO `player_bestiary_charms` (`player_id`, `charm_id`, `unlocked`, `raceid`) "
+				           "VALUES ({:d}, {:d}, {:d}, 0) ON DUPLICATE KEY UPDATE `unlocked` = {:d}",
+				           playerGuid, charmId, nextTier, nextTier)) &&
+				       setCharmPoints(playerGuid, charmPoints - price) &&
+				       setMinorCharmEchoes(playerGuid, minorEchoes + echoReward, maxMinorEchoes + echoReward);
+			});
+		} else {
+			const auto [minorEchoes, maxMinorEchoes] = getMinorCharmEchoes(playerGuid);
+			if (minorEchoes < price) {
+				return { false, "You do not have enough minor charm echoes." };
+			}
+
+			updated = DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
+				Database& db = Database::getInstance();
+				return db.executeQuery(fmt::format(
+				           "INSERT INTO `player_bestiary_charms` (`player_id`, `charm_id`, `unlocked`, `raceid`) "
+				           "VALUES ({:d}, {:d}, {:d}, 0) ON DUPLICATE KEY UPDATE `unlocked` = {:d}",
+				           playerGuid, charmId, nextTier, nextTier)) &&
+				       setMinorCharmEchoes(playerGuid, minorEchoes - price, maxMinorEchoes);
+			});
+		}
+
 		if (!updated) {
-			return { false, "Could not unlock this charm." };
+			return { false, "Could not upgrade this charm." };
 		}
-		return { true, "Charm unlocked." };
+		invalidatePlayer(playerGuid);
+		return { true, currentState.tier == 0 ? "Charm unlocked." : "Charm upgraded." };
 	}
 
 	if (action == 3) {
@@ -231,14 +361,23 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 			return { false, "You do not have enough gold." };
 		}
 
-		if (!Database::getInstance().executeQuery(fmt::format(
-		        "UPDATE `player_bestiary_charms` SET `raceid` = 0 WHERE `player_id` = {:d}", playerGuid))) {
+		const uint32_t charmPoints = getCharmPoints(playerGuid);
+		const uint32_t refund = getSpentMajorCharmPoints(states);
+		const bool reset = DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
+			return Database::getInstance().executeQuery(fmt::format(
+			           "UPDATE `player_bestiary_charms` SET `unlocked` = 0, `raceid` = 0 WHERE `player_id` = {:d}",
+			           playerGuid)) &&
+			       setCharmPoints(playerGuid, charmPoints + refund) &&
+			       setMinorCharmEchoes(playerGuid, 0, 0);
+		});
+		if (!reset) {
 			return { false, "Could not reset charms." };
 		}
-		return { true, "All charm assignments were cleared." };
+		invalidatePlayer(playerGuid);
+		return { true, "All charms were reset." };
 	}
 
-	if (!currentState.unlocked) {
+	if (currentState.tier == 0) {
 		return { false, "This charm is not unlocked." };
 	}
 
@@ -248,8 +387,12 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 			return { false, "Creature not found." };
 		}
 
-		if (getKillCount(playerGuid, raceId) < monster->get().toKill) {
-			return { false, "This creature is not fully unlocked." };
+		const uint32_t requiredKills = charm->category == BestiaryCharmCategory::Major ? monster->get().toKill : monster->get().secondUnlock;
+		if (getKillCount(playerGuid, raceId) < requiredKills) {
+			const std::string message = charm->category == BestiaryCharmCategory::Major ?
+			                                "This creature is not fully unlocked." :
+			                                "This creature has not reached the charm assignment stage.";
+			return { false, message };
 		}
 
 		if (currentState.raceId == 0) {
@@ -261,7 +404,7 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 		}
 
 		for (const auto& [otherCharmId, state] : states) {
-			if (otherCharmId == charmId || !state.unlocked || state.raceId != raceId) {
+			if (otherCharmId == charmId || state.tier == 0 || state.raceId != raceId) {
 				continue;
 			}
 
@@ -276,6 +419,7 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 		        raceId, playerGuid, charmId))) {
 			return { false, "Could not assign this charm." };
 		}
+		invalidatePlayer(playerGuid);
 		return { true, "Charm assigned." };
 	}
 
@@ -284,7 +428,7 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 			return { false, "This charm is not assigned." };
 		}
 
-		constexpr uint64_t removeCost = 10000;
+		const uint64_t removeCost = static_cast<uint64_t>(player.getLevel()) * 100;
 		if (!removeGold(player, removeCost)) {
 			return { false, "You do not have enough gold." };
 		}
@@ -294,6 +438,7 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 		        playerGuid, charmId))) {
 			return { false, "Could not remove this charm." };
 		}
+		invalidatePlayer(playerGuid);
 		return { true, "Charm removed." };
 	}
 
