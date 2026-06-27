@@ -74,6 +74,11 @@ private:
 	[[nodiscard]] uint8_t getAssignedCharmCount(const CharmStateMap& states) const;
 	[[nodiscard]] uint32_t getSpentMajorCharmPoints(const CharmStateMap& states) const;
 	[[nodiscard]] std::optional<std::reference_wrapper<const BestiaryCreatureInfo>> getMonster(uint16_t raceId) const;
+	[[nodiscard]] bool writeCharmStates(uint32_t playerGuid, const CharmStateMap& states) const;
+	[[nodiscard]] bool restoreCharmStates(uint32_t playerGuid, const CharmStateMap& states) const;
+	[[nodiscard]] bool restoreCharmStatesAndResources(uint32_t playerGuid, const CharmStateMap& states,
+	                                                   uint32_t charmPoints, uint32_t minorEchoes,
+	                                                   uint32_t maxMinorEchoes) const;
 	void invalidatePlayer(uint32_t playerGuid) const;
 
 	std::unordered_map<uint16_t, BestiaryCreatureInfo> monstersByRaceId;
