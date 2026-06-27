@@ -1225,7 +1225,7 @@ int luaMonsterTypeBaseSpeed(lua_State* L)
 		if (lua_gettop(L) == 1) {
 			lua_pushinteger(L, monsterType->info.baseSpeed);
 		} else {
-			monsterType->info.baseSpeed = getInteger<uint32_t>(L, 2);
+			monsterType->info.baseSpeed = getInteger<uint32_t>(L, 2) * 2;
 			pushBoolean(L, true);
 		}
 	} else {
