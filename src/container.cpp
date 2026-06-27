@@ -91,8 +91,7 @@ std::shared_ptr<Container> Container::createBrowseField(const TilePtr& tile)
 				continue;
 			}
 
-			browseField->itemlist.push_front(item);
-			item->setParent(browseField.get());
+			browseField->internalAddThing(item.get());
 		}
 	}
 

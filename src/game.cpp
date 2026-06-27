@@ -1810,6 +1810,10 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	if (browseFieldTile) {
 		fromCylinder = browseFieldTile.get();
 	}
+	std::shared_ptr<Tile> toBrowseFieldTile = getBrowseFieldTile(toCylinder);
+	if (toBrowseFieldTile) {
+		toCylinder = toBrowseFieldTile.get();
+	}
 
 	Player* actorPlayer = actor ? actor->getPlayer() : nullptr;
 	const uint32_t sourceInstanceId = isCarriedByCreature(item->getParent()) ? 0 : item->getInstanceID();

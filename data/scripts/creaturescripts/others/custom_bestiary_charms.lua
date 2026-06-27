@@ -171,7 +171,10 @@ local function getCharmForRace(player, raceId, category)
 	end
 	local entry = getPlayerCharms(player).byRace[raceId]
 	if type(entry) == "table" then
-		local charm = category and entry[category] or entry[CHARM_CATEGORY.MAJOR] or entry[CHARM_CATEGORY.MINOR]
+		local charm = category and entry[category]
+		if not category then
+			charm = entry[CHARM_CATEGORY.MAJOR] or entry[CHARM_CATEGORY.MINOR]
+		end
 		if type(charm) == "table" then
 			return charm.id, charm.tier
 		end

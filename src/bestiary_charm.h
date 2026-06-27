@@ -69,6 +69,7 @@ private:
 	[[nodiscard]] bool setCharmPoints(uint32_t playerGuid, uint32_t points) const;
 	[[nodiscard]] std::pair<uint32_t, uint32_t> getMinorCharmEchoes(uint32_t playerGuid) const;
 	[[nodiscard]] bool setMinorCharmEchoes(uint32_t playerGuid, uint32_t echoes, uint32_t maxEchoes) const;
+	[[nodiscard]] bool hasGold(const Player& player, uint64_t amount) const;
 	[[nodiscard]] bool removeGold(Player& player, uint64_t amount) const;
 	[[nodiscard]] uint8_t getAssignedCharmCount(const CharmStateMap& states) const;
 	[[nodiscard]] uint32_t getSpentMajorCharmPoints(const CharmStateMap& states) const;

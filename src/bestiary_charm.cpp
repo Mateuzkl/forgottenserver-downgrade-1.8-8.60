@@ -242,7 +242,7 @@ bool BestiaryCharmSystem::setMinorCharmEchoes(uint32_t playerGuid, uint32_t echo
 	    playerGuid, echoes, maxEchoes));
 }
 
-bool BestiaryCharmSystem::removeGold(Player& player, uint64_t amount) const
+bool BestiaryCharmSystem::hasGold(const Player& player, uint64_t amount) const
 {
 	if (amount == 0) {
 		return true;
@@ -250,10 +250,21 @@ bool BestiaryCharmSystem::removeGold(Player& player, uint64_t amount) const
 
 	const uint64_t inventoryMoney = player.getMoney();
 	const uint64_t bankBalance = player.getBankBalance();
-	if (inventoryMoney < amount && bankBalance < amount - inventoryMoney) {
+	return inventoryMoney >= amount || bankBalance >= amount - inventoryMoney;
+}
+
+bool BestiaryCharmSystem::removeGold(Player& player, uint64_t amount) const
+{
+	if (amount == 0) {
+		return true;
+	}
+
+	if (!hasGold(player, amount)) {
 		return false;
 	}
 
+	const uint64_t inventoryMoney = player.getMoney();
+	const uint64_t bankBalance = player.getBankBalance();
 	const uint64_t fromInventory = std::min(inventoryMoney, amount);
 	if (fromInventory > 0 && !g_game.removeMoney(&player, fromInventory)) {
 		return false;
@@ -357,7 +368,7 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 
 	if (action == 3) {
 		const uint64_t resetCost = 100000 + (player.getLevel() > 100 ? static_cast<uint64_t>(player.getLevel()) * 11000 : 0);
-		if (!removeGold(player, resetCost)) {
+		if (!hasGold(player, resetCost)) {
 			return { false, "You do not have enough gold." };
 		}
 
@@ -368,7 +379,8 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 			           "UPDATE `player_bestiary_charms` SET `unlocked` = 0, `raceid` = 0 WHERE `player_id` = {:d}",
 			           playerGuid)) &&
 			       setCharmPoints(playerGuid, charmPoints + refund) &&
-			       setMinorCharmEchoes(playerGuid, 0, 0);
+			       setMinorCharmEchoes(playerGuid, 0, 0) &&
+			       removeGold(player, resetCost);
 		});
 		if (!reset) {
 			return { false, "Could not reset charms." };
@@ -429,13 +441,17 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 		}
 
 		const uint64_t removeCost = static_cast<uint64_t>(player.getLevel()) * 100;
-		if (!removeGold(player, removeCost)) {
+		if (!hasGold(player, removeCost)) {
 			return { false, "You do not have enough gold." };
 		}
 
-		if (!Database::getInstance().executeQuery(fmt::format(
-		        "UPDATE `player_bestiary_charms` SET `raceid` = 0 WHERE `player_id` = {:d} AND `charm_id` = {:d}",
-		        playerGuid, charmId))) {
+		const bool removed = DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
+			return Database::getInstance().executeQuery(fmt::format(
+			           "UPDATE `player_bestiary_charms` SET `raceid` = 0 WHERE `player_id` = {:d} AND `charm_id` = {:d}",
+			           playerGuid, charmId)) &&
+			       removeGold(player, removeCost);
+		});
+		if (!removed) {
 			return { false, "Could not remove this charm." };
 		}
 		invalidatePlayer(playerGuid);
