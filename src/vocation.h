@@ -88,7 +88,7 @@ private:
 	uint32_t gainHP = 5;
 	uint32_t fromVocation = VOCATION_NONE;
 	uint32_t attackSpeed = 1500;
-	uint32_t baseSpeed = 110;
+	uint32_t baseSpeed = 220;
 	uint32_t noPongKickTime = 60000;
 
 	uint16_t id;

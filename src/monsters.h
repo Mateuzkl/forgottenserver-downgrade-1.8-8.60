@@ -131,7 +131,7 @@ class MonsterType
 		uint32_t changeTargetSpeed = 0;
 		uint64_t conditionImmunities = 0;
 		uint32_t damageImmunities = 0;
-		uint32_t baseSpeed = 110;
+		uint32_t baseSpeed = 200;
 
 		int32_t creatureAppearEvent = -1;
 		int32_t creatureDisappearEvent = -1;

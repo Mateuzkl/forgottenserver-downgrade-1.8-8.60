@@ -619,8 +619,8 @@ bool ConfigManager::load()
 	    getGlobalInteger(L, "RANGE_USE_ITEM_EX_INTERVAL", RANGE_USE_ITEM_EX_INTERVAL);
 	integers[Integer::RANGE_ROTATE_ITEM_INTERVAL] =
 	    getGlobalInteger(L, "RANGE_ROTATE_ITEM_INTERVAL", RANGE_ROTATE_ITEM_INTERVAL);
-	integers[Integer::PLAYER_SPEED_PER_LEVEL] = getGlobalInteger(L, "playerSpeedPerLevel", 1);
-	integers[Integer::PLAYER_MIN_SPEED] = getGlobalInteger(L, "playerMinSpeed", 10);
+	integers[Integer::PLAYER_SPEED_PER_LEVEL] = getGlobalInteger(L, "playerSpeedPerLevel", 2);
+	integers[Integer::PLAYER_MIN_SPEED] = getGlobalInteger(L, "playerMinSpeed", 120);
 	integers[Integer::PLAYER_MAX_SPEED] = getGlobalInteger(L, "playerMaxSpeed", 900);
 	integers[Integer::MAX_GOD_SPEED] = getGlobalInteger(L, "maxGodSpeed", 5000);
 
