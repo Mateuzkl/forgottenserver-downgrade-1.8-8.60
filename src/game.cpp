@@ -3804,6 +3804,15 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 	const uint32_t maxQuickLootCorpses = static_cast<uint32_t>(
 	    std::max<int64_t>(1, ConfigManager::getInteger(ConfigManager::QUICK_LOOT_MAX_CORPSES)));
 	if (lootAllCorpses && pos.x != 0xFFFF) {
+		if (Thing* clickedThing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_USEITEM)) {
+			if (Item* clickedItem = clickedThing->getItem()) {
+				if (Container* clickedContainer = clickedItem->getContainer(); clickedContainer && clickedContainer->isRewardCorpse()) {
+					playerUseItem(playerId, pos, stackPos, 0, itemId);
+					return;
+				}
+			}
+		}
+
 		bool foundCorpse = false;
 		ReturnValue firstFailure = RETURNVALUE_NOERROR;
 		const uint32_t lootedCorpses = collectQuickLootTile(*this, player, pos, maxQuickLootCorpses, foundCorpse,
