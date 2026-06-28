@@ -234,7 +234,7 @@ ReturnValue getQuickLootContainerReturn(const Player* player, const Container* c
 	}
 
 	if (corpseContainer->isRewardCorpse()) {
-		return RETURNVALUE_NOERROR;
+		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
 	const uint32_t owner = corpseContainer->getCorpseOwner();
@@ -257,55 +257,198 @@ bool shouldQuickLootItem(const Player* player, const Item* item)
 	return !listed;
 }
 
-Container* getQuickLootDestination(Player* player)
+bool isValidObjectCategory(ObjectCategory_t category)
+{
+	const uint8_t value = static_cast<uint8_t>(category);
+	return value >= OBJECTCATEGORY_FIRST && value <= OBJECTCATEGORY_LAST && value != 26;
+}
+
+ObjectCategory_t getQuickLootObjectCategory(const Item* item)
+{
+	if (!item) {
+		return OBJECTCATEGORY_NONE;
+	}
+
+	const ItemType& itemType = Item::items[item->getID()];
+	if (item->getWorth() > 0) {
+		return OBJECTCATEGORY_GOLD;
+	}
+
+	switch (itemType.weaponType) {
+		case WEAPON_FIST:
+			return OBJECTCATEGORY_FISTWEAPONS;
+		case WEAPON_SWORD:
+			return OBJECTCATEGORY_SWORDS;
+		case WEAPON_CLUB:
+			return OBJECTCATEGORY_CLUBS;
+		case WEAPON_AXE:
+			return OBJECTCATEGORY_AXES;
+		case WEAPON_SHIELD:
+			return OBJECTCATEGORY_SHIELDS;
+		case WEAPON_DISTANCE:
+			return OBJECTCATEGORY_DISTANCEWEAPONS;
+		case WEAPON_WAND:
+			return OBJECTCATEGORY_WANDS;
+		case WEAPON_AMMO:
+			return OBJECTCATEGORY_AMMO;
+		case WEAPON_QUIVER:
+			return OBJECTCATEGORY_QUIVERS;
+		default:
+			break;
+	}
+
+	if ((itemType.slotPosition & SLOTP_HEAD) != 0) {
+		return OBJECTCATEGORY_HELMETS;
+	}
+	if ((itemType.slotPosition & SLOTP_NECKLACE) != 0) {
+		return OBJECTCATEGORY_NECKLACES;
+	}
+	if ((itemType.slotPosition & SLOTP_BACKPACK) != 0) {
+		return OBJECTCATEGORY_CONTAINERS;
+	}
+	if ((itemType.slotPosition & SLOTP_ARMOR) != 0) {
+		return OBJECTCATEGORY_ARMORS;
+	}
+	if ((itemType.slotPosition & SLOTP_LEGS) != 0) {
+		return OBJECTCATEGORY_LEGS;
+	}
+	if ((itemType.slotPosition & SLOTP_FEET) != 0) {
+		return OBJECTCATEGORY_BOOTS;
+	}
+	if ((itemType.slotPosition & SLOTP_RING) != 0) {
+		return OBJECTCATEGORY_RINGS;
+	}
+	if (itemType.type == ITEM_TYPE_RUNE) {
+		return OBJECTCATEGORY_RUNES;
+	}
+	if (itemType.type == ITEM_TYPE_CONTAINER) {
+		return OBJECTCATEGORY_CONTAINERS;
+	}
+	return OBJECTCATEGORY_DEFAULT;
+}
+
+ContainerPtr getMainBackpackRef(Game& game, Player* player)
 {
 	if (!player || !player->getQuickLootFallbackToMainContainer()) {
 		return nullptr;
 	}
 
 	Item* backpackItem = player->getInventoryItem(CONST_SLOT_BACKPACK);
-	return backpackItem ? backpackItem->getContainer() : nullptr;
+	return game.getContainerSharedRef(backpackItem ? backpackItem->getContainer() : nullptr);
 }
 
-QuickLootResult collectQuickLootContainer(Game& game, Player* player, Container* container)
+ContainerPtr getQuickLootDestinationRef(Game& game, Player* player, ObjectCategory_t category)
+{
+	if (!player) {
+		return nullptr;
+	}
+
+	player->ensureQuickLootStateLoaded();
+	if (ContainerPtr container = player->getManagedLootContainerRef(category, true)) {
+		return container;
+	}
+	return getMainBackpackRef(game, player);
+}
+
+ReturnValue moveQuickLootItem(Game& game, Player* player, const std::shared_ptr<Item>& itemRef,
+                              const ContainerPtr& destination)
+{
+	Item* item = itemRef.get();
+	if (!player || !item || !destination) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+
+	std::vector<ContainerPtr> destinations;
+	destinations.push_back(destination);
+	for (size_t index = 0; index < destinations.size(); ++index) {
+		Container* current = destinations[index].get();
+		if (!current) {
+			continue;
+		}
+
+		for (ContainerIterator it = current->iterator(); it.hasNext(); it.advance()) {
+			Item* child = *it;
+			if (Container* childContainer = child ? child->getContainer() : nullptr) {
+				if (ContainerPtr childRef = game.getContainerSharedRef(childContainer)) {
+					destinations.push_back(childRef);
+				}
+			}
+		}
+	}
+
+	ReturnValue lastRet = RETURNVALUE_CONTAINERNOTENOUGHROOM;
+	for (const ContainerPtr& targetRef : destinations) {
+		Container* target = targetRef.get();
+		if (!target || target == item->getParent()) {
+			continue;
+		}
+
+		if (Container* itemContainer = item->getContainer()) {
+			if (itemContainer == target || itemContainer->isHoldingItem(target)) {
+				continue;
+			}
+		}
+
+		Creature* actor = target->getID() == ITEM_GOLD_POUCH ? nullptr : player;
+		ReturnValue ret = game.internalMoveItem(item->getParent(), target, INDEX_WHEREEVER, item,
+		                                        item->getItemCount(), nullptr, 0, actor);
+		if (ret == RETURNVALUE_NOERROR || item->isRemoved()) {
+			return RETURNVALUE_NOERROR;
+		}
+		lastRet = ret;
+		if (ret != RETURNVALUE_CONTAINERNOTENOUGHROOM) {
+			return ret;
+		}
+	}
+
+	return lastRet;
+}
+
+QuickLootResult collectQuickLootContainer(Game& game, Player* player, const ContainerPtr& containerRef)
 {
 	QuickLootResult result;
+	Container* container = containerRef.get();
 	const ReturnValue containerRet = getQuickLootContainerReturn(player, container);
 	if (containerRet != RETURNVALUE_NOERROR) {
 		result.failure = containerRet;
 		return result;
 	}
 
-	Container* destination = getQuickLootDestination(player);
-	if (!destination) {
-		result.failure = RETURNVALUE_CONTAINERNOTENOUGHROOM;
-		return result;
-	}
-
-	std::vector<Item*> lootItems;
+	std::vector<std::shared_ptr<Item>> lootItems;
 	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
 		Item* item = *it;
 		if (!item || item->isRemoved() || !shouldQuickLootItem(player, item)) {
 			continue;
 		}
 
-		result.hadLoot = true;
-		lootItems.push_back(item);
+		if (std::shared_ptr<Item> itemRef = game.getItemSharedRef(item)) {
+			result.hadLoot = true;
+			lootItems.push_back(itemRef);
+		}
 	}
 
-	for (Item* item : lootItems) {
+	for (const std::shared_ptr<Item>& itemRef : lootItems) {
+		Item* item = itemRef.get();
 		if (!item || item->isRemoved()) {
 			continue;
 		}
 
+		ObjectCategory_t category = getQuickLootObjectCategory(item);
+		ContainerPtr destination = getQuickLootDestinationRef(game, player, category);
+		if (!destination) {
+			if (result.failure == RETURNVALUE_NOERROR) {
+				result.failure = RETURNVALUE_CONTAINERNOTENOUGHROOM;
+			}
+			continue;
+		}
+
 		Cylinder* fromCylinder = item->getParent();
-		if (!fromCylinder || fromCylinder == destination) {
+		if (!fromCylinder || fromCylinder == destination.get()) {
 			continue;
 		}
 
 		const uint16_t originalCount = item->getItemCount();
-		ReturnValue ret = game.internalMoveItem(fromCylinder, destination, INDEX_WHEREEVER, item,
-		                                        originalCount, nullptr, 0, player);
+		ReturnValue ret = moveQuickLootItem(game, player, itemRef, destination);
 		if (ret == RETURNVALUE_NOERROR) {
 			++result.movedItems;
 			continue;
@@ -347,8 +490,13 @@ uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, u
 			continue;
 		}
 
+		ContainerPtr containerRef = game.getContainerSharedRef(container);
+		if (!containerRef) {
+			continue;
+		}
+
 		foundCorpse = true;
-		QuickLootResult result = collectQuickLootContainer(game, player, container);
+		QuickLootResult result = collectQuickLootContainer(game, player, containerRef);
 		if (result.movedItems > 0) {
 			++lootedCorpses;
 		} else if (result.failure != RETURNVALUE_NOERROR && firstFailure == RETURNVALUE_NOERROR) {
@@ -3412,7 +3560,8 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 	}
 	g_actions->useItem(player, pos, index, itemRef, isHotkey);
 
-	if (!itemRef->isRemoved() && itemRef->getCorpseOwner() != 0) {
+	if (!ConfigManager::getBoolean(ConfigManager::QUICK_LOOT_ENABLED) &&
+	    !itemRef->isRemoved() && itemRef->getCorpseOwner() != 0) {
 		player->lootCorpse(itemRef->getContainer());
 	}
 	player->maintainAttackFlow();
@@ -3682,13 +3831,30 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 		return;
 	}
 
+	std::shared_ptr<Item> itemRef = getItemSharedRef(item);
+	if (!itemRef) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
 	if (!InstanceUtils::isPlayerInSameInstance(player, item->getInstanceID())) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
 	if (Container* container = item->getContainer()) {
-		QuickLootResult result = collectQuickLootContainer(*this, player, container);
+		if (container->isRewardCorpse()) {
+			playerUseItem(playerId, pos, stackPos, 0, itemId);
+			return;
+		}
+
+		ContainerPtr containerRef = getContainerSharedRef(container);
+		if (!containerRef) {
+			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+			return;
+		}
+
+		QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
 		if (result.movedItems == 0 && result.failure != RETURNVALUE_NOERROR) {
 			player->sendCancelMessage(result.failure);
 		}
@@ -3697,12 +3863,13 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 	}
 
 	auto* sourceContainer = dynamic_cast<Container*>(item->getParent());
-	if (!sourceContainer) {
+	ContainerPtr sourceContainerRef = getContainerSharedRef(sourceContainer);
+	if (!sourceContainerRef) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
-	ReturnValue containerRet = getQuickLootContainerReturn(player, sourceContainer);
+	ReturnValue containerRet = getQuickLootContainerReturn(player, sourceContainerRef.get());
 	if (containerRet != RETURNVALUE_NOERROR) {
 		player->sendCancelMessage(containerRet);
 		return;
@@ -3712,14 +3879,14 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 		return;
 	}
 
-	Container* destination = getQuickLootDestination(player);
+	ObjectCategory_t category = getQuickLootObjectCategory(item);
+	ContainerPtr destination = getQuickLootDestinationRef(*this, player, category);
 	if (!destination) {
 		player->sendCancelMessage(RETURNVALUE_CONTAINERNOTENOUGHROOM);
 		return;
 	}
 
-	ReturnValue ret = internalMoveItem(sourceContainer, destination, INDEX_WHEREEVER, item, item->getItemCount(),
-	                                   nullptr, 0, player);
+	ReturnValue ret = moveQuickLootItem(*this, player, itemRef, destination);
 	if (ret != RETURNVALUE_NOERROR) {
 		player->sendCancelMessage(ret);
 	}
@@ -3770,6 +3937,125 @@ void Game::playerLootNearby(uint32_t playerId)
 		player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You looted {:d} corpses.", lootedCorpses));
 	}
 	player->maintainAttackFlow();
+}
+
+void Game::playerQuickLootCorpse(uint32_t playerId, Container* container)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !container || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	ContainerPtr containerRef = getContainerSharedRef(container);
+	if (!containerRef) {
+		return;
+	}
+
+	QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
+	if (result.movedItems == 0 && result.hadLoot && result.failure != RETURNVALUE_NOERROR) {
+		player->sendCancelMessage(result.failure);
+	}
+}
+
+void Game::playerSetManagedLootContainer(uint32_t playerId, ObjectCategory_t category, const Position& pos,
+                                         uint16_t itemId, uint8_t stackPos, bool isLootContainer)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	if (!isValidObjectCategory(category)) {
+		player->sendLootContainers();
+		return;
+	}
+
+	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_USEITEM);
+	Item* item = thing ? thing->getItem() : nullptr;
+	std::shared_ptr<Item> itemRef = getItemSharedRef(item);
+	if (!itemRef || (item->getClientID() != itemId && item->getID() != itemId)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		player->sendLootContainers();
+		return;
+	}
+
+	Container* container = item->getContainer();
+	ContainerPtr containerRef = getContainerSharedRef(container);
+	if (!containerRef || !item->isPickupable() || item->getTopParent() != player ||
+	    !InstanceUtils::isPlayerInSameInstance(player, item->getInstanceID())) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		player->sendLootContainers();
+		return;
+	}
+
+	if (item->getID() == ITEM_GOLD_POUCH) {
+		if (!isLootContainer) {
+			player->sendCancelMessage("You can only set the gold pouch as a loot container.");
+			player->sendLootContainers();
+			return;
+		}
+
+		if (category != OBJECTCATEGORY_GOLD) {
+			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+			player->sendLootContainers();
+			return;
+		}
+	}
+
+	const uint16_t containerId = item->getClientID() != 0 ? item->getClientID() : item->getID();
+	player->setManagedLootContainer(category, containerId, isLootContainer);
+	player->sendLootContainers();
+}
+
+void Game::playerClearManagedLootContainer(uint32_t playerId, ObjectCategory_t category, bool isLootContainer)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	player->clearManagedLootContainer(category, isLootContainer);
+	player->sendLootContainers();
+}
+
+void Game::playerOpenManagedLootContainer(uint32_t playerId, ObjectCategory_t category, bool isLootContainer)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	ContainerPtr containerRef = player->getManagedLootContainerRef(category, isLootContainer);
+	Container* container = containerRef.get();
+	if (!container) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		player->sendLootContainers();
+		return;
+	}
+
+	const int8_t openContainerId = player->getContainerID(container);
+	if (openContainerId >= 0) {
+		player->sendContainer(static_cast<uint8_t>(openContainerId), container,
+		                      dynamic_cast<const Container*>(container->getParent()) != nullptr,
+		                      player->getContainerIndex(static_cast<uint8_t>(openContainerId)));
+		return;
+	}
+
+	for (uint8_t cid = 0; cid <= 0x0F; ++cid) {
+		if (player->getContainerByID(cid)) {
+			continue;
+		}
+
+		player->addContainer(cid, container);
+		player->sendContainer(cid, container, dynamic_cast<const Container*>(container->getParent()) != nullptr, 0);
+		return;
+	}
+
+	player->sendCancelMessage("You cannot open more containers.");
 }
 
 void Game::playerSetQuickLootFallback(uint32_t playerId, bool fallback)

@@ -269,7 +269,7 @@ end
 
 local function sendItemDetails(player, itemId)
 	itemId = tonumber(itemId) or 0
-	if itemId <= 0 or not supportsCustomNetwork(player) or not colorizedLootEnabled() then
+	if itemId <= 0 or not supportsCustomNetwork(player) then
 		return false
 	end
 
@@ -304,6 +304,7 @@ local function sendItemDetails(player, itemId)
 		msg:addU32(math.min(tonumber(offer.salePrice) or 0, 0xFFFFFFFF))
 		msg:addString(tostring(offer.currencyQuestFlagDisplayName or ""))
 	end
+	msg:addString(tostring(itemType:getName() or ""))
 	return msg:sendToPlayer(player)
 end
 

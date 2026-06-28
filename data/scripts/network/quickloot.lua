@@ -2,6 +2,11 @@ if not configManager.getBoolean(configKeys.QUICK_LOOT_ENABLED) then
 	return
 end
 
+-- Quick Loot network/container handling is implemented in C++.
+if true then
+	return
+end
+
 local OPCODE_QUICK_LOOT = 0x8F
 local OPCODE_LOOT_CONTAINER = 0x90
 local OPCODE_BLACK_WHITELIST = 0x91

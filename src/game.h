@@ -424,6 +424,11 @@ public:
 	void playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,
 	                     bool lootAllCorpses);
 	void playerLootNearby(uint32_t playerId);
+	void playerQuickLootCorpse(uint32_t playerId, Container* container);
+	void playerSetManagedLootContainer(uint32_t playerId, ObjectCategory_t category, const Position& pos,
+	                                   uint16_t itemId, uint8_t stackPos, bool isLootContainer);
+	void playerClearManagedLootContainer(uint32_t playerId, ObjectCategory_t category, bool isLootContainer);
+	void playerOpenManagedLootContainer(uint32_t playerId, ObjectCategory_t category, bool isLootContainer);
 	void playerSetQuickLootFallback(uint32_t playerId, bool fallback);
 	void playerQuickLootBlackWhitelist(uint32_t playerId, QuickLootFilter_t filter, std::vector<uint16_t> itemIds);
 	void playerCloseContainer(uint32_t playerId, uint8_t cid);

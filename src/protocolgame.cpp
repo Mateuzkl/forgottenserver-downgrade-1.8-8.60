@@ -20,6 +20,7 @@
 #include "protocolgame.h"
 #include "imbuement.h"
 #include "familiar.h"
+#include "logger.h"
 #include "scheduler.h"
 #include "scriptmanager.h"
 #include "thread_pool.h"
@@ -2196,32 +2197,42 @@ void ProtocolGame::parseLootContainer(NetworkMessage& msg)
 				return;
 			}
 
-			msg.getByte(); // category
-			msg.getPosition();
-			msg.get<uint16_t>(); // item id
-			msg.getByte(); // stackpos
-			g_dispatcher.addTask([playerID = player->getID()]() {
-				if (auto playerRef = g_game.getPlayerByID(playerID)) {
-					playerRef->sendLootContainers();
-				}
+			auto category = static_cast<ObjectCategory_t>(msg.getByte());
+			Position pos = msg.getPosition();
+			uint16_t itemId = msg.get<uint16_t>();
+			uint8_t stackpos = msg.getByte();
+			const bool isLootContainer = action == 0;
+			g_dispatcher.addTask([=, playerID = player->getID()]() {
+				g_game.playerSetManagedLootContainer(playerID, category, pos, itemId, stackpos, isLootContainer);
 			});
 			break;
 		}
 		case 1:
-		case 2:
-		case 5:
-		case 6:
+		case 5: {
 			if (!requireUnreadBytes(msg, 1)) {
 				return;
 			}
 
-			msg.getByte(); // category
-			g_dispatcher.addTask([playerID = player->getID()]() {
-				if (auto playerRef = g_game.getPlayerByID(playerID)) {
-					playerRef->sendLootContainers();
-				}
+			auto category = static_cast<ObjectCategory_t>(msg.getByte());
+			const bool isLootContainer = action == 1;
+			g_dispatcher.addTask([=, playerID = player->getID()]() {
+				g_game.playerClearManagedLootContainer(playerID, category, isLootContainer);
 			});
 			break;
+		}
+		case 2:
+		case 6: {
+			if (!requireUnreadBytes(msg, 1)) {
+				return;
+			}
+
+			auto category = static_cast<ObjectCategory_t>(msg.getByte());
+			const bool isLootContainer = action == 2;
+			g_dispatcher.addTask([=, playerID = player->getID()]() {
+				g_game.playerOpenManagedLootContainer(playerID, category, isLootContainer);
+			});
+			break;
+		}
 		case 3: {
 			if (!requireUnreadBytes(msg, 1)) {
 				return;
@@ -2979,9 +2990,41 @@ void ProtocolGame::sendLootContainers()
 
 	NetworkMessage msg;
 	msg.addByte(0xC0);
+
+	player->ensureQuickLootStateLoaded();
 	msg.addByte(player->getQuickLootFallbackToMainContainer() ? 1 : 0);
-	msg.addByte(0); // managed loot containers
-	msg.addByte(0); // managed obtain containers
+
+	const auto& containers = player->getManagedLootContainers();
+	uint8_t lootContainerCount = 0;
+	uint8_t obtainContainerCount = 0;
+	for (const auto& [category, managedContainer] : containers) {
+		if (managedContainer.loot != 0) {
+			++lootContainerCount;
+		}
+		if (managedContainer.obtain != 0) {
+			++obtainContainerCount;
+		}
+	}
+
+	msg.addByte(lootContainerCount);
+	for (const auto& [category, managedContainer] : containers) {
+		if (managedContainer.loot == 0) {
+			continue;
+		}
+
+		msg.addByte(static_cast<uint8_t>(category));
+		msg.add<uint16_t>(managedContainer.loot);
+	}
+
+	msg.addByte(obtainContainerCount);
+	for (const auto& [category, managedContainer] : containers) {
+		if (managedContainer.obtain == 0) {
+			continue;
+		}
+
+		msg.addByte(static_cast<uint8_t>(category));
+		msg.add<uint16_t>(managedContainer.obtain);
+	}
 	writeToOutputBuffer(msg);
 }
 

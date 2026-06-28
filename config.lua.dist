@@ -155,7 +155,7 @@ monsterFactionPreferPlayers = true
 enableColorizedLootValue = false
 enableItemTierDisplay = false
 enableItemUpgradeClassification = false
-enableQuickLoot = false
+enableQuickLoot = true
 quickLootMaxCorpses = 30
 
 -- Character Bazaar (accounts.tibia_coins is the transferable coin balance)

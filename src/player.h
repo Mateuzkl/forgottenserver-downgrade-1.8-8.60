@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <map>
 #include <vector>
 
 #include <unordered_map>
@@ -131,6 +132,12 @@ struct AutoLootConfig
 	bool enabled = false;
 	bool goldEnabled = false;
 	std::string text;
+};
+
+struct ManagedLootContainer
+{
+	uint16_t loot = 0;
+	uint16_t obtain = 0;
 };
 
 using MuteCountMap = std::unordered_map<uint32_t, uint32_t>;
@@ -1432,8 +1439,17 @@ public:
 	bool isQuickLootListedItem(const Item* item) const;
 	QuickLootFilter_t getQuickLootFilter() const { return quickLootFilter; }
 	void setQuickLootBlackWhitelist(QuickLootFilter_t filter, const std::vector<uint16_t>& itemIds);
-	void setQuickLootFallbackToMainContainer(bool fallback) { quickLootFallbackToMainContainer = fallback; }
+	void setQuickLootFallbackToMainContainer(bool fallback);
 	bool getQuickLootFallbackToMainContainer() const { return quickLootFallbackToMainContainer; }
+	bool isQuickLootAutoEnabled() const;
+	void ensureQuickLootStateLoaded();
+	void saveQuickLootState() const;
+	void setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, bool isLootContainer);
+	void clearManagedLootContainer(ObjectCategory_t category, bool isLootContainer);
+	uint16_t getManagedLootContainerId(ObjectCategory_t category, bool isLootContainer) const;
+	Container* getManagedLootContainer(ObjectCategory_t category, bool isLootContainer) const;
+	ContainerPtr getManagedLootContainerRef(ObjectCategory_t category, bool isLootContainer) const;
+	const std::map<ObjectCategory_t, ManagedLootContainer>& getManagedLootContainers() const { return managedLootContainers; }
 
 	// Loot grouping
 	void addPendingLoot(std::string monsterName, Container* corpse);
@@ -1630,6 +1646,7 @@ private:
 	Position loginPosition;
 	AutoLootConfig autolootConfig;
 	std::unordered_set<uint16_t> quickLootListItemIds;
+	std::map<ObjectCategory_t, ManagedLootContainer> managedLootContainers;
 
 	time_t lastLoginSaved = 0;
 	time_t lastLogout = 0;
@@ -1716,6 +1733,7 @@ private:
 	int32_t helmetCooldownReduction = 0;
 	QuickLootFilter_t quickLootFilter = QUICKLOOTFILTER_SKIPPEDLOOT;
 	bool quickLootFallbackToMainContainer = true;
+	bool quickLootStateLoaded = false;
 	int32_t temporaryDeathLossReduction = 0;
 
 	uint16_t lastStatsTrainingTime = 0;

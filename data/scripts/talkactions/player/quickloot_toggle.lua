@@ -5,11 +5,9 @@ function talkaction.onSay(player, words, param)
 
 	if param == "on" then
 		settings:set("quickLoot", true)
-		player:registerEvent("QuickLootKill")
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "QuickLoot auto-loot has been enabled.")
 	elseif param == "off" then
 		settings:set("quickLoot", false)
-		player:unregisterEvent("QuickLootKill")
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "QuickLoot auto-loot has been disabled.")
 	else
 		local current = settings:get("quickLoot")
