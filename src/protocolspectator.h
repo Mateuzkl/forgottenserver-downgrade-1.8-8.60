@@ -830,15 +830,19 @@ class ProtocolSpectator {
 
         //containers
         void sendAddContainerItem(uint8_t cid, const Item *item) {
+            sendAddContainerItem(cid, 0, item);
+        }
+
+        void sendAddContainerItem(uint8_t cid, uint16_t slot, const Item *item) {
             auto o = owner.lock();
             if (o)
-                o->sendAddContainerItem(cid, item);
+                o->sendAddContainerItem(cid, slot, item);
 
             for (auto &it : spectators)
-                it->sendAddContainerItem(cid, item);
+                it->sendAddContainerItem(cid, slot, item);
 
             for (auto &spy : spyClients_)
-                spy->sendAddContainerItem(cid, item);
+                spy->sendAddContainerItem(cid, slot, item);
         }
 
         void sendUpdateContainerItem(uint8_t cid, uint16_t slot, const Item *item) {
@@ -854,15 +858,19 @@ class ProtocolSpectator {
         }
 
         void sendRemoveContainerItem(uint8_t cid, uint16_t slot) {
+            sendRemoveContainerItem(cid, slot, nullptr);
+        }
+
+        void sendRemoveContainerItem(uint8_t cid, uint16_t slot, const Item *lastItem) {
             auto o = owner.lock();
             if (o)
-                o->sendRemoveContainerItem(cid, slot);
+                o->sendRemoveContainerItem(cid, slot, lastItem);
 
             for (auto &it : spectators)
-                it->sendRemoveContainerItem(cid, slot);
+                it->sendRemoveContainerItem(cid, slot, lastItem);
 
             for (auto &spy : spyClients_)
-                spy->sendRemoveContainerItem(cid, slot);
+                spy->sendRemoveContainerItem(cid, slot, lastItem);
         }
 
 
@@ -980,6 +988,18 @@ class ProtocolSpectator {
             auto o = owner.lock();
             if (o)
                 o->sendImbuementDurations();
+        }
+
+        void sendCharmActivated(uint8_t charmId) {
+            auto o = owner.lock();
+            if (o)
+                o->sendCharmActivated(charmId);
+
+            for (auto &it : spectators)
+                it->sendCharmActivated(charmId);
+
+            for (auto &spy : spyClients_)
+                spy->sendCharmActivated(charmId);
         }
 
         void parseLookAt(NetworkMessage &msg) {

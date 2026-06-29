@@ -3,6 +3,7 @@
 
 #include "otpch.h"
 
+#include "bestiary_charm.h"
 #include "configmanager.h"
 #include "events.h"
 #include "game.h"
@@ -1205,6 +1206,58 @@ int luaGameSetWorldTime(lua_State* L)
 	return 1;
 }
 
+int luaGameRegisterBestiaryMonsterData(lua_State* L)
+{
+	// Game.registerBestiaryMonsterData(raceId, name, toKill, secondUnlock, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
+	BestiaryCreatureInfo info;
+	info.raceId = getInteger<uint16_t>(L, 1);
+	info.name = getString(L, 2);
+	info.toKill = getInteger<uint32_t>(L, 3);
+	if (lua_gettop(L) >= 11) {
+		info.secondUnlock = getInteger<uint32_t>(L, 4);
+		info.charmPoints = getInteger<uint16_t>(L, 5);
+		info.lookType = getInteger<uint16_t>(L, 6, 0);
+		info.lookHead = getInteger<uint8_t>(L, 7, 0);
+		info.lookBody = getInteger<uint8_t>(L, 8, 0);
+		info.lookLegs = getInteger<uint8_t>(L, 9, 0);
+		info.lookFeet = getInteger<uint8_t>(L, 10, 0);
+		info.lookAddons = getInteger<uint8_t>(L, 11, 0);
+	} else {
+		info.secondUnlock = info.toKill;
+		info.charmPoints = getInteger<uint16_t>(L, 4);
+		info.lookType = getInteger<uint16_t>(L, 5, 0);
+		info.lookHead = getInteger<uint8_t>(L, 6, 0);
+		info.lookBody = getInteger<uint8_t>(L, 7, 0);
+		info.lookLegs = getInteger<uint8_t>(L, 8, 0);
+		info.lookFeet = getInteger<uint8_t>(L, 9, 0);
+		info.lookAddons = getInteger<uint8_t>(L, 10, 0);
+	}
+
+	g_bestiaryCharmSystem.registerMonster(info);
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaGameHandleBestiaryCharmAction(lua_State* L)
+{
+	// Game.handleBestiaryCharmAction(player, charmId, action, raceId)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		pushBoolean(L, false);
+		pushString(L, "Player not found.");
+		return 2;
+	}
+
+	const uint8_t charmId = getInteger<uint8_t>(L, 2);
+	const uint8_t action = getInteger<uint8_t>(L, 3);
+	const uint16_t raceId = getInteger<uint16_t>(L, 4, 0);
+	const BestiaryCharmActionResult result = g_bestiaryCharmSystem.handleCharmAction(*player, charmId, action, raceId);
+
+	pushBoolean(L, result.success);
+	pushString(L, result.message);
+	return 2;
+}
+
 } // namespace
 
 void LuaScriptInterface::registerGame()
@@ -1213,6 +1266,8 @@ void LuaScriptInterface::registerGame()
 	registerTable("Game");
 	registerMethod("Game", "getLightState", luaGameGetLightState);
 	registerMethod("Game", "setWorldTime", luaGameSetWorldTime);
+	registerMethod("Game", "registerBestiaryMonsterData", luaGameRegisterBestiaryMonsterData);
+	registerMethod("Game", "handleBestiaryCharmAction", luaGameHandleBestiaryCharmAction);
 
 	registerMethod("Game", "getSpectators", luaGameGetSpectators);
 	registerMethod("Game", "getPlayers", luaGameGetPlayers);

@@ -720,6 +720,7 @@ enum item_t : uint16_t
 	ITEM_SUPPLY_STASH = 28750,
 	ITEM_DEPOT_BOX_1 = 22797,
 	ITEM_DEPOT_BOX_17 = 22813,
+	ITEM_BROWSEFIELD = 0xFFFF, // internal browse field container
 
 	ITEM_MALE_CORPSE = 4240,
 	ITEM_FEMALE_CORPSE = 4247,

@@ -30,6 +30,39 @@ local CHARM = {
 	OVERFLUX = 24
 }
 
+local CHARM_CATEGORY = {
+	MAJOR = "major",
+	MINOR = "minor"
+}
+
+local charmCategories = {
+	[CHARM.WOUND] = CHARM_CATEGORY.MAJOR,
+	[CHARM.ENFLAME] = CHARM_CATEGORY.MAJOR,
+	[CHARM.POISON] = CHARM_CATEGORY.MAJOR,
+	[CHARM.FREEZE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.ZAP] = CHARM_CATEGORY.MAJOR,
+	[CHARM.CURSE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.CRIPPLE] = CHARM_CATEGORY.MINOR,
+	[CHARM.PARRY] = CHARM_CATEGORY.MAJOR,
+	[CHARM.DODGE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.ADRENALINE] = CHARM_CATEGORY.MINOR,
+	[CHARM.NUMB] = CHARM_CATEGORY.MINOR,
+	[CHARM.CLEANSE] = CHARM_CATEGORY.MINOR,
+	[CHARM.BLESS] = CHARM_CATEGORY.MINOR,
+	[CHARM.SCAVENGE] = CHARM_CATEGORY.MINOR,
+	[CHARM.GUT] = CHARM_CATEGORY.MINOR,
+	[CHARM.LOW_BLOW] = CHARM_CATEGORY.MAJOR,
+	[CHARM.DIVINE_WRATH] = CHARM_CATEGORY.MAJOR,
+	[CHARM.VAMPIRIC] = CHARM_CATEGORY.MINOR,
+	[CHARM.VOID_CALL] = CHARM_CATEGORY.MINOR,
+	[CHARM.SAVAGE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.FATAL_HOLD] = CHARM_CATEGORY.MINOR,
+	[CHARM.VOID_INVERSION] = CHARM_CATEGORY.MINOR,
+	[CHARM.CARNAGE] = CHARM_CATEGORY.MAJOR,
+	[CHARM.OVERPOWER] = CHARM_CATEGORY.MAJOR,
+	[CHARM.OVERFLUX] = CHARM_CATEGORY.MAJOR
+}
+
 local damageCharms = {
 	[CHARM.WOUND] = COMBAT_PHYSICALDAMAGE,
 	[CHARM.ENFLAME] = COMBAT_FIREDAMAGE,
@@ -56,6 +89,32 @@ local playerCharmCache = {}
 local playerSpecials = {}
 local adrenalineBoosts = {}
 local charmDamageGuard = false
+
+local function getCharmDefinition(charmId)
+	return CustomBestiary and CustomBestiary.charmById and CustomBestiary.charmById[charmId] or nil
+end
+
+local function getCharmTierValue(charmId, tier, field, fallback)
+	local charm = getCharmDefinition(charmId)
+	tier = math.max(1, math.min(tonumber(tier) or 1, 3))
+	if charm and type(charm[field]) == "table" and charm[field][tier] ~= nil then
+		return charm[field][tier]
+	end
+	return fallback
+end
+
+local function getCharmChance(charmId, tier, fallback)
+	return getCharmTierValue(charmId, tier, "bonuses", fallback or 0)
+end
+
+local function getCharmBonus(charmId, tier, fallback)
+	return getCharmTierValue(charmId, tier, "bonuses", fallback or 0)
+end
+
+local function getCharmPercent(charmId, fallback)
+	local charm = getCharmDefinition(charmId)
+	return tonumber(charm and charm.percent) or fallback or 0
+end
 
 local function getPlayerFromCreature(creature)
 	if not creature then
@@ -85,16 +144,18 @@ local function getPlayerCharms(player)
 		return playerCharmCache[guid]
 	end
 
-	local charms = { byRace = {}, special = {} }
-	local resultId = db.storeQuery("SELECT `charm_id`, `raceid` FROM `player_bestiary_charms` WHERE `player_id` = " ..
-		guid .. " AND `unlocked` = 1 AND `raceid` > 0")
+	local charms = { byRace = {} }
+	local resultId = db.storeQuery("SELECT `charm_id`, `unlocked`, `raceid` FROM `player_bestiary_charms` WHERE `player_id` = " ..
+		guid .. " AND `unlocked` > 0 AND `raceid` > 0")
 	if resultId ~= false then
 		repeat
 			local charmId = result.getDataInt(resultId, "charm_id")
+			local tier = math.max(1, math.min(result.getDataInt(resultId, "unlocked"), 3))
 			local raceId = result.getDataInt(resultId, "raceid")
-			charms.byRace[raceId] = charmId
-			if charmId == CHARM.LOW_BLOW or charmId == CHARM.SAVAGE or charmId == CHARM.VAMPIRIC or charmId == CHARM.VOID_CALL then
-				charms.special[#charms.special + 1] = charmId
+			local category = charmCategories[charmId]
+			if category then
+				charms.byRace[raceId] = charms.byRace[raceId] or {}
+				charms.byRace[raceId][category] = { id = charmId, tier = tier }
 			end
 		until not result.next(resultId)
 		result.free(resultId)
@@ -104,11 +165,22 @@ local function getPlayerCharms(player)
 	return charms
 end
 
-local function getCharmForRace(player, raceId)
+local function getCharmForRace(player, raceId, category)
 	if not player or raceId <= 0 then
 		return nil
 	end
-	return getPlayerCharms(player).byRace[raceId]
+	local entry = getPlayerCharms(player).byRace[raceId]
+	if type(entry) == "table" then
+		local charm = category and entry[category]
+		if not category then
+			charm = entry[CHARM_CATEGORY.MAJOR] or entry[CHARM_CATEGORY.MINOR]
+		end
+		if type(charm) == "table" then
+			return charm.id, charm.tier
+		end
+		return charm, 1
+	end
+	return entry, 1
 end
 
 local function removeSpecials(player)
@@ -127,22 +199,6 @@ end
 
 local function applySpecials(player)
 	removeSpecials(player)
-	local values = {}
-	for _, charmId in ipairs(getPlayerCharms(player).special) do
-		if charmId == CHARM.LOW_BLOW then
-			values[SPECIALSKILL_CRITICALHITCHANCE] = (values[SPECIALSKILL_CRITICALHITCHANCE] or 0) + 400
-		elseif charmId == CHARM.SAVAGE then
-			values[SPECIALSKILL_CRITICALHITAMOUNT] = (values[SPECIALSKILL_CRITICALHITAMOUNT] or 0) + 2000
-		elseif charmId == CHARM.VAMPIRIC then
-			values[SPECIALSKILL_LIFELEECHAMOUNT] = (values[SPECIALSKILL_LIFELEECHAMOUNT] or 0) + 160
-		elseif charmId == CHARM.VOID_CALL then
-			values[SPECIALSKILL_MANALEECHAMOUNT] = (values[SPECIALSKILL_MANALEECHAMOUNT] or 0) + 80
-		end
-	end
-	for skill, value in pairs(values) do
-		player:addSpecialSkill(skill, value)
-	end
-	playerSpecials[player:getGuid()] = values
 end
 
 function CustomBestiary.refreshPlayerCharms(player)
@@ -155,15 +211,29 @@ end
 
 function CustomBestiary.getToolCharmBonuses(player, corpseId)
 	local raceId = CustomBestiary.corpseRaceById[tonumber(corpseId) or 0] or 0
-	local charmId = getCharmForRace(player, raceId)
+	local charmId, tier = getCharmForRace(player, raceId, CHARM_CATEGORY.MINOR)
 	return {
-		scavenge = charmId == CHARM.SCAVENGE,
-		gut = charmId == CHARM.GUT
+		scavenge = charmId == CHARM.SCAVENGE and getCharmBonus(charmId, tier, 60) or 0,
+		scavengeCharmId = charmId == CHARM.SCAVENGE and charmId or 0,
+		gut = charmId == CHARM.GUT and getCharmBonus(charmId, tier, 6) or 0,
+		gutCharmId = charmId == CHARM.GUT and charmId or 0
 	}
 end
 
 local function roll(chancePercent)
-	return math.random(100) <= chancePercent
+	return (math.random() * 100) <= (tonumber(chancePercent) or 0)
+end
+
+local function notifyCharmActivated(player, charmId)
+	if not player or not charmId then
+		return
+	end
+	if MiscAnalyzer and MiscAnalyzer.sendCharm and MiscAnalyzer.sendCharm(player, charmId) then
+		return
+	end
+	if player.sendCharmActivated then
+		player:sendCharmActivated(charmId)
+	end
 end
 
 local function isDamage(value, combatType)
@@ -254,39 +324,61 @@ function charmHealth.onHealthChange(creature, attacker, primaryDamage, primaryTy
 	if creature and creature:isMonster() then
 		local player = getPlayerFromCreature(attacker)
 		local raceId = getRaceId(creature)
-		local charmId = getCharmForRace(player, raceId)
-		if charmId and isDamage(primaryDamage, primaryType) then
-			local combatType = damageCharms[charmId]
-			if combatType and roll(5) then
+		if isDamage(primaryDamage, primaryType) then
+			local majorCharmId, majorTier = getCharmForRace(player, raceId, CHARM_CATEGORY.MAJOR)
+			local combatType = damageCharms[majorCharmId]
+			if player and combatType and roll(getCharmChance(majorCharmId, majorTier, 5)) then
 				local entry = CustomBestiary.getMonster(raceId)
 				local baseHealth = entry and entry.health or creature:getMaxHealth()
-				doCharmDamage(player, creature, combatType, math.max(1, math.floor(baseHealth * 0.05)), CONST_ME_DRAWBLOOD)
-			elseif charmId == CHARM.CRIPPLE and roll(6) then
+				local capByLevel = math.ceil(player:getLevel() * 2)
+				local damage = math.min(capByLevel, math.ceil(baseHealth * (getCharmPercent(majorCharmId, 5) / 100)))
+				notifyCharmActivated(player, majorCharmId)
+				doCharmDamage(player, creature, combatType, math.max(1, damage), CONST_ME_DRAWBLOOD)
+			elseif player and majorCharmId == CHARM.OVERPOWER and roll(getCharmChance(majorCharmId, majorTier, 5)) then
+				local targetCap = math.ceil(creature:getMaxHealth() * 0.08)
+				local damage = math.min(targetCap, math.ceil(player:getMaxHealth() * (getCharmPercent(majorCharmId, 5) / 100)))
+				notifyCharmActivated(player, majorCharmId)
+				doCharmDamage(player, creature, COMBAT_PHYSICALDAMAGE, math.max(1, damage), CONST_ME_DRAWBLOOD)
+			elseif player and majorCharmId == CHARM.OVERFLUX and roll(getCharmChance(majorCharmId, majorTier, 5)) then
+				local targetCap = math.ceil(creature:getMaxHealth() * 0.08)
+				local damage = math.min(targetCap, math.ceil(player:getMaxMana() * (getCharmPercent(majorCharmId, 2.5) / 100)))
+				notifyCharmActivated(player, majorCharmId)
+				doCharmDamage(player, creature, COMBAT_ENERGYDAMAGE, math.max(1, damage), CONST_ME_ENERGYHIT)
+			end
+
+			local minorCharmId, minorTier = getCharmForRace(player, raceId, CHARM_CATEGORY.MINOR)
+			if minorCharmId == CHARM.CRIPPLE and roll(getCharmChance(minorCharmId, minorTier, 6)) then
+				notifyCharmActivated(player, minorCharmId)
 				addParalyze(creature, 10000)
-			elseif charmId == CHARM.FATAL_HOLD and roll(30) and creature.blockFleeing then
+			elseif minorCharmId == CHARM.FATAL_HOLD and roll(getCharmChance(minorCharmId, minorTier, 30)) and creature.blockFleeing then
+				notifyCharmActivated(player, minorCharmId)
 				creature:blockFleeing(30000)
 				creature:getPosition():sendMagicEffect(CONST_ME_WHITE_TIGERCLASH)
-			elseif charmId == CHARM.OVERPOWER and roll(5) then
-				doCharmDamage(player, creature, COMBAT_PHYSICALDAMAGE, math.max(1, math.floor(player:getMaxHealth() * 0.05)), CONST_ME_DRAWBLOOD)
-			elseif charmId == CHARM.OVERFLUX and roll(5) then
-				doCharmDamage(player, creature, COMBAT_ENERGYDAMAGE, math.max(1, math.floor(player:getMaxMana() * 0.025)), CONST_ME_ENERGYHIT)
 			end
 		end
 	elseif creature and creature:isPlayer() then
 		local raceId = getRaceId(attacker)
-		local charmId = getCharmForRace(creature, raceId)
-		if charmId and isDamage(primaryDamage, primaryType) then
-			if charmId == CHARM.DODGE and roll(5) then
+		if isDamage(primaryDamage, primaryType) then
+			local majorCharmId, majorTier = getCharmForRace(creature, raceId, CHARM_CATEGORY.MAJOR)
+			if majorCharmId == CHARM.DODGE and roll(getCharmChance(majorCharmId, majorTier, 5)) then
+				notifyCharmActivated(creature, majorCharmId)
 				creature:getPosition():sendMagicEffect(CONST_ME_WHITE_EXPLOSIONHIT)
 				return 0, primaryType, 0, secondaryType
-			elseif charmId == CHARM.PARRY and roll(5) and attacker then
+			elseif majorCharmId == CHARM.PARRY and roll(getCharmChance(majorCharmId, majorTier, 5)) and attacker then
 				local reflected = math.abs(primaryDamage) + math.abs(secondaryDamage)
+				notifyCharmActivated(creature, majorCharmId)
 				doCharmDamage(creature, attacker, primaryType ~= COMBAT_NONE and primaryType or COMBAT_PHYSICALDAMAGE, reflected, CONST_ME_DRAWBLOOD)
-			elseif charmId == CHARM.ADRENALINE and roll(6) then
+			end
+
+			local minorCharmId, minorTier = getCharmForRace(creature, raceId, CHARM_CATEGORY.MINOR)
+			if minorCharmId == CHARM.ADRENALINE and roll(getCharmChance(minorCharmId, minorTier, 6)) then
+				notifyCharmActivated(creature, minorCharmId)
 				addAdrenaline(creature)
-			elseif charmId == CHARM.NUMB and roll(6) then
+			elseif minorCharmId == CHARM.NUMB and roll(getCharmChance(minorCharmId, minorTier, 6)) then
+				notifyCharmActivated(creature, minorCharmId)
 				addParalyze(attacker, 10000)
-			elseif charmId == CHARM.CLEANSE and roll(6) then
+			elseif minorCharmId == CHARM.CLEANSE and roll(getCharmChance(minorCharmId, minorTier, 6)) then
+				notifyCharmActivated(creature, minorCharmId)
 				cleanse(creature)
 			end
 		end
@@ -299,8 +391,9 @@ charmHealth:register()
 local charmMana = CreatureEvent("CustomBestiaryCharmMana")
 function charmMana.onManaChange(creature, attacker, primaryDamage, primaryType, secondaryDamage, secondaryType, origin)
 	if creature and creature:isPlayer() and primaryType == COMBAT_MANADRAIN then
-		local charmId = getCharmForRace(creature, getRaceId(attacker))
-		if charmId == CHARM.VOID_INVERSION and primaryDamage < 0 and roll(20) then
+		local charmId, tier = getCharmForRace(creature, getRaceId(attacker), CHARM_CATEGORY.MINOR)
+		if charmId == CHARM.VOID_INVERSION and primaryDamage < 0 and roll(getCharmChance(charmId, tier, 20)) then
+			notifyCharmActivated(creature, charmId)
 			creature:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 			return math.abs(primaryDamage), COMBAT_MANADRAIN, math.abs(secondaryDamage), secondaryType
 		end
@@ -315,12 +408,18 @@ function charmDeath.onDeath(creature, corpse, killer, mostDamageKiller, lastHitU
 	if not player or not creature or not creature:isMonster() then
 		return true
 	end
-	if getCharmForRace(player, getRaceId(creature)) == CHARM.CARNAGE and roll(10) then
-		local damage = math.max(1, math.floor(creature:getMaxHealth() * 0.15))
-		local spectators = Game.getSpectators(creature:getPosition(), false, false, 2, 2, 2, 2)
+	local charmId, tier = getCharmForRace(player, getRaceId(creature), CHARM_CATEGORY.MAJOR)
+	if charmId == CHARM.CARNAGE and roll(getCharmChance(charmId, tier, 10)) then
+		local capByLevel = player:getLevel() * 6
+		local damage = math.max(1, math.min(capByLevel, math.ceil(creature:getMaxHealth() * (getCharmPercent(charmId, 15) / 100))))
+		local position = creature:getPosition()
+		local spectators = Game.getSpectators(position, false, false, 1, 1, 1, 1)
+		notifyCharmActivated(player, charmId)
 		creature:getPosition():sendMagicEffect(CONST_ME_EXPLOSIONAREA)
 		for _, spectator in ipairs(spectators) do
-			if spectator:isMonster() and spectator ~= creature then
+			local spectatorPosition = spectator:getPosition()
+			local distance = math.abs(spectatorPosition.x - position.x) + math.abs(spectatorPosition.y - position.y)
+			if spectator:isMonster() and spectator ~= creature and spectatorPosition.z == position.z and distance == 1 then
 				spectator:getPosition():sendMagicEffect(CONST_ME_EXPLOSIONAREA)
 				doCharmDamage(player, spectator, COMBAT_PHYSICALDAMAGE, damage, CONST_ME_NONE)
 			end
@@ -332,8 +431,10 @@ charmDeath:register()
 
 local charmPrepareDeath = CreatureEvent("CustomBestiaryCharmPrepareDeath")
 function charmPrepareDeath.onPrepareDeath(player, killer)
-	if player and player:isPlayer() and getCharmForRace(player, getRaceId(killer)) == CHARM.BLESS and player.setTemporaryDeathLossReduction then
-		player:setTemporaryDeathLossReduction(6)
+	local charmId, tier = getCharmForRace(player, getRaceId(killer), CHARM_CATEGORY.MINOR)
+	if player and player:isPlayer() and charmId == CHARM.BLESS and player.setTemporaryDeathLossReduction then
+		notifyCharmActivated(player, charmId)
+		player:setTemporaryDeathLossReduction(getCharmBonus(charmId, tier, 6))
 	end
 	return true
 end

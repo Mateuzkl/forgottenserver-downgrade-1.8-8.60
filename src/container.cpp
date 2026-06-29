@@ -10,6 +10,7 @@
 #include "storeinbox.h"
 
 #include "game.h"
+#include "instance_utils.h"
 #include "iomap.h"
 #include "logger.h"
 
@@ -37,23 +38,67 @@ std::shared_ptr<Container> getSharedContainer(Container* container)
 
 } // namespace
 
+bool isBrowseFieldVisibleItem(const Item* item)
+{
+	if (!item || item->hasAttribute(ITEM_ATTRIBUTE_UNIQUEID)) {
+		return false;
+	}
+
+	return item->getContainer() || item->hasProperty(CONST_PROP_MOVEABLE) ||
+	       (Item::items[item->getID()].wrapableTo != 0 && !item->hasProperty(CONST_PROP_BLOCKPATH));
+}
+
 Container::Container(uint16_t type) : Container(type, items[type].maxItems) {}
 
 Container::Container(uint16_t type, uint16_t size) : Item(type), maxSize(size)
 {
-	if (getID() == ITEM_GOLD_POUCH) {
+	if (getID() == ITEM_GOLD_POUCH || getID() == ITEM_BROWSEFIELD) {
 		pagination = true;
 	}
 }
 
 Container::~Container()
 {
+	if (getID() == ITEM_BROWSEFIELD) {
+		Cylinder* parent = getParent();
+		for (const auto& item : itemlist) {
+			if (!item) {
+				continue;
+			}
+			item->setParent(parent);
+		}
+		return;
+	}
+
 	for (const auto& item : itemlist) {
 		if (!item) {
 			continue;
 		}
 		item->setParent(nullptr);
 	}
+}
+
+std::shared_ptr<Container> Container::createBrowseField(const TilePtr& tile, uint32_t viewerInstanceId)
+{
+	if (!tile) {
+		return nullptr;
+	}
+
+	auto browseField = std::make_shared<Container>(ITEM_BROWSEFIELD, 30);
+	const TileItemVector* itemVector = tile->getItemList();
+	if (itemVector) {
+		for (const auto& item : *itemVector) {
+			if (!isBrowseFieldVisibleItem(item.get()) ||
+			    !InstanceUtils::canSeeItemInInstance(viewerInstanceId, item.get())) {
+				continue;
+			}
+
+			browseField->internalAddThing(item.get());
+		}
+	}
+
+	browseField->setParent(tile.get());
+	return browseField;
 }
 
 void Container::updateAmmoCount(const Item* item, int32_t diff)
@@ -392,6 +437,10 @@ void Container::onRemoveContainerItem(uint32_t index, Item* item) const
 ReturnValue Container::queryAdd(int32_t index, const Thing& thing, uint32_t count, uint32_t flags,
                                 Creature* actor /* = nullptr*/) const
 {
+	if (getID() == ITEM_BROWSEFIELD) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+
 	bool childIsOwner = hasBitSet(FLAG_CHILDISOWNER, flags);
 	if (childIsOwner) {
 		// a child container is querying, since we are the top container (not carried by a player)

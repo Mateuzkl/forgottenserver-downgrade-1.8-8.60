@@ -469,6 +469,19 @@ int luaPlayerSetTemporaryDeathLossReduction(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSendCharmActivated(lua_State* L)
+{
+	// player:sendCharmActivated(charmId)
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		player->sendCharmActivated(getInteger<uint8_t>(L, 2));
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerAddConditionSuppressions(lua_State* L)
 {
 	// player:addConditionSuppressions(conditions)
@@ -4550,6 +4563,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getDeathPenalty", luaPlayerGetDeathPenalty);
 	registerMethod("Player", "getDropBonus", luaPlayerGetDropBonus);
 	registerMethod("Player", "setTemporaryDeathLossReduction", luaPlayerSetTemporaryDeathLossReduction);
+	registerMethod("Player", "sendCharmActivated", luaPlayerSendCharmActivated);
 	registerMethod("Player", "addConditionSuppressions", luaPlayerAddConditionSuppressions);
 	registerMethod("Player", "removeConditionSuppressions", luaPlayerRemoveConditionSuppressions);
 

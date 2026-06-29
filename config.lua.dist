@@ -136,7 +136,8 @@ exhaustPotionMiliSeconds = 1500
 exhaustItemAtUsePotion = true
 
 -- Optional custom systems
--- Default false keeps closer 8.60 behavior.
+-- Most optional systems default to false for closer 8.60 behavior.
+-- Quick Loot defaults to true because the Astra managed-loot UI expects it.
 forgeSystemEnabled = false
 imbuementSystemEnabled = false
 monkVocationEnabled = false
@@ -155,7 +156,7 @@ monsterFactionPreferPlayers = true
 enableColorizedLootValue = false
 enableItemTierDisplay = false
 enableItemUpgradeClassification = false
-enableQuickLoot = false
+enableQuickLoot = true
 quickLootMaxCorpses = 30
 
 -- Character Bazaar (accounts.tibia_coins is the transferable coin balance)

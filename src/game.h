@@ -413,6 +413,8 @@ public:
 	void playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint16_t fromSpriteId,
 	                     const Position& toPos, uint8_t toStackPos, uint16_t toSpriteId);
 	void playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPos, uint8_t index, uint16_t spriteId);
+	void playerBrowseField(uint32_t playerId, const Position& pos);
+	void playerSeekInContainer(uint32_t playerId, uint8_t containerId, uint16_t index);
 	void playerInspectItem(uint32_t playerId, const Position& pos);
 	void playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType);
 	void playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Position& pos, uint8_t stackPos,
@@ -422,6 +424,11 @@ public:
 	void playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,
 	                     bool lootAllCorpses);
 	void playerLootNearby(uint32_t playerId);
+	void playerQuickLootCorpse(uint32_t playerId, Container* container);
+	void playerSetManagedLootContainer(uint32_t playerId, ObjectCategory_t category, const Position& pos,
+	                                   uint16_t itemId, uint8_t stackPos, bool isLootContainer);
+	void playerClearManagedLootContainer(uint32_t playerId, ObjectCategory_t category, bool isLootContainer);
+	void playerOpenManagedLootContainer(uint32_t playerId, ObjectCategory_t category, bool isLootContainer);
 	void playerSetQuickLootFallback(uint32_t playerId, bool fallback);
 	void playerQuickLootBlackWhitelist(uint32_t playerId, QuickLootFilter_t filter, std::vector<uint16_t> itemIds);
 	void playerCloseContainer(uint32_t playerId, uint8_t cid);
@@ -691,6 +698,12 @@ public:
 		return tile ? tile->weak_from_this().lock() : nullptr;
 	}
 
+	std::shared_ptr<Container> getBrowseFieldContainer(Tile* tile, uint32_t instanceId);
+	std::shared_ptr<Container> getBrowseFieldContainer(Tile* tile);
+	std::shared_ptr<Tile> getBrowseFieldTile(const Cylinder* cylinder);
+	void releaseBrowseFieldContainer(const Container* container);
+	void cleanupBrowseFields();
+
 
 private:
 	StorageMap storageMap;
@@ -733,9 +746,32 @@ private:
 
 	using TradeItemMap = std::map<std::weak_ptr<Item>, uint32_t, std::owner_less<std::weak_ptr<Item>>>;
 	using LootHighlightEventMap = std::map<std::weak_ptr<Item>, uint32_t, std::owner_less<std::weak_ptr<Item>>>;
+	struct BrowseFieldKey
+	{
+		std::shared_ptr<Tile> tile;
+		uint32_t instanceId = 0;
+	};
+
+	struct BrowseFieldKeyCompare
+	{
+		bool operator()(const BrowseFieldKey& lhs, const BrowseFieldKey& rhs) const
+		{
+			std::owner_less<std::shared_ptr<Tile>> ownerLess;
+			if (ownerLess(lhs.tile, rhs.tile)) {
+				return true;
+			}
+			if (ownerLess(rhs.tile, lhs.tile)) {
+				return false;
+			}
+			return lhs.instanceId < rhs.instanceId;
+		}
+	};
+
+	using BrowseFieldMap = std::map<BrowseFieldKey, std::shared_ptr<Container>, BrowseFieldKeyCompare>;
 
 	// list of items that are in trading state, mapped to the player
 	TradeItemMap tradeItems;
+	BrowseFieldMap browseFields;
 
 	std::unordered_map<uint32_t, std::weak_ptr<BedItem>> bedSleepersMap;
 

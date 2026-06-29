@@ -20,8 +20,6 @@ local RESP_TRACKER = 0x05
 local RESP_BESTIARY_PROGRESS = 0x06
 
 local MAX_TRACKER_SLOTS = 5
-local CHARM_REMOVE_COST = 10000
-local BESTIARY_DETAIL_FULL = 4
 local BESTIARY_SEARCH_PREFIX = "__search__:"
 local MAX_CYCLOPEDIA_CLASS_LENGTH = 80
 
@@ -82,6 +80,15 @@ local function ensureTables()
 	]])
 
 	db.query([[
+		CREATE TABLE IF NOT EXISTS `player_bestiary_resources` (
+			`player_id` INT NOT NULL,
+			`minor_charm_echoes` INT UNSIGNED NOT NULL DEFAULT 0,
+			`max_minor_charm_echoes` INT UNSIGNED NOT NULL DEFAULT 0,
+			PRIMARY KEY (`player_id`)
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
+	]])
+
+	db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_tracker` (
 			`player_id` INT NOT NULL,
 			`raceid` SMALLINT UNSIGNED NOT NULL,
@@ -111,6 +118,40 @@ local function setPlayerCharmPoints(playerGuid, points)
 	points = math.max(0, tonumber(points) or 0)
 	db.query("UPDATE `players` SET `charmpoints` = " .. points .. " WHERE `id` = " .. playerGuid)
 	return points
+end
+
+local function ensurePlayerBestiaryResources(playerGuid)
+	playerGuid = tonumber(playerGuid) or 0
+	if playerGuid <= 0 then
+		return false
+	end
+	db.query("INSERT IGNORE INTO `player_bestiary_resources` (`player_id`) VALUES (" .. playerGuid .. ")")
+	return true
+end
+
+local function getPlayerMinorCharmEchoes(playerGuid)
+	if not ensurePlayerBestiaryResources(playerGuid) then
+		return 0, 0
+	end
+
+	local resultId = db.storeQuery("SELECT `minor_charm_echoes`, `max_minor_charm_echoes` FROM `player_bestiary_resources` WHERE `player_id` = " .. playerGuid)
+	if resultId == false then
+		return 0, 0
+	end
+
+	local echoes = math.max(0, result.getDataInt(resultId, "minor_charm_echoes"))
+	local maxEchoes = math.max(0, result.getDataInt(resultId, "max_minor_charm_echoes"))
+	result.free(resultId)
+	return echoes, maxEchoes
+end
+
+local function setPlayerMinorCharmEchoes(playerGuid, echoes, maxEchoes)
+	echoes = math.max(0, tonumber(echoes) or 0)
+	maxEchoes = math.max(echoes, tonumber(maxEchoes) or 0)
+	db.query("INSERT INTO `player_bestiary_resources` (`player_id`, `minor_charm_echoes`, `max_minor_charm_echoes`) VALUES (" ..
+		playerGuid .. ", " .. echoes .. ", " .. maxEchoes .. ") ON DUPLICATE KEY UPDATE `minor_charm_echoes` = " ..
+		echoes .. ", `max_minor_charm_echoes` = " .. maxEchoes)
+	return echoes, maxEchoes
 end
 
 local function invalidatePlayer(playerGuid)
@@ -157,8 +198,10 @@ local function loadCharmMap(playerGuid)
 	if resultId ~= false then
 		repeat
 			local charmId = result.getDataInt(resultId, "charm_id")
+			local tier = clamp(result.getDataInt(resultId, "unlocked"), 0, 3)
 			charms[charmId] = {
-				unlocked = result.getDataInt(resultId, "unlocked") ~= 0,
+				tier = tier,
+				unlocked = tier > 0,
 				raceId = result.getDataInt(resultId, "raceid")
 			}
 		until not result.next(resultId)
@@ -169,7 +212,11 @@ local function loadCharmMap(playerGuid)
 	charmByRaceCache[playerGuid] = {}
 	for charmId, state in pairs(charms) do
 		if state.unlocked and state.raceId > 0 then
-			charmByRaceCache[playerGuid][state.raceId] = charmId
+			local charm = CustomBestiary.charmById[charmId]
+			if charm then
+				charmByRaceCache[playerGuid][state.raceId] = charmByRaceCache[playerGuid][state.raceId] or {}
+				charmByRaceCache[playerGuid][state.raceId][charm.category or "major"] = charmId
+			end
 		end
 	end
 	return charms
@@ -209,7 +256,7 @@ rebuildEarnedPoints = function(playerGuid, kills)
 
 	local finished = {}
 	for raceId, entry in pairs(CustomBestiary.monstersByRaceId) do
-		if (kills[raceId] or 0) >= entry.toKill then
+		if (kills[raceId] or 0) >= entry.secondUnlock then
 			finished[#finished + 1] = raceId
 		end
 	end
@@ -269,8 +316,38 @@ local function getSpentCharmPoints(charms)
 	local spent = 0
 	for charmId, state in pairs(charms) do
 		local charm = CustomBestiary.charmById[charmId]
-		if charm and state.unlocked then
-			spent = spent + charm.price
+		local tier = clamp(state.tier or (state.unlocked and 1 or 0), 0, 3)
+		if charm and charm.category == "major" and tier > 0 then
+			for index = 1, tier do
+				spent = spent + ((charm.prices and charm.prices[index]) or charm.price or 0)
+			end
+		end
+	end
+	return spent
+end
+
+local function getNextCharmPrice(charm, tier)
+	tier = clamp(tier, 0, 3)
+	if tier >= 3 then
+		return 0
+	end
+	return (charm.prices and charm.prices[tier + 1]) or charm.price or 0
+end
+
+local function getMinorEchoRewardForTier(tier)
+	tier = clamp(tier, 0, 2)
+	return 25 * tier * tier + 25 * tier + 50
+end
+
+local function getCharmSpentByCategory(charms, category)
+	local spent = 0
+	for charmId, state in pairs(charms) do
+		local charm = CustomBestiary.charmById[charmId]
+		local tier = clamp(state.tier or (state.unlocked and 1 or 0), 0, 3)
+		if charm and charm.category == category and tier > 0 then
+			for index = 1, tier do
+				spent = spent + ((charm.prices and charm.prices[index]) or charm.price or 0)
+			end
 		end
 	end
 	return spent
@@ -296,10 +373,72 @@ local function getStoredCharmBalance(playerGuid, kills, charms)
 	return 0
 end
 
+local function getMaxCharmBalance(playerGuid, charmBalance, charms)
+	return math.max(charmBalance, charmBalance + getCharmSpentByCategory(charms, "major"))
+end
+
 local function getGoldBalance(player)
 	local inventoryMoney = math.max(0, tonumber(player:getMoney()) or 0)
 	local bankBalance = math.max(0, tonumber(player:getBankBalance()) or 0)
 	return inventoryMoney + bankBalance
+end
+
+local function getCharmResetCost(player)
+	local level = math.max(0, tonumber(player:getLevel()) or 0)
+	return 100000 + (level > 100 and level * 11000 or 0)
+end
+
+local function getEmptyCharmSlots(player, charms)
+	local assigned = 0
+	for charmId, state in pairs(charms) do
+		if CustomBestiary.charmById[charmId] and state.unlocked and (state.raceId or 0) > 0 then
+			assigned = assigned + 1
+		end
+	end
+
+	local maxSlots = player:isPremium() and 6 or 2
+	return math.max(0, maxSlots - assigned)
+end
+
+local function getCharmRemoveCost(player)
+	local level = math.max(0, tonumber(player:getLevel()) or 0)
+	return level * 100
+end
+
+local function getAssignableCharmCreatureIds(playerGuid, kills, charms)
+	if not finishedCache[playerGuid] then
+		rebuildEarnedPoints(playerGuid, kills)
+	end
+
+	local assignedByRace = {}
+	for charmId, state in pairs(charms) do
+		local charm = CustomBestiary.charmById[charmId]
+		local raceId = state.raceId or 0
+		local tier = clamp(state.tier or (state.unlocked and 1 or 0), 0, 3)
+		if charm and raceId > 0 and tier > 0 then
+			assignedByRace[raceId] = assignedByRace[raceId] or {}
+			assignedByRace[raceId][charm.category or "major"] = true
+		end
+	end
+
+	local creatures = {}
+	for _, raceId in ipairs(finishedCache[playerGuid] or {}) do
+		local assigned = assignedByRace[raceId]
+		if not assigned or not (assigned.major and assigned.minor) then
+			creatures[#creatures + 1] = raceId
+		end
+	end
+	return creatures
+end
+
+local function writeCharmResources(out, player, playerGuid, kills, charms)
+	local charmBalance = clamp(getStoredCharmBalance(playerGuid, kills, charms), 0, 0xFFFFFFFF)
+	local minorEchoes, maxMinorEchoes = getPlayerMinorCharmEchoes(playerGuid)
+	out:addU32(charmBalance)
+	out:addU32(clamp(minorEchoes, 0, 0xFFFFFFFF))
+	out:addU32(clamp(getMaxCharmBalance(playerGuid, charmBalance, charms), 0, 0xFFFFFFFF))
+	out:addU32(clamp(maxMinorEchoes, 0, 0xFFFFFFFF))
+	out:addU64(getGoldBalance(player))
 end
 
 local function removePlayerGold(player, amount)
@@ -351,26 +490,26 @@ end
 
 local function writeCharms(out, player, kills, charms)
 	local playerGuid = getPlayerGuid(player)
-	out:addU32(clamp(getStoredCharmBalance(playerGuid, kills, charms), 0, 0xFFFFFFFF))
-	out:addU64(getGoldBalance(player))
+	writeCharmResources(out, player, playerGuid, kills, charms)
 	out:addByte(math.min(#CustomBestiary.charmRunes, 0xFF))
 
 	for _, charm in ipairs(CustomBestiary.charmRunes) do
 		local state = charms[charm.id]
-		local unlocked = state and state.unlocked
-		local assignedRaceId = unlocked and state.raceId or 0
+		local tier = clamp(state and (state.tier or (state.unlocked and 1 or 0)) or 0, 0, 3)
+		local unlocked = tier > 0
+		local assignedRaceId = unlocked and state and state.raceId or 0
 
 		out:addByte(charm.id)
 		out:addString(charm.name)
 		out:addString(charm.description)
 		out:addByte(0)
-		out:addU16(clamp(charm.price, 0, 0xFFFF))
-		out:addByte(unlocked and 1 or 0)
+		out:addU16(clamp(getNextCharmPrice(charm, tier), 0, 0xFFFF))
+		out:addByte(tier)
 		if unlocked then
 			out:addByte(assignedRaceId > 0 and 1 or 0)
 			if assignedRaceId > 0 then
 				out:addU16(assignedRaceId)
-				out:addU32(CHARM_REMOVE_COST)
+				out:addU32(clamp(getCharmRemoveCost(player), 0, 0xFFFFFFFF))
 				writeCreatureInfo(out, CustomBestiary.getMonster(assignedRaceId))
 			end
 		else
@@ -378,9 +517,10 @@ local function writeCharms(out, player, kills, charms)
 		end
 	end
 
-	out:addByte(0)
+	out:addU32(clamp(getCharmResetCost(player), 0, 0xFFFFFFFF))
+	out:addByte(clamp(getEmptyCharmSlots(player, charms), 0, 0xFF))
 
-	local finished = finishedCache[playerGuid] or {}
+	local finished = getAssignableCharmCreatureIds(playerGuid, kills, charms)
 
 	out:addU16(math.min(#finished, 0xFFFF))
 	for i = 1, math.min(#finished, 0xFFFF) do
@@ -500,7 +640,7 @@ local function sendBestiaryMonster(player, raceId)
 	local kills = loadKillMap(playerGuid)
 	loadCharmMap(playerGuid) -- populates charmByRaceCache[playerGuid] as a side effect
 	local killCount = kills[entry.raceId] or 0
-	local detailLevel = BESTIARY_DETAIL_FULL
+	local detailLevel = CustomBestiary.getProgress(entry, killCount)
 
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_CYCLOPEDIA_SEND)
@@ -546,11 +686,12 @@ local function sendBestiaryMonster(player, raceId)
 		out:addString(entry.locations[i])
 	end
 
-	local assignedCharmId = charmByRaceCache[playerGuid] and charmByRaceCache[playerGuid][entry.raceId]
+	local assignedCharms = charmByRaceCache[playerGuid] and charmByRaceCache[playerGuid][entry.raceId]
+	local assignedCharmId = type(assignedCharms) == "table" and (assignedCharms.major or assignedCharms.minor) or assignedCharms
 	out:addByte(assignedCharmId and 1 or 0)
 	if assignedCharmId then
 		out:addByte(assignedCharmId)
-		out:addU32(CHARM_REMOVE_COST)
+		out:addU32(clamp(getCharmRemoveCost(player), 0, 0xFFFFFFFF))
 	else
 		out:addByte(0)
 	end
@@ -584,8 +725,7 @@ local function sendBestiaryProgress(player, raceId, killCount)
 	out:addU16(entry.secondUnlock)
 	out:addU16(entry.toKill)
 	writeCreatureInfo(out, entry)
-	out:addU32(clamp(getStoredCharmBalance(playerGuid, kills, charms), 0, 0xFFFFFFFF))
-	out:addU32(clamp(getGoldBalance(player), 0, 0xFFFFFFFF))
+	writeCharmResources(out, player, playerGuid, kills, charms)
 	return out:sendToPlayer(player)
 end
 
@@ -697,76 +837,22 @@ local function handleCharmAction(player, charmId, action, raceId)
 		return
 	end
 
-	local kills = loadKillMap(playerGuid)
-	local charms = loadCharmMap(playerGuid)
-	local state = charms[charmId]
+	if not Game.handleBestiaryCharmAction then
+		sendMessage(player, "Bestiary charm actions are unavailable.")
+		return
+	end
 
-	if action == 0 then
-		if state and state.unlocked then
-			sendMessage(player, "This charm is already unlocked.")
-			return
-		end
-
-		local charmPoints = getStoredCharmBalance(playerGuid, kills, charms)
-		if charmPoints < charm.price then
-			sendMessage(player, "You do not have enough charm points.")
-			return
-		end
-
-		db.query("INSERT INTO `player_bestiary_charms` (`player_id`, `charm_id`, `unlocked`, `raceid`) VALUES (" ..
-			playerGuid .. ", " .. charmId .. ", 1, 0) ON DUPLICATE KEY UPDATE `unlocked` = 1")
-		setPlayerCharmPoints(playerGuid, charmPoints - charm.price)
+	local success, message = Game.handleBestiaryCharmAction(player, charmId, action, raceId)
+	if message and message ~= "" then
+		sendMessage(player, message)
+	end
+	if success then
 		invalidatePlayer(playerGuid)
 		if CustomBestiary.refreshPlayerCharms then
 			CustomBestiary.refreshPlayerCharms(player)
 		end
-		sendMessage(player, "Charm unlocked.")
 		sendBestiaryData(player)
-		return
 	end
-
-	if not state or not state.unlocked then
-		sendMessage(player, "This charm is not unlocked.")
-		return
-	end
-
-	if action == 1 then
-		local entry = CustomBestiary.getMonster(raceId)
-		if not entry or CustomBestiary.getProgress(entry, kills[raceId] or 0) < 4 then
-			sendMessage(player, "This creature is not fully unlocked.")
-			return
-		end
-
-		db.query("UPDATE `player_bestiary_charms` SET `raceid` = 0 WHERE `player_id` = " .. playerGuid .. " AND `raceid` = " .. raceId)
-		db.query("UPDATE `player_bestiary_charms` SET `raceid` = " .. raceId .. " WHERE `player_id` = " .. playerGuid .. " AND `charm_id` = " .. charmId)
-		invalidatePlayer(playerGuid)
-		if CustomBestiary.refreshPlayerCharms then
-			CustomBestiary.refreshPlayerCharms(player)
-		end
-		sendMessage(player, "Charm assigned.")
-		sendBestiaryData(player)
-		return
-	elseif action == 2 then
-		if (state.raceId or 0) <= 0 then
-			sendMessage(player, "This charm is not assigned.")
-			return
-		end
-		if not removePlayerGold(player, CHARM_REMOVE_COST) then
-			sendMessage(player, "You do not have enough gold.")
-			return
-		end
-
-		db.query("UPDATE `player_bestiary_charms` SET `raceid` = 0 WHERE `player_id` = " .. playerGuid .. " AND `charm_id` = " .. charmId)
-		invalidatePlayer(playerGuid)
-		if CustomBestiary.refreshPlayerCharms then
-			CustomBestiary.refreshPlayerCharms(player)
-		end
-		sendMessage(player, "Charm removed.")
-		sendBestiaryData(player)
-		return
-	end
-
-	sendMessage(player, "Invalid charm action.")
 end
 
 local infoHandler = PacketHandler(OPCODE_CYCLOPEDIA_INFO)

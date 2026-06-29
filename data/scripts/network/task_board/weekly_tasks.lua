@@ -46,6 +46,7 @@ local KILL_TASKS_EXPANSION = 8
 local DELIVERY_TASKS_NORMAL = 6
 local DELIVERY_TASKS_EXPANSION = 9
 local KILL_SAVE_INTERVAL = 5
+local ITEM_NOTIFY_INTERVAL = 1000
 
 -- Weekday constants (Lua: 1=Sunday, 2=Monday, ..., 7=Saturday)
 local DEFAULT_RESET_DAY = 1 -- Sunday
@@ -606,13 +607,11 @@ function WeeklyTasks.deliverTask(player, taskIndex)
 	-- Count items in player inventory
 	local itemId = dt.itemId
 	local required = dt.required
-	local found = 0
 
-	-- Quick count from inventory
-	local countResult = player:getItemTypeCount(itemId)
+	local countResult = player:getItemCount(itemId, -1, true) or 0
 	if countResult >= required then
 		-- Remove items from player
-		if player:removeItem(itemId, required) then
+		if player:removeItem(itemId, required, -1, true) then
 			dt.collectedItems = (dt.collectedItems or 0) + required
 			dt.available = countResult - required
 			dt.delivered = 1
@@ -727,15 +726,15 @@ function WeeklyTasks.sendWeeklyData(player)
 		local delivered = dt.delivered == 1
 		local available = 0
 		if dt.itemId then
-			available = player:getItemCount(dt.itemId) or 0
+			available = player:getItemCount(dt.itemId, -1, true) or 0
 		end
 
 		deliveryTasks[#deliveryTasks + 1] = {
 			itemId = dt.itemId,
-			amount = delivered and required or 0,
+			amount = delivered and required or math.min(available, required),
 			required = required,
 			available = available,
-			grade = dt.grade or 0,
+			delivered = delivered and 1 or 0,
 		}
 	end
 
@@ -790,5 +789,44 @@ function WeeklyTasks.checkRewardsOnLogin(player)
 		WeeklyTasks.performWeeklyReset(player)
 	end
 end
+
+local function notifyDeliveryItemChange(player, item)
+	if not player or not item or not item.getId then
+		return
+	end
+
+	local playerGuid = getPlayerGuid(player)
+	local data = loadWeeklyData(playerGuid)
+	if #data.deliveryTasks == 0 then
+		return
+	end
+
+	local itemId = item:getId()
+	local shouldNotify = false
+	for _, task in ipairs(data.deliveryTasks) do
+		if task.delivered ~= 1 and tonumber(task.itemId) == itemId then
+			shouldNotify = true
+			break
+		end
+	end
+
+	if not shouldNotify then
+		return
+	end
+
+	local now = os.mtime and os.mtime() or (os.time() * 1000)
+	if now - (data.lastItemNotify or 0) < ITEM_NOTIFY_INTERVAL then
+		return
+	end
+
+	data.lastItemNotify = now
+	WeeklyTasks.sendWeeklyData(player)
+end
+
+local weeklyDeliveryItemMoved = Event()
+weeklyDeliveryItemMoved.onItemMoved = function(player, item)
+	notifyDeliveryItemChange(player, item)
+end
+weeklyDeliveryItemMoved:register()
 
 return WeeklyTasks

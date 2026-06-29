@@ -343,6 +343,8 @@ local function buildMissionsPayload(player, state, season, daily)
 		dailyEndTime = daily.endTime,
 		dailyMissions = dailyMissions,
 		generalMissions = generalPayload,
+		shopPoints = state.shopPoints,
+		shopUnlocked = state.completed,
 	}
 end
 
@@ -599,6 +601,8 @@ local function sendMissionState(player, state, season, daily)
 		writeU32(out, payload.dailyEndTime)
 		writeMissionList(out, payload.dailyMissions)
 		writeMissionList(out, payload.generalMissions)
+		writeU32(out, payload.shopPoints)
+		writeBool(out, payload.shopUnlocked)
 	end)
 end
 

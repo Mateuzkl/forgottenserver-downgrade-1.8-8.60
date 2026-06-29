@@ -139,6 +139,8 @@ local function buildItemDescriptions(itemId)
 		return details
 	end
 
+	addDetail(details, "Name", safeCall(itemType, "getName"))
+
 	local description = safeCall(itemType, "getDescription") or ""
 	addDetail(details, "Description", description ~= "" and description or safeCall(itemType, "getName"))
 
@@ -269,7 +271,7 @@ end
 
 local function sendItemDetails(player, itemId)
 	itemId = tonumber(itemId) or 0
-	if itemId <= 0 or not supportsCustomNetwork(player) or not colorizedLootEnabled() then
+	if itemId <= 0 or not supportsCustomNetwork(player) then
 		return false
 	end
 

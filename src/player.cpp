@@ -27,6 +27,7 @@
 #include "scheduler.h"
 #include "logger.h"
 #include <fmt/format.h>
+#include <cstdlib>
 #include "tools.h"
 #include "weapons.h"
 
@@ -2001,12 +2002,23 @@ void Player::sendAddContainerItem(const Container* container, const Item* item)
 			continue;
 		}
 
-		if (openContainer.index >= container->capacity()) {
-			item = container->getItemByIndex(openContainer.index);
+		uint16_t slot = openContainer.index;
+		const Item* itemToSend = item;
+		if (container->getID() == ITEM_BROWSEFIELD && container->size() > 0) {
+			const uint16_t containerSize = static_cast<uint16_t>(container->size() - 1);
+			const uint16_t pageEnd = openContainer.index + static_cast<uint16_t>(container->capacity()) - 1;
+			if (containerSize > pageEnd) {
+				slot = pageEnd;
+				itemToSend = container->getItemByIndex(pageEnd);
+			} else {
+				slot = containerSize;
+			}
+		} else if (openContainer.index >= container->capacity()) {
+			itemToSend = container->getItemByIndex(openContainer.index);
 		}
 
-		if (item) {
-			client->sendAddContainerItem(it->first, item);
+		if (itemToSend) {
+			client->sendAddContainerItem(it->first, slot, itemToSend);
 		}
 		++it;
 	}
@@ -2072,7 +2084,11 @@ void Player::sendRemoveContainerItem(const Container* container, uint16_t slot)
 			sendContainer(it->first, container, false, firstIndex);
 		}
 
-		client->sendRemoveContainerItem(it->first, std::max<uint16_t>(slot, firstIndex));
+		const uint32_t capacity = container->capacity();
+		const Item* lastItem = capacity > 0 ?
+		                           container->getItemByIndex(firstIndex + static_cast<uint16_t>(capacity - 1)) :
+		                           nullptr;
+		client->sendRemoveContainerItem(it->first, std::max<uint16_t>(slot, firstIndex), lastItem);
 		++it;
 	}
 }
@@ -6817,6 +6833,74 @@ void Player::lootCorpse(Container* container)
 	}
 }
 
+namespace {
+
+bool isValidQuickLootCategory(ObjectCategory_t category)
+{
+	const uint8_t value = static_cast<uint8_t>(category);
+	return value >= OBJECTCATEGORY_FIRST && value <= OBJECTCATEGORY_LAST && value != 26;
+}
+
+std::shared_ptr<KV> getPlayerQuickLootKV(uint32_t guid)
+{
+	return KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", guid))->scoped("quickloot");
+}
+
+uint16_t getKVContainerId(const ValueWrapper& value, const std::string& key)
+{
+	const int32_t number = value.get<IntType>(key);
+	if (number <= 0) {
+		return 0;
+	}
+	return static_cast<uint16_t>(std::min<int32_t>(number, std::numeric_limits<uint16_t>::max()));
+}
+
+uint64_t getKVContainerUid(const ValueWrapper& value, const std::string& key)
+{
+	const std::string text = value.get<StringType>(key);
+	if (text.empty()) {
+		return 0;
+	}
+
+	char* end = nullptr;
+	const unsigned long long number = std::strtoull(text.c_str(), &end, 10);
+	if (end == text.c_str() || *end != '\0') {
+		return 0;
+	}
+	return static_cast<uint64_t>(number);
+}
+
+Container* findHeldContainerByIdentity(Container* parent, uint16_t itemId, uint64_t itemUid)
+{
+	if (!parent) {
+		return nullptr;
+	}
+
+	for (ContainerIterator it = parent->iterator(); it.hasNext(); it.advance()) {
+		Item* item = *it;
+		if (!item) {
+			continue;
+		}
+
+		Container* container = item->getContainer();
+		if (!container) {
+			continue;
+		}
+
+		if ((itemUid != 0 && item->getItemUID() == itemUid) ||
+		    (itemUid == 0 && (item->getID() == itemId || item->getClientID() == itemId))) {
+			return container;
+		}
+
+		if (Container* nested = findHeldContainerByIdentity(container, itemId, itemUid)) {
+			return nested;
+		}
+	}
+	return nullptr;
+}
+
+} // namespace
+
 void Player::sendLootContainers() const
 {
 	if (client && isAstraClient()) {
@@ -6826,11 +6910,17 @@ void Player::sendLootContainers() const
 
 bool Player::isQuickLootListedItem(const Item* item) const
 {
-	return item && quickLootListItemIds.contains(item->getID());
+	if (!item) {
+		return false;
+	}
+
+	return quickLootListItemIds.contains(item->getID()) ||
+	       (item->getClientID() != 0 && quickLootListItemIds.contains(item->getClientID()));
 }
 
 void Player::setQuickLootBlackWhitelist(QuickLootFilter_t filter, const std::vector<uint16_t>& itemIds)
 {
+	ensureQuickLootStateLoaded();
 	quickLootFilter = filter == QUICKLOOTFILTER_ACCEPTEDLOOT ? QUICKLOOTFILTER_ACCEPTEDLOOT : QUICKLOOTFILTER_SKIPPEDLOOT;
 	quickLootListItemIds.clear();
 	quickLootListItemIds.reserve(itemIds.size());
@@ -6839,6 +6929,231 @@ void Player::setQuickLootBlackWhitelist(QuickLootFilter_t filter, const std::vec
 			quickLootListItemIds.insert(itemId);
 		}
 	}
+}
+
+void Player::setQuickLootFallbackToMainContainer(bool fallback)
+{
+	ensureQuickLootStateLoaded();
+	quickLootFallbackToMainContainer = fallback;
+	saveQuickLootState();
+}
+
+bool Player::isQuickLootAutoEnabled() const
+{
+	auto settings = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("settings");
+	const auto value = settings->get("quickLoot", true);
+	return value.has_value() && value->get<BooleanType>();
+}
+
+void Player::ensureQuickLootStateLoaded()
+{
+	if (quickLootStateLoaded) {
+		return;
+	}
+	quickLootStateLoaded = true;
+
+	auto store = getPlayerQuickLootKV(getGUID());
+	if (const auto fallback = store->get("fallback", true); fallback.has_value()) {
+		quickLootFallbackToMainContainer = fallback->get<BooleanType>();
+	}
+
+	const auto savedContainers = store->get("managedContainers", true);
+	if (!savedContainers.has_value()) {
+		return;
+	}
+
+	managedLootContainers.clear();
+	for (const auto& [categoryText, wrappedContainers] : savedContainers->get<MapType>()) {
+		if (!wrappedContainers) {
+			continue;
+		}
+
+		char* end = nullptr;
+		const unsigned long rawCategory = std::strtoul(categoryText.c_str(), &end, 10);
+		if (end == categoryText.c_str() || *end != '\0' || rawCategory > std::numeric_limits<uint8_t>::max()) {
+			continue;
+		}
+
+		const auto category = static_cast<ObjectCategory_t>(rawCategory);
+		if (!isValidQuickLootCategory(category)) {
+			continue;
+		}
+
+		ManagedLootContainer entry;
+		entry.loot = getKVContainerId(*wrappedContainers, "loot");
+		entry.obtain = getKVContainerId(*wrappedContainers, "obtain");
+		entry.lootUid = getKVContainerUid(*wrappedContainers, "lootUid");
+		entry.obtainUid = getKVContainerUid(*wrappedContainers, "obtainUid");
+		if (entry.loot != 0 || entry.obtain != 0) {
+			managedLootContainers[category] = entry;
+		}
+	}
+}
+
+void Player::saveQuickLootState() const
+{
+	auto store = getPlayerQuickLootKV(getGUID());
+
+	MapType serializedContainers;
+	for (const auto& [category, containers] : managedLootContainers) {
+		if (containers.loot == 0 && containers.obtain == 0) {
+			continue;
+		}
+
+		MapType entry;
+		entry.emplace("loot", std::make_shared<ValueWrapper>(static_cast<int32_t>(containers.loot)));
+		entry.emplace("obtain", std::make_shared<ValueWrapper>(static_cast<int32_t>(containers.obtain)));
+		entry.emplace("lootUid", std::make_shared<ValueWrapper>(std::to_string(containers.lootUid)));
+		entry.emplace("obtainUid", std::make_shared<ValueWrapper>(std::to_string(containers.obtainUid)));
+		serializedContainers.emplace(std::to_string(static_cast<uint8_t>(category)), std::make_shared<ValueWrapper>(entry));
+	}
+
+	store->set("managedContainers", ValueWrapper(serializedContainers));
+	store->set("fallback", ValueWrapper(quickLootFallbackToMainContainer));
+}
+
+void Player::setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, uint64_t containerUid, bool isLootContainer)
+{
+	ensureQuickLootStateLoaded();
+	if (!isValidQuickLootCategory(category) || containerId == 0) {
+		return;
+	}
+
+	auto& containers = managedLootContainers[category];
+	if (isLootContainer) {
+		containers.loot = containerId;
+		containers.lootUid = containerUid;
+	} else {
+		containers.obtain = containerId;
+		containers.obtainUid = containerUid;
+	}
+	saveQuickLootState();
+}
+
+void Player::clearManagedLootContainer(ObjectCategory_t category, bool isLootContainer)
+{
+	ensureQuickLootStateLoaded();
+	auto it = managedLootContainers.find(category);
+	if (it == managedLootContainers.end()) {
+		return;
+	}
+
+	if (isLootContainer) {
+		it->second.loot = 0;
+		it->second.lootUid = 0;
+	} else {
+		it->second.obtain = 0;
+		it->second.obtainUid = 0;
+	}
+
+	if (it->second.loot == 0 && it->second.obtain == 0) {
+		managedLootContainers.erase(it);
+	}
+	saveQuickLootState();
+}
+
+uint16_t Player::getManagedLootContainerId(ObjectCategory_t category, bool isLootContainer) const
+{
+	auto self = const_cast<Player*>(this);
+	self->ensureQuickLootStateLoaded();
+	if (category != OBJECTCATEGORY_DEFAULT && category != OBJECTCATEGORY_GOLD && !isPremium()) {
+		category = OBJECTCATEGORY_DEFAULT;
+	}
+
+	const auto it = managedLootContainers.find(category);
+	uint16_t containerId = 0;
+	if (it != managedLootContainers.end()) {
+		containerId = isLootContainer ? it->second.loot : it->second.obtain;
+	}
+
+	if (containerId == 0 && category != OBJECTCATEGORY_DEFAULT) {
+		return getManagedLootContainerId(OBJECTCATEGORY_DEFAULT, isLootContainer);
+	}
+	return containerId;
+}
+
+uint64_t Player::getManagedLootContainerUid(ObjectCategory_t category, bool isLootContainer) const
+{
+	auto self = const_cast<Player*>(this);
+	self->ensureQuickLootStateLoaded();
+	if (category != OBJECTCATEGORY_DEFAULT && category != OBJECTCATEGORY_GOLD && !isPremium()) {
+		category = OBJECTCATEGORY_DEFAULT;
+	}
+
+	const auto it = managedLootContainers.find(category);
+	uint64_t containerUid = 0;
+	uint16_t containerId = 0;
+	if (it != managedLootContainers.end()) {
+		containerId = isLootContainer ? it->second.loot : it->second.obtain;
+		containerUid = isLootContainer ? it->second.lootUid : it->second.obtainUid;
+	}
+
+	if (containerId == 0 && category != OBJECTCATEGORY_DEFAULT) {
+		return getManagedLootContainerUid(OBJECTCATEGORY_DEFAULT, isLootContainer);
+	}
+	return containerUid;
+}
+
+Container* Player::getManagedLootContainer(ObjectCategory_t category, bool isLootContainer) const
+{
+	const uint16_t containerId = getManagedLootContainerId(category, isLootContainer);
+	const uint64_t containerUid = getManagedLootContainerUid(category, isLootContainer);
+	if (containerId == 0) {
+		return nullptr;
+	}
+
+	if (containerId == ITEM_GOLD_POUCH && containerUid == 0) {
+		return findGoldPouch();
+	}
+
+	if (storeInbox) {
+		for (const auto& storeItem : storeInbox->getItemList()) {
+			if (!storeItem) {
+				continue;
+			}
+
+			Container* container = storeItem->getContainer();
+			if (!container) {
+				continue;
+			}
+
+			if ((containerUid != 0 && storeItem->getItemUID() == containerUid) ||
+			    (containerUid == 0 && (storeItem->getID() == containerId || storeItem->getClientID() == containerId))) {
+				return container;
+			}
+
+			if (Container* nested = findHeldContainerByIdentity(container, containerId, containerUid)) {
+				return nested;
+			}
+		}
+	}
+
+	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		Item* slotItem = inventory[slot].get();
+		if (!slotItem) {
+			continue;
+		}
+
+		Container* container = slotItem->getContainer();
+		if (!container) {
+			continue;
+		}
+
+		if ((containerUid != 0 && slotItem->getItemUID() == containerUid) ||
+		    (containerUid == 0 && (slotItem->getID() == containerId || slotItem->getClientID() == containerId))) {
+			return container;
+		}
+
+		if (Container* nested = findHeldContainerByIdentity(container, containerId, containerUid)) {
+			return nested;
+		}
+	}
+	return nullptr;
+}
+
+ContainerPtr Player::getManagedLootContainerRef(ObjectCategory_t category, bool isLootContainer) const
+{
+	return g_game.getContainerSharedRef(getManagedLootContainer(category, isLootContainer));
 }
 
 void Player::addPendingLoot(std::string monsterName, Container* corpse)

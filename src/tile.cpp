@@ -7,6 +7,7 @@
 
 #include "combat.h"
 #include "configmanager.h"
+#include "container.h"
 #include "creature.h"
 #include "game.h"
 #include "instance_utils.h"
@@ -453,6 +454,13 @@ Thing* Tile::getTopVisibleThing(const Creature* creature)
 
 void Tile::onAddTileItem(Item* item)
 {
+	if (isBrowseFieldVisibleItem(item)) {
+		if (auto browseField = g_game.getBrowseFieldContainer(this)) {
+			browseField->addItemBack(item);
+			item->setParent(this);
+		}
+	}
+
 	setTileFlags(item);
 
 	const Position& cylinderMapPos = getPosition();
@@ -478,6 +486,22 @@ void Tile::onAddTileItem(Item* item)
 
 void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newItem, const ItemType& newType)
 {
+	if (auto browseField = g_game.getBrowseFieldContainer(this)) {
+		if (isBrowseFieldVisibleItem(newItem)) {
+			const int32_t index = browseField->getThingIndex(oldItem);
+			if (index != -1) {
+				browseField->replaceThing(static_cast<uint32_t>(index), newItem);
+			} else {
+				browseField->addItemBack(newItem);
+			}
+			newItem->setParent(this);
+		} else if (isBrowseFieldVisibleItem(oldItem)) {
+			Cylinder* oldParent = oldItem->getParent();
+			browseField->removeThing(oldItem, oldItem->getItemCount());
+			oldItem->setParent(oldParent);
+		}
+	}
+
 	const Position& cylinderMapPos = getPosition();
 
 	SpectatorVec spectators;
@@ -499,6 +523,12 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 
 void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item)
 {
+	if (isBrowseFieldVisibleItem(item)) {
+		if (auto browseField = g_game.getBrowseFieldContainer(this)) {
+			browseField->removeThing(item, item->getItemCount());
+		}
+	}
+
 	resetTileFlags(item);
 
 	const Position& cylinderMapPos = getPosition();

@@ -722,6 +722,17 @@ bool Items::loadFromOtb(const std::string& file)
 		iType.alwaysOnTopOrder = alwaysOnTopOrder;
 	}
 
+	if (ITEM_BROWSEFIELD >= items.size()) {
+		items.resize(ITEM_BROWSEFIELD + 1);
+	}
+
+	ItemType& browseFieldType = items[ITEM_BROWSEFIELD];
+	browseFieldType.id = ITEM_BROWSEFIELD;
+	browseFieldType.name = "browse field";
+	browseFieldType.group = ITEM_GROUP_CONTAINER;
+	browseFieldType.type = ITEM_TYPE_CONTAINER;
+	browseFieldType.maxItems = 30;
+
 	items.shrink_to_fit();
 	return true;
 }

@@ -18,6 +18,8 @@ class RewardChest;
 class StoreInbox;
 class Player;
 
+bool isBrowseFieldVisibleItem(const Item* item);
+
 class ContainerIterator
 {
 public:
@@ -39,6 +41,8 @@ public:
 	explicit Container(uint16_t type);
 	Container(uint16_t type, uint16_t size);
 	~Container();
+
+	static std::shared_ptr<Container> createBrowseField(const TilePtr& tile, uint32_t viewerInstanceId);
 
 	// non-copyable
 	Container(const Container&) = delete;
