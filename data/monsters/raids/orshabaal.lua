@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Orshabaal")
 local monster = {}
 
-monster.name = "Orshabaal"
 monster.description = "Orshabaal"
 monster.experience = 10000
 monster.outfit = {
@@ -122,7 +121,7 @@ monster.loot = {
 	{ id = 6299, chance = 50000 }, -- death ring
 	{ name = "demonic essence", chance = 100000 },
 	{ name = "assassin star", chance = 12500, maxCount = 42 },
-	{ name = "great mana potion", chance = 33333 },
+	{ id = 238, chance = 33333 }, -- great mana potion
 	{ name = "great health potion", chance = 20000 },
 	{ name = "great spirit potion", chance = 12500 },
 	{ name = "ultimate health potion", chance = 33333 },
@@ -142,6 +141,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 111,
 	armor = 90,
+	--	mitigation = ???,
 	{ name = "combat", interval = 1000, chance = 9, type = COMBAT_HEALING, minDamage = 1500, maxDamage = 2500, effect = CONST_ME_MAGIC_BLUE, target = false },
 	{ name = "combat", interval = 1000, chance = 17, type = COMBAT_HEALING, minDamage = 600, maxDamage = 1000, effect = CONST_ME_MAGIC_BLUE, target = false },
 	{ name = "speed", interval = 1000, chance = 5, speedChange = 1901, effect = CONST_ME_MAGIC_RED, target = false, duration = 7000 },

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Orewalker")
 local monster = {}
 
-monster.name = "Orewalker"
 monster.description = "an orewalker"
 monster.experience = 5900
 monster.outfit = {
@@ -90,7 +89,7 @@ monster.loot = {
 	{ name = "glorious axe", chance = 1870 },
 	{ name = "strong health potion", chance = 15600, maxCount = 2 },
 	{ name = "strong mana potion", chance = 14000, maxCount = 2 },
-	{ name = "great mana potion", chance = 14000, maxCount = 2 },
+	{ id = 238, chance = 14000, maxCount = 2 }, -- great mana potion
 	{ name = "mana potion", chance = 14000, maxCount = 4 },
 	{ name = "ultimate health potion", chance = 9500, maxCount = 2 },
 	{ name = "crystalline armor", chance = 560 },
@@ -112,8 +111,7 @@ monster.attacks = {
 	{ name = "orewalker wave", interval = 2000, chance = 15, minDamage = -296, maxDamage = -700, target = false },
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -1500, length = 6, spread = 3, effect = CONST_ME_GROUNDSHAKER, target = false },
 	-- poison
-	{ name = "condition", interval = 2000, chance = 10, target = true, condition =
-	{ type = CONDITION_POISON, minDamage = -800, maxDamage = -1000, radius = 3, shootEffect = CONST_ANI_SMALLEARTH, effect = CONST_ME_SMALLPLANTS } },
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 10, minDamage = -800, maxDamage = -1080, radius = 3, shootEffect = CONST_ANI_SMALLEARTH, effect = CONST_ME_SMALLPLANTS, target = true },
 	{ name = "speed", interval = 2000, chance = 15, speedChange = -800, radius = 2, effect = CONST_ME_MAGIC_RED, target = false, duration = 20000 },
 }
 

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("The Count of the Core")
 local monster = {}
 
-monster.name = "The Count of the Core"
 monster.description = "The Count Of The Core"
 monster.experience = 300000
 monster.outfit = {
@@ -14,9 +13,8 @@ monster.outfit = {
 	lookMount = 0,
 }
 
-monster.bosstiary = {
-	bossRaceId = 1519,
-	bossRace = RARITY_BANE,
+monster.events = {
+	"DepthWarzoneBossDeath",
 }
 
 monster.health = 350000
@@ -29,6 +27,11 @@ monster.manaCost = 0
 monster.changeTarget = {
 	interval = 5000,
 	chance = 10,
+}
+
+monster.bosstiary = {
+	bossRaceId = 1519,
+	bossRace = RARITY_BANE,
 }
 
 monster.strategiesTarget = {
@@ -77,7 +80,7 @@ monster.loot = {
 	{ name = "stone skin amulet", chance = 100000 },
 	{ name = "amber staff", chance = 100000 },
 	{ name = "ultimate health potion", chance = 80000, maxCount = 15 },
-	{ name = "great mana potion", chance = 60000, maxCount = 23 },
+	{ id = 238, chance = 60000, maxCount = 23 }, -- great mana potion
 	{ name = "small topaz", chance = 60000, maxCount = 10 },
 	{ name = "green crystal shard", chance = 60000 },
 	{ name = "wand of inferno", chance = 60000 },
@@ -127,6 +130,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 160,
 	armor = 160,
+	--	mitigation = ???,
 }
 
 monster.elements = {

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Draken Abomination")
 local monster = {}
 
-monster.name = "Draken Abomination"
 monster.description = "a draken abomination"
 monster.experience = 3800
 monster.outfit = {
@@ -89,7 +88,7 @@ monster.loot = {
 	{ name = "gold coin", chance = 47000, maxCount = 98 },
 	{ name = "platinum coin", chance = 50590, maxCount = 8 },
 	{ name = "meat", chance = 50450, maxCount = 4 },
-	{ name = "great mana potion", chance = 9950, maxCount = 3 },
+	{ id = 238, chance = 9950, maxCount = 3 }, -- great mana potion
 	{ name = "terra hood", chance = 8730 },
 	{ name = "great spirit potion", chance = 4905, maxCount = 3 },
 	{ name = "ultimate health potion", chance = 9400, maxCount = 3 },
@@ -112,7 +111,7 @@ monster.attacks = {
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_FIREDAMAGE, minDamage = -310, maxDamage = -630, length = 4, spread = 3, effect = CONST_ME_EXPLOSIONHIT, target = false },
 	{ name = "draken abomination curse", interval = 2000, chance = 10, range = 5, target = false },
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_DEATHDAMAGE, minDamage = -170, maxDamage = -370, length = 4, spread = 3, effect = CONST_ME_MORTAREA, target = false },
-	{ name = "drunk", interval = 2000, chance = 15, range = 7, radius = 4, shootEffect = CONST_ANI_POISON, effect = CONST_ME_POISONAREA, target = true, duration = 9000 },
+	{ name = "drunk", interval = 2000, chance = 15, range = 7, radius = 4, shootEffect = CONST_ANI_POISON, effect = CONST_ME_POISONAREA, target = false, duration = 9000 },
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_PHYSICALDAMAGE, range = 7, radius = 3, effect = CONST_ME_HITBYPOISON, target = false },
 }
 

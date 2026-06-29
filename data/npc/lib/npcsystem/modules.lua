@@ -85,6 +85,7 @@ if Modules == nil then
                 npcHandler:say(parameters.text, cid)
                 player:setVocation(promotion)
                 player:setStorageValue(PlayerStorageKeys.promotion, 1)
+                player:sendBannerType(BANNER_TYPE_PROMOTION_GRANTED)
             end
         else
             npcHandler:say(

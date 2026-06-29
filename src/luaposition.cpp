@@ -136,6 +136,20 @@ int luaPositionSendDistanceEffect(lua_State* L)
 	return 1;
 }
 
+int luaPositionSendSingleSoundEffect(lua_State* L)
+{
+	// position:sendSingleSoundEffect(soundId[, actor])
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPositionSendDoubleSoundEffect(lua_State* L)
+{
+	// position:sendDoubleSoundEffect(mainSoundId, secondarySoundId[, actor])
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPositionGetZones(lua_State* L)
 {
 	// position:getZones()
@@ -185,6 +199,8 @@ void LuaScriptInterface::registerPosition()
 
 	registerMethod("Position", "sendMagicEffect", luaPositionSendMagicEffect);
 	registerMethod("Position", "sendDistanceEffect", luaPositionSendDistanceEffect);
+	registerMethod("Position", "sendSingleSoundEffect", luaPositionSendSingleSoundEffect);
+	registerMethod("Position", "sendDoubleSoundEffect", luaPositionSendDoubleSoundEffect);
 	registerMethod("Position", "getZones", luaPositionGetZones);
 	registerMethod("Position", "hasZone", luaPositionHasZone);
 }

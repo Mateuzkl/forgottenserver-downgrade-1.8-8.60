@@ -1452,6 +1452,76 @@ int luaPlayerSetVirtue(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetStance(lua_State* L)
+{
+	// player:getStance()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, static_cast<int>(player->getStance()));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetStance(lua_State* L)
+{
+	// player:setStance(stance)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		const auto stance = static_cast<Stance_t>(getNumber<uint8_t>(L, 2, 0));
+		const bool result = player->setStance(stance);
+		if (result) {
+			player->persistStances();
+		}
+		pushBoolean(L, result);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetElementalStance(lua_State* L)
+{
+	// player:getElementalStance()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, static_cast<int>(player->getElementalStance()));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetElementalStance(lua_State* L)
+{
+	// player:setElementalStance(stance)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		const auto stance = static_cast<Stance_t>(getNumber<uint8_t>(L, 2, 0));
+		const bool result = player->setElementalStance(stance);
+		if (result) {
+			player->persistStances();
+		}
+		pushBoolean(L, result);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetSpellAimPosition(lua_State* L)
+{
+	// player:getSpellAimPosition()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player && player->hasSpellAimPosition()) {
+		pushPosition(L, player->getSpellAimPosition());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerClearSpellCooldowns(lua_State* L)
 {
 	// player:clearSpellCooldowns()
@@ -2048,6 +2118,20 @@ int luaPlayerSendTextMessage(lua_State* L)
 	}
 
 	player->sendTextMessage(message);
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerSendBannerType(lua_State* L)
+{
+	// player:sendBannerType(bannerType)
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->sendBannerType(getInteger<Banner_t>(L, 2));
 	pushBoolean(L, true);
 	return 1;
 }
@@ -4645,6 +4729,11 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "setSereneCooldown", luaPlayerSetSereneCooldown);
 	registerMethod("Player", "getVirtue", luaPlayerGetVirtue);
 	registerMethod("Player", "setVirtue", luaPlayerSetVirtue);
+	registerMethod("Player", "getStance", luaPlayerGetStance);
+	registerMethod("Player", "setStance", luaPlayerSetStance);
+	registerMethod("Player", "getElementalStance", luaPlayerGetElementalStance);
+	registerMethod("Player", "setElementalStance", luaPlayerSetElementalStance);
+	registerMethod("Player", "getSpellAimPosition", luaPlayerGetSpellAimPosition);
 	registerMethod("Player", "clearSpellCooldowns", luaPlayerClearSpellCooldowns);
 
 	registerMethod("Player", "getBankBalance", luaPlayerGetBankBalance);
@@ -4679,6 +4768,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "showTextDialog", luaPlayerShowTextDialog);
 
 	registerMethod("Player", "sendTextMessage", luaPlayerSendTextMessage);
+	registerMethod("Player", "sendBannerType", luaPlayerSendBannerType);
 	registerMethod("Player", "sendStats", luaPlayerSendStats);
 	registerMethod("Player", "sendSkills", luaPlayerSendSkills);
 	registerMethod("Player", "sendChannelMessage", luaPlayerSendChannelMessage);

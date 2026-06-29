@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Worker Golem")
 local monster = {}
 
-monster.name = "Worker Golem"
 monster.description = "a worker golem"
 monster.experience = 1250
 monster.outfit = {
@@ -64,6 +63,7 @@ monster.flags = {
 	canWalkOnEnergy = false,
 	canWalkOnFire = false,
 	canWalkOnPoison = true,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -92,7 +92,7 @@ monster.loot = {
 	{ name = "bonebreaker", chance = 130 },
 	{ name = "berserk potion", chance = 820 },
 	{ name = "spiked squelcher", chance = 1003 },
-	{ name = "great mana potion", chance = 1470 },
+	{ id = 238, chance = 1470 }, -- great mana potion
 	{ name = "great health potion", chance = 2100 },
 	{ name = "nail", chance = 5000, maxCount = 5 },
 	{ name = "great spirit potion", chance = 830 },
@@ -105,7 +105,7 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -240 },
-	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -125, range = 7, shootEffect = CONST_ANI_SMALLSTONE, target = true },
+	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -125, range = 7, shootEffect = CONST_ANI_SMALLSTONE, target = false },
 }
 
 monster.defenses = {

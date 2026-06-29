@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Raging mage")
 local monster = {}
 
-monster.name = "Raging mage"
 monster.description = "a raging mage"
 monster.experience = 3250
 monster.outfit = {
@@ -14,10 +13,7 @@ monster.outfit = {
 	lookMount = 0,
 }
 
-monster.bosstiary = {
-	bossRaceId = 718,
-	bossRace = RARITY_ARCHFOE,
-}
+monster.events = {}
 
 monster.health = 3500
 monster.maxHealth = 3500
@@ -29,6 +25,11 @@ monster.manaCost = 0
 monster.changeTarget = {
 	interval = 4000,
 	chance = 10,
+}
+
+monster.bosstiary = {
+	bossRaceId = 718,
+	bossRace = RARITY_ARCHFOE,
 }
 
 monster.strategiesTarget = {
@@ -84,7 +85,6 @@ monster.loot = {
 	{ id = 5911, chance = 31100 }, -- red piece of cloth
 	{ id = 239, chance = 26830, maxCount = 5 }, -- great health potion
 	{ id = 238, chance = 23170, maxCount = 5 }, -- great mana potion
-	--{ id = 3062, chance = 9760 }, -- mind stone
 	{ id = 7443, chance = 6710, maxCount = 2 }, -- bullseye potion
 	{ id = 8043, chance = 4880 }, -- focus cape
 	{ id = 3049, chance = 4880 }, -- stealth ring

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Lisa")
 local monster = {}
 
-monster.name = "Lisa"
 monster.description = "Lisa"
 monster.experience = 18000
 monster.outfit = {
@@ -72,7 +71,7 @@ monster.loot = {
 	{ name = "bowl of glooth soup", chance = 55000, maxCount = 5 },
 	{ name = "glooth sandwich", chance = 34500, maxCount = 5 },
 	{ name = "great health potion", chance = 33000, maxCount = 5 },
-	{ name = "great mana potion", chance = 33000, maxCount = 5 },
+	{ id = 238, chance = 33000, maxCount = 5 }, -- great mana potion
 	{ name = "great spirit potion", chance = 33000, maxCount = 5 },
 	{ name = "glooth steak", chance = 28000, maxCount = 5 },
 	{ name = "slimy leaf tentacle", chance = 22000, maxCount = 3 },
@@ -106,6 +105,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 25,
 	armor = 15,
+	--	mitigation = ???,
 	{ name = "lisa summon", interval = 2000, chance = 5, target = false },
 	{ name = "lisa heal", interval = 1000, chance = 100, target = false },
 }

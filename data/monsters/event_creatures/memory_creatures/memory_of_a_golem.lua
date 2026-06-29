@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Memory of a Golem")
 local monster = {}
 
-monster.name = "Memory of a Golem"
 monster.description = "a memory of a golem"
 monster.experience = 1620
 monster.outfit = {
@@ -66,7 +65,7 @@ monster.voices = {
 monster.loot = {
 	{ name = "gold coin", chance = 100000, maxCount = 160 },
 	{ name = "small topaz", chance = 7000, maxCount = 2 },
-	{ name = "great mana potion", chance = 18830, maxCount = 2 },
+	{ id = 238, chance = 18830, maxCount = 2 }, -- great mana potion
 	{ name = "bronze gear wheel", chance = 3000 },
 	{ name = "small emerald", chance = 7430, maxCount = 2 },
 	{ id = 37531, chance = 5155 }, -- candy floss
@@ -77,7 +76,7 @@ monster.loot = {
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, skill = 60, attack = 50 },
 	{ name = "melee", interval = 2000, chance = 2, skill = 86, attack = 100 },
-	{ name = "combat", interval = 2000, chance = 25, type = COMBAT_ENERGYDAMAGE, minDamage = -50, maxDamage = -150, range = 7, shootEffect = CONST_ANI_ENERGY, target = true },
+	{ name = "combat", interval = 2000, chance = 25, type = COMBAT_ENERGYDAMAGE, minDamage = -50, maxDamage = -150, range = 7, shootEffect = CONST_ANI_ENERGY, target = false },
 	{ name = "war golem skill reducer", interval = 2000, chance = 16, target = false },
 }
 

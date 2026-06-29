@@ -948,6 +948,30 @@ class ProtocolSpectator {
                 spy->sendSpellCooldown(spellId, time);
         }
 
+        void sendStanceProtocol(const std::vector<uint16_t>& spellIds) {
+            auto o = owner.lock();
+            if (o)
+                o->sendStanceProtocol(spellIds);
+
+            for (auto &it : spectators)
+                it->sendStanceProtocol(spellIds);
+
+            for (auto &spy : spyClients_)
+                spy->sendStanceProtocol(spellIds);
+        }
+
+        void sendBannerType(Banner_t bannerType) {
+            auto o = owner.lock();
+            if (o)
+                o->sendBannerType(bannerType);
+
+            for (auto &it : spectators)
+                it->sendBannerType(bannerType);
+
+            for (auto &spy : spyClients_)
+                spy->sendBannerType(bannerType);
+        }
+
         void sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time) {
             auto o = owner.lock();
             if (o)

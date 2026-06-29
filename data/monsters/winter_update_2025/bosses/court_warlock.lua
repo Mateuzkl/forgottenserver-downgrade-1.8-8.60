@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Court Warlock")
 local monster = {}
 
-monster.name = "Court Warlock"
 monster.description = "a court warlock"
 monster.experience = 147000
 monster.outfit = {
@@ -27,15 +26,15 @@ monster.speed = 170
 monster.manaCost = 0
 
 monster.changeTarget = {
-	interval = 3500, -- Not confirmed
-	chance = 18, -- Not confirmed
+	interval = 3500, -- não confirmado
+	chance = 18, -- não confirmado
 }
 
 monster.strategiesTarget = {
-	nearest = 60, -- Not confirmed
-	health = 15, -- Not confirmed
-	damage = 15, -- Not confirmed
-	random = 10, -- Not confirmed
+	nearest = 60, -- não confirmado
+	health = 15, -- não confirmado
+	damage = 15, -- não confirmado
+	random = 10, -- não confirmado
 }
 
 monster.flags = {
@@ -45,22 +44,22 @@ monster.flags = {
 	convinceable = false,
 	pushable = false,
 	rewardBoss = true,
-	illusionable = false, -- Not confirmed
+	illusionable = false, -- não confirmado
 	canPushItems = true,
-	canPushCreatures = true, -- Not confirmed
-	staticAttackChance = 85, -- Not confirmed
+	canPushCreatures = true, -- não confirmado
+	staticAttackChance = 85, -- não confirmado
 	targetDistance = 1,
-	runHealth = 500, -- Not confirmed
-	healthHidden = false, -- Not confirmed
-	isBlockable = false, -- Not confirmed
+	runHealth = 500, -- não confirmado
+	healthHidden = false, -- não confirmado
+	isBlockable = false, -- não confirmado
 	canWalkOnEnergy = true,
 	canWalkOnFire = true,
 	canWalkOnPoison = true,
 }
 
 monster.light = {
-	level = 3, -- Not confirmed
-	color = 60, -- Not confirmed
+	level = 3, -- não confirmado
+	color = 60, -- não confirmado
 }
 
 monster.voices = {
@@ -83,7 +82,7 @@ monster.loot = {
 	{ name = "yellow gem", chance = 43750, maxCount = 4 },
 	{ name = "blue gem", chance = 43750, maxCount = 2 },
 	{ name = "ultimate mana potion", chance = 37500, maxCount = 39 },
-	{ name = "great mana potion", chance = 37500, maxCount = 30 },
+	{ id = 238, chance = 37500, maxCount = 30 }, -- great mana potion
 	{ name = "supreme health potion", chance = 37500, maxCount = 8 },
 	{ name = "strong mana potion", chance = 31250, maxCount = 25 },
 	{ name = "ultimate health potion", chance = 31250, maxCount = 16 },
@@ -102,41 +101,41 @@ monster.loot = {
 	{ name = "glacier robe", chance = 6250 },
 	{ name = "terra hood", chance = 6250 },
 	{ name = "lightning headband", chance = 6250 },
-	{ name = "giant amethyst", chance = 5000 }, -- Not confirmed
-	{ name = "giant emerald", chance = 5000 }, -- Not confirmed
+	{ name = "giant amethyst", chance = 5000 }, -- não confirmado
+	{ name = "giant emerald", chance = 5000 }, -- não confirmado
 	{ id = 37335, chance = 5000 }, -- black skull (não confirmado)
-	{ name = "magma monocle", chance = 5000 }, -- Not confirmed
-	{ name = "glacier mask", chance = 5000 }, -- Not confirmed
-	-- { name = "broken staff of mind control", chance = 5000 }, -- Not confirmed
-	-- { name = "twisted marionette", chance = 5000 }, -- Not confirmed
-	-- { name = "stag shinguards", chance = 3000 }, -- Not confirmed
-	-- { name = "stag boots", chance = 3000 }, -- Not confirmed
-	-- { name = "stag footwraps", chance = 3000 }, -- Not confirmed
-	-- { name = "stag scrolls", chance = 3000 }, -- Not confirmed
-	-- { name = "stag spellbook", chance = 3000 }, -- Not confirmed
-	-- { name = "stag shield", chance = 3000 }, -- Not confirmed
-	-- { name = "stag helmet", chance = 3000 }, -- Not confirmed
-	-- { name = "stag legs", chance = 3000 }, -- Not confirmed
-	-- { name = "stag plate", chance = 3000 }, -- Not confirmed
-	-- { name = "stag robe", chance = 3000 }, -- Not confirmed
+	{ name = "magma monocle", chance = 5000 }, -- não confirmado
+	{ name = "glacier mask", chance = 5000 }, -- não confirmado
+	{ name = "broken staff of mind control", chance = 5000 }, -- não confirmado
+	{ name = "twisted marionette", chance = 5000 }, -- não confirmado
+	{ name = "stag shinguards", chance = 3000 }, -- não confirmado
+	{ name = "stag boots", chance = 3000 }, -- não confirmado
+	{ name = "stag footwraps", chance = 3000 }, -- não confirmado
+	{ name = "stag scrolls", chance = 3000 }, -- não confirmado
+	{ name = "stag spellbook", chance = 3000 }, -- não confirmado
+	{ name = "stag shield", chance = 3000 }, -- não confirmado
+	{ name = "stag helmet", chance = 3000 }, -- não confirmado
+	{ name = "stag legs", chance = 3000 }, -- não confirmado
+	{ name = "stag plate", chance = 3000 }, -- não confirmado
+	{ name = "stag robe", chance = 3000 }, -- não confirmado
 }
 
 monster.attacks = {
-	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -700 }, -- Not confirmed
-	{ name = "combat", interval = 2000, chance = 28, type = COMBAT_FIREDAMAGE, minDamage = -700, maxDamage = -1300, range = 7, shootEffect = CONST_ANI_FIRE, effect = CONST_ME_FIREATTACK, target = true }, -- Not confirmed
-	{ name = "combat", interval = 2500, chance = 25, type = COMBAT_ENERGYDAMAGE, minDamage = -650, maxDamage = -1200, range = 7, shootEffect = CONST_ANI_ENERGY, effect = CONST_ME_ENERGYHIT, target = true }, -- Not confirmed
-	{ name = "combat", interval = 3000, chance = 22, type = COMBAT_DEATHDAMAGE, minDamage = -600, maxDamage = -1100, radius = 5, effect = CONST_ME_MORTAREA, target = false }, -- Not confirmed
-	{ name = "combat", interval = 2800, chance = 18, type = COMBAT_FIREDAMAGE, minDamage = -800, maxDamage = -1400, length = 7, spread = 2, effect = CONST_ME_FIREAREA, target = false }, -- Not confirmed
-	{ name = "combat", interval = 3500, chance = 15, type = COMBAT_ENERGYDAMAGE, minDamage = -700, maxDamage = -1250, radius = 4, effect = CONST_ME_ENERGYAREA, target = false }, -- Not confirmed
-	{ name = "condition", type = CONDITION_FIRE, interval = 4000, chance = 12, minDamage = -200, maxDamage = -350, radius = 4, effect = CONST_ME_HITBYFIRE, target = false }, -- Not confirmed
+	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -700 }, -- não confirmado
+	{ name = "combat", interval = 2000, chance = 28, type = COMBAT_FIREDAMAGE, minDamage = -700, maxDamage = -1300, range = 7, shootEffect = CONST_ANI_FIRE, effect = CONST_ME_FIREATTACK, target = true }, -- não confirmado
+	{ name = "combat", interval = 2500, chance = 25, type = COMBAT_ENERGYDAMAGE, minDamage = -650, maxDamage = -1200, range = 7, shootEffect = CONST_ANI_ENERGY, effect = CONST_ME_ENERGYHIT, target = true }, -- não confirmado
+	{ name = "combat", interval = 3000, chance = 22, type = COMBAT_DEATHDAMAGE, minDamage = -600, maxDamage = -1100, radius = 5, effect = CONST_ME_MORTAREA, target = false }, -- não confirmado
+	{ name = "combat", interval = 2800, chance = 18, type = COMBAT_FIREDAMAGE, minDamage = -800, maxDamage = -1400, length = 7, spread = 2, effect = CONST_ME_FIREAREA, target = false }, -- não confirmado
+	{ name = "combat", interval = 3500, chance = 15, type = COMBAT_ENERGYDAMAGE, minDamage = -700, maxDamage = -1250, radius = 4, effect = CONST_ME_ENERGYAREA, target = false }, -- não confirmado
+	{ name = "condition", type = CONDITION_FIRE, interval = 4000, chance = 12, minDamage = -200, maxDamage = -350, radius = 4, effect = CONST_ME_HITBYFIRE, target = false }, -- não confirmado
 }
 
 monster.defenses = {
-	defense = 75, -- Not confirmed
-	armor = 80, -- Not confirmed
-	mitigation = 2.40, -- Not confirmed
-	{ name = "combat", interval = 3000, chance = 18, type = COMBAT_HEALING, minDamage = 1000, maxDamage = 1800, effect = CONST_ME_MAGIC_BLUE, target = false }, -- Not confirmed
-	{ name = "invisible", interval = 6000, chance = 8, effect = CONST_ME_MAGIC_RED }, -- Not confirmed
+	defense = 75, -- não confirmado
+	armor = 80, -- não confirmado
+	mitigation = 2.40, -- não confirmado
+	{ name = "combat", interval = 3000, chance = 18, type = COMBAT_HEALING, minDamage = 1000, maxDamage = 1800, effect = CONST_ME_MAGIC_BLUE, target = false }, -- não confirmado
+	{ name = "invisible", interval = 6000, chance = 8, effect = CONST_ME_MAGIC_RED }, -- não confirmado
 }
 
 monster.elements = {
@@ -144,9 +143,9 @@ monster.elements = {
 	{ type = COMBAT_ENERGYDAMAGE, percent = 0 },
 	{ type = COMBAT_EARTHDAMAGE, percent = 0 },
 	{ type = COMBAT_FIREDAMAGE, percent = 0 },
-	{ type = COMBAT_LIFEDRAIN, percent = 0 }, -- Not confirmed
-	{ type = COMBAT_MANADRAIN, percent = 0 }, -- Not confirmed
-	{ type = COMBAT_DROWNDAMAGE, percent = 0 }, -- Not confirmed
+	{ type = COMBAT_LIFEDRAIN, percent = 0 }, -- não confirmado
+	{ type = COMBAT_MANADRAIN, percent = 0 }, -- não confirmado
+	{ type = COMBAT_DROWNDAMAGE, percent = 0 }, -- não confirmado
 	{ type = COMBAT_ICEDAMAGE, percent = 0 },
 	{ type = COMBAT_HOLYDAMAGE, percent = 0 },
 	{ type = COMBAT_DEATHDAMAGE, percent = 0 },
@@ -154,9 +153,9 @@ monster.elements = {
 
 monster.immunities = {
 	{ type = "paralyze", condition = true },
-	{ type = "outfit", condition = false }, -- Not confirmed
+	{ type = "outfit", condition = false }, -- não confirmado
 	{ type = "invisible", condition = true },
-	{ type = "bleed", condition = false }, -- Not confirmed
+	{ type = "bleed", condition = false }, -- não confirmado
 }
 
 mType:register(monster)

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Lost Exile")
 local monster = {}
 
-monster.name = "Lost Exile"
 monster.description = "a lost exile"
 monster.experience = 1800
 monster.outfit = {
@@ -12,6 +11,10 @@ monster.outfit = {
 	lookFeet = 0,
 	lookAddons = 0,
 	lookMount = 0,
+}
+
+monster.events = {
+	"LastExileDeath",
 }
 
 monster.raceId = 1529
@@ -64,6 +67,7 @@ monster.flags = {
 	canWalkOnEnergy = false,
 	canWalkOnFire = false,
 	canWalkOnPoison = false,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -82,7 +86,7 @@ monster.loot = {
 	{ name = "gold coin", chance = 100000, maxCount = 200 },
 	{ name = "platinum coin", chance = 60240, maxCount = 2 },
 	{ name = "strong health potion", chance = 10950, maxCount = 2 },
-	{ name = "great mana potion", chance = 8330, maxCount = 2 },
+	{ id = 238, chance = 8330, maxCount = 2 }, -- great mana potion
 	{ name = "brown mushroom", chance = 16900, maxCount = 2 },
 	{ id = 12600, chance = 13100 }, -- coal
 	{ name = "holy ash", chance = 13100 },
@@ -113,9 +117,9 @@ monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -120 },
 	{ name = "sudden death rune", interval = 2000, chance = 15, minDamage = -150, maxDamage = -350, range = 3, length = 6, spread = 0, effect = CONST_ME_MORTAREA, target = false },
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_MANADRAIN, minDamage = -150, maxDamage = -250, range = 3, length = 5, spread = 5, effect = CONST_ME_SMOKE, target = false },
-	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_LIFEDRAIN, minDamage = -150, maxDamage = -290, range = 3, length = 5, spread = 5, shootEffect = CONST_ANI_LARGEROCK, effect = CONST_ME_POISONAREA, target = true },
+	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_LIFEDRAIN, minDamage = -150, maxDamage = -290, range = 3, length = 5, spread = 5, shootEffect = CONST_ANI_LARGEROCK, effect = CONST_ME_POISONAREA, target = false },
 	{ name = "sudden death rune", interval = 2000, chance = 15, minDamage = -70, maxDamage = -250, range = 7, target = false },
-	{ name = "drunk", interval = 2000, chance = 10, range = 7, shootEffect = CONST_ANI_ENERGY, target = true, duration = 5000 },
+	{ name = "drunk", interval = 2000, chance = 10, range = 7, shootEffect = CONST_ANI_ENERGY, target = false, duration = 5000 },
 }
 
 monster.defenses = {

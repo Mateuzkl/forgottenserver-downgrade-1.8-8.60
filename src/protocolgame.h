@@ -226,6 +226,8 @@ private:
 	void sendSpellCooldown(uint16_t spellId, uint32_t time);
 	void sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time);
 	void sendUseItemCooldown(uint32_t time);
+	void sendStanceProtocol(const std::vector<uint16_t>& spellIds);
+	void sendBannerType(Banner_t bannerType);
 	void sendExtendedOpcode(uint8_t opcode, std::string_view data);
 	void sendBlessingWindow();
 	void sendBlessStatus();
