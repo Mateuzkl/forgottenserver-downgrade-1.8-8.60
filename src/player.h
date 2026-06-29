@@ -125,6 +125,9 @@ struct ProficiencySpellAugmentBonus
 	int32_t manaCostPercent = 0;
 	int32_t cooldownReduction = 0;
 	int32_t secondaryGroupCooldownReduction = 0;
+	int32_t additionalDuration = 0;
+	int32_t additionalTargets = 0;
+	int32_t affectedAreaEnlarged = 0;
 };
 
 struct OpenContainer
@@ -692,6 +695,9 @@ public:
 	void clearWheelSpellAugments();
 	void addWheelSpellAugment(std::string spellName, Augment_t augmentType, double value);
 	ProficiencySpellAugmentBonus getWheelSpellAugmentBonus(std::string_view spellName) const;
+	bool getWheelSpellAdditionalArea(std::string_view spellName) const;
+	int32_t getWheelSpellAdditionalTarget(std::string_view spellName) const;
+	int32_t getWheelSpellAdditionalDuration(std::string_view spellName) const;
 
 	WeaponProficiency& weaponProficiency() { assert(m_weaponProficiency); return *m_weaponProficiency; }
 	const WeaponProficiency& weaponProficiency() const { assert(m_weaponProficiency); return *m_weaponProficiency; }

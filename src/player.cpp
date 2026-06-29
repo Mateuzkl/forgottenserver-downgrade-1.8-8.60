@@ -157,6 +157,18 @@ void addSpellAugmentBonus(ProficiencySpellAugmentBonus& bonus, Augment_t augment
 			addClamped(bonus.secondaryGroupCooldownReduction, std::lround(std::abs(value) * 1000.0));
 			break;
 
+		case Augment_t::DurationIncreased:
+			addClamped(bonus.additionalDuration, std::lround(value));
+			break;
+
+		case Augment_t::AdditionalTargets:
+			addClamped(bonus.additionalTargets, std::lround(value));
+			break;
+
+		case Augment_t::AffectedAreaEnlarged:
+			addClamped(bonus.affectedAreaEnlarged, std::lround(value));
+			break;
+
 		case Augment_t::LifeLeech:
 			addClamped(bonus.lifeLeech, std::lround(value * 10000.0));
 			break;
@@ -729,6 +741,21 @@ ProficiencySpellAugmentBonus Player::getWheelSpellAugmentBonus(std::string_view 
 {
 	const auto it = wheelSpellAugments.find(std::string(spellName));
 	return it != wheelSpellAugments.end() ? it->second : ProficiencySpellAugmentBonus{};
+}
+
+bool Player::getWheelSpellAdditionalArea(std::string_view spellName) const
+{
+	return getWheelSpellAugmentBonus(spellName).affectedAreaEnlarged > 0;
+}
+
+int32_t Player::getWheelSpellAdditionalTarget(std::string_view spellName) const
+{
+	return getWheelSpellAugmentBonus(spellName).additionalTargets;
+}
+
+int32_t Player::getWheelSpellAdditionalDuration(std::string_view spellName) const
+{
+	return getWheelSpellAugmentBonus(spellName).additionalDuration;
 }
 
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const
