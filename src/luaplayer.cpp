@@ -2343,6 +2343,45 @@ int luaPlayerAddWheelSpellAugment(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetWheelSpellAdditionalArea(lua_State* L)
+{
+	// player:getWheelSpellAdditionalArea(spellName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushBoolean(L, player->getWheelSpellAdditionalArea(getString(L, 2)));
+	return 1;
+}
+
+int luaPlayerGetWheelSpellAdditionalTarget(lua_State* L)
+{
+	// player:getWheelSpellAdditionalTarget(spellName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, player->getWheelSpellAdditionalTarget(getString(L, 2)));
+	return 1;
+}
+
+int luaPlayerGetWheelSpellAdditionalDuration(lua_State* L)
+{
+	// player:getWheelSpellAdditionalDuration(spellName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, player->getWheelSpellAdditionalDuration(getString(L, 2)));
+	return 1;
+}
+
 int luaPlayerResetWeaponProficiencyStats(lua_State* L)
 {
 	// player:resetWeaponProficiencyStats()
@@ -4783,6 +4822,9 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addProficiencySpellAugment", luaPlayerAddProficiencySpellAugment);
 	registerMethod("Player", "clearWheelSpellAugments", luaPlayerClearWheelSpellAugments);
 	registerMethod("Player", "addWheelSpellAugment", luaPlayerAddWheelSpellAugment);
+	registerMethod("Player", "getWheelSpellAdditionalArea", luaPlayerGetWheelSpellAdditionalArea);
+	registerMethod("Player", "getWheelSpellAdditionalTarget", luaPlayerGetWheelSpellAdditionalTarget);
+	registerMethod("Player", "getWheelSpellAdditionalDuration", luaPlayerGetWheelSpellAdditionalDuration);
 	registerMethod("Player", "resetWeaponProficiencyStats", luaPlayerResetWeaponProficiencyStats);
 	registerMethod("Player", "applyWeaponProficiencyPerk", luaPlayerApplyWeaponProficiencyPerk);
 
