@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Shell Drake")
 local monster = {}
 
-monster.name = "Shell Drake"
 monster.description = "a shell drake"
 monster.experience = 2370
 monster.outfit = {
@@ -29,7 +28,7 @@ monster.Bestiary = {
 
 monster.health = 2800
 monster.maxHealth = 2800
-monster.race = "undead"
+monster.race = "ink"
 monster.corpse = 51556
 monster.speed = 90
 monster.manaCost = 0
@@ -83,7 +82,7 @@ monster.loot = {
 	{ name = "gold coin", chance = 60000, minCount = 1, maxCount = 150 },
 	{ name = "platinum coin", chance = 45000, minCount = 1, maxCount = 8 },
 	{ name = "paper plane", chance = 2800 }, -- new item
-	{ name = "great mana potion", chance = 2000 },
+	{ id = 238, chance = 2000 }, -- great mana potion
 	{ name = "small enchanted amethyst", chance = 1800 },
 	{ name = "spiked squelcher", chance = 1600 },
 	{ name = "violet crystal shard", chance = 1500 },

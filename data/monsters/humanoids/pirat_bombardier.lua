@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Pirat Bombardier")
 local monster = {}
 
-monster.name = "Pirat Bombardier"
 monster.description = "a pirat bombardier"
 monster.experience = 1700
 monster.outfit = {
@@ -77,12 +76,12 @@ monster.voices = {
 }
 
 monster.loot = {
-	{ name = "great mana potion", chance = 30000, maxCount = 2 },
+	{ id = 238, chance = 30000, maxCount = 2 }, -- great mana potion
 	{ name = "pirate coin", chance = 7000, maxCount = 10 },
 	{ name = "terra boots", chance = 6000 },
 	{ name = "pirat's tail", chance = 4000 },
 	{ name = "magma boots", chance = 3000 },
--- { name = "mouldy powder", chance = 4000 },
+	{ name = "mouldy powder", chance = 4000 },
 	{ id = 23529, chance = 2000 }, -- ring of blue plasma
 	{ name = "lightning boots", chance = 1000 },
 	{ name = "wood cape", chance = 1000 },
@@ -90,8 +89,8 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = -0, maxDamage = -350 },
-	{ name = "energy beam", interval = 2000, chance = 10, minDamage = -80, maxDamage = -160, shootEffect = CONST_ANI_ENERGY, effect = CONST_ME_ENERGYAREA, target = true },
-	{ name = "energy wave", interval = 2000, chance = 10, minDamage = -35, maxDamage = -75, shootEffect = CONST_ANI_ENERGY, effect = CONST_ME_ENERGYAREA, target = true },
+	{ name = "energy beam", interval = 2000, chance = 10, minDamage = -80, maxDamage = -160, shootEffect = CONST_ANI_ENERGY, effect = CONST_ME_ENERGYAREA, target = false },
+	{ name = "energy wave", interval = 2000, chance = 10, minDamage = -35, maxDamage = -75, shootEffect = CONST_ANI_ENERGY, effect = CONST_ME_ENERGYAREA, target = false },
 }
 
 monster.defenses = {

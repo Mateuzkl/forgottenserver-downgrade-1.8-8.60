@@ -5,7 +5,6 @@
 #define FS_WEAPON_PROFICIENCY_H
 
 #include "enums.h"
-#include "tools.h"
 
 #include <array>
 #include <cmath>

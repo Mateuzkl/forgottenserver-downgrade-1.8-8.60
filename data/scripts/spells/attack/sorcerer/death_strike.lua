@@ -1,24 +1,60 @@
-local combat = Combat()
-combat:setParameter(COMBAT_PARAM_TYPE, COMBAT_DEATHDAMAGE)
-combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_MORTAREA)
-combat:setParameter(COMBAT_PARAM_DISTANCEEFFECT, CONST_ANI_DEATH)
-
-local function callback(player, level, magicLevel)
-	local min = (level / 5) + (magicLevel * 1.4) + 8
-	local max = (level / 5) + (magicLevel * 2.2) + 14
+-- Vocation Adjustment: a Master Sorcerer's elemental stance reshapes Death Strike (element + impact
+-- effect + missile):
+--   Master of Flames  -> fire,   effect 334, missile 4
+--   Master of Thunder -> energy, effect 335, missile 5
+--   Master of Decay / no stance -> base death (CONST_ME_MORTAREA / CONST_ANI_DEATH)
+local function deathStrikeFormula(level, maglevel)
+	local min = (level / 5) + (maglevel * 1.403) + 8
+	local max = (level / 5) + (maglevel * 2.203) + 13
 	return -min, -max
 end
 
-combat:setCallback(CallBackParam.LEVELMAGICVALUE, callback)
+-- Each combat needs its OWN callback name (Canary won't let two combats share a callback name); all
+-- delegate to the same formula.
+function onGetFormulaValues(player, level, maglevel)
+	return deathStrikeFormula(level, maglevel)
+end
+function onGetFormulaValuesFlames(player, level, maglevel)
+	return deathStrikeFormula(level, maglevel)
+end
+function onGetFormulaValuesThunder(player, level, maglevel)
+	return deathStrikeFormula(level, maglevel)
+end
+
+local function createDeathStrikeCombat(combatType, effect, missile, callbackName)
+	local c = Combat()
+	c:setParameter(COMBAT_PARAM_TYPE, combatType)
+	c:setParameter(COMBAT_PARAM_EFFECT, effect)
+	c:setParameter(COMBAT_PARAM_DISTANCEEFFECT, missile)
+	c:setCallback(CALLBACK_PARAM_LEVELMAGICVALUE, callbackName)
+	return c
+end
+
+local combat = createDeathStrikeCombat(COMBAT_DEATHDAMAGE, CONST_ME_MORTAREA, CONST_ANI_DEATH, "onGetFormulaValues")
+local combatFlames = createDeathStrikeCombat(COMBAT_FIREDAMAGE, 334, 4, "onGetFormulaValuesFlames")
+local combatThunder = createDeathStrikeCombat(COMBAT_ENERGYDAMAGE, 335, 5, "onGetFormulaValuesThunder")
 
 local spell = Spell("instant")
-function spell.onCastSpell(creature, variant) return combat:execute(creature, variant) end
 
+function spell.onCastSpell(creature, var)
+	local player = creature:getPlayer()
+	if player then
+		local stance = player:getElementalStance()
+		if stance == STANCE_MASTER_OF_FLAMES then
+			return combatFlames:execute(creature, var)
+		elseif stance == STANCE_MASTER_OF_THUNDER then
+			return combatThunder:execute(creature, var)
+		end
+	end
+	return combat:execute(creature, var)
+end
 
 spell:group("attack")
-spell:id(101)
+spell:id(87)
 spell:name("Death Strike")
 spell:words("exori mort")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_DEATH_STRIKE)
 spell:level(16)
 spell:mana(20)
 spell:isPremium(true)
@@ -27,6 +63,6 @@ spell:needCasterTargetOrDirection(true)
 spell:blockWalls(true)
 spell:cooldown(2 * 1000)
 spell:groupCooldown(2 * 1000)
-spell:needLearn(false)
-spell:vocation("sorcerer", "master sorcerer")
+
+spell:vocation("sorcerer;true", "master sorcerer;true")
 spell:register()

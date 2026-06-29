@@ -1,7 +1,7 @@
 local mType = Game.createMonsterType("Day Night Harpy")
 local monster = {}
 
-monster.name = "Day Night Harpy"
+monster.name = "Night Harpy"
 monster.description = "a night harpy"
 monster.experience = 21000
 monster.outfit = {
@@ -77,13 +77,13 @@ monster.voices = {
 monster.loot = {
 	{ name = "crystal coin", chance = 70, minCount = 100 },
 	{ name = "strong mana potion", chance = 9090, minCount = 8, maxCount = 12 },
-	{ name = "great mana potion", chance = 10630, minCount = 8, maxCount = 12 },
+	{ id = 238, chance = 10630, minCount = 8, maxCount = 12 }, -- great mana potion
 	{ name = "great spirit potion", chance = 9840, minCount = 4, maxCount = 8 },
 	{ name = "giant ruby", chance = 220, maxCount = 1 },
 	{ name = "giant emerald", chance = 130, maxCount = 1 },
 	{ name = "giant topaz", chance = 130, maxCount = 1 },
 	{ name = "giant topaz", chance = 130, maxCount = 1 },
-	-- { name = "night harpy feathers", chance = 570, minCount = 5, maxCount = 10 },
+	{ name = "night harpy feathers", chance = 570, minCount = 5, maxCount = 10 },
 }
 
 monster.attacks = {

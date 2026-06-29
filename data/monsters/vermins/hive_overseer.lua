@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Hive Overseer")
 local monster = {}
 
-monster.name = "Hive Overseer"
 monster.description = "a hive overseer"
 monster.experience = 5500
 monster.outfit = {
@@ -64,6 +63,7 @@ monster.flags = {
 	canWalkOnEnergy = true,
 	canWalkOnFire = true,
 	canWalkOnPoison = true,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -91,7 +91,7 @@ monster.loot = {
 	{ name = "gold coin", chance = 58000, maxCount = 98 },
 	{ name = "platinum coin", chance = 84000, maxCount = 6 },
 	{ name = "steel boots", chance = 550 },
-	{ name = "great mana potion", chance = 18000 },
+	{ id = 238, chance = 18000 }, -- great mana potion
 	{ id = 281, chance = 6000 }, -- giant shimmering pearl (green)
 	{ name = "ultimate health potion", chance = 12000 },
 	{ name = "gold ingot", chance = 29000 },
@@ -108,8 +108,7 @@ monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -450 },
 	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_EARTHDAMAGE, minDamage = -60, maxDamage = -80, radius = 4, effect = CONST_ME_POISONAREA, target = false },
 	-- poison
-	{ name = "condition", interval = 2000, chance = 20, target = false, condition =
-	{ type = CONDITION_POISON, minDamage = -600, maxDamage = -1000, radius = 4, effect = CONST_ME_GREEN_RINGS } },
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 20, minDamage = -600, maxDamage = -1000, radius = 4, effect = CONST_ME_GREEN_RINGS, target = false },
 }
 
 monster.defenses = {

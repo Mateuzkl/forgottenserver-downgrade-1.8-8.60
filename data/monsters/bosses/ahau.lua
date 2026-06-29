@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Ahau")
 local monster = {}
 
-monster.name = "Ahau"
 monster.description = "Ahau"
 monster.experience = 17500
 monster.outfit = {
@@ -77,11 +76,11 @@ monster.voices = {
 monster.loot = {
 	{ name = "gold coin", chance = 100000, maxCount = 250 },
 	{ name = "the living idol of tukh", chance = 80000 },
--- { name = "rotten feather", chance = 45950, maxCount = 3 },
+	{ name = "rotten feather", chance = 45950, maxCount = 3 },
 	{ name = "great health potion", chance = 43920, maxCount = 5 },
 	{ name = "great spirit potion", chance = 26350, maxCount = 3 },
-	{ name = "great mana potion", chance = 29730, maxCount = 6 },
--- { name = "ritual tooth", chance = 41890 },
+	{ id = 238, chance = 29730, maxCount = 6 }, -- great mana potion
+	{ name = "ritual tooth", chance = 41890 },
 	{ name = "diamond", chance = 2700, maxCount = 8 },
 	{ name = "amber with a bug", chance = 3380 },
 	{ name = "amber", chance = 7430 },
@@ -108,6 +107,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 64,
 	armor = 0,
+	--	mitigation = ???,
 }
 
 monster.elements = {

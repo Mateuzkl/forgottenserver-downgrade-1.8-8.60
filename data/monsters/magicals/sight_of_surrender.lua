@@ -1,10 +1,17 @@
 local mType = Game.createMonsterType("Sight of Surrender")
 local monster = {}
 
-monster.name = "Sight of Surrender"
 monster.description = "a sight of surrender"
 monster.experience = 17000
-monster.outfit = { lookType = 583 }
+monster.outfit = {
+	lookType = 583,
+	lookHead = 0,
+	lookBody = 0,
+	lookLegs = 0,
+	lookFeet = 0,
+	lookAddons = 0,
+	lookMount = 0,
+}
 
 monster.raceId = 1012
 monster.Bestiary = {
@@ -53,10 +60,11 @@ monster.flags = {
 	targetDistance = 1,
 	runHealth = 0,
 	healthHidden = false,
-	isBlockable = true,
+	isBlockable = false,
 	canWalkOnEnergy = true,
 	canWalkOnFire = true,
 	canWalkOnPoison = true,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -86,7 +94,7 @@ monster.loot = {
 	{ name = "steel boots", chance = 920 },
 	{ name = "onyx flail", chance = 920 },
 	{ name = "jade hammer", chance = 920 },
-	{ name = "great mana potion", chance = 78000, maxCount = 5 },
+	{ id = 238, chance = 78000, maxCount = 5 }, -- great mana potion
 	{ name = "great spirit potion", chance = 72000, maxCount = 5 },
 	{ name = "ultimate health potion", chance = 30000, maxCount = 5 },
 	{ name = "blue crystal shard", chance = 23000, maxCount = 3 },

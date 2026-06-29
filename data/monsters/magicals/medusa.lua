@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Medusa")
 local monster = {}
 
-monster.name = "Medusa"
 monster.description = "a medusa"
 monster.experience = 4050
 monster.outfit = {
@@ -87,7 +86,7 @@ monster.loot = {
 	{ name = "knight armor", chance = 1840 },
 	{ name = "medusa shield", chance = 3040 },
 	{ name = "titan axe", chance = 1160 },
-	{ name = "great mana potion", chance = 10000, maxCount = 2 },
+	{ id = 238, chance = 10000, maxCount = 2 }, -- great mana potion
 	{ name = "terra mantle", chance = 870 },
 	{ name = "terra legs", chance = 420 },
 	{ name = "terra amulet", chance = 4060 },
@@ -101,7 +100,7 @@ monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -450, condition = { type = CONDITION_POISON, totalDamage = 840, interval = 4000 } },
 	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_LIFEDRAIN, minDamage = -21, maxDamage = -350, range = 7, shootEffect = CONST_ANI_EARTH, effect = CONST_ME_CARNIPHILA, target = true },
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_EARTHDAMAGE, minDamage = -250, maxDamage = -500, length = 8, spread = 0, effect = CONST_ME_CARNIPHILA, target = false },
-	{ name = "speed", interval = 2000, chance = 25, speedChange = -900, radius = 7, effect = CONST_ME_POFF, target = true },
+	{ name = "speed", interval = 2000, chance = 25, speedChange = -700, radius = 7, effect = CONST_ME_POFF, target = true, duration = 15000 },
 	{ name = "outfit", interval = 2000, chance = 1, range = 7, target = true, duration = 3000, outfitMonster = "clay guardian" },
 }
 

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Phantasm")
 local monster = {}
 
-monster.name = "Phantasm"
 monster.description = "a Phantasm"
 monster.experience = 4400
 monster.outfit = {
@@ -101,17 +100,16 @@ monster.loot = {
 	{ name = "demonic essence", chance = 16320 },
 	{ name = "abyss hammer", chance = 110 },
 	{ name = "shadow sceptre", chance = 550 },
-	{ name = "great mana potion", chance = 32750, maxCount = 2 },
+	{ id = 238, chance = 32750, maxCount = 2 }, -- great mana potion
 	{ name = "ultimate health potion", chance = 14680 },
 	{ name = "small topaz", chance = 12810, maxCount = 3 },
 }
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -475 },
-	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_DEATHDAMAGE, minDamage = -250, maxDamage = -610, range = 7, shootEffect = CONST_ANI_SUDDENDEATH, effect = CONST_ME_SMALLCLOUDS, target = true },
+	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_DEATHDAMAGE, minDamage = -250, maxDamage = -610, range = 7, shootEffect = CONST_ANI_SUDDENDEATH, effect = CONST_ME_SMALLCLOUDS, target = false },
 	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_MANADRAIN, minDamage = -5, maxDamage = -80, radius = 3, effect = CONST_ME_YELLOW_RINGS, target = false },
-	{ name = "condition", interval = 2000, chance = 15, target = false, condition =
-	{ type = CONDITION_DROWN, minDamage = -5, maxDamage = -5, effect = CONST_ME_LOSEENERGY } },
+	{ name = "phantasm drown", interval = 2000, chance = 15, target = false },
 	{ name = "drunk", interval = 2000, chance = 15, radius = 5, effect = CONST_ME_MAGIC_RED, target = false, duration = 6000 },
 }
 

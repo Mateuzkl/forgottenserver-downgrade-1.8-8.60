@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Werefox")
 local monster = {}
 
-monster.name = "Werefox"
 monster.description = "a werefox"
 monster.experience = 1600
 monster.outfit = {
@@ -91,7 +90,7 @@ monster.loot = {
 	{ name = "fox paw", chance = 4050, maxCount = 2 },
 	{ name = "werefox tail", chance = 4050, maxCount = 2 },
 	{ name = "strong mana potion", chance = 4050, maxCount = 2 },
-	{ name = "great mana potion", chance = 4050, maxCount = 2 },
+	{ id = 238, chance = 4050, maxCount = 2 }, -- great mana potion
 	{ name = "mana potion", chance = 4050, maxCount = 2 },
 	{ name = "small enchanted emerald", chance = 4050, maxCount = 2 },
 	{ name = "emerald bangle", chance = 4050, maxCount = 2 },
@@ -106,7 +105,7 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -290 },
-	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = -100, maxDamage = -200, shootEffect = CONST_ANI_GREENSTAR, target = true },
+	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = -100, maxDamage = -200, shootEffect = CONST_ANI_GREENSTAR, target = false },
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_LIFEDRAIN, minDamage = -100, maxDamage = -225, range = 7, radius = 4, effect = CONST_ME_MAGIC_RED, target = true },
 	{ name = "combat", interval = 2000, chance = 14, type = COMBAT_DEATHDAMAGE, minDamage = -100, maxDamage = -700, length = 5, spread = 0, effect = CONST_ME_MORTAREA, target = false },
 }

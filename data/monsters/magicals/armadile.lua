@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Armadile")
 local monster = {}
 
-monster.name = "Armadile"
 monster.description = "an armadile"
 monster.experience = 3200
 monster.outfit = {
@@ -87,7 +86,7 @@ monster.loot = {
 	{ name = "bonebreaker", chance = 1150 },
 	{ name = "strong health potion", chance = 14285, maxCount = 2 },
 	{ name = "strong mana potion", chance = 15000, maxCount = 2 },
-	{ name = "great mana potion", chance = 15920, maxCount = 2 },
+	{ id = 238, chance = 15920, maxCount = 2 }, -- great mana potion
 	{ name = "great health potion", chance = 15000, maxCount = 2 },
 	{ name = "mana potion", chance = 14285, maxCount = 3 },
 	{ name = "terra boots", chance = 2850 },
@@ -105,8 +104,7 @@ monster.loot = {
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -150 },
 	{ name = "drunk", interval = 2000, chance = 10, radius = 4, effect = CONST_ME_FIREAREA, target = true, duration = 5000 },
-	{ name = "condition", interval = 2000, chance = 15, target = false, condition =
-	{ type = CONDITION_POISON, minDamage = -200, maxDamage = -400, radius = 4, effect = CONST_ME_POISONAREA } },
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 15, minDamage = -200, maxDamage = -400, radius = 4, effect = CONST_ME_POISONAREA, target = false },
 }
 
 monster.defenses = {

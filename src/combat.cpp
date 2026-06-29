@@ -87,6 +87,16 @@ bool rollMonsterCritical(const std::shared_ptr<Monster>& monster, const CombatDa
 	return chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance;
 }
 
+void applyPercentToDamage(CombatDamage& damage, int32_t percent)
+{
+	if (percent == 100) {
+		return;
+	}
+
+	damage.primary.value = static_cast<int32_t>(std::round(damage.primary.value * (percent / 100.0)));
+	damage.secondary.value = static_cast<int32_t>(std::round(damage.secondary.value * (percent / 100.0)));
+}
+
 } // namespace
 
 static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatType)
@@ -670,6 +680,16 @@ bool Combat::setParam(CombatParam_t param, uint32_t value)
 			params.resetDamageMultiplier = f;
 			return true;
 		}
+
+		case COMBAT_PARAM_CASTSOUND: {
+			params.soundCastEffect = static_cast<uint16_t>(value);
+			return true;
+		}
+
+		case COMBAT_PARAM_IMPACTSOUND: {
+			params.soundImpactEffect = static_cast<uint16_t>(value);
+			return true;
+		}
 	}
 	return false;
 }
@@ -706,6 +726,12 @@ int32_t Combat::getParam(CombatParam_t param) const
 
 		case COMBAT_PARAM_USECHARGES:
 			return params.useCharges ? 1 : 0;
+
+		case COMBAT_PARAM_CASTSOUND:
+			return params.soundCastEffect;
+
+		case COMBAT_PARAM_IMPACTSOUND:
+			return params.soundImpactEffect;
 
 		default:
 			return std::numeric_limits<int32_t>().max();
@@ -1273,6 +1299,21 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			if (auto targetMonster = lockMonster(target)) {
 				casterPlayer->weaponProficiency().applyBestiaryDamage(damage, targetMonster);
 				casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damage, targetMonster);
+			}
+		}
+
+		if (damage.primary.type == COMBAT_HEALING) {
+			if (target) {
+				applyPercentToDamage(
+				    damage, target->getConditionParamPercent(CONDITION_PARAM_BUFF_HEALINGRECEIVED));
+			}
+		} else if (damage.origin != ORIGIN_CONDITION) {
+			if (caster) {
+				applyPercentToDamage(damage, caster->getConditionParamPercent(CONDITION_PARAM_BUFF_DAMAGEDEALT));
+			}
+			if (target) {
+				applyPercentToDamage(
+				    damage, target->getConditionParamPercent(CONDITION_PARAM_BUFF_DAMAGERECEIVED));
 			}
 		}
 

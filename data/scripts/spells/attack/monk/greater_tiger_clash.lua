@@ -20,9 +20,9 @@ function onGetFormulaValues(player, skill, weaponDamage, attackFactor)
 	return -total * 0.9, -total * 1.1
 end
 
-onGetFormulaValuesEnergy = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesEarth = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesPhysical = loadstring(string.dump(onGetFormulaValues))
+onGetFormulaValuesEnergy = onGetFormulaValues
+onGetFormulaValuesEarth = onGetFormulaValues
+onGetFormulaValuesPhysical = onGetFormulaValues
 
 combatPhysical:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesPhysical")
 combatEnergy:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesEnergy")
@@ -55,6 +55,7 @@ spell:group("attack")
 spell:id(292)
 spell:name("Greater Tiger Clash")
 spell:words("exori nia")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_GREATER_TIGER_CLASH)
 spell:level(18)
 spell:mana(50)
 spell:range(1)
@@ -63,8 +64,8 @@ spell:isPremium(true)
 spell:needTarget(true)
 spell:blockWalls(true)
 spell:needWeapon(false)
-spell:needLearn(false)
-spell:cooldown(2 * 1000)
+
+spell:cooldown(8 * 1000)
 spell:groupCooldown(2 * 1000)
-spell:vocation("monk", "exalted monk")
+spell:vocation("monk;true", "exalted monk;true")
 spell:register()

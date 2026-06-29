@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Sea Serpent")
 local monster = {}
 
-monster.name = "Sea Serpent"
 monster.description = "a sea serpent"
 monster.experience = 2300
 monster.outfit = {
@@ -88,7 +87,7 @@ monster.loot = {
 	{ name = "dragon ham", chance = 60000, maxCount = 2 },
 	{ name = "strong health potion", chance = 5500 },
 	{ name = "strong mana potion", chance = 3850 },
-	{ name = "great mana potion", chance = 920 },
+	{ id = 238, chance = 920 }, -- great mana potion
 	{ name = "glacier amulet", chance = 880 },
 	{ name = "glacier kilt", chance = 430 },
 	{ name = "spirit cloak", chance = 2900 },

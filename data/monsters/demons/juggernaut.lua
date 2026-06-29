@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Juggernaut")
 local monster = {}
 
-monster.name = "Juggernaut"
 monster.description = "a juggernaut"
 monster.experience = 11200
 monster.outfit = {
@@ -109,7 +108,7 @@ monster.loot = {
 	{ name = "assassin star", chance = 25000, maxCount = 10 },
 	{ name = "titan axe", chance = 4430 },
 	{ name = "spiked squelcher", chance = 7761 },
-	{ name = "great mana potion", chance = 35000 },
+	{ id = 238, chance = 35000 }, -- great mana potion
 	{ name = "great health potion", chance = 32000 },
 	{ name = "skullcracker armor", chance = 400 },
 	{ name = "gold ingot", chance = 7692, maxCount = 2 },
@@ -117,7 +116,7 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -1470 },
-	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -780, range = 7, shootEffect = CONST_ANI_LARGEROCK, target = true },
+	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -780, range = 7, shootEffect = CONST_ANI_LARGEROCK, target = false },
 }
 
 monster.defenses = {

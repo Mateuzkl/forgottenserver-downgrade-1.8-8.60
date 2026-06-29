@@ -68,6 +68,35 @@ bool playerIsMonkVocation(const Vocation* vocation)
 	return vocation && (vocation->getId() == 9 || vocation->getFromVocation() == 9);
 }
 
+uint32_t getStanceConditionSubId(Stance_t stance)
+{
+	switch (stance) {
+		case STANCE_PROTECTOR:
+		case STANCE_BLOOD_RAGE:
+			return AttrSubId_BloodRageProtector;
+		case STANCE_DIVINE_DEFIANCE:
+			return AttrSubId_DivineDefiance;
+		case STANCE_SHARPSHOOTER:
+			return AttrSubId_Sharpshooter;
+		case STANCE_EXPOSE_WEAKNESS:
+			return AttrSubId_SorcererExposeWeaknessAura;
+		case STANCE_SAP_STRENGTH:
+			return AttrSubId_SorcererSapStrengthAura;
+		case STANCE_MASTER_OF_FLAMES:
+			return AttrSubId_SorcererMasterOfFlames;
+		case STANCE_MASTER_OF_THUNDER:
+			return AttrSubId_SorcererMasterOfThunder;
+		case STANCE_MASTER_OF_DECAY:
+			return AttrSubId_SorcererMasterOfDecay;
+		case STANCE_SHARED_CONSERVATION:
+			return AttrSubId_DruidSharedConservation;
+		case STANCE_ELEMENTAL_SYNTHESIS:
+			return AttrSubId_DruidElementalSynthesis;
+		default:
+			return AttrSubId_None;
+	}
+}
+
 uint16_t clampPreyDamagePercent(uint16_t value)
 {
 	return std::min<uint16_t>(value, 100);
@@ -770,11 +799,15 @@ void Player::sendMonkData()
 		"{{"
 		"\"harmony\":{},"
 		"\"serene\":{},"
-		"\"virtue\":{}"
+		"\"virtue\":{},"
+		"\"stance\":{},"
+		"\"elementalStance\":{}"
 		"}}",
 		m_harmony,
 		m_serene,
-		static_cast<uint8_t>(m_virtue)
+		static_cast<uint8_t>(m_virtue),
+		static_cast<uint8_t>(m_stancePrimary),
+		static_cast<uint8_t>(m_stanceElemental)
 	);
 	client->sendExtendedOpcode(0x92, json);
 }
@@ -811,6 +844,181 @@ void Player::sendItemValues() const
 	if (const auto protocol = client->protocol()) {
 		protocol->sendItemValues();
 	}
+}
+
+std::vector<uint16_t> Player::buildActiveStanceSpellIds() const
+{
+	std::vector<uint16_t> spellIds;
+	if (const uint16_t spellId = getStanceSpellId(m_stancePrimary)) {
+		spellIds.push_back(spellId);
+	}
+	if (const uint16_t spellId = getStanceSpellId(m_stanceElemental)) {
+		spellIds.push_back(spellId);
+	}
+	return spellIds;
+}
+
+void Player::sendStanceProtocol() const
+{
+	if (client) {
+		client->sendStanceProtocol(buildActiveStanceSpellIds());
+	}
+}
+
+bool Player::isElementalStance(Stance_t stance)
+{
+	return stance == STANCE_MASTER_OF_FLAMES || stance == STANCE_MASTER_OF_THUNDER ||
+	       stance == STANCE_MASTER_OF_DECAY;
+}
+
+bool Player::isStanceCompatibleWithVocation(Stance_t stance, uint16_t vocationBaseId)
+{
+	switch (stance) {
+		case STANCE_NONE:
+			return true;
+		case STANCE_PROTECTOR:
+		case STANCE_BLOOD_RAGE:
+			return vocationBaseId == VOCATION_KNIGHT;
+		case STANCE_DIVINE_DEFIANCE:
+		case STANCE_SHARPSHOOTER:
+			return vocationBaseId == VOCATION_PALADIN;
+		case STANCE_EXPOSE_WEAKNESS:
+		case STANCE_SAP_STRENGTH:
+		case STANCE_MASTER_OF_FLAMES:
+		case STANCE_MASTER_OF_THUNDER:
+		case STANCE_MASTER_OF_DECAY:
+			return vocationBaseId == VOCATION_SORCERER;
+		case STANCE_SHARED_CONSERVATION:
+		case STANCE_ELEMENTAL_SYNTHESIS:
+			return vocationBaseId == VOCATION_DRUID;
+		default:
+			return false;
+	}
+}
+
+uint16_t Player::getStanceSpellId(Stance_t stance)
+{
+	switch (stance) {
+		case STANCE_PROTECTOR:
+			return 132;
+		case STANCE_BLOOD_RAGE:
+			return 133;
+		case STANCE_DIVINE_DEFIANCE:
+			return 314;
+		case STANCE_SHARPSHOOTER:
+			return 313;
+		case STANCE_EXPOSE_WEAKNESS:
+			return 312;
+		case STANCE_SAP_STRENGTH:
+			return 311;
+		case STANCE_MASTER_OF_FLAMES:
+			return 304;
+		case STANCE_MASTER_OF_THUNDER:
+			return 305;
+		case STANCE_MASTER_OF_DECAY:
+			return 306;
+		case STANCE_SHARED_CONSERVATION:
+			return 309;
+		case STANCE_ELEMENTAL_SYNTHESIS:
+			return 319;
+		default:
+			return 0;
+	}
+}
+
+bool Player::setStance(Stance_t stance)
+{
+	if (isElementalStance(stance)) {
+		return false;
+	}
+
+	uint16_t baseVocation = vocation ? static_cast<uint16_t>(vocation->getFromVocation()) : VOCATION_NONE;
+	if (baseVocation == VOCATION_NONE && vocation) {
+		baseVocation = vocation->getId();
+	}
+
+	if (!isStanceCompatibleWithVocation(stance, baseVocation)) {
+		return false;
+	}
+
+	if (m_stancePrimary != STANCE_NONE && m_stancePrimary != stance) {
+		if (Condition* condition = getCondition(
+		        CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, getStanceConditionSubId(m_stancePrimary))) {
+			removeCondition(condition, true);
+		}
+	}
+
+	m_stancePrimary = stance;
+	sendSkills();
+	sendMonkData();
+	sendStanceProtocol();
+	return true;
+}
+
+bool Player::setElementalStance(Stance_t stance)
+{
+	if (stance != STANCE_NONE && !isElementalStance(stance)) {
+		return false;
+	}
+
+	uint16_t baseVocation = vocation ? static_cast<uint16_t>(vocation->getFromVocation()) : VOCATION_NONE;
+	if (baseVocation == VOCATION_NONE && vocation) {
+		baseVocation = vocation->getId();
+	}
+
+	if (!isStanceCompatibleWithVocation(stance, baseVocation)) {
+		return false;
+	}
+
+	if (m_stanceElemental != STANCE_NONE && m_stanceElemental != stance) {
+		if (Condition* condition = getCondition(
+		        CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, getStanceConditionSubId(m_stanceElemental))) {
+			removeCondition(condition, true);
+		}
+	}
+
+	m_stanceElemental = stance;
+	sendSkills();
+	sendMonkData();
+	sendStanceProtocol();
+	return true;
+}
+
+void Player::persistStances() const
+{
+	auto stanceKv =
+	    KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("stance");
+	stanceKv->set("primary", static_cast<int32_t>(m_stancePrimary));
+	stanceKv->set("elemental", static_cast<int32_t>(m_stanceElemental));
+}
+
+void Player::restoreStances()
+{
+	auto stanceKv =
+	    KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("stance");
+
+	uint16_t baseVocation = vocation ? static_cast<uint16_t>(vocation->getFromVocation()) : VOCATION_NONE;
+	if (baseVocation == VOCATION_NONE && vocation) {
+		baseVocation = vocation->getId();
+	}
+
+	if (auto primary = stanceKv->get("primary", true)) {
+		const auto stance = static_cast<Stance_t>(static_cast<uint8_t>(primary->getNumber()));
+		if (!isElementalStance(stance) && isStanceCompatibleWithVocation(stance, baseVocation)) {
+			m_stancePrimary = stance;
+		}
+	}
+
+	if (auto elemental = stanceKv->get("elemental", true)) {
+		const auto stance = static_cast<Stance_t>(static_cast<uint8_t>(elemental->getNumber()));
+		if ((stance == STANCE_NONE || isElementalStance(stance)) &&
+		    isStanceCompatibleWithVocation(stance, baseVocation)) {
+			m_stanceElemental = stance;
+		}
+	}
+
+	sendMonkData();
+	sendStanceProtocol();
 }
 
 void Player::addBlessing(uint8_t blessing, uint8_t count)
@@ -3404,6 +3612,20 @@ bool Player::hasShield() const
 
 	item = inventory[CONST_SLOT_RIGHT].get();
 	if (item && item->getWeaponType() == WEAPON_SHIELD) {
+		return true;
+	}
+	return false;
+}
+
+bool Player::hasRealShield() const
+{
+	Item* item = inventory[CONST_SLOT_LEFT].get();
+	if (item && item->getWeaponType() == WEAPON_SHIELD && Item::items[item->getID()].defense > 0) {
+		return true;
+	}
+
+	item = inventory[CONST_SLOT_RIGHT].get();
+	if (item && item->getWeaponType() == WEAPON_SHIELD && Item::items[item->getID()].defense > 0) {
 		return true;
 	}
 	return false;

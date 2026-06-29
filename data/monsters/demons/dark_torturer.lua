@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Dark Torturer")
 local monster = {}
 
-monster.name = "Dark Torturer"
 monster.description = "a dark torturer"
 monster.experience = 4650
 monster.outfit = {
@@ -100,14 +99,14 @@ monster.loot = {
 	{ name = "assassin star", chance = 2222, maxCount = 5 },
 	{ name = "vile axe", chance = 480 },
 	{ name = "butcher's axe", chance = 850 },
-	{ name = "great mana potion", chance = 14830, maxCount = 2 },
+	{ id = 238, chance = 14830, maxCount = 2 }, -- great mana potion
 	{ name = "great health potion", chance = 10000, maxCount = 2 },
 	{ name = "gold ingot", chance = 3140 },
 }
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -500 },
-	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -781, range = 7, shootEffect = CONST_ANI_THROWINGKNIFE, target = true },
+	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -781, range = 7, shootEffect = CONST_ANI_THROWINGKNIFE, target = false },
 	{ name = "dark torturer skill reducer", interval = 2000, chance = 5, target = false },
 }
 

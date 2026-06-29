@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Lava Golem")
 local monster = {}
 
-monster.name = "Lava Golem"
 monster.description = "a lava golem"
 monster.experience = 7900
 monster.outfit = {
@@ -62,6 +61,7 @@ monster.flags = {
 	canWalkOnEnergy = false,
 	canWalkOnFire = true,
 	canWalkOnPoison = true,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -90,7 +90,7 @@ monster.loot = {
 	{ name = "yellow piece of cloth", chance = 7230 },
 	{ name = "strong health potion", chance = 18830, maxCount = 2 },
 	{ name = "strong mana potion", chance = 18150, maxCount = 2 },
-	{ name = "great mana potion", chance = 16030, maxCount = 2 },
+	{ id = 238, chance = 16030, maxCount = 2 }, -- great mana potion
 	{ name = "mana potion", chance = 20720, maxCount = 2 },
 	{ name = "magma amulet", chance = 2900 },
 	{ name = "magma boots", chance = 2650 },

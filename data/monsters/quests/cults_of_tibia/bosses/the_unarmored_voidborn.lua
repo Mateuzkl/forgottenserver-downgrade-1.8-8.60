@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("The Unarmored Voidborn")
 local monster = {}
 
-monster.name = "The Unarmored Voidborn"
 monster.description = "The Unarmored Voidborn"
 monster.experience = 15000
 monster.outfit = {
@@ -12,6 +11,10 @@ monster.outfit = {
 	lookFeet = 0,
 	lookAddons = 0,
 	lookMount = 0,
+}
+
+monster.events = {
+	"CultsOfTibiaBossDeath",
 }
 
 monster.bosstiary = {
@@ -92,7 +95,7 @@ monster.loot = {
 	{ name = "small amethyst", chance = 12259, maxCount = 10 },
 	{ name = "energy bar", chance = 16872, maxCount = 3 },
 	{ name = "ultimate health potion", chance = 27652, maxCount = 10 },
-	{ name = "great mana potion", chance = 33721, maxCount = 10 },
+	{ id = 238, chance = 33721, maxCount = 10 }, -- great mana potion
 	{ name = "great spirit potion", chance = 25690, maxCount = 5 },
 	{ id = 23542, chance = 12798 }, -- collar of blue plasma
 	{ name = "piece of royal steel", chance = 15890 },
@@ -110,6 +113,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 50,
 	armor = 50,
+	--	mitigation = ???,
 }
 
 monster.elements = {

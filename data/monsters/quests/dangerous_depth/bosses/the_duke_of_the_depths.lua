@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("The Duke of the Depths")
 local monster = {}
 
-monster.name = "The Duke of the Depths"
 monster.description = "The Duke Of The Depths"
 monster.experience = 300000
 monster.outfit = {
@@ -14,9 +13,8 @@ monster.outfit = {
 	lookMount = 0,
 }
 
-monster.bosstiary = {
-	bossRaceId = 1520,
-	bossRace = RARITY_BANE,
+monster.events = {
+	"DepthWarzoneBossDeath",
 }
 
 monster.health = 350000
@@ -29,6 +27,11 @@ monster.manaCost = 0
 monster.changeTarget = {
 	interval = 5000,
 	chance = 50,
+}
+
+monster.bosstiary = {
+	bossRaceId = 1520,
+	bossRace = RARITY_BANE,
 }
 
 monster.strategiesTarget = {
@@ -76,7 +79,7 @@ monster.loot = {
 	{ name = "stone skin amulet", chance = 100000 },
 	{ id = 27713, chance = 100000 }, -- heavy crystal fragment
 	{ name = "wand of inferno", chance = 75000 },
-	{ name = "great mana potion", chance = 64580, maxCount = 18 },
+	{ id = 238, chance = 64580, maxCount = 18 }, -- great mana potion
 	{ name = "blue crystal shard", chance = 60420 },
 	{ name = "fire axe", chance = 58330 },
 	{ name = "ultimate health potion", chance = 52080, maxCount = 18 },
@@ -123,6 +126,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 160,
 	armor = 160,
+	--	mitigation = ???,
 }
 
 monster.elements = {
