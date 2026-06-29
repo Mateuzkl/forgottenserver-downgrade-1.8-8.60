@@ -1259,14 +1259,14 @@ void Game::executeDeath(uint32_t creatureId)
 	}
 }
 
-std::shared_ptr<Container> Game::getBrowseFieldContainer(Tile* tile)
+std::shared_ptr<Container> Game::getBrowseFieldContainer(Tile* tile, uint32_t instanceId)
 {
 	auto tileRef = getTileSharedRef(tile);
 	if (!tileRef) {
 		return nullptr;
 	}
 
-	auto it = browseFields.find(tileRef);
+	auto it = browseFields.find(BrowseFieldKey{tileRef, instanceId});
 	if (it == browseFields.end()) {
 		return nullptr;
 	}
@@ -1277,6 +1277,21 @@ std::shared_ptr<Container> Game::getBrowseFieldContainer(Tile* tile)
 	}
 
 	return it->second;
+}
+
+std::shared_ptr<Container> Game::getBrowseFieldContainer(Tile* tile)
+{
+	auto tileRef = getTileSharedRef(tile);
+	if (!tileRef) {
+		return nullptr;
+	}
+
+	for (const auto& [key, browseField] : browseFields) {
+		if (key.tile == tileRef) {
+			return browseField;
+		}
+	}
+	return nullptr;
 }
 
 std::shared_ptr<Tile> Game::getBrowseFieldTile(const Cylinder* cylinder)
@@ -1294,11 +1309,12 @@ std::shared_ptr<Tile> Game::getBrowseFieldTile(const Cylinder* cylinder)
 		return nullptr;
 	}
 
-	auto it = browseFields.find(tileRef);
-	if (it == browseFields.end() || it->second.get() != container) {
-		return nullptr;
+	for (const auto& [key, browseField] : browseFields) {
+		if (key.tile == tileRef && browseField.get() == container) {
+			return tileRef;
+		}
 	}
-	return tileRef;
+	return nullptr;
 }
 
 void Game::cleanupBrowseFields()
@@ -3612,14 +3628,15 @@ void Game::playerBrowseField(uint32_t playerId, const Position& pos)
 		releaseBrowseFieldContainer(openContainer);
 	}
 
-	auto container = getBrowseFieldContainer(tileRef.get());
+	const uint32_t playerInstanceId = player->getInstanceID();
+	auto container = getBrowseFieldContainer(tileRef.get(), playerInstanceId);
 	if (!container) {
-		container = Container::createBrowseField(tileRef);
+		container = Container::createBrowseField(tileRef, playerInstanceId);
 		if (!container) {
 			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 			return;
 		}
-		browseFields[tileRef] = container;
+		browseFields[BrowseFieldKey{tileRef, playerInstanceId}] = container;
 	}
 
 	player->addContainer(dummyContainerId, container.get());
@@ -4013,8 +4030,12 @@ void Game::playerSetManagedLootContainer(uint32_t playerId, ObjectCategory_t cat
 		}
 	}
 
+	if (!item->hasItemUID()) {
+		item->setItemUID(Item::generateItemUID());
+	}
+
 	const uint16_t containerId = item->getClientID() != 0 ? item->getClientID() : item->getID();
-	player->setManagedLootContainer(category, containerId, isLootContainer);
+	player->setManagedLootContainer(category, containerId, item->getItemUID(), isLootContainer);
 	player->sendLootContainers();
 }
 
@@ -4023,6 +4044,11 @@ void Game::playerClearManagedLootContainer(uint32_t playerId, ObjectCategory_t c
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
 	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	if (!isValidObjectCategory(category)) {
+		player->sendLootContainers();
 		return;
 	}
 
@@ -4035,6 +4061,11 @@ void Game::playerOpenManagedLootContainer(uint32_t playerId, ObjectCategory_t ca
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
 	if (!player || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	if (!isValidObjectCategory(category)) {
+		player->sendLootContainers();
 		return;
 	}
 

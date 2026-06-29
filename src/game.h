@@ -698,6 +698,7 @@ public:
 		return tile ? tile->weak_from_this().lock() : nullptr;
 	}
 
+	std::shared_ptr<Container> getBrowseFieldContainer(Tile* tile, uint32_t instanceId);
 	std::shared_ptr<Container> getBrowseFieldContainer(Tile* tile);
 	std::shared_ptr<Tile> getBrowseFieldTile(const Cylinder* cylinder);
 	void releaseBrowseFieldContainer(const Container* container);
@@ -745,7 +746,28 @@ private:
 
 	using TradeItemMap = std::map<std::weak_ptr<Item>, uint32_t, std::owner_less<std::weak_ptr<Item>>>;
 	using LootHighlightEventMap = std::map<std::weak_ptr<Item>, uint32_t, std::owner_less<std::weak_ptr<Item>>>;
-	using BrowseFieldMap = std::map<std::shared_ptr<Tile>, std::shared_ptr<Container>, std::owner_less<std::shared_ptr<Tile>>>;
+	struct BrowseFieldKey
+	{
+		std::shared_ptr<Tile> tile;
+		uint32_t instanceId = 0;
+	};
+
+	struct BrowseFieldKeyCompare
+	{
+		bool operator()(const BrowseFieldKey& lhs, const BrowseFieldKey& rhs) const
+		{
+			std::owner_less<std::shared_ptr<Tile>> ownerLess;
+			if (ownerLess(lhs.tile, rhs.tile)) {
+				return true;
+			}
+			if (ownerLess(rhs.tile, lhs.tile)) {
+				return false;
+			}
+			return lhs.instanceId < rhs.instanceId;
+		}
+	};
+
+	using BrowseFieldMap = std::map<BrowseFieldKey, std::shared_ptr<Container>, BrowseFieldKeyCompare>;
 
 	// list of items that are in trading state, mapped to the player
 	TradeItemMap tradeItems;

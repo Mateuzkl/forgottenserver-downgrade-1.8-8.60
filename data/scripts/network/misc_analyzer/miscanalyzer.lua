@@ -10,8 +10,28 @@ local function isAstra(player)
 	return player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
+local function isOtc(player)
+	return player and player.isUsingOtClient and player:isUsingOtClient()
+end
+
+local otcOrAstraOpcodes = {
+	[OPCODE_CHARM_ACTIVATED] = true,
+	[OPCODE_IMBUEMENT_ACTIVATED] = true,
+	[OPCODE_SPECIAL_SKILL_ACTIVATED] = true,
+}
+
+local function canReceiveOpcode(player, opcode)
+	if not player then
+		return false
+	end
+	if otcOrAstraOpcodes[opcode] then
+		return isAstra(player) or isOtc(player)
+	end
+	return isAstra(player)
+end
+
 local function sendOpcode(player, opcode)
-	if not player or not isAstra(player) then return false end
+	if not canReceiveOpcode(player, opcode) then return false end
 	local out = NetworkMessage(player)
 	out:addByte(opcode)
 	return out

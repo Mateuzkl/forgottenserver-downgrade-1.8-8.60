@@ -138,6 +138,8 @@ struct ManagedLootContainer
 {
 	uint16_t loot = 0;
 	uint16_t obtain = 0;
+	uint64_t lootUid = 0;
+	uint64_t obtainUid = 0;
 };
 
 using MuteCountMap = std::unordered_map<uint32_t, uint32_t>;
@@ -1444,9 +1446,10 @@ public:
 	bool isQuickLootAutoEnabled() const;
 	void ensureQuickLootStateLoaded();
 	void saveQuickLootState() const;
-	void setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, bool isLootContainer);
+	void setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, uint64_t containerUid, bool isLootContainer);
 	void clearManagedLootContainer(ObjectCategory_t category, bool isLootContainer);
 	uint16_t getManagedLootContainerId(ObjectCategory_t category, bool isLootContainer) const;
+	uint64_t getManagedLootContainerUid(ObjectCategory_t category, bool isLootContainer) const;
 	Container* getManagedLootContainer(ObjectCategory_t category, bool isLootContainer) const;
 	ContainerPtr getManagedLootContainerRef(ObjectCategory_t category, bool isLootContainer) const;
 	const std::map<ObjectCategory_t, ManagedLootContainer>& getManagedLootContainers() const { return managedLootContainers; }

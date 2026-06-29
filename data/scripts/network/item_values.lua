@@ -139,6 +139,8 @@ local function buildItemDescriptions(itemId)
 		return details
 	end
 
+	addDetail(details, "Name", safeCall(itemType, "getName"))
+
 	local description = safeCall(itemType, "getDescription") or ""
 	addDetail(details, "Description", description ~= "" and description or safeCall(itemType, "getName"))
 
@@ -304,7 +306,6 @@ local function sendItemDetails(player, itemId)
 		msg:addU32(math.min(tonumber(offer.salePrice) or 0, 0xFFFFFFFF))
 		msg:addString(tostring(offer.currencyQuestFlagDisplayName or ""))
 	end
-	msg:addString(tostring(itemType:getName() or ""))
 	return msg:sendToPlayer(player)
 end
 

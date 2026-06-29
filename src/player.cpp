@@ -6855,7 +6855,22 @@ uint16_t getKVContainerId(const ValueWrapper& value, const std::string& key)
 	return static_cast<uint16_t>(std::min<int32_t>(number, std::numeric_limits<uint16_t>::max()));
 }
 
-Container* findHeldContainerById(Container* parent, uint16_t itemId)
+uint64_t getKVContainerUid(const ValueWrapper& value, const std::string& key)
+{
+	const std::string text = value.get<StringType>(key);
+	if (text.empty()) {
+		return 0;
+	}
+
+	char* end = nullptr;
+	const unsigned long long number = std::strtoull(text.c_str(), &end, 10);
+	if (end == text.c_str() || *end != '\0') {
+		return 0;
+	}
+	return static_cast<uint64_t>(number);
+}
+
+Container* findHeldContainerByIdentity(Container* parent, uint16_t itemId, uint64_t itemUid)
 {
 	if (!parent) {
 		return nullptr;
@@ -6872,11 +6887,12 @@ Container* findHeldContainerById(Container* parent, uint16_t itemId)
 			continue;
 		}
 
-		if (item->getID() == itemId || item->getClientID() == itemId) {
+		if ((itemUid != 0 && item->getItemUID() == itemUid) ||
+		    (itemUid == 0 && (item->getID() == itemId || item->getClientID() == itemId))) {
 			return container;
 		}
 
-		if (Container* nested = findHeldContainerById(container, itemId)) {
+		if (Container* nested = findHeldContainerByIdentity(container, itemId, itemUid)) {
 			return nested;
 		}
 	}
@@ -6966,6 +6982,8 @@ void Player::ensureQuickLootStateLoaded()
 		ManagedLootContainer entry;
 		entry.loot = getKVContainerId(*wrappedContainers, "loot");
 		entry.obtain = getKVContainerId(*wrappedContainers, "obtain");
+		entry.lootUid = getKVContainerUid(*wrappedContainers, "lootUid");
+		entry.obtainUid = getKVContainerUid(*wrappedContainers, "obtainUid");
 		if (entry.loot != 0 || entry.obtain != 0) {
 			managedLootContainers[category] = entry;
 		}
@@ -6985,6 +7003,8 @@ void Player::saveQuickLootState() const
 		MapType entry;
 		entry.emplace("loot", std::make_shared<ValueWrapper>(static_cast<int32_t>(containers.loot)));
 		entry.emplace("obtain", std::make_shared<ValueWrapper>(static_cast<int32_t>(containers.obtain)));
+		entry.emplace("lootUid", std::make_shared<ValueWrapper>(std::to_string(containers.lootUid)));
+		entry.emplace("obtainUid", std::make_shared<ValueWrapper>(std::to_string(containers.obtainUid)));
 		serializedContainers.emplace(std::to_string(static_cast<uint8_t>(category)), std::make_shared<ValueWrapper>(entry));
 	}
 
@@ -6992,7 +7012,7 @@ void Player::saveQuickLootState() const
 	store->set("fallback", ValueWrapper(quickLootFallbackToMainContainer));
 }
 
-void Player::setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, bool isLootContainer)
+void Player::setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, uint64_t containerUid, bool isLootContainer)
 {
 	ensureQuickLootStateLoaded();
 	if (!isValidQuickLootCategory(category) || containerId == 0) {
@@ -7002,8 +7022,10 @@ void Player::setManagedLootContainer(ObjectCategory_t category, uint16_t contain
 	auto& containers = managedLootContainers[category];
 	if (isLootContainer) {
 		containers.loot = containerId;
+		containers.lootUid = containerUid;
 	} else {
 		containers.obtain = containerId;
+		containers.obtainUid = containerUid;
 	}
 	saveQuickLootState();
 }
@@ -7018,8 +7040,10 @@ void Player::clearManagedLootContainer(ObjectCategory_t category, bool isLootCon
 
 	if (isLootContainer) {
 		it->second.loot = 0;
+		it->second.lootUid = 0;
 	} else {
 		it->second.obtain = 0;
+		it->second.obtainUid = 0;
 	}
 
 	if (it->second.loot == 0 && it->second.obtain == 0) {
@@ -7048,15 +7072,60 @@ uint16_t Player::getManagedLootContainerId(ObjectCategory_t category, bool isLoo
 	return containerId;
 }
 
+uint64_t Player::getManagedLootContainerUid(ObjectCategory_t category, bool isLootContainer) const
+{
+	auto self = const_cast<Player*>(this);
+	self->ensureQuickLootStateLoaded();
+	if (category != OBJECTCATEGORY_DEFAULT && category != OBJECTCATEGORY_GOLD && !isPremium()) {
+		category = OBJECTCATEGORY_DEFAULT;
+	}
+
+	const auto it = managedLootContainers.find(category);
+	uint64_t containerUid = 0;
+	uint16_t containerId = 0;
+	if (it != managedLootContainers.end()) {
+		containerId = isLootContainer ? it->second.loot : it->second.obtain;
+		containerUid = isLootContainer ? it->second.lootUid : it->second.obtainUid;
+	}
+
+	if (containerId == 0 && category != OBJECTCATEGORY_DEFAULT) {
+		return getManagedLootContainerUid(OBJECTCATEGORY_DEFAULT, isLootContainer);
+	}
+	return containerUid;
+}
+
 Container* Player::getManagedLootContainer(ObjectCategory_t category, bool isLootContainer) const
 {
 	const uint16_t containerId = getManagedLootContainerId(category, isLootContainer);
+	const uint64_t containerUid = getManagedLootContainerUid(category, isLootContainer);
 	if (containerId == 0) {
 		return nullptr;
 	}
 
-	if (containerId == ITEM_GOLD_POUCH) {
+	if (containerId == ITEM_GOLD_POUCH && containerUid == 0) {
 		return findGoldPouch();
+	}
+
+	if (storeInbox) {
+		for (const auto& storeItem : storeInbox->getItemList()) {
+			if (!storeItem) {
+				continue;
+			}
+
+			Container* container = storeItem->getContainer();
+			if (!container) {
+				continue;
+			}
+
+			if ((containerUid != 0 && storeItem->getItemUID() == containerUid) ||
+			    (containerUid == 0 && (storeItem->getID() == containerId || storeItem->getClientID() == containerId))) {
+				return container;
+			}
+
+			if (Container* nested = findHeldContainerByIdentity(container, containerId, containerUid)) {
+				return nested;
+			}
+		}
 	}
 
 	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
@@ -7070,11 +7139,12 @@ Container* Player::getManagedLootContainer(ObjectCategory_t category, bool isLoo
 			continue;
 		}
 
-		if (slotItem->getID() == containerId || slotItem->getClientID() == containerId) {
+		if ((containerUid != 0 && slotItem->getItemUID() == containerUid) ||
+		    (containerUid == 0 && (slotItem->getID() == containerId || slotItem->getClientID() == containerId))) {
 			return container;
 		}
 
-		if (Container* nested = findHeldContainerById(container, containerId)) {
+		if (Container* nested = findHeldContainerByIdentity(container, containerId, containerUid)) {
 			return nested;
 		}
 	}

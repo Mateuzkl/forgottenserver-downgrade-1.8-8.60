@@ -837,147 +837,22 @@ local function handleCharmAction(player, charmId, action, raceId)
 		return
 	end
 
-	if Game.handleBestiaryCharmAction then
-		local success, message = Game.handleBestiaryCharmAction(player, charmId, action, raceId)
-		if message and message ~= "" then
-			sendMessage(player, message)
-		end
-		if success then
-			invalidatePlayer(playerGuid)
-			if CustomBestiary.refreshPlayerCharms then
-				CustomBestiary.refreshPlayerCharms(player)
-			end
-			sendBestiaryData(player)
-		end
+	if not Game.handleBestiaryCharmAction then
+		sendMessage(player, "Bestiary charm actions are unavailable.")
 		return
 	end
 
-	local kills = loadKillMap(playerGuid)
-	local charms = loadCharmMap(playerGuid)
-	local state = charms[charmId]
-
-	if action == 0 then
-		local tier = clamp(state and (state.tier or (state.unlocked and 1 or 0)) or 0, 0, 3)
-		if tier >= 3 then
-			sendMessage(player, "This charm is already fully unlocked.")
-			return
-		end
-
-		local price = getNextCharmPrice(charm, tier)
-		if charm.category == "minor" then
-			local minorEchoes, maxMinorEchoes = getPlayerMinorCharmEchoes(playerGuid)
-			if minorEchoes < price then
-				sendMessage(player, "You do not have enough minor charm echoes.")
-				return
-			end
-			setPlayerMinorCharmEchoes(playerGuid, minorEchoes - price, maxMinorEchoes)
-		else
-			local charmPoints = getStoredCharmBalance(playerGuid, kills, charms)
-			if charmPoints < price then
-				sendMessage(player, "You do not have enough charm points.")
-				return
-			end
-			setPlayerCharmPoints(playerGuid, charmPoints - price)
-			local minorEchoes, maxMinorEchoes = getPlayerMinorCharmEchoes(playerGuid)
-			local reward = getMinorEchoRewardForTier(tier)
-			setPlayerMinorCharmEchoes(playerGuid, minorEchoes + reward, maxMinorEchoes + reward)
-		end
-
-		db.query("INSERT INTO `player_bestiary_charms` (`player_id`, `charm_id`, `unlocked`, `raceid`) VALUES (" ..
-			playerGuid .. ", " .. charmId .. ", " .. (tier + 1) .. ", 0) ON DUPLICATE KEY UPDATE `unlocked` = " .. (tier + 1))
+	local success, message = Game.handleBestiaryCharmAction(player, charmId, action, raceId)
+	if message and message ~= "" then
+		sendMessage(player, message)
+	end
+	if success then
 		invalidatePlayer(playerGuid)
 		if CustomBestiary.refreshPlayerCharms then
 			CustomBestiary.refreshPlayerCharms(player)
 		end
-		sendMessage(player, tier == 0 and "Charm unlocked." or "Charm upgraded.")
 		sendBestiaryData(player)
-		return
 	end
-
-	if action == 3 then
-		if not removePlayerGold(player, getCharmResetCost(player)) then
-			sendMessage(player, "You do not have enough gold.")
-			return
-		end
-
-		local charmPoints = getStoredCharmBalance(playerGuid, kills, charms)
-		local refund = getCharmSpentByCategory(charms, "major")
-		setPlayerCharmPoints(playerGuid, charmPoints + refund)
-		setPlayerMinorCharmEchoes(playerGuid, 0, 0)
-		db.query("UPDATE `player_bestiary_charms` SET `unlocked` = 0, `raceid` = 0 WHERE `player_id` = " .. playerGuid)
-		invalidatePlayer(playerGuid)
-		if CustomBestiary.refreshPlayerCharms then
-			CustomBestiary.refreshPlayerCharms(player)
-		end
-		sendMessage(player, "All charms were reset.")
-		sendBestiaryData(player)
-		return
-	end
-
-	if not state or clamp(state.tier or (state.unlocked and 1 or 0), 0, 3) == 0 then
-		sendMessage(player, "This charm is not unlocked.")
-		return
-	end
-
-	if action == 1 then
-		local entry = CustomBestiary.getMonster(raceId)
-		if not entry then
-			sendMessage(player, "Creature not found.")
-			return
-		end
-
-		local killCount = kills[raceId] or 0
-		if charm.category == "major" and killCount < entry.toKill then
-			sendMessage(player, "This creature is not fully unlocked.")
-			return
-		elseif charm.category == "minor" and killCount < entry.secondUnlock then
-			sendMessage(player, "This creature has not reached the charm assignment stage.")
-			return
-		end
-
-		if (state.raceId or 0) == 0 and getEmptyCharmSlots(player, charms) <= 0 then
-			sendMessage(player, "You do not have any charm slots available.")
-			return
-		end
-
-		for otherCharmId, otherState in pairs(charms) do
-			local otherCharm = CustomBestiary.charmById[otherCharmId]
-			local otherTier = clamp(otherState.tier or (otherState.unlocked and 1 or 0), 0, 3)
-			if otherCharmId ~= charmId and otherCharm and otherTier > 0 and (otherState.raceId or 0) == raceId and otherCharm.category == charm.category then
-				sendMessage(player, "You already have this creature set on another " .. charm.category .. " charm.")
-				return
-			end
-		end
-
-		db.query("UPDATE `player_bestiary_charms` SET `raceid` = " .. raceId .. " WHERE `player_id` = " .. playerGuid .. " AND `charm_id` = " .. charmId)
-		invalidatePlayer(playerGuid)
-		if CustomBestiary.refreshPlayerCharms then
-			CustomBestiary.refreshPlayerCharms(player)
-		end
-		sendMessage(player, "Charm assigned.")
-		sendBestiaryData(player)
-		return
-	elseif action == 2 then
-		if (state.raceId or 0) <= 0 then
-			sendMessage(player, "This charm is not assigned.")
-			return
-		end
-		if not removePlayerGold(player, getCharmRemoveCost(player)) then
-			sendMessage(player, "You do not have enough gold.")
-			return
-		end
-
-		db.query("UPDATE `player_bestiary_charms` SET `raceid` = 0 WHERE `player_id` = " .. playerGuid .. " AND `charm_id` = " .. charmId)
-		invalidatePlayer(playerGuid)
-		if CustomBestiary.refreshPlayerCharms then
-			CustomBestiary.refreshPlayerCharms(player)
-		end
-		sendMessage(player, "Charm removed.")
-		sendBestiaryData(player)
-		return
-	end
-
-	sendMessage(player, "Invalid charm action.")
 end
 
 local infoHandler = PacketHandler(OPCODE_CYCLOPEDIA_INFO)

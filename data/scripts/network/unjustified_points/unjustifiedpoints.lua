@@ -17,6 +17,16 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
+local function warnMissingUnjustifiedKillsIndex()
+	local message = "[CustomUnjustifiedPoints] Missing index `" .. UNJUSTIFIED_KILLS_INDEX ..
+		"` on `player_deaths`. Create it during migration/startup admin maintenance for faster refreshes."
+	if logger and logger.warn then
+		logger.warn(message)
+	else
+		print(message)
+	end
+end
+
 local function ensureUnjustifiedKillsIndex()
 	if indexChecked then
 		return
@@ -35,7 +45,7 @@ local function ensureUnjustifiedKillsIndex()
 	result.free(resultId)
 	indexChecked = true
 	if not exists then
-		db.query("ALTER TABLE `player_deaths` ADD INDEX `" .. UNJUSTIFIED_KILLS_INDEX .. "` (`killed_by`(64), `is_player`, `unjustified`, `time`)")
+		warnMissingUnjustifiedKillsIndex()
 	end
 end
 

@@ -712,6 +712,8 @@ bool Creature::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreatur
 						if (ConfigManager::getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
 							if (corpseOwner->isQuickLootAutoEnabled()) {
 								g_game.playerQuickLootCorpse(corpseOwner->getID(), corpseContainer);
+							} else {
+								corpseOwner->lootCorpse(corpseContainer);
 							}
 						} else {
 							corpseOwner->lootCorpse(corpseContainer);

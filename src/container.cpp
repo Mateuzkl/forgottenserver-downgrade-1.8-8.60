@@ -10,6 +10,7 @@
 #include "storeinbox.h"
 
 #include "game.h"
+#include "instance_utils.h"
 #include "iomap.h"
 #include "logger.h"
 
@@ -77,7 +78,7 @@ Container::~Container()
 	}
 }
 
-std::shared_ptr<Container> Container::createBrowseField(const TilePtr& tile)
+std::shared_ptr<Container> Container::createBrowseField(const TilePtr& tile, uint32_t viewerInstanceId)
 {
 	if (!tile) {
 		return nullptr;
@@ -87,7 +88,8 @@ std::shared_ptr<Container> Container::createBrowseField(const TilePtr& tile)
 	const TileItemVector* itemVector = tile->getItemList();
 	if (itemVector) {
 		for (const auto& item : *itemVector) {
-			if (!isBrowseFieldVisibleItem(item.get())) {
+			if (!isBrowseFieldVisibleItem(item.get()) ||
+			    !InstanceUtils::canSeeItemInInstance(viewerInstanceId, item.get())) {
 				continue;
 			}
 
