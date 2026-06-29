@@ -1,32 +1,38 @@
 local combat = Combat()
 combat:setParameter(COMBAT_PARAM_TYPE, COMBAT_PHYSICALDAMAGE)
 combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_HITAREA)
-combat:setParameter(COMBAT_PARAM_BLOCKARMOR, true)
-combat:setParameter(COMBAT_PARAM_USECHARGES, true)
+combat:setParameter(COMBAT_PARAM_BLOCKARMOR, 1)
+combat:setParameter(COMBAT_PARAM_USECHARGES, 1)
 combat:setArea(createCombatArea(AREA_SQUARE1X1))
 
-local function callback(player, skill, attack, factor)
-	local min = (player:getLevel() / 5) + (skill * attack * 0.06) + 13
-	local max = (player:getLevel() / 5) + (skill * attack * 0.11) + 27
-	return -min, -max
+function onGetFormulaValues(player, skill, attack, factor)
+	local level = player:getLevel()
+
+	local min = (level / 5) + (skill + 2 * attack) * 1.1
+	local max = (level / 5) + (skill + 2 * attack) * 3
+
+	return -min * 1.1, -max * 1.1 -- TODO : Use New Real Formula instead of an %
 end
 
-combat:setCallback(CallBackParam.SKILLVALUE, callback)
+combat:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValues")
 
 local spell = Spell("instant")
-function spell.onCastSpell(creature, variant) return combat:execute(creature, variant) end
 
+function spell.onCastSpell(creature, var)
+	return combat:execute(creature, var)
+end
 
 spell:group("attack")
-spell:id(109)
+spell:id(105)
 spell:name("Fierce Berserk")
 spell:words("exori gran")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_FIERCE_BERSERK)
 spell:level(90)
-spell:mana(340)
-spell:needWeapon(true)
+spell:mana(360) -- Phase A rebalance: 340 -> 360
 spell:isPremium(true)
-spell:cooldown(2 * 1000)
+spell:needWeapon(true)
+spell:cooldown(6 * 1000)
 spell:groupCooldown(2 * 1000)
-spell:needLearn(false)
-spell:vocation("knight", "elite knight")
+
+spell:vocation("knight;true", "elite knight;true")
 spell:register()

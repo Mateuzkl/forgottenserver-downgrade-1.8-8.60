@@ -1,0 +1,47 @@
+local combat = Combat()
+combat:setParameter(COMBAT_PARAM_TYPE, COMBAT_ENERGYDAMAGE)
+combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_ENERGYAREA)
+combat:setParameter(COMBAT_PARAM_DISTANCEEFFECT, CONST_ANI_ENERGY)
+-- Vocation Adjustment: chains to 2 additional targets (3 total).
+combat:setParameter(COMBAT_PARAM_CHAIN_EFFECT, CONST_ME_PINK_ENERGY_SPARK)
+
+-- Phase III LIVE rebalance: base 70 -> 110.
+local DAMAGE_SCALE = 110 / 70
+
+function onGetFormulaValues(player, level, maglevel)
+	local min = (level / 5) + (maglevel * 2.2) + 12
+	local max = (level / 5) + (maglevel * 3.4) + 21
+	return -math.floor(min * DAMAGE_SCALE), -math.floor(max * DAMAGE_SCALE)
+end
+
+combat:setCallback(CALLBACK_PARAM_LEVELMAGICVALUE, "onGetFormulaValues")
+
+-- Vocation Adjustment: chain to 2 additional targets (3 total), jump distance 5.
+function getChainValue(creature)
+	return 3, 5, false
+end
+
+combat:setCallback(CALLBACK_PARAM_CHAINVALUE, "getChainValue")
+
+local spell = Spell("instant")
+
+function spell.onCastSpell(creature, var)
+	return combat:execute(creature, var)
+end
+
+spell:group("attack", "special")
+spell:id(149)
+spell:name("Lightning")
+spell:words("exori amp vis")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_LIGHTNING)
+spell:level(55)
+spell:mana(60)
+spell:isPremium(true)
+spell:range(7)
+spell:needCasterTargetOrDirection(true)
+spell:blockWalls(true)
+spell:cooldown(8 * 1000)
+spell:groupCooldown(2 * 1000, 8 * 1000)
+
+spell:vocation("sorcerer;true", "master sorcerer;true")
+spell:register()

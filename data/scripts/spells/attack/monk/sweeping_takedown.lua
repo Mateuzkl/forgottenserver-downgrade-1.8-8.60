@@ -52,12 +52,12 @@ function onGetFormulaValues(player, skill, weaponDamage, attackFactor)
 	return -total * 0.9, -total * 1.1
 end
 
-onGetFormulaValuesPhysical1 = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesEnergy1 = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesEarth1 = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesPhysical2 = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesEnergy2 = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesEarth2 = loadstring(string.dump(onGetFormulaValues))
+onGetFormulaValuesPhysical1 = onGetFormulaValues
+onGetFormulaValuesEnergy1 = onGetFormulaValues
+onGetFormulaValuesEarth1 = onGetFormulaValues
+onGetFormulaValuesPhysical2 = onGetFormulaValues
+onGetFormulaValuesEnergy2 = onGetFormulaValues
+onGetFormulaValuesEarth2 = onGetFormulaValues
 
 combatPhysical1:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesPhysical1")
 combatEnergy1:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesEnergy1")
@@ -105,14 +105,15 @@ spell:group("attack")
 spell:id(294)
 spell:name("Sweeping Takedown")
 spell:words("exori mas nia")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_SWEEPING_TAKEDOWN)
 spell:level(60)
 spell:mana(195)
 spell:isPremium(true)
 spell:blockWalls(true)
-spell:needLearn(false)
+
 spell:needDirection(true)
 spell:harmony(true)
-spell:cooldown(8 * 1000)
 spell:groupCooldown(2 * 1000)
-spell:vocation("monk", "exalted monk")
+spell:cooldown(8 * 1000)
+spell:vocation("monk;true", "exalted monk;true")
 spell:register()

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Ravenous Hunger")
 local monster = {}
 
-monster.name = "Ravenous Hunger"
 monster.description = "Ravenous Hunger"
 monster.experience = 0
 monster.outfit = {
@@ -12,6 +11,10 @@ monster.outfit = {
 	lookFeet = 0,
 	lookAddons = 0,
 	lookMount = 0,
+}
+
+monster.events = {
+	"CultsOfTibiaBossDeath",
 }
 
 monster.bosstiary = {
@@ -92,7 +95,7 @@ monster.loot = {
 	{ name = "gold token", chance = 18180 },
 	{ name = "gold coin", chance = 100000, maxCount = 200 },
 	{ name = "small emerald", chance = 19000, maxCount = 10 },
-	{ name = "great mana potion", chance = 31230, maxCount = 5 },
+	{ id = 238, chance = 31230, maxCount = 5 }, -- great mana potion
 	{ id = 3039, chance = 12000 }, -- red gem
 	{ name = "oriental shoes", chance = 11000 },
 	{ name = "torn shirt", chance = 42000 },
@@ -120,6 +123,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 50,
 	armor = 35,
+	--	mitigation = ???,
 }
 
 monster.elements = {

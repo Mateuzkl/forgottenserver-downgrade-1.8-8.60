@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Preceptor Lazare")
 local monster = {}
 
-monster.name = "Preceptor Lazare"
 monster.description = "Preceptor Lazare"
 monster.experience = 10000
 monster.outfit = {
@@ -26,6 +25,9 @@ monster.corpse = 28643
 monster.speed = 105
 monster.manaCost = 0
 
+monster.events = {
+	"killingLibrary",
+}
 
 monster.changeTarget = {
 	interval = 2000,
@@ -72,7 +74,7 @@ monster.loot = {
 	{ name = "gold coin", chance = 100000, maxCount = 90 },
 	{ name = "gold coin", chance = 100000, maxCount = 45 },
 	{ name = "platinum coin", chance = 100000, maxCount = 3 },
-	{ name = "great mana potion", chance = 100000, maxCount = 3 },
+	{ id = 238, chance = 100000, maxCount = 3 }, -- great mana potion
 	{ name = "demonic essence", chance = 100000, maxCount = 5 },
 	{ id = 3039, chance = 700, maxCount = 3 }, -- red gem
 	{ name = "assassin star", chance = 100000, maxCount = 5 },
@@ -104,6 +106,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 60,
 	armor = 86,
+	--	mitigation = ???,
 	{ name = "combat", interval = 1500, chance = 20, type = COMBAT_HEALING, minDamage = 200, maxDamage = 800, effect = CONST_ME_MAGIC_BLUE, target = false },
 }
 

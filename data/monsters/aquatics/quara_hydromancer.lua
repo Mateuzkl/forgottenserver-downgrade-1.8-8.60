@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Quara Hydromancer")
 local monster = {}
 
-monster.name = "Quara Hydromancer"
 monster.description = "a quara hydromancer"
 monster.experience = 950
 monster.outfit = {
@@ -85,7 +84,7 @@ monster.loot = {
 	{ name = "white pearl", chance = 5180 },
 	{ name = "small emerald", chance = 5120, maxCount = 2 },
 	{ name = "shrimp", chance = 4790, maxCount = 5 },
-	{ name = "great mana potion", chance = 2970 },
+	{ id = 238, chance = 2970 }, -- great mana potion
 	{ name = "black pearl", chance = 2950 },
 	{ name = "fish fin", chance = 1480 },
 	{ id = 3098, chance = 1180 }, -- ring of healing

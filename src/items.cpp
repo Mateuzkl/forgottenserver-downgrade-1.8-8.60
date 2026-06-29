@@ -103,6 +103,7 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"magicpointspercent", ITEM_PARSE_MAGICPOINTSPERCENT},
     {"criticalhitchance", ITEM_PARSE_CRITICALHITCHANCE},
     {"criticalhitamount", ITEM_PARSE_CRITICALHITAMOUNT},
+    {"criticalhitdamage", ITEM_PARSE_CRITICALHITAMOUNT},
     {"criticalextradamage", ITEM_PARSE_CRITICALHITAMOUNT},
     {"lifeleechchance", ITEM_PARSE_LIFELEECHCHANCE},
     {"lifeleechamount", ITEM_PARSE_LIFELEECHAMOUNT},
@@ -178,17 +179,25 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"boostpercentphysical", ITEM_PARSE_BOOSTPERCENTPHYSICAL},
     {"boostpercenthealing", ITEM_PARSE_BOOSTPERCENTHEALING},
     {"magiclevelenergy", ITEM_PARSE_MAGICLEVELENERGY},
+    {"energymagiclevelpoints", ITEM_PARSE_MAGICLEVELENERGY},
     {"magiclevelfire", ITEM_PARSE_MAGICLEVELFIRE},
+    {"firemagiclevelpoints", ITEM_PARSE_MAGICLEVELFIRE},
     {"magiclevelpoison", ITEM_PARSE_MAGICLEVELPOISON},
     {"magiclevelearth", ITEM_PARSE_MAGICLEVELPOISON},
+    {"earthmagiclevelpoints", ITEM_PARSE_MAGICLEVELPOISON},
     {"magiclevelice", ITEM_PARSE_MAGICLEVELICE},
+    {"icemagiclevelpoints", ITEM_PARSE_MAGICLEVELICE},
     {"magiclevelholy", ITEM_PARSE_MAGICLEVELHOLY},
+    {"holymagiclevelpoints", ITEM_PARSE_MAGICLEVELHOLY},
     {"magicleveldeath", ITEM_PARSE_MAGICLEVELDEATH},
+    {"deathmagiclevelpoints", ITEM_PARSE_MAGICLEVELDEATH},
     {"magiclevellifedrain", ITEM_PARSE_MAGICLEVELLIFEDRAIN},
     {"magiclevelmanadrain", ITEM_PARSE_MAGICLEVELMANADRAIN},
     {"magicleveldrown", ITEM_PARSE_MAGICLEVELDROWN},
     {"magiclevelphysical", ITEM_PARSE_MAGICLEVELPHYSICAL},
+    {"physicalmagiclevelpoints", ITEM_PARSE_MAGICLEVELPHYSICAL},
     {"magiclevelhealing", ITEM_PARSE_MAGICLEVELHEALING},
+    {"healingmagiclevelpoints", ITEM_PARSE_MAGICLEVELHEALING},
     {"magiclevelundefined", ITEM_PARSE_MAGICLEVELUNDEFINED},
     {"suppressdrunk", ITEM_PARSE_SUPPRESSDRUNK},
     {"suppressenergy", ITEM_PARSE_SUPPRESSENERGY},
@@ -230,6 +239,9 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"experienceratestamina", ITEM_PARSE_EXPERIENCERATE_STAMINA},
     {"reduceskillloss", ITEM_PARSE_REDUCESKILLLOSS},
 	{"drop", ITEM_PARSE_DROPBONUS},
+    {"perfectshotdamage", ITEM_PARSE_PERFECTSHOTDAMAGE},
+    {"perfectshotrange", ITEM_PARSE_PERFECTSHOTRANGE},
+    {"primarytype", ITEM_PARSE_PRIMARYTYPE},
     {"elementalbond", ITEM_PARSE_ELEMENTALBOND},
     {"script", ITEM_PARSE_SCRIPT},
     {"mantra", ITEM_PARSE_MANTRA},
@@ -238,6 +250,7 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
 
 const std::unordered_map<std::string, Augment_t> AugmentTypesMap = {
     {"mana cost", Augment_t::ManaCost},
+    {"base", Augment_t::Base},
     {"base damage", Augment_t::BaseDamage},
     {"base healing", Augment_t::BaseHealing},
     {"duration increased", Augment_t::DurationIncreased},
@@ -373,6 +386,8 @@ std::string Items::getAugmentNameByType(Augment_t augmentType)
 			return "base damage";
 		case Augment_t::BaseHealing:
 			return "base healing";
+		case Augment_t::Base:
+			return "base";
 		case Augment_t::DurationIncreased:
 			return "duration increased";
 		case Augment_t::AdditionalTargets:
@@ -442,6 +457,8 @@ std::string ItemType::parseAugmentDescription() const
 			description += Items::getAugmentNameByType(augment->type);
 		} else if (augment->type == Augment_t::Cooldown) {
 			description += fmt::format("-{}s cooldown", augment->value / 1000);
+		} else if (augment->type == Augment_t::Base) {
+			description += fmt::format("{:+g}% {}", augment->value / 100.0, Items::getAugmentNameByType(augment->type));
 		} else {
 			description += fmt::format("{:+}% {}", augment->value, Items::getAugmentNameByType(augment->type));
 		}
@@ -1287,6 +1304,16 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 					break;
 				}
 
+				case ITEM_PARSE_PERFECTSHOTDAMAGE: {
+					abilities.perfectShotDamage = pugi::cast<int32_t>(valueAttribute.value());
+					break;
+				}
+
+				case ITEM_PARSE_PERFECTSHOTRANGE: {
+					abilities.perfectShotRange = pugi::cast<uint8_t>(valueAttribute.value());
+					break;
+				}
+
 				case ITEM_PARSE_MAXHITPOINTS: {
 					abilities.stats[STAT_MAXHITPOINTS] = pugi::cast<int32_t>(valueAttribute.value());
 					break;
@@ -2112,6 +2139,11 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 					}
 					it.dropBonus = value;
 					abilities.dropBonus = value;
+					break;
+				}
+
+				case ITEM_PARSE_PRIMARYTYPE: {
+					it.primaryType = asLowerCaseString(valueAttribute.as_string());
 					break;
 				}
 

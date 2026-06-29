@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Souleater")
 local monster = {}
 
-monster.name = "Souleater"
 monster.description = "a souleater"
 monster.experience = 1300
 monster.outfit = {
@@ -86,7 +85,7 @@ monster.loot = {
 	{ name = "wand of cosmic energy", chance = 910 },
 	{ id = 5884, chance = 140 }, -- spirit container
 	{ id = 6299, chance = 300 }, -- death ring
-	{ name = "great mana potion", chance = 8000 },
+	{ id = 238, chance = 8000 }, -- great mana potion
 	{ name = "ultimate health potion", chance = 9400 },
 	{ name = "souleater trophy", chance = 20 },
 	{ name = "lizard essence", chance = 15250 },

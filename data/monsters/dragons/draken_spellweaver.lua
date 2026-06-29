@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Draken Spellweaver")
 local monster = {}
 
-monster.name = "Draken Spellweaver"
 monster.description = "a draken spellweaver"
 monster.experience = 3100
 monster.outfit = {
@@ -82,7 +81,7 @@ monster.loot = {
 	{ name = "platinum coin", chance = 23800, maxCount = 5 },
 	{ name = "weaver's wandtip", chance = 18450 },
 	{ name = "small ruby", chance = 6640, maxCount = 5 },
-	{ name = "great mana potion", chance = 5350 },
+	{ id = 238, chance = 5350 }, -- great mana potion
 	{ name = "draken sulphur", chance = 4610 },
 	{ name = "luminous orb", chance = 2580 },
 	{ name = "green gem", chance = 1290 },
@@ -106,8 +105,7 @@ monster.attacks = {
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_EARTHDAMAGE, minDamage = -200, maxDamage = -380, radius = 4, effect = CONST_ME_POFF, target = true },
 	{ name = "soulfire rune", interval = 2000, chance = 10, target = false },
 	-- poison
-	{ name = "condition", interval = 2000, chance = 10, target = true, condition =
-	{ type = CONDITION_POISON, minDamage = -280, maxDamage = -360, shootEffect = CONST_ANI_POISON } },
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 10, minDamage = -280, maxDamage = -360, shootEffect = CONST_ANI_POISON, target = true },
 }
 
 monster.defenses = {

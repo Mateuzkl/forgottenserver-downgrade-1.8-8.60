@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Serpent Spawn")
 local monster = {}
 
-monster.name = "Serpent Spawn"
 monster.description = "a serpent spawn"
 monster.experience = 3050
 monster.outfit = {
@@ -98,7 +97,7 @@ monster.loot = {
 	{ name = "charmer's tiara", chance = 180 },
 	{ name = "mercenary sword", chance = 2070 },
 	{ name = "noble axe", chance = 750 },
-	{ name = "great mana potion", chance = 2000 },
+	{ id = 238, chance = 2000 }, -- great mana potion
 	{ name = "swamplair armor", chance = 90 },
 	{ name = "spellbook of mind control", chance = 90 },
 	{ name = "snake skin", chance = 14800 },
@@ -107,7 +106,7 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -252 },
-	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_EARTHDAMAGE, minDamage = -80, maxDamage = -300, range = 7, shootEffect = CONST_ANI_POISON, target = true },
+	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_EARTHDAMAGE, minDamage = -80, maxDamage = -300, range = 7, shootEffect = CONST_ANI_POISON, target = false },
 	{ name = "outfit", interval = 2000, chance = 1, range = 7, effect = CONST_ME_MAGIC_BLUE, target = false, duration = 3000, outfitMonster = "clay guardian" },
 	{ name = "speed", interval = 2000, chance = 25, speedChange = -850, range = 7, radius = 4, shootEffect = CONST_ANI_POISON, effect = CONST_ME_GREEN_RINGS, target = true, duration = 12000 },
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_LIFEDRAIN, minDamage = -200, maxDamage = -500, length = 8, spread = 3, effect = CONST_ME_SOUND_RED, target = false },

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Ghazbaran")
 local monster = {}
 
-monster.name = "Ghazbaran"
 monster.description = "Ghazbaran"
 monster.experience = 15000
 monster.outfit = {
@@ -112,7 +111,7 @@ monster.loot = {
 	{ name = "assassin star", chance = 12500, maxCount = 44 },
 	{ name = "havoc blade", chance = 16666 },
 	{ name = "ravenwing", chance = 14285 },
-	{ name = "great mana potion", chance = 20000 },
+	{ id = 238, chance = 20000 }, -- great mana potion
 	{ name = "great health potion", chance = 20000 },
 	{ name = "glacier kilt", chance = 8333 },
 	{ name = "great spirit potion", chance = 25000 },
@@ -140,6 +139,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 65,
 	armor = 55,
+	--	mitigation = ???,
 	{ name = "combat", interval = 3000, chance = 35, type = COMBAT_HEALING, minDamage = 300, maxDamage = 800, effect = CONST_ME_MAGIC_BLUE, target = false },
 	{ name = "speed", interval = 4000, chance = 80, speedChange = 440, effect = CONST_ME_MAGIC_RED, target = false, duration = 6000 },
 }

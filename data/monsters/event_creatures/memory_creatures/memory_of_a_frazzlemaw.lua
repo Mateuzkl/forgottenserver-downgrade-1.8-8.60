@@ -1,13 +1,19 @@
 local mType = Game.createMonsterType("Memory of a Frazzlemaw")
 local monster = {}
 
-monster.name = "Memory of a Frazzlemaw"
 monster.description = "a memory of a frazzlemaw"
 monster.experience = 1810
-monster.outfit = { lookType = 594 }
+monster.outfit = {
+	lookType = 594,
+	lookHead = 0,
+	lookBody = 0,
+	lookLegs = 0,
+	lookFeet = 0,
+	lookAddons = 0,
+	lookMount = 0,
+}
 
 monster.health = 3770
-
 monster.maxHealth = 3770
 monster.race = "blood"
 monster.corpse = 20233
@@ -40,7 +46,7 @@ monster.flags = {
 	targetDistance = 1,
 	runHealth = 0,
 	healthHidden = false,
-	isBlockable = true,
+	isBlockable = false,
 	canWalkOnEnergy = true,
 	canWalkOnFire = true,
 	canWalkOnPoison = true,
@@ -61,7 +67,7 @@ monster.loot = {
 	{ name = "piece of iron", chance = 10400 },
 	{ name = "great health potion", chance = 15000, maxCount = 2 },
 	{ name = "red crystal fragment", chance = 7600 },
-	{ name = "great mana potion", chance = 15000, maxCount = 3 },
+	{ id = 238, chance = 15000, maxCount = 3 }, -- great mana potion
 	{ name = "brown crystal splinter", chance = 16000 },
 	{ name = "banana skin", chance = 9500 },
 	{ name = "ham", chance = 6000, maxCount = 2 },
@@ -73,8 +79,7 @@ monster.loot = {
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -100 },
 	-- bleed
-	{ name = "condition", interval = 2000, chance = 10, target = false, condition =
-	{ type = CONDITION_BLEEDING, minDamage = -50, maxDamage = -120, radius = 3, effect = CONST_ME_DRAWBLOOD } },
+	{ name = "condition", type = CONDITION_BLEEDING, interval = 2000, chance = 10, minDamage = -50, maxDamage = -120, radius = 3, effect = CONST_ME_DRAWBLOOD, target = false },
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -110, length = 5, spread = 0, effect = CONST_ME_EXPLOSIONAREA, target = false },
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = 0, maxDamage = -100, radius = 2, shootEffect = CONST_ANI_LARGEROCK, effect = CONST_ME_STONES, target = true },
 	{ name = "speed", interval = 2000, chance = 15, speedChange = -600, radius = 5, effect = CONST_ME_MAGIC_RED, target = false, duration = 15000 },

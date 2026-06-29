@@ -4,16 +4,20 @@ local function targetFunction(creature, target)
 		return
 	end
 
-	local min = math.floor(((player:getLevel() / 5) + (player:getMagicLevel() * 5.7) + 26))
-	local max = math.floor(((player:getLevel() / 5) + (player:getMagicLevel() * 10.43) + 62))
+	local level = player:getLevel()
+	local magicLevel = player:getMagicLevel()
 
-	local harmony = player:getHarmony()
-	local multiplier = 1 + (harmony * 0.6)
-	local healAmount = math.floor(math.random(min, max) * multiplier)
+	-- Vocation Adjustment: Mass Spirit Mend is no longer a spender, so harmony no longer amplifies it.
+	local min = math.floor((level / 5) + (magicLevel * 5.7) + 26)
+	local max = math.floor((level / 5) + (magicLevel * 10.43) + 62)
+	local healAmount = math.random(min, max)
 
-	local bonusFactor = 1
-
-	healAmount = math.ceil(healAmount * bonusFactor)
+	-- The caster receives only a lesser effect (~ a regular Spirit Mend).
+	if target:getId() == creature:getId() then
+		local sMin = math.floor((level * 0.2) + (magicLevel * 12) + 75)
+		local sMax = math.floor((level * 0.2) + (magicLevel * 20) + 125)
+		healAmount = math.random(sMin, sMax)
+	end
 
 	local excludeCreature = "specific_creature_name"
 
@@ -65,14 +69,14 @@ end
 spell:name("Mass Spirit Mend")
 spell:words("exura mas nia")
 spell:group("healing")
-spell:vocation("monk", "exalted monk")
+spell:vocation("monk;true", "exalted monk;true")
 spell:id(296)
-spell:cooldown(8 * 1000)
-spell:groupCooldown(1 * 1000)
+spell:cooldown(12 * 1000)
+spell:groupCooldown(2 * 1000)
 spell:level(150)
 spell:mana(250)
-spell:harmony(true)
 spell:isPremium(true)
 spell:isAggressive(false)
-spell:needLearn(false)
+
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_MASS_SPIRIT_MEND)
 spell:register()

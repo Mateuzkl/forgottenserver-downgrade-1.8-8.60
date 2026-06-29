@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Bullwark")
 local monster = {}
 
-monster.name = "Bullwark"
 monster.description = "Bullwark"
 monster.experience = 22000
 monster.outfit = {
@@ -72,7 +71,7 @@ monster.loot = {
 	{ name = "gold coin", chance = 100000, maxCount = 375 },
 	{ name = "platinum coin", chance = 100000, maxCount = 9 },
 	{ name = "great health potion", chance = 25930, maxCount = 9 },
-	{ name = "great mana potion", chance = 33950, maxCount = 9 },
+	{ id = 238, chance = 33950, maxCount = 9 }, -- great mana potion
 	{ name = "great spirit potion", chance = 40120, maxCount = 9 },
 	{ name = "ham", chance = 53700, maxCount = 9 },
 	{ name = "meat", chance = 46300, maxCount = 9 },
@@ -94,8 +93,7 @@ monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, skill = 180, attack = 200 },
 	{ name = "combat", interval = 2000, chance = 19, type = COMBAT_LIFEDRAIN, minDamage = -200, maxDamage = -400, radius = 6, effect = CONST_ME_MAGIC_RED, target = false },
 	-- bleed
-	{ name = "condition", interval = 2000, chance = 9, target = false, condition =
-	{ type = CONDITION_BLEEDING, minDamage = -400, maxDamage = -600, radius = 8, effect = CONST_ME_ICEATTACK } },
+	{ name = "condition", type = CONDITION_BLEEDING, interval = 2000, chance = 9, minDamage = -400, maxDamage = -600, radius = 8, effect = CONST_ME_ICEATTACK, target = false },
 	{ name = "combat", interval = 2000, chance = 8, type = COMBAT_PHYSICALDAMAGE, minDamage = -250, maxDamage = -400, range = 7, radius = 6, shootEffect = CONST_ANI_LARGEROCK, effect = CONST_ME_STONES, target = true },
 	{ name = "combat", interval = 2000, chance = 13, type = COMBAT_PHYSICALDAMAGE, minDamage = -200, maxDamage = -400, range = 7, radius = 4, shootEffect = CONST_ANI_WHIRLWINDCLUB, effect = CONST_ME_EXPLOSIONHIT, target = true },
 	{ name = "bullwark paralyze", interval = 2000, chance = 6, target = false },
@@ -104,6 +102,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 66,
 	armor = 48,
+	--	mitigation = ???,
 	{ name = "combat", interval = 2000, chance = 1, type = COMBAT_HEALING, minDamage = 4000, maxDamage = 6000, effect = CONST_ME_MAGIC_BLUE, target = false },
 	{ name = "speed", interval = 2000, chance = 11, speedChange = 660, effect = CONST_ME_HITAREA, target = false, duration = 7000 },
 	{ name = "bullwark summon", interval = 2000, chance = 9, target = false },

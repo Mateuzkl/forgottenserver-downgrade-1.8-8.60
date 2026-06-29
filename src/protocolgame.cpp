@@ -2357,6 +2357,15 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 
 	auto text = msg.getString();
 	const bool forceCastOnFoot = consumeHelperCastOnFoot();
+	Position spellAimPos;
+	bool hasSpellAimPos = false;
+	if (getUnreadBytes(msg) >= 6) {
+		const uint8_t aimMode = msg.getByte();
+		if (aimMode != 0 && getUnreadBytes(msg) >= 5) {
+			spellAimPos = msg.getPosition();
+			hasSpellAimPos = true;
+		}
+	}
 	if (text.length() > 255) {
 		return;
 	}
@@ -2367,7 +2376,17 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 	}
 
 	g_dispatcher.addTask([=, playerID = player->getID(), receiver = std::string{receiver}, text = std::string{text}]() {
+		if (auto playerRef = g_game.getPlayerByID(playerID)) {
+			if (hasSpellAimPos) {
+				playerRef->setSpellAimPosition(spellAimPos);
+			} else {
+				playerRef->clearSpellAimPosition();
+			}
+		}
 		g_game.playerSay(playerID, channelId, type, receiver, text, forceCastOnFoot);
+		if (auto playerRef = g_game.getPlayerByID(playerID)) {
+			playerRef->clearSpellAimPosition();
+		}
 	});
 }
 
@@ -3680,6 +3699,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	}
 
 	sendPlayerInventory();
+	player->restoreStances();
 
 	sendStats();
 	sendSkills();
@@ -4381,6 +4401,35 @@ void ProtocolGame::sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time)
 	msg.addByte(0xA5);
 	msg.addByte(groupId);
 	msg.add<uint32_t>(time);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendStanceProtocol(const std::vector<uint16_t>& spellIds)
+{
+	if (!isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0xC1);
+	msg.addByte(0x02);
+	msg.addByte(static_cast<uint8_t>(std::min<std::size_t>(spellIds.size(), 255)));
+	for (std::size_t i = 0; i < spellIds.size() && i < 255; ++i) {
+		msg.add<uint16_t>(spellIds[i]);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendBannerType(Banner_t bannerType)
+{
+	if (!isAstraClient || bannerType == BANNER_TYPE_NONE) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_BANNER_INFO);
+	msg.addByte(bannerType);
 	writeToOutputBuffer(msg);
 }
 

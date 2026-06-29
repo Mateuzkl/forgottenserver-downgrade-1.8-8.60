@@ -272,6 +272,7 @@ public:
 	void removeCombatCondition(ConditionType_t type);
 	Condition* getCondition(ConditionType_t type) const;
 	Condition* getCondition(ConditionType_t type, ConditionId_t conditionId, uint32_t subId = 0) const;
+	int32_t getConditionParamPercent(ConditionParam_t param, int32_t defaultPercent = 100) const;
 	void executeConditions(uint32_t interval);
 	bool hasCondition(ConditionType_t type, uint32_t subId = 0) const;
 	virtual bool isImmune(ConditionType_t type) const;

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Cliff Strider")
 local monster = {}
 
-monster.name = "Cliff Strider"
 monster.description = "a cliff strider"
 monster.experience = 7100
 monster.outfit = {
@@ -64,6 +63,7 @@ monster.flags = {
 	canWalkOnEnergy = true,
 	canWalkOnFire = false,
 	canWalkOnPoison = false,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -96,7 +96,7 @@ monster.loot = {
 	{ name = "soul orb", chance = 17080 },
 	{ name = "sapphire hammer", chance = 1350 },
 	{ name = "spiked squelcher", chance = 1040 },
-	{ name = "great mana potion", chance = 30950, maxCount = 4 },
+	{ id = 238, chance = 30950, maxCount = 4 }, -- great mana potion
 	{ name = "ultimate health potion", chance = 25260, maxCount = 2 },
 	{ name = "crystal of balance", chance = 2690 },
 	{ name = "crystal of power", chance = 720 },

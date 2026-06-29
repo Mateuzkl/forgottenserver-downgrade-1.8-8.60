@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Magma Crawler")
 local monster = {}
 
-monster.name = "Magma Crawler"
 monster.description = "a magma crawler"
 monster.experience = 3900
 monster.outfit = {
@@ -88,7 +87,7 @@ monster.loot = {
 	{ id = 5909, chance = 2310 }, -- white piece of cloth
 	{ name = "red piece of cloth", chance = 930 },
 	{ name = "yellow piece of cloth", chance = 2980 },
-	{ name = "great mana potion", chance = 6500 },
+	{ id = 238, chance = 6500 }, -- great mana potion
 	{ name = "great health potion", chance = 7270 },
 	{ name = "magma amulet", chance = 3120 },
 	{ name = "magma boots", chance = 1820 },

@@ -112,7 +112,8 @@ TalkActionResult Spells::playerSaySpell(Player* player, std::string& words, bool
 		}
 	}
 
-	if (instantSpell->playerCastInstant(player, param, forceCastOnFoot)) {
+	const Position spellAimPos = player->hasSpellAimPosition() ? player->getSpellAimPosition() : Position();
+	if (instantSpell->playerCastInstant(player, param, forceCastOnFoot, spellAimPos)) {
 		words = instantSpell->getWords();
 
 		if (instantSpell->getHasParam() && !param.empty()) {
@@ -611,6 +612,13 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 				}
 
 				switch (augment->type) {
+					case Augment_t::Base: {
+						const double percent = augment->value / 10000.0;
+						damage.primary.value = saturatingAdd(damage.primary.value, damage.primary.value * percent);
+						damage.secondary.value = saturatingAdd(damage.secondary.value, damage.secondary.value * percent);
+						break;
+					}
+
 					case Augment_t::BaseDamage:
 					case Augment_t::BaseHealing:
 					case Augment_t::IncreasedDamage:
@@ -851,7 +859,7 @@ uint32_t Spell::getManaCost(const Player* player) const
 
 std::string_view InstantSpell::getScriptEventName() const { return "onCastSpell"; }
 
-bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool forceCastOnFoot /* = false */)
+bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool forceCastOnFoot /* = false */, const Position& to /* = {} */)
 {
 	if (!playerSpellCheck(player)) {
 		return false;
@@ -977,6 +985,8 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool fo
 	} else {
 		if (needDirection) {
 			var.setPosition(Spells::getCasterPosition(player, player->getDirection()));
+		} else if (needPosition && to.x != 0) {
+			var.setPosition(to);
 		} else {
 			var.setPosition(player->getPosition());
 		}

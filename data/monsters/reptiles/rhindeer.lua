@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Rhindeer")
 local monster = {}
 
-monster.name = "Rhindeer"
 monster.description = "a rhindeer"
 monster.experience = 5600
 monster.outfit = {
@@ -26,6 +25,7 @@ monster.Bestiary = {
 	Occurrence = 1,
 	Locations = "Ingol",
 }
+
 monster.health = 8650
 monster.maxHealth = 8650
 monster.race = "blood"
@@ -80,7 +80,7 @@ monster.loot = {
 	{ name = "brown crystal splinter", chance = 11550, maxCount = 4 },
 	{ name = "rhindeer antlers", chance = 6020 },
 	{ name = "rainbow quartz", chance = 4940, maxCount = 2 },
-	{ name = "great mana potion", chance = 2670, maxCount = 4 },
+	{ id = 238, chance = 2670, maxCount = 4 }, -- great mana potion
 	{ name = "titan axe", chance = 2470 },
 	{ name = "yellow gem", chance = 1880 },
 	{ name = "knight armor", chance = 1380 },

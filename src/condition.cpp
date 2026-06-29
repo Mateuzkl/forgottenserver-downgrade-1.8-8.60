@@ -489,6 +489,9 @@ void ConditionAttributes::addCondition(Creature* creature, const Condition* cond
 		std::copy_n(conditionAttrs.stats, STAT_LAST + 1, stats);
 		std::copy_n(conditionAttrs.statsPercent, STAT_LAST + 1, statsPercent);
 		std::copy_n(conditionAttrs.experienceRate, static_cast<size_t>(ExperienceRateType::STAMINA) + 1, experienceRate);
+		buffDamageDealtPercent = conditionAttrs.buffDamageDealtPercent;
+		buffDamageReceivedPercent = conditionAttrs.buffDamageReceivedPercent;
+		buffHealingReceivedPercent = conditionAttrs.buffHealingReceivedPercent;
 		disableDefense = conditionAttrs.disableDefense;
 
 		if (Player* player = creature->getPlayer()) {
@@ -893,6 +896,21 @@ bool ConditionAttributes::setParam(ConditionParam_t param, int32_t value)
 			return true;
 		}
 
+		case CONDITION_PARAM_BUFF_DAMAGEDEALT: {
+			buffDamageDealtPercent = std::max<int32_t>(0, value);
+			return true;
+		}
+
+		case CONDITION_PARAM_BUFF_DAMAGERECEIVED: {
+			buffDamageReceivedPercent = std::max<int32_t>(0, value);
+			return true;
+		}
+
+		case CONDITION_PARAM_BUFF_HEALINGRECEIVED: {
+			buffHealingReceivedPercent = std::max<int32_t>(0, value);
+			return true;
+		}
+
 		case CONDITION_PARAM_AGGRESSIVE: {
 			aggressive = (value != 0);
 			return true;
@@ -974,6 +992,15 @@ int32_t ConditionAttributes::getParam(ConditionParam_t param) const
 
 		case CONDITION_PARAM_DISABLE_DEFENSE:
 			return disableDefense ? 1 : 0;
+
+		case CONDITION_PARAM_BUFF_DAMAGEDEALT:
+			return buffDamageDealtPercent;
+
+		case CONDITION_PARAM_BUFF_DAMAGERECEIVED:
+			return buffDamageReceivedPercent;
+
+		case CONDITION_PARAM_BUFF_HEALINGRECEIVED:
+			return buffHealingReceivedPercent;
 
 		case CONDITION_PARAM_SPECIALSKILL_CRITICALHITCHANCE:
 			return specialSkills[SPECIALSKILL_CRITICALHITCHANCE];

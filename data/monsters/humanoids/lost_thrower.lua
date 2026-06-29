@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Lost Thrower")
 local monster = {}
 
-monster.name = "Lost Thrower"
 monster.description = "a lost thrower"
 monster.experience = 1500
 monster.outfit = {
@@ -82,7 +81,7 @@ monster.loot = {
 	{ name = "platinum coin", chance = 70000, maxCount = 2 },
 	{ name = "brown mushroom", chance = 14500, maxCount = 2 },
 	{ name = "iron ore", chance = 9470 },
-	{ name = "great mana potion", chance = 13470 },
+	{ id = 238, chance = 13470 }, -- great mana potion
 	{ name = "great health potion", chance = 14730 },
 	{ id = 12600, chance = 12180 }, -- coal
 	{ name = "buckle", chance = 850 },

@@ -6070,13 +6070,13 @@
 		</attribute>
 	</item>
 	<item id="3075" article="a" name="wand of dragonbreath">
-		<attribute key="classification" value="1" />
 		<attribute key="description" value="Legends say that this wand holds the soul of a young dragon" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="fire" />
 		<attribute key="range" value="3" />
 		<attribute key="weight" value="2300" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -19914,13 +19914,14 @@
 		</attribute>
 	</item>
 	<item id="8082" article="an" name="underworld rod">
-		<attribute key="classification" value="1" />
+		<attribute key="primarytype" value="rods" />
 		<attribute key="description" value="No one knows which hell this unholy rod comes from" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="death" />
 		<attribute key="range" value="3" />
 		<attribute key="weight" value="2900" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -19937,13 +19938,14 @@
 		</attribute>
 	</item>
 	<item id="8083" article="a" name="northwind rod">
-		<attribute key="classification" value="1" />
+		<attribute key="primarytype" value="rods" />
 		<attribute key="description" value="It was made by one of the shamans in Svargrond and symbolises an icy mammoth" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="range" value="3" />
 		<attribute key="weight" value="2900" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -19993,13 +19995,13 @@
 		<attribute key="description" value="It is Yandur's healing rune. You can't remove it from his house, but you may use it." />
 	</item>
 	<item id="8092" article="a" name="wand of starstorm">
-		<attribute key="classification" value="1" />
 		<attribute key="description" value="It is sparkling with universal energy" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="range" value="3" />
 		<attribute key="weight" value="2550" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -20016,13 +20018,13 @@
 		</attribute>
 	</item>
 	<item id="8093" article="a" name="wand of draconia">
-		<attribute key="classification" value="1" />
 		<attribute key="description" value="This wand holds the spirit and soul of a dragon lord" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="fire" />
 		<attribute key="range" value="3" />
 		<attribute key="weight" value="2700" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -20039,13 +20041,13 @@
 		</attribute>
 	</item>
 	<item id="8094" article="a" name="wand of voodoo">
-		<attribute key="classification" value="1" />
 		<attribute key="description" value="It is filled with the dark hatred and rage of a tormented demonic being" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="death" />
 		<attribute key="range" value="3" />
 		<attribute key="weight" value="2850" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -39990,12 +39992,13 @@
 		<attribute key="weight" value="3000" />
 	</item>
 	<item id="22183" article="an" name="ogre scepta">
-		<attribute key="classification" value="2" />
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallearth" />
 		<attribute key="range" value="3" />
 		<attribute key="weight" value="2900" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -43853,7 +43856,7 @@
 		</attribute>
 	</item>
 	<item id="25700" article="a" name="dream blossom staff">
-		<attribute key="classification" value="2" />
+		<attribute key="primarytype" value="rods" />
 		<attribute key="description" value="It's a gnarly branch with a gleaming blue blossom" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
@@ -43861,6 +43864,7 @@
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="3200" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -46730,16 +46734,15 @@
 		</attribute>
 	</item>
 	<item id="27457" article="a" name="wand of destruction">
-		<attribute key="classification" value="2" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="range" value="4" />
 		<attribute key="weight" value="3500" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -46754,16 +46757,15 @@
 		</attribute>
 	</item>
 	<item id="27458" article="a" name="rod of destruction">
-		<attribute key="classification" value="2" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="magiclevelpoints" value="1" />
 		<attribute key="range" value="4" />
 		<attribute key="weight" value="3500" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -48779,6 +48781,7 @@
 		<attribute key="classification" value="4" />
 	</item>
 	<item id="28716" article="a" name="falcon rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="earth" />
 		<attribute key="absorbpercentenergy" value="8" />
@@ -48786,9 +48789,9 @@
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="3700" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -48801,9 +48804,9 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="28717" article="a" name="falcon wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="absorbpercentfire" value="8" />
@@ -48811,9 +48814,9 @@
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="3300" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -48826,7 +48829,6 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="28718" article="a" name="falcon bow">
 		<attribute key="weaponType" value="distance" />
@@ -49370,6 +49372,7 @@
 		<attribute key="weight" value="50" />
 	</item>
 	<item id="28825" article="a" name="deepling ceremonial dagger">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="absorbpercentpoison" value="5" />
@@ -49377,9 +49380,9 @@
 		<attribute key="range" value="6" />
 		<attribute key="weight" value="3200" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -49392,20 +49395,21 @@
 			<attribute key="vocation" value="Sorcerer;true, Druid;true, Master Sorcerer, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="3" />
 	</item>
 	<item id="28826" article="a" name="deepling fork">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="absorbpercentholy" value="8" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="criticalhitdamage" value="2500" />
 		<attribute key="criticalhitchance" value="1000" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="3300" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -49418,7 +49422,6 @@
 			<attribute key="vocation" value="Sorcerer;true, Druid;true, Master Sorcerer, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="3" />
 	</item>
 	<item id="28829" article="a" name="rotten demonbone">
 		<attribute key="weaponType" value="club" />
@@ -50178,6 +50181,7 @@
 		<attribute key="classification" value="3" />
 	</item>
 	<item id="29425" article="an" name="energized limb">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="fire" />
 		<attribute key="absorbpercentenergy" value="10" />
@@ -50185,9 +50189,9 @@
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2700" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -50200,7 +50204,6 @@
 			<attribute key="vocation" value="Sorcerer;true, Druid;true, Master Sorcerer, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="3" />
 	</item>
 	<item id="29426" article="a" name="brain in a jar">
 		<attribute key="weaponType" value="shield" />
@@ -51833,14 +51836,16 @@
 		<attribute key="classification" value="4" />
 	</item>
 	<item id="30399" name="cobra wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="magiclevelpoints" value="2" />
-		<attribute key="criticalhitchance" value="500" />
-		<attribute key="criticalextradamage" value="2500" />
+		<attribute key="criticalhitdamage" value="3500" />
+		<attribute key="criticalhitchance" value="1000" />
 		<attribute key="range" value="4" />
 		<attribute key="weight" value="1900" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -51855,19 +51860,20 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="30400" name="cobra rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallearth" />
 		<attribute key="magiclevelpoints" value="2" />
 		<attribute key="lifeleechamount" value="1800" />
-		<attribute key="lifeleechchance" value="10000" />
+		<attribute key="lifeleechchance" value="100" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2500" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -51880,7 +51886,6 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="30401" name="amulet of theurgy">
 		<attribute key="weight" value="500" />
@@ -57804,15 +57809,19 @@
 		<attribute key="classification" value="4" />
 	</item>
 	<item id="34090" article="a" name="soultainter">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="suddendeath" />
 		<attribute key="absorbpercentdeath" value="12" />
 		<attribute key="magiclevelpoints" value="5" />
+		<attribute key="criticalhitdamage" value="1000" />
+		<attribute key="criticalhitdamage" value="1000" />
 		<attribute key="range" value="6" />
 		<attribute key="weight" value="1900" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -57825,9 +57834,9 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="34091" article="a" name="soulhexer">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="absorbpercentice" value="12" />
@@ -57835,12 +57844,13 @@
 		<attribute key="manaleechamount" value="300" />
 		<attribute key="manaleechchance" value="100" />
 		<attribute key="lifeleechamount" value="500" />
-		<attribute key="lifeleechchance" value="10000" />
+		<attribute key="lifeleechchance" value="100" />
 		<attribute key="range" value="6" />
 		<attribute key="weight" value="2500" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -57853,7 +57863,6 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="34092" article="a" name="soulshanks">
 		<attribute key="absorbpercentdeath" value="10" />
@@ -58203,14 +58212,16 @@
 		<attribute key="classification" value="4" />
 	</item>
 	<item id="34151" article="a" name="lion rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="magiclevelpoints" value="2" />
-		<attribute key="criticalhitchance" value="500" />
-		<attribute key="criticalextradamage" value="2500" />
+		<attribute key="criticalhitdamage" value="3500" />
+		<attribute key="criticalhitchance" value="1000" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2600" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -58225,19 +58236,20 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="34152" article="a" name="lion wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="magiclevelpoints" value="2" />
 		<attribute key="lifeleechamount" value="1800" />
-		<attribute key="lifeleechchance" value="10000" />
+		<attribute key="lifeleechchance" value="100" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2100" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -58250,7 +58262,6 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="34153" article="a" name="lion spellbook">
 		<attribute key="absorbpercentphysical" value="3" />
@@ -59484,6 +59495,7 @@
 		<attribute key="classification" value="4" />
 	</item>
 	<item id="35521" article="a" name="jungle rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="absorbpercentpoison" value="3" />
@@ -59491,8 +59503,9 @@
 		<attribute key="range" value="4" />
 		<attribute key="weight" value="3700" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -59505,9 +59518,9 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="35522" article="a" name="jungle wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallearth" />
 		<attribute key="absorbpercentice" value="3" />
@@ -59515,8 +59528,9 @@
 		<attribute key="range" value="4" />
 		<attribute key="weight" value="3200" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -59529,7 +59543,6 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="35523" article="an" name="exotic amulet">
 		<attribute key="showattributes" value="1" />
@@ -60814,14 +60827,19 @@
 		<attribute key="classification" value="4" />
 	</item>
 	<item id="36668" article="a" name="eldritch wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="fire" />
 		<attribute key="absorbpercentenergy" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="firemagiclevelpoints" value="1" />
+		<attribute key="perfectShotDamage" value="65" />
+		<attribute key="perfectshotrange" value="4" />
 		<attribute key="weight" value="3600" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -60835,18 +60853,22 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="36669" article="a" name="gilded eldritch wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="description" value="Refined by the legendary artisan Gnomaurum" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="fire" />
 		<attribute key="absorbpercentenergy" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="firemagiclevelpoints" value="1" />
+		<attribute key="perfectshotdamage" value="65" />
+		<attribute key="perfectshotrange" value="4" />
 		<attribute key="weight" value="3700" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -60860,7 +60882,6 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="36670" article="a" name="eldritch cowl">
 		<attribute key="absorbpercentice" value="7" />
@@ -60941,19 +60962,19 @@
 		</attribute>
 	</item>
 	<item id="36674" article="a" name="eldritch rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="ice" />
 		<attribute key="absorbpercentpoison" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="healingmagiclevelpoints" value="2" />
 		<attribute key="range" value="4" />
 		<attribute key="weight" value="3500" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="skillboost axe" value="3" />
-			<attribute key="skillboost sword" value="3" />
-			<attribute key="skillboost club" value="3" />
-			<attribute key="skillboost shielding" value="3" />
-			<attribute key="skillboost distance" value="3" />
+			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
 			<attribute key="level" value="250" />
@@ -60966,23 +60987,22 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="36675" article="a" name="gilded eldritch rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="description" value="Refined by the legendary artisan Gnomaurum" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="ice" />
 		<attribute key="absorbpercentpoison" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="healingmagiclevelpoints" value="2" />
 		<attribute key="range" value="4" />
 		<attribute key="weight" value="3600" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="skillboost axe" value="3" />
-			<attribute key="skillboost sword" value="3" />
-			<attribute key="skillboost club" value="3" />
-			<attribute key="skillboost shielding" value="3" />
-			<attribute key="skillboost distance" value="3" />
+			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
 			<attribute key="level" value="250" />
@@ -60995,7 +61015,6 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="36676" article="a" name="dead lavaworm">
 		<attribute key="duration" value="60" />
@@ -64278,16 +64297,18 @@
 		<attribute key="classification" value="4" />
 	</item>
 	<item id="39162" article="a" name="naga wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="absorbpercentice" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="energymagiclevelpoints" value="2" />
 		<attribute key="range" value="6" />
 		<attribute key="weight" value="2800" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -64301,19 +64322,20 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="39163" article="a" name="naga rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="absorbpercentfire" value="4" />
 		<attribute key="magiclevelpoints" value="2" />
+		<attribute key="icemagiclevelpoints" value="2" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2900" />
 		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
-			<attribute key="critical hit" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -64327,7 +64349,6 @@
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
 	</item>
 	<item id="39164" article="a" name="dawnfire sherwani">
 		<attribute key="absorbpercentfire" value="10" />
@@ -68236,20 +68257,32 @@
 		</attribute>
 	</item>
 	<item id="43882" article="a" name="sanguine coil">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="absorbpercentearth" value="7" />
 		<attribute key="magiclevelpoints" value="4" />
 		<attribute key="manaleechamount" value="100" />
 		<attribute key="lifeleechamount" value="200" />
-		<attribute key="criticalextradamage" value="500" />
+		<attribute key="firemagiclevelpoints" value="1" />
+		<attribute key="energymagiclevelpoints" value="1" />
+		<attribute key="criticalhitdamage" value="500" />
 		<attribute key="range" value="6" />
 		<attribute key="criticalhitchance" value="500" />
 		<attribute key="weight" value="2200" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="hell's core" value="base">
+				<attribute key="value" value="300" />
+			</attribute>
+			<attribute key="energy wave" value="base">
+				<attribute key="value" value="400" />
+			</attribute>
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
 			<attribute key="level" value="600" />
@@ -68262,30 +68295,33 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
-		<attribute key="augments" value="2">
-			<attribute key="hell's core" value="base damage">
-				<attribute key="value" value="3"/>
-			</attribute>
-			<attribute key="energy wave" value="base damage">
-				<attribute key="value" value="4"/>
-			</attribute>
-		</attribute>
 	</item>
 	<item id="43883" article="a" name="grand sanguine coil">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="absorbpercentearth" value="7" />
 		<attribute key="magiclevelpoints" value="4" />
 		<attribute key="manaleechamount" value="100" />
 		<attribute key="lifeleechamount" value="200" />
-		<attribute key="criticalextradamage" value="500" />
+		<attribute key="firemagiclevelpoints" value="1" />
+		<attribute key="energymagiclevelpoints" value="1" />
 		<attribute key="range" value="6" />
+		<attribute key="criticalhitdamage" value="500" />
 		<attribute key="weight" value="2100" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="300" />
-			<attribute key="critical hit" value="300" />
-			<attribute key="skillboost magic level" value="300" />
+			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
+			<attribute key="skillboost magic level" value="3" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="hell's core" value="base">
+				<attribute key="value" value="600" />
+			</attribute>
+			<attribute key="energy wave" value="base">
+				<attribute key="value" value="800" />
+			</attribute>
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
 			<attribute key="level" value="600" />
@@ -68297,15 +68333,6 @@
 			<attribute key="wandType" value="energy" />
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
-		</attribute>
-		<attribute key="classification" value="4" />
-		<attribute key="augments" value="2">
-			<attribute key="hell's core" value="base damage">
-				<attribute key="value" value="6"/>
-			</attribute>
-			<attribute key="energy wave" value="base damage">
-				<attribute key="value" value="8"/>
-			</attribute>
 		</attribute>
 	</item>
 	<item id="43884" name="sanguine boots">
@@ -68338,19 +68365,31 @@
 		</attribute>
 	</item>
 	<item id="43885" article="a" name="sanguine rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="earth" />
 		<attribute key="absorbpercentdeath" value="7" />
 		<attribute key="manaleechamount" value="100" />
 		<attribute key="lifeleechamount" value="600" />
-		<attribute key="criticalextradamage" value="500" />
 		<attribute key="range" value="6" />
 		<attribute key="magiclevelpoints" value="4" />
+		<attribute key="earthmagiclevelpoints" value="1" />
+		<attribute key="icemagiclevelpoints" value="1" />
+		<attribute key="criticalhitdamage" value="500" />
 		<attribute key="weight" value="2500" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="eternal winter" value="base">
+				<attribute key="value" value="300" />
+			</attribute>
+			<attribute key="terra wave" value="base">
+				<attribute key="value" value="400" />
+			</attribute>
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
 			<attribute key="level" value="600" />
@@ -68362,30 +68401,34 @@
 			<attribute key="wandType" value="earth" />
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
-		</attribute>
-		<attribute key="augments" value="2">
-			<attribute key="eternal winter" value="base damage">
-				<attribute key="value" value="3"/>
-			</attribute>
-			<attribute key="terra wave" value="base damage">
-				<attribute key="value" value="4"/>
-			</attribute>
 		</attribute>
 	</item>
 	<item id="43886" article="a" name="grand sanguine rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="earth" />
 		<attribute key="absorbpercentdeath" value="7" />
 		<attribute key="magiclevelpoints" value="4" />
 		<attribute key="manaleechamount" value="100" />
 		<attribute key="lifeleechamount" value="600" />
-		<attribute key="criticalextradamage" value="500" />
+		<attribute key="earthmagiclevelpoints" value="1" />
 		<attribute key="range" value="6" />
+		<attribute key="icemagiclevelpoints" value="1" />
+		<attribute key="criticalhitdamage" value="500" />
 		<attribute key="weight" value="2400" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="eternal winter" value="base">
+				<attribute key="value" value="600" />
+			</attribute>
+			<attribute key="terra wave" value="base">
+				<attribute key="value" value="800" />
+			</attribute>
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
 			<attribute key="level" value="600" />
@@ -68397,14 +68440,6 @@
 			<attribute key="wandType" value="earth" />
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
-		</attribute>
-		<attribute key="augments" value="2">
-			<attribute key="eternal winter" value="base damage">
-				<attribute key="value" value="6"/>
-			</attribute>
-			<attribute key="terra wave" value="base damage">
-				<attribute key="value" value="8"/>
-			</attribute>
 		</attribute>
 	</item>
 	<item id="43887" article="a" name="sanguine galoshes">
@@ -69465,15 +69500,18 @@
 		</attribute>
 	</item>
 	<item id="47372" article="an" name="amber wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="absorbpercentice" value="6" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="energymagiclevelpoints" value="2" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2200" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -69487,23 +69525,20 @@
 			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer" />
 			<attribute key="slot" value="hand" />
 		</attribute>
-		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
-			<attribute key="rage of the skies" value="critical extra damage">
-				<attribute key="value" value="10" />
-			</attribute>
-		</attribute>
 	</item>
 	<item id="47373" article="an" name="amber rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="ice" />
 		<attribute key="absorbpercentfire" value="6" />
 		<attribute key="range" value="5" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="icemagiclevelpoints" value="2" />
 		<attribute key="weight" value="1800" />
 		<attribute key="imbuementslot" value="2">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -69516,12 +69551,6 @@
 			<attribute key="wandType" value="ice" />
 			<attribute key="vocation" value="Druid;true, Elder Druid" />
 			<attribute key="slot" value="hand" />
-		</attribute>
-		<attribute key="classification" value="4" />
-		<attribute key="augments" value="1">
-			<attribute key="strong ice wave" value="critical extra damage">
-				<attribute key="value" value="6" />
-			</attribute>
 		</attribute>
 	</item>
 	<item id="47374" article="an" name="amber sabre">
@@ -72890,16 +72919,18 @@
 		</attribute>
 	</item>
 	<item id="49528" article="a" name="inferniarch wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="death" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="firemagiclevelpoints" value="1" />
 		<attribute key="absorbpercentearth" value="5" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2400" />
 		<attribute key="imbuementslot" value="2">
 			<attribute key="critical hit" value="3" />
-			<attribute key="mana leech" value="3" />
 			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -73708,15 +73739,18 @@
 		</attribute>
 	</item>
 	<item id="49882" article="a" name="rending inferniarch wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="death" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="firemagiclevelpoints" value="1" />
 		<attribute key="absorbpercentearth" value="5" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2400" />
 		<attribute key="imbuementslot" value="1">
-			<attribute key="mana leech" value="3" />
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -73732,15 +73766,18 @@
 		</attribute>
 	</item>
 	<item id="49883" article="a" name="draining inferniarch wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="death" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="firemagiclevelpoints" value="1" />
 		<attribute key="absorbpercentearth" value="5" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2400" />
 		<attribute key="imbuementslot" value="1">
-			<attribute key="mana leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -73756,15 +73793,18 @@
 		</attribute>
 	</item>
 	<item id="49884" article="a" name="siphoning inferniarch wand">
+		<attribute key="primarytype" value="wands" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="death" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="firemagiclevelpoints" value="1" />
 		<attribute key="absorbpercentearth" value="5" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2400" />
 		<attribute key="imbuementslot" value="1">
-			<attribute key="life leech" value="3" />
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -73780,13 +73820,16 @@
 		</attribute>
 	</item>
 	<item id="49885" article="a" name="rending inferniarch rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="earth" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="earthmagiclevelpoints" value="1" />
 		<attribute key="absorbpercentdeath" value="5" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2200" />
 		<attribute key="imbuementslot" value="1">
+			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
@@ -73804,14 +73847,17 @@
 		</attribute>
 	</item>
 	<item id="49886" article="a" name="draining inferniarch rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="earth" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="earthmagiclevelpoints" value="1" />
 		<attribute key="absorbpercentdeath" value="5" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2200" />
 		<attribute key="imbuementslot" value="1">
 			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
 			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
@@ -73828,15 +73874,18 @@
 		</attribute>
 	</item>
 	<item id="49887" article="a" name="siphoning inferniarch rod">
+		<attribute key="primarytype" value="rods" />
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="earth" />
 		<attribute key="magiclevelpoints" value="3" />
+		<attribute key="earthmagiclevelpoints" value="1" />
 		<attribute key="absorbpercentdeath" value="5" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2200" />
 		<attribute key="imbuementslot" value="1">
 			<attribute key="critical hit" value="3" />
 			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
 			<attribute key="skillboost magic level" value="3" />
 		</attribute>
 		<attribute key="script" value="moveevent;weapon">
@@ -76877,5 +76926,456 @@
 	<item id="65001" name="QA stackable test coin">
 		<attribute key="weight" value="1" />
 		<attribute key="stackable" value="1" />
+	</item>
+	<item id="52336" article="a" name="crypt bile">
+		<attribute key="description" value="For long only rumored among necromancers to exist, this wand, known as Bonechant, hums with the faint chorus of the dead. One of the creations of the mysterious soul-smith."/>
+		<attribute key="primarytype" value="wands"/>
+		<attribute key="weaponType" value="wand"/>
+		<attribute key="shootType" value="energy"/>
+		<attribute key="absorbpercentfire" value="6"/>
+		<attribute key="magiclevelpoints" value="4"/>
+		<attribute key="range" value="5"/>
+		<attribute key="weight" value="2000"/>
+		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
+			<attribute key="skillboost magic level" value="3" />
+		</attribute>
+		<attribute key="script" value="moveevent;weapon">
+			<attribute key="level" value="450"/>
+			<attribute key="mana" value="23"/>
+			<attribute key="fromDamage" value="94"/>
+			<attribute key="toDamage" value="116"/>
+			<attribute key="weaponType" value="wand"/>
+			<attribute key="wandType" value="energy"/>
+			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer"/>
+			<attribute key="slot" value="hand"/>
+		</attribute>
+	</item>
+	<item id="52337" article="a" name="crypt jaw">
+		<attribute key="description" value="Priests of decay called it Eternal Rest, believing it could grant true silence to the restless dead. One of the creations of the mysterious soul-smith."/>
+		<attribute key="primarytype" value="rods"/>
+		<attribute key="weaponType" value="wand"/>
+		<attribute key="shootType" value="earth"/>
+		<attribute key="absorbpercentenergy" value="6"/>
+		<attribute key="magiclevelpoints" value="4"/>
+		<attribute key="range" value="5"/>
+		<attribute key="weight" value="2000"/>
+		<attribute key="imbuementslot" value="2">
+			<attribute key="critical hit" value="3" />
+			<attribute key="life leech" value="3" />
+			<attribute key="mana leech" value="3" />
+			<attribute key="skillboost magic level" value="3" />
+		</attribute>
+		<attribute key="script" value="moveevent;weapon">
+			<attribute key="level" value="450"/>
+			<attribute key="mana" value="22"/>
+			<attribute key="fromDamage" value="95"/>
+			<attribute key="toDamage" value="115"/>
+			<attribute key="weaponType" value="wand"/>
+			<attribute key="wandType" value="earth"/>
+			<attribute key="vocation" value="Druid;true, Elder Druid"/>
+			<attribute key="slot" value="hand"/>
+		</attribute>
+	</item>
+	<item id="53162" article="an" name="superior mana potion">
+		<attribute key="primarytype" value="liquids"/>
+		<attribute key="description" value="This potion can only be consumed by paladins, monks, sorcerers and druids of level 100 or higher."/>
+		<attribute key="weight" value="310"/>
+	</item>
+	<item id="53163" article="an" name="distilled superior mana potion">
+		<attribute key="primarytype" value="liquids"/>
+		<attribute key="description" value="This potion can only be consumed by players of level 130 or higher."/>
+		<attribute key="weight" value="310"/>
+	</item>
+	<item id="53164" article="an" name="distilled ultimate mana potion">
+		<attribute key="primarytype" value="liquids"/>
+		<attribute key="description" value="This potion can only be consumed by players of level 200 or higher."/>
+		<attribute key="weight" value="310"/>
+	</item>
+	<item id="53168" article="a" name="shatterstorm arrow">
+		<attribute key="primarytype" value="ammunition"/>
+		<attribute key="weaponType" value="ammunition"/>
+		<attribute key="ammotype" value="arrow"/>
+		<attribute key="shootType" value="shatterstormarrow"/>
+		<attribute key="maxhitchance" value="100"/>
+		<attribute key="attack" value="27"/>
+		<attribute key="weight" value="80"/>
+	</item>
+	<item id="53169" article="a" name="firestorm arrow">
+		<attribute key="primarytype" value="ammunition"/>
+		<attribute key="weaponType" value="ammunition"/>
+		<attribute key="ammotype" value="arrow"/>
+		<attribute key="shootType" value="firestormarrow"/>
+		<attribute key="maxhitchance" value="100"/>
+		<attribute key="attack" value="21"/>
+		<attribute key="weight" value="80"/>
+	</item>
+	<item id="53170" article="a" name="terrastorm arrow">
+		<attribute key="primarytype" value="ammunition"/>
+		<attribute key="weaponType" value="ammunition"/>
+		<attribute key="ammotype" value="arrow"/>
+		<attribute key="shootType" value="terrastormarrow"/>
+		<attribute key="maxhitchance" value="100"/>
+		<attribute key="attack" value="21"/>
+		<attribute key="weight" value="80"/>
+	</item>
+	<item id="53171" article="a" name="froststorm arrow">
+		<attribute key="primarytype" value="ammunition"/>
+		<attribute key="weaponType" value="ammunition"/>
+		<attribute key="ammotype" value="arrow"/>
+		<attribute key="shootType" value="froststormarrow"/>
+		<attribute key="maxhitchance" value="100"/>
+		<attribute key="attack" value="21"/>
+		<attribute key="weight" value="80"/>
+	</item>
+	<item id="53172" article="a" name="thunderstorm arrow">
+		<attribute key="primarytype" value="ammunition"/>
+		<attribute key="weaponType" value="ammunition"/>
+		<attribute key="ammotype" value="arrow"/>
+		<attribute key="shootType" value="thunderstormarrow"/>
+		<attribute key="maxhitchance" value="100"/>
+		<attribute key="attack" value="21"/>
+		<attribute key="weight" value="80"/>
+	</item>
+	<item id="40527" article="a" name="rotten feather">
+		<attribute key="weight" value="100"/>
+	</item>
+	<item id="40528" article="a" name="ritual tooth">
+		<attribute key="weight" value="100"/>
+	</item>
+	<item id="40529" name="gold-brocaded cloth">
+		<attribute key="weight" value="100"/>
+	</item>
+	<item id="44438" article="a" name="broken mitmah necklace">
+		<attribute key="weight" value="100"/>
+	</item>
+	<item id="44439" article="a" name="crystal of the mitmah">
+		<attribute key="weight" value="100"/>
+	</item>
+	<item id="44727" article="a" name="broken mitmah chestplate">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="44728" article="a" name="splintered mitmah gem">
+		<attribute key="weight" value="100"/>
+	</item>
+	<item id="44739" name="encrypted notes">
+		<attribute key="weight" value="100"/>
+	</item>
+	<item id="52348" article="a" name="stag helmet">
+		<attribute key="primarytype" value="helmets"/>
+		<attribute key="firemagiclevelpoints" value="2"/>
+		<attribute key="absorbpercentenergy" value="8"/>
+		<attribute key="magiclevelpoints" value="2"/>
+		<attribute key="absorbpercentphysical" value="2"/>
+		<attribute key="armor" value="8"/>
+		<attribute key="weight" value="1400"/>
+		<attribute key="imbuementslot" value="2">
+			<attribute key="mana leech" value="3"/>
+			<attribute key="skillboost axe" value="3"/>
+			<attribute key="skillboost sword" value="3"/>
+			<attribute key="skillboost club" value="3"/>
+			<attribute key="skillboost shielding" value="3"/>
+			<attribute key="skillboost distance" value="3"/>
+			<attribute key="skillboost magic level" value="3"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="great fire wave" value="critical hit chance">
+				<attribute key="value" value="650"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="head"/>
+			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer"/>
+		</attribute>
+	</item>
+	<item id="52349" article="a" name="stag robe">
+		<attribute key="primarytype" value="armors"/>
+		<attribute key="absorbpercentphysical" value="4"/>
+		<attribute key="skillfist" value="4"/>
+		<attribute key="armor" value="10"/>
+		<attribute key="mantra" value="17"/>
+		<attribute key="weight" value="8000"/>
+		<attribute key="imbuementslot" value="2">
+			<attribute key="life leech" value="3"/>
+			<attribute key="elemental protection death" value="3"/>
+			<attribute key="elemental protection earth" value="3"/>
+			<attribute key="elemental protection fire" value="3"/>
+			<attribute key="elemental protection ice" value="3"/>
+			<attribute key="elemental protection energy" value="3"/>
+			<attribute key="elemental protection holy" value="3"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="spiritual outburst" value="critical hit chance">
+				<attribute key="value" value="100"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="armor"/>
+			<attribute key="vocation" value="Monk;true, Exalted Monk"/>
+		</attribute>
+	</item>
+	<item id="52350" article="a" name="stag plate">
+		<attribute key="primarytype" value="armors"/>
+		<attribute key="absorbpercentphysical" value="6"/>
+		<attribute key="skillshield" value="3"/>
+		<attribute key="skilldist" value="3"/>
+		<attribute key="armor" value="17"/>
+		<attribute key="weight" value="13000"/>
+		<attribute key="imbuementslot" value="2">
+			<attribute key="life leech" value="3"/>
+			<attribute key="elemental protection death" value="3"/>
+			<attribute key="elemental protection earth" value="3"/>
+			<attribute key="elemental protection fire" value="3"/>
+			<attribute key="elemental protection ice" value="3"/>
+			<attribute key="elemental protection energy" value="3"/>
+			<attribute key="elemental protection holy" value="3"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="divine grenade" value="critical hit chance">
+				<attribute key="value" value="1000"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="armor"/>
+			<attribute key="vocation" value="Paladin;true, Royal Paladin"/>
+		</attribute>
+	</item>
+	<item id="52351" name="stag legs">
+		<attribute key="primarytype" value="legs"/>
+		<attribute key="absorbpercentfire" value="7"/>
+		<attribute key="absorbpercentphysical" value="7"/>
+		<attribute key="skillsword" value="3"/>
+		<attribute key="skillaxe" value="3"/>
+		<attribute key="skillclub" value="3"/>
+		<attribute key="skillshield" value="2"/>
+		<attribute key="armor" value="10"/>
+		<attribute key="weight" value="1150"/>
+		<attribute key="augments" value="1">
+			<attribute key="fierce berserk" value="critical extra damage">
+				<attribute key="value" value="1000"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="legs"/>
+			<attribute key="vocation" value="Knight;true, Elite Knight"/>
+		</attribute>
+	</item>
+	<item id="52352" name="stag shinguards">
+		<attribute key="primarytype" value="boots"/>
+		<attribute key="absorbpercentenergy" value="5"/>
+		<attribute key="absorbpercentphysical" value="2"/>
+		<attribute key="speed" value="10"/>
+		<attribute key="skilldist" value="1"/>
+		<attribute key="armor" value="2"/>
+		<attribute key="weight" value="1700"/>
+		<attribute key="imbuementslot" value="1">
+			<attribute key="increase speed" value="2"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="divine grenade" value="critical hit chance">
+				<attribute key="value" value="800"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="feet"/>
+			<attribute key="vocation" value="Paladin;true, Royal Paladin"/>
+		</attribute>
+	</item>
+	<item id="52353" article="a" name="stag boots">
+		<attribute key="primarytype" value="boots"/>
+		<attribute key="magiclevelpoints" value="1"/>
+		<attribute key="earthmagiclevelpoints" value="1"/>
+		<attribute key="absorbpercentenergy" value="8"/>
+		<attribute key="armor" value="2"/>
+		<attribute key="weight" value="1400"/>
+		<attribute key="imbuementslot" value="1">
+			<attribute key="increase speed" value="3"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="terra wave" value="critical hit chance">
+				<attribute key="value" value="650"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="feet"/>
+			<attribute key="vocation" value="Druid;true, Elder Druid"/>
+		</attribute>
+	</item>
+	<item id="52354" article="a" name="stag footwraps">
+		<attribute key="primarytype" value="boots"/>
+		<attribute key="skillfist" value="2"/>
+		<attribute key="absorbpercentdeath" value="3"/>
+		<attribute key="absorbpercentphysical" value="2"/>
+		<attribute key="armor" value="2"/>
+		<attribute key="weight" value="1400"/>
+		<attribute key="imbuementslot" value="1">
+			<attribute key="increase speed" value="3"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="spiritual outburst" value="critical hit chance">
+				<attribute key="value" value="800"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="feet"/>
+			<attribute key="vocation" value="Monk;true, Exalted Monk"/>
+		</attribute>
+	</item>
+	<item id="52355" article="a" name="stag spellbook">
+		<attribute key="primarytype" value="spellbooks"/>
+		<attribute key="weaponType" value="shield"/>
+		<attribute key="absorbpercentphysical" value="2"/>
+		<attribute key="absorbpercentenergy" value="6"/>
+		<attribute key="magiclevelpoints" value="5"/>
+		<attribute key="defense" value="21"/>
+		<attribute key="weight" value="2000"/>
+		<attribute key="imbuementslot" value="1">
+			<attribute key="elemental protection death" value="3"/>
+			<attribute key="elemental protection earth" value="3"/>
+			<attribute key="elemental protection fire" value="3"/>
+			<attribute key="elemental protection ice" value="3"/>
+			<attribute key="elemental protection energy" value="3"/>
+			<attribute key="elemental protection holy" value="3"/>
+			<attribute key="skillboost shielding" value="3"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="great fire wave" value="critical hit chance">
+				<attribute key="value" value="100"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="shield"/>
+			<attribute key="vocation" value="Sorcerer;true, Master Sorcerer"/>
+		</attribute>
+	</item>
+	<item id="52356" article="a" name="stag scrolls">
+		<attribute key="primarytype" value="spellbooks"/>
+		<attribute key="weaponType" value="shield"/>
+		<attribute key="absorbpercentphysical" value="2"/>
+		<attribute key="absorbpercentdeath" value="5"/>
+		<attribute key="magiclevelpoints" value="5"/>
+		<attribute key="defense" value="21"/>
+		<attribute key="weight" value="2000"/>
+		<attribute key="imbuementslot" value="1">
+			<attribute key="elemental protection death" value="3"/>
+			<attribute key="elemental protection earth" value="3"/>
+			<attribute key="elemental protection fire" value="3"/>
+			<attribute key="elemental protection ice" value="3"/>
+			<attribute key="elemental protection energy" value="3"/>
+			<attribute key="elemental protection holy" value="3"/>
+			<attribute key="skillboost shielding" value="3"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="terra wave" value="critical hit chance">
+				<attribute key="value" value="100"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="shield"/>
+			<attribute key="vocation" value="Druid;true, Elder Druid"/>
+		</attribute>
+	</item>
+	<item id="52357" article="a" name="stag shield">
+		<attribute key="primarytype" value="shields"/>
+		<attribute key="weaponType" value="shield"/>
+		<attribute key="absorbpercentphysical" value="5"/>
+		<attribute key="absorbpercentice" value="10"/>
+		<attribute key="defense" value="40"/>
+		<attribute key="weight" value="6000"/>
+		<attribute key="imbuementslot" value="1">
+			<attribute key="elemental protection death" value="3"/>
+			<attribute key="elemental protection earth" value="3"/>
+			<attribute key="elemental protection fire" value="3"/>
+			<attribute key="elemental protection ice" value="3"/>
+			<attribute key="elemental protection energy" value="3"/>
+			<attribute key="elemental protection holy" value="3"/>
+			<attribute key="skillboost shielding" value="3"/>
+		</attribute>
+		<attribute key="augments" value="1">
+			<attribute key="berserk" value="critical hit chance">
+				<attribute key="value" value="100"/>
+			</attribute>
+		</attribute>
+		<attribute key="script" value="moveevent">
+			<attribute key="level" value="350"/>
+			<attribute key="slot" value="shield"/>
+			<attribute key="vocation" value="Knight;true, Elite Knight"/>
+		</attribute>
+	</item>
+	<item id="52633" name="night harpy feathers">
+		<attribute key="weight" value="750"/>
+	</item>
+	<item id="52657" article="a" name="fiery crypt rune">
+		<attribute key="description" value="This rune pulses with corrupt magic bound into bone. Only by offering a complete set to the guardian spirit may its blight be undone."/>
+		<attribute key="weight" value="500"/>
+	</item>
+	<item id="52658" article="an" name="icy crypt rune">
+		<attribute key="description" value="This rune pulses with corrupt magic bound into bone. Only by offering a complete set to the guardian spirit may its blight be undone."/>
+		<attribute key="weight" value="500"/>
+	</item>
+	<item id="52659" article="a" name="deathly crypt rune">
+		<attribute key="description" value="This rune pulses with corrupt magic bound into bone. Only by offering a complete set to the guardian spirit may its blight be undone."/>
+		<attribute key="weight" value="500"/>
+	</item>
+	<item id="52660" article="an" name="ancient crypt rune">
+		<attribute key="description" value="This rune pulses with corrupt magic bound into bone. Only by offering a complete set to the guardian spirit may its blight be undone."/>
+		<attribute key="weight" value="500"/>
+	</item>
+	<item id="52661" article="a" name="necromantic crypt rune">
+		<attribute key="description" value="This rune pulses with corrupt magic bound into bone. Only by offering a complete set to the guardian spirit may its blight be undone."/>
+		<attribute key="weight" value="500"/>
+	</item>
+	<item id="52708" article="a" name="fetid heart">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52709" article="a" name="cryptic fossil">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52710" article="a" name="worn guide book">
+		<attribute key="description" value="Compiled Quest Solutions for Dummies."/>
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52711" article="a" name="golden claw">
+		<attribute key="weight" value="455"/>
+	</item>
+	<item id="52712" article="a" name="shrunken head">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52713" article="an" name="ancient scales">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52714" article="a" name="soul trap">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52717" article="a" name="bone spikes">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52726" article="an" name="icy scales">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52727" article="an" name="icy horns">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52728" article="a" name="frozen crapace">
+		<attribute key="weight" value="1000"/>
+	</item>
+	<item id="52746" article="a" name="twisted marionette">
+		<attribute key="description" value="A twisted marionette once in the possession of an evil warlock."/>
+		<attribute key="weight" value="1001"/>
+	</item>
+	<item id="52747" article="a" name="broken staff of mind control">
+		<attribute key="description" value="A broken staff with a skull on one end. One of the means of which an evil warlock controlled the minds of others."/>
+		<attribute key="weight" value="1001"/>
 	</item>
 </items>

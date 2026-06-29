@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Spidris Elite")
 local monster = {}
 
-monster.name = "Spidris Elite"
 monster.description = "a spidris elite"
 monster.experience = 4000
 monster.outfit = {
@@ -62,6 +61,7 @@ monster.flags = {
 	canWalkOnEnergy = true,
 	canWalkOnFire = true,
 	canWalkOnPoison = true,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -82,7 +82,7 @@ monster.loot = {
 	{ name = "violet gem", chance = 1120 },
 	{ id = 6299, chance = 4480 }, -- death ring
 	{ name = "titan axe", chance = 1440 },
-	{ name = "great mana potion", chance = 20400, maxCount = 2 },
+	{ id = 238, chance = 20400, maxCount = 2 }, -- great mana potion
 	{ id = 281, chance = 3040 }, -- giant shimmering pearl (green)
 	{ name = "ultimate health potion", chance = 9250, maxCount = 2 },
 	{ name = "spidris mandible", chance = 27440 },

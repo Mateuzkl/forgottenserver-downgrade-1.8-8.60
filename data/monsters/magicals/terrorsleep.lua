@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Terrorsleep")
 local monster = {}
 
-monster.name = "Terrorsleep"
 monster.description = "a terrorsleep"
 monster.experience = 6900
 monster.outfit = {
@@ -90,7 +89,7 @@ monster.loot = {
 	{ name = "knight armor", chance = 4000 },
 	{ id = 5909, chance = 4520 }, -- white piece of cloth
 	{ name = "red piece of cloth", chance = 1130 },
-	{ name = "great mana potion", chance = 36000, maxCount = 2 },
+	{ id = 238, chance = 36000, maxCount = 2 }, -- great mana potion
 	{ name = "ultimate health potion", chance = 26000 },
 	{ name = "small topaz", chance = 17000, maxCount = 2 },
 	{ name = "blue crystal shard", chance = 6000 },
@@ -105,8 +104,7 @@ monster.loot = {
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -450 },
 	-- poison
-	{ name = "condition", interval = 2000, chance = 20, target = false, condition =
-	{ type = CONDITION_POISON, minDamage = -1000, maxDamage = -1500, radius = 7, effect = CONST_ME_YELLOW_RINGS } },
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 20, minDamage = -1000, maxDamage = -1500, radius = 7, effect = CONST_ME_YELLOW_RINGS, target = false },
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_MANADRAIN, minDamage = -100, maxDamage = -300, radius = 5, effect = CONST_ME_MAGIC_RED, target = false },
 	{ name = "feversleep skill reducer", interval = 2000, chance = 10, target = false },
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_LIFEDRAIN, minDamage = -350, maxDamage = -500, length = 6, spread = 0, effect = CONST_ME_YELLOWENERGY, target = true },

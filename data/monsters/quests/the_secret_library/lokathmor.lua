@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Lokathmor")
 local monster = {}
 
-monster.name = "Lokathmor"
 monster.description = "Lokathmor"
 monster.experience = 100000
 monster.outfit = {
@@ -12,6 +11,10 @@ monster.outfit = {
 	lookFeet = 77,
 	lookAddons = 0,
 	lookMount = 0,
+}
+
+monster.events = {
+	"lokathmorDeath",
 }
 
 monster.bosstiary = {
@@ -75,7 +78,7 @@ monster.voices = {
 monster.loot = {
 	{ name = "platinum coin", chance = 90000, maxCount = 63 },
 	{ name = "crystal coin", chance = 70000, maxCount = 4 },
-	{ name = "great mana potion", chance = 70000, maxCount = 18 },
+	{ id = 238, chance = 70000, maxCount = 18 }, -- great mana potion
 	{ name = "great spirit potion", chance = 70000, maxCount = 18 },
 	{ name = "ultimate mana potion", chance = 70000, maxCount = 12 },
 	{ name = "ultimate health potion", chance = 70000, maxCount = 18 },
@@ -106,8 +109,7 @@ monster.attacks = {
 	{ name = "combat", interval = 2000, chance = 8, type = COMBAT_LIFEDRAIN, minDamage = -1100, maxDamage = -2800, range = 7, radius = 5, shootEffect = CONST_ANI_WHIRLWINDAXE, effect = CONST_ME_DRAWBLOOD, target = true },
 	{ name = "combat", interval = 1000, chance = 8, type = COMBAT_DEATHDAMAGE, minDamage = -800, maxDamage = -1900, radius = 9, effect = CONST_ME_MORTAREA, target = false },
 	-- poison
-	{ name = "condition", interval = 5000, chance = 18, target = false, condition =
-	{ type = CONDITION_POISON, minDamage = -1100, maxDamage = -2500, effect = CONST_ME_HITBYPOISON } },
+	{ name = "condition", type = CONDITION_POISON, interval = 5000, chance = 18, minDamage = -1100, maxDamage = -2500, effect = CONST_ME_HITBYPOISON, target = false },
 	{ name = "combat", interval = 1000, chance = 20, type = COMBAT_EARTHDAMAGE, minDamage = -1000, maxDamage = -255, range = 7, radius = 6, effect = CONST_ME_LOSEENERGY, target = false },
 	{ name = "combat", interval = 2000, chance = 8, type = COMBAT_PHYSICALDAMAGE, minDamage = -90, maxDamage = -200, range = 7, shootEffect = CONST_ANI_WHIRLWINDAXE, effect = CONST_ME_EXPLOSIONAREA, target = true },
 }
@@ -115,6 +117,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 40,
 	armor = 40,
+	--	mitigation = ???,
 }
 
 monster.elements = {
