@@ -516,19 +516,26 @@ Full guide: [Windows Compilation Wiki](https://github.com/MillhioreBT/forgottens
 
 ## Client Configuration
 
+Read the full client setup guide before changing feature flags:
+
+- English: [`docs/client-configuration.md`](docs/client-configuration.md)
+- PT-BR: [`docs/client-configuration.pt-BR.md`](docs/client-configuration.pt-BR.md)
+
+The server still accepts protocol **860**. Version **15.24** below refers to the updated appearance/assets set (`.dat`, `.spr`, and `items.otb`), not a protocol change.
+
 ### 📢 Client Update: Version 15.24
 
 **Client version upgraded to 15.24.** The items.otb and sprite files (.spr and .dat) have been updated to support version 15.24 for both OTCv8 and the classic CIP client. Download the latest assets below.
 
 ### OTCv8 / Mehah
 
-Enable the required features for protocol 860 in `modules/game_features/game_features.lua`:
+Enable the required base features for protocol 860 in your client feature file, usually `modules/game_features/features.lua` or `modules/game_features/game_features.lua`:
 
 ```lua
 if(version >= 860) then
     g_game.enableFeature(GameAttackSeq)
     g_game.enableFeature(GameBot)
-    g_game.enableFeature(GameExtendedOpcode)       
+    g_game.enableFeature(GameExtendedOpcode)
     g_game.enableFeature(GameSkillsBase)
     g_game.enableFeature(GamePlayerMounts)
     g_game.enableFeature(GameMagicEffectU16)
@@ -538,20 +545,25 @@ if(version >= 860) then
     g_game.enableFeature(GameOfflineTrainingTime)
     g_game.enableFeature(GameBaseSkillU16)
     g_game.enableFeature(GameAdditionalSkills)
-    g_game.enableFeature(GameLeechAmount)
     g_game.enableFeature(GameIdleAnimations)
     g_game.enableFeature(GameEnhancedAnimations)
     g_game.enableFeature(GameExtendedClientPing)
     g_game.enableFeature(GameSpritesU32)
-    g_game.enableFeature(GameDoublePlayerGoodsMoney) 
+    g_game.enableFeature(GameDoublePlayerGoodsMoney)
     g_game.enableFeature(GameCreatureIcons)
     g_game.enableFeature(GamePurseSlot)
     g_game.enableFeature(GamePrey)
     g_game.enableFeature(GameSpellList)
-    g_game.enableFeature(GameThingUpgradeClassification)
-    g_game.enableFeature(GameItemTierByte)
+
+    -- Packet-layout flags must match ProtocolGame::sendFeatures().
+    -- Let the server handshake enable/disable these when possible.
+    g_game.disableFeature(GameQuickLootFlags)
+    g_game.disableFeature(GameThingUpgradeClassification)
+    g_game.disableFeature(GameItemTierByte)
 end
 ```
+
+Some forks define `GameLeechAmount`. Enable it only when the client source has that feature id and its parser expects it.
 
 Store Inbox compatibility:
 
