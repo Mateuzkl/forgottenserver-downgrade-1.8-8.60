@@ -1390,6 +1390,9 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		case 0x8A:
 			parseHouseWindow(msg);
 			break;
+		case 0x8B:
+			parseWrapableItem(msg);
+			break;
 		case 0x8C:
 			parseLookAt(msg);
 			break;
@@ -2508,6 +2511,21 @@ void ProtocolGame::parseRotateItem(NetworkMessage& msg)
 	uint8_t stackpos = msg.getByte();
 	g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, [=, playerID = player->getID()]() {
 		g_game.playerRotateItem(playerID, pos, stackpos, spriteId);
+	});
+}
+
+void ProtocolGame::parseWrapableItem(NetworkMessage& msg)
+{
+	if (!isOTC && !isOTCv8 && !isAstraClient) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	Position pos = msg.getPosition();
+	uint16_t spriteId = msg.get<uint16_t>();
+	uint8_t stackpos = msg.getByte();
+	g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, [=, playerID = player->getID()]() {
+		g_game.playerWrapableItem(playerID, pos, stackpos, spriteId);
 	});
 }
 

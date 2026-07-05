@@ -15,6 +15,7 @@
 #include "enums.h"
 #include "events.h"
 #include "globalevent.h"
+#include "housetile.h"
 #include "instance_utils.h"
 #include "iologindata.h"
 #include "items.h"
@@ -72,6 +73,29 @@ bool isInsideStoreInbox(const Cylinder* cylinder)
 		cylinder = cylinder->getParent();
 	}
 	return false;
+}
+
+uint16_t getWrapTargetId(const Item* item)
+{
+	if (!item) {
+		return 0;
+	}
+
+	if (item->hasAttribute(ITEM_ATTRIBUTE_WRAPID)) {
+		const int64_t wrapId = item->getIntAttr(ITEM_ATTRIBUTE_WRAPID);
+		if (wrapId > 0 && wrapId <= std::numeric_limits<uint16_t>::max()) {
+			return static_cast<uint16_t>(wrapId);
+		}
+	}
+
+	if (const auto* unwrapId = item->getCustomAttribute("unWrapId")) {
+		if (const auto* value = std::get_if<int64_t>(&unwrapId->value);
+		    value && *value > 0 && *value <= std::numeric_limits<uint16_t>::max()) {
+			return static_cast<uint16_t>(*value);
+		}
+	}
+
+	return 0;
 }
 
 bool isCarriedByCreature(const Cylinder* cylinder)
@@ -4387,6 +4411,92 @@ void Game::playerRotateItem(uint32_t playerId, const Position& pos, uint8_t stac
 	}
 
 	g_events->eventPlayerOnRotateItem(player, item);
+}
+
+void Game::playerWrapableItem(uint32_t playerId, const Position& pos, uint8_t stackPos, const uint16_t spriteId)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player) {
+		return;
+	}
+
+	Thing* thing = internalGetThing(player, pos, stackPos, spriteId, STACKPOS_USEITEM);
+	if (!thing) {
+		return;
+	}
+
+	Item* item = thing->getItem();
+	if (!item || item->getClientID() != spriteId || item->hasAttribute(ITEM_ATTRIBUTE_UNIQUEID)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	Tile* tile = item->getTile();
+	HouseTile* houseTile = tile ? tile->getHouseTile() : nullptr;
+	House* house = houseTile ? houseTile->getHouse() : nullptr;
+	if (!house) {
+		player->sendCancelMessage("You may construct this only inside a house.");
+		return;
+	}
+
+	if (!house->isInvited(player)) {
+		player->sendCancelMessage("You cannot modify items in another person's house.");
+		return;
+	}
+
+	if (!house->canModifyItems(player)) {
+		player->sendCancelMessage("You cannot modify items in this protected house.");
+		return;
+	}
+
+	if (pos.x != 0xFFFF && !pos.isInRange(player->getPosition(), 1, 1, 0)) {
+		std::vector<Direction> listDir;
+		if (player->getPathTo(pos, listDir, 0, 1, true, true)) {
+			g_dispatcher.addTask([=, this, playerID = player->getID(), listDir = std::move(listDir)]() {
+				playerAutoWalk(playerID, listDir);
+			});
+
+			auto task =
+			    createSchedulerTask(static_cast<uint32_t>(getInteger(ConfigManager::RANGE_ROTATE_ITEM_INTERVAL)),
+			                        ([this, playerId, pos, stackPos, spriteId]()
+			                        { playerWrapableItem(playerId, pos, stackPos, spriteId); }));
+			player->setNextWalkActionTask(std::move(task));
+		} else {
+			player->sendCancelMessage(RETURNVALUE_THEREISNOWAY);
+		}
+		return;
+	}
+
+	if (Container* container = item->getContainer(); container && !container->empty()) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	const uint16_t previousId = item->getID();
+	uint16_t targetId = getWrapTargetId(item);
+	if (targetId == 0 && previousId != ITEM_DECORATION_KIT) {
+		targetId = Item::items[previousId].wrapableTo;
+	}
+
+	if (targetId == 0 || Item::items[targetId].id == 0) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	Item* newItem = transformItem(item, targetId);
+	if (!newItem) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	newItem->setIntAttr(ITEM_ATTRIBUTE_WRAPID, previousId);
+	if (previousId == ITEM_DECORATION_KIT) {
+		newItem->removeCustomAttribute("unWrapId");
+		newItem->removeAttribute(ITEM_ATTRIBUTE_DESCRIPTION);
+	}
+
+	addMagicEffect(pos, CONST_ME_POFF, player->getInstanceID());
 }
 
 void Game::playerWriteItem(uint32_t playerId, uint32_t windowTextId, std::string_view text)

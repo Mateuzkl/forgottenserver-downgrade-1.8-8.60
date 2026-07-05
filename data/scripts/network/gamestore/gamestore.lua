@@ -88,6 +88,14 @@ local function isXpBoostOfferType(offerType)
 	return offerType == "expboost" or offerType == "xpboost"
 end
 
+local function parseOfferItemList(value)
+	local items = {}
+	for itemId in tostring(value or ""):gmatch("%d+") do
+		items[#items + 1] = tonumber(itemId)
+	end
+	return items
+end
+
 local function isBattlePassCategory(category)
 	return tostring(category and category.name or ""):lower() == "battle pass"
 end
@@ -403,6 +411,7 @@ local function loadStoreXML()
 						price = tonumber(offer:attribute("price")) or 0,
 						eid = tonumber(offer:attribute("eid")) or 0,
 						itemid = tonumber(offer:attribute("itemid")) or 0,
+						items = parseOfferItemList(offer:attribute("items")),
 						count = tonumber(offer:attribute("count")) or 1,
 						description = offer:attribute("description") or "",
 						oftype = offer:attribute("type") or "item",
@@ -653,6 +662,56 @@ local function deliverOffer(player, offer, extra)
 		return nil
 	end
 
+	if offer.oftype == "house" then
+		local inbox = player:getStoreInbox()
+		if not inbox then
+			return "Your store inbox is not available."
+		end
+
+		local deliveryIds = offer.items or {}
+		if #deliveryIds == 0 and offer.itemid > 0 then
+			deliveryIds = {offer.itemid}
+		end
+		if #deliveryIds == 0 then
+			return "Invalid house item."
+		end
+
+		local createdItems = {}
+		local function removeCreatedItems()
+			for _, created in ipairs(createdItems) do
+				created:remove()
+			end
+		end
+
+		for _, itemId in ipairs(deliveryIds) do
+			local itemType = ItemType(itemId)
+			if not itemType or itemType:getId() == 0 then
+				removeCreatedItems()
+				return "Invalid house item."
+			end
+
+			local kit = Game.createItem(ITEM_DECORATION_KIT, 1)
+			if not kit then
+				removeCreatedItems()
+				return "Failed to create item."
+			end
+
+			kit:setAttribute(ITEM_ATTRIBUTE_DESCRIPTION, "You bought this item in the Store.\nUnwrap it in your own house to create a <" .. itemType:getName() .. ">.")
+			kit:setAttribute(ITEM_ATTRIBUTE_WRAPID, itemId)
+			createdItems[#createdItems + 1] = kit
+		end
+
+		for _, item in ipairs(createdItems) do
+			if inbox:addItemEx(item) ~= RETURNVALUE_NOERROR then
+				removeCreatedItems()
+				return "Your store inbox is full."
+			end
+		end
+
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your house item was sent to your store inbox.")
+		return nil
+	end
+
 	if offer.oftype == "item" and offer.itemid > 0 then
 		local inbox = player:getStoreInbox()
 		if not inbox then
@@ -878,7 +937,7 @@ function buyHandler.onReceive(player, msg)
 
 	player:setTibiaCoins(coins - offer.price)
 
-	local historyCount = offer.oftype == "item" and offer.count or (offer.oftype == "prey_wildcard" and offer.value or 1)
+	local historyCount = offer.oftype == "item" and offer.count or (offer.oftype == "house" and math.max(#(offer.items or {}), offer.count or 1) or (offer.oftype == "prey_wildcard" and offer.value or 1))
 	addStoreHistory(player:getAccountId(), player:getGuid(), offer.name, -offer.price, historyCount, nil)
 
 	if isXpBoostOfferType(offer.oftype) then

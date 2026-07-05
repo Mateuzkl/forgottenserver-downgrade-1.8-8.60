@@ -149,6 +149,7 @@ private:
 	void parseRemoveVip(NetworkMessage& msg);
 
 	void parseRotateItem(NetworkMessage& msg);
+	void parseWrapableItem(NetworkMessage& msg);
 
 	// Channel tabs
 	void parseChannelInvite(NetworkMessage& msg);
