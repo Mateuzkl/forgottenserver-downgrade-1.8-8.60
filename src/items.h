@@ -42,6 +42,7 @@ enum ItemTypes_t
 	ITEM_TYPE_RUNE,
 	ITEM_TYPE_PODIUM,
 	ITEM_TYPE_REWARDCHEST,
+	ITEM_TYPE_CARPET,
 	ITEM_TYPE_LAST
 };
 
@@ -357,6 +358,7 @@ public:
 	bool isKey() const { return (type == ITEM_TYPE_KEY); }
 	bool isDepot() const { return (type == ITEM_TYPE_DEPOT); }
 	bool isRewardChest() const { return (type == ITEM_TYPE_REWARDCHEST); }
+	bool isCarpet() const { return (type == ITEM_TYPE_CARPET); }
 	bool isRewardContainer() const { return (id == ITEM_REWARD_CONTAINER); }
 	bool isMailbox() const { return (type == ITEM_TYPE_MAILBOX); }
 	bool isTrashHolder() const { return (type == ITEM_TYPE_TRASHHOLDER); }

@@ -160,7 +160,7 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 	}
 
 	const ItemType& iType = Item::items[id];
-	if (iType.moveable || iType.forceSerialize || !tile) {
+	if (iType.moveable || iType.forceSerialize || iType.isCarpet() || !tile) {
 		// create a new item
 		auto item = Item::CreateItem(id);
 		if (item) {
@@ -211,6 +211,28 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 				g_game.transformItem(item, id);
 			} else {
 				LOG_WARN(fmt::format("WARNING: Unserialization error in IOMapSerialize::loadItem() {}", id));
+			}
+		} else if (iType.wrapableTo != 0) {
+			auto item = Item::CreateItem(id);
+			if (item) {
+				if (item->unserializeAttr(propStream)) {
+					Container* container = item->getContainer();
+					if (container && !loadContainer(propStream, container)) {
+						return false;
+					}
+
+					Item* raw = item.get();
+					parent->internalAddThing(raw);
+					if (!mapSerializeCylinderOwnsThing(parent, raw)) {
+						return false;
+					}
+
+					raw->startDecaying();
+					item.reset();
+				} else {
+					LOG_WARN(fmt::format("WARNING: Unserialization error in IOMapSerialize::loadItem() {}", id));
+					return false;
+				}
 			}
 		} else {
 			// The map changed since the last save, just read the attributes
@@ -267,7 +289,7 @@ void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile)
 		const ItemType& it = Item::items[item->getID()];
 
 		// Note that these are NEGATED, ie. these are the items that will be saved.
-		if (!(it.moveable || it.forceSerialize || item->getDoor() ||
+		if (!(it.moveable || it.forceSerialize || it.isCarpet() || it.wrapableTo != 0 || item->getDoor() ||
 		      (item->getContainer() && !item->getContainer()->empty()) || it.canWriteText || item->getBed())) {
 			continue;
 		}

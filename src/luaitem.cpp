@@ -922,6 +922,18 @@ int luaItemHasProperty(lua_State* L)
 	return 1;
 }
 
+int luaItemCanReceiveAutoCarpet(lua_State* L)
+{
+	// item:canReceiveAutoCarpet()
+	const Item* item = getItemUserdata<const Item>(L, 1);
+	if (item) {
+		pushBoolean(L, item->canReceiveAutoCarpet());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaItemIsLoadedFromMap(lua_State* L)
 {
 	// item:isLoadedFromMap()
@@ -1304,6 +1316,7 @@ void LuaScriptInterface::registerItem()
 	registerMethod("Item", "getSpecialDescription", luaItemGetSpecialDescription);
 
 	registerMethod("Item", "hasProperty", luaItemHasProperty);
+	registerMethod("Item", "canReceiveAutoCarpet", luaItemCanReceiveAutoCarpet);
 	registerMethod("Item", "isLoadedFromMap", luaItemIsLoadedFromMap);
 	registerMethod("Item", "setStoreItem", luaItemSetStoreItem);
 	registerMethod("Item", "isStoreItem", luaItemIsStoreItem);

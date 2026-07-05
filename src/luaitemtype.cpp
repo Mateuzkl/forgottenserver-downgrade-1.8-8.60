@@ -176,6 +176,18 @@ int luaItemTypeIsMagicField(lua_State* L)
 	return 1;
 }
 
+int luaItemTypeIsCarpet(lua_State* L)
+{
+	// itemType:isCarpet()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (itemType) {
+		pushBoolean(L, itemType->isCarpet());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaItemTypeIsUseable(lua_State* L)
 {
 	// itemType:isUseable()
@@ -1181,6 +1193,7 @@ void LuaScriptInterface::registerItemType()
 	registerMethod("ItemType", "isBlocking", luaItemTypeIsBlocking);
 	registerMethod("ItemType", "isGroundTile", luaItemTypeIsGroundTile);
 	registerMethod("ItemType", "isMagicField", luaItemTypeIsMagicField);
+	registerMethod("ItemType", "isCarpet", luaItemTypeIsCarpet);
 	registerMethod("ItemType", "isUseable", luaItemTypeIsUseable);
 	registerMethod("ItemType", "isPickupable", luaItemTypeIsPickupable);
 	registerMethod("ItemType", "isStoreItem", luaItemTypeIsStoreItem);

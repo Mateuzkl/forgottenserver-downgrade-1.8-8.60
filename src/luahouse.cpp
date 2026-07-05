@@ -514,6 +514,34 @@ int luaHouseCanEditAccessList(lua_State* L)
 	return 1;
 }
 
+int luaHouseIsInvited(lua_State* L)
+{
+	// house:isInvited(player)
+	const House* house = getUserdata<const House>(L, 1);
+	if (!house) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	Player* player = getPlayer(L, 2);
+	pushBoolean(L, player && house->isInvited(player));
+	return 1;
+}
+
+int luaHouseCanModifyItems(lua_State* L)
+{
+	// house:canModifyItems(player)
+	const House* house = getUserdata<const House>(L, 1);
+	if (!house) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	Player* player = getPlayer(L, 2);
+	pushBoolean(L, house->canModifyItems(player));
+	return 1;
+}
+
 int luaHouseGetAccessList(lua_State* L)
 {
 	// house:getAccessList(listId)
@@ -732,6 +760,8 @@ void LuaScriptInterface::registerHouse()
 	registerMethod("House", "getTileCount", luaHouseGetTileCount);
 
 	registerMethod("House", "canEditAccessList", luaHouseCanEditAccessList);
+	registerMethod("House", "isInvited", luaHouseIsInvited);
+	registerMethod("House", "canModifyItems", luaHouseCanModifyItems);
 	registerMethod("House", "getAccessList", luaHouseGetAccessList);
 	registerMethod("House", "setAccessList", luaHouseSetAccessList);
 

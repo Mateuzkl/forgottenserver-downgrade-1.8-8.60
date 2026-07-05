@@ -2347,6 +2347,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(ITEM_TYPE_BED);
 	registerEnum(ITEM_TYPE_KEY);
 	registerEnum(ITEM_TYPE_RUNE);
+	registerEnum(ITEM_TYPE_CARPET);
 
 	registerEnum(ITEM_GROUP_GROUND);
 	registerEnum(ITEM_GROUP_CONTAINER);
@@ -2401,6 +2402,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(ITEM_INBOX);
 	registerEnum(ITEM_MARKET);
 	registerEnum(ITEM_STORE_INBOX);
+	registerEnum(ITEM_DECORATION_KIT);
 	registerEnum(ITEM_SUPPLY_STASH);
 	registerEnum(ITEM_DEPOT_BOX_1);
 

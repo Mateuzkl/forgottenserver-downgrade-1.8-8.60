@@ -878,6 +878,8 @@ public:
 	bool isAlwaysOnTop() const { return items[id].alwaysOnTop; }
 	bool isGroundTile() const { return items[id].isGroundTile(); }
 	bool isMagicField() const { return items[id].isMagicField(); }
+	bool isCarpet() const { return items[id].isCarpet(); }
+	bool canReceiveAutoCarpet() const { return isBlocking() && isAlwaysOnTop() && !items[id].hasHeight; }
 	bool isMoveable() const { return items[id].moveable; }
 	bool isPickupable() const { return items[id].isPickupable(); }
 	bool isUseable() const { return items[id].useable; }
