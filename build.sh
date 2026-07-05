@@ -552,6 +552,21 @@ apt_package_installed() {
   dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null | grep -q "install ok installed"
 }
 
+mysql_client_dev_installed() {
+  apt_package_installed default-libmysqlclient-dev ||
+    apt_package_installed libmysqlclient-dev ||
+    { apt_package_installed libmariadb-dev && apt_package_installed libmariadb-dev-compat; }
+}
+
+ensure_mysql_client_dev() {
+  if mysql_client_dev_installed; then
+    ok "$(printf "$(msg pkg_present)" "mysql/mariadb client dev")"
+    return
+  fi
+
+  apt_install_missing libmariadb-dev libmariadb-dev-compat
+}
+
 join_by_space() {
   local first=1 item
   for item in "$@"; do
@@ -603,7 +618,6 @@ install_common_deps() {
     make
     gcc
     g++
-    default-libmysqlclient-dev
     libpugixml-dev
     libfmt-dev
     libssl-dev
@@ -622,6 +636,7 @@ install_common_deps() {
   fi
 
   apt_install_missing "${packages[@]}"
+  ensure_mysql_client_dev
 }
 
 lua_header_declares_55() {
