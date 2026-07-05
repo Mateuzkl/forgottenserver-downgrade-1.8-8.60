@@ -1,8 +1,14 @@
 local COOLDOWN_TIME = 2 -- seconds
+local DECORATION_KIT_ID = ITEM_DECORATION_KIT or 23398
 
 local constructionKits = Action()
 
 function constructionKits.onUse(player, item, fromPosition, target, toPosition, isHotkey)
+	if item.itemid == DECORATION_KIT_ID then
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "Use Wrap or Unwrap from the context menu.")
+		return true
+	end
+
 	-- Cooldown check
 	local cooldown = player:getStorageValue(PlayerStorageKeys.constructionCooldown)
 	if cooldown > os.time() then
@@ -40,8 +46,9 @@ function constructionKits.onUse(player, item, fromPosition, target, toPosition, 
 end
 
 for id, _ in pairs(houseAutowrapItems) do
-	constructionKits:id(id)
+	if id ~= DECORATION_KIT_ID then
+		constructionKits:id(id)
+	end
 end
 
 constructionKits:register()
-
