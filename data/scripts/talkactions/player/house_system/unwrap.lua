@@ -18,6 +18,17 @@ function unwrapCommand.onSay(player, words, param)
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "You may only unwrap items inside a house.")
 		return false
 	end
+	local house = tile:getHouse()
+
+	if not house:isInvited(player) then
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "You cannot modify items in another person's house.")
+		return false
+	end
+
+	if not house:canModifyItems(player) then
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "You cannot modify items in this protected house.")
+		return false
+	end
 
 	local lookPosition = position
 	local dir = player:getDirection()
@@ -34,6 +45,11 @@ function unwrapCommand.onSay(player, words, param)
 	local lookTile = Tile(lookPosition)
 	if not lookTile then
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "No items found in front of you.")
+		return false
+	end
+
+	if lookTile:getHouse() ~= house then
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "You may only unwrap items inside your current house.")
 		return false
 	end
 
@@ -88,5 +104,4 @@ end
 
 unwrapCommand:separator(" ")
 unwrapCommand:register()
-
 

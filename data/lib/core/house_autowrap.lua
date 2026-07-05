@@ -1,6 +1,6 @@
 if not houseAutowrapItems then
 	houseAutowrapItems = {}
-	for i = 1, 50000 do
+	for i = 1, 65001 do
 		local it = ItemType(i)
 		if it and it:getId() ~= 0 then
 			local w = it:getWrapableTo()

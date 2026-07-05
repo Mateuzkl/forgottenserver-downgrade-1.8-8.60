@@ -16,10 +16,16 @@ function constructionKits.onUse(player, item, fromPosition, target, toPosition, 
 		return false
 	end
 
+	local tile = Tile(fromPosition)
+	local house = tile and tile:getHouse()
 	if fromPosition.x == CONTAINER_POSITION then
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "Put the construction kit on the floor first.")
-	elseif not Tile(fromPosition):getHouse() then
+	elseif not house then
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "You may construct this only inside a house.")
+	elseif not house:isInvited(player) then
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "You cannot modify items in another person's house.")
+	elseif not house:canModifyItems(player) then
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "You cannot modify items in this protected house.")
 	else
 		-- Apply cooldown
 		player:setStorageValue(PlayerStorageKeys.constructionCooldown, os.time() + COOLDOWN_TIME)
@@ -38,5 +44,4 @@ for id, _ in pairs(houseAutowrapItems) do
 end
 
 constructionKits:register()
-
 
