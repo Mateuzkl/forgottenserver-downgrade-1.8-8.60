@@ -40751,10 +40751,12 @@
 		<attribute key="weight" value="800" />
 	</item>
 	<item id="22736" article="a" name="rift carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="This carpet is extremely soft to the touch - and forever will be." />
 		</item>
 	<item id="22737" article="a" name="folded rift carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="This carpet is extremely soft to the touch - and forever will be" />
 		<attribute key="weight" value="1000" />
@@ -41620,12 +41622,15 @@
 		<attribute key="rotateto" value="23427" />
 	</item>
 	<item id="23431" article="a" name="rolled-up yalaharian carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23432" article="a" name="rolled-up white fur carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23433" article="a" name="rolled-up bamboo mat">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23434" article="a" name="predator lamp">
@@ -41699,12 +41704,15 @@
 		<attribute key="description" value="This cat takes her tidiness very seriously with a thoughtful catlick" />
 		</item>
 	<item id="23453" article="a" name="Yalaharian carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23454" article="a" name="white fur carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23455" article="a" name="bamboo mat">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23456" article="a" name="used red chair kit">
@@ -42088,10 +42096,12 @@
 		<attribute key="weight" value="750" />
 	</item>
 	<item id="23536" article="a" name="folded void carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="description" value="This carpet feels almost ethereally smooth to the touch" />
 		<attribute key="weight" value="1000" />
 	</item>
 	<item id="23537" article="a" name="void carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="description" value="This carpet is extremely soft to the touch - and forever will be." />
 		<attribute key="weight" value="1000" />
 	</item>
@@ -42349,6 +42359,7 @@
 		<attribute key="rotateto" value="23702" />
 	</item>
 	<item id="23707" article="a" name="rolled-up crimson carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23708" article="a" name="dog house">
@@ -42362,36 +42373,47 @@
 		<attribute key="decayTo" value="23697" />
 		</item>
 	<item id="23710" article="an" name="rolled-up azure carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23711" article="an" name="rolled-up emerald carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23712" article="a" name="light parquet planks">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23713" article="a" name="dark parquet planks">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23714" article="a" name="marble tiles">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23715" article="a" name="crimson carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23716" article="an" name="azure carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23717" article="an" name="emerald carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23718" article="a" name="light parquet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23719" article="a" name="dark parquet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="23720" article="a" name="marble floor">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		<attribute key="weight" value="850" />
 	</item>
@@ -42792,54 +42814,71 @@
 		<attribute key="weight" value="300" />
 	</item>
 	<item id="24416" article="a" name="rolled-up colourful carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24417" article="a" name="rolled-up flowery carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24418" article="a" name="rolled-up striped carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24419" article="a" name="rolled-up fur carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24420" article="a" name="rolled-up diamond carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24421" article="a" name="rolled-up patterned carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24422" article="a" name="rolled-up night sky carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24423" article="a" name="rolled-up star carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24424" article="a" name="colourful carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24425" article="a" name="flowery carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24426" article="a" name="striped carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24427" article="a" name="fur carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24428" article="a" name="diamond carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24429" article="a" name="patterned carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24430" article="a" name="night sky carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="24431" article="a" name="star carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="24432" toid="24433" article="a" name="parrot">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="The parrot is flapping its wings and screaks" />
 		</item>
 	<item id="24434" article="a" name="skull lamp">
@@ -43462,8 +43501,10 @@
 		<attribute key="description" value="It was awarded during the festivities of Tibia's anniversary" />
 	</item>
 	<item fromid="25210" toid="25212" article="a" name="vengothic lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="25213" toid="25215" article="a" name="chameleon">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="This chameleon is trying very hard to look absolutely unsuspicious" />
 		</item>
 	<item id="25216" article="a" name="blooming cactus">
@@ -46026,6 +46067,7 @@
 		<attribute key="wrapableto" value="23398" />
 	</item>
 	<item fromid="26076" toid="26077" article="a" name="bath tub">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="A very inviting bath tub filled with water" />
 		</item>
 	<item id="26078" article="a" name="spider in a terrarium">
@@ -46215,33 +46257,43 @@
 		<attribute key="rotateto" value="26112" />
 	</item>
 	<item id="26114" article="a" name="rolled-up verdant carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26115" article="a" name="verdant carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26116" article="a" name="rolled-up shaggy carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26117" article="a" name="shaggy carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26118" article="a" name="rolled-up mystic carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26119" article="a" name="mystic carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26120" article="a" name="pile of stone tiles">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26121" article="a" name="stone tiles">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26122" article="a" name="pile of wooden planks">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26123" article="a" name="wooden planks">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26124" name="unknown corpse (skeleton)" />
@@ -46265,14 +46317,20 @@
 	<item id="26143" article="a" name="small stones" />
 	<item fromid="26144" toid="26149" name="RESERVED SPRITE" />
 	<item id="26150" article="a" name="wheat carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="26151" name="rolled-up wheat carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 	</item>
 	<item fromid="26152" toid="26153" article="a" name="crested carpet">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item fromid="26154" toid="26155" article="a" name="decorated carpet">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item id="26156" article="an" name="ornate chair">
 		<attribute key="wrapableto" value="23398" />
@@ -46340,6 +46398,7 @@
 		<attribute key="decayTo" value="26171" />
 	</item>
 	<item fromid="26171" toid="26172" article="a" name="terrarium">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="A little snake is wiggling in the terrarium" />
 		</item>
 	<item id="26173" article="a" name="demon">
@@ -48604,6 +48663,7 @@
 		<attribute key="type" value="teleport" />
 	</item>
 	<item fromid="28674" toid="28675" article="an" name="anglerfish lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="28676" article="a" name="skeletal chair">
 		<attribute key="wrapableto" value="23398" />
@@ -49638,6 +49698,7 @@
 		<attribute key="wrapableto" value="23398" />
 	</item>
 	<item fromid="28913" toid="28914" article="a" name="fennec">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="Contrary to popular belief the fennec does not use his ears, which are the largest amongst foxes, to fly, soar or stabilise his balance. They mainly serve to dissipate heat" />
 		</item>
 	<item id="28915" article="an" name="adamant shield">
@@ -49664,8 +49725,10 @@
 		<attribute key="wrapableto" value="23398" />
 	</item>
 	<item fromid="28920" toid="28923" name="luminescent fungi">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="28924" toid="28927" name="gloomy poisonous fungi">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="28928" article="a" name="stuffed bear display">
 		<attribute key="wrapableto" value="23398" />
@@ -52255,6 +52318,7 @@
 		<attribute key="rotateto" value="31194" />
 	</item>
 	<item fromid="31196" toid="31197" article="a" name="crystal lamp">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="weight" value="1000" />
 	</item>
 	<item fromid="31198" toid="31202" name="unknowm item" />
@@ -52977,15 +53041,19 @@
 		<attribute key="decayTo" value="31464" />
 	</item>
 	<item id="31466" article="a" name="rolled-up tournament carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="31467" article="a" name="rolled-up sublime tournament carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="31468" article="a" name="tournament carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="31469" article="a" name="sublime tournament carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="31470" toid="31471" article="a" name="tournament accolade">
@@ -53848,6 +53916,7 @@
 		<attribute key="decayto" value="31680" />
 	</item>
 	<item fromid="31683" toid="31684" article="an" name="exalted sarcophagus">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="Something inside this hungers to be set free" />
 		</item>
 	<item id="31685" name="reed balls">
@@ -53893,8 +53962,10 @@
 		<attribute key="rotateto" value="31691" />
 	</item>
 	<item fromid="31695" toid="31696" article="a" name="curly hortensis lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="31697" toid="31698" article="a" name="little big flower lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="31699" toid="31702" name="RESERVED SPRITE" />
 	<item id="31703" article="a" name="baby unicorn">
@@ -56136,10 +56207,13 @@
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item fromid="32900" toid="32901" name="torch bearer">
+		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item fromid="32902" toid="32903" name="bamboo wall lamp">
+		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item fromid="32904" toid="32905" name="wall candle">
+		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="32907" article="a" name="Guzzlemaw Grub">
 		<attribute key="wrapableto" value="23398" />
@@ -56325,10 +56399,13 @@
 	</item>
 	<item fromid="33018" toid="33025" name="shrine" editorsuffix="(soul war quest)" />
 	<item fromid="33026" toid="33027" name="heart lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="33028" toid="33029" name="heart lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="33030" toid="33031" name="heart lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="33032" name="heart cabinet">
 		<attribute key="wrapableto" value="23398" />
@@ -57414,6 +57491,7 @@
 		<attribute key="rotateto" value="34031" />
 		</item>
 	<item fromid="34034" toid="34035" name="artist table">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="34036" name="artist chair">
 		<attribute key="wrapableto" value="23398" />
@@ -57468,6 +57546,7 @@
 		<attribute key="rotateto" value="34045" />
 		</item>
 	<item fromid="34048" toid="34049" name="sculptor table">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="34050" name="sculptor chair">
 		<attribute key="wrapableto" value="23398" />
@@ -58726,6 +58805,7 @@
 		<attribute key="weight" value="1703" />
 	</item>
 	<item fromid="34270" toid="34271" article="a" name="glowworms">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="Some glowworms are said to be giving off a mysterious, soothing light" />
 		</item>
 	<item id="34272" name="oven">
@@ -58829,6 +58909,7 @@
 		<attribute key="rotateto" value="34296" />
 		</item>
 	<item fromid="34300" toid="34301" name="barrel">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="rotateto" value="35156" />
 		</item>
 	<item id="34302" name="vegetable basket">
@@ -58840,6 +58921,7 @@
 		<attribute key="rotateto" value="34302" />
 		</item>
 	<item fromid="34304" toid="34305" name="kitchen lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="34309" name="kitchen clock">
 		<attribute key="wrapableto" value="23398" />
@@ -59006,6 +59088,7 @@
 		<attribute key="rotateto" value="35159" />
 		</item>
 	<item fromid="35161" toid="35162" name="metal wall lamp">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="rotateto" value="35183" />
 		</item>
 	<item id="35163" name="workbench">
@@ -59103,8 +59186,10 @@
 		<attribute key="rotateto" value="35183" />
 		</item>
 	<item fromid="35185" toid="35186" name="anvil">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="35187" toid="35188" name="water bucket">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="35189" name="wrought-iron bed">
 		<attribute key="wrapableto" value="23398" />
@@ -59994,18 +60079,32 @@
 		<attribute key="rotateTo" value="35884" />
 		</item>
 	<item fromid="35887" toid="35888" article="a" name="lilac carpet">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item fromid="35889" toid="35890" article="a" name="colourful pom-pom carpet">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item fromid="35891" toid="35892" article="a" name="natural pom-pom carpet">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item fromid="35893" toid="35894" article="a" name="owin rug">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item fromid="35895" toid="35896" article="a" name="midnight panther rug">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item fromid="35897" toid="35898" article="a" name="moon carpet">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item fromid="35899" toid="35900" article="a" name="romantic carpet">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item id="35901" article="a" name="diamond arrow">
 		<attribute key="weaponType" value="ammunition" />
@@ -60215,12 +60314,15 @@
 	<item id="35940" name="grandiose painting">
 	</item>
 	<item id="35941" article="a" name="grandiose carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="35942" article="a" name="grandiose carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="35943" toid="35944" name="grandiose lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="35949" article="a" name="portable aqueduct">
 		<attribute key="wrapableto" value="23398" />
@@ -60391,6 +60493,7 @@
 		<attribute key="decayto" value="36478" />
 	</item>
 	<item id="36496" article="an" name="eldritch carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="36532" article="a" name="white marble floor">
@@ -60454,12 +60557,16 @@
 		<attribute key="weight" value="10" />
 	</item>
 	<item fromid="36618" toid="36619" article="a" name="volcanic basin">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="36620" toid="36621" article="a" name="volcanic sphere">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="36622" toid="36623" article="a" name="volcanic spire">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="36624" toid="36625" article="a" name="volcanic bulb">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="36626" article="a" name="volcanic mirror">
 		<attribute key="wrapableto" value="23398" />
@@ -60514,6 +60621,7 @@
 		<attribute key="rotateto" value="36634" />
 		</item>
 	<item fromid="36638" toid="36639" article="a" name="volcanic table">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="36640" article="a" name="volcanic shelf">
 		<attribute key="wrapableto" value="23398" />
@@ -60540,6 +60648,7 @@
 		<attribute key="rotateto" value="36644" />
 		</item>
 	<item fromid="36646" toid="36648" article="a" name="demon baller">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="36649" article="a" name="demon baller">
 		<attribute key="wrapableto" value="23398" />
@@ -60562,6 +60671,7 @@
 		<attribute key="decayto" value="36654" />
 	</item>
 	<item fromid="36653" toid="36654" article="a" name="demon baller">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="36656" article="a" name="eldritch shield">
 		<attribute key="weaponType" value="shield" />
@@ -61536,6 +61646,7 @@
 		<attribute key="weight" value="500" />
 	</item>
 	<item id="36838" article="a" name="folded eldritch carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="weight" value="1100" />
 		</item>
@@ -61802,84 +61913,103 @@
 		<attribute key="weight" value="120" />
 	</item>
 	<item id="36939" article="a" name="cloth fragment">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This cloth resembles a prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36940" article="a" name="the sylvan sapling carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles the sylvan sapling prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36941" article="a" name="cloth fragment">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This cloth resembles a prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36942" article="a" name="the spatial almanach carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles the spatial almanach prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36943" article="a" name="cloth fragment">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This cloth resembles a prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36944" article="a" name="the book of death carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles the book of death prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36945" article="a" name="cloth fragment">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This cloth resembles a prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36946" article="a" name="the supreme cube carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles the supreme cube prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36947" article="a" name="cloth fragment">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This cloth resembles a prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36948" article="a" name="the ring of ending carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles the ring of ending prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36949" article="a" name="cloth fragment">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This cloth resembles a prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36950" article="a" name="the cobra amulet carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles the cobra amulet prime artefact. It feels soft to the touch and seems to have almost no weight." />
 		</item>
 	<item id="36951" article="a" name="folded artefact carpet I">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles a prime artefact. It feels soft to the touch and seems to have almost no weight" />
 		<attribute key="weight" value="10" />
 		</item>
 	<item id="36952" article="a" name="folded artefact carpet II">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles a prime artefact. It feels soft to the touch and seems to have almost no weight" />
 		<attribute key="weight" value="10" />
 		</item>
 	<item id="36953" article="a" name="folded artefact carpet III">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles a prime artefact. It feels soft to the touch and seems to have almost no weight" />
 		<attribute key="weight" value="10" />
 		</item>
 	<item id="36954" article="a" name="folded artefact carpet IV">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles a prime artefact. It feels soft to the touch and seems to have almost no weight" />
 		<attribute key="weight" value="10" />
 		</item>
 	<item id="36955" article="a" name="folded artefact carpet V">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles a prime artefact. It feels soft to the touch and seems to have almost no weight" />
 		<attribute key="weight" value="10" />
 		</item>
 	<item id="36956" article="a" name="folded artefact carpet VI">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This carpet resembles a prime artefact. It feels soft to the touch and seems to have almost no weight" />
 		<attribute key="weight" value="10" />
 		</item>
 	<item fromid="36958" toid="36959" article="a" name="megasylvan plant">
+		<attribute key="wrapableto" value="23473" />
 		<attribute key="description" value="This extraordinary plant sprang from a very rare megasylvan sapling. The beautiful blossom is not its only vivid attribute, however, as strangely... certain fruit in its vicinity will just disappear." />
 		</item>
 	<item id="36960" article="a" name="megasylvan plant">
@@ -62088,10 +62218,14 @@
 		<attribute key="rotateto" value="37011" />
 		</item>
 	<item fromid="37015" toid="37016" article="a" name="yellow shroom lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="37017" toid="37018" article="a" name="pink shroom lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="37019" toid="37020" article="a" name="grass">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item id="37021" article="a" name="dragon plant">
 		<attribute key="wrapableto" value="23398" />
@@ -62367,6 +62501,7 @@
 		<attribute key="rotateto" value="37181" />
 		</item>
 	<item fromid="37185" toid="37186" article="a" name="kraken watcher lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="37187" article="a" name="kraken buoy lamp">
 		<attribute key="wrapableto" value="23398" />
@@ -62712,135 +62847,179 @@
 	<item id="37352" article="a" name="pink 25 years balloon">
 	</item>
 	<item id="37353" article="a" name="dragon lord carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37354" article="a" name="folded dragon lord carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37355" article="a" name="dragon carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37356" article="an" name="elemental carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37357" article="a" name="folded dragon carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37358" article="a" name="folded elemental carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37359" article="a" name="Morgaroth carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37360" article="a" name="folded Morgaroth carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37361" article="a" name="Ghazbaran carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37362" article="a" name="folded Ghazbaran carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37363" article="an" name="Orshabaal carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37364" article="a" name="folded Orshabaal carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37365" article="a" name="red cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37366" article="a" name="folded red cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37367" article="an" name="orange cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37368" article="a" name="yellow cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37369" article="a" name="green cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37370" article="a" name="sky cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37371" article="a" name="blue cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37372" article="a" name="purple cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37373" article="a" name="pink cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37374" article="a" name="folded orange cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37375" article="a" name="folded yellow cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37376" article="a" name="folded green cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37377" article="a" name="folded sky cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37378" article="a" name="folded blue cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37379" article="a" name="folded purple cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37380" article="a" name="folded pink cake carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37381" article="a" name="red Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37382" article="a" name="folded red Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37383" article="an" name="orange Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37384" article="a" name="yellow Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37385" article="a" name="green Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37386" article="a" name="sky Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37387" article="a" name="blue Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37388" article="a" name="purple Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37389" article="a" name="pink Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37390" article="a" name="folded orange Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37391" article="a" name="folded yellow Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37392" article="a" name="folded green Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37393" article="a" name="folded sky Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37394" article="a" name="folded blue Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37395" article="a" name="folded purple Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37396" article="a" name="folded pink Tibia carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37397" article="a" name="wind-up key">
@@ -63166,6 +63345,7 @@
 		<attribute key="description" value="It was awarded during the festivities of Tibia's anniversary" />
 	</item>
 	<item fromid="37547" toid="37556" name="presents">
+		<attribute key="wrapableto" value="23473" />
 		</item>
 	<item id="37557" article="a" name="dragon pinata">
 		<attribute key="wrapableto" value="23473" />
@@ -63464,6 +63644,8 @@
 		<attribute key="weight" value="666" />
 	</item>
 	<item fromid="37763" toid="37774" name="Zaoan bamboo tiles">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item id="37775" article="a" name="Zaoan panel base">
 		<attribute key="wrapableto" value="23398" />
@@ -63632,13 +63814,16 @@
 		<attribute key="rotateto" value="37804" />
 		</item>
 	<item fromid="37806" toid="37807" article="a" name="Zaoan wall lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="37808" toid="37809" name="Zaoan wall lamps">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="37810" name="Morshabaal's extract" >
 		<attribute key="wrapableto" value="23398" />
 	</item>
 	<item fromid="37811" toid="37812" article="a" name="sculpture of a fox">
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="It symbolises the spirit of the fox. A mystic aura surrounds this sculpture" />
 		</item>
 	<item id="37813" article="a" name="sculpture of a fox">
@@ -66090,10 +66275,14 @@
 		<attribute key="rotateTo" value="39789" />
 		</item>
 	<item fromid="39793" toid="39794" article="a" name="turquoise flower lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="39795" toid="39796" article="a" name="purple flower lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="39797" toid="39798" name="flowery grass">
+		<attribute key="wrapableto" value="23398" />
+		<attribute key="type" value="carpet" />
 		</item>
 	<item id="39799" article="a" name="wall flowers">
 		<attribute key="wrapableto" value="23398" />
@@ -66858,8 +67047,10 @@
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="42299" toid="42300" article="a" name="sea-devil wall lamp">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="42301" toid="42302" article="a" name="seafood bucket">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="42303" name="ship bell">
 		<attribute key="wrapableto" value="23398" />
@@ -66871,6 +67062,7 @@
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item fromid="42306" toid="42308" article="a" name="captain crab">
+		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="42320" name="opulent chair">
 		<attribute key="wrapableto" value="23398" />
@@ -66937,21 +67129,27 @@
 		<attribute key="rotateTo" value="42334" />
 	</item>
 	<item id="42336" name="opulent wood floor planks">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="42337" name="opulent wood floor">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="42338" name="loose opulent floor intarsia">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="42339" name="opulent floor intarsia">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="42340" name="rolled-up opulent carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="42341" name="opulent carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="42342" name="pile of riches">
@@ -75945,9 +76143,11 @@
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="51222" name="rolled-up voodoo carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="51223" name="voodoo carpet">
+		<attribute key="type" value="carpet" />
 		<attribute key="wrapableto" value="23398" />
 		</item>
 	<item id="51237" article="a" name="voodoo mask">
