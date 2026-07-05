@@ -160,7 +160,7 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 	}
 
 	const ItemType& iType = Item::items[id];
-	if (iType.moveable || iType.forceSerialize || iType.isCarpet() || !tile) {
+	if (iType.moveable || iType.forceSerialize || !tile) {
 		// create a new item
 		auto item = Item::CreateItem(id);
 		if (item) {
@@ -212,7 +212,7 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 			} else {
 				LOG_WARN(fmt::format("WARNING: Unserialization error in IOMapSerialize::loadItem() {}", id));
 			}
-		} else if (iType.wrapableTo != 0) {
+		} else if (iType.isCarpet() || iType.wrapableTo != 0) {
 			auto item = Item::CreateItem(id);
 			if (item) {
 				if (item->unserializeAttr(propStream)) {

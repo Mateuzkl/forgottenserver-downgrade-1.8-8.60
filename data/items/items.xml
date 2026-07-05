@@ -42097,11 +42097,13 @@
 	</item>
 	<item id="23536" article="a" name="folded void carpet">
 		<attribute key="type" value="carpet" />
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="This carpet feels almost ethereally smooth to the touch" />
 		<attribute key="weight" value="1000" />
 	</item>
 	<item id="23537" article="a" name="void carpet">
 		<attribute key="type" value="carpet" />
+		<attribute key="wrapableto" value="23398" />
 		<attribute key="description" value="This carpet is extremely soft to the touch - and forever will be." />
 		<attribute key="weight" value="1000" />
 	</item>

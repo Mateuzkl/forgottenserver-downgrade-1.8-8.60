@@ -22,9 +22,9 @@ local carpetItems = {
 	[23714] = 23720,
 	[23720] = 23714, -- marble floor
 	[24416] = 24424,
-	[24424] = 24416, -- flowery carpet
+	[24424] = 24416, -- colourful carpet
 	[24417] = 24425,
-	[24425] = 24417, -- colourful carpet
+	[24425] = 24417, -- flowery carpet
 	[24418] = 24426,
 	[24426] = 24418, -- striped carpet
 	[24419] = 24427,
@@ -196,11 +196,10 @@ function carpets.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 		return fail(player, "You cannot modify items in this protected house.")
 	end
 
-	if tile:getItemCountById(itemId) == 1 then
+	if tile:getItemCountById(itemId) >= 1 then
 		for otherId in pairs(carpetItems) do
 			if otherId ~= itemId and tile:getItemCountById(otherId) > 0 then
-				player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
-				return true
+				return fail(player, "You cannot have more than one carpet on this tile.")
 			end
 		end
 	end
