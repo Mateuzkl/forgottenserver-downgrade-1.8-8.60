@@ -185,50 +185,50 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 		}
 	} else {
 		// Stationary items like doors/beds/blackboards/bookcases
-		Item* item = nullptr;
+		Item* staticItem = nullptr;
 		if (const TileItemVector* items = tile->getItemList()) {
 			for (const auto& findItem : *items) {
 				if (findItem->getID() == id) {
-					item = findItem.get();
+					staticItem = findItem.get();
 					break;
 				} else if (iType.isDoor() && findItem->getDoor()) {
-					item = findItem.get();
+					staticItem = findItem.get();
 					break;
 				} else if (iType.isBed() && findItem->getBed()) {
-					item = findItem.get();
+					staticItem = findItem.get();
 					break;
 				}
 			}
 		}
 
-		if (item) {
-			if (item->unserializeAttr(propStream)) {
-				Container* container = item->getContainer();
+		if (staticItem) {
+			if (staticItem->unserializeAttr(propStream)) {
+				Container* container = staticItem->getContainer();
 				if (container && !loadContainer(propStream, container)) {
 					return false;
 				}
 
-				g_game.transformItem(item, id);
+				g_game.transformItem(staticItem, id);
 			} else {
 				LOG_WARN(fmt::format("WARNING: Unserialization error in IOMapSerialize::loadItem() {}", id));
 			}
 		} else if (iType.isCarpet() || iType.wrapableTo != 0) {
-			auto item = Item::CreateItem(id);
-			if (item) {
-				if (item->unserializeAttr(propStream)) {
-					Container* container = item->getContainer();
+			auto loadedItem = Item::CreateItem(id);
+			if (loadedItem) {
+				if (loadedItem->unserializeAttr(propStream)) {
+					Container* container = loadedItem->getContainer();
 					if (container && !loadContainer(propStream, container)) {
 						return false;
 					}
 
-					Item* raw = item.get();
+					Item* raw = loadedItem.get();
 					parent->internalAddThing(raw);
 					if (!mapSerializeCylinderOwnsThing(parent, raw)) {
 						return false;
 					}
 
 					raw->startDecaying();
-					item.reset();
+					loadedItem.reset();
 				} else {
 					LOG_WARN(fmt::format("WARNING: Unserialization error in IOMapSerialize::loadItem() {}", id));
 					return false;
