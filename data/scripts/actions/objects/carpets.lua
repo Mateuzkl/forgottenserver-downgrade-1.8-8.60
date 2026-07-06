@@ -164,9 +164,74 @@ local carpetItems = {
 }
 
 local carpets = Action()
+local STACKED_CARPET_MESSAGE = "You need enough room in your backpack to unfold only one carpet."
 
 local function fail(player, message)
 	player:sendTextMessage(MESSAGE_FAILURE, message)
+	return true
+end
+
+local function getContainerStackRoom(container, itemId, stackSize)
+	local room = container:getEmptySlots() * stackSize
+	for i = 0, container:getSize() - 1 do
+		local child = container:getItem(i)
+		if child then
+			if child:getId() == itemId then
+				room = room + math.max(0, stackSize - child:getCount())
+			end
+
+			local childContainer = child:getContainer()
+			if childContainer then
+				room = room + getContainerStackRoom(childContainer, itemId, stackSize)
+			end
+		end
+	end
+	return room
+end
+
+local function canReceiveStackedCarpetRemainder(player, itemId, count)
+	local itemType = ItemType(itemId)
+	if not itemType or itemType:getId() == 0 or not itemType:isStackable() then
+		return false
+	end
+
+	local stackSize = itemType:getStackSize()
+	if count > stackSize or player:getFreeCapacity() < itemType:getWeight(count) then
+		return false
+	end
+
+	local room = 0
+	for slot = CONST_SLOT_HEAD, CONST_SLOT_AMMO do
+		local slotItem = player:getSlotItem(slot)
+		if slotItem then
+			if slotItem:getId() == itemId then
+				room = room + math.max(0, stackSize - slotItem:getCount())
+			end
+
+			local container = slotItem:getContainer()
+			if container then
+				room = room + getContainerStackRoom(container, itemId, stackSize)
+			end
+		end
+	end
+	return room >= count
+end
+
+local function returnStackedCarpetRemainder(player, itemId, count)
+	if not canReceiveStackedCarpetRemainder(player, itemId, count) then
+		return false
+	end
+
+	local remainderItem = Game.createItem(itemId, count)
+	if not remainderItem then
+		return false
+	end
+
+	local ret = player:addItemEx(remainderItem, false)
+	if ret ~= RETURNVALUE_NOERROR then
+		remainderItem:remove()
+		return false
+	end
 	return true
 end
 
@@ -201,6 +266,14 @@ function carpets.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 			if otherId ~= itemId and tile:getItemCountById(otherId) > 0 then
 				return fail(player, "You cannot have more than one carpet on this tile.")
 			end
+		end
+	end
+
+	local count = item:getCount()
+	if count > 1 then
+		local remaining = count - 1
+		if not returnStackedCarpetRemainder(player, itemId, remaining) then
+			return fail(player, STACKED_CARPET_MESSAGE)
 		end
 	end
 
