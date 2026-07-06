@@ -529,41 +529,48 @@ The server still accepts protocol **860**. Version **15.24** below refers to the
 
 ### OTCv8 / Mehah
 
-Enable the required base features for protocol 860 in your client feature file, usually `modules/game_features/features.lua` or `modules/game_features/game_features.lua`:
+Enable the required base features for protocol 860 in your client feature file, usually `modules/game_features/features.lua` or `modules/game_features/game_features.lua`. Keep server-negotiated flags separate from client-local defaults:
 
 ```lua
 if(version >= 860) then
-    g_game.enableFeature(GameAttackSeq)
-    g_game.enableFeature(GameBot)
+    -- Server-negotiated by ProtocolGame::sendFeatures().
+    -- OTCv8/Astra receive the full set below; Mehah-only handshakes are narrower.
     g_game.enableFeature(GameExtendedOpcode)
     g_game.enableFeature(GameSkillsBase)
     g_game.enableFeature(GamePlayerMounts)
     g_game.enableFeature(GameMagicEffectU16)
-    g_game.enableFeature(GameDistanceEffectU16)
-    g_game.enableFeature(GameDoubleHealth)
     g_game.enableFeature(GameDoubleSkills)
     g_game.enableFeature(GameOfflineTrainingTime)
     g_game.enableFeature(GameBaseSkillU16)
     g_game.enableFeature(GameAdditionalSkills)
+    g_game.enableFeature(GameExtendedClientPing)
+    g_game.enableFeature(GameCreatureIcons)
+    g_game.enableFeature(GameContainerPagination)
+    g_game.enableFeature(GameBrowseField)
+
+    -- Client-only defaults for this 8.60 protocol / 15.x appearance setup.
+    -- These are not advertised by ProtocolGame::sendFeatures().
+    g_game.enableFeature(GameAttackSeq)
+    g_game.enableFeature(GameBot)
+    g_game.enableFeature(GameDistanceEffectU16)
+    g_game.enableFeature(GameDoubleHealth)
     g_game.enableFeature(GameIdleAnimations)
     g_game.enableFeature(GameEnhancedAnimations)
-    g_game.enableFeature(GameExtendedClientPing)
     g_game.enableFeature(GameSpritesU32)
     g_game.enableFeature(GameDoublePlayerGoodsMoney)
-    g_game.enableFeature(GameCreatureIcons)
     g_game.enableFeature(GamePurseSlot)
     g_game.enableFeature(GamePrey)
     g_game.enableFeature(GameSpellList)
 
     -- Packet-layout flags must match ProtocolGame::sendFeatures().
-    -- Let the server handshake enable/disable these when possible.
+    -- Let the server handshake enable/disable these.
     g_game.disableFeature(GameQuickLootFlags)
     g_game.disableFeature(GameThingUpgradeClassification)
     g_game.disableFeature(GameItemTierByte)
 end
 ```
 
-Some forks define `GameLeechAmount`. Enable it only when the client source has that feature id and its parser expects it.
+Some forks define `GameLeechAmount`. It is not advertised by this server handshake; enable it only when the client source has that feature id and its parser expects it.
 
 Store Inbox compatibility:
 
