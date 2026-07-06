@@ -270,14 +270,22 @@ function carpets.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	end
 
 	local count = item:getCount()
-	if count > 1 then
+	local itemType = ItemType(itemId)
+	local carpetType = ItemType(carpetId)
+	if count > 1 and itemType and itemType:isStackable() and carpetType and not carpetType:isStackable() then
 		local remaining = count - 1
+		if not canReceiveStackedCarpetRemainder(player, itemId, remaining) then
+			return fail(player, STACKED_CARPET_MESSAGE)
+		end
+
+		item:transform(itemId, 1)
 		if not returnStackedCarpetRemainder(player, itemId, remaining) then
+			item:transform(itemId, count)
 			return fail(player, STACKED_CARPET_MESSAGE)
 		end
 	end
 
-	item:transform(carpetId)
+	item:transform(carpetId, 1)
 	return true
 end
 
