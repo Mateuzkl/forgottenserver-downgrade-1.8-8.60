@@ -198,18 +198,31 @@ struct QuickLootResult
 	ReturnValue failure = RETURNVALUE_NOERROR;
 };
 
+bool hasQuickLootDisabled(const Item* item)
+{
+	const auto* attribute = item ? item->getCustomAttribute("QuickLootDisabled") : nullptr;
+	const bool* disabled = attribute ? std::get_if<bool>(&attribute->value) : nullptr;
+	return disabled && *disabled;
+}
+
+bool shouldUseContainerInsteadOfQuickLoot(const Container* container)
+{
+	return container && (container->getRewardChest() || container->getID() == ITEM_REWARD_CONTAINER ||
+	                     container->isRewardCorpse() || hasQuickLootDisabled(container));
+}
+
 bool isQuickLootCorpseType(const Container* container)
 {
 	if (!container) {
 		return false;
 	}
 
-	if (container->isRewardCorpse()) {
-		return true;
+	if (shouldUseContainerInsteadOfQuickLoot(container)) {
+		return false;
 	}
 
 	const ItemType& type = Item::items[container->getID()];
-	return type.corpseType != RACE_NONE || container->getCorpseOwner() != 0;
+	return type.corpseType != RACE_NONE;
 }
 
 const Container* getQuickLootCorpseContainer(const Container* container)
@@ -3652,7 +3665,12 @@ void Game::playerSeekInContainer(uint32_t playerId, uint8_t containerId, uint16_
 	}
 
 	Container* container = player->getContainerByID(containerId);
-	if (!container || !container->hasPagination() || container->capacity() == 0) {
+	if (!container || container->capacity() == 0) {
+		return;
+	}
+
+	const bool canSeekContainer = container->hasPagination() || (player->isAstraClient() && container->getRewardChest());
+	if (!canSeekContainer) {
 		return;
 	}
 
@@ -3823,7 +3841,8 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 	if (lootAllCorpses && pos.x != 0xFFFF) {
 		if (Thing* clickedThing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_USEITEM)) {
 			if (Item* clickedItem = clickedThing->getItem()) {
-				if (Container* clickedContainer = clickedItem->getContainer(); clickedContainer && clickedContainer->isRewardCorpse()) {
+				if (Container* clickedContainer = clickedItem->getContainer();
+				    shouldUseContainerInsteadOfQuickLoot(clickedContainer)) {
 					playerUseItem(playerId, pos, stackPos, 0, itemId);
 					return;
 				}
@@ -3869,7 +3888,7 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 	}
 
 	if (Container* container = item->getContainer()) {
-		if (container->isRewardCorpse()) {
+		if (shouldUseContainerInsteadOfQuickLoot(container)) {
 			playerUseItem(playerId, pos, stackPos, 0, itemId);
 			return;
 		}
@@ -3970,6 +3989,10 @@ void Game::playerQuickLootCorpse(uint32_t playerId, Container* container)
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
 	if (!player || !container || !getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
+		return;
+	}
+
+	if (!isQuickLootCorpseType(container)) {
 		return;
 	}
 

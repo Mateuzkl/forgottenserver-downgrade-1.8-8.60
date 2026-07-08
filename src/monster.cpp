@@ -2620,6 +2620,10 @@ std::shared_ptr<Item> Monster::getCorpse(Creature* lastHitCreature, Creature* mo
 	}
 
 	if (corpse) {
+		if (mType->info.isBoss || mType->info.isRewardBoss) {
+			corpse->setCustomAttribute("QuickLootDisabled", true);
+		}
+
 		if (mostDamageCreature) {
 			if (mostDamageCreature->getPlayer()) {
 				corpse->setCorpseOwner(mostDamageCreature->getID());

@@ -308,6 +308,7 @@ private:
 	void sendFeatures();
 	bool shouldSendQuickLootFlags() const;
 	bool shouldSendContainerPagination() const;
+	bool shouldPaginateContainer(const Container* container) const;
 	bool shouldSendItemTierByte() const;
 	bool shouldSendThingUpgradeClassification() const;
 	bool shouldSendItemTierData() const;
