@@ -547,8 +547,18 @@ bool ProtocolGame::shouldSendItemTierByte() const
 
 bool ProtocolGame::shouldSendThingUpgradeClassification() const
 {
-	return isMehah && getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
-	       getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION);
+	if (!getBoolean(ConfigManager::ITEM_TIER_DISPLAY)) {
+		return false;
+	}
+
+	if (isMehah) {
+		return getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION);
+	}
+
+	// OTCv8 Classic uses this feature as the Lua-side gate for drawing tier icons.
+	// Keep the actual item wire format tied to GameItemTierByte so CIP and
+	// non-tier-aware OTC clients never receive unexpected item bytes.
+	return isOTCv8 && !isAstraClient && shouldSendItemTierByte();
 }
 
 bool ProtocolGame::shouldSendItemTierData() const
@@ -4905,7 +4915,7 @@ void ProtocolGame::sendFeatures()
 		features[GameFeature::AstraItemMetadata] = true;
 	}
 	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();
-	features[GameFeature::ThingUpgradeClassification] = false;
+	features[GameFeature::ThingUpgradeClassification] = shouldSendThingUpgradeClassification();
 	features[GameFeature::ItemTierByte] = shouldSendItemTierByte();
 
 	if (features.empty()) return;
