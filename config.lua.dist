@@ -396,53 +396,10 @@ serverSaveCleanMap = false
 serverSaveClose = false
 serverSaveShutdown = true
 
--- Experience stages
--- NOTE: to use a flat experience multiplier, set experienceStages to nil
--- minlevel and multiplier are MANDATORY
--- maxlevel is OPTIONAL, but is considered infinite by default
--- to disable stages, create a stage with minlevel 1 and no maxlevel
-experienceStages = {
-	{ minlevel = 1, maxlevel = 50, multiplier = 100},
-	{ minlevel = 51, maxlevel = 70, multiplier = 80},
-	{ minlevel = 71, maxlevel = 80, multiplier = 65},
-	{ minlevel = 81, maxlevel = 100, multiplier = 45},
-	{ minlevel = 101, maxlevel = 120, multiplier = 25},
-	{ minlevel = 121, maxlevel = 140, multiplier = 10},
-	{ minlevel = 141, maxlevel = 175, multiplier = 8},
-	{ minlevel = 176, maxlevel = 180, multiplier = 2},
-	{ minlevel = 181, maxlevel = 200, multiplier = 1.5},
-	{ minlevel = 201, maxlevel = 500, multiplier = 1}
-}
-
--- Skill stages (skill level based multiplier)
--- NOTE: to use a flat skill multiplier (rateSkill), set skillStages to nil
--- minlevel and multiplier are MANDATORY
--- maxlevel is OPTIONAL, but is considered infinite by default
-skillStages = {
-	{ minlevel = 1, maxlevel = 30, multiplier = 113 },
-	{ minlevel = 31, maxlevel = 40, multiplier = 98 },
-	{ minlevel = 41, maxlevel = 50, multiplier = 83 },
-	{ minlevel = 51, maxlevel = 60, multiplier = 68 },
-	{ minlevel = 61, maxlevel = 70, multiplier = 60 },
-	{ minlevel = 71, maxlevel = 80, multiplier = 38 },
-	{ minlevel = 81, maxlevel = 90, multiplier = 23 },
-	{ minlevel = 91, maxlevel = 100, multiplier = 15 },
-	{ minlevel = 101, maxlevel = 110, multiplier = 3 },
-	{ minlevel = 111, multiplier = 1 }
-}
-
--- Magic level stages (magic level based multiplier)
--- NOTE: to use a flat magic multiplier (rateMagic), set magicLevelStages to nil
--- minlevel and multiplier are MANDATORY
--- maxlevel is OPTIONAL, but is considered infinite by default
-magicLevelStages = {
-	{ minlevel = 0, maxlevel = 50, multiplier = 38 },
-	{ minlevel = 51, maxlevel = 70, multiplier = 35 },
-	{ minlevel = 71, maxlevel = 80, multiplier = 23 },
-	{ minlevel = 81, maxlevel = 100, multiplier = 15 },
-	{ minlevel = 101, maxlevel = 110, multiplier = 3 },
-	{ minlevel = 111, multiplier = 1 }
-}
+-- Experience, Skill, and Magic Level stages are now defined via revscript
+-- in data/scripts/systems/core/stages.lua (Game.setExperienceStages etc).
+-- rateExp, rateSkill, and rateMagic are no longer used here; configure them
+-- directly in stages.lua with the `enabled` toggles and `rate` fields.
 
 -- Rates
 rateLoot = 2

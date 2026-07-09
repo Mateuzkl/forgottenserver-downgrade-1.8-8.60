@@ -5,19 +5,6 @@ ResetBonusConfig = {
 	maxResets     = 225,
 	resetCooldown = 0,
 
-	xpStages = {
-		{ minReset =   1, maxReset =   5, multiplier = 0.95 },
-		{ minReset =   6, maxReset =  10, multiplier = 0.90 },
-		{ minReset =  11, maxReset =  20, multiplier = 0.82 },
-		{ minReset =  21, maxReset =  30, multiplier = 0.75 },
-		{ minReset =  31, maxReset =  50, multiplier = 0.65 },
-		{ minReset =  51, maxReset =  75, multiplier = 0.55 },
-		{ minReset =  76, maxReset = 100, multiplier = 0.45 },
-		{ minReset = 101, maxReset = 150, multiplier = 0.35 },
-		{ minReset = 151, maxReset =   0, multiplier = 0.25 },
-		-- maxReset = 0 significa sem limite superior
-	},
-
 	damage = {
 		enabled = true,
 		[VOCATION_ALL] = {

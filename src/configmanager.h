@@ -6,6 +6,22 @@
 
 namespace ConfigManager {
 
+struct ExperienceStage {
+	uint32_t minLevel;
+	uint32_t maxLevel;
+	float multiplier;
+};
+
+using ExperienceStages = std::vector<ExperienceStage>;
+
+struct ResetStage {
+	uint32_t minReset;
+	uint32_t maxReset;
+	float multiplier;
+};
+
+using ResetStages = std::vector<ResetStage>;
+
 enum Boolean
 {
 	ALLOW_CHANGEOUTFIT,
@@ -396,6 +412,11 @@ float getFloat(float_config_t what);
 float getExperienceStage(uint32_t level);
 float getSkillStage(uint32_t level);
 float getMagicLevelStage(uint32_t level);
+float getResetStage(uint32_t resetCount);
+void setExperienceStages(ExperienceStages stages);
+void setSkillStages(ExperienceStages stages);
+void setMagicLevelStages(ExperienceStages stages);
+void setResetStages(ResetStages stages);
 const std::vector<uint16_t>& getBlockedTeleportIds();
 const std::vector<uint16_t>& getTokenProtectionExceptions();
 const std::set<uint16_t>& getAutoLootMoneyIds();

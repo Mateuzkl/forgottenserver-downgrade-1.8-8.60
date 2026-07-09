@@ -99,8 +99,8 @@ function Player:onGainExperience(source, exp, rawExp, sendText)
 		end
 	end
 
-	if ResetStages then
-		result = result * ResetStages.getMultiplier(self:getResetCount())
+	if StagesConfig then
+		result = result * StagesConfig.getResetMultiplier(self:getResetCount())
 	end
 
 	return math.floor(result)

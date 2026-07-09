@@ -20,6 +20,7 @@
 #include "logger.h"
 #include "zones.h"
 #include <fmt/format.h>
+#include <limits>
 
 extern Vocations g_vocations;
 extern Game g_game;
@@ -299,6 +300,150 @@ int luaGameGetMagicLevelStage(lua_State* L)
 	// Game.getMagicLevelStage(level)
 	uint32_t level = getInteger<uint32_t>(L, 1);
 	lua_pushnumber(L, ConfigManager::getMagicLevelStage(level));
+	return 1;
+}
+
+int luaGameSetExperienceStages(lua_State* L)
+{
+	// Game.setExperienceStages(stages)
+	if (!lua_istable(L, 1)) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	ConfigManager::ExperienceStages stages;
+	lua_pushnil(L);
+	while (lua_next(L, 1) != 0) {
+		const auto tableIndex = lua_gettop(L);
+		if (!lua_istable(L, tableIndex)) {
+			lua_pop(L, 1);
+			pushBoolean(L, false);
+			return 1;
+		}
+		auto minLevel = getField<uint32_t>(L, tableIndex, "minlevel", 1);
+		auto maxLevel = getField<uint32_t>(L, tableIndex, "maxlevel", std::numeric_limits<uint32_t>::max());
+		auto multiplier = getField<float>(L, tableIndex, "multiplier", 1);
+		if (minLevel == 0 || maxLevel < minLevel || multiplier <= 0.0f) {
+			lua_pop(L, 4);
+			pushBoolean(L, false);
+			return 1;
+		}
+		stages.push_back({minLevel, maxLevel, multiplier});
+		lua_pop(L, 4);
+	}
+
+	ConfigManager::setExperienceStages(std::move(stages));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaGameSetSkillStages(lua_State* L)
+{
+	// Game.setSkillStages(stages)
+	if (!lua_istable(L, 1)) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	ConfigManager::ExperienceStages stages;
+	lua_pushnil(L);
+	while (lua_next(L, 1) != 0) {
+		const auto tableIndex = lua_gettop(L);
+		if (!lua_istable(L, tableIndex)) {
+			lua_pop(L, 1);
+			pushBoolean(L, false);
+			return 1;
+		}
+		auto minLevel = getField<uint32_t>(L, tableIndex, "minlevel", 1);
+		auto maxLevel = getField<uint32_t>(L, tableIndex, "maxlevel", std::numeric_limits<uint32_t>::max());
+		auto multiplier = getField<float>(L, tableIndex, "multiplier", 1);
+		if (minLevel == 0 || maxLevel < minLevel || multiplier <= 0.0f) {
+			lua_pop(L, 4);
+			pushBoolean(L, false);
+			return 1;
+		}
+		stages.push_back({minLevel, maxLevel, multiplier});
+		lua_pop(L, 4);
+	}
+
+	ConfigManager::setSkillStages(std::move(stages));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaGameSetMagicLevelStages(lua_State* L)
+{
+	// Game.setMagicLevelStages(stages)
+	if (!lua_istable(L, 1)) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	ConfigManager::ExperienceStages stages;
+	lua_pushnil(L);
+	while (lua_next(L, 1) != 0) {
+		const auto tableIndex = lua_gettop(L);
+		if (!lua_istable(L, tableIndex)) {
+			lua_pop(L, 1);
+			pushBoolean(L, false);
+			return 1;
+		}
+		auto minLevel = getField<uint32_t>(L, tableIndex, "minlevel", 0);
+		auto maxLevel = getField<uint32_t>(L, tableIndex, "maxlevel", std::numeric_limits<uint32_t>::max());
+		auto multiplier = getField<float>(L, tableIndex, "multiplier", 1);
+		if (maxLevel < minLevel || multiplier <= 0.0f) {
+			lua_pop(L, 4);
+			pushBoolean(L, false);
+			return 1;
+		}
+		stages.push_back({minLevel, maxLevel, multiplier});
+		lua_pop(L, 4);
+	}
+
+	ConfigManager::setMagicLevelStages(std::move(stages));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaGameSetResetStages(lua_State* L)
+{
+	// Game.setResetStages(stages)
+	if (!lua_istable(L, 1)) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	ConfigManager::ResetStages stages;
+	lua_pushnil(L);
+	while (lua_next(L, 1) != 0) {
+		const auto tableIndex = lua_gettop(L);
+		if (!lua_istable(L, tableIndex)) {
+			lua_pop(L, 1);
+			pushBoolean(L, false);
+			return 1;
+		}
+		auto minReset = getField<uint32_t>(L, tableIndex, "minReset", 1);
+		auto maxReset = getField<uint32_t>(L, tableIndex, "maxReset", 0);
+		auto multiplier = getField<float>(L, tableIndex, "multiplier", 1);
+		if (minReset == 0 || multiplier <= 0.0f || (maxReset != 0 && maxReset < minReset)) {
+			lua_pop(L, 4);
+			pushBoolean(L, false);
+			return 1;
+		}
+		stages.push_back({minReset, maxReset, multiplier});
+		lua_pop(L, 4);
+	}
+
+	ConfigManager::setResetStages(std::move(stages));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaGameGetResetStage(lua_State* L)
+{
+	// Game.getResetStage(resetCount)
+	uint32_t resetCount = getInteger<uint32_t>(L, 1);
+	lua_pushnumber(L, ConfigManager::getResetStage(resetCount));
 	return 1;
 }
 
@@ -1285,6 +1430,11 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "getExperienceStage", luaGameGetExperienceStage);
 	registerMethod("Game", "getSkillStage", luaGameGetSkillStage);
 	registerMethod("Game", "getMagicLevelStage", luaGameGetMagicLevelStage);
+	registerMethod("Game", "getResetStage", luaGameGetResetStage);
+	registerMethod("Game", "setExperienceStages", luaGameSetExperienceStages);
+	registerMethod("Game", "setSkillStages", luaGameSetSkillStages);
+	registerMethod("Game", "setMagicLevelStages", luaGameSetMagicLevelStages);
+	registerMethod("Game", "setResetStages", luaGameSetResetStages);
 	registerMethod("Game", "getExperienceForLevel", luaGameGetExperienceForLevel);
 	registerMethod("Game", "getMonsterCount", luaGameGetMonsterCount);
 	registerMethod("Game", "getPlayerCount", luaGameGetPlayerCount);
