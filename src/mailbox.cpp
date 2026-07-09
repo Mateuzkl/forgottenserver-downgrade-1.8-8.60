@@ -159,18 +159,21 @@ bool Mailbox::sendItem(Item* item) const
 			return false;
 		}
 
-	auto* originalParent = item->getParent();
-	auto originalIndex = originalParent ? originalParent->getThingIndex(item) : -1;
-	if (g_game.internalMoveItem(originalParent, inbox, INDEX_WHEREEVER, item, item->getItemCount(), nullptr,
-	                            FLAG_NOLIMIT) == RETURNVALUE_NOERROR) {
-		if (g_saveManager.savePlayerSync(&tmpPlayer)) {
-			g_game.transformItem(item, item->getID() + 1);
-			return true;
+		Cylinder* originalParent = item->getParent();
+		const int32_t originalIndex = originalParent ? originalParent->getThingIndex(item) : -1;
+		const uint16_t originalItemId = item->getID();
+		if (g_game.internalMoveItem(originalParent, inbox, INDEX_WHEREEVER, item, item->getItemCount(), nullptr,
+		                            FLAG_NOLIMIT) == RETURNVALUE_NOERROR) {
+			g_game.transformItem(item, originalItemId + 1);
+			if (g_saveManager.savePlayerSync(&tmpPlayer)) {
+				return true;
+			}
+
+			g_game.transformItem(item, originalItemId);
+			g_game.internalMoveItem(inbox, originalParent, originalIndex, item, item->getItemCount(), nullptr,
+			                        FLAG_NOLIMIT);
+			return false;
 		}
-		g_game.internalMoveItem(inbox, originalParent, originalIndex, item, item->getItemCount(), nullptr,
-		                        FLAG_NOLIMIT);
-		return false;
-	}
 	}
 	return false;
 }
