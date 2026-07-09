@@ -4,8 +4,6 @@
 #ifndef FS_SPECTATORS_H
 #define FS_SPECTATORS_H
 
-#include <absl/container/flat_hash_set.h>
-
 #include <algorithm>
 #include <cassert>
 #include <functional>
@@ -27,17 +25,28 @@ public:
 
 	void addSpectators(const SpectatorVec& spectators)
 	{
-		absl::flat_hash_set<Creature*> existing;
-		existing.reserve(vec.size() + spectators.vec.size());
-		for (const auto& spectator : vec) {
-			existing.insert(spectator.get());
+		if (spectators.vec.empty()) {
+			return;
 		}
 
-		for (const auto& spectator : spectators.vec) {
-			if (existing.insert(spectator.get()).second) {
-				vec.emplace_back(spectator);
-			}
+		if (&spectators != this) {
+			vec.reserve(vec.size() + spectators.vec.size());
+			vec.insert(vec.end(), spectators.vec.begin(), spectators.vec.end());
 		}
+
+		vec.erase(std::remove_if(vec.begin(), vec.end(),
+			[](const auto& spectator) { return !spectator; }), vec.end());
+
+		std::sort(vec.begin(), vec.end(),
+			[](const auto& lhs, const auto& rhs) {
+				return std::less<Creature*>()(lhs.get(), rhs.get());
+			});
+
+		vec.erase(std::unique(vec.begin(), vec.end(),
+			[](const auto& lhs, const auto& rhs) {
+				return lhs.get() == rhs.get();
+			}), vec.end());
+
 		partitioned_ = false;
 	}
 
