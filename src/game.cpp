@@ -222,6 +222,26 @@ struct QuickLootResult
 	ReturnValue failure = RETURNVALUE_NOERROR;
 };
 
+void sendQuickLootEmptyMessage(Player* player)
+{
+	if (player) {
+		player->sendCancelMessage("No loot");
+	}
+}
+
+void sendQuickLootResultMessage(Player* player, const QuickLootResult& result)
+{
+	if (!player || result.movedItems > 0) {
+		return;
+	}
+
+	if (result.failure != RETURNVALUE_NOERROR) {
+		player->sendCancelMessage(result.failure);
+	} else {
+		sendQuickLootEmptyMessage(player);
+	}
+}
+
 bool hasQuickLootDisabled(const Item* item)
 {
 	const auto* attribute = item ? item->getCustomAttribute("QuickLootDisabled") : nullptr;
@@ -541,6 +561,26 @@ uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, u
 		}
 	}
 	return lootedCorpses;
+}
+
+bool tryCollectQuickLootTile(Game& game, Player* player, const Position& pos, uint32_t maxQuickLootCorpses,
+                             bool& foundCorpse, uint32_t& lootedCorpses, ReturnValue& firstFailure)
+{
+	lootedCorpses = collectQuickLootTile(game, player, pos, maxQuickLootCorpses, foundCorpse, firstFailure);
+	if (!foundCorpse) {
+		return false;
+	}
+
+	if (lootedCorpses == 0) {
+		if (firstFailure != RETURNVALUE_NOERROR) {
+			player->sendCancelMessage(firstFailure);
+		} else {
+			sendQuickLootEmptyMessage(player);
+		}
+	} else if (lootedCorpses > 1) {
+		player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You looted {:d} corpses.", lootedCorpses));
+	}
+	return true;
 }
 
 } // namespace
@@ -3875,14 +3915,9 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 
 		bool foundCorpse = false;
 		ReturnValue firstFailure = RETURNVALUE_NOERROR;
-		const uint32_t lootedCorpses = collectQuickLootTile(*this, player, pos, maxQuickLootCorpses, foundCorpse,
-		                                                    firstFailure);
-		if (foundCorpse) {
-			if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
-				player->sendCancelMessage(firstFailure);
-			} else if (lootedCorpses > 1) {
-				player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You looted {:d} corpses.", lootedCorpses));
-			}
+		uint32_t lootedCorpses = 0;
+		if (tryCollectQuickLootTile(*this, player, pos, maxQuickLootCorpses, foundCorpse, lootedCorpses,
+		                            firstFailure)) {
 			player->maintainAttackFlow();
 			return;
 		}
@@ -3890,12 +3925,32 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 
 	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_USEITEM);
 	if (!thing) {
+		if (pos.x != 0xFFFF) {
+			bool foundCorpse = false;
+			ReturnValue firstFailure = RETURNVALUE_NOERROR;
+			uint32_t lootedCorpses = 0;
+			if (tryCollectQuickLootTile(*this, player, pos, maxQuickLootCorpses, foundCorpse, lootedCorpses,
+			                            firstFailure)) {
+				player->maintainAttackFlow();
+				return;
+			}
+		}
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
 	Item* item = thing->getItem();
 	if (!item) {
+		if (pos.x != 0xFFFF) {
+			bool foundCorpse = false;
+			ReturnValue firstFailure = RETURNVALUE_NOERROR;
+			uint32_t lootedCorpses = 0;
+			if (tryCollectQuickLootTile(*this, player, pos, maxQuickLootCorpses, foundCorpse, lootedCorpses,
+			                            firstFailure)) {
+				player->maintainAttackFlow();
+				return;
+			}
+		}
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
@@ -3924,9 +3979,7 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 		}
 
 		QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
-		if (result.movedItems == 0 && result.failure != RETURNVALUE_NOERROR) {
-			player->sendCancelMessage(result.failure);
-		}
+		sendQuickLootResultMessage(player, result);
 		player->maintainAttackFlow();
 		return;
 	}
@@ -4002,6 +4055,8 @@ void Game::playerLootNearby(uint32_t playerId)
 		player->sendCancelMessage("No lootable corpses nearby.");
 	} else if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
 		player->sendCancelMessage(firstFailure);
+	} else if (lootedCorpses == 0) {
+		sendQuickLootEmptyMessage(player);
 	} else if (lootedCorpses > 1) {
 		player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You looted {:d} corpses.", lootedCorpses));
 	}
@@ -4026,9 +4081,7 @@ void Game::playerQuickLootCorpse(uint32_t playerId, Container* container)
 	}
 
 	QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
-	if (result.movedItems == 0 && result.hadLoot && result.failure != RETURNVALUE_NOERROR) {
-		player->sendCancelMessage(result.failure);
-	}
+	sendQuickLootResultMessage(player, result);
 }
 
 void Game::playerSetManagedLootContainer(uint32_t playerId, ObjectCategory_t category, const Position& pos,
