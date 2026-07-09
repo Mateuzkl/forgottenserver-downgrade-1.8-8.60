@@ -11,6 +11,7 @@ This is the TFS 1.8 port inspired by the Canary bot/cast commits:
 The Canary engine is much larger and tied to Canary-only APIs. This port keeps the safe runtime core for this server:
 
 - registered bot players live in `bot_players`;
+- `/bot add` creates the `botaccount` account and the requested player name when they do not exist;
 - bots are spawned as real `Player` objects loaded through `IOLoginData`;
 - active bots are held by `std::shared_ptr<Player>` in `BotManager`;
 - despawn uses the normal `Game::removeCreature` path, so logout hooks and player saving still run;
@@ -21,7 +22,7 @@ The Canary engine is much larger and tied to Canary-only APIs. This port keeps t
 GOD command:
 
 ```text
-/bot add name[, auto]
+/bot add name[, auto[, vocation]]
 /bot remove name
 /bot enable name
 /bot disable name
@@ -39,6 +40,8 @@ Example:
 /bot add Test Bot, auto
 /bot spawn Test Bot, cast
 ```
+
+`vocation` is optional. When omitted, a new bot is created as a knight.
 
 ## SQL
 

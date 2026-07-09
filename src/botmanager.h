@@ -23,6 +23,15 @@ public:
 		std::shared_ptr<Player> player;
 	};
 
+	struct RegistrationResult
+	{
+		bool success = false;
+		bool created = false;
+		uint32_t guid = 0;
+		std::string name;
+		std::string message;
+	};
+
 	static BotManager& getInstance();
 
 	BotManager(const BotManager&) = delete;
@@ -30,6 +39,8 @@ public:
 
 	Result spawnByGuid(uint32_t guid, bool broadcast = false, bool requireMarked = true);
 	Result spawnByName(std::string_view name, bool broadcast = false, bool requireMarked = true);
+	RegistrationResult registerByName(std::string_view name, bool autoSpawn = false, bool createIfMissing = true,
+	                                  uint16_t vocationId = 4, uint16_t sex = 1);
 
 	bool despawnByGuid(uint32_t guid, bool save, std::string* message = nullptr);
 	bool despawnByName(std::string_view name, bool save, std::string* message = nullptr);

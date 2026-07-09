@@ -76,6 +76,24 @@ int luaGameGetPlayers(lua_State* L)
 	return 1;
 }
 
+int luaGameRegisterBot(lua_State* L)
+{
+	// Game.registerBot(name[, autoSpawn = false[, createIfMissing = true[, vocationId = 4[, sex = 1]]]])
+	const std::string name = getString(L, 1);
+	const bool autoSpawn = getBoolean(L, 2, false);
+	const bool createIfMissing = getBoolean(L, 3, true);
+	const uint16_t vocationId = getInteger<uint16_t>(L, 4, 4);
+	const uint16_t sex = getInteger<uint16_t>(L, 5, 1);
+
+	const auto result = BotManager::getInstance().registerByName(name, autoSpawn, createIfMissing, vocationId, sex);
+	pushBoolean(L, result.success);
+	pushString(L, result.message);
+	lua_pushinteger(L, result.guid);
+	pushString(L, result.name);
+	pushBoolean(L, result.created);
+	return 5;
+}
+
 int luaGameSpawnBot(lua_State* L)
 {
 	// Game.spawnBot(nameOrGuid[, broadcast = false[, requireMarked = true]])
@@ -1374,6 +1392,7 @@ void LuaScriptInterface::registerGame()
 
 	registerMethod("Game", "getSpectators", luaGameGetSpectators);
 	registerMethod("Game", "getPlayers", luaGameGetPlayers);
+	registerMethod("Game", "registerBot", luaGameRegisterBot);
 	registerMethod("Game", "spawnBot", luaGameSpawnBot);
 	registerMethod("Game", "despawnBot", luaGameDespawnBot);
 	registerMethod("Game", "despawnAllBots", luaGameDespawnAllBots);

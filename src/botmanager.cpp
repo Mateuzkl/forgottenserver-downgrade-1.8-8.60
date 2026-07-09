@@ -14,14 +14,19 @@
 #include "save_manager.h"
 #include "tasks.h"
 #include "tools.h"
+#include "vocation.h"
 
 #include <charconv>
 #include <ctime>
 
 extern Game g_game;
 extern Dispatcher g_dispatcher;
+extern Vocations g_vocations;
 
 namespace {
+constexpr std::string_view BOT_ACCOUNT_NAME = "botaccount";
+constexpr std::string_view BOT_ACCOUNT_PASSWORD = "botaccount";
+
 class LoginReservationGuard
 {
 public:
@@ -57,6 +62,54 @@ std::optional<uint32_t> parseGuid(std::string_view text)
 		return guid;
 	}
 	return std::nullopt;
+}
+
+std::optional<uint32_t> getAccountIdByName(std::string_view name)
+{
+	Database& db = Database::getInstance();
+	DBResult_ptr result = db.storeQuery(fmt::format(
+	    "SELECT `id` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s}) LIMIT 1", db.escapeString(name)));
+	if (!result) {
+		return std::nullopt;
+	}
+	return result->getNumber<uint32_t>("id");
+}
+
+std::optional<uint32_t> ensureBotAccount(std::string* message)
+{
+	if (auto accountId = getAccountIdByName(BOT_ACCOUNT_NAME)) {
+		return accountId;
+	}
+
+	uint32_t accountId = 0;
+	if (IOLoginData::createAccount(std::string{BOT_ACCOUNT_NAME}, std::string{BOT_ACCOUNT_PASSWORD}, accountId)) {
+		return accountId;
+	}
+
+	if (auto accountIdAfterRace = getAccountIdByName(BOT_ACCOUNT_NAME)) {
+		return accountIdAfterRace;
+	}
+
+	if (message) {
+		*message = "Could not create or load bot account.";
+	}
+	return std::nullopt;
+}
+
+uint16_t normalizeBotVocation(uint16_t vocationId)
+{
+	if (g_vocations.getVocation(vocationId)) {
+		return vocationId;
+	}
+	if (g_vocations.getVocation(4)) {
+		return 4;
+	}
+	return 0;
+}
+
+PlayerSex_t normalizeBotSex(uint16_t sex)
+{
+	return sex == PLAYERSEX_FEMALE ? PLAYERSEX_FEMALE : PLAYERSEX_MALE;
 }
 } // namespace
 
@@ -103,6 +156,62 @@ std::optional<uint32_t> BotManager::getGuidByName(std::string_view name) const
 		return std::nullopt;
 	}
 	return result->getNumber<uint32_t>("id");
+}
+
+BotManager::RegistrationResult BotManager::registerByName(std::string_view rawName, bool autoSpawn /* = false */,
+                                                          bool createIfMissing /* = true */,
+                                                          uint16_t vocationId /* = 4 */, uint16_t sex /* = 1 */)
+{
+	if (!ensureTables()) {
+		return { false, false, 0, "", "Could not create bot tables." };
+	}
+
+	std::string name{rawName};
+	trimString(name);
+	if (!validateAndFormatPlayerName(name)) {
+		return { false, false, 0, name, "Invalid player name." };
+	}
+
+	auto guid = getGuidByName(name);
+	bool created = false;
+	if (!guid) {
+		if (!createIfMissing) {
+			return { false, false, 0, name, fmt::format("Player '{}' was not found.", name) };
+		}
+
+		std::string accountMessage;
+		auto accountId = ensureBotAccount(&accountMessage);
+		if (!accountId) {
+			return { false, false, 0, name, accountMessage };
+		}
+
+		const uint16_t normalizedVocationId = normalizeBotVocation(vocationId);
+		if (!IOLoginData::createPlayer(*accountId, name, normalizedVocationId, normalizeBotSex(sex))) {
+			return { false, false, 0, name, fmt::format("Could not create bot player '{}'.", name) };
+		}
+
+		guid = getGuidByName(name);
+		if (!guid) {
+			return { false, true, 0, name, fmt::format("Bot player '{}' was created but could not be loaded.", name) };
+		}
+		created = true;
+	}
+
+	Database& db = Database::getInstance();
+	const std::time_t now = std::time(nullptr);
+	const bool registered = db.executeQuery(fmt::format(
+	    "INSERT INTO `bot_players` (`player_id`, `enabled`, `auto_spawn`, `created_at`, `updated_at`) "
+	    "VALUES ({:d}, 1, {:d}, {:d}, {:d}) "
+	    "ON DUPLICATE KEY UPDATE `enabled` = 1, `auto_spawn` = VALUES(`auto_spawn`), "
+	    "`updated_at` = VALUES(`updated_at`)",
+	    *guid, autoSpawn ? 1 : 0, static_cast<uint64_t>(now), static_cast<uint64_t>(now)));
+	if (!registered) {
+		return { false, created, *guid, name, fmt::format("Could not register bot '{}'.", name) };
+	}
+
+	return { true, created, *guid, name,
+		     fmt::format("Bot '{}' {}registered{}.", name, created ? "created and " : "",
+		                 autoSpawn ? " with auto-spawn" : "") };
 }
 
 bool BotManager::isMarkedBot(uint32_t guid, bool* enabled /* = nullptr */)

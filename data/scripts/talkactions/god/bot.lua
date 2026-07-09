@@ -25,7 +25,7 @@ end
 
 local function showHelp(player)
 	player:popupFYI(table.concat({
-		"/bot add name[, auto]",
+		"/bot add name[, auto[, vocation]]",
 		"/bot remove name",
 		"/bot enable name",
 		"/bot disable name",
@@ -49,7 +49,7 @@ function talkaction.onSay(player, words, param)
 
 	if action == "add" or action == "register" then
 		local args = splitArgs(rest)
-		local ok, message = BotSystem.register(args[1], args[2] and parseToggle(args[2]))
+		local ok, message = BotSystem.register(args[1], args[2] and parseToggle(args[2]), args[3])
 		send(player, message)
 		return false
 	end

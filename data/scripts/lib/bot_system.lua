@@ -10,6 +10,30 @@ local function normalizeName(name)
 	return name
 end
 
+local function parseVocation(value)
+	value = tostring(value or ""):lower()
+	if value == "" then
+		return 4
+	end
+
+	local vocation = tonumber(value)
+	if vocation then
+		return math.floor(vocation)
+	end
+
+	local names = {
+		sorcerer = 1,
+		druid = 2,
+		paladin = 3,
+		knight = 4,
+		ms = 5,
+		ed = 6,
+		rp = 7,
+		ek = 8
+	}
+	return names[value] or 4
+end
+
 function BotSystem.ensureTables()
 	local queries = {
 		[[CREATE TABLE IF NOT EXISTS `bot_players` (
@@ -73,9 +97,19 @@ function BotSystem.isRegistered(playerId)
 	return true
 end
 
-function BotSystem.register(nameOrGuid, autoSpawn)
+function BotSystem.register(nameOrGuid, autoSpawn, vocation)
 	if not BotSystem.ensureTables() then
 		return false, "Could not create bot tables."
+	end
+
+	local normalized = normalizeName(nameOrGuid)
+	if normalized == "" then
+		return false, "Bot name is required."
+	end
+
+	if Game.registerBot and not tonumber(normalized) then
+		local ok, message = Game.registerBot(normalized, autoSpawn == true, true, parseVocation(vocation), PLAYERSEX_MALE)
+		return ok, message
 	end
 
 	local playerId, playerName = BotSystem.getPlayerId(nameOrGuid)
