@@ -6,7 +6,6 @@
 
 [![Discord](https://img.shields.io/discord/1498442075442516120.svg?style=flat-square&logo=discord&label=Discord&color=5865F2)](https://discord.gg/9ne5TZapd)
 [![CI](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/actions/workflows/build.yml/badge.svg)](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/actions/workflows/build.yml)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/Mateuzkl/forgottenserver-downgrade-1.8-8.60?branch=main&svg=true)](https://ci.appveyor.com/project/Mateuzkl/forgottenserver-downgrade-1.8-8.60)
 ![Repository size](https://img.shields.io/github/repo-size/Mateuzkl/forgottenserver-downgrade-1.8-8.60?style=flat-square)
 [![License](https://img.shields.io/github/license/Mateuzkl/forgottenserver-downgrade-1.8-8.60.svg?style=flat-square)](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/blob/main/LICENSE)
 [![Commits](https://img.shields.io/badge/commits-1000%2B-6a0dad?style=flat-square)](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/commits)
@@ -615,14 +614,6 @@ CIP client, future client (<span style="color: green;">Work Progress</span>)
 ---
 
 ## Downloads
-
-### Manual AppVeyor artifacts
-
-1. Open the [AppVeyor project page](https://ci.appveyor.com/project/Mateuzkl/forgottenserver-downgrade-1-7-8-60).
-2. Click the latest job.
-3. Open the **Artifacts** tab.
-4. Download the `.zip` or `.7z` package.
-5. Extract it into your client folder.
 
 ### Client updater
 
