@@ -375,7 +375,7 @@ private:
 	bool isFonticakClient = false;
 	bool isUsingFonticakClient() const { return isFonticakClient; }
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }
-	bool supportsCreatureIcons() const { return isAstraClient; }
+	bool supportsCreatureIcons() const { return supportsAstraCreatureIcons(); }
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;
 	bool useItemTierByte = false;
