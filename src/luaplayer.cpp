@@ -120,6 +120,14 @@ int luaPlayerIsPlayer(lua_State* L)
 	return 1;
 }
 
+int luaPlayerIsBot(lua_State* L)
+{
+	// player:isBot()
+	const Player* player = getUserdata<const Player>(L, 1);
+	pushBoolean(L, player && player->isBot());
+	return 1;
+}
+
 int luaPlayerGetGuid(lua_State* L)
 {
 	// player:getGuid()
@@ -4539,6 +4547,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMetaMethod("Player", "__gc", LuaScriptInterface::luaCreatureGC);
 
     registerMethod("Player", "isPlayer", luaPlayerIsPlayer);
+	registerMethod("Player", "isBot", luaPlayerIsBot);
 
 	registerMethod("Player", "getGuid", luaPlayerGetGuid);
 	registerMethod("Player", "getIp", luaPlayerGetIp);

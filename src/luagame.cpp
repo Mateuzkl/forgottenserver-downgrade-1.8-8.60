@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "bestiary_charm.h"
+#include "botmanager.h"
 #include "configmanager.h"
 #include "events.h"
 #include "game.h"
@@ -72,6 +73,108 @@ int luaGameGetPlayers(lua_State* L)
 		setMetatable(L, -1, "Player");
 		lua_rawseti(L, -2, ++index);
 	}
+	return 1;
+}
+
+int luaGameSpawnBot(lua_State* L)
+{
+	// Game.spawnBot(nameOrGuid[, broadcast = false[, requireMarked = true]])
+	const bool broadcast = getBoolean(L, 2, false);
+	const bool requireMarked = getBoolean(L, 3, true);
+
+	BotManager::Result result;
+	if (isNumber(L, 1)) {
+		result = BotManager::getInstance().spawnByGuid(getInteger<uint32_t>(L, 1), broadcast, requireMarked);
+	} else {
+		result = BotManager::getInstance().spawnByName(getString(L, 1), broadcast, requireMarked);
+	}
+
+	if (result.success && result.player) {
+		pushUserdata<Player>(L, result.player.get());
+		setMetatable(L, -1, "Player");
+	} else {
+		lua_pushnil(L);
+	}
+	pushString(L, result.message);
+	return 2;
+}
+
+int luaGameDespawnBot(lua_State* L)
+{
+	// Game.despawnBot(nameOrGuid[, save = true])
+	const bool save = getBoolean(L, 2, true);
+	std::string message;
+	bool success = false;
+	if (isNumber(L, 1)) {
+		success = BotManager::getInstance().despawnByGuid(getInteger<uint32_t>(L, 1), save, &message);
+	} else {
+		success = BotManager::getInstance().despawnByName(getString(L, 1), save, &message);
+	}
+
+	pushBoolean(L, success);
+	pushString(L, message);
+	return 2;
+}
+
+int luaGameDespawnAllBots(lua_State* L)
+{
+	// Game.despawnAllBots([save = true])
+	const bool save = getBoolean(L, 1, true);
+	lua_pushinteger(L, BotManager::getInstance().despawnAll(save));
+	return 1;
+}
+
+int luaGameSetBotBroadcast(lua_State* L)
+{
+	// Game.setBotBroadcast(nameOrGuid, enabled)
+	const bool enabled = getBoolean(L, 2);
+	std::string message;
+	bool success = false;
+	if (isNumber(L, 1)) {
+		success = BotManager::getInstance().setBroadcast(getInteger<uint32_t>(L, 1), enabled, &message);
+	} else {
+		success = BotManager::getInstance().setBroadcast(getString(L, 1), enabled, &message);
+	}
+
+	pushBoolean(L, success);
+	pushString(L, message);
+	return 2;
+}
+
+int luaGameGetBots(lua_State* L)
+{
+	// Game.getBots()
+	const auto bots = BotManager::getInstance().getActiveBots();
+	lua_createtable(L, bots.size(), 0);
+
+	int index = 0;
+	for (const auto& bot : bots) {
+		if (!bot || bot->isRemoved()) {
+			continue;
+		}
+		pushUserdata<Player>(L, bot.get());
+		setMetatable(L, -1, "Player");
+		lua_rawseti(L, -2, ++index);
+	}
+	return 1;
+}
+
+int luaGameIsBot(lua_State* L)
+{
+	// Game.isBot(playerOrNameOrGuid)
+	if (isUserdata(L, 1)) {
+		Player* player = getUserdata<Player>(L, 1);
+		pushBoolean(L, player && player->isBot());
+		return 1;
+	}
+
+	if (isNumber(L, 1)) {
+		pushBoolean(L, BotManager::getInstance().isManagedBot(getInteger<uint32_t>(L, 1)));
+		return 1;
+	}
+
+	auto guid = BotManager::getInstance().getGuidByName(getString(L, 1));
+	pushBoolean(L, guid.has_value() && BotManager::getInstance().isManagedBot(*guid));
 	return 1;
 }
 
@@ -1271,6 +1374,12 @@ void LuaScriptInterface::registerGame()
 
 	registerMethod("Game", "getSpectators", luaGameGetSpectators);
 	registerMethod("Game", "getPlayers", luaGameGetPlayers);
+	registerMethod("Game", "spawnBot", luaGameSpawnBot);
+	registerMethod("Game", "despawnBot", luaGameDespawnBot);
+	registerMethod("Game", "despawnAllBots", luaGameDespawnAllBots);
+	registerMethod("Game", "setBotBroadcast", luaGameSetBotBroadcast);
+	registerMethod("Game", "getBots", luaGameGetBots);
+	registerMethod("Game", "isBot", luaGameIsBot);
 	registerMethod("Game", "getSpawnRate", luaGameGetSpawnRate);
 	registerMethod("Game", "getNpcs", luaGameGetNpcs);
 	registerMethod("Game", "getMonsters", luaGameGetMonsters);

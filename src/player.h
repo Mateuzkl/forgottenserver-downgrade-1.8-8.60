@@ -440,6 +440,8 @@ public:
 	void clearCooldowns();
 
 	bool isOffline() const { return (getID() == 0); }
+	bool isBot() const noexcept { return bot; }
+	void setBot(bool value) noexcept { bot = value; }
 	void disconnect()
 	{
 		if (client) {
@@ -1716,6 +1718,7 @@ private:
 	uint32_t accountNumber = 0;
 	uint32_t guid = 0;
 	bool saveFlag = true;
+	bool bot = false;
 	uint32_t windowTextId = 0;
 	uint32_t editListId = 0;
 	uint32_t mana = 0;

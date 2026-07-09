@@ -6,6 +6,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/baseevents.cpp
 	${CMAKE_CURRENT_LIST_DIR}/bestiary_charm.cpp
 	${CMAKE_CURRENT_LIST_DIR}/bed.cpp
+	${CMAKE_CURRENT_LIST_DIR}/botmanager.cpp
 	${CMAKE_CURRENT_LIST_DIR}/chat.cpp
 	${CMAKE_CURRENT_LIST_DIR}/character_bazaar.cpp
 	${CMAKE_CURRENT_LIST_DIR}/combat.cpp
@@ -144,6 +145,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/baseevents.h
 	${CMAKE_CURRENT_LIST_DIR}/bestiary_charm.h
 	${CMAKE_CURRENT_LIST_DIR}/bed.h
+	${CMAKE_CURRENT_LIST_DIR}/botmanager.h
 	${CMAKE_CURRENT_LIST_DIR}/chat.h
 	${CMAKE_CURRENT_LIST_DIR}/character_bazaar.h
 	${CMAKE_CURRENT_LIST_DIR}/combat.h

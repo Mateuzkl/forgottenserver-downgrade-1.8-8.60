@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "bed.h"
+#include "botmanager.h"
 #include "chat.h"
 #include "combat.h"
 #include "configmanager.h"
@@ -2480,6 +2481,10 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 		if (!saved) {
 			LOG_ERROR(fmt::format("Error while saving player: {}", getName()));
 		}
+
+		if (isBot()) {
+			BotManager::getInstance().forget(guid);
+		}
 	}
 }
 
@@ -2809,7 +2814,7 @@ void Player::onThink(uint32_t interval)
 {
 	Creature::onThink(interval);
 
-	if (client && getIP() == 0) {
+	if (!isBot() && client && getIP() == 0) {
 		if (hasCondition(CONDITION_INFIGHT)) {
 			ghostModeStartTime = 0;
 
@@ -2859,7 +2864,7 @@ void Player::onThink(uint32_t interval)
 		addMessageBuffer();
 	}
 
-	if (!getTile()->hasFlag(TILESTATE_NOLOGOUT) && !isAccessPlayer() && !(client && client->protocol() && client->protocol()->isSpectator) && !hasCondition(CONDITION_INFIGHT)) {
+	if (!isBot() && !getTile()->hasFlag(TILESTATE_NOLOGOUT) && !isAccessPlayer() && !(client && client->protocol() && client->protocol()->isSpectator) && !hasCondition(CONDITION_INFIGHT)) {
 		idleTime += interval;
 		const int32_t kickAfterMinutes = getInteger(ConfigManager::KICK_AFTER_MINUTES);
 		if (idleTime > (kickAfterMinutes * 60000) + 60000) {

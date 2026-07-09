@@ -97,6 +97,19 @@ CREATE TABLE IF NOT EXISTS `players` (
 INSERT INTO `players` (`id`, `name`, `group_id`, `account_id`, `level`, `vocation`, `health`, `healthmax`, `experience`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `currentmount`, `randomizemount`, `direction`, `maglevel`, `mana`, `manamax`, `manaspent`, `soul`, `town_id`, `posx`, `posy`, `posz`, `conditions`, `cap`, `sex`, `lastlogin`, `lastip`, `save`, `skull`, `skulltime`, `lastlogout`, `blessings`, `onlinetime`, `deletion`, `balance`, `offlinetraining_time`, `offlinetraining_skill`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`) VALUES
 (1, 'Account Manager', 1, 1, 1, 0, 150, 150, 0, 0, 0, 0, 0, 110, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 50, 50, 7, NULL, 400, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 43200, -1, 2520, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0, 10, 0);
 
+CREATE TABLE IF NOT EXISTS `bot_players` (
+  `player_id` int NOT NULL,
+  `enabled` tinyint NOT NULL DEFAULT '1',
+  `auto_spawn` tinyint NOT NULL DEFAULT '0',
+  `last_spawn` bigint unsigned NOT NULL DEFAULT '0',
+  `last_despawn` bigint unsigned NOT NULL DEFAULT '0',
+  `created_at` bigint unsigned NOT NULL DEFAULT '0',
+  `updated_at` bigint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`player_id`),
+  KEY `idx_bot_players_auto_spawn` (`enabled`, `auto_spawn`),
+  CONSTRAINT `fk_bot_players_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+
 CREATE TABLE IF NOT EXISTS `player_autolootconfig` (
   `player_id` int(11) NOT NULL,
   `config` blob NOT NULL,
