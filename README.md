@@ -4,8 +4,11 @@
 
 <div align="center">
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/9ne5TZapd)
+[![CI](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/actions/workflows/build.yml/badge.svg)](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/actions/workflows/build.yml)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/Mateuzkl/forgottenserver-downgrade?branch=official&svg=true)](https://ci.appveyor.com/project/Mateuzkl/forgottenserver-downgrade)
-[![License](https://img.shields.io/badge/license-GPL--2.0-blue?style=flat-square)](LICENSE)
+![Repository size](https://img.shields.io/github/repo-size/Mateuzkl/forgottenserver-downgrade-1.8-8.60?style=flat-square)
+[![License](https://img.shields.io/github/license/Mateuzkl/forgottenserver-downgrade-1.8-8.60.svg?style=flat-square)](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/blob/main/LICENSE)
 [![Commits](https://img.shields.io/badge/commits-1000%2B-6a0dad?style=flat-square)](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/commits)
 [![Wiki](https://img.shields.io/badge/docs-wiki-8b5cf6?style=flat-square&logo=wikipedia&logoColor=white)](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/wiki)
 
@@ -26,7 +29,7 @@
 
 Developed and maintained by [Mateuzkl](https://github.com/Mateuzkl), based on [Nekiro's TFS 1.5 Downgrades](https://github.com/nekiro/TFS-1.5-Downgrades) and forked from [MillhioreBT's downgrade](https://github.com/MillhioreBT/forgottenserver-downgrade).
 
-[Discord Community](https://discord.com/invite/GxTm7DyXVe) · [Full Wiki](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/wiki) · [Issues](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/issues)
+[Discord Community](https://discord.gg/9ne5TZapd) · [Full Wiki](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/wiki) · [Issues](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/issues)
 
 </div>
 
