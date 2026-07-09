@@ -24731,7 +24731,6 @@
 		<attribute key="classification" value="2" />
 	</item>
 	<item id="10440" name="dead sandcrawler">
-		<attribute key="corpseType" value="venom" />
 		<attribute key="fluidsource" value="slime" />
 		<attribute key="duration" value="300" />
 		<attribute key="decayTo" value="10441" />
@@ -24739,7 +24738,6 @@
 		<attribute key="weight" value="6300" />
 	</item>
 	<item id="10441" name="dead sandcrawler">
-		<attribute key="corpseType" value="venom" />
 		<attribute key="duration" value="300" />
 		<attribute key="decayTo" value="10442" />
 		<attribute key="containersize" value="8" />
@@ -24751,7 +24749,6 @@
 		<attribute key="weight" value="6300" />
 	</item>
 	<item id="10443" name="dead sandcrawler">
-		<attribute key="corpseType" value="venom" />
 		<attribute key="fluidsource" value="slime" />
 		<attribute key="duration" value="10" />
 		<attribute key="decayTo" value="10440" />
