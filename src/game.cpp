@@ -246,7 +246,7 @@ bool isQuickLootCorpseType(const Container* container)
 	}
 
 	const ItemType& type = Item::items[container->getID()];
-	return type.corpseType != RACE_NONE;
+	return type.corpseType != RACE_NONE || container->getCorpseOwner() != 0;
 }
 
 const Container* getQuickLootCorpseContainer(const Container* container)
