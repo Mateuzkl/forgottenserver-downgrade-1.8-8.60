@@ -2954,7 +2954,7 @@ void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
 
 void ProtocolGame::sendCreatureIcon(const Creature* creature)
 {
-	if (!creature || !player || !supportsAstraCreatureIcons()) {
+	if (!creature || !player || !supportsCreatureIcons()) {
 		return;
 	}
 
@@ -4504,6 +4504,10 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	msg.add<uint16_t>(static_cast<uint16_t>(creature->getStepSpeed()));
 
+	if (supportsCreatureIcons()) {
+		AddCreatureIcon(msg, creature);
+	}
+
 	msg.addByte(player->getSkullClient(creature));
 	msg.addByte(player->getPartyShield(otherPlayer));
 
@@ -4556,10 +4560,6 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	}
 
 	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
-
-	if (supportsAstraCreatureIcons()) {
-		AddCreatureIcon(msg, creature);
-	}
 }
 
 void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
