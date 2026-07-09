@@ -73,6 +73,14 @@ ipch/
 *.vsp
 *.vspx
 
+# Linux perf / FlameGraph profiling output
+profiling-output/
+perf.data
+perf.data.*
+*.perf
+*.folded
+*.collapsed
+
 # Guidance Automation Toolkit
 *.gpState
 
