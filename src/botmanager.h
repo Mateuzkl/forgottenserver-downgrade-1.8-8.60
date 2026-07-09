@@ -53,6 +53,7 @@ public:
 	std::vector<std::shared_ptr<Player>> getActiveBots() const;
 	void forget(uint32_t guid);
 
+	bool isEnabled() const;
 	bool ensureTables();
 	bool isMarkedBot(uint32_t guid, bool* enabled = nullptr);
 	std::optional<uint32_t> getGuidByName(std::string_view name) const;
@@ -63,6 +64,7 @@ private:
 	void cleanupRemoved();
 	void touchRuntime(uint32_t guid, bool spawned);
 
+	bool tablesReady = false;
 	std::unordered_map<uint32_t, std::shared_ptr<Player>> activeBots;
 };
 

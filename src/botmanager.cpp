@@ -6,6 +6,7 @@
 #include "botmanager.h"
 
 #include "character_bazaar.h"
+#include "configmanager.h"
 #include "database.h"
 #include "game.h"
 #include "iologindata.h"
@@ -25,7 +26,7 @@ extern Vocations g_vocations;
 
 namespace {
 constexpr std::string_view BOT_ACCOUNT_NAME = "botaccount";
-constexpr std::string_view BOT_ACCOUNT_PASSWORD = "botaccount";
+constexpr std::string_view LEGACY_BOT_ACCOUNT_PASSWORD_HASH = "3494b552958a9e81766feca7ffd85f800dd0bfc4";
 
 class LoginReservationGuard
 {
@@ -75,18 +76,34 @@ std::optional<uint32_t> getAccountIdByName(std::string_view name)
 	return result->getNumber<uint32_t>("id");
 }
 
+void rotateLegacyBotAccountPassword(uint32_t accountId)
+{
+	Database& db = Database::getInstance();
+	DBResult_ptr result = db.storeQuery(
+	    fmt::format("SELECT `password` FROM `accounts` WHERE `id` = {:d} LIMIT 1", accountId));
+	if (!result) {
+		return;
+	}
+
+	if (result->getString("password") == LEGACY_BOT_ACCOUNT_PASSWORD_HASH) {
+		IOLoginData::setPassword(accountId, generateSecurePassword(32));
+	}
+}
+
 std::optional<uint32_t> ensureBotAccount(std::string* message)
 {
 	if (auto accountId = getAccountIdByName(BOT_ACCOUNT_NAME)) {
+		rotateLegacyBotAccountPassword(*accountId);
 		return accountId;
 	}
 
 	uint32_t accountId = 0;
-	if (IOLoginData::createAccount(std::string{BOT_ACCOUNT_NAME}, std::string{BOT_ACCOUNT_PASSWORD}, accountId)) {
+	if (IOLoginData::createAccount(std::string{BOT_ACCOUNT_NAME}, generateSecurePassword(32), accountId)) {
 		return accountId;
 	}
 
 	if (auto accountIdAfterRace = getAccountIdByName(BOT_ACCOUNT_NAME)) {
+		rotateLegacyBotAccountPassword(*accountIdAfterRace);
 		return accountIdAfterRace;
 	}
 
@@ -119,10 +136,19 @@ BotManager& BotManager::getInstance()
 	return instance;
 }
 
+bool BotManager::isEnabled() const
+{
+	return ConfigManager::getBoolean(ConfigManager::BOT_SYSTEM_ENABLED);
+}
+
 bool BotManager::ensureTables()
 {
+	if (tablesReady) {
+		return true;
+	}
+
 	Database& db = Database::getInstance();
-	return db.executeQuery(
+	const bool ok = db.executeQuery(
 	    "CREATE TABLE IF NOT EXISTS `bot_players` ("
 	    "`player_id` int NOT NULL,"
 	    "`enabled` tinyint NOT NULL DEFAULT '1',"
@@ -135,6 +161,10 @@ bool BotManager::ensureTables()
 	    "KEY `idx_bot_players_auto_spawn` (`enabled`, `auto_spawn`),"
 	    "CONSTRAINT `fk_bot_players_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE"
 	    ") ENGINE=InnoDB DEFAULT CHARACTER SET=utf8");
+	if (ok) {
+		tablesReady = true;
+	}
+	return ok;
 }
 
 std::optional<uint32_t> BotManager::getGuidByName(std::string_view name) const
@@ -162,6 +192,10 @@ BotManager::RegistrationResult BotManager::registerByName(std::string_view rawNa
                                                           bool createIfMissing /* = true */,
                                                           uint16_t vocationId /* = 4 */, uint16_t sex /* = 1 */)
 {
+	if (!isEnabled()) {
+		return { false, false, 0, "", "Bot system is disabled in config.lua (botSystemEnabled = false)." };
+	}
+
 	if (!ensureTables()) {
 		return { false, false, 0, "", "Could not create bot tables." };
 	}
@@ -251,6 +285,10 @@ BotManager::Result BotManager::spawnByName(std::string_view name, bool broadcast
 BotManager::Result BotManager::spawnByGuid(uint32_t guid, bool broadcast /* = false */,
                                            bool requireMarked /* = true */)
 {
+	if (!isEnabled()) {
+		return { false, "Bot system is disabled in config.lua (botSystemEnabled = false).", nullptr };
+	}
+
 	if (!g_dispatcher.isDispatcherThread()) {
 		return { false, "Bot spawn must run on the dispatcher thread.", nullptr };
 	}
@@ -310,6 +348,7 @@ BotManager::Result BotManager::spawnByGuid(uint32_t guid, bool broadcast /* = fa
 	if (!g_game.placeCreature(player.get(), loginPosition)) {
 		if (!g_game.placeCreature(player.get(), player->getTemplePosition(), false, true)) {
 			activeBots.erase(guid);
+			player->client->setBroadcast(false);
 			player->setBot(false);
 			return { false, fmt::format("Could not place bot '{}' at login or temple position.", player->getName()),
 				     nullptr };

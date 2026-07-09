@@ -140,6 +140,7 @@ exhaustItemAtUsePotion = true
 -- Quick Loot defaults to true because the Astra managed-loot UI expects it.
 forgeSystemEnabled = false
 imbuementSystemEnabled = false
+botSystemEnabled = true
 monkVocationEnabled = false
 familiarSystemEnabled = false
 wheelSystemEnabled = false

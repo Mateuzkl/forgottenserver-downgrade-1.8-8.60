@@ -20,7 +20,12 @@ end
 
 local function parseToggle(value)
 	value = tostring(value or ""):lower()
-	return value == "on" or value == "true" or value == "1" or value == "yes"
+	return value == "on" or value == "true" or value == "1" or value == "yes" or value == "auto"
+end
+
+local function parseAddAutoSpawn(value)
+	value = tostring(value or ""):lower()
+	return value == "auto" or parseToggle(value)
 end
 
 local function showHelp(player)
@@ -49,7 +54,7 @@ function talkaction.onSay(player, words, param)
 
 	if action == "add" or action == "register" then
 		local args = splitArgs(rest)
-		local ok, message = BotSystem.register(args[1], args[2] and parseToggle(args[2]), args[3])
+		local ok, message = BotSystem.register(args[1], args[2] and parseAddAutoSpawn(args[2]), args[3])
 		send(player, message)
 		return false
 	end

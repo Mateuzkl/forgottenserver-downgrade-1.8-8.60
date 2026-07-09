@@ -1,5 +1,7 @@
 BotSystem = BotSystem or {}
 
+local tablesReady = false
+
 local function boolToNumber(value)
 	return value and 1 or 0
 end
@@ -34,27 +36,38 @@ local function parseVocation(value)
 	return names[value] or 4
 end
 
-function BotSystem.ensureTables()
-	local queries = {
-		[[CREATE TABLE IF NOT EXISTS `bot_players` (
-			`player_id` int NOT NULL,
-			`enabled` tinyint NOT NULL DEFAULT '1',
-			`auto_spawn` tinyint NOT NULL DEFAULT '0',
-			`last_spawn` bigint unsigned NOT NULL DEFAULT '0',
-			`last_despawn` bigint unsigned NOT NULL DEFAULT '0',
-			`created_at` bigint unsigned NOT NULL DEFAULT '0',
-			`updated_at` bigint unsigned NOT NULL DEFAULT '0',
-			PRIMARY KEY (`player_id`),
-			KEY `idx_bot_players_auto_spawn` (`enabled`, `auto_spawn`),
-			CONSTRAINT `fk_bot_players_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8]]
-	}
-
-	for _, query in ipairs(queries) do
-		if not db.query(query) then
-			return false
-		end
+function BotSystem.isEnabled()
+	if Game.isBotSystemEnabled then
+		return Game.isBotSystemEnabled()
 	end
+
+	if configManager and configKeys and configKeys.BOT_SYSTEM_ENABLED then
+		return configManager.getBoolean(configKeys.BOT_SYSTEM_ENABLED)
+	end
+	return true
+end
+
+function BotSystem.ensureTables()
+	if tablesReady then
+		return true
+	end
+
+	if not BotSystem.isEnabled() then
+		return false
+	end
+
+	if Game.ensureBotTables then
+		tablesReady = Game.ensureBotTables()
+		return tablesReady
+	end
+
+	local resultId = db.storeQuery("SHOW TABLES LIKE " .. db.escapeString("bot_players"))
+	if not resultId then
+		return false
+	end
+
+	result.free(resultId)
+	tablesReady = true
 	return true
 end
 
@@ -98,6 +111,10 @@ function BotSystem.isRegistered(playerId)
 end
 
 function BotSystem.register(nameOrGuid, autoSpawn, vocation)
+	if not BotSystem.isEnabled() then
+		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	end
+
 	if not BotSystem.ensureTables() then
 		return false, "Could not create bot tables."
 	end
@@ -131,6 +148,10 @@ function BotSystem.register(nameOrGuid, autoSpawn, vocation)
 end
 
 function BotSystem.unregister(nameOrGuid)
+	if not BotSystem.isEnabled() then
+		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	end
+
 	if not BotSystem.ensureTables() then
 		return false, "Could not create bot tables."
 	end
@@ -150,6 +171,10 @@ function BotSystem.unregister(nameOrGuid)
 end
 
 function BotSystem.setEnabled(nameOrGuid, enabled)
+	if not BotSystem.isEnabled() then
+		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	end
+
 	if not BotSystem.ensureTables() then
 		return false, "Could not create bot tables."
 	end
@@ -171,6 +196,10 @@ function BotSystem.setEnabled(nameOrGuid, enabled)
 end
 
 function BotSystem.setAutoSpawn(nameOrGuid, enabled)
+	if not BotSystem.isEnabled() then
+		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	end
+
 	if not BotSystem.ensureTables() then
 		return false, "Could not create bot tables."
 	end
@@ -192,7 +221,14 @@ function BotSystem.setAutoSpawn(nameOrGuid, enabled)
 end
 
 function BotSystem.spawn(nameOrGuid, broadcast, requireMarked)
+	if not BotSystem.isEnabled() then
+		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	end
+
 	local player, message = Game.spawnBot(nameOrGuid, broadcast == true, requireMarked ~= false)
+	if player and BotBrain and BotBrain.activate then
+		BotBrain.activate(player)
+	end
 	return player ~= nil, message, player
 end
 
@@ -201,10 +237,18 @@ function BotSystem.despawn(nameOrGuid, save)
 end
 
 function BotSystem.setCast(nameOrGuid, enabled)
+	if not BotSystem.isEnabled() then
+		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	end
+
 	return Game.setBotBroadcast(nameOrGuid, enabled == true)
 end
 
 function BotSystem.spawnAuto()
+	if not BotSystem.isEnabled() then
+		return 0
+	end
+
 	if not BotSystem.ensureTables() then
 		return 0
 	end

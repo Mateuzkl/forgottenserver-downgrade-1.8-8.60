@@ -94,6 +94,20 @@ int luaGameRegisterBot(lua_State* L)
 	return 5;
 }
 
+int luaGameEnsureBotTables(lua_State* L)
+{
+	// Game.ensureBotTables()
+	pushBoolean(L, BotManager::getInstance().ensureTables());
+	return 1;
+}
+
+int luaGameIsBotSystemEnabled(lua_State* L)
+{
+	// Game.isBotSystemEnabled()
+	pushBoolean(L, BotManager::getInstance().isEnabled());
+	return 1;
+}
+
 int luaGameSpawnBot(lua_State* L)
 {
 	// Game.spawnBot(nameOrGuid[, broadcast = false[, requireMarked = true]])
@@ -1393,6 +1407,8 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "getSpectators", luaGameGetSpectators);
 	registerMethod("Game", "getPlayers", luaGameGetPlayers);
 	registerMethod("Game", "registerBot", luaGameRegisterBot);
+	registerMethod("Game", "ensureBotTables", luaGameEnsureBotTables);
+	registerMethod("Game", "isBotSystemEnabled", luaGameIsBotSystemEnabled);
 	registerMethod("Game", "spawnBot", luaGameSpawnBot);
 	registerMethod("Game", "despawnBot", luaGameDespawnBot);
 	registerMethod("Game", "despawnAllBots", luaGameDespawnAllBots);

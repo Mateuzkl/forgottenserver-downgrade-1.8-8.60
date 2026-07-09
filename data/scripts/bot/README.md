@@ -12,10 +12,20 @@ The Canary engine is much larger and tied to Canary-only APIs. This port keeps t
 
 - registered bot players live in `bot_players`;
 - `/bot add` creates the `botaccount` account and the requested player name when they do not exist;
+- new bot accounts receive a generated password, and older public `botaccount` passwords are rotated automatically;
 - bots are spawned as real `Player` objects loaded through `IOLoginData`;
 - active bots are held by `std::shared_ptr<Player>` in `BotManager`;
 - despawn uses the normal `Game::removeCreature` path, so logout hooks and player saving still run;
 - cast uses the existing `ProtocolSpectator` system, so a bot can be watched through the normal cast list.
+- `BotBrain` equips starter gear without dropping it to the floor, disables loot/skill loss for bots, looks for nearby monsters, follows/attacks them, and wanders while idle.
+
+## Config
+
+```lua
+botSystemEnabled = true
+```
+
+Set it to `false` to disable registration, spawn, auto-spawn, and the Lua brain loop.
 
 ## Commands
 

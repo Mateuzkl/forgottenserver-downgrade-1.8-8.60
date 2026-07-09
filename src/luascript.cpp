@@ -2963,6 +2963,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::SOULPIT_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::SOULSEALS_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::CLEAVE_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::BOT_SYSTEM_ENABLED);
 
 	registerEnumIn("configKeys", ConfigManager::MAP_NAME);
 	registerEnumIn("configKeys", ConfigManager::HOUSE_RENT_PERIOD);
