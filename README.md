@@ -4,7 +4,7 @@
 
 <div align="center">
 
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/9ne5TZapd)
+[![Discord](https://img.shields.io/discord/1498442075442516120.svg?style=flat-square&logo=discord&label=Discord&color=5865F2)](https://discord.gg/9ne5TZapd)
 [![CI](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/actions/workflows/build.yml/badge.svg)](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/actions/workflows/build.yml)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/Mateuzkl/forgottenserver-downgrade?branch=official&svg=true)](https://ci.appveyor.com/project/Mateuzkl/forgottenserver-downgrade)
 ![Repository size](https://img.shields.io/github/repo-size/Mateuzkl/forgottenserver-downgrade-1.8-8.60?style=flat-square)

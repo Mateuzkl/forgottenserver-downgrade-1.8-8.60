@@ -29,7 +29,7 @@ install:
   - cmd: call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
   - cmd: cmake --version
   - cmd: ninja --version
-  - cmd: "%VCPKG_ROOT%\vcpkg.exe" version
+  - cmd: '"%VCPKG_ROOT%\vcpkg.exe" version'
 
 build_script:
   - cmd: call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
