@@ -3905,34 +3905,10 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 	if (lootAllCorpses && pos.x != 0xFFFF) {
 		if (Thing* clickedThing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_USEITEM)) {
 			if (Item* clickedItem = clickedThing->getItem()) {
-				if (Container* clickedContainer = clickedItem->getContainer()) {
-					if (shouldUseContainerInsteadOfQuickLoot(clickedContainer)) {
-						playerUseItem(playerId, pos, stackPos, 0, itemId);
-						return;
-					}
-
-					if (isQuickLootCorpseType(clickedContainer)) {
-						ContainerPtr clickedContainerRef = getContainerSharedRef(clickedContainer);
-						if (!clickedContainerRef) {
-							player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
-							return;
-						}
-
-						QuickLootResult result = collectQuickLootContainer(*this, player, clickedContainerRef);
-						if (result.movedItems > 0) {
-							player->maintainAttackFlow();
-							return;
-						}
-
-						if (result.failure != RETURNVALUE_NOERROR) {
-							player->sendCancelMessage(result.failure);
-							player->maintainAttackFlow();
-							return;
-						}
-
-						playerUseItem(playerId, pos, stackPos, 0, itemId);
-						return;
-					}
+				if (Container* clickedContainer = clickedItem->getContainer();
+				    shouldUseContainerInsteadOfQuickLoot(clickedContainer)) {
+					playerUseItem(playerId, pos, stackPos, 0, itemId);
+					return;
 				}
 			}
 		}
@@ -4003,11 +3979,6 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 		}
 
 		QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
-		if (result.movedItems == 0 && result.failure == RETURNVALUE_NOERROR && isQuickLootCorpseType(container)) {
-			playerUseItem(playerId, pos, stackPos, 0, itemId);
-			return;
-		}
-
 		sendQuickLootResultMessage(player, result);
 		player->maintainAttackFlow();
 		return;
