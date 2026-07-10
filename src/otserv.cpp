@@ -6,6 +6,7 @@
 #include "otserv.h"
 
 #include "configmanager.h"
+#include "console_styles.h"
 #include "databasemanager.h"
 #include "databasetasks.h"
 #include "game.h"
@@ -486,14 +487,7 @@ void startServer()
 		g_stats.start();
 		g_stats.setEnabled(true);
 #endif
-		using fmt::fg;
-		using fmt::emphasis;
-
-		const auto cyan_b    = fg(fmt::color::cyan) | emphasis::bold;
-		const auto green_b   = fg(fmt::color::lime_green) | emphasis::bold;
-		const auto white_b   = fg(fmt::color::white) | emphasis::bold;
-		const auto gray      = fg(fmt::color::gray);
-		const auto dark_gray = fg(fmt::color::dim_gray);
+		using namespace ConsoleStyle;
 
 		// ── Server Config ──
 		fmt::print(cyan_b, "    ⚙  SERVER CONFIG\n");
@@ -623,13 +617,9 @@ void printServerVersion()
 	using fmt::emphasis;
 
 	const auto purple      = fg(fmt::color::medium_purple);
-	const auto cyan_b      = fg(fmt::color::cyan) | emphasis::bold;
-	const auto white_b     = fg(fmt::color::white) | emphasis::bold;
-	const auto gray        = fg(fmt::color::gray);
-	const auto dark_gray   = fg(fmt::color::dim_gray);
-	const auto green_b     = fg(fmt::color::lime_green) | emphasis::bold;
+	using namespace ConsoleStyle;
+
 	const auto magenta_b   = fg(fmt::color::magenta) | emphasis::bold;
-	const auto red_b       = fg(fmt::color::orange_red) | emphasis::bold;
 
 	// ── ASCII Banner ──
 	fmt::print("\n");

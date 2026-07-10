@@ -9,6 +9,7 @@
 #include "bed.h"
 #include "character_bazaar.h"
 #include "configmanager.h"
+#include "console_styles.h"
 #include "creature.h"
 #include "creatureevent.h"
 #include "databasetasks.h"
@@ -637,10 +638,7 @@ void Game::setGameState(GameState_t newState)
 		}
 
 		case GAME_STATE_SHUTDOWN: {
-			using fmt::fg;
-			using fmt::emphasis;
-			const auto red_b     = fg(fmt::color::orange_red)  | emphasis::bold;
-			const auto dark_gray = fg(fmt::color::dim_gray);
+			using namespace ConsoleStyle;
 			fmt::print("\n");
 			fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
 			fmt::print(red_b,    "    ✖ SHUTTING DOWN\n");
