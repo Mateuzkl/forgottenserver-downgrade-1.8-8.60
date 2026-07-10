@@ -81,8 +81,8 @@ done
 
 [[ -n "${pid}" || -n "${process_name}" ]] || die "use --pid or --process"
 [[ -z "${pid}" || -z "${process_name}" ]] || die "use only one of --pid or --process"
-[[ "${duration}" =~ ^[0-9]+$ ]] || die "--duration must be an integer"
-[[ "${freq}" =~ ^[0-9]+$ ]] || die "--freq must be an integer"
+[[ "${duration}" =~ ^[0-9]+$ && "${duration}" -ge 1 ]] || die "--duration must be a positive integer"
+[[ "${freq}" =~ ^[0-9]+$ && "${freq}" -ge 1 ]] || die "--freq must be a positive integer"
 
 if [[ -n "${process_name}" ]]; then
   command -v pidof >/dev/null 2>&1 || die "pidof not found"
@@ -91,7 +91,6 @@ if [[ -n "${process_name}" ]]; then
 fi
 
 [[ "${pid}" =~ ^[0-9]+$ ]] || die "invalid PID: ${pid}"
-kill -0 "${pid}" 2>/dev/null || die "PID is not running or cannot be inspected: ${pid}"
 
 command -v perf >/dev/null 2>&1 || die "perf not found. Run scripts/profiling/setup_flamegraph.sh first."
 command -v perl >/dev/null 2>&1 || die "perl not found"
@@ -106,9 +105,9 @@ flamegraph="${flamegraph_dir}/flamegraph.pl"
 output_dir="$(dirname -- "${output}")"
 output_file="$(basename -- "${output}")"
 base_name="${output_file%.svg}"
-intermediate_dir="profiling-output"
+intermediate_dir="${output_dir}"
 
-mkdir -p "${output_dir}" "${intermediate_dir}"
+mkdir -p "${output_dir}"
 
 perf_data="${intermediate_dir}/${base_name}.perf.data"
 perf_script="${intermediate_dir}/${base_name}.perf"
