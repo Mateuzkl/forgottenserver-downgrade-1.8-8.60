@@ -16,8 +16,10 @@ The Canary engine is much larger and tied to Canary-only APIs. This port keeps t
 - bots are spawned as real `Player` objects loaded through `IOLoginData`;
 - active bots are held by `std::shared_ptr<Player>` in `BotManager`;
 - despawn uses the normal `Game::removeCreature` path, so logout hooks and player saving still run;
-- cast uses the existing `ProtocolSpectator` system, so a bot can be watched through the normal cast list.
-- `BotBrain` equips starter gear without dropping it to the floor, disables loot/skill loss for bots, looks for nearby monsters, follows/attacks them, and wanders while idle.
+- cast uses the existing `ProtocolSpectator` system, so a bot can be watched through the normal cast list;
+- socketless bots refresh their own pong inside `Player::sendPing`, so the `noPongKickTime` logout and the 7s attack-target drop never fire for them (spectator pings keep flowing);
+- `BotBrain` equips starter gear without dropping it to the floor, disables loot/skill loss for bots, looks for nearby monsters, follows/attacks them, and wanders while idle;
+- pure decision logic lives in `data/scripts/lib/bot_core.lua` and is covered by engine-free tests (`bash tests/lua/run.sh`).
 
 ## Config
 
@@ -25,7 +27,15 @@ The Canary engine is much larger and tied to Canary-only APIs. This port keeps t
 botSystemEnabled = true
 ```
 
-Set it to `false` to disable registration, spawn, auto-spawn, and the Lua brain loop.
+The system ships **disabled** (`botSystemEnabled = false` is the default); set it to `true` in `config.lua` to enable registration, spawn, auto-spawn, and the Lua brain loop.
+
+Brain behaviour can be tuned from any script before startup, e.g.:
+
+```lua
+BotBrain.config = { tickInterval = 250, heal = { enabled = false } }
+```
+
+Missing keys are filled from `BotCore.defaults`.
 
 ## Commands
 
@@ -52,6 +62,8 @@ Example:
 ```
 
 `vocation` is optional. When omitted, a new bot is created as a knight.
+
+Auto-spawned bots always open their cast on spawn; use `/bot cast name, off` to close it afterwards.
 
 ## SQL
 

@@ -1,86 +1,50 @@
+-- BotBrain: engine adapter for the managed bot AI tick loop.
+-- Decision logic lives in BotCore (data/scripts/lib/bot_core.lua); this file
+-- only touches engine APIs, and never at file scope, so it loads under a bare
+-- Lua interpreter regardless of lib load order.
 BotBrain = BotBrain or {}
-
-BotBrain.config = {
-	tickInterval = 500,
-	idleMoveInterval = 850,
-	combatMoveInterval = 700,
-	searchRangeX = 7,
-	searchRangeY = 5,
-	wanderRadius = 5
-}
 
 BotBrain.state = BotBrain.state or {}
 BotBrain.running = BotBrain.running or false
+BotBrain.eventId = BotBrain.eventId or nil
 
-local cardinalDirections = {
-	DIRECTION_NORTH,
-	DIRECTION_EAST,
-	DIRECTION_SOUTH,
-	DIRECTION_WEST
-}
+local slotMap
 
-local starterEquipment = {
-	common = {
-		{ slot = CONST_SLOT_BACKPACK, itemId = 2854 },
-		{ slot = CONST_SLOT_ARMOR, itemId = 3359 },
-		{ slot = CONST_SLOT_LEGS, itemId = 3372 },
-		{ slot = CONST_SLOT_FEET, itemId = 3552 }
-	},
-	vocations = {
-		[1] = {
-			{ slot = CONST_SLOT_LEFT, itemId = 3074 }
-		},
-		[2] = {
-			{ slot = CONST_SLOT_LEFT, itemId = 3066 }
-		},
-		[3] = {
-			{ slot = CONST_SLOT_LEFT, itemId = 3277 },
-			{ slot = CONST_SLOT_RIGHT, itemId = 3411 }
-		},
-		[4] = {
-			{ slot = CONST_SLOT_LEFT, itemId = 3271 },
-			{ slot = CONST_SLOT_RIGHT, itemId = 3411 }
+local function getConfig()
+	BotBrain.config = BotCore.mergeDefaults(BotBrain.config, BotCore.defaults)
+	return BotBrain.config
+end
+
+local function getSlotId(name)
+	if not slotMap then
+		slotMap = {
+			backpack = CONST_SLOT_BACKPACK,
+			armor = CONST_SLOT_ARMOR,
+			legs = CONST_SLOT_LEGS,
+			feet = CONST_SLOT_FEET,
+			left = CONST_SLOT_LEFT,
+			right = CONST_SLOT_RIGHT
 		}
-	}
-}
+	end
+	return slotMap[name]
+end
 
 local function logWarning(message)
 	if logger and logger.warn then
 		logger.warn(message)
-	else
+	elseif logInfo then
 		logInfo(message)
+	else
+		print(message)
 	end
 end
 
-local function distance(a, b)
-	if not a or not b or a.z ~= b.z then
-		return 999
-	end
-	return math.max(math.abs(a.x - b.x), math.abs(a.y - b.y))
-end
-
-local function vocationBase(player)
-	local vocation = player:getVocation()
-	if not vocation or not vocation.getId then
-		return 4
-	end
-
-	local id = vocation:getId()
-	if id > 4 then
-		id = id - 4
-	end
-	if id < 1 or id > 4 then
-		return 4
-	end
-	return id
-end
-
-local function addToSlot(player, slot, itemId, count)
+local function addToSlot(player, slot, itemId)
 	if player:getSlotItem(slot) then
 		return true
 	end
 
-	local item = player:addItem(itemId, count or 1, false, count or 1, slot)
+	local item = player:addItem(itemId, 1, false, 1, slot)
 	return item ~= nil
 end
 
@@ -106,56 +70,64 @@ local function configureBot(player)
 		player:setFightMode(FIGHTMODE_ATTACK, false, true)
 	end
 
-	for _, entry in ipairs(starterEquipment.common) do
-		addToSlot(player, entry.slot, entry.itemId, entry.count)
-	end
-	for _, entry in ipairs(starterEquipment.vocations[vocationBase(player)] or starterEquipment.vocations[4]) do
-		addToSlot(player, entry.slot, entry.itemId, entry.count)
+	local vocation = player:getVocation()
+	local vocationBase = BotCore.vocationBase(vocation and vocation.getId and vocation:getId() or 4)
+	for _, entry in ipairs(BotCore.equipmentFor(vocationBase)) do
+		local slot = getSlotId(entry.slot)
+		if slot then
+			addToSlot(player, slot, entry.itemId)
+		end
 	end
 
 	local pos = player:getPosition()
 	state.home = { x = pos.x, y = pos.y, z = pos.z }
 	state.nextMoveAt = 0
-	state.nextSayAt = os.time() + math.random(40, 120)
+	state.nextSayAt = os.time() + BotCore.firstSayDelay()
 	state.configured = true
 	return state
 end
 
-local function healIfNeeded(player)
-	local missingHealth = player:getMaxHealth() - player:getHealth()
-	if missingHealth > 0 and player:getHealth() * 100 <= player:getMaxHealth() * 65 then
-		player:addHealth(math.min(missingHealth, math.max(25, math.floor(player:getMaxHealth() * 0.15))))
+local function healIfNeeded(player, config)
+	if not config.heal.enabled then
+		return
+	end
+
+	local healthAmount = BotCore.computeHeal(player:getHealth(), player:getMaxHealth(), config.heal.health)
+	if healthAmount then
+		player:addHealth(healthAmount)
 	end
 
 	if player.getMana and player.getMaxMana and player.addMana then
-		local maxMana = player:getMaxMana()
-		local missingMana = maxMana - player:getMana()
-		if missingMana > 0 and player:getMana() * 100 <= maxMana * 50 then
-			player:addMana(math.min(missingMana, math.max(20, math.floor(maxMana * 0.20))))
+		local manaAmount = BotCore.computeHeal(player:getMana(), player:getMaxMana(), config.heal.mana)
+		if manaAmount then
+			player:addMana(manaAmount)
 		end
 	end
 end
 
 local function validMonster(creature)
-	return creature and not creature:isRemoved() and creature.isMonster and creature:isMonster() and creature:getHealth() > 0
+	return creature and not creature:isRemoved() and creature.isMonster and creature:isMonster() and
+		creature:getHealth() > 0
 end
 
-local function findTarget(player)
+local function findTarget(player, config)
 	local position = player:getPosition()
-	local spectators = Game.getSpectators(position, false, false, BotBrain.config.searchRangeX, BotBrain.config.searchRangeX, BotBrain.config.searchRangeY, BotBrain.config.searchRangeY)
-	local closest
-	local closestDistance = 999
+	local spectators = Game.getSpectators(position, false, false, config.searchRangeX, config.searchRangeX,
+		config.searchRangeY, config.searchRangeY)
 
-	for _, creature in ipairs(spectators) do
+	local candidates = {}
+	for index, creature in ipairs(spectators) do
 		if validMonster(creature) and player:canSeeCreature(creature) then
-			local creatureDistance = distance(position, creature:getPosition())
-			if creatureDistance < closestDistance then
-				closest = creature
-				closestDistance = creatureDistance
-			end
+			local creaturePosition = creature:getPosition()
+			candidates[#candidates + 1] = {
+				index = index,
+				position = { x = creaturePosition.x, y = creaturePosition.y, z = creaturePosition.z }
+			}
 		end
 	end
-	return closest, closestDistance
+
+	local chosen = BotCore.selectTarget({ x = position.x, y = position.y, z = position.z }, candidates)
+	return chosen and spectators[chosen.index] or nil
 end
 
 local function walkPath(player, targetPos, minDistance, maxDistance)
@@ -164,43 +136,25 @@ local function walkPath(player, targetPos, minDistance, maxDistance)
 		return false
 	end
 
-	local ret = player:move(path[1])
-	return ret == RETURNVALUE_NOERROR or ret == true or ret == 0
+	return player:move(path[1]) == RETURNVALUE_NOERROR
 end
 
-local function randomNearbyPosition(pos, radius)
-	local dx = math.random(-radius, radius)
-	local dy = math.random(-radius, radius)
-	if dx == 0 and dy == 0 then
-		local direction = cardinalDirections[math.random(#cardinalDirections)]
-		if direction == DIRECTION_NORTH then
-			dy = -1
-		elseif direction == DIRECTION_SOUTH then
-			dy = 1
-		elseif direction == DIRECTION_EAST then
-			dx = 1
-		else
-			dx = -1
-		end
-	end
-	return Position(pos.x + dx, pos.y + dy, pos.z)
-end
-
-local function wander(player, state, nowMs)
+local function wander(player, state, config, nowMs)
 	if nowMs < (state.nextMoveAt or 0) then
 		return
 	end
-	state.nextMoveAt = nowMs + BotBrain.config.idleMoveInterval + math.random(0, 300)
+	state.nextMoveAt = nowMs + config.idleMoveInterval + math.random(0, 300)
 
 	local pos = player:getPosition()
-	local target = randomNearbyPosition(state.home or pos, BotBrain.config.wanderRadius)
-	walkPath(player, target, 0, 1)
+	local home = state.home or { x = pos.x, y = pos.y, z = pos.z }
+	local dx, dy = BotCore.pickWanderOffset(config.wanderRadius)
+	walkPath(player, Position(home.x + dx, home.y + dy, home.z), 0, 1)
 end
 
-local function handleCombat(player, state, nowMs)
+local function handleCombat(player, state, config, nowMs)
 	local target = player:getTarget()
 	if not validMonster(target) then
-		target = findTarget(player)
+		target = findTarget(player, config)
 	end
 
 	if not target then
@@ -211,9 +165,13 @@ local function handleCombat(player, state, nowMs)
 
 	player:setTarget(target)
 
-	if nowMs >= (state.nextMoveAt or 0) and distance(player:getPosition(), target:getPosition()) > 1 then
-		state.nextMoveAt = nowMs + BotBrain.config.combatMoveInterval
-		walkPath(player, target:getPosition(), 1, 1)
+	local playerPosition = player:getPosition()
+	local targetPosition = target:getPosition()
+	if nowMs >= (state.nextMoveAt or 0) and
+		BotCore.chebyshevDistance({ x = playerPosition.x, y = playerPosition.y, z = playerPosition.z },
+			{ x = targetPosition.x, y = targetPosition.y, z = targetPosition.z }) > 1 then
+		state.nextMoveAt = nowMs + config.combatMoveInterval
+		walkPath(player, targetPosition, 1, 1)
 	end
 	return true
 end
@@ -223,15 +181,8 @@ local function maybeSay(player, state)
 		return
 	end
 
-	state.nextSayAt = os.time() + math.random(90, 240)
-	local phrases = {
-		"hi",
-		"hunt?",
-		"need cap",
-		"refill soon",
-		"exura"
-	}
-	player:say(phrases[math.random(#phrases)], TALKTYPE_SAY)
+	state.nextSayAt = os.time() + BotCore.nextSayDelay()
+	player:say(BotCore.pickPhrase(), TALKTYPE_SAY)
 end
 
 function BotBrain.activate(player)
@@ -244,23 +195,43 @@ function BotBrain.activate(player)
 	return true
 end
 
+function BotBrain.forget(guid)
+	BotBrain.state[guid] = nil
+end
+
 function BotBrain.run()
+	local config = getConfig()
 	local bots = Game.getBots()
 	local nowMs = os.mtime and os.mtime() or (os.time() * 1000)
 
+	local seen = {}
 	for _, player in ipairs(bots) do
 		if player and not player:isRemoved() and player:isBot() then
-			local state = configureBot(player)
-			healIfNeeded(player)
-			if not handleCombat(player, state, nowMs) then
-				wander(player, state, nowMs)
-				maybeSay(player, state)
+			seen[player:getGuid()] = true
+			-- One broken bot must not starve the rest of the fleet.
+			local ok, err = pcall(function()
+				local state = configureBot(player)
+				healIfNeeded(player, config)
+				if not handleCombat(player, state, config, nowMs) then
+					wander(player, state, config, nowMs)
+					maybeSay(player, state)
+				end
+			end)
+			if not ok then
+				logWarning("[BotBrain] bot tick failed: " .. tostring(err))
 			end
+		end
+	end
+
+	for guid in pairs(BotBrain.state) do
+		if not seen[guid] then
+			BotBrain.state[guid] = nil
 		end
 	end
 end
 
 function BotBrain.tick()
+	BotBrain.eventId = nil
 	if not BotBrain.running then
 		return
 	end
@@ -275,9 +246,7 @@ function BotBrain.tick()
 		logWarning("[BotBrain] tick failed: " .. tostring(err))
 	end
 
-	addEvent(function()
-		BotBrain.tick()
-	end, BotBrain.config.tickInterval)
+	BotBrain.eventId = addEvent(BotBrain.tick, getConfig().tickInterval)
 end
 
 function BotBrain.start()
@@ -289,11 +258,13 @@ function BotBrain.start()
 	end
 
 	BotBrain.running = true
-	addEvent(function()
-		BotBrain.tick()
-	end, BotBrain.config.tickInterval)
+	BotBrain.eventId = addEvent(BotBrain.tick, getConfig().tickInterval)
 end
 
 function BotBrain.stop()
 	BotBrain.running = false
+	if BotBrain.eventId then
+		stopEvent(BotBrain.eventId)
+		BotBrain.eventId = nil
+	end
 end

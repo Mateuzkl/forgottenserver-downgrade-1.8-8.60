@@ -4,28 +4,9 @@ local function send(player, message)
 	player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, message)
 end
 
-local function splitCommand(param)
-	param = tostring(param or ""):gsub("^%s+", ""):gsub("%s+$", "")
-	if param == "" then
-		return "", ""
-	end
-
-	local action, rest = param:match("^(%S+)%s*(.*)$")
-	return (action or ""):lower(), rest or ""
-end
-
-local function splitArgs(rest)
-	return rest:splitTrimmed(",")
-end
-
-local function parseToggle(value)
-	value = tostring(value or ""):lower()
-	return value == "on" or value == "true" or value == "1" or value == "yes" or value == "auto"
-end
-
 local function parseAddAutoSpawn(value)
 	value = tostring(value or ""):lower()
-	return value == "auto" or parseToggle(value)
+	return value == "auto" or BotCore.parseToggle(value)
 end
 
 local function showHelp(player)
@@ -46,55 +27,56 @@ end
 function talkaction.onSay(player, words, param)
 	logCommand(player, words, param)
 
-	local action, rest = splitCommand(param)
+	if not BotSystem or not BotCore then
+		send(player, "Bot system libraries are not loaded.")
+		return false
+	end
+
+	local action, args = BotCore.parseCommand(param)
 	if action == "" or action == "help" then
 		showHelp(player)
 		return false
 	end
 
 	if action == "add" or action == "register" then
-		local args = splitArgs(rest)
 		local ok, message = BotSystem.register(args[1], args[2] and parseAddAutoSpawn(args[2]), args[3])
 		send(player, message)
 		return false
 	end
 
 	if action == "remove" or action == "unregister" then
-		local ok, message = BotSystem.unregister(rest)
+		local ok, message = BotSystem.unregister(args[1])
 		send(player, message)
 		return false
 	end
 
 	if action == "enable" or action == "disable" then
-		local ok, message = BotSystem.setEnabled(rest, action == "enable")
+		local ok, message = BotSystem.setEnabled(args[1], action == "enable")
 		send(player, message)
 		return false
 	end
 
 	if action == "autospawn" then
-		local args = splitArgs(rest)
-		local ok, message = BotSystem.setAutoSpawn(args[1], parseToggle(args[2]))
+		local ok, message = BotSystem.setAutoSpawn(args[1], BotCore.parseToggle(args[2]))
 		send(player, message)
 		return false
 	end
 
 	if action == "spawn" then
-		local args = splitArgs(rest)
-		local broadcast = args[2] and (args[2]:lower() == "cast" or parseToggle(args[2]))
+		local broadcast = args[2] and (args[2]:lower() == "cast" or BotCore.parseToggle(args[2]))
 		local ok, message = BotSystem.spawn(args[1], broadcast, true)
 		send(player, message)
 		return false
 	end
 
 	if action == "despawn" or action == "kick" then
-		local ok, message = BotSystem.despawn(rest, true)
+		local ok, message = BotSystem.despawn(args[1], true)
 		send(player, message)
 		return false
 	end
 
 	if action == "cast" then
-		local args = splitArgs(rest)
-		local ok, message = BotSystem.setCast(args[1], parseToggle(args[2]))
+		local ok, message = BotSystem.setCast(args[1], BotCore.parseToggle(args[2]))
 		send(player, message)
 		return false
 	end
@@ -135,6 +117,6 @@ function talkaction.onSay(player, words, param)
 end
 
 talkaction:separator(" ")
-talkaction:accountType(6)
+talkaction:accountType(ACCOUNT_TYPE_GOD)
 talkaction:access(true)
 talkaction:register()

@@ -1,3 +1,8 @@
+-- BotSystem: registry and spawn wrapper for the managed bot system.
+-- Registration/spawn/despawn are implemented once, in C++ (BotManager); this
+-- file intentionally has no SQL fallbacks for those paths so the logic cannot
+-- drift. SQL remains only where it is the canonical implementation (registry
+-- listing and per-bot flags). No engine global is read at file scope.
 BotSystem = BotSystem or {}
 
 local tablesReady = false
@@ -6,43 +11,25 @@ local function boolToNumber(value)
 	return value and 1 or 0
 end
 
-local function normalizeName(name)
-	name = tostring(name or "")
-	name = name:gsub("^%s+", ""):gsub("%s+$", "")
-	return name
-end
+local DISABLED_MESSAGE = "Bot system is disabled in config.lua (botSystemEnabled = false)."
+local UNAVAILABLE_MESSAGE = "Bot system requires a server build with BotManager (Game.spawnBot missing)."
 
-local function parseVocation(value)
-	value = tostring(value or ""):lower()
-	if value == "" then
-		return 4
-	end
-
-	local vocation = tonumber(value)
-	if vocation then
-		return math.floor(vocation)
-	end
-
-	local names = {
-		sorcerer = 1,
-		druid = 2,
-		paladin = 3,
-		knight = 4,
-		ms = 5,
-		ed = 6,
-		rp = 7,
-		ek = 8
-	}
-	return names[value] or 4
+function BotSystem.isAvailable()
+	return Game.spawnBot ~= nil and Game.registerBot ~= nil and Game.despawnBot ~= nil and
+		Game.ensureBotTables ~= nil and Game.isBotSystemEnabled ~= nil
 end
 
 function BotSystem.isEnabled()
-	if Game.isBotSystemEnabled then
-		return Game.isBotSystemEnabled()
-	end
+	return BotSystem.isAvailable() and Game.isBotSystemEnabled()
+end
 
-	if configManager and configKeys and configKeys.BOT_SYSTEM_ENABLED then
-		return configManager.getBoolean(configKeys.BOT_SYSTEM_ENABLED)
+-- Returns false plus the reason when the system cannot act.
+local function guard()
+	if not BotSystem.isAvailable() then
+		return false, UNAVAILABLE_MESSAGE
+	end
+	if not Game.isBotSystemEnabled() then
+		return false, DISABLED_MESSAGE
 	end
 	return true
 end
@@ -52,27 +39,17 @@ function BotSystem.ensureTables()
 		return true
 	end
 
-	if not BotSystem.isEnabled() then
+	local ok = guard()
+	if not ok then
 		return false
 	end
 
-	if Game.ensureBotTables then
-		tablesReady = Game.ensureBotTables()
-		return tablesReady
-	end
-
-	local resultId = db.storeQuery("SHOW TABLES LIKE " .. db.escapeString("bot_players"))
-	if not resultId then
-		return false
-	end
-
-	result.free(resultId)
-	tablesReady = true
-	return true
+	tablesReady = Game.ensureBotTables()
+	return tablesReady
 end
 
 function BotSystem.getPlayerId(nameOrGuid)
-	local value = normalizeName(nameOrGuid)
+	local value = BotCore.trim(nameOrGuid)
 	if value == "" then
 		return nil, nil
 	end
@@ -82,7 +59,8 @@ function BotSystem.getPlayerId(nameOrGuid)
 	if numeric and numeric > 0 then
 		query = "SELECT `id`, `name` FROM `players` WHERE `id` = " .. math.floor(numeric) .. " LIMIT 1"
 	else
-		query = "SELECT `id`, `name` FROM `players` WHERE LOWER(`name`) = LOWER(" .. db.escapeString(value) .. ") LIMIT 1"
+		query = "SELECT `id`, `name` FROM `players` WHERE LOWER(`name`) = LOWER(" .. db.escapeString(value) ..
+			") LIMIT 1"
 	end
 
 	local resultId = db.storeQuery(query)
@@ -101,7 +79,8 @@ function BotSystem.isRegistered(playerId)
 		return false
 	end
 
-	local resultId = db.storeQuery("SELECT `player_id` FROM `bot_players` WHERE `player_id` = " .. playerId .. " LIMIT 1")
+	local resultId = db.storeQuery(
+		"SELECT `player_id` FROM `bot_players` WHERE `player_id` = " .. playerId .. " LIMIT 1")
 	if not resultId then
 		return false
 	end
@@ -111,45 +90,39 @@ function BotSystem.isRegistered(playerId)
 end
 
 function BotSystem.register(nameOrGuid, autoSpawn, vocation)
-	if not BotSystem.isEnabled() then
-		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	local ok, message = guard()
+	if not ok then
+		return false, message
 	end
 
 	if not BotSystem.ensureTables() then
 		return false, "Could not create bot tables."
 	end
 
-	local normalized = normalizeName(nameOrGuid)
+	local normalized = BotCore.trim(nameOrGuid)
 	if normalized == "" then
 		return false, "Bot name is required."
 	end
 
-	if Game.registerBot and not tonumber(normalized) then
-		local ok, message = Game.registerBot(normalized, autoSpawn == true, true, parseVocation(vocation), PLAYERSEX_MALE)
-		return ok, message
+	-- Numeric input refers to an existing player id; resolve it to the name
+	-- so the single C++ registration path handles both forms.
+	if tonumber(normalized) then
+		local playerId, playerName = BotSystem.getPlayerId(normalized)
+		if not playerId then
+			return false, "Player not found."
+		end
+		normalized = playerName
 	end
 
-	local playerId, playerName = BotSystem.getPlayerId(nameOrGuid)
-	if not playerId then
-		return false, "Player not found."
-	end
-
-	local now = os.time()
-	local query = string.format(
-		"INSERT INTO `bot_players` (`player_id`, `enabled`, `auto_spawn`, `created_at`, `updated_at`) VALUES (%d, 1, %d, %d, %d) " ..
-		"ON DUPLICATE KEY UPDATE `enabled` = 1, `auto_spawn` = VALUES(`auto_spawn`), `updated_at` = VALUES(`updated_at`)",
-		playerId, boolToNumber(autoSpawn), now, now
-	)
-
-	if not db.query(query) then
-		return false, "Could not register bot."
-	end
-	return true, string.format("Bot '%s' registered%s.", playerName, autoSpawn and " with auto-spawn" or "")
+	local registered, registerMessage = Game.registerBot(normalized, autoSpawn == true, true,
+		BotCore.normalizeVocation(vocation), PLAYERSEX_MALE)
+	return registered, registerMessage
 end
 
 function BotSystem.unregister(nameOrGuid)
-	if not BotSystem.isEnabled() then
-		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	local ok, message = guard()
+	if not ok then
+		return false, message
 	end
 
 	if not BotSystem.ensureTables() then
@@ -170,9 +143,10 @@ function BotSystem.unregister(nameOrGuid)
 	return true, string.format("Bot '%s' unregistered.", playerName)
 end
 
-function BotSystem.setEnabled(nameOrGuid, enabled)
-	if not BotSystem.isEnabled() then
-		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+local function setRegistryFlag(nameOrGuid, column, enabled, label)
+	local ok, message = guard()
+	if not ok then
+		return false, message
 	end
 
 	if not BotSystem.ensureTables() then
@@ -187,58 +161,55 @@ function BotSystem.setEnabled(nameOrGuid, enabled)
 		return false, "Bot is not registered. Use /bot add first."
 	end
 
-	local query = string.format("UPDATE `bot_players` SET `enabled` = %d, `updated_at` = %d WHERE `player_id` = %d",
-		boolToNumber(enabled), os.time(), playerId)
+	local query = string.format("UPDATE `bot_players` SET `%s` = %d, `updated_at` = %d WHERE `player_id` = %d",
+		column, boolToNumber(enabled), os.time(), playerId)
 	if not db.query(query) then
-		return false, "Could not update bot."
+		return false, string.format("Could not update bot %s.", label)
 	end
-	return true, string.format("Bot '%s' %s.", playerName, enabled and "enabled" or "disabled")
+	return true, string.format("Bot '%s' %s %s.", playerName, label, enabled and "enabled" or "disabled")
+end
+
+function BotSystem.setEnabled(nameOrGuid, enabled)
+	return setRegistryFlag(nameOrGuid, "enabled", enabled, "status")
 end
 
 function BotSystem.setAutoSpawn(nameOrGuid, enabled)
-	if not BotSystem.isEnabled() then
-		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
-	end
-
-	if not BotSystem.ensureTables() then
-		return false, "Could not create bot tables."
-	end
-
-	local playerId, playerName = BotSystem.getPlayerId(nameOrGuid)
-	if not playerId then
-		return false, "Player not found."
-	end
-	if not BotSystem.isRegistered(playerId) then
-		return false, "Bot is not registered. Use /bot add first."
-	end
-
-	local query = string.format("UPDATE `bot_players` SET `auto_spawn` = %d, `updated_at` = %d WHERE `player_id` = %d",
-		boolToNumber(enabled), os.time(), playerId)
-	if not db.query(query) then
-		return false, "Could not update bot auto-spawn."
-	end
-	return true, string.format("Bot '%s' auto-spawn %s.", playerName, enabled and "enabled" or "disabled")
+	return setRegistryFlag(nameOrGuid, "auto_spawn", enabled, "auto-spawn")
 end
 
 function BotSystem.spawn(nameOrGuid, broadcast, requireMarked)
-	if not BotSystem.isEnabled() then
-		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	local ok, message = guard()
+	if not ok then
+		return false, message
 	end
 
-	local player, message = Game.spawnBot(nameOrGuid, broadcast == true, requireMarked ~= false)
+	local player, spawnMessage = Game.spawnBot(nameOrGuid, broadcast == true, requireMarked ~= false)
 	if player and BotBrain and BotBrain.activate then
 		BotBrain.activate(player)
 	end
-	return player ~= nil, message, player
+	return player ~= nil, spawnMessage, player
 end
 
 function BotSystem.despawn(nameOrGuid, save)
+	if not BotSystem.isAvailable() then
+		return false, UNAVAILABLE_MESSAGE
+	end
+
+	-- Despawn stays allowed while the system is disabled so operators can
+	-- always clean up; only spawn/register are gated.
+	if BotBrain and BotBrain.forget then
+		local playerId = BotSystem.getPlayerId(nameOrGuid)
+		if playerId then
+			BotBrain.forget(playerId)
+		end
+	end
 	return Game.despawnBot(nameOrGuid, save ~= false)
 end
 
 function BotSystem.setCast(nameOrGuid, enabled)
-	if not BotSystem.isEnabled() then
-		return false, "Bot system is disabled in config.lua (botSystemEnabled = false)."
+	local ok, message = guard()
+	if not ok then
+		return false, message
 	end
 
 	return Game.setBotBroadcast(nameOrGuid, enabled == true)
@@ -255,8 +226,7 @@ function BotSystem.spawnAuto()
 
 	local resultId = db.storeQuery(
 		"SELECT p.`name` FROM `bot_players` bp INNER JOIN `players` p ON p.`id` = bp.`player_id` " ..
-		"WHERE bp.`enabled` = 1 AND bp.`auto_spawn` = 1 ORDER BY p.`name` ASC"
-	)
+		"WHERE bp.`enabled` = 1 AND bp.`auto_spawn` = 1 ORDER BY p.`name` ASC")
 	if not resultId then
 		return 0
 	end
@@ -264,6 +234,8 @@ function BotSystem.spawnAuto()
 	local spawned = 0
 	repeat
 		local name = result.getString(resultId, "name")
+		-- Auto-spawned bots always open their cast; use "/bot cast <name>, off"
+		-- to close it after spawn.
 		local ok = BotSystem.spawn(name, true, true)
 		if ok then
 			spawned = spawned + 1
@@ -280,8 +252,7 @@ function BotSystem.getRegistered()
 
 	local resultId = db.storeQuery(
 		"SELECT bp.`player_id`, bp.`enabled`, bp.`auto_spawn`, bp.`last_spawn`, bp.`last_despawn`, p.`name`, p.`level` " ..
-		"FROM `bot_players` bp INNER JOIN `players` p ON p.`id` = bp.`player_id` ORDER BY p.`name` ASC"
-	)
+		"FROM `bot_players` bp INNER JOIN `players` p ON p.`id` = bp.`player_id` ORDER BY p.`name` ASC")
 	if not resultId then
 		return {}
 	end
