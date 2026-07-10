@@ -6,6 +6,7 @@
 #include "admin.h"
 #include "configmanager.h"
 #include "connection.h"
+#include "game.h"
 #include "iologindata.h"
 #include "logger.h"
 #include "pugicast.h"
@@ -117,5 +118,4 @@ bool Admin::allow(uint32_t ip) const
 
 	return false;
 }
-
 
