@@ -114,25 +114,36 @@ bool Loader::getProps(const Node& node, PropStream& props)
 	}
 
 	// Slow path: unescape into propBuffer. An ESCAPE (0xFD) byte marks the
-	// next byte as a literal. Copy escape-free runs in bulk and handle only
-	// the escaped bytes individually.
+	// next byte as a literal. Copy escape-free runs in bulk, handle escaped
+	// bytes individually, and step over adjacent escapes without paying a
+	// memchr call per byte (dense escape clusters would otherwise degrade).
 	propBuffer.resize(size);
 	char* dst = propBuffer.data();
 	const char* src = node.propsBegin;
 	const char* const srcEnd = node.propsEnd;
 	const char* esc = escapePtr; // first escape, already located by memchr above
 
-	do {
+	while (true) {
 		dst = std::copy(src, esc, dst); // clean run before the escape
 		src = esc + 1;                  // skip the ESCAPE marker
 		if (src == srcEnd) {
 			break; // trailing lone ESCAPE: nothing to keep
 		}
 		*dst++ = *src++; // escaped byte kept literally (may itself be 0xFD)
-		esc = static_cast<const char*>(std::memchr(src, Node::ESCAPE, srcEnd - src));
-	} while (esc);
+		if (src == srcEnd) {
+			break;
+		}
+		if (*src == static_cast<char>(Node::ESCAPE)) {
+			esc = src; // adjacent escape: no scan needed
+			continue;
+		}
+		esc = static_cast<const char*>(std::memchr(src + 1, Node::ESCAPE, srcEnd - src - 1));
+		if (!esc) {
+			dst = std::copy(src, srcEnd, dst); // tail after the last escape
+			break;
+		}
+	}
 
-	dst = std::copy(src, srcEnd, dst); // tail after the last escape (no-op on break)
 	props.init(propBuffer.data(), std::distance(propBuffer.data(), dst));
 	return true;
 }
