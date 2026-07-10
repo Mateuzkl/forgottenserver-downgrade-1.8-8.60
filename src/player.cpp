@@ -1887,6 +1887,15 @@ void Player::sendPing()
 {
 	int64_t timeNow = OTSYS_TIME();
 
+	if (bot) {
+		// Socketless bots never pong (receivePing only fires from a client
+		// packet, and a cast spectator's pong refreshes lastPong only while
+		// someone is watching). Refresh synthetically so the noPongKickTime
+		// logout and the 7s attack-target drop below never fire for bots,
+		// while the ping fan-out to cast spectators stays intact.
+		lastPong = timeNow;
+	}
+
 	bool hasLostConnection = false;
 	if ((timeNow - lastPing) >= 5000) {
 		lastPing = timeNow;
