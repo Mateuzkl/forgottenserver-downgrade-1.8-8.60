@@ -34,9 +34,7 @@ void ThreadPool::start(uint32_t requestedThreads)
 		workers.emplace_back([this]() { workerMain(); });
 	}
 
-	LOG_INFO(fmt::format(">> {}: Running with {} threads.",
-		fmt::format(fg(fmt::color::cyan), "ThreadPool"),
-		fmt::format(fg(fmt::color::lime_green), "{}", threadCount)));
+
 }
 
 void ThreadPool::shutdown()
@@ -50,7 +48,7 @@ void ThreadPool::shutdown()
 
 	LOG_INFO(fmt::format(">> {}: {}",
 		fmt::format(fg(fmt::color::cyan), "ThreadPool"),
-		fmt::format(fg(fmt::color::yellow), ">> Shutting down...")));
+		fmt::format(fg(fmt::color::yellow), "Shutting down {} workers...", threadCount)));
 	condition.notify_all();
 
 	for (auto& worker : workers) {

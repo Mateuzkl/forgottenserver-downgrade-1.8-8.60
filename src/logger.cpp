@@ -106,6 +106,7 @@ public:
 		try {
 			auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 			console_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
+			allConsoleSinks_.push_back(console_sink);
 
 			std::vector<spdlog::sink_ptr> sinks{console_sink};
 
@@ -130,58 +131,60 @@ public:
 
 			auto console_sink_stats = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 			console_sink_stats->set_pattern("[%H:%M:%S] %v");
+			allConsoleSinks_.push_back(console_sink_stats);
 
 			statsLoggerConsole_ = std::make_shared<spdlog::logger>("tfs_stats_console", console_sink_stats);
 			statsLoggerConsole_->set_level(spdlog::level::info);
 
 			auto console_sink_migrations = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 			console_sink_migrations->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			allConsoleSinks_.push_back(console_sink_migrations);
 
 			migrationsLogger_ = std::make_shared<spdlog::logger>("tfs_migrations", console_sink_migrations);
 			migrationsLogger_->set_level(spdlog::level::info);
 
 			auto console_sink_stats_warning = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 			console_sink_stats_warning->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			allConsoleSinks_.push_back(console_sink_stats_warning);
 
 			statsWarningLogger_ = std::make_shared<spdlog::logger>("tfs_stats_warning", console_sink_stats_warning);
 			statsWarningLogger_->set_level(spdlog::level::info);
 
 			auto console_sink_mapcache = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 			console_sink_mapcache->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			allConsoleSinks_.push_back(console_sink_mapcache);
 
 			mapCacheLogger_ = std::make_shared<spdlog::logger>("tfs_mapcache", console_sink_mapcache);
 			mapCacheLogger_->set_level(spdlog::level::info);
 
 			auto console_sink_network = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 			console_sink_network->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			allConsoleSinks_.push_back(console_sink_network);
 
 			networkLogger_ = std::make_shared<spdlog::logger>("tfs_network", console_sink_network);
 			networkLogger_->set_level(spdlog::level::info);
 
 			auto console_sink_raid = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 			console_sink_raid->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			allConsoleSinks_.push_back(console_sink_raid);
 
 			raidLogger_ = std::make_shared<spdlog::logger>("tfs_raid", console_sink_raid);
 			raidLogger_->set_level(spdlog::level::info);
 
-		auto console_sink_threadpool = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-		console_sink_threadpool->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			auto console_sink_threadpool = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+			console_sink_threadpool->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			allConsoleSinks_.push_back(console_sink_threadpool);
 
-		threadPoolLogger_ = std::make_shared<spdlog::logger>("tfs_threadpool", console_sink_threadpool);
-		threadPoolLogger_->set_level(spdlog::level::info);
+			threadPoolLogger_ = std::make_shared<spdlog::logger>("tfs_threadpool", console_sink_threadpool);
+			threadPoolLogger_->set_level(spdlog::level::info);
 
-		auto console_sink_reactor = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-		console_sink_reactor->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			auto console_sink_reactor = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+			console_sink_reactor->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+			allConsoleSinks_.push_back(console_sink_reactor);
 
-		reactorLogger_ = std::make_shared<spdlog::logger>("tfs_reactor", console_sink_reactor);
-		reactorLogger_->set_level(spdlog::level::info);
+			reactorLogger_ = std::make_shared<spdlog::logger>("tfs_reactor", console_sink_reactor);
+			reactorLogger_->set_level(spdlog::level::info);
 
-			if (logToFile) {
-				logger_->info("=== TFS Logger Initialized ===");
-				logger_->info("Log file: {}", timestampedPath_);
-			} else {
-				logger_->info("=== TFS Logger Initialized (Console Only) ===");
-			}
 			logger_->flush();
 
 		} catch (const std::exception& e) {
@@ -206,6 +209,14 @@ public:
 	{
 		if (logger_) {
 			logger_->set_level(toSpd(level));
+		}
+	}
+
+	void setConsoleLevel(LogLevel level) override
+	{
+		auto spd_level = toSpd(level);
+		for (auto& sink : allConsoleSinks_) {
+			sink->set_level(spd_level);
 		}
 	}
 
@@ -314,6 +325,7 @@ private:
 	std::shared_ptr<spdlog::logger> raidLogger_;
 	std::shared_ptr<spdlog::logger> threadPoolLogger_;
 	std::shared_ptr<spdlog::logger> reactorLogger_;
+	std::vector<std::shared_ptr<spdlog::sinks::stdout_color_sink_mt>> allConsoleSinks_;
 	std::string timestampedPath_;
 
 	void writeToMainFileSink(spdlog::level::level_enum level, std::string_view formattedMsg)

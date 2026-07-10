@@ -25,6 +25,7 @@ public:
 	virtual ~Logger() = default;
 
 	virtual void setLevel(LogLevel level) = 0;
+	virtual void setConsoleLevel(LogLevel level) = 0;
 	virtual LogLevel getLevel() const = 0;
 	virtual bool isEnabled(LogLevel level) const = 0;
 

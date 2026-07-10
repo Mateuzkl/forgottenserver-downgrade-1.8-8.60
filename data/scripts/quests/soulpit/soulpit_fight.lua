@@ -69,7 +69,6 @@ if Zone then
 		end
 
 		SoulPit.zone = zone
-		SoulPit.log("Zone created successfully")
 	end
 end
 
@@ -423,5 +422,3 @@ SoulPit.startKick = function()
     if not SoulPit.encounter then return end
     startKickTimer()
 end
-
-SoulPit.log("Soulpit fight script loaded")

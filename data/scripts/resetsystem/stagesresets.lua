@@ -13,10 +13,3 @@ function ResetStages.getMultiplier(resetCount)
 	end
 	return 1.0
 end
-
-local count = (ResetBonusConfig and ResetBonusConfig.xpStages) and #ResetBonusConfig.xpStages or 0
-if count > 0 then
-	logger.info(">> Loading Reset System experience stages from ResetBonusConfig.xpStages [%d].", count)
-else
-	logger.warn(">> Reset System: no experience stages were found in ResetBonusConfig.xpStages.")
-end

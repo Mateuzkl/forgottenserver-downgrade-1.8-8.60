@@ -37,6 +37,7 @@
 #include "weapons.h"
 #include "logger.h"
 #include <fmt/format.h>
+#include <fmt/color.h>
 #include "luascript.h"
 #include "save_manager.h"
 
@@ -636,6 +637,17 @@ void Game::setGameState(GameState_t newState)
 		}
 
 		case GAME_STATE_SHUTDOWN: {
+			using fmt::fg;
+			using fmt::emphasis;
+			const auto red_b     = fg(fmt::color::orange_red)  | emphasis::bold;
+			const auto dark_gray = fg(fmt::color::dim_gray);
+			fmt::print("\n");
+			fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
+			fmt::print(red_b,    "    ✖ SHUTTING DOWN\n");
+			fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
+			fmt::print("\n");
+			std::fflush(stdout);
+
 			LOG_INFO(">> Starting shutdown sequence...");
 
 			g_globalEvents->save();

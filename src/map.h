@@ -321,6 +321,9 @@ public:
 	Towns towns;
 	Houses houses;
 
+	uint32_t getWidth() const { return width; }
+	uint32_t getHeight() const { return height; }
+
 private:
 	SpectatorCache spectatorsCache;
 

@@ -433,8 +433,6 @@ local function loadStoreXML()
 			})
 		end
 	end
-
-	logInfo(">> Loading Game Store System")
 end
 
 loadStoreXML()

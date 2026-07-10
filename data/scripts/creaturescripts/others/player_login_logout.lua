@@ -10,13 +10,18 @@ end
 local loginMessage = CreatureEvent("loginMessage")
 
 function loginMessage.onLogin(player)
-    local prevColor = logger.colors.green
-    local resetColor = logger.colors.reset
     local ipStr = convertIp(player:getIp())
     local vocation = player:getVocation():getName()
     local level = player:getLevel()
+    local name = player:getName()
 
-    logger.info("%s%s has logged in.%s [Lvl: %d] [Voc: %s] [IP: %s]", prevColor, player:getName(), resetColor, level, vocation, ipStr)
+    logger.info("%sLOGIN           %s%s%-20s%sLvl:%s%-5d%sVoc:%-12sIP:%s",
+        logger.colors.lime_green,
+        logger.colors.reset,
+        logger.colors.bold_white, name, logger.colors.reset,
+        logger.colors.bold_cyan, level, logger.colors.reset,
+        vocation,
+        ipStr)
 
     local rewardChest = player:getRewardChest()
     local rewardContainerCount = 0
@@ -77,13 +82,18 @@ loginMessage:register()
 
 local logoutMessage = CreatureEvent("logoutMessage")
 function logoutMessage.onLogout(player)
-    local prevColor = logger.colors.red
-    local resetColor = logger.colors.reset
     local ipStr = convertIp(player:getIp())
     local vocation = player:getVocation():getName()
     local level = player:getLevel()
+    local name = player:getName()
 
-    logger.info("%s%s has logged out.%s [Lvl: %d] [Voc: %s] [IP: %s]", prevColor, player:getName(), resetColor, level, vocation, ipStr)
+    logger.info("%sLOGOUT          %s%s%-20s%sLvl:%s%-5d%sVoc:%-12sIP:%s",
+        logger.colors.orange_red,
+        logger.colors.reset,
+        logger.colors.bold_white, name, logger.colors.reset,
+        logger.colors.bold_cyan, level, logger.colors.reset,
+        vocation,
+        ipStr)
     local playerId = player:getId()
     nextUseStaminaTime[playerId] = nil
     WorkbenchSessions.clearOwner(playerId, false)

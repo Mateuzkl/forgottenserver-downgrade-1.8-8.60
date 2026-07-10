@@ -646,8 +646,6 @@ local function loadMarketCatalog()
 		end
 		return nameA < nameB
 	end)
-
-	logInfo(string.format(">> Loading Custom Market System (%d tradeable items)", #marketItems))
 end
 
 local function getPlayerTotalMoney(player)
