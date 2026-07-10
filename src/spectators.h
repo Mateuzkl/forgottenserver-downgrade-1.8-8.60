@@ -25,14 +25,12 @@ public:
 
 	void addSpectators(const SpectatorVec& spectators)
 	{
-		if (spectators.vec.empty()) {
+		if (spectators.vec.empty() || &spectators == this) {
 			return;
 		}
 
-		if (&spectators != this) {
-			vec.reserve(vec.size() + spectators.vec.size());
-			vec.insert(vec.end(), spectators.vec.begin(), spectators.vec.end());
-		}
+		vec.reserve(vec.size() + spectators.vec.size());
+		vec.insert(vec.end(), spectators.vec.begin(), spectators.vec.end());
 
 		vec.erase(std::remove_if(vec.begin(), vec.end(),
 			[](const auto& spectator) { return !spectator; }), vec.end());
