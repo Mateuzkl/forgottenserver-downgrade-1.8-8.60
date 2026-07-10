@@ -22,6 +22,7 @@ build/
 build-release/
 build-debug/
 build-asan*/
+build-callgrind/
 [Bb]in/
 [Oo]bj/
 cmake-build-*/
@@ -213,6 +214,8 @@ tfs
 # Others
 *.emmyrc.jsondata/scripts/meus/
 build-valgrind-linux/
+tfs-valgrind
+callgrind.out.*
 build-analysis/
 analysis-reports/
 compile_commands.json

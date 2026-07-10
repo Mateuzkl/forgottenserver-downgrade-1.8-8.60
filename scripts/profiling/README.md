@@ -17,6 +17,14 @@ The wrapper selects a compatible versioned `perf` binary on WSL when the
 `/usr/bin/perf` launcher does not support the running kernel. Extra capture
 options are forwarded to `capture_flamegraph.sh`.
 
+For a Callgrind-friendly build with separate translation units and debug
+symbols, run:
+
+```bash
+bash tools/build-callgrind.sh
+valgrind --tool=callgrind --callgrind-out-file=callgrind.out.%p ./tfs-valgrind
+```
+
 Start here:
 
 ```bash
