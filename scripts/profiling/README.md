@@ -8,6 +8,11 @@ For the default `tfs` process, run:
 bash tools/run-flamegraph.sh
 ```
 
+If `tfs` is not already running, the wrapper starts `build-release/tfs`, waits
+for the server to become online, captures it, and stops that instance when the
+capture finishes. An existing `tfs` process is only attached to and remains
+running.
+
 The wrapper selects a compatible versioned `perf` binary on WSL when the
 `/usr/bin/perf` launcher does not support the running kernel. Extra capture
 options are forwarded to `capture_flamegraph.sh`.
