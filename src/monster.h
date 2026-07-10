@@ -109,6 +109,14 @@ public:
 	uint32_t getManaCost() const { return mType->info.manaCost; }
 	void setSpawn(std::shared_ptr<Spawn> newSpawn) { spawn = newSpawn; }
 	bool canWalkOnFieldType(CombatType_t combatType) const;
+	enum class WalkCacheResult : uint8_t
+	{
+		NotCached, // outside the window or on another floor
+		Blocked,
+		Walkable,
+		Field, // magic-field tile: walkability depends on volatile monster state, query live
+	};
+	WalkCacheResult getWalkCacheResult(const Position& pos) const;
 	std::optional<bool> getWalkCache(const Position& pos) const;
 
 	void onAttackedCreatureDisappear(bool isLogout) override;
@@ -231,6 +239,7 @@ private:
 	static constexpr std::size_t mapWalkCacheSize = static_cast<std::size_t>(mapWalkWidth) * mapWalkHeight;
 
 	mutable std::bitset<mapWalkCacheSize> localMapCache;
+	mutable std::bitset<mapWalkCacheSize> fieldMapCache;
 	mutable bool isWalkCacheLoaded = false;
 
 	void onCreatureEnter(Creature* creature);

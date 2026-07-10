@@ -711,18 +711,30 @@ bool Map::isSightClear(const Position& fromPos, const Position& toPos, bool same
 
 const Tile* Map::canWalkTo(const Creature& creature, const Position& pos) const
 {
-	Tile* tile = getTile(pos.x, pos.y, pos.z);
 	if (const Monster* monster = creature.getMonster()) {
-		// A damaging magic field's walkability also depends on volatile monster state
-		// (isIgnoringFieldDamage + hasBeenAttacked) that the walk cache cannot track, so always
-		// re-query field tiles live instead of trusting a possibly-stale cached bit.
-		if (!tile || !tile->hasFlag(TILESTATE_MAGICFIELD)) {
-			if (const auto cachedWalkable = monster->getWalkCache(pos)) {
-				return *cachedWalkable ? tile : nullptr;
-			}
+		// Consult the walk cache before touching the map: a cached Blocked answer skips
+		// the QTree tile lookup entirely, the common case while expanding path nodes.
+		// Magic-field tiles are never answered from the cache because a damaging field's
+		// walkability also depends on volatile monster state (isIgnoringFieldDamage +
+		// hasBeenAttacked) that the cache cannot track.
+		switch (monster->getWalkCacheResult(pos)) {
+			case Monster::WalkCacheResult::Blocked:
+				// Safe for fields: queryAdd can only field-block when TILESTATE_MAGICFIELD
+				// is set, and the walk and field bits are always written pairwise from the
+				// same tile snapshot — so Blocked (walk=false, field=false) means the tile
+				// was blocked by something other than a field at snapshot time.
+				return nullptr;
+			case Monster::WalkCacheResult::Walkable:
+				if (Tile* tile = getTile(pos.x, pos.y, pos.z); !tile || !tile->hasFlag(TILESTATE_MAGICFIELD)) {
+					return tile;
+				}
+				break; // stale field bit: re-run the live checks below
+			default:
+				break; // Field / NotCached: fall through to the live checks
 		}
 	}
 
+	Tile* tile = getTile(pos.x, pos.y, pos.z);
 	if (creature.getTile() != tile) {
 		if (!tile) {
 			return nullptr;

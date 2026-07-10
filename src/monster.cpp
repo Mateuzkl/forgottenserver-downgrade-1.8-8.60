@@ -266,33 +266,53 @@ bool Monster::canWalkOnFieldType(CombatType_t combatType) const
 	}
 }
 
-std::optional<bool> Monster::getWalkCache(const Position& pos) const
+Monster::WalkCacheResult Monster::getWalkCacheResult(const Position& pos) const
 {
 	if (!usesWalkCache()) {
-		return std::nullopt;
+		// While random stepping the cache is invalidated every wander tick; answer live
+		// so path searches issued mid-wander (e.g. walkToSpawn) do not thrash rebuilds.
+		return WalkCacheResult::NotCached;
 	}
 
 	const Position& myPos = getPosition();
 	if (myPos.z != pos.z) {
 		// The cache only models same-floor offsets; let canWalkTo fall back to queryAdd.
-		return std::nullopt;
+		return WalkCacheResult::NotCached;
 	}
 
 	if (pos == myPos) {
-		return true;
+		return WalkCacheResult::Walkable;
 	}
 
 	const int32_t dx = pos.getOffsetX(myPos);
 	const int32_t dy = pos.getOffsetY(myPos);
 	if (std::abs(dx) > maxWalkCacheWidth || std::abs(dy) > maxWalkCacheHeight) {
-		return std::nullopt;
+		return WalkCacheResult::NotCached;
 	}
 
 	if (!isWalkCacheLoaded) {
 		updateMapCache();
 	}
 
-	return localMapCache[getWalkCacheIndex(dx, dy)];
+	const std::size_t index = getWalkCacheIndex(dx, dy);
+	if (fieldMapCache[index]) {
+		// A damaging magic field's walkability also depends on volatile monster state
+		// (isIgnoringFieldDamage + hasBeenAttacked) that the walk cache cannot track.
+		return WalkCacheResult::Field;
+	}
+	return localMapCache[index] ? WalkCacheResult::Walkable : WalkCacheResult::Blocked;
+}
+
+std::optional<bool> Monster::getWalkCache(const Position& pos) const
+{
+	switch (getWalkCacheResult(pos)) {
+		case WalkCacheResult::Blocked:
+			return false;
+		case WalkCacheResult::Walkable:
+			return true;
+		default:
+			return std::nullopt;
+	}
 }
 
 void Monster::updateMapCache() const
@@ -317,7 +337,9 @@ void Monster::updateTileCache(const Tile* tile, int32_t dx, int32_t dy) const
 	}
 
 	constexpr uint32_t flags = FLAG_PATHFINDING | FLAG_IGNOREFIELDDAMAGE;
-	localMapCache[getWalkCacheIndex(dx, dy)] = tile && tile->queryAdd(0, *this, 1, flags) == RETURNVALUE_NOERROR;
+	const std::size_t index = getWalkCacheIndex(dx, dy);
+	localMapCache[index] = tile && tile->queryAdd(0, *this, 1, flags) == RETURNVALUE_NOERROR;
+	fieldMapCache[index] = tile && tile->hasFlag(TILESTATE_MAGICFIELD);
 }
 
 void Monster::updateTileCache(const Tile* tile, const Position& pos) const
@@ -458,50 +480,46 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 			const int32_t dz = newPos.z - oldPos.z;
 
 			if (teleport || dz != 0 || std::abs(dx) > 1 || std::abs(dy) > 1) {
-				updateMapCache();
+				// Rebuild lazily on the next path search: a teleported monster that never
+				// paths again should not pay for a full window rebuild.
+				invalidateWalkCache();
 			} else {
 				const Position& myPos = getPosition();
 
+				// Scroll the whole window with word-level bitset shifts, then refresh the
+				// row/column that scrolled in. A one-bit horizontal shift bleeds each row's
+				// edge bit into the neighboring row, but only into the very column that is
+				// refreshed below, so no masking is needed.
 				if (dy < 0) {
 					localMapCache <<= mapWalkWidth;
-					for (int32_t x = -maxWalkCacheWidth; x <= maxWalkCacheWidth; ++x) {
-						updateTileCache(g_game.map.getTile(myPos.x + x, myPos.y - maxWalkCacheHeight, myPos.z), x,
-						                -maxWalkCacheHeight);
-					}
+					fieldMapCache <<= mapWalkWidth;
 				} else if (dy > 0) {
 					localMapCache >>= mapWalkWidth;
+					fieldMapCache >>= mapWalkWidth;
+				}
+
+				if (dx > 0) {
+					localMapCache >>= 1;
+					fieldMapCache >>= 1;
+				} else if (dx < 0) {
+					localMapCache <<= 1;
+					fieldMapCache <<= 1;
+				}
+
+				const int32_t edgeY = dy < 0 ? -maxWalkCacheHeight : maxWalkCacheHeight;
+				if (dy != 0) {
 					for (int32_t x = -maxWalkCacheWidth; x <= maxWalkCacheWidth; ++x) {
-						updateTileCache(g_game.map.getTile(myPos.x + x, myPos.y + maxWalkCacheHeight, myPos.z), x,
-						                maxWalkCacheHeight);
+						updateTileCache(g_game.map.getTile(myPos.x + x, myPos.y + edgeY, myPos.z), x, edgeY);
 					}
 				}
 
-				// Vertical movement refreshes one edge row; do not shift that fresh row again
-				// when the same step also moves horizontally.
-				const int32_t horizontalStartY = dy < 0 ? 1 : 0;
-				const int32_t horizontalEndY = dy > 0 ? mapWalkHeight - 2 : mapWalkHeight - 1;
-
-				if (dx > 0) {
-					for (int32_t y = horizontalStartY; y <= horizontalEndY; ++y) {
-						const std::size_t rowBase = static_cast<std::size_t>(y) * mapWalkWidth;
-						for (int32_t x = 0; x < mapWalkWidth - 1; ++x) {
-							localMapCache[rowBase + x] = localMapCache[rowBase + x + 1];
-						}
-					}
+				if (dx != 0) {
+					const int32_t edgeX = dx > 0 ? maxWalkCacheWidth : -maxWalkCacheWidth;
 					for (int32_t y = -maxWalkCacheHeight; y <= maxWalkCacheHeight; ++y) {
-						updateTileCache(g_game.map.getTile(myPos.x + maxWalkCacheWidth, myPos.y + y, myPos.z),
-						                maxWalkCacheWidth, y);
-					}
-				} else if (dx < 0) {
-					for (int32_t y = horizontalStartY; y <= horizontalEndY; ++y) {
-						const std::size_t rowBase = static_cast<std::size_t>(y) * mapWalkWidth;
-						for (int32_t x = mapWalkWidth - 2; x >= 0; --x) {
-							localMapCache[rowBase + x + 1] = localMapCache[rowBase + x];
+						if (dy != 0 && y == edgeY) {
+							continue; // corner already refreshed with the edge row
 						}
-					}
-					for (int32_t y = -maxWalkCacheHeight; y <= maxWalkCacheHeight; ++y) {
-						updateTileCache(g_game.map.getTile(myPos.x - maxWalkCacheWidth, myPos.y + y, myPos.z),
-						                -maxWalkCacheWidth, y);
+						updateTileCache(g_game.map.getTile(myPos.x + edgeX, myPos.y + y, myPos.z), edgeX, y);
 					}
 				}
 
@@ -2154,6 +2172,9 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 	if (!walkingToSpawn && (followCreature.expired() || !hasFollowPath) && (!isSummon() || !isMasterInRange)) {
 		if (getTimeSinceLastMove() >= EVENT_CREATURE_THINK_INTERVAL) {
 			randomStepping = true;
+			// Invalidating every wander tick is the cache's only resynchronization point
+			// against mutations that dispatch no tile/creature events (ghost mode toggles,
+			// master changes); the next path search starts from a fresh rebuild.
 			invalidateWalkCache();
 			// choose a random direction
 			result = getRandomStep(getPosition(), direction);
