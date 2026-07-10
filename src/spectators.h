@@ -35,15 +35,10 @@ public:
 		vec.erase(std::remove_if(vec.begin(), vec.end(),
 			[](const auto& spectator) { return !spectator; }), vec.end());
 
-		std::sort(vec.begin(), vec.end(),
-			[](const auto& lhs, const auto& rhs) {
-				return std::less<Creature*>()(lhs.get(), rhs.get());
-			});
-
-		vec.erase(std::unique(vec.begin(), vec.end(),
-			[](const auto& lhs, const auto& rhs) {
-				return lhs.get() == rhs.get();
-			}), vec.end());
+		// shared_ptr's default comparisons are .get()-based under a strict total
+		// order (C++20 [util.smartptr.shared.cmp]), so no custom comparators needed.
+		std::sort(vec.begin(), vec.end());
+		vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
 
 		partitioned_ = false;
 	}
