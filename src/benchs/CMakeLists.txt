@@ -1,4 +1,5 @@
 set(benchs_SRC
+    ${CMAKE_CURRENT_LIST_DIR}/bench_botmanager.cpp
     ${CMAKE_CURRENT_LIST_DIR}/bench_tools.cpp
     )
 
