@@ -29,12 +29,8 @@ std::atomic<size_t> MapCache::itemCacheMisses{0};
 std::atomic<size_t> MapCache::tileCacheHits{0};
 std::atomic<size_t> MapCache::tileCacheMisses{0};
 
-std::shared_ptr<BasicItem> MapCache::tryGetItemFromCache(const std::shared_ptr<BasicItem>& item) {
-    if (!item) {
-        return nullptr;
-    }
-    
-    size_t h = item->hash();
+std::shared_ptr<BasicItem> MapCache::tryGetItemFromCache(BasicItem&& item) {
+    size_t h = item.hash();
     
     std::scoped_lock lock(itemCacheMutex);
     
@@ -42,14 +38,9 @@ std::shared_ptr<BasicItem> MapCache::tryGetItemFromCache(const std::shared_ptr<B
     if (it != itemCache.end()) {
         if (auto cached = it->second.lock()) {
             // Verify hash collision
-            if (*cached == *item) {
+            if (*cached == item) {
                 ++itemCacheHits;
                 return cached;
-            } else {
-                // #ifdef _DEBUG
-                // LOG_WARN(fmt::format("[MapCache] Hash collision detected for item ID {} (hash: {})", 
-                //                        item->id, h));
-                // #endif
             }
         } else {
             // Expired weak_ptr, remove it
@@ -58,16 +49,13 @@ std::shared_ptr<BasicItem> MapCache::tryGetItemFromCache(const std::shared_ptr<B
     }
     
     ++itemCacheMisses;
-    itemCache[h] = item;
-    return item;
+    auto newItem = std::make_shared<BasicItem>(std::move(item));
+    itemCache[h] = newItem;
+    return newItem;
 }
 
-std::shared_ptr<BasicTile> MapCache::tryGetTileFromCache(const std::shared_ptr<BasicTile>& tile) {
-    if (!tile) {
-        return nullptr;
-    }
-    
-    size_t h = tile->hash();
+std::shared_ptr<BasicTile> MapCache::tryGetTileFromCache(BasicTile&& tile) {
+    size_t h = tile.hash();
     
     std::scoped_lock lock(tileCacheMutex);
     
@@ -75,13 +63,9 @@ std::shared_ptr<BasicTile> MapCache::tryGetTileFromCache(const std::shared_ptr<B
     if (it != tileCache.end()) {
         if (auto cached = it->second.lock()) {
             // Verify hash collision
-            if (*cached == *tile) {
+            if (*cached == tile) {
                 ++tileCacheHits;
                 return cached;
-            } else {
-                // #ifdef _DEBUG
-                // LOG_WARN(fmt::format("[MapCache] Hash collision detected for tile (hash: {})", h));
-                // #endif
             }
         } else {
             // Expired weak_ptr, remove it
@@ -90,8 +74,9 @@ std::shared_ptr<BasicTile> MapCache::tryGetTileFromCache(const std::shared_ptr<B
     }
     
     ++tileCacheMisses;
-    tileCache[h] = tile;
-    return tile;
+    auto newTile = std::make_shared<BasicTile>(std::move(tile));
+    tileCache[h] = newTile;
+    return newTile;
 }
 
 void MapCache::flush() {
@@ -247,25 +232,25 @@ namespace {
 }
 
 // Helper to parse item from stream (used by both node-based and inline items)
-std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
+// Helper to parse item from stream (used by both node-based and inline items)
+bool parseBasicItemFromStream(PropStream& propStream, BasicItem& item) {
     uint16_t id;
     if (!propStream.read<uint16_t>(id)) {
         LOG_ERROR("[MapCache] Failed to read item ID from stream");
-        return nullptr;
+        return false;
     }
     
     // ID substitutions
     applyItemIdSubstitutions(id);
 
-    auto item = std::make_shared<BasicItem>();
-    item->id = id;
+    item.id = id;
     
     // Default values based on ItemType
     const ItemType& it = Item::items[id];
     if (it.stackable && it.charges == 0) {
-        item->charges = 1;
+        item.charges = 1;
     } else if (it.charges != 0) {
-        item->charges = it.charges;
+        item.charges = it.charges;
     }
     
     // Read attributes
@@ -276,7 +261,7 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
             case ATTR_RUNE_CHARGES: {
                 uint8_t count;
                 if (propStream.read<uint8_t>(count)) {
-                    item->charges = count;
+                    item.charges = count;
                 }
                 break;
             }
@@ -284,7 +269,7 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
             case ATTR_CHARGES: {
                 uint16_t charges;
                 if (propStream.read<uint16_t>(charges)) {
-                    item->charges = charges;
+                    item.charges = charges;
                 }
                 break;
             }
@@ -292,7 +277,7 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
             case ATTR_ACTION_ID: {
                 uint16_t actionId;
                 if (propStream.read<uint16_t>(actionId)) {
-                    item->actionId = actionId;
+                    item.actionId = actionId;
                 }
                 break;
             }
@@ -300,7 +285,7 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
             case ATTR_UNIQUE_ID: {
                 uint16_t uniqueId;
                 if (propStream.read<uint16_t>(uniqueId)) {
-                    item->uniqueId = uniqueId;
+                    item.uniqueId = uniqueId;
                 }
                 break;
             }
@@ -308,7 +293,7 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
             case ATTR_TEXT: {
                 auto [text, ok] = propStream.readString();
                 if (ok) {
-                    item->text = std::string(text);
+                    item.text = std::string(text);
                 }
                 break;
             }
@@ -316,9 +301,9 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
             case ATTR_TELE_DEST: {
                 OTBM_Destination_coords dest;
                 if (propStream.read(dest)) {
-                    item->destX = dest.x;
-                    item->destY = dest.y;
-                    item->destZ = dest.z;
+                    item.destX = dest.x;
+                    item.destY = dest.y;
+                    item.destZ = dest.z;
                 }
                 break;
             }
@@ -326,7 +311,7 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
             case ATTR_HOUSEDOORID: {
                 uint8_t doorId;
                 if (propStream.read<uint8_t>(doorId)) {
-                    item->doorOrDepotId = doorId;
+                    item.doorOrDepotId = doorId;
                 }
                 break;
             }
@@ -334,7 +319,7 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
             case ATTR_DEPOT_ID: {
                 uint16_t depotId;
                 if (propStream.read<uint16_t>(depotId)) {
-                    item->doorOrDepotId = depotId;
+                    item.doorOrDepotId = depotId;
                 }
                 break;
             }
@@ -405,7 +390,7 @@ std::shared_ptr<BasicItem> parseBasicItemFromStream(PropStream& propStream) {
                 break;
         }
     }
-    return item;
+    return true;
 }
 
 std::shared_ptr<BasicItem> MapCache::parseBasicItem(void* loaderptr, const void* nodeptr, BasicItem* parent) {
@@ -419,22 +404,22 @@ std::shared_ptr<BasicItem> MapCache::parseBasicItem(void* loaderptr, const void*
         return nullptr;
     }
 
-    auto item = parseBasicItemFromStream(propStream);
-    if (!item) {
+    BasicItem item;
+    if (!parseBasicItemFromStream(propStream, item)) {
         return nullptr;
     }
     
     // Parse children (containers)
     for (auto& childNode : node.children) {
         if (static_cast<OTBM_NodeTypes_t>(childNode.type) == OTBM_NodeTypes_t::ITEM) {
-            auto child = parseBasicItem(loaderptr, &childNode, item.get());
+            auto child = parseBasicItem(loaderptr, &childNode, &item);
             if (child) {
-                item->items.push_back(child);
+                item.items.push_back(child);
             }
         }
     }
 
-    return tryGetItemFromCache(item);
+    return tryGetItemFromCache(std::move(item));
 }
 
 std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void* nodeptr, uint8_t& xOffset, uint8_t& yOffset) {
@@ -456,13 +441,13 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
     xOffset = tile_coord.x;
     yOffset = tile_coord.y;
     
-    auto tile = std::make_shared<BasicTile>();
+    BasicTile tile;
     
     // Check for HouseTile
     if (static_cast<OTBM_NodeTypes_t>(tileNode.type) == OTBM_NodeTypes_t::HOUSETILE) {
         uint32_t houseId;
         if (propStream.read<uint32_t>(houseId)) {
-            tile->houseId = houseId;
+            tile.houseId = houseId;
         } else {
             LOG_ERROR("[MapCache] Failed to read house ID from house tile");
         }
@@ -475,10 +460,10 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
             case OTBM_AttrTypes_t::TILE_FLAGS: {
                 uint32_t flags;
                 if (propStream.read<uint32_t>(flags)) {
-                    if ((flags & tfs::to_underlying(OTBM_TileFlag_t::PROTECTIONZONE)) != 0) tile->flags |= TILESTATE_PROTECTIONZONE;
-                    if ((flags & tfs::to_underlying(OTBM_TileFlag_t::NOPVPZONE)) != 0) tile->flags |= TILESTATE_NOPVPZONE;
-                    if ((flags & tfs::to_underlying(OTBM_TileFlag_t::PVPZONE)) != 0) tile->flags |= TILESTATE_PVPZONE;
-                    if ((flags & tfs::to_underlying(OTBM_TileFlag_t::NOLOGOUT)) != 0) tile->flags |= TILESTATE_NOLOGOUT;
+                    if ((flags & tfs::to_underlying(OTBM_TileFlag_t::PROTECTIONZONE)) != 0) tile.flags |= TILESTATE_PROTECTIONZONE;
+                    if ((flags & tfs::to_underlying(OTBM_TileFlag_t::NOPVPZONE)) != 0) tile.flags |= TILESTATE_NOPVPZONE;
+                    if ((flags & tfs::to_underlying(OTBM_TileFlag_t::PVPZONE)) != 0) tile.flags |= TILESTATE_PVPZONE;
+                    if ((flags & tfs::to_underlying(OTBM_TileFlag_t::NOLOGOUT)) != 0) tile.flags |= TILESTATE_NOLOGOUT;
                     if ((flags & tfs::to_underlying(OTBM_TileFlag_t::ZONE)) != 0) {
                         ZoneId zoneId = 0;
                         do {
@@ -488,7 +473,7 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
                             }
 
                             if (zoneId != 0) {
-                                tile->zoneIds.emplace_back(zoneId);
+                                tile.zoneIds.emplace_back(zoneId);
                             }
                         } while (zoneId != 0);
                     }
@@ -500,13 +485,13 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
             }
             case OTBM_AttrTypes_t::ITEM: {
                 // Inline item
-                auto item = parseBasicItemFromStream(propStream);
-                if (item) {
-                     const ItemType& it = Item::items[item->id];
+                BasicItem item;
+                if (parseBasicItemFromStream(propStream, item)) {
+                     const ItemType& it = Item::items[item.id];
                      if (it.isGroundTile()) {
-                         tile->ground = MapCache::tryGetItemFromCache(item);
+                         tile.ground = MapCache::tryGetItemFromCache(std::move(item));
                      } else {
-                         tile->items.push_back(MapCache::tryGetItemFromCache(item));
+                         tile.items.push_back(MapCache::tryGetItemFromCache(std::move(item)));
                      }
                 }
                 break; 
@@ -524,25 +509,25 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
             auto item = parseBasicItem(loaderptr, &itemNode, nullptr);
             if (item) {
                 const ItemType& it = Item::items[item->id];
-                if (it.isGroundTile() && tile->ground == nullptr) {
-                    tile->ground = item;
+                if (it.isGroundTile() && tile.ground == nullptr) {
+                    tile.ground = item;
                 } else {
-                    tile->items.push_back(item);
+                    tile.items.push_back(item);
                 }
             }
         } else if (childNodeType == OTBM_NodeTypes_t::TILE_ZONE) {
             std::string errorType;
-            if (!IOMap::parseTileZoneNode(loader, itemNode, tile->zoneIds, errorType)) {
+            if (!IOMap::parseTileZoneNode(loader, itemNode, tile.zoneIds, errorType)) {
                 LOG_ERROR(fmt::format("[MapCache] {}", errorType));
                 return nullptr;
             }
         }
     }
 
-    std::sort(tile->zoneIds.begin(), tile->zoneIds.end());
-    tile->zoneIds.erase(std::unique(tile->zoneIds.begin(), tile->zoneIds.end()), tile->zoneIds.end());
+    std::sort(tile.zoneIds.begin(), tile.zoneIds.end());
+    tile.zoneIds.erase(std::unique(tile.zoneIds.begin(), tile.zoneIds.end()), tile.zoneIds.end());
     
-    return tryGetTileFromCache(tile);
+    return tryGetTileFromCache(std::move(tile));
 }
 
 /**

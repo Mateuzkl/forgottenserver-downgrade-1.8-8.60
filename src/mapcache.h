@@ -201,17 +201,17 @@ class MapCache {
 public:
     /**
      * Try to get cached item or store new one
-     * @param item The item to cache or find
+     * @param item The item to cache or find (moved if cached)
      * @return Shared pointer to the cached item (may be the same or existing one)
      */
-    static std::shared_ptr<BasicItem> tryGetItemFromCache(const std::shared_ptr<BasicItem>& item);
+    static std::shared_ptr<BasicItem> tryGetItemFromCache(BasicItem&& item);
     
     /**
      * Try to get cached tile or store new one
-     * @param tile The tile to cache or find
+     * @param tile The tile to cache or find (moved if cached)
      * @return Shared pointer to the cached tile (may be the same or existing one)
      */
-    static std::shared_ptr<BasicTile> tryGetTileFromCache(const std::shared_ptr<BasicTile>& tile);
+    static std::shared_ptr<BasicTile> tryGetTileFromCache(BasicTile&& tile);
     
     /**
      * Clear all caches after map loading is complete

@@ -100,33 +100,49 @@ void Map::setTile(uint16_t x, uint16_t y, uint8_t z, std::unique_ptr<Tile> newTi
 		return;
 	}
 
-	QTreeLeafNode::newLeaf = false;
-	QTreeLeafNode* leaf = root.createLeaf(x, y, 15);
+	thread_local static QTreeLeafNode* lastLeaf = nullptr;
+	thread_local static uint32_t lastLeafBaseX = 0xFFFFFFFF;
+	thread_local static uint32_t lastLeafBaseY = 0xFFFFFFFF;
 
-	if (QTreeLeafNode::newLeaf) {
-		// update north
-		QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
-		if (northLeaf) {
-			northLeaf->leafS = leaf;
+	uint32_t baseX = x & ~FLOOR_MASK;
+	uint32_t baseY = y & ~FLOOR_MASK;
+	QTreeLeafNode* leaf = nullptr;
+
+	if (lastLeaf && baseX == lastLeafBaseX && baseY == lastLeafBaseY) {
+		leaf = lastLeaf;
+	} else {
+		QTreeLeafNode::newLeaf = false;
+		leaf = root.createLeaf(x, y, 15);
+
+		if (QTreeLeafNode::newLeaf) {
+			// update north
+			QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
+			if (northLeaf) {
+				northLeaf->leafS = leaf;
+			}
+
+			// update west leaf
+			QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
+			if (westLeaf) {
+				westLeaf->leafE = leaf;
+			}
+
+			// update south
+			QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
+			if (southLeaf) {
+				leaf->leafS = southLeaf;
+			}
+
+			// update east
+			QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
+			if (eastLeaf) {
+				leaf->leafE = eastLeaf;
+			}
 		}
 
-		// update west leaf
-		QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
-		if (westLeaf) {
-			westLeaf->leafE = leaf;
-		}
-
-		// update south
-		QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
-		if (southLeaf) {
-			leaf->leafS = southLeaf;
-		}
-
-		// update east
-		QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
-		if (eastLeaf) {
-			leaf->leafE = eastLeaf;
-		}
+		lastLeaf = leaf;
+		lastLeafBaseX = baseX;
+		lastLeafBaseY = baseY;
 	}
 
 	Floor* floor = leaf->createFloor(z);
@@ -1340,33 +1356,49 @@ void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<
 		return;
 	}
 
-	QTreeLeafNode::newLeaf = false;
-	QTreeLeafNode* leaf = root.createLeaf(x, y, 15);
+	thread_local static QTreeLeafNode* lastLeaf = nullptr;
+	thread_local static uint32_t lastLeafBaseX = 0xFFFFFFFF;
+	thread_local static uint32_t lastLeafBaseY = 0xFFFFFFFF;
 
-	if (QTreeLeafNode::newLeaf) {
-		// update north
-		QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
-		if (northLeaf) {
-			northLeaf->leafS = leaf;
+	uint32_t baseX = x & ~FLOOR_MASK;
+	uint32_t baseY = y & ~FLOOR_MASK;
+	QTreeLeafNode* leaf = nullptr;
+
+	if (lastLeaf && baseX == lastLeafBaseX && baseY == lastLeafBaseY) {
+		leaf = lastLeaf;
+	} else {
+		QTreeLeafNode::newLeaf = false;
+		leaf = root.createLeaf(x, y, 15);
+
+		if (QTreeLeafNode::newLeaf) {
+			// update north
+			QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
+			if (northLeaf) {
+				northLeaf->leafS = leaf;
+			}
+
+			// update west leaf
+			QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
+			if (westLeaf) {
+				westLeaf->leafE = leaf;
+			}
+
+			// update south
+			QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
+			if (southLeaf) {
+				leaf->leafS = southLeaf;
+			}
+
+			// update east
+			QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
+			if (eastLeaf) {
+				leaf->leafE = eastLeaf;
+			}
 		}
 
-		// update west leaf
-		QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
-		if (westLeaf) {
-			westLeaf->leafE = leaf;
-		}
-
-		// update south
-		QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
-		if (southLeaf) {
-			leaf->leafS = southLeaf;
-		}
-
-		// update east
-		QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
-		if (eastLeaf) {
-			leaf->leafE = eastLeaf;
-		}
+		lastLeaf = leaf;
+		lastLeafBaseX = baseX;
+		lastLeafBaseY = baseY;
 	}
 
 	Floor* floor = leaf->createFloor(z);

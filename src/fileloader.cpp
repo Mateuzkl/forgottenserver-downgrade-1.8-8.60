@@ -101,6 +101,14 @@ bool Loader::getProps(const Node& node, PropStream& props)
 	if (size == 0) {
 		return false;
 	}
+
+	// Check if there are escape bytes in the props range. If not, use fast-path without copy.
+	const char* escapePtr = static_cast<const char*>(std::memchr(node.propsBegin, Node::ESCAPE, size));
+	if (!escapePtr) {
+		props.init(node.propsBegin, size);
+		return true;
+	}
+
 	propBuffer.resize(size);
 	bool lastEscaped = false;
 
