@@ -117,6 +117,8 @@ for arg in "$@"; do
 	esac
 done
 
+cd "${ROOT_DIR}"
+
 if [[ "${has_target}" -eq 0 ]]; then
 	existing_pid="$(pidof -s "${PROCESS_NAME}" 2>/dev/null || true)"
 	if [[ -n "${existing_pid}" ]]; then
@@ -128,7 +130,6 @@ if [[ "${has_target}" -eq 0 ]]; then
 	fi
 fi
 
-cd "${ROOT_DIR}"
 printf 'Using perf: %s\n' "${PERF_BIN}"
 printf 'Starting TFS FlameGraph capture...\n'
 bash "${CAPTURE_SCRIPT}" "${capture_args[@]}"
