@@ -8,6 +8,7 @@
 #include "character_bazaar.h"
 #include "configmanager.h"
 #include "database.h"
+#include "databasetasks.h"
 #include "game.h"
 #include "iologindata.h"
 #include "logger.h"
@@ -22,7 +23,28 @@
 
 extern Game g_game;
 extern Dispatcher g_dispatcher;
+extern DatabaseTasks g_databaseTasks;
 extern Vocations g_vocations;
+
+namespace tfs::bot {
+
+std::optional<uint32_t> parseGuid(std::string_view text)
+{
+	if (text.empty()) {
+		return std::nullopt;
+	}
+
+	uint32_t guid = 0;
+	const char* first = text.data();
+	const char* last = text.data() + text.size();
+	const auto [ptr, ec] = std::from_chars(first, last, guid);
+	if (ec == std::errc() && ptr == last && guid != 0) {
+		return guid;
+	}
+	return std::nullopt;
+}
+
+} // namespace tfs::bot
 
 namespace {
 constexpr std::string_view BOT_ACCOUNT_NAME = "botaccount";
@@ -48,22 +70,6 @@ private:
 	uint32_t guid = 0;
 	bool active = false;
 };
-
-std::optional<uint32_t> parseGuid(std::string_view text)
-{
-	if (text.empty()) {
-		return std::nullopt;
-	}
-
-	uint32_t guid = 0;
-	const char* first = text.data();
-	const char* last = text.data() + text.size();
-	const auto [ptr, ec] = std::from_chars(first, last, guid);
-	if (ec == std::errc() && ptr == last && guid != 0) {
-		return guid;
-	}
-	return std::nullopt;
-}
 
 std::optional<uint32_t> getAccountIdByName(std::string_view name)
 {
@@ -175,7 +181,7 @@ std::optional<uint32_t> BotManager::getGuidByName(std::string_view name) const
 		return std::nullopt;
 	}
 
-	if (auto guid = parseGuid(trimmed)) {
+	if (auto guid = tfs::bot::parseGuid(trimmed)) {
 		return guid;
 	}
 
@@ -248,28 +254,31 @@ BotManager::RegistrationResult BotManager::registerByName(std::string_view rawNa
 		                 autoSpawn ? " with auto-spawn" : "") };
 }
 
-bool BotManager::isMarkedBot(uint32_t guid, bool* enabled /* = nullptr */)
+std::optional<BotManager::MarkedState> BotManager::isMarkedBot(uint32_t guid)
 {
-	if (enabled) {
-		*enabled = false;
+	if (guid == 0) {
+		return MarkedState{};
 	}
 
-	if (guid == 0 || !ensureTables()) {
-		return false;
+	if (!ensureTables()) {
+		return std::nullopt;
 	}
 
+	// COUNT(*) always yields exactly one row, so a null result unambiguously
+	// means a database error rather than "no such registration" (storeQuery
+	// returns null both on error and on an empty result set).
 	Database& db = Database::getInstance();
-	DBResult_ptr result =
-	    db.storeQuery(fmt::format("SELECT `enabled` FROM `bot_players` WHERE `player_id` = {:d} LIMIT 1", guid));
+	DBResult_ptr result = db.storeQuery(fmt::format(
+	    "SELECT COUNT(*) AS `c`, COALESCE(MAX(`enabled`), 0) AS `e` FROM `bot_players` WHERE `player_id` = {:d}",
+	    guid));
 	if (!result) {
-		return false;
+		return std::nullopt;
 	}
 
-	const bool isEnabled = result->getNumber<uint16_t>("enabled") != 0;
-	if (enabled) {
-		*enabled = isEnabled;
-	}
-	return true;
+	MarkedState state;
+	state.marked = result->getNumber<uint64_t>("c") > 0;
+	state.enabled = state.marked && result->getNumber<uint16_t>("e") != 0;
+	return state;
 }
 
 BotManager::Result BotManager::spawnByName(std::string_view name, bool broadcast /* = false */,
@@ -293,18 +302,20 @@ BotManager::Result BotManager::spawnByGuid(uint32_t guid, bool broadcast /* = fa
 		return { false, "Bot spawn must run on the dispatcher thread.", nullptr };
 	}
 
-	cleanupRemoved();
+	sweepRemoved();
 
 	if (guid == 0) {
 		return { false, "Invalid bot player id.", nullptr };
 	}
 
-	bool enabled = false;
-	const bool marked = isMarkedBot(guid, &enabled);
-	if (requireMarked && !marked) {
+	const auto marked = isMarkedBot(guid);
+	if (!marked) {
+		return { false, "Bot registry is unavailable (database error).", nullptr };
+	}
+	if (requireMarked && !marked->marked) {
 		return { false, fmt::format("Player {:d} is not registered in bot_players.", guid), nullptr };
 	}
-	if (marked && !enabled) {
+	if (marked->marked && !marked->enabled) {
 		return { false, fmt::format("Bot player {:d} is disabled.", guid), nullptr };
 	}
 
@@ -341,22 +352,22 @@ BotManager::Result BotManager::spawnByGuid(uint32_t guid, bool broadcast /* = fa
 	}
 	IOLoginData::loadPlayerWorldData(player.get());
 	player->setBot(true);
-	player->client->setBroadcast(broadcast);
 
-	activeBots[guid] = player;
+	// The local shared_ptr keeps the player alive through placement; the
+	// registry entry (and the tile) take over ownership only on success, so
+	// the failure path needs no rollback.
 	const Position loginPosition = player->getLoginPosition();
 	if (!g_game.placeCreature(player.get(), loginPosition)) {
 		if (!g_game.placeCreature(player.get(), player->getTemplePosition(), false, true)) {
-			activeBots.erase(guid);
-			player->client->setBroadcast(false);
-			player->setBot(false);
 			return { false, fmt::format("Could not place bot '{}' at login or temple position.", player->getName()),
 				     nullptr };
 		}
 	}
 
+	player->client->setBroadcast(broadcast);
+	registry.insert(guid, player);
 	player->resetIdleTime();
-	touchRuntime(guid, true);
+	touchRuntimeAsync(guid, true);
 	LOG_INFO(fmt::format("[BotManager] Spawned bot '{}' (guid={}, cast={})", player->getName(), guid,
 	                     broadcast ? "on" : "off"));
 	return { true, fmt::format("Bot '{}' is online.", player->getName()), player };
@@ -383,30 +394,30 @@ bool BotManager::despawnByGuid(uint32_t guid, bool save, std::string* message /*
 		return false;
 	}
 
-	cleanupRemoved();
+	sweepRemoved();
 
-	auto it = activeBots.find(guid);
-	if (it == activeBots.end()) {
+	// Keep the bot alive through removal; forget() is triggered exactly once
+	// by Player::onRemoveCreature and is the single bookkeeping sink.
+	std::shared_ptr<Player> player = registry.find(guid);
+	if (!player) {
 		if (message) {
 			*message = fmt::format("Bot {:d} is not online.", guid);
 		}
 		return false;
 	}
 
-	std::shared_ptr<Player> player = it->second;
-	const std::string name = player ? player->getName() : std::to_string(guid);
-	if (player && !player->isRemoved()) {
-		const bool oldSaveFlag = player->getSaveFlag();
-		if (!save) {
-			player->setSaveFlag(false);
-		}
-		player->client->clear();
-		g_game.removeCreature(player.get(), true);
-		player->setSaveFlag(oldSaveFlag);
+	const std::string name = player->getName();
+	if (!save) {
+		player->setSaveFlag(false);
+	}
+	player->client->clear();
+	g_game.removeCreature(player.get(), true);
+	if (registry.erase(guid)) {
+		// removeCreature runs onRemoveCreature synchronously, so this only
+		// fires if the removal path skipped forget(); keep bookkeeping tight.
+		touchRuntimeAsync(guid, false);
 	}
 
-	activeBots.erase(guid);
-	touchRuntime(guid, false);
 	if (message) {
 		*message = fmt::format("Bot '{}' is offline.", name);
 	}
@@ -416,37 +427,35 @@ bool BotManager::despawnByGuid(uint32_t guid, bool save, std::string* message /*
 
 size_t BotManager::despawnAll(bool save)
 {
-	std::vector<uint32_t> guids;
-	guids.reserve(activeBots.size());
-	for (const auto& [guid, player] : activeBots) {
-		if (player && !player->isRemoved()) {
-			guids.push_back(guid);
-		}
-	}
-
 	size_t count = 0;
-	for (uint32_t guid : guids) {
+	for (uint32_t guid : registry.guids()) {
 		if (despawnByGuid(guid, save)) {
 			++count;
 		}
 	}
-	cleanupRemoved();
+	sweepRemoved();
 	return count;
 }
 
 bool BotManager::setBroadcast(uint32_t guid, bool enabled, std::string* message /* = nullptr */)
 {
-	cleanupRemoved();
+	if (!isEnabled()) {
+		if (message) {
+			*message = "Bot system is disabled in config.lua (botSystemEnabled = false).";
+		}
+		return false;
+	}
 
-	auto it = activeBots.find(guid);
-	if (it == activeBots.end() || !it->second || it->second->isRemoved()) {
+	sweepRemoved();
+
+	auto player = registry.find(guid);
+	if (!player) {
 		if (message) {
 			*message = fmt::format("Bot {:d} is not online.", guid);
 		}
 		return false;
 	}
 
-	auto& player = it->second;
 	player->client->setBroadcast(enabled);
 	IOLoginData::updateOnlineStatus(guid, true, player->client->isBroadcasting(), player->client->password(),
 	                                player->client->description(), player->client->spectatorList().size());
@@ -468,55 +477,36 @@ bool BotManager::setBroadcast(std::string_view name, bool enabled, std::string* 
 	return setBroadcast(*guid, enabled, message);
 }
 
-bool BotManager::isManagedBot(uint32_t guid) const
-{
-	auto it = activeBots.find(guid);
-	return it != activeBots.end() && it->second && !it->second->isRemoved();
-}
+bool BotManager::isManagedBot(uint32_t guid) const { return registry.contains(guid); }
 
-std::vector<std::shared_ptr<Player>> BotManager::getActiveBots() const
-{
-	std::vector<std::shared_ptr<Player>> bots;
-	bots.reserve(activeBots.size());
-	for (const auto& [guid, player] : activeBots) {
-		if (player && !player->isRemoved()) {
-			bots.push_back(player);
-		}
-	}
-	return bots;
-}
+std::vector<std::shared_ptr<Player>> BotManager::getActiveBots() const { return registry.snapshot(); }
 
 void BotManager::forget(uint32_t guid)
 {
-	auto it = activeBots.find(guid);
-	if (it != activeBots.end()) {
-		activeBots.erase(it);
-		touchRuntime(guid, false);
+	if (registry.erase(guid)) {
+		touchRuntimeAsync(guid, false);
 	}
 }
 
-void BotManager::cleanupRemoved()
+void BotManager::sweepRemoved()
 {
-	for (auto it = activeBots.begin(); it != activeBots.end();) {
-		if (!it->second || it->second->isRemoved()) {
-			const uint32_t guid = it->first;
-			it = activeBots.erase(it);
-			touchRuntime(guid, false);
-		} else {
-			++it;
-		}
+	for (uint32_t guid : registry.sweepRemoved()) {
+		touchRuntimeAsync(guid, false);
 	}
 }
 
-void BotManager::touchRuntime(uint32_t guid, bool spawned)
+void BotManager::touchRuntimeAsync(uint32_t guid, bool spawned)
 {
 	if (guid == 0 || !ensureTables()) {
 		return;
 	}
 
+	// Telemetry only; nothing reads these back in-process. DatabaseTasks is a
+	// single FIFO worker and its shutdown() flushes the queue, so ordering and
+	// shutdown persistence hold.
 	const std::time_t now = std::time(nullptr);
 	const char* column = spawned ? "last_spawn" : "last_despawn";
-	Database& db = Database::getInstance();
-	db.executeQuery(fmt::format("UPDATE `bot_players` SET `{:s}` = {:d}, `updated_at` = {:d} WHERE `player_id` = {:d}",
-	                            column, static_cast<uint64_t>(now), static_cast<uint64_t>(now), guid));
+	g_databaseTasks.addTask(
+	    fmt::format("UPDATE `bot_players` SET `{:s}` = {:d}, `updated_at` = {:d} WHERE `player_id` = {:d}", column,
+	                static_cast<uint64_t>(now), static_cast<uint64_t>(now), guid));
 }

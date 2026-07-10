@@ -4,11 +4,12 @@
 #ifndef FS_BOTMANAGER_H
 #define FS_BOTMANAGER_H
 
+#include "botregistry.h"
+
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 class Player;
@@ -30,6 +31,12 @@ public:
 		uint32_t guid = 0;
 		std::string name;
 		std::string message;
+	};
+
+	struct MarkedState
+	{
+		bool marked = false;
+		bool enabled = false;
 	};
 
 	static BotManager& getInstance();
@@ -55,17 +62,19 @@ public:
 
 	bool isEnabled() const;
 	bool ensureTables();
-	bool isMarkedBot(uint32_t guid, bool* enabled = nullptr);
+	// nullopt means the registry could not be read (database error), which is
+	// distinct from "not registered" (marked == false).
+	std::optional<MarkedState> isMarkedBot(uint32_t guid);
 	std::optional<uint32_t> getGuidByName(std::string_view name) const;
 
 private:
 	BotManager() = default;
 
-	void cleanupRemoved();
-	void touchRuntime(uint32_t guid, bool spawned);
+	void sweepRemoved();
+	void touchRuntimeAsync(uint32_t guid, bool spawned);
 
 	bool tablesReady = false;
-	std::unordered_map<uint32_t, std::shared_ptr<Player>> activeBots;
+	tfs::bot::Registry<Player> registry;
 };
 
 #endif
