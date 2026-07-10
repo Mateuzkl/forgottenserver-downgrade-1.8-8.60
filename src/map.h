@@ -336,6 +336,8 @@ private:
 	                           int32_t maxRangeX, int32_t minRangeY, int32_t maxRangeY, int32_t minRangeZ,
 	                           int32_t maxRangeZ, bool onlyPlayers, bool onlyMonsters, bool onlyNpcs) const;
 
+	QTreeLeafNode* getOrCreateLeaf(uint16_t x, uint16_t y);
+
 	friend class Game;
 	friend class IOMap;
 };
