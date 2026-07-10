@@ -1,4 +1,4 @@
-file(GLOB benchs_SRC ${CMAKE_CURRENT_LIST_DIR}/bench_*.cpp)
+file(GLOB benchs_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/bench_*.cpp)
 
 foreach(bench_src ${benchs_SRC})
     get_filename_component(bench_name ${bench_src} NAME_WE)
