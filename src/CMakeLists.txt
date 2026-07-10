@@ -146,6 +146,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/bestiary_charm.h
 	${CMAKE_CURRENT_LIST_DIR}/bed.h
 	${CMAKE_CURRENT_LIST_DIR}/botmanager.h
+	${CMAKE_CURRENT_LIST_DIR}/botregistry.h
 	${CMAKE_CURRENT_LIST_DIR}/chat.h
 	${CMAKE_CURRENT_LIST_DIR}/character_bazaar.h
 	${CMAKE_CURRENT_LIST_DIR}/combat.h
@@ -167,6 +168,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/enums.h
 	${CMAKE_CURRENT_LIST_DIR}/events.h
 	${CMAKE_CURRENT_LIST_DIR}/fileloader.h
+	${CMAKE_CURRENT_LIST_DIR}/fonticakclient.h
 	${CMAKE_CURRENT_LIST_DIR}/game.h
 	${CMAKE_CURRENT_LIST_DIR}/globalevent.h
 	${CMAKE_CURRENT_LIST_DIR}/groups.h

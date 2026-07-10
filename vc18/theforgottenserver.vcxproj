@@ -184,6 +184,7 @@
     <ClCompile Include="..\src\baseevents.cpp" />
     <ClCompile Include="..\src\bestiary_charm.cpp" />
     <ClCompile Include="..\src\bed.cpp" />
+    <ClCompile Include="..\src\botmanager.cpp" />
     <ClCompile Include="..\src\character_bazaar.cpp" />
     <ClCompile Include="..\src\chat.cpp" />
     <ClCompile Include="..\src\combat.cpp" />
@@ -329,6 +330,8 @@
     <ClInclude Include="..\src\baseevents.h" />
     <ClInclude Include="..\src\bestiary_charm.h" />
     <ClInclude Include="..\src\bed.h" />
+    <ClInclude Include="..\src\botmanager.h" />
+    <ClInclude Include="..\src\botregistry.h" />
     <ClInclude Include="..\src\character_bazaar.h" />
     <ClInclude Include="..\src\chat.h" />
     <ClInclude Include="..\src\combat.h" />
