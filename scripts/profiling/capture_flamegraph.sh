@@ -92,7 +92,8 @@ fi
 
 [[ "${pid}" =~ ^[0-9]+$ ]] || die "invalid PID: ${pid}"
 
-command -v perf >/dev/null 2>&1 || die "perf not found. Run scripts/profiling/setup_flamegraph.sh first."
+perf_bin="$(command -v "${PERF_BIN:-perf}" || true)"
+[[ -n "${perf_bin}" ]] || die "perf not found. Run scripts/profiling/setup_flamegraph.sh first."
 command -v perl >/dev/null 2>&1 || die "perl not found"
 
 flamegraph_dir="${FLAMEGRAPH_DIR:-${HOME}/FlameGraph}"
@@ -115,7 +116,7 @@ folded="${intermediate_dir}/${base_name}.folded"
 filtered_folded="${intermediate_dir}/${base_name}.filtered.folded"
 
 use_sudo=0
-record_cmd=(perf record -F "${freq}" -p "${pid}" -g -o "${perf_data}" -- sleep "${duration}")
+record_cmd=("${perf_bin}" record -F "${freq}" -p "${pid}" -g -o "${perf_data}" -- sleep "${duration}")
 if [[ "${PERF_USE_SUDO:-1}" != "0" && "${EUID}" -ne 0 ]]; then
   command -v sudo >/dev/null 2>&1 || die "sudo not found. Set PERF_USE_SUDO=0 if perf is allowed without sudo."
   use_sudo=1
@@ -127,9 +128,9 @@ printf 'Capturing PID %s for %ss at %s Hz...\n' "${pid}" "${duration}" "${freq}"
 
 printf 'Writing perf script: %s\n' "${perf_script}"
 if [[ "${use_sudo}" -eq 1 ]]; then
-  sudo perf script -i "${perf_data}" > "${perf_script}"
+  sudo "${perf_bin}" script -i "${perf_data}" > "${perf_script}"
 else
-  perf script -i "${perf_data}" > "${perf_script}"
+  "${perf_bin}" script -i "${perf_data}" > "${perf_script}"
 fi
 
 printf 'Writing folded stacks: %s\n' "${folded}"

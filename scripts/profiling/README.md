@@ -2,6 +2,16 @@
 
 Helpers for Linux perf and Brendan Gregg FlameGraph.
 
+For the default `tfs` process, run:
+
+```bash
+bash tools/run-flamegraph.sh
+```
+
+The wrapper selects a compatible versioned `perf` binary on WSL when the
+`/usr/bin/perf` launcher does not support the running kernel. Extra capture
+options are forwarded to `capture_flamegraph.sh`.
+
 Start here:
 
 ```bash
