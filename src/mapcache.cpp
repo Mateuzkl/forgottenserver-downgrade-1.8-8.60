@@ -30,52 +30,50 @@ std::atomic<size_t> MapCache::tileCacheHits{0};
 std::atomic<size_t> MapCache::tileCacheMisses{0};
 
 std::shared_ptr<BasicItem> MapCache::tryGetItemFromCache(BasicItem&& item) {
-    size_t h = item.hash();
-    
+    // Hash computed outside the critical section.
+    const size_t h = item.hash();
+
     std::scoped_lock lock(itemCacheMutex);
-    
-    auto it = itemCache.find(h);
-    if (it != itemCache.end()) {
-        if (auto cached = it->second.lock()) {
-            // Verify hash collision
-            if (*cached == item) {
-                ++itemCacheHits;
-                return cached;
-            }
-        } else {
-            // Expired weak_ptr, remove it
-            itemCache.erase(it);
+
+    auto [it, inserted] = itemCache.try_emplace(h);
+    if (!inserted) {
+        if (auto cached = it->second.lock(); cached && *cached == item) {
+            ++itemCacheHits;
+            return cached;
         }
+        // The slot is either expired or holds a different value with the same
+        // hash (collision). We take over the slot below: a displaced live
+        // entry stays alive via its shared_ptr owners, it merely stops being
+        // findable. Both cases count as a miss.
     }
-    
+
     ++itemCacheMisses;
     auto newItem = std::make_shared<BasicItem>(std::move(item));
-    itemCache[h] = newItem;
+    it->second = newItem;
     return newItem;
 }
 
 std::shared_ptr<BasicTile> MapCache::tryGetTileFromCache(BasicTile&& tile) {
-    size_t h = tile.hash();
-    
+    // Hash computed outside the critical section.
+    const size_t h = tile.hash();
+
     std::scoped_lock lock(tileCacheMutex);
-    
-    auto it = tileCache.find(h);
-    if (it != tileCache.end()) {
-        if (auto cached = it->second.lock()) {
-            // Verify hash collision
-            if (*cached == tile) {
-                ++tileCacheHits;
-                return cached;
-            }
-        } else {
-            // Expired weak_ptr, remove it
-            tileCache.erase(it);
+
+    auto [it, inserted] = tileCache.try_emplace(h);
+    if (!inserted) {
+        if (auto cached = it->second.lock(); cached && *cached == tile) {
+            ++tileCacheHits;
+            return cached;
         }
+        // The slot is either expired or holds a different value with the same
+        // hash (collision). We take over the slot below: a displaced live
+        // entry stays alive via its shared_ptr owners, it merely stops being
+        // findable. Both cases count as a miss.
     }
-    
+
     ++tileCacheMisses;
     auto newTile = std::make_shared<BasicTile>(std::move(tile));
-    tileCache[h] = newTile;
+    it->second = newTile;
     return newTile;
 }
 
@@ -131,6 +129,11 @@ size_t MapCache::getTileCacheSize() {
     std::scoped_lock lock(tileCacheMutex);
     return tileCache.size();
 }
+
+size_t MapCache::getItemCacheHits() { return itemCacheHits.load(); }
+size_t MapCache::getItemCacheMisses() { return itemCacheMisses.load(); }
+size_t MapCache::getTileCacheHits() { return tileCacheHits.load(); }
+size_t MapCache::getTileCacheMisses() { return tileCacheMisses.load(); }
 
 // Helper functions for parsing
 namespace {
@@ -231,7 +234,6 @@ namespace {
     }
 }
 
-// Helper to parse item from stream (used by both node-based and inline items)
 // Helper to parse item from stream (used by both node-based and inline items)
 bool parseBasicItemFromStream(PropStream& propStream, BasicItem& item) {
     uint16_t id;
@@ -393,8 +395,7 @@ bool parseBasicItemFromStream(PropStream& propStream, BasicItem& item) {
     return true;
 }
 
-std::shared_ptr<BasicItem> MapCache::parseBasicItem(void* loaderptr, const void* nodeptr, BasicItem* parent) {
-    (void)parent;
+std::shared_ptr<BasicItem> MapCache::parseBasicItem(void* loaderptr, const void* nodeptr) {
     OTB::Loader& loader = *static_cast<OTB::Loader*>(loaderptr);
     const OTB::Node& node = *static_cast<const OTB::Node*>(nodeptr);
     PropStream propStream;
@@ -412,7 +413,7 @@ std::shared_ptr<BasicItem> MapCache::parseBasicItem(void* loaderptr, const void*
     // Parse children (containers)
     for (auto& childNode : node.children) {
         if (static_cast<OTBM_NodeTypes_t>(childNode.type) == OTBM_NodeTypes_t::ITEM) {
-            auto child = parseBasicItem(loaderptr, &childNode, &item);
+            auto child = parseBasicItem(loaderptr, &childNode);
             if (child) {
                 item.items.push_back(child);
             }
@@ -506,7 +507,7 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
     for (auto& itemNode : tileNode.children) {
         const auto childNodeType = static_cast<OTBM_NodeTypes_t>(itemNode.type);
         if (childNodeType == OTBM_NodeTypes_t::ITEM) {
-            auto item = parseBasicItem(loaderptr, &itemNode, nullptr);
+            auto item = parseBasicItem(loaderptr, &itemNode);
             if (item) {
                 const ItemType& it = Item::items[item->id];
                 if (it.isGroundTile() && tile.ground == nullptr) {

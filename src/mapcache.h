@@ -226,14 +226,18 @@ public:
     /**
      * Map Parsing Helpers (used by IOMap)
      */
-    static std::shared_ptr<BasicItem> parseBasicItem(void* loaderptr, const void* nodeptr, BasicItem* parent = nullptr);
+    static std::shared_ptr<BasicItem> parseBasicItem(void* loaderptr, const void* nodeptr);
     static std::shared_ptr<BasicTile> parseBasicTile(void* loaderptr, const void* nodeptr, uint8_t& xOffset, uint8_t& yOffset);
-    
+
     /**
      * Get cache statistics for debugging
      */
     static size_t getItemCacheSize();
     static size_t getTileCacheSize();
+    static size_t getItemCacheHits();
+    static size_t getItemCacheMisses();
+    static size_t getTileCacheHits();
+    static size_t getTileCacheMisses();
 
 private:
     static std::unordered_map<size_t, std::weak_ptr<BasicItem>> itemCache;

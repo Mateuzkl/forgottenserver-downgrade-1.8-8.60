@@ -95,53 +95,45 @@ Tile* Map::getTile(uint16_t x, uint16_t y, uint8_t z) const
 
 QTreeLeafNode* Map::getOrCreateLeaf(uint16_t x, uint16_t y)
 {
-	thread_local static const Map* lastMap = nullptr;
-	thread_local static QTreeLeafNode* lastLeaf = nullptr;
-	thread_local static uint32_t lastLeafBaseX = 0xFFFFFFFF;
-	thread_local static uint32_t lastLeafBaseY = 0xFFFFFFFF;
+	const uint32_t baseX = x & ~FLOOR_MASK;
+	const uint32_t baseY = y & ~FLOOR_MASK;
 
-	uint32_t baseX = x & ~FLOOR_MASK;
-	uint32_t baseY = y & ~FLOOR_MASK;
-	QTreeLeafNode* leaf = nullptr;
-
-	if (lastMap == this && lastLeaf && baseX == lastLeafBaseX && baseY == lastLeafBaseY) {
-		leaf = lastLeaf;
-	} else {
-		QTreeLeafNode::newLeaf = false;
-		leaf = root.createLeaf(x, y, 15);
-
-		if (QTreeLeafNode::newLeaf) {
-			// update north
-			QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
-			if (northLeaf) {
-				northLeaf->leafS = leaf;
-			}
-
-			// update west leaf
-			QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
-			if (westLeaf) {
-				westLeaf->leafE = leaf;
-			}
-
-			// update south
-			QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
-			if (southLeaf) {
-				leaf->leafS = southLeaf;
-			}
-
-			// update east
-			QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
-			if (eastLeaf) {
-				leaf->leafE = eastLeaf;
-			}
-		}
-
-		lastMap = this;
-		lastLeaf = leaf;
-		lastLeafBaseX = baseX;
-		lastLeafBaseY = baseY;
+	if (cachedLeaf && baseX == cachedLeafBaseX && baseY == cachedLeafBaseY) {
+		return cachedLeaf;
 	}
 
+	QTreeLeafNode::newLeaf = false;
+	QTreeLeafNode* leaf = root.createLeaf(x, y, 15);
+
+	if (QTreeLeafNode::newLeaf) {
+		// update north
+		QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
+		if (northLeaf) {
+			northLeaf->leafS = leaf;
+		}
+
+		// update west leaf
+		QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
+		if (westLeaf) {
+			westLeaf->leafE = leaf;
+		}
+
+		// update south
+		QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
+		if (southLeaf) {
+			leaf->leafS = southLeaf;
+		}
+
+		// update east
+		QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
+		if (eastLeaf) {
+			leaf->leafE = eastLeaf;
+		}
+	}
+
+	cachedLeaf = leaf;
+	cachedLeafBaseX = baseX;
+	cachedLeafBaseY = baseY;
 	return leaf;
 }
 
