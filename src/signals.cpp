@@ -38,17 +38,17 @@ namespace {
 {
 	// Dispatcher thread
 	// Dispatcher thread
-	g_logger().setConsoleLevel(LogLevel::CRITICAL);
 	LOG_INFO(">> SIGBREAK received, shutting game server down...");
+	g_logger().setConsoleLevel(LogLevel::CRITICAL);
 	g_game.setGameState(GAME_STATE_SHUTDOWN);
 }
 
 void sigtermHandler()
 {
 	// Dispatcher thread
-	g_logger().setConsoleLevel(LogLevel::CRITICAL);
 	LOG_INFO(">> SIGTERM received, shutting game server down...");
 	LOG_INFO(">> Saving game state before shutdown...");
+	g_logger().setConsoleLevel(LogLevel::CRITICAL);
 	g_game.setGameState(GAME_STATE_SHUTDOWN);
 }
 
@@ -118,9 +118,9 @@ void sighupHandler()
 void sigintHandler()
 {
 	// Dispatcher thread
-	g_logger().setConsoleLevel(LogLevel::CRITICAL);
 	LOG_INFO(">> SIGINT received, shutting game server down...");
 	LOG_INFO(">> Saving game state before shutdown...");
+	g_logger().setConsoleLevel(LogLevel::CRITICAL);
 	g_game.setGameState(GAME_STATE_SHUTDOWN);
 }
 
