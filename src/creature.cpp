@@ -360,6 +360,11 @@ void Creature::stopEventWalk()
 
 void Creature::onCreatureAppear(Creature* creature, bool isLogin)
 {
+	if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG) && creature && (isSummon() || creature->isSummon())) {
+		LOG_INFO(fmt::format("[SummonDebug] callback=appear observer={} creature={} login={}", getName(),
+		                     creature->getName(), isLogin));
+	}
+
 	if (creature == this) {
 		if (isLogin) {
 			setLastPosition(getPosition());
@@ -375,6 +380,11 @@ void Creature::onRemoveCreature(Creature* creature, bool isLogout)
 
 void Creature::onCreatureDisappear(const Creature* creature, bool isLogout)
 {
+	if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG) && creature && (isSummon() || creature->isSummon())) {
+		LOG_INFO(fmt::format("[SummonDebug] callback=disappear observer={} creature={} logout={}", getName(),
+		                     creature->getName(), isLogout));
+	}
+
 	if (auto attacked = attackedCreature.lock(); attacked.get() == creature) {
 		setAttackedCreature(nullptr);
 		onAttackedCreatureDisappear(isLogout);
@@ -405,6 +415,11 @@ void Creature::onAttackedCreatureChangeZone(ZoneType_t zone)
 void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Position& newPos, const Tile* oldTile,
                               const Position& oldPos, bool teleport)
 {
+	if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG) && creature && (isSummon() || creature->isSummon())) {
+		LOG_INFO(fmt::format("[SummonDebug] callback=move observer={} creature={} from={} to={} teleport={}", getName(),
+		                     creature->getName(), oldPos, newPos, teleport));
+	}
+
 	if (creature == this) {
 		lastStep = OTSYS_TIME();
 		lastStepCost = 1;
@@ -955,16 +970,32 @@ void Creature::getPathSearchParams(const Creature*, FindPathParams& fpp) const
 void Creature::goToFollowCreature()
 {
 	if (auto fc = followCreature.lock()) {
+		const Position& targetPos = fc->getPosition();
+		if (targetPos.z != getPosition().z || !canSee(targetPos)) {
+			if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG)) {
+				LOG_INFO(fmt::format("[SummonDebug] follow path skipped follower={} target={} reason={}", getName(),
+				                     fc->getName(), targetPos.z != getPosition().z ? "floor" : "range"));
+			}
+			onCreatureDisappear(fc.get(), false);
+			onFollowCreatureComplete(nullptr);
+			return;
+		}
+
 		FindPathParams fpp;
 		getPathSearchParams(fc.get(), fpp);
 
 		listWalkDir.clear();
 
-		if (getPathTo(fc->getPosition(), listWalkDir, fpp)) {
+		if (getPathTo(targetPos, listWalkDir, fpp)) {
 			hasFollowPath = true;
 			startAutoWalk(listWalkDir);
-		} else
+		} else {
 			hasFollowPath = false;
+			if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG)) {
+				LOG_INFO(fmt::format("[SummonDebug] follow path failed follower={} target={} reason=no-path", getName(),
+				                     fc->getName()));
+			}
+		}
 	}
 
 	auto follow = followCreature.lock();
@@ -991,6 +1022,10 @@ bool Creature::setFollowCreature(Creature* creature)
 
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
+			if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG)) {
+				LOG_INFO(fmt::format("[SummonDebug] follow rejected follower={} target={} reason={}", getName(),
+				                     creature->getName(), creaturePos.z != getPosition().z ? "floor" : "range"));
+			}
 			isUpdatingPath = false;
 			hasFollowPath = false;
 			followCreature.reset();

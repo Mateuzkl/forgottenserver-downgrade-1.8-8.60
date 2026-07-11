@@ -301,7 +301,8 @@ void Monster::onCreatureAppear(Creature* creature, bool isLogin)
 			auto master = getMaster();
 			if (master) {
 				const bool sameInstance = getInstanceID() == master->getInstanceID();
-				isMasterInRange = sameInstance && canSee(master->getPosition());
+				isMasterInRange = sameInstance && getPosition().z == master->getPosition().z &&
+				                  canSee(master->getPosition());
 			}
 		}
 
@@ -386,7 +387,8 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 			auto master = getMaster();
 			if (master) {
 				const bool sameInstance = getInstanceID() == master->getInstanceID();
-				isMasterInRange = sameInstance && canSee(master->getPosition());
+				isMasterInRange = sameInstance && getPosition().z == master->getPosition().z &&
+				                  canSee(master->getPosition());
 			}
 			updateTargetList();
 		} else {
@@ -396,8 +398,8 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 		}
 		updateIdleStatus();
 	} else {
-		bool canSeeNewPos = canSee(newPos);
-		bool canSeeOldPos = canSee(oldPos);
+		const bool canSeeNewPos = newPos.z == position.z && canSee(newPos);
+		const bool canSeeOldPos = oldPos.z == position.z && canSee(oldPos);
 
 		if (canSeeNewPos && !canSeeOldPos) {
 			onCreatureEnter(creature);
@@ -571,6 +573,11 @@ void Monster::addTarget(Creature* creature, bool pushFront /* = false*/)
 	} else {
 		targetList.push_back(std::move(weakRef));
 	}
+
+	if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG) && creature->isSummon()) {
+		LOG_INFO(fmt::format("[SummonDebug] monster={} added summon={} to targetList size={}", getName(),
+		                     creature->getName(), targetList.size()));
+	}
 }
 
 void Monster::removeTarget(Creature* creature)
@@ -587,18 +594,19 @@ void Monster::updateTargetList()
 {
 	std::erase_if(friendList, [this](const auto& weakRef) {
 		auto creature = weakRef.lock();
-		return !creature || creature->isDead() || !canSee(creature->getPosition());
+		return !creature || creature->isDead() || creature->getPosition().z != position.z ||
+		       !canSee(creature->getPosition());
 	});
 
 	std::erase_if(targetList, [this](const auto& weakRef) {
 		auto creature = weakRef.lock();
-		return !creature || creature->isDead() || !canSee(creature->getPosition()) || !canSeeCreature(creature.get()) ||
+		return !creature || creature->isDead() || creature->getPosition().z != position.z ||
+		       !canSee(creature->getPosition()) || !canSeeCreature(creature.get()) ||
 		       (!isFamiliar() && creature->getZone() == ZONE_PROTECTION) || !isOpponent(creature.get());
 	});
 
 	SpectatorVec spectators;
-	// OPTIMIZATION: Use multifloor=true (like upstream) to reduce spectator count
-	g_game.map.getSpectators(spectators, position, true);
+	g_game.map.getSpectators(spectators, position, false);
 	spectators.erase(this);
 	for (const auto& spectator : spectators) {
 		onCreatureFound(spectator.get());
@@ -623,7 +631,7 @@ void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/)
 		return;
 	}
 
-	if (!canSee(creature->getPosition())) {
+	if (creature->getPosition().z != position.z || !canSee(creature->getPosition())) {
 		return;
 	}
 
@@ -650,6 +658,12 @@ void Monster::onCreatureEnter(Creature* creature)
 	if (master && master.get() == creature) {
 		// Follow master again
 		isMasterInRange = true;
+		if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG)) {
+			LOG_INFO(fmt::format("[SummonDebug] summon={} master={} reentered range", getName(), creature->getName()));
+		}
+	} else if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG) && creature->isSummon()) {
+		LOG_INFO(fmt::format("[SummonDebug] monster={} saw summon={} enter combat range", getName(),
+		                     creature->getName()));
 	}
 
 	onCreatureFound(creature, true);
@@ -866,6 +880,9 @@ void Monster::onCreatureLeave(Creature* creature)
 	if (master && master.get() == creature) {
 		// Take random steps and only use defense abilities (e.g. heal) until its master comes back
 		isMasterInRange = false;
+		if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG)) {
+			LOG_INFO(fmt::format("[SummonDebug] summon={} lost master={} from range", getName(), creature->getName()));
+		}
 	}
 
 	// update friendList
@@ -1304,12 +1321,19 @@ bool Monster::selectTarget(Creature* creature)
 		return false;
 	}
 
+	bool attackSelected = false;
 	if (isHostile() || isSummon()) {
-		if (setAttackedCreature(creature) && !isSummon()) {
+		attackSelected = setAttackedCreature(creature);
+		if (attackSelected && !isSummon()) {
 			g_dispatcher.addTask([id = getID()]() { g_game.checkCreatureAttack(id); });
 		}
 	}
-	return setFollowCreature(creature);
+	const bool followSelected = setFollowCreature(creature);
+	if (ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG) && creature->isSummon() && attackSelected &&
+	    followSelected) {
+		LOG_INFO(fmt::format("[SummonDebug] monster={} selected summon={} for attack", getName(), creature->getName()));
+	}
+	return followSelected;
 }
 
 void Monster::setIdle(bool idle)
@@ -1318,9 +1342,22 @@ void Monster::setIdle(bool idle)
 		return;
 	}
 
+	const bool idleChanged = isIdle != idle;
 	isIdle = idle;
 
 	if (!isIdle) {
+		if (idleChanged && ConfigManager::getBoolean(ConfigManager::SUMMON_DEBUG)) {
+			auto summonTarget = std::find_if(targetList.begin(), targetList.end(), [](const auto& weakRef) {
+				auto target = weakRef.lock();
+				return target && target->isSummon();
+			});
+			if (summonTarget != targetList.end()) {
+				if (auto target = summonTarget->lock()) {
+					LOG_INFO(fmt::format("[SummonDebug] monster={} left idle for summon={}", getName(),
+					                     target->getName()));
+				}
+			}
+		}
 		g_game.addCreatureCheck(this);
 	} else {
 		onIdleStatus();
@@ -1444,7 +1481,7 @@ void Monster::onThink(uint32_t interval)
 						selectTarget(masterTarget.get());
 					} else {
 						auto follow = followCreature.lock();
-						if (master != follow) {
+						if (isMasterInRange && master != follow) {
 							// Our master has not ordered us to attack anything, lets follow him around instead.
 							setFollowCreature(master.get());
 						}
