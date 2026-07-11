@@ -3445,6 +3445,27 @@ void Player::death(Creature* lastHitCreature)
 	loginPosition = town->getTemplePosition();
 	setInstanceID(0);
 
+	// Summons vanish when their master dies (same as on logout/removal);
+	// otherwise they would stay bonded forever, never go idle and keep
+	// wandering around looking for a master that respawned at the temple.
+	std::vector<std::shared_ptr<Creature>> summonRefs;
+	summonRefs.reserve(summons.size());
+	for (const auto& summonRef : summons) {
+		if (auto summon = summonRef.lock()) {
+			summonRefs.push_back(std::move(summon));
+		}
+	}
+	summons.clear();
+
+	for (const auto& summon : summonRefs) {
+		summon->setSkillLoss(false);
+		if (summon->getMaster().get() == this) {
+			summon->removeMaster();
+		}
+		g_game.removeCreature(summon.get(), false);
+		g_game.addMagicEffect(summon->getPosition(), CONST_ME_POFF, summon->getInstanceID());
+	}
+
 	auto refreshDeathPingWindow = [this]() {
 		const int64_t timeNow = OTSYS_TIME();
 		lastPing = timeNow;
