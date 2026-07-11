@@ -27,7 +27,16 @@ public:
 
 	void addSpectators(const SpectatorVec& spectators)
 	{
-		absl::flat_hash_set<Creature*> existing;
+		if (this == &spectators || spectators.vec.empty()) {
+			return;
+		}
+		if (vec.empty()) {
+			*this = spectators;
+			return;
+		}
+
+		thread_local absl::flat_hash_set<Creature*> existing;
+		existing.clear();
 		existing.reserve(vec.size() + spectators.vec.size());
 		for (const auto& spectator : vec) {
 			existing.insert(spectator.get());
