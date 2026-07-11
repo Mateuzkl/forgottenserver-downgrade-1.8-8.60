@@ -67,6 +67,12 @@ struct FindPathParams
 	int32_t maxTargetDist = -1;
 };
 
+struct PathSearchMetrics
+{
+	uint32_t nodesVisited = 0;
+	uint32_t tilesRead = 0;
+};
+
 class Map;
 class Thing;
 class Container;
@@ -388,7 +394,8 @@ public:
 
 	double getDamageRatio(const std::shared_ptr<Creature>& attacker) const;
 
-	bool getPathTo(const Position& targetPos, std::vector<Direction>& dirList, const FindPathParams& fpp) const;
+	bool getPathTo(const Position& targetPos, std::vector<Direction>& dirList, const FindPathParams& fpp,
+	               PathSearchMetrics* metrics = nullptr) const;
 	bool getPathTo(const Position& targetPos, std::vector<Direction>& dirList, int32_t minTargetDist,
 	               int32_t maxTargetDist, bool fullPathSearch = true, bool clearSight = true,
 	               int32_t maxSearchDist = 0) const;

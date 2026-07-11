@@ -59,6 +59,7 @@
     <ClCompile Include="..\src\protocoladmin.cpp" />
     <ClCompile Include="..\src\raids.cpp" />
     <ClCompile Include="..\src\reactor.cpp" />
+    <ClCompile Include="..\src\performance_metrics.cpp" />
     <ClCompile Include="..\src\rsa.cpp" />
     <ClCompile Include="..\src\scheduler.cpp" />
     <ClCompile Include="..\src\script.cpp" />
@@ -281,6 +282,7 @@
     <ClInclude Include="..\src\pugicast.h" />
     <ClInclude Include="..\src\raids.h" />
     <ClInclude Include="..\src\reactor.h" />
+    <ClInclude Include="..\src\performance_metrics.h" />
     <ClInclude Include="..\src\rsa.h" />
     <ClInclude Include="..\src\scheduler.h" />
     <ClInclude Include="..\src\script.h" />

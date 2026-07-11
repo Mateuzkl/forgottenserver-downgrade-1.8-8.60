@@ -23,6 +23,7 @@
 #include "monster.h"
 #include "movement.h"
 #include "outputmessage.h"
+#include "performance_metrics.h"
 #include "pugicast.h"
 #include "decay.h"
 #include "scheduler.h"
@@ -1607,6 +1608,7 @@ void Game::playerMoveCreature(Player* player, Creature* movingCreature, const Po
 
 ReturnValue Game::internalMoveCreature(Creature* creature, Direction direction, uint32_t flags /*= 0*/)
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameInternalMoveCreature);
 	creature->setLastPosition(creature->getPosition());
 	const Position& currentPos = creature->getPosition();
 	Position destPos = getNextPosition(direction, currentPos);
@@ -5867,6 +5869,7 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 
 void Game::checkCreatureWalk(uint32_t creatureId)
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatureWalk);
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
 	if (creature && !creature->isRemoved() && !creature->isDead()) {
@@ -5876,6 +5879,7 @@ void Game::checkCreatureWalk(uint32_t creatureId)
 
 void Game::updateCreatureWalk(uint32_t creatureId)
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameUpdateCreatureWalk);
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
 	if (creature && !creature->isRemoved() && !creature->isDead()) {
@@ -5927,6 +5931,7 @@ void Game::removeCreatureCheck(Creature* creature)
 
 void Game::checkCreatures(size_t index)
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatures);
 	auto& checkCreatureList = checkCreatureLists[index];
 	size_t i = 0;
 

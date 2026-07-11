@@ -6,6 +6,7 @@
 #include "reactor.h"
 
 #include "logger.h"
+#include "performance_metrics.h"
 #include "stats.h"
 
 TaskReactor g_reactor;
@@ -51,6 +52,7 @@ bool TaskReactor::send(ReactorCallback&& callback)
 	{
 		std::scoped_lock lock(mutex);
 		if (maxInboxSize > 0 && sendInbox.size() >= maxInboxSize) {
+			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] sendInbox overflow ({}), dropping task", sendInbox.size());
 			return false;
 		}
@@ -78,6 +80,7 @@ bool TaskReactor::send(std::chrono::milliseconds expirationTime, ReactorCallback
 	{
 		std::scoped_lock lock(mutex);
 		if (maxInboxSize > 0 && sendInbox.size() >= maxInboxSize) {
+			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] sendInbox overflow ({}), dropping timed task", sendInbox.size());
 			return false;
 		}
@@ -119,6 +122,7 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 	{
 		std::scoped_lock lock(mutex);
 		if (maxInboxSize > 0 && scheduleInbox.size() >= maxInboxSize) {
+			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] scheduleInbox overflow ({}), dropping scheduled task", scheduleInbox.size());
 			return 0;
 		}
@@ -171,12 +175,27 @@ void TaskReactor::runLoop()
 
 void TaskReactor::runOnce()
 {
+	PerformanceScope cycleScope(PerformanceMetric::ReactorCycle);
 	std::vector<Task> readyTasks;
 	readyTasks.reserve(128);
 
-	drainInbox(readyTasks);
-	drainReadyTasks(readyTasks);
-	executeReadyTasks(readyTasks);
+	{
+		PerformanceScope scope(PerformanceMetric::ReactorDrainInbox);
+		drainInbox(readyTasks);
+	}
+	{
+		PerformanceScope scope(PerformanceMetric::ReactorDrainReady);
+		drainReadyTasks(readyTasks);
+	}
+	{
+		PerformanceScope scope(PerformanceMetric::ReactorCallbacks);
+		executeReadyTasks(readyTasks);
+	}
+	{
+		std::scoped_lock lock(mutex);
+		g_performanceMetrics.recordQueueSize(sendInbox.size() + scheduleInbox.size() + cancelInbox.size() + taskHeap.size());
+	}
+	g_performanceMetrics.maybeReport();
 }
 
 void TaskReactor::shutdown() noexcept
@@ -255,6 +274,8 @@ void TaskReactor::drainInbox(std::vector<Task>& readyTasks)
 	for (auto& task : sentTasks) {
 		if (!task.hasExpired(now)) {
 			readyTasks.push_back(std::move(task));
+		} else {
+			g_performanceMetrics.recordTaskExpired();
 		}
 	}
 }
@@ -270,6 +291,9 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
 
 		activeIdentifiers.erase(readyTask.identifier);
 		if (cancelled.erase(readyTask.identifier) > 0 || readyTask.hasExpired(now)) {
+			if (readyTask.hasExpired(now)) {
+				g_performanceMetrics.recordTaskExpired();
+			}
 			continue;
 		}
 
@@ -279,12 +303,15 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
 
 void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 {
-	std::sort(readyTasks.begin(), readyTasks.end(), [](const Task& lhs, const Task& rhs) {
-		if (lhs.fireAt != rhs.fireAt) {
-			return lhs.fireAt < rhs.fireAt;
-		}
-		return lhs.sequence < rhs.sequence;
-	});
+	{
+		PerformanceScope scope(PerformanceMetric::ReactorSort);
+		std::sort(readyTasks.begin(), readyTasks.end(), [](const Task& lhs, const Task& rhs) {
+			if (lhs.fireAt != rhs.fireAt) {
+				return lhs.fireAt < rhs.fireAt;
+			}
+			return lhs.sequence < rhs.sequence;
+		});
+	}
 
 	const auto cycleStart = std::chrono::steady_clock::now();
 	uint32_t tasksExecuted = 0;
@@ -307,6 +334,13 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		}
 
 		try {
+			if (g_performanceMetrics.isEnabled()) {
+				const auto callbackStart = std::chrono::steady_clock::now();
+				const auto queueLatency = callbackStart > task.fireAt ? callbackStart - task.fireAt : std::chrono::steady_clock::duration::zero();
+				g_performanceMetrics.record(PerformanceMetric::ReactorQueueLatency,
+					std::chrono::duration_cast<std::chrono::nanoseconds>(queueLatency).count());
+			}
+			PerformanceScope callbackScope(PerformanceMetric::ReactorCallback);
 			task.function();
 		} catch (const std::exception& exception) {
 			LOG_ERROR("[TaskReactor] Unhandled task exception: {}", exception.what());
@@ -318,6 +352,7 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 	}
 
 	if (tasksExecuted < readyTasks.size()) {
+		g_performanceMetrics.recordTaskDeferred(readyTasks.size() - tasksExecuted);
 		std::scoped_lock lock(mutex);
 		for (size_t i = tasksExecuted; i < readyTasks.size(); ++i) {
 			sendInbox.push_back(std::move(readyTasks[i]));

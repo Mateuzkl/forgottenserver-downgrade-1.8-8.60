@@ -11,6 +11,7 @@
 #include "game.h"
 #include "luavariant.h"
 #include "monster.h"
+#include "performance_metrics.h"
 #include "pugicast.h"
 #include "scriptmanager.h"
 #include "logger.h"
@@ -279,6 +280,7 @@ bool CombatSpell::loadScriptCombat()
 
 bool CombatSpell::castSpell(Creature* creature)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatSpellCastSpell);
 	if (scripted) {
 		LuaVariant var;
 
@@ -304,6 +306,7 @@ bool CombatSpell::castSpell(Creature* creature)
 
 bool CombatSpell::castSpell(Creature* creature, Creature* target)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatSpellCastSpell);
 	if (scripted) {
 		LuaVariant var;
 

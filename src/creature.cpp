@@ -9,6 +9,7 @@
 #include "events.h"
 #include "game.h"
 #include "monster.h"
+#include "performance_metrics.h"
 #include "scheduler.h"
 #include "scriptmanager.h"
 #include "instance_utils.h"
@@ -195,6 +196,7 @@ void Creature::onThink(uint32_t interval)
 
 void Creature::onAttacking(uint32_t interval)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CreatureOnAttacking);
 	// OPTIMIZATION: Removed redundant isDead/isRemoved checks.
 	// checkCreatures() already validates creature state before calling this.
 
@@ -954,6 +956,7 @@ void Creature::getPathSearchParams(const Creature*, FindPathParams& fpp) const
 
 void Creature::goToFollowCreature()
 {
+	PerformanceScope performanceScope(PerformanceMetric::CreatureGoToFollow);
 	if (auto fc = followCreature.lock()) {
 		FindPathParams fpp;
 		getPathSearchParams(fc.get(), fpp);
@@ -1717,9 +1720,10 @@ bool Creature::isInvisible() const
 	       }) != conditions.end();
 }
 
-bool Creature::getPathTo(const Position& targetPos, std::vector<Direction>& dirList, const FindPathParams& fpp) const
+bool Creature::getPathTo(const Position& targetPos, std::vector<Direction>& dirList, const FindPathParams& fpp,
+                         PathSearchMetrics* metrics) const
 {
-	return g_game.map.getPathMatching(*this, dirList, FrozenPathingConditionCall(targetPos), fpp);
+	return g_game.map.getPathMatching(*this, dirList, FrozenPathingConditionCall(targetPos), fpp, metrics);
 }
 
 bool Creature::getPathTo(const Position& targetPos, std::vector<Direction>& dirList, int32_t minTargetDist,
