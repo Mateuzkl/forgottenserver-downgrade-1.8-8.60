@@ -126,6 +126,16 @@ bool Mailbox::sendItem(Item* item) const
 		return false;
 	}
 
+	if (Container* container = item->getContainer()) {
+		if (Tile* tile = item->getTile()) {
+			SpectatorVec spectators;
+			g_game.map.getSpectators(spectators, tile->getPosition(), true, true);
+			for (const auto& spectator : spectators.players()) {
+				static_cast<Player*>(spectator.get())->autoCloseContainers(container);
+			}
+		}
+	}
+
 	Town* town = nullptr;
 	if (!townName.empty()) {
 		town = g_game.map.towns.getTown(townName);

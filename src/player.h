@@ -915,7 +915,7 @@ public:
 
 	void sendCreatureIcon(const Creature* creature) const
 	{
-		if (!client) {
+		if (!client || !client->isAstraClient) {
 			return;
 		}
 		client->sendCreatureIcon(creature);

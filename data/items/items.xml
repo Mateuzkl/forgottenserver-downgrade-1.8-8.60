@@ -9632,6 +9632,7 @@
 		<attribute key="weight" value="1800" />
 	</item>
 	<item id="3504" article="a" name="stamped parcel">
+		<attribute key="type" value="container" />
 		<attribute key="containersize" value="10" />
 		<attribute key="weight" value="1800" />
 	</item>
