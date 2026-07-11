@@ -1415,15 +1415,12 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		case 0x8C:
 			parseLookAt(msg);
 			break;
-
 		case 0x8D:
 			parseLookInBattleList(msg);
 			break;
-
 		case 0x8E: /* join aggression */
 			break;
-
-		case 0x8F:
+				case 0x8F:
 			if (shouldSendQuickLootFlags()) {
 				parseQuickLoot(msg);
 			} else {
@@ -1446,85 +1443,65 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				skipUnreadBytes(msg);
 			}
 			break;
-
 		case 0x96:
 			parseSay(msg);
 			break;
-
 		case 0x97:
 			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerRequestChannels(playerID); });
 			break;
-
 		case 0x98:
 			parseOpenChannel(msg);
 			break;
-
 		case 0x99:
 			parseCloseChannel(msg);
 			break;
-
 		case 0x9A:
 			parseOpenPrivateChannel(msg);
 			break;
-
 		case 0x9E:
 			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerCloseNpcChannel(playerID); });
 			break;
-
 		case 0x9F:
 			if (isAstraClient) {
 				parseSetMonsterPodium(msg);
 			}
 			break;
-
 		case 0xA1:
 			parseAttack(msg);
 			break;
-
 		case 0xA2:
 			parseFollow(msg);
 			break;
-
 		case 0xA3:
 			parseInviteToParty(msg);
 			break;
-
 		case 0xA4:
 			parseJoinParty(msg);
 			break;
-
 		case 0xA5:
 			parseRevokePartyInvite(msg);
 			break;
-
 		case 0xA6:
 			parsePassPartyLeadership(msg);
 			break;
-
 		case 0xA7:
 			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerLeaveParty(playerID); });
 			break;
-
 		case 0xA8:
 			parseEnableSharedPartyExperience(msg);
 			break;
-
 		case 0xAA:
 			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerCreatePrivateChannel(playerID); });
 			break;
-
 		case 0xAB:
 			parseChannelInvite(msg);
 			break;
-
 		case 0xAC:
 			parseChannelExclude(msg);
 			break;
-
 		case 0xBE:
 			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerCancelAttackAndFollow(playerID); });
 			break;
-
 		case 0xCF:
 			if (isAstraClient) {
 				g_dispatcher.addTask([thisPtr = getThis()]() {
@@ -1532,14 +1509,11 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				});
 			}
 			break;
-
 		case 0xC9: /* update tile */
 			break;
-
 		case 0xCA:
 			parseUpdateContainer(msg);
 			break;
-
 		case 0xCB:
 			if (shouldSendContainerPagination()) {
 				parseBrowseField(msg);
@@ -1547,7 +1521,6 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				skipUnreadBytes(msg);
 			}
 			break;
-
 		case 0xCC:
 			if (shouldSendContainerPagination()) {
 				parseSeekInContainer(msg);
@@ -1555,13 +1528,11 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				skipUnreadBytes(msg);
 			}
 			break;
-
 		case 0xCD:
 			if (isAstraClient) {
 				parseInspectionObject(msg);
 			}
 			break;
-
 		case 0xD2:
 			if (isHirelingOutfitRequestPacket(msg, isAstraClient)) {
 				dispatchPlayerNetworkMessage(recvbyte, msg);
@@ -1569,7 +1540,6 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerRequestOutfit(playerID); });
 			}
 			break;
-
 		case 0xD3:
 			if (isHirelingOutfitChangePacket(msg, isAstraClient)) {
 				dispatchPlayerNetworkMessage(recvbyte, msg);
@@ -1577,37 +1547,29 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				parseSetOutfit(msg);
 			}
 			break;
-
 		case 0xDC:
 			parseAddVip(msg);
 			break;
-
 		case 0xDD:
 			parseRemoveVip(msg);
 			break;
-
 		case 0xE6:
 			parseBugReport(msg);
 			break;
-
 		case 0xE7: /* thank you / custom wheel gem action */
 			dispatchPlayerNetworkMessage(recvbyte, msg);
 			break;
-
 		case 0xF2:
 			parseRuleViolationReport(msg);
 			break;
-
 		case 0xF3: /* get object info */
 			break;
-
 		case 0xF8: /* custom store transfer */
 		case 0xFA: /* custom store history */
 		case 0xFB: /* custom store open */
 		case 0xFC: /* custom store buy */
 			dispatchPlayerNetworkMessage(recvbyte, msg);
 			break;
-
 		case 0xF9:
 			parseModalWindowAnswer(msg);
 			break;

@@ -42,7 +42,7 @@ bool GlobalEvents::registerLuaEvent(GlobalEvent* event)
 		auto result = timerMap.emplace(globalEvent->getName(), std::move(*globalEvent));
 		if (result.second) {
 			if (timerEventId == 0) {
-				timerEventId = g_scheduler.addEvent(createSchedulerTask(MIN_TASK_INTERVAL, [this]() { timer(); }));
+				timerEventId = g_scheduler.addEvent(createSchedulerTask(SCHEDULER_MINTICKS, [this]() { timer(); }));
 			}
 			return true;
 		}
@@ -55,7 +55,7 @@ bool GlobalEvents::registerLuaEvent(GlobalEvent* event)
 		auto result = thinkMap.emplace(globalEvent->getName(), std::move(*globalEvent));
 		if (result.second) {
 			if (thinkEventId == 0) {
-				thinkEventId = g_scheduler.addEvent(createSchedulerTask(MIN_TASK_INTERVAL, [this]() { think(); }));
+				thinkEventId = g_scheduler.addEvent(createSchedulerTask(SCHEDULER_MINTICKS, [this]() { think(); }));
 			}
 			return true;
 		}

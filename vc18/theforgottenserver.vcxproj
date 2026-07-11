@@ -287,7 +287,6 @@
     <ClCompile Include="..\src\protocolspectator.cpp" />
     <ClCompile Include="..\src\protocoladmin.cpp" />
     <ClCompile Include="..\src\raids.cpp" />
-    <ClCompile Include="..\src\reactor.cpp" />
     <ClCompile Include="..\src\rewardchest.cpp" />
     <ClCompile Include="..\src\rsa.cpp" />
     <ClCompile Include="..\src\save_manager.cpp" />
@@ -301,7 +300,6 @@
     <ClCompile Include="..\src\spy.cpp" />
     <ClCompile Include="..\src\spells.cpp" />
     <ClCompile Include="..\src\stats.cpp" />
-    <ClCompile Include="..\src\stress_test.cpp" />
     <ClCompile Include="..\src\storeinbox.cpp" />
     <ClCompile Include="..\src\protocolstatus.cpp" />
     <ClCompile Include="..\src\talkaction.cpp" />
@@ -397,7 +395,6 @@
     <ClInclude Include="..\src\protocoladmin.h" />
     <ClInclude Include="..\src\pugicast.h" />
     <ClInclude Include="..\src\raids.h" />
-    <ClInclude Include="..\src\reactor.h" />
     <ClInclude Include="..\src\rewardchest.h" />
     <ClInclude Include="..\src\rsa.h" />
     <ClInclude Include="..\src\save_manager.h" />
@@ -406,7 +403,6 @@
     <ClInclude Include="..\src\scriptmanager.h" />
     <ClInclude Include="..\src\server.h" />
     <ClInclude Include="..\src\signals.h" />
-    <ClInclude Include="..\src\stress_test.h" />
     <ClInclude Include="..\src\spawn.h" />
     <ClInclude Include="..\src\spy.h" />
     <ClInclude Include="..\src\spectators.h" />

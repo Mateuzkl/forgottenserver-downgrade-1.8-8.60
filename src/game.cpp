@@ -674,13 +674,19 @@ void Game::setGameState(GameState_t newState)
 			saveMotdNum();
 			saveGameState();
 
+			{
+				auto shutdownTask = createTaskWithStats([this]() { shutdown(); }, "Game::shutdown", "setGameState");
+				shutdownTask->trackInStats = false;
+				shutdownTask->skipSlowDetection = true;
+				g_dispatcher.addTask(std::move(shutdownTask));
+			}
+
 			g_scheduler.stop();
 			g_databaseTasks.stop();
 			g_dispatcher.stop();
 #ifdef STATS_ENABLED
 			g_stats.stop();
 #endif
-			shutdown();
 			LOG_INFO(">> Shutdown complete.");
 			break;
 		}
@@ -1728,7 +1734,7 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
                           const Position& toPos, uint8_t count, Item* item, Cylinder* toCylinder)
 {
 	if (player->hasCondition(CONDITION_EXHAUST_WEAPON, EXHAUST_MOVEITEM)) {
-		uint32_t delay = MIN_TASK_INTERVAL;
+		uint32_t delay = SCHEDULER_MINTICKS;
 		if (Condition* cond = player->getCondition(CONDITION_EXHAUST_WEAPON, CONDITIONID_DEFAULT, EXHAUST_MOVEITEM)) {
 			int64_t remaining = cond->getEndTime() - OTSYS_TIME();
 			if (remaining > 0) {
@@ -7711,6 +7717,8 @@ void Game::shutdown()
 		}
 		checkCreatureList.clear();
 	}
+
+	g_luaEnvironment.shutdown();
 
 	map.spawns.clear();
 	raids.clear();

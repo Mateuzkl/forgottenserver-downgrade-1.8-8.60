@@ -2275,7 +2275,7 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 	const uint8_t capturedChainEffect = params.chainEffect;
 	int i = 0;
 	for (const auto& [from, toVector] : targets) {
-		auto delay = i * std::max<int32_t>(MIN_TASK_INTERVAL, ConfigManager::getInteger(ConfigManager::COMBAT_CHAIN_DELAY));
+		auto delay = i * std::max<int32_t>(SCHEDULER_MINTICKS, ConfigManager::getInteger(ConfigManager::COMBAT_CHAIN_DELAY));
 		++i;
 		for (const auto& to : toVector) {
 			g_scheduler.addEvent(delay, [self, casterId = caster ? caster->getID() : 0, to, from, capturedChainEffect,

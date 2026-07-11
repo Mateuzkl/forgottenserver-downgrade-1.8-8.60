@@ -2803,7 +2803,7 @@ void Player::setNextActionTask(std::unique_ptr<SchedulerTask> task, bool resetId
 	}
 }
 
-uint32_t Player::getNextActionTime() const { return std::max<int64_t>(MIN_TASK_INTERVAL, nextAction - OTSYS_TIME()); }
+uint32_t Player::getNextActionTime() const { return std::max<int64_t>(SCHEDULER_MINTICKS, nextAction - OTSYS_TIME()); }
 
 void Player::onThink(uint32_t interval)
 {
@@ -4856,7 +4856,7 @@ void Player::doAttacking(uint32_t)
 			result = Weapon::useFist(this, ac.get());
 		}
 
-		auto task = createSchedulerTask(std::max<uint32_t>(MIN_TASK_INTERVAL, delay),
+		auto task = createSchedulerTask(std::max<uint32_t>(SCHEDULER_MINTICKS, delay),
 		                                          [id = getID()]() { g_game.checkCreatureAttack(id); });
 
 		if (!classicSpeed && !allowAutoAttackWithoutExhaustion) {

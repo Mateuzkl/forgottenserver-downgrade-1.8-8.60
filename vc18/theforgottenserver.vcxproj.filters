@@ -58,7 +58,6 @@
     <ClCompile Include="..\src\protocollogin.cpp" />
     <ClCompile Include="..\src\protocoladmin.cpp" />
     <ClCompile Include="..\src\raids.cpp" />
-    <ClCompile Include="..\src\reactor.cpp" />
     <ClCompile Include="..\src\rsa.cpp" />
     <ClCompile Include="..\src\scheduler.cpp" />
     <ClCompile Include="..\src\script.cpp" />
@@ -87,7 +86,6 @@
     <ClCompile Include="..\src\inbox.cpp" />
     <ClCompile Include="..\src\mapcache.cpp" />
     <ClCompile Include="..\src\stats.cpp" />
-    <ClCompile Include="..\src\stress_test.cpp" />
     <ClInclude Include="..\src\instance_utils.h" />
     <ClCompile Include="..\src\protocolspectator.cpp" />
     <ClCompile Include="..\src\save_manager.cpp" />
@@ -280,7 +278,6 @@
     <ClInclude Include="..\src\protocoladmin.h" />
     <ClInclude Include="..\src\pugicast.h" />
     <ClInclude Include="..\src\raids.h" />
-    <ClInclude Include="..\src\reactor.h" />
     <ClInclude Include="..\src\rsa.h" />
     <ClInclude Include="..\src\scheduler.h" />
     <ClInclude Include="..\src\script.h" />
@@ -317,7 +314,6 @@
     <ClInclude Include="..\src\imbuement.h" />
     <ClInclude Include="..\src\familiar.h" />
     <ClInclude Include="..\src\spy.h" />
-    <ClInclude Include="..\src\stress_test.h" />
     <ClInclude Include="..\src\zones.h" />
     <ClInclude Include="..\src\storeinbox.h" />
     <ClInclude Include="..\src\weapon_proficiency.h" />

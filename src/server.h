@@ -99,7 +99,7 @@ private:
 	Signals signals{io_context};
 	asio::steady_timer death_timer{io_context};
 	std::vector<std::jthread> ioThreads;
-	std::atomic_bool running{false};
+	bool running = false;
 };
 
 template <typename ProtocolType>

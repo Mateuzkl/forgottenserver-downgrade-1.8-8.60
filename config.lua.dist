@@ -94,19 +94,6 @@ networkThreads = 2
 connectionRateLimitAllowed = 10
 connectionRateLimitMS = 500
 
--- Reactor Limits Config
--- WARNING: reactorMaxTasksPerCycle = 0 means unlimited; use only on dedicated hardware with controlled workloads
--- NOTE: reactorTimeBudgetMS: max time in ms per cycle (0 = unlimited, max = 1000)
--- NOTE: reactorMaxInboxSize: max queued tasks before dropping new ones (min = 1, max = 10000000)
---
--- Presets:
---   Low    (small VPS / few players):   250 / 3  / 50000
---   Normal (moderate load):             500 / 5  / 100000
---   High   (default / heavy load):      1000 / 25 / 200000
-reactorMaxTasksPerCycle = 1000
-reactorTimeBudgetMS = 25
-reactorMaxInboxSize = 200000
-
 -- Deaths
 -- NOTE: Leave deathLosePercent as -1 if you want to use the default
 -- death penalty formula. For the old formula, set it to 10. For
@@ -187,57 +174,6 @@ soulpitSystemEnabled = false
 -- Enable Soulseals resource/window.
 -- Requires weeklyTasksEnabled or proper source of soulseals.
 soulsealsSystemEnabled = false
-
--- Stress test: runs reactor stress tests
--- For use test only says: /stress_reactor
-stressTest = false
-stressTestCount = 10000
-stressTestThreads = 8
-stressTestSend = true
-stressTestSendCount = 10000
-stressTestSchedule = true
-stressTestScheduleCount = 10000
-stressTestStaggered = true
-stressTestStaggeredCount = 10000
-stressTestMixed = true
-stressTestMixedCount = 10000
-stressTestCancel = true
-stressTestCancelCount = 10000
-stressTestConcurrentPush = true
-stressTestConcurrentPushCount = 10000
-stressTestConcurrentPushThreads = 8
-stressTestConcurrentSchedule = true
-stressTestConcurrentScheduleCount = 10000
-stressTestConcurrentScheduleThreads = 8
-stressTestHeapOrder = true
-stressTestHeapOrderCount = 5000
-stressTestUniqueIds = true
-stressTestUniqueIdsCount = 10000
-stressTestUniqueIdsThreads = 8
-stressTestMoveOnly = true
-stressTestMoveOnlyCount = 1000
-stressTestExpiration = true
-stressTestExpirationCount = 10000
-stressTestBurst = true
-stressTestBurstCount = 10000
-stressTestReentrancy = true
-stressTestReentrancyCount = 1000
-stressTestShutdownPending = true
-stressTestShutdownPendingCount = 10000
-stressTestCancelExternal = true
-stressTestCancelExternalCount = 10000
-stressTestCancelExternalThreads = 8
-stressTestException = true
-stressTestExceptionCount = 10000
-stressTestBenchmark = true
-stressTestInspection = true
-stressTestInspectionCount = 100
-stressTestMixedDelays = true
-stressTestMixedDelaysCount = 10000
-stressTestLeak = true
-stressTestLeakCount = 10000
-stressTestShutdownSend = true
-stressTestShutdownSendCount = 10000
 
 -- Static item augment defaults. Item-specific values can override these in items.xml.
 augmentIncreasedDamagePercent = 5

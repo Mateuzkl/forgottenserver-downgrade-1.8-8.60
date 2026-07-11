@@ -451,7 +451,6 @@ protected:
 	void registerWeapons();
 	void registerXML();
 	void registerKV();
-	void registerStressReactor();
 
 	void registerMethod(std::string_view globalName, std::string_view methodName, lua_CFunction func);
 

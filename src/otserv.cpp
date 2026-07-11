@@ -17,7 +17,6 @@
 #include "protocollogin.h"
 #include "protocoladmin.h"
 #include "protocolstatus.h"
-#include "reactor.h"
 #include "rsa.h"
 #include "save_manager.h"
 #include "scheduler.h"
@@ -44,6 +43,10 @@ Stats g_stats;
 Game g_game;
 Monsters g_monsters;
 Vocations g_vocations;
+
+std::mutex g_loaderLock;
+std::condition_variable g_loaderSignal;
+std::unique_lock<std::mutex> g_loaderUniqueLock(g_loaderLock);
 
 namespace {
 
@@ -107,6 +110,7 @@ void startupErrorMessage(std::string_view errorStr)
 {
 	g_logger().setConsoleLevel(LogLevel::INFO);
 	LOG_ERROR(errorStr);
+	g_loaderSignal.notify_all();
 }
 
 std::string formatFeatureStatus(std::string_view name, ConfigManager::Boolean key)
@@ -173,8 +177,7 @@ std::string getCompilerName()
 
 void mainLoader(const std::shared_ptr<ServiceManager>& services)
 {
-	// reactor thread
-	UPDATE_OTSYS_TIME();
+	// dispatcher thread
 	g_game.setGameState(GAME_STATE_STARTUP);
 
 #ifdef STATS_ENABLED
@@ -441,6 +444,8 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 
 	// Pre-warm the OutputMessage pool to avoid operator new() on first connections
 	OutputMessagePool::prewarmPool(128);
+
+	g_loaderSignal.notify_all();
 }
 
 [[noreturn]] void badAllocationHandler()
@@ -466,19 +471,13 @@ void startServer()
 	g_dispatcher.start();
 	g_scheduler.start();
 
-	mainLoader(serviceManager);
+	{
+		auto loaderTask = createTaskWithStats([services = serviceManager]() { mainLoader(services); }, "MainLoader", "");
+		loaderTask->skipSlowDetection = true;
+		g_dispatcher.addTask(std::move(loaderTask));
+	}
 
-	// Configure reactor production limits: fairness, time budget, and backpressure
-	g_reactor.setMaxTasksPerCycle(static_cast<uint32_t>(getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE)));
-	g_reactor.setTimeBudget(std::chrono::milliseconds(getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS)));
-	g_reactor.setMaxInboxSize(static_cast<size_t>(getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE)));
-
-	LOG_INFO(">> Reactor limits: maxTasks={}, timeBudget={}ms, maxInbox={}",
-	    getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE),
-	    getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS),
-	    getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE));
-
-	std::jthread serviceThread;
+	g_loaderSignal.wait(g_loaderUniqueLock);
 
 	if (serviceManager->is_running()) {
 		const auto networkThreads = std::clamp<int64_t>(getInteger(ConfigManager::NETWORK_THREADS), 1, 64);
@@ -560,8 +559,7 @@ void startServer()
 		// Restore console output now that all startup printing is done
 		g_logger().setConsoleLevel(LogLevel::INFO);
 
-		serviceThread = std::jthread([serviceManager]() { serviceManager->run(); });
-		g_reactor.runLoop();
+		serviceManager->run();
 	} else {
 		LOG_INFO(">> No services running. The server is NOT online.");
 		g_threadPool.shutdown();
@@ -585,18 +583,12 @@ void startServer()
 		}
 	});
 
-	serviceManager->stop();
-	if (serviceThread.joinable()) {
-		serviceThread.join();
-	}
-
-	// Shutdown ThreadPool before the database connection goes away.
+	// Shutdown ThreadPool first - async map saves need DB connection alive
 	g_threadPool.shutdown();
 
-	// Wait for all background tasks to finish before closing the Lua environment.
-	// NPCs and their NpcScriptInterface
+	// Wait for all dispatcher/scheduler tasks to finish (including Game::shutdown)
+	// before closing the Lua environment. NPCs and their NpcScriptInterface
 	g_scheduler.join();
-	g_databaseTasks.shutdown();
 	g_databaseTasks.join();
 	g_dispatcher.join();
 #ifdef STATS_ENABLED

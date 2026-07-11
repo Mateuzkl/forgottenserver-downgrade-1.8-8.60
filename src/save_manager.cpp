@@ -72,19 +72,21 @@ void SaveManager::saveAll()
 		}
 	}
 
-	// Save map synchronously on the dispatcher thread (reads g_game.map.houses — not thread-safe).
+	// Save map ASYNC on ThreadPool (house info + house items = pure SQL, no game state access)
 	beginTrackedFlush();
-	bool mapSaved = false;
-	for (uint32_t tries = 0; tries < 3; tries++) {
-		if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
-			mapSaved = true;
-			break;
+	g_threadPool.detach_task([this]() {
+		bool mapSaved = false;
+		for (uint32_t tries = 0; tries < 3; tries++) {
+			if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
+				mapSaved = true;
+				break;
+			}
 		}
-	}
-	if (!mapSaved) {
-		LOG_ERROR("[SaveManager] Failed to save map data after 3 retries.");
-	}
-	completeTrackedFlush();
+		if (!mapSaved) {
+			LOG_ERROR("[SaveManager] Failed to save map data after 3 retries.");
+		}
+		completeTrackedFlush();
+	});
 
 	auto endTime = std::chrono::high_resolution_clock::now();
 	auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
@@ -458,26 +460,28 @@ void SaveManager::saveMapAsync()
 {
 	LOG_INFO(fmt::format(">> {}: {}",
 		fmt::format(fg(fmt::color::magenta), "SaveManager"),
-		fmt::format(fg(fmt::color::cyan), "Saving map...")));
+		fmt::format(fg(fmt::color::cyan), "Saving map async on ThreadPool...")));
 
-	auto startTime = std::chrono::high_resolution_clock::now();
+	g_threadPool.detach_task([]() {
+		auto startTime = std::chrono::high_resolution_clock::now();
 
-	bool mapSaved = false;
-	for (uint32_t tries = 0; tries < 3; tries++) {
-		if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
-			mapSaved = true;
-			break;
+		bool mapSaved = false;
+		for (uint32_t tries = 0; tries < 3; tries++) {
+			if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
+				mapSaved = true;
+				break;
+			}
 		}
-	}
 
-	auto endTime = std::chrono::high_resolution_clock::now();
-	auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+		auto endTime = std::chrono::high_resolution_clock::now();
+		auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
-	if (mapSaved) {
-		LOG_INFO(fmt::format(">> {}: Map saved in {}",
-			fmt::format(fg(fmt::color::magenta), "SaveManager"),
-			fmt::format(fg(fmt::color::lime_green), "{}ms", durationMs)));
-	} else {
-		LOG_ERROR("[SaveManager] Failed to save map after 3 retries.");
-	}
+		if (mapSaved) {
+			LOG_INFO(fmt::format(">> {}: Map saved in {}",
+				fmt::format(fg(fmt::color::magenta), "SaveManager"),
+				fmt::format(fg(fmt::color::lime_green), "{}ms", durationMs)));
+		} else {
+			LOG_ERROR("[SaveManager] Failed to save map after 3 retries.");
+		}
+	});
 }

@@ -5,46 +5,78 @@
 
 #include "scheduler.h"
 
-SchedulerTask::SchedulerTask(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription) :
-	Task(std::move(f), description, extraDescription), delay(delay)
+uint32_t Scheduler::addEvent(std::unique_ptr<SchedulerTask> task)
 {
-}
-
-std::unique_ptr<SchedulerTask> createSchedulerTaskWithStats(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription)
-{
-	return std::make_unique<SchedulerTask>(delay, std::move(f), description, extraDescription);
-}
-
-void Scheduler::start() noexcept
-{
-	state.store(THREAD_STATE_RUNNING, std::memory_order_release);
-}
-
-void Scheduler::stop() noexcept
-{
-	state.store(THREAD_STATE_CLOSING, std::memory_order_release);
-}
-
-void Scheduler::shutdown() noexcept
-{
-	state.store(THREAD_STATE_TERMINATED, std::memory_order_release);
-}
-
-uint32_t Scheduler::addEvent(std::unique_ptr<SchedulerTask>&& task)
-{
-	if (!task || state.load(std::memory_order_acquire) != THREAD_STATE_RUNNING) {
-		return 0;
+	// check if the event has a valid id
+	if (task->getEventId() == 0) {
+		uint32_t id = lastEventId.fetch_add(1,
+			std::memory_order_relaxed) + 1;
+		task->setEventId(id);
 	}
 
-	const uint32_t delay = task->getDelay();
-	const uint32_t eventId = g_reactor.schedule(delay, [task = std::move(task)]() mutable {
-		g_dispatcher.executeTask(std::move(task));
-	});
+	const uint32_t eventId = task->getEventId();
+
+	struct TaskHolder {
+		std::unique_ptr<SchedulerTask> task;
+		explicit TaskHolder(std::unique_ptr<SchedulerTask> t) : task(std::move(t)) {}
+	};
+	auto holder = std::make_shared<TaskHolder>(std::move(task));
+
+	asio::post(io_context, [this, holder]() {
+		// insert the event id in the list of active events
+		auto [it, inserted] = eventIdTimerMap.emplace(holder->task->getEventId(), asio::steady_timer{ io_context });
+			if (!inserted) {
+      			return;
+    		}
+
+		auto& timer = it->second;
+
+		timer.expires_after(std::chrono::milliseconds(holder->task->getDelay()));
+		timer.async_wait([this, holder](const asio::error_code& error) {
+			eventIdTimerMap.erase(holder->task->getEventId());
+
+			if (error == asio::error::operation_aborted || getState() == THREAD_STATE_TERMINATED) {
+				// the timer has been manually canceled(timer->cancel()) or Scheduler::shutdown has been called.
+				// holder destructor will clean up the task via unique_ptr.
+				return;
+			}
+
+			// Transfer ownership to the dispatcher.
+			g_dispatcher.addTask(std::move(holder->task));
+			});
+		});
 
 	return eventId;
 }
 
 void Scheduler::stopEvent(uint32_t eventId) noexcept
 {
-	g_reactor.cancel(eventId);
+	if (eventId == 0) {
+		return;
+	}
+
+	asio::post(io_context, [this, eventId]() {
+		// search the event id
+		if (auto it = eventIdTimerMap.find(eventId); it != eventIdTimerMap.end()) {
+			it->second.cancel();
+		}
+	});
+}
+
+void Scheduler::shutdown() noexcept
+{
+	setState(THREAD_STATE_TERMINATED);
+	asio::post(io_context, [this]() {
+		// cancel all active timers
+		for (auto& [eventId, timer] : eventIdTimerMap) {
+			timer.cancel();
+		}
+
+		io_context.stop();
+	});
+}
+
+std::unique_ptr<SchedulerTask> createSchedulerTaskWithStats(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription)
+{
+	return std::make_unique<SchedulerTask>(delay, std::move(f), description, extraDescription);
 }

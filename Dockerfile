@@ -1,4 +1,4 @@
-FROM ubuntu:24.04 AS build
+FROM ubuntu:22.04 AS build
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl zip unzip tar build-essential cmake ninja-build pkg-config \
@@ -29,13 +29,10 @@ RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE
 
 FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN groupadd -r tfs && useradd -r -g tfs -d /srv -s /bin/sh tfs
 COPY --from=build /usr/src/forgottenserver-downgrade/build/tfs /bin/tfs
 COPY data /srv/data/
 COPY LICENSE README.md *.dist *.sql key.pem /srv/
-RUN chown -R tfs:tfs /bin/tfs /srv
 EXPOSE 7171 7172
 WORKDIR /srv
 VOLUME /srv
-USER tfs
 ENTRYPOINT ["/bin/tfs"]
