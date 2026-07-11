@@ -179,6 +179,87 @@ TEST_CASE(test_reactor_cancel_after_execution_is_safe)
 	CHECK(executions == 1);
 }
 
+TEST_CASE(test_reactor_rejects_new_work_at_backpressure_limit)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxInboxSize(1);
+
+	CHECK(reactor.send([] {}));
+	CHECK(!reactor.send([] {}));
+}
+
+TEST_CASE(test_reactor_preserves_deferred_send_order)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxTasksPerCycle(1);
+	std::vector<int> order;
+
+	reactor.send([&order] { order.push_back(1); });
+	reactor.send([&order] { order.push_back(2); });
+	reactor.send([&order] { order.push_back(3); });
+
+	reactor.runOnce();
+	reactor.runOnce();
+	reactor.runOnce();
+
+	CHECK(order == std::vector<int>({1, 2, 3}));
+}
+
+TEST_CASE(test_reactor_deferred_scheduled_task_remains_cancellable)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxTasksPerCycle(1);
+	int executions = 0;
+
+	reactor.schedule(0, [&executions] { ++executions; });
+	const uint32_t deferredId = reactor.schedule(0, [&executions] { executions += 100; });
+	reactor.runOnce();
+	CHECK(executions == 1);
+
+	reactor.cancel(deferredId);
+	reactor.runOnce();
+	reactor.runOnce();
+
+	CHECK(executions == 1);
+}
+
+TEST_CASE(test_reactor_cancellation_is_not_dropped_when_inbox_is_full)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxInboxSize(1);
+	bool executed = false;
+
+	const uint32_t identifier = reactor.schedule(0, [&executed] { executed = true; });
+	CHECK(identifier != 0);
+	reactor.cancel(identifier);
+	reactor.runOnce();
+
+	CHECK(!executed);
+}
+
+TEST_CASE(test_reactor_time_budget_defers_remaining_callbacks)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setTimeBudget(std::chrono::milliseconds(1));
+	std::vector<int> order;
+
+	reactor.send([&order] {
+		order.push_back(1);
+		std::this_thread::sleep_for(std::chrono::milliseconds(3));
+	});
+	reactor.send([&order] { order.push_back(2); });
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1}));
+
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 2}));
+}
+
 TEST_CASE(test_reactor_shutdown_wakes_run_loop)
 {
 	TaskReactor reactor;

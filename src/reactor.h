@@ -9,6 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <thread>
@@ -62,18 +63,20 @@ private:
 		[[nodiscard]] bool hasExpired(std::chrono::steady_clock::time_point now) const noexcept;
 	};
 
-	void drainInbox(std::vector<Task>& readyTasks);
-	void drainReadyTasks(std::vector<Task>& readyTasks);
-	void executeReadyTasks(std::vector<Task>& readyTasks);
+	void drainInbox(std::vector<Task>& readyTasks, std::chrono::steady_clock::time_point cycleStart);
+	void drainReadyTasks(std::vector<Task>& readyTasks, std::chrono::steady_clock::time_point cycleStart);
+	void executeReadyTasks(std::vector<Task>& readyTasks, std::chrono::steady_clock::time_point cycleStart);
 	void waitForWork();
+	[[nodiscard]] bool timeBudgetReached(std::chrono::steady_clock::time_point cycleStart) const noexcept;
+	[[nodiscard]] size_t preprocessingLimit() const noexcept;
 	static bool taskComesAfter(const Task& lhs, const Task& rhs) noexcept;
 
 	mutable std::mutex mutex;
 	std::condition_variable conditionVariable;
 
-	std::vector<Task> sendInbox;
-	std::vector<Task> scheduleInbox;
-	std::vector<uint32_t> cancelInbox;
+	std::deque<Task> sendInbox;
+	std::deque<Task> scheduleInbox;
+	std::deque<uint32_t> cancelInbox;
 
 	std::unordered_set<uint32_t> cancelled;
 	std::unordered_set<uint32_t> activeIdentifiers;

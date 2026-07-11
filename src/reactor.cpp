@@ -51,7 +51,7 @@ bool TaskReactor::send(ReactorCallback&& callback)
 
 	{
 		std::scoped_lock lock(mutex);
-		if (maxInboxSize > 0 && sendInbox.size() >= maxInboxSize) {
+		if (maxInboxSize > 0 && sendInbox.size() + scheduleInbox.size() >= maxInboxSize) {
 			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] sendInbox overflow ({}), dropping task", sendInbox.size());
 			return false;
@@ -79,7 +79,7 @@ bool TaskReactor::send(std::chrono::milliseconds expirationTime, ReactorCallback
 
 	{
 		std::scoped_lock lock(mutex);
-		if (maxInboxSize > 0 && sendInbox.size() >= maxInboxSize) {
+		if (maxInboxSize > 0 && sendInbox.size() + scheduleInbox.size() >= maxInboxSize) {
 			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] sendInbox overflow ({}), dropping timed task", sendInbox.size());
 			return false;
@@ -106,26 +106,26 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 		return 0;
 	}
 
-	uint32_t identifier = nextIdentifier.fetch_add(1, std::memory_order_relaxed) + 1;
-	if (identifier == 0) {
-		identifier = nextIdentifier.fetch_add(1, std::memory_order_relaxed) + 1;
-	}
-
-	Task task{
-	    .fireAt = std::chrono::steady_clock::now() + delay,
-	    .deadline = distantFuture(),
-	    .identifier = identifier,
-	    .sequence = nextSequence.fetch_add(1, std::memory_order_relaxed),
-	    .function = std::move(callback),
-	};
-
+	uint32_t identifier = 0;
 	{
 		std::scoped_lock lock(mutex);
-		if (maxInboxSize > 0 && scheduleInbox.size() >= maxInboxSize) {
+		if (maxInboxSize > 0 && sendInbox.size() + scheduleInbox.size() >= maxInboxSize) {
 			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] scheduleInbox overflow ({}), dropping scheduled task", scheduleInbox.size());
 			return 0;
 		}
+		do {
+			identifier = nextIdentifier.fetch_add(1, std::memory_order_relaxed) + 1;
+		} while (identifier == 0 || activeIdentifiers.contains(identifier));
+
+		Task task{
+		    .fireAt = std::chrono::steady_clock::now() + delay,
+		    .deadline = distantFuture(),
+		    .identifier = identifier,
+		    .sequence = nextSequence.fetch_add(1, std::memory_order_relaxed),
+		    .function = std::move(callback),
+		};
+		activeIdentifiers.insert(identifier);
 		scheduleInbox.push_back(std::move(task));
 	}
 
@@ -146,11 +146,9 @@ void TaskReactor::cancel(uint32_t taskIdentifier)
 
 	{
 		std::scoped_lock lock(mutex);
-		if (maxInboxSize > 0 && cancelInbox.size() >= maxInboxSize) {
-			LOG_WARN("[TaskReactor] cancelInbox overflow ({}), dropping cancellation", cancelInbox.size());
-			return;
+		if (activeIdentifiers.contains(taskIdentifier)) {
+			cancelInbox.push_back(taskIdentifier);
 		}
-		cancelInbox.push_back(taskIdentifier);
 	}
 
 	conditionVariable.notify_one();
@@ -175,21 +173,22 @@ void TaskReactor::runLoop()
 
 void TaskReactor::runOnce()
 {
+	const auto cycleStart = std::chrono::steady_clock::now();
 	PerformanceScope cycleScope(PerformanceMetric::ReactorCycle);
 	std::vector<Task> readyTasks;
 	readyTasks.reserve(128);
 
 	{
 		PerformanceScope scope(PerformanceMetric::ReactorDrainInbox);
-		drainInbox(readyTasks);
+		drainInbox(readyTasks, cycleStart);
 	}
 	{
 		PerformanceScope scope(PerformanceMetric::ReactorDrainReady);
-		drainReadyTasks(readyTasks);
+		drainReadyTasks(readyTasks, cycleStart);
 	}
 	{
 		PerformanceScope scope(PerformanceMetric::ReactorCallbacks);
-		executeReadyTasks(readyTasks);
+		executeReadyTasks(readyTasks, cycleStart);
 	}
 	{
 		std::scoped_lock lock(mutex);
@@ -200,7 +199,10 @@ void TaskReactor::runOnce()
 
 void TaskReactor::shutdown() noexcept
 {
-	threadState.store(THREAD_STATE_TERMINATED, std::memory_order_release);
+	{
+		std::scoped_lock lock(mutex);
+		threadState.store(THREAD_STATE_TERMINATED, std::memory_order_release);
+	}
 	conditionVariable.notify_all();
 }
 
@@ -245,33 +247,66 @@ bool TaskReactor::taskComesAfter(const Task& lhs, const Task& rhs) noexcept
 	return lhs.sequence > rhs.sequence;
 }
 
-void TaskReactor::drainInbox(std::vector<Task>& readyTasks)
+bool TaskReactor::timeBudgetReached(std::chrono::steady_clock::time_point cycleStart) const noexcept
 {
-	std::vector<Task> sentTasks;
-	std::vector<Task> scheduledTasks;
-	std::vector<uint32_t> cancellations;
+	return timeBudget.count() > 0 && std::chrono::steady_clock::now() - cycleStart >= timeBudget;
+}
+
+size_t TaskReactor::preprocessingLimit() const noexcept
+{
+	if (maxTasksPerCycle > 0) {
+		return maxTasksPerCycle;
+	}
+	return timeBudget.count() > 0 ? 1024 : std::numeric_limits<size_t>::max();
+}
+
+void TaskReactor::drainInbox(std::vector<Task>& readyTasks, std::chrono::steady_clock::time_point cycleStart)
+{
+	std::deque<Task> sentTasks;
+	std::deque<Task> scheduledTasks;
+	std::deque<uint32_t> cancellations;
+	const size_t limit = preprocessingLimit();
+	size_t drained = 0;
 
 	{
 		std::scoped_lock lock(mutex);
-		sentTasks.swap(sendInbox);
-		scheduledTasks.swap(scheduleInbox);
-		cancellations.swap(cancelInbox);
+		while (drained < limit && !cancelInbox.empty()) {
+			cancellations.push_back(cancelInbox.front());
+			cancelInbox.pop_front();
+			++drained;
+		}
+		while (drained < limit && (!sendInbox.empty() || !scheduleInbox.empty())) {
+			const bool takeScheduled = !scheduleInbox.empty() &&
+				(sendInbox.empty() || scheduleInbox.front().sequence < sendInbox.front().sequence);
+			if (takeScheduled) {
+				scheduledTasks.push_back(std::move(scheduleInbox.front()));
+				scheduleInbox.pop_front();
+			} else {
+				sentTasks.push_back(std::move(sendInbox.front()));
+				sendInbox.pop_front();
+			}
+			++drained;
+		}
 	}
 
 	for (auto& task : scheduledTasks) {
-		activeIdentifiers.insert(task.identifier);
 		taskHeap.push_back(std::move(task));
 		std::push_heap(taskHeap.begin(), taskHeap.end(), taskComesAfter);
 	}
 
 	for (uint32_t identifier : cancellations) {
-		if (activeIdentifiers.contains(identifier)) {
-			cancelled.insert(identifier);
-		}
+		cancelled.insert(identifier);
 	}
 
 	const auto now = std::chrono::steady_clock::now();
 	for (auto& task : sentTasks) {
+		if (timeBudgetReached(cycleStart)) {
+			std::scoped_lock lock(mutex);
+			for (auto it = sentTasks.rbegin(); it != sentTasks.rend(); ++it) {
+				if (it->function) sendInbox.push_front(std::move(*it));
+			}
+			break;
+		}
 		if (!task.hasExpired(now)) {
 			readyTasks.push_back(std::move(task));
 		} else {
@@ -280,17 +315,20 @@ void TaskReactor::drainInbox(std::vector<Task>& readyTasks)
 	}
 }
 
-void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
+void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks, std::chrono::steady_clock::time_point cycleStart)
 {
 	const auto now = std::chrono::steady_clock::now();
+	const size_t limit = maxTasksPerCycle > 0 ? maxTasksPerCycle : std::numeric_limits<size_t>::max();
 
-	while (!taskHeap.empty() && taskHeap.front().fireAt <= now) {
+	while (readyTasks.size() < limit && !taskHeap.empty() && taskHeap.front().fireAt <= now &&
+	       !timeBudgetReached(cycleStart)) {
 		std::pop_heap(taskHeap.begin(), taskHeap.end(), taskComesAfter);
 		auto readyTask = std::move(taskHeap.back());
 		taskHeap.pop_back();
 
-		activeIdentifiers.erase(readyTask.identifier);
 		if (cancelled.erase(readyTask.identifier) > 0 || readyTask.hasExpired(now)) {
+			std::scoped_lock lock(mutex);
+			activeIdentifiers.erase(readyTask.identifier);
 			if (readyTask.hasExpired(now)) {
 				g_performanceMetrics.recordTaskExpired();
 			}
@@ -301,7 +339,7 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
 	}
 }
 
-void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
+void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks, std::chrono::steady_clock::time_point cycleStart)
 {
 	{
 		PerformanceScope scope(PerformanceMetric::ReactorSort);
@@ -313,24 +351,29 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		});
 	}
 
-	const auto cycleStart = std::chrono::steady_clock::now();
 	uint32_t tasksExecuted = 0;
+	size_t nextTaskIndex = 0;
 
-	for (auto& task : readyTasks) {
+	for (; nextTaskIndex < readyTasks.size(); ++nextTaskIndex) {
+		auto& task = readyTasks[nextTaskIndex];
 		if (!task.function) {
 			continue;
 		}
 
 		if (maxTasksPerCycle > 0 && tasksExecuted >= maxTasksPerCycle) {
 			LOG_WARN("[TaskReactor] fairness limit reached ({} tasks/cycle), deferring {} tasks",
-			         maxTasksPerCycle, readyTasks.size() - tasksExecuted);
+			         maxTasksPerCycle, readyTasks.size() - nextTaskIndex);
 			break;
 		}
 
-		if (timeBudget.count() > 0 && std::chrono::steady_clock::now() - cycleStart >= timeBudget) {
-		LOG_REACTOR("time budget exceeded ({} ms), deferring {} tasks",
-		            timeBudget.count(), readyTasks.size() - tasksExecuted);
+		if (timeBudgetReached(cycleStart)) {
+			LOG_REACTOR("time budget exceeded ({} ms), deferring {} tasks",
+			            timeBudget.count(), readyTasks.size() - nextTaskIndex);
 			break;
+		}
+		if (task.identifier != 0) {
+			std::scoped_lock lock(mutex);
+			activeIdentifiers.erase(task.identifier);
 		}
 
 		try {
@@ -351,12 +394,22 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		++tasksExecuted;
 	}
 
-	if (tasksExecuted < readyTasks.size()) {
-		g_performanceMetrics.recordTaskDeferred(readyTasks.size() - tasksExecuted);
+	if (nextTaskIndex < readyTasks.size()) {
+		g_performanceMetrics.recordTaskDeferred(readyTasks.size() - nextTaskIndex);
 		std::scoped_lock lock(mutex);
-		for (size_t i = tasksExecuted; i < readyTasks.size(); ++i) {
-			sendInbox.push_back(std::move(readyTasks[i]));
+		for (size_t i = readyTasks.size(); i-- > nextTaskIndex;) {
+			auto& deferred = readyTasks[i];
+			if (!deferred.function) {
+				continue;
+			}
+			if (deferred.identifier != 0) {
+				taskHeap.push_back(std::move(deferred));
+				std::push_heap(taskHeap.begin(), taskHeap.end(), taskComesAfter);
+			} else {
+				sendInbox.push_front(std::move(deferred));
+			}
 		}
+		conditionVariable.notify_one();
 	}
 }
 
