@@ -3922,7 +3922,7 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 	}
 
 	if (Container* container = item->getContainer()) {
-		if (shouldUseContainerInsteadOfQuickLoot(container)) {
+		if (shouldUseContainerInsteadOfQuickLoot(container) || !isQuickLootCorpseType(container)) {
 			playerUseItem(playerId, pos, stackPos, 0, itemId);
 			return;
 		}
