@@ -352,6 +352,7 @@
     <ClInclude Include="..\src\events.h" />
     <ClInclude Include="..\src\familiar.h" />
     <ClInclude Include="..\src\fileloader.h" />
+    <ClInclude Include="..\src\follow_path.h" />
     <ClInclude Include="..\src\game.h" />
     <ClInclude Include="..\src\globalevent.h" />
     <ClInclude Include="..\src\groups.h" />

@@ -166,6 +166,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/enums.h
 	${CMAKE_CURRENT_LIST_DIR}/events.h
 	${CMAKE_CURRENT_LIST_DIR}/fileloader.h
+	${CMAKE_CURRENT_LIST_DIR}/follow_path.h
 	${CMAKE_CURRENT_LIST_DIR}/game.h
 	${CMAKE_CURRENT_LIST_DIR}/globalevent.h
 	${CMAKE_CURRENT_LIST_DIR}/groups.h

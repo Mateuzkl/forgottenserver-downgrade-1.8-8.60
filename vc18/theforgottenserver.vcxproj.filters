@@ -90,6 +90,7 @@
     <ClCompile Include="..\src\stats.cpp" />
     <ClCompile Include="..\src\stress_test.cpp" />
     <ClInclude Include="..\src\instance_utils.h" />
+    <ClInclude Include="..\src\follow_path.h" />
     <ClCompile Include="..\src\protocolspectator.cpp" />
     <ClCompile Include="..\src\save_manager.cpp" />
     <ClCompile Include="..\src\thread_pool.cpp" />
