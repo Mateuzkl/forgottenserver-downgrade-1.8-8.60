@@ -2649,9 +2649,16 @@ function Player.addAchievement(self, ach, hideMsg)
 	end
 
 	if not self:hasAchievement(achievement.id) then
-		self:setStorageValue(PlayerStorageKeys.achievementsBase + achievement.id, 1)
+		self:setStorageValue(PlayerStorageKeys.achievementsBase + achievement.id, os.time())
 		if not hideMsg then
 			self:sendTextMessage(MESSAGE_EVENT_ADVANCE, "Congratulations! You earned the achievement \"" .. achievement.name .. "\".")
+			if self.isUsingAstraClient and self:isUsingAstraClient() then
+				local msg = NetworkMessage(self)
+				msg:addByte(0x75)
+				msg:addByte(2) -- Achievement client event.
+				msg:addString(achievement.name)
+				msg:sendToPlayer(self)
+			end
 		end
 	end
 	return true
