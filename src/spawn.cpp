@@ -166,7 +166,7 @@ bool Spawns::loadFromXml(std::string_view filename)
 					          });
 				}
 
-				spawn.addBlock(sb);
+				spawn.addBlock(std::move(sb));
 			} else if (caseInsensitiveEqual(childNode.name(), "monster")) {
 				pugi::xml_attribute nameAttribute = childNode.attribute("name");
 				if (!nameAttribute) {
@@ -352,6 +352,8 @@ void Spawns::startup()
 	if (!loaded || isStarted()) {
 		return;
 	}
+
+	g_game.reserveStartupCreatures(getMonsterCount(), getNpcCount());
 
 	for (auto& npc : npcList) {
 		if (!g_game.placeCreature(npc.get(), npc->getMasterPos(), false, true)) {
@@ -698,10 +700,10 @@ void Spawn::clearMonsters()
 	spawnedMap.clear();
 }
 
-bool Spawn::addBlock(const spawnBlock_t& sb)
+bool Spawn::addBlock(spawnBlock_t sb)
 {
 	interval = std::min(interval, sb.interval);
-	spawnMap[spawnMap.size() + 1] = sb;
+	spawnMap.emplace(static_cast<uint32_t>(spawnMap.size() + 1), std::move(sb));
 
 	return true;
 }

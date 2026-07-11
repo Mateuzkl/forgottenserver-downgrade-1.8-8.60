@@ -61,6 +61,7 @@ public:
 	}
 
 	size_t size() const { return end - p; }
+	std::string_view view() const { return {p, size()}; }
 
 	template <typename T>
 	bool read(T& ret)

@@ -31,7 +31,7 @@ public:
 	Spawn(const Spawn&) = delete;
 	Spawn& operator=(const Spawn&) = delete;
 
-	bool addBlock(const spawnBlock_t& sb);
+	bool addBlock(spawnBlock_t sb);
 	bool addMonster(const std::string& name, const Position& pos, Direction dir, uint32_t interval);
 	void removeMonster(Monster* monster);
 

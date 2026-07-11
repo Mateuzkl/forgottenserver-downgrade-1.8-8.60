@@ -58,6 +58,7 @@ vcpkg_installed/
 *.exe
 
 # Visual C++ cache files
+data/cache/maps/
 ipch/
 *.aps
 *.ncb

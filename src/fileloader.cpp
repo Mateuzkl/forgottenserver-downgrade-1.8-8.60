@@ -102,10 +102,10 @@ bool Loader::getProps(const Node& node, PropStream& props)
 		return false;
 	}
 
-	// Check if there are escape bytes in the props range. If not, use fast-path without copy.
-	const char* escapePtr = static_cast<const char*>(std::memchr(node.propsBegin, Node::ESCAPE, size));
-	if (!escapePtr) {
-		props.init(node.propsBegin, size);
+	// Most OTBM property ranges do not contain escaped control bytes. Point the
+	// stream at the mapped file directly in that common case and avoid a copy.
+	if (std::memchr(node.propsBegin, Node::ESCAPE, static_cast<size_t>(size)) == nullptr) {
+		props.init(node.propsBegin, static_cast<size_t>(size));
 		return true;
 	}
 

@@ -8,6 +8,8 @@
 #include "logger.h"
 #include "zones.h"
 
+#include <fstream>
+
 /*
 OTBM_ROOTV1
     |--- OTBM_MAP_DATA
@@ -53,6 +55,99 @@ bool transferMapItem(Cylinder* cylinder, std::shared_ptr<Item>& item)
 	item.reset();
 	return true;
 }
+
+void appendEscapedProperties(std::vector<uint8_t>& output, OTB::Loader& loader, const OTB::Node& node)
+{
+	if (node.propsBegin == node.propsEnd) {
+		return;
+	}
+
+	PropStream properties;
+	if (!loader.getProps(node, properties)) {
+		throw OTB::InvalidOTBFormat{};
+	}
+	for (const unsigned char byte : properties.view()) {
+		if (byte == OTB::Node::ESCAPE || byte == OTB::Node::START || byte == OTB::Node::END) {
+			output.emplace_back(OTB::Node::ESCAPE);
+		}
+		output.emplace_back(byte);
+	}
+}
+
+void appendNode(std::vector<uint8_t>& output, OTB::Loader& loader, const OTB::Node& node)
+{
+	output.emplace_back(OTB::Node::START);
+	output.emplace_back(node.type);
+	appendEscapedProperties(output, loader, node);
+	for (const auto& child : node.children) {
+		appendNode(output, loader, child);
+	}
+	output.emplace_back(OTB::Node::END);
+}
+
+bool writeHouseMapCache(OTB::Loader& loader, const OTB::Node& root, const std::filesystem::path& path)
+{
+	if (root.children.size() != 1 ||
+	    static_cast<OTBM_NodeTypes_t>(root.children.front().type) != OTBM_NodeTypes_t::MAP_DATA) {
+		return false;
+	}
+
+	const auto& mapNode = root.children.front();
+	std::vector<uint8_t> output;
+	output.reserve(16 * 1024 * 1024);
+	output.insert(output.end(), {'O', 'T', 'B', 'M'});
+	output.emplace_back(OTB::Node::START);
+	output.emplace_back(root.type);
+	appendEscapedProperties(output, loader, root);
+	output.emplace_back(OTB::Node::START);
+	output.emplace_back(mapNode.type);
+	appendEscapedProperties(output, loader, mapNode);
+
+	for (const auto& child : mapNode.children) {
+		const auto type = static_cast<OTBM_NodeTypes_t>(child.type);
+		if (type == OTBM_NodeTypes_t::TILE_AREA) {
+			const bool hasHouseTile = std::ranges::any_of(child.children, [](const OTB::Node& tile) {
+				return static_cast<OTBM_NodeTypes_t>(tile.type) == OTBM_NodeTypes_t::HOUSETILE;
+			});
+			if (!hasHouseTile) {
+				continue;
+			}
+
+			output.emplace_back(OTB::Node::START);
+			output.emplace_back(child.type);
+			appendEscapedProperties(output, loader, child);
+			for (const auto& tile : child.children) {
+				if (static_cast<OTBM_NodeTypes_t>(tile.type) == OTBM_NodeTypes_t::HOUSETILE) {
+					appendNode(output, loader, tile);
+				}
+			}
+			output.emplace_back(OTB::Node::END);
+		} else if (type == OTBM_NodeTypes_t::TOWNS || type == OTBM_NodeTypes_t::WAYPOINTS) {
+			appendNode(output, loader, child);
+		}
+	}
+
+	output.emplace_back(OTB::Node::END); // map data
+	output.emplace_back(OTB::Node::END); // root
+
+	std::error_code error;
+	std::filesystem::create_directories(path.parent_path(), error);
+	if (error) return false;
+	const std::filesystem::path tempPath = path.string() + ".tmp";
+	std::ofstream stream(tempPath, std::ios::binary | std::ios::trunc);
+	stream.write(reinterpret_cast<const char*>(output.data()), static_cast<std::streamsize>(output.size()));
+	stream.close();
+	if (!stream) {
+		std::filesystem::remove(tempPath, error);
+		return false;
+	}
+#ifdef _WIN32
+	return MoveFileExW(tempPath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+	std::filesystem::rename(tempPath, path, error);
+	return !error;
+#endif
+}
 } // namespace
 
 std::unique_ptr<Tile> IOMap::createTile(std::shared_ptr<Item>& ground, Item* item, uint16_t x, uint16_t y, uint8_t z) {
@@ -71,16 +166,64 @@ std::unique_ptr<Tile> IOMap::createTile(std::shared_ptr<Item>& ground, Item* ite
     return tile;
 }
 
-bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName) {
-    int64_t start = OTSYS_TIME();
+bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePersistentCache) {
+    const auto start = std::chrono::steady_clock::now();
     if (!std::filesystem::exists(fileName)) {
         setLastErrorString(fmt::format("Map file not found at: {}. Please check 'mapName' in config.lua and ensure the file exists in data/world/.", fileName.string()));
         return false;
     }
 
+    const std::string cacheMode = asLowerCaseString(std::string{getString(ConfigManager::MAP_CACHE_MODE)});
+    const bool cacheEnabled = usePersistentCache && cacheMode == "auto";
+    if (usePersistentCache && cacheMode != "auto" && cacheMode != "off") {
+        g_logger().warn(">> Unknown mapCacheMode '{}'; persistent map cache disabled.", cacheMode);
+    }
+
+    std::filesystem::path cachePath;
+    std::filesystem::path houseCachePath;
+    std::optional<MapCache::Fingerprint> initialFingerprint;
+    if (cacheEnabled) {
+        const std::filesystem::path cacheDirectory{getString(ConfigManager::MAP_CACHE_DIRECTORY)};
+        const std::string cacheName = fileName.stem().string();
+        cachePath = cacheDirectory / (cacheName + ".tfsmc");
+        houseCachePath = cacheDirectory / (cacheName + ".houses.otbm");
+        initialFingerprint = MapCache::fingerprint(fileName);
+
+        const bool forceRebuild = ConfigManager::getBoolean(ConfigManager::REBUILD_MAP_CACHE);
+        const auto houseDigest = MapCache::digestFile(houseCachePath);
+        if (!forceRebuild && initialFingerprint && houseDigest && std::filesystem::exists(cachePath) &&
+            MapCache::loadPersistent(*map, cachePath, *initialFingerprint, *houseDigest)) {
+            const auto spawnFile = map->spawnfile;
+            const auto houseFile = map->housefile;
+            IOMap houseLoader;
+            if (!houseLoader.loadMap(map, houseCachePath, false)) {
+                setLastErrorString(fmt::format("Persistent house cache failed: {}", houseLoader.getLastErrorString()));
+                return false;
+            }
+            // External files remain relative to the original OTBM, not to the
+            // generated house-only cache.
+            map->spawnfile = spawnFile;
+            map->housefile = houseFile;
+            g_logger().info(">> Persistent map cache hit completed in [\033[1;33m{:.3f}\033[0m] seconds.",
+                            std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+            return true;
+        }
+        g_logger().info(">> Persistent map cache miss; rebuilding from OTBM.");
+        MapCache::resetStore();
+    }
+
+    std::error_code fileSizeError;
+    const auto sourceBytes = std::filesystem::file_size(fileName, fileSizeError);
+    if (!fileSizeError) {
+        MapCache::prepare(static_cast<size_t>(sourceBytes));
+    }
+
+    bool wroteHouseCache = false;
     try {
         OTB::Loader loader{fileName.string(), OTB::Identifier{{'O', 'T', 'B', 'M'}}};
+        const auto treeStart = std::chrono::steady_clock::now();
         auto& root = loader.parseTree();
+        const auto treeEnd = std::chrono::steady_clock::now();
         PropStream propStream;
         if (!loader.getProps(root, propStream)) {
             setLastErrorString("Could not read root property.");
@@ -140,6 +283,7 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName) {
             return false;
         }
 
+        const auto dataStart = std::chrono::steady_clock::now();
         for (auto& mapDataNode : mapNode.children) {
             if (static_cast<OTBM_NodeTypes_t>(mapDataNode.type) == OTBM_NodeTypes_t::TILE_AREA) {
                 if (!parseTileArea(loader, mapDataNode, *map)) {
@@ -158,6 +302,18 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName) {
                 return false;
             }
         }
+
+        const auto dataEnd = std::chrono::steady_clock::now();
+        g_logger().info(">> Map phases: tree [\033[1;33m{:.3f}\033[0m] s, data [\033[1;33m{:.3f}\033[0m] s.",
+                        std::chrono::duration<double>(treeEnd - treeStart).count(),
+                        std::chrono::duration<double>(dataEnd - dataStart).count());
+
+        if (cacheEnabled && initialFingerprint) {
+            wroteHouseCache = writeHouseMapCache(loader, root, houseCachePath);
+            if (!wroteHouseCache) {
+                g_logger().warn(">> Failed to write house-only map cache '{}'.", houseCachePath.string());
+            }
+        }
     } catch (const OTB::LoadError& err) {
         setLastErrorString(err.what());
         return false;
@@ -166,9 +322,23 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName) {
         return false;
     }
 
-    // Flush map cache after loading (logs deduplication stats)
+    if (cacheEnabled && initialFingerprint && wroteHouseCache) {
+        const auto finalFingerprint = MapCache::fingerprint(fileName);
+        const auto houseDigest = MapCache::digestFile(houseCachePath);
+        if (finalFingerprint && *finalFingerprint == *initialFingerprint && houseDigest) {
+            if (!MapCache::savePersistent(*map, cachePath, *finalFingerprint, *houseDigest)) {
+                g_logger().warn(">> Failed to write persistent map cache '{}'.", cachePath.string());
+            }
+        } else {
+            g_logger().warn(">> Map inputs changed while building the cache; generated cache was discarded.");
+        }
+    }
+
+    // Flush only the lookup tables; compact tileStore ids remain valid for
+    // lazy materialization throughout the Map lifetime.
     MapCache::flush();
-    g_logger().info(">> Map loading time: [\033[1;33m{}\033[0m] seconds.", (OTSYS_TIME() - start) / (1000.));
+    g_logger().info(">> Map loading time: [\033[1;33m{:.3f}\033[0m] seconds.",
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
     return true;
 }
 

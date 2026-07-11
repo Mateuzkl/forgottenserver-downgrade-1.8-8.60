@@ -16,10 +16,14 @@ static bool argumentsHandler(const std::vector<std::string_view>& args)
 			             "\t\t\t\tShould be equal to the global IP.\n"
 			             "\t--login-port=$1\tPort for login server to listen on.\n"
 			             "\t--game-port=$1\tPort for game server to listen on.\n";
+			std::clog << "\t--rebuild-map-cache\tIgnore and rebuild the persistent map cache.\n";
 			return false;
 		} else if (arg == "--version") {
 			printServerVersion();
 			return false;
+		} else if (arg == "--rebuild-map-cache") {
+			ConfigManager::setBoolean(ConfigManager::REBUILD_MAP_CACHE, true);
+			continue;
 		}
 
 		auto tmp = explodeString(arg, "=");

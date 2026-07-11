@@ -11,6 +11,7 @@
 #include "game.h"
 #include "imbuement.h"
 #include "logger.h"
+#include "mapcache.h"
 #include "outputmessage.h"
 #include "protocollogin.h"
 #include "protocoladmin.h"
@@ -235,6 +236,10 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	}
 	g_logger().setLevel(parseLogLevel(getString(ConfigManager::LOG_LEVEL)));
 	printFeatureStatus();
+	if (caseInsensitiveEqual(getString(ConfigManager::MAP_CACHE_MODE), "auto")) {
+		MapCache::precomputeFingerprint(
+		    fmt::format("data/world/{}.otbm", getString(ConfigManager::MAP_NAME)));
+	}
 
 	const auto workerThreads = static_cast<uint32_t>(
 		std::clamp<int64_t>(getInteger(ConfigManager::NETWORK_THREADS), 1, 64));
@@ -385,6 +390,7 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	}
 	LOG_INFO(fmt::format(">> {}", asUpperCaseString(worldType)));
 
+	const auto mapStartupStart = std::chrono::steady_clock::now();
 	LOG_INFO(">> Loading map");
 	if (!g_game.loadMainMap(std::string{getString(ConfigManager::MAP_NAME)})) {
 		startupErrorMessage("Failed to load map");
@@ -393,6 +399,8 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 
 	LOG_INFO(">> Initializing gamestate");
 	g_game.setGameState(GAME_STATE_INIT);
+	g_logger().info(">> Map-to-GAME_STATE_INIT total: [\033[1;33m{:.3f}\033[0m] s.",
+	                std::chrono::duration<double>(std::chrono::steady_clock::now() - mapStartupStart).count());
 
 	// Game client protocols
 	services->add<ProtocolGame>(static_cast<uint16_t>(getInteger(ConfigManager::GAME_PORT)));

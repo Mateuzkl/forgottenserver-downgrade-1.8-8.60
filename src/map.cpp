@@ -22,15 +22,17 @@ extern Game g_game;
 
 bool Map::loadMap(const std::string& identifier, bool loadHouses)
 {
+	const auto loadStart = std::chrono::steady_clock::now();
 	Zones::clear();
 
 	IOMap loader;
-	if (!loader.loadMap(this, identifier)) {
+	if (!loader.loadMap(this, identifier, loadHouses)) {
 		LOG_ERROR(fmt::format("[Fatal - Map::loadMap] {}", loader.getLastErrorString()));
 		return false;
 	}
 
 	if (loadHouses) {
+		const auto housesStart = std::chrono::steady_clock::now();
 		if (!IOMap::loadHouses(this)) {
 			LOG_WARN("[Warning - Map::loadMap] Failed to load house data.");
 		}
@@ -39,13 +41,19 @@ bool Map::loadMap(const std::string& identifier, bool loadHouses)
 		IOMapSerialize::loadHouseItems(this);
 		
 		LOG_INFO(fmt::format(">> Loaded [\033[1;33m{}\033[0m] towns with [\033[1;33m{}\033[0m] houses in total", towns.getTowns().size(), houses.getHouses().size()));
+		g_logger().info(">> House phase: [\033[1;33m{:.3f}\033[0m] s.",
+		                std::chrono::duration<double>(std::chrono::steady_clock::now() - housesStart).count());
 	}
 
+	const auto spawnsStart = std::chrono::steady_clock::now();
 	if (!IOMap::loadSpawns(this)) {
 		LOG_WARN("[Warning - Map::loadMap] Failed to load spawn data.");
 	} else {
-		LOG_INFO(fmt::format(">> Loaded [\033[1;33m{}\033[0m] npcs and spawned [\033[1;33m{}\033[0m] monsters", spawns.getNpcCount(), spawns.getMonsterCount()));
+		LOG_INFO(fmt::format(">> Loaded definitions for [\033[1;33m{}\033[0m] npcs and [\033[1;33m{}\033[0m] monsters", spawns.getNpcCount(), spawns.getMonsterCount()));
 	}
+	g_logger().info(">> Spawn XML phase: [\033[1;33m{:.3f}\033[0m] s; complete map load: [\033[1;33m{:.3f}\033[0m] s.",
+	                std::chrono::duration<double>(std::chrono::steady_clock::now() - spawnsStart).count(),
+	                std::chrono::duration<double>(std::chrono::steady_clock::now() - loadStart).count());
 	return true;
 }
 
@@ -95,53 +103,50 @@ Tile* Map::getTile(uint16_t x, uint16_t y, uint8_t z) const
 
 QTreeLeafNode* Map::getOrCreateLeaf(uint16_t x, uint16_t y)
 {
-	thread_local static const Map* lastMap = nullptr;
-	thread_local static QTreeLeafNode* lastLeaf = nullptr;
-	thread_local static uint32_t lastLeafBaseX = 0xFFFFFFFF;
-	thread_local static uint32_t lastLeafBaseY = 0xFFFFFFFF;
+	thread_local const Map* lastMap = nullptr;
+	thread_local QTreeLeafNode* lastLeaf = nullptr;
+	thread_local uint32_t lastLeafBaseX = std::numeric_limits<uint32_t>::max();
+	thread_local uint32_t lastLeafBaseY = std::numeric_limits<uint32_t>::max();
 
-	uint32_t baseX = x & ~FLOOR_MASK;
-	uint32_t baseY = y & ~FLOOR_MASK;
-	QTreeLeafNode* leaf = nullptr;
-
+	const uint32_t baseX = x & ~FLOOR_MASK;
+	const uint32_t baseY = y & ~FLOOR_MASK;
 	if (lastMap == this && lastLeaf && baseX == lastLeafBaseX && baseY == lastLeafBaseY) {
-		leaf = lastLeaf;
-	} else {
-		QTreeLeafNode::newLeaf = false;
-		leaf = root.createLeaf(x, y, 15);
-
-		if (QTreeLeafNode::newLeaf) {
-			// update north
-			QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
-			if (northLeaf) {
-				northLeaf->leafS = leaf;
-			}
-
-			// update west leaf
-			QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
-			if (westLeaf) {
-				westLeaf->leafE = leaf;
-			}
-
-			// update south
-			QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
-			if (southLeaf) {
-				leaf->leafS = southLeaf;
-			}
-
-			// update east
-			QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
-			if (eastLeaf) {
-				leaf->leafE = eastLeaf;
-			}
-		}
-
-		lastMap = this;
-		lastLeaf = leaf;
-		lastLeafBaseX = baseX;
-		lastLeafBaseY = baseY;
+		return lastLeaf;
 	}
 
+	QTreeLeafNode::newLeaf = false;
+	QTreeLeafNode* leaf = root.createLeaf(x, y, 15);
+
+	if (QTreeLeafNode::newLeaf) {
+		// update north
+		QTreeLeafNode* northLeaf = root.getLeaf(x, y - FLOOR_SIZE);
+		if (northLeaf) {
+			northLeaf->leafS = leaf;
+		}
+
+		// update west leaf
+		QTreeLeafNode* westLeaf = root.getLeaf(x - FLOOR_SIZE, y);
+		if (westLeaf) {
+			westLeaf->leafE = leaf;
+		}
+
+		// update south
+		QTreeLeafNode* southLeaf = root.getLeaf(x, y + FLOOR_SIZE);
+		if (southLeaf) {
+			leaf->leafS = southLeaf;
+		}
+
+		// update east
+		QTreeLeafNode* eastLeaf = root.getLeaf(x + FLOOR_SIZE, y);
+		if (eastLeaf) {
+			leaf->leafE = eastLeaf;
+		}
+	}
+
+	lastMap = this;
+	lastLeaf = leaf;
+	lastLeafBaseX = baseX;
+	lastLeafBaseY = baseY;
 	return leaf;
 }
 
@@ -181,7 +186,7 @@ void Map::setTile(uint16_t x, uint16_t y, uint8_t z, std::unique_ptr<Tile> newTi
 	} else {
 		tile = std::move(newTile);
 		// Clear cache since we now have real tile
-		tilePair.second = nullptr;
+		tilePair.second = 0;
 	}
 
 	if (tile) {
@@ -237,7 +242,7 @@ void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 	}
 	
 	// Also clear cache
-	tilePair.second = nullptr;
+	tilePair.second = 0;
 }
 
 bool Map::placeCreature(const Position& centerPos, Creature* creature, bool extendedPos /* = false*/,
@@ -1334,31 +1339,31 @@ Tile* Floor::getTile(uint16_t x, uint16_t y, uint8_t z) {
 	}
 	
 	// Lazy loading: create real tile from cache
-	const auto& basicTile = tilePair.second;
+	const auto basicTile = MapCache::getTileById(tilePair.second);
 	
 	tilePair.first = MapCacheUtils::createTileFromBasic(basicTile, x, y, z, g_game.map.houses);
-	tilePair.second = nullptr; // Clear cache
+	tilePair.second = 0; // Clear cache
 	
 	return tilePair.first.get();
 }
 
-void Floor::setTileCache(uint16_t x, uint16_t y, const std::shared_ptr<BasicTile>& basicTile) {
+void Floor::setTileCache(uint16_t x, uint16_t y, const BasicTile* basicTile) {
 	uint32_t offsetX = x & FLOOR_MASK;
 	uint32_t offsetY = y & FLOOR_MASK;
-	tiles[offsetX][offsetY].second = basicTile;
+	tiles[offsetX][offsetY].second = basicTile ? basicTile->cacheId : 0;
 }
 
-std::shared_ptr<BasicTile> Floor::getTileCache(uint16_t x, uint16_t y) const {
+const BasicTile* Floor::getTileCache(uint16_t x, uint16_t y) const {
 	uint32_t offsetX = x & FLOOR_MASK;
 	uint32_t offsetY = y & FLOOR_MASK;
-	return tiles[offsetX][offsetY].second;
+	return MapCache::getTileById(tiles[offsetX][offsetY].second);
 }
 
 // ============================================================================
 // Map::setBasicTile - store tile in cache during map load
 // ============================================================================
 
-void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<BasicTile>& basicTile) {
+void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const BasicTile* basicTile) {
 	if (z >= MAP_MAX_LAYERS) {
 		LOG_ERROR(fmt::format("ERROR: Attempt to set tile cache on invalid coordinate {}!", Position(x, y, z)));
 		return;
@@ -1368,8 +1373,77 @@ void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<
 	Floor* floor = leaf->createFloor(z);
 	floor->setTileCache(x, y, basicTile);
 	if (basicTile) {
-		Zones::registerPositionZones(Position(x, y, z), basicTile->zoneIds);
+		if (!basicTile->zoneIds.empty()) {
+			Zones::registerPositionZones(Position(x, y, z), basicTile->zoneIds);
+		}
 	} else {
 		Zones::unregisterPosition(Position(x, y, z));
+	}
+}
+
+void Map::forEachBasicFloorBlock(
+    const std::function<void(uint16_t, uint16_t, uint8_t, const std::array<uint32_t, FLOOR_SIZE * FLOOR_SIZE>&)>& visitor) const
+{
+	auto walk = [&](auto&& self, const QTreeNode* node, int32_t level, uint32_t baseX, uint32_t baseY) -> void {
+		if (!node) {
+			return;
+		}
+
+		if (node->isLeaf()) {
+			const auto* leaf = static_cast<const QTreeLeafNode*>(node);
+			for (uint8_t z = 0; z < MAP_MAX_LAYERS; ++z) {
+				const Floor* floor = leaf->getFloor(z);
+				if (!floor) {
+					continue;
+				}
+
+				std::array<uint32_t, FLOOR_SIZE * FLOOR_SIZE> ids{};
+				bool hasCachedTile = false;
+				for (uint32_t x = 0; x < FLOOR_SIZE; ++x) {
+					for (uint32_t y = 0; y < FLOOR_SIZE; ++y) {
+						const uint32_t id = floor->tiles[x][y].second;
+						ids[x * FLOOR_SIZE + y] = id;
+						hasCachedTile |= id != 0;
+					}
+				}
+
+				if (hasCachedTile) {
+					visitor(static_cast<uint16_t>(baseX), static_cast<uint16_t>(baseY), z, ids);
+				}
+			}
+			return;
+		}
+
+		for (uint32_t index = 0; index < 4; ++index) {
+			const uint32_t childX = baseX | ((index & 1U) ? (1U << level) : 0U);
+			const uint32_t childY = baseY | ((index & 2U) ? (1U << level) : 0U);
+			self(self, node->child[index].get(), level - 1, childX, childY);
+		}
+	};
+
+	walk(walk, &root, 15, 0, 0);
+}
+
+void Map::setBasicFloorBlock(uint16_t baseX, uint16_t baseY, uint8_t z,
+                             const std::array<uint32_t, FLOOR_SIZE * FLOOR_SIZE>& ids)
+{
+	if (z >= MAP_MAX_LAYERS) {
+		return;
+	}
+
+	QTreeLeafNode* leaf = getOrCreateLeaf(baseX, baseY);
+	Floor* floor = leaf->createFloor(z);
+	const bool registerZones = MapCache::hasZoneTemplates();
+	for (uint32_t x = 0; x < FLOOR_SIZE; ++x) {
+		for (uint32_t y = 0; y < FLOOR_SIZE; ++y) {
+			const uint32_t id = ids[x * FLOOR_SIZE + y];
+			floor->tiles[x][y].second = id;
+			if (registerZones && id != 0) {
+				const auto tile = MapCache::getTileById(id);
+				if (tile && !tile->zoneIds.empty()) {
+					Zones::registerPositionZones(Position(baseX + x, baseY + y, z), tile->zoneIds);
+				}
+			}
+		}
 	}
 }

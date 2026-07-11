@@ -358,6 +358,8 @@ bool ConfigManager::load()
 		}
 
 		strings[String::MAP_NAME] = getGlobalString(L, "mapName", "forgotten");
+		strings[String::MAP_CACHE_MODE] = getGlobalString(L, "mapCacheMode", "auto");
+		strings[String::MAP_CACHE_DIRECTORY] = getGlobalString(L, "mapCacheDirectory", "data/cache/maps");
 		strings[String::MAP_AUTHOR] = getGlobalString(L, "mapAuthor", "Unknown");
 		strings[String::HOUSE_RENT_PERIOD] = getGlobalString(L, "houseRentPeriod", "never");
 

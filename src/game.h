@@ -248,6 +248,7 @@ public:
 	void executeDeath(uint32_t creatureId);
 
 	void addCreatureCheck(Creature* creature);
+	void reserveStartupCreatures(size_t monsterCount, size_t npcCount);
 	static void removeCreatureCheck(Creature* creature);
 
 	size_t getPlayersOnline() const { return playersOnline.load(std::memory_order_relaxed); }
