@@ -69,13 +69,13 @@ void Dispatcher::shutdown() noexcept
 	g_reactor.shutdown();
 }
 
-void Dispatcher::addTask(std::unique_ptr<Task>&& task)
+bool Dispatcher::addTask(std::unique_ptr<Task>&& task)
 {
 	if (!task || state.load(std::memory_order_acquire) != THREAD_STATE_RUNNING) {
-		return;
+		return false;
 	}
 
-	g_reactor.send([this, task = std::move(task)]() mutable { executeTask(std::move(task)); });
+	return g_reactor.send([this, task = std::move(task)]() mutable { executeTask(std::move(task)); });
 }
 
 void Dispatcher::executeTask(std::unique_ptr<Task> task)

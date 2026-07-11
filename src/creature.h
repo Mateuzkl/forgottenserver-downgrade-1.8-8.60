@@ -8,6 +8,7 @@
 #include "const.h"
 #include "creatureevent.h"
 #include "enums.h"
+#include "follow_path.h"
 #include "logger.h"
 #include "map.h"
 #include "observer_ptr.h"
@@ -71,6 +72,20 @@ struct PathSearchMetrics
 {
 	uint32_t nodesVisited = 0;
 	uint32_t tilesRead = 0;
+};
+
+struct CreaturePathfindingCounters
+{
+	uint64_t pathRequests = 0;
+	uint64_t pathSuccess = 0;
+	uint64_t pathFailure = 0;
+	uint64_t nodesVisited = 0;
+	uint64_t tilesRead = 0;
+	uint64_t pathLength = 0;
+	uint64_t pathReused = 0;
+	uint64_t pathInvalidated = 0;
+	uint64_t timeSpentPathfindingNanoseconds = 0;
+	uint32_t consecutiveFailures = 0;
 };
 
 class Map;
@@ -147,10 +162,12 @@ public:
 		removedTime = OTSYS_TIME();
 		attackedCreature.reset();
 		followCreature.reset();
+		followPathState.cancel();
 	}
 	int64_t getRemovedTime() const { return removedTime; }
 
 	uint32_t getID() const { return id; }
+	uint64_t getLifetimeToken() const noexcept { return lifetimeToken; }
 	virtual void removeList() = 0;
 	virtual void addList() = 0;
 
@@ -243,6 +260,7 @@ public:
 	std::shared_ptr<Creature> getFollowCreatureShared() const { return followCreature.lock(); }
 	virtual bool setFollowCreature(Creature* creature);
 	void requestFollowPathUpdate();
+	const CreaturePathfindingCounters& getPathfindingCounters() const noexcept { return pathfindingCounters; }
 
 	// follow events
 	virtual void onFollowCreature(const Creature*) {}
@@ -437,9 +455,12 @@ protected:
 	std::weak_ptr<Creature> attackedCreature;
 	std::weak_ptr<Creature> master;
 	std::weak_ptr<Creature> followCreature;
+	FollowPathState followPathState;
+	CreaturePathfindingCounters pathfindingCounters;
 
 	uint64_t lastStep = 0;
 	uint32_t id = 0;
+	uint64_t lifetimeToken = 0;
 	uint32_t scriptEventsBitField = 0;
 	uint32_t eventWalk = 0;
 	uint32_t walkUpdateTicks = 0;
@@ -466,7 +487,6 @@ protected:
 
 	bool isInternalRemoved = false;
 	int64_t removedTime = 0;
-	bool isUpdatingPath = false;
 	bool creatureCheck = false;
 	bool inCheckCreaturesVector = false;
 	bool skillLoss = true;
@@ -494,6 +514,8 @@ protected:
 	virtual void dropLoot(Container*, Creature*) {}
 	virtual uint16_t getLookCorpse() const { return 0; }
 	virtual void getPathSearchParams(const Creature* creature, FindPathParams& fpp) const;
+	[[nodiscard]] FollowPathKey makeFollowPathKey(const Creature& target) const noexcept;
+	void invalidateFollowPath(bool resetFailures);
 	virtual void death(Creature*) {}
 	virtual bool dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreature, bool lastHitUnjustified,
 	                        bool mostDamageUnjustified);

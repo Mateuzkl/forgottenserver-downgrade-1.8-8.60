@@ -510,7 +510,7 @@ public:
 
 	// Events
 	void checkCreatureWalk(uint32_t creatureId);
-	void updateCreatureWalk(uint32_t creatureId);
+	void updateCreatureWalk(uint32_t creatureId, uint64_t lifetimeToken, uint32_t generation);
 	void checkCreatureAttack(uint32_t creatureId);
 	void checkCreatures(size_t index);
 	void checkSereneStatus();

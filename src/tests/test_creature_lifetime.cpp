@@ -42,6 +42,16 @@ TEST_CASE(creature_lifetime_registry_tracks_destroyed_creature)
 	CHECK(!Creature::isAlive(rawCreature));
 }
 
+TEST_CASE(creature_lifetime_tokens_are_not_reused)
+{
+	auto first = makeTestCreature();
+	const uint64_t firstToken = first->getLifetimeToken();
+	first.reset();
+
+	auto second = makeTestCreature();
+	CHECK(second->getLifetimeToken() != firstToken);
+}
+
 TEST_CASE(summon_lifecycle_uses_weak_owner_links)
 {
 	auto master = makeTestCreature();

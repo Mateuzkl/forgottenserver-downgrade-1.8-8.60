@@ -18,6 +18,7 @@
 extern Game g_game;
 
 namespace {
+std::atomic<uint64_t> nextCreatureLifetimeToken{1};
 
 std::shared_ptr<Creature> getSharedCreature(Creature* creature)
 {
@@ -30,6 +31,7 @@ std::unordered_set<const Creature*> Creature::liveCreatures;
 
 Creature::Creature()
 {
+	lifetimeToken = nextCreatureLifetimeToken.fetch_add(1, std::memory_order_relaxed);
 	liveCreatures.insert(this);
 	onIdleStatus();
 }
@@ -37,6 +39,7 @@ Creature::Creature()
 Creature::~Creature()
 {
 	liveCreatures.erase(this);
+	followPathState.cancel();
 
 	attackedCreature.reset();
 	followCreature.reset();
@@ -240,6 +243,8 @@ void Creature::onWalk()
 				}
 
 				forceUpdateFollowPath = true;
+				invalidateFollowPath(true);
+				requestFollowPathUpdate();
 			}
 		} else {
 			stopEventWalk();
@@ -473,12 +478,11 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 	}
 
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
-		if (hasFollowPath) {
-			requestFollowPathUpdate();
-		}
-
 		if (newPos.z != oldPos.z || !canSee(fc->getPosition())) {
 			onCreatureDisappear(fc.get(), false);
+		} else if (creature == fc.get()) {
+			invalidateFollowPath(true);
+			requestFollowPathUpdate();
 		}
 	}
 
@@ -958,16 +962,35 @@ void Creature::goToFollowCreature()
 {
 	PerformanceScope performanceScope(PerformanceMetric::CreatureGoToFollow);
 	if (auto fc = followCreature.lock()) {
+		const FollowPathKey key = makeFollowPathKey(*fc);
 		FindPathParams fpp;
 		getPathSearchParams(fc.get(), fpp);
 
 		listWalkDir.clear();
+		PathSearchMetrics searchMetrics;
+		const auto pathStart = std::chrono::steady_clock::now();
+		const bool found = getPathTo(fc->getPosition(), listWalkDir, fpp, &searchMetrics);
+		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now() - pathStart).count();
 
-		if (getPathTo(fc->getPosition(), listWalkDir, fpp)) {
+		++pathfindingCounters.pathRequests;
+		pathfindingCounters.nodesVisited += searchMetrics.nodesVisited;
+		pathfindingCounters.tilesRead += searchMetrics.tilesRead;
+		pathfindingCounters.timeSpentPathfindingNanoseconds += elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
+
+		if (found) {
+			++pathfindingCounters.pathSuccess;
+			pathfindingCounters.pathLength += listWalkDir.size();
+			followPathState.recordSuccess(key);
+			pathfindingCounters.consecutiveFailures = 0;
 			hasFollowPath = true;
 			startAutoWalk(listWalkDir);
-		} else
+		} else {
+			++pathfindingCounters.pathFailure;
+			followPathState.recordFailure(key, static_cast<uint64_t>(OTSYS_TIME()));
+			pathfindingCounters.consecutiveFailures = followPathState.getConsecutiveFailures();
 			hasFollowPath = false;
+		}
 	}
 
 	auto follow = followCreature.lock();
@@ -976,12 +999,43 @@ void Creature::goToFollowCreature()
 
 void Creature::requestFollowPathUpdate()
 {
-	if (isUpdatingPath || followCreature.expired()) {
+	auto follow = followCreature.lock();
+	if (!follow) {
 		return;
 	}
 
-	isUpdatingPath = true;
-	g_dispatcher.addTask(createTask([id = getID()] { g_game.updateCreatureWalk(id); }));
+	const FollowPathKey key = makeFollowPathKey(*follow);
+	if (followPathState.canReuse(key, !listWalkDir.empty(), forceUpdateFollowPath)) {
+		++pathfindingCounters.pathReused;
+		g_performanceMetrics.recordPathReused();
+		return;
+	}
+	if (!forceUpdateFollowPath && !followPathState.retryAllowed(key, static_cast<uint64_t>(OTSYS_TIME()))) {
+		return;
+	}
+
+	uint32_t generation = 0;
+	if (!followPathState.beginRequest(generation)) {
+		return;
+	}
+	forceUpdateFollowPath = false;
+	const uint32_t id = getID();
+	const uint64_t token = getLifetimeToken();
+	if (!g_dispatcher.addTask([id, token, generation] { g_game.updateCreatureWalk(id, token, generation); })) {
+		followPathState.abandonRequest(generation);
+	}
+}
+
+FollowPathKey Creature::makeFollowPathKey(const Creature& target) const noexcept
+{
+	return {getPosition(), target.getPosition(), target.getID()};
+}
+
+void Creature::invalidateFollowPath(bool resetFailures)
+{
+	followPathState.invalidate(resetFailures);
+	++pathfindingCounters.pathInvalidated;
+	g_performanceMetrics.recordPathInvalidated();
 }
 
 bool Creature::setFollowCreature(Creature* creature)
@@ -994,8 +1048,8 @@ bool Creature::setFollowCreature(Creature* creature)
 
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
-			isUpdatingPath = false;
 			hasFollowPath = false;
+			followPathState.cancel();
 			followCreature.reset();
 			return false;
 		}
@@ -1007,9 +1061,9 @@ bool Creature::setFollowCreature(Creature* creature)
 
 		hasFollowPath = false;
 		forceUpdateFollowPath = false;
+		followPathState.cancel();
 		auto creatureRef = getSharedCreature(creature);
 		if (!creatureRef) {
-			isUpdatingPath = false;
 			hasFollowPath = false;
 			followCreature.reset();
 			return false;
@@ -1017,8 +1071,8 @@ bool Creature::setFollowCreature(Creature* creature)
 		followCreature = creatureRef;
 		requestFollowPathUpdate();
 	} else {
-		isUpdatingPath = false;
 		hasFollowPath = false;
+		followPathState.cancel();
 		followCreature.reset();
 	}
 

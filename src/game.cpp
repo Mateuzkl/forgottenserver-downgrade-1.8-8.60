@@ -5877,13 +5877,16 @@ void Game::checkCreatureWalk(uint32_t creatureId)
 	}
 }
 
-void Game::updateCreatureWalk(uint32_t creatureId)
+void Game::updateCreatureWalk(uint32_t creatureId, uint64_t lifetimeToken, uint32_t generation)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameUpdateCreatureWalk);
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
-	if (creature && !creature->isRemoved() && !creature->isDead()) {
-		creature->isUpdatingPath = false;
+	if (creature && creature->getLifetimeToken() == lifetimeToken && !creature->isRemoved() && !creature->isDead()) {
+		if (!creature->followPathState.acceptResult(generation)) {
+			creature->requestFollowPathUpdate();
+			return;
+		}
 		creature->goToFollowCreature();
 	}
 }

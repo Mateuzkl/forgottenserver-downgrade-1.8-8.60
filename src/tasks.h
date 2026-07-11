@@ -53,9 +53,9 @@ public:
 	void join() noexcept {}
 	void shutdown() noexcept;
 
-	void addTask(std::unique_ptr<Task>&& task);
-	void addTask(TaskFunc&& f) { addTask(createTask(std::move(f))); }
-	void addTask(uint32_t expiration, TaskFunc&& f) { addTask(createTimedTask(expiration, std::move(f))); }
+	bool addTask(std::unique_ptr<Task>&& task);
+	bool addTask(TaskFunc&& f) { return addTask(createTask(std::move(f))); }
+	bool addTask(uint32_t expiration, TaskFunc&& f) { return addTask(createTimedTask(expiration, std::move(f))); }
 	void executeTask(std::unique_ptr<Task> task);
 
 	template <typename Func, typename Callback>

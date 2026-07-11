@@ -59,6 +59,13 @@ public:
 		return token == generation;
 	}
 
+	void abandonRequest(uint32_t token) noexcept
+	{
+		if (pending && token == pendingGeneration) {
+			pending = false;
+		}
+	}
+
 	void recordSuccess(const FollowPathKey& key) noexcept
 	{
 		snapshot = key;

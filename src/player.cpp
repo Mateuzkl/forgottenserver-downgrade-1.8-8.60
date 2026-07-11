@@ -2537,11 +2537,6 @@ void Player::onCreatureMove(Creature* creature, const Tile* newTile, const Posit
 {
 	Creature::onCreatureMove(creature, newTile, newPos, oldTile, oldPos, teleport);
 
-	auto follow = followCreature.lock();
-	if (hasFollowPath && (creature == follow.get() || (creature == this && follow))) {
-		requestFollowPathUpdate();
-	}
-
 	if (creature != this) {
 		return;
 	}
