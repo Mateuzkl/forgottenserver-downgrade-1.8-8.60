@@ -156,6 +156,7 @@
 		<attribute key="classification" value="1" />
 	</item>
 	<item id="140" article="a" name="parcel">
+		<attribute key="type" value="container" />
 		<attribute key="description" value="It is the parcel for the watchtower on the Femor Hills" />
 		<attribute key="containersize" value="10" />
 		<attribute key="weight" value="1800" />
