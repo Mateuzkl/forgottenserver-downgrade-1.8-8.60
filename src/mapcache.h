@@ -271,14 +271,24 @@ public:
     /**
      * Map Parsing Helpers (used by IOMap)
      */
+<<<<<<< HEAD
     static std::shared_ptr<BasicItem> parseBasicItem(void* loaderptr, const void* nodeptr, BasicItem* parent = nullptr);
     static const BasicTile* parseBasicTile(void* loaderptr, const void* nodeptr, uint8_t& xOffset, uint8_t& yOffset);
     
+=======
+    static std::shared_ptr<BasicItem> parseBasicItem(void* loaderptr, const void* nodeptr);
+    static std::shared_ptr<BasicTile> parseBasicTile(void* loaderptr, const void* nodeptr, uint8_t& xOffset, uint8_t& yOffset);
+
+>>>>>>> a2a5c51cc51d449e95934b5bc8cbdc8fdaf03e85
     /**
      * Get cache statistics for debugging
      */
     static size_t getItemCacheSize();
     static size_t getTileCacheSize();
+    static size_t getItemCacheHits();
+    static size_t getItemCacheMisses();
+    static size_t getTileCacheHits();
+    static size_t getTileCacheMisses();
 
 private:
     // Map loading is serialized by the game thread. Using multimaps preserves

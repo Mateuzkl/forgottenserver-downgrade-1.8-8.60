@@ -329,6 +329,13 @@ private:
 
 	QTreeNode root;
 
+	// Single-entry cache of the last leaf touched by setTile/setBasicTile.
+	// Protected by the same single-writer discipline as the quadtree itself;
+	// leaves are never freed while the Map lives, so cachedLeaf cannot dangle.
+	QTreeLeafNode* cachedLeaf = nullptr;
+	uint32_t cachedLeafBaseX = 0;
+	uint32_t cachedLeafBaseY = 0;
+
 	std::filesystem::path spawnfile;
 	std::filesystem::path housefile;
 

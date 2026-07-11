@@ -54,6 +54,8 @@ public:
 class PropStream
 {
 public:
+	// PropStream is a non-owning view: the caller must keep [a, a + size)
+	// alive for as long as the stream (or string_views from readString()) is used.
 	void init(const char* a, size_t size)
 	{
 		p = a;

@@ -102,22 +102,56 @@ bool Loader::getProps(const Node& node, PropStream& props)
 		return false;
 	}
 
+<<<<<<< HEAD
 	// Most OTBM property ranges do not contain escaped control bytes. Point the
 	// stream at the mapped file directly in that common case and avoid a copy.
 	if (std::memchr(node.propsBegin, Node::ESCAPE, static_cast<size_t>(size)) == nullptr) {
 		props.init(node.propsBegin, static_cast<size_t>(size));
+=======
+	// Fast path: no ESCAPE bytes, so the props can be read in place from the
+	// memory-mapped file without unescaping into propBuffer. The resulting
+	// PropStream (and any string_view obtained from it) aliases the mapped
+	// file and is only valid while this Loader is alive; callers must copy
+	// what they need to keep (all current callers do).
+	const char* escapePtr = static_cast<const char*>(std::memchr(node.propsBegin, Node::ESCAPE, size));
+	if (!escapePtr) {
+		props.init(node.propsBegin, size);
+>>>>>>> a2a5c51cc51d449e95934b5bc8cbdc8fdaf03e85
 		return true;
 	}
 
+	// Slow path: unescape into propBuffer. An ESCAPE (0xFD) byte marks the
+	// next byte as a literal. Copy escape-free runs in bulk, handle escaped
+	// bytes individually, and step over adjacent escapes without paying a
+	// memchr call per byte (dense escape clusters would otherwise degrade).
 	propBuffer.resize(size);
-	bool lastEscaped = false;
+	char* dst = propBuffer.data();
+	const char* src = node.propsBegin;
+	const char* const srcEnd = node.propsEnd;
+	const char* esc = escapePtr; // first escape, already located by memchr above
 
-	auto escapedPropEnd =
-	    std::copy_if(node.propsBegin, node.propsEnd, propBuffer.begin(), [&lastEscaped](const char& byte) {
-		    lastEscaped = byte == static_cast<char>(Node::ESCAPE) && !lastEscaped;
-		    return !lastEscaped;
-	    });
-	props.init(&propBuffer[0], std::distance(propBuffer.begin(), escapedPropEnd));
+	while (true) {
+		dst = std::copy(src, esc, dst); // clean run before the escape
+		src = esc + 1;                  // skip the ESCAPE marker
+		if (src == srcEnd) {
+			break; // trailing lone ESCAPE: nothing to keep
+		}
+		*dst++ = *src++; // escaped byte kept literally (may itself be 0xFD)
+		if (src == srcEnd) {
+			break;
+		}
+		if (*src == static_cast<char>(Node::ESCAPE)) {
+			esc = src; // adjacent escape: no scan needed
+			continue;
+		}
+		esc = static_cast<const char*>(std::memchr(src + 1, Node::ESCAPE, srcEnd - src - 1));
+		if (!esc) {
+			dst = std::copy(src, srcEnd, dst); // tail after the last escape
+			break;
+		}
+	}
+
+	props.init(propBuffer.data(), std::distance(propBuffer.data(), dst));
 	return true;
 }
 
