@@ -9,9 +9,9 @@ inline constexpr auto STATUS_SERVER_VERSION = "1.8";
 inline constexpr auto STATUS_SERVER_DEVELOPERS = "Mateuzkl";
 inline constexpr auto STATUS_SERVER_REPOSITORY = "https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60";
 
-inline constexpr auto CLIENT_VERSION_MIN = 860;
-inline constexpr auto CLIENT_VERSION_MAX = 860;
-inline constexpr auto CLIENT_VERSION_STR = "860";
+inline constexpr auto CLIENT_VERSION_MIN = 792;
+inline constexpr auto CLIENT_VERSION_MAX = 792;
+inline constexpr auto CLIENT_VERSION_STR = "7.92";
 
 inline constexpr unsigned int AUTHENTICATOR_DIGITS = 6;
 inline constexpr unsigned int AUTHENTICATOR_PERIOD = 30;

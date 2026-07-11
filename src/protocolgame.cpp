@@ -1003,20 +1003,19 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	key[3] = msg.get<uint32_t>();
 	enableXTEAEncryption();
 	setXTEAKey(std::move(key));
+	disableChecksum();
 
 	msg.skipBytes(1); // gamemaster flag
 
-	auto accountName = msg.getString();
-	auto characterName = msg.getString();
-	auto password = msg.getString();
-
-	uint32_t timeStamp = msg.get<uint32_t>();
-	uint8_t randNumber = msg.getByte();
-
-	if (challengeTimestamp != timeStamp || challengeRandom != randNumber) {
-		disconnect();
+	const uint32_t accountNumber = msg.get<uint32_t>();
+	if (accountNumber == 0) {
+		disconnectClient("You must enter your account number.");
 		return;
 	}
+
+	const std::string accountName = std::to_string(accountNumber);
+	auto characterName = msg.getString();
+	auto password = msg.getString();
 
 	// OTCv8 version detection
 	if (msg.getBufferPosition() < msg.getLength()) {
@@ -1151,30 +1150,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 
 void ProtocolGame::onConnect()
 {
-	auto output = OutputMessagePool::getOutputMessage();
-	static std::random_device rd;
-	static std::ranlux24 generator(rd());
-	static std::uniform_int_distribution<uint16_t> randNumber(0x00, 0xFF);
-
-	// Skip checksum
-	output->skipBytes(sizeof(uint32_t));
-
-	// Packet length & type
-	output->add<uint16_t>(0x0006);
-	output->addByte(0x1F);
-
-	// Add timestamp & random number
-	challengeTimestamp = static_cast<uint32_t>(time(nullptr));
-	output->add<uint32_t>(challengeTimestamp);
-
-	challengeRandom = randNumber(generator);
-	output->addByte(challengeRandom);
-
-	// Go back and write checksum
-	output->skipBytes(-12);
-	output->add<uint32_t>(adlerChecksum(output->getOutputBuffer() + sizeof(uint32_t), 8));
-
-	send(output);
+	// Protocol 7.92 does not use the server-first login challenge.
 }
 
 void ProtocolGame::disconnectClient(std::string_view message) const
@@ -2676,11 +2652,10 @@ void ProtocolGame::sendCreatureEmblem(const Creature* creature)
 	// Remove creature from client and re-add to update
 	Position pos = creature->getPosition();
 	int32_t stackpos = creature->getTile()->getClientIndexOfCreature(player.get(), creature);
-	sendRemoveTileThing(pos, stackpos);
+	sendRemoveTileCreature(creature, pos, stackpos);
 	NetworkMessage msg;
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
-	msg.addByte(stackpos);
 	AddCreature(msg, creature, false, creature->getID());
 	writeToOutputBuffer(msg);
 }
@@ -3388,7 +3363,6 @@ void ProtocolGame::sendCancelTarget()
 {
 	NetworkMessage msg;
 	msg.addByte(0xA3);
-	msg.add<uint32_t>(0x00);
 	writeToOutputBuffer(msg);
 }
 
@@ -3577,9 +3551,9 @@ void ProtocolGame::refreshWorldView()
 	sendMapDescription(player->getPosition());
 }
 
-void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const Item* item)
+void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t /*stackpos*/, const Item* item)
 {
-	if (stackpos >= MAX_STACKPOS_THINGS || !canSee(pos)) {
+	if (!canSee(pos)) {
 		return;
 	}
 
@@ -3590,7 +3564,6 @@ void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const
 	NetworkMessage msg;
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
-	msg.addByte(static_cast<uint8_t>(stackpos));
 	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
 	            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	writeToOutputBuffer(msg);
@@ -3623,6 +3596,20 @@ void ProtocolGame::sendRemoveTileThing(const Position& pos, uint32_t stackpos)
 
 	NetworkMessage msg;
 	RemoveTileThing(msg, pos, stackpos);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendRemoveTileCreature(const Creature* creature, const Position& pos, uint32_t stackpos)
+{
+	if (stackpos < MAX_STACKPOS_THINGS) {
+		sendRemoveTileThing(pos, stackpos);
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x6C);
+	msg.add<uint16_t>(0xFFFF);
+	msg.add<uint32_t>(creature->getID());
 	writeToOutputBuffer(msg);
 }
 
@@ -3691,11 +3678,10 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	}
 
 	if (creature != player.get()) {
-		if (stackpos != -1 && stackpos < MAX_STACKPOS_THINGS) {
+		if (stackpos != -1) {
 			NetworkMessage msg;
 			msg.addByte(0x6A);
 			msg.addPosition(pos);
-			msg.addByte(static_cast<uint8_t>(stackpos));
 
 			auto [known, removedKnown] = isKnownCreature(creature->getID());
 			AddCreature(msg, creature, known, removedKnown);
@@ -3775,7 +3761,7 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 		spyViewportPos_ = newPos;
 
 		if (teleport || oldStackPos >= MAX_STACKPOS_THINGS) {
-			sendRemoveTileThing(oldPos, oldStackPos);
+			sendRemoveTileCreature(creature, oldPos, oldStackPos);
 			sendMapDescription(newPos);
 			return;
 		}
@@ -3820,14 +3806,14 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 
 	if (creature != player.get() && !player->canSeeCreature(creature)) {
 		if (oldStackPos != -1 && canSee(oldPos)) {
-			sendRemoveTileThing(oldPos, oldStackPos);
+			sendRemoveTileCreature(creature, oldPos, oldStackPos);
 		}
 		return;
 	}
 
 	if (creature == player.get()) {
 		if (teleport || oldStackPos >= MAX_STACKPOS_THINGS) {
-			sendRemoveTileThing(oldPos, oldStackPos);
+			sendRemoveTileCreature(creature, oldPos, oldStackPos);
 			sendMapDescription(newPos);
 		} else {
 			NetworkMessage msg;
@@ -3875,7 +3861,7 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 		}
 	} else if (canSee(oldPos) && canSee(creature->getPosition())) {
 		if (teleport || (oldPos.z == 7 && newPos.z >= 8) || oldStackPos >= MAX_STACKPOS_THINGS) {
-			sendRemoveTileThing(oldPos, oldStackPos);
+			sendRemoveTileCreature(creature, oldPos, oldStackPos);
 			sendAddCreature(creature, newPos, newStackPos);
 		} else {
 			NetworkMessage msg;
@@ -3886,7 +3872,7 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 			writeToOutputBuffer(msg);
 		}
 	} else if (canSee(oldPos)) {
-		sendRemoveTileThing(oldPos, oldStackPos);
+		sendRemoveTileCreature(creature, oldPos, oldStackPos);
 	} else if (canSee(creature->getPosition())) {
 		sendAddCreature(creature, newPos, newStackPos);
 	}
@@ -4511,7 +4497,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	msg.addByte(player->getSkullClient(creature));
 	msg.addByte(player->getPartyShield(otherPlayer));
 
-	if (!known) {
+	if (!known && version > 792) {
 		auto addCreatureEmblem = [this, &msg, creature](GuildEmblems_t emblem) {
 			if (!isAstraClient) {
 				if (emblem == GUILDEMBLEM_MEMBER) {
@@ -4551,7 +4537,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 		}
 	}
 
-	if (isOTC) {
+	if (isOTC && version > 792) {
 		if (const auto npc = creature->getNpc()) {
 			msg.addByte(npc->getSpeechBubble());
 		} else {
@@ -4559,7 +4545,9 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 		}
 	}
 
-	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
+	if (version > 792) {
+		msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
+	}
 }
 
 void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
@@ -4581,7 +4569,10 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	msg.add<uint32_t>(health);
 	msg.add<uint32_t>(maxHealth);
 
-	msg.add<uint32_t>(player->hasFlag(PlayerFlag_HasInfiniteCapacity) ? 1000000 : player->getFreeCapacity());
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<uint32_t>(
+	    player->hasFlag(PlayerFlag_HasInfiniteCapacity) ? std::numeric_limits<uint16_t>::max()
+	                                                   : player->getFreeCapacity() / 100,
+	    std::numeric_limits<uint16_t>::max())));
 
 	msg.add<uint32_t>(std::min<uint32_t>(player->getExperience(), std::numeric_limits<int32_t>::max()));
 

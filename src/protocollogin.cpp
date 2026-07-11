@@ -405,6 +405,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 
 	enableXTEAEncryption();
 	setXTEAKey(std::move(key));
+	disableChecksum();
 
 	if (version < CLIENT_VERSION_MIN || version > CLIENT_VERSION_MAX) {
 		disconnectClient(fmt::format("Only clients with protocol {:s} allowed!", CLIENT_VERSION_STR));
@@ -437,7 +438,13 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		return;
 	}
 
-	auto accountName = msg.getString();
+	const uint32_t accountNumber = msg.get<uint32_t>();
+	if (accountNumber == 0) {
+		disconnectClient("Invalid account number.");
+		return;
+	}
+
+	const std::string accountName = std::to_string(accountNumber);
 
 	// Read and validate password from the message
 	auto password = msg.getString();

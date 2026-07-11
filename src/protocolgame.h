@@ -56,7 +56,7 @@ public:
 	}; // Not required as we send first
 	enum
 	{
-		use_checksum = true
+		use_checksum = false
 	};
 	static const char* protocol_name() { return "gameworld protocol"; }
 
@@ -238,6 +238,7 @@ private:
 	void sendAddTileItem(const Position& pos, uint32_t stackpos, const Item* item);
 	void sendUpdateTileItem(const Position& pos, uint32_t stackpos, const Item* item);
 	void sendRemoveTileThing(const Position& pos, uint32_t stackpos);
+	void sendRemoveTileCreature(const Creature* creature, const Position& pos, uint32_t stackpos);
 	void sendUpdateTileCreature(const Position& pos, uint32_t stackpos, const Creature* creature);
 	void sendUpdateTile(const Tile* tile, const Position& pos);
 
