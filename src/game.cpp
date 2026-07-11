@@ -5918,7 +5918,8 @@ void Game::addCreatureCheck(Creature* creature)
 	}
 
 	creature->inCheckCreaturesVector = true;
-	checkCreatureLists[uniform_random(0, EVENT_CREATURECOUNT - 1)].push_back(getCreatureSharedRef(creature));
+	const size_t bucket = creature->getID() % EVENT_CREATURECOUNT;
+	checkCreatureLists[bucket].push_back(getCreatureSharedRef(creature));
 }
 
 void Game::removeCreatureCheck(Creature* creature)
