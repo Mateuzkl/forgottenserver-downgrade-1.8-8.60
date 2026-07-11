@@ -1998,7 +1998,10 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 	}
 
 	bool result = false;
-	if (!walkingToSpawn && (followCreature.expired() || !hasFollowPath) && (!isSummon() || !isMasterInRange)) {
+	if (!walkingToSpawn && (followCreature.expired() || !hasFollowPath) && !isSummon()) {
+		// Free monsters wander randomly. A summon that lost sight of its
+		// master (stairs, holes) stands still and waits instead — it resumes
+		// following once the master is back in range (isMasterInRange).
 		if (getTimeSinceLastMove() >= EVENT_CREATURE_THINK_INTERVAL) {
 			randomStepping = true;
 			// choose a random direction
