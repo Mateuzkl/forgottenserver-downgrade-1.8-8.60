@@ -8281,23 +8281,23 @@ bool Game::playerStopSpyInventory(uint32_t godPlayerId)
 	return g_spy.stopSpyInventory(god);
 }
 
-void Game::forceAddCondition(uint32_t creatureId, Condition* condition)
+void Game::forceAddCondition(uint32_t creatureId, uint64_t lifetimeToken, Condition* condition)
 {
 	Condition_ptr condPtr(condition);
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
-	if (!creature) {
+	if (!creature || creature->getLifetimeToken() != lifetimeToken) {
 		return;
 	}
 
 	creature->addCondition(std::move(condPtr), true);
 }
 
-void Game::forceRemoveCondition(uint32_t creatureId, ConditionType_t type)
+void Game::forceRemoveCondition(uint32_t creatureId, uint64_t lifetimeToken, ConditionType_t type)
 {
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
-	if (!creature) {
+	if (!creature || creature->getLifetimeToken() != lifetimeToken) {
 		return;
 	}
 

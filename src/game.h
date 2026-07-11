@@ -101,8 +101,8 @@ public:
 
 	void start(const std::shared_ptr<ServiceManager>& manager);
 
-	void forceAddCondition(uint32_t creatureId, Condition* condition);
-	void forceRemoveCondition(uint32_t creatureId, ConditionType_t type);
+	void forceAddCondition(uint32_t creatureId, uint64_t lifetimeToken, Condition* condition);
+	void forceRemoveCondition(uint32_t creatureId, uint64_t lifetimeToken, ConditionType_t type);
 
 	bool loadMainMap(std::string_view filename);
 	void loadMap(const std::string& path);

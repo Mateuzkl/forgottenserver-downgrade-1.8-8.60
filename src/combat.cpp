@@ -2277,18 +2277,26 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 
 	auto self = shared_from_this();
 	const uint8_t capturedChainEffect = params.chainEffect;
+	const uint64_t casterLifetimeToken = caster ? caster->getLifetimeToken() : 0;
 	int i = 0;
 	for (const auto& [from, toVector] : targets) {
 		auto delay = i * std::max<int32_t>(MIN_TASK_INTERVAL, ConfigManager::getInteger(ConfigManager::COMBAT_CHAIN_DELAY));
 		++i;
 		for (const auto& to : toVector) {
-			g_scheduler.addEvent(delay, [self, casterId = caster ? caster->getID() : 0, to, from, capturedChainEffect,
+			auto scheduledTarget = g_game.getCreatureByIDShared(to);
+			if (!scheduledTarget) {
+				continue;
+			}
+			const uint64_t targetLifetimeToken = scheduledTarget->getLifetimeToken();
+			g_scheduler.addEvent(delay, [self, casterId = caster ? caster->getID() : 0, casterLifetimeToken,
+			                             to, targetLifetimeToken, from, capturedChainEffect,
 			                             instantSpellName]() {
 				auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
-				Creature* resolvedCaster = resolvedCasterRef.get();
+				Creature* resolvedCaster = resolvedCasterRef &&
+					resolvedCasterRef->getLifetimeToken() == casterLifetimeToken ? resolvedCasterRef.get() : nullptr;
 				auto nextTargetRef = g_game.getCreatureByIDShared(to);
 				Creature* nextTarget = nextTargetRef.get();
-				if (!nextTarget) {
+				if (!nextTarget || nextTarget->getLifetimeToken() != targetLifetimeToken) {
 					return;
 				}
 				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect, nextTarget->getInstanceID());

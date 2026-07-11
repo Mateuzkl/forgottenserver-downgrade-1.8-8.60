@@ -1336,8 +1336,8 @@ bool Creature::addCondition(Condition_ptr condition, bool force /* = false*/)
 		if (walkDelay > 0) {
 			auto condWrapper = std::make_shared<Condition_ptr>(std::move(condition));
 			g_scheduler.addEvent(
-			    createSchedulerTask(walkDelay, ([id = getID(), condWrapper]() {
-				    g_game.forceAddCondition(id, condWrapper->release());
+			    createSchedulerTask(walkDelay, ([id = getID(), token = getLifetimeToken(), condWrapper]() {
+				    g_game.forceAddCondition(id, token, condWrapper->release());
 			    })));
 			return false;
 		}
@@ -1385,7 +1385,9 @@ void Creature::removeCondition(ConditionType_t type, bool force /* = false*/)
 			int64_t walkDelay = getWalkDelay();
 			if (walkDelay > 0) {
 				g_scheduler.addEvent(
-				    createSchedulerTask(walkDelay, ([=, id = getID()]() { g_game.forceRemoveCondition(id, type); })));
+				    createSchedulerTask(walkDelay, ([=, id = getID(), token = getLifetimeToken()]() {
+					    g_game.forceRemoveCondition(id, token, type);
+				    })));
 				return;
 			}
 		}
@@ -1411,7 +1413,9 @@ void Creature::removeCondition(ConditionType_t type, ConditionId_t conditionId, 
 			int64_t walkDelay = getWalkDelay();
 			if (walkDelay > 0) {
 				g_scheduler.addEvent(
-				    createSchedulerTask(walkDelay, ([=, id = getID()]() { g_game.forceRemoveCondition(id, type); })));
+				    createSchedulerTask(walkDelay, ([=, id = getID(), token = getLifetimeToken()]() {
+					    g_game.forceRemoveCondition(id, token, type);
+				    })));
 				return;
 			}
 		}
@@ -1449,7 +1453,9 @@ void Creature::removeCondition(Condition* condition, bool force /* = false*/)
 		int64_t walkDelay = getWalkDelay();
 		if (walkDelay > 0) {
 			g_scheduler.addEvent(createSchedulerTask(
-			    walkDelay, ([id = getID(), type = condition->getType()]() { g_game.forceRemoveCondition(id, type); })));
+			    walkDelay, ([id = getID(), token = getLifetimeToken(), type = condition->getType()]() {
+				    g_game.forceRemoveCondition(id, token, type);
+			    })));
 			return;
 		}
 	}
