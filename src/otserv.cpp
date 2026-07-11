@@ -18,6 +18,7 @@
 #include "protocollogin.h"
 #include "protocoladmin.h"
 #include "protocolstatus.h"
+#include "performance_metrics.h"
 #include "reactor.h"
 #include "rsa.h"
 #include "save_manager.h"
@@ -484,6 +485,7 @@ void startServer()
 	g_reactor.setMaxTasksPerCycle(static_cast<uint32_t>(getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE)));
 	g_reactor.setTimeBudget(std::chrono::milliseconds(getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS)));
 	g_reactor.setMaxInboxSize(static_cast<size_t>(getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE)));
+	g_performanceMetrics.setEnabled(getBoolean(ConfigManager::PERFORMANCE_METRICS_ENABLED));
 
 	LOG_INFO(">> Reactor limits: maxTasks={}, timeBudget={}ms, maxInbox={}",
 	    getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE),

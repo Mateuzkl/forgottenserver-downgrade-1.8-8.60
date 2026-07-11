@@ -12,6 +12,7 @@
 #include "instance_utils.h"
 #include "matrixarea.h"
 #include "monster.h"
+#include "performance_metrics.h"
 #include "scriptmanager.h"
 #include "scheduler.h"
 #include "spells.h"
@@ -926,6 +927,7 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 
 void Combat::doCombat(Creature* caster, Creature* target, std::string_view instantSpellName) const
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
 	if (params.chainCallback) {
 		if (doCombatChain(caster, target, params.aggressive, std::string(instantSpellName))) {
 			return;
@@ -997,6 +999,7 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 
 void Combat::doCombat(Creature* caster, const Position& position, std::string_view instantSpellName) const
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
 	if (params.chainCallback) {
 		if (doCombatChain(caster, nullptr, params.aggressive, std::string(instantSpellName))) {
 			return;
@@ -1390,6 +1393,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 void Combat::doAreaCombat(Creature* caster, const Position& position, const AreaCombat* area, CombatDamage& damage,
                           const CombatParams& params)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatDoAreaCombat);
 	auto tiles =
 	    caster ? getCombatArea(caster->getPosition(), position, area) : getCombatArea(position, position, area);
 

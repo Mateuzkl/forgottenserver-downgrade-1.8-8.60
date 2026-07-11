@@ -534,6 +534,7 @@ bool ConfigManager::load()
 	booleans[Boolean::ADMIN_LOGS] = getGlobalBoolean(L, "adminLogs", false);
 	booleans[Boolean::LOG_TO_FILE] = getGlobalBoolean(L, "logToFile", false);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", true);
+	booleans[Boolean::PERFORMANCE_METRICS_ENABLED] = getGlobalBoolean(L, "performanceMetricsEnabled", false);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");
 	strings[String::LOG_LEVEL] = getGlobalString(L, "logLevel", "info");

@@ -11,6 +11,7 @@
 #include "iologindata.h"
 #include "logger.h"
 #include "player.h"
+#include "performance_metrics.h"
 #include "scriptmanager.h"
 #include "spells.h"
 
@@ -1357,6 +1358,7 @@ void Monster::onEndCondition(ConditionType_t type)
 
 void Monster::onThink(uint32_t interval)
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterOnThink);
 	Creature::onThink(interval);
 
 	if (mType->info.thinkEvent != -1) {
@@ -1482,6 +1484,7 @@ void Monster::onThink(uint32_t interval)
 
 void Monster::doAttacking(uint32_t interval)
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterDoAttacking);
 	if (isRemoved() || isDead()) {
 		return;
 	}
@@ -1859,7 +1862,11 @@ bool Monster::walkToSpawn()
 	return true;
 }
 
-void Monster::onWalk() { Creature::onWalk(); }
+void Monster::onWalk()
+{
+	PerformanceScope performanceScope(PerformanceMetric::MonsterOnWalk);
+	Creature::onWalk();
+}
 
 void Monster::onWalkComplete()
 {

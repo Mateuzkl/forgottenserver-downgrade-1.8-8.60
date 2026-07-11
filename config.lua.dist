@@ -106,6 +106,8 @@ connectionRateLimitMS = 500
 reactorMaxTasksPerCycle = 1000
 reactorTimeBudgetMS = 25
 reactorMaxInboxSize = 200000
+-- Aggregated 5-second latency/hotspot report. Keep disabled outside profiling runs.
+performanceMetricsEnabled = false
 
 -- Deaths
 -- NOTE: Leave deathLosePercent as -1 if you want to use the default

@@ -46,6 +46,7 @@ struct PositionHasher {
 inline constexpr int32_t MAP_MAX_LAYERS = 16;
 
 struct FindPathParams;
+struct PathSearchMetrics;
 
 inline constexpr uint16_t ASTAR_NODE_NONE = 0xFFFFu;
 
@@ -308,7 +309,8 @@ public:
 	const Tile* canWalkTo(const Creature& creature, const Position& pos) const;
 
 	bool getPathMatching(const Creature& creature, std::vector<Direction>& dirList,
-	                     const FrozenPathingConditionCall& pathCondition, const FindPathParams& fpp) const;
+	                     const FrozenPathingConditionCall& pathCondition, const FindPathParams& fpp,
+	                     PathSearchMetrics* metrics = nullptr) const;
 
 	std::map<std::string, Position> waypoints;
 
