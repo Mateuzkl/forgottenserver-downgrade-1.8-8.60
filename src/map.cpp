@@ -865,17 +865,19 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 
 			const uint16_t neighborNodeIdx = nodes.GetNodeByPosition(position.x, position.y);
 			const bool hasNeighborNode = neighborNodeIdx != ASTAR_NODE_NONE;
-			++searchMetrics.tilesRead;
-			const Tile *tile = hasNeighborNode ? getTile(position.x, position.y, position.z)
-				: canWalkTo(creature, position);
-
-			if (!tile) {
-				continue;
+			int_fast32_t extra_cost;
+			if (hasNeighborNode) {
+				extra_cost = nodes.GetNode(neighborNodeIdx).tileWalkCost;
+			} else {
+				++searchMetrics.tilesRead;
+				const Tile* tile = canWalkTo(creature, position);
+				if (!tile) {
+					continue;
+				}
+				extra_cost = AStarNodes::GetTileWalkCost(creature, tile);
 			}
 
 			const int_fast32_t cost = AStarNodes::GetMapWalkCost(node, position);
-			const int_fast32_t extra_cost =
-					AStarNodes::GetTileWalkCost(creature, tile);
 			const int_fast32_t neighbor_g_score = parent_g_score + cost + extra_cost;
 			const int_fast32_t neighbor_h_score =
 					manhattan_heuristic(position.x, position.y);
@@ -893,7 +895,8 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 				// Sifts the node up in the min-heap
 				nodes.OpenNode(neighborNodeIdx);
 			} else {
-				const uint16_t createdNodeIdx = nodes.CreateOpenNode(nodeIdx, position.x, position.y, neighbor_f_score, neighbor_g_score);
+				const uint16_t createdNodeIdx = nodes.CreateOpenNode(
+					nodeIdx, position.x, position.y, neighbor_f_score, neighbor_g_score, extra_cost);
 				if (createdNodeIdx == ASTAR_NODE_NONE) {
 					if (found != ASTAR_NODE_NONE) {
 						break;
@@ -970,6 +973,7 @@ AStarNodes::AStarNodes(uint32_t x, uint32_t y) : heap_size(1), current_node(1), 
 	start.y = static_cast<uint16_t>(y);
 	start.f = 0;
 	start.g_score = 0;
+	start.tileWalkCost = 0;
 	workspace.heap[0] = 0;
 	workspace.node_to_heap[0] = 0;
 	Insert((x << 16) | y, 0);
@@ -1064,7 +1068,7 @@ uint16_t AStarNodes::Find(uint32_t key) const
 }
 
 uint16_t AStarNodes::CreateOpenNode(uint16_t parent, uint32_t x, uint32_t y, int_fast32_t f,
-                                    int_fast32_t g_score)
+                                    int_fast32_t g_score, int_fast32_t tileWalkCost)
 {
 	if (current_node >= MAX_NODES) {
 		return ASTAR_NODE_NONE;
@@ -1078,6 +1082,7 @@ uint16_t AStarNodes::CreateOpenNode(uint16_t parent, uint32_t x, uint32_t y, int
 	node.y = static_cast<uint16_t>(y);
 	node.f = f;
 	node.g_score = g_score;
+	node.tileWalkCost = tileWalkCost;
 	Insert((x << 16) | y, node_index);
 	workspace.heap[heap_size] = node_index;
 	workspace.node_to_heap[node_index] = heap_size;

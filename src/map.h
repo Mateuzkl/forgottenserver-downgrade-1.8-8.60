@@ -55,6 +55,7 @@ struct AStarNode
 	uint16_t parent = ASTAR_NODE_NONE;
 	int_fast32_t f;       // f = g_score + h_score, used for heap ordering
 	int_fast32_t g_score; // actual accumulated cost from start to this node
+	int_fast32_t tileWalkCost;
 	uint16_t x, y;
 };
 
@@ -68,7 +69,8 @@ public:
 	AStarNodes(uint32_t x, uint32_t y);
 	~AStarNodes();
 
-	uint16_t CreateOpenNode(uint16_t parent, uint32_t x, uint32_t y, int_fast32_t f, int_fast32_t g_score);
+	uint16_t CreateOpenNode(uint16_t parent, uint32_t x, uint32_t y, int_fast32_t f, int_fast32_t g_score,
+	                        int_fast32_t tileWalkCost);
 	uint16_t GetBestNode() const;
 	void CloseNode(uint16_t nodeIdx);
 	void OpenNode(uint16_t nodeIdx);
