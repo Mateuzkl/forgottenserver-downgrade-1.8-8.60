@@ -840,12 +840,11 @@ bool Monster::isOpponent(const Creature* creature) const
 		       (!targetPlayer || (targetPlayer != masterPlayer && !masterPlayer->isPartner(targetPlayer)));
 	}
 
+	// A player-owned summon is always a valid opponent, even when its master
+	// has PlayerFlag_IgnoredByMonsters (e.g. GM/ADM) — only the flagged player
+	// himself is ignored (checked above), matching upstream TFS behavior.
 	auto creatureMaster = creature->getMaster();
 	const Player* creatureMasterPlayer = creatureMaster ? creatureMaster->getPlayer() : nullptr;
-	if (creatureMasterPlayer && creatureMasterPlayer->hasFlag(PlayerFlag_IgnoredByMonsters)) {
-		return false;
-	}
-
 	if (player || creatureMasterPlayer) {
 		return true;
 	}
