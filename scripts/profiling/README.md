@@ -22,8 +22,13 @@ symbols, run:
 
 ```bash
 bash tools/build-callgrind.sh
-valgrind --tool=callgrind --callgrind-out-file=callgrind.out.%p ./tfs-valgrind
+./scripts/profiling/capture_callgrind.sh pathfinding 60
 ```
+
+Capture `startup`, `idle`, `pathfinding`, `combat`, `movement` and `stress`
+separately. The helper starts collection disabled and resets counters after the
+server is online, preventing Lua/map startup cost from contaminating runtime.
+See `docs/performance/CALLGRIND_RUNTIME_HOTSPOTS.md`.
 
 Start here:
 
