@@ -102,21 +102,11 @@ bool Loader::getProps(const Node& node, PropStream& props)
 		return false;
 	}
 
-<<<<<<< HEAD
 	// Most OTBM property ranges do not contain escaped control bytes. Point the
 	// stream at the mapped file directly in that common case and avoid a copy.
-	if (std::memchr(node.propsBegin, Node::ESCAPE, static_cast<size_t>(size)) == nullptr) {
+	const char* escapePtr = static_cast<const char*>(std::memchr(node.propsBegin, Node::ESCAPE, static_cast<size_t>(size)));
+	if (escapePtr == nullptr) {
 		props.init(node.propsBegin, static_cast<size_t>(size));
-=======
-	// Fast path: no ESCAPE bytes, so the props can be read in place from the
-	// memory-mapped file without unescaping into propBuffer. The resulting
-	// PropStream (and any string_view obtained from it) aliases the mapped
-	// file and is only valid while this Loader is alive; callers must copy
-	// what they need to keep (all current callers do).
-	const char* escapePtr = static_cast<const char*>(std::memchr(node.propsBegin, Node::ESCAPE, size));
-	if (!escapePtr) {
-		props.init(node.propsBegin, size);
->>>>>>> a2a5c51cc51d449e95934b5bc8cbdc8fdaf03e85
 		return true;
 	}
 

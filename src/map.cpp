@@ -103,23 +103,11 @@ Tile* Map::getTile(uint16_t x, uint16_t y, uint8_t z) const
 
 QTreeLeafNode* Map::getOrCreateLeaf(uint16_t x, uint16_t y)
 {
-<<<<<<< HEAD
-	thread_local const Map* lastMap = nullptr;
-	thread_local QTreeLeafNode* lastLeaf = nullptr;
-	thread_local uint32_t lastLeafBaseX = std::numeric_limits<uint32_t>::max();
-	thread_local uint32_t lastLeafBaseY = std::numeric_limits<uint32_t>::max();
-
-	const uint32_t baseX = x & ~FLOOR_MASK;
-	const uint32_t baseY = y & ~FLOOR_MASK;
-	if (lastMap == this && lastLeaf && baseX == lastLeafBaseX && baseY == lastLeafBaseY) {
-		return lastLeaf;
-=======
 	const uint32_t baseX = x & ~FLOOR_MASK;
 	const uint32_t baseY = y & ~FLOOR_MASK;
 
 	if (cachedLeaf && baseX == cachedLeafBaseX && baseY == cachedLeafBaseY) {
 		return cachedLeaf;
->>>>>>> a2a5c51cc51d449e95934b5bc8cbdc8fdaf03e85
 	}
 
 	QTreeLeafNode::newLeaf = false;
@@ -151,16 +139,9 @@ QTreeLeafNode* Map::getOrCreateLeaf(uint16_t x, uint16_t y)
 		}
 	}
 
-<<<<<<< HEAD
-	lastMap = this;
-	lastLeaf = leaf;
-	lastLeafBaseX = baseX;
-	lastLeafBaseY = baseY;
-=======
 	cachedLeaf = leaf;
 	cachedLeafBaseX = baseX;
 	cachedLeafBaseY = baseY;
->>>>>>> a2a5c51cc51d449e95934b5bc8cbdc8fdaf03e85
 	return leaf;
 }
 
