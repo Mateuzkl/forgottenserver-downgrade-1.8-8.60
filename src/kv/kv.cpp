@@ -5,6 +5,8 @@
 #include "kv/kv.h"
 #include "database.h"
 #include "logger.h"
+#include "performance_metrics.h"
+#include "stats.h"
 #include <fmt/format.h>
 
 int64_t KV::lastTimestamp_ = 0;
@@ -51,6 +53,7 @@ void KVStore::set(const std::string &key, const std::initializer_list<std::pair<
 }
 
 void KVStore::set(const std::string &key, const ValueWrapper &value) {
+	AutoStat stat("KVStore::set", fmt::format("key={} deathId={}", key, g_performanceMetrics.currentDeathId()));
 	{
 		std::scoped_lock lock(mutex_);
 		setLocked(key, value);
@@ -87,6 +90,8 @@ void KVStore::setLocked(const std::string &key, const ValueWrapper &value) {
 }
 
 std::optional<ValueWrapper> KVStore::get(const std::string &key, bool forceLoad) {
+	AutoStat stat("KVStore::get", fmt::format("key={} forceLoad={} deathId={}", key, forceLoad,
+	                                         g_performanceMetrics.currentDeathId()));
 	{
 		std::scoped_lock lock(mutex_);
 		if (!forceLoad) {

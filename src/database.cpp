@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "database.h"
+#include "performance_metrics.h"
 #include "stats.h"
 
 #include "configmanager.h"
@@ -36,7 +37,11 @@ thread_local std::vector<std::string>* tlsQueryCapture = nullptr;
 void recordSqlStats(std::string_view query, std::chrono::steady_clock::time_point start)
 {
 	uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
-	g_stats.addSqlStats(std::make_unique<Stat>(ns, std::string(query.substr(0, 100)), std::string(query.substr(0, 256))));
+	std::string extra(query.substr(0, 256));
+	if (const uint64_t deathId = g_performanceMetrics.currentDeathId(); deathId != 0) {
+		extra = fmt::format("deathId={} {}", deathId, extra);
+	}
+	g_stats.addSqlStats(std::make_unique<Stat>(ns, std::string(query.substr(0, 100)), std::move(extra)));
 }
 #endif
 

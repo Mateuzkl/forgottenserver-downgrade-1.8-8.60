@@ -21,8 +21,23 @@ constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Co
 	"Game::updateCreatureWalk", "Creature::goToFollowCreature", "Creature::onAttacking",
 	"Game::internalMoveCreature", "Map::getPathMatching", "Map::getTile", "Map::moveCreature", "Map::getSpectators", "Monster::onThink",
 	"Monster::onWalk", "Monster::doAttacking", "CombatSpell::castSpell",
-	"Combat::doCombat", "Combat::doAreaCombat",
+	"Combat::doCombat", "Combat::doAreaCombat", "Death::total", "Death::lastHitCallbacks",
+	"Death::experienceCallbacks", "Death::mostDamageCallbacks", "Death::forgeReward", "Death::dropCorpse",
+	"Death::monsterTypeCallback", "Death::creatureCallbacks", "Death::dropLoot", "Death::quickLoot",
+	"Death::lootHighlight", "Death::finalize",
 };
+
+struct DeathTraceState
+{
+	uint64_t id = 0;
+	uint32_t creatureId = 0;
+	std::string creatureName;
+	std::chrono::steady_clock::time_point started;
+	uint64_t packets = 0;
+	uint64_t packetBytes = 0;
+};
+
+thread_local std::vector<DeathTraceState> deathTraceStack;
 
 size_t histogramIndex(uint64_t nanoseconds) noexcept
 {
@@ -134,6 +149,60 @@ void PerformanceMetrics::recordPathInvalidated() noexcept
 	if (isEnabled()) path.invalidated.fetch_add(1, std::memory_order_relaxed);
 }
 
+uint64_t PerformanceMetrics::beginDeathTrace(uint32_t creatureId, std::string_view creatureName)
+{
+	if (!isEnabled()) {
+		return 0;
+	}
+	const uint64_t deathId = nextDeathId.fetch_add(1, std::memory_order_relaxed);
+	deathTraceStack.push_back({deathId, creatureId, std::string(creatureName), std::chrono::steady_clock::now(), 0, 0});
+	LOG_INFO("[ServerDeathTrace] deathId={} phase=start creatureId={} creature={}", deathId, creatureId, creatureName);
+	return deathId;
+}
+
+void PerformanceMetrics::finishDeathTrace(uint64_t deathId)
+{
+	if (deathId == 0 || deathTraceStack.empty()) {
+		return;
+	}
+	const DeathTraceState& state = deathTraceStack.back();
+	if (state.id != deathId) {
+		LOG_WARN("[ServerDeathTrace] mismatched finish expected={} actual={}", state.id, deathId);
+		return;
+	}
+	const uint64_t elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+	    std::chrono::steady_clock::now() - state.started).count();
+	LOG_INFO("[ServerDeathTrace] deathId={} phase=end total_us={} packets={} packet_bytes={} creatureId={} creature={}",
+	         deathId, elapsed, state.packets, state.packetBytes, state.creatureId, state.creatureName);
+	deathTraceStack.pop_back();
+}
+
+void PerformanceMetrics::recordDeathStage(PerformanceMetric metric, uint64_t nanoseconds) const
+{
+	if (deathTraceStack.empty() || metric < PerformanceMetric::DeathTotal || metric >= PerformanceMetric::Count) {
+		return;
+	}
+	LOG_INFO("[ServerDeathTrace] deathId={} stage={} duration_us={:.3f}", deathTraceStack.back().id,
+	         METRIC_NAMES[static_cast<size_t>(metric)], nanoseconds / 1'000.0);
+}
+
+void PerformanceMetrics::recordDeathPacket(uint8_t opcode, size_t bytes, uint32_t playerId) const
+{
+	if (deathTraceStack.empty()) {
+		return;
+	}
+	auto& state = deathTraceStack.back();
+	++state.packets;
+	state.packetBytes += bytes;
+	LOG_INFO("[ServerDeathTrace] deathId={} packet_opcode=0x{:02X} bytes={} playerId={}", state.id, opcode, bytes,
+	         playerId);
+}
+
+uint64_t PerformanceMetrics::currentDeathId() const noexcept
+{
+	return deathTraceStack.empty() ? 0 : deathTraceStack.back().id;
+}
+
 void PerformanceMetrics::maybeReport()
 {
 	if (!isEnabled()) {
@@ -197,6 +266,8 @@ PerformanceScope::~PerformanceScope()
 	if (active) {
 		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
 			std::chrono::steady_clock::now() - started).count();
-		g_performanceMetrics.record(metric, elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0);
+		const uint64_t nanoseconds = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
+		g_performanceMetrics.record(metric, nanoseconds);
+		g_performanceMetrics.recordDeathStage(metric, nanoseconds);
 	}
 }

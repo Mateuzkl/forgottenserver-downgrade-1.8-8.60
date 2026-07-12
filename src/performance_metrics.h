@@ -35,6 +35,18 @@ enum class PerformanceMetric : uint8_t
 	CombatSpellCastSpell,
 	CombatDoCombat,
 	CombatDoAreaCombat,
+	DeathTotal,
+	DeathLastHitCallbacks,
+	DeathExperienceCallbacks,
+	DeathMostDamageCallbacks,
+	DeathForgeReward,
+	DeathDropCorpse,
+	DeathMonsterTypeCallback,
+	DeathCreatureCallbacks,
+	DeathDropLoot,
+	DeathQuickLoot,
+	DeathLootHighlight,
+	DeathFinalize,
 	Count,
 };
 
@@ -52,6 +64,11 @@ public:
 	void recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead, uint64_t pathLength) noexcept;
 	void recordPathReused() noexcept;
 	void recordPathInvalidated() noexcept;
+	uint64_t beginDeathTrace(uint32_t creatureId, std::string_view creatureName);
+	void finishDeathTrace(uint64_t deathId);
+	void recordDeathStage(PerformanceMetric metric, uint64_t nanoseconds) const;
+	void recordDeathPacket(uint8_t opcode, size_t bytes, uint32_t playerId) const;
+	[[nodiscard]] uint64_t currentDeathId() const noexcept;
 	void maybeReport();
 
 private:
@@ -91,6 +108,7 @@ private:
 	PathData path;
 	std::atomic_bool enabled{false};
 	std::atomic<int64_t> nextReportNanoseconds{0};
+	std::atomic<uint64_t> nextDeathId{1};
 };
 
 class PerformanceScope

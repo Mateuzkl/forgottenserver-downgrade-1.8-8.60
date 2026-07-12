@@ -20,6 +20,7 @@
 #include "monster.h"
 #include "npc.h"
 #include "player.h"
+#include "performance_metrics.h"
 #include "protocolstatus.h"
 #include "scheduler.h"
 #include "script.h"
@@ -262,6 +263,8 @@ void ScriptEnvironment::resetEnv()
 	callbackId = 0;
 	timerEvent = false;
 	hasOpenTransaction = false;
+	statsDescription.clear();
+	statsExtraDescription.clear();
 	interface = nullptr;
 	curNpc = nullptr;
 	localMap.clear();
@@ -810,11 +813,12 @@ int LuaScriptInterface::luaErrorHandler(lua_State* L)
 
 bool LuaScriptInterface::callFunction(int params)
 {
+	ScriptEnvironment* scriptEnv = getScriptEnv();
 	int32_t scriptId;
 	int32_t callbackId;
 	bool timerEvent;
 	LuaScriptInterface* scriptInterface;
-	getScriptEnv()->getEventInfo(scriptId, scriptInterface, callbackId, timerEvent);
+	scriptEnv->getEventInfo(scriptId, scriptInterface, callbackId, timerEvent);
 	(void)callbackId;
 	(void)timerEvent;
 	const bool slowTaskWarning = getBoolean(ConfigManager::SLOW_TASK_WARNING);
@@ -850,15 +854,22 @@ bool LuaScriptInterface::callFunction(int params)
 		const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
 		    std::chrono::steady_clock::now() - time_point).count();
 		if (slowTaskWarning && ns > slowThresholdNs) {
-			const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
-			                                           getFileByIdForStats(scriptId);
+			const auto& scriptFile = scriptEnv->getStatsDescription().empty() ?
+			    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId)) :
+			    scriptEnv->getStatsDescription();
 			LOG_WARN(">> Slow Lua callback detected: {}ms [{}]",
 			         ns / 1'000'000, scriptFile);
 		}
 #ifdef STATS_ENABLED
-		const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
-		                                           getFileByIdForStats(scriptId);
-		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
+		const auto& scriptFile = scriptEnv->getStatsDescription().empty() ?
+		    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId)) :
+		    scriptEnv->getStatsDescription();
+		std::string statsExtra = scriptEnv->getStatsExtraDescription();
+		if (const uint64_t deathId = g_performanceMetrics.currentDeathId(); deathId != 0) {
+			statsExtra = statsExtra.empty() ? fmt::format("deathId={}", deathId) :
+			                                fmt::format("{} deathId={}", statsExtra, deathId);
+		}
+		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, std::move(statsExtra)));
 #endif
 	}
 
@@ -868,11 +879,12 @@ bool LuaScriptInterface::callFunction(int params)
 
 void LuaScriptInterface::callVoidFunction(int params)
 {
+	ScriptEnvironment* scriptEnv = getScriptEnv();
 	int32_t scriptId;
 	int32_t callbackId;
 	bool timerEvent;
 	LuaScriptInterface* scriptInterface;
-	getScriptEnv()->getEventInfo(scriptId, scriptInterface, callbackId, timerEvent);
+	scriptEnv->getEventInfo(scriptId, scriptInterface, callbackId, timerEvent);
 	(void)callbackId;
 	(void)timerEvent;
 	const bool slowTaskWarning = getBoolean(ConfigManager::SLOW_TASK_WARNING);
@@ -904,15 +916,22 @@ void LuaScriptInterface::callVoidFunction(int params)
 		const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
 		    std::chrono::steady_clock::now() - time_point).count();
 		if (slowTaskWarning && ns > slowThresholdNs) {
-			const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
-			                                           getFileByIdForStats(scriptId);
+			const auto& scriptFile = scriptEnv->getStatsDescription().empty() ?
+			    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId)) :
+			    scriptEnv->getStatsDescription();
 			LOG_WARN(">> Slow Lua callback detected: {}ms [{}]",
 			         ns / 1'000'000, scriptFile);
 		}
 #ifdef STATS_ENABLED
-		const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
-		                                           getFileByIdForStats(scriptId);
-		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
+		const auto& scriptFile = scriptEnv->getStatsDescription().empty() ?
+		    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId)) :
+		    scriptEnv->getStatsDescription();
+		std::string statsExtra = scriptEnv->getStatsExtraDescription();
+		if (const uint64_t deathId = g_performanceMetrics.currentDeathId(); deathId != 0) {
+			statsExtra = statsExtra.empty() ? fmt::format("deathId={}", deathId) :
+			                                fmt::format("{} deathId={}", statsExtra, deathId);
+		}
+		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, std::move(statsExtra)));
 #endif
 	}
 
@@ -3879,6 +3898,31 @@ int LuaScriptInterface::luaAddEvent(lua_State* L)
 	}
 
 	LuaTimerEventDesc eventDesc;
+	int32_t sourceScriptId;
+	int32_t sourceCallbackId;
+	bool sourceTimerEvent;
+	LuaScriptInterface* sourceInterface;
+	getScriptEnv()->getEventInfo(sourceScriptId, sourceInterface, sourceCallbackId, sourceTimerEvent);
+	(void)sourceCallbackId;
+	(void)sourceTimerEvent;
+
+	std::string sourceFile = sourceInterface ? sourceInterface->getFileByIdForStats(sourceScriptId) :
+	                                          g_luaEnvironment.getFileByIdForStats(sourceScriptId);
+	std::string functionName = "anonymous";
+	int32_t functionLine = 0;
+	lua_pushvalue(L, 1);
+	lua_Debug functionInfo{};
+	if (lua_getinfo(L, ">nS", &functionInfo) != 0) {
+		if (functionInfo.name && functionInfo.name[0] != '\0') {
+			functionName = functionInfo.name;
+		}
+		if (functionInfo.linedefined > 0) {
+			functionLine = functionInfo.linedefined;
+		}
+		if (sourceFile == "(Unknown scriptfile)" && functionInfo.source && functionInfo.source[0] != '\0') {
+			sourceFile = functionInfo.source[0] == '@' ? functionInfo.source + 1 : functionInfo.source;
+		}
+	}
 	eventDesc.parameters.reserve(parameters -
 	                             2); // safe to use -2 since we garanteed that there is at least two parameters
 	for (int i = 0; i < parameters - 2; ++i) {
@@ -3892,10 +3936,15 @@ int LuaScriptInterface::luaAddEvent(lua_State* L)
 	eventDesc.scriptId = getScriptEnv()->getScriptId();
 
 	auto& lastTimerEventId = g_luaEnvironment.lastEventTimerId;
-	eventDesc.eventId = g_scheduler.addEvent(
-	    createSchedulerTask(delay, [lastTimerEventId]() { g_luaEnvironment.executeTimerEvent(lastTimerEventId); }));
+	const uint32_t timerId = lastTimerEventId;
+	eventDesc.statsDescription = fmt::format("{}:{}@{}", sourceFile, functionName, functionLine);
+	eventDesc.statsExtraDescription = fmt::format("timerId={} delay={}ms", timerId, delay);
+	const std::string taskDescription = fmt::format("Lua timer {}", eventDesc.statsDescription);
+	eventDesc.eventId = g_scheduler.addEvent(createSchedulerTaskWithStats(
+	    delay, [timerId]() { g_luaEnvironment.executeTimerEvent(timerId); }, taskDescription,
+	    eventDesc.statsExtraDescription));
 
-	g_luaEnvironment.timerEvents.emplace(lastTimerEventId, std::move(eventDesc));
+	g_luaEnvironment.timerEvents.emplace(timerId, std::move(eventDesc));
 	lua_pushinteger(L, lastTimerEventId++);
 	return 1;
 }
@@ -4628,6 +4677,8 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 		ScriptEnvironment* env = getScriptEnv();
 		env->setTimerEvent();
 		env->setScriptId(timerEventDesc.scriptId, this);
+		env->setTimerEventStats(std::move(timerEventDesc.statsDescription),
+		                       std::move(timerEventDesc.statsExtraDescription));
 		callVoidFunction(timerEventDesc.parameters.size());
 	} else {
 		LOG_ERROR("[Error - LuaScriptInterface::executeTimerEvent] Call stack overflow");
