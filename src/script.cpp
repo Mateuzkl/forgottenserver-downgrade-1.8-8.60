@@ -43,18 +43,25 @@ const std::vector<Scripts::DiscoveredFile>& Scripts::getDiscoveredFiles(const st
 		return it->second;
 	}
 
-	auto cacheIt = discoveredFiles.try_emplace(key).first;
-	auto& files = cacheIt->second;
-	for (fs::recursive_directory_iterator entry(directory), end; entry != end; ++entry) {
-		if (fs::is_regular_file(*entry) && entry->path().extension() == ".lua") {
-			files.push_back({entry->path(), fs::canonical(entry->path()).string()});
+	auto [cacheIt, inserted] = discoveredFiles.try_emplace(key);
+	try {
+		auto& files = cacheIt->second;
+		for (fs::recursive_directory_iterator entry(directory), end; entry != end; ++entry) {
+			if (fs::is_regular_file(*entry) && entry->path().extension() == ".lua") {
+				files.push_back({entry->path(), fs::canonical(entry->path()).string()});
+			}
 		}
-	}
 
-	std::sort(files.begin(), files.end(), [](const DiscoveredFile& left, const DiscoveredFile& right) {
-		return left.path < right.path;
-	});
-	return files;
+		std::sort(files.begin(), files.end(), [](const DiscoveredFile& left, const DiscoveredFile& right) {
+			return left.path < right.path;
+		});
+		return files;
+	} catch (...) {
+		if (inserted) {
+			discoveredFiles.erase(cacheIt);
+		}
+		throw;
+	}
 }
 
 bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload)
