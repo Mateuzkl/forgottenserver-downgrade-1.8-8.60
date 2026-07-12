@@ -989,6 +989,8 @@ ensure_prometheus_cpp() {
     -DCMAKE_INSTALL_PREFIX="${SIMDUTF_PREFIX}"
   cmake --build "${PROMETHEUS_CPP_DIR}/build" --parallel "${JOBS}"
   cmake --install "${PROMETHEUS_CPP_DIR}/build"
+
+  prometheus_cpp_config_exists || die "prometheus-cpp install verification failed at ${SIMDUTF_PREFIX}"
 }
 
 opentelemetry_config_exists() {
@@ -1023,6 +1025,8 @@ ensure_opentelemetry() {
     -DCMAKE_PREFIX_PATH="${SIMDUTF_PREFIX}"
   cmake --build "${OPENTELEMETRY_DIR}/build" --parallel "${JOBS}"
   cmake --install "${OPENTELEMETRY_DIR}/build"
+
+  opentelemetry_config_exists || die "opentelemetry-cpp install verification failed at ${SIMDUTF_PREFIX}"
 }
 
 prepare_repo() {

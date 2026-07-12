@@ -333,6 +333,53 @@ TEST_CASE(test_reactor_cancel_and_replace_within_batch_keeps_single_lineage)
 	CHECK(replacementRuns == 1);
 }
 
+TEST_CASE(test_reactor_time_budget_deferred_scheduled_task_remains_cancellable)
+{
+	// A scheduled task deferred by the time budget is pushed back into the
+	// heap; a cancellation issued afterwards must still be honoured.
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setTimeBudget(std::chrono::milliseconds(1));
+	int victimRuns = 0;
+
+	reactor.schedule(0, [] { std::this_thread::sleep_for(std::chrono::milliseconds(5)); });
+	const uint32_t victimId = reactor.schedule(0, [&victimRuns] { ++victimRuns; });
+	reactor.runOnce();
+	CHECK(victimRuns == 0);
+
+	CHECK(reactor.cancel(victimId));
+	reactor.runOnce();
+	reactor.runOnce();
+	CHECK(victimRuns == 0);
+}
+
+TEST_CASE(test_reactor_cancel_inside_own_callback_reports_not_pending)
+{
+	// stopEventWalk from inside the fired walk callback targets the event
+	// that is currently executing: it must be a no-op consume, reported as
+	// not pending, and must not suppress future events.
+	TaskReactor reactor;
+	startReactor(reactor);
+	int executions = 0;
+	uint32_t selfId = 0;
+	bool selfCancelReportedPending = true;
+
+	selfId = reactor.schedule(0, [&reactor, &selfId, &selfCancelReportedPending, &executions] {
+		++executions;
+		selfCancelReportedPending = reactor.cancel(selfId);
+	});
+	reactor.runOnce();
+	reactor.runOnce();
+
+	CHECK(executions == 1);
+	CHECK(!selfCancelReportedPending);
+
+	bool laterExecuted = false;
+	reactor.schedule(0, [&laterExecuted] { laterExecuted = true; });
+	reactor.runOnce();
+	CHECK(laterExecuted);
+}
+
 TEST_CASE(test_reactor_cancel_reports_whether_task_was_pending)
 {
 	TaskReactor reactor;
