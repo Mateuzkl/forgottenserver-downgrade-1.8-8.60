@@ -2068,7 +2068,7 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 	if (isMovementBlocked() || (!walkingToSpawn && (isIdle || isDead()))) {
 		// we don't have anyone watching, might as well stop walking
 		// or the creature movement is blocked
-		eventWalk = 0;
+		stopEventWalk();
 		return false;
 	}
 

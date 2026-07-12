@@ -18,7 +18,7 @@ constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Co
 	"TaskReactor::runOnce", "TaskReactor::drainInbox", "TaskReactor::drainReadyTasks",
 	"TaskReactor::sort", "TaskReactor::callbacks", "TaskReactor::callback",
 	"TaskReactor::queueLatency", "Game::checkCreatures", "Game::checkCreatureWalk",
-	"Game::updateCreatureWalk", "Creature::goToFollowCreature", "Creature::onAttacking",
+	"Creature::walkExecutionDelay", "Game::updateCreatureWalk", "Creature::goToFollowCreature", "Creature::onAttacking",
 	"Game::internalMoveCreature", "Map::getPathMatching", "Map::getTile", "Map::moveCreature", "Map::getSpectators", "Monster::onThink",
 	"Monster::onWalk", "Monster::doAttacking", "CombatSpell::castSpell",
 	"Combat::doCombat", "Combat::doAreaCombat", "Death::total", "Death::lastHitCallbacks",
@@ -75,6 +75,13 @@ void updateMaximum(std::atomic<uint64_t>& maximum, uint64_t value) noexcept
 {
 	auto current = maximum.load(std::memory_order_relaxed);
 	while (current < value && !maximum.compare_exchange_weak(current, value, std::memory_order_relaxed)) {
+	}
+}
+
+void decrementIfPositive(std::atomic<uint64_t>& value) noexcept
+{
+	auto current = value.load(std::memory_order_relaxed);
+	while (current > 0 && !value.compare_exchange_weak(current, current - 1, std::memory_order_relaxed)) {
 	}
 }
 } // namespace
@@ -147,6 +154,50 @@ void PerformanceMetrics::recordPathReused() noexcept
 void PerformanceMetrics::recordPathInvalidated() noexcept
 {
 	if (isEnabled()) path.invalidated.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordWalkScheduled() noexcept
+{
+	if (!isEnabled()) return;
+	walk.scheduled.fetch_add(1, std::memory_order_relaxed);
+	const uint64_t pending = walk.pending.fetch_add(1, std::memory_order_relaxed) + 1;
+	updateMaximum(walk.pendingMaximum, pending);
+}
+
+void PerformanceMetrics::recordWalkExecuted(uint64_t delayNanoseconds) noexcept
+{
+	if (!isEnabled()) return;
+	walk.executed.fetch_add(1, std::memory_order_relaxed);
+	decrementIfPositive(walk.pending);
+	record(PerformanceMetric::CreatureWalkExecutionDelay, delayNanoseconds);
+}
+
+void PerformanceMetrics::recordWalkCancelled(bool wasQueued) noexcept
+{
+	if (!isEnabled()) return;
+	walk.cancelled.fetch_add(1, std::memory_order_relaxed);
+	if (wasQueued) decrementIfPositive(walk.pending);
+}
+
+void PerformanceMetrics::recordWalkRejectedLifetime() noexcept
+{
+	if (!isEnabled()) return;
+	walk.stale.fetch_add(1, std::memory_order_relaxed);
+	walk.rejectedLifetime.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordWalkRejectedGeneration() noexcept
+{
+	if (!isEnabled()) return;
+	walk.stale.fetch_add(1, std::memory_order_relaxed);
+	walk.rejectedGeneration.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordWalkRejectedEventId() noexcept
+{
+	if (!isEnabled()) return;
+	walk.stale.fetch_add(1, std::memory_order_relaxed);
+	walk.rejectedEventId.fetch_add(1, std::memory_order_relaxed);
 }
 
 uint64_t PerformanceMetrics::beginDeathTrace(uint32_t creatureId, std::string_view creatureName)
@@ -251,6 +302,16 @@ void PerformanceMetrics::maybeReport()
 			 path.pathLength.exchange(0, std::memory_order_relaxed),
 			 path.reused.exchange(0, std::memory_order_relaxed),
 			 path.invalidated.exchange(0, std::memory_order_relaxed));
+	LOG_INFO("[Perf] walk scheduled={} executed={} cancelled={} stale={} rejected_lifetime={} rejected_generation={} rejected_event_id={} pending={} pending_max={}",
+	         walk.scheduled.exchange(0, std::memory_order_relaxed),
+	         walk.executed.exchange(0, std::memory_order_relaxed),
+	         walk.cancelled.exchange(0, std::memory_order_relaxed),
+	         walk.stale.exchange(0, std::memory_order_relaxed),
+	         walk.rejectedLifetime.exchange(0, std::memory_order_relaxed),
+	         walk.rejectedGeneration.exchange(0, std::memory_order_relaxed),
+	         walk.rejectedEventId.exchange(0, std::memory_order_relaxed),
+	         walk.pending.load(std::memory_order_relaxed),
+	         walk.pendingMaximum.exchange(0, std::memory_order_relaxed));
 }
 
 PerformanceScope::PerformanceScope(PerformanceMetric metric) noexcept :

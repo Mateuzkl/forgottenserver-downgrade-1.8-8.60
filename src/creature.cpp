@@ -260,11 +260,6 @@ void Creature::onWalk()
 		onWalkAborted();
 		cancelNextWalk = false;
 	}
-
-	if (eventWalk != 0) {
-		eventWalk = 0;
-		addEventWalk();
-	}
 }
 
 void Creature::onWalk(Direction& dir)
@@ -341,27 +336,35 @@ void Creature::addEventWalk(bool firstStep)
 		return;
 	}
 
-	if (eventWalk != 0) {
-		return;
-	}
-
 	int64_t ticks = getEventStepTicks(firstStep);
 	if (ticks <= 0) {
 		return;
 	}
 
 	const uint32_t safeTicks = static_cast<uint32_t>(std::max<int64_t>(1, ticks));
-	const uint32_t cid = getID();
+	const auto generation = walkEventState.beginScheduling();
+	if (!generation) {
+		return;
+	}
 
-	eventWalk = g_scheduler.addEvent(createSchedulerTask(safeTicks,
-	                                                     [cid]() { g_game.checkCreatureWalk(cid); }));
+	const WalkEventTicket ticket{getHandle(), *generation, OTSYS_TIME() + safeTicks};
+	const uint32_t eventId = g_scheduler.addEvent(createSchedulerTask(
+	    safeTicks, [ticket]() { g_game.checkCreatureWalk(ticket); }));
+	if (walkEventState.commitSchedule(*generation, eventId)) {
+		g_performanceMetrics.recordWalkScheduled();
+	} else if (eventId != 0) {
+		g_scheduler.stopEvent(eventId);
+	}
 }
 
 void Creature::stopEventWalk()
 {
-	if (eventWalk != 0) {
-		g_scheduler.stopEvent(eventWalk);
-		eventWalk = 0;
+	const WalkEventCancellation cancellation = walkEventState.cancel();
+	if (cancellation.wasActive()) {
+		g_performanceMetrics.recordWalkCancelled(cancellation.wasQueued);
+	}
+	if (cancellation.eventId != 0) {
+		g_scheduler.stopEvent(cancellation.eventId);
 	}
 }
 
@@ -520,6 +523,7 @@ CreatureVector Creature::getKillers() const
 
 void Creature::onDeath()
 {
+	stopEventWalk();
 	bool lastHitUnjustified = false;
 	bool mostDamageUnjustified = false;
 	auto self = getSharedCreature(this);

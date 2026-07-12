@@ -5911,13 +5911,33 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 	return true;
 }
 
-void Game::checkCreatureWalk(uint32_t creatureId)
+void Game::checkCreatureWalk(WalkEventTicket ticket)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatureWalk);
-	auto creatureRef = getCreatureByIDShared(creatureId);
+	auto creatureRef = resolveCreature(ticket.creature);
 	Creature* creature = creatureRef.get();
-	if (creature && !creature->isRemoved() && !creature->isDead()) {
-		creature->onWalk();
+	if (!creature) {
+		g_performanceMetrics.recordWalkRejectedLifetime();
+		return;
+	}
+	if (creature->isDead()) {
+		creature->stopEventWalk();
+		return;
+	}
+	if (!creature->walkEventState.beginExecution(ticket.generation)) {
+		if (creature->walkEventState.getGeneration() != ticket.generation) {
+			g_performanceMetrics.recordWalkRejectedGeneration();
+		} else {
+			g_performanceMetrics.recordWalkRejectedEventId();
+		}
+		return;
+	}
+	const int64_t delayMilliseconds = std::max<int64_t>(0, OTSYS_TIME() - ticket.deadlineMilliseconds);
+	g_performanceMetrics.recordWalkExecuted(static_cast<uint64_t>(delayMilliseconds) * 1'000'000);
+
+	creature->onWalk();
+	if (creature->walkEventState.finishExecution(ticket.generation)) {
+		creature->addEventWalk();
 	}
 }
 

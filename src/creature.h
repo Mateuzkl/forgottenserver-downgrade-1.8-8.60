@@ -15,6 +15,7 @@
 #include "observer_ptr.h"
 #include "position.h"
 #include "tile.h"
+#include "walk_event.h"
 
 #include <absl/container/flat_hash_map.h>
 
@@ -159,6 +160,7 @@ public:
 	virtual void setID() = 0;
 	void setRemoved()
 	{
+		stopEventWalk();
 		isInternalRemoved = true;
 		removedTime = OTSYS_TIME();
 		attackedCreature.reset();
@@ -373,8 +375,15 @@ public:
 	void setUseDefense(bool useDefense) { canUseDefense = useDefense; }
 	void setMovementBlocked(bool state)
 	{
+		if (state && !movementBlocked) {
+			stopEventWalk();
+			if (!listWalkDir.empty()) {
+				listWalkDir.clear();
+				onWalkAborted();
+			}
+			cancelNextWalk = false;
+		}
 		movementBlocked = state;
-		cancelNextWalk = true;
 	}
 	bool isMovementBlocked() const { return movementBlocked; }
 
@@ -472,7 +481,7 @@ protected:
 	uint32_t id = 0;
 	uint64_t lifetimeToken = 0;
 	uint32_t scriptEventsBitField = 0;
-	uint32_t eventWalk = 0;
+	WalkEventState walkEventState;
 	uint32_t walkUpdateTicks = 0;
 	uint32_t blockCount = 0;
 	uint32_t blockTicks = 0;

@@ -18,6 +18,7 @@
 #include "position.h"
 #include "raids.h"
 #include "wildcardtree.h"
+#include "walk_event.h"
 
 #include <map>
 #include <shared_mutex>
@@ -511,7 +512,7 @@ public:
 	void saveGameState(bool crash = false);
 
 	// Events
-	void checkCreatureWalk(uint32_t creatureId);
+	void checkCreatureWalk(WalkEventTicket ticket);
 	void updateCreatureWalk(CreatureHandle creature, uint32_t generation);
 	void checkCreatureAttack(CreatureHandle creature);
 	void checkCreatures(size_t index);

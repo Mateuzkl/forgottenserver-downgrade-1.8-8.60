@@ -305,6 +305,7 @@
     <ClInclude Include="..\src\town.h" />
     <ClInclude Include="..\src\trashholder.h" />
     <ClInclude Include="..\src\vocation.h" />
+    <ClInclude Include="..\src\walk_event.h" />
     <ClInclude Include="..\src\weapons.h" />
     <ClInclude Include="..\src\wildcardtree.h" />
     <ClInclude Include="..\src\xtea.h" />

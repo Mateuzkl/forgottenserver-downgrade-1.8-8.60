@@ -21,6 +21,7 @@ enum class PerformanceMetric : uint8_t
 	ReactorQueueLatency,
 	GameCheckCreatures,
 	GameCheckCreatureWalk,
+	CreatureWalkExecutionDelay,
 	GameUpdateCreatureWalk,
 	CreatureGoToFollow,
 	CreatureOnAttacking,
@@ -64,6 +65,12 @@ public:
 	void recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead, uint64_t pathLength) noexcept;
 	void recordPathReused() noexcept;
 	void recordPathInvalidated() noexcept;
+	void recordWalkScheduled() noexcept;
+	void recordWalkExecuted(uint64_t delayNanoseconds) noexcept;
+	void recordWalkCancelled(bool wasQueued) noexcept;
+	void recordWalkRejectedLifetime() noexcept;
+	void recordWalkRejectedGeneration() noexcept;
+	void recordWalkRejectedEventId() noexcept;
 	uint64_t beginDeathTrace(uint32_t creatureId, std::string_view creatureName);
 	void finishDeathTrace(uint64_t deathId);
 	void recordDeathStage(PerformanceMetric metric, uint64_t nanoseconds) const;
@@ -103,9 +110,23 @@ private:
 		std::atomic<uint64_t> invalidated{0};
 	};
 
+	struct WalkData
+	{
+		std::atomic<uint64_t> scheduled{0};
+		std::atomic<uint64_t> executed{0};
+		std::atomic<uint64_t> cancelled{0};
+		std::atomic<uint64_t> stale{0};
+		std::atomic<uint64_t> rejectedLifetime{0};
+		std::atomic<uint64_t> rejectedGeneration{0};
+		std::atomic<uint64_t> rejectedEventId{0};
+		std::atomic<uint64_t> pending{0};
+		std::atomic<uint64_t> pendingMaximum{0};
+	};
+
 	std::array<MetricData, static_cast<size_t>(PerformanceMetric::Count)> metrics;
 	ReactorData reactor;
 	PathData path;
+	WalkData walk;
 	std::atomic_bool enabled{false};
 	std::atomic<int64_t> nextReportNanoseconds{0};
 	std::atomic<uint64_t> nextDeathId{1};

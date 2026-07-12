@@ -2463,7 +2463,7 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 
 		lastLogout = time(nullptr);
 
-		if (eventWalk != 0) {
+		if (walkEventState.isQueued() || walkEventState.isExecuting()) {
 			setFollowCreature(nullptr);
 		}
 
@@ -4993,7 +4993,15 @@ void Player::onWalkComplete()
 	}
 }
 
-void Player::stopWalk() { cancelNextWalk = true; }
+void Player::stopWalk()
+{
+	stopEventWalk();
+	if (!listWalkDir.empty()) {
+		listWalkDir.clear();
+		onWalkAborted();
+	}
+	cancelNextWalk = false;
+}
 
 LightInfo Player::getCreatureLight() const
 {

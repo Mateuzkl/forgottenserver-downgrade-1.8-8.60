@@ -244,6 +244,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/town.h
 	${CMAKE_CURRENT_LIST_DIR}/trashholder.h
 	${CMAKE_CURRENT_LIST_DIR}/vocation.h
+	${CMAKE_CURRENT_LIST_DIR}/walk_event.h
 	${CMAKE_CURRENT_LIST_DIR}/weapon_proficiency.h
 	${CMAKE_CURRENT_LIST_DIR}/weapons.h
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.h
