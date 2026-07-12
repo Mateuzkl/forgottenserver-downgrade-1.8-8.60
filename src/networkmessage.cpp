@@ -143,6 +143,7 @@ void addAstraItemMetadata(NetworkMessage& msg, const ItemType& it)
 void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
                              bool sendAstraItemState, bool sendAstraQuiverCountU16)
 {
+	static_cast<void>(sendQuickLootFlags);
 	addItemId(id);
 
 	const ItemType& it = Item::items[id];
@@ -153,10 +154,6 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 		addByte(count);
 	} else if (it.isSplash() || it.isFluidContainer()) {
 		addByte(fluidMap[count & 7]);
-	}
-
-	if (sendQuickLootFlags && it.isContainer()) {
-		addByte(0);
 	}
 
 	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
@@ -174,6 +171,7 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
                              bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16)
 {
+	static_cast<void>(sendQuickLootFlags);
 	addItemId(item->getID());
 
 	const ItemType& it = Item::items[item->getID()];
@@ -189,10 +187,6 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 		addByte(static_cast<uint8_t>(std::min<uint16_t>(0xFF, item->getItemCount())));
 	} else if (it.isSplash() || it.isFluidContainer()) {
 		addByte(fluidMap[item->getFluidType() & 7]);
-	}
-
-	if (sendQuickLootFlags && it.isContainer()) {
-		addByte(0);
 	}
 
 	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
