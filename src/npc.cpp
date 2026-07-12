@@ -136,6 +136,7 @@ bool loadScripts(bool reload /* = false */)
 
 		LOG_INFO(fmt::format(">> Loading NPC scripts from {}", dirPath.string()));
 
+		const auto discoveryStart = std::chrono::steady_clock::now();
 		std::vector<fs::path> files;
 		try {
 			for (const auto& entry : fs::recursive_directory_iterator(dirPath)) {
@@ -153,9 +154,12 @@ bool loadScripts(bool reload /* = false */)
 		}
 
 		std::sort(files.begin(), files.end());
+		g_logger().info(">> NPC script discovery '{}': {:.3f} s ({} files).", dirPath.string(),
+		                std::chrono::duration<double>(std::chrono::steady_clock::now() - discoveryStart).count(), files.size());
 
 		lua_State* L = scriptInterface->getLuaState();
 		lua_newtable(L);
+		const auto executionStart = std::chrono::steady_clock::now();
 		for (const auto& path : files) {
 			const std::string filename = path.filename().generic_string();
 			const std::string relativeFile = path.lexically_relative(dirPath).generic_string();
@@ -193,23 +197,28 @@ bool loadScripts(bool reload /* = false */)
 			lua_pushnil(L);
 			lua_setglobal(L, "__npcCurrentScriptRoot");
 		}
+		g_logger().info(">> NPC script execution '{}': {:.3f} s.", dirPath.string(),
+		                std::chrono::duration<double>(std::chrono::steady_clock::now() - executionStart).count());
 	}
 
 	// Summary of registered NPC types (hybrid: Lua + XML)
 	size_t luaCount = 0;
+	const bool debugNpcTypes = g_logger().isEnabled(LogLevel::DEBUG);
 	for (const auto& it : npcTypes) {
 		const std::string& ntName = it.first;
 		const auto& ntType = it.second;
 		if (ntType->fromLua) {
 			++luaCount;
-			std::ostringstream ss;
-			ss << "   [Lua NPC] '" << ntName << "' lookType=" << ntType->defaultOutfit.lookType;
-			if (ntType->npcEventHandler) {
-				ss << " events(say=" << ntType->npcEventHandler->creatureSayEvent 
-				   << " appear=" << ntType->npcEventHandler->creatureAppearEvent 
-				   << " think=" << ntType->npcEventHandler->thinkEvent << ")";
+			if (debugNpcTypes) {
+				std::ostringstream ss;
+				ss << "   [Lua NPC] '" << ntName << "' lookType=" << ntType->defaultOutfit.lookType;
+				if (ntType->npcEventHandler) {
+					ss << " events(say=" << ntType->npcEventHandler->creatureSayEvent
+					   << " appear=" << ntType->npcEventHandler->creatureAppearEvent
+					   << " think=" << ntType->npcEventHandler->thinkEvent << ")";
+				}
+				LOG_DEBUG(ss.str());
 			}
-			LOG_DEBUG(ss.str());
 			
 			if (ntType->defaultOutfit.lookType == 0 && ntType->defaultOutfit.lookTypeEx == 0) {
 				LOG_WARN("   [Warning] Lua NPC '" + ntName + "' has NO outfit (lookType=0) - will be INVISIBLE!");

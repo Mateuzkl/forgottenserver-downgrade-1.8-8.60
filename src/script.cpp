@@ -31,6 +31,30 @@ void Scripts::clearLoadedFiles(const std::string& folderName)
 	std::erase_if(loadedFiles, [&prefix](const std::string& loadedFile) {
 		return loadedFile.starts_with(prefix);
 	});
+	discoveredFiles.clear();
+}
+
+const std::vector<Scripts::DiscoveredFile>& Scripts::getDiscoveredFiles(const std::filesystem::path& directory)
+{
+	namespace fs = std::filesystem;
+
+	const std::string key = directory.generic_string();
+	if (const auto it = discoveredFiles.find(key); it != discoveredFiles.end()) {
+		return it->second;
+	}
+
+	auto cacheIt = discoveredFiles.try_emplace(key).first;
+	auto& files = cacheIt->second;
+	for (fs::recursive_directory_iterator entry(directory), end; entry != end; ++entry) {
+		if (fs::is_regular_file(*entry) && entry->path().extension() == ".lua") {
+			files.push_back({entry->path(), fs::canonical(entry->path()).string()});
+		}
+	}
+
+	std::sort(files.begin(), files.end(), [](const DiscoveredFile& left, const DiscoveredFile& right) {
+		return left.path < right.path;
+	});
+	return files;
 }
 
 bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload)
@@ -43,37 +67,41 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 		return false;
 	}
 
+	const auto discoveryDir = folderName.starts_with("scripts/") ? (fs::current_path() / "data" / "scripts") : dir;
+	const auto discoveryStart = std::chrono::steady_clock::now();
+	const auto& discovered = getDiscoveredFiles(discoveryDir);
+	const auto discoveryElapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - discoveryStart).count();
+
 	bool scriptsConsoleLogs = getBoolean(ConfigManager::SCRIPTS_CONSOLE_LOGS);
 	std::vector<std::string> disabled = {}, loaded = {}, reloaded = {};
-
-	fs::recursive_directory_iterator endit;
 	std::vector<std::pair<fs::path, std::string>> v;
+	v.reserve(discovered.size());
 	static constexpr std::string_view disable = "#";
-	for (fs::recursive_directory_iterator it(dir); it != endit; ++it) {
-		const fs::path relative = fs::relative(it->path(), dir);
+	for (const auto& file : discovered) {
+		const fs::path relative = file.path.lexically_relative(dir);
+		if (relative.empty() || relative.begin()->string() == "..") {
+			continue;
+		}
 		const std::string topLevel = (relative.begin() != relative.end()) ? (*relative.begin()).string() : "";
 		if ((topLevel == "lib" && !isLib) || topLevel == "events" ||
 		    (topLevel == "chatchannels" && folderName != "scripts/chatchannels")) {
 			continue;
 		}
-		if (fs::is_regular_file(*it) && it->path().extension() == ".lua") {
-			size_t found = it->path().filename().string().find(disable);
-			if (found != std::string::npos) {
-				if (scriptsConsoleLogs) {
-					const auto& scrName = it->path().filename().string();
-					disabled.push_back(
-					    fmt::format("\"{}\"", fmt::format(fg(fmt::color::yellow), "{}",
-					                                      std::string_view(scrName.data(), scrName.size() - 4))));
-				}
-				continue;
+
+		const auto filename = file.path.filename().string();
+		if (filename.find(disable) != std::string::npos) {
+			if (scriptsConsoleLogs) {
+				disabled.push_back(fmt::format("\"{}\"", fmt::format(fg(fmt::color::yellow), "{}",
+				                                                  std::string_view(filename.data(), filename.size() - 4))));
 			}
-			std::string canonical = fs::canonical(it->path()).string();
-			if (!loadedFiles.contains(canonical)) {
-				v.emplace_back(it->path(), std::move(canonical));
-			}
+			continue;
+		}
+		if (!loadedFiles.contains(file.canonicalPath)) {
+			v.emplace_back(file.path, file.canonicalPath);
 		}
 	}
-	sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+
+	const auto executionStart = std::chrono::steady_clock::now();
 	for (auto& [path, canonical] : v) {
 		const std::string scriptFile = path.string();
 		if (scriptInterface.loadFile(scriptFile) == -1) {
@@ -97,6 +125,8 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 			}
 		}
 	}
+	g_logger().info(">> Script phase '{}': {:.3f} s discovery, {:.3f} s execution ({} files).", folderName,
+	                discoveryElapsed, std::chrono::duration<double>(std::chrono::steady_clock::now() - executionStart).count(), v.size());
 
 	if (scriptsConsoleLogs) {
 		if (!disabled.empty()) {

@@ -7,6 +7,10 @@
 #include "enums.h"
 #include "luascript.h"
 
+#include <filesystem>
+#include <unordered_map>
+#include <unordered_set>
+
 class Scripts
 {
 public:
@@ -16,12 +20,24 @@ public:
 	bool loadScripts(const std::string& folderName, bool isLib, bool reload);
 	LuaScriptInterface& getScriptInterface() { return scriptInterface; }
 
-	void clearLoadedFiles() { loadedFiles.clear(); }
+	void clearLoadedFiles()
+	{
+		loadedFiles.clear();
+		discoveredFiles.clear();
+	}
 	void clearLoadedFiles(const std::string& folderName);
 
 private:
+	struct DiscoveredFile {
+		std::filesystem::path path;
+		std::string canonicalPath;
+	};
+
+	const std::vector<DiscoveredFile>& getDiscoveredFiles(const std::filesystem::path& directory);
+
 	LuaScriptInterface scriptInterface;
-	std::set<std::string> loadedFiles;
+	std::unordered_set<std::string> loadedFiles;
+	std::unordered_map<std::string, std::vector<DiscoveredFile>> discoveredFiles;
 };
 
 #endif
