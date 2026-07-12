@@ -8,6 +8,7 @@
 #include "bed.h"
 #include "chat.h"
 #include "configmanager.h"
+#include "creature_scheduler_metrics.h"
 #include "databasemanager.h"
 #include "databasetasks.h"
 #include "depotchest.h"
@@ -1627,6 +1628,9 @@ void LuaScriptInterface::registerFunctions()
 
 	// cleanMap()
 	lua_register(luaState, "cleanMap", LuaScriptInterface::luaCleanMap);
+
+	// getCreatureSchedulerStats()
+	lua_register(luaState, "getCreatureSchedulerStats", LuaScriptInterface::luaGetCreatureSchedulerStats);
 
 	// debugPrint(text)
 	lua_register(luaState, "debugPrint", LuaScriptInterface::luaDebugPrint);
@@ -3988,6 +3992,102 @@ int LuaScriptInterface::luaCleanMap(lua_State* L)
 {
 	// cleanMap()
 	lua_pushinteger(L, g_game.map.clean());
+	return 1;
+}
+
+int LuaScriptInterface::luaGetCreatureSchedulerStats(lua_State* L)
+{
+	// getCreatureSchedulerStats()
+	auto& sched = g_creatureSchedulerMetrics;
+	std::string report;
+	report.reserve(2048);
+
+	const auto append = [&report](std::string&& line) {
+		report += line;
+		report += '\n';
+	};
+
+	append(fmt::format("Creature scheduler stats (creatureSchedulerMetrics = {})", sched.isEnabled() ? "on" : "off"));
+	append(fmt::format("online: {} players, {} monsters, {} npcs", g_game.getPlayersOnline(),
+	                   g_game.getMonstersOnline(), g_game.getNpcsOnline()));
+
+	const uint64_t walkScheduled = sched.walkScheduled.load(std::memory_order_relaxed);
+	const uint64_t walkExecuted = sched.walkExecuted.load(std::memory_order_relaxed);
+	const uint64_t walkCancelled = sched.walkCancelled.load(std::memory_order_relaxed);
+	append(fmt::format("walk events: {} scheduled, {} executed, {} cancelled, {} stale, {} pending", walkScheduled,
+	                   walkExecuted, walkCancelled, sched.walkStale.load(std::memory_order_relaxed),
+	                   sched.walkPending()));
+	append(fmt::format("walk rejected: {} generation, {} event-id",
+	                   sched.walkRejectedGeneration.load(std::memory_order_relaxed),
+	                   sched.walkRejectedEventId.load(std::memory_order_relaxed)));
+
+	const auto& delay = sched.walkExecutionDelay;
+	append(fmt::format("walk delay us: p50 {}, p95 {}, p99 {}, max {} ({} samples)", delay.percentileMicroseconds(0.50),
+	                   delay.percentileMicroseconds(0.95), delay.percentileMicroseconds(0.99),
+	                   delay.maximumMicroseconds.load(std::memory_order_relaxed),
+	                   delay.calls.load(std::memory_order_relaxed)));
+
+	append(fmt::format("follow updates: {} requested, {} reuse, {} backoff, {} in-flight, {} executed, {} stale",
+	                   sched.followRequested.load(std::memory_order_relaxed),
+	                   sched.followCoalescedReuse.load(std::memory_order_relaxed),
+	                   sched.followCoalescedBackoff.load(std::memory_order_relaxed),
+	                   sched.followCoalescedPending.load(std::memory_order_relaxed),
+	                   sched.followExecuted.load(std::memory_order_relaxed),
+	                   sched.followStale.load(std::memory_order_relaxed)));
+
+	const auto path = g_performanceMetrics.pathSnapshot();
+	const uint64_t pathAttempts = path.requests + path.reused;
+	const double reuseRate = pathAttempts > 0 ? (100.0 * static_cast<double>(path.reused)) / static_cast<double>(pathAttempts) : 0.0;
+	append(fmt::format("path: {} computed ({} ok, {} failed), {} reused ({:.1f}%), {} invalidated, {} nodes, {} tiles",
+	                   path.requests, path.successes, path.failures, path.reused, reuseRate, path.invalidated,
+	                   path.nodesVisited, path.tilesRead));
+
+	const uint64_t moves = sched.moveCalls.load(std::memory_order_relaxed);
+	const uint64_t spectatorSum = sched.moveSpectatorsTotal.load(std::memory_order_relaxed);
+	const uint64_t playerSum = sched.movePlayerSpectatorsTotal.load(std::memory_order_relaxed);
+	append(fmt::format("move fan-out: {} moves, avg {:.1f} spectators (max {}), avg {:.1f} players", moves,
+	                   moves > 0 ? static_cast<double>(spectatorSum) / static_cast<double>(moves) : 0.0,
+	                   sched.moveSpectatorsMaximum.load(std::memory_order_relaxed),
+	                   moves > 0 ? static_cast<double>(playerSum) / static_cast<double>(moves) : 0.0));
+
+	append(fmt::format("network movement: {} packets, {} bytes",
+	                   sched.networkMovePackets.load(std::memory_order_relaxed),
+	                   sched.networkMoveBytes.load(std::memory_order_relaxed)));
+
+	const auto reactor = g_performanceMetrics.reactorSnapshot();
+	append(fmt::format("reactor: queue {} (max {}), {} deferred, {} expired, {} dropped", reactor.queueCurrent,
+	                   reactor.queueMaximum, reactor.deferred, reactor.expired, reactor.dropped));
+	append(fmt::format("dispatcher: {} tasks processed, {} slow", g_dispatcher.getTotalTasksProcessed(),
+	                   g_dispatcher.getSlowTaskCount()));
+
+	if (g_performanceMetrics.isEnabled()) {
+		append(fmt::format("timings us: name: calls | avg | p95 | p99 | max"));
+		const auto timing = [&](PerformanceMetric metric) {
+			const auto data = g_performanceMetrics.snapshot(metric);
+			if (data.calls == 0) {
+				return;
+			}
+			append(fmt::format("  {}: {} | {} | {} | {} | {}", PerformanceMetrics::metricName(metric), data.calls,
+			                   data.totalNanoseconds / data.calls / 1000,
+			                   g_performanceMetrics.percentileNanoseconds(metric, 95) / 1000,
+			                   g_performanceMetrics.percentileNanoseconds(metric, 99) / 1000,
+			                   data.maximumNanoseconds / 1000));
+		};
+		timing(PerformanceMetric::GameCheckCreatures);
+		timing(PerformanceMetric::GameCheckCreatureWalk);
+		timing(PerformanceMetric::GameUpdateCreatureWalk);
+		timing(PerformanceMetric::MonsterOnThink);
+		timing(PerformanceMetric::CreatureOnAttacking);
+		timing(PerformanceMetric::MonsterDoAttacking);
+		timing(PerformanceMetric::CreatureExecuteConditions);
+		timing(PerformanceMetric::MapGetPathMatching);
+		timing(PerformanceMetric::MapMoveCreature);
+		timing(PerformanceMetric::MapGetSpectators);
+	} else {
+		append(fmt::format("timings: enable performanceMetricsEnabled for method latencies"));
+	}
+
+	Lua::pushString(L, report);
 	return 1;
 }
 
