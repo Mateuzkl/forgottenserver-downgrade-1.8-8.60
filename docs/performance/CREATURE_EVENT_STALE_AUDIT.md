@@ -95,4 +95,33 @@ double *scheduling*, but not lineage forking after a missed cancellation.
    tracked event, so a mismatch proves the callback belongs to a cancelled
    lineage — no false positives. Rejections count as `creature_walk_stale` +
    `creature_walk_rejected_generation` and are expected to stay at 0; any
-   nonzero value means a new cancellation hole appeared.
+   nonzero value means a new cancellation hole appeared. Rejected events are
+   a terminal state in the pending balance:
+   `pending = scheduled - executed - cancelled - rejected`.
+
+## Confirmed defect 3: reentrant re-arm fork (no cancellation involved)
+
+Found by adversarial review after the first two fixes landed. The re-arm in
+`Creature::onWalk` forked a lineage even with cancellation working perfectly:
+
+```text
+E1 fires -> onWalk -> getNextStep false (walk segment exhausted)
+    -> stopEventWalk           (consume of the firing event; gen G -> G+1)
+    -> onWalkComplete -> Monster::walkToSpawn -> startAutoWalk
+    -> addEventWalk schedules E2 (gen G+1, eventWalk = E2)   [inside onWalk!]
+back at the re-arm: eventWalk == E2 != 0
+    -> eventWalk = 0; addEventWalk() schedules E3            (E2 orphaned)
+E2 and E3 both carry the CURRENT generation -> generation defense blind,
+reactor fix irrelevant (E2 was never cancelled) -> permanent double lineage.
+```
+
+Reachable in vanilla gameplay: monsters returning to spawn walk in partial
+path segments (`walkToSpawn` uses `maxTargetDist = distance - 5`,
+`walkToSpawnRadius = 15` by default), so every segment boundary forked. This
+is a major contributor to the `/stresssummon` CPU creep — summons that lose
+their target return to spawn constantly.
+
+Fix: `onWalk` snapshots `walkGeneration` on entry and only performs the
+consume-and-re-arm when the generation is unchanged. A changed generation
+means `stopEventWalk` ran during the step, and whatever event was scheduled
+afterwards is already correctly tracked — re-arming would untrack it.

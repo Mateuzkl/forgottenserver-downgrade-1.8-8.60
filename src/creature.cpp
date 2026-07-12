@@ -232,6 +232,14 @@ void Creature::onIdleStatus()
 
 void Creature::onWalk()
 {
+	// Snapshot the walk generation: if it changes during this step, a
+	// stopEventWalk ran (path exhaustion, teleport, speed change) and any
+	// event scheduled meanwhile — e.g. Monster::onWalkComplete ->
+	// walkToSpawn -> addEventWalk inside this very callback — is already
+	// correctly tracked. Re-arming below would untrack that event and fork
+	// a second permanent walk lineage.
+	const uint32_t generationAtEntry = walkGeneration;
+
 	if (getWalkDelay() <= 0) {
 		Direction dir;
 		uint32_t flags = FLAG_IGNOREFIELDDAMAGE;
@@ -262,7 +270,7 @@ void Creature::onWalk()
 		cancelNextWalk = false;
 	}
 
-	if (eventWalk != 0) {
+	if (walkGeneration == generationAtEntry && eventWalk != 0) {
 		eventWalk = 0;
 		addEventWalk();
 	}
