@@ -80,6 +80,7 @@ private:
 
 	std::unordered_set<uint32_t> cancelled;
 	std::unordered_set<uint32_t> activeIdentifiers;
+	std::unordered_set<uint32_t> pendingCancellations;
 	std::vector<Task> taskHeap;
 
 	std::atomic<uint32_t> nextIdentifier{0};

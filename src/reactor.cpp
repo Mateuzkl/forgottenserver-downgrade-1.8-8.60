@@ -146,7 +146,7 @@ void TaskReactor::cancel(uint32_t taskIdentifier)
 
 	{
 		std::scoped_lock lock(mutex);
-		if (activeIdentifiers.contains(taskIdentifier)) {
+		if (activeIdentifiers.contains(taskIdentifier) && pendingCancellations.insert(taskIdentifier).second) {
 			cancelInbox.push_back(taskIdentifier);
 		}
 	}
@@ -295,7 +295,12 @@ void TaskReactor::drainInbox(std::vector<Task>& readyTasks, std::chrono::steady_
 	}
 
 	for (uint32_t identifier : cancellations) {
-		cancelled.insert(identifier);
+		std::scoped_lock lock(mutex);
+		if (activeIdentifiers.contains(identifier)) {
+			cancelled.insert(identifier);
+		} else {
+			pendingCancellations.erase(identifier);
+		}
 	}
 
 	const auto now = std::chrono::steady_clock::now();
@@ -310,6 +315,7 @@ void TaskReactor::drainInbox(std::vector<Task>& readyTasks, std::chrono::steady_
 		if (!task.hasExpired(now)) {
 			readyTasks.push_back(std::move(task));
 		} else {
+			task.function = nullptr;
 			g_performanceMetrics.recordTaskExpired();
 		}
 	}
@@ -329,6 +335,7 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks, std::chrono::st
 		if (cancelled.erase(readyTask.identifier) > 0 || readyTask.hasExpired(now)) {
 			std::scoped_lock lock(mutex);
 			activeIdentifiers.erase(readyTask.identifier);
+			pendingCancellations.erase(readyTask.identifier);
 			if (readyTask.hasExpired(now)) {
 				g_performanceMetrics.recordTaskExpired();
 			}
@@ -374,6 +381,7 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks, std::chrono::
 		if (task.identifier != 0) {
 			std::scoped_lock lock(mutex);
 			activeIdentifiers.erase(task.identifier);
+			pendingCancellations.erase(task.identifier);
 		}
 
 		try {
