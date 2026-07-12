@@ -60,8 +60,8 @@ deterministic and requires no RNG.
 
 ### Movement/spectators
 
-`SpectatorVec::addSpectators` reuses a thread-local flat hash workspace instead
-of allocating one on every movement merge. Empty/self merges fast-return.
+`SpectatorVec::addSpectators` merges spectators with `std::sort` and
+`std::unique`. Empty/self merges fast-return.
 Movement stack-position storage reserves only the number of player spectators.
 Spectator cache lifetime/invalidation is unchanged.
 

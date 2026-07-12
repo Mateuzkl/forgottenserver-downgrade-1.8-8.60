@@ -44,8 +44,7 @@ These numbers led directly to async Task Board persistence and C++ Bestiary/Boss
 No post-final runtime percentile is claimed yet. Run same kill scenario, then compare only newly appended OTS Stats entries. A valid Callgrind capture must have non-zero size.
 
 ```bash
-cd '/mnt/c/Users/Mateus/Desktop/forge/carpet system/forgottenserver-downgrade-1.8-8.60'
-
+# Run from the repository root.
 ./build-release/tfs
 ```
 
