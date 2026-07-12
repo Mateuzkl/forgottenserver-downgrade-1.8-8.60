@@ -81,14 +81,18 @@ double *scheduling*, but not lineage forking after a missed cancellation.
 - `getSpectators` cache (`map.cpp:446-551`) — though `clearSpectatorCache()` is a
   full flush on every tile add/remove (`tile.cpp:993,1232,1670`), worth metrics.
 
-## Fix plan (post-instrumentation)
+## Fixes (implemented on this branch)
 
-1. `executeReadyTasks`: drain `cancelInbox` into `cancelled` and recheck before
-   each `task.function()` (same lock it already takes for `activeIdentifiers`).
-2. Defense in depth: per-creature `walkGeneration` captured by the walk lambda;
-   `checkCreatureWalk` rejects mismatched generations (counted as
-   `creature_walk_rejected_generation`).
-3. Erase executed identifiers from `cancelled` to stop the set leak.
-
-Phase 0 (this branch) only counts these occurrences (`creature_walk_stale`)
-without changing behaviour, so the fix can be measured against a baseline.
+1. `executeReadyTasks` drains `cancelInbox` into `cancelled` and rechecks
+   before each `task.function()`, under the lock it already takes for
+   `activeIdentifiers`; consumed identifiers are erased, which also stops the
+   `cancelled` set leak. Covered red-to-green by
+   `test_reactor_cancel_from_earlier_task_in_same_batch` and
+   `test_reactor_cancel_and_replace_within_batch_keeps_single_lineage`.
+2. Defense in depth: `checkCreatureWalk` rejects callbacks whose captured
+   `walkGeneration` mismatches the creature's. Correctness argument: the
+   generation is bumped only by `stopEventWalk`, which always cancels the
+   tracked event, so a mismatch proves the callback belongs to a cancelled
+   lineage — no false positives. Rejections count as `creature_walk_stale` +
+   `creature_walk_rejected_generation` and are expected to stay at 0; any
+   nonzero value means a new cancellation hole appeared.

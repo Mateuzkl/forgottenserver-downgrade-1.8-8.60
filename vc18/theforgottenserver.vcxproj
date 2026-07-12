@@ -262,6 +262,7 @@
     <ClCompile Include="..\src\map.cpp" />
     <ClCompile Include="..\src\mapcache.cpp" />
     <ClCompile Include="..\src\matrixarea.cpp" />
+    <ClCompile Include="..\src\metrics.cpp" />
     <ClCompile Include="..\src\monster.cpp" />
     <ClCompile Include="..\src\monsters.cpp" />
     <ClCompile Include="..\src\mounts.cpp" />
@@ -339,6 +340,7 @@
     <ClInclude Include="..\src\container.h" />
     <ClInclude Include="..\src\const.h" />
     <ClInclude Include="..\src\creature.h" />
+    <ClInclude Include="..\src\creature_scheduler_metrics.h" />
     <ClInclude Include="..\src\creatureevent.h" />
     <ClInclude Include="..\src\cylinder.h" />
     <ClInclude Include="..\src\database.h" />
@@ -376,6 +378,7 @@
     <ClInclude Include="..\src\luascript.h" />
     <ClInclude Include="..\src\mailbox.h" />
     <ClInclude Include="..\src\map.h" />
+    <ClInclude Include="..\src\metrics.h" />
     <ClInclude Include="..\src\mapcache.h" />
     <ClInclude Include="..\src\matrixarea.h" />
     <ClInclude Include="..\src\monster.h" />

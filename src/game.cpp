@@ -5905,19 +5905,23 @@ void Game::checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration, int64
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
 
-	// A generation mismatch means stopEventWalk cancelled this event but the
-	// reactor executed it anyway (intra-cycle cancellation window). Phase 0
-	// only counts the occurrence; behaviour is unchanged.
-	const bool stale = creature && creature->walkGeneration != walkGeneration;
-	if (stale) {
+	// A generation mismatch means stopEventWalk cancelled this event: the
+	// generation is only ever bumped by stopEventWalk, which always cancels
+	// the tracked event, so a mismatched callback belongs to a cancelled
+	// lineage and must not run — executing it would fork a second permanent
+	// walk lineage through the re-arm in Creature::onWalk. The reactor now
+	// discards these itself; this is defense in depth and should stay at 0.
+	if (creature && creature->walkGeneration != walkGeneration) {
 		g_creatureSchedulerMetrics.walkStale.fetch_add(1, std::memory_order_relaxed);
+		g_creatureSchedulerMetrics.walkRejectedGeneration.fetch_add(1, std::memory_order_relaxed);
 		if (g_creatureSchedulerMetrics.isDebug()) {
-			LOG_WARN("[CreatureScheduler] stale walk callback executed: creature {} generation {} != {}", creatureId,
+			LOG_WARN("[CreatureScheduler] rejected stale walk callback: creature {} generation {} != {}", creatureId,
 			         walkGeneration, creature->walkGeneration);
 		}
-	} else {
-		g_creatureSchedulerMetrics.walkExecuted.fetch_add(1, std::memory_order_relaxed);
+		return;
 	}
+
+	g_creatureSchedulerMetrics.walkExecuted.fetch_add(1, std::memory_order_relaxed);
 
 	if (g_creatureSchedulerMetrics.isEnabled()) {
 		const int64_t nowNs = std::chrono::steady_clock::now().time_since_epoch().count();
