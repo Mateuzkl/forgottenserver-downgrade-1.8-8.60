@@ -481,6 +481,7 @@ void ItemType::addAugment(std::string spellName, Augment_t augmentType, int32_t 
 Items::Items()
 {
 	items.reserve(30000);
+	items.emplace_back(); // Safe ITEM_TYPE_NONE sentinel before OTB/XML loading.
 	nameToItems.reserve(30000);
 }
 
