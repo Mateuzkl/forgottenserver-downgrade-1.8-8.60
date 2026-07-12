@@ -6,6 +6,7 @@
 #include "creature.h"
 
 #include "configmanager.h"
+#include "creature_scheduler_metrics.h"
 #include "events.h"
 #include "game.h"
 #include "monster.h"
@@ -352,9 +353,18 @@ void Creature::addEventWalk(bool firstStep)
 
 	const uint32_t safeTicks = static_cast<uint32_t>(std::max<int64_t>(1, ticks));
 	const uint32_t cid = getID();
+	const uint32_t generation = walkGeneration;
+	const int64_t expectedFireNs =
+	    (std::chrono::steady_clock::now() + std::chrono::milliseconds(safeTicks)).time_since_epoch().count();
 
-	eventWalk = g_scheduler.addEvent(createSchedulerTask(safeTicks,
-	                                                     [cid]() { g_game.checkCreatureWalk(cid); }));
+	auto walkTask = [cid, generation, expectedFireNs]() {
+		g_game.checkCreatureWalk(cid, generation, expectedFireNs);
+	};
+	eventWalk = g_scheduler.addEvent(createSchedulerTask(safeTicks, std::move(walkTask)));
+
+	if (eventWalk != 0 && g_creatureSchedulerMetrics.isEnabled()) {
+		g_creatureSchedulerMetrics.walkScheduled.fetch_add(1, std::memory_order_relaxed);
+	}
 }
 
 void Creature::stopEventWalk()
@@ -362,6 +372,13 @@ void Creature::stopEventWalk()
 	if (eventWalk != 0) {
 		g_scheduler.stopEvent(eventWalk);
 		eventWalk = 0;
+		// Invalidate outstanding callbacks so a cancelled event that still
+		// executes (intra-cycle reactor window) can be detected as stale.
+		++walkGeneration;
+
+		if (g_creatureSchedulerMetrics.isEnabled()) {
+			g_creatureSchedulerMetrics.walkCancelled.fetch_add(1, std::memory_order_relaxed);
+		}
 	}
 }
 
@@ -1032,18 +1049,32 @@ void Creature::requestFollowPathUpdate()
 		return;
 	}
 
+	const bool schedulerMetrics = g_creatureSchedulerMetrics.isEnabled();
+	if (schedulerMetrics) {
+		g_creatureSchedulerMetrics.followRequested.fetch_add(1, std::memory_order_relaxed);
+	}
+
 	const FollowPathKey key = makeFollowPathKey(*follow);
 	if (followPathState.canReuse(key, !listWalkDir.empty(), forceUpdateFollowPath)) {
 		++pathfindingCounters.pathReused;
 		g_performanceMetrics.recordPathReused();
+		if (schedulerMetrics) {
+			g_creatureSchedulerMetrics.followCoalescedReuse.fetch_add(1, std::memory_order_relaxed);
+		}
 		return;
 	}
 	if (!forceUpdateFollowPath && !followPathState.retryAllowed(key, static_cast<uint64_t>(OTSYS_TIME()))) {
+		if (schedulerMetrics) {
+			g_creatureSchedulerMetrics.followCoalescedBackoff.fetch_add(1, std::memory_order_relaxed);
+		}
 		return;
 	}
 
 	uint32_t generation = 0;
 	if (!followPathState.beginRequest(generation)) {
+		if (schedulerMetrics) {
+			g_creatureSchedulerMetrics.followCoalescedPending.fetch_add(1, std::memory_order_relaxed);
+		}
 		return;
 	}
 	forceUpdateFollowPath = false;

@@ -471,6 +471,7 @@ protected:
 	uint64_t lifetimeToken = 0;
 	uint32_t scriptEventsBitField = 0;
 	uint32_t eventWalk = 0;
+	uint32_t walkGeneration = 0;
 	uint32_t walkUpdateTicks = 0;
 	uint32_t blockCount = 0;
 	uint32_t blockTicks = 0;

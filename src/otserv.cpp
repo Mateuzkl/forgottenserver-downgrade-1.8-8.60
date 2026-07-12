@@ -7,6 +7,7 @@
 
 #include "configmanager.h"
 #include "console_styles.h"
+#include "creature_scheduler_metrics.h"
 #include "databasemanager.h"
 #include "databasetasks.h"
 #include "game.h"
@@ -474,6 +475,8 @@ void startServer()
 	g_reactor.setTimeBudget(std::chrono::milliseconds(getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS)));
 	g_reactor.setMaxInboxSize(static_cast<size_t>(getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE)));
 	g_performanceMetrics.setEnabled(getBoolean(ConfigManager::PERFORMANCE_METRICS_ENABLED));
+	g_creatureSchedulerMetrics.setEnabled(getBoolean(ConfigManager::CREATURE_SCHEDULER_METRICS));
+	g_creatureSchedulerMetrics.setDebug(getBoolean(ConfigManager::CREATURE_SCHEDULER_DEBUG));
 
 	LOG_INFO(">> Reactor limits: maxTasks={}, timeBudget={}ms, maxInbox={}",
 	    getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE),

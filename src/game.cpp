@@ -11,6 +11,7 @@
 #include "configmanager.h"
 #include "console_styles.h"
 #include "creature.h"
+#include "creature_scheduler_metrics.h"
 #include "creatureevent.h"
 #include "databasetasks.h"
 #include "enums.h"
@@ -5898,11 +5899,36 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 	return true;
 }
 
-void Game::checkCreatureWalk(uint32_t creatureId)
+void Game::checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration, int64_t expectedFireNs)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatureWalk);
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
+
+	if (g_creatureSchedulerMetrics.isEnabled()) {
+		// A generation mismatch means stopEventWalk cancelled this event but
+		// the reactor executed it anyway (intra-cycle cancellation window).
+		// Phase 0 only counts the occurrence; behaviour is unchanged.
+		const bool stale = creature && creature->walkGeneration != walkGeneration;
+		if (stale) {
+			g_creatureSchedulerMetrics.walkStale.fetch_add(1, std::memory_order_relaxed);
+			if (g_creatureSchedulerMetrics.isDebug()) {
+				LOG_WARN("[CreatureScheduler] stale walk callback executed: creature {} generation {} != {}",
+				         creatureId, walkGeneration, creature->walkGeneration);
+			}
+		} else {
+			g_creatureSchedulerMetrics.walkExecuted.fetch_add(1, std::memory_order_relaxed);
+		}
+
+		const int64_t nowNs = std::chrono::steady_clock::now().time_since_epoch().count();
+		if (nowNs > expectedFireNs) {
+			g_creatureSchedulerMetrics.walkExecutionDelay.record(
+			    static_cast<uint64_t>(nowNs - expectedFireNs) / 1000);
+		} else {
+			g_creatureSchedulerMetrics.walkExecutionDelay.record(0);
+		}
+	}
+
 	if (creature && !creature->isRemoved() && !creature->isDead()) {
 		creature->onWalk();
 	}
@@ -5915,10 +5941,18 @@ void Game::updateCreatureWalk(uint32_t creatureId, uint64_t lifetimeToken, uint3
 	Creature* creature = creatureRef.get();
 	if (creature && creature->getLifetimeToken() == lifetimeToken && !creature->isRemoved() && !creature->isDead()) {
 		if (!creature->followPathState.acceptResult(generation)) {
+			if (g_creatureSchedulerMetrics.isEnabled()) {
+				g_creatureSchedulerMetrics.followStale.fetch_add(1, std::memory_order_relaxed);
+			}
 			creature->requestFollowPathUpdate();
 			return;
 		}
+		if (g_creatureSchedulerMetrics.isEnabled()) {
+			g_creatureSchedulerMetrics.followExecuted.fetch_add(1, std::memory_order_relaxed);
+		}
 		creature->goToFollowCreature();
+	} else if (g_creatureSchedulerMetrics.isEnabled()) {
+		g_creatureSchedulerMetrics.followStale.fetch_add(1, std::memory_order_relaxed);
 	}
 }
 

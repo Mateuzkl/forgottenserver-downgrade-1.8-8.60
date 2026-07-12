@@ -9,6 +9,7 @@
 #include "ban.h"
 #include "character_bazaar.h"
 #include "configmanager.h"
+#include "creature_scheduler_metrics.h"
 #include "creatureevent.h"
 #include "game.h"
 #include "iologindata.h"
@@ -3771,6 +3772,16 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& newPos, int32_t newStackPos,
                                     const Position& oldPos, int32_t oldStackPos, bool teleport)
 {
+	// Counts the locally-built movement messages; delegated full map
+	// refreshes (teleport/floor change) are not included, so bytes are a
+	// lower bound of movement traffic.
+	const auto recordMovementPacket = [](const NetworkMessage& msg) {
+		if (g_creatureSchedulerMetrics.isEnabled()) {
+			g_creatureSchedulerMetrics.networkMovePackets.fetch_add(1, std::memory_order_relaxed);
+			g_creatureSchedulerMetrics.networkMoveBytes.fetch_add(msg.getLength(), std::memory_order_relaxed);
+		}
+	};
+
 	if (spyActive_ && creature->getID() == spyTargetCreatureId_) {
 		spyViewportPos_ = newPos;
 
@@ -3814,6 +3825,7 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 			GetMapDescription(newPos.x - Map::maxClientViewportX, newPos.y - Map::maxClientViewportY, newPos.z,
 			                  1, (Map::maxClientViewportY * 2) + 2, msg);
 		}
+		recordMovementPacket(msg);
 		writeToOutputBuffer(msg);
 		return;
 	}
@@ -3871,6 +3883,7 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 					                  1, (Map::maxClientViewportY * 2) + 2, msg);
 				}
 			}
+			recordMovementPacket(msg);
 			writeToOutputBuffer(msg);
 		}
 	} else if (canSee(oldPos) && canSee(creature->getPosition())) {
@@ -3883,6 +3896,7 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 			msg.addPosition(oldPos);
 			msg.addByte(static_cast<uint8_t>(oldStackPos));
 			msg.addPosition(creature->getPosition());
+			recordMovementPacket(msg);
 			writeToOutputBuffer(msg);
 		}
 	} else if (canSee(oldPos)) {

@@ -154,6 +154,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/connection.h
 	${CMAKE_CURRENT_LIST_DIR}/const.h
 	${CMAKE_CURRENT_LIST_DIR}/container.h
+	${CMAKE_CURRENT_LIST_DIR}/creature_scheduler_metrics.h
 	${CMAKE_CURRENT_LIST_DIR}/creatureevent.h
 	${CMAKE_CURRENT_LIST_DIR}/creature.h
 	${CMAKE_CURRENT_LIST_DIR}/cylinder.h

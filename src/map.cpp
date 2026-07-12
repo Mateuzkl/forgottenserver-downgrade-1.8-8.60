@@ -7,6 +7,7 @@
 
 #include "combat.h"
 #include "creature.h"
+#include "creature_scheduler_metrics.h"
 #include "game.h"
 #include "instance_utils.h"
 #include "iomap.h"
@@ -305,6 +306,10 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 	getSpectators(newPosSpectators, newPos, true);
 	spectators.addSpectators(newPosSpectators);
 	spectators.partitionByType();
+
+	if (g_creatureSchedulerMetrics.isEnabled()) {
+		g_creatureSchedulerMetrics.recordMoveSpectators(spectators.size(), spectators.players().size());
+	}
 
 	std::vector<int32_t> oldStackPosVector;
 	oldStackPosVector.reserve(spectators.players().size());
