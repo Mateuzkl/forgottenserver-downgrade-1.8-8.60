@@ -2284,7 +2284,7 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 		++i;
 		for (const auto& to : toVector) {
 			auto scheduledTarget = g_game.getCreatureByIDShared(to);
-			if (!scheduledTarget) {
+			if (!scheduledTarget || scheduledTarget->isRemoved()) {
 				continue;
 			}
 			const uint64_t targetLifetimeToken = scheduledTarget->getLifetimeToken();
@@ -2292,11 +2292,14 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 			                             to, targetLifetimeToken, from, capturedChainEffect,
 			                             instantSpellName]() {
 				auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
-				Creature* resolvedCaster = resolvedCasterRef &&
+				Creature* resolvedCaster = resolvedCasterRef && !resolvedCasterRef->isRemoved() &&
 					resolvedCasterRef->getLifetimeToken() == casterLifetimeToken ? resolvedCasterRef.get() : nullptr;
+				if (casterId != 0 && !resolvedCaster) {
+					return;
+				}
 				auto nextTargetRef = g_game.getCreatureByIDShared(to);
 				Creature* nextTarget = nextTargetRef.get();
-				if (!nextTarget || nextTarget->getLifetimeToken() != targetLifetimeToken) {
+				if (!nextTarget || nextTarget->isRemoved() || nextTarget->getLifetimeToken() != targetLifetimeToken) {
 					return;
 				}
 				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect, nextTarget->getInstanceID());
