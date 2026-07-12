@@ -109,6 +109,22 @@ reactorMaxInboxSize = 200000
 -- Aggregated 5-second latency/hotspot report. Keep disabled outside profiling runs.
 performanceMetricsEnabled = false
 
+-- Metrics / Observability (OpenTelemetry)
+-- metricsEnablePrometheus exposes http://<address>/metrics for Prometheus scraping.
+-- See metrics/README.md for the batteries-included Prometheus + Grafana stack.
+-- Requires a binary built with -DENABLE_METRICS=ON (see build.sh --metrics).
+metricsEnablePrometheus = false
+metricsPrometheusAddress = "0.0.0.0:9464"
+-- OStream exporter dumps metrics to the server log. Debug only, not for production.
+metricsEnableOstream = false
+metricsOstreamInterval = 1000
+
+-- Creature scheduler diagnostics (walk/follow event lifecycle counters and logs).
+-- creatureSchedulerMetrics enables low-overhead aggregated counters (/creaturestats).
+-- creatureSchedulerDebug adds verbose per-event logs. Test environments only.
+creatureSchedulerMetrics = false
+creatureSchedulerDebug = false
+
 -- Deaths
 -- NOTE: Leave deathLosePercent as -1 if you want to use the default
 -- death penalty formula. For the old formula, set it to 10. For

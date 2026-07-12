@@ -533,6 +533,12 @@ bool ConfigManager::load()
 	booleans[Boolean::LOG_TO_FILE] = getGlobalBoolean(L, "logToFile", false);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", true);
 	booleans[Boolean::PERFORMANCE_METRICS_ENABLED] = getGlobalBoolean(L, "performanceMetricsEnabled", false);
+	booleans[Boolean::METRICS_ENABLE_PROMETHEUS] = getGlobalBoolean(L, "metricsEnablePrometheus", false);
+	booleans[Boolean::METRICS_ENABLE_OSTREAM] = getGlobalBoolean(L, "metricsEnableOstream", false);
+	booleans[Boolean::CREATURE_SCHEDULER_DEBUG] = getGlobalBoolean(L, "creatureSchedulerDebug", false);
+	booleans[Boolean::CREATURE_SCHEDULER_METRICS] = getGlobalBoolean(L, "creatureSchedulerMetrics", false);
+	strings[String::METRICS_PROMETHEUS_ADDRESS] = getGlobalString(L, "metricsPrometheusAddress", "0.0.0.0:9464");
+	integers[Integer::METRICS_OSTREAM_INTERVAL] = getGlobalInteger(L, "metricsOstreamInterval", 1000);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");
 	strings[String::LOG_LEVEL] = getGlobalString(L, "logLevel", "info");
