@@ -529,6 +529,7 @@ void Creature::onDeath()
 	auto lastHitCreature = lastAttacker.lock();
 	std::shared_ptr<Creature> lastHitCreatureMaster;
 	if (lastHitCreature) {
+		PerformanceScope scope(PerformanceMetric::DeathLastHitCallbacks);
 		lastHitUnjustified = lastHitCreature->onKilledCreature(self);
 		lastHitCreatureMaster = lastHitCreature->getMasterShared();
 	}
@@ -570,11 +571,15 @@ void Creature::onDeath()
 		}
 	}
 
-	for (const auto& it : experienceMap) {
-		it.first->onGainExperience(it.second, self);
+	{
+		PerformanceScope scope(PerformanceMetric::DeathExperienceCallbacks);
+		for (const auto& it : experienceMap) {
+			it.first->onGainExperience(it.second, self);
+		}
 	}
 
 	if (mostDamageCreature) {
+		PerformanceScope scope(PerformanceMetric::DeathMostDamageCallbacks);
 		if (mostDamageCreature != lastHitCreature && mostDamageCreature != lastHitCreatureMaster) {
 			auto mostDamageCreatureMaster = mostDamageCreature->getMasterShared();
 			if (lastHitCreature != mostDamageCreatureMaster &&
@@ -585,19 +590,27 @@ void Creature::onDeath()
 	}
 
 	if (Monster* monster = getMonster()) {
+		PerformanceScope scope(PerformanceMetric::DeathForgeReward);
 		monster->rewardForgeKill(lastHitCreature.get(), mostDamageCreature.get());
 	}
 
-	bool droppedCorpse = dropCorpse(lastHitCreature.get(), mostDamageCreature.get(), lastHitUnjustified,
-	                               mostDamageUnjustified);
-	death(lastHitCreature.get());
-
-	if (!master.expired()) {
-		setMaster(nullptr);
+	bool droppedCorpse;
+	{
+		PerformanceScope scope(PerformanceMetric::DeathDropCorpse);
+		droppedCorpse = dropCorpse(lastHitCreature.get(), mostDamageCreature.get(), lastHitUnjustified,
+		                           mostDamageUnjustified);
 	}
+	{
+		PerformanceScope scope(PerformanceMetric::DeathFinalize);
+		death(lastHitCreature.get());
 
-	if (droppedCorpse) {
-		g_game.removeCreature(this, false);
+		if (!master.expired()) {
+			setMaster(nullptr);
+		}
+
+		if (droppedCorpse) {
+			g_game.removeCreature(this, false);
+		}
 	}
 }
 
@@ -665,6 +678,7 @@ bool Creature::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreatur
 
 		// MonsterType onDeath
 		if (auto monster = getMonster()) {
+			PerformanceScope scope(PerformanceMetric::DeathMonsterTypeCallback);
 			const MonsterType* mType = monster->getMonsterType();
 			if (mType->info.deathEvent != -1) {
 				LuaScriptInterface* scriptInterface = mType->info.scriptInterface;
@@ -704,14 +718,20 @@ bool Creature::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreatur
 		}
 
 		// scripting event - onDeath
-		for (CreatureEvent* deathEvent : getCreatureEvents(CREATURE_EVENT_DEATH)) {
-			deathEvent->executeOnDeath(this, corpse.get(), lastHitCreature, mostDamageCreature, lastHitUnjustified,
-			                           mostDamageUnjustified);
+		{
+			PerformanceScope scope(PerformanceMetric::DeathCreatureCallbacks);
+			for (CreatureEvent* deathEvent : getCreatureEvents(CREATURE_EVENT_DEATH)) {
+				deathEvent->executeOnDeath(this, corpse.get(), lastHitCreature, mostDamageCreature, lastHitUnjustified,
+				                           mostDamageUnjustified);
+			}
 		}
 
 		if (corpse) {
 			if (Container* corpseContainer = corpse->getContainer()) {
-				dropLoot(corpseContainer, lastHitCreature);
+				{
+					PerformanceScope scope(PerformanceMetric::DeathDropLoot);
+					dropLoot(corpseContainer, lastHitCreature);
+				}
 
 				uint32_t corpseOwnerId = corpse->getCorpseOwner();
 				if (corpseOwnerId != 0) {
@@ -723,6 +743,7 @@ bool Creature::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreatur
 						const bool canAutoQuickLootCorpse = deadMonster &&
 						                                   !deadMonster->getMonsterType()->info.isBoss &&
 						                                   !deadMonster->isRewardBoss();
+						PerformanceScope scope(PerformanceMetric::DeathQuickLoot);
 						if (ConfigManager::getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
 							if (canAutoQuickLootCorpse) {
 								if (corpseOwner->isQuickLootAutoEnabled()) {
@@ -740,6 +761,7 @@ bool Creature::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreatur
 				// Start loot highlight — shows the sparkling effect on the corpse
 				// so the owner (and later everyone) knows there's loot inside
 				if (!corpseContainer->empty() && corpseOwnerId != 0) {
+					PerformanceScope scope(PerformanceMetric::DeathLootHighlight);
 					g_game.startLootHighlight(corpseContainer, corpseOwnerId);
 				}
 			}
@@ -774,8 +796,10 @@ void Creature::changeHealth(int32_t healthChange, bool sendHealthChange /* = tru
 		g_game.addCreatureHealth(this);
 	}
 
-	if (isDead()) {
-		g_dispatcher.addTask([id = getID()]() { g_game.executeDeath(id); });
+	if (isDead() && tryMarkDeathScheduled()) {
+		if (!g_dispatcher.addTask([id = getID()]() { g_game.executeDeath(id); })) {
+			clearDeathScheduled();
+		}
 	}
 }
 

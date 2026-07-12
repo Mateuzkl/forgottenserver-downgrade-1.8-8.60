@@ -1305,9 +1305,37 @@ void Game::executeDeath(uint32_t creatureId)
 {
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
-	if (creature && !creature->isRemoved()) {
-		creature->onDeath();
+	if (!creature) {
+		return;
 	}
+
+	if (!creature->isRemoved() && creature->isDead()) {
+		const uint64_t deathId = g_performanceMetrics.beginDeathTrace(creatureId, creature->getName());
+		auto sendTraceMarker = [creature, deathId](char phase) {
+			if (deathId == 0) return;
+			std::unordered_set<uint32_t> recipients;
+			for (const auto& [attackerId, _] : creature->getDamageMap()) {
+				auto attacker = g_game.getCreatureByIDShared(attackerId);
+				Player* player = attacker ? attacker->getPlayer() : nullptr;
+				if (!player && attacker) {
+					auto master = attacker->getMasterShared();
+					player = master ? master->getPlayer() : nullptr;
+				}
+				if (player && player->isAstraClient() && recipients.insert(player->getID()).second) {
+					player->sendExtendedOpcode(147, fmt::format("{}|{}|{}", phase, deathId, OTSYS_TIME()));
+				}
+			}
+		};
+
+		sendTraceMarker('S');
+		{
+			PerformanceScope deathScope(PerformanceMetric::DeathTotal);
+			creature->onDeath();
+		}
+		sendTraceMarker('E');
+		g_performanceMetrics.finishDeathTrace(deathId);
+	}
+	creature->clearDeathScheduled();
 }
 
 std::shared_ptr<Container> Game::getBrowseFieldContainer(Tile* tile, uint32_t instanceId)

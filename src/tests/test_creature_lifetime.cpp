@@ -128,4 +128,16 @@ TEST_CASE(creature_storage_uses_flat_hash_map_and_preserves_values)
 	CHECK(storage.size() == 1U);
 }
 
+TEST_CASE(creature_death_scheduling_is_idempotent_until_execution_finishes)
+{
+	auto creature = makeTestCreature();
+	CHECK(creature->tryMarkDeathScheduled());
+	CHECK(creature->isDeathScheduled());
+	CHECK(!creature->tryMarkDeathScheduled());
+
+	creature->clearDeathScheduled();
+	CHECK(!creature->isDeathScheduled());
+	CHECK(creature->tryMarkDeathScheduled());
+}
+
 TFS_TEST_MAIN()

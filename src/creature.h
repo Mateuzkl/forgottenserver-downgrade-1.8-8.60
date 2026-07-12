@@ -428,6 +428,14 @@ public:
 
 	void setHealth(int32_t newHealth) { health = std::max<int32_t>(0, std::min<int32_t>(newHealth, healthMax)); }
 	void setMaxHealth(int32_t newMaxHealth) { healthMax = std::max<int32_t>(0, newMaxHealth); }
+	bool tryMarkDeathScheduled() noexcept
+	{
+		if (deathScheduled) return false;
+		deathScheduled = true;
+		return true;
+	}
+	void clearDeathScheduled() noexcept { deathScheduled = false; }
+	bool isDeathScheduled() const noexcept { return deathScheduled; }
 
 	void setDefaultOutfit(Outfit_t outfit) { defaultOutfit = outfit; }
 
@@ -492,6 +500,7 @@ protected:
 	bool skillLoss = true;
 	bool lootDrop = true;
 	bool cancelNextWalk = false;
+	bool deathScheduled = false;
 	bool hasFollowPath = false;
 	bool forceUpdateFollowPath = false;
 

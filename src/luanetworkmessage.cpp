@@ -5,6 +5,7 @@
 
 #include "luascript.h"
 #include "networkmessage.h"
+#include "performance_metrics.h"
 #include "player.h"
 
 namespace {
@@ -95,6 +96,10 @@ int sendLuaNetworkMessageToPlayer(lua_State* L, NetworkMessage& message, Player&
 		return 1;
 	}
 
+	if (message.getLength() > 0) {
+		g_performanceMetrics.recordDeathPacket(message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION],
+		                                               message.getLength(), player.getID());
+	}
 	player.sendNetworkMessage(message);
 	pushBoolean(L, true);
 	return 1;
