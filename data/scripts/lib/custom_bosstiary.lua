@@ -215,6 +215,8 @@ function CustomBosstiary.addKill(players, entry)
 		local newKills = player:addBestiaryKillCount(entry.raceId, increment)
 		if CustomBestiary and CustomBestiary.updateKillCache then
 			CustomBestiary.updateKillCache(playerGuid, entry.raceId, increment)
+		elseif CustomBestiary and CustomBestiary.invalidatePlayer then
+			CustomBestiary.invalidatePlayer(playerGuid)
 		end
 		db.asyncQuery("INSERT IGNORE INTO `player_bosstiary` (`player_id`) VALUES (" .. playerGuid .. ")")
 
