@@ -6049,8 +6049,18 @@ void Game::checkCreatures(size_t index)
 	g_stats.playersOnline = getPlayersOnline();
 #endif
 
-	g_scheduler.addEvent(createSchedulerTask(EVENT_CHECK_CREATURE_INTERVAL,
-	                                         [index]() { g_game.checkCreatures((index + 1) % EVENT_CREATURECOUNT); }));
+	const uint32_t rearmEventId = g_scheduler.addEvent(createSchedulerTask(
+	    EVENT_CHECK_CREATURE_INTERVAL, [index]() { g_game.checkCreatures((index + 1) % EVENT_CREATURECOUNT); }));
+	if (rearmEventId == 0 && g_scheduler.getState() == THREAD_STATE_RUNNING) {
+		// Losing this re-arm silences creature AI permanently. If the reactor
+		// rejected the scheduled event (inbox backpressure), fall back to an
+		// immediate dispatcher task so the loop survives the overload burst.
+		LOG_ERROR("[Game] checkCreatures re-arm rejected by the reactor; forcing direct dispatch");
+		if (!g_dispatcher.addTask(
+		        [index]() { g_game.checkCreatures((index + 1) % EVENT_CREATURECOUNT); })) {
+			LOG_ERROR("[Game] checkCreatures fallback re-arm also rejected; creature AI will stall");
+		}
+	}
 }
 
 void Game::checkSereneStatus()
@@ -8565,8 +8575,13 @@ std::shared_ptr<Monster> Game::getRandomForgeableMonster() const
 
 		auto monster = monsterIt->second.lock();
 		const MonsterType* monsterType = monster ? monster->getMonsterType() : nullptr;
-		if (!monster || monster->isRemoved() || monster->getMaster() || monster->isInfluenced() || monster->isFiendish() ||
-		    !monsterType || monster->isBoss() || !monster->isAttackable() || !monster->isHostile() || monsterType->info.experience == 0) {
+		// isDead/isDeathScheduled: converting a monster whose death is already
+		// queued would restore its health and annul the kill (no corpse, loot
+		// or experience).
+		if (!monster || monster->isRemoved() || monster->isDead() || monster->isDeathScheduled() ||
+		    monster->getMaster() || monster->isInfluenced() || monster->isFiendish() || !monsterType ||
+		    monster->isBoss() || !monster->isAttackable() || !monster->isHostile() ||
+		    monsterType->info.experience == 0) {
 			continue;
 		}
 

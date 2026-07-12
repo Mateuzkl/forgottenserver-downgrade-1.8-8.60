@@ -251,15 +251,9 @@ local function saveAll(player)
 end
 
 local function getBestiaryKills(player)
-	local kills = {}
-	local resultId = db.storeQuery("SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = " .. player:getGuid())
-	if resultId ~= false then
-		repeat
-			kills[result.getDataInt(resultId, "raceid")] = result.getDataInt(resultId, "kills")
-		until not result.next(resultId)
-		result.free(resultId)
-	end
-	return kills
+	-- Kills live in player memory and are only persisted on save; reading
+	-- SQL here showed values frozen at the last server save.
+	return player:getBestiaryKills()
 end
 
 local function getDifficulty(entry)

@@ -173,13 +173,22 @@ local function loadKillMap(playerGuid)
 		return cached
 	end
 
-	local kills = {}
-	local resultId = db.storeQuery("SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = " .. playerGuid)
-	if resultId ~= false then
-		repeat
-			kills[result.getDataInt(resultId, "raceid")] = result.getDataInt(resultId, "kills")
-		until not result.next(resultId)
-		result.free(resultId)
+	-- Kills live in player memory and are only persisted on save; the SQL
+	-- rows are stale for online players (the cache is rebuilt here after
+	-- every invalidatePlayer, e.g. right after a charm action).
+	local kills
+	local onlinePlayer = Player(playerGuid)
+	if onlinePlayer then
+		kills = onlinePlayer:getBestiaryKills()
+	else
+		kills = {}
+		local resultId = db.storeQuery("SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = " .. playerGuid)
+		if resultId ~= false then
+			repeat
+				kills[result.getDataInt(resultId, "raceid")] = result.getDataInt(resultId, "kills")
+			until not result.next(resultId)
+			result.free(resultId)
+		end
 	end
 
 	killCache[playerGuid] = kills

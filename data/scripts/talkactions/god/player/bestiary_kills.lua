@@ -109,7 +109,11 @@ function bestiaryKills.onSay(player, words, param)
 	local kills = math.floor(parsedKills)
 
 	local playerGuid = target:getGuid()
-	local oldKills = getStoredKills(playerGuid, entry.raceId)
+	-- Kills live in player memory (persisted on save): read the old value
+	-- from memory and write through it, otherwise the next save reverts the
+	-- SQL row and the charm-point delta is computed against a stale count.
+	local oldKills = target:getBestiaryKillCount(entry.raceId)
+	target:setBestiaryKillCount(entry.raceId, kills)
 	db.query("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
 		playerGuid .. ", " .. entry.raceId .. ", " .. kills ..
 		") ON DUPLICATE KEY UPDATE `kills` = VALUES(`kills`)")

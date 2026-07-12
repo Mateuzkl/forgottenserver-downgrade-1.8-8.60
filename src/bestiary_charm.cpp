@@ -201,6 +201,12 @@ void BestiaryCharmSystem::invalidatePlayer(uint32_t playerGuid) const
 
 uint32_t BestiaryCharmSystem::getKillCount(uint32_t playerGuid, uint16_t raceId) const
 {
+	// Kills are tracked in memory and only persisted on save, so the database
+	// row is stale for the whole session of an online player.
+	if (const auto player = g_game.getPlayerByGUID(playerGuid)) {
+		return player->getBestiaryKillCount(raceId);
+	}
+
 	auto result = Database::getInstance().storeQuery(fmt::format(
 	    "SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = {:d} AND `raceid` = {:d}",
 	    playerGuid, raceId));

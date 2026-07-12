@@ -315,6 +315,7 @@ public:
 
 	uint32_t getBestiaryKillCount(uint16_t raceId) const;
 	uint32_t addBestiaryKillCount(uint16_t raceId, uint32_t amount = 1);
+	void setBestiaryKillCount(uint16_t raceId, uint32_t kills);
 	const std::unordered_map<uint16_t, uint32_t>& getBestiaryKills() const { return bestiaryKills; }
 
 	bool hasWeeklyExpansion() const { return m_hasWeeklyExpansion; }

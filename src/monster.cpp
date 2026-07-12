@@ -148,7 +148,7 @@ void Monster::setFiendish(bool v)
 
 void Monster::configureForge(bool makeFiendish, uint8_t level, time_t expireAt)
 {
-	if (isInfluenced() || isFiendish()) {
+	if (isInfluenced() || isFiendish() || isDead() || isDeathScheduled()) {
 		return;
 	}
 
@@ -174,8 +174,16 @@ void Monster::clearForgeStatus()
 	influencedLevel = 0;
 	forgeExpireAt = 0;
 	if (forgeBaseMaxHealth > 0) {
+		// Scale the current health down with the max instead of restoring it:
+		// expiring mid-combat must not erase the damage already dealt, and a
+		// monster whose death is pending must stay dead.
+		const int32_t forgedMaxHealth = std::max<int32_t>(1, getMaxHealth());
+		const auto scaledHealth = static_cast<int32_t>(
+		    static_cast<int64_t>(getHealth()) * forgeBaseMaxHealth / forgedMaxHealth);
 		setMaxHealth(forgeBaseMaxHealth);
-		setHealth(forgeBaseMaxHealth);
+		if (!isDead() && !isDeathScheduled()) {
+			setHealth(std::max<int32_t>(1, scaledHealth));
+		}
 		forgeBaseMaxHealth = 0;
 	}
 }

@@ -53,7 +53,9 @@ void KVStore::set(const std::string &key, const std::initializer_list<std::pair<
 }
 
 void KVStore::set(const std::string &key, const ValueWrapper &value) {
-	AutoStat stat("KVStore::set", fmt::format("key={} deathId={}", key, g_performanceMetrics.currentDeathId()));
+	AutoStat stat("KVStore::set", g_stats.isEnabled()
+	                                  ? fmt::format("key={} deathId={}", key, g_performanceMetrics.currentDeathId())
+	                                  : std::string());
 	{
 		std::scoped_lock lock(mutex_);
 		setLocked(key, value);
@@ -90,8 +92,10 @@ void KVStore::setLocked(const std::string &key, const ValueWrapper &value) {
 }
 
 std::optional<ValueWrapper> KVStore::get(const std::string &key, bool forceLoad) {
-	AutoStat stat("KVStore::get", fmt::format("key={} forceLoad={} deathId={}", key, forceLoad,
-	                                         g_performanceMetrics.currentDeathId()));
+	AutoStat stat("KVStore::get", g_stats.isEnabled()
+	                                  ? fmt::format("key={} forceLoad={} deathId={}", key, forceLoad,
+	                                                g_performanceMetrics.currentDeathId())
+	                                  : std::string());
 	{
 		std::scoped_lock lock(mutex_);
 		if (!forceLoad) {

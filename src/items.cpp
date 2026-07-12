@@ -488,6 +488,7 @@ Items::Items()
 void Items::clear()
 {
 	items.clear();
+	items.emplace_back(); // Restore the ITEM_TYPE_NONE sentinel the constructor guarantees.
 	nameToItems.clear();
 	currencyItems.clear();
 	inventory.clear();

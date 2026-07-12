@@ -396,6 +396,17 @@ uint32_t Player::addBestiaryKillCount(uint16_t raceId, uint32_t amount)
 	return kills;
 }
 
+void Player::setBestiaryKillCount(uint16_t raceId, uint32_t kills)
+{
+	if (raceId == 0) {
+		return;
+	}
+
+	// Keep zero entries: the save path only upserts rows, so erasing here
+	// would leave a stale database row that resurrects on the next login.
+	bestiaryKills[raceId] = kills;
+}
+
 Player::~Player()
 {
 	for (auto& item : inventory) {
