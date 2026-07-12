@@ -203,8 +203,10 @@ void Monster::rewardForgeKill(Creature* lastHitCreature, Creature* mostDamageCre
 	const int64_t rolledDust = uniform_random(10, 25);
 	const int64_t newDust = std::min(currentDust + rolledDust, dustLimit);
 	player->setStorageValue(FORGE_DUST_STORAGE, newDust);
-	player->sendTextMessage(MESSAGE_INFO_DESCR, fmt::format(
-	    "You killed a Fiendish monster and received {} Dust!", newDust - currentDust));
+	if (newDust > currentDust) {
+		player->sendTextMessage(MESSAGE_INFO_DESCR, fmt::format(
+		    "You killed a Fiendish monster and received {} Dust!", newDust - currentDust));
+	}
 
 	const uint64_t baseExperience = mType->info.experience;
 	if (baseExperience > 0) {
