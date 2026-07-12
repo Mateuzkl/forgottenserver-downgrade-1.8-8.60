@@ -362,7 +362,7 @@ void Creature::addEventWalk(bool firstStep)
 	};
 	eventWalk = g_scheduler.addEvent(createSchedulerTask(safeTicks, std::move(walkTask)));
 
-	if (eventWalk != 0 && g_creatureSchedulerMetrics.isEnabled()) {
+	if (eventWalk != 0) {
 		g_creatureSchedulerMetrics.walkScheduled.fetch_add(1, std::memory_order_relaxed);
 	}
 }
@@ -370,13 +370,15 @@ void Creature::addEventWalk(bool firstStep)
 void Creature::stopEventWalk()
 {
 	if (eventWalk != 0) {
-		g_scheduler.stopEvent(eventWalk);
+		// stopEvent only reports pending for events that have not fired yet;
+		// clearing the id of the event currently executing is a consume, not
+		// a cancel, and must not count against the pending balance.
+		const bool wasPending = g_scheduler.stopEvent(eventWalk);
 		eventWalk = 0;
 		// Invalidate outstanding callbacks so a cancelled event that still
 		// executes (intra-cycle reactor window) can be detected as stale.
 		++walkGeneration;
-
-		if (g_creatureSchedulerMetrics.isEnabled()) {
+		if (wasPending) {
 			g_creatureSchedulerMetrics.walkCancelled.fetch_add(1, std::memory_order_relaxed);
 		}
 	}
@@ -1049,32 +1051,23 @@ void Creature::requestFollowPathUpdate()
 		return;
 	}
 
-	const bool schedulerMetrics = g_creatureSchedulerMetrics.isEnabled();
-	if (schedulerMetrics) {
-		g_creatureSchedulerMetrics.followRequested.fetch_add(1, std::memory_order_relaxed);
-	}
+	g_creatureSchedulerMetrics.followRequested.fetch_add(1, std::memory_order_relaxed);
 
 	const FollowPathKey key = makeFollowPathKey(*follow);
 	if (followPathState.canReuse(key, !listWalkDir.empty(), forceUpdateFollowPath)) {
 		++pathfindingCounters.pathReused;
 		g_performanceMetrics.recordPathReused();
-		if (schedulerMetrics) {
-			g_creatureSchedulerMetrics.followCoalescedReuse.fetch_add(1, std::memory_order_relaxed);
-		}
+		g_creatureSchedulerMetrics.followCoalescedReuse.fetch_add(1, std::memory_order_relaxed);
 		return;
 	}
 	if (!forceUpdateFollowPath && !followPathState.retryAllowed(key, static_cast<uint64_t>(OTSYS_TIME()))) {
-		if (schedulerMetrics) {
-			g_creatureSchedulerMetrics.followCoalescedBackoff.fetch_add(1, std::memory_order_relaxed);
-		}
+		g_creatureSchedulerMetrics.followCoalescedBackoff.fetch_add(1, std::memory_order_relaxed);
 		return;
 	}
 
 	uint32_t generation = 0;
 	if (!followPathState.beginRequest(generation)) {
-		if (schedulerMetrics) {
-			g_creatureSchedulerMetrics.followCoalescedPending.fetch_add(1, std::memory_order_relaxed);
-		}
+		g_creatureSchedulerMetrics.followCoalescedPending.fetch_add(1, std::memory_order_relaxed);
 		return;
 	}
 	forceUpdateFollowPath = false;

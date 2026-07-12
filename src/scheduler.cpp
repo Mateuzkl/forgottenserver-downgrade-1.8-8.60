@@ -44,7 +44,7 @@ uint32_t Scheduler::addEvent(std::unique_ptr<SchedulerTask>&& task)
 	return eventId;
 }
 
-void Scheduler::stopEvent(uint32_t eventId) noexcept
+bool Scheduler::stopEvent(uint32_t eventId) noexcept
 {
-	g_reactor.cancel(eventId);
+	return g_reactor.cancel(eventId);
 }

@@ -138,20 +138,25 @@ uint32_t TaskReactor::schedule(uint32_t delay, ReactorCallback&& callback)
 	return schedule(std::chrono::milliseconds(delay), std::move(callback));
 }
 
-void TaskReactor::cancel(uint32_t taskIdentifier)
+bool TaskReactor::cancel(uint32_t taskIdentifier)
 {
 	if (taskIdentifier == 0 || threadState.load(std::memory_order_acquire) != THREAD_STATE_RUNNING) {
-		return;
+		return false;
 	}
 
+	bool wasPending = false;
 	{
 		std::scoped_lock lock(mutex);
 		if (activeIdentifiers.contains(taskIdentifier)) {
 			cancelInbox.push_back(taskIdentifier);
+			wasPending = true;
 		}
 	}
 
-	conditionVariable.notify_one();
+	if (wasPending) {
+		conditionVariable.notify_one();
+	}
+	return wasPending;
 }
 
 void TaskReactor::runLoop()

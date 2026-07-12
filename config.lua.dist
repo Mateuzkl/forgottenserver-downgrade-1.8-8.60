@@ -119,8 +119,10 @@ metricsPrometheusAddress = "0.0.0.0:9464"
 metricsEnableOstream = false
 metricsOstreamInterval = 1000
 
--- Creature scheduler diagnostics (walk/follow event lifecycle counters and logs).
--- creatureSchedulerMetrics enables low-overhead aggregated counters (/creaturestats).
+-- Creature scheduler diagnostics (see /creaturestats).
+-- Lifecycle counters (scheduled/executed/cancelled/stale) are always on;
+-- creatureSchedulerMetrics additionally enables delay histograms, spectator
+-- fan-out and movement packet accounting.
 -- creatureSchedulerDebug adds verbose per-event logs. Test environments only.
 creatureSchedulerMetrics = false
 creatureSchedulerDebug = false

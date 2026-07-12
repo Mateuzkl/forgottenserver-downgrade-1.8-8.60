@@ -10,10 +10,12 @@
 #include <cstdint>
 
 // Aggregated lifecycle counters for creature walk/follow events.
-// Enabled by creatureSchedulerMetrics in config.lua; every recording site
-// checks a single relaxed atomic load first so the disabled cost is one
-// branch. Counters are cumulative since startup: consumers (Prometheus,
-// /creaturestats) compute rates and deltas themselves.
+// Lifecycle counters (scheduled/executed/cancelled/stale, follow states) are
+// always on — a single relaxed fetch_add per event — so their balance holds
+// from process start (walkPending derives from it). creatureSchedulerMetrics
+// in config.lua gates the costlier sampling: the delay histogram, spectator
+// fan-out and movement packet accounting. Counters are cumulative since
+// startup: consumers (Prometheus, /creaturestats) compute rates and deltas.
 class CreatureSchedulerMetrics
 {
 public:
@@ -44,8 +46,8 @@ public:
 			buckets[index].fetch_add(1, std::memory_order_relaxed);
 		}
 
-		// Approximate percentile: returns the upper bound (2^N µs) of the
-		// bucket containing the requested quantile.
+		// Approximate percentile: the upper bound (2^N µs) of the bucket
+		// containing the requested quantile, clamped to the observed maximum.
 		[[nodiscard]] uint64_t percentileMicroseconds(double quantile) const noexcept
 		{
 			const uint64_t totalCalls = calls.load(std::memory_order_relaxed);
@@ -53,15 +55,17 @@ public:
 				return 0;
 			}
 
+			const uint64_t observedMaximum = maximumMicroseconds.load(std::memory_order_relaxed);
 			const auto threshold = static_cast<uint64_t>(static_cast<double>(totalCalls) * quantile);
 			uint64_t cumulative = 0;
 			for (size_t index = 0; index < HistogramBuckets; ++index) {
 				cumulative += buckets[index].load(std::memory_order_relaxed);
 				if (cumulative >= threshold && cumulative > 0) {
-					return index == 0 ? 1 : (uint64_t{1} << index);
+					const uint64_t upperBound = index == 0 ? 1 : (uint64_t{1} << index);
+					return std::min(upperBound, observedMaximum);
 				}
 			}
-			return maximumMicroseconds.load(std::memory_order_relaxed);
+			return observedMaximum;
 		}
 	};
 

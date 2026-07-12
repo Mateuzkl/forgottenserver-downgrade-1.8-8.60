@@ -37,7 +37,8 @@ public:
 
 	uint32_t addEvent(std::unique_ptr<SchedulerTask>&& task);
 	uint32_t addEvent(uint32_t delay, TaskFunc&& f) { return addEvent(createSchedulerTask(delay, std::move(f))); }
-	void stopEvent(uint32_t eventId) noexcept;
+	// Returns whether the event was still pending when the stop was requested.
+	bool stopEvent(uint32_t eventId) noexcept;
 
 	[[nodiscard]] ThreadState getState() const noexcept { return state.load(std::memory_order_acquire); }
 

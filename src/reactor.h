@@ -36,7 +36,9 @@ public:
 	bool send(uint32_t expirationTime, ReactorCallback&& callback);
 	uint32_t schedule(std::chrono::milliseconds delay, ReactorCallback&& callback);
 	uint32_t schedule(uint32_t delay, ReactorCallback&& callback);
-	void cancel(uint32_t taskIdentifier);
+	// Returns whether the task was still pending (scheduled and not yet
+	// executed) when the cancellation was requested.
+	bool cancel(uint32_t taskIdentifier);
 
 	void runLoop();
 	void runOnce();

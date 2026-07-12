@@ -21,6 +21,7 @@ x64/
 build/
 build-release/
 build-debug/
+build-metrics/
 build-asan*/
 build-tests/
 build-tsan/
