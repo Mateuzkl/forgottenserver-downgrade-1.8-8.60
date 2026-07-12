@@ -140,10 +140,9 @@ void addAstraItemMetadata(NetworkMessage& msg, const ItemType& it)
 
 } // namespace
 
-void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
+void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier,
                              bool sendAstraItemState, bool sendAstraQuiverCountU16)
 {
-	static_cast<void>(sendQuickLootFlags);
 	addItemId(id);
 
 	const ItemType& it = Item::items[id];
@@ -169,9 +168,8 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 }
 
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
-                             bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16)
+                             bool sendAstraItemState, bool sendAstraQuiverCountU16)
 {
-	static_cast<void>(sendQuickLootFlags);
 	addItemId(item->getID());
 
 	const ItemType& it = Item::items[item->getID()];

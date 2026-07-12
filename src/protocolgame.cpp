@@ -1670,7 +1670,6 @@ void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 {
 	const uint32_t playerInstanceId = player->getInstanceID();
-	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
 	const bool sendItemTierByte = shouldSendItemTierByte();
 	const bool sendItemTierData = shouldSendItemTierData();
 	const bool sendAstraItemState = canSendAstraItemState();
@@ -1678,7 +1677,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 	int32_t count;
 	Item* ground = tile->getGround();
 	if (ground) {
-		msg.addItem(ground, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
+		msg.addItem(ground, sendItemTierData, sendItemTierByte, isOTC, sendAstraItemState,
 		            sendAstraQuiverCountU16);
 		count = 1;
 	} else {
@@ -1691,7 +1690,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
+			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendAstraItemState,
 			            sendAstraQuiverCountU16);
 			count++;
 			if (count == 9 && tile->getPosition() == player->getPosition()) {
@@ -1737,7 +1736,7 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
+			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendAstraItemState,
 			            sendAstraQuiverCountU16);
 			if (++count == MAX_STACKPOS_THINGS) {
 				return;
@@ -2994,7 +2993,6 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 
 	msg.addByte(cid);
 
-	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
 	const bool sendItemTierByte = shouldSendItemTierByte();
 	const bool sendItemTierData = shouldSendItemTierData();
 	const bool sendAstraItemState = canSendAstraItemState();
@@ -3002,11 +3000,11 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 	const bool sendContainerPagination = shouldSendContainerPagination();
 	const bool paginateContainer = shouldPaginateContainer(container);
 	if (container->getID() == ITEM_BROWSEFIELD) {
-		msg.addItem(ITEM_BAG, 1, sendItemTierData, sendItemTierByte, sendQuickLootFlags, sendAstraItemState,
+		msg.addItem(ITEM_BAG, 1, sendItemTierData, sendItemTierByte, sendAstraItemState,
 		            sendAstraQuiverCountU16);
 		msg.addString("Browse Field");
 	} else {
-		msg.addItem(container, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
+		msg.addItem(container, sendItemTierData, sendItemTierByte, isOTC, sendAstraItemState,
 		            sendAstraQuiverCountU16);
 		msg.addString(container->getName());
 	}
@@ -3033,7 +3031,7 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 		uint32_t i = 0;
 		for (ItemDeque::const_iterator cit = itemList.begin() + firstIndex, end = itemList.end();
 		     i < itemCount && cit != end; ++cit, ++i) {
-			msg.addItem(cit->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
+			msg.addItem(cit->get(), sendItemTierData, sendItemTierByte, isOTC, sendAstraItemState,
 			            sendAstraQuiverCountU16);
 		}
 	}
@@ -3219,7 +3217,6 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 	}
 
 	msg.addString(traderName);
-	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
 	const bool sendItemTierByte = shouldSendItemTierByte();
 	const bool sendItemTierData = shouldSendItemTierData();
 
@@ -3243,12 +3240,12 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 		const bool sendAstraItemState = canSendAstraItemState();
 		const bool sendAstraQuiverCountU16 = shouldSendAstraQuiverCountU16();
 		for (const Item* listItem : itemList) {
-			msg.addItem(listItem, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
+			msg.addItem(listItem, sendItemTierData, sendItemTierByte, isOTC, sendAstraItemState,
 			            sendAstraQuiverCountU16);
 		}
 	} else {
 		msg.addByte(0x01);
-		msg.addItem(item, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, canSendAstraItemState(),
+		msg.addItem(item, sendItemTierData, sendItemTierByte, isOTC, canSendAstraItemState(),
 		            shouldSendAstraQuiverCountU16());
 	}
 	writeToOutputBuffer(msg);
@@ -3591,7 +3588,7 @@ void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const
 	msg.addByte(0x6A);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC,
 	            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	writeToOutputBuffer(msg);
 }
@@ -3610,7 +3607,7 @@ void ProtocolGame::sendUpdateTileItem(const Position& pos, uint32_t stackpos, co
 	msg.addByte(0x6B);
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
-	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC,
 	            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	writeToOutputBuffer(msg);
 }
@@ -3898,7 +3895,7 @@ void ProtocolGame::sendInventoryItem(slots_t slot, const Item* item)
 	if (item) {
 		msg.addByte(0x78);
 		msg.addByte(slot);
-		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC,
 		            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	} else {
 		msg.addByte(0x79);
@@ -4000,7 +3997,7 @@ void ProtocolGame::sendAddContainerItem(uint8_t cid, uint16_t slot, const Item* 
 	if (shouldSendContainerPagination()) {
 		msg.add<uint16_t>(slot);
 	}
-	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC,
 	            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	writeToOutputBuffer(msg);
 }
@@ -4015,7 +4012,7 @@ void ProtocolGame::sendUpdateContainerItem(uint8_t cid, uint16_t slot, const Ite
 	} else {
 		msg.addByte(slot);
 	}
-	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC,
 	            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	writeToOutputBuffer(msg);
 }
@@ -4033,7 +4030,7 @@ void ProtocolGame::sendRemoveContainerItem(uint8_t cid, uint16_t slot, const Ite
 	if (shouldSendContainerPagination()) {
 		msg.add<uint16_t>(slot);
 		if (lastItem) {
-			msg.addItem(lastItem, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+			msg.addItem(lastItem, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC,
 			            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 		} else {
 			msg.add<uint16_t>(0x00);
@@ -4271,11 +4268,11 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 	msg.addByte(1);
 	msg.addString(item ? item->getName() : std::string_view(itemType.name));
 	if (item) {
-		msg.addItem(item.get(), shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+		msg.addItem(item.get(), shouldSendItemTierData(), shouldSendItemTierByte(), isOTC,
 		            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	} else {
 		msg.addItem(itemId, itemCount, shouldSendItemTierData(), shouldSendItemTierByte(),
-		            shouldSendQuickLootFlags(), canSendAstraItemState(), shouldSendAstraQuiverCountU16());
+		            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	}
 	msg.addByte(0);
 
@@ -5231,7 +5228,7 @@ void ProtocolGame::sendImbuementDurations(slots_t updatedSlot, const Item* updat
 		const Item* item = p.second;
 
 		msg.addByte(static_cast<uint8_t>(slot));
-		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
+		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC,
 		            canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 
 		uint16_t totalSlots = item->getImbuementSlots();
