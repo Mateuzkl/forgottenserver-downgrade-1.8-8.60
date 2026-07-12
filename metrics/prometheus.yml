@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: tfs
+    static_configs:
+      # The TFS Prometheus endpoint (metricsPrometheusAddress in config.lua).
+      # host.docker.internal resolves to the host machine, where tfs runs.
+      - targets: ["host.docker.internal:9464"]
