@@ -181,6 +181,14 @@ endif ()
 if (ENABLE_METRICS)
     find_package(prometheus-cpp CONFIG REQUIRED)
     find_package(opentelemetry-cpp CONFIG REQUIRED)
+    foreach (otel_target metrics prometheus_exporter ostream_metrics_exporter)
+        if (NOT TARGET opentelemetry-cpp::${otel_target})
+            message(FATAL_ERROR
+                "opentelemetry-cpp is missing the ${otel_target} target. Rebuild it with its "
+                "default exporters and WITH_PROMETHEUS=ON (see build.sh --metrics on or the "
+                "vcpkg 'metrics' feature).")
+        endif ()
+    endforeach ()
     message(STATUS "OpenTelemetry metrics enabled (Prometheus exporter)")
     ADD_DEFINITIONS(-DMETRICS_ENABLED)
 endif ()

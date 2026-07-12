@@ -509,7 +509,8 @@ public:
 	void saveGameState(bool crash = false);
 
 	// Events
-	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration, int64_t expectedFireNs);
+	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration,
+	                       std::chrono::steady_clock::time_point expectedFireTime);
 	void updateCreatureWalk(uint32_t creatureId, uint64_t lifetimeToken, uint32_t generation);
 	void checkCreatureAttack(uint32_t creatureId);
 	void checkCreatures(size_t index);

@@ -4014,9 +4014,10 @@ int LuaScriptInterface::luaGetCreatureSchedulerStats(lua_State* L)
 	const uint64_t walkScheduled = sched.walkScheduled.load(std::memory_order_relaxed);
 	const uint64_t walkExecuted = sched.walkExecuted.load(std::memory_order_relaxed);
 	const uint64_t walkCancelled = sched.walkCancelled.load(std::memory_order_relaxed);
-	append(fmt::format("walk events: {} scheduled, {} executed, {} cancelled, {} stale, {} pending", walkScheduled,
-	                   walkExecuted, walkCancelled, sched.walkStale.load(std::memory_order_relaxed),
-	                   sched.walkPending()));
+	append(fmt::format("walk events: {} scheduled, {} executed, {} cancelled, {} orphaned, {} stale, {} pending",
+	                   walkScheduled, walkExecuted, walkCancelled,
+	                   sched.walkOrphaned.load(std::memory_order_relaxed),
+	                   sched.walkStale.load(std::memory_order_relaxed), sched.walkPending()));
 	append(fmt::format("walk rejected: {} generation, {} event-id",
 	                   sched.walkRejectedGeneration.load(std::memory_order_relaxed),
 	                   sched.walkRejectedEventId.load(std::memory_order_relaxed)));

@@ -362,11 +362,10 @@ void Creature::addEventWalk(bool firstStep)
 	const uint32_t safeTicks = static_cast<uint32_t>(std::max<int64_t>(1, ticks));
 	const uint32_t cid = getID();
 	const uint32_t generation = walkGeneration;
-	const int64_t expectedFireNs =
-	    (std::chrono::steady_clock::now() + std::chrono::milliseconds(safeTicks)).time_since_epoch().count();
+	const auto expectedFireTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(safeTicks);
 
-	auto walkTask = [cid, generation, expectedFireNs]() {
-		g_game.checkCreatureWalk(cid, generation, expectedFireNs);
+	auto walkTask = [cid, generation, expectedFireTime]() {
+		g_game.checkCreatureWalk(cid, generation, expectedFireTime);
 	};
 	eventWalk = g_scheduler.addEvent(createSchedulerTask(safeTicks, std::move(walkTask)));
 

@@ -80,16 +80,19 @@ public:
 	[[nodiscard]] bool isDebug() const noexcept { return debug.load(std::memory_order_relaxed); }
 
 	// Walk event lifecycle. Every scheduled event terminates exactly once:
-	// executed, cancelled while pending by stopEventWalk, or rejected by the
-	// generation defense in checkCreatureWalk (rejection implies the cancel
-	// was not counted as pending, so the sets are disjoint). Pending events
-	// are derived: scheduled - executed - cancelled - rejected.
+	// executed (onWalk ran), cancelled while pending by stopEventWalk,
+	// rejected by the generation defense in checkCreatureWalk (rejection
+	// implies the cancel was not counted as pending, so the sets are
+	// disjoint), or orphaned (fired after its creature was removed/died).
+	// Pending events are derived:
+	// scheduled - executed - cancelled - rejected - orphaned.
 	std::atomic<uint64_t> walkScheduled{0};
 	std::atomic<uint64_t> walkExecuted{0};
 	std::atomic<uint64_t> walkCancelled{0};
+	std::atomic<uint64_t> walkOrphaned{0};
 	std::atomic<uint64_t> walkStale{0};
-	std::atomic<uint64_t> walkRejectedGeneration{0}; // incremented once stale rejection ships
-	std::atomic<uint64_t> walkRejectedEventId{0};    // incremented once stale rejection ships
+	std::atomic<uint64_t> walkRejectedGeneration{0}; // defense in depth, expected to stay 0
+	std::atomic<uint64_t> walkRejectedEventId{0};    // reserved, currently always 0
 	Histogram walkExecutionDelay;                    // scheduled fire time -> callback entry
 
 	[[nodiscard]] int64_t walkPending() const noexcept
@@ -100,8 +103,9 @@ public:
 		const auto executed = static_cast<int64_t>(walkExecuted.load(std::memory_order_relaxed));
 		const auto cancelled = static_cast<int64_t>(walkCancelled.load(std::memory_order_relaxed));
 		const auto rejected = static_cast<int64_t>(walkRejectedGeneration.load(std::memory_order_relaxed));
+		const auto orphaned = static_cast<int64_t>(walkOrphaned.load(std::memory_order_relaxed));
 		const auto scheduled = static_cast<int64_t>(walkScheduled.load(std::memory_order_relaxed));
-		return std::max<int64_t>(0, scheduled - executed - cancelled - rejected);
+		return std::max<int64_t>(0, scheduled - executed - cancelled - rejected - orphaned);
 	}
 
 	// Follow path update lifecycle (requestFollowPathUpdate / updateCreatureWalk).

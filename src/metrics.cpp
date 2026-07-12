@@ -75,6 +75,7 @@ void observeWalkEvents(metrics_api::ObserverResult result, void*)
 	observer->Observe(toInt64(m.walkScheduled.load(std::memory_order_relaxed)), AttributeMap{{"state", "scheduled"}});
 	observer->Observe(toInt64(m.walkExecuted.load(std::memory_order_relaxed)), AttributeMap{{"state", "executed"}});
 	observer->Observe(toInt64(m.walkCancelled.load(std::memory_order_relaxed)), AttributeMap{{"state", "cancelled"}});
+	observer->Observe(toInt64(m.walkOrphaned.load(std::memory_order_relaxed)), AttributeMap{{"state", "orphaned"}});
 	observer->Observe(toInt64(m.walkStale.load(std::memory_order_relaxed)), AttributeMap{{"state", "stale"}});
 	observer->Observe(toInt64(m.walkRejectedGeneration.load(std::memory_order_relaxed)),
 	                  AttributeMap{{"state", "rejected_generation"}});

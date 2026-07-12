@@ -54,8 +54,8 @@ time, so game hot paths never call into OpenTelemetry.
 
 | Series | Content | Requires |
 | --- | --- | --- |
-| `tfs_creature_walk_events_total{state}` | scheduled / executed / cancelled / stale / rejected_* | `creatureSchedulerMetrics = true` |
-| `tfs_creature_walk_pending` | scheduled − executed − cancelled − rejected | idem |
+| `tfs_creature_walk_events_total{state}` | scheduled / executed / cancelled / orphaned / stale / rejected_* | always on |
+| `tfs_creature_walk_pending` | scheduled − executed − cancelled − rejected − orphaned | always on |
 | `tfs_creature_walk_delay_microseconds{quantile}` | p50/p95/p99/max callback delay | idem |
 | `tfs_creature_walk_delay_sum_microseconds` / `_count` | for rate-based averages | idem |
 | `tfs_follow_updates_total{state}` | requested / coalesced_* / executed / stale | idem |

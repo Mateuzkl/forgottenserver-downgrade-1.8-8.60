@@ -5899,7 +5899,8 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 	return true;
 }
 
-void Game::checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration, int64_t expectedFireNs)
+void Game::checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration,
+                             std::chrono::steady_clock::time_point expectedFireTime)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatureWalk);
 	auto creatureRef = getCreatureByIDShared(creatureId);
@@ -5921,21 +5922,28 @@ void Game::checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration, int64
 		return;
 	}
 
+	// Orphaned: the event outlived its creature (removed or dead with the
+	// event still scheduled). A normal lifecycle outcome, counted separately
+	// so "executed" strictly means onWalk ran.
+	if (!creature || creature->isRemoved() || creature->isDead()) {
+		g_creatureSchedulerMetrics.walkOrphaned.fetch_add(1, std::memory_order_relaxed);
+		return;
+	}
+
 	g_creatureSchedulerMetrics.walkExecuted.fetch_add(1, std::memory_order_relaxed);
 
 	if (g_creatureSchedulerMetrics.isEnabled()) {
-		const int64_t nowNs = std::chrono::steady_clock::now().time_since_epoch().count();
-		if (nowNs > expectedFireNs) {
-			g_creatureSchedulerMetrics.walkExecutionDelay.record(
-			    static_cast<uint64_t>(nowNs - expectedFireNs) / 1000);
+		const auto now = std::chrono::steady_clock::now();
+		if (now > expectedFireTime) {
+			const auto delayMicroseconds =
+			    std::chrono::duration_cast<std::chrono::microseconds>(now - expectedFireTime).count();
+			g_creatureSchedulerMetrics.walkExecutionDelay.record(static_cast<uint64_t>(delayMicroseconds));
 		} else {
 			g_creatureSchedulerMetrics.walkExecutionDelay.record(0);
 		}
 	}
 
-	if (creature && !creature->isRemoved() && !creature->isDead()) {
-		creature->onWalk();
-	}
+	creature->onWalk();
 }
 
 void Game::updateCreatureWalk(uint32_t creatureId, uint64_t lifetimeToken, uint32_t generation)
