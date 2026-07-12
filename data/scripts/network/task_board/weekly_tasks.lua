@@ -145,6 +145,51 @@ end
 -- ============================================
 
 local weeklyCache = {}
+local weeklySaveQueues = {}
+local weeklySaveRevisions = {}
+
+-- Keep one write in flight per player so an older snapshot cannot finish after a newer one.
+local function runWeeklySaveQueue(playerGuid)
+	local queue = weeklySaveQueues[playerGuid]
+	local item = queue and queue.items[1]
+	if not item then
+		weeklySaveQueues[playerGuid] = nil
+		return
+	end
+
+	db.asyncQuery(item.query, function(success)
+		if weeklySaveQueues[playerGuid] ~= queue then
+			return
+		end
+		table.remove(queue.items, 1)
+		if item.onComplete then
+			item.onComplete(success, item.revision)
+		end
+		if queue.items[1] then
+			runWeeklySaveQueue(playerGuid)
+		else
+			queue.running = false
+			weeklySaveQueues[playerGuid] = nil
+		end
+	end)
+end
+
+local function enqueueWeeklySave(playerGuid, query, onComplete)
+	local queue = weeklySaveQueues[playerGuid]
+	if not queue then
+		queue = { items = {}, running = false }
+		weeklySaveQueues[playerGuid] = queue
+	end
+
+	local revision = (weeklySaveRevisions[playerGuid] or 0) + 1
+	weeklySaveRevisions[playerGuid] = revision
+	queue.items[#queue.items + 1] = { query = query, revision = revision, onComplete = onComplete }
+	if not queue.running then
+		queue.running = true
+		runWeeklySaveQueue(playerGuid)
+	end
+	return true
+end
 
 local function invalidateCache(playerGuid)
 	weeklyCache[playerGuid] = nil
@@ -237,7 +282,7 @@ local function loadWeeklyData(playerGuid)
 	return data
 end
 
-local function saveWeeklyData(playerGuid, async)
+local function saveWeeklyData(playerGuid, _async, onComplete)
 	local data = weeklyCache[playerGuid]
 	if not data then return end
 
@@ -266,11 +311,7 @@ local function saveWeeklyData(playerGuid, async)
 		"`weekly_progress_finished` = VALUES(`weekly_progress_finished`), " ..
 		"`kill_tasks` = VALUES(`kill_tasks`), `delivery_tasks` = VALUES(`delivery_tasks`), `last_week` = VALUES(`last_week`), " ..
 		"`last_item_notify` = VALUES(`last_item_notify`)"
-	if async then
-		db.asyncQuery(query)
-		return true
-	end
-	return db.query(query)
+	return enqueueWeeklySave(playerGuid, query, onComplete)
 end
 
 -- ============================================
@@ -775,8 +816,12 @@ function WeeklyTasks.saveOnLogout(player)
 	local data = loadWeeklyData(playerGuid)
 	data.hasExpansion = player:hasWeeklyExpansion()
 	syncSoulsealBalance(player, data)
-	saveWeeklyData(playerGuid)
-	invalidateCache(playerGuid)
+	saveWeeklyData(playerGuid, true, function(success, revision)
+		if success and weeklySaveRevisions[playerGuid] == revision then
+			invalidateCache(playerGuid)
+			weeklySaveRevisions[playerGuid] = nil
+		end
+	end)
 end
 
 -- Expose internal loader for C++ sync on login

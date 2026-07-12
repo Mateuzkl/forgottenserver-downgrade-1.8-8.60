@@ -53,7 +53,57 @@ local RESOURCE_INVENTORY_GOLD = 1
 local RESOURCE_PREY_WILDCARDS = 10
 
 local taskCache = {}
+local taskSaveQueues = {}
 local schemaReady = nil
+
+-- Serialize kill and logout snapshots on the same per-player chain.
+local function runTaskSaveQueue(playerGuid)
+	local queue = taskSaveQueues[playerGuid]
+	local query = queue and queue.items[1]
+	if not query then
+		taskSaveQueues[playerGuid] = nil
+		return
+	end
+
+	db.asyncQuery(query, function()
+		if taskSaveQueues[playerGuid] ~= queue then
+			return
+		end
+		table.remove(queue.items, 1)
+		if queue.items[1] then
+			runTaskSaveQueue(playerGuid)
+			return
+		end
+
+		local waiters = queue.waiters
+		taskSaveQueues[playerGuid] = nil
+		for _, waiter in ipairs(waiters) do
+			waiter()
+		end
+	end)
+end
+
+local function enqueueTaskSave(playerGuid, query)
+	local queue = taskSaveQueues[playerGuid]
+	if not queue then
+		queue = { items = {}, waiters = {} }
+		taskSaveQueues[playerGuid] = queue
+	end
+	queue.items[#queue.items + 1] = query
+	if #queue.items == 1 then
+		runTaskSaveQueue(playerGuid)
+	end
+	return true
+end
+
+local function afterTaskSaves(playerGuid, callback)
+	local queue = taskSaveQueues[playerGuid]
+	if not queue then
+		callback()
+		return
+	end
+	queue.waiters[#queue.waiters + 1] = callback
+end
 
 local function debug(message, ...)
 	if TaskHunting.DEBUG then
@@ -210,7 +260,7 @@ local function loadTaskData(player)
 	return data
 end
 
-local function saveSlot(player, slot, async)
+local function saveSlot(player, slot, _async)
 	local data = taskCache[player:getId()]
 	local slotData = data and data.slots[slot]
 	if not slotData then
@@ -237,11 +287,7 @@ local function saveSlot(player, slot, async)
 		serializedRaceList,
 		math.max(0, tonumber(slotData.freeRerollAt) or 0)
 	)
-	if async then
-		db.asyncQuery(query)
-		return true
-	end
-	return db.query(query)
+	return enqueueTaskSave(player:getGuid(), query)
 end
 
 local function saveAll(player)
@@ -848,7 +894,14 @@ function TaskHunting.onLogin(player)
 	if not supportsAstra(player) then
 		return true
 	end
-	TaskHunting.sendFullSync(player)
+	local playerId = player:getId()
+	local playerGuid = player:getGuid()
+	afterTaskSaves(playerGuid, function()
+		local currentPlayer = Player(playerId)
+		if currentPlayer and currentPlayer:getGuid() == playerGuid then
+			TaskHunting.sendFullSync(currentPlayer)
+		end
+	end)
 	return true
 end
 
