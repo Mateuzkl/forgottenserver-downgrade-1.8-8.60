@@ -217,18 +217,27 @@ void PerformanceMetrics::maybeReport()
 		return;
 	}
 
+	// Counters stay cumulative for exporters; the report prints per-interval
+	// deltas against the baselines. Maxima remain per-interval (exchange).
 	for (size_t metricIndex = 0; metricIndex < metrics.size(); ++metricIndex) {
 		auto& data = metrics[metricIndex];
-		const uint64_t calls = data.calls.exchange(0, std::memory_order_relaxed);
+		auto& baseline = reportBaselines[metricIndex];
+		const uint64_t cumulativeCalls = data.calls.load(std::memory_order_relaxed);
+		const uint64_t calls = cumulativeCalls - baseline.calls;
 		if (calls == 0) {
 			continue;
 		}
-		const uint64_t total = data.totalNanoseconds.exchange(0, std::memory_order_relaxed);
+		const uint64_t cumulativeTotal = data.totalNanoseconds.load(std::memory_order_relaxed);
+		const uint64_t total = cumulativeTotal - baseline.totalNanoseconds;
 		const uint64_t maximum = data.maximumNanoseconds.exchange(0, std::memory_order_relaxed);
 		std::array<uint64_t, HistogramBuckets> histogram{};
 		for (size_t i = 0; i < histogram.size(); ++i) {
-			histogram[i] = data.histogram[i].exchange(0, std::memory_order_relaxed);
+			const uint64_t cumulativeBucket = data.histogram[i].load(std::memory_order_relaxed);
+			histogram[i] = cumulativeBucket - baseline.histogram[i];
+			baseline.histogram[i] = cumulativeBucket;
 		}
+		baseline.calls = cumulativeCalls;
+		baseline.totalNanoseconds = cumulativeTotal;
 
 		LOG_INFO("[Perf] {} calls={} total_ms={:.3f} avg_us={:.3f} max_us={:.3f} p50_us={:.3f} p95_us={:.3f} p99_us={:.3f}",
 				 METRIC_NAMES[metricIndex], calls, total / 1'000'000.0, total / static_cast<double>(calls) / 1'000.0,
@@ -236,21 +245,28 @@ void PerformanceMetrics::maybeReport()
 				 percentile(histogram, calls, 95) / 1'000.0, percentile(histogram, calls, 99) / 1'000.0);
 	}
 
+	const uint64_t reactorDeferred = reactor.deferred.load(std::memory_order_relaxed);
+	const uint64_t reactorExpired = reactor.expired.load(std::memory_order_relaxed);
+	const uint64_t reactorDropped = reactor.dropped.load(std::memory_order_relaxed);
 	LOG_INFO("[Perf] reactor queue={} backlog_max={} deferred={} expired={} dropped={}",
 			 reactor.queueCurrent.load(std::memory_order_relaxed),
 			 reactor.queueMaximum.exchange(0, std::memory_order_relaxed),
-			 reactor.deferred.exchange(0, std::memory_order_relaxed),
-			 reactor.expired.exchange(0, std::memory_order_relaxed),
-			 reactor.dropped.exchange(0, std::memory_order_relaxed));
+			 reactorDeferred - reactorBaseline.deferred, reactorExpired - reactorBaseline.expired,
+			 reactorDropped - reactorBaseline.dropped);
+	reactorBaseline = {reactorDeferred, reactorExpired, reactorDropped};
+
+	const PathBaseline currentPath{
+	    path.requests.load(std::memory_order_relaxed),     path.successes.load(std::memory_order_relaxed),
+	    path.failures.load(std::memory_order_relaxed),     path.nodesVisited.load(std::memory_order_relaxed),
+	    path.tilesRead.load(std::memory_order_relaxed),    path.pathLength.load(std::memory_order_relaxed),
+	    path.reused.load(std::memory_order_relaxed),       path.invalidated.load(std::memory_order_relaxed),
+	};
 	LOG_INFO("[Perf] path requests={} success={} failure={} nodes={} tiles={} path_steps={} reused={} invalidated={}",
-			 path.requests.exchange(0, std::memory_order_relaxed),
-			 path.successes.exchange(0, std::memory_order_relaxed),
-			 path.failures.exchange(0, std::memory_order_relaxed),
-			 path.nodesVisited.exchange(0, std::memory_order_relaxed),
-			 path.tilesRead.exchange(0, std::memory_order_relaxed),
-			 path.pathLength.exchange(0, std::memory_order_relaxed),
-			 path.reused.exchange(0, std::memory_order_relaxed),
-			 path.invalidated.exchange(0, std::memory_order_relaxed));
+			 currentPath.requests - pathBaseline.requests, currentPath.successes - pathBaseline.successes,
+			 currentPath.failures - pathBaseline.failures, currentPath.nodesVisited - pathBaseline.nodesVisited,
+			 currentPath.tilesRead - pathBaseline.tilesRead, currentPath.pathLength - pathBaseline.pathLength,
+			 currentPath.reused - pathBaseline.reused, currentPath.invalidated - pathBaseline.invalidated);
+	pathBaseline = currentPath;
 }
 
 PerformanceMetrics::MetricSnapshot PerformanceMetrics::snapshot(PerformanceMetric metric) const noexcept

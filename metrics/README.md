@@ -55,16 +55,19 @@ time, so game hot paths never call into OpenTelemetry.
 | Series | Content | Requires |
 | --- | --- | --- |
 | `tfs_creature_walk_events_total{state}` | scheduled / executed / cancelled / stale / rejected_* | `creatureSchedulerMetrics = true` |
-| `tfs_creature_walk_pending` | walk events scheduled but not yet resolved | idem |
+| `tfs_creature_walk_pending` | scheduled − executed − cancelled − rejected | idem |
 | `tfs_creature_walk_delay_microseconds{quantile}` | p50/p95/p99/max callback delay | idem |
 | `tfs_creature_walk_delay_sum_microseconds` / `_count` | for rate-based averages | idem |
 | `tfs_follow_updates_total{state}` | requested / coalesced_* / executed / stale | idem |
 | `tfs_move_spectators_total{stat}` | moves, spectator and player fan-out sums | idem |
+| `tfs_move_spectators_max` | largest fan-out seen for a single move (gauge) | idem |
 | `tfs_network_movement_packets_total` / `_bytes_total` | movement traffic (bytes are a lower bound) | idem |
-| `tfs_reactor{stat}` | queue_current / queue_max / deferred / expired / dropped | `performanceMetricsEnabled = true` |
+| `tfs_reactor{stat}` | queue_current / queue_max (gauge; queue_max resets per internal 5s report) | `performanceMetricsEnabled = true` |
+| `tfs_reactor_events_total{stat}` | deferred / expired / dropped (cumulative) | `performanceMetricsEnabled = true` |
 | `tfs_dispatcher_total{stat}` | tasks_processed / slow_tasks | always |
 | `tfs_path_total{stat}` | pathfinding requests / reuse / failures / nodes | `performanceMetricsEnabled = true` |
-| `tfs_method_calls_total{method}` / `tfs_method_duration_nanoseconds_total{method}` / `tfs_method_max_nanoseconds{method}` | per-method latency (`Game::checkCreatureWalk`, `Map::getPathMatching`, ...) | `performanceMetricsEnabled = true` |
+| `tfs_method_calls_total{method}` / `tfs_method_duration_nanoseconds_total{method}` | per-method latency, cumulative since startup (`Game::checkCreatureWalk`, `Map::getPathMatching`, ...) | `performanceMetricsEnabled = true` |
+| `tfs_method_max_nanoseconds{method}` | per-method maximum within the current 5s report window (gauge) | `performanceMetricsEnabled = true` |
 | `tfs_online{type}` | players / monsters / npcs online | always |
 
 Useful Grafana queries:

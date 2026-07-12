@@ -146,6 +146,38 @@ private:
 	std::atomic_bool enabled{false};
 	std::atomic<int64_t> nextReportNanoseconds{0};
 	std::atomic<uint64_t> nextDeathId{1};
+
+	// Counters are cumulative since startup so exporters (Prometheus,
+	// /creaturestats) see monotonic values; the periodic report prints
+	// per-interval deltas against these baselines instead of resetting.
+	// Only maybeReport() touches them, always on the reactor thread.
+	struct MetricBaseline
+	{
+		uint64_t calls = 0;
+		uint64_t totalNanoseconds = 0;
+		std::array<uint64_t, HistogramBuckets> histogram{};
+	};
+
+	std::array<MetricBaseline, static_cast<size_t>(PerformanceMetric::Count)> reportBaselines{};
+
+	struct ReactorBaseline
+	{
+		uint64_t deferred = 0;
+		uint64_t expired = 0;
+		uint64_t dropped = 0;
+	} reactorBaseline;
+
+	struct PathBaseline
+	{
+		uint64_t requests = 0;
+		uint64_t successes = 0;
+		uint64_t failures = 0;
+		uint64_t nodesVisited = 0;
+		uint64_t tilesRead = 0;
+		uint64_t pathLength = 0;
+		uint64_t reused = 0;
+		uint64_t invalidated = 0;
+	} pathBaseline;
 };
 
 class PerformanceScope

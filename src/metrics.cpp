@@ -134,8 +134,12 @@ void observeMoveSpectators(metrics_api::ObserverResult result, void*)
 	                  AttributeMap{{"stat", "spectators_sum"}});
 	observer->Observe(toInt64(m.movePlayerSpectatorsTotal.load(std::memory_order_relaxed)),
 	                  AttributeMap{{"stat", "player_spectators_sum"}});
-	observer->Observe(toInt64(m.moveSpectatorsMaximum.load(std::memory_order_relaxed)),
-	                  AttributeMap{{"stat", "spectators_max"}});
+}
+
+void observeMoveSpectatorsMaximum(metrics_api::ObserverResult result, void*)
+{
+	observerOf(result)->Observe(
+	    toInt64(g_creatureSchedulerMetrics.moveSpectatorsMaximum.load(std::memory_order_relaxed)));
 }
 
 void observeMovementPackets(metrics_api::ObserverResult result, void*)
@@ -149,12 +153,18 @@ void observeMovementBytes(metrics_api::ObserverResult result, void*)
 	observerOf(result)->Observe(toInt64(g_creatureSchedulerMetrics.networkMoveBytes.load(std::memory_order_relaxed)));
 }
 
-void observeReactor(metrics_api::ObserverResult result, void*)
+void observeReactorQueue(metrics_api::ObserverResult result, void*)
 {
 	auto observer = observerOf(result);
 	const auto reactor = g_performanceMetrics.reactorSnapshot();
 	observer->Observe(toInt64(reactor.queueCurrent), AttributeMap{{"stat", "queue_current"}});
 	observer->Observe(toInt64(reactor.queueMaximum), AttributeMap{{"stat", "queue_max"}});
+}
+
+void observeReactorEvents(metrics_api::ObserverResult result, void*)
+{
+	auto observer = observerOf(result);
+	const auto reactor = g_performanceMetrics.reactorSnapshot();
 	observer->Observe(toInt64(reactor.deferred), AttributeMap{{"stat", "deferred"}});
 	observer->Observe(toInt64(reactor.expired), AttributeMap{{"stat", "expired"}});
 	observer->Observe(toInt64(reactor.dropped), AttributeMap{{"stat", "dropped"}});
@@ -293,11 +303,16 @@ void Metrics::init(const MetricsOptions& options)
 	                 observeFollowUpdates);
 	impl->addCounter(meter, "tfs_move_spectators", "Spectator fan-out per Map::moveCreature", "{spectator}",
 	                 observeMoveSpectators);
+	impl->addGauge(meter, "tfs_move_spectators_max", "Largest spectator fan-out seen for a single move",
+	               "{spectator}", observeMoveSpectatorsMaximum);
 	impl->addCounter(meter, "tfs_network_movement_packets", "Movement packets written to clients", "{packet}",
 	                 observeMovementPackets);
 	impl->addCounter(meter, "tfs_network_movement_bytes", "Movement packet payload bytes (lower bound)", "By",
 	                 observeMovementBytes);
-	impl->addGauge(meter, "tfs_reactor", "TaskReactor queue and drop statistics", "{task}", observeReactor);
+	impl->addGauge(meter, "tfs_reactor", "TaskReactor queue depth (current and interval max)", "{task}",
+	               observeReactorQueue);
+	impl->addCounter(meter, "tfs_reactor_events", "TaskReactor deferred/expired/dropped task totals", "{task}",
+	                 observeReactorEvents);
 	impl->addCounter(meter, "tfs_dispatcher", "Dispatcher task statistics", "{task}", observeDispatcher);
 	impl->addCounter(meter, "tfs_path", "Pathfinding request statistics", "{request}", observePath);
 	impl->addCounter(meter, "tfs_method_calls", "Instrumented method call counts (performanceMetricsEnabled)",

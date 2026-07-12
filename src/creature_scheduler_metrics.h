@@ -7,6 +7,7 @@
 #include <array>
 #include <atomic>
 #include <bit>
+#include <cmath>
 #include <cstdint>
 
 // Aggregated lifecycle counters for creature walk/follow events.
@@ -56,11 +57,14 @@ public:
 			}
 
 			const uint64_t observedMaximum = maximumMicroseconds.load(std::memory_order_relaxed);
-			const auto threshold = static_cast<uint64_t>(static_cast<double>(totalCalls) * quantile);
+			// Round the rank up: truncation would select one rank too low and
+			// hide the tail with small sample counts.
+			const auto threshold = std::max<uint64_t>(
+			    1, static_cast<uint64_t>(std::ceil(static_cast<double>(totalCalls) * quantile)));
 			uint64_t cumulative = 0;
 			for (size_t index = 0; index < HistogramBuckets; ++index) {
 				cumulative += buckets[index].load(std::memory_order_relaxed);
-				if (cumulative >= threshold && cumulative > 0) {
+				if (cumulative >= threshold) {
 					const uint64_t upperBound = index == 0 ? 1 : (uint64_t{1} << index);
 					return std::min(upperBound, observedMaximum);
 				}
@@ -76,9 +80,10 @@ public:
 	[[nodiscard]] bool isDebug() const noexcept { return debug.load(std::memory_order_relaxed); }
 
 	// Walk event lifecycle. Every scheduled event terminates exactly once:
-	// executed as the tracked event, or cancelled by stopEventWalk (a
-	// cancelled event that still runs is additionally counted stale).
-	// Pending events are therefore derived: scheduled - executed - cancelled.
+	// executed, cancelled while pending by stopEventWalk, or rejected by the
+	// generation defense in checkCreatureWalk (rejection implies the cancel
+	// was not counted as pending, so the sets are disjoint). Pending events
+	// are derived: scheduled - executed - cancelled - rejected.
 	std::atomic<uint64_t> walkScheduled{0};
 	std::atomic<uint64_t> walkExecuted{0};
 	std::atomic<uint64_t> walkCancelled{0};
@@ -89,10 +94,14 @@ public:
 
 	[[nodiscard]] int64_t walkPending() const noexcept
 	{
-		const auto scheduled = static_cast<int64_t>(walkScheduled.load(std::memory_order_relaxed));
+		// Read the terminal counters before scheduled: scheduled only grows,
+		// so reading it last cannot undercount and the result stays
+		// non-negative even when scraped from another thread mid-update.
 		const auto executed = static_cast<int64_t>(walkExecuted.load(std::memory_order_relaxed));
 		const auto cancelled = static_cast<int64_t>(walkCancelled.load(std::memory_order_relaxed));
-		return scheduled - executed - cancelled;
+		const auto rejected = static_cast<int64_t>(walkRejectedGeneration.load(std::memory_order_relaxed));
+		const auto scheduled = static_cast<int64_t>(walkScheduled.load(std::memory_order_relaxed));
+		return std::max<int64_t>(0, scheduled - executed - cancelled - rejected);
 	}
 
 	// Follow path update lifecycle (requestFollowPathUpdate / updateCreatureWalk).
