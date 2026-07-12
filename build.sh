@@ -12,6 +12,10 @@ LUA_PREFIX="/usr/local"
 SIMDUTF_DIR="${HOME}/.cache/tfs-build/simdutf"
 SIMDUTF_PREFIX="${HOME}/.local"
 MIO_DIR="${HOME}/.cache/tfs-build/mio"
+PROMETHEUS_CPP_VERSION="v1.2.4"
+PROMETHEUS_CPP_DIR="${HOME}/.cache/tfs-build/prometheus-cpp"
+OPENTELEMETRY_VERSION="v1.16.1"
+OPENTELEMETRY_DIR="${HOME}/.cache/tfs-build/opentelemetry-cpp"
 
 BUILD_DIR="build-release"
 OUTPUT_BIN=""
@@ -19,6 +23,7 @@ UBUNTU_TARGET="${TFS_UBUNTU_TARGET:-auto}"
 UI_LANG="${TFS_BUILD_LANG:-}"
 JOBS="${JOBS:-}"
 HTTP="ON"
+METRICS="OFF"
 USE_MIMALLOC="ON"
 TFS_CXX_COMPILER=""
 CLEAN_BUILD=0
@@ -300,6 +305,7 @@ Options:
   --clean                Remove build-release before configuring
   --output PATH          Copy final binary to PATH (default: ./tfs)
   --http on|off          Configure CMake HTTP option (default: on)
+  --metrics on|off       Enable OpenTelemetry/Prometheus metrics (default: off)
   --no-mimalloc          Disable mimalloc in CMake
   --skip-deps            Do not install/check dependencies
   --skip-build           Install/check dependencies only
@@ -356,6 +362,15 @@ parse_args() {
           on|yes|true|1) HTTP="ON" ;;
           off|no|false|0) HTTP="OFF" ;;
           *) die "--http must be on or off" ;;
+        esac
+        shift 2
+        ;;
+      --metrics)
+        [[ $# -ge 2 ]] || die "--metrics requires a value"
+        case "${2,,}" in
+          on|yes|true|1) METRICS="ON" ;;
+          off|no|false|0) METRICS="OFF" ;;
+          *) die "--metrics must be on or off" ;;
         esac
         shift 2
         ;;
@@ -949,6 +964,67 @@ ensure_mio() {
   cmake --install build
 }
 
+prometheus_cpp_config_exists() {
+  [[ -f "${SIMDUTF_PREFIX}/lib/cmake/prometheus-cpp/prometheus-cpp-config.cmake" ]]
+}
+
+ensure_prometheus_cpp() {
+  if prometheus_cpp_config_exists; then
+    ok "prometheus-cpp ja esta instalado em ${SIMDUTF_PREFIX}"
+    return
+  fi
+
+  info "instalando prometheus-cpp ${PROMETHEUS_CPP_VERSION} em ${SIMDUTF_PREFIX}"
+  mkdir -p "$(dirname "${PROMETHEUS_CPP_DIR}")"
+  rm -rf "${PROMETHEUS_CPP_DIR}"
+  git clone --depth 1 --branch "${PROMETHEUS_CPP_VERSION}" --recursive \
+    https://github.com/jupp0r/prometheus-cpp.git "${PROMETHEUS_CPP_DIR}"
+
+  cmake -S "${PROMETHEUS_CPP_DIR}" -B "${PROMETHEUS_CPP_DIR}/build" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DENABLE_PUSH=OFF \
+    -DENABLE_TESTING=OFF \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DCMAKE_INSTALL_PREFIX="${SIMDUTF_PREFIX}"
+  cmake --build "${PROMETHEUS_CPP_DIR}/build" --parallel "${JOBS}"
+  cmake --install "${PROMETHEUS_CPP_DIR}/build"
+}
+
+opentelemetry_config_exists() {
+  [[ -f "${SIMDUTF_PREFIX}/lib/cmake/opentelemetry-cpp/opentelemetry-cpp-config.cmake" ]]
+}
+
+ensure_opentelemetry() {
+  if opentelemetry_config_exists; then
+    ok "opentelemetry-cpp ja esta instalado em ${SIMDUTF_PREFIX}"
+    return
+  fi
+
+  info "instalando opentelemetry-cpp ${OPENTELEMETRY_VERSION} em ${SIMDUTF_PREFIX}"
+  mkdir -p "$(dirname "${OPENTELEMETRY_DIR}")"
+  rm -rf "${OPENTELEMETRY_DIR}"
+  git clone --depth 1 --branch "${OPENTELEMETRY_VERSION}" \
+    https://github.com/open-telemetry/opentelemetry-cpp.git "${OPENTELEMETRY_DIR}"
+
+  cmake -S "${OPENTELEMETRY_DIR}" -B "${OPENTELEMETRY_DIR}/build" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DWITH_STL=CXX23 \
+    -DCMAKE_CXX_STANDARD=23 \
+    -DWITH_PROMETHEUS=ON \
+    -DBUILD_TESTING=OFF \
+    -DWITH_EXAMPLES=OFF \
+    -DWITH_BENCHMARK=OFF \
+    -DWITH_FUNC_TESTS=OFF \
+    -DOPENTELEMETRY_INSTALL=ON \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DCMAKE_INSTALL_PREFIX="${SIMDUTF_PREFIX}" \
+    -DCMAKE_PREFIX_PATH="${SIMDUTF_PREFIX}"
+  cmake --build "${OPENTELEMETRY_DIR}/build" --parallel "${JOBS}"
+  cmake --install "${OPENTELEMETRY_DIR}/build"
+}
+
 prepare_repo() {
   section section_repo
 
@@ -1067,6 +1143,7 @@ configure_tfs() {
     -DCMAKE_BUILD_TYPE=Release
     "${compiler_args[@]}"
     -DHTTP="${HTTP}"
+    -DENABLE_METRICS="${METRICS}"
     -DDISABLE_STATS=1
     -DENABLE_SLOW_TASK_DETECTION=OFF
     -DUSE_MIMALLOC="${USE_MIMALLOC}"
@@ -1153,6 +1230,10 @@ main() {
     ensure_lua_55
     ensure_simdutf
     ensure_mio
+    if [[ "${METRICS}" == "ON" ]]; then
+      ensure_prometheus_cpp
+      ensure_opentelemetry
+    fi
   fi
 
   if [[ "${SKIP_BUILD}" -eq 1 ]]; then

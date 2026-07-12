@@ -24,7 +24,7 @@ constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Co
 	"Combat::doCombat", "Combat::doAreaCombat", "Death::total", "Death::lastHitCallbacks",
 	"Death::experienceCallbacks", "Death::mostDamageCallbacks", "Death::forgeReward", "Death::dropCorpse",
 	"Death::monsterTypeCallback", "Death::creatureCallbacks", "Death::dropLoot", "Death::quickLoot",
-	"Death::lootHighlight", "Death::finalize",
+	"Death::lootHighlight", "Death::finalize", "Creature::executeConditions",
 };
 
 struct DeathTraceState
@@ -251,6 +251,56 @@ void PerformanceMetrics::maybeReport()
 			 path.pathLength.exchange(0, std::memory_order_relaxed),
 			 path.reused.exchange(0, std::memory_order_relaxed),
 			 path.invalidated.exchange(0, std::memory_order_relaxed));
+}
+
+PerformanceMetrics::MetricSnapshot PerformanceMetrics::snapshot(PerformanceMetric metric) const noexcept
+{
+	const auto& data = metrics[static_cast<size_t>(metric)];
+	return {
+	    data.calls.load(std::memory_order_relaxed),
+	    data.totalNanoseconds.load(std::memory_order_relaxed),
+	    data.maximumNanoseconds.load(std::memory_order_relaxed),
+	};
+}
+
+uint64_t PerformanceMetrics::percentileNanoseconds(PerformanceMetric metric, uint64_t percent) const noexcept
+{
+	const auto& data = metrics[static_cast<size_t>(metric)];
+	std::array<uint64_t, 64> histogram{};
+	for (size_t i = 0; i < histogram.size(); ++i) {
+		histogram[i] = data.histogram[i].load(std::memory_order_relaxed);
+	}
+	return percentile(histogram, data.calls.load(std::memory_order_relaxed), percent);
+}
+
+PerformanceMetrics::ReactorSnapshot PerformanceMetrics::reactorSnapshot() const noexcept
+{
+	return {
+	    reactor.queueCurrent.load(std::memory_order_relaxed),
+	    reactor.queueMaximum.load(std::memory_order_relaxed),
+	    reactor.deferred.load(std::memory_order_relaxed),
+	    reactor.expired.load(std::memory_order_relaxed),
+	    reactor.dropped.load(std::memory_order_relaxed),
+	};
+}
+
+PerformanceMetrics::PathSnapshot PerformanceMetrics::pathSnapshot() const noexcept
+{
+	return {
+	    path.requests.load(std::memory_order_relaxed),
+	    path.successes.load(std::memory_order_relaxed),
+	    path.failures.load(std::memory_order_relaxed),
+	    path.nodesVisited.load(std::memory_order_relaxed),
+	    path.tilesRead.load(std::memory_order_relaxed),
+	    path.pathLength.load(std::memory_order_relaxed),
+	    path.reused.load(std::memory_order_relaxed),
+	    path.invalidated.load(std::memory_order_relaxed),
+	};
+}
+
+std::string_view PerformanceMetrics::metricName(PerformanceMetric metric) noexcept
+{
+	return METRIC_NAMES[static_cast<size_t>(metric)];
 }
 
 PerformanceScope::PerformanceScope(PerformanceMetric metric) noexcept :

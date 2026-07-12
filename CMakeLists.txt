@@ -26,6 +26,11 @@ if (BUILD_BENCHMARKING)
     list(APPEND VCPKG_MANIFEST_FEATURES "benchmarks")
 endif()
 
+option(ENABLE_METRICS "Enable OpenTelemetry metrics (Prometheus exporter)" OFF)
+if (ENABLE_METRICS)
+    list(APPEND VCPKG_MANIFEST_FEATURES "metrics")
+endif()
+
 option(ENABLE_ASAN "Enable AddressSanitizer for memory diagnostics" OFF)
 option(ENABLE_NATIVE_OPTIMIZATIONS "Enable -march=native/-mtune=native for local Release builds" ON)
 
@@ -171,6 +176,13 @@ if (NOT DEFINED DISABLE_STATS OR NOT DISABLE_STATS)
 else ()
     message(STATUS "OTS stats disabled. Run 'cmake -DDISABLE_STATS=0 ..' to enable")
     ADD_DEFINITIONS(-USTATS_ENABLED)
+endif ()
+
+if (ENABLE_METRICS)
+    find_package(prometheus-cpp CONFIG REQUIRED)
+    find_package(opentelemetry-cpp CONFIG REQUIRED)
+    message(STATUS "OpenTelemetry metrics enabled (Prometheus exporter)")
+    ADD_DEFINITIONS(-DMETRICS_ENABLED)
 endif ()
 
 include_directories(${OPENSSL_INCLUDE_DIR} ${LUA_INCLUDE_DIR} ${MYSQL_INCLUDE_DIR} ${PUGIXML_INCLUDE_DIR} ${CMAKE_SOURCE_DIR}/src)

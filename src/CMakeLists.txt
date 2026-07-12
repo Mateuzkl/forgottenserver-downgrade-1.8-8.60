@@ -83,6 +83,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/map.cpp
 	${CMAKE_CURRENT_LIST_DIR}/mapcache.cpp
 	${CMAKE_CURRENT_LIST_DIR}/matrixarea.cpp
+	${CMAKE_CURRENT_LIST_DIR}/metrics.cpp
 	${CMAKE_CURRENT_LIST_DIR}/monster.cpp
 	${CMAKE_CURRENT_LIST_DIR}/monsters.cpp
 	${CMAKE_CURRENT_LIST_DIR}/mounts.cpp
@@ -194,6 +195,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/luavariant.h
 	${CMAKE_CURRENT_LIST_DIR}/mailbox.h
 	${CMAKE_CURRENT_LIST_DIR}/map.h
+	${CMAKE_CURRENT_LIST_DIR}/metrics.h
 	${CMAKE_CURRENT_LIST_DIR}/mapcache.h
 	${CMAKE_CURRENT_LIST_DIR}/matrixarea.h
 	${CMAKE_CURRENT_LIST_DIR}/monster.h
@@ -268,8 +270,18 @@ target_link_libraries(tfslib PUBLIC
 	${LUA_LIBRARIES}
 	${MYSQL_CLIENT_LIBS}
 	)
+
+if (ENABLE_METRICS)
+	target_link_libraries(tfslib PUBLIC
+		opentelemetry-cpp::metrics
+		opentelemetry-cpp::prometheus_exporter
+		opentelemetry-cpp::ostream_metrics_exporter
+	)
+endif ()
 target_compile_definitions(tfslib PUBLIC ASIO_STANDALONE)
 set_target_properties(tfslib PROPERTIES UNITY_BUILD ${ENABLE_UNITY_BUILD})
+# metrics.cpp pulls in opentelemetry headers that are not unity-build safe
+set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/metrics.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 add_custom_target(format COMMAND /usr/bin/clang-format -style=file -i ${tfs_HDR} ${tfs_SRC} ${tfs_MAIN})
 

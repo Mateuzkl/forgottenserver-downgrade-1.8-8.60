@@ -6017,7 +6017,10 @@ void Game::checkCreatures(size_t index)
 			if (!creature->isDead() && !creature->isRemoved()) {
 				creature->onThink(EVENT_CREATURE_THINK_INTERVAL);
 				creature->onAttacking(EVENT_CREATURE_THINK_INTERVAL);
-				creature->executeConditions(EVENT_CREATURE_THINK_INTERVAL);
+				{
+					PerformanceScope conditionsScope(PerformanceMetric::CreatureExecuteConditions);
+					creature->executeConditions(EVENT_CREATURE_THINK_INTERVAL);
+				}
 			} else {
 				// Dead/removed creatures sitting idle — mark for removal next cycle
 				creature->creatureCheck = false;

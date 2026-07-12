@@ -47,6 +47,7 @@ enum class PerformanceMetric : uint8_t
 	DeathQuickLoot,
 	DeathLootHighlight,
 	DeathFinalize,
+	CreatureExecuteConditions,
 	Count,
 };
 
@@ -70,6 +71,42 @@ public:
 	void recordDeathPacket(uint8_t opcode, size_t bytes, uint32_t playerId) const;
 	[[nodiscard]] uint64_t currentDeathId() const noexcept;
 	void maybeReport();
+
+	// Read-side snapshots for exporters (/creaturestats, Prometheus). Safe to
+	// call from any thread; values are relaxed-atomic reads.
+	struct MetricSnapshot
+	{
+		uint64_t calls = 0;
+		uint64_t totalNanoseconds = 0;
+		uint64_t maximumNanoseconds = 0;
+	};
+
+	struct ReactorSnapshot
+	{
+		uint64_t queueCurrent = 0;
+		uint64_t queueMaximum = 0;
+		uint64_t deferred = 0;
+		uint64_t expired = 0;
+		uint64_t dropped = 0;
+	};
+
+	struct PathSnapshot
+	{
+		uint64_t requests = 0;
+		uint64_t successes = 0;
+		uint64_t failures = 0;
+		uint64_t nodesVisited = 0;
+		uint64_t tilesRead = 0;
+		uint64_t pathLength = 0;
+		uint64_t reused = 0;
+		uint64_t invalidated = 0;
+	};
+
+	[[nodiscard]] MetricSnapshot snapshot(PerformanceMetric metric) const noexcept;
+	[[nodiscard]] uint64_t percentileNanoseconds(PerformanceMetric metric, uint64_t percent) const noexcept;
+	[[nodiscard]] ReactorSnapshot reactorSnapshot() const noexcept;
+	[[nodiscard]] PathSnapshot pathSnapshot() const noexcept;
+	[[nodiscard]] static std::string_view metricName(PerformanceMetric metric) noexcept;
 
 private:
 	static constexpr size_t HistogramBuckets = 64;

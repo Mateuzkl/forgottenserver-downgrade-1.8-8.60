@@ -53,6 +53,18 @@
       "dependencies": [
         "benchmark"
       ]
+    },
+    "metrics": {
+      "description": "Enable OpenTelemetry metrics with Prometheus exporter",
+      "dependencies": [
+        {
+          "name": "opentelemetry-cpp",
+          "default-features": false,
+          "features": [
+            "prometheus"
+          ]
+        }
+      ]
     }
   },
   "default-features": [

@@ -9,6 +9,7 @@
 #include "console_styles.h"
 #include "creature_scheduler_metrics.h"
 #include "databasemanager.h"
+#include "metrics.h"
 #include "databasetasks.h"
 #include "game.h"
 #include "imbuement.h"
@@ -478,6 +479,15 @@ void startServer()
 	g_creatureSchedulerMetrics.setEnabled(getBoolean(ConfigManager::CREATURE_SCHEDULER_METRICS));
 	g_creatureSchedulerMetrics.setDebug(getBoolean(ConfigManager::CREATURE_SCHEDULER_DEBUG));
 
+	{
+		MetricsOptions metricsOptions;
+		metricsOptions.enablePrometheus = getBoolean(ConfigManager::METRICS_ENABLE_PROMETHEUS);
+		metricsOptions.prometheusAddress = getString(ConfigManager::METRICS_PROMETHEUS_ADDRESS);
+		metricsOptions.enableOstream = getBoolean(ConfigManager::METRICS_ENABLE_OSTREAM);
+		metricsOptions.ostreamIntervalMilliseconds = getInteger(ConfigManager::METRICS_OSTREAM_INTERVAL);
+		g_metrics.init(metricsOptions);
+	}
+
 	LOG_INFO(">> Reactor limits: maxTasks={}, timeBudget={}ms, maxInbox={}",
 	    getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE),
 	    getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS),
@@ -576,6 +586,7 @@ void startServer()
 #ifdef STATS_ENABLED
 		g_stats.shutdown();
 #endif
+		g_metrics.shutdown();
 	}
 
 	// --- Shutdown Watchdog ---
@@ -607,6 +618,7 @@ void startServer()
 #ifdef STATS_ENABLED
 	g_stats.join();
 #endif
+	g_metrics.shutdown();
 
 	// Only now is it safe to close Lua — all NpcScriptInterface destructors
 	// have already run and released their eventTableRef handles.
