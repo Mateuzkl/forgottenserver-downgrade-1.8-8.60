@@ -40,6 +40,20 @@ TEST_CASE(follow_path_allows_only_one_pending_request)
 	CHECK(!state.isPending());
 }
 
+TEST_CASE(follow_path_abandon_allows_replacement_request)
+{
+	FollowPathState state;
+	uint32_t abandonedToken = 0;
+	uint32_t replacementToken = 0;
+
+	CHECK(state.beginRequest(abandonedToken));
+	state.abandonRequest(abandonedToken);
+	CHECK(!state.isPending());
+	CHECK(state.beginRequest(replacementToken));
+	CHECK(state.isPending());
+	CHECK(state.acceptResult(replacementToken));
+}
+
 TEST_CASE(follow_path_rejects_stale_result_after_invalidation)
 {
 	FollowPathState state;
