@@ -105,6 +105,13 @@ local function supportsHuntAnalyzer(player)
 	return player.isUsingOtClient and player:isUsingOtClient()
 end
 
+-- Astra receives the complete recursive corpse in 0xD1. Sending one extra
+-- 0xCF packet per leaf item duplicates the same loot and creates a packet/UI
+-- burst on the exact frame in which the monster dies.
+local function hasInlineLootStats(player)
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+end
+
 local function sendHuntAnalyzerKill(player, monster, corpse)
 	if not player or not supportsHuntAnalyzer(player) then
 		return
@@ -122,7 +129,7 @@ local function sendHuntAnalyzerKill(player, monster, corpse)
 	writeContainerItems(out, corpse)
 	out:sendToPlayer(player)
 
-	if player:getStorageValue(STORAGE_MEHAH_CLIENT) == 1 or supportsHuntAnalyzer(player) then
+	if not hasInlineLootStats(player) then
 		sendLootStatsRecursive(player, corpse)
 	end
 end

@@ -52,7 +52,9 @@ function Player:setBossCooldown(bossNameOrId, time)
 	if BossCooldown and BossCooldown.rememberKey then
 		BossCooldown.rememberKey(self, scope, time)
 	end
-	if BossCooldown and BossCooldown.send then
+	if BossCooldown and BossCooldown.sendUpdate then
+		BossCooldown.sendUpdate(self, bossNameOrId, time)
+	elseif BossCooldown and BossCooldown.send then
 		BossCooldown.send(self)
 	end
 	return result

@@ -42,6 +42,7 @@ local function getOrCreateSession(leader)
 			startTime = os.time(),
 			lootType = 0, -- 0=Market prices, 1=Leader prices
 			members = {},
+			flushEvent = nil,
 		}
 	end
 	return partySessions[leaderId]
@@ -113,6 +114,25 @@ function sendPartyAnalyzerToAll(leader)
 	end
 end
 
+local function flushPartyAnalyzer(leaderId)
+	local session = partySessions[leaderId]
+	if not session then return end
+	session.flushEvent = nil
+	local leader = Player(leaderId)
+	if leader and leader:getParty() then
+		sendPartyAnalyzerToAll(leader)
+	end
+end
+
+-- Damage/heal and loot callbacks can fire several times in one dispatcher
+-- cycle. Keep the numbers exact, but coalesce full-party packets into one
+-- attributed flush per 100 ms.
+local function queuePartyAnalyzerToAll(leader)
+	local session = getOrCreateSession(leader)
+	if not session or session.flushEvent then return end
+	session.flushEvent = addEvent(flushPartyAnalyzer, 100, leader:getId())
+end
+
 -- Drop event: add loot value when party member loots a corpse
 local partyLootDrop = Event()
 function partyLootDrop.onDropLoot(monster, corpse)
@@ -139,7 +159,7 @@ function partyLootDrop.onDropLoot(monster, corpse)
 	end
 
 	data.loot = data.loot + addContainerValue(corpse)
-	sendPartyAnalyzerToAll(leader)
+	queuePartyAnalyzerToAll(leader)
 end
 partyLootDrop:register(100)
 
@@ -153,15 +173,19 @@ function partyHealEvent.onHealthChange(creature, attacker, primaryDamage, primar
 	local session = getOrCreateSession(leader)
 	if not session then return primaryDamage, primaryType, secondaryDamage, secondaryType end
 
+	local changed = false
 	if primaryDamage > 0 then -- healing
 		local data = getOrCreateMemberData(session, creature:getId(), creature:getName())
 		data.healing = data.healing + primaryDamage
-		sendPartyAnalyzerToAll(leader)
+		changed = true
 	end
 	if secondaryDamage and secondaryDamage > 0 then
 		local data = getOrCreateMemberData(session, creature:getId(), creature:getName())
 		data.healing = data.healing + secondaryDamage
-		sendPartyAnalyzerToAll(leader)
+		changed = true
+	end
+	if changed then
+		queuePartyAnalyzerToAll(leader)
 	end
 
 	return primaryDamage, primaryType, secondaryDamage, secondaryType
@@ -186,6 +210,9 @@ local partyLogoutEvent = CreatureEvent("PartyAnalyzerLogout")
 function partyLogoutEvent.onLogout(player)
 	local leaderId = player:getId()
 	if partySessions[leaderId] then
+		if partySessions[leaderId].flushEvent then
+			stopEvent(partySessions[leaderId].flushEvent)
+		end
 		partySessions[leaderId] = nil
 		sendPartyAnalyzerToAll(player)
 	end
@@ -199,6 +226,9 @@ function partyCleanupEvent.onThink(interval)
 	for leaderId in pairs(partySessions) do
 		local leader = Player(leaderId)
 		if not leader or not leader:getParty() then
+			if partySessions[leaderId].flushEvent then
+				stopEvent(partySessions[leaderId].flushEvent)
+			end
 			partySessions[leaderId] = nil
 		end
 	end
@@ -231,6 +261,10 @@ function handler.onReceive(player, msg)
 	local action = msg:getByte()
 	if action == 0 then
 		if isPartyLeader(player) then
+			local oldSession = partySessions[player:getId()]
+			if oldSession and oldSession.flushEvent then
+				stopEvent(oldSession.flushEvent)
+			end
 			partySessions[player:getId()] = nil
 			sendPartyAnalyzerToAll(player)
 		end

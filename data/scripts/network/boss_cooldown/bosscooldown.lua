@@ -75,6 +75,42 @@ function BossCooldown.send(player)
 	return msg:sendToPlayer(player)
 end
 
+-- Incremental update used by Player:setBossCooldown. It preserves the 0x2C
+-- wire format (a one-entry list), but avoids scanning every boss/KV key and
+-- avoids rebuilding a large packet inside the death callback.
+function BossCooldown.sendUpdate(player, bossNameOrId, cooldown)
+	if not supportsBossCooldown(player) then
+		return false
+	end
+
+	local raceId = tonumber(bossNameOrId)
+	local entry
+	if raceId and CustomBosstiary and CustomBosstiary.monstersByRaceId then
+		entry = CustomBosstiary.monstersByRaceId[raceId]
+	elseif CustomBosstiary and CustomBosstiary.monstersByName then
+		entry = CustomBosstiary.monstersByName[tostring(bossNameOrId):lower()]
+		raceId = entry and entry.raceId
+	end
+	if not entry or not raceId then
+		return false
+	end
+
+	local outfit = normalizeOutfit(entry.outfit)
+	local msg = NetworkMessage(player)
+	msg:addByte(SERVER_PACKET_BOSS_COOLDOWN)
+	msg:addByte(1)
+	msg:addU16(raceId)
+	msg:addU32(clamp(cooldown, 0, 0xFFFFFFFF))
+	msg:addString(entry.name or "")
+	msg:addU16(outfit.type)
+	msg:addByte(outfit.head)
+	msg:addByte(outfit.body)
+	msg:addByte(outfit.legs)
+	msg:addByte(outfit.feet)
+	msg:addByte(outfit.addons)
+	return msg:sendToPlayer(player)
+end
+
 local bossCooldownLogin = CreatureEvent("BossCooldownLogin")
 function bossCooldownLogin.onLogin(player)
 	if supportsBossCooldown(player) then
