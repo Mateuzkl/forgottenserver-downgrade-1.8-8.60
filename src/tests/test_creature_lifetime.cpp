@@ -46,10 +46,14 @@ TEST_CASE(creature_lifetime_tokens_are_not_reused)
 {
 	auto first = makeTestCreature();
 	const uint64_t firstToken = first->getLifetimeToken();
+	const CreatureHandle firstHandle{42, firstToken};
 	first.reset();
 
 	auto second = makeTestCreature();
+	const CreatureHandle secondHandle{42, second->getLifetimeToken()};
 	CHECK(second->getLifetimeToken() != firstToken);
+	CHECK(secondHandle != firstHandle);
+	CHECK(firstHandle.valid());
 }
 
 TEST_CASE(summon_lifecycle_uses_weak_owner_links)

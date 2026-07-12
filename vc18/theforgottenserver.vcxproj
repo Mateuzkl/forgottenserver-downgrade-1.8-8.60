@@ -339,6 +339,7 @@
     <ClInclude Include="..\src\container.h" />
     <ClInclude Include="..\src\const.h" />
     <ClInclude Include="..\src\creature.h" />
+    <ClInclude Include="..\src\creature_handle.h" />
     <ClInclude Include="..\src\creatureevent.h" />
     <ClInclude Include="..\src\cylinder.h" />
     <ClInclude Include="..\src\database.h" />

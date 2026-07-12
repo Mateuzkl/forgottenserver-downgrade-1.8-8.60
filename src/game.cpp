@@ -947,6 +947,19 @@ std::shared_ptr<Creature> Game::getCreatureByIDShared(uint32_t id) const
 	return getCreatureSharedRef(id);
 }
 
+std::shared_ptr<Creature> Game::resolveCreature(CreatureHandle handle) const
+{
+	if (!handle.valid()) {
+		return nullptr;
+	}
+
+	auto creature = getCreatureByIDShared(handle.id);
+	if (!creature || creature->isRemoved() || creature->getLifetimeToken() != handle.generation) {
+		return nullptr;
+	}
+	return creature;
+}
+
 std::shared_ptr<Monster> Game::getMonsterByIDShared(uint32_t id) const
 {
 	return std::dynamic_pointer_cast<Monster>(getCreatureSharedRef(id));
@@ -5908,12 +5921,12 @@ void Game::checkCreatureWalk(uint32_t creatureId)
 	}
 }
 
-void Game::updateCreatureWalk(uint32_t creatureId, uint64_t lifetimeToken, uint32_t generation)
+void Game::updateCreatureWalk(CreatureHandle handle, uint32_t generation)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameUpdateCreatureWalk);
-	auto creatureRef = getCreatureByIDShared(creatureId);
+	auto creatureRef = resolveCreature(handle);
 	Creature* creature = creatureRef.get();
-	if (creature && creature->getLifetimeToken() == lifetimeToken && !creature->isRemoved() && !creature->isDead()) {
+	if (creature && !creature->isDead()) {
 		if (!creature->followPathState.acceptResult(generation)) {
 			creature->requestFollowPathUpdate();
 			return;
@@ -5922,11 +5935,11 @@ void Game::updateCreatureWalk(uint32_t creatureId, uint64_t lifetimeToken, uint3
 	}
 }
 
-void Game::checkCreatureAttack(uint32_t creatureId)
+void Game::checkCreatureAttack(CreatureHandle handle)
 {
-	auto creatureRef = getCreatureByIDShared(creatureId);
+	auto creatureRef = resolveCreature(handle);
 	Creature* creature = creatureRef.get();
-	if (creature && !creature->isRemoved() && !creature->isDead()) {
+	if (creature && !creature->isDead()) {
 		creature->onAttacking(0);
 	}
 }

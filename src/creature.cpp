@@ -492,7 +492,7 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 		} else {
 			if (hasExtraSwing()) {
 				// our target is moving lets see if we can get in hit
-				g_dispatcher.addTask(createTask([id = getID()]() { g_game.checkCreatureAttack(id); }));
+				g_dispatcher.addTask(createTask([handle = getHandle()]() { g_game.checkCreatureAttack(handle); }));
 			}
 
 			if (newTile->getZone() != oldTile->getZone()) {
@@ -1047,9 +1047,8 @@ void Creature::requestFollowPathUpdate()
 		return;
 	}
 	forceUpdateFollowPath = false;
-	const uint32_t id = getID();
-	const uint64_t token = getLifetimeToken();
-	if (!g_dispatcher.addTask([id, token, generation] { g_game.updateCreatureWalk(id, token, generation); })) {
+	const CreatureHandle handle = getHandle();
+	if (!g_dispatcher.addTask([handle, generation] { g_game.updateCreatureWalk(handle, generation); })) {
 		followPathState.abandonRequest(generation);
 	}
 }

@@ -4832,7 +4832,7 @@ bool Player::setAttackedCreature(Creature* creature)
 	}
 
 	if (creature) {
-		g_dispatcher.addTask([id = getID()]() { g_game.checkCreatureAttack(id); });
+		g_dispatcher.addTask([handle = getHandle()]() { g_game.checkCreatureAttack(handle); });
 	} else {
 		// Stop stamina trainer regeneration if we stop attacking
 		staminaTrainerActive = false;
@@ -4894,7 +4894,7 @@ void Player::doAttacking(uint32_t)
 		}
 
 		auto task = createSchedulerTask(std::max<uint32_t>(MIN_TASK_INTERVAL, delay),
-		                                          [id = getID()]() { g_game.checkCreatureAttack(id); });
+		                                          [handle = getHandle()]() { g_game.checkCreatureAttack(handle); });
 
 		if (!classicSpeed && !allowAutoAttackWithoutExhaustion) {
 			setNextActionTask(std::move(task), false);
@@ -4919,7 +4919,7 @@ void Player::maintainAttackFlow()
 		if ((OTSYS_TIME() - lastAttack) >= getAttackSpeed()) {
 			lastAttack = OTSYS_TIME() - getAttackSpeed() + 100;
 
-			auto task = createSchedulerTask(100, [id = getID()]() { g_game.checkCreatureAttack(id); });
+			auto task = createSchedulerTask(100, [handle = getHandle()]() { g_game.checkCreatureAttack(handle); });
 			bool classicSpeed = getBoolean(ConfigManager::CLASSIC_ATTACK_SPEED);
 
 			if (!classicSpeed && !allowAutoAttackWithoutExhaustion) {

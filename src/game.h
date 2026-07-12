@@ -7,6 +7,7 @@
 #include "account.h"
 #include "combat.h"
 #include "container.h"
+#include "creature_handle.h"
 #include "groups.h"
 #include "item.h"
 #include "map.h"
@@ -151,6 +152,7 @@ public:
 	 */
 	[[nodiscard]] Creature* getCreatureByID(uint32_t id);
 	[[nodiscard]] std::shared_ptr<Creature> getCreatureByIDShared(uint32_t id) const;
+	[[nodiscard]] std::shared_ptr<Creature> resolveCreature(CreatureHandle handle) const;
 
 	/**
 	 * Returns a monster based on the unique creature identifier
@@ -510,8 +512,8 @@ public:
 
 	// Events
 	void checkCreatureWalk(uint32_t creatureId);
-	void updateCreatureWalk(uint32_t creatureId, uint64_t lifetimeToken, uint32_t generation);
-	void checkCreatureAttack(uint32_t creatureId);
+	void updateCreatureWalk(CreatureHandle creature, uint32_t generation);
+	void checkCreatureAttack(CreatureHandle creature);
 	void checkCreatures(size_t index);
 	void checkSereneStatus();
 

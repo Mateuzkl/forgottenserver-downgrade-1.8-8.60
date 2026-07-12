@@ -6,6 +6,7 @@
 
 #include "condition.h"
 #include "const.h"
+#include "creature_handle.h"
 #include "creatureevent.h"
 #include "enums.h"
 #include "follow_path.h"
@@ -168,6 +169,7 @@ public:
 
 	uint32_t getID() const { return id; }
 	uint64_t getLifetimeToken() const noexcept { return lifetimeToken; }
+	[[nodiscard]] CreatureHandle getHandle() const noexcept { return {id, lifetimeToken}; }
 	virtual void removeList() = 0;
 	virtual void addList() = 0;
 
