@@ -293,6 +293,64 @@ TEST_CASE(test_reactor_exception_does_not_stop_other_callbacks)
 	CHECK(executedAfterException);
 }
 
+TEST_CASE(test_reactor_cancel_from_earlier_task_in_same_batch)
+{
+	// A cancellation issued by a task must be honoured for tasks later in
+	// the SAME ready batch, not only for tasks still sitting in the heap.
+	TaskReactor reactor;
+	startReactor(reactor);
+	bool victimExecuted = false;
+	uint32_t victimId = 0;
+
+	reactor.schedule(0, [&reactor, &victimId] { reactor.cancel(victimId); });
+	victimId = reactor.schedule(0, [&victimExecuted] { victimExecuted = true; });
+	reactor.runOnce();
+
+	CHECK(!victimExecuted);
+}
+
+TEST_CASE(test_reactor_cancel_and_replace_within_batch_keeps_single_lineage)
+{
+	// The walk-event pattern: an earlier task cancels the pending event and
+	// schedules a replacement. Only the replacement may run; if the cancelled
+	// victim also runs, the caller ends up with two event lineages.
+	TaskReactor reactor;
+	startReactor(reactor);
+	int victimRuns = 0;
+	int replacementRuns = 0;
+	uint32_t victimId = 0;
+
+	reactor.schedule(0, [&reactor, &victimId, &replacementRuns] {
+		reactor.cancel(victimId);
+		reactor.schedule(0, [&replacementRuns] { ++replacementRuns; });
+	});
+	victimId = reactor.schedule(0, [&victimRuns] { ++victimRuns; });
+
+	reactor.runOnce();
+	reactor.runOnce();
+
+	CHECK(victimRuns == 0);
+	CHECK(replacementRuns == 1);
+}
+
+TEST_CASE(test_reactor_cancel_reports_whether_task_was_pending)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	int executions = 0;
+
+	const uint32_t executedId = reactor.schedule(0, [&executions] { ++executions; });
+	reactor.runOnce();
+	CHECK(executions == 1);
+	CHECK(!reactor.cancel(executedId));
+
+	const uint32_t pendingId = reactor.schedule(0, [&executions] { ++executions; });
+	CHECK(reactor.cancel(pendingId));
+	reactor.runOnce();
+	CHECK(executions == 1);
+	CHECK(!reactor.cancel(pendingId));
+}
+
 TEST_CASE(test_scheduler_dispatcher_move_only_pipeline)
 {
 	g_dispatcher.start();

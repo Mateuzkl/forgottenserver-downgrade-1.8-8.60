@@ -378,7 +378,19 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks, std::chrono::
 		}
 		if (task.identifier != 0) {
 			std::scoped_lock lock(mutex);
+			// Game logic runs on this thread, so a task earlier in this batch
+			// may have cancelled this one; those cancellations are still in
+			// cancelInbox because drainInbox only runs at the start of a
+			// cycle. Drain and recheck before executing, and erase consumed
+			// identifiers so the cancelled set cannot grow unbounded.
+			while (!cancelInbox.empty()) {
+				cancelled.insert(cancelInbox.front());
+				cancelInbox.pop_front();
+			}
 			activeIdentifiers.erase(task.identifier);
+			if (cancelled.erase(task.identifier) > 0) {
+				continue;
+			}
 		}
 
 		try {
