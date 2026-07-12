@@ -50,13 +50,18 @@ trap cleanup EXIT INT TERM
 
 printf 'Wait for server online, then press Enter.\n'
 read -r
-callgrind_control -p "${server_pid}" -i on
-callgrind_control -p "${server_pid}" -z
-
 printf 'Prepare scenario "%s", then press Enter to start %ss capture.\n' "${scenario}" "${duration}"
 read -r
+callgrind_control -p "${server_pid}" -z
+callgrind_control -p "${server_pid}" -i on
 sleep "${duration}"
 callgrind_control -p "${server_pid}" -d
 callgrind_control -p "${server_pid}" -i off
 
-printf 'Captured %s for PID %s.\n' "${scenario}" "${server_pid}"
+kill -INT "${server_pid}" 2>/dev/null || true
+wait "${server_pid}" || true
+trap - EXIT INT TERM
+
+output_file="callgrind-${scenario}.out.${server_pid}"
+[[ -s "${output_file}" ]] || die "Callgrind output is empty: ${output_file}"
+printf 'Captured %s: %s\n' "${scenario}" "${output_file}"

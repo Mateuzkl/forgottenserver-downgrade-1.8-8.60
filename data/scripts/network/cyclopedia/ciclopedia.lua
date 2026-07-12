@@ -279,8 +279,52 @@ local function updateKillCache(playerGuid, raceId, amount)
 		return false
 	end
 
-	kills[raceId] = math.max(0, (kills[raceId] or 0) + amount)
-	rebuildEarnedPoints(playerGuid, kills)
+	local oldKills = kills[raceId] or 0
+	local newKills = math.max(0, oldKills + amount)
+	kills[raceId] = newKills
+
+	-- Kill events used to rebuild both derived caches by scanning every
+	-- registered Bestiary entry. Keep the full rebuild on preload, then update
+	-- only the killed race during gameplay (same result, constant kill cost).
+	local entry = CustomBestiary.monstersByRaceId[raceId]
+	if not entry then
+		return true
+	end
+
+	local earnedPoints = earnedPointsCache[playerGuid]
+	if earnedPoints ~= nil then
+		if oldKills < entry.toKill and newKills >= entry.toKill then
+			earnedPointsCache[playerGuid] = earnedPoints + entry.charmPoints
+		elseif oldKills >= entry.toKill and newKills < entry.toKill then
+			earnedPointsCache[playerGuid] = math.max(0, earnedPoints - entry.charmPoints)
+		end
+	end
+
+	local finished = finishedCache[playerGuid]
+	if finished ~= nil then
+		if oldKills < entry.secondUnlock and newKills >= entry.secondUnlock then
+			local insertAt = #finished + 1
+			for index, finishedRaceId in ipairs(finished) do
+				if finishedRaceId == raceId then
+					insertAt = nil
+					break
+				elseif finishedRaceId > raceId then
+					insertAt = index
+					break
+				end
+			end
+			if insertAt then
+				table.insert(finished, insertAt, raceId)
+			end
+		elseif oldKills >= entry.secondUnlock and newKills < entry.secondUnlock then
+			for index, finishedRaceId in ipairs(finished) do
+				if finishedRaceId == raceId then
+					table.remove(finished, index)
+					break
+				end
+			end
+		end
+	end
 	return true
 end
 

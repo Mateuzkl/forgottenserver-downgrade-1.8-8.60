@@ -237,14 +237,14 @@ local function loadWeeklyData(playerGuid)
 	return data
 end
 
-local function saveWeeklyData(playerGuid)
+local function saveWeeklyData(playerGuid, async)
 	local data = weeklyCache[playerGuid]
 	if not data then return end
 
 	local ktJson = json.encode(data.killTasks or {})
 	local dtJson = json.encode(data.deliveryTasks or {})
 
-	db.query(
+	local query =
 		"INSERT INTO `player_weekly_tasks` (`player_id`, `has_expansion`, `difficulty`, " ..
 		"`any_creature_total`, `any_creature_current`, `completed_kill_tasks`, `completed_delivery_tasks`, " ..
 		"`kill_task_reward_exp`, `delivery_task_reward_exp`, `reward_hunting_points`, `reward_soulseals`, " ..
@@ -266,7 +266,11 @@ local function saveWeeklyData(playerGuid)
 		"`weekly_progress_finished` = VALUES(`weekly_progress_finished`), " ..
 		"`kill_tasks` = VALUES(`kill_tasks`), `delivery_tasks` = VALUES(`delivery_tasks`), `last_week` = VALUES(`last_week`), " ..
 		"`last_item_notify` = VALUES(`last_item_notify`)"
-	)
+	if async then
+		db.asyncQuery(query)
+		return true
+	end
+	return db.query(query)
 end
 
 -- ============================================
@@ -575,7 +579,7 @@ function WeeklyTasks.onKill(player, raceId)
 
 	if updated then
 		if shouldSave or shouldFullSync then
-			saveWeeklyData(playerGuid)
+			saveWeeklyData(playerGuid, true)
 		end
 		if protocol and protocol.sendWeeklyKillUpdate then
 			for _, update in ipairs(killUpdates) do

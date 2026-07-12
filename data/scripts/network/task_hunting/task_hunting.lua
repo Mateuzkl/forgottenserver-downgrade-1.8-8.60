@@ -210,7 +210,7 @@ local function loadTaskData(player)
 	return data
 end
 
-local function saveSlot(player, slot)
+local function saveSlot(player, slot, async)
 	local data = taskCache[player:getId()]
 	local slotData = data and data.slots[slot]
 	if not slotData then
@@ -220,7 +220,7 @@ local function saveSlot(player, slot)
 	-- TFS db.escapeString returns a quoted SQL string literal.
 	local serializedRaceList = db.escapeString(serializeRaceList(slotData.raceList))
 
-	return db.query(string.format(
+	local query = string.format(
 		"INSERT INTO `player_task_hunting` (`player_id`, `slot`, `state`, `selected_raceid`, `current_kills`, `rarity`, `upgraded`, `wildcard`, `race_list`, `free_reroll_at`) " ..
 		"VALUES (%d, %d, %d, %d, %d, %d, %d, %d, %s, %d) " ..
 		"ON DUPLICATE KEY UPDATE `state` = VALUES(`state`), `selected_raceid` = VALUES(`selected_raceid`), " ..
@@ -236,7 +236,12 @@ local function saveSlot(player, slot)
 		slotData.wildcard and 1 or 0,
 		serializedRaceList,
 		math.max(0, tonumber(slotData.freeRerollAt) or 0)
-	))
+	)
+	if async then
+		db.asyncQuery(query)
+		return true
+	end
+	return db.query(query)
 end
 
 local function saveAll(player)
@@ -829,7 +834,7 @@ function TaskHunting.onKill(player, raceId)
 				player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "Your Hunting Task is complete. Claim its reward in the Hunting Task window.")
 			end
 			if shouldPersistKillProgress(previousKills, slotData.currentKills, completedNow) then
-				saveSlot(player, slot)
+				saveSlot(player, slot, true)
 			end
 			TaskHunting.sendSlotData(player, slot)
 			return true

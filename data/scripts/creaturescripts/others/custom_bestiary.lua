@@ -153,20 +153,16 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 	end
 
 	for playerGuid, player in pairs(players) do
-		local oldKills = getBestiaryKillCount(playerGuid, raceId)
+		local oldKills = player:getBestiaryKillCount(raceId)
 		local killsToAdd = 1
 		local doubleChance = TaskBoard and TaskBoard.getBountyTalismanBonus and
 			TaskBoard.getBountyTalismanBonus(player, raceId, 3) or 0
 		if doubleChance > 0 and math.random(1, 10000) <= doubleChance then
 			killsToAdd = 2
 		end
-		local newKills = oldKills + killsToAdd
+		local newKills = player:addBestiaryKillCount(raceId, killsToAdd)
 		local oldProgress = CustomBestiary.getProgress(entry, oldKills)
 		local newProgress = CustomBestiary.getProgress(entry, newKills)
-
-		db.asyncQuery("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
-			playerGuid .. ", " .. raceId .. ", " .. killsToAdd ..
-			") ON DUPLICATE KEY UPDATE `kills` = `kills` + " .. killsToAdd)
 
 		if CustomBestiary.updateKillCache then
 			CustomBestiary.updateKillCache(playerGuid, raceId, killsToAdd)

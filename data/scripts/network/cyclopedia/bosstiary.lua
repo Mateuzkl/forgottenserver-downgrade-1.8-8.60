@@ -46,16 +46,8 @@ local function loadState(playerGuid)
 	return state
 end
 
-local function loadKills(playerGuid)
-	local kills = {}
-	local resultId = db.storeQuery("SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = " .. playerGuid)
-	if resultId ~= false then
-		repeat
-			kills[result.getDataInt(resultId, "raceid")] = result.getDataInt(resultId, "kills")
-		until not result.next(resultId)
-		result.free(resultId)
-	end
-	return kills
+local function loadKills(player)
+	return player:getBestiaryKills()
 end
 
 local function loadTracker(playerGuid)
@@ -143,7 +135,7 @@ local function sendWindow(player)
 
 	sendBaseData(player)
 	local playerGuid = player:getGuid()
-	local kills = loadKills(playerGuid)
+	local kills = loadKills(player)
 	local tracker = loadTracker(playerGuid)
 	local entries = {}
 	for _, entry in pairs(CustomBosstiary.monstersByRaceId) do
@@ -196,7 +188,7 @@ local function sendSlots(player)
 	sendBaseData(player)
 	local playerGuid = player:getGuid()
 	local state = loadState(playerGuid)
-	local kills = loadKills(playerGuid)
+	local kills = loadKills(player)
 	local finished = getFinishedBosses(kills)
 	local currentBonus = getLootBonus(state.points)
 	local removePrice = getRemovePrice(state.removeTimes)
@@ -288,7 +280,7 @@ local function handleSlotAction(player, slot, raceId)
 
 	local playerGuid = player:getGuid()
 	local state = loadState(playerGuid)
-	local kills = loadKills(playerGuid)
+	local kills = loadKills(player)
 	local finished = getFinishedBosses(kills)
 	if slot == 1 and #finished == 0 then
 		return

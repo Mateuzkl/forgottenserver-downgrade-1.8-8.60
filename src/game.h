@@ -574,6 +574,11 @@ public:
 	std::vector<std::shared_ptr<Player>> getPlayers() const;
 	const NpcRegistry& getNpcs() const { return npcs; }
 	const MonsterRegistry& getMonsters() const { return monsters; }
+	std::shared_ptr<Monster> getRandomForgeableMonster() const;
+	const std::unordered_set<uint32_t>& getInfluencedMonsterIds() const { return influencedMonsterIds; }
+	const std::unordered_set<uint32_t>& getFiendishMonsterIds() const { return fiendishMonsterIds; }
+	void updateForgeMonsters();
+	void removeForgeMonster(uint32_t monsterId);
 
 	void addPlayer(Player* player);
 	void removePlayer(Player* player);
@@ -740,6 +745,10 @@ private:
 
 	NpcRegistry npcs;
 	MonsterRegistry monsters;
+	std::vector<uint32_t> forgeableMonsterIds;
+	std::unordered_map<uint32_t, size_t> forgeableMonsterIndices;
+	std::unordered_set<uint32_t> influencedMonsterIds;
+	std::unordered_set<uint32_t> fiendishMonsterIds;
 	std::unordered_map<uint32_t, InstanceArea> instanceAreas;
 	
 	std::unordered_map<uint32_t, std::shared_ptr<Creature>> creatureSharedRefs;

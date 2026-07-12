@@ -132,6 +132,49 @@ int luaPlayerGetGuid(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetBestiaryKillCount(lua_State* L)
+{
+	// player:getBestiaryKillCount(raceId)
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_pushinteger(L, player->getBestiaryKillCount(getInteger<uint16_t>(L, 2)));
+	return 1;
+}
+
+int luaPlayerAddBestiaryKillCount(lua_State* L)
+{
+	// player:addBestiaryKillCount(raceId[, amount = 1])
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+	const uint16_t raceId = getInteger<uint16_t>(L, 2);
+	const uint32_t amount = getInteger<uint32_t>(L, 3, 1);
+	lua_pushinteger(L, player->addBestiaryKillCount(raceId, amount));
+	return 1;
+}
+
+int luaPlayerGetBestiaryKills(lua_State* L)
+{
+	// player:getBestiaryKills()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_createtable(L, 0, static_cast<int>(player->getBestiaryKills().size()));
+	for (const auto& [raceId, kills] : player->getBestiaryKills()) {
+		lua_pushinteger(L, kills);
+		lua_rawseti(L, -2, raceId);
+	}
+	return 1;
+}
+
 int luaPlayerGetIp(lua_State* L)
 {
 	// player:getIp()
@@ -4541,6 +4584,9 @@ void LuaScriptInterface::registerPlayer()
     registerMethod("Player", "isPlayer", luaPlayerIsPlayer);
 
 	registerMethod("Player", "getGuid", luaPlayerGetGuid);
+	registerMethod("Player", "getBestiaryKillCount", luaPlayerGetBestiaryKillCount);
+	registerMethod("Player", "addBestiaryKillCount", luaPlayerAddBestiaryKillCount);
+	registerMethod("Player", "getBestiaryKills", luaPlayerGetBestiaryKills);
 	registerMethod("Player", "getIp", luaPlayerGetIp);
 	registerMethod("Player", "getAccountId", luaPlayerGetAccountId);
 	registerMethod("Player", "getLastLoginSaved", luaPlayerGetLastLoginSaved);

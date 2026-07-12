@@ -120,6 +120,20 @@ int luaGameGetMonsters(lua_State* L)
 	return 1;
 }
 
+int luaGameGetRandomForgeableMonster(lua_State* L)
+{
+	// Game.getRandomForgeableMonster()
+	auto monster = g_game.getRandomForgeableMonster();
+	if (!monster) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushUserdata<Monster>(L, monster.get());
+	setCreatureMetatable(L, -1, monster.get());
+	return 1;
+}
+
 enum class ZoneCreatureFilter
 {
 	All,
@@ -1128,12 +1142,13 @@ int luaGameSetBoostedCreature(lua_State* L)
 int luaGameGetInfluencedCreatures(lua_State* L)
 {
 	// Game.getInfluencedCreatures()
-	lua_createtable(L, 0, 0);
+	const auto& ids = g_game.getInfluencedMonsterIds();
+	lua_createtable(L, static_cast<int>(ids.size()), 0);
 	int index = 0;
-	for (const auto& [id, monster] : g_game.getMonsters()) {
-		if (auto monsterRef = monster.lock(); monsterRef && monsterRef->isInfluenced()) {
-			pushUserdata<Monster>(L, monsterRef.get());
-			setCreatureMetatable(L, -1, monsterRef.get());
+	for (const uint32_t id : ids) {
+		if (auto monsterRef = g_game.getMonsterByID(id)) {
+			pushUserdata<Monster>(L, monsterRef);
+			setCreatureMetatable(L, -1, monsterRef);
 			lua_rawseti(L, -2, ++index);
 		}
 	}
@@ -1143,12 +1158,13 @@ int luaGameGetInfluencedCreatures(lua_State* L)
 int luaGameGetFiendishCreatures(lua_State* L)
 {
 	// Game.getFiendishCreatures()
-	lua_createtable(L, 0, 0);
+	const auto& ids = g_game.getFiendishMonsterIds();
+	lua_createtable(L, static_cast<int>(ids.size()), 0);
 	int index = 0;
-	for (const auto& [id, monster] : g_game.getMonsters()) {
-		if (auto monsterRef = monster.lock(); monsterRef && monsterRef->isFiendish()) {
-			pushUserdata<Monster>(L, monsterRef.get());
-			setCreatureMetatable(L, -1, monsterRef.get());
+	for (const uint32_t id : ids) {
+		if (auto monsterRef = g_game.getMonsterByID(id)) {
+			pushUserdata<Monster>(L, monsterRef);
+			setCreatureMetatable(L, -1, monsterRef);
 			lua_rawseti(L, -2, ++index);
 		}
 	}
@@ -1274,6 +1290,7 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "getSpawnRate", luaGameGetSpawnRate);
 	registerMethod("Game", "getNpcs", luaGameGetNpcs);
 	registerMethod("Game", "getMonsters", luaGameGetMonsters);
+	registerMethod("Game", "getRandomForgeableMonster", luaGameGetRandomForgeableMonster);
 	registerMethod("Game", "getCreaturesInZone", luaGameGetCreaturesInZone);
 	registerMethod("Game", "getPlayersInZone", luaGameGetPlayersInZone);
 	registerMethod("Game", "getNpcsInZone", luaGameGetNpcsInZone);

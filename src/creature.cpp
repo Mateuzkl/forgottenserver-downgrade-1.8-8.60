@@ -584,6 +584,10 @@ void Creature::onDeath()
 		}
 	}
 
+	if (Monster* monster = getMonster()) {
+		monster->rewardForgeKill(lastHitCreature.get(), mostDamageCreature.get());
+	}
+
 	bool droppedCorpse = dropCorpse(lastHitCreature.get(), mostDamageCreature.get(), lastHitUnjustified,
 	                               mostDamageUnjustified);
 	death(lastHitCreature.get());

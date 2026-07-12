@@ -141,6 +141,11 @@ exhaustItemAtUsePotion = true
 -- Most optional systems default to false for closer 8.60 behavior.
 -- Quick Loot defaults to true because the Astra managed-loot UI expects it.
 forgeSystemEnabled = false
+forgeInfluencedLimit = 24
+forgeFiendishLimit = 7
+forgeSpawnInterval = 270 -- seconds
+forgeExpireTime = 3600 -- seconds
+forgeFiendishSpawnChance = 30 -- percent per interval
 imbuementSystemEnabled = false
 monkVocationEnabled = false
 familiarSystemEnabled = false

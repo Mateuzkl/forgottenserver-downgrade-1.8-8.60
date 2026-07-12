@@ -659,6 +659,11 @@ bool ConfigManager::load()
 	floats[BOOSTED_SPAWN_MULTIPLIER] = getGlobalFloat(L, "boostedSpawnMultiplier", 0.5f);
 	integers[Integer::BOOSTED_BOSS_LOOT_BONUS] = getGlobalInteger(L, "boostedBossLootBonus", 250);
 	integers[Integer::BOOSTED_BOSS_KILL_BONUS] = getGlobalInteger(L, "boostedBossKillBonus", 3);
+	integers[Integer::FORGE_INFLUENCED_LIMIT] = getGlobalInteger(L, "forgeInfluencedLimit", 24);
+	integers[Integer::FORGE_FIENDISH_LIMIT] = getGlobalInteger(L, "forgeFiendishLimit", 7);
+	integers[Integer::FORGE_SPAWN_INTERVAL] = getGlobalInteger(L, "forgeSpawnInterval", 270);
+	integers[Integer::FORGE_EXPIRE_TIME] = getGlobalInteger(L, "forgeExpireTime", 3600);
+	integers[Integer::FORGE_FIENDISH_SPAWN_CHANCE] = getGlobalInteger(L, "forgeFiendishSpawnChance", 30);
 
 	// Stress Reactor
 	integers[Integer::STRESS_TEST_COUNT] = getGlobalInteger(L, "stressTestCount", 10000);

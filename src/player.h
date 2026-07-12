@@ -313,6 +313,10 @@ public:
 	void addSoulsealsPoints(uint64_t points);
 	[[nodiscard]] bool removeSoulsealsPoints(uint64_t points);
 
+	uint32_t getBestiaryKillCount(uint16_t raceId) const;
+	uint32_t addBestiaryKillCount(uint16_t raceId, uint32_t amount = 1);
+	const std::unordered_map<uint16_t, uint32_t>& getBestiaryKills() const { return bestiaryKills; }
+
 	bool hasWeeklyExpansion() const { return m_hasWeeklyExpansion; }
 	void setWeeklyExpansion(bool has) { m_hasWeeklyExpansion = has; }
 	float getResetDefenseBonus() const {
@@ -1624,6 +1628,7 @@ private:
 	uint64_t storageDirtyRevision = 0;
 	std::unordered_map<uint32_t, uint64_t> storageDirtyKeyRevisions;
 	std::unordered_map<std::string, PreyCombatBonus> preyCombatBonuses;
+	std::unordered_map<uint16_t, uint32_t> bestiaryKills;
 
 	std::unordered_map<uint8_t, OpenContainer> openContainers;
 	std::unordered_map<uint32_t, DepotLocker_ptr> depotLockerMap;

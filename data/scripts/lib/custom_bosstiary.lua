@@ -211,24 +211,16 @@ function CustomBosstiary.addKill(players, entry)
 	local increment = isBoosted and math.max(CustomBosstiary.getBoostedBossKillBonus(), 1) or 1
 
 	for playerGuid, player in pairs(players or {}) do
-		db.query("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
-			playerGuid .. ", " .. entry.raceId .. ", " .. increment .. ") ON DUPLICATE KEY UPDATE `kills` = `kills` + " .. increment)
-		db.query("INSERT IGNORE INTO `player_bosstiary` (`player_id`) VALUES (" .. playerGuid .. ")")
-
-		local newKills = 0
-		local resultId = db.storeQuery("SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = " ..
-			playerGuid .. " AND `raceid` = " .. entry.raceId)
-		if resultId ~= false then
-			newKills = result.getDataInt(resultId, "kills")
-			result.free(resultId)
-		else
-			print("[Warning] CustomBosstiary.addKill: failed to read kills for player " .. playerGuid .. " raceid " .. entry.raceId)
+		local oldKills = player:getBestiaryKillCount(entry.raceId)
+		local newKills = player:addBestiaryKillCount(entry.raceId, increment)
+		if CustomBestiary and CustomBestiary.updateKillCache then
+			CustomBestiary.updateKillCache(playerGuid, entry.raceId, increment)
 		end
+		db.asyncQuery("INSERT IGNORE INTO `player_bosstiary` (`player_id`) VALUES (" .. playerGuid .. ")")
 
-		local oldKills = math.max(0, newKills - increment)
 		local awardedPoints = CustomBosstiary.getAwardedPoints(entry, oldKills, newKills)
 		if awardedPoints > 0 then
-			db.query("UPDATE `player_bosstiary` SET `points` = `points` + " .. awardedPoints ..
+			db.asyncQuery("UPDATE `player_bosstiary` SET `points` = `points` + " .. awardedPoints ..
 				" WHERE `player_id` = " .. playerGuid)
 			if player then
 				player:sendTextMessage(MESSAGE_EVENT_ADVANCE or MESSAGE_STATUS_CONSOLE_BLUE,

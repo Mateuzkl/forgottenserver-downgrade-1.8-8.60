@@ -146,6 +146,72 @@ void Monster::setFiendish(bool v)
 	g_game.updateCreatureSkull(this);
 }
 
+void Monster::configureForge(bool makeFiendish, uint8_t level, time_t expireAt)
+{
+	if (isInfluenced() || isFiendish()) {
+		return;
+	}
+
+	forgeBaseMaxHealth = getMaxHealth();
+	forgeExpireAt = expireAt;
+	if (makeFiendish) {
+		setFiendish(true);
+		setMaxHealth(static_cast<int32_t>(std::round(static_cast<double>(forgeBaseMaxHealth) * 3.0)));
+	} else {
+		static constexpr std::array<double, 6> healthMultipliers{0.0, 1.50, 1.65, 1.80, 1.95, 2.10};
+		influencedLevel = std::clamp<uint8_t>(level, 1, 5);
+		setInfluenced(true);
+		setMaxHealth(static_cast<int32_t>(
+		    std::round(static_cast<double>(forgeBaseMaxHealth) * healthMultipliers[influencedLevel])));
+	}
+	setHealth(getMaxHealth());
+}
+
+void Monster::clearForgeStatus()
+{
+	setFiendish(false);
+	setInfluenced(false);
+	influencedLevel = 0;
+	forgeExpireAt = 0;
+	if (forgeBaseMaxHealth > 0) {
+		setMaxHealth(forgeBaseMaxHealth);
+		setHealth(forgeBaseMaxHealth);
+		forgeBaseMaxHealth = 0;
+	}
+}
+
+void Monster::rewardForgeKill(Creature* lastHitCreature, Creature* mostDamageCreature) const
+{
+	if (!isFiendish()) {
+		return;
+	}
+
+	Player* player = mostDamageCreature ? mostDamageCreature->getPlayer() : nullptr;
+	if (!player && lastHitCreature) {
+		player = lastHitCreature->getPlayer();
+	}
+	if (!player) {
+		return;
+	}
+
+	const int64_t currentDust = std::max<int64_t>(0, player->getStorageValue(FORGE_DUST_STORAGE).value_or(0));
+	int64_t dustLimit = player->getStorageValue(FORGE_DUST_LIMIT_STORAGE).value_or(100);
+	if (dustLimit <= 0) {
+		dustLimit = 100;
+		player->setStorageValue(FORGE_DUST_LIMIT_STORAGE, dustLimit);
+	}
+	const int64_t rolledDust = uniform_random(10, 25);
+	const int64_t newDust = std::min(currentDust + rolledDust, dustLimit);
+	player->setStorageValue(FORGE_DUST_STORAGE, newDust);
+	player->sendTextMessage(MESSAGE_INFO_DESCR, fmt::format(
+	    "You killed a Fiendish monster and received {} Dust!", newDust - currentDust));
+
+	const uint64_t baseExperience = mType->info.experience;
+	if (baseExperience > 0) {
+		player->addExperience(nullptr, baseExperience * 2, true);
+	}
+}
+
 Monster::Monster(const std::shared_ptr<MonsterType>& mType) : Creature(), nameDescription(mType->nameDescription), mType(mType)
 {
 	defaultOutfit = mType->info.outfit;
@@ -2685,6 +2751,9 @@ bool Monster::getCombatValues(int32_t& min, int32_t& max)
 		double mult = dmgMult[influencedLevel];
 		min = static_cast<int32_t>(min * mult);
 		max = static_cast<int32_t>(max * mult);
+	} else if (fiendish) {
+		min = static_cast<int32_t>(min * 1.80);
+		max = static_cast<int32_t>(max * 1.80);
 	}
 
 	return true;
@@ -2735,6 +2804,17 @@ void Monster::dropLoot(Container* corpse, Creature*)
 		rewardContainer->setIntAttr(ITEM_ATTRIBUTE_REWARDID, getMonster()->getID());
 		corpse->internalAddThing(rewardContainer.get());
 	} else if (lootDrop) {
+		if (isInfluenced() && influencedLevel >= 1 && influencedLevel <= 5) {
+			static constexpr std::array<uint16_t, 6> sliverMin{0, 1, 2, 3, 4, 5};
+			static constexpr std::array<uint16_t, 6> sliverMax{0, 3, 6, 9, 12, 15};
+			static constexpr std::array<uint32_t, 6> chanceBasisPoints{0, 7500, 8225, 9530, 10000, 10000};
+			if (uniform_random(1, 10000) <= static_cast<int32_t>(chanceBasisPoints[influencedLevel])) {
+				if (auto sliver = Item::CreateItem(37109, static_cast<uint16_t>(
+				        uniform_random(sliverMin[influencedLevel], sliverMax[influencedLevel])))) {
+					corpse->internalAddThing(sliver.get());
+				}
+			}
+		}
 		g_events->eventMonsterOnDropLoot(this, corpse);
 	}
 }

@@ -865,6 +865,16 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 		} while (result->next());
 	}
 
+	// Bestiary progress stays in memory during gameplay, matching Crystal's
+	// death pipeline. This removes one SQL write from every monster kill.
+	if ((result = db.storeQuery(fmt::format(
+	         "SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = {:d}",
+	         player->getGUID())))) {
+		do {
+			player->bestiaryKills[result->getNumber<uint16_t>("raceid")] = result->getNumber<uint32_t>("kills");
+		} while (result->next());
+	}
+
 	// load vip list
 	if ((result = db.storeQuery(fmt::format("SELECT `player_id` FROM `account_viplist` WHERE `account_id` = {:d}",
 	                                        player->getAccount())))) {
@@ -1414,6 +1424,24 @@ bool IOLoginData::savePlayerQueries(Player* player)
 				if (!storageQuery.execute()) {
 					return false;
 				}
+			}
+		}
+	}
+
+	// save Bestiary/Bosstiary progress
+	{
+		AutoStat statBestiary("savePlayer", "bestiary");
+		if (!player->bestiaryKills.empty()) {
+			DBInsert bestiaryQuery(
+			    "INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES ");
+			bestiaryQuery.upsert(std::vector<std::string>{"kills"});
+			for (const auto& [raceId, kills] : player->bestiaryKills) {
+				if (!bestiaryQuery.addRow(fmt::format("{:d}, {:d}, {:d}", player->getGUID(), raceId, kills))) {
+					return false;
+				}
+			}
+			if (!bestiaryQuery.execute()) {
+				return false;
 			}
 		}
 	}

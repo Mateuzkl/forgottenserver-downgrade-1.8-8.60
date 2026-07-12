@@ -248,7 +248,7 @@ local function loadBountyData(playerGuid)
 	return data
 end
 
-local function saveBountyData(playerGuid)
+local function saveBountyData(playerGuid, async)
 	local data = bountyCache[playerGuid]
 	if not data then return end
 
@@ -277,7 +277,7 @@ local function saveBountyData(playerGuid)
 	local preferredJson = json.encode(data.preferredLists or {})
 	local creaturesJson = json.encode(data.creaturesList or {})
 
-	db.query(
+	local query =
 		"INSERT INTO `player_bounty_tasks` (`player_id`, `state`, `difficulty`, `bounty_points`, `reroll_tokens`, " ..
 		"`free_reroll`, `active_raceid`, `active_kills`, `active_required`, `active_reward_exp`, `active_reward_pts`, " ..
 		"`active_grade`, `active_difficulty`, `active_index`, `active_claim_state`, " ..
@@ -311,7 +311,11 @@ local function saveBountyData(playerGuid)
 		"`talisman_loot_upgrade` = VALUES(`talisman_loot_upgrade`), `talisman_bestiary_upgrade` = VALUES(`talisman_bestiary_upgrade`), " ..
 		"`preferred_lists` = VALUES(`preferred_lists`), `creatures_list` = VALUES(`creatures_list`), " ..
 		"`reroll_mode` = VALUES(`reroll_mode`), `upgrade` = VALUES(`upgrade`)"
-	)
+	if async then
+		db.asyncQuery(query)
+		return true
+	end
+	return db.query(query)
 end
 
 -- ============================================
@@ -718,7 +722,7 @@ function BountyTasks.onKill(player, raceId)
 	end
 
 	if shouldPersistKillProgress(previousKills, currentKills, completedNow) then
-		saveBountyData(playerGuid)
+		saveBountyData(playerGuid, true)
 	end
 
 	if protocol and protocol.sendBountyKillUpdate then

@@ -97,6 +97,10 @@ public:
 	void setInfluencedLevel(uint8_t level) { influencedLevel = level; }
 	bool isFiendish() const { return fiendish; }
 	void setFiendish(bool v);
+	void configureForge(bool makeFiendish, uint8_t level, time_t expireAt);
+	void clearForgeStatus();
+	void rewardForgeKill(Creature* lastHitCreature, Creature* mostDamageCreature) const;
+	time_t getForgeExpireAt() const { return forgeExpireAt; }
 	Skulls_t getSkull() const override;
 	int32_t getLevel() const { return level; }
 
@@ -212,6 +216,8 @@ private:
 	bool influenced = false;
 	uint8_t influencedLevel = 0;
 	bool fiendish = false;
+	time_t forgeExpireAt = 0;
+	int32_t forgeBaseMaxHealth = 0;
 
 	void onCreatureEnter(Creature* creature);
 	void onCreatureLeave(Creature* creature);

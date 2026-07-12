@@ -375,6 +375,27 @@ bool Player::removeSoulsealsPoints(uint64_t points)
 	return true;
 }
 
+uint32_t Player::getBestiaryKillCount(uint16_t raceId) const
+{
+	const auto it = bestiaryKills.find(raceId);
+	return it != bestiaryKills.end() ? it->second : 0;
+}
+
+uint32_t Player::addBestiaryKillCount(uint16_t raceId, uint32_t amount)
+{
+	if (raceId == 0 || amount == 0) {
+		return getBestiaryKillCount(raceId);
+	}
+
+	uint32_t& kills = bestiaryKills[raceId];
+	if (kills > std::numeric_limits<uint32_t>::max() - amount) {
+		kills = std::numeric_limits<uint32_t>::max();
+	} else {
+		kills += amount;
+	}
+	return kills;
+}
+
 Player::~Player()
 {
 	for (auto& item : inventory) {

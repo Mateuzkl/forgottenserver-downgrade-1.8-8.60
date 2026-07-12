@@ -567,6 +567,9 @@ void Game::start(const std::shared_ptr<ServiceManager>& manager)
 	}
 	g_scheduler.addEvent(createSchedulerTask(EVENT_CREATURE_THINK_INTERVAL, [this]() { checkCreatures(0); }));
 	g_scheduler.addEvent(createSchedulerTask(1000, [this]() { checkSereneStatus(); }));
+	if (ConfigManager::getBoolean(ConfigManager::FORGE_SYSTEM_ENABLED)) {
+		g_scheduler.addEvent(createSchedulerTask(10000, [this]() { updateForgeMonsters(); }));
+	}
 	CharacterBazaar::finalizeExpiredAuctions();
 	CharacterBazaar::scheduleFinalization();
 }
@@ -8395,13 +8398,113 @@ void Game::removeNpc(Npc* npc)
 void Game::addMonster(Monster* monster)
 {
 	monsters[monster->getID()] = std::static_pointer_cast<Monster>(getCreatureSharedRef(monster));
+	if (!forgeableMonsterIndices.contains(monster->getID())) {
+		forgeableMonsterIndices[monster->getID()] = forgeableMonsterIds.size();
+		forgeableMonsterIds.push_back(monster->getID());
+	}
 	monstersOnline.store(monsters.size(), std::memory_order_relaxed);
 }
 
 void Game::removeMonster(Monster* monster)
 {
+	removeForgeMonster(monster->getID());
+	if (auto indexIt = forgeableMonsterIndices.find(monster->getID()); indexIt != forgeableMonsterIndices.end()) {
+		const size_t index = indexIt->second;
+		const uint32_t lastId = forgeableMonsterIds.back();
+		forgeableMonsterIds[index] = lastId;
+		forgeableMonsterIndices[lastId] = index;
+		forgeableMonsterIds.pop_back();
+		forgeableMonsterIndices.erase(indexIt);
+	}
 	monsters.erase(monster->getID());
 	monstersOnline.store(monsters.size(), std::memory_order_relaxed);
+}
+
+void Game::removeForgeMonster(uint32_t monsterId)
+{
+	influencedMonsterIds.erase(monsterId);
+	fiendishMonsterIds.erase(monsterId);
+}
+
+void Game::updateForgeMonsters()
+{
+	if (!ConfigManager::getBoolean(ConfigManager::FORGE_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	const time_t now = time(nullptr);
+	auto removeExpired = [this, now](std::unordered_set<uint32_t>& ids) {
+		for (auto it = ids.begin(); it != ids.end();) {
+			auto monster = getMonsterByID(*it);
+			if (!monster) {
+				it = ids.erase(it);
+				continue;
+			}
+			if (monster->getForgeExpireAt() > 0 && monster->getForgeExpireAt() <= now) {
+				monster->clearForgeStatus();
+				it = ids.erase(it);
+				continue;
+			}
+			++it;
+		}
+	};
+	removeExpired(influencedMonsterIds);
+	removeExpired(fiendishMonsterIds);
+
+	const time_t expireAt = now + std::max<int64_t>(1, ConfigManager::getInteger(ConfigManager::FORGE_EXPIRE_TIME));
+	if (influencedMonsterIds.size() < static_cast<size_t>(
+	        std::max<int64_t>(0, ConfigManager::getInteger(ConfigManager::FORGE_INFLUENCED_LIMIT)))) {
+		if (auto monster = getRandomForgeableMonster()) {
+			monster->configureForge(false, static_cast<uint8_t>(uniform_random(1, 5)), expireAt);
+			influencedMonsterIds.insert(monster->getID());
+		}
+	}
+
+	const int64_t fiendishChance = std::clamp<int64_t>(
+	    ConfigManager::getInteger(ConfigManager::FORGE_FIENDISH_SPAWN_CHANCE), 0, 100);
+	if (fiendishMonsterIds.size() < static_cast<size_t>(
+	        std::max<int64_t>(0, ConfigManager::getInteger(ConfigManager::FORGE_FIENDISH_LIMIT))) &&
+	    uniform_random(1, 100) <= fiendishChance) {
+		if (auto monster = getRandomForgeableMonster()) {
+			monster->configureForge(true, 0, expireAt);
+			fiendishMonsterIds.insert(monster->getID());
+		}
+	}
+
+	const uint32_t interval = static_cast<uint32_t>(std::max<int64_t>(
+	    1, ConfigManager::getInteger(ConfigManager::FORGE_SPAWN_INTERVAL)));
+	g_scheduler.addEvent(createSchedulerTask(interval * 1000, [this]() { updateForgeMonsters(); }));
+}
+
+std::shared_ptr<Monster> Game::getRandomForgeableMonster() const
+{
+	if (forgeableMonsterIds.empty()) {
+		return nullptr;
+	}
+
+	const size_t start = static_cast<size_t>(uniform_random(0, static_cast<int32_t>(forgeableMonsterIds.size() - 1)));
+	for (size_t offset = 0; offset < forgeableMonsterIds.size(); ++offset) {
+		const uint32_t monsterId = forgeableMonsterIds[(start + offset) % forgeableMonsterIds.size()];
+		auto monsterIt = monsters.find(monsterId);
+		if (monsterIt == monsters.end()) {
+			continue;
+		}
+
+		auto monster = monsterIt->second.lock();
+		const MonsterType* monsterType = monster ? monster->getMonsterType() : nullptr;
+		if (!monster || monster->isRemoved() || monster->getMaster() || monster->isInfluenced() || monster->isFiendish() ||
+		    !monsterType || monster->isBoss() || !monster->isAttackable() || !monster->isHostile() || monsterType->info.experience == 0) {
+			continue;
+		}
+
+		const std::string name = asLowerCaseString(monster->getName());
+		if (name.find("trainer") != std::string::npos || name.find("training") != std::string::npos ||
+		    name.find("dummy") != std::string::npos) {
+			continue;
+		}
+		return monster;
+	}
+	return nullptr;
 }
 
 Guild_ptr Game::getGuild(uint32_t id) const
