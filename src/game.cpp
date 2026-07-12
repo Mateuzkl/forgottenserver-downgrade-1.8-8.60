@@ -6052,12 +6052,21 @@ void Game::checkCreatures(size_t index)
 	const uint32_t rearmEventId = g_scheduler.addEvent(createSchedulerTask(
 	    EVENT_CHECK_CREATURE_INTERVAL, [index]() { g_game.checkCreatures((index + 1) % EVENT_CREATURECOUNT); }));
 	if (rearmEventId == 0 && g_scheduler.getState() == THREAD_STATE_RUNNING) {
-		// Losing this re-arm silences creature AI permanently. If the reactor
-		// rejected the scheduled event (inbox backpressure), fall back to an
-		// immediate dispatcher task so the loop survives the overload burst.
-		LOG_ERROR("[Game] checkCreatures re-arm rejected by the reactor; forcing direct dispatch");
-		if (!g_dispatcher.addTask(
-		        [index]() { g_game.checkCreatures((index + 1) % EVENT_CREATURECOUNT); })) {
+		// Losing this re-arm silences creature AI permanently. Retry the
+		// scheduled re-arm from a plain dispatcher task: it only runs after
+		// the next cycle drains the inboxes, so a transient rejection keeps
+		// the normal cadence instead of re-running the bucket immediately
+		// under the same backpressure that rejected the event. If scheduling
+		// is still saturated by then, run the bucket directly — each such hop
+		// costs a full reactor cycle, which self-throttles the loop.
+		LOG_ERROR("[Game] checkCreatures re-arm rejected by the reactor; retrying after the backlog drains");
+		const bool fallbackQueued = g_dispatcher.addTask([index]() {
+			auto retryTask = [index]() { g_game.checkCreatures((index + 1) % EVENT_CREATURECOUNT); };
+			if (g_scheduler.addEvent(createSchedulerTask(EVENT_CHECK_CREATURE_INTERVAL, std::move(retryTask))) == 0) {
+				g_game.checkCreatures((index + 1) % EVENT_CREATURECOUNT);
+			}
+		});
+		if (!fallbackQueued) {
 			LOG_ERROR("[Game] checkCreatures fallback re-arm also rejected; creature AI will stall");
 		}
 	}

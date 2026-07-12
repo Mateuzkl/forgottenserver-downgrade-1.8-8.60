@@ -23,18 +23,6 @@ local function findBestiaryEntry(value)
 	return nil
 end
 
-local function getStoredKills(playerGuid, raceId)
-	local resultId = db.storeQuery("SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = " ..
-		playerGuid .. " AND `raceid` = " .. raceId)
-	if resultId == false then
-		return 0
-	end
-
-	local kills = result.getDataInt(resultId, "kills")
-	result.free(resultId)
-	return math.max(0, kills)
-end
-
 local function getCharmPoints(playerGuid)
 	local resultId = db.storeQuery("SELECT `charmpoints` FROM `players` WHERE `id` = " .. playerGuid)
 	if resultId == false then
