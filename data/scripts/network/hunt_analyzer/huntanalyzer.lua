@@ -1,5 +1,9 @@
 -- data/scripts/network/huntanalyzer.lua
 
+-- Disabled: do not inspect corpses or emit analyzer packets during monster death.
+local HUNT_ANALYZER_ENABLED = false
+if HUNT_ANALYZER_ENABLED then
+
 local OPCODE_KILL_TRACKER = 0xD1
 local STORAGE_MEHAH_CLIENT = 99999 -- Must match extendedopcode.lua
 local MAX_ITEMS_PER_CONTAINER = 255
@@ -183,3 +187,5 @@ function huntAnalyzerDrop.onDropLoot(monster, corpse)
 end
 
 huntAnalyzerDrop:register(HUNT_ANALYZER_DROP_TRIGGER)
+
+end

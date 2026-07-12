@@ -1,7 +1,13 @@
+BossCooldown = BossCooldown or {}
+BossCooldown.send = nil
+BossCooldown.sendUpdate = nil
+
+-- Disabled: retain server-side boss-room cooldown enforcement, but remove its UI scan, timer and packets.
+local BOSS_COOLDOWN_NETWORK_ENABLED = false
+if BOSS_COOLDOWN_NETWORK_ENABLED then
+
 local SERVER_PACKET_BOSS_COOLDOWN = 0x2C
 local MAX_BOSSES_PER_PACKET = 0xFF
-
-BossCooldown = BossCooldown or {}
 
 local function supportsBossCooldown(player)
 	return player and player.isUsingAstraClient and player:isUsingAstraClient()
@@ -32,9 +38,11 @@ local function getActiveCooldowns(player)
 		return active
 	end
 
-	for raceId, entry in pairs(CustomBosstiary.monstersByRaceId) do
-		local cooldown = tonumber(kv:get("boss.cooldown." .. raceId)) or 0
-		if cooldown > now then
+	for _, key in ipairs(kv:keys("boss.cooldown")) do
+		local raceId = tonumber(key)
+		local entry = raceId and CustomBosstiary.monstersByRaceId[raceId]
+		local cooldown = entry and tonumber(kv:get("boss.cooldown." .. raceId)) or 0
+		if entry and cooldown > now then
 			active[#active + 1] = {
 			raceId = raceId,
 			cooldown = cooldown,
@@ -124,3 +132,5 @@ function bossCooldownLogin.onLogin(player)
 	return true
 end
 bossCooldownLogin:register()
+
+end

@@ -1,6 +1,10 @@
 -- data/scripts/network/party_analyzer/partytracker.lua
 -- Party Hunt Analyzer - tracks per-member loot/supplies/damage/healing and sends to AstraClient
 
+-- Disabled: keep party-analyzer work and packets out of combat/death paths.
+local PARTY_ANALYZER_ENABLED = false
+if PARTY_ANALYZER_ENABLED then
+
 local OPCODE_PARTY_ANALYZER = 0x2B
 local MSG_BLUE = MESSAGE_STATUS_CONSOLE_BLUE or MESSAGE_EVENT_ADVANCE or 19
 
@@ -285,3 +289,5 @@ PartyAnalyzer = {
 	send = sendPartyAnalyzer,
 	sendToAll = sendPartyAnalyzerToAll,
 }
+
+end
