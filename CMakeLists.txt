@@ -181,14 +181,20 @@ endif ()
 if (ENABLE_METRICS)
     find_package(prometheus-cpp CONFIG REQUIRED)
     find_package(opentelemetry-cpp CONFIG REQUIRED)
-    foreach (otel_target metrics prometheus_exporter ostream_metrics_exporter)
+    foreach (otel_target metrics prometheus_exporter)
         if (NOT TARGET opentelemetry-cpp::${otel_target})
             message(FATAL_ERROR
-                "opentelemetry-cpp is missing the ${otel_target} target. Rebuild it with its "
-                "default exporters and WITH_PROMETHEUS=ON (see build.sh --metrics on or the "
-                "vcpkg 'metrics' feature).")
+                "opentelemetry-cpp is missing the ${otel_target} target. Rebuild it with "
+                "WITH_PROMETHEUS=ON (see build.sh --metrics on or the vcpkg 'metrics' feature).")
         endif ()
     endforeach ()
+    # The ostream exporter ships with source builds but is not guaranteed by
+    # every vcpkg feature set; treat it as optional debug-only functionality.
+    if (TARGET opentelemetry-cpp::ostream_metrics_exporter)
+        ADD_DEFINITIONS(-DMETRICS_OSTREAM_ENABLED)
+    else ()
+        message(STATUS "opentelemetry-cpp ostream exporter unavailable; metricsEnableOstream will be inert")
+    endif ()
     message(STATUS "OpenTelemetry metrics enabled (Prometheus exporter)")
     ADD_DEFINITIONS(-DMETRICS_ENABLED)
 endif ()

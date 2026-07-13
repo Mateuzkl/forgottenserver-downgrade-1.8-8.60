@@ -316,6 +316,9 @@ void TaskReactor::drainInbox(std::vector<Task>& readyTasks, std::chrono::steady_
 			readyTasks.push_back(std::move(task));
 		} else {
 			g_performanceMetrics.recordTaskExpired();
+			// Clear the callback so a later budget break cannot requeue an
+			// already-expired task and count it expired again next cycle.
+			task.function = {};
 		}
 	}
 }

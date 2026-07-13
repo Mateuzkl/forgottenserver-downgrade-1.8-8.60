@@ -18,7 +18,7 @@
 Set `performanceMetricsEnabled = true` in `config.lua`, start the Release server, connect Astra and reproduce movement plus monster kills with all systems enabled. Stop with `Ctrl+C` after at least 60 seconds.
 
 ```bash
-cd '/mnt/c/Users/Mateus/Desktop/forge/carpet system/forgottenserver-downgrade-1.8-8.60'
+cd '<your-server-checkout>'
 ./build-release/tfs 2>&1 | tee "data/logs/stutter-final-$(date +%Y%m%d-%H%M%S).log"
 ```
 
@@ -27,7 +27,7 @@ Then extract correlated evidence:
 ```bash
 LOG=$(ls -t data/logs/stutter-final-*.log | head -1)
 grep -E '\[ServerDeathTrace\]|\[Perf\] (Death::|Game::checkCreatureWalk|Game::internalMoveCreature|Map::moveCreature|Map::getSpectators|reactor queue)' "$LOG"
-grep -E '\[ClientDeathTrace\]' '/mnt/c/Users/Mateus/Desktop/forge/bazar/AstraClient/otclientv8.log'
+grep -E '\[ClientDeathTrace\]' '<your-astra-client-dir>/otclientv8.log'
 tail -n 200 data/logs/stats/lua_slow.log
 tail -n 200 data/logs/stats/sql_slow.log
 tail -n 200 data/logs/stats/special.log

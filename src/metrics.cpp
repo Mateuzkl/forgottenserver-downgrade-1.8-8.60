@@ -38,7 +38,9 @@ bool Metrics::isEnabled() const noexcept { return false; }
 #include "performance_metrics.h"
 #include "tasks.h"
 
+#ifdef METRICS_OSTREAM_ENABLED
 #include <opentelemetry/exporters/ostream/metric_exporter_factory.h>
+#endif
 #include <opentelemetry/exporters/prometheus/exporter_factory.h>
 #include <opentelemetry/exporters/prometheus/exporter_options.h>
 #include <opentelemetry/metrics/provider.h>
@@ -278,6 +280,7 @@ void Metrics::init(const MetricsOptions& options)
 	}
 
 	if (options.enableOstream) {
+#ifdef METRICS_OSTREAM_ENABLED
 		metrics_sdk::PeriodicExportingMetricReaderOptions readerOptions;
 		readerOptions.export_interval_millis =
 		    std::chrono::milliseconds(std::max<int64_t>(100, options.ostreamIntervalMilliseconds));
@@ -286,6 +289,11 @@ void Metrics::init(const MetricsOptions& options)
 		provider->AddMetricReader(metrics_sdk::PeriodicExportingMetricReaderFactory::Create(
 		    metrics_exporter::OStreamMetricExporterFactory::Create(), readerOptions));
 		LOG_INFO(">> Metrics: OStream exporter every {} ms", options.ostreamIntervalMilliseconds);
+#else
+		LOG_WARN(
+		    "[Metrics] metricsEnableOstream set, but this opentelemetry-cpp build lacks the ostream exporter; "
+		    "ignoring");
+#endif
 	}
 
 	auto meter = provider->GetMeter("tfs", "1.0.0");

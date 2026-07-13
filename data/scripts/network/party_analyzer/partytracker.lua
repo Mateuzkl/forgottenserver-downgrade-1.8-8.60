@@ -114,9 +114,12 @@ function sendPartyAnalyzerToAll(leader)
 	end
 end
 
-local function flushPartyAnalyzer(leaderId)
+local function flushPartyAnalyzer(leaderId, generation)
 	local session = partySessions[leaderId]
 	if not session then return end
+	-- A stale event (from a session replaced under the same leader id) must
+	-- not clear the tracking of the live session's pending flush.
+	if generation ~= session.flushGeneration then return end
 	session.flushEvent = nil
 	local leader = Player(leaderId)
 	if leader and leader:getParty() then
@@ -130,7 +133,13 @@ end
 local function queuePartyAnalyzerToAll(leader)
 	local session = getOrCreateSession(leader)
 	if not session or session.flushEvent then return end
-	session.flushEvent = addEvent(flushPartyAnalyzer, 100, leader:getId())
+	session.flushGeneration = (session.flushGeneration or 0) + 1
+	local eventId = addEvent(flushPartyAnalyzer, 100, leader:getId(), session.flushGeneration)
+	-- addEvent returns 0 when the scheduler rejects the event; 0 is truthy in
+	-- Lua and would block every future flush for this session.
+	if eventId and eventId ~= 0 then
+		session.flushEvent = eventId
+	end
 end
 
 -- Drop event: add loot value when party member loots a corpse

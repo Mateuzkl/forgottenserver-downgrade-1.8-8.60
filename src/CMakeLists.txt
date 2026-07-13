@@ -275,8 +275,10 @@ if (ENABLE_METRICS)
 	target_link_libraries(tfslib PUBLIC
 		opentelemetry-cpp::metrics
 		opentelemetry-cpp::prometheus_exporter
-		opentelemetry-cpp::ostream_metrics_exporter
 	)
+	if (TARGET opentelemetry-cpp::ostream_metrics_exporter)
+		target_link_libraries(tfslib PUBLIC opentelemetry-cpp::ostream_metrics_exporter)
+	endif ()
 endif ()
 target_compile_definitions(tfslib PUBLIC ASIO_STANDALONE)
 set_target_properties(tfslib PROPERTIES UNITY_BUILD ${ENABLE_UNITY_BUILD})

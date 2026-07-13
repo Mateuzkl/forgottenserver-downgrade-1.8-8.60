@@ -537,7 +537,7 @@ bool ConfigManager::load()
 	booleans[Boolean::METRICS_ENABLE_OSTREAM] = getGlobalBoolean(L, "metricsEnableOstream", false);
 	booleans[Boolean::CREATURE_SCHEDULER_DEBUG] = getGlobalBoolean(L, "creatureSchedulerDebug", false);
 	booleans[Boolean::CREATURE_SCHEDULER_METRICS] = getGlobalBoolean(L, "creatureSchedulerMetrics", false);
-	strings[String::METRICS_PROMETHEUS_ADDRESS] = getGlobalString(L, "metricsPrometheusAddress", "0.0.0.0:9464");
+	strings[String::METRICS_PROMETHEUS_ADDRESS] = getGlobalString(L, "metricsPrometheusAddress", "127.0.0.1:9464");
 	integers[Integer::METRICS_OSTREAM_INTERVAL] = getGlobalInteger(L, "metricsOstreamInterval", 1000);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");

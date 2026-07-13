@@ -328,7 +328,16 @@ bool CombatSpell::castSpell(Creature* creature, Creature* target)
 		if (needTarget) {
 			combat->doCombat(creature, target->getPosition());
 		} else {
-			return castSpell(creature);
+			// Inline the no-target area cast: re-entering castSpell(creature)
+			// would open a second CombatSpellCastSpell scope and double-count
+			// this cast in the latency metrics.
+			Position pos;
+			if (needDirection) {
+				pos = Spells::getCasterPosition(creature, creature->getDirection());
+			} else {
+				pos = creature->getPosition();
+			}
+			combat->doCombat(creature, pos);
 		}
 	} else {
 		combat->doCombat(creature, target);

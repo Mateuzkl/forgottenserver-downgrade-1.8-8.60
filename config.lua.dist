@@ -113,6 +113,9 @@ performanceMetricsEnabled = false
 -- metricsEnablePrometheus exposes http://<address>/metrics for Prometheus scraping.
 -- See metrics/README.md for the batteries-included Prometheus + Grafana stack.
 -- Requires a binary built with -DENABLE_METRICS=ON (see build.sh --metrics).
+-- NOTE: 0.0.0.0 binds every interface (needed by the dockerized Prometheus,
+-- which reaches the host via host.docker.internal). Use 127.0.0.1 or firewall
+-- the port if the metrics endpoint must not be reachable from outside.
 metricsEnablePrometheus = false
 metricsPrometheusAddress = "0.0.0.0:9464"
 -- OStream exporter dumps metrics to the server log. Debug only, not for production.
