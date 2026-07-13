@@ -54,6 +54,12 @@ fixed on this branch.
 
 ## Known follow-ups (documented, intentionally not changed here)
 
+- Reserved scheduling capacity for self-rearming recurring tasks: the fatal
+  case (`checkCreatures`) has a reliable retry; other recurring loops (forge,
+  serene status) can still stop under sustained inbox overflow — visible via
+  `tfs_reactor_events_total{stat="dropped"}` — and restart with the server. A
+  generic reserved-capacity mechanism in the reactor deserves its own change.
+
 - Summon behavior from PR #172 (`walkToSpawn` wait-in-place for monster
   masters; master-death cleanup ordering) has theoretical edge cases flagged
   by review but changing it requires gameplay validation.
