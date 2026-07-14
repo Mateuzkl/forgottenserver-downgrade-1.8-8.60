@@ -9,6 +9,9 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
+#include <string>
+#include <string_view>
 
 enum class PerformanceMetric : uint8_t
 {
@@ -48,6 +51,8 @@ public:
 	void recordTaskDeferred(uint64_t count = 1) noexcept;
 	void recordTaskExpired(uint64_t count = 1) noexcept;
 	void recordTaskDropped(uint64_t count = 1) noexcept;
+	void recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
+	                                 std::string_view origin) noexcept;
 	void recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead, uint64_t pathLength) noexcept;
 	void maybeReport();
 
@@ -81,9 +86,18 @@ private:
 		std::atomic<uint64_t> pathLength{0};
 	};
 
+	struct SlowestReactorCallback
+	{
+		std::mutex mutex;
+		uint64_t nanoseconds = 0;
+		std::string description;
+		std::string origin;
+	};
+
 	std::array<MetricData, static_cast<size_t>(PerformanceMetric::Count)> metrics;
 	ReactorData reactor;
 	PathData path;
+	SlowestReactorCallback slowestReactorCallback;
 	std::atomic_bool enabled{false};
 	std::atomic<int64_t> nextReportNanoseconds{0};
 };

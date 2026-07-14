@@ -372,6 +372,11 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		++tasksExecuted;
 		const auto taskEnd = std::chrono::steady_clock::now();
 		const auto taskDuration = taskEnd - taskStart;
+		if (g_performanceMetrics.isEnabled()) {
+			const auto taskNanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(taskDuration).count();
+			g_performanceMetrics.recordReactorCallbackSource(
+				taskNanoseconds > 0 ? static_cast<uint64_t>(taskNanoseconds) : 0, task.description, task.origin);
+		}
 		if (taskDuration > slowestDuration) {
 			slowestDuration = taskDuration;
 			slowestTaskIndex = index;

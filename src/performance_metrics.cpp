@@ -112,6 +112,28 @@ void PerformanceMetrics::recordTaskDropped(uint64_t count) noexcept
 	if (isEnabled()) reactor.dropped.fetch_add(count, std::memory_order_relaxed);
 }
 
+void PerformanceMetrics::recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
+                                                      std::string_view origin) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+
+	try {
+		std::scoped_lock lock(slowestReactorCallback.mutex);
+		if (nanoseconds <= slowestReactorCallback.nanoseconds) {
+			return;
+		}
+		std::string newDescription(description);
+		std::string newOrigin(origin);
+		slowestReactorCallback.description = std::move(newDescription);
+		slowestReactorCallback.origin = std::move(newOrigin);
+		slowestReactorCallback.nanoseconds = nanoseconds;
+	} catch (...) {
+		// Profiling must never interfere with task execution.
+	}
+}
+
 void PerformanceMetrics::recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead,
 											 uint64_t pathLength) noexcept
 {
@@ -170,6 +192,29 @@ void PerformanceMetrics::maybeReport()
 		reactor.deferred.exchange(0, std::memory_order_relaxed),
 		reactor.expired.exchange(0, std::memory_order_relaxed),
 		reactor.dropped.exchange(0, std::memory_order_relaxed));
+
+	uint64_t slowestNanoseconds = 0;
+	std::string slowestDescription;
+	std::string slowestOrigin;
+	{
+		std::scoped_lock lock(slowestReactorCallback.mutex);
+		slowestNanoseconds = slowestReactorCallback.nanoseconds;
+		slowestDescription = std::move(slowestReactorCallback.description);
+		slowestOrigin = std::move(slowestReactorCallback.origin);
+		slowestReactorCallback.nanoseconds = 0;
+	}
+	if (slowestNanoseconds > 0) {
+		std::string label;
+		if (slowestDescription.empty()) {
+			label = slowestOrigin.empty() ? "unknown" : std::move(slowestOrigin);
+		} else if (slowestOrigin.empty()) {
+			label = std::move(slowestDescription);
+		} else {
+			label = fmt::format("{} @ {}", slowestDescription, slowestOrigin);
+		}
+		report += fmt::format("[Perf] reactor slowest_callback={} max_us={:.3f}\n", label,
+		                      slowestNanoseconds / 1'000.0);
+	}
 	report += fmt::format(
 		"[Perf] path requests={} success={} failure={} nodes={} tiles={} path_steps={}",
 		path.requests.exchange(0, std::memory_order_relaxed),
