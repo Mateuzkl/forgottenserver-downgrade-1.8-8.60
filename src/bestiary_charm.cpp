@@ -344,11 +344,11 @@ bool BestiaryCharmSystem::restoreCharmStatesAndResources(uint32_t playerGuid, co
                                                          uint32_t charmPoints, uint32_t minorEchoes,
                                                          uint32_t maxMinorEchoes) const
 {
-	return DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
+	const bool restored = DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
 		return writeCharmStates(playerGuid, states) &&
-		       setCharmPoints(playerGuid, charmPoints) &&
 		       setMinorCharmEchoes(playerGuid, minorEchoes, maxMinorEchoes);
 	});
+	return restored && setCharmPoints(playerGuid, charmPoints);
 }
 
 BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player, uint8_t charmId, uint8_t action, uint16_t raceId) const
@@ -389,9 +389,11 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 				           "INSERT INTO `player_bestiary_charms` (`player_id`, `charm_id`, `unlocked`, `raceid`) "
 				           "VALUES ({:d}, {:d}, {:d}, 0) ON DUPLICATE KEY UPDATE `unlocked` = {:d}",
 				           playerGuid, charmId, nextTier, nextTier)) &&
-				       setCharmPoints(playerGuid, charmPoints - price) &&
 				       setMinorCharmEchoes(playerGuid, minorEchoes + echoReward, maxMinorEchoes + echoReward);
 			});
+			if (updated) {
+				player.setBestiaryCharmPoints(charmPoints - price);
+			}
 		} else {
 			const auto [minorEchoes, maxMinorEchoes] = getMinorCharmEchoes(playerGuid);
 			if (minorEchoes < price) {
@@ -428,12 +430,12 @@ BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player,
 			return Database::getInstance().executeQuery(fmt::format(
 			           "UPDATE `player_bestiary_charms` SET `unlocked` = 0, `raceid` = 0 WHERE `player_id` = {:d}",
 			           playerGuid)) &&
-			       setCharmPoints(playerGuid, charmPoints + refund) &&
 			       setMinorCharmEchoes(playerGuid, 0, 0);
 		});
 		if (!reset) {
 			return { false, "Could not reset charms." };
 		}
+		player.setBestiaryCharmPoints(charmPoints + refund);
 		if (!removeGold(player, resetCost)) {
 			const bool restored = restoreCharmStatesAndResources(playerGuid, states, charmPoints, minorEchoes, maxMinorEchoes);
 			invalidatePlayer(playerGuid);

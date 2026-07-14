@@ -1358,7 +1358,17 @@ Player* Lua::getPlayer(lua_State* L, int32_t arg)
 	if (isUserdata(L, arg)) {
 		return getUserdata<Player>(L, arg);
 	}
-	auto player = g_game.getPlayerByID(getInteger<uint32_t>(L, arg));
+
+	std::shared_ptr<Player> player;
+	if (lua_type(L, arg) == LUA_TSTRING) {
+		player = g_game.getPlayerByName(getString(L, arg));
+	} else {
+		const uint32_t identifier = getInteger<uint32_t>(L, arg);
+		player = g_game.getPlayerByID(identifier);
+		if (!player) {
+			player = g_game.getPlayerByGUID(identifier);
+		}
+	}
 	if (!player || !Creature::isAlive(player.get()) || player->isRemoved()) {
 		return nullptr;
 	}

@@ -312,7 +312,10 @@ local function getPlayerPrey(player)
 		preyCache[playerId] = loadPreyFromDB(player:getGuid())
 	end
 
-	local wildcards = getPlayerBonusRerolls(player)
+	local wildcards = preyCache[playerId].wildcards
+	if firstLoad or player.getPreyWildcards then
+		wildcards = getPlayerBonusRerolls(player)
+	end
 	if firstLoad and wildcards == 0 and preyCache[playerId].legacyWildcards > 0 then
 		setPlayerBonusRerolls(player, preyCache[playerId].legacyWildcards)
 		wildcards = preyCache[playerId].legacyWildcards

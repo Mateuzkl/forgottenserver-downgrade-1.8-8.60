@@ -1407,8 +1407,8 @@ void Monster::onThink(uint32_t interval)
 					// The master is gone from the game world but the bond was
 					// not severed (safety net) — vanish instead of wandering
 					// around forever searching for him.
-					g_game.removeCreature(this, false);
 					g_game.addMagicEffect(getPosition(), CONST_ME_POFF, getInstanceID());
+					g_game.removeCreature(this, false);
 					return;
 				}
 				if (master) {
@@ -1430,8 +1430,8 @@ void Monster::onThink(uint32_t interval)
 						}
 					} else if (masterInProtectionZone) {
 						if (ConfigManager::getBoolean(ConfigManager::REMOVE_SUMMONS_ON_PZ)) {
-							g_game.removeCreature(this, false);
 							g_game.addMagicEffect(getPosition(), CONST_ME_POFF, getInstanceID());
+							g_game.removeCreature(this, false);
 							return;
 						}
 					} else if (ConfigManager::getBoolean(ConfigManager::TELEPORT_SUMMON)) {

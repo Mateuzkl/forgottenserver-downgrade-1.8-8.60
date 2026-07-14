@@ -621,11 +621,11 @@ CREATE TABLE IF NOT EXISTS `server_config` (
 
 CREATE TABLE IF NOT EXISTS `character_auctions` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `player_id` INT UNSIGNED NOT NULL,
+  `player_id` INT NOT NULL,
   `player_name` VARCHAR(255) NOT NULL,
-  `seller_account_id` INT UNSIGNED NOT NULL,
-  `current_bidder_account_id` INT UNSIGNED DEFAULT NULL,
-  `winner_account_id` INT UNSIGNED DEFAULT NULL,
+  `seller_account_id` INT NOT NULL,
+  `current_bidder_account_id` INT DEFAULT NULL,
+  `winner_account_id` INT DEFAULT NULL,
   `start_price` INT UNSIGNED NOT NULL DEFAULT 0,
   `current_bid` INT UNSIGNED NOT NULL DEFAULT 0,
   `final_price` INT UNSIGNED DEFAULT NULL,
@@ -651,31 +651,40 @@ CREATE TABLE IF NOT EXISTS `character_auctions` (
   KEY `idx_character_auctions_status_end` (`status`, `end_at`),
   KEY `idx_character_auctions_status_finished` (`status`, `finished_at`),
   KEY `idx_character_auctions_seller` (`seller_account_id`),
-  KEY `idx_character_auctions_bidder` (`current_bidder_account_id`)
+  KEY `idx_character_auctions_bidder` (`current_bidder_account_id`),
+  CONSTRAINT `fk_character_auctions_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_character_auctions_seller` FOREIGN KEY (`seller_account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_character_auctions_bidder` FOREIGN KEY (`current_bidder_account_id`) REFERENCES `accounts` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_character_auctions_winner` FOREIGN KEY (`winner_account_id`) REFERENCES `accounts` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `character_auction_bids` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `auction_id` INT UNSIGNED NOT NULL,
-  `bidder_account_id` INT UNSIGNED NOT NULL,
+  `bidder_account_id` INT NOT NULL,
   `bid_amount` INT UNSIGNED NOT NULL,
   `created_at` INT UNSIGNED NOT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_character_auction_bids_auction` (`auction_id`, `created_at`),
-  KEY `idx_character_auction_bids_bidder` (`bidder_account_id`, `created_at`)
+  KEY `idx_character_auction_bids_bidder` (`bidder_account_id`, `created_at`),
+  CONSTRAINT `fk_character_auction_bids_auction` FOREIGN KEY (`auction_id`) REFERENCES `character_auctions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_character_auction_bids_bidder` FOREIGN KEY (`bidder_account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `character_auction_history` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `auction_id` INT UNSIGNED NOT NULL,
   `action` VARCHAR(64) NOT NULL,
-  `account_id` INT UNSIGNED DEFAULT NULL,
-  `player_id` INT UNSIGNED DEFAULT NULL,
+  `account_id` INT DEFAULT NULL,
+  `player_id` INT DEFAULT NULL,
   `amount` INT UNSIGNED DEFAULT NULL,
   `message` TEXT DEFAULT NULL,
   `created_at` INT UNSIGNED NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_character_auction_history_auction` (`auction_id`)
+  KEY `idx_character_auction_history_auction` (`auction_id`),
+  CONSTRAINT `fk_character_auction_history_auction` FOREIGN KEY (`auction_id`) REFERENCES `character_auctions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_character_auction_history_account` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_character_auction_history_player` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `tile_store` (
@@ -694,7 +703,7 @@ CREATE TABLE IF NOT EXISTS `towns` (
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-INSERT INTO server_config (config, value) VALUES ('db_version', '58'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO server_config (config, value) VALUES ('db_version', '59'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 CREATE TABLE IF NOT EXISTS guild_transactions (
   id SERIAL PRIMARY KEY,

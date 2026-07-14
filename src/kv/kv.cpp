@@ -5,6 +5,7 @@
 #include "kv/kv.h"
 #include "database.h"
 #include "logger.h"
+#include "thread_pool.h"
 #include <fmt/format.h>
 
 int64_t KV::lastTimestamp_ = 0;
@@ -264,7 +265,14 @@ std::vector<std::string> KVStore::loadPrefix(const std::string &prefix) {
 		}
 	} while (result->next());
 
-	processEvictions();
+	bool hasPendingEvictions = false;
+	{
+		std::scoped_lock lock(mutex_);
+		hasPendingEvictions = !pendingEvictions_.empty();
+	}
+	if (hasPendingEvictions) {
+		g_threadPool.detach_task([]() { KVStore::getInstance().processEvictions(); });
+	}
 
 	return keys;
 }
