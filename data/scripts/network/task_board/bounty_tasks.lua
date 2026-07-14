@@ -277,7 +277,9 @@ local function saveBountyData(playerGuid)
 	local preferredJson = json.encode(data.preferredLists or {})
 	local creaturesJson = json.encode(data.creaturesList or {})
 
-	db.query(
+	-- Keep task state in memory and hand persistence to the FIFO C++ database worker.
+	-- The worker is drained during shutdown, so kills never wait on MySQL here.
+	db.asyncQuery(
 		"INSERT INTO `player_bounty_tasks` (`player_id`, `state`, `difficulty`, `bounty_points`, `reroll_tokens`, " ..
 		"`free_reroll`, `active_raceid`, `active_kills`, `active_required`, `active_reward_exp`, `active_reward_pts`, " ..
 		"`active_grade`, `active_difficulty`, `active_index`, `active_claim_state`, " ..

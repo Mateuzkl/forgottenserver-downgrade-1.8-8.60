@@ -16,22 +16,29 @@ void DatabaseTasks::start()
 
 void DatabaseTasks::threadMain()
 {
-	std::unique_lock<std::mutex> taskLockUnique(taskLock, std::defer_lock);
-	while (getState() != THREAD_STATE_TERMINATED) {
-		taskLockUnique.lock();
+	while (true) {
+		std::unique_lock<std::mutex> guard{taskLock};
+		taskSignal.wait(guard, [this] { return getState() == THREAD_STATE_TERMINATED || !tasks.empty(); });
+
 		if (tasks.empty()) {
-			taskSignal.wait(taskLockUnique);
+			break;
 		}
 
-		if (!tasks.empty()) {
-			DatabaseTask task = std::move(tasks.front());
-			tasks.pop_front();
-			taskLockUnique.unlock();
-			runTask(task);
-		} else {
-			taskLockUnique.unlock();
+		DatabaseTask task = std::move(tasks.front());
+		tasks.pop_front();
+		++activeTasks;
+		guard.unlock();
+
+		runTask(task);
+
+		guard.lock();
+		--activeTasks;
+		if (tasks.empty() && activeTasks == 0) {
+			taskDoneSignal.notify_all();
 		}
 	}
+
+	taskDoneSignal.notify_all();
 }
 
 void DatabaseTasks::addTask(std::string query, std::function<void(DBResult_ptr, bool, uint64_t)> callback /* = nullptr*/,
@@ -74,13 +81,7 @@ void DatabaseTasks::runTask(const DatabaseTask& task)
 void DatabaseTasks::flush()
 {
 	std::unique_lock<std::mutex> guard{taskLock};
-	while (!tasks.empty()) {
-		auto task = std::move(tasks.front());
-		tasks.pop_front();
-		guard.unlock();
-		runTask(task);
-		guard.lock();
-	}
+	taskDoneSignal.wait(guard, [this] { return tasks.empty() && activeTasks == 0; });
 }
 
 void DatabaseTasks::shutdown()
@@ -89,6 +90,6 @@ void DatabaseTasks::shutdown()
 		std::scoped_lock guard(taskLock);
 		setState(THREAD_STATE_TERMINATED);
 	}
+	taskSignal.notify_all();
 	flush();
-	taskSignal.notify_one();
 }

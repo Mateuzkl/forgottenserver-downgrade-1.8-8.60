@@ -2776,6 +2776,48 @@ void ProtocolGame::sendKillTrackerUpdate(const std::shared_ptr<Container>& corps
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendItemValues()
+{
+	if (!isAstraClient) {
+		return;
+	}
+
+	constexpr uint8_t OPCODE_ITEM_VALUES = 0xC6;
+	constexpr size_t ITEM_VALUE_WIRE_SIZE = sizeof(uint16_t) + sizeof(uint32_t);
+	constexpr size_t PACKET_HEADER_SIZE = sizeof(uint8_t) + sizeof(uint16_t);
+	constexpr size_t MAX_ITEM_VALUES_PER_PACKET =
+	    (NetworkMessage::MAX_PROTOCOL_BODY_LENGTH - PACKET_HEADER_SIZE) / ITEM_VALUE_WIRE_SIZE;
+
+	std::vector<std::pair<uint16_t, uint32_t>> entries;
+	entries.reserve(Item::items.size());
+	for (size_t id = 0, size = Item::items.size(); id < size; ++id) {
+		const ItemType& itemType = Item::items.getItemType(id);
+		const uint64_t value = itemType.sellPrice > 0 ? itemType.sellPrice :
+		                       (itemType.buyPrice > 0 ? itemType.buyPrice : itemType.worth);
+		if (itemType.id != 0 && value > 0) {
+			entries.emplace_back(
+			    itemType.id,
+			    static_cast<uint32_t>(std::min<uint64_t>(value, std::numeric_limits<uint32_t>::max())));
+		}
+	}
+
+	if (entries.empty()) {
+		return;
+	}
+
+	for (size_t offset = 0; offset < entries.size(); offset += MAX_ITEM_VALUES_PER_PACKET) {
+		const size_t chunkSize = std::min(MAX_ITEM_VALUES_PER_PACKET, entries.size() - offset);
+		NetworkMessage msg;
+		msg.addByte(OPCODE_ITEM_VALUES);
+		msg.add<uint16_t>(static_cast<uint16_t>(chunkSize));
+		for (size_t index = offset; index < offset + chunkSize; ++index) {
+			msg.add<uint16_t>(entries[index].first);
+			msg.add<uint32_t>(entries[index].second);
+		}
+		writeToOutputBuffer(msg);
+	}
+}
+
 void ProtocolGame::sendImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
                                      std::string_view targetName)
 {

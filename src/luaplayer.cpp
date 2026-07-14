@@ -2125,6 +2125,20 @@ int luaPlayerSendSkills(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSendItemValues(lua_State* L)
+{
+	// player:sendItemValues()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->sendItemValues();
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerSendChannelMessage(lua_State* L)
 {
 	// player:sendChannelMessage(author, text, type, channelId)
@@ -4742,6 +4756,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "sendTextMessage", luaPlayerSendTextMessage);
 	registerMethod("Player", "sendStats", luaPlayerSendStats);
 	registerMethod("Player", "sendSkills", luaPlayerSendSkills);
+	registerMethod("Player", "sendItemValues", luaPlayerSendItemValues);
 	registerMethod("Player", "sendChannelMessage", luaPlayerSendChannelMessage);
 	registerMethod("Player", "sendPrivateMessage", luaPlayerSendPrivateMessage);
 	registerMethod("Player", "channelSay", luaPlayerChannelSay);

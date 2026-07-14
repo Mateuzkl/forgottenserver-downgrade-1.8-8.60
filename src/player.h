@@ -1278,6 +1278,7 @@ public:
 	void updateKillTracker(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Container>& corpse) const;
 	void updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
 	                         std::string_view targetName = {}) const;
+	void sendItemValues() const;
 	void sendPing();
 	void sendStats();
 	void sendSkills() const

@@ -266,6 +266,7 @@ private:
 	                           const Outfit_t& monsterOutfit);
 	void sendImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
 	                       std::string_view targetName = {});
+	void sendItemValues();
 
 	// messages
 	void sendModalWindow(const ModalWindow& modalWindow);

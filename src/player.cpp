@@ -808,6 +808,17 @@ void Player::updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatTy
 	}
 }
 
+void Player::sendItemValues() const
+{
+	if (!client) {
+		return;
+	}
+
+	if (const auto protocol = client->protocol()) {
+		protocol->sendItemValues();
+	}
+}
+
 void Player::addBlessing(uint8_t blessing, uint8_t count)
 {
 	if (blessing < 1 || blessing > PLAYER_MAX_BLESSINGS || blessings[blessing] == 255) return;

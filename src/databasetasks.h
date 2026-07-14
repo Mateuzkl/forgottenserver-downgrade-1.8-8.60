@@ -37,6 +37,8 @@ private:
 	std::deque<DatabaseTask> tasks;
 	std::mutex taskLock;
 	std::condition_variable taskSignal;
+	std::condition_variable taskDoneSignal;
+	size_t activeTasks = 0;
 };
 
 extern DatabaseTasks g_databaseTasks;

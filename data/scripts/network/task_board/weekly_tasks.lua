@@ -244,7 +244,9 @@ local function saveWeeklyData(playerGuid)
 	local ktJson = json.encode(data.killTasks or {})
 	local dtJson = json.encode(data.deliveryTasks or {})
 
-	db.query(
+	-- Keep task state in memory and hand persistence to the FIFO C++ database worker.
+	-- The worker is drained during shutdown, so kills never wait on MySQL here.
+	db.asyncQuery(
 		"INSERT INTO `player_weekly_tasks` (`player_id`, `has_expansion`, `difficulty`, " ..
 		"`any_creature_total`, `any_creature_current`, `completed_kill_tasks`, `completed_delivery_tasks`, " ..
 		"`kill_task_reward_exp`, `delivery_task_reward_exp`, `reward_hunting_points`, `reward_soulseals`, " ..

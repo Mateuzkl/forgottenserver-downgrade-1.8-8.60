@@ -443,26 +443,12 @@ local function ensureSlotReady(player, data, slot)
 end
 
 local function getPlayerWildcards(player)
-	if player.getPreyWildcards then
-		return player:getPreyWildcards()
-	end
-
-	local resultId = db.storeQuery("SELECT `bonus_rerolls` FROM `players` WHERE `id` = " .. player:getGuid())
-	if resultId == false then
-		return 0
-	end
-	local wildcards = math.max(0, result.getDataInt(resultId, "bonus_rerolls"))
-	result.free(resultId)
-	return wildcards
+	return player:getPreyWildcards()
 end
 
 local function setPlayerWildcards(player, value)
 	value = math.floor(math.max(0, tonumber(value) or 0))
-	if player.setPreyWildcards then
-		player:setPreyWildcards(value)
-	else
-		db.query("UPDATE `players` SET `bonus_rerolls` = " .. value .. " WHERE `id` = " .. player:getGuid())
-	end
+	player:setPreyWildcards(value)
 	return value
 end
 
