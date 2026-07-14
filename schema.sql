@@ -440,7 +440,8 @@ CREATE TABLE IF NOT EXISTS `player_bestiary_kills` (
   `raceid` SMALLINT UNSIGNED NOT NULL,
   `kills` INT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (`player_id`, `raceid`),
-  FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+  CONSTRAINT `fk_player_bestiary_kills_player`
+    FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `player_weapon_proficiency` (
@@ -693,7 +694,7 @@ CREATE TABLE IF NOT EXISTS `towns` (
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-INSERT INTO server_config (config, value) VALUES ('db_version', '57'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO server_config (config, value) VALUES ('db_version', '58'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 CREATE TABLE IF NOT EXISTS guild_transactions (
   id SERIAL PRIMARY KEY,

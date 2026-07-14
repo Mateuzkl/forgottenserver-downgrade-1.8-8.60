@@ -62,7 +62,9 @@ function onUpdateDatabase()
 			`player_id` INT NOT NULL,
 			`raceid` SMALLINT UNSIGNED NOT NULL,
 			`kills` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`player_id`, `raceid`)
+			PRIMARY KEY (`player_id`, `raceid`),
+			CONSTRAINT `fk_player_bestiary_kills_player`
+				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4]],
 	}
 
