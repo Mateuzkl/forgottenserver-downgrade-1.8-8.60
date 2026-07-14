@@ -26,7 +26,6 @@ enum class PerformanceMetric : uint8_t
 	CreatureOnAttacking,
 	GameInternalMoveCreature,
 	MapGetPathMatching,
-	MapGetTile,
 	MapMoveCreature,
 	MapGetSpectators,
 	MonsterOnThink,
@@ -50,8 +49,6 @@ public:
 	void recordTaskExpired(uint64_t count = 1) noexcept;
 	void recordTaskDropped(uint64_t count = 1) noexcept;
 	void recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead, uint64_t pathLength) noexcept;
-	void recordPathReused() noexcept;
-	void recordPathInvalidated() noexcept;
 	void maybeReport();
 
 private:
@@ -82,8 +79,6 @@ private:
 		std::atomic<uint64_t> nodesVisited{0};
 		std::atomic<uint64_t> tilesRead{0};
 		std::atomic<uint64_t> pathLength{0};
-		std::atomic<uint64_t> reused{0};
-		std::atomic<uint64_t> invalidated{0};
 	};
 
 	std::array<MetricData, static_cast<size_t>(PerformanceMetric::Count)> metrics;

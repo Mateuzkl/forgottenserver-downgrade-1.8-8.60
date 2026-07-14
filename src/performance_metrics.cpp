@@ -19,7 +19,8 @@ constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Co
 	"TaskReactor::sort", "TaskReactor::callbacks", "TaskReactor::callback",
 	"TaskReactor::queueLatency", "Game::checkCreatures", "Game::checkCreatureWalk",
 	"Game::updateCreatureWalk", "Creature::goToFollowCreature", "Creature::onAttacking",
-	"Game::internalMoveCreature", "Map::getPathMatching", "Map::getTile", "Map::moveCreature", "Map::getSpectators", "Monster::onThink",
+	"Game::internalMoveCreature", "Map::getPathMatching", "Map::moveCreature", "Map::getSpectators",
+	"Monster::onThink",
 	"Monster::onWalk", "Monster::doAttacking", "CombatSpell::castSpell",
 	"Combat::doCombat", "Combat::doAreaCombat",
 };
@@ -124,16 +125,6 @@ void PerformanceMetrics::recordPathRequest(bool success, uint64_t nodesVisited, 
 	path.pathLength.fetch_add(pathLength, std::memory_order_relaxed);
 }
 
-void PerformanceMetrics::recordPathReused() noexcept
-{
-	if (isEnabled()) path.reused.fetch_add(1, std::memory_order_relaxed);
-}
-
-void PerformanceMetrics::recordPathInvalidated() noexcept
-{
-	if (isEnabled()) path.invalidated.fetch_add(1, std::memory_order_relaxed);
-}
-
 void PerformanceMetrics::maybeReport()
 {
 	if (!isEnabled()) {
@@ -148,6 +139,8 @@ void PerformanceMetrics::maybeReport()
 		return;
 	}
 
+	std::string report;
+	report.reserve(4096);
 	for (size_t metricIndex = 0; metricIndex < metrics.size(); ++metricIndex) {
 		auto& data = metrics[metricIndex];
 		const uint64_t calls = data.calls.exchange(0, std::memory_order_relaxed);
@@ -161,27 +154,31 @@ void PerformanceMetrics::maybeReport()
 			histogram[i] = data.histogram[i].exchange(0, std::memory_order_relaxed);
 		}
 
-		LOG_INFO("[Perf] {} calls={} total_ms={:.3f} avg_us={:.3f} max_us={:.3f} p50_us={:.3f} p95_us={:.3f} p99_us={:.3f}",
-				 METRIC_NAMES[metricIndex], calls, total / 1'000'000.0, total / static_cast<double>(calls) / 1'000.0,
-				 maximum / 1'000.0, percentile(histogram, calls, 50) / 1'000.0,
-				 percentile(histogram, calls, 95) / 1'000.0, percentile(histogram, calls, 99) / 1'000.0);
+		report += fmt::format(
+			"[Perf] {} calls={} total_ms={:.3f} avg_us={:.3f} max_us={:.3f} "
+			"p50_us={:.3f} p95_us={:.3f} p99_us={:.3f}\n",
+			METRIC_NAMES[metricIndex], calls, total / 1'000'000.0,
+			total / static_cast<double>(calls) / 1'000.0, maximum / 1'000.0,
+			percentile(histogram, calls, 50) / 1'000.0, percentile(histogram, calls, 95) / 1'000.0,
+			percentile(histogram, calls, 99) / 1'000.0);
 	}
 
-	LOG_INFO("[Perf] reactor queue={} backlog_max={} deferred={} expired={} dropped={}",
-			 reactor.queueCurrent.load(std::memory_order_relaxed),
-			 reactor.queueMaximum.exchange(0, std::memory_order_relaxed),
-			 reactor.deferred.exchange(0, std::memory_order_relaxed),
-			 reactor.expired.exchange(0, std::memory_order_relaxed),
-			 reactor.dropped.exchange(0, std::memory_order_relaxed));
-	LOG_INFO("[Perf] path requests={} success={} failure={} nodes={} tiles={} path_steps={} reused={} invalidated={}",
-			 path.requests.exchange(0, std::memory_order_relaxed),
-			 path.successes.exchange(0, std::memory_order_relaxed),
-			 path.failures.exchange(0, std::memory_order_relaxed),
-			 path.nodesVisited.exchange(0, std::memory_order_relaxed),
-			 path.tilesRead.exchange(0, std::memory_order_relaxed),
-			 path.pathLength.exchange(0, std::memory_order_relaxed),
-			 path.reused.exchange(0, std::memory_order_relaxed),
-			 path.invalidated.exchange(0, std::memory_order_relaxed));
+	report += fmt::format(
+		"[Perf] reactor queue={} backlog_max={} deferred={} expired={} dropped={}\n",
+		reactor.queueCurrent.load(std::memory_order_relaxed),
+		reactor.queueMaximum.exchange(0, std::memory_order_relaxed),
+		reactor.deferred.exchange(0, std::memory_order_relaxed),
+		reactor.expired.exchange(0, std::memory_order_relaxed),
+		reactor.dropped.exchange(0, std::memory_order_relaxed));
+	report += fmt::format(
+		"[Perf] path requests={} success={} failure={} nodes={} tiles={} path_steps={}",
+		path.requests.exchange(0, std::memory_order_relaxed),
+		path.successes.exchange(0, std::memory_order_relaxed),
+		path.failures.exchange(0, std::memory_order_relaxed),
+		path.nodesVisited.exchange(0, std::memory_order_relaxed),
+		path.tilesRead.exchange(0, std::memory_order_relaxed),
+		path.pathLength.exchange(0, std::memory_order_relaxed));
+	LOG_INFO("{}", report);
 }
 
 PerformanceScope::PerformanceScope(PerformanceMetric metric) noexcept :

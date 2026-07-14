@@ -84,7 +84,6 @@ bool Map::save()
 
 Tile* Map::getTile(uint16_t x, uint16_t y, uint8_t z) const
 {
-	PerformanceScope performanceScope(PerformanceMetric::MapGetTile);
 	if (z >= MAP_MAX_LAYERS) {
 		return nullptr;
 	}
@@ -781,15 +780,19 @@ struct AStarWorkspace
 };
 
 thread_local AStarWorkspace threaded_workspace;
+
+struct PathSearchMetrics
+{
+	uint32_t nodesVisited = 0;
+	uint32_t tilesRead = 0;
+};
 } // namespace
 
 bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirList,
-                          const FrozenPathingConditionCall& pathCondition, const FindPathParams& fpp,
-                          PathSearchMetrics* metrics) const
+                          const FrozenPathingConditionCall& pathCondition, const FindPathParams& fpp) const
 {
 	PerformanceScope performanceScope(PerformanceMetric::MapGetPathMatching);
-	PathSearchMetrics localMetrics;
-	PathSearchMetrics& searchMetrics = metrics ? *metrics : localMetrics;
+	PathSearchMetrics searchMetrics;
 	const auto finish = [&](bool success) {
 		g_performanceMetrics.recordPathRequest(success, searchMetrics.nodesVisited, searchMetrics.tilesRead,
 		                                       success ? dirList.size() : 0);
@@ -1389,6 +1392,20 @@ void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const BasicTile* basic
 	} else {
 		Zones::unregisterPosition(Position(x, y, z));
 	}
+}
+
+void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<BasicTile>& basicTile)
+{
+	if (!basicTile) {
+		setBasicTile(x, y, z, static_cast<const BasicTile*>(nullptr));
+		return;
+	}
+
+	BasicTile cacheCandidate = *basicTile;
+	cacheCandidate.cacheId = 0;
+	cacheCandidate.cachedHash = 0;
+	cacheCandidate.hashReady = false;
+	setBasicTile(x, y, z, MapCache::tryGetTileFromCache(std::move(cacheCandidate)));
 }
 
 void Map::forEachBasicFloorBlock(
