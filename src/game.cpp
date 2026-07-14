@@ -6557,6 +6557,10 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 						}
 					}
 				}
+
+				if (auto targetPlayerRef = std::dynamic_pointer_cast<Player>(targetRef)) {
+					targetPlayerRef->updateImpactTracker(0, static_cast<uint32_t>(realHeal), COMBAT_HEALING);
+				}
 			}
 		}
 
@@ -6836,6 +6840,28 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		realDamage = damage.primary.value + damage.secondary.value;
 		if (realDamage == 0) {
 			return true;
+		}
+
+		const auto attackerPlayerRef = std::dynamic_pointer_cast<Player>(attackerRef);
+		const auto targetPlayerRef = std::dynamic_pointer_cast<Player>(targetRef);
+		if (attackerPlayerRef) {
+			if (damage.primary.value > 0) {
+				attackerPlayerRef->updateImpactTracker(1, static_cast<uint32_t>(damage.primary.value), damage.primary.type);
+			}
+			if (damage.secondary.value > 0) {
+				attackerPlayerRef->updateImpactTracker(1, static_cast<uint32_t>(damage.secondary.value), damage.secondary.type);
+			}
+		}
+		if (targetPlayerRef) {
+			const std::string_view attackerName = attacker ? std::string_view(attacker->getName()) : std::string_view{};
+			if (damage.primary.value > 0) {
+				targetPlayerRef->updateImpactTracker(2, static_cast<uint32_t>(damage.primary.value), damage.primary.type,
+				                                     attackerName);
+			}
+			if (damage.secondary.value > 0) {
+				targetPlayerRef->updateImpactTracker(2, static_cast<uint32_t>(damage.secondary.value), damage.secondary.type,
+				                                     attackerName);
+			}
 		}
 
 		if (spectators.empty()) {

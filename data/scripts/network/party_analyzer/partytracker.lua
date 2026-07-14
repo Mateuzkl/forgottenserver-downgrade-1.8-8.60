@@ -5,6 +5,7 @@ local OPCODE_PARTY_ANALYZER = 0x2B
 local MSG_BLUE = MESSAGE_STATUS_CONSOLE_BLUE or MESSAGE_EVENT_ADVANCE or 19
 
 local partySessions = {}
+local pendingPartyUpdates = {}
 
 local function isOTC(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
@@ -113,6 +114,21 @@ function sendPartyAnalyzerToAll(leader)
 	end
 end
 
+local function queuePartyAnalyzerUpdate(leader)
+	if not leader then return end
+	local leaderId = leader:getId()
+	if pendingPartyUpdates[leaderId] then return end
+
+	pendingPartyUpdates[leaderId] = true
+	addEvent(function(currentLeaderId)
+		pendingPartyUpdates[currentLeaderId] = nil
+		local currentLeader = Player(currentLeaderId)
+		if currentLeader and currentLeader:getParty() then
+			sendPartyAnalyzerToAll(currentLeader)
+		end
+	end, 50, leaderId)
+end
+
 -- Drop event: add loot value when party member loots a corpse
 local partyLootDrop = Event()
 function partyLootDrop.onDropLoot(monster, corpse)
@@ -139,7 +155,7 @@ function partyLootDrop.onDropLoot(monster, corpse)
 	end
 
 	data.loot = data.loot + addContainerValue(corpse)
-	sendPartyAnalyzerToAll(leader)
+	queuePartyAnalyzerUpdate(leader)
 end
 partyLootDrop:register(100)
 
@@ -153,15 +169,11 @@ function partyHealEvent.onHealthChange(creature, attacker, primaryDamage, primar
 	local session = getOrCreateSession(leader)
 	if not session then return primaryDamage, primaryType, secondaryDamage, secondaryType end
 
-	if primaryDamage > 0 then -- healing
+	local healing = math.max(primaryDamage or 0, 0) + math.max(secondaryDamage or 0, 0)
+	if healing > 0 then
 		local data = getOrCreateMemberData(session, creature:getId(), creature:getName())
-		data.healing = data.healing + primaryDamage
-		sendPartyAnalyzerToAll(leader)
-	end
-	if secondaryDamage and secondaryDamage > 0 then
-		local data = getOrCreateMemberData(session, creature:getId(), creature:getName())
-		data.healing = data.healing + secondaryDamage
-		sendPartyAnalyzerToAll(leader)
+		data.healing = data.healing + healing
+		queuePartyAnalyzerUpdate(leader)
 	end
 
 	return primaryDamage, primaryType, secondaryDamage, secondaryType
@@ -185,6 +197,7 @@ partyRefreshEvent:register()
 local partyLogoutEvent = CreatureEvent("PartyAnalyzerLogout")
 function partyLogoutEvent.onLogout(player)
 	local leaderId = player:getId()
+	pendingPartyUpdates[leaderId] = nil
 	if partySessions[leaderId] then
 		partySessions[leaderId] = nil
 		sendPartyAnalyzerToAll(player)

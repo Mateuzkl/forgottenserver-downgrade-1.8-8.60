@@ -1,78 +1,12 @@
 -- data/scripts/network/huntanalyzer.lua
 
-local OPCODE_KILL_TRACKER = 0xD1
 local STORAGE_MEHAH_CLIENT = 99999 -- Must match extendedopcode.lua
-local MAX_ITEMS_PER_CONTAINER = 255
 local HUNT_ANALYZER_DROP_TRIGGER = 100
-
--- Payload: monster string, outfit bytes, then recursive corpse item records.
-local function clampByte(value)
-	return math.min(math.max(tonumber(value) or 0, 0), 255)
-end
-
-local function clampU16(value)
-	return math.min(math.max(tonumber(value) or 0, 0), 65535)
-end
 
 local function isItemStackable(itemId)
 	local itemType = ItemType(itemId)
 	if not itemType then return false end
 	return itemType:isStackable() or itemType:isFluidContainer()
-end
-
-local function writeOutfit(out, monsterType)
-	local outfit = monsterType:outfit()
-	out:addU16(outfit.lookType or 0)
-	out:addByte(outfit.lookHead or 0)
-	out:addByte(outfit.lookBody or 0)
-	out:addByte(outfit.lookLegs or 0)
-	out:addByte(outfit.lookFeet or 0)
-	out:addByte(outfit.lookAddons or 0)
-end
-
-local itemTypeClientIdCache = {}
-
-local function getClientItemId(item)
-	local itemId = item and item:getId()
-	if not itemId then
-		return 0
-	end
-
-	local cached = itemTypeClientIdCache[itemId]
-	if cached ~= nil then
-		return cached
-	end
-
-	local itemType = ItemType(itemId)
-	local clientId = itemType and itemType:getClientId() or 0
-	itemTypeClientIdCache[itemId] = clientId
-	return clientId
-end
-
-local function writeContainerItems(out, container, depth)
-	depth = depth or 1
-	if depth > 4 then
-		out:addByte(0)
-		return
-	end
-
-	local items = container and container:getItems(false) or {}
-	local itemCount = math.min(#items, MAX_ITEMS_PER_CONTAINER)
-	out:addByte(itemCount)
-
-	for index = 1, itemCount do
-		local item = items[index]
-		out:addU16(getClientItemId(item))
-
-		local childContainer = item and item:getContainer()
-		if childContainer then
-			writeContainerItems(out, childContainer, depth + 1)
-		else
-			out:addByte(clampByte(item and item:getCount() or 0))
-			out:addU16(clampU16(item and item.getDefaultPrice and item:getDefaultPrice() or item and item:getWorth() or 0))
-			out:addString(item and item:getName() or "")
-		end
-	end
 end
 
 local function sendLootStatsRecursive(player, container)
@@ -84,10 +18,10 @@ local function sendLootStatsRecursive(player, container)
 		else
 			local out = NetworkMessage(player)
 			out:addByte(0xCF) -- OPCODE_LOOT_TRACKER
-			local clientId = getClientItemId(item)
+			local clientId = ItemType(item:getId()):getClientId()
 			out:addU16(clientId)
 			if isItemStackable(item:getId()) then
-				out:addByte(clampByte(item:getCount()))
+				out:addByte(math.min(math.max(item:getCount(), 0), 255))
 			end
 			out:addString(item:getName() or "")
 			out:sendToPlayer(player)
@@ -110,19 +44,11 @@ local function sendHuntAnalyzerKill(player, monster, corpse)
 		return
 	end
 
-	local monsterType = monster:getType()
-	if not monsterType then
-		return
-	end
+	player:updateKillTracker(monster, corpse)
 
-	local out = NetworkMessage(player)
-	out:addByte(OPCODE_KILL_TRACKER)
-	out:addString(monsterType:getName())
-	writeOutfit(out, monsterType)
-	writeContainerItems(out, corpse)
-	out:sendToPlayer(player)
-
-	if player:getStorageValue(STORAGE_MEHAH_CLIENT) == 1 or supportsHuntAnalyzer(player) then
+	-- Astra reads loot from the C++-decoded 0xD1 batch. Keep the legacy
+	-- per-item 0xCF stream only for older OTClient variants.
+	if not (player.isUsingAstraClient and player:isUsingAstraClient()) then
 		sendLootStatsRecursive(player, corpse)
 	end
 end

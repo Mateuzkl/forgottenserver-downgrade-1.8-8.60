@@ -262,6 +262,10 @@ private:
 	void sendPlayerInventory();
 	void sendImbuementDurations(slots_t updatedSlot = CONST_SLOT_WHEREEVER, const Item* updatedItem = nullptr);
 	void sendCharmActivated(uint8_t charmId);
+	void sendKillTrackerUpdate(const std::shared_ptr<Container>& corpse, std::string_view monsterName,
+	                           const Outfit_t& monsterOutfit);
+	void sendImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
+	                       std::string_view targetName = {});
 
 	// messages
 	void sendModalWindow(const ModalWindow& modalWindow);

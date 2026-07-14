@@ -51,6 +51,7 @@ class SchedulerTask;
 class Bed;
 class Guild;
 class KV;
+class Monster;
 
 enum skillsid_t
 {
@@ -1274,6 +1275,9 @@ public:
 			client->sendCharmActivated(charmId);
 		}
 	}
+	void updateKillTracker(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Container>& corpse) const;
+	void updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
+	                         std::string_view targetName = {}) const;
 	void sendPing();
 	void sendStats();
 	void sendSkills() const

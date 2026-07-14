@@ -12,6 +12,7 @@
 #include "luascript.h"
 #include "const.h"
 #include "map.h"
+#include "monster.h"
 #include "mounts.h"
 #include "player.h"
 #include "scriptmanager.h"
@@ -479,6 +480,24 @@ int luaPlayerSendCharmActivated(lua_State* L)
 	} else {
 		lua_pushnil(L);
 	}
+	return 1;
+}
+
+int luaPlayerUpdateKillTracker(lua_State* L)
+{
+	// player:updateKillTracker(monster, corpse)
+	const auto player = getLuaPlayerShared(L, 1);
+	Monster* monsterRaw = getUserdata<Monster>(L, 2);
+	Container* corpseRaw = getUserdata<Container>(L, 3);
+	const auto monster = monsterRaw ? std::dynamic_pointer_cast<Monster>(monsterRaw->weak_from_this().lock()) : nullptr;
+	const auto corpse = corpseRaw ? std::dynamic_pointer_cast<Container>(corpseRaw->weak_from_this().lock()) : nullptr;
+	if (!player || !monster || !corpse) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->updateKillTracker(monster, corpse);
+	pushBoolean(L, true);
 	return 1;
 }
 
@@ -4603,6 +4622,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getDropBonus", luaPlayerGetDropBonus);
 	registerMethod("Player", "setTemporaryDeathLossReduction", luaPlayerSetTemporaryDeathLossReduction);
 	registerMethod("Player", "sendCharmActivated", luaPlayerSendCharmActivated);
+	registerMethod("Player", "updateKillTracker", luaPlayerUpdateKillTracker);
 	registerMethod("Player", "addConditionSuppressions", luaPlayerAddConditionSuppressions);
 	registerMethod("Player", "removeConditionSuppressions", luaPlayerRemoveConditionSuppressions);
 

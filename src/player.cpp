@@ -785,6 +785,29 @@ void Player::sendMonkData()
 	client->sendExtendedOpcode(0x92, json);
 }
 
+void Player::updateKillTracker(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Container>& corpse) const
+{
+	if (!client || !monster || !corpse) {
+		return;
+	}
+
+	if (const auto protocol = client->protocol()) {
+		protocol->sendKillTrackerUpdate(corpse, monster->getName(), monster->getCurrentOutfit());
+	}
+}
+
+void Player::updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
+                                 std::string_view targetName) const
+{
+	if (!client || amount == 0) {
+		return;
+	}
+
+	if (const auto protocol = client->protocol()) {
+		protocol->sendImpactTracker(analyzerType, amount, combatType, targetName);
+	}
+}
+
 void Player::addBlessing(uint8_t blessing, uint8_t count)
 {
 	if (blessing < 1 || blessing > PLAYER_MAX_BLESSINGS || blessings[blessing] == 255) return;
