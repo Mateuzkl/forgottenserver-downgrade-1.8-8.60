@@ -8,6 +8,8 @@
 #include "stats.h"
 #include "thread_pool.h"
 
+#include <source_location>
+
 using TaskFunc = ReactorCallback;
 
 inline constexpr int DISPATCHER_TASK_EXPIRATION = 2000;
@@ -54,8 +56,17 @@ public:
 	void shutdown() noexcept;
 
 	void addTask(std::unique_ptr<Task>&& task);
-	void addTask(TaskFunc&& f) { addTask(createTask(std::move(f))); }
-	void addTask(uint32_t expiration, TaskFunc&& f) { addTask(createTimedTask(expiration, std::move(f))); }
+	void addTask(TaskFunc&& f, const std::source_location location = std::source_location::current())
+	{
+		addTask(createTaskWithStats(std::move(f), location.function_name(),
+		                            std::string(location.file_name()) + ":" + std::to_string(location.line())));
+	}
+	void addTask(uint32_t expiration, TaskFunc&& f,
+	             const std::source_location location = std::source_location::current())
+	{
+		addTask(createTaskWithStats(expiration, std::move(f), location.function_name(),
+		                            std::string(location.file_name()) + ":" + std::to_string(location.line())));
+	}
 	void executeTask(std::unique_ptr<Task> task);
 
 	template <typename Func, typename Callback>

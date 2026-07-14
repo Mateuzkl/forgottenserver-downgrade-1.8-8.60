@@ -29,6 +29,8 @@ local trackerCache = {}
 local earnedPointsCache = {}
 local charmByRaceCache = {}
 local finishedCache = {}
+local charmPointsCache = {}
+local minorResourcesCache = {}
 local rebuildEarnedPoints
 
 local function supportsCustomNetwork(player)
@@ -104,50 +106,60 @@ local function getPlayerGuid(player)
 end
 
 local function getPlayerCharmPoints(playerGuid)
+	if Game.getBestiaryCharmPoints then
+		return Game.getBestiaryCharmPoints(playerGuid)
+	end
+
+	if charmPointsCache[playerGuid] ~= nil then
+		return charmPointsCache[playerGuid]
+	end
+
 	local resultId = db.storeQuery("SELECT `charmpoints` FROM `players` WHERE `id` = " .. playerGuid)
 	if resultId == false then
+		charmPointsCache[playerGuid] = 0
 		return 0
 	end
 
 	local points = math.max(0, result.getDataInt(resultId, "charmpoints"))
 	result.free(resultId)
+	charmPointsCache[playerGuid] = points
 	return points
 end
 
 local function setPlayerCharmPoints(playerGuid, points)
 	points = math.max(0, tonumber(points) or 0)
-	db.query("UPDATE `players` SET `charmpoints` = " .. points .. " WHERE `id` = " .. playerGuid)
+	charmPointsCache[playerGuid] = points
+	if Game.setBestiaryCharmPoints then
+		Game.setBestiaryCharmPoints(playerGuid, points)
+	else
+		db.query("UPDATE `players` SET `charmpoints` = " .. points .. " WHERE `id` = " .. playerGuid)
+	end
 	return points
 end
 
-local function ensurePlayerBestiaryResources(playerGuid)
-	playerGuid = tonumber(playerGuid) or 0
-	if playerGuid <= 0 then
-		return false
-	end
-	db.query("INSERT IGNORE INTO `player_bestiary_resources` (`player_id`) VALUES (" .. playerGuid .. ")")
-	return true
-end
-
 local function getPlayerMinorCharmEchoes(playerGuid)
-	if not ensurePlayerBestiaryResources(playerGuid) then
-		return 0, 0
+	local cached = minorResourcesCache[playerGuid]
+	if cached then
+		return cached.echoes, cached.maxEchoes
 	end
 
 	local resultId = db.storeQuery("SELECT `minor_charm_echoes`, `max_minor_charm_echoes` FROM `player_bestiary_resources` WHERE `player_id` = " .. playerGuid)
 	if resultId == false then
+		minorResourcesCache[playerGuid] = {echoes = 0, maxEchoes = 0}
 		return 0, 0
 	end
 
 	local echoes = math.max(0, result.getDataInt(resultId, "minor_charm_echoes"))
 	local maxEchoes = math.max(0, result.getDataInt(resultId, "max_minor_charm_echoes"))
 	result.free(resultId)
+	minorResourcesCache[playerGuid] = {echoes = echoes, maxEchoes = maxEchoes}
 	return echoes, maxEchoes
 end
 
 local function setPlayerMinorCharmEchoes(playerGuid, echoes, maxEchoes)
 	echoes = math.max(0, tonumber(echoes) or 0)
 	maxEchoes = math.max(echoes, tonumber(maxEchoes) or 0)
+	minorResourcesCache[playerGuid] = {echoes = echoes, maxEchoes = maxEchoes}
 	db.query("INSERT INTO `player_bestiary_resources` (`player_id`, `minor_charm_echoes`, `max_minor_charm_echoes`) VALUES (" ..
 		playerGuid .. ", " .. echoes .. ", " .. maxEchoes .. ") ON DUPLICATE KEY UPDATE `minor_charm_echoes` = " ..
 		echoes .. ", `max_minor_charm_echoes` = " .. maxEchoes)
@@ -161,6 +173,8 @@ local function invalidatePlayer(playerGuid)
 	earnedPointsCache[playerGuid] = nil
 	charmByRaceCache[playerGuid] = nil
 	finishedCache[playerGuid] = nil
+	charmPointsCache[playerGuid] = nil
+	minorResourcesCache[playerGuid] = nil
 end
 
 if CustomBestiary then
@@ -168,6 +182,10 @@ if CustomBestiary then
 end
 
 local function loadKillMap(playerGuid)
+	if Game.getBestiaryKills then
+		return Game.getBestiaryKills(playerGuid)
+	end
+
 	local cached = killCache[playerGuid]
 	if cached then
 		return cached
@@ -264,12 +282,27 @@ rebuildEarnedPoints = function(playerGuid, kills)
 	finishedCache[playerGuid] = finished
 end
 
-local function updateKillCache(playerGuid, raceId, amount)
+local function updateKillCache(playerGuid, raceId, amount, oldKills, newKills)
 	playerGuid = tonumber(playerGuid) or 0
 	raceId = tonumber(raceId) or 0
 	amount = tonumber(amount) or 0
 	if playerGuid <= 0 or raceId <= 0 or amount == 0 then
 		return false
+	end
+	-- The C++ Player map is authoritative and was already incremented by
+	-- Game.addBestiaryKill. Only maintain already-built derived caches here.
+	if Game.getBestiaryKills then
+		oldKills = math.max(0, tonumber(oldKills) or 0)
+		newKills = math.max(oldKills, tonumber(newKills) or (oldKills + amount))
+		local entry = CustomBestiary.monstersByRaceId[raceId]
+		if entry and earnedPointsCache[playerGuid] and oldKills < entry.toKill and newKills >= entry.toKill then
+			earnedPointsCache[playerGuid] = earnedPointsCache[playerGuid] + entry.charmPoints
+		end
+		if entry and finishedCache[playerGuid] and oldKills < entry.secondUnlock and newKills >= entry.secondUnlock then
+			finishedCache[playerGuid][#finishedCache[playerGuid] + 1] = raceId
+			table.sort(finishedCache[playerGuid])
+		end
+		return true
 	end
 
 	local kills = killCache[playerGuid]
@@ -290,6 +323,9 @@ local function getKillCount(playerGuid, raceId)
 	if playerGuid <= 0 or raceId <= 0 then
 		return 0
 	end
+	if Game.getBestiaryKillCount then
+		return Game.getBestiaryKillCount(playerGuid, raceId)
+	end
 
 	local kills = loadKillMap(playerGuid)
 	return kills[raceId] or 0
@@ -301,8 +337,13 @@ local function preloadPlayer(playerGuid)
 		return false
 	end
 
-	loadKillMap(playerGuid)
+	if not Game.getBestiaryKills then
+		loadKillMap(playerGuid)
+	end
+	loadCharmMap(playerGuid)
 	loadTrackerList(playerGuid)
+	getPlayerCharmPoints(playerGuid)
+	getPlayerMinorCharmEchoes(playerGuid)
 	return true
 end
 
@@ -310,6 +351,15 @@ if CustomBestiary then
 	CustomBestiary.updateKillCache = updateKillCache
 	CustomBestiary.getKillCount = getKillCount
 	CustomBestiary.preloadPlayer = preloadPlayer
+	CustomBestiary.updateCharmPointCache = function(playerGuid, amount)
+		playerGuid = tonumber(playerGuid) or 0
+		amount = tonumber(amount) or 0
+		if playerGuid <= 0 or amount == 0 then
+			return false
+		end
+		charmPointsCache[playerGuid] = math.max(0, getPlayerCharmPoints(playerGuid) + amount)
+		return true
+	end
 end
 
 local function getSpentCharmPoints(charms)

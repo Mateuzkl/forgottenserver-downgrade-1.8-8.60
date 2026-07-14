@@ -114,6 +114,9 @@ local function ensurePreySchema()
 	preySchemaChecked = true
 end
 
+-- Schema maintenance belongs to startup, never to a player's login callback.
+ensurePreySchema()
+
 PreySystem = PreySystem or {}
 PreySystem.BONUS_DAMAGE_BOOST = PREY_BONUS_DMG_BOOST
 PreySystem.BONUS_DAMAGE_REDUCTION = PREY_BONUS_DMG_RED
@@ -171,17 +174,6 @@ local function defaultSlot()
 	}
 end
 
-local function ensurePlayerRows(playerGuid)
-	ensurePreySchema()
-
-	for slot = 0, PREY_SLOTS - 1 do
-		db.query(string.format(
-			"INSERT IGNORE INTO `player_prey` (`player_id`, `slot`, `state`, `list_monsters`, `reroll_at`, `list_reroll_used`) VALUES (%d, %d, %d, '', 0, 0)",
-			playerGuid, slot, PREY_STATE_LIST_SELECTION
-		))
-	end
-end
-
 local function serializeMonsterList(list)
 	return table.concat(list or {}, ";")
 end
@@ -197,6 +189,10 @@ local function parseMonsterList(rawList)
 end
 
 local function getPlayerBonusRerolls(player)
+	if player.getPreyWildcards then
+		return math.min(player:getPreyWildcards(), PREY_MAX_WILDCARDS)
+	end
+
 	local resultId = db.storeQuery("SELECT `bonus_rerolls` FROM `players` WHERE `id` = " .. player:getGuid())
 	if resultId == false then
 		return 0
@@ -209,6 +205,11 @@ end
 
 local function setPlayerBonusRerolls(player, rerolls)
 	rerolls = math.min(math.max(tonumber(rerolls) or 0, 0), PREY_MAX_WILDCARDS)
+	if player.setPreyWildcards then
+		player:setPreyWildcards(rerolls)
+		return rerolls
+	end
+
 	db.query(string.format(
 		"UPDATE `players` SET `bonus_rerolls` = %d WHERE `id` = %d",
 		rerolls,
@@ -222,8 +223,6 @@ local function loadPreyFromDB(playerGuid)
 	for slot = 0, PREY_SLOTS - 1 do
 		data.slots[slot] = defaultSlot()
 	end
-
-	ensurePlayerRows(playerGuid)
 
 	local resultId = db.storeQuery("SELECT * FROM `player_prey` WHERE `player_id` = " .. playerGuid)
 	if resultId == false then
@@ -308,13 +307,17 @@ end
 
 local function getPlayerPrey(player)
 	local playerId = player:getId()
+	local firstLoad = not preyCache[playerId]
 	if not preyCache[playerId] then
 		preyCache[playerId] = loadPreyFromDB(player:getGuid())
-		if getPlayerBonusRerolls(player) == 0 and preyCache[playerId].legacyWildcards > 0 then
-			setPlayerBonusRerolls(player, preyCache[playerId].legacyWildcards)
-		end
 	end
-	preyCache[playerId].wildcards = getPlayerBonusRerolls(player)
+
+	local wildcards = getPlayerBonusRerolls(player)
+	if firstLoad and wildcards == 0 and preyCache[playerId].legacyWildcards > 0 then
+		setPlayerBonusRerolls(player, preyCache[playerId].legacyWildcards)
+		wildcards = preyCache[playerId].legacyWildcards
+	end
+	preyCache[playerId].wildcards = wildcards
 	return preyCache[playerId]
 end
 
@@ -445,7 +448,6 @@ local function sendPreyBalances(player)
 	end
 
 	local prey = getPlayerPrey(player)
-	prey.wildcards = getPlayerBonusRerolls(player)
 	player:sendResource("prey", prey.wildcards)
 	player:sendResource("bank", player:getBankBalance())
 	player:sendResource("inventory", player:getMoney())
@@ -1027,7 +1029,7 @@ local function preyTick()
 
 	for _, player in ipairs(Game.getPlayers()) do
 		if playerIsInCombat(player) then
-			local prey = preyCache[player:getId()]
+			local prey = getPlayerPrey(player)
 			if prey then
 				local changed = false
 				for slot = 0, PREY_SLOTS - 1 do
@@ -1044,7 +1046,6 @@ local function preyTick()
 							end
 
 							if locked then
-								prey.wildcards = getPlayerBonusRerolls(player)
 								if prey.wildcards >= PREY_LOCK_COST then
 									prey.wildcards = setPlayerBonusRerolls(player, prey.wildcards - PREY_LOCK_COST)
 									slotData.time_left = PREY_DURATION_SECS
@@ -1054,7 +1055,6 @@ local function preyTick()
 									slotData.state = PREY_STATE_INACTIVE
 								end
 							elseif autoBonus then
-								prey.wildcards = getPlayerBonusRerolls(player)
 								if prey.wildcards >= PREY_AUTO_BONUS_COST then
 									prey.wildcards = setPlayerBonusRerolls(player, prey.wildcards - PREY_AUTO_BONUS_COST)
 									rerollBonus(slotData)
@@ -1097,8 +1097,8 @@ addEvent(preyTick, PREY_TICK_INTERVAL)
 
 local loginEvent = CreatureEvent("PreySystemLogin")
 function loginEvent.onLogin(player)
-	preyCache[player:getId()] = loadPreyFromDB(player:getGuid())
-	syncPreyCombatBonuses(player, preyCache[player:getId()])
+	local prey = getPlayerPrey(player)
+	syncPreyCombatBonuses(player, prey)
 	player:registerEvent("PreySystemLogout")
 	return true
 end
@@ -1138,7 +1138,7 @@ function PreySystem.addWildcards(player, amount)
 	end
 
 	local prey = getPlayerPrey(player)
-	prey.wildcards = setPlayerBonusRerolls(player, getPlayerBonusRerolls(player) + amount)
+	prey.wildcards = setPlayerBonusRerolls(player, prey.wildcards + amount)
 	sendFullPrey(player, false)
 	sendPreyBalances(player)
 	return true
@@ -1236,7 +1236,6 @@ local function nativeBonusReroll(player, slot)
 	end
 
 	local prey = getPlayerPrey(player)
-	prey.wildcards = getPlayerBonusRerolls(player)
 	if prey.wildcards < 1 then
 		return sendError(player, "You do not have enough Prey Wildcards.")
 	end
@@ -1266,7 +1265,6 @@ local function nativeRequestAllMonsters(player, slot)
 		return sendError(player, "You are already selecting a creature from the list.")
 	end
 
-	prey.wildcards = getPlayerBonusRerolls(player)
 	if prey.wildcards < PREY_LOCK_COST then
 		return sendError(player, "You do not have enough Prey Wildcards.")
 	end

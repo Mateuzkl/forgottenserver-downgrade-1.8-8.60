@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <functional>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_set>
 #include <vector>
@@ -30,11 +31,15 @@ public:
 	TaskReactor();
 
 	void start() noexcept;
-	bool send(ReactorCallback&& callback);
-	bool send(std::chrono::milliseconds expirationTime, ReactorCallback&& callback);
-	bool send(uint32_t expirationTime, ReactorCallback&& callback);
-	uint32_t schedule(std::chrono::milliseconds delay, ReactorCallback&& callback);
-	uint32_t schedule(uint32_t delay, ReactorCallback&& callback);
+	bool send(ReactorCallback&& callback, std::string description = {}, std::string origin = {});
+	bool send(std::chrono::milliseconds expirationTime, ReactorCallback&& callback, std::string description = {},
+	          std::string origin = {});
+	bool send(uint32_t expirationTime, ReactorCallback&& callback, std::string description = {},
+	          std::string origin = {});
+	uint32_t schedule(std::chrono::milliseconds delay, ReactorCallback&& callback, std::string description = {},
+	                  std::string origin = {});
+	uint32_t schedule(uint32_t delay, ReactorCallback&& callback, std::string description = {},
+	                  std::string origin = {});
 	void cancel(uint32_t taskIdentifier);
 
 	void runLoop();
@@ -57,6 +62,8 @@ private:
 		std::chrono::steady_clock::time_point deadline;
 		uint32_t identifier = 0;
 		uint64_t sequence = 0;
+		std::string description;
+		std::string origin;
 		ReactorCallback function;
 
 		[[nodiscard]] bool hasExpired(std::chrono::steady_clock::time_point now) const noexcept;

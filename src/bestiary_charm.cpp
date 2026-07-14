@@ -201,6 +201,10 @@ void BestiaryCharmSystem::invalidatePlayer(uint32_t playerGuid) const
 
 uint32_t BestiaryCharmSystem::getKillCount(uint32_t playerGuid, uint16_t raceId) const
 {
+	if (const auto player = g_game.getPlayerByGUID(playerGuid)) {
+		return player->getBestiaryKillCount(raceId);
+	}
+
 	auto result = Database::getInstance().storeQuery(fmt::format(
 	    "SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = {:d} AND `raceid` = {:d}",
 	    playerGuid, raceId));
@@ -209,6 +213,10 @@ uint32_t BestiaryCharmSystem::getKillCount(uint32_t playerGuid, uint16_t raceId)
 
 uint32_t BestiaryCharmSystem::getCharmPoints(uint32_t playerGuid) const
 {
+	if (const auto player = g_game.getPlayerByGUID(playerGuid)) {
+		return player->getBestiaryCharmPoints();
+	}
+
 	auto result = Database::getInstance().storeQuery(
 	    fmt::format("SELECT `charmpoints` FROM `players` WHERE `id` = {:d}", playerGuid));
 	return result ? result->getNumber<uint32_t>("charmpoints") : 0;
@@ -216,6 +224,11 @@ uint32_t BestiaryCharmSystem::getCharmPoints(uint32_t playerGuid) const
 
 bool BestiaryCharmSystem::setCharmPoints(uint32_t playerGuid, uint32_t points) const
 {
+	if (const auto player = g_game.getPlayerByGUID(playerGuid)) {
+		player->setBestiaryCharmPoints(points);
+		return true;
+	}
+
 	return Database::getInstance().executeQuery(
 	    fmt::format("UPDATE `players` SET `charmpoints` = {:d} WHERE `id` = {:d}", points, playerGuid));
 }

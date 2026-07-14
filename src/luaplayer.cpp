@@ -1514,6 +1514,32 @@ int luaPlayerSetBankBalance(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetPreyWildcards(lua_State* L)
+{
+	// player:getPreyWildcards()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getPreyWildcards());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetPreyWildcards(lua_State* L)
+{
+	// player:setPreyWildcards(value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setPreyWildcards(getInteger<uint64_t>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
 // Task Hunting Points
 int luaPlayerGetTaskHuntingPoints(lua_State* L)
 {
@@ -4662,6 +4688,8 @@ void LuaScriptInterface::registerPlayer()
 
 	registerMethod("Player", "getBankBalance", luaPlayerGetBankBalance);
 	registerMethod("Player", "setBankBalance", luaPlayerSetBankBalance);
+	registerMethod("Player", "getPreyWildcards", luaPlayerGetPreyWildcards);
+	registerMethod("Player", "setPreyWildcards", luaPlayerSetPreyWildcards);
 
 	registerMethod("Player", "getTaskHuntingPoints", luaPlayerGetTaskHuntingPoints);
 	registerMethod("Player", "setTaskHuntingPoints", luaPlayerSetTaskHuntingPoints);

@@ -128,6 +128,10 @@ local function ensureSchema()
 	return true
 end
 
+-- Run DDL/schema probes during script startup, not inside the first player's
+-- login or first Hunting Task action.
+ensureSchema()
+
 local function defaultSlot()
 	return {
 		state = STATE_SELECT,
@@ -220,7 +224,7 @@ local function saveSlot(player, slot)
 	-- TFS db.escapeString returns a quoted SQL string literal.
 	local serializedRaceList = db.escapeString(serializeRaceList(slotData.raceList))
 
-	return db.query(string.format(
+	db.asyncQuery(string.format(
 		"INSERT INTO `player_task_hunting` (`player_id`, `slot`, `state`, `selected_raceid`, `current_kills`, `rarity`, `upgraded`, `wildcard`, `race_list`, `free_reroll_at`) " ..
 		"VALUES (%d, %d, %d, %d, %d, %d, %d, %d, %s, %d) " ..
 		"ON DUPLICATE KEY UPDATE `state` = VALUES(`state`), `selected_raceid` = VALUES(`selected_raceid`), " ..
@@ -237,6 +241,7 @@ local function saveSlot(player, slot)
 		serializedRaceList,
 		math.max(0, tonumber(slotData.freeRerollAt) or 0)
 	))
+	return true
 end
 
 local function saveAll(player)
@@ -246,6 +251,10 @@ local function saveAll(player)
 end
 
 local function getBestiaryKills(player)
+	if Game.getBestiaryKills then
+		return Game.getBestiaryKills(player:getGuid())
+	end
+
 	local kills = {}
 	local resultId = db.storeQuery("SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = " .. player:getGuid())
 	if resultId ~= false then
@@ -434,6 +443,10 @@ local function ensureSlotReady(player, data, slot)
 end
 
 local function getPlayerWildcards(player)
+	if player.getPreyWildcards then
+		return player:getPreyWildcards()
+	end
+
 	local resultId = db.storeQuery("SELECT `bonus_rerolls` FROM `players` WHERE `id` = " .. player:getGuid())
 	if resultId == false then
 		return 0
@@ -445,7 +458,11 @@ end
 
 local function setPlayerWildcards(player, value)
 	value = math.floor(math.max(0, tonumber(value) or 0))
-	db.query("UPDATE `players` SET `bonus_rerolls` = " .. value .. " WHERE `id` = " .. player:getGuid())
+	if player.setPreyWildcards then
+		player:setPreyWildcards(value)
+	else
+		db.query("UPDATE `players` SET `bonus_rerolls` = " .. value .. " WHERE `id` = " .. player:getGuid())
+	end
 	return value
 end
 

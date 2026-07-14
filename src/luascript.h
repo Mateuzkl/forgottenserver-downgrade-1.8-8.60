@@ -204,6 +204,7 @@ struct LuaTimerEventDesc
 	int32_t function = -1;
 	std::vector<int32_t> parameters;
 	uint32_t eventId = 0;
+	std::string origin;
 
 	LuaTimerEventDesc() = default;
 	LuaTimerEventDesc(LuaTimerEventDesc&& other) = default;
@@ -232,7 +233,12 @@ public:
 	LuaScriptInterface* getScriptInterface() { return interface; }
 	void setScriptInterface(LuaScriptInterface* scriptInterface) { interface = scriptInterface; }
 
-	void setTimerEvent() { timerEvent = true; }
+	void setTimerEvent(std::string origin = {})
+	{
+		timerEvent = true;
+		timerEventOrigin = std::move(origin);
+	}
+	const std::string& getTimerEventOrigin() const { return timerEventOrigin; }
 
 	void getEventInfo(int32_t& scriptId, LuaScriptInterface*& scriptInterface, int32_t& callbackId,
 	                  bool& timerEvent) const;
@@ -280,6 +286,7 @@ public:
 	int32_t scriptId;
 	int32_t callbackId;
 	bool timerEvent;
+	std::string timerEventOrigin;
 	bool hasOpenTransaction = false;
 
 	// result map

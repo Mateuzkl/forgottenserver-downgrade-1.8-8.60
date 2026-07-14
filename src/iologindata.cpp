@@ -280,7 +280,7 @@ bool IOLoginData::loadPlayerById(Player* player, uint32_t id, bool deferWorldDat
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
 	        id)), deferWorldData);
 }
 
@@ -290,7 +290,7 @@ bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
 	        db.escapeString(name))));
 }
 
@@ -417,6 +417,8 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	player->setSaveFlag(result->getNumber<uint16_t>("save") != 0);
 
 	player->bankBalance = result->getNumber<uint64_t>("balance");
+	player->preyWildcards = result->getNumber<uint64_t>("bonus_rerolls");
+	player->bestiaryCharmPoints = result->getNumber<uint32_t>("charmpoints");
 	player->taskHuntingPoints = result->getNumber<uint64_t>("task_hunting_points");
 	player->bountyPoints = result->getNumber<uint64_t>("bounty_points");
 	player->soulsealsPoints = result->getNumber<uint64_t>("soulseals_points");
@@ -865,6 +867,20 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 		} while (result->next());
 	}
 
+	// Bestiary and Bosstiary kills stay in the Player object while online. This mirrors
+	// the Crystal design and keeps database reads out of the creature death pipeline.
+	if ((result = db.storeQuery(fmt::format(
+	         "SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = {:d}", player->getGUID())))) {
+		do {
+			player->setBestiaryKillCount(result->getNumber<uint16_t>("raceid"), result->getNumber<uint32_t>("kills"));
+		} while (result->next());
+	}
+	player->clearBestiaryDirty();
+	if ((result = db.storeQuery(fmt::format(
+	         "SELECT `points` FROM `player_bosstiary` WHERE `player_id` = {:d}", player->getGUID())))) {
+		player->bosstiaryPoints = result->getNumber<uint32_t>("points");
+	}
+
 	// load vip list
 	if ((result = db.storeQuery(fmt::format("SELECT `player_id` FROM `account_viplist` WHERE `account_id` = {:d}",
 	                                        player->getAccount())))) {
@@ -1011,10 +1027,11 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 	}
 
 	const Player::StorageDirtySnapshot storageSnapshot = player->getStorageDirtySnapshot();
+	const Player::BestiaryDirtySnapshot bestiarySnapshot = player->getBestiaryDirtySnapshot();
 	std::vector<std::string> queries;
 	try {
 		QueryCaptureScope capture{queries};
-		if (!savePlayerQueries(player)) {
+		if (!savePlayerQueries(player, bestiarySnapshot)) {
 			return std::nullopt;
 		}
 	} catch (const std::exception& e) {
@@ -1026,7 +1043,9 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 		std::move(queries),
 		storageSnapshot.snapshotId,
 		storageSnapshot.modifiedKeys,
-		storageSnapshot.removedKeys
+		storageSnapshot.removedKeys,
+		bestiarySnapshot.snapshotId,
+		bestiarySnapshot.modifiedRaceIds
 	};
 }
 
@@ -1057,11 +1076,15 @@ bool IOLoginData::savePlayer(Player* player)
 			queries->snapshotModifiedKeys,
 			queries->snapshotRemovedKeys
 		});
+		player->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
+			queries->bestiarySnapshotId,
+			queries->snapshotModifiedBestiaryRaceIds
+		});
 	}
 	return success;
 }
 
-bool IOLoginData::savePlayerQueries(Player* player)
+bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot)
 {
 	AutoStat stat("savePlayer", "full");
 
@@ -1148,6 +1171,8 @@ bool IOLoginData::savePlayerQueries(Player* player)
 
 	query << "`lastlogout` = " << player->getLastLogout() << ',';
 	query << "`balance` = " << player->bankBalance << ',';
+	query << "`bonus_rerolls` = " << player->preyWildcards << ',';
+	query << "`charmpoints` = " << player->bestiaryCharmPoints << ',';
 	query << "`task_hunting_points` = " << player->taskHuntingPoints << ',';
 	query << "`bounty_points` = " << player->bountyPoints << ',';
 	query << "`soulseals_points` = " << player->soulsealsPoints << ',';
@@ -1416,6 +1441,32 @@ bool IOLoginData::savePlayerQueries(Player* player)
 				}
 			}
 		}
+	}
+
+	// Persist the in-memory Bestiary map in the same captured player-save transaction.
+	// No SQL is executed by onDeath/onKill.
+	if (!bestiarySnapshot.modifiedRaceIds.empty()) {
+		const auto& bestiaryKills = player->getBestiaryKillMap();
+		DBInsert bestiaryQuery("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES ");
+		bestiaryQuery.upsert(std::vector<std::string>{"kills"});
+		for (const uint16_t raceId : bestiarySnapshot.modifiedRaceIds) {
+			const auto killIt = bestiaryKills.find(raceId);
+			if (killIt == bestiaryKills.end()) {
+				continue;
+			}
+			if (!bestiaryQuery.addRow(fmt::format("{:d}, {:d}, {:d}", player->getGUID(), raceId, killIt->second))) {
+				return false;
+			}
+		}
+		if (!bestiaryQuery.execute()) {
+			return false;
+		}
+	}
+	if (!db.executeQuery(fmt::format(
+	        "INSERT INTO `player_bosstiary` (`player_id`, `points`) VALUES ({:d}, {:d}) "
+	        "ON DUPLICATE KEY UPDATE `points` = VALUES(`points`)",
+	        player->getGUID(), player->bosstiaryPoints))) {
+		return false;
 	}
 
 	// save outfits & addons

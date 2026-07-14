@@ -22,6 +22,17 @@ auto distantFuture() noexcept
 {
 	return std::chrono::steady_clock::time_point::max();
 }
+
+std::string taskLabel(const std::string& description, const std::string& origin)
+{
+	if (description.empty()) {
+		return origin.empty() ? "unknown" : origin;
+	}
+	if (origin.empty()) {
+		return description;
+	}
+	return fmt::format("{} @ {}", description, origin);
+}
 } // namespace
 
 bool TaskReactor::Task::hasExpired(std::chrono::steady_clock::time_point now) const noexcept
@@ -34,7 +45,7 @@ void TaskReactor::start() noexcept
 	threadState.store(THREAD_STATE_RUNNING, std::memory_order_release);
 }
 
-bool TaskReactor::send(ReactorCallback&& callback)
+bool TaskReactor::send(ReactorCallback&& callback, std::string description, std::string origin)
 {
 	if (!callback || threadState.load(std::memory_order_acquire) != THREAD_STATE_RUNNING) {
 		return false;
@@ -45,6 +56,8 @@ bool TaskReactor::send(ReactorCallback&& callback)
 	    .fireAt = now,
 	    .deadline = distantFuture(),
 	    .sequence = nextSequence.fetch_add(1, std::memory_order_relaxed),
+	    .description = std::move(description),
+	    .origin = std::move(origin),
 	    .function = std::move(callback),
 	};
 
@@ -61,7 +74,8 @@ bool TaskReactor::send(ReactorCallback&& callback)
 	return true;
 }
 
-bool TaskReactor::send(std::chrono::milliseconds expirationTime, ReactorCallback&& callback)
+bool TaskReactor::send(std::chrono::milliseconds expirationTime, ReactorCallback&& callback, std::string description,
+                       std::string origin)
 {
 	if (!callback || threadState.load(std::memory_order_acquire) != THREAD_STATE_RUNNING) {
 		return false;
@@ -72,6 +86,8 @@ bool TaskReactor::send(std::chrono::milliseconds expirationTime, ReactorCallback
 	    .fireAt = now,
 	    .deadline = now + expirationTime,
 	    .sequence = nextSequence.fetch_add(1, std::memory_order_relaxed),
+	    .description = std::move(description),
+	    .origin = std::move(origin),
 	    .function = std::move(callback),
 	};
 
@@ -88,16 +104,18 @@ bool TaskReactor::send(std::chrono::milliseconds expirationTime, ReactorCallback
 	return true;
 }
 
-bool TaskReactor::send(uint32_t expirationTime, ReactorCallback&& callback)
+bool TaskReactor::send(uint32_t expirationTime, ReactorCallback&& callback, std::string description, std::string origin)
 {
 	if (expirationTime == 0) {
-		return send(std::move(callback));
+		return send(std::move(callback), std::move(description), std::move(origin));
 	}
 
-	return send(std::chrono::milliseconds(expirationTime), std::move(callback));
+	return send(std::chrono::milliseconds(expirationTime), std::move(callback), std::move(description),
+	            std::move(origin));
 }
 
-uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&& callback)
+uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&& callback, std::string description,
+                               std::string origin)
 {
 	if (!callback || threadState.load(std::memory_order_acquire) != THREAD_STATE_RUNNING) {
 		return 0;
@@ -113,6 +131,8 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 	    .deadline = distantFuture(),
 	    .identifier = identifier,
 	    .sequence = nextSequence.fetch_add(1, std::memory_order_relaxed),
+	    .description = std::move(description),
+	    .origin = std::move(origin),
 	    .function = std::move(callback),
 	};
 
@@ -129,9 +149,9 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 	return identifier;
 }
 
-uint32_t TaskReactor::schedule(uint32_t delay, ReactorCallback&& callback)
+uint32_t TaskReactor::schedule(uint32_t delay, ReactorCallback&& callback, std::string description, std::string origin)
 {
-	return schedule(std::chrono::milliseconds(delay), std::move(callback));
+	return schedule(std::chrono::milliseconds(delay), std::move(callback), std::move(description), std::move(origin));
 }
 
 void TaskReactor::cancel(uint32_t taskIdentifier)
@@ -288,33 +308,55 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 
 	const auto cycleStart = std::chrono::steady_clock::now();
 	uint32_t tasksExecuted = 0;
+	std::chrono::steady_clock::duration slowestDuration{};
+	std::optional<size_t> slowestTaskIndex;
 
-	for (auto& task : readyTasks) {
+	for (size_t index = 0; index < readyTasks.size(); ++index) {
+		auto& task = readyTasks[index];
 		if (!task.function) {
+			++tasksExecuted;
 			continue;
 		}
 
 		if (maxTasksPerCycle > 0 && tasksExecuted >= maxTasksPerCycle) {
-			LOG_WARN("[TaskReactor] fairness limit reached ({} tasks/cycle), deferring {} tasks",
-			         maxTasksPerCycle, readyTasks.size() - tasksExecuted);
+			LOG_WARN("[TaskReactor] fairness limit reached ({} tasks/cycle), deferring {} tasks; next: {}",
+			         maxTasksPerCycle, readyTasks.size() - tasksExecuted, taskLabel(task.description, task.origin));
 			break;
 		}
 
-		if (timeBudget.count() > 0 && std::chrono::steady_clock::now() - cycleStart >= timeBudget) {
-		LOG_REACTOR("time budget exceeded ({} ms), deferring {} tasks",
-		            timeBudget.count(), readyTasks.size() - tasksExecuted);
-			break;
-		}
-
+		const auto taskStart = std::chrono::steady_clock::now();
 		try {
 			task.function();
 		} catch (const std::exception& exception) {
-			LOG_ERROR("[TaskReactor] Unhandled task exception: {}", exception.what());
+			LOG_ERROR("[TaskReactor] Unhandled task exception in {}: {}", taskLabel(task.description, task.origin),
+			          exception.what());
 		} catch (...) {
-			LOG_ERROR("[TaskReactor] Unhandled non-standard task exception");
+			LOG_ERROR("[TaskReactor] Unhandled non-standard task exception in {}",
+			          taskLabel(task.description, task.origin));
 		}
 
 		++tasksExecuted;
+		const auto taskEnd = std::chrono::steady_clock::now();
+		const auto taskDuration = taskEnd - taskStart;
+		if (taskDuration > slowestDuration) {
+			slowestDuration = taskDuration;
+			slowestTaskIndex = index;
+		}
+
+		if (timeBudget.count() > 0 && taskEnd - cycleStart >= timeBudget) {
+			const auto cycleMicros =
+			    std::chrono::duration_cast<std::chrono::microseconds>(taskEnd - cycleStart).count();
+			const auto slowestMicros = std::chrono::duration_cast<std::chrono::microseconds>(slowestDuration).count();
+			LOG_REACTOR(
+			    "time budget exceeded (budget={} ms, cycle={:.3f} ms, executed={}), "
+			    "deferring {} tasks; slowest: {} ({:.3f} ms); last: {} ({:.3f} ms)",
+			    timeBudget.count(), cycleMicros / 1000.0, tasksExecuted, readyTasks.size() - tasksExecuted,
+			    slowestTaskIndex ? taskLabel(readyTasks[*slowestTaskIndex].description,
+			                                readyTasks[*slowestTaskIndex].origin) : "unknown",
+			    slowestMicros / 1000.0, taskLabel(task.description, task.origin),
+			    std::chrono::duration_cast<std::chrono::microseconds>(taskDuration).count() / 1000.0);
+			break;
+		}
 	}
 
 	if (tasksExecuted < readyTasks.size()) {

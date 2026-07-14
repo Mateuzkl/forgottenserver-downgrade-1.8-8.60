@@ -43,10 +43,17 @@ local function loadState(playerGuid)
 		state.removeTimes = result.getDataInt(resultId, "remove_times")
 		result.free(resultId)
 	end
+	if Game.getBosstiaryPoints then
+		state.points = Game.getBosstiaryPoints(playerGuid)
+	end
 	return state
 end
 
 local function loadKills(playerGuid)
+	if Game.getBestiaryKills then
+		return Game.getBestiaryKills(playerGuid)
+	end
+
 	local kills = {}
 	local resultId = db.storeQuery("SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = " .. playerGuid)
 	if resultId ~= false then

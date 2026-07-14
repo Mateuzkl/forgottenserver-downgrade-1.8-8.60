@@ -261,6 +261,7 @@ void ScriptEnvironment::resetEnv()
 	scriptId = 0;
 	callbackId = 0;
 	timerEvent = false;
+	timerEventOrigin.clear();
 	hasOpenTransaction = false;
 	interface = nullptr;
 	curNpc = nullptr;
@@ -874,7 +875,7 @@ void LuaScriptInterface::callVoidFunction(int params)
 	LuaScriptInterface* scriptInterface;
 	getScriptEnv()->getEventInfo(scriptId, scriptInterface, callbackId, timerEvent);
 	(void)callbackId;
-	(void)timerEvent;
+	const std::string timerOrigin = timerEvent ? getScriptEnv()->getTimerEventOrigin() : std::string{};
 	const bool slowTaskWarning = getBoolean(ConfigManager::SLOW_TASK_WARNING);
 	uint64_t slowThresholdNs = SLOW_TASK_THRESHOLD_NS;
 	if (slowTaskWarning) {
@@ -904,14 +905,14 @@ void LuaScriptInterface::callVoidFunction(int params)
 		const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
 		    std::chrono::steady_clock::now() - time_point).count();
 		if (slowTaskWarning && ns > slowThresholdNs) {
-			const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
-			                                           getFileByIdForStats(scriptId);
+			const std::string scriptFile = !timerOrigin.empty() ? timerOrigin :
+			    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId));
 			LOG_WARN(">> Slow Lua callback detected: {}ms [{}]",
 			         ns / 1'000'000, scriptFile);
 		}
 #ifdef STATS_ENABLED
-		const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
-		                                           getFileByIdForStats(scriptId);
+		const std::string scriptFile = !timerOrigin.empty() ? timerOrigin :
+		    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId));
 		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
 #endif
 	}
@@ -3779,6 +3780,24 @@ int LuaScriptInterface::luaAddEvent(lua_State* L)
 		return 1;
 	}
 
+	std::string eventOrigin;
+	lua_Debug functionInfo {};
+	lua_pushvalue(L, 1);
+	if (lua_getinfo(L, ">S", &functionInfo) != 0 && functionInfo.source) {
+		eventOrigin = functionInfo.source;
+		if (!eventOrigin.empty() && eventOrigin.front() == '@') {
+			eventOrigin.erase(eventOrigin.begin());
+		}
+		if (functionInfo.linedefined > 0) {
+			eventOrigin += fmt::format(":{}", functionInfo.linedefined);
+		}
+	}
+	if (eventOrigin.empty()) {
+		auto* env = getScriptEnv();
+		auto* interface = env->getScriptInterface();
+		eventOrigin = interface ? std::string(interface->getFileById(env->getScriptId())) : "(Unknown Lua timer)";
+	}
+
 	// if (!Lua::isInteger(L, 2)) {
 	// 	reportErrorFunc(L, "delay parameter should be a integer.");
 	// 	Lua::pushBoolean(L, false);
@@ -3890,10 +3909,12 @@ int LuaScriptInterface::luaAddEvent(lua_State* L)
 
 	eventDesc.function = luaL_ref(L, LUA_REGISTRYINDEX);
 	eventDesc.scriptId = getScriptEnv()->getScriptId();
+	eventDesc.origin = eventOrigin;
 
 	auto& lastTimerEventId = g_luaEnvironment.lastEventTimerId;
-	eventDesc.eventId = g_scheduler.addEvent(
-	    createSchedulerTask(delay, [lastTimerEventId]() { g_luaEnvironment.executeTimerEvent(lastTimerEventId); }));
+	const uint32_t timerEventId = lastTimerEventId;
+	eventDesc.eventId = g_scheduler.addEvent(createSchedulerTaskWithStats(
+	    delay, [timerEventId]() { g_luaEnvironment.executeTimerEvent(timerEventId); }, "Lua timer callback", eventOrigin));
 
 	g_luaEnvironment.timerEvents.emplace(lastTimerEventId, std::move(eventDesc));
 	lua_pushinteger(L, lastTimerEventId++);
@@ -4626,7 +4647,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 	// call the function
 	if (reserveScriptEnv()) {
 		ScriptEnvironment* env = getScriptEnv();
-		env->setTimerEvent();
+		env->setTimerEvent(timerEventDesc.origin);
 		env->setScriptId(timerEventDesc.scriptId, this);
 		callVoidFunction(timerEventDesc.parameters.size());
 	} else {

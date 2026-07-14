@@ -27,6 +27,7 @@
 #include <array>
 #include <limits>
 #include <map>
+#include <utility>
 #include <vector>
 
 #include <unordered_map>
@@ -211,6 +212,18 @@ public:
 
 	void setGUID(uint32_t guid) { this->guid = guid; }
 	uint32_t getGUID() const { return guid; }
+	void setBestiaryKillCount(uint16_t raceId, uint32_t count);
+	std::pair<uint32_t, uint32_t> addBestiaryKillCount(uint16_t raceId, uint32_t amount = 1);
+	uint32_t getBestiaryKillCount(uint16_t raceId) const;
+	const std::unordered_map<uint16_t, uint32_t>& getBestiaryKillMap() const { return bestiaryKills; }
+	struct BestiaryDirtySnapshot
+	{
+		uint64_t snapshotId = 0;
+		std::unordered_set<uint16_t> modifiedRaceIds;
+	};
+	BestiaryDirtySnapshot getBestiaryDirtySnapshot() const;
+	void acknowledgeBestiaryDirty(const BestiaryDirtySnapshot& snapshot);
+	void clearBestiaryDirty();
 	bool getSaveFlag() const { return saveFlag; }
 	void setSaveFlag(bool value) { saveFlag = value; }
 	bool canSeeInvisibility() const override { return hasFlag(PlayerFlag_CanSenseInvisibility) || group->access; }
@@ -228,6 +241,13 @@ public:
 
 	uint64_t getBankBalance() const { return bankBalance; }
 	void setBankBalance(uint64_t balance) { bankBalance = balance; }
+	uint64_t getPreyWildcards() const { return preyWildcards; }
+	void setPreyWildcards(uint64_t value) { preyWildcards = value; }
+	uint32_t getBestiaryCharmPoints() const { return bestiaryCharmPoints; }
+	void setBestiaryCharmPoints(uint32_t value) { bestiaryCharmPoints = value; }
+	std::pair<uint32_t, uint32_t> addBestiaryCharmPoints(uint32_t amount);
+	uint32_t getBosstiaryPoints() const { return bosstiaryPoints; }
+	std::pair<uint32_t, uint32_t> addBosstiaryPoints(uint32_t amount);
 
 	// Offline Training
 	static constexpr int32_t SKILL_OFFLINE_AUTO = 255;
@@ -1660,6 +1680,9 @@ private:
 	uint64_t manaSpent = 0;
 	uint64_t lastAttack = 0;
 	uint64_t bankBalance = 0;
+	uint64_t preyWildcards = 0;
+	uint32_t bestiaryCharmPoints = 0;
+	uint32_t bosstiaryPoints = 0;
 	uint64_t taskHuntingPoints = 0;
 	uint64_t bountyPoints = 0;
 	uint64_t soulsealsPoints = 0;
@@ -1680,6 +1703,10 @@ private:
 	std::shared_ptr<Item> inventory[CONST_SLOT_LAST + 1] = {};
 	std::unordered_map<uint16_t, std::unordered_map<uint16_t, ProficiencySpellAugmentBonus>> proficiencySpellAugments;
 	std::unordered_map<std::string, ProficiencySpellAugmentBonus> wheelSpellAugments;
+	std::unordered_map<uint16_t, uint32_t> bestiaryKills;
+	std::unordered_set<uint16_t> modifiedBestiaryRaceIds;
+	std::unordered_map<uint16_t, uint64_t> bestiaryDirtyRaceRevisions;
+	uint64_t bestiaryDirtyRevision = 0;
 	std::unique_ptr<WeaponProficiency> m_weaponProficiency;
 	std::weak_ptr<Item> writeItem;
 	std::weak_ptr<House> editHouse;

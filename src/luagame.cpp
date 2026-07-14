@@ -1258,6 +1258,127 @@ int luaGameHandleBestiaryCharmAction(lua_State* L)
 	return 2;
 }
 
+int luaGameGetBestiaryKills(lua_State* L)
+{
+	// Game.getBestiaryKills(playerGuid)
+	const auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	if (!player) {
+		lua_createtable(L, 0, 0);
+		return 1;
+	}
+
+	const auto& kills = player->getBestiaryKillMap();
+	lua_createtable(L, 0, kills.size());
+	for (const auto& [raceId, count] : kills) {
+		lua_pushinteger(L, count);
+		lua_rawseti(L, -2, raceId);
+	}
+	return 1;
+}
+
+int luaGameGetBestiaryKillCount(lua_State* L)
+{
+	// Game.getBestiaryKillCount(playerGuid, raceId)
+	const auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	const uint16_t raceId = getInteger<uint16_t>(L, 2);
+	lua_pushinteger(L, player ? player->getBestiaryKillCount(raceId) : 0);
+	return 1;
+}
+
+int luaGameAddBestiaryKill(lua_State* L)
+{
+	// Game.addBestiaryKill(player, raceId[, amount = 1]) -> oldCount, newCount
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushinteger(L, 0);
+		lua_pushinteger(L, 0);
+		return 2;
+	}
+
+	const uint16_t raceId = getInteger<uint16_t>(L, 2);
+	const uint32_t amount = getInteger<uint32_t>(L, 3, 1);
+	const auto [oldCount, newCount] = player->addBestiaryKillCount(raceId, amount);
+	lua_pushinteger(L, oldCount);
+	lua_pushinteger(L, newCount);
+	return 2;
+}
+
+int luaGameSetBestiaryKillCount(lua_State* L)
+{
+	// Game.setBestiaryKillCount(player, raceId, count)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	player->setBestiaryKillCount(getInteger<uint16_t>(L, 2), getInteger<uint32_t>(L, 3));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaGameGetBestiaryCharmPoints(lua_State* L)
+{
+	// Game.getBestiaryCharmPoints(playerGuid)
+	const auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	lua_pushinteger(L, player ? player->getBestiaryCharmPoints() : 0);
+	return 1;
+}
+
+int luaGameAddBestiaryCharmPoints(lua_State* L)
+{
+	// Game.addBestiaryCharmPoints(playerGuid, amount) -> oldPoints, newPoints
+	const auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	if (!player) {
+		lua_pushinteger(L, 0);
+		lua_pushinteger(L, 0);
+		return 2;
+	}
+
+	const auto [oldPoints, newPoints] = player->addBestiaryCharmPoints(getInteger<uint32_t>(L, 2));
+	lua_pushinteger(L, oldPoints);
+	lua_pushinteger(L, newPoints);
+	return 2;
+}
+
+int luaGameSetBestiaryCharmPoints(lua_State* L)
+{
+	// Game.setBestiaryCharmPoints(playerGuid, points)
+	const auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	if (!player) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	player->setBestiaryCharmPoints(getInteger<uint32_t>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaGameGetBosstiaryPoints(lua_State* L)
+{
+	// Game.getBosstiaryPoints(playerGuid)
+	const auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	lua_pushinteger(L, player ? player->getBosstiaryPoints() : 0);
+	return 1;
+}
+
+int luaGameAddBosstiaryPoints(lua_State* L)
+{
+	// Game.addBosstiaryPoints(playerGuid, amount) -> oldPoints, newPoints
+	const auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	if (!player) {
+		lua_pushinteger(L, 0);
+		lua_pushinteger(L, 0);
+		return 2;
+	}
+
+	const auto [oldPoints, newPoints] = player->addBosstiaryPoints(getInteger<uint32_t>(L, 2));
+	lua_pushinteger(L, oldPoints);
+	lua_pushinteger(L, newPoints);
+	return 2;
+}
+
 } // namespace
 
 void LuaScriptInterface::registerGame()
@@ -1268,6 +1389,15 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "setWorldTime", luaGameSetWorldTime);
 	registerMethod("Game", "registerBestiaryMonsterData", luaGameRegisterBestiaryMonsterData);
 	registerMethod("Game", "handleBestiaryCharmAction", luaGameHandleBestiaryCharmAction);
+	registerMethod("Game", "getBestiaryKills", luaGameGetBestiaryKills);
+	registerMethod("Game", "getBestiaryKillCount", luaGameGetBestiaryKillCount);
+	registerMethod("Game", "addBestiaryKill", luaGameAddBestiaryKill);
+	registerMethod("Game", "setBestiaryKillCount", luaGameSetBestiaryKillCount);
+	registerMethod("Game", "getBestiaryCharmPoints", luaGameGetBestiaryCharmPoints);
+	registerMethod("Game", "addBestiaryCharmPoints", luaGameAddBestiaryCharmPoints);
+	registerMethod("Game", "setBestiaryCharmPoints", luaGameSetBestiaryCharmPoints);
+	registerMethod("Game", "getBosstiaryPoints", luaGameGetBosstiaryPoints);
+	registerMethod("Game", "addBosstiaryPoints", luaGameAddBosstiaryPoints);
 
 	registerMethod("Game", "getSpectators", luaGameGetSpectators);
 	registerMethod("Game", "getPlayers", luaGameGetPlayers);

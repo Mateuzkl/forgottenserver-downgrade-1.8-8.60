@@ -24,6 +24,10 @@ local function findBestiaryEntry(value)
 end
 
 local function getStoredKills(playerGuid, raceId)
+	if Game.getBestiaryKillCount then
+		return Game.getBestiaryKillCount(playerGuid, raceId)
+	end
+
 	local resultId = db.storeQuery("SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = " ..
 		playerGuid .. " AND `raceid` = " .. raceId)
 	if resultId == false then
@@ -36,6 +40,10 @@ local function getStoredKills(playerGuid, raceId)
 end
 
 local function getCharmPoints(playerGuid)
+	if Game.getBestiaryCharmPoints then
+		return Game.getBestiaryCharmPoints(playerGuid)
+	end
+
 	local resultId = db.storeQuery("SELECT `charmpoints` FROM `players` WHERE `id` = " .. playerGuid)
 	if resultId == false then
 		return 0
@@ -47,7 +55,12 @@ local function getCharmPoints(playerGuid)
 end
 
 local function setCharmPoints(playerGuid, points)
-	db.query("UPDATE `players` SET `charmpoints` = " .. math.max(0, math.floor(points)) .. " WHERE `id` = " .. playerGuid)
+	points = math.max(0, math.floor(points))
+	if Game.setBestiaryCharmPoints then
+		Game.setBestiaryCharmPoints(playerGuid, points)
+	else
+		db.query("UPDATE `players` SET `charmpoints` = " .. points .. " WHERE `id` = " .. playerGuid)
+	end
 end
 
 local function updateCharmPointsForCompletion(playerGuid, entry, oldKills, newKills)
@@ -110,9 +123,13 @@ function bestiaryKills.onSay(player, words, param)
 
 	local playerGuid = target:getGuid()
 	local oldKills = getStoredKills(playerGuid, entry.raceId)
-	db.query("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
-		playerGuid .. ", " .. entry.raceId .. ", " .. kills ..
-		") ON DUPLICATE KEY UPDATE `kills` = VALUES(`kills`)")
+	if Game.setBestiaryKillCount then
+		Game.setBestiaryKillCount(target, entry.raceId, kills)
+	else
+		db.query("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
+			playerGuid .. ", " .. entry.raceId .. ", " .. kills ..
+			") ON DUPLICATE KEY UPDATE `kills` = VALUES(`kills`)")
+	end
 
 	local charmPointDelta = updateCharmPointsForCompletion(playerGuid, entry, oldKills, kills)
 	if CustomBestiary.invalidatePlayer then

@@ -4,19 +4,16 @@
 #include "observer_ptr.h"
 #include "thread_holder_base.h"
 
-#ifdef STATS_ENABLED
-#define createTask(function) createTaskWithStats(function, #function, __FUNCTION__)
-#define createTimedTask(delay, function) createTaskWithStats(delay, function, #function, __FUNCTION__)
-#define createSchedulerTask(delay, function) createSchedulerTaskWithStats(delay, function, #function, __FUNCTION__)
-#define addGameTask(function, ...) addGameTaskWithStats(function, #function, __FUNCTION__, __VA_ARGS__)
-#define addGameTaskTimed(delay, function, ...) addGameTaskTimedWithStats(delay, function, #function, __FUNCTION__, __VA_ARGS__)
-#else
-#define createTask(function) createTaskWithStats(function, "", "")
-#define createTimedTask(delay, function) createTaskWithStats(delay, function, "", "")
-#define createSchedulerTask(delay, function) createSchedulerTaskWithStats(delay, function, "", "")
-#define addGameTask(function, ...) addGameTaskWithStats(function, "", "", __VA_ARGS__)
-#define addGameTaskTimed(delay, function, ...) addGameTaskTimedWithStats(delay, function, "", "", __VA_ARGS__)
-#endif
+#define TFS_STRINGIFY_DETAIL(value) #value
+#define TFS_STRINGIFY(value) TFS_STRINGIFY_DETAIL(value)
+#define TASK_SOURCE_LOCATION __FILE__ ":" TFS_STRINGIFY(__LINE__)
+#define createTask(function) createTaskWithStats(function, #function, TASK_SOURCE_LOCATION)
+#define createTimedTask(delay, function) createTaskWithStats(delay, function, #function, TASK_SOURCE_LOCATION)
+#define createSchedulerTask(delay, function) \
+	createSchedulerTaskWithStats(delay, function, #function, TASK_SOURCE_LOCATION)
+#define addGameTask(function, ...) addGameTaskWithStats(function, #function, TASK_SOURCE_LOCATION, __VA_ARGS__)
+#define addGameTaskTimed(delay, function, ...) \
+	addGameTaskTimedWithStats(delay, function, #function, TASK_SOURCE_LOCATION, __VA_ARGS__)
 
 struct Stat {
 	Stat(uint64_t _executionTime, std::string _description, std::string _extraDescription) :

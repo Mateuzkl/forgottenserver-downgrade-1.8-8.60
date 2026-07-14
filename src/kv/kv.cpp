@@ -237,17 +237,34 @@ std::vector<std::string> KVStore::loadPrefix(const std::string &prefix) {
 	}
 
 	std::string keySearch = db.escapeString(escaped + "%");
-	const auto query = fmt::format("SELECT `key_name` FROM `kv_store` WHERE `key_name` LIKE {} ESCAPE '\\\\'", keySearch);
+	const auto query = fmt::format("SELECT `key_name`, `timestamp`, `value` FROM `kv_store` WHERE `key_name` LIKE {} ESCAPE '\\\\'", keySearch);
 	const auto result = db.storeQuery(query);
 	if (result == nullptr) {
 		return keys;
 	}
 
 	do {
-		std::string key(result->getString("key_name"));
-		key.erase(0, prefix.size());
-		keys.push_back(key);
+		const std::string fullKey(result->getString("key_name"));
+		keys.push_back(fullKey.substr(prefix.size()));
+
+		unsigned long size = 0;
+		auto data = result->getStream("value", size);
+		if (data.data() == nullptr || size == 0) {
+			continue;
+		}
+
+		auto value = ValueWrapper::deserialize(data.data(), size, result->getNumber<uint64_t>("timestamp"));
+		if (!value) {
+			continue;
+		}
+
+		std::scoped_lock lock(mutex_);
+		if (store_.find(fullKey) == store_.end()) {
+			setLocked(fullKey, *value);
+		}
 	} while (result->next());
+
+	processEvictions();
 
 	return keys;
 }

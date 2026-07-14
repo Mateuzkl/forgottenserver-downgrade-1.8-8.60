@@ -2,6 +2,7 @@ local SERVER_PACKET_BOSS_COOLDOWN = 0x2C
 local MAX_BOSSES_PER_PACKET = 0xFF
 
 BossCooldown = BossCooldown or {}
+BossCooldown.keyCache = BossCooldown.keyCache or {}
 
 local function supportsBossCooldown(player)
 	return player and player.isUsingAstraClient and player:isUsingAstraClient()
@@ -32,9 +33,23 @@ local function getActiveCooldowns(player)
 		return active
 	end
 
-	for raceId, entry in pairs(CustomBosstiary.monstersByRaceId) do
+	local playerGuid = player:getGuid()
+	local cooldownKeys = BossCooldown.keyCache[playerGuid]
+	if not cooldownKeys then
+		cooldownKeys = {}
+		for _, key in ipairs(kv:keys("boss.cooldown")) do
+			local raceId = tonumber(key)
+			if raceId then
+				cooldownKeys[raceId] = true
+			end
+		end
+		BossCooldown.keyCache[playerGuid] = cooldownKeys
+	end
+
+	for raceId in pairs(cooldownKeys) do
+		local entry = CustomBosstiary.monstersByRaceId[raceId]
 		local cooldown = tonumber(kv:get("boss.cooldown." .. raceId)) or 0
-		if cooldown > now then
+		if entry and cooldown > now then
 			active[#active + 1] = {
 			raceId = raceId,
 			cooldown = cooldown,
@@ -48,6 +63,22 @@ local function getActiveCooldowns(player)
 		return left.raceId < right.raceId
 	end)
 	return active
+end
+
+function BossCooldown.rememberKey(player, scope)
+	if not player or type(scope) ~= "string" then
+		return
+	end
+
+	local cooldownKeys = BossCooldown.keyCache[player:getGuid()]
+	if not cooldownKeys then
+		return
+	end
+
+	local raceId = tonumber(scope:match("^boss%.cooldown%.(%d+)$"))
+	if raceId then
+		cooldownKeys[raceId] = true
+	end
 end
 
 function BossCooldown.send(player)
@@ -78,6 +109,7 @@ end
 local bossCooldownLogin = CreatureEvent("BossCooldownLogin")
 function bossCooldownLogin.onLogin(player)
 	if supportsBossCooldown(player) then
+		player:registerEvent("BossCooldownLogout")
 		addEvent(function(playerId)
 			local currentPlayer = Player(playerId)
 			if currentPlayer then
@@ -88,3 +120,10 @@ function bossCooldownLogin.onLogin(player)
 	return true
 end
 bossCooldownLogin:register()
+
+local bossCooldownLogout = CreatureEvent("BossCooldownLogout")
+function bossCooldownLogout.onLogout(player)
+	BossCooldown.keyCache[player:getGuid()] = nil
+	return true
+end
+bossCooldownLogout:register()

@@ -1594,6 +1594,86 @@ uint16_t Player::getLookCorpse() const
 	return ITEM_MALE_CORPSE;
 }
 
+void Player::setBestiaryKillCount(uint16_t raceId, uint32_t count)
+{
+	if (raceId == 0) {
+		return;
+	}
+	const auto it = bestiaryKills.find(raceId);
+	if (it != bestiaryKills.end() && it->second == count) {
+		return;
+	}
+	bestiaryKills[raceId] = count;
+	modifiedBestiaryRaceIds.insert(raceId);
+	bestiaryDirtyRaceRevisions[raceId] = ++bestiaryDirtyRevision;
+}
+
+std::pair<uint32_t, uint32_t> Player::addBestiaryKillCount(uint16_t raceId, uint32_t amount)
+{
+	const uint32_t oldCount = getBestiaryKillCount(raceId);
+	if (raceId == 0 || amount == 0) {
+		return {oldCount, oldCount};
+	}
+
+	const uint32_t newCount = amount > std::numeric_limits<uint32_t>::max() - oldCount ?
+	                              std::numeric_limits<uint32_t>::max() :
+	                              oldCount + amount;
+	setBestiaryKillCount(raceId, newCount);
+	return {oldCount, newCount};
+}
+
+uint32_t Player::getBestiaryKillCount(uint16_t raceId) const
+{
+	const auto it = bestiaryKills.find(raceId);
+	return it != bestiaryKills.end() ? it->second : 0;
+}
+
+std::pair<uint32_t, uint32_t> Player::addBestiaryCharmPoints(uint32_t amount)
+{
+	const uint32_t oldPoints = bestiaryCharmPoints;
+	const uint32_t newPoints = amount > std::numeric_limits<uint32_t>::max() - oldPoints ?
+	                               std::numeric_limits<uint32_t>::max() :
+	                               oldPoints + amount;
+	bestiaryCharmPoints = newPoints;
+	return {oldPoints, newPoints};
+}
+
+std::pair<uint32_t, uint32_t> Player::addBosstiaryPoints(uint32_t amount)
+{
+	const uint32_t oldPoints = bosstiaryPoints;
+	const uint32_t newPoints = amount > std::numeric_limits<uint32_t>::max() - oldPoints ?
+	                               std::numeric_limits<uint32_t>::max() :
+	                               oldPoints + amount;
+	bosstiaryPoints = newPoints;
+	return {oldPoints, newPoints};
+}
+
+Player::BestiaryDirtySnapshot Player::getBestiaryDirtySnapshot() const
+{
+	return BestiaryDirtySnapshot{bestiaryDirtyRevision, modifiedBestiaryRaceIds};
+}
+
+void Player::acknowledgeBestiaryDirty(const BestiaryDirtySnapshot& snapshot)
+{
+	for (const uint16_t raceId : snapshot.modifiedRaceIds) {
+		const auto revisionIt = bestiaryDirtyRaceRevisions.find(raceId);
+		if (revisionIt != bestiaryDirtyRaceRevisions.end() && revisionIt->second > snapshot.snapshotId) {
+			continue;
+		}
+
+		modifiedBestiaryRaceIds.erase(raceId);
+		if (revisionIt != bestiaryDirtyRaceRevisions.end()) {
+			bestiaryDirtyRaceRevisions.erase(revisionIt);
+		}
+	}
+}
+
+void Player::clearBestiaryDirty()
+{
+	modifiedBestiaryRaceIds.clear();
+	bestiaryDirtyRaceRevisions.clear();
+}
+
 void Player::setStorageValue(const uint32_t key, const std::optional<int64_t> value, const bool isSpawn /* = false*/)
 {
 	const auto oldValue = getStorageValue(key);

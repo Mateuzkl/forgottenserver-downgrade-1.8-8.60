@@ -1004,7 +1004,14 @@ local function deliverReward(player, reward, objectId)
 		end
 		return true
 	elseif definition.type == "charms" then
-		if not db.query("UPDATE `players` SET `charmpoints` = `charmpoints` + " .. reward.count .. " WHERE `id` = " .. player:getGuid()) then
+		local delivered
+		if Game.addBestiaryCharmPoints then
+			Game.addBestiaryCharmPoints(player:getGuid(), reward.count)
+			delivered = true
+		else
+			delivered = db.query("UPDATE `players` SET `charmpoints` = `charmpoints` + " .. reward.count .. " WHERE `id` = " .. player:getGuid())
+		end
+		if delivered == false then
 			return false, "Could not add charm points."
 		end
 		return true
@@ -1085,7 +1092,14 @@ local function deliverShopEntry(player, entry)
 		return true
 	elseif entry.type == "charms" then
 		local count = math.max(1, tonumber(entry.count) or 1)
-		if not db.query("UPDATE `players` SET `charmpoints` = `charmpoints` + " .. count .. " WHERE `id` = " .. player:getGuid()) then
+		local delivered
+		if Game.addBestiaryCharmPoints then
+			Game.addBestiaryCharmPoints(player:getGuid(), count)
+			delivered = true
+		else
+			delivered = db.query("UPDATE `players` SET `charmpoints` = `charmpoints` + " .. count .. " WHERE `id` = " .. player:getGuid())
+		end
+		if delivered == false then
 			return false, "Could not add charm points."
 		end
 		return true

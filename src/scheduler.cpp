@@ -37,9 +37,11 @@ uint32_t Scheduler::addEvent(std::unique_ptr<SchedulerTask>&& task)
 	}
 
 	const uint32_t delay = task->getDelay();
-	const uint32_t eventId = g_reactor.schedule(delay, [task = std::move(task)]() mutable {
-		g_dispatcher.executeTask(std::move(task));
-	});
+	std::string description = task->description;
+	std::string origin = task->extraDescription;
+	const uint32_t eventId = g_reactor.schedule(
+	    delay, [task = std::move(task)]() mutable { g_dispatcher.executeTask(std::move(task)); },
+	    std::move(description), std::move(origin));
 
 	return eventId;
 }

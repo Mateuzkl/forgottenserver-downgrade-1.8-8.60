@@ -42,6 +42,8 @@ public:
 		uint64_t storageSnapshotId = 0;
 		std::unordered_set<uint32_t> snapshotModifiedKeys;
 		std::unordered_set<uint32_t> snapshotRemovedKeys;
+		uint64_t bestiarySnapshotId = 0;
+		std::unordered_set<uint16_t> snapshotModifiedBestiaryRaceIds;
 	};
 	static std::optional<PlayerSaveSnapshot> buildPlayerSave(Player* player);
 	static bool flushPlayerSave(const PlayerSaveSnapshot& snapshot);
@@ -85,7 +87,7 @@ private:
 	static void cleanupItemMap(ItemMap& itemMap);
 	static void loadPlayerGuild(Player* player);
 	static bool savePlayer(Player* player);
-	static bool savePlayerQueries(Player* player);
+	static bool savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot);
 	static bool saveItems(const Player* player, const ItemBlockList& itemList, DBInsert& query_insert,
 	                      PropWriteStream& propWriteStream);
 };

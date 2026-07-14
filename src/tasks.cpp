@@ -30,20 +30,16 @@ bool Task::hasExpired() const
 	return expiration < std::chrono::steady_clock::now();
 }
 
-std::unique_ptr<Task> createTaskWithStats(TaskFunc&& f, const std::string& description, const std::string& extraDescription)
+std::unique_ptr<Task> createTaskWithStats(TaskFunc&& f, const std::string& description,
+                                          const std::string& extraDescription)
 {
-	if (g_stats.isEnabled()) {
-		return std::make_unique<Task>(std::move(f), description, extraDescription);
-	}
-	return std::make_unique<Task>(std::move(f), "", "");
+	return std::make_unique<Task>(std::move(f), description, extraDescription);
 }
 
-std::unique_ptr<Task> createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description, const std::string& extraDescription)
+std::unique_ptr<Task> createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description,
+                                          const std::string& extraDescription)
 {
-	if (g_stats.isEnabled()) {
-		return std::make_unique<Task>(expiration, std::move(f), description, extraDescription);
-	}
-	return std::make_unique<Task>(expiration, std::move(f), "", "");
+	return std::make_unique<Task>(expiration, std::move(f), description, extraDescription);
 }
 
 Dispatcher::Dispatcher()
@@ -75,7 +71,10 @@ void Dispatcher::addTask(std::unique_ptr<Task>&& task)
 		return;
 	}
 
-	g_reactor.send([this, task = std::move(task)]() mutable { executeTask(std::move(task)); });
+	std::string description = task->description;
+	std::string origin = task->extraDescription;
+	g_reactor.send([this, task = std::move(task)]() mutable { executeTask(std::move(task)); }, std::move(description),
+	               std::move(origin));
 }
 
 void Dispatcher::executeTask(std::unique_ptr<Task> task)

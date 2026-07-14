@@ -7,6 +7,7 @@ CustomBosstiary = CustomBosstiary or {}
 CustomBosstiary.monstersByRaceId = CustomBosstiary.monstersByRaceId or {}
 CustomBosstiary.monstersByName = CustomBosstiary.monstersByName or {}
 CustomBosstiary.boostedBoss = CustomBosstiary.boostedBoss or nil
+CustomBosstiary.tablesReady = CustomBosstiary.tablesReady or false
 
 local thresholds = {
 	[1] = {25, 100, 300},
@@ -68,6 +69,10 @@ local function normalizeOutfit(outfit)
 end
 
 function CustomBosstiary.ensureTables()
+	if CustomBosstiary.tablesReady then
+		return true
+	end
+
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_kills` (
 			`player_id` INT NOT NULL,
@@ -116,6 +121,8 @@ function CustomBosstiary.ensureTables()
 
 	-- Insert default row if not exists
 	db.query([[INSERT IGNORE INTO `boosted_boss` (`date`, `boostname`, `raceid`) VALUES ('0', 'default', '0')]])
+	CustomBosstiary.tablesReady = true
+	return true
 end
 
 function CustomBosstiary.registerMonster(monsterType, mask)
@@ -211,25 +218,31 @@ function CustomBosstiary.addKill(players, entry)
 	local increment = isBoosted and math.max(CustomBosstiary.getBoostedBossKillBonus(), 1) or 1
 
 	for playerGuid, player in pairs(players or {}) do
-		db.query("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
-			playerGuid .. ", " .. entry.raceId .. ", " .. increment .. ") ON DUPLICATE KEY UPDATE `kills` = `kills` + " .. increment)
-		db.query("INSERT IGNORE INTO `player_bosstiary` (`player_id`) VALUES (" .. playerGuid .. ")")
-
-		local newKills = 0
-		local resultId = db.storeQuery("SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = " ..
-			playerGuid .. " AND `raceid` = " .. entry.raceId)
-		if resultId ~= false then
-			newKills = result.getDataInt(resultId, "kills")
-			result.free(resultId)
+		local oldKills, newKills
+		if Game.addBestiaryKill and player then
+			oldKills, newKills = Game.addBestiaryKill(player, entry.raceId, increment)
 		else
-			print("[Warning] CustomBosstiary.addKill: failed to read kills for player " .. playerGuid .. " raceid " .. entry.raceId)
+			local resultId = db.storeQuery("SELECT `kills` FROM `player_bestiary_kills` WHERE `player_id` = " ..
+				playerGuid .. " AND `raceid` = " .. entry.raceId)
+			oldKills = resultId ~= false and result.getDataInt(resultId, "kills") or 0
+			if resultId ~= false then
+				result.free(resultId)
+			end
+			newKills = oldKills + increment
+			db.asyncQuery("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
+				playerGuid .. ", " .. entry.raceId .. ", " .. increment ..
+				") ON DUPLICATE KEY UPDATE `kills` = `kills` + " .. increment)
 		end
 
-		local oldKills = math.max(0, newKills - increment)
 		local awardedPoints = CustomBosstiary.getAwardedPoints(entry, oldKills, newKills)
+		if Game.addBosstiaryPoints then
+			Game.addBosstiaryPoints(playerGuid, awardedPoints)
+		else
+			db.asyncQuery("INSERT INTO `player_bosstiary` (`player_id`, `points`) VALUES (" ..
+				playerGuid .. ", " .. awardedPoints ..
+				") ON DUPLICATE KEY UPDATE `points` = `points` + " .. awardedPoints)
+		end
 		if awardedPoints > 0 then
-			db.query("UPDATE `player_bosstiary` SET `points` = `points` + " .. awardedPoints ..
-				" WHERE `player_id` = " .. playerGuid)
 			if player then
 				player:sendTextMessage(MESSAGE_EVENT_ADVANCE or MESSAGE_STATUS_CONSOLE_BLUE,
 					"You advanced your Bosstiary entry for " .. entry.name .. " and earned " ..

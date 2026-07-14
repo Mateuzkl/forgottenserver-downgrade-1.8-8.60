@@ -1,5 +1,5 @@
 function onUpdateDatabase()
-	logMigration("Updating database to version 56 (repair Character Bazaar and hot-path indexes)")
+	logMigration("Updating database to version 57 (repair Character Bazaar and hot-path indexes)")
 
 	local queries = {
 		[[CREATE TABLE IF NOT EXISTS `character_auctions` (

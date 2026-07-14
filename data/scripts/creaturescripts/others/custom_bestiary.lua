@@ -44,6 +44,9 @@ local function getBestiaryEntryForCreature(creature)
 end
 
 local function getBestiaryKillCount(playerGuid, raceId)
+	if Game.getBestiaryKillCount then
+		return Game.getBestiaryKillCount(playerGuid, raceId)
+	end
 	if CustomBestiary.getKillCount then
 		return CustomBestiary.getKillCount(playerGuid, raceId)
 	end
@@ -59,13 +62,32 @@ local function getBestiaryKillCount(playerGuid, raceId)
 	return kills
 end
 
+local function addBestiaryKill(player, playerGuid, raceId, amount)
+	if Game.addBestiaryKill then
+		return Game.addBestiaryKill(player, raceId, amount)
+	end
+
+	local oldKills = getBestiaryKillCount(playerGuid, raceId)
+	db.asyncQuery("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
+		playerGuid .. ", " .. raceId .. ", " .. amount ..
+		") ON DUPLICATE KEY UPDATE `kills` = `kills` + " .. amount)
+	return oldKills, oldKills + amount
+end
+
 local function addPlayerCharmPoints(playerGuid, points)
 	points = math.max(0, tonumber(points) or 0)
 	if points <= 0 then
 		return
 	end
 
-	db.query("UPDATE `players` SET `charmpoints` = `charmpoints` + " .. points .. " WHERE `id` = " .. playerGuid)
+	if CustomBestiary.updateCharmPointCache then
+		CustomBestiary.updateCharmPointCache(playerGuid, points)
+	end
+	if Game.addBestiaryCharmPoints then
+		Game.addBestiaryCharmPoints(playerGuid, points)
+	else
+		db.asyncQuery("UPDATE `players` SET `charmpoints` = `charmpoints` + " .. points .. " WHERE `id` = " .. playerGuid)
+	end
 end
 
 local function sendBestiaryUnlockMessage(player, entry, progress)
@@ -153,23 +175,18 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 	end
 
 	for playerGuid, player in pairs(players) do
-		local oldKills = getBestiaryKillCount(playerGuid, raceId)
 		local killsToAdd = 1
 		local doubleChance = TaskBoard and TaskBoard.getBountyTalismanBonus and
 			TaskBoard.getBountyTalismanBonus(player, raceId, 3) or 0
 		if doubleChance > 0 and math.random(1, 10000) <= doubleChance then
 			killsToAdd = 2
 		end
-		local newKills = oldKills + killsToAdd
+		local oldKills, newKills = addBestiaryKill(player, playerGuid, raceId, killsToAdd)
 		local oldProgress = CustomBestiary.getProgress(entry, oldKills)
 		local newProgress = CustomBestiary.getProgress(entry, newKills)
 
-		db.asyncQuery("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES (" ..
-			playerGuid .. ", " .. raceId .. ", " .. killsToAdd ..
-			") ON DUPLICATE KEY UPDATE `kills` = `kills` + " .. killsToAdd)
-
 		if CustomBestiary.updateKillCache then
-			CustomBestiary.updateKillCache(playerGuid, raceId, killsToAdd)
+			CustomBestiary.updateKillCache(playerGuid, raceId, killsToAdd, oldKills, newKills)
 		elseif CustomBestiary.invalidatePlayer then
 			CustomBestiary.invalidatePlayer(playerGuid)
 		end

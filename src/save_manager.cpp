@@ -169,6 +169,10 @@ bool SaveManager::savePlayerSync(Player* player)
 				save->snapshotModifiedKeys,
 				save->snapshotRemovedKeys
 			});
+			player->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
+				save->bestiarySnapshotId,
+				save->snapshotModifiedBestiaryRaceIds
+			});
 			success = true;
 			break;
 		}
@@ -332,6 +336,10 @@ void SaveManager::acknowledgePlayerSave(uint32_t guid, const IOLoginData::Player
 			save.storageSnapshotId,
 			save.snapshotModifiedKeys,
 			save.snapshotRemovedKeys
+		});
+		player->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
+			save.bestiarySnapshotId,
+			save.snapshotModifiedBestiaryRaceIds
 		});
 	}
 }
