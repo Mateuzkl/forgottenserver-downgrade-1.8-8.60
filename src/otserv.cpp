@@ -30,6 +30,7 @@
 #include "luascript.h"
 #include "lua.hpp"
 #include "thread_pool.h"
+#include "zoneweather.h"
 #include "zones.h"
 
 #include <fmt/format.h>
@@ -338,6 +339,10 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	LOG_INFO(">> Preparing native OTBM zones");
 	if (!Zones::load()) {
 		startupErrorMessage("Unable to load zones!");
+		return;
+	}
+	if (!ZoneWeather::load()) {
+		startupErrorMessage("Unable to load zone weather!");
 		return;
 	}
 

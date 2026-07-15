@@ -132,6 +132,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/weapons.cpp
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.cpp
 	${CMAKE_CURRENT_LIST_DIR}/xtea.cpp
+	${CMAKE_CURRENT_LIST_DIR}/zoneweather.cpp
 	${CMAKE_CURRENT_LIST_DIR}/zones.cpp
 )
 
@@ -246,6 +247,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/weapons.h
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.h
 	${CMAKE_CURRENT_LIST_DIR}/xtea.h
+	${CMAKE_CURRENT_LIST_DIR}/zoneweather.h
 	${CMAKE_CURRENT_LIST_DIR}/zones.h
 )
 

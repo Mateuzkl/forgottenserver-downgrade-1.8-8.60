@@ -36,6 +36,10 @@ extern Monsters g_monsters;
 
 namespace {
 
+// 0x3C is reserved for native ZoneId weather on negotiated custom clients.
+constexpr uint8_t ZONE_WEATHER_OPCODE = 0x3C;
+constexpr uint8_t ZONE_WEATHER_PACKET_VERSION = 1;
+
 std::deque<std::pair<int64_t, uint32_t>> waitList; // (timeout, player guid)
 std::size_t priorityCount = 0;
 constexpr int64_t CAST_SWITCH_COOLDOWN_MS = 500;
@@ -1038,6 +1042,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 				const auto marker = msg.getString(markerLength);
 				if (marker == "OTCv8TierByte") {
 					useItemTierByte = true;
+				} else if (marker == "OTCv8ZoneWeather") {
+					supportsZoneWeather = true;
 				} else if (marker == AstraClient::LOGIN_MARKER) {
 					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
 						break;
@@ -3713,6 +3719,46 @@ void ProtocolGame::refreshWorldView()
 {
 	knownCreatureSet.clear();
 	sendMapDescription(player->getPosition());
+	sendZoneWeather(player->getPosition(), true);
+}
+
+void ProtocolGame::sendZoneWeather(const Position& position, bool force)
+{
+	if (!player || !supportsNativeZoneWeather() || !zoneWeatherFeatureEnabled) {
+		return;
+	}
+
+	WeatherState state = ZoneWeather::getState(position);
+	if (state.type > WeatherType::Sand) {
+		state = {};
+	}
+	state.intensity = std::min<uint8_t>(state.intensity, 100);
+	if (state.type == WeatherType::None) {
+		state.intensity = 0;
+		state.windX = 0;
+		state.windY = 0;
+	}
+
+	// Reuse the outgoing transition while the player remains outside weather.
+	// This produces one fade-out packet and keeps later movement cache hits stable.
+	if (state.type == WeatherType::None && lastZoneWeather) {
+		state.transitionMs = lastZoneWeather->transitionMs;
+	}
+
+	if (!force && lastZoneWeather && *lastZoneWeather == state) {
+		return;
+	}
+	lastZoneWeather = state;
+
+	NetworkMessage msg;
+	msg.addByte(ZONE_WEATHER_OPCODE);
+	msg.addByte(ZONE_WEATHER_PACKET_VERSION);
+	msg.addByte(static_cast<uint8_t>(state.type));
+	msg.addByte(state.intensity);
+	msg.addByte(static_cast<uint8_t>(state.windX));
+	msg.addByte(static_cast<uint8_t>(state.windY));
+	msg.add<uint16_t>(state.transitionMs);
+	writeToOutputBuffer(msg);
 }
 
 void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const Item* item)
@@ -3862,6 +3908,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	writeToOutputBuffer(msg);
 
 	sendMapDescription(pos);
+	sendZoneWeather(pos, true);
 
 	if (magicEffect != CONST_ME_NONE) {
 		sendMagicEffect(pos, magicEffect);
@@ -4011,6 +4058,7 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 			}
 			writeToOutputBuffer(msg);
 		}
+		sendZoneWeather(newPos);
 	} else if (canSee(oldPos) && canSee(creature->getPosition())) {
 		if (teleport || (oldPos.z == 7 && newPos.z >= 8) || oldStackPos >= MAX_STACKPOS_THINGS) {
 			sendRemoveTileThing(oldPos, oldStackPos);
@@ -5035,6 +5083,8 @@ void ProtocolGame::parseNewPing(NetworkMessage& msg)
 // OTCv8 and Mehah
 void ProtocolGame::sendFeatures()
 {
+	zoneWeatherFeatureEnabled = false;
+
 	if (isMehah && !isOTCv8) {
 		std::unordered_map<GameFeature, bool> features;
 		features[GameFeature::ContainerPagination] = true;
@@ -5073,6 +5123,10 @@ void ProtocolGame::sendFeatures()
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
+	}
+	if (supportsNativeZoneWeather()) {
+		features[GameFeature::ZoneWeather] = true;
+		zoneWeatherFeatureEnabled = true;
 	}
 	if (canSendAstraItemState()) {
 		features[GameFeature::DisplayItemDuration] = true;

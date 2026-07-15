@@ -8,6 +8,9 @@
 #include "creature.h"
 #include "protocol.h"
 #include "tasks.h"
+#include "zoneweather.h"
+
+#include <optional>
 
 class NetworkMessage;
 class Player;
@@ -234,6 +237,7 @@ private:
 	// tiles
 	void sendMapDescription(const Position& pos);
 	void refreshWorldView();
+	void sendZoneWeather(const Position& position, bool force = false);
 
 	void sendAddTileItem(const Position& pos, uint32_t stackpos, const Item* item);
 	void sendUpdateTileItem(const Position& pos, uint32_t stackpos, const Item* item);
@@ -378,15 +382,19 @@ private:
 	bool isOTC = false;
 	bool isAstraClient = false;
 	bool isFonticakClient = false;
+	bool supportsZoneWeather = false;
+	bool zoneWeatherFeatureEnabled = false;
 	bool isUsingFonticakClient() const { return isFonticakClient; }
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }
 	bool supportsCreatureIcons() const { return supportsAstraCreatureIcons(); }
+	bool supportsNativeZoneWeather() const { return isAstraClient || (isOTCv8 && supportsZoneWeather); }
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;
 	bool useItemTierByte = false;
 	bool debugAssertSent = false;
 	bool acceptPackets = false;
 	bool imbuementTrackerOpen = false;
+	std::optional<WeatherState> lastZoneWeather;
 	int64_t nextCastSwitchTime = 0;
 	int64_t nextCastSwitchCooldownMessageTime = 0;
 

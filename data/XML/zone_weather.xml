@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zoneWeather>
+	<zone id="2" type="rain" intensity="70" windX="-12" windY="90" transitionMs="400" priority="10"/>
+	<zone id="3" type="snow" intensity="45" windX="4" windY="28" transitionMs="700" priority="20"/>
+	<zone id="4" type="sand" intensity="65" windX="45" windY="8" transitionMs="500" priority="15"/>
+	<zone id="5" type="rain" intensity="90" windX="-20" windY="110" transitionMs="300" priority="25"/>
+	<zone id="1001" type="rain" intensity="70" windX="-12" windY="90" transitionMs="400" priority="10"/>
+	<zone id="1002" type="snow" intensity="45" windX="4" windY="28" transitionMs="700" priority="20"/>
+	<zone id="1003" type="sand" intensity="65" windX="45" windY="8" transitionMs="500" priority="15"/>
+</zoneWeather>
