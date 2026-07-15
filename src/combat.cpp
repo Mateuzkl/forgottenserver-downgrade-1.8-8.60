@@ -1689,7 +1689,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 				casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::MANA, WeaponProficiencyGain_t::KILL);
 			}
 
-			if (damage.blockType == BLOCK_NONE || damage.blockType == BLOCK_ARMOR) {
+			if (damageCopy.blockType == BLOCK_NONE || damageCopy.blockType == BLOCK_ARMOR) {
 				for (const auto& condition : params.conditionList) {
 					if (caster == creature.get() || !creature->isImmune(condition->getType())) {
 						auto conditionCopy = condition->clone();
