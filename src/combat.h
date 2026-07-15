@@ -10,11 +10,13 @@
 #include "thing.h"
 
 #include <memory>
+#include <string>
 
 class Condition;
 class Creature;
 class MatrixArea;
 class Item;
+struct AreaCombatMetricsSample;
 
 struct Position;
 
@@ -74,6 +76,7 @@ struct CombatParams
 	CombatParams& operator=(CombatParams&&) noexcept = default;
 
 	std::forward_list<std::unique_ptr<const Condition>> conditionList;
+	std::string profileName;
 
 	std::unique_ptr<ValueCallback> valueCallback;
 	std::unique_ptr<TileCallback> tileCallback;
@@ -96,6 +99,7 @@ struct CombatParams
 	bool aggressive = true;
 	bool useCharges = false;
 	bool ignoreResistances = false;
+	bool profileScripted = false;
 
 	uint8_t chainEffect = CONST_ME_NONE;
 
@@ -167,6 +171,11 @@ public:
 	void postCombatEffects(Creature* caster, const Position& pos) const { postCombatEffects(caster, pos, params); }
 
 	void setOrigin(CombatOrigin origin) { params.origin = origin; }
+	void setProfileContext(std::string_view name, bool scripted)
+	{
+		params.profileName = name;
+		params.profileScripted = scripted;
+	}
 
 	void setupChain(const class Weapon* weapon);
 	bool doCombatChain(Creature* caster, Creature* target, bool aggressive, std::string instantSpellName = {}) const;
@@ -181,7 +190,7 @@ private:
 	                               const CombatParams& params, bool aggressive);
 
 	static void combatTileEffects(const SpectatorVec& spectators, Creature* caster, Tile* tile,
-	                              const CombatParams& params);
+	                              const CombatParams& params, AreaCombatMetricsSample* metrics = nullptr);
 	CombatDamage getCombatDamage(Creature* creature, Creature* target, std::string_view instantSpellName) const;
 
 	// configurable

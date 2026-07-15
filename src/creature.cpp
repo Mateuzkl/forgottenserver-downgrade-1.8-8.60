@@ -1429,6 +1429,7 @@ Condition* Creature::getCondition(ConditionType_t type, ConditionId_t conditionI
 
 void Creature::executeConditions(uint32_t interval)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CreatureExecuteConditions);
 	std::vector<Condition*> tempConditions;
 	tempConditions.reserve(conditions.size());
 	for (const auto& c : conditions) {

@@ -18,6 +18,8 @@
 #include "spells.h"
 #include "weapons.h"
 
+#include <optional>
+
 extern Game g_game;
 
 namespace {
@@ -97,11 +99,16 @@ static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatT
 	return std::max<int32_t>(0, magicLevel);
 }
 
-std::vector<Tile*> getList(const MatrixArea& area, const Position& targetPos, const Direction dir)
+std::vector<Tile*> getList(const MatrixArea& area, const Position& targetPos, const Direction dir,
+                           AreaCombatMetricsSample* metrics)
 {
 	auto casterPos = getNextPosition(dir, targetPos);
 
 	std::vector<Tile*> vec;
+	if (metrics) {
+		metrics->areaRows = area.getRows();
+		metrics->areaColumns = area.getCols();
+	}
 
 	auto& center = area.getCenter();
 
@@ -109,30 +116,48 @@ std::vector<Tile*> getList(const MatrixArea& area, const Position& targetPos, co
 	for (uint32_t row = 0; row < area.getRows(); ++row, ++tmpPos.y) {
 		for (uint32_t col = 0; col < area.getCols(); ++col, ++tmpPos.x) {
 			if (area(row, col)) {
+				if (metrics) {
+					++metrics->activeCells;
+					++metrics->sightChecks;
+				}
 				if (g_game.isSightClear(casterPos, tmpPos, true)) {
 					Tile* tile = g_game.map.getTile(tmpPos);
 					if (!tile) {
 						auto newTile = std::make_unique<StaticTile>(tmpPos.x, tmpPos.y, tmpPos.z);
 						tile = newTile.get();
 						g_game.map.setTile(tmpPos, std::move(newTile));
+						if (metrics) {
+							++metrics->tilesCreated;
+						}
 					}
 					vec.push_back(tile);
+				} else if (metrics) {
+					++metrics->sightRejected;
 				}
 			}
 		}
 		tmpPos.x -= static_cast<uint16_t>(area.getCols());
 	}
+	if (metrics) {
+		metrics->tilesReturned = vec.size();
+	}
 	return vec;
 }
 
-std::vector<Tile*> getCombatArea(const Position& centerPos, const Position& targetPos, const AreaCombat* area)
+std::vector<Tile*> getCombatArea(const Position& centerPos, const Position& targetPos, const AreaCombat* area,
+                                 AreaCombatMetricsSample* metrics = nullptr)
 {
 	if (targetPos.z >= MAP_MAX_LAYERS) {
 		return {};
 	}
 
 	if (area) {
-		return getList(area->getArea(centerPos, targetPos), targetPos, getDirectionTo(targetPos, centerPos));
+		return getList(area->getArea(centerPos, targetPos), targetPos, getDirectionTo(targetPos, centerPos), metrics);
+	}
+	if (metrics) {
+		metrics->areaRows = 1;
+		metrics->areaColumns = 1;
+		metrics->activeCells = 1;
 	}
 
 	Tile* tile = g_game.map.getTile(targetPos);
@@ -140,6 +165,12 @@ std::vector<Tile*> getCombatArea(const Position& centerPos, const Position& targ
 		auto newTile = std::make_unique<StaticTile>(targetPos.x, targetPos.y, targetPos.z);
 		tile = newTile.get();
 		g_game.map.setTile(targetPos, std::move(newTile));
+		if (metrics) {
+			++metrics->tilesCreated;
+		}
+	}
+	if (metrics) {
+		metrics->tilesReturned = 1;
 	}
 	return {tile};
 }
@@ -758,7 +789,8 @@ bool Combat::loadCallBack(CallBackParam key, LuaScriptInterface* scriptInterface
 	return false;
 }
 
-void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster, Tile* tile, const CombatParams& params)
+void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster, Tile* tile, const CombatParams& params,
+                               AreaCombatMetricsSample* metrics)
 {
 	if (params.itemId != 0) {
 		uint16_t itemId = params.itemId;
@@ -832,6 +864,9 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 
 				auto field = std::dynamic_pointer_cast<MagicField>(itemPtr);
 				if (field) {
+					if (metrics) {
+						++metrics->fieldsCreated;
+					}
 					if (CreatureVector* creatures = tile->getCreatures()) {
 						const CreatureVector creatureRefs = *creatures;
 						for (const auto& creature : creatureRefs) {
@@ -847,16 +882,25 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 	}
 
 	if (params.tileCallback) {
+		if (metrics) {
+			++metrics->tileCallbacks;
+		}
 		params.tileCallback->onTileCombat(caster, tile);
 	}
 
 	if (params.impactEffect != CONST_ME_NONE) {
+		if (metrics) {
+			++metrics->impactEffects;
+		}
 		if (caster) {
 			SpectatorVec filtered;
 			for (const auto& s : spectators.players()) {
 				Player *p = static_cast<Player*>(s.get());
 				if (p->compareInstance(caster->getInstanceID())) {
 					filtered.emplace_back(s);
+					if (metrics) {
+						++metrics->effectRecipients;
+					}
 				}
 			}
 			Game::addMagicEffect(filtered, tile->getPosition(), params.impactEffect);
@@ -1394,8 +1438,40 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
                           const CombatParams& params)
 {
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoAreaCombat);
+	const bool metricsEnabled = g_performanceMetrics.isEnabled();
+	std::optional<AreaCombatMetricsSample> areaMetrics;
+	if (metricsEnabled) {
+		areaMetrics.emplace();
+		areaMetrics->positionX = position.x;
+		areaMetrics->positionY = position.y;
+		areaMetrics->positionZ = position.z;
+		areaMetrics->itemId = params.itemId;
+		areaMetrics->impactEffect = params.impactEffect;
+		areaMetrics->scripted = params.profileScripted || !damage.instantSpellName.empty();
+		areaMetrics->hasConditions = !params.conditionList.empty();
+		areaMetrics->hasTileCallback = params.tileCallback != nullptr;
+		areaMetrics->hasTargetCallback = params.targetCallback != nullptr;
+	}
+	AreaCombatMetricsSample* metrics = areaMetrics ? &*areaMetrics : nullptr;
+
+	using MetricsClock = std::chrono::steady_clock;
+	const auto areaStarted = metricsEnabled ? MetricsClock::now() : MetricsClock::time_point{};
+	auto phaseStarted = areaStarted;
+	const auto finishPhase = [&](PerformanceMetric metric, uint64_t AreaCombatMetricsSample::*destination) {
+		if (!metrics) {
+			return;
+		}
+		const auto now = MetricsClock::now();
+		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - phaseStarted).count();
+		metrics->*destination = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
+		g_performanceMetrics.record(metric, metrics->*destination);
+		phaseStarted = now;
+	};
+
 	auto tiles =
-	    caster ? getCombatArea(caster->getPosition(), position, area) : getCombatArea(position, position, area);
+	    caster ? getCombatArea(caster->getPosition(), position, area, metrics)
+	           : getCombatArea(position, position, area, metrics);
+	finishPhase(PerformanceMetric::CombatAreaBuildTiles, &AreaCombatMetricsSample::buildTilesNanoseconds);
 
 	Player* casterPlayer = caster ? caster->getPlayer() : nullptr;
 	const bool wpEnabled = casterPlayer && ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
@@ -1444,6 +1520,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			damage.critical = true;
 		}
 	}
+	finishPhase(PerformanceMetric::CombatAreaPrepareDamage, &AreaCombatMetricsSample::prepareDamageNanoseconds);
 
 	int32_t maxX = 0;
 	int32_t maxY = 0;
@@ -1461,6 +1538,10 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, position, true, true, rangeX, rangeX, rangeY, rangeY);
+	if (metrics) {
+		metrics->spectators = spectators.size();
+	}
+	finishPhase(PerformanceMetric::CombatAreaCollectSpectators, &AreaCombatMetricsSample::collectSpectatorsNanoseconds);
 
 	postCombatEffects(caster, position, params);
 
@@ -1469,10 +1550,13 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 
 	for (Tile* tile : tiles) {
 		if (canDoCombat(caster, tile, params.aggressive) != RETURNVALUE_NOERROR) {
+			if (metrics) {
+				++metrics->combatRejected;
+			}
 			continue;
 		}
 
-		combatTileEffects(spectators, caster, tile, params);
+		combatTileEffects(spectators, caster, tile, params, metrics);
 
 		if (CreatureVector* creatures = tile->getCreatures()) {
 			const Creature* topCreature = tile->getTopCreature();
@@ -1490,6 +1574,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 				if (!params.aggressive ||
 				    (caster != creature.get() && Combat::canDoCombat(caster, creature.get()) == RETURNVALUE_NOERROR)) {
 					toDamageCreatures.push_back(creature);
+					if (metrics) {
+						++metrics->targets;
+					}
 
 					if (params.targetCasterOrTopMost) {
 						break;
@@ -1498,6 +1585,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			}
 		}
 	}
+	finishPhase(PerformanceMetric::CombatAreaProcessTiles, &AreaCombatMetricsSample::processTilesNanoseconds);
 
 	CombatDamage leechCombat;
 	leechCombat.origin = ORIGIN_NONE;
@@ -1563,8 +1651,13 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 
 		bool success = false;
 		if (damageCopy.primary.type != COMBAT_MANADRAIN) {
-			if (g_game.combatBlockHit(damageCopy, caster, creature.get(), params.blockedByShield, params.blockedByArmor,
-			                          params.itemId != 0, params.ignoreResistances)) {
+			const bool fullyBlocked = g_game.combatBlockHit(
+			    damageCopy, caster, creature.get(), params.blockedByShield, params.blockedByArmor,
+			    params.itemId != 0, params.ignoreResistances);
+			if (metrics && damageCopy.blockType != BLOCK_NONE) {
+				++metrics->blockedTargets;
+			}
+			if (fullyBlocked) {
 				continue;
 			}
 			if (params.resetDamageMultiplier >= 0.0f) {
@@ -1584,6 +1677,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 		}
 
 		if (success) {
+			if (metrics) {
+				++metrics->appliedTargets;
+			}
 			if (casterPlayer && wpEnabled && damageCopy.primary.type != COMBAT_HEALING && damageCopy.primary.type != COMBAT_MANADRAIN) {
 				casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::LIFE, WeaponProficiencyGain_t::HIT);
 				casterPlayer->weaponProficiency().applyOn(WeaponProficiencyHealth_t::MANA, WeaponProficiencyGain_t::HIT);
@@ -1598,6 +1694,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 				for (const auto& condition : params.conditionList) {
 					if (caster == creature.get() || !creature->isImmune(condition->getType())) {
 						auto conditionCopy = condition->clone();
+						if (metrics) {
+							++metrics->conditionClones;
+						}
 						if (caster) {
 							conditionCopy->setParam(CONDITION_PARAM_OWNER, caster->getID());
 							conditionCopy->setPositionParam(CONDITION_PARAM_CASTER_POSITION, caster->getPosition());
@@ -1670,8 +1769,22 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 		}
 
 		if (params.targetCallback) {
+			if (metrics) {
+				++metrics->targetCallbacks;
+			}
 			params.targetCallback->onTargetCombat(caster, creature.get());
 		}
+	}
+	finishPhase(PerformanceMetric::CombatAreaApplyTargets, &AreaCombatMetricsSample::applyTargetsNanoseconds);
+
+	if (metrics) {
+		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(MetricsClock::now() - areaStarted).count();
+		metrics->totalNanoseconds = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
+		const Monster* casterMonster = caster ? caster->getMonster() : nullptr;
+		const std::string_view monsterName = casterMonster ? std::string_view(casterMonster->getName()) : std::string_view{};
+		const std::string_view spellName = !damage.instantSpellName.empty() ? std::string_view(damage.instantSpellName)
+		                                                               : std::string_view(params.profileName);
+		g_performanceMetrics.recordAreaCombat(*metrics, monsterName, spellName);
 	}
 }
 

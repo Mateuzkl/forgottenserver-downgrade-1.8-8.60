@@ -37,7 +37,52 @@ enum class PerformanceMetric : uint8_t
 	CombatSpellCastSpell,
 	CombatDoCombat,
 	CombatDoAreaCombat,
+	CombatAreaBuildTiles,
+	CombatAreaPrepareDamage,
+	CombatAreaCollectSpectators,
+	CombatAreaProcessTiles,
+	CombatAreaApplyTargets,
+	CreatureExecuteConditions,
 	Count,
+};
+
+struct AreaCombatMetricsSample
+{
+	uint64_t buildTilesNanoseconds = 0;
+	uint64_t prepareDamageNanoseconds = 0;
+	uint64_t collectSpectatorsNanoseconds = 0;
+	uint64_t processTilesNanoseconds = 0;
+	uint64_t applyTargetsNanoseconds = 0;
+	uint64_t totalNanoseconds = 0;
+
+	uint64_t areaRows = 0;
+	uint64_t areaColumns = 0;
+	uint64_t activeCells = 0;
+	uint64_t sightChecks = 0;
+	uint64_t sightRejected = 0;
+	uint64_t tilesReturned = 0;
+	uint64_t tilesCreated = 0;
+	uint64_t combatRejected = 0;
+	uint64_t spectators = 0;
+	uint64_t targets = 0;
+	uint64_t blockedTargets = 0;
+	uint64_t appliedTargets = 0;
+	uint64_t conditionClones = 0;
+	uint64_t tileCallbacks = 0;
+	uint64_t targetCallbacks = 0;
+	uint64_t impactEffects = 0;
+	uint64_t fieldsCreated = 0;
+	uint64_t effectRecipients = 0;
+
+	uint16_t positionX = 0;
+	uint16_t positionY = 0;
+	uint16_t itemId = 0;
+	uint16_t impactEffect = 0;
+	uint8_t positionZ = 0;
+	bool scripted = false;
+	bool hasConditions = false;
+	bool hasTileCallback = false;
+	bool hasTargetCallback = false;
 };
 
 class PerformanceMetrics
@@ -54,6 +99,8 @@ public:
 	void recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
 	                                 std::string_view origin) noexcept;
 	void recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead, uint64_t pathLength) noexcept;
+	void recordAreaCombat(const AreaCombatMetricsSample& sample, std::string_view monsterName,
+	                      std::string_view spellName) noexcept;
 	void maybeReport();
 
 private:
@@ -86,6 +133,29 @@ private:
 		std::atomic<uint64_t> pathLength{0};
 	};
 
+	struct AreaCombatData
+	{
+		std::atomic<uint64_t> casts{0};
+		std::atomic<uint64_t> areaRows{0};
+		std::atomic<uint64_t> areaColumns{0};
+		std::atomic<uint64_t> activeCells{0};
+		std::atomic<uint64_t> sightChecks{0};
+		std::atomic<uint64_t> sightRejected{0};
+		std::atomic<uint64_t> tilesReturned{0};
+		std::atomic<uint64_t> tilesCreated{0};
+		std::atomic<uint64_t> combatRejected{0};
+		std::atomic<uint64_t> spectators{0};
+		std::atomic<uint64_t> targets{0};
+		std::atomic<uint64_t> blockedTargets{0};
+		std::atomic<uint64_t> appliedTargets{0};
+		std::atomic<uint64_t> conditionClones{0};
+		std::atomic<uint64_t> tileCallbacks{0};
+		std::atomic<uint64_t> targetCallbacks{0};
+		std::atomic<uint64_t> impactEffects{0};
+		std::atomic<uint64_t> fieldsCreated{0};
+		std::atomic<uint64_t> effectRecipients{0};
+	};
+
 	struct SlowestReactorCallback
 	{
 		std::mutex mutex;
@@ -94,10 +164,21 @@ private:
 		std::string origin;
 	};
 
+	struct SlowestAreaCombat
+	{
+		std::mutex mutex;
+		std::atomic<uint64_t> maximumNanoseconds{0};
+		AreaCombatMetricsSample sample;
+		std::string monsterName;
+		std::string spellName;
+	};
+
 	std::array<MetricData, static_cast<size_t>(PerformanceMetric::Count)> metrics;
 	ReactorData reactor;
 	PathData path;
+	AreaCombatData areaCombat;
 	SlowestReactorCallback slowestReactorCallback;
+	SlowestAreaCombat slowestAreaCombat;
 	std::atomic_bool enabled{false};
 	std::atomic<int64_t> nextReportNanoseconds{0};
 };

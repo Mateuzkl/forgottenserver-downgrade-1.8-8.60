@@ -145,6 +145,7 @@ bool Monsters::deserializeSpell(MonsterSpell* spell, spellBlock_t& sb, const std
 			return false;
 		}
 
+		combatSpell->getCombat()->setProfileContext(spell->scriptName, true);
 		combatSpell->getCombat()->setPlayerCombatValues(COMBAT_FORMULA_DAMAGE, sb.minCombatValue, 0, sb.maxCombatValue, 0);
 		sb.ownedSpell = std::move(combatSpell);
 	} else {
@@ -347,6 +348,7 @@ bool Monsters::deserializeSpell(MonsterSpell* spell, spellBlock_t& sb, const std
 			combat->setParam(COMBAT_PARAM_EFFECT, spell->effect);
 		}
 
+		combat->setProfileContext(spell->name, false);
 		combat->setPlayerCombatValues(COMBAT_FORMULA_DAMAGE, sb.minCombatValue, 0, sb.maxCombatValue, 0);
 		sb.ownedSpell = std::make_unique<CombatSpell>(combat, spell->needTarget, spell->needDirection);
 	}
