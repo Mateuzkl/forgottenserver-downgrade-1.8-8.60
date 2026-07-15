@@ -730,6 +730,47 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 	Position end_position;
 	auto position = creature.getPosition();
 	auto nodes = AStarNodes(position.x, position.y);
+	const QTreeLeafNode* pathLeaf = nullptr;
+	Floor* pathFloor = nullptr;
+	uint16_t pathLeafBaseX = 0;
+	uint16_t pathLeafBaseY = 0;
+	uint8_t pathFloorZ = MAP_MAX_LAYERS;
+	const auto getPathTile = [&](const Position& tilePosition) -> Tile* {
+		if (tilePosition.z >= MAP_MAX_LAYERS) {
+			return nullptr;
+		}
+
+		const uint16_t leafBaseX = tilePosition.x & ~FLOOR_MASK;
+		const uint16_t leafBaseY = tilePosition.y & ~FLOOR_MASK;
+		if (!pathLeaf || leafBaseX != pathLeafBaseX || leafBaseY != pathLeafBaseY) {
+			pathLeaf = QTreeNode::getLeafStatic<const QTreeLeafNode*, const QTreeNode*>(&root, tilePosition.x,
+			                                                                         tilePosition.y);
+			pathLeafBaseX = leafBaseX;
+			pathLeafBaseY = leafBaseY;
+			pathFloorZ = MAP_MAX_LAYERS;
+		}
+
+		if (pathFloorZ != tilePosition.z) {
+			pathFloor = pathLeaf ? const_cast<Floor*>(pathLeaf->getFloor(tilePosition.z)) : nullptr;
+			pathFloorZ = tilePosition.z;
+		}
+
+		return pathFloor ? pathFloor->getTile(tilePosition.x, tilePosition.y, tilePosition.z) : nullptr;
+	};
+	const auto canWalkToForPath = [&](const Position& tilePosition) -> Tile* {
+		Tile* tile = getPathTile(tilePosition);
+		if (creature.getTile() != tile) {
+			if (!tile) {
+				return nullptr;
+			}
+
+			const uint32_t flags = FLAG_PATHFINDING | FLAG_IGNOREFIELDDAMAGE;
+			if (tile->queryAdd(0, creature, 1, flags) != RETURNVALUE_NOERROR) {
+				return nullptr;
+			}
+		}
+		return tile;
+	};
 	const auto &target_position = pathCondition.targetPos;
 	const auto manhattan_heuristic = [&](const int_fast32_t nx, const int_fast32_t ny) -> int_fast32_t
 	{
@@ -822,8 +863,7 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 			const uint16_t neighborNodeIdx = nodes.GetNodeByPosition(position.x, position.y);
 			const bool hasNeighborNode = neighborNodeIdx != ASTAR_NODE_NONE;
 			++searchMetrics.tilesRead;
-			const Tile *tile = hasNeighborNode ? getTile(position.x, position.y, position.z)
-				: canWalkTo(creature, position);
+			const Tile* tile = hasNeighborNode ? getPathTile(position) : canWalkToForPath(position);
 
 			if (!tile) {
 				continue;
