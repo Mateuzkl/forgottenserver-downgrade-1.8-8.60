@@ -598,14 +598,14 @@ void Monster::updateTargetList()
 	});
 
 	SpectatorVec spectators;
-	// OPTIMIZATION: Use multifloor=true (like upstream) to reduce spectator count
-	g_game.map.getSpectators(spectators, position, true);
+	g_game.map.getSpectators(spectators, position);
 	spectators.erase(this);
 	for (const auto& spectator : spectators) {
-		onCreatureFound(spectator.get());
+		onCreatureFound(spectator.get(), false, false);
 	}
 
 	clearFactionTargetIfNotAllowed();
+	updateIdleStatus();
 }
 
 void Monster::clearTargetList()
@@ -618,7 +618,7 @@ void Monster::clearFriendList()
 	friendList.clear();
 }
 
-void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/)
+void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/, bool refreshIdle /* = true*/)
 {
 	if (!creature) {
 		return;
@@ -640,7 +640,9 @@ void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/)
 		addTarget(creature, pushFront);
 	}
 
-	updateIdleStatus();
+	if (refreshIdle) {
+		updateIdleStatus();
+	}
 }
 
 void Monster::onCreatureEnter(Creature* creature)

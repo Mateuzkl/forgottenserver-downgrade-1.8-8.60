@@ -216,7 +216,7 @@ private:
 	void onCreatureEnter(Creature* creature);
 	void onCreatureLeave(Creature* creature);
 	bool selectBlockerTarget();
-	void onCreatureFound(Creature* creature, bool pushFront = false);
+	void onCreatureFound(Creature* creature, bool pushFront = false, bool refreshIdle = true);
 	bool isFactionCombatTarget(const Creature* creature) const;
 	bool isFactionCombatAllowed() const;
 	bool clearFactionTargetIfNotAllowed();
