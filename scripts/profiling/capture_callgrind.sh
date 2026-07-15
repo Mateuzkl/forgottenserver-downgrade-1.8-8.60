@@ -35,7 +35,7 @@ command -v callgrind_control >/dev/null 2>&1 || die "callgrind_control not found
 
 output="callgrind-${scenario}.out.%p"
 valgrind --tool=callgrind \
-  --collect-atstart=no \
+  --instr-atstart=no \
   --callgrind-out-file="${output}" \
   ./tfs-valgrind &
 server_pid=$!
@@ -50,13 +50,13 @@ trap cleanup EXIT INT TERM
 
 printf 'Wait for server online, then press Enter.\n'
 read -r
-callgrind_control -p "${server_pid}" -i on
-callgrind_control -p "${server_pid}" -z
+callgrind_control -i on "${server_pid}"
+callgrind_control -z "${server_pid}"
 
 printf 'Prepare scenario "%s", then press Enter to start %ss capture.\n' "${scenario}" "${duration}"
 read -r
 sleep "${duration}"
-callgrind_control -p "${server_pid}" -d
-callgrind_control -p "${server_pid}" -i off
+callgrind_control --dump "${server_pid}"
+callgrind_control -i off "${server_pid}"
 
 printf 'Captured %s for PID %s.\n' "${scenario}" "${server_pid}"
