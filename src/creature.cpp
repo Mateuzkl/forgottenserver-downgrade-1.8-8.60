@@ -477,7 +477,10 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 			requestFollowPathUpdate();
 		}
 
-		if (newPos.z != oldPos.z || !canSee(fc->getPosition())) {
+		auto masterCreature = master.lock();
+		const bool followsLiveMaster = masterCreature && masterCreature == fc && !masterCreature->isRemoved() &&
+		                               !masterCreature->isDead();
+		if (!followsLiveMaster && (newPos.z != oldPos.z || !canSee(fc->getPosition()))) {
 			onCreatureDisappear(fc.get(), false);
 		}
 	}
