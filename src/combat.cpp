@@ -893,17 +893,16 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 			++metrics->impactEffects;
 		}
 		if (caster) {
-			SpectatorVec filtered;
-			for (const auto& s : spectators.players()) {
-				Player *p = static_cast<Player*>(s.get());
-				if (p->compareInstance(caster->getInstanceID())) {
-					filtered.emplace_back(s);
-					if (metrics) {
+			if (metrics) {
+				for (const auto& spectator : spectators.players()) {
+					const Player* player = static_cast<const Player*>(spectator.get());
+					if (player->compareInstance(caster->getInstanceID())) {
 						++metrics->effectRecipients;
 					}
 				}
 			}
-			Game::addMagicEffect(filtered, tile->getPosition(), params.impactEffect);
+			InstanceUtils::sendMagicEffectToInstance(
+			    spectators, tile->getPosition(), params.impactEffect, caster->getInstanceID());
 		} else {
 			g_game.addMagicEffect(tile->getPosition(), params.impactEffect, 0);
 		}
