@@ -475,7 +475,6 @@ void Npc::reset(bool reload)
 
 	parameters.clear();
 	shopPlayerSet.clear();
-	spectators.clear();
 
 	if (reload) {
 		load();
@@ -490,11 +489,7 @@ void Npc::reload()
 
 	SpectatorVec players;
 	g_game.map.getSpectators(players, getPosition(), true, true);
-	for (const auto& player : players.players()) {
-		spectators.insert(std::static_pointer_cast<Player>(player));
-	}
-
-	const bool hasSpectators = !spectators.empty();
+	const bool hasSpectators = !players.empty();
 	setIdle(!hasSpectators);
 
 	if (hasSpectators && walkTicks > 0) {
@@ -786,13 +781,7 @@ void Npc::onPlayerCloseChannel(Player* player)
 
 void Npc::onThink(uint32_t interval)
 {
-	SpectatorVec players;
-	g_game.map.getSpectators(players, getPosition(), true, true, Npcs::ViewportX, Npcs::ViewportX,
-	                         Npcs::ViewportY, Npcs::ViewportY);
-	for (const auto& player : players.players()) {
-		spectators.insert(std::static_pointer_cast<Player>(player));
-	}
-
+	const auto spectators = getSpectators();
 	setIdle(spectators.empty());
 
 	if (isIdle) {
@@ -828,7 +817,23 @@ void Npc::onThink(uint32_t interval)
 		addEventWalk();
 	}
 
-	spectators.clear();
+}
+
+std::vector<std::shared_ptr<Player>> Npc::getSpectators() const
+{
+	SpectatorVec players;
+	g_game.map.getSpectators(players, getPosition(), true, true, Npcs::ViewportX, Npcs::ViewportX,
+	                         Npcs::ViewportY, Npcs::ViewportY);
+
+	std::vector<std::shared_ptr<Player>> result;
+	result.reserve(players.players().size());
+	for (const auto& player : players.players()) {
+		result.emplace_back(std::static_pointer_cast<Player>(player));
+	}
+
+	std::ranges::sort(result);
+	result.erase(std::unique(result.begin(), result.end()), result.end());
+	return result;
 }
 
 void Npc::doSay(std::string_view text) { g_game.internalCreatureSay(this, TALKTYPE_SAY, text, false); }

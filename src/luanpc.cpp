@@ -74,11 +74,11 @@ int luaNpcGetSpectators(lua_State* L)
 		return 1;
 	}
 
-	const auto& spectators = npc->getSpectators();
+	const auto spectators = npc->getSpectators();
 	lua_createtable(L, spectators.size(), 0);
 
 	int index = 0;
-	for (const auto& spectatorPlayer : npc->getSpectators()) {
+	for (const auto& spectatorPlayer : spectators) {
 		pushUserdata<const Player>(L, spectatorPlayer.get());
 		setCreatureMetatable(L, -1, spectatorPlayer.get());
 		lua_rawseti(L, -2, ++index);

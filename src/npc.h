@@ -224,7 +224,7 @@ public:
 	bool setFollowCreature(Creature* creature) override;
 	void clearFocusIfNeeded(Player* player);
 
-	const auto& getSpectators() { return spectators; }
+	std::vector<std::shared_ptr<Player>> getSpectators() const;
 
 	uint8_t getSpeechBubble() const { return speechBubble; }
 	void setSpeechBubble(const uint8_t bubble) { 
@@ -269,7 +269,6 @@ private:
 	void reset(bool reload = false);
 
 	std::set<std::shared_ptr<Player>> shopPlayerSet;
-	std::set<std::shared_ptr<Player>> spectators;
 
 	std::string name;
 	std::string filename;
