@@ -480,47 +480,6 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
 	minRangeY = (minRangeY == 0 ? -maxViewportY : -minRangeY);
 	maxRangeY = (maxRangeY == 0 ? maxViewportY : maxRangeY);
 
-	bool cacheResult = (minRangeX == -maxViewportX && maxRangeX == maxViewportX &&
-	                    minRangeY == -maxViewportY && maxRangeY == maxViewportY);
-
-	SpectatorVec* cacheOpt = nullptr;
-	bool* hasCacheOpt = nullptr;
-
-	if (cacheResult) {
-		auto iter = spectatorsCache.find(centerPos);
-		if (iter != spectatorsCache.end()) {
-			auto& entry = iter->second;
-			SpectatorsCache::FloorData* cacheFloorData;
-			if (onlyPlayers) {
-				cacheFloorData = &entry.players;
-			} else if (onlyMonsters) {
-				cacheFloorData = &entry.monsters;
-			} else if (onlyNpcs) {
-				cacheFloorData = &entry.npcs;
-			} else {
-				cacheFloorData = &entry.creatures;
-			}
-
-			if (multifloor) {
-				cacheOpt = &cacheFloorData->multiFloor;
-				hasCacheOpt = &cacheFloorData->hasMultiFloor;
-			} else {
-				cacheOpt = &cacheFloorData->floor;
-				hasCacheOpt = &cacheFloorData->hasFloor;
-			}
-
-			if (*hasCacheOpt) {
-				if (!spectators.empty()) {
-					spectators.addSpectators(*cacheOpt);
-					spectators.partitionByType();
-				} else {
-					spectators = *cacheOpt;
-				}
-				return;
-			}
-		}
-	}
-
 	int32_t minRangeZ;
 	int32_t maxRangeZ;
 
@@ -543,37 +502,7 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
 	                      onlyPlayers, onlyMonsters, onlyNpcs);
 
 	spectators.partitionByType();
-
-	if (cacheResult) {
-		auto [iter, inserted] = spectatorsCache.try_emplace(centerPos);
-		auto& entry = iter->second;
-		entry.minRangeX = minRangeX;
-		entry.maxRangeX = maxRangeX;
-		entry.minRangeY = minRangeY;
-		entry.maxRangeY = maxRangeY;
-
-		SpectatorsCache::FloorData* cacheFloorData;
-		if (onlyPlayers) {
-			cacheFloorData = &entry.players;
-		} else if (onlyMonsters) {
-			cacheFloorData = &entry.monsters;
-		} else if (onlyNpcs) {
-			cacheFloorData = &entry.npcs;
-		} else {
-			cacheFloorData = &entry.creatures;
-		}
-
-		if (multifloor) {
-			cacheFloorData->hasMultiFloor = true;
-			cacheFloorData->multiFloor = spectators;
-		} else {
-			cacheFloorData->hasFloor = true;
-			cacheFloorData->floor = spectators;
-		}
-	}
 }
-
-void Map::clearSpectatorCache() { spectatorsCache.clear(); }
 
 bool Map::canThrowObjectTo(const Position& fromPos, const Position& toPos, bool checkLineOfSight /*= true*/,
                            bool sameFloor /*= false*/, int32_t rangex /*= Map::maxClientViewportX*/,

@@ -990,8 +990,6 @@ void Tile::addThing(int32_t, Thing* thing)
 			return;
 		}
 
-		g_game.map.clearSpectatorCache();
-
 		creature->setParent(this);
 		CreatureVector* creatures = makeCreatures();
 		creatures->insert(creatures->begin(), std::move(creatureRef));
@@ -1229,8 +1227,6 @@ void Tile::removeThing(Thing* thing, uint32_t count)
 			auto it = std::find_if(creatures->begin(), creatures->end(),
 				[creature](const auto& sp) { return sp.get() == creature; });
 			if (it != creatures->end()) {
-				g_game.map.clearSpectatorCache();
-
 				creatures->erase(it);
 			}
 		}
@@ -1666,8 +1662,6 @@ void Tile::internalAddThing(uint32_t, Thing* thing)
 			logSharedCreatureLockFailure("Tile::internalAddThing", creature);
 			return;
 		}
-
-		g_game.map.clearSpectatorCache();
 
 		creature->setParent(this);
 		CreatureVector* creatures = makeCreatures();
