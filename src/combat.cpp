@@ -904,6 +904,14 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 			InstanceUtils::sendMagicEffectToInstance(
 			    spectators, tile->getPosition(), params.impactEffect, caster->getInstanceID());
 		} else {
+			if (metrics) {
+				for (const auto& spectator : spectators.players()) {
+					const Player* player = static_cast<const Player*>(spectator.get());
+					if (player->compareInstance(0)) {
+						++metrics->effectRecipients;
+					}
+				}
+			}
 			g_game.addMagicEffect(tile->getPosition(), params.impactEffect, 0);
 		}
 	}
