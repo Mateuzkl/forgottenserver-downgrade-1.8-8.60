@@ -545,11 +545,10 @@ bool Monster::setType(const std::shared_ptr<MonsterType>& newType, bool restoreH
 
 void Monster::removeFriend(Creature* creature)
 {
-	auto weakRef = g_game.getCreatureWeakRef(creature);
-	auto it = friendList.find(weakRef);
-	if (it != friendList.end()) {
-		friendList.erase(it);
-	}
+	std::erase_if(friendList, [creature](const auto& weakRef) {
+		auto friendCreature = weakRef.lock();
+		return !friendCreature || friendCreature.get() == creature;
+	});
 }
 
 void Monster::addTarget(Creature* creature, bool pushFront /* = false*/)
@@ -576,26 +575,74 @@ void Monster::addTarget(Creature* creature, bool pushFront /* = false*/)
 
 void Monster::removeTarget(Creature* creature)
 {
-	auto it = std::find_if(targetList.begin(), targetList.end(), [creature](const auto& weakRef) {
-		return weakRef.lock().get() == creature;
+	std::erase_if(targetList, [creature](const auto& weakRef) {
+		auto target = weakRef.lock();
+		return !target || target.get() == creature;
 	});
-	if (it != targetList.end()) {
-		targetList.erase(it);
+}
+
+bool Monster::isValidKnownFriend(const std::shared_ptr<Creature>& creature) const
+{
+	return creature && !creature->isRemoved() && !creature->isDead() && creature->getTile() &&
+	       canSee(creature->getPosition()) && canSeeCreature(creature.get()) && isFriend(creature.get());
+}
+
+bool Monster::isValidKnownTarget(const std::shared_ptr<Creature>& creature) const
+{
+	if (!creature || creature->isRemoved() || creature->isDead() || !creature->isAttackable() ||
+	    !creature->getTile() || !canSee(creature->getPosition()) || !canSeeCreature(creature.get()) ||
+	    (!isFamiliar() && creature->getZone() == ZONE_PROTECTION)) {
+		return false;
+	}
+
+	// Avoid the player-nearby spectator query used by faction combat. That
+	// policy is already enforced centrally by clearFactionTargetIfNotAllowed().
+	if (creature->getMonster() && !creature->isSummon()) {
+		return ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) &&
+		       isFactionCombatTarget(creature.get());
+	}
+
+	return isOpponent(creature.get());
+}
+
+void Monster::pruneInvalidTargetState()
+{
+	std::erase_if(friendList,
+	              [this](const auto& weakRef) { return !isValidKnownFriend(weakRef.lock()); });
+	std::erase_if(targetList,
+	              [this](const auto& weakRef) { return !isValidKnownTarget(weakRef.lock()); });
+
+	const auto isKnownTarget = [this](const Creature* creature) {
+		return std::any_of(targetList.begin(), targetList.end(), [creature](const auto& weakRef) {
+			return weakRef.lock().get() == creature;
+		});
+	};
+
+	if (auto attacked = attackedCreature.lock()) {
+		if (!isKnownTarget(attacked.get()) || !isValidKnownTarget(attacked)) {
+			setAttackedCreature(nullptr);
+		}
+	} else {
+		attackedCreature.reset();
+	}
+
+	if (auto follow = followCreature.lock()) {
+		auto master = getMaster();
+		const bool followsLiveMaster = isSummon() && master && follow == master && !master->isRemoved() && !master->isDead();
+		if (!followsLiveMaster && (!isKnownTarget(follow.get()) || !isValidKnownTarget(follow))) {
+			setFollowCreature(nullptr);
+		}
+	} else {
+		followCreature.reset();
 	}
 }
 
 void Monster::updateTargetList()
 {
-	std::erase_if(friendList, [this](const auto& weakRef) {
-		auto creature = weakRef.lock();
-		return !creature || creature->isDead() || !canSee(creature->getPosition());
-	});
-
-	std::erase_if(targetList, [this](const auto& weakRef) {
-		auto creature = weakRef.lock();
-		return !creature || creature->isDead() || !canSee(creature->getPosition()) || !canSeeCreature(creature.get()) ||
-		       (!isFamiliar() && creature->getZone() == ZONE_PROTECTION) || !isOpponent(creature.get());
-	});
+	std::erase_if(friendList,
+	              [this](const auto& weakRef) { return !isValidKnownFriend(weakRef.lock()); });
+	std::erase_if(targetList,
+	              [this](const auto& weakRef) { return !isValidKnownTarget(weakRef.lock()); });
 
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, position);
@@ -863,28 +910,39 @@ bool Monster::isFamiliar() const
 void Monster::onCreatureLeave(Creature* creature)
 {
 	// LOG_INFO(fmt::format("onCreatureLeave - {}", creature->getName()));
+	if (!creature) {
+		return;
+	}
 
 	auto master = getMaster();
-	if (master && master.get() == creature) {
+	const bool leavingMaster = master && master.get() == creature;
+	if (leavingMaster) {
 		// Take random steps and only use defense abilities (e.g. heal) until its master comes back
 		isMasterInRange = false;
 	}
 
-	// update friendList
-	if (isFriend(creature)) {
-		removeFriend(creature);
+	const bool wasKnownTarget = std::any_of(targetList.begin(), targetList.end(), [creature](const auto& weakRef) {
+		return weakRef.lock().get() == creature;
+	});
+	removeFriend(creature);
+	removeTarget(creature);
+
+	if (auto attacked = attackedCreature.lock(); attacked.get() == creature) {
+		setAttackedCreature(nullptr);
 	}
 
-	// update targetList
-	if (isOpponent(creature)) {
-		removeTarget(creature);
-		updateIdleStatus();
+	if (!leavingMaster) {
+		if (auto follow = followCreature.lock(); follow.get() == creature) {
+			setFollowCreature(nullptr);
+		}
+	}
 
-		if (!isSummon() && targetList.empty()) {
-			const int64_t walkToSpawnRadius = getInteger(ConfigManager::DEFAULT_WALKTOSPAWNRADIUS);
-			if (walkToSpawnRadius > 0 && !position.isInRange(masterPos, walkToSpawnRadius, walkToSpawnRadius)) {
-				walkToSpawn();
-			}
+	updateIdleStatus();
+
+	if (wasKnownTarget && !isSummon() && targetList.empty()) {
+		const int64_t walkToSpawnRadius = getInteger(ConfigManager::DEFAULT_WALKTOSPAWNRADIUS);
+		if (walkToSpawnRadius > 0 && !position.isInRange(masterPos, walkToSpawnRadius, walkToSpawnRadius)) {
+			walkToSpawn();
 		}
 	}
 
@@ -1334,6 +1392,8 @@ void Monster::setIdle(bool idle)
 
 void Monster::updateIdleStatus()
 {
+	pruneInvalidTargetState();
+
 	bool idle = false;
 	if (!isSummon() && targetList.empty()) {
 		idle = std::find_if(conditions.begin(), conditions.end(),
