@@ -3,6 +3,9 @@
 #include "../spectators.h"
 
 #include "../creature.h"
+#include "../game.h"
+#include "../instance_utils.h"
+#include "../player.h"
 
 #include <absl/container/flat_hash_set.h>
 #include <benchmark/benchmark.h>
@@ -27,6 +30,18 @@ private:
 };
 
 using Vec = std::vector<std::shared_ptr<Creature>>;
+
+SpectatorVec makePlayerSpectators(int64_t playerCount)
+{
+	SpectatorVec spectators;
+	for (int64_t i = 0; i < playerCount; ++i) {
+		auto player = std::make_shared<Player>(nullptr);
+		player->setInstanceID((i & 1) == 0 ? 1 : 2);
+		spectators.emplace_back(std::move(player));
+	}
+	spectators.partitionByType();
+	return spectators;
+}
 
 // Builds a destination of `size` creatures and a source of `size` creatures
 // where `overlapPct`% are shared with the destination.
@@ -130,5 +145,42 @@ static void bench_addSpectators_linearFind(benchmark::State& state)
 	}
 }
 BENCHMARK(bench_addSpectators_linearFind)->ArgsProduct({{35, 150}, {0, 50, 90}});
+
+static void bench_combatImpactEffect_filterCopy(benchmark::State& state)
+{
+	const SpectatorVec spectators = makePlayerSpectators(state.range(1));
+	const Position position{100, 100, 7};
+	const int64_t tileCount = state.range(0);
+
+	for ([[maybe_unused]] auto _ : state) {
+		for (int64_t tile = 0; tile < tileCount; ++tile) {
+			SpectatorVec filtered;
+			for (const auto& spectator : spectators.players()) {
+				Player* player = static_cast<Player*>(spectator.get());
+				if (player->compareInstance(1)) {
+					filtered.emplace_back(spectator);
+				}
+			}
+			Game::addMagicEffect(filtered, position, CONST_ME_POFF);
+		}
+	}
+	state.SetItemsProcessed(state.iterations() * tileCount);
+}
+BENCHMARK(bench_combatImpactEffect_filterCopy)->ArgsProduct({{1, 9, 25, 81, 225}, {0, 1, 20, 100}});
+
+static void bench_combatImpactEffect_direct(benchmark::State& state)
+{
+	const SpectatorVec spectators = makePlayerSpectators(state.range(1));
+	const Position position{100, 100, 7};
+	const int64_t tileCount = state.range(0);
+
+	for ([[maybe_unused]] auto _ : state) {
+		for (int64_t tile = 0; tile < tileCount; ++tile) {
+			InstanceUtils::sendMagicEffectToInstance(spectators, position, CONST_ME_POFF, 1);
+		}
+	}
+	state.SetItemsProcessed(state.iterations() * tileCount);
+}
+BENCHMARK(bench_combatImpactEffect_direct)->ArgsProduct({{1, 9, 25, 81, 225}, {0, 1, 20, 100}});
 
 BENCHMARK_MAIN();
