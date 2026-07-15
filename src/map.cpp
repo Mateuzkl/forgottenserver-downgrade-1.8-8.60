@@ -735,7 +735,7 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 	uint16_t pathLeafBaseX = 0;
 	uint16_t pathLeafBaseY = 0;
 	uint8_t pathFloorZ = MAP_MAX_LAYERS;
-	const auto getPathTile = [&](const Position& tilePosition) -> Tile* {
+	const auto getPathTile = [&](const Position& tilePosition) -> const Tile* {
 		if (tilePosition.z >= MAP_MAX_LAYERS) {
 			return nullptr;
 		}
@@ -751,14 +751,14 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 		}
 
 		if (pathFloorZ != tilePosition.z) {
-			pathFloor = pathLeaf ? const_cast<Floor*>(pathLeaf->getFloor(tilePosition.z)) : nullptr;
+			pathFloor = pathLeaf ? pathLeaf->getFloor(tilePosition.z) : nullptr;
 			pathFloorZ = tilePosition.z;
 		}
 
 		return pathFloor ? pathFloor->getTile(tilePosition.x, tilePosition.y, tilePosition.z) : nullptr;
 	};
-	const auto canWalkToForPath = [&](const Position& tilePosition) -> Tile* {
-		Tile* tile = getPathTile(tilePosition);
+	const auto canWalkToForPath = [&](const Position& tilePosition) -> const Tile* {
+		const Tile* tile = getPathTile(tilePosition);
 		if (creature.getTile() != tile) {
 			if (!tile) {
 				return nullptr;
