@@ -831,8 +831,6 @@ std::vector<std::shared_ptr<Player>> Npc::getSpectators() const
 		result.emplace_back(std::static_pointer_cast<Player>(player));
 	}
 
-	std::ranges::sort(result);
-	result.erase(std::unique(result.begin(), result.end()), result.end());
 	return result;
 }
 
