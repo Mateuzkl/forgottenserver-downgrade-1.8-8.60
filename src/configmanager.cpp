@@ -533,6 +533,9 @@ bool ConfigManager::load()
 	booleans[Boolean::ADMIN_REQUIRE_LOGIN] = getGlobalBoolean(L, "adminRequireLogin", true);
 	booleans[Boolean::ADMIN_LOGS] = getGlobalBoolean(L, "adminLogs", false);
 	booleans[Boolean::LOG_TO_FILE] = getGlobalBoolean(L, "logToFile", false);
+	booleans[Boolean::STARTUP_PROGRESS_BAR] = getGlobalBoolean(L, "startupProgressBar", true);
+	booleans[Boolean::STARTUP_DETAILED_LOGS] = getGlobalBoolean(L, "startupDetailedLogs", false);
+	booleans[Boolean::CONSOLE_COLORS] = getGlobalBoolean(L, "consoleColors", true);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", false);
 	booleans[Boolean::PERFORMANCE_METRICS_ENABLED] = getGlobalBoolean(L, "performanceMetricsEnabled", false);
 

@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 
 class Protocol;
 
@@ -52,8 +53,9 @@ public:
 	ServicePort(const ServicePort&) = delete;
 	ServicePort& operator=(const ServicePort&) = delete;
 
-	void open(uint16_t port);
+	bool open(uint16_t port, bool retryOnFailure = true);
 	void close();
+	bool isOpen() const { return acceptor && acceptor->is_open(); }
 	bool is_single_socket() const;
 	std::string get_protocol_names() const;
 
@@ -91,13 +93,14 @@ public:
 	ServiceManager(const ServiceManager&) = delete;
 	ServiceManager& operator=(const ServiceManager&) = delete;
 
-	void run();
+	void run(std::function<void()> onStarted = {});
 	void stop();
 
 	template <typename ProtocolType>
 	bool add(uint16_t port);
 
-	bool is_running() const { return acceptors.empty() == false; }
+	bool hasOpenServices() const;
+	bool is_running() const { return running.load(std::memory_order_acquire); }
 
 private:
 	void die();
@@ -127,8 +130,9 @@ bool ServiceManager::add(uint16_t port)
 
 	if (foundServicePort == acceptors.end()) {
 		service_port = std::make_shared<ServicePort>(io_context, connectionRateLimiter);
-		service_port->open(port);
-		acceptors[port] = service_port;
+		if (!service_port->open(port, false)) {
+			return false;
+		}
 	} else {
 		service_port = foundServicePort->second;
 
@@ -138,7 +142,13 @@ bool ServiceManager::add(uint16_t port)
 		}
 	}
 
-	return service_port->add_service(std::make_shared<Service<ProtocolType>>());
+	if (!service_port->add_service(std::make_shared<Service<ProtocolType>>())) {
+		return false;
+	}
+	if (foundServicePort == acceptors.end()) {
+		acceptors.emplace(port, service_port);
+	}
+	return true;
 }
 
 #endif

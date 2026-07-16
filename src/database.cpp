@@ -196,7 +196,7 @@ bool Database::connect()
 		}
 
 		libraryInitialized = true;
-		LOG_INFO(">> Database running in per-thread connection mode (one MySQL connection per worker thread).");
+		LOG_DATABASE(">> Database running in per-thread connection mode (one MySQL connection per worker thread).");
 	});
 
 	if (!libraryInitialized) {
@@ -277,7 +277,7 @@ Database::ConnectionContext& Database::getContext() const
 	}
 
 	tlsContext = contextPtr;
-	LOG_INFO(fmt::format(">> Database: opened MySQL connection #{}.", connectionNumber));
+	LOG_DATABASE(fmt::format(">> Database: opened MySQL connection #{}.", connectionNumber));
 	return *tlsContext;
 }
 
@@ -288,7 +288,7 @@ bool Database::reconnect(ConnectionContext& ctx) const
 	ctx.handle.reset();
 	const bool success = establishConnection(ctx, true);
 	if (success) {
-		LOG_INFO(">> Database: reconnected successfully.");
+		LOG_DATABASE(">> Database: reconnected successfully.");
 	}
 	return success;
 }
@@ -299,7 +299,7 @@ void Database::shutdown()
 	{
 		std::scoped_lock lock{db.connectionsMutex};
 		if (!db.connections.empty()) {
-			LOG_INFO(fmt::format(">> Database: closing {} MySQL connection(s).", db.connections.size()));
+			LOG_DATABASE(fmt::format(">> Database: closing {} MySQL connection(s).", db.connections.size()));
 		}
 		db.connections.clear();
 	}

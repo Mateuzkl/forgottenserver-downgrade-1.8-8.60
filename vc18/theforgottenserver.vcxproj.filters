@@ -89,6 +89,7 @@
     <ClCompile Include="..\src\inbox.cpp" />
     <ClCompile Include="..\src\mapcache.cpp" />
     <ClCompile Include="..\src\stats.cpp" />
+    <ClCompile Include="..\src\startup_progress.cpp" />
     <ClCompile Include="..\src\stress_test.cpp" />
     <ClInclude Include="..\src\instance_utils.h" />
     <ClCompile Include="..\src\protocolspectator.cpp" />
@@ -315,6 +316,7 @@
     <ClInclude Include="..\src\inbox.h" />
     <ClInclude Include="..\src\mapcache.h" />
     <ClInclude Include="..\src\stats.h" />
+    <ClInclude Include="..\src\startup_progress.h" />
     <ClInclude Include="..\src\protocolspectator.h" />
     <ClInclude Include="..\src\save_manager.h" />
     <ClInclude Include="..\src\thread_pool.h" />

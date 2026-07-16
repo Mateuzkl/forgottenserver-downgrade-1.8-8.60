@@ -119,6 +119,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/storeinbox.cpp
 	${CMAKE_CURRENT_LIST_DIR}/spy.cpp
 	${CMAKE_CURRENT_LIST_DIR}/stats.cpp
+	${CMAKE_CURRENT_LIST_DIR}/startup_progress.cpp
 	${CMAKE_CURRENT_LIST_DIR}/stress_test.cpp
 	${CMAKE_CURRENT_LIST_DIR}/talkaction.cpp
 	${CMAKE_CURRENT_LIST_DIR}/tasks.cpp
@@ -233,6 +234,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/storeinbox.h
 	${CMAKE_CURRENT_LIST_DIR}/spy.h
 	${CMAKE_CURRENT_LIST_DIR}/stats.h
+	${CMAKE_CURRENT_LIST_DIR}/startup_progress.h
 	${CMAKE_CURRENT_LIST_DIR}/talkaction.h
 	${CMAKE_CURRENT_LIST_DIR}/tasks.h
 	${CMAKE_CURRENT_LIST_DIR}/teleport.h

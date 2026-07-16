@@ -15,6 +15,7 @@
 #include "events.h"
 #include "game.h"
 #include "house.h"
+#include "logger.h"
 #include "mailbox.h"
 #include "player.h"
 #include "scheduler.h"
@@ -1590,7 +1591,7 @@ bool Item::addImbuementSlots(const uint16_t amount)
 
 	if ((currentSlots + amount) >= limit)
 	{
-		std::cout << "Warning in call to Item:addImbuementSlots(). Total added would be more than supported memory limit!\n";
+		LOG_WARN("Warning in call to Item:addImbuementSlots(). Total added would be more than supported memory limit!");
 		return false;
 	}
 

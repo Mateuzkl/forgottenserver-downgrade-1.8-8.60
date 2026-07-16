@@ -830,6 +830,8 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	acceptPackets = true;
+	LOG_LOGIN("{} | Lvl:{} | Voc:{} | IP:{}", player->getName(), player->getLevel(),
+	          player->getVocation()->getVocName(), convertIPToString(player->lastIP));
 	g_game.releaseLogin(reservedGuid);
 }
 
@@ -937,6 +939,8 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->resetIdleTime();
 	player->lastPing = OTSYS_TIME();
 	acceptPackets = true;
+	LOG_LOGIN("{} | Lvl:{} | Voc:{} | IP:{}", player->getName(), player->getLevel(),
+	          player->getVocation()->getVocName(), convertIPToString(player->lastIP));
 
 	g_creatureEvents->playerReconnect(player.get());
 }
@@ -974,6 +978,8 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 		}
 	}
 
+	LOG_LOGOUT("{} | Lvl:{} | Voc:{} | IP:{}", player->getName(), player->getLevel(),
+	           player->getVocation()->getVocName(), convertIPToString(player->getIP()));
 	player->client->clear();
 	disconnect();
 
@@ -1070,20 +1076,24 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 
 	if (getBoolean(ConfigManager::ASTRA_CLIENT_ONLY)) {
 		if (!isAstraClient) {
-			LOG_INFO("[AstraClient] Client rejected: AstraClient required");
+			LOG_WARN("[AstraClient] Client rejected: AstraClient required");
 			disconnectClient(AstraClient::REQUIRED_MESSAGE);
 			return;
 		}
-		LOG_INFO(">> [AstraClient] Client accepted");
 	}
 
 	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY)) {
 		if (!isFonticakClient) {
-			LOG_INFO("[FonticakClient] Client rejected: OTC-Fonticak required");
+			LOG_WARN("[FonticakClient] Client rejected: OTC-Fonticak required");
 			disconnectClient(FonticakClient::REQUIRED_MESSAGE);
 			return;
 		}
-		LOG_INFO(">> [FonticakClient] Client accepted");
+	}
+
+	if (isAstraClient) {
+		LOG_NETWORK("Client connected: AstraClient");
+	} else if (isFonticakClient) {
+		LOG_NETWORK("Client connected: FonticakClient");
 	}
 
 	if (isOTC) {

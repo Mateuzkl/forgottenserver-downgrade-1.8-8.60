@@ -529,6 +529,11 @@ startupDatabaseOptimization = false
 logToFile = false
 -- logLevel: trace, debug, info, warning, error, critical (default: info)
 logLevel = "info"
+-- Real startup progress. Detailed mode keeps individual loader logs visible.
+startupProgressBar = true
+startupDetailedLogs = false
+-- Colors are used only when stdout is an interactive terminal.
+consoleColors = true
 -- Status Server Information
 ownerName = ""
 ownerEmail = ""

@@ -303,6 +303,7 @@
     <ClCompile Include="..\src\spy.cpp" />
     <ClCompile Include="..\src\spells.cpp" />
     <ClCompile Include="..\src\stats.cpp" />
+    <ClCompile Include="..\src\startup_progress.cpp" />
     <ClCompile Include="..\src\stress_test.cpp" />
     <ClCompile Include="..\src\storeinbox.cpp" />
     <ClCompile Include="..\src\protocolstatus.cpp" />
@@ -415,6 +416,7 @@
     <ClInclude Include="..\src\spy.h" />
     <ClInclude Include="..\src\spectators.h" />
     <ClInclude Include="..\src\stats.h" />
+    <ClInclude Include="..\src\startup_progress.h" />
     <ClInclude Include="..\src\storeinbox.h" />
     <ClInclude Include="..\src\spells.h" />
     <ClInclude Include="..\src\protocolstatus.h" />

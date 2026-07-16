@@ -1,28 +1,6 @@
-local function convertIp(int)
-    if not int then return "0.0.0.0" end
-    local b1 = int % 256
-    local b2 = math.floor(int / 256) % 256
-    local b3 = math.floor(int / 65536) % 256
-    local b4 = math.floor(int / 16777216) % 256
-    return string.format("%d.%d.%d.%d", b1, b2, b3, b4)
-end
-
 local loginMessage = CreatureEvent("loginMessage")
 
 function loginMessage.onLogin(player)
-    local ipStr = convertIp(player:getIp())
-    local vocation = player:getVocation():getName()
-    local level = player:getLevel()
-    local name = player:getName()
-
-    logger.info("%sLOGIN           %s%s%-20s%sLvl:%s%-5d%sVoc:%-12sIP:%s",
-        logger.colors.lime_green,
-        logger.colors.reset,
-        logger.colors.bold_white, name, logger.colors.reset,
-        logger.colors.bold_cyan, level, logger.colors.reset,
-        vocation,
-        ipStr)
-
     local rewardChest = player:getRewardChest()
     local rewardContainerCount = 0
     for _, item in ipairs(rewardChest:getItems()) do
@@ -82,18 +60,6 @@ loginMessage:register()
 
 local logoutMessage = CreatureEvent("logoutMessage")
 function logoutMessage.onLogout(player)
-    local ipStr = convertIp(player:getIp())
-    local vocation = player:getVocation():getName()
-    local level = player:getLevel()
-    local name = player:getName()
-
-    logger.info("%sLOGOUT          %s%s%-20s%sLvl:%s%-5d%sVoc:%-12sIP:%s",
-        logger.colors.orange_red,
-        logger.colors.reset,
-        logger.colors.bold_white, name, logger.colors.reset,
-        logger.colors.bold_cyan, level, logger.colors.reset,
-        vocation,
-        ipStr)
     local playerId = player:getId()
     nextUseStaminaTime[playerId] = nil
     WorkbenchSessions.clearOwner(playerId, false)

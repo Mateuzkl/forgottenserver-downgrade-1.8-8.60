@@ -1323,7 +1323,7 @@ bool Events::eventItemOnImbue(Item* item, std::shared_ptr<Imbuement> imbuement, 
 	}
 
 	if (!scriptInterface.reserveScriptEnv()) {
-		std::cout << "[Error - Events::eventItemOnImbue] Call stack overflow\n";
+		LOG_ERROR("[Error - Events::eventItemOnImbue] Call stack overflow");
 		return false;
 	}
 
@@ -1350,7 +1350,7 @@ void Events::eventItemOnRemoveImbue(Item* item, ImbuementType imbueType, bool de
 	}
 
 	if (!scriptInterface.reserveScriptEnv()) {
-		std::cout << "[Error - Events::eventItemOnRemoveImbue] Call stack overflow\n";
+		LOG_ERROR("[Error - Events::eventItemOnRemoveImbue] Call stack overflow");
 		return;
 	}
 

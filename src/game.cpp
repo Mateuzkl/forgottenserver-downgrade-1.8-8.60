@@ -9,7 +9,6 @@
 #include "bed.h"
 #include "character_bazaar.h"
 #include "configmanager.h"
-#include "console_styles.h"
 #include "creature.h"
 #include "creatureevent.h"
 #include "databasetasks.h"
@@ -30,6 +29,7 @@
 #include "script.h"
 #include "server.h"
 #include "stats.h"
+#include "startup_progress.h"
 #include "spells.h"
 #include "spy.h"
 #include "storeinbox.h"
@@ -621,7 +621,7 @@ void Game::setGameState(GameState_t newState)
 		case GAME_STATE_INIT: {
 			const auto initStart = std::chrono::steady_clock::now();
 			auto logStartupPhase = [](std::string_view name, std::chrono::steady_clock::time_point start) {
-				g_logger().info(">> Startup phase '{}': [\033[1;33m{:.3f}\033[0m] s.", name,
+				g_logger().info(">> Startup phase '{}': {:.3f} s.", name,
 				                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
 			};
 
@@ -629,20 +629,24 @@ void Game::setGameState(GameState_t newState)
 			groups.load();
 			g_chat->load();
 			logStartupPhase("groups and chat", phaseStart);
+			startupProgress().update(1, 6, "groups and chat");
 
 			const auto spawnsStart = std::chrono::steady_clock::now();
 			map.spawns.startup();
-			g_logger().info(">> Spawn creation phase: [\033[1;33m{:.3f}\033[0m] s.",
+			g_logger().info(">> Spawn creation phase: {:.3f} s.",
 			                std::chrono::duration<double>(std::chrono::steady_clock::now() - spawnsStart).count());
+			startupProgress().update(2, 6, "spawn creatures");
 
 			phaseStart = std::chrono::steady_clock::now();
 			mounts.loadFromXml();
 			logStartupPhase("mounts", phaseStart);
+			startupProgress().update(3, 6, "mounts");
 
 			phaseStart = std::chrono::steady_clock::now();
 			raids.loadFromXml();
 			raids.startup();
 			logStartupPhase("raids", phaseStart);
+			startupProgress().update(4, 6, "raids");
 
 			phaseStart = std::chrono::steady_clock::now();
 			loadMotdNum();
@@ -650,22 +654,21 @@ void Game::setGameState(GameState_t newState)
 			loadGameStorageValues();
 			loadAccountStorageValues();
 			logStartupPhase("startup storage", phaseStart);
+			startupProgress().update(5, 6, "storage");
 
 			phaseStart = std::chrono::steady_clock::now();
 			g_globalEvents->startup();
 			logStartupPhase("global events", phaseStart);
-			g_logger().info(">> GAME_STATE_INIT phase: [\033[1;33m{:.3f}\033[0m] s.",
+			startupProgress().update(6, 6, "global events");
+			g_logger().info(">> GAME_STATE_INIT phase: {:.3f} s.",
 			                std::chrono::duration<double>(std::chrono::steady_clock::now() - initStart).count());
 			break;
 		}
 
 		case GAME_STATE_SHUTDOWN: {
-			using namespace ConsoleStyle;
-			fmt::print("\n");
-			fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
-			fmt::print(red_b,    "    ✖ SHUTTING DOWN\n");
-			fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
-			fmt::print("\n");
+			LOG_INFO("─────────────────────────────────────────────────────────");
+			LOG_INFO("SHUTTING DOWN");
+			LOG_INFO("─────────────────────────────────────────────────────────");
 			std::fflush(stdout);
 
 			LOG_INFO(">> Starting shutdown sequence...");

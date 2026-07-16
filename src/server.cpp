@@ -32,6 +32,13 @@ std::atomic<uint64_t> nextAcceptErrorLog{0};
 
 ServiceManager::~ServiceManager() { stop(); }
 
+bool ServiceManager::hasOpenServices() const
+{
+	return !acceptors.empty() && std::all_of(acceptors.begin(), acceptors.end(), [](const auto& entry) {
+		return entry.second && entry.second->isOpen();
+	});
+}
+
 void ServiceManager::die()
 {
 	// Release protocols before closing connections — the dispatcher is already
@@ -57,7 +64,7 @@ void ServiceManager::runIoContext() noexcept
 	}
 }
 
-void ServiceManager::run()
+void ServiceManager::run(std::function<void()> onStarted)
 {
 	bool expected = false;
 	if (!running.compare_exchange_strong(expected, true)) {
@@ -74,6 +81,9 @@ void ServiceManager::run()
 		for (int i = 0; i < extraThreads; ++i) {
 			ioThreads.emplace_back([this]() { runIoContext(); });
 		}
+	}
+	if (onStarted) {
+		onStarted();
 	}
 
 	runIoContext();
@@ -315,15 +325,15 @@ void ServicePort::scheduleOpen(std::chrono::milliseconds delay)
 				return;
 			}
 			if (auto servicePort = service.lock(); servicePort && !servicePort->stopped.load()) {
-				servicePort->open(port);
+				servicePort->open(port, true);
 			}
 		});
 }
 
-void ServicePort::open(uint16_t port)
+bool ServicePort::open(uint16_t port, bool retryOnFailure)
 {
 	if (stopped.load()) {
-		return;
+		return false;
 	}
 
 	close();
@@ -349,22 +359,24 @@ void ServicePort::open(uint16_t port)
 		                                getBoolean(ConfigManager::BIND_ONLY_GLOBAL_ADDRESS)));
 
 		accept();
+		return true;
 	} catch (const std::system_error& e) {
 		LOG_NETWORK(fmt::format("Error - ServicePort::open: {}", e.what()));
 
 		if (e.code() == asio::error::address_in_use) {
-			LOG_ERROR("\x1b[31mATTENTION: network port is already in use. There is likely another TFS process running.\x1b[0m");
-			LOG_ERROR("\x1b[31mTo check, run: ps aux | grep ./tfs\x1b[0m");
-			LOG_ERROR("\x1b[31mTry this first: kill PID\x1b[0m");
-			LOG_ERROR("\x1b[31mIf it does not stop, then use: kill -9 PID\x1b[0m");
-			LOG_ERROR("\x1b[31mThen start the server again.\x1b[0m");
+			LOG_ERROR("ATTENTION: network port is already in use. There is likely another TFS process running.");
 		}
 
-		scheduleOpen(std::chrono::seconds(15));
+		if (retryOnFailure) {
+			scheduleOpen(std::chrono::seconds(15));
+		}
 	} catch (const std::exception& e) {
 		LOG_NETWORK(fmt::format("Error - ServicePort::open: {}", e.what()));
-		scheduleOpen(std::chrono::seconds(15));
+		if (retryOnFailure) {
+			scheduleOpen(std::chrono::seconds(15));
+		}
 	}
+	return false;
 }
 
 void ServicePort::close()

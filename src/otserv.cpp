@@ -27,6 +27,7 @@
 #include "scriptmanager.h"
 #include "server.h"
 #include "signals.h"
+#include "startup_progress.h"
 #include "luascript.h"
 #include "lua.hpp"
 #include "thread_pool.h"
@@ -34,6 +35,7 @@
 
 #include <fmt/format.h>
 #include <fmt/color.h>
+#include <future>
 #if __has_include("gitmetadata.h")
 #include "gitmetadata.h"
 #endif
@@ -51,11 +53,30 @@ namespace {
 
 std::optional<double> startupMapLoadSeconds;
 
-std::pair<bool, LogLevel> getLogToFileFromConfig(const std::string& configFile)
+struct BootstrapOptions {
+	bool logToFile = false;
+	LogLevel logLevel = LogLevel::INFO;
+	bool startupProgressBar = true;
+	bool startupDetailedLogs = false;
+	bool consoleColors = true;
+};
+
+template <typename... Args>
+void consolePrint(fmt::text_style style, fmt::format_string<Args...> format, Args&&... args)
+{
+	const std::string rendered = fmt::format(format, std::forward<Args>(args)...);
+	if (startupProgress().colorsEnabled()) {
+		fmt::print(style, "{}", rendered);
+	} else {
+		fmt::print("{}", rendered);
+	}
+}
+
+BootstrapOptions getBootstrapOptions(const std::string& configFile)
 {
 	lua_State* L = luaL_newstate();
 	if (!L) {
-		return {false, LogLevel::INFO};
+		return {};
 	}
 	luaL_openlibs(L);
 
@@ -66,20 +87,29 @@ std::pair<bool, LogLevel> getLogToFileFromConfig(const std::string& configFile)
 	lua_pushinteger(L, 3);
 	lua_setglobal(L, "TEXTCOLOR_ORANGE");
 
-	bool logToFile = false;
-	LogLevel logLevel = LogLevel::INFO;
-	if (luaL_dofile(L, configFile.c_str()) == 0) {
-		lua_getglobal(L, "logToFile");
-		if (lua_isboolean(L, -1)) {
-			logToFile = lua_toboolean(L, -1) != 0;
-		}
-		lua_pop(L, 1);
+	BootstrapOptions options;
+	auto readOptions = [&]() {
+		auto readBoolean = [&](const char* name, bool& value) {
+			lua_getglobal(L, name);
+			if (lua_isboolean(L, -1)) {
+				value = lua_toboolean(L, -1) != 0;
+			}
+			lua_pop(L, 1);
+		};
+		readBoolean("logToFile", options.logToFile);
+		readBoolean("startupProgressBar", options.startupProgressBar);
+		readBoolean("startupDetailedLogs", options.startupDetailedLogs);
+		readBoolean("consoleColors", options.consoleColors);
 
 		lua_getglobal(L, "logLevel");
 		if (lua_isstring(L, -1)) {
-			logLevel = parseLogLevel(lua_tostring(L, -1));
+			options.logLevel = parseLogLevel(lua_tostring(L, -1));
 		}
 		lua_pop(L, 1);
+	};
+
+	if (luaL_dofile(L, configFile.c_str()) == 0) {
+		readOptions();
 	} else {
 		fmt::print(stderr, "Warning: Failed to parse config file '{}': {}\n", configFile, lua_tostring(L, -1));
 	}
@@ -87,39 +117,29 @@ std::pair<bool, LogLevel> getLogToFileFromConfig(const std::string& configFile)
 	constexpr const char* serverConfigFile = "data/server_config.lua";
 	if (std::ifstream customConfig(serverConfigFile); customConfig.good()) {
 		if (luaL_dofile(L, serverConfigFile) == 0) {
-			lua_getglobal(L, "logToFile");
-			if (lua_isboolean(L, -1)) {
-				logToFile = lua_toboolean(L, -1) != 0;
-			}
-			lua_pop(L, 1);
-
-			lua_getglobal(L, "logLevel");
-			if (lua_isstring(L, -1)) {
-				logLevel = parseLogLevel(lua_tostring(L, -1));
-			}
-			lua_pop(L, 1);
+			readOptions();
 		} else {
 			fmt::print(stderr, "Warning: Failed to parse server config '{}': {}\n", serverConfigFile, lua_tostring(L, -1));
 		}
 	}
 
 	lua_close(L);
-	return {logToFile, logLevel};
+	return options;
 }
 
 void startupErrorMessage(std::string_view errorStr)
 {
-	g_logger().setConsoleLevel(LogLevel::INFO);
-	LOG_ERROR(errorStr);
+	startupProgress().fail(errorStr);
+	if (isLoggerInitialized()) {
+		LOG_ERROR(errorStr);
+	} else {
+		fmt::print(stderr, "[ERROR   ] {}\n", errorStr);
+	}
 }
 
 std::string formatFeatureStatus(std::string_view name, ConfigManager::Boolean key)
 {
-	const bool enabled = ConfigManager::getBoolean(key);
-	const auto color = enabled ? fmt::color::lime_green : fmt::color::yellow;
-	const auto* status = enabled ? "ON" : "OFF";
-
-	return fmt::format("{} [{}]", name, fmt::format(fg(color), "{}", status));
+	return fmt::format("{} [{}]", name, ConfigManager::getBoolean(key) ? "ON" : "OFF");
 }
 
 void printFeatureStatus()
@@ -175,7 +195,7 @@ std::string getCompilerName()
 #endif
 }
 
-void mainLoader(const std::shared_ptr<ServiceManager>& services)
+bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 {
 	// reactor thread
 	UPDATE_OTSYS_TIME();
@@ -206,32 +226,26 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 		c_test.close();
 	}
 
-	auto [logToFile, logLevel] = getLogToFileFromConfig(std::string{configFile});
+	const BootstrapOptions bootstrap = getBootstrapOptions(std::string{configFile});
 
-	if (!initLogger(logLevel, "data/logs/server.log", 5 * 1024 * 1024, 3, logToFile)) {
+	if (!initLogger(bootstrap.logLevel, "data/logs/server.log", 5 * 1024 * 1024, 3, bootstrap.logToFile)) {
 		fmt::print(stderr, "Failed to initialize logger!\n");
-		startupErrorMessage("Failed to initialize logger!");
-		return;
+		return false;
 	}
 
 	setupLoggerSignalHandlers();
+	startupProgress().configure(bootstrap.startupProgressBar, bootstrap.startupDetailedLogs, bootstrap.consoleColors);
+	g_logger().setConsoleColors(startupProgress().colorsEnabled());
+	g_logger().setConsoleLevel(bootstrap.startupDetailedLogs ? bootstrap.logLevel : LogLevel::WARNING);
 
 	srand(static_cast<unsigned int>(OTSYS_TIME()));
 #ifdef _WIN32
 	SetConsoleTitle(STATUS_SERVER_NAME);
-
-	// fixes a problem with escape characters not being processed in Windows consoles
-	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-	DWORD dwMode = 0;
-	GetConsoleMode(hOut, &dwMode);
-	dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-	SetConsoleMode(hOut, dwMode);
 #endif
 
 	printServerVersion();
-
-	// Suppress console output during loading — logs still go to file
-	g_logger().setConsoleLevel(LogLevel::CRITICAL);
+	startupProgress().start();
+	startupProgress().begin(StartupStage::CONFIGURATION, configFile);
 
 	if (copiedConfig) {
 		LOG_INFO(fmt::format(">> copying config.lua.dist to {}", configFile));
@@ -241,18 +255,22 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	LOG_INFO(">> Loading config");
 	if (!ConfigManager::load()) {
 		startupErrorMessage(fmt::format("Unable to load {}!", configFile));
-		return;
+		return false;
 	}
 	g_logger().setLevel(parseLogLevel(getString(ConfigManager::LOG_LEVEL)));
 	printFeatureStatus();
+	startupProgress().complete("configuration loaded");
+	startupProgress().begin(StartupStage::RUNTIME, "map cache fingerprint");
 	if (caseInsensitiveEqual(getString(ConfigManager::MAP_CACHE_MODE), "auto")) {
 		MapCache::precomputeFingerprint(
 		    fmt::format("data/world/{}.otbm", getString(ConfigManager::MAP_NAME)));
 	}
+	startupProgress().update(1, 3, "map cache ready");
 
 	const auto workerThreads = static_cast<uint32_t>(
 		std::clamp<int64_t>(getInteger(ConfigManager::NETWORK_THREADS), 1, 64));
 	g_threadPool.start(workerThreads);
+	startupProgress().update(2, 3, "worker pool started");
 
 #ifdef _WIN32
 	auto defaultPriority = getString(ConfigManager::DEFAULT_PRIORITY);
@@ -270,17 +288,21 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 		tfs::rsa::loadPEM(pem);
 	} catch (const std::exception& e) {
 		startupErrorMessage(e.what());
-		return;
+		return false;
 	}
+	startupProgress().update(3, 3, "RSA key loaded");
+	startupProgress().complete("runtime ready");
+	startupProgress().begin(StartupStage::DATABASE, "connecting");
 
-	LOG_INFO(">> Establishing database connection...");
+	LOG_DATABASE(">> Establishing database connection...");
 
 	if (!Database::getInstance().connect()) {
 		startupErrorMessage("Failed to connect to database.");
-		return;
+		return false;
 	}
+	startupProgress().update(1, 5, "connected");
 
-	LOG_INFO(fmt::format(">> MySQL {}", Database::getClientVersion()));
+	LOG_DATABASE(fmt::format(">> MySQL {}", Database::getClientVersion()));
 
 	// run database manager
 	LOG_INFO(">> Running database manager");
@@ -288,11 +310,14 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	if (!DatabaseManager::isDatabaseSetup()) {
 		startupErrorMessage(
 		    "The database you have specified in config.lua is empty, please import the schema.sql to your database.");
-		return;
+		return false;
 	}
+	startupProgress().update(2, 5, "schema verified");
 	g_databaseTasks.start();
+	startupProgress().update(3, 5, "database worker started");
 
 	DatabaseManager::updateDatabase();
+	startupProgress().update(4, 5, "migrations checked");
 
 	// Recover any pending async saves from a previous crash
 	g_saveManager.recoverPendingFlushes();
@@ -300,87 +325,109 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	if (getBoolean(ConfigManager::OPTIMIZE_DATABASE) && !DatabaseManager::optimizeTables()) {
 		LOG_INFO(">> No tables were optimized.");
 	}
+	startupProgress().update(5, 5, "recovery and optimization complete");
+	startupProgress().complete("database ready");
+	startupProgress().begin(StartupStage::GAME_DATA, "vocations");
 
 	// load vocations
 	if (!g_vocations.loadFromXml()) {
 		startupErrorMessage("Unable to load vocations!");
-		return;
+		return false;
 	}
+	startupProgress().update(1, 6, "vocations");
 
 	// instantiate required script systems for items
 	if (!ScriptingManager::getInstance().loadPreItems()) {
 		startupErrorMessage("Failed to initialize pre-item script systems");
-		return;
+		return false;
 	}
+	startupProgress().update(2, 6, "pre-item systems");
 
 	// load item data
 	LOG_INFO(">> Loading items... ");
 	if (!Item::items.loadFromOtb("data/items/items.otb")) {
 		startupErrorMessage("Unable to load items (OTB)!");
-		return;
+		return false;
 	}
+	startupProgress().update(3, 6, "items OTB");
 	LOG_INFO(fmt::format(">> OTB v{:d}.{:d}.{:d}", Item::items.majorVersion, Item::items.minorVersion,
 	                         Item::items.buildNumber));
 
 	if (!Item::items.loadFromXml()) {
 		startupErrorMessage("Unable to load items (XML)!");
-		return;
+		return false;
 	}
+	startupProgress().update(4, 6, "items XML");
 
 	if (ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED)) {
 		LOG_INFO(">> Loading imbuements");
 		if (!Imbuements::getInstance().loadFromXml()) {
 			startupErrorMessage("Unable to load imbuements!");
-			return;
+			return false;
 		}
 	}
+	startupProgress().update(5, 6, ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED) ? "imbuements" : "imbuements disabled");
 
 	LOG_INFO(">> Preparing native OTBM zones");
 	if (!Zones::load()) {
 		startupErrorMessage("Unable to load zones!");
-		return;
+		return false;
 	}
+	startupProgress().update(6, 6, "zones");
+	startupProgress().complete("core data loaded");
+	startupProgress().begin(StartupStage::SCRIPT_SYSTEMS, "script registries");
 
 	LOG_INFO(">> Loading script systems");
 	if (!ScriptingManager::getInstance().loadScriptSystems()) {
 		startupErrorMessage("Failed to load script systems");
-		return;
+		return false;
 	}
 
 	g_game.raids.getScriptInterface().initState();
+	startupProgress().complete("script systems ready");
+	startupProgress().begin(StartupStage::SPELL_SCRIPTS, "discovering files");
 
 	LOG_INFO(">> Loading spells");
 	if (!g_scripts->loadScripts("scripts/spells", false, false)) {
 		startupErrorMessage("Failed to load spell scripts");
-		return;
+		return false;
 	}
+	startupProgress().complete("spell scripts ready");
+	startupProgress().begin(StartupStage::MONSTER_SCRIPTS, "discovering files");
 
 	LOG_INFO(">> Loading monster scripts");
 	if (!g_scripts->loadScripts("monsters", false, false)) {
 		startupErrorMessage("Failed to load monster scripts");
-		return;
+		return false;
 	}
+	startupProgress().complete("monster scripts ready");
+	startupProgress().begin(StartupStage::LUA_SCRIPTS, "discovering files");
 
 	LOG_INFO(">> Loading lua scripts");
 	if (!g_scripts->loadScripts("scripts", false, false)) {
 		startupErrorMessage("Failed to load lua scripts");
-		return;
+		return false;
 	}
+	startupProgress().complete("Lua scripts ready");
+	startupProgress().begin(StartupStage::NPC_SCRIPTS, "discovering files");
 
 
 	LOG_INFO(">> Loading lua npcs");
 	if (!Npcs::loadScripts(false)) {
 		startupErrorMessage("Failed to load lua npcs");
-		return;
+		return false;
 	}
+	startupProgress().complete("NPC scripts ready");
+	startupProgress().begin(StartupStage::FINAL_GAME_DATA, "outfits");
 
-	LOG_INFO(fmt::format(">> Loading monsters... [\033[1;33m{}\033[0m]", g_monsters.monsters.size()));
+	LOG_INFO(fmt::format(">> Loaded monster definitions: {}", g_monsters.monsters.size()));
 
 	LOG_INFO(">> Loading outfits");
 	if (!Outfits::getInstance().loadFromXml()) {
 		startupErrorMessage("Unable to load outfits!");
-		return;
+		return false;
 	}
+	startupProgress().update(1, 2, "outfits");
 
 	LOG_INFO(">> Checking world type... ");
 	auto worldType = asLowerCaseString(std::string{getString(ConfigManager::WORLD_TYPE)});
@@ -395,31 +442,52 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 		startupErrorMessage(
 		    fmt::format("Unknown world type: {:s}, valid world types are: pvp, no-pvp and pvp-enforced.",
 		                getString(ConfigManager::WORLD_TYPE)));
-		return;
+		return false;
 	}
 	LOG_INFO(fmt::format(">> {}", asUpperCaseString(worldType)));
+	startupProgress().update(2, 2, "world type");
+	startupProgress().complete("game data finalized");
+	startupProgress().begin(StartupStage::MAP_DATA, getString(ConfigManager::MAP_NAME));
 
 	startupMapLoadSeconds.reset();
 	const auto mapStartupStart = std::chrono::steady_clock::now();
 	LOG_INFO(">> Loading map");
 	if (!g_game.loadMainMap(std::string{getString(ConfigManager::MAP_NAME)})) {
 		startupErrorMessage("Failed to load map");
-		return;
+		return false;
 	}
 	startupMapLoadSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - mapStartupStart).count();
 
 	LOG_INFO(">> Initializing gamestate");
+	startupProgress().begin(StartupStage::GAME_INITIALIZATION, "groups and chat");
 	g_game.setGameState(GAME_STATE_INIT);
-	g_logger().info(">> Map-to-GAME_STATE_INIT total: [\033[1;33m{:.3f}\033[0m] s.",
+	startupProgress().complete("game state initialized");
+	g_logger().info(">> Map-to-GAME_STATE_INIT total: {:.3f} s.",
 	                std::chrono::duration<double>(std::chrono::steady_clock::now() - mapStartupStart).count());
+	startupProgress().begin(StartupStage::SERVICES, "binding ports");
 
 	// Game client protocols
-	services->add<ProtocolGame>(static_cast<uint16_t>(getInteger(ConfigManager::GAME_PORT)));
-	services->add<ProtocolLogin>(static_cast<uint16_t>(getInteger(ConfigManager::LOGIN_PORT)));
+	if (!services->add<ProtocolGame>(static_cast<uint16_t>(getInteger(ConfigManager::GAME_PORT))) ||
+	    !services->add<ProtocolLogin>(static_cast<uint16_t>(getInteger(ConfigManager::LOGIN_PORT)))) {
+		startupErrorMessage("Failed to bind required game/login service ports.");
+		return false;
+	}
 
 	// OT protocols
-	services->add<ProtocolStatus>(static_cast<uint16_t>(getInteger(ConfigManager::STATUS_PORT)));
-	services->add<ProtocolAdmin>(static_cast<uint16_t>(getInteger(ConfigManager::ADMIN_PORT)));
+	if (!services->add<ProtocolStatus>(static_cast<uint16_t>(getInteger(ConfigManager::STATUS_PORT)))) {
+		startupErrorMessage("Failed to bind the required status service port.");
+		return false;
+	}
+	const auto adminPort = static_cast<uint16_t>(getInteger(ConfigManager::ADMIN_PORT));
+	if (adminPort != 0 && !services->add<ProtocolAdmin>(adminPort)) {
+		startupErrorMessage("Failed to bind the configured admin service port.");
+		return false;
+	}
+	if (!services->hasOpenServices()) {
+		startupErrorMessage("One or more network service ports are not open.");
+		return false;
+	}
+	startupProgress().update(1, 5, "ports bound");
 
 	RentPeriod_t rentPeriod;
 	auto strRentPeriod =
@@ -440,6 +508,7 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	}
 
 	g_game.map.houses.payHouses(rentPeriod);
+	startupProgress().update(2, 5, "house rent processed");
 
 	LOG_INFO(">> Loaded all modules, server starting up...");
 
@@ -451,9 +520,12 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 
 	g_game.start(services);
 	g_game.setGameState(GAME_STATE_NORMAL);
+	startupProgress().update(3, 5, "game state normal");
 
 	// Pre-warm the OutputMessage pool to avoid operator new() on first connections
 	OutputMessagePool::prewarmPool(128);
+	startupProgress().update(4, 5, "runtime pools ready");
+	return true;
 }
 
 [[noreturn]] void badAllocationHandler()
@@ -479,111 +551,164 @@ void startServer()
 	g_dispatcher.start();
 	g_scheduler.start();
 
-	mainLoader(serviceManager);
-
-	// Configure reactor production limits: fairness, time budget, and backpressure
-	g_reactor.setMaxTasksPerCycle(static_cast<uint32_t>(getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE)));
-	g_reactor.setTimeBudget(std::chrono::milliseconds(getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS)));
-	g_reactor.setMaxInboxSize(static_cast<size_t>(getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE)));
-	g_performanceMetrics.setEnabled(getBoolean(ConfigManager::PERFORMANCE_METRICS_ENABLED));
-
-	LOG_INFO(">> Reactor limits: maxTasks={}, timeBudget={}ms, maxInbox={}",
-	    getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE),
-	    getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS),
-	    getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE));
+	const bool startupLoaded = mainLoader(serviceManager);
 
 	std::jthread serviceThread;
 
-	if (serviceManager->is_running()) {
+	if (startupLoaded && serviceManager->hasOpenServices()) {
+		// Configure reactor production limits: fairness, time budget, and backpressure
+		g_reactor.setMaxTasksPerCycle(static_cast<uint32_t>(getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE)));
+		g_reactor.setTimeBudget(std::chrono::milliseconds(getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS)));
+		g_reactor.setMaxInboxSize(static_cast<size_t>(getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE)));
+		g_performanceMetrics.setEnabled(getBoolean(ConfigManager::PERFORMANCE_METRICS_ENABLED));
+
+		LOG_INFO(">> Reactor limits: maxTasks={}, timeBudget={}ms, maxInbox={}",
+		    getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE),
+		    getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS),
+		    getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE));
+
 		const auto networkThreads = std::clamp<int64_t>(getInteger(ConfigManager::NETWORK_THREADS), 1, 64);
 #ifdef STATS_ENABLED
 		g_stats.configureDispatchers(static_cast<std::size_t>(networkThreads) + 1);
 		g_stats.start();
 		g_stats.setEnabled(true);
 #endif
+		auto serviceStarted = std::make_shared<std::promise<void>>();
+		auto serviceStartedFuture = serviceStarted->get_future();
+		serviceThread = std::jthread([serviceManager, serviceStarted]() {
+			serviceManager->run([serviceStarted]() { serviceStarted->set_value(); });
+		});
+		serviceStartedFuture.get();
+		if (!serviceManager->is_running()) {
+			startupErrorMessage("Network I/O stopped before startup completed.");
+			g_threadPool.shutdown();
+			g_scheduler.shutdown();
+			g_databaseTasks.shutdown();
+			g_dispatcher.shutdown();
+#ifdef STATS_ENABLED
+			g_stats.shutdown();
+#endif
+		} else {
+			startupProgress().complete("network I/O running");
+			startupProgress().finish();
+			for (const auto& stage : startupProgress().snapshot()) {
+				LOG_STARTUP("{} (weight {}%): {:.3f} s", stage.name, stage.weight, stage.seconds);
+			}
+			LOG_STARTUP("Startup completed in {:.3f} s", startupProgress().elapsedSeconds());
+		}
+		if (serviceManager->is_running()) {
 		using namespace ConsoleStyle;
 
 		// ── Server Config ──
-		fmt::print(cyan_b, "    ⚙  SERVER CONFIG\n");
-		fmt::print(dark_gray, "    ────────────────────────────────────────\n");
-		fmt::print(gray, "    {:<20}", "World Map");
-		fmt::print(white_b, "{}\n", getString(ConfigManager::MAP_NAME));
-		fmt::print(gray, "    {:<20}", "World Size");
-		fmt::print(white_b, "{}x{}\n", g_game.map.getWidth(), g_game.map.getHeight());
-		fmt::print(gray, "    {:<20}", "Map Load Time");
+		consolePrint(cyan_b, "    ⚙  SERVER CONFIG\n");
+		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+		consolePrint(gray, "    {:<20}", "World Map");
+		consolePrint(white_b, "{}\n", getString(ConfigManager::MAP_NAME));
+		consolePrint(gray, "    {:<20}", "World Size");
+		consolePrint(white_b, "{}x{}\n", g_game.map.getWidth(), g_game.map.getHeight());
+		consolePrint(gray, "    {:<20}", "Map Load Time");
 		if (startupMapLoadSeconds) {
-			fmt::print(green_b, "{:.3f} s \u2714\n", *startupMapLoadSeconds);
+			consolePrint(green_b, "{:.3f} s \u2714\n", *startupMapLoadSeconds);
 		} else {
-			fmt::print(dark_gray, "unavailable\n");
+			consolePrint(dark_gray, "unavailable\n");
 		}
-		fmt::print(gray, "    {:<20}", "World Type");
-		fmt::print(white_b, "{}\n", getString(ConfigManager::WORLD_TYPE));
-		fmt::print(gray, "    {:<20}", "Account Manager");
-		fmt::print(white_b, "{}\n", getBoolean(ConfigManager::ACCOUNT_MANAGER) ? "enabled" : "disabled");
-		fmt::print(gray, "    {:<20}", "Game Port");
-		fmt::print(white_b, "{} ✔\n", getInteger(ConfigManager::GAME_PORT));
-		fmt::print(gray, "    {:<20}", "Login Port");
-		fmt::print(white_b, "{} ✔\n", getInteger(ConfigManager::LOGIN_PORT));
-		fmt::print(gray, "    {:<20}", "Status Port");
-		fmt::print(white_b, "{} ✔\n", getInteger(ConfigManager::STATUS_PORT));
+		consolePrint(gray, "    {:<20}", "World Type");
+		consolePrint(white_b, "{}\n", getString(ConfigManager::WORLD_TYPE));
+		consolePrint(gray, "    {:<20}", "Account Manager");
+		consolePrint(white_b, "{}\n", getBoolean(ConfigManager::ACCOUNT_MANAGER) ? "enabled" : "disabled");
+		consolePrint(gray, "    {:<20}", "Game Port");
+		consolePrint(white_b, "{} ✔\n", getInteger(ConfigManager::GAME_PORT));
+		consolePrint(gray, "    {:<20}", "Login Port");
+		consolePrint(white_b, "{} ✔\n", getInteger(ConfigManager::LOGIN_PORT));
+		consolePrint(gray, "    {:<20}", "Status Port");
+		consolePrint(white_b, "{} ✔\n", getInteger(ConfigManager::STATUS_PORT));
 		fmt::print("\n");
 
 		// ── Threads ──
-		fmt::print(cyan_b, "    ⚙  THREADS\n");
-		fmt::print(dark_gray, "    ────────────────────────────────────────\n");
-		fmt::print(gray, "    {:<20}", "Network I/O");
-		fmt::print(white_b, "{}\n", networkThreads);
-		fmt::print(gray, "    {:<20}", "ThreadPool Workers");
-		fmt::print(white_b, "{}\n", g_threadPool.get_thread_count());
-		fmt::print(gray, "    {:<20}", "Dispatcher");
-		fmt::print(white_b, "1\n");
-		fmt::print(gray, "    {:<20}", "Scheduler");
-		fmt::print(white_b, "1\n");
-		fmt::print(gray, "    {:<20}", "DB Tasks");
-		fmt::print(white_b, "1\n");
+		consolePrint(cyan_b, "    ⚙  THREADS\n");
+		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+		consolePrint(gray, "    {:<20}", "Network I/O");
+		consolePrint(white_b, "{}\n", networkThreads);
+		consolePrint(gray, "    {:<20}", "ThreadPool Workers");
+		consolePrint(white_b, "{}\n", g_threadPool.get_thread_count());
+		consolePrint(gray, "    {:<20}", "Dispatcher");
+		consolePrint(white_b, "1\n");
+		consolePrint(gray, "    {:<20}", "Scheduler");
+		consolePrint(white_b, "1\n");
+		consolePrint(gray, "    {:<20}", "DB Tasks");
+		consolePrint(white_b, "1\n");
 		fmt::print("\n");
 
 		// ── Game Data ──
-		fmt::print(cyan_b, "    ⚙  GAME DATA\n");
-		fmt::print(dark_gray, "    ────────────────────────────────────────\n");
-		fmt::print(gray, "    {:<20}", "Items");
-		fmt::print(white_b, "{} ✔\n", Item::items.size());
-		fmt::print(gray, "    {:<20}", "Vocations");
-		fmt::print(white_b, "{} ✔\n", g_vocations.getVocations().size());
-		fmt::print(gray, "    {:<20}", "Outfits");
-		fmt::print(white_b, "{} (M) + {} (F) ✔\n",
-			Outfits::getInstance().getOutfits(PLAYERSEX_MALE).size(),
-			Outfits::getInstance().getOutfits(PLAYERSEX_FEMALE).size());
-		fmt::print(gray, "    {:<20}", "Npcs");
-		fmt::print(white_b, "{} ✔\n", g_game.getNpcs().size());
-		fmt::print(gray, "    {:<20}", "Monsters");
-		fmt::print(white_b, "{} ✔\n", g_monsters.monsters.size());
-		if (ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED)) {
-			auto& imbue = Imbuements::getInstance();
-			fmt::print(gray, "    {:<20}", "Imbuements");
-			fmt::print(white_b, "{}, categories {}, {} definitions ✔\n",
-				imbue.getBases().size(), imbue.getCategories().size(), imbue.getDefinitions().size());
+		consolePrint(cyan_b, "    ⚙  GAME DATA\n");
+		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+		for (std::string_view dataName : {"Items", "Vocations", "Outfits", "NPC Scripts", "Monster Scripts",
+		                                  "Map", "Houses", "Spawns"}) {
+			consolePrint(gray, "    {:<20}", dataName);
+			consolePrint(green_b, "Loaded ✔\n");
+		}
+		consolePrint(gray, "    {:<20}", "Imbuements");
+		consolePrint(ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED) ? green_b : dark_gray,
+		             "{}\n", ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED) ? "Loaded ✔" : "Disabled");
+		fmt::print("\n");
+
+		// Real ConfigManager toggles only; no inferred or hardcoded feature state.
+		consolePrint(cyan_b, "    ⚙  SERVER FEATURES\n");
+		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+		const std::array featureRows{
+		    std::pair{"Forge", ConfigManager::FORGE_SYSTEM_ENABLED},
+		    std::pair{"Imbuements", ConfigManager::IMBUEMENT_SYSTEM_ENABLED},
+		    std::pair{"Wheel", ConfigManager::WHEEL_SYSTEM_ENABLED},
+		    std::pair{"Bestiary", ConfigManager::BESTIARY_SYSTEM_ENABLED},
+		    std::pair{"Market", ConfigManager::MARKET_SYSTEM_ENABLED},
+		    std::pair{"Prey", ConfigManager::PREY_SYSTEM_ENABLED},
+		    std::pair{"Battle Pass", ConfigManager::BATTLEPASS_SYSTEM_ENABLED},
+		    std::pair{"Weapon Proficiency", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED},
+		    std::pair{"Augments", ConfigManager::AUGMENT_SYSTEM_ENABLED},
+		    std::pair{"Monk Vocation", ConfigManager::MONK_VOCATION_ENABLED},
+		    std::pair{"Familiars", ConfigManager::FAMILIAR_SYSTEM_ENABLED},
+		    std::pair{"Hirelings", ConfigManager::HIRELING_SYSTEM_ENABLED},
+		    std::pair{"Monster Levels", ConfigManager::MONSTER_LEVEL_ENABLED},
+		    std::pair{"Monster Factions", ConfigManager::MONSTER_FACTION_SYSTEM},
+		    std::pair{"Chain Combat", ConfigManager::CHAIN_SYSTEM_ENABLED},
+		    std::pair{"Quick Loot", ConfigManager::QUICK_LOOT_ENABLED},
+		    std::pair{"Autoloot", ConfigManager::AUTOLOOT_ENABLED},
+		    std::pair{"Task Hunting", ConfigManager::TASK_HUNTING_SYSTEM_ENABLED},
+		    std::pair{"Bounty Tasks", ConfigManager::BOUNTY_TASKS_ENABLED},
+		    std::pair{"Weekly Tasks", ConfigManager::WEEKLY_TASKS_ENABLED},
+		    std::pair{"Soulpit", ConfigManager::SOULPIT_SYSTEM_ENABLED},
+		    std::pair{"Soulseals", ConfigManager::SOULSEALS_SYSTEM_ENABLED},
+		    std::pair{"Cleave", ConfigManager::CLEAVE_SYSTEM_ENABLED},
+		    std::pair{"Character Bazaar", ConfigManager::CHARACTER_BAZAAR_ENABLED},
+		    std::pair{"Reset/Reborn", ConfigManager::RESET_SYSTEM_ENABLED},
+		};
+		for (const auto& [name, key] : featureRows) {
+			const bool enabled = ConfigManager::getBoolean(key);
+			consolePrint(gray, "    {:<24}", name);
+			consolePrint(enabled ? green_b : dark_gray, "{}\n", enabled ? "ON" : "OFF");
 		}
 		fmt::print("\n");
 
 		// ── Online ──
-		fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
-		fmt::print(green_b, "    ◆ ");
-		fmt::print(white_b, "{}", getString(ConfigManager::SERVER_NAME));
-		fmt::print(gray, " — ");
-		fmt::print(green_b, "SERVER ONLINE");
-		fmt::print(green_b, " ◆\n");
-		fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
+		consolePrint(dark_gray, "    ─────────────────────────────────────────────────────────\n");
+		consolePrint(green_b, "    ◆ ");
+		consolePrint(white_b, "{}", getString(ConfigManager::SERVER_NAME));
+		consolePrint(gray, " — ");
+		consolePrint(green_b, "SERVER ONLINE");
+		consolePrint(green_b, " ◆\n");
+		consolePrint(dark_gray, "    ─────────────────────────────────────────────────────────\n");
 		fmt::print("\n");
 		std::fflush(stdout);
 
 		// Restore console output now that all startup printing is done
-		g_logger().setConsoleLevel(LogLevel::INFO);
+		g_logger().setConsoleLevel(parseLogLevel(getString(ConfigManager::LOG_LEVEL)));
 
-		serviceThread = std::jthread([serviceManager]() { serviceManager->run(); });
 		g_reactor.runLoop();
+		}
 	} else {
-		LOG_INFO(">> No services running. The server is NOT online.");
+		if (startupLoaded) {
+			startupErrorMessage("No open services. The server is NOT online.");
+		}
 		g_threadPool.shutdown();
 		g_scheduler.shutdown();
 		g_databaseTasks.shutdown();
@@ -643,65 +768,65 @@ void printServerVersion()
 
 	// ── ASCII Banner ──
 	fmt::print("\n");
-	fmt::print(purple | emphasis::bold,
+	consolePrint(purple | emphasis::bold,
 		"    ████████╗███████╗███████╗    ██████╗  ██████╗ ██╗    ██╗███╗   ██╗\n");
-	fmt::print(fg(fmt::color::medium_orchid),
+	consolePrint(fg(fmt::color::medium_orchid),
 		"    ╚══██╔══╝██╔════╝██╔════╝    ██╔══██╗██╔═══██╗██║    ██║████╗  ██║\n");
-	fmt::print(fg(fmt::color::orchid),
+	consolePrint(fg(fmt::color::orchid),
 		"       ██║   █████╗  ███████╗    ██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║\n");
-	fmt::print(fg(fmt::color::violet),
+	consolePrint(fg(fmt::color::violet),
 		"       ██║   ██╔══╝  ╚════██║    ██║  ██║██║   ██║██║███╗██║██║╚██╗██║\n");
-	fmt::print(cyan_b,
+	consolePrint(cyan_b,
 		"       ██║   ██║     ███████║    ██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║\n");
-	fmt::print(fg(fmt::color::dark_cyan),
+	consolePrint(fg(fmt::color::dark_cyan),
 		"       ╚═╝   ╚═╝     ╚══════╝    ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝\n");
 	fmt::print("\n");
 
 	// ── Version bar ──
-	fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
-	fmt::print(gray, "    ◆ ");
-	fmt::print(gray, "VERSION ");
-	fmt::print(white_b, "{}", STATUS_SERVER_VERSION);
-	fmt::print(dark_gray, "  ·  ");
-	fmt::print(gray, "CLIENT ");
-	fmt::print(white_b, "{}", CLIENT_VERSION_STR);
-	fmt::print(dark_gray, "  ·  ");
-	fmt::print(gray, "BUILD ");
+	consolePrint(dark_gray, "    ─────────────────────────────────────────────────────────\n");
+	consolePrint(gray, "    ◆ ");
+	consolePrint(gray, "VERSION ");
+	consolePrint(white_b, "{}", STATUS_SERVER_VERSION);
+	consolePrint(dark_gray, "  ·  ");
+	consolePrint(gray, "CLIENT ");
+	consolePrint(white_b, "{}", CLIENT_VERSION_STR);
+	consolePrint(dark_gray, "  ·  ");
+	consolePrint(gray, "BUILD ");
 #if defined(GIT_RETRIEVED_STATE) && GIT_RETRIEVED_STATE
-	fmt::print(green_b, "{}", GIT_SHORT_SHA1);
+	consolePrint(green_b, "{}", GIT_SHORT_SHA1);
 #if GIT_IS_DIRTY
-	fmt::print(fg(fmt::color::gold) | emphasis::bold, " DIRTY");
+	consolePrint(fg(fmt::color::gold) | emphasis::bold, " DIRTY");
 #endif
 #else
-	fmt::print(green_b, "RELEASE");
+	consolePrint(green_b, "RELEASE");
 #endif
 	fmt::print("\n");
-	fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
+	consolePrint(dark_gray, "    ─────────────────────────────────────────────────────────\n");
 
 	// ── Build info section ──
-	fmt::print(cyan_b, "\n    ⚙  BUILD INFO\n");
-	fmt::print(dark_gray, "    ────────────────────────────────────────\n");
-	fmt::print(gray, "    {:<20}", "Compiler");
-	fmt::print(white_b, "{}\n", getCompilerName());
-	fmt::print(gray, "    {:<20}", "Compiled");
-	fmt::print(white_b, "{} {}\n", __DATE__, __TIME__);
-	fmt::print(gray, "    {:<20}", "Platform");
-	fmt::print(white_b, "{}\n", getPlatformName());
-	fmt::print(gray, "    {:<20}", "Lua Engine");
-	fmt::print(white_b, "{}\n", getLuaRuntimeName());
-	fmt::print(gray, "    {:<20}", "CPU Threads");
-	fmt::print(white_b, "{}\n", std::max(1u, std::thread::hardware_concurrency()));
+	consolePrint(cyan_b, "\n    ⚙  BUILD INFO\n");
+	consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+	consolePrint(gray, "    {:<20}", "Compiler");
+	consolePrint(white_b, "{}\n", getCompilerName());
+	consolePrint(gray, "    {:<20}", "Compiled");
+	consolePrint(white_b, "{} {}\n", __DATE__, __TIME__);
+	consolePrint(gray, "    {:<20}", "Platform");
+	consolePrint(white_b, "{}\n", getPlatformName());
+	consolePrint(gray, "    {:<20}", "Lua Engine");
+	consolePrint(white_b, "{}\n", getLuaRuntimeName());
+	consolePrint(gray, "    {:<20}", "CPU Threads");
+	consolePrint(white_b, "{}\n", std::max(1u, std::thread::hardware_concurrency()));
 	fmt::print("\n");
 
 	// ── Credits ──
-	fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
-	fmt::print(gray, "    ► Developed by ");
-	fmt::print(white_b, "{}\n", STATUS_SERVER_DEVELOPERS);
-	fmt::print(gray, "    ► Downgraded by ");
-	fmt::print(magenta_b, "Nekiro / MillhioreBT\n");
-	fmt::print(gray, "    ► Custom fork by ");
-	fmt::print(red_b, "Mateuzkl\n");
-	fmt::print(dark_gray, "    ─────────────────────────────────────────────────────────\n");
+	consolePrint(dark_gray, "    ─────────────────────────────────────────────────────────\n");
+	consolePrint(gray, "    ► Developed by ");
+	consolePrint(white_b, "{}\n", STATUS_SERVER_DEVELOPERS);
+	consolePrint(gray, "    ► Downgraded by ");
+	consolePrint(magenta_b, "Nekiro / MillhioreBT\n");
+	consolePrint(gray, "    ► Custom fork by ");
+	consolePrint(red_b, "Mateuzkl\n");
+	consolePrint(dark_gray, "    ─────────────────────────────────────────────────────────\n");
 	fmt::print("\n");
 
 	std::fflush(stdout);
