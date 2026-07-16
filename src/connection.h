@@ -115,6 +115,7 @@ private:
 	time_t timeConnected;
 	uint32_t packetsSent = 0;
 	uint32_t trackedIp = 0;
+	uint32_t cachedPeerIp = 0;
 
 	bool closed = false;
 	bool receivedFirst = false;

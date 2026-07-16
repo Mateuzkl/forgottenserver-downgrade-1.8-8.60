@@ -32,6 +32,7 @@ void ProtocolStatus::onRecvFirstMessage(NetworkMessage& msg)
 {
 	const uint32_t ip = getIP();
 	const int64_t now = OTSYS_TIME();
+	const bool whitelisted = ip == 0x0100007F || convertIPToString(ip) == getString(ConfigManager::IP);
 	bool blocked = false;
 	{
 		std::scoped_lock lock(ipConnectMutex);
@@ -43,7 +44,7 @@ void ProtocolStatus::onRecvFirstMessage(NetworkMessage& msg)
 			});
 		}
 
-		if (ip != 0x0100007F && convertIPToString(ip) != getString(ConfigManager::IP)) {
+		if (!whitelisted) {
 			const auto it = ipConnectMap.find(ip);
 			blocked = it != ipConnectMap.end() &&
 			          now < it->second + getInteger(ConfigManager::STATUSQUERY_TIMEOUT);

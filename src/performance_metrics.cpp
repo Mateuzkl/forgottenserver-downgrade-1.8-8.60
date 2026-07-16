@@ -257,7 +257,8 @@ void PerformanceMetrics::maybeReport()
 		path.pathLength.exchange(0, std::memory_order_relaxed));
 	const uint64_t currentConnections = network.connectionsCurrent.load(std::memory_order_relaxed);
 	const uint64_t maximumConnections =
-		std::max(currentConnections, network.connectionsMaximum.exchange(0, std::memory_order_relaxed));
+		std::max(currentConnections,
+		         network.connectionsMaximum.exchange(currentConnections, std::memory_order_relaxed));
 	report += fmt::format(
 		"\n[Perf] network accept_started={} accept_ok={} accept_error={} rate_limited={} ip_limited={} "
 		"active={} active_max={}",

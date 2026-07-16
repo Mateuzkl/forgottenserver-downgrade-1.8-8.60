@@ -113,4 +113,22 @@ TEST_CASE(test_rate_limit_deadline_is_not_extended_by_retries)
 	CHECK(limiter.check(clientIp, 4'200, 2, 500).allowed);
 }
 
+TEST_CASE(test_rate_limit_escalates_only_when_block_starts)
+{
+	tfs::net::ConnectionRateLimiter limiter;
+	constexpr uint32_t clientIp = 0x0D0E0F10;
+
+	CHECK(limiter.check(clientIp, 1'000, 1, 100).allowed);
+	CHECK(limiter.check(clientIp, 1'200, 1, 100).allowed);
+	CHECK(limiter.check(clientIp, 1'300, 1, 100).allowed);
+	CHECK(limiter.check(clientIp, 1'500, 1, 100).allowed);
+	CHECK(limiter.check(clientIp, 1'600, 1, 100).allowed);
+
+	const auto blocked = limiter.check(clientIp, 1'650, 1, 100);
+	CHECK(!blocked.allowed);
+	CHECK(blocked.blockStarted);
+	CHECK(blocked.totalBlocks == 1);
+	CHECK(blocked.blockDuration == 3'000);
+}
+
 TFS_TEST_MAIN()

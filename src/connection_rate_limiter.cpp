@@ -9,6 +9,7 @@ namespace {
 constexpr uint64_t CLEANUP_INTERVAL = 60'000;
 constexpr uint64_t ENTRY_LIFETIME = 300'000;
 constexpr uint64_t ATTEMPT_WINDOW = 5'000;
+constexpr size_t CLEANUP_BATCH_SIZE = 256;
 
 uint64_t getBlockDuration(uint32_t totalBlocks)
 {
@@ -27,6 +28,16 @@ uint64_t getBlockDuration(uint32_t totalBlocks)
 
 namespace tfs::net {
 
+void ConnectionRateLimiter::refreshExpiry(uint32_t clientIp, Entry& entry)
+{
+	if (entry.expiry != expiryIndex.end()) {
+		expiryIndex.erase(entry.expiry);
+	}
+
+	const uint64_t expiresAt = std::max(entry.blockUntil, entry.lastAttempt + ENTRY_LIFETIME + 1);
+	entry.expiry = expiryIndex.emplace(expiresAt, clientIp);
+}
+
 void ConnectionRateLimiter::cleanup(uint64_t currentTime)
 {
 	if (lastCleanup != 0 && currentTime - lastCleanup < CLEANUP_INTERVAL) {
@@ -34,10 +45,18 @@ void ConnectionRateLimiter::cleanup(uint64_t currentTime)
 	}
 	lastCleanup = currentTime;
 
-	std::erase_if(entries, [currentTime](const auto& pair) {
-		const Entry& entry = pair.second;
-		return entry.blockUntil <= currentTime && currentTime - entry.lastAttempt > ENTRY_LIFETIME;
-	});
+	for (size_t processed = 0; processed < CLEANUP_BATCH_SIZE && !expiryIndex.empty(); ++processed) {
+		const auto expiryIt = expiryIndex.begin();
+		if (expiryIt->first > currentTime) {
+			break;
+		}
+
+		const auto entryIt = entries.find(expiryIt->second);
+		if (entryIt != entries.end() && entryIt->second.expiry == expiryIt) {
+			entries.erase(entryIt);
+		}
+		expiryIndex.erase(expiryIt);
+	}
 }
 
 ConnectionRateLimitResult ConnectionRateLimiter::check(uint32_t clientIp, uint64_t currentTime,
@@ -47,8 +66,9 @@ ConnectionRateLimitResult ConnectionRateLimiter::check(uint32_t clientIp, uint64
 	std::scoped_lock lock(mutex);
 	cleanup(currentTime);
 
-	auto [it, inserted] = entries.try_emplace(clientIp, Entry{.lastAttempt = currentTime});
+	auto [it, inserted] = entries.try_emplace(clientIp, currentTime, expiryIndex.end());
 	if (inserted) {
+		refreshExpiry(clientIp, it->second);
 		return {};
 	}
 
@@ -64,10 +84,11 @@ ConnectionRateLimitResult ConnectionRateLimiter::check(uint32_t clientIp, uint64
 	if (timeDifference <= ATTEMPT_WINDOW) {
 		if (++entry.count > allowedConnections) {
 			entry.count = 0;
-			++entry.totalBlocks;
 			if (timeDifference <= minimumInterval) {
+				++entry.totalBlocks;
 				const uint64_t blockDuration = getBlockDuration(entry.totalBlocks);
 				entry.blockUntil = currentTime + blockDuration;
+				refreshExpiry(clientIp, entry);
 				return {
 					.allowed = false,
 					.blockStarted = true,
@@ -83,6 +104,7 @@ ConnectionRateLimitResult ConnectionRateLimiter::check(uint32_t clientIp, uint64
 		}
 	}
 
+	refreshExpiry(clientIp, entry);
 	return {};
 }
 

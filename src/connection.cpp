@@ -363,13 +363,18 @@ uint32_t Connection::getIP()
 uint32_t Connection::getIPLocked()
 {
 	// Must be called with connectionLock held, or from a safe context.
+	if (cachedPeerIp != 0) {
+		return cachedPeerIp;
+	}
+
 	asio::error_code error;
 	const asio::ip::tcp::endpoint endpoint = socket.remote_endpoint(error);
 	if (error) {
 		return 0;
 	}
 
-	return htonl(endpoint.address().to_v4().to_uint());
+	cachedPeerIp = htonl(endpoint.address().to_v4().to_uint());
+	return cachedPeerIp;
 }
 
 void Connection::onWriteOperation(const asio::error_code& error)

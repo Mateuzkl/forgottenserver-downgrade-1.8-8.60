@@ -5,6 +5,7 @@
 #define FS_CONNECTION_RATE_LIMITER_H
 
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <unordered_map>
 
@@ -25,17 +26,24 @@ public:
 	                                uint64_t minimumInterval);
 
 private:
+	using ExpiryIndex = std::multimap<uint64_t, uint32_t>;
+
 	struct Entry
 	{
+		Entry(uint64_t lastAttempt, ExpiryIndex::iterator expiry) : lastAttempt(lastAttempt), expiry(expiry) {}
+
 		uint64_t lastAttempt;
 		uint64_t blockUntil = 0;
 		uint32_t count = 1;
 		uint32_t totalBlocks = 0;
+		ExpiryIndex::iterator expiry;
 	};
 
 	void cleanup(uint64_t currentTime);
+	void refreshExpiry(uint32_t clientIp, Entry& entry);
 
 	std::unordered_map<uint32_t, Entry> entries;
+	ExpiryIndex expiryIndex;
 	std::mutex mutex;
 	uint64_t lastCleanup = 0;
 };

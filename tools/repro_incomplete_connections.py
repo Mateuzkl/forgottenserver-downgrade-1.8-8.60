@@ -17,6 +17,8 @@ def probe(host: str, port: int, timeout: float) -> bool:
     try:
         data = connection.recv(1)
         return data != b""
+    except ConnectionResetError:
+        return False
     except TimeoutError:
         # An admitted incomplete connection waits for the two-byte packet header.
         return True
