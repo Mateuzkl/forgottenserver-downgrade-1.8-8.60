@@ -1,6 +1,7 @@
 #include "../otpch.h"
 
 #include "../configmanager.h"
+#include "../events.h"
 #include "../game.h"
 #include "../monster.h"
 #include "../movement.h"
@@ -56,9 +57,11 @@ class WorldFixture
 {
 public:
 	WorldFixture()
-	    : oldFactionSystem(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM)),
+	    : oldEvents(g_events),
+	      oldFactionSystem(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM)),
 	      oldRequirePlayer(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY))
 	{
+		g_events = &events;
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_SYSTEM, true);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY, false);
 		if (!g_moveEvents) {
@@ -75,6 +78,7 @@ public:
 		}
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_SYSTEM, oldFactionSystem);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY, oldRequirePlayer);
+		g_events = oldEvents;
 	}
 
 	void place(const std::shared_ptr<Creature>& creature, const Position& position)
@@ -85,6 +89,8 @@ public:
 	}
 
 private:
+	Events* oldEvents;
+	Events events;
 	bool oldFactionSystem;
 	bool oldRequirePlayer;
 	std::vector<std::weak_ptr<Creature>> creatures;
@@ -242,6 +248,105 @@ TEST_CASE(monster_cleans_target_after_real_teleport_out_of_view)
 	CHECK(!monster->getAttackedCreatureShared());
 	CHECK(!monster->getFollowCreatureShared());
 	CHECK(monster->getIdleStatus());
+}
+
+TEST_CASE(monster_cleans_target_after_real_teleport_to_another_floor)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{800, 500, 7});
+	world.place(target, Position{801, 500, 7});
+	selectTarget(monster, target);
+	const Position destination{801, 500, 8};
+	ensureTile(destination);
+
+	CHECK(g_game.internalTeleport(target.get(), destination) == RETURNVALUE_NOERROR);
+
+	CHECK(monster->getTargetList().empty());
+	CHECK(!monster->getAttackedCreatureShared());
+	CHECK(!monster->getFollowCreatureShared());
+	CHECK(monster->getIdleStatus());
+	CHECK(!monster->isCreatureCheckEnabled());
+}
+
+TEST_CASE(monster_cleans_target_after_real_teleport_into_protection_zone)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{810, 500, 7});
+	world.place(target, Position{811, 500, 7});
+	selectTarget(monster, target);
+	const Position destination{812, 500, 7};
+	ensureTile(destination);
+	g_game.map.getTile(destination)->setFlag(TILESTATE_PROTECTIONZONE);
+
+	CHECK(g_game.internalTeleport(target.get(), destination) == RETURNVALUE_NOERROR);
+
+	CHECK(monster->getTargetList().empty());
+	CHECK(!monster->getAttackedCreatureShared());
+	CHECK(!monster->getFollowCreatureShared());
+	CHECK(monster->getIdleStatus());
+	CHECK(!monster->isCreatureCheckEnabled());
+}
+
+TEST_CASE(monster_cleans_target_after_logout_removal)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{820, 500, 7});
+	world.place(target, Position{821, 500, 7});
+	selectTarget(monster, target);
+
+	CHECK(g_game.removeCreature(target.get(), true));
+
+	CHECK(monster->getTargetList().empty());
+	CHECK(!monster->getAttackedCreatureShared());
+	CHECK(!monster->getFollowCreatureShared());
+	CHECK(monster->getIdleStatus());
+	CHECK(!monster->isCreatureCheckEnabled());
+}
+
+TEST_CASE(aggressive_condition_ends_with_one_idle_transition)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{830, 500, 7});
+	world.place(target, Position{831, 500, 7});
+	selectTarget(monster, target);
+	CHECK(monster->addCondition(
+	    Condition::createCondition(CONDITIONID_COMBAT, CONDITION_INFIGHT, 10'000, 0, false, 0, true)));
+	monster->onRemoveCreature(target.get(), false);
+	CHECK(!monster->getIdleStatus());
+	MetricsFixture metrics;
+	const uint64_t transitionsToIdle = metrics.get(MonsterIdleMetric::TransitionToIdle);
+	const uint64_t onIdleStatusCalls = metrics.get(MonsterIdleMetric::OnIdleStatusCalls);
+
+	monster->removeCondition(CONDITION_INFIGHT, true);
+
+	CHECK(monster->getIdleStatus());
+	CHECK(metrics.get(MonsterIdleMetric::TransitionToIdle) == transitionsToIdle + 1);
+	CHECK(metrics.get(MonsterIdleMetric::OnIdleStatusCalls) == onIdleStatusCalls + 1);
+}
+
+TEST_CASE(active_monster_without_reason_converges_to_idle_on_think)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	world.place(monster, Position{840, 500, 7});
+	MetricsFixture metrics;
+	const uint64_t activeWithoutReason = metrics.get(MonsterIdleMetric::ActiveWithoutReason);
+	monster->setIdle(false);
+	CHECK(monster->isCreatureCheckEnabled());
+
+	monster->onThink(EVENT_CREATURE_THINK_INTERVAL);
+
+	CHECK(monster->getIdleStatus());
+	CHECK(!monster->isCreatureCheckEnabled());
+	CHECK(metrics.get(MonsterIdleMetric::ActiveWithoutReason) == activeWithoutReason + 1);
 }
 
 TEST_CASE(monster_clears_faction_target_when_policy_is_disabled)
