@@ -26,6 +26,8 @@ bool Map::loadMap(const std::string& identifier, bool loadHouses)
 {
 	const auto loadStart = std::chrono::steady_clock::now();
 	Zones::clear();
+	houseLoadStatus = MapLoadStatus::SKIPPED;
+	spawnLoadStatus = MapLoadStatus::SKIPPED;
 
 	IOMap loader;
 	if (!loader.loadMap(this, identifier, loadHouses)) {
@@ -37,7 +39,9 @@ bool Map::loadMap(const std::string& identifier, bool loadHouses)
 
 	if (loadHouses) {
 		const auto housesStart = std::chrono::steady_clock::now();
-		if (!IOMap::loadHouses(this)) {
+		const bool housesLoaded = IOMap::loadHouses(this);
+		houseLoadStatus = housesLoaded ? MapLoadStatus::LOADED : MapLoadStatus::FAILED;
+		if (!housesLoaded) {
 			LOG_WARN("[Warning - Map::loadMap] Failed to load house data.");
 		}
 
@@ -48,10 +52,13 @@ bool Map::loadMap(const std::string& identifier, bool loadHouses)
 		g_logger().info(">> House phase: {:.3f} s.",
 		                std::chrono::duration<double>(std::chrono::steady_clock::now() - housesStart).count());
 	}
-	startupProgress().update(1, 2, loadHouses ? "houses loaded" : "houses skipped");
+	startupProgress().update(1, 2, houseLoadStatus == MapLoadStatus::LOADED ? "houses loaded" :
+	                                  houseLoadStatus == MapLoadStatus::FAILED ? "houses failed" : "houses skipped");
 
 	const auto spawnsStart = std::chrono::steady_clock::now();
-	if (!IOMap::loadSpawns(this)) {
+	const bool spawnsLoaded = IOMap::loadSpawns(this);
+	spawnLoadStatus = spawnsLoaded ? MapLoadStatus::LOADED : MapLoadStatus::FAILED;
+	if (!spawnsLoaded) {
 		LOG_WARN("[Warning - Map::loadMap] Failed to load spawn data.");
 	} else {
 		LOG_INFO(fmt::format(">> Loaded definitions for {} npcs and {} monsters", spawns.getNpcCount(), spawns.getMonsterCount()));
@@ -59,8 +66,9 @@ bool Map::loadMap(const std::string& identifier, bool loadHouses)
 	g_logger().info(">> Spawn XML phase: {:.3f} s; complete map load: {:.3f} s.",
 	                std::chrono::duration<double>(std::chrono::steady_clock::now() - spawnsStart).count(),
 	                std::chrono::duration<double>(std::chrono::steady_clock::now() - loadStart).count());
-	startupProgress().update(2, 2, "spawns loaded");
-	startupProgress().complete("map auxiliary data ready");
+	startupProgress().update(2, 2, spawnsLoaded ? "spawns loaded" : "spawns failed");
+	startupProgress().complete(houseLoadStatus == MapLoadStatus::FAILED || spawnLoadStatus == MapLoadStatus::FAILED ?
+	                               "map auxiliary data completed with warnings" : "map auxiliary data ready");
 	return true;
 }
 

@@ -75,7 +75,7 @@ void StartupProgress::start()
 	if (!active || failed) {
 		return;
 	}
-	startVisualPhaseLocked(VisualPhase::SCRIPTS);
+	startupStart = std::chrono::steady_clock::now();
 }
 
 void StartupProgress::begin(StartupStage stage, std::string_view)
@@ -96,9 +96,11 @@ void StartupProgress::begin(StartupStage stage, std::string_view)
 	currentStage = nextStage;
 	currentFraction = 0.0;
 	stageStart = std::chrono::steady_clock::now();
-	if (stage == StartupStage::MAP_DATA && visualPhase != VisualPhase::MAP) {
+	if (stage == StartupStage::SCRIPT_SYSTEMS) {
+		startVisualPhaseLocked(VisualPhase::SCRIPTS);
+	} else if (stage == StartupStage::MAP_DATA) {
 		startVisualPhaseLocked(VisualPhase::MAP);
-	} else {
+	} else if (isVisualStageLocked()) {
 		renderVisualLocked();
 	}
 }
@@ -195,7 +197,7 @@ void StartupProgress::startVisualPhaseLocked(VisualPhase phase)
 
 void StartupProgress::renderVisualLocked(bool force)
 {
-	if (!displayEnabled) {
+	if (!displayEnabled || !isVisualStageLocked()) {
 		return;
 	}
 
@@ -229,6 +231,19 @@ void StartupProgress::renderVisualLocked(bool force)
 
 	fmt::print("    [{}] {:3}%{}\n", bar, percent, completed);
 	std::fflush(stdout);
+}
+
+bool StartupProgress::isVisualStageLocked() const
+{
+	if (currentStage < 0) {
+		return false;
+	}
+
+	const auto stage = static_cast<StartupStage>(currentStage);
+	if (visualPhase == VisualPhase::SCRIPTS) {
+		return stage >= StartupStage::SCRIPT_SYSTEMS && stage <= StartupStage::NPC_SCRIPTS;
+	}
+	return stage >= StartupStage::MAP_DATA && stage <= StartupStage::MAP_AUXILIARY;
 }
 
 double StartupProgress::visualPercentageLocked() const

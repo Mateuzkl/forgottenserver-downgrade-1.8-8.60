@@ -81,7 +81,15 @@ public:
 
 	void database(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "DATABASE", msg); }
 	void login(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "LOGIN", msg); }
+	void login(std::string_view msg, std::string_view persistedMsg)
+	{
+		logCategoryIfEnabled(LogLevel::INFO, "LOGIN", msg, persistedMsg);
+	}
 	void logout(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "LOGOUT", msg); }
+	void logout(std::string_view msg, std::string_view persistedMsg)
+	{
+		logCategoryIfEnabled(LogLevel::INFO, "LOGOUT", msg, persistedMsg);
+	}
 	void lua(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "LUA", msg); }
 	void startup(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "STARTUP", msg); }
 
@@ -247,12 +255,22 @@ public:
 protected:
 	virtual void log(LogLevel level, std::string_view message) = 0;
 	virtual void logCategory(LogLevel level, std::string_view category, std::string_view message) = 0;
+	virtual void logCategory(LogLevel level, std::string_view category, std::string_view message,
+	                         std::string_view persistedMessage) = 0;
 
 private:
 	void logCategoryIfEnabled(LogLevel level, std::string_view category, std::string_view message)
 	{
 		if (isEnabled(level)) {
 			logCategory(level, category, message);
+		}
+	}
+
+	void logCategoryIfEnabled(LogLevel level, std::string_view category, std::string_view message,
+	                          std::string_view persistedMessage)
+	{
+		if (isEnabled(level)) {
+			logCategory(level, category, message, persistedMessage);
 		}
 	}
 

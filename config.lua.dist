@@ -525,7 +525,9 @@ defaultPriority = "high"
 startupDatabaseOptimization = false
 
 -- Logging
--- logToFile: true = save logs to data/logs/server.log, false = console only (default: false)
+-- logToFile: true = save timestamped logs under data/logs, false = console only (default: false).
+-- Files rotate at 5 MiB with 3 files per server run. LOGIN/LOGOUT file entries retain player names
+-- but mask the final IPv4 octet; the interactive console continues to show the full address.
 logToFile = false
 -- logLevel: trace, debug, info, warning, error, critical (default: info)
 logLevel = "info"

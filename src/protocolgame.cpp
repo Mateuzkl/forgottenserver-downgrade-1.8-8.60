@@ -46,6 +46,36 @@ constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
 constexpr uint32_t STORAGE_ASTRA_HELPER_SMART_FOLLOW = 99998;
 constexpr auto STORE_OUTFIT_OFFERS_PATH = "data/store/gamestore.xml";
 
+std::string anonymizeIPv4ForFile(uint32_t ip)
+{
+	std::string address = convertIPToString(ip);
+	const size_t lastOctet = address.rfind('.');
+	if (lastOctet == std::string::npos) {
+		return "redacted";
+	}
+	address.replace(lastOctet + 1, std::string::npos, "0");
+	return address;
+}
+
+void logPlayerSession(const Player& player, uint32_t ip, bool login)
+{
+	if (!isLoggerInitialized()) {
+		return;
+	}
+
+	const auto formatMessage = [&player](std::string_view address) {
+		return fmt::format("{} | Lvl:{} | Voc:{} | IP:{}", player.getName(), player.getLevel(),
+		                   player.getVocation()->getVocName(), address);
+	};
+	const std::string consoleMessage = formatMessage(convertIPToString(ip));
+	const std::string persistedMessage = formatMessage(anonymizeIPv4ForFile(ip));
+	if (login) {
+		g_logger().login(std::string_view{consoleMessage}, std::string_view{persistedMessage});
+	} else {
+		g_logger().logout(std::string_view{consoleMessage}, std::string_view{persistedMessage});
+	}
+}
+
 using PlayerInventoryKey = std::pair<uint16_t, uint8_t>;
 using PlayerInventoryCounts = std::map<PlayerInventoryKey, uint32_t>;
 
@@ -830,8 +860,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	acceptPackets = true;
-	LOG_LOGIN("{} | Lvl:{} | Voc:{} | IP:{}", player->getName(), player->getLevel(),
-	          player->getVocation()->getVocName(), convertIPToString(player->lastIP));
+	logPlayerSession(*player, player->lastIP, true);
 	g_game.releaseLogin(reservedGuid);
 }
 
@@ -939,8 +968,7 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->resetIdleTime();
 	player->lastPing = OTSYS_TIME();
 	acceptPackets = true;
-	LOG_LOGIN("{} | Lvl:{} | Voc:{} | IP:{}", player->getName(), player->getLevel(),
-	          player->getVocation()->getVocName(), convertIPToString(player->lastIP));
+	logPlayerSession(*player, player->lastIP, true);
 
 	g_creatureEvents->playerReconnect(player.get());
 }
@@ -978,8 +1006,7 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 		}
 	}
 
-	LOG_LOGOUT("{} | Lvl:{} | Voc:{} | IP:{}", player->getName(), player->getLevel(),
-	           player->getVocation()->getVocName(), convertIPToString(player->getIP()));
+	logPlayerSession(*player, player->getIP(), false);
 	player->client->clear();
 	disconnect();
 

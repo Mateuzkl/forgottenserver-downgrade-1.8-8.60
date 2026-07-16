@@ -285,6 +285,12 @@ protected:
 
 	void logCategory(LogLevel level, std::string_view category, std::string_view msg) override
 	{
+		logCategory(level, category, msg, msg);
+	}
+
+	void logCategory(LogLevel level, std::string_view category, std::string_view msg,
+	                 std::string_view persistedMsg) override
+	{
 		if (!isEnabled(level)) {
 			return;
 		}
@@ -296,13 +302,13 @@ protected:
 			}
 
 			std::string plainStorage;
-			std::string_view plainMessage = msg;
-			if (msg.find('\x1b') != std::string_view::npos) {
-				plainStorage = stripAnsi(msg);
+			std::string_view plainMessage = persistedMsg;
+			if (persistedMsg.find('\x1b') != std::string_view::npos) {
+				plainStorage = stripAnsi(persistedMsg);
 				plainMessage = plainStorage;
 			}
 
-			const std::string_view consoleMessage = normalizeConsoleMessage(plainMessage);
+			const std::string_view consoleMessage = normalizeConsoleMessage(msg);
 			if (category == "LOGIN") {
 				consoleLogger_->log(toSpd(level), "   ♟[LOGIN ] {}", consoleMessage);
 			} else if (category == "LOGOUT") {

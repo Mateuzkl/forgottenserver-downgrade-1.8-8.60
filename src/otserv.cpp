@@ -642,11 +642,26 @@ void startServer()
 		// ── Game Data ──
 		consolePrint(cyan_b, "    ⚙  GAME DATA\n");
 		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
-		for (std::string_view dataName : {"Items", "Vocations", "Outfits", "NPC Scripts", "Monster Scripts",
-		                                  "Map", "Houses", "Spawns"}) {
+		for (std::string_view dataName : {"Items", "Vocations", "Outfits", "NPC Scripts", "Monster Scripts", "Map"}) {
 			consolePrint(gray, "    {:<20}", dataName);
 			consolePrint(green_b, "Loaded ✔\n");
 		}
+		const auto printMapLoadStatus = [](std::string_view name, MapLoadStatus status) {
+			consolePrint(gray, "    {:<20}", name);
+			switch (status) {
+				case MapLoadStatus::LOADED:
+					consolePrint(green_b, "Loaded ✔\n");
+					break;
+				case MapLoadStatus::SKIPPED:
+					consolePrint(dark_gray, "Skipped\n");
+					break;
+				case MapLoadStatus::FAILED:
+					consolePrint(red_b, "Failed\n");
+					break;
+			}
+		};
+		printMapLoadStatus("Houses", g_game.map.getHouseLoadStatus());
+		printMapLoadStatus("Spawns", g_game.map.getSpawnLoadStatus());
 		consolePrint(gray, "    {:<20}", "Imbuements");
 		consolePrint(ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED) ? green_b : dark_gray,
 		             "{}\n", ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED) ? "Loaded ✔" : "Disabled");

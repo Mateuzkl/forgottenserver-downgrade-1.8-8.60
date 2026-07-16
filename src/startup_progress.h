@@ -74,6 +74,7 @@ private:
 	void completeCurrentLocked(std::string_view detail);
 	void startVisualPhaseLocked(VisualPhase phase);
 	void renderVisualLocked(bool force = false);
+	bool isVisualStageLocked() const;
 	double visualPercentageLocked() const;
 	double percentageLocked() const;
 
