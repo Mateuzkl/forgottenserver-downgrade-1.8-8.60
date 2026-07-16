@@ -229,11 +229,6 @@ uint64_t PerformanceMetrics::getMonsterIdleMetric(MonsterIdleMetric metric) cons
 	return monsterIdle[static_cast<size_t>(metric)].load(std::memory_order_relaxed);
 }
 
-uint64_t PerformanceMetrics::getMonsterActiveReason(MonsterActiveReason reason) const noexcept
-{
-	return monsterActiveReasons[static_cast<size_t>(reason)].load(std::memory_order_relaxed);
-}
-
 void PerformanceMetrics::maybeReport()
 {
 	if (!isEnabled()) {

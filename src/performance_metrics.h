@@ -141,7 +141,6 @@ public:
 	void recordMonsterIdle(MonsterIdleMetric metric, uint64_t count = 1) noexcept;
 	void recordMonsterActiveReason(MonsterActiveReason reason, uint64_t count = 1) noexcept;
 	[[nodiscard]] uint64_t getMonsterIdleMetric(MonsterIdleMetric metric) const noexcept;
-	[[nodiscard]] uint64_t getMonsterActiveReason(MonsterActiveReason reason) const noexcept;
 	void maybeReport();
 
 private:
