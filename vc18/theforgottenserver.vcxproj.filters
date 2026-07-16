@@ -13,6 +13,7 @@
     <ClCompile Include="..\src\condition.cpp" />
     <ClCompile Include="..\src\configmanager.cpp" />
     <ClCompile Include="..\src\connection.cpp" />
+    <ClCompile Include="..\src\connection_rate_limiter.cpp" />
     <ClCompile Include="..\src\container.cpp" />
     <ClCompile Include="..\src\creature.cpp" />
     <ClCompile Include="..\src\creatureevent.cpp" />
@@ -228,6 +229,7 @@
     <ClInclude Include="..\src\condition.h" />
     <ClInclude Include="..\src\configmanager.h" />
     <ClInclude Include="..\src\connection.h" />
+    <ClInclude Include="..\src\connection_rate_limiter.h" />
     <ClInclude Include="..\src\const.h" />
     <ClInclude Include="..\src\container.h" />
     <ClInclude Include="..\src\creature.h" />
