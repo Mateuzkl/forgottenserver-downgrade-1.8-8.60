@@ -83,7 +83,9 @@ void Creature::setInstanceID(uint32_t id)
 	g_game.map.getSpectators(oldSpectators, getPosition(), true);
 	for (const auto& spectator : oldSpectators.monsters()) {
 		if (spectator.get() != this && spectator->compareInstance(oldInstanceId)) {
-			spectator->onRemoveCreature(this, false);
+			if (Monster* monster = spectator->getMonster()) {
+				monster->onCreatureInstanceChange(this, false);
+			}
 		}
 	}
 
@@ -93,14 +95,16 @@ void Creature::setInstanceID(uint32_t id)
 
 	Thing::setInstanceID(id);
 	if (Monster* monster = getMonster()) {
-		monster->onCreatureMove(this, tile, getPosition(), tile, getPosition(), true);
+		monster->onCreatureInstanceChange(this, true);
 	}
 
 	SpectatorVec newSpectators;
 	g_game.map.getSpectators(newSpectators, getPosition(), true);
 	for (const auto& spectator : newSpectators.monsters()) {
 		if (spectator.get() != this && spectator->compareInstance(id)) {
-			spectator->onCreatureAppear(this, false);
+			if (Monster* monster = spectator->getMonster()) {
+				monster->onCreatureInstanceChange(this, true);
+			}
 		}
 	}
 }
@@ -1292,11 +1296,10 @@ bool Creature::setMaster(Creature* newMaster)
 		newMasterSummons.emplace_back(self);
 	}
 
+	master = std::move(masterRef);
 	if (getInstanceID() != newMaster->getInstanceID()) {
 		setInstanceID(newMaster->getInstanceID());
 	}
-
-	master = std::move(masterRef);
 	return true;
 }
 

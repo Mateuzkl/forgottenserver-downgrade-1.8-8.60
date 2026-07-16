@@ -129,6 +129,22 @@ TEST_CASE(monster_cleans_target_when_instance_changes_at_same_position)
 	CHECK(monster->getIdleStatus());
 }
 
+TEST_CASE(summon_keeps_master_while_adopting_master_instance)
+{
+	WorldFixture world;
+	auto summon = makeMonster();
+	auto master = std::make_shared<TestCreature>();
+	world.place(summon, Position{705, 500, 7});
+	world.place(master, Position{706, 500, 7});
+	master->setInstanceID(11);
+
+	CHECK(summon->setMaster(master.get()));
+
+	CHECK(summon->getMaster() == master);
+	CHECK(summon->getInstanceID() == master->getInstanceID());
+	CHECK(!summon->getIdleStatus());
+}
+
 TEST_CASE(idle_monster_is_removed_from_creature_checks_after_placement)
 {
 	WorldFixture world;

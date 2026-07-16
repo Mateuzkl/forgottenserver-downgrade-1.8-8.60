@@ -445,6 +445,21 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 	}
 }
 
+void Monster::onCreatureInstanceChange(Creature* creature, bool visible)
+{
+	if (!creature) {
+		return;
+	}
+
+	if (creature == this) {
+		updateTargetList();
+	} else if (visible) {
+		onCreatureEnter(creature);
+	} else {
+		onCreatureLeave(creature);
+	}
+}
+
 void Monster::onCreatureSay(Creature* creature, SpeakClasses type, std::string_view text)
 {
 	Creature::onCreatureSay(creature, type, text);
