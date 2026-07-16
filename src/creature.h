@@ -127,6 +127,7 @@ public:
 	virtual std::string getDescription(int32_t lookDistance) const = 0;
 
 	virtual CreatureType_t getType() const = 0;
+	void setInstanceID(uint32_t id);
 
 	// Raw type checks: no shared_from_this(), no dynamic_cast.
 	// Use for type-only checks; use getPlayer()/getMonster()/getNpc() when the pointer is needed.

@@ -60,6 +60,51 @@ Creature::~Creature()
 	eventsList.clear();
 }
 
+void Creature::setInstanceID(uint32_t id)
+{
+	const uint32_t oldInstanceId = getInstanceID();
+	if (oldInstanceId == id) {
+		return;
+	}
+
+	Tile* tile = getTile();
+	if (!tile || isRemoved()) {
+		Thing::setInstanceID(id);
+		return;
+	}
+
+	auto self = weak_from_this().lock();
+	if (!self) {
+		Thing::setInstanceID(id);
+		return;
+	}
+
+	SpectatorVec oldSpectators;
+	g_game.map.getSpectators(oldSpectators, getPosition(), true);
+	for (const auto& spectator : oldSpectators.monsters()) {
+		if (spectator.get() != this && spectator->compareInstance(oldInstanceId)) {
+			spectator->onRemoveCreature(this, false);
+		}
+	}
+
+	if (isRemoved()) {
+		return;
+	}
+
+	Thing::setInstanceID(id);
+	if (Monster* monster = getMonster()) {
+		monster->onCreatureMove(this, tile, getPosition(), tile, getPosition(), true);
+	}
+
+	SpectatorVec newSpectators;
+	g_game.map.getSpectators(newSpectators, getPosition(), true);
+	for (const auto& spectator : newSpectators.monsters()) {
+		if (spectator.get() != this && spectator->compareInstance(id)) {
+			spectator->onCreatureAppear(this, false);
+		}
+	}
+}
+
 bool Creature::canSee(const Position& myPos, const Position& pos, int32_t viewRangeX, int32_t viewRangeY)
 {
 	if (myPos.z <= 7) {
