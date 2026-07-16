@@ -472,8 +472,7 @@ The build command below passes Lua explicitly. Keep these CMake flags when build
 -DCMAKE_CXX_COMPILER=/usr/bin/g++-12 \
 -DLUA_INCLUDE_DIR=/usr/local/include \
 -DLUA_LIBRARY=/usr/local/lib/liblua.a \
--DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl" \
--DLUA_VERSION_STRING=5.5.0
+-DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl"
 ```
 
 Use `-DCMAKE_CXX_COMPILER=/usr/bin/g++-12` on Ubuntu 22.04. Omit it on Ubuntu 24.04 and Ubuntu 26.04 unless you intentionally want to select another compiler.
@@ -517,7 +516,6 @@ cmake -DCMAKE_BUILD_TYPE=Release \
   -DLUA_INCLUDE_DIR=/usr/local/include \
   -DLUA_LIBRARY=/usr/local/lib/liblua.a \
   -DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl" \
-  -DLUA_VERSION_STRING=5.5.0 \
   -DCMAKE_PREFIX_PATH="/usr/local;$HOME/.local" \
   ..
 

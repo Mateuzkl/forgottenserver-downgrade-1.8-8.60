@@ -202,11 +202,6 @@ validate_settings() {
     [[ "${ADMIN_IP}" =~ ^[0-9A-Fa-f:.]+$ ]] || die "IP administrativo inválido: ${ADMIN_IP}"
   fi
 
-  if [[ -n "${DB_PASSWORD}" ]]; then
-    [[ "${DB_PASSWORD}" =~ ^[A-Za-z0-9@%+=_.:-]{12,128}$ ]] ||
-      die "TFS_DB_PASSWORD deve ter 12-128 caracteres seguros (letras, números ou @%+=_.:-)"
-  fi
-
   [[ "${MARIADB_ROOT_PASSWORD}" != *$'\n'* && "${MARIADB_ROOT_PASSWORD}" != *$'\r'* ]] ||
     die "MARIADB_ROOT_PASSWORD não pode conter quebra de linha"
 }
@@ -376,28 +371,59 @@ ask_database_settings() {
 read_lua_string() {
   local key="$1"
   local file="$2"
-  awk -F'"' -v key="${key}" '$1 ~ "^[[:space:]]*" key "[[:space:]]*=" {print $2}' "${file}"
+  local line=""
+  local value=""
+  local char=""
+  local escaped=0
+  local i=0
+
+  LUA_STRING_VALUE=""
+  line="$(grep -m1 -E "^[[:space:]]*${key}[[:space:]]*=[[:space:]]*\"" "${file}" || true)"
+  [[ -n "${line}" ]] || return 1
+  value="${line#*\"}"
+
+  for ((i = 0; i < ${#value}; ++i)); do
+    char="${value:i:1}"
+    if [[ "${escaped}" -eq 1 ]]; then
+      case "${char}" in
+        a) LUA_STRING_VALUE+=$'\a' ;;
+        b) LUA_STRING_VALUE+=$'\b' ;;
+        f) LUA_STRING_VALUE+=$'\f' ;;
+        n) LUA_STRING_VALUE+=$'\n' ;;
+        r) LUA_STRING_VALUE+=$'\r' ;;
+        t) LUA_STRING_VALUE+=$'\t' ;;
+        v) LUA_STRING_VALUE+=$'\v' ;;
+        \\) LUA_STRING_VALUE+='\' ;;
+        '"') LUA_STRING_VALUE+='"' ;;
+        *) return 1 ;;
+      esac
+      escaped=0
+    elif [[ "${char}" == "\\" ]]; then
+      escaped=1
+    elif [[ "${char}" == '"' ]]; then
+      return 0
+    else
+      LUA_STRING_VALUE+="${char}"
+    fi
+  done
+
+  return 1
 }
 
 load_existing_database_settings() {
   local config="${TFS_DIR}/config.lua"
-  local existing=""
-
   [[ -f "${config}" ]] || return 0
 
-  if [[ "${DB_NAME_EXPLICIT}" -eq 0 ]]; then
-    existing="$(read_lua_string mysqlDatabase "${config}")"
-    [[ -z "${existing}" ]] || DB_NAME="${existing}"
+  if [[ "${DB_NAME_EXPLICIT}" -eq 0 ]] && read_lua_string mysqlDatabase "${config}"; then
+    DB_NAME="${LUA_STRING_VALUE}"
   fi
 
-  if [[ "${DB_USER_EXPLICIT}" -eq 0 ]]; then
-    existing="$(read_lua_string mysqlUser "${config}")"
-    [[ -z "${existing}" ]] || DB_USER="${existing}"
+  if [[ "${DB_USER_EXPLICIT}" -eq 0 ]] && read_lua_string mysqlUser "${config}"; then
+    DB_USER="${LUA_STRING_VALUE}"
   fi
 
-  if [[ "${DB_PASSWORD_EXPLICIT}" -eq 0 ]]; then
-    existing="$(read_lua_string mysqlPass "${config}")"
-    [[ -z "${existing}" ]] || DB_PASSWORD="${existing}"
+  if [[ "${DB_PASSWORD_EXPLICIT}" -eq 0 ]] && read_lua_string mysqlPass "${config}"; then
+    DB_PASSWORD="${LUA_STRING_VALUE}"
   fi
 }
 
@@ -454,10 +480,10 @@ write_mariadb_client_config() {
   local client_config="$1"
   {
     printf '[client]\n'
-    printf 'host=127.0.0.1\n'
-    printf 'user=%s\n' "${DB_USER}"
-    printf 'password=%s\n' "${DB_PASSWORD}"
-    printf 'database=%s\n' "${DB_NAME}"
+    printf 'host="127.0.0.1"\n'
+    printf 'user="%s"\n' "$(escape_mariadb_option "${DB_USER}")"
+    printf 'password="%s"\n' "$(escape_mariadb_option "${DB_PASSWORD}")"
+    printf 'database="%s"\n' "$(escape_mariadb_option "${DB_NAME}")"
   } >"${client_config}"
   chmod 0600 "${client_config}"
 }
@@ -466,6 +492,10 @@ escape_mariadb_option() {
   local value="$1"
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  value="${value//$'\b'/\\b}"
   printf '%s' "${value}"
 }
 
@@ -527,18 +557,45 @@ prepare_mariadb_admin() {
 
 import_tfs_schema_if_needed() {
   local client_config="$1"
-  local accounts_exists=""
+  local table=""
+  local actual_tables_output=""
+  local -a expected_tables=()
+  local -a actual_tables=()
+  local -a missing_tables=()
+  local -A actual_table_set=()
 
-  accounts_exists="$(mariadb --defaults-extra-file="${client_config}" -Nse \
-    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='accounts';")"
+  mapfile -t expected_tables < <(sed -nE \
+    's/^CREATE TABLE IF NOT EXISTS[[:space:]]+`?([A-Za-z0-9_]+)`?[[:space:]]*\(.*/\1/p' \
+    "${TFS_DIR}/schema.sql")
+  [[ "${#expected_tables[@]}" -gt 0 ]] || die \
+    "Nenhuma tabela esperada foi encontrada em ${TFS_DIR}/schema.sql"
 
-  if [[ "${accounts_exists}" == "0" ]]; then
+  actual_tables_output="$(mariadb --defaults-extra-file="${client_config}" -Nse \
+    "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE' ORDER BY table_name;")" ||
+    die "Não foi possível consultar as tabelas existentes em ${DB_NAME}"
+  if [[ -n "${actual_tables_output}" ]]; then
+    mapfile -t actual_tables <<<"${actual_tables_output}"
+  fi
+
+  if [[ "${#actual_tables[@]}" -eq 0 ]]; then
     info "Importando ${TFS_DIR}/schema.sql..."
     mariadb --defaults-extra-file="${client_config}" <"${TFS_DIR}/schema.sql"
     ok "Schema do TFS importado"
-  else
-    ok "Banco já possui a tabela accounts; schema não foi importado novamente"
+    return
   fi
+
+  for table in "${actual_tables[@]}"; do
+    actual_table_set["${table}"]=1
+  done
+  for table in "${expected_tables[@]}"; do
+    [[ -n "${actual_table_set[${table}]:-}" ]] || missing_tables+=("${table}")
+  done
+
+  if [[ "${#missing_tables[@]}" -gt 0 ]]; then
+    die "Banco não está vazio e o schema do TFS está incompleto. Tabelas ausentes: ${missing_tables[*]}"
+  fi
+
+  ok "Banco já possui o schema completo do TFS; schema não foi importado novamente"
 }
 
 configure_database() {
@@ -556,10 +613,16 @@ configure_database() {
   fi
 
   prepare_mariadb_admin
+  local password_hex=""
+  password_hex="$(printf '%s' "${DB_PASSWORD}" | od -An -v -tx1 | tr -d ' \n')"
   {
     printf "CREATE DATABASE IF NOT EXISTS \`%s\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n" "${DB_NAME}"
-    printf "CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED BY '%s';\n" "${DB_USER}" "${DB_PASSWORD}"
-    printf "ALTER USER '%s'@'localhost' IDENTIFIED BY '%s';\n" "${DB_USER}" "${DB_PASSWORD}"
+    printf "SET SESSION sql_mode = '';\n"
+    printf "SET @tfs_password = X'%s';\n" "${password_hex}"
+    printf "SET @tfs_statement = CONCAT('CREATE USER IF NOT EXISTS ''%s''@''localhost'' IDENTIFIED BY ', QUOTE(@tfs_password));\n" "${DB_USER}"
+    printf 'PREPARE tfs_user_statement FROM @tfs_statement; EXECUTE tfs_user_statement; DEALLOCATE PREPARE tfs_user_statement;\n'
+    printf "SET @tfs_statement = CONCAT('ALTER USER ''%s''@''localhost'' IDENTIFIED BY ', QUOTE(@tfs_password));\n" "${DB_USER}"
+    printf 'PREPARE tfs_user_statement FROM @tfs_statement; EXECUTE tfs_user_statement; DEALLOCATE PREPARE tfs_user_statement;\n'
     printf "GRANT ALL PRIVILEGES ON \`%s\`.* TO '%s'@'localhost';\n" "${DB_NAME}" "${DB_USER}"
     printf 'FLUSH PRIVILEGES;\n'
   } | mariadb_admin
@@ -569,16 +632,44 @@ configure_database() {
   import_tfs_schema_if_needed "${client_config}"
 }
 
+escape_lua_string() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\a'/\\a}"
+  value="${value//$'\b'/\\b}"
+  value="${value//$'\f'/\\f}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  value="${value//$'\v'/\\v}"
+  printf '%s' "${value}"
+}
+
 replace_lua_setting() {
   local file="$1"
   local key="$2"
   local value="$3"
+  local escaped_value=""
+  local replacement=""
+  local staged_file=""
 
-  if grep -Eq "^${key}[[:space:]]*=" "${file}"; then
-    sed -i -E "s|^${key}[[:space:]]*=.*$|${key} = \"${value}\"|" "${file}"
-  else
-    printf '\n%s = "%s"\n' "${key}" "${value}" >>"${file}"
-  fi
+  escaped_value="$(escape_lua_string "${value}")"
+  replacement="${key} = \"${escaped_value}\""
+  staged_file="$(mktemp "${TMP_DIR}/lua-setting.XXXXXXXX")"
+
+  LUA_SETTING_KEY="${key}" LUA_SETTING_REPLACEMENT="${replacement}" awk '
+    BEGIN { pattern = "^[[:space:]]*" ENVIRON["LUA_SETTING_KEY"] "[[:space:]]*=" }
+    $0 ~ pattern { print ENVIRON["LUA_SETTING_REPLACEMENT"]; replaced = 1; next }
+    { print }
+    END {
+      if (!replaced) {
+        print ""
+        print ENVIRON["LUA_SETTING_REPLACEMENT"]
+      }
+    }
+  ' "${file}" >"${staged_file}"
+  mv -- "${staged_file}" "${file}"
 }
 
 configure_tfs() {
@@ -710,6 +801,11 @@ write_installer_ip() {
   "${SUDO[@]}" install -o www-data -g www-data -m 0640 "${ip_file}" "${WEB_ROOT}/install/ip.txt"
 }
 
+installer_is_locked() {
+  "${SUDO[@]}" find "${WEB_ROOT}/install" -maxdepth 1 -type f \
+    -name 'ip.txt.disabled.*' -print -quit 2>/dev/null | grep -q .
+}
+
 deploy_myaac() {
   section "Instalando ${MYAAC_TAG} de slawkens/myaac"
 
@@ -726,7 +822,11 @@ deploy_myaac() {
 
   if [[ "${current_tag}" == "${MYAAC_TAG}" && "${FORCE_DEPLOY}" -eq 0 ]]; then
     ok "${MYAAC_TAG} já está instalada; arquivos preservados"
-    write_installer_ip
+    if installer_is_locked; then
+      ok "Instalador MyAAC permanece bloqueado"
+    else
+      write_installer_ip
+    fi
     set_myaac_permissions
     return
   fi
@@ -783,11 +883,31 @@ configure_nginx() {
 
   local site_file="${TMP_DIR}/${SITE_NAME}.conf"
   local target="/etc/nginx/sites-available/${SITE_NAME}"
+  local listen_default=""
+  local enabled_site=""
+  local resolved_site=""
+
+  if [[ "${DOMAIN}" == "_" ]]; then
+    for enabled_site in /etc/nginx/sites-enabled/*; do
+      [[ -e "${enabled_site}" || -L "${enabled_site}" ]] || continue
+      if [[ "${enabled_site}" == "/etc/nginx/sites-enabled/default" && -L "${enabled_site}" ]]; then
+        continue
+      fi
+      resolved_site="$(readlink -f -- "${enabled_site}" 2>/dev/null || true)"
+      [[ "${resolved_site}" == "${target}" ]] && continue
+      if "${SUDO[@]}" grep -Eq \
+        '^[[:space:]]*listen[[:space:]]+([^;[:space:]]*:)?80[[:space:]][^;]*default_server([[:space:]]|;)' \
+        "${enabled_site}"; then
+        die "Outro site Nginx já usa default_server na porta 80: ${enabled_site}"
+      fi
+    done
+    listen_default=" default_server"
+  fi
 
   cat >"${site_file}" <<EOF
 server {
-    listen 80;
-    listen [::]:80;
+    listen 80${listen_default};
+    listen [::]:80${listen_default};
     server_name ${DOMAIN};
 
     root ${WEB_ROOT};
@@ -916,7 +1036,7 @@ verify_installation() {
   [[ -f "${TFS_DIR}/config.lua" ]] || die "config.lua do TFS ausente"
 
   local http_code
-  http_code="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: localhost' http://127.0.0.1/ || true)"
+  http_code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: ${DOMAIN}" http://127.0.0.1/ || true)"
   case "${http_code}" in
     200|301|302) ok "Nginx respondeu HTTP ${http_code}" ;;
     *) die "Resposta HTTP inesperada do MyAAC: ${http_code:-sem resposta}" ;;
