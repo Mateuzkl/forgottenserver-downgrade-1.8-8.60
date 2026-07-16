@@ -614,6 +614,11 @@ bool Monster::isValidKnownTarget(const std::shared_ptr<Creature>& creature) cons
 
 bool Monster::pruneInvalidTargetState()
 {
+	const bool metricsEnabled = g_performanceMetrics.isEnabled();
+	if (metricsEnabled) {
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::PruneCalls);
+	}
+
 	const size_t oldFriendCount = friendList.size();
 	std::erase_if(friendList,
 	              [this](const auto& weakRef) { return !isValidKnownFriend(weakRef.lock()); });
@@ -621,6 +626,12 @@ bool Monster::pruneInvalidTargetState()
 	std::erase_if(targetList,
 	              [this](const auto& weakRef) { return !isValidKnownTarget(weakRef.lock()); });
 	bool changed = friendList.size() != oldFriendCount || targetList.size() != oldTargetCount;
+	if (metricsEnabled) {
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::FriendsPruned,
+		                                       oldFriendCount - friendList.size());
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::TargetsPruned,
+		                                       oldTargetCount - targetList.size());
+	}
 
 	const auto isKnownTarget = [this](const Creature* creature) {
 		return std::any_of(targetList.begin(), targetList.end(), [creature](const auto& weakRef) {
@@ -632,6 +643,9 @@ bool Monster::pruneInvalidTargetState()
 		if (!isKnownTarget(attacked.get()) || !isValidKnownTarget(attacked)) {
 			setAttackedCreature(nullptr);
 			changed = true;
+			if (metricsEnabled) {
+				g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::AttackedCleared);
+			}
 		}
 	} else {
 		attackedCreature.reset();
@@ -643,6 +657,9 @@ bool Monster::pruneInvalidTargetState()
 		if (!followsLiveMaster && (!isKnownTarget(follow.get()) || !isValidKnownTarget(follow))) {
 			setFollowCreature(nullptr);
 			changed = true;
+			if (metricsEnabled) {
+				g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::FollowCleared);
+			}
 		}
 	} else {
 		followCreature.reset();
@@ -1401,14 +1418,21 @@ void Monster::setIdle(bool idle)
 	}
 
 	if (isIdle == idle) {
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::SameStateCalls);
 		return;
 	}
 
 	isIdle = idle;
 
 	if (!isIdle) {
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::TransitionToActive);
 		g_game.addCreatureCheck(this);
 	} else {
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::TransitionToIdle);
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::OnIdleStatusCalls);
+		if (!damageMap.empty()) {
+			g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::DamageMapClears);
+		}
 		onIdleStatus();
 		clearTargetList();
 		clearFriendList();
@@ -1435,7 +1459,42 @@ bool Monster::shouldBeIdle() const
 
 void Monster::updateIdleStatus()
 {
-	setIdle(shouldBeIdle());
+	const bool idle = shouldBeIdle();
+	if (g_performanceMetrics.isEnabled()) {
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::RefreshCalls);
+		g_performanceMetrics.recordMonsterIdle(idle ? MonsterIdleMetric::DecisionTrue
+		                                                : MonsterIdleMetric::DecisionFalse);
+
+		if (!idle) {
+			if (isSummon()) {
+				g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::BlockedBySummon);
+				g_performanceMetrics.recordMonsterActiveReason(MonsterActiveReason::Summon);
+			} else if (!targetList.empty()) {
+				const bool factionTarget = std::ranges::any_of(targetList, [this](const auto& weakRef) {
+					auto target = weakRef.lock();
+					return target && isFactionCombatTarget(target.get());
+				});
+				g_performanceMetrics.recordMonsterIdle(factionTarget ? MonsterIdleMetric::BlockedByFaction
+				                                                        : MonsterIdleMetric::BlockedByTarget);
+				g_performanceMetrics.recordMonsterActiveReason(factionTarget ? MonsterActiveReason::FactionTarget
+				                                                               : MonsterActiveReason::TargetList);
+			} else {
+				g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::BlockedByCondition);
+				g_performanceMetrics.recordMonsterActiveReason(MonsterActiveReason::AggressiveCondition);
+			}
+		} else if (!isIdle) {
+			if (!attackedCreature.expired()) {
+				g_performanceMetrics.recordMonsterActiveReason(MonsterActiveReason::AttackedCreature);
+			} else if (!followCreature.expired()) {
+				g_performanceMetrics.recordMonsterActiveReason(MonsterActiveReason::FollowCreature);
+			} else {
+				g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::ActiveWithoutReason);
+				g_performanceMetrics.recordMonsterActiveReason(MonsterActiveReason::Unknown);
+			}
+		}
+	}
+
+	setIdle(idle);
 }
 
 void Monster::onAddCondition(ConditionType_t)

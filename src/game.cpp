@@ -5928,7 +5928,11 @@ void Game::addCreatureCheck(Creature* creature)
 		return;
 	}
 
+	const bool wasEnabled = creature->creatureCheck;
 	creature->creatureCheck = true;
+	if (!wasEnabled && creature->getMonster()) {
+		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::CreatureCheckAdds);
+	}
 
 	if (creature->inCheckCreaturesVector) {
 		// already in a vector
@@ -5958,6 +5962,9 @@ void Game::removeCreatureCheck(Creature* creature)
 	}
 
 	if (creature->inCheckCreaturesVector) {
+		if (creature->creatureCheck && creature->getMonster()) {
+			g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::CreatureCheckRemoves);
+		}
 		creature->creatureCheck = false;
 	}
 }

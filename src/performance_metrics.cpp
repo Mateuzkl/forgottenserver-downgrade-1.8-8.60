@@ -28,6 +28,19 @@ constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Co
 	"Combat::area.applyTargets", "Creature::executeConditions",
 };
 
+constexpr std::array<std::string_view, static_cast<size_t>(MonsterIdleMetric::Count)> MONSTER_IDLE_METRIC_NAMES = {
+	"refresh_calls", "decision_true", "decision_false", "transition_to_idle", "transition_to_active",
+	"same_state_calls", "prune_calls", "targets_pruned", "friends_pruned", "attacked_cleared",
+	"follow_cleared", "blocked_by_target", "blocked_by_condition", "blocked_by_summon", "blocked_by_faction",
+	"active_without_reason", "on_idle_status_calls", "damage_map_clears", "creature_check_adds",
+	"creature_check_removes",
+};
+
+constexpr std::array<std::string_view, static_cast<size_t>(MonsterActiveReason::Count)> MONSTER_ACTIVE_REASON_NAMES = {
+	"target_list", "attacked_creature", "follow_creature", "aggressive_condition", "summon",
+	"faction_target", "unknown",
+};
+
 size_t histogramIndex(uint64_t nanoseconds) noexcept
 {
 	return std::min<size_t>(std::bit_width(nanoseconds), 63);
@@ -197,6 +210,30 @@ void PerformanceMetrics::recordAreaCombat(const AreaCombatMetricsSample& sample,
 	}
 }
 
+void PerformanceMetrics::recordMonsterIdle(MonsterIdleMetric metric, uint64_t count) noexcept
+{
+	if (isEnabled()) {
+		monsterIdle[static_cast<size_t>(metric)].fetch_add(count, std::memory_order_relaxed);
+	}
+}
+
+void PerformanceMetrics::recordMonsterActiveReason(MonsterActiveReason reason, uint64_t count) noexcept
+{
+	if (isEnabled()) {
+		monsterActiveReasons[static_cast<size_t>(reason)].fetch_add(count, std::memory_order_relaxed);
+	}
+}
+
+uint64_t PerformanceMetrics::getMonsterIdleMetric(MonsterIdleMetric metric) const noexcept
+{
+	return monsterIdle[static_cast<size_t>(metric)].load(std::memory_order_relaxed);
+}
+
+uint64_t PerformanceMetrics::getMonsterActiveReason(MonsterActiveReason reason) const noexcept
+{
+	return monsterActiveReasons[static_cast<size_t>(reason)].load(std::memory_order_relaxed);
+}
+
 void PerformanceMetrics::maybeReport()
 {
 	if (!isEnabled()) {
@@ -268,6 +305,34 @@ void PerformanceMetrics::maybeReport()
 			areaCombat.impactEffects.exchange(0, std::memory_order_relaxed),
 			areaCombat.fieldsCreated.exchange(0, std::memory_order_relaxed),
 			areaCombat.effectRecipients.exchange(0, std::memory_order_relaxed));
+	}
+
+	bool hasMonsterIdleMetrics = false;
+	std::array<uint64_t, static_cast<size_t>(MonsterIdleMetric::Count)> monsterIdleValues{};
+	for (size_t i = 0; i < monsterIdleValues.size(); ++i) {
+		monsterIdleValues[i] = monsterIdle[i].exchange(0, std::memory_order_relaxed);
+		hasMonsterIdleMetrics = hasMonsterIdleMetrics || monsterIdleValues[i] != 0;
+	}
+	if (hasMonsterIdleMetrics) {
+		report += "[Perf] monster_idle";
+		for (size_t i = 0; i < monsterIdleValues.size(); ++i) {
+			report += fmt::format(" {}={}", MONSTER_IDLE_METRIC_NAMES[i], monsterIdleValues[i]);
+		}
+		report += '\n';
+	}
+
+	bool hasMonsterActiveReasons = false;
+	std::array<uint64_t, static_cast<size_t>(MonsterActiveReason::Count)> monsterActiveReasonValues{};
+	for (size_t i = 0; i < monsterActiveReasonValues.size(); ++i) {
+		monsterActiveReasonValues[i] = monsterActiveReasons[i].exchange(0, std::memory_order_relaxed);
+		hasMonsterActiveReasons = hasMonsterActiveReasons || monsterActiveReasonValues[i] != 0;
+	}
+	if (hasMonsterActiveReasons) {
+		report += "[Perf] monster_active_reason";
+		for (size_t i = 0; i < monsterActiveReasonValues.size(); ++i) {
+			report += fmt::format(" {}={}", MONSTER_ACTIVE_REASON_NAMES[i], monsterActiveReasonValues[i]);
+		}
+		report += '\n';
 	}
 
 	AreaCombatMetricsSample slowestAreaSample;

@@ -46,6 +46,43 @@ enum class PerformanceMetric : uint8_t
 	Count,
 };
 
+enum class MonsterIdleMetric : uint8_t
+{
+	RefreshCalls,
+	DecisionTrue,
+	DecisionFalse,
+	TransitionToIdle,
+	TransitionToActive,
+	SameStateCalls,
+	PruneCalls,
+	TargetsPruned,
+	FriendsPruned,
+	AttackedCleared,
+	FollowCleared,
+	BlockedByTarget,
+	BlockedByCondition,
+	BlockedBySummon,
+	BlockedByFaction,
+	ActiveWithoutReason,
+	OnIdleStatusCalls,
+	DamageMapClears,
+	CreatureCheckAdds,
+	CreatureCheckRemoves,
+	Count,
+};
+
+enum class MonsterActiveReason : uint8_t
+{
+	TargetList,
+	AttackedCreature,
+	FollowCreature,
+	AggressiveCondition,
+	Summon,
+	FactionTarget,
+	Unknown,
+	Count,
+};
+
 struct AreaCombatMetricsSample
 {
 	uint64_t buildTilesNanoseconds = 0;
@@ -101,6 +138,10 @@ public:
 	void recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead, uint64_t pathLength) noexcept;
 	void recordAreaCombat(const AreaCombatMetricsSample& sample, std::string_view monsterName,
 	                      std::string_view spellName) noexcept;
+	void recordMonsterIdle(MonsterIdleMetric metric, uint64_t count = 1) noexcept;
+	void recordMonsterActiveReason(MonsterActiveReason reason, uint64_t count = 1) noexcept;
+	[[nodiscard]] uint64_t getMonsterIdleMetric(MonsterIdleMetric metric) const noexcept;
+	[[nodiscard]] uint64_t getMonsterActiveReason(MonsterActiveReason reason) const noexcept;
 	void maybeReport();
 
 private:
@@ -177,6 +218,8 @@ private:
 	ReactorData reactor;
 	PathData path;
 	AreaCombatData areaCombat;
+	std::array<std::atomic<uint64_t>, static_cast<size_t>(MonsterIdleMetric::Count)> monsterIdle{};
+	std::array<std::atomic<uint64_t>, static_cast<size_t>(MonsterActiveReason::Count)> monsterActiveReasons{};
 	SlowestReactorCallback slowestReactorCallback;
 	SlowestAreaCombat slowestAreaCombat;
 	std::atomic_bool enabled{false};
