@@ -613,17 +613,20 @@ configure_database() {
   fi
 
   prepare_mariadb_admin
+  local db_host=""
   local password_hex=""
   password_hex="$(printf '%s' "${DB_PASSWORD}" | od -An -v -tx1 | tr -d ' \n')"
   {
     printf "CREATE DATABASE IF NOT EXISTS \`%s\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n" "${DB_NAME}"
     printf "SET SESSION sql_mode = '';\n"
     printf "SET @tfs_password = X'%s';\n" "${password_hex}"
-    printf "SET @tfs_statement = CONCAT('CREATE USER IF NOT EXISTS ''%s''@''localhost'' IDENTIFIED BY ', QUOTE(@tfs_password));\n" "${DB_USER}"
-    printf 'PREPARE tfs_user_statement FROM @tfs_statement; EXECUTE tfs_user_statement; DEALLOCATE PREPARE tfs_user_statement;\n'
-    printf "SET @tfs_statement = CONCAT('ALTER USER ''%s''@''localhost'' IDENTIFIED BY ', QUOTE(@tfs_password));\n" "${DB_USER}"
-    printf 'PREPARE tfs_user_statement FROM @tfs_statement; EXECUTE tfs_user_statement; DEALLOCATE PREPARE tfs_user_statement;\n'
-    printf "GRANT ALL PRIVILEGES ON \`%s\`.* TO '%s'@'localhost';\n" "${DB_NAME}" "${DB_USER}"
+    for db_host in localhost 127.0.0.1; do
+      printf "SET @tfs_statement = CONCAT('CREATE USER IF NOT EXISTS ''%s''@''%s'' IDENTIFIED BY ', QUOTE(@tfs_password));\n" "${DB_USER}" "${db_host}"
+      printf 'PREPARE tfs_user_statement FROM @tfs_statement; EXECUTE tfs_user_statement; DEALLOCATE PREPARE tfs_user_statement;\n'
+      printf "SET @tfs_statement = CONCAT('ALTER USER ''%s''@''%s'' IDENTIFIED BY ', QUOTE(@tfs_password));\n" "${DB_USER}" "${db_host}"
+      printf 'PREPARE tfs_user_statement FROM @tfs_statement; EXECUTE tfs_user_statement; DEALLOCATE PREPARE tfs_user_statement;\n'
+      printf "GRANT ALL PRIVILEGES ON \`%s\`.* TO '%s'@'%s';\n" "${DB_NAME}" "${DB_USER}" "${db_host}"
+    done
     printf 'FLUSH PRIVILEGES;\n'
   } | mariadb_admin
 
@@ -806,6 +809,19 @@ installer_is_locked() {
     -name 'ip.txt.disabled.*' -print -quit 2>/dev/null | grep -q .
 }
 
+restore_installer_lock() {
+  local backup_root="$1"
+  local lock_marker=""
+
+  lock_marker="$("${SUDO[@]}" find "${backup_root}/install" -maxdepth 1 -type f \
+    -name 'ip.txt.disabled.*' -print -quit 2>/dev/null)"
+  [[ -n "${lock_marker}" ]] || die "Marcador de bloqueio do instalador não foi encontrado no backup"
+
+  "${SUDO[@]}" install -d -o www-data -g www-data -m 0750 "${WEB_ROOT}/install"
+  "${SUDO[@]}" rm -f -- "${WEB_ROOT}/install/ip.txt"
+  "${SUDO[@]}" cp -a -- "${lock_marker}" "${WEB_ROOT}/install/$(basename "${lock_marker}")"
+}
+
 deploy_myaac() {
   section "Instalando ${MYAAC_TAG} de slawkens/myaac"
 
@@ -814,15 +830,19 @@ deploy_myaac() {
   local extract_root="${TMP_DIR}/extract"
   local extracted_dir=""
   local current_tag=""
+  local installer_locked=0
   local saved_config="${TMP_DIR}/config.local.php"
 
   if "${SUDO[@]}" test -f "${WEB_ROOT}/.myaac-release"; then
     current_tag="$("${SUDO[@]}" cat "${WEB_ROOT}/.myaac-release")"
   fi
+  if installer_is_locked; then
+    installer_locked=1
+  fi
 
   if [[ "${current_tag}" == "${MYAAC_TAG}" && "${FORCE_DEPLOY}" -eq 0 ]]; then
     ok "${MYAAC_TAG} já está instalada; arquivos preservados"
-    if installer_is_locked; then
+    if [[ "${installer_locked}" -eq 1 ]]; then
       ok "Instalador MyAAC permanece bloqueado"
     else
       write_installer_ip
@@ -873,7 +893,12 @@ deploy_myaac() {
   printf '%s\n' "${MYAAC_TAG}" >"${TMP_DIR}/.myaac-release"
   "${SUDO[@]}" install -o www-data -g www-data -m 0640 "${TMP_DIR}/.myaac-release" "${WEB_ROOT}/.myaac-release"
 
-  write_installer_ip
+  if [[ "${installer_locked}" -eq 1 ]]; then
+    restore_installer_lock "${BACKUP_PATH}"
+    ok "Bloqueio do instalador MyAAC preservado após atualização"
+  else
+    write_installer_ip
+  fi
   set_myaac_permissions
   ok "MyAAC instalado em ${WEB_ROOT}"
 }
