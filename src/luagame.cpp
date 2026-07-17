@@ -1208,21 +1208,23 @@ int luaGameSetWorldTime(lua_State* L)
 
 int luaGameRegisterBestiaryMonsterData(lua_State* L)
 {
-	// Game.registerBestiaryMonsterData(raceId, name, toKill, secondUnlock, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
+	// Game.registerBestiaryMonsterData(raceId, name, toKill, firstUnlock, secondUnlock, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
 	BestiaryCreatureInfo info;
 	info.raceId = getInteger<uint16_t>(L, 1);
 	info.name = getString(L, 2);
 	info.toKill = getInteger<uint32_t>(L, 3);
-	if (lua_gettop(L) >= 11) {
-		info.secondUnlock = getInteger<uint32_t>(L, 4);
-		info.charmPoints = getInteger<uint16_t>(L, 5);
-		info.lookType = getInteger<uint16_t>(L, 6, 0);
-		info.lookHead = getInteger<uint8_t>(L, 7, 0);
-		info.lookBody = getInteger<uint8_t>(L, 8, 0);
-		info.lookLegs = getInteger<uint8_t>(L, 9, 0);
-		info.lookFeet = getInteger<uint8_t>(L, 10, 0);
-		info.lookAddons = getInteger<uint8_t>(L, 11, 0);
+	if (lua_gettop(L) >= 12) {
+		info.firstUnlock = getInteger<uint32_t>(L, 4);
+		info.secondUnlock = getInteger<uint32_t>(L, 5);
+		info.charmPoints = getInteger<uint16_t>(L, 6);
+		info.lookType = getInteger<uint16_t>(L, 7, 0);
+		info.lookHead = getInteger<uint8_t>(L, 8, 0);
+		info.lookBody = getInteger<uint8_t>(L, 9, 0);
+		info.lookLegs = getInteger<uint8_t>(L, 10, 0);
+		info.lookFeet = getInteger<uint8_t>(L, 11, 0);
+		info.lookAddons = getInteger<uint8_t>(L, 12, 0);
 	} else {
+		info.firstUnlock = 1;
 		info.secondUnlock = info.toKill;
 		info.charmPoints = getInteger<uint16_t>(L, 4);
 		info.lookType = getInteger<uint16_t>(L, 5, 0);
@@ -1301,6 +1303,30 @@ int luaGameAddBestiaryKill(lua_State* L)
 	lua_pushinteger(L, oldCount);
 	lua_pushinteger(L, newCount);
 	return 2;
+}
+
+int luaGameTakeBestiaryKill(lua_State* L)
+{
+	// Game.takeBestiaryKill(player, raceId, victimId) -> handled, oldCount, newCount, charmPointsAwarded
+	Player* player = getPlayer(L, 1);
+	const uint16_t raceId = getInteger<uint16_t>(L, 2);
+	const uint32_t victimId = getInteger<uint32_t>(L, 3);
+	if (!player) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	const auto result = player->takePendingBestiaryKill(victimId, raceId);
+	if (!result) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	pushBoolean(L, true);
+	lua_pushinteger(L, result->oldCount);
+	lua_pushinteger(L, result->newCount);
+	pushBoolean(L, result->charmPointsAwarded);
+	return 4;
 }
 
 int luaGameSetBestiaryKillCount(lua_State* L)
@@ -1392,6 +1418,7 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "getBestiaryKills", luaGameGetBestiaryKills);
 	registerMethod("Game", "getBestiaryKillCount", luaGameGetBestiaryKillCount);
 	registerMethod("Game", "addBestiaryKill", luaGameAddBestiaryKill);
+	registerMethod("Game", "takeBestiaryKill", luaGameTakeBestiaryKill);
 	registerMethod("Game", "setBestiaryKillCount", luaGameSetBestiaryKillCount);
 	registerMethod("Game", "getBestiaryCharmPoints", luaGameGetBestiaryCharmPoints);
 	registerMethod("Game", "addBestiaryCharmPoints", luaGameAddBestiaryCharmPoints);
