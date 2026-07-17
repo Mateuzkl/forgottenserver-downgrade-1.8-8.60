@@ -18,6 +18,7 @@
 #include "talkaction.h"
 #include "tools.h"
 #include "logger.h"
+#include "market.h"
 #include "zones.h"
 #include <fmt/format.h>
 
@@ -1206,6 +1207,196 @@ int luaGameSetWorldTime(lua_State* L)
 	return 1;
 }
 
+void pushMarketOffer(lua_State* L, const MarketOfferRecord& offer)
+{
+	lua_createtable(L, 0, 12);
+	setField(L, "id", offer.id);
+	setField(L, "playerId", offer.playerId);
+	setField(L, "sale", offer.sale);
+	setField(L, "itemId", offer.itemId);
+	setField(L, "amount", offer.amount);
+	setField(L, "created", offer.created);
+	pushBoolean(L, offer.anonymous);
+	lua_setfield(L, -2, "anonymous");
+	setField(L, "price", offer.price);
+	setField(L, "tier", offer.tier);
+	if (!offer.attributes.empty()) {
+		setField(L, "attributes", offer.attributes);
+	}
+	setField(L, "playerName", offer.playerName);
+	setField(L, "state", offer.state);
+}
+
+void pushMarketOffers(lua_State* L, const std::vector<MarketOfferRecord>& offers)
+{
+	lua_createtable(L, static_cast<int>(offers.size()), 0);
+	int index = 0;
+	for (const MarketOfferRecord& offer : offers) {
+		pushMarketOffer(L, offer);
+		lua_rawseti(L, -2, ++index);
+	}
+}
+
+int luaGameGetMarketOfferCount(lua_State* L)
+{
+	// Game.getMarketOfferCount(playerId)
+	lua_pushinteger(L, Market::getOfferCount(getInteger<uint32_t>(L, 1)));
+	return 1;
+}
+
+int luaGameGetMarketOffer(lua_State* L)
+{
+	// Game.getMarketOffer(offerId)
+	const auto offer = Market::getOffer(getInteger<uint32_t>(L, 1));
+	if (!offer) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushMarketOffer(L, *offer);
+	return 1;
+}
+
+int luaGameGetOwnMarketOffers(lua_State* L)
+{
+	// Game.getOwnMarketOffers(playerId[, limit = 250])
+	pushMarketOffers(L, Market::getOwnOffers(
+		getInteger<uint32_t>(L, 1), getInteger<uint32_t>(L, 2, Market::MAX_PACKET_OFFERS)));
+	return 1;
+}
+
+int luaGameGetItemMarketOffers(lua_State* L)
+{
+	// Game.getItemMarketOffers(itemId, sale[, limit = 250])
+	pushMarketOffers(L, Market::getItemOffers(
+		getInteger<uint16_t>(L, 1), getInteger<uint8_t>(L, 2),
+		getInteger<uint32_t>(L, 3, Market::MAX_PACKET_OFFERS)));
+	return 1;
+}
+
+int luaGameGetExpiredMarketOffers(lua_State* L)
+{
+	// Game.getExpiredMarketOffers(createdBefore[, limit = 100])
+	pushMarketOffers(L, Market::getExpiredOffers(
+		getInteger<uint32_t>(L, 1), getInteger<uint32_t>(L, 2, Market::MAX_EXPIRED_OFFERS)));
+	return 1;
+}
+
+int luaGameGetMarketHistory(lua_State* L)
+{
+	// Game.getMarketHistory(playerId[, limit = 250])
+	pushMarketOffers(L, Market::getHistory(
+		getInteger<uint32_t>(L, 1), getInteger<uint32_t>(L, 2, Market::MAX_PACKET_OFFERS)));
+	return 1;
+}
+
+int luaGameGetMarketStatistics(lua_State* L)
+{
+	// Game.getMarketStatistics(itemId, sale, firstDay[, limit = 30])
+	const auto statistics = Market::getStatistics(
+		getInteger<uint16_t>(L, 1), getInteger<uint8_t>(L, 2), getInteger<uint32_t>(L, 3),
+		getInteger<uint32_t>(L, 4, Market::MAX_STATISTIC_DAYS));
+	lua_createtable(L, static_cast<int>(statistics.size()), 0);
+	int index = 0;
+	for (const MarketStatisticRecord& statistic : statistics) {
+		lua_createtable(L, 0, 5);
+		setField(L, "day", statistic.day);
+		setField(L, "transactions", statistic.transactions);
+		setField(L, "totalPrice", statistic.totalPrice);
+		setField(L, "highestPrice", statistic.highestPrice);
+		setField(L, "lowestPrice", statistic.lowestPrice);
+		lua_rawseti(L, -2, ++index);
+	}
+	return 1;
+}
+
+int luaGameCreateMarketOffer(lua_State* L)
+{
+	// Game.createMarketOffer(playerId, sale, itemId, amount, created, anonymous, price, tier[, attributes])
+	MarketOfferRecord offer;
+	offer.playerId = getInteger<uint32_t>(L, 1);
+	offer.sale = getInteger<uint8_t>(L, 2);
+	offer.itemId = getInteger<uint16_t>(L, 3);
+	offer.amount = getInteger<uint32_t>(L, 4);
+	offer.created = getInteger<uint32_t>(L, 5);
+	offer.anonymous = getBoolean(L, 6);
+	offer.price = getInteger<uint32_t>(L, 7);
+	offer.tier = Market::normalizeTier(getInteger<uint32_t>(L, 8));
+	if (lua_isstring(L, 9)) {
+		offer.attributes = getString(L, 9);
+	}
+	pushBoolean(L, Market::createOffer(offer));
+	return 1;
+}
+
+int luaGameClaimMarketOffer(lua_State* L)
+{
+	// Game.claimMarketOffer(offerId, expectedAmount, acceptedAmount[, ownerId = 0])
+	pushBoolean(L, Market::claimOffer(
+		getInteger<uint32_t>(L, 1), getInteger<uint32_t>(L, 2), getInteger<uint32_t>(L, 3),
+		getInteger<uint32_t>(L, 4, 0)));
+	return 1;
+}
+
+int luaGameRestoreMarketOffer(lua_State* L)
+{
+	// Game.restoreMarketOffer(id, playerId, sale, itemId, amount, created, anonymous, price, tier, attributes,
+	//                         acceptedAmount)
+	MarketOfferRecord offer;
+	offer.id = getInteger<uint32_t>(L, 1);
+	offer.playerId = getInteger<uint32_t>(L, 2);
+	offer.sale = getInteger<uint8_t>(L, 3);
+	offer.itemId = getInteger<uint16_t>(L, 4);
+	offer.amount = getInteger<uint32_t>(L, 5);
+	offer.created = getInteger<uint32_t>(L, 6);
+	offer.anonymous = getBoolean(L, 7);
+	offer.price = getInteger<uint32_t>(L, 8);
+	offer.tier = Market::normalizeTier(getInteger<uint32_t>(L, 9));
+	if (lua_isstring(L, 10)) {
+		offer.attributes = getString(L, 10);
+	}
+	pushBoolean(L, Market::restoreOffer(offer, getInteger<uint32_t>(L, 11)));
+	return 1;
+}
+
+int luaGameAddMarketHistory(lua_State* L)
+{
+	// Game.addMarketHistory(playerId, sale, itemId, amount, price, tier, expiresAt, inserted, state)
+	pushBoolean(L, Market::addHistory(
+		getInteger<uint32_t>(L, 1), getInteger<uint8_t>(L, 2), getInteger<uint16_t>(L, 3),
+		getInteger<uint32_t>(L, 4), getInteger<uint32_t>(L, 5), getInteger<uint8_t>(L, 6),
+		getInteger<uint32_t>(L, 7), getInteger<uint32_t>(L, 8), getInteger<uint8_t>(L, 9)));
+	return 1;
+}
+
+int luaGameRefreshMarketStatistics(lua_State* L)
+{
+	// Game.refreshMarketStatistics(firstDay, acceptedState)
+	pushBoolean(L, Market::refreshStatistics(
+		getInteger<uint32_t>(L, 1), getInteger<uint8_t>(L, 2)));
+	return 1;
+}
+
+int luaGameCreditMarketBank(lua_State* L)
+{
+	// Game.creditMarketBank(playerId, amount)
+	pushBoolean(L, Market::creditBank(
+		getInteger<uint32_t>(L, 1), getInteger<uint64_t>(L, 2)));
+	return 1;
+}
+
+int luaGameInsertMarketInboxItem(lua_State* L)
+{
+	// Game.insertMarketInboxItem(playerId, itemId, amount[, attributes])
+	std::string attributes;
+	if (lua_isstring(L, 4)) {
+		attributes = getString(L, 4);
+	}
+	pushBoolean(L, Market::insertInboxItems(
+		getInteger<uint32_t>(L, 1), getInteger<uint16_t>(L, 2), getInteger<uint32_t>(L, 3), attributes));
+	return 1;
+}
+
 int luaGameRegisterBestiaryMonsterData(lua_State* L)
 {
 	// Game.registerBestiaryMonsterData(raceId, name, toKill, firstUnlock, secondUnlock, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
@@ -1413,6 +1604,20 @@ void LuaScriptInterface::registerGame()
 	registerTable("Game");
 	registerMethod("Game", "getLightState", luaGameGetLightState);
 	registerMethod("Game", "setWorldTime", luaGameSetWorldTime);
+	registerMethod("Game", "getMarketOfferCount", luaGameGetMarketOfferCount);
+	registerMethod("Game", "getMarketOffer", luaGameGetMarketOffer);
+	registerMethod("Game", "getOwnMarketOffers", luaGameGetOwnMarketOffers);
+	registerMethod("Game", "getItemMarketOffers", luaGameGetItemMarketOffers);
+	registerMethod("Game", "getExpiredMarketOffers", luaGameGetExpiredMarketOffers);
+	registerMethod("Game", "getMarketHistory", luaGameGetMarketHistory);
+	registerMethod("Game", "getMarketStatistics", luaGameGetMarketStatistics);
+	registerMethod("Game", "createMarketOffer", luaGameCreateMarketOffer);
+	registerMethod("Game", "claimMarketOffer", luaGameClaimMarketOffer);
+	registerMethod("Game", "restoreMarketOffer", luaGameRestoreMarketOffer);
+	registerMethod("Game", "addMarketHistory", luaGameAddMarketHistory);
+	registerMethod("Game", "refreshMarketStatistics", luaGameRefreshMarketStatistics);
+	registerMethod("Game", "creditMarketBank", luaGameCreditMarketBank);
+	registerMethod("Game", "insertMarketInboxItem", luaGameInsertMarketInboxItem);
 	registerMethod("Game", "registerBestiaryMonsterData", luaGameRegisterBestiaryMonsterData);
 	registerMethod("Game", "handleBestiaryCharmAction", luaGameHandleBestiaryCharmAction);
 	registerMethod("Game", "getBestiaryKills", luaGameGetBestiaryKills);
