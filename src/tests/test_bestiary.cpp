@@ -84,4 +84,23 @@ TEST_CASE(bestiary_kills_are_saturated_dirty_and_consumed_once)
 	CHECK(saturated == std::numeric_limits<uint32_t>::max());
 }
 
+TEST_CASE(bestiary_first_kill_is_recorded_when_race_id_is_patched_after_death)
+{
+	Player player(nullptr);
+	player.clearBestiaryDirty();
+
+	constexpr uint32_t victimId = 1002;
+	constexpr uint16_t patchedRaceId = 2764;
+
+	// Death processing could not queue a pending kill because the monster had no race ID yet.
+	CHECK(!player.takePendingBestiaryKill(victimId, patchedRaceId).has_value());
+
+	// Name-based Lua resolution patches the race ID and must fall back to the normal add path.
+	const auto [oldCount, newCount] = player.addBestiaryKillCount(patchedRaceId, 1);
+	CHECK(oldCount == 0);
+	CHECK(newCount == 1);
+	CHECK(player.getBestiaryKillCount(patchedRaceId) == 1);
+	CHECK(player.getBestiaryDirtySnapshot().modifiedRaceIds.contains(patchedRaceId));
+}
+
 TFS_TEST_MAIN()

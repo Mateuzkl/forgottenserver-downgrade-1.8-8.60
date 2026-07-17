@@ -182,7 +182,8 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 			local handled
 			handled, oldKills, newKills, charmPointsAwarded = Game.takeBestiaryKill(player, raceId, creature:getId())
 			if not handled then
-				goto continue
+				oldKills, newKills = addBestiaryKill(player, playerGuid, raceId, 1)
+				charmPointsAwarded = false
 			end
 		else
 			oldKills, newKills = addBestiaryKill(player, playerGuid, raceId, 1)
@@ -222,8 +223,6 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 		if newProgress > oldProgress then
 			sendBestiaryUnlockMessage(player, entry, newProgress)
 		end
-
-		::continue::
 	end
 	return true
 end
