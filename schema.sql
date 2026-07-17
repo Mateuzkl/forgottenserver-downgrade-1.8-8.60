@@ -450,6 +450,16 @@ CREATE TABLE IF NOT EXISTS `player_storage` (
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
+CREATE TABLE IF NOT EXISTS `player_supplystash` (
+  `player_id` INT NOT NULL,
+  `itemtype` SMALLINT UNSIGNED NOT NULL,
+  `tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `amount` INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (`player_id`, `itemtype`, `tier`),
+  CONSTRAINT `player_supplystash_player_fk`
+    FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+
 CREATE TABLE IF NOT EXISTS `player_bestiary_kills` (
   `player_id` INT NOT NULL,
   `raceid` SMALLINT UNSIGNED NOT NULL,
@@ -718,7 +728,7 @@ CREATE TABLE IF NOT EXISTS `towns` (
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-INSERT INTO server_config (config, value) VALUES ('db_version', '60'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO server_config (config, value) VALUES ('db_version', '61'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 CREATE TABLE IF NOT EXISTS guild_transactions (
   id SERIAL PRIMARY KEY,

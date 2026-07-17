@@ -63,186 +63,49 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
-local function logError(message)
-	if logger and logger.error then
-		logger.error(message)
-	else
-		print(message)
-	end
-end
-
-local function runSchemaQuery(query, errorMessage)
-	local ok, result = pcall(db.query, query)
-	if not ok or not result then
-		logError("[SupplyStash] " .. errorMessage)
+local function tileHasSupplyStashAccess(tile)
+	if not tile then
 		return false
 	end
-	return true
+	if tile:getItemByType(ITEM_TYPE_DEPOT) then
+		return true
+	end
+	return tile.getItemById and tile:getItemById(SUPPLY_STASH_ITEM_ID) ~= nil
 end
 
--- Checks whether a given column name exists in the specified database table.
--- @param tableName The name of the database table to inspect.
--- @param columnName The column name to look for (pattern is matched with SQL LIKE).
--- @return `true` if the column exists in the table, `false` otherwise.
-local function tableColumnExists(tableName, columnName)
-	local resultId = db.storeQuery("SHOW COLUMNS FROM `" .. tableName .. "` LIKE " .. db.escapeString(columnName))
-	if resultId then
-		result.free(resultId)
+local function hasCurrentSupplyStashAccess(player)
+	if not player then
+		return false
+	end
+
+	local position = player:getPosition()
+	local playerTile = Tile(position)
+	if not playerTile or not playerTile:hasFlag(TILESTATE_PROTECTIONZONE) then
+		return false
+	end
+	if tileHasSupplyStashAccess(playerTile) then
 		return true
+	end
+
+	for x = -1, 1 do
+		for y = -1, 1 do
+			if x ~= 0 or y ~= 0 then
+				local tile = Tile(Position(position.x + x, position.y + y, position.z))
+				if tileHasSupplyStashAccess(tile) then
+					return true
+				end
+			end
+		end
 	end
 	return false
 end
 
-local function tableForeignKeyExists(tableName, constraintName)
-	local resultId = db.storeQuery(
-		"SELECT `CONSTRAINT_NAME` FROM `information_schema`.`TABLE_CONSTRAINTS` WHERE `CONSTRAINT_SCHEMA` = DATABASE() " ..
-		"AND `TABLE_NAME` = " .. db.escapeString(tableName) ..
-		" AND `CONSTRAINT_NAME` = " .. db.escapeString(constraintName) ..
-		" AND `CONSTRAINT_TYPE` = 'FOREIGN KEY' LIMIT 1"
-	)
-	if resultId then
-		result.free(resultId)
+local function ensureSupplyStashAccess(player)
+	if hasCurrentSupplyStashAccess(player) then
 		return true
 	end
+	player:sendCancelMessage("Supply stash closed. You need to be near a depot.")
 	return false
-end
-
-local function addSupplyStashForeignKey(tableName, errorMessage)
-	return runSchemaQuery(
-		"ALTER TABLE `" .. tableName .. "` ADD CONSTRAINT `player_supplystash_player_fk` " ..
-		"FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE",
-		errorMessage
-	)
-end
-
--- Returns the primary key column signature for the `player_supplystash` table as a comma-separated string.
--- @return A string containing primary key column names in index order (e.g., "player_id,itemtype,tier"). Returns an empty string if the table has no PRIMARY index or cannot be queried.
-local function getSupplyStashPrimaryKeySignature()
-	local indexes = {}
-	local resultId = db.storeQuery("SHOW INDEX FROM `player_supplystash` WHERE `Key_name` = 'PRIMARY'")
-	if resultId then
-		repeat
-			indexes[#indexes + 1] = {
-				seq = result.getDataInt(resultId, "Seq_in_index"),
-				column = result.getDataString(resultId, "Column_name")
-			}
-		until not result.next(resultId)
-		result.free(resultId)
-	end
-
-	table.sort(indexes, function(a, b)
-		return a.seq < b.seq
-	end)
-
-	local columns = {}
-	for _, index in ipairs(indexes) do
-		columns[#columns + 1] = index.column
-	end
-	return table.concat(columns, ",")
-end
-
--- Rebuilds the `player_supplystash` table to ensure a composite primary key that includes `tier` and migrates existing rows, aggregating amounts by `(player_id, itemtype, tier)`.
--- @return `true` if the table was successfully rebuilt and migrated, `false` otherwise.
-local function rebuildSupplyStashTable()
-	db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
-	local droppedOriginalForeignKey = false
-	if tableForeignKeyExists("player_supplystash", "player_supplystash_player_fk") then
-		if not runSchemaQuery("ALTER TABLE `player_supplystash` DROP FOREIGN KEY `player_supplystash_player_fk`", "Could not drop old supply stash foreign key for migration.") then
-			return false
-		end
-		droppedOriginalForeignKey = true
-	end
-
-	local function restoreOriginalForeignKey()
-		if droppedOriginalForeignKey and not tableForeignKeyExists("player_supplystash", "player_supplystash_player_fk") then
-			addSupplyStashForeignKey("player_supplystash", "Could not restore old supply stash foreign key after failed migration.")
-		end
-	end
-
-	if not runSchemaQuery([[
-		CREATE TABLE `player_supplystash_tier_migration` (
-			`player_id` INT NOT NULL,
-			`itemtype` SMALLINT UNSIGNED NOT NULL,
-			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
-			`amount` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`player_id`, `itemtype`, `tier`),
-			CONSTRAINT `player_supplystash_player_fk`
-				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
-				ON DELETE CASCADE
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
-	]], "Could not create tier migration table.") then
-		restoreOriginalForeignKey()
-		db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
-		return false
-	end
-
-	if not runSchemaQuery([[
-		INSERT INTO `player_supplystash_tier_migration` (`player_id`, `itemtype`, `tier`, `amount`)
-		SELECT ps.`player_id`, ps.`itemtype`, COALESCE(ps.`tier`, 0), SUM(ps.`amount`)
-		FROM `player_supplystash` ps
-		INNER JOIN `players` p ON p.`id` = ps.`player_id`
-		WHERE ps.`amount` > 0
-		GROUP BY ps.`player_id`, ps.`itemtype`, COALESCE(ps.`tier`, 0)
-	]], "Could not copy supply stash rows into tier migration table.") then
-		restoreOriginalForeignKey()
-		db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
-		return false
-	end
-
-	if not runSchemaQuery("DROP TABLE `player_supplystash`", "Could not drop old supply stash table.") then
-		restoreOriginalForeignKey()
-		db.query("DROP TABLE IF EXISTS `player_supplystash_tier_migration`")
-		return false
-	end
-	return runSchemaQuery("RENAME TABLE `player_supplystash_tier_migration` TO `player_supplystash`", "Could not rename tier migration table.")
-end
-
--- Ensures the `player_supplystash` table has a composite primary key on `player_id,itemtype,tier`, altering or rebuilding the table if necessary.
--- This may modify the database schema to enforce the correct primary key.
--- @return `true` if the primary key is configured as `player_id,itemtype,tier`, `false` otherwise.
-local function ensureSupplyStashPrimaryKey()
-	if getSupplyStashPrimaryKeySignature() == "player_id,itemtype,tier" then
-		return true
-	end
-
-	if runSchemaQuery("ALTER TABLE `player_supplystash` DROP PRIMARY KEY, ADD PRIMARY KEY (`player_id`, `itemtype`, `tier`)", "Could not alter supply stash primary key; trying table rebuild.") and
-			getSupplyStashPrimaryKeySignature() == "player_id,itemtype,tier" then
-		return true
-	end
-
-	return rebuildSupplyStashTable()
-end
-
--- Ensures the database schema for the supply stash exists and is up-to-date.
--- Creates the `player_supplystash` table if missing (columns: `player_id`, `itemtype`, `tier`, `amount`),
--- guarantees the `tier` column exists, and enforces the composite primary key (`player_id`, `itemtype`, `tier`)
--- along with the foreign key constraint to `players(id)`.
-local function ensureTables()
-	if not runSchemaQuery([[
-		CREATE TABLE IF NOT EXISTS `player_supplystash` (
-			`player_id` INT NOT NULL,
-			`itemtype` SMALLINT UNSIGNED NOT NULL,
-			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
-			`amount` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`player_id`, `itemtype`, `tier`),
-			CONSTRAINT `player_supplystash_player_fk`
-				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
-				ON DELETE CASCADE
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
-	]], "Could not create supply stash table.") then
-		return false
-	end
-
-	if not tableColumnExists("player_supplystash", "tier") then
-		if not runSchemaQuery("ALTER TABLE `player_supplystash` ADD COLUMN `tier` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `itemtype`", "Could not add tier column to supply stash table.") then
-			return false
-		end
-	end
-	if not ensureSupplyStashPrimaryKey() then
-		logError("[SupplyStash] Could not ensure supply stash primary key.")
-		return false
-	end
-	return true
 end
 
 -- Get the ItemType corresponding to the provided item id or nil when the id is invalid or the item type does not exist.
@@ -553,23 +416,11 @@ end
 -- @return An array of tables { itemId = <number>, tier = <number>, amount = <number> } for each stored entry; `amount` is clamped to at most 0xFFFFFFFF.
 local function getRows(player)
 	local rows = {}
-	local resultId = db.storeQuery(
-		"SELECT `itemtype`, `tier`, `amount` FROM `player_supplystash` WHERE `player_id` = " ..
-		player:getGuid() .. " AND `amount` > 0 ORDER BY `itemtype` ASC, `tier` ASC"
-	)
-
-	if resultId then
-		repeat
-			local itemId = result.getDataInt(resultId, "itemtype")
-			local tier = result.getDataInt(resultId, "tier")
-			local amount = result.getDataLong and result.getDataLong(resultId, "amount") or result.getDataInt(resultId, "amount")
-			if isSupplyItem(itemId) and amount > 0 then
-				rows[#rows + 1] = {itemId = itemId, tier = tier, amount = math.min(amount, 0xFFFFFFFF)}
-			end
-		until not result.next(resultId)
-		result.free(resultId)
+	for _, row in ipairs(Game.getSupplyStashRows(player:getGuid()) or {}) do
+		if isSupplyItem(row.itemId) and row.amount > 0 then
+			rows[#rows + 1] = row
+		end
 	end
-
 	return rows
 end
 
@@ -608,25 +459,6 @@ local function sendStash(player)
 	return msg:sendToPlayer(player)
 end
 
--- Retrieves the stored amount for a specific item and tier in the player's supply stash.
--- @param player The player whose stash is queried.
--- @param itemId The item type id to query.
--- @param tier Tier of the item; values are clamped to the range 0..10.
--- @return The stored amount for the (itemId, tier) entry, or 0 if none exists.
-local function getStoredAmount(player, itemId, tier)
-	local amount = 0
-	tier = math.max(0, math.min(10, tonumber(tier) or 0))
-	local resultId = db.storeQuery(
-		"SELECT `amount` FROM `player_supplystash` WHERE `player_id` = " ..
-		player:getGuid() .. " AND `itemtype` = " .. itemId .. " AND `tier` = " .. tier .. " LIMIT 1"
-	)
-	if resultId then
-		amount = result.getDataLong and result.getDataLong(resultId, "amount") or result.getDataInt(resultId, "amount")
-		result.free(resultId)
-	end
-	return amount
-end
-
 -- Adds `amount` to the stored quantity for the given player's item and tier, creating a row if none exists.
 -- @param player The player whose stash will be modified.
 -- @param itemId The item type id to increment.
@@ -634,12 +466,7 @@ end
 -- @param tier The item tier; values are clamped to the range 0..10.
 -- @return The database query result on success, `false` on failure.
 local function addStoredAmount(player, itemId, amount, tier)
-	tier = math.max(0, math.min(10, tonumber(tier) or 0))
-	return db.query(string.format(
-		"INSERT INTO `player_supplystash` (`player_id`, `itemtype`, `tier`, `amount`) VALUES (%d, %d, %d, %d) " ..
-		"ON DUPLICATE KEY UPDATE `amount` = `amount` + VALUES(`amount`)",
-		player:getGuid(), itemId, tier, amount
-	))
+	return Game.addSupplyStashAmount(player:getGuid(), itemId, amount, tier)
 end
 
 -- Decrease the stored quantity for a specific item and tier in a player's supply stash.
@@ -649,15 +476,11 @@ end
 -- @param tier The item tier; coerced to an integer in the range 0..10.
 -- @return The result of the database update query.
 local function removeStoredAmount(player, itemId, amount, tier)
-	tier = math.max(0, math.min(10, tonumber(tier) or 0))
-	return db.query(string.format(
-		"UPDATE `player_supplystash` SET `amount` = `amount` - %d WHERE `player_id` = %d AND `itemtype` = %d AND `tier` = %d AND `amount` >= %d",
-		amount, player:getGuid(), itemId, tier, amount
-	))
+	return Game.removeSupplyStashAmount(player:getGuid(), itemId, amount, tier)
 end
 
 local function cleanupEmptyRows(player)
-	db.query("DELETE FROM `player_supplystash` WHERE `player_id` = " .. player:getGuid() .. " AND `amount` = 0")
+	return Game.cleanupSupplyStash(player:getGuid())
 end
 
 local function collectSupplyItems(container, list)
@@ -876,14 +699,8 @@ local function withdraw(player, itemId, amount, tier)
 		return true
 	end
 
-	if getStoredAmount(player, itemId, tier) < amount then
-		player:sendCancelMessage("You do not have enough items in your supply stash.")
-		sendStash(player)
-		return true
-	end
-
 	if not removeStoredAmount(player, itemId, amount, tier) then
-		player:sendCancelMessage("Could not remove the items from your supply stash.")
+		player:sendCancelMessage("You do not have enough items in your supply stash.")
 		sendStash(player)
 		return true
 	end
@@ -896,7 +713,7 @@ local function withdraw(player, itemId, amount, tier)
 		return true
 	end
 
-	db.query("DELETE FROM `player_supplystash` WHERE `player_id` = " .. player:getGuid() .. " AND `amount` = 0")
+	cleanupEmptyRows(player)
 	sendStash(player)
 	return true
 end
@@ -904,7 +721,7 @@ end
 local handler = PacketHandler(OPCODE_SUPPLY_STASH_REQUEST)
 
 -- Handles incoming supply stash request packets and dispatches open, stow-all, and withdraw actions.
--- Ensures database tables exist, verifies the player uses the custom network client, and sends appropriate responses or cancel messages.
+-- Verifies the custom client and nearby depot access before changing stash contents.
 -- @param player The player who sent the packet.
 -- @param msg The incoming network message containing the action and any parameters.
 -- @return `true` to indicate the packet was handled.
@@ -929,17 +746,21 @@ function handler.onReceive(player, msg)
 		return true
 	end
 
-	if not ensureTables() then
-		player:sendCancelMessage("Supply stash is temporarily unavailable.")
-		return true
-	end
-
 	if action == ACTION_OPEN then
+		if not hasCurrentSupplyStashAccess(player) then
+			player:sendCancelMessage("You need to be near a depot to open the supply stash.")
+			return true
+		end
 		setSupplyStashDepotId(player, getPlayerLastDepotId(player))
 		sendStash(player)
 	elseif action == ACTION_STOW_ALL then
-		stowAll(player)
+		if ensureSupplyStashAccess(player) then
+			stowAll(player)
+		end
 	elseif action == ACTION_WITHDRAW then
+		if not ensureSupplyStashAccess(player) then
+			return true
+		end
 		if not NetworkGuard.canRead(msg, 6) then
 			return true
 		end
@@ -963,21 +784,31 @@ end
 
 handler:register()
 
+local supplyStashSessionCleanup = CreatureEvent("CustomSupplyStashSessionCleanup")
+function supplyStashSessionCleanup.onLogout(player)
+	supplyStashDepotSessions[player:getId()] = nil
+	return true
+end
+supplyStashSessionCleanup:register()
+
+local supplyStashSessionInit = CreatureEvent("CustomSupplyStashSessionInit")
+function supplyStashSessionInit.onLogin(player)
+	player:registerEvent("CustomSupplyStashSessionCleanup")
+	return true
+end
+supplyStashSessionInit:register()
+
 CustomSupplyStash = {
 	open = function(player, depotId)
 		if not supportsCustomNetwork(player) then
 			return false
 		end
 
-		if not ensureTables() then
-			player:sendCancelMessage("Supply stash is temporarily unavailable.")
+		if not hasCurrentSupplyStashAccess(player) then
+			player:sendCancelMessage("You need to be near a depot to open the supply stash.")
 			return false
 		end
 		setSupplyStashDepotId(player, depotId or getPlayerLastDepotId(player))
 		return sendStash(player)
-	end,
-	stowAll = stowAll,
-	withdraw = withdraw
+	end
 }
-
-ensureTables()

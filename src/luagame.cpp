@@ -19,6 +19,7 @@
 #include "tools.h"
 #include "logger.h"
 #include "market.h"
+#include "stash.h"
 #include "zones.h"
 #include <fmt/format.h>
 
@@ -1397,6 +1398,47 @@ int luaGameInsertMarketInboxItem(lua_State* L)
 	return 1;
 }
 
+int luaGameGetSupplyStashRows(lua_State* L)
+{
+	// Game.getSupplyStashRows(playerId)
+	const auto rows = Stash::getRows(getInteger<uint32_t>(L, 1));
+	lua_createtable(L, static_cast<int>(rows.size()), 0);
+	int index = 0;
+	for (const StashRecord& row : rows) {
+		lua_createtable(L, 0, 3);
+		setField(L, "itemId", row.itemId);
+		setField(L, "tier", row.tier);
+		setField(L, "amount", row.amount);
+		lua_rawseti(L, -2, ++index);
+	}
+	return 1;
+}
+
+int luaGameAddSupplyStashAmount(lua_State* L)
+{
+	// Game.addSupplyStashAmount(playerId, itemId, amount[, tier = 0])
+	pushBoolean(L, Stash::addAmount(
+		getInteger<uint32_t>(L, 1), getInteger<uint16_t>(L, 2), getInteger<uint32_t>(L, 3),
+		Stash::normalizeTier(getInteger<uint32_t>(L, 4, 0))));
+	return 1;
+}
+
+int luaGameRemoveSupplyStashAmount(lua_State* L)
+{
+	// Game.removeSupplyStashAmount(playerId, itemId, amount[, tier = 0])
+	pushBoolean(L, Stash::removeAmount(
+		getInteger<uint32_t>(L, 1), getInteger<uint16_t>(L, 2), getInteger<uint32_t>(L, 3),
+		Stash::normalizeTier(getInteger<uint32_t>(L, 4, 0))));
+	return 1;
+}
+
+int luaGameCleanupSupplyStash(lua_State* L)
+{
+	// Game.cleanupSupplyStash(playerId)
+	pushBoolean(L, Stash::cleanup(getInteger<uint32_t>(L, 1)));
+	return 1;
+}
+
 int luaGameRegisterBestiaryMonsterData(lua_State* L)
 {
 	// Game.registerBestiaryMonsterData(raceId, name, toKill, firstUnlock, secondUnlock, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
@@ -1618,6 +1660,10 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "refreshMarketStatistics", luaGameRefreshMarketStatistics);
 	registerMethod("Game", "creditMarketBank", luaGameCreditMarketBank);
 	registerMethod("Game", "insertMarketInboxItem", luaGameInsertMarketInboxItem);
+	registerMethod("Game", "getSupplyStashRows", luaGameGetSupplyStashRows);
+	registerMethod("Game", "addSupplyStashAmount", luaGameAddSupplyStashAmount);
+	registerMethod("Game", "removeSupplyStashAmount", luaGameRemoveSupplyStashAmount);
+	registerMethod("Game", "cleanupSupplyStash", luaGameCleanupSupplyStash);
 	registerMethod("Game", "registerBestiaryMonsterData", luaGameRegisterBestiaryMonsterData);
 	registerMethod("Game", "handleBestiaryCharmAction", luaGameHandleBestiaryCharmAction);
 	registerMethod("Game", "getBestiaryKills", luaGameGetBestiaryKills);
