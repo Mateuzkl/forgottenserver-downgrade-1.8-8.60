@@ -61,6 +61,16 @@ struct BootstrapOptions {
 	bool consoleColors = true;
 };
 
+struct StartupRuntimeState {
+	bool threadPoolStarted = false;
+	bool databaseTasksStarted = false;
+	bool statsStarted = false;
+	bool scriptEngineLoaded = false;
+	bool revScriptsLoaded = false;
+	bool npcEngineLoaded = false;
+	std::optional<uint64_t> guildCount;
+};
+
 template <typename... Args>
 void consolePrint(fmt::text_style style, fmt::format_string<Args...> format, Args&&... args)
 {
@@ -137,6 +147,146 @@ void startupErrorMessage(std::string_view errorStr)
 	}
 }
 
+void printDatabaseConnectionFailure(const Database::ConnectionError& error)
+{
+	using namespace ConsoleStyle;
+	using ErrorKind = Database::ConnectionError::Kind;
+
+	const std::string errorMessage = error.message.empty() ? "Unknown MySQL/MariaDB connection error" : error.message;
+	std::string_view explanation;
+	std::vector<std::string_view> steps;
+
+	switch (error.kind) {
+		case ErrorKind::UNKNOWN_DATABASE:
+			explanation = "The configured database does not exist or could not\n    be accessed.";
+			steps = {
+			    "Create the MySQL/MariaDB database.",
+			    "Import the server schema.sql file.",
+			    "Check mysqlHost, mysqlUser, mysqlPass, mysqlDatabase and mysqlPort in config.lua.",
+			    "Confirm that MySQL/MariaDB is running.",
+			};
+			break;
+		case ErrorKind::ACCESS_DENIED:
+			explanation = "The configured account was rejected by MySQL/MariaDB.";
+			steps = {
+			    "Check mysqlUser and mysqlPass in config.lua.",
+			    "Confirm that the database account exists.",
+			    "Grant the account access to the configured database.",
+			    "Confirm that MySQL/MariaDB is running.",
+			};
+			break;
+		case ErrorKind::CANNOT_CONNECT:
+			explanation = "MySQL/MariaDB is not reachable at the configured host and port.";
+			steps = {
+			    "Start the MySQL/MariaDB service.",
+			    "Check mysqlHost and mysqlPort in config.lua.",
+			    "Check mysqlSock when using a local socket.",
+			    "Confirm that the port is reachable and not blocked.",
+			};
+			break;
+		case ErrorKind::TIMED_OUT:
+			explanation = "The connection timed out before MySQL/MariaDB responded.";
+			steps = {
+			    "Confirm that MySQL/MariaDB is running.",
+			    "Check mysqlHost and mysqlPort in config.lua.",
+			    "Check network routing and firewall rules.",
+			    "Confirm that the database accepts remote connections.",
+			};
+			break;
+		case ErrorKind::UNKNOWN_HOST:
+			explanation = "The configured MySQL/MariaDB host could not be resolved.";
+			steps = {
+			    "Correct mysqlHost in config.lua.",
+			    "Check DNS or use a valid IP address.",
+			    "Confirm network connectivity to the database host.",
+			    "Restart the server after correcting the host.",
+			};
+			break;
+		case ErrorKind::OTHER:
+			explanation = "The database connection could not be established.";
+			steps = {
+			    "Check the MySQL/MariaDB connection settings in config.lua.",
+			    "Confirm that MySQL/MariaDB is running.",
+			    "Confirm that the database and account exist.",
+			    "Review the MySQL error shown above.",
+			};
+			break;
+	}
+
+	std::string persisted = fmt::format(
+	    "DATABASE CONNECTION FAILED\n"
+	    "Host: {}\nPort: {}\nDatabase: {}\nUser: {}\nMySQL Error: {}\n\n{}\n\nRequired steps:\n",
+	    getString(ConfigManager::MYSQL_HOST), getInteger(ConfigManager::SQL_PORT),
+	    getString(ConfigManager::MYSQL_DB), getString(ConfigManager::MYSQL_USER), errorMessage, explanation);
+	for (size_t index = 0; index < steps.size(); ++index) {
+		persisted += fmt::format("{}. {}\n", index + 1, steps[index]);
+	}
+	persisted += "\nServer startup was safely aborted.";
+
+	g_logger().writeConsoleBlock([&]() {
+		consolePrint(red_b, "\n    ✖  DATABASE CONNECTION FAILED\n");
+		consolePrint(dark_gray, "    ──────────────────────────────────────────────────────\n");
+		consolePrint(gray, "    {:<20}", "Host");
+		consolePrint(white_b, "{}\n", getString(ConfigManager::MYSQL_HOST));
+		consolePrint(gray, "    {:<20}", "Port");
+		consolePrint(white_b, "{}\n", getInteger(ConfigManager::SQL_PORT));
+		consolePrint(gray, "    {:<20}", "Database");
+		consolePrint(white_b, "{}\n", getString(ConfigManager::MYSQL_DB));
+		consolePrint(gray, "    {:<20}", "User");
+		consolePrint(white_b, "{}\n", getString(ConfigManager::MYSQL_USER));
+		consolePrint(gray, "    {:<20}", "MySQL Error");
+		consolePrint(red_b, "{}\n\n", errorMessage);
+		consolePrint(white_b, "    {}\n\n", explanation);
+		consolePrint(white_b, "    Required steps:\n");
+		for (size_t index = 0; index < steps.size(); ++index) {
+			consolePrint(gray, "    {}. ", index + 1);
+			consolePrint(white_b, "{}\n", steps[index]);
+		}
+		consolePrint(red_b, "\n    Server startup was safely aborted.\n\n");
+	}, persisted);
+}
+
+#ifdef STATS_ENABLED
+void printStatsStatus()
+{
+	using namespace ConsoleStyle;
+	const auto fileStatus = g_stats.getFileLoggingStatus();
+
+	if (fileStatus.requested && !fileStatus.available) {
+		consolePrint(yellow_b, "    ⚠  OTS STATISTICS\n");
+		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+		consolePrint(gray, "    {:<20}", "Log directory");
+		consolePrint(yellow_b, "unavailable\n");
+		consolePrint(gray, "    {:<20}", "Path");
+		consolePrint(white_b, "{}\n", fileStatus.absoluteDirectory.string());
+		consolePrint(gray, "    {:<20}", "Reason");
+		consolePrint(white_b, "{}\n", fileStatus.reason);
+		consolePrint(gray, "    {:<20}", "File logging");
+		consolePrint(yellow_b, "disabled for this session\n");
+		return;
+	}
+
+	consolePrint(cyan_b, "    ⚙  OTS STATISTICS\n");
+	consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+	consolePrint(gray, "    {:<20}", "Status");
+	consolePrint(green_b, "Enabled ✔\n");
+	consolePrint(gray, "    {:<20}", "Report Interval");
+	consolePrint(white_b, "{} s\n", getInteger(ConfigManager::STATS_DUMP_INTERVAL));
+
+	if (fileStatus.requested) {
+		for (std::string_view label : {"Dispatcher Logs", "Lua Logs", "SQL Logs", "Special Logs"}) {
+			consolePrint(gray, "    {:<20}", label);
+			consolePrint(green_b, "Ready ✔\n");
+		}
+	} else {
+		consolePrint(gray, "    {:<20}", "File logging");
+		consolePrint(dark_gray, "Disabled by config\n");
+	}
+	consolePrint(gray, "    {:<20}", "Directory");
+	consolePrint(white_b, "{}\n", fileStatus.directory.generic_string());
+}
+#endif
+
 std::string formatFeatureStatus(std::string_view name, ConfigManager::Boolean key)
 {
 	return fmt::format("{} [{}]", name, ConfigManager::getBoolean(key) ? "ON" : "OFF");
@@ -187,7 +337,7 @@ std::string getCompilerName()
 #if defined(__clang__)
 	return fmt::format("Clang {}", __clang_version__);
 #elif defined(_MSC_VER)
-	return fmt::format("MSVC {}", _MSC_VER);
+	return fmt::format("Microsoft Visual C++ version {}", _MSC_VER);
 #elif defined(__GNUC__)
 	return fmt::format("GCC {}", __VERSION__);
 #else
@@ -195,7 +345,16 @@ std::string getCompilerName()
 #endif
 }
 
-bool mainLoader(const std::shared_ptr<ServiceManager>& services)
+std::string getDatabaseClientName()
+{
+#if defined(MARIADB_VERSION_ID)
+	return fmt::format("MariaDB {}", Database::getClientVersion());
+#else
+	return fmt::format("MySQL {}", Database::getClientVersion());
+#endif
+}
+
+bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeState& runtimeState)
 {
 	// reactor thread
 	UPDATE_OTSYS_TIME();
@@ -258,6 +417,9 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 		return false;
 	}
 	g_logger().setLevel(parseLogLevel(getString(ConfigManager::LOG_LEVEL)));
+#ifdef STATS_ENABLED
+	g_stats.prepareFileLogging();
+#endif
 	printFeatureStatus();
 	startupProgress().complete("configuration loaded");
 	startupProgress().begin(StartupStage::RUNTIME, "map cache fingerprint");
@@ -270,6 +432,7 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 	const auto workerThreads = static_cast<uint32_t>(
 		std::clamp<int64_t>(getInteger(ConfigManager::NETWORK_THREADS), 1, 64));
 	g_threadPool.start(workerThreads);
+	runtimeState.threadPoolStarted = true;
 	startupProgress().update(2, 3, "worker pool started");
 
 #ifdef _WIN32
@@ -297,7 +460,8 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 	LOG_DATABASE(">> Establishing database connection...");
 
 	if (!Database::getInstance().connect()) {
-		startupErrorMessage("Failed to connect to database.");
+		startupProgress().fail("Failed to connect to database.");
+		printDatabaseConnectionFailure(Database::getInstance().getLastConnectionError());
 		return false;
 	}
 	startupProgress().update(1, 5, "connected");
@@ -314,10 +478,16 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 	}
 	startupProgress().update(2, 5, "schema verified");
 	g_databaseTasks.start();
+	runtimeState.databaseTasksStarted = true;
 	startupProgress().update(3, 5, "database worker started");
 
 	DatabaseManager::updateDatabase();
 	startupProgress().update(4, 5, "migrations checked");
+
+	if (const auto guildCountResult = Database::getInstance().storeQuery(
+	        "SELECT COUNT(*) AS `count` FROM `guilds`")) {
+		runtimeState.guildCount = guildCountResult->getNumber<uint64_t>("count");
+	}
 
 	// Recover any pending async saves from a previous crash
 	g_saveManager.recoverPendingFlushes();
@@ -382,6 +552,7 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 		startupErrorMessage("Failed to load script systems");
 		return false;
 	}
+	runtimeState.scriptEngineLoaded = true;
 
 	g_game.raids.getScriptInterface().initState();
 	startupProgress().complete("script systems ready");
@@ -408,6 +579,7 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 		startupErrorMessage("Failed to load lua scripts");
 		return false;
 	}
+	runtimeState.revScriptsLoaded = true;
 	startupProgress().complete("Lua scripts ready");
 	startupProgress().begin(StartupStage::NPC_SCRIPTS, "discovering files");
 
@@ -417,6 +589,7 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 		startupErrorMessage("Failed to load lua npcs");
 		return false;
 	}
+	runtimeState.npcEngineLoaded = true;
 	startupProgress().complete("NPC scripts ready");
 	startupProgress().begin(StartupStage::FINAL_GAME_DATA, "outfits");
 
@@ -538,11 +711,13 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services)
 
 } // namespace
 
-void startServer()
+int startServer()
 {
 	std::set_new_handler(badAllocationHandler);
 
 	auto serviceManager = std::make_shared<ServiceManager>();
+	StartupRuntimeState runtimeState;
+	bool startupCompleted = false;
 
 #ifdef STATS_ENABLED
 	g_stats.setEnabled(false);
@@ -551,7 +726,7 @@ void startServer()
 	g_dispatcher.start();
 	g_scheduler.start();
 
-	const bool startupLoaded = mainLoader(serviceManager);
+	const bool startupLoaded = mainLoader(serviceManager, runtimeState);
 
 	std::jthread serviceThread;
 
@@ -570,8 +745,6 @@ void startServer()
 		const auto networkThreads = std::clamp<int64_t>(getInteger(ConfigManager::NETWORK_THREADS), 1, 64);
 #ifdef STATS_ENABLED
 		g_stats.configureDispatchers(static_cast<std::size_t>(networkThreads) + 1);
-		g_stats.start();
-		g_stats.setEnabled(true);
 #endif
 		auto serviceStarted = std::make_shared<std::promise<void>>();
 		auto serviceStartedFuture = serviceStarted->get_future();
@@ -581,13 +754,6 @@ void startServer()
 		serviceStartedFuture.get();
 		if (!serviceManager->is_running()) {
 			startupErrorMessage("Network I/O stopped before startup completed.");
-			g_threadPool.shutdown();
-			g_scheduler.shutdown();
-			g_databaseTasks.shutdown();
-			g_dispatcher.shutdown();
-#ifdef STATS_ENABLED
-			g_stats.shutdown();
-#endif
 		} else {
 			startupProgress().complete("network I/O running");
 			startupProgress().finish();
@@ -597,6 +763,7 @@ void startServer()
 			LOG_STARTUP("Startup completed in {:.3f} s", startupProgress().elapsedSeconds());
 		}
 		if (serviceManager->is_running()) {
+		g_logger().writeConsoleBlock([&]() {
 		using namespace ConsoleStyle;
 
 		// ── Server Config ──
@@ -639,13 +806,59 @@ void startServer()
 		consolePrint(white_b, "1\n");
 		fmt::print("\n");
 
+#ifdef STATS_ENABLED
+		printStatsStatus();
+		fmt::print("\n");
+#endif
+
 		// ── Game Data ──
 		consolePrint(cyan_b, "    ⚙  GAME DATA\n");
 		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
-		for (std::string_view dataName : {"Items", "Vocations", "Outfits", "NPC Scripts", "Monster Scripts", "Map"}) {
-			consolePrint(gray, "    {:<20}", dataName);
-			consolePrint(green_b, "Loaded ✔\n");
+		const auto printCount = [](std::string_view label, size_t count) {
+			consolePrint(gray, "    {:<20}", label);
+			consolePrint(white_b, "{} ", count);
+			consolePrint(green_b, "✔\n");
+		};
+		printCount("Items", Item::items.size());
+		printCount("Vocations", g_vocations.getVocations().size());
+		consolePrint(gray, "    {:<20}", "Outfits");
+		consolePrint(white_b, "{} (M) + {} (F) ",
+		             Outfits::getInstance().getOutfits(PLAYERSEX_MALE).size(),
+		             Outfits::getInstance().getOutfits(PLAYERSEX_FEMALE).size());
+		consolePrint(green_b, "✔\n");
+		printCount("NPCs", g_game.getNpcs().size());
+		printCount("Monsters", g_monsters.monsters.size());
+		consolePrint(gray, "    {:<20}", "Guilds");
+		if (runtimeState.guildCount) {
+			consolePrint(white_b, "{} ", *runtimeState.guildCount);
+			consolePrint(green_b, "✔\n");
+		} else {
+			consolePrint(dark_gray, "unavailable\n");
 		}
+		printCount("Zones", Zones::count());
+		const auto printEngineStatus = [](std::string_view label, std::string_view engine, bool loaded) {
+			consolePrint(gray, "    {:<20}", label);
+			if (loaded) {
+				consolePrint(white_b, "{} ", engine);
+				consolePrint(green_b, "✔\n");
+			} else {
+				consolePrint(red_b, "Not loaded\n");
+			}
+		};
+		const bool castSystemLoaded = g_scripts && g_scripts->isFileLoaded(
+		    "data/scripts/talkactions/player/misc/cast_system.lua");
+		printEngineStatus("Cast System", "Loaded", castSystemLoaded);
+		printEngineStatus("Script Engine", "RevScripts",
+		                  runtimeState.scriptEngineLoaded && runtimeState.revScriptsLoaded);
+		if (g_scripts) {
+			printCount("Lua Scripts", g_scripts->getLoadedFileCount());
+		} else {
+			consolePrint(gray, "    {:<20}", "Lua Scripts");
+			consolePrint(red_b, "Not loaded\n");
+		}
+		printEngineStatus("NPC Engine", "Loaded", runtimeState.npcEngineLoaded && Npcs::isLoaded());
+		consolePrint(gray, "    {:<20}", "Map");
+		consolePrint(green_b, "Loaded ✔\n");
 		const auto printMapLoadStatus = [](std::string_view name, MapLoadStatus status) {
 			consolePrint(gray, "    {:<20}", name);
 			switch (status) {
@@ -662,9 +875,6 @@ void startServer()
 		};
 		printMapLoadStatus("Houses", g_game.map.getHouseLoadStatus());
 		printMapLoadStatus("Spawns", g_game.map.getSpawnLoadStatus());
-		consolePrint(gray, "    {:<20}", "Imbuements");
-		consolePrint(ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED) ? green_b : dark_gray,
-		             "{}\n", ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED) ? "Loaded ✔" : "Disabled");
 		fmt::print("\n");
 
 		// Real ConfigManager toggles only; no inferred or hardcoded feature state.
@@ -697,12 +907,37 @@ void startServer()
 		    std::pair{"Character Bazaar", ConfigManager::CHARACTER_BAZAAR_ENABLED},
 		    std::pair{"Reset/Reborn", ConfigManager::RESET_SYSTEM_ENABLED},
 		};
-		for (const auto& [name, key] : featureRows) {
+		const auto printFeatureColumn = [=](const auto& feature) {
+			const auto& [name, key] = feature;
 			const bool enabled = ConfigManager::getBoolean(key);
-			consolePrint(gray, "    {:<24}", name);
-			consolePrint(enabled ? green_b : dark_gray, "{}\n", enabled ? "ON" : "OFF");
+			consolePrint(gray, "{:<24}", name);
+			consolePrint(enabled ? green_b : red_b, "{:<3}", enabled ? "ON" : "OFF");
+		};
+
+		for (size_t index = 0; index < featureRows.size(); index += 2) {
+			consolePrint(gray, "    ");
+			printFeatureColumn(featureRows[index]);
+			if (index + 1 < featureRows.size()) {
+				consolePrint(gray, "{:6}", "");
+				printFeatureColumn(featureRows[index + 1]);
+			}
+			fmt::print("\n");
 		}
 		fmt::print("\n");
+
+		// ── Server info ──
+		consolePrint(cyan_b, "    ◈  SERVER INFO\n");
+		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+		consolePrint(gray, "    {:<16}", "TFS Version");
+		consolePrint(white_b, "{:<14}", STATUS_SERVER_VERSION);
+		consolePrint(gray, "{:<12}", "Protocol");
+		consolePrint(white_b, "{}\n", CLIENT_VERSION_STR);
+		consolePrint(gray, "    {:<16}", "IP Address");
+		consolePrint(white_b, "{:<14}", getString(ConfigManager::IP));
+		consolePrint(gray, "{:<12}", "Ports");
+		consolePrint(white_b, "{} / {}\n\n",
+		             getInteger(ConfigManager::LOGIN_PORT),
+		             getInteger(ConfigManager::GAME_PORT));
 
 		// ── Online ──
 		consolePrint(dark_gray, "    ─────────────────────────────────────────────────────────\n");
@@ -714,23 +949,23 @@ void startServer()
 		consolePrint(dark_gray, "    ─────────────────────────────────────────────────────────\n");
 		fmt::print("\n");
 		std::fflush(stdout);
+		});
 
 		// Restore console output now that all startup printing is done
 		g_logger().setConsoleLevel(parseLogLevel(getString(ConfigManager::LOG_LEVEL)));
 
+#ifdef STATS_ENABLED
+		g_stats.start();
+		runtimeState.statsStarted = true;
+		g_stats.setEnabled(true);
+#endif
+		startupCompleted = true;
 		g_reactor.runLoop();
 		}
 	} else {
 		if (startupLoaded) {
 			startupErrorMessage("No open services. The server is NOT online.");
 		}
-		g_threadPool.shutdown();
-		g_scheduler.shutdown();
-		g_databaseTasks.shutdown();
-		g_dispatcher.shutdown();
-#ifdef STATS_ENABLED
-		g_stats.shutdown();
-#endif
 	}
 
 	// --- Shutdown Watchdog ---
@@ -745,22 +980,41 @@ void startServer()
 		}
 	});
 
-	serviceManager->stop();
+	if (serviceManager->is_running()) {
+		serviceManager->stop();
+	}
 	if (serviceThread.joinable()) {
 		serviceThread.join();
 	}
 
 	// Shutdown ThreadPool before the database connection goes away.
-	g_threadPool.shutdown();
+	if (runtimeState.threadPoolStarted && g_threadPool.isRunning()) {
+		g_threadPool.shutdown();
+	}
 
 	// Wait for all background tasks to finish before closing the Lua environment.
 	// NPCs and their NpcScriptInterface
+	if (g_scheduler.getState() != THREAD_STATE_TERMINATED) {
+		g_scheduler.shutdown();
+	}
 	g_scheduler.join();
-	g_databaseTasks.shutdown();
-	g_databaseTasks.join();
+	if (runtimeState.databaseTasksStarted) {
+		if (g_databaseTasks.isRunning()) {
+			g_databaseTasks.shutdown();
+		}
+		g_databaseTasks.join();
+	}
+	if (g_dispatcher.getState() != THREAD_STATE_TERMINATED) {
+		g_dispatcher.shutdown();
+	}
 	g_dispatcher.join();
 #ifdef STATS_ENABLED
-	g_stats.join();
+	if (runtimeState.statsStarted) {
+		if (g_stats.isRunning()) {
+			g_stats.shutdown();
+		}
+		g_stats.join();
+	}
 #endif
 
 	// Only now is it safe to close Lua — all NpcScriptInterface destructors
@@ -769,6 +1023,7 @@ void startServer()
 
 	// Cleanup MySQL connection and library
 	Database::shutdown();
+	return startupCompleted ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 void printServerVersion()
@@ -827,8 +1082,10 @@ void printServerVersion()
 	consolePrint(white_b, "{} {}\n", __DATE__, __TIME__);
 	consolePrint(gray, "    {:<20}", "Platform");
 	consolePrint(white_b, "{}\n", getPlatformName());
-	consolePrint(gray, "    {:<20}", "Lua Engine");
+	consolePrint(gray, "    {:<20}", "Lua Version");
 	consolePrint(white_b, "{}\n", getLuaRuntimeName());
+	consolePrint(gray, "    {:<20}", "Database");
+	consolePrint(white_b, "{}\n", getDatabaseClientName());
 	consolePrint(gray, "    {:<20}", "CPU Threads");
 	consolePrint(white_b, "{}\n", std::max(1u, std::thread::hardware_concurrency()));
 	fmt::print("\n");

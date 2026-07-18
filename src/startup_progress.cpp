@@ -223,13 +223,14 @@ void StartupProgress::renderVisualLocked(bool force)
 		fmt::print("\r    [{}] {:3}%{}", bar, percent, completed);
 		consoleLineOpen = percent != 100;
 		if (!consoleLineOpen) {
-			fmt::print("\n");
+			fmt::print("{}", visualPhase == VisualPhase::MAP ? "\n\n" : "\n");
 		}
 		std::fflush(stdout);
 		return;
 	}
 
-	fmt::print("    [{}] {:3}%{}\n", bar, percent, completed);
+	fmt::print("    [{}] {:3}%{}{}", bar, percent, completed,
+	           percent == 100 && visualPhase == VisualPhase::MAP ? "\n\n" : "\n");
 	std::fflush(stdout);
 }
 

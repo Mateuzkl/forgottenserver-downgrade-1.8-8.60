@@ -18,6 +18,13 @@ Scripts::Scripts() : scriptInterface("Scripts Interface") { scriptInterface.init
 
 Scripts::~Scripts() { scriptInterface.reInitState(); }
 
+bool Scripts::isFileLoaded(const std::filesystem::path& file) const
+{
+	std::error_code error;
+	const auto canonicalPath = std::filesystem::canonical(file, error);
+	return !error && loadedFiles.contains(canonicalPath.string());
+}
+
 void Scripts::clearLoadedFiles(const std::string& folderName)
 {
 	namespace fs = std::filesystem;

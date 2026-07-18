@@ -222,6 +222,26 @@ public:
 		return consoleLogger_ && consoleLogger_->should_log(toSpd(level));
 	}
 
+	void writeConsoleBlock(const std::function<void()>& writer, std::string_view persistedMessage) override
+	{
+		if (!writer) {
+			return;
+		}
+
+		try {
+			std::scoped_lock lock(outputMutex_);
+			writer();
+			std::fflush(stdout);
+
+			if (fileLogger_ && !persistedMessage.empty()) {
+				fileLogger_->log(spdlog::level::err, "[{:<8}] {}", "ERROR", stripAnsi(persistedMessage));
+				fileLogger_->flush();
+			}
+		} catch (const std::exception& e) {
+			fmt::print(stderr, "[LOGGER ERROR] Failed to write console block: {}\n", e.what());
+		}
+	}
+
 	void flush()
 	{
 		if (consoleLogger_) {
@@ -317,6 +337,8 @@ protected:
 				consoleLogger_->log(toSpd(level), "    [ERROR   ] {}", consoleMessage);
 			} else if (level >= LogLevel::WARNING) {
 				consoleLogger_->log(toSpd(level), "    [WARNING ] {}", consoleMessage);
+			} else if (category == "STATS") {
+				consoleLogger_->log(toSpd(level), "    [STATS] {}", consoleMessage);
 			} else if (category == "DATABASE") {
 				consoleLogger_->log(toSpd(level), "    [DATABASE] {}", consoleMessage);
 			} else if (category == "NETWORK") {

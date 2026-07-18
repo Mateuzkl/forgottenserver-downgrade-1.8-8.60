@@ -4,6 +4,9 @@
 #include "observer_ptr.h"
 #include "thread_holder_base.h"
 
+#include <filesystem>
+#include <string_view>
+
 #define TFS_STRINGIFY_DETAIL(value) #value
 #define TFS_STRINGIFY(value) TFS_STRINGIFY_DETAIL(value)
 #define TASK_SOURCE_LOCATION __FILE__ ":" TFS_STRINGIFY(__LINE__)
@@ -33,6 +36,15 @@ struct statsData {
 
 using statsMap = std::unordered_map<std::string, statsData>;
 
+struct StatsFileLoggingStatus
+{
+	bool requested = false;
+	bool available = false;
+	std::filesystem::path directory;
+	std::filesystem::path absoluteDirectory;
+	std::string reason;
+};
+
 class Stats : public ThreadHolder<Stats> {
 public:
 	Stats();
@@ -52,6 +64,8 @@ public:
 	}
 
 	bool isRunning() const { return getState() == THREAD_STATE_RUNNING; }
+	void prepareFileLogging();
+	StatsFileLoggingStatus getFileLoggingStatus() const;
 
 	void configureDispatchers(std::size_t count);
 	void addDispatcherStat(std::size_t index, std::unique_ptr<Stat> stat);
@@ -71,8 +85,11 @@ private:
 	void parseLuaQueue(std::forward_list<std::unique_ptr<Stat>>& queue);
 	void parseSqlQueue(std::forward_list<std::unique_ptr<Stat>>& queue);
 	void parseSpecialQueue(std::forward_list<std::unique_ptr<Stat>>& queue);
-	static void writeSlowInfo(const std::string& file, uint64_t executionTime, const std::string& description, const std::string& extraDescription);
-	static void writeStats(const std::string& file, const statsMap& stats, const std::string& extraInfo = "", int64_t intervalMs = 0);
+	void writeSlowInfo(const std::string& file, uint64_t executionTime, const std::string& description,
+	                   const std::string& extraDescription);
+	void writeStats(const std::string& file, const statsMap& stats, const std::string& extraInfo = "",
+	                int64_t intervalMs = 0, std::string_view consoleSummary = {});
+	void disableFileLogging(std::string reason);
 
 	std::mutex statsLock;
 	struct DispatcherStats {
@@ -108,6 +125,12 @@ private:
 	} lua, sql, special;
 
 	std::atomic<bool> enabled{true};
+	const std::filesystem::path statsDirectory{"data/logs/stats"};
+	std::filesystem::path absoluteStatsDirectory;
+	std::atomic<bool> fileLoggingRequested{false};
+	std::atomic<bool> fileLoggingAvailable{false};
+	mutable std::mutex fileLoggingMutex;
+	std::string fileLoggingFailureReason;
 };
 
 extern Stats g_stats;

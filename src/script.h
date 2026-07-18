@@ -19,6 +19,8 @@ public:
 
 	bool loadScripts(const std::string& folderName, bool isLib, bool reload);
 	LuaScriptInterface& getScriptInterface() { return scriptInterface; }
+	bool isFileLoaded(const std::filesystem::path& file) const;
+	size_t getLoadedFileCount() const { return loadedFiles.size(); }
 
 	void clearLoadedFiles()
 	{

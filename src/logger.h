@@ -7,6 +7,7 @@
 #include "position.h"
 
 #include <fmt/format.h>
+#include <functional>
 
 enum class LogLevel
 {
@@ -29,6 +30,7 @@ public:
 	virtual void setConsoleColors(bool enabled) = 0;
 	virtual LogLevel getLevel() const = 0;
 	virtual bool isEnabled(LogLevel level) const = 0;
+	virtual void writeConsoleBlock(const std::function<void()>& writer, std::string_view persistedMessage = {}) = 0;
 
 	void trace([[maybe_unused]] std::string_view msg)
 	{

@@ -13,6 +13,7 @@ inline const auto green_b = fmt::fg(fmt::color::lime_green) | fmt::emphasis::bol
 inline const auto white_b = fmt::fg(fmt::color::white) | fmt::emphasis::bold;
 inline const auto gray = fmt::fg(fmt::color::gray);
 inline const auto dark_gray = fmt::fg(fmt::color::dim_gray);
+inline const auto yellow_b = fmt::fg(fmt::color::gold) | fmt::emphasis::bold;
 inline const auto red_b = fmt::fg(fmt::color::orange_red) | fmt::emphasis::bold;
 
 } // namespace ConsoleStyle

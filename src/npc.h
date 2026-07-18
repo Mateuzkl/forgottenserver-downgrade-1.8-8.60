@@ -143,6 +143,7 @@ public:
 namespace Npcs {
 void load(bool reload = false);
 bool loadScripts(bool reload = false);
+bool isLoaded();
 void reload();
 void addNpcType(const std::string& name, const std::shared_ptr<NpcType>& npcType);
 void clearNpcTypes();

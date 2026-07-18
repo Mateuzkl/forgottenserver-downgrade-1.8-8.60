@@ -270,6 +270,11 @@ bool loadScripts(bool reload /* = false */)
 	return true;
 }
 
+bool isLoaded()
+{
+	return loaded;
+}
+
 void reload()
 {
 	// 1. Reload the NPC Lua library (creates fresh scriptInterface)

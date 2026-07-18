@@ -56,6 +56,14 @@ CREATE TABLE IF NOT EXISTS `players` (
   `skulltime` bigint NOT NULL DEFAULT '0',
   `lastlogout` bigint unsigned NOT NULL DEFAULT '0',
   `blessings` tinyint NOT NULL DEFAULT '0',
+  `blessings1` tinyint unsigned NOT NULL DEFAULT '0',
+  `blessings2` tinyint unsigned NOT NULL DEFAULT '0',
+  `blessings3` tinyint unsigned NOT NULL DEFAULT '0',
+  `blessings4` tinyint unsigned NOT NULL DEFAULT '0',
+  `blessings5` tinyint unsigned NOT NULL DEFAULT '0',
+  `blessings6` tinyint unsigned NOT NULL DEFAULT '0',
+  `blessings7` tinyint unsigned NOT NULL DEFAULT '0',
+  `blessings8` tinyint unsigned NOT NULL DEFAULT '0',
   `onlinetime` bigint NOT NULL DEFAULT '0',
   `deletion` bigint NOT NULL DEFAULT '0',
   `balance` bigint unsigned NOT NULL DEFAULT '0',
@@ -703,7 +711,7 @@ CREATE TABLE IF NOT EXISTS `towns` (
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-INSERT INTO server_config (config, value) VALUES ('db_version', '59'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO server_config (config, value) VALUES ('db_version', '60'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 CREATE TABLE IF NOT EXISTS guild_transactions (
   id SERIAL PRIMARY KEY,
