@@ -71,6 +71,7 @@ private:
 
 	void getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient);
 	void getCastList(const std::string& password);
+	void getAstraCastList();
 
 	bool isAstraClient_ = false;
 };

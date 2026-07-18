@@ -30,6 +30,16 @@ extern Vocations g_vocations;
 namespace {
 
 constexpr uint8_t ASTRA_LOGIN_BOOSTED_INFO_MARKER = 0xA1;
+constexpr uint8_t ASTRA_LOGIN_CAST_LIST_MARKER = 0xA2;
+constexpr uint8_t ASTRA_LOGIN_CAST_LIST_VERSION = 1;
+constexpr size_t ASTRA_LOGIN_CAST_LIST_LIMIT = std::numeric_limits<uint8_t>::max();
+constexpr std::string_view ASTRA_LOGIN_CAST_LIST_REQUEST = "__astra_casts_v1__";
+
+struct LoginCastEntry {
+	std::string name;
+	uint16_t viewers = 0;
+	bool hasPassword = false;
+};
 
 struct LoginBoostedEntry {
 	uint32_t raceId = 0;
@@ -384,6 +394,51 @@ void ProtocolLogin::getCastList(const std::string& password)
 	disconnect();
 }
 
+void ProtocolLogin::getAstraCastList()
+{
+	const auto casters = g_game.getLiveCasters({});
+	std::vector<LoginCastEntry> entries;
+	entries.reserve(std::min(ASTRA_LOGIN_CAST_LIST_LIMIT, casters.size()));
+
+	uint32_t totalViewers = 0;
+	for (const auto& caster : casters) {
+		if (entries.size() >= ASTRA_LOGIN_CAST_LIST_LIMIT) {
+			break;
+		}
+
+		if (!caster || !caster->client || !caster->client->isBroadcasting()) {
+			continue;
+		}
+
+		const size_t viewers = caster->client->spectatorList().size();
+		totalViewers += static_cast<uint32_t>(
+		    std::min<size_t>(viewers, std::numeric_limits<uint32_t>::max() - totalViewers));
+		entries.push_back(LoginCastEntry{
+		    caster->getName(),
+		    static_cast<uint16_t>(std::min<size_t>(viewers, std::numeric_limits<uint16_t>::max())),
+		    !caster->client->password().empty(),
+		});
+	}
+
+	auto output = OutputMessagePool::getOutputMessage();
+	output->addByte(ASTRA_LOGIN_CAST_LIST_MARKER);
+	output->addByte(ASTRA_LOGIN_CAST_LIST_VERSION);
+	output->addString(getString(ConfigManager::SERVER_NAME));
+	output->add<uint32_t>(getIP(getString(ConfigManager::IP)));
+	output->add<uint16_t>(getInteger(ConfigManager::GAME_PORT));
+	output->add<uint16_t>(static_cast<uint16_t>(entries.size()));
+	output->add<uint32_t>(totalViewers);
+
+	for (const auto& entry : entries) {
+		output->addString(entry.name);
+		output->add<uint16_t>(entry.viewers);
+		output->addByte(entry.hasPassword ? 1 : 0);
+	}
+
+	send(output);
+	disconnect();
+}
+
 void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 {
 	if (g_game.getGameState() == GAME_STATE_SHUTDOWN) {
@@ -488,7 +543,9 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		return;
 	}
 
-	if (isAstraClient_) {
+	const bool isAstraCastListRequest =
+	    accountName.empty() && isAstraClient_ && password == ASTRA_LOGIN_CAST_LIST_REQUEST;
+	if (isAstraClient_ && !isAstraCastListRequest) {
 		LOG_INFO(">> [AstraClient] Client accepted");
 	}
 	if (isFonticakClient_) {
@@ -504,8 +561,11 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 
 	g_dispatcher.addTask([=, thisPtr = std::static_pointer_cast<ProtocolLogin>(shared_from_this()),
 	                      accountName = std::string{accountName},
-	                      password = std::string{password}]() {
-		if (accountName.empty()) {
+	                      password = std::string{password},
+	                      astraCastListRequest = isAstraCastListRequest]() {
+		if (astraCastListRequest) {
+			thisPtr->getAstraCastList();
+		} else if (accountName.empty()) {
 			thisPtr->getCastList(password);
 		} else {
 			thisPtr->getCharacterList(accountName, password, thisPtr->isAstraClient_);
