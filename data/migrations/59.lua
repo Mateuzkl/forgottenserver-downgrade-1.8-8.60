@@ -13,16 +13,19 @@ function onUpdateDatabase()
 		return exists
 	end
 
-	local function indexExists(tableName, indexName)
-		local query = "SELECT COUNT(*) AS `count` FROM `information_schema`.`STATISTICS`"
+	local function indexSignature(tableName, indexName)
+		local columns = {}
+		local query = "SELECT `COLUMN_NAME` FROM `information_schema`.`STATISTICS`"
 			.. " WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = '" .. tableName .. "'"
-			.. " AND `INDEX_NAME` = '" .. indexName .. "'"
+			.. " AND `INDEX_NAME` = '" .. indexName .. "' ORDER BY `SEQ_IN_INDEX`"
 		local queryResult = db.storeQuery(query)
-		local exists = queryResult and result.getNumber(queryResult, "count") > 0
 		if queryResult then
+			repeat
+				columns[#columns + 1] = result.getString(queryResult, "COLUMN_NAME")
+			until not result.next(queryResult)
 			result.free(queryResult)
 		end
-		return exists
+		return table.concat(columns, ",")
 	end
 
 	local function ensureColumn(tableName, columnName, definition)
@@ -30,9 +33,17 @@ function onUpdateDatabase()
 			or db.query("ALTER TABLE `" .. tableName .. "` ADD COLUMN `" .. columnName .. "` " .. definition)
 	end
 
-	local function ensureIndex(tableName, indexName, columns)
-		return indexExists(tableName, indexName)
-			or db.query("ALTER TABLE `" .. tableName .. "` ADD INDEX `" .. indexName .. "` (" .. columns .. ")")
+	local function ensureIndex(tableName, indexName, columns, expectedSignature)
+		local currentSignature = indexSignature(tableName, indexName)
+		if currentSignature == expectedSignature then
+			return true
+		end
+
+		local dropIndex = currentSignature ~= "" and "DROP INDEX `" .. indexName .. "`, " or ""
+		return db.query(
+			"ALTER TABLE `" .. tableName .. "` " .. dropIndex ..
+			"ADD INDEX `" .. indexName .. "` (" .. columns .. ")"
+		) and indexSignature(tableName, indexName) == expectedSignature
 	end
 
 	if not db.query([[CREATE TABLE IF NOT EXISTS `market_offers` (
@@ -89,8 +100,8 @@ function onUpdateDatabase()
 	return ensureColumn("market_offers", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
 		and ensureColumn("market_offers", "attributes", "MEDIUMBLOB NULL AFTER `tier`")
 		and ensureColumn("market_history", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
-		and ensureIndex("market_offers", "idx_market_offers_item_sale_price", "`itemtype`, `sale`, `price`, `created`")
-		and ensureIndex("market_offers", "idx_market_offers_player_created", "`player_id`, `created`")
-		and ensureIndex("market_offers", "idx_market_offers_created", "`created`")
-		and ensureIndex("market_history", "idx_market_history_player_inserted", "`player_id`, `inserted`")
+		and ensureIndex("market_offers", "idx_market_offers_item_sale_price", "`itemtype`, `sale`, `price`, `created`", "itemtype,sale,price,created")
+		and ensureIndex("market_offers", "idx_market_offers_player_created", "`player_id`, `created`", "player_id,created")
+		and ensureIndex("market_offers", "idx_market_offers_created", "`created`", "created")
+		and ensureIndex("market_history", "idx_market_history_player_inserted", "`player_id`, `inserted`", "player_id,inserted")
 end
