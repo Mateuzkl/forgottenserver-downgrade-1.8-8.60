@@ -192,6 +192,13 @@ AutoStatRecursive::~AutoStatRecursive() noexcept
 void Stats::threadMain() {
 	std::unique_lock<std::mutex> taskLockUnique(statsLock, std::defer_lock);
 	bool last_iteration = false;
+	if (ConfigManager::getBoolean(ConfigManager::LOG_TO_FILE)) {
+		std::error_code error;
+		std::filesystem::create_directories("data/logs/stats", error);
+		if (error) {
+			LOG_STATS_WARNING("Can't create data/logs/stats: {}", error.message());
+		}
+	}
 	lua.lastDump = sql.lastDump = special.lastDump = OTSYS_TIME();
 	playersOnline = 0;
 	for(auto& dispatcher : dispatchers) {
@@ -317,7 +324,7 @@ void Stats::addDispatcherStat(std::size_t index, std::unique_ptr<Stat> stat) {
 }
 
 void Stats::addDispatcherWaitTime(std::size_t index, uint64_t waitTime) noexcept {
-	if (index >= dispatchers.size()) {
+	if (!isEnabled() || index >= dispatchers.size()) {
 		return;
 	}
 	dispatchers[index].waitTime.fetch_add(waitTime, std::memory_order_relaxed);

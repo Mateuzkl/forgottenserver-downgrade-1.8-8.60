@@ -24,6 +24,7 @@ struct BestiaryCreatureInfo
 	uint16_t raceId = 0;
 	std::string name;
 	uint32_t toKill = 0;
+	uint32_t firstUnlock = 0;
 	uint32_t secondUnlock = 0;
 	uint16_t charmPoints = 0;
 	uint16_t lookType = 0;
@@ -44,6 +45,8 @@ class BestiaryCharmSystem
 {
 public:
 	void registerMonster(BestiaryCreatureInfo info);
+	[[nodiscard]] std::optional<std::reference_wrapper<const BestiaryCreatureInfo>> getMonster(uint16_t raceId) const;
+	[[nodiscard]] static uint8_t getProgress(const BestiaryCreatureInfo& info, uint32_t kills);
 	BestiaryCharmActionResult handleCharmAction(Player& player, uint8_t charmId, uint8_t action, uint16_t raceId) const;
 
 	[[nodiscard]] bool isMajorCharm(uint8_t charmId) const;
@@ -73,7 +76,6 @@ private:
 	[[nodiscard]] bool removeGold(Player& player, uint64_t amount) const;
 	[[nodiscard]] uint8_t getAssignedCharmCount(const CharmStateMap& states) const;
 	[[nodiscard]] uint32_t getSpentMajorCharmPoints(const CharmStateMap& states) const;
-	[[nodiscard]] std::optional<std::reference_wrapper<const BestiaryCreatureInfo>> getMonster(uint16_t raceId) const;
 	[[nodiscard]] bool writeCharmStates(uint32_t playerGuid, const CharmStateMap& states) const;
 	[[nodiscard]] bool restoreCharmStates(uint32_t playerGuid, const CharmStateMap& states) const;
 	[[nodiscard]] bool restoreCharmStatesAndResources(uint32_t playerGuid, const CharmStateMap& states,

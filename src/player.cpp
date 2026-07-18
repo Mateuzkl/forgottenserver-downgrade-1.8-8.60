@@ -866,21 +866,10 @@ void Player::addDeathLog(uint32_t timestamp, uint8_t color, std::string_view mes
 
 void Player::sendBlessStatus()
 {
-	if (!client || !client->isAstraClient) {
+	if (!client) {
 		return;
 	}
-
-	uint8_t totalCount = 0;
-	for (uint8_t i = 2; i <= 8; i++) {
-		if (hasBlessing(i)) totalCount++;
-	}
-
-	NetworkMessage msg;
-	msg.addByte(0x9C);
-	bool glow = getVocationId() > 0 && (totalCount >= 4 || getLevel() < 21);
-	msg.add<uint16_t>(glow ? 1 : 0);
-	msg.addByte(totalCount >= 7 ? 3 : (totalCount >= 5 ? 2 : 1));
-	client->writeToOutputBuffer(msg);
+	client->sendBlessStatus();
 }
 
 Item* Player::getWeapon(bool ignoreAmmo /* = false*/) const
@@ -1706,6 +1695,32 @@ void Player::clearBestiaryDirty()
 {
 	modifiedBestiaryRaceIds.clear();
 	bestiaryDirtyRaceRevisions.clear();
+}
+
+void Player::setPendingBestiaryKill(BestiaryKillResult result)
+{
+	constexpr size_t maxPendingBestiaryKills = 16;
+	std::erase_if(pendingBestiaryKills, [&result](const BestiaryKillResult& pending) {
+		return pending.victimId == result.victimId;
+	});
+	pendingBestiaryKills.push_back(result);
+	while (pendingBestiaryKills.size() > maxPendingBestiaryKills) {
+		pendingBestiaryKills.pop_front();
+	}
+}
+
+std::optional<Player::BestiaryKillResult> Player::takePendingBestiaryKill(uint32_t victimId, uint16_t raceId)
+{
+	const auto it = std::ranges::find_if(pendingBestiaryKills, [victimId, raceId](const BestiaryKillResult& pending) {
+		return pending.victimId == victimId && pending.raceId == raceId;
+	});
+	if (it == pendingBestiaryKills.end()) {
+		return {};
+	}
+
+	BestiaryKillResult result = *it;
+	pendingBestiaryKills.erase(it);
+	return result;
 }
 
 void Player::setStorageValue(const uint32_t key, const std::optional<int64_t> value, const bool isSpawn /* = false*/)

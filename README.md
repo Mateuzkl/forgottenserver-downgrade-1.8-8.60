@@ -18,7 +18,7 @@
 ![C++](https://img.shields.io/badge/C++-23-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)
 ![Lua](https://img.shields.io/badge/Lua-5.5-2C2D72?style=for-the-badge&logo=lua&logoColor=white)
 ![MariaDB](https://img.shields.io/badge/MariaDB-003545?style=for-the-badge&logo=mariadb&logoColor=white)
-![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04%20%7C%2026.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-vcpkg-0078D4?style=for-the-badge&logo=windows&logoColor=white)
 
 <br />
@@ -39,480 +39,91 @@ Developed and maintained by [Mateuzkl](https://github.com/Mateuzkl), based on [N
 | Area | Features |
 |---|---|
 | Core | TFS 1.8 engine, protocol 8.60, C++23, Lua 5.5, MariaDB, optimized decay |
-| ClientID | Native `.dat` loading, no ServerID/ClientID conversion layer |
-| RPG systems | Forge, Imbuements, Reward Boss, Monk Harmony, Offline Training |
-| World systems | Instances, Zones, Guild Halls, House Protection, Live Cast |
-| Security & tools | Token Protection, System Spy, AutoLoot, Store Inbox support |
-| Clients | OTCv8/Mehah features, extended sprites, modified CIP DLL options |
+| Maps | ClientID-native maps and items |
+| Clients | OTCv8, Mehah, CipSoft, and custom client options |
+| Tooling | Automatic Ubuntu/WSL build and Windows support through vcpkg |
 
 ---
 
-## ClientID Native
+## Map Editor
 
-This source uses **ClientID everywhere**: items, maps, Lua scripts and database records all use the same IDs seen by the client.
+Use the ClientID-compatible map editor for this source:
 
-| What changes | Benefit |
-|---|---|
-| Reads item definitions from the client `.dat` | Easier content editing |
-| Removes ServerID/ClientID mapping | Fewer conversion bugs |
-| OTBM maps use ClientID directly | Better compatibility with modern workflows |
-
-Use the modified map editor:
-
-**[Download RME-CLIENTID](https://github.com/Mateuzkl/RME-CLIENTID)**
-
-Map tutorials:
-
-| Tutorial | Description |
-|---|---|
-| [ServerID to ClientID Conversion](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/wiki/Map-Conversion-Tutorial-%E2%80%90-ServerID-to-ClientID) | Convert standard TFS maps |
-| [Import Canary/Crystal Maps](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/wiki/Importing-Canary-Crystal-Maps-to-RME-8.60) | Downgrade and import modern maps |
-| [Importar Mapas Canary/Crystal](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/wiki/%F0%9F%97%BA%EF%B8%8F-Importando-Mapas-Canary-Crystal-para-RME-8.60) | Tutorial em portugues |
-
----
-
-## Systems
-
-<details>
-<summary><b>AutoLoot</b></summary>
-
-Built into the C++ source for high performance, with optional automatic gold deposit through AutoMoney.
-
-| Command | Description |
-|---|---|
-| `!autoloot` | Open the management window |
-| `!autoloot on/off` | Toggle AutoLoot |
-| `!autoloot clear` | Clear your loot list |
-
-</details>
-
-<details>
-<summary><b>Guild War</b></summary>
-
-Real guild wars with live ally, member and enemy emblems.
-
-| Command | Description |
-|---|---|
-| `/war invite, guildname` | Invite a guild |
-| `/war accept, guildname` | Accept a war |
-
-</details>
-
-<details>
-<summary><b>Reward Boss</b></summary>
-
-Tibia-like boss reward system with contribution tracking and reward chests.
-
-| Tracking | Description |
-|---|---|
-| Damage Done | DPS contribution |
-| Damage Taken | Survivability contribution |
-| Healing Done | Support contribution |
-| Fair Distribution | Loot based on total score |
-
-</details>
-
-<details>
-<summary><b>Offline Training</b></summary>
-
-Train skills while offline using beds. Premium is required, and gains are calculated from logout duration up to 12 hours.
-
-Trainable skills: Sword, Axe, Club, Distance, Shielding and Magic Level.
-
-</details>
-
-<details>
-<summary><b>Guild Halls</b></summary>
-
-Guild leaders can buy special halls using the guild bank balance. Guild halls support normal house features such as doors, beds and protection zones.
-
-| Command | Access | Description |
-|---|---|---|
-| `!buyhouse` | Leader / Vice-Leader | Buy a guild hall |
-| `!leavehouse` | Leader | Leave the hall |
-
-</details>
-
-<details>
-<summary><b>House Protection</b></summary>
-
-Owners can protect each house independently. When enabled, only the owner and listed guests can move items.
-
-| Command | Description |
-|---|---|
-| `!protecthouse on/off` | Toggle protection |
-| `!houseguest add <name>` | Add guest |
-| `!houseguest remove <name>` | Remove guest |
-| `!houseguest list` | Show guests |
-
-</details>
-
-<details>
-<summary><b>Live Cast</b></summary>
-
-Players can stream gameplay with `!cast`, receive configurable EXP bonuses, and chat with spectators in a dedicated channel.
-
-| Command | Access | Description |
-|---|---|---|
-| `!cast` | Caster | Start or stop broadcasting |
-| `/spectators` | Caster | List spectators |
-| `/kick <name>` | Caster | Kick spectator |
-| `/mute <name>` | Caster | Mute spectator |
-| `/ban <name>` | Caster | Ban spectator |
-
-</details>
-
-<details>
-<summary><b>Improved Decay</b></summary>
-
-Optimized item decay processing and state management to reduce CPU usage on populated servers.
-
-</details>
-
-<details>
-<summary><b>Token Item Protection</b></summary>
-
-Locks important items to the character to reduce theft risk when sharing accounts or recovering from compromised access.
-
-| Command | Description |
-|---|---|
-| `!token set, YOUR_TOKEN` | Set your secret token while disabled |
-| `!token on` | Enable protection |
-| `!token off, YOUR_TOKEN` | Disable protection |
-
-> Keep your token secret. It is required only to disable protection.
-
-</details>
-
-<details>
-<summary><b>System Spy</b></summary>
-
-Administrative tool for GODs and Admins to silently inspect a player session, including viewport, inventory and open containers.
-
-| Command | Permission | Description |
-|---|---|---|
-| `/spy <name>` | GOD / Admin | Observe a player |
-| `/spyinv <name>` | GOD / Admin | View inventory and containers |
-| `/unspy` | GOD / Admin | Stop observing |
-
-</details>
-
-<details>
-<summary><b>Magic Roulette</b></summary>
-
-Interactive roulette stations with animated map effects, configurable rewards and database tracking.
-
-![Magic Roulette](https://user-images.githubusercontent.com/40324910/236821618-63cb56a4-3003-4156-a05f-02375649fe55.gif)
-
-Configuration file: `data/scripts/magic-roulette-master/configroulette.lua`
-
-</details>
-
-<details>
-<summary><b>Forge System</b></summary>
-
-![Forge System](tools/forge.gif)
-
-Fuse two identical items to upgrade one of them by **+1 Tier**. Failures destroy one item and keep the other at its current tier.
-
-| Tier | Success Rate | Extra Materials |
-|:---:|:---:|:---:|
-| T0 to T1 | 50% | - |
-| T1 to T2 | 40% | - |
-| T2 to T3 | 30% | - |
-| T3 to T4 | 25% | - |
-| T4 to T5 | 20% | - |
-| T5 to T6 | 15% | Exalted Core |
-| T6 to T7 | 10% | Exalted Core |
-| T7 to T8 | 8% | Exalted Core |
-| T8 to T9 | 5% | Exalted Core |
-
-Materials: Forge Dust, Silver Tokens and Exalted Cores.
-
-| Command | Description |
-|---|---|
-| `/forge info` | Show forge info |
-| `/forge dust` | Check Forge Dust |
-| `/forge silver` | Check Silver Tokens |
-
-</details>
-
-<details>
-<summary><b>Imbuement System</b></summary>
-
-Supports scroll-based imbuements and raw material crafting through an Etcher/workbench flow.
-
-![Scroll Method](tools/imbuments_scroll.gif)
-
-![Raw Materials Method](tools/imbuments_items.gif)
-
-| Feature | Description |
-|---|---|
-| Workbench | 1 equipment slot plus up to 3 material slots |
-| Owner Lock | Only the item owner can apply imbuements |
-| Tiers | Flawed, Intricate and Powerful |
-| Types | 27 imbuements, including skills, leech, critical, elemental protection and more |
-
-</details>
-
-<details>
-<summary><b>Instance System</b></summary>
-
-Private dungeon instances where monsters, effects and items are visible only to players in the same instance.
-
-```lua
-player:setInstanceId(id)
-Game.registerInstanceArea(area)
-Game.createMonster(name, pos, extended, force, master, instanceId)
-```
-
-Use it for solo dungeons, party rooms, boss fights and quests without affecting the main world.
-
-</details>
-
-<details>
-<summary><b>Zones System</b></summary>
-
-Configurable geographical zones for safe areas, PvP arenas, custom events and territory control.
-
-Key APIs:
-
-```lua
-zone:getCreatures([type])
-zone:getItems([itemId])
-zone:getTiles([flags])
-Creature:onChangeZone(fromZone, toZone)
-```
-
-Zones can be loaded from `data/world/world-zones/1.xml` or created dynamically in Lua.
-
-</details>
-
-<details>
-<summary><b>Harmony System - Monk Vocation</b></summary>
-
-Exclusive to Monks. Harmony points are gained by builder spells and spent by stronger finishing spells.
-
-| Points | Base Bonus | With Virtue of Harmony |
-|:---:|:---:|:---:|
-| 0 | 0% | 0% |
-| 1 | +15% | +25% |
-| 2 | +30% | +55% |
-| 3 | +60% | +100% |
-| 4 | +120% | +200% |
-| 5 | +240% | +400% |
-
-Command:
-
-| Command | Description |
-|---|---|
-| `!harmony` | Show points, active virtue, serene state and bonus |
-
-</details>
+**[Download NexaMap Editor](https://github.com/Mateuzkl/NexaMap-Editor)**
 
 ---
 
 ## Optional Systems
 
-Some custom systems are disabled by default in `config.lua` and `config.lua.dist`, keeping the server closer to classic 8.60 behavior.
+Optional systems are listed in `config.lua.dist` and enabled in `config.lua`. Most remain disabled by default to preserve the classic 8.60 experience.
 
-| Config key | Default | Controls |
-|---|---|---|
-| `forgeSystemEnabled` | `false` | Forge tiers, commands, portal and item look text |
-| `imbuementSystemEnabled` | `false` | Imbuements, scrolls, workbench, portal and item look text |
-| `monkVocationEnabled` | `false` | Monk vocation behavior, outfits, spells and checks |
-| `familiarSystemEnabled` | `false` | Familiar summons, spells and remaining-time look text |
-| `wheelSystemEnabled` | `false` | Wheel of destiny, increase stats comp HP, mana, cap or mitigation. |
-| `bestiarySystemEnabled` | `false` | Custom Cyclopedia/Bestiary packets, kills, tracker and charms |
-| `marketSystemEnabled` | `false` | Custom OTC market packets, market tables and market depot item |
-| `preySystemEnabled` | `false` | Custom Prey packets, prey bonuses, timers and wildcard usage |
-item |
-| `monsterLevelEnabled` | `false` | Monsters with certain levels, increasing HP, damage, and experience |
+<details>
+<summary><strong>View optional systems and config keys</strong></summary>
 
-Set a system to `true` only when you want that feature active:
+| System | Config key |
+|---|---|
+| Forge | `forgeSystemEnabled` |
+| Imbuements | `imbuementSystemEnabled` |
+| Monk Vocation | `monkVocationEnabled` |
+| Familiars | `familiarSystemEnabled` |
+| Wheel of Destiny | `wheelSystemEnabled` |
+| Bestiary | `bestiarySystemEnabled` |
+| Market | `marketSystemEnabled` |
+| Prey | `preySystemEnabled` |
+| Battle Pass | `battlePassSystemEnabled` |
+| Weapon Proficiency | `weaponProficiencySystemEnabled` |
+| Augments | `augmentSystemEnabled` |
+| Monster Levels | `monsterLevelEnabled` |
+| Monster Factions | `monsterFactionSystem` |
+| Character Bazaar | `characterBazaarEnabled` |
+| Task Hunting / Task Board | `taskHuntingSystemEnabled` |
+| Bounty Tasks | `bountyTasksEnabled` |
+| Weekly Tasks | `weeklyTasksEnabled` |
+| Soulpit | `soulpitSystemEnabled` |
+| Soulseals | `soulsealsSystemEnabled` |
 
-Example:
+Set the desired key to `true` in `config.lua`. Bounty and Weekly Tasks require Task Hunting; Soulseals require Weekly Tasks or another configured source.
 
-```lua
-forgeSystemEnabled = false
-imbuementSystemEnabled = true
-monkVocationEnabled = false
-familiarSystemEnabled = false
-wheelSystemEnabled = false
-bestiarySystemEnabled = true
-marketSystemEnabled = false
-preySystemEnabled = false
-```
+</details>
 
 ---
 
 ## Compilation
 
-## **IMPORTANT / ATENCAO**
+### Linux / WSL
 
-### **RECOMMENDED: USE THE AUTOMATIC BUILD SCRIPT**
-
-For Ubuntu 22.04 / 24.04 or WSL, run:
+On Ubuntu 22.04, 24.04, or 26.04, run:
 
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
 
-The script supports Ubuntu 22.04 and Ubuntu 24.04. It detects your Ubuntu version, lets you choose the language, installs missing dependencies, prepares Lua 5.5, `simdutf`, `mio` and builds the server in Release mode.
+The script detects the Ubuntu version, installs all required dependencies automatically, and builds the server in Release mode.
 
-Ubuntu 22.04 uses `gcc-12`/`g++-12` automatically because the default `g++` 11 package does not provide the C++23 `std::move_only_function` support required by this source. Ubuntu 24.04 can use the default compiler packages.
-
-If Ubuntu 22.04 fails with `TaskReactor requires C++23 std::move_only_function support` or `ThreadPool requires C++23 std::move_only_function support`, rerun the automatic script without `--skip-deps` so it can install `g++-12`, then rebuild with `--clean`.
-
-Useful examples:
-
-```bash
-./build.sh --lang pt
-./build.sh --lang en --ubuntu 24.04
-./build.sh --lang es --ubuntu 22.04 --clean
-```
-
-After the build finishes, run:
+After the build finishes:
 
 ```bash
 ./tfs
 ```
 
-Manual compilation notes are kept below only for advanced/custom setups.
-
-### Ubuntu 22.04 / 24.04
-
-Manual build requirements:
-
-- Only Ubuntu 22.04 and Ubuntu 24.04 are supported by the automatic script.
-- Ubuntu 24.04 is recommended.
-- Ubuntu 22.04 requires `gcc-12` and `g++-12` for C++23 support.
-- Lua 5.5 is installed manually because Ubuntu does not ship it as a normal apt package.
-- `simdutf` and `mio` are installed manually into `$HOME/.local`.
-
-Install system dependencies:
-
-```bash
-sudo apt update
-sudo apt install -y \
-  git wget cmake build-essential pkg-config gcc-12 g++-12 \
-  libmysqlclient-dev \
-  libpugixml-dev libfmt-dev libssl-dev libspdlog-dev libmimalloc-dev \
-  libabsl-dev libasio-dev zlib1g-dev
-```
-
-On Ubuntu 24.04, `gcc-12` and `g++-12` are not required when using the default compiler.
-
-Install Lua 5.5:
-
-```bash
-cd /tmp
-wget https://www.lua.org/ftp/lua-5.5.0.tar.gz
-tar -xzf lua-5.5.0.tar.gz
-cd lua-5.5.0
-
-make linux
-sudo make install
-
-lua -v
-```
-
-The build command below passes Lua explicitly. Keep these CMake flags when building manually:
-
-```bash
--DCMAKE_CXX_COMPILER=/usr/bin/g++-12 \
--DLUA_INCLUDE_DIR=/usr/local/include \
--DLUA_LIBRARY=/usr/local/lib/liblua.a \
--DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl" \
--DLUA_VERSION_STRING=5.5.0
-```
-
-Use `-DCMAKE_CXX_COMPILER=/usr/bin/g++-12` on Ubuntu 22.04. Omit it on Ubuntu 24.04 unless you intentionally want to select another compiler.
-
-Install `simdutf`:
-
-```bash
-cd ~
-git clone https://github.com/simdutf/simdutf.git
-cd simdutf
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/.local
-cmake --build build -- -j"$(nproc)"
-cmake --install build
-```
-
-Install `mio`:
-
-```bash
-cd ~
-git clone https://github.com/mandreyel/mio.git
-cd mio
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/.local
-cmake --build build -- -j"$(nproc)"
-cmake --install build
-```
-
-Build the server in Release mode:
-
-```bash
-git clone https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60
-cd forgottenserver-downgrade-1.8-8.60
-
-rm -rf build-release
-mkdir build-release
-cd build-release
-
-cmake -DCMAKE_BUILD_TYPE=Release \
-  -DDISABLE_STATS=1 \
-  -DENABLE_SLOW_TASK_DETECTION=ON \
-  -DUSE_MIMALLOC=ON \
-  -DLUA_INCLUDE_DIR=/usr/local/include \
-  -DLUA_LIBRARY=/usr/local/lib/liblua.a \
-  -DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl" \
-  -DLUA_VERSION_STRING=5.5.0 \
-  -DCMAKE_PREFIX_PATH="/usr/local;$HOME/.local" \
-  ..
-
-cmake --build . -- -j"$(nproc)"
-```
-
-| CMake flag | Effect |
-|---|---|
-| `-DCMAKE_BUILD_TYPE=Release` | Enables optimized release build |
-| `-DDISABLE_STATS=1` | Removes runtime stats overhead |
-| `-DENABLE_SLOW_TASK_DETECTION=ON` | Enables slow task diagnostics |
-| `-DUSE_MIMALLOC=ON` | Uses Microsoft's mimalloc allocator |
-| `-DCMAKE_PREFIX_PATH="/usr/local;$HOME/.local"` | Helps CMake find manual Lua, simdutf and mio installs |
-
-For memory/lifetime pull requests, run the Linux ASAN test preset:
-
-```bash
-cmake --preset asan-linux-tests
-cmake --build --preset asan-linux-tests -- -j"$(nproc)"
-ctest --preset asan-linux-tests --output-on-failure
-```
-
-Optional Linux tuning:
-
-```bash
-sudo cpupower frequency-set -g performance
-sudo nice -n -10 ./tfs
-```
-
 ### Windows
 
-Install vcpkg:
+Use the latest version of [vcpkg](https://github.com/microsoft/vcpkg):
 
-```bash
+```powershell
 git clone https://github.com/microsoft/vcpkg.git
 cd vcpkg
 .\bootstrap-vcpkg.bat
 .\vcpkg.exe integrate install
 ```
 
-Build with **Visual Studio 2022** or newer. Choose backend, platform and build normally; dependencies are installed through vcpkg.
+| Visual Studio | Platform toolset |
+|---|---|
+| Visual Studio 2026 | `v145` (project default) |
+| Visual Studio 2022 | `v143` (retarget the project before building) |
 
-Full guide: [Windows Compilation Wiki](https://github.com/MillhioreBT/forgottenserver-downgrade/wiki/Compiling-on-Windows-(vcpkg))
+Open `vc18/theforgottenserver.sln`, select `Release` and `x64`, then build the solution. Dependencies declared in `vcpkg.json` are downloaded automatically on the first build.
 
 ---
 
@@ -523,103 +134,26 @@ Read the full client setup guide before changing feature flags:
 - English: [`docs/client-configuration.md`](docs/client-configuration.md)
 - PT-BR: [`docs/client-configuration.pt-BR.md`](docs/client-configuration.pt-BR.md)
 
-The server still accepts protocol **860**. Version **15.24** below refers to the updated appearance/assets set (`.dat`, `.spr`, and `items.otb`), not a protocol change.
+## Available Clients
 
-### 📢 Client Update: Version 15.24
+Choose the client that matches the experience and feature set you want. They all target protocol 8.60, but use different engines and visual styles.
 
-**Client version upgraded to 15.24.** The items.otb and sprite files (.spr and .dat) have been updated to support version 15.24 for both OTCv8 and the classic CIP client. Download the latest assets below.
+### OTClient-based
 
-### OTCv8 / Mehah
-
-Enable the required base features for protocol 860 in your client feature file, usually `modules/game_features/features.lua` or `modules/game_features/game_features.lua`. Keep server-negotiated flags separate from client-local defaults:
-
-```lua
-if(version >= 860) then
-    -- Server-negotiated by ProtocolGame::sendFeatures().
-    -- OTCv8/Astra receive the full set below; Mehah-only handshakes are narrower.
-    g_game.enableFeature(GameExtendedOpcode)
-    g_game.enableFeature(GameSkillsBase)
-    g_game.enableFeature(GamePlayerMounts)
-    g_game.enableFeature(GameMagicEffectU16)
-    g_game.enableFeature(GameDoubleSkills)
-    g_game.enableFeature(GameOfflineTrainingTime)
-    g_game.enableFeature(GameBaseSkillU16)
-    g_game.enableFeature(GameAdditionalSkills)
-    g_game.enableFeature(GameExtendedClientPing)
-    g_game.enableFeature(GameCreatureIcons)
-    g_game.enableFeature(GameContainerPagination)
-    g_game.enableFeature(GameBrowseField)
-
-    -- Client-only defaults for this 8.60 protocol / 15.x appearance setup.
-    -- These are not advertised by ProtocolGame::sendFeatures().
-    g_game.enableFeature(GameAttackSeq)
-    g_game.enableFeature(GameBot)
-    g_game.enableFeature(GameDistanceEffectU16)
-    g_game.enableFeature(GameDoubleHealth)
-    g_game.enableFeature(GameIdleAnimations)
-    g_game.enableFeature(GameEnhancedAnimations)
-    g_game.enableFeature(GameSpritesU32)
-    g_game.enableFeature(GameDoublePlayerGoodsMoney)
-    g_game.enableFeature(GamePurseSlot)
-    g_game.enableFeature(GamePrey)
-    g_game.enableFeature(GameSpellList)
-
-    -- Packet-layout flags must match ProtocolGame::sendFeatures().
-    -- Let the server handshake enable/disable these.
-    g_game.disableFeature(GameQuickLootFlags)
-    g_game.disableFeature(GameThingUpgradeClassification)
-    g_game.disableFeature(GameItemTierByte)
-end
-```
-
-Some forks define `GameLeechAmount`. It is not advertised by this server handshake; enable it only when the client source has that feature id and its parser expects it.
-
-Store Inbox compatibility:
-
-| Client | Behavior |
+| Client | Description |
 |---|---|
-| OTCv8 / Mehah | Enable `GamePurseSlot` for protocol 860 |
-| Original CIP 8.60 | Use `!storeinbox`, `!sinbox` or `!inbox` |
-| Close inbox | Use `!fecharinbox` or `!closeinbox` |
+| [Astra Client 8.6](https://github.com/Mateuzkl/AstraClient) | OTCv8 client based on OTAcademy with a layout inspired by the CIP 15.x appearance |
+| [Otcv8--Classic-8.6](https://github.com/Mateuzkl/Otcv8--Classic-8.6) | OTCv8 Classic using the original CIP 8.60 appearance |
+| [OTC-Fonticak](https://github.com/soyfabi/OTC-Fonticak) | Alternative client based on a Mehah fork |
 
-Extended sprites:
+### CipSoft and custom clients
 
-- [Otcv8--Classic-8.6 (CIP 8.60 Appearance)](https://github.com/Mateuzkl/Otcv8--Classic-8.6)
-- [Astra Client (CIP 15.x Appearance)](https://github.com/Mateuzkl/AstraClient)
-- [OTC-Fonticak (Fork Mehah)](https://github.com/soyfabi/OTC-Fonticak)
-- Extract `.spr` and `.dat` to your OTC directory.
+| Client | Description |
+|---|---|
+| [Client 8.60 + DLL Mount](https://github.com/Mateuzkl/Client-cip-8.60-with-DLL-Mount) | Classic CipSoft 8.60 client with mount support through a modified DLL |
+| [Forgotten Client (Alpha 1.0)](https://github.com/Mateuzkl/The-Forgotten-Client) | Future custom client currently under development |
 
-> [!IMPORTANT]
-> **Astra Client Asset Setup:** The Astra Client repository does not contain the required `.spr` and `.dat` sprite files at the moment. To run the Astra Client, you must download the latest OTCv8 Classic sprite assets, extract them, and place them in the appropriate directory of your Astra Client (usually under `data/things/860/`).
-> - **[Click here to download 860.rar (spr/dat)](https://github.com/Mateuzkl/Otcv8--Classic-8.6/blob/main/data/things/860.rar)**
-
-CIP client with mounts:
-
-- [Client 8.60 + DLL Mount](https://github.com/Mateuzkl/Client-cip-8.60-with-DLL-Mount)
-
-CIP client, future client (<span style="color: green;">Work Progress</span>)
-- [Forgotten Client (Alpha 1.0)](https://github.com/Mateuzkl/The-Forgotten-Client)
-
-### Modified CIP DLL Options
-
-| DLL patch | Status | Extends |
-|---|:---:|---|
-| `__MAGIC_EFFECTS_U16__` | Done | Magic effects: 255 to 65535 |
-| `__DISTANCE_SHOOT_U16__` | Done | Projectile effects: 255 to 65535 |
-| `__PLAYER_HEALTH_U32__` | Done | Player HP: 65535 to 4.2 billion |
-| `__PLAYER_MANA_U32__` | Done | Player mana: 65535 to 4.2 billion |
-| `__PLAYER_SKILLS_U16__` | Pending | Skill levels up to 65535 |
-| Outfit Limit Changer | Done | Outfits: 255 to 65535+ |
-
----
-
-## Downloads
-
-### Client updater
-
-Update the CipSoft client, executables and DLLs automatically:
-
-**[Client Updater Tutorial - Mateuzkl/Client_Mout_Updater](https://github.com/Mateuzkl/Client_Mout_Updater)**
+> CIP 15.x in the Astra description refers only to its visual layout. The server and every client listed here continue to use protocol 8.60.
 
 ---
 

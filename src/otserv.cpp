@@ -250,6 +250,14 @@ void printDatabaseConnectionFailure(const Database::ConnectionError& error)
 void printStatsStatus()
 {
 	using namespace ConsoleStyle;
+	if (!g_stats.isEnabled()) {
+		consolePrint(cyan_b, "    ⚙  OTS STATISTICS\n");
+		consolePrint(dark_gray, "    ────────────────────────────────────────\n");
+		consolePrint(gray, "    {:<20}", "Status");
+		consolePrint(dark_gray, "Disabled by config\n");
+		return;
+	}
+
 	const auto fileStatus = g_stats.getFileLoggingStatus();
 
 	if (fileStatus.requested && !fileStatus.available) {
@@ -744,7 +752,11 @@ int startServer()
 
 		const auto networkThreads = std::clamp<int64_t>(getInteger(ConfigManager::NETWORK_THREADS), 1, 64);
 #ifdef STATS_ENABLED
-		g_stats.configureDispatchers(static_cast<std::size_t>(networkThreads) + 1);
+		const bool statsEnabled = getBoolean(ConfigManager::STATS_MONITOR_ENABLED);
+		g_stats.setEnabled(statsEnabled);
+		if (statsEnabled) {
+			g_stats.configureDispatchers(static_cast<std::size_t>(networkThreads) + 1);
+		}
 #endif
 		auto serviceStarted = std::make_shared<std::promise<void>>();
 		auto serviceStartedFuture = serviceStarted->get_future();
@@ -955,9 +967,10 @@ int startServer()
 		g_logger().setConsoleLevel(parseLogLevel(getString(ConfigManager::LOG_LEVEL)));
 
 #ifdef STATS_ENABLED
-		g_stats.start();
-		runtimeState.statsStarted = true;
-		g_stats.setEnabled(true);
+		if (statsEnabled) {
+			g_stats.start();
+			runtimeState.statsStarted = true;
+		}
 #endif
 		startupCompleted = true;
 		g_reactor.runLoop();

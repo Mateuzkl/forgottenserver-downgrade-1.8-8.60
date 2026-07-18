@@ -85,15 +85,9 @@ local function clamp(value, minValue, maxValue)
 	return value
 end
 
-local function getSeasonStore()
-	return kv.scoped("battlepass"):scoped("season")
-end
-
 local function getSeason()
 	local seasonConfig = config.season or {}
-	local store = getSeasonStore()
 	local configuredId = tostring(seasonConfig.id or "season")
-	local activeConfigId = store:get("configId")
 	local epoch = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonEpoch)) or -1
 	local beginTime = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonStartedAt)) or -1
 
@@ -105,10 +99,6 @@ local function getSeason()
 		end
 		Game.setStorageValue(GlobalStorageKeys.battlePassSeasonEpoch, epoch)
 		Game.setStorageValue(GlobalStorageKeys.battlePassSeasonStartedAt, beginTime)
-	end
-
-	if activeConfigId ~= configuredId then
-		store:set("configId", configuredId)
 	end
 
 	local durationDays = math.max(1, tonumber(seasonConfig.durationDays) or 35)
@@ -181,7 +171,6 @@ local function loadState(player)
 
 	if type(state) ~= "table" or state.seasonId ~= season.id then
 		state = resetStateForSeason(season)
-		player:setStorageValue(PlayerStorageKeys.battlePassSeasonEpoch, season.epoch)
 	else
 		ensureStateTables(state)
 	end
@@ -674,13 +663,10 @@ local rewardTypes = {
 	prey = 7,
 	xpBoost = 8,
 	regeneration = 9,
-	overloadForge = 10,
-	instantReward = 11,
 	boostedExercise = 12,
 	charms = 13,
 	outfit = 14,
 	extraSkill = 15,
-	elementalOutfit = 16,
 	multiItem = 17,
 	choiceItem = 18,
 }
@@ -744,9 +730,6 @@ local function makeReward(step, freeReward, definition)
 		if #reward.randomValues == 0 then
 			reward.randomValues = makeOutfitValues(definition.female)
 		end
-	elseif definition.type == "elementalOutfit" then
-		reward.maleOutfit = definition.maleOutfit or {}
-		reward.femaleOutfit = definition.femaleOutfit or {}
 	end
 
 	return reward
@@ -895,34 +878,64 @@ local function addItemsToBattlePassInbox(player, items)
 		return false, "Your Battle Pass inbox is not available."
 	end
 
+	local normalizedItems = {}
 	local neededSlots = 0
 	for _, entry in ipairs(items) do
-		local itemType = ItemType(entry.itemId)
-		if not itemType or itemType:getId() ~= entry.itemId then
+		if type(entry) ~= "table" then
 			return false, "This season has an invalid reward item configured."
 		end
-		neededSlots = neededSlots + (itemType:isStackable() and 1 or entry.count)
+
+		local itemId = tonumber(entry.itemId) or 0
+		local count = math.max(1, math.floor(tonumber(entry.count) or 1))
+		local charges = math.max(0, math.floor(tonumber(entry.charges) or 0))
+		if itemId <= 0 then
+			return false, "This season has an invalid reward item configured."
+		end
+		local itemType = ItemType(itemId)
+		if not itemType or itemType:getId() ~= itemId then
+			return false, "This season has an invalid reward item configured."
+		end
+
+		local stackSize = itemType:isStackable() and math.max(1, itemType:getStackSize()) or 1
+		neededSlots = neededSlots + math.ceil(count / stackSize)
+		normalizedItems[#normalizedItems + 1] = {
+			itemId = itemId,
+			count = count,
+			charges = charges,
+			stackSize = stackSize,
+		}
 	end
 	if inbox:getEmptySlots() < neededSlots then
 		return false, "Your Battle Pass inbox does not have enough room for this reward."
 	end
 
-	for _, entry in ipairs(items) do
-		local itemType = ItemType(entry.itemId)
-		local deliveries = itemType:isStackable() and 1 or entry.count
-		local amount = itemType:isStackable() and entry.count or 1
-		for _ = 1, deliveries do
+	local deliveredItems = {}
+	local deliveryFlags = FLAG_NOLIMIT | FLAG_IGNOREAUTOSTACK
+	local function rollbackDeliveredItems()
+		for index = #deliveredItems, 1, -1 do
+			deliveredItems[index]:remove()
+		end
+	end
+
+	for _, entry in ipairs(normalizedItems) do
+		local remaining = entry.count
+		while remaining > 0 do
+			local amount = math.min(remaining, entry.stackSize)
 			local item = Game.createItem(entry.itemId, amount)
 			if not item then
+				rollbackDeliveredItems()
 				return false, "Could not create the reward item."
 			end
-			if entry.charges and entry.charges > 0 then
+			if entry.charges > 0 then
 				item:setAttribute(ITEM_ATTRIBUTE_CHARGES, entry.charges)
 			end
-			if inbox:addItemEx(item, INDEX_WHEREEVER, FLAG_NOLIMIT) ~= RETURNVALUE_NOERROR then
+			if inbox:addItemEx(item, INDEX_WHEREEVER, deliveryFlags) ~= RETURNVALUE_NOERROR then
 				item:remove()
+				rollbackDeliveredItems()
 				return false, "Your Battle Pass inbox does not have enough room for this reward."
 			end
+			deliveredItems[#deliveredItems + 1] = item
+			remaining = remaining - amount
 		end
 	end
 	return true
@@ -1382,7 +1395,6 @@ function BattlePassSystem.resetPlayer(player)
 		return false, "Player not found."
 	end
 	getStore(player):remove("state")
-	player:setStorageValue(PlayerStorageKeys.battlePassSeasonEpoch, -1)
 	local state, store, season, daily = loadState(player)
 	saveState(store, state)
 	if supportsCustomNetwork(player) then
@@ -1435,11 +1447,9 @@ function BattlePassSystem.unlockShop(player)
 end
 
 function BattlePassSystem.startNewSeason()
-	local seasonStore = getSeasonStore()
 	local currentEpoch = tonumber(Game.getStorageValue(GlobalStorageKeys.battlePassSeasonEpoch)) or 0
 	Game.setStorageValue(GlobalStorageKeys.battlePassSeasonEpoch, math.max(1, currentEpoch + 1))
 	Game.setStorageValue(GlobalStorageKeys.battlePassSeasonStartedAt, os.time())
-	seasonStore:set("configId", tostring(config.season.id or "season"))
 
 	for _, onlinePlayer in ipairs(Game.getPlayers()) do
 		BattlePassSystem.resetPlayer(onlinePlayer)

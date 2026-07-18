@@ -153,7 +153,32 @@ if (USE_LUAJIT)
 else ()
     set(TFS_LUA_REQUIRED_VERSION "5.5")
     message(STATUS "LuaJIT disabled; requiring Lua ${TFS_LUA_REQUIRED_VERSION}. See README.md for the manual Lua 5.5 setup.")
-    find_package(Lua "${TFS_LUA_REQUIRED_VERSION}" REQUIRED)
+
+    # Lua 5.5 changed its version defines to numeric *_N macros. CMake's
+    # FindLua module does not recognize those macros yet, so honor and verify
+    # the explicit paths supplied by build.sh before falling back to FindLua.
+    if (LUA_INCLUDE_DIR AND LUA_LIBRARY AND EXISTS "${LUA_INCLUDE_DIR}/lua.h" AND EXISTS "${LUA_LIBRARY}")
+        file(STRINGS "${LUA_INCLUDE_DIR}/lua.h" TFS_LUA_VERSION_DEFINES
+            REGEX "^#define[ \t]+LUA_VERSION_(MAJOR|MINOR)(_N)?[ \t]+")
+
+        string(REGEX MATCH "LUA_VERSION_MAJOR(_N)?[ \t]+\"?([0-9]+)" TFS_LUA_MAJOR_MATCH "${TFS_LUA_VERSION_DEFINES}")
+        set(TFS_LUA_VERSION_MAJOR "${CMAKE_MATCH_2}")
+        string(REGEX MATCH "LUA_VERSION_MINOR(_N)?[ \t]+\"?([0-9]+)" TFS_LUA_MINOR_MATCH "${TFS_LUA_VERSION_DEFINES}")
+        set(TFS_LUA_VERSION_MINOR "${CMAKE_MATCH_2}")
+
+        if (NOT TFS_LUA_VERSION_MAJOR STREQUAL "5" OR NOT TFS_LUA_VERSION_MINOR STREQUAL "5")
+            message(FATAL_ERROR "The explicit Lua headers at ${LUA_INCLUDE_DIR} are not Lua ${TFS_LUA_REQUIRED_VERSION}.")
+        endif()
+
+        if (NOT LUA_LIBRARIES)
+            set(LUA_LIBRARIES "${LUA_LIBRARY};m;${CMAKE_DL_LIBS}")
+        endif()
+        set(Lua_FOUND TRUE)
+        set(Lua_VERSION "${TFS_LUA_VERSION_MAJOR}.${TFS_LUA_VERSION_MINOR}")
+        message(STATUS "Found explicit Lua ${Lua_VERSION}: ${LUA_LIBRARY}")
+    else()
+        find_package(Lua "${TFS_LUA_REQUIRED_VERSION}" REQUIRED)
+    endif()
 endif ()
 
 if (APPLE)

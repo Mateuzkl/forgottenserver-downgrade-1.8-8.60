@@ -124,7 +124,7 @@ private:
 		int64_t lastDump;
 	} lua, sql, special;
 
-	std::atomic<bool> enabled{true};
+	std::atomic<bool> enabled{false};
 	const std::filesystem::path statsDirectory{"data/logs/stats"};
 	std::filesystem::path absoluteStatsDirectory;
 	std::atomic<bool> fileLoggingRequested{false};

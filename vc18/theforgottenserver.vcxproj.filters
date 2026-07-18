@@ -41,6 +41,8 @@
     <ClCompile Include="..\src\luascript.cpp" />
     <ClCompile Include="..\src\mailbox.cpp" />
     <ClCompile Include="..\src\map.cpp" />
+    <ClCompile Include="..\src\market.cpp" />
+    <ClCompile Include="..\src\stash.cpp" />
     <ClCompile Include="..\src\matrixarea.cpp" />
     <ClCompile Include="..\src\monster.cpp" />
     <ClCompile Include="..\src\monsters.cpp" />
@@ -264,6 +266,8 @@
     <ClInclude Include="..\src\luascript.h" />
     <ClInclude Include="..\src\mailbox.h" />
     <ClInclude Include="..\src\map.h" />
+    <ClInclude Include="..\src\market.h" />
+    <ClInclude Include="..\src\stash.h" />
     <ClInclude Include="..\src\matrixarea.h" />
     <ClInclude Include="..\src\monster.h" />
     <ClInclude Include="..\src\monsters.h" />

@@ -10,8 +10,10 @@
 #include "game.h"
 #include "monster.h"
 #include "performance_metrics.h"
+#include "player.h"
 #include "scheduler.h"
 #include "scriptmanager.h"
+#include "bestiary_charm.h"
 #include "instance_utils.h"
 #include "tools.h"
 
@@ -561,6 +563,60 @@ void Creature::onDeath()
 					experienceMap[attacker] = gainExp;
 				} else {
 					tmpIt->second += gainExp;
+				}
+			}
+		}
+	}
+
+	// Keep the Bestiary base kill on the game thread and independent from Lua event
+	// registration. Recipient selection intentionally mirrors the former Lua onDeath:
+	// last hit and most damage resolve a player summon to its master, while the damage
+	// map contributes direct players only. GUID deduplication gives one base kill per
+	// player and death; party sharing is deliberately not introduced here.
+	if (Monster* monster = getMonster(); monster && !monster->isSummon() &&
+	    ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED)) {
+		const MonsterType* monsterType = monster->getMonsterType();
+		const uint32_t monsterRaceId = monsterType ? monsterType->raceId : 0;
+		if (monsterType && monsterRaceId > 0 && monsterRaceId <= std::numeric_limits<uint16_t>::max()) {
+			const uint16_t raceId = static_cast<uint16_t>(monsterRaceId);
+			const auto registeredMonster = g_bestiaryCharmSystem.getMonster(raceId);
+			if (registeredMonster) {
+				std::unordered_map<uint32_t, std::shared_ptr<Player>> recipients;
+				auto addPlayerOwner = [&recipients](const std::shared_ptr<Creature>& attacker) {
+					if (!attacker) {
+						return;
+					}
+
+					std::shared_ptr<Creature> owner = attacker;
+					if (!owner->getPlayer()) {
+						owner = owner->getMasterShared();
+					}
+					if (!owner || !owner->getPlayer()) {
+						return;
+					}
+
+					if (auto player = g_game.getPlayerByID(owner->getID())) {
+						recipients.try_emplace(player->getGUID(), std::move(player));
+					}
+				};
+
+				addPlayerOwner(lastHitCreature);
+				addPlayerOwner(mostDamageCreature);
+				for (const auto& [attackerId, _] : damageMap) {
+					auto attacker = g_game.getCreatureByIDShared(attackerId);
+					if (attacker && attacker->getPlayer()) {
+						addPlayerOwner(attacker);
+					}
+				}
+
+				const BestiaryCreatureInfo& info = registeredMonster->get();
+				for (const auto& [_, player] : recipients) {
+					const auto [oldCount, newCount] = player->addBestiaryKillCount(raceId, 1);
+					const bool completed = oldCount < info.toKill && newCount >= info.toKill;
+					if (completed) {
+						player->addBestiaryCharmPoints(info.charmPoints);
+					}
+					player->setPendingBestiaryKill({getID(), raceId, oldCount, newCount, completed});
 				}
 			}
 		}
