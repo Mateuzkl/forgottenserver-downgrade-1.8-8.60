@@ -39,6 +39,26 @@ namespace {
 thread_local std::vector<std::string>* tlsQueryCapture = nullptr;
 thread_local bool tlsSuppressConnectionErrorLogging = false;
 
+class ScopedConnectionErrorLoggingSuppression final
+{
+public:
+	ScopedConnectionErrorLoggingSuppression() noexcept : previousValue(tlsSuppressConnectionErrorLogging)
+	{
+		tlsSuppressConnectionErrorLogging = true;
+	}
+
+	~ScopedConnectionErrorLoggingSuppression()
+	{
+		tlsSuppressConnectionErrorLogging = previousValue;
+	}
+
+	ScopedConnectionErrorLoggingSuppression(const ScopedConnectionErrorLoggingSuppression&) = delete;
+	ScopedConnectionErrorLoggingSuppression& operator=(const ScopedConnectionErrorLoggingSuppression&) = delete;
+
+private:
+	bool previousValue;
+};
+
 #ifdef STATS_ENABLED
 void recordSqlStats(std::string_view query, std::chrono::steady_clock::time_point start)
 {
@@ -256,9 +276,10 @@ bool Database::connect()
 		static_cast<int>(getInteger(ConfigManager::SQL_PORT))
 	};
 
-	tlsSuppressConnectionErrorLogging = true;
-	ConnectionContext& ctx = getContext();
-	tlsSuppressConnectionErrorLogging = false;
+	ConnectionContext& ctx = [this]() -> ConnectionContext& {
+		ScopedConnectionErrorLoggingSuppression guard;
+		return getContext();
+	}();
 	if (!ctx.handle) {
 		return false;
 	}

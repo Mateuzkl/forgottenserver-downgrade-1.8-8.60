@@ -50,6 +50,12 @@ void addStatSample(statsMap& stats, const Stat& stat)
 	it->second.calls += 1;
 	it->second.executionTime += stat.executionTime;
 }
+
+std::error_code currentStreamError()
+{
+	return errno != 0 ? std::error_code(errno, std::generic_category()) :
+	                    std::make_error_code(std::io_errc::stream);
+}
 }
 
 Stats::Stats()
@@ -433,17 +439,24 @@ void Stats::writeSlowInfo(const std::string& file, uint64_t executionTime, const
 	errno = 0;
 	std::ofstream out(statsDirectory / file, std::ofstream::out | std::ofstream::app);
 	if (!out.is_open()) {
-		const std::error_code error = errno != 0 ? std::error_code(errno, std::generic_category()) :
-		                                          std::make_error_code(std::io_errc::stream);
-		disableFileLogging(error.message());
+		disableFileLogging(currentStreamError().message());
+		LOG_STATS("Execution time: {} ms - {} - {}", (executionTime / 1000000), description, extraDescription);
 		return;
 	}
 	
 	// File log includes manual timestamp
 	std::string fileMessage = fmt::format("[{}] Execution time: {} ms - {} - {}\n", formatDateShort(time(nullptr)), (executionTime / 1000000), description, extraDescription);
+	errno = 0;
 	out << fileMessage;
-	out.flush();
-	out.close();
+	if (!out) {
+		disableFileLogging(currentStreamError().message());
+	} else {
+		errno = 0;
+		out.flush();
+		if (!out) {
+			disableFileLogging(currentStreamError().message());
+		}
+	}
 
 	// Console log uses system Logger (timestamp handled by logger)
 	LOG_STATS("Execution time: {} ms - {} - {}", (executionTime / 1000000), description, extraDescription);
@@ -469,15 +482,14 @@ void Stats::writeStats(const std::string& file, const statsMap& stats, const std
 	errno = 0;
 	std::ofstream out(statsDirectory / file, std::ofstream::out | std::ofstream::app);
 	if (!out.is_open()) {
-		const std::error_code error = errno != 0 ? std::error_code(errno, std::generic_category()) :
-		                                          std::make_error_code(std::io_errc::stream);
-		disableFileLogging(error.message());
+		disableFileLogging(currentStreamError().message());
 		return;
 	}
 	if(stats.empty()) {
 		out.close();
 		return;
 	}
+	errno = 0;
 	out << "[" << formatDateShort(time(nullptr)) << "]\n";
 
 	std::vector<std::pair<std::string, statsData>> pairs;
@@ -503,6 +515,14 @@ void Stats::writeStats(const std::string& file, const statsMap& stats, const std
 				<< std::setw(15) << std::setprecision(5) << std::fixed << percent << "%" << std::setw(15) << std::setprecision(5) << std::fixed << realPercent << "%" << " " << it.first << "\n";
 	}
 	out << "\n";
+	if (!out) {
+		disableFileLogging(currentStreamError().message());
+		return;
+	}
+
+	errno = 0;
 	out.flush();
-	out.close();
+	if (!out) {
+		disableFileLogging(currentStreamError().message());
+	}
 }
