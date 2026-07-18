@@ -866,21 +866,10 @@ void Player::addDeathLog(uint32_t timestamp, uint8_t color, std::string_view mes
 
 void Player::sendBlessStatus()
 {
-	if (!client || !client->isAstraClient) {
+	if (!client) {
 		return;
 	}
-
-	uint8_t totalCount = 0;
-	for (uint8_t i = 2; i <= 8; i++) {
-		if (hasBlessing(i)) totalCount++;
-	}
-
-	NetworkMessage msg;
-	msg.addByte(0x9C);
-	bool glow = getVocationId() > 0 && (totalCount >= 4 || getLevel() < 21);
-	msg.add<uint16_t>(glow ? 1 : 0);
-	msg.addByte(totalCount >= 7 ? 3 : (totalCount >= 5 ? 2 : 1));
-	client->writeToOutputBuffer(msg);
+	client->sendBlessStatus();
 }
 
 Item* Player::getWeapon(bool ignoreAmmo /* = false*/) const

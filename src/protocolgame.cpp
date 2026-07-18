@@ -3889,7 +3889,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	}
 
 	if (isAstraClient) {
-		player->sendBlessStatus();
+		sendBlessStatus();
 	}
 
 	sendWorldLight(g_game.getWorldLightInfo());
