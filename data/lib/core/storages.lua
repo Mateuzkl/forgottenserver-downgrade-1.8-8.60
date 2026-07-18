@@ -36,8 +36,7 @@ PlayerStorageKeys = {
 
     -- Battle Pass
     -- The detailed state is persisted in player KV under the "battlepass" scope.
-    -- These numeric storages are intentionally reserved for timers/version markers.
-    battlePassSeasonEpoch = 90730,
+    -- This numeric storage is reserved for the active reward timer.
     battlePassDoubleSkillUntil = 90731,
 
     -- Forge system

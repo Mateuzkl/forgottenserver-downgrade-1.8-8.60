@@ -25,8 +25,10 @@
 #include "kv/kv.h"
 #include <algorithm>
 #include <array>
+#include <deque>
 #include <limits>
 #include <map>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -225,6 +227,16 @@ public:
 	BestiaryDirtySnapshot getBestiaryDirtySnapshot() const;
 	void acknowledgeBestiaryDirty(const BestiaryDirtySnapshot& snapshot);
 	void clearBestiaryDirty();
+	struct BestiaryKillResult
+	{
+		uint32_t victimId = 0;
+		uint16_t raceId = 0;
+		uint32_t oldCount = 0;
+		uint32_t newCount = 0;
+		bool charmPointsAwarded = false;
+	};
+	void setPendingBestiaryKill(BestiaryKillResult result);
+	std::optional<BestiaryKillResult> takePendingBestiaryKill(uint32_t victimId, uint16_t raceId);
 	bool getSaveFlag() const { return saveFlag; }
 	void setSaveFlag(bool value) { saveFlag = value; }
 	bool canSeeInvisibility() const override { return hasFlag(PlayerFlag_CanSenseInvisibility) || group->access; }
@@ -1712,6 +1724,7 @@ private:
 	std::unordered_set<uint16_t> modifiedBestiaryRaceIds;
 	std::unordered_map<uint16_t, uint64_t> bestiaryDirtyRaceRevisions;
 	uint64_t bestiaryDirtyRevision = 0;
+	std::deque<BestiaryKillResult> pendingBestiaryKills;
 	std::unique_ptr<WeaponProficiency> m_weaponProficiency;
 	std::weak_ptr<Item> writeItem;
 	std::weak_ptr<House> editHouse;

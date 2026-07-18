@@ -18,7 +18,7 @@
 ![C++](https://img.shields.io/badge/C++-23-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)
 ![Lua](https://img.shields.io/badge/Lua-5.5-2C2D72?style=for-the-badge&logo=lua&logoColor=white)
 ![MariaDB](https://img.shields.io/badge/MariaDB-003545?style=for-the-badge&logo=mariadb&logoColor=white)
-![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04%20%7C%2026.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-vcpkg-0078D4?style=for-the-badge&logo=windows&logoColor=white)
 
 <br />
@@ -352,16 +352,16 @@ preySystemEnabled = false
 
 ### **RECOMMENDED: USE THE AUTOMATIC BUILD SCRIPT**
 
-For Ubuntu 22.04 / 24.04 or WSL, run:
+For Ubuntu 22.04 / 24.04 / 26.04 or WSL, run:
 
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
 
-The script supports Ubuntu 22.04 and Ubuntu 24.04. It detects your Ubuntu version, lets you choose the language, installs missing dependencies, prepares Lua 5.5, `simdutf`, `mio` and builds the server in Release mode.
+The script supports Ubuntu 22.04, Ubuntu 24.04 and Ubuntu 26.04. It detects your Ubuntu version, lets you choose the language, installs missing dependencies, prepares Lua 5.5, `simdutf`, `mio` and builds the server in Release mode.
 
-Ubuntu 22.04 uses `gcc-12`/`g++-12` automatically because the default `g++` 11 package does not provide the C++23 `std::move_only_function` support required by this source. Ubuntu 24.04 can use the default compiler packages.
+Ubuntu 22.04 uses `gcc-12`/`g++-12` automatically because the default `g++` 11 package does not provide the C++23 `std::move_only_function` support required by this source. Ubuntu 24.04 and Ubuntu 26.04 can use their default compiler packages.
 
 If Ubuntu 22.04 fails with `TaskReactor requires C++23 std::move_only_function support` or `ThreadPool requires C++23 std::move_only_function support`, rerun the automatic script without `--skip-deps` so it can install `g++-12`, then rebuild with `--clean`.
 
@@ -371,6 +371,7 @@ Useful examples:
 ./build.sh --lang pt
 ./build.sh --lang en --ubuntu 24.04
 ./build.sh --lang es --ubuntu 22.04 --clean
+./build.sh --lang pt --ubuntu 26.04 --clean
 ```
 
 After the build finishes, run:
@@ -379,14 +380,61 @@ After the build finishes, run:
 ./tfs
 ```
 
+### MyAAC for TFS 1.8 / protocol 8.60
+
+The web-stack assistant supports Ubuntu 22.04, 24.04 and 26.04. It installs the default PHP-FPM version and required extensions, Nginx, MariaDB, the TFS schema and the latest official [slawkens/myaac](https://github.com/slawkens/myaac) release. Existing databases are not imported twice, and an existing MyAAC directory is backed up before an update.
+
+Run a read-only system check first:
+
+```bash
+chmod +x install-tfs18-myaac.sh
+./install-tfs18-myaac.sh --check
+```
+
+Start the guided installation:
+
+```bash
+./install-tfs18-myaac.sh --install
+```
+
+On reruns, the assistant reuses the database credentials already present in
+`config.lua`; administrative MariaDB access is not required when that database
+is healthy. On a new server where MariaDB root password authentication is used
+instead of Ubuntu's default Unix-socket authentication, provide it only through
+the environment (it is never accepted as a command-line argument):
+
+```bash
+sudo MARIADB_ROOT_PASSWORD='YOUR_ROOT_PASSWORD' ./install-tfs18-myaac.sh --install
+```
+
+The script detects the administrator IP from the SSH session. You can also provide it and the site domain explicitly:
+
+```bash
+./install-tfs18-myaac.sh --install \
+  --admin-ip YOUR_PUBLIC_IP \
+  --domain account.example.com
+```
+
+phpMyAdmin is optional and, when requested, listens only on `127.0.0.1:2344` for access through an SSH tunnel:
+
+```bash
+./install-tfs18-myaac.sh --install --with-phpmyadmin
+```
+
+After completing `/install` in the browser, disable the web installer:
+
+```bash
+sudo ./install-tfs18-myaac.sh --lock-installer
+```
+
 Manual compilation notes are kept below only for advanced/custom setups.
 
-### Ubuntu 22.04 / 24.04
+### Ubuntu 22.04 / 24.04 / 26.04
 
 Manual build requirements:
 
-- Only Ubuntu 22.04 and Ubuntu 24.04 are supported by the automatic script.
-- Ubuntu 24.04 is recommended.
+- Ubuntu 22.04, Ubuntu 24.04 and Ubuntu 26.04 are supported by the automatic script.
+- Ubuntu 24.04 and Ubuntu 26.04 can use the default compiler packages.
 - Ubuntu 22.04 requires `gcc-12` and `g++-12` for C++23 support.
 - Lua 5.5 is installed manually because Ubuntu does not ship it as a normal apt package.
 - `simdutf` and `mio` are installed manually into `$HOME/.local`.
@@ -402,7 +450,7 @@ sudo apt install -y \
   libabsl-dev libasio-dev zlib1g-dev
 ```
 
-On Ubuntu 24.04, `gcc-12` and `g++-12` are not required when using the default compiler.
+On Ubuntu 24.04 and Ubuntu 26.04, `gcc-12` and `g++-12` are not required when using the default compiler.
 
 Install Lua 5.5:
 
@@ -424,11 +472,10 @@ The build command below passes Lua explicitly. Keep these CMake flags when build
 -DCMAKE_CXX_COMPILER=/usr/bin/g++-12 \
 -DLUA_INCLUDE_DIR=/usr/local/include \
 -DLUA_LIBRARY=/usr/local/lib/liblua.a \
--DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl" \
--DLUA_VERSION_STRING=5.5.0
+-DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl"
 ```
 
-Use `-DCMAKE_CXX_COMPILER=/usr/bin/g++-12` on Ubuntu 22.04. Omit it on Ubuntu 24.04 unless you intentionally want to select another compiler.
+Use `-DCMAKE_CXX_COMPILER=/usr/bin/g++-12` on Ubuntu 22.04. Omit it on Ubuntu 24.04 and Ubuntu 26.04 unless you intentionally want to select another compiler.
 
 Install `simdutf`:
 
@@ -469,7 +516,6 @@ cmake -DCMAKE_BUILD_TYPE=Release \
   -DLUA_INCLUDE_DIR=/usr/local/include \
   -DLUA_LIBRARY=/usr/local/lib/liblua.a \
   -DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl" \
-  -DLUA_VERSION_STRING=5.5.0 \
   -DCMAKE_PREFIX_PATH="/usr/local;$HOME/.local" \
   ..
 

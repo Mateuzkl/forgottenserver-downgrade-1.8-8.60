@@ -190,6 +190,7 @@
     <ClCompile Include="..\src\condition.cpp" />
     <ClCompile Include="..\src\configmanager.cpp" />
     <ClCompile Include="..\src\connection.cpp" />
+    <ClCompile Include="..\src\connection_rate_limiter.cpp" />
     <ClCompile Include="..\src\container.cpp" />
     <ClCompile Include="..\src\creature.cpp" />
     <ClCompile Include="..\src\creatureevent.cpp" />
@@ -261,6 +262,8 @@
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\map.cpp" />
     <ClCompile Include="..\src\mapcache.cpp" />
+    <ClCompile Include="..\src\market.cpp" />
+    <ClCompile Include="..\src\stash.cpp" />
     <ClCompile Include="..\src\matrixarea.cpp" />
     <ClCompile Include="..\src\monster.cpp" />
     <ClCompile Include="..\src\monsters.cpp" />
@@ -336,6 +339,7 @@
     <ClInclude Include="..\src\condition.h" />
     <ClInclude Include="..\src\configmanager.h" />
     <ClInclude Include="..\src\connection.h" />
+    <ClInclude Include="..\src\connection_rate_limiter.h" />
     <ClInclude Include="..\src\container.h" />
     <ClInclude Include="..\src\const.h" />
     <ClInclude Include="..\src\creature.h" />
@@ -376,6 +380,8 @@
     <ClInclude Include="..\src\mailbox.h" />
     <ClInclude Include="..\src\map.h" />
     <ClInclude Include="..\src\mapcache.h" />
+    <ClInclude Include="..\src\market.h" />
+    <ClInclude Include="..\src\stash.h" />
     <ClInclude Include="..\src\matrixarea.h" />
     <ClInclude Include="..\src\monster.h" />
     <ClInclude Include="..\src\monsters.h" />

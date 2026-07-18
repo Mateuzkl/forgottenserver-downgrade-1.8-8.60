@@ -5,95 +5,30 @@
 
 #include "server.h"
 
-#include "ban.h"
 #include "configmanager.h"
-#include "outputmessage.h"
-#include "scheduler.h"
+#include "performance_metrics.h"
 #include "logger.h"
 #include <fmt/format.h>
 
 #include "tools.h"
 
 namespace {
-struct ConnectBlock
+bool shouldLog(std::atomic<uint64_t>& nextLog, uint64_t currentTime, uint64_t interval)
 {
-	uint64_t lastAttempt;
-	uint64_t blockTime = 0;
-	uint32_t count = 1;
-	uint32_t totalBlocks = 0;  // escalation counter
-};
-
-// Cleanup stale entries periodically to prevent memory growth
-void cleanupConnectMap(std::unordered_map<uint32_t, ConnectBlock>& ipConnectMap, uint64_t currentTime)
-{
-	static uint64_t lastCleanup = 0;
-	if (currentTime - lastCleanup < 60000) { // every 60 seconds
-		return;
-	}
-	lastCleanup = currentTime;
-
-	std::erase_if(ipConnectMap, [currentTime](const auto& entry) {
-		return currentTime - entry.second.lastAttempt > 300000;
-	});
-}
-
-bool acceptConnection(const uint32_t clientIP)
-{
-	static std::recursive_mutex mu;
-	std::scoped_lock lock{mu};
-
-	uint64_t currentTime = OTSYS_TIME();
-
-	static std::unordered_map<uint32_t, ConnectBlock> ipConnectMap;
-
-	// Periodic cleanup of stale entries
-	cleanupConnectMap(ipConnectMap, currentTime);
-
-	auto it = ipConnectMap.find(clientIP);
-	if (it == ipConnectMap.end()) {
-		ipConnectMap.emplace(clientIP, ConnectBlock{.lastAttempt = currentTime});
-		return true;
-	}
-
-	ConnectBlock& connectBlock = it->second;
-	if (connectBlock.blockTime > currentTime) {
-		// Escalate block time for repeat offenders (DDoS protection)
-		connectBlock.blockTime += 500;
-		return false;
-	}
-
-	int64_t timeDiff = currentTime - connectBlock.lastAttempt;
-	connectBlock.lastAttempt = currentTime;
-	if (timeDiff <= 5000) {
-		if (++connectBlock.count > static_cast<uint32_t>(getInteger(ConfigManager::CONNECTION_RATE_LIMIT_ALLOWED))) {
-			connectBlock.count = 0;
-			connectBlock.totalBlocks++;
-
-			// Escalating block: repeat offenders get longer bans
-			uint64_t blockDuration = 3000;
-			if (connectBlock.totalBlocks >= 10) {
-				blockDuration = 300000; // 5 minutes
-			} else if (connectBlock.totalBlocks >= 5) {
-				blockDuration = 60000;  // 1 minute
-			} else if (connectBlock.totalBlocks >= 3) {
-				blockDuration = 15000;  // 15 seconds
-			}
-
-			if (timeDiff <= getInteger(ConfigManager::CONNECTION_RATE_LIMIT_MS)) {
-				connectBlock.blockTime = currentTime + blockDuration;
-				return false;
-			}
-		}
-	} else {
-		connectBlock.count = 1;
-		// Slowly decay totalBlocks when the IP behaves
-		if (timeDiff > 60000 && connectBlock.totalBlocks > 0) {
-			connectBlock.totalBlocks--;
+	auto expected = nextLog.load(std::memory_order_relaxed);
+	while (currentTime >= expected) {
+		if (nextLog.compare_exchange_weak(expected, currentTime + interval, std::memory_order_relaxed)) {
+			return true;
 		}
 	}
-	return true;
+	return false;
 }
-}
+
+std::atomic<uint64_t> nextConnectionLimitLog{0};
+std::atomic<uint64_t> nextIpLimitLog{0};
+std::atomic<uint64_t> nextRateLimitLog{0};
+std::atomic<uint64_t> nextAcceptErrorLog{0};
+} // namespace
 
 ServiceManager::~ServiceManager() { stop(); }
 
@@ -103,7 +38,23 @@ void ServiceManager::die()
 	// shut down so closeLocked's dispatched release() would be lost.
 	ConnectionManager::getInstance().releaseAllProtocols();
 	ConnectionManager::getInstance().closeAll();
+	workGuard.reset();
+	LOG_NETWORK("Stopping network io_context.");
 	io_context.stop();
+}
+
+void ServiceManager::runIoContext() noexcept
+{
+	while (!io_context.stopped()) {
+		try {
+			io_context.run();
+			return;
+		} catch (const std::exception& e) {
+			LOG_ERROR(fmt::format("[Network] Exception in asynchronous handler: {}. Continuing io_context.", e.what()));
+		} catch (...) {
+			LOG_ERROR("[Network] Unknown exception in asynchronous handler. Continuing io_context.");
+		}
+	}
 }
 
 void ServiceManager::run()
@@ -121,11 +72,11 @@ void ServiceManager::run()
 	if (extraThreads > 0) {
 		ioThreads.reserve(extraThreads);
 		for (int i = 0; i < extraThreads; ++i) {
-			ioThreads.emplace_back([this]() { io_context.run(); });
+			ioThreads.emplace_back([this]() { runIoContext(); });
 		}
 	}
 
-	io_context.run();
+	runIoContext();
 	running.store(false, std::memory_order_release);
 
 	// After io_context.stop() is called in die(), all io_context.run() calls return.
@@ -142,7 +93,7 @@ void ServiceManager::stop()
 
 	for (auto& servicePortIt : acceptors) {
 		try {
-			asio::post(io_context, [servicePort = servicePortIt.second]() { servicePort->onStopServer(); });
+			servicePortIt.second->onStopServer();
 		} catch (std::system_error& e) {
 			LOG_NETWORK(fmt::format("Error - ServiceManager::stop: {}", e.what()));
 		}
@@ -179,62 +130,132 @@ void ServicePort::accept()
 		return;
 	}
 
-	auto connection = ConnectionManager::getInstance().createConnection(io_context, shared_from_this());
-	if (!connection) {
-		// Max connections reached — schedule retry after a brief delay
-		auto timer = std::make_shared<asio::steady_timer>(io_context);
-		timer->expires_after(std::chrono::milliseconds(100));
-		timer->async_wait([timer, thisPtr = shared_from_this()](const asio::error_code&) {
-			thisPtr->accept();
-		});
-		return;
-	}
+	Connection_ptr connection;
+	try {
+		connection = ConnectionManager::getInstance().createConnection(io_context, shared_from_this());
+		if (!connection) {
+			const uint64_t currentTime = OTSYS_TIME();
+			if (shouldLog(nextConnectionLimitLog, currentTime, 60'000)) {
+				LOG_NETWORK(fmt::format("Connection limit reached: active={}, configured={}. Retrying accept.",
+				                                ConnectionManager::getInstance().getConnectionCount(),
+				                                getInteger(ConfigManager::MAX_CONNECTIONS)));
+			}
+			scheduleAccept(std::chrono::milliseconds(100));
+			return;
+		}
 
-	acceptor->async_accept(connection->getSocket(),
-	                       [=, thisPtr = shared_from_this()](const asio::error_code& error) {
-		                       thisPtr->onAccept(connection, error);
-	                       });
+		acceptor->async_accept(
+			connection->getSocket(),
+			asio::bind_executor(strand, [thisPtr = shared_from_this(), connection](const asio::error_code& error) {
+				thisPtr->onAccept(connection, error);
+			}));
+		g_performanceMetrics.recordNetworkAcceptStarted();
+	} catch (const std::exception& e) {
+		if (connection) {
+			connection->close(Connection::FORCE_CLOSE);
+		}
+		const uint64_t currentTime = OTSYS_TIME();
+		if (shouldLog(nextAcceptErrorLog, currentTime, 10'000)) {
+			LOG_NETWORK(fmt::format("Failed to start async_accept on port {}: {}", serverPort, e.what()));
+		}
+		scheduleAccept(std::chrono::milliseconds(250));
+	}
 }
 
 void ServicePort::onAccept(Connection_ptr connection, const asio::error_code& error)
 {
-	if (!error) {
-		if (services.empty()) {
+	if (error) {
+		connection->close(Connection::FORCE_CLOSE);
+		if (error == asio::error::operation_aborted) {
+			if (!stopped.load() && !pendingStart.load() && acceptor && acceptor->is_open()) {
+				scheduleAccept(std::chrono::milliseconds(0));
+			}
 			return;
 		}
 
-		const auto remote_ip = connection->getIP();
-		if (remote_ip != 0 && acceptConnection(remote_ip)) {
-			// Check per-IP connection limit
-			if (ConnectionManager::getInstance().isMaxConnectionsPerIPReached(remote_ip)) {
-				connection->close(Connection::FORCE_CLOSE);
-				accept();
-				return;
-			}
+		g_performanceMetrics.recordNetworkAccept(false);
+		const uint64_t currentTime = OTSYS_TIME();
+		if (shouldLog(nextAcceptErrorLog, currentTime, 10'000)) {
+			LOG_NETWORK(fmt::format("async_accept failed on port {}: code={} message='{}' acceptor_open={}",
+			                                serverPort, error.value(), error.message(),
+			                                acceptor && acceptor->is_open()));
+		}
 
-			// Track this IP's connection count
-			ConnectionManager::getInstance().trackIPConnection(remote_ip);
+		if (stopped.load()) {
+			return;
+		}
 
-			Service_ptr service = services.front();
-			if (service->is_single_socket()) {
-				connection->accept(service->make_protocol(connection));
-			} else {
-				connection->accept();
-			}
+		const bool needsReopen = error == asio::error::bad_descriptor || error == asio::error::not_socket ||
+		                         error == asio::error::invalid_argument || !acceptor || !acceptor->is_open();
+		if (needsReopen) {
+			scheduleOpen(std::chrono::seconds(1));
 		} else {
+			scheduleAccept(std::chrono::milliseconds(250));
+		}
+		return;
+	}
+
+	g_performanceMetrics.recordNetworkAccept(true);
+	try {
+		if (services.empty()) {
+			LOG_ERROR(fmt::format("[Network] Accepted a connection on port {} without a registered service.", serverPort));
 			connection->close(Connection::FORCE_CLOSE);
+			accept();
+			return;
 		}
 
-		accept();
-	} else if (error != asio::error::operation_aborted) {
-		if (!stopped.load() && !pendingStart.exchange(true)) {
-			close();
-			g_scheduler.addEvent(createSchedulerTask(
-			    15000, ([serverPort = this->serverPort, service = std::weak_ptr<ServicePort>(shared_from_this())]() {
-				    openAcceptor(service, serverPort);
-			    })));
+		const uint32_t remoteIp = connection->getIP();
+		if (remoteIp == 0) {
+			connection->close(Connection::FORCE_CLOSE);
+			accept();
+			return;
 		}
+
+		const uint64_t currentTime = OTSYS_TIME();
+		const auto rateResult = rateLimiter.check(
+			remoteIp, currentTime,
+			static_cast<uint32_t>(std::max<int64_t>(0, getInteger(ConfigManager::CONNECTION_RATE_LIMIT_ALLOWED))),
+			static_cast<uint64_t>(std::max<int64_t>(0, getInteger(ConfigManager::CONNECTION_RATE_LIMIT_MS))));
+		if (!rateResult.allowed) {
+			g_performanceMetrics.recordNetworkRateLimitRejection();
+			if (rateResult.blockStarted && shouldLog(nextRateLimitLog, currentTime, 10'000)) {
+				LOG_NETWORK(fmt::format("Rate limit started for {}: duration_ms={} escalation={}",
+				                                convertIPToString(remoteIp), rateResult.blockDuration,
+				                                rateResult.totalBlocks));
+			}
+			connection->close(Connection::FORCE_CLOSE);
+			accept();
+			return;
+		}
+
+		uint32_t ipConnectionCount = 0;
+		if (!ConnectionManager::getInstance().trackIPConnection(connection, remoteIp, ipConnectionCount)) {
+			g_performanceMetrics.recordNetworkIpLimitRejection();
+			if (shouldLog(nextIpLimitLog, currentTime, 60'000)) {
+				LOG_NETWORK(fmt::format("Per-IP connection limit reached for {}: active={}, configured={}",
+				                                convertIPToString(remoteIp), ipConnectionCount,
+				                                getInteger(ConfigManager::MAX_CONNECTIONS_PER_IP)));
+			}
+			connection->close(Connection::FORCE_CLOSE);
+			accept();
+			return;
+		}
+
+		Service_ptr service = services.front();
+		if (service->is_single_socket()) {
+			connection->accept(service->make_protocol(connection));
+		} else {
+			connection->accept();
+		}
+	} catch (const std::exception& e) {
+		LOG_NETWORK(fmt::format("Exception while handling accepted connection on port {}: {}", serverPort, e.what()));
+		connection->close(Connection::FORCE_CLOSE);
+	} catch (...) {
+		LOG_NETWORK(fmt::format("Unknown exception while handling accepted connection on port {}.", serverPort));
+		connection->close(Connection::FORCE_CLOSE);
 	}
+
+	accept();
 }
 
 Protocol_ptr ServicePort::make_protocol(bool checksummed, NetworkMessage& msg, const Connection_ptr& connection) const
@@ -254,15 +275,49 @@ Protocol_ptr ServicePort::make_protocol(bool checksummed, NetworkMessage& msg, c
 
 void ServicePort::onStopServer()
 {
+	asio::dispatch(strand, [thisPtr = shared_from_this()] { thisPtr->stopOnStrand(); });
+}
+
+void ServicePort::stopOnStrand()
+{
 	stopped.store(true);
 	close();
 }
 
-void ServicePort::openAcceptor(std::weak_ptr<ServicePort> weak_service, uint16_t port)
+void ServicePort::scheduleAccept(std::chrono::milliseconds delay)
 {
-	if (auto service = weak_service.lock(); service && !service->stopped.load()) {
-		service->open(port);
+	if (stopped.load()) {
+		return;
 	}
+
+	retryTimer.expires_after(delay);
+	retryTimer.async_wait([service = std::weak_ptr<ServicePort>(shared_from_this())](const asio::error_code& error) {
+		if (error == asio::error::operation_aborted) {
+			return;
+		}
+		if (auto servicePort = service.lock(); servicePort && !servicePort->stopped.load()) {
+			servicePort->accept();
+		}
+	});
+}
+
+void ServicePort::scheduleOpen(std::chrono::milliseconds delay)
+{
+	if (stopped.load() || pendingStart.exchange(true)) {
+		return;
+	}
+
+	close();
+	retryTimer.expires_after(delay);
+	retryTimer.async_wait(
+		[service = std::weak_ptr<ServicePort>(shared_from_this()), port = serverPort](const asio::error_code& error) {
+			if (error == asio::error::operation_aborted) {
+				return;
+			}
+			if (auto servicePort = service.lock(); servicePort && !servicePort->stopped.load()) {
+				servicePort->open(port);
+			}
+		});
 }
 
 void ServicePort::open(uint16_t port)
@@ -277,22 +332,24 @@ void ServicePort::open(uint16_t port)
 	pendingStart.store(false);
 
 	try {
+		asio::ip::tcp::endpoint endpoint;
 		if (getBoolean(ConfigManager::BIND_ONLY_GLOBAL_ADDRESS)) {
-			acceptor = std::make_unique<asio::ip::tcp::acceptor>(
-			    io_context,
-			    asio::ip::tcp::endpoint(asio::ip::address(asio::ip::make_address_v4(
-			                                       std::string{getString(ConfigManager::IP)})),
-			                                   serverPort));
+			endpoint = asio::ip::tcp::endpoint(
+				asio::ip::address(asio::ip::make_address_v4(std::string{getString(ConfigManager::IP)})), serverPort);
 		} else {
-			acceptor = std::make_unique<asio::ip::tcp::acceptor>(
-			    io_context, asio::ip::tcp::endpoint(
-			                    asio::ip::address(asio::ip::address_v4(INADDR_ANY)), serverPort));
+			endpoint = asio::ip::tcp::endpoint(asio::ip::tcp::v4(), serverPort);
 		}
 
+		acceptor = std::make_unique<asio::ip::tcp::acceptor>(strand, endpoint, true);
 		acceptor->set_option(asio::ip::tcp::no_delay(true));
+		const auto boundEndpoint = acceptor->local_endpoint();
+		LOG_NETWORK(fmt::format("Acceptor listening on {}:{} (configured_ip={}, bind_only_global={}).",
+		                                boundEndpoint.address().to_string(), boundEndpoint.port(),
+		                                getString(ConfigManager::IP),
+		                                getBoolean(ConfigManager::BIND_ONLY_GLOBAL_ADDRESS)));
 
 		accept();
-	} catch (std::system_error& e) {
+	} catch (const std::system_error& e) {
 		LOG_NETWORK(fmt::format("Error - ServicePort::open: {}", e.what()));
 
 		if (e.code() == asio::error::address_in_use) {
@@ -303,17 +360,17 @@ void ServicePort::open(uint16_t port)
 			LOG_ERROR("\x1b[31mThen start the server again.\x1b[0m");
 		}
 
-		if (!stopped.load()) {
-			pendingStart.store(true);
-			g_scheduler.addEvent(createSchedulerTask(
-			    15000,
-			    ([port, service = std::weak_ptr<ServicePort>(shared_from_this())]() { openAcceptor(service, port); })));
-		}
+		scheduleOpen(std::chrono::seconds(15));
+	} catch (const std::exception& e) {
+		LOG_NETWORK(fmt::format("Error - ServicePort::open: {}", e.what()));
+		scheduleOpen(std::chrono::seconds(15));
 	}
 }
 
 void ServicePort::close()
 {
+	asio::error_code timerError;
+	retryTimer.cancel(timerError);
 	if (acceptor && acceptor->is_open()) {
 		asio::error_code error;
 		acceptor->close(error);

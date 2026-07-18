@@ -27,6 +27,7 @@ public:
 
 private:
 	LoginAttemptLimiter() = default;
+	void cleanup(int64_t now);
 
 	struct AttemptInfo {
 		uint32_t failures = 0;
@@ -36,6 +37,7 @@ private:
 
 	std::unordered_map<uint32_t, AttemptInfo> attempts;
 	std::mutex mu;
+	int64_t lastCleanup = 0;
 
 	static constexpr uint32_t MAX_FAILURES = 5;
 	static constexpr int64_t WINDOW_MS = 60000;      // 60 seconds

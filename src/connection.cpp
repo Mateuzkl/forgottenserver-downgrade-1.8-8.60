@@ -7,6 +7,7 @@
 
 #include "configmanager.h"
 #include "outputmessage.h"
+#include "performance_metrics.h"
 #include "protocol.h"
 #include "scheduler.h"
 #include "server.h"
@@ -18,13 +19,14 @@ Connection_ptr ConnectionManager::createConnection(asio::io_context& io_context,
 {
 	std::scoped_lock lockClass(connectionManagerLock);
 
-	if (connections.size() >= static_cast<size_t>(getInteger(ConfigManager::MAX_CONNECTIONS))) {
-		LOG_NETWORK(fmt::format("Max connections ({}) reached. Rejecting new connection.", getInteger(ConfigManager::MAX_CONNECTIONS)));
+	const int64_t maximumConnections = getInteger(ConfigManager::MAX_CONNECTIONS);
+	if (maximumConnections > 0 && connections.size() >= static_cast<size_t>(maximumConnections)) {
 		return nullptr;
 	}
 
 	auto connection = std::make_shared<Connection>(io_context, servicePort);
 	connections.insert(connection);
+	g_performanceMetrics.recordNetworkConnectionCount(connections.size());
 	return connection;
 }
 
@@ -32,8 +34,11 @@ void ConnectionManager::releaseConnection(const Connection_ptr& connection)
 {
 	std::scoped_lock lockClass(connectionManagerLock);
 
-	// Decrement IP counter
-	uint32_t ip = connection->getLastIp();
+	if (connections.erase(connection) == 0) {
+		return;
+	}
+
+	const uint32_t ip = connection->trackedIp;
 	if (ip != 0) {
 		auto it = ipConnectionCount.find(ip);
 		if (it != ipConnectionCount.end()) {
@@ -45,7 +50,7 @@ void ConnectionManager::releaseConnection(const Connection_ptr& connection)
 		}
 	}
 
-	connections.erase(connection);
+	g_performanceMetrics.recordNetworkConnectionCount(connections.size());
 }
 
 void ConnectionManager::closeAll()
@@ -62,6 +67,7 @@ void ConnectionManager::closeAll()
 	}
 	connections.clear();
 	ipConnectionCount.clear();
+	g_performanceMetrics.recordNetworkConnectionCount(0);
 }
 
 void ConnectionManager::releaseAllProtocols()
@@ -76,39 +82,42 @@ void ConnectionManager::releaseAllProtocols()
 	}
 }
 
-bool ConnectionManager::isMaxConnectionsReached()
-{
-	std::scoped_lock lockClass(connectionManagerLock);
-	return connections.size() >= static_cast<size_t>(getInteger(ConfigManager::MAX_CONNECTIONS));
-}
-
-bool ConnectionManager::isMaxConnectionsPerIPReached(uint32_t ip)
-{
-	std::scoped_lock lockClass(connectionManagerLock);
-	auto it = ipConnectionCount.find(ip);
-	if (it == ipConnectionCount.end()) {
-		return false;
-	}
-
-	uint32_t limit = static_cast<uint32_t>(getInteger(ConfigManager::MAX_CONNECTIONS_PER_IP));
-	if (limit == 0) {
-		return false;
-	}
-
-	return it->second >= limit;
-}
-
 size_t ConnectionManager::getConnectionCount() const
 {
 	std::scoped_lock lockClass(connectionManagerLock);
 	return connections.size();
 }
 
-void ConnectionManager::trackIPConnection(uint32_t ip)
+uint32_t ConnectionManager::getConnectionCountForIP(uint32_t ip) const
 {
-	if (ip == 0) return;
 	std::scoped_lock lockClass(connectionManagerLock);
-	ipConnectionCount[ip]++;
+	const auto it = ipConnectionCount.find(ip);
+	return it != ipConnectionCount.end() ? it->second : 0;
+}
+
+bool ConnectionManager::trackIPConnection(const Connection_ptr& connection, uint32_t ip, uint32_t& currentCount)
+{
+	if (!connection || ip == 0) {
+		currentCount = 0;
+		return false;
+	}
+
+	std::scoped_lock lockClass(connectionManagerLock);
+	if (!connections.contains(connection) || connection->trackedIp != 0) {
+		currentCount = 0;
+		return false;
+	}
+
+	uint32_t& count = ipConnectionCount[ip];
+	currentCount = count;
+	const int64_t configuredLimit = getInteger(ConfigManager::MAX_CONNECTIONS_PER_IP);
+	if (configuredLimit > 0 && static_cast<uint64_t>(count) >= static_cast<uint64_t>(configuredLimit)) {
+		return false;
+	}
+
+	connection->trackedIp = ip;
+	currentCount = ++count;
+	return true;
 }
 
 // Connection
@@ -267,7 +276,6 @@ void Connection::parsePacket(const asio::error_code& error)
 	if (!receivedFirst) {
 		// First message received
 		receivedFirst = true;
-		lastIp = getIPLocked();
 
 		if (!protocol) {
 			// Game protocol has already been created at this point
@@ -355,13 +363,18 @@ uint32_t Connection::getIP()
 uint32_t Connection::getIPLocked()
 {
 	// Must be called with connectionLock held, or from a safe context.
+	if (cachedPeerIp != 0) {
+		return cachedPeerIp;
+	}
+
 	asio::error_code error;
 	const asio::ip::tcp::endpoint endpoint = socket.remote_endpoint(error);
 	if (error) {
 		return 0;
 	}
 
-	return htonl(endpoint.address().to_v4().to_uint());
+	cachedPeerIp = htonl(endpoint.address().to_v4().to_uint());
+	return cachedPeerIp;
 }
 
 void Connection::onWriteOperation(const asio::error_code& error)

@@ -126,21 +126,52 @@ class PerformanceMetrics
 {
 public:
 	void setEnabled(bool value) noexcept;
-	[[nodiscard]] bool isEnabled() const noexcept { return enabled.load(std::memory_order_relaxed); }
+
+	[[nodiscard]] bool isEnabled() const noexcept
+	{
+		return enabled.load(std::memory_order_relaxed);
+	}
 
 	void record(PerformanceMetric metric, uint64_t nanoseconds) noexcept;
+
 	void recordQueueSize(size_t current) noexcept;
 	void recordTaskDeferred(uint64_t count = 1) noexcept;
 	void recordTaskExpired(uint64_t count = 1) noexcept;
 	void recordTaskDropped(uint64_t count = 1) noexcept;
-	void recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
-	                                 std::string_view origin) noexcept;
-	void recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead, uint64_t pathLength) noexcept;
-	void recordAreaCombat(const AreaCombatMetricsSample& sample, std::string_view monsterName,
-	                      std::string_view spellName) noexcept;
-	void recordMonsterIdle(MonsterIdleMetric metric, uint64_t count = 1) noexcept;
-	void recordMonsterActiveReason(MonsterActiveReason reason, uint64_t count = 1) noexcept;
-	[[nodiscard]] uint64_t getMonsterIdleMetric(MonsterIdleMetric metric) const noexcept;
+
+	void recordNetworkAcceptStarted() noexcept;
+	void recordNetworkAccept(bool success) noexcept;
+	void recordNetworkRateLimitRejection() noexcept;
+	void recordNetworkIpLimitRejection() noexcept;
+	void recordNetworkConnectionCount(size_t current) noexcept;
+
+	void recordReactorCallbackSource(
+	    uint64_t nanoseconds,
+	    std::string_view description,
+	    std::string_view origin) noexcept;
+
+	void recordPathRequest(
+	    bool success,
+	    uint64_t nodesVisited,
+	    uint64_t tilesRead,
+	    uint64_t pathLength) noexcept;
+
+	void recordAreaCombat(
+	    const AreaCombatMetricsSample& sample,
+	    std::string_view monsterName,
+	    std::string_view spellName) noexcept;
+
+	void recordMonsterIdle(
+	    MonsterIdleMetric metric,
+	    uint64_t count = 1) noexcept;
+
+	void recordMonsterActiveReason(
+	    MonsterActiveReason reason,
+	    uint64_t count = 1) noexcept;
+
+	[[nodiscard]] uint64_t getMonsterIdleMetric(
+	    MonsterIdleMetric metric) const noexcept;
+
 	void maybeReport();
 
 private:
@@ -196,6 +227,17 @@ private:
 		std::atomic<uint64_t> effectRecipients{0};
 	};
 
+	struct NetworkData
+	{
+		std::atomic<uint64_t> acceptStarted{0};
+		std::atomic<uint64_t> accepted{0};
+		std::atomic<uint64_t> acceptErrors{0};
+		std::atomic<uint64_t> rateLimitRejections{0};
+		std::atomic<uint64_t> ipLimitRejections{0};
+		std::atomic<uint64_t> connectionsCurrent{0};
+		std::atomic<uint64_t> connectionsMaximum{0};
+	};
+
 	struct SlowestReactorCallback
 	{
 		std::mutex mutex;
@@ -214,13 +256,25 @@ private:
 	};
 
 	std::array<MetricData, static_cast<size_t>(PerformanceMetric::Count)> metrics;
+
 	ReactorData reactor;
 	PathData path;
 	AreaCombatData areaCombat;
-	std::array<std::atomic<uint64_t>, static_cast<size_t>(MonsterIdleMetric::Count)> monsterIdle{};
-	std::array<std::atomic<uint64_t>, static_cast<size_t>(MonsterActiveReason::Count)> monsterActiveReasons{};
+	NetworkData network;
+
+	std::array<
+	    std::atomic<uint64_t>,
+	    static_cast<size_t>(MonsterIdleMetric::Count)>
+	    monsterIdle{};
+
+	std::array<
+	    std::atomic<uint64_t>,
+	    static_cast<size_t>(MonsterActiveReason::Count)>
+	    monsterActiveReasons{};
+
 	SlowestReactorCallback slowestReactorCallback;
 	SlowestAreaCombat slowestAreaCombat;
+
 	std::atomic_bool enabled{false};
 	std::atomic<int64_t> nextReportNanoseconds{0};
 };

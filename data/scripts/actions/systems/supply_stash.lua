@@ -10,12 +10,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         return true
     end
 
-    if not CustomSupplyStash then
-        player:sendCancelMessage("The supply stash is not available.")
-        return true
-    end
-
-    if not CustomSupplyStash.open then
+    if not CustomSupplyStash or not CustomSupplyStash.open then
         player:sendCancelMessage("The supply stash is not available.")
         return true
     end
@@ -28,7 +23,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
         depotId = tonumber(ok and value or nil) or 0
     end
 
-    local ok, err = pcall(function()
+    local ok = pcall(function()
         CustomSupplyStash.open(player, depotId)
     end)
 

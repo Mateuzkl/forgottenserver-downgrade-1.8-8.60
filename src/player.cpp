@@ -1708,6 +1708,32 @@ void Player::clearBestiaryDirty()
 	bestiaryDirtyRaceRevisions.clear();
 }
 
+void Player::setPendingBestiaryKill(BestiaryKillResult result)
+{
+	constexpr size_t maxPendingBestiaryKills = 16;
+	std::erase_if(pendingBestiaryKills, [&result](const BestiaryKillResult& pending) {
+		return pending.victimId == result.victimId;
+	});
+	pendingBestiaryKills.push_back(result);
+	while (pendingBestiaryKills.size() > maxPendingBestiaryKills) {
+		pendingBestiaryKills.pop_front();
+	}
+}
+
+std::optional<Player::BestiaryKillResult> Player::takePendingBestiaryKill(uint32_t victimId, uint16_t raceId)
+{
+	const auto it = std::ranges::find_if(pendingBestiaryKills, [victimId, raceId](const BestiaryKillResult& pending) {
+		return pending.victimId == victimId && pending.raceId == raceId;
+	});
+	if (it == pendingBestiaryKills.end()) {
+		return {};
+	}
+
+	BestiaryKillResult result = *it;
+	pendingBestiaryKills.erase(it);
+	return result;
+}
+
 void Player::setStorageValue(const uint32_t key, const std::optional<int64_t> value, const bool isSpawn /* = false*/)
 {
 	const auto oldValue = getStorageValue(key);

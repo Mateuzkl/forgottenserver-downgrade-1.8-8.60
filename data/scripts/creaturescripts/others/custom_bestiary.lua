@@ -175,18 +175,32 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 	end
 
 	for playerGuid, player in pairs(players) do
-		local killsToAdd = 1
+		local oldKills
+		local newKills
+		local charmPointsAwarded = false
+		if Game.takeBestiaryKill then
+			local handled
+			handled, oldKills, newKills, charmPointsAwarded = Game.takeBestiaryKill(player, raceId, creature:getId())
+			if not handled then
+				oldKills, newKills = addBestiaryKill(player, playerGuid, raceId, 1)
+				charmPointsAwarded = false
+			end
+		else
+			oldKills, newKills = addBestiaryKill(player, playerGuid, raceId, 1)
+		end
+
+		local bonusKills = 0
 		local doubleChance = TaskBoard and TaskBoard.getBountyTalismanBonus and
 			TaskBoard.getBountyTalismanBonus(player, raceId, 3) or 0
 		if doubleChance > 0 and math.random(1, 10000) <= doubleChance then
-			killsToAdd = 2
+			bonusKills = 1
+			_, newKills = addBestiaryKill(player, playerGuid, raceId, bonusKills)
 		end
-		local oldKills, newKills = addBestiaryKill(player, playerGuid, raceId, killsToAdd)
 		local oldProgress = CustomBestiary.getProgress(entry, oldKills)
 		local newProgress = CustomBestiary.getProgress(entry, newKills)
 
 		if CustomBestiary.updateKillCache then
-			CustomBestiary.updateKillCache(playerGuid, raceId, killsToAdd, oldKills, newKills)
+			CustomBestiary.updateKillCache(playerGuid, raceId, 1 + bonusKills, oldKills, newKills)
 		elseif CustomBestiary.invalidatePlayer then
 			CustomBestiary.invalidatePlayer(playerGuid)
 		end
@@ -196,7 +210,11 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 		elseif CustomBestiary.sendTracker then
 			CustomBestiary.sendTracker(player)
 		end
-		if oldKills < entry.toKill and newKills >= entry.toKill then
+		if charmPointsAwarded then
+			if CustomBestiary.updateCharmPointCache then
+				CustomBestiary.updateCharmPointCache(playerGuid, entry.charmPoints)
+			end
+		elseif oldKills < entry.toKill and newKills >= entry.toKill then
 			addPlayerCharmPoints(playerGuid, entry.charmPoints)
 		end
 		if CustomBestiary.sendProgress then

@@ -257,7 +257,8 @@ function CustomBestiary.registerMonster(monsterType, mask)
 
 	CustomBestiary.monstersByRaceId[raceId] = entry
 	if Game.registerBestiaryMonsterData then
-		Game.registerBestiaryMonsterData(entry.raceId, entry.name, entry.toKill, entry.secondUnlock, entry.charmPoints,
+		Game.registerBestiaryMonsterData(entry.raceId, entry.name, entry.toKill, entry.firstUnlock, entry.secondUnlock,
+			entry.charmPoints,
 			entry.outfit.type or 0, entry.outfit.head or 0, entry.outfit.body or 0,
 			entry.outfit.legs or 0, entry.outfit.feet or 0, entry.outfit.addons or 0)
 	end

@@ -134,10 +134,24 @@ void addAstraLoginBoostedInfo(const OutputMessage_ptr& output)
 
 // --- Brute Force Protection ---
 
+void LoginAttemptLimiter::cleanup(int64_t now)
+{
+	if (lastCleanup != 0 && now - lastCleanup < WINDOW_MS) {
+		return;
+	}
+	lastCleanup = now;
+
+	std::erase_if(attempts, [now](const auto& pair) {
+		const AttemptInfo& info = pair.second;
+		return info.blockUntil <= now && now - info.firstAttempt > WINDOW_MS;
+	});
+}
+
 bool LoginAttemptLimiter::allowLogin(uint32_t ip)
 {
 	std::scoped_lock lock(mu);
-	int64_t now = OTSYS_TIME();
+	const int64_t now = OTSYS_TIME();
+	cleanup(now);
 
 	auto it = attempts.find(ip);
 	if (it == attempts.end()) {
@@ -163,7 +177,8 @@ bool LoginAttemptLimiter::allowLogin(uint32_t ip)
 void LoginAttemptLimiter::recordFailure(uint32_t ip)
 {
 	std::scoped_lock lock(mu);
-	int64_t now = OTSYS_TIME();
+	const int64_t now = OTSYS_TIME();
+	cleanup(now);
 
 	auto& info = attempts[ip];
 

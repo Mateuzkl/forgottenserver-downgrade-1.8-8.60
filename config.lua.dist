@@ -540,6 +540,7 @@ location = "Sweden"
 statsDumpInterval = 0
 -- time in milliseconds: 50 = 0.05 sec, 0 = disabled
 statsSlowLogTime = 0
+-- Enables slow task and TaskReactor time-budget diagnostics for development.
 slowTaskWarning = false
 -- time in milliseconds: 500 = 0.5 sec, 0 = disabled
 statsVerySlowLogTime = 0

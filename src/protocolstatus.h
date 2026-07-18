@@ -36,6 +36,8 @@ public:
 
 private:
 	static std::unordered_map<uint32_t, int64_t> ipConnectMap;
+	static std::mutex ipConnectMutex;
+	static int64_t lastCleanup;
 };
 
 #endif

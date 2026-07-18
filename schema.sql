@@ -283,11 +283,12 @@ CREATE TABLE IF NOT EXISTS `market_history` (
   `itemtype` smallint unsigned NOT NULL,
   `amount` smallint unsigned NOT NULL,
   `price` int unsigned NOT NULL DEFAULT '0',
+  `tier` tinyint unsigned NOT NULL DEFAULT '0',
   `expires_at` bigint unsigned NOT NULL,
   `inserted` bigint unsigned NOT NULL,
   `state` tinyint unsigned NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `player_id` (`player_id`, `sale`),
+  KEY `idx_market_history_player_inserted` (`player_id`, `inserted`),
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
@@ -300,10 +301,24 @@ CREATE TABLE IF NOT EXISTS `market_offers` (
   `created` bigint unsigned NOT NULL,
   `anonymous` tinyint NOT NULL DEFAULT '0',
   `price` int unsigned NOT NULL DEFAULT '0',
+  `tier` tinyint unsigned NOT NULL DEFAULT '0',
+  `attributes` mediumblob DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `sale` (`sale`,`itemtype`),
-  KEY `created` (`created`),
+  KEY `idx_market_offers_item_sale_price` (`itemtype`, `sale`, `price`, `created`),
+  KEY `idx_market_offers_player_created` (`player_id`, `created`),
+  KEY `idx_market_offers_created` (`created`),
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+
+CREATE TABLE IF NOT EXISTS `market_statistics` (
+  `itemtype` smallint unsigned NOT NULL,
+  `sale` tinyint NOT NULL DEFAULT '0',
+  `day` int unsigned NOT NULL,
+  `transactions` int unsigned NOT NULL DEFAULT '0',
+  `total_price` bigint unsigned NOT NULL DEFAULT '0',
+  `highest_price` int unsigned NOT NULL DEFAULT '0',
+  `lowest_price` int unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`itemtype`, `sale`, `day`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `players_online` (
@@ -433,6 +448,16 @@ CREATE TABLE IF NOT EXISTS `player_storage` (
   `value` bigint NOT NULL DEFAULT '0',
   PRIMARY KEY (`player_id`,`key`),
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+
+CREATE TABLE IF NOT EXISTS `player_supplystash` (
+  `player_id` INT NOT NULL,
+  `itemtype` SMALLINT UNSIGNED NOT NULL,
+  `tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `amount` INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (`player_id`, `itemtype`, `tier`),
+  CONSTRAINT `player_supplystash_player_fk`
+    FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
 CREATE TABLE IF NOT EXISTS `player_bestiary_kills` (
@@ -703,7 +728,7 @@ CREATE TABLE IF NOT EXISTS `towns` (
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
-INSERT INTO server_config (config, value) VALUES ('db_version', '59'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO server_config (config, value) VALUES ('db_version', '61'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 CREATE TABLE IF NOT EXISTS guild_transactions (
   id SERIAL PRIMARY KEY,
