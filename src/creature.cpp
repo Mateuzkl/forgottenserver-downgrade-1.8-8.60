@@ -83,6 +83,7 @@ void Creature::setInstanceID(uint32_t id)
 
 	SpectatorVec oldSpectators;
 	g_game.map.getSpectators(oldSpectators, getPosition(), true);
+	Thing::setInstanceID(id);
 	for (const auto& spectator : oldSpectators.monsters()) {
 		if (spectator.get() != this && spectator->compareInstance(oldInstanceId)) {
 			if (Monster* monster = spectator->getMonster()) {
@@ -95,7 +96,6 @@ void Creature::setInstanceID(uint32_t id)
 		return;
 	}
 
-	Thing::setInstanceID(id);
 	if (Monster* monster = getMonster()) {
 		monster->onCreatureInstanceChange(this, true);
 	}

@@ -393,8 +393,8 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 
 		if (needsFullTargetRefresh) {
 			updateTargetList();
-		} else if (pruneInvalidTargetState()) {
-			updateIdleStatus();
+		} else {
+			updateTargetListAfterMovement(oldPos, newPos);
 		}
 	} else {
 		bool canSeeNewPos = canSee(newPos);
@@ -697,6 +697,55 @@ void Monster::updateTargetList()
 	updateIdleStatus();
 	if (isIdle) {
 		clearFriendList();
+	}
+}
+
+void Monster::updateTargetListAfterMovement(const Position& oldPosition, const Position& newPosition)
+{
+	bool changed = pruneInvalidTargetState();
+	const size_t targetCount = targetList.size();
+	const size_t friendCount = friendList.size();
+	SpectatorVec spectators;
+
+	constexpr int32_t viewRangeX = Map::maxClientViewportX + 1;
+	constexpr int32_t viewRangeY = Map::maxClientViewportY + 1;
+	const auto shiftedPosition = [&newPosition](int32_t offsetX, int32_t offsetY) {
+		const int32_t x = std::clamp<int32_t>(static_cast<int32_t>(newPosition.x) + offsetX, 0,
+		                                      std::numeric_limits<uint16_t>::max());
+		const int32_t y = std::clamp<int32_t>(static_cast<int32_t>(newPosition.y) + offsetY, 0,
+		                                      std::numeric_limits<uint16_t>::max());
+		return Position{static_cast<uint16_t>(x), static_cast<uint16_t>(y), newPosition.z};
+	};
+	const auto addEdgeSpectators = [&spectators](const Position& center, int32_t rangeX, int32_t rangeY) {
+		SpectatorVec edgeSpectators;
+		g_game.map.getSpectators(edgeSpectators, center, false, false, rangeX, rangeX, rangeY, rangeY);
+		spectators.addSpectators(edgeSpectators);
+	};
+
+	if (newPosition.x > oldPosition.x) {
+		addEdgeSpectators(shiftedPosition(viewRangeX, 0), 1, viewRangeY);
+	} else if (newPosition.x < oldPosition.x) {
+		addEdgeSpectators(shiftedPosition(-viewRangeX, 0), 1, viewRangeY);
+	}
+
+	if (newPosition.y > oldPosition.y) {
+		addEdgeSpectators(shiftedPosition(0, viewRangeY), viewRangeX, 1);
+	} else if (newPosition.y < oldPosition.y) {
+		addEdgeSpectators(shiftedPosition(0, -viewRangeY), viewRangeX, 1);
+	}
+
+	spectators.erase(this);
+	for (const auto& spectator : spectators) {
+		onCreatureFound(spectator.get(), false, false);
+	}
+
+	changed = changed || targetList.size() != targetCount || friendList.size() != friendCount;
+	changed = clearFactionTargetIfNotAllowed() || changed;
+	if (changed) {
+		updateIdleStatus();
+		if (isIdle) {
+			clearFriendList();
+		}
 	}
 }
 

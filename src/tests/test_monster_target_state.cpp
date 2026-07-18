@@ -1,13 +1,21 @@
 #include "../otpch.h"
 
+#include "../chat.h"
 #include "../configmanager.h"
+#include "../events.h"
 #include "../game.h"
+#include "../globalevent.h"
+#include "../groups.h"
+#include "../item.h"
 #include "../monster.h"
 #include "../movement.h"
+#include "../player.h"
 #include "../scriptmanager.h"
 #include "../tile.h"
 
 #include "test_support.h"
+
+#include <filesystem>
 
 namespace {
 
@@ -44,21 +52,69 @@ std::shared_ptr<Monster> makeMonster(bool target = false)
 	return std::make_shared<Monster>(type);
 }
 
+std::shared_ptr<Player> makePlayer()
+{
+	auto player = std::make_shared<Player>(nullptr);
+	player->setName("Monster Target State Player");
+	player->setGroup(std::make_shared<Group>());
+	return player;
+}
+
+void ensureItemTypes()
+{
+	static const bool loaded = [] {
+		const auto itemFile = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() /
+		                      "data/items/items.otb";
+		return Item::items.loadFromOtb(itemFile.string());
+	}();
+	CHECK(loaded);
+}
+
 void ensureTile(const Position& position)
 {
 	if (!g_game.map.getTile(position)) {
 		g_game.map.setTile(position.x, position.y, position.z,
 		                   std::make_unique<StaticTile>(position.x, position.y, position.z));
 	}
+
+	Tile* tile = g_game.map.getTile(position);
+	if (!tile->getGround()) {
+		tile->setGround(std::make_shared<Item>(0));
+	}
+}
+
+void addStairHeight(Tile* tile)
+{
+	static const uint16_t heightItemId = [] {
+		for (size_t id = 1; id < Item::items.size(); ++id) {
+			const ItemType& itemType = Item::items[id];
+			if (itemType.id != 0 && !itemType.isGroundTile() && itemType.hasHeight &&
+			    (!itemType.blockSolid || itemType.moveable)) {
+				return static_cast<uint16_t>(id);
+			}
+		}
+		return uint16_t{0};
+	}();
+	CHECK(heightItemId != 0);
+	for (uint8_t i = 0; i < 3; ++i) {
+		auto item = std::make_shared<Item>(heightItemId);
+		tile->internalAddThing(item.get());
+	}
+	CHECK(tile->hasHeight(3));
 }
 
 class WorldFixture
 {
 public:
 	WorldFixture()
-	    : oldFactionSystem(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM)),
+	    : oldChat(g_chat), oldEvents(g_events), oldGlobalEvents(g_globalEvents),
+	      oldFactionSystem(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM)),
 	      oldRequirePlayer(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY))
 	{
+		ensureItemTypes();
+		g_chat = &chat;
+		g_events = &events;
+		g_globalEvents = &globalEvents;
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_SYSTEM, true);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY, false);
 		if (!g_moveEvents) {
@@ -75,6 +131,9 @@ public:
 		}
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_SYSTEM, oldFactionSystem);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY, oldRequirePlayer);
+		g_globalEvents = oldGlobalEvents;
+		g_events = oldEvents;
+		g_chat = oldChat;
 	}
 
 	void place(const std::shared_ptr<Creature>& creature, const Position& position)
@@ -85,6 +144,12 @@ public:
 	}
 
 private:
+	Chat* oldChat;
+	Events* oldEvents;
+	GlobalEvents* oldGlobalEvents;
+	Chat chat;
+	Events events;
+	GlobalEvents globalEvents;
 	bool oldFactionSystem;
 	bool oldRequirePlayer;
 	std::vector<std::weak_ptr<Creature>> creatures;
@@ -99,12 +164,27 @@ void selectTarget(const std::shared_ptr<Monster>& monster, const std::shared_ptr
 	monster->setIdle(false);
 }
 
-void moveCreatureForMonster(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Creature>& creature,
-                            const Position& oldPosition, const Position& newPosition)
+void moveCreatureForMonster(const std::shared_ptr<Creature>& creature, const Position& newPosition)
 {
 	ensureTile(newPosition);
-	monster->onCreatureMove(creature.get(), g_game.map.getTile(newPosition), newPosition,
-	                        g_game.map.getTile(oldPosition), oldPosition, true);
+	Tile* expectedTile = g_game.map.getTile(newPosition);
+	CHECK(g_game.internalMoveCreature(*creature, *expectedTile, FLAG_NOLIMIT) == RETURNVALUE_NOERROR);
+	CHECK(creature->getPosition() == newPosition);
+	CHECK(creature->getTile() == expectedTile);
+}
+
+void moveCreatureByDirection(const std::shared_ptr<Creature>& creature, Direction direction,
+                             const Position& expectedPosition)
+{
+	ensureTile(expectedPosition);
+	Tile* expectedTile = g_game.map.getTile(expectedPosition);
+	const ReturnValue result = g_game.internalMoveCreature(creature.get(), direction, FLAG_NOLIMIT);
+	if (result != RETURNVALUE_NOERROR) {
+		throw std::runtime_error("directional creature move failed with ReturnValue " +
+		                         std::to_string(static_cast<uint8_t>(result)));
+	}
+	CHECK(creature->getPosition() == expectedPosition);
+	CHECK(creature->getTile() == expectedTile);
 }
 
 void flushCreatureChecks()
@@ -112,6 +192,13 @@ void flushCreatureChecks()
 	for (size_t index = 0; index < EVENT_CREATURECOUNT; ++index) {
 		g_game.checkCreatures(index);
 	}
+}
+
+bool hasTarget(const std::shared_ptr<Monster>& monster, const Creature* creature)
+{
+	return std::ranges::any_of(monster->getTargetList(), [creature](const auto& weakRef) {
+		return weakRef.lock().get() == creature;
+	});
 }
 
 } // namespace
@@ -213,8 +300,7 @@ TEST_CASE(summon_preserves_master_follow_across_floor_change)
 	CHECK(summon->setMaster(master.get()));
 	CHECK(summon->setFollowCreature(master.get()));
 
-	summon->onCreatureMove(master.get(), g_game.map.getTile(newMasterPosition), newMasterPosition,
-	                       g_game.map.getTile(oldMasterPosition), oldMasterPosition, true);
+	moveCreatureForMonster(master, newMasterPosition);
 
 	CHECK(summon->getMaster() == master);
 	CHECK(summon->getFollowCreatureShared() == master);
@@ -245,7 +331,7 @@ TEST_CASE(monster_cleans_target_that_moves_out_of_view)
 	world.place(target, oldPosition);
 	selectTarget(monster, target);
 
-	moveCreatureForMonster(monster, target, oldPosition, newPosition);
+	moveCreatureForMonster(target, newPosition);
 
 	CHECK(monster->getTargetList().empty());
 	CHECK(!monster->getAttackedCreatureShared());
@@ -259,17 +345,27 @@ TEST_CASE(monster_cleans_target_that_changes_floor)
 	auto monster = makeMonster();
 	auto target = makeMonster(true);
 	const Position oldPosition{600, 500, 7};
-	const Position newPosition{600, 500, 8};
+	const Position newPosition{600, 500, 6};
 	world.place(monster, Position{599, 500, 7});
 	world.place(target, oldPosition);
 	selectTarget(monster, target);
+	CHECK(monster->canSee(oldPosition));
+	CHECK(Creature::canSee(monster->getPosition(), oldPosition, Map::maxClientViewportX + 1,
+	                       Map::maxClientViewportY + 1));
+	CHECK(Creature::canSee(monster->getPosition(), newPosition, Map::maxClientViewportX + 1,
+	                       Map::maxClientViewportY + 1));
+	CHECK(!monster->canSee(newPosition));
 
-	moveCreatureForMonster(monster, target, oldPosition, newPosition);
+	moveCreatureForMonster(target, newPosition);
 
 	CHECK(monster->getTargetList().empty());
 	CHECK(!monster->getAttackedCreatureShared());
 	CHECK(!monster->getFollowCreatureShared());
 	CHECK(monster->getIdleStatus());
+
+	moveCreatureForMonster(target, oldPosition);
+	CHECK(hasTarget(monster, target.get()));
+	CHECK(!monster->getIdleStatus());
 }
 
 TEST_CASE(monster_cleans_target_that_enters_protection_zone)
@@ -285,12 +381,18 @@ TEST_CASE(monster_cleans_target_that_enters_protection_zone)
 	ensureTile(newPosition);
 	g_game.map.getTile(newPosition)->setFlag(TILESTATE_PROTECTIONZONE);
 
-	moveCreatureForMonster(monster, target, oldPosition, newPosition);
+	moveCreatureForMonster(target, newPosition);
+	CHECK(target->getZone() == ZONE_PROTECTION);
 
 	CHECK(monster->getTargetList().empty());
 	CHECK(!monster->getAttackedCreatureShared());
 	CHECK(!monster->getFollowCreatureShared());
 	CHECK(monster->getIdleStatus());
+
+	moveCreatureForMonster(target, oldPosition);
+	CHECK(target->getZone() != ZONE_PROTECTION);
+	CHECK(hasTarget(monster, target.get()));
+	CHECK(!monster->getIdleStatus());
 }
 
 TEST_CASE(monster_prunes_expired_friend_reference)
@@ -327,7 +429,7 @@ TEST_CASE(familiar_preserves_master_follow_across_floor_change)
 	CHECK(familiar->setMaster(master.get()));
 	CHECK(familiar->setFollowCreature(master.get()));
 
-	moveCreatureForMonster(familiar, master, oldMasterPosition, newMasterPosition);
+	moveCreatureForMonster(master, newMasterPosition);
 
 	CHECK(familiar->getMaster() == master);
 	CHECK(familiar->getFollowCreatureShared() == master);
@@ -370,6 +472,108 @@ TEST_CASE(monster_can_return_to_combat_after_becoming_idle)
 	CHECK(!monster->getIdleStatus());
 	CHECK(monster->getAttackedCreatureShared() == target);
 	CHECK(monster->getFollowCreatureShared() == target);
+}
+
+TEST_CASE(monsters_clean_all_player_target_states_after_real_floor_transition)
+{
+	WorldFixture world;
+	auto monsterA = makeMonster();
+	auto monsterB = makeMonster();
+	auto monsterC = makeMonster();
+	auto player = makePlayer();
+	const Position oldPosition{900, 500, 7};
+	const Position newPosition{901, 500, 6};
+	world.place(monsterA, Position{899, 499, 7});
+	world.place(monsterB, Position{899, 500, 7});
+	world.place(monsterC, Position{899, 501, 7});
+	world.place(player, oldPosition);
+	ensureTile(newPosition);
+	addStairHeight(player->getTile());
+
+	CHECK(monsterA->canSee(oldPosition));
+	CHECK(Creature::canSee(monsterA->getPosition(), newPosition, Map::maxClientViewportX + 1,
+	                       Map::maxClientViewportY + 1));
+	CHECK(!monsterA->canSee(newPosition));
+	selectTarget(monsterA, player);
+	CHECK(monsterB->addTarget(player.get()));
+	CHECK(monsterB->setFollowCreature(player.get()));
+	monsterB->setAttackedCreature(nullptr);
+	CHECK(monsterC->addTarget(player.get()));
+	monsterC->setAttackedCreature(nullptr);
+	monsterC->setFollowCreature(nullptr);
+	CHECK(hasTarget(monsterA, player.get()));
+	CHECK(hasTarget(monsterB, player.get()));
+	CHECK(hasTarget(monsterC, player.get()));
+
+	moveCreatureByDirection(player, DIRECTION_EAST, newPosition);
+
+	for (const auto& monster : {monsterA, monsterB, monsterC}) {
+		CHECK(!hasTarget(monster, player.get()));
+		CHECK(!monster->getAttackedCreatureShared());
+		CHECK(!monster->getFollowCreatureShared());
+		CHECK(monster->getIdleStatus());
+		CHECK(!monster->isCreatureCheckEnabled());
+	}
+	// Execute the work an already queued follow task would perform. The stale
+	// task must observe the cleared follow pointer and stop before pathfinding.
+	g_game.updateCreatureWalk(monsterA->getID());
+	CHECK(monsterA->getIdleStatus());
+	CHECK(!monsterA->getFollowCreatureShared());
+
+	moveCreatureByDirection(player, DIRECTION_WEST, oldPosition);
+	for (const auto& monster : {monsterA, monsterB, monsterC}) {
+		CHECK(hasTarget(monster, player.get()));
+		CHECK(!monster->getIdleStatus());
+		CHECK(monster->isCreatureCheckEnabled());
+	}
+}
+
+TEST_CASE(monster_does_not_readd_player_during_same_position_instance_change)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto newInstanceMonster = makeMonster();
+	auto player = makePlayer();
+	const Position position{920, 500, 7};
+	world.place(monster, Position{919, 500, 7});
+	newInstanceMonster->setInstanceID(7);
+	world.place(newInstanceMonster, Position{921, 500, 7});
+	world.place(player, position);
+	selectTarget(monster, player);
+
+	player->setInstanceID(7);
+
+	CHECK(player->getPosition() == position);
+	CHECK(player->getTile() == g_game.map.getTile(position));
+	CHECK(player->getInstanceID() == 7);
+	CHECK(!hasTarget(monster, player.get()));
+	CHECK(!monster->getAttackedCreatureShared());
+	CHECK(!monster->getFollowCreatureShared());
+	CHECK(monster->getIdleStatus());
+	CHECK(hasTarget(newInstanceMonster, player.get()));
+	CHECK(!newInstanceMonster->getIdleStatus());
+}
+
+TEST_CASE(moving_monster_discovers_new_stationary_target)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto followedTarget = makeMonster(true);
+	auto stationaryTarget = makeMonster(true);
+	const Position oldPosition{940, 500, 7};
+	const Position newPosition{941, 500, 7};
+	world.place(monster, oldPosition);
+	world.place(followedTarget, Position{940, 501, 7});
+	world.place(stationaryTarget, Position{950, 500, 7});
+	selectTarget(monster, followedTarget);
+	CHECK(!hasTarget(monster, stationaryTarget.get()));
+	CHECK(!monster->canSee(stationaryTarget->getPosition()));
+
+	moveCreatureForMonster(monster, newPosition);
+
+	CHECK(monster->canSee(stationaryTarget->getPosition()));
+	CHECK(hasTarget(monster, followedTarget.get()));
+	CHECK(hasTarget(monster, stationaryTarget.get()));
 }
 
 TFS_TEST_MAIN()

@@ -228,6 +228,7 @@ private:
 	mutable bool cachedPlayerNearby = false;
 
 	void updateTargetList();
+	void updateTargetListAfterMovement(const Position& oldPosition, const Position& newPosition);
 	bool isValidKnownFriend(const std::shared_ptr<Creature>& creature) const;
 	bool isValidKnownTarget(const std::shared_ptr<Creature>& creature) const;
 	bool pruneInvalidTargetState();
