@@ -1,9 +1,25 @@
 #include "../otpch.h"
 
 #include "../bestiary_charm.h"
+#include "../item.h"
 #include "../player.h"
 
 #include "test_support.h"
+
+namespace {
+
+void ensureItemTypesLoaded()
+{
+	if (Item::items.size() != 0) {
+		return;
+	}
+
+	const auto itemsPath = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() /
+	                       "data/items/items.otb";
+	CHECK(Item::items.loadFromOtb(itemsPath.string()));
+}
+
+} // namespace
 
 TEST_CASE(bestiary_progress_matches_legacy_lua_thresholds)
 {
@@ -53,12 +69,13 @@ TEST_CASE(bestiary_registration_uses_race_id_as_legacy_identity)
 	system.registerMonster(replacement);
 
 	const auto registered = system.getMonster(2764);
-	REQUIRE(registered.has_value());
+	CHECK(registered.has_value());
 	CHECK(registered->get().name == "Night Harpy");
 }
 
 TEST_CASE(bestiary_kills_are_saturated_dirty_and_consumed_once)
 {
+	ensureItemTypesLoaded();
 	Player player(nullptr);
 	player.clearBestiaryDirty();
 
@@ -86,6 +103,7 @@ TEST_CASE(bestiary_kills_are_saturated_dirty_and_consumed_once)
 
 TEST_CASE(bestiary_first_kill_is_recorded_when_race_id_is_patched_after_death)
 {
+	ensureItemTypesLoaded();
 	Player player(nullptr);
 	player.clearBestiaryDirty();
 
