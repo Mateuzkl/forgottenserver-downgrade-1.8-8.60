@@ -888,6 +888,9 @@ local function addItemsToBattlePassInbox(player, items)
 		local itemId = tonumber(entry.itemId) or 0
 		local count = math.max(1, math.floor(tonumber(entry.count) or 1))
 		local charges = math.max(0, math.floor(tonumber(entry.charges) or 0))
+		if itemId <= 0 then
+			return false, "This season has an invalid reward item configured."
+		end
 		local itemType = ItemType(itemId)
 		if not itemType or itemType:getId() ~= itemId then
 			return false, "This season has an invalid reward item configured."

@@ -16,7 +16,7 @@ void ensureItemTypesLoaded()
 
 	const auto itemsPath = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() /
 	                       "data/items/items.otb";
-	CHECK(Item::items.loadFromOtb(itemsPath.string()));
+	REQUIRE(Item::items.loadFromOtb(itemsPath.string()));
 }
 
 } // namespace
@@ -69,7 +69,7 @@ TEST_CASE(bestiary_registration_uses_race_id_as_legacy_identity)
 	system.registerMonster(replacement);
 
 	const auto registered = system.getMonster(2764);
-	CHECK(registered.has_value());
+	REQUIRE(registered.has_value());
 	CHECK(registered->get().name == "Night Harpy");
 }
 

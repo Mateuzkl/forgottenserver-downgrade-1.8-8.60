@@ -1367,13 +1367,13 @@ local function buildMarketDescriptions(itemId)
 end
 
 local function fetchMarketStatistics(itemId, actionType)
-	local since = os.time() - (MARKET_STATISTICS_DAYS * 24 * 60 * 60)
+	local since = os.time() - ((MARKET_STATISTICS_DAYS - 1) * 24 * 60 * 60)
 	local firstDay = math.floor(since / 86400) * 86400
 	return Game.getMarketStatistics(itemId, actionType, firstDay, MARKET_STATISTICS_DAYS)
 end
 
 local function refreshMarketStatistics()
-	local since = os.time() - (MARKET_STATISTICS_DAYS * 24 * 60 * 60)
+	local since = os.time() - ((MARKET_STATISTICS_DAYS - 1) * 24 * 60 * 60)
 	local firstDay = math.floor(since / 86400) * 86400
 	return Game.refreshMarketStatistics(firstDay, MARKET_STATE_ACCEPTED)
 end

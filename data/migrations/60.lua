@@ -30,21 +30,33 @@ function onUpdateDatabase()
 		return table.concat(columns, ",")
 	end
 
-	local function hasPlayerForeignKey()
+	-- Returns "cascade" when the FK exists with ON DELETE CASCADE,
+	-- "wrong_rule" and the constraint name when it exists with a different rule,
+	-- or false when no matching FK exists.
+	local function checkPlayerForeignKey()
 		local queryResult = db.storeQuery([[
-			SELECT COUNT(*) AS `count`
-			FROM `information_schema`.`KEY_COLUMN_USAGE`
-			WHERE `CONSTRAINT_SCHEMA` = DATABASE()
-			  AND `TABLE_NAME` = 'player_supplystash'
-			  AND `COLUMN_NAME` = 'player_id'
-			  AND `REFERENCED_TABLE_NAME` = 'players'
-			  AND `REFERENCED_COLUMN_NAME` = 'id'
+			SELECT `rc`.`CONSTRAINT_NAME`, `rc`.`DELETE_RULE`
+			FROM `information_schema`.`KEY_COLUMN_USAGE` AS `kcu`
+			JOIN `information_schema`.`REFERENTIAL_CONSTRAINTS` AS `rc`
+			  ON `rc`.`CONSTRAINT_SCHEMA` = `kcu`.`CONSTRAINT_SCHEMA`
+			  AND `rc`.`CONSTRAINT_NAME` = `kcu`.`CONSTRAINT_NAME`
+			WHERE `kcu`.`CONSTRAINT_SCHEMA` = DATABASE()
+			  AND `kcu`.`TABLE_NAME` = 'player_supplystash'
+			  AND `kcu`.`COLUMN_NAME` = 'player_id'
+			  AND `kcu`.`REFERENCED_TABLE_NAME` = 'players'
+			  AND `kcu`.`REFERENCED_COLUMN_NAME` = 'id'
+			LIMIT 1
 		]])
-		local exists = queryResult and result.getNumber(queryResult, "count") > 0
-		if queryResult then
-			result.free(queryResult)
+		if not queryResult then
+			return false
 		end
-		return exists
+		local constraintName = result.getString(queryResult, "CONSTRAINT_NAME")
+		local deleteRule = result.getString(queryResult, "DELETE_RULE")
+		result.free(queryResult)
+		if deleteRule == "CASCADE" then
+			return "cascade"
+		end
+		return "wrong_rule", constraintName
 	end
 
 	if not db.query([[
@@ -81,7 +93,17 @@ function onUpdateDatabase()
 		end
 	end
 
-	if not hasPlayerForeignKey() then
+	local fkStatus, constraintName = checkPlayerForeignKey()
+	if fkStatus == "wrong_rule" then
+		if not db.query(
+			"ALTER TABLE `player_supplystash` DROP FOREIGN KEY `" .. constraintName .. "`"
+		) then
+			return false
+		end
+		fkStatus = false
+	end
+
+	if not fkStatus then
 		if not db.query([[
 			DELETE `stash` FROM `player_supplystash` AS `stash`
 			LEFT JOIN `players` AS `player` ON `player`.`id` = `stash`.`player_id`
