@@ -536,8 +536,10 @@ url = "https://otland.net/"
 location = "Sweden"
 
 -- Server Statistics
+-- Detailed console/file statistics. Accepts true or "on"; disabled by default.
+statsEnabled = false
 -- time in seconds: 30 = 30 seconds, 0 = disabled
-statsDumpInterval = 0
+statsDumpInterval = 30
 -- time in milliseconds: 50 = 0.05 sec, 0 = disabled
 statsSlowLogTime = 0
 -- Enables slow task and TaskReactor time-budget diagnostics for development.

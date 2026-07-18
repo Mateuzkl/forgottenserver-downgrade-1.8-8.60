@@ -535,6 +535,7 @@ bool ConfigManager::load()
 	booleans[Boolean::LOG_TO_FILE] = getGlobalBoolean(L, "logToFile", false);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", false);
 	booleans[Boolean::PERFORMANCE_METRICS_ENABLED] = getGlobalBoolean(L, "performanceMetricsEnabled", false);
+	booleans[Boolean::STATS_MONITOR_ENABLED] = getGlobalBoolean(L, "statsEnabled", false);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");
 	strings[String::LOG_LEVEL] = getGlobalString(L, "logLevel", "info");
@@ -720,7 +721,7 @@ bool ConfigManager::load()
 	integers[Integer::BOSS_DEFAULT_TIME_TO_FIGHT_AGAIN] = getGlobalInteger(L, "bossDefaultTimeToFightAgain", 20 * 60 * 60);
 	integers[Integer::BOSS_DEFAULT_TIME_TO_DEFEAT] = getGlobalInteger(L, "bossDefaultTimeToDefeat", 10 * 60);
 
-	integers[Integer::STATS_DUMP_INTERVAL] = getGlobalInteger(L, "statsDumpInterval", 30000);
+	integers[Integer::STATS_DUMP_INTERVAL] = getGlobalInteger(L, "statsDumpInterval", 30);
 	integers[Integer::STATS_SLOW_LOG_TIME] = getGlobalInteger(L, "statsSlowLogTime", 10);
 	integers[Integer::STATS_VERY_SLOW_LOG_TIME] = getGlobalInteger(L, "statsVerySlowLogTime", 50);
 

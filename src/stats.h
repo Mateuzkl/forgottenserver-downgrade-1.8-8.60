@@ -107,7 +107,7 @@ private:
 		int64_t lastDump;
 	} lua, sql, special;
 
-	std::atomic<bool> enabled{true};
+	std::atomic<bool> enabled{false};
 };
 
 extern Stats g_stats;

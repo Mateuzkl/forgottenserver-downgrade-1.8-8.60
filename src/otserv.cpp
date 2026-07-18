@@ -497,9 +497,12 @@ void startServer()
 	if (serviceManager->is_running()) {
 		const auto networkThreads = std::clamp<int64_t>(getInteger(ConfigManager::NETWORK_THREADS), 1, 64);
 #ifdef STATS_ENABLED
-		g_stats.configureDispatchers(static_cast<std::size_t>(networkThreads) + 1);
-		g_stats.start();
-		g_stats.setEnabled(true);
+		const bool statsEnabled = getBoolean(ConfigManager::STATS_MONITOR_ENABLED);
+		g_stats.setEnabled(statsEnabled);
+		if (statsEnabled) {
+			g_stats.configureDispatchers(static_cast<std::size_t>(networkThreads) + 1);
+			g_stats.start();
+		}
 #endif
 		using namespace ConsoleStyle;
 
