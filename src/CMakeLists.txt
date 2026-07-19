@@ -2,6 +2,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/otpch.cpp
 	${CMAKE_CURRENT_LIST_DIR}/actions.cpp
 	${CMAKE_CURRENT_LIST_DIR}/admin.cpp
+	${CMAKE_CURRENT_LIST_DIR}/admin_console.cpp
 	${CMAKE_CURRENT_LIST_DIR}/ban.cpp
 	${CMAKE_CURRENT_LIST_DIR}/baseevents.cpp
 	${CMAKE_CURRENT_LIST_DIR}/bestiary_charm.cpp
@@ -144,6 +145,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/account.h
 	${CMAKE_CURRENT_LIST_DIR}/actions.h
 	${CMAKE_CURRENT_LIST_DIR}/admin.h
+	${CMAKE_CURRENT_LIST_DIR}/admin_console.h
 	${CMAKE_CURRENT_LIST_DIR}/astraclient.h
 	${CMAKE_CURRENT_LIST_DIR}/ban.h
 	${CMAKE_CURRENT_LIST_DIR}/baseevents.h

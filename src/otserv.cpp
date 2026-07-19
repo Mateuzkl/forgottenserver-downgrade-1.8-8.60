@@ -5,6 +5,7 @@
 
 #include "otserv.h"
 
+#include "admin_console.h"
 #include "configmanager.h"
 #include "console_styles.h"
 #include "databasemanager.h"
@@ -52,6 +53,7 @@ Vocations g_vocations;
 namespace {
 
 std::optional<double> startupMapLoadSeconds;
+std::atomic<bool> restartRequested{false};
 
 struct BootstrapOptions {
 	bool logToFile = false;
@@ -722,6 +724,7 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 int startServer()
 {
 	std::set_new_handler(badAllocationHandler);
+	restartRequested.store(false, std::memory_order_release);
 
 	auto serviceManager = std::make_shared<ServiceManager>();
 	StartupRuntimeState runtimeState;
@@ -737,6 +740,7 @@ int startServer()
 	const bool startupLoaded = mainLoader(serviceManager, runtimeState);
 
 	std::jthread serviceThread;
+	AdminConsole adminConsole;
 
 	if (startupLoaded && serviceManager->hasOpenServices()) {
 		// Configure reactor production limits: fairness, time budget, and backpressure
@@ -973,7 +977,9 @@ int startServer()
 		}
 #endif
 		startupCompleted = true;
+		adminConsole.start();
 		g_reactor.runLoop();
+		adminConsole.stop();
 		}
 	} else {
 		if (startupLoaded) {
@@ -1036,7 +1042,15 @@ int startServer()
 
 	// Cleanup MySQL connection and library
 	Database::shutdown();
-	return startupCompleted ? EXIT_SUCCESS : EXIT_FAILURE;
+	if (!startupCompleted) {
+		return EXIT_FAILURE;
+	}
+	return restartRequested.load(std::memory_order_acquire) ? SERVER_RESTART_EXIT_CODE : EXIT_SUCCESS;
+}
+
+void requestServerRestart()
+{
+	restartRequested.store(true, std::memory_order_release);
 }
 
 void printServerVersion()

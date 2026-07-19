@@ -1,13 +1,19 @@
 #include "otpch.h"
 
 #include "configmanager.h"
+#include "logger.h"
 #include "otserv.h"
 #include "outputmessage.h"
 #include "tools.h"
 
+#include <cerrno>
+
 #ifdef _WIN32
 #include <io.h>
+#include <process.h>
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace {
@@ -47,6 +53,22 @@ void waitForInteractiveConsoleOnStartupFailure()
 void waitForInteractiveConsoleOnStartupFailure() {}
 #endif
 
+bool restartCurrentProcess(char* const* argv)
+{
+	fmt::print("Restarting server process...\n");
+	std::fflush(stdout);
+	shutdownLogger();
+
+#ifdef _WIN32
+	_execv(argv[0], argv);
+#else
+	execvp(argv[0], argv);
+#endif
+
+	fmt::print(stderr, "Failed to restart the server process: {}\n", std::strerror(errno));
+	return false;
+}
+
 } // namespace
 
 static bool argumentsHandler(const std::vector<std::string_view>& args)
@@ -85,7 +107,7 @@ static bool argumentsHandler(const std::vector<std::string_view>& args)
 	return true;
 }
 
-int main(int argc, const char** argv)
+int main(int argc, char** argv)
 {
 	std::vector<std::string_view> args(argv, argv + argc);
 	if (!argumentsHandler(args)) {
@@ -94,7 +116,13 @@ int main(int argc, const char** argv)
 
 	const int exitCode = startServer();
 	OutputMessagePool::drainPool();
-	if (exitCode != EXIT_SUCCESS) {
+	if (exitCode == SERVER_RESTART_EXIT_CODE) {
+		if (!restartCurrentProcess(argv)) {
+			waitForInteractiveConsoleOnStartupFailure();
+		}
+		return SERVER_RESTART_EXIT_CODE;
+	}
+	if (exitCode != EXIT_SUCCESS && exitCode != SERVER_RESTART_EXIT_CODE) {
 		waitForInteractiveConsoleOnStartupFailure();
 	}
 	return exitCode;
