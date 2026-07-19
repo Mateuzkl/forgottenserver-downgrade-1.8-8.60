@@ -12,6 +12,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/condition.cpp
 	${CMAKE_CURRENT_LIST_DIR}/configmanager.cpp
 	${CMAKE_CURRENT_LIST_DIR}/connection.cpp
+	${CMAKE_CURRENT_LIST_DIR}/connection_rate_limiter.cpp
 	${CMAKE_CURRENT_LIST_DIR}/container.cpp
 	${CMAKE_CURRENT_LIST_DIR}/creature.cpp
 	${CMAKE_CURRENT_LIST_DIR}/creatureevent.cpp
@@ -82,6 +83,8 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/mailbox.cpp
 	${CMAKE_CURRENT_LIST_DIR}/map.cpp
 	${CMAKE_CURRENT_LIST_DIR}/mapcache.cpp
+	${CMAKE_CURRENT_LIST_DIR}/market.cpp
+	${CMAKE_CURRENT_LIST_DIR}/stash.cpp
 	${CMAKE_CURRENT_LIST_DIR}/matrixarea.cpp
 	${CMAKE_CURRENT_LIST_DIR}/monster.cpp
 	${CMAKE_CURRENT_LIST_DIR}/monsters.cpp
@@ -118,6 +121,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/storeinbox.cpp
 	${CMAKE_CURRENT_LIST_DIR}/spy.cpp
 	${CMAKE_CURRENT_LIST_DIR}/stats.cpp
+	${CMAKE_CURRENT_LIST_DIR}/startup_progress.cpp
 	${CMAKE_CURRENT_LIST_DIR}/stress_test.cpp
 	${CMAKE_CURRENT_LIST_DIR}/talkaction.cpp
 	${CMAKE_CURRENT_LIST_DIR}/tasks.cpp
@@ -152,6 +156,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/condition.h
 	${CMAKE_CURRENT_LIST_DIR}/configmanager.h
 	${CMAKE_CURRENT_LIST_DIR}/connection.h
+	${CMAKE_CURRENT_LIST_DIR}/connection_rate_limiter.h
 	${CMAKE_CURRENT_LIST_DIR}/const.h
 	${CMAKE_CURRENT_LIST_DIR}/container.h
 	${CMAKE_CURRENT_LIST_DIR}/creatureevent.h
@@ -194,6 +199,8 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/mailbox.h
 	${CMAKE_CURRENT_LIST_DIR}/map.h
 	${CMAKE_CURRENT_LIST_DIR}/mapcache.h
+	${CMAKE_CURRENT_LIST_DIR}/market.h
+	${CMAKE_CURRENT_LIST_DIR}/stash.h
 	${CMAKE_CURRENT_LIST_DIR}/matrixarea.h
 	${CMAKE_CURRENT_LIST_DIR}/monster.h
 	${CMAKE_CURRENT_LIST_DIR}/monsters.h
@@ -232,6 +239,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/storeinbox.h
 	${CMAKE_CURRENT_LIST_DIR}/spy.h
 	${CMAKE_CURRENT_LIST_DIR}/stats.h
+	${CMAKE_CURRENT_LIST_DIR}/startup_progress.h
 	${CMAKE_CURRENT_LIST_DIR}/talkaction.h
 	${CMAKE_CURRENT_LIST_DIR}/tasks.h
 	${CMAKE_CURRENT_LIST_DIR}/teleport.h

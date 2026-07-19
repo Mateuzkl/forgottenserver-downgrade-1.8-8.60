@@ -5,11 +5,14 @@
 #define FS_SERVER_H
 
 #include "connection.h"
+#include "connection_rate_limiter.h"
 #include "signals.h"
 #include "logger.h"
 #include <fmt/format.h>
 
 #include <atomic>
+#include <chrono>
+#include <functional>
 
 class Protocol;
 
@@ -41,16 +44,18 @@ public:
 class ServicePort : public std::enable_shared_from_this<ServicePort>
 {
 public:
-	explicit ServicePort(asio::io_context& io_context) : io_context(io_context) {}
+	ServicePort(asio::io_context& io_context, tfs::net::ConnectionRateLimiter& rateLimiter) :
+	    io_context(io_context), strand(asio::make_strand(io_context)), retryTimer(strand), rateLimiter(rateLimiter)
+	{}
 	~ServicePort();
 
 	// non-copyable
 	ServicePort(const ServicePort&) = delete;
 	ServicePort& operator=(const ServicePort&) = delete;
 
-	static void openAcceptor(std::weak_ptr<ServicePort> weak_service, uint16_t port);
-	void open(uint16_t port);
+	bool open(uint16_t port, bool retryOnFailure = true);
 	void close();
+	bool isOpen() const { return acceptor && acceptor->is_open(); }
 	bool is_single_socket() const;
 	std::string get_protocol_names() const;
 
@@ -62,8 +67,14 @@ public:
 
 private:
 	void accept();
+	void scheduleAccept(std::chrono::milliseconds delay);
+	void scheduleOpen(std::chrono::milliseconds delay);
+	void stopOnStrand();
 
 	asio::io_context& io_context;
+	asio::strand<asio::io_context::executor_type> strand;
+	asio::steady_timer retryTimer;
+	tfs::net::ConnectionRateLimiter& rateLimiter;
 	std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
 	std::vector<Service_ptr> services;
 
@@ -82,22 +93,25 @@ public:
 	ServiceManager(const ServiceManager&) = delete;
 	ServiceManager& operator=(const ServiceManager&) = delete;
 
-	void run();
+	void run(std::function<void()> onStarted = {});
 	void stop();
 
 	template <typename ProtocolType>
 	bool add(uint16_t port);
 
-	bool is_running() const { return acceptors.empty() == false; }
+	bool hasOpenServices() const;
+	bool is_running() const { return running.load(std::memory_order_acquire); }
 
 private:
 	void die();
-
-	std::unordered_map<uint16_t, ServicePort_ptr> acceptors;
+	void runIoContext() noexcept;
 
 	asio::io_context io_context;
+	tfs::net::ConnectionRateLimiter connectionRateLimiter;
+	std::unordered_map<uint16_t, ServicePort_ptr> acceptors;
 	Signals signals{io_context};
 	asio::steady_timer death_timer{io_context};
+	asio::executor_work_guard<asio::io_context::executor_type> workGuard{asio::make_work_guard(io_context)};
 	std::vector<std::jthread> ioThreads;
 	std::atomic_bool running{false};
 };
@@ -115,9 +129,10 @@ bool ServiceManager::add(uint16_t port)
 	auto foundServicePort = acceptors.find(port);
 
 	if (foundServicePort == acceptors.end()) {
-		service_port = std::make_shared<ServicePort>(io_context);
-		service_port->open(port);
-		acceptors[port] = service_port;
+		service_port = std::make_shared<ServicePort>(io_context, connectionRateLimiter);
+		if (!service_port->open(port, false)) {
+			return false;
+		}
 	} else {
 		service_port = foundServicePort->second;
 
@@ -127,7 +142,13 @@ bool ServiceManager::add(uint16_t port)
 		}
 	}
 
-	return service_port->add_service(std::make_shared<Service<ProtocolType>>());
+	if (!service_port->add_service(std::make_shared<Service<ProtocolType>>())) {
+		return false;
+	}
+	if (foundServicePort == acceptors.end()) {
+		acceptors.emplace(port, service_port);
+	}
+	return true;
 }
 
 #endif

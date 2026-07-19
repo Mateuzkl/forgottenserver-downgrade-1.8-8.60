@@ -58,7 +58,7 @@ declare -A MSG_PT=(
   [detect_system]="Sistema detectado"
   [wsl_detected]="WSL detectado"
   [choose_ubuntu]="Escolha a versao do Ubuntu para preparar o build:"
-  [ubuntu_prompt]="Digite 1 ou 2 [detectado: %s]: "
+  [ubuntu_prompt]="Digite 1, 2 ou 3 [detectado: %s]: "
   [invalid_option]="opcao invalida"
   [using_ubuntu]="Usando configuracao para Ubuntu %s"
   [section_preflight]="Verificando ambiente"
@@ -67,7 +67,7 @@ declare -A MSG_PT=(
   [section_simdutf]="Verificando simdutf"
   [section_repo]="Verificando projeto TFS"
   [section_build]="Compilando TFS em Release"
-  [need_ubuntu]="Este script foi feito para Ubuntu 22.04/24.04 com apt/dpkg."
+  [need_ubuntu]="Este script foi feito para Ubuntu 22.04/24.04/26.04 com apt/dpkg."
   [need_sudo]="sudo nao encontrado. Rode como root ou instale sudo."
   [pkg_present]="pacote ja instalado: %s"
   [pkg_installing]="instalando pacotes ausentes: %s"
@@ -116,7 +116,7 @@ declare -A MSG_EN=(
   [detect_system]="Detected system"
   [wsl_detected]="WSL detected"
   [choose_ubuntu]="Choose the Ubuntu version to prepare the build:"
-  [ubuntu_prompt]="Type 1 or 2 [detected: %s]: "
+  [ubuntu_prompt]="Type 1, 2 or 3 [detected: %s]: "
   [invalid_option]="invalid option"
   [using_ubuntu]="Using Ubuntu %s configuration"
   [section_preflight]="Checking environment"
@@ -125,7 +125,7 @@ declare -A MSG_EN=(
   [section_simdutf]="Checking simdutf"
   [section_repo]="Checking TFS project"
   [section_build]="Building TFS Release"
-  [need_ubuntu]="This script is intended for Ubuntu 22.04/24.04 with apt/dpkg."
+  [need_ubuntu]="This script is intended for Ubuntu 22.04/24.04/26.04 with apt/dpkg."
   [need_sudo]="sudo was not found. Run as root or install sudo."
   [pkg_present]="package already installed: %s"
   [pkg_installing]="installing missing packages: %s"
@@ -174,7 +174,7 @@ declare -A MSG_ES=(
   [detect_system]="Sistema detectado"
   [wsl_detected]="WSL detectado"
   [choose_ubuntu]="Elige la version de Ubuntu para preparar el build:"
-  [ubuntu_prompt]="Escribe 1 o 2 [detectado: %s]: "
+  [ubuntu_prompt]="Escribe 1, 2 o 3 [detectado: %s]: "
   [invalid_option]="opcion invalida"
   [using_ubuntu]="Usando configuracion para Ubuntu %s"
   [section_preflight]="Verificando entorno"
@@ -183,7 +183,7 @@ declare -A MSG_ES=(
   [section_simdutf]="Verificando simdutf"
   [section_repo]="Verificando proyecto TFS"
   [section_build]="Compilando TFS Release"
-  [need_ubuntu]="Este script fue hecho para Ubuntu 22.04/24.04 con apt/dpkg."
+  [need_ubuntu]="Este script fue hecho para Ubuntu 22.04/24.04/26.04 con apt/dpkg."
   [need_sudo]="sudo no fue encontrado. Ejecuta como root o instala sudo."
   [pkg_present]="paquete ya instalado: %s"
   [pkg_installing]="instalando paquetes faltantes: %s"
@@ -295,7 +295,8 @@ Usage: ./build.sh [options]
 
 Options:
   --lang pt|en|es        Select language without prompt
-  --ubuntu 22.04|24.04   Select Ubuntu dependency strategy
+  --ubuntu 22.04|24.04|26.04
+                          Select Ubuntu dependency strategy
   --jobs N               Parallel build jobs
   --clean                Remove build-release before configuring
   --output PATH          Copy final binary to PATH (default: ./tfs)
@@ -308,7 +309,7 @@ Options:
 
 Environment:
   TFS_BUILD_LANG=pt|en|es
-  TFS_UBUNTU_TARGET=22.04|24.04
+  TFS_UBUNTU_TARGET=22.04|24.04|26.04
   JOBS=N
 EOF
 }
@@ -450,15 +451,19 @@ choose_ubuntu() {
   info "$(msg detect_system): Ubuntu ${detected}"
   info "$(msg wsl_detected): $(detect_wsl)"
 
-  if [[ "${UBUNTU_TARGET}" == "22.04" || "${UBUNTU_TARGET}" == "24.04" ]]; then
-    sayf using_ubuntu "${UBUNTU_TARGET}"
-    return
-  fi
+  case "${UBUNTU_TARGET}" in
+    22.04|24.04|26.04)
+      sayf using_ubuntu "${UBUNTU_TARGET}"
+      return
+      ;;
+  esac
 
   if [[ "${detected}" == "22.04" ]]; then
     default_choice="1"
   elif [[ "${detected}" == "24.04" ]]; then
     default_choice="2"
+  elif [[ "${detected}" == "26.04" ]]; then
+    default_choice="3"
   else
     default_choice=""
   fi
@@ -469,7 +474,8 @@ choose_ubuntu() {
   else
     printf '\n%s\n' "$(msg choose_ubuntu)"
     printf '  1) Ubuntu 22.04\n'
-    printf '  2) Ubuntu 24.04\n\n'
+    printf '  2) Ubuntu 24.04\n'
+    printf '  3) Ubuntu 26.04\n\n'
     printf "$(msg ubuntu_prompt)" "${default_choice:-nenhum}"
     read -r choice || choice=""
     choice="${choice:-$default_choice}"
@@ -478,6 +484,7 @@ choose_ubuntu() {
   case "${choice}" in
     1) UBUNTU_TARGET="22.04" ;;
     2) UBUNTU_TARGET="24.04" ;;
+    3) UBUNTU_TARGET="26.04" ;;
     *) die "$(msg invalid_option)" ;;
   esac
 
@@ -764,11 +771,21 @@ ensure_lua_pkgconfig() {
 }
 
 ensure_lua_alternatives() {
-  if [[ -x "${LUA_PREFIX}/bin/lua" ]]; then
+  local current_lua=""
+  local current_luac=""
+  local wanted_lua=""
+  local wanted_luac=""
+
+  current_lua="$(readlink -f /usr/bin/lua 2>/dev/null || true)"
+  current_luac="$(readlink -f /usr/bin/luac 2>/dev/null || true)"
+  wanted_lua="$(readlink -f "${LUA_PREFIX}/bin/lua" 2>/dev/null || true)"
+  wanted_luac="$(readlink -f "${LUA_PREFIX}/bin/luac" 2>/dev/null || true)"
+
+  if [[ -n "${wanted_lua}" && "${current_lua}" != "${wanted_lua}" ]]; then
     "${SUDO[@]}" update-alternatives --install /usr/bin/lua lua "${LUA_PREFIX}/bin/lua" 100 >/dev/null 2>&1 || true
   fi
 
-  if [[ -x "${LUA_PREFIX}/bin/luac" ]]; then
+  if [[ -n "${wanted_luac}" && "${current_luac}" != "${wanted_luac}" ]]; then
     "${SUDO[@]}" update-alternatives --install /usr/bin/luac luac "${LUA_PREFIX}/bin/luac" 100 >/dev/null 2>&1 || true
   fi
 }
@@ -909,7 +926,9 @@ ensure_simdutf() {
   cmake -S . -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="${SIMDUTF_PREFIX}" \
-    -DBUILD_SHARED_LIBS=OFF
+    -DBUILD_SHARED_LIBS=OFF \
+    -DSIMDUTF_TESTS=OFF \
+    -DSIMDUTF_TOOLS=OFF
 
   cmake --build build --parallel "${JOBS}"
   cmake --install build
@@ -918,6 +937,7 @@ ensure_simdutf() {
 mio_config_exists() {
   [[ -f "${SIMDUTF_PREFIX}/lib/cmake/mio/mio-config.cmake" ]] || \
     [[ -f "${SIMDUTF_PREFIX}/lib/cmake/mio/mioConfig.cmake" ]] || \
+    [[ -f "${SIMDUTF_PREFIX}/share/cmake/mio/mio-config.cmake" ]] || \
     [[ -f "${SIMDUTF_PREFIX}/share/cmake/mio/mioConfig.cmake" ]]
 }
 
@@ -943,7 +963,8 @@ ensure_mio() {
 
   cmake -S . -B build \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="${SIMDUTF_PREFIX}"
+    -DCMAKE_INSTALL_PREFIX="${SIMDUTF_PREFIX}" \
+    -DBUILD_TESTING=OFF
 
   cmake --build build --parallel "${JOBS}"
   cmake --install build
@@ -1073,7 +1094,6 @@ configure_tfs() {
     -DLUA_INCLUDE_DIR="${LUA_PREFIX}/include"
     -DLUA_LIBRARY="${LUA_PREFIX}/lib/liblua.a"
     -DLUA_LIBRARIES="${LUA_PREFIX}/lib/liblua.a;m;dl"
-    -DLUA_VERSION_STRING="${LUA_VERSION}"
     -DCMAKE_PREFIX_PATH="${prefix_path}"
   )
 

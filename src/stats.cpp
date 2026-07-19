@@ -8,6 +8,9 @@
 #include "tasks.h"
 #include "tools.h"
 
+#include <cerrno>
+#include <system_error>
+
 // extern ConfigManager g_config;
 
 int64_t Stats::DUMP_INTERVAL = 30000; // 30 sec
@@ -47,6 +50,12 @@ void addStatSample(statsMap& stats, const Stat& stat)
 	it->second.calls += 1;
 	it->second.executionTime += stat.executionTime;
 }
+
+std::error_code currentStreamError()
+{
+	return errno != 0 ? std::error_code(errno, std::generic_category()) :
+	                    std::make_error_code(std::io_errc::stream);
+}
 }
 
 Stats::Stats()
@@ -55,6 +64,88 @@ Stats::Stats()
 }
 
 Stats::~Stats() = default;
+
+void Stats::prepareFileLogging()
+{
+	fileLoggingRequested.store(ConfigManager::getBoolean(ConfigManager::LOG_TO_FILE), std::memory_order_release);
+	fileLoggingAvailable.store(false, std::memory_order_release);
+
+	std::error_code error;
+	auto absoluteDirectory = std::filesystem::absolute(statsDirectory, error);
+	if (error) {
+		absoluteDirectory = statsDirectory;
+		error.clear();
+	}
+
+	{
+		std::scoped_lock lock(fileLoggingMutex);
+		absoluteStatsDirectory = std::move(absoluteDirectory);
+		fileLoggingFailureReason.clear();
+	}
+
+	std::filesystem::create_directories(statsDirectory, error);
+	if (!error && !std::filesystem::is_directory(statsDirectory, error)) {
+		error = std::make_error_code(std::errc::not_a_directory);
+	}
+	if (error) {
+		std::scoped_lock lock(fileLoggingMutex);
+		fileLoggingFailureReason = error.message();
+		return;
+	}
+
+	if (!fileLoggingRequested.load(std::memory_order_acquire)) {
+		return;
+	}
+
+	for (std::string_view fileName : {"dispatcher.log", "lua.log", "sql.log", "special.log"}) {
+		errno = 0;
+		std::ofstream output(statsDirectory / fileName, std::ofstream::out | std::ofstream::app);
+		if (!output.is_open()) {
+			const std::error_code openError = errno != 0 ? std::error_code(errno, std::generic_category()) :
+			                                             std::make_error_code(std::io_errc::stream);
+			std::scoped_lock lock(fileLoggingMutex);
+			fileLoggingFailureReason = openError.message();
+			return;
+		}
+	}
+
+	fileLoggingAvailable.store(true, std::memory_order_release);
+}
+
+StatsFileLoggingStatus Stats::getFileLoggingStatus() const
+{
+	std::scoped_lock lock(fileLoggingMutex);
+	return StatsFileLoggingStatus{
+	    fileLoggingRequested.load(std::memory_order_acquire),
+	    fileLoggingAvailable.load(std::memory_order_acquire),
+	    statsDirectory,
+	    absoluteStatsDirectory,
+	    fileLoggingFailureReason,
+	};
+}
+
+void Stats::disableFileLogging(std::string reason)
+{
+	bool expected = true;
+	if (!fileLoggingAvailable.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
+		return;
+	}
+
+	std::filesystem::path absoluteDirectory;
+	{
+		std::scoped_lock lock(fileLoggingMutex);
+		fileLoggingFailureReason = std::move(reason);
+		absoluteDirectory = absoluteStatsDirectory;
+	}
+
+	LOG_STATS_WARNING(
+	    "OTS STATISTICS\n"
+	    "    Log directory       unavailable\n"
+	    "    Path                {}\n"
+	    "    Reason              {}\n"
+	    "    File logging        disabled for this session",
+	    absoluteDirectory.string(), getFileLoggingStatus().reason);
+}
 
 thread_local AutoStatRecursive* AutoStatRecursive::activeStat = nullptr;
 
@@ -107,6 +198,13 @@ AutoStatRecursive::~AutoStatRecursive() noexcept
 void Stats::threadMain() {
 	std::unique_lock<std::mutex> taskLockUnique(statsLock, std::defer_lock);
 	bool last_iteration = false;
+	if (ConfigManager::getBoolean(ConfigManager::LOG_TO_FILE)) {
+		std::error_code error;
+		std::filesystem::create_directories("data/logs/stats", error);
+		if (error) {
+			LOG_STATS_WARNING("Can't create data/logs/stats: {}", error.message());
+		}
+	}
 	lua.lastDump = sql.lastDump = special.lastDump = OTSYS_TIME();
 	playersOnline = 0;
 	for(auto& dispatcher : dispatchers) {
@@ -159,14 +257,15 @@ void Stats::threadMain() {
 				const double cpu = clampPercent(static_cast<double>(executionTime) / (static_cast<double>(elapsedMs) * 10000.));
 				const double idle = clampPercent(static_cast<double>(waitTime) / (static_cast<double>(elapsedMs) * 10000.));
 				const double other = std::max(0., 100. - cpu - idle);
-				auto msg = fmt::format("Thread: {} Cpu usage: {:.5f}% Idle: {:.5f}% Other: {:.5f}% Players online: {}\n",
-					++threadId,
-					cpu,
-					idle,
-					other,
-					playersOnline.load());
+				const int currentThreadId = ++threadId;
+				const auto fileSummary = fmt::format(
+				    "Thread: {} Cpu usage: {:.5f}% Idle: {:.5f}% Other: {:.5f}% Players online: {}\n",
+				    currentThreadId, cpu, idle, other, playersOnline.load());
+				const auto consoleSummary = fmt::format(
+				    "Thread {} | CPU {:.2f}% | Idle {:.2f}% | Other {:.2f}% | Players {}",
+				    currentThreadId, cpu, idle, other, playersOnline.load());
 				if(waitTime > 0 || !dispatcher.stats.empty())
-					writeStats("dispatcher.log", dispatcher.stats, msg, elapsedMs);
+					writeStats("dispatcher.log", dispatcher.stats, fileSummary, elapsedMs, consoleSummary);
 				dispatcher.stats.clear();
 				dispatcher.lastDump = now;
 			}
@@ -218,7 +317,7 @@ void Stats::configureDispatchers(std::size_t count) {
 }
 
 void Stats::addDispatcherStat(std::size_t index, std::unique_ptr<Stat> stat) {
-	if (!stat) {
+	if (!stat || !isEnabled() || !isRunning()) {
 		return;
 	}
 
@@ -231,14 +330,14 @@ void Stats::addDispatcherStat(std::size_t index, std::unique_ptr<Stat> stat) {
 }
 
 void Stats::addDispatcherWaitTime(std::size_t index, uint64_t waitTime) noexcept {
-	if (index >= dispatchers.size()) {
+	if (!isEnabled() || index >= dispatchers.size()) {
 		return;
 	}
 	dispatchers[index].waitTime.fetch_add(waitTime, std::memory_order_relaxed);
 }
 
 void Stats::addLuaStats(std::unique_ptr<Stat> stats) {
-	if (!stats) {
+	if (!stats || !isEnabled() || !isRunning()) {
 		return;
 	}
 
@@ -247,7 +346,7 @@ void Stats::addLuaStats(std::unique_ptr<Stat> stats) {
 }
 
 void Stats::addSqlStats(std::unique_ptr<Stat> stats) {
-	if (!stats) {
+	if (!stats || !isEnabled() || !isRunning()) {
 		return;
 	}
 
@@ -256,7 +355,7 @@ void Stats::addSqlStats(std::unique_ptr<Stat> stats) {
 }
 
 void Stats::addSpecialStats(std::unique_ptr<Stat> stats) {
-	if (!stats) {
+	if (!stats || !isEnabled() || !isRunning()) {
 		return;
 	}
 
@@ -331,56 +430,66 @@ void Stats::parseSpecialQueue(std::forward_list<std::unique_ptr<Stat>>& queue) {
 }
 
 void Stats::writeSlowInfo(const std::string& file, uint64_t executionTime, const std::string& description, const std::string& extraDescription) {
-	if (!ConfigManager::getBoolean(ConfigManager::LOG_TO_FILE)) {
+	if (!fileLoggingRequested.load(std::memory_order_acquire) ||
+	    !fileLoggingAvailable.load(std::memory_order_acquire)) {
 		LOG_STATS("Execution time: {} ms - {} - {}", (executionTime / 1000000), description, extraDescription);
 		return;
 	}
 
-	std::ofstream out(std::string("data/logs/stats/") + file, std::ofstream::out | std::ofstream::app);
+	errno = 0;
+	std::ofstream out(statsDirectory / file, std::ofstream::out | std::ofstream::app);
 	if (!out.is_open()) {
-		LOG_STATS_WARNING("Can't open {} (check if directory exists)", (std::string("data/logs/stats/") + file));
+		disableFileLogging(currentStreamError().message());
+		LOG_STATS("Execution time: {} ms - {} - {}", (executionTime / 1000000), description, extraDescription);
 		return;
 	}
 	
 	// File log includes manual timestamp
 	std::string fileMessage = fmt::format("[{}] Execution time: {} ms - {} - {}\n", formatDateShort(time(nullptr)), (executionTime / 1000000), description, extraDescription);
+	errno = 0;
 	out << fileMessage;
-	out.flush();
-	out.close();
+	if (!out) {
+		disableFileLogging(currentStreamError().message());
+	} else {
+		errno = 0;
+		out.flush();
+		if (!out) {
+			disableFileLogging(currentStreamError().message());
+		}
+	}
 
 	// Console log uses system Logger (timestamp handled by logger)
 	LOG_STATS("Execution time: {} ms - {} - {}", (executionTime / 1000000), description, extraDescription);
 }
 
-void Stats::writeStats(const std::string& file, const statsMap& stats, const std::string& extraInfo, int64_t intervalMs) {
+void Stats::writeStats(const std::string& file, const statsMap& stats, const std::string& extraInfo,
+                       int64_t intervalMs, std::string_view consoleSummary) {
 	if (DUMP_INTERVAL <= 0) {
 		return;
 	}
 
-	if (!extraInfo.empty()) {
-		// Use LOG_INFO for console summary, removing the trailing newline if present as logger adds it
-		std::string infoCopy = extraInfo;
-		if (!infoCopy.empty() && infoCopy.back() == '\n') {
-			infoCopy.pop_back();
-		}
-		LOG_STATS("{}", infoCopy);
+	if (!consoleSummary.empty()) {
+		LOG_STATS("{}", consoleSummary);
 	}
 
-	if (!ConfigManager::getBoolean(ConfigManager::LOG_TO_FILE)) {
+	if (!fileLoggingRequested.load(std::memory_order_acquire) ||
+	    !fileLoggingAvailable.load(std::memory_order_acquire)) {
 		return;
 	}
 
 	const int64_t effectiveIntervalMs = std::max<int64_t>(1, intervalMs > 0 ? intervalMs : DUMP_INTERVAL);
 
-	std::ofstream out(std::string("data/logs/stats/") + file, std::ofstream::out | std::ofstream::app);
+	errno = 0;
+	std::ofstream out(statsDirectory / file, std::ofstream::out | std::ofstream::app);
 	if (!out.is_open()) {
-		LOG_STATS_WARNING("Can't open {} (check if directory exists)", (std::string("data/logs/stats/") + file));
+		disableFileLogging(currentStreamError().message());
 		return;
 	}
 	if(stats.empty()) {
 		out.close();
 		return;
 	}
+	errno = 0;
 	out << "[" << formatDateShort(time(nullptr)) << "]\n";
 
 	std::vector<std::pair<std::string, statsData>> pairs;
@@ -406,6 +515,14 @@ void Stats::writeStats(const std::string& file, const statsMap& stats, const std
 				<< std::setw(15) << std::setprecision(5) << std::fixed << percent << "%" << std::setw(15) << std::setprecision(5) << std::fixed << realPercent << "%" << " " << it.first << "\n";
 	}
 	out << "\n";
+	if (!out) {
+		disableFileLogging(currentStreamError().message());
+		return;
+	}
+
+	errno = 0;
 	out.flush();
-	out.close();
+	if (!out) {
+		disableFileLogging(currentStreamError().message());
+	}
 }

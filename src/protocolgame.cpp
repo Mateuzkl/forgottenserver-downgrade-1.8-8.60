@@ -366,6 +366,36 @@ uint32_t nextDllCheckRandom()
 	return distribution(generator);
 }
 
+std::string anonymizeIPv4ForFile(uint32_t ip)
+{
+	std::string address = convertIPToString(ip);
+	const size_t lastOctet = address.rfind('.');
+	if (lastOctet == std::string::npos) {
+		return "redacted";
+	}
+	address.replace(lastOctet + 1, std::string::npos, "0");
+	return address;
+}
+
+void logPlayerSession(const Player& player, uint32_t ip, bool login)
+{
+	if (!isLoggerInitialized()) {
+		return;
+	}
+
+	const auto formatMessage = [&player](std::string_view address) {
+		return fmt::format("{} | Lvl:{} | Voc:{} | IP:{}", player.getName(), player.getLevel(),
+		                   player.getVocation()->getVocName(), address);
+	};
+	const std::string consoleMessage = formatMessage(convertIPToString(ip));
+	const std::string persistedMessage = formatMessage(anonymizeIPv4ForFile(ip));
+	if (login) {
+		g_logger().login(std::string_view{consoleMessage}, std::string_view{persistedMessage});
+	} else {
+		g_logger().logout(std::string_view{consoleMessage}, std::string_view{persistedMessage});
+	}
+}
+
 using PlayerInventoryKey = std::pair<uint16_t, uint8_t>;
 using PlayerInventoryCounts = std::map<PlayerInventoryKey, uint32_t>;
 
@@ -1152,6 +1182,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	acceptPackets = true;
 	sendDllCheck();
+	logPlayerSession(*player, player->lastIP, true);
 	g_game.releaseLogin(reservedGuid);
 }
 
@@ -1260,6 +1291,7 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->lastPing = OTSYS_TIME();
 	acceptPackets = true;
 	sendDllCheck();
+	logPlayerSession(*player, player->lastIP, true);
 
 	g_creatureEvents->playerReconnect(player.get());
 }
@@ -1298,6 +1330,7 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 	}
 
 	resetDllCheckState();
+	logPlayerSession(*player, player->getIP(), false);
 	player->client->clear();
 	disconnect();
 
@@ -1418,20 +1451,24 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 
 	if (getBoolean(ConfigManager::ASTRA_CLIENT_ONLY)) {
 		if (!isAstraClient) {
-			LOG_INFO("[AstraClient] Client rejected: AstraClient required");
+			LOG_WARN("[AstraClient] Client rejected: AstraClient required");
 			disconnectClient(AstraClient::REQUIRED_MESSAGE);
 			return;
 		}
-		LOG_INFO(">> [AstraClient] Client accepted");
 	}
 
 	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY)) {
 		if (!isFonticakClient) {
-			LOG_INFO("[FonticakClient] Client rejected: OTC-Fonticak required");
+			LOG_WARN("[FonticakClient] Client rejected: OTC-Fonticak required");
 			disconnectClient(FonticakClient::REQUIRED_MESSAGE);
 			return;
 		}
-		LOG_INFO(">> [FonticakClient] Client accepted");
+	}
+
+	if (isAstraClient) {
+		LOG_NETWORK("Client connected: AstraClient");
+	} else if (isFonticakClient) {
+		LOG_NETWORK("Client connected: FonticakClient");
 	}
 
 	if (isOTC) {
@@ -4365,7 +4402,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	}
 
 	if (isAstraClient) {
-		player->sendBlessStatus();
+		sendBlessStatus();
 	}
 
 	sendWorldLight(g_game.getWorldLightInfo());

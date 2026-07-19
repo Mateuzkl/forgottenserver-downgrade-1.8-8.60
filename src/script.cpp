@@ -6,6 +6,7 @@
 #include "script.h"
 
 #include "configmanager.h"
+#include "startup_progress.h"
 
 #include <fmt/color.h>
 #include <fmt/ranges.h>
@@ -16,6 +17,13 @@ extern LuaEnvironment g_luaEnvironment;
 Scripts::Scripts() : scriptInterface("Scripts Interface") { scriptInterface.initState(); }
 
 Scripts::~Scripts() { scriptInterface.reInitState(); }
+
+bool Scripts::isFileLoaded(const std::filesystem::path& file) const
+{
+	std::error_code error;
+	const auto canonicalPath = std::filesystem::canonical(file, error);
+	return !error && loadedFiles.contains(canonicalPath.string());
+}
 
 void Scripts::clearLoadedFiles(const std::string& folderName)
 {
@@ -83,6 +91,8 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 	std::vector<std::string> disabled = {}, loaded = {}, reloaded = {};
 	std::vector<std::pair<fs::path, std::string>> v;
 	v.reserve(discovered.size());
+	size_t candidateCount = 0;
+	size_t processedCount = 0;
 	static constexpr std::string_view disable = "#";
 	for (const auto& file : discovered) {
 		const fs::path relative = file.path.lexically_relative(dir);
@@ -94,6 +104,7 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 		    (topLevel == "chatchannels" && folderName != "scripts/chatchannels")) {
 			continue;
 		}
+		++candidateCount;
 
 		const auto filename = file.path.filename().string();
 		if (filename.find(disable) != std::string::npos) {
@@ -101,19 +112,36 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 				disabled.push_back(fmt::format("\"{}\"", fmt::format(fg(fmt::color::yellow), "{}",
 				                                                  std::string_view(filename.data(), filename.size() - 4))));
 			}
+			++processedCount;
 			continue;
 		}
 		if (!loadedFiles.contains(file.canonicalPath)) {
 			v.emplace_back(file.path, file.canonicalPath);
+		} else {
+			++processedCount;
 		}
 	}
-
 	const auto executionStart = std::chrono::steady_clock::now();
+	const bool reportStartupProgress = startupProgress().isCurrentStage(StartupStage::GAME_DATA) ||
+	                                   startupProgress().isCurrentStage(StartupStage::SCRIPT_SYSTEMS) ||
+	                                   startupProgress().isCurrentStage(StartupStage::SPELL_SCRIPTS) ||
+	                                   startupProgress().isCurrentStage(StartupStage::MONSTER_SCRIPTS) ||
+	                                   startupProgress().isCurrentStage(StartupStage::LUA_SCRIPTS);
+	const bool showCurrentFile = reportStartupProgress && startupProgress().detailedLogs();
+	if (reportStartupProgress && processedCount != 0) {
+		startupProgress().update(processedCount, candidateCount,
+		                         showCurrentFile ? "disabled/already loaded scripts" : "scripts");
+	}
 	for (auto& [path, canonical] : v) {
 		const std::string scriptFile = path.string();
 		if (scriptInterface.loadFile(scriptFile) == -1) {
 			LOG_ERROR(fmt::format("> {} [error]", path.filename().string()));
 			LOG_ERROR(fmt::format("^ {}", scriptInterface.getLastLuaError()));
+			++processedCount;
+			if (reportStartupProgress) {
+				startupProgress().update(processedCount, candidateCount,
+				                         showCurrentFile ? path.filename().string() : "scripts");
+			}
 			continue;
 		}
 
@@ -131,9 +159,14 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 				    fmt::format(fg(fmt::color::green), "{}", std::string_view(scrName.data(), scrName.size() - 4))));
 			}
 		}
+		++processedCount;
+		if (reportStartupProgress) {
+			startupProgress().update(processedCount, candidateCount,
+			                         showCurrentFile ? path.filename().string() : "scripts");
+		}
 	}
-	g_logger().info(">> Script phase '{}': {:.3f} s discovery, {:.3f} s execution ({} files).", folderName,
-	                discoveryElapsed, std::chrono::duration<double>(std::chrono::steady_clock::now() - executionStart).count(), v.size());
+	LOG_LUA(">> Script phase '{}': {:.3f} s discovery, {:.3f} s execution ({} files).", folderName,
+	        discoveryElapsed, std::chrono::duration<double>(std::chrono::steady_clock::now() - executionStart).count(), v.size());
 
 	if (scriptsConsoleLogs) {
 		if (!disabled.empty()) {

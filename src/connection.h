@@ -36,11 +36,9 @@ public:
 	void closeAll();
 	void releaseAllProtocols();
 
-	// Connection limit checks
-	bool isMaxConnectionsReached();
-	bool isMaxConnectionsPerIPReached(uint32_t ip);
 	size_t getConnectionCount() const;
-	void trackIPConnection(uint32_t ip);
+	uint32_t getConnectionCountForIP(uint32_t ip) const;
+	bool trackIPConnection(const Connection_ptr& connection, uint32_t ip, uint32_t& currentCount);
 
 private:
 	ConnectionManager() = default;
@@ -82,7 +80,6 @@ public:
 	void send(const OutputMessage_ptr& msg);
 
 	uint32_t getIP();
-	uint32_t getLastIp() const { return lastIp; }
 
 private:
 	void parseHeader(const asio::error_code& error);
@@ -117,7 +114,8 @@ private:
 
 	time_t timeConnected;
 	uint32_t packetsSent = 0;
-	uint32_t lastIp = 0;
+	uint32_t trackedIp = 0;
+	uint32_t cachedPeerIp = 0;
 
 	bool closed = false;
 	bool receivedFirst = false;

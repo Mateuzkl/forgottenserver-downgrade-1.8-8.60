@@ -51,6 +51,11 @@ public:
 	void recordTaskDeferred(uint64_t count = 1) noexcept;
 	void recordTaskExpired(uint64_t count = 1) noexcept;
 	void recordTaskDropped(uint64_t count = 1) noexcept;
+	void recordNetworkAcceptStarted() noexcept;
+	void recordNetworkAccept(bool success) noexcept;
+	void recordNetworkRateLimitRejection() noexcept;
+	void recordNetworkIpLimitRejection() noexcept;
+	void recordNetworkConnectionCount(size_t current) noexcept;
 	void recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
 	                                 std::string_view origin) noexcept;
 	void recordPathRequest(bool success, uint64_t nodesVisited, uint64_t tilesRead, uint64_t pathLength) noexcept;
@@ -86,6 +91,17 @@ private:
 		std::atomic<uint64_t> pathLength{0};
 	};
 
+	struct NetworkData
+	{
+		std::atomic<uint64_t> acceptStarted{0};
+		std::atomic<uint64_t> accepted{0};
+		std::atomic<uint64_t> acceptErrors{0};
+		std::atomic<uint64_t> rateLimitRejections{0};
+		std::atomic<uint64_t> ipLimitRejections{0};
+		std::atomic<uint64_t> connectionsCurrent{0};
+		std::atomic<uint64_t> connectionsMaximum{0};
+	};
+
 	struct SlowestReactorCallback
 	{
 		std::mutex mutex;
@@ -97,6 +113,7 @@ private:
 	std::array<MetricData, static_cast<size_t>(PerformanceMetric::Count)> metrics;
 	ReactorData reactor;
 	PathData path;
+	NetworkData network;
 	SlowestReactorCallback slowestReactorCallback;
 	std::atomic_bool enabled{false};
 	std::atomic<int64_t> nextReportNanoseconds{0};

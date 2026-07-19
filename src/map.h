@@ -194,6 +194,12 @@ private:
 	friend class QTreeNode;
 };
 
+enum class MapLoadStatus : uint8_t {
+	SKIPPED,
+	LOADED,
+	FAILED,
+};
+
 /**
  * Map class.
  * Holds all the actual map-data
@@ -328,6 +334,8 @@ public:
 
 	uint32_t getWidth() const { return width; }
 	uint32_t getHeight() const { return height; }
+	MapLoadStatus getHouseLoadStatus() const { return houseLoadStatus; }
+	MapLoadStatus getSpawnLoadStatus() const { return spawnLoadStatus; }
 
 private:
 	SpectatorCache spectatorsCache;
@@ -343,6 +351,8 @@ private:
 
 	std::filesystem::path spawnfile;
 	std::filesystem::path housefile;
+	MapLoadStatus houseLoadStatus = MapLoadStatus::SKIPPED;
+	MapLoadStatus spawnLoadStatus = MapLoadStatus::SKIPPED;
 
 	uint32_t width = 0;
 	uint32_t height = 0;

@@ -5,6 +5,7 @@
 
 #include "reactor.h"
 
+#include "configmanager.h"
 #include "logger.h"
 #include "performance_metrics.h"
 #include "stats.h"
@@ -383,17 +384,20 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		}
 
 		if (timeBudget.count() > 0 && taskEnd - cycleStart >= timeBudget) {
-			const auto cycleMicros =
-			    std::chrono::duration_cast<std::chrono::microseconds>(taskEnd - cycleStart).count();
-			const auto slowestMicros = std::chrono::duration_cast<std::chrono::microseconds>(slowestDuration).count();
-			LOG_REACTOR(
-			    "time budget exceeded (budget={} ms, cycle={:.3f} ms, executed={}), "
-			    "deferring {} tasks; slowest: {} ({:.3f} ms); last: {} ({:.3f} ms)",
-			    timeBudget.count(), cycleMicros / 1000.0, tasksExecuted, readyTasks.size() - tasksExecuted,
-			    slowestTaskIndex ? taskLabel(readyTasks[*slowestTaskIndex].description,
-			                                readyTasks[*slowestTaskIndex].origin) : "unknown",
-			    slowestMicros / 1000.0, taskLabel(task.description, task.origin),
-			    std::chrono::duration_cast<std::chrono::microseconds>(taskDuration).count() / 1000.0);
+			if (getBoolean(ConfigManager::SLOW_TASK_WARNING)) {
+				const auto cycleMicros =
+				    std::chrono::duration_cast<std::chrono::microseconds>(taskEnd - cycleStart).count();
+				const auto slowestMicros =
+				    std::chrono::duration_cast<std::chrono::microseconds>(slowestDuration).count();
+				LOG_REACTOR(
+				    "time budget exceeded (budget={} ms, cycle={:.3f} ms, executed={}), "
+				    "deferring {} tasks; slowest: {} ({:.3f} ms); last: {} ({:.3f} ms)",
+				    timeBudget.count(), cycleMicros / 1000.0, tasksExecuted, readyTasks.size() - tasksExecuted,
+				    slowestTaskIndex ? taskLabel(readyTasks[*slowestTaskIndex].description,
+				                                readyTasks[*slowestTaskIndex].origin) : "unknown",
+				    slowestMicros / 1000.0, taskLabel(task.description, task.origin),
+				    std::chrono::duration_cast<std::chrono::microseconds>(taskDuration).count() / 1000.0);
+			}
 			break;
 		}
 	}

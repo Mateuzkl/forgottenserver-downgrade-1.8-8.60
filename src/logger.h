@@ -7,6 +7,7 @@
 #include "position.h"
 
 #include <fmt/format.h>
+#include <functional>
 
 enum class LogLevel
 {
@@ -26,25 +27,23 @@ public:
 
 	virtual void setLevel(LogLevel level) = 0;
 	virtual void setConsoleLevel(LogLevel level) = 0;
+	virtual void setConsoleColors(bool enabled) = 0;
 	virtual LogLevel getLevel() const = 0;
 	virtual bool isEnabled(LogLevel level) const = 0;
+	virtual void writeConsoleBlock(const std::function<void()>& writer, std::string_view persistedMessage = {}) = 0;
 
 	void trace([[maybe_unused]] std::string_view msg)
 	{
-#if !defined(NDEBUG) || defined(DEBUG_LOG)
 		if (isEnabled(LogLevel::TRACE)) {
 			log(LogLevel::TRACE, msg);
 		}
-#endif
 	}
 
 	void debug([[maybe_unused]] std::string_view msg)
 	{
-#if !defined(NDEBUG) || defined(DEBUG_LOG)
 		if (isEnabled(LogLevel::DEBUG)) {
 			log(LogLevel::DEBUG, msg);
 		}
-#endif
 	}
 
 	void info(std::string_view msg)
@@ -78,9 +77,23 @@ public:
 	void migration(std::string_view msg)
 	{
 		if (isEnabled(LogLevel::MIGRATION)) {
-			log(LogLevel::MIGRATION, msg);
+			logCategory(LogLevel::INFO, "DATABASE", msg);
 		}
 	}
+
+	void database(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "DATABASE", msg); }
+	void login(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "LOGIN", msg); }
+	void login(std::string_view msg, std::string_view persistedMsg)
+	{
+		logCategoryIfEnabled(LogLevel::INFO, "LOGIN", msg, persistedMsg);
+	}
+	void logout(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "LOGOUT", msg); }
+	void logout(std::string_view msg, std::string_view persistedMsg)
+	{
+		logCategoryIfEnabled(LogLevel::INFO, "LOGOUT", msg, persistedMsg);
+	}
+	void lua(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "LUA", msg); }
+	void startup(std::string_view msg) { logCategoryIfEnabled(LogLevel::INFO, "STARTUP", msg); }
 
 	virtual void stats(std::string_view msg) = 0;
 	virtual void statsWarning(std::string_view msg) = 0;
@@ -93,21 +106,17 @@ public:
 	template <typename... Args>
 	void trace(fmt::format_string<Args...> fmt, Args&&... args)
 	{
-#if !defined(NDEBUG) || defined(DEBUG_LOG)
 		if (isEnabled(LogLevel::TRACE)) {
 			log(LogLevel::TRACE, fmt::format(fmt, std::forward<Args>(args)...));
 		}
-#endif
 	}
 
 	template <typename... Args>
 	void debug(fmt::format_string<Args...> fmt, Args&&... args)
 	{
-#if !defined(NDEBUG) || defined(DEBUG_LOG)
 		if (isEnabled(LogLevel::DEBUG)) {
 			log(LogLevel::DEBUG, fmt::format(fmt, std::forward<Args>(args)...));
 		}
-#endif
 	}
 
 	template <typename... Args>
@@ -146,8 +155,38 @@ public:
 	void migration(fmt::format_string<Args...> fmt, Args&&... args)
 	{
 		if (isEnabled(LogLevel::MIGRATION)) {
-			log(LogLevel::MIGRATION, fmt::format(fmt, std::forward<Args>(args)...));
+			logCategory(LogLevel::INFO, "DATABASE", fmt::format(fmt, std::forward<Args>(args)...));
 		}
+	}
+
+	template <typename... Args>
+	void database(fmt::format_string<Args...> fmt, Args&&... args)
+	{
+		logCategoryFormatted(LogLevel::INFO, "DATABASE", fmt, std::forward<Args>(args)...);
+	}
+
+	template <typename... Args>
+	void login(fmt::format_string<Args...> fmt, Args&&... args)
+	{
+		logCategoryFormatted(LogLevel::INFO, "LOGIN", fmt, std::forward<Args>(args)...);
+	}
+
+	template <typename... Args>
+	void logout(fmt::format_string<Args...> fmt, Args&&... args)
+	{
+		logCategoryFormatted(LogLevel::INFO, "LOGOUT", fmt, std::forward<Args>(args)...);
+	}
+
+	template <typename... Args>
+	void lua(fmt::format_string<Args...> fmt, Args&&... args)
+	{
+		logCategoryFormatted(LogLevel::INFO, "LUA", fmt, std::forward<Args>(args)...);
+	}
+
+	template <typename... Args>
+	void startup(fmt::format_string<Args...> fmt, Args&&... args)
+	{
+		logCategoryFormatted(LogLevel::INFO, "STARTUP", fmt, std::forward<Args>(args)...);
 	}
 
 	template <typename... Args>
@@ -217,6 +256,34 @@ public:
 
 protected:
 	virtual void log(LogLevel level, std::string_view message) = 0;
+	virtual void logCategory(LogLevel level, std::string_view category, std::string_view message) = 0;
+	virtual void logCategory(LogLevel level, std::string_view category, std::string_view message,
+	                         std::string_view persistedMessage) = 0;
+
+private:
+	void logCategoryIfEnabled(LogLevel level, std::string_view category, std::string_view message)
+	{
+		if (isEnabled(level)) {
+			logCategory(level, category, message);
+		}
+	}
+
+	void logCategoryIfEnabled(LogLevel level, std::string_view category, std::string_view message,
+	                          std::string_view persistedMessage)
+	{
+		if (isEnabled(level)) {
+			logCategory(level, category, message, persistedMessage);
+		}
+	}
+
+	template <typename... Args>
+	void logCategoryFormatted(LogLevel level, std::string_view category, fmt::format_string<Args...> format,
+	                          Args&&... args)
+	{
+		if (isEnabled(level)) {
+			logCategory(level, category, fmt::format(format, std::forward<Args>(args)...));
+		}
+	}
 };
 
 Logger& g_logger();
@@ -285,6 +352,26 @@ void loggerSignalHandler(int signal);
 #define LOG_REACTOR(...) \
 	do { \
 		if (isLoggerInitialized()) g_logger().reactor(__VA_ARGS__); \
+	} while (0)
+#define LOG_DATABASE(...) \
+	do { \
+		if (isLoggerInitialized()) g_logger().database(__VA_ARGS__); \
+	} while (0)
+#define LOG_LOGIN(...) \
+	do { \
+		if (isLoggerInitialized()) g_logger().login(__VA_ARGS__); \
+	} while (0)
+#define LOG_LOGOUT(...) \
+	do { \
+		if (isLoggerInitialized()) g_logger().logout(__VA_ARGS__); \
+	} while (0)
+#define LOG_LUA(...) \
+	do { \
+		if (isLoggerInitialized()) g_logger().lua(__VA_ARGS__); \
+	} while (0)
+#define LOG_STARTUP(...) \
+	do { \
+		if (isLoggerInitialized()) g_logger().startup(__VA_ARGS__); \
 	} while (0)
 
 template <typename T>

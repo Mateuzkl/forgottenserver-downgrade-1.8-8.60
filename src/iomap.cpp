@@ -6,6 +6,7 @@
 #include "bed.h"
 #include "mapcache.h"
 #include "logger.h"
+#include "startup_progress.h"
 #include "zones.h"
 
 #include <fstream>
@@ -168,10 +169,14 @@ std::unique_ptr<Tile> IOMap::createTile(std::shared_ptr<Item>& ground, Item* ite
 
 bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePersistentCache) {
     const auto start = std::chrono::steady_clock::now();
+	const bool reportStartupProgress = startupProgress().isCurrentStage(StartupStage::MAP_DATA);
     if (!std::filesystem::exists(fileName)) {
         setLastErrorString(fmt::format("Map file not found at: {}. Please check 'mapName' in config.lua and ensure the file exists in data/world/.", fileName.string()));
         return false;
     }
+	if (reportStartupProgress) {
+		startupProgress().updateFraction(0.02, fileName.filename().string());
+	}
 
     const std::string cacheMode = asLowerCaseString(std::string{getString(ConfigManager::MAP_CACHE_MODE)});
     const bool cacheEnabled = usePersistentCache && cacheMode == "auto";
@@ -188,6 +193,9 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
         cachePath = cacheDirectory / (cacheName + ".tfsmc");
         houseCachePath = cacheDirectory / (cacheName + ".houses.otbm");
         initialFingerprint = MapCache::fingerprint(fileName);
+		if (reportStartupProgress) {
+			startupProgress().updateFraction(0.08, "checking persistent cache");
+		}
 
         const bool forceRebuild = ConfigManager::getBoolean(ConfigManager::REBUILD_MAP_CACHE);
         const auto houseDigest = MapCache::digestFile(houseCachePath);
@@ -204,8 +212,11 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
             // generated house-only cache.
             map->spawnfile = spawnFile;
             map->housefile = houseFile;
-            g_logger().info(">> Persistent map cache hit completed in [\033[1;33m{:.3f}\033[0m] seconds.",
+            g_logger().info(">> Persistent map cache hit completed in {:.3f} seconds.",
                             std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+			if (reportStartupProgress) {
+				startupProgress().updateFraction(1.0, "persistent cache loaded");
+			}
             return true;
         }
         g_logger().info(">> Persistent map cache miss; rebuilding from OTBM.");
@@ -224,6 +235,9 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
         const auto treeStart = std::chrono::steady_clock::now();
         auto& root = loader.parseTree();
         const auto treeEnd = std::chrono::steady_clock::now();
+		if (reportStartupProgress) {
+			startupProgress().updateFraction(0.20, "OTBM tree parsed");
+		}
         PropStream propStream;
         if (!loader.getProps(root, propStream)) {
             setLastErrorString("Could not read root property.");
@@ -269,7 +283,7 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
             g_logger().warn("This map needs an updated items.otb.");
         }
 
-        g_logger().info(">> Map size: [\033[1;33m{}x{}\033[0m].", root_header.width, root_header.height);
+        g_logger().info(">> Map size: {}x{}.", root_header.width, root_header.height);
         map->width = root_header.width;
         map->height = root_header.height;
 
@@ -282,8 +296,12 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
         if (!parseMapDataAttributes(loader, mapNode, *map, fileName)) {
             return false;
         }
+		if (reportStartupProgress) {
+			startupProgress().updateFraction(0.25, "map attributes parsed");
+		}
 
         const auto dataStart = std::chrono::steady_clock::now();
+        size_t processedMapNodes = 0;
         for (auto& mapDataNode : mapNode.children) {
             if (static_cast<OTBM_NodeTypes_t>(mapDataNode.type) == OTBM_NodeTypes_t::TILE_AREA) {
                 if (!parseTileArea(loader, mapDataNode, *map)) {
@@ -301,10 +319,18 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
                 setLastErrorString("Unknown map node.");
                 return false;
             }
+            ++processedMapNodes;
+            const double nodeFraction = mapNode.children.empty()
+                                            ? 0.90
+                                            : 0.25 + (0.65 * static_cast<double>(processedMapNodes) /
+                                                      static_cast<double>(mapNode.children.size()));
+			if (reportStartupProgress) {
+				startupProgress().updateFraction(nodeFraction, "map nodes");
+			}
         }
 
         const auto dataEnd = std::chrono::steady_clock::now();
-        g_logger().info(">> Map phases: tree [\033[1;33m{:.3f}\033[0m] s, data [\033[1;33m{:.3f}\033[0m] s.",
+        g_logger().info(">> Map phases: tree {:.3f} s, data {:.3f} s.",
                         std::chrono::duration<double>(treeEnd - treeStart).count(),
                         std::chrono::duration<double>(dataEnd - dataStart).count());
 
@@ -333,12 +359,18 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
             g_logger().warn(">> Map inputs changed while building the cache; generated cache was discarded.");
         }
     }
+	if (reportStartupProgress) {
+		startupProgress().updateFraction(0.95, cacheEnabled ? "map cache finalized" : "map parsed");
+	}
 
     // Flush only the lookup tables; compact tileStore ids remain valid for
     // lazy materialization throughout the Map lifetime.
     MapCache::flush();
-    g_logger().info(">> Map loading time: [\033[1;33m{:.3f}\033[0m] seconds.",
+    g_logger().info(">> Map loading time: {:.3f} seconds.",
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+	if (reportStartupProgress) {
+		startupProgress().updateFraction(1.0, "OTBM ready");
+	}
     return true;
 }
 

@@ -112,6 +112,38 @@ void PerformanceMetrics::recordTaskDropped(uint64_t count) noexcept
 	if (isEnabled()) reactor.dropped.fetch_add(count, std::memory_order_relaxed);
 }
 
+void PerformanceMetrics::recordNetworkAcceptStarted() noexcept
+{
+	if (isEnabled()) network.acceptStarted.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordNetworkAccept(bool success) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	(success ? network.accepted : network.acceptErrors).fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordNetworkRateLimitRejection() noexcept
+{
+	if (isEnabled()) network.rateLimitRejections.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordNetworkIpLimitRejection() noexcept
+{
+	if (isEnabled()) network.ipLimitRejections.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordNetworkConnectionCount(size_t current) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	network.connectionsCurrent.store(current, std::memory_order_relaxed);
+	updateMaximum(network.connectionsMaximum, current);
+}
+
 void PerformanceMetrics::recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
                                                       std::string_view origin) noexcept
 {
@@ -223,6 +255,18 @@ void PerformanceMetrics::maybeReport()
 		path.nodesVisited.exchange(0, std::memory_order_relaxed),
 		path.tilesRead.exchange(0, std::memory_order_relaxed),
 		path.pathLength.exchange(0, std::memory_order_relaxed));
+	const uint64_t currentConnections = network.connectionsCurrent.load(std::memory_order_relaxed);
+	const uint64_t maximumConnections =
+		std::max(currentConnections,
+		         network.connectionsMaximum.exchange(currentConnections, std::memory_order_relaxed));
+	report += fmt::format(
+		"\n[Perf] network accept_started={} accept_ok={} accept_error={} rate_limited={} ip_limited={} "
+		"active={} active_max={}",
+		network.acceptStarted.exchange(0, std::memory_order_relaxed),
+		network.accepted.exchange(0, std::memory_order_relaxed),
+		network.acceptErrors.exchange(0, std::memory_order_relaxed),
+		network.rateLimitRejections.exchange(0, std::memory_order_relaxed),
+		network.ipLimitRejections.exchange(0, std::memory_order_relaxed), currentConnections, maximumConnections);
 	LOG_INFO("{}", report);
 }
 

@@ -543,10 +543,18 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	player->setTokenProtected(result->getNumber<uint8_t>("token_protected") != 0);
 	player->setTokenHash(result->getString("token_hash"));
 
-	auto town = g_game.map.towns.getSharedTown(result->getNumber<uint32_t>("town_id"));
+	const uint32_t townId = result->getNumber<uint32_t>("town_id");
+	auto town = g_game.map.towns.getSharedTown(townId);
 	if (!town) {
-		LOG_ERROR(fmt::format("[Error - IOLoginData::loadPlayer] {} has Town ID {} which doesn't exist", player->name, result->getNumber<uint32_t>("town_id")));
-		return false;
+		LOG_WARN(fmt::format("[Warning - IOLoginData::loadPlayer] {} has Town ID {} which doesn't exist; using Town ID 1", player->name, townId));
+		town = g_game.map.towns.getSharedTown(1);
+		if (!town) {
+			LOG_ERROR("[Error - IOLoginData::loadPlayer] Town ID 1 doesn't exist");
+			return false;
+		}
+
+		// Also reset the login position so the player is sent to Town 1's temple.
+		player->loginPosition = town->getTemplePosition();
 	}
 
 	player->town = std::move(town);

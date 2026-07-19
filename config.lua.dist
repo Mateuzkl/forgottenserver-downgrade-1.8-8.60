@@ -102,10 +102,10 @@ connectionRateLimitMS = 500
 -- Presets:
 --   Low    (small VPS / few players):   250 / 3  / 50000
 --   Normal (moderate load):             500 / 5  / 100000
---   High   (default / heavy load):      1000 / 25 / 200000
-reactorMaxTasksPerCycle = 1000
-reactorTimeBudgetMS = 25
-reactorMaxInboxSize = 200000
+--   High   (default / heavy load):      2000 / 50 / 400000
+reactorMaxTasksPerCycle = 2000
+reactorTimeBudgetMS = 50
+reactorMaxInboxSize = 400000
 -- Aggregated 5-second latency/hotspot report. Keep disabled outside profiling runs.
 performanceMetricsEnabled = false
 
@@ -525,10 +525,17 @@ defaultPriority = "high"
 startupDatabaseOptimization = false
 
 -- Logging
--- logToFile: true = save logs to data/logs/server.log, false = console only (default: false)
+-- logToFile: true = save timestamped logs under data/logs, false = console only (default: false).
+-- Files rotate at 5 MiB with 3 files per server run. LOGIN/LOGOUT file entries retain player names
+-- but mask the final IPv4 octet; the interactive console continues to show the full address.
 logToFile = false
 -- logLevel: trace, debug, info, warning, error, critical (default: info)
 logLevel = "info"
+-- Real startup progress. Detailed mode keeps individual loader logs visible.
+startupProgressBar = true
+startupDetailedLogs = false
+-- Colors are used only when stdout is an interactive terminal.
+consoleColors = true
 -- Status Server Information
 ownerName = ""
 ownerEmail = ""
@@ -536,10 +543,13 @@ url = "https://otland.net/"
 location = "Sweden"
 
 -- Server Statistics
+-- Detailed console/file statistics. Accepts true or "on"; disabled by default.
+statsEnabled = false
 -- time in seconds: 30 = 30 seconds, 0 = disabled
-statsDumpInterval = 0
+statsDumpInterval = 30
 -- time in milliseconds: 50 = 0.05 sec, 0 = disabled
 statsSlowLogTime = 0
+-- Enables slow task and TaskReactor time-budget diagnostics for development.
 slowTaskWarning = false
 -- time in milliseconds: 500 = 0.5 sec, 0 = disabled
 statsVerySlowLogTime = 0

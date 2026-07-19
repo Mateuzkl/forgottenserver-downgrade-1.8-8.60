@@ -30,6 +30,7 @@ public:
 	void addTask(std::string query, std::function<void(DBResult_ptr, bool, uint64_t)> callback = nullptr, bool store = false);
 
 	void threadMain();
+	[[nodiscard]] bool isRunning() const { return getState() == THREAD_STATE_RUNNING; }
 
 private:
 	void runTask(const DatabaseTask& task);

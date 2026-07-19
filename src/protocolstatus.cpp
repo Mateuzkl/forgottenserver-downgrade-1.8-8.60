@@ -12,6 +12,8 @@
 extern Game g_game;
 
 std::unordered_map<uint32_t, int64_t> ProtocolStatus::ipConnectMap;
+std::mutex ProtocolStatus::ipConnectMutex;
+int64_t ProtocolStatus::lastCleanup = 0;
 const uint64_t ProtocolStatus::start = OTSYS_TIME();
 
 enum RequestedInfo_t : uint16_t
@@ -28,20 +30,35 @@ enum RequestedInfo_t : uint16_t
 
 void ProtocolStatus::onRecvFirstMessage(NetworkMessage& msg)
 {
-	uint32_t ip = getIP();
-	if (ip != 0x0100007F) {
-		std::string ipStr = convertIPToString(ip);
-		if (ipStr != getString(ConfigManager::IP)) {
-			auto it = ipConnectMap.find(ip);
-			if (it != ipConnectMap.end() &&
-			    (OTSYS_TIME() < (it->second + getInteger(ConfigManager::STATUSQUERY_TIMEOUT)))) {
-				disconnect();
-				return;
-			}
+	const uint32_t ip = getIP();
+	const int64_t now = OTSYS_TIME();
+	const bool whitelisted = ip == 0x0100007F || convertIPToString(ip) == getString(ConfigManager::IP);
+	bool blocked = false;
+	{
+		std::scoped_lock lock(ipConnectMutex);
+		if (lastCleanup == 0 || now - lastCleanup >= 60'000) {
+			lastCleanup = now;
+			const int64_t retention = std::max<int64_t>(60'000, getInteger(ConfigManager::STATUSQUERY_TIMEOUT));
+			std::erase_if(ipConnectMap, [now, retention](const auto& pair) {
+				return now - pair.second > retention;
+			});
+		}
+
+		if (!whitelisted) {
+			const auto it = ipConnectMap.find(ip);
+			blocked = it != ipConnectMap.end() &&
+			          now < it->second + getInteger(ConfigManager::STATUSQUERY_TIMEOUT);
+		}
+
+		if (!blocked) {
+			ipConnectMap[ip] = now;
 		}
 	}
 
-	ipConnectMap[ip] = OTSYS_TIME();
+	if (blocked) {
+		disconnect();
+		return;
+	}
 
 	switch (msg.getByte()) {
 		// XML info protocol

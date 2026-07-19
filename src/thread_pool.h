@@ -79,6 +79,10 @@ public:
 	 * @brief Get the number of worker threads.
 	 */
 	[[nodiscard]] uint32_t get_thread_count() const noexcept { return threadCount; }
+	[[nodiscard]] bool isRunning() const noexcept
+	{
+		return threadCount > 0 && !stopped.load(std::memory_order_relaxed);
+	}
 
 	/**
 	 * @brief Check if the pool has been stopped.

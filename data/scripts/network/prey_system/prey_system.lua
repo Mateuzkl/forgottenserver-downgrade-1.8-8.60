@@ -75,7 +75,6 @@ local RESOURCE_INVENTORY = 1
 local RESOURCE_PREY = 10
 
 local preyCache = {}
-local preySchemaChecked = false
 
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
@@ -89,33 +88,6 @@ local function isPreySlotUnlocked(player, slot)
 	return slot ~= PREY_PERMANENT_SLOT
 		or player:getStorageValue(PREY_STORAGE_PERMANENT_SLOT) == 1
 end
-
-local function ensurePreySchema()
-	if preySchemaChecked then
-		return
-	end
-
-	local query = db.storeQuery(
-		"SELECT COUNT(*) AS `count` FROM `information_schema`.`COLUMNS`"
-		.. " WHERE `TABLE_SCHEMA` = DATABASE()"
-		.. " AND `TABLE_NAME` = 'player_prey'"
-		.. " AND `COLUMN_NAME` = 'list_reroll_used'"
-	)
-	local exists = false
-	if query ~= false then
-		exists = result.getDataInt(query, "count") > 0
-		result.free(query)
-	end
-
-	if not exists then
-		db.query("ALTER TABLE `player_prey` ADD `list_reroll_used` TINYINT(1) NOT NULL DEFAULT 0")
-	end
-
-	preySchemaChecked = true
-end
-
--- Schema maintenance belongs to startup, never to a player's login callback.
-ensurePreySchema()
 
 PreySystem = PreySystem or {}
 PreySystem.BONUS_DAMAGE_BOOST = PREY_BONUS_DMG_BOOST
@@ -189,32 +161,12 @@ local function parseMonsterList(rawList)
 end
 
 local function getPlayerBonusRerolls(player)
-	if player.getPreyWildcards then
-		return math.min(player:getPreyWildcards(), PREY_MAX_WILDCARDS)
-	end
-
-	local resultId = db.storeQuery("SELECT `bonus_rerolls` FROM `players` WHERE `id` = " .. player:getGuid())
-	if resultId == false then
-		return 0
-	end
-
-	local rerolls = math.min(result.getDataInt(resultId, "bonus_rerolls"), PREY_MAX_WILDCARDS)
-	result.free(resultId)
-	return math.max(rerolls, 0)
+	return math.min(player:getPreyWildcards(), PREY_MAX_WILDCARDS)
 end
 
 local function setPlayerBonusRerolls(player, rerolls)
 	rerolls = math.min(math.max(tonumber(rerolls) or 0, 0), PREY_MAX_WILDCARDS)
-	if player.setPreyWildcards then
-		player:setPreyWildcards(rerolls)
-		return rerolls
-	end
-
-	db.query(string.format(
-		"UPDATE `players` SET `bonus_rerolls` = %d WHERE `id` = %d",
-		rerolls,
-		player:getGuid()
-	))
+	player:setPreyWildcards(rerolls)
 	return rerolls
 end
 
@@ -270,15 +222,12 @@ local function loadPreyFromDB(playerGuid)
 	return data
 end
 
-local function saveSlotToDB(playerGuid, slot, slotData, wildcards)
-	ensurePreySchema()
+local PREY_SLOT_INSERT = "INSERT INTO `player_prey` (`player_id`, `slot`, `state`, `monster_name`, `bonus_type`, `bonus_value`, `time_left`, `list_monsters`, `reroll_at`, `wildcards`, `list_reroll_used`) VALUES "
+local PREY_SLOT_UPSERT = " ON DUPLICATE KEY UPDATE `state` = VALUES(`state`), `monster_name` = VALUES(`monster_name`), `bonus_type` = VALUES(`bonus_type`), `bonus_value` = VALUES(`bonus_value`), `time_left` = VALUES(`time_left`), `list_monsters` = VALUES(`list_monsters`), `reroll_at` = VALUES(`reroll_at`), `wildcards` = VALUES(`wildcards`), `list_reroll_used` = VALUES(`list_reroll_used`)"
 
-	db.asyncQuery(string.format(
-		"INSERT INTO `player_prey` (`player_id`, `slot`, `state`, `monster_name`, `bonus_type`, `bonus_value`, `time_left`, `list_monsters`, `reroll_at`, `wildcards`, `list_reroll_used`) " ..
-		"VALUES (%d, %d, %d, %s, %d, %d, %d, %s, %d, %d, %d) " ..
-		"ON DUPLICATE KEY UPDATE `state` = VALUES(`state`), `monster_name` = VALUES(`monster_name`), `bonus_type` = VALUES(`bonus_type`), " ..
-		"`bonus_value` = VALUES(`bonus_value`), `time_left` = VALUES(`time_left`), `list_monsters` = VALUES(`list_monsters`), " ..
-		"`reroll_at` = VALUES(`reroll_at`), `wildcards` = VALUES(`wildcards`), `list_reroll_used` = VALUES(`list_reroll_used`)",
+local function serializeSlotValues(playerGuid, slot, slotData)
+	return string.format(
+		"(%d, %d, %d, %s, %d, %d, %d, %s, %d, 0, %d)",
 		playerGuid,
 		slot,
 		slotData.state,
@@ -288,9 +237,12 @@ local function saveSlotToDB(playerGuid, slot, slotData, wildcards)
 		slotData.time_left,
 		db.escapeString(serializeMonsterList(slotData.list_monsters)),
 		slotData.reroll_at,
-		0,
 		slotData.list_reroll_used and 1 or 0
-	))
+	)
+end
+
+local function saveSlotToDB(playerGuid, slot, slotData)
+	db.asyncQuery(PREY_SLOT_INSERT .. serializeSlotValues(playerGuid, slot, slotData) .. PREY_SLOT_UPSERT)
 end
 
 local function saveAllSlots(player)
@@ -300,9 +252,11 @@ local function saveAllSlots(player)
 	end
 
 	local guid = player:getGuid()
+	local values = {}
 	for slot = 0, PREY_SLOTS - 1 do
-		saveSlotToDB(guid, slot, prey.slots[slot], prey.wildcards)
+		values[#values + 1] = serializeSlotValues(guid, slot, prey.slots[slot])
 	end
+	db.asyncQuery(PREY_SLOT_INSERT .. table.concat(values, ",") .. PREY_SLOT_UPSERT)
 end
 
 local function getPlayerPrey(player)
@@ -312,10 +266,7 @@ local function getPlayerPrey(player)
 		preyCache[playerId] = loadPreyFromDB(player:getGuid())
 	end
 
-	local wildcards = preyCache[playerId].wildcards
-	if firstLoad or player.getPreyWildcards then
-		wildcards = getPlayerBonusRerolls(player)
-	end
+	local wildcards = getPlayerBonusRerolls(player)
 	if firstLoad and wildcards == 0 and preyCache[playerId].legacyWildcards > 0 then
 		setPlayerBonusRerolls(player, preyCache[playerId].legacyWildcards)
 		wildcards = preyCache[playerId].legacyWildcards
@@ -703,7 +654,7 @@ local function sendSlotUpdate(player, slot, wildcardRaceIds)
 	writeSlot(out, player, slot, prey.slots[slot], wildcardRaceIds)
 	syncPreyCombatBonuses(player, prey)
 	local sent = out:sendToPlayer(player)
-	saveSlotToDB(player:getGuid(), slot, prey.slots[slot], prey.wildcards)
+	saveSlotToDB(player:getGuid(), slot, prey.slots[slot])
 	return sent
 end
 
@@ -819,7 +770,7 @@ local function initializeEmptySlots(player)
 	local prey = getPlayerPrey(player)
 	for slot = 0, PREY_SLOTS - 1 do
 		if isPreySlotUnlocked(player, slot) and initializeSlot(player, slot) then
-			saveSlotToDB(player:getGuid(), slot, prey.slots[slot], prey.wildcards)
+			saveSlotToDB(player:getGuid(), slot, prey.slots[slot])
 			changed = true
 		end
 	end
@@ -1081,9 +1032,7 @@ local function preyTick()
 				if changed then
 					prey.saveTicker = (prey.saveTicker or 0) + 1
 					if prey.saveTicker >= 60 then
-						for slot = 0, PREY_SLOTS - 1 do
-							saveSlotToDB(player:getGuid(), slot, prey.slots[slot], prey.wildcards)
-						end
+						saveAllSlots(player)
 						prey.saveTicker = 0
 					end
 				end

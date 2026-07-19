@@ -7,6 +7,7 @@
 
 #include "database.h"
 #include "game.h"
+#include "logger.h"
 #include "player.h"
 
 #include <algorithm>
@@ -104,14 +105,19 @@ BestiaryCharmSystem g_bestiaryCharmSystem;
 
 void BestiaryCharmSystem::registerMonster(BestiaryCreatureInfo info)
 {
-	if (info.raceId == 0) {
+	if (info.raceId == 0 || info.toKill == 0) {
+		LOG_ERROR("[Bestiary] Refusing invalid monster registration: raceId={}, name='{}', toKill={}",
+		          info.raceId, info.name, info.toKill);
 		return;
 	}
 
 	if (info.name.empty()) {
 		info.name = "?";
 	}
-	if (info.secondUnlock == 0 || info.secondUnlock > info.toKill) {
+	if (info.firstUnlock == 0 || info.firstUnlock > info.toKill) {
+		info.firstUnlock = info.toKill;
+	}
+	if (info.secondUnlock < info.firstUnlock || info.secondUnlock > info.toKill) {
 		info.secondUnlock = info.toKill;
 	}
 
@@ -125,6 +131,23 @@ std::optional<std::reference_wrapper<const BestiaryCreatureInfo>> BestiaryCharmS
 		return std::nullopt;
 	}
 	return std::cref(it->second);
+}
+
+uint8_t BestiaryCharmSystem::getProgress(const BestiaryCreatureInfo& info, uint32_t kills)
+{
+	if (kills == 0) {
+		return 0;
+	}
+	if (kills >= info.toKill) {
+		return 4;
+	}
+	if (kills >= info.secondUnlock) {
+		return 3;
+	}
+	if (kills >= info.firstUnlock) {
+		return 2;
+	}
+	return 1;
 }
 
 bool BestiaryCharmSystem::isMajorCharm(uint8_t charmId) const

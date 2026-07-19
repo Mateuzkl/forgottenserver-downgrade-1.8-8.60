@@ -38,6 +38,22 @@ using MysqlResult_ptr = std::unique_ptr<MYSQL_RES, MysqlDeleter>;
 class Database
 {
 public:
+	struct ConnectionError
+	{
+		enum class Kind : uint8_t {
+			UNKNOWN_DATABASE,
+			ACCESS_DENIED,
+			CANNOT_CONNECT,
+			TIMED_OUT,
+			UNKNOWN_HOST,
+			OTHER,
+		};
+
+		unsigned int code = 0;
+		std::string message;
+		Kind kind = Kind::OTHER;
+	};
+
 	/**
 	 * Singleton implementation.
 	 *
@@ -55,6 +71,7 @@ public:
 	 * @return true on successful connection, false on error
 	 */
 	bool connect();
+	ConnectionError getLastConnectionError() const;
 
 	/**
 	 * Executes command.
@@ -159,7 +176,8 @@ private:
 	};
 
 	ConnectionContext& getContext() const;
-	bool establishConnection(ConnectionContext& ctx, bool retryIfError) const;
+	bool establishConnection(ConnectionContext& ctx, bool retryIfError, bool logConnectionError = true) const;
+	void setLastConnectionError(ConnectionError error) const;
 	/**
 	 * Reconnects the calling thread's database context using saved credentials.
 	 * Replaces that thread's handle on success.
@@ -170,6 +188,8 @@ private:
 	mutable std::optional<ConnectionParams> connectionParams;
 	mutable std::mutex connectionsMutex;
 	mutable std::vector<std::unique_ptr<ConnectionContext>> connections;
+	mutable std::mutex connectionErrorMutex;
+	mutable ConnectionError lastConnectionError;
 	bool libraryInitialized = false;
 
 	friend class DBTransaction;

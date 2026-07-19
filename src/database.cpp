@@ -14,6 +14,12 @@
 #  include <mysql/errmsg.h>
 #endif
 
+#if __has_include(<mariadb/mysqld_error.h>)
+#  include <mariadb/mysqld_error.h>
+#else
+#  include <mysql/mysqld_error.h>
+#endif
+
 #ifndef ER_LOCK_DEADLOCK
 #define ER_LOCK_DEADLOCK 1213
 #endif
@@ -31,6 +37,27 @@ static constexpr uint64_t DB_INSERT_PACKET_SAFETY_MARGIN = 4096;
 
 namespace {
 thread_local std::vector<std::string>* tlsQueryCapture = nullptr;
+thread_local bool tlsSuppressConnectionErrorLogging = false;
+
+class ScopedConnectionErrorLoggingSuppression final
+{
+public:
+	ScopedConnectionErrorLoggingSuppression() noexcept : previousValue(tlsSuppressConnectionErrorLogging)
+	{
+		tlsSuppressConnectionErrorLogging = true;
+	}
+
+	~ScopedConnectionErrorLoggingSuppression()
+	{
+		tlsSuppressConnectionErrorLogging = previousValue;
+	}
+
+	ScopedConnectionErrorLoggingSuppression(const ScopedConnectionErrorLoggingSuppression&) = delete;
+	ScopedConnectionErrorLoggingSuppression& operator=(const ScopedConnectionErrorLoggingSuppression&) = delete;
+
+private:
+	bool previousValue;
+};
 
 #ifdef STATS_ENABLED
 void recordSqlStats(std::string_view query, std::chrono::steady_clock::time_point start)
@@ -80,9 +107,36 @@ ThreadCleanup& getThreadCleanup()
 	static thread_local ThreadCleanup cleanup;
 	return cleanup;
 }
+
+Database::ConnectionError::Kind classifyConnectionError(unsigned int code, std::string_view message)
+{
+	std::string normalized(message);
+	std::ranges::transform(normalized, normalized.begin(), [](unsigned char ch) {
+		return static_cast<char>(std::tolower(ch));
+	});
+
+	if (normalized.find("timed out") != std::string::npos || normalized.find("timeout") != std::string::npos) {
+		return Database::ConnectionError::Kind::TIMED_OUT;
+	}
+	if (code == ER_BAD_DB_ERROR) {
+		return Database::ConnectionError::Kind::UNKNOWN_DATABASE;
+	}
+	if (code == ER_ACCESS_DENIED_ERROR) {
+		return Database::ConnectionError::Kind::ACCESS_DENIED;
+	}
+	if (code == CR_UNKNOWN_HOST) {
+		return Database::ConnectionError::Kind::UNKNOWN_HOST;
+	}
+	if (code == CR_CONNECTION_ERROR || code == CR_CONN_HOST_ERROR) {
+		return Database::ConnectionError::Kind::CANNOT_CONNECT;
+	}
+	return Database::ConnectionError::Kind::OTHER;
+}
 } // namespace
 
-static tfs::detail::Mysql_ptr connectToDatabase(const Database::ConnectionParams& params, const bool retryIfError)
+static tfs::detail::Mysql_ptr connectToDatabase(const Database::ConnectionParams& params, const bool retryIfError,
+                                                const bool logConnectionError,
+                                                Database::ConnectionError& lastConnectionError)
 {
 	for (int retryCount = 0; ; ++retryCount) {
 		if (retryCount > 0) {
@@ -97,7 +151,11 @@ static tfs::detail::Mysql_ptr connectToDatabase(const Database::ConnectionParams
 
 		tfs::detail::Mysql_ptr handle{mysql_init(nullptr)};
 		if (!handle) {
-			LOG_ERROR(">> Database: failed to initialize MySQL connection handle.");
+			lastConnectionError = {0, "Failed to initialize MySQL connection handle.",
+			                       Database::ConnectionError::Kind::OTHER};
+			if (logConnectionError) {
+				LOG_ERROR(">> Database: failed to initialize MySQL connection handle.");
+			}
 			continue;
 		}
 
@@ -137,9 +195,14 @@ static tfs::detail::Mysql_ptr connectToDatabase(const Database::ConnectionParams
 		const char* socket = params.socket.empty() ? nullptr : params.socket.c_str();
 		if (!mysql_real_connect(handle.get(), params.host.c_str(), params.user.c_str(), params.password.c_str(),
 		                        params.database.c_str(), static_cast<unsigned int>(params.port), socket, 0)) {
-			LOG_ERROR(fmt::format("MySQL Error Message: {}", mysql_error(handle.get())));
+			lastConnectionError = {mysql_errno(handle.get()), mysql_error(handle.get()),
+			                       classifyConnectionError(mysql_errno(handle.get()), mysql_error(handle.get()))};
+			if (logConnectionError) {
+				LOG_ERROR("MySQL connection error {}: {}", lastConnectionError.code, lastConnectionError.message);
+			}
 			continue;
 		}
+		lastConnectionError = {};
 		return handle;
 	}
 }
@@ -191,12 +254,13 @@ bool Database::connect()
 	static std::once_flag libraryInitFlag;
 	std::call_once(libraryInitFlag, [this]() {
 		if (mysql_library_init(0, nullptr, nullptr) != 0) {
-			LOG_ERROR("Failed to initialize the MySQL client library.");
+			setLastConnectionError({0, "Failed to initialize the MySQL client library.",
+			                        ConnectionError::Kind::OTHER});
 			return;
 		}
 
 		libraryInitialized = true;
-		LOG_INFO(">> Database running in per-thread connection mode (one MySQL connection per worker thread).");
+		LOG_DATABASE(">> Database running in per-thread connection mode (one MySQL connection per worker thread).");
 	});
 
 	if (!libraryInitialized) {
@@ -212,7 +276,10 @@ bool Database::connect()
 		static_cast<int>(getInteger(ConfigManager::SQL_PORT))
 	};
 
-	ConnectionContext& ctx = getContext();
+	ConnectionContext& ctx = [this]() -> ConnectionContext& {
+		ScopedConnectionErrorLoggingSuppression guard;
+		return getContext();
+	}();
 	if (!ctx.handle) {
 		return false;
 	}
@@ -220,24 +287,48 @@ bool Database::connect()
 	return true;
 }
 
-bool Database::establishConnection(ConnectionContext& ctx, const bool retryIfError) const
+Database::ConnectionError Database::getLastConnectionError() const
+{
+	std::scoped_lock lock(connectionErrorMutex);
+	return lastConnectionError;
+}
+
+void Database::setLastConnectionError(ConnectionError error) const
+{
+	std::scoped_lock lock(connectionErrorMutex);
+	lastConnectionError = std::move(error);
+}
+
+bool Database::establishConnection(ConnectionContext& ctx, const bool retryIfError,
+                                   const bool logConnectionError) const
 {
 	if (!connectionParams) {
-		LOG_ERROR(">> Database: connection parameters not initialized.");
+		setLastConnectionError({0, "Database connection parameters were not initialized.",
+		                        ConnectionError::Kind::OTHER});
+		if (logConnectionError) {
+			LOG_ERROR(">> Database: connection parameters not initialized.");
+		}
 		return false;
 	}
 
 	if (!getThreadCleanup().init()) {
-		LOG_ERROR(">> Database: failed to initialize MySQL thread state.");
+		setLastConnectionError({0, "Failed to initialize MySQL thread state.", ConnectionError::Kind::OTHER});
+		if (logConnectionError) {
+			LOG_ERROR(">> Database: failed to initialize MySQL thread state.");
+		}
 		return false;
 	}
 
-	ctx.handle = connectToDatabase(*connectionParams, retryIfError);
-	ctx.lastErrno = 0;
+	ConnectionError connectionError;
+	ctx.handle = connectToDatabase(*connectionParams, retryIfError, logConnectionError, connectionError);
+	ctx.lastErrno = connectionError.code;
 	ctx.inTransaction = false;
 	if (!ctx.handle) {
+		setLastConnectionError(std::move(connectionError));
 		return false;
 	}
+	setLastConnectionError({});
+	ctx.lastErrno = 0;
 
 	static constexpr std::string_view maxPacketQuery = "SHOW VARIABLES LIKE 'max_allowed_packet'";
 	if (mysql_real_query(ctx.handle.get(), maxPacketQuery.data(), maxPacketQuery.size()) == 0) {
@@ -263,9 +354,8 @@ Database::ConnectionContext& Database::getContext() const
 
 	auto context = std::make_unique<ConnectionContext>();
 	ConnectionContext* contextPtr = context.get();
-	if (!establishConnection(*contextPtr, false)) {
+	if (!establishConnection(*contextPtr, false, !tlsSuppressConnectionErrorLogging)) {
 		failedContext = std::move(context);
-		LOG_ERROR(">> Database: failed to open MySQL connection.");
 		return *failedContext;
 	}
 
@@ -277,7 +367,7 @@ Database::ConnectionContext& Database::getContext() const
 	}
 
 	tlsContext = contextPtr;
-	LOG_INFO(fmt::format(">> Database: opened MySQL connection #{}.", connectionNumber));
+	LOG_DATABASE(fmt::format(">> Database: opened MySQL connection #{}.", connectionNumber));
 	return *tlsContext;
 }
 
@@ -288,7 +378,7 @@ bool Database::reconnect(ConnectionContext& ctx) const
 	ctx.handle.reset();
 	const bool success = establishConnection(ctx, true);
 	if (success) {
-		LOG_INFO(">> Database: reconnected successfully.");
+		LOG_DATABASE(">> Database: reconnected successfully.");
 	}
 	return success;
 }
@@ -299,7 +389,7 @@ void Database::shutdown()
 	{
 		std::scoped_lock lock{db.connectionsMutex};
 		if (!db.connections.empty()) {
-			LOG_INFO(fmt::format(">> Database: closing {} MySQL connection(s).", db.connections.size()));
+			LOG_DATABASE(fmt::format(">> Database: closing {} MySQL connection(s).", db.connections.size()));
 		}
 		db.connections.clear();
 	}

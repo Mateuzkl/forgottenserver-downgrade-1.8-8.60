@@ -351,6 +351,15 @@ class ProtocolSpectator {
                 spy->sendIcons(icons, bakragoreIcon);
         }
 
+        void sendBlessStatus() {
+            auto o = owner.lock();
+            if (o)
+                o->sendBlessStatus();
+
+            for (auto &it : spectators)
+                it->sendBlessStatus();
+        }
+
         void sendCreatureIcon(const Creature* creature) {
             auto o = owner.lock();
             if (o)

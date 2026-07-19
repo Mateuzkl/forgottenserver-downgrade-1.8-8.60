@@ -5,6 +5,50 @@
 #include "outputmessage.h"
 #include "tools.h"
 
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#endif
+
+namespace {
+
+#ifdef _WIN32
+bool shouldWaitForInteractiveConsole()
+{
+	if (const char* ci = std::getenv("CI"); ci && *ci != '\0') {
+		return false;
+	}
+	if (_isatty(_fileno(stdin)) == 0 || _isatty(_fileno(stdout)) == 0) {
+		return false;
+	}
+
+	const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+	DWORD consoleMode = 0;
+	if (input == nullptr || input == INVALID_HANDLE_VALUE || GetConsoleMode(input, &consoleMode) == 0) {
+		return false;
+	}
+
+	DWORD processIds[2]{};
+	return GetConsoleProcessList(processIds, static_cast<DWORD>(std::size(processIds))) == 1;
+}
+
+void waitForInteractiveConsoleOnStartupFailure()
+{
+	if (!shouldWaitForInteractiveConsole()) {
+		return;
+	}
+
+	fmt::print("Press ENTER to close the server...");
+	std::fflush(stdout);
+	std::string line;
+	std::getline(std::cin, line);
+}
+#else
+void waitForInteractiveConsoleOnStartupFailure() {}
+#endif
+
+} // namespace
+
 static bool argumentsHandler(const std::vector<std::string_view>& args)
 {
 	for (const auto& arg : args) {
@@ -43,12 +87,15 @@ static bool argumentsHandler(const std::vector<std::string_view>& args)
 
 int main(int argc, const char** argv)
 {
-    std::vector<std::string_view> args(argv, argv + argc);
+	std::vector<std::string_view> args(argv, argv + argc);
 	if (!argumentsHandler(args)) {
 		return 1;
 	}
 
-    startServer();
-    OutputMessagePool::drainPool();
-    return 0;
+	const int exitCode = startServer();
+	OutputMessagePool::drainPool();
+	if (exitCode != EXIT_SUCCESS) {
+		waitForInteractiveConsoleOnStartupFailure();
+	}
+	return exitCode;
 }

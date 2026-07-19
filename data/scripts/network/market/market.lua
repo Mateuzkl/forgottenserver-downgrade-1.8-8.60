@@ -151,22 +151,6 @@ local function hasSerializedAttributes(attributes)
 	return type(attributes) == "string" and #attributes > 0
 end
 
--- Provide a SQL literal representing an empty serialized attributes value.
--- @return SQL expression for an empty attributes value; uses `db.escapeBlob("", 0)` when available, otherwise the empty-string literal `''`.
-local function emptyAttributesSql()
-	return db.escapeBlob and db.escapeBlob("", 0) or "''"
-end
-
--- Escapes serialized item attributes for safe SQL insertion, or returns the SQL used to represent empty attributes.
--- @param attributes Serialized attributes string, or nil/empty when there are no serialized attributes.
--- @return SQL expression suitable for inserting the attributes into a query (`db.escapeBlob(attributes, #attributes)` is used when available, otherwise `db.escapeString(attributes)`); returns the database-specific empty-attributes SQL when attributes are not serialized.
-local function escapeAttributes(attributes)
-	if hasSerializedAttributes(attributes) then
-		return db.escapeBlob and db.escapeBlob(attributes, #attributes) or db.escapeString(attributes)
-	end
-	return emptyAttributesSql()
-end
-
 -- Rollback a DB-claimed offer (used when delivery fails after DB claim).
 -- For full-amount offers (deleted): tries to re-INSERT with original data.
 -- Restores a market offer in the database after a previously claimed (deleted or reduced) offer.
@@ -176,22 +160,10 @@ end
 -- @param acceptedAmount Number of units to restore to the offer.
 -- @return The result of the database query (truthy on success, `false` on failure).
 local function rollbackOfferClaim(offer, acceptedAmount)
-	if acceptedAmount >= offer.amount then
-		-- Full offer was DELETE'd — restore it
-		return db.query(
-			"INSERT INTO `market_offers` (`id`, `player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`) VALUES (" ..
-			offer.id .. ", " .. offer.playerId .. ", " .. offer.sale .. ", " .. offer.itemId .. ", " ..
-			offer.amount .. ", " .. offer.created .. ", " .. (offer.anonymous and 1 or 0) .. ", " .. offer.price .. ", " ..
-			math.max(0, math.min(10, tonumber(offer.tier) or 0)) .. ", " ..
-			escapeAttributes(offer.attributes) .. ")"
-		)
-	else
-		-- Partial offer: restore subtracted amount
-		return db.query(
-			"UPDATE `market_offers` SET `amount` = `amount` + " .. acceptedAmount ..
-			" WHERE `id` = " .. offer.id
-		)
-	end
+	return Game.restoreMarketOffer(
+		offer.id, offer.playerId, offer.sale, offer.itemId, offer.amount, offer.created,
+		offer.anonymous, offer.price, offer.tier, offer.attributes, acceptedAmount
+	)
 end
 
 local blockedItems = {}
@@ -232,129 +204,6 @@ local function clamp(value, minValue, maxValue)
 		return maxValue
 	end
 	return value
-end
-
-local tableExistsCache = {}
-
--- Determine whether a database table with the given name exists.
--- @param name The name of the database table to check.
--- @return `true` if the table exists, `false` otherwise.
-local function tableExists(name)
-	if tableExistsCache[name] ~= nil then
-		return tableExistsCache[name]
-	end
-
-	local exists = true
-	if db.tableExists then
-		exists = db.tableExists(name)
-	end
-	tableExistsCache[name] = exists
-	return exists
-end
-
--- Checks whether a given column exists in the specified database table.
--- @return `true` if the column exists in the table, `false` otherwise.
-local function columnExists(tableName, columnName)
-	local resultId = db.storeQuery("SHOW COLUMNS FROM `" .. tableName .. "` LIKE " .. db.escapeString(columnName))
-	if resultId ~= false then
-		result.free(resultId)
-		return true
-	end
-	return false
-end
-
--- Ensures a column exists on a database table by adding it when missing.
--- Does nothing if the table does not exist or the column is already present.
--- @param tableName The name of the database table.
--- @param columnName The name of the column to ensure exists.
--- @param definition The SQL column definition (e.g. "INT NOT NULL DEFAULT 0").
-local function ensureColumn(tableName, columnName, definition)
-	if not tableExists(tableName) or columnExists(tableName, columnName) then
-		return
-	end
-	db.query("ALTER TABLE `" .. tableName .. "` ADD COLUMN `" .. columnName .. "` " .. definition)
-end
-
--- Retrieve the serialized attributes value for a given result row and column, if present.
--- Prefers a stream-backed column when available; otherwise reads the column as a string.
--- @param resultId The result row identifier returned by a query.
--- @param columnName Optional column name to read (default: "attributes").
--- @return The serialized attributes string when the column contains non-empty serialized data, `nil` otherwise.
-local function getResultAttributes(resultId, columnName)
-	columnName = columnName or "attributes"
-	if result.getStream then
-		local attributes, size = result.getStream(resultId, columnName)
-		if attributes and (tonumber(size) or 0) > 0 then
-			return attributes
-		end
-		return nil
-	end
-
-	local attributes = result.getDataString(resultId, columnName)
-	if hasSerializedAttributes(attributes) then
-		return attributes
-	end
-	return nil
-end
-
--- Ensures the market-related database schema exists and adds required columns.
--- Creates `market_offers`, `market_history`, and `market_statistics` tables when absent,
--- and guarantees the presence of `attributes` and `tier` columns on `market_offers`
--- and the `tier` column on `market_history`.
--- This function has no return value and performs schema mutations as side effects.
-local function ensureTables()
-	db.query([[
-		CREATE TABLE IF NOT EXISTS `market_offers` (
-			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-			`player_id` INT NOT NULL,
-			`sale` TINYINT(1) NOT NULL DEFAULT 0,
-			`itemtype` SMALLINT UNSIGNED NOT NULL,
-			`amount` SMALLINT UNSIGNED NOT NULL,
-			`created` INT UNSIGNED NOT NULL,
-			`anonymous` TINYINT(1) NOT NULL DEFAULT 0,
-			`price` INT UNSIGNED NOT NULL DEFAULT 0,
-			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
-			`attributes` MEDIUMBLOB NULL,
-			PRIMARY KEY (`id`),
-			KEY `idx_market_offers_itemtype_sale` (`itemtype`, `sale`),
-			KEY `idx_market_offers_player` (`player_id`)
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
-	]])
-
-	ensureColumn("market_offers", "attributes", "MEDIUMBLOB NULL")
-	ensureColumn("market_offers", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
-
-	db.query([[
-		CREATE TABLE IF NOT EXISTS `market_history` (
-			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-			`player_id` INT NOT NULL,
-			`sale` TINYINT(1) NOT NULL DEFAULT 0,
-			`itemtype` SMALLINT UNSIGNED NOT NULL,
-			`amount` SMALLINT UNSIGNED NOT NULL,
-			`price` INT UNSIGNED NOT NULL DEFAULT 0,
-			`tier` TINYINT UNSIGNED NOT NULL DEFAULT 0,
-			`expires_at` INT UNSIGNED NOT NULL,
-			`inserted` INT UNSIGNED NOT NULL,
-			`state` TINYINT UNSIGNED NOT NULL,
-			PRIMARY KEY (`id`),
-			KEY `idx_market_history_player` (`player_id`)
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
-	]])
-
-	ensureColumn("market_history", "tier", "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `price`")
-
-	db.query([[
-		CREATE TABLE IF NOT EXISTS `market_statistics` (
-			`itemtype` SMALLINT UNSIGNED NOT NULL,
-			`sale` TINYINT(1) NOT NULL DEFAULT 0,
-			`day` INT UNSIGNED NOT NULL,
-			`transactions` INT UNSIGNED NOT NULL DEFAULT 0,
-			`total_price` BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			`highest_price` INT UNSIGNED NOT NULL DEFAULT 0,
-			`lowest_price` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`itemtype`, `sale`, `day`)
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
-	]])
 end
 
 local function getOfferDuration()
@@ -847,26 +696,6 @@ local function getDepotBoxes(player)
 	return boxes
 end
 
-local function getDepotItemAmount(player, itemId)
-	local itemType = ItemType(itemId)
-	if not itemType or itemType:getId() == 0 then
-		return 0
-	end
-
-	local amount = 0
-	for _, box in ipairs(getDepotBoxes(player)) do
-		for _, item in ipairs(box:getItems(true)) do
-			if item:getId() == itemId then
-				amount = amount + getItemTradeCount(item, itemType)
-				if amount >= 0xFFFF then
-					return 0xFFFF
-				end
-			end
-		end
-	end
-	return clamp(amount, 0, 0xFFFF)
-end
-
 local itemTypeStackableCache = {}
 
 -- Builds a map of the player's depot item quantities, keyed by itemId and by itemId:tier.
@@ -914,6 +743,23 @@ end
 local function buildMarketEnterEntries(depotMap)
 	local entries = {}
 	depotMap = depotMap or {}
+	local tierAmountsByItem = {}
+
+	for key, amount in pairs(depotMap) do
+		if type(key) == "string" and amount > 0 then
+			local itemId, tier = key:match("^(%d+):(%d+)$")
+			itemId = tonumber(itemId)
+			tier = tonumber(tier)
+			if itemId and tier and tier > 0 and tier <= 10 then
+				local tierAmounts = tierAmountsByItem[itemId]
+				if not tierAmounts then
+					tierAmounts = {}
+					tierAmountsByItem[itemId] = tierAmounts
+				end
+				tierAmounts[tier] = amount
+			end
+		end
+	end
 
 	for _, entry in ipairs(marketItems) do
 		entries[#entries + 1] = {
@@ -924,16 +770,19 @@ local function buildMarketEnterEntries(depotMap)
 			tier = 0
 		}
 
-		for tier = 1, 10 do
-			local amount = depotMap[getDepotItemKey(entry.id, tier)] or 0
-			if amount > 0 then
-				entries[#entries + 1] = {
-					id = entry.id,
-					category = entry.category,
-					name = entry.name,
-					amount = amount,
-					tier = tier
-				}
+		local tierAmounts = tierAmountsByItem[entry.id]
+		if tierAmounts then
+			for tier = 1, 10 do
+				local amount = tierAmounts[tier]
+				if amount then
+					entries[#entries + 1] = {
+						id = entry.id,
+						category = entry.category,
+						name = entry.name,
+						amount = amount,
+						tier = tier
+					}
+				end
 			end
 		end
 	end
@@ -1071,34 +920,7 @@ local function removeDepotItemsWithAttributes(player, itemId, amount, tier)
 	return true, storedAttributes
 end
 
--- Attempts to remove the specified amount of an item from the player's depot for a market operation.
--- @param player The player object whose depot will be scanned.
--- @param itemId The item type id to remove.
--- @param amount The quantity to remove.
--- @return `true` if the requested amount was successfully removed/reserved, `false` otherwise.
-local function removeDepotItems(player, itemId, amount)
-	local ok = removeDepotItemsWithAttributes(player, itemId, amount)
-	return ok
-end
-
--- Get the number of active market offers for a player.
--- @param playerId The player's database id.
--- @return The count of offers for the player, or `0` if the `market_offers` table is missing or the query fails.
-local function getMarketOfferCount(playerId)
-	if not tableExists("market_offers") then
-		return 0
-	end
-
-	local resultId = db.storeQuery("SELECT COUNT(*) AS `total` FROM `market_offers` WHERE `player_id` = " .. playerId)
-	if resultId == false then
-		return 0
-	end
-
-	local total = result.getDataInt(resultId, "total")
-	result.free(resultId)
-	return total
-end
-
+-- Calculates the one-percent market fee, clamped to the protocol's 20..1000 range.
 local function calculateFee(price, amount)
 	local fee = math.ceil((price * amount) / 100)
 	if fee < 20 then
@@ -1107,69 +929,6 @@ local function calculateFee(price, amount)
 		return 1000
 	end
 	return fee
-end
-
--- Compute the next sequential inbox `sid` for the given player.
--- Queries `player_inboxitems` for the current maximum `sid` (defaulting to 100) and returns that value plus one.
--- @param playerId The numeric player identifier.
--- @return The next available inbox `sid` (integer).
-local function getNextInboxSid(playerId)
-	local sid = 100
-	local resultId = db.storeQuery("SELECT COALESCE(MAX(`sid`), 100) AS `sid` FROM `player_inboxitems` WHERE `player_id` = " .. playerId)
-	if resultId ~= false then
-		sid = result.getDataInt(resultId, "sid")
-		result.free(resultId)
-	end
-	return sid + 1
-end
-
--- Insert item(s) into the player's inbox DB table, splitting into stack-sized rows and storing serialized attributes when present.
--- Validates the item type and that the `player_inboxitems` table exists. If `attributes` are serialized, `amount` must be 1 and the attributes are stored in the row; otherwise the function splits `amount` into one or more rows using the item's stack size.
--- @param playerId The numeric database id of the player receiving the item(s).
--- @param itemId The item type id to insert.
--- @param amount The total quantity to insert.
--- @param attributes Serialized attributes string for the item instance, or nil/empty for no attributes.
--- @return `true` if all necessary rows were successfully inserted, `false` on validation failure or any DB error.
-local function insertInboxItem(playerId, itemId, amount, attributes)
-	if not tableExists("player_inboxitems") then
-		return false
-	end
-
-	local itemType = ItemType(itemId)
-	if not itemType or itemType:getId() == 0 then
-		return false
-	end
-
-	if hasSerializedAttributes(attributes) then
-		if amount ~= 1 then
-			return false
-		end
-
-		local sid = getNextInboxSid(playerId)
-		local query = "INSERT INTO `player_inboxitems` (`player_id`, `sid`, `pid`, `itemtype`, `count`, `attributes`) VALUES (" ..
-			playerId .. ", " .. sid .. ", 0, " .. itemId .. ", 1, " .. escapeAttributes(attributes) .. ")"
-		return db.query(query)
-	end
-
-	local remaining = amount
-	local sid = getNextInboxSid(playerId)
-	while remaining > 0 do
-		local count = 1
-		if itemType:isStackable() then
-			count = math.min(remaining, math.max(1, itemType:getStackSize()))
-		end
-
-		local attributesSql = emptyAttributesSql()
-		local query = "INSERT INTO `player_inboxitems` (`player_id`, `sid`, `pid`, `itemtype`, `count`, `attributes`) VALUES (" ..
-			playerId .. ", " .. sid .. ", 0, " .. itemId .. ", " .. count .. ", " .. attributesSql .. ")"
-		if not db.query(query) then
-			return false
-		end
-
-		remaining = remaining - count
-		sid = sid + 1
-	end
-	return true
 end
 
 -- Adds the specified item(s) into the provided inbox container, honoring stack sizes and serialized attributes.
@@ -1205,11 +964,18 @@ local function addItemToInbox(inbox, itemId, amount, attributes)
 
 	local stackSize = math.max(1, itemType:getStackSize())
 	local remaining = amount
+	local addedItems = {}
 	while remaining > 0 do
 		local count = itemType:isStackable() and math.min(remaining, stackSize) or 1
-		if not inbox:addItem(itemId, count, INDEX_WHEREEVER, FLAG_NOLIMIT) then
+		local item = inbox:addItem(itemId, count, INDEX_WHEREEVER, FLAG_NOLIMIT)
+		if not item then
+			for index = #addedItems, 1, -1 do
+				local added = addedItems[index]
+				added.item:remove(added.count)
+			end
 			return false
 		end
+		addedItems[#addedItems + 1] = { item = item, count = count }
 		remaining = remaining - count
 	end
 	return true
@@ -1282,7 +1048,7 @@ local function deliverItemToPlayer(playerId, playerName, itemId, amount, attribu
 			return true
 		end
 	end
-	return insertInboxItem(playerId, itemId, amount, attributes)
+	return Game.insertMarketInboxItem(playerId, itemId, amount, attributes)
 end
 
 -- Credits `amount` to a player's bank balance, preferring an online player object when available.
@@ -1301,11 +1067,11 @@ local function creditPlayerBank(playerId, playerName, amount)
 		return true
 	end
 
-	return db.query("UPDATE `players` SET `balance` = `balance` + " .. amount .. " WHERE `id` = " .. playerId)
+	return Game.creditMarketBank(playerId, amount)
 end
 
 -- Records a market offer event in the `market_history` table.
--- Inserts a history row if the `market_history` table exists; computes `expires_at` as `(created or now) + offerDuration` and clamps `tier` into the range 0..10.
+-- Computes `expires_at` as `(created or now) + offerDuration` and delegates the typed insert to C++.
 -- @param playerId Numeric id of the player who created or was affected by the offer.
 -- @param sale Numeric action code indicating buy or sell (e.g., `MARKET_ACTION_BUY` / `MARKET_ACTION_SELL`).
 -- @param itemId Numeric item type id involved in the offer.
@@ -1315,46 +1081,26 @@ end
 -- @param created Optional timestamp to use as the offer creation time; when omitted, the current time is used.
 -- @param tier Optional numeric tier for the item; will be coerced to an integer and clamped between 0 and 10.
 local function addHistory(playerId, sale, itemId, amount, price, state, created, tier)
-	if not tableExists("market_history") then
-		return
-	end
-
 	local now = os.time()
 	local expiresAt = (created or now) + getOfferDuration()
 	tier = math.max(0, math.min(10, tonumber(tier) or 0))
-	db.query("INSERT INTO `market_history` (`player_id`, `sale`, `itemtype`, `amount`, `price`, `tier`, `expires_at`, `inserted`, `state`) VALUES (" ..
-		playerId .. ", " .. sale .. ", " .. itemId .. ", " .. amount .. ", " .. price .. ", " .. tier .. ", " .. expiresAt .. ", " .. now .. ", " .. state .. ")")
+	return Game.addMarketHistory(playerId, sale, itemId, amount, price, tier, expiresAt, now, state)
 end
 
 -- Retrieves a market offer by its database ID, resolving stored attributes and deriving the effective tier from those attributes when present.
 -- @param offerId The offer database ID.
 -- @return A table with fields: `id`, `playerId`, `sale`, `itemId`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`, `playerName`; or `nil` if the offer does not exist.
 local function fetchOfferById(offerId)
-	local resultId = db.storeQuery("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`id` = " .. offerId .. " LIMIT 1")
-	if resultId == false then
+	local offer = Game.getMarketOffer(offerId)
+	if not offer then
 		return nil
 	end
-
-	local offer = {
-		id = result.getDataInt(resultId, "id"),
-		playerId = result.getDataInt(resultId, "player_id"),
-		sale = result.getDataInt(resultId, "sale"),
-		itemId = result.getDataInt(resultId, "itemtype"),
-		amount = result.getDataInt(resultId, "amount"),
-		created = result.getDataInt(resultId, "created"),
-		anonymous = result.getDataInt(resultId, "anonymous") ~= 0,
-		price = result.getDataInt(resultId, "price"),
-		tier = result.getDataInt(resultId, "tier"),
-		attributes = getResultAttributes(resultId),
-		playerName = result.getDataString(resultId, "player_name")
-	}
 	offer.tier = getOfferTier(offer.itemId, offer.tier, offer.attributes)
-	result.free(resultId)
 	return offer
 end
 
--- Parses the result of an SQL query and returns a list of market offers built from its rows.
--- @param query The SQL query string expected to select offer rows (columns: id, player_id, sale, itemtype, amount, created, anonymous, price, tier, player_name and any attributes blob).
+-- Resolves the effective tier for offers returned by the C++ persistence layer.
+-- @param offers Market offer tables returned by Game market methods.
 -- @return A numeric-indexed table of offer tables. Each offer contains:
 --   - id: offer id.
 --   - playerId: owner player id.
@@ -1368,32 +1114,10 @@ end
 --   - attributes: serialized attributes blob (or `nil`).
 --   - playerName: owner name string.
 --   - state: offer state (set to `MARKET_STATE_ACTIVE` for returned rows).
-local function fetchOffers(query)
-	local offers = {}
-	local resultId = db.storeQuery(query)
-	if resultId == false then
-		return offers
+local function resolveOfferTiers(offers)
+	for _, offer in ipairs(offers) do
+		offer.tier = getOfferTier(offer.itemId, offer.tier, offer.attributes)
 	end
-
-	repeat
-		offers[#offers + 1] = {
-			id = result.getDataInt(resultId, "id"),
-			playerId = result.getDataInt(resultId, "player_id"),
-			sale = result.getDataInt(resultId, "sale"),
-			itemId = result.getDataInt(resultId, "itemtype"),
-			amount = result.getDataInt(resultId, "amount"),
-			created = result.getDataInt(resultId, "created"),
-			anonymous = result.getDataInt(resultId, "anonymous") ~= 0,
-			price = result.getDataInt(resultId, "price"),
-			tier = result.getDataInt(resultId, "tier"),
-			attributes = getResultAttributes(resultId),
-			playerName = result.getDataString(resultId, "player_name"),
-			state = MARKET_STATE_ACTIVE
-		}
-		offers[#offers].tier = getOfferTier(offers[#offers].itemId, offers[#offers].tier, offers[#offers].attributes)
-	until not result.next(resultId)
-
-	result.free(resultId)
 	return offers
 end
 
@@ -1412,34 +1136,7 @@ end
 --   - playerName: player name string (empty here).
 --   - state: history state code.
 local function fetchHistory(playerId)
-	local offers = {}
-	if not tableExists("market_history") then
-		return offers
-	end
-
-	local resultId = db.storeQuery("SELECT `id`, `player_id`, `sale`, `itemtype`, `amount`, `price`, `tier`, `inserted`, `state` FROM `market_history` WHERE `player_id` = " .. playerId .. " ORDER BY `inserted` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
-	if resultId == false then
-		return offers
-	end
-
-	repeat
-		offers[#offers + 1] = {
-			id = result.getDataInt(resultId, "id"),
-			playerId = result.getDataInt(resultId, "player_id"),
-			sale = result.getDataInt(resultId, "sale"),
-			itemId = result.getDataInt(resultId, "itemtype"),
-			amount = result.getDataInt(resultId, "amount"),
-			created = result.getDataInt(resultId, "inserted"),
-			anonymous = false,
-			price = result.getDataInt(resultId, "price"),
-			tier = result.getDataInt(resultId, "tier"),
-			playerName = "",
-			state = result.getDataInt(resultId, "state")
-		}
-	until not result.next(resultId)
-
-	result.free(resultId)
-	return offers
+	return Game.getMarketHistory(playerId, MARKET_MAX_PACKET_OFFERS)
 end
 
 -- Writes a market offer's serialized fields into the output packet.
@@ -1670,53 +1367,15 @@ local function buildMarketDescriptions(itemId)
 end
 
 local function fetchMarketStatistics(itemId, actionType)
-	local stats = {}
-	if not tableExists("market_statistics") then
-		return stats
-	end
-
-	local since = os.time() - (MARKET_STATISTICS_DAYS * 24 * 60 * 60)
+	local since = os.time() - ((MARKET_STATISTICS_DAYS - 1) * 24 * 60 * 60)
 	local firstDay = math.floor(since / 86400) * 86400
-	local query = "SELECT `day`, `transactions`, `total_price`, `highest_price`, `lowest_price` FROM `market_statistics` " ..
-		"WHERE `itemtype` = " .. itemId .. " AND `sale` = " .. actionType .. " AND `day` >= " .. firstDay ..
-		" ORDER BY `day` ASC LIMIT " .. MARKET_STATISTICS_DAYS
-
-	local resultId = db.storeQuery(query)
-	if resultId == false then
-		return stats
-	end
-
-	repeat
-		stats[#stats + 1] = {
-			day = result.getDataInt(resultId, "day"),
-			transactions = result.getDataInt(resultId, "transactions"),
-			totalPrice = result.getDataLong(resultId, "total_price"),
-			highestPrice = result.getDataInt(resultId, "highest_price"),
-			lowestPrice = result.getDataInt(resultId, "lowest_price")
-		}
-	until not result.next(resultId)
-
-	result.free(resultId)
-	return stats
+	return Game.getMarketStatistics(itemId, actionType, firstDay, MARKET_STATISTICS_DAYS)
 end
 
 local function refreshMarketStatistics()
-	if not tableExists("market_history") or not tableExists("market_statistics") then
-		return false
-	end
-
-	local since = os.time() - (MARKET_STATISTICS_DAYS * 24 * 60 * 60)
+	local since = os.time() - ((MARKET_STATISTICS_DAYS - 1) * 24 * 60 * 60)
 	local firstDay = math.floor(since / 86400) * 86400
-	db.query("DELETE FROM `market_statistics`")
-
-	return db.query(
-		"REPLACE INTO `market_statistics` (`itemtype`, `sale`, `day`, `transactions`, `total_price`, `highest_price`, `lowest_price`) " ..
-		"SELECT `itemtype`, `sale`, FLOOR(`inserted` / 86400) * 86400 AS `stat_day`, COUNT(*) AS `transactions`, " ..
-		"CASE WHEN SUM(`amount`) > 0 THEN FLOOR((SUM(`price` * `amount`) / SUM(`amount`)) * COUNT(*)) ELSE 0 END AS `total_price`, " ..
-		"MAX(`price`) AS `highest_price`, MIN(`price`) AS `lowest_price` FROM `market_history` " ..
-		"WHERE `state` = " .. MARKET_STATE_ACCEPTED .. " AND `inserted` >= " .. firstDay ..
-		" GROUP BY `itemtype`, `sale`, FLOOR(`inserted` / 86400) * 86400"
-	)
+	return Game.refreshMarketStatistics(firstDay, MARKET_STATE_ACCEPTED)
 end
 
 local function writeStatistics(out, stats)
@@ -1749,8 +1408,7 @@ local function sendMarketBrowse(player, browseId)
 	local playerId = player:getGuid()
 
 	if browseId == MARKET_REQUEST_MY_OFFERS then
-		local query = "SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`player_id` = " .. playerId .. " ORDER BY mo.`created` DESC LIMIT " .. MARKET_MAX_PACKET_OFFERS
-		for _, offer in ipairs(fetchOffers(query)) do
+		for _, offer in ipairs(resolveOfferTiers(Game.getOwnMarketOffers(playerId, MARKET_MAX_PACKET_OFFERS))) do
 			if offer.sale == MARKET_ACTION_BUY then
 				buyOffers[#buyOffers + 1] = offer
 			else
@@ -1766,8 +1424,8 @@ local function sendMarketBrowse(player, browseId)
 			end
 		end
 	elseif marketItemsById[browseId] then
-		buyOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_BUY .. " ORDER BY mo.`price` DESC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
-		sellOffers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`itemtype` = " .. browseId .. " AND mo.`sale` = " .. MARKET_ACTION_SELL .. " ORDER BY mo.`price` ASC, mo.`created` ASC LIMIT " .. MARKET_MAX_PACKET_OFFERS)
+		buyOffers = resolveOfferTiers(Game.getItemMarketOffers(browseId, MARKET_ACTION_BUY, MARKET_MAX_PACKET_OFFERS))
+		sellOffers = resolveOfferTiers(Game.getItemMarketOffers(browseId, MARKET_ACTION_SELL, MARKET_MAX_PACKET_OFFERS))
 	else
 		sendMarketMessage(player, "This item cannot be traded on the market.")
 		return
@@ -1808,7 +1466,7 @@ local function sendMarketEnter(player, depotMap)
 	local playerGuid = player:getGuid()
 	local offers = offerCountCache[playerGuid]
 	if offers == nil then
-		offers = clamp(getMarketOfferCount(playerGuid), 0, MARKET_MAX_OFFERS)
+		offers = clamp(Game.getMarketOfferCount(playerGuid), 0, MARKET_MAX_OFFERS)
 		offerCountCache[playerGuid] = offers
 	end
 	local chunkIndex = 0
@@ -1878,16 +1536,16 @@ local function refreshMarket(player, browseId, depotMap)
 end
 
 -- Expires market offers whose lifetime has elapsed, atomically claims them from the database, returns funds or items to the offer owners, and records the expiration in market history.
--- Skips execution if the configured expire-check interval has not passed or if the `market_offers` table is absent. For each claimed offer this function attempts to credit the seller/buyer (money or item delivery), clears the per-player offer count cache on success, and on delivery failure restores the offer so it can be retried.
+-- Skips execution if the configured expire-check interval has not passed. For each claimed offer this function attempts to credit the seller/buyer, clears the per-player offer count cache on success, and restores the offer on delivery failure.
 local function expireOffers()
 	local now = os.time()
-	if now - lastExpireCheck < MARKET_EXPIRE_CHECK_INTERVAL or not tableExists("market_offers") then
+	if now - lastExpireCheck < MARKET_EXPIRE_CHECK_INTERVAL then
 		return
 	end
 	lastExpireCheck = now
 
 	local expiredBefore = now - getOfferDuration()
-	local offers = fetchOffers("SELECT mo.`id`, mo.`player_id`, mo.`sale`, mo.`itemtype`, mo.`amount`, mo.`created`, mo.`anonymous`, mo.`price`, mo.`tier`, mo.`attributes`, p.`name` AS `player_name` FROM `market_offers` mo INNER JOIN `players` p ON p.`id` = mo.`player_id` WHERE mo.`created` <= " .. expiredBefore .. " ORDER BY mo.`created` ASC LIMIT 100")
+	local offers = resolveOfferTiers(Game.getExpiredMarketOffers(expiredBefore, 100))
 	for _, offer in ipairs(offers) do
 		local offerKey = "offer:" .. offer.id
 		-- Skip offers currently being processed by another handler
@@ -1895,7 +1553,7 @@ local function expireOffers()
 			logInfo("[CustomMarket] Skipping expire for locked offer " .. offer.id)
 		else
 			-- Atomically claim the offer before returning goods
-			local claimed = db.query("DELETE FROM `market_offers` WHERE `id` = " .. offer.id)
+			local claimed = Game.claimMarketOffer(offer.id, offer.amount, offer.amount)
 			if claimed then
 				local returned = true
 				if offer.sale == MARKET_ACTION_BUY then
@@ -1937,7 +1595,7 @@ local function validateOfferPayload(player, actionType, itemId, amount, price)
 		return false, "Invalid price."
 	end
 
-	if getMarketOfferCount(player:getGuid()) >= MARKET_MAX_OFFERS then
+	if Game.getMarketOfferCount(player:getGuid()) >= MARKET_MAX_OFFERS then
 		return false, "You have too many active market offers."
 	end
 
@@ -2013,7 +1671,7 @@ function createHandler.onReceive(player, msg)
 	local itemId = msg:getU16()
 	local amount = msg:getU16()
 	local price = msg:getU32()
-	local anonymous = msg:getByte() ~= 0 and 1 or 0
+	local anonymous = msg:getByte() ~= 0
 	local requestedTier = nil
 	if msg:len() - msg:tell() >= 1 then
 		requestedTier = math.max(0, math.min(10, tonumber(msg:getByte()) or 0))
@@ -2084,10 +1742,10 @@ function createHandler.onReceive(player, msg)
 	end
 
 	local now = os.time()
-	local ok = db.query("INSERT INTO `market_offers` (`player_id`, `sale`, `itemtype`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`) VALUES (" ..
-		player:getGuid() .. ", " .. actionType .. ", " .. itemId .. ", " .. amount .. ", " .. now .. ", " .. anonymous .. ", " .. price .. ", " ..
-		math.max(0, math.min(10, tonumber(offerTier) or 0)) .. ", " ..
-		escapeAttributes(offerAttributes) .. ")")
+	local ok = Game.createMarketOffer(
+		player:getGuid(), actionType, itemId, amount, now, anonymous, price,
+		math.max(0, math.min(10, tonumber(offerTier) or 0)), offerAttributes
+	)
 	if not ok then
 		if actionType == MARKET_ACTION_BUY then
 			refundPlayerMarketMoney(player, payment)
@@ -2148,23 +1806,30 @@ function cancelHandler.onReceive(player, msg)
 	end
 
 	-- Atomically claim (delete) the offer BEFORE returning goods
-	if not db.query("DELETE FROM `market_offers` WHERE `id` = " .. offer.id .. " AND `player_id` = " .. player:getGuid()) then
+	if not Game.claimMarketOffer(offer.id, offer.amount, offer.amount, player:getGuid()) then
 		releaseMultipleLocks({ offerKey, playerKey })
 		sendMarketMessage(player, "Could not cancel the market offer.")
 		return
 	end
-	offerCountCache[player:getGuid()] = nil
 
 	-- Return goods after safe DB claim
+	local returned = true
 	if offer.sale == MARKET_ACTION_BUY then
 		player:setBankBalance(player:getBankBalance() + offer.price * offer.amount)
 	else
 		-- Use deliverItemToPlayer (inbox/depot) instead of raw addItem
-		if not deliverItemToPlayer(player:getGuid(), player:getName(), offer.itemId, offer.amount, offer.attributes) then
-			logError("[CustomMarket] Failed to return cancelled sell offer " .. offer.id .. " items to player " .. player:getName())
-		end
+		returned = deliverItemToPlayer(player:getGuid(), player:getName(), offer.itemId, offer.amount, offer.attributes)
 	end
 
+	if not returned then
+		rollbackOfferClaim(offer, offer.amount)
+		releaseMultipleLocks({ offerKey, playerKey })
+		logError("[CustomMarket] Failed to return cancelled sell offer " .. offer.id .. " items to player " .. player:getName())
+		sendMarketMessage(player, "Could not return the market offer items.")
+		return
+	end
+
+	offerCountCache[player:getGuid()] = nil
 	addHistory(player:getGuid(), offer.sale, offer.itemId, offer.amount, offer.price, MARKET_STATE_CANCELLED, offer.created, offer.tier)
 	releaseMultipleLocks({ offerKey, playerKey })
 	sendMarketMessage(player, "Market offer cancelled.")
@@ -2242,20 +1907,7 @@ function acceptHandler.onReceive(player, msg)
 	-- STEP 1: Atomically claim the offer in DB BEFORE any item/money
 	-- transfer. This is the core anti-dupe guarantee.
 	-- ================================================================
-	local dbClaimed
-	if amount == offer.amount then
-		-- Full accept: DELETE with amount guard so a concurrent op can't sneak in
-		dbClaimed = db.query(
-			"DELETE FROM `market_offers` WHERE `id` = " .. offer.id ..
-			" AND `amount` = " .. offer.amount
-		)
-	else
-		-- Partial accept: UPDATE with guard that amount is still sufficient
-		dbClaimed = db.query(
-			"UPDATE `market_offers` SET `amount` = `amount` - " .. amount ..
-			" WHERE `id` = " .. offer.id .. " AND `amount` >= " .. amount
-		)
-	end
+	local dbClaimed = Game.claimMarketOffer(offer.id, offer.amount, amount)
 
 	if not dbClaimed then
 		releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
@@ -2377,7 +2029,6 @@ function marketSessionInit.onLogin(player)
 end
 marketSessionInit:register()
 
-ensureTables()
 loadMarketCatalog()
 refreshMarketStatistics()
 

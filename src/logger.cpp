@@ -98,17 +98,57 @@ bool checkDiskSpace(const std::string& path, size_t minSpaceBytes = 50 * 1024 * 
 	}
 }
 
+std::string stripAnsi(std::string_view message)
+{
+	if (message.find('\x1b') == std::string_view::npos) {
+		return std::string(message);
+	}
+
+	std::string plain;
+	plain.reserve(message.size());
+	for (size_t i = 0; i < message.size(); ++i) {
+		if (message[i] != '\x1b' || i + 1 >= message.size() || message[i + 1] != '[') {
+			plain.push_back(message[i]);
+			continue;
+		}
+
+		i += 2;
+		while (i < message.size()) {
+			const unsigned char ch = static_cast<unsigned char>(message[i]);
+			if (ch >= 0x40 && ch <= 0x7E) {
+				break;
+			}
+			++i;
+		}
+	}
+	return plain;
+}
+
+std::string_view normalizeConsoleMessage(std::string_view message)
+{
+	while (!message.empty() && std::isspace(static_cast<unsigned char>(message.front()))) {
+		message.remove_prefix(1);
+	}
+	if (message.starts_with(">>")) {
+		message.remove_prefix(2);
+		while (!message.empty() && std::isspace(static_cast<unsigned char>(message.front()))) {
+			message.remove_prefix(1);
+		}
+	}
+	return message;
+}
+
 class LogWithSpdLog final : public Logger
 {
 public:
 	LogWithSpdLog(std::string_view filePath, size_t rotateSize, size_t rotateFiles, bool logToFile)
 	{
 		try {
-			auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
-			allConsoleSinks_.push_back(console_sink);
-
-			std::vector<spdlog::sink_ptr> sinks{console_sink};
+			consoleSink_ = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+			consoleSink_->set_pattern("%^%v%$");
+			consoleLogger_ = std::make_shared<spdlog::logger>("tfs-console", consoleSink_);
+			consoleLogger_->set_level(spdlog::level::trace);
+			consoleLogger_->flush_on(spdlog::level::err);
 
 			if (logToFile) {
 				timestampedPath_ = generateLogFileName(filePath);
@@ -117,75 +157,16 @@ public:
 					fmt::print(stderr, "Warning: Low disk space for logging\n");
 				}
 
-				auto file_sink =
+				auto fileSink =
 				    std::make_shared<spdlog::sinks::rotating_file_sink_mt>(timestampedPath_, rotateSize, rotateFiles);
-				file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
-				file_sink->set_level(spdlog::level::trace);
-
-				sinks.push_back(file_sink);
+				fileSink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
+				fileSink->set_level(spdlog::level::trace);
+				fileLogger_ = std::make_shared<spdlog::logger>("tfs-file", fileSink);
+				fileLogger_->set_level(spdlog::level::trace);
+				fileLogger_->flush_on(spdlog::level::err);
 			}
 
-			logger_ = std::make_shared<spdlog::logger>("tfs", sinks.begin(), sinks.end());
-			logger_->set_level(spdlog::level::trace);
-			logger_->flush_on(spdlog::level::info);
-
-			auto console_sink_stats = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink_stats->set_pattern("[%H:%M:%S] %v");
-			allConsoleSinks_.push_back(console_sink_stats);
-
-			statsLoggerConsole_ = std::make_shared<spdlog::logger>("tfs_stats_console", console_sink_stats);
-			statsLoggerConsole_->set_level(spdlog::level::info);
-
-			auto console_sink_migrations = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink_migrations->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
-			allConsoleSinks_.push_back(console_sink_migrations);
-
-			migrationsLogger_ = std::make_shared<spdlog::logger>("tfs_migrations", console_sink_migrations);
-			migrationsLogger_->set_level(spdlog::level::info);
-
-			auto console_sink_stats_warning = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink_stats_warning->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
-			allConsoleSinks_.push_back(console_sink_stats_warning);
-
-			statsWarningLogger_ = std::make_shared<spdlog::logger>("tfs_stats_warning", console_sink_stats_warning);
-			statsWarningLogger_->set_level(spdlog::level::info);
-
-			auto console_sink_mapcache = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink_mapcache->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
-			allConsoleSinks_.push_back(console_sink_mapcache);
-
-			mapCacheLogger_ = std::make_shared<spdlog::logger>("tfs_mapcache", console_sink_mapcache);
-			mapCacheLogger_->set_level(spdlog::level::info);
-
-			auto console_sink_network = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink_network->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
-			allConsoleSinks_.push_back(console_sink_network);
-
-			networkLogger_ = std::make_shared<spdlog::logger>("tfs_network", console_sink_network);
-			networkLogger_->set_level(spdlog::level::info);
-
-			auto console_sink_raid = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink_raid->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
-			allConsoleSinks_.push_back(console_sink_raid);
-
-			raidLogger_ = std::make_shared<spdlog::logger>("tfs_raid", console_sink_raid);
-			raidLogger_->set_level(spdlog::level::info);
-
-			auto console_sink_threadpool = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink_threadpool->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
-			allConsoleSinks_.push_back(console_sink_threadpool);
-
-			threadPoolLogger_ = std::make_shared<spdlog::logger>("tfs_threadpool", console_sink_threadpool);
-			threadPoolLogger_->set_level(spdlog::level::info);
-
-			auto console_sink_reactor = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-			console_sink_reactor->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %v");
-			allConsoleSinks_.push_back(console_sink_reactor);
-
-			reactorLogger_ = std::make_shared<spdlog::logger>("tfs_reactor", console_sink_reactor);
-			reactorLogger_->set_level(spdlog::level::info);
-
-			logger_->flush();
+			flush();
 
 		} catch (const std::exception& e) {
 			fmt::print(stderr, "Error creating logger: {}\n", e.what());
@@ -196,9 +177,14 @@ public:
 	~LogWithSpdLog() override
 	{
 		try {
-			if (logger_ && !shutdownInProgress.load()) {
-				logger_->info("=== TFS Logger Shutdown ===");
-				logger_->flush();
+			if (!shutdownInProgress.load()) {
+				if (consoleLogger_) {
+					consoleLogger_->info("[INFO    ] === TFS Logger Shutdown ===");
+				}
+				if (fileLogger_) {
+					fileLogger_->info("[INFO    ] === TFS Logger Shutdown ===");
+				}
+				flush();
 			}
 		} catch (...) {
 			// Safe destructor - no exceptions
@@ -207,108 +193,170 @@ public:
 
 	void setLevel(LogLevel level) override
 	{
-		if (logger_) {
-			logger_->set_level(toSpd(level));
+		if (consoleLogger_) {
+			consoleLogger_->set_level(toSpd(level));
+		}
+		if (fileLogger_) {
+			fileLogger_->set_level(toSpd(level));
 		}
 	}
 
 	void setConsoleLevel(LogLevel level) override
 	{
-		auto spd_level = toSpd(level);
-		for (auto& sink : allConsoleSinks_) {
-			sink->set_level(spd_level);
+		if (consoleSink_) {
+			consoleSink_->set_level(toSpd(level));
 		}
 	}
 
-	LogLevel getLevel() const override { return logger_ ? fromSpd(logger_->level()) : LogLevel::INFO; }
+	void setConsoleColors(bool enabled) override
+	{
+		if (consoleSink_) {
+			consoleSink_->set_color_mode(enabled ? spdlog::color_mode::automatic : spdlog::color_mode::never);
+		}
+	}
 
-	bool isEnabled(LogLevel level) const override { return logger_ && logger_->should_log(toSpd(level)); }
+	LogLevel getLevel() const override { return consoleLogger_ ? fromSpd(consoleLogger_->level()) : LogLevel::INFO; }
+
+	bool isEnabled(LogLevel level) const override
+	{
+		return consoleLogger_ && consoleLogger_->should_log(toSpd(level));
+	}
+
+	void writeConsoleBlock(const std::function<void()>& writer, std::string_view persistedMessage) override
+	{
+		if (!writer) {
+			return;
+		}
+
+		try {
+			std::scoped_lock lock(outputMutex_);
+			writer();
+			std::fflush(stdout);
+
+			if (fileLogger_ && !persistedMessage.empty()) {
+				fileLogger_->log(spdlog::level::err, "[{:<8}] {}", "ERROR", stripAnsi(persistedMessage));
+				fileLogger_->flush();
+			}
+		} catch (const std::exception& e) {
+			fmt::print(stderr, "[LOGGER ERROR] Failed to write console block: {}\n", e.what());
+		}
+	}
 
 	void flush()
 	{
-		if (logger_) {
-			logger_->flush();
+		if (consoleLogger_) {
+			consoleLogger_->flush();
+		}
+		if (fileLogger_) {
+			fileLogger_->flush();
 		}
 	}
 
 	void stats(std::string_view msg) override
 	{
-		if (statsLoggerConsole_) {
-			statsLoggerConsole_->info("\033[38;5;208m[STATS]\033[0m {}", msg);
-		}
-		writeToMainFileSink(spdlog::level::info, fmt::format("[STATS] {}", msg));
+		logCategory(LogLevel::INFO, "STATS", msg);
 	}
 
 	void statsWarning(std::string_view msg) override
 	{
-		if (statsWarningLogger_) {
-			statsWarningLogger_->info("{} {}", fmt::format(fg(fmt::color::yellow), "[WARNING STATS]"), msg);
-		}
-		writeToMainFileSink(spdlog::level::warn, fmt::format("[WARNING STATS] {}", msg));
+		logCategory(LogLevel::WARNING, "WARNING", fmt::format("[STATS] {}", msg));
 	}
 
 	void mapCache(std::string_view msg) override
 	{
-		if (mapCacheLogger_) {
-			mapCacheLogger_->info("{}", msg);
-		}
-		writeToMainFileSink(spdlog::level::info, fmt::format("{}", msg));
+		logCategory(LogLevel::INFO, "MAPCACHE", msg);
 	}
 
 	void network(std::string_view msg) override
 	{
-		if (networkLogger_) {
-			networkLogger_->info("\033[38;5;135m[Network]\033[0m {}", msg);
-		}
-		writeToMainFileSink(spdlog::level::info, fmt::format("[Network] {}", msg));
+		logCategory(LogLevel::INFO, "NETWORK", msg);
 	}
 
 	void raid(std::string_view msg) override
 	{
-		if (raidLogger_) {
-			raidLogger_->info("\033[31m[RAIDS]\033[0m \033[37m{}\033[0m", msg);
-		}
-		writeToMainFileSink(spdlog::level::warn, fmt::format("[RAIDS] {}", msg));
+		logCategory(LogLevel::WARNING, "RAID", msg);
 	}
 
 	void threadPool(std::string_view msg) override
 	{
-		if (threadPoolLogger_) {
-			threadPoolLogger_->info("\033[36m[ThreadPool]\033[0m \033[37m{}\033[0m", msg);
-		}
-		writeToMainFileSink(spdlog::level::info, fmt::format("[ThreadPool] {}", msg));
+		logCategory(LogLevel::INFO, "THREAD", msg);
 	}
 
 	void reactor(std::string_view msg) override
 	{
-		if (reactorLogger_) {
-			reactorLogger_->info("\033[33m[TaskReactor]\033[0m >> {}", msg);
-		}
-		writeToMainFileSink(spdlog::level::info, fmt::format("[TaskReactor] >> {}", msg));
+		logCategory(LogLevel::INFO, "REACTOR", msg);
 	}
 
 protected:
 	void log(LogLevel level, std::string_view msg) override
 	{
-		if (level == LogLevel::MIGRATION) {
-			if (migrationsLogger_) {
-				migrationsLogger_->info("\033[36m[migrations]\033[0m {}", msg);
-			}
-			writeToMainFileSink(spdlog::level::info, fmt::format("[migrations] {}", msg));
+		std::string_view category;
+		switch (level) {
+			case LogLevel::TRACE: category = "TRACE"; break;
+			case LogLevel::DEBUG: category = "DEBUG"; break;
+			case LogLevel::INFO: category = "INFO"; break;
+			case LogLevel::WARNING: category = "WARNING"; break;
+			case LogLevel::ERRORR:
+			case LogLevel::CRITICAL: category = "ERROR"; break;
+			case LogLevel::MIGRATION: category = "DATABASE"; break;
+		}
+		logCategory(level == LogLevel::MIGRATION ? LogLevel::INFO : level, category, msg);
+	}
+
+	void logCategory(LogLevel level, std::string_view category, std::string_view msg) override
+	{
+		logCategory(level, category, msg, msg);
+	}
+
+	void logCategory(LogLevel level, std::string_view category, std::string_view msg,
+	                 std::string_view persistedMsg) override
+	{
+		if (!isEnabled(level)) {
 			return;
 		}
 
-		if (!logger_ || !logger_->should_log(toSpd(level))) return;
-
 		try {
+			std::scoped_lock lock(outputMutex_);
 			if (level >= LogLevel::ERRORR && !timestampedPath_.empty() && !checkDiskSpace(timestampedPath_)) {
 				fmt::print(stderr, "[DISK FULL] {}\n", msg);
 			}
 
-			logger_->log(toSpd(level), msg);
+			std::string plainStorage;
+			std::string_view plainMessage = persistedMsg;
+			if (persistedMsg.find('\x1b') != std::string_view::npos) {
+				plainStorage = stripAnsi(persistedMsg);
+				plainMessage = plainStorage;
+			}
+
+			const std::string_view consoleMessage = normalizeConsoleMessage(msg);
+			if (category == "LOGIN") {
+				consoleLogger_->log(toSpd(level), "   ♟[LOGIN ] {}", consoleMessage);
+			} else if (category == "LOGOUT") {
+				consoleLogger_->log(toSpd(level), "   ♟[LOGOUT] {}", consoleMessage);
+			} else if (level >= LogLevel::ERRORR) {
+				consoleLogger_->log(toSpd(level), "    [ERROR   ] {}", consoleMessage);
+			} else if (level >= LogLevel::WARNING) {
+				consoleLogger_->log(toSpd(level), "    [WARNING ] {}", consoleMessage);
+			} else if (category == "STATS") {
+				consoleLogger_->log(toSpd(level), "    [STATS] {}", consoleMessage);
+			} else if (category == "DATABASE") {
+				consoleLogger_->log(toSpd(level), "    [DATABASE] {}", consoleMessage);
+			} else if (category == "NETWORK") {
+				consoleLogger_->log(toSpd(level), "    [NETWORK ] {}", consoleMessage);
+			} else if ((consoleMessage.starts_with("SIG") &&
+			            consoleMessage.find("shutting game server down") != std::string_view::npos) ||
+			           consoleMessage.starts_with("Saving game state")) {
+				consoleLogger_->log(toSpd(level), "   ⚠[INFO  ] {}", consoleMessage);
+			} else {
+				consoleLogger_->log(toSpd(level), "    [INFO    ] {}", consoleMessage);
+			}
+
+			if (fileLogger_) {
+				fileLogger_->log(toSpd(level), "[{:<8}] {}", category.substr(0, 8), plainMessage);
+			}
 
 			if (level >= LogLevel::ERRORR) {
-				logger_->flush();
+				flush();
 			}
 		} catch (const std::exception& e) {
 			fmt::print(stderr, "[LOGGER ERROR] {}: {}\n", e.what(), msg);
@@ -316,37 +364,11 @@ protected:
 	}
 
 private:
-	std::shared_ptr<spdlog::logger> logger_;
-	std::shared_ptr<spdlog::logger> statsLoggerConsole_;
-	std::shared_ptr<spdlog::logger> statsWarningLogger_;
-	std::shared_ptr<spdlog::logger> migrationsLogger_;
-	std::shared_ptr<spdlog::logger> mapCacheLogger_;
-	std::shared_ptr<spdlog::logger> networkLogger_;
-	std::shared_ptr<spdlog::logger> raidLogger_;
-	std::shared_ptr<spdlog::logger> threadPoolLogger_;
-	std::shared_ptr<spdlog::logger> reactorLogger_;
-	std::vector<std::shared_ptr<spdlog::sinks::stdout_color_sink_mt>> allConsoleSinks_;
+	std::shared_ptr<spdlog::logger> consoleLogger_;
+	std::shared_ptr<spdlog::logger> fileLogger_;
+	std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> consoleSink_;
 	std::string timestampedPath_;
-
-	void writeToMainFileSink(spdlog::level::level_enum level, std::string_view formattedMsg)
-	{
-		if (!logger_) {
-			return;
-		}
-		for (auto& sink : logger_->sinks()) {
-			auto fileSink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink);
-			if (fileSink) {
-				try {
-					spdlog::details::log_msg logMsg("tfs", level, formattedMsg);
-					fileSink->log(logMsg);
-				} catch (const std::exception& e) {
-					fmt::print(stderr, "[LOGGER] writeToMainFileSink({}) I/O error: {}\n", static_cast<int>(level), e.what());
-				} catch (...) {
-					fmt::print(stderr, "[LOGGER] writeToMainFileSink({}) unknown I/O error\n", static_cast<int>(level));
-				}
-			}
-		}
-	}
+	std::mutex outputMutex_;
 };
 
 static std::unique_ptr<Logger> loggerInstance;

@@ -6,6 +6,6 @@
 
 void printServerVersion();
 void printServerLinks();
-void startServer();
+int startServer();
 
 #endif

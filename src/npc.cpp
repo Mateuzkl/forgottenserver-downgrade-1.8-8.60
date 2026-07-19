@@ -9,6 +9,7 @@
 #include "game.h"
 #include "logger.h"
 #include "pugicast.h"
+#include "startup_progress.h"
 
 #if defined(__GNUC__) && (__GNUC__ < 8)
 #include <experimental/filesystem>
@@ -127,6 +128,14 @@ bool loadScripts(bool reload /* = false */)
 	std::vector<fs::path> scriptDirs = getNpcScriptDirectories(npcSystem);
 
 	std::sort(scriptDirs.begin(), scriptDirs.end());
+	struct DirectoryScripts {
+		fs::path directory;
+		std::vector<fs::path> files;
+		size_t disabled = 0;
+	};
+	std::vector<DirectoryScripts> discoveredScripts;
+	size_t totalScripts = 0;
+	size_t processedScripts = 0;
 
 	for (const auto& dirPath : scriptDirs) {
 		if (!fs::exists(dirPath) || !fs::is_directory(dirPath)) {
@@ -134,17 +143,19 @@ bool loadScripts(bool reload /* = false */)
 			continue;
 		}
 
-		LOG_INFO(fmt::format(">> Loading NPC scripts from {}", dirPath.string()));
-
 		const auto discoveryStart = std::chrono::steady_clock::now();
-		std::vector<fs::path> files;
+		DirectoryScripts directoryScripts{dirPath, {}, 0};
 		try {
 			for (const auto& entry : fs::recursive_directory_iterator(dirPath)) {
 				const fs::path path = entry.path();
 				if (fs::is_regular_file(path) && path.extension() == ".lua") {
+					++totalScripts;
 					const std::string filename = path.filename().string();
-					if (filename.find('#') == std::string::npos) {
-						files.emplace_back(path);
+					if (filename.find('#') != std::string::npos) {
+						++directoryScripts.disabled;
+						++processedScripts;
+					} else {
+						directoryScripts.files.emplace_back(path);
 					}
 				}
 			}
@@ -153,9 +164,24 @@ bool loadScripts(bool reload /* = false */)
 			continue;
 		}
 
-		std::sort(files.begin(), files.end());
-		g_logger().info(">> NPC script discovery '{}': {:.3f} s ({} files).", dirPath.string(),
-		                std::chrono::duration<double>(std::chrono::steady_clock::now() - discoveryStart).count(), files.size());
+		std::sort(directoryScripts.files.begin(), directoryScripts.files.end());
+		LOG_LUA(">> NPC script discovery '{}': {:.3f} s ({} enabled, {} disabled).", dirPath.string(),
+		        std::chrono::duration<double>(std::chrono::steady_clock::now() - discoveryStart).count(),
+		        directoryScripts.files.size(), directoryScripts.disabled);
+		discoveredScripts.emplace_back(std::move(directoryScripts));
+	}
+
+	const bool reportStartupProgress = startupProgress().isCurrentStage(StartupStage::NPC_SCRIPTS);
+	const bool showCurrentFile = reportStartupProgress && startupProgress().detailedLogs();
+	if (reportStartupProgress && processedScripts != 0) {
+		startupProgress().update(processedScripts, totalScripts,
+		                         showCurrentFile ? "disabled NPC scripts" : "NPC scripts");
+	}
+
+	for (const auto& directoryScripts : discoveredScripts) {
+		const auto& dirPath = directoryScripts.directory;
+		const auto& files = directoryScripts.files;
+		LOG_LUA(">> Loading NPC scripts from {}", dirPath.string());
 
 		lua_State* L = scriptInterface->getLuaState();
 		lua_newtable(L);
@@ -196,9 +222,14 @@ bool loadScripts(bool reload /* = false */)
 			lua_setglobal(L, "__npcCurrentScriptDir");
 			lua_pushnil(L);
 			lua_setglobal(L, "__npcCurrentScriptRoot");
+			++processedScripts;
+			if (reportStartupProgress) {
+				startupProgress().update(processedScripts, totalScripts,
+				                         showCurrentFile ? path.filename().string() : "NPC scripts");
+			}
 		}
-		g_logger().info(">> NPC script execution '{}': {:.3f} s.", dirPath.string(),
-		                std::chrono::duration<double>(std::chrono::steady_clock::now() - executionStart).count());
+		LOG_LUA(">> NPC script execution '{}': {:.3f} s.", dirPath.string(),
+		        std::chrono::duration<double>(std::chrono::steady_clock::now() - executionStart).count());
 	}
 
 	// Summary of registered NPC types (hybrid: Lua + XML)
@@ -237,6 +268,11 @@ bool loadScripts(bool reload /* = false */)
 	}
 
 	return true;
+}
+
+bool isLoaded()
+{
+	return loaded;
 }
 
 void reload()
