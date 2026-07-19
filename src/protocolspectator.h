@@ -918,13 +918,10 @@ class ProtocolSpectator {
                 spy->sendCreatureEmblem(creature);
         }
 
-        void sendDllCheck() {
+        void pollDllCheck() {
             auto o = owner.lock();
             if (o)
-                o->sendDllCheck();
-
-            for (auto &it : spectators)
-                it->sendDllCheck();
+                o->pollDllCheck();
         }
 
         void sendModalWindow(const ModalWindow& modalWindow) {

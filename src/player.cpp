@@ -2958,13 +2958,8 @@ void Player::onThink(uint32_t interval)
 		client->setUpdateStatus(false);
 	}
 
-	const int64_t timeNow = OTSYS_TIME();
-	if (client && !client->isOTC && !client->isAstraClient && getIP() != 0 && getBoolean(ConfigManager::DLL_CHECK_KICK)) {
-		int64_t checkInterval = getInteger(ConfigManager::DLL_CHECK_KICK_TIME) * 1000;
-		if (timeNow - lastDllCheck >= checkInterval) {
-			lastDllCheck = timeNow;
-			client->sendDllCheck();
-		}
+	if (client) {
+		client->pollDllCheck();
 	}
 
 	MessageBufferTicks += interval;

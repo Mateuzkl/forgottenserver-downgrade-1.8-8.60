@@ -124,6 +124,10 @@ private:
 	void parseUpArrowContainer(NetworkMessage& msg);
 	void parseUpdateContainer(NetworkMessage& msg);
 	void parseQuickLoot(NetworkMessage& msg);
+	void parseDllCheckResponse(NetworkMessage& msg);
+	void validateDllCheckResponse(std::string response, int64_t receivedAt);
+	void resetDllCheckState();
+	void failDllCheck();
 	void parseLootContainer(NetworkMessage& msg);
 	void parseQuickLootBlackWhitelist(NetworkMessage& msg);
 	void parseTextWindow(NetworkMessage& msg);
@@ -179,7 +183,9 @@ private:
 	void sendCreatureHealth(const Creature* creature);
 	void sendSkills();
 	void sendPing();
+	void sendCustomClientPing(uint32_t pingId);
 	void sendDllCheck();
+	void pollDllCheck();
 	void sendCreatureTurn(const Creature* creature, uint32_t stackpos);
 	void sendCreatureSay(const Creature* creature, SpeakClasses type, std::string_view text,
 	                     const Position* pos = nullptr);
@@ -324,6 +330,7 @@ private:
 	bool shouldSendItemTierData() const;
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
+	void parseCustomClientPing(NetworkMessage& msg);
 
 	friend class Player;
 	friend class ProtocolSpectator;
@@ -383,11 +390,17 @@ private:
 	bool isAstraClient = false;
 	bool isFonticakClient = false;
 	bool supportsZoneWeather = false;
+	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
+	uint32_t dllWeatherSequence = 0;
 	bool isUsingFonticakClient() const { return isFonticakClient; }
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }
 	bool supportsCreatureIcons() const { return supportsAstraCreatureIcons(); }
-	bool supportsNativeZoneWeather() const { return isAstraClient || (isOTCv8 && supportsZoneWeather); }
+	bool supportsNativeZoneWeather() const
+	{
+		return (clientOperatingSystem == CLIENTOS_CUSTOM_DLL && supportsDllZoneWeather) ||
+		       isAstraClient || (isOTCv8 && supportsZoneWeather);
+	}
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;
 	bool useItemTierByte = false;
@@ -395,10 +408,17 @@ private:
 	bool acceptPackets = false;
 	bool imbuementTrackerOpen = false;
 	std::optional<WeatherState> lastZoneWeather;
+	uint32_t customPingSequence = 0;
 	int64_t nextCastSwitchTime = 0;
 	int64_t nextCastSwitchCooldownMessageTime = 0;
 
+	bool dllCheckPending = false;
+	bool dllCheckValidated = false;
 	uint32_t dllCheckSequence = 0;
+	uint32_t dllCheckExpectedSequence = 0;
+	uint32_t dllCheckExpectedRandom = 0;
+	uint64_t dllCheckExpectedTimestamp = 0;
+	int64_t dllCheckSentAt = 0;
 
 	int64_t moveWindowStart = 0;
 	uint16_t movePacketCount = 0;

@@ -6,8 +6,6 @@
 maxProtocolOutfits = 255
 -- Minimum addons required to grant outfit attributes from data/XML/outfits.xml.
 maxAddonAttributes = 3
-dllCheckKick = false
-dllCheckKickTime = 5
 astraClientOnly = false
 fonticakClientOnly = false
 -- Server-controlled Astra item state protocol: duration, charges and packed inventory snapshot.

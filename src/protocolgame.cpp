@@ -26,9 +26,13 @@
 #include "scriptmanager.h"
 #include "thread_pool.h"
 
+#include <array>
+#include <atomic>
 #include <limits>
 #include <map>
+#include <string_view>
 #include <unordered_map>
+#include <vector>
 
 uint32_t ProtocolGame::spectatorId = 1;
 std::set<std::string> ProtocolGame::spectatorNames;
@@ -36,9 +40,313 @@ extern Monsters g_monsters;
 
 namespace {
 
+namespace DllCheckProtocol {
+
+constexpr uint8_t OPCODE = 0xDE;
+constexpr uint8_t DLL_CHECK_WIRE_VERSION = 3;
+constexpr uint8_t CHALLENGE_KIND = 0x71;
+constexpr uint8_t RESPONSE_KIND = 0xA6;
+constexpr uint32_t BUILD_ID = 2026071903;
+constexpr uint32_t INITIAL_SEQUENCE = 0x6B19D3A7;
+constexpr int64_t INTERVAL_MS = 5000;
+constexpr int64_t TIMEOUT_MS = 5000;
+constexpr std::size_t PAYLOAD_SIZE = 64;
+constexpr std::size_t MAX_ENCODED_PAYLOAD_SIZE = 512;
+
+constexpr std::string_view BASE64_ALPHABET =
+    "s5cvbxqZe8Ph9mS7R/0fMNrzoKlDQdgHkYVja4UEX621LnTCpA+3FBWiJwtIGyuO";
+constexpr std::string_view XOR_KEY =
+    "vZ3LrhkGjHs97RvQfnap7Q1IIdrzduw046pIL689hQpAFR4ILQZYfHYC43TurO3Z4LcYPT4w";
+
+constexpr std::array<uint8_t, 8> SERVER_MAGIC = {
+    0x53, 0xA6, 0x9C, 0xC6, 0xC3, 0x30, 0xE2, 0xD6
+};
+constexpr std::array<uint8_t, 8> CLIENT_MAGIC = {
+    0xB6, 0x57, 0xD9, 0x1B, 0xA3, 0x72, 0xED, 0x60
+};
+constexpr std::array<uint8_t, 16> FIXED_TEXT = {
+    'N', 'E', 'X', 'A', '8', '6', '0', '-', 'C', 'H', 'E', 'C', 'K', '-', 'V', '3'
+};
+constexpr std::array<uint8_t, 16> PRIVATE_SALT = {
+    0x37, 0x89, 0xFF, 0xBA, 0xF5, 0xA8, 0x93, 0x0E,
+    0x79, 0xD8, 0xE2, 0xC6, 0xA5, 0xD2, 0xD1, 0x79
+};
+
+constexpr bool hasUniqueAlphabetCharacters()
+{
+	if (BASE64_ALPHABET.size() != 64) {
+		return false;
+	}
+	for (std::size_t i = 0; i < BASE64_ALPHABET.size(); ++i) {
+		if (BASE64_ALPHABET[i] == '=') {
+			return false;
+		}
+		for (std::size_t j = i + 1; j < BASE64_ALPHABET.size(); ++j) {
+			if (BASE64_ALPHABET[i] == BASE64_ALPHABET[j]) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+static_assert(BASE64_ALPHABET.size() == 64);
+static_assert(hasUniqueAlphabetCharacters());
+static_assert(!XOR_KEY.empty());
+
+using Payload = std::array<uint8_t, PAYLOAD_SIZE>;
+
+struct Fields
+{
+	uint64_t timestamp = 0;
+	uint32_t sequence = 0;
+	uint32_t randomValue = 0;
+};
+
+void writeU16(Payload& payload, std::size_t offset, uint16_t value)
+{
+	payload[offset] = static_cast<uint8_t>(value);
+	payload[offset + 1] = static_cast<uint8_t>(value >> 8);
+}
+
+void writeU32(Payload& payload, std::size_t offset, uint32_t value)
+{
+	for (std::size_t i = 0; i < 4; ++i) {
+		payload[offset + i] = static_cast<uint8_t>(value >> (i * 8));
+	}
+}
+
+void writeU64(Payload& payload, std::size_t offset, uint64_t value)
+{
+	for (std::size_t i = 0; i < 8; ++i) {
+		payload[offset + i] = static_cast<uint8_t>(value >> (i * 8));
+	}
+}
+
+uint16_t readU16(const Payload& payload, std::size_t offset)
+{
+	return static_cast<uint16_t>(payload[offset]) |
+	       static_cast<uint16_t>(payload[offset + 1] << 8);
+}
+
+uint32_t readU32(const Payload& payload, std::size_t offset)
+{
+	uint32_t value = 0;
+	for (std::size_t i = 0; i < 4; ++i) {
+		value |= static_cast<uint32_t>(payload[offset + i]) << (i * 8);
+	}
+	return value;
+}
+
+uint64_t readU64(const Payload& payload, std::size_t offset)
+{
+	uint64_t value = 0;
+	for (std::size_t i = 0; i < 8; ++i) {
+		value |= static_cast<uint64_t>(payload[offset + i]) << (i * 8);
+	}
+	return value;
+}
+
+template <std::size_t N>
+void writeArray(Payload& payload, std::size_t offset, const std::array<uint8_t, N>& value)
+{
+	for (std::size_t i = 0; i < N; ++i) {
+		payload[offset + i] = value[i];
+	}
+}
+
+template <std::size_t N>
+bool matchesArray(const Payload& payload, std::size_t offset, const std::array<uint8_t, N>& value)
+{
+	for (std::size_t i = 0; i < N; ++i) {
+		if (payload[offset + i] != value[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+Payload buildChallenge(uint64_t timestamp, uint32_t sequence, uint32_t randomValue)
+{
+	Payload payload = {};
+	writeArray(payload, 0, SERVER_MAGIC);
+	payload[8] = DLL_CHECK_WIRE_VERSION;
+	payload[9] = CHALLENGE_KIND;
+	writeU16(payload, 10, static_cast<uint16_t>(PAYLOAD_SIZE));
+	writeU32(payload, 12, BUILD_ID);
+	writeU64(payload, 16, timestamp);
+	writeU32(payload, 24, sequence);
+	writeU32(payload, 28, randomValue);
+	writeArray(payload, 32, FIXED_TEXT);
+	writeArray(payload, 48, PRIVATE_SALT);
+	return payload;
+}
+
+bool parseResponse(const Payload& payload, Fields& fields)
+{
+	if (!matchesArray(payload, 0, CLIENT_MAGIC) || payload[8] != DLL_CHECK_WIRE_VERSION ||
+	    payload[9] != RESPONSE_KIND || readU16(payload, 10) != PAYLOAD_SIZE ||
+	    readU32(payload, 12) != BUILD_ID || !matchesArray(payload, 32, FIXED_TEXT) ||
+	    !matchesArray(payload, 48, PRIVATE_SALT)) {
+		return false;
+	}
+
+	fields.timestamp = readU64(payload, 16);
+	fields.sequence = readU32(payload, 24);
+	fields.randomValue = readU32(payload, 28);
+	return fields.timestamp != 0 && fields.sequence != 0;
+}
+
+void xorCrypt(std::vector<uint8_t>& bytes)
+{
+	for (std::size_t i = 0; i < bytes.size(); ++i) {
+		bytes[i] ^= static_cast<uint8_t>(XOR_KEY[i % XOR_KEY.size()]);
+	}
+}
+
+std::string base64Encode(const std::vector<uint8_t>& bytes)
+{
+	std::string encoded;
+	encoded.reserve(((bytes.size() + 2) / 3) * 4);
+	std::size_t offset = 0;
+	while (offset + 3 <= bytes.size()) {
+		const uint32_t value = (static_cast<uint32_t>(bytes[offset]) << 16) |
+		                       (static_cast<uint32_t>(bytes[offset + 1]) << 8) |
+		                       static_cast<uint32_t>(bytes[offset + 2]);
+		encoded.push_back(BASE64_ALPHABET[(value >> 18) & 0x3F]);
+		encoded.push_back(BASE64_ALPHABET[(value >> 12) & 0x3F]);
+		encoded.push_back(BASE64_ALPHABET[(value >> 6) & 0x3F]);
+		encoded.push_back(BASE64_ALPHABET[value & 0x3F]);
+		offset += 3;
+	}
+
+	const std::size_t remaining = bytes.size() - offset;
+	if (remaining == 1) {
+		const uint32_t value = static_cast<uint32_t>(bytes[offset]) << 16;
+		encoded.push_back(BASE64_ALPHABET[(value >> 18) & 0x3F]);
+		encoded.push_back(BASE64_ALPHABET[(value >> 12) & 0x3F]);
+		encoded.append("==");
+	} else if (remaining == 2) {
+		const uint32_t value = (static_cast<uint32_t>(bytes[offset]) << 16) |
+		                       (static_cast<uint32_t>(bytes[offset + 1]) << 8);
+		encoded.push_back(BASE64_ALPHABET[(value >> 18) & 0x3F]);
+		encoded.push_back(BASE64_ALPHABET[(value >> 12) & 0x3F]);
+		encoded.push_back(BASE64_ALPHABET[(value >> 6) & 0x3F]);
+		encoded.push_back('=');
+	}
+	return encoded;
+}
+
+int base64Index(char character)
+{
+	for (std::size_t i = 0; i < BASE64_ALPHABET.size(); ++i) {
+		if (BASE64_ALPHABET[i] == character) {
+			return static_cast<int>(i);
+		}
+	}
+	return -1;
+}
+
+bool base64Decode(std::string_view encoded, std::vector<uint8_t>& decoded)
+{
+	decoded.clear();
+	if (encoded.empty()) {
+		return true;
+	}
+	if ((encoded.size() % 4) != 0) {
+		return false;
+	}
+	decoded.reserve((encoded.size() / 4) * 3);
+
+	for (std::size_t offset = 0; offset < encoded.size(); offset += 4) {
+		const bool lastBlock = offset + 4 == encoded.size();
+		const bool pad2 = encoded[offset + 2] == '=';
+		const bool pad3 = encoded[offset + 3] == '=';
+		if (encoded[offset] == '=' || encoded[offset + 1] == '=' ||
+		    (pad2 && !pad3) || ((pad2 || pad3) && !lastBlock)) {
+			return false;
+		}
+
+		const int a = base64Index(encoded[offset]);
+		const int b = base64Index(encoded[offset + 1]);
+		const int c = pad2 ? 0 : base64Index(encoded[offset + 2]);
+		const int d = pad3 ? 0 : base64Index(encoded[offset + 3]);
+		if (a < 0 || b < 0 || c < 0 || d < 0 ||
+		    (pad2 && (b & 0x0F) != 0) || (pad3 && !pad2 && (c & 0x03) != 0)) {
+			decoded.clear();
+			return false;
+		}
+
+		const uint32_t value = (static_cast<uint32_t>(a) << 18) |
+		                       (static_cast<uint32_t>(b) << 12) |
+		                       (static_cast<uint32_t>(c) << 6) |
+		                       static_cast<uint32_t>(d);
+		decoded.push_back(static_cast<uint8_t>(value >> 16));
+		if (!pad2) {
+			decoded.push_back(static_cast<uint8_t>(value >> 8));
+		}
+		if (!pad3) {
+			decoded.push_back(static_cast<uint8_t>(value));
+		}
+	}
+	return true;
+}
+
+std::string encodeProtected(const Payload& payload)
+{
+	std::vector<uint8_t> bytes(payload.begin(), payload.end());
+	xorCrypt(bytes);
+	return base64Encode(bytes);
+}
+
+bool decodeProtected(std::string_view encoded, Payload& payload)
+{
+	if (encoded.empty() || encoded.size() > MAX_ENCODED_PAYLOAD_SIZE) {
+		return false;
+	}
+	std::vector<uint8_t> bytes;
+	if (!base64Decode(encoded, bytes) || bytes.size() != PAYLOAD_SIZE) {
+		return false;
+	}
+	xorCrypt(bytes);
+	for (std::size_t i = 0; i < PAYLOAD_SIZE; ++i) {
+		payload[i] = bytes[i];
+	}
+	return true;
+}
+
+} // namespace DllCheckProtocol
+
 // 0x3C is reserved for native ZoneId weather on negotiated custom clients.
 constexpr uint8_t ZONE_WEATHER_OPCODE = 0x3C;
 constexpr uint8_t ZONE_WEATHER_PACKET_VERSION = 1;
+constexpr std::array<uint8_t, 8> DLL_WEATHER_SERVER_MAGIC = {
+	0xD7, 0x2B, 0x91, 0x4E, 0xC3, 0x68, 0xAF, 0x15
+};
+constexpr uint8_t DLL_WEATHER_PROTOCOL_VERSION = 2;
+constexpr uint32_t DLL_WEATHER_BUILD_ID = 20260719;
+constexpr uint32_t DLL_WEATHER_LOGIN_MAGIC = 0x4C44575A; // "ZWDL"
+constexpr uint8_t DLL_WEATHER_LOGIN_VERSION = 1;
+constexpr uint8_t DLL_WEATHER_LOGIN_TAG_HIGH = 0xA5;
+constexpr uint8_t DLL_WEATHER_LOGIN_TAG_LOW = 0x86;
+
+std::atomic<uint32_t> dllWeatherSequenceCounter{0x86193C01};
+
+uint32_t nextDllWeatherSequence()
+{
+	uint32_t sequence = dllWeatherSequenceCounter.fetch_add(1, std::memory_order_relaxed);
+	if (sequence == 0) {
+		sequence = dllWeatherSequenceCounter.fetch_add(1, std::memory_order_relaxed);
+	}
+	return sequence;
+}
+
+std::size_t getReadableBytes(const NetworkMessage& msg)
+{
+	const std::size_t end = static_cast<std::size_t>(msg.getLength()) + NetworkMessage::INITIAL_BUFFER_POSITION;
+	const std::size_t position = msg.getBufferPosition();
+	return position <= end ? end - position : 0;
+}
 
 std::deque<std::pair<int64_t, uint32_t>> waitList; // (timeout, player guid)
 std::size_t priorityCount = 0;
@@ -49,6 +357,14 @@ constexpr uint8_t HELPER_OPCODE_SMART_FOLLOW = 212;
 constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
 constexpr uint32_t STORAGE_ASTRA_HELPER_SMART_FOLLOW = 99998;
 constexpr auto STORE_OUTFIT_OFFERS_PATH = "data/store/gamestore.xml";
+
+uint32_t nextDllCheckRandom()
+{
+	static std::random_device randomDevice;
+	static std::mt19937 generator(randomDevice());
+	static std::uniform_int_distribution<uint32_t> distribution(1, (std::numeric_limits<uint32_t>::max)());
+	return distribution(generator);
+}
 
 using PlayerInventoryKey = std::pair<uint16_t, uint8_t>;
 using PlayerInventoryCounts = std::map<PlayerInventoryKey, uint32_t>;
@@ -495,6 +811,7 @@ void ProtocolGame::sendBlessStatus()
 void ProtocolGame::release()
 {
 	// dispatcher thread
+	resetDllCheckState();
 	if (player) {
 		if (isSpectator) {
 			auto clientRef = player->client;
@@ -801,7 +1118,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 			return;
 		}
 	}
-	sendDllCheck();
+	resetDllCheckState();
 	sendLootContainers();
 
 	if (isOTC) {
@@ -834,6 +1151,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	acceptPackets = true;
+	sendDllCheck();
 	g_game.releaseLogin(reservedGuid);
 }
 
@@ -934,13 +1252,14 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 		sendFeatures();
 	}
 	sendAddCreature(player.get(), player->getPosition(), 0);
-	sendDllCheck();
+	resetDllCheckState();
 	sendLootContainers();
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	player->resetIdleTime();
 	player->lastPing = OTSYS_TIME();
 	acceptPackets = true;
+	sendDllCheck();
 
 	g_creatureEvents->playerReconnect(player.get());
 }
@@ -978,6 +1297,7 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 		}
 	}
 
+	resetDllCheckState();
 	player->client->clear();
 	disconnect();
 
@@ -1020,6 +1340,28 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	if (challengeTimestamp != timeStamp || challengeRandom != randNumber) {
 		disconnect();
 		return;
+	}
+
+	if (operatingSystem == CLIENTOS_CUSTOM_DLL) {
+		constexpr std::size_t markerSize = sizeof(uint32_t) + (sizeof(uint8_t) * 4);
+		if (getReadableBytes(msg) >= markerSize) {
+			const uint32_t magic = msg.get<uint32_t>();
+			const uint8_t markerVersion = msg.getByte();
+			const uint8_t weatherOpcode = msg.getByte();
+			const uint8_t tagHigh = msg.getByte();
+			const uint8_t tagLow = msg.getByte();
+			supportsDllZoneWeather = magic == DLL_WEATHER_LOGIN_MAGIC &&
+			                         markerVersion == DLL_WEATHER_LOGIN_VERSION &&
+			                         weatherOpcode == ZONE_WEATHER_OPCODE &&
+			                         tagHigh == DLL_WEATHER_LOGIN_TAG_HIGH &&
+			                         tagLow == DLL_WEATHER_LOGIN_TAG_LOW;
+		}
+
+		if (!supportsDllZoneWeather) {
+			disconnectClient("This custom client does not support the required Zone Weather protocol.");
+			return;
+		}
+		dllWeatherSequence = nextDllWeatherSequence();
 	}
 
 	// OTCv8 version detection
@@ -1243,6 +1585,13 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 	if (isSpectator) {
 		switch (recvbyte) {
 			case 0x14: g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->disconnect(); }); break;
+			case 0x1E:
+				if (clientOperatingSystem == CLIENTOS_CUSTOM_DLL) {
+					parseCustomClientPing(msg);
+				} else {
+					g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerReceivePing(playerID); });
+				}
+				break;
 			case 0x32:
 				if (isOTC) {
 					parseExtendedOpcode(msg);
@@ -1289,7 +1638,11 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->logout(true, false); });
 			break;
 		case 0x1E:
-			g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerReceivePing(playerID); });
+			if (clientOperatingSystem == CLIENTOS_CUSTOM_DLL) {
+				parseCustomClientPing(msg);
+			} else {
+				g_dispatcher.addTask([playerID = player->getID()]() { g_game.playerReceivePing(playerID); });
+			}
 			break;
 		case 0x32:
 			if (isOTC) {
@@ -1303,6 +1656,13 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			break; // GameClientExtendedPing
 		case 0x60:
 			parseImbuementDurations(msg);
+			break;
+		case DllCheckProtocol::OPCODE:
+			if (clientOperatingSystem == CLIENTOS_CUSTOM_DLL) {
+				parseDllCheckResponse(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 		case CharacterBazaar::CLIENT_PACKET:
 			if (isAstraClient) {
@@ -3562,95 +3922,149 @@ void ProtocolGame::sendSkills()
 
 void ProtocolGame::sendPing()
 {
+	if (clientOperatingSystem == CLIENTOS_CUSTOM_DLL) {
+		if (++customPingSequence == 0) {
+			++customPingSequence;
+		}
+		sendCustomClientPing(customPingSequence);
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x1E);
 	writeToOutputBuffer(msg);
 }
 
-static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-static inline bool is_base64(unsigned char c) { return (isalnum(c) || (c == '+') || (c == '/')); }
-std::string dllCheckKey = "QP14kLGdTzMXygW9zhEsex7D8WAMtGgyCGFxdCDCbZ7t9A5";
-
-std::string base64Encode(const std::string& decoded_string)
+void ProtocolGame::sendCustomClientPing(uint32_t pingId)
 {
-	std::string ret;
-	int i = 0;
-	int j = 0;
-	uint8_t char_array_3[3];
-	uint8_t char_array_4[4];
-	int pos = 0;
-	int len = decoded_string.size();
-
-	while (len--) {
-		char_array_3[i++] = decoded_string[pos++];
-		if (i == 3) {
-			char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-			char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-			char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-			char_array_4[3] = char_array_3[2] & 0x3f;
-
-			for (i = 0; (i < 4); i++) ret += base64_chars[char_array_4[i]];
-			i = 0;
-		}
-	}
-
-	if (i) {
-		for (j = i; j < 3; j++) char_array_3[j] = '\0';
-
-		char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-		char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-		char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-		char_array_4[3] = char_array_3[2] & 0x3f;
-
-		for (j = 0; (j < i + 1); j++) ret += base64_chars[char_array_4[j]];
-
-		while ((i++ < 3)) ret += '=';
-	}
-
-	return ret;
-}
-
-void xorCrypt(std::string& buffer, const std::string& key)
-{
-	size_t strLen = buffer.length();
-	size_t keyLen = key.length();
-	for (size_t i = 0; i < strLen; ++i) buffer[i] = static_cast<char>(static_cast<char>(buffer[i]) ^ static_cast<char>(key[i % keyLen]));
+	NetworkMessage msg;
+	msg.addByte(0x1E);
+	msg.add<uint32_t>(pingId);
+	writeToOutputBuffer(msg);
 }
 
 void ProtocolGame::sendDllCheck()
 {
-	if (!player) {
+	if (!player || isSpectator || clientOperatingSystem != CLIENTOS_CUSTOM_DLL || getVersion() != 860 || dllCheckPending) {
 		return;
 	}
 
-	// 0xBB is Task Hunting data for Astra. The legacy DLL check uses the same
-	// opcode only for the classic 8.60 client and must never reach Astra.
-	if (isOTC || isAstraClient) {
-		return;
+	dllCheckExpectedTimestamp = static_cast<uint64_t>(OTSYS_TIME());
+	dllCheckExpectedSequence = dllCheckSequence;
+	dllCheckExpectedRandom = nextDllCheckRandom();
+	if (++dllCheckSequence == 0) {
+		dllCheckSequence = 1;
 	}
 
-	if (!getBoolean(ConfigManager::DLL_CHECK_KICK)) {
-		return;
-	}
-
-	if (getVersion() != 860) {
-		return;
-	}
-
-	std::string cryptStr;
-	cryptStr.reserve(48);
-	cryptStr.append(std::to_string(OTSYS_TIME()));
-	cryptStr.append(";");
-	cryptStr.append(std::to_string(dllCheckSequence++));
-	cryptStr.append(";3puZ8qrriHA");
-
-	xorCrypt(cryptStr, dllCheckKey);
-	cryptStr = base64Encode(cryptStr);
+	const auto payload = DllCheckProtocol::buildChallenge(
+	    dllCheckExpectedTimestamp, dllCheckExpectedSequence, dllCheckExpectedRandom);
+	const std::string encoded = DllCheckProtocol::encodeProtected(payload);
 
 	NetworkMessage msg;
-	msg.addByte(0xBB);
-	msg.addString(cryptStr);
+	msg.addByte(DllCheckProtocol::OPCODE);
+	msg.addString(encoded);
 	writeToOutputBuffer(msg);
+
+	dllCheckPending = true;
+	dllCheckValidated = false;
+	dllCheckSentAt = OTSYS_TIME();
+}
+
+void ProtocolGame::pollDllCheck()
+{
+	if (!player || isSpectator || clientOperatingSystem != CLIENTOS_CUSTOM_DLL || getVersion() != 860) {
+		return;
+	}
+
+	const int64_t now = OTSYS_TIME();
+	if (dllCheckPending) {
+		if (now < dllCheckSentAt || now - dllCheckSentAt >= DllCheckProtocol::TIMEOUT_MS) {
+			failDllCheck();
+		}
+		return;
+	}
+
+	if (!dllCheckValidated || now < dllCheckSentAt ||
+	    now - dllCheckSentAt >= DllCheckProtocol::INTERVAL_MS) {
+		sendDllCheck();
+	}
+}
+
+void ProtocolGame::resetDllCheckState()
+{
+	dllCheckPending = false;
+	dllCheckValidated = false;
+	dllCheckSequence = DllCheckProtocol::INITIAL_SEQUENCE;
+	dllCheckExpectedSequence = 0;
+	dllCheckExpectedRandom = 0;
+	dllCheckExpectedTimestamp = 0;
+	dllCheckSentAt = 0;
+}
+
+void ProtocolGame::failDllCheck()
+{
+	dllCheckPending = false;
+	dllCheckValidated = false;
+	disconnectClient("Client validation failed.");
+}
+
+void ProtocolGame::parseDllCheckResponse(NetworkMessage& msg)
+{
+	auto reject = [thisPtr = getThis()]() {
+		g_dispatcher.addTask([thisPtr]() { thisPtr->failDllCheck(); });
+	};
+
+	if (clientOperatingSystem != CLIENTOS_CUSTOM_DLL || getReadableBytes(msg) < sizeof(uint16_t)) {
+		reject();
+		return;
+	}
+
+	const uint16_t encodedLength = msg.get<uint16_t>();
+	if (encodedLength == 0 || encodedLength > DllCheckProtocol::MAX_ENCODED_PAYLOAD_SIZE ||
+	    getReadableBytes(msg) != encodedLength) {
+		reject();
+		return;
+	}
+
+	std::string response = msg.getString(encodedLength);
+	if (msg.isOverrun() || response.size() != encodedLength) {
+		reject();
+		return;
+	}
+
+	const int64_t receivedAt = OTSYS_TIME();
+	g_dispatcher.addTask([thisPtr = getThis(), response = std::move(response), receivedAt]() mutable {
+		thisPtr->validateDllCheckResponse(std::move(response), receivedAt);
+	});
+}
+
+void ProtocolGame::validateDllCheckResponse(std::string response, int64_t receivedAt)
+{
+	if (!dllCheckPending || clientOperatingSystem != CLIENTOS_CUSTOM_DLL ||
+	    receivedAt < dllCheckSentAt || receivedAt - dllCheckSentAt >= DllCheckProtocol::TIMEOUT_MS) {
+		failDllCheck();
+		return;
+	}
+
+	DllCheckProtocol::Payload payload = {};
+	DllCheckProtocol::Fields fields;
+	if (!DllCheckProtocol::decodeProtected(response, payload)) {
+		failDllCheck();
+		return;
+	}
+	if (!DllCheckProtocol::parseResponse(payload, fields)) {
+		failDllCheck();
+		return;
+	}
+	if (fields.timestamp != dllCheckExpectedTimestamp ||
+	    fields.sequence != dllCheckExpectedSequence ||
+	    fields.randomValue != dllCheckExpectedRandom) {
+		failDllCheck();
+		return;
+	}
+
+	dllCheckPending = false;
+	dllCheckValidated = true;
 }
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
@@ -3724,7 +4138,8 @@ void ProtocolGame::refreshWorldView()
 
 void ProtocolGame::sendZoneWeather(const Position& position, bool force)
 {
-	if (!player || !supportsNativeZoneWeather() || !zoneWeatherFeatureEnabled) {
+	const bool weatherEnabled = zoneWeatherFeatureEnabled || supportsDllZoneWeather;
+	if (!player || !supportsNativeZoneWeather() || !weatherEnabled) {
 		return;
 	}
 
@@ -3739,20 +4154,34 @@ void ProtocolGame::sendZoneWeather(const Position& position, bool force)
 		state.windY = 0;
 	}
 
-	// Reuse the outgoing transition while the player remains outside weather.
-	// This produces one fade-out packet and keeps later movement cache hits stable.
-	if (state.type == WeatherType::None && lastZoneWeather) {
+	// Reuse the outgoing transition only for unmapped areas without an explicit transition.
+	if (state.type == WeatherType::None && state.transitionMs == 0 && lastZoneWeather) {
 		state.transitionMs = lastZoneWeather->transitionMs;
 	}
 
-	if (!force && lastZoneWeather && *lastZoneWeather == state) {
+	const bool sameClientPayload = lastZoneWeather &&
+	                               lastZoneWeather->type == state.type &&
+	                               lastZoneWeather->intensity == state.intensity &&
+	                               lastZoneWeather->windX == state.windX &&
+	                               lastZoneWeather->windY == state.windY &&
+	                               lastZoneWeather->transitionMs == state.transitionMs;
+	if (!force && sameClientPayload) {
 		return;
 	}
 	lastZoneWeather = state;
 
 	NetworkMessage msg;
 	msg.addByte(ZONE_WEATHER_OPCODE);
-	msg.addByte(ZONE_WEATHER_PACKET_VERSION);
+	if (clientOperatingSystem == CLIENTOS_CUSTOM_DLL) {
+		for (const uint8_t value : DLL_WEATHER_SERVER_MAGIC) {
+			msg.addByte(value);
+		}
+		msg.addByte(DLL_WEATHER_PROTOCOL_VERSION);
+		msg.add<uint32_t>(DLL_WEATHER_BUILD_ID);
+		msg.add<uint32_t>(dllWeatherSequence);
+	} else {
+		msg.addByte(ZONE_WEATHER_PACKET_VERSION);
+	}
 	msg.addByte(static_cast<uint8_t>(state.type));
 	msg.addByte(state.intensity);
 	msg.addByte(static_cast<uint8_t>(state.windX));
@@ -5077,6 +5506,17 @@ void ProtocolGame::parseNewPing(NetworkMessage& msg)
 	uint32_t pingId = msg.get<uint32_t>();
 	if (g_game.getGameState() == GAME_STATE_NORMAL && player) {
 		g_dispatcher.addTask([thisPtr = getThis(), pingId]() { thisPtr->sendNewPing(pingId); });
+	}
+}
+
+void ProtocolGame::parseCustomClientPing(NetworkMessage& msg)
+{
+	const uint32_t pingId = msg.get<uint32_t>();
+	if (g_game.getGameState() == GAME_STATE_NORMAL && player) {
+		g_dispatcher.addTask([thisPtr = getThis(), playerId = player->getID(), pingId]() {
+			g_game.playerReceivePing(playerId);
+			thisPtr->sendCustomClientPing(pingId);
+		});
 	}
 }
 

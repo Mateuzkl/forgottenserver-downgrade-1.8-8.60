@@ -1696,7 +1696,6 @@ private:
 	int64_t lastToggleMount = 0;
 	int64_t lastPing;
 	int64_t lastPong;
-	int64_t lastDllCheck = 0;
 	int64_t ghostModeStartTime = 0;
 	int64_t nextAction = 0;
 

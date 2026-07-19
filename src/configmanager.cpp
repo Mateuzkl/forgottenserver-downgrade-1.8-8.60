@@ -433,7 +433,6 @@ bool ConfigManager::load()
 	booleans[Boolean::START_CHOOSEVOC] = getGlobalBoolean(L, "newPlayerChooseVoc", false);
 	booleans[Boolean::GENERATE_ACCOUNT_NUMBER] = getGlobalBoolean(L, "generateAccountNumber", false);
 	booleans[Boolean::CHECK_DUPLICATE_STORAGE_KEYS] = getGlobalBoolean(L, "checkDuplicateStorageKeys", false);
-	booleans[Boolean::DLL_CHECK_KICK] = getGlobalBoolean(L, "dllCheckKick", false);
 	booleans[Boolean::RESET_SYSTEM_ENABLED] = getGlobalBoolean(L, "resetssystem", false);
 	booleans[Boolean::NPCS_USING_BANK_MONEY] = getGlobalBoolean(L, "npcsUsingBankMoney", false);
 	booleans[Boolean::STAMINA_TRAINER] = getGlobalBoolean(L, "staminaTrainer", false);
@@ -715,7 +714,6 @@ bool ConfigManager::load()
 	integers[Integer::NEW_PLAYER_CAP] = getGlobalInteger(L, "newPlayerCap", 400);
 	integers[Integer::MAX_ALLOWED_ON_A_DUMMY] = getGlobalInteger(L, "maxAllowedOnADummy", 5);
 	integers[Integer::RATE_EXERCISE_TRAINING_SPEED] = getGlobalInteger(L, "rateExerciseTrainingSpeed", 1.0);
-	integers[Integer::DLL_CHECK_KICK_TIME] = getGlobalInteger(L, "dllCheckKickTime", 300);
 	integers[Integer::OFFLINE_TRAINING_THRESHOLD] = getGlobalInteger(L, "offlineTrainingThreshold", 600);
 	integers[Integer::BOSS_DEFAULT_TIME_TO_FIGHT_AGAIN] = getGlobalInteger(L, "bossDefaultTimeToFightAgain", 20 * 60 * 60);
 	integers[Integer::BOSS_DEFAULT_TIME_TO_DEFEAT] = getGlobalInteger(L, "bossDefaultTimeToDefeat", 10 * 60);
