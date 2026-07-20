@@ -34,6 +34,19 @@ PlayerStorageKeys = {
     dailyRewardStreak = 90722,
     dailyRewardJokerTokens = 90723,
 
+    -- Astra helper / MiniBot protocol state
+    astraHelperCavebot = 99997,
+    astraHelperSmartFollow = 99998,
+    astraHelperMehahClient = 99999,
+    miniBotTimeLeft = 100020,
+    miniBotTotalTime = 100021,
+    miniBotStartedAt = 100022,
+    miniBotTask = 100023,
+    miniBotRenewals = 100024,
+    miniBotBannedUntil = 100025,
+    miniBotAfkPauseUntil = 100026,
+    miniBotAfkAvailableAt = 100027,
+
     -- Battle Pass
     -- The detailed state is persisted in player KV under the "battlepass" scope.
     -- This numeric storage is reserved for the active reward timer.

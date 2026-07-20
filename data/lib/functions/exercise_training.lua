@@ -41,8 +41,39 @@ ExerciseWeaponsTable = {
 	[50295] = { skill = SKILL_FIST, effect = CONST_ANI_WHIRLWINDAXE },
 }
 
-FreeDummies = {5787, 5788, 28558, 28559, 28560, 28561, 28562, 28563, 28564, 28565}
-HouseDummies = {5787, 5788, 28558, 28559, 28560, 28561, 28562, 28563, 28564, 28565}
+local function addExerciseWeapons(ids, skill, effect, allowFarUse)
+	for _, id in ipairs(ids) do
+		ExerciseWeaponsTable[id] = {
+			skill = skill,
+			effect = effect,
+			allowFarUse = allowFarUse
+		}
+	end
+end
+
+-- Daily, Epic, Legend, Mystic, Special and Weak variants exposed by the
+-- AstraClient Assistant. Durable/regular/lasting variants are declared above.
+addExerciseWeapons({ 40636, 40856, 40863, 40820, 40630, 40687 }, SKILL_AXE)
+addExerciseWeapons({ 40637, 40857, 40864, 40821, 40632, 40688 }, SKILL_DISTANCE,
+	CONST_ANI_SIMPLEARROW, true)
+addExerciseWeapons({ 40638, 40851, 40858, 40815, 40631, 40689 }, SKILL_CLUB)
+addExerciseWeapons({ 40639, 40852, 40859, 40816, 40633, 40690 }, SKILL_MAGLEVEL,
+	CONST_ANI_SMALLICE, true)
+addExerciseWeapons({ 40640, 40853, 40860, 40817, 40635, 40691 }, SKILL_SHIELD)
+addExerciseWeapons({ 40641, 40854, 40861, 40818, 40629, 40692 }, SKILL_SWORD)
+addExerciseWeapons({ 40642, 40855, 40862, 40819, 40634, 40693 }, SKILL_MAGLEVEL,
+	CONST_ANI_FIRE, true)
+addExerciseWeapons({ 41021, 41022, 41023, 41024, 41025, 41026 }, SKILL_FIST,
+	CONST_ANI_WHIRLWINDAXE)
+
+FreeDummies = {
+	5787, 5788, 28558, 28559, 28560, 28561, 28562, 28563, 28564, 28565,
+	40621, 40622, 40647, 40648, 41259, 41260
+}
+HouseDummies = {
+	5787, 5788, 28558, 28559, 28560, 28561, 28562, 28563, 28564, 28565,
+	40621, 40622, 40647, 40648, 41259, 41260
+}
 MaxAllowedOnADummy = configManager.getNumber(configKeys.MAX_ALLOWED_ON_A_DUMMY)
 
 local magicLevelRate = configManager.getNumber(configKeys.RATE_MAGIC)

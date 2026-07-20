@@ -50,6 +50,33 @@ extern LuaEnvironment g_luaEnvironment;
 
 namespace {
 
+constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
+constexpr uint32_t STORAGE_ASTRA_HELPER_MINIBOT_TIME_LEFT = 100020;
+constexpr uint32_t STORAGE_ASTRA_HELPER_MINIBOT_TASK = 100023;
+constexpr uint32_t STORAGE_ASTRA_HELPER_MINIBOT_BANNED_UNTIL = 100025;
+constexpr double MINIBOT_TASK_LOOT_MULTIPLIER = 0.20;
+
+double getMiniBotTaskLootMultiplier(const Player* player)
+{
+	if (!player) {
+		return 1.0;
+	}
+	const auto cavebot = player->getStorageValue(STORAGE_ASTRA_HELPER_CAVEBOT);
+	const auto timeLeft = player->getStorageValue(STORAGE_ASTRA_HELPER_MINIBOT_TIME_LEFT);
+	const auto taskMode = player->getStorageValue(STORAGE_ASTRA_HELPER_MINIBOT_TASK);
+	const auto bannedUntil = player->getStorageValue(STORAGE_ASTRA_HELPER_MINIBOT_BANNED_UNTIL);
+	const bool taskActive = cavebot.value_or(0) == 1 && taskMode.value_or(0) == 1 && timeLeft.value_or(0) > 0 &&
+	                        bannedUntil.value_or(0) <= time(nullptr);
+	return taskActive ? MINIBOT_TASK_LOOT_MULTIPLIER : 1.0;
+}
+
+void recordMiniBotRewardMode(Game::PlayerScoreInfo& score, const Player* player)
+{
+	// Freeze the most restrictive mode observed for this boss. A logout or a
+	// last-second Task toggle therefore cannot upgrade already-earned loot.
+	score.miniBotLootMultiplier = std::min(score.miniBotLootMultiplier, getMiniBotTaskLootMultiplier(player));
+}
+
 bool areDifferentNonZeroInstances(const Creature* first, const Creature* second)
 {
 	if (!first || !second) {
@@ -6654,8 +6681,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					const Position& monsterPos = monster->getPosition();
 					double distBetweenTargetAndBoss = std::sqrt(std::pow(playerPos.x - monsterPos.x, 2) + std::pow(playerPos.y - monsterPos.y, 2));
 					if (distBetweenTargetAndBoss < 7) {
-						uint32_t playerGuid = target->getPlayer()->getGUID();
-						rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageTaken += realHealthChange * ConfigManager::getFloat(ConfigManager::REWARD_RATE_HEALING_DONE);
+						Player* rewardPlayer = target->getPlayer();
+						uint32_t playerGuid = rewardPlayer->getGUID();
+						auto& score = rewardBossTracking[monsterId].playerScoreTable[playerGuid];
+						recordMiniBotRewardMode(score, rewardPlayer);
+						score.damageTaken += realHealthChange * ConfigManager::getFloat(ConfigManager::REWARD_RATE_HEALING_DONE);
 					}
 				}
 			}
@@ -7022,8 +7052,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					rewardBossTracking[monsterId] = RewardBossContributionInfo();
 				}
 				if (attacker && attacker->getPlayer()) {
-					uint32_t playerGuid = attacker->getPlayer()->getGUID();
-					rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageDone += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_DONE);
+					Player* rewardPlayer = attacker->getPlayer();
+					uint32_t playerGuid = rewardPlayer->getGUID();
+					auto& score = rewardBossTracking[monsterId].playerScoreTable[playerGuid];
+					recordMiniBotRewardMode(score, rewardPlayer);
+					score.damageDone += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_DONE);
 				}
 			}
 			// rewardboss boss attacking player
@@ -7033,8 +7066,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					rewardBossTracking[monsterId] = RewardBossContributionInfo();
 				}
 				if (target->getPlayer()) {
-					uint32_t playerGuid = target->getPlayer()->getGUID();
-					rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageTaken += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_TAKEN);
+					Player* rewardPlayer = target->getPlayer();
+					uint32_t playerGuid = rewardPlayer->getGUID();
+					auto& score = rewardBossTracking[monsterId].playerScoreTable[playerGuid];
+					recordMiniBotRewardMode(score, rewardPlayer);
+					score.damageTaken += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_TAKEN);
 				}
 			}
 

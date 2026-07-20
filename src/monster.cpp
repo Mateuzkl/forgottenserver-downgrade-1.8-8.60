@@ -2740,6 +2740,7 @@ void Monster::death(Creature*)
 			    contrubutionScore, totalScore, contributors,
 			    ConfigManager::getFloat(ConfigManager::REWARD_BASE_RATE));
 			auto player = g_game.getPlayerByGUID(playerId);
+			const double miniBotLootMultiplier = std::clamp(playerScoreInfo.miniBotLootMultiplier, 0.0, 1.0);
 			auto rewardItem = Item::CreateItem(ITEM_REWARD_CONTAINER);
 			if (!rewardItem) {
 				return;
@@ -2760,9 +2761,13 @@ void Monster::death(Creature*)
 				if (lootBlock.id == 0) {
 					continue;
 				}
-				float adjustedChance =
-				    (lootBlock.chance * lootRate) * ConfigManager::getInteger(ConfigManager::RATE_LOOT);
+				double adjustedChance = (lootBlock.chance * lootRate) *
+				                        ConfigManager::getInteger(ConfigManager::RATE_LOOT) * miniBotLootMultiplier;
 				if (lootBlock.unique && mostScoreContributor == playerId) {
+					if (miniBotLootMultiplier < 1.0 &&
+					    uniform_random(1, MAX_LOOTCHANCE) > MAX_LOOTCHANCE * miniBotLootMultiplier) {
+						continue;
+					}
 					// Ensure that the mostScoreContributor can receive multiple unique items
 					const ItemType& itemType = Item::items[lootBlock.id];
 					if (itemType.stackable) {

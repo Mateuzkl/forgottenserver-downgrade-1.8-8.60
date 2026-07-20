@@ -28,6 +28,13 @@ local blockedNameParts = {
 }
 
 -- Helper Functions
+local function getMiniBotLootMultiplier(player)
+    if not player or not AstraHelper or not AstraHelper.getMiniBotLootMultiplier then
+        return 1
+    end
+    return math.max(0, tonumber(AstraHelper.getMiniBotLootMultiplier(player)) or 1)
+end
+
 local function getFreeTile(pos, radius)
     for r = 1, radius do
         for dx = -r, r do
@@ -248,16 +255,34 @@ function influencedDeath.onDeath(creature, corpse, killer, mostDamageKiller, las
     end
 
     if monster:isFiendish() then
-        local dustAmount = math.random(CONFIG.fiendish.dustMin, CONFIG.fiendish.dustMax)
-        player:addForgeDust(dustAmount)
-        player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("You killed a Fiendish monster and received %d Dust!", dustAmount))
+        local lootMultiplier = getMiniBotLootMultiplier(player)
+        -- Guaranteed Dust used no chance roll before Task mode. Keep that exact
+        -- RNG path when multiplier=1 and add only the Task gate when reduced.
+        if lootMultiplier >= 1 or (lootMultiplier > 0 and math.random() <= lootMultiplier) then
+            local dustAmount = math.random(CONFIG.fiendish.dustMin, CONFIG.fiendish.dustMax)
+            player:addForgeDust(dustAmount)
+            player:sendTextMessage(
+                MESSAGE_INFO_DESCR,
+                string.format("You killed a Fiendish monster and received %d Dust!", dustAmount)
+            )
+        end
 
         local baseExp = monster:getType():experience()
         if baseExp > 0 then
             local extraExp = math.floor(baseExp * (CONFIG.fiendish.expMult - 1))
             if extraExp > 0 then
+                local experienceBefore = player:getExperience()
                 player:addExperience(extraExp, true)
-                player:sendTextMessage(MESSAGE_EXPERIENCE, string.format("You gained %d extra experience points from the Fiendish monster.", extraExp))
+                local awardedExtraExp = math.max(0, player:getExperience() - experienceBefore)
+                if awardedExtraExp > 0 then
+                    player:sendTextMessage(
+                        MESSAGE_EXPERIENCE,
+                        string.format(
+                            "You gained %d extra experience points from the Fiendish monster.",
+                            awardedExtraExp
+                        )
+                    )
+                end
             end
         end
         return true
@@ -278,7 +303,8 @@ function influencedDeath.onDeath(creature, corpse, killer, mostDamageKiller, las
 
     local starData = CONFIG.starLevels[level]
     local chance = starData.chanceMult or 100
-    if math.random(1, 10000) <= (chance * 100) then
+    local lootMultiplier = getMiniBotLootMultiplier(player)
+    if math.random(1, 10000) <= (chance * 100 * lootMultiplier) then
         local sliverAmount = math.random(starData.sliverMin, starData.sliverMax)
         if corpse and corpse:isContainer() then
             corpse:addItem(CONFIG.sliverItemId, sliverAmount)

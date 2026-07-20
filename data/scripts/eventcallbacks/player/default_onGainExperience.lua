@@ -90,6 +90,23 @@ end
 
 event:register()
 
+-- Task mode must be applied after the standard experience formula above, but
+-- before consumers such as Weapon Proficiency (priority 100) and the message
+-- aggregator (priority math.huge). This keeps every downstream consumer in
+-- agreement with the experience that is actually awarded.
+local miniBotTaskExperience = Event()
+
+function miniBotTaskExperience.onGainExperience(player, source, exp)
+	if not AstraHelper or not AstraHelper.getMiniBotExperienceMultiplier then
+		return exp
+	end
+
+	local multiplier = tonumber(AstraHelper.getMiniBotExperienceMultiplier(player)) or 1
+	return exp * math.max(0, multiplier)
+end
+
+miniBotTaskExperience:register(50)
+
 
 local message = Event()
 
