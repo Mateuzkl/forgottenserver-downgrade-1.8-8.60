@@ -60,7 +60,7 @@ bool restartCurrentProcess(char* const* argv)
 	shutdownLogger();
 
 #ifdef _WIN32
-	_execv(argv[0], argv);
+	_execvp(argv[0], argv);
 #else
 	execvp(argv[0], argv);
 #endif
@@ -119,10 +119,11 @@ int main(int argc, char** argv)
 	if (exitCode == SERVER_RESTART_EXIT_CODE) {
 		if (!restartCurrentProcess(argv)) {
 			waitForInteractiveConsoleOnStartupFailure();
+			return EXIT_FAILURE;
 		}
 		return SERVER_RESTART_EXIT_CODE;
 	}
-	if (exitCode != EXIT_SUCCESS && exitCode != SERVER_RESTART_EXIT_CODE) {
+	if (exitCode != EXIT_SUCCESS) {
 		waitForInteractiveConsoleOnStartupFailure();
 	}
 	return exitCode;

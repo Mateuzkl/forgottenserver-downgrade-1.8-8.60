@@ -138,6 +138,8 @@ void AdminConsole::run(std::stop_token stopToken)
 	}
 #endif
 
+	std::string command;
+
 	while (!stopToken.stop_requested()) {
 #ifndef _WIN32
 		pollfd inputPoll{STDIN_FILENO, POLLIN, 0};
@@ -154,9 +156,25 @@ void AdminConsole::run(std::stop_token stopToken)
 		if ((inputPoll.revents & (POLLIN | POLLHUP)) == 0) {
 			break;
 		}
-#endif
 
-		std::string command;
+		char ch;
+		const ssize_t bytesRead = read(STDIN_FILENO, &ch, 1);
+		if (bytesRead < 0 && errno == EINTR) {
+			continue;
+		}
+		if (bytesRead != 1) {
+			break;
+		}
+		if (stopToken.stop_requested()) {
+			break;
+		}
+		if (ch == '\n' || ch == '\r') {
+			processCommand(std::move(command));
+			command.clear();
+		} else {
+			command += ch;
+		}
+#else
 		if (!std::getline(std::cin, command)) {
 			break;
 		}
@@ -164,6 +182,8 @@ void AdminConsole::run(std::stop_token stopToken)
 			break;
 		}
 		processCommand(std::move(command));
+		command.clear();
+#endif
 	}
 
 	running.store(false, std::memory_order_release);
