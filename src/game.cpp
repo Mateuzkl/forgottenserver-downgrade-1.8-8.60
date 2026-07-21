@@ -992,7 +992,7 @@ std::shared_ptr<Player> Game::getPlayerByID(uint32_t id)
 	return it->second.lock();
 }
 
-Creature* Game::getCreatureByName(std::string_view s)
+std::shared_ptr<Creature> Game::getCreatureByNameShared(std::string_view s)
 {
 	if (s.empty()) {
 		return nullptr;
@@ -1004,7 +1004,7 @@ Creature* Game::getCreatureByName(std::string_view s)
 		std::shared_lock<std::shared_mutex> lock(playersMutex);
 		auto it = mappedPlayerNames.find(lowerCaseName);
 		if (it != mappedPlayerNames.end()) {
-			return it->second.lock().get();
+			return it->second.lock();
 		}
 	}
 
@@ -1014,27 +1014,29 @@ Creature* Game::getCreatureByName(std::string_view s)
 			return false;
 		}
 
-		auto& name = creature->getName();
-		return caseInsensitiveEqual(lowerCaseName, name);
+		return caseInsensitiveEqual(lowerCaseName, creature->getName());
 	};
 
 	{
 		auto it = std::find_if(npcs.begin(), npcs.end(), equalCreatureName);
 		if (it != npcs.end()) {
-			auto npc = it->second.lock();
-			return npc.get();
+			return it->second.lock();
 		}
 	}
 
 	{
 		auto it = std::find_if(monsters.begin(), monsters.end(), equalCreatureName);
 		if (it != monsters.end()) {
-			auto monster = it->second.lock();
-			return monster.get();
+			return it->second.lock();
 		}
 	}
 
 	return nullptr;
+}
+
+Creature* Game::getCreatureByName(std::string_view s)
+{
+	return getCreatureByNameShared(s).get();
 }
 
 Npc* Game::getNpcByName(std::string_view npcName)
@@ -1227,7 +1229,7 @@ bool Game::placeCreature(Creature* creature, const Position& pos, bool extendedP
 
 bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 {
-	if (creature->isRemoved()) {
+	if (!creature || creature->isRemoved()) {
 		return false;
 	}
 
@@ -1236,10 +1238,17 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 		return false;
 	}
 
-	Tile* tile = creature->getTile();
+	auto tileRef = getTileSharedRef(creature->getTile());
+	if (!tileRef) {
+		LOG_ERROR("[Game::removeCreature] Creature '{}' id={} has no valid tile.", creature->getName(), creature->getID());
+		return false;
+	}
+
+	Tile* tile = tileRef.get();
+	const Position tilePosition = tile->getPosition();
 
 	SpectatorVec spectators;
-	map.getSpectators(spectators, tile->getPosition(), true);
+	map.getSpectators(spectators, tilePosition, true);
 
 	std::vector<int32_t> oldStackPosVector;
 	oldStackPosVector.reserve(spectators.size());
@@ -1250,8 +1259,6 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 	}
 
 	tile->removeCreature(creature);
-
-	const Position& tilePosition = tile->getPosition();
 
 	// send to client
 	size_t i = 0;
@@ -1282,14 +1289,6 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 	creature->removeList();
 	creature->setRemoved();
 
-	// Eagerly release internal structures while the creature still exists.
-	// These would be cleaned by the destructor eventually, but releasing now
-	// prevents the allocations from being reported as leaked if the
-	// destructor runs late due to refcount chain dependencies.
-	creature->damageMap.clear();
-
-	ReleaseCreature(creatureRef);
-
 	removeCreatureCheck(creature);
 
 	// Explicitly clear master ref on each summon BEFORE recursive removal.
@@ -1312,6 +1311,12 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 		}
 		removeCreature(summon.get());
 	}
+
+	// Eagerly release internal structures AFTER all callbacks and removal logic.
+	// These would be cleaned by the destructor eventually, but releasing now
+	// prevents the allocations from being reported as leaked if the
+	// destructor runs late due to refcount chain dependencies.
+	creature->damageMap.clear();
 
 	// Drop the shared_ptr anchor from the global creature registry.
 	{

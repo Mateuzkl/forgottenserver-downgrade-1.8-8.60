@@ -29,16 +29,23 @@ std::shared_ptr<Creature> getSharedCreature(Creature* creature)
 } // namespace
 
 std::unordered_set<const Creature*> Creature::liveCreatures;
+std::shared_mutex Creature::liveCreaturesMutex;
 
 Creature::Creature()
 {
-	liveCreatures.insert(this);
+	{
+		std::unique_lock lock(liveCreaturesMutex);
+		liveCreatures.insert(this);
+	}
 	onIdleStatus();
 }
 
 Creature::~Creature()
 {
-	liveCreatures.erase(this);
+	{
+		std::unique_lock lock(liveCreaturesMutex);
+		liveCreatures.erase(this);
+	}
 
 	attackedCreature.reset();
 	followCreature.reset();
@@ -589,7 +596,11 @@ void Creature::onDeath()
 	const int64_t inFightTicks = getInteger(ConfigManager::PZ_LOCKED);
 	int32_t mostDamage = 0;
 	std::unordered_map<std::shared_ptr<Creature>, uint64_t> experienceMap;
-	for (const auto& it : damageMap) {
+	
+	// Use snapshot to prevent crashes if damageMap is cleared by Game::removeCreature
+	auto damageMapSnapshot = getDamageMapSnapshot();
+	
+	for (const auto& it : damageMapSnapshot) {
 		auto attacker = g_game.getCreatureByIDShared(it.first);
 		if (attacker) {
 			CountBlock_t cb = it.second;
@@ -654,7 +665,7 @@ void Creature::onDeath()
 
 				addPlayerOwner(lastHitCreature);
 				addPlayerOwner(mostDamageCreature);
-				for (const auto& [attackerId, _] : damageMap) {
+				for (const auto& [attackerId, _] : damageMapSnapshot) {
 					auto attacker = g_game.getCreatureByIDShared(attackerId);
 					if (attacker && attacker->getPlayer()) {
 						addPlayerOwner(attacker);
@@ -1173,9 +1184,10 @@ void Creature::addDamagePoints(const std::shared_ptr<Creature>& attacker, int32_
 
 	uint32_t attackerId = attacker->id;
 
-	auto& cb = damageMap[attackerId];
-	cb.ticks = OTSYS_TIME();
-	cb.total += damagePoints;
+	// Do not keep a reference to the map element, as it may be invalidated
+	// during reentrant access (e.g., callbacks modifying the map).
+	damageMap[attackerId].total += damagePoints;
+	damageMap[attackerId].ticks = OTSYS_TIME();
 
 	lastAttacker = attacker;
 }
@@ -1858,12 +1870,30 @@ const std::vector<ZoneId>& Creature::getZoneIds() const
 void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value, bool isSpawn)
 {
 	auto oldValue = getStorageValue(key);
-	if (value && value.value() != -1) {
-		storageMap.insert_or_assign(key, value.value());
+
+	auto normalize = [](int64_t v) -> std::optional<int64_t> {
+		return v == -1 ? std::nullopt : std::optional<int64_t>{v};
+	};
+	std::optional<int64_t> normalizedNewValue = value ? normalize(value.value()) : std::nullopt;
+	std::optional<int64_t> normalizedOldValue = oldValue ? normalize(oldValue.value()) : std::nullopt;
+
+	if (normalizedOldValue == normalizedNewValue) {
+		return;
+	}
+
+	// Complete the map modification BEFORE calling Lua callbacks to prevent
+	// reentrant access to the same flat_hash_map during element construction.
+	if (normalizedNewValue) {
+		storageMap.insert_or_assign(key, normalizedNewValue.value());
 	} else {
 		storageMap.erase(key);
 	}
-	g_events->eventCreatureOnUpdateStorage(this, key, oldValue, value, isSpawn);
+
+	// Call event after map is in a consistent state
+	auto selfRef = getSharedCreature(this);
+	if (selfRef && !selfRef->isRemoved()) {
+		g_events->eventCreatureOnUpdateStorage(this, key, oldValue, value, isSpawn);
+	}
 }
 
 void Creature::iconChanged()
