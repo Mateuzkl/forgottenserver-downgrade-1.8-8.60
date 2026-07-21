@@ -69,27 +69,40 @@ function LeaveTraining(playerId)
 	end
 end
 
-local function findPlayerWeaponById(player, weaponId)
+local function findContainerItemById(container, weaponId, weaponUid)
+	if not container or not container:isContainer() then
+		return nil
+	end
+
+	for i = 0, container:getSize() - 1 do
+		local item = container:getItem(i)
+		if item then
+			if item:getId() == weaponId and item:getUniqueId() == weaponUid then
+				return item
+			end
+
+			if item:isContainer() then
+				local found = findContainerItemById(item, weaponId, weaponUid)
+				if found then
+					return found
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+local function findPlayerWeaponById(player, weaponId, weaponUid)
 	for slot = CONST_SLOT_HEAD, CONST_SLOT_AMMO do
 		local item = player:getSlotItem(slot)
-		if item and item:getId() == weaponId then
+		if item and item:getId() == weaponId and item:getUniqueId() == weaponUid then
 			return item
 		end
 	end
 
 	local backpack = player:getSlotItem(CONST_SLOT_BACKPACK)
-	if not backpack then
-		return nil
-	end
-
-	for i = 0, backpack:getSize() - 1 do
-		local item = backpack:getItem(i)
-		if item and item:getId() == weaponId then
-			return item
-		end
-	end
-
-	return nil
+	return findContainerItemById(backpack, weaponId, weaponUid)
 end
 
 function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
@@ -121,12 +134,14 @@ function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
         return true
     end
 
-	local weapon = findPlayerWeaponById(player, weaponId)
+	local weapon = findPlayerWeaponById(player, weaponId, training.weaponUid)
 	if not weapon then
 		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "The training weapon is no longer available, the training has stopped.")
 		LeaveTraining(playerId)
 		return false
 	end
+
+	onExerciseTraining[playerId].weaponUid = weapon:getUniqueId()
 
 	if not isItemOwnedByPlayer(weapon, player) then
 		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "The training weapon is no longer yours, the training has stopped.")
