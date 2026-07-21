@@ -153,6 +153,13 @@ public:
 	[[nodiscard]] std::shared_ptr<Creature> getCreatureByIDShared(uint32_t id) const;
 
 	/**
+	 * Returns a creature based on a string name identifier
+	 * \param s is the name identifier
+	 * \returns A shared pointer to the creature
+	 */
+	[[nodiscard]] std::shared_ptr<Creature> getCreatureByNameShared(std::string_view s);
+
+	/**
 	 * Returns a monster based on the unique creature identifier
 	 * \param id is the unique monster id to get a monster pointer to
 	 * \returns A Monster pointer to the monster

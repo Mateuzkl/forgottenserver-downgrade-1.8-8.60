@@ -22,6 +22,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <shared_mutex>
 
 class Creature;
 
@@ -114,7 +115,17 @@ public:
 	std::shared_ptr<Creature> asCreature() { return weak_from_this().lock(); }
 	std::shared_ptr<const Creature> asCreature() const { return weak_from_this().lock(); }
 
-	static bool isAlive(const Creature* c) { return liveCreatures.count(c) > 0; }
+	static bool isAlive(const Creature* c) {
+		if (!c) {
+			return false;
+		}
+		std::shared_lock lock(liveCreaturesMutex);
+		return liveCreatures.count(c) > 0;
+	}
+
+	static bool isAliveUnsafe(const Creature* c) {
+		return c && liveCreatures.count(c) > 0;
+	}
 	virtual Player* getPlayer() { return nullptr; }
 	virtual const Player* getPlayer() const { return nullptr; }
 	virtual Npc* getNpc() { return nullptr; }
@@ -409,6 +420,7 @@ public:
 	void setDefaultOutfit(Outfit_t outfit) { defaultOutfit = outfit; }
 
 	const auto& getDamageMap() const { return damageMap; }
+	auto getDamageMapSnapshot() const { return damageMap; }
 
 protected:
 	struct CountBlock_t
@@ -417,9 +429,10 @@ protected:
 		int64_t ticks;
 	};
 
+	using CountMap = absl::flat_hash_map<uint32_t, CountBlock_t>;
+
 	Position position;
 
-	using CountMap = absl::flat_hash_map<uint32_t, CountBlock_t>;
 	CountMap damageMap;
 
 	SummonList summons;
@@ -551,6 +564,7 @@ private:
 	std::map<std::string, CreatureIcon> creatureIcons;
 
 	static std::unordered_set<const Creature*> liveCreatures;
+	static std::shared_mutex liveCreaturesMutex;
 };
 
 template <typename T>

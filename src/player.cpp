@@ -1728,11 +1728,16 @@ void Player::setStorageValue(const uint32_t key, const std::optional<int64_t> va
 	const auto oldValue = getStorageValue(key);
 	Creature::setStorageValue(key, value, isSpawn);
 
-	if (isSpawn || oldValue == getStorageValue(key)) {
+	if (isSpawn) {
 		return;
 	}
 
-	if (value && value.value() != -1) {
+	const auto currentValue = getStorageValue(key);
+	if (oldValue == currentValue) {
+		return;
+	}
+
+	if (currentValue) {
 		removedStorageKeys.erase(key);
 		modifiedStorageKeys.insert(key);
 	} else {

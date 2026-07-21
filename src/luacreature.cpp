@@ -80,13 +80,14 @@ void updateCreatureInstance(const std::shared_ptr<Creature>& creature, uint32_t 
 int luaCreatureCreate(lua_State* L)
 {
 	// Creature(id or name or userdata)
-	Creature* creature;
+	Creature* creature = nullptr;
 	std::shared_ptr<Creature> creatureRef;
 	if (isInteger(L, 2)) {
 		creatureRef = g_game.getCreatureByIDShared(getInteger<uint32_t>(L, 2));
 		creature = creatureRef.get();
 	} else if (isString(L, 2)) {
-		creature = g_game.getCreatureByName(getString(L, 2));
+		creatureRef = g_game.getCreatureByNameShared(getString(L, 2));
+		creature = creatureRef.get();
 	} else if (isUserdata(L, 2)) {
 		LuaDataType type = getUserdataType(L, 2);
 		if (type != LuaData_Player && type != LuaData_Monster && type != LuaData_Npc) {
@@ -94,11 +95,9 @@ int luaCreatureCreate(lua_State* L)
 			return 1;
 		}
 		creature = getUserdata<Creature>(L, 2);
-	} else {
-		creature = nullptr;
 	}
 
-	if (creature) {
+	if (creature && !creature->isRemoved()) {
 		pushUserdata<Creature>(L, creature);
 		setCreatureMetatable(L, -1, creature);
 	} else {
@@ -1039,7 +1038,7 @@ int luaCreatureGetDamageMap(lua_State* L)
 		return 1;
 	}
 
-	const auto& damageMap = creature->getDamageMap();
+	const auto& damageMap = creature->getDamageMapSnapshot();
 	lua_createtable(L, damageMap.size(), 0);
 	for (const auto& damageEntry : damageMap) {
 		lua_createtable(L, 0, 2);
@@ -1322,10 +1321,12 @@ int LuaScriptInterface::luaCreatureGC(lua_State* L)
 	if (creaturePtr) {
 		*creaturePtr = nullptr;
 	}
+
 	if (getAssociatedValue(L, 1, 1)) {
 		auto* weakPtr = static_cast<std::weak_ptr<Creature>*>(lua_touserdata(L, -1));
 		if (weakPtr) {
 			std::destroy_at(weakPtr);
+			std::construct_at(weakPtr);
 		}
 		lua_pop(L, 1);
 	}
