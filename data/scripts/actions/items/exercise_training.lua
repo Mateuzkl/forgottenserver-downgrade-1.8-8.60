@@ -60,13 +60,14 @@ function exerciseTraining.onUse(player, item, fromPosition, target, toPosition, 
 			return true
 		end
 
+		local playerGuid = player:getGuid()
 		onExerciseTraining[playerId] = {}
 		if not onExerciseTraining[playerId].event then
-			onExerciseTraining[playerId].weapon = item
 			player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You started training with an exercise weapon.")
 			onExerciseTraining[playerId].event = addEvent(ExerciseEvent, 0, playerId, targetPos,
 			                                              item.itemid, targetId)
 			onExerciseTraining[playerId].dummyPos = targetPos
+			onExerciseTraining[playerId].ownerGuid = playerGuid
 			player:setStorageValue(PlayerStorageKeys.ExerciseDummyExhaust, os.time() + 30)
 		end
 		return true
@@ -82,6 +83,19 @@ for weaponId, weapon in pairs(ExerciseWeaponsTable) do
 end
 
 exerciseTraining:register()
+
+local exerciseTraining_Logout = CreatureEvent("ExerciseTraining_Logout")
+function exerciseTraining_Logout.onLogout(player)
+	local playerId = player:getId()
+	if onExerciseTraining[playerId] then
+		stopEvent(onExerciseTraining[playerId].event)
+		onExerciseTraining[playerId] = nil
+	end
+
+	return true
+end
+
+exerciseTraining_Logout:register()
 
 local exerciseTraining_Login = CreatureEvent("ExerciseTraining_Login")
 function exerciseTraining_Login.onLogin(player)

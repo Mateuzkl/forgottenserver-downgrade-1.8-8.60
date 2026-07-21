@@ -182,14 +182,15 @@ end
 
 local function scheduleChangeNameKick(player)
 	local playerId = player:getId()
+	local playerName = player:getName()
 	player:sendTextMessage(MESSAGE_INFO_DESCR, CHANGE_NAME_SUCCESS_MESSAGE)
 
-	addEvent(function(id)
+	addEvent(function(id, expectedName)
 		local onlinePlayer = Player(id)
-		if onlinePlayer then
+		if onlinePlayer and onlinePlayer:getName() == expectedName then
 			onlinePlayer:remove()
 		end
-	end, CHANGE_NAME_KICK_DELAY, playerId)
+	end, CHANGE_NAME_KICK_DELAY, playerId, playerName)
 end
 
 local forbiddenNameWords = {

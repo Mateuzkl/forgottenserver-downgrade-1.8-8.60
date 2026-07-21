@@ -185,11 +185,20 @@ function doNpcSellItem(cid, itemid, amount, subType, ignoreCap, inBackpacks,
 end
 
 local func = function(cid, text, type, e, pcid)
-	if Player(pcid) then
-		local creature = Creature(cid)
-		creature:say(text, type, false, pcid, creature:getPosition())
+	local player = Player(pcid)
+	if not player then
 		e.done = true
+		return
 	end
+
+	local creature = Creature(cid)
+	if not creature then
+		e.done = true
+		return
+	end
+
+	creature:say(text, type, false, pcid, creature:getPosition())
+	e.done = true
 end
 
 function doCreatureSayWithDelay(cid, text, type, delay, e, pcid)

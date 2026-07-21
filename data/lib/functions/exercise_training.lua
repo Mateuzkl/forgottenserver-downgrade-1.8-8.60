@@ -67,9 +67,29 @@ function LeaveTraining(playerId)
 		stopEvent(onExerciseTraining[playerId].event)
 		onExerciseTraining[playerId] = nil
 	end
+end
 
-	local player = Player(playerId)
-	return
+local function findPlayerWeaponById(player, weaponId)
+	for slot = CONST_SLOT_HEAD, CONST_SLOT_AMMO do
+		local item = player:getSlotItem(slot)
+		if item and item:getId() == weaponId then
+			return item
+		end
+	end
+
+	local backpack = player:getSlotItem(CONST_SLOT_BACKPACK)
+	if not backpack then
+		return nil
+	end
+
+	for i = 0, backpack:getSize() - 1 do
+		local item = backpack:getItem(i)
+		if item and item:getId() == weaponId then
+			return item
+		end
+	end
+
+	return nil
 end
 
 function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
@@ -80,6 +100,11 @@ function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
 
 	local training = onExerciseTraining[playerId]
 	if not training then
+		return false
+	end
+
+	if training.ownerGuid and training.ownerGuid ~= player:getGuid() then
+		LeaveTraining(playerId)
 		return false
 	end
 
@@ -96,8 +121,8 @@ function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
         return true
     end
 
-	local weapon = training.weapon
-	if not weapon or not weapon:isItem() or weapon:getId() ~= weaponId then
+	local weapon = findPlayerWeaponById(player, weaponId)
+	if not weapon then
 		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "The training weapon is no longer available, the training has stopped.")
 		LeaveTraining(playerId)
 		return false
@@ -154,6 +179,7 @@ function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
 
 	local vocation = player:getVocation()
 	onExerciseTraining[playerId].event = addEvent(ExerciseEvent, vocation:getAttackSpeed() / configManager.getNumber(configKeys.RATE_EXERCISE_TRAINING_SPEED), playerId, tilePosition, weaponId, dummyId)
+	onExerciseTraining[playerId].ownerGuid = player:getGuid()
 	return true
 end
 
