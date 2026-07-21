@@ -63,52 +63,24 @@ local function isItemOwnedByPlayer(item, player)
 end
 
 function LeaveTraining(playerId)
-	if onExerciseTraining[playerId] then
-		stopEvent(onExerciseTraining[playerId].event)
-		onExerciseTraining[playerId] = nil
-	end
-end
-
-local function findContainerItemById(container, weaponId, weaponUid)
-	if not container or not container:isContainer() then
-		return nil
+	local training = onExerciseTraining[playerId]
+	if not training then
+		return
 	end
 
-	for i = 0, container:getSize() - 1 do
-		local item = container:getItem(i)
-		if item then
-			if item:getId() == weaponId and item:getUniqueId() == weaponUid then
-				return item
-			end
-
-			if item:isContainer() then
-				local found = findContainerItemById(item, weaponId, weaponUid)
-				if found then
-					return found
-				end
-			end
-		end
+	if training.event then
+		stopEvent(training.event)
 	end
 
-	return nil
-end
-
-local function findPlayerWeaponById(player, weaponId, weaponUid)
-	for slot = CONST_SLOT_HEAD, CONST_SLOT_AMMO do
-		local item = player:getSlotItem(slot)
-		if item and item:getId() == weaponId and item:getUniqueId() == weaponUid then
-			return item
-		end
-	end
-
-	local backpack = player:getSlotItem(CONST_SLOT_BACKPACK)
-	return findContainerItemById(backpack, weaponId, weaponUid)
+	training.weapon = nil
+	onExerciseTraining[playerId] = nil
 end
 
 function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
 	local player = Player(playerId)
 	if not player then
-		return LeaveTraining(playerId)
+		LeaveTraining(playerId)
+		return false
 	end
 
 	local training = onExerciseTraining[playerId]
@@ -116,41 +88,60 @@ function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
 		return false
 	end
 
-	if training.ownerGuid and training.ownerGuid ~= player:getGuid() then
+	if training.ownerGuid ~= player:getGuid() then
 		LeaveTraining(playerId)
 		return false
 	end
 
-	if not Tile(tilePosition):getItemById(dummyId) then
-		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "Someone has moved the dummy, the training has stopped.")
+	local dummyTile = Tile(tilePosition)
+	if not dummyTile or not dummyTile:getItemById(dummyId) then
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			"Someone has moved the dummy, the training has stopped."
+		)
 		LeaveTraining(playerId)
 		return false
 	end
 
-	local playerPosition = player:getPosition()
-	if not player:getTile():hasFlag(TILESTATE_PROTECTIONZONE) and not staminaEvents[playerId] then
-        player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You are no longer in a protection zone, the training has stopped.")
-		LeaveTraining(playerId)
-        return true
-    end
-
-	local weapon = findPlayerWeaponById(player, weaponId, training.weaponUid)
-	if not weapon then
-		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "The training weapon is no longer available, the training has stopped.")
+	local playerTile = player:getTile()
+	if not playerTile then
 		LeaveTraining(playerId)
 		return false
 	end
 
-	onExerciseTraining[playerId].weaponUid = weapon:getUniqueId()
+	if not playerTile:hasFlag(TILESTATE_PROTECTIONZONE) and not staminaEvents[playerId] then
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			"You are no longer in a protection zone, the training has stopped."
+		)
+		LeaveTraining(playerId)
+		return false
+	end
+
+	local weapon = training.weapon
+	if not weapon or not weapon:isItem() or weapon:getId() ~= weaponId then
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			"The training weapon is no longer available, the training has stopped."
+		)
+		LeaveTraining(playerId)
+		return false
+	end
 
 	if not isItemOwnedByPlayer(weapon, player) then
-		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "The training weapon is no longer yours, the training has stopped.")
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			"The training weapon is no longer yours, the training has stopped."
+		)
 		LeaveTraining(playerId)
 		return false
 	end
 
 	if not weapon:hasAttribute(ITEM_ATTRIBUTE_CHARGES) then
-		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "The selected item is not a training weapon, the training has stopped.")
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			"The selected item is not a training weapon, the training has stopped."
+		)
 		LeaveTraining(playerId)
 		return false
 	end
@@ -158,43 +149,65 @@ function ExerciseEvent(playerId, tilePosition, weaponId, dummyId)
 	local weaponCharges = weapon:getAttribute(ITEM_ATTRIBUTE_CHARGES)
 	if not weaponCharges or weaponCharges <= 0 then
 		weapon:remove(1)
-		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "Your training weapon has disappeared.")
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			"Your training weapon has disappeared."
+		)
 		LeaveTraining(playerId)
 		return false
 	end
 
-	local isMagic = ExerciseWeaponsTable[weaponId].skill == SKILL_MAGLEVEL
+	local weaponConfig = ExerciseWeaponsTable[weaponId]
+	if not weaponConfig then
+		LeaveTraining(playerId)
+		return false
+	end
+
 	local bonusDummy = 1
 
 	if table.contains(HouseDummies, dummyId) then
-		bonusDummy = 1.5 -- 50%
-	elseif table.contains(FreeDummies, dummyId) then
-		bonusDummy = 1
+		bonusDummy = 1.5
 	end
 
-	if isMagic then
+	if weaponConfig.skill == SKILL_MAGLEVEL then
 		player:addManaSpent(500 * bonusDummy)
 	else
-		player:addSkillTries(ExerciseWeaponsTable[weaponId].skill, 7 * bonusDummy)
+		player:addSkillTries(weaponConfig.skill, 7 * bonusDummy)
 	end
 
-	weapon:setAttribute(ITEM_ATTRIBUTE_CHARGES, (weaponCharges - 1))
+	weapon:setAttribute(ITEM_ATTRIBUTE_CHARGES, weaponCharges - 1)
 	tilePosition:sendMagicEffect(CONST_ME_HITAREA)
 
-	if ExerciseWeaponsTable[weaponId].effect then
-		playerPosition:sendDistanceEffect(tilePosition, ExerciseWeaponsTable[weaponId].effect)
+	if weaponConfig.effect then
+		player:getPosition():sendDistanceEffect(tilePosition, weaponConfig.effect)
 	end
 
 	if weapon:getAttribute(ITEM_ATTRIBUTE_CHARGES) <= 0 then
 		weapon:remove(1)
-		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "Your training weapon has disappeared.")
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			"Your training weapon has disappeared."
+		)
 		LeaveTraining(playerId)
 		return false
 	end
 
+	local currentTraining = onExerciseTraining[playerId]
+	if not currentTraining or currentTraining ~= training then
+		return false
+	end
+
 	local vocation = player:getVocation()
-	onExerciseTraining[playerId].event = addEvent(ExerciseEvent, vocation:getAttackSpeed() / configManager.getNumber(configKeys.RATE_EXERCISE_TRAINING_SPEED), playerId, tilePosition, weaponId, dummyId)
-	onExerciseTraining[playerId].ownerGuid = player:getGuid()
+	currentTraining.event = addEvent(
+		ExerciseEvent,
+		vocation:getAttackSpeed() /
+			configManager.getNumber(configKeys.RATE_EXERCISE_TRAINING_SPEED),
+		playerId,
+		tilePosition,
+		weaponId,
+		dummyId
+	)
+
 	return true
 end
 

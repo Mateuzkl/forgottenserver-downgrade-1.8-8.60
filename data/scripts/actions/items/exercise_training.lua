@@ -61,17 +61,33 @@ function exerciseTraining.onUse(player, item, fromPosition, target, toPosition, 
 		end
 
 		local playerGuid = player:getGuid()
-		local weaponUid = item:getUniqueId()
-		onExerciseTraining[playerId] = {}
-		if not onExerciseTraining[playerId].event then
-			player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You started training with an exercise weapon.")
-			onExerciseTraining[playerId].event = addEvent(ExerciseEvent, 0, playerId, targetPos,
-			                                              item.itemid, targetId)
-			onExerciseTraining[playerId].dummyPos = targetPos
-			onExerciseTraining[playerId].ownerGuid = playerGuid
-			onExerciseTraining[playerId].weaponUid = weaponUid
-			player:setStorageValue(PlayerStorageKeys.ExerciseDummyExhaust, os.time() + 30)
-		end
+		local training = {
+			weapon = item,
+			ownerGuid = playerGuid,
+			dummyPos = targetPos,
+		}
+
+		onExerciseTraining[playerId] = training
+
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			"You started training with an exercise weapon."
+		)
+
+		training.event = addEvent(
+			ExerciseEvent,
+			0,
+			playerId,
+			targetPos,
+			item:getId(),
+			targetId
+		)
+
+		player:setStorageValue(
+			PlayerStorageKeys.ExerciseDummyExhaust,
+			os.time() + 30
+		)
+
 		return true
 	end
 	
@@ -87,26 +103,18 @@ end
 exerciseTraining:register()
 
 local exerciseTraining_Logout = CreatureEvent("ExerciseTraining_Logout")
-function exerciseTraining_Logout.onLogout(player)
-	local playerId = player:getId()
-	if onExerciseTraining[playerId] then
-		stopEvent(onExerciseTraining[playerId].event)
-		onExerciseTraining[playerId] = nil
-	end
 
+function exerciseTraining_Logout.onLogout(player)
+	LeaveTraining(player:getId())
 	return true
 end
 
 exerciseTraining_Logout:register()
 
 local exerciseTraining_Login = CreatureEvent("ExerciseTraining_Login")
+
 function exerciseTraining_Login.onLogin(player)
-
-	if onExerciseTraining[player:getId()] then -- onLogin & onLogout
-		stopEvent(onExerciseTraining[player:getId()].event)
-		onExerciseTraining[player:getId()] = nil
-	end
-
+	LeaveTraining(player:getId())
 	return true
 end
 
