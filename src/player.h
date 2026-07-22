@@ -183,12 +183,6 @@ public:
 	const std::string& getName() const override { return name; }
 	void setName(std::string_view name) { this->name = name; }
 	const std::string& getNameDescription() const override { return name; }
-	std::string getDisplayName() const {
-		if (reset > 0) {
-			return name + " [" + std::to_string(reset) + "]";
-		}
-		return name;
-	}
 	std::string getDescription(int32_t lookDistance) const override;
 
 	CreatureType_t getType() const override { return CREATURETYPE_PLAYER; }

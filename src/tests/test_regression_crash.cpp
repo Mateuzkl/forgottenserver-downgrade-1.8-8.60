@@ -37,13 +37,68 @@ std::shared_ptr<TestCreature> makeTestCreature()
 
 TEST_CASE(live_creatures_thread_safe_basic)
 {
-	const Creature* rawCreature = nullptr;
+	auto creature = makeTestCreature();
+	const Creature* rawCreature = creature.get();
+	CHECK(Creature::isAlive(rawCreature));
+
+	std::mutex phaseMutex;
+	std::condition_variable phaseChanged;
+	bool workerReady = false;
+	bool startWorker = false;
+	bool workerStartedReads = false;
+	bool firstObservationAlive = false;
+	bool aliveAfterDestruction = false;
+	std::atomic<bool> destructionStarted{false};
+	std::atomic<bool> destructionComplete{false};
+
+	std::thread worker([&]() {
+		{
+			std::unique_lock lock(phaseMutex);
+			workerReady = true;
+			phaseChanged.notify_one();
+			phaseChanged.wait(lock, [&]() { return startWorker; });
+		}
+
+		firstObservationAlive = Creature::isAlive(rawCreature);
+		{
+			std::lock_guard lock(phaseMutex);
+			workerStartedReads = true;
+		}
+		phaseChanged.notify_one();
+
+		while (!destructionStarted.load(std::memory_order_acquire)) {
+			std::this_thread::yield();
+		}
+		for (uint32_t i = 0; i < 4096; ++i) {
+			(void)Creature::isAlive(rawCreature);
+			std::this_thread::yield();
+		}
+		while (!destructionComplete.load(std::memory_order_acquire)) {
+			std::this_thread::yield();
+		}
+
+		for (uint32_t i = 0; i < 1024; ++i) {
+			if (Creature::isAlive(rawCreature)) {
+				aliveAfterDestruction = true;
+			}
+		}
+	});
+
 	{
-		auto creature = makeTestCreature();
-		rawCreature = creature.get();
-		CHECK(Creature::isAlive(rawCreature));
+		std::unique_lock lock(phaseMutex);
+		phaseChanged.wait(lock, [&]() { return workerReady; });
+		startWorker = true;
+		phaseChanged.notify_one();
+		phaseChanged.wait(lock, [&]() { return workerStartedReads; });
 	}
 
+	destructionStarted.store(true, std::memory_order_release);
+	creature.reset();
+	destructionComplete.store(true, std::memory_order_release);
+	worker.join();
+
+	CHECK(firstObservationAlive);
+	CHECK(!aliveAfterDestruction);
 	CHECK(!Creature::isAlive(rawCreature));
 }
 

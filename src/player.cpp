@@ -491,13 +491,6 @@ std::string Player::getDescription(int32_t lookDistance) const
 			s << " You have no vocation (Level " << level << ").";
 		}
 
-		if (ConfigManager::getBoolean(ConfigManager::RESET_SYSTEM_ENABLED) && reset > 0) {
-			if (lookDistance == -1) {
-				s << " You have " << reset << " reset" << (reset == 1 ? "" : "s") << ".";
-			} else {
-				s << " " << subjectPronoun << " has " << reset << " reset" << (reset == 1 ? "" : "s") << ".";
-			}
-		}
 	} else {
 		s << name;
 		if (!group->access) {
@@ -518,12 +511,13 @@ std::string Player::getDescription(int32_t lookDistance) const
 		} else {
 			s << " has no vocation.";
 		}
-		if (ConfigManager::getBoolean(ConfigManager::RESET_SYSTEM_ENABLED) && reset > 0) {
-			if (lookDistance == -1) {
-				s << " You have " << reset << " reset" << (reset == 1 ? "" : "s") << ".";
-			} else {
-				s << " " << subjectPronoun << " has " << reset << " reset" << (reset == 1 ? "" : "s") << ".";
-			}
+	}
+
+	if (ConfigManager::getBoolean(ConfigManager::RESET_SYSTEM_ENABLED) && reset > 0) {
+		if (lookDistance == -1) {
+			s << " You have " << reset << " reset" << (reset == 1 ? "" : "s") << ".";
+		} else {
+			s << " " << subjectPronoun << " has " << reset << " reset" << (reset == 1 ? "" : "s") << ".";
 		}
 	}
 

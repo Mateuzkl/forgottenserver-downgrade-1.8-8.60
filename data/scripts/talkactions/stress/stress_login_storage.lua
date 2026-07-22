@@ -32,6 +32,7 @@ local CONFIG = {
     defaultHammerChunk = 500,
     maxHammerOperations = 5000000,
     maxHammerChunk = 5000,
+    hammerSnapshotSlotsPerChunk = 256,
     hammerDelayMs = 1,
     saveEveryChunks = 4,
 
@@ -358,18 +359,24 @@ runHammerCleanup = function(job)
     local entry = job.players[job.cleanupPlayerIndex]
     if not entry then
         local suffix = job.cleanupReason or "concluido"
+        local disconnectedCount = 0
+        for _ in pairs(job.disconnected) do
+            disconnectedCount = disconnectedCount + 1
+        end
         finishJob(job, string.format(
-            "HAMMER %s: %d operacoes, %d saves solicitados, %d jogador(es)",
+            "HAMMER %s: %d operacoes, %d saves solicitados, %d jogador(es), %d desconectado(s)",
             suffix,
             job.completed,
             job.saveRequests,
-            #job.players
+            #job.players,
+            disconnectedCount
         ))
         return
     end
 
     local player = getHammerPlayer(entry)
     if not player then
+        job.disconnected[entry.guid] = true
         notify(job, "AVISO: " .. entry.name .. " desconectou; use CLEAN com ele offline", true)
         job.cleanupPlayerIndex = job.cleanupPlayerIndex + 1
         job.cleanupSlot = 0
@@ -395,6 +402,7 @@ runHammerCleanup = function(job)
 end
 
 local runHammerStep
+local runHammerSnapshot
 
 runHammerStep = function(job)
     if job.stopRequested then
@@ -443,6 +451,69 @@ runHammerStep = function(job)
     schedule(job, runHammerStep, CONFIG.hammerDelayMs)
 end
 
+runHammerSnapshot = function(job)
+    if job.stopRequested then
+        finishJob(job, string.format(
+            "HAMMER interrompido durante snapshot em %d/%d storages; nenhuma storage foi alterada",
+            job.snapshotCompleted,
+            job.snapshotTotal
+        ), true)
+        return
+    end
+
+    local target = job.snapshotTargets[job.snapshotPlayerIndex]
+    if not target then
+        job.snapshotTargets = nil
+        job.phase = "hammer"
+        notify(job, string.format(
+            "HAMMER iniciado: %d ops, chunk=%d, jogadores=%d. Use /stress_login stop para abortar com limpeza",
+            job.total,
+            job.chunkSize,
+            #job.players
+        ))
+        schedule(job, runHammerStep, 0)
+        return
+    end
+
+    local entry = job.players[job.snapshotPlayerIndex]
+    if not entry then
+        entry = target
+        entry.originalValues = {}
+        job.players[job.snapshotPlayerIndex] = entry
+    end
+
+    local player = getHammerPlayer(entry)
+    if not player then
+        finishJob(job, "HAMMER cancelado: " .. entry.name .. " desconectou durante o snapshot; nenhuma storage foi alterada", true)
+        return
+    end
+
+    local amount = math.min(
+        CONFIG.hammerSnapshotSlotsPerChunk,
+        CONFIG.hammerStorageSlots - job.snapshotSlot
+    )
+    for index = 0, amount - 1 do
+        local slot = job.snapshotSlot + index
+        entry.originalValues[slot + 1] = player:getStorageValue(CONFIG.hammerStorageBase + slot)
+    end
+
+    job.snapshotSlot = job.snapshotSlot + amount
+    job.snapshotCompleted = job.snapshotCompleted + amount
+    maybeReport(job, string.format(
+        "HAMMER SNAPSHOT %d/%d storages (%.1f%%) | atual=%s",
+        job.snapshotCompleted,
+        job.snapshotTotal,
+        (job.snapshotCompleted * 100) / math.max(1, job.snapshotTotal),
+        entry.name
+    ))
+
+    if job.snapshotSlot >= CONFIG.hammerStorageSlots then
+        job.snapshotPlayerIndex = job.snapshotPlayerIndex + 1
+        job.snapshotSlot = 0
+    end
+    schedule(job, runHammerSnapshot, CONFIG.hammerDelayMs)
+end
+
 local function startHammer(player, operationsValue, chunkValue)
     local onlinePlayers = Game.getPlayers()
     if #onlinePlayers == 0 then
@@ -458,34 +529,34 @@ local function startHammer(player, operationsValue, chunkValue)
     )
     local chunkSize = clampInteger(chunkValue, CONFIG.defaultHammerChunk, 1, CONFIG.maxHammerChunk)
     local job = newJob(player, "hammer")
+    job.phase = "hammer_snapshot"
     job.players = {}
+    job.snapshotTargets = {}
     job.disconnected = {}
     job.total = operations
     job.completed = 0
     job.chunkSize = chunkSize
     job.chunkNumber = 0
     job.saveRequests = 0
+    job.snapshotPlayerIndex = 1
+    job.snapshotSlot = 0
+    job.snapshotCompleted = 0
+    job.snapshotTotal = #onlinePlayers * CONFIG.hammerStorageSlots
 
     for _, onlinePlayer in ipairs(onlinePlayers) do
-        local entry = {
+        job.snapshotTargets[#job.snapshotTargets + 1] = {
             id = onlinePlayer:getId(),
             guid = onlinePlayer:getGuid(),
             name = onlinePlayer:getName(),
-            originalValues = {},
         }
-        for slot = 0, CONFIG.hammerStorageSlots - 1 do
-            entry.originalValues[slot + 1] = onlinePlayer:getStorageValue(CONFIG.hammerStorageBase + slot)
-        end
-        job.players[#job.players + 1] = entry
     end
 
     notify(job, string.format(
-        "HAMMER iniciado: %d ops, chunk=%d, jogadores=%d. Use /stress_login stop para abortar com limpeza",
-        operations,
-        chunkSize,
-        #job.players
+        "HAMMER snapshot iniciado: %d jogador(es) x %d storages",
+        #job.snapshotTargets,
+        CONFIG.hammerStorageSlots
     ))
-    schedule(job, runHammerStep, 0)
+    schedule(job, runHammerSnapshot, 0)
 end
 
 local function showStatus(player)
@@ -505,14 +576,23 @@ local function showStatus(player)
             elapsedSeconds(job)
         ))
     elseif job.mode == "hammer" then
-        notifyPlayer(player, string.format(
-            "Ativo: %s %d/%d ops | saves=%d | tempo=%ds",
-            job.phase:upper(),
-            job.completed,
-            job.total,
-            job.saveRequests,
-            elapsedSeconds(job)
-        ))
+        if job.phase == "hammer_snapshot" then
+            notifyPlayer(player, string.format(
+                "Ativo: HAMMER SNAPSHOT %d/%d storages | tempo=%ds",
+                job.snapshotCompleted,
+                job.snapshotTotal,
+                elapsedSeconds(job)
+            ))
+        else
+            notifyPlayer(player, string.format(
+                "Ativo: %s %d/%d ops | saves=%d | tempo=%ds",
+                job.phase:upper(),
+                job.completed,
+                job.total,
+                job.saveRequests,
+                elapsedSeconds(job)
+            ))
+        end
     else
         notifyPlayer(player, string.format(
             "Ativo: %s alvo %d/%d | tempo=%ds",
