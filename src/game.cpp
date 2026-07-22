@@ -8278,7 +8278,7 @@ void Game::playerReportBug(uint32_t playerId, std::string_view message)
 	g_events->eventPlayerOnReportBug(player, message);
 }
 
-void Game::parsePlayerNetworkMessage(uint32_t playerId, uint8_t recvByte, NetworkMessage_ptr msg)
+void Game::parsePlayerNetworkMessage(uint32_t playerId, uint8_t recvByte, NetworkMessage_ptr& msg)
 {
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();

@@ -6,6 +6,7 @@
 
 #include "chat.h"
 #include "creature.h"
+#include "packet_backlog.h"
 #include "protocol.h"
 #include "tasks.h"
 #include "zoneweather.h"
@@ -97,7 +98,7 @@ private:
 
 	// we have all the parse methods
 	void parsePacket(NetworkMessage& msg) override;
-	void parsePacketOnDispatcher(NetworkMessage& msg);
+	void parsePacketOnDispatcher(NetworkMessage_ptr& packet);
 	void onRecvFirstMessage(NetworkMessage& msg) override;
 	void onConnect() override;
 
@@ -368,6 +369,7 @@ private:
 
 	std::unordered_set<uint32_t> knownCreatureSet;
 	std::shared_ptr<Player> player;
+	tfs::net::PacketBacklog packetBacklog;
 
 	uint32_t eventConnect = 0;
 	uint32_t challengeTimestamp = 0;

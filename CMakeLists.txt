@@ -28,6 +28,7 @@ endif()
 
 option(ENABLE_ASAN "Enable AddressSanitizer for memory diagnostics" OFF)
 option(ENABLE_NATIVE_OPTIMIZATIONS "Enable -march=native/-mtune=native for local Release builds" ON)
+option(ENABLE_PACKET_BACKLOG_DIAGNOSTICS "Enable ProtocolGame packet backlog diagnostics" OFF)
 
 option(USE_LUAJIT "Use LuaJIT" OFF)
 if (USE_LUAJIT)
@@ -255,6 +256,11 @@ if (ENABLE_SLOW_TASK_DETECTION)
 endif()
 ### END SLOW TASK DETECTION ###
 
+if (ENABLE_PACKET_BACKLOG_DIAGNOSTICS)
+    ADD_DEFINITIONS(-DPROTOCOLGAME_BACKLOG_DIAGNOSTICS)
+    message(STATUS "ProtocolGame packet backlog diagnostics enabled")
+endif()
+
 if (BUILD_TESTING OR BUILD_BENCHMARKING)
     enable_testing()
 endif()
@@ -277,6 +283,12 @@ if (BUILD_TESTING)
         COMMAND ${CMAKE_COMMAND}
             -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
             -P ${CMAKE_SOURCE_DIR}/tools/check-shared-get-escapes.cmake
+    )
+    add_test(
+        NAME check_protocolgame_handshake
+        COMMAND ${CMAKE_COMMAND}
+            -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -P ${CMAKE_SOURCE_DIR}/tools/check-protocolgame-handshake.cmake
     )
 endif()
 

@@ -211,6 +211,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/otserv.h
 	${CMAKE_CURRENT_LIST_DIR}/outfit.h
 	${CMAKE_CURRENT_LIST_DIR}/outputmessage.h
+	${CMAKE_CURRENT_LIST_DIR}/packet_backlog.h
 	${CMAKE_CURRENT_LIST_DIR}/party.h
 	${CMAKE_CURRENT_LIST_DIR}/performance_metrics.h
 	${CMAKE_CURRENT_LIST_DIR}/player.h

@@ -280,6 +280,7 @@
     <ClInclude Include="..\src\otserv.h" />
     <ClInclude Include="..\src\outfit.h" />
     <ClInclude Include="..\src\outputmessage.h" />
+    <ClInclude Include="..\src\packet_backlog.h" />
     <ClInclude Include="..\src\party.h" />
     <ClInclude Include="..\src\player.h" />
     <ClInclude Include="..\src\position.h" />

@@ -1,0 +1,38 @@
+if(NOT DEFINED PROJECT_SOURCE_DIR)
+    message(FATAL_ERROR "PROJECT_SOURCE_DIR is required")
+endif()
+
+file(READ "${PROJECT_SOURCE_DIR}/src/protocolgame.cpp" protocolgame_source)
+
+function(extract_block start_marker end_marker output_var)
+    string(FIND "${protocolgame_source}" "${start_marker}" block_start)
+    string(FIND "${protocolgame_source}" "${end_marker}" block_end)
+    if(block_start EQUAL -1 OR block_end EQUAL -1 OR block_end LESS_EQUAL block_start)
+        message(FATAL_ERROR "Unable to locate ProtocolGame block: ${start_marker}")
+    endif()
+    math(EXPR block_length "${block_end} - ${block_start}")
+    string(SUBSTRING "${protocolgame_source}" ${block_start} ${block_length} block)
+    set(${output_var} "${block}" PARENT_SCOPE)
+endfunction()
+
+function(require_occurrences text needle expected context)
+    string(REGEX MATCHALL "${needle}" matches "${text}")
+    list(LENGTH matches count)
+    if(NOT count EQUAL expected)
+        message(FATAL_ERROR "${context}: expected ${expected} occurrence(s) of ${needle}, found ${count}")
+    endif()
+endfunction()
+
+extract_block("void ProtocolGame::login" "void ProtocolGame::finishLogin" login_block)
+extract_block("void ProtocolGame::connect" "void ProtocolGame::logout" connect_block)
+
+require_occurrences("${login_block}" "sendFeatures\\(isAstraClient\\)" 1 "login feature negotiation")
+require_occurrences("${login_block}" "opcodeMessage\\.addByte\\(0x32\\)" 1 "login extended-opcode negotiation")
+require_occurrences("${connect_block}" "sendFeatures\\(" 0 "reconnect duplicate feature negotiation")
+require_occurrences("${connect_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "reconnect duplicate extended-opcode negotiation")
+
+string(FIND "${login_block}" "sendFeatures(isAstraClient);" features_position)
+string(FIND "${login_block}" "connect(foundPlayer->getID(), operatingSystem);" reconnect_position)
+if(features_position EQUAL -1 OR reconnect_position EQUAL -1 OR features_position GREATER reconnect_position)
+    message(FATAL_ERROR "Astra features must be negotiated before the reconnect path")
+endif()

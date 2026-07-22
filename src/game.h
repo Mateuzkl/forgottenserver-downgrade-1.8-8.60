@@ -470,7 +470,7 @@ public:
 	void playerEnableSharedPartyExperience(uint32_t playerId, bool sharedExpActive);
 
 	void parsePlayerExtendedOpcode(uint32_t playerId, uint8_t opcode, std::string_view buffer);
-	void parsePlayerNetworkMessage(uint32_t playerId, uint8_t recvByte, NetworkMessage_ptr msg);
+	void parsePlayerNetworkMessage(uint32_t playerId, uint8_t recvByte, NetworkMessage_ptr& msg);
 
 	// Spy system
 	bool playerStartSpy(uint32_t godPlayerId, const std::string& targetName);
