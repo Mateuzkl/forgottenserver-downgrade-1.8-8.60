@@ -1695,7 +1695,6 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 				}
 				break;
 			case 0x8C: parseLookAt(msg); break; // Look at tile/item
-				break;
 			case 0x96: parseSpectatorSay(msg); break;
 			case 0x97:
 				sendCastChannel();
