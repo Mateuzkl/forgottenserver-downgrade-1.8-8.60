@@ -935,7 +935,10 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 
 	// OTCv8 and Mehah features and extended opcodes
 	if (isOTC) {
-		sendFeatures();
+		// Player loading can emit status packets before finishLogin(). Astra
+		// therefore needs its final wire-format features advertised up front.
+		sendFeatures(isAstraClient);
+
 		NetworkMessage opcodeMessage;
 		opcodeMessage.addByte(0x32);
 		opcodeMessage.addByte(0x00);
@@ -1137,13 +1140,6 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->client->isOTC = isOTC;
 	player->client->isAstraClient = isAstraClient;
 	player->client->isFonticakClient = isFonticakClient;
-	// Astra item-state features depend on the loaded player and on this
-	// protocol already owning player->client. Advertise the final feature set
-	// before serializing the initial map, otherwise the server appends Astra
-	// item metadata that the client does not know how to consume.
-	if (isAstraClient) {
-		sendFeatures();
-	}
 	if (!g_game.placeCreature(player.get(), player->getLoginPosition())) {
 		if (!g_game.placeCreature(player.get(), player->getTemplePosition(), false, true)) {
 			g_game.releaseLogin(reservedGuid);
@@ -1282,12 +1278,6 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->client->isOTC = isOTC;
 	player->client->isAstraClient = isAstraClient;
 	player->client->isFonticakClient = isFonticakClient;
-	// Reconnecting Astra clients also need the feature set recalculated after
-	// this protocol becomes the owner, and before sendAddCreature sends map and
-	// item data.
-	if (isAstraClient) {
-		sendFeatures();
-	}
 	sendAddCreature(player.get(), player->getPosition(), 0);
 	resetDllCheckState();
 	sendLootContainers();
@@ -1584,6 +1574,26 @@ void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 
 void ProtocolGame::parsePacket(NetworkMessage& msg)
 {
+	if (msg.getLength() == 0) {
+		return;
+	}
+
+	// The ASIO thread only owns the incoming bytes. Protocol and player state
+	// are read exclusively by the dispatcher task below.
+	auto packet = tfs::net::make_network_message(msg);
+	g_dispatcher.addTask([thisPtr = getThis(), packet = std::move(packet)]() {
+		if (thisPtr->isConnectionExpired()) {
+			return;
+		}
+
+		thisPtr->parsePacketOnDispatcher(*packet);
+	});
+}
+
+void ProtocolGame::parsePacketOnDispatcher(NetworkMessage& msg)
+{
+	assert(g_dispatcher.isDispatcherThread() && "ProtocolGame packet state must be handled by the dispatcher");
+
 	if (!acceptPackets || g_game.getGameState() == GAME_STATE_SHUTDOWN || msg.getLength() == 0) {
 		return;
 	}
@@ -1619,7 +1629,13 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			case 0x96: // say (allows /unspy)
 				break; // allowed — fall through to normal processing
 			default:
-				g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->sendCancelWalk(); });
+				g_dispatcher.addTask([thisPtr = getThis()]() {
+					if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+						return;
+					}
+
+					thisPtr->sendCancelWalk();
+				});
 				return; // block all other actions
 		}
 	}
@@ -1646,24 +1662,56 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 				break; // GameClientExtendedPing
 			case 0x6F:
 			case 0x71:
-				g_dispatcher.addTask([thisPtr = getThis(), dir = recvbyte - 0x6F]() { thisPtr->spectatorTurn(dir); });
+				g_dispatcher.addTask([thisPtr = getThis(), dir = recvbyte - 0x6F]() {
+					if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+						return;
+					}
+
+					thisPtr->spectatorTurn(dir);
+				});
 				break;
 			case 0x70: // Turn East - used for Next Cast (CTRL + RIGHT)
 				if (canProcessCastSwitch()) {
-					g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->parseSwitchCast(uint8_t(1)); });
+					g_dispatcher.addTask([thisPtr = getThis()]() {
+						if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+							return;
+						}
+
+						thisPtr->parseSwitchCast(uint8_t(1));
+					});
 				}
 				break;
 			case 0x72: // Turn West - used for Prev Cast (CTRL + LEFT)
 				if (canProcessCastSwitch()) {
-					g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->parseSwitchCast(uint8_t(0)); });
+					g_dispatcher.addTask([thisPtr = getThis()]() {
+						if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+							return;
+						}
+
+						thisPtr->parseSwitchCast(uint8_t(0));
+					});
 				}
 				break;
 			case 0x8C: parseLookAt(msg); break; // Look at tile/item
 				break;
 			case 0x96: parseSpectatorSay(msg); break;
-			case 0x97: g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->sendCastChannel(); }); break;
+			case 0x97:
+				g_dispatcher.addTask([thisPtr = getThis()]() {
+					if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+						return;
+					}
+
+					thisPtr->sendCastChannel();
+				});
+				break;
 			default:
-				g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->sendCancelWalk(); });
+				g_dispatcher.addTask([thisPtr = getThis()]() {
+					if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+						return;
+					}
+
+					thisPtr->sendCancelWalk();
+				});
 				break;
 		}
 		return;
@@ -1936,6 +1984,10 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		case 0xCF:
 			if (isAstraClient) {
 				g_dispatcher.addTask([thisPtr = getThis()]() {
+					if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+						return;
+					}
+
 					thisPtr->sendBlessingWindow();
 				});
 			}
@@ -4053,7 +4105,11 @@ void ProtocolGame::failDllCheck()
 void ProtocolGame::parseDllCheckResponse(NetworkMessage& msg)
 {
 	auto reject = [thisPtr = getThis()]() {
-		g_dispatcher.addTask([thisPtr]() { thisPtr->failDllCheck(); });
+		g_dispatcher.addTask([thisPtr]() {
+			if (!thisPtr->isConnectionExpired()) {
+				thisPtr->failDllCheck();
+			}
+		});
 	};
 
 	if (clientOperatingSystem != CLIENTOS_CUSTOM_DLL || getReadableBytes(msg) < sizeof(uint16_t)) {
@@ -4076,7 +4132,9 @@ void ProtocolGame::parseDllCheckResponse(NetworkMessage& msg)
 
 	const int64_t receivedAt = OTSYS_TIME();
 	g_dispatcher.addTask([thisPtr = getThis(), response = std::move(response), receivedAt]() mutable {
-		thisPtr->validateDllCheckResponse(std::move(response), receivedAt);
+		if (!thisPtr->isConnectionExpired()) {
+			thisPtr->validateDllCheckResponse(std::move(response), receivedAt);
+		}
 	});
 }
 
@@ -5545,7 +5603,13 @@ void ProtocolGame::parseNewPing(NetworkMessage& msg)
 {
 	uint32_t pingId = msg.get<uint32_t>();
 	if (g_game.getGameState() == GAME_STATE_NORMAL && player) {
-		g_dispatcher.addTask([thisPtr = getThis(), pingId]() { thisPtr->sendNewPing(pingId); });
+		g_dispatcher.addTask([thisPtr = getThis(), pingId]() {
+			if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+				return;
+			}
+
+			thisPtr->sendNewPing(pingId);
+		});
 	}
 }
 
@@ -5554,6 +5618,10 @@ void ProtocolGame::parseCustomClientPing(NetworkMessage& msg)
 	const uint32_t pingId = msg.get<uint32_t>();
 	if (g_game.getGameState() == GAME_STATE_NORMAL && player) {
 		g_dispatcher.addTask([thisPtr = getThis(), playerId = player->getID(), pingId]() {
+			if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+				return;
+			}
+
 			g_game.playerReceivePing(playerId);
 			thisPtr->sendCustomClientPing(pingId);
 		});
@@ -5561,7 +5629,7 @@ void ProtocolGame::parseCustomClientPing(NetworkMessage& msg)
 }
 
 // OTCv8 and Mehah
-void ProtocolGame::sendFeatures()
+void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 {
 	zoneWeatherFeatureEnabled = false;
 
@@ -5608,7 +5676,7 @@ void ProtocolGame::sendFeatures()
 		features[GameFeature::ZoneWeather] = true;
 		zoneWeatherFeatureEnabled = true;
 	}
-	if (canSendAstraItemState()) {
+	if (advertiseAstraItemState && isAstraClient && getBoolean(ConfigManager::ASTRA_ITEM_STATE_ENABLED)) {
 		features[GameFeature::DisplayItemDuration] = true;
 		features[GameFeature::DisplayItemCharges] = true;
 		features[GameFeature::PackedPlayerInventory] = true;
@@ -5725,12 +5793,18 @@ void ProtocolGame::parseSpectatorSay(NetworkMessage& msg)
 		return;
 	}
 
-	g_dispatcher.addTask([thisPtr = getThis(), text = std::string(text), channelId]() { thisPtr->spectatorSay(text, channelId); });
+	g_dispatcher.addTask([thisPtr = getThis(), text = std::string(text), channelId]() {
+		if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+			return;
+		}
+
+		thisPtr->spectatorSay(text, channelId);
+	});
 }
 
 void ProtocolGame::spectatorSay(const std::string text, uint16_t channelId)
 {
-	if (channelId != CHANNEL_CAST || !player->client) {
+	if (channelId != CHANNEL_CAST || !player || !player->client) {
 		return;
 	}
 
@@ -5865,6 +5939,10 @@ void ProtocolGame::parseImbuementDurations(NetworkMessage& msg)
 {
 	const bool open = msg.getByte() != 0;
 	g_dispatcher.addTask([thisPtr = getThis(), open]() {
+		if (thisPtr->isConnectionExpired() || !thisPtr->player) {
+			return;
+		}
+
 		thisPtr->imbuementTrackerOpen = open;
 		if (open) {
 			thisPtr->sendImbuementDurations();

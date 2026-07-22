@@ -115,7 +115,7 @@ TEST_CASE(damage_map_snapshot_is_independent)
 	CHECK(snapshot.size() == 2U);
 }
 
-TEST_CASE(storage_spawn_load_normalizes_minus_one_without_lua_callback)
+TEST_CASE(storage_spawn_load_normalizes_minus_one)
 {
 	auto creature = makeTestCreature();
 	creature->setStorageValue(1000, std::optional<int64_t>{42}, true);
@@ -131,7 +131,7 @@ TEST_CASE(storage_spawn_load_normalizes_minus_one_without_lua_callback)
 	CHECK(creature->getStorageValue(1000).value_or(-2) == 42);
 }
 
-TEST_CASE(storage_database_load_does_not_require_lua_events)
+TEST_CASE(storage_database_load_sets_and_erases_value)
 {
 	auto creature = makeTestCreature();
 	creature->loadStorageValue(2000, 84);

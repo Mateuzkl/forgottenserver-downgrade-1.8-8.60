@@ -97,6 +97,7 @@ private:
 
 	// we have all the parse methods
 	void parsePacket(NetworkMessage& msg) override;
+	void parsePacketOnDispatcher(NetworkMessage& msg);
 	void onRecvFirstMessage(NetworkMessage& msg) override;
 	void onConnect() override;
 
@@ -322,7 +323,7 @@ private:
 	}
 
 	// OTCv8
-	void sendFeatures();
+	void sendFeatures(bool advertiseAstraItemState = false);
 	bool shouldSendQuickLootFlags() const;
 	bool shouldSendContainerPagination() const;
 	bool shouldPaginateContainer(const Container* container) const;

@@ -183,13 +183,6 @@ public:
 	[[nodiscard]] std::shared_ptr<Player> getPlayerByID(uint32_t id);
 
 	/**
-	 * Returns a creature based on a string name identifier
-	 * \param s is the name identifier
-	 * \returns A Pointer to the creature
-	 */
-	[[nodiscard]] Creature* getCreatureByName(std::string_view s);
-
-	/**
 	 * Returns a npc based on a string name identifier
 	 * \param s is the name identifier
 	 * \returns A Pointer to the npc

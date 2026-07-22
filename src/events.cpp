@@ -378,7 +378,7 @@ void Events::eventCreatureOnUpdateStorage(Creature* creature, const uint32_t key
 	scriptInterface.pushFunction(info.creatureOnUpdateStorage);
 
 	Lua::pushUserdata<Creature>(L, creature);
-	Lua::setMetatable(L, -1, "Creature");
+	Lua::setCreatureMetatable(L, -1, creature);
 
 	lua_pushinteger(L, key);
 	if (value) {

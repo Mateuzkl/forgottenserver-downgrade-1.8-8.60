@@ -1034,11 +1034,6 @@ std::shared_ptr<Creature> Game::getCreatureByNameShared(std::string_view s)
 	return nullptr;
 }
 
-Creature* Game::getCreatureByName(std::string_view s)
-{
-	return getCreatureByNameShared(s).get();
-}
-
 Npc* Game::getNpcByName(std::string_view npcName)
 {
 	if (npcName.empty()) {
@@ -1239,62 +1234,65 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 	}
 
 	auto tileRef = creature->getTileShared();
-	if (!tileRef) {
-		LOG_ERROR("[Game::removeCreature] Creature '{}' id={} has no valid tile.", creature->getName(), creature->getID());
-		return false;
-	}
+	if (tileRef) {
+		Tile* tile = tileRef.get();
+		const Position tilePosition = tile->getPosition();
 
-	Tile* tile = tileRef.get();
-	const Position tilePosition = tile->getPosition();
+		SpectatorVec spectators;
+		map.getSpectators(spectators, tilePosition, true);
 
-	SpectatorVec spectators;
-	map.getSpectators(spectators, tilePosition, true);
-
-	std::vector<int32_t> oldStackPosVector;
-	oldStackPosVector.reserve(spectators.size());
-	for (const auto& spectator : spectators.players()) {
-		Player* player = static_cast<Player*>(spectator.get());
-		oldStackPosVector.push_back(
-		    player->canSeeCreature(creature) ? tile->getClientIndexOfCreature(player, creature) : -1);
-	}
-
-	tile->removeCreature(creature);
-
-	// send to client
-	size_t i = 0;
-	for (const auto& spectator : spectators.players()) {
-		Player* player = static_cast<Player*>(spectator.get());
-		if (player->canSeeCreature(creature)) {
-			player->sendRemoveTileThing(tilePosition, oldStackPosVector[i]);
-		}
-		++i;
-	}
-
-	// event method
-	for (const auto& spectator : spectators) {
-		if (!spectator || !spectator->compareInstance(creature->getInstanceID())) {
-			continue;
+		std::vector<int32_t> oldStackPosVector;
+		oldStackPosVector.reserve(spectators.size());
+		for (const auto& spectator : spectators.players()) {
+			Player* player = static_cast<Player*>(spectator.get());
+			oldStackPosVector.push_back(
+			    player->canSeeCreature(creature) ? tile->getClientIndexOfCreature(player, creature) : -1);
 		}
 
-		spectator->onRemoveCreature(creature, isLogout);
+		tile->removeCreature(creature);
+
+		// send to client
+		size_t i = 0;
+		for (const auto& spectator : spectators.players()) {
+			Player* player = static_cast<Player*>(spectator.get());
+			if (player->canSeeCreature(creature)) {
+				player->sendRemoveTileThing(tilePosition, oldStackPosVector[i]);
+			}
+			++i;
+		}
+
+		// event method
+		for (const auto& spectator : spectators) {
+			if (!spectator || !spectator->compareInstance(creature->getInstanceID())) {
+				continue;
+			}
+
+			spectator->onRemoveCreature(creature, isLogout);
+		}
+
+		if (Cylinder* parent = creature->getParent()) {
+			parent->postRemoveNotification(creature, nullptr, 0);
+		} else {
+			LOG_ERROR("[Game::removeCreature] Creature '{}' id={} lost its parent during tile removal.",
+			          creature->getName(), creature->getID());
+		}
+	} else {
+		LOG_ERROR("[Game::removeCreature] Creature '{}' id={} has no valid tile; continuing global cleanup.",
+		          creature->getName(), creature->getID());
 	}
 
 	auto master = creature->getMaster();
-	if (master && !master->isRemoved()) {
+	if (master) {
 		creature->setMaster(nullptr);
 	}
-
-	creature->getParent()->postRemoveNotification(creature, nullptr, 0);
 
 	creature->removeList();
 	creature->setRemoved();
 
 	removeCreatureCheck(creature);
 
-	// Explicitly clear master ref on each summon BEFORE recursive removal.
-	// removeCreature(summon) would skip setMaster(nullptr) because 'creature'
-	// is already marked removed. Clearing here avoids relying on destructor
-	// ordering for the master ref decrement.
+	// Explicitly clear each summon master before recursive removal so the
+	// relationship is detached while both shared references are still held.
 	std::vector<std::shared_ptr<Creature>> summonRefs;
 	summonRefs.reserve(creature->summons.size());
 	for (const auto& summonRef : creature->summons) {
@@ -1324,6 +1322,7 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 		creatureSharedRefs.erase(creature->getID());
 	}
 
+	ReleaseCreature(std::move(creatureRef));
 	return true;
 }
 
@@ -7835,11 +7834,22 @@ void Game::cleanup()
 void Game::ReleaseCreature(Creature* creature)
 {
 	if (auto creatureRef = getCreatureSharedRef(creature)) {
-		ToReleaseCreatures.push_back(std::move(creatureRef));
+		ReleaseCreature(std::move(creatureRef));
 	}
 }
 
-void Game::ReleaseCreature(std::shared_ptr<Creature> creature) { ToReleaseCreatures.push_back(std::move(creature)); }
+void Game::ReleaseCreature(std::shared_ptr<Creature> creature)
+{
+	if (!creature) {
+		return;
+	}
+
+	const auto alreadyQueued = std::ranges::any_of(
+	    ToReleaseCreatures, [&creature](const auto& queuedCreature) { return queuedCreature.get() == creature.get(); });
+	if (!alreadyQueued) {
+		ToReleaseCreatures.push_back(std::move(creature));
+	}
+}
 
 void Game::ReleaseItem(Item* item)
 {

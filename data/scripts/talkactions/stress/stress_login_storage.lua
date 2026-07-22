@@ -17,6 +17,13 @@
     dispatcher remains able to process logins while the test is running.
 --]]
 
+-- Disabled by default. Enable manually only in a controlled test environment.
+local ENABLE_STRESS_LOGIN_COMMAND = false
+
+if not ENABLE_STRESS_LOGIN_COMMAND then
+    return
+end
+
 local stressLogin = TalkAction("/stress_login")
 
 local CONFIG = {
