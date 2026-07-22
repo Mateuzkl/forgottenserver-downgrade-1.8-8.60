@@ -55,7 +55,13 @@ Use the ClientID-compatible map editor for this source:
 
 ## Optional Systems
 
-Optional systems are listed in `config.lua.dist` and enabled in `config.lua`. Most remain disabled by default to preserve the classic 8.60 experience.
+Optional systems are listed in `config.lua.dist` and controlled individually in `config.lua`. Set a system to `true` to enable it or `false` to disable it, choosing only the features that fit your server.
+
+- For a classic 8.60 experience, keep most optional systems set to `false`.
+- For a modern or 15.x-inspired experience, set the systems you want to `true`.
+- You can freely mix `true` and `false` to create your own feature set. The server protocol remains 8.60.
+
+Most optional systems are disabled by default so new installations start with behavior closer to classic 8.60.
 
 <details>
 <summary><strong>View optional systems and config keys</strong></summary>
@@ -82,7 +88,7 @@ Optional systems are listed in `config.lua.dist` and enabled in `config.lua`. Mo
 | Soulpit | `soulpitSystemEnabled` |
 | Soulseals | `soulsealsSystemEnabled` |
 
-Set the desired key to `true` in `config.lua`. Bounty and Weekly Tasks require Task Hunting; Soulseals require Weekly Tasks or another configured source.
+Choose `true` or `false` for each key in `config.lua`. Bounty and Weekly Tasks require Task Hunting; Soulseals require Weekly Tasks or another configured source.
 
 </details>
 
