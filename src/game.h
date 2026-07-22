@@ -733,6 +733,7 @@ private:
 	std::vector<std::shared_ptr<Creature>> checkCreatureLists[EVENT_CREATURECOUNT];
 
 	std::vector<std::shared_ptr<Creature>> ToReleaseCreatures;
+	std::unordered_set<const Creature*> ToReleaseCreatureSet;
 	std::vector<std::shared_ptr<Item>> ToReleaseItems;
 
 	size_t lastBucket = 0;

@@ -2012,6 +2012,9 @@ function acceptHandler.onReceive(player, msg)
 		else
 			sendMarketMessage(owner, "Your market sell offer has been fulfilled. The payment was credited to your bank balance.")
 		end
+		if marketOpenSessions[owner:getId()] then
+			sendMarketBrowse(owner, MARKET_REQUEST_MY_OFFERS)
+		end
 	end
 end
 acceptHandler:register()

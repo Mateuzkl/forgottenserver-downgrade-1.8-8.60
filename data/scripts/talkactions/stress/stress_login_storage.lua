@@ -132,7 +132,7 @@ local function finishJob(job, message, isError)
     if activeJob ~= job then
         return
     end
-    notify(job, message .. string.format(" | tempo=%ds", elapsedSeconds(job)), isError)
+    notify(job, message .. string.format(" | elapsed=%ds", elapsedSeconds(job)), isError)
     activeJob = nil
 end
 
@@ -174,13 +174,13 @@ local function resolveOfflinePlayers(names)
     local targets = {}
     for _, name in ipairs(names) do
         if Player(name) then
-            return nil, "O personagem '" .. name .. "' precisa estar offline."
+            return nil, "The character '" .. name .. "' must be offline."
         end
 
         local query = "SELECT `id`, `name` FROM `players` WHERE `name` = " .. sqlString(name) .. " LIMIT 1"
         local resultId = db.storeQuery(query)
         if not resultId then
-            return nil, "Personagem nao encontrado: " .. name
+            return nil, "Character not found: " .. name
         end
 
         targets[#targets + 1] = {
@@ -196,14 +196,14 @@ local runPrepareStep
 
 runPrepareStep = function(job)
     if job.stopRequested then
-        finishJob(job, string.format("PREPARE interrompido em %d/%d rows", job.completed, job.total), true)
+        finishJob(job, string.format("PREPARE stopped at %d/%d rows", job.completed, job.total), true)
         return
     end
 
     local target = job.targets[job.targetIndex]
     if not target then
         finishJob(job, string.format(
-            "PREPARE concluido: %d storages em %d personagem(ns). Agora deixe-os offline e faca login simultaneo com 1, 2 e 3 clientes",
+            "PREPARE completed: %d storages for %d character(s). Keep them offline, then log in simultaneously with 1, 2, and 3 clients",
             job.completed,
             #job.targets
         ))
@@ -211,7 +211,7 @@ runPrepareStep = function(job)
     end
 
     if Player(target.name) then
-        finishJob(job, "PREPARE cancelado: '" .. target.name .. "' entrou durante a gravacao", true)
+        finishJob(job, "PREPARE cancelled: '" .. target.name .. "' logged in during setup", true)
         return
     end
 
@@ -236,14 +236,14 @@ runPrepareStep = function(job)
         .. " ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)"
 
     if not db.query(query) then
-        finishJob(job, string.format("Falha SQL preparando '%s' no offset %d", target.name, job.offset), true)
+        finishJob(job, string.format("SQL failure while preparing '%s' at offset %d", target.name, job.offset), true)
         return
     end
 
     job.offset = job.offset + amount
     job.completed = job.completed + amount
     maybeReport(job, string.format(
-        "PREPARE %d/%d rows (%.1f%%) | atual=%s",
+        "PREPARE %d/%d rows (%.1f%%) | current=%s",
         job.completed,
         job.total,
         (job.completed * 100) / math.max(1, job.total),
@@ -255,7 +255,7 @@ end
 local function startPrepare(player, namesValue, rowsValue)
     local names = splitNames(namesValue)
     if #names == 0 then
-        notifyPlayer(player, "Uso: /stress_login prepare,Nome 1|Nome 2|Nome 3,25000", true)
+        notifyPlayer(player, "Usage: /stress_login prepare,Name 1|Name 2|Name 3,25000", true)
         return
     end
 
@@ -275,7 +275,7 @@ local function startPrepare(player, namesValue, rowsValue)
     job.total = rows * #targets
 
     notify(job, string.format(
-        "PREPARE iniciado: %d personagem(ns) x %d storages = %d rows",
+        "PREPARE started: %d character(s) x %d storages = %d rows",
         #targets,
         rows,
         job.total
@@ -287,18 +287,18 @@ local runCleanStep
 
 runCleanStep = function(job)
     if job.stopRequested then
-        finishJob(job, string.format("CLEAN interrompido em %d/%d personagens", job.targetIndex - 1, #job.targets), true)
+        finishJob(job, string.format("CLEAN stopped at %d/%d characters", job.targetIndex - 1, #job.targets), true)
         return
     end
 
     local target = job.targets[job.targetIndex]
     if not target then
-        finishJob(job, string.format("CLEAN concluido para %d personagem(ns)", #job.targets))
+        finishJob(job, string.format("CLEAN completed for %d character(s)", #job.targets))
         return
     end
 
     if Player(target.name) then
-        finishJob(job, "CLEAN cancelado: '" .. target.name .. "' precisa estar offline", true)
+        finishJob(job, "CLEAN cancelled: '" .. target.name .. "' must be offline", true)
         return
     end
 
@@ -314,11 +314,11 @@ runCleanStep = function(job)
     )
 
     if not db.query(query) then
-        finishJob(job, "Falha SQL limpando '" .. target.name .. "'", true)
+        finishJob(job, "SQL failure while cleaning '" .. target.name .. "'", true)
         return
     end
 
-    notify(job, "CLEAN removido de " .. target.name)
+    notify(job, "CLEAN removed reserved storages for " .. target.name)
     job.targetIndex = job.targetIndex + 1
     schedule(job, runCleanStep, CONFIG.sqlBatchDelayMs)
 end
@@ -326,7 +326,7 @@ end
 local function startClean(player, namesValue)
     local names = splitNames(namesValue)
     if #names == 0 then
-        notifyPlayer(player, "Uso: /stress_login clean,Nome 1|Nome 2|Nome 3", true)
+        notifyPlayer(player, "Usage: /stress_login clean,Name 1|Name 2|Name 3", true)
         return
     end
 
@@ -339,7 +339,7 @@ local function startClean(player, namesValue)
     local job = newJob(player, "clean")
     job.targets = targets
     job.targetIndex = 1
-    notify(job, "CLEAN iniciado. Somente a faixa reservada pelo teste sera removida")
+    notify(job, "CLEAN started. Only the storage ranges reserved by this test will be removed")
     schedule(job, runCleanStep, 0)
 end
 
@@ -358,20 +358,20 @@ local function beginHammerCleanup(job, reason)
     job.cleanupPlayerIndex = 1
     job.cleanupSlot = 0
     job.cleanupReason = reason
-    notify(job, "HAMMER finalizando; restaurando storages temporarias...")
+    notify(job, "HAMMER finishing; restoring temporary storages...")
     schedule(job, runHammerCleanup, 0)
 end
 
 runHammerCleanup = function(job)
     local entry = job.players[job.cleanupPlayerIndex]
     if not entry then
-        local suffix = job.cleanupReason or "concluido"
+        local suffix = job.cleanupReason or "completed"
         local disconnectedCount = 0
         for _ in pairs(job.disconnected) do
             disconnectedCount = disconnectedCount + 1
         end
         finishJob(job, string.format(
-            "HAMMER %s: %d operacoes, %d saves solicitados, %d jogador(es), %d desconectado(s)",
+            "HAMMER %s: %d operations, %d saves requested, %d player(s), %d disconnected",
             suffix,
             job.completed,
             job.saveRequests,
@@ -384,7 +384,7 @@ runHammerCleanup = function(job)
     local player = getHammerPlayer(entry)
     if not player then
         job.disconnected[entry.guid] = true
-        notify(job, "AVISO: " .. entry.name .. " desconectou; use CLEAN com ele offline", true)
+        notify(job, "WARNING: " .. entry.name .. " disconnected; run CLEAN after the character is offline", true)
         job.cleanupPlayerIndex = job.cleanupPlayerIndex + 1
         job.cleanupSlot = 0
         schedule(job, runHammerCleanup, 0)
@@ -413,11 +413,11 @@ local runHammerSnapshot
 
 runHammerStep = function(job)
     if job.stopRequested then
-        beginHammerCleanup(job, "interrompido")
+        beginHammerCleanup(job, "stopped")
         return
     end
     if job.completed >= job.total then
-        beginHammerCleanup(job, "concluido")
+        beginHammerCleanup(job, "completed")
         return
     end
 
@@ -461,7 +461,7 @@ end
 runHammerSnapshot = function(job)
     if job.stopRequested then
         finishJob(job, string.format(
-            "HAMMER interrompido durante snapshot em %d/%d storages; nenhuma storage foi alterada",
+            "HAMMER stopped during snapshot at %d/%d storages; no storage was changed",
             job.snapshotCompleted,
             job.snapshotTotal
         ), true)
@@ -473,7 +473,7 @@ runHammerSnapshot = function(job)
         job.snapshotTargets = nil
         job.phase = "hammer"
         notify(job, string.format(
-            "HAMMER iniciado: %d ops, chunk=%d, jogadores=%d. Use /stress_login stop para abortar com limpeza",
+            "HAMMER started: %d ops, chunk=%d, players=%d. Use /stress_login stop to abort and clean up",
             job.total,
             job.chunkSize,
             #job.players
@@ -491,7 +491,7 @@ runHammerSnapshot = function(job)
 
     local player = getHammerPlayer(entry)
     if not player then
-        finishJob(job, "HAMMER cancelado: " .. entry.name .. " desconectou durante o snapshot; nenhuma storage foi alterada", true)
+        finishJob(job, "HAMMER cancelled: " .. entry.name .. " disconnected during the snapshot; no storage was changed", true)
         return
     end
 
@@ -507,7 +507,7 @@ runHammerSnapshot = function(job)
     job.snapshotSlot = job.snapshotSlot + amount
     job.snapshotCompleted = job.snapshotCompleted + amount
     maybeReport(job, string.format(
-        "HAMMER SNAPSHOT %d/%d storages (%.1f%%) | atual=%s",
+        "HAMMER SNAPSHOT %d/%d storages (%.1f%%) | current=%s",
         job.snapshotCompleted,
         job.snapshotTotal,
         (job.snapshotCompleted * 100) / math.max(1, job.snapshotTotal),
@@ -524,7 +524,7 @@ end
 local function startHammer(player, operationsValue, chunkValue)
     local onlinePlayers = Game.getPlayers()
     if #onlinePlayers == 0 then
-        notifyPlayer(player, "Nenhum jogador online para o HAMMER", true)
+        notifyPlayer(player, "No players are online for HAMMER", true)
         return
     end
 
@@ -559,7 +559,7 @@ local function startHammer(player, operationsValue, chunkValue)
     end
 
     notify(job, string.format(
-        "HAMMER snapshot iniciado: %d jogador(es) x %d storages",
+        "HAMMER snapshot started: %d player(s) x %d storages",
         #job.snapshotTargets,
         CONFIG.hammerStorageSlots
     ))
@@ -568,14 +568,14 @@ end
 
 local function showStatus(player)
     if not activeJob then
-        notifyPlayer(player, "Nenhum teste ativo")
+        notifyPlayer(player, "No active test")
         return
     end
 
     local job = activeJob
     if job.mode == "prepare" then
         notifyPlayer(player, string.format(
-            "Ativo: PREPARE %d/%d rows | alvo %d/%d | tempo=%ds",
+            "Active: PREPARE %d/%d rows | target %d/%d | elapsed=%ds",
             job.completed,
             job.total,
             job.targetIndex,
@@ -585,14 +585,14 @@ local function showStatus(player)
     elseif job.mode == "hammer" then
         if job.phase == "hammer_snapshot" then
             notifyPlayer(player, string.format(
-                "Ativo: HAMMER SNAPSHOT %d/%d storages | tempo=%ds",
+                "Active: HAMMER SNAPSHOT %d/%d storages | elapsed=%ds",
                 job.snapshotCompleted,
                 job.snapshotTotal,
                 elapsedSeconds(job)
             ))
         else
             notifyPlayer(player, string.format(
-                "Ativo: %s %d/%d ops | saves=%d | tempo=%ds",
+                "Active: %s %d/%d ops | saves=%d | elapsed=%ds",
                 job.phase:upper(),
                 job.completed,
                 job.total,
@@ -602,7 +602,7 @@ local function showStatus(player)
         end
     else
         notifyPlayer(player, string.format(
-            "Ativo: %s alvo %d/%d | tempo=%ds",
+            "Active: %s target %d/%d | elapsed=%ds",
             job.mode:upper(),
             job.targetIndex,
             #job.targets,
@@ -612,11 +612,11 @@ local function showStatus(player)
 end
 
 local function showHelp(player)
-    notifyPlayer(player, "PREPARE: /stress_login prepare,Nome 1|Nome 2|Nome 3,25000")
-    notifyPlayer(player, "Depois faca login simultaneo nos personagens preparados (1, 2 e 3 clientes)")
+    notifyPlayer(player, "PREPARE: /stress_login prepare,Name 1|Name 2|Name 3,25000")
+    notifyPlayer(player, "Then log in to the prepared characters simultaneously with 1, 2, and 3 clients")
     notifyPlayer(player, "HAMMER online: /stress_login hammer,200000,500")
-    notifyPlayer(player, "Controle: /stress_login status  |  /stress_login stop")
-    notifyPlayer(player, "Limpeza offline: /stress_login clean,Nome 1|Nome 2|Nome 3")
+    notifyPlayer(player, "Controls: /stress_login status  |  /stress_login stop")
+    notifyPlayer(player, "Offline cleanup: /stress_login clean,Name 1|Name 2|Name 3")
 end
 
 function stressLogin.onSay(player, words, param)
@@ -634,12 +634,12 @@ function stressLogin.onSay(player, words, param)
 
     if command == "stop" then
         if not activeJob then
-            notifyPlayer(player, "Nenhum teste ativo")
+            notifyPlayer(player, "No active test")
         elseif activeJob.phase == "hammer_cleanup" then
-            notifyPlayer(player, "HAMMER ja esta limpando; aguarde")
+            notifyPlayer(player, "HAMMER is already cleaning up; please wait")
         else
             activeJob.stopRequested = true
-            notifyPlayer(player, "Parada solicitada; o chunk atual sera concluido")
+            notifyPlayer(player, "Stop requested; the current chunk will finish")
         end
         return false
     end
@@ -650,7 +650,7 @@ function stressLogin.onSay(player, words, param)
     end
 
     if activeJob then
-        notifyPlayer(player, "Ja existe um teste ativo. Use /stress_login status ou stop", true)
+        notifyPlayer(player, "A test is already active. Use /stress_login status or stop", true)
         return false
     end
 

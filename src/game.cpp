@@ -7827,6 +7827,7 @@ void Game::cleanup()
 {
 	// free memory
 	ToReleaseCreatures.clear();
+	ToReleaseCreatureSet.clear();
 
 	ToReleaseItems.clear(); // shared_ptrs destroyed, items freed
 }
@@ -7844,9 +7845,7 @@ void Game::ReleaseCreature(std::shared_ptr<Creature> creature)
 		return;
 	}
 
-	const auto alreadyQueued = std::ranges::any_of(
-	    ToReleaseCreatures, [&creature](const auto& queuedCreature) { return queuedCreature.get() == creature.get(); });
-	if (!alreadyQueued) {
+	if (ToReleaseCreatureSet.insert(creature.get()).second) {
 		ToReleaseCreatures.push_back(std::move(creature));
 	}
 }
