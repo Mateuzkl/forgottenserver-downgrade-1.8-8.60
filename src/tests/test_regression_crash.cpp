@@ -4,8 +4,12 @@
 #include "../otpch.h"
 
 #include "../creature.h"
+#include "../luascript.h"
+#include "../player.h"
 
 #include "test_support.h"
+
+extern LuaEnvironment g_luaEnvironment;
 
 namespace {
 
@@ -139,6 +143,29 @@ TEST_CASE(storage_database_load_sets_and_erases_value)
 
 	creature->loadStorageValue(2000, -1);
 	CHECK(!creature->getStorageValue(2000).has_value());
+}
+
+TEST_CASE(network_message_constructor_associates_player_userdata)
+{
+	CHECK(g_luaEnvironment.initState());
+	lua_State* L = g_luaEnvironment.getLuaState();
+	CHECK(L != nullptr);
+
+	auto player = std::make_shared<Player>(nullptr);
+	player->setID();
+
+	Lua::pushUserdata<Player>(L, player.get());
+	Lua::setMetatable(L, -1, "Player");
+	lua_setglobal(L, "regressionTestPlayer");
+
+	CHECK(luaL_loadstring(L, "return NetworkMessage(regressionTestPlayer)") == LUA_OK);
+	CHECK(lua_pcall(L, 0, 1, 0) == LUA_OK);
+	CHECK(luaL_testudata(L, -1, "NetworkMessage") != nullptr);
+	CHECK(lua_getiuservalue(L, -1, 1) == LUA_TNUMBER);
+	CHECK(Lua::getInteger<uint32_t>(L, -1) == player->getID());
+
+	lua_settop(L, 0);
+	CHECK(g_luaEnvironment.closeState());
 }
 
 TFS_TEST_MAIN()

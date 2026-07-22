@@ -13,6 +13,7 @@
 #define STDERR_FILENO 2
 using ssize_t = ptrdiff_t;
 #else
+#include <signal.h>
 #include <unistd.h>
 #endif
 
@@ -21,6 +22,148 @@ namespace {
 std::mutex loggerMutex;
 std::atomic<bool> loggerInitialized{false};
 std::atomic<bool> shutdownInProgress{false};
+
+constexpr size_t CRASH_CONTEXT_CAPACITY = 1024;
+
+struct CrashContextLine
+{
+	std::array<char, CRASH_CONTEXT_CAPACITY> text{};
+	size_t length = 0;
+};
+
+struct CrashContextState
+{
+	std::array<CrashContextLine, 2> lines{};
+	std::atomic<unsigned int> active{0};
+};
+
+static_assert(std::atomic<unsigned int>::is_always_lock_free, "fatal-signal crash context requires lock-free atomics");
+
+CrashContextState luaCrashOrigin;
+CrashContextState luaCrashDetails;
+CrashContextState luaCrashPhase;
+
+template <typename... Args>
+void publishCrashLine(CrashContextState& state, fmt::format_string<Args...> format, Args&&... args) noexcept
+{
+	try {
+		const unsigned int next = state.active.load(std::memory_order_relaxed) ^ 1U;
+		auto& line = state.lines[next];
+		const auto result =
+		    fmt::format_to_n(line.text.data(), line.text.size() - 2, format, std::forward<Args>(args)...);
+		line.length = std::min(result.size, line.text.size() - 2);
+		line.text[line.length++] = '\n';
+		line.text[line.length] = '\0';
+		state.active.store(next, std::memory_order_release);
+	} catch (...) {
+		// Crash diagnostics must never affect normal server execution.
+	}
+}
+
+void publishCrashText(CrashContextState& state, std::string_view prefix, std::string_view value) noexcept
+{
+	const unsigned int next = state.active.load(std::memory_order_relaxed) ^ 1U;
+	auto& line = state.lines[next];
+	const size_t prefixLength = std::min(prefix.size(), line.text.size() - 2);
+	std::memcpy(line.text.data(), prefix.data(), prefixLength);
+	const size_t valueLength = std::min(value.size(), line.text.size() - prefixLength - 2);
+	std::memcpy(line.text.data() + prefixLength, value.data(), valueLength);
+	line.length = prefixLength + valueLength;
+	line.text[line.length++] = '\n';
+	line.text[line.length] = '\0';
+	state.active.store(next, std::memory_order_release);
+}
+
+void clearCrashLine(CrashContextState& state) noexcept
+{
+	const unsigned int next = state.active.load(std::memory_order_relaxed) ^ 1U;
+	state.lines[next].length = 0;
+	state.lines[next].text[0] = '\0';
+	state.active.store(next, std::memory_order_release);
+}
+
+bool writeCrashLine(const CrashContextState& state) noexcept
+{
+	const unsigned int active = state.active.load(std::memory_order_acquire);
+	const auto& line = state.lines[active];
+	if (line.length != 0) {
+		[[maybe_unused]] const ssize_t result = write(STDERR_FILENO, line.text.data(), line.length);
+		return true;
+	}
+	return false;
+}
+
+void writeLuaCrashContext() noexcept
+{
+	const bool hasContext = writeCrashLine(luaCrashOrigin);
+	writeCrashLine(luaCrashDetails);
+	writeCrashLine(luaCrashPhase);
+
+	if (hasContext) {
+		const char note[] =
+		    "[CRASH CONTEXT] phase is the last operation started; it can reveal an earlier memory corruption\n";
+		[[maybe_unused]] const ssize_t result = write(STDERR_FILENO, note, sizeof(note) - 1);
+	}
+}
+
+#ifndef _WIN32
+struct SignalSafeText
+{
+	const char* data;
+	size_t size;
+};
+
+SignalSafeText getSegvReason(int code) noexcept
+{
+	switch (code) {
+		case SEGV_MAPERR:
+			return {"address not mapped", sizeof("address not mapped") - 1};
+		case SEGV_ACCERR:
+			return {"invalid permissions", sizeof("invalid permissions") - 1};
+		default:
+			return {"unknown memory fault", sizeof("unknown memory fault") - 1};
+	}
+}
+
+void writeFaultAddress(const void* address) noexcept
+{
+	constexpr char digits[] = "0123456789abcdef";
+	char buffer[2 + sizeof(uintptr_t) * 2];
+	buffer[0] = '0';
+	buffer[1] = 'x';
+	uintptr_t value = reinterpret_cast<uintptr_t>(address);
+	for (size_t i = 0; i < sizeof(uintptr_t) * 2; ++i) {
+		const size_t shift = (sizeof(uintptr_t) * 2 - i - 1) * 4;
+		buffer[2 + i] = digits[(value >> shift) & 0x0F];
+	}
+	[[maybe_unused]] const ssize_t result = write(STDERR_FILENO, buffer, sizeof(buffer));
+}
+
+void loggerSignalHandlerWithInfo(int signal, siginfo_t* info, void*)
+{
+	const SignalSafeText signalName = signal == SIGSEGV ? SignalSafeText{"SIGSEGV", sizeof("SIGSEGV") - 1}
+	                                                    : SignalSafeText{"SIGABRT", sizeof("SIGABRT") - 1};
+	const char prefix[] = "[CRITICAL] Signal received: ";
+	[[maybe_unused]] const ssize_t r1 = write(STDERR_FILENO, prefix, sizeof(prefix) - 1);
+	[[maybe_unused]] const ssize_t r2 = write(STDERR_FILENO, signalName.data, signalName.size);
+
+	if (signal == SIGSEGV && info) {
+		const char separator[] = ", reason=";
+		const SignalSafeText reason = getSegvReason(info->si_code);
+		[[maybe_unused]] const ssize_t r3 = write(STDERR_FILENO, separator, sizeof(separator) - 1);
+		[[maybe_unused]] const ssize_t r4 = write(STDERR_FILENO, reason.data, reason.size);
+		const char addressPrefix[] = ", faultAddress=";
+		[[maybe_unused]] const ssize_t r5 = write(STDERR_FILENO, addressPrefix, sizeof(addressPrefix) - 1);
+		writeFaultAddress(info->si_addr);
+	}
+
+	const char suffix[] = "\n";
+	[[maybe_unused]] const ssize_t r6 = write(STDERR_FILENO, suffix, sizeof(suffix) - 1);
+	writeLuaCrashContext();
+
+	::raise(signal);
+}
+#endif
 
 spdlog::level::level_enum toSpd(LogLevel level)
 {
@@ -375,6 +518,44 @@ static std::unique_ptr<Logger> loggerInstance;
 
 } // namespace
 
+void setLuaCrashContext(std::string_view interfaceName, std::string_view scriptName, int32_t scriptId) noexcept
+{
+	publishCrashLine(luaCrashOrigin, "[CRASH CONTEXT] Lua interface=\"{}\" script=\"{}\" scriptId={}", interfaceName,
+	                 scriptName, scriptId);
+	clearCrashLine(luaCrashDetails);
+	publishCrashLine(luaCrashPhase, "[CRASH CONTEXT] phase=preparing Lua callback arguments");
+}
+
+void setLuaCrashDetails(std::string_view details) noexcept
+{
+	publishCrashText(luaCrashDetails, "[CRASH CONTEXT] C++ ", details);
+}
+
+void setLuaCrashCreatureEventDetails(std::string_view eventName, uint32_t creatureId, uint32_t attackerId,
+                                     int32_t damageOrigin) noexcept
+{
+	publishCrashLine(luaCrashDetails,
+	                 "[CRASH CONTEXT] C++ CreatureEvent::executeHealthChange event=\"{}\" creatureId={} "
+	                 "attackerId={} damageOrigin={}",
+	                 eventName, creatureId, attackerId, damageOrigin);
+}
+
+void setLuaCrashPhase(std::string_view phase) noexcept
+{
+	publishCrashText(luaCrashPhase, "[CRASH CONTEXT] phase=", phase);
+}
+
+void clearLuaCrashContext() noexcept
+{
+	clearCrashLine(luaCrashOrigin);
+	clearCrashLine(luaCrashDetails);
+	clearCrashLine(luaCrashPhase);
+}
+
+#ifndef _WIN32
+extern "C" __attribute__((used)) void dumpLuaCrashContext() { writeLuaCrashContext(); }
+#endif
+
 Logger& g_logger()
 {
 	if (loggerInitialized.load(std::memory_order_acquire) && loggerInstance) {
@@ -472,6 +653,7 @@ void loggerSignalHandler(int signal)
 	[[maybe_unused]] ssize_t r1 = write(STDERR_FILENO, prefix, sizeof(prefix) - 1);
 	[[maybe_unused]] ssize_t r2 = write(STDERR_FILENO, signalName, strlen(signalName));
 	[[maybe_unused]] ssize_t r3 = write(STDERR_FILENO, suffix, sizeof(suffix) - 1);
+	writeLuaCrashContext();
 
 	std::signal(signal, SIG_DFL);
 	std::raise(signal);
@@ -479,6 +661,15 @@ void loggerSignalHandler(int signal)
 
 void setupLoggerSignalHandlers()
 {
+#ifdef _WIN32
 	std::signal(SIGSEGV, loggerSignalHandler);
 	std::signal(SIGABRT, loggerSignalHandler);
+#else
+	struct sigaction action{};
+	action.sa_sigaction = loggerSignalHandlerWithInfo;
+	sigemptyset(&action.sa_mask);
+	action.sa_flags = SA_SIGINFO | SA_RESETHAND;
+	sigaction(SIGSEGV, &action, nullptr);
+	sigaction(SIGABRT, &action, nullptr);
+#endif
 }

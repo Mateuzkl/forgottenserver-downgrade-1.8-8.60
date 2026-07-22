@@ -66,14 +66,20 @@ int luaGameGetSpectators(lua_State* L)
 int luaGameGetPlayers(lua_State* L)
 {
 	// Game.getPlayers()
+	setLuaCrashDetails("Game.getPlayers / building Player userdata snapshot");
+	setLuaCrashPhase("Game.getPlayers / create result table");
 	lua_createtable(L, g_game.getPlayersOnline(), 0);
 
 	int index = 0;
 	for (const auto& player : g_game.getPlayers()) {
+		setLuaCrashPhase("Game.getPlayers / allocate Player userdata");
 		pushUserdata<Player>(L, player.get());
+		setLuaCrashPhase("Game.getPlayers / assign Player metatable");
 		setMetatable(L, -1, "Player");
+		setLuaCrashPhase("Game.getPlayers / append Player userdata to result");
 		lua_rawseti(L, -2, ++index);
 	}
+	setLuaCrashPhase("Lua callback execution / Game.getPlayers complete");
 	return 1;
 }
 

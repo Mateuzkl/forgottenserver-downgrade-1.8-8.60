@@ -1192,6 +1192,10 @@ void Events::eventPlayerOnUpdateInventory(Player* player, Item* item, const slot
 	if (info.playerOnUpdateInventory == -1) {
 		return;
 	}
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[Events::eventPlayerOnUpdateInventory] Refusing to execute Lua outside the dispatcher thread.");
+		return;
+	}
 
 	if (!scriptInterface.reserveScriptEnv()) {
 		LOG_ERROR("[Error - Events::eventPlayerOnUpdateInventory] Call stack overflow");

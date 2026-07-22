@@ -297,6 +297,15 @@ LogLevel parseLogLevel(std::string_view level);
 void setupLoggerSignalHandlers();
 void loggerSignalHandler(int signal);
 
+// The strings are copied into fixed buffers so the fatal-signal handler can
+// report the last active Lua callback without touching the damaged Lua state.
+void setLuaCrashContext(std::string_view interfaceName, std::string_view scriptName, int32_t scriptId) noexcept;
+void setLuaCrashDetails(std::string_view details) noexcept;
+void setLuaCrashCreatureEventDetails(std::string_view eventName, uint32_t creatureId, uint32_t attackerId,
+                                     int32_t damageOrigin) noexcept;
+void setLuaCrashPhase(std::string_view phase) noexcept;
+void clearLuaCrashContext() noexcept;
+
 #define LOG_TRACE(...) \
 	do { \
 		if (isLoggerInitialized()) g_logger().trace(__VA_ARGS__); \

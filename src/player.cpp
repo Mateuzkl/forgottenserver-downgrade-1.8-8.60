@@ -4714,6 +4714,13 @@ Thing* Player::getThing(size_t index) const
 void Player::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index,
                                  cylinderlink_t link /*= LINK_OWNER*/)
 {
+	// IOLoginData builds the inventory in a worker thread. The item is already
+	// attached by internalAddThing(), but every notification side effect below
+	// must wait until the player is placed on the dispatcher thread.
+	if (isLoading()) {
+		return;
+	}
+
 	if (link == LINK_OWNER) {
 		// calling movement scripts
 		g_moveEvents->onPlayerEquip(this, thing->getItem(), static_cast<slots_t>(index), false);

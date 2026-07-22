@@ -384,7 +384,20 @@ void IOLoginData::loadPlayerGuild(Player* player)
 
 void IOLoginData::loadPlayerWorldData(Player* player)
 {
+	if (!player) {
+		return;
+	}
+
 	loadPlayerGuild(player);
+
+	// Inventory ownership is established by the login worker, but notification
+	// side effects can execute Lua and therefore belong to the dispatcher.
+	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		Item* item = player->getInventoryItem(static_cast<slots_t>(slot));
+		if (item) {
+			player->postAddNotification(item, nullptr, slot);
+		}
+	}
 }
 
 bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorldData)

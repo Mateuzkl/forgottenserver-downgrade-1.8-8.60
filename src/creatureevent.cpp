@@ -434,24 +434,32 @@ void CreatureEvent::executeHealthChange(Creature* creature, Creature* attacker, 
 
 	ScriptEnvironment* env = scriptInterface->getScriptEnv();
 	env->setScriptId(scriptId, scriptInterface);
+	setLuaCrashCreatureEventDetails(eventName, creature ? creature->getID() : 0, attacker ? attacker->getID() : 0,
+	                                static_cast<int32_t>(damage.origin));
 
 	lua_State* L = scriptInterface->getLuaState();
 	scriptInterface->pushFunction(scriptId);
 
+	setLuaCrashPhase("CreatureEvent::executeHealthChange / push target userdata");
 	Lua::pushUserdata(L, creature);
 	Lua::setCreatureMetatable(L, -1, creature);
 	if (attacker) {
+		setLuaCrashPhase("CreatureEvent::executeHealthChange / push attacker userdata");
 		Lua::pushUserdata(L, attacker);
 		Lua::setCreatureMetatable(L, -1, attacker);
 	} else {
+		setLuaCrashPhase("CreatureEvent::executeHealthChange / push nil attacker");
 		lua_pushnil(L);
 	}
 
+	setLuaCrashPhase("CreatureEvent::executeHealthChange / push combat damage");
 	Lua::pushCombatDamage(L, damage);
 
 	if (scriptInterface->protectedCall(L, 7, 4) != 0) {
+		setLuaCrashPhase("CreatureEvent::executeHealthChange / report Lua error");
 		LuaScriptInterface::reportError(nullptr, Lua::popString(L));
 	} else {
+		setLuaCrashPhase("CreatureEvent::executeHealthChange / read Lua return values");
 		damage.primary.value = std::abs(Lua::getInteger<int32_t>(L, -4));
 		damage.primary.type = Lua::getInteger<CombatType_t>(L, -3);
 		damage.secondary.value = std::abs(Lua::getInteger<int32_t>(L, -2));

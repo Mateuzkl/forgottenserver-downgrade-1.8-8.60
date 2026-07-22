@@ -222,11 +222,7 @@ public:
 
 	void resetEnv();
 
-	void setScriptId(int32_t scriptId, LuaScriptInterface* scriptInterface)
-	{
-		this->scriptId = scriptId;
-		interface = scriptInterface;
-	}
+	void setScriptId(int32_t scriptId, LuaScriptInterface* scriptInterface);
 	bool setCallbackId(int32_t callbackId, LuaScriptInterface* scriptInterface);
 
 	int32_t getScriptId() const { return scriptId; }
@@ -352,16 +348,7 @@ public:
 
 	static bool reserveScriptEnv() { return ++scriptEnvIndex < 16; }
 
-	static void resetScriptEnv()
-	{
-		assert(scriptEnvIndex >= 0);
-		// Rollback any open transaction leaked by the script that just ended
-		if (Database::getInstance().isInTransaction()) {
-			Database::getInstance().rollback();
-			scriptEnv[scriptEnvIndex].hasOpenTransaction = false;
-		}
-		scriptEnv[scriptEnvIndex--].resetEnv();
-	}
+	static void resetScriptEnv();
 
 	static void reportError(const char* function, std::string_view error_desc, lua_State* L = nullptr,
 	                        bool stack_trace = false);
@@ -1003,7 +990,12 @@ std::optional<uint8_t> getBlessingId(lua_State* L, int32_t arg);
 
 inline bool getAssociatedValue(lua_State* L, int32_t arg, int32_t index)
 {
-	return lua_getiuservalue(L, arg, index) != LUA_TNONE;
+	const int32_t valueType = lua_getiuservalue(L, arg, index);
+	if (valueType == LUA_TNONE || valueType == LUA_TNIL) {
+		lua_pop(L, 1);
+		return false;
+	}
+	return true;
 }
 
 // Is

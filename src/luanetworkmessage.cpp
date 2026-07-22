@@ -116,11 +116,14 @@ int luaNetworkMessageCreate(lua_State* L)
 {
 	// NetworkMessage([player])
 	pushSharedPtr(L, tfs::net::make_network_message());
+	const int32_t messageIndex = lua_gettop(L);
 	setMetatable(L, -1, "NetworkMessage");
 
-	if (const auto player = getPlayer(L, 1)) {
+	// __call receives the NetworkMessage class table at index 1 and the
+	// optional constructor argument at index 2.
+	if (const auto player = getPlayer(L, 2)) {
 		lua_pushinteger(L, player->getID());
-		lua_setiuservalue(L, 2, 1);
+		lua_setiuservalue(L, messageIndex, 1);
 	}
 	return 1;
 }
