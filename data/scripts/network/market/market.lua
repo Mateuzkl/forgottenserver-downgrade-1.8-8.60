@@ -2007,8 +2007,11 @@ function acceptHandler.onReceive(player, msg)
 
 	local owner = Player(offer.playerName)
 	if owner then
-		sendMarketMessage(owner, "One of your market offers was accepted.")
-		refreshMarket(owner, MARKET_REQUEST_MY_OFFERS)
+		if offer.sale == MARKET_ACTION_BUY then
+			sendMarketMessage(owner, "Your market buy offer has been fulfilled. The purchased item was delivered to your Market Inbox.")
+		else
+			sendMarketMessage(owner, "Your market sell offer has been fulfilled. The payment was credited to your bank balance.")
+		end
 	end
 end
 acceptHandler:register()
