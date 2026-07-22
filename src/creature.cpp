@@ -1184,10 +1184,10 @@ void Creature::addDamagePoints(const std::shared_ptr<Creature>& attacker, int32_
 
 	uint32_t attackerId = attacker->id;
 
-	// Do not keep a reference to the map element, as it may be invalidated
-	// during reentrant access (e.g., callbacks modifying the map).
-	damageMap[attackerId].total += damagePoints;
-	damageMap[attackerId].ticks = OTSYS_TIME();
+	auto [it, inserted] = damageMap.try_emplace(attackerId, CountBlock_t{0, 0});
+	(void)inserted;
+	it->second.total += damagePoints;
+	it->second.ticks = OTSYS_TIME();
 
 	lastAttacker = attacker;
 }
@@ -1889,11 +1889,29 @@ void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value, bool 
 		storageMap.erase(key);
 	}
 
-	// Call event after map is in a consistent state
-	auto selfRef = getSharedCreature(this);
-	if (selfRef && !selfRef->isRemoved()) {
-		g_events->eventCreatureOnUpdateStorage(this, key, oldValue, value, isSpawn);
+	// Database loading may run in a worker thread. It must never enter the
+	// global Lua state or invoke gameplay callbacks.
+	if (isSpawn) {
+		return;
 	}
+
+	// Keep the creature alive for the whole callback after the map reaches a
+	// consistent state. The callback receives (new value, old value).
+	auto selfRef = getSharedCreature(this);
+	if (!selfRef || selfRef->isRemoved()) {
+		return;
+	}
+	g_events->eventCreatureOnUpdateStorage(this, key, normalizedNewValue, normalizedOldValue, false);
+}
+
+void Creature::loadStorageValue(uint32_t key, int64_t value)
+{
+	if (value == -1) {
+		storageMap.erase(key);
+		return;
+	}
+
+	storageMap.insert_or_assign(key, value);
 }
 
 void Creature::iconChanged()

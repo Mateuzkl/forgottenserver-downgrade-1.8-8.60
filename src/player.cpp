@@ -1747,6 +1747,14 @@ void Player::setStorageValue(const uint32_t key, const std::optional<int64_t> va
 	storageDirtyKeyRevisions[key] = ++storageDirtyRevision;
 }
 
+void Player::loadStorageValue(uint32_t key, int64_t value)
+{
+	Creature::loadStorageValue(key, value);
+	modifiedStorageKeys.erase(key);
+	removedStorageKeys.erase(key);
+	storageDirtyKeyRevisions.erase(key);
+}
+
 Player::StorageDirtySnapshot Player::getStorageDirtySnapshot() const
 {
 	return StorageDirtySnapshot{storageDirtyRevision, modifiedStorageKeys, removedStorageKeys};

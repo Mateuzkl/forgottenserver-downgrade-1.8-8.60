@@ -7,6 +7,7 @@
 
 #include "outputmessage.h"
 #include "rsa.h"
+#include "tasks.h"
 #include "xtea.h"
 
 namespace {
@@ -66,7 +67,7 @@ void Protocol::onRecvMessage(NetworkMessage& msg)
 
 OutputMessage_ptr Protocol::getOutputBuffer(int32_t size)
 {
-	// dispatcher thread
+	assert(g_dispatcher.isDispatcherThread() && "Protocol::getOutputBuffer must run on the dispatcher thread");
 	if (!outputBuffer) {
 		outputBuffer = OutputMessagePool::getOutputMessage();
 		OutputMessagePool::getInstance().addProtocolToAutosend(shared_from_this());

@@ -84,6 +84,7 @@ private:
 	void connect(uint32_t playerId, OperatingSystem_t operatingSystem);
 	void finishLogin(uint32_t reservedGuid, uint32_t accountId, bool loaded, OperatingSystem_t operatingSystem);
 	void disconnectClient(std::string_view message) const;
+	void dispatchCancelMessage(ReturnValue message) const;
 	void writeToOutputBuffer(const NetworkMessage& msg);
 
 	void release() override;

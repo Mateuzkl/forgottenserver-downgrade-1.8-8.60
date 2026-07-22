@@ -871,7 +871,7 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	if ((result = db.storeQuery(
 	         fmt::format("SELECT `key`, `value` FROM `player_storage` WHERE `player_id` = {:d}", player->getGUID())))) {
 		do {
-			player->setStorageValue(result->getNumber<uint32_t>("key"), result->getNumber<int64_t>("value"), true);
+			player->loadStorageValue(result->getNumber<uint32_t>("key"), result->getNumber<int64_t>("value"));
 		} while (result->next());
 	}
 

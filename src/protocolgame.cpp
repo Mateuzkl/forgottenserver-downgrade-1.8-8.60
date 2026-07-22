@@ -1137,10 +1137,13 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->client->isOTC = isOTC;
 	player->client->isAstraClient = isAstraClient;
 	player->client->isFonticakClient = isFonticakClient;
+	// Astra item-state features depend on the loaded player and on this
+	// protocol already owning player->client. Advertise the final feature set
+	// before serializing the initial map, otherwise the server appends Astra
+	// item metadata that the client does not know how to consume.
 	if (isAstraClient) {
 		sendFeatures();
 	}
-
 	if (!g_game.placeCreature(player.get(), player->getLoginPosition())) {
 		if (!g_game.placeCreature(player.get(), player->getTemplePosition(), false, true)) {
 			g_game.releaseLogin(reservedGuid);
@@ -1279,6 +1282,9 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->client->isOTC = isOTC;
 	player->client->isAstraClient = isAstraClient;
 	player->client->isFonticakClient = isFonticakClient;
+	// Reconnecting Astra clients also need the feature set recalculated after
+	// this protocol becomes the owner, and before sendAddCreature sends map and
+	// item data.
 	if (isAstraClient) {
 		sendFeatures();
 	}
@@ -1359,7 +1365,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	key[2] = msg.get<uint32_t>();
 	key[3] = msg.get<uint32_t>();
 	enableXTEAEncryption();
-	setXTEAKey(std::move(key));
+	setXTEAKey(key);
 
 	msg.skipBytes(1); // gamemaster flag
 
@@ -1471,17 +1477,6 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 		LOG_NETWORK("Client connected: FonticakClient");
 	}
 
-	if (isOTC) {
-		NetworkMessage opcodeMessage;
-		opcodeMessage.addByte(0x32);
-		opcodeMessage.addByte(0x00);
-		opcodeMessage.add<uint16_t>(0x00);
-		writeToOutputBuffer(opcodeMessage);
-	}
-	if (isOTCv8) {
-		sendFeatures();
-	}
-
 	if (version < CLIENT_VERSION_MIN || version > CLIENT_VERSION_MAX) {
 		disconnectClient(fmt::format("Only clients with protocol {:s} allowed!", CLIENT_VERSION_STR));
 		return;
@@ -1571,6 +1566,16 @@ void ProtocolGame::disconnectClient(std::string_view message) const
 	disconnect();
 }
 
+void ProtocolGame::dispatchCancelMessage(ReturnValue message) const
+{
+	const uint32_t playerId = player ? player->getID() : 0;
+	g_dispatcher.addTask([playerId, message]() {
+		if (auto playerRef = g_game.getPlayerByID(playerId)) {
+			playerRef->sendCancelMessage(message);
+		}
+	});
+}
+
 void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 {
 	auto out = getOutputBuffer(msg.getLength());
@@ -1614,7 +1619,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 			case 0x96: // say (allows /unspy)
 				break; // allowed — fall through to normal processing
 			default:
-				sendCancelWalk();
+				g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->sendCancelWalk(); });
 				return; // block all other actions
 		}
 	}
@@ -2374,7 +2379,7 @@ void ProtocolGame::parseAutoWalk(NetworkMessage& msg)
 void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 {
 	if (player->isAccountManager()) {
-		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		dispatchCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
@@ -2464,7 +2469,7 @@ void ProtocolGame::parseSetMonsterPodium(NetworkMessage& msg)
 void ProtocolGame::parseUseItem(NetworkMessage& msg)
 {
 	if (player->isAccountManager()) {
-		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		dispatchCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
@@ -2542,7 +2547,7 @@ void ProtocolGame::parseHotkeyEquip(NetworkMessage& msg)
 void ProtocolGame::parseUseItemEx(NetworkMessage& msg)
 {
 	if (player->isAccountManager()) {
-		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		dispatchCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
@@ -2560,7 +2565,7 @@ void ProtocolGame::parseUseItemEx(NetworkMessage& msg)
 void ProtocolGame::parseUseWithCreature(NetworkMessage& msg)
 {
 	if (player->isAccountManager()) {
-		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		dispatchCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
@@ -2734,7 +2739,7 @@ void ProtocolGame::parseQuickLootBlackWhitelist(NetworkMessage& msg)
 void ProtocolGame::parseThrow(NetworkMessage& msg)
 {
 	if (player->isAccountManager()) {
-		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		dispatchCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
@@ -2807,7 +2812,11 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 	}
 
 	if (player->isAccountManager()) {
-		player->manageAccount(std::string{text});
+		g_dispatcher.addTask([playerID = player->getID(), text = std::string{text}]() {
+			if (auto playerRef = g_game.getPlayerByID(playerID)) {
+				playerRef->manageAccount(text);
+			}
+		});
 		return;
 	}
 
@@ -2819,7 +2828,7 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 void ProtocolGame::parseAttack(NetworkMessage& msg)
 {
 	if (player->isAccountManager()) {
-		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		dispatchCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
@@ -2892,7 +2901,7 @@ void ProtocolGame::parsePlayerSale(NetworkMessage& msg)
 void ProtocolGame::parseRequestTrade(NetworkMessage& msg)
 {
 	if (player->isAccountManager()) {
-		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		dispatchCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}
 
@@ -5860,11 +5869,13 @@ void ProtocolGame::parseSwitchCast(uint8_t direction)
 
 void ProtocolGame::parseImbuementDurations(NetworkMessage& msg)
 {
-	bool open = msg.getByte() != 0;
-	imbuementTrackerOpen = open;
-	if (open) {
-		sendImbuementDurations();
-	}
+	const bool open = msg.getByte() != 0;
+	g_dispatcher.addTask([thisPtr = getThis(), open]() {
+		thisPtr->imbuementTrackerOpen = open;
+		if (open) {
+			thisPtr->sendImbuementDurations();
+		}
+	});
 }
 
 void ProtocolGame::sendImbuementDurations(slots_t updatedSlot, const Item* updatedItem)

@@ -123,9 +123,6 @@ public:
 		return liveCreatures.count(c) > 0;
 	}
 
-	static bool isAliveUnsafe(const Creature* c) {
-		return c && liveCreatures.count(c) > 0;
-	}
 	virtual Player* getPlayer() { return nullptr; }
 	virtual const Player* getPlayer() const { return nullptr; }
 	virtual Npc* getNpc() { return nullptr; }
@@ -393,6 +390,8 @@ public:
 
 	Tile* getTile() override final { return tile.lock().get(); }
 	const Tile* getTile() const override final { return tile.lock().get(); }
+	std::shared_ptr<Tile> getTileShared() { return tile.lock(); }
+	std::shared_ptr<const Tile> getTileShared() const { return tile.lock(); }
 
 	const Position& getLastPosition() const { return lastPosition; }
 	void setLastPosition(Position newLastPos) { lastPosition = newLastPos; }
@@ -407,6 +406,7 @@ public:
 	               int32_t maxSearchDist = 0) const;
 
 	virtual void setStorageValue(uint32_t key, std::optional<int64_t> value, bool isSpawn = false);
+	void loadStorageValue(uint32_t key, int64_t value);
 	virtual std::optional<int64_t> getStorageValue(uint32_t key) const;
 	using StorageMap = absl::flat_hash_map<uint32_t, int64_t>;
 	const StorageMap& getStorageMap() const { return storageMap; }

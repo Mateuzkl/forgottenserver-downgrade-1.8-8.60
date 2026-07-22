@@ -89,8 +89,8 @@ public:
 	ReturnValue eventCreatureOnTargetCombat(Creature* creature, Creature* target);
 	void eventCreatureOnHear(Creature* creature, Creature* speaker, std::string_view words, SpeakClasses type);
 	void eventCreatureOnChangeZone(Creature* creature, ZoneType_t fromZone, ZoneType_t toZone);
-	void eventCreatureOnUpdateStorage(Creature* creature, const uint32_t key, const std::optional<int32_t> value,
-	                                  const std::optional<int32_t> oldValue, bool isSpawn);
+	void eventCreatureOnUpdateStorage(Creature* creature, const uint32_t key, const std::optional<int64_t> value,
+	                                  const std::optional<int64_t> oldValue, bool isSpawn);
 
 	// Party
 	bool eventPartyOnJoin(Party* party, Player* player);

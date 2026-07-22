@@ -1238,7 +1238,7 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 		return false;
 	}
 
-	auto tileRef = getTileSharedRef(creature->getTile());
+	auto tileRef = creature->getTileShared();
 	if (!tileRef) {
 		LOG_ERROR("[Game::removeCreature] Creature '{}' id={} has no valid tile.", creature->getName(), creature->getID());
 		return false;

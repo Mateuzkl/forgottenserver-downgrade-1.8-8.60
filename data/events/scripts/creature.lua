@@ -25,6 +25,6 @@ end
 
 function Creature:onUpdateStorage(key, value, oldValue, isSpawn)
 	if hasEvent.onUpdateStorage then
-		Event.onUpdateStorage(self, key, oldValue, value, isSpawn)
+		Event.onUpdateStorage(self, key, value, oldValue, isSpawn)
 	end
 end

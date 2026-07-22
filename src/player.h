@@ -494,6 +494,7 @@ public:
 	bool canOpenCorpse(uint32_t ownerId) const;
 
 	void setStorageValue(const uint32_t key, const std::optional<int64_t> value, const bool isSpawn = false) override;
+	void loadStorageValue(uint32_t key, int64_t value);
 	const std::unordered_set<uint32_t>& getModifiedStorageKeys() const { return modifiedStorageKeys; }
 	const std::unordered_set<uint32_t>& getRemovedStorageKeys() const { return removedStorageKeys; }
 	bool hasStorageDirty() const { return !modifiedStorageKeys.empty() || !removedStorageKeys.empty(); }

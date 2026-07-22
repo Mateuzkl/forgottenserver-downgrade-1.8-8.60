@@ -8,6 +8,7 @@
 #include "item.h"
 #include "monster.h"
 #include "player.h"
+#include "tasks.h"
 #include "imbuement.h"
 #include "logger.h"
 #include <fmt/format.h>
@@ -353,11 +354,15 @@ void Events::eventCreatureOnChangeZone(Creature* creature, ZoneType_t fromZone, 
 	scriptInterface.callVoidFunction(3);
 }
 
-void Events::eventCreatureOnUpdateStorage(Creature* creature, const uint32_t key, const std::optional<int32_t> value,
-                                          const std::optional<int32_t> oldValue, bool isSpawn)
+void Events::eventCreatureOnUpdateStorage(Creature* creature, const uint32_t key, const std::optional<int64_t> value,
+                                          const std::optional<int64_t> oldValue, bool isSpawn)
 {
 	// Creature:onUpdateStorage(key, value, oldValue, isSpawn)
 	if (info.creatureOnUpdateStorage == -1) {
+		return;
+	}
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[Events::eventCreatureOnUpdateStorage] Refusing to execute Lua outside the dispatcher thread.");
 		return;
 	}
 
