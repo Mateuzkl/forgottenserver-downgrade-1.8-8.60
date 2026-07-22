@@ -4,7 +4,8 @@ set -Eeuo pipefail
 REPO_URL="https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60.git"
 
 LUA_VERSION="5.5.0"
-LUA_TARBALL="lua-${LUA_VERSION}.tar.gz"
+LUA_SOURCE_DIR="lua-${LUA_VERSION}"
+LUA_TARBALL="${LUA_SOURCE_DIR}.tar.gz"
 LUA_URL="https://www.lua.org/ftp/${LUA_TARBALL}"
 LUA_SHA256="57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d"
 LUA_PREFIX="/usr/local"
@@ -27,6 +28,7 @@ SKIP_BUILD=0
 NONINTERACTIVE=0
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+LUA_PATCH_FILE="${SCRIPT_DIR}/tools/patches/lua-5.5.0-write-barrier.patch"
 APT_UPDATED=0
 SUDO=()
 
@@ -621,6 +623,7 @@ install_common_deps() {
     xz-utils
     cmake
     build-essential
+    patch
     pkg-config
     make
     gcc
@@ -682,13 +685,29 @@ lua_binary_is_55() {
   [[ "${version}" =~ ^Lua[[:space:]]5\.5(\.|[[:space:]]|$) ]]
 }
 
+lua_runtime_has_required_fixes() {
+  local lua_bin="${LUA_PREFIX}/bin/lua"
+
+  [[ -x "${lua_bin}" ]] || return 1
+  "${lua_bin}" -e '
+local parent = {}
+parent.__newindex = parent
+collectgarbage()
+local child = setmetatable({}, parent)
+child.__newindex = {x = "hello"}
+collectgarbage("step")
+assert(parent.__newindex.x == "hello")
+' >/dev/null 2>&1
+}
+
 lua_local_is_55() {
   local header="${LUA_PREFIX}/include/lua.h"
   local library="${LUA_PREFIX}/lib/liblua.a"
 
   [[ -f "${header}" && -f "${library}" ]] || return 1
   lua_header_declares_55 "${header}" || return 1
-  lua_binary_is_55
+  lua_binary_is_55 || return 1
+  lua_runtime_has_required_fixes
 }
 
 lua_pkgconfig_dirs() {
@@ -848,14 +867,15 @@ install_lua_55() {
   sayf lua_install "${LUA_VERSION}"
 
   cd /tmp
-  rm -rf "lua-${LUA_VERSION}" "${LUA_TARBALL}"
+  rm -rf "${LUA_SOURCE_DIR}" "${LUA_TARBALL}"
 
   wget -O "${LUA_TARBALL}" "${LUA_URL}"
   printf '%s  %s\n' "${LUA_SHA256}" "${LUA_TARBALL}" | sha256sum -c -
 
   tar -xzf "${LUA_TARBALL}"
-  cd "lua-${LUA_VERSION}"
+  cd "${LUA_SOURCE_DIR}"
 
+  patch -d src -p1 < "${LUA_PATCH_FILE}"
   make linux MYCFLAGS="-fPIC"
   "${SUDO[@]}" make install
   "${SUDO[@]}" ldconfig

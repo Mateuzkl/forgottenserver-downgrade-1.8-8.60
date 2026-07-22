@@ -45,20 +45,23 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             cmake ninja-build build-essential pkg-config \
+            patch \
             gcc g++ \
             libssl-dev zlib1g-dev libfmt-dev libspdlog-dev \
             libpugixml-dev libabsl-dev \
             libasio-dev \
             default-libmysqlclient-dev
 
-      - name: Build Lua 5.5 from source
+      - name: Build patched Lua 5.5 from source
         run: |
           curl -sSL https://www.lua.org/ftp/lua-5.5.0.tar.gz -o lua.tar.gz
           echo "57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d lua.tar.gz" | sha256sum -c
           tar xzf lua.tar.gz
           cd lua-5.5.0
+          patch -d src -p1 < "$GITHUB_WORKSPACE/tools/patches/lua-5.5.0-write-barrier.patch"
           make -j$(nproc) linux MYCFLAGS="-fPIC"
           sudo make install INSTALL_TOP=/usr/local
+          /usr/local/bin/lua -e 'local p={}; p.__newindex=p; collectgarbage(); local c=setmetatable({},p); c.__newindex={x="hello"}; collectgarbage("step"); assert(p.__newindex.x=="hello")'
           cd ..
           rm -rf lua-5.5.0 lua.tar.gz
 
