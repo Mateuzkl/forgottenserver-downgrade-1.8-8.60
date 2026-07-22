@@ -92,6 +92,29 @@ Choose `true` or `false` for each key in `config.lua`. Bounty and Weekly Tasks r
 
 </details>
 
+### NPC System
+
+Two ready-to-use NPC systems are included. Select one with the `npcSystem` key in `config.lua`:
+
+| Value | NPC system |
+|---|---|
+| `"tfs"` | Default. Uses the standard TFS Lua/RevScript NPC libraries and NPCs from `data/npc/lua`. |
+| `"crystal"` | Uses the included Crystal Server 15.25 Lua/RevScript NPC libraries and NPC pack. |
+
+The default configuration is:
+
+```lua
+npcSystem = "tfs"
+```
+
+To use the Crystal Server NPCs, change only this value and restart the server:
+
+```lua
+npcSystem = "crystal"
+```
+
+Both Lua/RevScript NPC backends and their folders are already configured. An unknown value automatically falls back to `"tfs"`.
+
 ---
 
 ## Compilation
