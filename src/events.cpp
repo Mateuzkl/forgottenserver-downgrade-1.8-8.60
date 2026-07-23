@@ -355,9 +355,9 @@ void Events::eventCreatureOnChangeZone(Creature* creature, ZoneType_t fromZone, 
 }
 
 void Events::eventCreatureOnUpdateStorage(Creature* creature, const uint32_t key, const std::optional<int64_t> value,
-                                          const std::optional<int64_t> oldValue, bool isSpawn)
+                                          const std::optional<int64_t> oldValue)
 {
-	// Creature:onUpdateStorage(key, value, oldValue, isSpawn)
+	// Creature:onUpdateStorage(key, value, oldValue)
 	if (info.creatureOnUpdateStorage == -1) {
 		return;
 	}
@@ -393,9 +393,7 @@ void Events::eventCreatureOnUpdateStorage(Creature* creature, const uint32_t key
 		lua_pushnil(L);
 	}
 
-	Lua::pushBoolean(L, isSpawn);
-
-	scriptInterface.callVoidFunction(5);
+	scriptInterface.callVoidFunction(4);
 }
 
 // Party

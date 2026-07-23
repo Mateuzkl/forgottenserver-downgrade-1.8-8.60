@@ -10,7 +10,8 @@ ENV VCPKG_ROOT=/opt/vcpkg
 ENV PATH="${VCPKG_ROOT}:${PATH}"
 # Instalar dependencias del proyecto
 WORKDIR /usr/src/forgottenserver-downgrade
-COPY vcpkg.json ./
+COPY vcpkg.json vcpkg-configuration.json ./
+COPY vcpkg-overlays ./vcpkg-overlays/
 # Pre-seed Lua's distfile to avoid transient vcpkg download timeouts in CI.
 RUN set -eux; \
     mkdir -p /opt/vcpkg/downloads; \

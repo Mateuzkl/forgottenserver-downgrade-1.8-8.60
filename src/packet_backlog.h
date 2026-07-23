@@ -12,6 +12,36 @@
 
 namespace tfs::net {
 
+// Preserve the legacy dispatcher deadline only for gameplay actions that
+// become unsafe or confusing when replayed after a long dispatcher stall.
+constexpr bool shouldExpireQueuedGamePacket(uint8_t opcode) noexcept
+{
+	switch (opcode) {
+		case 0x6F: // turn north
+		case 0x70: // turn east
+		case 0x71: // turn south
+		case 0x72: // turn west
+		case 0x77: // hotkey equip
+		case 0x78: // move item
+		case 0x79: // look in shop
+		case 0x7A: // buy
+		case 0x7B: // sell
+		case 0x7E: // look in trade
+		case 0x82: // use item
+		case 0x83: // use item on position
+		case 0x84: // use item on creature
+		case 0x85: // rotate item
+		case 0x8B: // wrap item
+		case 0x8C: // look at
+		case 0x8D: // look in battle list
+		case 0xCB: // browse field
+		case 0xCC: // seek in container
+			return true;
+		default:
+			return false;
+	}
+}
+
 class PacketBacklog
 {
 private:

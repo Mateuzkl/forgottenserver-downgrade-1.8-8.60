@@ -112,16 +112,16 @@ TEST_CASE(packet_pipeline_preserves_connection_order)
 	reactor.shutdown();
 }
 
-TEST_CASE(network_message_is_forwarded_without_a_second_copy)
+TEST_CASE(packet_expiration_policy_matches_legacy_gameplay_actions)
 {
-	NetworkMessage original;
-	original.addByte(0xFB);
-	auto packet = tfs::net::make_network_message(original);
-	NetworkMessage* const address = packet.get();
+	for (uint8_t opcode : {0x6F, 0x72, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7E, 0x82, 0x83,
+	                       0x84, 0x85, 0x8B, 0x8C, 0x8D, 0xCB, 0xCC}) {
+		CHECK(tfs::net::shouldExpireQueuedGamePacket(opcode));
+	}
 
-	auto forwardToHandler = [address](NetworkMessage_ptr& forwarded) { CHECK(forwarded.get() == address); };
-	forwardToHandler(packet);
-	CHECK(packet.get() == address);
+	for (uint8_t opcode : {0x14, 0x1E, 0x32, 0x40, 0x64, 0x65, 0x7D, 0x7F, 0x80, 0x96}) {
+		CHECK(!tfs::net::shouldExpireQueuedGamePacket(opcode));
+	}
 }
 
 TFS_TEST_MAIN()

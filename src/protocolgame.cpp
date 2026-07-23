@@ -1566,9 +1566,8 @@ void ProtocolGame::disconnectClient(std::string_view message) const
 
 void ProtocolGame::dispatchCancelMessage(ReturnValue message) const
 {
-	const uint32_t playerId = player ? player->getID() : 0;
-	if (auto playerRef = g_game.getPlayerByID(playerId)) {
-		playerRef->sendCancelMessage(message);
+	if (player) {
+		player->sendCancelMessage(message);
 	}
 }
 
@@ -1580,10 +1579,11 @@ void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 
 void ProtocolGame::parsePacket(NetworkMessage& msg)
 {
-	if (msg.getLength() == 0) {
+	if (msg.getLength() == 0 || getReadableBytes(msg) == 0) {
 		return;
 	}
 
+	const uint8_t opcode = msg.getBuffer()[msg.getBufferPosition()];
 	auto admission = packetBacklog.tryAcquire();
 	if (!admission) {
 		if (admission.requestDisconnect) {
@@ -1605,14 +1605,20 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 	// The ASIO thread only owns the incoming bytes. Protocol and player state
 	// are read exclusively by the dispatcher task below.
 	auto packet = tfs::net::make_network_message(msg);
-	g_dispatcher.addTask([thisPtr = getThis(), packet = std::move(packet), ticket = std::move(admission.ticket)]() mutable {
+	auto task = [thisPtr = getThis(), packet = std::move(packet), ticket = std::move(admission.ticket)]() mutable {
 		(void)ticket;
 		if (thisPtr->isConnectionExpired()) {
 			return;
 		}
 
 		thisPtr->parsePacketOnDispatcher(packet);
-	});
+	};
+
+	if (tfs::net::shouldExpireQueuedGamePacket(opcode)) {
+		g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, std::move(task));
+	} else {
+		g_dispatcher.addTask(std::move(task));
+	}
 }
 
 void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)

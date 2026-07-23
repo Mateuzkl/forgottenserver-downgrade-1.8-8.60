@@ -24,12 +24,18 @@ function(require_occurrences text needle expected context)
 endfunction()
 
 extract_block("void ProtocolGame::login" "void ProtocolGame::finishLogin" login_block)
+extract_block("void ProtocolGame::finishLogin" "void ProtocolGame::spectate" finish_login_block)
 extract_block("void ProtocolGame::connect" "void ProtocolGame::logout" connect_block)
+extract_block("void ProtocolGame::onRecvFirstMessage" "void ProtocolGame::onConnect" first_message_block)
 
 require_occurrences("${login_block}" "sendFeatures\\(isAstraClient\\)" 1 "login feature negotiation")
 require_occurrences("${login_block}" "opcodeMessage\\.addByte\\(0x32\\)" 1 "login extended-opcode negotiation")
 require_occurrences("${connect_block}" "sendFeatures\\(" 0 "reconnect duplicate feature negotiation")
 require_occurrences("${connect_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "reconnect duplicate extended-opcode negotiation")
+require_occurrences("${finish_login_block}" "sendFeatures\\(" 0 "finishLogin duplicate feature negotiation")
+require_occurrences("${finish_login_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "finishLogin duplicate extended-opcode negotiation")
+require_occurrences("${first_message_block}" "sendFeatures\\(" 0 "first-message duplicate feature negotiation")
+require_occurrences("${first_message_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "first-message duplicate extended-opcode negotiation")
 
 string(FIND "${login_block}" "sendFeatures(isAstraClient);" features_position)
 string(FIND "${login_block}" "connect(foundPlayer->getID(), operatingSystem);" reconnect_position)

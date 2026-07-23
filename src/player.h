@@ -487,7 +487,7 @@ public:
 
 	bool canOpenCorpse(uint32_t ownerId) const;
 
-	void setStorageValue(const uint32_t key, const std::optional<int64_t> value, const bool isSpawn = false) override;
+	void setStorageValue(const uint32_t key, const std::optional<int64_t> value) override;
 	void loadStorageValue(uint32_t key, int64_t value);
 	const std::unordered_set<uint32_t>& getModifiedStorageKeys() const { return modifiedStorageKeys; }
 	const std::unordered_set<uint32_t>& getRemovedStorageKeys() const { return removedStorageKeys; }
@@ -895,6 +895,7 @@ public:
 	void addInFightTicks(bool pzlock = false);
 
 	uint64_t getGainedExperience(const std::shared_ptr<Creature>& attacker) const override;
+	uint64_t getGainedExperience(const std::shared_ptr<Creature>& attacker, double damageRatio) const override;
 
 	// combat event functions
 	void onAddCondition(ConditionType_t type) override;

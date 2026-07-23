@@ -1326,9 +1326,14 @@ int LuaScriptInterface::luaCreatureGC(lua_State* L)
 		auto* weakPtr = static_cast<std::weak_ptr<Creature>*>(lua_touserdata(L, -1));
 		if (weakPtr) {
 			std::destroy_at(weakPtr);
-			std::construct_at(weakPtr);
 		}
 		lua_pop(L, 1);
+
+		// Remove the ownership userdata after destroying its C++ object. This
+		// makes a repeated/finalizer re-entry a no-op without starting a second
+		// weak_ptr lifetime in memory owned by Lua.
+		lua_pushnil(L);
+		lua_setiuservalue(L, 1, 1);
 	}
 	return 0;
 }

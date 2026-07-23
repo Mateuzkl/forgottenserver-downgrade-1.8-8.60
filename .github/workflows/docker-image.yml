@@ -15,6 +15,7 @@ on:
       - CMakeLists.txt
       - vcpkg.json
       - vcpkg-configuration.json
+      - "vcpkg-overlays/**"
 
   pull_request:
     branches:
@@ -30,6 +31,7 @@ on:
       - CMakeLists.txt
       - vcpkg.json
       - vcpkg-configuration.json
+      - "vcpkg-overlays/**"
 
   workflow_dispatch:
 

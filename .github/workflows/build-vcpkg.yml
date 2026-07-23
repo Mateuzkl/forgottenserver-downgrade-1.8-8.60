@@ -21,6 +21,9 @@ on:
       - CMakeLists.txt
       - CMakePresets.json
       - vcpkg.json
+      - vcpkg-configuration.json
+      - vcpkg-overlays/**
+      - tools/*.cmake
 
   pull_request:
     paths:
@@ -30,6 +33,9 @@ on:
       - CMakeLists.txt
       - CMakePresets.json
       - vcpkg.json
+      - vcpkg-configuration.json
+      - vcpkg-overlays/**
+      - tools/*.cmake
 
   workflow_dispatch:
 
@@ -64,7 +70,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ github.workspace }}/vcpkg_cache
-          key: vcpkg-windows-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**', 'CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
           restore-keys: |
             vcpkg-windows-
 
@@ -81,7 +87,10 @@ jobs:
         with:
           configurePreset: vcpkg
           buildPreset: vcpkg
-          configurePresetAdditionalArgs: "['-GNinja', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl', '-DCMAKE_C_COMPILER_LAUNCHER=sccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=sccache', '-DVCPKG_TARGET_TRIPLET=x64-windows-static', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded']"
+          configurePresetAdditionalArgs: "['-GNinja', '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_TESTING=ON', '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl', '-DCMAKE_C_COMPILER_LAUNCHER=sccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=sccache', '-DVCPKG_TARGET_TRIPLET=x64-windows-static', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded']"
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
 
       - name: Upload build logs
         uses: actions/upload-artifact@v7.0.1

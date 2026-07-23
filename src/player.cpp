@@ -1717,14 +1717,10 @@ std::optional<Player::BestiaryKillResult> Player::takePendingBestiaryKill(uint32
 	return result;
 }
 
-void Player::setStorageValue(const uint32_t key, const std::optional<int64_t> value, const bool isSpawn /* = false*/)
+void Player::setStorageValue(const uint32_t key, const std::optional<int64_t> value)
 {
 	const auto oldValue = getStorageValue(key);
-	Creature::setStorageValue(key, value, isSpawn);
-
-	if (isSpawn) {
-		return;
-	}
+	Creature::setStorageValue(key, value);
 
 	const auto currentValue = getStorageValue(key);
 	if (oldValue == currentValue) {
@@ -5055,12 +5051,17 @@ void Player::maintainAttackFlow()
 
 uint64_t Player::getGainedExperience(const std::shared_ptr<Creature>& attacker) const
 {
+	return getGainedExperience(attacker, getDamageRatio(attacker));
+}
+
+uint64_t Player::getGainedExperience(const std::shared_ptr<Creature>& attacker, double damageRatio) const
+{
 	if (getBoolean(ConfigManager::EXPERIENCE_FROM_PLAYERS)) {
 		Player* attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
 		if (attackerPlayer && attacker.get() != this && skillLoss &&
 		    std::abs(static_cast<int64_t>(attackerPlayer->getLevel() - level)) <=
 		        getInteger(ConfigManager::EXP_FROM_PLAYERS_LEVEL_RANGE)) {
-			return std::max<uint64_t>(0, std::floor(getLostExperience() * getDamageRatio(attacker) * 0.75));
+			return std::max<uint64_t>(0, std::floor(getLostExperience() * damageRatio * 0.75));
 		}
 	}
 	return 0;

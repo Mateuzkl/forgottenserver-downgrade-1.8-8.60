@@ -268,6 +268,7 @@ endif()
 if (BUILD_TESTING)
     message(STATUS "Building unit tests")
     add_test(
+        NAME check_source_list_parity
         COMMAND ${CMAKE_COMMAND}
             -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
             -P ${CMAKE_SOURCE_DIR}/tools/check-source-list-parity.cmake

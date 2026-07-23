@@ -1,5 +1,5 @@
 --[[
-    Server-side login/storage stress test for TFS 1.8.
+    Server-side login/storage stress diagnostic for TFS 1.8.
 
     Commands (account type 6 / access group only):
       /stress_login prepare,Player One|Player Two|Player Three,25000

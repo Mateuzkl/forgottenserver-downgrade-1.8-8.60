@@ -226,6 +226,7 @@ public:
 	bool setCallbackId(int32_t callbackId, LuaScriptInterface* scriptInterface);
 
 	int32_t getScriptId() const { return scriptId; }
+	int32_t getCallbackId() const { return callbackId; }
 	LuaScriptInterface* getScriptInterface() { return interface; }
 	void setScriptInterface(LuaScriptInterface* scriptInterface) { interface = scriptInterface; }
 

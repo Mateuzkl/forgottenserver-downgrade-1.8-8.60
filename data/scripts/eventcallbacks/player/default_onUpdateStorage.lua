@@ -2,9 +2,7 @@ local lastQuestUpdate = {}
 
 local event = Event()
 
-event.onUpdateStorage = function(creature, key, value, oldValue, isSpawn)
-	if isSpawn then return end
-
+event.onUpdateStorage = function(creature, key, value, oldValue)
 	local player = creature:getPlayer()
 	if not player then
 		player = Player(creature:getId())

@@ -11,6 +11,8 @@ on:
       - 'cmake/**'
       - CMakeLists.txt
       - vcpkg.json
+      - 'tools/*.cmake'
+      - 'tools/patches/lua-5.5.0-write-barrier.patch'
       - '.github/workflows/build.yml'
   pull_request:
     branches:
@@ -20,6 +22,8 @@ on:
       - 'cmake/**'
       - CMakeLists.txt
       - vcpkg.json
+      - 'tools/*.cmake'
+      - 'tools/patches/lua-5.5.0-write-barrier.patch'
       - '.github/workflows/build.yml'
   workflow_dispatch:
 
@@ -99,6 +103,7 @@ jobs:
           -DENABLE_NATIVE_OPTIMIZATIONS=OFF
           -DENABLE_SLOW_TASK_DETECTION=OFF
           -DUSE_MIMALLOC=OFF
+          -DBUILD_TESTING=ON
           -DSKIP_GIT=OFF
           -DLUA_INCLUDE_DIR=/usr/local/include
           -DLUA_LIBRARY=/usr/local/lib/liblua.a
@@ -107,6 +112,9 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel $(nproc)
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
 
       - name: Verify binary
         run: |

@@ -553,6 +553,8 @@ void clearLuaCrashContext() noexcept
 }
 
 #ifndef _WIN32
+// GDB/LLDB hook: `call dumpLuaCrashContext()` prints the last signal-safe
+// snapshot without asking the debugger to inspect the possibly damaged Lua VM.
 extern "C" __attribute__((used)) void dumpLuaCrashContext() { writeLuaCrashContext(); }
 #endif
 

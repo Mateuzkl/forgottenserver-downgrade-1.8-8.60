@@ -137,8 +137,8 @@ function Player:onNetworkMessage(recvByte, msg)
 	handler(self, msg)
 end
 
-function Player:onUpdateStorage(key, value, oldValue, isLogin)
-	if hasEvent.onUpdateStorage then Event.onUpdateStorage(self, key, value, oldValue, isLogin) end
+function Player:onUpdateStorage(key, value, oldValue)
+	if hasEvent.onUpdateStorage then Event.onUpdateStorage(self, key, value, oldValue) end
 end
 
 function Player:onUpdateInventory(item, slot, equip)

@@ -324,6 +324,12 @@ bool ScriptEnvironment::setCallbackId(int32_t callbackId, LuaScriptInterface* sc
 
 	this->callbackId = callbackId;
 	interface = scriptInterface;
+	if (scriptInterface) {
+		setLuaCrashContext(scriptInterface->getInterfaceName(), scriptInterface->getFileById(callbackId), callbackId);
+		setLuaCrashPhase("registered Lua callback");
+	} else {
+		clearLuaCrashContext();
+	}
 	return true;
 }
 
@@ -549,10 +555,12 @@ void LuaScriptInterface::resetScriptEnv()
 		return;
 	}
 
+	const int32_t activeScriptId =
+	    outerEnv->getCallbackId() != 0 ? outerEnv->getCallbackId() : outerEnv->getScriptId();
 	const std::string_view origin = outerEnv->getTimerEventOrigin().empty()
-	                                    ? outerInterface->getFileById(outerEnv->getScriptId())
+	                                    ? outerInterface->getFileById(activeScriptId)
 	                                    : std::string_view(outerEnv->getTimerEventOrigin());
-	setLuaCrashContext(outerInterface->getInterfaceName(), origin, outerEnv->getScriptId());
+	setLuaCrashContext(outerInterface->getInterfaceName(), origin, activeScriptId);
 	setLuaCrashPhase("resumed outer Lua callback");
 }
 
@@ -4490,6 +4498,26 @@ bool LuaEnvironment::initState()
 	}
 
 	luaL_openlibs(luaState);
+
+#if LUA_VERSION_NUM == 505
+	// Lua 5.5.0 shipped with a missing write barrier in luaV_finishset. Fail
+	// fast for an unpatched system library instead of accepting latent heap
+	// corruption. Patched 5.5 builds and later 5.5 maintenance releases pass.
+	constexpr const char* writeBarrierProbe =
+	    "local p={}; p.__newindex=p; collectgarbage(); "
+	    "local c=setmetatable({},p); c.__newindex={x='ok'}; "
+	    "collectgarbage('step'); assert(p.__newindex.x=='ok')";
+	if (luaL_dostring(luaState, writeBarrierProbe) != LUA_OK) {
+		const char* error = lua_tostring(luaState, -1);
+		LOG_ERROR("[LuaEnvironment::initState] Lua 5.5 write-barrier self-test failed: {}",
+		          error ? error : "unknown error");
+		ownedLuaState_.reset();
+		luaState = nullptr;
+		return false;
+	}
+	lua_settop(luaState, 0);
+#endif
+
 	registerFunctions();
 
 	runningEventId = EVENT_ID_USER;

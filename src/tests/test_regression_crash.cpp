@@ -4,14 +4,27 @@
 #include "../otpch.h"
 
 #include "../creature.h"
+#include "../events.h"
 #include "../luascript.h"
 #include "../player.h"
+#include "../scriptmanager.h"
 
 #include "test_support.h"
 
 extern LuaEnvironment g_luaEnvironment;
 
 namespace {
+
+class EventsGuard
+{
+public:
+	EventsGuard() : previous(g_events) { g_events = &events; }
+	~EventsGuard() { g_events = previous; }
+
+private:
+	Events* previous;
+	Events events;
+};
 
 class TestCreature final : public Creature
 {
@@ -23,7 +36,12 @@ public:
 	void setID() override { id = nextId.fetch_add(1, std::memory_order_relaxed); }
 	void removeList() override {}
 	void addList() override {}
-	void clearDamageMapForTest() { damageMap.clear(); }
+	double snapshotDamageRatioAfterClear(const std::shared_ptr<Creature>& attacker)
+	{
+		const auto snapshot = getDamageMapSnapshot();
+		damageMap.clear();
+		return getDamageRatio(attacker, snapshot);
+	}
 
 private:
 	inline static std::atomic<uint32_t> nextId{1};
@@ -106,33 +124,16 @@ TEST_CASE(live_creatures_thread_safe_basic)
 	CHECK(!Creature::isAlive(rawCreature));
 }
 
-TEST_CASE(damage_map_snapshot_is_independent)
+TEST_CASE(damage_map_snapshot_keeps_experience_ratio_after_reentrant_clear)
 {
 	auto creature = makeTestCreature();
-	creature->addDamagePoints(makeTestCreature(), 100);
+	auto primaryAttacker = makeTestCreature();
+	creature->addDamagePoints(primaryAttacker, 100);
 	creature->addDamagePoints(makeTestCreature(), 50);
 
-	auto snapshot = creature->getDamageMapSnapshot();
-	CHECK(snapshot.size() == 2U);
-
-	creature->clearDamageMapForTest();
-	CHECK(snapshot.size() == 2U);
-}
-
-TEST_CASE(storage_spawn_load_normalizes_minus_one)
-{
-	auto creature = makeTestCreature();
-	creature->setStorageValue(1000, std::optional<int64_t>{42}, true);
-	CHECK(creature->getStorageValue(1000).value_or(-2) == 42);
-
-	creature->setStorageValue(1000, std::optional<int64_t>{-1}, true);
-	CHECK(!creature->getStorageValue(1000).has_value());
-
-	creature->setStorageValue(1000, std::optional<int64_t>{-1}, true);
-	CHECK(!creature->getStorageValue(1000).has_value());
-
-	creature->setStorageValue(1000, std::optional<int64_t>{42}, true);
-	CHECK(creature->getStorageValue(1000).value_or(-2) == 42);
+	const double ratio = creature->snapshotDamageRatioAfterClear(primaryAttacker);
+	CHECK(std::abs(ratio - (2.0 / 3.0)) < 0.000001);
+	CHECK(creature->getDamageMap().empty());
 }
 
 TEST_CASE(storage_database_load_sets_and_erases_value)
@@ -143,6 +144,18 @@ TEST_CASE(storage_database_load_sets_and_erases_value)
 
 	creature->loadStorageValue(2000, -1);
 	CHECK(!creature->getStorageValue(2000).has_value());
+}
+
+TEST_CASE(storage_live_update_normalizes_minus_one)
+{
+	EventsGuard eventsGuard;
+	auto creature = makeTestCreature();
+
+	creature->setStorageValue(3000, 42);
+	CHECK(creature->getStorageValue(3000).value_or(-2) == 42);
+
+	creature->setStorageValue(3000, -1);
+	CHECK(!creature->getStorageValue(3000).has_value());
 }
 
 TEST_CASE(network_message_constructor_associates_player_userdata)

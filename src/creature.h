@@ -302,6 +302,7 @@ public:
 	CreatureVector getKillers() const;
 	void onDeath();
 	virtual uint64_t getGainedExperience(const std::shared_ptr<Creature>& attacker) const;
+	virtual uint64_t getGainedExperience(const std::shared_ptr<Creature>& attacker, double damageRatio) const;
 	void addDamagePoints(const std::shared_ptr<Creature>& attacker, int32_t damagePoints);
 	bool hasBeenAttacked(uint32_t attackerId);
 
@@ -391,7 +392,6 @@ public:
 	Tile* getTile() override final { return tile.lock().get(); }
 	const Tile* getTile() const override final { return tile.lock().get(); }
 	std::shared_ptr<Tile> getTileShared() { return tile.lock(); }
-	std::shared_ptr<const Tile> getTileShared() const { return tile.lock(); }
 
 	const Position& getLastPosition() const { return lastPosition; }
 	void setLastPosition(Position newLastPos) { lastPosition = newLastPos; }
@@ -405,7 +405,7 @@ public:
 	               int32_t maxTargetDist, bool fullPathSearch = true, bool clearSight = true,
 	               int32_t maxSearchDist = 0) const;
 
-	virtual void setStorageValue(uint32_t key, std::optional<int64_t> value, bool isSpawn = false);
+	virtual void setStorageValue(uint32_t key, std::optional<int64_t> value);
 	void loadStorageValue(uint32_t key, int64_t value);
 	virtual std::optional<int64_t> getStorageValue(uint32_t key) const;
 	using StorageMap = absl::flat_hash_map<uint32_t, int64_t>;
@@ -430,6 +430,7 @@ protected:
 	};
 
 	using CountMap = absl::flat_hash_map<uint32_t, CountBlock_t>;
+	double getDamageRatio(const std::shared_ptr<Creature>& attacker, const CountMap& damageCounts) const;
 
 	Position position;
 

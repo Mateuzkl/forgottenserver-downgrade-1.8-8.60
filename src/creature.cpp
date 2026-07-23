@@ -583,6 +583,11 @@ void Creature::onDeath()
 	if (!self) {
 		return;
 	}
+
+	// onKilledCreature may execute Lua that removes this creature and clears
+	// damageMap. Capture all attribution data before the first callback.
+	const auto damageMapSnapshot = getDamageMapSnapshot();
+
 	auto lastHitCreature = lastAttacker.lock();
 	std::shared_ptr<Creature> lastHitCreatureMaster;
 	if (lastHitCreature) {
@@ -596,21 +601,19 @@ void Creature::onDeath()
 	const int64_t inFightTicks = getInteger(ConfigManager::PZ_LOCKED);
 	int32_t mostDamage = 0;
 	std::unordered_map<std::shared_ptr<Creature>, uint64_t> experienceMap;
-	
-	// Use snapshot to prevent crashes if damageMap is cleared by Game::removeCreature
-	auto damageMapSnapshot = getDamageMapSnapshot();
-	
+
 	for (const auto& it : damageMapSnapshot) {
 		auto attacker = g_game.getCreatureByIDShared(it.first);
 		if (attacker) {
-			CountBlock_t cb = it.second;
+			const CountBlock_t& cb = it.second;
 			if ((cb.total > mostDamage && (timeNow - cb.ticks <= inFightTicks))) {
 				mostDamage = cb.total;
 				mostDamageCreature = attacker;
 			}
 
 			if (attacker.get() != this) {
-				uint64_t gainExp = getGainedExperience(attacker);
+				const uint64_t gainExp =
+				    getGainedExperience(attacker, getDamageRatio(attacker, damageMapSnapshot));
 				if (Player* attackerPlayer = attacker->getPlayer()) {
 					attackerPlayer->removeAttacked(getPlayer());
 
@@ -1153,14 +1156,23 @@ size_t Creature::getSummonCount() const
 
 double Creature::getDamageRatio(const std::shared_ptr<Creature>& attacker) const
 {
-	uint32_t totalDamage = 0;
-	uint32_t attackerDamage = 0;
+	return getDamageRatio(attacker, damageMap);
+}
 
-	for (const auto& it : damageMap) {
+double Creature::getDamageRatio(const std::shared_ptr<Creature>& attacker, const CountMap& damageCounts) const
+{
+	uint64_t totalDamage = 0;
+	uint64_t attackerDamage = 0;
+
+	for (const auto& it : damageCounts) {
 		const CountBlock_t& cb = it.second;
-		totalDamage += cb.total;
+		if (cb.total <= 0) {
+			continue;
+		}
+
+		totalDamage += static_cast<uint64_t>(cb.total);
 		if (attacker && it.first == attacker->getID()) {
-			attackerDamage += cb.total;
+			attackerDamage += static_cast<uint64_t>(cb.total);
 		}
 	}
 
@@ -1173,7 +1185,12 @@ double Creature::getDamageRatio(const std::shared_ptr<Creature>& attacker) const
 
 uint64_t Creature::getGainedExperience(const std::shared_ptr<Creature>& attacker) const
 {
-	return std::floor(getDamageRatio(attacker) * getLostExperience());
+	return getGainedExperience(attacker, getDamageRatio(attacker));
+}
+
+uint64_t Creature::getGainedExperience(const std::shared_ptr<Creature>&, double damageRatio) const
+{
+	return std::floor(damageRatio * getLostExperience());
 }
 
 void Creature::addDamagePoints(const std::shared_ptr<Creature>& attacker, int32_t damagePoints)
@@ -1184,8 +1201,7 @@ void Creature::addDamagePoints(const std::shared_ptr<Creature>& attacker, int32_
 
 	uint32_t attackerId = attacker->id;
 
-	auto [it, inserted] = damageMap.try_emplace(attackerId, CountBlock_t{0, 0});
-	(void)inserted;
+	auto it = damageMap.try_emplace(attackerId, CountBlock_t{0, 0}).first;
 	it->second.total += damagePoints;
 	it->second.ticks = OTSYS_TIME();
 
@@ -1867,7 +1883,7 @@ const std::vector<ZoneId>& Creature::getZoneIds() const
 	return emptyZoneIds;
 }
 
-void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value, bool isSpawn)
+void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value)
 {
 	auto oldValue = getStorageValue(key);
 
@@ -1877,10 +1893,6 @@ void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value, bool 
 	std::optional<int64_t> normalizedNewValue = value ? normalize(value.value()) : std::nullopt;
 	std::optional<int64_t> normalizedOldValue = oldValue ? normalize(oldValue.value()) : std::nullopt;
 
-	if (normalizedOldValue == normalizedNewValue) {
-		return;
-	}
-
 	// Complete the map modification BEFORE calling Lua callbacks to prevent
 	// reentrant access to the same flat_hash_map during element construction.
 	if (normalizedNewValue) {
@@ -1889,23 +1901,19 @@ void Creature::setStorageValue(uint32_t key, std::optional<int64_t> value, bool 
 		storageMap.erase(key);
 	}
 
-	// Database loading may run in a worker thread. It must never enter the
-	// global Lua state or invoke gameplay callbacks.
-	if (isSpawn) {
-		return;
-	}
-
 	// Keep the creature alive for the whole callback after the map reaches a
 	// consistent state. The callback receives (new value, old value).
 	auto selfRef = getSharedCreature(this);
 	if (!selfRef || selfRef->isRemoved()) {
 		return;
 	}
-	g_events->eventCreatureOnUpdateStorage(this, key, normalizedNewValue, normalizedOldValue, false);
+	g_events->eventCreatureOnUpdateStorage(this, key, normalizedNewValue, normalizedOldValue);
 }
 
 void Creature::loadStorageValue(uint32_t key, int64_t value)
 {
+	// Database loading can run on a worker thread. This path updates only the
+	// map; it deliberately never enters Lua or marks Player storage as dirty.
 	if (value == -1) {
 		storageMap.erase(key);
 		return;
