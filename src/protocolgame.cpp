@@ -43,40 +43,10 @@ uint32_t ProtocolGame::spectatorId = 1;
 std::set<std::string> ProtocolGame::spectatorNames;
 extern Monsters g_monsters;
 
-namespace {
-
 namespace DllCheckProtocol {
-
-constexpr uint8_t OPCODE = 0xDE;
-constexpr uint8_t DLL_CHECK_WIRE_VERSION = 4;
-constexpr uint8_t CHALLENGE_KIND = 0x31;
-constexpr uint8_t RESPONSE_KIND = 0x72;
-constexpr uint32_t BUILD_ID = 2026072201;
-constexpr uint32_t INTEGRITY_FLAG = 0x80000000;
-constexpr uint32_t BUILD_MASK = 0x7FFFFFFF;
-constexpr uint32_t INITIAL_SEQUENCE = 0x6B19D3A7;
-constexpr int64_t INTERVAL_MS = 5000;
-constexpr int64_t TIMEOUT_MS = 5000;
-constexpr std::size_t PAYLOAD_SIZE = 64;
-constexpr std::size_t AUTHENTICATED_SIZE = 32;
-constexpr std::size_t TAG_OFFSET = AUTHENTICATED_SIZE;
-constexpr std::size_t TAG_SIZE = 32;
-constexpr std::size_t MAX_ENCODED_PAYLOAD_SIZE = 256;
 
 constexpr std::string_view BASE64_ALPHABET =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-constexpr std::array<uint8_t, 32> KEY_FRAGMENT_A = {
-    0x48, 0x2C, 0xC5, 0x8F, 0x31, 0xCB, 0x47, 0xAE,
-    0x08, 0x6C, 0x50, 0xCA, 0x80, 0x29, 0xEE, 0xC0,
-    0x1C, 0xB9, 0xE9, 0x42, 0xF4, 0xAE, 0x74, 0x29,
-    0x10, 0x4F, 0x29, 0xDD, 0x5F, 0xB3, 0x0F, 0xE7
-};
-constexpr std::array<uint8_t, 32> KEY_FRAGMENT_B = {
-    0xE0, 0xBC, 0x2F, 0x24, 0xAA, 0xB3, 0xED, 0xCE,
-    0x44, 0x42, 0xC3, 0x49, 0x0B, 0x83, 0xE8, 0xE4,
-    0xEF, 0x46, 0xCF, 0x3A, 0x13, 0x0C, 0xF8, 0xAA,
-    0xC6, 0xAE, 0x41, 0x3A, 0xBE, 0x6E, 0xF9, 0x54
-};
 
 constexpr bool hasUniqueAlphabetCharacters()
 {
@@ -99,17 +69,38 @@ constexpr bool hasUniqueAlphabetCharacters()
 static_assert(BASE64_ALPHABET.size() == 64);
 static_assert(hasUniqueAlphabetCharacters());
 
-using Payload = std::array<uint8_t, PAYLOAD_SIZE>;
-using Tag = std::array<uint8_t, TAG_SIZE>;
-
-struct Fields
+int hexValue(char character)
 {
-	uint32_t build = 0;
-	uint64_t timestamp = 0;
-	uint64_t sessionId = 0;
-	uint32_t sequence = 0;
-	uint32_t nonce = 0;
-};
+	if (character >= '0' && character <= '9') {
+		return character - '0';
+	}
+	if (character >= 'a' && character <= 'f') {
+		return character - 'a' + 10;
+	}
+	if (character >= 'A' && character <= 'F') {
+		return character - 'A' + 10;
+	}
+	return -1;
+}
+
+bool decodeHmacKey(std::string_view encoded, HmacKey& key)
+{
+	key.fill(0);
+	if (encoded.size() != key.size() * 2) {
+		return false;
+	}
+
+	for (std::size_t index = 0; index < key.size(); ++index) {
+		const int high = hexValue(encoded[index * 2]);
+		const int low = hexValue(encoded[index * 2 + 1]);
+		if (high < 0 || low < 0) {
+			key.fill(0);
+			return false;
+		}
+		key[index] = static_cast<uint8_t>((high << 4) | low);
+	}
+	return true;
+}
 
 void writeU16(Payload& payload, std::size_t offset, uint16_t value)
 {
@@ -167,25 +158,19 @@ Tag getTag(const Payload& payload)
 	return tag;
 }
 
-bool computeTag(const Payload& payload, Tag& tag)
+bool computeTag(const HmacKey& key, const Payload& payload, Tag& tag)
 {
-	std::array<uint8_t, 32> key = {};
-	for (std::size_t index = 0; index < key.size(); ++index) {
-		key[index] = KEY_FRAGMENT_A[index] ^ KEY_FRAGMENT_B[index];
-	}
-
 	unsigned int tagLength = 0;
 	const unsigned char* result =
 	    HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), payload.data(),
 	         AUTHENTICATED_SIZE, tag.data(), &tagLength);
-	OPENSSL_cleanse(key.data(), key.size());
 	return result != nullptr && tagLength == static_cast<unsigned int>(tag.size());
 }
 
-bool hasValidTag(const Payload& payload)
+bool hasValidTag(const HmacKey& key, const Payload& payload)
 {
 	Tag expected = {};
-	if (!computeTag(payload, expected)) {
+	if (!computeTag(key, payload, expected)) {
 		return false;
 	}
 
@@ -195,8 +180,19 @@ bool hasValidTag(const Payload& payload)
 	return valid;
 }
 
-bool buildChallenge(uint64_t timestamp, uint64_t sessionId, uint32_t sequence,
-                    uint32_t nonce, Payload& payload)
+bool signPayload(const HmacKey& key, Payload& payload)
+{
+	Tag tag = {};
+	if (!computeTag(key, payload, tag)) {
+		return false;
+	}
+	setTag(payload, tag);
+	OPENSSL_cleanse(tag.data(), tag.size());
+	return true;
+}
+
+bool buildChallenge(const HmacKey& key, uint64_t timestamp, uint64_t sessionId,
+                    uint32_t sequence, uint32_t nonce, Payload& payload)
 {
 	payload = {};
 	payload[0] = DLL_CHECK_WIRE_VERSION;
@@ -208,19 +204,13 @@ bool buildChallenge(uint64_t timestamp, uint64_t sessionId, uint32_t sequence,
 	writeU32(payload, 24, sequence);
 	writeU32(payload, 28, nonce);
 
-	Tag tag = {};
-	if (!computeTag(payload, tag)) {
-		return false;
-	}
-	setTag(payload, tag);
-	OPENSSL_cleanse(tag.data(), tag.size());
-	return true;
+	return signPayload(key, payload);
 }
 
-bool parseResponse(const Payload& payload, Fields& fields)
+bool parseResponse(const HmacKey& key, const Payload& payload, Fields& fields)
 {
 	if (payload[0] != DLL_CHECK_WIRE_VERSION || payload[1] != RESPONSE_KIND ||
-	    readU16(payload, 2) != PAYLOAD_SIZE || !hasValidTag(payload)) {
+	    readU16(payload, 2) != PAYLOAD_SIZE || !hasValidTag(key, payload)) {
 		return false;
 	}
 
@@ -231,6 +221,19 @@ bool parseResponse(const Payload& payload, Fields& fields)
 	fields.nonce = readU32(payload, 28);
 	return fields.timestamp != 0 && fields.sessionId != 0 && fields.sequence != 0 &&
 	       (fields.build & BUILD_MASK) == BUILD_ID && (fields.build & INTEGRITY_FLAG) != 0;
+}
+
+bool matchesExpectedResponse(const Fields& fields, const Fields& expected)
+{
+	return fields.timestamp == expected.timestamp &&
+	       fields.sessionId == expected.sessionId &&
+	       fields.sequence == expected.sequence &&
+	       fields.nonce == expected.nonce;
+}
+
+bool isResponseWindowValid(bool pending, int64_t sentAt, int64_t receivedAt)
+{
+	return pending && receivedAt >= sentAt && receivedAt - sentAt < TIMEOUT_MS;
 }
 
 std::string base64Encode(const std::vector<uint8_t>& bytes)
@@ -341,6 +344,14 @@ bool decodePayload(std::string_view encoded, Payload& payload)
 }
 
 } // namespace DllCheckProtocol
+
+namespace {
+
+bool getConfiguredDllCheckKey(DllCheckProtocol::HmacKey& key)
+{
+	return DllCheckProtocol::decodeHmacKey(
+	    ConfigManager::getString(ConfigManager::DLL_CHECK_HMAC_KEY), key);
+}
 
 // 0x3C is reserved for native ZoneId weather on negotiated custom clients.
 constexpr uint8_t ZONE_WEATHER_OPCODE = 0x3C;
@@ -3989,12 +4000,16 @@ void ProtocolGame::sendDllCheck()
 	}
 
 	DllCheckProtocol::Payload payload = {};
-	if (!DllCheckProtocol::buildChallenge(
+	DllCheckProtocol::HmacKey key = {};
+	if (!getConfiguredDllCheckKey(key) || !DllCheckProtocol::buildChallenge(
+	        key,
 	        dllCheckExpectedTimestamp, dllCheckExpectedSessionId,
 	        dllCheckExpectedSequence, dllCheckExpectedRandom, payload)) {
+		OPENSSL_cleanse(key.data(), key.size());
 		failDllCheck();
 		return;
 	}
+	OPENSSL_cleanse(key.data(), key.size());
 	const std::string encoded = DllCheckProtocol::encodePayload(payload);
 
 	NetworkMessage msg;
@@ -4075,7 +4090,7 @@ void ProtocolGame::parseDllCheckResponse(NetworkMessage& msg)
 void ProtocolGame::validateDllCheckResponse(std::string response, int64_t receivedAt)
 {
 	if (!dllCheckPending || clientOperatingSystem != CLIENTOS_CUSTOM_DLL ||
-	    receivedAt < dllCheckSentAt || receivedAt - dllCheckSentAt >= DllCheckProtocol::TIMEOUT_MS) {
+	    !DllCheckProtocol::isResponseWindowValid(dllCheckPending, dllCheckSentAt, receivedAt)) {
 		failDllCheck();
 		return;
 	}
@@ -4086,14 +4101,20 @@ void ProtocolGame::validateDllCheckResponse(std::string response, int64_t receiv
 		failDllCheck();
 		return;
 	}
-	if (!DllCheckProtocol::parseResponse(payload, fields)) {
+	DllCheckProtocol::HmacKey key = {};
+	if (!getConfiguredDllCheckKey(key) ||
+	    !DllCheckProtocol::parseResponse(key, payload, fields)) {
+		OPENSSL_cleanse(key.data(), key.size());
 		failDllCheck();
 		return;
 	}
-	if (fields.timestamp != dllCheckExpectedTimestamp ||
-	    fields.sessionId != dllCheckExpectedSessionId ||
-	    fields.sequence != dllCheckExpectedSequence ||
-	    fields.nonce != dllCheckExpectedRandom) {
+	OPENSSL_cleanse(key.data(), key.size());
+	DllCheckProtocol::Fields expected;
+	expected.timestamp = dllCheckExpectedTimestamp;
+	expected.sessionId = dllCheckExpectedSessionId;
+	expected.sequence = dllCheckExpectedSequence;
+	expected.nonce = dllCheckExpectedRandom;
+	if (!DllCheckProtocol::matchesExpectedResponse(fields, expected)) {
 		failDllCheck();
 		return;
 	}

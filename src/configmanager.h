@@ -177,6 +177,7 @@ enum String
 	NPC_SYSTEM,
 	DUAL_WIELDING_MODE,
 	RAID_SPAWNFILE_DIRECTORY,
+	DLL_CHECK_HMAC_KEY,
 
 	LAST_STRING /* this must be the last one */
 };
