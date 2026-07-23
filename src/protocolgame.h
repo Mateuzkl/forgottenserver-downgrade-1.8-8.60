@@ -422,6 +422,7 @@ private:
 	uint32_t dllCheckExpectedSequence = 0;
 	uint32_t dllCheckExpectedRandom = 0;
 	uint64_t dllCheckExpectedTimestamp = 0;
+	uint64_t dllCheckExpectedSessionId = 0;
 	int64_t dllCheckSentAt = 0;
 
 	int64_t moveWindowStart = 0;

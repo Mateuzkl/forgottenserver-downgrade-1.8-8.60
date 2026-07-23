@@ -26,6 +26,7 @@
 #include "scriptmanager.h"
 #include "thread_pool.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <limits>
@@ -33,6 +34,10 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+
+#include <openssl/crypto.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
 
 uint32_t ProtocolGame::spectatorId = 1;
 std::set<std::string> ProtocolGame::spectatorNames;
@@ -43,33 +48,34 @@ namespace {
 namespace DllCheckProtocol {
 
 constexpr uint8_t OPCODE = 0xDE;
-constexpr uint8_t DLL_CHECK_WIRE_VERSION = 3;
-constexpr uint8_t CHALLENGE_KIND = 0x71;
-constexpr uint8_t RESPONSE_KIND = 0xA6;
-constexpr uint32_t BUILD_ID = 2026071903;
+constexpr uint8_t DLL_CHECK_WIRE_VERSION = 4;
+constexpr uint8_t CHALLENGE_KIND = 0x31;
+constexpr uint8_t RESPONSE_KIND = 0x72;
+constexpr uint32_t BUILD_ID = 2026072201;
+constexpr uint32_t INTEGRITY_FLAG = 0x80000000;
+constexpr uint32_t BUILD_MASK = 0x7FFFFFFF;
 constexpr uint32_t INITIAL_SEQUENCE = 0x6B19D3A7;
 constexpr int64_t INTERVAL_MS = 5000;
 constexpr int64_t TIMEOUT_MS = 5000;
 constexpr std::size_t PAYLOAD_SIZE = 64;
-constexpr std::size_t MAX_ENCODED_PAYLOAD_SIZE = 512;
+constexpr std::size_t AUTHENTICATED_SIZE = 32;
+constexpr std::size_t TAG_OFFSET = AUTHENTICATED_SIZE;
+constexpr std::size_t TAG_SIZE = 32;
+constexpr std::size_t MAX_ENCODED_PAYLOAD_SIZE = 256;
 
 constexpr std::string_view BASE64_ALPHABET =
-    "s5cvbxqZe8Ph9mS7R/0fMNrzoKlDQdgHkYVja4UEX621LnTCpA+3FBWiJwtIGyuO";
-constexpr std::string_view XOR_KEY =
-    "vZ3LrhkGjHs97RvQfnap7Q1IIdrzduw046pIL689hQpAFR4ILQZYfHYC43TurO3Z4LcYPT4w";
-
-constexpr std::array<uint8_t, 8> SERVER_MAGIC = {
-    0x53, 0xA6, 0x9C, 0xC6, 0xC3, 0x30, 0xE2, 0xD6
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+constexpr std::array<uint8_t, 32> KEY_FRAGMENT_A = {
+    0x48, 0x2C, 0xC5, 0x8F, 0x31, 0xCB, 0x47, 0xAE,
+    0x08, 0x6C, 0x50, 0xCA, 0x80, 0x29, 0xEE, 0xC0,
+    0x1C, 0xB9, 0xE9, 0x42, 0xF4, 0xAE, 0x74, 0x29,
+    0x10, 0x4F, 0x29, 0xDD, 0x5F, 0xB3, 0x0F, 0xE7
 };
-constexpr std::array<uint8_t, 8> CLIENT_MAGIC = {
-    0xB6, 0x57, 0xD9, 0x1B, 0xA3, 0x72, 0xED, 0x60
-};
-constexpr std::array<uint8_t, 16> FIXED_TEXT = {
-    'N', 'E', 'X', 'A', '8', '6', '0', '-', 'C', 'H', 'E', 'C', 'K', '-', 'V', '3'
-};
-constexpr std::array<uint8_t, 16> PRIVATE_SALT = {
-    0x37, 0x89, 0xFF, 0xBA, 0xF5, 0xA8, 0x93, 0x0E,
-    0x79, 0xD8, 0xE2, 0xC6, 0xA5, 0xD2, 0xD1, 0x79
+constexpr std::array<uint8_t, 32> KEY_FRAGMENT_B = {
+    0xE0, 0xBC, 0x2F, 0x24, 0xAA, 0xB3, 0xED, 0xCE,
+    0x44, 0x42, 0xC3, 0x49, 0x0B, 0x83, 0xE8, 0xE4,
+    0xEF, 0x46, 0xCF, 0x3A, 0x13, 0x0C, 0xF8, 0xAA,
+    0xC6, 0xAE, 0x41, 0x3A, 0xBE, 0x6E, 0xF9, 0x54
 };
 
 constexpr bool hasUniqueAlphabetCharacters()
@@ -92,15 +98,17 @@ constexpr bool hasUniqueAlphabetCharacters()
 
 static_assert(BASE64_ALPHABET.size() == 64);
 static_assert(hasUniqueAlphabetCharacters());
-static_assert(!XOR_KEY.empty());
 
 using Payload = std::array<uint8_t, PAYLOAD_SIZE>;
+using Tag = std::array<uint8_t, TAG_SIZE>;
 
 struct Fields
 {
+	uint32_t build = 0;
 	uint64_t timestamp = 0;
+	uint64_t sessionId = 0;
 	uint32_t sequence = 0;
-	uint32_t randomValue = 0;
+	uint32_t nonce = 0;
 };
 
 void writeU16(Payload& payload, std::size_t offset, uint16_t value)
@@ -147,61 +155,82 @@ uint64_t readU64(const Payload& payload, std::size_t offset)
 	return value;
 }
 
-template <std::size_t N>
-void writeArray(Payload& payload, std::size_t offset, const std::array<uint8_t, N>& value)
+void setTag(Payload& payload, const Tag& tag)
 {
-	for (std::size_t i = 0; i < N; ++i) {
-		payload[offset + i] = value[i];
-	}
+	std::copy(tag.begin(), tag.end(), payload.begin() + TAG_OFFSET);
 }
 
-template <std::size_t N>
-bool matchesArray(const Payload& payload, std::size_t offset, const std::array<uint8_t, N>& value)
+Tag getTag(const Payload& payload)
 {
-	for (std::size_t i = 0; i < N; ++i) {
-		if (payload[offset + i] != value[i]) {
-			return false;
-		}
-	}
-	return true;
+	Tag tag = {};
+	std::copy_n(payload.begin() + TAG_OFFSET, TAG_SIZE, tag.begin());
+	return tag;
 }
 
-Payload buildChallenge(uint64_t timestamp, uint32_t sequence, uint32_t randomValue)
+bool computeTag(const Payload& payload, Tag& tag)
 {
-	Payload payload = {};
-	writeArray(payload, 0, SERVER_MAGIC);
-	payload[8] = DLL_CHECK_WIRE_VERSION;
-	payload[9] = CHALLENGE_KIND;
-	writeU16(payload, 10, static_cast<uint16_t>(PAYLOAD_SIZE));
-	writeU32(payload, 12, BUILD_ID);
-	writeU64(payload, 16, timestamp);
+	std::array<uint8_t, 32> key = {};
+	for (std::size_t index = 0; index < key.size(); ++index) {
+		key[index] = KEY_FRAGMENT_A[index] ^ KEY_FRAGMENT_B[index];
+	}
+
+	unsigned int tagLength = 0;
+	const unsigned char* result =
+	    HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), payload.data(),
+	         AUTHENTICATED_SIZE, tag.data(), &tagLength);
+	OPENSSL_cleanse(key.data(), key.size());
+	return result != nullptr && tagLength == static_cast<unsigned int>(tag.size());
+}
+
+bool hasValidTag(const Payload& payload)
+{
+	Tag expected = {};
+	if (!computeTag(payload, expected)) {
+		return false;
+	}
+
+	const Tag received = getTag(payload);
+	const bool valid = CRYPTO_memcmp(expected.data(), received.data(), TAG_SIZE) == 0;
+	OPENSSL_cleanse(expected.data(), expected.size());
+	return valid;
+}
+
+bool buildChallenge(uint64_t timestamp, uint64_t sessionId, uint32_t sequence,
+                    uint32_t nonce, Payload& payload)
+{
+	payload = {};
+	payload[0] = DLL_CHECK_WIRE_VERSION;
+	payload[1] = CHALLENGE_KIND;
+	writeU16(payload, 2, static_cast<uint16_t>(PAYLOAD_SIZE));
+	writeU64(payload, 4, timestamp);
+	writeU64(payload, 12, sessionId);
+	writeU32(payload, 20, BUILD_ID);
 	writeU32(payload, 24, sequence);
-	writeU32(payload, 28, randomValue);
-	writeArray(payload, 32, FIXED_TEXT);
-	writeArray(payload, 48, PRIVATE_SALT);
-	return payload;
+	writeU32(payload, 28, nonce);
+
+	Tag tag = {};
+	if (!computeTag(payload, tag)) {
+		return false;
+	}
+	setTag(payload, tag);
+	OPENSSL_cleanse(tag.data(), tag.size());
+	return true;
 }
 
 bool parseResponse(const Payload& payload, Fields& fields)
 {
-	if (!matchesArray(payload, 0, CLIENT_MAGIC) || payload[8] != DLL_CHECK_WIRE_VERSION ||
-	    payload[9] != RESPONSE_KIND || readU16(payload, 10) != PAYLOAD_SIZE ||
-	    readU32(payload, 12) != BUILD_ID || !matchesArray(payload, 32, FIXED_TEXT) ||
-	    !matchesArray(payload, 48, PRIVATE_SALT)) {
+	if (payload[0] != DLL_CHECK_WIRE_VERSION || payload[1] != RESPONSE_KIND ||
+	    readU16(payload, 2) != PAYLOAD_SIZE || !hasValidTag(payload)) {
 		return false;
 	}
 
-	fields.timestamp = readU64(payload, 16);
+	fields.timestamp = readU64(payload, 4);
+	fields.sessionId = readU64(payload, 12);
+	fields.build = readU32(payload, 20);
 	fields.sequence = readU32(payload, 24);
-	fields.randomValue = readU32(payload, 28);
-	return fields.timestamp != 0 && fields.sequence != 0;
-}
-
-void xorCrypt(std::vector<uint8_t>& bytes)
-{
-	for (std::size_t i = 0; i < bytes.size(); ++i) {
-		bytes[i] ^= static_cast<uint8_t>(XOR_KEY[i % XOR_KEY.size()]);
-	}
+	fields.nonce = readU32(payload, 28);
+	return fields.timestamp != 0 && fields.sessionId != 0 && fields.sequence != 0 &&
+	       (fields.build & BUILD_MASK) == BUILD_ID && (fields.build & INTEGRITY_FLAG) != 0;
 }
 
 std::string base64Encode(const std::vector<uint8_t>& bytes)
@@ -292,14 +321,13 @@ bool base64Decode(std::string_view encoded, std::vector<uint8_t>& decoded)
 	return true;
 }
 
-std::string encodeProtected(const Payload& payload)
+std::string encodePayload(const Payload& payload)
 {
 	std::vector<uint8_t> bytes(payload.begin(), payload.end());
-	xorCrypt(bytes);
 	return base64Encode(bytes);
 }
 
-bool decodeProtected(std::string_view encoded, Payload& payload)
+bool decodePayload(std::string_view encoded, Payload& payload)
 {
 	if (encoded.empty() || encoded.size() > MAX_ENCODED_PAYLOAD_SIZE) {
 		return false;
@@ -308,10 +336,7 @@ bool decodeProtected(std::string_view encoded, Payload& payload)
 	if (!base64Decode(encoded, bytes) || bytes.size() != PAYLOAD_SIZE) {
 		return false;
 	}
-	xorCrypt(bytes);
-	for (std::size_t i = 0; i < PAYLOAD_SIZE; ++i) {
-		payload[i] = bytes[i];
-	}
+	std::copy(bytes.begin(), bytes.end(), payload.begin());
 	return true;
 }
 
@@ -364,6 +389,13 @@ uint32_t nextDllCheckRandom()
 	static std::mt19937 generator(randomDevice());
 	static std::uniform_int_distribution<uint32_t> distribution(1, (std::numeric_limits<uint32_t>::max)());
 	return distribution(generator);
+}
+
+uint64_t nextDllCheckSessionId()
+{
+	const uint64_t high = nextDllCheckRandom();
+	const uint64_t low = nextDllCheckRandom();
+	return (high << 32) | low;
 }
 
 std::string anonymizeIPv4ForFile(uint32_t ip)
@@ -3949,15 +3981,21 @@ void ProtocolGame::sendDllCheck()
 	}
 
 	dllCheckExpectedTimestamp = static_cast<uint64_t>(OTSYS_TIME());
+	dllCheckExpectedSessionId = nextDllCheckSessionId();
 	dllCheckExpectedSequence = dllCheckSequence;
 	dllCheckExpectedRandom = nextDllCheckRandom();
 	if (++dllCheckSequence == 0) {
 		dllCheckSequence = 1;
 	}
 
-	const auto payload = DllCheckProtocol::buildChallenge(
-	    dllCheckExpectedTimestamp, dllCheckExpectedSequence, dllCheckExpectedRandom);
-	const std::string encoded = DllCheckProtocol::encodeProtected(payload);
+	DllCheckProtocol::Payload payload = {};
+	if (!DllCheckProtocol::buildChallenge(
+	        dllCheckExpectedTimestamp, dllCheckExpectedSessionId,
+	        dllCheckExpectedSequence, dllCheckExpectedRandom, payload)) {
+		failDllCheck();
+		return;
+	}
+	const std::string encoded = DllCheckProtocol::encodePayload(payload);
 
 	NetworkMessage msg;
 	msg.addByte(DllCheckProtocol::OPCODE);
@@ -3997,6 +4035,7 @@ void ProtocolGame::resetDllCheckState()
 	dllCheckExpectedSequence = 0;
 	dllCheckExpectedRandom = 0;
 	dllCheckExpectedTimestamp = 0;
+	dllCheckExpectedSessionId = 0;
 	dllCheckSentAt = 0;
 }
 
@@ -4043,7 +4082,7 @@ void ProtocolGame::validateDllCheckResponse(std::string response, int64_t receiv
 
 	DllCheckProtocol::Payload payload = {};
 	DllCheckProtocol::Fields fields;
-	if (!DllCheckProtocol::decodeProtected(response, payload)) {
+	if (!DllCheckProtocol::decodePayload(response, payload)) {
 		failDllCheck();
 		return;
 	}
@@ -4052,8 +4091,9 @@ void ProtocolGame::validateDllCheckResponse(std::string response, int64_t receiv
 		return;
 	}
 	if (fields.timestamp != dllCheckExpectedTimestamp ||
+	    fields.sessionId != dllCheckExpectedSessionId ||
 	    fields.sequence != dllCheckExpectedSequence ||
-	    fields.randomValue != dllCheckExpectedRandom) {
+	    fields.nonce != dllCheckExpectedRandom) {
 		failDllCheck();
 		return;
 	}
