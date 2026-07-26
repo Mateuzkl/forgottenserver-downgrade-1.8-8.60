@@ -53,7 +53,7 @@ TEST_CASE(loads_uint32_sprite_ids_only_after_full_uint16_probe_fails)
 	CHECK(items.isValidItemId(100));
 }
 
-TEST_CASE(validates_and_discards_declared_visual_sections)
+TEST_CASE(ignores_declared_visual_sections)
 {
 	TempDatFile file("tfs_items_dat_visual_sections",
 	                 makeDat(100, sizeof(uint32_t), false, VisualCounts{1, 1, 1}));
@@ -63,23 +63,32 @@ TEST_CASE(validates_and_discards_declared_visual_sections)
 	CHECK(!items.isValidItemId(101));
 }
 
-TEST_CASE(rejects_corrupt_visual_section)
+TEST_CASE(loads_astra_extended_animation_layout)
+{
+	TempDatFile file("tfs_items_dat_astra", makeDat(100, sizeof(uint32_t), false, {}, true));
+	Items items;
+	CHECK(items.loadFromDat(file.path.string()));
+	CHECK(items.getDatItemCount() == 100);
+	CHECK(items[100].isAnimation);
+}
+
+TEST_CASE(ignores_visual_section_contents)
 {
 	const size_t visualOffset = makeDat().size();
 	auto bytes = makeDat(100, sizeof(uint16_t), false, VisualCounts{1, 0, 0});
 	bytes[visualOffset] = 34;
 	TempDatFile file("tfs_items_dat_corrupt_visual", bytes);
 	Items items;
-	CHECK(!items.loadFromDat(file.path.string()));
+	CHECK(items.loadFromDat(file.path.string()));
 }
 
-TEST_CASE(rejects_bytes_after_declared_dat_sections)
+TEST_CASE(ignores_bytes_after_item_section)
 {
 	auto bytes = makeDat(100, sizeof(uint16_t), false, VisualCounts{1, 1, 1});
 	bytes.push_back(0);
 	TempDatFile file("tfs_items_dat_trailing_bytes", bytes);
 	Items items;
-	CHECK(!items.loadFromDat(file.path.string()));
+	CHECK(items.loadFromDat(file.path.string()));
 }
 
 TEST_CASE(dat_unmoveable_applies_only_to_the_parsed_item)

@@ -15,6 +15,7 @@
 #include "scriptmanager.h"
 #include "spells.h"
 #include "weapons.h"
+#include <array>
 #include <charconv>
 #include <fmt/format.h>
 #include <fstream>
@@ -410,6 +411,12 @@ struct DatParseError
 	}
 };
 
+struct DatFormat
+{
+	size_t spriteIdBytes;
+	bool enhancedAnimations;
+};
+
 class DatReader
 {
 public:
@@ -742,7 +749,7 @@ bool readDatAttributes(ItemType& itemType, uint16_t itemId, DatReader& reader, D
 	}
 }
 
-bool skipDatSpriteLayout(DatReader& reader, uint16_t itemId, size_t spriteIdBytes, uint8_t& frameCount,
+bool skipDatSpriteLayout(DatReader& reader, uint16_t itemId, const DatFormat& format, uint8_t& frameCount,
                          DatParseError& error)
 {
 	uint8_t width = 0;
@@ -799,39 +806,21 @@ bool skipDatSpriteLayout(DatReader& reader, uint16_t itemId, size_t spriteIdByte
 		return false;
 	}
 
+	if (format.enhancedAnimations && frameCount > 1) {
+		size_t durationBytes = 0;
+		if (!checkedMultiply(static_cast<size_t>(frameCount), sizeof(uint32_t) * 2, durationBytes) ||
+		    !skipDatBytes(reader, 1 + sizeof(uint32_t) + 1 + durationBytes, error,
+		                  fmt::format("animation data for item {}", itemId))) {
+			return false;
+		}
+	}
+
 	size_t spriteBytes = 0;
-	if (!checkedMultiply(spriteCount, spriteIdBytes, spriteBytes)) {
+	if (!checkedMultiply(spriteCount, format.spriteIdBytes, spriteBytes)) {
 		error.set(reader.position(), fmt::format("sprite byte count overflow for item {}", itemId));
 		return false;
 	}
 	return skipDatBytes(reader, spriteBytes, error, fmt::format("sprite IDs for item {}", itemId));
-}
-
-bool validateDatVisualSection(DatReader& reader, uint16_t count, std::string_view sectionName,
-                              size_t spriteIdBytes, DatParseError& error)
-{
-	for (uint32_t id = 1; id <= count; ++id) {
-		// Visual records use the same bounded attribute and sprite-layout encoding
-		// as items, but their parsed values are intentionally discarded.
-		ItemType discardedType;
-		uint32_t discardedMarketItemCount = 0;
-		DatParseError recordError;
-		if (!readDatAttributes(discardedType, static_cast<uint16_t>(id), reader, recordError,
-		                       discardedMarketItemCount)) {
-			error.set(recordError.offset,
-			          fmt::format("{} {}: {}", sectionName, id, recordError.message));
-			return false;
-		}
-
-		uint8_t discardedFrameCount = 0;
-		if (!skipDatSpriteLayout(reader, static_cast<uint16_t>(id), spriteIdBytes, discardedFrameCount,
-		                         recordError)) {
-			error.set(recordError.offset,
-			          fmt::format("{} {}: {}", sectionName, id, recordError.message));
-			return false;
-		}
-	}
-	return true;
 }
 
 struct DatParseResult
@@ -844,10 +833,10 @@ struct DatParseResult
 	uint32_t marketItemCount = 0;
 };
 
-bool parseDatBuffer(const std::vector<uint8_t>& buffer, size_t spriteIdBytes, DatParseResult& result,
+bool parseDatBuffer(const std::vector<uint8_t>& buffer, const DatFormat& format, DatParseResult& result,
                     DatParseError& error)
 {
-	if (spriteIdBytes != sizeof(uint16_t) && spriteIdBytes != sizeof(uint32_t)) {
+	if (format.spriteIdBytes != sizeof(uint16_t) && format.spriteIdBytes != sizeof(uint32_t)) {
 		error.set(0, "unsupported sprite ID width");
 		return false;
 	}
@@ -891,21 +880,10 @@ bool parseDatBuffer(const std::vector<uint8_t>& buffer, size_t spriteIdBytes, Da
 		}
 
 		uint8_t frameCount = 0;
-		if (!skipDatSpriteLayout(reader, itemType.id, spriteIdBytes, frameCount, error)) {
+		if (!skipDatSpriteLayout(reader, itemType.id, format, frameCount, error)) {
 			return false;
 		}
 		itemType.isAnimation = itemType.isAnimation || frameCount > 1;
-	}
-
-	if (!validateDatVisualSection(reader, result.outfitCount, "outfit", spriteIdBytes, error) ||
-	    !validateDatVisualSection(reader, result.effectCount, "effect", spriteIdBytes, error) ||
-	    !validateDatVisualSection(reader, result.distanceEffectCount, "distance effect", spriteIdBytes, error)) {
-		return false;
-	}
-	if (reader.remaining() != 0) {
-		error.set(reader.position(),
-		          fmt::format("{} unexpected bytes remain after the declared DAT sections", reader.remaining()));
-		return false;
 	}
 
 	result.items = std::move(parsedItems);
@@ -1471,21 +1449,34 @@ bool Items::loadFromDat(std::string_view file)
 		return false;
 	}
 
+	const std::array<DatFormat, 3> formats = {
+	    DatFormat{sizeof(uint16_t), false},
+	    DatFormat{sizeof(uint32_t), false},
+	    DatFormat{sizeof(uint32_t), true},
+	};
+
 	DatParseResult parsed;
-	DatParseError uint16Error;
-	size_t spriteIdBytes = sizeof(uint16_t);
-	if (!parseDatBuffer(buffer, spriteIdBytes, parsed, uint16Error)) {
-		parsed = DatParseResult{};
-		DatParseError uint32Error;
-		spriteIdBytes = sizeof(uint32_t);
-		if (!parseDatBuffer(buffer, spriteIdBytes, parsed, uint32Error)) {
-			lastError = fmt::format(
-			    "Unable to load items from assets.dat '{}': {} at offset {}. "
-			    "The file may be truncated, corrupt, or from an incompatible client.",
-			    filePath, uint32Error.message.empty() ? "invalid item section" : uint32Error.message,
-			    uint32Error.offset);
-			return false;
+	DatParseError bestError;
+	const DatFormat* selectedFormat = nullptr;
+	for (const DatFormat& format : formats) {
+		DatParseResult candidate;
+		DatParseError candidateError;
+		if (parseDatBuffer(buffer, format, candidate, candidateError)) {
+			parsed = std::move(candidate);
+			selectedFormat = &format;
+			break;
 		}
+		if (bestError.message.empty() || candidateError.offset > bestError.offset) {
+			bestError = std::move(candidateError);
+		}
+	}
+
+	if (!selectedFormat) {
+		lastError = fmt::format(
+		    "Unable to load items from assets.dat '{}': {} at offset {}. "
+		    "The file may be truncated, corrupt, or from an incompatible client.",
+		    filePath, bestError.message.empty() ? "invalid item section" : bestError.message, bestError.offset);
+		return false;
 	}
 
 	items = std::move(parsed.items);
@@ -1497,7 +1488,7 @@ bool Items::loadFromDat(std::string_view file)
 	loadedSource = Source::DAT;
 	loadedSourcePath = filePath;
 	datItemCount = parsed.itemCount;
-	datSpriteIdBytes = static_cast<uint8_t>(spriteIdBytes);
+	datSpriteIdBytes = static_cast<uint8_t>(selectedFormat->spriteIdBytes);
 	datMarketItemCount = parsed.marketItemCount;
 	return true;
 }

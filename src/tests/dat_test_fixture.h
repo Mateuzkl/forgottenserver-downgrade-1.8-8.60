@@ -36,23 +36,36 @@ inline void appendU32(std::vector<uint8_t>& bytes, uint32_t value)
 	bytes.push_back(static_cast<uint8_t>(value >> 24));
 }
 
-inline void appendThing(std::vector<uint8_t>& bytes, size_t spriteIdBytes, bool unmoveable = false)
+inline void appendThing(std::vector<uint8_t>& bytes, size_t spriteIdBytes, bool unmoveable = false,
+                        uint8_t animationPhases = 1, bool enhancedAnimations = false)
 {
 	if (unmoveable) {
 		bytes.push_back(13); // IsUnmoveable
 	}
-	bytes.push_back(255);                             // LastFlag
-	bytes.insert(bytes.end(), {1, 1, 1, 1, 1, 1, 1}); // width, height, layers, patterns, frames
-	if (spriteIdBytes == sizeof(uint16_t)) {
-		appendU16(bytes, 1);
-	} else {
-		appendU32(bytes, 1);
+	bytes.push_back(255); // LastFlag
+	bytes.insert(bytes.end(), {1, 1, 1, 1, 1, 1}); // width, height, layers, patterns
+	bytes.push_back(animationPhases);
+	if (enhancedAnimations && animationPhases > 1) {
+		bytes.push_back(0); // async
+		appendU32(bytes, 0); // loop count
+		bytes.push_back(0); // start phase
+		for (uint8_t phase = 0; phase < animationPhases; ++phase) {
+			appendU32(bytes, 100);
+			appendU32(bytes, 100);
+		}
+	}
+	for (uint8_t phase = 0; phase < animationPhases; ++phase) {
+		if (spriteIdBytes == sizeof(uint16_t)) {
+			appendU16(bytes, 1);
+		} else {
+			appendU32(bytes, 1);
+		}
 	}
 }
 
 inline std::vector<uint8_t> makeDat(uint16_t itemCount = FIRST_DAT_ITEM_ID,
                                     size_t spriteIdBytes = sizeof(uint16_t), bool firstItemUnmoveable = false,
-                                    VisualCounts visualCounts = {})
+                                    VisualCounts visualCounts = {}, bool enhancedAnimations = false)
 {
 	if (itemCount < FIRST_DAT_ITEM_ID) {
 		throw std::invalid_argument("DAT test fixture itemCount must be at least 100");
@@ -73,9 +86,16 @@ inline std::vector<uint8_t> makeDat(uint16_t itemCount = FIRST_DAT_ITEM_ID,
 	appendU16(bytes, visualCounts.distanceEffects);
 
 	for (uint32_t id = FIRST_DAT_ITEM_ID; id <= itemCount; ++id) {
-		appendThing(bytes, spriteIdBytes, firstItemUnmoveable && id == FIRST_DAT_ITEM_ID);
+		appendThing(bytes, spriteIdBytes, firstItemUnmoveable && id == FIRST_DAT_ITEM_ID,
+		            enhancedAnimations && id == FIRST_DAT_ITEM_ID ? 2 : 1, enhancedAnimations);
 	}
-	for (size_t index = 0; index < visualCount; ++index) {
+	for (uint16_t id = 0; id < visualCounts.outfits; ++id) {
+		appendThing(bytes, spriteIdBytes);
+	}
+	for (uint16_t id = 0; id < visualCounts.effects; ++id) {
+		appendThing(bytes, spriteIdBytes);
+	}
+	for (uint16_t id = 0; id < visualCounts.distanceEffects; ++id) {
 		appendThing(bytes, spriteIdBytes);
 	}
 	return bytes;
