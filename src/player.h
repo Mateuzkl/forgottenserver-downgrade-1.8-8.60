@@ -827,13 +827,7 @@ public:
 
 	uint16_t getSpecialSkill(uint8_t skill) const
 	{
-		int32_t base = 0;
-		if (skill == SPECIALSKILL_CRITICALHITCHANCE) {
-			base = 500;
-		} else if (skill == SPECIALSKILL_CRITICALHITAMOUNT) {
-			base = 1000;
-		}
-		return static_cast<uint16_t>(std::max<int32_t>(0, base + varSpecialSkills[skill]));
+		return static_cast<uint16_t>(std::max<int32_t>(0, varSpecialSkills[skill]));
 	}
 	uint16_t getSkillLevel(uint8_t skill) const
 	{
