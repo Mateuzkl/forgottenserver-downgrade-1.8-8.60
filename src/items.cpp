@@ -5,18 +5,20 @@
 
 #include "items.h"
 
+#include "configmanager.h"
+#include "datitemloader.h"
+#include "itemloader.h"
+#include "logger.h"
 #include "movement.h"
 #include "pugicast.h"
 #include "script.h"
 #include "scriptmanager.h"
 #include "spells.h"
 #include "weapons.h"
-#include "logger.h"
+#include <charconv>
 #include <fmt/format.h>
 #include <fstream>
-#include <cstring>
-#include "configmanager.h"
-#include "itemloader.h"
+#include <limits>
 
 namespace {
 
@@ -239,6 +241,7 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"worth", ITEM_PARSE_WORTH},
     {"imbuementslot", ITEM_PARSE_IMBUEMENTSLOT},
     {"wrapableto", ITEM_PARSE_WRAPABLETO},
+    {"stackable", ITEM_PARSE_STACKABLE},
     {"stacksize", ITEM_PARSE_STACKSIZE},
     {"supply", ITEM_PARSE_SUPPLY},
     {"experienceratebase", ITEM_PARSE_EXPERIENCERATE_BASE},
@@ -380,6 +383,525 @@ Direction getDirection(std::string_view string)
 	return DIRECTION_NORTH;
 }
 
+constexpr uint32_t TIBIA_860_DAT_SIGNATURE = 0x4C2C7993;
+constexpr size_t MAX_ASSETS_DAT_FILE_SIZE = 256ULL * 1024 * 1024;
+constexpr uint32_t MAX_DAT_OUTFITS = 20'000;
+constexpr uint32_t MAX_DAT_EFFECTS = 10'000;
+constexpr uint32_t MAX_DAT_DISTANCE_EFFECTS = 10'000;
+constexpr uint8_t MAX_DAT_SPRITE_DIMENSION = 32;
+constexpr uint8_t MAX_DAT_LAYERS = 8;
+constexpr uint8_t MAX_DAT_PATTERN_DIMENSION = 32;
+constexpr size_t MAX_DAT_SPRITES_PER_ITEM = 65'536;
+constexpr uint16_t FIRST_DAT_ITEM_ID = 100;
+constexpr uint16_t FIRST_SERVER_ONLY_ITEM_ID = 65'000;
+constexpr size_t MAX_DAT_MARKET_NAME_LENGTH = 1'024;
+
+struct DatParseError
+{
+	size_t offset = 0;
+	std::string message;
+
+	void set(size_t errorOffset, std::string errorMessage)
+	{
+		if (message.empty()) {
+			offset = errorOffset;
+			message = std::move(errorMessage);
+		}
+	}
+};
+
+class DatReader
+{
+public:
+	explicit DatReader(const std::vector<uint8_t>& input) : buffer(input) {}
+
+	size_t position() const { return offset; }
+	size_t remaining() const { return buffer.size() - offset; }
+
+	bool readU8(uint8_t& value)
+	{
+		if (remaining() < 1) {
+			return false;
+		}
+		value = buffer[offset++];
+		return true;
+	}
+
+	bool readU16LE(uint16_t& value)
+	{
+		if (remaining() < 2) {
+			return false;
+		}
+		value = static_cast<uint16_t>(buffer[offset]) | (static_cast<uint16_t>(buffer[offset + 1]) << 8);
+		offset += 2;
+		return true;
+	}
+
+	bool readU32LE(uint32_t& value)
+	{
+		if (remaining() < 4) {
+			return false;
+		}
+		value = static_cast<uint32_t>(buffer[offset]) | (static_cast<uint32_t>(buffer[offset + 1]) << 8) |
+		        (static_cast<uint32_t>(buffer[offset + 2]) << 16) | (static_cast<uint32_t>(buffer[offset + 3]) << 24);
+		offset += 4;
+		return true;
+	}
+
+	bool skipChecked(size_t count)
+	{
+		if (count > remaining()) {
+			return false;
+		}
+		offset += count;
+		return true;
+	}
+
+private:
+	const std::vector<uint8_t>& buffer;
+	size_t offset = 0;
+};
+
+bool readDatU8(DatReader& reader, uint8_t& value, DatParseError& error, std::string_view context)
+{
+	const size_t offset = reader.position();
+	if (reader.readU8(value)) {
+		return true;
+	}
+	error.set(offset, fmt::format("truncated data while reading {}", context));
+	return false;
+}
+
+bool readDatU16(DatReader& reader, uint16_t& value, DatParseError& error, std::string_view context)
+{
+	const size_t offset = reader.position();
+	if (reader.readU16LE(value)) {
+		return true;
+	}
+	error.set(offset, fmt::format("truncated data while reading {}", context));
+	return false;
+}
+
+bool readDatU32(DatReader& reader, uint32_t& value, DatParseError& error, std::string_view context)
+{
+	const size_t offset = reader.position();
+	if (reader.readU32LE(value)) {
+		return true;
+	}
+	error.set(offset, fmt::format("truncated data while reading {}", context));
+	return false;
+}
+
+bool skipDatBytes(DatReader& reader, size_t count, DatParseError& error, std::string_view context)
+{
+	const size_t offset = reader.position();
+	if (reader.skipChecked(count)) {
+		return true;
+	}
+	error.set(offset, fmt::format("truncated data while skipping {} ({} bytes requested, {} remain)", context, count,
+	                              reader.remaining()));
+	return false;
+}
+
+bool checkedMultiply(size_t left, size_t right, size_t& result)
+{
+	if (left != 0 && right > (std::numeric_limits<size_t>::max)() / left) {
+		return false;
+	}
+	result = left * right;
+	return true;
+}
+
+bool readDatAttributes(ItemType& itemType, uint16_t itemId, DatReader& reader, DatParseError& error,
+                       uint32_t& marketItemCount)
+{
+	for (;;) {
+		const size_t flagOffset = reader.position();
+		uint8_t rawFlag = 0;
+		if (!readDatU8(reader, rawFlag, error, fmt::format("flag for item {}", itemId))) {
+			return false;
+		}
+
+		switch (static_cast<ItemDatFlag>(rawFlag)) {
+			case ItemDatFlag::Ground: {
+				uint16_t speed = 0;
+				if (!readDatU16(reader, speed, error, fmt::format("ground speed for item {}", itemId))) {
+					return false;
+				}
+				itemType.group = ITEM_GROUP_GROUND;
+				itemType.speed = speed;
+				break;
+			}
+
+			case ItemDatFlag::GroundBorder:
+				itemType.alwaysOnTopOrder = 1;
+				break;
+
+			case ItemDatFlag::OnBottom:
+				itemType.alwaysOnTopOrder = 2;
+				break;
+
+			case ItemDatFlag::OnTop:
+				itemType.alwaysOnTopOrder = 3;
+				break;
+
+			case ItemDatFlag::Container:
+				itemType.group = ITEM_GROUP_CONTAINER;
+				itemType.type = ITEM_TYPE_CONTAINER;
+				break;
+
+			case ItemDatFlag::Stackable:
+				itemType.stackable = true;
+				break;
+
+			case ItemDatFlag::ForceUse:
+				itemType.forceUse = true;
+				break;
+
+			case ItemDatFlag::MultiUse:
+				itemType.useable = true;
+				break;
+
+			case ItemDatFlag::Writable: {
+				uint16_t maxTextLength = 0;
+				if (!readDatU16(reader, maxTextLength, error, fmt::format("writable length for item {}", itemId))) {
+					return false;
+				}
+				itemType.canWriteText = true;
+				itemType.canReadText = true;
+				itemType.maxTextLen = maxTextLength;
+				break;
+			}
+
+			case ItemDatFlag::WritableOnce: {
+				uint16_t maxTextLength = 0;
+				if (!readDatU16(reader, maxTextLength, error, fmt::format("write-once length for item {}", itemId))) {
+					return false;
+				}
+				itemType.canReadText = true;
+				itemType.maxTextLen = maxTextLength;
+				break;
+			}
+
+			case ItemDatFlag::FluidContainer:
+				itemType.group = ITEM_GROUP_FLUID;
+				break;
+
+			case ItemDatFlag::Fluid:
+				itemType.group = ITEM_GROUP_SPLASH;
+				break;
+
+			case ItemDatFlag::IsUnpassable:
+				itemType.blockSolid = true;
+				break;
+
+			case ItemDatFlag::IsUnmoveable:
+				itemType.moveable = false;
+				break;
+
+			case ItemDatFlag::BlockMissiles:
+				itemType.blockProjectile = true;
+				break;
+
+			case ItemDatFlag::BlockPathfinder:
+				itemType.blockPathFind = true;
+				break;
+
+			case ItemDatFlag::Pickupable:
+				itemType.pickupable = true;
+				break;
+
+			case ItemDatFlag::Hangable:
+				itemType.isHangable = true;
+				break;
+
+			case ItemDatFlag::IsHorizontal:
+				itemType.isHorizontal = true;
+				break;
+
+			case ItemDatFlag::IsVertical:
+				itemType.isVertical = true;
+				break;
+
+			case ItemDatFlag::Rotatable:
+				itemType.rotatable = true;
+				break;
+
+			case ItemDatFlag::HasLight: {
+				uint16_t lightLevel = 0;
+				uint16_t lightColor = 0;
+				if (!readDatU16(reader, lightLevel, error, fmt::format("light level for item {}", itemId)) ||
+				    !readDatU16(reader, lightColor, error, fmt::format("light color for item {}", itemId))) {
+					return false;
+				}
+				if (lightLevel > (std::numeric_limits<uint8_t>::max)() ||
+				    lightColor > (std::numeric_limits<uint8_t>::max)()) {
+					error.set(flagOffset, fmt::format("light payload for item {} exceeds uint8 limits", itemId));
+					return false;
+				}
+				itemType.lightLevel = static_cast<uint8_t>(lightLevel);
+				itemType.lightColor = static_cast<uint8_t>(lightColor);
+				break;
+			}
+
+			case ItemDatFlag::DontHide:
+			case ItemDatFlag::Translucent:
+			case ItemDatFlag::Lying:
+			case ItemDatFlag::FullGround:
+				// These visual/client stacking flags have no server-side ItemType consumer.
+				break;
+
+			case ItemDatFlag::HasOffset:
+				if (!skipDatBytes(reader, 4, error, fmt::format("offset payload for item {}", itemId))) {
+					return false;
+				}
+				break;
+
+			case ItemDatFlag::HasElevation:
+				if (!skipDatBytes(reader, 2, error, fmt::format("elevation payload for item {}", itemId))) {
+					return false;
+				}
+				itemType.hasHeight = true;
+				break;
+
+			case ItemDatFlag::AnimateAlways:
+				itemType.isAnimation = true;
+				break;
+
+			case ItemDatFlag::Minimap:
+				if (!skipDatBytes(reader, 2, error, fmt::format("minimap payload for item {}", itemId))) {
+					return false;
+				}
+				break;
+
+			case ItemDatFlag::LensHelp: {
+				uint16_t lensHelp = 0;
+				if (!readDatU16(reader, lensHelp, error, fmt::format("lens-help payload for item {}", itemId))) {
+					return false;
+				}
+				if (lensHelp == 1112) {
+					itemType.canReadText = true;
+				}
+				break;
+			}
+
+			case ItemDatFlag::IgnoreLook:
+				itemType.lookThrough = true;
+				break;
+
+			case ItemDatFlag::Cloth:
+				if (!skipDatBytes(reader, 2, error, fmt::format("cloth payload for item {}", itemId))) {
+					return false;
+				}
+				break;
+
+			case ItemDatFlag::MarketItem: {
+				uint16_t category = 0;
+				uint16_t tradeAs = 0;
+				uint16_t showAs = 0;
+				uint16_t nameLength = 0;
+				uint16_t restrictedVocation = 0;
+				uint16_t minimumLevel = 0;
+				if (!readDatU16(reader, category, error, fmt::format("market category for item {}", itemId)) ||
+				    !readDatU16(reader, tradeAs, error, fmt::format("market tradeAs for item {}", itemId)) ||
+				    !readDatU16(reader, showAs, error, fmt::format("market showAs for item {}", itemId)) ||
+				    !readDatU16(reader, nameLength, error, fmt::format("market name length for item {}", itemId))) {
+					return false;
+				}
+				if (nameLength > MAX_DAT_MARKET_NAME_LENGTH) {
+					error.set(flagOffset, fmt::format("market name for item {} is too long ({})", itemId, nameLength));
+					return false;
+				}
+				if (!skipDatBytes(reader, nameLength, error, fmt::format("market name for item {}", itemId)) ||
+				    !readDatU16(reader, restrictedVocation, error,
+				                fmt::format("market vocation for item {}", itemId)) ||
+				    !readDatU16(reader, minimumLevel, error, fmt::format("market minimum level for item {}", itemId))) {
+					return false;
+				}
+
+				// wareId is not consumed by this server's custom Market or Supply Stash,
+				// which trade direct IDs and obtain names/restrictions from items.xml.
+				// Preserve the DAT tradeAs mapping for compatibility with future consumers.
+				itemType.wareId = tradeAs;
+				++marketItemCount;
+				(void)category;
+				(void)showAs;
+				(void)restrictedVocation;
+				(void)minimumLevel;
+				break;
+			}
+
+			case ItemDatFlag::LastFlag:
+				itemType.alwaysOnTop = itemType.alwaysOnTopOrder != 0;
+				return true;
+
+			default:
+				error.set(flagOffset, fmt::format("unknown flag {} for item {}", rawFlag, itemId));
+				return false;
+		}
+	}
+}
+
+bool skipDatSpriteLayout(DatReader& reader, uint16_t itemId, size_t spriteIdBytes, uint8_t& frameCount,
+                         DatParseError& error)
+{
+	uint8_t width = 0;
+	uint8_t height = 0;
+	uint8_t layers = 0;
+	uint8_t patternX = 0;
+	uint8_t patternY = 0;
+	uint8_t patternZ = 0;
+	if (!readDatU8(reader, width, error, fmt::format("sprite width for item {}", itemId)) ||
+	    !readDatU8(reader, height, error, fmt::format("sprite height for item {}", itemId))) {
+		return false;
+	}
+	if (width == 0 || height == 0 || width > MAX_DAT_SPRITE_DIMENSION || height > MAX_DAT_SPRITE_DIMENSION) {
+		error.set(reader.position() - 2,
+		          fmt::format("invalid sprite dimensions {}x{} for item {}", width, height, itemId));
+		return false;
+	}
+
+	if (width > 1 || height > 1) {
+		uint8_t exactSize = 0;
+		if (!readDatU8(reader, exactSize, error, fmt::format("exact sprite size for item {}", itemId))) {
+			return false;
+		}
+	}
+
+	if (!readDatU8(reader, layers, error, fmt::format("layers for item {}", itemId)) ||
+	    !readDatU8(reader, patternX, error, fmt::format("patternX for item {}", itemId)) ||
+	    !readDatU8(reader, patternY, error, fmt::format("patternY for item {}", itemId)) ||
+	    !readDatU8(reader, patternZ, error, fmt::format("patternZ for item {}", itemId)) ||
+	    !readDatU8(reader, frameCount, error, fmt::format("frame count for item {}", itemId))) {
+		return false;
+	}
+
+	if (layers == 0 || layers > MAX_DAT_LAYERS || patternX == 0 || patternX > MAX_DAT_PATTERN_DIMENSION ||
+	    patternY == 0 || patternY > MAX_DAT_PATTERN_DIMENSION || patternZ == 0 ||
+	    patternZ > MAX_DAT_PATTERN_DIMENSION || frameCount == 0) {
+		error.set(reader.position() - 5,
+		          fmt::format("invalid sprite layout for item {} (layers {}, patterns {}x{}x{}, frames {})", itemId,
+		                      layers, patternX, patternY, patternZ, frameCount));
+		return false;
+	}
+
+	size_t spriteCount = width;
+	for (const size_t factor :
+	     {static_cast<size_t>(height), static_cast<size_t>(layers), static_cast<size_t>(patternX),
+	      static_cast<size_t>(patternY), static_cast<size_t>(patternZ), static_cast<size_t>(frameCount)}) {
+		if (!checkedMultiply(spriteCount, factor, spriteCount)) {
+			error.set(reader.position(), fmt::format("sprite count overflow for item {}", itemId));
+			return false;
+		}
+	}
+	if (spriteCount > MAX_DAT_SPRITES_PER_ITEM) {
+		error.set(reader.position(), fmt::format("sprite count {} exceeds limit for item {}", spriteCount, itemId));
+		return false;
+	}
+
+	size_t spriteBytes = 0;
+	if (!checkedMultiply(spriteCount, spriteIdBytes, spriteBytes)) {
+		error.set(reader.position(), fmt::format("sprite byte count overflow for item {}", itemId));
+		return false;
+	}
+	return skipDatBytes(reader, spriteBytes, error, fmt::format("sprite IDs for item {}", itemId));
+}
+
+struct DatParseResult
+{
+	std::vector<ItemType> items;
+	uint16_t itemCount = 0;
+	uint16_t outfitCount = 0;
+	uint16_t effectCount = 0;
+	uint16_t distanceEffectCount = 0;
+	uint32_t marketItemCount = 0;
+};
+
+bool parseDatBuffer(const std::vector<uint8_t>& buffer, size_t spriteIdBytes, DatParseResult& result,
+                    DatParseError& error)
+{
+	if (spriteIdBytes != sizeof(uint16_t) && spriteIdBytes != sizeof(uint32_t)) {
+		error.set(0, "unsupported sprite ID width");
+		return false;
+	}
+
+	DatReader reader(buffer);
+	uint32_t signature = 0;
+	if (!readDatU32(reader, signature, error, "DAT signature") ||
+	    !readDatU16(reader, result.itemCount, error, "item count") ||
+	    !readDatU16(reader, result.outfitCount, error, "outfit count") ||
+	    !readDatU16(reader, result.effectCount, error, "effect count") ||
+	    !readDatU16(reader, result.distanceEffectCount, error, "distance-effect count")) {
+		return false;
+	}
+
+	if (signature != TIBIA_860_DAT_SIGNATURE) {
+		error.set(0, fmt::format("unsupported DAT signature 0x{:08X}; expected Tibia 8.60 signature 0x{:08X}",
+		                         signature, TIBIA_860_DAT_SIGNATURE));
+		return false;
+	}
+	if (result.itemCount < FIRST_DAT_ITEM_ID || result.itemCount >= ITEM_BROWSEFIELD) {
+		error.set(4, fmt::format("invalid itemCount {}", result.itemCount));
+		return false;
+	}
+	if (result.outfitCount > MAX_DAT_OUTFITS || result.effectCount > MAX_DAT_EFFECTS ||
+	    result.distanceEffectCount > MAX_DAT_DISTANCE_EFFECTS) {
+		error.set(6, fmt::format("visual section counts are unreasonable (outfits {}, effects {}, distance effects {})",
+		                         result.outfitCount, result.effectCount, result.distanceEffectCount));
+		return false;
+	}
+
+	std::vector<ItemType> parsedItems(static_cast<size_t>(result.itemCount) + 1);
+	for (uint32_t id = FIRST_DAT_ITEM_ID; id <= result.itemCount; ++id) {
+		ItemType& itemType = parsedItems[id];
+		itemType.id = static_cast<uint16_t>(id);
+		// DAT semantics default each real item to movable; the global ItemType
+		// default remains false for reserved, server-only and uninitialized IDs.
+		itemType.moveable = true;
+
+		if (!readDatAttributes(itemType, itemType.id, reader, error, result.marketItemCount)) {
+			return false;
+		}
+
+		uint8_t frameCount = 0;
+		if (!skipDatSpriteLayout(reader, itemType.id, spriteIdBytes, frameCount, error)) {
+			return false;
+		}
+		itemType.isAnimation = itemType.isAnimation || frameCount > 1;
+	}
+
+	size_t visualCount = static_cast<size_t>(result.outfitCount) + result.effectCount + result.distanceEffectCount;
+	if (visualCount == 0 && reader.remaining() != 0) {
+		error.set(reader.position(),
+		          fmt::format("{} unexpected bytes remain after the item section", reader.remaining()));
+		return false;
+	}
+	size_t minimumVisualBytes = 0;
+	if (!checkedMultiply(visualCount, 7 + spriteIdBytes, minimumVisualBytes) ||
+	    reader.remaining() < minimumVisualBytes) {
+		error.set(reader.position(),
+		          fmt::format("only {} bytes remain for {} declared visual entries", reader.remaining(), visualCount));
+		return false;
+	}
+
+	result.items = std::move(parsedItems);
+	return true;
+}
+
+bool parseXmlItemId(const pugi::xml_attribute& attribute, uint32_t& value)
+{
+	const std::string_view text = attribute.value();
+	if (text.empty()) {
+		return false;
+	}
+	const char* begin = text.data();
+	const char* end = begin + text.size();
+	const auto [ptr, ec] = std::from_chars(begin, end, value);
+	return ec == std::errc() && ptr == end;
+}
+
+bool isExplicitServerOnlyItemId(uint16_t id) { return id >= FIRST_SERVER_ONLY_ITEM_ID && id < ITEM_BROWSEFIELD; }
+
 } // namespace
 
 std::string Items::getAugmentNameByType(Augment_t augmentType)
@@ -490,26 +1012,143 @@ void Items::clear()
 	nameToItems.clear();
 	currencyItems.clear();
 	inventory.clear();
+	majorVersion = 0;
+	minorVersion = 0;
+	buildNumber = 0;
+	loadedSource = Source::NONE;
+	loadedSourcePath.clear();
+	lastError.clear();
+	datItemCount = 0;
+	datSpriteIdBytes = 0;
+	datMarketItemCount = 0;
+}
+
+void Items::initializeInternalItemTypes()
+{
+	if (ITEM_BROWSEFIELD >= items.size()) {
+		items.resize(static_cast<size_t>(ITEM_BROWSEFIELD) + 1);
+	}
+
+	ItemType& browseFieldType = items[ITEM_BROWSEFIELD];
+	browseFieldType.id = ITEM_BROWSEFIELD;
+	browseFieldType.name = "browse field";
+	browseFieldType.group = ITEM_GROUP_CONTAINER;
+	browseFieldType.type = ITEM_TYPE_CONTAINER;
+	browseFieldType.maxItems = 30;
+}
+
+void Items::swapState(Items& other) noexcept
+{
+	using std::swap;
+	items.swap(other.items);
+	nameToItems.swap(other.nameToItems);
+	currencyItems.swap(other.currencyItems);
+	inventory.swap(other.inventory);
+	swap(majorVersion, other.majorVersion);
+	swap(minorVersion, other.minorVersion);
+	swap(buildNumber, other.buildNumber);
+	swap(loadedSource, other.loadedSource);
+	loadedSourcePath.swap(other.loadedSourcePath);
+	lastError.swap(other.lastError);
+	swap(datItemCount, other.datItemCount);
+	swap(datSpriteIdBytes, other.datSpriteIdBytes);
+	swap(datMarketItemCount, other.datMarketItemCount);
 }
 
 bool Items::reload()
 {
-	clear();
-	loadFromOtb("data/items/items.otb");
-
-	g_moveEvents->reload();
-	g_weapons->reload();
-
-	if (!loadFromXml()) {
+	Items loadedItems;
+	if (!loadedItems.loadFromConfiguredSource()) {
+		lastError = loadedItems.lastError;
 		return false;
 	}
 
-	g_scripts->loadScripts("items", false, true);
+	pugi::xml_document doc;
+	const pugi::xml_parse_result xmlResult = doc.load_file("data/items/items.xml");
+	if (!xmlResult) {
+		printXMLError("Error - Items::reload", "data/items/items.xml", xmlResult);
+		lastError = fmt::format("Unable to reload items.xml: {}", xmlResult.description());
+		return false;
+	}
+	if (!loadedItems.loadFromXmlDocument(doc, false, false)) {
+		lastError = loadedItems.lastError;
+		return false;
+	}
+
+	// The currently live state remains untouched until the complete source and
+	// all non-side-effecting XML attributes have been validated.
+	swapState(loadedItems);
+
+	const bool registriesLoaded = g_moveEvents->reload() && g_weapons->reload() &&
+	                              loadFromXmlDocument(doc, true, true) && g_scripts->loadScripts("items", false, true);
+	if (!registriesLoaded) {
+		const std::string registryError =
+		    "Unable to rebuild item moveevents, weapons or item scripts; previous item state restored.";
+		swapState(loadedItems);
+
+		// Restore registries against the old ItemType table using the already
+		// parsed XML document. No source or XML file is reopened during rollback.
+		const bool restored = g_moveEvents->reload() && g_weapons->reload() && loadFromXmlDocument(doc, true, true) &&
+		                      g_scripts->loadScripts("items", false, true);
+		g_weapons->loadDefaults();
+		if (!restored) {
+			LOG_ERROR(
+			    "[Error - Items::reload] Item state was restored, but one or more script registries could not be rebuilt.");
+		}
+		lastError = registryError;
+		LOG_ERROR("[Error - Items::reload] {}", registryError);
+		return false;
+	}
+
 	g_weapons->loadDefaults();
 	return true;
 }
 
 constexpr auto OTBI = OTB::Identifier{{'O', 'T', 'B', 'I'}};
+
+bool Items::loadFromConfiguredSource()
+{
+	lastError.clear();
+	const bool useAssetsDat = ConfigManager::getBoolean(ConfigManager::USE_ASSETS_DAT);
+	const std::string path =
+	    useAssetsDat ? std::string{ConfigManager::getString(ConfigManager::ASSETS_DAT_PATH)} : "data/items/items.otb";
+
+	bool loaded = false;
+	try {
+		loaded = useAssetsDat ? loadFromDat(path) : loadFromOtb(path);
+	} catch (const std::exception& error) {
+		lastError = fmt::format("Unable to load items from {} at '{}': {}", useAssetsDat ? "assets.dat" : "items.otb",
+		                        path, error.what());
+		LOG_ERROR("[Error - Items::loadFromConfiguredSource] {}", lastError);
+		return false;
+	}
+
+	if (!loaded) {
+		if (lastError.empty()) {
+			lastError = fmt::format(
+			    "Unable to load items from {} at '{}': parser rejected the file. "
+			    "Verify the configured file and its client version.",
+			    useAssetsDat ? "assets.dat" : "items.otb", path);
+		}
+		LOG_ERROR("[Error - Items::loadFromConfiguredSource] {}", lastError);
+		return false;
+	}
+
+	if (useAssetsDat) {
+		LOG_INFO(">> Item source: assets.dat");
+		LOG_INFO(">> Assets DAT: {} item IDs loaded (sprite IDs: uint{})",
+		         static_cast<uint32_t>(datItemCount) - FIRST_DAT_ITEM_ID + 1,
+		         static_cast<uint32_t>(datSpriteIdBytes) * 8);
+		if (datMarketItemCount == 0) {
+			LOG_INFO(
+			    ">> Assets DAT: no MarketItem payloads; Market and Supply Stash use direct IDs and items.xml metadata.");
+		}
+	} else {
+		LOG_INFO(">> Item source: items.otb");
+		LOG_INFO(">> OTB v{}.{}.{}", majorVersion, minorVersion, buildNumber);
+	}
+	return true;
+}
 
 bool Items::loadFromOtb(const std::string& file)
 {
@@ -740,92 +1379,256 @@ bool Items::loadFromOtb(const std::string& file)
 		iType.alwaysOnTopOrder = alwaysOnTopOrder;
 	}
 
-	if (ITEM_BROWSEFIELD >= items.size()) {
-		items.resize(ITEM_BROWSEFIELD + 1);
-	}
-
-	ItemType& browseFieldType = items[ITEM_BROWSEFIELD];
-	browseFieldType.id = ITEM_BROWSEFIELD;
-	browseFieldType.name = "browse field";
-	browseFieldType.group = ITEM_GROUP_CONTAINER;
-	browseFieldType.type = ITEM_TYPE_CONTAINER;
-	browseFieldType.maxItems = 30;
-
+	initializeInternalItemTypes();
 	items.shrink_to_fit();
+	loadedSource = Source::OTB;
+	loadedSourcePath = file;
+	datItemCount = 0;
+	datSpriteIdBytes = 0;
+	datMarketItemCount = 0;
 	return true;
 }
 
-bool Items::loadFromXml()
+bool Items::loadFromDat(std::string_view file)
+{
+	lastError.clear();
+	if (file.empty()) {
+		lastError = "Unable to load items from assets.dat: assetsDatPath is empty.";
+		return false;
+	}
+
+	const std::string filePath(file);
+	std::ifstream stream(filePath, std::ios::binary | std::ios::ate);
+	if (!stream) {
+		lastError = fmt::format(
+		    "Unable to load items from assets.dat: file not found or unreadable: '{}'. "
+		    "Copy Tibia.dat from your Tibia 8.60 client into 'data/items', rename the copy to 'assets.dat', "
+		    "and keep assetsDatPath = \"data/items/assets.dat\" (or point assetsDatPath to another copied DAT).",
+		    filePath);
+		return false;
+	}
+
+	const std::streamoff endPosition = stream.tellg();
+	if (endPosition <= 0) {
+		lastError = fmt::format("Unable to load items from assets.dat: file is empty or tellg failed: '{}'.", filePath);
+		return false;
+	}
+	const uint64_t unsignedSize = static_cast<uint64_t>(endPosition);
+	if (unsignedSize > MAX_ASSETS_DAT_FILE_SIZE) {
+		lastError = fmt::format(
+		    "Unable to load items from assets.dat: file '{}' is {} bytes; "
+		    "the documented safety limit is {} bytes.",
+		    filePath, unsignedSize, MAX_ASSETS_DAT_FILE_SIZE);
+		return false;
+	}
+	if (unsignedSize > (std::numeric_limits<size_t>::max)() ||
+	    unsignedSize > static_cast<uint64_t>((std::numeric_limits<std::streamsize>::max)())) {
+		lastError = fmt::format("Unable to load items from assets.dat: file '{}' does not fit in memory or streamsize.",
+		                        filePath);
+		return false;
+	}
+
+	const size_t fileSize = static_cast<size_t>(unsignedSize);
+	stream.seekg(0, std::ios::beg);
+	if (!stream) {
+		lastError = fmt::format("Unable to load items from assets.dat: failed to seek '{}'.", filePath);
+		return false;
+	}
+
+	std::vector<uint8_t> buffer(fileSize);
+	stream.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(fileSize));
+	if (stream.gcount() != static_cast<std::streamsize>(fileSize)) {
+		lastError = fmt::format("Unable to load items from assets.dat: incomplete read of '{}' ({} of {} bytes).",
+		                        filePath, stream.gcount(), fileSize);
+		return false;
+	}
+
+	DatParseResult parsed;
+	DatParseError uint16Error;
+	size_t spriteIdBytes = sizeof(uint16_t);
+	if (!parseDatBuffer(buffer, spriteIdBytes, parsed, uint16Error)) {
+		parsed = DatParseResult{};
+		DatParseError uint32Error;
+		spriteIdBytes = sizeof(uint32_t);
+		if (!parseDatBuffer(buffer, spriteIdBytes, parsed, uint32Error)) {
+			lastError = fmt::format(
+			    "Unable to load items from assets.dat '{}': {} at offset {}. "
+			    "The file may be truncated, corrupt, or from an incompatible client.",
+			    filePath, uint32Error.message.empty() ? "invalid item section" : uint32Error.message,
+			    uint32Error.offset);
+			return false;
+		}
+	}
+
+	items = std::move(parsed.items);
+	initializeInternalItemTypes();
+	items.shrink_to_fit();
+	majorVersion = 0;
+	minorVersion = 0;
+	buildNumber = 0;
+	loadedSource = Source::DAT;
+	loadedSourcePath = filePath;
+	datItemCount = parsed.itemCount;
+	datSpriteIdBytes = static_cast<uint8_t>(spriteIdBytes);
+	datMarketItemCount = parsed.marketItemCount;
+	return true;
+}
+
+bool Items::loadFromXml(bool parseScriptAttributes, bool scriptAttributesOnly)
 {
 	pugi::xml_document doc;
 	pugi::xml_parse_result result = doc.load_file("data/items/items.xml");
 	if (!result) {
 		printXMLError("Error - Items::loadFromXml", "data/items/items.xml", result);
+		lastError = fmt::format("Unable to load items.xml: {}", result.description());
 		return false;
 	}
+	return loadFromXmlDocument(doc, parseScriptAttributes, scriptAttributesOnly);
+}
+
+bool Items::loadFromXmlDocument(const pugi::xml_document& doc, bool parseScriptAttributes, bool scriptAttributesOnly)
+{
+	std::unordered_set<uint16_t> seenIds;
+	std::unordered_set<std::string> seenNames;
+	size_t duplicateNameCount = 0;
 
 	for (auto itemNode : doc.child("items").children()) {
 		pugi::xml_attribute idAttribute = itemNode.attribute("id");
 		if (idAttribute) {
-			parseItemNode(itemNode, pugi::cast<uint16_t>(idAttribute.value()));
+			uint32_t parsedId = 0;
+			if (!parseXmlItemId(idAttribute, parsedId) || parsedId == 0 ||
+			    parsedId > (std::numeric_limits<uint16_t>::max)()) {
+				lastError = fmt::format("Invalid items.xml item id '{}'.", idAttribute.value());
+				LOG_ERROR("[Error - Items::loadFromXml] {}", lastError);
+				return false;
+			}
+
+			const uint16_t id = static_cast<uint16_t>(parsedId);
+			if (!scriptAttributesOnly && !seenIds.insert(id).second) {
+				lastError = fmt::format("Duplicate items.xml item id {}.", id);
+				LOG_ERROR("[Error - Items::loadFromXml] {}", lastError);
+				return false;
+			}
+			if (!scriptAttributesOnly && isLoadedFromDat() && id >= FIRST_DAT_ITEM_ID && id > datItemCount &&
+			    !isExplicitServerOnlyItemId(id)) {
+				lastError = fmt::format(
+				    "items.xml id {} has no DAT client mapping (DAT itemCount {}). "
+				    "Only explicit server-only IDs {}-{} may be defined above itemCount.",
+				    id, datItemCount, FIRST_SERVER_ONLY_ITEM_ID, ITEM_BROWSEFIELD - 1);
+				LOG_ERROR("[Error - Items::loadFromXml] {}", lastError);
+				return false;
+			}
+			if (!scriptAttributesOnly && (id < FIRST_DAT_ITEM_ID || isExplicitServerOnlyItemId(id))) {
+				ItemType& itemType = items[id];
+				itemType.id = id;
+			}
+
+			const std::string name = asLowerCaseString(itemNode.attribute("name").as_string());
+			if (!scriptAttributesOnly && !name.empty() && !seenNames.insert(name).second) {
+				++duplicateNameCount;
+			}
+			if (!parseItemNode(itemNode, id, parseScriptAttributes, scriptAttributesOnly)) {
+				return false;
+			}
 			continue;
 		}
 
 		pugi::xml_attribute fromIdAttribute = itemNode.attribute("fromid");
 		if (!fromIdAttribute) {
-			LOG_WARN("[Warning - Items::loadFromXml] No item id found");
-			continue;
+			lastError = "items.xml entry has neither id nor fromid.";
+			LOG_ERROR("[Error - Items::loadFromXml] {}", lastError);
+			return false;
 		}
 
 		pugi::xml_attribute toIdAttribute = itemNode.attribute("toid");
 		if (!toIdAttribute) {
-			LOG_WARN(fmt::format("[Warning - Items::loadFromXml] fromid ({}) without toid", fromIdAttribute.value()));
-			continue;
+			lastError = fmt::format("items.xml fromid {} has no toid.", fromIdAttribute.value());
+			LOG_ERROR("[Error - Items::loadFromXml] {}", lastError);
+			return false;
 		}
 
-		uint16_t id = pugi::cast<uint16_t>(fromIdAttribute.value());
-		uint16_t toId = pugi::cast<uint16_t>(toIdAttribute.value());
-		while (id <= toId) {
-			parseItemNode(itemNode, id++);
+		uint32_t fromId = 0;
+		uint32_t toId = 0;
+		if (!parseXmlItemId(fromIdAttribute, fromId) || !parseXmlItemId(toIdAttribute, toId) || fromId == 0 ||
+		    fromId > toId || toId > (std::numeric_limits<uint16_t>::max)()) {
+			lastError = fmt::format("Invalid items.xml range {}-{}.", fromIdAttribute.value(), toIdAttribute.value());
+			LOG_ERROR("[Error - Items::loadFromXml] {}", lastError);
+			return false;
 		}
+		if (isLoadedFromDat() && (fromId < FIRST_DAT_ITEM_ID || toId > datItemCount)) {
+			lastError = fmt::format(
+			    "items.xml range {}-{} is outside the DAT client ID range {}-{}. "
+			    "Server-only definitions must use an explicit id.",
+			    fromId, toId, FIRST_DAT_ITEM_ID, datItemCount);
+			LOG_ERROR("[Error - Items::loadFromXml] {}", lastError);
+			return false;
+		}
+
+		const std::string name = asLowerCaseString(itemNode.attribute("name").as_string());
+		for (uint32_t currentId = fromId; currentId <= toId; ++currentId) {
+			const uint16_t id = static_cast<uint16_t>(currentId);
+			if (!scriptAttributesOnly && !seenIds.insert(id).second) {
+				lastError = fmt::format("Duplicate items.xml item id {} in range {}-{}.", id, fromId, toId);
+				LOG_ERROR("[Error - Items::loadFromXml] {}", lastError);
+				return false;
+			}
+			if (!scriptAttributesOnly && !name.empty() && !seenNames.insert(name).second) {
+				++duplicateNameCount;
+			}
+			if (!parseItemNode(itemNode, id, parseScriptAttributes, scriptAttributesOnly)) {
+				return false;
+			}
+		}
+	}
+	if (!scriptAttributesOnly && duplicateNameCount != 0) {
+		LOG_INFO(">> items.xml: {} duplicate names kept with the existing first-ID lookup behavior.",
+		         duplicateNameCount);
 	}
 	return true;
 }
 
-void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
+bool Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id, bool parseScriptAttributes,
+                          bool scriptAttributesOnly)
 {
-	if (id > 0 && id < 100) {
+	if (!scriptAttributesOnly && (id < FIRST_DAT_ITEM_ID || isExplicitServerOnlyItemId(id))) {
 		ItemType& iType = items[id];
 		iType.id = id;
 	}
 
 	ItemType& it = getItemType(id);
 	if (it.id == 0) {
-		return;
+		if (isLoadedFromDat()) {
+			lastError = fmt::format("items.xml id {} is not initialized by the selected DAT source.", id);
+			LOG_ERROR("[Error - Items::parseItemNode] {}", lastError);
+			return false;
+	}
+		return true;
 	}
 
-	if (!it.name.empty()) {
+	if (!scriptAttributesOnly && !it.name.empty()) {
 		LOG_WARN(fmt::format("[Warning - Items::parseItemNode] Duplicate item with id: {}", id));
-		return;
+		return true;
 	}
 
-	it.name = itemNode.attribute("name").as_string();
+	if (!scriptAttributesOnly) {
+		it.name = itemNode.attribute("name").as_string();
 
-	if (!it.name.empty()) {
-		std::string lowerCaseName = asLowerCaseString(it.name);
-		if (!nameToItems.contains(lowerCaseName)) {
-			nameToItems.emplace(std::move(lowerCaseName), id);
+		if (!it.name.empty()) {
+			std::string lowerCaseName = asLowerCaseString(it.name);
+			if (!nameToItems.contains(lowerCaseName)) {
+				nameToItems.emplace(std::move(lowerCaseName), id);
+			}
 		}
-	}
 
-	pugi::xml_attribute articleAttribute = itemNode.attribute("article");
-	if (articleAttribute) {
-		it.article = articleAttribute.as_string();
-	}
+		pugi::xml_attribute articleAttribute = itemNode.attribute("article");
+		if (articleAttribute) {
+			it.article = articleAttribute.as_string();
+		}
 
-	pugi::xml_attribute pluralAttribute = itemNode.attribute("plural");
-	if (pluralAttribute) {
-		it.pluralName = pluralAttribute.as_string();
+		pugi::xml_attribute pluralAttribute = itemNode.attribute("plural");
+		if (pluralAttribute) {
+			it.pluralName = pluralAttribute.as_string();
+		}
 	}
 
 	Abilities& abilities = it.getAbilities();
@@ -852,6 +1655,10 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 
 		std::string tmpStrValue = asLowerCaseString(keyAttribute.as_string());
 		auto parseAttribute = ItemParseAttributesMap.find(tmpStrValue);
+		if (scriptAttributesOnly &&
+		    (parseAttribute == ItemParseAttributesMap.end() || parseAttribute->second != ITEM_PARSE_SCRIPT)) {
+			continue;
+		}
 		if (parseAttribute != ItemParseAttributesMap.end()) {
 			ItemParseAttributes_t parseType = parseAttribute->second;
 			switch (parseType) {
@@ -2103,6 +2910,11 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 					break;
 				}
 
+				case ITEM_PARSE_STACKABLE: {
+					it.stackable = valueAttribute.as_bool();
+					break;
+				}
+
 				case ITEM_PARSE_EXPERIENCERATE_BASE: {
 					int32_t rate = pugi::cast<int32_t>(valueAttribute.value());
 					abilities.experienceRate[static_cast<size_t>(ExperienceRateType::BASE)] = rate;
@@ -2155,7 +2967,9 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 				}
 
 				case ITEM_PARSE_SCRIPT: {
-					parseScriptAttribute(it, attributeNode, valueAttribute);
+					if (parseScriptAttributes) {
+						parseScriptAttribute(it, attributeNode, valueAttribute);
+					}
 					break;
 				}
 
@@ -2262,11 +3076,13 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 	}
 
 	// check bed items
-	if ((it.transformToFree != 0 || it.transformToOnUse[PLAYERSEX_FEMALE] != 0 ||
+	if (!scriptAttributesOnly &&
+	    (it.transformToFree != 0 || it.transformToOnUse[PLAYERSEX_FEMALE] != 0 ||
 	     it.transformToOnUse[PLAYERSEX_MALE] != 0) &&
 	    it.type != ITEM_TYPE_BED) {
 		LOG_WARN(fmt::format("[Warning - Items::parseItemNode] Item {} is not set as a bed-type", it.id));
 	}
+	return true;
 }
 
 void Items::parseScriptAttribute(ItemType& it, const pugi::xml_node& attributeNode, const pugi::xml_attribute& valueAttribute)
@@ -2622,7 +3438,8 @@ ItemType& Items::getItemType(size_t id)
 	if (id < items.size()) {
 		return items[id];
 	}
-	return items.front();
+	static ItemType invalidItemType;
+	return invalidItemType;
 }
 
 const ItemType& Items::getItemType(size_t id) const
@@ -2630,7 +3447,13 @@ const ItemType& Items::getItemType(size_t id) const
 	if (id < items.size()) {
 		return items[id];
 	}
-	return items.front();
+	static const ItemType invalidItemType;
+	return invalidItemType;
+}
+
+bool Items::isValidItemId(size_t id) const
+{
+	return id < items.size() && items[id].id == id;
 }
 
 uint16_t Items::getItemIdByName(const std::string& name)

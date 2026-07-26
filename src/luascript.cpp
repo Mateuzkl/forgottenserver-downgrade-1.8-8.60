@@ -3035,6 +3035,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::SOULSEALS_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::CLEAVE_SYSTEM_ENABLED);
 
+	registerEnumIn("configKeys", ConfigManager::USE_ASSETS_DAT);
 	registerEnumIn("configKeys", ConfigManager::MAP_NAME);
 	registerEnumIn("configKeys", ConfigManager::HOUSE_RENT_PERIOD);
 	registerEnumIn("configKeys", ConfigManager::SERVER_NAME);
@@ -3053,6 +3054,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::DEFAULT_PRIORITY);
 	registerEnumIn("configKeys", ConfigManager::MAP_AUTHOR);
 
+	registerEnumIn("configKeys", ConfigManager::ASSETS_DAT_PATH);
 	registerEnumIn("configKeys", ConfigManager::SERVER_SAVE_NOTIFY_DURATION);
 	registerEnumIn("configKeys", ConfigManager::SQL_PORT);
 	registerEnumIn("configKeys", ConfigManager::MAX_PLAYERS);

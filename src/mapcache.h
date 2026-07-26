@@ -225,7 +225,7 @@ public:
     using Digest = std::array<uint8_t, 32>;
     struct Fingerprint {
         Digest map{};
-        Digest itemsOtb{};
+        Digest itemSource{};
         Digest itemsXml{};
 
         bool operator==(const Fingerprint&) const = default;
@@ -271,8 +271,9 @@ public:
     /**
      * Map Parsing Helpers (used by IOMap)
      */
-    static std::shared_ptr<BasicItem> parseBasicItem(void* loaderptr, const void* nodeptr);
-    static const BasicTile* parseBasicTile(void* loaderptr, const void* nodeptr, uint8_t& xOffset, uint8_t& yOffset);
+    static std::shared_ptr<BasicItem> parseBasicItem(void* loaderptr, const void* nodeptr, std::string& error);
+    static const BasicTile* parseBasicTile(void* loaderptr, const void* nodeptr, uint8_t& xOffset, uint8_t& yOffset,
+                                           std::string& error);
     /**
      * Get cache statistics for debugging
      */

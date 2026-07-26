@@ -57,6 +57,15 @@ bool transferMapItem(Cylinder* cylinder, std::shared_ptr<Item>& item)
 	return true;
 }
 
+void logMapItemSourceCompatibility()
+{
+	if (Item::items.isLoadedFromDat()) {
+		g_logger().info(">> Map item source compatibility: DAT client IDs");
+	} else {
+		g_logger().info(">> Map item source compatibility: OTB");
+	}
+}
+
 void appendEscapedProperties(std::vector<uint8_t>& output, OTB::Loader& loader, const OTB::Node& node)
 {
 	if (node.propsBegin == node.propsEnd) {
@@ -214,6 +223,7 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
             map->housefile = houseFile;
             g_logger().info(">> Persistent map cache hit completed in {:.3f} seconds.",
                             std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+            logMapItemSourceCompatibility();
 			if (reportStartupProgress) {
 				startupProgress().updateFraction(1.0, "persistent cache loaded");
 			}
@@ -262,25 +272,27 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
             return false;
         }
 
-        if (root_header.majorVersionItems < 3) {
-            setLastErrorString(
-                "This map need to be upgraded by using the latest map editor version to be able to load correctly.");
-            return false;
-        }
+        if (!Item::items.isLoadedFromDat()) {
+            if (root_header.majorVersionItems < 3) {
+                setLastErrorString(
+                    "This map need to be upgraded by using the latest map editor version to be able to load correctly.");
+                return false;
+            }
 
-        if (root_header.majorVersionItems > Item::items.majorVersion) {
-            setLastErrorString(
-                "The map was saved with a different items.otb version, an upgraded items.otb is required.");
-            return false;
-        }
+            if (root_header.majorVersionItems > Item::items.majorVersion) {
+                setLastErrorString(
+                    "The map was saved with a different items.otb version, an upgraded items.otb is required.");
+                return false;
+            }
 
-        if (root_header.minorVersionItems < CLIENT_VERSION_810) {
-            setLastErrorString("This map needs to be updated.");
-            return false;
-        }
+            if (root_header.minorVersionItems < CLIENT_VERSION_810) {
+                setLastErrorString("This map needs to be updated.");
+                return false;
+            }
 
-        if (root_header.minorVersionItems > Item::items.minorVersion) {
-            g_logger().warn("This map needs an updated items.otb.");
+            if (root_header.minorVersionItems > Item::items.minorVersion) {
+                g_logger().warn("This map needs an updated items.otb.");
+            }
         }
 
         g_logger().info(">> Map size: {}x{}.", root_header.width, root_header.height);
@@ -368,6 +380,7 @@ bool IOMap::loadMap(Map* map, const std::filesystem::path& fileName, bool usePer
     MapCache::flush();
     g_logger().info(">> Map loading time: {:.3f} seconds.",
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    logMapItemSourceCompatibility();
 	if (reportStartupProgress) {
 		startupProgress().updateFraction(1.0, "OTBM ready");
 	}
@@ -519,9 +532,25 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                     }
 
                     case OTBM_AttrTypes_t::ITEM: {
+                        PropStream idStream = tilePropStream;
+                        uint16_t serializedId = 0;
+                        if (!idStream.read<uint16_t>(serializedId)) {
+                            setLastErrorString(
+                                fmt::format("[x:{:d}, y:{:d}, z:{:d}] Could not read map item id.", x, y, z));
+                            return false;
+                        }
+                        if (Item::items.isLoadedFromDat() && !Item::items.isValidItemId(serializedId)) {
+                            setLastErrorString(fmt::format(
+                                "[x:{:d}, y:{:d}, z:{:d}] Map contains unknown item id {} for the selected DAT source.",
+                                x, y, z, serializedId));
+                            return false;
+                        }
+
                         auto item = Item::CreateItem(tilePropStream);
                         if (!item) {
-                            setLastErrorString(fmt::format("[x:{:d}, y:{:d}, z:{:d}] Failed to create item.", x, y, z));
+                            setLastErrorString(fmt::format(
+                                "[x:{:d}, y:{:d}, z:{:d}] Failed to create map item id {} for the selected {} source.",
+                                x, y, z, serializedId, Item::items.isLoadedFromDat() ? "DAT" : "OTB"));
                             return false;
                         }
 
@@ -575,9 +604,25 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                     return false;
                 }
 
+                PropStream idStream = stream;
+                uint16_t serializedId = 0;
+                if (!idStream.read<uint16_t>(serializedId)) {
+                    setLastErrorString(
+                        fmt::format("[x:{:d}, y:{:d}, z:{:d}] Could not read map item id.", x, y, z));
+                    return false;
+                }
+                if (Item::items.isLoadedFromDat() && !Item::items.isValidItemId(serializedId)) {
+                    setLastErrorString(fmt::format(
+                        "[x:{:d}, y:{:d}, z:{:d}] Map contains unknown item id {} for the selected DAT source.", x, y,
+                        z, serializedId));
+                    return false;
+                }
+
                 auto item = Item::CreateItem(stream);
                 if (!item) {
-                    setLastErrorString(fmt::format("[x:{:d}, y:{:d}, z:{:d}] Failed to create item.", x, y, z));
+                    setLastErrorString(fmt::format(
+                        "[x:{:d}, y:{:d}, z:{:d}] Failed to create map item id {} for the selected {} source.", x, y, z,
+                        serializedId, Item::items.isLoadedFromDat() ? "DAT" : "OTB"));
                     return false;
                 }
 
@@ -631,10 +676,14 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                 return false;
             }
 
-            uint8_t xOffset, yOffset;
-            auto basicTile = MapCache::parseBasicTile(&loader, &tileNode, xOffset, yOffset);
+            uint8_t xOffset = 0;
+            uint8_t yOffset = 0;
+            std::string tileError;
+            auto basicTile = MapCache::parseBasicTile(&loader, &tileNode, xOffset, yOffset, tileError);
             if (!basicTile) {
-                setLastErrorString("Failed to parse basic tile.");
+                setLastErrorString(fmt::format("[x:{}, y:{}, z:{}] Failed to parse basic tile: {}", base_x + xOffset,
+                                               base_y + yOffset, z,
+                                               tileError.empty() ? "unknown error" : tileError));
                 return false;
             }
 

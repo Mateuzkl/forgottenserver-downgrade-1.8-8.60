@@ -184,6 +184,7 @@ enum ItemParseAttributes_t
 	ITEM_PARSE_ALLOWDISTREAD,
 	ITEM_PARSE_STOREITEM,
 	ITEM_PARSE_WORTH,
+	ITEM_PARSE_STACKABLE,
 	ITEM_PARSE_STACKSIZE,
 	ITEM_PARSE_REFLECTPERCENTALL,
 	ITEM_PARSE_REFLECTPERCENTELEMENTS,
@@ -503,6 +504,13 @@ private:
 class Items
 {
 public:
+	enum class Source : uint8_t
+	{
+		NONE,
+		OTB,
+		DAT,
+	};
+
 	using NameMap = std::unordered_map<std::string, uint16_t>;
 	using InventoryVector = std::vector<uint16_t>;
 
@@ -518,11 +526,14 @@ public:
 	bool reload();
 	void clear();
 
+	bool loadFromConfiguredSource();
 	bool loadFromOtb(const std::string& file);
+	bool loadFromDat(std::string_view file);
 
 	const ItemType& operator[](size_t id) const { return getItemType(id); }
 	const ItemType& getItemType(size_t id) const;
 	ItemType& getItemType(size_t id);
+	bool isValidItemId(size_t id) const;
 
 	uint16_t getItemIdByName(const std::string& name);
 
@@ -530,14 +541,20 @@ public:
 	uint32_t minorVersion = 0;
 	uint32_t buildNumber = 0;
 
-	bool loadFromXml();
-	void parseItemNode(const pugi::xml_node& itemNode, uint16_t id);
+	bool loadFromXml(bool parseScriptAttributes = true, bool scriptAttributesOnly = false);
+	bool parseItemNode(const pugi::xml_node& itemNode, uint16_t id, bool parseScriptAttributes = true,
+	                   bool scriptAttributesOnly = false);
 	void parseScriptAttribute(ItemType& it, const pugi::xml_node& attributeNode, const pugi::xml_attribute& valueAttribute);
 
 	void buildInventoryList();
 	const InventoryVector& getInventory() const { return inventory; }
 
 	size_t size() const { return items.size(); }
+	Source getLoadedSource() const { return loadedSource; }
+	bool isLoadedFromDat() const { return loadedSource == Source::DAT; }
+	std::string_view getLoadedSourcePath() const { return loadedSourcePath; }
+	const std::string& getLastError() const { return lastError; }
+	uint16_t getDatItemCount() const { return datItemCount; }
 
 	static std::string getAugmentNameByType(Augment_t augmentType);
 	static bool isAugmentWithoutValueDescription(Augment_t augmentType);
@@ -546,7 +563,17 @@ public:
 	CurrencyMap currencyItems;
 
 private:
+	bool loadFromXmlDocument(const pugi::xml_document& doc, bool parseScriptAttributes, bool scriptAttributesOnly);
+	void initializeInternalItemTypes();
+	void swapState(Items& other) noexcept;
+
 	std::vector<ItemType> items;
 	InventoryVector inventory;
+	Source loadedSource = Source::NONE;
+	std::string loadedSourcePath;
+	std::string lastError;
+	uint16_t datItemCount = 0;
+	uint8_t datSpriteIdBytes = 0;
+	uint32_t datMarketItemCount = 0;
 };
 #endif

@@ -40133,7 +40133,7 @@
 	</item>
 	<item id="22327" article="a" name="stone spiked club">
 	</item>
-	<item fromid="22328" toid="22323" article="a" name="large totem pole" />
+	<item fromid="22328" toid="22333" article="a" name="large totem pole" />
 	<item fromid="22334" toid="22335" article="a" name="clay hut">
 	</item>
 	<item fromid="22336" toid="22337" article="a" name="clay hut entrance">
@@ -43404,7 +43404,7 @@
 		<attribute key="decayTo" value="0" />
 	</item>
 	<item fromid="25135" toid="25138" name="unknown item" />
-	<item fromid="25139" toid="25134" name="RESERVED SPRITE" />
+	<item fromid="25139" toid="25140" name="RESERVED SPRITE" />
 	<item id="25141" name="unknown item" />
 	<item id="25142" name="dragon lair wall" />
 	<item fromid="25143" toid="25145" name="RESERVED SPRITE" />
@@ -56542,7 +56542,7 @@
 	</item>
 	<item id="33211" article="a" name="cornerstone" />
 	<item fromid="33212" toid="33226" article="a" name="wall" />
-	<item fromid="33231" toid="33227" article="a" name="buttress" />
+	<item fromid="33227" toid="33231" article="a" name="buttress" />
 	<item id="33232" article="a" name="ramp" />
 	<item id="33233" article="a" name="ramp">
 		<attribute key="floorchange" value="north" />
@@ -72930,7 +72930,7 @@
 		<attribute key="description" value="Drinking this potion temporarily increases your fist skill" />
 		<attribute key="weight" value="290" />
 	</item>
-	<item toid="49282" fromid="49329" article="a" name="brick wall" />
+	<item fromid="49282" toid="49329" article="a" name="brick wall" />
 	<item id="49371" article="a" name="lesser spiritualist gem" plural="lesser spiritualist gems">
 		<attribute key="description" value="Shines with the strength of monks." />
 		<attribute key="weight" value="20" />

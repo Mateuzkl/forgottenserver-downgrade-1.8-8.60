@@ -141,6 +141,7 @@ enum Boolean
 	SOULSEALS_SYSTEM_ENABLED,
 	CLEAVE_SYSTEM_ENABLED,
 	CHARACTER_BAZAAR_ENABLED,
+	USE_ASSETS_DAT,
 
 	LAST_BOOLEAN /* this must be the last one */
 };
@@ -178,6 +179,7 @@ enum String
 	DUAL_WIELDING_MODE,
 	RAID_SPAWNFILE_DIRECTORY,
 	DLL_CHECK_HMAC_KEY,
+	ASSETS_DAT_PATH,
 
 	LAST_STRING /* this must be the last one */
 };

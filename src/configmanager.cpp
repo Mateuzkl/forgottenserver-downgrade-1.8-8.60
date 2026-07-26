@@ -385,6 +385,10 @@ bool ConfigManager::load()
 		integers[Integer::MARKET_OFFER_DURATION] = getGlobalInteger(L, "marketOfferDuration", 30 * 24 * 60 * 60);
 	}
 
+	// Item source is reloadable; keep both values outside the one-time block.
+	booleans[Boolean::USE_ASSETS_DAT] = getGlobalBoolean(L, "useAssetsDat", false);
+	strings[String::ASSETS_DAT_PATH] = getGlobalString(L, "assetsDatPath", "data/items/assets.dat");
+
 	booleans[Boolean::ALLOW_CHANGEOUTFIT] = getGlobalBoolean(L, "allowChangeOutfit", true);
 	booleans[Boolean::ONE_PLAYER_ON_ACCOUNT] = getGlobalBoolean(L, "onePlayerOnlinePerAccount", true);
 	booleans[Boolean::AIMBOT_HOTKEY_ENABLED] = getGlobalBoolean(L, "hotkeyAimbotEnabled", true);

@@ -15,6 +15,7 @@
 #include "iomap.h"
 #include "fileloader.h"
 #include "logger.h"
+#include "configmanager.h"
 
 #include <algorithm>
 #include <fstream>
@@ -42,6 +43,13 @@ constexpr uint32_t MAX_CACHE_ENTRIES = 100'000'000;
 std::mutex fingerprintMutex;
 std::filesystem::path fingerprintPath;
 std::optional<std::future<std::optional<MapCache::Fingerprint>>> fingerprintFuture;
+
+std::filesystem::path configuredItemSourcePath() {
+    if (ConfigManager::getBoolean(ConfigManager::USE_ASSETS_DAT)) {
+        return std::filesystem::path{ConfigManager::getString(ConfigManager::ASSETS_DAT_PATH)};
+    }
+    return std::filesystem::path{"data/items/items.otb"};
+}
 
 class CacheWriter {
 public:
@@ -172,7 +180,7 @@ bool replaceMapCacheFile(const std::filesystem::path& source, const std::filesys
     return !error;
 #endif
 }
-} // namespace
+}
 
 void MapCache::prepare(size_t sourceBytes) {
     // Estimates are deliberately based on the source size instead of map
@@ -223,23 +231,24 @@ std::optional<MapCache::Fingerprint> MapCache::fingerprint(const std::filesystem
     }
 
     const auto mapDigest = digestFile(mapPath);
-    const auto otbDigest = digestFile("data/items/items.otb");
+    const auto itemSourceDigest = digestFile(configuredItemSourcePath());
     const auto xmlDigest = digestFile("data/items/items.xml");
-    if (!mapDigest || !otbDigest || !xmlDigest) {
+    if (!mapDigest || !itemSourceDigest || !xmlDigest) {
         return std::nullopt;
     }
-    return Fingerprint{*mapDigest, *otbDigest, *xmlDigest};
+    return Fingerprint{*mapDigest, *itemSourceDigest, *xmlDigest};
 }
 
 void MapCache::precomputeFingerprint(const std::filesystem::path& mapPath) {
     std::scoped_lock lock(fingerprintMutex);
     fingerprintPath = mapPath;
-    fingerprintFuture.emplace(std::async(std::launch::async, [mapPath]() -> std::optional<Fingerprint> {
+    const std::filesystem::path itemSourcePath = configuredItemSourcePath();
+    fingerprintFuture.emplace(std::async(std::launch::async, [mapPath, itemSourcePath]() -> std::optional<Fingerprint> {
         const auto mapDigest = digestFile(mapPath);
-        const auto otbDigest = digestFile("data/items/items.otb");
+        const auto itemSourceDigest = digestFile(itemSourcePath);
         const auto xmlDigest = digestFile("data/items/items.xml");
-        if (!mapDigest || !otbDigest || !xmlDigest) return std::nullopt;
-        return Fingerprint{*mapDigest, *otbDigest, *xmlDigest};
+        if (!mapDigest || !itemSourceDigest || !xmlDigest) return std::nullopt;
+        return Fingerprint{*mapDigest, *itemSourceDigest, *xmlDigest};
     }));
 }
 
@@ -284,7 +293,7 @@ bool MapCache::savePersistent(const Map& map, const std::filesystem::path& cache
     writer.u32(Item::items.minorVersion);
     writer.u32(Item::items.buildNumber);
     writer.bytes(fingerprintValue.map.data(), fingerprintValue.map.size());
-    writer.bytes(fingerprintValue.itemsOtb.data(), fingerprintValue.itemsOtb.size());
+    writer.bytes(fingerprintValue.itemSource.data(), fingerprintValue.itemSource.size());
     writer.bytes(fingerprintValue.itemsXml.data(), fingerprintValue.itemsXml.size());
     writer.bytes(houseCacheDigest.data(), houseCacheDigest.size());
     writer.u32(map.width);
@@ -380,7 +389,7 @@ bool MapCache::loadPersistent(Map& map, const std::filesystem::path& cachePath,
         itemMajor != Item::items.majorVersion || itemMinor != Item::items.minorVersion ||
         itemBuild != Item::items.buildNumber ||
         !reader.bytes(storedFingerprint.map.data(), storedFingerprint.map.size()) ||
-        !reader.bytes(storedFingerprint.itemsOtb.data(), storedFingerprint.itemsOtb.size()) ||
+        !reader.bytes(storedFingerprint.itemSource.data(), storedFingerprint.itemSource.size()) ||
         !reader.bytes(storedFingerprint.itemsXml.data(), storedFingerprint.itemsXml.size()) ||
         !reader.bytes(storedHouseDigest.data(), storedHouseDigest.size()) ||
         storedFingerprint != expectedFingerprint || storedHouseDigest != expectedHouseDigest) {
@@ -409,6 +418,9 @@ bool MapCache::loadPersistent(Map& map, const std::filesystem::path& cachePath,
             !reader.u16(item->uniqueId) || !reader.u16(item->destX) || !reader.u16(item->destY) ||
             !reader.u16(item->doorOrDepotId) || !reader.u8(item->destZ) || !reader.string(item->text) ||
             !reader.u32(childCount) || childCount > MAX_CACHE_ENTRIES) {
+            return false;
+        }
+        if (!Item::items.isValidItemId(item->id)) {
             return false;
         }
         PendingItem pending{std::move(item), std::vector<uint32_t>(childCount)};
@@ -688,15 +700,25 @@ namespace {
 }
 
 // Helper to parse item from stream (used by both node-based and inline items)
-bool parseBasicItemFromStream(PropStream& propStream, BasicItem& item) {
-    uint16_t id;
+bool parseBasicItemFromStream(PropStream& propStream, BasicItem& item, std::string& error) {
+    uint16_t id = 0;
     if (!propStream.read<uint16_t>(id)) {
-        LOG_ERROR("[MapCache] Failed to read item ID from stream");
+        error = "Failed to read item ID from stream.";
         return false;
     }
-    
-    // ID substitutions
-    applyItemIdSubstitutions(id);
+
+    const uint16_t serializedId = id;
+    // OTB mode preserves the legacy persistent-field substitutions. DAT mode
+    // is a direct client-ID contract and must never convert map IDs.
+    if (!Item::items.isLoadedFromDat()) {
+        applyItemIdSubstitutions(id);
+    }
+    if (!Item::items.isValidItemId(id)) {
+        error = fmt::format("Map contains unknown item id {}{} for the selected {} source.", serializedId,
+                            serializedId != id ? fmt::format(" (resolved to {})", id) : "",
+                            Item::items.isLoadedFromDat() ? "DAT" : "OTB");
+        return false;
+    }
 
     item.id = id;
     
@@ -840,55 +862,59 @@ bool parseBasicItemFromStream(PropStream& propStream, BasicItem& item) {
                 break;
             
             default:
-                // Unknown attribute, log warning
-                LOG_WARN(fmt::format("[MapCache] Unknown item attribute: {}", attr_type));
-                break;
+                error = fmt::format("Unknown map item attribute {} for item {}.", attr_type, serializedId);
+                return false;
         }
     }
     return true;
 }
 
-std::shared_ptr<BasicItem> MapCache::parseBasicItem(void* loaderptr, const void* nodeptr) {
+std::shared_ptr<BasicItem> MapCache::parseBasicItem(void* loaderptr, const void* nodeptr, std::string& error) {
     OTB::Loader& loader = *static_cast<OTB::Loader*>(loaderptr);
     const OTB::Node& node = *static_cast<const OTB::Node*>(nodeptr);
     PropStream propStream;
 
     if (!loader.getProps(node, propStream)) {
-        LOG_ERROR("[MapCache] Failed to get props from item node");
+        error = "Failed to get properties from item node.";
         return nullptr;
     }
 
     BasicItem item;
-    if (!parseBasicItemFromStream(propStream, item)) {
+    if (!parseBasicItemFromStream(propStream, item, error)) {
         return nullptr;
     }
     
     // Parse children (containers)
     for (auto& childNode : node.children) {
         if (static_cast<OTBM_NodeTypes_t>(childNode.type) == OTBM_NodeTypes_t::ITEM) {
-            auto child = parseBasicItem(loaderptr, &childNode);
-            if (child) {
-                item.items.push_back(child);
+            auto child = parseBasicItem(loaderptr, &childNode, error);
+            if (!child) {
+                return nullptr;
             }
+            item.items.push_back(std::move(child));
+        } else {
+            error = fmt::format("Unknown child node type {} in map container item.", childNode.type);
+            return nullptr;
         }
     }
 
     return tryGetItemFromCache(std::move(item));
 }
 
-const BasicTile* MapCache::parseBasicTile(void* loaderptr, const void* nodeptr, uint8_t& xOffset, uint8_t& yOffset) {
+const BasicTile* MapCache::parseBasicTile(void* loaderptr, const void* nodeptr, uint8_t& xOffset, uint8_t& yOffset,
+                                          std::string& error) {
     OTB::Loader& loader = *static_cast<OTB::Loader*>(loaderptr);
     const OTB::Node& tileNode = *static_cast<const OTB::Node*>(nodeptr);
     PropStream propStream;
 
     if (!loader.getProps(tileNode, propStream)) {
-        LOG_ERROR("[MapCache] Failed to get props from tile node");
+        error = "Failed to get properties from tile node.";
         return nullptr;
     }
 
     OTBM_Tile_coords tile_coord;
     if (!propStream.read(tile_coord)) {
-        LOG_ERROR("[MapCache] Failed to read tile coordinates");
+        error = "Failed to read tile coordinates.";
         return nullptr;
     }
     
@@ -922,7 +948,7 @@ const BasicTile* MapCache::parseBasicTile(void* loaderptr, const void* nodeptr, 
                         ZoneId zoneId = 0;
                         do {
                             if (!propStream.read<ZoneId>(zoneId)) {
-                                LOG_ERROR("[MapCache] Failed to read tile zone id");
+                                error = "Failed to read tile zone id.";
                                 return nullptr;
                             }
 
@@ -932,7 +958,7 @@ const BasicTile* MapCache::parseBasicTile(void* loaderptr, const void* nodeptr, 
                         } while (zoneId != 0);
                     }
                 } else {
-                    LOG_ERROR("[MapCache] Failed to read tile flags");
+                    error = "Failed to read tile flags.";
                     return nullptr;
                 }
                 break;
@@ -940,19 +966,20 @@ const BasicTile* MapCache::parseBasicTile(void* loaderptr, const void* nodeptr, 
             case OTBM_AttrTypes_t::ITEM: {
                 // Inline item
                 BasicItem item;
-                if (parseBasicItemFromStream(propStream, item)) {
-                     const ItemType& it = Item::items[item.id];
-                     if (it.isGroundTile()) {
-                         tile.ground = MapCache::tryGetItemFromCache(std::move(item));
-                     } else {
-                         tile.items.push_back(MapCache::tryGetItemFromCache(std::move(item)));
-                     }
+                if (!parseBasicItemFromStream(propStream, item, error)) {
+                    return nullptr;
+                }
+                const ItemType& it = Item::items[item.id];
+                if (it.isGroundTile()) {
+                    tile.ground = MapCache::tryGetItemFromCache(std::move(item));
+                } else {
+                    tile.items.push_back(MapCache::tryGetItemFromCache(std::move(item)));
                 }
                 break; 
             }
             default:
-                LOG_WARN(fmt::format("[MapCache] Unknown tile attribute: {}", attribute));
-                break;
+                error = fmt::format("Unknown tile attribute {}.", attribute);
+                return nullptr;
         }
     }
     
@@ -960,21 +987,25 @@ const BasicTile* MapCache::parseBasicTile(void* loaderptr, const void* nodeptr, 
     for (auto& itemNode : tileNode.children) {
         const auto childNodeType = static_cast<OTBM_NodeTypes_t>(itemNode.type);
         if (childNodeType == OTBM_NodeTypes_t::ITEM) {
-            auto item = parseBasicItem(loaderptr, &itemNode);
-            if (item) {
-                const ItemType& it = Item::items[item->id];
-                if (it.isGroundTile() && tile.ground == nullptr) {
-                    tile.ground = item;
-                } else {
-                    tile.items.push_back(item);
-                }
+            auto item = parseBasicItem(loaderptr, &itemNode, error);
+            if (!item) {
+                return nullptr;
+            }
+            const ItemType& it = Item::items[item->id];
+            if (it.isGroundTile() && tile.ground == nullptr) {
+                tile.ground = item;
+            } else {
+                tile.items.push_back(item);
             }
         } else if (childNodeType == OTBM_NodeTypes_t::TILE_ZONE) {
             std::string errorType;
             if (!IOMap::parseTileZoneNode(loader, itemNode, tile.zoneIds, errorType)) {
-                LOG_ERROR(fmt::format("[MapCache] {}", errorType));
+                error = std::move(errorType);
                 return nullptr;
             }
+        } else {
+            error = fmt::format("Unknown tile child node type {}.", itemNode.type);
+            return nullptr;
         }
     }
 
@@ -1106,4 +1137,4 @@ std::unique_ptr<Tile> createTileFromBasic(const BasicTile* basicTile,
     return tile;
 }
 
-} // namespace MapCacheUtils
+}
