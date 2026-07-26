@@ -807,6 +807,33 @@ bool skipDatSpriteLayout(DatReader& reader, uint16_t itemId, size_t spriteIdByte
 	return skipDatBytes(reader, spriteBytes, error, fmt::format("sprite IDs for item {}", itemId));
 }
 
+bool validateDatVisualSection(DatReader& reader, uint16_t count, std::string_view sectionName,
+                              size_t spriteIdBytes, DatParseError& error)
+{
+	for (uint32_t id = 1; id <= count; ++id) {
+		// Visual records use the same bounded attribute and sprite-layout encoding
+		// as items, but their parsed values are intentionally discarded.
+		ItemType discardedType;
+		uint32_t discardedMarketItemCount = 0;
+		DatParseError recordError;
+		if (!readDatAttributes(discardedType, static_cast<uint16_t>(id), reader, recordError,
+		                       discardedMarketItemCount)) {
+			error.set(recordError.offset,
+			          fmt::format("{} {}: {}", sectionName, id, recordError.message));
+			return false;
+		}
+
+		uint8_t discardedFrameCount = 0;
+		if (!skipDatSpriteLayout(reader, static_cast<uint16_t>(id), spriteIdBytes, discardedFrameCount,
+		                         recordError)) {
+			error.set(recordError.offset,
+			          fmt::format("{} {}: {}", sectionName, id, recordError.message));
+			return false;
+		}
+	}
+	return true;
+}
+
 struct DatParseResult
 {
 	std::vector<ItemType> items;
@@ -870,17 +897,14 @@ bool parseDatBuffer(const std::vector<uint8_t>& buffer, size_t spriteIdBytes, Da
 		itemType.isAnimation = itemType.isAnimation || frameCount > 1;
 	}
 
-	size_t visualCount = static_cast<size_t>(result.outfitCount) + result.effectCount + result.distanceEffectCount;
-	if (visualCount == 0 && reader.remaining() != 0) {
-		error.set(reader.position(),
-		          fmt::format("{} unexpected bytes remain after the item section", reader.remaining()));
+	if (!validateDatVisualSection(reader, result.outfitCount, "outfit", spriteIdBytes, error) ||
+	    !validateDatVisualSection(reader, result.effectCount, "effect", spriteIdBytes, error) ||
+	    !validateDatVisualSection(reader, result.distanceEffectCount, "distance effect", spriteIdBytes, error)) {
 		return false;
 	}
-	size_t minimumVisualBytes = 0;
-	if (!checkedMultiply(visualCount, 7 + spriteIdBytes, minimumVisualBytes) ||
-	    reader.remaining() < minimumVisualBytes) {
+	if (reader.remaining() != 0) {
 		error.set(reader.position(),
-		          fmt::format("only {} bytes remain for {} declared visual entries", reader.remaining(), visualCount));
+		          fmt::format("{} unexpected bytes remain after the declared DAT sections", reader.remaining()));
 		return false;
 	}
 
@@ -1088,8 +1112,12 @@ bool Items::reload()
 
 		// Restore registries against the old ItemType table using the already
 		// parsed XML document. No source or XML file is reopened during rollback.
-		const bool restored = g_moveEvents->reload() && g_weapons->reload() && loadFromXmlDocument(doc, true, true) &&
-		                      g_scripts->loadScripts("items", false, true);
+		const bool moveEventsRestored = g_moveEvents->reload();
+		const bool weaponsRestored = g_weapons->reload();
+		const bool itemXmlRegistriesRestored = loadFromXmlDocument(doc, true, true);
+		const bool itemScriptsRestored = g_scripts->loadScripts("items", false, true);
+		const bool restored =
+		    moveEventsRestored && weaponsRestored && itemXmlRegistriesRestored && itemScriptsRestored;
 		g_weapons->loadDefaults();
 		if (!restored) {
 			LOG_ERROR(
