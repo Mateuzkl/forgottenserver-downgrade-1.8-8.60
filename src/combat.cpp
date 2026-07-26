@@ -1149,10 +1149,15 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 
 	bool success = false;
 	if (damage.primary.type != COMBAT_MANADRAIN) {
-		if (g_game.combatBlockHit(damage, caster, target, params.blockedByShield, params.blockedByArmor,
-		                          params.itemId != 0, params.ignoreResistances)) {
+		const int32_t perfectShotDamage = damage.perfectShotDamage;
+		damage.perfectShotDamage = 0;
+		const bool fullyBlocked =
+		    g_game.combatBlockHit(damage, caster, target, params.blockedByShield, params.blockedByArmor,
+		                          params.itemId != 0, params.ignoreResistances);
+		if (fullyBlocked && (perfectShotDamage == 0 || damage.blockType == BLOCK_NONE)) {
 			return;
 		}
+		damage.primary.value += perfectShotDamage;
 
 		if (target && target->getPlayer() &&
 				damage.primary.type != COMBAT_HEALING &&

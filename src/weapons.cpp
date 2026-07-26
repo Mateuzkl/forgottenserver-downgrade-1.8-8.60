@@ -61,8 +61,7 @@ int32_t getPerfectShotDamage(const Player* player, const Item* attackingItem, co
 	return perfectShotDamage;
 }
 
-// Folds the perfect shot bonus into damage and returns the signed delta it applied (0 if none), so
-// callers that route damage elsewhere (e.g. the chain system) can re-deliver the same bonus.
+// Stores the perfect shot bonus separately so combat blocking cannot absorb the flat damage.
 int32_t applyPerfectShotDamage(const Player* player, const Item* item, const Creature* target, CombatDamage& damage)
 {
 	if (damage.origin != ORIGIN_RANGED && damage.origin != ORIGIN_WAND) {
@@ -81,7 +80,7 @@ int32_t applyPerfectShotDamage(const Player* player, const Item* item, const Cre
 		delta = perfectShotDamage;
 	}
 
-	damage.primary.value += delta;
+	damage.perfectShotDamage = delta;
 	return delta;
 }
 
@@ -452,7 +451,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 					CombatDamage perfectShotHit;
 					perfectShotHit.origin = damage.origin;
 					perfectShotHit.primary.type = damage.primary.type;
-					perfectShotHit.primary.value = perfectShotDelta;
+					perfectShotHit.perfectShotDamage = perfectShotDelta;
 
 					CombatParams perfectShotParams;
 					perfectShotParams.combatType = damage.primary.type;
