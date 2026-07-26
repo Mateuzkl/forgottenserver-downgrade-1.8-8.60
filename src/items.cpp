@@ -1103,11 +1103,13 @@ bool Items::reload()
 	// all non-side-effecting XML attributes have been validated.
 	swapState(loadedItems);
 
-	const bool registriesLoaded = g_moveEvents->reload() && g_weapons->reload() &&
-	                              loadFromXmlDocument(doc, true, true) && g_scripts->loadScripts("items", false, true);
+	// Item scripts share the global revscript Lua state, which cannot be rolled
+	// back atomically. Leave script loading to the script-system reload.
+	const bool registriesLoaded =
+	    g_moveEvents->reload() && g_weapons->reload() && loadFromXmlDocument(doc, true, true);
 	if (!registriesLoaded) {
 		const std::string registryError =
-		    "Unable to rebuild item moveevents, weapons or item scripts; previous item state restored.";
+		    "Unable to rebuild item moveevents or weapons; previous item state restored.";
 		swapState(loadedItems);
 
 		// Restore registries against the old ItemType table using the already
@@ -1115,9 +1117,7 @@ bool Items::reload()
 		const bool moveEventsRestored = g_moveEvents->reload();
 		const bool weaponsRestored = g_weapons->reload();
 		const bool itemXmlRegistriesRestored = loadFromXmlDocument(doc, true, true);
-		const bool itemScriptsRestored = g_scripts->loadScripts("items", false, true);
-		const bool restored =
-		    moveEventsRestored && weaponsRestored && itemXmlRegistriesRestored && itemScriptsRestored;
+		const bool restored = moveEventsRestored && weaponsRestored && itemXmlRegistriesRestored;
 		g_weapons->loadDefaults();
 		if (!restored) {
 			LOG_ERROR(
