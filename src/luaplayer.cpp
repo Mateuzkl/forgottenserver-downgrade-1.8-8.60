@@ -4171,6 +4171,7 @@ int luaPlayerReloadData(lua_State* L)
 
 	player->sendSkills();
 	player->sendStats();
+	player->sendBasicData();
 	pushBoolean(L, true);
 	return 1;
 }

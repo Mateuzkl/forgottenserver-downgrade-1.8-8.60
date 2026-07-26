@@ -24,6 +24,7 @@
 #include "logger.h"
 #include "scheduler.h"
 #include "scriptmanager.h"
+#include "spells.h"
 #include "thread_pool.h"
 
 #include <algorithm>
@@ -3361,6 +3362,10 @@ void ProtocolGame::sendStats()
 
 void ProtocolGame::sendBasicData()
 {
+	if (!player || !isAstraClient) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x9F);
 
@@ -3373,8 +3378,24 @@ void ProtocolGame::sendBasicData()
 	// prey - OTC client expects 1 byte for prey status when GamePrey feature is enabled
 	msg.addByte(0x00);
 
-	// spells - send known spells count + ids
-	msg.add<uint16_t>(0); // spell count = 0 (protocol 8.60 doesn't use this packet for spells)
+	std::vector<uint16_t> knownSpells;
+	if (g_spells) {
+		for (const auto& entry : g_spells->getInstantSpells()) {
+			const auto& spell = entry.second;
+			if (spell.getId() != 0 && spell.canCast(player.get())) {
+				knownSpells.push_back(spell.getId());
+			}
+		}
+	}
+
+	std::ranges::sort(knownSpells);
+	knownSpells.erase(std::unique(knownSpells.begin(), knownSpells.end()), knownSpells.end());
+
+	msg.add<uint16_t>(static_cast<uint16_t>(knownSpells.size()));
+	for (uint16_t spellId : knownSpells) {
+		msg.add<uint16_t>(spellId);
+	}
+	msg.addByte(player->getVocation()->getMagicShield());
 
 	writeToOutputBuffer(msg);
 }
@@ -4412,7 +4433,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	sendStats();
 	sendSkills();
 
-	if (isOTC) {
+	if (isAstraClient) {
 		sendBasicData();
 	}
 

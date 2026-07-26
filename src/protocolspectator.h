@@ -518,6 +518,18 @@ class ProtocolSpectator {
                 spy->sendStats();
         }
 
+        void sendBasicData() {
+            auto o = owner.lock();
+            if (o)
+                o->sendBasicData();
+
+            for (auto &it : spectators)
+                it->sendBasicData();
+
+            for (auto &spy : spyClients_)
+                spy->sendBasicData();
+        }
+
         void sendTextMessage(const TextMessage &message) {
             auto o = owner.lock();
             if (o)

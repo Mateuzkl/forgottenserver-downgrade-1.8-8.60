@@ -444,6 +444,8 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 			if (!chainCombat->doCombatChain(player, target, params.aggressive)) {
 				Combat::doTargetCombat(player, target, damage, params);
 			} else if (perfectShotDelta != 0) {
+				damage.primary.value += perfectShotDelta;
+
 				// doCombatChain recomputes damage per target and ignores our boosted `damage`, so the
 				// primary target would otherwise lose the perfect shot bonus. Deliver just the bonus to
 				// it as an extra flat hit, re-resolving by id since the chain may have freed the target.

@@ -1154,10 +1154,14 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 		const bool fullyBlocked =
 		    g_game.combatBlockHit(damage, caster, target, params.blockedByShield, params.blockedByArmor,
 		                          params.itemId != 0, params.ignoreResistances);
-		if (fullyBlocked && (perfectShotDamage == 0 || damage.blockType == BLOCK_NONE)) {
+		const bool perfectShotBypassesBlock =
+		    damage.blockType == BLOCK_DEFENSE || damage.blockType == BLOCK_ARMOR;
+		if (fullyBlocked && (perfectShotDamage == 0 || !perfectShotBypassesBlock)) {
 			return;
 		}
-		damage.primary.value += perfectShotDamage;
+		if (damage.blockType == BLOCK_NONE || perfectShotBypassesBlock) {
+			damage.primary.value += perfectShotDamage;
+		}
 
 		if (target && target->getPlayer() &&
 				damage.primary.type != COMBAT_HEALING &&
