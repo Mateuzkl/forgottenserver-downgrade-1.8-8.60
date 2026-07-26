@@ -79,7 +79,6 @@ LoginBoostedEntry getBoostedCreatureLoginEntry()
 	entry.raceId = monsterType->raceId;
 	entry.name = monsterType->name;
 	entry.outfit = monsterType->info.outfit;
-	entry.outfit.lookType = AstraClient::sanitize860OutfitLookType(entry.outfit.lookType);
 	return entry;
 }
 
@@ -106,7 +105,7 @@ LoginBoostedEntry getBoostedBossLoginEntry()
 
 	entry.raceId = result->getNumber<uint32_t>("raceid");
 	entry.name = std::string{result->getString("boostname")};
-	entry.outfit.lookType = AstraClient::sanitize860OutfitLookType(result->getNumber<uint16_t>("looktype"));
+	entry.outfit.lookType = result->getNumber<uint16_t>("looktype");
 	entry.outfit.lookHead = result->getNumber<uint8_t>("lookhead");
 	entry.outfit.lookBody = result->getNumber<uint8_t>("lookbody");
 	entry.outfit.lookLegs = result->getNumber<uint8_t>("looklegs");
@@ -279,7 +278,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 			CharacterListEntry character;
 			character.name = std::string{result->getString("name")};
 			character.level = result->getNumber<uint32_t>("level");
-			character.lookType = AstraClient::sanitize860OutfitLookType(result->getNumber<uint16_t>("looktype"));
+			character.lookType = result->getNumber<uint16_t>("looktype");
 			character.lookHead = result->getNumber<uint8_t>("lookhead");
 			character.lookBody = result->getNumber<uint8_t>("lookbody");
 			character.lookLegs = result->getNumber<uint8_t>("looklegs");

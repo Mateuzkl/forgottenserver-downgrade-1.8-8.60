@@ -13,23 +13,6 @@ namespace AstraClient {
 
 inline constexpr std::string_view LOGIN_MARKER = "A";
 inline constexpr std::string_view REQUIRED_MESSAGE = "This server requires AstraClient.";
-inline constexpr uint16_t CLIENT_860_MAX_OUTFIT_LOOKTYPE = 1921;
-inline constexpr uint16_t CLIENT_860_FALLBACK_OUTFIT_LOOKTYPE = 128;
-
-inline constexpr bool supports860OutfitLookType(uint16_t lookType)
-{
-	return lookType <= CLIENT_860_MAX_OUTFIT_LOOKTYPE;
-}
-
-inline constexpr uint16_t sanitize860OutfitLookType(uint16_t lookType)
-{
-	return supports860OutfitLookType(lookType) ? lookType : CLIENT_860_FALLBACK_OUTFIT_LOOKTYPE;
-}
-
-inline constexpr uint16_t sanitize860MountLookType(uint16_t lookType)
-{
-	return supports860OutfitLookType(lookType) ? lookType : 0;
-}
 
 inline uint32_t rotateLeft(uint32_t value, uint8_t bits)
 {
