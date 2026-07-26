@@ -184,6 +184,7 @@ TEST_CASE(successful_reload_switches_between_otb_and_dat)
 	CurrentPathGuard currentPath(root);
 	TempDatFile dat("tfs_item_source_switch", makeDat(52947));
 
+	CHECK(ConfigManager::setString(ConfigManager::CONFIG_FILE, (root / "config.lua.dist").string()));
 	CHECK(ConfigManager::load());
 	ConfigManager::setBoolean(ConfigManager::USE_ASSETS_DAT, false);
 	CHECK(ScriptingManager::getInstance().loadPreItems());
