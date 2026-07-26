@@ -713,10 +713,10 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 				}
 
 				if (pid < 0) {
-					int32_t townId = ((-pid) - 1) / 20;
+					int32_t depotTownId = ((-pid) - 1) / 20;
 					int32_t boxIndex = ((-pid) - 1) % 20;
 					if (boxIndex >= 0 && boxIndex < 17) {
-						DepotChest* chest = player->getDepotChest(townId, true);
+						DepotChest* chest = player->getDepotChest(depotTownId, true);
 						for (const auto& boxItem : chest->getItemList()) {
 							if (boxItem->getID() == static_cast<uint16_t>(ITEM_DEPOT_BOX_1 + boxIndex)) {
 								transferLoadedItem(boxItem->getContainer(), item);
