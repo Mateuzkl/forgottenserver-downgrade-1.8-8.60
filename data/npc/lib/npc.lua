@@ -197,7 +197,7 @@ local func = function(cid, text, type, e, pcid)
 		return
 	end
 
-	creature:say(text, type, false, pcid, creature:getPosition())
+	creature:say(text, type, false, player, creature:getPosition())
 	e.done = true
 end
 
