@@ -525,7 +525,7 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 	// load item data
 	LOG_INFO(">> Loading items... ");
 	if (!Item::items.loadFromConfiguredSource()) {
-		startupProgress().fail(Item::items.getLastError());
+		startupErrorMessage(Item::items.getLastError());
 		return false;
 	}
 	startupProgress().update(3, 6, Item::items.isLoadedFromDat() ? "items DAT" : "items OTB");
