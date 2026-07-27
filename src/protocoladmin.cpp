@@ -266,19 +266,20 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 				}
 
 				case CMD_PAY_HOUSES: {
-					g_dispatcher.addTask([this]() { adminCommandPayHouses(); });
+					g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->adminCommandPayHouses(); });
 					break;
 				}
 
 				case CMD_RELOAD_SCRIPTS: {
 					int8_t reload = msg.getByte();
-					g_dispatcher.addTask([this, reload]() { adminCommandReload(reload); });
+					g_dispatcher.addTask([thisPtr = getThis(), reload]() { thisPtr->adminCommandReload(reload); });
 					break;
 				}
 
 				case CMD_KICK: {
 					std::string param = std::string(msg.getString());
-					g_dispatcher.addTask([this, param = std::move(param)]() { adminCommandKickPlayer(param); });
+					g_dispatcher.addTask(
+					    [thisPtr = getThis(), param = std::move(param)]() { thisPtr->adminCommandKickPlayer(param); });
 					break;
 				}
 

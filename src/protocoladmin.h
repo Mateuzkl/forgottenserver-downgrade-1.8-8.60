@@ -7,6 +7,8 @@
 #include "protocol.h"
 
 class NetworkMessage;
+class ProtocolAdmin;
+using ProtocolAdmin_ptr = std::shared_ptr<ProtocolAdmin>;
 
 class ProtocolAdmin : public Protocol
 {
@@ -22,6 +24,8 @@ class ProtocolAdmin : public Protocol
 			lastCommand = 0;
 			startTime = std::time(nullptr);
 		}
+
+		ProtocolAdmin_ptr getThis() { return std::static_pointer_cast<ProtocolAdmin>(shared_from_this()); }
 
 		enum {protocolId = 0xFE};
 		// enum {isSingleSocket = false}; // Protocol base class handles this? Check if needed.
