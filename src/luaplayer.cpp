@@ -834,7 +834,7 @@ int luaPlayerGetSpecialSkill(lua_State* L)
 	// player:getSpecialSkill(specialSkillType)
 	SpecialSkills_t specialSkillType = getInteger<SpecialSkills_t>(L, 2);
 	const Player* player = getUserdata<const Player>(L, 1);
-	if (player && specialSkillType <= SPECIALSKILL_LAST) {
+	if (player && specialSkillType >= SPECIALSKILL_FIRST && specialSkillType <= SPECIALSKILL_LAST) {
 		lua_pushinteger(L, player->getSpecialSkill(specialSkillType));
 	} else {
 		lua_pushnil(L);
@@ -852,7 +852,7 @@ int luaPlayerAddSpecialSkill(lua_State* L)
 	}
 
 	SpecialSkills_t specialSkillType = getInteger<SpecialSkills_t>(L, 2);
-	if (specialSkillType > SPECIALSKILL_LAST) {
+	if (specialSkillType < SPECIALSKILL_FIRST || specialSkillType > SPECIALSKILL_LAST) {
 		lua_pushnil(L);
 		return 1;
 	}
