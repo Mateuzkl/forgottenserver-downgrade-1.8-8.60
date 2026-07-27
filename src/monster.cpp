@@ -1248,10 +1248,19 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 	}
 
 	// lets just pick the first target in the list
+	// snapshot targetList first: selectTarget() can call removeTarget(), which erases
+	// from targetList, so iterating targetList directly here would invalidate the loop
+	std::vector<std::shared_ptr<Creature>> fallbackList;
+	fallbackList.reserve(targetList.size());
+	for (const auto& weakRef : targetList) {
+		if (auto creature = weakRef.lock()) {
+			fallbackList.push_back(std::move(creature));
+		}
+	}
+
 	if (preferPlayers) {
-		for (const auto& weakRef : targetList) {
-			auto target = weakRef.lock();
-			if (!target || target->isRemoved() || !target->getTile()) {
+		for (const auto& target : fallbackList) {
+			if (target->isRemoved() || !target->getTile()) {
 				continue;
 			}
 
@@ -1262,9 +1271,8 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		}
 	}
 
-	for (const auto& weakRef : targetList) {
-		auto target = weakRef.lock();
-		if (!target || target->isRemoved() || !target->getTile()) {
+	for (const auto& target : fallbackList) {
+		if (target->isRemoved() || !target->getTile()) {
 			continue;
 		}
 
