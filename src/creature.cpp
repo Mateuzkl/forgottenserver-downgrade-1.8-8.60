@@ -531,15 +531,16 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 	}
 
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
-		if (hasFollowPath) {
-			requestFollowPathUpdate();
-		}
-
 		auto masterCreature = master.lock();
 		const bool followsLiveMaster = masterCreature && masterCreature == fc && !masterCreature->isRemoved() &&
 		                               !masterCreature->isDead();
 		if (!followsLiveMaster && (newPos.z != oldPos.z || !canSee(fc->getPosition()))) {
+			clearFollowPath();
 			onCreatureDisappear(fc.get(), false);
+		} else if (getPosition().z != fc->getPosition().z) {
+			clearFollowPath();
+		} else if (hasFollowPath) {
+			requestFollowPathUpdate();
 		}
 	}
 
@@ -1076,20 +1077,35 @@ void Creature::getPathSearchParams(const Creature*, FindPathParams& fpp) const
 	}
 }
 
+void Creature::clearFollowPath()
+{
+	stopEventWalk();
+	if (!listWalkDir.empty()) {
+		listWalkDir.clear();
+		onWalkAborted();
+	}
+	hasFollowPath = false;
+	forceUpdateFollowPath = false;
+}
+
 void Creature::goToFollowCreature()
 {
 	PerformanceScope performanceScope(PerformanceMetric::CreatureGoToFollow);
 	if (auto fc = followCreature.lock()) {
-		FindPathParams fpp;
-		getPathSearchParams(fc.get(), fpp);
+		if (getPosition().z != fc->getPosition().z) {
+			clearFollowPath();
+		} else {
+			FindPathParams fpp;
+			getPathSearchParams(fc.get(), fpp);
 
-		listWalkDir.clear();
+			listWalkDir.clear();
 
-		if (getPathTo(fc->getPosition(), listWalkDir, fpp)) {
-			hasFollowPath = true;
-			startAutoWalk(listWalkDir);
-		} else
-			hasFollowPath = false;
+			if (getPathTo(fc->getPosition(), listWalkDir, fpp)) {
+				hasFollowPath = true;
+				startAutoWalk(listWalkDir);
+			} else
+				hasFollowPath = false;
+		}
 	}
 
 	auto follow = followCreature.lock();
@@ -1098,7 +1114,17 @@ void Creature::goToFollowCreature()
 
 void Creature::requestFollowPathUpdate()
 {
-	if (isUpdatingPath || followCreature.expired()) {
+	auto follow = followCreature.lock();
+	if (!follow) {
+		return;
+	}
+
+	if (getPosition().z != follow->getPosition().z) {
+		clearFollowPath();
+		return;
+	}
+
+	if (isUpdatingPath) {
 		return;
 	}
 
