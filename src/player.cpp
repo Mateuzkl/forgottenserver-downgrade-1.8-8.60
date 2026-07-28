@@ -2218,7 +2218,7 @@ void Player::sendRemoveContainerItem(const Container* container, uint16_t slot)
 
 		const uint32_t capacity = container->capacity();
 		const Item* lastItem = capacity > 0 ?
-		                           container->getItemByIndex(firstIndex + static_cast<uint16_t>(capacity - 1)) :
+		                           container->getItemByIndex(firstIndex + static_cast<uint16_t>(capacity)) :
 		                           nullptr;
 		client->sendRemoveContainerItem(it->first, std::max<uint16_t>(slot, firstIndex), lastItem);
 		++it;
