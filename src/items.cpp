@@ -256,8 +256,6 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"experienceratestamina", ITEM_PARSE_EXPERIENCERATE_STAMINA},
     {"reduceskillloss", ITEM_PARSE_REDUCESKILLLOSS},
 	{"drop", ITEM_PARSE_DROPBONUS},
-    {"perfectshotdamage", ITEM_PARSE_PERFECTSHOTDAMAGE},
-    {"perfectshotrange", ITEM_PARSE_PERFECTSHOTRANGE},
     {"primarytype", ITEM_PARSE_PRIMARYTYPE},
     {"elementalbond", ITEM_PARSE_ELEMENTALBOND},
     {"script", ITEM_PARSE_SCRIPT},
@@ -1319,16 +1317,6 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 
 				case ITEM_PARSE_LIFELEECHCHANCE: {
 					abilities.specialSkills[SPECIALSKILL_LIFELEECHCHANCE] = pugi::cast<int32_t>(valueAttribute.value());
-					break;
-				}
-
-				case ITEM_PARSE_PERFECTSHOTDAMAGE: {
-					abilities.perfectShotDamage = pugi::cast<int32_t>(valueAttribute.value());
-					break;
-				}
-
-				case ITEM_PARSE_PERFECTSHOTRANGE: {
-					abilities.perfectShotRange = pugi::cast<uint8_t>(valueAttribute.value());
 					break;
 				}
 
