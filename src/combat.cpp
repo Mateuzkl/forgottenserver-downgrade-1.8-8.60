@@ -1193,25 +1193,27 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 				damage.primary.type != COMBAT_HEALING &&
 				damage.origin != ORIGIN_CONDITION) {
 			Player *targetPlayer = target->getPlayer();
+			double dodgeChance = targetPlayer->getWheelDodgeChance();
 			Item *armor = targetPlayer->getInventoryItem(CONST_SLOT_ARMOR);
 			if (armor && armor->getTier() > 0) {
-				double dodgeChance = armor->getDodgeChance();
+				double armorDodgeChance = armor->getDodgeChance();
 				Item *boots = targetPlayer->getInventoryItem(CONST_SLOT_FEET);
 				if (boots && boots->getTier() > 0) {
 					double ampChance = boots->getMomentumChance()* 0.02;
-					dodgeChance *= (1.0 + ampChance);
+					armorDodgeChance *= (1.0 + ampChance);
 				}
-				if (dodgeChance > 0 && (normal_random(1, 10000) / 100.0) < dodgeChance) {
-					damage.primary.value = 0;
-					damage.secondary.value = 0;
-					damage.blockType = BLOCK_DODGE;
-					damage.dodge = true;
-					SpectatorVec dodgeSpectators;
-					g_game.map.getSpectators(dodgeSpectators, target->getPosition(), true, true);
-					InstanceUtils::sendMagicEffectToInstance(dodgeSpectators,
-						target->getPosition(), CONST_ME_DODGE, target->getInstanceID());
-					return;
-				}
+				dodgeChance += armorDodgeChance;
+			}
+			if (dodgeChance > 0 && (normal_random(1, 10000) / 100.0) < dodgeChance) {
+				damage.primary.value = 0;
+				damage.secondary.value = 0;
+				damage.blockType = BLOCK_DODGE;
+				damage.dodge = true;
+				SpectatorVec dodgeSpectators;
+				g_game.map.getSpectators(dodgeSpectators, target->getPosition(), true, true);
+				InstanceUtils::sendMagicEffectToInstance(dodgeSpectators,
+					target->getPosition(), CONST_ME_DODGE, target->getInstanceID());
+				return;
 			}
 		}
 

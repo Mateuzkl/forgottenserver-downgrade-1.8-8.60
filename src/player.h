@@ -926,10 +926,17 @@ public:
 
 	int32_t getArmor() const override;
 	int32_t getDefense() const override;
-	int32_t getCombatAbsorbPercent(CombatType_t combatType) const;
+	float getCombatAbsorbPercent(CombatType_t combatType) const;
+	void addCombatAbsorbPercent(CombatType_t combatType, float modifier)
+	{
+		varCombatAbsorbPercent[combatTypeToIndex(combatType)] += modifier;
+	}
 
 	float getMitigation() const override;
 	void addMitigation(float modifier) { varMitigation += modifier; }
+	void addWheelMitigationMultiplier(float modifier) { varWheelMitigationMultiplier += modifier; }
+	float getWheelDodgeChance() const { return varWheelDodgeChance; }
+	void addWheelDodgeChance(float modifier) { varWheelDodgeChance += modifier; }
 
 	float getAttackFactor() const override;
 	float getDefenseFactor() const override;
@@ -1820,6 +1827,9 @@ private:
 	int32_t varSkills[SKILL_LAST + 1] = {};
 	int32_t varStats[STAT_LAST + 1] = {};
 	float varMitigation = 0.0f;
+	float varWheelMitigationMultiplier = 0.0f;
+	float varWheelDodgeChance = 0.0f;
+	std::array<float, COMBAT_COUNT> varCombatAbsorbPercent = {0};
 	std::array<int16_t, COMBAT_COUNT> specialMagicLevelSkill = {0};
 	std::array<int32_t, static_cast<size_t>(ExperienceRateType::STAMINA) + 1> experienceRate = {0};
 	int32_t purchaseCallback = -1;

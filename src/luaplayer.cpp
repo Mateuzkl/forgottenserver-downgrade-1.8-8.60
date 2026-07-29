@@ -932,10 +932,24 @@ int luaPlayerGetCombatAbsorbPercent(lua_State* L)
 	// player:getCombatAbsorbPercent(combatType)
 	const Player* player = getUserdata<const Player>(L, 1);
 	if (player) {
-		lua_pushinteger(L, player->getCombatAbsorbPercent(getInteger<CombatType_t>(L, 2)));
+		lua_pushnumber(L, player->getCombatAbsorbPercent(getInteger<CombatType_t>(L, 2)));
 	} else {
 		lua_pushnil(L);
 	}
+	return 1;
+}
+
+int luaPlayerAddCombatAbsorbPercent(lua_State* L)
+{
+	// player:addCombatAbsorbPercent(combatType, value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addCombatAbsorbPercent(getInteger<CombatType_t>(L, 2), getNumber<float>(L, 3));
+	pushBoolean(L, true);
 	return 1;
 }
 
@@ -949,6 +963,34 @@ int luaPlayerAddMitigation(lua_State* L)
 	}
 
 	player->addMitigation(getNumber<float>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddWheelMitigationMultiplier(lua_State* L)
+{
+	// player:addWheelMitigationMultiplier(value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addWheelMitigationMultiplier(getNumber<float>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddWheelDodgeChance(lua_State* L)
+{
+	// player:addWheelDodgeChance(value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addWheelDodgeChance(getNumber<float>(L, 2));
 	pushBoolean(L, true);
 	return 1;
 }
@@ -4797,7 +4839,10 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getArmor", luaPlayerGetArmor);
 	registerMethod("Player", "getDefense", luaPlayerGetDefense);
 	registerMethod("Player", "getCombatAbsorbPercent", luaPlayerGetCombatAbsorbPercent);
+	registerMethod("Player", "addCombatAbsorbPercent", luaPlayerAddCombatAbsorbPercent);
 	registerMethod("Player", "addMitigation", luaPlayerAddMitigation);
+	registerMethod("Player", "addWheelMitigationMultiplier", luaPlayerAddWheelMitigationMultiplier);
+	registerMethod("Player", "addWheelDodgeChance", luaPlayerAddWheelDodgeChance);
 
 	registerMethod("Player", "getItemCount", luaPlayerGetItemCount);
 	registerMethod("Player", "getItemById", luaPlayerGetItemById);

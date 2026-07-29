@@ -1186,9 +1186,9 @@ int32_t Player::getArmor() const
 	return static_cast<int32_t>(armor * vocation->armorMultiplier);
 }
 
-int32_t Player::getCombatAbsorbPercent(CombatType_t combatType) const
+float Player::getCombatAbsorbPercent(CombatType_t combatType) const
 {
-	int32_t total = 0;
+	float total = varCombatAbsorbPercent[combatTypeToIndex(combatType)];
 	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_AMMO; ++slot) {
 		if (!isItemAbilityEnabled(static_cast<slots_t>(slot))) {
 			continue;
@@ -1282,15 +1282,18 @@ float Player::getMitigation() const
 	const Item *shield, *weapon;
 	getShieldAndWeapon(shield, weapon);
 
+	float mitigation;
 	if (shield) {
-		return std::max(0.0f,
-		                ((shieldingSkill * vocation->primaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f) +
-		                    varMitigation);
+		mitigation =
+		    (shieldingSkill * vocation->primaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f;
+	} else {
+		mitigation =
+		    (shieldingSkill * vocation->secondaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f;
 	}
 
-	return std::max(0.0f,
-	                ((shieldingSkill * vocation->secondaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f) +
-	                    varMitigation);
+	mitigation += varMitigation;
+	mitigation += mitigation * (varWheelMitigationMultiplier / 100.0f);
+	return std::max(0.0f, mitigation);
 }
 
 void Player::getShieldAndWeapon(const Item*& shield, const Item*& weapon) const
@@ -3773,6 +3776,11 @@ BlockType_t Player::blockHit(const std::shared_ptr<Creature>& attacker, CombatTy
 
 		if (mantraAbsorbPercent != 0) {
 			damage -= std::ceil(damage * (mantraAbsorbPercent / 100.));
+		}
+
+		const float wheelAbsorbPercent = varCombatAbsorbPercent[combatTypeToIndex(combatType)];
+		if (wheelAbsorbPercent != 0) {
+			damage -= std::round(damage * (wheelAbsorbPercent / 100.0f));
 		}
 
 		if (attacker && reflect.chance > 0 && reflect.percent != 0 && uniform_random(1, 100) <= reflect.chance) {
