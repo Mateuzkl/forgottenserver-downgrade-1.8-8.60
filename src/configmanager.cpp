@@ -587,7 +587,6 @@ bool ConfigManager::load()
 	integers[Integer::PROTECTION_LEVEL] = getGlobalInteger(L, "protectionLevel", 1);
 	integers[Integer::DEATH_LOSE_PERCENT] = getGlobalInteger(L, "deathLosePercent", -1);
 	integers[Integer::STATUSQUERY_TIMEOUT] = getGlobalInteger(L, "statusTimeout", 5000);
-	integers[Integer::STATUS_COUNT_MAX_PLAYERS_PER_IP] = getGlobalInteger(L, "statusCountMaxPlayersPerIp", 0);
 	integers[Integer::FRAG_TIME] = getGlobalInteger(L, "timeToDecreaseFrags", 24 * 60 * 60);
 	integers[Integer::WHITE_SKULL_TIME] = getGlobalInteger(L, "whiteSkullTime", 15 * 60);
 	integers[Integer::STAIRHOP_DELAY] = getGlobalInteger(L, "stairJumpExhaustion", 2000);

@@ -122,25 +122,33 @@ void ProtocolStatus::sendStatusString()
 	owner.append_attribute("email") = getString(ConfigManager::OWNER_EMAIL).data();
 
 	pugi::xml_node players = tsqp.append_child("players");
-	uint32_t reportableOnlinePlayerCount = 0;
-	uint32_t maxPlayersPerIp = getInteger(ConfigManager::STATUS_COUNT_MAX_PLAYERS_PER_IP);
-	if (maxPlayersPerIp > 0) {
-		std::unordered_map<uint32_t, uint32_t> playersPerIp;
-		for (const auto& player : g_game.getPlayers()) {
-			uint32_t playerIp = player->getIP();
-			if (playerIp != 0) {
-				playersPerIp[playerIp]++;
-			}
+	constexpr uint32_t maxPlayersPerIp = 4;
+	uint32_t onlinePlayers = 0;
+	uint32_t uniquePlayers = 0;
+	std::unordered_map<uint32_t, uint32_t> playersByIp;
+
+	for (const auto& player : g_game.getPlayers()) {
+		if (!player) {
+			continue;
 		}
 
-	for (const auto& pair : playersPerIp) {
-			reportableOnlinePlayerCount += std::min<uint32_t>(pair.second, maxPlayersPerIp);
+		const uint32_t playerIp = player->getIP();
+		if (playerIp == 0) {
+			continue;
 		}
-	} else {
-		reportableOnlinePlayerCount = g_game.getPlayersOnline();
+
+		auto [it, inserted] = playersByIp.try_emplace(playerIp, 0);
+		++it->second;
+		if (inserted) {
+			++uniquePlayers;
+		}
+		if (it->second <= maxPlayersPerIp) {
+			++onlinePlayers;
+		}
 	}
 
-	players.append_attribute("online") = std::to_string(reportableOnlinePlayerCount).c_str();
+	players.append_attribute("online").set_value(onlinePlayers);
+	players.append_attribute("unique").set_value(uniquePlayers);
 	players.append_attribute("max") = std::to_string(getInteger(ConfigManager::MAX_PLAYERS)).c_str();
 	players.append_attribute("peak") = std::to_string(g_game.getPlayersRecord()).c_str();
 

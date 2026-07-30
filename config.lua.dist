@@ -64,7 +64,6 @@ expFromPlayersLevelRange = 75
 -- Connection Config
 -- NOTE: maxPlayers set to 0 means no limit
 -- NOTE: allowWalkthrough is only applicable to players
--- NOTE: statusCountMaxPlayersPerIp allows you to only count up to X players per IP in status response (0 = disabled)
 -- Sent as IPv4 + gameProtocolPort in the standard CIP 8.60 character list
 -- (opcode 0x64). Use the public DNS name or public IP in production.
 ip = "127.0.0.1"
@@ -83,7 +82,6 @@ allowClones = false
 allowWalkthrough = true
 serverName = "Forgotten"
 statusTimeout = 5000
-statusCountMaxPlayersPerIp = 0
 replaceKickOnLogin = true
 maxPacketsPerSecond = 25
 
