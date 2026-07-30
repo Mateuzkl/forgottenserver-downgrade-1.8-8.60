@@ -2727,9 +2727,9 @@ void Monster::death(Creature*)
 			if (healingDone > 0) {
 				contrubutionScore += healingDone;
 			}
-			double expectedScore =
-			    ((contrubutionScore / totalScore) * ConfigManager::getFloat(ConfigManager::REWARD_BASE_RATE));
-			double lootRate = std::min(expectedScore, 1.0);
+			double expectedScore = static_cast<double>(totalScore) / contributors;
+			double lootRate = std::min(
+			    (contrubutionScore / expectedScore) * ConfigManager::getFloat(ConfigManager::REWARD_BASE_RATE), 1.0);
 			auto player = g_game.getPlayerByGUID(playerId);
 			auto rewardItem = Item::CreateItem(ITEM_REWARD_CONTAINER);
 			if (!rewardItem) {
