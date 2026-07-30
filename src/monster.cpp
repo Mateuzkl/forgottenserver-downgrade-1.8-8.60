@@ -28,6 +28,21 @@ int32_t Monster::despawnRadius;
 
 uint32_t Monster::monsterAutoID = 0x40000000;
 
+double reward_boss::calculateLootRate(double contributionScore, int32_t totalScore, int32_t contributors,
+                                      double baseRate)
+{
+	if (totalScore <= 0 || contributors <= 0) {
+		return 0.0;
+	}
+
+	const double expectedScore = static_cast<double>(totalScore) / contributors;
+	if (expectedScore <= 0.0) {
+		return 0.0;
+	}
+
+	return std::min((contributionScore / expectedScore) * baseRate, 1.0);
+}
+
 std::unique_ptr<Monster> Monster::createMonster(const std::string& name)
 {
 	auto mType = g_monsters.getSharedMonsterType(name);
@@ -2727,9 +2742,9 @@ void Monster::death(Creature*)
 			if (healingDone > 0) {
 				contrubutionScore += healingDone;
 			}
-			double expectedScore = static_cast<double>(totalScore) / contributors;
-			double lootRate = std::min(
-			    (contrubutionScore / expectedScore) * ConfigManager::getFloat(ConfigManager::REWARD_BASE_RATE), 1.0);
+			const double lootRate = reward_boss::calculateLootRate(
+			    contrubutionScore, totalScore, contributors,
+			    ConfigManager::getFloat(ConfigManager::REWARD_BASE_RATE));
 			auto player = g_game.getPlayerByGUID(playerId);
 			auto rewardItem = Item::CreateItem(ITEM_REWARD_CONTAINER);
 			if (!rewardItem) {

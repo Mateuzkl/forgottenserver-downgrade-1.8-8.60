@@ -11,6 +11,11 @@ class Creature;
 class Game;
 class Spawn;
 
+namespace reward_boss {
+	[[nodiscard]] double calculateLootRate(double contributionScore, int32_t totalScore, int32_t contributors,
+	                                       double baseRate);
+}
+
 using CreatureWeakHashSet = std::set<std::weak_ptr<Creature>, std::owner_less<std::weak_ptr<Creature>>>;
 using CreatureWeakList = std::vector<std::weak_ptr<Creature>>;
 
