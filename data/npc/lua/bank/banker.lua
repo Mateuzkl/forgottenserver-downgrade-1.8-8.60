@@ -191,97 +191,29 @@ local change = greet:keyword("change")
 change:respond(
 "Would you like to change your coins? You can exchange gold, platinum, crystal, and spectral gold currencies.")
 
-local function registerCurrencyExchange(parent, words, prompt, sourceId, resultId, sourceLabel, resultLabel, operation)
-    local exchange = parent:keyword(words)
-    exchange:respond(prompt)
-
-    local answer = exchange:onAnswer()
-    function answer:callback(npc, player, message, handler)
-        local multiple = operation == "divide" and 100 or nil
-        local sourceCount = CurrencyConversion.parseAmount(message, multiple)
-        local resultCount = sourceCount and (operation == "divide"
-            and CurrencyConversion.divideExact(sourceCount, 100)
-            or CurrencyConversion.multiply(sourceCount, 100)) or nil
-
-        if not sourceCount or not resultCount then
-            return false, "Please enter a positive whole amount within the safe limit" ..
-                (multiple and " and divisible by 100." or ".")
-        end
-
-        if player:getItemCount(sourceId) < sourceCount then
-            return false, "You don't have enough " .. sourceLabel .. "."
-        end
-
-        handler:addData(player, "currencySourceId", sourceId)
-        handler:addData(player, "currencySourceCount", sourceCount)
-        handler:addData(player, "currencyResultId", resultId)
-        handler:addData(player, "currencyResultCount", resultCount)
-        handler:addData(player, "currencySourceLabel", sourceLabel)
-        handler:addData(player, "currencyResultLabel", resultLabel)
-        return true, "You want to change " .. sourceCount .. " " .. sourceLabel ..
-            " into " .. resultCount .. " " .. resultLabel .. "?"
-    end
-
-    local accept = answer:keyword({ "yes" })
-    function accept:callback(npc, player, message, handler)
-        local sourceId = handler:getData(player, "currencySourceId")
-        local sourceCount = handler:getData(player, "currencySourceCount")
-        local resultId = handler:getData(player, "currencyResultId")
-        local resultCount = handler:getData(player, "currencyResultCount")
-        local sourceLabel = handler:getData(player, "currencySourceLabel")
-        local resultLabel = handler:getData(player, "currencyResultLabel")
-
-        if not sourceId or not sourceCount or not resultId or not resultCount then
-            handler:resetData(player)
-            return false, "The exchange request is no longer valid."
-        end
-
-        local success, reason = CurrencyConversion.exchangePlayerItems(
-            player, sourceId, sourceCount, resultId, resultCount)
-        handler:resetData(player)
-        if not success then
-            if reason == "not_enough" or reason == "remove_failed" then
-                return false, "You don't have enough " .. sourceLabel .. "."
-            end
-            return false, "The exchange could not be completed. Make sure you have enough inventory space."
-        end
-
-        return true, "You have changed " .. sourceCount .. " " .. sourceLabel ..
-            " into " .. resultCount .. " " .. resultLabel .. "."
-    end
-
-    local decline = answer:keyword({ "no" })
-    function decline:callback(npc, player, message, handler)
-        handler:resetData(player)
-        return true, "Ok then, not."
-    end
-
-    return exchange
-end
-
-registerCurrencyExchange(change, "gold", "How many gold coins would you like to change?",
+CurrencyConversion.registerNpcExchange(change, "gold", "How many gold coins would you like to change?",
     ITEM_GOLD_COIN, ITEM_PLATINUM_COIN, "gold coins", "platinum coins", "divide")
 
 local platinum = change:keyword("platinum")
 platinum:respond(
 "Would you like to change your platinum coins into {gold} coins or into {crystal} coins?")
-registerCurrencyExchange(platinum, "gold", "How many platinum coins would you like to change into gold?",
+CurrencyConversion.registerNpcExchange(platinum, "gold", "How many platinum coins would you like to change into gold?",
     ITEM_PLATINUM_COIN, ITEM_GOLD_COIN, "platinum coins", "gold coins", "multiply")
-registerCurrencyExchange(platinum, "crystal", "How many platinum coins would you like to change into crystal?",
+CurrencyConversion.registerNpcExchange(platinum, "crystal", "How many platinum coins would you like to change into crystal?",
     ITEM_PLATINUM_COIN, ITEM_CRYSTAL_COIN, "platinum coins", "crystal coins", "divide")
 
 local crystal = change:keyword("crystal")
 crystal:respond(
 "Would you like to change your crystal coins into {platinum} coins or into {spectral} gold nuggets?")
-registerCurrencyExchange(crystal, "platinum", "How many crystal coins would you like to change into platinum?",
+CurrencyConversion.registerNpcExchange(crystal, "platinum", "How many crystal coins would you like to change into platinum?",
     ITEM_CRYSTAL_COIN, ITEM_PLATINUM_COIN, "crystal coins", "platinum coins", "multiply")
 
 local spectralGoldNuggetId = CurrencyConversion.getItemIdByWorth(1000000)
 if spectralGoldNuggetId then
-    registerCurrencyExchange(crystal, { "spectral", "nugget" },
+    CurrencyConversion.registerNpcExchange(crystal, { "spectral", "nugget" },
         "How many crystal coins would you like to change into spectral gold nuggets?",
         ITEM_CRYSTAL_COIN, spectralGoldNuggetId, "crystal coins", "spectral gold nuggets", "divide")
-    registerCurrencyExchange(change, { "spectral", "nugget" },
+    CurrencyConversion.registerNpcExchange(change, { "spectral", "nugget" },
         "How many spectral gold nuggets would you like to change into crystal coins?",
         spectralGoldNuggetId, ITEM_CRYSTAL_COIN, "spectral gold nuggets", "crystal coins", "multiply")
 end

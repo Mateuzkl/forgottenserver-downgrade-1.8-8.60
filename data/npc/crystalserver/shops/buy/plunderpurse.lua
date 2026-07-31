@@ -221,7 +221,7 @@ local function creatureSayCallback(npc, creature, type, message)
 		return true
 		-- Money exchange
 	elseif CurrencyConversion.handleLegacyNpcExchange(
-		npcHandler, npc, creature, player, message, count) then
+		npcHandler, npc, creature, player, message) then
 		return true
 	end
 	return true

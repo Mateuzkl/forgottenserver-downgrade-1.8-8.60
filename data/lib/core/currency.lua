@@ -1,6 +1,7 @@
 CurrencyConversion = CurrencyConversion or {}
 
 local MAX_ITEM_COUNT = 2147483647
+local legacyNpcExchangeState = {}
 
 local function isValidCount(count)
 	return type(count) == "number" and count > 0 and count <= MAX_ITEM_COUNT and count == math.floor(count)
@@ -93,7 +94,7 @@ function CurrencyConversion.exchangePlayerItems(player, sourceId, sourceCount, r
 	local resultRolledBack = rollbackAddedItems(player, resultId, addedCount)
 	local sourceRestored = restoreItems(player, sourceId, sourceCount)
 	if not resultRolledBack or not sourceRestored then
-		print(string.format("[CurrencyConversion] Rollback failed for player %s.", player:getName()))
+		logger.error("[CurrencyConversion] Rollback failed for player %s.", player:getName())
 		return false, "rollback_failed"
 	end
 	return false, "add_failed"
@@ -122,19 +123,96 @@ function CurrencyConversion.exchangeItem(player, sourceItem, sourceCount, result
 	local resultRolledBack = rollbackAddedItems(player, resultId, addedCount)
 	local sourceRestored = restoreItems(player, sourceId, sourceCount)
 	if not resultRolledBack or not sourceRestored then
-		print(string.format("[CurrencyConversion] Item rollback failed for player %s.", player:getName()))
+		logger.error("[CurrencyConversion] Item rollback failed for player %s.", player:getName())
 		return false, "rollback_failed"
 	end
 	return false, "add_failed"
 end
 
-function CurrencyConversion.handleLegacyNpcExchange(npcHandler, npc, creature, player, message, transactions)
+function CurrencyConversion.registerNpcExchange(parent, words, prompt, sourceId, resultId, sourceLabel, resultLabel, operation)
+	local exchange = parent:keyword(words)
+	exchange:respond(prompt)
+
+	local answer = exchange:onAnswer()
+	function answer:callback(npc, player, message, handler)
+		local multiple = operation == "divide" and 100 or nil
+		local sourceCount = CurrencyConversion.parseAmount(message, multiple)
+		local resultCount = sourceCount and (operation == "divide"
+			and CurrencyConversion.divideExact(sourceCount, 100)
+			or CurrencyConversion.multiply(sourceCount, 100)) or nil
+
+		if not sourceCount or not resultCount then
+			return false, "Please enter a positive whole amount within the safe limit" ..
+				(multiple and " and divisible by 100." or ".")
+		end
+
+		if player:getItemCount(sourceId) < sourceCount then
+			return false, "You don't have enough " .. sourceLabel .. "."
+		end
+
+		handler:addData(player, "currencySourceId", sourceId)
+		handler:addData(player, "currencySourceCount", sourceCount)
+		handler:addData(player, "currencyResultId", resultId)
+		handler:addData(player, "currencyResultCount", resultCount)
+		handler:addData(player, "currencySourceLabel", sourceLabel)
+		handler:addData(player, "currencyResultLabel", resultLabel)
+		return true, "You want to change " .. sourceCount .. " " .. sourceLabel ..
+			" into " .. resultCount .. " " .. resultLabel .. "?"
+	end
+
+	local accept = answer:keyword({ "yes" })
+	function accept:callback(npc, player, message, handler)
+		local sourceId = handler:getData(player, "currencySourceId")
+		local sourceCount = handler:getData(player, "currencySourceCount")
+		local resultId = handler:getData(player, "currencyResultId")
+		local resultCount = handler:getData(player, "currencyResultCount")
+		local sourceLabel = handler:getData(player, "currencySourceLabel")
+		local resultLabel = handler:getData(player, "currencyResultLabel")
+
+		if not sourceId or not sourceCount or not resultId or not resultCount then
+			handler:resetData(player)
+			return false, "The exchange request is no longer valid."
+		end
+
+		local success, reason = CurrencyConversion.exchangePlayerItems(
+			player, sourceId, sourceCount, resultId, resultCount)
+		handler:resetData(player)
+		if not success then
+			if reason == "not_enough" or reason == "remove_failed" then
+				return false, "You don't have enough " .. sourceLabel .. "."
+			end
+			return false, "The exchange could not be completed. Make sure you have enough inventory space."
+		end
+
+		return true, "You have changed " .. sourceCount .. " " .. sourceLabel ..
+			" into " .. resultCount .. " " .. resultLabel .. "."
+	end
+
+	local decline = answer:keyword({ "no" })
+	function decline:callback(npc, player, message, handler)
+		handler:resetData(player)
+		return true, "Ok then, not."
+	end
+
+	return exchange
+end
+
+function CurrencyConversion.handleLegacyNpcExchange(npcHandler, npc, creature, player, message)
 	local playerId = player:getId()
 	local topic = npcHandler:getTopic(playerId)
 	local spectralGoldNuggetId = CurrencyConversion.getItemIdByWorth(1000000)
+	local npcId = npc:getId()
+	local transactions = legacyNpcExchangeState[npcId]
+	if not transactions then
+		transactions = {}
+		legacyNpcExchangeState[npcId] = transactions
+	end
 
 	local function resetExchange()
 		transactions[playerId] = nil
+		if next(transactions) == nil then
+			legacyNpcExchangeState[npcId] = nil
+		end
 		npcHandler:setTopic(playerId, 0)
 	end
 

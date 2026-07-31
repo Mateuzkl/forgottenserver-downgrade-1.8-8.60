@@ -2736,6 +2736,28 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 		return;
 	}
 
+	constexpr uint64_t maxMoneyStacks = 10'000;
+	uint64_t projectedStacks = 0;
+	uint64_t remainingMoney = money;
+	for (const auto& it : Item::items.currencyItems) {
+		const uint64_t worth = it.first;
+		if (worth == 0) {
+			continue;
+		}
+
+		const uint64_t currencyCoins = remainingMoney / worth;
+		const uint64_t stacks = currencyCoins / 100 + (currencyCoins % 100 != 0);
+		if (stacks > maxMoneyStacks - projectedStacks) {
+			LOG_WARN("[Game::addMoney] Refusing to create {} stacks for {} gold; maximum is {}.",
+			         projectedStacks + stacks, money, maxMoneyStacks);
+			return;
+		}
+
+		projectedStacks += stacks;
+		remainingMoney -= currencyCoins * worth;
+	}
+
+	uint64_t createdStacks = 0;
 	for (const auto& it : Item::items.currencyItems) {
 		const uint64_t worth = it.first;
 		if (worth == 0) {
@@ -2749,6 +2771,11 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 
 		money -= currencyCoins * worth;
 		while (currencyCoins > 0) {
+			if (++createdStacks > maxMoneyStacks) {
+				LOG_WARN("[Game::addMoney] Reached the maximum of {} stacks while adding money.", maxMoneyStacks);
+				return;
+			}
+
 			const uint16_t count = static_cast<uint16_t>(std::min<uint64_t>(100, currencyCoins));
 
 			auto remaindItem = Item::CreateItem(it.second, count);
