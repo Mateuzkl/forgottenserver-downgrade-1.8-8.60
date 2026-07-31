@@ -189,146 +189,102 @@ decline:respond("Ok then, not.")
 -- Bank Change
 local change = greet:keyword("change")
 change:respond(
-"Would you like to change your coins? You can change {gold} coins into {platinum} coins, {platinum} coins into {gold} coins, {platinum} coins into {crystal} coins, or {crystal} coins into {platinum} coins.")
+"Would you like to change your coins? You can exchange gold, platinum, crystal, and spectral gold currencies.")
 
--- Change Gold to Platinum
-local gold = change:keyword("gold")
-gold:respond("How many platinum coins would you like to get?")
-local answer = gold:onAnswer()
-function answer:callback(npc, player, message, handler)
-    local money = tonumber(message) * 100
-    local valid = isValidMoney(money)
-    if valid then
-        if player:getItemCount(ITEM_GOLD_COIN) < money then
-            return false,
-                "You don't have enough money to change " .. money .. " gold coins, into " .. message ..
-                " platinum coins."
+local function registerCurrencyExchange(parent, words, prompt, sourceId, resultId, sourceLabel, resultLabel, operation)
+    local exchange = parent:keyword(words)
+    exchange:respond(prompt)
+
+    local answer = exchange:onAnswer()
+    function answer:callback(npc, player, message, handler)
+        local multiple = operation == "divide" and 100 or nil
+        local sourceCount = CurrencyConversion.parseAmount(message, multiple)
+        local resultCount = sourceCount and (operation == "divide"
+            and CurrencyConversion.divideExact(sourceCount, 100)
+            or CurrencyConversion.multiply(sourceCount, 100)) or nil
+
+        if not sourceCount or not resultCount then
+            return false, "Please enter a positive whole amount within the safe limit" ..
+                (multiple and " and divisible by 100." or ".")
         end
-        handler:addData(player, "money", money)
-        return true, "You want to change " .. money .. " gold coins, into " .. message .. " platinum coins?"
+
+        if player:getItemCount(sourceId) < sourceCount then
+            return false, "You don't have enough " .. sourceLabel .. "."
+        end
+
+        handler:addData(player, "currencySourceId", sourceId)
+        handler:addData(player, "currencySourceCount", sourceCount)
+        handler:addData(player, "currencyResultId", resultId)
+        handler:addData(player, "currencyResultCount", resultCount)
+        handler:addData(player, "currencySourceLabel", sourceLabel)
+        handler:addData(player, "currencyResultLabel", resultLabel)
+        return true, "You want to change " .. sourceCount .. " " .. sourceLabel ..
+            " into " .. resultCount .. " " .. resultLabel .. "?"
     end
-    return false, "I'm sorry, but you can't change a negative amount of money or no money at all."
+
+    local accept = answer:keyword({ "yes" })
+    function accept:callback(npc, player, message, handler)
+        local sourceId = handler:getData(player, "currencySourceId")
+        local sourceCount = handler:getData(player, "currencySourceCount")
+        local resultId = handler:getData(player, "currencyResultId")
+        local resultCount = handler:getData(player, "currencyResultCount")
+        local sourceLabel = handler:getData(player, "currencySourceLabel")
+        local resultLabel = handler:getData(player, "currencyResultLabel")
+
+        if not sourceId or not sourceCount or not resultId or not resultCount then
+            handler:resetData(player)
+            return false, "The exchange request is no longer valid."
+        end
+
+        local success, reason = CurrencyConversion.exchangePlayerItems(
+            player, sourceId, sourceCount, resultId, resultCount)
+        handler:resetData(player)
+        if not success then
+            if reason == "not_enough" or reason == "remove_failed" then
+                return false, "You don't have enough " .. sourceLabel .. "."
+            end
+            return false, "The exchange could not be completed. Make sure you have enough inventory space."
+        end
+
+        return true, "You have changed " .. sourceCount .. " " .. sourceLabel ..
+            " into " .. resultCount .. " " .. resultLabel .. "."
+    end
+
+    local decline = answer:keyword({ "no" })
+    function decline:callback(npc, player, message, handler)
+        handler:resetData(player)
+        return true, "Ok then, not."
+    end
+
+    return exchange
 end
 
-local accept = answer:keyword({ "yes" })
-function accept:callback(npc, player, message, handler)
-    local money = handler:getData(player, "money")
-    if not player:removeItem(ITEM_GOLD_COIN, money) then
-        return false,
-            "You don't have enough money to change " ..
-            money .. " gold coins, into " .. math.floor(money / 100) .. " platinum coins."
-    end
-    player:addItem(ITEM_PLATINUM_COIN, math.floor(money / 100))
-    handler:resetData(player)
-    return true, "You have changed " .. money .. " gold coins, into " .. math.floor(money / 100) .. " platinum coins."
-end
+registerCurrencyExchange(change, "gold", "How many gold coins would you like to change?",
+    ITEM_GOLD_COIN, ITEM_PLATINUM_COIN, "gold coins", "platinum coins", "divide")
 
-local decline = answer:keyword({ "no" })
-decline:respond("Ok then, not.")
-
--- Change Platinum to Gold
 local platinum = change:keyword("platinum")
 platinum:respond(
-"Would you like to change your platinum coins into {gold} coins? or would you like to change them into {crystal} coins?")
-local gold = platinum:keyword("gold")
-gold:respond("How many gold coins would you like to get?")
-local answer = gold:onAnswer()
-function answer:callback(npc, player, message, handler)
-    local money = tonumber(message)
-    local valid = isValidMoney(money)
-    if valid then
-        if player:getItemCount(ITEM_PLATINUM_COIN) * 100 < money then
-            return false, "You don't have enough platinum coins to change " .. money .. " gold coins."
-        end
-        handler:addData(player, "money", money)
-        return true, "You want to change " .. money / 100 .. " platinum coins, into " .. money .. " gold coins?"
-    end
-    return false, "I'm sorry, but you can't change a negative amount of money or no money at all."
-end
+"Would you like to change your platinum coins into {gold} coins or into {crystal} coins?")
+registerCurrencyExchange(platinum, "gold", "How many platinum coins would you like to change into gold?",
+    ITEM_PLATINUM_COIN, ITEM_GOLD_COIN, "platinum coins", "gold coins", "multiply")
+registerCurrencyExchange(platinum, "crystal", "How many platinum coins would you like to change into crystal?",
+    ITEM_PLATINUM_COIN, ITEM_CRYSTAL_COIN, "platinum coins", "crystal coins", "divide")
 
-local accept = answer:keyword({ "yes" })
-function accept:callback(npc, player, message, handler)
-    local money = handler:getData(player, "money")
-    if not player:removeItem(ITEM_PLATINUM_COIN, math.floor(money / 100)) then
-        return false,
-            "You don't have enough platinum coins to change " ..
-            money / 100 .. " platinum coins, into " .. money .. " gold coins."
-    end
-    player:addItem(ITEM_GOLD_COIN, money)
-    handler:resetData(player)
-    return true, "You have changed " .. money / 100 .. " platinum coins, into " .. money .. " gold coins."
-end
-
-local decline = answer:keyword({ "no" })
-decline:respond("Ok then, not.")
-
--- Change Platinum to Crystal
-local crystal = platinum:keyword("crystal")
-crystal:respond("How many crystal coins would you like to get?")
-local answer = crystal:onAnswer()
-function answer:callback(npc, player, message, handler)
-    local money = tonumber(message)
-    local valid = isValidMoney(money)
-    if valid then
-        if player:getItemCount(ITEM_PLATINUM_COIN) * 100 < money * 10000 then
-            return false, "You don't have enough platinum coins to change " .. money .. " crystal coins."
-        end
-        handler:addData(player, "money", money)
-        return true, "You want to change " .. money * 100 .. " platinum coins, into " .. money .. " crystal coins?"
-    end
-    return false, "I'm sorry, but you can't change a negative amount of money or no money at all."
-end
-
-local accept = answer:keyword({ "yes" })
-function accept:callback(npc, player, message, handler)
-    local money = handler:getData(player, "money")
-    if not player:removeItem(ITEM_PLATINUM_COIN, math.floor(money * 100)) then
-        return false,
-            "You don't have enough platinum coins to change " ..
-            money * 100 .. " platinum coins, into " .. money .. " crystal coins."
-    end
-    player:addItem(ITEM_CRYSTAL_COIN, money)
-    handler:resetData(player)
-    return true, "You have changed " .. money * 100 .. " platinum coins, into " .. money .. " crystal coins."
-end
-
-local decline = answer:keyword({ "no" })
-decline:respond("Ok then, not.")
-
--- Change Crystal to Platinum
 local crystal = change:keyword("crystal")
-crystal:respond("How many platinum coins would you like to get?")
-local answer = crystal:onAnswer()
-function answer:callback(npc, player, message, handler)
-    local money = tonumber(message)
-    local valid = isValidMoney(money)
-    if valid then
-        if player:getItemCount(ITEM_CRYSTAL_COIN) * 10000 < money * 100 then
-            return false, "You don't have enough crystal coins to change into " .. money .. " platinum coins."
-        end
-        handler:addData(player, "money", money)
-        return true, "You want to change " .. money / 100 .. " crystal coins, into " .. money .. " platinum coins?"
-    end
-    return false, "I'm sorry, but you can't change a negative amount of money or no money at all."
-end
+crystal:respond(
+"Would you like to change your crystal coins into {platinum} coins or into {spectral} gold nuggets?")
+registerCurrencyExchange(crystal, "platinum", "How many crystal coins would you like to change into platinum?",
+    ITEM_CRYSTAL_COIN, ITEM_PLATINUM_COIN, "crystal coins", "platinum coins", "multiply")
 
-local accept = answer:keyword({ "yes" })
-function accept:callback(npc, player, message, handler)
-    local money = handler:getData(player, "money") -- platinum coins wanted
-    -- FIX: remover crystal corretamente (1 crystal = 100 platinum)
-    if not player:removeItem(ITEM_CRYSTAL_COIN, math.floor(money / 100)) then
-        return false,
-            "You don't have enough crystal coins to change " ..
-            money / 100 .. " crystal coins, into " .. money .. " platinum coins."
-    end
-    -- FIX: adicionar a quantidade correta de platinum
-    player:addItem(ITEM_PLATINUM_COIN, money)
-    handler:resetData(player)
-    return true, "You have changed " .. money / 100 .. " crystal coins, into " .. money .. " platinum coins."
+local spectralGoldNuggetId = CurrencyConversion.getItemIdByWorth(1000000)
+if spectralGoldNuggetId then
+    registerCurrencyExchange(crystal, { "spectral", "nugget" },
+        "How many crystal coins would you like to change into spectral gold nuggets?",
+        ITEM_CRYSTAL_COIN, spectralGoldNuggetId, "crystal coins", "spectral gold nuggets", "divide")
+    registerCurrencyExchange(change, { "spectral", "nugget" },
+        "How many spectral gold nuggets would you like to change into crystal coins?",
+        spectralGoldNuggetId, ITEM_CRYSTAL_COIN, "spectral gold nuggets", "crystal coins", "multiply")
 end
-
-local decline = answer:keyword({ "no" })
-decline:respond("Ok then, not.")
 
 -- Fast transfer / deposit / withdraw
 local fast = greet:onAnswer()

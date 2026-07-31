@@ -820,7 +820,7 @@ public:
 		return items[id].dropBonus;
 	}
 
-	uint32_t getWorth() const;
+	uint64_t getWorth() const;
 	LightInfo getLightInfo() const;
 
 	void setReflect(CombatType_t combatType, const Reflect& reflect) { getAttributes()->reflect[combatType] = reflect; }

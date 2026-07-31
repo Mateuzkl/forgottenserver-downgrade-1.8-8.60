@@ -9,19 +9,22 @@ function goldConverter.onUse(player, item, fromPosition, target, toPosition,
 	if not coin then return false end
 
 	local charges = item:getCharges()
+	local converted = false
 	if coin.changeTo and target.type == 100 then
-		target:remove()
-		player:addItem(coin.changeTo, 1)
-		item:transform(item:getId(), charges - 1)
+		converted = CurrencyConversion.exchangeItem(player, target, 100, coin.changeTo, 1)
 	elseif coin.changeBack then
-		target:transform(target.itemid, target.type - 1)
-		player:addItem(coin.changeBack, 100)
-		item:transform(item:getId(), charges - 1)
+		converted = CurrencyConversion.exchangeItem(player, target, 1, coin.changeBack, 100)
 	else
 		return false
 	end
 
-	if charges == 0 then item:remove() end
+	if not converted then return false end
+
+	if charges <= 1 then
+		item:remove(1)
+	else
+		item:transform(item:getId(), charges - 1)
+	end
 	return true
 end
 
