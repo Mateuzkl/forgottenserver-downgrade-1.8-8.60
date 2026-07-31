@@ -8,8 +8,19 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 		fromPosition.z = fromPosition.z + 1
 	end
 
-	if player:isPzLocked() and Tile(fromPosition):hasFlag(TILESTATE_PROTECTIONZONE) then
+	local destinationTile = Tile(fromPosition)
+	if not destinationTile then
+		player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
+		return true
+	end
+
+	if player:isPzLocked() and destinationTile:hasFlag(TILESTATE_PROTECTIONZONE) then
 		player:sendCancelMessage(RETURNVALUE_PLAYERISPZLOCKED)
+		return true
+	end
+
+	if destinationTile:queryAdd(player) ~= RETURNVALUE_NOERROR then
+		player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
 		return true
 	end
 
