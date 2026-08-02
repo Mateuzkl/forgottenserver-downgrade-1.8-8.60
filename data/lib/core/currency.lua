@@ -11,6 +11,23 @@ local function isValidItemId(itemId)
 	return type(itemId) == "number" and itemId > 0 and itemId <= 65535 and itemId == math.floor(itemId)
 end
 
+local function formatCurrencyAmount(count, label)
+	if count == 1 then
+		label = label:gsub("s$", "")
+	end
+	return count .. " " .. label
+end
+
+local function getExchangeConfirmation(prefix, sourceCount, sourceLabel, resultCount, resultLabel, remainderCount)
+	local confirmation = prefix .. formatCurrencyAmount(sourceCount, sourceLabel) ..
+		" into " .. formatCurrencyAmount(resultCount, resultLabel)
+	if remainderCount > 0 then
+		confirmation = confirmation .. " and keep the remaining " ..
+			formatCurrencyAmount(remainderCount, sourceLabel)
+	end
+	return confirmation .. "?"
+end
+
 local function addExact(player, itemId, count, canDropOnMap)
 	local countBefore = player:getItemCount(itemId)
 	player:addItem(itemId, count, canDropOnMap)
@@ -61,6 +78,33 @@ function CurrencyConversion.divideExact(amount, divisor)
 		return nil
 	end
 	return amount / divisor
+end
+
+function CurrencyConversion.getExchangeAmounts(message, operation)
+	local requestedSourceCount = CurrencyConversion.parseAmount(message)
+	if not requestedSourceCount then
+		return nil
+	end
+
+	if operation == "divide" then
+		local resultCount = math.floor(requestedSourceCount / 100)
+		if not isValidCount(resultCount) then
+			return nil
+		end
+
+		local sourceCount = resultCount * 100
+		return sourceCount, resultCount, requestedSourceCount - sourceCount, requestedSourceCount
+	end
+
+	if operation == "multiply" then
+		local resultCount = CurrencyConversion.multiply(requestedSourceCount, 100)
+		if not resultCount then
+			return nil
+		end
+		return requestedSourceCount, resultCount, 0, requestedSourceCount
+	end
+
+	return nil
 end
 
 function CurrencyConversion.getItemIdByWorth(worth)
@@ -135,18 +179,16 @@ function CurrencyConversion.registerNpcExchange(parent, words, prompt, sourceId,
 
 	local answer = exchange:onAnswer()
 	function answer:callback(npc, player, message, handler)
-		local multiple = operation == "divide" and 100 or nil
-		local sourceCount = CurrencyConversion.parseAmount(message, multiple)
-		local resultCount = sourceCount and (operation == "divide"
-			and CurrencyConversion.divideExact(sourceCount, 100)
-			or CurrencyConversion.multiply(sourceCount, 100)) or nil
+		local sourceCount, resultCount, remainderCount, requestedSourceCount =
+			CurrencyConversion.getExchangeAmounts(message, operation)
 
 		if not sourceCount or not resultCount then
-			return false, "Please enter a positive whole amount within the safe limit" ..
-				(multiple and " and divisible by 100." or ".")
+			return false, operation == "divide"
+				and "Please enter a positive whole amount within the safe limit. At least 100 coins are required."
+				or "Please enter a positive whole amount within the safe limit."
 		end
 
-		if player:getItemCount(sourceId) < sourceCount then
+		if player:getItemCount(sourceId) < requestedSourceCount then
 			return false, "You don't have enough " .. sourceLabel .. "."
 		end
 
@@ -156,8 +198,8 @@ function CurrencyConversion.registerNpcExchange(parent, words, prompt, sourceId,
 		handler:addData(player, "currencyResultCount", resultCount)
 		handler:addData(player, "currencySourceLabel", sourceLabel)
 		handler:addData(player, "currencyResultLabel", resultLabel)
-		return true, "You want to change " .. sourceCount .. " " .. sourceLabel ..
-			" into " .. resultCount .. " " .. resultLabel .. "?"
+		return true, getExchangeConfirmation("You want to change ", sourceCount, sourceLabel,
+			resultCount, resultLabel, remainderCount)
 	end
 
 	local accept = answer:keyword({ "yes" })
@@ -184,8 +226,8 @@ function CurrencyConversion.registerNpcExchange(parent, words, prompt, sourceId,
 			return false, "The exchange could not be completed. Make sure you have enough inventory space."
 		end
 
-		return true, "You have changed " .. sourceCount .. " " .. sourceLabel ..
-			" into " .. resultCount .. " " .. resultLabel .. "."
+		return true, "You have changed " .. formatCurrencyAmount(sourceCount, sourceLabel) ..
+			" into " .. formatCurrencyAmount(resultCount, resultLabel) .. "."
 	end
 
 	local decline = answer:keyword({ "no" })
@@ -217,20 +259,18 @@ function CurrencyConversion.handleLegacyNpcExchange(npcHandler, npc, creature, p
 	end
 
 	local function prepareExchange(sourceId, resultId, sourceLabel, resultLabel, operation, confirmationTopic)
-		local multiple = operation == "divide" and 100 or nil
-		local sourceCount = CurrencyConversion.parseAmount(message, multiple)
-		local resultCount = sourceCount and (operation == "divide"
-			and CurrencyConversion.divideExact(sourceCount, 100)
-			or CurrencyConversion.multiply(sourceCount, 100)) or nil
+		local sourceCount, resultCount, remainderCount, requestedSourceCount =
+			CurrencyConversion.getExchangeAmounts(message, operation)
 
 		if not sourceCount or not resultCount then
-			npcHandler:say("Please enter a positive whole amount within the safe limit" ..
-				(multiple and " and divisible by 100." or "."), npc, creature)
-			resetExchange()
+			npcHandler:say(operation == "divide"
+				and "Please enter a positive whole amount within the safe limit. At least 100 coins are required."
+				or "Please enter a positive whole amount within the safe limit.", npc, creature)
+			transactions[playerId] = nil
 			return
 		end
 
-		if player:getItemCount(sourceId) < sourceCount then
+		if player:getItemCount(sourceId) < requestedSourceCount then
 			npcHandler:say("Sorry, you do not have enough " .. sourceLabel .. ".", npc, creature)
 			resetExchange()
 			return
@@ -244,8 +284,8 @@ function CurrencyConversion.handleLegacyNpcExchange(npcHandler, npc, creature, p
 			sourceLabel = sourceLabel,
 			resultLabel = resultLabel
 		}
-		npcHandler:say("So you would like me to change " .. sourceCount .. " " .. sourceLabel ..
-			" into " .. resultCount .. " " .. resultLabel .. "?", npc, creature)
+		npcHandler:say(getExchangeConfirmation("So you would like me to change ", sourceCount, sourceLabel,
+			resultCount, resultLabel, remainderCount), npc, creature)
 		npcHandler:setTopic(playerId, confirmationTopic)
 	end
 
