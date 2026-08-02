@@ -2610,6 +2610,19 @@ bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*
 
 	std::multimap<uint64_t, Item*> moneyMap;
 	uint64_t moneyCount = 0;
+	const auto registerMoney = [&moneyMap, &moneyCount](Item* item) {
+		const uint64_t worth = item->getWorth();
+		if (worth == 0) {
+			return;
+		}
+
+		if (worth > std::numeric_limits<uint64_t>::max() - moneyCount) {
+			moneyCount = std::numeric_limits<uint64_t>::max();
+		} else {
+			moneyCount += worth;
+		}
+		moneyMap.emplace(worth, item);
+	};
 
 	for (size_t i = cylinder->getFirstIndex(), j = cylinder->getLastIndex(); i < j; ++i) {
 		Thing* thing = cylinder->getThing(i);
@@ -2626,11 +2639,7 @@ bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*
 		if (container) {
 			containers.push_back(container);
 		} else {
-			const uint32_t worth = item->getWorth();
-			if (worth != 0) {
-				moneyCount += worth;
-				moneyMap.emplace(worth, item);
-			}
+			registerMoney(item);
 		}
 	}
 
@@ -2642,11 +2651,7 @@ bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*
 			if (tmpContainer) {
 				containers.push_back(tmpContainer);
 			} else {
-				const uint32_t worth = item->getWorth();
-				if (worth != 0) {
-					moneyCount += worth;
-					moneyMap.emplace(worth, item.get());
-				}
+				registerMoney(item.get());
 			}
 		}
 	}
@@ -2655,22 +2660,72 @@ bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*
 		return false;
 	}
 
-	for (const auto& moneyEntry : moneyMap) {
-		Item* item = moneyEntry.second;
-		if (moneyEntry.first < money) {
-			internalRemoveItem(item);
-			money -= moneyEntry.first;
-		} else if (moneyEntry.first > money) {
-			const uint32_t worth = moneyEntry.first / item->getItemCount();
-			const uint32_t removeCount = std::ceil(money / static_cast<double>(worth));
+	struct MoneyRemoval {
+		Item* item;
+		uint32_t count;
+		uint64_t worth;
+	};
 
-			addMoney(cylinder, static_cast<uint64_t>(worth * removeCount) - money, flags);
-			internalRemoveItem(item, removeCount);
-			break;
-		} else {
-			internalRemoveItem(item);
-			break;
+	std::vector<MoneyRemoval> removals;
+	uint64_t remainingMoney = money;
+	uint64_t change = 0;
+	for (const auto& [stackWorth, item] : moneyMap) {
+		const uint32_t itemCount = item->getItemCount();
+		if (itemCount == 0) {
+			return false;
 		}
+
+		if (stackWorth <= remainingMoney) {
+			removals.push_back({item, itemCount, stackWorth});
+			remainingMoney -= stackWorth;
+			if (remainingMoney == 0) {
+				break;
+			}
+			continue;
+		}
+
+		const uint64_t unitWorth = stackWorth / itemCount;
+		if (unitWorth == 0) {
+			return false;
+		}
+
+		const uint64_t removeCount = remainingMoney / unitWorth + (remainingMoney % unitWorth != 0);
+		if (removeCount == 0 || removeCount > itemCount) {
+			return false;
+		}
+
+		const uint64_t removedWorth = unitWorth * removeCount;
+		removals.push_back({item, static_cast<uint32_t>(removeCount), removedWorth});
+		change = removedWorth - remainingMoney;
+		remainingMoney = 0;
+		break;
+	}
+
+	if (remainingMoney != 0) {
+		return false;
+	}
+
+	for (const MoneyRemoval& removal : removals) {
+		if (internalRemoveItem(removal.item, removal.count, true, flags) != RETURNVALUE_NOERROR) {
+			return false;
+		}
+	}
+
+	uint64_t removedMoney = 0;
+	for (const MoneyRemoval& removal : removals) {
+		if (internalRemoveItem(removal.item, removal.count, false, flags) != RETURNVALUE_NOERROR) {
+			addMoney(cylinder, removedMoney, flags);
+			return false;
+		}
+		if (removal.worth > std::numeric_limits<uint64_t>::max() - removedMoney) {
+			removedMoney = std::numeric_limits<uint64_t>::max();
+		} else {
+			removedMoney += removal.worth;
+		}
+	}
+
+	if (change > 0) {
+		addMoney(cylinder, change, flags);
 	}
 	return true;
 }
@@ -2681,17 +2736,47 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 		return;
 	}
 
+	constexpr uint64_t maxMoneyStacks = 10'000;
+	uint64_t projectedStacks = 0;
+	uint64_t remainingMoney = money;
 	for (const auto& it : Item::items.currencyItems) {
 		const uint64_t worth = it.first;
+		if (worth == 0) {
+			continue;
+		}
 
-		uint32_t currencyCoins = money / worth;
+		const uint64_t currencyCoins = remainingMoney / worth;
+		const uint64_t stacks = currencyCoins / 100 + (currencyCoins % 100 != 0);
+		if (stacks > maxMoneyStacks - projectedStacks) {
+			LOG_WARN("[Game::addMoney] Refusing to create {} stacks for {} gold; maximum is {}.",
+			         projectedStacks + stacks, money, maxMoneyStacks);
+			return;
+		}
+
+		projectedStacks += stacks;
+		remainingMoney -= currencyCoins * worth;
+	}
+
+	uint64_t createdStacks = 0;
+	for (const auto& it : Item::items.currencyItems) {
+		const uint64_t worth = it.first;
+		if (worth == 0) {
+			continue;
+		}
+
+		uint64_t currencyCoins = money / worth;
 		if (currencyCoins == 0) {
 			continue;
 		}
 
 		money -= currencyCoins * worth;
 		while (currencyCoins > 0) {
-			const uint16_t count = std::min<uint16_t>(100, static_cast<uint16_t>(currencyCoins));
+			if (++createdStacks > maxMoneyStacks) {
+				LOG_WARN("[Game::addMoney] Reached the maximum of {} stacks while adding money.", maxMoneyStacks);
+				return;
+			}
+
+			const uint16_t count = static_cast<uint16_t>(std::min<uint64_t>(100, currencyCoins));
 
 			auto remaindItem = Item::CreateItem(it.second, count);
 

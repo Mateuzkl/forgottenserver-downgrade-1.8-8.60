@@ -6,15 +6,14 @@ function changeGold.onUse(player, item, fromPosition, target, toPosition,
                           isHotkey)
 	local coin = config[item:getId()]
 	if coin.changeTo and item.type == 100 then
-		item:remove()
-		player:addItem(coin.changeTo, 1)
+		local converted = CurrencyConversion.exchangeItem(player, item, 100, coin.changeTo, 1)
+		return converted
 	elseif coin.changeBack then
-		item:remove(1)
-		player:addItem(coin.changeBack, 100)
+		local converted = CurrencyConversion.exchangeItem(player, item, 1, coin.changeBack, 100)
+		return converted
 	else
 		return false
 	end
-	return true
 end
 
 local currencyItems = Game.getCurrencyItems()

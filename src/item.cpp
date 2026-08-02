@@ -1267,7 +1267,14 @@ bool Item::canDecay() const
 	return true;
 }
 
-uint32_t Item::getWorth() const { return items[id].worth * count; }
+uint64_t Item::getWorth() const
+{
+	const uint64_t unitWorth = items[id].worth;
+	if (unitWorth == 0 || count == 0 || unitWorth > std::numeric_limits<uint64_t>::max() / count) {
+		return 0;
+	}
+	return unitWorth * count;
+}
 
 LightInfo Item::getLightInfo() const
 {

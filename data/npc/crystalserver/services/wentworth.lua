@@ -228,115 +228,10 @@ local function creatureSayCallback(npc, creature, type, message)
 			npcHandler:setTopic(playerId, 0)
 		end
 		return true
-		--Money exchange
-	elseif MsgContains(message, "change gold") then
-		npcHandler:say("How many platinum coins would you like to get?", npc, creature)
-		npcHandler:setTopic(playerId, 14)
-	elseif npcHandler:getTopic(playerId) == 14 then
-		if getMoneyCount(message) < 1 then
-			npcHandler:say("Sorry, you do not have enough gold coins.", npc, creature)
-			npcHandler:setTopic(playerId, 0)
-		else
-			count[playerId] = getMoneyCount(message)
-			npcHandler:say("So you would like me to change " .. count[playerId] * 100 .. " of your gold \z
-				coins into " .. count[playerId] .. " platinum coins?", npc, creature)
-			npcHandler:setTopic(playerId, 15)
-		end
-	elseif npcHandler:getTopic(playerId) == 15 then
-		if MsgContains(message, "yes") then
-			if player:removeItem(3031, count[playerId] * 100) then
-				player:addItem(3035, count[playerId])
-				npcHandler:say("Here you are.", npc, creature)
-			else
-				npcHandler:say("Sorry, you do not have enough gold coins.", npc, creature)
-			end
-		else
-			npcHandler:say("Well, can I help you with something else?", npc, creature)
-		end
-		npcHandler:setTopic(playerId, 0)
-	elseif MsgContains(message, "change platinum") then
-		npcHandler:say("Would you like to change your platinum coins into gold or crystal?", npc, creature)
-		npcHandler:setTopic(playerId, 16)
-	elseif npcHandler:getTopic(playerId) == 16 then
-		if MsgContains(message, "gold") then
-			npcHandler:say("How many platinum coins would you like to change into gold?", npc, creature)
-			npcHandler:setTopic(playerId, 17)
-		elseif MsgContains(message, "crystal") then
-			npcHandler:say("How many crystal coins would you like to get?", npc, creature)
-			npcHandler:setTopic(playerId, 19)
-		else
-			npcHandler:say("Well, can I help you with something else?", npc, creature)
-			npcHandler:setTopic(playerId, 0)
-		end
-	elseif npcHandler:getTopic(playerId) == 17 then
-		if getMoneyCount(message) < 1 then
-			npcHandler:say("Sorry, you do not have enough platinum coins.", npc, creature)
-			npcHandler:setTopic(playerId, 0)
-		else
-			count[playerId] = getMoneyCount(message)
-			npcHandler:say("So you would like me to change " .. count[playerId] .. " of your platinum \z
-				coins into " .. count[playerId] * 100 .. " gold coins for you?", npc, creature)
-			npcHandler:setTopic(playerId, 18)
-		end
-	elseif npcHandler:getTopic(playerId) == 18 then
-		if MsgContains(message, "yes") then
-			if player:removeItem(3035, count[playerId]) then
-				player:addItem(3031, count[playerId] * 100)
-				npcHandler:say("Here you are.", npc, creature)
-			else
-				npcHandler:say("Sorry, you do not have enough platinum coins.", npc, creature)
-			end
-		else
-			npcHandler:say("Well, can I help you with something else?", npc, creature)
-		end
-		npcHandler:setTopic(playerId, 0)
-	elseif npcHandler:getTopic(playerId) == 19 then
-		if getMoneyCount(message) < 1 then
-			npcHandler:say("Sorry, you do not have enough platinum coins.", npc, creature)
-			npcHandler:setTopic(playerId, 0)
-		else
-			count[playerId] = getMoneyCount(message)
-			npcHandler:say("So you would like me to change " .. count[playerId] * 100 .. " of your platinum coins \z
-				into " .. count[playerId] .. " crystal coins for you?", npc, creature)
-			npcHandler:setTopic(playerId, 20)
-		end
-	elseif npcHandler:getTopic(playerId) == 20 then
-		if MsgContains(message, "yes") then
-			if player:removeItem(3035, count[playerId] * 100) then
-				player:addItem(3043, count[playerId])
-				npcHandler:say("Here you are.", npc, creature)
-			else
-				npcHandler:say("Sorry, you do not have enough platinum coins.", npc, creature)
-			end
-		else
-			npcHandler:say("Well, can I help you with something else?", npc, creature)
-		end
-		npcHandler:setTopic(playerId, 0)
-	elseif MsgContains(message, "change crystal") then
-		npcHandler:say("How many crystal coins would you like to change into platinum?", npc, creature)
-		npcHandler:setTopic(playerId, 21)
-	elseif npcHandler:getTopic(playerId) == 21 then
-		if getMoneyCount(message) < 1 then
-			npcHandler:say("Sorry, you do not have enough crystal coins.", npc, creature)
-			npcHandler:setTopic(playerId, 0)
-		else
-			count[playerId] = getMoneyCount(message)
-			npcHandler:say("So you would like me to change " .. count[playerId] .. " of your crystal coins \z
-				into " .. count[playerId] * 100 .. " platinum coins for you?", npc, creature)
-			npcHandler:setTopic(playerId, 22)
-		end
-	elseif npcHandler:getTopic(playerId) == 22 then
-		if MsgContains(message, "yes") then
-			if player:removeItem(3043, count[playerId]) then
-				player:addItem(3035, count[playerId] * 100)
-				npcHandler:say("Here you are.", npc, creature)
-			else
-				npcHandler:say("Sorry, you do not have enough crystal coins.", npc, creature)
-			end
-		else
-			npcHandler:say("Well, can I help you with something else?", npc, creature)
-		end
-		npcHandler:setTopic(playerId, 0)
+		-- Money exchange
+	elseif CurrencyConversion.handleLegacyNpcExchange(
+		npcHandler, npc, creature, player, message) then
+		return true
 	end
 	return true
 end
@@ -345,12 +240,12 @@ keywordHandler:addKeyword({ "money" }, StdModule.say, {
 	npcHandler = npcHandler,
 	text = "We can {change} money for you. You can also access your {bank account}.",
 })
-keywordHandler:addKeyword({ "change" }, StdModule.say, {
-	npcHandler = npcHandler,
-	text = "There are three different coin types in Tibia: 100 gold coins equal 1 platinum coin, \z
-			100 platinum coins equal 1 crystal coin. \z
-			So if you'd like to change 100 gold into 1 platinum, simply say '{change gold}' and then '1 platinum'.",
-})
+	keywordHandler:addKeyword({ "change" }, StdModule.say, {
+		npcHandler = npcHandler,
+		text = "There are four different coin types: 100 gold coins equal 1 platinum coin, \z
+			100 platinum coins equal 1 crystal coin, and 100 crystal coins equal 1 spectral gold nugget. \z
+			To change 100 gold into 1 platinum, simply say '{change gold}' and then '100'.",
+	})
 keywordHandler:addKeyword({ "bank" }, StdModule.say, {
 	npcHandler = npcHandler,
 	text = "We can {change} money for you. You can also access your {bank account}.",
