@@ -5,15 +5,20 @@ local changeGold = Action()
 function changeGold.onUse(player, item, fromPosition, target, toPosition,
                           isHotkey)
 	local coin = config[item:getId()]
+	local converted, reason
 	if coin.changeTo and item.type == 100 then
-		local converted = CurrencyConversion.exchangeItem(player, item, 100, coin.changeTo, 1)
-		return converted
+		converted, reason = CurrencyConversion.exchangeItem(player, item, 100, coin.changeTo, 1)
 	elseif coin.changeBack then
-		local converted = CurrencyConversion.exchangeItem(player, item, 1, coin.changeBack, 100)
-		return converted
+		converted, reason = CurrencyConversion.exchangeItem(player, item, 1, coin.changeBack, 100)
 	else
 		return false
 	end
+
+	if not converted then
+		player:sendCancelMessage(CurrencyConversion.getExchangeFailureMessage(reason))
+		return false
+	end
+	return true
 end
 
 local currencyItems = Game.getCurrencyItems()

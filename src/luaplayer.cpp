@@ -1972,8 +1972,7 @@ int luaPlayerAddMoney(lua_State* L)
 	uint64_t money = getInteger<uint64_t>(L, 2);
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
-		g_game.addMoney(player, money);
-		pushBoolean(L, true);
+		pushBoolean(L, g_game.addMoney(player, money));
 	} else {
 		lua_pushnil(L);
 	}

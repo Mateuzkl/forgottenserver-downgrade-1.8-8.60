@@ -2714,7 +2714,11 @@ bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*
 	uint64_t removedMoney = 0;
 	for (const MoneyRemoval& removal : removals) {
 		if (internalRemoveItem(removal.item, removal.count, false, flags) != RETURNVALUE_NOERROR) {
-			addMoney(cylinder, removedMoney, flags);
+			if (!addMoney(cylinder, removedMoney, flags)) {
+				const Player* affectedPlayer = dynamic_cast<const Player*>(cylinder);
+				LOG_ERROR("[Game::removeMoney] Failed to restore {} gold for player '{}' after partial removal.",
+				          removedMoney, affectedPlayer ? affectedPlayer->getName() : "<unknown>");
+			}
 			return false;
 		}
 		if (removal.worth > std::numeric_limits<uint64_t>::max() - removedMoney) {
@@ -2725,15 +2729,23 @@ bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*
 	}
 
 	if (change > 0) {
-		addMoney(cylinder, change, flags);
+		if (!addMoney(cylinder, change, flags)) {
+			const Player* affectedPlayer = dynamic_cast<const Player*>(cylinder);
+			LOG_ERROR("[Game::removeMoney] Failed to pay {} gold in change to player '{}'.", change,
+			          affectedPlayer ? affectedPlayer->getName() : "<unknown>");
+		}
 	}
 	return true;
 }
 
-void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
+bool Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 {
+	if (cylinder == nullptr) {
+		return false;
+	}
+
 	if (money == 0) {
-		return;
+		return true;
 	}
 
 	constexpr uint64_t maxMoneyStacks = 10'000;
@@ -2750,7 +2762,7 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 		if (stacks > maxMoneyStacks - projectedStacks) {
 			LOG_WARN("[Game::addMoney] Refusing to create {} stacks for {} gold; maximum is {}.",
 			         projectedStacks + stacks, money, maxMoneyStacks);
-			return;
+			return false;
 		}
 
 		projectedStacks += stacks;
@@ -2773,7 +2785,7 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 		while (currencyCoins > 0) {
 			if (++createdStacks > maxMoneyStacks) {
 				LOG_WARN("[Game::addMoney] Reached the maximum of {} stacks while adding money.", maxMoneyStacks);
-				return;
+				return false;
 			}
 
 			const uint16_t count = static_cast<uint16_t>(std::min<uint64_t>(100, currencyCoins));
@@ -2788,6 +2800,7 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 			currencyCoins -= count;
 		}
 	}
+	return true;
 }
 
 Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)

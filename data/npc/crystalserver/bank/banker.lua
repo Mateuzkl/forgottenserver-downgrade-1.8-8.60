@@ -191,32 +191,7 @@ local change = greet:keyword("change")
 change:respond(
 "Would you like to change your coins? You can exchange gold, platinum, crystal, and spectral gold currencies.")
 
-CurrencyConversion.registerNpcExchange(change, "gold", "How many gold coins would you like to change?",
-    ITEM_GOLD_COIN, ITEM_PLATINUM_COIN, "gold coins", "platinum coins", "divide")
-
-local platinum = change:keyword("platinum")
-platinum:respond(
-"Would you like to change your platinum coins into {gold} coins or into {crystal} coins?")
-CurrencyConversion.registerNpcExchange(platinum, "gold", "How many platinum coins would you like to change into gold?",
-    ITEM_PLATINUM_COIN, ITEM_GOLD_COIN, "platinum coins", "gold coins", "multiply")
-CurrencyConversion.registerNpcExchange(platinum, "crystal", "How many platinum coins would you like to change into crystal?",
-    ITEM_PLATINUM_COIN, ITEM_CRYSTAL_COIN, "platinum coins", "crystal coins", "divide")
-
-local crystal = change:keyword("crystal")
-crystal:respond(
-"Would you like to change your crystal coins into {platinum} coins or into {spectral} gold nuggets?")
-CurrencyConversion.registerNpcExchange(crystal, "platinum", "How many crystal coins would you like to change into platinum?",
-    ITEM_CRYSTAL_COIN, ITEM_PLATINUM_COIN, "crystal coins", "platinum coins", "multiply")
-
-local spectralGoldNuggetId = CurrencyConversion.getItemIdByWorth(1000000)
-if spectralGoldNuggetId then
-    CurrencyConversion.registerNpcExchange(crystal, { "spectral", "nugget" },
-        "How many crystal coins would you like to change into spectral gold nuggets?",
-        ITEM_CRYSTAL_COIN, spectralGoldNuggetId, "crystal coins", "spectral gold nuggets", "divide")
-    CurrencyConversion.registerNpcExchange(change, { "spectral", "nugget" },
-        "How many spectral gold nuggets would you like to change into crystal coins?",
-        spectralGoldNuggetId, ITEM_CRYSTAL_COIN, "spectral gold nuggets", "crystal coins", "multiply")
-end
+CurrencyConversion.registerBankerExchanges(change)
 
 -- Fast transfer / deposit / withdraw
 local fast = greet:onAnswer()

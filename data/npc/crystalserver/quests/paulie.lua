@@ -53,6 +53,7 @@ npcType.onSay = function(npc, creature, type, message)
 end
 
 npcType.onCloseChannel = function(npc, creature)
+	CurrencyConversion.cleanupLegacyNpcExchange(npc, creature)
 	npcHandler:onCloseChannel(npc, creature)
 end
 
@@ -67,6 +68,16 @@ local function greetCallback(npc, creature)
 	else
 		npcHandler:setMessage(MESSAGE_GREET, "Yes? What may I do for you, |PLAYERNAME|? Bank business, perhaps?")
 	end
+	return true
+end
+
+local function farewellCallback(creature)
+	CurrencyConversion.cleanupLegacyNpcExchange(Npc(), creature)
+	return true
+end
+
+local function releaseFocusCallback(npc, creature)
+	CurrencyConversion.cleanupLegacyNpcExchange(npc, creature)
 	return true
 end
 
@@ -237,6 +248,8 @@ local function creatureSayCallback(npc, creature, type, message)
 end
 
 npcHandler:setCallback(CALLBACK_GREET, greetCallback)
+npcHandler:setCallback(CALLBACK_FAREWELL, farewellCallback)
+npcHandler:setCallback(CALLBACK_ONRELEASEFOCUS, releaseFocusCallback)
 npcHandler:setMessage(MESSAGE_FAREWELL, "Have a nice day.")
 npcHandler:setMessage(MESSAGE_WALKAWAY, "Have a nice day.")
 npcHandler:setCallback(CALLBACK_MESSAGE_DEFAULT, creatureSayCallback)

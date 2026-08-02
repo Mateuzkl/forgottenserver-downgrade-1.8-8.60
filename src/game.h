@@ -325,8 +325,9 @@ public:
 	 * \param cylinder which will receive money
 	 * \param money the amount to give
 	 * \param flags optional flags to modify default behavior
+	 * \returns true if all money was added
 	 */
-	void addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags = 0);
+	bool addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags = 0);
 
 	/**
 	 * Transform one item to another type/count
