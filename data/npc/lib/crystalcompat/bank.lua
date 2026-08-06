@@ -152,7 +152,13 @@ function Npc.parseBankMessages(self, message, npc, creature, npcHandler)
 	return false
 end
 
--- Greet callback referenced by the bank NPCs; allow the greeting to proceed.
-function NpcBankGreetCallback(npc, creature, npcHandler)
+-- Greet callback referenced by the bank NPCs. Called as callback(cid) by the
+-- npcsystem NpcHandler. Clears any stale pending transaction so a player can't
+-- leave a confirmation half-open, walk off, re-greet and say "yes" to fire the
+-- old transaction. Returns true so the greeting proceeds normally.
+function NpcBankGreetCallback(cid)
+	if cid then
+		state[cid] = nil
+	end
 	return true
 end
