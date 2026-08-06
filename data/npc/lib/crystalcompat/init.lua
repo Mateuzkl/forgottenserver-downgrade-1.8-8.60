@@ -238,6 +238,7 @@ dofile('data/npc/lib/crystalcompat/npchandler.lua')
 dofile('data/npc/lib/crystalcompat/stdmodule.lua')
 dofile('data/npc/lib/crystalcompat/focusmodule.lua')
 dofile('data/npc/lib/crystalcompat/npctype.lua')
+dofile('data/npc/lib/crystalcompat/bank.lua')
 
 if KeywordHandler and NpcHandler then
 	if not _G.OriginalKeywordHandlerNew then _G.OriginalKeywordHandlerNew = KeywordHandler.new end
