@@ -524,16 +524,14 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 
 	// load item data
 	LOG_INFO(">> Loading items... ");
-	if (!Item::items.loadFromOtb("data/items/items.otb")) {
-		startupErrorMessage("Unable to load items (OTB)!");
+	if (!Item::items.loadFromConfiguredSource()) {
+		startupErrorMessage(Item::items.getLastError());
 		return false;
 	}
-	startupProgress().update(3, 6, "items OTB");
-	LOG_INFO(fmt::format(">> OTB v{:d}.{:d}.{:d}", Item::items.majorVersion, Item::items.minorVersion,
-	                         Item::items.buildNumber));
+	startupProgress().update(3, 6, Item::items.isLoadedFromDat() ? "items DAT" : "items OTB");
 
 	if (!Item::items.loadFromXml()) {
-		startupErrorMessage("Unable to load items (XML)!");
+		startupErrorMessage(Item::items.getLastError());
 		return false;
 	}
 	startupProgress().update(4, 6, "items XML");

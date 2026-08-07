@@ -128,6 +128,7 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 	                                   startupProgress().isCurrentStage(StartupStage::MONSTER_SCRIPTS) ||
 	                                   startupProgress().isCurrentStage(StartupStage::LUA_SCRIPTS);
 	const bool showCurrentFile = reportStartupProgress && startupProgress().detailedLogs();
+	bool success = true;
 	if (reportStartupProgress && processedCount != 0) {
 		startupProgress().update(processedCount, candidateCount,
 		                         showCurrentFile ? "disabled/already loaded scripts" : "scripts");
@@ -137,6 +138,7 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 		if (scriptInterface.loadFile(scriptFile) == -1) {
 			LOG_ERROR(fmt::format("> {} [error]", path.filename().string()));
 			LOG_ERROR(fmt::format("^ {}", scriptInterface.getLastLuaError()));
+			success = false;
 			++processedCount;
 			if (reportStartupProgress) {
 				startupProgress().update(processedCount, candidateCount,
@@ -182,5 +184,5 @@ bool Scripts::loadScripts(const std::string& folderName, bool isLib, bool reload
 		}
 	}
 
-	return true;
+	return success;
 }

@@ -138,37 +138,39 @@ std::shared_ptr<Item> Item::CreateItem(PropStream& propStream)
 		return nullptr;
 	}
 
-	switch (id) {
-		case ITEM_FIREFIELD_PVP_FULL:
-			id = ITEM_FIREFIELD_PERSISTENT_FULL;
-			break;
+	if (!Item::items.isLoadedFromDat()) {
+		switch (id) {
+			case ITEM_FIREFIELD_PVP_FULL:
+				id = ITEM_FIREFIELD_PERSISTENT_FULL;
+				break;
 
-		case ITEM_FIREFIELD_PVP_MEDIUM:
-			id = ITEM_FIREFIELD_PERSISTENT_MEDIUM;
-			break;
+			case ITEM_FIREFIELD_PVP_MEDIUM:
+				id = ITEM_FIREFIELD_PERSISTENT_MEDIUM;
+				break;
 
-		case ITEM_FIREFIELD_PVP_SMALL:
-			id = ITEM_FIREFIELD_PERSISTENT_SMALL;
-			break;
+			case ITEM_FIREFIELD_PVP_SMALL:
+				id = ITEM_FIREFIELD_PERSISTENT_SMALL;
+				break;
 
-		case ITEM_ENERGYFIELD_PVP:
-			id = ITEM_ENERGYFIELD_PERSISTENT;
-			break;
+			case ITEM_ENERGYFIELD_PVP:
+				id = ITEM_ENERGYFIELD_PERSISTENT;
+				break;
 
-		case ITEM_POISONFIELD_PVP:
-			id = ITEM_POISONFIELD_PERSISTENT;
-			break;
+			case ITEM_POISONFIELD_PVP:
+				id = ITEM_POISONFIELD_PERSISTENT;
+				break;
 
-		case ITEM_MAGICWALL:
-			id = ITEM_MAGICWALL_PERSISTENT;
-			break;
+			case ITEM_MAGICWALL:
+				id = ITEM_MAGICWALL_PERSISTENT;
+				break;
 
-		case ITEM_WILDGROWTH:
-			id = ITEM_WILDGROWTH_PERSISTENT;
-			break;
+			case ITEM_WILDGROWTH:
+				id = ITEM_WILDGROWTH_PERSISTENT;
+				break;
 
-		default:
-			break;
+			default:
+				break;
+		}
 	}
 
 	return Item::CreateItem(id, 0);

@@ -206,6 +206,7 @@ pip-log.txt
 #############
 config.lua
 jenkins-credentials.txt
+data/items/assets.dat
 
 # Ignorar ejecutable principal en linux
 tfs

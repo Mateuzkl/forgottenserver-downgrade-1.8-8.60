@@ -326,6 +326,13 @@ mysqlDatabase = "forgottenserver"
 mysqlPort = 3306
 mysqlSock = ""
 
+-- Items
+-- To enable assets.dat, copy Tibia.dat from your Tibia 8.60 client into
+-- data/items, rename the copy to assets.dat, and then set useAssetsDat to true.
+-- Keep the original client file unchanged. Use assetsDatPath for a different copied location.
+useAssetsDat = false
+assetsDatPath = "data/items/assets.dat"
+
 -- Misc.
 -- NOTE: classicAttackSpeed set to true makes players constantly attack at regular
 -- intervals regardless of other actions such as item (potion) use. This setting
