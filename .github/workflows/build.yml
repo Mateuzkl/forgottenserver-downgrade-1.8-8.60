@@ -56,13 +56,47 @@ jobs:
             libasio-dev \
             default-libmysqlclient-dev
 
+      - name: Cache Lua 5.5 source
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.cache/lua/lua-5.5.0.tar.gz
+          key: lua-source-5.5.0-57ccc32bbbd005cab75bcc52444052535
+
       - name: Build patched Lua 5.5 from source
         run: |
-          curl --fail --show-error --location \
-            --retry 5 --retry-delay 5 --retry-all-errors \
-            --connect-timeout 30 \
-            https://www.lua.org/ftp/lua-5.5.0.tar.gz -o lua.tar.gz
-          echo "57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d lua.tar.gz" | sha256sum -c
+          set -euo pipefail
+          cache_tar="$GITHUB_WORKSPACE/.cache/lua/lua-5.5.0.tar.gz"
+          expected_sha="57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d"
+          mkdir -p "$(dirname "$cache_tar")"
+
+          if [ -f "$cache_tar" ]; then
+            cp "$cache_tar" lua.tar.gz
+          else
+            lua_urls=(
+              "https://www.lua.org/ftp/lua-5.5.0.tar.gz"
+              "https://www.tecgraf.puc-rio.br/lua/ftp/lua-5.5.0.tar.gz"
+            )
+            downloaded=0
+            for url in "${lua_urls[@]}"; do
+              echo "Downloading Lua from $url"
+              if curl --fail --show-error --location \
+                --retry 3 --retry-delay 5 --retry-connrefused \
+                --retry-all-errors --connect-timeout 30 --max-time 120 \
+                "$url" -o lua.tar.gz && \
+                echo "$expected_sha  lua.tar.gz" | sha256sum -c -; then
+                cp lua.tar.gz "$cache_tar"
+                downloaded=1
+                break
+              fi
+              rm -f lua.tar.gz
+            done
+            if [ "$downloaded" -ne 1 ]; then
+              echo "Failed to download a valid Lua 5.5.0 source archive" >&2
+              exit 1
+            fi
+          fi
+
+          echo "$expected_sha  lua.tar.gz" | sha256sum -c -
           tar xzf lua.tar.gz
           cd lua-5.5.0
           patch -d src -p1 < "$GITHUB_WORKSPACE/tools/patches/lua-5.5.0-write-barrier.patch"
