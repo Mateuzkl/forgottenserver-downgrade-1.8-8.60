@@ -11,7 +11,6 @@
 #include "tasks.h"
 #include "zoneweather.h"
 
-#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -29,50 +28,6 @@ using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 class ProtocolSpectator;
 
 extern Game g_game;
-
-namespace DllCheckProtocol {
-
-inline constexpr uint8_t OPCODE = 0xDE;
-inline constexpr uint8_t DLL_CHECK_WIRE_VERSION = 4;
-inline constexpr uint8_t CHALLENGE_KIND = 0x31;
-inline constexpr uint8_t RESPONSE_KIND = 0x72;
-inline constexpr uint32_t BUILD_ID = 2026072201;
-inline constexpr uint32_t INTEGRITY_FLAG = 0x80000000;
-inline constexpr uint32_t BUILD_MASK = 0x7FFFFFFF;
-inline constexpr uint32_t INITIAL_SEQUENCE = 0x6B19D3A7;
-inline constexpr int64_t INTERVAL_MS = 5000;
-inline constexpr int64_t TIMEOUT_MS = 5000;
-inline constexpr std::size_t PAYLOAD_SIZE = 64;
-inline constexpr std::size_t AUTHENTICATED_SIZE = 32;
-inline constexpr std::size_t TAG_OFFSET = AUTHENTICATED_SIZE;
-inline constexpr std::size_t TAG_SIZE = 32;
-inline constexpr std::size_t KEY_SIZE = 32;
-inline constexpr std::size_t MAX_ENCODED_PAYLOAD_SIZE = 256;
-
-using HmacKey = std::array<uint8_t, KEY_SIZE>;
-using Payload = std::array<uint8_t, PAYLOAD_SIZE>;
-using Tag = std::array<uint8_t, TAG_SIZE>;
-
-struct Fields
-{
-	uint32_t build = 0;
-	uint64_t timestamp = 0;
-	uint64_t sessionId = 0;
-	uint32_t sequence = 0;
-	uint32_t nonce = 0;
-};
-
-bool decodeHmacKey(std::string_view encoded, HmacKey& key);
-bool signPayload(const HmacKey& key, Payload& payload);
-bool buildChallenge(const HmacKey& key, uint64_t timestamp, uint64_t sessionId,
-                    uint32_t sequence, uint32_t nonce, Payload& payload);
-bool parseResponse(const HmacKey& key, const Payload& payload, Fields& fields);
-bool matchesExpectedResponse(const Fields& fields, const Fields& expected);
-bool isResponseWindowValid(bool pending, int64_t sentAt, int64_t receivedAt);
-std::string encodePayload(const Payload& payload);
-bool decodePayload(std::string_view encoded, Payload& payload);
-
-} // namespace DllCheckProtocol
 
 struct TextMessage
 {
@@ -174,10 +129,6 @@ private:
 	void parseUpArrowContainer(NetworkMessage& msg);
 	void parseUpdateContainer(NetworkMessage& msg);
 	void parseQuickLoot(NetworkMessage& msg);
-	void parseDllCheckResponse(NetworkMessage& msg);
-	void validateDllCheckResponse(std::string response, int64_t receivedAt);
-	void resetDllCheckState();
-	void failDllCheck();
 	void parseLootContainer(NetworkMessage& msg);
 	void parseQuickLootBlackWhitelist(NetworkMessage& msg);
 	void parseTextWindow(NetworkMessage& msg);
@@ -234,8 +185,6 @@ private:
 	void sendSkills();
 	void sendPing();
 	void sendCustomClientPing(uint32_t pingId);
-	void sendDllCheck();
-	void pollDllCheck();
 	void sendCreatureTurn(const Creature* creature, uint32_t stackpos);
 	void sendCreatureSay(const Creature* creature, SpeakClasses type, std::string_view text,
 	                     const Position* pos = nullptr);
@@ -462,15 +411,6 @@ private:
 	uint32_t customPingSequence = 0;
 	int64_t nextCastSwitchTime = 0;
 	int64_t nextCastSwitchCooldownMessageTime = 0;
-
-	bool dllCheckPending = false;
-	bool dllCheckValidated = false;
-	uint32_t dllCheckSequence = 0;
-	uint32_t dllCheckExpectedSequence = 0;
-	uint32_t dllCheckExpectedRandom = 0;
-	uint64_t dllCheckExpectedTimestamp = 0;
-	uint64_t dllCheckExpectedSessionId = 0;
-	int64_t dllCheckSentAt = 0;
 
 	int64_t moveWindowStart = 0;
 	uint16_t movePacketCount = 0;

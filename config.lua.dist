@@ -72,9 +72,6 @@ loginProtocolPort = 7171
 gameProtocolPort = 7172
 statusProtocolPort = 7171
 adminPort = 7170
--- Use a unique 64-character hexadecimal key. The
--- TFS_DLL_CHECK_HMAC_KEY environment variable takes precedence.
-dllCheckHmacKey = ""
 maxPlayers = 500
 motd = "Welcome to The Forgotten Server!"
 onePlayerOnlinePerAccount = true

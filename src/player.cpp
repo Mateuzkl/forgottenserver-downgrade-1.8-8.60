@@ -2976,10 +2976,6 @@ void Player::onThink(uint32_t interval)
 		client->setUpdateStatus(false);
 	}
 
-	if (client) {
-		client->pollDllCheck();
-	}
-
 	MessageBufferTicks += interval;
 	if (MessageBufferTicks >= 1500) {
 		MessageBufferTicks = 0;

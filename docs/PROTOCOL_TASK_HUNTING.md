@@ -12,10 +12,8 @@ Hunting Task packet shapes consumed by AstraClient.
 | Client -> server | `0x5F` | Custom Task Board action. SoulSeal fight is action `19` with `raceId(U16)`. |
 | Server -> client | `0xEE` | Resource balance. |
 
-The legacy 8.60 anti-DLL check also historically used `0xBB`. It is now
-explicitly disabled for Astra sessions, so `0xBB` is unambiguous for the
-Astra Task Hunting parser. Classic non-Astra clients retain their legacy
-anti-DLL packet and never receive Task Hunting packets.
+`0xBB` is reserved for the Astra Task Hunting parser. Classic non-Astra
+clients never receive Task Hunting packets.
 
 ## Deployment note
 

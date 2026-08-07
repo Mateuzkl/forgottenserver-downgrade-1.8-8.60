@@ -551,10 +551,6 @@ bool ConfigManager::load()
 	strings[String::NPC_SYSTEM] = getGlobalString(L, "npcSystem", "tfs");
 	strings[String::DUAL_WIELDING_MODE] = getGlobalString(L, "dualWieldingMode", "allweapons");
 	strings[String::RAID_SPAWNFILE_DIRECTORY] = getGlobalString(L, "raidSpawnFileDirectory", "data/raids");
-	const char* dllCheckKeyFromEnvironment = std::getenv("TFS_DLL_CHECK_HMAC_KEY");
-	strings[String::DLL_CHECK_HMAC_KEY] = dllCheckKeyFromEnvironment ?
-	                                        dllCheckKeyFromEnvironment :
-	                                        getGlobalString(L, "dllCheckHmacKey", "");
 
 	Monster::despawnRange = getGlobalInteger(L, "deSpawnRange", 2);
 	Monster::despawnRadius = getGlobalInteger(L, "deSpawnRadius", 50);

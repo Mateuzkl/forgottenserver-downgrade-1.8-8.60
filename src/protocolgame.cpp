@@ -36,323 +36,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include <openssl/crypto.h>
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
-
 uint32_t ProtocolGame::spectatorId = 1;
 std::set<std::string> ProtocolGame::spectatorNames;
 extern Monsters g_monsters;
 
-namespace DllCheckProtocol {
-
-constexpr std::string_view BASE64_ALPHABET =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-constexpr bool hasUniqueAlphabetCharacters()
-{
-	if (BASE64_ALPHABET.size() != 64) {
-		return false;
-	}
-	for (std::size_t i = 0; i < BASE64_ALPHABET.size(); ++i) {
-		if (BASE64_ALPHABET[i] == '=') {
-			return false;
-		}
-		for (std::size_t j = i + 1; j < BASE64_ALPHABET.size(); ++j) {
-			if (BASE64_ALPHABET[i] == BASE64_ALPHABET[j]) {
-				return false;
-			}
-		}
-	}
-	return true;
-}
-
-static_assert(BASE64_ALPHABET.size() == 64);
-static_assert(hasUniqueAlphabetCharacters());
-
-int hexValue(char character)
-{
-	if (character >= '0' && character <= '9') {
-		return character - '0';
-	}
-	if (character >= 'a' && character <= 'f') {
-		return character - 'a' + 10;
-	}
-	if (character >= 'A' && character <= 'F') {
-		return character - 'A' + 10;
-	}
-	return -1;
-}
-
-bool decodeHmacKey(std::string_view encoded, HmacKey& key)
-{
-	key.fill(0);
-	if (encoded.size() != key.size() * 2) {
-		return false;
-	}
-
-	for (std::size_t index = 0; index < key.size(); ++index) {
-		const int high = hexValue(encoded[index * 2]);
-		const int low = hexValue(encoded[index * 2 + 1]);
-		if (high < 0 || low < 0) {
-			key.fill(0);
-			return false;
-		}
-		key[index] = static_cast<uint8_t>((high << 4) | low);
-	}
-	return true;
-}
-
-void writeU16(Payload& payload, std::size_t offset, uint16_t value)
-{
-	payload[offset] = static_cast<uint8_t>(value);
-	payload[offset + 1] = static_cast<uint8_t>(value >> 8);
-}
-
-void writeU32(Payload& payload, std::size_t offset, uint32_t value)
-{
-	for (std::size_t i = 0; i < 4; ++i) {
-		payload[offset + i] = static_cast<uint8_t>(value >> (i * 8));
-	}
-}
-
-void writeU64(Payload& payload, std::size_t offset, uint64_t value)
-{
-	for (std::size_t i = 0; i < 8; ++i) {
-		payload[offset + i] = static_cast<uint8_t>(value >> (i * 8));
-	}
-}
-
-uint16_t readU16(const Payload& payload, std::size_t offset)
-{
-	return static_cast<uint16_t>(payload[offset]) |
-	       static_cast<uint16_t>(payload[offset + 1] << 8);
-}
-
-uint32_t readU32(const Payload& payload, std::size_t offset)
-{
-	uint32_t value = 0;
-	for (std::size_t i = 0; i < 4; ++i) {
-		value |= static_cast<uint32_t>(payload[offset + i]) << (i * 8);
-	}
-	return value;
-}
-
-uint64_t readU64(const Payload& payload, std::size_t offset)
-{
-	uint64_t value = 0;
-	for (std::size_t i = 0; i < 8; ++i) {
-		value |= static_cast<uint64_t>(payload[offset + i]) << (i * 8);
-	}
-	return value;
-}
-
-void setTag(Payload& payload, const Tag& tag)
-{
-	std::copy(tag.begin(), tag.end(), payload.begin() + TAG_OFFSET);
-}
-
-Tag getTag(const Payload& payload)
-{
-	Tag tag = {};
-	std::copy_n(payload.begin() + TAG_OFFSET, TAG_SIZE, tag.begin());
-	return tag;
-}
-
-bool computeTag(const HmacKey& key, const Payload& payload, Tag& tag)
-{
-	unsigned int tagLength = 0;
-	const unsigned char* result =
-	    HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), payload.data(),
-	         AUTHENTICATED_SIZE, tag.data(), &tagLength);
-	return result != nullptr && tagLength == static_cast<unsigned int>(tag.size());
-}
-
-bool hasValidTag(const HmacKey& key, const Payload& payload)
-{
-	Tag expected = {};
-	if (!computeTag(key, payload, expected)) {
-		return false;
-	}
-
-	const Tag received = getTag(payload);
-	const bool valid = CRYPTO_memcmp(expected.data(), received.data(), TAG_SIZE) == 0;
-	OPENSSL_cleanse(expected.data(), expected.size());
-	return valid;
-}
-
-bool signPayload(const HmacKey& key, Payload& payload)
-{
-	Tag tag = {};
-	if (!computeTag(key, payload, tag)) {
-		return false;
-	}
-	setTag(payload, tag);
-	OPENSSL_cleanse(tag.data(), tag.size());
-	return true;
-}
-
-bool buildChallenge(const HmacKey& key, uint64_t timestamp, uint64_t sessionId,
-                    uint32_t sequence, uint32_t nonce, Payload& payload)
-{
-	payload = {};
-	payload[0] = DLL_CHECK_WIRE_VERSION;
-	payload[1] = CHALLENGE_KIND;
-	writeU16(payload, 2, static_cast<uint16_t>(PAYLOAD_SIZE));
-	writeU64(payload, 4, timestamp);
-	writeU64(payload, 12, sessionId);
-	writeU32(payload, 20, BUILD_ID);
-	writeU32(payload, 24, sequence);
-	writeU32(payload, 28, nonce);
-
-	return signPayload(key, payload);
-}
-
-bool parseResponse(const HmacKey& key, const Payload& payload, Fields& fields)
-{
-	if (payload[0] != DLL_CHECK_WIRE_VERSION || payload[1] != RESPONSE_KIND ||
-	    readU16(payload, 2) != PAYLOAD_SIZE || !hasValidTag(key, payload)) {
-		return false;
-	}
-
-	fields.timestamp = readU64(payload, 4);
-	fields.sessionId = readU64(payload, 12);
-	fields.build = readU32(payload, 20);
-	fields.sequence = readU32(payload, 24);
-	fields.nonce = readU32(payload, 28);
-	return fields.timestamp != 0 && fields.sessionId != 0 && fields.sequence != 0 &&
-	       (fields.build & BUILD_MASK) == BUILD_ID && (fields.build & INTEGRITY_FLAG) != 0;
-}
-
-bool matchesExpectedResponse(const Fields& fields, const Fields& expected)
-{
-	return fields.timestamp == expected.timestamp &&
-	       fields.sessionId == expected.sessionId &&
-	       fields.sequence == expected.sequence &&
-	       fields.nonce == expected.nonce;
-}
-
-bool isResponseWindowValid(bool pending, int64_t sentAt, int64_t receivedAt)
-{
-	return pending && receivedAt >= sentAt && receivedAt - sentAt < TIMEOUT_MS;
-}
-
-std::string base64Encode(const std::vector<uint8_t>& bytes)
-{
-	std::string encoded;
-	encoded.reserve(((bytes.size() + 2) / 3) * 4);
-	std::size_t offset = 0;
-	while (offset + 3 <= bytes.size()) {
-		const uint32_t value = (static_cast<uint32_t>(bytes[offset]) << 16) |
-		                       (static_cast<uint32_t>(bytes[offset + 1]) << 8) |
-		                       static_cast<uint32_t>(bytes[offset + 2]);
-		encoded.push_back(BASE64_ALPHABET[(value >> 18) & 0x3F]);
-		encoded.push_back(BASE64_ALPHABET[(value >> 12) & 0x3F]);
-		encoded.push_back(BASE64_ALPHABET[(value >> 6) & 0x3F]);
-		encoded.push_back(BASE64_ALPHABET[value & 0x3F]);
-		offset += 3;
-	}
-
-	const std::size_t remaining = bytes.size() - offset;
-	if (remaining == 1) {
-		const uint32_t value = static_cast<uint32_t>(bytes[offset]) << 16;
-		encoded.push_back(BASE64_ALPHABET[(value >> 18) & 0x3F]);
-		encoded.push_back(BASE64_ALPHABET[(value >> 12) & 0x3F]);
-		encoded.append("==");
-	} else if (remaining == 2) {
-		const uint32_t value = (static_cast<uint32_t>(bytes[offset]) << 16) |
-		                       (static_cast<uint32_t>(bytes[offset + 1]) << 8);
-		encoded.push_back(BASE64_ALPHABET[(value >> 18) & 0x3F]);
-		encoded.push_back(BASE64_ALPHABET[(value >> 12) & 0x3F]);
-		encoded.push_back(BASE64_ALPHABET[(value >> 6) & 0x3F]);
-		encoded.push_back('=');
-	}
-	return encoded;
-}
-
-int base64Index(char character)
-{
-	for (std::size_t i = 0; i < BASE64_ALPHABET.size(); ++i) {
-		if (BASE64_ALPHABET[i] == character) {
-			return static_cast<int>(i);
-		}
-	}
-	return -1;
-}
-
-bool base64Decode(std::string_view encoded, std::vector<uint8_t>& decoded)
-{
-	decoded.clear();
-	if (encoded.empty()) {
-		return true;
-	}
-	if ((encoded.size() % 4) != 0) {
-		return false;
-	}
-	decoded.reserve((encoded.size() / 4) * 3);
-
-	for (std::size_t offset = 0; offset < encoded.size(); offset += 4) {
-		const bool lastBlock = offset + 4 == encoded.size();
-		const bool pad2 = encoded[offset + 2] == '=';
-		const bool pad3 = encoded[offset + 3] == '=';
-		if (encoded[offset] == '=' || encoded[offset + 1] == '=' ||
-		    (pad2 && !pad3) || ((pad2 || pad3) && !lastBlock)) {
-			return false;
-		}
-
-		const int a = base64Index(encoded[offset]);
-		const int b = base64Index(encoded[offset + 1]);
-		const int c = pad2 ? 0 : base64Index(encoded[offset + 2]);
-		const int d = pad3 ? 0 : base64Index(encoded[offset + 3]);
-		if (a < 0 || b < 0 || c < 0 || d < 0 ||
-		    (pad2 && (b & 0x0F) != 0) || (pad3 && !pad2 && (c & 0x03) != 0)) {
-			decoded.clear();
-			return false;
-		}
-
-		const uint32_t value = (static_cast<uint32_t>(a) << 18) |
-		                       (static_cast<uint32_t>(b) << 12) |
-		                       (static_cast<uint32_t>(c) << 6) |
-		                       static_cast<uint32_t>(d);
-		decoded.push_back(static_cast<uint8_t>(value >> 16));
-		if (!pad2) {
-			decoded.push_back(static_cast<uint8_t>(value >> 8));
-		}
-		if (!pad3) {
-			decoded.push_back(static_cast<uint8_t>(value));
-		}
-	}
-	return true;
-}
-
-std::string encodePayload(const Payload& payload)
-{
-	std::vector<uint8_t> bytes(payload.begin(), payload.end());
-	return base64Encode(bytes);
-}
-
-bool decodePayload(std::string_view encoded, Payload& payload)
-{
-	if (encoded.empty() || encoded.size() > MAX_ENCODED_PAYLOAD_SIZE) {
-		return false;
-	}
-	std::vector<uint8_t> bytes;
-	if (!base64Decode(encoded, bytes) || bytes.size() != PAYLOAD_SIZE) {
-		return false;
-	}
-	std::copy(bytes.begin(), bytes.end(), payload.begin());
-	return true;
-}
-
-} // namespace DllCheckProtocol
-
 namespace {
-
-bool getConfiguredDllCheckKey(DllCheckProtocol::HmacKey& key)
-{
-	return DllCheckProtocol::decodeHmacKey(
-	    ConfigManager::getString(ConfigManager::DLL_CHECK_HMAC_KEY), key);
-}
 
 // 0x3C is reserved for native ZoneId weather on negotiated custom clients.
 constexpr uint8_t ZONE_WEATHER_OPCODE = 0x3C;
@@ -394,21 +82,6 @@ constexpr uint8_t HELPER_OPCODE_SMART_FOLLOW = 212;
 constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
 constexpr uint32_t STORAGE_ASTRA_HELPER_SMART_FOLLOW = 99998;
 constexpr auto STORE_OUTFIT_OFFERS_PATH = "data/store/gamestore.xml";
-
-uint32_t nextDllCheckRandom()
-{
-	static std::random_device randomDevice;
-	static std::mt19937 generator(randomDevice());
-	static std::uniform_int_distribution<uint32_t> distribution(1, (std::numeric_limits<uint32_t>::max)());
-	return distribution(generator);
-}
-
-uint64_t nextDllCheckSessionId()
-{
-	const uint64_t high = nextDllCheckRandom();
-	const uint64_t low = nextDllCheckRandom();
-	return (high << 32) | low;
-}
 
 std::string anonymizeIPv4ForFile(uint32_t ip)
 {
@@ -893,7 +566,6 @@ void ProtocolGame::sendBlessStatus()
 void ProtocolGame::release()
 {
 	// dispatcher thread
-	resetDllCheckState();
 	if (player) {
 		if (isSpectator) {
 			auto clientRef = player->client;
@@ -1199,7 +871,6 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 			return;
 		}
 	}
-	resetDllCheckState();
 	sendLootContainers();
 
 	if (isOTC) {
@@ -1232,7 +903,6 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	acceptPackets = true;
-	sendDllCheck();
 	logPlayerSession(*player, player->lastIP, true);
 	g_game.releaseLogin(reservedGuid);
 }
@@ -1331,14 +1001,12 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->client->isAstraClient = isAstraClient;
 	player->client->isFonticakClient = isFonticakClient;
 	sendAddCreature(player.get(), player->getPosition(), 0);
-	resetDllCheckState();
 	sendLootContainers();
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 	player->resetIdleTime();
 	player->lastPing = OTSYS_TIME();
 	acceptPackets = true;
-	sendDllCheck();
 	logPlayerSession(*player, player->lastIP, true);
 
 	g_creatureEvents->playerReconnect(player.get());
@@ -1377,7 +1045,6 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 		}
 	}
 
-	resetDllCheckState();
 	logPlayerSession(*player, player->getIP(), false);
 	player->client->clear();
 	disconnect();
@@ -1783,13 +1450,6 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break; // GameClientExtendedPing
 		case 0x60:
 			parseImbuementDurations(msg);
-			break;
-		case DllCheckProtocol::OPCODE:
-			if (clientOperatingSystem == CLIENTOS_CUSTOM_DLL) {
-				parseDllCheckResponse(msg);
-			} else {
-				skipUnreadBytes(msg);
-			}
 			break;
 		case CharacterBazaar::CLIENT_PACKET:
 			if (isAstraClient) {
@@ -4004,144 +3664,6 @@ void ProtocolGame::sendCustomClientPing(uint32_t pingId)
 	msg.addByte(0x1E);
 	msg.add<uint32_t>(pingId);
 	writeToOutputBuffer(msg);
-}
-
-void ProtocolGame::sendDllCheck()
-{
-	if (!player || isSpectator || clientOperatingSystem != CLIENTOS_CUSTOM_DLL || getVersion() != 860 || dllCheckPending) {
-		return;
-	}
-
-	dllCheckExpectedTimestamp = static_cast<uint64_t>(OTSYS_TIME());
-	dllCheckExpectedSessionId = nextDllCheckSessionId();
-	dllCheckExpectedSequence = dllCheckSequence;
-	dllCheckExpectedRandom = nextDllCheckRandom();
-	if (++dllCheckSequence == 0) {
-		dllCheckSequence = 1;
-	}
-
-	DllCheckProtocol::Payload payload = {};
-	DllCheckProtocol::HmacKey key = {};
-	if (!getConfiguredDllCheckKey(key) || !DllCheckProtocol::buildChallenge(
-	        key,
-	        dllCheckExpectedTimestamp, dllCheckExpectedSessionId,
-	        dllCheckExpectedSequence, dllCheckExpectedRandom, payload)) {
-		OPENSSL_cleanse(key.data(), key.size());
-		failDllCheck();
-		return;
-	}
-	OPENSSL_cleanse(key.data(), key.size());
-	const std::string encoded = DllCheckProtocol::encodePayload(payload);
-
-	NetworkMessage msg;
-	msg.addByte(DllCheckProtocol::OPCODE);
-	msg.addString(encoded);
-	writeToOutputBuffer(msg);
-
-	dllCheckPending = true;
-	dllCheckValidated = false;
-	dllCheckSentAt = OTSYS_TIME();
-}
-
-void ProtocolGame::pollDllCheck()
-{
-	if (!player || isSpectator || clientOperatingSystem != CLIENTOS_CUSTOM_DLL || getVersion() != 860) {
-		return;
-	}
-
-	const int64_t now = OTSYS_TIME();
-	if (dllCheckPending) {
-		if (now < dllCheckSentAt || now - dllCheckSentAt >= DllCheckProtocol::TIMEOUT_MS) {
-			failDllCheck();
-		}
-		return;
-	}
-
-	if (!dllCheckValidated || now < dllCheckSentAt ||
-	    now - dllCheckSentAt >= DllCheckProtocol::INTERVAL_MS) {
-		sendDllCheck();
-	}
-}
-
-void ProtocolGame::resetDllCheckState()
-{
-	dllCheckPending = false;
-	dllCheckValidated = false;
-	dllCheckSequence = DllCheckProtocol::INITIAL_SEQUENCE;
-	dllCheckExpectedSequence = 0;
-	dllCheckExpectedRandom = 0;
-	dllCheckExpectedTimestamp = 0;
-	dllCheckExpectedSessionId = 0;
-	dllCheckSentAt = 0;
-}
-
-void ProtocolGame::failDllCheck()
-{
-	dllCheckPending = false;
-	dllCheckValidated = false;
-	disconnectClient("Client validation failed.");
-}
-
-void ProtocolGame::parseDllCheckResponse(NetworkMessage& msg)
-{
-	auto reject = [this]() { failDllCheck(); };
-
-	if (clientOperatingSystem != CLIENTOS_CUSTOM_DLL || getReadableBytes(msg) < sizeof(uint16_t)) {
-		reject();
-		return;
-	}
-
-	const uint16_t encodedLength = msg.get<uint16_t>();
-	if (encodedLength == 0 || encodedLength > DllCheckProtocol::MAX_ENCODED_PAYLOAD_SIZE ||
-	    getReadableBytes(msg) != encodedLength) {
-		reject();
-		return;
-	}
-
-	std::string response = msg.getString(encodedLength);
-	if (msg.isOverrun() || response.size() != encodedLength) {
-		reject();
-		return;
-	}
-
-	const int64_t receivedAt = OTSYS_TIME();
-	validateDllCheckResponse(std::move(response), receivedAt);
-}
-
-void ProtocolGame::validateDllCheckResponse(std::string response, int64_t receivedAt)
-{
-	if (!dllCheckPending || clientOperatingSystem != CLIENTOS_CUSTOM_DLL ||
-	    !DllCheckProtocol::isResponseWindowValid(dllCheckPending, dllCheckSentAt, receivedAt)) {
-		failDllCheck();
-		return;
-	}
-
-	DllCheckProtocol::Payload payload = {};
-	DllCheckProtocol::Fields fields;
-	if (!DllCheckProtocol::decodePayload(response, payload)) {
-		failDllCheck();
-		return;
-	}
-	DllCheckProtocol::HmacKey key = {};
-	if (!getConfiguredDllCheckKey(key) ||
-	    !DllCheckProtocol::parseResponse(key, payload, fields)) {
-		OPENSSL_cleanse(key.data(), key.size());
-		failDllCheck();
-		return;
-	}
-	OPENSSL_cleanse(key.data(), key.size());
-	DllCheckProtocol::Fields expected;
-	expected.timestamp = dllCheckExpectedTimestamp;
-	expected.sessionId = dllCheckExpectedSessionId;
-	expected.sequence = dllCheckExpectedSequence;
-	expected.nonce = dllCheckExpectedRandom;
-	if (!DllCheckProtocol::matchesExpectedResponse(fields, expected)) {
-		failDllCheck();
-		return;
-	}
-
-	dllCheckPending = false;
-	dllCheckValidated = true;
 }
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
