@@ -69,9 +69,12 @@ jobs:
           expected_sha="57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d"
           mkdir -p "$(dirname "$cache_tar")"
 
-          if [ -f "$cache_tar" ]; then
+          if [ -f "$cache_tar" ] &&
+             echo "$expected_sha  $cache_tar" | sha256sum -c -; then
+            echo "Using verified cached Lua source"
             cp "$cache_tar" lua.tar.gz
           else
+            rm -f "$cache_tar"
             lua_urls=(
               "https://www.lua.org/ftp/lua-5.5.0.tar.gz"
               "https://www.tecgraf.puc-rio.br/lua/ftp/lua-5.5.0.tar.gz"
