@@ -511,6 +511,7 @@ private:
 
 	static int luaSaveServer(lua_State* L);
 	static int luaCleanMap(lua_State* L);
+	static int luaCreateTown(lua_State* L);
 
 	static int luaIsInWar(lua_State* L);
 

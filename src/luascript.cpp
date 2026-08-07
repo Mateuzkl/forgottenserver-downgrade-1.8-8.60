@@ -1680,6 +1680,9 @@ void LuaScriptInterface::registerFunctions()
 	// cleanMap()
 	lua_register(luaState, "cleanMap", LuaScriptInterface::luaCleanMap);
 
+	// createTown(id, name, templePosition)
+	lua_register(luaState, "createTown", LuaScriptInterface::luaCreateTown);
+
 	// debugPrint(text)
 	lua_register(luaState, "debugPrint", LuaScriptInterface::luaDebugPrint);
 
@@ -4030,6 +4033,22 @@ int LuaScriptInterface::luaCleanMap(lua_State* L)
 {
 	// cleanMap()
 	lua_pushinteger(L, g_game.map.clean());
+	return 1;
+}
+
+int LuaScriptInterface::luaCreateTown(lua_State* L)
+{
+	// createTown(id, name, templePosition)
+	uint32_t townId = Lua::getNumber<uint32_t>(L, 1);
+	if (g_game.map.towns.getTown(townId)) {
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
+
+	auto town = std::make_shared<Town>(townId);
+	town->setName(Lua::getString(L, 2));
+	town->setTemplePos(Lua::getPosition(L, 3));
+	Lua::pushBoolean(L, g_game.map.towns.addTown(townId, std::move(town)));
 	return 1;
 }
 
