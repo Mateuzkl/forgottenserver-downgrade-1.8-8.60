@@ -6,7 +6,6 @@ end
 
 local OPCODE_FORGE_REQUEST = 0xE2
 local OPCODE_FORGE_SEND = 0xE3
-local OPCODE_RESOURCE_BALANCE = 0xEE
 
 local REQUEST_OPEN = 1
 local REQUEST_CLOSE = 2
@@ -26,12 +25,6 @@ local RESPONSE_CLOSE = 6
 local HISTORY_FUSION = 0
 local HISTORY_TRANSFER = 1
 local HISTORY_CONVERSION = 2
-
-local RESOURCE_BANK = 0
-local RESOURCE_INVENTORY = 1
-local RESOURCE_FORGE_DUST = 20
-local RESOURCE_FORGE_SLIVERS = 21
-local RESOURCE_FORGE_EXALTED_CORE = 22
 
 local FORGE_ITEM_IDS = {
 	dust = 37160,
@@ -198,18 +191,6 @@ local function sendForgeMessage(player, message)
 	return out:sendToPlayer(player)
 end
 
-local function sendResourceBalance(player, resourceType, value)
-	if not supportsCustomNetwork(player) then
-		return false
-	end
-
-	local out = NetworkMessage(player)
-	out:addByte(OPCODE_RESOURCE_BALANCE)
-	out:addByte(resourceType)
-	out:addU64(value)
-	return out:sendToPlayer(player)
-end
-
 local function getForgeDust(player)
 	local value = player:getStorageValue(FORGE_STORAGE.dust)
 	return value and value > 0 and value or 0
@@ -251,15 +232,6 @@ end
 
 local function getPlayerTotalMoney(player)
 	return getPlayerInventoryMoney(player) + getPlayerBankBalance(player)
-end
-
-local function sendAllResources(player)
-	local bankSent = sendResourceBalance(player, RESOURCE_BANK, getPlayerBankBalance(player))
-	local inventorySent = sendResourceBalance(player, RESOURCE_INVENTORY, getPlayerInventoryMoney(player))
-	local dustSent = sendResourceBalance(player, RESOURCE_FORGE_DUST, getForgeDust(player))
-	local sliversSent = sendResourceBalance(player, RESOURCE_FORGE_SLIVERS, player:getItemCount(FORGE_ITEM_IDS.sliver))
-	local coresSent = sendResourceBalance(player, RESOURCE_FORGE_EXALTED_CORE, player:getItemCount(FORGE_ITEM_IDS.exaltedCore))
-	return bankSent and inventorySent and dustSent and sliversSent and coresSent
 end
 
 local function getForgeCategory(itemId)
@@ -484,13 +456,34 @@ local function countEntries(items)
 	return entries
 end
 
-local function getSubItems(items, sourceEntry, targetTier)
+local function getForgeGroupKey(classification, category)
+	return classification .. ":" .. category
+end
+
+local function buildBaseItemGroups(entries)
+	local groups = {}
+	for _, entry in pairs(entries) do
+		if entry.tier == 0 then
+			local key = getForgeGroupKey(entry.classification, entry.category)
+			local group = groups[key]
+			if not group then
+				group = {}
+				groups[key] = group
+			end
+			group[entry.itemId] = entry.count
+		end
+	end
+	return groups
+end
+
+local function getSubItems(baseItemGroups, sourceEntry)
 	local result = {}
-	for _, item in ipairs(items) do
-		if item:getTier() == targetTier and item:getId() ~= sourceEntry.itemId and
-			item:getClassification() == sourceEntry.classification and getForgeCategory(item:getId()) == sourceEntry.category then
-			local itemId = item:getId()
-			result[itemId] = (result[itemId] or 0) + 1
+	local group = baseItemGroups[getForgeGroupKey(sourceEntry.classification, sourceEntry.category)]
+	if group then
+		for itemId, count in pairs(group) do
+			if itemId ~= sourceEntry.itemId then
+				result[itemId] = count
+			end
 		end
 	end
 	return result
@@ -512,6 +505,7 @@ local function buildForgeData(player)
 
 	local items = collectForgeItems(player)
 	local entries = countEntries(items)
+	local baseItemGroups = buildBaseItemGroups(entries)
 	fusionData = {}
 	fusionConvergenceData = {}
 	transferData = {}
@@ -524,17 +518,13 @@ local function buildForgeData(player)
 			fusionConvergenceData[#fusionConvergenceData + 1] = entry
 		end
 
-		if entry.tier >= 2 then
-			local subItems = getSubItems(items, entry, 0)
-			if subItemCount(subItems) > 0 then
-				entry.subItems = subItems
-				transferData[#transferData + 1] = entry
-			end
-		end
-
 		if entry.tier >= 1 then
-			local subItems = getSubItems(items, entry, 0)
+			local subItems = getSubItems(baseItemGroups, entry)
 			if subItemCount(subItems) > 0 then
+				if entry.tier >= 2 then
+					entry.subItems = subItems
+					transferData[#transferData + 1] = entry
+				end
 				local convergenceEntry = {
 					itemId = entry.itemId,
 					tier = entry.tier,
@@ -752,9 +742,8 @@ end
 
 local function refreshForge(player)
 	debugForge(player, "refresh start")
-	local resourcesSent = sendAllResources(player)
 	local dataSent = sendForgeData(player)
-	debugForge(player, "refresh done resources=" .. tostring(resourcesSent) .. " data=" .. tostring(dataSent))
+	debugForge(player, "refresh done data=" .. tostring(dataSent))
 	return dataSent
 end
 
