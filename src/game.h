@@ -460,7 +460,7 @@ public:
 	void playerTurn(uint32_t playerId, Direction dir);
 	void playerRequestOutfit(uint32_t playerId);
 	void playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, std::string_view receiver,
-	               std::string_view text, bool forceCastOnFoot = false);
+	               std::string_view text);
 	void playerChangeOutfit(uint32_t playerId, Outfit_t outfit, bool randomizeMount = false);
 	void playerInviteToParty(uint32_t playerId, uint32_t invitedId);
 	void playerJoinParty(uint32_t playerId, uint32_t leaderId);
@@ -710,7 +710,7 @@ public:
 private:
 	StorageMap storageMap;
 
-	bool playerSaySpell(Player* player, SpeakClasses type, std::string_view text, bool forceCastOnFoot = false);
+	bool playerSaySpell(Player* player, SpeakClasses type, std::string_view text);
 	void playerWhisper(Player* player, std::string_view text);
 	bool playerYell(Player* player, std::string_view text);
 	bool playerSpeakTo(Player* player, SpeakClasses type, std::string_view receiver, std::string_view text);

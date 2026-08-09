@@ -312,12 +312,6 @@ private:
 
 	// otclient
 	void parseExtendedOpcode(NetworkMessage& msg);
-	bool consumeHelperCastOnFoot()
-	{
-		const bool value = helperCastOnFootNextSay;
-		helperCastOnFootNextSay = false;
-		return value;
-	}
 
 	// OTCv8
 	void sendFeatures(bool advertiseAstraItemState = false);
@@ -401,7 +395,6 @@ private:
 		return (clientOperatingSystem == CLIENTOS_CUSTOM_DLL && supportsDllZoneWeather) ||
 		       isAstraClient || (isOTCv8 && supportsZoneWeather);
 	}
-	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;
 	bool useItemTierByte = false;
 	bool debugAssertSent = false;

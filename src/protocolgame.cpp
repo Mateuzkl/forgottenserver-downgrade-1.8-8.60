@@ -76,11 +76,6 @@ std::size_t getReadableBytes(const NetworkMessage& msg)
 std::deque<std::pair<int64_t, uint32_t>> waitList; // (timeout, player guid)
 std::size_t priorityCount = 0;
 constexpr int64_t CAST_SWITCH_COOLDOWN_MS = 500;
-constexpr uint8_t HELPER_OPCODE_CAVEBOT = 210;
-constexpr uint8_t HELPER_OPCODE_CAST_ON_FOOT = 211;
-constexpr uint8_t HELPER_OPCODE_SMART_FOLLOW = 212;
-constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
-constexpr uint32_t STORAGE_ASTRA_HELPER_SMART_FOLLOW = 99998;
 constexpr auto STORE_OUTFIT_OFFERS_PATH = "data/store/gamestore.xml";
 
 std::string anonymizeIPv4ForFile(uint32_t ip)
@@ -373,23 +368,6 @@ uint8_t getRuleViolationTypeFromLegacyAction(uint8_t action)
 	}
 
 	return REPORT_TYPE_BOT;
-}
-
-bool isEnabledHelperBuffer(std::string_view buffer)
-{
-	return buffer == "1" || buffer == "true" || buffer == "on" || buffer == "enabled";
-}
-
-std::optional<uint32_t> getHelperStateStorageKey(uint8_t opcode)
-{
-	switch (opcode) {
-		case HELPER_OPCODE_CAVEBOT:
-			return STORAGE_ASTRA_HELPER_CAVEBOT;
-		case HELPER_OPCODE_SMART_FOLLOW:
-			return STORAGE_ASTRA_HELPER_SMART_FOLLOW;
-		default:
-			return std::nullopt;
-	}
 }
 
 auto findClient(uint32_t guid)
@@ -2497,7 +2475,6 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 	}
 
 	auto text = msg.getString();
-	const bool forceCastOnFoot = consumeHelperCastOnFoot();
 	if (text.length() > 255) {
 		return;
 	}
@@ -2507,7 +2484,7 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 		return;
 	}
 
-	g_game.playerSay(player->getID(), channelId, type, receiver, text, forceCastOnFoot);
+	g_game.playerSay(player->getID(), channelId, type, receiver, text);
 }
 
 void ProtocolGame::parseAttack(NetworkMessage& msg)
@@ -5050,18 +5027,7 @@ void ProtocolGame::parseExtendedOpcode(NetworkMessage& msg)
 	uint8_t opcode = msg.getByte();
 	auto buffer = msg.getString();
 
-	if (opcode == HELPER_OPCODE_CAST_ON_FOOT) {
-		helperCastOnFootNextSay = buffer.empty() || isEnabledHelperBuffer(buffer);
-		return;
-	}
-
-	const auto helperStateStorageKey = getHelperStateStorageKey(opcode);
-
 	// process additional opcodes via lua script event
-	if (helperStateStorageKey) {
-		player->setStorageValue(*helperStateStorageKey,
-		                        std::optional<int64_t>{isEnabledHelperBuffer(buffer) ? 1 : 0});
-	}
 	g_game.parsePlayerExtendedOpcode(player->getID(), opcode, buffer);
 }
 

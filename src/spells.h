@@ -37,7 +37,7 @@ public:
 	InstantSpell* getInstantSpell(std::string_view words);
 	InstantSpell* getInstantSpellByName(std::string_view name);
 
-	TalkActionResult playerSaySpell(Player* player, std::string& words, bool forceCastOnFoot = false);
+	TalkActionResult playerSaySpell(Player* player, std::string& words);
 
 	static Position getCasterPosition(Creature* creature, Direction dir);
 	std::string_view getScriptBaseName() const override;
@@ -248,7 +248,7 @@ class InstantSpell final : public TalkAction, public Spell
 public:
 	explicit InstantSpell(LuaScriptInterface* interface) : TalkAction(interface) {}
 
-	virtual bool playerCastInstant(Player* player, std::string& param, bool forceCastOnFoot = false);
+	virtual bool playerCastInstant(Player* player, std::string& param);
 
 	bool castSpell(Creature* creature) override;
 	bool castSpell(Creature* creature, Creature* target) override;
