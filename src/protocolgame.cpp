@@ -19,6 +19,7 @@
 #include "outputmessage.h"
 #include "player.h"
 #include "protocolgame.h"
+#include "protocollogin.h"
 #include "imbuement.h"
 #include "familiar.h"
 #include "logger.h"
@@ -1201,6 +1202,19 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 		return;
 	}
 
+	// Brute force protection. The login server applies this limiter on its own
+	// port, but the game world validates the same account name and password
+	// independently, so without the check here an attacker can skip the login
+	// server entirely and guess credentials at connection speed.
+	//
+	// An empty account name is a cast (spectator) request, which is authenticated
+	// against the cast password rather than account credentials, so it is left out
+	// of the account limiter.
+	if (!accountName.empty() && !LoginAttemptLimiter::getInstance().allowLogin(getIP())) {
+		disconnectClient("Too many failed login attempts. Please wait 5 minutes.");
+		return;
+	}
+
 	// Authenticate and resolve account/character IDs
 	bool cast = false;
 	auto authPair = IOLoginData::gameworldAuthentication(accountName, password, characterName, cast);
@@ -1211,8 +1225,10 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	uint32_t accountId = authPair.first;
 	uint32_t characterId = authPair.second;
 
-	if (accountId == 0 || characterId == 0) {
-		// auth failed, will disconnect below
+	if (accountId == 0) {
+		LoginAttemptLimiter::getInstance().recordFailure(getIP());
+	} else {
+		LoginAttemptLimiter::getInstance().recordSuccess(getIP());
 	}
 
 	BanInfo banInfo;
