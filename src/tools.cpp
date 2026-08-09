@@ -1160,8 +1160,6 @@ itemAttrTypes stringToItemAttribute(std::string_view str)
 		return ITEM_ATTRIBUTE_FLUIDTYPE;
 	} else if (str == "doorid") {
 		return ITEM_ATTRIBUTE_DOORID;
-	} else if (str == "decayto") {
-		return ITEM_ATTRIBUTE_DECAYSTATE;
 	} else if (str == "wrapid") {
 		return ITEM_ATTRIBUTE_WRAPID;
 	} else if (str == "storeitem") {
