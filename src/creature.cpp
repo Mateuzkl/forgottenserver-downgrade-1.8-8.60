@@ -28,14 +28,23 @@ std::shared_ptr<Creature> getSharedCreature(Creature* creature)
 
 } // namespace
 
-std::unordered_set<const Creature*> Creature::liveCreatures;
-std::shared_mutex Creature::liveCreaturesMutex;
+std::unordered_set<const Creature*>& Creature::getLiveCreatures()
+{
+	static auto* liveCreatures = new std::unordered_set<const Creature*>();
+	return *liveCreatures;
+}
+
+std::shared_mutex& Creature::getLiveCreaturesMutex()
+{
+	static auto* liveCreaturesMutex = new std::shared_mutex();
+	return *liveCreaturesMutex;
+}
 
 Creature::Creature()
 {
 	{
-		std::unique_lock lock(liveCreaturesMutex);
-		liveCreatures.insert(this);
+		std::unique_lock lock(getLiveCreaturesMutex());
+		getLiveCreatures().insert(this);
 	}
 	onIdleStatus();
 }
@@ -43,8 +52,8 @@ Creature::Creature()
 Creature::~Creature()
 {
 	{
-		std::unique_lock lock(liveCreaturesMutex);
-		liveCreatures.erase(this);
+		std::unique_lock lock(getLiveCreaturesMutex());
+		getLiveCreatures().erase(this);
 	}
 
 	attackedCreature.reset();

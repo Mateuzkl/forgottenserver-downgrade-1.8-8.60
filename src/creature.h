@@ -119,8 +119,8 @@ public:
 		if (!c) {
 			return false;
 		}
-		std::shared_lock lock(liveCreaturesMutex);
-		return liveCreatures.count(c) > 0;
+		std::shared_lock lock(getLiveCreaturesMutex());
+		return getLiveCreatures().count(c) > 0;
 	}
 
 	virtual Player* getPlayer() { return nullptr; }
@@ -564,8 +564,12 @@ private:
 	StorageMap storageMap;
 	std::map<std::string, CreatureIcon> creatureIcons;
 
-	static std::unordered_set<const Creature*> liveCreatures;
-	static std::shared_mutex liveCreaturesMutex;
+	// Intentionally immortal: these outlive every Creature, including creatures
+	// still owned by globals (g_game) when static destructors run. Static
+	// destruction order across translation units is unspecified, so plain static
+	// members would be torn down before ~Creature() could deregister from them.
+	static std::unordered_set<const Creature*>& getLiveCreatures();
+	static std::shared_mutex& getLiveCreaturesMutex();
 };
 
 template <typename T>

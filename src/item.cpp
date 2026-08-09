@@ -32,9 +32,19 @@ Items Item::items;
 
 // Global observer registry used only to reject stale raw Item* callbacks after
 // the owning shared_ptr has destroyed the item. Constructors insert, the
-// destructor erases, and clearGlobalRegistry() disables checks during static
-// teardown when Item::items may already be going away.
-static std::unique_ptr<std::unordered_set<Item*>> g_validItems = std::make_unique<std::unordered_set<Item*>>();
+// destructor erases, and clearGlobalRegistry() drops all tracked entries at
+// shutdown.
+//
+// Intentionally immortal: the registry must outlive every Item, including items
+// still owned by globals (g_game) when static destructors run. A namespace-scope
+// unique_ptr is torn down before those owners, and ~unique_ptr does not null its
+// stored pointer, so an `if (g_validItems)` guard could not detect the dangling
+// state and ~Item() would erase from freed memory.
+static std::unordered_set<Item*>& getValidItems()
+{
+	static auto* validItems = new std::unordered_set<Item*>();
+	return *validItems;
+}
 
 namespace {
 	constexpr uint64_t UID_COUNTER_BITS = 21;
@@ -177,7 +187,7 @@ std::shared_ptr<Item> Item::CreateItem(PropStream& propStream)
 
 Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
 {
-	if (g_validItems) g_validItems->insert(this);
+	getValidItems().insert(this);
 	const ItemType& it = items[id];
 
 	if (it.isFluidContainer() || it.isSplash()) {
@@ -205,7 +215,7 @@ Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
 
 Item::Item(const Item& i) : Thing(), std::enable_shared_from_this<Item>(), id(i.id), count(i.count), loadedFromMap(i.loadedFromMap)
 {
-	if (g_validItems) g_validItems->insert(this);
+	getValidItems().insert(this);
 	if (i.attributes) {
 		attributes = std::make_unique<ItemAttributes>(*i.attributes);
 	}
@@ -213,17 +223,19 @@ Item::Item(const Item& i) : Thing(), std::enable_shared_from_this<Item>(), id(i.
 
 Item::~Item()
 {
-	if (g_validItems) g_validItems->erase(this);
+	getValidItems().erase(this);
 }
 
 bool isValidItemPointer(Item* item)
 {
-	return item && g_validItems && g_validItems->count(item) > 0;
+	return item && getValidItems().count(item) > 0;
 }
 
 void Item::clearGlobalRegistry()
 {
-	g_validItems.reset();
+	// Release the tracked entries without destroying the registry itself; the
+	// container must stay alive for ~Item() calls that happen after shutdown.
+	getValidItems().clear();
 }
 
 uint64_t Item::generateItemUID() noexcept
