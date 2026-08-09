@@ -300,8 +300,16 @@ IntegerVector vectorAtoi(const std::vector<std::string_view>& stringVector)
 
 std::mt19937& getRandomGenerator()
 {
-	static std::random_device rd;
-	static std::mt19937 generator(rd());
+	// thread_local, not a plain static. std::mt19937::operator() mutates the
+	// engine's internal state, so a shared instance is a data race the moment two
+	// threads draw at once - and they do. Player loading runs on a thread pool
+	// worker (ProtocolGame::connect -> IOLoginData::loadPlayerById), where
+	// Item::CreateItem reaches normal_random() through setDefaultDuration() and
+	// setID(), while the dispatcher thread is drawing from combat, monster and
+	// weapon code at the same time.
+	//
+	// Each thread now owns its stream, seeded independently on first use.
+	static thread_local std::mt19937 generator(std::random_device{}());
 	return generator;
 }
 
@@ -371,7 +379,9 @@ void replaceString(std::string& source, std::string_view search, std::string_vie
 
 int32_t uniform_random(int32_t minNumber, int32_t maxNumber)
 {
-	static std::uniform_int_distribution<int32_t> uniformRand;
+	// thread_local for the same reason as the engine: a distribution object is
+	// allowed to carry state across calls, so sharing one across threads is a race.
+	static thread_local std::uniform_int_distribution<int32_t> uniformRand;
 	if (minNumber == maxNumber) {
 		return minNumber;
 	} else if (minNumber > maxNumber) {
@@ -382,7 +392,10 @@ int32_t uniform_random(int32_t minNumber, int32_t maxNumber)
 
 int32_t normal_random(int32_t minNumber, int32_t maxNumber)
 {
-	static std::normal_distribution<float> normalRand(0.5f, 0.25f);
+	// std::normal_distribution is the clearest case: it generates values in pairs
+	// and caches the second one inside the object, so concurrent calls both race
+	// on that cache and hand back values from the wrong draw.
+	static thread_local std::normal_distribution<float> normalRand(0.5f, 0.25f);
 
 	float v;
 	do {
@@ -395,7 +408,7 @@ int32_t normal_random(int32_t minNumber, int32_t maxNumber)
 
 bool boolean_random(double probability /* = 0.5*/)
 {
-	static std::bernoulli_distribution booleanRand;
+	static thread_local std::bernoulli_distribution booleanRand;
 	return booleanRand(getRandomGenerator(), std::bernoulli_distribution::param_type(probability));
 }
 
@@ -1534,9 +1547,14 @@ SpellGroup_t stringToSpellGroup(std::string_view value)
 	return SPELLGROUP_NONE;
 }
 
-const std::vector<Direction>& getShuffleDirections()
+std::vector<Direction> getShuffleDirections()
 {
-	static std::vector<Direction> dirList{DIRECTION_NORTH, DIRECTION_WEST, DIRECTION_EAST, DIRECTION_SOUTH};
+	// Returned by value. This used to shuffle one shared static vector and hand
+	// out a const reference to it, which was both a data race across threads and,
+	// on a single thread, a buffer every caller aliased: a nested call reshuffled
+	// the same storage while an outer range-for was still walking it. Four
+	// elements make the copy free in practice.
+	std::vector<Direction> dirList{DIRECTION_NORTH, DIRECTION_WEST, DIRECTION_EAST, DIRECTION_SOUTH};
 	std::shuffle(dirList.begin(), dirList.end(), getRandomGenerator());
 	return dirList;
 }

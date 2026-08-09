@@ -119,7 +119,7 @@ int64_t OTSYS_NANOTIME();
 
 SpellGroup_t stringToSpellGroup(std::string_view value);
 
-const std::vector<Direction>& getShuffleDirections();
+std::vector<Direction> getShuffleDirections();
 
 std::string getVocationShortName(uint8_t vocationId);
 

@@ -1291,9 +1291,12 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 void ProtocolGame::onConnect()
 {
 	auto output = OutputMessagePool::getOutputMessage();
-	static std::random_device rd;
-	static std::ranlux24 generator(rd());
-	static std::uniform_int_distribution<uint16_t> randNumber(0x00, 0xFF);
+	// thread_local: onConnect() runs on the io_context threads, and the server
+	// spawns several of them for parallel I/O, so incoming connections are handled
+	// concurrently. A shared engine and distribution here were raced on every
+	// simultaneous connect, which is also how the login challenge is drawn.
+	static thread_local std::ranlux24 generator(std::random_device{}());
+	static thread_local std::uniform_int_distribution<uint16_t> randNumber(0x00, 0xFF);
 
 	// Skip checksum
 	output->skipBytes(sizeof(uint32_t));
