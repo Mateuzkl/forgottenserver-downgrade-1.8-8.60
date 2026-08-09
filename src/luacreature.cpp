@@ -858,6 +858,14 @@ int luaCreatureRemoveCondition(lua_State* L)
 
 	if (isUserdata(L, 2)) {
 		const Condition* const condition = getUserdata<Condition>(L, 2);
+		// isUserdata() only says argument 2 is some userdata, not that it is a
+		// Condition. getUserdata() type-checks and returns nullptr on a mismatch,
+		// so passing any other userdata here reached this dereference.
+		if (!condition) {
+			lua_pushnil(L);
+			return 1;
+		}
+
 		const ConditionType_t conditionType = condition->getType();
 		const ConditionId_t conditionId = condition->getId();
 		const uint32_t subId = condition->getSubId();
