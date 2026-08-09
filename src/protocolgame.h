@@ -341,7 +341,7 @@ private:
 	//cast
 	void spectatorTurn(uint8_t direction);
 	void parseSpectatorSay(NetworkMessage& msg);
-	void spectatorSay(const std::string text, uint16_t channelId);
+	void spectatorSay(std::string_view text, uint16_t channelId);
 	void sendCastChannel();
 	void syncOpenContainers();
 	void parseSwitchCast(uint8_t direction); // 0 = previous, 1 = next

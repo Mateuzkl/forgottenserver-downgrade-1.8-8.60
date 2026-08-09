@@ -5349,7 +5349,7 @@ void ProtocolGame::parseSpectatorSay(NetworkMessage& msg)
 	spectatorSay(text, channelId);
 }
 
-void ProtocolGame::spectatorSay(const std::string text, uint16_t channelId)
+void ProtocolGame::spectatorSay(std::string_view text, uint16_t channelId)
 {
 	if (channelId != CHANNEL_CAST || !player || !player->client) {
 		return;

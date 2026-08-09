@@ -58,7 +58,10 @@ bool ProtocolSpectator::isBanned(uint32_t ip) const
 
 void ProtocolSpectator::spectatorSay(ProtocolGame_ptr spectator, std::string_view text)
 {
-    if (text[0] == '/') {
+    // text is a view, so operator[] on an empty one is out of bounds rather than
+    // returning '\0' the way std::string does. A spectator can send an empty
+    // message, so the emptiness check has to come first.
+    if (!text.empty() && text[0] == '/') {
         auto sv = explodeString(text.substr(1, text.length()), " ", 1);
         // Convert string_view elements to std::string for manipulation
         std::string cmd = sv.empty() ? "" : std::string(sv[0]);
