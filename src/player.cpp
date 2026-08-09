@@ -5312,7 +5312,8 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature>& target, bool ad
 			addAttacked(targetPlayer);
 			targetPlayer->sendCreatureSkull(this);
 		} else {
-			if (!targetPlayer->hasAttacked(this)) {
+			if (!targetPlayer->hasAttacked(this) ||
+			    !ConfigManager::getBoolean(ConfigManager::PZLOCK_SKULL_ATTACKER)) {
 				if (!pzLocked && g_game.getWorldType() != WORLD_TYPE_PVP_ENFORCED) {
 					pzLocked = true;
 					sendIcons();

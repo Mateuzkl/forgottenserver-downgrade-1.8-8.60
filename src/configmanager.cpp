@@ -393,6 +393,7 @@ bool ConfigManager::load()
 	booleans[Boolean::REMOVE_WEAPON_AMMO] = getGlobalBoolean(L, "removeWeaponAmmunition", true);
 	booleans[Boolean::REMOVE_WEAPON_CHARGES] = getGlobalBoolean(L, "removeWeaponCharges", true);
 	booleans[Boolean::REMOVE_POTION_CHARGES] = getGlobalBoolean(L, "removeChargesFromPotions", true);
+	booleans[Boolean::PZLOCK_SKULL_ATTACKER] = getGlobalBoolean(L, "pzLockSkullAttacker", false);
 	booleans[Boolean::EXPERIENCE_FROM_PLAYERS] = getGlobalBoolean(L, "experienceByKillingPlayers", false);
 	booleans[Boolean::FREE_PREMIUM] = getGlobalBoolean(L, "freePremium", false);
 	booleans[Boolean::REPLACE_KICK_ON_LOGIN] = getGlobalBoolean(L, "replaceKickOnLogin", true);
