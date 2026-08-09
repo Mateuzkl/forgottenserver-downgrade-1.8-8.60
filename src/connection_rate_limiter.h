@@ -41,6 +41,9 @@ private:
 
 	void cleanup(uint64_t currentTime);
 	void refreshExpiry(uint32_t clientIp, Entry& entry);
+	// Drops the entry at the front of expiryIndex. Caller must check that the
+	// index is not empty.
+	void eraseOldestEntry();
 
 	std::unordered_map<uint32_t, Entry> entries;
 	ExpiryIndex expiryIndex;

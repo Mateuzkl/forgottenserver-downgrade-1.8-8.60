@@ -10,6 +10,12 @@ constexpr uint64_t CLEANUP_INTERVAL = 60'000;
 constexpr uint64_t ENTRY_LIFETIME = 300'000;
 constexpr uint64_t ATTEMPT_WINDOW = 5'000;
 constexpr size_t CLEANUP_BATCH_SIZE = 256;
+// Fraction of the map swept per cleanup pass once it grows past the fixed batch,
+// so the sweep rate scales with the arrival rate instead of staying flat.
+constexpr size_t CLEANUP_DIVISOR = 8;
+// Hard ceiling on tracked IPs. At roughly 150 bytes per tracked IP this caps the
+// limiter at about 10 MB, well above any legitimate concurrent-IP count.
+constexpr size_t MAX_ENTRIES = 65'536;
 
 uint64_t getBlockDuration(uint32_t totalBlocks)
 {
@@ -38,24 +44,44 @@ void ConnectionRateLimiter::refreshExpiry(uint32_t clientIp, Entry& entry)
 	entry.expiry = expiryIndex.emplace(expiresAt, clientIp);
 }
 
+void ConnectionRateLimiter::eraseOldestEntry()
+{
+	const auto expiryIt = expiryIndex.begin();
+	const auto entryIt = entries.find(expiryIt->second);
+	if (entryIt != entries.end() && entryIt->second.expiry == expiryIt) {
+		entries.erase(entryIt);
+	}
+	expiryIndex.erase(expiryIt);
+}
+
 void ConnectionRateLimiter::cleanup(uint64_t currentTime)
 {
-	if (lastCleanup != 0 && currentTime - lastCleanup < CLEANUP_INTERVAL) {
-		return;
+	if (lastCleanup == 0 || currentTime - lastCleanup >= CLEANUP_INTERVAL) {
+		lastCleanup = currentTime;
+
+		// The batch scales with the map. A flat 256 entries per minute is far
+		// below the rate at which a flood from many source addresses adds them,
+		// so the map could grow without bound in the component whose job is to
+		// protect against exactly that.
+		const size_t batch = std::max(CLEANUP_BATCH_SIZE, entries.size() / CLEANUP_DIVISOR);
+		for (size_t processed = 0; processed < batch && !expiryIndex.empty(); ++processed) {
+			if (expiryIndex.begin()->first > currentTime) {
+				break;
+			}
+			eraseOldestEntry();
+		}
 	}
-	lastCleanup = currentTime;
 
-	for (size_t processed = 0; processed < CLEANUP_BATCH_SIZE && !expiryIndex.empty(); ++processed) {
-		const auto expiryIt = expiryIndex.begin();
-		if (expiryIt->first > currentTime) {
-			break;
-		}
-
-		const auto entryIt = entries.find(expiryIt->second);
-		if (entryIt != entries.end() && entryIt->second.expiry == expiryIt) {
-			entries.erase(entryIt);
-		}
-		expiryIndex.erase(expiryIt);
+	// Hard ceiling, checked on every call rather than once per interval, so a
+	// burst cannot outrun the periodic sweep.
+	//
+	// Eviction takes from the front of expiryIndex, which is ordered by expiry
+	// time. Idle entries expire soonest and go first; a blocked IP has its expiry
+	// pushed out to blockUntil by refreshExpiry(), so it sorts to the back and is
+	// evicted last. An attacker therefore cannot flush their own block by filling
+	// the map.
+	while (entries.size() > MAX_ENTRIES && !expiryIndex.empty()) {
+		eraseOldestEntry();
 	}
 }
 
