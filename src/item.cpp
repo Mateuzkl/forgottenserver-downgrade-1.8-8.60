@@ -1720,15 +1720,16 @@ bool Item::addImbuement(std::shared_ptr<Imbuement>  imbuement, bool created)
 	const bool hasRoom = imbuementSlots > 0 && imbuementSlots > imbuements.size();
 	if (hasRoom && (!created || g_events->eventItemOnImbue(this, imbuement, created))) {
 		imbuements.push_back(imbuement);
-		for (auto imbue : imbuements) {
-			if (imbue == imbuement) {
-				Player* player = const_cast<Player*>(getHoldingPlayer());
-				if (systemEnabled && player && isEquipped() &&
-				    (imbue->imbuetype != ImbuementType::IMBUEMENT_TYPE_CAPACITY_BOOST ||
-				     player->getInventoryItem(CONST_SLOT_BACKPACK) == this)) {
-					player->addImbuementEffect(imbue);
-				}
-			}
+
+		// Apply the effect exactly once. Scanning the vector for the entry that was
+		// just pushed used to apply it once per match, so re-adding an imbuement the
+		// item already held granted the bonus several times over, while
+		// removeImbuement() only ever subtracts it once.
+		Player* player = const_cast<Player*>(getHoldingPlayer());
+		if (systemEnabled && player && isEquipped() &&
+		    (imbuement->imbuetype != ImbuementType::IMBUEMENT_TYPE_CAPACITY_BOOST ||
+		     player->getInventoryItem(CONST_SLOT_BACKPACK) == this)) {
+			player->addImbuementEffect(imbuement);
 		}
 		return true;
 	}
@@ -1745,7 +1746,7 @@ bool Item::removeImbuement(std::shared_ptr<Imbuement> imbuement, bool decayed)
 
 	auto imbue = *it;
 	Player* player = const_cast<Player*>(getHoldingPlayer());
-	if (player && isEquipped() &&
+	if (ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED) && player && isEquipped() &&
 	    (imbue->imbuetype != ImbuementType::IMBUEMENT_TYPE_CAPACITY_BOOST ||
 	     player->getInventoryItem(CONST_SLOT_BACKPACK) == this)) {
 		player->removeImbuementEffect(imbue);
