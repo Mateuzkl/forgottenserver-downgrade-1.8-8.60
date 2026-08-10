@@ -32,19 +32,37 @@ Items Item::items;
 
 // Global observer registry used only to reject stale raw Item* callbacks after
 // the owning shared_ptr has destroyed the item. Constructors insert, the
-// destructor erases, and clearGlobalRegistry() drops all tracked entries at
-// shutdown.
+// destructor erases, and clearGlobalRegistry() retires the registry at shutdown.
 //
 // Intentionally immortal: the registry must outlive every Item, including items
-// still owned by globals (g_game) when static destructors run. A namespace-scope
-// unique_ptr is torn down before those owners, and ~unique_ptr does not null its
-// stored pointer, so an `if (g_validItems)` guard could not detect the dangling
-// state and ~Item() would erase from freed memory.
-static std::unordered_set<Item*>& getValidItems()
+// still owned by globals (g_game) when static destructors run. Static
+// destruction order across translation units is unspecified, so a namespace-scope
+// object here can be destroyed before those owners are.
+//
+// That is what made the previous `if (g_validItems)` guard unfixable rather than
+// merely wrong. Once the lifetime of the namespace-scope unique_ptr had ended,
+// *reading g_validItems at all* was already undefined behaviour - the guard could
+// not detect its own object's destruction from the inside, whatever the stored
+// pointer happened to contain. Constructing on first use with a deliberate leak
+// removes the question: the object's lifetime never ends.
+//
+// `enabled` preserves the original shutdown semantics. clearGlobalRegistry() used
+// to reset() the pointer, after which nothing registered again and every pointer
+// read as invalid. Clearing an immortal container alone would not do that, since
+// any Item built afterwards would register itself anew.
+namespace {
+struct ItemRegistry
 {
-	static auto* validItems = new std::unordered_set<Item*>();
-	return *validItems;
+	std::unordered_set<Item*> items;
+	bool enabled = true;
+};
+
+ItemRegistry& getItemRegistry()
+{
+	static auto* registry = new ItemRegistry();
+	return *registry;
 }
+} // namespace
 
 namespace {
 	constexpr uint64_t UID_COUNTER_BITS = 21;
@@ -187,7 +205,9 @@ std::shared_ptr<Item> Item::CreateItem(PropStream& propStream)
 
 Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
 {
-	getValidItems().insert(this);
+	if (auto& registry = getItemRegistry(); registry.enabled) {
+		registry.items.insert(this);
+	}
 	const ItemType& it = items[id];
 
 	if (it.isFluidContainer() || it.isSplash()) {
@@ -215,7 +235,9 @@ Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
 
 Item::Item(const Item& i) : Thing(), std::enable_shared_from_this<Item>(), id(i.id), count(i.count), loadedFromMap(i.loadedFromMap)
 {
-	getValidItems().insert(this);
+	if (auto& registry = getItemRegistry(); registry.enabled) {
+		registry.items.insert(this);
+	}
 	if (i.attributes) {
 		attributes = std::make_unique<ItemAttributes>(*i.attributes);
 	}
@@ -223,19 +245,26 @@ Item::Item(const Item& i) : Thing(), std::enable_shared_from_this<Item>(), id(i.
 
 Item::~Item()
 {
-	getValidItems().erase(this);
+	if (auto& registry = getItemRegistry(); registry.enabled) {
+		registry.items.erase(this);
+	}
 }
 
 bool isValidItemPointer(Item* item)
 {
-	return item && getValidItems().count(item) > 0;
+	const auto& registry = getItemRegistry();
+	return item && registry.enabled && registry.items.count(item) > 0;
 }
 
 void Item::clearGlobalRegistry()
 {
-	// Release the tracked entries without destroying the registry itself; the
-	// container must stay alive for ~Item() calls that happen after shutdown.
-	getValidItems().clear();
+	// Drop the tracked entries and retire the registry, matching what the old
+	// g_validItems.reset() did: nothing registers again and every pointer reads as
+	// invalid from here on. The container itself stays alive, so ~Item() calls that
+	// happen after shutdown are still safe.
+	auto& registry = getItemRegistry();
+	registry.items.clear();
+	registry.enabled = false;
 }
 
 uint64_t Item::generateItemUID() noexcept
