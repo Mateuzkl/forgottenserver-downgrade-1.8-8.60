@@ -7,6 +7,7 @@
 #include "item.h"
 #include "items.h"
 #include "luascript.h"
+#include "protocolgame.h"
 #include "tools.h"
 
 namespace {
@@ -457,7 +458,10 @@ int luaItemTypeSetBuyPrice(lua_State* L)
 		const uint32_t safePrice = price > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())
 		                         ? std::numeric_limits<uint32_t>::max()
 		                         : static_cast<uint32_t>(price);
-		mutableItemType.buyPrice = std::max(mutableItemType.buyPrice, safePrice);
+		if (safePrice > mutableItemType.buyPrice) {
+			mutableItemType.buyPrice = safePrice;
+			ProtocolGame::invalidateItemValuesCache();
+		}
 	}
 	pushBoolean(L, true);
 	return 1;
@@ -478,7 +482,10 @@ int luaItemTypeSetSellPrice(lua_State* L)
 		const uint32_t safePrice = price > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())
 		                         ? std::numeric_limits<uint32_t>::max()
 		                         : static_cast<uint32_t>(price);
-		mutableItemType.sellPrice = std::max(mutableItemType.sellPrice, safePrice);
+		if (safePrice > mutableItemType.sellPrice) {
+			mutableItemType.sellPrice = safePrice;
+			ProtocolGame::invalidateItemValuesCache();
+		}
 	}
 	pushBoolean(L, true);
 	return 1;

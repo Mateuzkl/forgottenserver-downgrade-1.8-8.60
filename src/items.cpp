@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "items.h"
+#include "protocolgame.h"
 
 #include "movement.h"
 #include "pugicast.h"
@@ -494,6 +495,7 @@ void Items::clear()
 
 bool Items::reload()
 {
+	ProtocolGame::invalidateItemValuesCache();
 	clear();
 	loadFromOtb("data/items/items.otb");
 
@@ -506,6 +508,7 @@ bool Items::reload()
 
 	g_scripts->loadScripts("items", false, true);
 	g_weapons->loadDefaults();
+	ProtocolGame::rebuildItemValuesCache();
 	return true;
 }
 

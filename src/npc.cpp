@@ -8,6 +8,7 @@
 #include "configmanager.h"
 #include "game.h"
 #include "logger.h"
+#include "protocolgame.h"
 #include "pugicast.h"
 #include "startup_progress.h"
 
@@ -33,11 +34,23 @@ namespace {
 void registerItemShopPrice(const ShopInfo& item)
 {
 	ItemType& itemType = Item::items.getItemType(item.itemId);
+	bool changed = false;
 	if (item.buyPrice > 0) {
-		itemType.buyPrice = std::max(itemType.buyPrice, static_cast<uint32_t>(item.buyPrice));
+		const auto buyPrice = static_cast<uint32_t>(item.buyPrice);
+		if (buyPrice > itemType.buyPrice) {
+			itemType.buyPrice = buyPrice;
+			changed = true;
+		}
 	}
 	if (item.sellPrice > 0) {
-		itemType.sellPrice = std::max(itemType.sellPrice, static_cast<uint32_t>(item.sellPrice));
+		const auto sellPrice = static_cast<uint32_t>(item.sellPrice);
+		if (sellPrice > itemType.sellPrice) {
+			itemType.sellPrice = sellPrice;
+			changed = true;
+		}
+	}
+	if (changed) {
+		ProtocolGame::invalidateItemValuesCache();
 	}
 }
 } // namespace
@@ -335,6 +348,8 @@ void reload()
 			npcRef->reload();
 		}
 	}
+
+	ProtocolGame::rebuildItemValuesCache();
 }
 
 void addNpcType(const std::string& name, const std::shared_ptr<NpcType>& npcType)

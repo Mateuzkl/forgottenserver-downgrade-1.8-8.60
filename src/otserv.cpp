@@ -15,6 +15,7 @@
 #include "logger.h"
 #include "mapcache.h"
 #include "outputmessage.h"
+#include "protocolgame.h"
 #include "protocollogin.h"
 #include "protocoladmin.h"
 #include "protocolstatus.h"
@@ -647,6 +648,7 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 	LOG_INFO(">> Initializing gamestate");
 	startupProgress().begin(StartupStage::GAME_INITIALIZATION, "groups and chat");
 	g_game.setGameState(GAME_STATE_INIT);
+	ProtocolGame::rebuildItemValuesCache();
 	startupProgress().complete("game state initialized");
 	g_logger().info(">> Map-to-GAME_STATE_INIT total: {:.3f} s.",
 	                std::chrono::duration<double>(std::chrono::steady_clock::now() - mapStartupStart).count());
