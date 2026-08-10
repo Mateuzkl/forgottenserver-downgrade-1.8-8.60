@@ -28,6 +28,10 @@ public:
 	// dimension" - the caller is doing something that is not an account login, such
 	// as a cast list request - and only the per-IP guard applies.
 	[[nodiscard]] bool allowLogin(uint32_t ip, std::string_view accountName);
+	[[nodiscard]] bool reserveLogin(uint32_t ip, std::string_view accountName);
+	void commitFailure(uint32_t ip, std::string_view accountName);
+	void commitSuccess(uint32_t ip, std::string_view accountName);
+	void releaseReservation(uint32_t ip, std::string_view accountName);
 	void recordFailure(uint32_t ip, std::string_view accountName);
 	void recordSuccess(uint32_t ip, std::string_view accountName);
 
@@ -38,6 +42,7 @@ private:
 	struct AttemptInfo
 	{
 		uint32_t failures = 0;
+		uint32_t pending = 0;
 		int64_t blockUntil = 0; // OTSYS_TIME value
 		int64_t firstAttempt = 0;
 	};
@@ -61,8 +66,12 @@ private:
 
 	// Returns true if this entry is currently blocking, updating expiry state.
 	static bool isBlocked(AttemptInfo& info, int64_t now);
+	static bool hasCapacity(AttemptInfo& info, int64_t now, uint32_t threshold);
 	static void registerFailure(AttemptInfo& info, int64_t now, uint32_t threshold, int64_t blockDurationMs,
 	                            int64_t& blockedAt);
+	void releaseReservationLocked(uint32_t ip, const std::string& account);
+	void recordFailureLocked(uint32_t ip, const std::string& account, int64_t now);
+	void recordSuccessLocked(uint32_t ip, const std::string& account);
 
 	// Thresholds are read from config so server owners can tune them; see
 	// bruteForce* in config.lua.dist.
@@ -110,8 +119,9 @@ public:
 private:
 	void disconnectClient(std::string_view message);
 
-	void getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient);
-	void getCastList(const std::string& password);
+	void getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient,
+	                      uint32_t clientIP);
+	void getCastList(const std::string& password, uint32_t clientIP);
 	void getAstraCastList();
 
 	bool isAstraClient_ = false;

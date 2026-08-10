@@ -70,7 +70,7 @@ public:
 	~ProtocolGame() override;
 
 	void login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem);
-	void spectate(const std::string& name, const std::string& password);
+	void spectate(const std::string& name, const std::string& password, uint32_t clientIP);
 	static void recordRejectedCastPassword(uint32_t ip);
 	void logout(bool displayEffect, bool forced);
 

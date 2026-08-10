@@ -908,10 +908,11 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	g_game.releaseLogin(reservedGuid);
 }
 
-void ProtocolGame::spectate(const std::string& name, const std::string& password)
+void ProtocolGame::spectate(const std::string& name, const std::string& password, uint32_t clientIP)
 {
 	//dispatcher thread
 	if (isConnectionExpired()) {
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, "");
 		return;
 	}
 
@@ -928,6 +929,7 @@ void ProtocolGame::spectate(const std::string& name, const std::string& password
 	auto foundPlayer = g_game.getPlayerByName(name);
 	auto castClient = foundPlayer ? foundPlayer->client : nullptr;
 	if (!foundPlayer || !castClient || !castClient->isBroadcasting()) {
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, "");
 		disconnectClient("That cast is not available anymore.");
 		return;
 	}
@@ -937,15 +939,17 @@ void ProtocolGame::spectate(const std::string& name, const std::string& password
 		// count. It is recorded with an empty account name, which registers against
 		// the per-IP spray guard only - a cast has no account dimension, and keying
 		// it by the streamer's name would let anyone lock a streamer's viewers out.
-		recordRejectedCastPassword(getIP());
+		recordRejectedCastPassword(clientIP);
 		disconnectClient("Wrong password for that cast.");
 		return;
 	}
 
 	if (castClient->isBanned(getIP())) {
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, "");
 		disconnectClient("You are banned on this cast.");
 		return;
 	}
+	LoginAttemptLimiter::getInstance().commitSuccess(clientIP, "");
 
 	player = foundPlayer;
 	isSpectator = true;
@@ -969,7 +973,7 @@ void ProtocolGame::spectate(const std::string& name, const std::string& password
 
 void ProtocolGame::recordRejectedCastPassword(uint32_t ip)
 {
-	LoginAttemptLimiter::getInstance().recordFailure(ip, "");
+	LoginAttemptLimiter::getInstance().commitFailure(ip, "");
 }
 
 void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
@@ -1221,7 +1225,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	// (spectator) request carries no account name and is authenticated against the
 	// cast password instead, so it only meets the per-IP spray guard - watching a
 	// stream keeps working while one account on the same address is locked out.
-	if (!LoginAttemptLimiter::getInstance().allowLogin(getIP(), accountName)) {
+	const uint32_t clientIP = getIP();
+	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, accountName)) {
 		disconnectClient("Too many failed login attempts. Please try again later.");
 		return;
 	}
@@ -1229,17 +1234,19 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	// Authenticate and resolve account/character IDs
 	const auto authentication = IOLoginData::gameworldAuthentication(accountName, password, characterName);
 	if (authentication.cast) {
-		g_dispatcher.addTask([thisPtr = getThis(), name = std::string(characterName), pass = std::string(password)]() { thisPtr->spectate(name, pass); });
+		g_dispatcher.addTask([thisPtr = getThis(), name = std::string(characterName), pass = std::string(password),
+		                      clientIP]() { thisPtr->spectate(name, pass, clientIP); });
 		return;
 	}
 	const uint32_t accountId = authentication.accountId;
 	const uint32_t characterId = authentication.characterId;
 
 	if (authentication.status == IOLoginData::AuthenticationResult::Rejected) {
-		LoginAttemptLimiter::getInstance().recordFailure(getIP(), accountName);
+		LoginAttemptLimiter::getInstance().commitFailure(clientIP, accountName);
 	} else if (authentication.status == IOLoginData::AuthenticationResult::Success) {
-		LoginAttemptLimiter::getInstance().recordSuccess(getIP(), accountName);
+		LoginAttemptLimiter::getInstance().commitSuccess(clientIP, accountName);
 	} else {
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
 		disconnectClient("The login service is temporarily unavailable. Please try again later.");
 		return;
 	}

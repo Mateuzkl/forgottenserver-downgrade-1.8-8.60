@@ -181,7 +181,7 @@ void LoginAttemptLimiter::cleanup(int64_t now)
 
 	const auto expired = [now](const auto& pair) {
 		const AttemptInfo& info = pair.second;
-		return info.blockUntil <= now && now - info.firstAttempt > WINDOW_MS;
+		return info.pending == 0 && info.blockUntil <= now && now - info.firstAttempt > WINDOW_MS;
 	};
 
 	std::erase_if(accountAttempts, expired);
@@ -196,9 +196,16 @@ bool LoginAttemptLimiter::isBlocked(AttemptInfo& info, int64_t now)
 
 	// Block expired, or the counting window elapsed: start counting again.
 	if (info.blockUntil != 0 || now - info.firstAttempt > WINDOW_MS) {
+		const uint32_t pending = info.pending;
 		info = AttemptInfo{};
+		info.pending = pending;
 	}
 	return false;
+}
+
+bool LoginAttemptLimiter::hasCapacity(AttemptInfo& info, int64_t now, uint32_t threshold)
+{
+	return !isBlocked(info, now) && info.failures + info.pending < threshold;
 }
 
 void LoginAttemptLimiter::registerFailure(AttemptInfo& info, int64_t now, uint32_t threshold,
@@ -224,7 +231,8 @@ bool LoginAttemptLimiter::allowLogin(uint32_t ip, std::string_view accountName)
 	const int64_t now = OTSYS_TIME();
 	cleanup(now);
 
-	if (auto ipIt = ipAttempts.find(ip); ipIt != ipAttempts.end() && isBlocked(ipIt->second, now)) {
+	if (auto ipIt = ipAttempts.find(ip);
+	    ipIt != ipAttempts.end() && !hasCapacity(ipIt->second, now, ipFailureThreshold())) {
 		return false;
 	}
 
@@ -236,15 +244,52 @@ bool LoginAttemptLimiter::allowLogin(uint32_t ip, std::string_view accountName)
 	}
 
 	auto it = accountAttempts.find(AccountKey{ip, account});
-	return it == accountAttempts.end() || !isBlocked(it->second, now);
+	return it == accountAttempts.end() || hasCapacity(it->second, now, accountFailureThreshold());
 }
 
-void LoginAttemptLimiter::recordFailure(uint32_t ip, std::string_view accountName)
+bool LoginAttemptLimiter::reserveLogin(uint32_t ip, std::string_view accountName)
 {
 	std::scoped_lock lock(mu);
 	const int64_t now = OTSYS_TIME();
 	cleanup(now);
 
+	AttemptInfo& ipInfo = ipAttempts[ip];
+	if (!hasCapacity(ipInfo, now, ipFailureThreshold())) {
+		return false;
+	}
+
+	const std::string account = normalizeAccountName(accountName);
+	AttemptInfo* accountInfo = nullptr;
+	if (!account.empty()) {
+		accountInfo = &accountAttempts[AccountKey{ip, account}];
+		if (!hasCapacity(*accountInfo, now, accountFailureThreshold())) {
+			return false;
+		}
+	}
+
+	++ipInfo.pending;
+	if (accountInfo) {
+		++accountInfo->pending;
+	}
+	return true;
+}
+
+void LoginAttemptLimiter::releaseReservationLocked(uint32_t ip, const std::string& account)
+{
+	if (auto ipIt = ipAttempts.find(ip); ipIt != ipAttempts.end() && ipIt->second.pending > 0) {
+		--ipIt->second.pending;
+	}
+
+	if (!account.empty()) {
+		auto accountIt = accountAttempts.find(AccountKey{ip, account});
+		if (accountIt != accountAttempts.end() && accountIt->second.pending > 0) {
+			--accountIt->second.pending;
+		}
+	}
+}
+
+void LoginAttemptLimiter::recordFailureLocked(uint32_t ip, const std::string& account, int64_t now)
+{
 	const int64_t blockDuration = blockDurationMs();
 
 	int64_t blockedAfter = 0;
@@ -255,7 +300,6 @@ void LoginAttemptLimiter::recordFailure(uint32_t ip, std::string_view accountNam
 		                     convertIPToString(ip), blockDuration / 1000, blockedAfter));
 	}
 
-	const std::string account = normalizeAccountName(accountName);
 	if (account.empty()) {
 		return;
 	}
@@ -270,19 +314,72 @@ void LoginAttemptLimiter::recordFailure(uint32_t ip, std::string_view accountNam
 	}
 }
 
-void LoginAttemptLimiter::recordSuccess(uint32_t ip, std::string_view accountName)
+void LoginAttemptLimiter::recordSuccessLocked(uint32_t ip, const std::string& account)
 {
 	// Deliberately clears only this account's history. Erasing everything for the
 	// IP let anyone holding one valid account reset the counter at will: guess four
 	// times against a victim, log into your own account, repeat forever. The per-IP
 	// spray counter is likewise left alone and expires on its own window.
-	const std::string account = normalizeAccountName(accountName);
 	if (account.empty()) {
 		return;
 	}
 
+	auto it = accountAttempts.find(AccountKey{ip, account});
+	if (it == accountAttempts.end()) {
+		return;
+	}
+
+	const uint32_t pending = it->second.pending;
+	if (pending == 0) {
+		accountAttempts.erase(it);
+	} else {
+		it->second = AttemptInfo{};
+		it->second.pending = pending;
+	}
+}
+
+void LoginAttemptLimiter::commitFailure(uint32_t ip, std::string_view accountName)
+{
+	const std::string account = normalizeAccountName(accountName);
 	std::scoped_lock lock(mu);
-	accountAttempts.erase(AccountKey{ip, account});
+	const int64_t now = OTSYS_TIME();
+	cleanup(now);
+	releaseReservationLocked(ip, account);
+	recordFailureLocked(ip, account, now);
+}
+
+void LoginAttemptLimiter::commitSuccess(uint32_t ip, std::string_view accountName)
+{
+	const std::string account = normalizeAccountName(accountName);
+	std::scoped_lock lock(mu);
+	cleanup(OTSYS_TIME());
+	releaseReservationLocked(ip, account);
+	recordSuccessLocked(ip, account);
+}
+
+void LoginAttemptLimiter::releaseReservation(uint32_t ip, std::string_view accountName)
+{
+	const std::string account = normalizeAccountName(accountName);
+	std::scoped_lock lock(mu);
+	cleanup(OTSYS_TIME());
+	releaseReservationLocked(ip, account);
+}
+
+void LoginAttemptLimiter::recordFailure(uint32_t ip, std::string_view accountName)
+{
+	const std::string account = normalizeAccountName(accountName);
+	std::scoped_lock lock(mu);
+	const int64_t now = OTSYS_TIME();
+	cleanup(now);
+	recordFailureLocked(ip, account, now);
+}
+
+void LoginAttemptLimiter::recordSuccess(uint32_t ip, std::string_view accountName)
+{
+	const std::string account = normalizeAccountName(accountName);
+	std::scoped_lock lock(mu);
+	cleanup(OTSYS_TIME());
+	recordSuccessLocked(ip, account);
 }
 
 void ProtocolLogin::disconnectClient(std::string_view message)
@@ -294,24 +391,23 @@ void ProtocolLogin::disconnectClient(std::string_view message)
 	disconnect();
 }
 
-void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient)
+void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient,
+                                     uint32_t clientIP)
 {
-	auto connection = getConnection();
-	uint32_t clientIP = connection ? connection->getIP() : 0;
-
 	Account account;
 	const auto authentication = IOLoginData::loginserverAuthentication(accountName, password, account);
 	if (authentication == IOLoginData::AuthenticationResult::Rejected) {
-		LoginAttemptLimiter::getInstance().recordFailure(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().commitFailure(clientIP, accountName);
 		disconnectClient("Account name or password is not correct.");
 		return;
 	}
 	if (authentication == IOLoginData::AuthenticationResult::DatabaseError) {
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
 		disconnectClient("The login service is temporarily unavailable. Please try again later.");
 		return;
 	}
 
-	LoginAttemptLimiter::getInstance().recordSuccess(clientIP, accountName);
+	LoginAttemptLimiter::getInstance().commitSuccess(clientIP, accountName);
 
 	auto output = OutputMessagePool::getOutputMessage();
 
@@ -429,7 +525,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	disconnect();
 }
 
-void ProtocolLogin::getCastList(const std::string& password)
+void ProtocolLogin::getCastList(const std::string& password, uint32_t clientIP)
 {
 	auto casts = IOLoginData::getCastList(password);
 	if (casts.empty()) {
@@ -438,11 +534,14 @@ void ProtocolLogin::getCastList(const std::string& password)
 		// empty password is the ordinary "list the public casts" request and an empty
 		// result there only means nobody is streaming, so it is not recorded.
 		if (!password.empty()) {
-			recordRejectedCastPassword(getIP());
+			recordRejectedCastPassword(clientIP);
+		} else {
+			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, "");
 		}
 		disconnectClient("There are no casts available at this time.");
 		return;
 	}
+	LoginAttemptLimiter::getInstance().commitSuccess(clientIP, "");
 
 	auto output = OutputMessagePool::getOutputMessage();
 
@@ -478,7 +577,7 @@ void ProtocolLogin::getCastList(const std::string& password)
 
 void ProtocolLogin::recordRejectedCastPassword(uint32_t ip)
 {
-	LoginAttemptLimiter::getInstance().recordFailure(ip, "");
+	LoginAttemptLimiter::getInstance().commitFailure(ip, "");
 }
 
 void ProtocolLogin::getAstraCastList()
@@ -645,7 +744,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// watching a stream still works while one account on the same address is
 	// locked out.
 	uint32_t clientIP = connection ? connection->getIP() : 0;
-	if (!LoginAttemptLimiter::getInstance().allowLogin(clientIP, accountName)) {
+	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, accountName)) {
 		disconnectClient("Too many failed login attempts. Please try again later.");
 		return;
 	}
@@ -655,11 +754,12 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	                      password = std::string{password},
 	                      astraCastListRequest = isAstraCastListRequest]() {
 		if (astraCastListRequest) {
+			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
 			thisPtr->getAstraCastList();
 		} else if (accountName.empty()) {
-			thisPtr->getCastList(password);
+			thisPtr->getCastList(password, clientIP);
 		} else {
-			thisPtr->getCharacterList(accountName, password, thisPtr->isAstraClient_);
+			thisPtr->getCharacterList(accountName, password, thisPtr->isAstraClient_, clientIP);
 		}
 	});
 }

@@ -17,6 +17,7 @@ constexpr uint32_t IP_SPRAY = 0x0A000004;
 constexpr uint32_t IP_CAST = 0x0A000005;
 constexpr uint32_t IP_CASE = 0x0A000006;
 constexpr uint32_t IP_CAST_GUESS = 0x0A000007;
+constexpr uint32_t IP_PENDING = 0x0A000008;
 
 } // namespace
 
@@ -119,17 +120,38 @@ TEST_CASE(bruteforce_cast_password_failures_feed_the_ip_guard)
 	// The production methods are seams used by ProtocolGame::spectate() and the
 	// login-server cast-list path after each one rejects a cast password.
 	for (uint32_t i = 0; i < 10; ++i) {
+		CHECK(limiter().reserveLogin(IP_CAST_GUESS, ""));
 		ProtocolGame::recordRejectedCastPassword(IP_CAST_GUESS);
 	}
 	CHECK(limiter().allowLogin(IP_CAST_GUESS, ""));
 
 	for (uint32_t i = 0; i < 10; ++i) {
+		CHECK(limiter().reserveLogin(IP_CAST_GUESS, ""));
 		ProtocolLogin::recordRejectedCastPassword(IP_CAST_GUESS);
 	}
 
 	// The address is now refused even for a request carrying no account name.
 	CHECK(!limiter().allowLogin(IP_CAST_GUESS, ""));
 	CHECK(!limiter().allowLogin(IP_CAST_GUESS, "any-account"));
+}
+
+TEST_CASE(bruteforce_pending_attempts_reserve_capacity)
+{
+	for (uint32_t i = 0; i < 5; ++i) {
+		CHECK(limiter().reserveLogin(IP_PENDING, "target"));
+	}
+	CHECK(!limiter().reserveLogin(IP_PENDING, "target"));
+
+	limiter().releaseReservation(IP_PENDING, "target");
+	CHECK(limiter().reserveLogin(IP_PENDING, "target"));
+	limiter().commitSuccess(IP_PENDING, "target");
+	CHECK(limiter().reserveLogin(IP_PENDING, "target"));
+	CHECK(!limiter().reserveLogin(IP_PENDING, "target"));
+
+	for (uint32_t i = 0; i < 5; ++i) {
+		limiter().commitFailure(IP_PENDING, "target");
+	}
+	CHECK(!limiter().allowLogin(IP_PENDING, "target"));
 }
 
 TFS_TEST_MAIN()
