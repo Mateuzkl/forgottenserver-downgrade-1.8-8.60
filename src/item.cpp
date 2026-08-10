@@ -1717,6 +1717,16 @@ bool Item::addImbuement(std::shared_ptr<Imbuement>  imbuement, bool created)
 		return false;
 	}
 
+	// Refuse an imbuement this item already holds. Adding the same
+	// shared_ptr<Imbuement> twice applied the effect twice, but removeImbuement()
+	// subtracts it once while erasing every matching entry - so a single removal
+	// emptied the vector and still left a bonus applied, with nothing left to
+	// account for it. Keeping entries unique is what makes add and remove
+	// symmetric; see test_imbuement_lifecycle.
+	if (std::find(imbuements.begin(), imbuements.end(), imbuement) != imbuements.end()) {
+		return false;
+	}
+
 	const bool hasRoom = imbuementSlots > 0 && imbuementSlots > imbuements.size();
 	if (hasRoom && (!created || g_events->eventItemOnImbue(this, imbuement, created))) {
 		imbuements.push_back(imbuement);
@@ -1752,6 +1762,12 @@ bool Item::removeImbuement(std::shared_ptr<Imbuement> imbuement, bool decayed)
 		player->removeImbuementEffect(imbue);
 	}
 	g_events->eventItemOnRemoveImbue(this, imbuement->imbuetype, decayed);
+
+	// Deliberately re-scans instead of erasing the iterator found above.
+	// eventItemOnRemoveImbue() hands the item to a Lua script, which can call
+	// addImbuement()/removeImbuement() and reallocate this vector, so `it` may be
+	// dangling by the time we get here. addImbuement() rejects duplicates, so this
+	// erases exactly one entry - matching the single removeImbuementEffect() above.
 	imbuements.erase(std::remove(imbuements.begin(), imbuements.end(), imbue), imbuements.end());
 	return true;
 }
