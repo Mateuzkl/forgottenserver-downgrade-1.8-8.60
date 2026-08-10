@@ -33,6 +33,7 @@
 #include <atomic>
 #include <limits>
 #include <map>
+#include <mutex>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -95,6 +96,7 @@ struct ItemValuesCache {
 };
 
 ItemValuesCache itemValuesCache;
+std::mutex itemValuesCacheMutex;
 
 std::string anonymizeIPv4ForFile(uint32_t ip)
 {
@@ -2903,17 +2905,28 @@ void ProtocolGame::sendItemValues()
 		return;
 	}
 
-	if (!itemValuesCache.valid) {
+	std::vector<NetworkMessage> packets;
+	for (;;) {
+		{
+			std::lock_guard<std::mutex> lock(itemValuesCacheMutex);
+			if (itemValuesCache.valid) {
+				packets = itemValuesCache.packets;
+				break;
+			}
+		}
+
 		rebuildItemValuesCache();
 	}
 
-	for (const auto& packet : itemValuesCache.packets) {
+	for (const auto& packet : packets) {
 		writeToOutputBuffer(packet);
 	}
 }
 
 void ProtocolGame::rebuildItemValuesCache()
 {
+	std::lock_guard<std::mutex> lock(itemValuesCacheMutex);
+
 	std::vector<std::pair<uint16_t, uint32_t>> entries;
 	entries.reserve(Item::items.size());
 	for (size_t id = 0, size = Item::items.size(); id < size; ++id) {
@@ -2946,6 +2959,7 @@ void ProtocolGame::rebuildItemValuesCache()
 
 void ProtocolGame::invalidateItemValuesCache()
 {
+	std::lock_guard<std::mutex> lock(itemValuesCacheMutex);
 	itemValuesCache.valid = false;
 }
 
