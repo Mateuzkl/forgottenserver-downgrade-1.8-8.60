@@ -48,27 +48,40 @@ private:
 	{
 		size_t operator()(const AccountKey& key) const noexcept
 		{
-			return std::hash<uint32_t>{}(key.first) ^ (std::hash<std::string>{}(key.second) << 1);
+			// A plain xor with a shifted second hash discards a high bit and leaves
+			// the two inputs barely mixed. This is the usual combine step: folding
+			// the seed back in through the golden-ratio constant and two shifts
+			// scatters bits, so keys differing only in the account name do not
+			// cluster into the same buckets.
+			size_t seed = std::hash<uint32_t>{}(key.first);
+			seed ^= std::hash<std::string>{}(key.second) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+			return seed;
 		}
 	};
 
 	// Returns true if this entry is currently blocking, updating expiry state.
 	static bool isBlocked(AttemptInfo& info, int64_t now);
-	static void registerFailure(AttemptInfo& info, int64_t now, uint32_t threshold, int64_t& blockedAt);
+	static void registerFailure(AttemptInfo& info, int64_t now, uint32_t threshold, int64_t blockDurationMs,
+	                            int64_t& blockedAt);
+
+	// Thresholds are read from config so server owners can tune them; see
+	// bruteForce* in config.lua.dist.
+	static uint32_t accountFailureThreshold();
+	static uint32_t ipFailureThreshold();
+	static int64_t blockDurationMs();
 
 	std::unordered_map<AccountKey, AttemptInfo, AccountKeyHash> accountAttempts;
 	std::unordered_map<uint32_t, AttemptInfo> ipAttempts;
 	std::mutex mu;
 	int64_t lastCleanup = 0;
 
-	// Per (IP, account): a targeted guess against one account.
-	static constexpr uint32_t MAX_FAILURES = 5;
-	// Per IP across all accounts: catches spraying, where no single account reaches
-	// MAX_FAILURES. Deliberately well above what a person mistyping their own
-	// password reaches, so shared addresses (NAT, internet cafes) are not punished.
-	static constexpr uint32_t MAX_IP_FAILURES = 20;
-	static constexpr int64_t WINDOW_MS = 60000;      // 60 seconds
-	static constexpr int64_t BLOCK_TIME_MS = 300000; // 5 minutes
+	static constexpr int64_t WINDOW_MS = 60000; // 60 seconds
+
+	// Used when the config has not been loaded (unit tests) or holds a nonsensical
+	// value. Falling back beats honouring a 0, which would block on first failure.
+	static constexpr uint32_t DEFAULT_ACCOUNT_FAILURES = 5;
+	static constexpr uint32_t DEFAULT_IP_FAILURES = 20;
+	static constexpr int64_t DEFAULT_BLOCK_SECONDS = 300;
 };
 
 class ProtocolLogin : public Protocol

@@ -933,6 +933,11 @@ void ProtocolGame::spectate(const std::string& name, const std::string& password
 	}
 
 	if (!castClient->password().empty() && asLowerCaseString(castClient->password()) != asLowerCaseString(password)) {
+		// A cast password is a credential like any other, so a rejected guess has to
+		// count. It is recorded with an empty account name, which registers against
+		// the per-IP spray guard only - a cast has no account dimension, and keying
+		// it by the streamer's name would let anyone lock a streamer's viewers out.
+		LoginAttemptLimiter::getInstance().recordFailure(getIP(), "");
 		disconnectClient("Wrong password for that cast.");
 		return;
 	}

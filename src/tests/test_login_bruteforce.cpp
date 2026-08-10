@@ -15,6 +15,7 @@ constexpr uint32_t IP_PER_ACCOUNT = 0x0A000003;
 constexpr uint32_t IP_SPRAY = 0x0A000004;
 constexpr uint32_t IP_CAST = 0x0A000005;
 constexpr uint32_t IP_CASE = 0x0A000006;
+constexpr uint32_t IP_CAST_GUESS = 0x0A000007;
 
 } // namespace
 
@@ -61,8 +62,16 @@ TEST_CASE(bruteforce_lockout_does_not_spill_onto_other_accounts)
 	CHECK(limiter().allowLogin(IP_PER_ACCOUNT, "someone-else"));
 }
 
-// Spraying spreads guesses thin enough that no single account reaches
-// MAX_FAILURES, which is what the per-IP counter is there to catch.
+// Spraying spreads guesses thin enough that no single account reaches the
+// per-account threshold, which is what the per-IP counter is there to catch.
+//
+// Note the tradeoff this encodes deliberately: once the IP threshold is reached,
+// even an account that was never touched is refused from that address. That is
+// the point - a sprayer must not get a fresh start by picking a new name - but it
+// does mean a shared address (NAT, an internet cafe, a school) can be locked out
+// by one abusive user behind it. The threshold is set well above what ordinary
+// mistyping produces, and is configurable via bruteForceIpFailures, so operators
+// who serve large NATs can raise it.
 TEST_CASE(bruteforce_spraying_many_accounts_trips_the_ip_guard)
 {
 	for (int i = 0; i < 20; ++i) {
@@ -97,6 +106,20 @@ TEST_CASE(bruteforce_account_names_are_normalized)
 
 	CHECK(!limiter().allowLogin(IP_CASE, "mixed"));
 	CHECK(!limiter().allowLogin(IP_CASE, "  MIXED  "));
+}
+
+// A rejected cast password is recorded with an empty account name, so it feeds
+// the per-IP guard without being attributable to any account. Both cast paths -
+// the game world spectate() and the login server's cast list - do this.
+TEST_CASE(bruteforce_cast_password_failures_feed_the_ip_guard)
+{
+	for (uint32_t i = 0; i < 20; ++i) {
+		limiter().recordFailure(IP_CAST_GUESS, "");
+	}
+
+	// The address is now refused even for a request carrying no account name.
+	CHECK(!limiter().allowLogin(IP_CAST_GUESS, ""));
+	CHECK(!limiter().allowLogin(IP_CAST_GUESS, "any-account"));
 }
 
 TFS_TEST_MAIN()

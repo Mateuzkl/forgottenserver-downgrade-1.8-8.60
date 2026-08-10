@@ -154,6 +154,24 @@ std::string normalizeAccountName(std::string_view accountName)
 
 } // namespace
 
+uint32_t LoginAttemptLimiter::accountFailureThreshold()
+{
+	const int64_t configured = ConfigManager::getInteger(ConfigManager::BRUTEFORCE_ACCOUNT_FAILURES);
+	return configured > 0 ? static_cast<uint32_t>(configured) : DEFAULT_ACCOUNT_FAILURES;
+}
+
+uint32_t LoginAttemptLimiter::ipFailureThreshold()
+{
+	const int64_t configured = ConfigManager::getInteger(ConfigManager::BRUTEFORCE_IP_FAILURES);
+	return configured > 0 ? static_cast<uint32_t>(configured) : DEFAULT_IP_FAILURES;
+}
+
+int64_t LoginAttemptLimiter::blockDurationMs()
+{
+	const int64_t configured = ConfigManager::getInteger(ConfigManager::BRUTEFORCE_BLOCK_SECONDS);
+	return (configured > 0 ? configured : DEFAULT_BLOCK_SECONDS) * 1000;
+}
+
 void LoginAttemptLimiter::cleanup(int64_t now)
 {
 	if (lastCleanup != 0 && now - lastCleanup < WINDOW_MS) {
@@ -183,7 +201,8 @@ bool LoginAttemptLimiter::isBlocked(AttemptInfo& info, int64_t now)
 	return false;
 }
 
-void LoginAttemptLimiter::registerFailure(AttemptInfo& info, int64_t now, uint32_t threshold, int64_t& blockedAt)
+void LoginAttemptLimiter::registerFailure(AttemptInfo& info, int64_t now, uint32_t threshold,
+                                         int64_t blockDuration, int64_t& blockedAt)
 {
 	if (info.firstAttempt == 0 || now - info.firstAttempt > WINDOW_MS) {
 		info.failures = 1;
@@ -194,7 +213,7 @@ void LoginAttemptLimiter::registerFailure(AttemptInfo& info, int64_t now, uint32
 	}
 
 	if (info.failures >= threshold) {
-		info.blockUntil = now + BLOCK_TIME_MS;
+		info.blockUntil = now + blockDuration;
 		blockedAt = info.failures;
 	}
 }
@@ -226,12 +245,14 @@ void LoginAttemptLimiter::recordFailure(uint32_t ip, std::string_view accountNam
 	const int64_t now = OTSYS_TIME();
 	cleanup(now);
 
+	const int64_t blockDuration = blockDurationMs();
+
 	int64_t blockedAfter = 0;
-	registerFailure(ipAttempts[ip], now, MAX_IP_FAILURES, blockedAfter);
+	registerFailure(ipAttempts[ip], now, ipFailureThreshold(), blockDuration, blockedAfter);
 	if (blockedAfter != 0) {
-		LOG_WARN(fmt::format("[Anti-BruteForce] IP {} blocked for {} minutes after {} failed login attempts across "
+		LOG_WARN(fmt::format("[Anti-BruteForce] IP {} blocked for {} seconds after {} failed login attempts across "
 		                     "multiple accounts.",
-		                     convertIPToString(ip), BLOCK_TIME_MS / 60000, blockedAfter));
+		                     convertIPToString(ip), blockDuration / 1000, blockedAfter));
 	}
 
 	const std::string account = normalizeAccountName(accountName);
@@ -240,11 +261,12 @@ void LoginAttemptLimiter::recordFailure(uint32_t ip, std::string_view accountNam
 	}
 
 	blockedAfter = 0;
-	registerFailure(accountAttempts[AccountKey{ip, account}], now, MAX_FAILURES, blockedAfter);
+	registerFailure(accountAttempts[AccountKey{ip, account}], now, accountFailureThreshold(), blockDuration,
+	                blockedAfter);
 	if (blockedAfter != 0) {
-		LOG_WARN(fmt::format("[Anti-BruteForce] IP {} blocked for {} minutes after {} failed login attempts on one "
+		LOG_WARN(fmt::format("[Anti-BruteForce] IP {} blocked for {} seconds after {} failed login attempts on one "
 		                     "account.",
-		                     convertIPToString(ip), BLOCK_TIME_MS / 60000, blockedAfter));
+		                     convertIPToString(ip), blockDuration / 1000, blockedAfter));
 	}
 }
 
@@ -406,6 +428,13 @@ void ProtocolLogin::getCastList(const std::string& password)
 {
 	auto casts = IOLoginData::getCastList(password);
 	if (casts.empty()) {
+		// getCastList filters on the password in SQL, so a non-empty one that matches
+		// nothing is a rejected guess and has to count against the per-IP guard. An
+		// empty password is the ordinary "list the public casts" request and an empty
+		// result there only means nobody is streaming, so it is not recorded.
+		if (!password.empty()) {
+			LoginAttemptLimiter::getInstance().recordFailure(getIP(), "");
+		}
 		disconnectClient("There are no casts available at this time.");
 		return;
 	}

@@ -590,6 +590,9 @@ bool ConfigManager::load()
 	integers[Integer::EXP_SHARE_FLOORS] = getGlobalInteger(L, "experienceShareFloors", 1);
 	integers[Integer::EXP_FROM_PLAYERS_LEVEL_RANGE] = getGlobalInteger(L, "expFromPlayersLevelRange", 75);
 	integers[Integer::MAX_PACKETS_PER_SECOND] = getGlobalInteger(L, "maxPacketsPerSecond", 25);
+	integers[Integer::BRUTEFORCE_ACCOUNT_FAILURES] = getGlobalInteger(L, "bruteForceAccountFailures", 5);
+	integers[Integer::BRUTEFORCE_IP_FAILURES] = getGlobalInteger(L, "bruteForceIpFailures", 20);
+	integers[Integer::BRUTEFORCE_BLOCK_SECONDS] = getGlobalInteger(L, "bruteForceBlockSeconds", 300);
 	integers[Integer::SERVER_SAVE_NOTIFY_DURATION] = getGlobalInteger(L, "serverSaveNotifyDuration", 5);
 	integers[Integer::YELL_MINIMUM_LEVEL] = getGlobalInteger(L, "yellMinimumLevel", 2);
 	integers[Integer::MINIMUM_LEVEL_TO_SEND_PRIVATE] = getGlobalInteger(L, "minimumLevelToSendPrivate", 1);

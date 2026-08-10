@@ -82,6 +82,17 @@ statusTimeout = 5000
 replaceKickOnLogin = true
 maxPacketsPerSecond = 25
 
+-- Brute force protection
+-- bruteForceAccountFailures: failed logins against one account, from one IP,
+--   before that account is locked for that address
+-- bruteForceIpFailures: failed logins from one IP across all accounts, which
+--   catches spraying; keep it well above what a person mistyping their own
+--   password reaches, or shared addresses (NAT) get punished
+-- bruteForceBlockSeconds: how long a block lasts
+bruteForceAccountFailures = 5
+bruteForceIpFailures = 20
+bruteForceBlockSeconds = 300
+
 -- Connection Limits Config
 -- NOTE: maxConnections: maximum total concurrent connections (0 = no limit)
 -- NOTE: maxConnectionsPerIP: maximum concurrent connections per IP (0 = no limit)
