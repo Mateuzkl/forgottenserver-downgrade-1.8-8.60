@@ -1395,20 +1395,29 @@ std::shared_ptr<Tile> Game::getBrowseFieldTile(const Cylinder* cylinder)
 
 void Game::cleanupBrowseFields()
 {
-	auto isOpenByAnyPlayer = [this](const Container* container) {
-		for (const auto& onlinePlayer : getPlayers()) {
-			for (const auto& [cid, openContainer] : onlinePlayer->getOpenContainers()) {
-				(void)cid;
-				if (openContainer.container.lock().get() == container) {
-					return true;
-				}
+	if (browseFields.empty()) {
+		return;
+	}
+
+	// Collect every open container once, then filter. This used to ask "is this
+	// browse field open by anyone?" per entry, and each of those questions called
+	// getPlayers() - which returns std::vector<std::shared_ptr<Player>> by value,
+	// so every browse field allocated a fresh vector and touched the refcount of
+	// every player online. That made the scan O(fields x players x containers) in
+	// atomic operations, and removePlayer() runs it on every single logout, so the
+	// cost grew quadratically with population exactly when the server was busiest.
+	std::unordered_set<const Container*> openContainers;
+	for (const auto& onlinePlayer : getPlayers()) {
+		for (const auto& [cid, openContainer] : onlinePlayer->getOpenContainers()) {
+			(void)cid;
+			if (const auto container = openContainer.container.lock()) {
+				openContainers.insert(container.get());
 			}
 		}
-		return false;
-	};
+	}
 
 	for (auto it = browseFields.begin(); it != browseFields.end();) {
-		if (!it->second || !isOpenByAnyPlayer(it->second.get())) {
+		if (!it->second || !openContainers.contains(it->second.get())) {
 			it = browseFields.erase(it);
 			continue;
 		}
