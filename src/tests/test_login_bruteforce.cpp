@@ -1,5 +1,6 @@
 #include "../otpch.h"
 
+#include "../protocolgame.h"
 #include "../protocollogin.h"
 
 #include "test_support.h"
@@ -113,8 +114,17 @@ TEST_CASE(bruteforce_account_names_are_normalized)
 // the game world spectate() and the login server's cast list - do this.
 TEST_CASE(bruteforce_cast_password_failures_feed_the_ip_guard)
 {
-	for (uint32_t i = 0; i < 20; ++i) {
-		limiter().recordFailure(IP_CAST_GUESS, "");
+	CHECK(limiter().allowLogin(IP_CAST_GUESS, ""));
+
+	// The production methods are seams used by ProtocolGame::spectate() and the
+	// login-server cast-list path after each one rejects a cast password.
+	for (uint32_t i = 0; i < 10; ++i) {
+		ProtocolGame::recordRejectedCastPassword(IP_CAST_GUESS);
+	}
+	CHECK(limiter().allowLogin(IP_CAST_GUESS, ""));
+
+	for (uint32_t i = 0; i < 10; ++i) {
+		ProtocolLogin::recordRejectedCastPassword(IP_CAST_GUESS);
 	}
 
 	// The address is now refused even for a request carrying no account name.

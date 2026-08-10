@@ -17,12 +17,28 @@ using ItemBlockList = std::list<std::pair<int32_t, ObserverPtr<Item>>>;
 class IOLoginData
 {
 public:
+	enum class AuthenticationResult : uint8_t
+	{
+		Success,
+		Rejected,
+		DatabaseError,
+	};
+
+	struct GameworldAuthenticationResult
+	{
+		AuthenticationResult status = AuthenticationResult::Rejected;
+		uint32_t accountId = 0;
+		uint32_t characterId = 0;
+		bool cast = false;
+	};
+
 	static Account loadAccount(uint32_t accno);
 
-	static bool loginserverAuthentication(std::string_view name, std::string_view password, Account& account);
-	static std::pair<uint32_t, uint32_t> gameworldAuthentication(std::string_view accountName,
-	                                                             std::string_view password,
-	                                                             std::string_view characterName, bool& cast);
+	static AuthenticationResult loginserverAuthentication(std::string_view name, std::string_view password,
+	                                                        Account& account);
+	static GameworldAuthenticationResult gameworldAuthentication(std::string_view accountName,
+	                                                              std::string_view password,
+	                                                              std::string_view characterName);
 	static uint32_t getAccountIdByPlayerName(std::string_view playerName);
 	static uint32_t getAccountIdByPlayerId(uint32_t playerId);
 

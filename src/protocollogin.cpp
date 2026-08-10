@@ -300,9 +300,14 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	uint32_t clientIP = connection ? connection->getIP() : 0;
 
 	Account account;
-	if (!IOLoginData::loginserverAuthentication(accountName, password, account)) {
+	const auto authentication = IOLoginData::loginserverAuthentication(accountName, password, account);
+	if (authentication == IOLoginData::AuthenticationResult::Rejected) {
 		LoginAttemptLimiter::getInstance().recordFailure(clientIP, accountName);
 		disconnectClient("Account name or password is not correct.");
+		return;
+	}
+	if (authentication == IOLoginData::AuthenticationResult::DatabaseError) {
+		disconnectClient("The login service is temporarily unavailable. Please try again later.");
 		return;
 	}
 
@@ -433,7 +438,7 @@ void ProtocolLogin::getCastList(const std::string& password)
 		// empty password is the ordinary "list the public casts" request and an empty
 		// result there only means nobody is streaming, so it is not recorded.
 		if (!password.empty()) {
-			LoginAttemptLimiter::getInstance().recordFailure(getIP(), "");
+			recordRejectedCastPassword(getIP());
 		}
 		disconnectClient("There are no casts available at this time.");
 		return;
@@ -469,6 +474,11 @@ void ProtocolLogin::getCastList(const std::string& password)
 	send(output);
 
 	disconnect();
+}
+
+void ProtocolLogin::recordRejectedCastPassword(uint32_t ip)
+{
+	LoginAttemptLimiter::getInstance().recordFailure(ip, "");
 }
 
 void ProtocolLogin::getAstraCastList()
@@ -636,7 +646,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// locked out.
 	uint32_t clientIP = connection ? connection->getIP() : 0;
 	if (!LoginAttemptLimiter::getInstance().allowLogin(clientIP, accountName)) {
-		disconnectClient("Too many failed login attempts. Please wait 5 minutes.");
+		disconnectClient("Too many failed login attempts. Please try again later.");
 		return;
 	}
 

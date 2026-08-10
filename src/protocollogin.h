@@ -105,6 +105,7 @@ public:
 	explicit ProtocolLogin(Connection_ptr connection) : Protocol(connection) {}
 
 	void onRecvFirstMessage(NetworkMessage& msg) override;
+	static void recordRejectedCastPassword(uint32_t ip);
 
 private:
 	void disconnectClient(std::string_view message);

@@ -71,6 +71,7 @@ public:
 
 	void login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem);
 	void spectate(const std::string& name, const std::string& password);
+	static void recordRejectedCastPassword(uint32_t ip);
 	void logout(bool displayEffect, bool forced);
 
 	uint16_t getVersion() const { return version; }
