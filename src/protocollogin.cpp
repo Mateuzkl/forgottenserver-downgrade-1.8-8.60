@@ -143,6 +143,17 @@ void addAstraLoginBoostedInfo(const OutputMessage_ptr& output)
 
 // --- Brute Force Protection ---
 
+namespace {
+
+std::string normalizeAccountName(std::string_view accountName)
+{
+	std::string normalized = asTrimmedString(accountName);
+	toLowerCaseString(normalized);
+	return normalized;
+}
+
+} // namespace
+
 void LoginAttemptLimiter::cleanup(int64_t now)
 {
 	if (lastCleanup != 0 && now - lastCleanup < WINDOW_MS) {
@@ -150,68 +161,106 @@ void LoginAttemptLimiter::cleanup(int64_t now)
 	}
 	lastCleanup = now;
 
-	std::erase_if(attempts, [now](const auto& pair) {
+	const auto expired = [now](const auto& pair) {
 		const AttemptInfo& info = pair.second;
 		return info.blockUntil <= now && now - info.firstAttempt > WINDOW_MS;
-	});
+	};
+
+	std::erase_if(accountAttempts, expired);
+	std::erase_if(ipAttempts, expired);
 }
 
-bool LoginAttemptLimiter::allowLogin(uint32_t ip)
+bool LoginAttemptLimiter::isBlocked(AttemptInfo& info, int64_t now)
 {
-	std::scoped_lock lock(mu);
-	const int64_t now = OTSYS_TIME();
-	cleanup(now);
-
-	auto it = attempts.find(ip);
-	if (it == attempts.end()) {
-		return true;
-	}
-
-	auto& info = it->second;
-
-	// Still blocked?
 	if (info.blockUntil > now) {
-		return false;
-	}
-
-	// Window expired — reset
-	if (now - info.firstAttempt > WINDOW_MS) {
-		attempts.erase(it);
 		return true;
 	}
 
-	return true;
+	// Block expired, or the counting window elapsed: start counting again.
+	if (info.blockUntil != 0 || now - info.firstAttempt > WINDOW_MS) {
+		info = AttemptInfo{};
+	}
+	return false;
 }
 
-void LoginAttemptLimiter::recordFailure(uint32_t ip)
+void LoginAttemptLimiter::registerFailure(AttemptInfo& info, int64_t now, uint32_t threshold, int64_t& blockedAt)
 {
-	std::scoped_lock lock(mu);
-	const int64_t now = OTSYS_TIME();
-	cleanup(now);
-
-	auto& info = attempts[ip];
-
-	// Reset window if expired
 	if (info.firstAttempt == 0 || now - info.firstAttempt > WINDOW_MS) {
 		info.failures = 1;
 		info.firstAttempt = now;
 		info.blockUntil = 0;
-		return;
+	} else {
+		++info.failures;
 	}
 
-	info.failures++;
-
-	if (info.failures >= MAX_FAILURES) {
+	if (info.failures >= threshold) {
 		info.blockUntil = now + BLOCK_TIME_MS;
-		LOG_WARN(fmt::format("[Anti-BruteForce] IP {} blocked for {} minutes after {} failed login attempts.",
-		                     convertIPToString(ip), BLOCK_TIME_MS / 60000, info.failures));
+		blockedAt = info.failures;
 	}
 }
 
-void LoginAttemptLimiter::recordSuccess(uint32_t ip)
+bool LoginAttemptLimiter::allowLogin(uint32_t ip, std::string_view accountName)
 {
 	std::scoped_lock lock(mu);
-	attempts.erase(ip);
+	const int64_t now = OTSYS_TIME();
+	cleanup(now);
+
+	if (auto ipIt = ipAttempts.find(ip); ipIt != ipAttempts.end() && isBlocked(ipIt->second, now)) {
+		return false;
+	}
+
+	// No account dimension (for example a cast list request): the per-IP guard above
+	// is the only thing that applies.
+	const std::string account = normalizeAccountName(accountName);
+	if (account.empty()) {
+		return true;
+	}
+
+	auto it = accountAttempts.find(AccountKey{ip, account});
+	return it == accountAttempts.end() || !isBlocked(it->second, now);
+}
+
+void LoginAttemptLimiter::recordFailure(uint32_t ip, std::string_view accountName)
+{
+	std::scoped_lock lock(mu);
+	const int64_t now = OTSYS_TIME();
+	cleanup(now);
+
+	int64_t blockedAfter = 0;
+	registerFailure(ipAttempts[ip], now, MAX_IP_FAILURES, blockedAfter);
+	if (blockedAfter != 0) {
+		LOG_WARN(fmt::format("[Anti-BruteForce] IP {} blocked for {} minutes after {} failed login attempts across "
+		                     "multiple accounts.",
+		                     convertIPToString(ip), BLOCK_TIME_MS / 60000, blockedAfter));
+	}
+
+	const std::string account = normalizeAccountName(accountName);
+	if (account.empty()) {
+		return;
+	}
+
+	blockedAfter = 0;
+	registerFailure(accountAttempts[AccountKey{ip, account}], now, MAX_FAILURES, blockedAfter);
+	if (blockedAfter != 0) {
+		LOG_WARN(fmt::format("[Anti-BruteForce] IP {} blocked for {} minutes after {} failed login attempts on one "
+		                     "account.",
+		                     convertIPToString(ip), BLOCK_TIME_MS / 60000, blockedAfter));
+	}
+}
+
+void LoginAttemptLimiter::recordSuccess(uint32_t ip, std::string_view accountName)
+{
+	// Deliberately clears only this account's history. Erasing everything for the
+	// IP let anyone holding one valid account reset the counter at will: guess four
+	// times against a victim, log into your own account, repeat forever. The per-IP
+	// spray counter is likewise left alone and expires on its own window.
+	const std::string account = normalizeAccountName(accountName);
+	if (account.empty()) {
+		return;
+	}
+
+	std::scoped_lock lock(mu);
+	accountAttempts.erase(AccountKey{ip, account});
 }
 
 void ProtocolLogin::disconnectClient(std::string_view message)
@@ -230,12 +279,12 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 
 	Account account;
 	if (!IOLoginData::loginserverAuthentication(accountName, password, account)) {
-		LoginAttemptLimiter::getInstance().recordFailure(clientIP);
+		LoginAttemptLimiter::getInstance().recordFailure(clientIP, accountName);
 		disconnectClient("Account name or password is not correct.");
 		return;
 	}
 
-	LoginAttemptLimiter::getInstance().recordSuccess(clientIP);
+	LoginAttemptLimiter::getInstance().recordSuccess(clientIP, accountName);
 
 	auto output = OutputMessagePool::getOutputMessage();
 
@@ -551,9 +600,13 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		LOG_DEBUG("[FonticakClient] Login protocol client accepted");
 	}
 
-	// Brute force check before dispatching login task
+	// Brute force check before dispatching the login task. The account name is
+	// passed so failures are counted per account rather than per IP; a cast list
+	// request carries no account name and is only subject to the per-IP guard, so
+	// watching a stream still works while one account on the same address is
+	// locked out.
 	uint32_t clientIP = connection ? connection->getIP() : 0;
-	if (!LoginAttemptLimiter::getInstance().allowLogin(clientIP)) {
+	if (!LoginAttemptLimiter::getInstance().allowLogin(clientIP, accountName)) {
 		disconnectClient("Too many failed login attempts. Please wait 5 minutes.");
 		return;
 	}

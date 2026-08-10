@@ -1207,10 +1207,11 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	// independently, so without the check here an attacker can skip the login
 	// server entirely and guess credentials at connection speed.
 	//
-	// An empty account name is a cast (spectator) request, which is authenticated
-	// against the cast password rather than account credentials, so it is left out
-	// of the account limiter.
-	if (!accountName.empty() && !LoginAttemptLimiter::getInstance().allowLogin(getIP())) {
+	// The account name is passed so failures are counted per account. A cast
+	// (spectator) request carries no account name and is authenticated against the
+	// cast password instead, so it only meets the per-IP spray guard - watching a
+	// stream keeps working while one account on the same address is locked out.
+	if (!LoginAttemptLimiter::getInstance().allowLogin(getIP(), accountName)) {
 		disconnectClient("Too many failed login attempts. Please wait 5 minutes.");
 		return;
 	}
@@ -1226,9 +1227,9 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	uint32_t characterId = authPair.second;
 
 	if (accountId == 0) {
-		LoginAttemptLimiter::getInstance().recordFailure(getIP());
+		LoginAttemptLimiter::getInstance().recordFailure(getIP(), accountName);
 	} else {
-		LoginAttemptLimiter::getInstance().recordSuccess(getIP());
+		LoginAttemptLimiter::getInstance().recordSuccess(getIP(), accountName);
 	}
 
 	BanInfo banInfo;
