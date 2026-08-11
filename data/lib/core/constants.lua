@@ -18,3 +18,31 @@ RESPAWNPERIOD_NIGHT = 2
 RARITY_BANE = 1
 RARITY_ARCHFOE = 2
 RARITY_NEMESIS = 3
+
+-- Bestiary class ordering keys.
+-- custom_bestiary.lua uses these only as a sort key (classRace), so the values
+-- just have to be distinct and stable; the grouping itself comes from the
+-- separate `class` string on each monster. Ordered alphabetically because the
+-- scripts carry no other ordering intent - adjust freely if you want a
+-- different order in the bestiary list.
+BESTY_RACE_AMPHIBIC = 1
+BESTY_RACE_AQUATIC = 2
+BESTY_RACE_BIRD = 3
+BESTY_RACE_CONSTRUCT = 4
+BESTY_RACE_DEMON = 5
+BESTY_RACE_DRAGON = 6
+BESTY_RACE_ELEMENTAL = 7
+BESTY_RACE_EXTRA_DIMENSIONAL = 8
+BESTY_RACE_FEY = 9
+BESTY_RACE_GIANT = 10
+BESTY_RACE_HUMAN = 11
+BESTY_RACE_HUMANOID = 12
+BESTY_RACE_INKBORN = 13
+BESTY_RACE_LYCANTHROPE = 14
+BESTY_RACE_MAGICAL = 15
+BESTY_RACE_MAMMAL = 16
+BESTY_RACE_PLANT = 17
+BESTY_RACE_REPTILE = 18
+BESTY_RACE_SLIME = 19
+BESTY_RACE_UNDEAD = 20
+BESTY_RACE_VERMIN = 21
