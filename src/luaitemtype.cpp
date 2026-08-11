@@ -564,6 +564,42 @@ int luaItemTypeGetAttackSpeed(lua_State* L)
 	return 1;
 }
 
+int luaItemTypeGetAttackSpeedPercent(lua_State* L)
+{
+	// itemType:getAttackSpeedPercent()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (itemType) {
+		lua_pushinteger(L, itemType->attackSpeedPercent);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaItemTypeGetDamagePercent(lua_State* L)
+{
+	// itemType:getDamagePercent()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (itemType) {
+		lua_pushinteger(L, itemType->damagePercent);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaItemTypeGetDamageReductionPercent(lua_State* L)
+{
+	// itemType:getDamageReductionPercent()
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	if (itemType) {
+		lua_pushinteger(L, itemType->damageReductionPercent);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaItemTypeGetDefense(lua_State* L)
 {
 	// itemType:getDefense()
@@ -1235,6 +1271,9 @@ void LuaScriptInterface::registerItemType()
 
 	registerMethod("ItemType", "getAttack", luaItemTypeGetAttack);
 	registerMethod("ItemType", "getAttackSpeed", luaItemTypeGetAttackSpeed);
+	registerMethod("ItemType", "getAttackSpeedPercent", luaItemTypeGetAttackSpeedPercent);
+	registerMethod("ItemType", "getDamagePercent", luaItemTypeGetDamagePercent);
+	registerMethod("ItemType", "getDamageReductionPercent", luaItemTypeGetDamageReductionPercent);
 	registerMethod("ItemType", "getClassification", luaItemTypeGetClassification);
 	registerMethod("ItemType", "getTier", luaItemTypeGetTier);
 	registerMethod("ItemType", "getDefense", luaItemTypeGetDefense);

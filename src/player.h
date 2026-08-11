@@ -782,25 +782,11 @@ public:
 	void setSecureMode(bool mode) { secureMode = mode; }
 
 	void setAttackSpeed(uint32_t speed) { attackSpeed = speed; }
-	uint32_t getAttackSpeed() const
-	{
-		uint32_t baseSpeed = attackSpeed > 0 ? attackSpeed : vocation->getAttackSpeed();
-		if (resetAttackSpeedBonus > 0 && baseSpeed > static_cast<uint32_t>(resetAttackSpeedBonus)) {
-			baseSpeed -= static_cast<uint32_t>(resetAttackSpeedBonus);
-		}
-		if (isDualWielding()) {
-			const auto rate = getInteger(ConfigManager::DUAL_WIELDING_SPEED_RATE);
-			if (rate > 0) {
-				const auto rateValue = static_cast<uint64_t>(rate);
-				baseSpeed = static_cast<uint32_t>(
-				    (static_cast<uint64_t>(baseSpeed) * 100 + rateValue - 1) / rateValue);
-			}
-		}
-		if (baseSpeed < 100) {
-			baseSpeed = 100;
-		}
-		return baseSpeed;
-	}
+	uint32_t getAttackSpeed() const;
+	uint32_t getAttackSpeedWithoutEquipmentBonus() const;
+	uint32_t getEquipmentAttackSpeedPercent() const;
+	uint32_t getEquipmentDamagePercent() const;
+	uint32_t getEquipmentDamageReductionPercent() const;
 
 	// combat functions
 	bool setAttackedCreature(Creature* creature) override;
@@ -1619,6 +1605,7 @@ private:
 	void reloadEquipmentStats();
 	void applyEquipmentStats();
 	void flushAstraPlayerInventorySnapshot();
+	uint64_t getAttackSpeedBeforeEquipmentBonus() const;
 
 	void setNextWalkActionTask(std::unique_ptr<SchedulerTask> task);
 	void setNextWalkTask(std::unique_ptr<SchedulerTask> task);

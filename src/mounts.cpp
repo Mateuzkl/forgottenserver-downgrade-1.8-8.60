@@ -296,7 +296,7 @@ bool Mounts::addAttributes(uint32_t playerId, uint16_t mountId)
 	}
 
 	if (mount->attackSpeed != 0) {
-		player->setAttackSpeed(player->getAttackSpeed() + mount->attackSpeed);
+		player->setAttackSpeed(player->getAttackSpeedWithoutEquipmentBonus() + mount->attackSpeed);
 		update = true;
 	}
 
@@ -385,7 +385,7 @@ bool Mounts::removeAttributes(uint32_t playerId, uint16_t mountId)
 	}
 
 	if (mount->attackSpeed != 0) {
-		player->setAttackSpeed(player->getAttackSpeed() - mount->attackSpeed);
+		player->setAttackSpeed(player->getAttackSpeedWithoutEquipmentBonus() - mount->attackSpeed);
 		update = true;
 	}
 

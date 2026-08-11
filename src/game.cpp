@@ -13,6 +13,7 @@
 #include "creatureevent.h"
 #include "databasetasks.h"
 #include "enums.h"
+#include "equipment_combat_bonus.h"
 #include "events.h"
 #include "globalevent.h"
 #include "housetile.h"
@@ -6410,29 +6411,6 @@ void Game::combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColo
 	}
 }
 
-static int32_t increaseDamageByPercent(int32_t value, uint16_t percent)
-{
-	if (value <= 0 || percent == 0) {
-		return value;
-	}
-
-	const int64_t result = static_cast<int64_t>(value) + (static_cast<int64_t>(value) * percent / 100);
-	return static_cast<int32_t>(std::min<int64_t>(result, std::numeric_limits<int32_t>::max()));
-}
-
-static int32_t reduceDamageByPercent(int32_t value, uint16_t percent)
-{
-	if (value <= 0 || percent == 0) {
-		return value;
-	}
-
-	if (percent >= 100) {
-		return 0;
-	}
-
-	return value - static_cast<int32_t>(static_cast<int64_t>(value) * percent / 100);
-}
-
 static uint16_t getPreyDamageBoostPercent(const std::shared_ptr<Player>& player, const std::shared_ptr<Creature>& target)
 {
 	if (!player || !target) {
@@ -6471,16 +6449,16 @@ static void applyPreyCombatBonuses(CombatDamage& damage, const std::shared_ptr<C
 	auto attackerPlayer = std::dynamic_pointer_cast<Player>(attacker);
 	if (attackerPlayer) {
 		const uint16_t boost = getPreyDamageBoostPercent(attackerPlayer, target);
-		damage.primary.value = increaseDamageByPercent(damage.primary.value, boost);
-		damage.secondary.value = increaseDamageByPercent(damage.secondary.value, boost);
+		damage.primary.value = EquipmentCombatBonus::increaseDamageByPercent(damage.primary.value, boost);
+		damage.secondary.value = EquipmentCombatBonus::increaseDamageByPercent(damage.secondary.value, boost);
 		return;
 	}
 
 	auto targetPlayer = std::dynamic_pointer_cast<Player>(target);
 	if (targetPlayer) {
 		const uint16_t reduction = getPreyDamageReductionPercent(targetPlayer, attacker);
-		damage.primary.value = reduceDamageByPercent(damage.primary.value, reduction);
-		damage.secondary.value = reduceDamageByPercent(damage.secondary.value, reduction);
+		damage.primary.value = EquipmentCombatBonus::reduceDamageByPercent(damage.primary.value, reduction);
+		damage.secondary.value = EquipmentCombatBonus::reduceDamageByPercent(damage.secondary.value, reduction);
 	}
 }
 
@@ -6733,6 +6711,18 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		damage.primary.value = std::abs(damage.primary.value);
 		damage.secondary.value = std::abs(damage.secondary.value);
 
+		if (!damage.equipmentDamageBonusApplied) {
+			damage.equipmentDamageBonusApplied = true;
+			const bool validOrigin = damage.origin != ORIGIN_CONDITION && damage.origin != ORIGIN_REFLECT;
+			if (attackerPlayer && attacker != target && validOrigin) {
+				const uint32_t percent = attackerPlayer->getEquipmentDamagePercent();
+				damage.primary.value =
+				    EquipmentCombatBonus::increaseDamageByPercent(damage.primary.value, percent);
+				damage.secondary.value =
+				    EquipmentCombatBonus::increaseDamageByPercent(damage.secondary.value, percent);
+			}
+		}
+
 		// Reset system: apply damage/defense bonuses (PvE only)
 		applyResetSystemBonuses(damage, attackerPlayer, targetPlayer);
 
@@ -6836,6 +6826,18 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					damage.secondary.value = std::max<int32_t>(0, damage.secondary.value + damage.primary.value);
 					damage.primary.value = 0;
 				}
+			}
+		}
+
+		if (!damage.equipmentDamageReductionApplied) {
+			damage.equipmentDamageReductionApplied = true;
+			const bool validOrigin = damage.origin != ORIGIN_CONDITION && damage.origin != ORIGIN_REFLECT;
+			if (targetPlayer && attacker && attacker != target && validOrigin) {
+				const uint32_t percent = targetPlayer->getEquipmentDamageReductionPercent();
+				damage.primary.value =
+				    EquipmentCombatBonus::reduceDamageByPercent(damage.primary.value, percent);
+				damage.secondary.value =
+				    EquipmentCombatBonus::reduceDamageByPercent(damage.secondary.value, percent);
 			}
 		}
 

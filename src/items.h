@@ -59,6 +59,9 @@ enum ItemParseAttributes_t
 	ITEM_PARSE_EXTRADEF,
 	ITEM_PARSE_ATTACK,
 	ITEM_PARSE_ATTACK_SPEED,
+	ITEM_PARSE_ATTACK_SPEED_PERCENT,
+	ITEM_PARSE_DAMAGE_PERCENT,
+	ITEM_PARSE_DAMAGE_REDUCTION_PERCENT,
 	ITEM_PARSE_CLASSIFICATION,
 	ITEM_PARSE_TIER,
 	ITEM_PARSE_ROTATETO,
@@ -398,6 +401,9 @@ public:
 	std::unique_ptr<ConditionDamage> conditionDamage;
 
 	uint32_t attackSpeed = 0;
+	uint32_t attackSpeedPercent = 0;
+	uint32_t damagePercent = 0;
+	uint32_t damageReductionPercent = 0;
 	uint32_t classification = 0;
 	uint32_t tier = 0;
 	uint32_t weight = 0;

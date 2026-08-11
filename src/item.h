@@ -780,6 +780,9 @@ public:
 		}
 		return items[id].attackSpeed;
 	}
+	uint32_t getAttackSpeedPercent() const { return items[id].attackSpeedPercent; }
+	uint32_t getDamagePercent() const { return items[id].damagePercent; }
+	uint32_t getDamageReductionPercent() const { return items[id].damageReductionPercent; }
 	int32_t getArmor() const
 	{
 		if (hasAttribute(ITEM_ATTRIBUTE_ARMOR)) {

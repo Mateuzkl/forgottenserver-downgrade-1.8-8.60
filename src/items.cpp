@@ -37,6 +37,9 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"extradef", ITEM_PARSE_EXTRADEF},
     {"attack", ITEM_PARSE_ATTACK},
     {"attackspeed", ITEM_PARSE_ATTACK_SPEED},
+    {"attackspeedpercent", ITEM_PARSE_ATTACK_SPEED_PERCENT},
+    {"damagepercent", ITEM_PARSE_DAMAGE_PERCENT},
+    {"damagereductionpercent", ITEM_PARSE_DAMAGE_REDUCTION_PERCENT},
     {"classification", ITEM_PARSE_CLASSIFICATION},
     {"upgradeclassification", ITEM_PARSE_CLASSIFICATION},
     {"upgrade_classification", ITEM_PARSE_CLASSIFICATION},
@@ -929,6 +932,26 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 						LOG_WARN(fmt::format("[Warning - Items::parseItemNode] AttackSpeed lower than 100 for item: {}", it.id));
 						it.attackSpeed = 100;
 					}
+					break;
+				}
+
+				case ITEM_PARSE_ATTACK_SPEED_PERCENT: {
+					const int64_t value = pugi::cast<int64_t>(valueAttribute.value());
+					it.attackSpeedPercent = static_cast<uint32_t>(std::clamp<int64_t>(
+					    value, 0, std::numeric_limits<uint32_t>::max()));
+					break;
+				}
+
+				case ITEM_PARSE_DAMAGE_PERCENT: {
+					const int64_t value = pugi::cast<int64_t>(valueAttribute.value());
+					it.damagePercent = static_cast<uint32_t>(std::clamp<int64_t>(
+					    value, 0, std::numeric_limits<uint32_t>::max()));
+					break;
+				}
+
+				case ITEM_PARSE_DAMAGE_REDUCTION_PERCENT: {
+					const int64_t value = pugi::cast<int64_t>(valueAttribute.value());
+					it.damageReductionPercent = static_cast<uint32_t>(std::clamp<int64_t>(value, 0, 100));
 					break;
 				}
 

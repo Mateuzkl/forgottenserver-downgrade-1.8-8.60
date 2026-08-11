@@ -9,6 +9,7 @@
 #include "configmanager.h"
 #include "creatureevent.h"
 #include "database.h"
+#include "equipment_combat_bonus.h"
 #include "events.h"
 #include "familiar.h"
 #include "game.h"
@@ -3410,6 +3411,75 @@ bool Player::hasShield() const
 		return true;
 	}
 	return false;
+}
+
+uint32_t Player::getEquipmentAttackSpeedPercent() const
+{
+	uint64_t total = 0;
+	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		const auto inventorySlot = static_cast<slots_t>(slot);
+		const Item* item = getInventoryItem(inventorySlot);
+		if (item && isItemAbilityEnabled(inventorySlot)) {
+			total = std::min<uint64_t>(total + item->getAttackSpeedPercent(),
+			                           std::numeric_limits<uint32_t>::max());
+		}
+	}
+	return static_cast<uint32_t>(total);
+}
+
+uint32_t Player::getEquipmentDamagePercent() const
+{
+	uint64_t total = 0;
+	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		const auto inventorySlot = static_cast<slots_t>(slot);
+		const Item* item = getInventoryItem(inventorySlot);
+		if (item && isItemAbilityEnabled(inventorySlot)) {
+			total = std::min<uint64_t>(total + item->getDamagePercent(),
+			                           std::numeric_limits<uint32_t>::max());
+		}
+	}
+	return static_cast<uint32_t>(total);
+}
+
+uint32_t Player::getEquipmentDamageReductionPercent() const
+{
+	uint32_t total = 0;
+	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		const auto inventorySlot = static_cast<slots_t>(slot);
+		const Item* item = getInventoryItem(inventorySlot);
+		if (item && isItemAbilityEnabled(inventorySlot)) {
+			total = static_cast<uint32_t>(std::min<uint64_t>(
+			    100, static_cast<uint64_t>(total) + item->getDamageReductionPercent()));
+		}
+	}
+	return total;
+}
+
+uint64_t Player::getAttackSpeedBeforeEquipmentBonus() const
+{
+	uint64_t baseSpeed = attackSpeed > 0 ? attackSpeed : vocation->getAttackSpeed();
+	if (resetAttackSpeedBonus > 0 && baseSpeed > static_cast<uint32_t>(resetAttackSpeedBonus)) {
+		baseSpeed -= static_cast<uint32_t>(resetAttackSpeedBonus);
+	}
+	if (isDualWielding()) {
+		const auto rate = getInteger(ConfigManager::DUAL_WIELDING_SPEED_RATE);
+		if (rate > 0) {
+			const auto rateValue = static_cast<uint64_t>(rate);
+			baseSpeed = (baseSpeed * 100 + rateValue - 1) / rateValue;
+		}
+	}
+	return baseSpeed;
+}
+
+uint32_t Player::getAttackSpeedWithoutEquipmentBonus() const
+{
+	return EquipmentCombatBonus::applyAttackSpeedPercent(getAttackSpeedBeforeEquipmentBonus(), 0);
+}
+
+uint32_t Player::getAttackSpeed() const
+{
+	return EquipmentCombatBonus::applyAttackSpeedPercent(getAttackSpeedBeforeEquipmentBonus(),
+	                                                     getEquipmentAttackSpeedPercent());
 }
 
 BlockType_t Player::blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage,
