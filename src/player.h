@@ -783,7 +783,7 @@ public:
 
 	void setAttackSpeed(uint32_t speed) { attackSpeed = speed; }
 	uint32_t getAttackSpeed() const;
-	uint32_t getAttackSpeedWithoutEquipmentBonus() const;
+	uint32_t getRawAttackSpeed() const;
 	uint32_t getEquipmentAttackSpeedPercent() const;
 	uint32_t getEquipmentDamagePercent() const;
 	uint32_t getEquipmentDamageReductionPercent() const;

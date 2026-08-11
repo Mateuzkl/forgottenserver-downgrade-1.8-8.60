@@ -2,6 +2,7 @@
 
 #include "../equipment_combat_bonus.h"
 #include "../item.h"
+#include "../player.h"
 
 #include "test_support.h"
 
@@ -34,6 +35,24 @@ TEST_CASE(equipment_combat_bonus_math_is_additive_and_clamped)
 	CHECK(EquipmentCombatBonus::reduceDamageByPercent(100, 100) == 0);
 	CHECK(EquipmentCombatBonus::reduceDamageByPercent(100, 150) == 0);
 	CHECK(EquipmentCombatBonus::reduceDamageByPercent(-100, 8) == -100);
+}
+
+TEST_CASE(attack_speed_modifiers_update_the_raw_interval_symmetrically)
+{
+	Player player(nullptr);
+	player.setAttackSpeed(2000);
+	player.setResetAttackSpeedBonus(200);
+
+	CHECK(player.getRawAttackSpeed() == 2000);
+	CHECK(player.getAttackSpeed() == 1800);
+
+	player.setAttackSpeed(player.getRawAttackSpeed() + 100);
+	CHECK(player.getRawAttackSpeed() == 2100);
+	CHECK(player.getAttackSpeed() == 1900);
+
+	player.setAttackSpeed(player.getRawAttackSpeed() - 100);
+	CHECK(player.getRawAttackSpeed() == 2000);
+	CHECK(player.getAttackSpeed() == 1800);
 }
 
 TEST_CASE(equipment_combat_bonus_xml_attributes_are_parsed)

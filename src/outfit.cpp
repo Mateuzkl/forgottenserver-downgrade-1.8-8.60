@@ -289,7 +289,7 @@ bool Outfits::addAttributes(uint32_t playerId, uint32_t outfitId, PlayerSex_t se
 	}
 
 	if (outfit.attackSpeed != 0) {
-		player->setAttackSpeed(player->getAttackSpeedWithoutEquipmentBonus() + outfit.attackSpeed);
+		player->setAttackSpeed(player->getRawAttackSpeed() + outfit.attackSpeed);
 		needsUpdate = true;
 	}
 
@@ -352,7 +352,7 @@ bool Outfits::removeAttributes(uint32_t playerId, uint32_t outfitId, PlayerSex_t
 	}
 
 	if (outfit.attackSpeed != 0) {
-		player->setAttackSpeed(player->getAttackSpeedWithoutEquipmentBonus() - outfit.attackSpeed);
+		player->setAttackSpeed(player->getRawAttackSpeed() - outfit.attackSpeed);
 		needsUpdate = true;
 	}
 

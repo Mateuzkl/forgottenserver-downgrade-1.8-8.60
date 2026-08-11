@@ -3457,7 +3457,7 @@ uint32_t Player::getEquipmentDamageReductionPercent() const
 
 uint64_t Player::getAttackSpeedBeforeEquipmentBonus() const
 {
-	uint64_t baseSpeed = attackSpeed > 0 ? attackSpeed : vocation->getAttackSpeed();
+	uint64_t baseSpeed = getRawAttackSpeed();
 	if (resetAttackSpeedBonus > 0 && baseSpeed > static_cast<uint32_t>(resetAttackSpeedBonus)) {
 		baseSpeed -= static_cast<uint32_t>(resetAttackSpeedBonus);
 	}
@@ -3471,9 +3471,9 @@ uint64_t Player::getAttackSpeedBeforeEquipmentBonus() const
 	return baseSpeed;
 }
 
-uint32_t Player::getAttackSpeedWithoutEquipmentBonus() const
+uint32_t Player::getRawAttackSpeed() const
 {
-	return EquipmentCombatBonus::applyAttackSpeedPercent(getAttackSpeedBeforeEquipmentBonus(), 0);
+	return attackSpeed > 0 ? attackSpeed : vocation->getAttackSpeed();
 }
 
 uint32_t Player::getAttackSpeed() const

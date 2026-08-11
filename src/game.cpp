@@ -6510,6 +6510,10 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 	if (!target || target->isDead() || target->isRemoved()) {
 		return false;
 	}
+	if (!damage.initialOriginCaptured) {
+		damage.initialOrigin = damage.origin;
+		damage.initialOriginCaptured = true;
+	}
 
 	if (attacker && !attacker->compareInstance(target->getInstanceID())) {
 		return false;
@@ -6713,7 +6717,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 		if (!damage.equipmentDamageBonusApplied) {
 			damage.equipmentDamageBonusApplied = true;
-			const bool validOrigin = damage.origin != ORIGIN_CONDITION && damage.origin != ORIGIN_REFLECT;
+			const bool validOrigin = damage.initialOrigin != ORIGIN_CONDITION && damage.initialOrigin != ORIGIN_REFLECT;
 			if (attackerPlayer && attacker != target && validOrigin) {
 				const uint32_t percent = attackerPlayer->getEquipmentDamagePercent();
 				damage.primary.value =
@@ -6831,7 +6835,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 		if (!damage.equipmentDamageReductionApplied) {
 			damage.equipmentDamageReductionApplied = true;
-			const bool validOrigin = damage.origin != ORIGIN_CONDITION && damage.origin != ORIGIN_REFLECT;
+			const bool validOrigin = damage.initialOrigin != ORIGIN_CONDITION && damage.initialOrigin != ORIGIN_REFLECT;
 			if (targetPlayer && attacker && attacker != target && validOrigin) {
 				const uint32_t percent = targetPlayer->getEquipmentDamageReductionPercent();
 				damage.primary.value =
