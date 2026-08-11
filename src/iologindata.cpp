@@ -160,17 +160,15 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
 			return {AuthenticationResult::Success, fallbackAccountId, accountManagerId};
         }
 
-        // Pick the first character from this account if specific character was not found/matched
-        DBResult_ptr firstCharRes = db.storeQuery(fmt::format(
-            "SELECT `id`, `name` FROM `players` WHERE `account_id` = {:d} AND `deletion` = 0 ORDER BY `name` ASC LIMIT 1",
-            fallbackAccountId));
-        if (!firstCharRes) {
-			return {failedQueryAuthenticationResult(db)};
-        }
-
-        uint32_t fallbackCharacterId = firstCharRes->getNumber<uint32_t>("id");
-        std::string fallbackCharacterName = std::string{firstCharRes->getString("name")};
-        return {AuthenticationResult::Success, fallbackAccountId, fallbackCharacterId};
+        // The credentials are good but the requested character did not resolve: it
+        // does not exist, was deleted, was renamed, or belongs to another account.
+        // Report the account as authenticated with no character rather than
+        // substituting one, so the player is told instead of silently landing on a
+        // different character of theirs.
+        //
+        // Still a Success, not a Rejected - the password was correct, and counting
+        // it would burn a login attempt on a mistyped character name.
+        return {AuthenticationResult::Success, fallbackAccountId, 0};
     }
 
     if (transformToSHA1(password) != result->getString("password")) {
