@@ -921,6 +921,12 @@ public:
 	void addAttacked(const Player* attacked);
 	void removeAttacked(const Player* attacked);
 	void clearAttacked();
+	bool hasAttackedBy(const Player* attacker) const;
+	void removeAttackedBy(const Player* attacker);
+	void clearAttackedBy();
+	bool hasPvpActivity(const Player* player, bool guildAndParty) const;
+	bool isInPvpSituation() const;
+	SquareColor_t getCreatureSquare(const Creature* creature) const;
 
 	void addUnjustifiedDead(const Player* attacked);
 	void sendCreatureSkull(const Creature* creature) const
@@ -1651,6 +1657,7 @@ private:
 	void internalAddThing(uint32_t index, Thing* thing) override;
 
 	std::unordered_set<uint32_t> attackedSet;
+	std::unordered_set<uint32_t> attackedBySet;
 	std::unordered_set<uint32_t> VIPList;
 	std::unordered_set<uint32_t> modifiedStorageKeys;
 	std::unordered_set<uint32_t> removedStorageKeys;

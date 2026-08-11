@@ -8011,6 +8011,25 @@ void Game::updateCreatureSkull(const Creature* creature)
 	}
 }
 
+void Game::updateCreatureSquare(const Creature* creature)
+{
+	if (!creature || getWorldType() != WORLD_TYPE_PVP) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	map.getSpectators(spectators, creature->getPosition(), true, true);
+	const uint32_t creatureInstance = creature->getInstanceID();
+	for (const auto& spectator : spectators.players()) {
+		Player* player = static_cast<Player*>(spectator.get());
+		if (!player->compareInstance(creatureInstance)) {
+			continue;
+		}
+
+		player->sendCreatureSquare(creature, player->getCreatureSquare(creature));
+	}
+}
+
 void Game::updatePlayerShield(Player* player)
 {
 	SpectatorVec spectators;

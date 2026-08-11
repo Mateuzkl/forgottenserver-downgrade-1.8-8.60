@@ -498,6 +498,7 @@ public:
 	void internalCreatureChangeVisible(Creature* creature, bool visible);
 	void changeLight(const Creature* creature);
 	void updateCreatureSkull(const Creature* creature);
+	void updateCreatureSquare(const Creature* creature);
 	void updatePlayerShield(Player* player);
 	void updateCreatureWalkthrough(const Creature* creature);
 	void updateCreatureEmblem(Creature* creature);

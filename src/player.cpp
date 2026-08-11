@@ -2941,6 +2941,13 @@ void Player::onThink(uint32_t interval)
 {
 	Creature::onThink(interval);
 
+	// O protocolo 8.6 exibe o opcode 0x86 como um quadrado temporário.
+	// Renova a marca enquanto houver uma relação de PvP ativa para que o
+	// efeito permaneça visível também no cliente padrão.
+	if (isInPvpSituation()) {
+		g_game.updateCreatureSquare(this);
+	}
+
 	if (client && getIP() == 0) {
 		if (hasCondition(CONDITION_INFIGHT)) {
 			ghostModeStartTime = 0;
@@ -3605,6 +3612,7 @@ void Player::death(Creature* lastHitCreature)
 			pzLocked = false;
 			onIdleStatus();
 			clearAttacked();
+			clearAttackedBy();
 
 			if (getSkull() != SKULL_RED && getSkull() != SKULL_BLACK) {
 				setSkull(SKULL_NONE);
@@ -3619,6 +3627,7 @@ void Player::death(Creature* lastHitCreature)
 		setFollowCreature(nullptr);
 		stopWalk();
 		clearAttacked();
+		clearAttackedBy();
 	};
 
 	int32_t storedTotalReduceSkillLoss = totalReduceSkillLoss;
@@ -5233,6 +5242,7 @@ void Player::onEndCondition(ConditionType_t type)
 		onIdleStatus();
 		pzLocked = false;
 		clearAttacked();
+		clearAttackedBy();
 
 		updateSkullAfterPzLockEnded();
 	}
@@ -5786,7 +5796,16 @@ void Player::addAttacked(const Player* attacked)
 		return;
 	}
 
-	attackedSet.insert(attacked->guid);
+	if (!attackedSet.insert(attacked->guid).second) {
+		return;
+	}
+
+	if (auto attackedPlayer = g_game.getPlayerByGUID(attacked->guid)) {
+		attackedPlayer->attackedBySet.insert(guid);
+		g_game.updateCreatureSquare(attackedPlayer.get());
+	}
+
+	g_game.updateCreatureSquare(this);
 }
 
 void Player::removeAttacked(const Player* attacked)
@@ -5798,10 +5817,126 @@ void Player::removeAttacked(const Player* attacked)
 	auto it = attackedSet.find(attacked->guid);
 	if (it != attackedSet.end()) {
 		attackedSet.erase(it);
+
+		if (auto attackedPlayer = g_game.getPlayerByGUID(attacked->guid)) {
+			attackedPlayer->removeAttackedBy(this);
+			g_game.updateCreatureSquare(attackedPlayer.get());
+		}
+
+		g_game.updateCreatureSquare(this);
 	}
 }
 
-void Player::clearAttacked() { attackedSet.clear(); }
+void Player::clearAttacked()
+{
+	if (attackedSet.empty()) {
+		return;
+	}
+
+	const auto attackedPlayers = attackedSet;
+	attackedSet.clear();
+
+	for (uint32_t attackedGuid : attackedPlayers) {
+		auto attackedPlayer = g_game.getPlayerByGUID(attackedGuid);
+		if (!attackedPlayer) {
+			continue;
+		}
+
+		attackedPlayer->removeAttackedBy(this);
+		g_game.updateCreatureSquare(attackedPlayer.get());
+	}
+
+	g_game.updateCreatureSquare(this);
+}
+
+bool Player::hasAttackedBy(const Player* attacker) const
+{
+	return attacker && attackedBySet.contains(attacker->guid);
+}
+
+void Player::removeAttackedBy(const Player* attacker)
+{
+	if (attacker) {
+		attackedBySet.erase(attacker->guid);
+	}
+}
+
+void Player::clearAttackedBy()
+{
+	if (attackedBySet.empty()) {
+		return;
+	}
+
+	const auto attackers = attackedBySet;
+	attackedBySet.clear();
+
+	for (uint32_t attackerGuid : attackers) {
+		auto attacker = g_game.getPlayerByGUID(attackerGuid);
+		if (!attacker) {
+			continue;
+		}
+
+		attacker->attackedSet.erase(guid);
+		g_game.updateCreatureSquare(attacker.get());
+	}
+
+	g_game.updateCreatureSquare(this);
+}
+
+bool Player::hasPvpActivity(const Player* player, bool guildAndParty) const
+{
+	if (!player) {
+		return false;
+	}
+
+	if (hasAttacked(player) || hasAttackedBy(player)) {
+		return true;
+	}
+
+	if (!guildAndParty) {
+		return false;
+	}
+
+	auto hasRelatedParticipant = [this](const std::unordered_set<uint32_t>& participants) {
+		for (uint32_t participantGuid : participants) {
+			auto participant = g_game.getPlayerByGUID(participantGuid);
+			if (participant && (isPartner(participant.get()) || isGuildMate(participant.get()))) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	return hasRelatedParticipant(player->attackedSet) || hasRelatedParticipant(player->attackedBySet);
+}
+
+bool Player::isInPvpSituation() const { return !attackedSet.empty() || !attackedBySet.empty(); }
+
+SquareColor_t Player::getCreatureSquare(const Creature* creature) const
+{
+	if (g_game.getWorldType() != WORLD_TYPE_PVP || !creature) {
+		return SQ_COLOR_NONE;
+	}
+
+	const Player* targetPlayer = creature->getPlayer();
+	if (!targetPlayer) {
+		return SQ_COLOR_NONE;
+	}
+
+	if (targetPlayer == this) {
+		return isInPvpSituation() ? SQ_COLOR_YELLOW : SQ_COLOR_NONE;
+	}
+
+	if (hasPvpActivity(targetPlayer, false)) {
+		return SQ_COLOR_YELLOW;
+	}
+
+	if (targetPlayer->isInPvpSituation()) {
+		return hasPvpActivity(targetPlayer, true) ? SQ_COLOR_ORANGE : SQ_COLOR_BROWN;
+	}
+
+	return SQ_COLOR_NONE;
+}
 
 void Player::updateSkullAfterPzLockEnded()
 {

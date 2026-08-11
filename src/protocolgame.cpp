@@ -3984,6 +3984,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 			auto [known, removedKnown] = isKnownCreature(creature->getID());
 			AddCreature(msg, creature, known, removedKnown);
 			writeToOutputBuffer(msg);
+			sendCreatureSquare(creature, player->getCreatureSquare(creature));
 		}
 
 		if (magicEffect != CONST_ME_NONE) {
@@ -4008,6 +4009,11 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	writeToOutputBuffer(msg);
 
 	sendMapDescription(pos);
+	for (const auto& visiblePlayer : g_game.getPlayers()) {
+		if (visiblePlayer->getInstanceID() == player->getInstanceID() && canSee(visiblePlayer->getPosition())) {
+			sendCreatureSquare(visiblePlayer.get(), player->getCreatureSquare(visiblePlayer.get()));
+		}
+	}
 	sendZoneWeather(pos, true);
 
 	if (magicEffect != CONST_ME_NONE) {
