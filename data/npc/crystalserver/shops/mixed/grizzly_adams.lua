@@ -26,69 +26,69 @@ npcConfig.flags = {
 npcConfig.shop = {
 	-- HuntsMan rank
 	-- Sell offers
-	{ clientId = 10297, sell = 50, itemName = "antlers", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 9633, sell = 100, itemName = "bloody pincers", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10272, sell = 35, itemName = "crab pincers", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 9657, sell = 55, itemName = "cyclops toe", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12316, sell = 550, itemName = "cavebear skull", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 17818, sell = 150, itemName = "cheesy figurine", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 11514, sell = 110, itemName = "colourful feather", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 7398, sell = 500, itemName = "cyclops trophy", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10398, sell = 15000, itemName = "draken trophy", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12309, sell = 800, itemName = "draptor scales", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 18994, sell = 115, itemName = "elven hoof", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 9648, sell = 30, itemName = "frosty ear of a troll", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12317, sell = 950, itemName = "giant crab pincer", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 11539, sell = 20, itemName = "goblin ear", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12314, sell = 400, itemName = "hollow stampor hoof", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10282, sell = 600, itemName = "hydra head", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10455, sell = 80, itemName = "lancer beetle shell", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10419, sell = 8000, itemName = "lizard trophy", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 11489, sell = 280, itemName = "mantassin tail", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 17461, sell = 65, itemName = "marsh stalker beak", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 17462, sell = 50, itemName = "marsh stalker feather", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12315, sell = 250, itemName = "maxilla", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 7401, sell = 500, itemName = "minotaur trophy", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 9662, sell = 420, itemName = "mutated bat ear", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12039, sell = 750, itemName = "panther head", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12040, sell = 300, itemName = "panther paw", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 11491, sell = 500, itemName = "quara bone", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 11491, sell = 350, itemName = "quara eye", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 11490, sell = 410, itemName = "quara pincers", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 11487, sell = 140, itemName = "quara tentacle", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12172, sell = 50, itemName = "rabbit's foot", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 18993, sell = 70, itemName = "rorc feather", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10311, sell = 400, itemName = "sabretooth", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10456, sell = 20, itemName = "sandcrawler shell", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 9631, sell = 280, itemName = "scarab pincers", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12312, sell = 280, itemName = "stampor horn", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 12313, sell = 150, itemName = "stampor talons", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10454, sell = 60, itemName = "terramite legs", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10452, sell = 170, itemName = "terramite shell", storageKey = POINTSSTORAGE, storageValue = 10 },
-	{ clientId = 10273, sell = 95, itemName = "terrorbird beak", storageKey = POINTSSTORAGE, storageValue = 10 },
+	{ clientId = 10297, sell = 50, itemName = "antlers", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 9633, sell = 100, itemName = "bloody pincers", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10272, sell = 35, itemName = "crab pincers", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 9657, sell = 55, itemName = "cyclops toe", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12316, sell = 550, itemName = "cavebear skull", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 17818, sell = 150, itemName = "cheesy figurine", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 11514, sell = 110, itemName = "colourful feather", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 7398, sell = 500, itemName = "cyclops trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10398, sell = 15000, itemName = "draken trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12309, sell = 800, itemName = "draptor scales", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 18994, sell = 115, itemName = "elven hoof", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 9648, sell = 30, itemName = "frosty ear of a troll", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12317, sell = 950, itemName = "giant crab pincer", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 11539, sell = 20, itemName = "goblin ear", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12314, sell = 400, itemName = "hollow stampor hoof", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10282, sell = 600, itemName = "hydra head", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10455, sell = 80, itemName = "lancer beetle shell", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10419, sell = 8000, itemName = "lizard trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 11489, sell = 280, itemName = "mantassin tail", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 17461, sell = 65, itemName = "marsh stalker beak", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 17462, sell = 50, itemName = "marsh stalker feather", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12315, sell = 250, itemName = "maxilla", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 7401, sell = 500, itemName = "minotaur trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 9662, sell = 420, itemName = "mutated bat ear", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12039, sell = 750, itemName = "panther head", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12040, sell = 300, itemName = "panther paw", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 11491, sell = 500, itemName = "quara bone", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 11491, sell = 350, itemName = "quara eye", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 11490, sell = 410, itemName = "quara pincers", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 11487, sell = 140, itemName = "quara tentacle", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12172, sell = 50, itemName = "rabbit's foot", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 18993, sell = 70, itemName = "rorc feather", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10311, sell = 400, itemName = "sabretooth", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10456, sell = 20, itemName = "sandcrawler shell", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 9631, sell = 280, itemName = "scarab pincers", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12312, sell = 280, itemName = "stampor horn", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 12313, sell = 150, itemName = "stampor talons", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10454, sell = 60, itemName = "terramite legs", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10452, sell = 170, itemName = "terramite shell", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
+	{ clientId = 10273, sell = 95, itemName = "terrorbird beak", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 10 },
 	-- Buy offers
-	{ clientId = 5907, buy = 35000, itemName = "slingshot", storageKey = POINTSSTORAGE, storageValue = 20 },
+	{ clientId = 5907, buy = 35000, itemName = "slingshot", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 20 },
 
 	-- BigGameHunter rank
-	{ clientId = 10244, sell = 6000, itemName = "bonebeast trophy", storageKey = POINTSSTORAGE, storageValue = 40 },
-	{ clientId = 7397, sell = 3000, itemName = "deer trophy", storageKey = POINTSSTORAGE, storageValue = 40 },
-	{ clientId = 7400, sell = 3000, itemName = "lion trophy", storageKey = POINTSSTORAGE, storageValue = 40 },
-	{ clientId = 7395, sell = 1000, itemName = "orc trophy", storageKey = POINTSSTORAGE, storageValue = 40 },
-	{ clientId = 7394, sell = 3000, itemName = "wolf trophy", storageKey = POINTSSTORAGE, storageValue = 40 },
+	{ clientId = 10244, sell = 6000, itemName = "bonebeast trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 40 },
+	{ clientId = 7397, sell = 3000, itemName = "deer trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 40 },
+	{ clientId = 7400, sell = 3000, itemName = "lion trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 40 },
+	{ clientId = 7395, sell = 1000, itemName = "orc trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 40 },
+	{ clientId = 7394, sell = 3000, itemName = "wolf trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 40 },
 
 	-- TrophyHunter rank
 	-- Sell offers
-	{ clientId = 7396, sell = 20000, itemName = "behemoth trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
-	{ clientId = 7393, sell = 40000, itemName = "demon trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
-	{ clientId = 7399, sell = 10000, itemName = "dragon lord trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
-	{ clientId = 10421, sell = 3000, itemName = "disgusting trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
-	{ clientId = 22101, sell = 9000, itemName = "werebadger trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
-	{ clientId = 22102, sell = 10000, itemName = "wereboar trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
-	{ clientId = 22103, sell = 11000, itemName = "werebear trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
-	{ clientId = 27706, sell = 9000, itemName = "werefox trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
-	{ clientId = 34219, sell = 12000, itemName = "werehyaena trophy", storageKey = POINTSSTORAGE, storageValue = 70 },
+	{ clientId = 7396, sell = 20000, itemName = "behemoth trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
+	{ clientId = 7393, sell = 40000, itemName = "demon trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
+	{ clientId = 7399, sell = 10000, itemName = "dragon lord trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
+	{ clientId = 10421, sell = 3000, itemName = "disgusting trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
+	{ clientId = 22101, sell = 9000, itemName = "werebadger trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
+	{ clientId = 22102, sell = 10000, itemName = "wereboar trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
+	{ clientId = 22103, sell = 11000, itemName = "werebear trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
+	{ clientId = 27706, sell = 9000, itemName = "werefox trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
+	{ clientId = 34219, sell = 12000, itemName = "werehyaena trophy", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
 	-- Buy offers
-	{ clientId = 9601, buy = 1000, itemName = "demon backpack", storageKey = POINTSSTORAGE, storageValue = 70 },
+	{ clientId = 9601, buy = 1000, itemName = "demon backpack", storageKey = Storage.Quest.U8_5.KillingInTheNameOf.Points, storageValue = 70 },
 }
 -- On buy npc shop message
 npcType.onBuyItem = function(npc, player, itemId, subType, amount, ignore, inBackpacks, totalCost)
@@ -135,13 +135,13 @@ local function greetCallback(npc, creature)
 	if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry) ~= 0 then
 		npcHandler:setMessage(MESSAGE_GREET, "Hi there, do you want to to {join} the 'Paw and Fur - Hunting Elite'?")
 	elseif
-		player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) < 0 and player:getStorageValue(POINTSSTORAGE) >= 10 and player:getLevel() >= 6 -- to Huntsman Rank
-		or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 0 and player:getStorageValue(POINTSSTORAGE) >= 20 and player:getLevel() >= 6 -- to Ranger Rank
-		or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 2 and player:getStorageValue(POINTSSTORAGE) >= 40 and player:getLevel() >= 50 -- to Big Game Hunter Rank
-		or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 4 and player:getStorageValue(POINTSSTORAGE) >= 70 and player:getLevel() >= 80 -- to Trophy Hunter Rank
-		or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 6 and player:getStorageValue(POINTSSTORAGE) >= 100 and player:getLevel() >= 130
+		player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) < 0 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 10 and player:getLevel() >= 6 -- to Huntsman Rank
+		or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 0 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 20 and player:getLevel() >= 6 -- to Ranger Rank
+		or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 2 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 40 and player:getLevel() >= 50 -- to Big Game Hunter Rank
+		or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 4 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 70 and player:getLevel() >= 80 -- to Trophy Hunter Rank
+		or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 6 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 100 and player:getLevel() >= 130
 	then -- to Elite Hunter Rank
-		npcHandler:setMessage(MESSAGE_GREET, "Good to see you again |PLAYERNAME|. You gained " .. player:getStorageValue(POINTSSTORAGE) .. " points for our society. Ask me for {promotion} to advance your rank!")
+		npcHandler:setMessage(MESSAGE_GREET, "Good to see you again |PLAYERNAME|. You gained " .. player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) .. " points for our society. Ask me for {promotion} to advance your rank!")
 	else
 		npcHandler:setMessage(MESSAGE_GREET, "Welcome to the 'Paw and Fur - Hunting Elite' |PLAYERNAME|. Feel free to do {tasks} for us.")
 	end
@@ -413,7 +413,7 @@ local function creatureSayCallback(npc, creature, type, message)
 		player:setStorageValue(JOIN_STOR, 1)
 		player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.BossPoints, 0)
 		player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry, 0)
-		player:setStorageValue(POINTSSTORAGE, 0)
+		player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points, 0)
 		npcHandler:say("Great! A warm welcome to our newest member: |PLAYERNAME|! Ask me for a {task} if you want to go on a hunt.", npc, creature)
 	elseif table.contains({ "report", "reports" }, message:lower()) then
 		if checkZ(npc, player, message) == true then
@@ -429,11 +429,11 @@ local function creatureSayCallback(npc, creature, type, message)
 			return true
 		end
 		if
-			player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) < 0 and player:getStorageValue(POINTSSTORAGE) >= 10 and player:getLevel() >= 6 -- to Huntsman Rank
-			or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 0 and player:getStorageValue(POINTSSTORAGE) >= 20 and player:getLevel() >= 6 -- to Ranger Rank
-			or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 2 and player:getStorageValue(POINTSSTORAGE) >= 40 and player:getLevel() >= 50 -- to Big Game Hunter Rank
-			or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 4 and player:getStorageValue(POINTSSTORAGE) >= 70 and player:getLevel() >= 80 -- to Trophy Hunter Rank
-			or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 6 and player:getStorageValue(POINTSSTORAGE) >= 100 and player:getLevel() >= 130
+			player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) < 0 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 10 and player:getLevel() >= 6 -- to Huntsman Rank
+			or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 0 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 20 and player:getLevel() >= 6 -- to Ranger Rank
+			or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 2 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 40 and player:getLevel() >= 50 -- to Big Game Hunter Rank
+			or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 4 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 70 and player:getLevel() >= 80 -- to Trophy Hunter Rank
+			or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 6 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 100 and player:getLevel() >= 130
 		then -- to Elite Hunter Rank
 			npcHandler:say("You are ready to advance one rank in our society |PLAYERNAME|. Ask me for a {promotion} first.", npc, creature)
 			return true
@@ -482,25 +482,25 @@ local function creatureSayCallback(npc, creature, type, message)
 							end
 
 							local pointsToReceive = reward.value[1] * ratePoints
-							if player:getStorageValue(POINTSSTORAGE) >= 40 and player:getLevel() < 50 or player:getStorageValue(POINTSSTORAGE) >= 70 and player:getLevel() < 80 or player:getStorageValue(POINTSSTORAGE) >= 100 and player:getLevel() < 130 then
+							if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 40 and player:getLevel() < 50 or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 70 and player:getLevel() < 80 or player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 100 and player:getLevel() < 130 then
 								messageAltPoints = true
-							elseif player:getLevel() >= 130 and player:getStorageValue(POINTSSTORAGE) <= 20 then
-								player:setStorageValue(POINTSSTORAGE, getPlayerTasksPoints(creature) + pointsToReceive + 3)
+							elseif player:getLevel() >= 130 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) <= 20 then
+								player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points, getPlayerTasksPoints(creature) + pointsToReceive + 3)
 								messageAltExtraPoints = true
 								extraValue = 3
 								player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry, player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry)) -- fake update
-							elseif player:getLevel() >= 130 and player:getStorageValue(POINTSSTORAGE) <= 40 then
-								player:setStorageValue(POINTSSTORAGE, getPlayerTasksPoints(creature) + pointsToReceive + 2)
+							elseif player:getLevel() >= 130 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) <= 40 then
+								player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points, getPlayerTasksPoints(creature) + pointsToReceive + 2)
 								messageAltExtraPoints = true
 								extraValue = 2
 								player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry, player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry)) -- fake update
-							elseif player:getLevel() >= 130 and player:getStorageValue(POINTSSTORAGE) <= 70 then
-								player:setStorageValue(POINTSSTORAGE, getPlayerTasksPoints(creature) + pointsToReceive + 1)
+							elseif player:getLevel() >= 130 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) <= 70 then
+								player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points, getPlayerTasksPoints(creature) + pointsToReceive + 1)
 								messageAltExtraPoints = true
 								extraValue = 1
 								player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry, player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry)) -- fake update
 							else
-								player:setStorageValue(POINTSSTORAGE, getPlayerTasksPoints(creature) + pointsToReceive)
+								player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points, getPlayerTasksPoints(creature) + pointsToReceive)
 								player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry, player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.QuestLogEntry)) -- fake update
 							end
 						elseif table.contains({ REWARD_ITEM, "item", "items", "object" }, reward.type:lower()) and not deny then
@@ -563,7 +563,7 @@ local function creatureSayCallback(npc, creature, type, message)
 			return true
 		end
 		if player:getLevel() < 50 then
-			if player:getStorageValue(POINTSSTORAGE) >= 40 then
+			if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 40 then
 				npcHandler:say({
 					"You may not advance in your rank anymore until you've levelled up. But you can accept tasks without getting Paw & Fur points, just for an experience reward and the possibility to fight a boss from the range lower than level 50. ...",
 					"You can try {crocodiles}, {badgers}, {tarantulas}, {carniphilas}, {stone golems}, {mammoths}, {gnarlhounds}, ...",
@@ -573,7 +573,7 @@ local function creatureSayCallback(npc, creature, type, message)
 				npcHandler:say("Alright, what would you like to hunt? {Crocodiles}, {badgers}, {tarantulas}, {carniphilas}, {stone golems}, {mammoths}, {gnarlhounds}, {terramites}, {apes}, {thornback tortoises} or {gargoyles}.", npc, creature)
 			end
 		elseif player:getLevel() >= 50 and player:getLevel() < 80 then
-			if player:getStorageValue(POINTSSTORAGE) >= 70 then
+			if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 70 then
 				npcHandler:say({
 					"You may not advance in your rank anymore until you've levelled up. But you can accept tasks without getting Paw & Fur points, just for an experience reward and the possibility to fight a boss from the range lower than level 80. ...",
 					"You can try {ice golems}, {quara scouts}, {mutated rats}, {ancient scarabs}, {wyverns}, {lancer beetles}, {wailing widows}, ...",
@@ -586,7 +586,7 @@ local function creatureSayCallback(npc, creature, type, message)
 				}, npc, creature)
 			end
 		elseif player:getLevel() >= 80 and player:getLevel() < 130 then
-			if player:getStorageValue(POINTSSTORAGE) >= 100 then
+			if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 100 then
 				npcHandler:say({
 					"You may not advance in your rank anymore until you've levelled up. But you can accept tasks without getting Paw & Fur points, just for an experience reward and the possibility to fight a boss from the range lower than level 130. ...",
 					"You can try {underwater quara}, {giant spiders}, {werewolves}, {nightmares}, {hellspawns}, {high class lizards}, {stampors}, ...",
@@ -598,7 +598,7 @@ local function creatureSayCallback(npc, creature, type, message)
 					"as well as {high class lizards}, {stampors}, {brimstone bugs}, {mutated bats}.",
 				}, npc, creature)
 			end
-		elseif player:getLevel() >= 130 and player:getStorageValue(POINTSSTORAGE) < 100 then
+		elseif player:getLevel() >= 130 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) < 100 then
 			npcHandler:say({
 				"Alright, what would you like to hunt? You can try {hydras}, {serpent spawns}, {medusae}, {behemoths}, {sea serpents}, ...",
 				"as well as {hellhounds}, {ghastly dragons}, {undead dragons}, {draken} and {destroyers}.",
@@ -623,7 +623,7 @@ local function creatureSayCallback(npc, creature, type, message)
 		end
 		local messageElse = "You already achieved the maximum rank for your level range. If you accept this task, you won't gain points for our society. Hunt " .. tasks.GrizzlyAdams[task].killsRequired .. " " .. tasks.GrizzlyAdams[task].raceName .. " and you'll be rewarded with experience and the possibility to choose a {boss}. Are you in, old chap?"
 		if table.contains(tier[1].allName, message:lower()) then
-			if player:getStorageValue(POINTSSTORAGE) >= 40 and player:getLevel() < 50 then
+			if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 40 and player:getLevel() < 50 then
 				npcHandler:say(messageElse, npc, creature)
 			elseif table.contains({ "carniphilas", "carniphila" }, message:lower()) then
 				local chanceX = math.random(2)
@@ -638,7 +638,7 @@ local function creatureSayCallback(npc, creature, type, message)
 				npcHandler:say(messageStartTaskAlt[message:lower()], npc, creature)
 			end
 		elseif table.contains(tier[2].allName, message:lower()) then
-			if player:getStorageValue(POINTSSTORAGE) >= 70 and player:getLevel() < 80 then
+			if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 70 and player:getLevel() < 80 then
 				npcHandler:say(messageElse, npc, creature)
 			elseif table.contains(tier[2].withsName, message:lower()) then
 				npcHandler:say(messageStartTask[message:lower()], npc, creature)
@@ -646,7 +646,7 @@ local function creatureSayCallback(npc, creature, type, message)
 				npcHandler:say(messageStartTaskAlt[message:lower()], npc, creature)
 			end
 		elseif table.contains(tier[3].allName, message:lower()) then
-			if player:getStorageValue(POINTSSTORAGE) >= 100 and player:getLevel() < 130 then
+			if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 100 and player:getLevel() < 130 then
 				npcHandler:say(messageElse, npc, creature)
 			elseif table.contains(tier[3].withsName, message:lower()) then
 				npcHandler:say(messageStartTask[message:lower()], npc, creature)
@@ -739,31 +739,31 @@ local function creatureSayCallback(npc, creature, type, message)
 			npcHandler:say("You haven't started any task yet.", npc, creature)
 		end
 	elseif table.contains({ "promotion", "promotions" }, message:lower()) then
-		if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) < 0 and player:getStorageValue(POINTSSTORAGE) >= 10 and player:getLevel() >= 6 then -- to Huntsman Rank
+		if player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) < 0 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 10 and player:getLevel() >= 6 then -- to Huntsman Rank
 			npcHandler:say({
 				"You gained 10 points! Let me promote you to the first rank: 'Huntsman'. Congratulations! ...",
 				"If you find any trophies - either monster heads or other parts of monsters that you don't need - feel free to ask me for a trade.",
 			}, npc, creature)
 			player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank, 0)
-		elseif player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 0 and player:getStorageValue(POINTSSTORAGE) >= 20 and player:getLevel() >= 6 then -- to Ranger Rank
+		elseif player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 0 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 20 and player:getLevel() >= 6 then -- to Ranger Rank
 			npcHandler:say({
 				"You gained 20 points. It's time for a promotion. You advance to the rank of a 'Ranger'. Congratulations! ...",
 				"Oh, I made a deal with Lorek. He ships Rangers from our society - and higher ranks of course - to Banuta, Chor or near the mountain pass to Darama. Just ask him for a passage.",
 			}, npc, creature)
 			player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank, 2)
-		elseif player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 2 and player:getStorageValue(POINTSSTORAGE) >= 40 and player:getLevel() >= 50 then -- to Big Game Hunter Rank
+		elseif player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 2 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 40 and player:getLevel() >= 50 then -- to Big Game Hunter Rank
 			npcHandler:say({
 				"Good show! You gained 40 points for the 'Paw and Fur - Hunting Elite'. You have earned the right to join the ranks of those known as 'Big game hunter'. Congratulations! ...",
 				"From now on I'll buy more trophies from you!",
 			}, npc, creature)
 			player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank, 4)
-		elseif player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 4 and player:getStorageValue(POINTSSTORAGE) >= 70 and player:getLevel() >= 80 then -- to Trophy Hunter Rank
+		elseif player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 4 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 70 and player:getLevel() >= 80 then -- to Trophy Hunter Rank
 			npcHandler:say({
 				"Spiffing! You gained 70 hunting points! From now on you can call yourself a 'Trophy hunter'. As a reward I have this special backpack for you and in addition, you can sell some more rare trophies to me. ...",
 				"Ask me for {special} tasks from time to time.",
 			}, npc, creature)
 			player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank, 6)
-		elseif player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 6 and player:getStorageValue(POINTSSTORAGE) >= 100 and player:getLevel() >= 130 then -- to Elite Hunter Rank
+		elseif player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank) == 6 and player:getStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.Points) >= 100 and player:getLevel() >= 130 then -- to Elite Hunter Rank
 			npcHandler:say("Congratulations, |PLAYERNAME|! You have gained the highest rank: 'Elite hunter'. If you haven't done yet, ask me for the {special} task.", npc, creature)
 			player:setStorageValue(Storage.Quest.U8_5.KillingInTheNameOf.PawAndFurRank, 7)
 		else
