@@ -4010,7 +4010,8 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 
 	sendMapDescription(pos);
 	for (const auto& visiblePlayer : g_game.getPlayers()) {
-		if (visiblePlayer->getInstanceID() == player->getInstanceID() && canSee(visiblePlayer->getPosition())) {
+		if (visiblePlayer->getInstanceID() == player->getInstanceID() && canSee(visiblePlayer->getPosition()) &&
+		    player->canSeeCreature(visiblePlayer.get())) {
 			sendCreatureSquare(visiblePlayer.get(), player->getCreatureSquare(visiblePlayer.get()));
 		}
 	}

@@ -8022,7 +8022,7 @@ void Game::updateCreatureSquare(const Creature* creature)
 	const uint32_t creatureInstance = creature->getInstanceID();
 	for (const auto& spectator : spectators.players()) {
 		Player* player = static_cast<Player*>(spectator.get());
-		if (!player->compareInstance(creatureInstance)) {
+		if (!player->compareInstance(creatureInstance) || !player->canSeeCreature(creature)) {
 			continue;
 		}
 
