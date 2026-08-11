@@ -58,7 +58,7 @@ npcType.onBuyItem = function(npc, player, itemId, subType, amount, ignore, inBac
 end
 
 npcType.onSellItem = function(npc, player, itemId, subtype, amount, ignore, name, totalCost)
-	player:sendTextMessage(MESSAGE_TRADE, string.format("Sold %ix %s for %i gold.", amount, name, totalCost))
+	player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("Sold %ix %s for %i gold.", amount, name, totalCost))
 end
 
 local node1 = keywordHandler:addKeyword({ "greater tiger clash" }, StdModule.say, { npcHandler = npcHandler, onlyFocus = true, text = "Would you like to learn {greater tiger clash} magic spell for 6000 gold?" })
