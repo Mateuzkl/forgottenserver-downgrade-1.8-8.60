@@ -2128,6 +2128,79 @@ void Game::playerStowStack(uint32_t playerId, const Position& pos, uint16_t spri
 	}
 }
 
+void Game::playerStashWithdraw(uint32_t playerId, uint16_t itemId, uint8_t tier, uint32_t amount)
+{
+	const auto player = getPlayerByID(playerId);
+	if (!player || player->isRemoved()) {
+		return;
+	}
+
+	if (!tfs::supply_stash::hasSupplyStashAccess(player.get())) {
+		player->sendCancelMessage("You need to be near a depot to use the supply stash.");
+		return;
+	}
+
+	if (itemId == 0 || amount == 0 || tier > Stash::MAX_ITEM_TIER) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	const ItemType& type = Item::items[itemId];
+	if (type.id == 0) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	// Non-stackables come out one object at a time, so the cap is much lower —
+	// the same split the Lua makes. Without it a single request could try to
+	// create a hundred thousand separate items.
+	const uint32_t cap = type.stackable ? 100'000u : 100u;
+	const uint32_t wanted = std::min<uint32_t>(amount, cap);
+
+	auto& stash = player->getSupplyStash();
+	// Taken from the logical count first. remove() refuses to go below zero, so a
+	// request for more than is stored fails here rather than half-way through
+	// handing items over.
+	if (!stash.remove(itemId, tier, wanted)) {
+		player->sendCancelMessage("You do not have that many stored.");
+		return;
+	}
+
+	const uint32_t stackSize = type.stackable ? std::max<uint32_t>(1, Item::items[itemId].stackSize) : 1;
+	uint32_t remaining = wanted;
+	uint32_t delivered = 0;
+
+	while (remaining > 0) {
+		const uint32_t chunk = std::min(remaining, stackSize);
+		auto created = Item::CreateItem(itemId, static_cast<uint16_t>(chunk));
+		if (!created) {
+			break;
+		}
+
+		if (tier > 0) {
+			created->setTier(tier);
+		}
+
+		// dropOnMap so a full inventory does not silently swallow the withdrawal.
+		if (internalPlayerAddItem(player.get(), created.get(), true) != RETURNVALUE_NOERROR) {
+			break;
+		}
+
+		delivered += chunk;
+		remaining -= chunk;
+	}
+
+	// Whatever could not be handed over goes back, so the count never disappears
+	// between the stash and the player.
+	if (remaining > 0) {
+		[[maybe_unused]] const bool refunded = stash.add(itemId, tier, remaining);
+	}
+
+	if (delivered == 0) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+	}
+}
+
 void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
                           const Position& toPos, uint8_t count, Item* item, Cylinder* toCylinder)
 {
