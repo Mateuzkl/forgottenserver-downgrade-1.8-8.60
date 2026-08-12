@@ -14,20 +14,38 @@ class NetworkMessage;
 
 namespace tfs::supply_stash {
 
-// Opcode note, because the pairing is a trap.
+// Opcode directions. These are top-level packet opcodes, not extended opcodes,
+// and the numbers are only safe because the directions differ:
 //
-// These two numbers are only safe because they travel in opposite directions:
+//     C -> S  0x28   Supply Stash actions
+//     S -> C  0x28   ReLogin/Death window  (sendReLoginWindow)
+//     S -> C  0x29   Supply Stash contents
 //
-//     client -> server  0x28   free
-//     server -> client  0x29   free
-//     server -> client  0x28   ALREADY sendReLoginWindow()
-//
-// Never mirror the request opcode to answer on 0x28 — that is the death/relogin
-// window in 8.60 and the client will act on it.
+// Never answer a stash request on S -> C 0x28. That is the death/relogin window
+// in 8.60 and the client will act on it.
 inline constexpr uint8_t CLIENT_REQUEST_OPCODE = 0x28;
 inline constexpr uint8_t SERVER_CONTENTS_OPCODE = 0x29;
 
 // Wire values shared with AstraClient. Do not renumber.
+//
+// These replace the previous Lua numbering (OPEN = 1, STOW_ALL = 2,
+// WITHDRAW = 3), so 1 and 2 now mean something different than they used to and
+// a client that has not been updated is speaking the old dialect.
+//
+// That transition is safe only because every layout here is fixed size and the
+// parser rejects both short and long messages:
+//
+//     old OPEN      1 byte  -> this expects 8 more  -> Truncated, rejected
+//     old STOW_ALL  1 byte  -> this expects 8 more  -> Truncated, rejected
+//     old WITHDRAW  6 bytes -> this expects 7       -> Truncated, rejected
+//     old WITHDRAW  7 bytes -> identical layout     -> accepted, same meaning
+//
+// So an out-of-date client is refused rather than silently misread as an
+// item-moving command. test_supply_stash_protocol pins that down; if the length
+// guards are ever relaxed, the rollout stops being fail-safe.
+//
+// Note there is deliberately no OPEN action: opening the stash comes from using
+// the stash object, not from a client request.
 enum class Action : uint8_t
 {
 	StowItem = 0,

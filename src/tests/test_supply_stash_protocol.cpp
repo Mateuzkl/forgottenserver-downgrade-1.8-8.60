@@ -223,6 +223,49 @@ TEST_CASE(supply_stash_rejects_trailing_bytes)
 	CHECK(result.error == ParseError::TrailingBytes);
 }
 
+// The action numbering changed: the old Lua used OPEN = 1, STOW_ALL = 2,
+// WITHDRAW = 3, so 1 and 2 now mean StowContainer and StowStack. A client that
+// has not been updated must be refused, never reinterpreted as a command that
+// moves items. These three pin that down.
+TEST_CASE(supply_stash_rejects_legacy_open_request)
+{
+	NetworkMessage msg;
+	msg.addByte(1); // old ACTION_OPEN, now StowContainer, which needs 8 more bytes
+	rewind(msg);
+
+	const auto result = parseRequest(msg);
+
+	CHECK(!static_cast<bool>(result));
+	CHECK(result.error == ParseError::Truncated);
+}
+
+TEST_CASE(supply_stash_rejects_legacy_stow_all_request)
+{
+	NetworkMessage msg;
+	msg.addByte(2); // old ACTION_STOW_ALL, now StowStack
+	rewind(msg);
+
+	const auto result = parseRequest(msg);
+
+	CHECK(!static_cast<bool>(result));
+	CHECK(result.error == ParseError::Truncated);
+}
+
+TEST_CASE(supply_stash_rejects_legacy_withdraw_without_tier)
+{
+	// The old withdraw sent the tier byte only when it had one.
+	NetworkMessage msg;
+	msg.addByte(3);
+	msg.add<uint16_t>(2160);
+	msg.add<uint32_t>(10);
+	rewind(msg);
+
+	const auto result = parseRequest(msg);
+
+	CHECK(!static_cast<bool>(result));
+	CHECK(result.error == ParseError::Truncated);
+}
+
 TEST_CASE(supply_stash_serializes_contents_tier_aware)
 {
 	std::vector<StashRecord> rows{
