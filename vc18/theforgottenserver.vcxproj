@@ -265,6 +265,7 @@
     <ClCompile Include="..\src\market.cpp" />
     <ClCompile Include="..\src\stash.cpp" />
     <ClCompile Include="..\src\supply_stash_protocol.cpp" />
+    <ClCompile Include="..\src\supply_stash_rules.cpp" />
     <ClCompile Include="..\src\matrixarea.cpp" />
     <ClCompile Include="..\src\monster.cpp" />
     <ClCompile Include="..\src\monsters.cpp" />
@@ -387,6 +388,7 @@
     <ClInclude Include="..\src\market.h" />
     <ClInclude Include="..\src\stash.h" />
     <ClInclude Include="..\src\supply_stash_protocol.h" />
+    <ClInclude Include="..\src\supply_stash_rules.h" />
     <ClInclude Include="..\src\matrixarea.h" />
     <ClInclude Include="..\src\monster.h" />
     <ClInclude Include="..\src\monsters.h" />
