@@ -7,6 +7,10 @@
 
 #include "item.h"
 
+#include "game.h"
+#include "player.h"
+#include "tile.h"
+
 #include <algorithm>
 
 namespace tfs::supply_stash {
@@ -86,6 +90,67 @@ StowRejection getStowRejection(const Item* item)
 	}
 
 	return StowRejection::None;
+}
+
+namespace {
+
+// A tile grants access if it holds a depot or the stash object itself.
+bool tileGrantsStashAccess(const Tile* tile)
+{
+	if (!tile) {
+		return false;
+	}
+
+	const TileItemVector* items = tile->getItemList();
+	if (!items) {
+		return false;
+	}
+
+	for (const Item* item : *items) {
+		if (!item) {
+			continue;
+		}
+		const ItemType& type = Item::items[item->getID()];
+		if (type.isDepot() || item->getID() == ITEM_SUPPLY_STASH) {
+			return true;
+		}
+	}
+	return false;
+}
+
+} // namespace
+
+bool hasSupplyStashAccess(const Player* player)
+{
+	if (!player) {
+		return false;
+	}
+
+	const Position& position = player->getPosition();
+	const Tile* playerTile = g_game.map.getTile(position.x, position.y, position.z);
+
+	// Protection zone first: the stash is a town service, and requiring it keeps
+	// the whole thing out of reach mid-fight.
+	if (!playerTile || !playerTile->hasFlag(TILESTATE_PROTECTIONZONE)) {
+		return false;
+	}
+
+	if (tileGrantsStashAccess(playerTile)) {
+		return true;
+	}
+
+	for (int32_t dx = -1; dx <= 1; ++dx) {
+		for (int32_t dy = -1; dy <= 1; ++dy) {
+			if (dx == 0 && dy == 0) {
+				continue;
+			}
+			if (tileGrantsStashAccess(g_game.map.getTile(static_cast<uint16_t>(position.x + dx),
+			                                             static_cast<uint16_t>(position.y + dy), position.z))) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 } // namespace tfs::supply_stash

@@ -7,6 +7,7 @@
 #include <cstdint>
 
 class Item;
+class Player;
 
 namespace tfs::supply_stash {
 
@@ -39,6 +40,13 @@ enum class StowRejection : uint8_t
 {
 	return getStowRejection(item) == StowRejection::None;
 }
+
+// The stash is only reachable standing in a protection zone, on or next to a
+// depot or the stash object itself. Checked server-side on every action: an open
+// window on the client proves nothing, and the player may have walked away since.
+//
+// Ported from hasCurrentSupplyStashAccess in the Lua, same 3x3 area.
+[[nodiscard]] bool hasSupplyStashAccess(const Player* player);
 
 } // namespace tfs::supply_stash
 
