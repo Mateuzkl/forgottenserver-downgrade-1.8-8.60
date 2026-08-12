@@ -222,7 +222,11 @@ public:
 	DBResult& operator=(const DBResult&) = delete;
 
 	template <typename T>
-	T getNumber(const std::string& s) const
+	// string_view, matching getString/getStream below. Taking const std::string&
+	// forced every call site — all of which pass literals — to materialise a
+	// temporary std::string just to probe a map that is already keyed by
+	// string_view. Loading one player reads dozens of columns.
+	T getNumber(std::string_view s) const
 	{
 		auto it = listNames.find(s);
 		if (it == listNames.end()) {
