@@ -184,9 +184,13 @@ TEST_CASE(test_reactor_shutdown_wakes_run_loop)
 	TaskReactor reactor;
 	startReactor(reactor);
 	std::atomic_bool enteredLoop = false;
+	std::atomic_bool loopExited = false;
 
 	reactor.send([&enteredLoop] { enteredLoop.store(true, std::memory_order_release); });
-	std::jthread reactorThread([&reactor] { reactor.runLoop(); });
+	std::jthread reactorThread([&reactor, &loopExited] {
+		reactor.runLoop();
+		loopExited.store(true, std::memory_order_release);
+	});
 
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
 	while (!enteredLoop.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline) {
@@ -195,7 +199,22 @@ TEST_CASE(test_reactor_shutdown_wakes_run_loop)
 
 	CHECK(enteredLoop.load(std::memory_order_acquire));
 	reactor.shutdown();
+
+	// join() has no deadline of its own, so a missed wakeup hangs the whole suite
+	// instead of failing it. Bound the wait; if it expires, notify once more — by
+	// then the loop is definitely registered on the condition variable — so the
+	// test can report the failure rather than block ctest until CI times out.
+	const auto exitDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	while (!loopExited.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < exitDeadline) {
+		std::this_thread::yield();
+	}
+	const bool exitedInTime = loopExited.load(std::memory_order_acquire);
+	if (!exitedInTime) {
+		reactor.shutdown();
+	}
+
 	reactorThread.join();
+	CHECK(exitedInTime);
 	CHECK(reactor.getState() == THREAD_STATE_TERMINATED);
 }
 
