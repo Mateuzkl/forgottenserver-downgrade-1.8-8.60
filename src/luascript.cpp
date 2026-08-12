@@ -3999,6 +3999,24 @@ int LuaScriptInterface::luaAddEvent(lua_State* L)
 	eventDesc.eventId = g_scheduler.addEvent(createSchedulerTaskWithStats(
 	    delay, [timerEventId]() { g_luaEnvironment.executeTimerEvent(timerEventId); }, "Lua timer callback", eventOrigin));
 
+	if (eventDesc.eventId == 0) {
+		// The scheduler refused the event: it is not running, or the reactor's
+		// scheduleInbox overflowed and dropped the task. executeTimerEvent() will
+		// therefore never run, so nothing would ever release these registry refs.
+		// Drop them here instead of registering an event that can never fire —
+		// otherwise the refs, and every game object the userdata keeps alive,
+		// leak until shutdown.
+		luaL_unref(L, LUA_REGISTRYINDEX, eventDesc.function);
+		for (auto parameter : eventDesc.parameters) {
+			luaL_unref(L, LUA_REGISTRYINDEX, parameter);
+		}
+		LOG_ERROR("[Error - LuaScriptInterface::luaAddEvent] Scheduler rejected the event; "
+		          "the callback will not run (origin: {})",
+		          eventOrigin);
+		lua_pushnil(L);
+		return 1;
+	}
+
 	g_luaEnvironment.timerEvents.emplace(lastTimerEventId, std::move(eventDesc));
 	lua_pushinteger(L, lastTimerEventId++);
 	return 1;
