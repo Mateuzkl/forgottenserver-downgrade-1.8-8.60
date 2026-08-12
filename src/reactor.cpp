@@ -221,7 +221,13 @@ void TaskReactor::runOnce()
 
 void TaskReactor::shutdown() noexcept
 {
-	threadState.store(THREAD_STATE_TERMINATED, std::memory_order_release);
+	// The state has to change under the mutex. waitForWork() evaluates its predicate
+	// holding the lock and only then blocks; a store from outside can land in that
+	// window, and notify_all() reaches nobody because the waiter is not registered yet.
+	{
+		std::scoped_lock lock(mutex);
+		threadState.store(THREAD_STATE_TERMINATED, std::memory_order_release);
+	}
 	conditionVariable.notify_all();
 }
 
