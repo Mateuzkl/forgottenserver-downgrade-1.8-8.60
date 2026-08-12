@@ -35,9 +35,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN groupadd -r tfs && useradd -r -g tfs -d /srv -s /bin/sh tfs
 COPY --from=build /usr/src/forgottenserver-downgrade/build/tfs /bin/tfs
 # Fail here rather than publishing an image that exits 127 on first run.
-RUN if ldd /bin/tfs | grep -q 'not found'; then \
-        echo 'Runtime stage is missing shared libraries:' >&2; \
-        ldd /bin/tfs | grep 'not found' >&2; \
+# Written to fail closed: the shell has no pipefail, so `ldd ... | grep -q` would
+# report success whenever ldd itself failed, which is exactly when the check
+# matters most. Capture the output, judge ldd's own exit status first, and only
+# then look for missing libraries.
+RUN set -eu; \
+    if ! command -v ldd >/dev/null 2>&1; then \
+        echo 'ldd is unavailable in the runtime stage; cannot verify linkage' >&2; \
+        exit 1; \
+    fi; \
+    if linkage="$(ldd /bin/tfs 2>&1)"; then \
+        if printf '%s\n' "$linkage" | grep -q 'not found'; then \
+            echo 'Runtime stage is missing shared libraries:' >&2; \
+            printf '%s\n' "$linkage" | grep 'not found' >&2; \
+            exit 1; \
+        fi; \
+    elif printf '%s\n' "$linkage" | grep -q 'not a dynamic executable'; then \
+        echo 'Binary is statically linked; no shared libraries to verify'; \
+    else \
+        echo 'ldd failed on /bin/tfs:' >&2; \
+        printf '%s\n' "$linkage" >&2; \
         exit 1; \
     fi
 COPY data /srv/data/
