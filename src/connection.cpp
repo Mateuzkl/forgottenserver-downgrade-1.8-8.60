@@ -330,6 +330,14 @@ void Connection::send(const OutputMessage_ptr& msg)
 		return;
 	}
 
+	if (messageQueue.size() >= MAX_PENDING_WRITE_MESSAGES) {
+		LOG_NETWORK(fmt::format("{} disconnected for exceeding the pending write limit ({} messages).",
+		                        convertIPToString(getIPLocked()), MAX_PENDING_WRITE_MESSAGES));
+		messageQueue.clear();
+		closeLocked(FORCE_CLOSE);
+		return;
+	}
+
 	bool noPendingWrite = messageQueue.empty();
 	messageQueue.emplace_back(msg);
 	if (noPendingWrite) {
