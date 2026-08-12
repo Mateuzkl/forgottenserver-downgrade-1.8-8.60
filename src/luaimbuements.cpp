@@ -101,7 +101,7 @@ int LuaScriptInterface::luaItemHasImbuement(lua_State* L)
 	// item:hasImbuement(imbuement)
 	Item* item = getItemUserdata<Item>(L, 1);
 	if (item) {
-		std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 2);
+		const auto& imbue = getSharedPtr<Imbuement>(L, 2);
 		if (imbue) {
 			pushBoolean(L, item->hasImbuement(imbue));
 		} else {
@@ -135,7 +135,7 @@ int LuaScriptInterface::luaItemAddImbuement(lua_State* L)
 			return 1;
 		}
 
-		std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 2);
+		const auto& imbue = getSharedPtr<Imbuement>(L, 2);
 		if (imbue) {
 			pushBoolean(L, item->addImbuement(imbue, true));
 		}
@@ -155,7 +155,7 @@ int LuaScriptInterface::luaItemRemoveImbuement(lua_State* L)
 			return 1;
 		}
 
-		std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 2);
+		const auto& imbue = getSharedPtr<Imbuement>(L, 2);
 		if (imbue) {
 			pushBoolean(L, item->removeImbuement(imbue, false));
 		}
@@ -179,11 +179,13 @@ int LuaScriptInterface::luaItemGetImbuements(lua_State* L)
 		return 1;
 	}
 
-	std::vector<std::shared_ptr<Imbuement>> imbuements = item->getImbuements();
+	// getImbuements() returns a reference; binding by value copied the whole
+	// vector and bumped the refcount of every element for nothing.
+	const auto& imbuements = item->getImbuements();
 	lua_createtable(L, imbuements.size(), 0);
 
 	int index = 0;
-	for (std::shared_ptr<Imbuement> imbuement : imbuements) {
+	for (const auto& imbuement : imbuements) {
 		pushSharedPtr(L, imbuement);
 		setMetatable(L, -1, "Imbuement");
 		lua_rawseti(L, -2, ++index);
@@ -221,7 +223,7 @@ int LuaScriptInterface::luaImbuementCreate(lua_State* L)
 	uint32_t duration = getNumber<uint32_t>(L, 4);
 	ImbuementDecayType decayType = getNumber<ImbuementDecayType>(L, 5, IMBUEMENT_DECAY_EQUIPPED);
 	uint16_t baseId = getNumber<uint16_t>(L, 6, 0);
-	pushSharedPtr(L, std::make_shared<Imbuement>(Imbuement(imbueType, amount, duration, decayType, baseId)));
+	pushSharedPtr(L, std::make_shared<Imbuement>(imbueType, amount, duration, decayType, baseId));
 	setMetatable(L, -1, "Imbuement");
 	return 1;
 }
@@ -229,7 +231,7 @@ int LuaScriptInterface::luaImbuementCreate(lua_State* L)
 int LuaScriptInterface::luaImbuementGetBaseId(lua_State* L)
 {
 	// imbuement:getBaseId()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		lua_pushnumber(L, imbue->baseId);
 	} else {
@@ -241,7 +243,7 @@ int LuaScriptInterface::luaImbuementGetBaseId(lua_State* L)
 int LuaScriptInterface::luaImbuementGetType(lua_State* L)
 {
 	// imbuement:getType()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		lua_pushnumber(L, static_cast<uint8_t>(imbue->imbuetype));
 	} else {
@@ -253,7 +255,7 @@ int LuaScriptInterface::luaImbuementGetType(lua_State* L)
 int LuaScriptInterface::luaImbuementGetValue(lua_State* L)
 {
 	// imbuement:getValue()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		lua_pushnumber(L, imbue->value);
 	} else {
@@ -265,7 +267,7 @@ int LuaScriptInterface::luaImbuementGetValue(lua_State* L)
 int LuaScriptInterface::luaImbuementGetDuration(lua_State* L)
 {
 	// imbuement:getDuration()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		lua_pushnumber(L, imbue->duration);
 	} else {
@@ -277,7 +279,7 @@ int LuaScriptInterface::luaImbuementGetDuration(lua_State* L)
 int LuaScriptInterface::luaImbuementIsSkill(lua_State* L)
 {
 	// imbuement:isSkill()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		pushBoolean(L, imbue->isSkill());
 	} else {
@@ -289,7 +291,7 @@ int LuaScriptInterface::luaImbuementIsSkill(lua_State* L)
 int LuaScriptInterface::luaImbuementIsSpecialSkill(lua_State* L)
 {
 	// imbuement:isSpecialSkill()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		pushBoolean(L, imbue->isSpecialSkill());
 	} else {
@@ -301,7 +303,7 @@ int LuaScriptInterface::luaImbuementIsSpecialSkill(lua_State* L)
 int LuaScriptInterface::luaImbuementIsDamage(lua_State* L)
 {
 	// imbuement:isDamage()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		pushBoolean(L, imbue->isDamage());
 	} else {
@@ -313,7 +315,7 @@ int LuaScriptInterface::luaImbuementIsDamage(lua_State* L)
 int LuaScriptInterface::luaImbuementIsResist(lua_State* L)
 {
 	// imbuement:isResist()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		pushBoolean(L, imbue->isResist());
 	} else {
@@ -325,7 +327,7 @@ int LuaScriptInterface::luaImbuementIsResist(lua_State* L)
 int LuaScriptInterface::luaImbuementIsStat(lua_State* L)
 {
 	// imbuement:isStat()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		pushBoolean(L, imbue->isStat());
 	} else {
@@ -337,7 +339,7 @@ int LuaScriptInterface::luaImbuementIsStat(lua_State* L)
 int LuaScriptInterface::luaImbuementSetValue(lua_State* L)
 {
 	// imbuement:setValue(amount)
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		imbue->value = getNumber<uint32_t>(L, 2);
 		pushBoolean(L, true);
@@ -350,7 +352,7 @@ int LuaScriptInterface::luaImbuementSetValue(lua_State* L)
 int LuaScriptInterface::luaImbuementSetDuration(lua_State* L)
 {
 	// imbuement:setDuration(duration)
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		imbue->duration = getNumber<uint32_t>(L, 2);
 		pushBoolean(L, true);
@@ -363,7 +365,7 @@ int LuaScriptInterface::luaImbuementSetDuration(lua_State* L)
 int LuaScriptInterface::luaImbuementSetEquipDecay(lua_State* L)
 {
 	// imbuement:makeEquipDecayed()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		imbue->decaytype = IMBUEMENT_DECAY_EQUIPPED;
 		pushBoolean(L, true);
@@ -376,7 +378,7 @@ int LuaScriptInterface::luaImbuementSetEquipDecay(lua_State* L)
 int LuaScriptInterface::luaImbuementSetInfightDecay(lua_State* L)
 {
 	// imbuement:makeInfightDecayed()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		imbue->decaytype = IMBUEMENT_DECAY_INFIGHT;
 		pushBoolean(L, true);
@@ -389,7 +391,7 @@ int LuaScriptInterface::luaImbuementSetInfightDecay(lua_State* L)
 int LuaScriptInterface::luaImbuementIsEquipDecay(lua_State* L)
 {
 	// imbuement:isEquipDecayed()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		pushBoolean(L, imbue->decaytype == IMBUEMENT_DECAY_EQUIPPED);
 	} else {
@@ -401,7 +403,7 @@ int LuaScriptInterface::luaImbuementIsEquipDecay(lua_State* L)
 int LuaScriptInterface::luaImbuementIsInfightDecay(lua_State* L)
 {
 	// imbuement:isInfightDecayed()
-	std::shared_ptr<Imbuement> imbue = getSharedPtr<Imbuement>(L, 1);
+	const auto& imbue = getSharedPtr<Imbuement>(L, 1);
 	if (imbue) {
 		pushBoolean(L, imbue->decaytype == IMBUEMENT_DECAY_INFIGHT);
 	} else {
