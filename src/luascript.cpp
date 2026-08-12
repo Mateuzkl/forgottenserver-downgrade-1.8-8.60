@@ -245,8 +245,6 @@ void pushKVValue(lua_State* L, const ValueWrapper& value, int32_t depth = 0)
 }
 } // namespace
 
-ScriptEnvironment::DBResultMap ScriptEnvironment::tempResults;
-uint32_t ScriptEnvironment::lastResultId = 0;
 
 std::multimap<ScriptEnvironment*, std::shared_ptr<Item>> ScriptEnvironment::tempItems;
 
@@ -4236,7 +4234,7 @@ int LuaScriptInterface::luaDatabaseAsyncExecute(lua_State* L)
 int LuaScriptInterface::luaDatabaseStoreQuery(lua_State* L)
 {
 	if (DBResult_ptr res = Database::getInstance().storeQuery(Lua::getString(L, -1))) {
-		lua_pushinteger(L, ScriptEnvironment::addResult(res));
+		lua_pushinteger(L, getScriptEnv()->addResult(res));
 	} else {
 		Lua::pushBoolean(L, false);
 	}
@@ -4265,7 +4263,7 @@ int LuaScriptInterface::luaDatabaseAsyncStoreQuery(lua_State* L)
 
 			lua_rawgeti(luaState, LUA_REGISTRYINDEX, ref);
 			if (result) {
-				lua_pushinteger(luaState, ScriptEnvironment::addResult(result));
+				lua_pushinteger(luaState, LuaScriptInterface::getScriptEnv()->addResult(result));
 				lua_pushinteger(luaState, affectedRows);
 			} else {
 				Lua::pushBoolean(luaState, false);
@@ -4377,7 +4375,7 @@ const luaL_Reg LuaScriptInterface::luaResultTable[] = {
 
 int LuaScriptInterface::luaResultGetNumber(lua_State* L)
 {
-	DBResult_ptr res = ScriptEnvironment::getResultByID(Lua::getInteger<uint32_t>(L, 1));
+	DBResult_ptr res = getScriptEnv()->getResultByID(Lua::getInteger<uint32_t>(L, 1));
 	if (!res) {
 		Lua::pushBoolean(L, false);
 		return 1;
@@ -4390,7 +4388,7 @@ int LuaScriptInterface::luaResultGetNumber(lua_State* L)
 
 int LuaScriptInterface::luaResultGetString(lua_State* L)
 {
-	DBResult_ptr res = ScriptEnvironment::getResultByID(Lua::getInteger<uint32_t>(L, 1));
+	DBResult_ptr res = getScriptEnv()->getResultByID(Lua::getInteger<uint32_t>(L, 1));
 	if (!res) {
 		Lua::pushBoolean(L, false);
 		return 1;
@@ -4403,7 +4401,7 @@ int LuaScriptInterface::luaResultGetString(lua_State* L)
 
 int LuaScriptInterface::luaResultGetStream(lua_State* L)
 {
-	DBResult_ptr res = ScriptEnvironment::getResultByID(Lua::getInteger<uint32_t>(L, 1));
+	DBResult_ptr res = getScriptEnv()->getResultByID(Lua::getInteger<uint32_t>(L, 1));
 	if (!res) {
 		Lua::pushBoolean(L, false);
 		return 1;
@@ -4417,7 +4415,7 @@ int LuaScriptInterface::luaResultGetStream(lua_State* L)
 
 int LuaScriptInterface::luaResultNext(lua_State* L)
 {
-	DBResult_ptr res = ScriptEnvironment::getResultByID(Lua::getInteger<uint32_t>(L, -1));
+	DBResult_ptr res = getScriptEnv()->getResultByID(Lua::getInteger<uint32_t>(L, -1));
 	if (!res) {
 		Lua::pushBoolean(L, false);
 		return 1;
@@ -4429,7 +4427,7 @@ int LuaScriptInterface::luaResultNext(lua_State* L)
 
 int LuaScriptInterface::luaResultFree(lua_State* L)
 {
-	Lua::pushBoolean(L, ScriptEnvironment::removeResult(Lua::getInteger<uint32_t>(L, -1)));
+	Lua::pushBoolean(L, getScriptEnv()->removeResult(Lua::getInteger<uint32_t>(L, -1)));
 	return 1;
 }
 

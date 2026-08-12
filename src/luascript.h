@@ -246,9 +246,11 @@ public:
 	uint32_t addThing(Thing* thing);
 	void insertItem(uint32_t uid, Item* item);
 
-	static DBResult_ptr getResultByID(uint32_t id);
-	static uint32_t addResult(DBResult_ptr res);
-	static bool removeResult(uint32_t id);
+	// Per-environment. These used to be static, so a nested environment resetting
+	// wiped the DB results of every outer environment still mid-execution.
+	DBResult_ptr getResultByID(uint32_t id);
+	uint32_t addResult(DBResult_ptr res);
+	bool removeResult(uint32_t id);
 
 	void setNpc(Npc* npc);
 	void setNpc(const std::shared_ptr<Npc>& npc) { curNpc = npc.get(); }
@@ -288,8 +290,8 @@ public:
 	bool hasOpenTransaction = false;
 
 	// result map
-	static uint32_t lastResultId;
-	static DBResultMap tempResults;
+	uint32_t lastResultId = 0;
+	DBResultMap tempResults;
 };
 
 #define reportErrorFunc(L, a) LuaScriptInterface::reportError(__FUNCTION__, a, L, true)
