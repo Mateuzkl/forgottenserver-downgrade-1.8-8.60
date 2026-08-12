@@ -24,6 +24,16 @@ public:
 	[[nodiscard]] static bool addAmount(uint32_t playerId, uint16_t itemId, uint32_t amount, uint8_t tier);
 	[[nodiscard]] static bool removeAmount(uint32_t playerId, uint16_t itemId, uint32_t amount, uint8_t tier);
 	[[nodiscard]] static bool cleanup(uint32_t playerId);
+
+	// Absolute writes, for the in-memory model where the Player already holds the
+	// authoritative count.
+	//
+	// addAmount/removeAmount adjust by a delta, which is correct when the database
+	// is the source of truth but not idempotent: replaying one inside a retried
+	// transaction adds the amount twice. These set the row to a known value, so a
+	// retry lands on the same result.
+	[[nodiscard]] static bool writeRow(uint32_t playerId, uint16_t itemId, uint8_t tier, uint32_t amount);
+	[[nodiscard]] static bool deleteRow(uint32_t playerId, uint16_t itemId, uint8_t tier);
 };
 
 #endif // FS_STASH_H
