@@ -8,6 +8,7 @@ on:
       - 'src/**'
       - 'cmake/**'
       - CMakeLists.txt
+      - 'tools/patches/lua-5.5.0-write-barrier.patch'
       - '.github/workflows/thread-sanitizer.yml'
   workflow_dispatch:
 
@@ -27,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Install apt dependencies
         run: |
@@ -109,7 +112,7 @@ jobs:
 
       - name: Run tests under ThreadSanitizer
         env:
-          # halt_on_error keeps the first race as the failure; without it a racy
-          # test can keep running and bury the report in later output.
-          TSAN_OPTIONS: "halt_on_error=0 second_deadlock_stack=1 history_size=4"
+          # Stop on the first reported race so CI fails immediately with the
+          # clearest ThreadSanitizer report instead of burying it in later output.
+          TSAN_OPTIONS: "halt_on_error=1 second_deadlock_stack=1 history_size=4"
         run: ctest --test-dir build --output-on-failure
