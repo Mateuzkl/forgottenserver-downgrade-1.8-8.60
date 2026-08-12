@@ -556,6 +556,11 @@ void LuaScriptInterface::registerImbuement()
 	// Imbuement
 	registerClass("Imbuement", "", LuaScriptInterface::luaImbuementCreate);
 	registerMetaMethod("Imbuement", "__eq", LuaScriptInterface::luaUserdataCompare);
+	// Imbuement userdata holds a placement-constructed std::shared_ptr<Imbuement>
+	// (see Lua::pushSharedPtr). Without __gc the Lua collector frees the userdata
+	// memory without ever running ~shared_ptr, so the refcount is never dropped
+	// and both the Imbuement and its control block leak on every push.
+	registerMetaMethod("Imbuement", "__gc", LuaScriptInterface::luaSharedPtrGC<Imbuement>);
 	registerMethod("Imbuement", "getType", LuaScriptInterface::luaImbuementGetType);
 	registerMethod("Imbuement", "isSkill", LuaScriptInterface::luaImbuementIsSkill);
 	registerMethod("Imbuement", "isSpecialSkill", LuaScriptInterface::luaImbuementIsSpecialSkill);
