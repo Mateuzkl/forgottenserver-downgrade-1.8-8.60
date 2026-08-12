@@ -31,7 +31,7 @@ RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE
 # Must track the build stage above. The binary is linked against that image's glibc,
 # so an older runtime base fails to start regardless of which libraries are installed.
 FROM ubuntu:24.04@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libc-bin && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends binutils ca-certificates libc-bin && rm -rf /var/lib/apt/lists/*
 RUN groupadd -r tfs && useradd -r -g tfs -d /srv -s /bin/sh tfs
 COPY --from=build /usr/src/forgottenserver-downgrade/build/tfs /bin/tfs
 # Fail here rather than publishing an image that exits 127 on first run.
@@ -48,9 +48,17 @@ RUN set -eu; \
         :; \
     else \
         status=$?; \
-        echo 'ldd failed on /bin/tfs:' >&2; \
-        printf '%s\n' "$linkage" >&2; \
-        exit "$status"; \
+        if [ -x /bin/tfs ] \
+            && elf_header="$(/usr/bin/readelf -hW /bin/tfs 2>/dev/null)" \
+            && elf_segments="$(/usr/bin/readelf -lW /bin/tfs 2>/dev/null)" \
+            && printf '%s\n' "$elf_header" | grep -Eq 'Type:[[:space:]]+(EXEC|DYN)' \
+            && ! printf '%s\n' "$elf_segments" | grep -Eq '[[:space:]]INTERP[[:space:]]'; then \
+            echo 'Binary is a statically linked ELF executable; no shared libraries to verify'; \
+        else \
+            echo 'ldd failed on /bin/tfs:' >&2; \
+            printf '%s\n' "$linkage" >&2; \
+            exit "$status"; \
+        fi; \
     fi; \
     if printf '%s\n' "$linkage" | grep -q 'not found'; then \
         echo 'Runtime stage is missing shared libraries:' >&2; \
