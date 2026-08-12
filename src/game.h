@@ -663,11 +663,17 @@ public:
 		return getCreatureSharedRef(creature->getID());
 	}
 
+	// Starting from a bare id the concrete type is unknown, so this has to be
+	// checked: a static_pointer_cast here would hand back a shared_ptr<Player>
+	// aimed at a Monster whenever the id belonged to something else, and every
+	// later member access would be type confusion. Returns null on a mismatch.
 	template <typename T>
 	std::shared_ptr<T> getCreatureSharedRef(uint32_t creatureId) const {
-		return std::static_pointer_cast<T>(getCreatureSharedRef(creatureId));
+		return std::dynamic_pointer_cast<T>(getCreatureSharedRef(creatureId));
 	}
 
+	// The caller already holds a T*, so the type is proven at compile time and
+	// the unchecked cast is both correct and free.
 	template <typename T>
 	std::shared_ptr<T> getCreatureSharedRef(const T* creature) const {
 		return std::static_pointer_cast<T>(getCreatureSharedRef(static_cast<const Creature*>(creature)));
