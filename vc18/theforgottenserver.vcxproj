@@ -284,6 +284,7 @@
     <ClCompile Include="..\src\party.cpp" />
     <ClCompile Include="..\src\performance_metrics.cpp" />
     <ClCompile Include="..\src\player.cpp" />
+    <ClCompile Include="..\src\player_stash.cpp" />
     <ClCompile Include="..\src\position.cpp" />
     <ClCompile Include="..\src\protocol.cpp" />
     <ClCompile Include="..\src\protocolgame.cpp" />
@@ -400,6 +401,7 @@
     <ClInclude Include="..\src\party.h" />
     <ClInclude Include="..\src\performance_metrics.h" />
     <ClInclude Include="..\src\player.h" />
+    <ClInclude Include="..\src\player_stash.h" />
     <ClInclude Include="..\src\position.h" />
     <ClInclude Include="..\src\protocol.h" />
     <ClInclude Include="..\src\protocolgame.h" />
