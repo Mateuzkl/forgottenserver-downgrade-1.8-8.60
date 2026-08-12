@@ -5,6 +5,8 @@
 
 #include "game.h"
 
+#include "supply_stash_rules.h"
+
 #include "actions.h"
 #include "bed.h"
 #include "character_bazaar.h"
@@ -1762,6 +1764,88 @@ void Game::playerMoveItemByPlayerID(uint32_t playerId, const Position& fromPos, 
 		return;
 	}
 	playerMoveItem(player, fromPos, spriteId, fromStackPos, toPos, count, nullptr, nullptr);
+}
+
+void Game::playerStowItem(uint32_t playerId, const Position& pos, uint16_t spriteId, uint8_t stackpos, uint32_t count)
+{
+	const auto player = getPlayerByID(playerId);
+	if (!player || player->isRemoved()) {
+		return;
+	}
+
+	// Re-checked on every action rather than trusted from when the window opened:
+	// the player may have walked away, and a modified client can ask from anywhere.
+	if (!tfs::supply_stash::hasSupplyStashAccess(player.get())) {
+		player->sendCancelMessage("You need to be near a depot to use the supply stash.");
+		return;
+	}
+
+	// Resolve the real item from the position, the same way playerMoveItem does.
+	// The itemId the client sent is only used to confirm this resolution below.
+	uint8_t fromIndex = 0;
+	if (pos.x == 0xFFFF) {
+		fromIndex = (pos.y & 0x40) ? static_cast<uint8_t>(pos.z) : static_cast<uint8_t>(pos.y);
+	} else {
+		fromIndex = stackpos;
+	}
+
+	Thing* thing = internalGetThing(player.get(), pos, fromIndex, 0, STACKPOS_MOVE);
+	if (!thing) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	Item* item = thing->getItem();
+	if (!item) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	// The client names what it thinks it dragged. A mismatch means the world moved
+	// under it, so refuse rather than stow whatever happens to be there now.
+	if (item->getClientID() != spriteId) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (!tfs::supply_stash::canStowSupplyItem(item)) {
+		player->sendCancelMessage("You cannot stow this item.");
+		return;
+	}
+
+	// Only the count survives, so clamp to what is actually there. A client asking
+	// for more than the stack holds must not create the difference.
+	const uint32_t available = item->isStackable() ? item->getItemCount() : 1;
+	const uint32_t amount = std::min<uint32_t>(count, available);
+	if (amount == 0) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	const uint16_t itemId = item->getID();
+	const uint8_t tier = item->getTier();
+
+	auto& stash = player->getSupplyStash();
+	if (stash.wouldExceedRowLimit(itemId, tier)) {
+		player->sendCancelMessage("Your supply stash cannot hold any more different items.");
+		return;
+	}
+
+	// Add first, remove second. If the removal fails the add is undone, so the
+	// worst case is a no-op rather than an item that exists in both places or in
+	// neither.
+	if (!stash.add(itemId, tier, amount)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (internalRemoveItem(item, static_cast<int32_t>(amount)) != RETURNVALUE_NOERROR) {
+		// Roll back the logical count. remove() only fails when the row holds less
+		// than asked, which cannot happen for an amount just added.
+		[[maybe_unused]] const bool rolledBack = stash.remove(itemId, tier, amount);
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
 }
 
 void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,

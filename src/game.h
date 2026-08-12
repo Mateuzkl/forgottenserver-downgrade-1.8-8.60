@@ -397,6 +397,11 @@ public:
 	                        Tile* toTile);
 	void playerMoveItemByPlayerID(uint32_t playerId, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
 	                              const Position& toPos, uint8_t count);
+	// Supply Stash. The item is resolved server-side from the position the client
+	// sent; the itemId in the packet is only ever used to confirm the resolution,
+	// never to pick the item.
+	void playerStowItem(uint32_t playerId, const Position& pos, uint16_t spriteId, uint8_t stackpos, uint32_t count);
+
 	void playerMoveItem(Player* player, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
 	                    const Position& toPos, uint8_t count, Item* item, Cylinder* toCylinder);
 	void playerMove(uint32_t playerId, Direction direction);
