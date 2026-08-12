@@ -93,9 +93,25 @@ struct ParseResult
 // the action's layout says it does.
 [[nodiscard]] ParseResult parseRequest(NetworkMessage& msg);
 
+// Largest row count that can be encoded. Bounded by two things, and the tighter
+// of them is the message body, not the 16-bit count: at seven bytes per row a
+// full message runs out well before 65535 rows do.
+[[nodiscard]] size_t maxSerializableRows();
+
 // Writes the stash contents payload, tier-aware, matching what AstraClient
 // already knows how to read.
-void serializeContents(NetworkMessage& msg, const std::vector<StashRecord>& rows, uint16_t freeSlots);
+//
+// Returns false and writes nothing when the rows do not fit. Both failure modes
+// desynchronise the receiver rather than merely losing data, so neither may
+// produce a partial packet:
+//
+//   - a count above 65535 wraps in the header while every row is still written
+//   - a payload past the message body stops being appended silently, because
+//     NetworkMessage::addByte returns without writing once it is full
+//
+// Either way the header promises more rows than follow, and the receiver goes on
+// to read row bytes as freeSlots.
+[[nodiscard]] bool serializeContents(NetworkMessage& msg, const std::vector<StashRecord>& rows, uint16_t freeSlots);
 
 } // namespace tfs::supply_stash
 
