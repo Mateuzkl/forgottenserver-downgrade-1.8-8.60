@@ -7,7 +7,7 @@ for i = 60, 75 do
 	local condition1 = Condition(CONDITION_ATTRIBUTES)
 	condition1:setParameter(CONDITION_PARAM_TICKS, 7000)
 	condition1:setParameter(CONDITION_PARAM_SKILL_MELEEPERCENT, i)
-	condition1:setParameter(CONDITION_PARAM_SKILL_DEFENSEPERCENT, i)
+	condition1:setParameter(CONDITION_PARAM_SKILL_SHIELDPERCENT, i)
 
 	local condition2 = Condition(CONDITION_ATTRIBUTES)
 	condition2:setParameter(CONDITION_PARAM_TICKS, 7000)
@@ -16,7 +16,7 @@ for i = 60, 75 do
 	local condition3 = Condition(CONDITION_ATTRIBUTES)
 	condition3:setParameter(CONDITION_PARAM_TICKS, 7000)
 	condition3:setParameter(CONDITION_PARAM_SKILL_DISTANCEPERCENT, i)
-	condition3:setParameter(CONDITION_PARAM_SKILL_DEFENSEPERCENT, i)
+	condition3:setParameter(CONDITION_PARAM_SKILL_SHIELDPERCENT, i)
 
 	arr = {
 		{ 0, 0, 0, 1, 1, 1, 0, 0, 0 },

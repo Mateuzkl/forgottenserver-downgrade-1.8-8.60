@@ -18,7 +18,7 @@ local aLarge = {
 
 local combatLargeRing = Combat()
 combatLargeRing:setParameter(COMBAT_PARAM_TYPE, COMBAT_HOLYDAMAGE)
-combatLargeRing:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_CONST_ME_HOLYAREA)
+combatLargeRing:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_HOLYAREA)
 combatLargeRing:setArea(createCombatArea(aLarge))
 
 local combats = { combatLargeRing }

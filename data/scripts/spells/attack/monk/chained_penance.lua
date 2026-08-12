@@ -117,7 +117,7 @@ local function onGetFormulaValues(player, weaponDamage)
 		basePower = math.floor(basePower * 1.06) -- 6%
 	end
 
-	local skill = player:getSkillLevel(SKILL_FIRST)
+	local skill = player:getSkillLevel(SKILL_FIST)
 	local attackValue = calculateAttackValue(player, skill, weaponDamage)
 
 	local spellFactor = 2.0
