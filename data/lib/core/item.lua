@@ -370,6 +370,24 @@ do
 			if atkSpeed ~= 0 then descriptions[#descriptions + 1] = fmt("AS:%0.2f/turn", 2000 / atkSpeed) end
 		end
 
+		-- equipment combat bonuses
+		do
+			local attackSpeedPercent = itemType:getAttackSpeedPercent()
+			if attackSpeedPercent > 0 then
+				descriptions[#descriptions + 1] = fmt("Attack Speed: +%d%%", attackSpeedPercent)
+			end
+
+			local damagePercent = itemType:getDamagePercent()
+			if damagePercent > 0 then
+				descriptions[#descriptions + 1] = fmt("Damage Increase: +%d%%", damagePercent)
+			end
+
+			local damageReductionPercent = itemType:getDamageReductionPercent()
+			if damageReductionPercent > 0 then
+				descriptions[#descriptions + 1] = fmt("Damage Reduction: +%d%%", damageReductionPercent)
+			end
+		end
+
 		-- defense attributes
 		do
 			local showDef = table.contains(showDefWeaponTypes, weaponType)
