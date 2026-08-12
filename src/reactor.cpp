@@ -312,9 +312,20 @@ void TaskReactor::drainInbox(std::vector<Task>& readyTasks)
 
 	const auto now = std::chrono::steady_clock::now();
 	for (auto& task : sentTasks) {
+		// Scheduled tasks deferred by the fairness or time-budget limit come back
+		// through sendInbox, so this path must honour cancellations too — otherwise
+		// stopEvent() silently does nothing for any task that got deferred and the
+		// callback runs after the caller retired it. Plain send() tasks carry
+		// identifier 0 and are never cancellable.
+		if (task.identifier != 0 && cancelled.erase(task.identifier) > 0) {
+			activeIdentifiers.erase(task.identifier);
+			continue;
+		}
+
 		if (!task.hasExpired(now)) {
 			readyTasks.push_back(std::move(task));
 		} else {
+			activeIdentifiers.erase(task.identifier);
 			g_performanceMetrics.recordTaskExpired();
 		}
 	}
@@ -329,14 +340,17 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
 		auto readyTask = std::move(taskHeap.back());
 		taskHeap.pop_back();
 
-		activeIdentifiers.erase(readyTask.identifier);
 		if (cancelled.erase(readyTask.identifier) > 0 || readyTask.hasExpired(now)) {
+			activeIdentifiers.erase(readyTask.identifier);
 			if (readyTask.hasExpired(now)) {
 				g_performanceMetrics.recordTaskExpired();
 			}
 			continue;
 		}
 
+		// The identifier deliberately stays active until the task actually runs.
+		// Retiring it here would make a later cancel() a no-op, because cancel()
+		// only records cancellations for identifiers still in activeIdentifiers.
 		readyTasks.push_back(std::move(readyTask));
 	}
 }
@@ -369,6 +383,20 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 			LOG_WARN("[TaskReactor] fairness limit reached ({} tasks/cycle), deferring {} tasks; next: {}",
 			         maxTasksPerCycle, readyTasks.size() - tasksExecuted, taskLabel(task.description, task.origin));
 			break;
+		}
+
+		// Past every deferral point, so this task is committed to running now.
+		// Deferred tasks keep their identifier registered precisely so a cancel()
+		// that landed while they waited is still honoured here; retire it now and
+		// drop the task if it was cancelled. tasksExecuted doubles as the index of
+		// the first unprocessed task in the deferral loop below, so a skipped task
+		// still has to advance it.
+		if (task.identifier != 0) {
+			activeIdentifiers.erase(task.identifier);
+			if (cancelled.erase(task.identifier) > 0) {
+				++tasksExecuted;
+				continue;
+			}
 		}
 
 		const auto taskStart = std::chrono::steady_clock::now();
