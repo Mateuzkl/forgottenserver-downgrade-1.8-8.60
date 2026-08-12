@@ -1,4 +1,4 @@
-FROM ubuntu:24.04 AS build
+FROM ubuntu:24.04@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea AS build
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl zip unzip tar build-essential cmake ninja-build pkg-config \
@@ -30,8 +30,8 @@ RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE
 
 # Must track the build stage above. The binary is linked against that image's glibc,
 # so an older runtime base fails to start regardless of which libraries are installed.
-FROM ubuntu:24.04
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+FROM ubuntu:24.04@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libc-bin && rm -rf /var/lib/apt/lists/*
 RUN groupadd -r tfs && useradd -r -g tfs -d /srv -s /bin/sh tfs
 COPY --from=build /usr/src/forgottenserver-downgrade/build/tfs /bin/tfs
 # Fail here rather than publishing an image that exits 127 on first run.
@@ -40,21 +40,21 @@ COPY --from=build /usr/src/forgottenserver-downgrade/build/tfs /bin/tfs
 # matters most. Capture the output, judge ldd's own exit status first, and only
 # then look for missing libraries.
 RUN set -eu; \
-    if ! command -v ldd >/dev/null 2>&1; then \
-        echo 'ldd is unavailable in the runtime stage; cannot verify linkage' >&2; \
+    if [ ! -x /usr/bin/ldd ]; then \
+        echo '/usr/bin/ldd is unavailable in the runtime stage; cannot verify linkage' >&2; \
         exit 1; \
     fi; \
-    if linkage="$(ldd /bin/tfs 2>&1)"; then \
-        if printf '%s\n' "$linkage" | grep -q 'not found'; then \
-            echo 'Runtime stage is missing shared libraries:' >&2; \
-            printf '%s\n' "$linkage" | grep 'not found' >&2; \
-            exit 1; \
-        fi; \
-    elif printf '%s\n' "$linkage" | grep -q 'not a dynamic executable'; then \
-        echo 'Binary is statically linked; no shared libraries to verify'; \
+    if linkage="$(/usr/bin/ldd /bin/tfs 2>&1)"; then \
+        :; \
     else \
+        status=$?; \
         echo 'ldd failed on /bin/tfs:' >&2; \
         printf '%s\n' "$linkage" >&2; \
+        exit "$status"; \
+    fi; \
+    if printf '%s\n' "$linkage" | grep -q 'not found'; then \
+        echo 'Runtime stage is missing shared libraries:' >&2; \
+        printf '%s\n' "$linkage" | grep 'not found' >&2; \
         exit 1; \
     fi
 COPY data /srv/data/
