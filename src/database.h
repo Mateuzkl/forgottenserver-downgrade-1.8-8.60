@@ -187,6 +187,16 @@ private:
 
 	mutable std::optional<ConnectionParams> connectionParams;
 	mutable std::mutex connectionsMutex;
+	// Grows once per thread that ever touches the database and is never pruned, so
+	// it reads like a leak. It is bounded because the set of such threads is fixed
+	// for the process lifetime: the pool is started once (otserv.cpp:444, and
+	// ThreadPool::start() refuses to run twice), the asio io threads and the
+	// database task thread are created once at boot, and nothing spawns transient
+	// threads that query.
+	//
+	// If that ever changes — a thread created per request, or a pool that can
+	// restart — each such thread would strand a live MySQL connection here, and
+	// this needs a thread_local guard that removes its entry on exit.
 	mutable std::vector<std::unique_ptr<ConnectionContext>> connections;
 	mutable std::mutex connectionErrorMutex;
 	mutable ConnectionError lastConnectionError;
