@@ -99,6 +99,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/party.cpp
 	${CMAKE_CURRENT_LIST_DIR}/performance_metrics.cpp
 	${CMAKE_CURRENT_LIST_DIR}/player.cpp
+	${CMAKE_CURRENT_LIST_DIR}/player_stash.cpp
 	${CMAKE_CURRENT_LIST_DIR}/position.cpp
 	${CMAKE_CURRENT_LIST_DIR}/protocol.cpp
 	${CMAKE_CURRENT_LIST_DIR}/protocolgame.cpp
@@ -217,6 +218,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/party.h
 	${CMAKE_CURRENT_LIST_DIR}/performance_metrics.h
 	${CMAKE_CURRENT_LIST_DIR}/player.h
+	${CMAKE_CURRENT_LIST_DIR}/player_stash.h
 	${CMAKE_CURRENT_LIST_DIR}/position.h
 	${CMAKE_CURRENT_LIST_DIR}/protocolgame.h
 	${CMAKE_CURRENT_LIST_DIR}/protocol.h
