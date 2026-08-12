@@ -15,6 +15,7 @@
 #include "guild.h"
 #include "outfit.h"
 #include "party.h"
+#include "player_stash.h"
 #include "protocolgame.h"
 #include "protocolspectator.h"
 #include "rewardchest.h"
@@ -501,6 +502,25 @@ public:
 	StorageDirtySnapshot getStorageDirtySnapshot() const;
 	void acknowledgeStorageDirty(const StorageDirtySnapshot& snapshot);
 	void clearStorageDirty();
+
+	// Supply Stash. Authoritative in memory while online, persisted through the
+	// same player-save transaction as everything else rather than by a synchronous
+	// write per stow.
+	PlayerStash& getSupplyStash() { return supplyStash; }
+	const PlayerStash& getSupplyStash() const { return supplyStash; }
+	bool hasSupplyStashDirty() const { return supplyStash.isDirty(); }
+	PlayerStash::DirtySnapshot getSupplyStashDirtySnapshot() const { return supplyStash.getDirtySnapshot(); }
+	void acknowledgeSupplyStashDirty(const PlayerStash::DirtySnapshot& snapshot)
+	{
+		supplyStash.acknowledgeDirty(snapshot);
+	}
+	void clearSupplyStashDirty() { supplyStash.clearDirty(); }
+	// Login path: fills the row without marking it dirty, since it is what the
+	// database already holds.
+	void loadSupplyStashRow(uint16_t itemId, uint8_t tier, uint32_t amount)
+	{
+		supplyStash.load(itemId, tier, amount);
+	}
 
 	void setGroup(const std::shared_ptr<Group>& newGroup) { group = newGroup; }
 	Group* getGroup() const { return group.get(); }
@@ -1649,6 +1669,7 @@ private:
 	std::unordered_set<uint32_t> VIPList;
 	std::unordered_set<uint32_t> modifiedStorageKeys;
 	std::unordered_set<uint32_t> removedStorageKeys;
+	PlayerStash supplyStash;
 	uint64_t storageDirtyRevision = 0;
 	std::unordered_map<uint32_t, uint64_t> storageDirtyKeyRevisions;
 	std::unordered_map<std::string, PreyCombatBonus> preyCombatBonuses;

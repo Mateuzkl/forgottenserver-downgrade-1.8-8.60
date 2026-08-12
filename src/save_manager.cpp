@@ -173,6 +173,10 @@ bool SaveManager::savePlayerSync(Player* player)
 				save->bestiarySnapshotId,
 				save->snapshotModifiedBestiaryRaceIds
 			});
+			player->acknowledgeSupplyStashDirty(PlayerStash::DirtySnapshot{
+				save->stashSnapshotId,
+				save->snapshotModifiedStashRows
+			});
 			success = true;
 			break;
 		}
@@ -340,6 +344,10 @@ void SaveManager::acknowledgePlayerSave(uint32_t guid, const IOLoginData::Player
 		player->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
 			save.bestiarySnapshotId,
 			save.snapshotModifiedBestiaryRaceIds
+		});
+		player->acknowledgeSupplyStashDirty(PlayerStash::DirtySnapshot{
+			save.stashSnapshotId,
+			save.snapshotModifiedStashRows
 		});
 	}
 }

@@ -6,6 +6,8 @@
 
 #include "iologindata.h"
 
+#include "stash.h"
+
 #include "character_bazaar.h"
 #include "configmanager.h"
 #include "stats.h"
@@ -911,6 +913,14 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 		} while (result->next());
 	}
 	player->clearBestiaryDirty();
+
+	// Supply Stash rows become authoritative in memory for as long as the player is
+	// online. Loaded here rather than read per action, and deliberately not marked
+	// dirty: this is exactly what the database already holds.
+	for (const auto& row : Stash::getRows(player->getGUID())) {
+		player->loadSupplyStashRow(row.itemId, row.tier, row.amount);
+	}
+	player->clearSupplyStashDirty();
 	if ((result = db.storeQuery(fmt::format(
 	         "SELECT `points` FROM `player_bosstiary` WHERE `player_id` = {:d}", player->getGUID())))) {
 		player->bosstiaryPoints = result->getNumber<uint32_t>("points");
@@ -1063,10 +1073,11 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 
 	const Player::StorageDirtySnapshot storageSnapshot = player->getStorageDirtySnapshot();
 	const Player::BestiaryDirtySnapshot bestiarySnapshot = player->getBestiaryDirtySnapshot();
+	const PlayerStash::DirtySnapshot stashSnapshot = player->getSupplyStashDirtySnapshot();
 	std::vector<std::string> queries;
 	try {
 		QueryCaptureScope capture{queries};
-		if (!savePlayerQueries(player, bestiarySnapshot)) {
+		if (!savePlayerQueries(player, bestiarySnapshot, stashSnapshot)) {
 			return std::nullopt;
 		}
 	} catch (const std::exception& e) {
@@ -1080,7 +1091,9 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 		storageSnapshot.modifiedKeys,
 		storageSnapshot.removedKeys,
 		bestiarySnapshot.snapshotId,
-		bestiarySnapshot.modifiedRaceIds
+		bestiarySnapshot.modifiedRaceIds,
+		stashSnapshot.snapshotId,
+		stashSnapshot.modifiedRows
 	};
 }
 
@@ -1115,11 +1128,16 @@ bool IOLoginData::savePlayer(Player* player)
 			queries->bestiarySnapshotId,
 			queries->snapshotModifiedBestiaryRaceIds
 		});
+		player->acknowledgeSupplyStashDirty(PlayerStash::DirtySnapshot{
+			queries->stashSnapshotId,
+			queries->snapshotModifiedStashRows
+		});
 	}
 	return success;
 }
 
-bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot)
+bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot,
+                                    const PlayerStash::DirtySnapshot& stashSnapshot)
 {
 	AutoStat stat("savePlayer", "full");
 
@@ -1494,6 +1512,46 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 			}
 		}
 		if (!bestiaryQuery.execute()) {
+			return false;
+		}
+	}
+
+	// Supply Stash, same captured transaction. The Player holds the authoritative
+	// count, so rows are written absolutely rather than by a delta: these queries
+	// run inside executeWithinTransactionRollbackOnFailure, and a replayed delta
+	// would add the amount twice.
+	if (!stashSnapshot.modifiedRows.empty()) {
+		const auto& stash = player->getSupplyStash();
+		DBInsert stashQuery(
+		    "INSERT INTO `player_supplystash` (`player_id`, `itemtype`, `tier`, `amount`) VALUES ");
+		stashQuery.upsert(std::vector<std::string>{"amount"});
+
+		std::string emptied;
+		for (const auto& key : stashSnapshot.modifiedRows) {
+			const uint32_t amount = stash.getCount(key.itemId, key.tier);
+			if (amount == 0) {
+				// Emptied rows are deleted, not stored as zero, so the row count in
+				// the database matches what the in-memory model reports.
+				if (!emptied.empty()) {
+					emptied += " OR ";
+				}
+				emptied += fmt::format("(`itemtype` = {:d} AND `tier` = {:d})", key.itemId, key.tier);
+				continue;
+			}
+
+			if (!stashQuery.addRow(
+			        fmt::format("{:d}, {:d}, {:d}, {:d}", player->getGUID(), key.itemId, key.tier, amount))) {
+				return false;
+			}
+		}
+
+		if (!stashQuery.execute()) {
+			return false;
+		}
+
+		if (!emptied.empty() &&
+		    !db.executeQuery(fmt::format("DELETE FROM `player_supplystash` WHERE `player_id` = {:d} AND ({:s})",
+		                                 player->getGUID(), emptied))) {
 			return false;
 		}
 	}
