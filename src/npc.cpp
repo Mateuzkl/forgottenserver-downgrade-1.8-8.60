@@ -12,13 +12,8 @@
 #include "pugicast.h"
 #include "startup_progress.h"
 
-#if defined(__GNUC__) && (__GNUC__ < 8)
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
 #include <filesystem>
 namespace fs = std::filesystem;
-#endif
 
 #include <iostream>
 #include <sstream>

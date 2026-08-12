@@ -2709,16 +2709,10 @@ void Monster::death(Creature*)
 		int32_t highestScore = 0;
 		int32_t totalScore = 0;
 		int32_t contributors = 0;
-		int32_t totalDamageDone = 0;
-		int32_t totalDamageTaken = 0;
-		int32_t totalHealingDone = 0;
 		for (const auto& [playerId, playerScoreInfo] : scoreInfo.playerScoreTable) {
 			int32_t playerScore =
 			    playerScoreInfo.damageDone + playerScoreInfo.damageTaken + playerScoreInfo.healingDone;
 			totalScore += playerScore;
-			totalDamageDone += playerScoreInfo.damageDone;
-			totalDamageTaken += playerScoreInfo.damageTaken;
-			totalHealingDone += playerScoreInfo.healingDone;
 			contributors++;
 			if (playerScore > highestScore) {
 				highestScore = playerScore;
