@@ -75,8 +75,11 @@ jobs:
 
       - name: Build simdutf from source
         run: |
-          git clone --depth 1 --branch v6.4.1 https://github.com/simdutf/simdutf.git
+          git init -q simdutf
           cd simdutf
+          git remote add origin https://github.com/simdutf/simdutf.git
+          git fetch --depth 1 --no-tags origin e3055634219dfda3c14625c636d7913c955a0810
+          git checkout --detach FETCH_HEAD
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr/local -DSIMDUTF_TESTS=OFF -DSIMDUTF_BENCHMARKS=OFF
           cmake --build build --parallel $(nproc)
