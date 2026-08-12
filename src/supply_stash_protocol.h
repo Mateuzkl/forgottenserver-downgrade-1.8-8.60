@@ -93,10 +93,13 @@ struct ParseResult
 // the action's layout says it does.
 [[nodiscard]] ParseResult parseRequest(NetworkMessage& msg);
 
-// Largest row count that can be encoded. Bounded by two things, and the tighter
-// of them is the message body, not the 16-bit count: at seven bytes per row a
-// full message runs out well before 65535 rows do.
-[[nodiscard]] size_t maxSerializableRows();
+// Largest row count that still fits in this message. Bounded by two things, and
+// the tighter is usually the body rather than the 16-bit count: at seven bytes
+// per row a full message runs out well before 65535 rows do.
+//
+// Takes the message because the payload may follow other data — a bound computed
+// from an empty message would promise room that is already spent.
+[[nodiscard]] size_t maxSerializableRows(const NetworkMessage& msg);
 
 // Writes the stash contents payload, tier-aware, matching what AstraClient
 // already knows how to read.

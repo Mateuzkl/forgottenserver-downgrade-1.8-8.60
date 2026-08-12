@@ -20,6 +20,10 @@ enum class StowRejection : uint8_t
 	NoItem,
 	IsContainer,       // containers go through the container action, not this one
 	NotPickupable,     // ground, doors, magic fields and anything else fixed in place
+	NotMovable,        // pickupable is not enough; the Lua required both
+	BlockedItemId,     // currency, market, inbox, store inbox, depot, the stash itself
+	UnsupportedType,   // corpse, door, container, fluid container, magic field, ground
+	Nameless,          // no name in items.xml, so nothing sensible to show in the stash
 	StoreItem,
 	HasImbuements,
 	InstanceAttribute, // actionid, uniqueid, custom name, owner, custom armor…

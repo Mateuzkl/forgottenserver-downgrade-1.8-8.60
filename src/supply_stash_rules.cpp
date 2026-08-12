@@ -32,6 +32,25 @@ constexpr itemAttrTypes RESTRICTED_ATTRIBUTES[] = {
     ITEM_ATTRIBUTE_STOREITEM,    ITEM_ATTRIBUTE_ATTACK_SPEED, ITEM_ATTRIBUTE_REWARDID,
 };
 
+// Blocked outright, matching the Lua's blockedItems table. Currency has its own
+// handling, and the container types would either nest the stash inside itself or
+// lose everything they hold.
+constexpr uint16_t BLOCKED_ITEM_IDS[] = {
+    ITEM_GOLD_COIN, ITEM_PLATINUM_COIN, ITEM_CRYSTAL_COIN, ITEM_GOLD_NUGGET,
+    ITEM_MARKET,    ITEM_SUPPLY_STASH,  ITEM_INBOX,        ITEM_STORE_INBOX,
+    ITEM_DEPOT,
+};
+
+bool isBlockedItemId(uint16_t itemId)
+{
+	for (const uint16_t blocked : BLOCKED_ITEM_IDS) {
+		if (itemId == blocked) {
+			return true;
+		}
+	}
+	return false;
+}
+
 } // namespace
 
 StowRejection getStowRejection(const Item* item)
@@ -46,9 +65,32 @@ StowRejection getStowRejection(const Item* item)
 		return StowRejection::IsContainer;
 	}
 
+	const uint16_t itemId = item->getID();
+	if (itemId == 0 || isBlockedItemId(itemId)) {
+		return StowRejection::BlockedItemId;
+	}
+
+	const ItemType& type = Item::items[itemId];
+
+	// An item with no name has nothing sensible to show in the stash window.
+	if (type.name.empty()) {
+		return StowRejection::Nameless;
+	}
+
+	if (type.corpseType != RACE_NONE || type.isDoor() || type.isFluidContainer() || type.isMagicField() ||
+	    type.isGroundTile()) {
+		return StowRejection::UnsupportedType;
+	}
+
 	// Covers ground, doors, magic fields and anything else that is not a loose item.
 	if (!item->isPickupable()) {
 		return StowRejection::NotPickupable;
+	}
+
+	// The Lua required movable *and* pickupable. Pickupable alone would let through
+	// things the player is not allowed to move.
+	if (!type.moveable) {
+		return StowRejection::NotMovable;
 	}
 
 	if (item->isStoreItem() || item->hasAttribute(ITEM_ATTRIBUTE_STOREITEM)) {
@@ -75,9 +117,13 @@ StowRejection getStowRejection(const Item* item)
 	// only the count survives. Anything less would be refunded to full on withdraw,
 	// which is a quiet duplication of value.
 	if (item->hasAttribute(ITEM_ATTRIBUTE_DURATION)) {
-		const uint32_t duration = static_cast<uint32_t>(item->getDuration());
-		const uint32_t maxDuration = std::max(item->getDefaultDurationMin(), item->getDefaultDurationMax());
-		if (maxDuration == 0 || duration < maxDuration) {
+		// Compared signed. getDuration() returns int32_t and casting a negative to
+		// uint32_t wraps to something enormous, which would sail past the check and
+		// let a spent item through as though it were full.
+		const int64_t duration = item->getDuration();
+		const int64_t maxDuration =
+		    std::max<int64_t>(item->getDefaultDurationMin(), item->getDefaultDurationMax());
+		if (maxDuration <= 0 || duration < maxDuration) {
 			return StowRejection::PartialDuration;
 		}
 	}

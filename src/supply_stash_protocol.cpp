@@ -117,10 +117,18 @@ ParseResult parseRequest(NetworkMessage& msg)
 	return ParseResult{ParseError::None, request};
 }
 
-size_t maxSerializableRows()
+size_t maxSerializableRows(const NetworkMessage& msg)
 {
-	constexpr size_t byMessage =
-	    (static_cast<size_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH) - CONTENTS_FIXED_BYTES) / CONTENTS_ROW_BYTES;
+	// Against what is left in this message, not against an empty one. The payload
+	// may be appended after other data, and a bound computed from a fresh message
+	// would promise room that is already spent.
+	const size_t used = msg.getLength();
+	const size_t capacity = static_cast<size_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH);
+	if (used + CONTENTS_FIXED_BYTES >= capacity) {
+		return 0;
+	}
+
+	const size_t byMessage = (capacity - used - CONTENTS_FIXED_BYTES) / CONTENTS_ROW_BYTES;
 	constexpr size_t byCountField = std::numeric_limits<uint16_t>::max();
 	return std::min(byMessage, byCountField);
 }
@@ -129,7 +137,7 @@ bool serializeContents(NetworkMessage& msg, const std::vector<StashRecord>& rows
 {
 	// Checked before a single byte is written, because a partial payload is worse
 	// than none: the count would promise rows that never arrive.
-	if (rows.size() > maxSerializableRows()) {
+	if (rows.size() > maxSerializableRows(msg)) {
 		return false;
 	}
 

@@ -315,18 +315,20 @@ TEST_CASE(supply_stash_serializes_empty_contents)
 // reads row bytes as freeSlots and every following packet is misaligned.
 TEST_CASE(supply_stash_serializes_at_the_row_limit)
 {
-	std::vector<StashRecord> rows(maxSerializableRows(), StashRecord{2160, 0, 1});
+	NetworkMessage sizing;
+	std::vector<StashRecord> rows(maxSerializableRows(sizing), StashRecord{2160, 0, 1});
 
 	NetworkMessage msg;
 	CHECK(serializeContents(msg, rows, 0));
 	rewind(msg);
-	CHECK(msg.get<uint16_t>() == static_cast<uint16_t>(maxSerializableRows()));
+	CHECK(msg.get<uint16_t>() == static_cast<uint16_t>(rows.size()));
 	CHECK(!msg.isOverrun());
 }
 
 TEST_CASE(supply_stash_refuses_one_row_over_the_limit)
 {
-	std::vector<StashRecord> rows(maxSerializableRows() + 1, StashRecord{2160, 0, 1});
+	NetworkMessage sizing;
+	std::vector<StashRecord> rows(maxSerializableRows(sizing) + 1, StashRecord{2160, 0, 1});
 
 	NetworkMessage msg;
 	CHECK(!serializeContents(msg, rows, 0));
@@ -338,9 +340,17 @@ TEST_CASE(supply_stash_refuses_one_row_over_the_limit)
 // that actually applies.
 TEST_CASE(supply_stash_row_limit_is_bounded_by_the_message_not_the_count_field)
 {
-	CHECK(maxSerializableRows() < std::numeric_limits<uint16_t>::max());
+	NetworkMessage empty;
+	CHECK(maxSerializableRows(empty) < std::numeric_limits<uint16_t>::max());
 	// comfortably above the 1000-row cap the stash itself enforces
-	CHECK(maxSerializableRows() > 1000);
+	CHECK(maxSerializableRows(empty) > 1000);
+
+	// And it shrinks as the message fills, which is the point of taking it.
+	NetworkMessage partlyUsed;
+	for (int i = 0; i < 1000; ++i) {
+		partlyUsed.add<uint32_t>(0);
+	}
+	CHECK(maxSerializableRows(partlyUsed) < maxSerializableRows(empty));
 }
 
 TFS_TEST_MAIN()
