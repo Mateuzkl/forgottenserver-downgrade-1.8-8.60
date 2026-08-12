@@ -241,6 +241,13 @@ public:
 		return pugi::cast<T>(row[it->second]);
 	}
 
+	// LIFETIME: the returned view points into the MYSQL_RES row buffer owned by
+	// this DBResult. It is invalidated by the next call to next(), and freed when
+	// the DBResult is destroyed. Consume it before either happens, or copy it into
+	// a std::string. Do not store the view in a member or return it upwards.
+	//
+	// Returning a view rather than a std::string avoids an allocation per column
+	// read, which is why the contract is stated here instead of removed.
 	std::string_view getString(std::string_view column) const;
 	std::string_view getStream(std::string_view column, unsigned long& size) const;
 
