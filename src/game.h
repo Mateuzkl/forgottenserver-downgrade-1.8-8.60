@@ -737,8 +737,6 @@ private:
 	std::unordered_set<const Creature*> ToReleaseCreatureSet;
 	std::vector<std::shared_ptr<Item>> ToReleaseItems;
 
-	size_t lastBucket = 0;
-
 	WildcardTreeNode wildcardTree{false};
 
 	NpcRegistry npcs;

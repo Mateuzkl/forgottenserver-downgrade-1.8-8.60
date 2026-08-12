@@ -11,6 +11,7 @@ on:
       - 'cmake/**'
       - CMakeLists.txt
       - vcpkg.json
+      - 'tools/patches/lua-5.5.0-write-barrier.patch'
       - '.github/workflows/build-clang.yml'
   pull_request:
     branches:
@@ -20,6 +21,7 @@ on:
       - 'cmake/**'
       - CMakeLists.txt
       - vcpkg.json
+      - 'tools/patches/lua-5.5.0-write-barrier.patch'
       - '.github/workflows/build-clang.yml'
   workflow_dispatch:
 
@@ -39,6 +41,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
 
       - name: Install apt dependencies
         run: |
