@@ -106,7 +106,7 @@ bool tileGrantsStashAccess(const Tile* tile)
 		return false;
 	}
 
-	for (const Item* item : *items) {
+	for (const auto& item : *items) {
 		if (!item) {
 			continue;
 		}
