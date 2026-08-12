@@ -7,9 +7,16 @@
 
 #include "networkmessage.h"
 
+#include <algorithm>
+#include <limits>
+
 namespace tfs::supply_stash {
 
 namespace {
+
+// U16 itemId + U32 amount + U8 tier per row; U16 count and U16 freeSlots around them.
+constexpr size_t CONTENTS_ROW_BYTES = 7;
+constexpr size_t CONTENTS_FIXED_BYTES = 4;
 
 ParseResult fail(ParseError error) { return ParseResult{error, Request{}}; }
 
@@ -110,8 +117,22 @@ ParseResult parseRequest(NetworkMessage& msg)
 	return ParseResult{ParseError::None, request};
 }
 
-void serializeContents(NetworkMessage& msg, const std::vector<StashRecord>& rows, uint16_t freeSlots)
+size_t maxSerializableRows()
 {
+	constexpr size_t byMessage =
+	    (static_cast<size_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH) - CONTENTS_FIXED_BYTES) / CONTENTS_ROW_BYTES;
+	constexpr size_t byCountField = std::numeric_limits<uint16_t>::max();
+	return std::min(byMessage, byCountField);
+}
+
+bool serializeContents(NetworkMessage& msg, const std::vector<StashRecord>& rows, uint16_t freeSlots)
+{
+	// Checked before a single byte is written, because a partial payload is worse
+	// than none: the count would promise rows that never arrive.
+	if (rows.size() > maxSerializableRows()) {
+		return false;
+	}
+
 	msg.add<uint16_t>(static_cast<uint16_t>(rows.size()));
 	for (const auto& row : rows) {
 		msg.add<uint16_t>(row.itemId);
@@ -119,6 +140,7 @@ void serializeContents(NetworkMessage& msg, const std::vector<StashRecord>& rows
 		msg.addByte(row.tier);
 	}
 	msg.add<uint16_t>(freeSlots);
+	return true;
 }
 
 } // namespace tfs::supply_stash

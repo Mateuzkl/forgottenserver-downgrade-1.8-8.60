@@ -8,6 +8,8 @@
 
 #include "test_support.h"
 
+#include <limits>
+
 using namespace tfs::supply_stash;
 
 namespace {
@@ -275,7 +277,7 @@ TEST_CASE(supply_stash_serializes_contents_tier_aware)
 	};
 
 	NetworkMessage msg;
-	serializeContents(msg, rows, 42);
+	CHECK(serializeContents(msg, rows, 42));
 	rewind(msg);
 
 	CHECK(msg.get<uint16_t>() == 3);
@@ -300,12 +302,45 @@ TEST_CASE(supply_stash_serializes_contents_tier_aware)
 TEST_CASE(supply_stash_serializes_empty_contents)
 {
 	NetworkMessage msg;
-	serializeContents(msg, {}, 1000);
+	CHECK(serializeContents(msg, {}, 1000));
 	rewind(msg);
 
 	CHECK(msg.get<uint16_t>() == 0);
 	CHECK(msg.get<uint16_t>() == 1000);
 	CHECK(!msg.isOverrun());
+}
+
+// Both bounds have to be refused before anything is written. A partial payload is
+// worse than none: the count promises rows that never arrive, so the receiver
+// reads row bytes as freeSlots and every following packet is misaligned.
+TEST_CASE(supply_stash_serializes_at_the_row_limit)
+{
+	std::vector<StashRecord> rows(maxSerializableRows(), StashRecord{2160, 0, 1});
+
+	NetworkMessage msg;
+	CHECK(serializeContents(msg, rows, 0));
+	rewind(msg);
+	CHECK(msg.get<uint16_t>() == static_cast<uint16_t>(maxSerializableRows()));
+	CHECK(!msg.isOverrun());
+}
+
+TEST_CASE(supply_stash_refuses_one_row_over_the_limit)
+{
+	std::vector<StashRecord> rows(maxSerializableRows() + 1, StashRecord{2160, 0, 1});
+
+	NetworkMessage msg;
+	CHECK(!serializeContents(msg, rows, 0));
+	// Nothing may have been emitted.
+	CHECK(msg.getLength() == 0);
+}
+
+// The message body runs out before the 16-bit count does, so that is the bound
+// that actually applies.
+TEST_CASE(supply_stash_row_limit_is_bounded_by_the_message_not_the_count_field)
+{
+	CHECK(maxSerializableRows() < std::numeric_limits<uint16_t>::max());
+	// comfortably above the 1000-row cap the stash itself enforces
+	CHECK(maxSerializableRows() > 1000);
 }
 
 TFS_TEST_MAIN()
