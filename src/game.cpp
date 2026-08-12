@@ -1808,6 +1808,43 @@ void Game::playerStowItem(uint32_t playerId, const Position& pos, uint16_t sprit
 		return;
 	}
 
+	// Access to the stash service is not access to the item. Without these a
+	// modified client could name a position it has no business reaching and stow
+	// whatever internalGetThing resolves there. Same checks playerMoveItem applies.
+	if (item->getTopParent() == player.get()) {
+		item->setInstanceID(0);
+	}
+	if (!InstanceUtils::isPlayerInSameInstance(player.get(), item->getInstanceID())) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (hasNotMoveableActionId(*item)) {
+		player->sendCancelMessage(RETURNVALUE_NOTMOVEABLE);
+		return;
+	}
+
+	Cylinder* fromCylinder = internalGetCylinder(player.get(), pos);
+	if (!fromCylinder) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	// An item lying on the map has to be within arm's reach and on the same floor.
+	// Items already carried are reachable by definition.
+	if (pos.x != 0xFFFF) {
+		const Position& playerPos = player->getPosition();
+		if (playerPos.z != pos.z) {
+			player->sendCancelMessage(playerPos.z > pos.z ? RETURNVALUE_FIRSTGOUPSTAIRS
+			                                              : RETURNVALUE_FIRSTGODOWNSTAIRS);
+			return;
+		}
+		if (!Position::areInRange<1, 1>(playerPos, pos)) {
+			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
+			return;
+		}
+	}
+
 	if (!tfs::supply_stash::canStowSupplyItem(item)) {
 		player->sendCancelMessage("You cannot stow this item.");
 		return;

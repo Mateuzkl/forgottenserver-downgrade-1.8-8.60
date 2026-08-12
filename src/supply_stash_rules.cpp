@@ -12,6 +12,7 @@
 #include "tile.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace tfs::supply_stash {
 
@@ -144,8 +145,19 @@ bool hasSupplyStashAccess(const Player* player)
 			if (dx == 0 && dy == 0) {
 				continue;
 			}
-			if (tileGrantsStashAccess(g_game.map.getTile(static_cast<uint16_t>(position.x + dx),
-			                                             static_cast<uint16_t>(position.y + dy), position.z))) {
+
+			// Kept signed and bounds-checked before the cast. At x or y of 0 the
+			// neighbour is -1, and casting that to uint16_t gives 65535 — a depot at
+			// the opposite edge of the map would satisfy an adjacency check.
+			const int32_t neighbourX = static_cast<int32_t>(position.x) + dx;
+			const int32_t neighbourY = static_cast<int32_t>(position.y) + dy;
+			if (neighbourX < 0 || neighbourY < 0 || neighbourX > std::numeric_limits<uint16_t>::max() ||
+			    neighbourY > std::numeric_limits<uint16_t>::max()) {
+				continue;
+			}
+
+			if (tileGrantsStashAccess(g_game.map.getTile(static_cast<uint16_t>(neighbourX),
+			                                             static_cast<uint16_t>(neighbourY), position.z))) {
 				return true;
 			}
 		}
