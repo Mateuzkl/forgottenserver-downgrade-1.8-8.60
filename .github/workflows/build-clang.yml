@@ -1,0 +1,126 @@
+name: Build (Clang)
+
+on:
+  push:
+    branches:
+      - main
+      - 'fix/**'
+      - 'feat/**'
+    paths:
+      - 'src/**'
+      - 'cmake/**'
+      - CMakeLists.txt
+      - vcpkg.json
+      - '.github/workflows/build-clang.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'cmake/**'
+      - CMakeLists.txt
+      - vcpkg.json
+      - '.github/workflows/build-clang.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: build-clang-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clang:
+    name: Clang (Ubuntu 24.04, Release)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            cmake ninja-build build-essential pkg-config \
+            patch clang \
+            libssl-dev zlib1g-dev libfmt-dev libspdlog-dev \
+            libpugixml-dev libabsl-dev \
+            libasio-dev \
+            default-libmysqlclient-dev
+
+      - name: Cache Lua 5.5 source
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ github.workspace }}/.cache/lua/lua-5.5.0.tar.gz
+          key: lua-source-5.5.0-57ccc32bbbd005cab75bcc52444052535
+
+      - name: Build patched Lua 5.5 from source
+        run: |
+          set -euo pipefail
+          cache_tar="$GITHUB_WORKSPACE/.cache/lua/lua-5.5.0.tar.gz"
+          expected_sha="57ccc32bbbd005cab75bcc52444052535af691789dba2b9016d5c50640d68b3d"
+          mkdir -p "$(dirname "$cache_tar")"
+
+          if [ -f "$cache_tar" ] && echo "$expected_sha  $cache_tar" | sha256sum -c -; then
+            cp "$cache_tar" lua.tar.gz
+          else
+            curl --fail --show-error --location --retry 3 --retry-delay 5 \
+              --retry-all-errors --connect-timeout 30 --max-time 120 \
+              "https://www.lua.org/ftp/lua-5.5.0.tar.gz" -o lua.tar.gz
+            echo "$expected_sha  lua.tar.gz" | sha256sum -c -
+            cp lua.tar.gz "$cache_tar"
+          fi
+
+          tar xzf lua.tar.gz
+          cd lua-5.5.0
+          patch -d src -p1 < "$GITHUB_WORKSPACE/tools/patches/lua-5.5.0-write-barrier.patch"
+          make -j$(nproc) linux MYCFLAGS="-fPIC"
+          sudo make install INSTALL_TOP=/usr/local
+          cd ..
+          rm -rf lua-5.5.0 lua.tar.gz
+
+      - name: Build simdutf from source
+        run: |
+          git clone --depth 1 --branch v6.4.1 https://github.com/simdutf/simdutf.git
+          cd simdutf
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local -DSIMDUTF_TESTS=OFF -DSIMDUTF_BENCHMARKS=OFF
+          cmake --build build --parallel $(nproc)
+          sudo cmake --install build
+          cd .. && rm -rf simdutf
+
+      - name: Build mio from source
+        run: |
+          git clone https://github.com/mandreyel/mio.git
+          cd mio
+          git checkout 8b6b7d878c89e81614d05edca7936de41ccdd2da
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build build
+          sudo cmake --install build
+          cd .. && rm -rf mio
+
+      - name: Configure CMake
+        env:
+          CC: clang
+          CXX: clang++
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DENABLE_NATIVE_OPTIMIZATIONS=OFF
+          -DENABLE_SLOW_TASK_DETECTION=OFF
+          -DUSE_MIMALLOC=OFF
+          -DBUILD_TESTING=ON
+          -DSKIP_GIT=OFF
+          -DLUA_INCLUDE_DIR=/usr/local/include
+          -DLUA_LIBRARY=/usr/local/lib/liblua.a
+          "-DLUA_LIBRARIES=/usr/local/lib/liblua.a;m;dl"
+          -DLUA_VERSION_STRING=5.5.0
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure

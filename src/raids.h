@@ -90,9 +90,10 @@ private:
 class Raid : public std::enable_shared_from_this<Raid>
 {
 public:
-	Raid(std::string_view name, uint32_t interval, uint32_t marginTime, bool repeat, std::string_view spawnFile) :
-	    name{name}, spawnFile{spawnFile}, interval{interval}, margin{marginTime}, repeat{repeat}
-	{}
+	// Defined out of line: an inline body would need RaidEvent complete here, to
+	// destroy raidEvents if the constructor throws, and that class is declared
+	// further down this header.
+	Raid(std::string_view name, uint32_t interval, uint32_t marginTime, bool repeat, std::string_view spawnFile);
 	~Raid();
 
 	// non-copyable
@@ -203,7 +204,7 @@ public:
 	bool executeEvent() override;
 
 private:
-	std::string_view getScriptEventName() const { return "onRaid"; }
+	std::string_view getScriptEventName() const override { return "onRaid"; }
 };
 
 #endif

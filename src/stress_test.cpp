@@ -414,7 +414,7 @@ bool testCancelExternal()
 	{
 		std::vector<std::jthread> cancelers;
 		for (int t = 0; t < THREADS; ++t) {
-			cancelers.emplace_back([&reactor, &ids, &idMutex, t, THREADS] {
+			cancelers.emplace_back([&reactor, &ids, t, THREADS] {
 				for (size_t i = t; i < ids.size(); i += THREADS) {
 					reactor.cancel(ids[i]);
 				}

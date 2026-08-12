@@ -56,7 +56,10 @@ private:
 	std::unordered_map<uint32_t, spawnBlock_t> spawnMap;
 
 	Position centerPos;
-	int32_t radius;
+	// Stored from the constructor but never read: NPCs keep their own copy via
+	// setMasterPos(), and monsters check against the global despawnRadius. Kept
+	// rather than removed so the constructor signature stays as it is.
+	[[maybe_unused]] int32_t radius;
 
 	uint32_t interval = 60000;
 	uint32_t checkSpawnEvent = 0;

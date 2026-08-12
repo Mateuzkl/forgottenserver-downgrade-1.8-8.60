@@ -168,7 +168,7 @@ private:
 	WeaponProficiencyCriticalBonus m_generalCritical;
 	WeaponProficiencyCriticalBonus m_autoAttackCritical;
 	WeaponProficiencyCriticalBonus m_runesCritical;
-	std::array<WeaponProficiencyCriticalBonus, COMBAT_COUNT> m_elementCritical = { 0 };
+	std::array<WeaponProficiencyCriticalBonus, COMBAT_COUNT> m_elementCritical = {};
 
 	double_t m_powerfulFoeDamage = 0;
 	WeaponProficiencyPerfectShotBonus m_perfectShot;

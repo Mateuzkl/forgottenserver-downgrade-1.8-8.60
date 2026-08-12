@@ -267,6 +267,10 @@ Raid* Raids::getRaidByName(std::string_view name)
 	return nullptr;
 }
 
+Raid::Raid(std::string_view name, uint32_t interval, uint32_t marginTime, bool repeat, std::string_view spawnFile) :
+    name{name}, spawnFile{spawnFile}, interval{interval}, margin{marginTime}, repeat{repeat}
+{}
+
 Raid::~Raid() = default;
 
 bool Raid::loadFromXml(const std::string& filename)
