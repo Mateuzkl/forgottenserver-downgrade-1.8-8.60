@@ -2014,6 +2014,120 @@ void Game::playerStowContainer(uint32_t playerId, const Position& pos, uint16_t 
 	}
 }
 
+void Game::playerStowStack(uint32_t playerId, const Position& pos, uint16_t spriteId, uint8_t stackpos)
+{
+	const auto player = getPlayerByID(playerId);
+	if (!player || player->isRemoved()) {
+		return;
+	}
+
+	if (!tfs::supply_stash::hasSupplyStashAccess(player.get())) {
+		player->sendCancelMessage("You need to be near a depot to use the supply stash.");
+		return;
+	}
+
+	// Resolve the named item only to learn which type the player meant. Everything
+	// stowed afterwards is found by walking the player's own inventory, never by
+	// trusting a position the client supplied for each one.
+	uint8_t fromIndex = 0;
+	if (pos.x == 0xFFFF) {
+		fromIndex = (pos.y & 0x40) ? static_cast<uint8_t>(pos.z) : static_cast<uint8_t>(pos.y);
+	} else {
+		fromIndex = stackpos;
+	}
+
+	Thing* thing = internalGetThing(player.get(), pos, fromIndex, 0, STACKPOS_MOVE);
+	if (!thing) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	Item* named = thing->getItem();
+	if (!named || named->getClientID() != spriteId) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (!tfs::supply_stash::canStowSupplyItem(named)) {
+		player->sendCancelMessage("You cannot stow this item.");
+		return;
+	}
+
+	const uint16_t wantedId = named->getID();
+	const uint8_t wantedTier = named->getTier();
+
+	// Phase one: collect every matching item the player carries, without touching
+	// anything. Scoped to the player's own inventory and containers, so this cannot
+	// reach items lying on the map.
+	struct StowEntry
+	{
+		std::shared_ptr<Item> item;
+		uint32_t count;
+	};
+	std::vector<StowEntry> planned;
+
+	const auto collect = [&](Item* candidate) {
+		if (!candidate || candidate->getID() != wantedId || candidate->getTier() != wantedTier) {
+			return;
+		}
+		if (!tfs::supply_stash::canStowSupplyItem(candidate)) {
+			return;
+		}
+		const uint32_t amount = candidate->isStackable() ? candidate->getItemCount() : 1;
+		if (amount > 0) {
+			planned.push_back(StowEntry{candidate->shared_from_this(), amount});
+		}
+	};
+
+	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		Item* inventoryItem = player->getInventoryItem(static_cast<slots_t>(slot));
+		if (!inventoryItem) {
+			continue;
+		}
+
+		if (Container* container = inventoryItem->getContainer()) {
+			auto iterator = container->iterator();
+			while (iterator.hasNext()) {
+				collect(*iterator);
+				iterator.advance();
+			}
+			continue;
+		}
+
+		collect(inventoryItem);
+	}
+
+	if (planned.empty()) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	auto& stash = player->getSupplyStash();
+	if (stash.wouldExceedRowLimit(wantedId, wantedTier)) {
+		player->sendCancelMessage("Your supply stash cannot hold any more different items.");
+		return;
+	}
+
+	// Phase two: execute, each entry rolling back on its own.
+	uint32_t stowed = 0;
+	for (const auto& entry : planned) {
+		if (!stash.add(wantedId, wantedTier, entry.count)) {
+			continue;
+		}
+
+		if (internalRemoveItem(entry.item.get(), static_cast<int32_t>(entry.count)) != RETURNVALUE_NOERROR) {
+			[[maybe_unused]] const bool rolledBack = stash.remove(wantedId, wantedTier, entry.count);
+			continue;
+		}
+
+		++stowed;
+	}
+
+	if (stowed == 0) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+	}
+}
+
 void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
                           const Position& toPos, uint8_t count, Item* item, Cylinder* toCylinder)
 {
