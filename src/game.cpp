@@ -1909,6 +1909,111 @@ void Game::playerStowItem(uint32_t playerId, const Position& pos, uint16_t sprit
 	}
 }
 
+void Game::playerStowContainer(uint32_t playerId, const Position& pos, uint16_t spriteId, uint8_t stackpos)
+{
+	const auto player = getPlayerByID(playerId);
+	if (!player || player->isRemoved()) {
+		return;
+	}
+
+	if (!tfs::supply_stash::hasSupplyStashAccess(player.get())) {
+		player->sendCancelMessage("You need to be near a depot to use the supply stash.");
+		return;
+	}
+
+	uint8_t fromIndex = 0;
+	if (pos.x == 0xFFFF) {
+		fromIndex = (pos.y & 0x40) ? static_cast<uint8_t>(pos.z) : static_cast<uint8_t>(pos.y);
+	} else {
+		fromIndex = stackpos;
+	}
+
+	Thing* thing = internalGetThing(player.get(), pos, fromIndex, 0, STACKPOS_MOVE);
+	if (!thing) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	Item* item = thing->getItem();
+	if (!item || item->getClientID() != spriteId) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	Container* container = item->getContainer();
+	if (!container) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	// Phase one: decide. Nothing is mutated here, because removing while walking
+	// the container would invalidate the iterator underneath us.
+	struct StowEntry
+	{
+		std::shared_ptr<Item> item;
+		uint16_t itemId;
+		uint8_t tier;
+		uint32_t count;
+	};
+	std::vector<StowEntry> planned;
+
+	auto& stash = player->getSupplyStash();
+	auto iterator = container->iterator();
+	while (iterator.hasNext()) {
+		Item* candidate = *iterator;
+		iterator.advance();
+
+		// The container itself is never stored, and a nested one is skipped rather
+		// than flattened away — its contents are reached by the iterator anyway.
+		if (!candidate || candidate->getContainer()) {
+			continue;
+		}
+
+		if (!tfs::supply_stash::canStowSupplyItem(candidate)) {
+			continue;
+		}
+
+		const uint16_t candidateId = candidate->getID();
+		const uint8_t candidateTier = candidate->getTier();
+		if (stash.wouldExceedRowLimit(candidateId, candidateTier)) {
+			continue;
+		}
+
+		const uint32_t amount = candidate->isStackable() ? candidate->getItemCount() : 1;
+		if (amount == 0) {
+			continue;
+		}
+
+		planned.push_back(StowEntry{candidate->shared_from_this(), candidateId, candidateTier, amount});
+	}
+
+	if (planned.empty()) {
+		player->sendCancelMessage("There is nothing in there that can be stowed.");
+		return;
+	}
+
+	// Phase two: execute. Each entry rolls back on its own, so one failure leaves
+	// the rest of the batch intact rather than aborting halfway with items already
+	// counted twice.
+	uint32_t stowed = 0;
+	for (const auto& entry : planned) {
+		if (!stash.add(entry.itemId, entry.tier, entry.count)) {
+			continue;
+		}
+
+		if (internalRemoveItem(entry.item.get(), static_cast<int32_t>(entry.count)) != RETURNVALUE_NOERROR) {
+			[[maybe_unused]] const bool rolledBack = stash.remove(entry.itemId, entry.tier, entry.count);
+			continue;
+		}
+
+		++stowed;
+	}
+
+	if (stowed == 0) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+	}
+}
+
 void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
                           const Position& toPos, uint8_t count, Item* item, Cylinder* toCylinder)
 {
