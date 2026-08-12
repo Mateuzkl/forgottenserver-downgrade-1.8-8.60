@@ -85,6 +85,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/mapcache.cpp
 	${CMAKE_CURRENT_LIST_DIR}/market.cpp
 	${CMAKE_CURRENT_LIST_DIR}/stash.cpp
+	${CMAKE_CURRENT_LIST_DIR}/supply_stash_protocol.cpp
 	${CMAKE_CURRENT_LIST_DIR}/matrixarea.cpp
 	${CMAKE_CURRENT_LIST_DIR}/monster.cpp
 	${CMAKE_CURRENT_LIST_DIR}/monsters.cpp
@@ -201,6 +202,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/mapcache.h
 	${CMAKE_CURRENT_LIST_DIR}/market.h
 	${CMAKE_CURRENT_LIST_DIR}/stash.h
+	${CMAKE_CURRENT_LIST_DIR}/supply_stash_protocol.h
 	${CMAKE_CURRENT_LIST_DIR}/matrixarea.h
 	${CMAKE_CURRENT_LIST_DIR}/monster.h
 	${CMAKE_CURRENT_LIST_DIR}/monsters.h
