@@ -1830,8 +1830,27 @@ void Game::playerStowItem(uint32_t playerId, const Position& pos, uint16_t sprit
 		return;
 	}
 
-	// An item lying on the map has to be within arm's reach and on the same floor.
-	// Items already carried are reachable by definition.
+	// Token security: the same rule playerMoveItem applies. Without it the stash
+	// would be a way to move protected items out while protection is on.
+	if (player->isTokenProtected()) {
+		bool fromPlayer = false;
+		for (Cylinder* current = fromCylinder; current; current = current->getParent()) {
+			if (current == player.get()) {
+				fromPlayer = true;
+				break;
+			}
+		}
+
+		if (fromPlayer && !player->canMoveOwnItems(item)) {
+			player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
+			                        "[TOKEN]: To move your items out, disable token security!");
+			player->sendCancelMessage(RETURNVALUE_ITEMSTOKENPROTECTED);
+			return;
+		}
+	}
+
+	// An item lying on the map has to be within arm's reach, on the same floor, and
+	// actually visible. Items already carried are reachable by definition.
 	if (pos.x != 0xFFFF) {
 		const Position& playerPos = player->getPosition();
 		if (playerPos.z != pos.z) {
@@ -1841,6 +1860,11 @@ void Game::playerStowItem(uint32_t playerId, const Position& pos, uint16_t sprit
 		}
 		if (!playerPos.isInRange(pos, 1, 1)) {
 			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
+			return;
+		}
+		// Range alone would let an item be taken through a wall one tile away.
+		if (!canThrowObjectTo(playerPos, pos, true, true)) {
+			player->sendCancelMessage(RETURNVALUE_CANNOTTHROW);
 			return;
 		}
 	}
