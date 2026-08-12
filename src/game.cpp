@@ -6737,6 +6737,18 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 		applyPreyCombatBonuses(damage, attackerRef, targetRef);
 
+		if (!damage.equipmentDamageReductionApplied) {
+			damage.equipmentDamageReductionApplied = true;
+			const bool validOrigin = damage.initialOrigin != ORIGIN_CONDITION && damage.initialOrigin != ORIGIN_REFLECT;
+			if (targetPlayer && attacker && attacker != target && validOrigin) {
+				const uint32_t percent = targetPlayer->getEquipmentDamageReductionPercent();
+				damage.primary.value =
+				    EquipmentCombatBonus::reduceDamageByPercent(damage.primary.value, percent);
+				damage.secondary.value =
+				    EquipmentCombatBonus::reduceDamageByPercent(damage.secondary.value, percent);
+			}
+		}
+
 		int32_t healthChange = damage.primary.value + damage.secondary.value;
 		if (healthChange == 0) {
 			return true;
@@ -6830,18 +6842,6 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					damage.secondary.value = std::max<int32_t>(0, damage.secondary.value + damage.primary.value);
 					damage.primary.value = 0;
 				}
-			}
-		}
-
-		if (!damage.equipmentDamageReductionApplied) {
-			damage.equipmentDamageReductionApplied = true;
-			const bool validOrigin = damage.initialOrigin != ORIGIN_CONDITION && damage.initialOrigin != ORIGIN_REFLECT;
-			if (targetPlayer && attacker && attacker != target && validOrigin) {
-				const uint32_t percent = targetPlayer->getEquipmentDamageReductionPercent();
-				damage.primary.value =
-				    EquipmentCombatBonus::reduceDamageByPercent(damage.primary.value, percent);
-				damage.secondary.value =
-				    EquipmentCombatBonus::reduceDamageByPercent(damage.secondary.value, percent);
 			}
 		}
 

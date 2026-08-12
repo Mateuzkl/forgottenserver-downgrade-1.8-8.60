@@ -1,6 +1,8 @@
 #include "../otpch.h"
 
+#include "../condition.h"
 #include "../equipment_combat_bonus.h"
+#include "../game.h"
 #include "../item.h"
 #include "../player.h"
 
@@ -75,6 +77,50 @@ TEST_CASE(equipment_combat_bonus_xml_attributes_are_parsed)
 	CHECK(itemType.attackSpeedPercent == 5);
 	CHECK(itemType.damagePercent == 10);
 	CHECK(itemType.damageReductionPercent == 100);
+}
+
+TEST_CASE(equipment_damage_reduction_precedes_full_mana_shield_absorption)
+{
+	ensureItemTypesLoaded();
+	constexpr uint16_t testItemId = 2161;
+	pugi::xml_document document;
+	const auto result = document.load_string(R"xml(
+		<item name="mana shield equipment reduction test">
+			<attribute key="damagereductionpercent" value="20" />
+		</item>
+	)xml");
+	CHECK(result);
+	Item::items.parseItemNode(document.child("item"), testItemId);
+
+	auto equipment = Item::CreateItem(testItemId);
+	CHECK(equipment);
+
+	auto attacker = std::make_shared<Player>(nullptr);
+	auto target = std::make_shared<Player>(nullptr);
+	auto group = std::make_shared<Group>();
+	attacker->setGroup(group);
+	target->setGroup(group);
+	target->setMaxHealth(100);
+	target->setHealth(100);
+	target->setMaxMana(200);
+	target->setMana(200);
+	static_cast<Cylinder*>(target.get())->internalAddThing(CONST_SLOT_RING, equipment.get());
+	target->setItemAbility(CONST_SLOT_RING, true);
+	CHECK(target->getEquipmentDamageReductionPercent() == 20);
+	CHECK(target->addCondition(
+	    Condition::createCondition(CONDITIONID_COMBAT, CONDITION_MANASHIELD, -1, 0)));
+
+	CombatDamage damage;
+	damage.primary.type = COMBAT_PHYSICALDAMAGE;
+	damage.primary.value = -100;
+	damage.origin = ORIGIN_SPELL;
+
+	CHECK(g_game.combatChangeHealth(attacker, target, damage));
+	CHECK(target->getMana() == 120);
+	CHECK(target->getHealth() == 100);
+	CHECK(damage.primary.value == 0);
+	CHECK(damage.secondary.value == 0);
+	CHECK(damage.equipmentDamageReductionApplied);
 }
 
 TFS_TEST_MAIN()
