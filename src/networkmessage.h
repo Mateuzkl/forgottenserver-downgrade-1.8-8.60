@@ -66,7 +66,18 @@ public:
 		return buffer[info.position++];
 	}
 
-	uint8_t getPreviousByte() { return buffer[--info.position]; }
+	// position is unsigned, so decrementing at 0 wraps to 65535 and indexes past
+	// the end of a NETWORKMESSAGE_MAXSIZE (65500) buffer. Every current caller is
+	// guarded — parseAutoWalk validates that the direction bytes exactly consume
+	// the message — but the primitive itself should not depend on that.
+	uint8_t getPreviousByte()
+	{
+		if (info.position == 0) {
+			info.overrun = true;
+			return 0;
+		}
+		return buffer[--info.position];
+	}
 
 	template <typename T>
 	std::enable_if_t<std::is_trivially_copyable_v<T>, T> get() noexcept

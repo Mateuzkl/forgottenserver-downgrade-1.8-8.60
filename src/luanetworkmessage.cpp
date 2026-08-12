@@ -427,6 +427,17 @@ int luaNetworkMessageSkipBytes(lua_State* L)
 	const auto& message = getNetworkMessage(L);
 	if (message) {
 		int16_t integer = getInteger<int16_t>(L, 2);
+		// skipBytes() adjusts the cursor without validating it, and this is the one
+		// caller whose argument comes straight from a script. Reject a skip that
+		// would land outside the buffer instead of letting later reads and writes
+		// work from an out-of-range cursor.
+		const int32_t newPosition = static_cast<int32_t>(message->getBufferPosition()) + integer;
+		if (newPosition < 0 || newPosition >= NETWORKMESSAGE_MAXSIZE) {
+			reportErrorFunc(L, "networkMessage:skipBytes() would move the cursor outside the buffer");
+			pushBoolean(L, false);
+			return 1;
+		}
+
 		message->skipBytes(integer);
 		pushBoolean(L, true);
 	} else {
