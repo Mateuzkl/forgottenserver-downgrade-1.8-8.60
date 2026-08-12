@@ -53,28 +53,39 @@ void ConnectionManager::releaseConnection(const Connection_ptr& connection)
 	g_performanceMetrics.recordNetworkConnectionCount(connections.size());
 }
 
+// Both bulk operations below touch per-connection state, which belongs to
+// connectionLock. Connection::closeLocked() already takes connectionLock and
+// then connectionManagerLock (via releaseConnection), so acquiring them in the
+// opposite order here would deadlock. Snapshot the set under the manager lock,
+// release it, then lock each connection on its own — the two locks are never
+// held at the same time.
 void ConnectionManager::closeAll()
 {
-	std::scoped_lock lockClass(connectionManagerLock);
-
-	for (const auto& connection : connections) {
-		try {
-			asio::error_code error;
-			connection->socket.shutdown(asio::ip::tcp::socket::shutdown_both, error);
-			connection->socket.close(error);
-		} catch (std::system_error&) {
-		}
+	std::vector<Connection_ptr> openConnections;
+	{
+		std::scoped_lock lockClass(connectionManagerLock);
+		openConnections.assign(connections.begin(), connections.end());
+		connections.clear();
+		ipConnectionCount.clear();
+		g_performanceMetrics.recordNetworkConnectionCount(0);
 	}
-	connections.clear();
-	ipConnectionCount.clear();
-	g_performanceMetrics.recordNetworkConnectionCount(0);
+
+	for (const auto& connection : openConnections) {
+		std::scoped_lock lock(connection->connectionLock);
+		connection->closeSocket();
+	}
 }
 
 void ConnectionManager::releaseAllProtocols()
 {
-	std::scoped_lock lockClass(connectionManagerLock);
+	std::vector<Connection_ptr> openConnections;
+	{
+		std::scoped_lock lockClass(connectionManagerLock);
+		openConnections.assign(connections.begin(), connections.end());
+	}
 
-	for (const auto& connection : connections) {
+	for (const auto& connection : openConnections) {
+		std::scoped_lock lock(connection->connectionLock);
 		if (connection->protocol) {
 			connection->protocol->release();
 			connection->protocol.reset();
@@ -335,6 +346,18 @@ void Connection::send(const OutputMessage_ptr& msg)
 
 void Connection::internalSend(const OutputMessage_ptr& msg)
 {
+	std::scoped_lock lockClass(connectionLock);
+
+	// releaseAllProtocols() clears protocol during shutdown, and this runs on the
+	// strand, so the pointer can legitimately be gone by the time a queued send
+	// gets here. Nothing can serialise the message without a protocol; tear the
+	// connection down instead of dereferencing null.
+	if (!protocol) {
+		messageQueue.clear();
+		closeLocked(FORCE_CLOSE);
+		return;
+	}
+
 	protocol->onSendMessage(msg);
 	try {
 		writeTimer.expires_after(std::chrono::seconds(CONNECTION_WRITE_TIMEOUT));
