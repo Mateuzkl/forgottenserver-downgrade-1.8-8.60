@@ -522,8 +522,14 @@ std::string_view LuaScriptInterface::getErrorDesc(LuaErrorCode code)
 	}
 }
 
-ScriptEnvironment LuaScriptInterface::scriptEnv[16];
+ScriptEnvironment LuaScriptInterface::scriptEnv[LuaScriptInterface::SCRIPT_ENV_COUNT];
 int32_t LuaScriptInterface::scriptEnvIndex = -1;
+
+void LuaScriptInterface::reportScriptEnvOutOfBounds(const char* function, int32_t index)
+{
+	LOG_ERROR("[{}] scriptEnvIndex out of bounds: {} (valid range 0..{})", function, index,
+	          SCRIPT_ENV_COUNT - 1);
+}
 
 LuaScriptInterface::LuaScriptInterface(std::string_view interfaceName) : interfaceName{interfaceName} {}
 
@@ -535,7 +541,14 @@ LuaScriptInterface::~LuaScriptInterface()
 
 void LuaScriptInterface::resetScriptEnv()
 {
-	assert(scriptEnvIndex >= 0);
+	assert(scriptEnvIndex >= 0 && scriptEnvIndex < SCRIPT_ENV_COUNT);
+	// The upper bound was previously unchecked, so a stale index would index past
+	// the end of the array and write there. Bail out instead of corrupting memory.
+	if (scriptEnvIndex < 0 || scriptEnvIndex >= SCRIPT_ENV_COUNT) {
+		reportScriptEnvOutOfBounds(__func__, scriptEnvIndex);
+		return;
+	}
+
 	// Rollback any open transaction leaked by the script that just ended
 	if (Database::getInstance().isInTransaction()) {
 		Database::getInstance().rollback();

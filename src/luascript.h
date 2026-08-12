@@ -11,6 +11,7 @@
 #include "position.h"
 #include "spectators.h"
 
+#include <algorithm>
 #include <memory>
 
 #if LUA_VERSION_NUM >= 502
@@ -339,15 +340,37 @@ public:
 	int32_t getMetaEvent(std::string_view globalName, std::string_view eventName);
 	void removeEvent(int32_t scriptId);
 
+	// Depth of the nested script environment stack. Bounds every access below.
+	static constexpr int32_t SCRIPT_ENV_COUNT = 16;
+
+	// Returns the innermost reserved environment. 63 call sites dereference the
+	// result unconditionally, so this must never return nullptr; on a bounds
+	// violation it clamps and reports instead, which keeps a release build out of
+	// the array's tail rather than trading one bug for 63 null dereferences.
 	static ScriptEnvironment* getScriptEnv()
 	{
-		assert(scriptEnvIndex >= 0 && scriptEnvIndex < 16);
+		assert(scriptEnvIndex >= 0 && scriptEnvIndex < SCRIPT_ENV_COUNT);
+		if (scriptEnvIndex < 0 || scriptEnvIndex >= SCRIPT_ENV_COUNT) {
+			reportScriptEnvOutOfBounds(__func__, scriptEnvIndex);
+			return scriptEnv + std::clamp(scriptEnvIndex, 0, SCRIPT_ENV_COUNT - 1);
+		}
 		return scriptEnv + scriptEnvIndex;
 	}
 
-	static bool hasScriptEnv() { return scriptEnvIndex >= 0 && scriptEnvIndex < 16; }
+	static bool hasScriptEnv() { return scriptEnvIndex >= 0 && scriptEnvIndex < SCRIPT_ENV_COUNT; }
 
-	static bool reserveScriptEnv() { return ++scriptEnvIndex < 16; }
+	// Reserves the next environment slot. The index must only advance when a slot
+	// is actually available: incrementing first and reporting failure afterwards
+	// leaves the index past the end permanently, because no caller unwinds it on
+	// the failure path, which poisons every later script call.
+	static bool reserveScriptEnv()
+	{
+		if (scriptEnvIndex + 1 >= SCRIPT_ENV_COUNT) {
+			return false;
+		}
+		++scriptEnvIndex;
+		return true;
+	}
 
 	static void resetScriptEnv();
 
@@ -640,7 +663,9 @@ private:
 
 	std::string interfaceName;
 
-	static ScriptEnvironment scriptEnv[16];
+	static void reportScriptEnvOutOfBounds(const char* function, int32_t index);
+
+	static ScriptEnvironment scriptEnv[SCRIPT_ENV_COUNT];
 	static int32_t scriptEnvIndex;
 
 	std::string loadingFile;
