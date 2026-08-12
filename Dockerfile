@@ -28,10 +28,18 @@ WORKDIR /usr/src/forgottenserver-downgrade
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     && cmake --build build --config RelWithDebInfo
 
-FROM ubuntu:22.04
+# Must track the build stage above. The binary is linked against that image's glibc,
+# so an older runtime base fails to start regardless of which libraries are installed.
+FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN groupadd -r tfs && useradd -r -g tfs -d /srv -s /bin/sh tfs
 COPY --from=build /usr/src/forgottenserver-downgrade/build/tfs /bin/tfs
+# Fail here rather than publishing an image that exits 127 on first run.
+RUN if ldd /bin/tfs | grep -q 'not found'; then \
+        echo 'Runtime stage is missing shared libraries:' >&2; \
+        ldd /bin/tfs | grep 'not found' >&2; \
+        exit 1; \
+    fi
 COPY data /srv/data/
 COPY LICENSE README.md *.dist *.sql key.pem /srv/
 RUN chown -R tfs:tfs /bin/tfs /srv
