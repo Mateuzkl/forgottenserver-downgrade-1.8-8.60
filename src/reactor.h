@@ -78,6 +78,15 @@ private:
 	mutable std::mutex mutex;
 	std::condition_variable conditionVariable;
 
+#ifndef NDEBUG
+	// taskHeap, activeIdentifiers and cancelled are deliberately touched without
+	// the mutex, because they belong to whichever single thread drives runOnce().
+	// Nothing enforced that, and when it was broken the symptom was heap
+	// corruption far from the cause. Counts concurrent entries so the next
+	// mistake of that shape aborts immediately instead.
+	std::atomic<int> runOnceDepth{0};
+#endif
+
 	std::vector<Task> sendInbox;
 	std::vector<Task> scheduleInbox;
 	std::vector<uint32_t> cancelInbox;

@@ -196,6 +196,19 @@ void TaskReactor::runLoop()
 
 void TaskReactor::runOnce()
 {
+#ifndef NDEBUG
+	struct SingleDriverGuard
+	{
+		std::atomic<int>& depth;
+		explicit SingleDriverGuard(std::atomic<int>& depth) : depth{depth}
+		{
+			assert(depth.fetch_add(1, std::memory_order_acq_rel) == 0 &&
+			       "TaskReactor::runOnce() must be driven by one thread at a time");
+		}
+		~SingleDriverGuard() { depth.fetch_sub(1, std::memory_order_acq_rel); }
+	} singleDriverGuard{runOnceDepth};
+#endif
+
 	PerformanceScope cycleScope(PerformanceMetric::ReactorCycle);
 	std::vector<Task> readyTasks;
 	readyTasks.reserve(128);
