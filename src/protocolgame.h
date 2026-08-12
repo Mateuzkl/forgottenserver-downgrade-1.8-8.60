@@ -201,6 +201,13 @@ private:
 	void sendTextMessage(const TextMessage& message);
 	void sendReLoginWindow();
 
+	// Supply Stash. parseSupplyStashAction is deliberately NOT wired into
+	// parsePacket yet: the Lua PacketHandler(0x28) is still authoritative, and a
+	// native case would take precedence and leave two implementations mutating the
+	// stash. Wiring is one case label when the replacement path is ready to test.
+	void parseSupplyStashAction(NetworkMessage& msg);
+	void sendSupplyStash();
+
 	void sendTutorial(uint8_t tutorialId);
 	void sendAddMarker(const Position& pos, uint8_t markType, std::string_view desc);
 

@@ -19,6 +19,8 @@
 #include "outputmessage.h"
 #include "player.h"
 #include "protocolgame.h"
+
+#include "supply_stash_protocol.h"
 #include "protocollogin.h"
 #include "imbuement.h"
 #include "familiar.h"
@@ -3080,6 +3082,68 @@ void ProtocolGame::sendAddMarker(const Position& pos, uint8_t markType, std::str
 	msg.addPosition(pos);
 	msg.addByte(markType);
 	msg.addString(desc);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::parseSupplyStashAction(NetworkMessage& msg)
+{
+	if (!player) {
+		return;
+	}
+
+	const auto parsed = tfs::supply_stash::parseRequest(msg);
+	if (!parsed) {
+		// Malformed requests are dropped without answering. The parser already
+		// guarantees the read stopped inside the message, so the connection stays
+		// aligned for whatever follows.
+		return;
+	}
+
+	const auto& request = parsed.request;
+	const uint32_t playerId = player->getID();
+
+	switch (request.action) {
+		case tfs::supply_stash::Action::StowItem:
+			g_game.playerStowItem(playerId, request.position, request.itemId, request.stackpos, request.count);
+			break;
+
+		case tfs::supply_stash::Action::StowContainer:
+			g_game.playerStowContainer(playerId, request.position, request.itemId, request.stackpos);
+			break;
+
+		case tfs::supply_stash::Action::StowStack:
+			g_game.playerStowStack(playerId, request.position, request.itemId, request.stackpos);
+			break;
+
+		case tfs::supply_stash::Action::Withdraw:
+			g_game.playerStashWithdraw(playerId, request.itemId, request.tier, request.count);
+			break;
+	}
+
+	sendSupplyStash();
+}
+
+void ProtocolGame::sendSupplyStash()
+{
+	if (!player) {
+		return;
+	}
+
+	const auto records = player->getSupplyStash().toRecords();
+
+	NetworkMessage msg;
+	msg.addByte(tfs::supply_stash::SERVER_CONTENTS_OPCODE);
+
+	const size_t used = player->getSupplyStash().getUniqueRowCount();
+	const uint16_t freeSlots = static_cast<uint16_t>(
+	    used >= PlayerStash::MAX_UNIQUE_ROWS ? 0 : PlayerStash::MAX_UNIQUE_ROWS - used);
+
+	// Nothing is sent if the payload will not fit, rather than a truncated one the
+	// client would read past the end of.
+	if (!tfs::supply_stash::serializeContents(msg, records, freeSlots)) {
+		return;
+	}
+
 	writeToOutputBuffer(msg);
 }
 
