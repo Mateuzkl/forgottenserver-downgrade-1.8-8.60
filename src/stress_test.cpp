@@ -257,23 +257,18 @@ bool testUniqueIdentifiers()
 
 bool testMoveOnlyPipeline()
 {
+	TaskReactor reactor;
+	startReactor(reactor);
 	const int COUNT = std::min(1000, getCountFor(ConfigManager::STRESS_TEST_MOVE_ONLY_COUNT));
 	std::atomic<int> sum{0};
 
 	for (int i = 0; i < COUNT; ++i) {
 		auto value = std::make_unique<int>(i + 1);
-		g_scheduler.addEvent(0, [value = std::move(value), &sum] {
+		reactor.schedule(0, [value = std::move(value), &sum] {
 			sum.fetch_add(*value, std::memory_order_relaxed);
 		});
 	}
-
-	while (true) {
-		g_reactor.runOnce();
-		if (sum.load() == COUNT * (COUNT + 1) / 2) {
-			break;
-		}
-		std::this_thread::yield();
-	}
+	reactor.runOnce();
 
 	STRESS_CHECK(sum.load() == COUNT * (COUNT + 1) / 2, "pipeline sum should match");
 	return true;
