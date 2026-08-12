@@ -4669,6 +4669,11 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 	LuaTimerEventDesc timerEventDesc = std::move(timerEvents[eventIndex]);
 	timerEvents.erase(eventIndex);
 
+	// Everything below pushes onto the shared Lua stack. Only callVoidFunction()
+	// unwinds those pushes, so remember where the stack started and restore it on
+	// any path that does not reach the call.
+	const int stackBase = lua_gettop(luaState);
+
 	// push function
 	lua_rawgeti(luaState, LUA_REGISTRYINDEX, timerEventDesc.function);
 
@@ -4755,6 +4760,10 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 		callVoidFunction(timerEventDesc.parameters.size());
 	} else {
 		LOG_ERROR("[Error - LuaScriptInterface::executeTimerEvent] Call stack overflow");
+		// The function and its parameters are already on the stack but nothing will
+		// consume them now, so drop them here. Without this every timer event that
+		// fails to reserve leaks 1+N stack slots for the lifetime of the state.
+		lua_settop(luaState, stackBase);
 	}
 
 	// free resources
