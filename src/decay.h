@@ -48,7 +48,9 @@ class Decay
 
 		[[nodiscard]] static constexpr int32_t clampSchedulerDuration(int32_t duration) noexcept;
 
-		uint64_t eventId {0};
+		// Matches Scheduler::addEvent()'s return type and stopEvent()'s parameter.
+		// Declaring it wider only hid a narrowing conversion on every stopEvent call.
+		uint32_t eventId {0};
 		std::map<DecayTimestamp, DecayBucket> decayMap;
 };
 
