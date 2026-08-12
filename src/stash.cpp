@@ -72,3 +72,33 @@ bool Stash::cleanup(uint32_t playerId)
 	return Database::getInstance().executeQuery(fmt::format(
 		"DELETE FROM `player_supplystash` WHERE `player_id` = {:d} AND `amount` = 0", playerId));
 }
+
+bool Stash::writeRow(uint32_t playerId, uint16_t itemId, uint8_t tier, uint32_t amount)
+{
+	if (playerId == 0 || itemId == 0) {
+		return false;
+	}
+
+	// An emptied row is a delete, not a zero, so the unique-row count in the
+	// database matches what the in-memory model reports.
+	if (amount == 0) {
+		return deleteRow(playerId, itemId, tier);
+	}
+
+	return Database::getInstance().executeQuery(fmt::format(
+		"INSERT INTO `player_supplystash` (`player_id`, `itemtype`, `tier`, `amount`) "
+		"VALUES ({:d}, {:d}, {:d}, {:d}) "
+		"ON DUPLICATE KEY UPDATE `amount` = VALUES(`amount`)",
+		playerId, itemId, normalizeTier(tier), amount));
+}
+
+bool Stash::deleteRow(uint32_t playerId, uint16_t itemId, uint8_t tier)
+{
+	if (playerId == 0 || itemId == 0) {
+		return false;
+	}
+
+	return Database::getInstance().executeQuery(fmt::format(
+		"DELETE FROM `player_supplystash` WHERE `player_id` = {:d} AND `itemtype` = {:d} AND `tier` = {:d}",
+		playerId, itemId, normalizeTier(tier)));
+}
