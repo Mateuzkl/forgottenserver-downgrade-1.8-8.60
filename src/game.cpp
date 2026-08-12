@@ -1839,7 +1839,7 @@ void Game::playerStowItem(uint32_t playerId, const Position& pos, uint16_t sprit
 			                                              : RETURNVALUE_FIRSTGODOWNSTAIRS);
 			return;
 		}
-		if (!Position::areInRange<1, 1>(playerPos, pos)) {
+		if (!playerPos.isInRange(pos, 1, 1)) {
 			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
 			return;
 		}
