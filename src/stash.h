@@ -32,7 +32,7 @@ public:
 	// is the source of truth but not idempotent: replaying one inside a retried
 	// transaction adds the amount twice. These set the row to a known value, so a
 	// retry lands on the same result.
-	[[nodiscard]] static bool writeRow(uint32_t playerId, uint16_t itemId, uint8_t tier, uint32_t amount);
+	[[nodiscard]] static bool writeRow(uint32_t playerId, uint16_t itemId, uint32_t amount, uint8_t tier);
 	[[nodiscard]] static bool deleteRow(uint32_t playerId, uint16_t itemId, uint8_t tier);
 };
 

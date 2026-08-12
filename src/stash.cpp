@@ -73,7 +73,7 @@ bool Stash::cleanup(uint32_t playerId)
 		"DELETE FROM `player_supplystash` WHERE `player_id` = {:d} AND `amount` = 0", playerId));
 }
 
-bool Stash::writeRow(uint32_t playerId, uint16_t itemId, uint8_t tier, uint32_t amount)
+bool Stash::writeRow(uint32_t playerId, uint16_t itemId, uint32_t amount, uint8_t tier)
 {
 	if (playerId == 0 || itemId == 0) {
 		return false;

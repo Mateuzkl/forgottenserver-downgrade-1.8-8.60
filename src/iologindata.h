@@ -8,6 +8,7 @@
 #include "database.h"
 #include "observer_ptr.h"
 #include "player.h"
+#include "player_stash.h"
 #include <optional>
 #include <unordered_set>
 #include <vector>
