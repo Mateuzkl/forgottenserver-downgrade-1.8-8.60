@@ -736,6 +736,45 @@ CREATE TABLE IF NOT EXISTS `towns` (
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 
+-- Created by migration 34. A fresh install starts at db_version 62, so that
+-- migration never runs and the roulette scripts find no table.
+CREATE TABLE IF NOT EXISTS `roulette_plays` (
+  `id` int(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `player_id` int(11) NOT NULL,
+  `uuid` VARCHAR(255) NOT NULL,
+  `reward_id` int(11) NOT NULL,
+  `reward_count` int(11) NOT NULL,
+  `status` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0 = rolling | 1 = pending | 2 = delivered',
+  `created_at` bigint(20) NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  `updated_at` bigint(20) NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY (`uuid`),
+  FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- Created by migration 48, same problem: the engine logs
+-- "[Hireling] player_hirelings table is missing" on every fresh install.
+CREATE TABLE IF NOT EXISTS `player_hirelings` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `player_id` INT NOT NULL,
+  `name` VARCHAR(32) NOT NULL,
+  `active` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `sex` TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  `posx` INT NOT NULL DEFAULT 0,
+  `posy` INT NOT NULL DEFAULT 0,
+  `posz` INT NOT NULL DEFAULT 0,
+  `lookbody` INT NOT NULL DEFAULT 34,
+  `lookfeet` INT NOT NULL DEFAULT 116,
+  `lookhead` INT NOT NULL DEFAULT 97,
+  `looklegs` INT NOT NULL DEFAULT 3,
+  `looktype` INT NOT NULL DEFAULT 1108,
+  PRIMARY KEY (`id`),
+  KEY `idx_player_hirelings_player_id` (`player_id`),
+  CONSTRAINT `fk_player_hirelings_player_id`
+    FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 INSERT INTO server_config (config, value) VALUES ('db_version', '62'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 CREATE TABLE IF NOT EXISTS guild_transactions (
