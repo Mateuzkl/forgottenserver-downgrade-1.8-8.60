@@ -820,6 +820,24 @@ int luaCreatureGetCondition(lua_State* L)
 
 	Condition* condition = creature->getCondition(conditionType, conditionId, subId);
 	if (condition) {
+		// HAZARD: this hands Lua a raw, non-owning Condition*. The weak metatable
+		// (no __gc) is correct — the Creature owns the Condition, not the script —
+		// but nothing invalidates the handle if the Condition is destroyed while a
+		// script still holds it:
+		//
+		//   local c = player:getCondition(CONDITION_POISON)
+		//   player:removeCondition(CONDITION_POISON)  -- Condition is deleted
+		//   c:getTicks()                              -- use-after-free
+		//
+		// No shipped script does this today; data/npc/.../cipfried.lua gets closest,
+		// holding a handle across removeCondition() but only testing it for nil
+		// afterwards, which does not dereference. Keep it that way: read what you
+		// need from the handle before anything can remove the condition.
+		//
+		// The structural fix is shared_ptr<Condition> in ConditionList, as
+		// CrystalServer does (creatures/creature.hpp:47), which makes the handle
+		// keep the object alive. That is a wide change across condition.cpp and
+		// creature.cpp and has not been made.
 		pushUserdata<Condition>(L, condition);
 		setWeakMetatable(L, -1, "Condition");
 	} else {
