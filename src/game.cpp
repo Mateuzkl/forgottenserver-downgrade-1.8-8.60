@@ -8013,7 +8013,7 @@ void Game::updateCreatureSkull(const Creature* creature)
 
 void Game::updateCreatureSquare(const Creature* creature)
 {
-	if (!creature || getWorldType() != WORLD_TYPE_PVP) {
+	if (!creature || !creature->getPlayer() || getWorldType() != WORLD_TYPE_PVP) {
 		return;
 	}
 
@@ -8026,7 +8026,10 @@ void Game::updateCreatureSquare(const Creature* creature)
 			continue;
 		}
 
-		player->sendCreatureSquare(creature, player->getCreatureSquare(creature));
+		const SquareColor_t color = player->getCreatureSquare(creature);
+		if (color != SQ_COLOR_NONE) {
+			player->sendCreatureSquare(creature, color);
+		}
 	}
 }
 

@@ -3049,7 +3049,9 @@ void ProtocolGame::sendCreatureSkull(const Creature* creature)
 
 void ProtocolGame::sendCreatureSquare(const Creature* creature, SquareColor_t color)
 {
-	if (!canSee(creature)) {
+	// Opcode 0x86 is only valid for visible players with an actual PvP color.
+	// Sending it for monsters or SQ_COLOR_NONE can desynchronize 8.6 clients.
+	if (!creature || !creature->getPlayer() || color == SQ_COLOR_NONE || !canSee(creature)) {
 		return;
 	}
 

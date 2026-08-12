@@ -1658,6 +1658,7 @@ private:
 
 	std::unordered_set<uint32_t> attackedSet;
 	std::unordered_set<uint32_t> attackedBySet;
+	uint32_t pvpSquareRefreshTicks = 0;
 	std::unordered_set<uint32_t> VIPList;
 	std::unordered_set<uint32_t> modifiedStorageKeys;
 	std::unordered_set<uint32_t> removedStorageKeys;

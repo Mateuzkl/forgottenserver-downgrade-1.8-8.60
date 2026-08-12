@@ -2942,10 +2942,15 @@ void Player::onThink(uint32_t interval)
 	Creature::onThink(interval);
 
 	// O protocolo 8.6 exibe o opcode 0x86 como um quadrado temporário.
-	// Renova a marca enquanto houver uma relação de PvP ativa para que o
-	// efeito permaneça visível também no cliente padrão.
+	// Limita a renovação para evitar uma enxurrada de pacotes em todo onThink.
 	if (isInPvpSituation()) {
-		g_game.updateCreatureSquare(this);
+		pvpSquareRefreshTicks += interval;
+		if (pvpSquareRefreshTicks >= 1000) {
+			pvpSquareRefreshTicks = 0;
+			g_game.updateCreatureSquare(this);
+		}
+	} else {
+		pvpSquareRefreshTicks = 0;
 	}
 
 	if (client && getIP() == 0) {
