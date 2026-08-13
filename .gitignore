@@ -22,6 +22,8 @@ build/
 build-release/
 build-debug/
 build-asan*/
+build-tsan*/
+build-tests*/
 build-callgrind/
 [Bb]in/
 [Oo]bj/

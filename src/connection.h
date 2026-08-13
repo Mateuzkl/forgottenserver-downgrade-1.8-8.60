@@ -104,11 +104,17 @@ private:
 
 	void closeSocket();
 	void closeLocked(bool force);
-	void internalSend(const OutputMessage_ptr& msg);
+	void internalSend(OutputMessage_ptr msg);
 	uint32_t getIPLocked();
 
 	asio::ip::tcp::socket& getSocket() { return socket; }
 	friend class ServicePort;
+
+	// Test seam. The write-lifetime regression tests need a genuinely connected
+	// socket and direct sight of messageQueue to reproduce "async write pending while
+	// the queue is emptied"; nothing else can observe that state. Declaration only —
+	// the type is defined in src/tests and never exists in the server binary.
+	friend struct ConnectionTestAccess;
 
 	NetworkMessage msg;
 
