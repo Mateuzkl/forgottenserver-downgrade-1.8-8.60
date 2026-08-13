@@ -391,12 +391,10 @@ private:
 	bool isMehah = false;
 	bool isOTC = false;
 	bool isAstraClient = false;
-	bool isFonticakClient = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
 	uint32_t dllWeatherSequence = 0;
-	bool isUsingFonticakClient() const { return isFonticakClient; }
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }
 	bool supportsCreatureIcons() const { return supportsAstraCreatureIcons(); }
 	bool supportsNativeZoneWeather() const

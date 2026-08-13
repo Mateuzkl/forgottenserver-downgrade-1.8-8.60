@@ -879,7 +879,6 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->client->isMehah = isMehah;
 	player->client->isOTC = isOTC;
 	player->client->isAstraClient = isAstraClient;
-	player->client->isFonticakClient = isFonticakClient;
 	if (!g_game.placeCreature(player.get(), player->getLoginPosition())) {
 		if (!g_game.placeCreature(player.get(), player->getTemplePosition(), false, true)) {
 			g_game.releaseLogin(reservedGuid);
@@ -1029,7 +1028,6 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->client->isMehah = isMehah;
 	player->client->isOTC = isOTC;
 	player->client->isAstraClient = isAstraClient;
-	player->client->isFonticakClient = isFonticakClient;
 	sendAddCreature(player.get(), player->getPosition(), 0);
 	sendLootContainers();
 	player->lastIP = player->getIP();
@@ -1142,6 +1140,11 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 		dllWeatherSequence = nextDllWeatherSequence();
 	}
 
+	// Fonticak is an OTCv8 client that adds its own signature marker. It never
+	// selected a different wire layout, so it is not protocol state — the signature
+	// only feeds the fonticakClientOnly login gate below and is dead after that.
+	bool fonticakSignatureValid = false;
+
 	// OTCv8 version detection
 	if (msg.getBufferPosition() < msg.getLength()) {
 		uint16_t otcV8StringLength = msg.get<uint16_t>();
@@ -1176,7 +1179,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
 						break;
 					}
-					isFonticakClient =
+					fonticakSignatureValid =
 					    msg.get<uint32_t>() ==
 					    FonticakClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
@@ -1203,7 +1206,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY)) {
-		if (!isFonticakClient) {
+		if (!fonticakSignatureValid) {
 			LOG_WARN("[FonticakClient] Client rejected: OTC-Fonticak required");
 			disconnectClient(FonticakClient::REQUIRED_MESSAGE);
 			return;
@@ -1212,7 +1215,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 
 	if (isAstraClient) {
 		LOG_NETWORK("Client connected: AstraClient");
-	} else if (isFonticakClient) {
+	} else if (fonticakSignatureValid) {
 		LOG_NETWORK("Client connected: FonticakClient");
 	}
 

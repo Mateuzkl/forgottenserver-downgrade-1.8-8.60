@@ -1553,7 +1553,6 @@ public:
 	bool isOTCv8() const { return client ? client->isOTCv8 : false; }
 	bool isMehah() const { return client ? client->isMehah : false; }
 	bool isAstraClient() const { return client ? client->isAstraClient : false; }
-	bool isFonticakClient() const { return client ? client->isFonticakClient : false; }
 	bool isOTC() const
 	{
 		switch (operatingSystem) {

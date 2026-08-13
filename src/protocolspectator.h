@@ -1053,7 +1053,6 @@ class ProtocolSpectator {
         bool isMehah = false;
 	    bool isOTC = false;
         bool isAstraClient = false;
-        bool isFonticakClient = false;
         std::string cast_password = "";
         std::string cast_description = "";
 
