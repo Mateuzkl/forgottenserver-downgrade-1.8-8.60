@@ -611,7 +611,8 @@ bool ProtocolGame::shouldSendQuickLootFlags() const
 
 bool ProtocolGame::shouldSendContainerPagination() const
 {
-	return isOTCv8 || isAstraClient || isMehah;
+	// isAstraClient implies isOTCv8, so listing it separately was redundant.
+	return isOTCv8 || isMehah;
 }
 
 bool ProtocolGame::shouldPaginateContainer(const Container* container) const
@@ -2670,7 +2671,9 @@ void ProtocolGame::parseRotateItem(NetworkMessage& msg)
 
 void ProtocolGame::parseWrapableItem(NetworkMessage& msg)
 {
-	if (!isOTC && !isOTCv8 && !isAstraClient) {
+	// isOTCv8 and isAstraClient both imply isOTC (see docs/client-capability-matrix.md
+	// §1), so the extra terms could never change the result.
+	if (!isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2844,7 +2847,8 @@ void ProtocolGame::sendCharmActivated(uint8_t charmId)
 void ProtocolGame::sendKillTrackerUpdate(const std::shared_ptr<Container>& corpse, std::string_view monsterName,
                                          const Outfit_t& monsterOutfit)
 {
-	if (!corpse || (!isAstraClient && !isOTC && !isOTCv8 && !isMehah)) {
+	// isAstraClient, isOTCv8 and isMehah all imply isOTC.
+	if (!corpse || !isOTC) {
 		return;
 	}
 
@@ -5161,7 +5165,8 @@ void ProtocolGame::sendNewPing(uint32_t pingId)
 
 void ProtocolGame::sendExtendedOpcode(uint8_t opcode, std::string_view data)
 {
-	if (!isOTCv8 && !isOTC && !isAstraClient) {
+	// isOTCv8 and isAstraClient both imply isOTC.
+	if (!isOTC) {
 		return;
 	}
 
@@ -5215,7 +5220,8 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		return;
 	}
 
-	if (!isOTCv8 && !isAstraClient) return;
+	// isAstraClient implies isOTCv8.
+	if (!isOTCv8) return;
 
 	std::unordered_map<GameFeature, bool> features;
 	features[GameFeature::ExtendedOpcode] = true;
