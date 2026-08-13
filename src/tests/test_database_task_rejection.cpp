@@ -66,7 +66,13 @@ TEST_CASE(test_accepted_task_reports_success)
 
 	CHECK(tasks.addTask("SELECT 1"));
 
+	// shutdown() stops the worker but deliberately does not join it — otserv.cpp and
+	// signals.cpp join explicitly afterwards. Without that join here the worker is
+	// still returning from threadMain() while ~DatabaseTasks() destroys the deque,
+	// mutex and condition variables it is using, which ThreadSanitizer reports as a
+	// data race in the destructor. Follow the same contract the server does.
 	tasks.shutdown();
+	tasks.join();
 	CHECK(!tasks.isRunning());
 
 	// Once the worker is down, rejection resumes.
