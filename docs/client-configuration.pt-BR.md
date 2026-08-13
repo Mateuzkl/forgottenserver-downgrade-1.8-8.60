@@ -49,6 +49,12 @@ negociadas no marker loop de login existente com `OTCv8CapabilitiesV1`, seguido
 por uma mascara de capabilities de 32 bits. Um OTCv8 simples que nao envia esse
 marker recebe apenas o conjunto comum de features abaixo.
 
+O protocolo de login da conta e negociado separadamente. Clients com parser de
+character list estendida enviam `OTCv8LoginCapabilitiesV1` e sua mascara de 32
+bits depois da senha. Clients OTCv8 sem esse marker recebem a lista 8.60 padrao
+(`0x64`); clients capazes podem solicitar separadamente a lista estendida
+(`0x65`), a cast list e os metadados de criaturas boosted.
+
 O server atualmente envia estas flags comuns para OTCv8:
 
 ```cpp

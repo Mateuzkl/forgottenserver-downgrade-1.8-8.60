@@ -3,6 +3,7 @@ if(NOT DEFINED PROJECT_SOURCE_DIR)
 endif()
 
 file(READ "${PROJECT_SOURCE_DIR}/src/protocolgame.cpp" protocolgame_source)
+file(READ "${PROJECT_SOURCE_DIR}/src/protocollogin.cpp" protocollogin_source)
 
 function(extract_block start_marker end_marker output_var)
     string(FIND "${protocolgame_source}" "${start_marker}" block_start)
@@ -38,6 +39,9 @@ require_occurrences("${first_message_block}" "sendFeatures\\(" 0 "first-message 
 require_occurrences("${first_message_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "first-message duplicate extended-opcode negotiation")
 require_occurrences("${first_message_block}" "OTCv8CapabilitiesV1" 1 "OTCv8 capability marker")
 require_occurrences("${first_message_block}" "OTCV8_CAPABILITIES_V1_MASK" 1 "OTCv8 capability mask validation")
+require_occurrences("${protocollogin_source}" "OTCv8LoginCapabilitiesV1" 1 "OTCv8 login capability marker")
+require_occurrences("${protocollogin_source}" "Otcv8LoginCapability::ExtendedCharacterList" 1 "extended character-list capability gate")
+require_occurrences("${protocollogin_source}" "usesExtendedOtcv8Login" 0 "operating-system-only character-list selection")
 
 string(FIND "${login_block}" "sendFeatures();" features_position)
 string(FIND "${login_block}" "connect(foundPlayer->getID(), operatingSystem);" reconnect_position)

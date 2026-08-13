@@ -120,7 +120,7 @@ private:
 	void disconnectClient(std::string_view message);
 
 	void getCharacterList(std::string_view accountName, std::string_view password, bool extendedCharacterList,
-	                      uint32_t clientIP);
+	                      bool extendedBoostedInfo, uint32_t clientIP);
 	void getCastList(const std::string& password, uint32_t clientIP);
 	void getExtendedCastList();
 };

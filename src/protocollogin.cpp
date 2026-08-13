@@ -32,10 +32,24 @@ constexpr uint8_t EXTENDED_LOGIN_CAST_LIST_MARKER = 0xA2;
 constexpr uint8_t EXTENDED_LOGIN_CAST_LIST_VERSION = 1;
 constexpr size_t EXTENDED_LOGIN_CAST_LIST_LIMIT = std::numeric_limits<uint8_t>::max();
 constexpr std::string_view EXTENDED_LOGIN_CAST_LIST_REQUEST = "__extended_casts_v1__";
+constexpr std::string_view OTCV8_LOGIN_CAPABILITIES_V1_MARKER = "OTCv8LoginCapabilitiesV1";
 
-bool usesExtendedOtcv8Login(uint16_t operatingSystem)
+enum class Otcv8LoginCapability : uint32_t {
+	ExtendedCharacterList = 1U << 0,
+	ExtendedCastList = 1U << 1,
+	ExtendedBoostedInfo = 1U << 2,
+};
+
+inline constexpr uint32_t OTCV8_LOGIN_CAPABILITIES_V1_MASK = (1U << 3) - 1;
+
+bool isOtcv8OperatingSystem(uint16_t operatingSystem)
 {
 	return operatingSystem >= CLIENTOS_OTCLIENTV8_LINUX && operatingSystem <= CLIENTOS_OTCLIENTV8_WEB;
+}
+
+bool hasOtcv8LoginCapability(uint32_t capabilities, Otcv8LoginCapability capability)
+{
+	return (capabilities & static_cast<uint32_t>(capability)) != 0;
 }
 
 struct LoginCastEntry {
@@ -395,7 +409,7 @@ void ProtocolLogin::disconnectClient(std::string_view message)
 }
 
 void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_view password, bool extendedCharacterList,
-                                     uint32_t clientIP)
+                                     bool extendedBoostedInfo, uint32_t clientIP)
 {
 	Account account;
 	const auto authentication = IOLoginData::loginserverAuthentication(accountName, password, account);
@@ -519,7 +533,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 		}
 	}
 
-	if (extendedCharacterList) {
+	if (extendedBoostedInfo) {
 		addExtendedLoginBoostedInfo(output);
 	}
 
@@ -701,8 +715,29 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// Read and validate password from the message
 	auto password = msg.getString();
 
-	const bool extendedCharacterList = usesExtendedOtcv8Login(operatingSystem);
-	const bool isExtendedCastListRequest = accountName.empty() && extendedCharacterList &&
+	uint32_t otcV8LoginCapabilities = 0;
+	const std::size_t messageEnd = static_cast<std::size_t>(msg.getLength()) +
+	                               NetworkMessage::INITIAL_BUFFER_POSITION;
+	if (isOtcv8OperatingSystem(operatingSystem) && msg.getBufferPosition() + 2 <= messageEnd) {
+		const uint16_t markerLength = msg.get<uint16_t>();
+		if (markerLength > 0 && markerLength <= 64 &&
+		    msg.getBufferPosition() + markerLength <= messageEnd) {
+			const auto marker = msg.getString(markerLength);
+			if (marker == OTCV8_LOGIN_CAPABILITIES_V1_MARKER &&
+			    msg.getBufferPosition() + sizeof(uint32_t) <= messageEnd) {
+				otcV8LoginCapabilities = msg.get<uint32_t>() & OTCV8_LOGIN_CAPABILITIES_V1_MASK;
+			}
+		}
+	}
+
+	const bool extendedCharacterList = hasOtcv8LoginCapability(
+	    otcV8LoginCapabilities, Otcv8LoginCapability::ExtendedCharacterList);
+	const bool extendedBoostedInfo = extendedCharacterList && hasOtcv8LoginCapability(
+	    otcV8LoginCapabilities, Otcv8LoginCapability::ExtendedBoostedInfo);
+	const bool isExtendedCastListRequest = accountName.empty() &&
+	                                       hasOtcv8LoginCapability(
+	                                           otcV8LoginCapabilities,
+	                                           Otcv8LoginCapability::ExtendedCastList) &&
 	                                       password == EXTENDED_LOGIN_CAST_LIST_REQUEST;
 
 	// Brute force check before dispatching the login task. The account name is
@@ -726,7 +761,8 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		} else if (accountName.empty()) {
 			thisPtr->getCastList(password, clientIP);
 		} else {
-			thisPtr->getCharacterList(accountName, password, extendedCharacterList, clientIP);
+			thisPtr->getCharacterList(accountName, password, extendedCharacterList, extendedBoostedInfo,
+			                           clientIP);
 		}
 	});
 }

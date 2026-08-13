@@ -49,6 +49,12 @@ negotiated in the existing login marker loop with `OTCv8CapabilitiesV1`
 followed by a 32-bit capability mask. A plain OTCv8 client that does not send
 this marker receives only the common feature set below.
 
+The account-login protocol is negotiated separately. Clients with the extended
+character-list parser send `OTCv8LoginCapabilitiesV1` and its 32-bit mask after
+the password. OTCv8 clients without that marker receive the standard 8.60
+character list (`0x64`); capable clients may request the extended list (`0x65`),
+cast list, and boosted-creature metadata independently.
+
 The server currently sends these common flags to OTCv8:
 
 ```cpp
