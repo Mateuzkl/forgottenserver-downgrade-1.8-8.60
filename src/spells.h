@@ -158,6 +158,15 @@ public:
 		return vocationSpellMap.empty() || vocationSpellMap.contains(vocationId);
 	}
 
+	// Whether the player knows this spell at all: either mastered permanently, or
+	// lent by a piece of equipment they are currently wearing. Non-learnable
+	// spells are known by definition and are gated only by vocation.
+	//
+	// playerSpellCheck (the cast gate) and InstantSpell::canCast (which feeds the
+	// client's spell list) must both go through this, or the list ends up
+	// offering spells that refuse to cast.
+	bool hasKnowledgeOfSpell(const Player* player) const;
+
 	SpellGroup_t getGroup() const { return group; }
 	void setGroup(SpellGroup_t g) { group = g; }
 	SpellGroup_t getSecondaryGroup() const { return secondaryGroup; }

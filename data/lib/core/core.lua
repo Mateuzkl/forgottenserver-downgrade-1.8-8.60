@@ -19,6 +19,7 @@ dofile(CORE_DIRECTORY .. "/lib/core/player.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/position.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/quests.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/spells.lua")
+dofile(CORE_DIRECTORY .. "/lib/core/spell_modifiers.lua")
 -- Note: The library of storages must be loaded previously to the other libraries.
 dofile(CORE_DIRECTORY .. "/lib/core/storages.lua")
 dofile(CORE_DIRECTORY .. "/lib/core/task_board.lua")

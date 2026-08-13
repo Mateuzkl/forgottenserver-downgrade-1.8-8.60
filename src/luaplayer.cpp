@@ -2275,16 +2275,15 @@ int luaPlayerClearProficiencySpellAugments(lua_State* L)
 
 int luaPlayerAddProficiencySpellAugment(lua_State* L)
 {
-	// player:addProficiencySpellAugment(weaponId, spellId, augmentType, value)
+	// player:addProficiencySpellAugment(spellName, augmentType, value)
 	Player* player = getUserdata<Player>(L, 1);
 	if (!player) {
 		lua_pushnil(L);
 		return 1;
 	}
 
-	player->addProficiencySpellAugment(getInteger<uint16_t>(L, 2), getInteger<uint16_t>(L, 3),
-	                                  static_cast<Augment_t>(getInteger<uint8_t>(L, 4)),
-	                                  getNumber<double>(L, 5));
+	player->addProficiencySpellAugment(getString(L, 2), static_cast<Augment_t>(getInteger<uint8_t>(L, 3)),
+	                                   getNumber<double>(L, 4));
 	pushBoolean(L, true);
 	return 1;
 }
@@ -2314,6 +2313,35 @@ int luaPlayerAddWheelSpellAugment(lua_State* L)
 
 	player->addWheelSpellAugment(getString(L, 2), static_cast<Augment_t>(getInteger<uint8_t>(L, 3)),
 	                             getNumber<double>(L, 4));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerClearSkillTreeSpellAugments(lua_State* L)
+{
+	// player:clearSkillTreeSpellAugments()
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->clearSkillTreeSpellAugments();
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddSkillTreeSpellAugment(lua_State* L)
+{
+	// player:addSkillTreeSpellAugment(spellName, augmentType, value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addSkillTreeSpellAugment(getString(L, 2), static_cast<Augment_t>(getInteger<uint8_t>(L, 3)),
+	                                 getNumber<double>(L, 4));
 	pushBoolean(L, true);
 	return 1;
 }
@@ -2754,6 +2782,46 @@ int luaPlayerHasLearnedSpell(lua_State* L)
 	if (player) {
 		const std::string& spellName = getString(L, 2);
 		pushBoolean(L, player->hasLearnedInstantSpell(spellName));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerClearEquipmentGrantedSpells(lua_State* L)
+{
+	// player:clearEquipmentGrantedSpells()
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		player->clearEquipmentGrantedSpells();
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerAddEquipmentGrantedSpell(lua_State* L)
+{
+	// player:addEquipmentGrantedSpell(spellName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		const std::string& spellName = getString(L, 2);
+		player->addEquipmentGrantedSpell(spellName);
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerHasEquipmentGrantedSpell(lua_State* L)
+{
+	// player:hasEquipmentGrantedSpell(spellName)
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		const std::string& spellName = getString(L, 2);
+		pushBoolean(L, player->hasEquipmentGrantedSpell(spellName));
 	} else {
 		lua_pushnil(L);
 	}
@@ -4770,6 +4838,8 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addProficiencySpellAugment", luaPlayerAddProficiencySpellAugment);
 	registerMethod("Player", "clearWheelSpellAugments", luaPlayerClearWheelSpellAugments);
 	registerMethod("Player", "addWheelSpellAugment", luaPlayerAddWheelSpellAugment);
+	registerMethod("Player", "clearSkillTreeSpellAugments", luaPlayerClearSkillTreeSpellAugments);
+	registerMethod("Player", "addSkillTreeSpellAugment", luaPlayerAddSkillTreeSpellAugment);
 	registerMethod("Player", "resetWeaponProficiencyStats", luaPlayerResetWeaponProficiencyStats);
 	registerMethod("Player", "applyWeaponProficiencyPerk", luaPlayerApplyWeaponProficiencyPerk);
 
@@ -4802,6 +4872,10 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "learnSpell", luaPlayerLearnSpell);
 	registerMethod("Player", "forgetSpell", luaPlayerForgetSpell);
 	registerMethod("Player", "hasLearnedSpell", luaPlayerHasLearnedSpell);
+
+	registerMethod("Player", "clearEquipmentGrantedSpells", luaPlayerClearEquipmentGrantedSpells);
+	registerMethod("Player", "addEquipmentGrantedSpell", luaPlayerAddEquipmentGrantedSpell);
+	registerMethod("Player", "hasEquipmentGrantedSpell", luaPlayerHasEquipmentGrantedSpell);
 
 	registerMethod("Player", "sendTutorial", luaPlayerSendTutorial);
 	registerMethod("Player", "addMapMark", luaPlayerAddMapMark);

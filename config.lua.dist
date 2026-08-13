@@ -161,6 +161,7 @@ marketSystemEnabled = false
 preySystemEnabled = false
 battlePassSystemEnabled = false
 weaponProficiencySystemEnabled = false
+skillTreeSystemEnabled = false
 augmentSystemEnabled = false
 monsterLevelEnabled = false
 monsterFactionSystem = false

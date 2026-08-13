@@ -1,17 +1,30 @@
-local proficiencySystemConfigKey = configKeys and configKeys.WEAPON_PROFICIENCY_SYSTEM_ENABLED or WEAPON_PROFICIENCY_SYSTEM_ENABLED
+-- Equipment Proficiency
+--
+-- Any equipped item can carry proficiency. It accumulates experience while the
+-- player fights, and it teaches spells to specific vocations:
+--
+--   borrowed  item worn, proficiency below the spell's mastery level
+--             -> castable only while the item stays on
+--   learned   proficiency reached the mastery level
+--             -> player:learnSpell writes it to player_spells, castable forever
+--
+-- The engine enforces both states in Spell::playerSpellCheck and
+-- InstantSpell::canCast; this script only decides what goes into each bucket.
+--
+-- Experience lives in player_weapon_proficiency (kept under its old name to
+-- avoid a migration). The `perks` column of that table is a leftover from the
+-- perk-tree design this replaced and is no longer written.
+
+local proficiencySystemConfigKey = configKeys and configKeys.WEAPON_PROFICIENCY_SYSTEM_ENABLED or
+	WEAPON_PROFICIENCY_SYSTEM_ENABLED
 if configManager and proficiencySystemConfigKey and not configManager.getBoolean(proficiencySystemConfigKey) then
-	WeaponProficiencySystem = nil
+	EquipmentProficiencySystem = nil
 	return
 end
 
-WeaponProficiencySystem = WeaponProficiencySystem or {}
+EquipmentProficiencySystem = EquipmentProficiencySystem or {}
 
-local System = WeaponProficiencySystem
-local augmentSystemConfigKey = configKeys and configKeys.AUGMENT_SYSTEM_ENABLED or AUGMENT_SYSTEM_ENABLED
-
-local function isAugmentSystemEnabled()
-	return configManager and augmentSystemConfigKey and configManager.getBoolean(augmentSystemConfigKey) or false
-end
+local System = EquipmentProficiencySystem
 
 local OPCODE_REQUEST = 0xB3
 local OPCODE_CATALOG = 0x5A
@@ -21,17 +34,35 @@ local OPCODE_INFO_BATCH = 0x5B
 
 local ACTION_ITEM_INFO = 0
 local ACTION_LIST_INFO = 1
-local ACTION_RESET_PERKS = 2
-local ACTION_APPLY_PERKS = 3
 
-local MAX_PERK_LEVEL = 7
-local MAX_PERK_POSITION = 2
+local SPELL_STATE_BORROWED = 0
+local SPELL_STATE_LEARNED = 1
+
+local MAX_PROFICIENCY_LEVEL = 7
 local EXPERIENCE_GAIN_MULTIPLIER = 0.01
 local SAVE_DELAY_MS = 5000
 local LIST_INFO_COOLDOWN_MS = 1000
 
--- The first MAX_PERK_LEVEL thresholds unlock perk slots. The remaining
--- thresholds keep mastery progression active until the final experience cap.
+-- Slots that can carry proficiency. Mirrors Player::getEquippedItems() minus the
+-- backpack (a container, not gear) and the ammo slot.
+local PROFICIENCY_SLOTS = {
+	CONST_SLOT_HEAD,
+	CONST_SLOT_NECKLACE,
+	CONST_SLOT_ARMOR,
+	CONST_SLOT_RIGHT,
+	CONST_SLOT_LEFT,
+	CONST_SLOT_LEGS,
+	CONST_SLOT_FEET,
+	CONST_SLOT_RING,
+}
+
+-- The first MAX_PROFICIENCY_LEVEL thresholds unlock levels. The remaining ones
+-- keep progression running up to the final experience cap.
+--
+-- NOTE: these curves were calibrated when only the weapon could gain experience.
+-- Every equipped piece now gains in parallel, so a fully-equipped character
+-- progresses far faster than these numbers assume. They need rebalancing before
+-- any serious tuning pass.
 local EXPERIENCE_TABLES = {
 	regular = { 1750, 25000, 100000, 400000, 2000000, 8000000, 30000000, 60000000, 90000000 },
 	knight = { 1250, 20000, 80000, 300000, 1500000, 6000000, 20000000, 40000000, 60000000 },
@@ -39,13 +70,13 @@ local EXPERIENCE_TABLES = {
 }
 
 local WEAPON_CATALOG = dofile(DATA_DIRECTORY .. "/scripts/network/proficiency/weapon_catalog.lua")
+local EQUIPMENT_SPELLS = dofile(DATA_DIRECTORY .. "/scripts/network/proficiency/equipment_spells.lua")
+
 local playerCache = {}
 local catalogEntries
 local catalogByServerId = {}
 local serverIdByClientId = {}
 local proficiencyTableReady = false
-local proficiencyDefinitionsById = {}
-local refreshProfileSpellAugments
 
 local function logError(message)
 	if logger and logger.error then
@@ -54,53 +85,6 @@ local function logError(message)
 		print(message)
 	end
 end
-
-local function loadProficiencyDefinitions()
-	if not isAugmentSystemEnabled() then
-		return
-	end
-
-	local file = io.open(DATA_DIRECTORY .. "/items/proficiencies.json", "r")
-	if not file then
-		logError("[WeaponProficiency] Failed to open data/items/proficiencies.json.")
-		return
-	end
-
-	local content = file:read("*a")
-	file:close()
-
-	local ok, definitions = pcall(json.decode, content)
-	if not ok or type(definitions) ~= "table" then
-		logError("[WeaponProficiency] Failed to decode data/items/proficiencies.json.")
-		return
-	end
-
-	for _, definition in ipairs(definitions) do
-		local proficiencyId = tonumber(definition.ProficiencyId)
-		if proficiencyId then
-			proficiencyDefinitionsById[proficiencyId] = definition
-		end
-	end
-end
-
-loadProficiencyDefinitions()
-
--- Element mapping: Cipbia unshifted index -> TFS CombatType_t (bitmask)
-local CIPBIA_TO_COMBAT = {
-	[0]  = COMBAT_PHYSICALDAMAGE,
-	[1]  = COMBAT_FIREDAMAGE,
-	[2]  = COMBAT_EARTHDAMAGE,
-	[3]  = COMBAT_ENERGYDAMAGE,
-	[4]  = COMBAT_ICEDAMAGE,
-	[5]  = COMBAT_HOLYDAMAGE,
-	[6]  = COMBAT_DEATHDAMAGE,
-	[7]  = COMBAT_HEALING,
-	[8]  = COMBAT_DROWNDAMAGE,
-	[9]  = COMBAT_LIFEDRAIN,
-	[10] = COMBAT_MANADRAIN,
-	[11] = COMBAT_AGONYDAMAGE,
-	[18] = COMBAT_HEALING,
-}
 
 local function ensureTables()
 	if proficiencyTableReady then
@@ -118,7 +102,7 @@ local function ensureTables()
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
 	]])
 	if not ok or not success then
-		logError("[WeaponProficiency] Failed to create player_weapon_proficiency table.")
+		logError("[EquipmentProficiency] Failed to create player_weapon_proficiency table.")
 		return false
 	end
 
@@ -138,14 +122,14 @@ local function getItemType(itemId)
 	return itemType
 end
 
-local function isValidWeaponId(itemId)
+-- An item takes part in the system when it declares proficiency spells, whatever
+-- slot it belongs to. This replaces the old "is it a weapon?" test.
+local function hasProficiencyDefinition(itemId)
 	itemId = tonumber(itemId)
 	if not itemId or itemId <= 0 or itemId > 0xFFFF or itemId % 1 ~= 0 then
 		return false
 	end
-
-	local itemType = getItemType(itemId)
-	return itemType and itemType:getWeaponType() ~= WEAPON_NONE or false
+	return EQUIPMENT_SPELLS[itemId] ~= nil and getItemType(itemId) ~= nil
 end
 
 local function ensureCatalog()
@@ -155,13 +139,13 @@ local function ensureCatalog()
 
 	catalogEntries = {}
 	local serverIds = {}
-	for serverId in pairs(WEAPON_CATALOG) do
+	for serverId in pairs(EQUIPMENT_SPELLS) do
 		serverIds[#serverIds + 1] = serverId
 	end
 	table.sort(serverIds)
 
 	for _, serverId in ipairs(serverIds) do
-		if isValidWeaponId(serverId) then
+		if hasProficiencyDefinition(serverId) then
 			local itemType = getItemType(serverId)
 			local clientId = itemType:getClientId()
 			if not clientId or clientId == 0 or clientId > 0xFFFF then
@@ -172,7 +156,7 @@ local function ensureCatalog()
 				entry = {
 					serverId = serverId,
 					clientId = clientId,
-					category = WEAPON_CATALOG[serverId],
+					category = WEAPON_CATALOG[serverId] or 0,
 					name = itemType:getName(),
 				}
 				catalogEntries[#catalogEntries + 1] = entry
@@ -222,56 +206,40 @@ local function getExperienceTable(itemId)
 	return EXPERIENCE_TABLES.regular
 end
 
-local function getUnlockedLevelCount(itemId, experience)
-	-- Stored and network perk levels are zero-based, while this count
-	-- represents how many perk slots are currently available.
-	local count = 0
+local function getProficiencyLevel(itemId, experience)
+	local level = 0
 	local experienceTable = getExperienceTable(itemId)
-	for level = 1, MAX_PERK_LEVEL do
-		if experience >= experienceTable[level] then
-			count = level
+	for index = 1, MAX_PROFICIENCY_LEVEL do
+		if experience >= experienceTable[index] then
+			level = index
 		end
 	end
-	return count
+	return level
 end
 
-local function hasUnusedPerk(itemId, state)
-	local unlocked = getUnlockedLevelCount(itemId, state.experience)
-	local selected = 0
-	for level in pairs(state.perks) do
-		if level < unlocked then
-			selected = selected + 1
-		end
+-- Promoted vocations resolve down to their base, so equipment_spells.lua only
+-- ever lists base ids. Base vocations point at themselves in vocations.xml, so
+-- one hop is always enough.
+local function getBaseVocationId(player)
+	local vocation = player:getVocation()
+	if not vocation then
+		return 0
 	end
-	return selected < unlocked
+	local demotion = vocation:getDemotion()
+	return demotion and demotion:getId() or vocation:getId()
 end
 
-local function encodePerks(perks)
-	local levels = {}
-	for level in pairs(perks) do
-		levels[#levels + 1] = level
+local function getSpellDefinitions(itemId, vocationId)
+	local byVocation = EQUIPMENT_SPELLS[itemId]
+	if not byVocation then
+		return nil
 	end
-	table.sort(levels)
-
-	local encoded = {}
-	for _, level in ipairs(levels) do
-		encoded[#encoded + 1] = level .. ":" .. perks[level]
-	end
-	return table.concat(encoded, ",")
+	return byVocation[vocationId]
 end
 
-local function decodePerks(encoded)
-	local perks = {}
-	for entry in tostring(encoded or ""):gmatch("[^,]+") do
-		local level, position = entry:match("^(%d+):(%d+)$")
-		level = tonumber(level)
-		position = tonumber(position)
-		if level and position and level >= 0 and level < MAX_PERK_LEVEL and position >= 0 and position <= MAX_PERK_POSITION then
-			perks[level] = position
-		end
-	end
-	return perks
-end
+---------------------------------------------------------------------------
+-- Persistence
+---------------------------------------------------------------------------
 
 local supportsAliasedUpsert
 
@@ -304,17 +272,19 @@ local function saveState(guid, itemId, state)
 		return
 	end
 
-	local upsertClause = "ON DUPLICATE KEY UPDATE `experience` = VALUES(`experience`), `perks` = VALUES(`perks`)"
+	local upsertClause = "ON DUPLICATE KEY UPDATE `experience` = VALUES(`experience`)"
 	if canUseAliasedUpsert() then
-		upsertClause = "AS new ON DUPLICATE KEY UPDATE `experience` = new.`experience`, `perks` = new.`perks`"
+		upsertClause = "AS new ON DUPLICATE KEY UPDATE `experience` = new.`experience`"
 	end
 
 	db.asyncQuery(string.format(
-		"INSERT INTO `player_weapon_proficiency` (`player_id`, `item_id`, `experience`, `perks`) VALUES (%d, %d, %d, %s) " ..
+		"INSERT INTO `player_weapon_proficiency` (`player_id`, `item_id`, `experience`) VALUES (%d, %d, %d) " ..
 		upsertClause,
-		guid, itemId, state.experience, db.escapeString(encodePerks(state.perks))
+		guid, itemId, state.experience
 	))
 end
+
+local refreshEquipmentSpells
 
 local function loadProfile(player)
 	local guid = player:getGuid()
@@ -323,19 +293,18 @@ local function loadProfile(player)
 		return cached
 	end
 
-	local profile = { weapons = {}, dirty = {}, catalogSent = false }
+	local profile = { items = {}, dirty = {}, catalogSent = false }
 	if ensureTables() then
 		local resultId = db.storeQuery(
-			"SELECT `item_id`, `experience`, `perks` FROM `player_weapon_proficiency` WHERE `player_id` = " .. guid
+			"SELECT `item_id`, `experience` FROM `player_weapon_proficiency` WHERE `player_id` = " .. guid
 		)
 		if resultId then
 			repeat
 				local itemId = result.getDataInt(resultId, "item_id")
 				local canonicalId = canonicalizeServerId(itemId)
 				if canonicalId then
-					profile.weapons[canonicalId] = {
+					profile.items[canonicalId] = {
 						experience = math.max(0, result.getDataInt(resultId, "experience")),
-						perks = decodePerks(result.getDataString(resultId, "perks")),
 					}
 				end
 			until not result.next(resultId)
@@ -344,10 +313,7 @@ local function loadProfile(player)
 	end
 
 	playerCache[guid] = profile
-	player:registerEvent("WeaponProficiencyLogout")
-	if refreshProfileSpellAugments then
-		refreshProfileSpellAugments(player, profile)
-	end
+	player:registerEvent("EquipmentProficiencyLogout")
 	return profile
 end
 
@@ -359,7 +325,7 @@ local function flushProfile(guid)
 
 	profile.saveEvent = nil
 	for itemId in pairs(profile.dirty) do
-		local state = profile.weapons[itemId]
+		local state = profile.items[itemId]
 		if state then
 			saveState(guid, itemId, state)
 		end
@@ -377,163 +343,117 @@ end
 
 local function getState(player, itemId)
 	local profile = loadProfile(player)
-	if not profile.weapons[itemId] then
-		profile.weapons[itemId] = { experience = 0, perks = {} }
+	if not profile.items[itemId] then
+		profile.items[itemId] = { experience = 0 }
 	end
-	return profile.weapons[itemId]
+	return profile.items[itemId]
 end
 
-local function getEquippedWeaponId(player)
-	if player.getWeaponProficiencyId then
-		local itemId = canonicalizeServerId(player:getWeaponProficiencyId())
-		if itemId then
-			return itemId
-		end
-	end
+---------------------------------------------------------------------------
+-- Equipment scanning
+---------------------------------------------------------------------------
 
-	for _, slot in ipairs({ CONST_SLOT_LEFT, CONST_SLOT_RIGHT }) do
+-- Every equipped item that takes part in the system, deduplicated: wearing two
+-- copies of the same ring must not award experience twice.
+local function getProficiencyItemIds(player)
+	local seen = {}
+	local itemIds = {}
+	for _, slot in ipairs(PROFICIENCY_SLOTS) do
 		local item = player:getSlotItem(slot)
 		local itemId = item and canonicalizeServerId(item:getId())
-		if itemId then
-			return itemId
+		if itemId and not seen[itemId] then
+			seen[itemId] = true
+			itemIds[#itemIds + 1] = itemId
 		end
 	end
-	return 0
+	return itemIds
 end
 
-refreshProfileSpellAugments = function(player, profile)
-	if not player.clearProficiencySpellAugments
-	   or not player.addProficiencySpellAugment
-	   or not player.resetWeaponProficiencyStats
-	   or not player.applyWeaponProficiencyPerk then
+-- Modifiers scale with the item's proficiency level, so the curve lives in data
+-- and rebalancing never needs a recompile. `perLevel` is multiplied by the
+-- level; `value` is flat.
+local function applySpellModifiers(player, definition, level)
+	if not definition.modifiers or not player.addProficiencySpellAugment then
 		return
 	end
 
-	player:clearProficiencySpellAugments()
-	player:resetWeaponProficiencyStats()
+	for _, modifier in ipairs(definition.modifiers) do
+		local amount = (modifier.value or 0) + (modifier.perLevel or 0) * level
+		if modifier.type and amount ~= 0 then
+			player:addProficiencySpellAugment(definition.spell, modifier.type, amount)
+		end
+	end
+end
 
-	if not isAugmentSystemEnabled() then
+-- Rebuilds the borrowed-spell set and the modifier map from scratch, and
+-- promotes anything that has reached its mastery level. Called on login, on any
+-- inventory change, and whenever an item gains a proficiency level.
+refreshEquipmentSpells = function(player)
+	if not player or not player.clearEquipmentGrantedSpells then
 		return
 	end
 
-	profile = profile or playerCache[player:getGuid()]
-	if not profile then
-		return
+	player:clearEquipmentGrantedSpells()
+	if player.clearProficiencySpellAugments then
+		player:clearProficiencySpellAugments()
 	end
 
-	-- Cipbia skill ID -> TFS skills_t (non-linear mapping from Canary's CipbiaSkills_t)
-	local CIPBIA_SKILL_TO_TFS = {
-		[1]  = SKILL_MAGLEVEL,
-		[6]  = SKILL_SHIELD,
-		[7]  = SKILL_DISTANCE,
-		[8]  = SKILL_SWORD,
-		[9]  = SKILL_CLUB,
-		[10] = SKILL_AXE,
-		[11] = SKILL_FIST,
-		[13] = SKILL_FISHING,
-	}
+	local vocationId = getBaseVocationId(player)
+	local mastered = {}
 
-	-- Market category -> Proficiency ID (matches client getProficiencyIdFromCategory)
-	local MARKET_CATEGORY_TO_PROFICIENCY = {
-		[17] = 8,  -- Axes → Sanguine 1H Axe
-		[18] = 9,  -- Clubs → Sanguine 1H Club
-		[19] = 13, -- Distance → Sanguine 2H Bow
-		[20] = 6,  -- Swords → Sanguine 1H Sword
-		[21] = 15, -- Wands/Rods → Sanguine 1H Wand
-		[27] = 14, -- Fist → Sanguine 2H Fist
-	}
-
-	local function categoryToProficiencyId(category)
-		return MARKET_CATEGORY_TO_PROFICIENCY[category] or category
-	end
-
-	local function cipbiaSkillToTfs(cipbiaSkill)
-		if not cipbiaSkill then return SKILL_FIST end
-		return CIPBIA_SKILL_TO_TFS[cipbiaSkill] or SKILL_FIST
-	end
-
-	local function getElementFromJson(perk)
-		local shifted = tonumber(perk.ElementId) or tonumber(perk.DamageType)
-		if not shifted or shifted == 0 then
-			return COMBAT_NONE
-		end
-		-- undoShift: trailingZeros - 2
-		local unshifted = 0
-		local n = shifted
-		while n > 0 and (n % 2) == 0 do
-			unshifted = unshifted + 1
-			n = n / 2
-		end
-		unshifted = unshifted - 2
-		if unshifted < 0 then
-			return COMBAT_NONE
-		end
-		return CIPBIA_TO_COMBAT[unshifted] or COMBAT_NONE
-	end
-
-	local equippedId = getEquippedWeaponId(player)
-
-	local perkCount = 0
-	for itemId, state in pairs(profile.weapons) do
-		local entry = getCatalogEntry(itemId)
-		local proficiencyId = categoryToProficiencyId(entry and entry.category)
-		local definition = proficiencyDefinitionsById[proficiencyId]
-		if definition and type(definition.Levels) == "table" then
-			local isEquipped = (itemId == equippedId)
-			for level, position in pairs(state.perks) do
-				local levelData = definition.Levels[level + 1]
-				local perk = levelData and levelData.Perks and levelData.Perks[position + 1]
-				if perk then
-					local perkType = tonumber(perk.Type)
-					local value = tonumber(perk.Value)
-					local rawSkillId = tonumber(perk.SkillId)
-					if perkType and value then
-						if perkType == 5 then
-							-- Type 5 (Spell Augment): always register for lookup
-							local spellId = tonumber(perk.SpellId)
-							local augmentType = tonumber(perk.AugmentType)
-							if spellId and augmentType then
-								player:addProficiencySpellAugment(itemId, spellId, augmentType, value)
-							end
-						elseif isEquipped then
-							local spellId = tonumber(perk.SpellId) or 0
-							local augmentType = tonumber(perk.AugmentType) or 0
-							local skillId = cipbiaSkillToTfs(rawSkillId)
-							local element = getElementFromJson(perk)
-							local range = tonumber(perk.Range) or 0
-							local bestiaryId = tonumber(perk.BestiaryId) or 0
-							player:applyWeaponProficiencyPerk(perkType, value, spellId, augmentType, skillId, element, range, bestiaryId)
-						end
+	for _, itemId in ipairs(getProficiencyItemIds(player)) do
+		local definitions = getSpellDefinitions(itemId, vocationId)
+		if definitions then
+			local level = getProficiencyLevel(itemId, getState(player, itemId).experience)
+			for _, definition in ipairs(definitions) do
+				if level >= (definition.masterLevel or MAX_PROFICIENCY_LEVEL) then
+					if not player:hasLearnedSpell(definition.spell) then
+						player:learnSpell(definition.spell)
+						mastered[#mastered + 1] = definition.spell
 					end
+				else
+					player:addEquipmentGrantedSpell(definition.spell)
 				end
+
+				-- Only the equipped item empowers its spell: a mastered spell can
+				-- still be cast bare, just without the item's bonus.
+				applySpellModifiers(player, definition, level)
 			end
 		end
 	end
 
-	if player.sendSkills then
-		player:sendSkills()
+	for _, spellName in ipairs(mastered) do
+		player:sendTextMessage(MESSAGE_STATUS_SMALL,
+			string.format("You mastered %s. You can now cast it without the equipment.", spellName))
 	end
-	if player.wheelSendSkillStats then
-		player:wheelSendSkillStats()
+
+	-- Resends packet 0x9F so the client's spell list matches what the server will
+	-- actually allow.
+	if player.reloadData then
+		player:reloadData()
 	end
 end
 
-local function writeInfoPayload(out, entry, state)
-	local levels = {}
-	for level in pairs(state.perks) do
-		levels[#levels + 1] = level
-	end
-	table.sort(levels)
+---------------------------------------------------------------------------
+-- Protocol
+---------------------------------------------------------------------------
+
+local function writeInfoPayload(out, player, entry, state)
+	local level = getProficiencyLevel(entry.serverId, state.experience)
+	local definitions = getSpellDefinitions(entry.serverId, getBaseVocationId(player)) or {}
 
 	out:addU16(entry.clientId)
 	out:addU32(state.experience)
-	out:addByte(math.min(#levels, 0xFF))
-	for index = 1, math.min(#levels, 0xFF) do
-		local level = levels[index]
-		out:addByte(level)
-		out:addByte(state.perks[level])
-	end
+	out:addByte(level)
 	out:addU16(entry.category)
+	out:addByte(math.min(#definitions, 0xFF))
+	for index = 1, math.min(#definitions, 0xFF) do
+		local definition = definitions[index]
+		local masterLevel = definition.masterLevel or MAX_PROFICIENCY_LEVEL
+		out:addString(definition.spell)
+		out:addByte(masterLevel)
+		out:addByte(level >= masterLevel and SPELL_STATE_LEARNED or SPELL_STATE_BORROWED)
+	end
 end
 
 local function sendInfo(player, itemId)
@@ -544,7 +464,7 @@ local function sendInfo(player, itemId)
 
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_INFO)
-	writeInfoPayload(out, entry, getState(player, itemId))
+	writeInfoPayload(out, player, entry, getState(player, itemId))
 	return out:sendToPlayer(player)
 end
 
@@ -559,7 +479,7 @@ local function sendExperience(player, itemId)
 	out:addByte(OPCODE_EXPERIENCE)
 	out:addU16(entry.clientId)
 	out:addU32(state.experience)
-	out:addByte(hasUnusedPerk(itemId, state) and 1 or 0)
+	out:addByte(getProficiencyLevel(itemId, state.experience))
 	return out:sendToPlayer(player)
 end
 
@@ -600,7 +520,7 @@ local function sendAllInfo(player, itemIds)
 	out:addByte(OPCODE_INFO_BATCH)
 	out:addU16(#entries)
 	for _, info in ipairs(entries) do
-		writeInfoPayload(out, info.entry, getState(player, info.itemId))
+		writeInfoPayload(out, player, info.entry, getState(player, info.itemId))
 	end
 	return out:sendToPlayer(player)
 end
@@ -612,7 +532,7 @@ local function sendAll(player, forceCatalog)
 	end
 
 	local itemIds = {}
-	for itemId in pairs(profile.weapons) do
+	for itemId in pairs(profile.items) do
 		itemIds[#itemIds + 1] = itemId
 	end
 	table.sort(itemIds)
@@ -620,58 +540,15 @@ local function sendAll(player, forceCatalog)
 	sendAllInfo(player, itemIds)
 end
 
-local function clearPerks(player, itemId)
-	if not isValidWeaponId(itemId) then
-		return
-	end
+---------------------------------------------------------------------------
+-- Public API
+---------------------------------------------------------------------------
 
-	local state = getState(player, itemId)
-	state.perks = {}
-	refreshProfileSpellAugments(player)
-	queueSave(player, itemId)
-	sendInfo(player, itemId)
-end
-
-local function applyPerks(player, msg, itemId)
-	if not isValidWeaponId(itemId) or msg:len() - msg:tell() < 1 then
-		return
-	end
-
-	local state = getState(player, itemId)
-	local unlocked = getUnlockedLevelCount(itemId, state.experience)
-	local perks = {}
-	local count = msg:getByte()
-	if count > MAX_PERK_LEVEL then
-		return
-	end
-	for _ = 1, count do
-		if msg:len() - msg:tell() < 2 then
-			return
-		end
-		local level = msg:getByte()
-		local position = msg:getByte()
-		if level < unlocked and level < MAX_PERK_LEVEL and position <= MAX_PERK_POSITION then
-			perks[level] = position
-		end
-	end
-
-	state.perks = perks
-	refreshProfileSpellAugments(player)
-	queueSave(player, itemId)
-	sendInfo(player, itemId)
-end
-
+-- Awards experience to every equipped item that takes part in the system. Each
+-- item receives the full share, so gear progresses together rather than
+-- competing for one pool.
 function System.addExperience(player, source, experience, itemId, applyMultiplier)
 	if not player or (source and source.isPlayer and source:isPlayer()) then
-		return false
-	end
-
-	if itemId then
-		itemId = canonicalizeServerId(itemId) or resolveServerId(itemId)
-	else
-		itemId = getEquippedWeaponId(player)
-	end
-	if not isValidWeaponId(itemId) then
 		return false
 	end
 
@@ -688,56 +565,122 @@ function System.addExperience(player, source, experience, itemId, applyMultiplie
 		return false
 	end
 
-	local state = getState(player, itemId)
-	local previousUnlocked = getUnlockedLevelCount(itemId, state.experience)
-	local experienceTable = getExperienceTable(itemId)
-	state.experience = math.min(experienceTable[#experienceTable], state.experience + experience)
-	queueSave(player, itemId)
-	sendExperience(player, itemId)
-
-	if getUnlockedLevelCount(itemId, state.experience) > previousUnlocked then
-		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your weapon proficiency has unlocked a new perk.")
-		sendInfo(player, itemId)
+	local itemIds
+	if itemId then
+		local resolved = canonicalizeServerId(itemId) or resolveServerId(itemId)
+		if not resolved then
+			return false
+		end
+		itemIds = { resolved }
+	else
+		itemIds = getProficiencyItemIds(player)
 	end
-	return true
+
+	local awarded = false
+	local levelledUp = false
+
+	for _, targetId in ipairs(itemIds) do
+		local state = getState(player, targetId)
+		local experienceTable = getExperienceTable(targetId)
+		local previousLevel = getProficiencyLevel(targetId, state.experience)
+
+		state.experience = math.min(experienceTable[#experienceTable], state.experience + experience)
+		queueSave(player, targetId)
+		sendExperience(player, targetId)
+		awarded = true
+
+		if getProficiencyLevel(targetId, state.experience) > previousLevel then
+			levelledUp = true
+			sendInfo(player, targetId)
+		end
+	end
+
+	-- One refresh for the whole batch: it rescans every slot anyway, and it is
+	-- what promotes a borrowed spell once its mastery level is crossed.
+	if levelledUp then
+		refreshEquipmentSpells(player)
+	end
+
+	return awarded
 end
 
-function System.sendEquippedExperience(player)
-	local itemId = getEquippedWeaponId(player)
-	if itemId and itemId ~= 0 then
+function System.refreshEquippedSpells(player)
+	refreshEquipmentSpells(player)
+end
+
+function System.sendEquippedInfo(player)
+	for _, itemId in ipairs(getProficiencyItemIds(player)) do
 		sendExperience(player, itemId)
 		sendInfo(player, itemId)
 	end
 end
 
--- Validates the player, then synchronizes equipped spell augments and experience/perks
--- through refreshProfileSpellAugments and System.sendEquippedExperience.
-function System.refreshEquippedPerks(player)
+function System.getProficiencyLevel(player, itemId)
+	local resolved = canonicalizeServerId(itemId)
+	if not resolved then
+		return 0
+	end
+	return getProficiencyLevel(resolved, getState(player, resolved).experience)
+end
+
+function System.getEquippedItemIds(player)
+	return getProficiencyItemIds(player)
+end
+
+function System.getExperience(player, itemId)
+	local resolved = canonicalizeServerId(itemId)
+	if not resolved then
+		return 0
+	end
+	return getState(player, resolved).experience
+end
+
+-- What this item teaches the player's vocation, and whether each spell is still
+-- only borrowed. Used by the GM talkaction and available to any UI script.
+function System.getSpellStates(player, itemId)
+	local resolved = canonicalizeServerId(itemId)
+	if not resolved then
+		return {}
+	end
+
+	local definitions = getSpellDefinitions(resolved, getBaseVocationId(player)) or {}
+	local level = getProficiencyLevel(resolved, getState(player, resolved).experience)
+
+	local states = {}
+	for _, definition in ipairs(definitions) do
+		local masterLevel = definition.masterLevel or MAX_PROFICIENCY_LEVEL
+		states[#states + 1] = {
+			spell = definition.spell,
+			masterLevel = masterLevel,
+			learned = level >= masterLevel,
+		}
+	end
+	return states
+end
+
+function System.clearPlayerCache(player)
 	if not player then
 		return
 	end
 
-	refreshProfileSpellAugments(player)
-	System.sendEquippedExperience(player)
-end
-
-function System.clearPlayerCache(player)
-	if player then
-		local guid = player:getGuid()
-		local profile = playerCache[guid]
-		if profile then
-			if profile.saveEvent then
-				stopEvent(profile.saveEvent)
-			end
-			profile.catalogSent = false
-			flushProfile(guid)
-			playerCache[guid] = nil
+	local guid = player:getGuid()
+	local profile = playerCache[guid]
+	if profile then
+		if profile.saveEvent then
+			stopEvent(profile.saveEvent)
 		end
-		if player.clearProficiencySpellAugments then
-			player:clearProficiencySpellAugments()
-		end
+		profile.catalogSent = false
+		flushProfile(guid)
+		playerCache[guid] = nil
+	end
+	if player.clearEquipmentGrantedSpells then
+		player:clearEquipmentGrantedSpells()
 	end
 end
+
+---------------------------------------------------------------------------
+-- Events
+---------------------------------------------------------------------------
 
 local requestHandler = PacketHandler(OPCODE_REQUEST)
 
@@ -763,32 +706,25 @@ function requestHandler.onReceive(player, msg)
 	end
 
 	local itemId = resolveServerId(msg:getU16())
-	if action == ACTION_ITEM_INFO then
+	if action == ACTION_ITEM_INFO and itemId then
 		sendInfo(player, itemId)
-	elseif action == ACTION_RESET_PERKS then
-		clearPerks(player, itemId)
-	elseif action == ACTION_APPLY_PERKS then
-		applyPerks(player, msg, itemId)
 	end
 end
 
 requestHandler:register()
 
-local loginEvent = CreatureEvent("WeaponProficiencyLogin")
+local loginEvent = CreatureEvent("EquipmentProficiencyLogin")
 
 function loginEvent.onLogin(player)
 	loadProfile(player)
-	local itemId = getEquippedWeaponId(player)
-	if itemId and itemId ~= 0 then
-		sendExperience(player, itemId)
-		sendInfo(player, itemId)
-	end
+	refreshEquipmentSpells(player)
+	System.sendEquippedInfo(player)
 	return true
 end
 
 loginEvent:register()
 
-local logoutEvent = CreatureEvent("WeaponProficiencyLogout")
+local logoutEvent = CreatureEvent("EquipmentProficiencyLogout")
 
 function logoutEvent.onLogout(player)
 	System.clearPlayerCache(player)

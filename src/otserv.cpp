@@ -304,11 +304,13 @@ std::string formatFeatureStatus(std::string_view name, ConfigManager::Boolean ke
 
 void printFeatureStatus()
 {
-	LOG_INFO(">> Systems: {} | {} | {} | {} | {}", formatFeatureStatus("Forge", ConfigManager::FORGE_SYSTEM_ENABLED),
+	LOG_INFO(">> Systems: {} | {} | {} | {} | {} | {}",
+	         formatFeatureStatus("Forge", ConfigManager::FORGE_SYSTEM_ENABLED),
 	         formatFeatureStatus("Imbuements", ConfigManager::IMBUEMENT_SYSTEM_ENABLED),
 	         formatFeatureStatus("Wheel", ConfigManager::WHEEL_SYSTEM_ENABLED),
 	         formatFeatureStatus("Augments", ConfigManager::AUGMENT_SYSTEM_ENABLED),
-	         formatFeatureStatus("Proficiency", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED));
+	         formatFeatureStatus("Proficiency", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED),
+	         formatFeatureStatus("Skill Tree", ConfigManager::SKILLTREE_SYSTEM_ENABLED));
 	LOG_INFO(">> Modules: {} | {} | {} | {} | {} | {}",
 	         formatFeatureStatus("Bestiary", ConfigManager::BESTIARY_SYSTEM_ENABLED),
 	         formatFeatureStatus("Prey", ConfigManager::PREY_SYSTEM_ENABLED),
@@ -908,6 +910,7 @@ int startServer()
 		    std::pair{"Prey", ConfigManager::PREY_SYSTEM_ENABLED},
 		    std::pair{"Battle Pass", ConfigManager::BATTLEPASS_SYSTEM_ENABLED},
 		    std::pair{"Weapon Proficiency", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED},
+		    std::pair{"Skill Tree", ConfigManager::SKILLTREE_SYSTEM_ENABLED},
 		    std::pair{"Augments", ConfigManager::AUGMENT_SYSTEM_ENABLED},
 		    std::pair{"Monk Vocation", ConfigManager::MONK_VOCATION_ENABLED},
 		    std::pair{"Familiars", ConfigManager::FAMILIAR_SYSTEM_ENABLED},

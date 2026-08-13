@@ -45,6 +45,15 @@ function doPlayerReset(player)
 		return false
 	end
 
+	-- A reset restarts the progression axis, unlike dying: the highest-level
+	-- watermark and the skill tree allocation both go with it. This has to happen
+	-- before the level drops, or the login backfill would rebuild the watermark
+	-- from the pre-reset level.
+	player:clearHighestLevel()
+	if SkillTreeSystem and SkillTreeSystem.clearProfile then
+		SkillTreeSystem.clearProfile(player)
+	end
+
 	local resetLevel = ResetBonusConfig.resetLevel
 	local newExp = Game.getExperienceForLevel(resetLevel)
 

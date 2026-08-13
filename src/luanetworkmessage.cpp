@@ -19,6 +19,7 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0x32: // extended opcode
 		case 0x48: // custom cyclopedia/bestiary
 		case 0x5F: // custom wheel of destiny window
+		case 0xC1: // custom skill tree window
 		case 0x61: // native bosstiary base data
 		case 0x62: // native bosstiary slots
 		case 0x73: // native bosstiary window

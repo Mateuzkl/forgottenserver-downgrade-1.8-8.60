@@ -31,21 +31,21 @@ function ec.onUpdateInventory(player, item, slot, equip)
         player:wheelSendSkillStats()
     end
 
-    if slot == CONST_SLOT_LEFT or slot == CONST_SLOT_RIGHT then
-        local playerGuid = player:getGuid()
+    -- Any slot can carry proficiency, so this no longer filters on the hands.
+    -- The refresh rescans every slot, so one deferred call per change is enough.
+    local playerGuid = player:getGuid()
 
-        addEvent(function(guid)
-            local freshPlayer = Player(guid)
-            if not freshPlayer then
-                return
-            end
+    addEvent(function(guid)
+        local freshPlayer = Player(guid)
+        if not freshPlayer then
+            return
+        end
 
-            if WeaponProficiencySystem
-                and WeaponProficiencySystem.refreshEquippedPerks then
-                WeaponProficiencySystem.refreshEquippedPerks(freshPlayer)
-            end
-        end, 100, playerGuid)
-    end
+        if EquipmentProficiencySystem
+            and EquipmentProficiencySystem.refreshEquippedSpells then
+            EquipmentProficiencySystem.refreshEquippedSpells(freshPlayer)
+        end
+    end, 100, playerGuid)
 
     return true
 end

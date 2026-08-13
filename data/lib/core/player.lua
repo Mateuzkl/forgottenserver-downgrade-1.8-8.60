@@ -466,6 +466,34 @@ function Player.questKV(self, questName)
 	return self:kv():scoped("quests"):scoped(questName)
 end
 
+function Player.progressionKV(self)
+	return self:kv():scoped("progression")
+end
+
+-- The highest level this character has ever reached. Losing levels to death
+-- never lowers it, so progression tied to it survives dying. Falls back to the
+-- current level so a missing watermark can never report a level that is too low.
+function Player.getHighestLevel(self)
+	local stored = tonumber(self:progressionKV():get("highestLevel")) or 0
+	return math.max(stored, self:getLevel())
+end
+
+function Player.updateHighestLevel(self)
+	local current = self:getLevel()
+	local stored = tonumber(self:progressionKV():get("highestLevel")) or 0
+	if current > stored then
+		self:progressionKV():set("highestLevel", current)
+		return current
+	end
+	return stored
+end
+
+-- Only the reset system calls this: a reset is a deliberate restart of the
+-- progression axis, unlike dying.
+function Player.clearHighestLevel(self)
+	self:progressionKV():remove("highestLevel")
+end
+
 ---@param type ExperienceRateType
 ---@param value integer
 function Player:addExperienceRate(type, value)

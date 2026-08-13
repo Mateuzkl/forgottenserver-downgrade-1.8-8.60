@@ -1763,6 +1763,7 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("PREY_SYSTEM_ENABLED", ConfigManager::PREY_SYSTEM_ENABLED);
 	registerGlobalVariable("BATTLEPASS_SYSTEM_ENABLED", ConfigManager::BATTLEPASS_SYSTEM_ENABLED);
 	registerGlobalVariable("WEAPON_PROFICIENCY_SYSTEM_ENABLED", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
+	registerGlobalVariable("SKILLTREE_SYSTEM_ENABLED", ConfigManager::SKILLTREE_SYSTEM_ENABLED);
 	registerGlobalVariable("AUGMENT_SYSTEM_ENABLED", ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	registerGlobalVariable("COLORIZED_LOOT_VALUE", ConfigManager::COLORIZED_LOOT_VALUE);
 	registerGlobalVariable("ITEM_TIER_DISPLAY", ConfigManager::ITEM_TIER_DISPLAY);
@@ -3016,6 +3017,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::PREY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::BATTLEPASS_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::SKILLTREE_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MONSTER_LEVEL_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::LOOT_GROUPING_ENABLED);

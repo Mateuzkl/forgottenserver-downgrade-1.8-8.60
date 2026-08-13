@@ -106,7 +106,7 @@ bool isOwnedOrOpenContainer(const Player* player, const Container* container)
 	return false;
 }
 
-void addSpellAugmentBonus(ProficiencySpellAugmentBonus& bonus, Augment_t augmentType, double value)
+void addSpellAugmentBonus(SpellModifiers& bonus, Augment_t augmentType, double value)
 {
 	switch (augmentType) {
 		case Augment_t::ManaCost:
@@ -645,42 +645,23 @@ void Player::clearProficiencySpellAugments()
 	proficiencySpellAugments.clear();
 }
 
-void Player::addProficiencySpellAugment(uint16_t weaponId, uint16_t spellId, Augment_t augmentType, double value)
+void Player::addProficiencySpellAugment(std::string spellName, Augment_t augmentType, double value)
 {
-	if (!ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED) || weaponId == 0 || spellId == 0 ||
+	if (!ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED) || spellName.empty() ||
 	    !std::isfinite(value)) {
 		return;
 	}
 
-	auto& bonus = proficiencySpellAugments[weaponId][spellId];
-	addSpellAugmentBonus(bonus, augmentType, value);
+	addSpellAugmentBonus(proficiencySpellAugments[std::move(spellName)], augmentType, value);
 }
 
-ProficiencySpellAugmentBonus Player::getProficiencySpellAugmentBonus(uint16_t spellId) const
+SpellModifiers Player::getProficiencySpellAugmentBonus(std::string_view spellName) const
 {
-	const Item* weapon = getWeapon(true);
-	if (!weapon) {
-		return {};
-	}
-
-	uint16_t weaponId = weapon->getID();
-	auto weaponIt = proficiencySpellAugments.find(weaponId);
-	if (weaponIt == proficiencySpellAugments.end()) {
-		// Lua groups catalog aliases by client id before caching the canonical server id.
-		const uint16_t clientId = Item::items[weaponId].id;
-		for (auto it = proficiencySpellAugments.begin(); it != proficiencySpellAugments.end(); ++it) {
-			if (Item::items[it->first].id == clientId) {
-				weaponIt = it;
-				break;
-			}
-		}
-	}
-	if (weaponIt == proficiencySpellAugments.end()) {
-		return {};
-	}
-
-	const auto spellIt = weaponIt->second.find(spellId);
-	return spellIt != weaponIt->second.end() ? spellIt->second : ProficiencySpellAugmentBonus{};
+	// Flat, already summed across every equipped piece: the Lua system rebuilds
+	// this map whenever equipment or proficiency changes, so there is nothing to
+	// resolve per item at cast time.
+	const auto it = proficiencySpellAugments.find(std::string(spellName));
+	return it != proficiencySpellAugments.end() ? it->second : SpellModifiers{};
 }
 
 void Player::clearWheelSpellAugments()
@@ -697,10 +678,28 @@ void Player::addWheelSpellAugment(std::string spellName, Augment_t augmentType, 
 	addSpellAugmentBonus(wheelSpellAugments[std::move(spellName)], augmentType, value);
 }
 
-ProficiencySpellAugmentBonus Player::getWheelSpellAugmentBonus(std::string_view spellName) const
+SpellModifiers Player::getWheelSpellAugmentBonus(std::string_view spellName) const
 {
 	const auto it = wheelSpellAugments.find(std::string(spellName));
-	return it != wheelSpellAugments.end() ? it->second : ProficiencySpellAugmentBonus{};
+	return it != wheelSpellAugments.end() ? it->second : SpellModifiers{};
+}
+
+void Player::clearSkillTreeSpellAugments() { skillTreeSpellAugments.clear(); }
+
+void Player::addSkillTreeSpellAugment(std::string spellName, Augment_t augmentType, double value)
+{
+	if (!ConfigManager::getBoolean(ConfigManager::SKILLTREE_SYSTEM_ENABLED) || spellName.empty() ||
+	    !std::isfinite(value)) {
+		return;
+	}
+
+	addSpellAugmentBonus(skillTreeSpellAugments[std::move(spellName)], augmentType, value);
+}
+
+SpellModifiers Player::getSkillTreeSpellAugmentBonus(std::string_view spellName) const
+{
+	const auto it = skillTreeSpellAugments.find(std::string(spellName));
+	return it != skillTreeSpellAugments.end() ? it->second : SpellModifiers{};
 }
 
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const
@@ -6175,6 +6174,30 @@ bool Player::hasLearnedInstantSpell(std::string_view spellName) const
 
 	for (std::string_view learnedSpellName : learnedInstantSpellList) {
 		if (caseInsensitiveEqual(learnedSpellName, spellName)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void Player::clearEquipmentGrantedSpells() { equipmentGrantedSpellList.clear(); }
+
+void Player::addEquipmentGrantedSpell(std::string_view spellName)
+{
+	if (spellName.empty() || hasEquipmentGrantedSpell(spellName)) {
+		return;
+	}
+	equipmentGrantedSpellList.push_front(std::string{spellName});
+}
+
+bool Player::hasEquipmentGrantedSpell(std::string_view spellName) const
+{
+	if (hasFlag(PlayerFlag_CannotUseSpells)) {
+		return false;
+	}
+
+	for (std::string_view grantedSpellName : equipmentGrantedSpellList) {
+		if (caseInsensitiveEqual(grantedSpellName, spellName)) {
 			return true;
 		}
 	}

@@ -359,6 +359,17 @@ bool CombatSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 	return scriptInterface->callFunction(2);
 }
 
+bool Spell::hasKnowledgeOfSpell(const Player* player) const
+{
+	// Only learnable instant spells have to be acquired; everything else is known
+	// by default and gated purely by vocation.
+	if (!isInstant() || !isLearnable()) {
+		return true;
+	}
+
+	return player->hasLearnedInstantSpell(getName()) || player->hasEquipmentGrantedSpell(getName());
+}
+
 bool Spell::playerSpellCheck(Player* player) const
 {
 	if (player->hasFlag(PlayerFlag_CannotUseSpells)) {
@@ -443,14 +454,17 @@ bool Spell::playerSpellCheck(Player* player) const
 		return false;
 	}
 
-	if (isInstant() && isLearnable()) {
-		if (!player->hasLearnedInstantSpell(getName())) {
-			player->sendCancelMessage(RETURNVALUE_YOUNEEDTOLEARNTHISSPELL);
-			g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF, player->getInstanceID());
-			return false;
-		}
-	} else if (!hasVocationSpellMap(player->getVocationId())) {
+	// Vocation and knowledge are independent gates: a spell taught by equipment is
+	// still off-limits to the wrong vocation. These used to be an if/else if, so a
+	// learnable spell skipped the vocation check entirely.
+	if (!hasVocationSpellMap(player->getVocationId())) {
 		player->sendCancelMessage(RETURNVALUE_YOURVOCATIONCANNOTUSETHISSPELL);
+		g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF, player->getInstanceID());
+		return false;
+	}
+
+	if (!hasKnowledgeOfSpell(player)) {
+		player->sendCancelMessage(RETURNVALUE_YOUNEEDTOLEARNTHISSPELL);
 		g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF, player->getInstanceID());
 		return false;
 	}
@@ -602,7 +616,10 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 {
 	const bool augmentSystemEnabled = ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	const bool wheelSystemEnabled = ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED);
-	if ((!augmentSystemEnabled && !wheelSystemEnabled) || !player) {
+	const bool proficiencySystemEnabled = ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
+	const bool skillTreeSystemEnabled = ConfigManager::getBoolean(ConfigManager::SKILLTREE_SYSTEM_ENABLED);
+	if ((!augmentSystemEnabled && !wheelSystemEnabled && !proficiencySystemEnabled && !skillTreeSystemEnabled) ||
+	    !player) {
 		return;
 	}
 
@@ -650,7 +667,7 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 		}
 	}
 
-	const auto applyBonus = [&damage](const ProficiencySpellAugmentBonus& bonus) {
+	const auto applyBonus = [&damage](const SpellModifiers& bonus) {
 		const int32_t percent = damage.primary.type == COMBAT_HEALING ? bonus.healingPercent : bonus.damagePercent;
 		if (percent != 0) {
 			const double multiplier = percent / 100.0;
@@ -663,11 +680,16 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 		damage.criticalChance = saturatingAdd(damage.criticalChance, bonus.criticalChance);
 	};
 
-	if (augmentSystemEnabled) {
-		applyBonus(player->getProficiencySpellAugmentBonus(getId()));
+	// Equipment proficiency is no longer tied to the augment system: it stands on
+	// its own flag and keys on the spell name, like the wheel does.
+	if (proficiencySystemEnabled) {
+		applyBonus(player->getProficiencySpellAugmentBonus(getName()));
 	}
 	if (wheelSystemEnabled) {
 		applyBonus(player->getWheelSpellAugmentBonus(getName()));
+	}
+	if (skillTreeSystemEnabled) {
+		applyBonus(player->getSkillTreeSpellAugmentBonus(getName()));
 	}
 }
 
@@ -675,7 +697,8 @@ int32_t Spell::calculateAugmentSpellCooldownReduction(const std::shared_ptr<Play
 {
 	const bool augmentSystemEnabled = ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	const bool wheelSystemEnabled = ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED);
-	if ((!augmentSystemEnabled && !wheelSystemEnabled) || !player) {
+	const bool proficiencySystemEnabled = ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
+	if ((!augmentSystemEnabled && !wheelSystemEnabled && !proficiencySystemEnabled) || !player) {
 		return 0;
 	}
 
@@ -688,10 +711,15 @@ int32_t Spell::calculateAugmentSpellCooldownReduction(const std::shared_ptr<Play
 				}
 			}
 		}
-		reduction = saturatingAdd(reduction, player->getProficiencySpellAugmentBonus(getId()).cooldownReduction);
+	}
+	if (proficiencySystemEnabled) {
+		reduction = saturatingAdd(reduction, player->getProficiencySpellAugmentBonus(getName()).cooldownReduction);
 	}
 	if (wheelSystemEnabled) {
 		reduction = saturatingAdd(reduction, player->getWheelSpellAugmentBonus(getName()).cooldownReduction);
+	}
+	if (ConfigManager::getBoolean(ConfigManager::SKILLTREE_SYSTEM_ENABLED)) {
+		reduction = saturatingAdd(reduction, player->getSkillTreeSpellAugmentBonus(getName()).cooldownReduction);
 	}
 	return reduction;
 }
@@ -700,7 +728,8 @@ int32_t Spell::calculateAugmentSpellSecondaryGroupCooldownReduction(const std::s
 {
 	const bool augmentSystemEnabled = ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	const bool wheelSystemEnabled = ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED);
-	if ((!augmentSystemEnabled && !wheelSystemEnabled) || !player) {
+	const bool proficiencySystemEnabled = ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
+	if ((!augmentSystemEnabled && !wheelSystemEnabled && !proficiencySystemEnabled) || !player) {
 		return 0;
 	}
 
@@ -714,12 +743,18 @@ int32_t Spell::calculateAugmentSpellSecondaryGroupCooldownReduction(const std::s
 				}
 			}
 		}
+	}
+	if (proficiencySystemEnabled) {
 		reduction =
-		    saturatingAdd(reduction, player->getProficiencySpellAugmentBonus(getId()).secondaryGroupCooldownReduction);
+		    saturatingAdd(reduction, player->getProficiencySpellAugmentBonus(getName()).secondaryGroupCooldownReduction);
 	}
 	if (wheelSystemEnabled) {
 		reduction =
 		    saturatingAdd(reduction, player->getWheelSpellAugmentBonus(getName()).secondaryGroupCooldownReduction);
+	}
+	if (ConfigManager::getBoolean(ConfigManager::SKILLTREE_SYSTEM_ENABLED)) {
+		reduction =
+		    saturatingAdd(reduction, player->getSkillTreeSpellAugmentBonus(getName()).secondaryGroupCooldownReduction);
 	}
 	return reduction;
 }
@@ -728,7 +763,8 @@ int32_t Spell::calculateAugmentSpellManaCostReduction(const Player* player) cons
 {
 	const bool augmentSystemEnabled = ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	const bool wheelSystemEnabled = ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED);
-	if ((!augmentSystemEnabled && !wheelSystemEnabled) || !player) {
+	const bool proficiencySystemEnabled = ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
+	if ((!augmentSystemEnabled && !wheelSystemEnabled && !proficiencySystemEnabled) || !player) {
 		return 0;
 	}
 
@@ -741,10 +777,15 @@ int32_t Spell::calculateAugmentSpellManaCostReduction(const Player* player) cons
 				}
 			}
 		}
-		reduction = saturatingAdd(reduction, player->getProficiencySpellAugmentBonus(getId()).manaCostPercent);
+	}
+	if (proficiencySystemEnabled) {
+		reduction = saturatingAdd(reduction, player->getProficiencySpellAugmentBonus(getName()).manaCostPercent);
 	}
 	if (wheelSystemEnabled) {
 		reduction = saturatingAdd(reduction, player->getWheelSpellAugmentBonus(getName()).manaCostPercent);
+	}
+	if (ConfigManager::getBoolean(ConfigManager::SKILLTREE_SYSTEM_ENABLED)) {
+		reduction = saturatingAdd(reduction, player->getSkillTreeSpellAugmentBonus(getName()).manaCostPercent);
 	}
 	return std::clamp(reduction, 0, 100);
 }
@@ -1097,15 +1138,7 @@ bool InstantSpell::canCast(const Player* player) const
 		return true;
 	}
 
-	if (isLearnable()) {
-		if (player->hasLearnedInstantSpell(getName())) {
-			return true;
-		}
-	} else if (hasVocationSpellMap(player->getVocationId())) {
-		return true;
-	}
-
-	return false;
+	return hasVocationSpellMap(player->getVocationId()) && hasKnowledgeOfSpell(player);
 }
 
 std::string_view RuneSpell::getScriptEventName() const { return "onCastSpell"; }

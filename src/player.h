@@ -99,7 +99,12 @@ struct DeathLogEntry
 	std::string message;
 };
 
-struct ProficiencySpellAugmentBonus
+// Per-spell modifiers accumulated from every source that can strengthen a spell
+// (equipment proficiency, the wheel, the skill tree). Adding a new dimension of
+// spell power is a field here, a case in Player::addSpellAugmentBonus, and a
+// line in the applyBonus lambda in spells.cpp — every source picks it up at
+// once.
+struct SpellModifiers
 {
 	int32_t damagePercent = 0;
 	int32_t healingPercent = 0;
@@ -644,11 +649,14 @@ public:
 	std::vector<std::shared_ptr<Item>> getEquippedAugmentItems() const;
 	std::vector<std::shared_ptr<Item>> getEquippedAugmentItemsByType(Augment_t augmentType) const;
 	void clearProficiencySpellAugments();
-	void addProficiencySpellAugment(uint16_t weaponId, uint16_t spellId, Augment_t augmentType, double value);
-	ProficiencySpellAugmentBonus getProficiencySpellAugmentBonus(uint16_t spellId) const;
+	void addProficiencySpellAugment(std::string spellName, Augment_t augmentType, double value);
+	SpellModifiers getProficiencySpellAugmentBonus(std::string_view spellName) const;
 	void clearWheelSpellAugments();
 	void addWheelSpellAugment(std::string spellName, Augment_t augmentType, double value);
-	ProficiencySpellAugmentBonus getWheelSpellAugmentBonus(std::string_view spellName) const;
+	SpellModifiers getWheelSpellAugmentBonus(std::string_view spellName) const;
+	void clearSkillTreeSpellAugments();
+	void addSkillTreeSpellAugment(std::string spellName, Augment_t augmentType, double value);
+	SpellModifiers getSkillTreeSpellAugmentBonus(std::string_view spellName) const;
 
 	WeaponProficiency& weaponProficiency() { assert(m_weaponProficiency); return *m_weaponProficiency; }
 	const WeaponProficiency& weaponProficiency() const { assert(m_weaponProficiency); return *m_weaponProficiency; }
@@ -1456,6 +1464,14 @@ public:
 	void forgetInstantSpell(const std::string& spellName);
 	bool hasLearnedInstantSpell(std::string_view spellName) const;
 
+	// Spells lent by currently equipped gear. Unlike learnedInstantSpellList this
+	// is runtime-only and never persisted: it is rebuilt from the equipment on
+	// login and on every inventory change. Mastering a spell moves it out of here
+	// and into the persisted learned list.
+	void clearEquipmentGrantedSpells();
+	void addEquipmentGrantedSpell(std::string_view spellName);
+	bool hasEquipmentGrantedSpell(std::string_view spellName) const;
+
 	// Autoloot
 	void sendAutoLootWindow() const;
 	void parseAutoLootWindow(const std::string& text);
@@ -1666,6 +1682,7 @@ private:
 	std::forward_list<std::weak_ptr<Party>> invitePartyList;
 	std::forward_list<uint32_t> modalWindows;
 	std::forward_list<std::string> learnedInstantSpellList;
+	std::forward_list<std::string> equipmentGrantedSpellList;
 
 	std::forward_list<Condition_ptr>
 	    storedConditionList; // per-player buffer used temporarily during login
@@ -1708,8 +1725,12 @@ private:
 	std::shared_ptr<Group> group;
 	std::weak_ptr<Item> tradeItem;
 	std::shared_ptr<Item> inventory[CONST_SLOT_LAST + 1] = {};
-	std::unordered_map<uint16_t, std::unordered_map<uint16_t, ProficiencySpellAugmentBonus>> proficiencySpellAugments;
-	std::unordered_map<std::string, ProficiencySpellAugmentBonus> wheelSpellAugments;
+	// Keyed by spell NAME, not id: only a fraction of spells declare an id, ids
+	// collide, and there is no id -> spell lookup in the engine. Both maps are
+	// runtime-only and rebuilt by their Lua system on every change.
+	std::unordered_map<std::string, SpellModifiers> proficiencySpellAugments;
+	std::unordered_map<std::string, SpellModifiers> wheelSpellAugments;
+	std::unordered_map<std::string, SpellModifiers> skillTreeSpellAugments;
 	std::unordered_map<uint16_t, uint32_t> bestiaryKills;
 	std::unordered_set<uint16_t> modifiedBestiaryRaceIds;
 	std::unordered_map<uint16_t, uint64_t> bestiaryDirtyRaceRevisions;
