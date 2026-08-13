@@ -82,7 +82,8 @@ local OPCODE_RESOURCE_BALANCE = 0xEE
 local BOUNTY_EXTENSION_MARKER = 0x5441534B424F4152
 
 local function supportsCustomNetwork(player)
-	return player and player.isOTCv8 and player:isOTCv8()
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function clamp(value, minValue, maxValue)

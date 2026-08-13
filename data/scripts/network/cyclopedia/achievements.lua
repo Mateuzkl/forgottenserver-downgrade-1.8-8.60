@@ -3,7 +3,8 @@ local SERVER_PACKET_CHARACTER_INFO = 0xDA
 local CHARACTER_INFO_ACHIEVEMENTS = 5
 
 local function supportsAchievements(player)
-	return player and player.isOTCv8 and player:isOTCv8()
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function sendAchievements(player)

@@ -80,7 +80,7 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
 	if (isExtendedOtcv8LuaOpcode(opcode)) {
-		return player.isOTCv8();
+		return player.hasOtcv8Capability(Otcv8Capability::ExtendedLuaOpcodes);
 	}
 	if (isSharedOtcLuaOpcode(opcode)) {
 		return player.isOTC();

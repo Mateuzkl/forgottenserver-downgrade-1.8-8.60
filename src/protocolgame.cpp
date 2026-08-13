@@ -505,7 +505,7 @@ ProtocolGame::~ProtocolGame()
 
 void ProtocolGame::sendBlessingWindow()
 {
-	if (!player || !isOTCv8) return;
+	if (!player || !hasOtcv8Capability(Otcv8Capability::BlessingSystem)) return;
 
 	NetworkMessage msg;
 	msg.addByte(0x9B);
@@ -561,7 +561,7 @@ void ProtocolGame::sendBlessingWindow()
 
 void ProtocolGame::sendBlessStatus()
 {
-	if (!player || !isOTCv8) return;
+	if (!player || !hasOtcv8Capability(Otcv8Capability::BlessingSystem)) return;
 
 	uint8_t totalCount = 0;
 	for (uint8_t i = 2; i <= 8; i++) {
@@ -604,7 +604,8 @@ void ProtocolGame::release()
 
 bool ProtocolGame::shouldSendQuickLootFlags() const
 {
-	return isOTCv8 && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
+	return hasOtcv8Capability(Otcv8Capability::QuickLootFlags) &&
+	       getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
 }
 
 bool ProtocolGame::shouldSendContainerPagination() const
@@ -619,12 +620,13 @@ bool ProtocolGame::shouldPaginateContainer(const Container* container) const
 		return false;
 	}
 
-	return container->hasPagination() || (isOTCv8 && container->getRewardChest());
+	return container->hasPagination() ||
+	       (hasOtcv8Capability(Otcv8Capability::RewardChestPagination) && container->getRewardChest());
 }
 
 bool ProtocolGame::canSendItemMetadata() const
 {
-	if (!player || !player->client || !isOTCv8 || isSpectator ||
+	if (!player || !player->client || !hasOtcv8Capability(Otcv8Capability::ItemMetadata) || isSpectator ||
 	    !getBoolean(ConfigManager::ITEM_METADATA_ENABLED)) {
 		return false;
 	}
@@ -635,12 +637,13 @@ bool ProtocolGame::canSendItemMetadata() const
 
 bool ProtocolGame::shouldSendQuiverCountU16() const
 {
-	return isOTCv8;
+	return hasOtcv8Capability(Otcv8Capability::QuiverCountU16);
 }
 
 bool ProtocolGame::shouldSendItemTierByte() const
 {
-	return useItemTierByte && getBoolean(ConfigManager::ITEM_TIER_DISPLAY);
+	return hasOtcv8Capability(Otcv8Capability::ItemTierByte) &&
+	       getBoolean(ConfigManager::ITEM_TIER_DISPLAY);
 }
 
 bool ProtocolGame::shouldSendThingUpgradeClassification() const
@@ -653,10 +656,10 @@ bool ProtocolGame::shouldSendThingUpgradeClassification() const
 		return getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION);
 	}
 
-	// OTCv8 Classic uses this feature as the Lua-side gate for drawing tier icons.
-	// Keep the actual item wire format tied to GameItemTierByte so CIP and
-	// non-tier-aware OTC clients never receive unexpected item bytes.
-	return isOTCv8 && shouldSendItemTierByte();
+	// Item metadata and upgrade classification are mutually exclusive item
+	// layouts. A client that negotiates metadata must not receive both encodings.
+	return isOTCv8 && !hasOtcv8Capability(Otcv8Capability::ItemMetadata) &&
+	       shouldSendItemTierByte();
 }
 
 bool ProtocolGame::shouldSendItemTierData() const
@@ -675,7 +678,7 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 	if (isOTC) {
 		// Player loading can emit status packets before finishLogin(), so advertise
 		// the final OTCv8 wire format before loading the player.
-		sendFeatures(isOTCv8);
+		sendFeatures();
 
 		NetworkMessage opcodeMessage;
 		opcodeMessage.addByte(0x32);
@@ -876,6 +879,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->client->isOTCv8 = isOTCv8;
 	player->client->isMehah = isMehah;
 	player->client->isOTC = isOTC;
+	player->client->otcv8Capabilities = otcv8Capabilities;
 	if (!g_game.placeCreature(player.get(), player->getLoginPosition())) {
 		if (!g_game.placeCreature(player.get(), player->getTemplePosition(), false, true)) {
 			g_game.releaseLogin(reservedGuid);
@@ -1024,6 +1028,7 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->client->isOTCv8 = isOTCv8;
 	player->client->isMehah = isMehah;
 	player->client->isOTC = isOTC;
+	player->client->otcv8Capabilities = otcv8Capabilities;
 	sendAddCreature(player.get(), player->getPosition(), 0);
 	sendLootContainers();
 	player->lastIP = player->getIP();
@@ -1155,9 +1160,14 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 
 				const auto marker = msg.getString(markerLength);
 				if (marker == "OTCv8TierByte") {
-					useItemTierByte = true;
+					otcv8Capabilities |= static_cast<uint32_t>(Otcv8Capability::ItemTierByte);
 				} else if (marker == "OTCv8ZoneWeather") {
-					supportsZoneWeather = true;
+					otcv8Capabilities |= static_cast<uint32_t>(Otcv8Capability::NativeZoneWeather);
+				} else if (marker == "OTCv8CapabilitiesV1") {
+					if (!requireUnreadBytes(msg, sizeof(uint32_t))) {
+						break;
+					}
+					otcv8Capabilities |= msg.get<uint32_t>() & OTCV8_CAPABILITIES_V1_MASK;
 				} else {
 					break;
 				}
@@ -1462,7 +1472,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			parseImbuementDurations(msg);
 			break;
 		case CharacterBazaar::CLIENT_PACKET:
-			if (isOTCv8) {
+			if (hasOtcv8Capability(Otcv8Capability::CharacterBazaar)) {
 				parseCharacterBazaar(msg);
 			} else {
 				skipUnreadBytes(msg);
@@ -1511,7 +1521,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			g_game.playerTurn(player->getID(), DIRECTION_WEST);
 			break;
 		case 0x77:
-			if (isOTCv8) {
+			if (hasOtcv8Capability(Otcv8Capability::HotkeyEquip)) {
 				parseHotkeyEquip(msg);
 			} else {
 				skipUnreadBytes(msg);
@@ -1631,7 +1641,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0x9F:
-			if (isOTCv8) {
+			if (hasOtcv8Capability(Otcv8Capability::MonsterPodium)) {
 				parseSetMonsterPodium(msg);
 			}
 			break;
@@ -1685,7 +1695,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xCF:
-			if (isOTCv8) {
+			if (hasOtcv8Capability(Otcv8Capability::BlessingSystem)) {
 				sendBlessingWindow();
 			}
 			break;
@@ -1714,13 +1724,14 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xCD:
-			if (isOTCv8) {
+			if (hasOtcv8Capability(Otcv8Capability::ItemInspection)) {
 				parseInspectionObject(msg);
 			}
 			break;
 
 		case 0xD2:
-			if (isHirelingOutfitRequestPacket(msg, isOTCv8)) {
+			if (isHirelingOutfitRequestPacket(
+			        msg, hasOtcv8Capability(Otcv8Capability::HirelingProtocol))) {
 				handlePlayerNetworkMessage(recvbyte);
 			} else {
 				g_game.playerRequestOutfit(player->getID());
@@ -1728,7 +1739,8 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xD3:
-			if (isHirelingOutfitChangePacket(msg, isOTCv8)) {
+			if (isHirelingOutfitChangePacket(
+			        msg, hasOtcv8Capability(Otcv8Capability::HirelingProtocol))) {
 				handlePlayerNetworkMessage(recvbyte);
 			} else {
 				parseSetOutfit(msg);
@@ -1781,7 +1793,8 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 {
-	if (!player || !isOTCv8 || !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) ||
+	if (!player || !hasOtcv8Capability(Otcv8Capability::CharacterBazaar) ||
+	    !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) ||
 	    !requireUnreadBytes(msg, 1)) {
 		skipUnreadBytes(msg);
 		return;
@@ -2137,7 +2150,7 @@ void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 	} else {
 		newOutfit.lookMount = 0;
 	}
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::PlayerFamiliars)) {
 		const uint16_t requestedFamiliar = msg.get<uint16_t>();
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		newOutfit.lookFamiliar =
@@ -2233,7 +2246,8 @@ void ProtocolGame::parseSeekInContainer(NetworkMessage& msg)
 void ProtocolGame::parseHotkeyEquip(NetworkMessage& msg)
 {
 	const std::size_t packetSize = getUnreadBytes(msg);
-	if (!player || !isOTCv8 || isSpectator || player->isAccountManager()) {
+	if (!player || !hasOtcv8Capability(Otcv8Capability::HotkeyEquip) || isSpectator ||
+	    player->isAccountManager()) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2250,9 +2264,9 @@ void ProtocolGame::parseHotkeyEquip(NetworkMessage& msg)
 	}
 
 	uint8_t tier = 0;
-	bool hasTier = getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
-	               (useItemTierByte || (getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) &&
-	                                   Item::items[itemId].classification > 0));
+	const bool hasTier = shouldSendItemTierByte() ||
+	                     (shouldSendThingUpgradeClassification() &&
+	                      Item::items[itemId].classification > 0);
 	if (packetSize != (hasTier ? 3 : 2)) {
 		skipUnreadBytes(msg);
 		return;
@@ -2752,7 +2766,7 @@ void ProtocolGame::sendCreatureEmblem(const Creature* creature)
 		return;
 	}
 
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::CreatureEmblems)) {
 		if (const Monster* monster = creature->getMonster(); monster && monster->isFamiliar()) {
 			return;
 		}
@@ -2790,7 +2804,7 @@ void ProtocolGame::sendWorldLight(LightInfo lightInfo)
 
 void ProtocolGame::sendCharmActivated(uint8_t charmId)
 {
-	if (!isOTCv8) {
+	if (!hasOtcv8Capability(Otcv8Capability::Charms)) {
 		return;
 	}
 
@@ -2864,7 +2878,7 @@ void ProtocolGame::sendKillTrackerUpdate(const std::shared_ptr<Container>& corps
 
 void ProtocolGame::sendItemValues()
 {
-	if (!isOTCv8) {
+	if (!hasOtcv8Capability(Otcv8Capability::ExtendedLuaOpcodes)) {
 		return;
 	}
 
@@ -2929,7 +2943,7 @@ void ProtocolGame::invalidateItemValuesCache()
 void ProtocolGame::sendImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
                                      std::string_view targetName)
 {
-	if (!isOTCv8 || amount == 0) {
+	if (!hasOtcv8Capability(Otcv8Capability::CombatAnalyzers) || amount == 0) {
 		return;
 	}
 
@@ -3059,7 +3073,7 @@ void ProtocolGame::sendStats()
 
 void ProtocolGame::sendBasicData()
 {
-	if (!player || !isOTCv8) {
+	if (!player || !hasOtcv8Capability(Otcv8Capability::ExtendedBasicData)) {
 		return;
 	}
 
@@ -3209,7 +3223,7 @@ void ProtocolGame::sendIcons(uint16_t icons)
 
 void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
 {
-	if (!player || !isOTCv8) {
+	if (!player || !hasOtcv8Capability(Otcv8Capability::ExtendedConditionIcons)) {
 		return;
 	}
 
@@ -3222,7 +3236,8 @@ void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
 
 void ProtocolGame::sendCreatureIcon(const Creature* creature)
 {
-	if (!creature || !player || !isOTCv8) {
+	if (!creature || !player ||
+	    !hasOtcv8Capability(Otcv8Capability::ExtendedCreatureIcons)) {
 		return;
 	}
 
@@ -3999,15 +4014,16 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	sendStats();
 	sendSkills();
 
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::ExtendedBasicData)) {
 		sendBasicData();
 	}
 
-	if (isOTCv8 && (player->getVocationId() == 9 || player->getVocationId() == 10)) {
+	if (hasOtcv8Capability(Otcv8Capability::MonkData) &&
+	    (player->getVocationId() == 9 || player->getVocationId() == 10)) {
 		player->sendMonkData();
 	}
 
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::BlessingSystem)) {
 		sendBlessStatus();
 	}
 
@@ -4369,7 +4385,8 @@ void ProtocolGame::sendOutfitWindow()
 	msg.addByte(0xC8);
 
 	const bool monkVocationEnabled = ConfigManager::getBoolean(ConfigManager::MONK_VOCATION_ENABLED);
-	const bool usesExtendedOutfitStore = isOTCv8 && getVersion() == 860;
+	const bool usesExtendedOutfitStore =
+	    hasOtcv8Capability(Otcv8Capability::OutfitStoreMode) && getVersion() == 860;
 	auto isHiddenOutfit = [monkVocationEnabled](const Outfit* outfit) {
 		return outfit && !monkVocationEnabled && outfit->name == "Monk";
 	};
@@ -4399,7 +4416,7 @@ void ProtocolGame::sendOutfitWindow()
 	}
 
 	AddOutfit(msg, currentOutfit);
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::PlayerFamiliars)) {
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		if (!familiar || currentOutfit.lookFamiliar != familiar->lookType) {
 			currentOutfit.lookFamiliar = 0;
@@ -4482,7 +4499,7 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::PlayerFamiliars)) {
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		msg.add<uint16_t>(familiar ? 1 : 0);
 		if (familiar) {
@@ -4497,7 +4514,7 @@ void ProtocolGame::sendOutfitWindow()
 
 void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType)
 {
-	if (!isOTCv8) {
+	if (!hasOtcv8Capability(Otcv8Capability::ItemInspection)) {
 		return;
 	}
 
@@ -4558,7 +4575,7 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId,
                                             uint8_t stackPos)
 {
-	if (!isOTCv8 || !podium) {
+	if (!hasOtcv8Capability(Otcv8Capability::MonsterPodium) || !podium) {
 		return;
 	}
 
@@ -4759,7 +4776,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	msg.add<uint16_t>(static_cast<uint16_t>(creature->getStepSpeed()));
 
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::ExtendedCreatureIcons)) {
 		AddCreatureIcon(msg, creature);
 	}
 
@@ -4768,7 +4785,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	if (!known) {
 		auto addCreatureEmblem = [this, &msg, creature](GuildEmblems_t emblem) {
-			if (!isOTCv8) {
+			if (!hasOtcv8Capability(Otcv8Capability::ExtendedCreatureIcons)) {
 				if (emblem == GUILDEMBLEM_MEMBER) {
 					emblem = GUILDEMBLEM_ALLY;
 				} else if (emblem == GUILDEMBLEM_OTHER) {
@@ -4782,7 +4799,8 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 		};
 
 		if (otherPlayer) {
-			addCreatureEmblem(player->getGuildEmblem(otherPlayer, isOTCv8));
+			addCreatureEmblem(player->getGuildEmblem(
+			    otherPlayer, hasOtcv8Capability(Otcv8Capability::ExtendedCreatureIcons)));
 		} else {
 			if (creature->isSummon()) {
 				auto master = creature->getMaster();
@@ -4843,7 +4861,7 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	msg.add<uint16_t>(static_cast<uint16_t>(player->getLevel()));
 	msg.addByte(player->getLevelPercent());
 
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::ExtendedPlayerStats)) {
 		msg.add<uint16_t>(player->getBaseXpGain());
 		msg.add<uint16_t>(0); // voucher XP boost
 		msg.add<uint16_t>(player->getDisplayGrindingXpBoost());
@@ -4868,7 +4886,7 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	if (isOTC) {
 		msg.add<uint16_t>(player->getBaseSpeed() / 2);
 		msg.add<uint16_t>(player->getOfflineTrainingTime() / 60 / 1000);
-		if (isOTCv8) {
+		if (hasOtcv8Capability(Otcv8Capability::ExtendedPlayerStats)) {
 			msg.add<uint16_t>(player->getXpBoostTime());
 			// 0x00 means boost is active and cannot be bought; 0x01 means the client may buy one.
 			msg.addByte(player->getXpBoostTime() > 0 ? 0x00 : 0x01);
@@ -5155,7 +5173,7 @@ void ProtocolGame::parseCustomClientPing(NetworkMessage& msg)
 }
 
 // OTCv8 and Mehah
-void ProtocolGame::sendFeatures(bool advertiseItemMetadata)
+void ProtocolGame::sendFeatures()
 {
 	zoneWeatherFeatureEnabled = false;
 
@@ -5192,18 +5210,27 @@ void ProtocolGame::sendFeatures(bool advertiseItemMetadata)
 	features[GameFeature::CreatureIcons] = true;
 	features[GameFeature::ContainerPagination] = true;
 	features[GameFeature::BrowseField] = true;
-	if (isOTCv8) {
+	if (hasOtcv8Capability(Otcv8Capability::ExtendedPlayerStats)) {
 		features[GameFeature::ExperienceBonus] = true;
+	}
+	if (hasOtcv8Capability(Otcv8Capability::PlayerFamiliars)) {
 		features[GameFeature::PlayerFamiliars] = true;
+	}
+	if (hasOtcv8Capability(Otcv8Capability::ExtendedCreatureIcons)) {
 		features[GameFeature::ExtendedCreatureIcons] = true;
+	}
+	if (shouldSendQuiverCountU16()) {
 		features[GameFeature::QuiverCountU16] = true;
+	}
+	if (hasOtcv8Capability(Otcv8Capability::OutfitStoreMode)) {
 		features[GameFeature::OutfitStoreMode] = true;
 	}
 	if (supportsNativeZoneWeather()) {
 		features[GameFeature::ZoneWeather] = true;
 		zoneWeatherFeatureEnabled = true;
 	}
-	if (advertiseItemMetadata && getBoolean(ConfigManager::ITEM_METADATA_ENABLED)) {
+	if (hasOtcv8Capability(Otcv8Capability::ItemMetadata) &&
+	    getBoolean(ConfigManager::ITEM_METADATA_ENABLED)) {
 		features[GameFeature::DisplayItemDuration] = true;
 		features[GameFeature::DisplayItemCharges] = true;
 		features[GameFeature::PackedPlayerInventory] = true;

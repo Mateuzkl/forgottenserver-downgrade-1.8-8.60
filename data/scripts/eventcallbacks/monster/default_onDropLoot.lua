@@ -40,7 +40,8 @@ local function sendUngroupedLootMessage(player, corpse, monsterName, preyLootTex
 
 	if useColorized then
 		for _, recipient in ipairs(recipients) do
-			if recipient.isOTCv8 and recipient:isOTCv8() then
+			if recipient.hasOtcv8Capability and
+				recipient:hasOtcv8Capability(OTCV8_CAPABILITY_COLORIZED_LOOT_TEXT) then
 				needColorized = true
 				break
 			end
@@ -53,7 +54,8 @@ local function sendUngroupedLootMessage(player, corpse, monsterName, preyLootTex
 	end
 
 	for _, recipient in ipairs(recipients) do
-		local wantsColorized = needColorized and recipient.isOTCv8 and recipient:isOTCv8()
+		local wantsColorized = needColorized and recipient.hasOtcv8Capability and
+			recipient:hasOtcv8Capability(OTCV8_CAPABILITY_COLORIZED_LOOT_TEXT)
 		if wantsColorized then
 			colorizedText = colorizedText or buildText(true)
 			sendLootMessage(recipient, colorizedText)

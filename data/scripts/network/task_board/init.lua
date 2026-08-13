@@ -91,7 +91,8 @@ local OPCODE_TASK_BOARD_ACTION = 0x5F
 local taskBoardActionHandler = PacketHandler(OPCODE_TASK_BOARD_ACTION)
 
 function taskBoardActionHandler.onReceive(player, msg)
-	if not player or not player.isOTCv8 or not player:isOTCv8() then return end
+	if not player or not player.hasOtcv8Capability or
+		not player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES) then return end
 
 	local payload = protocol.parseTaskBoardAction(msg)
 	if not payload then

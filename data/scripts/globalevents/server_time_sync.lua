@@ -14,7 +14,8 @@ function serverTimeSync.onThink(interval)
 	local minute = worldTime % 60
 
 	for _, player in ipairs(Game.getPlayers()) do
-		if player.isOTCv8 and player:isOTCv8() then
+		if player.hasOtcv8Capability and
+			player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES) then
 			sendServerTime(player, hour, minute)
 		end
 	end

@@ -764,7 +764,7 @@ Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 
 void Player::sendMonkData()
 {
-	if (!client || !isOTCv8()) {
+	if (!client || !supportsMonkData()) {
 		return;
 	}
 	std::string json = fmt::format(
@@ -1305,7 +1305,7 @@ void Player::sendIcons() const
 
 	// Extended 64-bit condition icons are only understood by clients that
 	// advertise them.
-	if (!isOTCv8()) {
+	if (!supportsExtendedConditionIcons()) {
 		return;
 	}
 
@@ -5829,11 +5829,11 @@ Skulls_t Player::getSkullClient(const Creature* creature) const
 
 	// Extended OTCv8 uses creature icon opcode 0x8B instead of a skull.
 	if (const Monster* monster = creature->getMonster()) {
-		if (monster->isFamiliar() && isOTCv8()) {
+		if (monster->isFamiliar() && supportsExtendedCreatureIcons()) {
 			return SKULL_NONE;
 		}
 		if (monster->isInfluenced() || monster->isFiendish()) {
-			if (isOTCv8()) {
+			if (supportsExtendedCreatureIcons()) {
 				return SKULL_NONE;
 			}
 			return monster->isInfluenced() ? SKULL_GREEN : SKULL_RED;
@@ -7273,7 +7273,7 @@ Container* findHeldContainerByIdentity(Container* parent, uint16_t itemId, uint6
 
 void Player::sendLootContainers() const
 {
-	if (client && isOTCv8()) {
+	if (client && supportsLootContainers()) {
 		client->sendLootContainers();
 	}
 }
@@ -7646,7 +7646,8 @@ void Player::flushPendingLoot(const std::string& groupKey)
 	const std::string colorizedText = colorizedLootEnabled ? buildLootText(true) : plainText;
 	const auto sendLootText = [&](Player& recipient) {
 		recipient.sendChannelMessage(
-		    "", colorizedLootEnabled && recipient.isOTCv8() ? colorizedText : plainText, TALKTYPE_CHANNEL_O, 10);
+		    "", colorizedLootEnabled && recipient.supportsColorizedLootText() ? colorizedText : plainText,
+		    TALKTYPE_CHANNEL_O, 10);
 	};
 
 	const auto& party = getParty();

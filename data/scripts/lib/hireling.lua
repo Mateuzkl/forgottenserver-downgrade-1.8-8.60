@@ -90,7 +90,8 @@ end
 local function hirelingProtocolEnabled(player)
 	return hirelingSystemEnabled() and configKeys.HIRELING_PROTOCOL_ENABLED and
 		configManager.getBoolean(configKeys.HIRELING_PROTOCOL_ENABLED) and
-		player and player.isOTCv8 and player:isOTCv8()
+		player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_HIRELING_PROTOCOL)
 end
 
 local function logWarning(message)

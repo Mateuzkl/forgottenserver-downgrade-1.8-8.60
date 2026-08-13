@@ -1778,6 +1778,12 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("COLORIZED_LOOT_VALUE", ConfigManager::COLORIZED_LOOT_VALUE);
 	registerGlobalVariable("ITEM_TIER_DISPLAY", ConfigManager::ITEM_TIER_DISPLAY);
 	registerGlobalVariable("ITEM_UPGRADE_CLASSIFICATION", ConfigManager::ITEM_UPGRADE_CLASSIFICATION);
+	registerGlobalVariable("OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES",
+	                       static_cast<uint32_t>(Otcv8Capability::ExtendedLuaOpcodes));
+	registerGlobalVariable("OTCV8_CAPABILITY_COLORIZED_LOOT_TEXT",
+	                       static_cast<uint32_t>(Otcv8Capability::ColorizedLootText));
+	registerGlobalVariable("OTCV8_CAPABILITY_HIRELING_PROTOCOL",
+	                       static_cast<uint32_t>(Otcv8Capability::HirelingProtocol));
 	registerGlobalVariable("MIN_TASK_INTERVAL", MIN_TASK_INTERVAL);
 
 	registerGlobalVariable("ACCOUNT_MANAGER_NONE", static_cast<uint8_t>(AccountManagerMode::ACCOUNT_MANAGER_NONE));

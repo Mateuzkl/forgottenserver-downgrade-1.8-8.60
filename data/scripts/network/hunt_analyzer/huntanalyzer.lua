@@ -48,7 +48,8 @@ local function sendHuntAnalyzerKill(player, monster, corpse)
 
 	-- Extended OTCv8 reads loot from the C++-decoded 0xD1 batch. Keep the legacy
 	-- per-item 0xCF stream only for older OTClient variants.
-	if not (player.isOTCv8 and player:isOTCv8()) then
+	if not (player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)) then
 		sendLootStatsRecursive(player, corpse)
 	end
 end

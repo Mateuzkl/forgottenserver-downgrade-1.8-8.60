@@ -28,7 +28,8 @@ local function isNearSoulpitObelisk(player)
 end
 
 local function isExtendedOtcv8Player(player)
-	return player and player.isOTCv8 and player:isOTCv8()
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 function SoulSealHandler.sendSoulSealsData(player)

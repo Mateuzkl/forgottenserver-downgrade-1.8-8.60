@@ -61,7 +61,8 @@ local function isTaskBoardOfferEnabled(offerType)
 end
 
 local function supportsTaskBoardStore(player, offerType)
-	return player and player.isOTCv8 and player:isOTCv8() and
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES) and
 		isTaskBoardOfferEnabled(offerType)
 end
 
@@ -102,13 +103,15 @@ end
 
 local function supportsBattlePassStore(player)
 	return configManager.getBoolean(configKeys.BATTLEPASS_SYSTEM_ENABLED) and
-		player and player.isOTCv8 and player:isOTCv8()
+		player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function supportsHirelingStore(player)
 	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
 		configManager.getBoolean(configKeys.HIRELING_PROTOCOL_ENABLED) and
-		player and player.isOTCv8 and player:isOTCv8()
+		player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_HIRELING_PROTOCOL)
 end
 
 local function playerOwnsMount(player, mountId)

@@ -7,7 +7,8 @@ local OPCODE_IMBUEMENT_ACTIVATED = 0x30
 local OPCODE_SPECIAL_SKILL_ACTIVATED = 0x31
 
 local function isExtendedOtcv8(player)
-	return player and player.isOTCv8 and player:isOTCv8()
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function isOtc(player)

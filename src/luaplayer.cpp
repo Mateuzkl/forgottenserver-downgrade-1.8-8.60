@@ -3480,6 +3480,20 @@ int luaPlayerIsUsingOtcV8(lua_State* L)
 	return 1;
 }
 
+int luaPlayerHasOtcv8Capability(lua_State* L)
+{
+	// player:hasOtcv8Capability(capability)
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const auto capability = static_cast<Otcv8Capability>(getInteger<uint32_t>(L, 2));
+	pushBoolean(L, player->hasOtcv8Capability(capability));
+	return 1;
+}
+
 int luaPlayerIsUsingOtc(lua_State* L)
 {
 	// player:isUsingOtc()
@@ -4873,6 +4887,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "isUsingOtcV8", luaPlayerIsUsingOtcV8);
 	registerMethod("Player", "isUsingOtc", luaPlayerIsUsingOtc);
 	registerMethod("Player", "isOTCv8", luaPlayerIsUsingOtcV8);
+	registerMethod("Player", "hasOtcv8Capability", luaPlayerHasOtcv8Capability);
 	registerMethod("Player", "isOTC", luaPlayerIsUsingOtc);
 	registerMethod("Player", "isMehah", luaPlayerIsMehah);
 	registerMethod("Player", "getLastIp", luaPlayerGetLastIp);

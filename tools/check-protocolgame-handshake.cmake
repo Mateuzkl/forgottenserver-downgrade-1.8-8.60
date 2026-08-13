@@ -28,7 +28,7 @@ extract_block("void ProtocolGame::finishLogin" "void ProtocolGame::spectate" fin
 extract_block("void ProtocolGame::connect" "void ProtocolGame::logout" connect_block)
 extract_block("void ProtocolGame::onRecvFirstMessage" "void ProtocolGame::onConnect" first_message_block)
 
-require_occurrences("${login_block}" "sendFeatures\\(isOTCv8\\)" 1 "login feature negotiation")
+require_occurrences("${login_block}" "sendFeatures\\(\\)" 1 "login feature negotiation")
 require_occurrences("${login_block}" "opcodeMessage\\.addByte\\(0x32\\)" 1 "login extended-opcode negotiation")
 require_occurrences("${connect_block}" "sendFeatures\\(" 0 "reconnect duplicate feature negotiation")
 require_occurrences("${connect_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "reconnect duplicate extended-opcode negotiation")
@@ -36,8 +36,10 @@ require_occurrences("${finish_login_block}" "sendFeatures\\(" 0 "finishLogin dup
 require_occurrences("${finish_login_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "finishLogin duplicate extended-opcode negotiation")
 require_occurrences("${first_message_block}" "sendFeatures\\(" 0 "first-message duplicate feature negotiation")
 require_occurrences("${first_message_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "first-message duplicate extended-opcode negotiation")
+require_occurrences("${first_message_block}" "OTCv8CapabilitiesV1" 1 "OTCv8 capability marker")
+require_occurrences("${first_message_block}" "OTCV8_CAPABILITIES_V1_MASK" 1 "OTCv8 capability mask validation")
 
-string(FIND "${login_block}" "sendFeatures(isOTCv8);" features_position)
+string(FIND "${login_block}" "sendFeatures();" features_position)
 string(FIND "${login_block}" "connect(foundPlayer->getID(), operatingSystem);" reconnect_position)
 if(features_position EQUAL -1 OR reconnect_position EQUAL -1 OR features_position GREATER reconnect_position)
     message(FATAL_ERROR "Features must be sent before the reconnect path")

@@ -33,7 +33,8 @@ for _, vocation in ipairs(vocations) do
 end
 
 local function isOTCv8Player(player)
-	return player and player.isOTCv8 and player:isOTCv8()
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function clamp(value, minValue, maxValue)

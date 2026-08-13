@@ -59,7 +59,9 @@ function loginBoosted.onLogin(player)
 	end
 
 	-- Boosted Boss is persisted by CustomBosstiary and sent through login and Bosstiary protocols.
-	if player.isOTCv8 and player:isOTCv8() and CustomBosstiary and CustomBosstiary.getBoostedBoss then
+	if player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES) and
+		CustomBosstiary and CustomBosstiary.getBoostedBoss then
 		local boostedBoss = CustomBosstiary.getBoostedBoss()
 		if boostedBoss and boostedBoss.name then
 			player:sendTextMessage(MESSAGE_EVENT_ADVANCE,

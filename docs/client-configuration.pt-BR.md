@@ -44,6 +44,11 @@ O server envia overrides de features para OTCv8/Mehah em `ProtocolGame::sendFeat
 
 Clients que suportam o pacote `0x43` (`GameServerFeatures`) devem deixar o server controlar as flags que mudam tamanho/formato de pacote.
 
+`OTCv8` identifica somente a familia do client. Extensoes opcionais de wire sao
+negociadas no marker loop de login existente com `OTCv8CapabilitiesV1`, seguido
+por uma mascara de capabilities de 32 bits. Um OTCv8 simples que nao envia esse
+marker recebe apenas o conjunto comum de features abaixo.
+
 O server atualmente envia estas flags comuns para OTCv8:
 
 ```cpp
@@ -158,7 +163,7 @@ Condição no server:
 QuickLootFlags = shouldSendQuickLootFlags()
 ```
 
-`shouldSendQuickLootFlags()` e verdadeiro apenas para OTCv8 quando quick loot esta habilitado.
+`shouldSendQuickLootFlags()` e verdadeiro apenas quando o client anuncia a capability de quick loot e quick loot esta habilitado na config.
 
 ### GameThingUpgradeClassification
 
@@ -169,7 +174,7 @@ ThingUpgradeClassification = shouldSendThingUpgradeClassification() // caminho O
 ThingUpgradeClassification = shouldSendThingUpgradeClassification() // caminho Mehah
 ```
 
-O helper aplica a regra especifica da familia: OTCv8 exige `ItemTierByte`, enquanto Mehah usa `enableItemUpgradeClassification`. Clients sem suporte continuam excluidos.
+O helper aplica a regra especifica da familia: OTCv8 exige a capability negociada `ItemTierByte` e nao pode negociar ao mesmo tempo o layout exclusivo de item metadata, enquanto Mehah usa `enableItemUpgradeClassification`. Clients sem suporte continuam excluidos.
 
 Para Mehah, depende de:
 
@@ -192,11 +197,11 @@ Depende de:
 enableItemTierDisplay = true
 ```
 
-e do modo server-side de item tier byte.
+do modo server-side de item tier byte e do suporte anunciado pelo marker legado `OTCv8TierByte` ou pela mascara V1.
 
 ## Notas das extensoes OTCv8
 
-Estas extensoes de pacote sao habilitadas diretamente para a familia OTCv8.
+Estas extensoes de pacote sao habilitadas somente quando o client OTCv8 anuncia a capability correspondente.
 
 Features estendidas do OTCv8:
 
@@ -207,7 +212,7 @@ GameOutfitStoreMode
 GameItemMetadata
 ```
 
-Essas flags so devem ser usadas para a familia de client correspondente quando a config relacionada esta ativa.
+Para cada extensao, o valor efetivo e `clientSupportsFeature && serverEnablesFeature`. Os serializers usam a mesma capability efetiva, entao uma feature nunca e anunciada sem seu layout correspondente, nem serializada sem negociacao.
 
 ## Client CIP classico
 
@@ -232,6 +237,6 @@ Store inbox no CIP classico deve ser acessado por comandos como `!storeinbox`, `
 - [ ] OTCv8/Mehah tem as features base 8.60 ligadas.
 - [ ] `GameSpritesU32` bate com o formato do arquivo de sprites.
 - [ ] `GameQuickLootFlags`, `GameThingUpgradeClassification` e `GameItemTierByte` batem com `sendFeatures()`.
-- [ ] Flags estendidas correspondem a familia OTCv8 ou Mehah selecionada.
+- [ ] Flags estendidas correspondem as capabilities anunciadas pelo client OTCv8.
 - [ ] CIP classico usa DLL patch em vez de feature flag OTC.
 - [ ] Login, andar, look, use, abrir backpack, abrir corpse, store inbox e logout foram testados.

@@ -930,7 +930,7 @@ public:
 
 	void sendCreatureIcon(const Creature* creature) const
 	{
-		if (!client || !isOTCv8()) {
+		if (!client || !supportsExtendedCreatureIcons()) {
 			return;
 		}
 		client->sendCreatureIcon(creature);
@@ -1552,6 +1552,19 @@ public:
 
 	bool isOTCv8() const { return client ? client->isOTCv8 : false; }
 	bool isMehah() const { return client ? client->isMehah : false; }
+	bool hasOtcv8Capability(Otcv8Capability capability) const
+	{
+		return client && client->isOTCv8 &&
+		       (client->otcv8Capabilities & static_cast<uint32_t>(capability)) != 0;
+	}
+	bool supportsItemInspection() const { return hasOtcv8Capability(Otcv8Capability::ItemInspection); }
+	bool supportsMonsterPodium() const { return hasOtcv8Capability(Otcv8Capability::MonsterPodium); }
+	bool supportsRewardChestPagination() const { return hasOtcv8Capability(Otcv8Capability::RewardChestPagination); }
+	bool supportsExtendedCreatureIcons() const { return hasOtcv8Capability(Otcv8Capability::ExtendedCreatureIcons); }
+	bool supportsColorizedLootText() const { return hasOtcv8Capability(Otcv8Capability::ColorizedLootText); }
+	bool supportsExtendedConditionIcons() const { return hasOtcv8Capability(Otcv8Capability::ExtendedConditionIcons); }
+	bool supportsLootContainers() const { return hasOtcv8Capability(Otcv8Capability::LootContainers); }
+	bool supportsMonkData() const { return hasOtcv8Capability(Otcv8Capability::MonkData); }
 	bool isOTC() const
 	{
 		switch (operatingSystem) {

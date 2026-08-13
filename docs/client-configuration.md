@@ -44,6 +44,11 @@ The server sends OTCv8/Mehah feature overrides from `ProtocolGame::sendFeatures(
 
 Clients that support packet `0x43` (`GameServerFeatures`) should let the server control packet-layout flags.
 
+`OTCv8` identifies only the client family. Optional wire extensions are
+negotiated in the existing login marker loop with `OTCv8CapabilitiesV1`
+followed by a 32-bit capability mask. A plain OTCv8 client that does not send
+this marker receives only the common feature set below.
+
 The server currently sends these common flags to OTCv8:
 
 ```cpp
@@ -158,7 +163,7 @@ Server condition:
 QuickLootFlags = shouldSendQuickLootFlags()
 ```
 
-`shouldSendQuickLootFlags()` is true only for OTCv8 when quick loot is enabled in config.
+`shouldSendQuickLootFlags()` is true only when the client advertises the quick-loot capability and quick loot is enabled in config.
 
 ### GameThingUpgradeClassification
 
@@ -169,7 +174,7 @@ ThingUpgradeClassification = shouldSendThingUpgradeClassification() // OTCv8 pat
 ThingUpgradeClassification = shouldSendThingUpgradeClassification() // Mehah path
 ```
 
-The helper applies the family-specific rule: OTCv8 requires `ItemTierByte`, while Mehah uses `enableItemUpgradeClassification`. Unsupported clients remain excluded.
+The helper applies the family-specific rule: OTCv8 requires the negotiated `ItemTierByte` capability and must not negotiate the mutually exclusive item-metadata layout, while Mehah uses `enableItemUpgradeClassification`. Unsupported clients remain excluded.
 
 For Mehah, this depends on:
 
@@ -192,11 +197,11 @@ This depends on:
 enableItemTierDisplay = true
 ```
 
-and the server-side item tier byte mode.
+and client support announced either by the legacy `OTCv8TierByte` marker or the V1 capability mask.
 
 ## OTCv8 extension notes
 
-These packet extensions are enabled directly for the OTCv8 family.
+These packet extensions are enabled only when the OTCv8 client advertises the matching capability.
 
 Extended OTCv8 features include:
 
@@ -207,7 +212,7 @@ GameOutfitStoreMode
 GameItemMetadata
 ```
 
-These flags are sent only for the matching client family when the related config is enabled.
+For every extension, the effective value is `clientSupportsFeature && serverEnablesFeature`. Serializers use that same effective capability, so a feature is never merely advertised without its matching wire layout (or serialized without being negotiated).
 
 ## Classic CIP Client
 
@@ -232,6 +237,6 @@ Store inbox on classic CIP should be accessed with commands such as `!storeinbox
 - [ ] OTCv8/Mehah has the 8.60 base features enabled.
 - [ ] `GameSpritesU32` matches the sprite file format.
 - [ ] `GameQuickLootFlags`, `GameThingUpgradeClassification`, and `GameItemTierByte` match `sendFeatures()`.
-- [ ] Extended flags match the selected OTCv8 or Mehah family.
+- [ ] Extended flags match the capabilities announced by the OTCv8 client.
 - [ ] Classic CIP uses DLL patches instead of OTC feature flags.
 - [ ] Login, walking, look, use, container open, corpse open, store inbox, and logout were tested.
