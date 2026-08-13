@@ -2643,10 +2643,29 @@ void Items::buildInventoryList()
 	std::ranges::sort(inventory);
 }
 
+namespace {
+
+// Unknown ids fall back to items.front(), which is fine once the OTB is loaded but
+// is undefined behaviour while items is still empty: front() on an empty vector
+// reads past the end. Production always loads the OTB first, so this only bites
+// callers that construct items before any load — the unit tests do exactly that,
+// and under ASan the poisoned heap turned the read into arbitrary field values
+// (a fresh Item picked up 48830 imbuement slots, defeating the slot limit).
+ItemType& emptyItemsFallback()
+{
+	static ItemType fallback;
+	return fallback;
+}
+
+} // namespace
+
 ItemType& Items::getItemType(size_t id)
 {
 	if (id < items.size()) {
 		return items[id];
+	}
+	if (items.empty()) {
+		return emptyItemsFallback();
 	}
 	return items.front();
 }
@@ -2655,6 +2674,9 @@ const ItemType& Items::getItemType(size_t id) const
 {
 	if (id < items.size()) {
 		return items[id];
+	}
+	if (items.empty()) {
+		return emptyItemsFallback();
 	}
 	return items.front();
 }
