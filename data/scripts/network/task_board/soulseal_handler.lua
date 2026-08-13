@@ -28,7 +28,7 @@ local function isNearSoulpitObelisk(player)
 end
 
 local function isAstraPlayer(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player.isOTCv8 and player:isOTCv8()
 end
 
 function SoulSealHandler.sendSoulSealsData(player)

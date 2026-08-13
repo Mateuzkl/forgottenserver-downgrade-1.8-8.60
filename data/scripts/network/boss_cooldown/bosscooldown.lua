@@ -5,7 +5,7 @@ BossCooldown = BossCooldown or {}
 BossCooldown.keyCache = BossCooldown.keyCache or {}
 
 local function supportsBossCooldown(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player.isOTCv8 and player:isOTCv8()
 end
 
 local function clamp(value, minimum, maximum)

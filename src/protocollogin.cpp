@@ -391,7 +391,7 @@ void ProtocolLogin::disconnectClient(std::string_view message)
 	disconnect();
 }
 
-void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient,
+void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_view password, bool extendedCharacterList,
                                      uint32_t clientIP)
 {
 	Account account;
@@ -472,7 +472,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), characters.size());
 
-	if (isAstraClient) {
+	if (extendedCharacterList) {
 		// AstraClient extends the 8.60 list with outfit, level and vocation metadata.
 		output->addByte(0x65);
 		output->addByte(size);
@@ -516,7 +516,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 		}
 	}
 
-	if (isAstraClient) {
+	if (extendedCharacterList) {
 		addAstraLoginBoostedInfo(output);
 	}
 
@@ -700,41 +700,41 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 
 	// Always detect AstraClient and FonticakClient, regardless of astraClientOnly setting.
 	// This allows sending the correct packet format (0x65 vs 0x64) to each client.
-	bool isFonticakClient_ = false;
+	bool fonticakSignatureValid = false;
 	if (msg.getBufferPosition() + 2 <= msg.getLength()) {
 		uint16_t markerLength = msg.get<uint16_t>();
 		if (markerLength > 0 && markerLength <= 64 && msg.getBufferPosition() + markerLength <= msg.getLength()) {
 			const auto marker = msg.getString(markerLength);
 			if (marker == AstraClient::LOGIN_MARKER && msg.getBufferPosition() + sizeof(uint32_t) <= msg.getLength()) {
-				isAstraClient_ =
+				extendedProfileSignatureValid =
 				    msg.get<uint32_t>() == AstraClient::generateSignature(operatingSystem, version, key);
 			} else if (marker == FonticakClient::LOGIN_MARKER && msg.getBufferPosition() + sizeof(uint32_t) <= msg.getLength()) {
-				isFonticakClient_ =
+				fonticakSignatureValid =
 				    msg.get<uint32_t>() == FonticakClient::generateSignature(operatingSystem, version, key);
 			}
 		}
 	}
 
 	// When astraClientOnly is true, reject any client that is not AstraClient.
-	if (getBoolean(ConfigManager::ASTRA_CLIENT_ONLY) && !isAstraClient_) {
+	if (getBoolean(ConfigManager::ASTRA_CLIENT_ONLY) && !extendedProfileSignatureValid) {
 		LOG_WARN("[AstraClient] Client rejected: AstraClient required");
 		disconnectClient(AstraClient::REQUIRED_MESSAGE);
 		return;
 	}
 
 	// When fonticakClientOnly is true, reject any client that is not FonticakClient.
-	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY) && !isFonticakClient_) {
+	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY) && !fonticakSignatureValid) {
 		LOG_WARN("[FonticakClient] Client rejected: OTC-Fonticak required");
 		disconnectClient(FonticakClient::REQUIRED_MESSAGE);
 		return;
 	}
 
 	const bool isAstraCastListRequest =
-	    accountName.empty() && isAstraClient_ && password == ASTRA_LOGIN_CAST_LIST_REQUEST;
-	if (isAstraClient_ && !isAstraCastListRequest) {
+	    accountName.empty() && extendedProfileSignatureValid && password == ASTRA_LOGIN_CAST_LIST_REQUEST;
+	if (extendedProfileSignatureValid && !isAstraCastListRequest) {
 		LOG_DEBUG("[AstraClient] Login protocol client accepted");
 	}
-	if (isFonticakClient_) {
+	if (fonticakSignatureValid) {
 		LOG_DEBUG("[FonticakClient] Login protocol client accepted");
 	}
 
@@ -759,7 +759,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		} else if (accountName.empty()) {
 			thisPtr->getCastList(password, clientIP);
 		} else {
-			thisPtr->getCharacterList(accountName, password, thisPtr->isAstraClient_, clientIP);
+			thisPtr->getCharacterList(accountName, password, thisPtr->extendedProfileSignatureValid, clientIP);
 		}
 	});
 }

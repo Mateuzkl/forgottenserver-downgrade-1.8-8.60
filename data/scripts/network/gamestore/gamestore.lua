@@ -61,7 +61,7 @@ local function isTaskBoardOfferEnabled(offerType)
 end
 
 local function supportsTaskBoardStore(player, offerType)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient() and
+	return player and player.isOTCv8 and player:isOTCv8() and
 		isTaskBoardOfferEnabled(offerType)
 end
 
@@ -102,13 +102,13 @@ end
 
 local function supportsBattlePassStore(player)
 	return configManager.getBoolean(configKeys.BATTLEPASS_SYSTEM_ENABLED) and
-		player and player.isUsingAstraClient and player:isUsingAstraClient()
+		player and player.isOTCv8 and player:isOTCv8()
 end
 
 local function supportsHirelingStore(player)
 	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
 		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
-		player and player.isUsingAstraClient and player:isUsingAstraClient()
+		player and player.isOTCv8 and player:isOTCv8()
 end
 
 local function playerOwnsMount(player, mountId)

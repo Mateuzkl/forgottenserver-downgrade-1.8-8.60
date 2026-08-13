@@ -119,12 +119,12 @@ public:
 private:
 	void disconnectClient(std::string_view message);
 
-	void getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient,
+	void getCharacterList(std::string_view accountName, std::string_view password, bool extendedCharacterList,
 	                      uint32_t clientIP);
 	void getCastList(const std::string& password, uint32_t clientIP);
 	void getAstraCastList();
 
-	bool isAstraClient_ = false;
+	bool extendedProfileSignatureValid = false;
 };
 
 #endif

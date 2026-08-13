@@ -81,7 +81,7 @@ local function supportsCustomNetwork(player)
 end
 
 local function supportsAstraPreyExtension(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player.isOTCv8 and player:isOTCv8()
 end
 
 local function isPreySlotUnlocked(player, slot)

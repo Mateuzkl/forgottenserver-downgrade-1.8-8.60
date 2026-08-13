@@ -91,7 +91,7 @@ local OPCODE_TASK_BOARD_ACTION = 0x5F
 local taskBoardActionHandler = PacketHandler(OPCODE_TASK_BOARD_ACTION)
 
 function taskBoardActionHandler.onReceive(player, msg)
-	if not player or not player.isUsingAstraClient or not player:isUsingAstraClient() then return end
+	if not player or not player.isOTCv8 or not player:isOTCv8() then return end
 
 	local payload = protocol.parseTaskBoardAction(msg)
 	if not payload then

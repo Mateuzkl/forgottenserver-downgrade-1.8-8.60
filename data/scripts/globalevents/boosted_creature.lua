@@ -59,7 +59,7 @@ function loginBoosted.onLogin(player)
 	end
 
 	-- Boosted Boss is persisted by CustomBosstiary and sent to Astra through login and Bosstiary protocols.
-	if player.isUsingAstraClient and player:isUsingAstraClient() and CustomBosstiary and CustomBosstiary.getBoostedBoss then
+	if player.isOTCv8 and player:isOTCv8() and CustomBosstiary and CustomBosstiary.getBoostedBoss then
 		local boostedBoss = CustomBosstiary.getBoostedBoss()
 		if boostedBoss and boostedBoss.name then
 			player:sendTextMessage(MESSAGE_EVENT_ADVANCE,

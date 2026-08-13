@@ -6,7 +6,7 @@ local HIRELING_TARGET_TYPE = 1
 local function hirelingProtocolEnabled(player)
 	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
 		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
-		player and player.isUsingAstraClient and player:isUsingAstraClient()
+		player and player.isOTCv8 and player:isOTCv8()
 end
 
 local function readHirelingOutfit(msg)

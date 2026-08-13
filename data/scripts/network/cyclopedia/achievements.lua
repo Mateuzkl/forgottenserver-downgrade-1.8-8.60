@@ -3,7 +3,7 @@ local SERVER_PACKET_CHARACTER_INFO = 0xDA
 local CHARACTER_INFO_ACHIEVEMENTS = 5
 
 local function supportsAchievements(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player.isOTCv8 and player:isOTCv8()
 end
 
 local function sendAchievements(player)

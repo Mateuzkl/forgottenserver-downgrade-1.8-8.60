@@ -90,7 +90,7 @@ end
 local function astraHirelingProtocolEnabled(player)
 	return hirelingSystemEnabled() and configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED and
 		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
-		player and player.isUsingAstraClient and player:isUsingAstraClient()
+		player and player.isOTCv8 and player:isOTCv8()
 end
 
 local function logWarning(message)

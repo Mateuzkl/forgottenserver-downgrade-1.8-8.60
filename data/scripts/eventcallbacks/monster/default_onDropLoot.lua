@@ -40,7 +40,7 @@ local function sendUngroupedLootMessage(player, corpse, monsterName, preyLootTex
 
 	if useColorized then
 		for _, recipient in ipairs(recipients) do
-			if recipient.isUsingAstraClient and recipient:isUsingAstraClient() then
+			if recipient.isOTCv8 and recipient:isOTCv8() then
 				needColorized = true
 				break
 			end
@@ -53,7 +53,7 @@ local function sendUngroupedLootMessage(player, corpse, monsterName, preyLootTex
 	end
 
 	for _, recipient in ipairs(recipients) do
-		local wantsColorized = needColorized and recipient.isUsingAstraClient and recipient:isUsingAstraClient()
+		local wantsColorized = needColorized and recipient.isOTCv8 and recipient:isOTCv8()
 		if wantsColorized then
 			colorizedText = colorizedText or buildText(true)
 			sendLootMessage(recipient, colorizedText)

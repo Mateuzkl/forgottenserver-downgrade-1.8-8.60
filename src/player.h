@@ -1550,9 +1550,14 @@ public:
 
 	bool hasDebugAssertSent() const { return client ? client->debugAssertSent : false; }
 
+	const ClientCapabilities& caps() const
+	{
+		static constexpr ClientCapabilities none{};
+		return client ? client->caps : none;
+	}
+
 	bool isOTCv8() const { return client ? client->isOTCv8 : false; }
 	bool isMehah() const { return client ? client->isMehah : false; }
-	bool isAstraClient() const { return client ? client->isAstraClient : false; }
 
 	// Capability accessors — see docs/client-capability-matrix.md.
 	//
@@ -1562,17 +1567,17 @@ public:
 	// belongs here rather than smeared across Game, Player and the Lua bindings.
 	// When another OTCv8-family client picks one of these up, only this block
 	// changes.
-	bool supportsItemInspection() const { return isAstraClient(); }
-	bool supportsMonsterPodium() const { return isAstraClient(); }
-	bool supportsRewardChestPagination() const { return isAstraClient(); }
-	bool supportsCreatureIcons() const { return isAstraClient(); }
-	bool supportsColorizedLoot() const { return isAstraClient(); }
-	bool supportsExtendedConditionIcons() const { return isAstraClient(); }
-	bool supportsLootContainers() const { return isAstraClient(); }
-	bool supportsMonkData() const { return isAstraClient(); }
+	bool supportsItemInspection() const { return caps().itemInspection; }
+	bool supportsMonsterPodium() const { return caps().monsterPodium; }
+	bool supportsRewardChestPagination() const { return caps().rewardChestPagination; }
+	bool supportsCreatureIcons() const { return caps().creatureIcons; }
+	bool supportsColorizedLoot() const { return caps().colorizedLootText; }
+	bool supportsExtendedConditionIcons() const { return caps().extendedConditionIcons; }
+	bool supportsLootContainers() const { return caps().lootContainers; }
+	bool supportsMonkData() const { return caps().monkData; }
 	// Astra draws influenced/fiendish state with a creature icon (0x8B) instead of
 	// a skull, so the skull must be suppressed for it.
-	bool usesCreatureIconsInsteadOfSkulls() const { return isAstraClient(); }
+	bool usesCreatureIconsInsteadOfSkulls() const { return caps().creatureIcons; }
 	bool isOTC() const
 	{
 		switch (operatingSystem) {

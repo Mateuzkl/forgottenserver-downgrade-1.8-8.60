@@ -6,76 +6,121 @@
 
 #include <cstdint>
 
-// Single source of truth for "what does this client understand".
+// Single source of truth for what a connected client understands.
 //
-// The server used to answer that question by asking which BRAND connected —
-// isOTCv8, isMehah, isAstraClient, isFonticakClient — spread across protocol and
-// gameplay code. Five independent booleans allow states that cannot exist on the
-// wire (isOTCv8 && isMehah && isAstraClient), and a brand check cannot express
-// "this other client happens to speak the same bytes".
+// The server used to track client BRAND as persistent state — isAstraClient,
+// isFonticakClient — and branch on it across protocol and gameplay code. Brand
+// state cannot express "another client speaks the same bytes", allows impossible
+// combinations, and leaks client identity into gameplay.
 //
-// Brand is for DETECTION. Capabilities are for ENCODING. The login handshake
-// decides a family once, derives a capability set once, and everything after
-// that asks about the capability, never the brand.
+// Brand belongs to DETECTION only, and only for the length of the login
+// handshake. Capabilities are what the rest of the server asks about, and every
+// one of them is named after the wire FORMAT it controls, never after a client.
 //
-// Protocol 8.60 is unchanged by this type: it exists to describe the conditional
-// bytes that already existed, not to introduce new ones.
+// The login handshake negotiates these: a client announces the markers it
+// understands, the server derives the capability set once, and it is frozen for
+// the session. If the server does not enable a capability, the client must not
+// expect the bytes.
+//
+// Protocol 8.60 is unchanged by this type. It describes the conditional bytes
+// that already existed.
 
 enum class ClientFamily : uint8_t
 {
 	// Classic CIP 8.60, with or without DLL patches.
 	Cip860,
-	// OTClientV8 and its forks. AstraClient is a member of this family: it
-	// announces "OTCv8" first and only then adds its own signature marker, so it
-	// is an OTCv8 client with extra capabilities, not a separate protocol.
+	// OTClientV8 and its forks.
 	Otcv8,
-	// Mehah-style OTClient, detected by operating system rather than by marker.
+	// Mehah-style OTClient.
 	Mehah,
 };
 
-// Plain POD. Copied by value, no allocation, no virtual dispatch, no map lookup —
-// this is read on the item-serialization hot path, so it must stay trivial.
+// Plain POD: copied by value, no allocation, no virtual dispatch, no lookup.
+// Read on the item-serialization hot path, so it must stay trivial.
 struct ClientCapabilities
 {
+	ClientFamily family = ClientFamily::Cip860;
+
+	// Any OTClient-derived client. Broader than family, because some clients are
+	// identified purely by the operating system they report.
+	bool otClient = false;
+
 	// --- wire layout: these change the bytes on the wire ---
 
 	// Container packets carry pagination fields.
 	bool containerPagination = false;
-	// Reward chests paginate even when the container itself does not ask for it.
+	// Reward chests paginate even when the container does not request it.
 	bool rewardChestPagination = false;
 	// Item serialization carries the tier byte (GameItemTierByte).
 	bool itemTierByte = false;
-	// Item serialization carries the upgrade-classification field
-	// (GameThingUpgradeClassification). Distinct from itemTierByte: they are
-	// negotiated separately and must never both be assumed from one flag.
+	// Item serialization carries the upgrade-classification field. Negotiated
+	// separately from itemTierByte and must never be inferred from it.
 	bool thingUpgradeClassification = false;
 	// Quiver count is sent as uint16 instead of uint8.
 	bool quiverCountU16 = false;
-	// Extra per-item state/metadata block.
+	// Per-item extended state/metadata block.
 	bool itemMetadata = false;
+	// Condition icons are sent as a 64-bit field instead of the 8.60 width.
+	bool extendedConditionIcons = false;
+	// Creature state is drawn with the icon opcode (0x8B) rather than a skull.
+	bool creatureIcons = false;
 
-	// --- negotiated features: server announces, client may use ---
+	// --- negotiated features ---
 
 	bool quickLootFlags = false;
-	bool creatureIcons = false;
+	bool lootContainers = false;
+	bool colorizedLootText = false;
 	bool nativeZoneWeather = false;
 	bool outfitStoreMode = false;
 	bool hirelingProtocol = false;
 	bool monsterPodium = false;
-	bool colorizedLoot = false;
+	bool itemInspection = false;
 	bool characterBazaar = false;
+	bool monkData = false;
+	bool blessingSystem = false;
+	bool hotkeyEquip = false;
+	bool charms = false;
+	bool combatAnalyzers = false;
+	bool extendedPlayerStats = false;
+	bool extendedBasicData = false;
+	bool creatureEmblem = false;
 
-	[[nodiscard]] constexpr bool isOtClientFamily() const noexcept { return otClientFamily; }
-
-	// True only for the OTCv8 family. Kept separate from isOtClientFamily()
-	// because Mehah is an OTClient but does not share the OTCv8 marker flow.
+	[[nodiscard]] constexpr bool isOtClient() const noexcept { return otClient; }
 	[[nodiscard]] constexpr bool isOtcv8Family() const noexcept { return family == ClientFamily::Otcv8; }
 	[[nodiscard]] constexpr bool isMehahFamily() const noexcept { return family == ClientFamily::Mehah; }
 
-	ClientFamily family = ClientFamily::Cip860;
-	// Any OTClient-derived client, including ones identified purely by their
-	// reported operating system. Broader than family == Otcv8 || family == Mehah.
-	bool otClientFamily = false;
+	// Enables the extended protocol profile negotiated by the extended-profile
+	// login marker. Every flag below is a wire format, not a client: any client
+	// that sends the marker and a valid signature gets exactly this set, and a
+	// client that does not send it gets none of it and must not expect the bytes.
+	constexpr void enableExtendedProfile() noexcept
+	{
+		rewardChestPagination = true;
+		quiverCountU16 = true;
+		itemMetadata = true;
+		extendedConditionIcons = true;
+		creatureIcons = true;
+		quickLootFlags = true;
+		lootContainers = true;
+		colorizedLootText = true;
+		nativeZoneWeather = true;
+		outfitStoreMode = true;
+		hirelingProtocol = true;
+		monsterPodium = true;
+		itemInspection = true;
+		characterBazaar = true;
+		monkData = true;
+		blessingSystem = true;
+		hotkeyEquip = true;
+		charms = true;
+		combatAnalyzers = true;
+		extendedPlayerStats = true;
+		extendedBasicData = true;
+		creatureEmblem = true;
+		// Deliberately NOT thingUpgradeClassification: the extended profile carries
+		// its own item metadata block and must not also receive the upgrade
+		// classification field, or item bytes desynchronise.
+	}
 };
 
 #endif // FS_CLIENTCAPABILITIES_H

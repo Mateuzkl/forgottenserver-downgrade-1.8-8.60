@@ -14,7 +14,7 @@ function serverTimeSync.onThink(interval)
 	local minute = worldTime % 60
 
 	for _, player in ipairs(Game.getPlayers()) do
-		if player.isUsingAstraClient and player:isUsingAstraClient() then
+		if player.isOTCv8 and player:isOTCv8() then
 			sendServerTime(player, hour, minute)
 		end
 	end

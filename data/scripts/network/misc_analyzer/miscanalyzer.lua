@@ -7,7 +7,7 @@ local OPCODE_IMBUEMENT_ACTIVATED = 0x30
 local OPCODE_SPECIAL_SKILL_ACTIVATED = 0x31
 
 local function isAstra(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player.isOTCv8 and player:isOTCv8()
 end
 
 local function isOtc(player)

@@ -286,7 +286,7 @@ function soulPitAction.onUse(player, item, fromPosition, target, toPosition, isH
 	end
 
 	if item:getId() == SoulPit.obeliskInactiveId then
-		if not player.isUsingAstraClient or not player:isUsingAstraClient() then
+		if not player.isOTCv8 or not player:isOTCv8() then
 			return false
 		end
 		if not TaskBoardSoulSealHandler or not TaskBoardSoulSealHandler.sendSoulSealsData then

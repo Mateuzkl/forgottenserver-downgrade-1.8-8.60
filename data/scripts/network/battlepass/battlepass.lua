@@ -26,7 +26,7 @@ local RESPONSE_ERROR = 3
 local RESPONSE_SHOP = 4
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player.isOTCv8 and player:isOTCv8()
 end
 
 local DAY_SECONDS = 24 * 60 * 60

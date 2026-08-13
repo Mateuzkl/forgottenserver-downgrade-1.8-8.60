@@ -5,6 +5,7 @@
 #define FS_PROTOCOLGAME_H
 
 #include "chat.h"
+#include "clientcapabilities.h"
 #include "creature.h"
 #include "packet_backlog.h"
 #include "protocol.h"
@@ -76,7 +77,7 @@ public:
 
 	uint16_t getVersion() const { return version; }
 	bool canSendAstraItemState() const;
-	bool shouldSendAstraQuiverCountU16() const;
+	bool shouldSendQuiverCountU16() const;
 	static void rebuildItemValuesCache();
 	static void invalidateItemValuesCache();
 
@@ -390,17 +391,16 @@ private:
 	bool isOTCv8 = false;
 	bool isMehah = false;
 	bool isOTC = false;
-	bool isAstraClient = false;
+	ClientCapabilities caps;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
 	uint32_t dllWeatherSequence = 0;
-	bool supportsAstraCreatureIcons() const { return isAstraClient; }
-	bool supportsCreatureIcons() const { return supportsAstraCreatureIcons(); }
+	bool supportsCreatureIcons() const { return caps.creatureIcons; }
 	bool supportsNativeZoneWeather() const
 	{
 		return (clientOperatingSystem == CLIENTOS_CUSTOM_DLL && supportsDllZoneWeather) ||
-		       isAstraClient || (isOTCv8 && supportsZoneWeather);
+		       caps.nativeZoneWeather || (isOTCv8 && supportsZoneWeather);
 	}
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;
