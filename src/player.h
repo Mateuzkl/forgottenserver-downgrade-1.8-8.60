@@ -930,7 +930,7 @@ public:
 
 	void sendCreatureIcon(const Creature* creature) const
 	{
-		if (!client || !client->isAstraClient) {
+		if (!client || !supportsCreatureIcons()) {
 			return;
 		}
 		client->sendCreatureIcon(creature);
@@ -1553,6 +1553,26 @@ public:
 	bool isOTCv8() const { return client ? client->isOTCv8 : false; }
 	bool isMehah() const { return client ? client->isMehah : false; }
 	bool isAstraClient() const { return client ? client->isAstraClient : false; }
+
+	// Capability accessors — see docs/client-capability-matrix.md.
+	//
+	// Gameplay must ask what a client can do, never which brand connected. Every
+	// one of these resolves to the Astra profile today, and that is the point:
+	// which client happens to implement a feature is a detection detail, and it
+	// belongs here rather than smeared across Game, Player and the Lua bindings.
+	// When another OTCv8-family client picks one of these up, only this block
+	// changes.
+	bool supportsItemInspection() const { return isAstraClient(); }
+	bool supportsMonsterPodium() const { return isAstraClient(); }
+	bool supportsRewardChestPagination() const { return isAstraClient(); }
+	bool supportsCreatureIcons() const { return isAstraClient(); }
+	bool supportsColorizedLoot() const { return isAstraClient(); }
+	bool supportsExtendedConditionIcons() const { return isAstraClient(); }
+	bool supportsLootContainers() const { return isAstraClient(); }
+	bool supportsMonkData() const { return isAstraClient(); }
+	// Astra draws influenced/fiendish state with a creature icon (0x8B) instead of
+	// a skull, so the skull must be suppressed for it.
+	bool usesCreatureIconsInsteadOfSkulls() const { return isAstraClient(); }
 	bool isOTC() const
 	{
 		switch (operatingSystem) {

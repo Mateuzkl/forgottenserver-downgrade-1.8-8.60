@@ -3573,7 +3573,7 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
-	if (player->isAstraClient() && isMonsterPodiumId(item->getID())) {
+	if (player->supportsMonsterPodium() && isMonsterPodiumId(item->getID())) {
 		if (pos.x == 0xFFFF || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
 			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
 			return;
@@ -3743,7 +3743,8 @@ void Game::playerSeekInContainer(uint32_t playerId, uint8_t containerId, uint16_
 		return;
 	}
 
-	const bool canSeekContainer = container->hasPagination() || (player->isAstraClient() && container->getRewardChest());
+	const bool canSeekContainer =
+	    container->hasPagination() || (player->supportsRewardChestPagination() && container->getRewardChest());
 	if (!canSeekContainer) {
 		return;
 	}
@@ -3761,7 +3762,7 @@ void Game::playerInspectItem(uint32_t playerId, const Position& pos)
 {
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
-	if (!player || !player->isAstraClient()) {
+	if (!player || !player->supportsItemInspection()) {
 		return;
 	}
 
@@ -3798,7 +3799,7 @@ void Game::playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCou
 {
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
-	if (!player || !player->isAstraClient() || itemId >= Item::items.size() || Item::items[itemId].id == 0) {
+	if (!player || !player->supportsItemInspection() || itemId >= Item::items.size() || Item::items[itemId].id == 0) {
 		return;
 	}
 	player->sendItemInspection(nullptr, itemId, itemCount, inspectionType);
@@ -3809,7 +3810,7 @@ void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Posi
 {
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
-	if (!player || !player->isAstraClient() || pos.x == 0xFFFF || direction > DIRECTION_WEST) {
+	if (!player || !player->supportsMonsterPodium() || pos.x == 0xFFFF || direction > DIRECTION_WEST) {
 		return;
 	}
 
