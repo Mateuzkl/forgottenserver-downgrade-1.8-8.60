@@ -2865,11 +2865,13 @@ void Player::schedulePlayerInventorySnapshot()
 
 	playerInventorySnapshotScheduled = true;
 	const uint32_t playerId = getID();
-	g_dispatcher.addTask([playerId]() {
+	if (!g_dispatcher.addTask([playerId]() {
 		if (auto player = g_game.getPlayerByID(playerId)) {
 			player->flushPlayerInventorySnapshot();
 		}
-	});
+	})) {
+		playerInventorySnapshotScheduled = false;
+	}
 }
 
 void Player::flushPlayerInventorySnapshot()

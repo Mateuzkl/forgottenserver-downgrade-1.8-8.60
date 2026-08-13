@@ -23,6 +23,7 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0x62: // native bosstiary slots
 		case 0x73: // native bosstiary window
 		case 0xA7: // custom fight mode sync
+		case 0xCF: // legacy per-item loot tracker
 		case 0xD1: // custom hunt analyzer
 		case 0xDB: // custom market
 		case 0xEB: // imbuing window
@@ -65,7 +66,6 @@ bool isExtendedOtcv8LuaOpcode(uint8_t opcode)
 		case 0xC0: // managed quick-loot containers
 		case 0xC6: // custom item values
 		case 0xC7: // custom item details
-		case 0xCF: // quick-loot statistics
 			return true;
 		default:
 			return false;

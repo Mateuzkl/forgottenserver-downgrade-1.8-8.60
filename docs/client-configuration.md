@@ -16,8 +16,7 @@ Use matching `.dat`, `.spr`, and `items.otb` files. If the client assets and ser
 
 Supported client targets:
 
-- OTCv8 / Mehah-style clients with extended feature support.
-- OTCv8 clients with the matching protocol extensions.
+- OTCv8 / Mehah-style clients with extended feature support and matching protocol extensions.
 - Classic CIP 8.60 client with the project DLL patches.
 
 ## Where Client Features Are Configured
@@ -61,9 +60,11 @@ CreatureIcons = true
 ContainerPagination = true
 BrowseField = true
 QuickLootFlags = shouldSendQuickLootFlags()
-ThingUpgradeClassification = false
+ThingUpgradeClassification = shouldSendThingUpgradeClassification()
 ItemTierByte = shouldSendItemTierByte()
 ```
+
+For OTCv8, `shouldSendThingUpgradeClassification()` requires an OTCv8 session and an enabled item-tier byte. For Mehah, it follows the server's item-upgrade-classification setting. Other client families receive neither feature.
 
 For Mehah-only detection, the server sends:
 
@@ -164,9 +165,11 @@ QuickLootFlags = shouldSendQuickLootFlags()
 Server condition:
 
 ```cpp
-ThingUpgradeClassification = false // OTCv8 path
+ThingUpgradeClassification = shouldSendThingUpgradeClassification() // OTCv8 path
 ThingUpgradeClassification = shouldSendThingUpgradeClassification() // Mehah path
 ```
+
+The helper applies the family-specific rule: OTCv8 requires `ItemTierByte`, while Mehah uses `enableItemUpgradeClassification`. Unsupported clients remain excluded.
 
 For Mehah, this depends on:
 
