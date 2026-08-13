@@ -1,4 +1,4 @@
--- Global-like Task Hunting for AstraClient.
+-- Global-like Task Hunting for compatible OTCv8 clients.
 --
 -- Wire format:
 --   S2C 0xBA: base data (bestiary difficulty + reward table + prices)
@@ -61,7 +61,7 @@ local function debug(message, ...)
 	end
 end
 
-local function supportsAstra(player)
+local function supportsExtendedOtcv8(player)
 	return player and player.isOTCv8 and player:isOTCv8()
 end
 
@@ -496,7 +496,7 @@ local function sendResourceBalance(player, resourceType, amount)
 end
 
 local function sendBalances(player)
-	if not supportsAstra(player) then
+	if not supportsExtendedOtcv8(player) then
 		return false
 	end
 	sendResourceBalance(player, RESOURCE_BANK, player:getBankBalance())
@@ -507,7 +507,7 @@ local function sendBalances(player)
 end
 
 function TaskHunting.sendBasicData(player)
-	if not supportsAstra(player) or not CustomBestiary or not CustomBestiary.monstersByRaceId then
+	if not supportsExtendedOtcv8(player) or not CustomBestiary or not CustomBestiary.monstersByRaceId then
 		return false
 	end
 
@@ -555,7 +555,7 @@ local function writeRaceList(out, raceList, kills)
 end
 
 function TaskHunting.sendSlotData(player, slot)
-	if not supportsAstra(player) then
+	if not supportsExtendedOtcv8(player) then
 		return false
 	end
 
@@ -601,7 +601,7 @@ function TaskHunting.sendSlotData(player, slot)
 end
 
 function TaskHunting.sendFullSync(player)
-	if not supportsAstra(player) then
+	if not supportsExtendedOtcv8(player) then
 		return false
 	end
 
@@ -793,7 +793,7 @@ end
 
 local taskHuntingActionHandler = PacketHandler(OPCODE_BASE_DATA)
 function taskHuntingActionHandler.onReceive(player, msg)
-	if not supportsAstra(player) or (msg:len() - msg:tell()) < 5 then
+	if not supportsExtendedOtcv8(player) or (msg:len() - msg:tell()) < 5 then
 		return
 	end
 
@@ -806,7 +806,7 @@ end
 taskHuntingActionHandler:register()
 
 function TaskHunting.onKill(player, raceId)
-	if not supportsAstra(player) or raceId <= 0 then
+	if not supportsExtendedOtcv8(player) or raceId <= 0 then
 		return false
 	end
 
@@ -843,7 +843,7 @@ function TaskHunting.onKill(player, raceId)
 end
 
 function TaskHunting.onLogin(player)
-	if not supportsAstra(player) then
+	if not supportsExtendedOtcv8(player) then
 		return true
 	end
 	TaskHunting.sendFullSync(player)

@@ -3493,6 +3493,19 @@ int luaPlayerIsUsingOtc(lua_State* L)
 	return 1;
 }
 
+int luaPlayerIsMehah(lua_State* L)
+{
+	// player:isMehah()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushBoolean(L, player->isMehah());
+	return 1;
+}
+
 int luaPlayerGetLastIp(lua_State* L)
 {
 	// player:getLastIp()
@@ -4859,6 +4872,9 @@ void LuaScriptInterface::registerPlayer()
 
 	registerMethod("Player", "isUsingOtcV8", luaPlayerIsUsingOtcV8);
 	registerMethod("Player", "isUsingOtc", luaPlayerIsUsingOtc);
+	registerMethod("Player", "isOTCv8", luaPlayerIsUsingOtcV8);
+	registerMethod("Player", "isOTC", luaPlayerIsUsingOtc);
+	registerMethod("Player", "isMehah", luaPlayerIsMehah);
 	registerMethod("Player", "getLastIp", luaPlayerGetLastIp);
 
 	// Offline Training Functions

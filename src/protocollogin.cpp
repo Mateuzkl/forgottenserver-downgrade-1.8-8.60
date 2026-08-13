@@ -5,8 +5,6 @@
 
 #include "protocollogin.h"
 
-#include "astraclient.h"
-#include "fonticakclient.h"
 #include "ban.h"
 #include "configmanager.h"
 #include "database.h"
@@ -29,11 +27,16 @@ extern Vocations g_vocations;
 
 namespace {
 
-constexpr uint8_t ASTRA_LOGIN_BOOSTED_INFO_MARKER = 0xA1;
-constexpr uint8_t ASTRA_LOGIN_CAST_LIST_MARKER = 0xA2;
-constexpr uint8_t ASTRA_LOGIN_CAST_LIST_VERSION = 1;
-constexpr size_t ASTRA_LOGIN_CAST_LIST_LIMIT = std::numeric_limits<uint8_t>::max();
-constexpr std::string_view ASTRA_LOGIN_CAST_LIST_REQUEST = "__astra_casts_v1__";
+constexpr uint8_t EXTENDED_LOGIN_BOOSTED_INFO_MARKER = 0xA1;
+constexpr uint8_t EXTENDED_LOGIN_CAST_LIST_MARKER = 0xA2;
+constexpr uint8_t EXTENDED_LOGIN_CAST_LIST_VERSION = 1;
+constexpr size_t EXTENDED_LOGIN_CAST_LIST_LIMIT = std::numeric_limits<uint8_t>::max();
+constexpr std::string_view EXTENDED_LOGIN_CAST_LIST_REQUEST = "__extended_casts_v1__";
+
+bool usesExtendedOtcv8Login(uint16_t operatingSystem)
+{
+	return operatingSystem >= CLIENTOS_OTCLIENTV8_LINUX && operatingSystem <= CLIENTOS_OTCLIENTV8_WEB;
+}
 
 struct LoginCastEntry {
 	std::string name;
@@ -132,9 +135,9 @@ void addBoostedLoginEntry(const OutputMessage_ptr& output, const LoginBoostedEnt
 	output->addByte(entry.outfit.lookAddons);
 }
 
-void addAstraLoginBoostedInfo(const OutputMessage_ptr& output)
+void addExtendedLoginBoostedInfo(const OutputMessage_ptr& output)
 {
-	output->addByte(ASTRA_LOGIN_BOOSTED_INFO_MARKER);
+	output->addByte(EXTENDED_LOGIN_BOOSTED_INFO_MARKER);
 	addBoostedLoginEntry(output, getBoostedCreatureLoginEntry());
 	addBoostedLoginEntry(output, getBoostedBossLoginEntry());
 }
@@ -473,7 +476,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), characters.size());
 
 	if (extendedCharacterList) {
-		// AstraClient extends the 8.60 list with outfit, level and vocation metadata.
+		// The extended list adds outfit, level and vocation metadata to the 8.60 one.
 		output->addByte(0x65);
 		output->addByte(size);
 		for (uint8_t i = 0; i < size; ++i) {
@@ -492,7 +495,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 			output->addString(character.vocation);
 		}
 	} else {
-		// Standard 8.60 character list for OTCv8 Classic, Fonticak, CIP, etc.
+		// Standard 8.60 character list for OTCv8, Mehah and CIP clients.
 		output->addByte(0x64);
 		output->addByte(size);
 		for (uint8_t i = 0; i < size; ++i) {
@@ -517,7 +520,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	}
 
 	if (extendedCharacterList) {
-		addAstraLoginBoostedInfo(output);
+		addExtendedLoginBoostedInfo(output);
 	}
 
 	send(output);
@@ -580,15 +583,15 @@ void ProtocolLogin::recordRejectedCastPassword(uint32_t ip)
 	LoginAttemptLimiter::getInstance().commitFailure(ip, "");
 }
 
-void ProtocolLogin::getAstraCastList()
+void ProtocolLogin::getExtendedCastList()
 {
 	const auto casters = g_game.getLiveCasters({});
 	std::vector<LoginCastEntry> entries;
-	entries.reserve(std::min(ASTRA_LOGIN_CAST_LIST_LIMIT, casters.size()));
+	entries.reserve(std::min(EXTENDED_LOGIN_CAST_LIST_LIMIT, casters.size()));
 
 	uint32_t totalViewers = 0;
 	for (const auto& caster : casters) {
-		if (entries.size() >= ASTRA_LOGIN_CAST_LIST_LIMIT) {
+		if (entries.size() >= EXTENDED_LOGIN_CAST_LIST_LIMIT) {
 			break;
 		}
 
@@ -607,8 +610,8 @@ void ProtocolLogin::getAstraCastList()
 	}
 
 	auto output = OutputMessagePool::getOutputMessage();
-	output->addByte(ASTRA_LOGIN_CAST_LIST_MARKER);
-	output->addByte(ASTRA_LOGIN_CAST_LIST_VERSION);
+	output->addByte(EXTENDED_LOGIN_CAST_LIST_MARKER);
+	output->addByte(EXTENDED_LOGIN_CAST_LIST_VERSION);
 	output->addString(getString(ConfigManager::SERVER_NAME));
 	output->add<uint32_t>(getIP(getString(ConfigManager::IP)));
 	output->add<uint16_t>(getInteger(ConfigManager::GAME_PORT));
@@ -632,7 +635,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		return;
 	}
 
-	uint16_t operatingSystem = msg.get<uint16_t>();
+	const uint16_t operatingSystem = msg.get<uint16_t>();
 
 	uint16_t version = msg.get<uint16_t>();
 	msg.skipBytes(12);
@@ -698,45 +701,9 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// Read and validate password from the message
 	auto password = msg.getString();
 
-	// Always detect AstraClient and FonticakClient, regardless of astraClientOnly setting.
-	// This allows sending the correct packet format (0x65 vs 0x64) to each client.
-	bool fonticakSignatureValid = false;
-	if (msg.getBufferPosition() + 2 <= msg.getLength()) {
-		uint16_t markerLength = msg.get<uint16_t>();
-		if (markerLength > 0 && markerLength <= 64 && msg.getBufferPosition() + markerLength <= msg.getLength()) {
-			const auto marker = msg.getString(markerLength);
-			if (marker == AstraClient::LOGIN_MARKER && msg.getBufferPosition() + sizeof(uint32_t) <= msg.getLength()) {
-				extendedProfileSignatureValid =
-				    msg.get<uint32_t>() == AstraClient::generateSignature(operatingSystem, version, key);
-			} else if (marker == FonticakClient::LOGIN_MARKER && msg.getBufferPosition() + sizeof(uint32_t) <= msg.getLength()) {
-				fonticakSignatureValid =
-				    msg.get<uint32_t>() == FonticakClient::generateSignature(operatingSystem, version, key);
-			}
-		}
-	}
-
-	// When astraClientOnly is true, reject any client that is not AstraClient.
-	if (getBoolean(ConfigManager::ASTRA_CLIENT_ONLY) && !extendedProfileSignatureValid) {
-		LOG_WARN("[AstraClient] Client rejected: AstraClient required");
-		disconnectClient(AstraClient::REQUIRED_MESSAGE);
-		return;
-	}
-
-	// When fonticakClientOnly is true, reject any client that is not FonticakClient.
-	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY) && !fonticakSignatureValid) {
-		LOG_WARN("[FonticakClient] Client rejected: OTC-Fonticak required");
-		disconnectClient(FonticakClient::REQUIRED_MESSAGE);
-		return;
-	}
-
-	const bool isAstraCastListRequest =
-	    accountName.empty() && extendedProfileSignatureValid && password == ASTRA_LOGIN_CAST_LIST_REQUEST;
-	if (extendedProfileSignatureValid && !isAstraCastListRequest) {
-		LOG_DEBUG("[AstraClient] Login protocol client accepted");
-	}
-	if (fonticakSignatureValid) {
-		LOG_DEBUG("[FonticakClient] Login protocol client accepted");
-	}
+	const bool extendedCharacterList = usesExtendedOtcv8Login(operatingSystem);
+	const bool isExtendedCastListRequest = accountName.empty() && extendedCharacterList &&
+	                                       password == EXTENDED_LOGIN_CAST_LIST_REQUEST;
 
 	// Brute force check before dispatching the login task. The account name is
 	// passed so failures are counted per account rather than per IP; a cast list
@@ -752,14 +719,14 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	g_dispatcher.addTask([=, thisPtr = std::static_pointer_cast<ProtocolLogin>(shared_from_this()),
 	                      accountName = std::string{accountName},
 	                      password = std::string{password},
-	                      astraCastListRequest = isAstraCastListRequest]() {
-		if (astraCastListRequest) {
+	                      extendedCastListRequest = isExtendedCastListRequest]() {
+		if (extendedCastListRequest) {
 			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
-			thisPtr->getAstraCastList();
+			thisPtr->getExtendedCastList();
 		} else if (accountName.empty()) {
 			thisPtr->getCastList(password, clientIP);
 		} else {
-			thisPtr->getCharacterList(accountName, password, thisPtr->extendedProfileSignatureValid, clientIP);
+			thisPtr->getCharacterList(accountName, password, extendedCharacterList, clientIP);
 		}
 	});
 }

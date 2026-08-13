@@ -5,7 +5,6 @@
 #define FS_PROTOCOLGAME_H
 
 #include "chat.h"
-#include "clientcapabilities.h"
 #include "creature.h"
 #include "packet_backlog.h"
 #include "protocol.h"
@@ -76,7 +75,7 @@ public:
 	void logout(bool displayEffect, bool forced);
 
 	uint16_t getVersion() const { return version; }
-	bool canSendAstraItemState() const;
+	bool canSendItemMetadata() const;
 	bool shouldSendQuiverCountU16() const;
 	static void rebuildItemValuesCache();
 	static void invalidateItemValuesCache();
@@ -324,7 +323,7 @@ private:
 	}
 
 	// OTCv8
-	void sendFeatures(bool advertiseAstraItemState = false);
+	void sendFeatures(bool advertiseItemMetadata = false);
 	bool shouldSendQuickLootFlags() const;
 	bool shouldSendContainerPagination() const;
 	bool shouldPaginateContainer(const Container* container) const;
@@ -391,16 +390,14 @@ private:
 	bool isOTCv8 = false;
 	bool isMehah = false;
 	bool isOTC = false;
-	ClientCapabilities caps;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
 	uint32_t dllWeatherSequence = 0;
-	bool supportsCreatureIcons() const { return caps.creatureIcons; }
 	bool supportsNativeZoneWeather() const
 	{
 		return (clientOperatingSystem == CLIENTOS_CUSTOM_DLL && supportsDllZoneWeather) ||
-		       caps.nativeZoneWeather || (isOTCv8 && supportsZoneWeather);
+		       (isOTCv8 && supportsZoneWeather);
 	}
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;

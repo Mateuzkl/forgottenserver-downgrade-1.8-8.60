@@ -431,7 +431,7 @@
         <offer id="8002" name="Sex Change" icon="Sex_Change" price="120" eid="0" itemid="0" type="sexchange" count="1" description="Changes your current character from female to male, or from male to female."/>
     </category>
 
-    <category name="Task Hunt" icon="task_hunt.png" description="Task Hunt boosts and permanent weekly task upgrades. These offers are available only on AstraClient.">
+    <category name="Task Hunt" icon="task_hunt.png" description="Task Hunt boosts and permanent weekly task upgrades. These offers are available only on compatible OTCv8 clients.">
         <offer id="13001" name="Bounty Double Kill Boost (1H)" icon="double_bounty_kill.png" price="30" eid="0" itemid="0" type="bounty_kill_boost" value="3600" count="1" description="Bounty task kills count twice for one hour."/>
         <offer id="13002" name="Weekly Double Kill Boost (1H)" icon="double_weekly_kill.png" price="30" eid="0" itemid="0" type="weekly_kill_boost" value="3600" count="1" description="Weekly kill task progress counts twice for one hour."/>
         <offer id="13003" name="Reduced Weekly Bounty Items" icon="reduced_items.png" price="30" eid="0" itemid="0" type="weekly_reduced_items" value="3600" count="1" description="Halves the required amounts of unfinished weekly delivery tasks and applies to newly generated tasks for one hour."/>

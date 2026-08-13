@@ -107,7 +107,7 @@ end
 
 local function supportsHirelingStore(player)
 	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
-		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
+		configManager.getBoolean(configKeys.HIRELING_PROTOCOL_ENABLED) and
 		player and player.isOTCv8 and player:isOTCv8()
 end
 
@@ -785,7 +785,7 @@ local function deliverOffer(player, offer, extra)
 
 	if offer.oftype == "hireling" then
 		if not supportsHirelingStore(player) then
-			return "Hireling purchases are only available on AstraClient."
+			return "Hireling purchases are only available on compatible OTCv8 clients."
 		end
 
 		if not player.addNewHireling then
@@ -803,7 +803,7 @@ local function deliverOffer(player, offer, extra)
 
 	if offer.oftype == "hireling_skill" then
 		if not supportsHirelingStore(player) then
-			return "Hireling purchases are only available on AstraClient."
+			return "Hireling purchases are only available on compatible OTCv8 clients."
 		end
 
 		local skillName = GetHirelingSkillNameById(offer.value > 0 and offer.value or offer.eid)
@@ -821,7 +821,7 @@ local function deliverOffer(player, offer, extra)
 
 	if offer.oftype == "hireling_outfit" then
 		if not supportsHirelingStore(player) then
-			return "Hireling purchases are only available on AstraClient."
+			return "Hireling purchases are only available on compatible OTCv8 clients."
 		end
 
 		local outfitName = GetHirelingOutfitNameById(offer.value > 0 and offer.value or offer.eid)

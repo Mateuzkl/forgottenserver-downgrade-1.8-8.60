@@ -980,13 +980,13 @@ enum class GameFeature : uint8_t {
 	DisplayItemDuration = 129,
 	ThingUpgradeClassification = 130,
 	ItemTierByte = 131,
-	AstraCreatureIcons = 133,
+	ExtendedCreatureIcons = 133,
 	PlayerFamiliars = 138,
 	DisplayItemCharges = 139,
 	PackedPlayerInventory = 140,
-	AstraQuiverCountU16 = 141,
-	AstraOutfitStoreMode = 142,
-	AstraItemMetadata = 143,
+	QuiverCountU16 = 141,
+	OutfitStoreMode = 142,
+	ItemMetadata = 143,
 	ZoneWeather = 144,
 
 	Last = 144

@@ -27,7 +27,7 @@ local function isNearSoulpitObelisk(player)
 		and math.abs(playerPosition.y - obeliskPosition.y) <= 1
 end
 
-local function isAstraPlayer(player)
+local function isExtendedOtcv8Player(player)
 	return player and player.isOTCv8 and player:isOTCv8()
 end
 
@@ -35,7 +35,7 @@ function SoulSealHandler.sendSoulSealsData(player)
 	if not protocol or not player then
 		return false
 	end
-	if not isAstraPlayer(player) then
+	if not isExtendedOtcv8Player(player) then
 		return false
 	end
 	if not isNearSoulpitObelisk(player) then
@@ -53,7 +53,7 @@ function SoulSealHandler.sendSoulSealsData(player)
 end
 
 function SoulSealHandler.startFight(player, raceId)
-	if not SoulPit or not isAstraPlayer(player) then
+	if not SoulPit or not isExtendedOtcv8Player(player) then
 		return false
 	end
 	if not isNearSoulpitObelisk(player) then

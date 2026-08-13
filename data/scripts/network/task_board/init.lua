@@ -4,7 +4,7 @@
 -- Task Hunting is loaded separately and owns 0xBA/0xBB.
 --
 -- Uses native bytes only. No JSON, no extended opcodes.
--- Only sends modern bytes to AstraClient (IsAstraClient guard in protocol layer).
+-- Only sends modern bytes to OTCv8 clients.
 
 -- Config keys (registered by C++ in configKeys global table)
 if not configManager or not configManager.getBoolean then

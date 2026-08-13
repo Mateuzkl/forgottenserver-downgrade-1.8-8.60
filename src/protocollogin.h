@@ -122,9 +122,7 @@ private:
 	void getCharacterList(std::string_view accountName, std::string_view password, bool extendedCharacterList,
 	                      uint32_t clientIP);
 	void getCastList(const std::string& password, uint32_t clientIP);
-	void getAstraCastList();
-
-	bool extendedProfileSignatureValid = false;
+	void getExtendedCastList();
 };
 
 #endif

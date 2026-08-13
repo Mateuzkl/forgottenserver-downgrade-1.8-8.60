@@ -46,7 +46,7 @@ local function sendHuntAnalyzerKill(player, monster, corpse)
 
 	player:updateKillTracker(monster, corpse)
 
-	-- Astra reads loot from the C++-decoded 0xD1 batch. Keep the legacy
+	-- Extended OTCv8 reads loot from the C++-decoded 0xD1 batch. Keep the legacy
 	-- per-item 0xCF stream only for older OTClient variants.
 	if not (player.isOTCv8 and player:isOTCv8()) then
 		sendLootStatsRecursive(player, corpse)

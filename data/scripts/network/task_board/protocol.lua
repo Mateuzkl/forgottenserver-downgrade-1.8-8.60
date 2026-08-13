@@ -1,4 +1,4 @@
--- Task Board Protocol: byte-level serialization following Crystal Server/AstraClient wire format.
+-- Task Board Protocol: byte-level serialization following the OTCv8 wire format.
 -- Opcodes: 0x53 (server->client, subtype byte), 0x5F (client->server, action byte),
 --           0xEE (resource balance). Task Hunting owns 0xBA/0xBB.
 -- All send functions use NetworkMessage. All receive handlers use PacketHandler + NetworkGuard.
@@ -9,7 +9,7 @@ local TaskBoardProtocol = {}
 local RESOURCE_TASK_HUNTING = TaskBoard.Resources.TASK_HUNTING
 local RESOURCE_BOUNTY_POINTS = TaskBoard.Resources.BOUNTY_POINTS
 local RESOURCE_SOULSEALS_POINTS = TaskBoard.Resources.SOULSEALS_POINTS
--- AstraClient modules/gamelib/const.lua: ResourceTypes.BOUNTY_REROLL_POINTS = 95.
+-- OTCv8 gamelib/const.lua: ResourceTypes.BOUNTY_REROLL_POINTS = 95.
 -- This value intentionally equals the C2S Task Board opcode byte, but it is
 -- carried inside the unrelated S2C 0xEE resource-balance packet.
 local RESOURCE_BOUNTY_REROLL_POINTS_RAW_VALUE = 0x5F

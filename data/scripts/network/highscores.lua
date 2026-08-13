@@ -32,7 +32,7 @@ for _, vocation in ipairs(vocations) do
 	vocationById[vocation.id] = vocation
 end
 
-local function supportsAstraClient(player)
+local function isOTCv8Player(player)
 	return player and player.isOTCv8 and player:isOTCv8()
 end
 
@@ -51,7 +51,7 @@ local function getServerName()
 	if configManager and configKeys and configKeys.SERVER_NAME then
 		return configManager.getString(configKeys.SERVER_NAME)
 	end
-	return "Astra"
+	return "Server"
 end
 
 local function getVocationCondition(vocationId)
@@ -138,7 +138,7 @@ local function loadRows(column, vocationCondition, page, entriesPerPage)
 end
 
 local function sendHighscores(player, requestType, categoryId, vocationId, worldName, page, entriesPerPage)
-	if not supportsAstraClient(player) then
+	if not isOTCv8Player(player) then
 		return false
 	end
 
@@ -204,7 +204,7 @@ end
 
 local highscoresHandler = PacketHandler(OPCODE_HIGHSCORES)
 function highscoresHandler.onReceive(player, msg)
-	if not supportsAstraClient(player) then
+	if not isOTCv8Player(player) then
 		return
 	end
 

@@ -468,12 +468,9 @@ bool ConfigManager::load()
 	booleans[Boolean::ALLOW_DUAL_WIELDING] = getGlobalBoolean(L, "allowDualWielding", false);
 	booleans[Boolean::RAID_SPAWN_FILE_ENABLED] = getGlobalBoolean(L, "raidSpawnFileEnabled", true);
 	booleans[Boolean::POWERLAW] = getGlobalBoolean(L, "powerlaw", false);
-	booleans[Boolean::ASTRA_CLIENT_ONLY] = getGlobalBoolean(L, "astraClientOnly", false);
-	booleans[Boolean::FONTICAK_CLIENT_ONLY] = getGlobalBoolean(L, "fonticakClientOnly", false);
-	booleans[Boolean::ASTRA_ITEM_STATE_ENABLED] = getGlobalBoolean(L, "astraItemStateEnabled", false);
+	booleans[Boolean::ITEM_METADATA_ENABLED] = getGlobalBoolean(L, "itemMetadataEnabled", false);
 	booleans[Boolean::HIRELING_SYSTEM_ENABLED] = getGlobalBoolean(L, "hirelingSystemEnabled", false);
-	booleans[Boolean::ASTRA_HIRELING_PROTOCOL_ENABLED] =
-	    getGlobalBoolean(L, "astraHirelingProtocolEnabled", false);
+	booleans[Boolean::HIRELING_PROTOCOL_ENABLED] = getGlobalBoolean(L, "hirelingProtocolEnabled", false);
 	booleans[Boolean::COLORIZED_LOOT_VALUE] = getGlobalBoolean(L, "enableColorizedLootValue", false);
 	booleans[Boolean::ITEM_TIER_DISPLAY] = getGlobalBoolean(L, "enableItemTierDisplay", false);
 	booleans[Boolean::ITEM_UPGRADE_CLASSIFICATION] = getGlobalBoolean(L, "enableItemUpgradeClassification", false);

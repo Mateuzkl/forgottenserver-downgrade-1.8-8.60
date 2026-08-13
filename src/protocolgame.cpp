@@ -4,8 +4,6 @@
 #include "otpch.h"
 
 #include "actions.h"
-#include "astraclient.h"
-#include "fonticakclient.h"
 #include "ban.h"
 #include "character_bazaar.h"
 #include "configmanager.h"
@@ -81,8 +79,8 @@ constexpr int64_t CAST_SWITCH_COOLDOWN_MS = 500;
 constexpr uint8_t HELPER_OPCODE_CAVEBOT = 210;
 constexpr uint8_t HELPER_OPCODE_CAST_ON_FOOT = 211;
 constexpr uint8_t HELPER_OPCODE_SMART_FOLLOW = 212;
-constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
-constexpr uint32_t STORAGE_ASTRA_HELPER_SMART_FOLLOW = 99998;
+constexpr uint32_t STORAGE_HELPER_CAVEBOT = 99997;
+constexpr uint32_t STORAGE_HELPER_SMART_FOLLOW = 99998;
 constexpr auto STORE_OUTFIT_OFFERS_PATH = "data/store/gamestore.xml";
 constexpr uint8_t ITEM_VALUES_OPCODE = 0xC6;
 constexpr size_t ITEM_VALUE_WIRE_SIZE = sizeof(uint16_t) + sizeof(uint32_t);
@@ -342,7 +340,7 @@ bool requireUnreadBytes(NetworkMessage& msg, std::size_t required)
 bool canUseHirelingProtocol(bool hirelingProtocol)
 {
 	return hirelingProtocol && getBoolean(ConfigManager::HIRELING_SYSTEM_ENABLED) &&
-	       getBoolean(ConfigManager::ASTRA_HIRELING_PROTOCOL_ENABLED);
+	       getBoolean(ConfigManager::HIRELING_PROTOCOL_ENABLED);
 }
 
 constexpr std::size_t HIRELING_OUTFIT_REQUEST_SIZE = 9;
@@ -399,9 +397,9 @@ std::optional<uint32_t> getHelperStateStorageKey(uint8_t opcode)
 {
 	switch (opcode) {
 		case HELPER_OPCODE_CAVEBOT:
-			return STORAGE_ASTRA_HELPER_CAVEBOT;
+			return STORAGE_HELPER_CAVEBOT;
 		case HELPER_OPCODE_SMART_FOLLOW:
-			return STORAGE_ASTRA_HELPER_SMART_FOLLOW;
+			return STORAGE_HELPER_SMART_FOLLOW;
 		default:
 			return std::nullopt;
 	}
@@ -507,7 +505,7 @@ ProtocolGame::~ProtocolGame()
 
 void ProtocolGame::sendBlessingWindow()
 {
-	if (!player || !caps.blessingSystem) return;
+	if (!player || !isOTCv8) return;
 
 	NetworkMessage msg;
 	msg.addByte(0x9B);
@@ -563,7 +561,7 @@ void ProtocolGame::sendBlessingWindow()
 
 void ProtocolGame::sendBlessStatus()
 {
-	if (!player || !caps.blessingSystem) return;
+	if (!player || !isOTCv8) return;
 
 	uint8_t totalCount = 0;
 	for (uint8_t i = 2; i <= 8; i++) {
@@ -606,12 +604,12 @@ void ProtocolGame::release()
 
 bool ProtocolGame::shouldSendQuickLootFlags() const
 {
-	return caps.quickLootFlags && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
+	return isOTCv8 && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
 }
 
 bool ProtocolGame::shouldSendContainerPagination() const
 {
-	// The extended profile is an OTCv8 client, so listing it separately was redundant.
+	// Both OTCv8 and Mehah use container pagination.
 	return isOTCv8 || isMehah;
 }
 
@@ -621,13 +619,13 @@ bool ProtocolGame::shouldPaginateContainer(const Container* container) const
 		return false;
 	}
 
-	return container->hasPagination() || (caps.rewardChestPagination && container->getRewardChest());
+	return container->hasPagination() || (isOTCv8 && container->getRewardChest());
 }
 
-bool ProtocolGame::canSendAstraItemState() const
+bool ProtocolGame::canSendItemMetadata() const
 {
-	if (!player || !player->client || !caps.itemMetadata || isSpectator ||
-	    !getBoolean(ConfigManager::ASTRA_ITEM_STATE_ENABLED)) {
+	if (!player || !player->client || !isOTCv8 || isSpectator ||
+	    !getBoolean(ConfigManager::ITEM_METADATA_ENABLED)) {
 		return false;
 	}
 
@@ -637,7 +635,7 @@ bool ProtocolGame::canSendAstraItemState() const
 
 bool ProtocolGame::shouldSendQuiverCountU16() const
 {
-	return caps.quiverCountU16;
+	return isOTCv8;
 }
 
 bool ProtocolGame::shouldSendItemTierByte() const
@@ -658,7 +656,7 @@ bool ProtocolGame::shouldSendThingUpgradeClassification() const
 	// OTCv8 Classic uses this feature as the Lua-side gate for drawing tier icons.
 	// Keep the actual item wire format tied to GameItemTierByte so CIP and
 	// non-tier-aware OTC clients never receive unexpected item bytes.
-	return caps.thingUpgradeClassification && shouldSendItemTierByte();
+	return isOTCv8 && shouldSendItemTierByte();
 }
 
 bool ProtocolGame::shouldSendItemTierData() const
@@ -675,9 +673,9 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 
 	// OTCv8 and Mehah features and extended opcodes
 	if (isOTC) {
-		// Player loading can emit status packets before finishLogin(). Astra
-		// therefore needs its final wire-format features advertised up front.
-		sendFeatures(caps.itemMetadata);
+		// Player loading can emit status packets before finishLogin(), so advertise
+		// the final OTCv8 wire format before loading the player.
+		sendFeatures(isOTCv8);
 
 		NetworkMessage opcodeMessage;
 		opcodeMessage.addByte(0x32);
@@ -878,7 +876,6 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->client->isOTCv8 = isOTCv8;
 	player->client->isMehah = isMehah;
 	player->client->isOTC = isOTC;
-	player->client->caps = caps;
 	if (!g_game.placeCreature(player.get(), player->getLoginPosition())) {
 		if (!g_game.placeCreature(player.get(), player->getTemplePosition(), false, true)) {
 			g_game.releaseLogin(reservedGuid);
@@ -1027,7 +1024,6 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->client->isOTCv8 = isOTCv8;
 	player->client->isMehah = isMehah;
 	player->client->isOTC = isOTC;
-	player->client->caps = caps;
 	sendAddCreature(player.get(), player->getPosition(), 0);
 	sendLootContainers();
 	player->lastIP = player->getIP();
@@ -1140,15 +1136,6 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 		dllWeatherSequence = nextDllWeatherSequence();
 	}
 
-	// Fonticak is an OTCv8 client that adds its own signature marker. It never
-	// selected a different wire layout, so it is not protocol state — the signature
-	// only feeds the fonticakClientOnly login gate below and is dead after that.
-	// Transient login-only identification. Neither survives the handshake: one
-	// enables a capability set, the other selects a family. Nothing downstream
-	// ever learns which client brand produced them.
-	bool extendedProfileSignatureValid = false;
-	bool fonticakSignatureValid = false;
-
 	// OTCv8 version detection
 	if (msg.getBufferPosition() < msg.getLength()) {
 		uint16_t otcV8StringLength = msg.get<uint16_t>();
@@ -1171,22 +1158,6 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					useItemTierByte = true;
 				} else if (marker == "OTCv8ZoneWeather") {
 					supportsZoneWeather = true;
-				} else if (marker == AstraClient::LOGIN_MARKER) {
-					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
-						break;
-					}
-					extendedProfileSignatureValid =
-					    msg.get<uint32_t>() ==
-					    AstraClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
-					                                   challengeTimestamp, challengeRandom);
-				} else if (marker == FonticakClient::LOGIN_MARKER) {
-					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
-						break;
-					}
-					fonticakSignatureValid =
-					    msg.get<uint32_t>() ==
-					    FonticakClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
-					                                   challengeTimestamp, challengeRandom);
 				} else {
 					break;
 				}
@@ -1199,62 +1170,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 		isMehah = true;
 	}
 
-	// A valid Fonticak signature selects the Mehah family. The client announces
-	// "OTCv8" first only to reach the marker loop; the signature is what decides
-	// the layout, and from here on the session is a Mehah session like any other.
-	if (fonticakSignatureValid) {
-		isOTCv8 = false;
-		isMehah = true;
-	}
-
 	isOTC = isOTCv8 || isMehah || isOtclientOperatingSystem(operatingSystem);
-
-	// Freeze the capability set for the session. Everything downstream asks these
-	// questions; nothing downstream learns which client answered them.
-	caps.otClient = isOTC;
-	caps.family = isMehah ? ClientFamily::Mehah : (isOTCv8 ? ClientFamily::Otcv8 : ClientFamily::Cip860);
-	caps.containerPagination = isOTCv8 || isMehah;
-	caps.itemTierByte = useItemTierByte;
-
-	if (extendedProfileSignatureValid) {
-		caps.enableExtendedProfile();
-	}
-
-	// Negotiated separately from the tier byte, and mutually exclusive with the
-	// extended profile's own item metadata block: a client must never receive both
-	// encodings for the same item.
-	if (isMehah) {
-		caps.thingUpgradeClassification = getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION);
-	} else {
-		caps.thingUpgradeClassification = isOTCv8 && !caps.itemMetadata;
-	}
-
-	if (!caps.nativeZoneWeather) {
-		caps.nativeZoneWeather = (clientOperatingSystem == CLIENTOS_CUSTOM_DLL && supportsDllZoneWeather) ||
-		                         (isOTCv8 && supportsZoneWeather);
-	}
-
-	if (getBoolean(ConfigManager::ASTRA_CLIENT_ONLY)) {
-		if (!extendedProfileSignatureValid) {
-			LOG_WARN("[AstraClient] Client rejected: AstraClient required");
-			disconnectClient(AstraClient::REQUIRED_MESSAGE);
-			return;
-		}
-	}
-
-	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY)) {
-		if (!fonticakSignatureValid) {
-			LOG_WARN("[FonticakClient] Client rejected: OTC-Fonticak required");
-			disconnectClient(FonticakClient::REQUIRED_MESSAGE);
-			return;
-		}
-	}
-
-	if (extendedProfileSignatureValid) {
-		LOG_NETWORK("Client connected: extended OTCv8 profile");
-	} else if (fonticakSignatureValid) {
-		LOG_NETWORK("Client connected: FonticakClient");
-	}
 
 	if (version < CLIENT_VERSION_MIN || version > CLIENT_VERSION_MAX) {
 		disconnectClient(fmt::format("Only clients with protocol {:s} allowed!", CLIENT_VERSION_STR));
@@ -1546,7 +1462,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			parseImbuementDurations(msg);
 			break;
 		case CharacterBazaar::CLIENT_PACKET:
-			if (caps.itemMetadata) {
+			if (isOTCv8) {
 				parseCharacterBazaar(msg);
 			} else {
 				skipUnreadBytes(msg);
@@ -1595,7 +1511,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			g_game.playerTurn(player->getID(), DIRECTION_WEST);
 			break;
 		case 0x77:
-			if (caps.itemMetadata) {
+			if (isOTCv8) {
 				parseHotkeyEquip(msg);
 			} else {
 				skipUnreadBytes(msg);
@@ -1715,7 +1631,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0x9F:
-			if (caps.itemMetadata) {
+			if (isOTCv8) {
 				parseSetMonsterPodium(msg);
 			}
 			break;
@@ -1769,7 +1685,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xCF:
-			if (caps.itemMetadata) {
+			if (isOTCv8) {
 				sendBlessingWindow();
 			}
 			break;
@@ -1798,13 +1714,13 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xCD:
-			if (caps.itemMetadata) {
+			if (isOTCv8) {
 				parseInspectionObject(msg);
 			}
 			break;
 
 		case 0xD2:
-			if (isHirelingOutfitRequestPacket(msg, caps.hirelingProtocol)) {
+			if (isHirelingOutfitRequestPacket(msg, isOTCv8)) {
 				handlePlayerNetworkMessage(recvbyte);
 			} else {
 				g_game.playerRequestOutfit(player->getID());
@@ -1812,7 +1728,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xD3:
-			if (isHirelingOutfitChangePacket(msg, caps.hirelingProtocol)) {
+			if (isHirelingOutfitChangePacket(msg, isOTCv8)) {
 				handlePlayerNetworkMessage(recvbyte);
 			} else {
 				parseSetOutfit(msg);
@@ -1865,7 +1781,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 {
-	if (!player || !caps.characterBazaar || !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) ||
+	if (!player || !isOTCv8 || !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) ||
 	    !requireUnreadBytes(msg, 1)) {
 		skipUnreadBytes(msg);
 		return;
@@ -1906,13 +1822,13 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
 	const bool sendItemTierByte = shouldSendItemTierByte();
 	const bool sendItemTierData = shouldSendItemTierData();
-	const bool sendAstraItemState = canSendAstraItemState();
-	const bool sendAstraQuiverCountU16 = shouldSendQuiverCountU16();
+	const bool sendItemMetadata = canSendItemMetadata();
+	const bool sendQuiverCountU16 = shouldSendQuiverCountU16();
 	int32_t count;
 	Item* ground = tile->getGround();
 	if (ground) {
-		msg.addItem(ground, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
-		            sendAstraQuiverCountU16);
+		msg.addItem(ground, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendItemMetadata,
+		            sendQuiverCountU16);
 		count = 1;
 	} else {
 		count = 0;
@@ -1924,8 +1840,8 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
-			            sendAstraQuiverCountU16);
+			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendItemMetadata,
+			            sendQuiverCountU16);
 			count++;
 			if (count == 9 && tile->getPosition() == player->getPosition()) {
 				break;
@@ -1970,8 +1886,8 @@ void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
 				continue;
 			}
-			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
-			            sendAstraQuiverCountU16);
+			msg.addItem(it->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendItemMetadata,
+			            sendQuiverCountU16);
 			if (++count == MAX_STACKPOS_THINGS) {
 				return;
 			}
@@ -2221,7 +2137,7 @@ void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 	} else {
 		newOutfit.lookMount = 0;
 	}
-	if (caps.outfitStoreMode) {
+	if (isOTCv8) {
 		const uint16_t requestedFamiliar = msg.get<uint16_t>();
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		newOutfit.lookFamiliar =
@@ -2317,7 +2233,7 @@ void ProtocolGame::parseSeekInContainer(NetworkMessage& msg)
 void ProtocolGame::parseHotkeyEquip(NetworkMessage& msg)
 {
 	const std::size_t packetSize = getUnreadBytes(msg);
-	if (!player || !caps.hotkeyEquip || isSpectator || player->isAccountManager()) {
+	if (!player || !isOTCv8 || isSpectator || player->isAccountManager()) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2711,7 +2627,7 @@ void ProtocolGame::parseRotateItem(NetworkMessage& msg)
 
 void ProtocolGame::parseWrapableItem(NetworkMessage& msg)
 {
-	// isOTCv8 and isMehah both imply isOTC (see docs/client-capability-matrix.md
+	// isOTCv8 and isMehah both imply isOTC
 	// §1), so the extra terms could never change the result.
 	if (!isOTC) {
 		skipUnreadBytes(msg);
@@ -2836,7 +2752,7 @@ void ProtocolGame::sendCreatureEmblem(const Creature* creature)
 		return;
 	}
 
-	if (caps.creatureEmblem) {
+	if (isOTCv8) {
 		if (const Monster* monster = creature->getMonster(); monster && monster->isFamiliar()) {
 			return;
 		}
@@ -2874,7 +2790,7 @@ void ProtocolGame::sendWorldLight(LightInfo lightInfo)
 
 void ProtocolGame::sendCharmActivated(uint8_t charmId)
 {
-	if (!caps.charms) {
+	if (!isOTCv8) {
 		return;
 	}
 
@@ -2948,7 +2864,7 @@ void ProtocolGame::sendKillTrackerUpdate(const std::shared_ptr<Container>& corps
 
 void ProtocolGame::sendItemValues()
 {
-	if (!caps.itemMetadata) {
+	if (!isOTCv8) {
 		return;
 	}
 
@@ -3013,7 +2929,7 @@ void ProtocolGame::invalidateItemValuesCache()
 void ProtocolGame::sendImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
                                      std::string_view targetName)
 {
-	if (!caps.combatAnalyzers || amount == 0) {
+	if (!isOTCv8 || amount == 0) {
 		return;
 	}
 
@@ -3143,7 +3059,7 @@ void ProtocolGame::sendStats()
 
 void ProtocolGame::sendBasicData()
 {
-	if (!player || !caps.extendedBasicData) {
+	if (!player || !isOTCv8) {
 		return;
 	}
 
@@ -3293,7 +3209,7 @@ void ProtocolGame::sendIcons(uint16_t icons)
 
 void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
 {
-	if (!player || !supportsCreatureIcons()) {
+	if (!player || !isOTCv8) {
 		return;
 	}
 
@@ -3306,7 +3222,7 @@ void ProtocolGame::sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon)
 
 void ProtocolGame::sendCreatureIcon(const Creature* creature)
 {
-	if (!creature || !player || !supportsCreatureIcons()) {
+	if (!creature || !player || !isOTCv8) {
 		return;
 	}
 
@@ -3349,17 +3265,17 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 	const bool sendQuickLootFlags = shouldSendQuickLootFlags();
 	const bool sendItemTierByte = shouldSendItemTierByte();
 	const bool sendItemTierData = shouldSendItemTierData();
-	const bool sendAstraItemState = canSendAstraItemState();
-	const bool sendAstraQuiverCountU16 = shouldSendQuiverCountU16();
+	const bool sendItemMetadata = canSendItemMetadata();
+	const bool sendQuiverCountU16 = shouldSendQuiverCountU16();
 	const bool sendContainerPagination = shouldSendContainerPagination();
 	const bool paginateContainer = shouldPaginateContainer(container);
 	if (container->getID() == ITEM_BROWSEFIELD) {
-		msg.addItem(ITEM_BAG, 1, sendItemTierData, sendItemTierByte, sendQuickLootFlags, sendAstraItemState,
-		            sendAstraQuiverCountU16);
+		msg.addItem(ITEM_BAG, 1, sendItemTierData, sendItemTierByte, sendQuickLootFlags, sendItemMetadata,
+		            sendQuiverCountU16);
 		msg.addString("Browse Field");
 	} else {
-		msg.addItem(container, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
-		            sendAstraQuiverCountU16);
+		msg.addItem(container, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendItemMetadata,
+		            sendQuiverCountU16);
 		msg.addString(container->getName());
 	}
 
@@ -3385,8 +3301,8 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 		uint32_t i = 0;
 		for (ItemDeque::const_iterator cit = itemList.begin() + firstIndex, end = itemList.end();
 		     i < itemCount && cit != end; ++cit, ++i) {
-			msg.addItem(cit->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
-			            sendAstraQuiverCountU16);
+			msg.addItem(cit->get(), sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendItemMetadata,
+			            sendQuiverCountU16);
 		}
 	}
 	writeToOutputBuffer(msg);
@@ -3592,15 +3508,15 @@ void ProtocolGame::sendTradeItemRequest(std::string_view traderName, const Item*
 		}
 
 		msg.addByte(itemList.size());
-		const bool sendAstraItemState = canSendAstraItemState();
-		const bool sendAstraQuiverCountU16 = shouldSendQuiverCountU16();
+		const bool sendItemMetadata = canSendItemMetadata();
+		const bool sendQuiverCountU16 = shouldSendQuiverCountU16();
 		for (const Item* listItem : itemList) {
-			msg.addItem(listItem, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendAstraItemState,
-			            sendAstraQuiverCountU16);
+			msg.addItem(listItem, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, sendItemMetadata,
+			            sendQuiverCountU16);
 		}
 	} else {
 		msg.addByte(0x01);
-		msg.addItem(item, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, canSendAstraItemState(),
+		msg.addItem(item, sendItemTierData, sendItemTierByte, isOTC, sendQuickLootFlags, canSendItemMetadata(),
 		            shouldSendQuiverCountU16());
 	}
 	writeToOutputBuffer(msg);
@@ -3925,7 +3841,7 @@ void ProtocolGame::sendAddTileItem(const Position& pos, uint32_t stackpos, const
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
 	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-	            canSendAstraItemState(), shouldSendQuiverCountU16());
+	            canSendItemMetadata(), shouldSendQuiverCountU16());
 	writeToOutputBuffer(msg);
 }
 
@@ -3944,7 +3860,7 @@ void ProtocolGame::sendUpdateTileItem(const Position& pos, uint32_t stackpos, co
 	msg.addPosition(pos);
 	msg.addByte(static_cast<uint8_t>(stackpos));
 	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-	            canSendAstraItemState(), shouldSendQuiverCountU16());
+	            canSendItemMetadata(), shouldSendQuiverCountU16());
 	writeToOutputBuffer(msg);
 }
 
@@ -4083,15 +3999,15 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	sendStats();
 	sendSkills();
 
-	if (caps.creatureIcons) {
+	if (isOTCv8) {
 		sendBasicData();
 	}
 
-	if (caps.creatureIcons && (player->getVocationId() == 9 || player->getVocationId() == 10)) {
+	if (isOTCv8 && (player->getVocationId() == 9 || player->getVocationId() == 10)) {
 		player->sendMonkData();
 	}
 
-	if (caps.creatureIcons) {
+	if (isOTCv8) {
 		sendBlessStatus();
 	}
 
@@ -4241,7 +4157,7 @@ void ProtocolGame::sendInventoryItem(slots_t slot, const Item* item)
 		msg.addByte(0x78);
 		msg.addByte(slot);
 		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-		            canSendAstraItemState(), shouldSendQuiverCountU16());
+		            canSendItemMetadata(), shouldSendQuiverCountU16());
 	} else {
 		msg.addByte(0x79);
 		msg.addByte(slot);
@@ -4255,7 +4171,7 @@ void ProtocolGame::sendInventoryItem(slots_t slot, const Item* item)
 
 void ProtocolGame::sendPlayerInventory()
 {
-	if (!canSendAstraItemState()) {
+	if (!canSendItemMetadata()) {
 		return;
 	}
 
@@ -4266,17 +4182,17 @@ void ProtocolGame::sendPlayerInventory()
 
 	NetworkMessage msg;
 	msg.addByte(0xF5);
-	constexpr std::size_t astraInventorySlotMarkers = 11;
-	const std::size_t inventoryEntries = counts.size() + astraInventorySlotMarkers;
+	constexpr std::size_t inventorySlotMarkers = 11;
+	const std::size_t inventoryEntries = counts.size() + inventorySlotMarkers;
 	if (inventoryEntries > std::numeric_limits<uint16_t>::max()) {
-		LOG_WARN("[AstraInventory] Inventory snapshot truncated for player {}", player->getName());
+		LOG_WARN("[Inventory] Inventory snapshot truncated for player {}", player->getName());
 	}
 
 	const std::size_t totalItems = std::min<std::size_t>(inventoryEntries, std::numeric_limits<uint16_t>::max());
 	msg.add<uint16_t>(static_cast<uint16_t>(totalItems));
 
 	std::size_t written = 0;
-	for (uint16_t slotMarker = 1; slotMarker <= astraInventorySlotMarkers && written < totalItems; ++slotMarker) {
+	for (uint16_t slotMarker = 1; slotMarker <= inventorySlotMarkers && written < totalItems; ++slotMarker) {
 		msg.add<uint16_t>(slotMarker);
 		msg.addByte(0);
 		addPackedPlayerInventoryCount(msg, 1);
@@ -4343,7 +4259,7 @@ void ProtocolGame::sendAddContainerItem(uint8_t cid, uint16_t slot, const Item* 
 		msg.add<uint16_t>(slot);
 	}
 	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-	            canSendAstraItemState(), shouldSendQuiverCountU16());
+	            canSendItemMetadata(), shouldSendQuiverCountU16());
 	writeToOutputBuffer(msg);
 }
 
@@ -4358,7 +4274,7 @@ void ProtocolGame::sendUpdateContainerItem(uint8_t cid, uint16_t slot, const Ite
 		msg.addByte(slot);
 	}
 	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-	            canSendAstraItemState(), shouldSendQuiverCountU16());
+	            canSendItemMetadata(), shouldSendQuiverCountU16());
 	writeToOutputBuffer(msg);
 }
 
@@ -4376,7 +4292,7 @@ void ProtocolGame::sendRemoveContainerItem(uint8_t cid, uint16_t slot, const Ite
 		msg.add<uint16_t>(slot);
 		if (lastItem) {
 			msg.addItem(lastItem, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-			            canSendAstraItemState(), shouldSendQuiverCountU16());
+			            canSendItemMetadata(), shouldSendQuiverCountU16());
 		} else {
 			msg.add<uint16_t>(0x00);
 		}
@@ -4453,7 +4369,7 @@ void ProtocolGame::sendOutfitWindow()
 	msg.addByte(0xC8);
 
 	const bool monkVocationEnabled = ConfigManager::getBoolean(ConfigManager::MONK_VOCATION_ENABLED);
-	const bool isAstra860 = caps.outfitStoreMode && getVersion() == 860;
+	const bool usesExtendedOutfitStore = isOTCv8 && getVersion() == 860;
 	auto isHiddenOutfit = [monkVocationEnabled](const Outfit* outfit) {
 		return outfit && !monkVocationEnabled && outfit->name == "Monk";
 	};
@@ -4483,7 +4399,7 @@ void ProtocolGame::sendOutfitWindow()
 	}
 
 	AddOutfit(msg, currentOutfit);
-	if (caps.outfitStoreMode) {
+	if (isOTCv8) {
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		if (!familiar || currentOutfit.lookFamiliar != familiar->lookType) {
 			currentOutfit.lookFamiliar = 0;
@@ -4514,7 +4430,7 @@ void ProtocolGame::sendOutfitWindow()
 		uint32_t storeOfferId = 0;
 		if (player->getOutfitAddons(*outfit, addons)) {
 			// available outfit
-		} else if (isAstra860) {
+		} else if (usesExtendedOutfitStore) {
 			const auto offerIt = storeOutfitOffers.find(outfit->lookType);
 			if (offerIt == storeOutfitOffers.end()) {
 				continue;
@@ -4533,7 +4449,7 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
-	if (isOTC || isAstra860) {
+	if (isOTC || usesExtendedOutfitStore) {
 		msg.addByte(static_cast<uint8_t>(protocolOutfits.size()));
 	} else {
 		msg.add<uint16_t>(static_cast<uint16_t>(protocolOutfits.size()));
@@ -4543,7 +4459,7 @@ void ProtocolGame::sendOutfitWindow()
 		msg.add<uint16_t>(outfit.lookType);
 		msg.addString(outfit.name);
 		msg.addByte(outfit.addons);
-		if (isAstra860) {
+		if (usesExtendedOutfitStore) {
 			msg.addByte(outfit.mode);
 			if (outfit.mode == 1) {
 				msg.add<uint32_t>(outfit.storeOfferId);
@@ -4551,7 +4467,7 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
-	if (isOTC || isAstra860 || getVersion() != 861) {
+	if (isOTC || usesExtendedOutfitStore || getVersion() != 861) {
 		std::vector<const Mount*> mounts;
 		for (const auto& [id, mount] : g_game.mounts.getMounts()) {
 			if (player->hasMount(&mount)) {
@@ -4566,7 +4482,7 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
-	if (caps.outfitStoreMode) {
+	if (isOTCv8) {
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		msg.add<uint16_t>(familiar ? 1 : 0);
 		if (familiar) {
@@ -4581,7 +4497,7 @@ void ProtocolGame::sendOutfitWindow()
 
 void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType)
 {
-	if (!caps.itemInspection) {
+	if (!isOTCv8) {
 		return;
 	}
 
@@ -4613,10 +4529,10 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 	msg.addString(item ? item->getName() : std::string_view(itemType.name));
 	if (item) {
 		msg.addItem(item.get(), shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-		            canSendAstraItemState(), shouldSendQuiverCountU16());
+		            canSendItemMetadata(), shouldSendQuiverCountU16());
 	} else {
 		msg.addItem(itemId, itemCount, shouldSendItemTierData(), shouldSendItemTierByte(),
-		            shouldSendQuickLootFlags(), canSendAstraItemState(), shouldSendQuiverCountU16());
+		            shouldSendQuickLootFlags(), canSendItemMetadata(), shouldSendQuiverCountU16());
 	}
 	msg.addByte(0);
 
@@ -4642,7 +4558,7 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId,
                                             uint8_t stackPos)
 {
-	if (!caps.monsterPodium || !podium) {
+	if (!isOTCv8 || !podium) {
 		return;
 	}
 
@@ -4843,7 +4759,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	msg.add<uint16_t>(static_cast<uint16_t>(creature->getStepSpeed()));
 
-	if (supportsCreatureIcons()) {
+	if (isOTCv8) {
 		AddCreatureIcon(msg, creature);
 	}
 
@@ -4852,7 +4768,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 
 	if (!known) {
 		auto addCreatureEmblem = [this, &msg, creature](GuildEmblems_t emblem) {
-			if (!caps.creatureIcons) {
+			if (!isOTCv8) {
 				if (emblem == GUILDEMBLEM_MEMBER) {
 					emblem = GUILDEMBLEM_ALLY;
 				} else if (emblem == GUILDEMBLEM_OTHER) {
@@ -4866,7 +4782,7 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 		};
 
 		if (otherPlayer) {
-			addCreatureEmblem(player->getGuildEmblem(otherPlayer, caps.creatureIcons));
+			addCreatureEmblem(player->getGuildEmblem(otherPlayer, isOTCv8));
 		} else {
 			if (creature->isSummon()) {
 				auto master = creature->getMaster();
@@ -4927,7 +4843,7 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	msg.add<uint16_t>(static_cast<uint16_t>(player->getLevel()));
 	msg.addByte(player->getLevelPercent());
 
-	if (caps.extendedPlayerStats) {
+	if (isOTCv8) {
 		msg.add<uint16_t>(player->getBaseXpGain());
 		msg.add<uint16_t>(0); // voucher XP boost
 		msg.add<uint16_t>(player->getDisplayGrindingXpBoost());
@@ -4952,7 +4868,7 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	if (isOTC) {
 		msg.add<uint16_t>(player->getBaseSpeed() / 2);
 		msg.add<uint16_t>(player->getOfflineTrainingTime() / 60 / 1000);
-		if (caps.extendedPlayerStats) {
+		if (isOTCv8) {
 			msg.add<uint16_t>(player->getXpBoostTime());
 			// 0x00 means boost is active and cannot be bought; 0x01 means the client may buy one.
 			msg.addByte(player->getXpBoostTime() > 0 ? 0x00 : 0x01);
@@ -5239,7 +5155,7 @@ void ProtocolGame::parseCustomClientPing(NetworkMessage& msg)
 }
 
 // OTCv8 and Mehah
-void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
+void ProtocolGame::sendFeatures(bool advertiseItemMetadata)
 {
 	zoneWeatherFeatureEnabled = false;
 
@@ -5260,7 +5176,7 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		return;
 	}
 
-	// The extended profile is an OTCv8 client.
+	// These feature bytes use the OTCv8 layout.
 	if (!isOTCv8) return;
 
 	std::unordered_map<GameFeature, bool> features;
@@ -5276,22 +5192,22 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 	features[GameFeature::CreatureIcons] = true;
 	features[GameFeature::ContainerPagination] = true;
 	features[GameFeature::BrowseField] = true;
-	if (caps.creatureIcons) {
+	if (isOTCv8) {
 		features[GameFeature::ExperienceBonus] = true;
 		features[GameFeature::PlayerFamiliars] = true;
-		features[GameFeature::AstraCreatureIcons] = true;
-		features[GameFeature::AstraQuiverCountU16] = true;
-		features[GameFeature::AstraOutfitStoreMode] = true;
+		features[GameFeature::ExtendedCreatureIcons] = true;
+		features[GameFeature::QuiverCountU16] = true;
+		features[GameFeature::OutfitStoreMode] = true;
 	}
 	if (supportsNativeZoneWeather()) {
 		features[GameFeature::ZoneWeather] = true;
 		zoneWeatherFeatureEnabled = true;
 	}
-	if (advertiseAstraItemState && caps.itemMetadata && getBoolean(ConfigManager::ASTRA_ITEM_STATE_ENABLED)) {
+	if (advertiseItemMetadata && getBoolean(ConfigManager::ITEM_METADATA_ENABLED)) {
 		features[GameFeature::DisplayItemDuration] = true;
 		features[GameFeature::DisplayItemCharges] = true;
 		features[GameFeature::PackedPlayerInventory] = true;
-		features[GameFeature::AstraItemMetadata] = true;
+		features[GameFeature::ItemMetadata] = true;
 	}
 	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();
 	features[GameFeature::ThingUpgradeClassification] = shouldSendThingUpgradeClassification();
@@ -5583,7 +5499,7 @@ void ProtocolGame::sendImbuementDurations(slots_t updatedSlot, const Item* updat
 
 		msg.addByte(static_cast<uint8_t>(slot));
 		msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
-		            canSendAstraItemState(), shouldSendQuiverCountU16());
+		            canSendItemMetadata(), shouldSendQuiverCountU16());
 
 		uint16_t totalSlots = item->getImbuementSlots();
 		msg.addByte(static_cast<uint8_t>(totalSlots));

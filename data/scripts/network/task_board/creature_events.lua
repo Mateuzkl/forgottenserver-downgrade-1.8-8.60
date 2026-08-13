@@ -107,7 +107,7 @@ function taskBoardLogin.onLogin(player)
 	end
 
 	-- Send 0xBA and every 0xBB slot in the same login flow. Do not defer this
-	-- path: the Astra Hunting Task UI may be opened right after login.
+	-- path: the Hunting Task UI may be opened right after login.
 	local taskHunting = getTaskHuntingModule()
 	if taskHunting and taskHunting.onLogin then
 		taskHunting.onLogin(player)

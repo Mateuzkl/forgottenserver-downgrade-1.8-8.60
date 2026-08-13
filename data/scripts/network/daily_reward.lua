@@ -403,7 +403,7 @@ local function claimReward(player, msg)
 		return sendClaimError(player, "Invalid daily reward request.")
 	end
 	local fromShrine = NetworkGuard.readByte(msg)
-	-- Astra sends this shrine/shortcut flag before the selected item list.
+	-- Extended OTCv8 sends this shrine/shortcut flag before the selected item list.
 	-- Claims currently use the same validation path either way, but the byte must be consumed.
 
 	local selectedItems = parseSelectedItems(msg)

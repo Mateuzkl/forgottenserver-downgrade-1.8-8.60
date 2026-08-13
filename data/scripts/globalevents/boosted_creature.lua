@@ -58,7 +58,7 @@ function loginBoosted.onLogin(player)
 			string.format("Today's boosted creature is: %s. Double XP, double loot, spawns twice as fast!", boosted))
 	end
 
-	-- Boosted Boss is persisted by CustomBosstiary and sent to Astra through login and Bosstiary protocols.
+	-- Boosted Boss is persisted by CustomBosstiary and sent through login and Bosstiary protocols.
 	if player.isOTCv8 and player:isOTCv8() and CustomBosstiary and CustomBosstiary.getBoostedBoss then
 		local boostedBoss = CustomBosstiary.getBoostedBoss()
 		if boostedBoss and boostedBoss.name then

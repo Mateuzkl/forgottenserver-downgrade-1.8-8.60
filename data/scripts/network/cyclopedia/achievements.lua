@@ -57,7 +57,7 @@ function achievementsHandler.onReceive(player, msg)
 		return
 	end
 
-	-- The 8.60 Astra client may only inspect its own character.
+	-- The extended 8.60 client may only inspect its own character.
 	if characterId ~= 0 and characterId ~= player:getId() and characterId ~= player:getGuid() then
 		return
 	end

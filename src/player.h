@@ -930,7 +930,7 @@ public:
 
 	void sendCreatureIcon(const Creature* creature) const
 	{
-		if (!client || !supportsCreatureIcons()) {
+		if (!client || !isOTCv8()) {
 			return;
 		}
 		client->sendCreatureIcon(creature);
@@ -1207,9 +1207,9 @@ public:
 	// inventory
 	void onUpdateInventoryItem(Item* oldItem, Item* newItem);
 	void onRemoveInventoryItem(Item* item);
-	bool canReceiveAstraItemState() const;
-	void sendAstraPlayerInventorySnapshot() const;
-	void scheduleAstraPlayerInventorySnapshot();
+	bool canReceiveItemMetadata() const;
+	void sendPlayerInventorySnapshot() const;
+	void schedulePlayerInventorySnapshot();
 
 	void sendCancelMessage(std::string_view msg) const
 	{
@@ -1550,34 +1550,8 @@ public:
 
 	bool hasDebugAssertSent() const { return client ? client->debugAssertSent : false; }
 
-	const ClientCapabilities& caps() const
-	{
-		static constexpr ClientCapabilities none{};
-		return client ? client->caps : none;
-	}
-
 	bool isOTCv8() const { return client ? client->isOTCv8 : false; }
 	bool isMehah() const { return client ? client->isMehah : false; }
-
-	// Capability accessors — see docs/client-capability-matrix.md.
-	//
-	// Gameplay must ask what a client can do, never which brand connected. Every
-	// one of these resolves to the Astra profile today, and that is the point:
-	// which client happens to implement a feature is a detection detail, and it
-	// belongs here rather than smeared across Game, Player and the Lua bindings.
-	// When another OTCv8-family client picks one of these up, only this block
-	// changes.
-	bool supportsItemInspection() const { return caps().itemInspection; }
-	bool supportsMonsterPodium() const { return caps().monsterPodium; }
-	bool supportsRewardChestPagination() const { return caps().rewardChestPagination; }
-	bool supportsCreatureIcons() const { return caps().creatureIcons; }
-	bool supportsColorizedLoot() const { return caps().colorizedLootText; }
-	bool supportsExtendedConditionIcons() const { return caps().extendedConditionIcons; }
-	bool supportsLootContainers() const { return caps().lootContainers; }
-	bool supportsMonkData() const { return caps().monkData; }
-	// Astra draws influenced/fiendish state with a creature icon (0x8B) instead of
-	// a skull, so the skull must be suppressed for it.
-	bool usesCreatureIconsInsteadOfSkulls() const { return caps().creatureIcons; }
 	bool isOTC() const
 	{
 		switch (operatingSystem) {
@@ -1628,7 +1602,7 @@ private:
 	void updateInventoryWeight();
 	void reloadEquipmentStats();
 	void applyEquipmentStats();
-	void flushAstraPlayerInventorySnapshot();
+	void flushPlayerInventorySnapshot();
 	uint64_t getAttackSpeedBeforeEquipmentBonus() const;
 
 	void setNextWalkActionTask(std::unique_ptr<SchedulerTask> task);
@@ -1847,7 +1821,7 @@ private:
 	bool tokenLocked = false;
 	bool staminaPzActive = false;
 	bool staminaTrainerActive = false;
-	bool astraPlayerInventorySnapshotScheduled = false;
+	bool playerInventorySnapshotScheduled = false;
 	uint8_t m_harmony = 0;
 	bool m_serene = false;
 	uint64_t m_serene_cooldown = 0;

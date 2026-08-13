@@ -39,7 +39,7 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 	}
 }
 
-bool isOtcOrAstraLuaOpcode(uint8_t opcode)
+bool isSharedOtcLuaOpcode(uint8_t opcode)
 {
 	switch (opcode) {
 		case 0x2D: // custom charm activated
@@ -52,7 +52,7 @@ bool isOtcOrAstraLuaOpcode(uint8_t opcode)
 	}
 }
 
-bool isAstraOnlyLuaOpcode(uint8_t opcode)
+bool isExtendedOtcv8LuaOpcode(uint8_t opcode)
 {
 	switch (opcode) {
 		case 0x2C: // custom boss cooldown
@@ -79,10 +79,10 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 	}
 
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
-	if (isAstraOnlyLuaOpcode(opcode)) {
-		return player.supportsCreatureIcons();
+	if (isExtendedOtcv8LuaOpcode(opcode)) {
+		return player.isOTCv8();
 	}
-	if (isOtcOrAstraLuaOpcode(opcode)) {
+	if (isSharedOtcLuaOpcode(opcode)) {
 		return player.isOTC();
 	}
 	return !isOtcOnlyLuaOpcode(opcode) || player.isOTC();

@@ -920,7 +920,7 @@ class ProtocolSpectator {
         }
 
         void sendLootContainers() {
-            if (caps.creatureIcons) {
+            if (isOTCv8) {
                 auto o = owner.lock();
                 if (o)
                     o->sendLootContainers();
@@ -1052,7 +1052,6 @@ class ProtocolSpectator {
         bool isOTCv8 = false;
         bool isMehah = false;
 	    bool isOTC = false;
-        ClientCapabilities caps;
         std::string cast_password = "";
         std::string cast_description = "";
 

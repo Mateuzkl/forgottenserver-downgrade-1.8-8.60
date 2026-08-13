@@ -1,4 +1,4 @@
--- Astra/client protocol configuration is in data/server_config.lua.
+-- OTCv8/Mehah protocol configuration is in data/server_config.lua.
 
 Autoloot_enabled = true
 AutoBank = true
@@ -150,7 +150,7 @@ exhaustItemAtUsePotion = true
 
 -- Optional custom systems
 -- Most optional systems default to false for closer 8.60 behavior.
--- Quick Loot defaults to true because the Astra managed-loot UI expects it.
+-- Quick Loot defaults to true for clients that support the managed-loot UI.
 forgeSystemEnabled = false
 imbuementSystemEnabled = false
 monkVocationEnabled = false
@@ -182,7 +182,7 @@ characterBazaarMinDurationHours = 24
 characterBazaarMaxDurationDays = 7
 
 -- Enable Task Hunt / Task Board system.
--- Requires compatible AstraClient/OTCv8 support.
+-- Requires compatible OTCv8 support.
 -- Default: false keeps classic 8.60 behaviour.
 taskHuntingSystemEnabled = false
 
