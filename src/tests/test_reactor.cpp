@@ -231,6 +231,81 @@ TEST_CASE(test_reactor_exception_does_not_stop_other_callbacks)
 	CHECK(executedAfterException);
 }
 
+// A task pushed past the fairness limit goes back through sendInbox to run next
+// cycle. Cancelling it while it sits there must be honoured: before the fix,
+// drainInbox() ignored cancellations on that path, so stopEvent() silently did
+// nothing and the callback ran anyway after the caller had retired it.
+TEST_CASE(test_reactor_cancel_while_deferred_by_fairness_limit_prevents_execution)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxTasksPerCycle(1);
+
+	bool firstExecuted = false;
+	bool deferredExecuted = false;
+
+	reactor.schedule(0, [&firstExecuted] { firstExecuted = true; });
+	const uint32_t deferredIdentifier = reactor.schedule(0, [&deferredExecuted] { deferredExecuted = true; });
+
+	// Only one task may run this cycle; the second is deferred, still registered.
+	reactor.runOnce();
+	CHECK(firstExecuted);
+	CHECK(!deferredExecuted);
+
+	reactor.cancel(deferredIdentifier);
+	reactor.setMaxTasksPerCycle(0);
+
+	reactor.runOnce();
+	reactor.runOnce();
+	CHECK(!deferredExecuted);
+}
+
+// Same contract under the time budget, which is the other deferral path.
+TEST_CASE(test_reactor_cancel_while_deferred_by_time_budget_prevents_execution)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setTimeBudget(std::chrono::milliseconds(1));
+
+	bool deferredExecuted = false;
+
+	// The first callback alone overruns the budget, so everything after it defers.
+	reactor.schedule(0, [] { std::this_thread::sleep_for(std::chrono::milliseconds(5)); });
+	const uint32_t deferredIdentifier = reactor.schedule(0, [&deferredExecuted] { deferredExecuted = true; });
+
+	reactor.runOnce();
+	CHECK(!deferredExecuted);
+
+	reactor.cancel(deferredIdentifier);
+	reactor.setTimeBudget(std::chrono::milliseconds(0));
+
+	reactor.runOnce();
+	reactor.runOnce();
+	CHECK(!deferredExecuted);
+}
+
+// A deferred task that is *not* cancelled must still run on a later cycle, so the
+// cancellation fix does not silently drop legitimate work.
+TEST_CASE(test_reactor_deferred_task_still_runs_when_not_cancelled)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxTasksPerCycle(1);
+
+	int executions = 0;
+	reactor.schedule(0, [] {});
+	reactor.schedule(0, [&executions] { ++executions; });
+
+	reactor.runOnce();
+	CHECK(executions == 0);
+
+	reactor.runOnce();
+	CHECK(executions == 1);
+
+	reactor.runOnce();
+	CHECK(executions == 1); // runs exactly once
+}
+
 TEST_CASE(test_scheduler_dispatcher_move_only_pipeline)
 {
 	g_dispatcher.start();
