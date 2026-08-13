@@ -6175,16 +6175,38 @@ void Game::internalCreatureChangeOutfit(Creature* creature, const Outfit_t& outf
 
 void Game::internalCreatureChangeVisible(Creature* creature, bool visible)
 {
-	// send to clients
+	// The fourth argument is onlyPlayers. It used to be true, which is why only
+	// clients were ever updated: monsters never even reached the spectator list.
+	// Collect every spectator so the AI below can see them; players() still yields
+	// exactly the same set it did before.
 	SpectatorVec spectators;
-	map.getSpectators(spectators, creature->getPosition(), true, true);
+	map.getSpectators(spectators, creature->getPosition(), true);
 	const uint32_t creatureInstance = creature->getInstanceID();
+
+	// send to clients
 	for (const auto& spectator : spectators.players()) {
 		Player* p = static_cast<Player*>(spectator.get());
 		if (!p->compareInstance(creatureInstance)) {
 			continue;
 		}
 		p->sendCreatureChangeVisible(creature, visible);
+	}
+
+	// Update monster AI too. Only the client was told about the change, so a monster
+	// kept attacking a target it could no longer see, and never reacquired one that
+	// became visible again while standing next to it.
+	//
+	// onCreatureInstanceChange() already routes this correctly: leaving drops the
+	// target, entering runs onCreatureFound() and clears the idle state. isTarget()
+	// gates on canSeeCreature(), so the invisibility check itself already works.
+	for (const auto& spectator : spectators.monsters()) {
+		if (spectator.get() == creature || !spectator->compareInstance(creatureInstance)) {
+			continue;
+		}
+
+		if (Monster* monster = spectator->getMonster()) {
+			monster->onCreatureInstanceChange(creature, visible);
+		}
 	}
 }
 
