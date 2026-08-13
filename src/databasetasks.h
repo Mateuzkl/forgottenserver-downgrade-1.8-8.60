@@ -27,7 +27,13 @@ public:
 	void flush();
 	void shutdown();
 
-	void addTask(std::string query, std::function<void(DBResult_ptr, bool, uint64_t)> callback = nullptr, bool store = false);
+	// Returns true only when the task was actually queued. A false return means the
+	// worker is not running and the callback will NEVER be invoked, so any resource
+	// whose release is owned by that callback (a Lua registry reference, for example)
+	// must be freed by the caller instead. Discarding the result silently leaks those.
+	[[nodiscard]] bool addTask(std::string query,
+	                           std::function<void(DBResult_ptr, bool, uint64_t)> callback = nullptr,
+	                           bool store = false);
 
 	void threadMain();
 	[[nodiscard]] bool isRunning() const { return getState() == THREAD_STATE_RUNNING; }

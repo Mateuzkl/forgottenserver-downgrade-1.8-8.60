@@ -41,11 +41,12 @@ void DatabaseTasks::threadMain()
 	taskDoneSignal.notify_all();
 }
 
-void DatabaseTasks::addTask(std::string query, std::function<void(DBResult_ptr, bool, uint64_t)> callback /* = nullptr*/,
+bool DatabaseTasks::addTask(std::string query, std::function<void(DBResult_ptr, bool, uint64_t)> callback /* = nullptr*/,
                             bool store /* = false*/)
 {
 	bool signal = false;
 	bool accepted = false;
+	const size_t queryLength = query.size();
 	{
 		std::scoped_lock guard(taskLock);
 		if (getState() == THREAD_STATE_RUNNING) {
@@ -59,20 +60,21 @@ void DatabaseTasks::addTask(std::string query, std::function<void(DBResult_ptr, 
 		// Dropping the task used to be completely silent: no log, no return value,
 		// nothing for the caller to react to. Since logout and shutdown saves come
 		// through here, that turned into player progress vanishing with no trace to
-		// correlate against the report. Truncate the query so a bulk INSERT does not
-		// flood the log.
-		constexpr size_t MAX_LOGGED_QUERY_LENGTH = 256;
-		std::string_view preview{query};
+		// correlate against the report.
+		//
+		// Only metadata is logged. Queries carry account names, passwords, player
+		// positions and other user data, so echoing even a truncated prefix into the
+		// log would leak it to anyone who can read the log file.
 		LOG_ERROR("[DatabaseTasks::addTask] Task rejected because the database worker is not running; "
-		          "the query was NOT executed: {}{}",
-		          preview.substr(0, MAX_LOGGED_QUERY_LENGTH),
-		          preview.size() > MAX_LOGGED_QUERY_LENGTH ? "..." : "");
-		return;
+		          "the query was NOT executed; query_length={}",
+		          queryLength);
+		return false;
 	}
 
 	if (signal) {
 		taskSignal.notify_one();
 	}
+	return true;
 }
 
 void DatabaseTasks::runTask(const DatabaseTask& task)

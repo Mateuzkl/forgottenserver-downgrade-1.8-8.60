@@ -24,11 +24,14 @@ bool IOBan::isAccountBanned(uint32_t accountId, BanInfo& banInfo)
 	time_t expiresAt = result->getNumber<time_t>("expires_at");
 	if (expiresAt != 0 && std::chrono::system_clock::now() > std::chrono::system_clock::from_time_t(expiresAt)) {
 		// Move the ban to history if it has expired
-		g_databaseTasks.addTask(fmt::format(
+		// Fire-and-forget housekeeping: no callback, so nothing owns a resource that a
+		// rejected task would strand. addTask() already logs the rejection itself.
+		static_cast<void>(g_databaseTasks.addTask(fmt::format(
 		    "INSERT INTO `account_ban_history` (`account_id`, `reason`, `banned_at`, `expired_at`, `banned_by`) VALUES ({:d}, {:s}, {:d}, {:d}, {:d})",
 		    accountId, db.escapeString(result->getString("reason")), result->getNumber<time_t>("banned_at"), expiresAt,
-		    result->getNumber<uint32_t>("banned_by")));
-		g_databaseTasks.addTask(fmt::format("DELETE FROM `account_bans` WHERE `account_id` = {:d}", accountId));
+		    result->getNumber<uint32_t>("banned_by"))));
+		static_cast<void>(
+		    g_databaseTasks.addTask(fmt::format("DELETE FROM `account_bans` WHERE `account_id` = {:d}", accountId)));
 		return false;
 	}
 
@@ -55,7 +58,8 @@ bool IOBan::isIpBanned(const uint32_t clientIP, BanInfo& banInfo)
 
 	time_t expiresAt = result->getNumber<time_t>("expires_at");
 	if (expiresAt != 0 && std::chrono::system_clock::now() > std::chrono::system_clock::from_time_t(expiresAt)) {
-		g_databaseTasks.addTask(fmt::format("DELETE FROM `ip_bans` WHERE `ip` = {:d}", clientIP));
+		// Fire-and-forget housekeeping, as above.
+		static_cast<void>(g_databaseTasks.addTask(fmt::format("DELETE FROM `ip_bans` WHERE `ip` = {:d}", clientIP)));
 		return false;
 	}
 

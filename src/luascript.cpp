@@ -4207,8 +4207,10 @@ int LuaScriptInterface::luaDatabaseAsyncExecute(lua_State* L)
 		return pushAsyncTransactionError(L, "db.query()");
 	}
 	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
+	int32_t callbackRef = LUA_NOREF;
 	if (lua_gettop(L) > 1) {
 		int32_t ref = luaL_ref(L, LUA_REGISTRYINDEX);
+		callbackRef = ref;
 		auto scriptId = getScriptEnv()->getScriptId();
 		callback = [ref, scriptId](DBResult_ptr, bool success, uint64_t affectedRows) {
 			lua_State* luaState = g_luaEnvironment.getLuaState();
@@ -4227,7 +4229,13 @@ int LuaScriptInterface::luaDatabaseAsyncExecute(lua_State* L)
 			finishAsyncDatabaseCallback(luaState, ref, scriptId, 2);
 		};
 	}
-	g_databaseTasks.addTask(Lua::getString(L, -1), callback);
+
+	// The worker is not running, so the callback that owns this reference will never
+	// run. Release it here or it — and everything the referenced closure keeps alive —
+	// stays in the registry until shutdown.
+	if (!g_databaseTasks.addTask(Lua::getString(L, -1), callback) && callbackRef != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, callbackRef);
+	}
 	return 0;
 }
 
@@ -4247,8 +4255,10 @@ int LuaScriptInterface::luaDatabaseAsyncStoreQuery(lua_State* L)
 		return pushAsyncTransactionError(L, "db.storeQuery()");
 	}
 	std::function<void(DBResult_ptr, bool, uint64_t)> callback;
+	int32_t callbackRef = LUA_NOREF;
 	if (lua_gettop(L) > 1) {
 		int32_t ref = luaL_ref(L, LUA_REGISTRYINDEX);
+		callbackRef = ref;
 		auto scriptId = getScriptEnv()->getScriptId();
 		callback = [ref, scriptId](DBResult_ptr result, bool, uint64_t affectedRows) {
 			lua_State* luaState = g_luaEnvironment.getLuaState();
@@ -4272,7 +4282,11 @@ int LuaScriptInterface::luaDatabaseAsyncStoreQuery(lua_State* L)
 			finishAsyncDatabaseCallback(luaState, ref, scriptId, 2);
 		};
 	}
-	g_databaseTasks.addTask(Lua::getString(L, -1), callback, true);
+	// See luaDatabaseAsyncExecute: a rejected task means the callback never runs, so
+	// the registry reference it would have released has to be dropped here.
+	if (!g_databaseTasks.addTask(Lua::getString(L, -1), callback, true) && callbackRef != LUA_NOREF) {
+		luaL_unref(L, LUA_REGISTRYINDEX, callbackRef);
+	}
 	return 0;
 }
 
