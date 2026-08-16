@@ -10,18 +10,24 @@ namespace {
 
 using enum WeaponProficiencyBonus_t;
 
+// The config is process-wide and the tests share one binary, so every change to it has to be
+// undone before the next test runs.
 class ProficiencyEnabledGuard
 {
 public:
-	ProficiencyEnabledGuard() : previous(ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED))
+	explicit ProficiencyEnabledGuard(bool enabled = true) :
+		previous(ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED))
 	{
-		ConfigManager::setBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED, true);
+		ConfigManager::setBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED, enabled);
 	}
 
 	~ProficiencyEnabledGuard()
 	{
 		ConfigManager::setBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED, previous);
 	}
+
+	ProficiencyEnabledGuard(const ProficiencyEnabledGuard&) = delete;
+	ProficiencyEnabledGuard& operator=(const ProficiencyEnabledGuard&) = delete;
 
 private:
 	bool previous;
@@ -213,7 +219,7 @@ TEST_CASE(disabling_the_system_keeps_combat_untouched)
 	proficiency.resetStats();
 
 	// With the system off applyPerk is a no-op, so nothing can leak into combat.
-	ConfigManager::setBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED, false);
+	ProficiencyEnabledGuard disabled(false);
 	proficiency.applyPerk(static_cast<uint8_t>(CRITICAL_HIT_CHANCE), 0.05);
 	applyIcePerks(proficiency);
 
