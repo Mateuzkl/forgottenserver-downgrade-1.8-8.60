@@ -19,6 +19,10 @@ public:
 
 	void removeInbox(Inbox* inbox);
 
+	// cylinder implementations
+	ReturnValue queryAdd(int32_t index, const Thing& thing, uint32_t count, uint32_t flags,
+	                     Creature* actor = nullptr) const override;
+
 	// serialization
 	Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
 
