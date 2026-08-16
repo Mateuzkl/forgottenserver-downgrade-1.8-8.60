@@ -74,6 +74,31 @@ local function normalizeName(name)
 	return tostring(name or ""):lower()
 end
 
+-- onKill runs on every monster death, so it has to be able to reject a monster that no mission
+-- tracks before touching the KV store. Target names are normalized once here instead of on every
+-- comparison, and collected into a single lookup set.
+local missionWatchesEveryMonster = false
+local watchedMonsterNames = {}
+
+for _, mission in pairs(missionById) do
+	if mission.targets == "*" then
+		mission.normalizedTargets = "*"
+		missionWatchesEveryMonster = true
+	else
+		local normalized = {}
+		for _, targetName in ipairs(mission.targets or {}) do
+			local name = normalizeName(targetName)
+			normalized[name] = true
+			watchedMonsterNames[name] = true
+		end
+		mission.normalizedTargets = normalized
+	end
+end
+
+local function isMonsterWatched(normalizedName)
+	return missionWatchesEveryMonster or watchedMonsterNames[normalizedName] == true
+end
+
 local function clamp(value, minValue, maxValue)
 	value = tonumber(value) or 0
 	if value < minValue then
@@ -171,8 +196,6 @@ local function loadState(player)
 
 	if type(state) ~= "table" or state.seasonId ~= season.id then
 		state = resetStateForSeason(season)
-	else
-		ensureStateTables(state)
 	end
 
 	if state.dailyKey ~= daily.key then
@@ -220,18 +243,13 @@ local function addShopPoints(state, amount)
 	state.shopPoints = clamp((tonumber(state.shopPoints) or 0) + amount, 0, 0xFFFFFFFF)
 end
 
-local function missionMatches(mission, monsterName)
-	if mission.targets == "*" then
+-- Takes an already normalized monster name; see the precomputation above.
+local function missionMatches(mission, normalizedName)
+	local targets = mission.normalizedTargets
+	if targets == "*" then
 		return true
 	end
-
-	local normalized = normalizeName(monsterName)
-	for _, targetName in ipairs(mission.targets or {}) do
-		if normalized == normalizeName(targetName) then
-			return true
-		end
-	end
-	return false
+	return targets ~= nil and targets[normalizedName] == true
 end
 
 local function getMissionPayload(state, mission, daily)
@@ -1286,8 +1304,8 @@ function BattlePassSystem.rerollDailyMission(player, data)
 	return true
 end
 
-local function updateMissionProgress(player, state, mission, daily, monsterName)
-	if not mission or not missionMatches(mission, monsterName) then
+local function updateMissionProgress(player, state, mission, daily, normalizedName)
+	if not mission or not missionMatches(mission, normalizedName) then
 		return false
 	end
 
@@ -1323,6 +1341,14 @@ function BattlePassSystem.onKill(player, target)
 	if target:getMaster() then
 		return true
 	end
+
+	-- Reject monsters no mission tracks before anything else: loadState() reaches into the KV
+	-- store and deserializes the whole battle pass state, and this runs on every kill.
+	local normalizedName = normalizeName(target:getName())
+	if not isMonsterWatched(normalizedName) then
+		return true
+	end
+
 	if getRequirementError(player) then
 		return true
 	end
@@ -1332,7 +1358,6 @@ function BattlePassSystem.onKill(player, target)
 		return true
 	end
 
-	local monsterName = target:getName()
 	local changed = false
 	local previousStep = getCurrentRewardStep(state.points)
 	local wasCompleted = state.completed
@@ -1340,15 +1365,18 @@ function BattlePassSystem.onKill(player, target)
 
 	local dailyMissions = getActiveDailyMissions(state, daily.key)
 	if dailyMissions[1] then
-		changed = updateMissionProgress(player, state, dailyMissions[1], true, monsterName) or changed
+		changed = updateMissionProgress(player, state, dailyMissions[1], true, normalizedName) or changed
 	end
 	if isPremiumActive(state) and dailyMissions[2] then
-		changed = updateMissionProgress(player, state, dailyMissions[2], true, monsterName) or changed
+		changed = updateMissionProgress(player, state, dailyMissions[2], true, normalizedName) or changed
 	end
 
 	for _, mission in ipairs(generalMissions) do
-		if not state.completed and isGeneralMissionUnlocked(mission, season) then
-			changed = updateMissionProgress(player, state, mission, false, monsterName) or changed
+		-- state.completed is re-read every iteration on purpose: completing a mission here can
+		-- complete the whole battle pass, and the remaining missions must then be skipped.
+		if not state.completed and missionMatches(mission, normalizedName)
+			and isGeneralMissionUnlocked(mission, season) then
+			changed = updateMissionProgress(player, state, mission, false, normalizedName) or changed
 		end
 	end
 
