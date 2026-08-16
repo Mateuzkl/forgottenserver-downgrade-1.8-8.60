@@ -457,6 +457,10 @@ refreshProfileSpellAugments = function(player, profile)
 		if not shifted or shifted == 0 then
 			return COMBAT_NONE
 		end
+		-- Physical is 1, which has no trailing zeros and so falls outside the shift formula below.
+		if shifted == 1 then
+			return COMBAT_PHYSICALDAMAGE
+		end
 		-- undoShift: trailingZeros - 2
 		local unshifted = 0
 		local n = shifted

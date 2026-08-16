@@ -46,10 +46,12 @@ enum class WeaponProficiencyBonus_t : uint8_t {
 	SKILL_PERCENTAGE_AUTO_ATTACK = 25,
 	SKILL_PERCENTAGE_SPELL_DAMAGE = 26,
 	SKILL_PERCENTAGE_SPELL_HEALING = 27,
-	ARMOR_PENETRATION = 28,
-	ELEMENTAL_PIERCE = 29,
-	DAMAGE_VS_FULL_HP = 30,
-	DAMAGE_VS_LOW_HP = 31,
+	// 28-31 follow the ids used by data/items/proficiencies.json (Crystal Server's numbering).
+	// They are parsed and stored but not consumed by combat yet.
+	ALPHA_STRIKE_EXTRA_DAMAGE = 28,
+	OMEGA_STRIKE_EXTRA_DAMAGE = 29,
+	ARMOR_PENETRATION = 30,
+	ELEMENTAL_PIERCE = 31,
 
 	BONUS_COUNT = 32
 };
@@ -124,10 +126,18 @@ public:
 	const SkillPercentage& getSkillPercentage(skills_t skill) const;
 
 	// Combat application — called from combat/game code when system is enabled
-	void applyAutoAttackCritical(CombatDamage& damage) const;
-	void applyGeneralCritical(CombatDamage& damage) const;
-	void applyRunesCritical(CombatDamage& damage, bool aggressive) const;
-	void applyElementCritical(CombatDamage& damage) const;
+
+	/**
+	 * Fold every critical perk that matches this hit into damage.criticalChance /
+	 * damage.criticalDamage, which the combat roll then consumes once.
+	 *
+	 * Which perks match follows Crystal Server:
+	 *  - general (8/12)          : every hit;
+	 *  - auto attack (11/15)     : melee, distance and wand/rod swings only;
+	 *  - offensive rune (10/14)  : runes whose spell group is "attack" only;
+	 *  - elemental (9/13)        : instant spells and runes only, matched on primary damage type.
+	 */
+	void applyCriticalPerks(CombatDamage& damage) const;
 	void applyBestiaryDamage(CombatDamage& damage, const std::shared_ptr<Monster>& monster) const;
 	void applyPowerfulFoeDamage(CombatDamage& damage, const std::shared_ptr<Monster>& monster) const;
 	void applySkillAutoAttackPercentage(CombatDamage& damage) const;
@@ -157,6 +167,12 @@ private:
 	void applyCriticalBonus(uint8_t perkType, CombatType_t element, double_t value);
 	void applySkillPercentageBonus(uint8_t perkType, skills_t skillId, double_t value);
 	void applyDamageMultiplier(CombatDamage& damage, double_t multiplier) const;
+
+	// SKILL_MAGLEVEL sits outside Player::skills[], so it has to be read as the magic level.
+	int32_t getProficiencyStatLevel(skills_t skill) const;
+	// Adds a flat bonus in the direction the value already points: damage is negative, healing
+	// positive (same convention as applyPerfectShotDamage in weapons.cpp).
+	static void addExtraValue(CombatDamage& damage, int32_t bonus, bool includeSecondary);
 
 	Player& m_player;
 

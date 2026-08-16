@@ -271,12 +271,14 @@ void Combat::doCombatCleave(Creature* caster, uint32_t primaryTargetId, const Co
 	}
 }
 
-CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target, std::string_view instantSpellName) const
+CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target, const CombatSource& source) const
 {
 	CombatDamage damage;
 	damage.origin = params.origin;
 	damage.primary.type = params.combatType;
-	damage.instantSpellName = instantSpellName;
+	damage.instantSpellName = source.instantSpellName;
+	damage.runeSpell = source.runeSpell;
+	damage.offensiveRune = source.offensiveRune;
 	if (formulaType == COMBAT_FORMULA_DAMAGE) {
 		damage.primary.value = normal_random(static_cast<int32_t>(mina), static_cast<int32_t>(maxa));
 	} else if (creature) {
@@ -1004,18 +1006,18 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 	}
 }
 
-void Combat::doCombat(Creature* caster, Creature* target, std::string_view instantSpellName) const
+void Combat::doCombat(Creature* caster, Creature* target, const CombatSource& source) const
 {
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
 	if (params.chainCallback) {
-		if (doCombatChain(caster, target, params.aggressive, std::string(instantSpellName))) {
+		if (doCombatChain(caster, target, params.aggressive, source)) {
 			return;
 		}
 	}
 
 	// target combat callback function
 	if (params.combatType != COMBAT_NONE) {
-		CombatDamage damage = getCombatDamage(caster, target, instantSpellName);
+		CombatDamage damage = getCombatDamage(caster, target, source);
 
 		bool canCombat =
 		    !params.aggressive || (caster != target && Combat::canDoCombat(caster, target) == RETURNVALUE_NOERROR);
@@ -1076,18 +1078,18 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 	}
 }
 
-void Combat::doCombat(Creature* caster, const Position& position, std::string_view instantSpellName) const
+void Combat::doCombat(Creature* caster, const Position& position, const CombatSource& source) const
 {
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
 	if (params.chainCallback) {
-		if (doCombatChain(caster, nullptr, params.aggressive, std::string(instantSpellName))) {
+		if (doCombatChain(caster, nullptr, params.aggressive, source)) {
 			return;
 		}
 	}
 
 	// area combat callback function
 	if (params.combatType != COMBAT_NONE) {
-		CombatDamage damage = getCombatDamage(caster, nullptr, instantSpellName);
+		CombatDamage damage = getCombatDamage(caster, nullptr, source);
 		doAreaCombat(caster, position, area.get(), damage, params);
 	} else {
 		auto tiles = caster ? getCombatArea(caster->getPosition(), position, area.get())
@@ -1232,10 +1234,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 
 			if (!damage.critical && damage.primary.type != COMBAT_HEALING && damage.origin != ORIGIN_CONDITION) {
 				if (wpEnabled) {
-					casterPlayer->weaponProficiency().applyAutoAttackCritical(damage);
-					casterPlayer->weaponProficiency().applyGeneralCritical(damage);
-					casterPlayer->weaponProficiency().applyRunesCritical(damage, params.aggressive);
-					casterPlayer->weaponProficiency().applyElementCritical(damage);
+					casterPlayer->weaponProficiency().applyCriticalPerks(damage);
 				}
 
 				const uint16_t targetRaceId = target ? getMonsterRaceId(target->getMonster()) : 0;
@@ -1506,14 +1505,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 	const bool wpEnabled = casterPlayer && ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
 
 	if (wpEnabled) {
+		// The spell skill percentage is applied once, in getCombatDamage(), for both the target and
+		// the area path — applying it again here would double it for every area spell.
 		casterPlayer->weaponProficiency().applySkillAutoAttackPercentage(damage);
-		if (!damage.instantSpellName.empty()) {
-			if (damage.primary.type == COMBAT_HEALING) {
-				casterPlayer->weaponProficiency().applySkillSpellPercentage(damage, true);
-			} else {
-				casterPlayer->weaponProficiency().applySkillSpellPercentage(damage);
-			}
-		}
 	}
 
 	int32_t criticalPrimary = 0;
@@ -1521,10 +1515,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 	if (!damage.critical && damage.primary.type != COMBAT_HEALING && casterPlayer &&
 	    damage.origin != ORIGIN_CONDITION) {
 		if (wpEnabled) {
-			casterPlayer->weaponProficiency().applyAutoAttackCritical(damage);
-			casterPlayer->weaponProficiency().applyGeneralCritical(damage);
-			casterPlayer->weaponProficiency().applyRunesCritical(damage, params.aggressive);
-			casterPlayer->weaponProficiency().applyElementCritical(damage);
+			casterPlayer->weaponProficiency().applyCriticalPerks(damage);
 		}
 
 		int32_t chance = std::clamp<int32_t>(
@@ -2410,7 +2401,7 @@ std::vector<std::pair<Position, std::vector<uint32_t>>> Combat::pickChainTargets
 	return resultMap;
 }
 
-bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, std::string instantSpellName) const
+bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, const CombatSource& source) const
 {
 	if (!params.chainCallback) {
 		return false;
@@ -2428,13 +2419,18 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 
 	auto self = shared_from_this();
 	const uint8_t capturedChainEffect = params.chainEffect;
+	// The chain fires from scheduled events, so the source has to be captured by value; its
+	// string_view would dangle by the time the event runs.
+	std::string instantSpellName{source.instantSpellName};
+	const bool runeSpell = source.runeSpell;
+	const bool offensiveRune = source.offensiveRune;
 	int i = 0;
 	for (const auto& [from, toVector] : targets) {
 		auto delay = i * std::max<int32_t>(MIN_TASK_INTERVAL, ConfigManager::getInteger(ConfigManager::COMBAT_CHAIN_DELAY));
 		++i;
 		for (const auto& to : toVector) {
 			g_scheduler.addEvent(delay, [self, casterId = caster ? caster->getID() : 0, to, from, capturedChainEffect,
-			                             instantSpellName]() {
+			                             instantSpellName, runeSpell, offensiveRune]() {
 				auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
 				Creature* resolvedCaster = resolvedCasterRef.get();
 				auto nextTargetRef = g_game.getCreatureByIDShared(to);
@@ -2444,7 +2440,8 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 				}
 				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect, nextTarget->getInstanceID());
 				if (resolvedCaster) {
-					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget, instantSpellName);
+					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget,
+					                                            {instantSpellName, runeSpell, offensiveRune});
 					bool canCombat = !self->params.aggressive ||
 					                 (resolvedCaster != nextTarget &&
 					                  Combat::canDoCombat(resolvedCaster, nextTarget) == RETURNVALUE_NOERROR);

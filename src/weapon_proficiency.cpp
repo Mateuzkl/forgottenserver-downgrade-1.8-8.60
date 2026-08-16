@@ -15,6 +15,10 @@
 
 namespace {
 
+// Perk values come from JSON as decimal fractions (0.02 == 2%). Critical chance, critical extra
+// damage and leech are all consumed by combat as basis points out of 10000.
+constexpr double_t BASIS_POINTS = 10000.0;
+
 int32_t saturatingAddWeapon(int32_t value, int64_t increase)
 {
 	return static_cast<int32_t>(std::clamp<int64_t>(static_cast<int64_t>(value) + increase,
@@ -22,9 +26,31 @@ int32_t saturatingAddWeapon(int32_t value, int64_t increase)
 	                                               std::numeric_limits<int32_t>::max()));
 }
 
+int64_t toBasisPoints(double_t value)
+{
+	if (!std::isfinite(value)) {
+		return 0;
+	}
+	return std::llround(value * BASIS_POINTS);
+}
+
 bool isEnabled()
 {
 	return ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED);
+}
+
+// An auto attack is the weapon swing itself. Spells and runes both arrive as ORIGIN_SPELL and are
+// told apart by instantSpellName / runeSpell.
+bool isAutoAttack(const CombatDamage& damage)
+{
+	return damage.origin == ORIGIN_MELEE || damage.origin == ORIGIN_RANGED || damage.origin == ORIGIN_WAND;
+}
+
+// Crystal gates the elemental perk on "spells and runes": anything carrying an instant spell name
+// or produced by a rune, offensive or not.
+bool isSpellOrRune(const CombatDamage& damage)
+{
+	return !damage.instantSpellName.empty() || damage.runeSpell;
 }
 
 } // namespace
@@ -104,7 +130,7 @@ void WeaponProficiency::applyPerk(uint8_t perkType, double_t value, uint16_t /*s
 			SpecialSkills_t specialSkill = (perkType == static_cast<uint8_t>(LIFE_LEECH))
 			    ? SPECIALSKILL_LIFELEECHAMOUNT
 			    : SPECIALSKILL_MANALEECHAMOUNT;
-			int32_t amount = static_cast<int32_t>(std::llround(value * 10000.0));
+			int32_t amount = static_cast<int32_t>(toBasisPoints(value));
 			m_player.setVarSpecialSkill(specialSkill, amount);
 			if (perkType == static_cast<uint8_t>(LIFE_LEECH)) {
 				m_lifeLeechAdded += amount;
@@ -374,53 +400,41 @@ void WeaponProficiency::applySkillPercentageBonus(uint8_t perkType, skills_t ski
 
 // ---- Combat application methods ---- //
 
-void WeaponProficiency::applyAutoAttackCritical(CombatDamage& damage) const
+void WeaponProficiency::applyCriticalPerks(CombatDamage& damage) const
 {
-	if (damage.origin == ORIGIN_WAND) {
-		return;
+	int64_t chance = 0;
+	int64_t extraDamage = 0;
+
+	const auto accumulate = [&chance, &extraDamage](const WeaponProficiencyCriticalBonus& bonus) {
+		chance += toBasisPoints(bonus.chance);
+		extraDamage += toBasisPoints(bonus.damage);
+	};
+
+	// Crystal folds the unconditional perks into the player's critical skills, so they weigh on
+	// every hit.
+	accumulate(m_generalCritical);
+
+	if (isAutoAttack(damage)) {
+		accumulate(m_autoAttackCritical);
 	}
 
-	if (damage.origin == ORIGIN_MELEE || damage.origin == ORIGIN_RANGED) {
-		damage.criticalChance = saturatingAddWeapon(damage.criticalChance,
-		                                      static_cast<int64_t>(std::llround(m_autoAttackCritical.chance * 10000.0)));
-		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage,
-		                                      static_cast<int64_t>(std::llround(m_autoAttackCritical.damage * 10000.0)));
-	}
-}
+	if (isSpellOrRune(damage)) {
+		// Only runes of the attack group carry the rune-specific perk.
+		if (damage.offensiveRune) {
+			accumulate(m_runesCritical);
+		}
 
-void WeaponProficiency::applyGeneralCritical(CombatDamage& damage) const
-{
-	if (m_generalCritical.chance > 0 || m_generalCritical.damage > 0) {
-		damage.criticalChance = saturatingAddWeapon(damage.criticalChance,
-		                                      static_cast<int64_t>(std::llround(m_generalCritical.chance * 10000.0)));
-		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage,
-		                                      static_cast<int64_t>(std::llround(m_generalCritical.damage * 10000.0)));
-	}
-}
-
-void WeaponProficiency::applyRunesCritical(CombatDamage& damage, bool aggressive) const
-{
-	if (!aggressive) {
-		return;
+		const size_t index = combatTypeToIndex(damage.primary.type);
+		if (index < m_elementCritical.size()) {
+			accumulate(m_elementCritical[index]);
+		}
 	}
 
-	if (!damage.instantSpellName.empty() && damage.origin == ORIGIN_SPELL) {
-		damage.criticalChance = saturatingAddWeapon(damage.criticalChance,
-		                                      static_cast<int64_t>(std::llround(m_runesCritical.chance * 10000.0)));
-		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage,
-		                                      static_cast<int64_t>(std::llround(m_runesCritical.damage * 10000.0)));
+	if (chance != 0) {
+		damage.criticalChance = saturatingAddWeapon(damage.criticalChance, chance);
 	}
-}
-
-void WeaponProficiency::applyElementCritical(CombatDamage& damage) const
-{
-	const size_t index = combatTypeToIndex(damage.primary.type);
-	if (index < m_elementCritical.size()) {
-		const auto& ec = m_elementCritical[index];
-		damage.criticalChance = saturatingAddWeapon(damage.criticalChance,
-		                                      static_cast<int64_t>(std::llround(ec.chance * 10000.0)));
-		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage,
-		                                      static_cast<int64_t>(std::llround(ec.damage * 10000.0)));
+	if (extraDamage != 0) {
+		damage.criticalDamage = saturatingAddWeapon(damage.criticalDamage, extraDamage);
 	}
 }
 
@@ -460,18 +474,47 @@ void WeaponProficiency::applyDamageMultiplier(CombatDamage& damage, double_t mul
 	damage.secondary.value = static_cast<int32_t>(std::llround(damage.secondary.value * mult));
 }
 
-void WeaponProficiency::applySkillAutoAttackPercentage(CombatDamage& damage) const
+int32_t WeaponProficiency::getProficiencyStatLevel(skills_t skill) const
 {
-	if (damage.origin != ORIGIN_MELEE && damage.origin != ORIGIN_RANGED) {
+	if (skill == SKILL_MAGLEVEL) {
+		return static_cast<int32_t>(m_player.getMagicLevel());
+	}
+	return static_cast<int32_t>(m_player.getSkillLevel(skill));
+}
+
+void WeaponProficiency::addExtraValue(CombatDamage& damage, int32_t bonus, bool includeSecondary)
+{
+	if (bonus <= 0) {
 		return;
 	}
 
-	for (const auto& kv : m_skillPercentages) {
-		const auto& sp = kv.second;
+	if (damage.primary.value < 0) {
+		damage.primary.value = saturatingAddWeapon(damage.primary.value, -bonus);
+	} else if (damage.primary.value > 0) {
+		damage.primary.value = saturatingAddWeapon(damage.primary.value, bonus);
+	}
+
+	if (!includeSecondary) {
+		return;
+	}
+
+	if (damage.secondary.value < 0) {
+		damage.secondary.value = saturatingAddWeapon(damage.secondary.value, -bonus);
+	} else if (damage.secondary.value > 0) {
+		damage.secondary.value = saturatingAddWeapon(damage.secondary.value, bonus);
+	}
+}
+
+void WeaponProficiency::applySkillAutoAttackPercentage(CombatDamage& damage) const
+{
+	if (!isAutoAttack(damage)) {
+		return;
+	}
+
+	for (const auto& [skill, sp] : m_skillPercentages) {
 		if (sp.autoAttack > 0) {
-			const int32_t extra = static_cast<int32_t>(
-			    std::ceil(m_player.getSkillLevel(sp.skill) * sp.autoAttack));
-			damage.primary.value += extra;
+			addExtraValue(damage, static_cast<int32_t>(std::ceil(getProficiencyStatLevel(sp.skill) * sp.autoAttack)),
+			              true);
 		}
 	}
 }
@@ -482,14 +525,11 @@ void WeaponProficiency::applySkillSpellPercentage(CombatDamage& damage, bool hea
 		return;
 	}
 
-	for (const auto& kv : m_skillPercentages) {
-		const auto& sp = kv.second;
-		double_t value = healing ? sp.spellHealing : sp.spellDamage;
-
+	for (const auto& [skill, sp] : m_skillPercentages) {
+		const double_t value = healing ? sp.spellHealing : sp.spellDamage;
 		if (value > 0) {
-			const int32_t extra = static_cast<int32_t>(
-			    std::ceil(m_player.getSkillLevel(sp.skill) * value));
-			damage.primary.value += extra;
+			// Healing has no secondary component; only spell damage spills over to it.
+			addExtraValue(damage, static_cast<int32_t>(std::ceil(getProficiencyStatLevel(sp.skill) * value)), !healing);
 		}
 	}
 }

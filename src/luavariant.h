@@ -18,6 +18,11 @@ class LuaVariant
 public:
 	std::string instantName;
 
+	// Set by RuneSpell before the variant is handed to onCastSpell, so that combat:execute()
+	// can tell the resulting damage apart from an instant spell.
+	bool runeSpell = false;
+	bool offensiveRune = false;
+
 	uint32_t getNumber() const { return std::get<VARIANT_NUMBER>(variant); }
 	const Position& getPosition() const { return std::get<VARIANT_POSITION>(variant); }
 	const Position& getTargetPosition() const { return std::get<VARIANT_TARGETPOSITION>(variant); }

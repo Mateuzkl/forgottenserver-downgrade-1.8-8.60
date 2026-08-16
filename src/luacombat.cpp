@@ -330,21 +330,21 @@ int luaCombatExecute(lua_State* L)
 			}
 
 			if (combat->hasArea()) {
-				combat->doCombat(creature, target->getPosition(), variant.instantName);
+				combat->doCombat(creature, target->getPosition(), CombatSource::fromVariant(variant));
 			} else {
-				combat->doCombat(creature, target, variant.instantName);
+				combat->doCombat(creature, target, CombatSource::fromVariant(variant));
 			}
 			break;
 		}
 
 		case VARIANT_POSITION: {
-			combat->doCombat(creature, variant.getPosition(), variant.instantName);
+			combat->doCombat(creature, variant.getPosition(), CombatSource::fromVariant(variant));
 			break;
 		}
 
 		case VARIANT_TARGETPOSITION: {
 			if (combat->hasArea()) {
-				combat->doCombat(creature, variant.getTargetPosition(), variant.instantName);
+				combat->doCombat(creature, variant.getTargetPosition(), CombatSource::fromVariant(variant));
 			} else {
 				combat->postCombatEffects(creature, variant.getTargetPosition());
 				g_game.addMagicEffect(variant.getTargetPosition(), CONST_ME_POFF, creature ? creature->getInstanceID() : 0);
@@ -359,7 +359,7 @@ int luaCombatExecute(lua_State* L)
 				return 1;
 			}
 
-			combat->doCombat(creature, target.get(), variant.instantName);
+			combat->doCombat(creature, target.get(), CombatSource::fromVariant(variant));
 			break;
 		}
 

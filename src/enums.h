@@ -784,6 +784,10 @@ struct CombatDamage
 	bool initialOriginCaptured = false;
 	bool equipmentDamageBonusApplied = false;
 	bool equipmentDamageReductionApplied = false;
+	// Runes carry no instantSpellName, so these flags are what tells a rune hit apart from an
+	// instant spell hit (both arrive with origin == ORIGIN_SPELL).
+	bool runeSpell = false;
+	bool offensiveRune = false; // runeSpell whose spell group is SPELLGROUP_ATTACK
 	int32_t criticalDamage = 0;
 	int32_t criticalChance = 0;
 	int32_t perfectShotDamage = 0;

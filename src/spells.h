@@ -6,6 +6,7 @@
 
 #include "actions.h"
 #include "baseevents.h"
+#include "luavariant.h"
 #include "player.h"
 #include "talkaction.h"
 #include "tools.h"
@@ -319,6 +320,14 @@ private:
 	std::string_view getScriptEventName() const override;
 
 	bool internalCastSpell(Creature* creature, const LuaVariant& var, bool isHotkey);
+
+	// Tags the variant handed to onCastSpell so the combat it triggers is attributed to a rune
+	// rather than an instant spell. Weapon proficiency perks distinguish the two.
+	void markRuneSource(LuaVariant& var) const
+	{
+		var.runeSpell = true;
+		var.offensiveRune = getGroup() == SPELLGROUP_ATTACK;
+	}
 
 	uint16_t runeId = 0;
 	uint32_t charges = 0;

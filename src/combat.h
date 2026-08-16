@@ -6,6 +6,7 @@
 
 #include "baseevents.h"
 #include "condition.h"
+#include "luavariant.h"
 #include "map.h"
 #include "thing.h"
 
@@ -121,6 +122,21 @@ private:
 	bool hasExtArea = false;
 };
 
+// Identifies what produced a combat, so the damage can be attributed to an instant spell, a rune
+// or neither. Runes are indistinguishable from instant spells by origin alone (both are
+// ORIGIN_SPELL) and carry no name, which is what the weapon proficiency perks need to tell apart.
+struct CombatSource
+{
+	std::string_view instantSpellName;
+	bool runeSpell = false;
+	bool offensiveRune = false; // rune whose spell group is SPELLGROUP_ATTACK
+
+	static CombatSource fromVariant(const LuaVariant& variant)
+	{
+		return {variant.instantName, variant.runeSpell, variant.offensiveRune};
+	}
+};
+
 class Combat : public std::enable_shared_from_this<Combat>
 {
 public:
@@ -142,8 +158,8 @@ public:
 
 	static void addDistanceEffect(Creature* caster, const Position& fromPos, const Position& toPos, uint16_t effect);
 
-	void doCombat(Creature* caster, Creature* target, std::string_view instantSpellName = {}) const;
-	void doCombat(Creature* caster, const Position& position, std::string_view instantSpellName = {}) const;
+	void doCombat(Creature* caster, Creature* target, const CombatSource& source = {}) const;
+	void doCombat(Creature* caster, const Position& position, const CombatSource& source = {}) const;
 
 	static void doTargetCombat(Creature* caster, Creature* target, CombatDamage& damage, const CombatParams& params);
 	static void doAreaCombat(Creature* caster, const Position& position, const AreaCombat* area, CombatDamage& damage,
@@ -178,7 +194,7 @@ public:
 	}
 
 	void setupChain(const class Weapon* weapon);
-	bool doCombatChain(Creature* caster, Creature* target, bool aggressive, std::string instantSpellName = {}) const;
+	bool doCombatChain(Creature* caster, Creature* target, bool aggressive, const CombatSource& source = {}) const;
 	void setChainCallback(uint8_t chainTargets, uint8_t chainDistance, bool backtracking);
 
 private:
@@ -191,7 +207,7 @@ private:
 
 	static void combatTileEffects(const SpectatorVec& spectators, Creature* caster, Tile* tile,
 	                              const CombatParams& params, AreaCombatMetricsSample* metrics = nullptr);
-	CombatDamage getCombatDamage(Creature* creature, Creature* target, std::string_view instantSpellName) const;
+	CombatDamage getCombatDamage(Creature* creature, Creature* target, const CombatSource& source) const;
 
 	// configurable
 	CombatParams params;

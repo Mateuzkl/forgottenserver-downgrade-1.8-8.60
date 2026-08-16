@@ -1144,6 +1144,7 @@ bool RuneSpell::executeUse(Player* player, const std::shared_ptr<Item>& item, co
 	}
 
 	LuaVariant var;
+	markRuneSource(var);
 
 	if (needTarget) {
 		if (target == nullptr) {
@@ -1187,6 +1188,7 @@ bool RuneSpell::executeUse(Player* player, const std::shared_ptr<Item>& item, co
 bool RuneSpell::castSpell(Creature* creature)
 {
 	LuaVariant var;
+	markRuneSource(var);
 	var.setNumber(creature->getID());
 	return internalCastSpell(creature, var, false);
 }
@@ -1194,6 +1196,7 @@ bool RuneSpell::castSpell(Creature* creature)
 bool RuneSpell::castSpell(Creature* creature, Creature* target)
 {
 	LuaVariant var;
+	markRuneSource(var);
 	var.setNumber(target->getID());
 	return internalCastSpell(creature, var, false);
 }
