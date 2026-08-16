@@ -64,6 +64,14 @@ public:
 	static std::optional<PlayerSaveSnapshot> buildPlayerSave(Player* player);
 	static bool flushPlayerSave(const PlayerSaveSnapshot& snapshot);
 	static bool addRewardItems(uint32_t playerId, const ItemBlockList& itemList, DBInsert& query_insert, PropWriteStream& propWriteStream);
+	// Gathers every inbox item of every town locker, keyed by depot id. Exposed so the
+	// persistence tests can assert on it without a database round trip.
+	static void collectInboxItems(const Player* player, ItemBlockList& itemList);
+	// Serializes an item list, expanding nested containers, into query_insert. Public alongside
+	// addRewardItems, which does the same job for the reward chest, so the persistence tests can
+	// drive a real save.
+	static bool saveItems(const Player* player, const ItemBlockList& itemList, DBInsert& query_insert,
+	                      PropWriteStream& propWriteStream);
 	static uint32_t getGuidByName(std::string_view name);
 	static bool getGuidByNameEx(uint32_t& guid, bool& specialVip, std::string& name);
 	static bool saveAutoLootConfig(Player* player);
@@ -104,8 +112,6 @@ private:
 	static void loadPlayerGuild(Player* player);
 	static bool savePlayer(Player* player);
 	static bool savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot);
-	static bool saveItems(const Player* player, const ItemBlockList& itemList, DBInsert& query_insert,
-	                      PropWriteStream& propWriteStream);
 };
 
 #endif
