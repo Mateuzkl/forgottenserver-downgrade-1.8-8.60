@@ -11,6 +11,7 @@
 #include "tasks.h"
 #include "zoneweather.h"
 
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -24,6 +25,7 @@ class Item;
 class Tile;
 class Connection;
 class ProtocolGame;
+struct ProtocolGameCustomPingTestAccess;
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 class ProtocolSpectator;
 
@@ -333,10 +335,23 @@ private:
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 	void parseCustomClientPing(NetworkMessage& msg);
+	static uint32_t nextCustomPingId(uint32_t current);
+	static std::optional<uint32_t> readCustomPingId(NetworkMessage& msg);
+	void cleanupCustomPings(int64_t now);
+	bool registerCustomPing(uint32_t id, int64_t now);
+
+	enum class CustomPongResult : uint8_t
+	{
+		Accepted,
+		Duplicate,
+		Unknown,
+	};
+	CustomPongResult receiveCustomPong(uint32_t id, int64_t now);
 
 	friend class Player;
 	friend class ProtocolSpectator;
 	friend class SpySystem;
+	friend struct ProtocolGameCustomPingTestAccess;
 
 	//cast
 	void spectatorTurn(uint8_t direction);
@@ -412,6 +427,16 @@ private:
 	bool imbuementTrackerOpen = false;
 	std::optional<WeatherState> lastZoneWeather;
 	uint32_t customPingSequence = 0;
+	// Sixteen slots cover more than the 30-second TTL at a five-second heartbeat.
+	static constexpr std::size_t CUSTOM_PING_MAX_TRACKED = 16;
+	static constexpr int64_t CUSTOM_PING_TTL_MS = 30'000;
+	struct CustomPingEntry
+	{
+		uint32_t id = 0;
+		int64_t stateSince = 0;
+		bool acknowledgementSent = false;
+	};
+	std::array<CustomPingEntry, CUSTOM_PING_MAX_TRACKED> customPings = {};
 	int64_t nextCastSwitchTime = 0;
 	int64_t nextCastSwitchCooldownMessageTime = 0;
 

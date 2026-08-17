@@ -3723,9 +3723,8 @@ void ProtocolGame::sendSkills()
 void ProtocolGame::sendPing()
 {
 	if (clientOperatingSystem == CLIENTOS_CUSTOM_DLL) {
-		if (++customPingSequence == 0) {
-			++customPingSequence;
-		}
+		customPingSequence = nextCustomPingId(customPingSequence);
+		registerCustomPing(customPingSequence, OTSYS_TIME());
 		sendCustomClientPing(customPingSequence);
 		return;
 	}
@@ -3741,6 +3740,72 @@ void ProtocolGame::sendCustomClientPing(uint32_t pingId)
 	msg.addByte(0x1E);
 	msg.add<uint32_t>(pingId);
 	writeToOutputBuffer(msg);
+}
+
+uint32_t ProtocolGame::nextCustomPingId(uint32_t current)
+{
+	++current;
+	return current == 0 ? 1 : current;
+}
+
+void ProtocolGame::cleanupCustomPings(int64_t now)
+{
+	for (CustomPingEntry& entry : customPings) {
+		if (entry.id != 0 && now >= entry.stateSince && now - entry.stateSince >= CUSTOM_PING_TTL_MS) {
+			entry = {};
+		}
+	}
+}
+
+bool ProtocolGame::registerCustomPing(uint32_t id, int64_t now)
+{
+	if (id == 0) {
+		return false;
+	}
+
+	cleanupCustomPings(now);
+	for (CustomPingEntry& entry : customPings) {
+		if (entry.id == id) {
+			entry = {id, now, false};
+			return true;
+		}
+	}
+
+	CustomPingEntry* selected = nullptr;
+	for (CustomPingEntry& entry : customPings) {
+		if (entry.id == 0) {
+			selected = &entry;
+			break;
+		}
+		if (!selected || entry.stateSince < selected->stateSince) {
+			selected = &entry;
+		}
+	}
+
+	*selected = {id, now, false};
+	return true;
+}
+
+ProtocolGame::CustomPongResult ProtocolGame::receiveCustomPong(uint32_t id, int64_t now)
+{
+	cleanupCustomPings(now);
+	if (id == 0) {
+		return CustomPongResult::Unknown;
+	}
+
+	for (CustomPingEntry& entry : customPings) {
+		if (entry.id != id) {
+			continue;
+		}
+		if (entry.acknowledgementSent) {
+			return CustomPongResult::Duplicate;
+		}
+
+		entry.acknowledgementSent = true;
+		entry.stateSince = now;
+		return CustomPongResult::Accepted;
+	}
+	return CustomPongResult::Unknown;
 }
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
@@ -5186,11 +5251,25 @@ void ProtocolGame::parseNewPing(NetworkMessage& msg)
 
 void ProtocolGame::parseCustomClientPing(NetworkMessage& msg)
 {
-	const uint32_t pingId = msg.get<uint32_t>();
-	if (g_game.getGameState() == GAME_STATE_NORMAL && player) {
-		g_game.playerReceivePing(player->getID());
-		sendCustomClientPing(pingId);
+	const auto pingId = readCustomPingId(msg);
+	if (!pingId || g_game.getGameState() != GAME_STATE_NORMAL || !player) {
+		return;
 	}
+
+	// ProtocolGame packet state is dispatcher-owned. Only the first pong for an
+	// ID that this connection actually issued may refresh keepalive or get an ACK.
+	if (receiveCustomPong(*pingId, OTSYS_TIME()) == CustomPongResult::Accepted) {
+		g_game.playerReceivePing(player->getID());
+		sendCustomClientPing(*pingId);
+	}
+}
+
+std::optional<uint32_t> ProtocolGame::readCustomPingId(NetworkMessage& msg)
+{
+	if (getReadableBytes(msg) < sizeof(uint32_t)) {
+		return std::nullopt;
+	}
+	return msg.get<uint32_t>();
 }
 
 // OTCv8 and Mehah
