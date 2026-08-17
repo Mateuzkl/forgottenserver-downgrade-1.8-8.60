@@ -1,7 +1,7 @@
 local miniBotAdmin = TalkAction("/minibotadmin")
 
 local MAX_BAN_MINUTES = 365 * 24 * 60
-local USAGE = "Usage: /minibotadmin check-start|check-stop|ban|unban|status, player name[, ban minutes]"
+local USAGE = "Usage: /minibotadmin check-start|check-stop|ban|unban|status, player name[, ban minutes] | /minibotadmin stats"
 
 local function reply(player, message, errorMessage)
 	player:sendTextMessage(errorMessage and MESSAGE_STATUS_CONSOLE_RED or MESSAGE_STATUS_CONSOLE_BLUE, message)
@@ -28,6 +28,24 @@ function miniBotAdmin.onSay(player, words, param)
 	local params = param:splitTrimmed(",")
 	local action = params[1] and params[1]:lower() or ""
 	local targetName = params[2] or ""
+
+	-- Server-wide MiniBot accounting. Proves that the session registry, the
+	-- scheduled events and the published packets stay proportional to the players
+	-- actually using MiniBot instead of to the whole server.
+	if action == "stats" then
+		local debugStats = AstraHelper.getMiniBotDebugStats and AstraHelper.getMiniBotDebugStats()
+		if not debugStats then
+			reply(player, "MiniBot debug statistics are unavailable.", true)
+			return false
+		end
+		reply(player, string.format(
+			"MiniBot: sessions=%d, checks=%d, scheduledEvents=%d, packetsSent=%d, packetsSkipped=%d, storageWrites=%d, rateLimited=%d (players online: %d).",
+			debugStats.activeSessions, debugStats.checkSessions, debugStats.scheduledExpiryEvents,
+			debugStats.statePacketsSent, debugStats.statePacketsSkipped, debugStats.storageWrites,
+			debugStats.rateLimitedRequests, #Game.getPlayers()))
+		return false
+	end
+
 	if action == "" or targetName == "" then
 		reply(player, USAGE, true)
 		return false

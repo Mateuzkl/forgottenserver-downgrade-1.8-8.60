@@ -2740,7 +2740,8 @@ void Monster::death(Creature*)
 			    contrubutionScore, totalScore, contributors,
 			    ConfigManager::getFloat(ConfigManager::REWARD_BASE_RATE));
 			auto player = g_game.getPlayerByGUID(playerId);
-			const double miniBotLootMultiplier = std::clamp(playerScoreInfo.miniBotLootMultiplier, 0.0, 1.0);
+			const double miniBotLootMultiplier =
+			    playerScoreInfo.miniBotTaskRestricted ? MINIBOT_TASK_LOOT_MULTIPLIER : 1.0;
 			auto rewardItem = Item::CreateItem(ITEM_REWARD_CONTAINER);
 			if (!rewardItem) {
 				return;

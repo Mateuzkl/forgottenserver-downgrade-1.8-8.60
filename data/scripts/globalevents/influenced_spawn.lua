@@ -270,9 +270,10 @@ function influencedDeath.onDeath(creature, corpse, killer, mostDamageKiller, las
         local baseExp = monster:getType():experience()
         if baseExp > 0 then
             local extraExp = math.floor(baseExp * (CONFIG.fiendish.expMult - 1))
-            -- addExperience() bypasses onGainExperience, so the Task-mode MiniBot
-            -- multiplier has to be applied here or Fiendish kills would pay full
-            -- experience while the bot is active.
+            -- player:addExperience() enters onGainExperience with no source, and
+            -- the MiniBot handler there deliberately ignores sourceless awards.
+            -- This bonus is monster experience, so the Task multiplier is applied
+            -- here instead - exactly once.
             if AstraHelper and AstraHelper.getMiniBotExperienceMultiplier then
                 local multiplier = tonumber(AstraHelper.getMiniBotExperienceMultiplier(player)) or 1
                 extraExp = math.floor(extraExp * math.min(1, math.max(0, multiplier)) + 0.5)

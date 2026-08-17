@@ -1,6 +1,7 @@
 local OPCODE_LANGUAGE = 1
 local OPCODE_MEHAH_ID = 50
-local STORAGE_MEHAH_CLIENT = 99999 -- Storage key to mark Mehah clients
+-- Storage key that marks Mehah clients. PlayerStorageKeys is the source of truth.
+local STORAGE_MEHAH_CLIENT = PlayerStorageKeys.astraHelperMehahClient
 
 local extendedOpcode = CreatureEvent("ExtendedOpcode")
 function extendedOpcode.onExtendedOpcode(player, opcode, buffer)
@@ -39,21 +40,8 @@ function logout.onLogout(player)
 end
 logout:register()
 
-local ticker = GlobalEvent("MiniBotStateTicker")
-function ticker.onThink(interval)
-    if not AstraHelper then
-        return true
-    end
-
-    for _, player in ipairs(Game.getPlayers()) do
-        -- Publishing without a client request is intentional: this transition
-        -- disables an expired/banned cavebot on its own.  Restrict it to players
-        -- that actually carry MiniBot state, so idle sessions are left untouched.
-        if not AstraHelper.needsMiniBotStateTick or AstraHelper.needsMiniBotStateTick(player) then
-            AstraHelper.sendMiniBotState(player)
-        end
-    end
-    return true
-end
-ticker:interval(30000)
-ticker:register()
+-- There is deliberately no MiniBot global ticker. Scanning Game.getPlayers() made
+-- the cost of the feature proportional to the whole server instead of to the
+-- handful of players actually botting. AstraHelper now keeps one session per
+-- MiniBot user and schedules a single event per session that publishes the clock,
+-- refreshes the AFK indicator and switches an exhausted or banned cavebot off.

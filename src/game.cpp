@@ -50,31 +50,15 @@ extern LuaEnvironment g_luaEnvironment;
 
 namespace {
 
-constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
-constexpr uint32_t STORAGE_ASTRA_HELPER_MINIBOT_TIME_LEFT = 100020;
-constexpr uint32_t STORAGE_ASTRA_HELPER_MINIBOT_TASK = 100023;
-constexpr uint32_t STORAGE_ASTRA_HELPER_MINIBOT_BANNED_UNTIL = 100025;
-constexpr double MINIBOT_TASK_LOOT_MULTIPLIER = 0.20;
-
-double getMiniBotTaskLootMultiplier(const Player* player)
+// Freezes the most restrictive MiniBot mode observed while the player was
+// contributing to a reward boss, so a logout or a last-second Task toggle cannot
+// upgrade already-earned loot. This runs on every damage/heal tick of the whole
+// fight, so once the flag is latched no further work is done for that player.
+inline void recordMiniBotRewardMode(Game::PlayerScoreInfo& score, const Player* player) noexcept
 {
-	if (!player) {
-		return 1.0;
+	if (!score.miniBotTaskRestricted && player && player->isMiniBotTaskRestricted()) {
+		score.miniBotTaskRestricted = true;
 	}
-	const auto cavebot = player->getStorageValue(STORAGE_ASTRA_HELPER_CAVEBOT);
-	const auto timeLeft = player->getStorageValue(STORAGE_ASTRA_HELPER_MINIBOT_TIME_LEFT);
-	const auto taskMode = player->getStorageValue(STORAGE_ASTRA_HELPER_MINIBOT_TASK);
-	const auto bannedUntil = player->getStorageValue(STORAGE_ASTRA_HELPER_MINIBOT_BANNED_UNTIL);
-	const bool taskActive = cavebot.value_or(0) == 1 && taskMode.value_or(0) == 1 && timeLeft.value_or(0) > 0 &&
-	                        bannedUntil.value_or(0) <= time(nullptr);
-	return taskActive ? MINIBOT_TASK_LOOT_MULTIPLIER : 1.0;
-}
-
-void recordMiniBotRewardMode(Game::PlayerScoreInfo& score, const Player* player)
-{
-	// Freeze the most restrictive mode observed for this boss. A logout or a
-	// last-second Task toggle therefore cannot upgrade already-earned loot.
-	score.miniBotLootMultiplier = std::min(score.miniBotLootMultiplier, getMiniBotTaskLootMultiplier(player));
 }
 
 bool areDifferentNonZeroInstances(const Creature* first, const Creature* second)

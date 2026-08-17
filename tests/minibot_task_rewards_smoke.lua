@@ -103,6 +103,39 @@ taskExperienceMultiplier = 1
 assert(runExperienceCallbacks() == 200, "experience multiplier 1 must preserve the baseline")
 assert(proficiencyExperience == 200, "baseline Weapon Proficiency experience must be preserved")
 
+-- Player::addExperience() runs this same chain for every direct
+-- player:addExperience() call, so quest rewards, task board rewards, /addexp and
+-- the reset system's experience restore all arrive here with no source. Task mode
+-- may only reduce hunting experience: scaling those would silently destroy a
+-- player's level on the next reset, and would scale the Fiendish bonus twice.
+local function runSourcelessExperienceCallbacks(exp)
+	for _, registered in ipairs(experienceCallbacks) do
+		exp = registered.callback(player, nil, exp, exp, false)
+	end
+	return exp
+end
+
+local playerSource = {
+	isPlayer = function() return true end,
+	isMonster = function() return false end,
+	isInfluenced = function() return false end,
+	getName = function() return "Test Player" end,
+}
+local function runPvpExperienceCallbacks(exp)
+	for _, registered in ipairs(experienceCallbacks) do
+		exp = registered.callback(player, playerSource, exp, exp, false)
+	end
+	return exp
+end
+
+taskExperienceMultiplier = 0.20
+assert(runSourcelessExperienceCallbacks(1000) == 1000,
+	"Task mode must not scale experience awarded without a monster source")
+assert(runPvpExperienceCallbacks(1000) == 1000, "Task mode must not scale player kill experience")
+assert(runExperienceCallbacks() == 40, "Task must still scale monster experience exactly once")
+
+taskExperienceMultiplier = 1
+
 local playerEventFile = assert(io.open("data/events/scripts/player.lua", "rb"))
 local playerEventSource = playerEventFile:read("*a")
 playerEventFile:close()

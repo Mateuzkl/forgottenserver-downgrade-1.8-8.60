@@ -35,6 +35,12 @@
 #include <unordered_map>
 #include <unordered_set>
 
+// Single C++ source of truth for the MiniBot Task reward policy. It must stay in
+// sync with AstraHelper.MINIBOT.TaskLootMultiplier in
+// data/lib/functions/astra_helper.lua; tests/minibot_task_rewards_smoke.lua
+// asserts that both sides agree.
+inline constexpr double MINIBOT_TASK_LOOT_MULTIPLIER = 0.20;
+
 enum VirtueMonk_t : uint8_t {
 	VIRTUE_NONE = 0,
 	VIRTUE_HARMONY = 1,
@@ -1554,6 +1560,14 @@ public:
 	bool isMehah() const { return client ? client->isMehah : false; }
 	bool isAstraClient() const { return client ? client->isAstraClient : false; }
 	bool isFonticakClient() const { return client ? client->isFonticakClient : false; }
+
+	// MiniBot Task mode. Combat and loot hot paths must never reach for storages
+	// to answer this, so Lua mirrors every MiniBot transition into this flag and
+	// the engine only reads it. It is deliberately not persisted: a fresh Player
+	// starts unrestricted and Lua re-arms it when Task mode is enabled again.
+	bool isMiniBotTaskRestricted() const noexcept { return miniBotTaskRestricted; }
+	void setMiniBotTaskRestricted(bool restricted) noexcept { miniBotTaskRestricted = restricted; }
+
 	bool isOTC() const
 	{
 		switch (operatingSystem) {
@@ -1824,6 +1838,7 @@ private:
 	bool staminaPzActive = false;
 	bool staminaTrainerActive = false;
 	bool astraPlayerInventorySnapshotScheduled = false;
+	bool miniBotTaskRestricted = false;
 	uint8_t m_harmony = 0;
 	bool m_serene = false;
 	uint64_t m_serene_cooldown = 0;

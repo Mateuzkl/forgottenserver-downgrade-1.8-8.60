@@ -97,6 +97,18 @@ event:register()
 local miniBotTaskExperience = Event()
 
 function miniBotTaskExperience.onGainExperience(player, source, exp)
+	-- Same guard as the standard formula above, and it is load bearing.
+	-- Player::addExperience() runs this whole chain (src/player.cpp), including
+	-- every direct player:addExperience() call: quest rewards, task board rewards,
+	-- /addexp and the reset system's experience restore all arrive here with no
+	-- source. Task mode may only reduce hunting experience, so anything without a
+	-- monster source is passed through untouched. Callers that award monster
+	-- experience through addExperience() (the Fiendish bonus) apply the multiplier
+	-- themselves, which keeps it applied exactly once.
+	if not source or source:isPlayer() then
+		return exp
+	end
+
 	if not AstraHelper or not AstraHelper.getMiniBotExperienceMultiplier then
 		return exp
 	end
