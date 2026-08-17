@@ -206,9 +206,54 @@ cada servidor precisa rodar `benchmarks/perf_baseline/run.sh` no próprio hardwa
 > mais, o ganho é ≤6% e o port é **REJEITADO** pelo gate. Sem o histograma da seção 8, qualquer decisão
 > aqui é chute.
 
-**5. Pré-condição (A) ainda em aberto.** Se o binário for distribuído para terceiros, `-march=native`
-não pode ser usado e o baseline muda — foi exatamente esse cenário que fez o plano priorizar errado da
-primeira vez. Preciso da sua resposta: **o binário roda na mesma máquina onde é compilado?**
+**5. Pré-condição (A) — metade resolvida pelo `--sweep`.** Em `-O3` puro (sem `-march=native`, que é o
+que se usa num binário distribuído), o AVX2 do BlackTek ganha em **praticamente todo tamanho**:
+
+| bytes | tfs @ -O3 | bt-avx2 @ -O3 | ganho |
+|------:|----------:|--------------:|------:|
+| 64 | 164,7 | **81,8** | 2,01x |
+| 128 | 242,4 | **152,1** | 1,59x |
+| 256 | 451,8 | **306,6** | 1,47x |
+| 512 | 872,4 | **613,6** | 1,42x |
+| 1024 | 1925,5 | **1217,6** | 1,58x |
+| 4096 | 7102,0 | **4889,7** | 1,45x |
+| 16384 | 27879,0 | **19542,1** | 1,43x |
+
+Todos passam o gate de 20% com folga. **Se o binário for distribuído para terceiros, o port vale.**
+Se for compilado na mesma máquina onde roda, ver o item 6. Ainda preciso da sua resposta sobre qual
+dos dois cenários é o real.
+
+### AVISO — variância acima de 256 bytes invalida o gate com `-march=native`
+
+Duas execuções do **mesmo commit, mesma máquina, mesmas flags de baseline**:
+
+| bytes | tfs (execução 1) | tfs (execução 2) | variação | bt-avx2 (1) | bt-avx2 (2) | variação |
+|------:|-----------------:|-----------------:|---------:|------------:|------------:|---------:|
+| 256 | 305,1 | 380,0 | +25% | 307,3 | 315,0 | +3% |
+| 512 | 652,3 | 738,3 | +13% | 607,3 | 618,7 | +2% |
+| 1024 | 1103,8 | 1291,3 | +17% | 1209,4 | 1246,5 | +3% |
+| 4096 | 4917,8 | 6580,6 | **+34%** | 4845,1 | 5004,0 | +3% |
+| 16384 | 20575,3 | 26343,7 | +28% | 19689,7 | 22684,1 | +15% |
+
+A coluna do código atual variou até **34%**; a do AVX2 ficou dentro de 3% na maior parte. A causa mais
+provável é **thermal throttling** — a máquina é um i5-10300H de notebook e a segunda execução veio no
+fim de um `--sweep` de quatro builds. O laço auto-vetorizado é mais sensível à queda de clock que o
+kernel AVX2.
+
+**Consequência:** de 256 bytes para cima, com `-march=native`, o gate de 20% cai **dentro da margem de
+ruído**. Esses números não decidem nada. Para decidir seria preciso repetir num servidor dedicado, sem
+throttling, com a máquina fria e repetições intercaladas.
+
+### O que é estável em todas as 8 execuções
+
+Independente de flags, ordem e temperatura:
+
+```
+64 B     -> AVX2 ganha 2,01x a 2,66x     (sempre)
+128 B    -> AVX2 ganha 1,42x a 1,69x     (sempre)
+16/24/48/56 B -> o código atual ganha    (sempre)
+bt-scalar-> perde em tudo acima de 8 B, até 7,2x   (sempre)
+```
 
 ---
 
