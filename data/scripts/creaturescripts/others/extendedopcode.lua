@@ -46,9 +46,12 @@ function ticker.onThink(interval)
     end
 
     for _, player in ipairs(Game.getPlayers()) do
-        -- Publishing every session is intentional: this transition disables an
-        -- expired/banned cavebot even if no client request is received.
-        AstraHelper.sendMiniBotState(player)
+        -- Publishing without a client request is intentional: this transition
+        -- disables an expired/banned cavebot on its own.  Restrict it to players
+        -- that actually carry MiniBot state, so idle sessions are left untouched.
+        if not AstraHelper.needsMiniBotStateTick or AstraHelper.needsMiniBotStateTick(player) then
+            AstraHelper.sendMiniBotState(player)
+        end
     end
     return true
 end

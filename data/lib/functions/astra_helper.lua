@@ -190,6 +190,25 @@ function AstraHelper.isMiniBotCheckActive(player)
 	return session ~= nil and session.playerGuid == player:getGuid()
 end
 
+-- Read-only predicate: reads storage through readStorage and the in-memory check
+-- sessions, and never initializes or writes anything.  Lets the state ticker skip
+-- players that carry no MiniBot state instead of touching every online session.
+function AstraHelper.needsMiniBotStateTick(player)
+	if not player then
+		return false
+	end
+
+	if player:getStorageValue(AstraHelper.STORAGES.Cavebot) == 1 then
+		return true
+	end
+
+	if readStorage(player, AstraHelper.STORAGES.MiniBotAfkPauseUntil, 0) > 0 then
+		return true
+	end
+
+	return AstraHelper.isMiniBotCheckActive(player) == true
+end
+
 function AstraHelper.refreshMiniBotAfkIndicator(player, timestamp)
 	if not player then
 		return false
