@@ -221,12 +221,17 @@ int main()
 	const xtea::key rawKey = {0x1F2E3D4Cu, 0x5B6A7988u, 0x97A6B5C4u, 0xD3E2F100u};
 	const round_keys k = xtea::expand_key(rawKey);
 
-	const std::vector<Impl> impls = {
+	std::vector<Impl> impls = {
 	    {"tfs", &xtea::encrypt},
 	    {"bt-scalar", &bt_scalar_encrypt},
 	    {"bt-sse2", &bt_sse2_encrypt},
-	    {"bt-avx2", &bt_avx2_encrypt},
 	};
+	__builtin_cpu_init();
+	if (__builtin_cpu_supports("avx2")) {
+		impls.push_back({"bt-avx2", &bt_avx2_encrypt});
+	} else {
+		std::printf("SKIP bt-avx2: AVX2 is unavailable\n");
+	}
 
 	// Multiples of 8 only: XTEA operates on 8-byte blocks and the protocol pads
 	// to that boundary before calling encrypt.
@@ -240,7 +245,11 @@ int main()
 	std::printf("  all %zu implementations agree on %zu sizes, decrypt round-trips\n\n", impls.size(), sizes.size());
 
 	std::printf("== encrypt, ns per call, best of 5, lower is better ==\n");
-	std::printf("%8s %12s %12s %12s %12s   %s\n", "bytes", "tfs", "bt-scalar", "bt-sse2", "bt-avx2", "winner");
+	std::printf("%8s", "bytes");
+	for (const Impl& impl : impls) {
+		std::printf(" %12s", impl.name);
+	}
+	std::printf("   %s\n", "winner");
 
 	for (size_t size : sizes) {
 		const size_t iterations = std::max<size_t>(2000, (1u << 22) / size);
@@ -256,8 +265,11 @@ int main()
 		const size_t winner = static_cast<size_t>(std::min_element(best.begin(), best.end()) - best.begin());
 		const double ratio = best[0] / best[winner];
 
-		std::printf("%8zu %12.1f %12.1f %12.1f %12.1f   %s", size, best[0], best[1], best[2], best[3],
-		            impls[winner].name);
+		std::printf("%8zu", size);
+		for (double timing : best) {
+			std::printf(" %12.1f", timing);
+		}
+		std::printf("   %s", impls[winner].name);
 		if (winner == 0) {
 			std::printf(" (current is fastest)\n");
 		} else {

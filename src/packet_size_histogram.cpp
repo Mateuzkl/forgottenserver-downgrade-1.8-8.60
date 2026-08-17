@@ -16,29 +16,42 @@ namespace tfs::diagnostics {
 std::string PacketSizeHistogram::report(const char* label) const
 {
 	const uint64_t samples = total.load(std::memory_order_relaxed);
-	if (samples == 0) {
+	const uint64_t bytes = totalBytes.load(std::memory_order_relaxed);
+	std::array<uint64_t, PACKET_SIZE_BUCKETS.size()> bucketHits;
+	for (size_t i = 0; i < PACKET_SIZE_BUCKETS.size(); ++i) {
+		bucketHits[i] = buckets[i].load(std::memory_order_relaxed);
+	}
+	const uint64_t overflowHits = overflow.load(std::memory_order_relaxed);
+
+	uint64_t distributionSamples = overflowHits;
+	for (uint64_t hits : bucketHits) {
+		distributionSamples += hits;
+	}
+	if (samples == 0 || distributionSamples == 0) {
 		return fmt::format("[packet-size] {}: no samples yet\n", label);
 	}
 
-	const uint64_t bytes = totalBytes.load(std::memory_order_relaxed);
 	std::string out = fmt::format("[packet-size] {}: {} packets, {} bytes, mean {:.1f} bytes\n", label, samples, bytes,
 	                              static_cast<double>(bytes) / static_cast<double>(samples));
 
 	size_t low = 0;
 	uint64_t cumulative = 0;
 	for (size_t i = 0; i < PACKET_SIZE_BUCKETS.size(); ++i) {
-		const uint64_t hits = buckets[i].load(std::memory_order_relaxed);
+		const uint64_t hits = bucketHits[i];
 		cumulative += hits;
-		const double share = 100.0 * static_cast<double>(hits) / static_cast<double>(samples);
-		const double cumulativeShare = 100.0 * static_cast<double>(cumulative) / static_cast<double>(samples);
+		const double share = 100.0 * static_cast<double>(hits) / static_cast<double>(distributionSamples);
+		const double cumulativeShare =
+		    100.0 * static_cast<double>(cumulative) / static_cast<double>(distributionSamples);
 		out += fmt::format("    {:>6}..{:<6} {:>12} {:>6.2f}%  (cum {:>6.2f}%)\n", low + 1, PACKET_SIZE_BUCKETS[i],
 		                   hits, share, cumulativeShare);
 		low = PACKET_SIZE_BUCKETS[i];
 	}
 
-	const uint64_t hits = overflow.load(std::memory_order_relaxed);
-	out += fmt::format("    {:>6}+{:<7} {:>12} {:>6.2f}%  (cum 100.00%)\n", low + 1, "", hits,
-	                   100.0 * static_cast<double>(hits) / static_cast<double>(samples));
+	cumulative += overflowHits;
+	const double overflowShare = 100.0 * static_cast<double>(overflowHits) / static_cast<double>(distributionSamples);
+	const double cumulativeShare = 100.0 * static_cast<double>(cumulative) / static_cast<double>(distributionSamples);
+	out += fmt::format("    {:>6}+{:<7} {:>12} {:>6.2f}%  (cum {:>6.2f}%)\n", low + 1, "", overflowHits,
+	                   overflowShare, cumulativeShare);
 	return out;
 }
 

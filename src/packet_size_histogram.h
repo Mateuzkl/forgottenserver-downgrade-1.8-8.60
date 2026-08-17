@@ -40,18 +40,19 @@ public:
 	// Called from the IO threads, so the counters are atomic. Relaxed ordering
 	// is enough: nothing else is published through them and the totals are only
 	// read for reporting.
-	void record(size_t length) noexcept
+	uint64_t record(size_t length) noexcept
 	{
-		total.fetch_add(1, std::memory_order_relaxed);
+		const uint64_t count = total.fetch_add(1, std::memory_order_relaxed) + 1;
 		totalBytes.fetch_add(length, std::memory_order_relaxed);
 
 		for (size_t i = 0; i < PACKET_SIZE_BUCKETS.size(); ++i) {
 			if (length <= PACKET_SIZE_BUCKETS[i]) {
 				buckets[i].fetch_add(1, std::memory_order_relaxed);
-				return;
+				return count;
 			}
 		}
 		overflow.fetch_add(1, std::memory_order_relaxed);
+		return count;
 	}
 
 	// Renders the distribution as a single multi-line string. Kept out of the
@@ -85,8 +86,8 @@ inline constexpr uint64_t REPORT_INTERVAL = 100000;
 #define TFS_RECORD_OUTGOING_PACKET_SIZE(length)                                        \
 	do {                                                                               \
 		auto& histogram = ::tfs::diagnostics::outgoingPacketSizes();                   \
-		histogram.record(length);                                                      \
-		if (histogram.count() % ::tfs::diagnostics::REPORT_INTERVAL == 0) {             \
+		const uint64_t count = histogram.record(length);                               \
+		if (count % ::tfs::diagnostics::REPORT_INTERVAL == 0) {                        \
 			::tfs::diagnostics::reportPacketSizes();                                   \
 		}                                                                              \
 	} while (false)

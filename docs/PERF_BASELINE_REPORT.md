@@ -30,7 +30,7 @@ Nenhuma mudança de comportamento. Toda instrumentação adicionada é opcional 
 
 `CMakeCache.txt` mostra apenas o valor que o usuário passou:
 
-```
+```text
 CMAKE_BUILD_TYPE:STRING=Release
 CMAKE_CXX_FLAGS_RELEASE:STRING=-O3 -DNDEBUG
 ENABLE_NATIVE_OPTIMIZATIONS:BOOL=ON
@@ -38,7 +38,7 @@ ENABLE_NATIVE_OPTIMIZATIONS:BOOL=ON
 
 A linha de compilação real, lida de `build-release/src/CMakeFiles/tfslib.dir/flags.make`:
 
-```
+```text
 -O3 -fomit-frame-pointer -DNDEBUG -march=native -mtune=native -std=c++23
 -flto=auto -fno-fat-lto-objects -Wall -Wextra ... -fno-strict-aliasing
 ```
@@ -66,7 +66,7 @@ Rodando exatamente isso, a saída vem vazia — parece "não vetorizou". **É um
 O projeto compila com `-flto=auto -fno-fat-lto-objects`: o `.o` contém só bytecode GIMPLE, nenhuma
 instrução de máquina. Comprovado:
 
-```
+```text
 compile rc=0
 ymm (AVX2 256-bit) no TU : 0
 xmm (SSE  128-bit) no TU : 0
@@ -76,13 +76,13 @@ total de instruções      : 0     <- objeto sem código, geração adiada para 
 A geração de código — e portanto a vetorização — acontece **no link**. E como o projeto usa
 `-fvisibility=hidden` + LTO, `xtea::encrypt` nem existe como símbolo no binário final:
 
-```
+```text
 nm -C build-release/tfs | grep xtea::   ->  (vazio, inlinado pelo LTO)
 ```
 
 Isolando o mesmo laço num TU sem `otpch.h`, o GCC **vetoriza**:
 
-```
+```text
 /tmp/xtea_iso.cpp:9:49: optimized: loop vectorized using 32 byte vectors
 /tmp/xtea_iso.cpp:9:49: optimized: loop versioned for vectorization because of possible aliasing
 /tmp/xtea_iso.cpp:9:49: optimized: loop vectorized using 16 byte vectors
@@ -96,7 +96,7 @@ medir, não inspecionar — que é o que `benchmarks/perf_baseline/` passa a faz
 
 ## 3. Onde XTEA e Adler32 são realmente chamados
 
-```
+```text
 src/protocol.cpp:24   xtea::encrypt(buffer, msg.getLength(), key)        <- todo pacote de saída
 src/protocol.cpp:34   xtea::decrypt(buffer, msg.getLength() - 6, key)    <- todo pacote de entrada
 
@@ -124,7 +124,7 @@ Adler com **8 bytes fixos** — exatamente o tamanho onde a zlib **perde** para 
 
 Estruturas que o TFS **já tem** e que não devem ser reimplementadas:
 
-```
+```text
 QTree + cachedLeaf            src/map.cpp        (5 ocorrências)
 SpectatorVec::partitionByType src/spectators.h
 thread_local AStarWorkspace   src/map.cpp        (13 ocorrências)
@@ -248,7 +248,7 @@ throttling, com a máquina fria e repetições intercaladas.
 
 Independente de flags, ordem e temperatura:
 
-```
+```text
 64 B     -> AVX2 ganha 2,01x a 2,66x     (sempre)
 128 B    -> AVX2 ganha 1,42x a 1,69x     (sempre)
 16/24/48/56 B -> o código atual ganha    (sempre)
@@ -280,7 +280,7 @@ nada e o binário de produção não muda.
 Um `cmake -B build-novo -DCMAKE_BUILD_TYPE=Release` **limpo não configura** nesta máquina. Duas
 dependências estão instaladas à mão e só são encontradas via cache de uma árvore já configurada:
 
-```
+```text
 mio             -> /home/mateus/.local/share/cmake/mio     (precisa de CMAKE_PREFIX_PATH)
 Lua 5.5         -> LUA_INCLUDE_DIR não é achado sozinho
 simdutf         -> /home/mateus/.local/lib/cmake/simdutf

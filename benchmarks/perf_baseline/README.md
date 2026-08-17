@@ -9,7 +9,7 @@ document.
 
 The baseline is the flag set the Release build really uses:
 
-```
+```text
 -O3 -march=native -mtune=native -fomit-frame-pointer -DNDEBUG
 ```
 
