@@ -949,6 +949,40 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	return true;
 }
 
+void IOLoginData::collectInboxItems(const Player* player, ItemBlockList& itemList)
+{
+	// Each town locker holds one inbox, and its contents are keyed by that locker's depot id so
+	// the loader can put them back under the right town.
+	//
+	// There is deliberately no item cap here. The rows produced replace everything previously
+	// stored for this player, and the inbox legitimately receives whole houses at once through
+	// House::transferToDepot, which moves items with FLAG_NOLIMIT. Truncating here silently
+	// destroyed anything past the limit. How many entries a client can display is a separate
+	// concern, handled by container pagination in the protocol.
+	for (const auto& [depotId, locker] : player->depotLockerMap) {
+		if (!locker) {
+			continue;
+		}
+
+		for (const auto& item : locker->getItemList()) {
+			if (!item || item->getID() != ITEM_INBOX) {
+				continue;
+			}
+
+			const Container* inbox = item->getContainer();
+			if (!inbox) {
+				continue;
+			}
+
+			for (const auto& subItem : inbox->getItemList()) {
+				if (subItem) {
+					itemList.emplace_back(static_cast<int32_t>(depotId), subItem.get());
+				}
+			}
+		}
+	}
+}
+
 bool IOLoginData::saveItems(const Player* player, const ItemBlockList& itemList, DBInsert& query_insert,
                             PropWriteStream& propWriteStream)
 {
@@ -1344,22 +1378,7 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 	DBInsert inboxQuery(
 		    "INSERT INTO `player_inboxitems` (`player_id`, `pid`, `sid`, `itemtype`, `count`, `attributes`) VALUES ");
 		ItemBlockList itemList;
-
-		int inboxItemsCount = 0;
-		for (const auto& it : player->depotLockerMap) {
-			for (const auto& item : it.second->getItemList()) {
-				if (item->getID() == ITEM_INBOX) {
-					if (Container* container = item->getContainer()) {
-						for (const auto& subItem : container->getItemList()) {
-							if (++inboxItemsCount > 100) {
-								continue;
-							}
-							itemList.emplace_back(it.first, subItem.get());
-						}
-					}
-				}
-			}
-		}
+		collectInboxItems(player, itemList);
 
 		if (!saveItems(player, itemList, inboxQuery, propWriteStream)) {
 			return false;
