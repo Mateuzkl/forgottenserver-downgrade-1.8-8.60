@@ -40,6 +40,7 @@ struct ProtocolGameCustomPingTestAccess
 	static constexpr std::size_t capacity() { return ProtocolGame::CUSTOM_PING_MAX_TRACKED; }
 	static constexpr int64_t ttl() { return ProtocolGame::CUSTOM_PING_TTL_MS; }
 	static uint32_t nextId(uint32_t current) { return ProtocolGame::nextCustomPingId(current); }
+	static uint32_t nextSeed() { return ProtocolGame::nextCustomPingSeed(); }
 	static std::optional<uint32_t> readId(NetworkMessage& msg) { return ProtocolGame::readCustomPingId(msg); }
 };
 
@@ -120,6 +121,25 @@ TEST_CASE(custom_ping_sequence_skips_zero_after_wrap)
 	CHECK(ProtocolGameCustomPingTestAccess::nextId(0) == 1);
 	CHECK(ProtocolGameCustomPingTestAccess::nextId(41) == 42);
 	CHECK(ProtocolGameCustomPingTestAccess::nextId((std::numeric_limits<uint32_t>::max)()) == 1);
+}
+
+TEST_CASE(custom_ping_seeds_do_not_repeat_across_connections)
+{
+	// Every connection must start somewhere else, so a relogin cannot reuse ids
+	// the DLL still holds closed from the previous session.
+	std::set<uint32_t> seeds;
+	uint32_t previous = ProtocolGameCustomPingTestAccess::nextSeed();
+	seeds.insert(previous);
+	for (std::size_t i = 0; i < 4'096; ++i) {
+		const uint32_t seed = ProtocolGameCustomPingTestAccess::nextSeed();
+		CHECK(seed != previous);
+		CHECK(seeds.insert(seed).second);
+		previous = seed;
+	}
+
+	// A seed is only ever fed through nextCustomPingId, which never yields zero,
+	// so a seed landing on zero still produces a usable id.
+	CHECK(ProtocolGameCustomPingTestAccess::nextId(0) != 0);
 }
 
 TEST_CASE(custom_ping_packet_reader_rejects_truncation_without_overrun)

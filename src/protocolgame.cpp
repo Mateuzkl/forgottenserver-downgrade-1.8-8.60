@@ -68,6 +68,16 @@ uint32_t nextDllWeatherSequence()
 	return sequence;
 }
 
+// Ping ids used to restart at 1 on every connection, so each session handed out
+// the same low ids again. The DLL keeps a completed id closed for a while to
+// reject late acknowledgements, which means a relogin inside that window could
+// be answered with "duplicate" instead of a pong. Giving every connection its
+// own starting point of a process-wide cycle keeps ids distinct across sessions;
+// the stride is odd, so a start point only repeats after 2^32 connections. This
+// is collision avoidance, not secrecy: ids stay guessable, and the tracker in
+// registerCustomPing/receiveCustomPong is what rejects ids we never issued.
+std::atomic<uint32_t> customPingSeedCounter{0x1E86'0001};
+
 std::size_t getReadableBytes(const NetworkMessage& msg)
 {
 	const std::size_t end = static_cast<std::size_t>(msg.getLength()) + NetworkMessage::INITIAL_BUFFER_POSITION;
@@ -3723,6 +3733,11 @@ void ProtocolGame::sendSkills()
 void ProtocolGame::sendPing()
 {
 	if (clientOperatingSystem == CLIENTOS_CUSTOM_DLL) {
+		if (customPingSequence == 0) {
+			// Zero is never a live id, so it doubles as the unseeded marker.
+			customPingSequence = nextCustomPingSeed();
+		}
+
 		customPingSequence = nextCustomPingId(customPingSequence);
 		registerCustomPing(customPingSequence, OTSYS_TIME());
 		sendCustomClientPing(customPingSequence);
@@ -3746,6 +3761,11 @@ uint32_t ProtocolGame::nextCustomPingId(uint32_t current)
 {
 	++current;
 	return current == 0 ? 1 : current;
+}
+
+uint32_t ProtocolGame::nextCustomPingSeed()
+{
+	return customPingSeedCounter.fetch_add(0x9E37'79B9, std::memory_order_relaxed);
 }
 
 void ProtocolGame::cleanupCustomPings(int64_t now)
