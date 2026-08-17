@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d0221,40:2d0b6e,70:5b1fa8,100:8b5cf6&height=240&section=header&text=%E2%9A%94%EF%B8%8F%20TFS%201.8%20Downgrade&fontSize=52&fontColor=ffffff&fontAlignY=40&desc=Protocol%208.60%20%7C%20Modern%20Engine%20%7C%20ClientID%20Native&descAlignY=62&descSize=17&animation=fadeIn" alt="TFS 1.8 Downgrade" />
+  <img src="docs/assets/tfs-1.8-official-banner.png" alt="TFS 1.8 Downgrade — Protocol 8.60" width="100%" />
 </p>
 
 <div align="center">
