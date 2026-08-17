@@ -95,6 +95,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/otserv.cpp
 	${CMAKE_CURRENT_LIST_DIR}/outfit.cpp
 	${CMAKE_CURRENT_LIST_DIR}/outputmessage.cpp
+	${CMAKE_CURRENT_LIST_DIR}/packet_size_histogram.cpp
 	${CMAKE_CURRENT_LIST_DIR}/party.cpp
 	${CMAKE_CURRENT_LIST_DIR}/performance_metrics.cpp
 	${CMAKE_CURRENT_LIST_DIR}/player.cpp
