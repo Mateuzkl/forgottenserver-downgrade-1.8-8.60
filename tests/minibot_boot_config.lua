@@ -13,7 +13,8 @@ maxPlayers = 1
 
 mysqlHost = '127.0.0.1'
 mysqlUser = 'forgottenserver'
-mysqlPass = 'CodexUserSmoke_860'
+-- Supplied by the test runner; never commit a database password.
+mysqlPass = os.getenv('MINIBOT_SMOKE_MYSQL_PASS') or ''
 mysqlDatabase = 'forgottenserver'
 mysqlPort = 33306
 

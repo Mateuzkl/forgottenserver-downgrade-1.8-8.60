@@ -2,7 +2,7 @@
 -- Run only against the isolated database selected by minibot_boot_config.lua.
 
 INSERT INTO `accounts` (`name`, `password`, `type`, `premium_ends_at`)
-VALUES ('codex_smoke', SHA1('CodexSmoke860'), 6, UNIX_TIMESTAMP() + 86400)
+VALUES ('codex_smoke', SHA1(@minibot_smoke_password), 6, UNIX_TIMESTAMP() + 86400)
 ON DUPLICATE KEY UPDATE
   `password` = VALUES(`password`),
   `type` = VALUES(`type`),
@@ -25,6 +25,8 @@ VALUES (
 ON DUPLICATE KEY UPDATE
   `group_id` = VALUES(`group_id`),
   `account_id` = VALUES(`account_id`),
+  `level` = VALUES(`level`),
+  `experience` = VALUES(`experience`),
   `vocation` = VALUES(`vocation`),
   `health` = VALUES(`health`),
   `healthmax` = VALUES(`healthmax`),

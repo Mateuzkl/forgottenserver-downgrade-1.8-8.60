@@ -101,8 +101,12 @@ function miniBotTaskExperience.onGainExperience(player, source, exp)
 		return exp
 	end
 
+	-- Clamp to [0, 1]: Task mode may only reduce experience, never grant a bonus.
+	-- Round here so every downstream consumer sees the same whole number that is
+	-- actually awarded.
 	local multiplier = tonumber(AstraHelper.getMiniBotExperienceMultiplier(player)) or 1
-	return exp * math.max(0, multiplier)
+	multiplier = math.min(1, math.max(0, multiplier))
+	return math.floor(exp * multiplier + 0.5)
 end
 
 miniBotTaskExperience:register(50)
