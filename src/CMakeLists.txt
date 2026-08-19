@@ -114,6 +114,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/script.cpp
 	${CMAKE_CURRENT_LIST_DIR}/scriptmanager.cpp
 	${CMAKE_CURRENT_LIST_DIR}/server.cpp
+	${CMAKE_CURRENT_LIST_DIR}/server_minimap.cpp
 	${CMAKE_CURRENT_LIST_DIR}/signals.cpp
 	${CMAKE_CURRENT_LIST_DIR}/spawn.cpp
 	${CMAKE_CURRENT_LIST_DIR}/spectators.cpp
@@ -232,6 +233,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/script.h
 	${CMAKE_CURRENT_LIST_DIR}/scriptmanager.h
 	${CMAKE_CURRENT_LIST_DIR}/server.h
+	${CMAKE_CURRENT_LIST_DIR}/server_minimap.h
 	${CMAKE_CURRENT_LIST_DIR}/signals.h
 	${CMAKE_CURRENT_LIST_DIR}/stress_test.h
 	${CMAKE_CURRENT_LIST_DIR}/spawn.h

@@ -13,6 +13,7 @@
 #include "game.h"
 #include "iologindata.h"
 #include "save_manager.h"
+#include "server_minimap.h"
 #include "instance_utils.h"
 #include "monster.h"
 #include "monsters.h"
@@ -78,6 +79,7 @@ std::size_t getReadableBytes(const NetworkMessage& msg)
 std::deque<std::pair<int64_t, uint32_t>> waitList; // (timeout, player guid)
 std::size_t priorityCount = 0;
 constexpr int64_t CAST_SWITCH_COOLDOWN_MS = 500;
+constexpr int64_t SERVER_MINIMAP_TRANSFER_COOLDOWN_MS = 30'000;
 constexpr uint8_t HELPER_OPCODE_CAVEBOT = 210;
 constexpr uint8_t HELPER_OPCODE_CAST_ON_FOOT = 211;
 constexpr uint8_t HELPER_OPCODE_SMART_FOLLOW = 212;
@@ -5133,6 +5135,50 @@ void ProtocolGame::parseExtendedOpcode(NetworkMessage& msg)
 {
 	uint8_t opcode = msg.getByte();
 	auto buffer = msg.getString();
+
+	if (opcode == ServerMinimap::EXTENDED_OPCODE &&
+	    ConfigManager::getBoolean(ConfigManager::SERVER_MINIMAP_ENABLED)) {
+		if (buffer.size() > 96 || (buffer != "R" && !buffer.starts_with("V:"))) {
+			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE, "X:invalid-request");
+			return;
+		}
+
+		const ServerMinimap::Snapshot snapshot = ServerMinimap::getSnapshot();
+		if (!snapshot.otmm || snapshot.otmm->empty() || snapshot.metadata.version.empty() ||
+		    snapshot.metadata.size != snapshot.otmm->size()) {
+			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE, "X:unavailable");
+			return;
+		}
+
+		const std::string_view clientVersion =
+		    buffer == "R" ? std::string_view{} : std::string_view{buffer}.substr(2);
+		if (!clientVersion.empty() && clientVersion == snapshot.metadata.version) {
+			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE, "C" + snapshot.metadata.version);
+			return;
+		}
+
+		const int64_t now = OTSYS_TIME();
+		if (now < nextServerMinimapTransferTime) {
+			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE, "X:rate-limit");
+			return;
+		}
+		nextServerMinimapTransferTime = now + SERVER_MINIMAP_TRANSFER_COOLDOWN_MS;
+
+		sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE,
+		                   fmt::format("M{}|{}", snapshot.metadata.version, snapshot.metadata.size));
+		for (const ServerMinimap::TransferChunk& chunk : ServerMinimap::splitForTransfer(*snapshot.otmm)) {
+			// OTMM chunks are arbitrary binary. addString performs UTF-8 to
+			// Latin-1 conversion, so write the length and payload directly.
+			NetworkMessage chunkMessage;
+			chunkMessage.addByte(0x32);
+			chunkMessage.addByte(ServerMinimap::EXTENDED_OPCODE);
+			chunkMessage.add<uint16_t>(static_cast<uint16_t>(chunk.payload.size() + 1));
+			chunkMessage.addByte(static_cast<uint8_t>(chunk.marker));
+			chunkMessage.addBytes(chunk.payload.data(), chunk.payload.size());
+			writeToOutputBuffer(chunkMessage);
+		}
+		return;
+	}
 
 	if (opcode == HELPER_OPCODE_CAST_ON_FOOT) {
 		helperCastOnFootNextSay = buffer.empty() || isEnabledHelperBuffer(buffer);

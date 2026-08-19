@@ -414,6 +414,7 @@ private:
 	uint32_t customPingSequence = 0;
 	int64_t nextCastSwitchTime = 0;
 	int64_t nextCastSwitchCooldownMessageTime = 0;
+	int64_t nextServerMinimapTransferTime = 0;
 
 	int64_t moveWindowStart = 0;
 	uint16_t movePacketCount = 0;

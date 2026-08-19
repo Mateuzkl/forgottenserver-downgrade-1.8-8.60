@@ -233,6 +233,11 @@ public:
 		setBasicTile(pos.x, pos.y, pos.z, basicTile);
 	}
 
+	// Visits the static map representation without forcing lazy tiles to be
+	// materialized. Exactly one of tile/basicTile is non-null for each entry.
+	void forEachStaticTile(
+	    const std::function<void(const Position&, const Tile*, const BasicTile*)>& visitor) const;
+
 	/**
 	 * Removes a single tile.
 	 */

@@ -181,6 +181,13 @@ characterBazaarCommissionPercent = 10
 characterBazaarMinDurationHours = 24
 characterBazaarMaxDurationDays = 7
 
+-- Server Minimap
+-- Optional server-generated OTMM synchronization for compatible OTClient clients.
+-- Extended opcode 230 is reserved by this feature. The generated map is kept
+-- in memory and is not written to disk.
+serverMinimapEnabled = false
+serverMinimapMaxSizeMB = 16
+
 -- Enable Task Hunt / Task Board system.
 -- Requires compatible AstraClient/OTCv8 support.
 -- Default: false keeps classic 8.60 behaviour.

@@ -27,6 +27,7 @@
 #include "script.h"
 #include "scriptmanager.h"
 #include "server.h"
+#include "server_minimap.h"
 #include "signals.h"
 #include "startup_progress.h"
 #include "luascript.h"
@@ -644,6 +645,13 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 		return false;
 	}
 	startupMapLoadSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - mapStartupStart).count();
+	if (getBoolean(ConfigManager::SERVER_MINIMAP_ENABLED)) {
+		constexpr size_t bytesPerMiB = 1024 * 1024;
+		const size_t maxBytes = static_cast<size_t>(getInteger(ConfigManager::SERVER_MINIMAP_MAX_SIZE_MB)) * bytesPerMiB;
+		if (!ServerMinimap::prepare(maxBytes)) {
+			LOG_WARN("[ServerMinimap] The server will continue without minimap synchronization.");
+		}
+	}
 
 	LOG_INFO(">> Initializing gamestate");
 	startupProgress().begin(StartupStage::GAME_INITIALIZATION, "groups and chat");
