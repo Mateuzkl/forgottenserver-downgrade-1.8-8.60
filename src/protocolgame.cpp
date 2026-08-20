@@ -68,15 +68,20 @@ uint32_t nextDllWeatherSequence()
 	return sequence;
 }
 
-// Ping ids used to restart at 1 on every connection, so each session handed out
-// the same low ids again. The DLL keeps a completed id closed for a while to
-// reject late acknowledgements, which means a relogin inside that window could
-// be answered with "duplicate" instead of a pong. Giving every connection its
-// own starting point of a process-wide cycle keeps ids distinct across sessions;
-// the stride is odd, so a start point only repeats after 2^32 connections. This
-// is collision avoidance, not secrecy: ids stay guessable, and the tracker in
-// registerCustomPing/receiveCustomPong is what rejects ids we never issued.
-std::atomic<uint32_t> customPingSeedCounter{0x1E86'0001};
+uint64_t customPingProcessEntropy() noexcept
+{
+	uint64_t entropy = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+	entropy ^= static_cast<uint64_t>(std::chrono::system_clock::now().time_since_epoch().count()) +
+	           0x9E37'79B9'7F4A'7C15ULL + (entropy << 6) + (entropy >> 2);
+
+	try {
+		std::random_device random;
+		entropy ^= (static_cast<uint64_t>(random()) << 32) ^ static_cast<uint64_t>(random());
+	} catch (...) {
+		// The two clocks still give restarts a different process-local cycle.
+	}
+	return entropy;
+}
 
 std::size_t getReadableBytes(const NetworkMessage& msg)
 {
@@ -3763,8 +3768,25 @@ uint32_t ProtocolGame::nextCustomPingId(uint32_t current)
 	return current == 0 ? 1 : current;
 }
 
+uint32_t ProtocolGame::customPingSeedFromEntropy(uint64_t entropy)
+{
+	// SplitMix64 finalizer: collision avoidance only, not a security boundary.
+	entropy ^= entropy >> 30;
+	entropy *= 0xBF58'476D'1CE4'E5B9ULL;
+	entropy ^= entropy >> 27;
+	entropy *= 0x94D0'49BB'1331'11EBULL;
+	entropy ^= entropy >> 31;
+
+	const uint32_t seed = static_cast<uint32_t>(entropy ^ (entropy >> 32));
+	return seed == 0 ? 0x1E86'0001 : seed;
+}
+
 uint32_t ProtocolGame::nextCustomPingSeed()
 {
+	// A fresh process nonce prevents a restarted server from replaying the same
+	// recent ids that a still-loaded DLL may retain as closed. The odd stride
+	// then gives every connection a distinct point in that process-wide cycle.
+	static std::atomic<uint32_t> customPingSeedCounter{customPingSeedFromEntropy(customPingProcessEntropy())};
 	return customPingSeedCounter.fetch_add(0x9E37'79B9, std::memory_order_relaxed);
 }
 

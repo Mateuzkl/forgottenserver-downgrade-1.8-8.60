@@ -40,13 +40,14 @@ struct ProtocolGameCustomPingTestAccess
 	static constexpr std::size_t capacity() { return ProtocolGame::CUSTOM_PING_MAX_TRACKED; }
 	static constexpr int64_t ttl() { return ProtocolGame::CUSTOM_PING_TTL_MS; }
 	static uint32_t nextId(uint32_t current) { return ProtocolGame::nextCustomPingId(current); }
+	static uint32_t seedFromEntropy(uint64_t entropy) { return ProtocolGame::customPingSeedFromEntropy(entropy); }
 	static uint32_t nextSeed() { return ProtocolGame::nextCustomPingSeed(); }
 	static std::optional<uint32_t> readId(NetworkMessage& msg) { return ProtocolGame::readCustomPingId(msg); }
 };
 
 using PingResult = ProtocolGameCustomPingTestAccess::Result;
 
-TEST_CASE(custom_ping_accepts_once_and_rejects_duplicates)
+TEST_CASE(custom_ping_breaks_echo_loop_and_accepts_only_once)
 {
 	ProtocolGame protocol(nullptr);
 	CHECK(ProtocolGameCustomPingTestAccess::registerPing(protocol, 10, 1'000));
@@ -123,23 +124,31 @@ TEST_CASE(custom_ping_sequence_skips_zero_after_wrap)
 	CHECK(ProtocolGameCustomPingTestAccess::nextId((std::numeric_limits<uint32_t>::max)()) == 1);
 }
 
-TEST_CASE(custom_ping_seeds_do_not_repeat_across_connections)
+TEST_CASE(custom_ping_relogin_does_not_reuse_recent_id)
 {
-	// Every connection must start somewhere else, so a relogin cannot reuse ids
-	// the DLL still holds closed from the previous session.
+	// Every connection starts elsewhere in the process-wide cycle, so a relogin
+	// cannot reuse an id the DLL still holds closed from the previous session.
 	std::set<uint32_t> seeds;
-	uint32_t previous = ProtocolGameCustomPingTestAccess::nextSeed();
-	seeds.insert(previous);
+	uint32_t previousId = ProtocolGameCustomPingTestAccess::nextId(ProtocolGameCustomPingTestAccess::nextSeed());
+	seeds.insert(previousId);
 	for (std::size_t i = 0; i < 4'096; ++i) {
-		const uint32_t seed = ProtocolGameCustomPingTestAccess::nextSeed();
-		CHECK(seed != previous);
-		CHECK(seeds.insert(seed).second);
-		previous = seed;
+		const uint32_t id = ProtocolGameCustomPingTestAccess::nextId(ProtocolGameCustomPingTestAccess::nextSeed());
+		CHECK(id != previousId);
+		CHECK(seeds.insert(id).second);
+		previousId = id;
 	}
+	CHECK(previousId != 0);
+}
 
-	// A seed is only ever fed through nextCustomPingId, which never yields zero,
-	// so a seed landing on zero still produces a usable id.
-	CHECK(ProtocolGameCustomPingTestAccess::nextId(0) != 0);
+TEST_CASE(custom_ping_process_restart_changes_seed_cycle)
+{
+	const uint32_t firstProcessSeed = ProtocolGameCustomPingTestAccess::seedFromEntropy(0x1234'5678'9ABC'DEF0ULL);
+	const uint32_t restartedProcessSeed = ProtocolGameCustomPingTestAccess::seedFromEntropy(0x1234'5678'9ABC'DEF1ULL);
+	CHECK(firstProcessSeed != 0);
+	CHECK(restartedProcessSeed != 0);
+	CHECK(firstProcessSeed != restartedProcessSeed);
+	CHECK(ProtocolGameCustomPingTestAccess::nextId(firstProcessSeed) !=
+	      ProtocolGameCustomPingTestAccess::nextId(restartedProcessSeed));
 }
 
 TEST_CASE(custom_ping_packet_reader_rejects_truncation_without_overrun)

@@ -336,6 +336,7 @@ private:
 	void parseNewPing(NetworkMessage& msg);
 	void parseCustomClientPing(NetworkMessage& msg);
 	static uint32_t nextCustomPingId(uint32_t current);
+	static uint32_t customPingSeedFromEntropy(uint64_t entropy);
 	static uint32_t nextCustomPingSeed();
 	static std::optional<uint32_t> readCustomPingId(NetworkMessage& msg);
 	void cleanupCustomPings(int64_t now);
