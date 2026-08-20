@@ -65,7 +65,7 @@ struct IntervalInfo
 };
 
 class Condition;
-using Condition_ptr = std::unique_ptr<Condition>;
+using Condition_ptr = std::shared_ptr<Condition>;
 
 class Condition
 {
@@ -157,7 +157,7 @@ public:
 	void addCondition(Creature* creature, const Condition* condition) override;
 	uint64_t getIcons() const override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionGeneric>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionGeneric>(*this); }
 };
 
 class ConditionAttributes final : public ConditionGeneric
@@ -176,7 +176,7 @@ public:
 	bool setParam(ConditionParam_t param, int32_t value) override;
 	int32_t getParam(ConditionParam_t param) const override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionAttributes>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionAttributes>(*this); }
 
 	// serialization
 	void serialize(PropWriteStream& propWriteStream) override;
@@ -217,7 +217,7 @@ public:
 	bool setParam(ConditionParam_t param, int32_t value) override;
 	int32_t getParam(ConditionParam_t param) const override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionRegeneration>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionRegeneration>(*this); }
 
 	// serialization
 	void serialize(PropWriteStream& propWriteStream) override;
@@ -249,7 +249,7 @@ public:
 	bool setParam(ConditionParam_t param, int32_t value) override;
 	int32_t getParam(ConditionParam_t param) const override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionSoul>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionSoul>(*this); }
 
 	// serialization
 	void serialize(PropWriteStream& propWriteStream) override;
@@ -272,7 +272,7 @@ public:
 	bool startCondition(Creature* creature) override;
 	void endCondition(Creature* creature) override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionInvisible>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionInvisible>(*this); }
 };
 
 class ConditionDamage final : public Condition
@@ -293,7 +293,7 @@ public:
 	void addCondition(Creature* creature, const Condition* condition) override;
 	uint64_t getIcons() const override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionDamage>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionDamage>(*this); }
 
 	bool setParam(ConditionParam_t param, int32_t value) override;
 	int32_t getParam(ConditionParam_t param) const override;
@@ -346,7 +346,7 @@ public:
 	void addCondition(Creature* creature, const Condition* condition) override;
 	uint64_t getIcons() const override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionSpeed>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionSpeed>(*this); }
 
 	bool setParam(ConditionParam_t param, int32_t value) override;
 	int32_t getParam(ConditionParam_t param) const override;
@@ -381,7 +381,7 @@ public:
 	void addCondition(Creature* creature, const Condition* condition) override;
 	uint64_t getIcons() const override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionRooted>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionRooted>(*this); }
 };
 
 class ConditionFeared final : public Condition
@@ -399,7 +399,7 @@ public:
 	bool setPositionParam(ConditionParam_t param, const Position& pos) override;
 	uint64_t getIcons() const override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionFeared>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionFeared>(*this); }
 
 private:
 	bool getFleePath(const std::shared_ptr<Creature>& creature, std::vector<Direction>& dirList) const;
@@ -420,7 +420,7 @@ public:
 	void endCondition(Creature* creature) override;
 	void addCondition(Creature* creature, const Condition* condition) override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionOutfit>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionOutfit>(*this); }
 
 	void setOutfit(const Outfit_t& outfit);
 
@@ -445,7 +445,7 @@ public:
 	void endCondition(Creature* creature) override;
 	void addCondition(Creature* creature, const Condition* condition) override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionLight>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionLight>(*this); }
 
 	bool setParam(ConditionParam_t param, int32_t value) override;
 	int32_t getParam(ConditionParam_t param) const override;
@@ -471,7 +471,7 @@ public:
 	bool startCondition(Creature* creature) override;
 	void addCondition(Creature* creature, const Condition* condition) override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionSpellCooldown>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionSpellCooldown>(*this); }
 };
 
 
@@ -486,7 +486,7 @@ public:
 	bool startCondition(Creature* creature) override;
 	void addCondition(Creature* creature, const Condition* condition) override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionSpellGroupCooldown>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionSpellGroupCooldown>(*this); }
 };
 
 class ConditionDrunk final : public Condition
@@ -507,7 +507,7 @@ public:
 	bool setParam(ConditionParam_t param, int32_t value) override;
 	void addCondition(Creature* creature, const Condition* condition) override;
 
-	Condition_ptr clone() const override { return std::make_unique<ConditionDrunk>(*this); }
+	Condition_ptr clone() const override { return std::make_shared<ConditionDrunk>(*this); }
 
 private:
 	uint8_t drunkenness = 25;

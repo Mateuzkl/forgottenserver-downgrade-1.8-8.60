@@ -1281,7 +1281,7 @@ void Creature::onTickCondition(ConditionType_t type, bool& bRemove)
 	}
 }
 
-void Creature::onCombatRemoveCondition(Condition* condition) { removeCondition(condition); }
+void Creature::onCombatRemoveCondition(const Condition_ptr& condition) { removeCondition(condition); }
 
 void Creature::onAttacked()
 {
@@ -1424,16 +1424,14 @@ bool Creature::addCondition(Condition_ptr condition, bool force /* = false*/)
 	if (!force && condition->getType() == CONDITION_HASTE && hasCondition(CONDITION_PARALYZE)) {
 		int64_t walkDelay = getWalkDelay();
 		if (walkDelay > 0) {
-			auto condWrapper = std::make_shared<Condition_ptr>(std::move(condition));
-			g_scheduler.addEvent(
-			    createSchedulerTask(walkDelay, ([id = getID(), condWrapper]() {
-				    g_game.forceAddCondition(id, condWrapper->release());
-			    })));
+			g_scheduler.addEvent(createSchedulerTask(
+			    walkDelay,
+			    ([id = getID(), condition = std::move(condition)]() { g_game.forceAddCondition(id, condition); })));
 			return false;
 		}
 	}
 
-	Condition* prevCond = getCondition(condition->getType(), condition->getId(), condition->getSubId());
+	Condition_ptr prevCond = getCondition(condition->getType(), condition->getId(), condition->getSubId());
 	if (prevCond) {
 		prevCond->addCondition(this, condition.get());
 		return true;
@@ -1480,10 +1478,10 @@ void Creature::removeCondition(ConditionType_t type, bool force /* = false*/)
 			}
 		}
 
-		auto owned = std::move(*it);
+		auto condition = *it;
 		it = conditions.erase(it);
 
-		owned->endCondition(this);
+		condition->endCondition(this);
 		onEndCondition(type);
 	}
 }
@@ -1506,31 +1504,30 @@ void Creature::removeCondition(ConditionType_t type, ConditionId_t conditionId, 
 			}
 		}
 
-		auto owned = std::move(*it);
+		auto condition = *it;
 		it = conditions.erase(it);
-		owned->endCondition(this);
+		condition->endCondition(this);
 		onEndCondition(type);
 	}
 }
 
 void Creature::removeCombatCondition(ConditionType_t type)
 {
-	std::vector<Condition*> removeConditions;
+	ConditionList removeConditions;
 	for (const auto& condition : conditions) {
 		if (condition->getType() == type) {
-			removeConditions.push_back(condition.get());
+			removeConditions.push_back(condition);
 		}
 	}
 
-	for (Condition* condition : removeConditions) {
+	for (const auto& condition : removeConditions) {
 		onCombatRemoveCondition(condition);
 	}
 }
 
-void Creature::removeCondition(Condition* condition, bool force /* = false*/)
+void Creature::removeCondition(const Condition_ptr& condition, bool force /* = false*/)
 {
-	auto it = std::find_if(conditions.begin(), conditions.end(),
-	                        [condition](const auto& c) { return c.get() == condition; });
+	auto it = std::find(conditions.begin(), conditions.end(), condition);
 	if (it == conditions.end()) {
 		return;
 	}
@@ -1544,28 +1541,28 @@ void Creature::removeCondition(Condition* condition, bool force /* = false*/)
 		}
 	}
 
-	auto owned = std::move(*it);
+	auto owned = *it;
 	conditions.erase(it);
 
 	owned->endCondition(this);
 	onEndCondition(owned->getType());
 }
 
-Condition* Creature::getCondition(ConditionType_t type) const
+Condition_ptr Creature::getCondition(ConditionType_t type) const
 {
 	for (const auto& condition : conditions) {
 		if (condition->getType() == type) {
-			return condition.get();
+			return condition;
 		}
 	}
 	return nullptr;
 }
 
-Condition* Creature::getCondition(ConditionType_t type, ConditionId_t conditionId, uint32_t subId /* = 0*/) const
+Condition_ptr Creature::getCondition(ConditionType_t type, ConditionId_t conditionId, uint32_t subId /* = 0*/) const
 {
 	for (const auto& condition : conditions) {
 		if (condition->getType() == type && condition->getId() == conditionId && condition->getSubId() == subId) {
-			return condition.get();
+			return condition;
 		}
 	}
 	return nullptr;
@@ -1574,29 +1571,23 @@ Condition* Creature::getCondition(ConditionType_t type, ConditionId_t conditionI
 void Creature::executeConditions(uint32_t interval)
 {
 	PerformanceScope performanceScope(PerformanceMetric::CreatureExecuteConditions);
-	std::vector<Condition*> tempConditions;
-	tempConditions.reserve(conditions.size());
-	for (const auto& c : conditions) {
-		tempConditions.push_back(c.get());
-	}
+	ConditionList tempConditions = conditions;
 
-	for (Condition* condition : tempConditions) {
+	for (const auto& condition : tempConditions) {
 		if (isDead() || isRemoved()) {
 			break;
 		}
 
-		auto it = std::find_if(conditions.begin(), conditions.end(),
-		                        [condition](const auto& c) { return c.get() == condition; });
+		auto it = std::find(conditions.begin(), conditions.end(), condition);
 		if (it == conditions.end()) {
 			continue;
 		}
 
 		if (!condition->executeCondition(this, interval)) {
-			auto it2 = std::find_if(conditions.begin(), conditions.end(),
-			                         [condition](const auto& c) { return c.get() == condition; });
+			auto it2 = std::find(conditions.begin(), conditions.end(), condition);
 			if (it2 != conditions.end()) {
 				const ConditionType_t condType = condition->getType();
-				auto owned = std::move(*it2);
+				auto owned = *it2;
 				conditions.erase(it2);
 				owned->endCondition(this);
 				onEndCondition(condType);

@@ -818,28 +818,10 @@ int luaCreatureGetCondition(lua_State* L)
 	ConditionId_t conditionId = getInteger<ConditionId_t>(L, 3, CONDITIONID_COMBAT);
 	uint32_t subId = getInteger<uint32_t>(L, 4, 0);
 
-	Condition* condition = creature->getCondition(conditionType, conditionId, subId);
+	Condition_ptr condition = creature->getCondition(conditionType, conditionId, subId);
 	if (condition) {
-		// HAZARD: this hands Lua a raw, non-owning Condition*. The weak metatable
-		// (no __gc) is correct — the Creature owns the Condition, not the script —
-		// but nothing invalidates the handle if the Condition is destroyed while a
-		// script still holds it:
-		//
-		//   local c = player:getCondition(CONDITION_POISON)
-		//   player:removeCondition(CONDITION_POISON)  -- Condition is deleted
-		//   c:getTicks()                              -- use-after-free
-		//
-		// No shipped script does this today; data/npc/.../cipfried.lua gets closest,
-		// holding a handle across removeCondition() but only testing it for nil
-		// afterwards, which does not dereference. Keep it that way: read what you
-		// need from the handle before anything can remove the condition.
-		//
-		// The structural fix is shared_ptr<Condition> in ConditionList, as
-		// CrystalServer does (creatures/creature.hpp:47), which makes the handle
-		// keep the object alive. That is a wide change across condition.cpp and
-		// creature.cpp and has not been made.
-		pushUserdata<Condition>(L, condition);
-		setWeakMetatable(L, -1, "Condition");
+		pushSharedPtr(L, std::move(condition));
+		setMetatable(L, -1, "Condition");
 	} else {
 		lua_pushnil(L);
 	}
@@ -850,7 +832,7 @@ int luaCreatureAddCondition(lua_State* L)
 {
 	// creature:addCondition(condition[, force = false])
 	Creature* creature = getUserdata<Creature>(L, 1);
-	Condition* condition = getUserdata<Condition>(L, 2);
+	Condition* condition = getSharedUserdata<Condition>(L, 2);
 	if (creature && condition) {
 		bool force = getBoolean(L, 3, false);
 		pushBoolean(L, creature->addCondition(condition->clone(), force));
@@ -870,14 +852,14 @@ int luaCreatureRemoveCondition(lua_State* L)
 		return 1;
 	}
 
-	Condition* creatureCondition = nullptr;
+	Condition_ptr creatureCondition;
 
 	bool force = false;
 
 	if (isUserdata(L, 2)) {
-		const Condition* const condition = getUserdata<Condition>(L, 2);
+		const Condition* const condition = getSharedUserdata<Condition>(L, 2);
 		// isUserdata() only says argument 2 is some userdata, not that it is a
-		// Condition. getUserdata() type-checks and returns nullptr on a mismatch,
+		// Condition. getSharedUserdata() type-checks and returns nullptr on a mismatch,
 		// so passing any other userdata here reached this dereference.
 		if (!condition) {
 			lua_pushnil(L);
@@ -932,7 +914,7 @@ int luaCreatureIsImmune(lua_State* L)
 
 	if (isInteger(L, 2)) {
 		pushBoolean(L, creature->isImmune(getInteger<ConditionType_t>(L, 2)));
-	} else if (Condition* condition = getUserdata<Condition>(L, 2)) {
+	} else if (Condition* condition = getSharedUserdata<Condition>(L, 2)) {
 		pushBoolean(L, creature->isImmune(condition->getType()));
 	} else {
 		lua_pushnil(L);
