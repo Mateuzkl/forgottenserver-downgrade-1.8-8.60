@@ -26,6 +26,7 @@ class Tile;
 class Connection;
 class ProtocolGame;
 struct ProtocolGameCustomPingTestAccess;
+struct ProtocolGameAstraRegenerationTestAccess;
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 class ProtocolSpectator;
 
@@ -299,6 +300,7 @@ private:
 
 	void AddCreature(NetworkMessage& msg, const Creature* creature, bool known, uint32_t remove);
 	void AddPlayerStats(NetworkMessage& msg);
+	static uint16_t getRegenerationTimeSeconds(int32_t ticks);
 	void AddOutfit(NetworkMessage& msg, const Outfit_t& outfit);
 	void AddPlayerSkills(NetworkMessage& msg);
 	void AddWorldLight(NetworkMessage& msg, LightInfo lightInfo);
@@ -354,6 +356,7 @@ private:
 	friend class ProtocolSpectator;
 	friend class SpySystem;
 	friend struct ProtocolGameCustomPingTestAccess;
+	friend struct ProtocolGameAstraRegenerationTestAccess;
 
 	//cast
 	void spectatorTurn(uint8_t direction);

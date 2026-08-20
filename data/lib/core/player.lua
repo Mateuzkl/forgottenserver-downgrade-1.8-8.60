@@ -109,6 +109,7 @@ function Player.feed(self, food)
 
 		self:addCondition(foodCondition)
 	end
+	self:sendStats()
 	return true
 end
 
