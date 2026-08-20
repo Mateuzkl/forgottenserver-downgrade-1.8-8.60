@@ -1066,9 +1066,9 @@ std::unique_ptr<Tile> createTileFromBasic(const BasicTile* basicTile,
     
     // Create appropriate tile type
     if (basicTile->isHouse()) {
-        House* house = houses.getHouse(basicTile->houseId);
+        auto house = houses.getHouse(basicTile->houseId);
         if (house) {
-            auto houseTile = std::make_unique<HouseTile>(x, y, z, house);
+            auto houseTile = std::make_unique<HouseTile>(x, y, z, house.get());
             house->addTile(houseTile.get());
             tile = std::move(houseTile);
         } else {

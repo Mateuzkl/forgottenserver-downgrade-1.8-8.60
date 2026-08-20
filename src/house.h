@@ -269,13 +269,13 @@ public:
 		return ins->second.get();
 	}
 
-	[[nodiscard]] House* getHouse(uint32_t houseId)
+	[[nodiscard]] std::shared_ptr<House> getHouse(uint32_t houseId)
 	{
 		auto it = houseMap.find(houseId);
 		if (it == houseMap.end()) {
 			return nullptr;
 		}
-		return it->second.get();
+		return it->second;
 	}
 
 	[[nodiscard]] House* getHouseByPlayerId(uint32_t playerId);

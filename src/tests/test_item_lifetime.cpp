@@ -77,6 +77,26 @@ TEST_CASE(house_transfer_item_trade_cancel_resets_document)
 	CHECK(replacement != transferItem);
 }
 
+TEST_CASE(houses_get_house_preserves_house_lifetime)
+{
+	std::shared_ptr<House> house;
+	House* rawHouse = nullptr;
+	{
+		Houses houses;
+		rawHouse = houses.addHouse(42);
+		house = houses.getHouse(42);
+
+		CHECK(house != nullptr);
+		CHECK(house.get() == rawHouse);
+		CHECK(houses.getHouse(42) == house);
+		CHECK(houses.getHouse(43) == nullptr);
+	}
+
+	CHECK(house != nullptr);
+	CHECK(house.get() == rawHouse);
+	CHECK(house->getId() == 42);
+}
+
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)
 {
 	auto container = std::make_shared<Container>(0, 2);

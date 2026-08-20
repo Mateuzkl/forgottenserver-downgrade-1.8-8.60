@@ -805,7 +805,7 @@ bool Houses::loadHousesXML(const std::string& filename)
 
 		int32_t houseId = pugi::cast<int32_t>(houseIdAttribute.value());
 
-		House* house = getHouse(houseId);
+		auto house = getHouse(houseId);
 		if (!house) {
 			LOG_ERROR(fmt::format("Error: [Houses::loadHousesXML] Unknown house, id = {}", houseId));
 			return false;

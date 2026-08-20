@@ -20,9 +20,9 @@ using namespace Lua;
 int luaHouseCreate(lua_State* L)
 {
 	// House(id)
-	House* house = g_game.map.houses.getHouse(getInteger<uint32_t>(L, 2));
+	auto house = g_game.map.houses.getHouse(getInteger<uint32_t>(L, 2));
 	if (house) {
-		pushUserdata<House>(L, house);
+		pushUserdata<House>(L, house.get());
 		setMetatable(L, -1, "House");
 	} else {
 		lua_pushnil(L);

@@ -321,7 +321,7 @@ bool IOMapSerialize::loadHouseInfo()
 	}
 
 	do {
-			House* house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("id"));
+			auto house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("id"));
 			if (house) {
 				std::string_view typeStr = result->getString("type");
 				uint32_t typeVal = house->getType();
@@ -348,7 +348,7 @@ bool IOMapSerialize::loadHouseInfo()
 	result = db.storeQuery("SELECT `house_id`, `listid`, `list` FROM `house_lists`");
 	if (result) {
 		do {
-			House* house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("house_id"));
+			auto house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("house_id"));
 			if (house) {
 				house->setAccessList(result->getNumber<uint32_t>("listid"), result->getString("list"));
 			}
@@ -359,7 +359,7 @@ bool IOMapSerialize::loadHouseInfo()
 	result = db.storeQuery("SELECT `house_id`, `player_id` FROM `house_guests`");
 	if (result) {
 		do {
-			House* house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("house_id"));
+			auto house = g_game.map.houses.getHouse(result->getNumber<uint32_t>("house_id"));
 			if (house) {
 				house->getProtectionGuests().insert(result->getNumber<uint32_t>("player_id"));
 			}
