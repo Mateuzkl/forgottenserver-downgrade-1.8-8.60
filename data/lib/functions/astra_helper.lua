@@ -35,7 +35,7 @@ AstraHelper.MINIBOT = {
 	ProtocolVersion = 1,
 	DefaultTime = 3 * 60 * 60,
 	RenewTime = 60 * 60,
-	MinimumTimeUsedToRenew = 15 * 60,
+	MinimumTimeUsedToRenew = 60 * 60,
 	RenewBasePrice = 5000000,
 	RenewPriceStep = 5000000,
 	AfkPauseDuration = 5 * 60,
@@ -560,12 +560,8 @@ function AstraHelper.renewMiniBotTime(player)
 	end
 	session.renewAt = now + MINIBOT.RenewCooldown
 
-	-- The original UI explicitly warns that payment is still consumed when less
-	-- than a full hour has been used. Only a complete used hour is replenished.
-	if total - timeLeft >= MINIBOT.RenewTime then
-		timeLeft = math.min(total, timeLeft + MINIBOT.RenewTime)
-		writeStorage(player, S.MiniBotTimeLeft, timeLeft)
-	end
+	timeLeft = math.min(total, timeLeft + MINIBOT.RenewTime)
+	writeStorage(player, S.MiniBotTimeLeft, timeLeft)
 
 	local renewals = readStorage(player, S.MiniBotRenewals, 0)
 	writeStorage(player, S.MiniBotRenewals, renewals + 1)

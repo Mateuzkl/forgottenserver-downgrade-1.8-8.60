@@ -50,27 +50,37 @@ configManager = {
 loadProduction("data/lib/functions/exercise_training.lua")
 
 local exerciseFamilies = {
-	[SKILL_AXE] = { 40636, 35280, 40856, 28553, 35286, 40863, 40820, 40630, 40687 },
-	[SKILL_DISTANCE] = { 40637, 35282, 40857, 28555, 35288, 40864, 40821, 40632, 40688 },
-	[SKILL_CLUB] = { 40638, 35281, 40851, 28554, 35287, 40858, 40815, 40631, 40689 },
+	[SKILL_AXE] = { 28541, 40636, 35280, 40856, 28553, 35286, 40863, 40820, 40630, 40687 },
+	[SKILL_DISTANCE] = { 28543, 40637, 35282, 40857, 28555, 35288, 40864, 40821, 40632, 40688 },
+	[SKILL_CLUB] = { 28542, 40638, 35281, 40851, 28554, 35287, 40858, 40815, 40631, 40689 },
 	[SKILL_MAGLEVEL] = {
-		40639, 35283, 40852, 28556, 35289, 40859, 40816, 40633, 40690,
-		40642, 35284, 40855, 28557, 35290, 40862, 40819, 40634, 40693
+		28544, 40639, 35283, 40852, 28556, 35289, 40859, 40816, 40633, 40690,
+		28545, 40642, 35284, 40855, 28557, 35290, 40862, 40819, 40634, 40693
 	},
-	[SKILL_SHIELD] = { 40640, 44066, 40853, 44065, 44067, 40860, 40817, 40635, 40691 },
-	[SKILL_SWORD] = { 40641, 35279, 40854, 28552, 35285, 40861, 40818, 40629, 40692 },
-	[SKILL_FIST] = { 50294, 50293, 50295, 41021, 41022, 41023, 41024, 41025, 41026 }
+	[SKILL_SHIELD] = { 44064, 40640, 44066, 40853, 44065, 44067, 40860, 40817, 40635, 40691 },
+	[SKILL_SWORD] = { 28540, 40641, 35279, 40854, 28552, 35285, 40861, 40818, 40629, 40692 },
+	[SKILL_FIST] = { 50292, 50294, 50293, 50295, 41021, 41022, 41023, 41024, 41025, 41026 }
 }
 
 local itemsXml = readProduction("data/items/items.xml")
 local function itemXmlBlock(id)
-	return itemsXml:match('<item%s+id="' .. id .. '"[^>]*>(.-)</item>')
+	local exact = itemsXml:match('<item%s+id="' .. id .. '"[^>]*>(.-)</item>')
+	if exact then
+		return exact
+	end
+	for fromId, toId, block in itemsXml:gmatch(
+		'<item%s+fromid="(%d+)"%s+toid="(%d+)"[^>]*>(.-)</item>') do
+		if id >= tonumber(fromId) and id <= tonumber(toId) then
+			return block
+		end
+	end
+	return nil
 end
 
-local clientWeaponCount = 0
+local serverWeaponCount = 0
 for skill, ids in pairs(exerciseFamilies) do
 	for _, id in ipairs(ids) do
-		clientWeaponCount = clientWeaponCount + 1
+		serverWeaponCount = serverWeaponCount + 1
 		local entry = assert(ExerciseWeaponsTable[id], "missing exercise weapon " .. id)
 		assert(entry.skill == skill, "wrong exercise skill for " .. id)
 		if skill == SKILL_DISTANCE or skill == SKILL_MAGLEVEL then
@@ -84,10 +94,10 @@ for skill, ids in pairs(exerciseFamilies) do
 		assert(charges and charges > 0, "exercise weapon has no positive default charges: " .. id)
 	end
 end
-assert(clientWeaponCount == 72, "client exercise weapon inventory changed")
+assert(serverWeaponCount == 80, "server exercise weapon registry changed")
 
-for _, id in ipairs({ 28558, 28561, 28562, 40622, 40621, 28559, 28560,
-	28563, 28564, 40648, 40647, 41259, 41260 }) do
+for _, id in ipairs({ 5787, 5788, 28558, 28559, 28560, 28561, 28562, 28563,
+	28564, 28565, 40621, 40622, 40647, 40648, 41259, 41260 }) do
 	assert(contains(FreeDummies, id) or contains(HouseDummies, id),
 		"missing Assistant training dummy " .. id)
 	assert(itemXmlBlock(id), "missing items.xml definition for Assistant training dummy " .. id)
@@ -137,10 +147,19 @@ end
 function Action()
 	local action = { metadata = {} }
 	action.id = metadataMethod("id")
+	action.allowFarUse = metadataMethod("allowFarUse")
 	function action:register()
 		registeredAction = self
 	end
 	return action
+end
+
+function CreatureEvent(name)
+	local event = { name = name }
+	function event:register()
+		return true
+	end
+	return event
 end
 
 configManager.getBoolean = function()
@@ -149,6 +168,43 @@ end
 function sendSupplyTracker()
 	trackedSupplies = trackedSupplies + 1
 end
+
+MESSAGE_EVENT_ADVANCE = 1
+PlayerStorageKeys = { ExerciseDummyExhaust = 30029 }
+loadProduction("data/scripts/actions/items/exercise_training.lua")
+local exerciseAction = assert(registeredAction, "Exercise Training action was not registered")
+local activeTraining = { event = {} }
+onExerciseTraining[501] = activeTraining
+local repeatedMessage
+local repeatedPlayer = {
+	getId = function()
+		return 501
+	end,
+	sendTextMessage = function(_, _, message)
+		repeatedMessage = message
+	end
+}
+local repeatedWeapon = {
+	getCustomAttribute = function()
+		return nil
+	end
+}
+local repeatedDummy = {
+	getId = function()
+		return 28558
+	end,
+	isItem = function()
+		return true
+	end
+}
+assert(exerciseAction.onUse(repeatedPlayer, repeatedWeapon, {}, repeatedDummy, {}, true) == true,
+	"Repeated Exercise Training request failed")
+assert(onExerciseTraining[501] == activeTraining and activeTraining.event ~= nil,
+	"Repeated Exercise Training request cancelled the active event")
+assert(repeatedMessage == "You are already training with an exercise weapon.",
+	"Repeated Exercise Training request did not report the active session")
+onExerciseTraining[501] = nil
+registeredAction = nil
 
 loadProduction("data/scripts/spells/support/cancel_magic_shield.lua")
 assert(registeredSpell and registeredSpell.kind == "instant", "Cancel Magic Shield was not registered")
@@ -247,4 +303,4 @@ assert(registeredAction.onUse(makePlayer(100, 5), reusableItem, {}, nil, {}, tru
 assert(reusableItem.removed == 0 and trackedSupplies == 2,
 	"Magic Shield Potion ignored the server charge setting")
 
-print("minibot dependencies smoke: OK (72 training weapons, 13 dummies, mana shield spell/potion)")
+print("minibot dependencies smoke: OK (80 training weapons, 16 dummies, mana shield spell/potion)")
