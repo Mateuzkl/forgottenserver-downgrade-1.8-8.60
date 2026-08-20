@@ -3,7 +3,8 @@ local SERVER_PACKET_CHARACTER_INFO = 0xDA
 local CHARACTER_INFO_ACHIEVEMENTS = 5
 
 local function supportsAchievements(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function sendAchievements(player)
@@ -57,7 +58,7 @@ function achievementsHandler.onReceive(player, msg)
 		return
 	end
 
-	-- The 8.60 Astra client may only inspect its own character.
+	-- The extended 8.60 client may only inspect its own character.
 	if characterId ~= 0 and characterId ~= player:getId() and characterId ~= player:getGuid() then
 		return
 	end

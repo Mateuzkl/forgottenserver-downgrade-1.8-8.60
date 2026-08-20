@@ -930,7 +930,7 @@ public:
 
 	void sendCreatureIcon(const Creature* creature) const
 	{
-		if (!client || !client->isAstraClient) {
+		if (!client || !supportsExtendedCreatureIcons()) {
 			return;
 		}
 		client->sendCreatureIcon(creature);
@@ -1207,9 +1207,9 @@ public:
 	// inventory
 	void onUpdateInventoryItem(Item* oldItem, Item* newItem);
 	void onRemoveInventoryItem(Item* item);
-	bool canReceiveAstraItemState() const;
-	void sendAstraPlayerInventorySnapshot() const;
-	void scheduleAstraPlayerInventorySnapshot();
+	bool canReceiveItemMetadata() const;
+	void sendPlayerInventorySnapshot() const;
+	void schedulePlayerInventorySnapshot();
 
 	void sendCancelMessage(std::string_view msg) const
 	{
@@ -1552,8 +1552,19 @@ public:
 
 	bool isOTCv8() const { return client ? client->isOTCv8 : false; }
 	bool isMehah() const { return client ? client->isMehah : false; }
-	bool isAstraClient() const { return client ? client->isAstraClient : false; }
-	bool isFonticakClient() const { return client ? client->isFonticakClient : false; }
+	bool hasOtcv8Capability(Otcv8Capability capability) const
+	{
+		return client && client->isOTCv8 &&
+		       (client->otcv8Capabilities & static_cast<uint32_t>(capability)) != 0;
+	}
+	bool supportsItemInspection() const { return hasOtcv8Capability(Otcv8Capability::ItemInspection); }
+	bool supportsMonsterPodium() const { return hasOtcv8Capability(Otcv8Capability::MonsterPodium); }
+	bool supportsRewardChestPagination() const { return hasOtcv8Capability(Otcv8Capability::RewardChestPagination); }
+	bool supportsExtendedCreatureIcons() const { return hasOtcv8Capability(Otcv8Capability::ExtendedCreatureIcons); }
+	bool supportsColorizedLootText() const { return hasOtcv8Capability(Otcv8Capability::ColorizedLootText); }
+	bool supportsExtendedConditionIcons() const { return hasOtcv8Capability(Otcv8Capability::ExtendedConditionIcons); }
+	bool supportsLootContainers() const { return hasOtcv8Capability(Otcv8Capability::LootContainers); }
+	bool supportsMonkData() const { return hasOtcv8Capability(Otcv8Capability::MonkData); }
 	bool isOTC() const
 	{
 		switch (operatingSystem) {
@@ -1604,7 +1615,7 @@ private:
 	void updateInventoryWeight();
 	void reloadEquipmentStats();
 	void applyEquipmentStats();
-	void flushAstraPlayerInventorySnapshot();
+	void flushPlayerInventorySnapshot();
 	uint64_t getAttackSpeedBeforeEquipmentBonus() const;
 
 	void setNextWalkActionTask(std::unique_ptr<SchedulerTask> task);
@@ -1823,7 +1834,7 @@ private:
 	bool tokenLocked = false;
 	bool staminaPzActive = false;
 	bool staminaTrainerActive = false;
-	bool astraPlayerInventorySnapshotScheduled = false;
+	bool playerInventorySnapshotScheduled = false;
 	uint8_t m_harmony = 0;
 	bool m_serene = false;
 	uint64_t m_serene_cooldown = 0;

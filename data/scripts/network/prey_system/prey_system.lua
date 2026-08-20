@@ -80,8 +80,9 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
 end
 
-local function supportsAstraPreyExtension(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+local function supportsExtendedPrey(player)
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function isPreySlotUnlocked(player, slot)
@@ -362,7 +363,7 @@ local function getPreyLockType(player, slot)
 end
 
 local function writePreyLockType(out, player, slot)
-	if supportsAstraPreyExtension(player) then
+	if supportsExtendedPrey(player) then
 		out:addByte(getPreyLockType(player, slot))
 	end
 end
@@ -576,7 +577,7 @@ local function writeSlot(out, player, slot, slotData, wildcardRaceIds)
 		out:addByte(PREY_NATIVE_UNLOCK_STORE)
 		out:addU16(0)
 		writePreyLockType(out, player, slot)
-		if supportsAstraPreyExtension(player) then
+		if supportsExtendedPrey(player) then
 			out:addU32(PREY_PERMANENT_SLOT_COST)
 		end
 		return
@@ -592,7 +593,7 @@ local function writeSlot(out, player, slot, slotData, wildcardRaceIds)
 			writeMonster(out, name)
 		end
 	elseif slotData.state == PREY_STATE_WILDCARD_SELECTION then
-		local includeMonsterData = supportsAstraPreyExtension(player)
+		local includeMonsterData = supportsExtendedPrey(player)
 		out:addByte(includeMonsterData and PREY_NATIVE_STATE_WILDCARD_WITH_MONSTERS or PREY_NATIVE_STATE_WILDCARD)
 		local raceIds = wildcardRaceIds or buildWildcardRaceIds(player, getPlayerPrey(player), slot)
 		out:addU16(#raceIds)

@@ -1,17 +1,15 @@
 -- Server-only configuration.
 -- MyAAC reads config.lua, so keep advanced Lua values and server-only toggles here.
 
--- Astra/client protocol
+-- OTCv8/Mehah protocol
 -- NOTE: maxProtocolOutfits only applies to Cip client; OTC will use 255.
 maxProtocolOutfits = 255
 -- Minimum addons required to grant outfit attributes from data/XML/outfits.xml.
 maxAddonAttributes = 3
-astraClientOnly = false
-fonticakClientOnly = false
--- Server-controlled Astra item state protocol: duration, charges and packed inventory snapshot.
-astraItemStateEnabled = true
+-- Item metadata protocol: duration, charges and packed inventory snapshot.
+itemMetadataEnabled = true
 hirelingSystemEnabled = true
-astraHirelingProtocolEnabled = true
+hirelingProtocolEnabled = true
 
 -- Dual Wielding
 -- NOTE: dualWieldingSpeedRate = 200 means dual-wielding attacks twice as fast

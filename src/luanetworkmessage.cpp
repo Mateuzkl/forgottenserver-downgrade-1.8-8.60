@@ -23,6 +23,7 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 		case 0x62: // native bosstiary slots
 		case 0x73: // native bosstiary window
 		case 0xA7: // custom fight mode sync
+		case 0xCF: // legacy per-item loot tracker
 		case 0xD1: // custom hunt analyzer
 		case 0xDB: // custom market
 		case 0xEB: // imbuing window
@@ -39,7 +40,7 @@ bool isOtcOnlyLuaOpcode(uint8_t opcode)
 	}
 }
 
-bool isOtcOrAstraLuaOpcode(uint8_t opcode)
+bool isSharedOtcLuaOpcode(uint8_t opcode)
 {
 	switch (opcode) {
 		case 0x2D: // custom charm activated
@@ -52,7 +53,7 @@ bool isOtcOrAstraLuaOpcode(uint8_t opcode)
 	}
 }
 
-bool isAstraOnlyLuaOpcode(uint8_t opcode)
+bool isExtendedOtcv8LuaOpcode(uint8_t opcode)
 {
 	switch (opcode) {
 		case 0x2C: // custom boss cooldown
@@ -65,7 +66,6 @@ bool isAstraOnlyLuaOpcode(uint8_t opcode)
 		case 0xC0: // managed quick-loot containers
 		case 0xC6: // custom item values
 		case 0xC7: // custom item details
-		case 0xCF: // quick-loot statistics
 			return true;
 		default:
 			return false;
@@ -79,11 +79,11 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 	}
 
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
-	if (isAstraOnlyLuaOpcode(opcode)) {
-		return player.isAstraClient();
+	if (isExtendedOtcv8LuaOpcode(opcode)) {
+		return player.hasOtcv8Capability(Otcv8Capability::ExtendedLuaOpcodes);
 	}
-	if (isOtcOrAstraLuaOpcode(opcode)) {
-		return player.isOTC() || player.isAstraClient();
+	if (isSharedOtcLuaOpcode(opcode)) {
+		return player.isOTC();
 	}
 	return !isOtcOnlyLuaOpcode(opcode) || player.isOTC();
 }

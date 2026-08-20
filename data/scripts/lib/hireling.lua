@@ -87,10 +87,11 @@ local function hirelingSystemEnabled()
 		configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED)
 end
 
-local function astraHirelingProtocolEnabled(player)
-	return hirelingSystemEnabled() and configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED and
-		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
-		player and player.isUsingAstraClient and player:isUsingAstraClient()
+local function hirelingProtocolEnabled(player)
+	return hirelingSystemEnabled() and configKeys.HIRELING_PROTOCOL_ENABLED and
+		configManager.getBoolean(configKeys.HIRELING_PROTOCOL_ENABLED) and
+		player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_HIRELING_PROTOCOL)
 end
 
 local function logWarning(message)
@@ -782,7 +783,7 @@ function Player:getHirelingChangingOutfit()
 end
 
 function Player:sendHirelingOutfitWindow(hireling)
-	if not astraHirelingProtocolEnabled(self) or not hireling then
+	if not hirelingProtocolEnabled(self) or not hireling then
 		return false
 	end
 
@@ -800,7 +801,7 @@ function Player:sendHirelingOutfitWindow(hireling)
 		msg:addByte(outfit.lookAddons)
 	end
 	msg:addU16(outfit.lookMount or 0)
-	msg:addU16(0) -- familiar looktype (Astra outfit extension)
+	msg:addU16(0) -- familiar looktype extension
 
 	local availableOutfits = hireling:getAvailableOutfits(true)
 	msg:addByte(math.min(#availableOutfits, 255))

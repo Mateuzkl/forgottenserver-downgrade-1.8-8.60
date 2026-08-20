@@ -1,7 +1,7 @@
 # Task Hunting protocol
 
 Task Hunting is independent from the custom Task Board. It uses the native
-Hunting Task packet shapes consumed by AstraClient.
+Hunting Task packet shapes consumed by compatible OTCv8 clients.
 
 | Direction | Opcode | Purpose |
 | --- | --- | --- |
@@ -12,12 +12,12 @@ Hunting Task packet shapes consumed by AstraClient.
 | Client -> server | `0x5F` | Custom Task Board action. SoulSeal fight is action `19` with `raceId(U16)`. |
 | Server -> client | `0xEE` | Resource balance. |
 
-`0xBB` is reserved for the Astra Task Hunting parser. Classic non-Astra
+`0xBB` is reserved for the extended OTCv8 Task Hunting parser. Other
 clients never receive Task Hunting packets.
 
 ## Deployment note
 
-Deploy the server and AstraClient protocol changes together. SoulSeal data was
+Deploy the server and client protocol changes together. SoulSeal data was
 moved from the old standalone `0xBA` path to Task Board `0x53` subtype `0x03`
 so Task Hunting can own `0xBA`/`0xBB`. A server with this change requires a
 client that routes Task Board subtype `0x03` to the SoulSeal parser.
@@ -44,12 +44,12 @@ tab-dependent request:
 2. `0xBB` for slots 0, 1 and 2;
 3. required `0xEE` balances.
 
-It runs on AstraClient login. Actions and kills only send the changed `0xBB`
+It runs on login for OTCv8 clients. Actions and kills only send the changed `0xBB`
 slot plus balances.
 
 ## Manual validation
 
-1. Log in with AstraClient and open Hunting Task: all slots must already be
+1. Log in with OTCv8 and open Hunting Task: all slots must already be
    populated.
 2. Reroll, select a creature, kill it, and claim the reward. Check that only
    the affected slot changes and Task Hunting Points update through `0xEE`.

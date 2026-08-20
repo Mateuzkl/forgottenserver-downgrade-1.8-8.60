@@ -633,7 +633,7 @@ local function sendBestiaryOverviewEntries(player, title, entries)
 		local progress = CustomBestiary.getProgress(entry, kills[entry.raceId] or 0)
 		out:addU16(entry.raceId)
 		if progress <= 0 then
-			-- Astra still paints undiscovered creatures as "?" with the black
+			-- Extended OTCv8 still paints undiscovered creatures as "?" with the black
 			-- outfit shader, but it needs the real creature info cached so a
 			-- later unlock/progress event can resolve the race id and reveal it.
 			out:addByte(1)

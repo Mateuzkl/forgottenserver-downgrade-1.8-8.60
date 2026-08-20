@@ -920,7 +920,7 @@ class ProtocolSpectator {
         }
 
         void sendLootContainers() {
-            if (isAstraClient) {
+            if ((otcv8Capabilities & static_cast<uint32_t>(Otcv8Capability::LootContainers)) != 0) {
                 auto o = owner.lock();
                 if (o)
                     o->sendLootContainers();
@@ -1052,8 +1052,7 @@ class ProtocolSpectator {
         bool isOTCv8 = false;
         bool isMehah = false;
 	    bool isOTC = false;
-        bool isAstraClient = false;
-        bool isFonticakClient = false;
+	    uint32_t otcv8Capabilities = 0;
         std::string cast_password = "";
         std::string cast_description = "";
 

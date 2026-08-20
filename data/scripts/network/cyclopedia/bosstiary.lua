@@ -13,7 +13,8 @@ local MAX_TRACKER_SLOTS = 5
 local SLOT_TWO_POINTS = 1500
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function clamp(value, minValue, maxValue)

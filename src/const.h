@@ -980,17 +980,50 @@ enum class GameFeature : uint8_t {
 	DisplayItemDuration = 129,
 	ThingUpgradeClassification = 130,
 	ItemTierByte = 131,
-	AstraCreatureIcons = 133,
+	ExtendedCreatureIcons = 133,
 	PlayerFamiliars = 138,
 	DisplayItemCharges = 139,
 	PackedPlayerInventory = 140,
-	AstraQuiverCountU16 = 141,
-	AstraOutfitStoreMode = 142,
-	AstraItemMetadata = 143,
+	QuiverCountU16 = 141,
+	OutfitStoreMode = 142,
+	ItemMetadata = 143,
 	ZoneWeather = 144,
 
 	Last = 144
 };
+
+// Optional OTCv8 protocol extensions negotiated after the OTCv8 family marker.
+// These bits describe wire capabilities, never a client brand. Keep their
+// numeric values stable: clients send the mask with OTCv8CapabilitiesV1.
+enum class Otcv8Capability : uint32_t {
+	QuiverCountU16 = 1U << 0,
+	ItemMetadata = 1U << 1,
+	ExtendedCreatureIcons = 1U << 2,
+	OutfitStoreMode = 1U << 3,
+	RewardChestPagination = 1U << 4,
+	QuickLootFlags = 1U << 5,
+	LootContainers = 1U << 6,
+	ColorizedLootText = 1U << 7,
+	PlayerFamiliars = 1U << 8,
+	MonsterPodium = 1U << 9,
+	ItemInspection = 1U << 10,
+	CharacterBazaar = 1U << 11,
+	MonkData = 1U << 12,
+	BlessingSystem = 1U << 13,
+	HotkeyEquip = 1U << 14,
+	Charms = 1U << 15,
+	CombatAnalyzers = 1U << 16,
+	ExtendedPlayerStats = 1U << 17,
+	ExtendedBasicData = 1U << 18,
+	ExtendedConditionIcons = 1U << 19,
+	CreatureEmblems = 1U << 20,
+	HirelingProtocol = 1U << 21,
+	ExtendedLuaOpcodes = 1U << 22,
+	NativeZoneWeather = 1U << 23,
+	ItemTierByte = 1U << 24,
+};
+
+inline constexpr uint32_t OTCV8_CAPABILITIES_V1_MASK = (1U << 25) - 1;
 
 inline constexpr int32_t CHANNEL_GUILD = 0x00;
 inline constexpr int32_t CHANNEL_PARTY = 0x01;

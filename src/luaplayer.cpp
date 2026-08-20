@@ -3480,29 +3480,17 @@ int luaPlayerIsUsingOtcV8(lua_State* L)
 	return 1;
 }
 
-int luaPlayerIsUsingAstraClient(lua_State* L)
+int luaPlayerHasOtcv8Capability(lua_State* L)
 {
-	// player:isUsingAstraClient()
+	// player:hasOtcv8Capability(capability)
 	const Player* player = getUserdata<const Player>(L, 1);
 	if (!player) {
 		lua_pushnil(L);
 		return 1;
 	}
 
-	pushBoolean(L, player->isAstraClient());
-	return 1;
-}
-
-int luaPlayerIsUsingFonticakClient(lua_State* L)
-{
-	// player:isUsingFonticakClient()
-	const Player* player = getUserdata<const Player>(L, 1);
-	if (!player) {
-		lua_pushnil(L);
-		return 1;
-	}
-
-	pushBoolean(L, player->isFonticakClient());
+	const auto capability = static_cast<Otcv8Capability>(getInteger<uint32_t>(L, 2));
+	pushBoolean(L, player->hasOtcv8Capability(capability));
 	return 1;
 }
 
@@ -3516,6 +3504,19 @@ int luaPlayerIsUsingOtc(lua_State* L)
 	}
 
 	pushBoolean(L, player->isOTC());
+	return 1;
+}
+
+int luaPlayerIsMehah(lua_State* L)
+{
+	// player:isMehah()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushBoolean(L, player->isMehah());
 	return 1;
 }
 
@@ -4884,9 +4885,11 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "setXpBoostTime", luaPlayerSetXpBoostTime);
 
 	registerMethod("Player", "isUsingOtcV8", luaPlayerIsUsingOtcV8);
-	registerMethod("Player", "isUsingAstraClient", luaPlayerIsUsingAstraClient);
-	registerMethod("Player", "isUsingFonticakClient", luaPlayerIsUsingFonticakClient);
 	registerMethod("Player", "isUsingOtc", luaPlayerIsUsingOtc);
+	registerMethod("Player", "isOTCv8", luaPlayerIsUsingOtcV8);
+	registerMethod("Player", "hasOtcv8Capability", luaPlayerHasOtcv8Capability);
+	registerMethod("Player", "isOTC", luaPlayerIsUsingOtc);
+	registerMethod("Player", "isMehah", luaPlayerIsMehah);
 	registerMethod("Player", "getLastIp", luaPlayerGetLastIp);
 
 	// Offline Training Functions

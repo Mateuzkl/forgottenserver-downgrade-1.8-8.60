@@ -764,7 +764,7 @@ Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 
 void Player::sendMonkData()
 {
-	if (!client || !client->isAstraClient) {
+	if (!client || !supportsMonkData()) {
 		return;
 	}
 	std::string json = fmt::format(
@@ -1303,8 +1303,9 @@ void Player::sendIcons() const
 	}
 	client->sendIcons(getClientIcons());
 
-	// Send extended 64-bit condition icons for AstraClient ONLY
-	if (!client->isAstraClient) {
+	// Extended 64-bit condition icons are only understood by clients that
+	// advertise them.
+	if (!supportsExtendedConditionIcons()) {
 		return;
 	}
 
@@ -2717,8 +2718,8 @@ void Player::onAddContainerItem(const Item* item)
 			}
 		}
 	}
-	if (canReceiveAstraItemState() && (isOwnedInventoryItem(this, item) || isOwnedOrOpenContainer(this, container))) {
-		scheduleAstraPlayerInventorySnapshot();
+	if (canReceiveItemMetadata() && (isOwnedInventoryItem(this, item) || isOwnedOrOpenContainer(this, container))) {
+		schedulePlayerInventorySnapshot();
 	}
 
 	checkTradeState(item);
@@ -2726,12 +2727,12 @@ void Player::onAddContainerItem(const Item* item)
 
 void Player::onUpdateContainerItem(const Container* container, const Item* oldItem, const Item* newItem)
 {
-	const bool updatesAstraInventory = canReceiveAstraItemState() &&
+	const bool updatesInventoryMetadata = canReceiveItemMetadata() &&
 	                                   (isOwnedOrOpenContainer(this, container) ||
 	                                    isOwnedInventoryItem(this, oldItem) ||
 	                                    isOwnedInventoryItem(this, newItem));
-	if (oldItem == newItem && updatesAstraInventory) {
-		scheduleAstraPlayerInventorySnapshot();
+	if (oldItem == newItem && updatesInventoryMetadata) {
+		schedulePlayerInventorySnapshot();
 	}
 
 	if (oldItem != newItem) {
@@ -2745,8 +2746,8 @@ void Player::onUpdateContainerItem(const Container* container, const Item* oldIt
 
 void Player::onRemoveContainerItem(const Container* container, const Item* item)
 {
-	if (canReceiveAstraItemState() && (isOwnedOrOpenContainer(this, container) || isOwnedInventoryItem(this, item))) {
-		scheduleAstraPlayerInventorySnapshot();
+	if (canReceiveItemMetadata() && (isOwnedOrOpenContainer(this, container) || isOwnedInventoryItem(this, item))) {
+		schedulePlayerInventorySnapshot();
 	}
 
 	if (tradeState != TRADE_TRANSFER) {
@@ -2828,53 +2829,55 @@ void Player::onRemoveInventoryItem(Item* item)
 	}
 }
 
-bool Player::canReceiveAstraItemState() const
+bool Player::canReceiveItemMetadata() const
 {
 	if (!client) {
 		return false;
 	}
 
 	const ProtocolGame_ptr protocol = client->protocol();
-	return protocol && protocol->canSendAstraItemState();
+	return protocol && protocol->canSendItemMetadata();
 }
 
-void Player::sendAstraPlayerInventorySnapshot() const
+void Player::sendPlayerInventorySnapshot() const
 {
 	if (!client) {
 		return;
 	}
 
 	const ProtocolGame_ptr protocol = client->protocol();
-	if (!protocol || !protocol->canSendAstraItemState()) {
+	if (!protocol || !protocol->canSendItemMetadata()) {
 		return;
 	}
 
 	protocol->sendPlayerInventory();
 }
 
-void Player::scheduleAstraPlayerInventorySnapshot()
+void Player::schedulePlayerInventorySnapshot()
 {
-	if (!canReceiveAstraItemState()) {
+	if (!canReceiveItemMetadata()) {
 		return;
 	}
 
-	if (astraPlayerInventorySnapshotScheduled) {
+	if (playerInventorySnapshotScheduled) {
 		return;
 	}
 
-	astraPlayerInventorySnapshotScheduled = true;
+	playerInventorySnapshotScheduled = true;
 	const uint32_t playerId = getID();
-	g_dispatcher.addTask([playerId]() {
+	if (!g_dispatcher.addTask([playerId]() {
 		if (auto player = g_game.getPlayerByID(playerId)) {
-			player->flushAstraPlayerInventorySnapshot();
+			player->flushPlayerInventorySnapshot();
 		}
-	});
+	})) {
+		playerInventorySnapshotScheduled = false;
+	}
 }
 
-void Player::flushAstraPlayerInventorySnapshot()
+void Player::flushPlayerInventorySnapshot()
 {
-	astraPlayerInventorySnapshotScheduled = false;
-	sendAstraPlayerInventorySnapshot();
+	playerInventorySnapshotScheduled = false;
+	sendPlayerInventorySnapshot();
 }
 
 void Player::checkTradeState(const Item* item)
@@ -4543,7 +4546,7 @@ void Player::addThing(int32_t index, Thing* thing)
 
 	// send to client
 	sendInventoryItem(static_cast<slots_t>(index), item);
-	scheduleAstraPlayerInventorySnapshot();
+	schedulePlayerInventorySnapshot();
 }
 
 void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
@@ -4566,7 +4569,7 @@ void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 
 	// event methods
 	onUpdateInventoryItem(item, item);
-	scheduleAstraPlayerInventorySnapshot();
+	schedulePlayerInventorySnapshot();
 }
 
 void Player::refreshThing(Thing* thing)
@@ -4583,7 +4586,7 @@ void Player::refreshThing(Thing* thing)
 
 	sendInventoryItem(static_cast<slots_t>(index), item);
 	onUpdateInventoryItem(item, item);
-	scheduleAstraPlayerInventorySnapshot();
+	schedulePlayerInventorySnapshot();
 }
 
 void Player::replaceThing(uint32_t index, Thing* thing)
@@ -4621,7 +4624,7 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 	if (oldItem != item) {
 		oldItem->setParent(nullptr);
 	}
-	scheduleAstraPlayerInventorySnapshot();
+	schedulePlayerInventorySnapshot();
 }
 
 void Player::removeThing(Thing* thing, uint32_t count)
@@ -4646,7 +4649,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 			item->setParent(nullptr);
 			inventory[index].reset();
-			scheduleAstraPlayerInventorySnapshot();
+			schedulePlayerInventorySnapshot();
 		} else {
 			uint8_t newCount = static_cast<uint8_t>(std::max<int32_t>(0, item->getItemCount() - count));
 			item->setItemCount(newCount);
@@ -4656,7 +4659,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 			// event methods
 			onUpdateInventoryItem(item, item);
-			scheduleAstraPlayerInventorySnapshot();
+			schedulePlayerInventorySnapshot();
 		}
 	} else {
 		// send change to client
@@ -4667,7 +4670,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 		item->setParent(nullptr);
 		inventory[index].reset();
-		scheduleAstraPlayerInventorySnapshot();
+		schedulePlayerInventorySnapshot();
 	}
 }
 
@@ -5824,13 +5827,13 @@ Skulls_t Player::getSkullClient(const Creature* creature) const
 		return SKULL_NONE;
 	}
 
-	// Influenced/fiendish: OTC gets skull, Astra gets creature icon via 0x8B
+	// Extended OTCv8 uses creature icon opcode 0x8B instead of a skull.
 	if (const Monster* monster = creature->getMonster()) {
-		if (monster->isFamiliar() && isAstraClient()) {
+		if (monster->isFamiliar() && supportsExtendedCreatureIcons()) {
 			return SKULL_NONE;
 		}
 		if (monster->isInfluenced() || monster->isFiendish()) {
-			if (isAstraClient()) {
+			if (supportsExtendedCreatureIcons()) {
 				return SKULL_NONE;
 			}
 			return monster->isInfluenced() ? SKULL_GREEN : SKULL_RED;
@@ -7270,7 +7273,7 @@ Container* findHeldContainerByIdentity(Container* parent, uint16_t itemId, uint6
 
 void Player::sendLootContainers() const
 {
-	if (client && isAstraClient()) {
+	if (client && supportsLootContainers()) {
 		client->sendLootContainers();
 	}
 }
@@ -7643,7 +7646,8 @@ void Player::flushPendingLoot(const std::string& groupKey)
 	const std::string colorizedText = colorizedLootEnabled ? buildLootText(true) : plainText;
 	const auto sendLootText = [&](Player& recipient) {
 		recipient.sendChannelMessage(
-		    "", colorizedLootEnabled && recipient.isAstraClient() ? colorizedText : plainText, TALKTYPE_CHANNEL_O, 10);
+		    "", colorizedLootEnabled && recipient.supportsColorizedLootText() ? colorizedText : plainText,
+		    TALKTYPE_CHANNEL_O, 10);
 	};
 
 	const auto& party = getParty();

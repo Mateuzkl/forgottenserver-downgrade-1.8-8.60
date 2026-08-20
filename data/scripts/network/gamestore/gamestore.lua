@@ -61,7 +61,8 @@ local function isTaskBoardOfferEnabled(offerType)
 end
 
 local function supportsTaskBoardStore(player, offerType)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient() and
+	return player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES) and
 		isTaskBoardOfferEnabled(offerType)
 end
 
@@ -102,13 +103,15 @@ end
 
 local function supportsBattlePassStore(player)
 	return configManager.getBoolean(configKeys.BATTLEPASS_SYSTEM_ENABLED) and
-		player and player.isUsingAstraClient and player:isUsingAstraClient()
+		player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_EXTENDED_LUA_OPCODES)
 end
 
 local function supportsHirelingStore(player)
 	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
-		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
-		player and player.isUsingAstraClient and player:isUsingAstraClient()
+		configManager.getBoolean(configKeys.HIRELING_PROTOCOL_ENABLED) and
+		player and player.hasOtcv8Capability and
+		player:hasOtcv8Capability(OTCV8_CAPABILITY_HIRELING_PROTOCOL)
 end
 
 local function playerOwnsMount(player, mountId)
@@ -785,7 +788,7 @@ local function deliverOffer(player, offer, extra)
 
 	if offer.oftype == "hireling" then
 		if not supportsHirelingStore(player) then
-			return "Hireling purchases are only available on AstraClient."
+			return "Hireling purchases are only available on compatible OTCv8 clients."
 		end
 
 		if not player.addNewHireling then
@@ -803,7 +806,7 @@ local function deliverOffer(player, offer, extra)
 
 	if offer.oftype == "hireling_skill" then
 		if not supportsHirelingStore(player) then
-			return "Hireling purchases are only available on AstraClient."
+			return "Hireling purchases are only available on compatible OTCv8 clients."
 		end
 
 		local skillName = GetHirelingSkillNameById(offer.value > 0 and offer.value or offer.eid)
@@ -821,7 +824,7 @@ local function deliverOffer(player, offer, extra)
 
 	if offer.oftype == "hireling_outfit" then
 		if not supportsHirelingStore(player) then
-			return "Hireling purchases are only available on AstraClient."
+			return "Hireling purchases are only available on compatible OTCv8 clients."
 		end
 
 		local outfitName = GetHirelingOutfitNameById(offer.value > 0 and offer.value or offer.eid)

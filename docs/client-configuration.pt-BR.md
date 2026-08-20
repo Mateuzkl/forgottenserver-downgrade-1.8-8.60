@@ -16,8 +16,7 @@ Use `.dat`, `.spr` e `items.otb` compatíveis entre si. Se os assets do client e
 
 Targets suportados:
 
-- OTCv8 / clients estilo Mehah com suporte a features estendidas.
-- AstraClient.
+- OTCv8 / clients estilo Mehah com suporte a features estendidas e extensoes de protocolo correspondentes.
 - Client CIP 8.60 classico com as DLLs modificadas do projeto.
 
 ## Onde configurar features no client
@@ -41,11 +40,22 @@ server: src/const.h
 
 ## Handshake de features do server
 
-O server envia overrides de features para OTCv8/Mehah/Astra em `ProtocolGame::sendFeatures()`, no arquivo `src/protocolgame.cpp`.
+O server envia overrides de features para OTCv8/Mehah em `ProtocolGame::sendFeatures()`, no arquivo `src/protocolgame.cpp`.
 
 Clients que suportam o pacote `0x43` (`GameServerFeatures`) devem deixar o server controlar as flags que mudam tamanho/formato de pacote.
 
-O server atualmente envia estas flags comuns para OTCv8/Astra:
+`OTCv8` identifica somente a familia do client. Extensoes opcionais de wire sao
+negociadas no marker loop de login existente com `OTCv8CapabilitiesV1`, seguido
+por uma mascara de capabilities de 32 bits. Um OTCv8 simples que nao envia esse
+marker recebe apenas o conjunto comum de features abaixo.
+
+O protocolo de login da conta e negociado separadamente. Clients com parser de
+character list estendida enviam `OTCv8LoginCapabilitiesV1` e sua mascara de 32
+bits depois da senha. Clients OTCv8 sem esse marker recebem a lista 8.60 padrao
+(`0x64`); clients capazes podem solicitar separadamente a lista estendida
+(`0x65`), a cast list e os metadados de criaturas boosted.
+
+O server atualmente envia estas flags comuns para OTCv8:
 
 ```cpp
 ExtendedOpcode = true
@@ -61,9 +71,11 @@ CreatureIcons = true
 ContainerPagination = true
 BrowseField = true
 QuickLootFlags = shouldSendQuickLootFlags()
-ThingUpgradeClassification = false
+ThingUpgradeClassification = shouldSendThingUpgradeClassification()
 ItemTierByte = shouldSendItemTierByte()
 ```
+
+Para OTCv8, `shouldSendThingUpgradeClassification()` exige uma sessao OTCv8 e o item-tier byte habilitado. Para Mehah, segue a configuracao server-side de classificacao de upgrade. As outras familias nao recebem nenhuma dessas features.
 
 Para detecção Mehah-only, o server envia:
 
@@ -73,21 +85,21 @@ BrowseField = true
 ThingUpgradeClassification = shouldSendThingUpgradeClassification()
 ```
 
-Para AstraClient, o server tambem pode enviar flags exclusivas:
+O server tambem pode enviar estas flags de extensao OTCv8:
 
 ```cpp
 ExperienceBonus = true
 PlayerFamiliars = true
-AstraCreatureIcons = true
-AstraQuiverCountU16 = true
-AstraOutfitStoreMode = true
+ExtendedCreatureIcons = true
+QuiverCountU16 = true
+OutfitStoreMode = true
 DisplayItemDuration = true
 DisplayItemCharges = true
 PackedPlayerInventory = true
-AstraItemMetadata = true
+ItemMetadata = true
 ```
 
-Nao copie flags `Astra*` para OTCv8 Classic. Elas precisam do parser do Astra.
+Estas flags estendidas exigem suporte correspondente no parser OTCv8.
 
 ## Bloco recomendado OTCv8 / Mehah 8.60
 
@@ -157,16 +169,18 @@ Condição no server:
 QuickLootFlags = shouldSendQuickLootFlags()
 ```
 
-`shouldSendQuickLootFlags()` e verdadeiro apenas para AstraClient quando quick loot esta habilitado na config.
+`shouldSendQuickLootFlags()` e verdadeiro apenas quando o client anuncia a capability de quick loot e quick loot esta habilitado na config.
 
 ### GameThingUpgradeClassification
 
 Condição no server:
 
 ```cpp
-ThingUpgradeClassification = false // caminho OTCv8/Astra
+ThingUpgradeClassification = shouldSendThingUpgradeClassification() // caminho OTCv8
 ThingUpgradeClassification = shouldSendThingUpgradeClassification() // caminho Mehah
 ```
+
+O helper aplica a regra especifica da familia: OTCv8 exige a capability negociada `ItemTierByte` e nao pode negociar ao mesmo tempo o layout exclusivo de item metadata, enquanto Mehah usa `enableItemUpgradeClassification`. Clients sem suporte continuam excluidos.
 
 Para Mehah, depende de:
 
@@ -189,22 +203,22 @@ Depende de:
 enableItemTierDisplay = true
 ```
 
-e do modo server-side de item tier byte.
+do modo server-side de item tier byte e do suporte anunciado pelo marker legado `OTCv8TierByte` ou pela mascara V1.
 
-## Notas para AstraClient
+## Notas das extensoes OTCv8
 
-O AstraClient tem perfil proprio de features 8.60 e extensoes proprias de pacote. Nao trate Astra como copia direta do OTCv8 Classic.
+Estas extensoes de pacote sao habilitadas somente quando o client OTCv8 anuncia a capability correspondente.
 
-Features exclusivas do Astra:
+Features estendidas do OTCv8:
 
 ```lua
-GameAstraCreatureIcons
-GameAstraQuiverCountU16
-GameAstraOutfitStoreMode
-GameAstraItemMetadata
+GameExtendedCreatureIcons
+GameQuiverCountU16
+GameOutfitStoreMode
+GameItemMetadata
 ```
 
-Essas flags so devem ser usadas quando o server reconhece AstraClient e a config relacionada esta ativa.
+Para cada extensao, o valor efetivo e `clientSupportsFeature && serverEnablesFeature`. Os serializers usam a mesma capability efetiva, entao uma feature nunca e anunciada sem seu layout correspondente, nem serializada sem negociacao.
 
 ## Client CIP classico
 
@@ -229,6 +243,6 @@ Store inbox no CIP classico deve ser acessado por comandos como `!storeinbox`, `
 - [ ] OTCv8/Mehah tem as features base 8.60 ligadas.
 - [ ] `GameSpritesU32` bate com o formato do arquivo de sprites.
 - [ ] `GameQuickLootFlags`, `GameThingUpgradeClassification` e `GameItemTierByte` batem com `sendFeatures()`.
-- [ ] Flags exclusivas do Astra so sao usadas pelo AstraClient.
+- [ ] Flags estendidas correspondem as capabilities anunciadas pelo client OTCv8.
 - [ ] CIP classico usa DLL patch em vez de feature flag OTC.
 - [ ] Login, andar, look, use, abrir backpack, abrir corpse, store inbox e logout foram testados.

@@ -114,10 +114,10 @@ void NetworkMessage::addItemId(uint16_t itemId)
 
 namespace {
 
-constexpr uint8_t AstraItemFlagEquipable = 1 << 0;
-constexpr uint8_t AstraItemFlagAmmo = 1 << 1;
+constexpr uint8_t ItemMetadataFlagEquipable = 1 << 0;
+constexpr uint8_t ItemMetadataFlagAmmo = 1 << 1;
 
-bool isAstraItemMetadataEquipable(const ItemType& it)
+bool isItemMetadataEquipable(const ItemType& it)
 {
 	return it.weaponType != WEAPON_NONE || it.ammoType != AMMO_NONE || it.attack != 0 || it.defense != 0 ||
 	       it.extraDefense != 0 || it.armor != 0 || (it.slotPosition & SLOTP_NECKLACE) != 0 ||
@@ -126,34 +126,34 @@ bool isAstraItemMetadataEquipable(const ItemType& it)
 	       (it.slotPosition & SLOTP_ARMOR) != 0 || (it.slotPosition & SLOTP_LEGS) != 0;
 }
 
-uint8_t getAstraItemMetadataFlags(const ItemType& it)
+uint8_t getItemMetadataFlags(const ItemType& it)
 {
 	uint8_t flags = 0;
 	if (it.weaponType == WEAPON_AMMO) {
-		flags |= AstraItemFlagAmmo;
+		flags |= ItemMetadataFlagAmmo;
 	}
-	if (isAstraItemMetadataEquipable(it)) {
-		flags |= AstraItemFlagEquipable;
+	if (isItemMetadataEquipable(it)) {
+		flags |= ItemMetadataFlagEquipable;
 	}
 	return flags;
 }
 
-void addAstraItemMetadata(NetworkMessage& msg, const ItemType& it)
+void addItemMetadata(NetworkMessage& msg, const ItemType& it)
 {
 	msg.add<uint16_t>(it.slotPosition);
-	msg.addByte(getAstraItemMetadataFlags(it));
+	msg.addByte(getItemMetadataFlags(it));
 }
 
 } // namespace
 
 void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
-                             bool sendAstraItemState, bool sendAstraQuiverCountU16)
+                             bool sendItemMetadata, bool sendQuiverCountU16)
 {
 	static_cast<void>(sendQuickLootFlags);
 	addItemId(id);
 
 	const ItemType& it = Item::items[id];
-	if (sendAstraQuiverCountU16 && it.weaponType == WEAPON_QUIVER) {
+	if (sendQuiverCountU16 && it.weaponType == WEAPON_QUIVER) {
 		// This overload only has the caller-provided subtype/count; real quiver ammo count is sent by the Item* overload.
 		add<uint16_t>(count);
 	} else if (it.stackable) {
@@ -167,24 +167,24 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 		addByte(static_cast<uint8_t>(it.tier));
 	}
 
-	if (sendAstraItemState) {
+	if (sendItemMetadata) {
 		addByte(0); // no instance duration is available in the id/count overload
 		addByte(0); // no instance charges are available in the id/count overload
-		addAstraItemMetadata(*this, it);
+		addItemMetadata(*this, it);
 	}
 }
 
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
-                             bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16)
+                             bool sendQuickLootFlags, bool sendItemMetadata, bool sendQuiverCountU16)
 {
 	static_cast<void>(sendQuickLootFlags);
 	addItemId(item->getID());
 
 	const ItemType& it = Item::items[item->getID()];
-	if ((sendQuiverCount || sendAstraQuiverCountU16) && item->getWeaponType() == WEAPON_QUIVER) {
+	if ((sendQuiverCount || sendQuiverCountU16) && item->getWeaponType() == WEAPON_QUIVER) {
 		const Container* quiver = item->getContainer();
 		const uint32_t ammoCount = quiver ? quiver->getAmmoCount() : 0;
-		if (sendAstraQuiverCountU16) {
+		if (sendQuiverCountU16) {
 			add<uint16_t>(static_cast<uint16_t>(std::min<uint32_t>(0xFFFF, ammoCount)));
 		} else {
 			addByte(static_cast<uint8_t>(std::min<uint32_t>(0xFF, ammoCount)));
@@ -200,7 +200,7 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 		addByte(item->getTier());
 	}
 
-	if (sendAstraItemState) {
+	if (sendItemMetadata) {
 		const bool hasVisualDuration = it.showDuration || it.wearOut || it.clockExpire || it.expire || it.expireStop;
 		const bool hasDuration = hasVisualDuration && item->getDuration() > 0;
 		addByte(hasDuration ? 1 : 0);
@@ -222,7 +222,7 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 			addByte((it.charges != 0 && charges == it.charges) ? 1 : 0);
 		}
 
-		addAstraItemMetadata(*this, it);
+		addItemMetadata(*this, it);
 	}
 }
 

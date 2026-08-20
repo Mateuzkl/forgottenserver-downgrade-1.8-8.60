@@ -77,8 +77,13 @@ public:
 	void logout(bool displayEffect, bool forced);
 
 	uint16_t getVersion() const { return version; }
-	bool canSendAstraItemState() const;
-	bool shouldSendAstraQuiverCountU16() const;
+	bool hasOtcv8Capability(Otcv8Capability capability) const
+	{
+		return isOTCv8 &&
+		       (otcv8Capabilities & static_cast<uint32_t>(capability)) != 0;
+	}
+	bool canSendItemMetadata() const;
+	bool shouldSendQuiverCountU16() const;
 	static void rebuildItemValuesCache();
 	static void invalidateItemValuesCache();
 
@@ -325,7 +330,7 @@ private:
 	}
 
 	// OTCv8
-	void sendFeatures(bool advertiseAstraItemState = false);
+	void sendFeatures();
 	bool shouldSendQuickLootFlags() const;
 	bool shouldSendContainerPagination() const;
 	bool shouldPaginateContainer(const Container* container) const;
@@ -407,23 +412,17 @@ private:
 	bool isOTCv8 = false;
 	bool isMehah = false;
 	bool isOTC = false;
-	bool isAstraClient = false;
-	bool isFonticakClient = false;
-	bool supportsZoneWeather = false;
+	uint32_t otcv8Capabilities = 0;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
 	uint32_t dllWeatherSequence = 0;
-	bool isUsingFonticakClient() const { return isFonticakClient; }
-	bool supportsAstraCreatureIcons() const { return isAstraClient; }
-	bool supportsCreatureIcons() const { return supportsAstraCreatureIcons(); }
 	bool supportsNativeZoneWeather() const
 	{
 		return (clientOperatingSystem == CLIENTOS_CUSTOM_DLL && supportsDllZoneWeather) ||
-		       isAstraClient || (isOTCv8 && supportsZoneWeather);
+		       hasOtcv8Capability(Otcv8Capability::NativeZoneWeather);
 	}
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;
-	bool useItemTierByte = false;
 	bool debugAssertSent = false;
 	bool acceptPackets = false;
 	bool imbuementTrackerOpen = false;
