@@ -4964,6 +4964,16 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
 }
 
+uint16_t ProtocolGame::getRegenerationTimeSeconds(int32_t ticks)
+{
+	if (ticks < 0) {
+		return (std::numeric_limits<uint16_t>::max)();
+	}
+
+	return static_cast<uint16_t>(std::min<uint32_t>(static_cast<uint32_t>(ticks) / 1000,
+	                                                (std::numeric_limits<uint16_t>::max)()));
+}
+
 void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 {
 	msg.addByte(0xA0);
@@ -5014,6 +5024,10 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 
 	if (isOTC) {
 		msg.add<uint16_t>(player->getBaseSpeed() / 2);
+		if (isAstraClient) {
+			const Condition* condition = player->getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT);
+			msg.add<uint16_t>(getRegenerationTimeSeconds(condition ? condition->getTicks() : 0));
+		}
 		msg.add<uint16_t>(player->getOfflineTrainingTime() / 60 / 1000);
 		if (isAstraClient) {
 			msg.add<uint16_t>(player->getXpBoostTime());
@@ -5352,6 +5366,7 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 	features[GameFeature::ContainerPagination] = true;
 	features[GameFeature::BrowseField] = true;
 	if (isAstraClient) {
+		features[GameFeature::PlayerRegenerationTime] = true;
 		features[GameFeature::ExperienceBonus] = true;
 		features[GameFeature::PlayerFamiliars] = true;
 		features[GameFeature::AstraCreatureIcons] = true;

@@ -5323,6 +5323,9 @@ void Player::onEndCondition(ConditionType_t type)
 	}
 
 	sendIcons();
+	if (type == CONDITION_REGENERATION) {
+		sendStats();
+	}
 }
 
 void Player::onCombatRemoveCondition(Condition* condition)
