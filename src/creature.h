@@ -278,10 +278,10 @@ public:
 	bool addCombatCondition(Condition_ptr condition);
 	void removeCondition(ConditionType_t type, ConditionId_t conditionId, bool force = false);
 	void removeCondition(ConditionType_t type, bool force = false);
-	void removeCondition(Condition* condition, bool force = false);
+	void removeCondition(const Condition_ptr& condition, bool force = false);
 	void removeCombatCondition(ConditionType_t type);
-	Condition* getCondition(ConditionType_t type) const;
-	Condition* getCondition(ConditionType_t type, ConditionId_t conditionId, uint32_t subId = 0) const;
+	Condition_ptr getCondition(ConditionType_t type) const;
+	Condition_ptr getCondition(ConditionType_t type, ConditionId_t conditionId, uint32_t subId = 0) const;
 	void executeConditions(uint32_t interval);
 	bool hasCondition(ConditionType_t type, uint32_t subId = 0) const;
 	virtual bool isImmune(ConditionType_t type) const;
@@ -311,7 +311,7 @@ public:
 	virtual void onAddCombatCondition(ConditionType_t type);
 	virtual void onEndCondition(ConditionType_t type);
 	void onTickCondition(ConditionType_t type, bool& bRemove);
-	virtual void onCombatRemoveCondition(Condition* condition);
+	virtual void onCombatRemoveCondition(const Condition_ptr& condition);
 	virtual void onAttackedCreature(const std::shared_ptr<Creature>&, bool = true) {}
 	virtual void onAttacked();
 	virtual void onAttackedCreatureDrainHealth(const std::shared_ptr<Creature>& target, int32_t points);

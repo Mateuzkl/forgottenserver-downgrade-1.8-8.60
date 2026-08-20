@@ -75,7 +75,7 @@ struct CombatParams
 	CombatParams(CombatParams&&) noexcept = default;
 	CombatParams& operator=(CombatParams&&) noexcept = default;
 
-	std::forward_list<std::unique_ptr<const Condition>> conditionList;
+	std::forward_list<std::shared_ptr<const Condition>> conditionList;
 	std::string profileName;
 
 	std::unique_ptr<ValueCallback> valueCallback;

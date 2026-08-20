@@ -162,7 +162,7 @@ int luaCombatAddCondition(lua_State* L)
 		return 1;
 	}
 
-	Condition* condition = getUserdata<Condition>(L, 2);
+	Condition* condition = getSharedUserdata<Condition>(L, 2);
 	if (condition) {
 		combat->addCondition(condition->clone());
 		pushBoolean(L, true);

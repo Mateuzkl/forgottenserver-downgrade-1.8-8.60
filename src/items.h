@@ -398,7 +398,7 @@ public:
 	std::string elementalBond;
 
 	std::unique_ptr<Abilities> abilities;
-	std::unique_ptr<ConditionDamage> conditionDamage;
+	std::shared_ptr<ConditionDamage> conditionDamage;
 
 	uint32_t attackSpeed = 0;
 	uint32_t attackSpeedPercent = 0;

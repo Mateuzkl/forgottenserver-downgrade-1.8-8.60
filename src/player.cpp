@@ -2356,7 +2356,7 @@ void Player::onCreatureAppear(Creature* creature, bool isLogin)
 			offlineTime = 0;
 		}
 
-		for (Condition* condition : getMuteConditions()) {
+		for (const auto& condition : getMuteConditions()) {
 			condition->setTicks(condition->getTicks() - (offlineTime * 1000));
 			if (condition->getTicks() <= 0) {
 				removeCondition(condition);
@@ -5323,9 +5323,12 @@ void Player::onEndCondition(ConditionType_t type)
 	}
 
 	sendIcons();
+	if (type == CONDITION_REGENERATION) {
+		sendStats();
+	}
 }
 
-void Player::onCombatRemoveCondition(Condition* condition)
+void Player::onCombatRemoveCondition(const Condition_ptr& condition)
 {
 	// Creature::onCombatRemoveCondition(condition);
 	if (condition->getId() > 0) {
@@ -6723,9 +6726,9 @@ size_t Player::getMaxDepotItems() const
 	return getInteger(isPremium() ? ConfigManager::DEPOT_PREMIUM_LIMIT : ConfigManager::DEPOT_FREE_LIMIT);
 }
 
-std::forward_list<Condition*> Player::getMuteConditions() const
+std::forward_list<Condition_ptr> Player::getMuteConditions() const
 {
-	std::forward_list<Condition*> muteConditions;
+	std::forward_list<Condition_ptr> muteConditions;
 	for (const auto& condition : conditions) {
 		if (condition->getTicks() <= 0) {
 			continue;
@@ -6736,7 +6739,7 @@ std::forward_list<Condition*> Player::getMuteConditions() const
 			continue;
 		}
 
-		muteConditions.push_front(condition.get());
+		muteConditions.push_front(condition);
 	}
 	return muteConditions;
 }
@@ -7670,7 +7673,7 @@ void Player::updateRegeneration()
 		return;
 	}
 
-	Condition* condition = getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT);
+	auto condition = getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT);
 	if (condition) {
 		condition->setParam(CONDITION_PARAM_HEALTHGAIN, vocation->getHealthGainAmount());
 		condition->setParam(CONDITION_PARAM_HEALTHTICKS, vocation->getHealthGainTicks() * 1000);

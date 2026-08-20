@@ -219,7 +219,7 @@ void BedItem::regeneratePlayer(Player* player) const
 
 	const auto sleptTime = static_cast<uint32_t>(currentTime - sleepStart);
 
-	auto* condition = player->getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT);
+	auto condition = player->getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT);
 	if (condition) {
 		uint32_t regen;
 

@@ -85,7 +85,8 @@ TalkActionResult TalkActions::playerSaySpell(Player* player, SpeakClasses type, 
 
 		if (exhaustTime > 0) {
 			if (player->hasCondition(CONDITION_EXHAUST_WEAPON, EXHAUST_TALKACTION)) {
-				Condition* condition = player->getCondition(CONDITION_EXHAUST_WEAPON, CONDITIONID_DEFAULT, EXHAUST_TALKACTION);
+				auto condition =
+				    player->getCondition(CONDITION_EXHAUST_WEAPON, CONDITIONID_DEFAULT, EXHAUST_TALKACTION);
 				if (!it->second.getExhaustionMessage().empty()) {
 					std::string msg = it->second.getExhaustionMessage();
 					size_t pos = msg.find("{time}");

@@ -4462,6 +4462,13 @@ int LuaScriptInterface::luaUserdataCompare(lua_State* L)
 		return 1;
 	}
 
+	if (typeA == LuaData_Condition || typeB == LuaData_Condition) {
+		Lua::pushBoolean(L,
+		                 typeA == typeB &&
+		                     Lua::getSharedPtr<Condition>(L, 1).get() == Lua::getSharedPtr<Condition>(L, 2).get());
+		return 1;
+	}
+
 	Lua::pushBoolean(L, Lua::getUserdata<void>(L, 1, false) == Lua::getUserdata<void>(L, 2, false));
 	return 1;
 }
