@@ -485,10 +485,10 @@ bool House::canEditAccessList(uint32_t listId, const Player* player) const
 	}
 }
 
-HouseTransferItem* House::getTransferItem()
+std::shared_ptr<HouseTransferItem> House::getTransferItem()
 {
 	if (auto item = transferItem.lock()) {
-		return item.get();
+		return item;
 	}
 
 	auto newTransferItem = HouseTransferItem::createHouseTransferItem(this);
@@ -498,7 +498,7 @@ HouseTransferItem* House::getTransferItem()
 
 	transferItem = newTransferItem;
 	transfer_container.addThing(newTransferItem.get());
-	return newTransferItem.get();
+	return newTransferItem;
 }
 
 void House::resetTransferItem()

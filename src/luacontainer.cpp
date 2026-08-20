@@ -82,7 +82,8 @@ int luaContainerGetEmptySlots(lua_State* L)
 	uint32_t slots = container->capacity() - container->size();
 	if (getBoolean(L, 2, false)) {
 		for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-			if (Container* tmpContainer = (*it)->getContainer()) {
+			auto item = *it;
+			if (Container* tmpContainer = item->getContainer()) {
 				slots += tmpContainer->capacity() - tmpContainer->size();
 			}
 		}
@@ -114,9 +115,10 @@ int luaContainerGetItem(lua_State* L)
 	}
 
 	uint32_t index = getInteger<uint32_t>(L, 2);
-	Item* item = container->getItemByIndex(index);
+	auto item = container->getItemByIndex(index);
 	if (item) {
-		pushItem(L, item);
+		pushSharedPtr(L, item);
+		setItemMetatable(L, -1, item.get());
 	} else {
 		lua_pushnil(L);
 	}

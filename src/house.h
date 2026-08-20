@@ -169,7 +169,7 @@ public:
 	Door* getDoorByNumber(uint32_t doorId) const;
 	Door* getDoorByPosition(const Position& pos) const;
 
-	HouseTransferItem* getTransferItem();
+	std::shared_ptr<HouseTransferItem> getTransferItem();
 	void resetTransferItem();
 	bool executeTransfer(HouseTransferItem* item, Player* newOwner);
 

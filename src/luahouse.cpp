@@ -298,14 +298,14 @@ int luaHouseStartTrade(lua_State* L)
 			return 1;
 		}
 
-		Item* transferItem = house->getTransferItem();
+		auto transferItem = house->getTransferItem();
 		if (!transferItem) {
 			lua_pushinteger(L, RETURNVALUE_YOUCANNOTTRADETHISHOUSE);
 			return 1;
 		}
 
 		transferItem->getParent()->setParent(player);
-		if (!g_game.internalStartTrade(player, tradePartner, transferItem)) {
+		if (!g_game.internalStartTrade(player, tradePartner, transferItem.get())) {
 			house->resetTransferItem();
 		}
 
@@ -342,14 +342,14 @@ int luaHouseStartTrade(lua_State* L)
 		return 1;
 	}
 
-	Item* transferItem = house->getTransferItem();
+	auto transferItem = house->getTransferItem();
 	if (!transferItem) {
 		lua_pushinteger(L, RETURNVALUE_YOUCANNOTTRADETHISHOUSE);
 		return 1;
 	}
 
 	transferItem->getParent()->setParent(player);
-	if (!g_game.internalStartTrade(player, tradePartner, transferItem)) {
+	if (!g_game.internalStartTrade(player, tradePartner, transferItem.get())) {
 		house->resetTransferItem();
 	}
 

@@ -271,7 +271,7 @@ bool Container::canMergeIntoExistingStack(const Item* item, int32_t index) const
 		return false;
 	}
 
-	return canStackWith(getItemByIndex(index));
+	return canStackWith(getItemByIndex(index).get());
 }
 
 bool Container::hasRoomForItem(const Item* item, int32_t index, uint32_t count) const
@@ -305,12 +305,7 @@ uint64_t Container::getWeightReductionContentWeight() const
 	return weight;
 }
 
-Item* Container::getItemByIndex(size_t index) const
-{
-	return getItemByIndexRef(index).get();
-}
-
-std::shared_ptr<Item> Container::getItemByIndexRef(size_t index) const
+std::shared_ptr<Item> Container::getItemByIndex(size_t index) const
 {
 	if (index >= size()) {
 		return nullptr;
@@ -330,7 +325,7 @@ uint32_t Container::getItemHoldingCount() const
 bool Container::isHoldingItem(const Item* item) const
 {
 	for (ContainerIterator it = iterator(); it.hasNext(); it.advance()) {
-		if (*it == item) {
+		if ((*it).get() == item) {
 			return true;
 		}
 	}
@@ -548,7 +543,7 @@ ReturnValue Container::queryMaxCount(int32_t index, const Thing& thing, uint32_t
 				++slotIndex;
 			}
 		} else {
-			const auto destItemRef = getItemByIndexRef(index);
+			const auto destItemRef = getItemByIndex(index);
 			const Item* destItem = destItemRef.get();
 			if (item->equals(destItem) && destItem->getItemCount() < destItem->getStackSize()) {
 				if (queryAdd(index, *item, count, flags) == RETURNVALUE_NOERROR) {
@@ -644,7 +639,7 @@ Cylinder* Container::queryDestination(int32_t& index, const Thing& thing, Item**
 	}
 
 	if (index != INDEX_WHEREEVER) {
-		auto itemFromIndexRef = getItemByIndexRef(index);
+		auto itemFromIndexRef = getItemByIndex(index);
 		Item* itemFromIndex = itemFromIndexRef.get();
 		if (itemFromIndex) {
 			*destItem = itemFromIndex;
@@ -781,7 +776,7 @@ void Container::replaceThing(uint32_t index, Thing* thing)
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
 	}
 
-	auto replacedItemRef = getItemByIndexRef(index);
+	auto replacedItemRef = getItemByIndex(index);
 	Item* replacedItem = replacedItemRef.get();
 	if (!replacedItem) {
 		return /*RETURNVALUE_NOTPOSSIBLE*/;
@@ -897,7 +892,7 @@ ItemVector Container::getItems(bool recursive /*= false*/) const
 	return {itemlist.begin(), itemlist.end()};
 }
 
-Thing* Container::getThing(size_t index) const { return getItemByIndex(index); }
+Thing* Container::getThing(size_t index) const { return getItemByIndex(index).get(); }
 
 void Container::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t)
 {
@@ -1033,12 +1028,12 @@ bool Container::isRewardCorpse() const
 	return false;
 }
 
-Item* ContainerIterator::operator*() const
+std::shared_ptr<Item> ContainerIterator::operator*() const
 {
 	if (!hasNext()) {
 		return nullptr;
 	}
-	return items[index].get();
+	return items[index];
 }
 
 void ContainerIterator::advance()

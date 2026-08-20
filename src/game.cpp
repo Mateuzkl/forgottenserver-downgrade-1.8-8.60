@@ -408,7 +408,7 @@ ReturnValue moveQuickLootItem(Game& game, Player* player, const std::shared_ptr<
 		}
 
 		for (ContainerIterator it = current->iterator(); it.hasNext(); it.advance()) {
-			Item* child = *it;
+			auto child = *it;
 			if (Container* childContainer = child ? child->getContainer() : nullptr) {
 				if (ContainerPtr childRef = game.getContainerSharedRef(childContainer)) {
 					destinations.push_back(childRef);
@@ -457,15 +457,13 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 
 	std::vector<std::shared_ptr<Item>> lootItems;
 	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-		Item* item = *it;
-		if (!item || item->isRemoved() || !shouldQuickLootItem(player, item)) {
+		auto item = *it;
+		if (!item || item->isRemoved() || !shouldQuickLootItem(player, item.get())) {
 			continue;
 		}
 
-		if (std::shared_ptr<Item> itemRef = game.getItemSharedRef(item)) {
-			result.hadLoot = true;
-			lootItems.push_back(itemRef);
-		}
+		result.hadLoot = true;
+		lootItems.push_back(std::move(item));
 	}
 
 	for (const std::shared_ptr<Item>& itemRef : lootItems) {
@@ -871,7 +869,7 @@ Thing* Game::internalGetThing(Player* player, const Position& pos, int32_t index
 		}
 
 		uint8_t slot = pos.z;
-		return parentContainer->getItemByIndex(player->getContainerIndex(fromCid) + slot);
+		return parentContainer->getItemByIndex(player->getContainerIndex(fromCid) + slot).get();
 	} else if (pos.y == 0 && pos.z == 0) {
 		const ItemType& it = Item::items[static_cast<uint16_t>(spriteId)];
 		if (it.id == 0) {
@@ -2973,8 +2971,9 @@ Item* searchForItem(Container* container, uint16_t itemId, bool hasTier = false,
 	}
 
 	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-		if ((*it)->getID() == itemId && (!hasTier || (*it)->getTier() == tier)) {
-			return *it;
+		auto item = *it;
+		if (item->getID() == itemId && (!hasTier || item->getTier() == tier)) {
+			return item.get();
 		}
 	}
 
