@@ -954,6 +954,18 @@ inline std::shared_ptr<T>& getSharedPtr(lua_State* L, int32_t arg)
 }
 
 template <class T>
+inline T* getSharedUserdata(lua_State* L, int32_t arg, const bool checkType = true)
+{
+	using RawT = std::remove_const_t<T>;
+	if (checkType && !isType<T>(L, arg)) {
+		return nullptr;
+	}
+
+	auto* userdata = static_cast<std::shared_ptr<RawT>*>(lua_touserdata(L, arg));
+	return userdata ? userdata->get() : nullptr;
+}
+
+template <class T>
 inline void pushCreatureWeakPtr(lua_State* L, std::weak_ptr<T> value, int nuvalue = 1)
 {
 	new (lua_newuserdatauv(L, sizeof(std::weak_ptr<T>), nuvalue)) std::weak_ptr<T>(std::move(value));

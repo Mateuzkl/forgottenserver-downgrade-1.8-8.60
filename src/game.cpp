@@ -1769,7 +1769,7 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
 {
 	if (player->hasCondition(CONDITION_EXHAUST_WEAPON, EXHAUST_MOVEITEM)) {
 		uint32_t delay = MIN_TASK_INTERVAL;
-		if (Condition* cond = player->getCondition(CONDITION_EXHAUST_WEAPON, CONDITIONID_DEFAULT, EXHAUST_MOVEITEM)) {
+		if (auto cond = player->getCondition(CONDITION_EXHAUST_WEAPON, CONDITIONID_DEFAULT, EXHAUST_MOVEITEM)) {
 			int64_t remaining = cond->getEndTime() - OTSYS_TIME();
 			if (remaining > 0) {
 				delay = static_cast<uint32_t>(remaining);
@@ -8431,16 +8431,15 @@ bool Game::playerStopSpyInventory(uint32_t godPlayerId)
 	return g_spy.stopSpyInventory(god);
 }
 
-void Game::forceAddCondition(uint32_t creatureId, Condition* condition)
+void Game::forceAddCondition(uint32_t creatureId, Condition_ptr condition)
 {
-	Condition_ptr condPtr(condition);
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
 	if (!creature) {
 		return;
 	}
 
-	creature->addCondition(std::move(condPtr), true);
+	creature->addCondition(std::move(condition), true);
 }
 
 void Game::forceRemoveCondition(uint32_t creatureId, ConditionType_t type)

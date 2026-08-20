@@ -1912,26 +1912,26 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 					it.type = ITEM_TYPE_MAGICFIELD;
 
 					CombatType_t combatType = COMBAT_NONE;
-					std::unique_ptr<ConditionDamage> conditionDamage;
+					std::shared_ptr<ConditionDamage> conditionDamage;
 
 					tmpStrValue = asLowerCaseString(valueAttribute.as_string());
 					if (tmpStrValue == "fire") {
-						conditionDamage = std::make_unique<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_FIRE);
+						conditionDamage = std::make_shared<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_FIRE);
 						combatType = COMBAT_FIREDAMAGE;
 					} else if (tmpStrValue == "energy") {
-						conditionDamage = std::make_unique<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_ENERGY);
+						conditionDamage = std::make_shared<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_ENERGY);
 						combatType = COMBAT_ENERGYDAMAGE;
 					} else if (tmpStrValue == "poison") {
-						conditionDamage = std::make_unique<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_POISON);
+						conditionDamage = std::make_shared<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_POISON);
 						combatType = COMBAT_EARTHDAMAGE;
 					} else if (tmpStrValue == "drown") {
-						conditionDamage = std::make_unique<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_DROWN);
+						conditionDamage = std::make_shared<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_DROWN);
 						combatType = COMBAT_DROWNDAMAGE;
 					} else if (tmpStrValue == "physical") {
-						conditionDamage = std::make_unique<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_BLEEDING);
+						conditionDamage = std::make_shared<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_BLEEDING);
 						combatType = COMBAT_PHYSICALDAMAGE;
 					} else if (tmpStrValue == "agony") {
-						conditionDamage = std::make_unique<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_AGONY);
+						conditionDamage = std::make_shared<ConditionDamage>(CONDITIONID_COMBAT, CONDITION_AGONY);
 						combatType = COMBAT_AGONYDAMAGE;
 					} else {
 						LOG_WARN(fmt::format("[Warning - Items::parseItemNode] Unknown field value: {}", valueAttribute.as_string()));

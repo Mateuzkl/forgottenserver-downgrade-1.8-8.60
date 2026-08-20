@@ -228,45 +228,45 @@ Condition_ptr Condition::createCondition(ConditionId_t id, ConditionType_t type,
 		case CONDITION_CURSED:
 		case CONDITION_AGONY:
 		case CONDITION_BLEEDING:
-			return std::make_unique<ConditionDamage>(id, type, buff, subId, aggressive);
+			return std::make_shared<ConditionDamage>(id, type, buff, subId, aggressive);
 
 		case CONDITION_HASTE:
 		case CONDITION_PARALYZE:
-			return std::make_unique<ConditionSpeed>(id, type, ticks, buff, subId, param, aggressive);
+			return std::make_shared<ConditionSpeed>(id, type, ticks, buff, subId, param, aggressive);
 
 		case CONDITION_ROOTED:
-			return std::make_unique<ConditionRooted>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionRooted>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_FEARED:
-			return std::make_unique<ConditionFeared>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionFeared>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_INVISIBLE:
-			return std::make_unique<ConditionInvisible>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionInvisible>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_OUTFIT:
-			return std::make_unique<ConditionOutfit>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionOutfit>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_LIGHT:
-			return std::make_unique<ConditionLight>(id, type, ticks, buff, subId, static_cast<uint8_t>(param & 0xFF),
+			return std::make_shared<ConditionLight>(id, type, ticks, buff, subId, static_cast<uint8_t>(param & 0xFF),
 			                                        static_cast<uint8_t>((param & 0xFF00) >> 8), aggressive);
 
 		case CONDITION_REGENERATION:
-			return std::make_unique<ConditionRegeneration>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionRegeneration>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_SOUL:
-			return std::make_unique<ConditionSoul>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionSoul>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_ATTRIBUTES:
-			return std::make_unique<ConditionAttributes>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionAttributes>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_SPELLCOOLDOWN:
-			return std::make_unique<ConditionSpellCooldown>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionSpellCooldown>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_SPELLGROUPCOOLDOWN:
-			return std::make_unique<ConditionSpellGroupCooldown>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionSpellGroupCooldown>(id, type, ticks, buff, subId, aggressive);
 
 		case CONDITION_DRUNK:
-			return std::make_unique<ConditionDrunk>(id, type, ticks, buff, subId, static_cast<uint8_t>(param), aggressive);
+			return std::make_shared<ConditionDrunk>(id, type, ticks, buff, subId, static_cast<uint8_t>(param), aggressive);
 
 		case CONDITION_INFIGHT:
 		case CONDITION_EXHAUST_WEAPON:
@@ -282,7 +282,7 @@ Condition_ptr Condition::createCondition(ConditionId_t id, ConditionType_t type,
 		case CONDITION_INTENSEHEX:
 		case CONDITION_GREATERHEX:
 		case CONDITION_POWERLESS:
-			return std::make_unique<ConditionGeneric>(id, type, ticks, buff, subId, aggressive);
+			return std::make_shared<ConditionGeneric>(id, type, ticks, buff, subId, aggressive);
 
 		default:
 			return nullptr;
