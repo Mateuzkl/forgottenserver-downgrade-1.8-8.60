@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <limits>
 #include <map>
 #include <mutex>
@@ -68,7 +69,6 @@ uint32_t nextDllWeatherSequence()
 	}
 	return sequence;
 }
-
 std::size_t getReadableBytes(const NetworkMessage& msg)
 {
 	const std::size_t end = static_cast<std::size_t>(msg.getLength()) + NetworkMessage::INITIAL_BUFFER_POSITION;
@@ -76,10 +76,29 @@ std::size_t getReadableBytes(const NetworkMessage& msg)
 	return position <= end ? end - position : 0;
 }
 
+std::string encodeBase64(std::string_view input)
+{
+	static constexpr std::string_view alphabet =
+	    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	std::string output;
+	output.reserve(((input.size() + 2) / 3) * 4);
+	for (size_t offset = 0; offset < input.size(); offset += 3) {
+		const uint32_t a = static_cast<uint8_t>(input[offset]);
+		const uint32_t b = offset + 1 < input.size() ? static_cast<uint8_t>(input[offset + 1]) : 0;
+		const uint32_t c = offset + 2 < input.size() ? static_cast<uint8_t>(input[offset + 2]) : 0;
+		const uint32_t value = (a << 16) | (b << 8) | c;
+		output.push_back(alphabet[(value >> 18) & 0x3F]);
+		output.push_back(alphabet[(value >> 12) & 0x3F]);
+		output.push_back(offset + 1 < input.size() ? alphabet[(value >> 6) & 0x3F] : '=');
+		output.push_back(offset + 2 < input.size() ? alphabet[value & 0x3F] : '=');
+	}
+	return output;
+}
+
 std::deque<std::pair<int64_t, uint32_t>> waitList; // (timeout, player guid)
 std::size_t priorityCount = 0;
 constexpr int64_t CAST_SWITCH_COOLDOWN_MS = 500;
-constexpr int64_t SERVER_MINIMAP_TRANSFER_COOLDOWN_MS = 30'000;
+constexpr size_t SERVER_MINIMAP_HD_CHUNK_WINDOW = 16;
 constexpr uint8_t HELPER_OPCODE_CAVEBOT = 210;
 constexpr uint8_t HELPER_OPCODE_CAST_ON_FOOT = 211;
 constexpr uint8_t HELPER_OPCODE_SMART_FOLLOW = 212;
@@ -1425,7 +1444,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			case 0x1E: // ping
 			case 0x40: // extended ping (OTC)
 			case 0x96: // say (allows /unspy)
-				break; // allowed — fall through to normal processing
+				break; // allowed â€” fall through to normal processing
 			default:
 				sendCancelWalk();
 				return; // block all other actions
@@ -5131,6 +5150,158 @@ void ProtocolGame::AddShopItem(NetworkMessage& msg, const ShopInfo& item)
 	msg.add<uint32_t>(static_cast<uint32_t>(std::max<int64_t>(item.sellPrice, 0)));
 }
 
+
+void ProtocolGame::parseServerMinimapRequest(std::string_view buffer)
+{
+	const bool hdRequest = buffer.starts_with("hd-manifest:") || buffer.starts_with("hd-chunk:");
+	auto sendError = [this, hdRequest](std::string_view message) {
+		if (hdRequest) {
+			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE,
+			                   fmt::format(R"({{"type":"error","asset":"hd","message":"{}"}})", message));
+		} else {
+			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE,
+			                   fmt::format(R"({{"type":"error","message":"{}"}})", message));
+		}
+	};
+
+	if (buffer.empty() || buffer.size() > 255) {
+		sendError("invalid request");
+		return;
+	}
+
+	const std::string_view manifestPrefix = hdRequest ? "hd-manifest:" : "manifest:";
+	if (buffer.starts_with(manifestPrefix)) {
+		bool& manifestHandled =
+		    hdRequest ? serverMinimapHDManifestHandled : serverMinimapManifestHandled;
+		std::string& transferVersion =
+		    hdRequest ? serverMinimapHDTransferVersion : serverMinimapTransferVersion;
+		size_t& nextChunk = hdRequest ? serverMinimapHDNextChunk : serverMinimapNextChunk;
+		if (manifestHandled) {
+			sendError("manifest already requested for this session");
+			return;
+		}
+		manifestHandled = true;
+
+		const std::string_view clientVersion = buffer.substr(manifestPrefix.size());
+		const bool validVersion = clientVersion.size() <= 96 &&
+		    std::all_of(clientVersion.begin(), clientVersion.end(), [](unsigned char value) {
+			    return std::isalnum(value) || value == '.' || value == '_' || value == ':' || value == '-';
+		    });
+		if (!validVersion) {
+			sendError("invalid cached minimap version");
+			return;
+		}
+
+		const ServerMinimap::Snapshot snapshot = hdRequest ? ServerMinimap::Snapshot{} :
+		                                                     ServerMinimap::getSnapshot();
+		const ServerMinimap::Metadata metadata =
+		    hdRequest ? ServerMinimap::getHDRasterMetadata() : snapshot.metadata;
+		const size_t assetSize = hdRequest ? metadata.size :
+		                                     (snapshot.otmm ? snapshot.otmm->size() : 0);
+		if (assetSize == 0 || metadata.version.empty() ||
+		    (!hdRequest && (!snapshot.otmm || snapshot.otmm->empty()))) {
+			sendError(hdRequest ? "server HD raster is unavailable" : "server minimap is unavailable");
+			return;
+		}
+
+		const size_t chunkCount =
+		    (assetSize + ServerMinimap::CHUNK_PAYLOAD_SIZE - 1) / ServerMinimap::CHUNK_PAYLOAD_SIZE;
+		const bool unchanged = !clientVersion.empty() && clientVersion == metadata.version;
+		if (!unchanged) {
+			transferVersion = metadata.version;
+			nextChunk = 0;
+		}
+
+		if (hdRequest) {
+			sendExtendedOpcode(
+			    ServerMinimap::EXTENDED_OPCODE,
+			    fmt::format(
+			        R"({{"type":"manifest","asset":"hd","version":"{}","size":{},"checksum":{},"chunkSize":{},"chunks":{},"window":{},"encoding":"base64","unchanged":{}}})",
+			        metadata.version, assetSize, metadata.checksum, ServerMinimap::CHUNK_PAYLOAD_SIZE,
+			        chunkCount, SERVER_MINIMAP_HD_CHUNK_WINDOW, unchanged ? "true" : "false"));
+		} else {
+			sendExtendedOpcode(
+			    ServerMinimap::EXTENDED_OPCODE,
+			    fmt::format(
+			        R"({{"type":"manifest","version":"{}","size":{},"checksum":{},"chunkSize":{},"chunks":{},"encoding":"base64","unchanged":{}}})",
+			        metadata.version, assetSize, metadata.checksum, ServerMinimap::CHUNK_PAYLOAD_SIZE,
+			        chunkCount, unchanged ? "true" : "false"));
+		}
+		return;
+	}
+
+	const std::string_view chunkPrefix = hdRequest ? "hd-chunk:" : "chunk:";
+	const bool manifestHandled =
+	    hdRequest ? serverMinimapHDManifestHandled : serverMinimapManifestHandled;
+	const std::string& transferVersion =
+	    hdRequest ? serverMinimapHDTransferVersion : serverMinimapTransferVersion;
+	size_t& nextChunk = hdRequest ? serverMinimapHDNextChunk : serverMinimapNextChunk;
+	if (!buffer.starts_with(chunkPrefix) || !manifestHandled || transferVersion.empty()) {
+		sendError("invalid minimap chunk request");
+		return;
+	}
+
+	const std::string_view request = buffer.substr(chunkPrefix.size());
+	const size_t separator = request.rfind(':');
+	if (separator == std::string_view::npos) {
+		sendError("invalid minimap chunk request");
+		return;
+	}
+
+	const std::string_view requestedVersion = request.substr(0, separator);
+	const std::string_view indexText = request.substr(separator + 1);
+	size_t requestedIndex = 0;
+	const auto [end, error] =
+	    std::from_chars(indexText.data(), indexText.data() + indexText.size(), requestedIndex);
+	if (error != std::errc{} || end != indexText.data() + indexText.size() ||
+	    requestedVersion != transferVersion || requestedIndex != nextChunk) {
+		sendError("unexpected minimap chunk");
+		return;
+	}
+
+	const ServerMinimap::Snapshot snapshot =
+	    hdRequest ? ServerMinimap::Snapshot{} : ServerMinimap::getSnapshot();
+	const ServerMinimap::Metadata metadata =
+	    hdRequest ? ServerMinimap::getHDRasterMetadata() : snapshot.metadata;
+	const size_t assetSize = hdRequest ? metadata.size :
+	                                     (snapshot.otmm ? snapshot.otmm->size() : 0);
+	if (assetSize == 0 || metadata.version != transferVersion ||
+	    (!hdRequest && !snapshot.otmm)) {
+		sendError("server minimap changed during transfer");
+		return;
+	}
+
+	const size_t chunkCount =
+	    (assetSize + ServerMinimap::CHUNK_PAYLOAD_SIZE - 1) / ServerMinimap::CHUNK_PAYLOAD_SIZE;
+	if (requestedIndex >= chunkCount) {
+		sendError("minimap chunk is out of range");
+		return;
+	}
+
+	const size_t chunksToSend = hdRequest ? SERVER_MINIMAP_HD_CHUNK_WINDOW : 1;
+	const size_t windowEnd = std::min(chunkCount, requestedIndex + chunksToSend);
+	for (size_t index = requestedIndex; index < windowEnd; ++index) {
+		const size_t offset = index * ServerMinimap::CHUNK_PAYLOAD_SIZE;
+		const size_t length = std::min(ServerMinimap::CHUNK_PAYLOAD_SIZE, assetSize - offset);
+		std::string chunk;
+		if (hdRequest) {
+			if (!ServerMinimap::readHDRasterChunk(offset, length, chunk)) {
+				sendError("failed to read HD raster chunk");
+				return;
+			}
+		} else {
+			chunk.assign(snapshot.otmm->data() + offset, length);
+		}
+
+		const std::string prefix = hdRequest ? "hd-chunk:" : "chunk:";
+		sendExtendedOpcode(
+		    ServerMinimap::EXTENDED_OPCODE,
+		    fmt::format("{}{}:{}:{}:{}", prefix, metadata.version, index, chunkCount,
+		                encodeBase64(chunk)));
+	}
+	nextChunk = windowEnd;
+}
+
 void ProtocolGame::parseExtendedOpcode(NetworkMessage& msg)
 {
 	uint8_t opcode = msg.getByte();
@@ -5138,45 +5309,7 @@ void ProtocolGame::parseExtendedOpcode(NetworkMessage& msg)
 
 	if (opcode == ServerMinimap::EXTENDED_OPCODE &&
 	    ConfigManager::getBoolean(ConfigManager::SERVER_MINIMAP_ENABLED)) {
-		if (buffer.size() > 96 || (buffer != "R" && !buffer.starts_with("V:"))) {
-			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE, "X:invalid-request");
-			return;
-		}
-
-		const ServerMinimap::Snapshot snapshot = ServerMinimap::getSnapshot();
-		if (!snapshot.otmm || snapshot.otmm->empty() || snapshot.metadata.version.empty() ||
-		    snapshot.metadata.size != snapshot.otmm->size()) {
-			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE, "X:unavailable");
-			return;
-		}
-
-		const std::string_view clientVersion =
-		    buffer == "R" ? std::string_view{} : std::string_view{buffer}.substr(2);
-		if (!clientVersion.empty() && clientVersion == snapshot.metadata.version) {
-			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE, "C" + snapshot.metadata.version);
-			return;
-		}
-
-		const int64_t now = OTSYS_TIME();
-		if (now < nextServerMinimapTransferTime) {
-			sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE, "X:rate-limit");
-			return;
-		}
-		nextServerMinimapTransferTime = now + SERVER_MINIMAP_TRANSFER_COOLDOWN_MS;
-
-		sendExtendedOpcode(ServerMinimap::EXTENDED_OPCODE,
-		                   fmt::format("M{}|{}", snapshot.metadata.version, snapshot.metadata.size));
-		for (const ServerMinimap::TransferChunk& chunk : ServerMinimap::splitForTransfer(*snapshot.otmm)) {
-			// OTMM chunks are arbitrary binary. addString performs UTF-8 to
-			// Latin-1 conversion, so write the length and payload directly.
-			NetworkMessage chunkMessage;
-			chunkMessage.addByte(0x32);
-			chunkMessage.addByte(ServerMinimap::EXTENDED_OPCODE);
-			chunkMessage.add<uint16_t>(static_cast<uint16_t>(chunk.payload.size() + 1));
-			chunkMessage.addByte(static_cast<uint8_t>(chunk.marker));
-			chunkMessage.addBytes(chunk.payload.data(), chunk.payload.size());
-			writeToOutputBuffer(chunkMessage);
-		}
+		parseServerMinimapRequest(buffer);
 		return;
 	}
 

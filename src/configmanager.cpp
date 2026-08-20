@@ -361,6 +361,8 @@ bool ConfigManager::load()
 		strings[String::MAP_CACHE_MODE] = getGlobalString(L, "mapCacheMode", "auto");
 		strings[String::MAP_CACHE_DIRECTORY] = getGlobalString(L, "mapCacheDirectory", "data/cache/maps");
 		strings[String::MAP_AUTHOR] = getGlobalString(L, "mapAuthor", "Unknown");
+		strings[String::SERVER_MINIMAP_HD_RASTER_FILE] =
+		    getGlobalString(L, "serverMinimapHDRasterFile", "data/minimap/minimap-hd-raster.hdr");
 		strings[String::HOUSE_RENT_PERIOD] = getGlobalString(L, "houseRentPeriod", "never");
 
 		strings[String::MYSQL_HOST] = getGlobalString(L, "mysqlHost", getEnv("MYSQL_HOST", "127.0.0.1"));
@@ -530,6 +532,8 @@ bool ConfigManager::load()
 	    std::max<int64_t>(1, getGlobalInteger(L, "characterBazaarMaxDurationDays", 7));
 	integers[Integer::SERVER_MINIMAP_MAX_SIZE_MB] =
 	    std::clamp<int64_t>(getGlobalInteger(L, "serverMinimapMaxSizeMB", 16), 1, 64);
+	integers[Integer::SERVER_MINIMAP_HD_RASTER_MAX_SIZE_MB] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "serverMinimapHDRasterMaxSizeMB", 256), 1, 512);
 
 	// Admin Config
 	booleans[Boolean::ADMIN_LOCALHOST_ONLY] = getGlobalBoolean(L, "adminLocalhostOnly", true);

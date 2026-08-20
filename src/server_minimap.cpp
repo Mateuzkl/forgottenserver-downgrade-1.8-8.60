@@ -15,6 +15,8 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -76,6 +78,14 @@ struct BuildResult
 
 std::mutex snapshotMutex;
 ServerMinimap::Snapshot cachedSnapshot;
+ServerMinimap::Metadata cachedHDRasterMetadata;
+std::ifstream cachedHDRasterFile;
+
+uint16_t readU16LE(const char* data)
+{
+	return static_cast<uint16_t>(static_cast<uint8_t>(data[0])) |
+	       static_cast<uint16_t>(static_cast<uint8_t>(data[1])) << 8;
+}
 
 void addU8(std::string& out, uint8_t value) { out.push_back(static_cast<char>(value)); }
 
@@ -349,6 +359,8 @@ bool prepare(size_t maxBytes)
 		Snapshot snapshot;
 		snapshot.metadata.version = contentVersion(*otmm);
 		snapshot.metadata.size = otmm->size();
+		snapshot.metadata.checksum = static_cast<uint32_t>(
+		    crc32(0, reinterpret_cast<const Bytef*>(otmm->data()), static_cast<uInt>(otmm->size())));
 		snapshot.otmm = std::move(otmm);
 
 		{
@@ -363,16 +375,98 @@ bool prepare(size_t maxBytes)
 	return true;
 }
 
+bool prepareHDRaster(const std::string& fileName, size_t maxBytes)
+{
+	std::lock_guard lock(snapshotMutex);
+	cachedHDRasterFile.close();
+	cachedHDRasterFile.clear();
+	cachedHDRasterMetadata = {};
+
+	if (fileName.empty() || maxBytes < 20) {
+		return false;
+	}
+
+	cachedHDRasterFile.open(std::filesystem::path(fileName), std::ios::binary | std::ios::ate);
+	if (!cachedHDRasterFile.is_open()) {
+		LOG_WARN("[ServerMinimap] HD raster archive '{}' is unavailable.", fileName);
+		return false;
+	}
+
+	const std::streamoff length = cachedHDRasterFile.tellg();
+	if (length < 20 || static_cast<uint64_t>(length) > maxBytes) {
+		LOG_ERROR("[ServerMinimap] HD raster archive has an invalid size ({} bytes).", length);
+		cachedHDRasterFile.close();
+		return false;
+	}
+
+	std::array<char, 6> header{};
+	cachedHDRasterFile.seekg(0, std::ios::beg);
+	cachedHDRasterFile.read(header.data(), header.size());
+	if (cachedHDRasterFile.gcount() != static_cast<std::streamsize>(header.size()) ||
+	    std::string_view(header.data(), 4) != "HDRB" || readU16LE(header.data() + 4) != 1) {
+		LOG_ERROR("[ServerMinimap] Refusing to publish a non-raster or unsupported HD minimap archive.");
+		cachedHDRasterFile.close();
+		return false;
+	}
+
+	std::vector<char> buffer(256 * 1024);
+	uLong checksum = crc32(0, Z_NULL, 0);
+	cachedHDRasterFile.clear();
+	cachedHDRasterFile.seekg(0, std::ios::beg);
+	while (cachedHDRasterFile) {
+		cachedHDRasterFile.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+		const std::streamsize read = cachedHDRasterFile.gcount();
+		if (read > 0) {
+			checksum = crc32(checksum, reinterpret_cast<const Bytef*>(buffer.data()),
+			                 static_cast<uInt>(read));
+		}
+	}
+
+	cachedHDRasterFile.clear();
+	cachedHDRasterFile.seekg(0, std::ios::beg);
+	cachedHDRasterMetadata.size = static_cast<size_t>(length);
+	cachedHDRasterMetadata.checksum = static_cast<uint32_t>(checksum);
+	cachedHDRasterMetadata.version =
+	    fmt::format("{:08x}-{}", cachedHDRasterMetadata.checksum, cachedHDRasterMetadata.size);
+	LOG_INFO("[ServerMinimap] HD raster archive ready ({} bytes, version {}).",
+	         cachedHDRasterMetadata.size, cachedHDRasterMetadata.version);
+	return true;
+}
+
 Snapshot getSnapshot()
 {
 	std::lock_guard lock(snapshotMutex);
 	return cachedSnapshot;
 }
 
+Metadata getHDRasterMetadata()
+{
+	std::lock_guard lock(snapshotMutex);
+	return cachedHDRasterMetadata;
+}
+
+bool readHDRasterChunk(size_t offset, size_t length, std::string& output)
+{
+	std::lock_guard lock(snapshotMutex);
+	if (!cachedHDRasterFile.is_open() || length == 0 || offset > cachedHDRasterMetadata.size ||
+	    length > cachedHDRasterMetadata.size - offset) {
+		return false;
+	}
+
+	cachedHDRasterFile.clear();
+	cachedHDRasterFile.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+	output.resize(length);
+	cachedHDRasterFile.read(output.data(), static_cast<std::streamsize>(length));
+	return cachedHDRasterFile.gcount() == static_cast<std::streamsize>(length);
+}
+
 void reset()
 {
 	std::lock_guard lock(snapshotMutex);
 	cachedSnapshot = {};
+	cachedHDRasterFile.close();
+	cachedHDRasterFile.clear();
+	cachedHDRasterMetadata = {};
 }
 
 } // namespace ServerMinimap

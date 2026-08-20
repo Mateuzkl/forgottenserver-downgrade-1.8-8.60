@@ -20,6 +20,7 @@ struct Metadata
 {
 	std::string version;
 	size_t size = 0;
+	uint32_t checksum = 0;
 };
 
 struct Snapshot
@@ -37,7 +38,10 @@ struct TransferChunk
 // Captures the loaded static map and schedules OTMM compression on the worker
 // pool. The size limit is checked before the snapshot becomes visible.
 bool prepare(size_t maxBytes);
+bool prepareHDRaster(const std::string& fileName, size_t maxBytes);
 Snapshot getSnapshot();
+Metadata getHDRasterMetadata();
+bool readHDRasterChunk(size_t offset, size_t length, std::string& output);
 void reset();
 
 // The version contains only a deterministic content fingerprint and byte

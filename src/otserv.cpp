@@ -651,6 +651,13 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 		if (!ServerMinimap::prepare(maxBytes)) {
 			LOG_WARN("[ServerMinimap] The server will continue without minimap synchronization.");
 		}
+
+		const size_t hdMaxBytes =
+		    static_cast<size_t>(getInteger(ConfigManager::SERVER_MINIMAP_HD_RASTER_MAX_SIZE_MB)) * bytesPerMiB;
+		if (!ServerMinimap::prepareHDRaster(
+		        std::string{getString(ConfigManager::SERVER_MINIMAP_HD_RASTER_FILE)}, hdMaxBytes)) {
+			LOG_WARN("[ServerMinimap] The classic minimap remains available, but no HD raster will be published.");
+		}
 	}
 
 	LOG_INFO(">> Initializing gamestate");
