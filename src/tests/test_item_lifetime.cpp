@@ -80,21 +80,57 @@ TEST_CASE(house_transfer_item_trade_cancel_resets_document)
 TEST_CASE(houses_get_house_preserves_house_lifetime)
 {
 	std::shared_ptr<House> house;
-	House* rawHouse = nullptr;
+	std::shared_ptr<House> addedHouse;
 	{
 		Houses houses;
-		rawHouse = houses.addHouse(42);
+		addedHouse = houses.addHouse(42);
 		house = houses.getHouse(42);
 
 		CHECK(house != nullptr);
-		CHECK(house.get() == rawHouse);
+		CHECK(house == addedHouse);
 		CHECK(houses.getHouse(42) == house);
 		CHECK(houses.getHouse(43) == nullptr);
 	}
 
 	CHECK(house != nullptr);
-	CHECK(house.get() == rawHouse);
+	CHECK(house == addedHouse);
 	CHECK(house->getId() == 42);
+}
+
+TEST_CASE(houses_add_house_creates_and_returns_shared_ptr)
+{
+	Houses houses;
+	auto house100 = houses.addHouse(100);
+	CHECK(house100 != nullptr);
+	CHECK(house100->getId() == 100);
+
+	auto house100_again = houses.addHouse(100);
+	CHECK(house100_again != nullptr);
+	CHECK(house100 == house100_again);
+	CHECK(house100.get() == house100_again.get());
+
+	auto house200 = houses.addHouse(200);
+	CHECK(house200 != nullptr);
+	CHECK(house200->getId() == 200);
+	CHECK(house100 != house200);
+
+	CHECK(houses.getHouse(100) == house100);
+	CHECK(houses.getHouse(200) == house200);
+	CHECK(houses.getHouse(300) == nullptr);
+}
+
+TEST_CASE(houses_add_house_preserves_lifetime_beyond_houses_scope)
+{
+	std::shared_ptr<House> house;
+	{
+		Houses houses;
+		house = houses.addHouse(100);
+		CHECK(house != nullptr);
+		CHECK(house->getId() == 100);
+	}
+
+	CHECK(house != nullptr);
+	CHECK(house->getId() == 100);
 }
 
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)

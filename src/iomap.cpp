@@ -457,7 +457,7 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
             uint16_t x = base_x + tile_coord.x;
             uint16_t y = base_y + tile_coord.y;
 
-            House* house = nullptr;
+            std::shared_ptr<House> house = nullptr;
             std::unique_ptr<Tile> tilePtr;
             Tile* tile = nullptr;
             std::shared_ptr<Item> ground_item;
@@ -476,7 +476,7 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                 return false;
             }
 
-            tilePtr = std::make_unique<HouseTile>(x, y, z, house);
+            tilePtr = std::make_unique<HouseTile>(x, y, z, house.get());
             tile = tilePtr.get();
             house->addTile(static_cast<HouseTile*>(tile));
 

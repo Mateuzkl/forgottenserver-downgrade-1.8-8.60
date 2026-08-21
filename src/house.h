@@ -258,15 +258,15 @@ public:
 	Houses(const Houses&) = delete;
 	Houses& operator=(const Houses&) = delete;
 
-	House* addHouse(uint32_t id)
+	std::shared_ptr<House> addHouse(uint32_t id)
 	{
 		auto it = houseMap.find(id);
 		if (it != houseMap.end()) {
-			return it->second.get();
+			return it->second;
 		}
 
 		auto [ins, ok] = houseMap.emplace(id, std::make_shared<House>(id));
-		return ins->second.get();
+		return ins->second;
 	}
 
 	[[nodiscard]] std::shared_ptr<House> getHouse(uint32_t houseId)
