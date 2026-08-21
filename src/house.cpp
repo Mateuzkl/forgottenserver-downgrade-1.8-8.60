@@ -233,7 +233,7 @@ bool House::kickPlayer(Player* player, Player* target) const
 	}
 
 	const auto houseTile = tile->getHouseTile();
-	if (!houseTile || houseTile->getHouse() != this) {
+	if (!houseTile || houseTile->getHouse().get() != this) {
 		return false;
 	}
 

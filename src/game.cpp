@@ -2083,7 +2083,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		if (!actorPlayer->hasFlag(PlayerFlag_CanEditHouses)) {
 			if (Tile* fromTile = fromCylinder->getTile()) {
 				if (HouseTile* fromHouseTile = dynamic_cast<HouseTile*>(fromTile)) {
-					House* fromHouse = fromHouseTile->getHouse();
+					auto fromHouse = fromHouseTile->getHouse();
 					if (fromHouse && !fromHouse->canModifyItems(actorPlayer)) {
 						return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
 					}
@@ -2101,7 +2101,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 
 			if (Tile* toTile = toCylinder->getTile()) {
 				if (HouseTile* toHouseTile = dynamic_cast<HouseTile*>(toTile)) {
-					House* toHouse = toHouseTile->getHouse();
+					auto toHouse = toHouseTile->getHouse();
 					if (toHouse && !toHouse->canModifyItems(actorPlayer)) {
 						return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
 					}
@@ -4509,7 +4509,7 @@ void Game::playerWrapableItem(uint32_t playerId, const Position& pos, uint8_t st
 
 	Tile* tile = item->getTile();
 	HouseTile* houseTile = tile ? tile->getHouseTile() : nullptr;
-	House* house = houseTile ? houseTile->getHouse() : nullptr;
+	auto house = houseTile ? houseTile->getHouse() : nullptr;
 	if (!house) {
 		player->sendCancelMessage("You may construct this only inside a house.");
 		return;
@@ -4713,9 +4713,10 @@ void Game::playerRequestTrade(uint32_t playerId, const Position& pos, uint8_t st
 	if (getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
 		if (const auto tile = tradeItem->getTile()) {
 			if (const auto houseTile = tile->getHouseTile()) {
-			if (!tradeItem->getTopParent()->getCreature() && !houseTile->getHouse()->isInvited(player)) {
-				player->sendCancelMessage(RETURNVALUE_PLAYERISNOTINVITED);
-				return;
+				auto house = houseTile->getHouse();
+				if (!tradeItem->getTopParent()->getCreature() && (!house || !house->isInvited(player))) {
+					player->sendCancelMessage(RETURNVALUE_PLAYERISNOTINVITED);
+					return;
 				}
 			}
 		}

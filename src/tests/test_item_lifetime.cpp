@@ -239,6 +239,33 @@ TEST_CASE(door_can_use_and_access_list_behavior)
 	CHECK(door->canUse(player.get()));
 }
 
+TEST_CASE(housetile_get_house_returns_valid_shared_ptr_and_preserves_identity)
+{
+	auto house = std::make_shared<House>(500);
+	auto houseTile = std::make_unique<HouseTile>(100, 100, 7, house.get());
+	house->addTile(houseTile.get());
+
+	auto retrievedHouse = houseTile->getHouse();
+	CHECK(retrievedHouse != nullptr);
+	CHECK(retrievedHouse == house);
+	CHECK(retrievedHouse->getId() == 500);
+	CHECK(retrievedHouse.get() == house.get());
+}
+
+TEST_CASE(housetile_get_house_returns_nullptr_when_house_is_destroyed)
+{
+	std::unique_ptr<HouseTile> houseTile;
+	{
+		auto house = std::make_shared<House>(600);
+		houseTile = std::make_unique<HouseTile>(101, 101, 7, house.get());
+		house->addTile(houseTile.get());
+		CHECK(houseTile->getHouse() != nullptr);
+		CHECK(houseTile->getHouse()->getId() == 600);
+	}
+
+	CHECK(houseTile->getHouse() == nullptr);
+}
+
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)
 {
 	auto container = std::make_shared<Container>(0, 2);

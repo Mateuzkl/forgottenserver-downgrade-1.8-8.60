@@ -33,7 +33,7 @@ public:
 	void addThing(int32_t index, Thing* thing) override;
 	void internalAddThing(uint32_t index, Thing* thing) override;
 
-	House* getHouse() const { return house.lock().get(); }
+	std::shared_ptr<House> getHouse() const { return house.lock(); }
 
 private:
 	void updateHouse(Item* item);

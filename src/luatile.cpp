@@ -731,8 +731,12 @@ int luaTileGetHouse(lua_State* L)
 	}
 
 	if (HouseTile* houseTile = tile->getHouseTile()) {
-		pushUserdata<House>(L, houseTile->getHouse());
-		setMetatable(L, -1, "House");
+		if (auto house = houseTile->getHouse()) {
+			pushUserdata<House>(L, house.get());
+			setMetatable(L, -1, "House");
+		} else {
+			lua_pushnil(L);
+		}
 	} else {
 		lua_pushnil(L);
 	}

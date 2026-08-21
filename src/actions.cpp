@@ -424,7 +424,8 @@ bool Actions::useItem(Player* player, const Position& pos, uint8_t index, const 
 	if (getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
 		if (const auto tile = item->getTile()) {
 			if (const auto houseTile = tile->getHouseTile()) {
-				if (!item->getTopParent()->getCreature() && !houseTile->getHouse()->isInvited(player)) {
+				auto house = houseTile->getHouse();
+				if (!item->getTopParent()->getCreature() && (!house || !house->isInvited(player))) {
 					player->sendCancelMessage(RETURNVALUE_PLAYERISNOTINVITED);
 					return false;
 				}
