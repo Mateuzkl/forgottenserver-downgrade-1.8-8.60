@@ -21,13 +21,9 @@ static constexpr uint32_t SOUL_REGEN_INTERVAL_SECONDS = 60 * 15;
 
 BedItem::BedItem(uint16_t id) : Item(id) { internalRemoveSleeper(); }
 
-void BedItem::setHouse(House* h) noexcept
+void BedItem::setHouse(const std::shared_ptr<House>& h) noexcept
 {
-	if (h) {
-		house = h->weak_from_this().lock();
-	} else {
-		house.reset();
-	}
+	house = h;
 }
 
 Attr_ReadValue BedItem::readAttr(AttrTypes_t attr, PropStream& propStream)

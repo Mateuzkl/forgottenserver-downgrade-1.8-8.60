@@ -448,7 +448,9 @@ void House::removeDoor(Door* door)
 void House::addBed(BedItem* bed)
 {
 	bedsList.push_back(bed);
-	bed->setHouse(this);
+	if (bed) {
+		bed->setHouse(weak_from_this().lock());
+	}
 }
 
 std::shared_ptr<Door> House::getDoorByNumber(uint32_t doorId) const

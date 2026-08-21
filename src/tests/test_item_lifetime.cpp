@@ -323,6 +323,38 @@ TEST_CASE(bed_get_house_preserves_lifetime_for_caller)
 	CHECK(bed->canRemove());
 }
 
+TEST_CASE(bed_set_house_preserves_identity_and_handles_nullptr_and_expiration)
+{
+	auto bed = std::make_shared<BedItem>(0);
+	CHECK(bed->getHouse() == nullptr);
+
+	auto house = std::make_shared<House>(900);
+	House* rawHouse = house.get();
+
+	// Set house via shared_ptr
+	bed->setHouse(house);
+	std::shared_ptr<House> retrievedHouse = bed->getHouse();
+	CHECK(retrievedHouse != nullptr);
+	CHECK(retrievedHouse == house);
+	CHECK(retrievedHouse.get() == rawHouse);
+	CHECK(retrievedHouse->getId() == 900);
+
+	// Set nullptr explicitly
+	bed->setHouse(nullptr);
+	CHECK(bed->getHouse() == nullptr);
+	CHECK(bed->canRemove());
+
+	// Test expiration
+	{
+		auto tempHouse = std::make_shared<House>(901);
+		bed->setHouse(tempHouse);
+		CHECK(bed->getHouse() != nullptr);
+		CHECK(bed->getHouse()->getId() == 901);
+	}
+	CHECK(bed->getHouse() == nullptr);
+	CHECK(bed->canRemove());
+}
+
 TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetime)
 {
 	ensureItemTypes();
