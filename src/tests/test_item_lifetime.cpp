@@ -333,6 +333,7 @@ TEST_CASE(bed_set_house_preserves_identity_and_handles_nullptr_and_expiration)
 
 	// Set house via shared_ptr
 	bed->setHouse(house);
+	CHECK(!bed->canRemove());
 	std::shared_ptr<House> retrievedHouse = bed->getHouse();
 	CHECK(retrievedHouse != nullptr);
 	CHECK(retrievedHouse == house);
@@ -348,6 +349,7 @@ TEST_CASE(bed_set_house_preserves_identity_and_handles_nullptr_and_expiration)
 	{
 		auto tempHouse = std::make_shared<House>(901);
 		bed->setHouse(tempHouse);
+		CHECK(!bed->canRemove());
 		CHECK(bed->getHouse() != nullptr);
 		CHECK(bed->getHouse()->getId() == 901);
 	}
