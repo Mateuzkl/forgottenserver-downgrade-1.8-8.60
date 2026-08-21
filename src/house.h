@@ -46,7 +46,7 @@ public:
 	Door* getDoor() override { return this; }
 	const Door* getDoor() const override { return this; }
 
-	House* getHouse() { return house.lock().get(); }
+	std::shared_ptr<House> getHouse() const { return house.lock(); }
 
 	// serialization
 	Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;

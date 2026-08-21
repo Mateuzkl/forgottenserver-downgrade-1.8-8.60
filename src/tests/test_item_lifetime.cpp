@@ -4,6 +4,7 @@
 #include "../house.h"
 #include "../item.h"
 #include "../luascript.h"
+#include "../player.h"
 
 #include "test_support.h"
 #include <memory>
@@ -131,6 +132,84 @@ TEST_CASE(houses_add_house_preserves_lifetime_beyond_houses_scope)
 
 	CHECK(house != nullptr);
 	CHECK(house->getId() == 100);
+}
+
+TEST_CASE(door_get_house_returns_valid_shared_ptr_and_preserves_identity)
+{
+	auto house = std::make_shared<House>(100);
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(1);
+
+	CHECK(door->getHouse() == nullptr);
+
+	house->addDoor(door.get());
+
+	auto retrievedHouse = door->getHouse();
+	CHECK(retrievedHouse != nullptr);
+	CHECK(retrievedHouse == house);
+	CHECK(retrievedHouse->getId() == 100);
+	CHECK(house->getDoors().size() == 1);
+	CHECK(house->getDoorByNumber(1) == door.get());
+}
+
+TEST_CASE(door_get_house_returns_nullptr_when_house_is_destroyed)
+{
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(2);
+
+	{
+		auto house = std::make_shared<House>(200);
+		house->addDoor(door.get());
+		CHECK(door->getHouse() != nullptr);
+		CHECK(door->getHouse()->getId() == 200);
+	}
+
+	CHECK(door->getHouse() == nullptr);
+	// onRemoved when house is destroyed should be safe and not throw/crash
+	door->onRemoved();
+	CHECK(door->getHouse() == nullptr);
+}
+
+void ensureItemTypes()
+{
+	static const bool loaded = [] {
+		const auto itemFile = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() /
+		                      "data/items/items.otb";
+		return Item::items.loadFromOtb(itemFile.string());
+	}();
+	CHECK(loaded);
+}
+
+std::shared_ptr<Player> makeTestPlayer(uint32_t guid, std::string_view name)
+{
+	ensureItemTypes();
+	auto player = std::make_shared<Player>(nullptr);
+	player->setGUID(guid);
+	player->setName(name);
+	player->setGroup(std::make_shared<Group>());
+	return player;
+}
+
+TEST_CASE(door_can_use_and_access_list_behavior)
+{
+	auto house = std::make_shared<House>(300);
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(3);
+	house->addDoor(door.get());
+
+	auto player = makeTestPlayer(1, "TestPlayer");
+
+	// Uninvited player on restricted door cannot use
+	CHECK(!door->canUse(player.get()));
+
+	// Door with wildcard access list allows player
+	door->setAccessList("*");
+	CHECK(door->canUse(player.get()));
+
+	// When house is reset/destroyed, door allows usage freely
+	house.reset();
+	CHECK(door->getHouse() == nullptr);
+	CHECK(door->canUse(player.get()));
 }
 
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)
