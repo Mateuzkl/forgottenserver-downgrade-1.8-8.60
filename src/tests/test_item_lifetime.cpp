@@ -245,7 +245,7 @@ TEST_CASE(door_can_use_and_access_list_behavior)
 TEST_CASE(housetile_get_house_returns_valid_shared_ptr_and_preserves_identity)
 {
 	auto house = std::make_shared<House>(500);
-	auto houseTile = std::make_unique<HouseTile>(100, 100, 7, house.get());
+	auto houseTile = std::make_unique<HouseTile>(100, 100, 7, house);
 	house->addTile(houseTile.get());
 
 	auto retrievedHouse = houseTile->getHouse();
@@ -255,12 +255,17 @@ TEST_CASE(housetile_get_house_returns_valid_shared_ptr_and_preserves_identity)
 	CHECK(retrievedHouse.get() == house.get());
 }
 
-TEST_CASE(housetile_get_house_returns_nullptr_when_house_is_destroyed)
+TEST_CASE(housetile_get_house_returns_nullptr_when_house_is_null_or_destroyed)
 {
+	// Null/empty shared_ptr
+	auto nullHouseTile = std::make_unique<HouseTile>(102, 102, 7, nullptr);
+	CHECK(nullHouseTile->getHouse() == nullptr);
+
+	// Expiration after House dies
 	std::unique_ptr<HouseTile> houseTile;
 	{
 		auto house = std::make_shared<House>(600);
-		houseTile = std::make_unique<HouseTile>(101, 101, 7, house.get());
+		houseTile = std::make_unique<HouseTile>(101, 101, 7, house);
 		house->addTile(houseTile.get());
 		CHECK(houseTile->getHouse() != nullptr);
 		CHECK(houseTile->getHouse()->getId() == 600);

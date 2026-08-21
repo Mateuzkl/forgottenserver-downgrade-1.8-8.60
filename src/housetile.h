@@ -13,7 +13,7 @@ class House;
 class HouseTile final : public DynamicTile
 {
 public:
-	HouseTile(uint16_t x, uint16_t y, uint8_t z, House* house);
+	HouseTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<House>& house);
 
 	using Tile::internalAddThing;
 

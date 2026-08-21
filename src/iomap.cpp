@@ -476,7 +476,7 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                 return false;
             }
 
-            tilePtr = std::make_unique<HouseTile>(x, y, z, house.get());
+            tilePtr = std::make_unique<HouseTile>(x, y, z, house);
             tile = tilePtr.get();
             house->addTile(static_cast<HouseTile*>(tile));
 
