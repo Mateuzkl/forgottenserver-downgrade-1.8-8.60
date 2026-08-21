@@ -101,16 +101,18 @@ bool IOMapSerialize::saveHouseItems()
 		for (const auto& it : g_game.map.houses.getHouses()) {
 			// save house items
 			House* house = it.second.get();
-			for (HouseTile* tile : house->getTiles()) {
-				saveTile(stream, tile);
+			for (const auto& weakTile : house->getTiles()) {
+				if (auto tile = weakTile.lock()) {
+					saveTile(stream, tile.get());
 
-				if (auto attributes = stream.getStream(); !attributes.empty()) {
-					if (notEmpty) {
-						query << ",";
+					if (auto attributes = stream.getStream(); !attributes.empty()) {
+						if (notEmpty) {
+							query << ",";
+						}
+						query << "(" << house->getId() << "," << db.escapeString(attributes) << ")";
+						notEmpty = true;
+						stream.clear();
 					}
-					query << "(" << house->getId() << "," << db.escapeString(attributes) << ")";
-					notEmpty = true;
-					stream.clear();
 				}
 			}
 		}
@@ -392,7 +394,7 @@ bool IOMapSerialize::saveHouseInfo()
 		}
 		query << fmt::format("({:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d})",
 		                     house->getId(), static_cast<uint32_t>(house->getType()), house->getOwner(), house->getPaidUntil(), house->getPayRentWarnings(),
-		                     (house->getProtected() ? 1 : 0), db.escapeString(house->getName()), house->getTownId(), house->getRent(), house->getTiles().size(),
+		                     (house->getProtected() ? 1 : 0), db.escapeString(house->getName()), house->getTownId(), house->getRent(), house->getTileCount(),
 		                     house->getBedCount());
 		notEmpty = true;
 	}
@@ -475,14 +477,16 @@ bool IOMapSerialize::saveHouse(const House* house)
 	DBInsert stmt("INSERT INTO `tile_store` (`house_id`, `data`) VALUES ");
 
 	PropWriteStream stream;
-	for (HouseTile* tile : house->getTiles()) {
-		saveTile(stream, tile);
+	for (const auto& weakTile : house->getTiles()) {
+		if (auto tile = weakTile.lock()) {
+			saveTile(stream, tile.get());
 
-		if (auto attributes = stream.getStream(); attributes.size() > 0) {
-			if (!stmt.addRow(fmt::format("{:d}, {:s}", houseId, db.escapeString(attributes)))) {
-				return false;
+			if (auto attributes = stream.getStream(); attributes.size() > 0) {
+				if (!stmt.addRow(fmt::format("{:d}, {:s}", houseId, db.escapeString(attributes)))) {
+					return false;
+				}
+				stream.clear();
 			}
-			stream.clear();
 		}
 	}
 

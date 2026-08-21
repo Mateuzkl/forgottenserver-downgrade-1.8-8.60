@@ -26,6 +26,16 @@ void BedItem::setHouse(const std::shared_ptr<House>& h) noexcept
 	house = h;
 }
 
+void BedItem::onRemoved()
+{
+	Item::onRemoved();
+
+	if (auto h = getHouse()) {
+		h->removeBed(this);
+	}
+	setHouse(nullptr);
+}
+
 Attr_ReadValue BedItem::readAttr(AttrTypes_t attr, PropStream& propStream)
 {
 	switch (attr) {

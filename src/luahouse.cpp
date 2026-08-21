@@ -304,7 +304,13 @@ int luaHouseStartTrade(lua_State* L)
 			return 1;
 		}
 
-		transferItem->getParent()->setParent(player);
+		Cylinder* parent = transferItem->getParent();
+		if (!parent) {
+			lua_pushinteger(L, RETURNVALUE_YOUCANNOTTRADETHISHOUSE);
+			return 1;
+		}
+
+		parent->setParent(player);
 		if (!g_game.internalStartTrade(player, tradePartner, transferItem.get())) {
 			house->resetTransferItem();
 		}
@@ -348,7 +354,13 @@ int luaHouseStartTrade(lua_State* L)
 		return 1;
 	}
 
-	transferItem->getParent()->setParent(player);
+	Cylinder* parent = transferItem->getParent();
+	if (!parent) {
+		lua_pushinteger(L, RETURNVALUE_YOUCANNOTTRADETHISHOUSE);
+		return 1;
+	}
+
+	parent->setParent(player);
 	if (!g_game.internalStartTrade(player, tradePartner, transferItem.get())) {
 		house->resetTransferItem();
 	}
@@ -449,13 +461,15 @@ int luaHouseGetTiles(lua_State* L)
 	}
 
 	const auto& tiles = house->getTiles();
-	lua_createtable(L, tiles.size(), 0);
+	lua_newtable(L);
 
 	int index = 0;
-	for (Tile* tile : tiles) {
-		pushUserdata<Tile>(L, tile);
-		setMetatable(L, -1, "Tile");
-		lua_rawseti(L, -2, ++index);
+	for (const auto& weakTile : tiles) {
+		if (auto tile = weakTile.lock()) {
+			pushUserdata<Tile>(L, tile.get());
+			setMetatable(L, -1, "Tile");
+			lua_rawseti(L, -2, ++index);
+		}
 	}
 	return 1;
 }
@@ -473,13 +487,15 @@ int luaHouseGetItems(lua_State* L)
 	lua_newtable(L);
 
 	int index = 0;
-	for (Tile* tile : tiles) {
-		TileItemVector* itemVector = tile->getItemList();
-		if (itemVector) {
-			for (const auto& item : *itemVector) {
-				pushSharedPtr(L, item);
-				setItemMetatable(L, -1, item.get());
-				lua_rawseti(L, -2, ++index);
+	for (const auto& weakTile : tiles) {
+		if (auto tile = weakTile.lock()) {
+			TileItemVector* itemVector = tile->getItemList();
+			if (itemVector) {
+				for (const auto& item : *itemVector) {
+					pushSharedPtr(L, item);
+					setItemMetatable(L, -1, item.get());
+					lua_rawseti(L, -2, ++index);
+				}
 			}
 		}
 	}
@@ -491,7 +507,7 @@ int luaHouseGetTileCount(lua_State* L)
 	// house:getTileCount()
 	const House* house = getUserdata<const House>(L, 1);
 	if (house) {
-		lua_pushinteger(L, house->getTiles().size());
+		lua_pushinteger(L, house->getTileCount());
 	} else {
 		lua_pushnil(L);
 	}

@@ -8598,7 +8598,7 @@ void Game::internalRemoveItems(std::vector<std::shared_ptr<Item>> itemList, uint
 	}
 }
 
-BedItem* Game::getBedBySleeper(uint32_t guid)
+std::shared_ptr<BedItem> Game::getBedBySleeper(uint32_t guid)
 {
 	auto it = bedSleepersMap.find(guid);
 	if (it == bedSleepersMap.end()) {
@@ -8610,7 +8610,7 @@ BedItem* Game::getBedBySleeper(uint32_t guid)
 		bedSleepersMap.erase(it);
 		return nullptr;
 	}
-	return bed.get();
+	return bed;
 }
 
 void Game::setBedSleeper(BedItem* bed, uint32_t guid)

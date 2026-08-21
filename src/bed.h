@@ -29,6 +29,7 @@ public:
 	void serializeAttr(PropWriteStream& propWriteStream) const override;
 
 	[[nodiscard]] bool canRemove() const override { return house.expired(); }
+	void onRemoved() override;
 
 	[[nodiscard]] uint32_t getSleeper() const noexcept { return sleeperGUID; }
 

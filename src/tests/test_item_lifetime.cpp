@@ -289,8 +289,8 @@ TEST_CASE(door_can_use_and_access_list_behavior)
 TEST_CASE(housetile_get_house_returns_valid_shared_ptr_and_preserves_identity)
 {
 	auto house = std::make_shared<House>(500);
-	auto houseTile = std::make_unique<HouseTile>(100, 100, 7, house);
-	house->addTile(houseTile.get());
+	auto houseTile = std::make_shared<HouseTile>(100, 100, 7, house);
+	house->addTile(houseTile);
 
 	auto retrievedHouse = houseTile->getHouse();
 	CHECK(retrievedHouse != nullptr);
@@ -302,15 +302,15 @@ TEST_CASE(housetile_get_house_returns_valid_shared_ptr_and_preserves_identity)
 TEST_CASE(housetile_get_house_returns_nullptr_when_house_is_null_or_destroyed)
 {
 	// Null/empty shared_ptr
-	auto nullHouseTile = std::make_unique<HouseTile>(102, 102, 7, nullptr);
+	auto nullHouseTile = std::make_shared<HouseTile>(102, 102, 7, nullptr);
 	CHECK(nullHouseTile->getHouse() == nullptr);
 
 	// Expiration after House dies
-	std::unique_ptr<HouseTile> houseTile;
+	std::shared_ptr<HouseTile> houseTile;
 	{
 		auto house = std::make_shared<House>(600);
-		houseTile = std::make_unique<HouseTile>(101, 101, 7, house);
-		house->addTile(houseTile.get());
+		houseTile = std::make_shared<HouseTile>(101, 101, 7, house);
+		house->addTile(houseTile);
 		CHECK(houseTile->getHouse() != nullptr);
 		CHECK(houseTile->getHouse()->getId() == 600);
 	}
@@ -355,8 +355,8 @@ TEST_CASE(item_get_door_returns_nullptr_for_regular_item_and_valid_shared_ptr_fo
 TEST_CASE(housetile_update_house_registers_door_using_get_door_and_handles_destruction)
 {
 	auto house = std::make_shared<House>(560);
-	auto houseTile = std::make_unique<HouseTile>(112, 112, 7, house);
-	house->addTile(houseTile.get());
+	auto houseTile = std::make_shared<HouseTile>(112, 112, 7, house);
+	house->addTile(houseTile);
 
 	auto door = std::make_shared<Door>(0);
 	door->setDoorId(77);
@@ -410,8 +410,8 @@ TEST_CASE(item_get_bed_returns_nullptr_for_regular_item_and_valid_shared_ptr_for
 TEST_CASE(housetile_update_house_registers_bed_item_using_get_bed)
 {
 	auto house = std::make_shared<House>(550);
-	auto houseTile = std::make_unique<HouseTile>(110, 110, 7, house);
-	house->addTile(houseTile.get());
+	auto houseTile = std::make_shared<HouseTile>(110, 110, 7, house);
+	house->addTile(houseTile);
 
 	auto bed = std::make_shared<BedItem>(694);
 	CHECK(bed->getHouse() == nullptr);
@@ -1015,6 +1015,106 @@ TEST_CASE(game_internal_remove_items_robust_against_concurrent_pre_removal)
 	CHECK(weak2.expired());
 	CHECK(weak3.expired());
 	CHECK(container->empty());
+}
+
+TEST_CASE(house_bed_list_drops_destroyed_bed)
+{
+	auto house = std::make_shared<House>(705);
+	auto bed = std::make_shared<BedItem>(694);
+	BedItem* rawBed = bed.get();
+
+	house->addBed(rawBed);
+	CHECK(house->getBeds().size() == 1);
+	CHECK(bed->getHouse() == house);
+
+	// Removing bed triggers onRemoved, which removes bed from house bedsList
+	bed->onRemoved();
+	CHECK(house->getBeds().empty());
+	CHECK(bed->getHouse() == nullptr);
+
+	// Destroying bed leaves no dangling pointers; setOwner must be safe
+	bed.reset();
+	house->setOwner(0, false);
+	CHECK(house->getBeds().empty());
+}
+
+TEST_CASE(house_tile_list_survives_map_tile_removal)
+{
+	ensureItemTypes();
+	const Position tilePos{120, 120, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(120, 120, 7);
+
+	auto house = std::make_shared<House>(706);
+	auto houseTile = std::make_unique<HouseTile>(tilePos.x, tilePos.y, tilePos.z, house);
+
+	g_game.map.setTile(tilePos.x, tilePos.y, tilePos.z, std::move(houseTile));
+	CHECK(house->getTileCount() == 1);
+
+	// Remove tile via Map::removeTile()
+	g_game.map.removeTile(tilePos);
+	CHECK(g_game.map.getTile(tilePos) == nullptr);
+
+	// houseTiles weak_ptr is expired; getTileCount and setOwner must safely ignore / clean it
+	CHECK(house->getTileCount() == 0);
+	house->setOwner(0, false);
+	CHECK(house->getTileCount() == 0);
+}
+
+TEST_CASE(get_bed_by_sleeper_keeps_bed_alive_for_caller)
+{
+	auto bed = std::make_shared<BedItem>(694);
+	BedItem* rawBed = bed.get();
+	std::weak_ptr<BedItem> weakBed = bed;
+
+	g_game.setBedSleeper(rawBed, 12345);
+
+	// Caller retrieves strong shared_ptr
+	std::shared_ptr<BedItem> callerBed = g_game.getBedBySleeper(12345);
+	CHECK(callerBed != nullptr);
+	CHECK(callerBed.get() == rawBed);
+	CHECK(callerBed == bed);
+
+	// Original bed owner releases ownership; caller keeps it alive
+	bed.reset();
+	CHECK(!weakBed.expired());
+	CHECK(callerBed != nullptr);
+	CHECK(callerBed.get() == rawBed);
+
+	// Caller releases reference; bed is now destroyed and getter returns nullptr
+	callerBed.reset();
+	CHECK(weakBed.expired());
+	CHECK(g_game.getBedBySleeper(12345) == nullptr);
+
+	g_game.removeBedSleeper(12345);
+}
+
+TEST_CASE(house_door_set_drops_tile_destroyed_door)
+{
+	ensureItemTypes();
+	const Position doorPos{121, 121, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(121, 121, 7);
+
+	auto house = std::make_shared<House>(707);
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(88);
+
+	auto tile = std::make_unique<DynamicTile>(doorPos.x, doorPos.y, doorPos.z);
+	g_game.map.setTile(doorPos.x, doorPos.y, doorPos.z, std::move(tile));
+	Tile* rawTile = g_game.map.getTile(doorPos);
+	rawTile->internalAddThing(door.get());
+
+	house->addDoor(door.get());
+	CHECK(house->getDoors().size() == 1);
+	CHECK(house->getDoorByNumber(88) == door);
+
+	// Map::removeTile removes and destroys tile contents, triggering Door::onRemoved()
+	door.reset();
+	g_game.map.removeTile(doorPos);
+
+	CHECK(house->getDoors().empty());
+	CHECK(house->getDoorByNumber(88) == nullptr);
 }
 
 TFS_TEST_MAIN()

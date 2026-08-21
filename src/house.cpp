@@ -24,8 +24,46 @@ House::~House()
 
 void House::addTile(HouseTile* tile)
 {
+	if (!tile) {
+		return;
+	}
+
 	tile->setFlag(TILESTATE_PROTECTIONZONE);
+	if (auto tileRef = tile->weak_from_this().lock()) {
+		auto houseTileRef = std::static_pointer_cast<HouseTile>(tileRef);
+		for (const auto& weakTile : houseTiles) {
+			if (weakTile.lock() == houseTileRef) {
+				return;
+			}
+		}
+		houseTiles.push_back(houseTileRef);
+	}
+}
+
+void House::addTile(const std::shared_ptr<HouseTile>& tile)
+{
+	if (!tile) {
+		return;
+	}
+
+	tile->setFlag(TILESTATE_PROTECTIONZONE);
+	for (const auto& weakTile : houseTiles) {
+		if (weakTile.lock() == tile) {
+			return;
+		}
+	}
 	houseTiles.push_back(tile);
+}
+
+size_t House::getTileCount() const
+{
+	size_t count = 0;
+	for (const auto& weakTile : houseTiles) {
+		if (!weakTile.expired()) {
+			++count;
+		}
+	}
+	return count;
 }
 
 std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> House::initializeOwnerDataFromDatabase(uint32_t guid_guild, HouseType_t type)
@@ -99,17 +137,22 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 			transferToDepot();
 		}
 
-		for (HouseTile* tile : houseTiles) {
-			if (const CreatureVector* creatures = tile->getCreatures()) {
-				for (int32_t i = creatures->size(); --i >= 0;) {
-					kickPlayer(nullptr, (*creatures)[i]->getPlayer());
+		for (auto it = houseTiles.begin(); it != houseTiles.end();) {
+			if (auto tile = it->lock()) {
+				if (const CreatureVector* creatures = tile->getCreatures()) {
+					for (int32_t i = creatures->size(); --i >= 0;) {
+						kickPlayer(nullptr, (*creatures)[i]->getPlayer());
+					}
 				}
+				++it;
+			} else {
+				it = houseTiles.erase(it);
 			}
 		}
 
 		// Remove players from beds
 		for (BedItem* bed : bedsList) {
-			if (bed->getSleeper() != 0) {
+			if (bed && bed->getSleeper() != 0) {
 				bed->wakeUp(nullptr);
 			}
 		}
@@ -266,14 +309,19 @@ void House::setAccessList(uint32_t listId, std::string_view textlist)
 	}
 
 	// kick uninvited players
-	for (HouseTile* tile : houseTiles) {
-		if (CreatureVector* creatures = tile->getCreatures()) {
-			for (int32_t i = creatures->size(); --i >= 0;) {
-				Player* player = (*creatures)[i]->getPlayer();
-				if (player && !isInvited(player)) {
-					kickPlayer(nullptr, player);
+	for (auto it = houseTiles.begin(); it != houseTiles.end();) {
+		if (auto tile = it->lock()) {
+			if (CreatureVector* creatures = tile->getCreatures()) {
+				for (int32_t i = creatures->size(); --i >= 0;) {
+					Player* player = (*creatures)[i]->getPlayer();
+					if (player && !isInvited(player)) {
+						kickPlayer(nullptr, player);
+					}
 				}
 			}
+			++it;
+		} else {
+			it = houseTiles.erase(it);
 		}
 	}
 }
@@ -348,7 +396,12 @@ bool House::transferToDepot(Player* player) const
 		}
 	}
 
-	for (HouseTile* tile : houseTiles) {
+	for (const auto& weakTile : houseTiles) {
+		auto tile = weakTile.lock();
+		if (!tile) {
+			continue;
+		}
+
 		const TileItemVector* items = tile->getItemList();
 		if (!items) {
 			continue;
@@ -451,8 +504,23 @@ void House::addBed(BedItem* bed)
 		return;
 	}
 
+	for (BedItem* existing : bedsList) {
+		if (existing == bed) {
+			return;
+		}
+	}
+
 	bedsList.push_back(bed);
 	bed->setHouse(weak_from_this().lock());
+}
+
+void House::removeBed(BedItem* bed)
+{
+	if (!bed) {
+		return;
+	}
+
+	bedsList.remove(bed);
 }
 
 std::shared_ptr<Door> House::getDoorByNumber(uint32_t doorId) const
@@ -772,7 +840,7 @@ void House::updateDoorDescription() const
 
 		const int32_t housePrice = getInteger(ConfigManager::HOUSE_PRICE);
 		if (housePrice != -1 && getBoolean(ConfigManager::HOUSE_DOOR_SHOW_PRICE)) {
-			description << " It costs " << (houseTiles.size() * housePrice) << " gold coins.";
+			description << " It costs " << (getTileCount() * housePrice) << " gold coins.";
 		}
 	}
 

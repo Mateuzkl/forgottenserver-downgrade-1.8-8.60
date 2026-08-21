@@ -1068,9 +1068,7 @@ std::unique_ptr<Tile> createTileFromBasic(const BasicTile* basicTile,
     if (basicTile->isHouse()) {
         auto house = houses.getHouse(basicTile->houseId);
         if (house) {
-            auto houseTile = std::make_unique<HouseTile>(x, y, z, house);
-            house->addTile(houseTile.get());
-            tile = std::move(houseTile);
+            tile = std::make_unique<HouseTile>(x, y, z, house);
         } else {
             LOG_ERROR(fmt::format("[MapCache] House not found for houseId {}", basicTile->houseId));
             tile = std::make_unique<StaticTile>(x, y, z);

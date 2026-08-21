@@ -478,7 +478,6 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
 
             tilePtr = std::make_unique<HouseTile>(x, y, z, house);
             tile = tilePtr.get();
-            house->addTile(static_cast<HouseTile*>(tile));
 
             uint8_t attribute;
             while (tilePropStream.read(attribute)) {

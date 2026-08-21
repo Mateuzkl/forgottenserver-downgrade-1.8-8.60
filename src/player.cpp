@@ -2297,8 +2297,7 @@ void Player::onCreatureAppear(Creature* creature, bool isLogin)
 
 		updateRegeneration();
 
-		BedItem* bed = g_game.getBedBySleeper(guid);
-		if (bed) {
+		if (auto bed = g_game.getBedBySleeper(guid)) {
 			bed->wakeUp(this);
 		}
 

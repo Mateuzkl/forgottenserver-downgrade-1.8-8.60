@@ -200,6 +200,11 @@ void Map::setTile(uint16_t x, uint16_t y, uint8_t z, std::unique_ptr<Tile> newTi
 	}
 
 	if (tile) {
+		if (HouseTile* houseTile = tile->getHouseTile()) {
+			if (auto house = houseTile->getHouse()) {
+				house->addTile(houseTile);
+			}
+		}
 		Zones::registerPositionZones(Position(x, y, z), tile->getZoneIds());
 	}
 }
@@ -1339,6 +1344,14 @@ Tile* Floor::getTile(uint16_t x, uint16_t y, uint8_t z) {
 	
 	tilePair.first = MapCacheUtils::createTileFromBasic(basicTile, x, y, z, g_game.map.houses);
 	tilePair.second = 0; // Clear cache
+
+	if (tilePair.first) {
+		if (HouseTile* houseTile = tilePair.first->getHouseTile()) {
+			if (auto house = houseTile->getHouse()) {
+				house->addTile(houseTile);
+			}
+		}
+	}
 	
 	return tilePair.first.get();
 }

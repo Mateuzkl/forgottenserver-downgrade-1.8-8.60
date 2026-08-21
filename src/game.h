@@ -593,7 +593,7 @@ public:
 
 	void internalRemoveItems(std::vector<std::shared_ptr<Item>> itemList, uint32_t amount, bool stackable);
 
-	[[nodiscard]] BedItem* getBedBySleeper(uint32_t guid);
+	[[nodiscard]] std::shared_ptr<BedItem> getBedBySleeper(uint32_t guid);
 	void setBedSleeper(BedItem* bed, uint32_t guid);
 	void removeBedSleeper(uint32_t guid);
 

@@ -96,7 +96,7 @@ enum HouseType_t
 	HOUSE_TYPE_GUILDHALL = 2,
 };
 
-using HouseTileList = std::list<ObserverPtr<HouseTile>>;
+using HouseTileList = std::list<std::weak_ptr<HouseTile>>;
 using HouseBedItemList = std::list<ObserverPtr<BedItem>>;
 
 class HouseTransferItem final : public Item
@@ -120,6 +120,7 @@ public:
 	~House();
 
 	void addTile(HouseTile* tile);
+	void addTile(const std::shared_ptr<HouseTile>& tile);
 
 	bool canEditAccessList(uint32_t listId, const Player* player) const;
 	// listId special values:
@@ -180,10 +181,12 @@ public:
 	bool executeTransfer(HouseTransferItem* item, Player* newOwner);
 
 	const HouseTileList& getTiles() const { return houseTiles; }
+	size_t getTileCount() const;
 
 	const std::set<ObserverPtr<Door>>& getDoors() const { return doorSet; }
 
 	void addBed(BedItem* bed);
+	void removeBed(BedItem* bed);
 	const HouseBedItemList& getBeds() const { return bedsList; }
 	uint32_t getBedCount() const
 	{
