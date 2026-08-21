@@ -178,7 +178,8 @@ TEST_CASE(door_get_house_returns_valid_shared_ptr_and_preserves_identity)
 	CHECK(retrievedHouse == house);
 	CHECK(retrievedHouse->getId() == 100);
 	CHECK(house->getDoors().size() == 1);
-	CHECK(house->getDoorByNumber(1) == door.get());
+	CHECK(house->getDoorByNumber(1) == door);
+	CHECK(house->getDoorByNumber(1).get() == door.get());
 }
 
 TEST_CASE(door_get_house_returns_nullptr_when_house_is_destroyed)
@@ -410,18 +411,27 @@ TEST_CASE(tile_get_bed_item_from_ground_preserves_identity_and_lifetime)
 	auto bedGround = std::make_shared<BedItem>(694);
 	BedItem* rawBed = bedGround.get();
 
-	tile->internalAddThing(bedGround.get());
+	tile->setGround(bedGround);
 	tile->setFlag(TILESTATE_BED);
+
+	// Assert bed is stored as ground and not in item list
+	CHECK(tile->getGround() == rawBed);
+	CHECK(tile->getItemList() == nullptr || tile->getItemList()->empty());
 
 	std::shared_ptr<BedItem> retrievedBed = tile->getBedItem();
 	CHECK(retrievedBed != nullptr);
 	CHECK(retrievedBed.get() == rawBed);
 	CHECK(retrievedBed == bedGround);
 
-	// Removing ground from tile keeps retrievedBed alive for caller
+	// Release test-created shared_ptr owner before removing from tile
+	bedGround.reset();
+
+	// Remove from actual storage location (ground)
 	tile->setGround(nullptr);
 	tile->resetFlag(TILESTATE_BED);
 	CHECK(tile->getBedItem() == nullptr);
+
+	// Validate retrievedBed remains alive and preserves identity
 	CHECK(retrievedBed != nullptr);
 	CHECK(retrievedBed.get() == rawBed);
 	CHECK(retrievedBed->getID() == 694);
@@ -437,19 +447,79 @@ TEST_CASE(tile_get_bed_item_from_item_list_preserves_identity_and_lifetime)
 
 	tile->internalAddThing(bed.get());
 
+	// Assert bed is stored in item list and not as ground
+	CHECK(tile->getGround() == nullptr);
+	CHECK(tile->getItemList() != nullptr);
+	CHECK(!tile->getItemList()->empty());
+
 	std::shared_ptr<BedItem> retrievedBed = tile->getBedItem();
 	CHECK(retrievedBed != nullptr);
 	CHECK(retrievedBed == bed);
 	CHECK(retrievedBed.get() == rawBed);
 	CHECK(retrievedBed->getID() == 694);
 
-	// Clearing tile items preserves retrievedBed reference
+	// Release test-created shared_ptr owner before removing from tile
+	bed.reset();
+
+	// Remove from actual storage location (item list)
 	tile->getItemList()->clear();
 	tile->resetFlag(TILESTATE_BED);
 	CHECK(tile->getBedItem() == nullptr);
+
+	// Validate retrievedBed remains alive and preserves identity
 	CHECK(retrievedBed != nullptr);
 	CHECK(retrievedBed.get() == rawBed);
 	CHECK(retrievedBed->getID() == 694);
+}
+
+TEST_CASE(house_get_door_by_number_finds_door_and_preserves_identity_and_lifetime)
+{
+	auto house = std::make_shared<House>(500);
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(10);
+	Door* rawDoor = door.get();
+
+	house->addDoor(door.get());
+
+	// Door found & identity
+	std::shared_ptr<Door> retrievedDoor = house->getDoorByNumber(10);
+	CHECK(retrievedDoor != nullptr);
+	CHECK(retrievedDoor.get() == rawDoor);
+	CHECK(retrievedDoor == door);
+	CHECK(retrievedDoor->getDoorId() == 10);
+
+	// Door non-existent
+	CHECK(house->getDoorByNumber(999) == nullptr);
+
+	// Release original owner
+	door.reset();
+	CHECK(retrievedDoor != nullptr);
+	CHECK(retrievedDoor.get() == rawDoor);
+
+	// Remove door from house
+	house->removeDoor(rawDoor);
+	CHECK(house->getDoorByNumber(10) == nullptr);
+
+	// retrievedDoor remains alive
+	CHECK(retrievedDoor != nullptr);
+	CHECK(retrievedDoor.get() == rawDoor);
+	CHECK(retrievedDoor->getDoorId() == 10);
+}
+
+TEST_CASE(house_get_door_by_number_returns_nullptr_when_door_is_destroyed)
+{
+	auto house = std::make_shared<House>(501);
+
+	{
+		auto door = std::make_shared<Door>(0);
+		door->setDoorId(20);
+		house->addDoor(door.get());
+		CHECK(house->getDoorByNumber(20) != nullptr);
+		// door goes out of scope and is destroyed
+	}
+
+	// weak_from_this().lock() fails -> returns nullptr
+	CHECK(house->getDoorByNumber(20) == nullptr);
 }
 
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)

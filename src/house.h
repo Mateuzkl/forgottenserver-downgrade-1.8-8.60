@@ -166,7 +166,7 @@ public:
 
 	void addDoor(Door* door);
 	void removeDoor(Door* door);
-	Door* getDoorByNumber(uint32_t doorId) const;
+	[[nodiscard]] std::shared_ptr<Door> getDoorByNumber(uint32_t doorId) const;
 	Door* getDoorByPosition(const Position& pos) const;
 
 	std::shared_ptr<HouseTransferItem> getTransferItem();

@@ -256,7 +256,7 @@ void House::setAccessList(uint32_t listId, std::string_view textlist)
 	} else if (listId == SUBOWNER_LIST) {
 		subOwnerList.parseList(textlist);
 	} else {
-		Door* door = getDoorByNumber(listId);
+		auto door = getDoorByNumber(listId);
 		if (door) {
 			door->setAccessList(textlist);
 		}
@@ -421,7 +421,7 @@ std::optional<std::string_view> House::getAccessList(uint32_t listId) const
 		return std::make_optional(subOwnerList.getList());
 	}
 
-	Door* door = getDoorByNumber(listId);
+	auto door = getDoorByNumber(listId);
 	if (!door) {
 		return std::nullopt;
 	}
@@ -451,11 +451,13 @@ void House::addBed(BedItem* bed)
 	bed->setHouse(this);
 }
 
-Door* House::getDoorByNumber(uint32_t doorId) const
+std::shared_ptr<Door> House::getDoorByNumber(uint32_t doorId) const
 {
 	for (Door* door : doorSet) {
-		if (door->getDoorId() == doorId) {
-			return door;
+		if (door && door->getDoorId() == doorId) {
+			if (auto itemRef = door->weak_from_this().lock()) {
+				return std::static_pointer_cast<Door>(itemRef);
+			}
 		}
 	}
 	return nullptr;
