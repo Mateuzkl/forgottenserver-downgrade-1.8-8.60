@@ -753,11 +753,15 @@ TEST_CASE(house_get_door_by_position_finds_door_and_preserves_identity_and_lifet
 	ensureItemTypes();
 
 	const Position doorPos{105, 105, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(105, 105, 7);
+
 	auto house = std::make_shared<House>(502);
 	auto door = std::make_shared<Door>(0);
 	door->setDoorId(30);
 	Door* rawDoor = door.get();
 
+	CHECK(g_game.map.getTile(doorPos) == nullptr);
 	auto tile = std::make_unique<DynamicTile>(doorPos.x, doorPos.y, doorPos.z);
 	g_game.map.setTile(doorPos.x, doorPos.y, doorPos.z, std::move(tile));
 	Tile* rawTile = g_game.map.getTile(doorPos);
