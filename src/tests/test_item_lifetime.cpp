@@ -42,6 +42,40 @@ public:
 	bool prevConvertUnsafe{false};
 };
 
+struct ItemTypePropertyGuard
+{
+	uint16_t itemId;
+	bool origMoveable;
+	bool origStackable;
+
+	explicit ItemTypePropertyGuard(uint16_t id)
+	    : itemId(id),
+	      origMoveable(Item::items.getItemType(id).moveable),
+	      origStackable(Item::items.getItemType(id).stackable)
+	{
+	}
+
+	~ItemTypePropertyGuard()
+	{
+		Item::items.getItemType(itemId).moveable = origMoveable;
+		Item::items.getItemType(itemId).stackable = origStackable;
+	}
+};
+
+struct MapTileGuard
+{
+	std::vector<Position> positions;
+
+	void track(uint16_t x, uint16_t y, uint8_t z) { positions.emplace_back(x, y, z); }
+
+	~MapTileGuard()
+	{
+		for (const auto& pos : positions) {
+			g_game.map.removeTile(pos);
+		}
+	}
+};
+
 } // namespace
 
 TEST_CASE(item_lifetime_registry_tracks_destroyed_item)
@@ -490,6 +524,10 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 {
 	ensureItemTypes();
 
+	MapTileGuard tileGuard;
+	tileGuard.track(100, 100, 7);
+	tileGuard.track(100, 101, 7);
+
 	const auto origDir694 = Item::items.getItemType(694).bedPartnerDir;
 	const auto origDir695 = Item::items.getItemType(695).bedPartnerDir;
 	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
@@ -551,6 +589,10 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 TEST_CASE(bed_get_next_bed_item_returns_nullptr_when_partner_absent)
 {
 	ensureItemTypes();
+
+	MapTileGuard tileGuard;
+	tileGuard.track(200, 200, 7);
+	tileGuard.track(200, 201, 7);
 
 	const auto origDir694 = Item::items.getItemType(694).bedPartnerDir;
 	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
@@ -851,6 +893,7 @@ TEST_CASE(lua_container_item_userdata_preserves_item_lifetime)
 TEST_CASE(player_remove_item_of_type_inventory_and_container_lifetime)
 {
 	ensureItemTypes();
+	ItemTypePropertyGuard guard100(100);
 	Item::items.getItemType(100).moveable = true;
 
 	auto player = makeTestPlayer(100, "RemoveItemPlayer");
@@ -897,6 +940,7 @@ TEST_CASE(player_remove_item_of_type_inventory_and_container_lifetime)
 TEST_CASE(player_remove_item_of_type_stackable_partial_and_multi_container)
 {
 	ensureItemTypes();
+	ItemTypePropertyGuard guard2160(2160);
 	Item::items.getItemType(2160).stackable = true;
 	Item::items.getItemType(2160).moveable = true;
 
@@ -934,6 +978,7 @@ TEST_CASE(player_remove_item_of_type_stackable_partial_and_multi_container)
 TEST_CASE(game_internal_remove_items_robust_against_concurrent_pre_removal)
 {
 	ensureItemTypes();
+	ItemTypePropertyGuard guard100(100);
 	Item::items.getItemType(100).moveable = true;
 
 	auto player = makeTestPlayer(102, "PreRemovePlayer");
