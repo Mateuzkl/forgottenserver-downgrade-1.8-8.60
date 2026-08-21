@@ -35,7 +35,7 @@ public:
 	bool sleep(Player* player);
 	void wakeUp(Player* player);
 
-	[[nodiscard]] BedItem* getNextBedItem() const;
+	[[nodiscard]] std::shared_ptr<BedItem> getNextBedItem() const;
 
 private:
 	void updateAppearance(const Player* player);

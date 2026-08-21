@@ -2,6 +2,7 @@
 
 #include "../bed.h"
 #include "../configmanager.h"
+#include "../game.h"
 #include "../house.h"
 #include "../item.h"
 #include "../luascript.h"
@@ -319,6 +320,74 @@ TEST_CASE(bed_get_house_preserves_lifetime_for_caller)
 	callerHouseRef.reset();
 	CHECK(bed->getHouse() == nullptr);
 	CHECK(bed->canRemove());
+}
+
+TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetime)
+{
+	ensureItemTypes();
+
+	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
+	Item::items.getItemType(695).bedPartnerDir = DIRECTION_NORTH;
+
+	auto bed1 = std::make_shared<BedItem>(694);
+	auto bed2 = std::make_shared<BedItem>(695);
+
+	auto tile1 = std::make_unique<DynamicTile>(100, 100, 7);
+	auto tile2 = std::make_unique<DynamicTile>(100, 101, 7);
+
+	Tile* rawTile1 = tile1.get();
+	Tile* rawTile2 = tile2.get();
+
+	g_game.map.setTile(100, 100, 7, std::move(tile1));
+	g_game.map.setTile(100, 101, 7, std::move(tile2));
+
+	rawTile1->internalAddThing(bed1.get());
+	rawTile2->internalAddThing(bed2.get());
+
+	// Test partner detection and identity
+	auto partner = bed1->getNextBedItem();
+	CHECK(partner != nullptr);
+	CHECK(partner == bed2);
+	CHECK(partner.get() == bed2.get());
+	CHECK(partner->getID() == 695);
+
+	// Test reverse partner
+	auto partnerReverse = bed2->getNextBedItem();
+	CHECK(partnerReverse != nullptr);
+	CHECK(partnerReverse == bed1);
+	CHECK(partnerReverse.get() == bed1.get());
+	CHECK(partnerReverse->getID() == 694);
+
+	// Test lifetime preservation when item is cleared from partner tile
+	rawTile2->getItemList()->clear();
+	CHECK(rawTile2->getBedItem() == nullptr);
+	CHECK(bed1->getNextBedItem() == nullptr);
+	CHECK(partner != nullptr);
+	CHECK(partner->getID() == 695);
+}
+
+TEST_CASE(bed_get_next_bed_item_returns_nullptr_when_partner_absent)
+{
+	ensureItemTypes();
+
+	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
+
+	auto bed = std::make_shared<BedItem>(694);
+	auto tile = std::make_unique<DynamicTile>(200, 200, 7);
+	Tile* rawTile = tile.get();
+
+	g_game.map.setTile(200, 200, 7, std::move(tile));
+	rawTile->internalAddThing(bed.get());
+
+	// Target tile (200, 201, 7) does not exist -> returns nullptr
+	CHECK(bed->getNextBedItem() == nullptr);
+
+	// Create target tile without a bed item
+	auto emptyTile = std::make_unique<DynamicTile>(200, 201, 7);
+	g_game.map.setTile(200, 201, 7, std::move(emptyTile));
+
+	// Target tile exists but has no bed -> returns nullptr
+	CHECK(bed->getNextBedItem() == nullptr);
 }
 
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)

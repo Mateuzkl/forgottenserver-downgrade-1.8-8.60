@@ -79,7 +79,7 @@ void BedItem::serializeAttr(PropWriteStream& propWriteStream) const
 	}
 }
 
-BedItem* BedItem::getNextBedItem() const
+std::shared_ptr<BedItem> BedItem::getNextBedItem() const
 {
 	const auto dir = Item::items[id].bedPartnerDir;
 	const auto targetPos = getNextPosition(dir, getPosition());
@@ -88,7 +88,17 @@ BedItem* BedItem::getNextBedItem() const
 	if (!tile) {
 		return nullptr;
 	}
-	return tile->getBedItem();
+
+	BedItem* nextBed = tile->getBedItem();
+	if (!nextBed) {
+		return nullptr;
+	}
+
+	auto itemRef = nextBed->weak_from_this().lock();
+	if (!itemRef) {
+		return nullptr;
+	}
+	return std::static_pointer_cast<BedItem>(itemRef);
 }
 
 bool BedItem::canUse(Player* player)
@@ -147,7 +157,7 @@ bool BedItem::sleep(Player* player)
 		return false;
 	}
 
-	auto* nextBedItem = getNextBedItem();
+	auto nextBedItem = getNextBedItem();
 
 	internalSetSleeper(player);
 
@@ -200,7 +210,7 @@ void BedItem::wakeUp(Player* player)
 	// update the bedSleepersMap
 	g_game.removeBedSleeper(sleeperGUID);
 
-	auto* nextBedItem = getNextBedItem();
+	auto nextBedItem = getNextBedItem();
 
 	// unset sleep info
 	internalRemoveSleeper();
