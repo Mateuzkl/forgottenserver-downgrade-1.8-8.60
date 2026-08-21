@@ -26,7 +26,7 @@ public:
 
 	[[nodiscard]] uint32_t getSleeper() const noexcept { return sleeperGUID; }
 
-	[[nodiscard]] House* getHouse() const noexcept { return house.lock().get(); }
+	[[nodiscard]] std::shared_ptr<House> getHouse() const noexcept { return house.lock(); }
 	void setHouse(House* h) noexcept;
 
 	[[nodiscard]] bool canUse(Player* player);

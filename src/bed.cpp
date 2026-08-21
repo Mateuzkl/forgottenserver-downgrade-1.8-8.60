@@ -93,7 +93,12 @@ BedItem* BedItem::getNextBedItem() const
 
 bool BedItem::canUse(Player* player)
 {
-	if (!player || house.expired() || !player->isPremium() || player->getZone() != ZONE_PROTECTION) {
+	if (!player || !player->isPremium() || player->getZone() != ZONE_PROTECTION) {
+		return false;
+	}
+
+	auto h = getHouse();
+	if (!h) {
 		return false;
 	}
 
@@ -101,7 +106,7 @@ bool BedItem::canUse(Player* player)
 		return true;
 	}
 
-	if (getHouse()->getHouseAccessLevel(player) == HOUSE_OWNER) {
+	if (h->getHouseAccessLevel(player) == HOUSE_OWNER) {
 		return true;
 	}
 
@@ -110,18 +115,23 @@ bool BedItem::canUse(Player* player)
 		return false;
 	}
 
-	return getHouse()->getHouseAccessLevel(&sleeper) <= getHouse()->getHouseAccessLevel(player);
+	return h->getHouseAccessLevel(&sleeper) <= h->getHouseAccessLevel(player);
 }
 
 bool BedItem::trySleep(Player* player)
 {
-	if (house.expired() || player->isRemoved()) {
+	if (player->isRemoved()) {
+		return false;
+	}
+
+	auto h = getHouse();
+	if (!h) {
 		return false;
 	}
 
 	if (sleeperGUID != 0) {
 		const auto& itemType = Item::items[id];
-		if (itemType.transformToFree != 0 && getHouse()->getOwner() == player->getGUID()) {
+		if (itemType.transformToFree != 0 && h->getOwner() == player->getGUID()) {
 			wakeUp(nullptr);
 		}
 

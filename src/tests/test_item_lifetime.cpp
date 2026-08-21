@@ -1,5 +1,6 @@
 #include "../otpch.h"
 
+#include "../bed.h"
 #include "../configmanager.h"
 #include "../house.h"
 #include "../item.h"
@@ -264,6 +265,60 @@ TEST_CASE(housetile_get_house_returns_nullptr_when_house_is_destroyed)
 	}
 
 	CHECK(houseTile->getHouse() == nullptr);
+}
+
+TEST_CASE(bed_get_house_returns_valid_shared_ptr_and_preserves_identity)
+{
+	auto bed = std::make_shared<BedItem>(0);
+	CHECK(bed->getHouse() == nullptr);
+
+	auto house = std::make_shared<House>(700);
+	house->addBed(bed.get());
+
+	auto retrievedHouse = bed->getHouse();
+	CHECK(retrievedHouse != nullptr);
+	CHECK(retrievedHouse == house);
+	CHECK(retrievedHouse->getId() == 700);
+	CHECK(retrievedHouse.get() == house.get());
+}
+
+TEST_CASE(bed_get_house_returns_nullptr_when_house_is_destroyed_and_can_remove)
+{
+	auto bed = std::make_shared<BedItem>(0);
+	CHECK(bed->canRemove());
+
+	{
+		auto house = std::make_shared<House>(701);
+		house->addBed(bed.get());
+		CHECK(bed->getHouse() != nullptr);
+		CHECK(!bed->canRemove());
+	}
+
+	CHECK(bed->getHouse() == nullptr);
+	CHECK(bed->canRemove());
+}
+
+TEST_CASE(bed_get_house_preserves_lifetime_for_caller)
+{
+	auto bed = std::make_shared<BedItem>(0);
+	std::shared_ptr<House> callerHouseRef;
+
+	{
+		auto house = std::make_shared<House>(800);
+		house->addBed(bed.get());
+		callerHouseRef = bed->getHouse();
+		CHECK(callerHouseRef != nullptr);
+	}
+
+	// Original house out of scope, but callerHouseRef still keeps house alive
+	CHECK(callerHouseRef != nullptr);
+	CHECK(callerHouseRef->getId() == 800);
+	CHECK(bed->getHouse() != nullptr);
+
+	// When caller releases reference, house is destroyed
+	callerHouseRef.reset();
+	CHECK(bed->getHouse() == nullptr);
+	CHECK(bed->canRemove());
 }
 
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)
