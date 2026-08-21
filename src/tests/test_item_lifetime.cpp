@@ -21,6 +21,8 @@ class LuaFixture
 public:
 	LuaFixture()
 	{
+		prevWarnUnsafe = ConfigManager::getBoolean(ConfigManager::WARN_UNSAFE_SCRIPTS);
+		prevConvertUnsafe = ConfigManager::getBoolean(ConfigManager::CONVERT_UNSAFE_SCRIPTS);
 		ConfigManager::setBoolean(ConfigManager::WARN_UNSAFE_SCRIPTS, false);
 		ConfigManager::setBoolean(ConfigManager::CONVERT_UNSAFE_SCRIPTS, false);
 		CHECK(g_luaEnvironment.initState());
@@ -28,9 +30,16 @@ public:
 		CHECK(L != nullptr);
 	}
 
-	~LuaFixture() { g_luaEnvironment.closeState(); }
+	~LuaFixture()
+	{
+		g_luaEnvironment.closeState();
+		ConfigManager::setBoolean(ConfigManager::WARN_UNSAFE_SCRIPTS, prevWarnUnsafe);
+		ConfigManager::setBoolean(ConfigManager::CONVERT_UNSAFE_SCRIPTS, prevConvertUnsafe);
+	}
 
 	lua_State* L = nullptr;
+	bool prevWarnUnsafe{false};
+	bool prevConvertUnsafe{false};
 };
 
 } // namespace
@@ -483,6 +492,8 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 {
 	ensureItemTypes();
 
+	const auto origDir694 = Item::items.getItemType(694).bedPartnerDir;
+	const auto origDir695 = Item::items.getItemType(695).bedPartnerDir;
 	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
 	Item::items.getItemType(695).bedPartnerDir = DIRECTION_NORTH;
 
@@ -521,12 +532,16 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 	CHECK(bed1->getNextBedItem() == nullptr);
 	CHECK(partner != nullptr);
 	CHECK(partner->getID() == 695);
+
+	Item::items.getItemType(694).bedPartnerDir = origDir694;
+	Item::items.getItemType(695).bedPartnerDir = origDir695;
 }
 
 TEST_CASE(bed_get_next_bed_item_returns_nullptr_when_partner_absent)
 {
 	ensureItemTypes();
 
+	const auto origDir694 = Item::items.getItemType(694).bedPartnerDir;
 	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
 
 	auto bed = std::make_shared<BedItem>(694);
@@ -545,6 +560,8 @@ TEST_CASE(bed_get_next_bed_item_returns_nullptr_when_partner_absent)
 
 	// Target tile exists but has no bed -> returns nullptr
 	CHECK(bed->getNextBedItem() == nullptr);
+
+	Item::items.getItemType(694).bedPartnerDir = origDir694;
 }
 
 TEST_CASE(tile_get_bed_item_returns_nullptr_when_no_bed)
