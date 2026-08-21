@@ -241,14 +241,18 @@ void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 		}
 
 		if (TileItemVector* items = tile->getItemList()) {
-			for (auto it = items->begin(), end = items->end(); it != end; ++it) {
-				g_game.internalRemoveItem(it->get());
+			std::vector<std::shared_ptr<Item>> itemsToRemove(items->begin(), items->end());
+			for (const auto& item : itemsToRemove) {
+				if (!item || item->isRemoved()) {
+					continue;
+				}
+				g_game.internalRemoveItem(item.get(), -1, false, FLAG_NOLIMIT);
 			}
 		}
 
 		Item* ground = tile->getGround();
 		if (ground) {
-			g_game.internalRemoveItem(ground);
+			g_game.internalRemoveItem(ground, -1, false, FLAG_NOLIMIT);
 			tile->setGround(nullptr);
 		}
 		

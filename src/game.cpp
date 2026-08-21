@@ -2512,7 +2512,7 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 		return ret;
 	}
 
-	if (!item->canRemove()) {
+	if (!hasBitSet(FLAG_NOLIMIT, flags) && !item->canRemove()) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 

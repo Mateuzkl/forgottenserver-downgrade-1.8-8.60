@@ -1117,4 +1117,76 @@ TEST_CASE(house_door_set_drops_tile_destroyed_door)
 	CHECK(house->getDoorByNumber(88) == nullptr);
 }
 
+TEST_CASE(map_remove_tile_safely_removes_all_items_without_iterator_invalidation)
+{
+	ensureItemTypes();
+	const Position tilePos{122, 122, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(122, 122, 7);
+
+	auto house = std::make_shared<House>(708);
+	auto houseTile = std::make_unique<HouseTile>(tilePos.x, tilePos.y, tilePos.z, house);
+	g_game.map.setTile(tilePos.x, tilePos.y, tilePos.z, std::move(houseTile));
+
+	Tile* rawTile = g_game.map.getTile(tilePos);
+	CHECK(rawTile != nullptr);
+
+	auto ground = std::make_shared<Item>(100);
+	auto item1 = std::make_shared<Item>(2160);
+	auto item2 = std::make_shared<Item>(2160);
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(99);
+	auto bed = std::make_shared<BedItem>(694);
+
+	std::weak_ptr<Item> weakGround = ground;
+	std::weak_ptr<Item> weak1 = item1;
+	std::weak_ptr<Item> weak2 = item2;
+	std::weak_ptr<Door> weakDoor = door;
+	std::weak_ptr<BedItem> weakBed = bed;
+
+	rawTile->setGround(ground);
+	rawTile->internalAddThing(0, item1.get());
+	rawTile->internalAddThing(0, item2.get());
+	rawTile->internalAddThing(0, door.get());
+	rawTile->internalAddThing(0, bed.get());
+
+	house->addDoor(door.get());
+	house->addBed(bed.get());
+
+	CHECK(house->getDoors().size() == 1);
+	CHECK(house->getBeds().size() == 1);
+
+	// Release local strong pointers
+	ground.reset();
+	item1.reset();
+	item2.reset();
+	door.reset();
+	bed.reset();
+
+	CHECK(!weakGround.expired());
+	CHECK(!weak1.expired());
+	CHECK(!weak2.expired());
+	CHECK(!weakDoor.expired());
+	CHECK(!weakBed.expired());
+
+	// Remove tile from map: must remove all items safely via snapshot
+	g_game.map.removeTile(tilePos);
+	CHECK(g_game.map.getTile(tilePos) == nullptr);
+
+	// Flush deferred releases
+	g_game.cleanup();
+
+	// All items must be removed and destroyed (none skipped due to iterator invalidation)
+	CHECK(weakGround.expired());
+	CHECK(weak1.expired());
+	CHECK(weak2.expired());
+	CHECK(weakDoor.expired());
+	CHECK(weakBed.expired());
+
+	// House registries must be clean
+	CHECK(house->getDoors().empty());
+	CHECK(house->getBeds().empty());
+	CHECK(house->getTileCount() == 0);
+}
+
 TFS_TEST_MAIN()
