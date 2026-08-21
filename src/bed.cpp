@@ -88,17 +88,7 @@ std::shared_ptr<BedItem> BedItem::getNextBedItem() const
 	if (!tile) {
 		return nullptr;
 	}
-
-	BedItem* nextBed = tile->getBedItem();
-	if (!nextBed) {
-		return nullptr;
-	}
-
-	auto itemRef = nextBed->weak_from_this().lock();
-	if (!itemRef) {
-		return nullptr;
-	}
-	return std::static_pointer_cast<BedItem>(itemRef);
+	return tile->getBedItem();
 }
 
 bool BedItem::canUse(Player* player)

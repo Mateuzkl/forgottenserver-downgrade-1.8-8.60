@@ -390,6 +390,68 @@ TEST_CASE(bed_get_next_bed_item_returns_nullptr_when_partner_absent)
 	CHECK(bed->getNextBedItem() == nullptr);
 }
 
+TEST_CASE(tile_get_bed_item_returns_nullptr_when_no_bed)
+{
+	ensureItemTypes();
+
+	auto tile = std::make_unique<DynamicTile>(50, 50, 7);
+	CHECK(tile->getBedItem() == nullptr);
+
+	auto regularItem = std::make_shared<Item>(0);
+	tile->internalAddThing(regularItem.get());
+	CHECK(tile->getBedItem() == nullptr);
+}
+
+TEST_CASE(tile_get_bed_item_from_ground_preserves_identity_and_lifetime)
+{
+	ensureItemTypes();
+
+	auto tile = std::make_unique<DynamicTile>(51, 51, 7);
+	auto bedGround = std::make_shared<BedItem>(694);
+	BedItem* rawBed = bedGround.get();
+
+	tile->internalAddThing(bedGround.get());
+	tile->setFlag(TILESTATE_BED);
+
+	std::shared_ptr<BedItem> retrievedBed = tile->getBedItem();
+	CHECK(retrievedBed != nullptr);
+	CHECK(retrievedBed.get() == rawBed);
+	CHECK(retrievedBed == bedGround);
+
+	// Removing ground from tile keeps retrievedBed alive for caller
+	tile->setGround(nullptr);
+	tile->resetFlag(TILESTATE_BED);
+	CHECK(tile->getBedItem() == nullptr);
+	CHECK(retrievedBed != nullptr);
+	CHECK(retrievedBed.get() == rawBed);
+	CHECK(retrievedBed->getID() == 694);
+}
+
+TEST_CASE(tile_get_bed_item_from_item_list_preserves_identity_and_lifetime)
+{
+	ensureItemTypes();
+
+	auto tile = std::make_unique<DynamicTile>(52, 52, 7);
+	auto bed = std::make_shared<BedItem>(694);
+	BedItem* rawBed = bed.get();
+
+	tile->internalAddThing(bed.get());
+
+	std::shared_ptr<BedItem> retrievedBed = tile->getBedItem();
+	CHECK(retrievedBed != nullptr);
+	CHECK(retrievedBed == bed);
+	CHECK(retrievedBed.get() == rawBed);
+	CHECK(retrievedBed->getID() == 694);
+
+	// Clearing tile items preserves retrievedBed reference
+	tile->getItemList()->clear();
+	tile->resetFlag(TILESTATE_BED);
+	CHECK(tile->getBedItem() == nullptr);
+	CHECK(retrievedBed != nullptr);
+	CHECK(retrievedBed.get() == rawBed);
+	CHECK(retrievedBed->getID() == 694);
+}
+
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)
 {
 	auto container = std::make_shared<Container>(0, 2);

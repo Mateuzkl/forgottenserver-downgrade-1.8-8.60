@@ -5,6 +5,7 @@
 
 #include "tile.h"
 
+#include "bed.h"
 #include "combat.h"
 #include "configmanager.h"
 #include "container.h"
@@ -281,20 +282,20 @@ Mailbox* Tile::getMailbox() const
 	return nullptr;
 }
 
-BedItem* Tile::getBedItem() const
+std::shared_ptr<BedItem> Tile::getBedItem() const
 {
 	if (!hasFlag(TILESTATE_BED)) {
 		return nullptr;
 	}
 
 	if (ground && ground->getBed()) {
-		return ground->getBed();
+		return std::static_pointer_cast<BedItem>(ground);
 	}
 
 	if (const TileItemVector* items = getItemList()) {
 		for (auto it = items->rbegin(), end = items->rend(); it != end; ++it) {
 			if ((*it)->getBed()) {
-				return (*it)->getBed();
+				return std::static_pointer_cast<BedItem>(*it);
 			}
 		}
 	}

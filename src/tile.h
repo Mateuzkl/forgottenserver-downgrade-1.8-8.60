@@ -154,7 +154,7 @@ public:
 	Teleport* getTeleportItem() const;
 	TrashHolder* getTrashHolder() const;
 	Mailbox* getMailbox() const;
-	BedItem* getBedItem() const;
+	std::shared_ptr<BedItem> getBedItem() const;
 
 	Creature* getTopCreature() const;
 	const Creature* getBottomCreature() const;

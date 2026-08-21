@@ -3690,10 +3690,7 @@ int luaPlayerStartOfflineTraining(lua_State* L)
 		}
 		
 		Tile* tile = g_game.map.getTile(lookPosition);
-		BedItem* bed = nullptr;
-		if (tile) {
-			bed = tile->getBedItem();
-		}
+		std::shared_ptr<BedItem> bed = tile ? tile->getBedItem() : nullptr;
 		
 		if (bed) {
 			if (!player->isPremium()) {
