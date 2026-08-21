@@ -47,11 +47,13 @@ struct ItemTypePropertyGuard
 	uint16_t itemId;
 	bool origMoveable;
 	bool origStackable;
+	Direction origBedPartnerDir;
 
 	explicit ItemTypePropertyGuard(uint16_t id)
 	    : itemId(id),
 	      origMoveable(Item::items.getItemType(id).moveable),
-	      origStackable(Item::items.getItemType(id).stackable)
+	      origStackable(Item::items.getItemType(id).stackable),
+	      origBedPartnerDir(Item::items.getItemType(id).bedPartnerDir)
 	{
 	}
 
@@ -59,6 +61,7 @@ struct ItemTypePropertyGuard
 	{
 		Item::items.getItemType(itemId).moveable = origMoveable;
 		Item::items.getItemType(itemId).stackable = origStackable;
+		Item::items.getItemType(itemId).bedPartnerDir = origBedPartnerDir;
 	}
 };
 
@@ -524,14 +527,14 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 {
 	ensureItemTypes();
 
+	ItemTypePropertyGuard guard694(694);
+	ItemTypePropertyGuard guard695(695);
+	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
+	Item::items.getItemType(695).bedPartnerDir = DIRECTION_NORTH;
+
 	MapTileGuard tileGuard;
 	tileGuard.track(100, 100, 7);
 	tileGuard.track(100, 101, 7);
-
-	const auto origDir694 = Item::items.getItemType(694).bedPartnerDir;
-	const auto origDir695 = Item::items.getItemType(695).bedPartnerDir;
-	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
-	Item::items.getItemType(695).bedPartnerDir = DIRECTION_NORTH;
 
 	auto bed1 = std::make_shared<BedItem>(694);
 	auto bed2 = std::make_shared<BedItem>(695);
@@ -581,21 +584,18 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 	// Releasing partner must expire the weak pointer
 	partner.reset();
 	CHECK(weakBed2.expired());
-
-	Item::items.getItemType(694).bedPartnerDir = origDir694;
-	Item::items.getItemType(695).bedPartnerDir = origDir695;
 }
 
 TEST_CASE(bed_get_next_bed_item_returns_nullptr_when_partner_absent)
 {
 	ensureItemTypes();
 
+	ItemTypePropertyGuard guard694(694);
+	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
+
 	MapTileGuard tileGuard;
 	tileGuard.track(200, 200, 7);
 	tileGuard.track(200, 201, 7);
-
-	const auto origDir694 = Item::items.getItemType(694).bedPartnerDir;
-	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
 
 	auto bed = std::make_shared<BedItem>(694);
 	auto tile = std::make_unique<DynamicTile>(200, 200, 7);
@@ -613,8 +613,6 @@ TEST_CASE(bed_get_next_bed_item_returns_nullptr_when_partner_absent)
 
 	// Target tile exists but has no bed -> returns nullptr
 	CHECK(bed->getNextBedItem() == nullptr);
-
-	Item::items.getItemType(694).bedPartnerDir = origDir694;
 }
 
 TEST_CASE(tile_get_bed_item_returns_nullptr_when_no_bed)
@@ -753,15 +751,15 @@ TEST_CASE(house_get_door_by_position_finds_door_and_preserves_identity_and_lifet
 	ensureItemTypes();
 
 	const Position doorPos{105, 105, 7};
-	MapTileGuard tileGuard;
-	tileGuard.track(105, 105, 7);
-
 	auto house = std::make_shared<House>(502);
 	auto door = std::make_shared<Door>(0);
 	door->setDoorId(30);
 	Door* rawDoor = door.get();
 
 	CHECK(g_game.map.getTile(doorPos) == nullptr);
+	MapTileGuard tileGuard;
+	tileGuard.track(105, 105, 7);
+
 	auto tile = std::make_unique<DynamicTile>(doorPos.x, doorPos.y, doorPos.z);
 	g_game.map.setTile(doorPos.x, doorPos.y, doorPos.z, std::move(tile));
 	Tile* rawTile = g_game.map.getTile(doorPos);
@@ -792,6 +790,7 @@ TEST_CASE(house_get_door_by_position_finds_door_and_preserves_identity_and_lifet
 	CHECK(retrievedDoor != nullptr);
 	CHECK(retrievedDoor.get() == rawDoor);
 	CHECK(retrievedDoor->getDoorId() == 30);
+	retrievedDoor.reset();
 }
 
 TEST_CASE(house_get_door_by_position_returns_nullptr_when_door_is_destroyed)
