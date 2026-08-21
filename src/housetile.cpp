@@ -58,9 +58,9 @@ void HouseTile::updateHouse(Item* item)
 			house->addDoor(door);
 		}
 	} else {
-		BedItem* bed = item->getBed();
+		auto bed = item->getBed();
 		if (bed) {
-			house->addBed(bed);
+			house->addBed(bed.get());
 		}
 	}
 }

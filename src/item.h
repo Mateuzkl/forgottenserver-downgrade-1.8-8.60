@@ -503,8 +503,8 @@ public:
 	virtual const Door* getDoor() const { return nullptr; }
 	virtual MagicField* getMagicField() { return nullptr; }
 	virtual const MagicField* getMagicField() const { return nullptr; }
-	virtual BedItem* getBed() { return nullptr; }
-	virtual const BedItem* getBed() const { return nullptr; }
+	virtual std::shared_ptr<BedItem> getBed() { return nullptr; }
+	virtual std::shared_ptr<const BedItem> getBed() const { return nullptr; }
 
 	std::string_view getStrAttr(itemAttrTypes type) const
 	{

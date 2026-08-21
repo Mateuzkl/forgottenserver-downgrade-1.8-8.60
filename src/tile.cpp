@@ -288,14 +288,16 @@ std::shared_ptr<BedItem> Tile::getBedItem() const
 		return nullptr;
 	}
 
-	if (ground && ground->getBed()) {
-		return std::static_pointer_cast<BedItem>(ground);
+	if (ground) {
+		if (auto bed = ground->getBed()) {
+			return std::const_pointer_cast<BedItem>(bed);
+		}
 	}
 
 	if (const TileItemVector* items = getItemList()) {
 		for (auto it = items->rbegin(), end = items->rend(); it != end; ++it) {
-			if ((*it)->getBed()) {
-				return std::static_pointer_cast<BedItem>(*it);
+			if (auto bed = (*it)->getBed()) {
+				return std::const_pointer_cast<BedItem>(bed);
 			}
 		}
 	}

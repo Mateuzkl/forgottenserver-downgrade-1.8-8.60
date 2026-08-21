@@ -16,8 +16,14 @@ class BedItem final : public Item
 public:
 	explicit BedItem(uint16_t id);
 
-	[[nodiscard]] BedItem* getBed() override { return this; }
-	[[nodiscard]] const BedItem* getBed() const override { return this; }
+	[[nodiscard]] std::shared_ptr<BedItem> getBed() override
+	{
+		return std::static_pointer_cast<BedItem>(weak_from_this().lock());
+	}
+	[[nodiscard]] std::shared_ptr<const BedItem> getBed() const override
+	{
+		return std::static_pointer_cast<const BedItem>(weak_from_this().lock());
+	}
 
 	Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
 	void serializeAttr(PropWriteStream& propWriteStream) const override;

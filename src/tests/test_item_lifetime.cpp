@@ -274,6 +274,54 @@ TEST_CASE(housetile_get_house_returns_nullptr_when_house_is_null_or_destroyed)
 	CHECK(houseTile->getHouse() == nullptr);
 }
 
+TEST_CASE(item_get_bed_returns_nullptr_for_regular_item_and_valid_shared_ptr_for_bed_item)
+{
+	// Regular Item returns nullptr
+	auto regularItem = std::make_shared<Item>(100);
+	CHECK(regularItem->getBed() == nullptr);
+	const auto& constRegularItem = regularItem;
+	CHECK(constRegularItem->getBed() == nullptr);
+
+	// BedItem returns valid shared_ptr and preserves identity
+	auto bed = std::make_shared<BedItem>(694);
+	BedItem* rawBed = bed.get();
+
+	std::shared_ptr<BedItem> nonConstBed = bed->getBed();
+	CHECK(nonConstBed != nullptr);
+	CHECK(nonConstBed == bed);
+	CHECK(nonConstBed.get() == rawBed);
+
+	const auto& constBed = bed;
+	std::shared_ptr<const BedItem> constBedRef = constBed->getBed();
+	CHECK(constBedRef != nullptr);
+	CHECK(constBedRef == bed);
+	CHECK(constBedRef.get() == rawBed);
+
+	// Lifetime extension
+	bed.reset();
+	CHECK(nonConstBed != nullptr);
+	CHECK(nonConstBed.get() == rawBed);
+	CHECK(constBedRef != nullptr);
+	CHECK(constBedRef.get() == rawBed);
+}
+
+TEST_CASE(housetile_update_house_registers_bed_item_using_get_bed)
+{
+	auto house = std::make_shared<House>(550);
+	auto houseTile = std::make_unique<HouseTile>(110, 110, 7, house);
+	house->addTile(houseTile.get());
+
+	auto bed = std::make_shared<BedItem>(694);
+	CHECK(bed->getHouse() == nullptr);
+
+	// Adding bed to houseTile updates house registration
+	houseTile->internalAddThing(0, bed.get());
+
+	CHECK(bed->getHouse() != nullptr);
+	CHECK(bed->getHouse() == house);
+	CHECK(!bed->canRemove());
+}
+
 TEST_CASE(bed_get_house_returns_valid_shared_ptr_and_preserves_identity)
 {
 	auto bed = std::make_shared<BedItem>(0);
