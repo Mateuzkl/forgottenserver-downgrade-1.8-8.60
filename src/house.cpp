@@ -463,11 +463,13 @@ std::shared_ptr<Door> House::getDoorByNumber(uint32_t doorId) const
 	return nullptr;
 }
 
-Door* House::getDoorByPosition(const Position& pos) const
+std::shared_ptr<Door> House::getDoorByPosition(const Position& pos) const
 {
 	for (Door* door : doorSet) {
-		if (door->getPosition() == pos) {
-			return door;
+		if (door && door->getPosition() == pos) {
+			if (auto itemRef = door->weak_from_this().lock()) {
+				return std::static_pointer_cast<Door>(itemRef);
+			}
 		}
 	}
 	return nullptr;

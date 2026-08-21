@@ -430,7 +430,7 @@ int luaHouseGetDoorIdByPosition(lua_State* L)
 		return 1;
 	}
 
-	const Door* door = house->getDoorByPosition(getPosition(L, 2));
+	const auto door = house->getDoorByPosition(getPosition(L, 2));
 	if (door) {
 		lua_pushinteger(L, door->getDoorId());
 	} else {

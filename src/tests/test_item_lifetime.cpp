@@ -515,11 +515,74 @@ TEST_CASE(house_get_door_by_number_returns_nullptr_when_door_is_destroyed)
 		door->setDoorId(20);
 		house->addDoor(door.get());
 		CHECK(house->getDoorByNumber(20) != nullptr);
+		door->onRemoved();
 		// door goes out of scope and is destroyed
 	}
 
-	// weak_from_this().lock() fails -> returns nullptr
 	CHECK(house->getDoorByNumber(20) == nullptr);
+}
+
+TEST_CASE(house_get_door_by_position_finds_door_and_preserves_identity_and_lifetime)
+{
+	ensureItemTypes();
+
+	const Position doorPos{105, 105, 7};
+	auto house = std::make_shared<House>(502);
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(30);
+	Door* rawDoor = door.get();
+
+	auto tile = std::make_unique<DynamicTile>(doorPos.x, doorPos.y, doorPos.z);
+	g_game.map.setTile(doorPos.x, doorPos.y, doorPos.z, std::move(tile));
+	Tile* rawTile = g_game.map.getTile(doorPos);
+	rawTile->internalAddThing(door.get());
+
+	house->addDoor(door.get());
+
+	// Found by position & identity
+	std::shared_ptr<Door> retrievedDoor = house->getDoorByPosition(doorPos);
+	CHECK(retrievedDoor != nullptr);
+	CHECK(retrievedDoor.get() == rawDoor);
+	CHECK(retrievedDoor == door);
+	CHECK(retrievedDoor->getDoorId() == 30);
+
+	// Non-existent position
+	CHECK(house->getDoorByPosition(Position{999, 999, 7}) == nullptr);
+
+	// Release original owner
+	door.reset();
+	CHECK(retrievedDoor != nullptr);
+	CHECK(retrievedDoor.get() == rawDoor);
+
+	// Remove door from house
+	house->removeDoor(rawDoor);
+	CHECK(house->getDoorByPosition(doorPos) == nullptr);
+
+	// retrievedDoor remains alive
+	CHECK(retrievedDoor != nullptr);
+	CHECK(retrievedDoor.get() == rawDoor);
+	CHECK(retrievedDoor->getDoorId() == 30);
+}
+
+TEST_CASE(house_get_door_by_position_returns_nullptr_when_door_is_destroyed)
+{
+	const Position doorPos{106, 106, 7};
+	auto house = std::make_shared<House>(503);
+
+	{
+		auto door = std::make_shared<Door>(0);
+		auto tile = std::make_unique<DynamicTile>(doorPos.x, doorPos.y, doorPos.z);
+		Tile* rawTile = tile.get();
+		rawTile->internalAddThing(door.get());
+
+		house->addDoor(door.get());
+		CHECK(house->getDoorByPosition(doorPos) != nullptr);
+
+		door->onRemoved();
+		// door goes out of scope and is destroyed
+	}
+
+	CHECK(house->getDoorByPosition(doorPos) == nullptr);
 }
 
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)
