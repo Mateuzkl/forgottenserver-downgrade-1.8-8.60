@@ -411,6 +411,17 @@ TEST_CASE(bed_get_house_returns_nullptr_when_house_is_destroyed_and_can_remove)
 	CHECK(bed->canRemove());
 }
 
+TEST_CASE(house_add_bed_ignores_nullptr_and_set_owner_succeeds)
+{
+	auto house = std::make_shared<House>(702);
+	house->addBed(nullptr);
+	CHECK(house->getBeds().empty());
+
+	// setOwner should not crash or dereference nullptr in bedsList
+	house->setOwner(0, false);
+	CHECK(house->getOwner() == 0);
+}
+
 TEST_CASE(bed_get_house_preserves_lifetime_for_caller)
 {
 	auto bed = std::make_shared<BedItem>(0);
