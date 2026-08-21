@@ -278,7 +278,7 @@ public:
 		return it->second;
 	}
 
-	[[nodiscard]] House* getHouseByPlayerId(uint32_t playerId);
+	[[nodiscard]] std::shared_ptr<House> getHouseByPlayerId(uint32_t playerId) const;
 
 	bool loadHousesXML(const std::string& filename);
 

@@ -778,11 +778,11 @@ void House::updateDoorDescription() const
 	}
 }
 
-House* Houses::getHouseByPlayerId(uint32_t playerId)
+std::shared_ptr<House> Houses::getHouseByPlayerId(uint32_t playerId) const
 {
 	for (const auto& it : houseMap) {
-		if (it.second->getOwner() == playerId) {
-			return it.second.get();
+		if (it.second && it.second->getOwner() == playerId) {
+			return it.second;
 		}
 	}
 	return nullptr;

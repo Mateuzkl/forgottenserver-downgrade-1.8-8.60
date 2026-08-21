@@ -8058,8 +8058,7 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 			                    Database::getInstance().escapeString(managerData.string1), guid))) {
 				Database::getInstance().executeQuery(
 				    fmt::format("DELETE FROM `player_namelocks` WHERE `player_id` = {:d}", guid));
-
-				if (House* house = g_game.map.houses.getHouseByPlayerId(guid)) {
+				if (auto house = g_game.map.houses.getHouseByPlayerId(guid)) {
 					house->updateOwnerName(managerData.string1);
 				}
 

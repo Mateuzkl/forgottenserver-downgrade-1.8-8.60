@@ -2905,9 +2905,9 @@ int luaPlayerGetHouse(lua_State* L)
 		return 1;
 	}
 
-	House* house = g_game.map.houses.getHouseByPlayerId(player->getGUID());
+	auto house = g_game.map.houses.getHouseByPlayerId(player->getGUID());
 	if (house) {
-		pushUserdata<House>(L, house);
+		pushUserdata<House>(L, house.get());
 		setMetatable(L, -1, "House");
 	} else {
 		lua_pushnil(L);

@@ -134,6 +134,33 @@ TEST_CASE(houses_add_house_preserves_lifetime_beyond_houses_scope)
 	CHECK(house->getId() == 100);
 }
 
+TEST_CASE(houses_get_house_by_player_id_preserves_lifetime_and_semantics)
+{
+	Houses houses;
+	auto house1 = houses.addHouse(101);
+	auto house2 = houses.addHouse(102);
+
+	CHECK(house1 != nullptr);
+	CHECK(house2 != nullptr);
+	CHECK(house1->getOwner() == 0);
+	CHECK(house2->getOwner() == 0);
+
+	// Searching for non-existent owner returns nullptr
+	CHECK(houses.getHouseByPlayerId(999) == nullptr);
+	CHECK(houses.getHouseByPlayerId(1) == nullptr);
+
+	// Const access test
+	const Houses& constHouses = houses;
+	CHECK(constHouses.getHouseByPlayerId(999) == nullptr);
+
+	// Searching for owner 0 finds the first house with owner 0
+	auto unowned = constHouses.getHouseByPlayerId(0);
+	CHECK(unowned != nullptr);
+	CHECK(unowned->getId() == 101);
+	CHECK(unowned == house1);
+	CHECK(unowned.get() == house1.get());
+}
+
 TEST_CASE(door_get_house_returns_valid_shared_ptr_and_preserves_identity)
 {
 	auto house = std::make_shared<House>(100);
