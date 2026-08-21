@@ -4721,7 +4721,7 @@ bool Player::removeItemOfType(uint16_t itemId, uint32_t amount, int32_t subType,
 		return true;
 	}
 
-	std::vector<Item*> itemList;
+	std::vector<std::shared_ptr<Item>> itemList;
 
 	uint32_t count = 0;
 	for (int32_t i = CONST_SLOT_FIRST; i <= CONST_SLOT_LAST; i++) {
@@ -4736,7 +4736,7 @@ bool Player::removeItemOfType(uint16_t itemId, uint32_t amount, int32_t subType,
 				continue;
 			}
 
-			itemList.push_back(item);
+			itemList.push_back(inventory[i]);
 
 			count += itemCount;
 			if (count >= amount) {
@@ -4753,7 +4753,7 @@ bool Player::removeItemOfType(uint16_t itemId, uint32_t amount, int32_t subType,
 						continue;
 					}
 
-					itemList.push_back(containerItem);
+					itemList.push_back(containerItemRef);
 
 					count += itemCount;
 					if (count >= amount) {
@@ -4807,14 +4807,18 @@ void Player::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_
 
 	if (link == LINK_OWNER) {
 		// calling movement scripts
-		g_moveEvents->onPlayerEquip(this, thing->getItem(), static_cast<slots_t>(index), false);
+		if (g_moveEvents) {
+			g_moveEvents->onPlayerEquip(this, thing->getItem(), static_cast<slots_t>(index), false);
+		}
 		if (isInventorySlot(static_cast<slots_t>(index))) {
 			Item* item = thing->getItem();
 			if (item && item->hasImbuements()) {
 				addItemImbuements(thing->getItem(), static_cast<slots_t>(index));
 			}
 		}
-		g_events->eventPlayerOnUpdateInventory(this, thing->getItem(), static_cast<slots_t>(index), true);
+		if (g_events) {
+			g_events->eventPlayerOnUpdateInventory(this, thing->getItem(), static_cast<slots_t>(index), true);
+		}
 	}
 
 	bool requireListUpdate = false;
@@ -4872,14 +4876,18 @@ void Player::postRemoveNotification(Thing* thing, const Cylinder* newParent, int
 {
 	if (link == LINK_OWNER) {
 		// calling movement scripts
-		g_moveEvents->onPlayerDeEquip(this, thing->getItem(), static_cast<slots_t>(index));
+		if (g_moveEvents) {
+			g_moveEvents->onPlayerDeEquip(this, thing->getItem(), static_cast<slots_t>(index));
+		}
 		if (isInventorySlot(static_cast<slots_t>(index))) {
 			Item* item = thing->getItem();
 			if (item && item->hasImbuements()) {
 				removeItemImbuements(thing->getItem(), static_cast<slots_t>(index));
 			}
 		}
-		g_events->eventPlayerOnUpdateInventory(this, thing->getItem(), static_cast<slots_t>(index), false);
+		if (g_events) {
+			g_events->eventPlayerOnUpdateInventory(this, thing->getItem(), static_cast<slots_t>(index), false);
+		}
 	}
 
 	bool requireListUpdate = false;

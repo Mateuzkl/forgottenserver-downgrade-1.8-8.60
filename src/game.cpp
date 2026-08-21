@@ -8573,21 +8573,27 @@ void Game::addGuild(Guild_ptr guild)
 
 void Game::removeGuild(uint32_t guildId) { guilds.erase(guildId); }
 
-void Game::internalRemoveItems(std::vector<ObserverPtr<Item>> itemList, uint32_t amount, bool stackable)
+void Game::internalRemoveItems(std::vector<std::shared_ptr<Item>> itemList, uint32_t amount, bool stackable)
 {
 	if (stackable) {
-		for (Item* item : itemList) {
+		for (const auto& item : itemList) {
+			if (!item || item->isRemoved()) {
+				continue;
+			}
 			if (item->getItemCount() > amount) {
-				internalRemoveItem(item, amount);
+				internalRemoveItem(item.get(), amount);
 				break;
 			} else {
 				amount -= item->getItemCount();
-				internalRemoveItem(item);
+				internalRemoveItem(item.get());
 			}
 		}
 	} else {
-		for (Item* item : itemList) {
-			internalRemoveItem(item);
+		for (const auto& item : itemList) {
+			if (!item || item->isRemoved()) {
+				continue;
+			}
+			internalRemoveItem(item.get());
 		}
 	}
 }

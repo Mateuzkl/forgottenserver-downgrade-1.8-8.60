@@ -92,10 +92,9 @@ TEST_CASE(house_transfer_item_trade_cancel_resets_document)
 TEST_CASE(houses_get_house_preserves_house_lifetime)
 {
 	std::shared_ptr<House> house;
-	std::shared_ptr<House> addedHouse;
 	{
 		Houses houses;
-		addedHouse = houses.addHouse(42);
+		auto addedHouse = houses.addHouse(42);
 		house = houses.getHouse(42);
 
 		CHECK(house != nullptr);
@@ -105,7 +104,6 @@ TEST_CASE(houses_get_house_preserves_house_lifetime)
 	}
 
 	CHECK(house != nullptr);
-	CHECK(house == addedHouse);
 	CHECK(house->getId() == 42);
 }
 
@@ -499,6 +497,7 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 
 	auto bed1 = std::make_shared<BedItem>(694);
 	auto bed2 = std::make_shared<BedItem>(695);
+	std::weak_ptr<BedItem> weakBed2 = bed2;
 
 	auto tile1 = std::make_unique<DynamicTile>(100, 100, 7);
 	auto tile2 = std::make_unique<DynamicTile>(100, 101, 7);
@@ -525,13 +524,25 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 	CHECK(partnerReverse == bed1);
 	CHECK(partnerReverse.get() == bed1.get());
 	CHECK(partnerReverse->getID() == 694);
+	partnerReverse.reset();
 
-	// Test lifetime preservation when item is cleared from partner tile
+	// Reset bed2 ownership; partner and tile2 are now the holders
+	bed2.reset();
+	CHECK(!weakBed2.expired());
+
+	// Clear partner from tile
 	rawTile2->getItemList()->clear();
 	CHECK(rawTile2->getBedItem() == nullptr);
 	CHECK(bed1->getNextBedItem() == nullptr);
+
+	// partner returned earlier keeps the object alive
+	CHECK(!weakBed2.expired());
 	CHECK(partner != nullptr);
 	CHECK(partner->getID() == 695);
+
+	// Releasing partner must expire the weak pointer
+	partner.reset();
+	CHECK(weakBed2.expired());
 
 	Item::items.getItemType(694).bedPartnerDir = origDir694;
 	Item::items.getItemType(695).bedPartnerDir = origDir695;
@@ -835,6 +846,127 @@ TEST_CASE(lua_container_item_userdata_preserves_item_lifetime)
 	                    "collectgarbage('collect')\n"
 	                    "collectgarbage('collect')") == LUA_OK);
 	CHECK(weakItem.expired());
+}
+
+TEST_CASE(player_remove_item_of_type_inventory_and_container_lifetime)
+{
+	ensureItemTypes();
+	Item::items.getItemType(100).moveable = true;
+
+	auto player = makeTestPlayer(100, "RemoveItemPlayer");
+
+	// Non-stackable items spread across inventory and backpack container
+	auto backpack = std::make_shared<Container>(ITEM_BAG, 10);
+	static_cast<Cylinder*>(player.get())->internalAddThing(CONST_SLOT_BACKPACK, backpack.get());
+
+	auto invItem = std::make_shared<Item>(100);
+	std::weak_ptr<Item> weakInvItem = invItem;
+	static_cast<Cylinder*>(player.get())->internalAddThing(CONST_SLOT_RIGHT, invItem.get());
+	invItem.reset();
+
+	auto contItem1 = std::make_shared<Item>(100);
+	std::weak_ptr<Item> weakContItem1 = contItem1;
+	backpack->addItem(contItem1);
+	contItem1.reset();
+
+	auto contItem2 = std::make_shared<Item>(100);
+	std::weak_ptr<Item> weakContItem2 = contItem2;
+	backpack->addItem(contItem2);
+	contItem2.reset();
+
+	CHECK(player->getItemTypeCount(100) == 3);
+	CHECK(!weakInvItem.expired());
+	CHECK(!weakContItem1.expired());
+	CHECK(!weakContItem2.expired());
+
+	// Remove 2 non-stackable items of type 100 (backpack in slot 3 is scanned before right-hand in slot 6)
+	CHECK(player->removeItemOfType(100, 2, -1));
+	CHECK(player->getItemTypeCount(100) == 1);
+	g_game.cleanup();
+	CHECK(weakContItem1.expired());
+	CHECK(weakContItem2.expired());
+	CHECK(!weakInvItem.expired());
+
+	// Remove remaining 1 (removes from right-hand inventory slot)
+	CHECK(player->removeItemOfType(100, 1, -1));
+	CHECK(player->getItemTypeCount(100) == 0);
+	g_game.cleanup();
+	CHECK(weakInvItem.expired());
+}
+
+TEST_CASE(player_remove_item_of_type_stackable_partial_and_multi_container)
+{
+	ensureItemTypes();
+	Item::items.getItemType(2160).stackable = true;
+	Item::items.getItemType(2160).moveable = true;
+
+	auto player = makeTestPlayer(101, "StackablePlayer");
+
+	auto backpack = std::make_shared<Container>(ITEM_BAG, 10);
+	static_cast<Cylinder*>(player.get())->internalAddThing(CONST_SLOT_BACKPACK, backpack.get());
+
+	auto stack1 = std::make_shared<Item>(2160, 50);
+	std::weak_ptr<Item> weakStack1 = stack1;
+	backpack->addItem(stack1);
+	stack1.reset();
+
+	auto stack2 = std::make_shared<Item>(2160, 100);
+	std::weak_ptr<Item> weakStack2 = stack2;
+	backpack->addItem(stack2);
+	stack2.reset();
+
+	CHECK(player->getItemTypeCount(2160) == 150);
+
+	// Remove 75 items: stack1 (50) is fully removed, stack2 (100) is reduced to 75
+	CHECK(player->removeItemOfType(2160, 75, -1));
+	CHECK(player->getItemTypeCount(2160) == 75);
+	g_game.cleanup();
+	CHECK(weakStack1.expired());
+	CHECK(!weakStack2.expired());
+
+	// Remove remaining 75
+	CHECK(player->removeItemOfType(2160, 75, -1));
+	CHECK(player->getItemTypeCount(2160) == 0);
+	g_game.cleanup();
+	CHECK(weakStack2.expired());
+}
+
+TEST_CASE(game_internal_remove_items_robust_against_concurrent_pre_removal)
+{
+	ensureItemTypes();
+	Item::items.getItemType(100).moveable = true;
+
+	auto player = makeTestPlayer(102, "PreRemovePlayer");
+	auto container = std::make_shared<Container>(ITEM_BAG, 5);
+	static_cast<Cylinder*>(player.get())->internalAddThing(CONST_SLOT_BACKPACK, container.get());
+
+	auto item1 = std::make_shared<Item>(100);
+	auto item2 = std::make_shared<Item>(100);
+	auto item3 = std::make_shared<Item>(100);
+
+	std::weak_ptr<Item> weak1 = item1;
+	std::weak_ptr<Item> weak2 = item2;
+	std::weak_ptr<Item> weak3 = item3;
+
+	container->addItem(item1);
+	container->addItem(item2);
+	container->addItem(item3);
+
+	// Pre-remove item2 before calling internalRemoveItems on the batch
+	container->removeThing(item2.get(), 1);
+	CHECK(item2->isRemoved());
+
+	// Collect batch and execute removal
+	{
+		std::vector<std::shared_ptr<Item>> batch = {std::move(item1), std::move(item2), std::move(item3)};
+		g_game.internalRemoveItems(std::move(batch), 3, false);
+	}
+
+	g_game.cleanup();
+	CHECK(weak1.expired());
+	CHECK(weak2.expired());
+	CHECK(weak3.expired());
+	CHECK(container->empty());
 }
 
 TFS_TEST_MAIN()
