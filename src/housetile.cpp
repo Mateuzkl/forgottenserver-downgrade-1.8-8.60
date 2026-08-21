@@ -52,10 +52,10 @@ void HouseTile::updateHouse(Item* item)
 		return;
 	}
 
-	Door* door = item->getDoor();
+	auto door = item->getDoor();
 	if (door) {
 		if (door->getDoorId() != 0) {
-			house->addDoor(door);
+			house->addDoor(door.get());
 		}
 	} else {
 		auto bed = item->getBed();

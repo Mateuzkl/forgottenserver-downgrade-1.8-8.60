@@ -499,8 +499,8 @@ public:
 	virtual const TrashHolder* getTrashHolder() const { return nullptr; }
 	virtual Mailbox* getMailbox() { return nullptr; }
 	virtual const Mailbox* getMailbox() const { return nullptr; }
-	virtual Door* getDoor() { return nullptr; }
-	virtual const Door* getDoor() const { return nullptr; }
+	virtual std::shared_ptr<Door> getDoor() { return nullptr; }
+	virtual std::shared_ptr<const Door> getDoor() const { return nullptr; }
 	virtual MagicField* getMagicField() { return nullptr; }
 	virtual const MagicField* getMagicField() const { return nullptr; }
 	virtual std::shared_ptr<BedItem> getBed() { return nullptr; }

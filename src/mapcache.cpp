@@ -1019,7 +1019,7 @@ std::shared_ptr<Item> createItemFromBasic(const std::shared_ptr<BasicItem>& basi
     
     // Handle door/depot ID
     if (basicItem->doorOrDepotId != 0) {
-        if (Door* door = item->getDoor()) {
+        if (auto door = item->getDoor()) {
             door->setDoorId(basicItem->doorOrDepotId);
         } else if (Container* container = item->getContainer()) {
             if (DepotLocker* depot = container->getDepotLocker()) {

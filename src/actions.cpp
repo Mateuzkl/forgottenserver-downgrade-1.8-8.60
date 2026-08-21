@@ -203,7 +203,7 @@ Action* Actions::getAction(const Position& pos)
 ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_t index,
                                      const std::shared_ptr<Item>& item, bool isHotkey)
 {
-	if (Door* door = item->getDoor()) {
+	if (auto door = item->getDoor()) {
 		if (!door->canUse(player)) {
 			return RETURNVALUE_NOTPOSSIBLE;
 		}

@@ -274,6 +274,64 @@ TEST_CASE(housetile_get_house_returns_nullptr_when_house_is_null_or_destroyed)
 	CHECK(houseTile->getHouse() == nullptr);
 }
 
+TEST_CASE(item_get_door_returns_nullptr_for_regular_item_and_valid_shared_ptr_for_door)
+{
+	// Regular Item returns nullptr
+	auto regularItem = std::make_shared<Item>(100);
+	CHECK(regularItem->getDoor() == nullptr);
+	const auto& constRegularItem = regularItem;
+	CHECK(constRegularItem->getDoor() == nullptr);
+
+	// Door returns valid shared_ptr and preserves identity
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(45);
+	Door* rawDoor = door.get();
+
+	std::shared_ptr<Door> nonConstDoor = door->getDoor();
+	CHECK(nonConstDoor != nullptr);
+	CHECK(nonConstDoor == door);
+	CHECK(nonConstDoor.get() == rawDoor);
+	CHECK(nonConstDoor->getDoorId() == 45);
+
+	const auto& constDoor = door;
+	std::shared_ptr<const Door> constDoorRef = constDoor->getDoor();
+	CHECK(constDoorRef != nullptr);
+	CHECK(constDoorRef == door);
+	CHECK(constDoorRef.get() == rawDoor);
+	CHECK(constDoorRef->getDoorId() == 45);
+
+	// Lifetime extension
+	door.reset();
+	CHECK(nonConstDoor != nullptr);
+	CHECK(nonConstDoor.get() == rawDoor);
+	CHECK(constDoorRef != nullptr);
+	CHECK(constDoorRef.get() == rawDoor);
+}
+
+TEST_CASE(housetile_update_house_registers_door_using_get_door_and_handles_destruction)
+{
+	auto house = std::make_shared<House>(560);
+	auto houseTile = std::make_unique<HouseTile>(112, 112, 7, house);
+	house->addTile(houseTile.get());
+
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(77);
+	CHECK(door->getHouse() == nullptr);
+
+	// Adding door with valid doorId to houseTile updates house registration
+	houseTile->internalAddThing(0, door.get());
+
+	CHECK(door->getHouse() != nullptr);
+	CHECK(door->getHouse() == house);
+	CHECK(house->getDoors().size() == 1);
+	CHECK(house->getDoorByNumber(77) == door);
+
+	// Safe removal / destruction
+	door->onRemoved();
+	CHECK(house->getDoorByNumber(77) == nullptr);
+	CHECK(house->getDoors().empty());
+}
+
 TEST_CASE(item_get_bed_returns_nullptr_for_regular_item_and_valid_shared_ptr_for_bed_item)
 {
 	// Regular Item returns nullptr

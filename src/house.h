@@ -43,8 +43,14 @@ public:
 	Door(const Door&) = delete;
 	Door& operator=(const Door&) = delete;
 
-	Door* getDoor() override { return this; }
-	const Door* getDoor() const override { return this; }
+	[[nodiscard]] std::shared_ptr<Door> getDoor() override
+	{
+		return std::static_pointer_cast<Door>(weak_from_this().lock());
+	}
+	[[nodiscard]] std::shared_ptr<const Door> getDoor() const override
+	{
+		return std::static_pointer_cast<const Door>(weak_from_this().lock());
+	}
 
 	std::shared_ptr<House> getHouse() const { return house.lock(); }
 
