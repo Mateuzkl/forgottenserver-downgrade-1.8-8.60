@@ -30,6 +30,33 @@ extern Vocations g_vocations;
 
 Items Item::items;
 
+void Item::setTier(uint8_t tier)
+{
+	if (!ConfigManager::getBoolean(ConfigManager::FORGE_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	const uint8_t newTier = std::min<uint8_t>(tier, 10);
+	if (getTier() == newTier) {
+		return;
+	}
+
+	setIntAttr(ITEM_ATTRIBUTE_TIER, newTier);
+
+	// Notify the client when a tier changes without moving the item.
+	if (auto* container = dynamic_cast<Container*>(getParent())) {
+		const int32_t index = container->getThingIndex(this);
+		if (index >= 0) {
+			container->onUpdateContainerItem(static_cast<uint32_t>(index), this, this);
+		}
+	} else if (auto* player = dynamic_cast<Player*>(getParent())) {
+		const int32_t index = player->getThingIndex(this);
+		if (index >= 0) {
+			player->sendInventoryItem(static_cast<slots_t>(index), this);
+		}
+	}
+}
+
 // Global observer registry used only to reject stale raw Item* callbacks after
 // the owning shared_ptr has destroyed the item. Constructors insert, the
 // destructor erases, and clearGlobalRegistry() retires the registry at shutdown.

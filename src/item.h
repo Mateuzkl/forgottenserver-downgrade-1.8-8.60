@@ -845,13 +845,7 @@ public:
 		}
 		return static_cast<uint8_t>(getIntAttr(ITEM_ATTRIBUTE_TIER));
 	}
-	void setTier(uint8_t tier)
-	{
-		if (!ConfigManager::getBoolean(ConfigManager::FORGE_SYSTEM_ENABLED)) {
-			return;
-		}
-		setIntAttr(ITEM_ATTRIBUTE_TIER, std::min<uint8_t>(tier, 10));
-	}
+	void setTier(uint8_t tier);
 	uint8_t getClassification() const
 	{
 		if (!ConfigManager::getBoolean(ConfigManager::FORGE_SYSTEM_ENABLED)) {

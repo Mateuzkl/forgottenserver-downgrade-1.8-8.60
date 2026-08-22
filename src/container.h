@@ -37,6 +37,8 @@ private:
 
 class Container : public Item, public Cylinder
 {
+friend class Item;
+
 public:
 	explicit Container(uint16_t type);
 	Container(uint16_t type, uint16_t size);

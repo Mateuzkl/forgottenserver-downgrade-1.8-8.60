@@ -157,6 +157,8 @@ inline constexpr int32_t DUAL_WIELD_DAMAGE_BOOST_STORAGE = 50001;
 
 class Player final : public Creature, public Cylinder
 {
+friend class Item;
+
 public:
 	explicit Player(ProtocolGame_ptr p);
 	~Player();
