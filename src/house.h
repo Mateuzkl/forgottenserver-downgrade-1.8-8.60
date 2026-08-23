@@ -97,7 +97,6 @@ enum HouseType_t
 };
 
 using HouseTileList = std::list<std::weak_ptr<HouseTile>>;
-using HouseBedItemList = std::list<ObserverPtr<BedItem>>;
 
 class HouseTransferItem final : public Item
 {
@@ -182,17 +181,15 @@ public:
 
 	const HouseTileList& getTiles() const { return houseTiles; }
 	size_t getTileCount() const;
+	void removeTile(const HouseTile* tile);
 
-	const std::set<ObserverPtr<Door>>& getDoors() const { return doorSet; }
+	[[nodiscard]] std::vector<std::shared_ptr<Door>> getDoors() const;
+	[[nodiscard]] size_t getDoorCount() const;
 
 	void addBed(BedItem* bed);
 	void removeBed(BedItem* bed);
-	const HouseBedItemList& getBeds() const { return bedsList; }
-	uint32_t getBedCount() const
-	{
-		return static_cast<uint32_t>(
-		    std::ceil(bedsList.size() / 2.)); // each bed takes 2 sqms of space, ceil is just for bad maps
-	}
+	[[nodiscard]] std::vector<std::shared_ptr<BedItem>> getBeds() const;
+	uint32_t getBedCount() const;
 
 	// Protection guest management and permission checks
 	bool addProtectionGuest(uint32_t playerId);
@@ -216,8 +213,8 @@ private:
 	Container transfer_container{ITEM_LOCKER};
 
 	HouseTileList houseTiles;
-	std::set<ObserverPtr<Door>> doorSet;
-	HouseBedItemList bedsList;
+	std::vector<std::weak_ptr<Door>> doorList;
+	std::vector<std::weak_ptr<BedItem>> bedsList;
 
 	std::string houseName;
 	std::string ownerName;

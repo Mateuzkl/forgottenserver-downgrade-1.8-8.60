@@ -47,12 +47,14 @@ struct ItemTypePropertyGuard
 	uint16_t itemId;
 	bool origMoveable;
 	bool origStackable;
+	bool origPickupable;
 	Direction origBedPartnerDir;
 
 	explicit ItemTypePropertyGuard(uint16_t id)
 	    : itemId(id),
 	      origMoveable(Item::items.getItemType(id).moveable),
 	      origStackable(Item::items.getItemType(id).stackable),
+	      origPickupable(Item::items.getItemType(id).pickupable),
 	      origBedPartnerDir(Item::items.getItemType(id).bedPartnerDir)
 	{
 	}
@@ -61,6 +63,7 @@ struct ItemTypePropertyGuard
 	{
 		Item::items.getItemType(itemId).moveable = origMoveable;
 		Item::items.getItemType(itemId).stackable = origStackable;
+		Item::items.getItemType(itemId).pickupable = origPickupable;
 		Item::items.getItemType(itemId).bedPartnerDir = origBedPartnerDir;
 	}
 };
@@ -1187,6 +1190,256 @@ TEST_CASE(map_remove_tile_safely_removes_all_items_without_iterator_invalidation
 	CHECK(house->getDoors().empty());
 	CHECK(house->getBeds().empty());
 	CHECK(house->getTileCount() == 0);
+}
+
+TEST_CASE(door_reparenting_between_houses_and_destruction_lifetime)
+{
+	auto houseA = std::make_shared<House>(801);
+	auto houseB = std::make_shared<House>(802);
+	auto houseTileA = std::make_shared<HouseTile>(140, 140, 7, houseA);
+	auto houseTileB = std::make_shared<HouseTile>(141, 141, 7, houseB);
+	houseA->addTile(houseTileA);
+	houseB->addTile(houseTileB);
+
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(101);
+	std::weak_ptr<Door> weakDoor = door;
+
+	// Add door to houseTileA
+	houseTileA->internalAddThing(0, door.get());
+	CHECK(door->getHouse() == houseA);
+	CHECK(houseA->getDoors().size() == 1);
+	CHECK(houseA->getDoorByNumber(101) == door);
+	CHECK(houseB->getDoors().empty());
+	CHECK(houseB->getDoorByNumber(101) == nullptr);
+
+	// Move door to houseTileB: simulate move from tileA to tileB
+	houseTileA->removeThing(door.get(), 1);
+	houseTileB->internalAddThing(0, door.get());
+	CHECK(door->getHouse() == houseB);
+	CHECK(houseA->getDoors().empty());
+	CHECK(houseA->getDoorByNumber(101) == nullptr);
+	CHECK(houseB->getDoors().size() == 1);
+	CHECK(houseB->getDoorByNumber(101) == door);
+
+	// Resetting houseA owner must succeed without touching the door
+	houseA->setOwner(0);
+	CHECK(houseA->getDoors().empty());
+
+	// Destroy door: remove from tile and call onRemoved()
+	houseTileB->removeThing(door.get(), 1);
+	door->onRemoved();
+	door.reset();
+	g_game.cleanup();
+
+	CHECK(weakDoor.expired());
+	CHECK(houseB->getDoors().empty());
+	CHECK(houseB->getDoorByNumber(101) == nullptr);
+
+	// Resetting houseB owner must succeed without any UAF
+	houseB->setOwner(0);
+}
+
+TEST_CASE(bed_reparenting_between_houses_and_destruction_lifetime)
+{
+	auto houseA = std::make_shared<House>(803);
+	auto houseB = std::make_shared<House>(804);
+	auto houseTileA = std::make_shared<HouseTile>(142, 142, 7, houseA);
+	auto houseTileB = std::make_shared<HouseTile>(143, 143, 7, houseB);
+	houseA->addTile(houseTileA);
+	houseB->addTile(houseTileB);
+
+	auto bed = std::make_shared<BedItem>(694);
+	std::weak_ptr<BedItem> weakBed = bed;
+
+	// Add bed to houseTileA
+	houseTileA->internalAddThing(0, bed.get());
+	CHECK(bed->getHouse() == houseA);
+	CHECK(!bed->canRemove());
+	CHECK(houseA->getBeds().size() == 1);
+	CHECK(houseB->getBeds().empty());
+
+	// Move bed to houseTileB: simulate move from tileA to tileB
+	houseTileA->removeThing(bed.get(), 1);
+	houseTileB->internalAddThing(0, bed.get());
+	CHECK(bed->getHouse() == houseB);
+	CHECK(!bed->canRemove());
+	CHECK(houseA->getBeds().empty());
+	CHECK(houseB->getBeds().size() == 1);
+
+	// Resetting houseA owner must succeed without touching the bed
+	houseA->setOwner(0);
+	CHECK(houseA->getBeds().empty());
+
+	// Destroy bed: remove from tile and call onRemoved()
+	houseTileB->removeThing(bed.get(), 1);
+	bed->onRemoved();
+	bed.reset();
+	g_game.cleanup();
+
+	CHECK(weakBed.expired());
+	CHECK(houseB->getBeds().empty());
+
+	// Resetting houseB owner must succeed without any UAF
+	houseB->setOwner(0);
+}
+
+TEST_CASE(flag_nolimit_vs_can_remove_semantics)
+{
+	ensureItemTypes();
+	const Position pos{144, 144, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(144, 144, 7);
+
+	auto house = std::make_shared<House>(805);
+	auto houseTile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+	g_game.map.setTile(pos.x, pos.y, pos.z, std::move(houseTile));
+
+	Tile* rawTile = g_game.map.getTile(pos);
+	CHECK(rawTile != nullptr);
+
+	auto bed = std::make_shared<BedItem>(694);
+	std::weak_ptr<BedItem> weakBed = bed;
+	rawTile->internalAddThing(0, bed.get());
+	house->addBed(bed.get());
+
+	CHECK(!bed->canRemove());
+	CHECK(house->getBeds().size() == 1);
+
+	// Normal removal without FLAG_NOLIMIT fails because canRemove() is false
+	ReturnValue normalRet = g_game.internalRemoveItem(bed.get(), 1, false, 0);
+	CHECK(normalRet == RETURNVALUE_NOTPOSSIBLE);
+	CHECK(!bed->isRemoved());
+	CHECK(house->getBeds().size() == 1);
+
+	// Forced removal with FLAG_NOLIMIT bypasses canRemove() constraint
+	ReturnValue forcedRet = g_game.internalRemoveItem(bed.get(), 1, false, FLAG_NOLIMIT);
+	CHECK(forcedRet == RETURNVALUE_NOERROR);
+	CHECK(bed->isRemoved());
+	CHECK(house->getBeds().empty());
+
+	bed.reset();
+	g_game.cleanup();
+	CHECK(weakBed.expired());
+}
+
+TEST_CASE(house_reassigns_door_and_bed_without_stale_back_references)
+{
+	auto houseA = std::make_shared<House>(901);
+	auto houseB = std::make_shared<House>(902);
+
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(1);
+	auto bed = std::make_shared<BedItem>(694);
+
+	// Register in House A
+	houseA->addDoor(door.get());
+	houseA->addBed(bed.get());
+
+	CHECK(houseA->getDoors().size() == 1);
+	CHECK(houseA->getBeds().size() == 1);
+	CHECK(door->getHouse() == houseA);
+	CHECK(bed->getHouse() == houseA);
+
+	// Reassign to House B
+	houseB->addDoor(door.get());
+	houseB->addBed(bed.get());
+
+	CHECK(houseA->getDoors().empty());
+	CHECK(houseA->getBeds().empty());
+	CHECK(houseB->getDoors().size() == 1);
+	CHECK(houseB->getBeds().size() == 1);
+	CHECK(door->getHouse() == houseB);
+	CHECK(bed->getHouse() == houseB);
+
+	// Remove from House B and destroy
+	door->onRemoved();
+	bed->onRemoved();
+	door.reset();
+	bed.reset();
+	g_game.cleanup();
+
+	CHECK(houseA->getDoors().empty());
+	CHECK(houseA->getBeds().empty());
+	CHECK(houseB->getDoors().empty());
+	CHECK(houseB->getBeds().empty());
+
+	// Call methods on House A and House B under ASan
+	houseA->setOwner(0, false);
+	houseB->setOwner(0, false);
+	CHECK(houseA->getDoorByNumber(1) == nullptr);
+	CHECK(houseB->getDoorByNumber(1) == nullptr);
+	CHECK(houseA->getBedCount() == 0);
+	CHECK(houseB->getBedCount() == 0);
+}
+
+TEST_CASE(container_on_orphan_house_tile_does_not_dereference_expired_house)
+{
+	ensureItemTypes();
+	const Position pos{150, 150, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(150, 150, 7);
+
+	std::shared_ptr<HouseTile> orphanTile;
+	{
+		auto house = std::make_shared<House>(903);
+		auto houseTile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(houseTile));
+		orphanTile = std::static_pointer_cast<HouseTile>(g_game.map.getTile(pos)->weak_from_this().lock());
+	}
+	// House is now destroyed; orphanTile->getHouse() is nullptr
+	CHECK(orphanTile != nullptr);
+	CHECK(orphanTile->getHouse() == nullptr);
+
+	ItemTypePropertyGuard guard100(100);
+	Item::items.getItemType(100).moveable = true;
+	Item::items.getItemType(100).pickupable = true;
+
+	auto ground = std::make_shared<Item>(100);
+	orphanTile->setGround(ground);
+
+	auto container = std::make_shared<Container>(ITEM_BAG, 10);
+	orphanTile->internalAddThing(container.get());
+
+	auto item = std::make_shared<Item>(100);
+	container->addItem(item);
+
+	auto player = makeTestPlayer(10, "OrphanHousePlayer");
+
+	// Test queryAdd and queryRemove with ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS enabled
+	bool prevOnlyInvited = ConfigManager::getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS);
+	ConfigManager::setBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS, true);
+
+	auto addRet = container->queryAdd(0, *item, 1, 0, player.get());
+	CHECK(addRet == RETURNVALUE_NOERROR);
+
+	auto removeRet = container->queryRemove(*item, 1, 0, player.get());
+	CHECK(removeRet == RETURNVALUE_NOERROR);
+
+	ConfigManager::setBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS, prevOnlyInvited);
+}
+
+TEST_CASE(house_tile_registry_is_unregistered_when_map_tile_is_removed)
+{
+	ensureItemTypes();
+	const Position pos{151, 151, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(151, 151, 7);
+
+	auto house = std::make_shared<House>(904);
+
+	for (int cycle = 0; cycle < 3; ++cycle) {
+		auto houseTile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(houseTile));
+
+		CHECK(house->getTileCount() == 1);
+		CHECK(house->getTiles().size() == 1);
+
+		g_game.map.removeTile(pos);
+
+		CHECK(house->getTileCount() == 0);
+		CHECK(house->getTiles().empty());
+	}
 }
 
 TFS_TEST_MAIN()

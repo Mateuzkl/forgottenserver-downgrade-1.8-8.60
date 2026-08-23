@@ -255,7 +255,13 @@ void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 			g_game.internalRemoveItem(ground, -1, false, FLAG_NOLIMIT);
 			tile->setGround(nullptr);
 		}
-		
+		// Unregister HouseTile from its House before releasing
+		if (HouseTile* houseTile = tile->getHouseTile()) {
+			if (auto house = houseTile->getHouse()) {
+				house->removeTile(houseTile);
+			}
+		}
+
 		// Reset shared_ptr to release the tile
 		tile.reset();
 	}

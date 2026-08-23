@@ -151,9 +151,12 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 		}
 
 		// Remove players from beds
-		for (BedItem* bed : bedsList) {
-			if (bed && bed->getSleeper() != 0) {
-				bed->wakeUp(nullptr);
+		{
+			auto bedsSnapshot = getBeds();
+			for (const auto& bed : bedsSnapshot) {
+				if (bed && bed->getSleeper() != 0) {
+					bed->wakeUp(nullptr);
+				}
 			}
 		}
 
@@ -167,8 +170,11 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 		setAccessList(SUBOWNER_LIST, "");
 		setAccessList(GUEST_LIST, "");
 
-		for (Door* door : doorSet) {
-			door->setAccessList("");
+		{
+			auto doorsSnapshot = getDoors();
+			for (const auto& door : doorsSnapshot) {
+				door->setAccessList("");
+			}
 		}
 	} else {
 		auto strRentPeriod =
@@ -486,15 +492,46 @@ bool House::isInvited(const Player* player) const { return getHouseAccessLevel(p
 
 void House::addDoor(Door* door)
 {
-	doorSet.insert(door);
+	if (!door) {
+		return;
+	}
+
+	auto doorRef = door->weak_from_this().lock();
+	if (!doorRef) {
+		return;
+	}
+	auto doorShared = std::static_pointer_cast<Door>(doorRef);
+
+	// Check for duplicates
+	for (const auto& weakDoor : doorList) {
+		if (weakDoor.lock() == doorShared) {
+			// Already registered, just ensure house backlink
+			door->setHouse(this);
+			return;
+		}
+	}
+
 	door->setHouse(this);
+	doorList.emplace_back(doorShared);
 }
 
 void House::removeDoor(Door* door)
 {
-	auto it = doorSet.find(door);
-	if (it != doorSet.end()) {
-		doorSet.erase(it);
+	if (!door) {
+		return;
+	}
+
+	for (auto it = doorList.begin(); it != doorList.end(); ++it) {
+		auto locked = it->lock();
+		if (!locked || locked.get() == door) {
+			it = doorList.erase(it);
+			if (locked) {
+				return;
+			}
+			// Continue pruning expired entries, but we haven't found our door yet
+			--it; // adjust for outer loop increment
+			continue;
+		}
 	}
 }
 
@@ -504,14 +541,23 @@ void House::addBed(BedItem* bed)
 		return;
 	}
 
-	for (BedItem* existing : bedsList) {
-		if (existing == bed) {
+	auto bedRef = bed->weak_from_this().lock();
+	if (!bedRef) {
+		return;
+	}
+	auto bedShared = std::static_pointer_cast<BedItem>(bedRef);
+
+	// Check for duplicates
+	for (const auto& weakBed : bedsList) {
+		if (weakBed.lock() == bedShared) {
+			// Already registered, just ensure house backlink
+			bed->setHouse(weak_from_this().lock());
 			return;
 		}
 	}
 
-	bedsList.push_back(bed);
 	bed->setHouse(weak_from_this().lock());
+	bedsList.emplace_back(bedShared);
 }
 
 void House::removeBed(BedItem* bed)
@@ -520,16 +566,25 @@ void House::removeBed(BedItem* bed)
 		return;
 	}
 
-	bedsList.remove(bed);
+	for (auto it = bedsList.begin(); it != bedsList.end(); ++it) {
+		auto locked = it->lock();
+		if (!locked || locked.get() == bed) {
+			it = bedsList.erase(it);
+			if (locked) {
+				return;
+			}
+			--it;
+			continue;
+		}
+	}
 }
 
 std::shared_ptr<Door> House::getDoorByNumber(uint32_t doorId) const
 {
-	for (Door* door : doorSet) {
+	for (const auto& weakDoor : doorList) {
+		auto door = weakDoor.lock();
 		if (door && door->getDoorId() == doorId) {
-			if (auto itemRef = door->weak_from_this().lock()) {
-				return std::static_pointer_cast<Door>(itemRef);
-			}
+			return std::static_pointer_cast<Door>(door);
 		}
 	}
 	return nullptr;
@@ -537,14 +592,78 @@ std::shared_ptr<Door> House::getDoorByNumber(uint32_t doorId) const
 
 std::shared_ptr<Door> House::getDoorByPosition(const Position& pos) const
 {
-	for (Door* door : doorSet) {
+	for (const auto& weakDoor : doorList) {
+		auto door = weakDoor.lock();
 		if (door && door->getPosition() == pos) {
-			if (auto itemRef = door->weak_from_this().lock()) {
-				return std::static_pointer_cast<Door>(itemRef);
-			}
+			return std::static_pointer_cast<Door>(door);
 		}
 	}
 	return nullptr;
+}
+
+std::vector<std::shared_ptr<Door>> House::getDoors() const
+{
+	std::vector<std::shared_ptr<Door>> result;
+	result.reserve(doorList.size());
+	for (const auto& weakDoor : doorList) {
+		if (auto door = weakDoor.lock()) {
+			result.push_back(std::static_pointer_cast<Door>(door));
+		}
+	}
+	return result;
+}
+
+size_t House::getDoorCount() const
+{
+	size_t count = 0;
+	for (const auto& weakDoor : doorList) {
+		if (!weakDoor.expired()) {
+			++count;
+		}
+	}
+	return count;
+}
+
+std::vector<std::shared_ptr<BedItem>> House::getBeds() const
+{
+	std::vector<std::shared_ptr<BedItem>> result;
+	result.reserve(bedsList.size());
+	for (const auto& weakBed : bedsList) {
+		if (auto bed = weakBed.lock()) {
+			result.push_back(std::static_pointer_cast<BedItem>(bed));
+		}
+	}
+	return result;
+}
+
+uint32_t House::getBedCount() const
+{
+	size_t liveCount = 0;
+	for (const auto& weakBed : bedsList) {
+		if (!weakBed.expired()) {
+			++liveCount;
+		}
+	}
+	return static_cast<uint32_t>(
+	    std::ceil(liveCount / 2.)); // each bed takes 2 sqms of space, ceil is just for bad maps
+}
+
+void House::removeTile(const HouseTile* tile)
+{
+	if (!tile) {
+		return;
+	}
+	for (auto it = houseTiles.begin(); it != houseTiles.end();) {
+		auto locked = it->lock();
+		if (!locked || locked.get() == tile) {
+			it = houseTiles.erase(it);
+			if (locked) {
+				return;
+			}
+		} else {
+			++it;
+		}
+	}
 }
 
 bool House::canEditAccessList(uint32_t listId, const Player* player) const
@@ -761,18 +880,16 @@ Attr_ReadValue Door::readAttr(AttrTypes_t attr, PropStream& propStream)
 
 void Door::setHouse(House* house)
 {
-	if (!this->house.expired()) {
-		return;
-	}
-
 	auto houseRef = house ? house->weak_from_this().lock() : nullptr;
-	if (!houseRef) {
-		return;
+	if (auto currentHouse = this->house.lock()) {
+		if (currentHouse != houseRef) {
+			currentHouse->removeDoor(this);
+		}
 	}
 
-	this->house = std::move(houseRef);
+	this->house = houseRef;
 
-	if (!accessList) {
+	if (houseRef && !accessList) {
 		accessList = std::make_unique<AccessList>();
 	}
 }
@@ -822,6 +939,7 @@ void Door::onRemoved()
 	if (auto h = house.lock()) {
 		h->removeDoor(this);
 	}
+	house.reset();
 }
 
 void House::updateDoorDescription() const
@@ -849,8 +967,11 @@ void House::updateDoorDescription() const
 		description << " It requires " << requiredReset << " resets.";
 	}
 
-	for (Door* door : doorSet) {
-		door->setSpecialDescription(description.str());
+	{
+		auto doorsSnapshot = getDoors();
+		for (const auto& door : doorsSnapshot) {
+			door->setSpecialDescription(description.str());
+		}
 	}
 }
 

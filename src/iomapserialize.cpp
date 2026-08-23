@@ -439,7 +439,7 @@ bool IOMapSerialize::saveHouseInfo()
 			}
 		}
 
-		for (Door* door : house->getDoors()) {
+		for (const auto& door : house->getDoors()) {
 			listText = door->getAccessList().value_or("");
 			if (!listText.empty()) {
 				if (!stmt.addRow(fmt::format("{:d}, {:d}, {:s}", house->getId(), door->getDoorId(),

@@ -378,12 +378,12 @@ int luaHouseGetBeds(lua_State* L)
 		return 1;
 	}
 
-	const auto& beds = house->getBeds();
+	const auto beds = house->getBeds();
 	lua_createtable(L, beds.size(), 0);
 
 	int index = 0;
-	for (BedItem* bedItem : beds) {
-		pushItem(L, bedItem);
+	for (const auto& bedItem : beds) {
+		pushItem(L, bedItem.get());
 		lua_rawseti(L, -2, ++index);
 	}
 	return 1;
@@ -410,12 +410,12 @@ int luaHouseGetDoors(lua_State* L)
 		return 1;
 	}
 
-	const auto& doors = house->getDoors();
+	const auto doors = house->getDoors();
 	lua_createtable(L, doors.size(), 0);
 
 	int index = 0;
-	for (Door* door : doors) {
-		pushItem(L, door);
+	for (const auto& door : doors) {
+		pushItem(L, door.get());
 		lua_rawseti(L, -2, ++index);
 	}
 	return 1;
@@ -426,7 +426,7 @@ int luaHouseGetDoorCount(lua_State* L)
 	// house:getDoorCount()
 	const House* house = getUserdata<const House>(L, 1);
 	if (house) {
-		lua_pushinteger(L, house->getDoors().size());
+		lua_pushinteger(L, house->getDoorCount());
 	} else {
 		lua_pushnil(L);
 	}

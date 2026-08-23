@@ -23,6 +23,11 @@ BedItem::BedItem(uint16_t id) : Item(id) { internalRemoveSleeper(); }
 
 void BedItem::setHouse(const std::shared_ptr<House>& h) noexcept
 {
+	if (auto current = house.lock()) {
+		if (current != h) {
+			current->removeBed(this);
+		}
+	}
 	house = h;
 }
 
