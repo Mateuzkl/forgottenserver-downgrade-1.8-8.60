@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Mitmah Vanguard")
 local monster = {}
 
-monster.name = "Mitmah Vanguard"
 monster.description = "Mitmah Vanguard"
 monster.experience = 300000
 monster.outfit = {
@@ -78,7 +77,7 @@ monster.loot = {
 	{ name = "platinum coin", chance = 655000, maxCount = 15 },
 	{ name = "crystal coin", chance = 325000, maxCount = 5 },
 	{ name = "great health potion", chance = 288900, maxCount = 15 },
-	{ name = "great mana potion", chance = 281500 },
+	{ id = 238, chance = 281500 }, -- great mana potion
 	{ name = "great spirit potion", chance = 65337, maxCount = 45 },
 	{ name = "ultimate health potion", chance = 214800, maxCount = 12 },
 	{ name = "ultimate mana potion", chance = 155600, maxCount = 15 },
@@ -93,10 +92,10 @@ monster.loot = {
 	{ name = "white gem", chance = 311100 },
 	{ name = "yellow gem", chance = 251900 },
 	{ name = "blue gem", chance = 222200 },
--- { name = "crystal of the mitmah", chance = 451900 },
--- { name = "broken mitmah necklace", chance = 548100 },
--- { name = "broken mitmah chestplate", chance = 44400 },
--- { name = "splintered mitmah gem", chance = 3700 },
+	{ name = "crystal of the mitmah", chance = 451900 },
+	{ name = "broken mitmah necklace", chance = 548100 },
+	{ name = "broken mitmah chestplate", chance = 44400 },
+	{ name = "splintered mitmah gem", chance = 3700 },
 	{ name = "stoic iks boots", chance = 500 },
 	{ name = "stoic iks faulds", chance = 500 },
 	{ name = "stoic iks casque", chance = 500 },
@@ -121,6 +120,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 64,
 	armor = 0,
+	--	mitigation = ???,
 }
 
 monster.elements = {

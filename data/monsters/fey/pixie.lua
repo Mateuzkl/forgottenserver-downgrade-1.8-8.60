@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Pixie")
 local monster = {}
 
-monster.name = "Pixie"
 monster.description = "a pixie"
 monster.experience = 700
 monster.outfit = {
@@ -96,7 +95,7 @@ monster.loot = {
 	{ name = "red rose", chance = 30100 },
 	{ name = "strong mana potion", chance = 6800 },
 	{ name = "wild flowers", chance = 5155 },
-	{ name = "great mana potion", chance = 591 },
+	{ id = 238, chance = 591 }, -- great mana potion
 	{ name = "dandelion seeds", chance = 5800 },
 	{ name = "fresh fruit", chance = 3400, maxCount = 2 },
 }
@@ -105,7 +104,7 @@ monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -250 },
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_ENERGYDAMAGE, minDamage = -85, maxDamage = -135, range = 7, shootEffect = CONST_ANI_ENERGY, effect = CONST_ME_ENERGYHIT, target = true },
 	{ name = "speed", interval = 2000, chance = 11, speedChange = -440, length = 4, spread = 2, effect = CONST_ME_MAGIC_GREEN, target = false, duration = 7000 },
-	{ name = "combat", interval = 2000, chance = 30, type = COMBAT_ENERGYDAMAGE, minDamage = 0, maxDamage = -100, range = 4, shootEffect = CONST_ANI_LEAFSTAR, target = true },
+	{ name = "combat", interval = 2000, chance = 30, type = COMBAT_ENERGYDAMAGE, minDamage = 0, maxDamage = -100, range = 4, shootEffect = CONST_ANI_LEAFSTAR, target = false },
 	{ name = "pixie skill reducer", interval = 2000, chance = 20, target = false },
 }
 

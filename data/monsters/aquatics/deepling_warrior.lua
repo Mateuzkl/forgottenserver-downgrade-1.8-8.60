@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Deepling Warrior")
 local monster = {}
 
-monster.name = "Deepling Warrior"
 monster.description = "a deepling warrior"
 monster.experience = 1500
 monster.outfit = {
@@ -85,7 +84,7 @@ monster.loot = {
 	{ name = "deepling filet", chance = 15180 },
 	{ name = "deeptags", chance = 14890 },
 	{ name = "deepling ridge", chance = 11120 },
-	{ name = "great mana potion", chance = 10180 },
+	{ id = 238, chance = 10180 }, -- great mana potion
 	{ name = "great health potion", chance = 10020 },
 	{ name = "deepling warts", chance = 9970 },
 	{ name = "vortex bolt", chance = 3460, maxCount = 5 },

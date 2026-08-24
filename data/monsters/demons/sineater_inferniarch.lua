@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Sineater Inferniarch")
 local monster = {}
 
-monster.name = "Sineater Inferniarch"
 monster.description = "a sineater inferniarch"
 monster.experience = 7250
 monster.outfit = {
@@ -64,6 +63,8 @@ monster.flags = {
 	canWalkOnEnergy = true,
 	canWalkOnFire = true,
 	canWalkOnPoison = true,
+	isPreyable = true,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -80,7 +81,7 @@ monster.voices = {
 
 monster.loot = {
 	{ name = "Platinum Coin", chance = 26500, maxCount = 40 },
-	{ name = "Great Mana Potion", chance = 24500, maxCount = 5 },
+	{ id = 238, chance = 24500, maxCount = 5 }, -- great mana potion
 	{ id = 3030, chance = 24500, maxCount = 5 },
 	{ name = "Demonic Core Essence", chance = 1500, maxCount = 1 },
 	{ name = "Sineater Wing", chance = 5500, maxCount = 1 },

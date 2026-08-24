@@ -1,10 +1,17 @@
 local mType = Game.createMonsterType("Retching Horror")
 local monster = {}
 
-monster.name = "Retching Horror"
 monster.description = "a retching horror"
 monster.experience = 4100
-monster.outfit = { lookType = 588 }
+monster.outfit = {
+	lookType = 588,
+	lookHead = 0,
+	lookBody = 0,
+	lookLegs = 0,
+	lookFeet = 0,
+	lookAddons = 0,
+	lookMount = 0,
+}
 
 monster.raceId = 1018
 monster.Bestiary = {
@@ -52,7 +59,7 @@ monster.flags = {
 	targetDistance = 1,
 	runHealth = 0,
 	healthHidden = false,
-	isBlockable = true,
+	isBlockable = false,
 	canWalkOnEnergy = false,
 	canWalkOnFire = false,
 	canWalkOnPoison = true,
@@ -81,7 +88,7 @@ monster.loot = {
 	{ name = "beastslayer axe", chance = 4260 },
 	{ name = "mercenary sword", chance = 2500 },
 	{ name = "spiked squelcher", chance = 410 },
-	{ name = "great mana potion", chance = 12500 },
+	{ id = 238, chance = 12500 }, -- great mana potion
 	{ name = "great health potion", chance = 15000 },
 	{ name = "underworld rod", chance = 1800 },
 	{ name = "wand of starstorm", chance = 960 },

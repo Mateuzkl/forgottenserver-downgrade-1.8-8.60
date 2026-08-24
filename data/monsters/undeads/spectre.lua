@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Spectre")
 local monster = {}
 
-monster.name = "Spectre"
 monster.description = "a spectre"
 monster.experience = 2100
 monster.outfit = {
@@ -95,7 +94,7 @@ monster.loot = {
 	{ id = 6299, chance = 280 }, -- death ring
 	{ name = "demonic essence", chance = 6270 },
 	{ name = "relic sword", chance = 700 },
-	{ name = "great mana potion", chance = 920 },
+	{ id = 238, chance = 920 }, -- great mana potion
 	{ name = "shiny stone", chance = 1000 },
 }
 

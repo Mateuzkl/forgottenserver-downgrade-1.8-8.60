@@ -204,6 +204,40 @@ int luaSpellCooldown(lua_State* L)
 	return 1;
 }
 
+int luaSpellCastSound(lua_State* L)
+{
+	// spell:castSound([sound])
+	Spell* spell = getUserdata<Spell>(L, 1);
+	if (spell) {
+		if (lua_gettop(L) == 1) {
+			lua_pushinteger(L, spell->getCastSound());
+		} else {
+			spell->setCastSound(getInteger<uint16_t>(L, 2, 0));
+			pushBoolean(L, true);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaSpellImpactSound(lua_State* L)
+{
+	// spell:impactSound([sound])
+	Spell* spell = getUserdata<Spell>(L, 1);
+	if (spell) {
+		if (lua_gettop(L) == 1) {
+			lua_pushinteger(L, spell->getImpactSound());
+		} else {
+			spell->setImpactSound(getInteger<uint16_t>(L, 2, 0));
+			pushBoolean(L, true);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaSpellGroup(lua_State* L)
 {
 	// spell:group(primaryGroup[, secondaryGroup])
@@ -659,6 +693,29 @@ int luaSpellNeedDirection(lua_State* L)
 }
 
 // only for InstantSpells
+int luaSpellNeedPosition(lua_State* L)
+{
+	// spell:needPosition(bool)
+	InstantSpell* spell = dynamic_cast<InstantSpell*>(getUserdata<Spell>(L, 1));
+	if (spell) {
+		if (spell->spellType != SPELL_INSTANT) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		if (lua_gettop(L) == 1) {
+			pushBoolean(L, spell->getNeedPosition());
+		} else {
+			spell->setNeedPosition(getBoolean(L, 2));
+			pushBoolean(L, true);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+// only for InstantSpells
 int luaSpellHasParams(lua_State* L)
 {
 	// spell:hasParams(bool)
@@ -953,6 +1010,8 @@ void LuaScriptInterface::registerSpells()
 	registerMethod("Spell", "id", luaSpellId);
 	registerMethod("Spell", "group", luaSpellGroup);
 	registerMethod("Spell", "cooldown", luaSpellCooldown);
+	registerMethod("Spell", "castSound", luaSpellCastSound);
+	registerMethod("Spell", "impactSound", luaSpellImpactSound);
 	registerMethod("Spell", "groupCooldown", luaSpellGroupCooldown);
 	registerMethod("Spell", "level", luaSpellLevel);
 	registerMethod("Spell", "magicLevel", luaSpellMagicLevel);
@@ -977,6 +1036,7 @@ void LuaScriptInterface::registerSpells()
 	// only for InstantSpell
 	registerMethod("Spell", "words", luaSpellWords);
 	registerMethod("Spell", "needDirection", luaSpellNeedDirection);
+	registerMethod("Spell", "needPosition", luaSpellNeedPosition);
 	registerMethod("Spell", "hasParams", luaSpellHasParams);
 	registerMethod("Spell", "hasPlayerNameParam", luaSpellHasPlayerNameParam);
 	registerMethod("Spell", "needCasterTargetOrDirection", luaSpellNeedCasterTargetOrDirection);

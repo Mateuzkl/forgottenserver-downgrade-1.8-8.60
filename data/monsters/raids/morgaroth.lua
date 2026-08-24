@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Morgaroth")
 local monster = {}
 
-monster.name = "Morgaroth"
 monster.description = "Morgaroth"
 monster.experience = 15000
 monster.outfit = {
@@ -83,7 +82,7 @@ monster.loot = {
 	{ name = "platinum coin", chance = 95000, maxCount = 74 },
 	{ name = "demonic essence", chance = 95000, maxCount = 5 },
 	{ name = "green gem", chance = 50000 },
-	{ name = "great mana potion", chance = 45000 },
+	{ id = 238, chance = 45000 }, -- great mana potion
 	{ name = "small amethyst", chance = 36000, maxCount = 18 },
 	{ name = "devileye", chance = 36000 },
 	{ name = "small emerald", chance = 27000, maxCount = 7 },
@@ -153,6 +152,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 65,
 	armor = 130,
+	--	mitigation = ???,
 	{ name = "combat", interval = 3000, chance = 35, type = COMBAT_HEALING, minDamage = 800, maxDamage = 1100, effect = CONST_ME_MAGIC_BLUE, target = false },
 	{ name = "combat", interval = 9000, chance = 15, type = COMBAT_HEALING, minDamage = 3800, maxDamage = 4000, effect = CONST_ME_MAGIC_BLUE, target = false },
 	{ name = "speed", interval = 4000, chance = 80, speedChange = 470, effect = CONST_ME_MAGIC_RED, target = false, duration = 6000 },

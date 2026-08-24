@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Renegade Quara Pincher")
 local monster = {}
 
-monster.name = "Renegade Quara Pincher"
 monster.description = "a renegade quara pincher"
 monster.experience = 2200
 monster.outfit = {
@@ -64,6 +63,7 @@ monster.flags = {
 	canWalkOnEnergy = false,
 	canWalkOnFire = true,
 	canWalkOnPoison = false,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -79,7 +79,7 @@ monster.voices = {
 monster.loot = {
 	{ name = "platinum coin", chance = 80620, maxCount = 5 },
 	{ name = "quara pincers", chance = 18640, maxCount = 1 },
-	{ name = "great mana potion", chance = 10380, maxCount = 2 },
+	{ id = 238, chance = 10380, maxCount = 2 }, -- great mana potion
 	{ name = "great health potion", chance = 9340, maxCount = 2 },
 	{ name = "small ruby", chance = 7920, maxCount = 2 },
 	{ name = "small diamond", chance = 7620, maxCount = 2 },

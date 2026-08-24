@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Dipthrah")
 local monster = {}
 
-monster.name = "Dipthrah"
 monster.description = "Dipthrah"
 monster.experience = 2900
 monster.outfit = {
@@ -14,11 +13,6 @@ monster.outfit = {
 	lookMount = 0,
 }
 
-monster.bosstiary = {
-	bossRaceId = 87,
-	bossRace = RARITY_BANE,
-}
-
 monster.health = 4200
 monster.maxHealth = 4200
 monster.race = "undead"
@@ -29,6 +23,11 @@ monster.manaCost = 0
 monster.changeTarget = {
 	interval = 5000,
 	chance = 8,
+}
+
+monster.bosstiary = {
+	bossRaceId = 87,
+	bossRace = RARITY_BANE,
 }
 
 monster.strategiesTarget = {
@@ -88,7 +87,7 @@ monster.loot = {
 	{ name = "ornamented ankh", chance = 100000 },
 	{ name = "skull staff", chance = 500 },
 	{ name = "pharaoh sword", chance = 300 },
-	{ name = "great mana potion", chance = 7000 },
+	{ id = 238, chance = 7000 }, -- great mana potion
 }
 
 monster.attacks = {

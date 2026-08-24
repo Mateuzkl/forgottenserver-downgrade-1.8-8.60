@@ -4,30 +4,31 @@ combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_STONES)
 combat:setParameter(COMBAT_PARAM_DISTANCEEFFECT, CONST_ANI_EARTH)
 combat:setArea(createCombatArea(AREA_CIRCLE3X3))
 
-local function callback(player, level, magicLevel)
-	local min = (level / 5) + magicLevel + 6
-	local max = (level / 5) + (magicLevel * 2.6) + 16
+function onGetFormulaValues(player, level, magicLevel)
+	local min = (level / 5) + (magicLevel * 1.2) + 7
+	local max = (level / 5) + (magicLevel * 2.8) + 17
 	return -min, -max
 end
 
-combat:setCallback(CallBackParam.LEVELMAGICVALUE, callback)
+combat:setCallback(CALLBACK_PARAM_LEVELMAGICVALUE, "onGetFormulaValues")
 
-local spell = Spell("rune")
-function spell.onCastSpell(creature, variant, isHotkey)
-	return combat:execute(creature, variant)
+local rune = Spell("rune")
+
+function rune.onCastSpell(creature, var, isHotkey)
+	return combat:execute(creature, var)
 end
 
-
-spell:group("attack")
-spell:id(3175)
-spell:runeId(3175)
-spell:name("Stone Shower Rune")
-spell:level(28)
-spell:cooldown(2 * 1000)
-spell:groupCooldown(2 * 1000)
-spell:needLearn(false)
-spell:allowFarUse(true)
-spell:magicLevel(4)
-spell:charges(4)
-spell:isBlocking(true) -- True = Solid / False = Creature
-spell:register()
+rune:id(116)
+rune:group("attack")
+rune:name("stone shower rune")
+rune:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+rune:impactSound(SOUND_EFFECT_TYPE_SPELL_STONE_SHOWER_RUNE)
+rune:runeId(3175)
+rune:allowFarUse(true)
+rune:charges(4)
+rune:level(28)
+rune:magicLevel(4)
+rune:cooldown(2 * 1000)
+rune:groupCooldown(2 * 1000)
+rune:isBlocking(false) -- True = Solid / False = Creature
+rune:register()

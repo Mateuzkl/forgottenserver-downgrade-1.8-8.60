@@ -169,6 +169,10 @@ public:
 
 	uint32_t getCooldown() const { return cooldown; }
 	void setCooldown(uint32_t cd) { cooldown = cd; }
+	uint16_t getCastSound() const { return castSound; }
+	void setCastSound(uint16_t sound) { castSound = sound; }
+	uint16_t getImpactSound() const { return impactSound; }
+	void setImpactSound(uint16_t sound) { impactSound = sound; }
 	void getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDamage& damage) const;
 	int32_t calculateAugmentSpellCooldownReduction(const std::shared_ptr<Player>& player) const;
 	int32_t calculateAugmentSpellSecondaryGroupCooldownReduction(const std::shared_ptr<Player>& player) const;
@@ -213,6 +217,8 @@ protected:
 	uint32_t groupCooldown = 1000;
 	uint32_t secondaryGroupCooldown = 0;
 	uint32_t cooldown = 1000;
+	uint16_t castSound = 0;
+	uint16_t impactSound = 0;
 	uint32_t level = 0;
 	uint32_t magLevel = 0;
 	int32_t range = -1;
@@ -248,7 +254,7 @@ class InstantSpell final : public TalkAction, public Spell
 public:
 	explicit InstantSpell(LuaScriptInterface* interface) : TalkAction(interface) {}
 
-	virtual bool playerCastInstant(Player* player, std::string& param, bool forceCastOnFoot = false);
+	virtual bool playerCastInstant(Player* player, std::string& param, bool forceCastOnFoot = false, const Position& to = {});
 
 	bool castSpell(Creature* creature) override;
 	bool castSpell(Creature* creature, Creature* target) override;
@@ -263,6 +269,8 @@ public:
 	void setHasPlayerNameParam(bool p) { hasPlayerNameParam = p; }
 	bool getNeedDirection() const { return needDirection; }
 	void setNeedDirection(bool n) { needDirection = n; }
+	bool getNeedPosition() const { return needPosition; }
+	void setNeedPosition(bool n) { needPosition = n; }
 	bool getNeedCasterTargetOrDirection() const { return casterTargetOrDirection; }
 	void setNeedCasterTargetOrDirection(bool d) { casterTargetOrDirection = d; }
 	bool getBlockWalls() const { return checkLineOfSight; }
@@ -276,6 +284,7 @@ private:
 	bool internalCastSpell(Creature* creature, const LuaVariant& var);
 
 	bool needDirection = false;
+	bool needPosition = false;
 	bool hasParam = false;
 	bool hasPlayerNameParam = false;
 	bool checkLineOfSight = true;

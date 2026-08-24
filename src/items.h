@@ -237,6 +237,7 @@ enum ItemParseAttributes_t
 	ITEM_PARSE_EXPERIENCERATE_STAMINA,
 	ITEM_PARSE_REDUCESKILLLOSS,
 	ITEM_PARSE_DROPBONUS,
+	ITEM_PARSE_PRIMARYTYPE,
 	ITEM_PARSE_ELEMENTALBOND,
 	ITEM_PARSE_SCRIPT,
 	ITEM_PARSE_IMBUEMENTSLOT,
@@ -263,6 +264,7 @@ enum class Augment_t : uint8_t
 	ManaLeech = 15,
 	CriticalExtraDamage = 16,
 	CriticalHitChance = 17,
+	Base = 18,
 	PowerfulImpact = 100,
 	StrongImpact = 101,
 	IncreasedDamage = 102,
@@ -396,6 +398,7 @@ public:
 	std::string runeSpellName;
 	std::string vocationString;
 	std::string elementalBond;
+	std::string primaryType;
 
 	std::unique_ptr<Abilities> abilities;
 	std::shared_ptr<ConditionDamage> conditionDamage;

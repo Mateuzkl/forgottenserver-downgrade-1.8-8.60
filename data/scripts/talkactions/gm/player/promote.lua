@@ -18,6 +18,7 @@ local function promoteOnlinePlayer(player, target)
 
 	target:setVocation(promotion)
 	target:setStorageValue(PlayerStorageKeys.promotion, 1)
+	target:sendBannerType(BANNER_TYPE_PROMOTION_GRANTED)
 	target:save()
 	target:getPosition():sendMagicEffect(CONST_ME_FIREWORK_RED)
 

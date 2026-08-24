@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("The Baron from Below")
 local monster = {}
 
-monster.name = "The Baron from Below"
 monster.description = "The Baron From Below"
 monster.experience = 50000
 monster.outfit = {
@@ -14,9 +13,9 @@ monster.outfit = {
 	lookMount = 0,
 }
 
-monster.bosstiary = {
-	bossRaceId = 1518,
-	bossRace = RARITY_BANE,
+monster.events = {
+	"DepthWarzoneBossDeath",
+	"TheBaronFromBelowThink",
 }
 
 monster.health = 350000
@@ -29,6 +28,11 @@ monster.manaCost = 0
 monster.changeTarget = {
 	interval = 4000,
 	chance = 10,
+}
+
+monster.bosstiary = {
+	bossRaceId = 1518,
+	bossRace = RARITY_BANE,
 }
 
 monster.strategiesTarget = {
@@ -80,7 +84,7 @@ monster.loot = {
 	{ name = "fire sword", chance = 56250 },
 	{ name = "great spirit potion", chance = 54170, maxCount = 18 },
 	{ name = "magic sulphur", chance = 45830 },
-	{ name = "great mana potion", chance = 43750, maxCount = 18 },
+	{ id = 238, chance = 43750, maxCount = 18 }, -- great mana potion
 	{ name = "crystal mace", chance = 37500 },
 	{ name = "silver token", chance = 15220 },
 	{ name = "small emerald", chance = 20830 },
@@ -125,6 +129,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 160,
 	armor = 160,
+	--	mitigation = ???,
 }
 
 monster.elements = {

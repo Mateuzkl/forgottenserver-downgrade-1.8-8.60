@@ -10,6 +10,7 @@
 #include "monster.h"
 #include "monsters.h"
 #include "player.h"
+#include "tools.h"
 
 #include <cmath>
 

@@ -16,7 +16,7 @@ local function creatureArrayListChain(startCreatureId, maxTargets)
 		local bestMonsterId = nil
 		local bestPathLength = math.huge
 		local bestHealthPercent = -1
-		local range = 2
+		local range = 3 -- Vocation Adjustment: jump range +1 (2 -> 3); chains to the closest target
 
 		local spectators = Game.getSpectators(currentCreature:getPosition(), false, false, range, range, range, range)
 		for _, candidate in ipairs(spectators) do
@@ -112,10 +112,13 @@ local config = {
 local function onGetFormulaValues(player, weaponDamage)
 	local basePower = 70
 
+	--[[
 	local helmetItem = player:getSlotItem(CONST_SLOT_HEAD)
 	if helmetItem and helmetItem:getId() == 50274 then -- coned hat of enlightenment
 		basePower = math.floor(basePower * 1.06) -- 6%
 	end
+	]]
+	--
 
 	local skill = player:getSkillLevel(SKILL_FIST)
 	local attackValue = calculateAttackValue(player, skill, weaponDamage)
@@ -133,8 +136,7 @@ local spell = Spell("instant")
 
 function spell.onCastSpell(creature, var)
 	local maxTargets = 5
-	-- TODO: Uncomment when getWheelSpellAdditionalTarget is implemented
-	-- maxTargets = maxTargets + creature:getWheelSpellAdditionalTarget("Chained Penance") or 0
+	maxTargets = maxTargets + creature:getWheelSpellAdditionalTarget("Chained Penance") or 0
 
 	local legsItem = creature:getSlotItem(CONST_SLOT_LEGS)
 	if legsItem and legsItem:getId() == 50146 then -- Sanguine Trousers
@@ -168,7 +170,7 @@ function spell.onCastSpell(creature, var)
 
 	local min, max = onGetFormulaValues(creature, weaponDamage)
 	executeChain(creature, min, max, effectData)
-	addHarmonyPoint(creature)
+	creature:addHarmony(1)
 	return true
 end
 
@@ -181,8 +183,9 @@ spell:mana(180)
 spell:isPremium(true)
 spell:blockWalls(true)
 spell:needWeapon(false)
-spell:cooldown(4 * 1000)
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_FLURRY_OF_BLOWS)
 spell:groupCooldown(2 * 1000)
-spell:needLearn(false)
-spell:vocation("monk", "exalted monk")
+spell:cooldown(4 * 1000)
+
+spell:vocation("monk;true", "exalted monk;true")
 spell:register()

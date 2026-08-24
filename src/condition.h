@@ -189,6 +189,9 @@ private:
 	int32_t stats[STAT_LAST + 1] = {};
 	int32_t statsPercent[STAT_LAST + 1] = {};
 	int32_t experienceRate[static_cast<size_t>(ExperienceRateType::STAMINA) + 1] = {};
+	int32_t buffDamageDealtPercent = 100;
+	int32_t buffDamageReceivedPercent = 100;
+	int32_t buffHealingReceivedPercent = 100;
 	int32_t currentSkill = 0;
 	int32_t currentSpecialSkill = 0;
 	int32_t currentStat = 0;

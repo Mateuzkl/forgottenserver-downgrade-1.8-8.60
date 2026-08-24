@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Memory of a Fungus")
 local monster = {}
 
-monster.name = "Memory of a Fungus"
 monster.description = "a memory of a fungus"
 monster.experience = 1660
 monster.outfit = {
@@ -65,7 +64,7 @@ monster.voices = {
 
 monster.loot = {
 	{ name = "gold coin", chance = 100000, maxCount = 200 },
-	{ name = "great mana potion", chance = 4960, maxCount = 2 },
+	{ id = 238, chance = 4960, maxCount = 2 }, -- great mana potion
 	{ name = "strong health potion", chance = 5040, maxCount = 2 },
 	{ name = "mushroom pie", chance = 17130, maxCount = 3 },
 	{ name = "great health potion", chance = 4950, maxCount = 2 },
@@ -75,15 +74,13 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -150 },
-	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_EARTHDAMAGE, minDamage = -50, maxDamage = -150, range = 7, shootEffect = CONST_ANI_SMALLEARTH, effect = CONST_ME_SMALLPLANTS, target = true },
+	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_EARTHDAMAGE, minDamage = -50, maxDamage = -150, range = 7, shootEffect = CONST_ANI_SMALLEARTH, effect = CONST_ME_SMALLPLANTS, target = false },
 	{ name = "poisonfield", interval = 2000, chance = 20, radius = 4, target = false },
 	-- poison
-	{ name = "condition", interval = 2000, chance = 10, target = false, condition =
-	{ type = CONDITION_POISON, minDamage = -30, maxDamage = -30, length = 8, spread = 0, effect = CONST_ME_GREEN_RINGS } },
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 10, minDamage = -30, maxDamage = -150, length = 8, spread = 0, effect = CONST_ME_GREEN_RINGS, target = false },
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_LIFEDRAIN, minDamage = -80, maxDamage = -130, length = 5, spread = 0, effect = CONST_ME_MAGIC_RED, target = false },
 	-- poison
-	{ name = "condition", interval = 2000, chance = 10, target = false, condition =
-	{ type = CONDITION_POISON, minDamage = -100, maxDamage = -100, range = 7, radius = 3, effect = CONST_ME_HITBYPOISON } },	
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 10, minDamage = -50, maxDamage = -180, range = 7, radius = 3, effect = CONST_ME_HITBYPOISON, target = false },
 }
 
 monster.defenses = {

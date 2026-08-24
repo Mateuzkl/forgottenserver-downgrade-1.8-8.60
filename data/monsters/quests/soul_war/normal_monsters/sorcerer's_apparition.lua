@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Sorcerer's Apparition")
 local monster = {}
 
-monster.name = "Sorcerer's Apparition"
 monster.description = "a sorcerer's apparition"
 monster.experience = 28600
 monster.outfit = {
@@ -34,6 +33,9 @@ monster.corpse = 6081
 monster.speed = 235
 monster.manaCost = 0
 
+monster.events = {
+	"MirroredNightmareBossAccess",
+}
 
 monster.changeTarget = {
 	interval = 4000,
@@ -80,7 +82,7 @@ monster.voices = {
 
 monster.loot = {
 	{ name = "crystal coin", chance = 79040 },
-	{ name = "great mana potion", chance = 62450, maxCount = 3 },
+	{ id = 238, chance = 62450, maxCount = 3 }, -- great mana potion
 	-- {name = "giant shimmering pearl", chance = 10040}, -- unknown item: giant shimmering pearl
 	{ name = "blue gem", chance = 5240 },
 	{ id = 23533, chance = 4370 }, -- ring of red plasma
