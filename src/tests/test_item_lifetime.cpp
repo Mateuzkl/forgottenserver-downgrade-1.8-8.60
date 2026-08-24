@@ -1690,7 +1690,9 @@ TEST_CASE(lua_tile_userdata_is_invalidated_after_map_removal)
 	g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tileB));
 	Tile* rawTileB = g_game.map.getTile(pos);
 	CHECK(rawTileB != nullptr);
-	CHECK(rawTileB != rawTileA);
+	// The allocator may immediately reuse Tile A's address for Tile B. Object
+	// identity is verified by the weak Lua userdata checks below, not by comparing
+	// raw addresses from non-overlapping lifetimes.
 
 	// Push Tile B to Lua
 	Lua::pushUserdata<Tile>(L, rawTileB);
