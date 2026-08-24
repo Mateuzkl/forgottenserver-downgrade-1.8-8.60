@@ -1,18 +1,24 @@
 #include "../otpch.h"
 
 #include "../bed.h"
+#include "../chat.h"
 #include "../configmanager.h"
+#include "../events.h"
 #include "../game.h"
+#include "../globalevent.h"
 #include "../house.h"
 #include "../item.h"
 #include "../luascript.h"
 #include "../player.h"
+#include "../scriptmanager.h"
+#include "../vocation.h"
 
 #include "test_support.h"
 #include <memory>
 
 extern bool isValidItemPointer(Item* item);
 extern LuaEnvironment g_luaEnvironment;
+extern Vocations g_vocations;
 
 namespace {
 
@@ -253,6 +259,19 @@ void ensureItemTypes()
 		const auto itemFile = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() /
 		                      "data/items/items.otb";
 		return Item::items.loadFromOtb(itemFile.string());
+	}();
+	CHECK(loaded);
+}
+
+void ensureVocations()
+{
+	static const bool loaded = [] {
+		const auto originalPath = std::filesystem::current_path();
+		const auto projectPath = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+		std::filesystem::current_path(projectPath);
+		const bool result = g_vocations.loadFromXml();
+		std::filesystem::current_path(originalPath);
+		return result;
 	}();
 	CHECK(loaded);
 }
@@ -1526,6 +1545,108 @@ TEST_CASE(house_door_bed_tile_pruning_prevents_unbounded_registry_growth)
 	CHECK(house->getBedCount() == 1);
 	CHECK(house->getTiles().size() == 1);
 	CHECK(house->getTileCount() == 1);
+}
+
+TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
+{
+	ensureItemTypes();
+	ensureVocations();
+
+	const Position startPos{169, 170, 7};
+	const Position bedPos{170, 170, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(startPos.x, startPos.y, startPos.z);
+	tileGuard.track(bedPos.x, bedPos.y, bedPos.z);
+
+	auto startTile = std::make_unique<DynamicTile>(startPos.x, startPos.y, startPos.z);
+	startTile->setGround(std::make_shared<Item>(100));
+	g_game.map.setTile(startPos.x, startPos.y, startPos.z, std::move(startTile));
+
+	auto house = std::make_shared<House>(912);
+	auto houseTile = std::make_unique<HouseTile>(bedPos.x, bedPos.y, bedPos.z, house);
+	houseTile->setGround(std::make_shared<Item>(100));
+	g_game.map.setTile(bedPos.x, bedPos.y, bedPos.z, std::move(houseTile));
+
+	ItemTypePropertyGuard bedTypeGuard(694);
+	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
+	auto bed = std::make_shared<BedItem>(694);
+	std::weak_ptr<BedItem> weakBed = bed;
+	g_game.map.getTile(bedPos)->internalAddThing(bed.get());
+
+	auto player = makeTestPlayer(912, "SleepingPlayer");
+	CHECK(player->setVocation(0));
+	player->setMaxHealth(100);
+	player->setHealth(10);
+	player->setMaxMana(100);
+	player->setMana(10);
+	CHECK(player->addCondition(
+	    Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_REGENERATION, -1, 0)));
+
+	GlobalEvents globalEvents;
+	GlobalEvents* previousGlobalEvents = g_globalEvents;
+	g_globalEvents = &globalEvents;
+	struct GlobalEventsGuard {
+		GlobalEvents* previous;
+		~GlobalEventsGuard() { g_globalEvents = previous; }
+	} globalEventsGuard{previousGlobalEvents};
+	Events events;
+	Events* previousEvents = g_events;
+	g_events = &events;
+	struct EventsGuard {
+		Events* previous;
+		~EventsGuard() { g_events = previous; }
+	} eventsGuard{previousEvents};
+	Chat chat;
+	Chat* previousChat = g_chat;
+	g_chat = &chat;
+	struct ChatGuard {
+		Chat* previous;
+		~ChatGuard() { g_chat = previous; }
+	} chatGuard{previousChat};
+
+	CHECK(g_game.internalPlaceCreature(player.get(), startPos, false, true));
+
+	struct PlayerRemovalGuard {
+		Player* player;
+		~PlayerRemovalGuard()
+		{
+			if (player && !player->isRemoved()) {
+				g_game.removeCreature(player);
+			}
+		}
+	} playerRemovalGuard{player.get()};
+
+	CHECK(bed->sleep(player.get()));
+	CHECK(bed->getSleeper() == player->getGUID());
+	CHECK(g_game.getBedBySleeper(player->getGUID()) == bed);
+
+	PropWriteStream writeStream;
+	const auto sleepStart = static_cast<uint32_t>(std::time(nullptr) - 1800);
+	writeStream.write<uint32_t>(sleepStart);
+	const std::string_view serialized = writeStream.getStream();
+	PropStream readStream;
+	readStream.init(serialized.data(), serialized.size());
+	CHECK(bed->readAttr(ATTR_SLEEPSTART, readStream) == ATTR_READ_CONTINUE);
+
+	// Keep the test player online, but away from the tile being removed. This
+	// exercises the same wake-up path used when an online sleeper is found.
+	g_game.map.moveCreature(*player, *g_game.map.getTile(startPos), true);
+	CHECK(player->getPosition() == startPos);
+
+	bed.reset();
+	g_game.map.removeTile(bedPos);
+	g_game.cleanup();
+
+	CHECK(weakBed.expired());
+	CHECK(player->getHealth() == 70);
+	CHECK(player->getMana() == 70);
+	CHECK(player->getSoul() == 2);
+	CHECK(g_game.getBedBySleeper(player->getGUID()) == nullptr);
+
+	// A later login lookup must not regenerate a second time.
+	CHECK(player->getHealth() == 70);
+	CHECK(player->getMana() == 70);
+	CHECK(player->getSoul() == 2);
 }
 
 TEST_CASE(lua_tile_userdata_is_invalidated_after_map_removal)

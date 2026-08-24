@@ -2524,6 +2524,14 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 			return RETURNVALUE_NOTPOSSIBLE;
 		}
 
+		// End an occupied bed session while the BedItem is still attached to its
+		// tile and House. This preserves sleeper regeneration and lets wakeUp()
+		// clear the partner bed and registry exactly once before destruction.
+		if (auto bed = item->getBed(); bed && bed->getSleeper() != 0) {
+			auto sleeper = getPlayerByGUID(bed->getSleeper());
+			bed->wakeUp(sleeper.get());
+		}
+
 		// remove the item
 		cylinder->removeThing(item, count);
 

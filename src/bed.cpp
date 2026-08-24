@@ -191,10 +191,6 @@ bool BedItem::sleep(Player* player)
 
 void BedItem::wakeUp(Player* player)
 {
-	if (house.expired()) {
-		return;
-	}
-
 	if (sleeperGUID != 0) {
 		if (!player) {
 			Player regenPlayer(nullptr);
