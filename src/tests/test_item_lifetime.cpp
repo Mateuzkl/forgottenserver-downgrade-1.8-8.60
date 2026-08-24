@@ -1442,4 +1442,154 @@ TEST_CASE(house_tile_registry_is_unregistered_when_map_tile_is_removed)
 	}
 }
 
+TEST_CASE(door_and_bed_remove_with_expired_first_element_regression)
+{
+	auto house = std::make_shared<House>(910);
+
+	// Create two doors
+	auto door1 = std::make_shared<Door>(0);
+	door1->setDoorId(1);
+	auto door2 = std::make_shared<Door>(0);
+	door2->setDoorId(2);
+
+	// Add both doors
+	house->addDoor(door1.get());
+	house->addDoor(door2.get());
+	CHECK(house->getDoors().size() == 2);
+
+	// Expire door1 (first element in doorList)
+	door1.reset();
+	g_game.cleanup();
+
+	// Now remove door2 (valid door, while first element is expired)
+	// This must not trigger iterator decrement UB (--it on begin()) and must successfully remove door2
+	house->removeDoor(door2.get());
+	CHECK(house->getDoors().empty());
+
+	// Create two beds
+	auto bed1 = std::make_shared<BedItem>(694);
+	auto bed2 = std::make_shared<BedItem>(694);
+
+	// Add both beds
+	house->addBed(bed1.get());
+	house->addBed(bed2.get());
+	CHECK(house->getBeds().size() == 2);
+
+	// Expire bed1 (first element in bedsList)
+	bed1.reset();
+	g_game.cleanup();
+
+	// Now remove bed2 (valid bed, while first element is expired)
+	// Must not trigger iterator decrement UB and must successfully remove bed2
+	house->removeBed(bed2.get());
+	CHECK(house->getBeds().empty());
+}
+
+TEST_CASE(house_door_bed_tile_pruning_prevents_unbounded_registry_growth)
+{
+	auto house = std::make_shared<House>(911);
+
+	// Repeat add -> expire -> add cycle multiple times
+	for (int i = 0; i < 5; ++i) {
+		auto door = std::make_shared<Door>(0);
+		door->setDoorId(100 + i);
+		house->addDoor(door.get());
+
+		auto bed = std::make_shared<BedItem>(694);
+		house->addBed(bed.get());
+
+		auto tile = std::make_shared<HouseTile>(10 + i, 10 + i, 7, house);
+		house->addTile(tile);
+
+		// Expire previous items
+		door.reset();
+		bed.reset();
+		tile.reset();
+		g_game.cleanup();
+	}
+
+	// Now add one new live door, bed, and tile
+	auto liveDoor = std::make_shared<Door>(0);
+	liveDoor->setDoorId(999);
+	house->addDoor(liveDoor.get());
+
+	auto liveBed = std::make_shared<BedItem>(694);
+	house->addBed(liveBed.get());
+
+	auto liveTile = std::make_shared<HouseTile>(50, 50, 7, house);
+	house->addTile(liveTile);
+
+	// addDoor, addBed, addTile pruned the dead entries, so the live counts are exactly 1
+	CHECK(house->getDoors().size() == 1);
+	CHECK(house->getDoorCount() == 1);
+	CHECK(house->getBeds().size() == 1);
+	CHECK(house->getBedCount() == 1);
+	CHECK(house->getTiles().size() == 1);
+	CHECK(house->getTileCount() == 1);
+}
+
+TEST_CASE(lua_tile_userdata_is_invalidated_after_map_removal)
+{
+	ensureItemTypes();
+	LuaFixture fixture;
+	lua_State* L = fixture.L;
+
+	const Position pos{160, 160, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(160, 160, 7);
+
+	// 1. Create Tile A on map
+	auto tileA = std::make_unique<DynamicTile>(pos.x, pos.y, pos.z);
+	g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tileA));
+	Tile* rawTileA = g_game.map.getTile(pos);
+	CHECK(rawTileA != nullptr);
+
+	// Push Tile A to Lua
+	Lua::pushUserdata<Tile>(L, rawTileA);
+	Lua::setMetatable(L, -1, "Tile");
+	lua_setglobal(L, "tileA");
+
+	// Verify Lua can read Tile A
+	lua_getglobal(L, "tileA");
+	Tile* luaTileA = Lua::getUserdata<Tile>(L, -1);
+	CHECK(luaTileA == rawTileA);
+	lua_pop(L, 1);
+
+	// 2. Remove Tile A from map
+	g_game.map.removeTile(pos);
+
+	// Verify old userdata for Tile A is now invalidated
+	lua_getglobal(L, "tileA");
+	Tile* invalidatedTileA = Lua::getUserdata<Tile>(L, -1);
+	CHECK(invalidatedTileA == nullptr);
+	lua_pop(L, 1);
+
+	// 3. Create new Tile B at the same position
+	auto tileB = std::make_unique<DynamicTile>(pos.x, pos.y, pos.z);
+	g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tileB));
+	Tile* rawTileB = g_game.map.getTile(pos);
+	CHECK(rawTileB != nullptr);
+	CHECK(rawTileB != rawTileA);
+
+	// Push Tile B to Lua
+	Lua::pushUserdata<Tile>(L, rawTileB);
+	Lua::setMetatable(L, -1, "Tile");
+	lua_setglobal(L, "tileB");
+
+	// Verify old userdata tileA remains invalidated (no ABA)
+	lua_getglobal(L, "tileA");
+	Tile* staleTileA = Lua::getUserdata<Tile>(L, -1);
+	CHECK(staleTileA == nullptr);
+	lua_pop(L, 1);
+
+	// Verify new userdata tileB is valid
+	lua_getglobal(L, "tileB");
+	Tile* validTileB = Lua::getUserdata<Tile>(L, -1);
+	CHECK(validTileB == rawTileB);
+	lua_pop(L, 1);
+
+	// Run Lua GC to verify proper destruction of weak userdata
+	lua_gc(L, LUA_GCCOLLECT, 0);
+}
+
 TFS_TEST_MAIN()

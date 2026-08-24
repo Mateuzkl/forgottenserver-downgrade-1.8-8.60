@@ -1113,6 +1113,20 @@ void Lua::setMetatable(lua_State* L, int32_t index, std::string_view name)
 {
 	luaL_getmetatable(L, name.data());
 	lua_setmetatable(L, index - 1);
+	if (name == "Tile") {
+		if (Tile** userdata = static_cast<Tile**>(lua_touserdata(L, index))) {
+			if (*userdata) {
+				std::weak_ptr<Tile> weakTile;
+				try {
+					weakTile = (*userdata)->weak_from_this();
+				} catch (const std::bad_weak_ptr&) {
+				}
+				new (lua_newuserdatauv(L, sizeof(std::weak_ptr<Tile>), 0))
+				    std::weak_ptr<Tile>(std::move(weakTile));
+				lua_setiuservalue(L, index - 1, 1);
+			}
+		}
+	}
 }
 
 void Lua::setWeakMetatable(lua_State* L, int32_t index, std::string_view name)
@@ -1211,6 +1225,32 @@ Creature* Lua::getValidatedCreatureUserdata(lua_State* L, int32_t arg)
 		return nullptr;
 	}
 	return rawCreature;
+}
+
+Tile* Lua::getValidatedTileUserdata(lua_State* L, int32_t arg)
+{
+	Tile* rawTile = nullptr;
+	if (Tile** userdata = static_cast<Tile**>(lua_touserdata(L, arg))) {
+		rawTile = *userdata;
+	}
+
+	const int userValueType = lua_getiuservalue(L, arg, 1);
+	if (userValueType == LUA_TUSERDATA) {
+		auto* weakPtr = static_cast<std::weak_ptr<Tile>*>(lua_touserdata(L, -1));
+		auto tileRef = weakPtr ? weakPtr->lock() : std::shared_ptr<Tile>{};
+		lua_pop(L, 1);
+
+		if (tileRef) {
+			return tileRef.get();
+		}
+
+		return nullptr;
+	}
+	if (userValueType != LUA_TNONE) {
+		lua_pop(L, 1);
+	}
+
+	return rawTile;
 }
 
 // Is

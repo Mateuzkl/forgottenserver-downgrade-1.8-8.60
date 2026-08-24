@@ -744,11 +744,32 @@ int luaTileGetHouse(lua_State* L)
 }
 } // namespace
 
+int LuaScriptInterface::luaTileGC(lua_State* L)
+{
+	Tile** tilePtr = getRawUserdata<Tile>(L, 1);
+	if (tilePtr) {
+		*tilePtr = nullptr;
+	}
+
+	if (getAssociatedValue(L, 1, 1)) {
+		auto* weakPtr = static_cast<std::weak_ptr<Tile>*>(lua_touserdata(L, -1));
+		if (weakPtr) {
+			std::destroy_at(weakPtr);
+		}
+		lua_pop(L, 1);
+
+		lua_pushnil(L);
+		lua_setiuservalue(L, 1, 1);
+	}
+	return 0;
+}
+
 void LuaScriptInterface::registerTile()
 {
 	// Tile
 	registerClass("Tile", "", luaTileCreate);
 	registerMetaMethod("Tile", "__eq", LuaScriptInterface::luaUserdataCompare);
+	registerMetaMethod("Tile", "__gc", LuaScriptInterface::luaTileGC);
 
 	registerMethod("Tile", "remove", luaTileRemove);
 

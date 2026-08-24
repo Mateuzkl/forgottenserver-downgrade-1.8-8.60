@@ -31,9 +31,14 @@ void House::addTile(HouseTile* tile)
 	tile->setFlag(TILESTATE_PROTECTIONZONE);
 	if (auto tileRef = tile->weak_from_this().lock()) {
 		auto houseTileRef = std::static_pointer_cast<HouseTile>(tileRef);
-		for (const auto& weakTile : houseTiles) {
-			if (weakTile.lock() == houseTileRef) {
+		for (auto it = houseTiles.begin(); it != houseTiles.end();) {
+			auto locked = it->lock();
+			if (!locked) {
+				it = houseTiles.erase(it);
+			} else if (locked == houseTileRef) {
 				return;
+			} else {
+				++it;
 			}
 		}
 		houseTiles.push_back(houseTileRef);
@@ -47,9 +52,14 @@ void House::addTile(const std::shared_ptr<HouseTile>& tile)
 	}
 
 	tile->setFlag(TILESTATE_PROTECTIONZONE);
-	for (const auto& weakTile : houseTiles) {
-		if (weakTile.lock() == tile) {
+	for (auto it = houseTiles.begin(); it != houseTiles.end();) {
+		auto locked = it->lock();
+		if (!locked) {
+			it = houseTiles.erase(it);
+		} else if (locked == tile) {
 			return;
+		} else {
+			++it;
 		}
 	}
 	houseTiles.push_back(tile);
@@ -502,12 +512,16 @@ void House::addDoor(Door* door)
 	}
 	auto doorShared = std::static_pointer_cast<Door>(doorRef);
 
-	// Check for duplicates
-	for (const auto& weakDoor : doorList) {
-		if (weakDoor.lock() == doorShared) {
-			// Already registered, just ensure house backlink
+	// Check for duplicates and prune expired entries
+	for (auto it = doorList.begin(); it != doorList.end();) {
+		auto locked = it->lock();
+		if (!locked) {
+			it = doorList.erase(it);
+		} else if (locked == doorShared) {
 			door->setHouse(this);
 			return;
+		} else {
+			++it;
 		}
 	}
 
@@ -521,16 +535,16 @@ void House::removeDoor(Door* door)
 		return;
 	}
 
-	for (auto it = doorList.begin(); it != doorList.end(); ++it) {
+	for (auto it = doorList.begin(); it != doorList.end();) {
 		auto locked = it->lock();
 		if (!locked || locked.get() == door) {
+			const bool found = (locked && locked.get() == door);
 			it = doorList.erase(it);
-			if (locked) {
+			if (found) {
 				return;
 			}
-			// Continue pruning expired entries, but we haven't found our door yet
-			--it; // adjust for outer loop increment
-			continue;
+		} else {
+			++it;
 		}
 	}
 }
@@ -547,12 +561,16 @@ void House::addBed(BedItem* bed)
 	}
 	auto bedShared = std::static_pointer_cast<BedItem>(bedRef);
 
-	// Check for duplicates
-	for (const auto& weakBed : bedsList) {
-		if (weakBed.lock() == bedShared) {
-			// Already registered, just ensure house backlink
+	// Check for duplicates and prune expired entries
+	for (auto it = bedsList.begin(); it != bedsList.end();) {
+		auto locked = it->lock();
+		if (!locked) {
+			it = bedsList.erase(it);
+		} else if (locked == bedShared) {
 			bed->setHouse(weak_from_this().lock());
 			return;
+		} else {
+			++it;
 		}
 	}
 
@@ -566,15 +584,16 @@ void House::removeBed(BedItem* bed)
 		return;
 	}
 
-	for (auto it = bedsList.begin(); it != bedsList.end(); ++it) {
+	for (auto it = bedsList.begin(); it != bedsList.end();) {
 		auto locked = it->lock();
 		if (!locked || locked.get() == bed) {
+			const bool found = (locked && locked.get() == bed);
 			it = bedsList.erase(it);
-			if (locked) {
+			if (found) {
 				return;
 			}
-			--it;
-			continue;
+		} else {
+			++it;
 		}
 	}
 }

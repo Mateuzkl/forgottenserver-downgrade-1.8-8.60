@@ -574,6 +574,7 @@ private:
 
 	static int luaUserdataCompare(lua_State* L);
 	static int luaCreatureGC(lua_State* L);
+	static int luaTileGC(lua_State* L);
 	static int luaItemGC(lua_State* L);
 
 	static int luaIsType(lua_State* L);
@@ -910,6 +911,7 @@ inline std::unique_ptr<T> releaseOwnedUserdataPtr(lua_State* L, int32_t arg)
 }
 
 Creature* getValidatedCreatureUserdata(lua_State* L, int32_t arg);
+Tile* getValidatedTileUserdata(lua_State* L, int32_t arg);
 
 template <class T>
 inline T* getUserdata(lua_State* L, int32_t arg, const bool checkType = true)
@@ -922,6 +924,13 @@ inline T* getUserdata(lua_State* L, int32_t arg, const bool checkType = true)
 
 		Creature* creature = getValidatedCreatureUserdata(L, arg);
 		return creature ? dynamic_cast<T*>(creature) : nullptr;
+	} else if constexpr (std::is_base_of_v<Tile, RawT>) {
+		if (checkType && !isType<T>(L, arg)) {
+			return nullptr;
+		}
+
+		Tile* tile = getValidatedTileUserdata(L, arg);
+		return tile ? dynamic_cast<T*>(tile) : nullptr;
 	}
 
 	T** userdata = getRawUserdata<T>(L, arg, checkType);
@@ -1107,7 +1116,7 @@ inline void pushUserdata(lua_State* L, T* value, int nuvalue = 1)
 {
 	using RawT = std::remove_const_t<T>;
 	int uservalueCount = nuvalue;
-	if constexpr (std::is_base_of_v<Creature, RawT>) {
+	if constexpr (std::is_base_of_v<Creature, RawT> || std::is_base_of_v<Tile, RawT>) {
 		if (uservalueCount < 2) {
 			uservalueCount = 2;
 		}
