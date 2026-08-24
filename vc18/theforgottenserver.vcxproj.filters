@@ -3,6 +3,7 @@
   <ItemGroup>
     <ClCompile Include="..\src\actions.cpp" />
     <ClCompile Include="..\src\admin.cpp" />
+    <ClCompile Include="..\src\admin_console.cpp" />
     <ClCompile Include="..\src\ban.cpp" />
     <ClCompile Include="..\src\baseevents.cpp" />
     <ClCompile Include="..\src\bestiary_charm.cpp" />
@@ -221,6 +222,7 @@
     <ClInclude Include="..\src\account.h" />
     <ClInclude Include="..\src\actions.h" />
     <ClInclude Include="..\src\admin.h" />
+    <ClInclude Include="..\src\admin_console.h" />
     <ClInclude Include="..\src\astraclient.h" />
     <ClInclude Include="..\src\fonticakclient.h" />
     <ClInclude Include="..\src\ban.h" />

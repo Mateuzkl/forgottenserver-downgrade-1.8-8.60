@@ -4,8 +4,11 @@
 #ifndef FS_OTSERV_H
 #define FS_OTSERV_H
 
+inline constexpr int SERVER_RESTART_EXIT_CODE = 75;
+
 void printServerVersion();
 void printServerLinks();
 int startServer();
+void requestServerRestart();
 
 #endif
