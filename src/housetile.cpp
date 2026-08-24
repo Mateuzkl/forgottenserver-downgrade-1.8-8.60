@@ -68,13 +68,19 @@ void HouseTile::updateHouse(Item* item)
 ReturnValue HouseTile::queryAdd(int32_t index, const Thing& thing, uint32_t count, uint32_t flags,
                                 Creature* actor /* = nullptr*/) const
 {
-	if (hasBitSet(FLAG_NOLIMIT, flags)) {
-		return RETURNVALUE_NOERROR;
-	}
-
 	auto house = getHouse();
 	if (!house) {
+		// A HouseTile whose House has expired must not silently become a normal,
+		// unrestricted tile. Actor-less item operations are kept available for
+		// internal maintenance; creature and actor-driven operations fail closed.
+		if (thing.getCreature() || actor) {
+			return RETURNVALUE_NOTPOSSIBLE;
+		}
 		return Tile::queryAdd(index, thing, count, flags, actor);
+	}
+
+	if (hasBitSet(FLAG_NOLIMIT, flags)) {
+		return RETURNVALUE_NOERROR;
 	}
 
 	if (const Creature* creature = thing.getCreature()) {
@@ -111,23 +117,28 @@ Tile* HouseTile::queryDestination(int32_t& index, const Thing& thing, Item** des
 {
 	if (const Creature* creature = thing.getCreature()) {
 		if (const Player* player = creature->getPlayer()) {
-			if (auto house = getHouse()) {
-				if (!house->isInvited(player)) {
-					const Position& entryPos = house->getEntryPosition();
-					Tile* destTile = g_game.map.getTile(entryPos);
+			auto house = getHouse();
+			if (!house) {
+				index = -1;
+				*destItem = nullptr;
+				return &Tile::nullptr_tile;
+			}
+
+			if (!house->isInvited(player)) {
+				const Position& entryPos = house->getEntryPosition();
+				Tile* destTile = g_game.map.getTile(entryPos);
+				if (!destTile) {
+					LOG_ERROR(fmt::format("[HouseTile::queryDestination] House entry not correct - Name: {} - House id: {} - Tile not found: {}", house->getName(), house->getId(), entryPos));
+
+					destTile = g_game.map.getTile(player->getTemplePosition());
 					if (!destTile) {
-						LOG_ERROR(fmt::format("[HouseTile::queryDestination] House entry not correct - Name: {} - House id: {} - Tile not found: {}", house->getName(), house->getId(), entryPos));
-
-						destTile = g_game.map.getTile(player->getTemplePosition());
-						if (!destTile) {
-							destTile = &(Tile::nullptr_tile);
-						}
+						destTile = &(Tile::nullptr_tile);
 					}
-
-					index = -1;
-					*destItem = nullptr;
-					return destTile;
 				}
+
+				index = -1;
+				*destItem = nullptr;
+				return destTile;
 			}
 		}
 	}
@@ -144,15 +155,18 @@ ReturnValue HouseTile::queryRemove(const Thing& thing, uint32_t count, uint32_t 
 	}
 
 	if (actor) {
-		if (auto house = getHouse()) {
-			if (house->getProtected() && !house->canModifyItems(actor->getPlayer())) {
-				return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
-			}
+		auto house = getHouse();
+		if (!house) {
+			return RETURNVALUE_NOTPOSSIBLE;
+		}
 
-			if (getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
-				if (!house->isInvited(actor->getPlayer())) {
-					return RETURNVALUE_PLAYERISNOTINVITED;
-				}
+		if (house->getProtected() && !house->canModifyItems(actor->getPlayer())) {
+			return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
+		}
+
+		if (getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
+			if (!house->isInvited(actor->getPlayer())) {
+				return RETURNVALUE_PLAYERISNOTINVITED;
 			}
 		}
 	}

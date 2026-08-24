@@ -3,14 +3,18 @@
 #include "../bed.h"
 #include "../chat.h"
 #include "../configmanager.h"
+#include "../depotchest.h"
+#include "../depotlocker.h"
 #include "../events.h"
 #include "../game.h"
 #include "../globalevent.h"
 #include "../house.h"
+#include "../inbox.h"
 #include "../item.h"
 #include "../luascript.h"
 #include "../player.h"
 #include "../scriptmanager.h"
+#include "../storeinbox.h"
 #include "../vocation.h"
 
 #include "test_support.h"
@@ -285,6 +289,58 @@ std::shared_ptr<Player> makeTestPlayer(uint32_t guid, std::string_view name)
 	player->setGroup(std::make_shared<Group>());
 	return player;
 }
+
+struct OfflineSleeperState
+{
+	uint32_t guid = 0;
+	uint32_t loadedGuid = 0;
+	int loadCount = 0;
+	int saveCount = 0;
+	int32_t savedHealth = 0;
+	uint32_t savedMana = 0;
+	uint8_t savedSoul = 0;
+};
+
+class OfflineTestBedItem final : public BedItem
+{
+public:
+	OfflineTestBedItem(uint16_t id, OfflineSleeperState& state) : BedItem(id), state(state) {}
+
+protected:
+	bool loadOfflineSleeper(Player* player, uint32_t guid) const override
+	{
+		++state.loadCount;
+		state.loadedGuid = guid;
+		if (guid != state.guid) {
+			return false;
+		}
+
+		player->setGUID(guid);
+		player->setName("OfflineSleepingPlayer");
+		player->setGroup(std::make_shared<Group>());
+		if (!player->setVocation(0)) {
+			return false;
+		}
+		player->setMaxHealth(100);
+		player->setHealth(10);
+		player->setMaxMana(100);
+		player->setMana(10);
+		return player->addCondition(
+		    Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_REGENERATION, -1, 0));
+	}
+
+	bool saveOfflineSleeper(Player* player) const override
+	{
+		++state.saveCount;
+		state.savedHealth = player->getHealth();
+		state.savedMana = player->getMana();
+		state.savedSoul = player->getSoul();
+		return true;
+	}
+
+private:
+	OfflineSleeperState& state;
+};
 
 TEST_CASE(door_can_use_and_access_list_behavior)
 {
@@ -1303,7 +1359,7 @@ TEST_CASE(bed_reparenting_between_houses_and_destruction_lifetime)
 	houseB->setOwner(0);
 }
 
-TEST_CASE(flag_nolimit_vs_can_remove_semantics)
+TEST_CASE(map_cleanup_flag_is_distinct_from_flag_nolimit)
 {
 	ensureItemTypes();
 	const Position pos{144, 144, 7};
@@ -1325,14 +1381,20 @@ TEST_CASE(flag_nolimit_vs_can_remove_semantics)
 	CHECK(!bed->canRemove());
 	CHECK(house->getBeds().size() == 1);
 
-	// Normal removal without FLAG_NOLIMIT fails because canRemove() is false
+	// Normal removal fails because canRemove() is false.
 	ReturnValue normalRet = g_game.internalRemoveItem(bed.get(), 1, false, 0);
 	CHECK(normalRet == RETURNVALUE_NOTPOSSIBLE);
 	CHECK(!bed->isRemoved());
 	CHECK(house->getBeds().size() == 1);
 
-	// Forced removal with FLAG_NOLIMIT bypasses canRemove() constraint
-	ReturnValue forcedRet = g_game.internalRemoveItem(bed.get(), 1, false, FLAG_NOLIMIT);
+	// FLAG_NOLIMIT controls cylinder limits; it must not bypass Item::canRemove().
+	ReturnValue noLimitRet = g_game.internalRemoveItem(bed.get(), 1, false, FLAG_NOLIMIT);
+	CHECK(noLimitRet == RETURNVALUE_NOTPOSSIBLE);
+	CHECK(!bed->isRemoved());
+	CHECK(house->getBeds().size() == 1);
+
+	// Map teardown uses the explicit internal cleanup flag.
+	ReturnValue forcedRet = g_game.internalRemoveItem(bed.get(), 1, false, FLAG_IGNORECANREMOVE);
 	CHECK(forcedRet == RETURNVALUE_NOERROR);
 	CHECK(bed->isRemoved());
 	CHECK(house->getBeds().empty());
@@ -1340,6 +1402,46 @@ TEST_CASE(flag_nolimit_vs_can_remove_semantics)
 	bed.reset();
 	g_game.cleanup();
 	CHECK(weakBed.expired());
+}
+
+TEST_CASE(flag_nolimit_does_not_remove_special_nonremovable_containers)
+{
+	ensureItemTypes();
+	const Position pos{145, 145, 7};
+	MapTileGuard tileGuard;
+	tileGuard.track(pos.x, pos.y, pos.z);
+
+	auto tile = std::make_unique<DynamicTile>(pos.x, pos.y, pos.z);
+	tile->setGround(std::make_shared<Item>(100));
+	g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
+	Tile* rawTile = g_game.map.getTile(pos);
+	CHECK(rawTile != nullptr);
+
+	std::vector<std::shared_ptr<Item>> specialItems{
+	    std::make_shared<Inbox>(ITEM_INBOX),
+	    std::make_shared<StoreInbox>(ITEM_STORE_INBOX),
+	    std::make_shared<DepotChest>(ITEM_DEPOT),
+	    std::make_shared<DepotLocker>(ITEM_LOCKER),
+	};
+	std::vector<std::weak_ptr<Item>> weakItems;
+	weakItems.reserve(specialItems.size());
+
+	for (const auto& item : specialItems) {
+		CHECK(!item->canRemove());
+		rawTile->internalAddThing(item.get());
+		CHECK(item->getParent() == rawTile);
+		CHECK(g_game.internalRemoveItem(item.get(), -1, false, FLAG_NOLIMIT) == RETURNVALUE_NOTPOSSIBLE);
+		CHECK(item->getParent() == rawTile);
+		weakItems.emplace_back(item);
+	}
+
+	// The dedicated Map cleanup path can still tear down the tile completely.
+	specialItems.clear();
+	g_game.map.removeTile(pos);
+	g_game.cleanup();
+	for (const auto& weakItem : weakItems) {
+		CHECK(weakItem.expired());
+	}
 }
 
 TEST_CASE(house_reassigns_door_and_bed_without_stale_back_references)
@@ -1392,21 +1494,23 @@ TEST_CASE(house_reassigns_door_and_bed_without_stale_back_references)
 	CHECK(houseB->getBedCount() == 0);
 }
 
-TEST_CASE(container_on_orphan_house_tile_does_not_dereference_expired_house)
+TEST_CASE(orphan_house_tile_fails_closed_for_players_and_allows_map_cleanup)
 {
 	ensureItemTypes();
 	const Position pos{150, 150, 7};
 	MapTileGuard tileGuard;
 	tileGuard.track(150, 150, 7);
 
-	std::shared_ptr<HouseTile> orphanTile;
+	HouseTile* orphanTile = nullptr;
+	std::weak_ptr<Thing> weakTile;
 	{
 		auto house = std::make_shared<House>(903);
 		auto houseTile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
 		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(houseTile));
-		orphanTile = std::static_pointer_cast<HouseTile>(g_game.map.getTile(pos)->weak_from_this().lock());
+		orphanTile = g_game.map.getTile(pos)->getHouseTile();
+		weakTile = orphanTile->weak_from_this();
 	}
-	// House is now destroyed; orphanTile->getHouse() is nullptr
+	// House is now destroyed while the map still owns the HouseTile.
 	CHECK(orphanTile != nullptr);
 	CHECK(orphanTile->getHouse() == nullptr);
 
@@ -1420,22 +1524,57 @@ TEST_CASE(container_on_orphan_house_tile_does_not_dereference_expired_house)
 	auto container = std::make_shared<Container>(ITEM_BAG, 10);
 	orphanTile->internalAddThing(container.get());
 
-	auto item = std::make_shared<Item>(100);
-	container->addItem(item);
+	auto nestedItem = std::make_shared<Item>(100);
+	container->addItem(nestedItem);
+	auto incomingItem = std::make_shared<Item>(100);
+
+	auto door = std::make_shared<Door>(0);
+	door->setDoorId(10);
+	orphanTile->internalAddThing(door.get());
+	auto bed = std::make_shared<BedItem>(694);
+	orphanTile->internalAddThing(bed.get());
+	CHECK(door->getHouse() == nullptr);
+	CHECK(bed->getHouse() == nullptr);
 
 	auto player = makeTestPlayer(10, "OrphanHousePlayer");
 
-	// Test queryAdd and queryRemove with ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS enabled
+	// Direct entry and actor-driven item operations fail closed.
+	CHECK(orphanTile->queryAdd(0, *player, 1, FLAG_NOLIMIT, player.get()) == RETURNVALUE_NOTPOSSIBLE);
+	CHECK(orphanTile->queryAdd(0, *incomingItem, 1, 0, player.get()) == RETURNVALUE_NOTPOSSIBLE);
+	CHECK(orphanTile->queryRemove(*door, 1, 0, player.get()) == RETURNVALUE_NOTPOSSIBLE);
+	int32_t destinationIndex = 0;
+	Item* destinationItem = nullptr;
+	uint32_t destinationFlags = 0;
+	CHECK(orphanTile->queryDestination(destinationIndex, *player, &destinationItem, destinationFlags, 0) ==
+	      &Tile::nullptr_tile);
+
+	// A nested container must not bypass the expired House permissions.
 	bool prevOnlyInvited = ConfigManager::getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS);
 	ConfigManager::setBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS, true);
-
-	auto addRet = container->queryAdd(0, *item, 1, 0, player.get());
-	CHECK(addRet == RETURNVALUE_NOERROR);
-
-	auto removeRet = container->queryRemove(*item, 1, 0, player.get());
-	CHECK(removeRet == RETURNVALUE_NOERROR);
-
+	CHECK(container->queryAdd(0, *incomingItem, 1, 0, player.get()) == RETURNVALUE_NOTPOSSIBLE);
+	CHECK(container->queryRemove(*nestedItem, 1, 0, player.get()) == RETURNVALUE_NOTPOSSIBLE);
+	// Actor-less maintenance remains available.
+	CHECK(container->queryRemove(*nestedItem, 1, 0, nullptr) == RETURNVALUE_NOERROR);
 	ConfigManager::setBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS, prevOnlyInvited);
+
+	std::weak_ptr<Container> weakContainer = container;
+	std::weak_ptr<Item> weakNestedItem = nestedItem;
+	std::weak_ptr<Door> weakDoor = door;
+	std::weak_ptr<BedItem> weakBed = bed;
+	ground.reset();
+	container.reset();
+	nestedItem.reset();
+	incomingItem.reset();
+	door.reset();
+	bed.reset();
+
+	g_game.map.removeTile(pos);
+	g_game.cleanup();
+	CHECK(weakTile.expired());
+	CHECK(weakContainer.expired());
+	CHECK(weakNestedItem.expired());
+	CHECK(weakDoor.expired());
+	CHECK(weakBed.expired());
 }
 
 TEST_CASE(house_tile_registry_is_unregistered_when_map_tile_is_removed)
@@ -1554,9 +1693,11 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 
 	const Position startPos{169, 170, 7};
 	const Position bedPos{170, 170, 7};
+	const Position partnerPos{170, 171, 7};
 	MapTileGuard tileGuard;
 	tileGuard.track(startPos.x, startPos.y, startPos.z);
 	tileGuard.track(bedPos.x, bedPos.y, bedPos.z);
+	tileGuard.track(partnerPos.x, partnerPos.y, partnerPos.z);
 
 	auto startTile = std::make_unique<DynamicTile>(startPos.x, startPos.y, startPos.z);
 	startTile->setGround(std::make_shared<Item>(100));
@@ -1566,21 +1707,23 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 	auto houseTile = std::make_unique<HouseTile>(bedPos.x, bedPos.y, bedPos.z, house);
 	houseTile->setGround(std::make_shared<Item>(100));
 	g_game.map.setTile(bedPos.x, bedPos.y, bedPos.z, std::move(houseTile));
+	auto partnerTile = std::make_unique<HouseTile>(partnerPos.x, partnerPos.y, partnerPos.z, house);
+	partnerTile->setGround(std::make_shared<Item>(100));
+	g_game.map.setTile(partnerPos.x, partnerPos.y, partnerPos.z, std::move(partnerTile));
 
 	ItemTypePropertyGuard bedTypeGuard(694);
 	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
-	auto bed = std::make_shared<BedItem>(694);
+	OfflineSleeperState offlineState;
+	offlineState.guid = 912;
+	auto bed = std::make_shared<OfflineTestBedItem>(694, offlineState);
+	auto partnerBed = std::make_shared<BedItem>(694);
 	std::weak_ptr<BedItem> weakBed = bed;
 	g_game.map.getTile(bedPos)->internalAddThing(bed.get());
+	g_game.map.getTile(partnerPos)->internalAddThing(partnerBed.get());
+	CHECK(house->getBeds().size() == 2);
 
 	auto player = makeTestPlayer(912, "SleepingPlayer");
 	CHECK(player->setVocation(0));
-	player->setMaxHealth(100);
-	player->setHealth(10);
-	player->setMaxMana(100);
-	player->setMana(10);
-	CHECK(player->addCondition(
-	    Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_REGENERATION, -1, 0)));
 
 	GlobalEvents globalEvents;
 	GlobalEvents* previousGlobalEvents = g_globalEvents;
@@ -1606,18 +1749,9 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 
 	CHECK(g_game.internalPlaceCreature(player.get(), startPos, false, true));
 
-	struct PlayerRemovalGuard {
-		Player* player;
-		~PlayerRemovalGuard()
-		{
-			if (player && !player->isRemoved()) {
-				g_game.removeCreature(player);
-			}
-		}
-	} playerRemovalGuard{player.get()};
-
 	CHECK(bed->sleep(player.get()));
 	CHECK(bed->getSleeper() == player->getGUID());
+	CHECK(partnerBed->getSleeper() == player->getGUID());
 	CHECK(g_game.getBedBySleeper(player->getGUID()) == bed);
 
 	PropWriteStream writeStream;
@@ -1628,25 +1762,38 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 	readStream.init(serialized.data(), serialized.size());
 	CHECK(bed->readAttr(ATTR_SLEEPSTART, readStream) == ATTR_READ_CONTINUE);
 
-	// Keep the test player online, but away from the tile being removed. This
-	// exercises the same wake-up path used when an online sleeper is found.
-	g_game.map.moveCreature(*player, *g_game.map.getTile(startPos), true);
-	CHECK(player->getPosition() == startPos);
+	// Remove the sleeper from the online registries before removing the bed. The
+	// Map teardown must therefore execute BedItem::wakeUp(nullptr), including
+	// the real regeneration routine and the injected offline load/save boundary.
+	CHECK(g_game.removeCreature(player.get()));
+	CHECK(player->isRemoved());
+	CHECK(g_game.getPlayerByGUID(player->getGUID()) == nullptr);
 
-	bed.reset();
 	g_game.map.removeTile(bedPos);
 	g_game.cleanup();
 
-	CHECK(weakBed.expired());
-	CHECK(player->getHealth() == 70);
-	CHECK(player->getMana() == 70);
-	CHECK(player->getSoul() == 2);
+	CHECK(offlineState.loadCount == 1);
+	CHECK(offlineState.saveCount == 1);
+	CHECK(offlineState.loadedGuid == player->getGUID());
+	CHECK(offlineState.savedHealth == 70);
+	CHECK(offlineState.savedMana == 70);
+	CHECK(offlineState.savedSoul == 2);
+	CHECK(bed->getSleeper() == 0);
+	CHECK(partnerBed->getSleeper() == 0);
+	CHECK(house->getBeds().size() == 1);
 	CHECK(g_game.getBedBySleeper(player->getGUID()) == nullptr);
 
-	// A later login lookup must not regenerate a second time.
-	CHECK(player->getHealth() == 70);
-	CHECK(player->getMana() == 70);
-	CHECK(player->getSoul() == 2);
+	// A later login/wake lookup cannot regenerate the removed session twice.
+	bed->wakeUp(nullptr);
+	CHECK(offlineState.loadCount == 1);
+	CHECK(offlineState.saveCount == 1);
+	CHECK(offlineState.savedHealth == 70);
+	CHECK(offlineState.savedMana == 70);
+	CHECK(offlineState.savedSoul == 2);
+
+	bed.reset();
+	g_game.cleanup();
+	CHECK(weakBed.expired());
 }
 
 TEST_CASE(lua_tile_userdata_is_invalidated_after_map_removal)

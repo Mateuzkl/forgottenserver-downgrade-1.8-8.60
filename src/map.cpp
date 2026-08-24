@@ -246,13 +246,13 @@ void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 				if (!item || item->isRemoved()) {
 					continue;
 				}
-				g_game.internalRemoveItem(item.get(), -1, false, FLAG_NOLIMIT);
+				g_game.internalRemoveItem(item.get(), -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE);
 			}
 		}
 
 		Item* ground = tile->getGround();
 		if (ground) {
-			g_game.internalRemoveItem(ground, -1, false, FLAG_NOLIMIT);
+			g_game.internalRemoveItem(ground, -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE);
 			tile->setGround(nullptr);
 		}
 		// Unregister HouseTile from its House before releasing

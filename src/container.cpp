@@ -494,6 +494,9 @@ ReturnValue Container::queryAdd(int32_t index, const Thing& thing, uint32_t coun
 	if (const auto tile = topParent->getTile()) {
 		if (const auto houseTile = tile->getHouseTile()) {
 			const auto house = houseTile->getHouse();
+			if (!house && actor && !topParent->getCreature()) {
+				return RETURNVALUE_NOTPOSSIBLE;
+			}
 			if (house) {
 				if (house->getProtected() && actor && !topParent->getCreature() && !house->canModifyItems(actor->getPlayer())) {
 					return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
@@ -592,6 +595,9 @@ ReturnValue Container::queryRemove(const Thing& thing, uint32_t count, uint32_t 
 	if (const auto tile = topParent->getTile()) {
 		if (const auto houseTile = tile->getHouseTile()) {
 			const auto house = houseTile->getHouse();
+			if (!house && actor && !topParent->getCreature()) {
+				return RETURNVALUE_NOTPOSSIBLE;
+			}
 			if (house) {
 				if (house->getProtected() && actor && !topParent->getCreature() && !house->canModifyItems(actor->getPlayer())) {
 					return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;

@@ -11,7 +11,7 @@
 class House;
 class Player;
 
-class BedItem final : public Item
+class BedItem : public Item
 {
 public:
 	explicit BedItem(uint16_t id);
@@ -43,6 +43,10 @@ public:
 	void wakeUp(Player* player);
 
 	[[nodiscard]] std::shared_ptr<BedItem> getNextBedItem() const;
+
+protected:
+	virtual bool loadOfflineSleeper(Player* player, uint32_t guid) const;
+	virtual bool saveOfflineSleeper(Player* player) const;
 
 private:
 	void updateAppearance(const Player* player);

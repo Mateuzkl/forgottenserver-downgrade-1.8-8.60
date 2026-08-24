@@ -194,9 +194,9 @@ void BedItem::wakeUp(Player* player)
 	if (sleeperGUID != 0) {
 		if (!player) {
 			Player regenPlayer(nullptr);
-			if (IOLoginData::loadPlayerById(&regenPlayer, sleeperGUID)) {
+			if (loadOfflineSleeper(&regenPlayer, sleeperGUID)) {
 				regeneratePlayer(&regenPlayer);
-				g_saveManager.savePlayerSync(&regenPlayer);
+				saveOfflineSleeper(&regenPlayer);
 			}
 		} else {
 			regeneratePlayer(player);
@@ -222,6 +222,16 @@ void BedItem::wakeUp(Player* player)
 	if (nextBedItem) {
 		nextBedItem->updateAppearance(nullptr);
 	}
+}
+
+bool BedItem::loadOfflineSleeper(Player* player, uint32_t guid) const
+{
+	return IOLoginData::loadPlayerById(player, guid);
+}
+
+bool BedItem::saveOfflineSleeper(Player* player) const
+{
+	return g_saveManager.savePlayerSync(player);
 }
 
 void BedItem::regeneratePlayer(Player* player) const
