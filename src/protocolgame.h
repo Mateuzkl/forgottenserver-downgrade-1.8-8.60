@@ -241,6 +241,12 @@ private:
 	void sendSpellCooldown(uint16_t spellId, uint32_t time);
 	void sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time);
 	void sendUseItemCooldown(uint32_t time);
+	void sendStanceProtocol(const std::vector<uint16_t>& spellIds);
+	void sendBannerType(Banner_t bannerType);
+	void sendScreenshotAndBannerUnlockedCosmetic(std::string_view skinName, uint16_t lookType, uint8_t skinType);
+	void sendScreenshotAndBannerUpLevel(uint16_t level);
+	void sendScreenshotAndBannerUpSkill(skills_t skill, uint16_t level);
+	void sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss = false);
 	void sendExtendedOpcode(uint8_t opcode, std::string_view data);
 	void sendBlessingWindow();
 	void sendBlessStatus();

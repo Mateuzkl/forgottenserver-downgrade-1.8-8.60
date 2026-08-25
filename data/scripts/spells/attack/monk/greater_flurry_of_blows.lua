@@ -31,9 +31,9 @@ function onGetFormulaValues(player, skill, weaponDamage, attackFactor)
 	return -total * 0.9, -total * 1.1
 end
 
-onGetFormulaValuesEnergy = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesEarth = loadstring(string.dump(onGetFormulaValues))
-onGetFormulaValuesPhysical = loadstring(string.dump(onGetFormulaValues))
+onGetFormulaValuesEnergy = onGetFormulaValues
+onGetFormulaValuesEarth = onGetFormulaValues
+onGetFormulaValuesPhysical = onGetFormulaValues
 
 combatPhysical:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesPhysical")
 combatEnergy:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValuesEnergy")
@@ -60,7 +60,7 @@ function spell.onCastSpell(creature, var)
 		end
 	end
 
-	addHarmonyPoint(creature)
+	creature:addHarmony(1)
 
 	return combat:execute(creature, var)
 end
@@ -69,13 +69,14 @@ spell:group("attack")
 spell:id(289)
 spell:name("Greater Flurry of Blows")
 spell:words("exori gran mas pug")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_FLURRY_OF_BLOWS)
 spell:level(90)
 spell:mana(300)
 spell:isPremium(true)
 spell:blockWalls(true)
-spell:needLearn(false)
+
 spell:needDirection(true)
-spell:cooldown(3 * 1000)
+spell:cooldown(10 * 1000)
 spell:groupCooldown(2 * 1000)
-spell:vocation("monk", "exalted monk")
+spell:vocation("monk;true", "exalted monk;true")
 spell:register()

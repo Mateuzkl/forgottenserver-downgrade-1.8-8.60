@@ -5,17 +5,18 @@
 #define FS_WEAPON_PROFICIENCY_H
 
 #include "enums.h"
-#include "tools.h"
 
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 struct CombatDamage;
 class Player;
 class Monster;
+class Creature;
 
 enum class WeaponProficiencyBonus_t : uint8_t {
 	ATTACK_DAMAGE = 0,
@@ -46,12 +47,13 @@ enum class WeaponProficiencyBonus_t : uint8_t {
 	SKILL_PERCENTAGE_AUTO_ATTACK = 25,
 	SKILL_PERCENTAGE_SPELL_DAMAGE = 26,
 	SKILL_PERCENTAGE_SPELL_HEALING = 27,
-	ARMOR_PENETRATION = 28,
-	ELEMENTAL_PIERCE = 29,
-	DAMAGE_VS_FULL_HP = 30,
-	DAMAGE_VS_LOW_HP = 31,
+	DAMAGE_VS_FULL_HP = 28,
+	DAMAGE_VS_LOW_HP = 29,
+	ARMOR_PENETRATION = 30,
+	ELEMENTAL_PIERCE = 31,
+	HOMING_MISSILE = 32,
 
-	BONUS_COUNT = 32
+	BONUS_COUNT = 33
 };
 
 enum class SkillPercentage_t : uint8_t {
@@ -87,6 +89,13 @@ struct WeaponProficiencyPerfectShotBonus {
 	double_t damage = 0;
 };
 
+struct WeaponProficiencyHomingMissileBonus {
+	CombatType_t element = COMBAT_NONE;
+	uint16_t missileId = 0;
+	double_t multiplier = 0;
+	double_t probability = 0;
+};
+
 class WeaponProficiency {
 public:
 	explicit WeaponProficiency(Player& player);
@@ -107,7 +116,8 @@ public:
 	void applyPerk(uint8_t perkType, double_t value, uint16_t spellId = 0,
 	               uint8_t augmentType = 0, skills_t skillId = SKILL_FIST,
 	               CombatType_t element = COMBAT_NONE, uint8_t range = 0,
-	               uint16_t bestiaryId = 0);
+	               uint16_t bestiaryId = 0, uint16_t missileId = 0,
+	               double_t missileMultiplier = 0, double_t missileProbability = 0);
 
 	double_t getStat(WeaponProficiencyBonus_t stat) const;
 	uint32_t getSkillBonus(skills_t type) const;
@@ -132,6 +142,10 @@ public:
 	void applyPowerfulFoeDamage(CombatDamage& damage, const std::shared_ptr<Monster>& monster) const;
 	void applySkillAutoAttackPercentage(CombatDamage& damage) const;
 	void applySkillSpellPercentage(CombatDamage& damage, bool healing = false) const;
+	void applyTargetHealthDamage(CombatDamage& damage, const Creature* target) const;
+	void tryProcHomingMissile(Creature* target) const;
+	double_t getArmorPenetration() const;
+	double_t getElementalPierce(CombatType_t type) const;
 
 	/**
 	 * Apply life/mana on hit/kill bonuses.
@@ -169,6 +183,7 @@ private:
 	WeaponProficiencyCriticalBonus m_autoAttackCritical;
 	WeaponProficiencyCriticalBonus m_runesCritical;
 	std::array<WeaponProficiencyCriticalBonus, COMBAT_COUNT> m_elementCritical = {};
+	std::array<double_t, COMBAT_COUNT> m_elementalPierce = {};
 
 	double_t m_powerfulFoeDamage = 0;
 	WeaponProficiencyPerfectShotBonus m_perfectShot;
@@ -178,6 +193,7 @@ private:
 
 	std::unordered_map<uint16_t, double_t> m_bestiaryDamage;
 	std::unordered_map<skills_t, SkillPercentage> m_skillPercentages;
+	std::vector<WeaponProficiencyHomingMissileBonus> m_homingMissiles;
 };
 
 #endif // FS_WEAPON_PROFICIENCY_H

@@ -48,6 +48,7 @@ public:
 	[[nodiscard]] std::optional<std::reference_wrapper<const BestiaryCreatureInfo>> getMonster(uint16_t raceId) const;
 	[[nodiscard]] static uint8_t getProgress(const BestiaryCreatureInfo& info, uint32_t kills);
 	BestiaryCharmActionResult handleCharmAction(Player& player, uint8_t charmId, uint8_t action, uint16_t raceId) const;
+	[[nodiscard]] bool addMinorCharmEchoes(uint32_t playerGuid, uint32_t amount) const;
 
 	[[nodiscard]] bool isMajorCharm(uint8_t charmId) const;
 	[[nodiscard]] bool isMinorCharm(uint8_t charmId) const;

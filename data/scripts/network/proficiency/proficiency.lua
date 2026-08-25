@@ -18,17 +18,35 @@ local OPCODE_CATALOG = 0x5A
 local OPCODE_EXPERIENCE = 0x5C
 local OPCODE_INFO = 0xC4
 local OPCODE_INFO_BATCH = 0x5B
+local OPCODE_RESHAPE = 0x3D
+local OPCODE_RESOURCE_BALANCE = 0xEE
 
 local ACTION_ITEM_INFO = 0
 local ACTION_LIST_INFO = 1
 local ACTION_RESET_PERKS = 2
 local ACTION_APPLY_PERKS = 3
+local ACTION_MODIFY_SLOT = 4
+local ACTION_REFINE_SLOT = 5
+local ACTION_MAXIMISE_SLOT = 6
+local ACTION_RESHAPE_SLOT = 7
+local ACTION_PICK_RESHAPE = 8
+local ACTION_CLEAR_SLOT = 9
 
 local MAX_PERK_LEVEL = 7
 local MAX_PERK_POSITION = 2
 local EXPERIENCE_GAIN_MULTIPLIER = 0.01
 local SAVE_DELAY_MS = 5000
 local LIST_INFO_COOLDOWN_MS = 1000
+local MAX_MODIFIED_SLOTS = 2
+local MAX_MODIFIER_RANK = 10
+local MIN_SHAPING_UNLOCKED_LEVELS = 3
+local FIRST_MODIFY_DUST_COST = 250
+local SECOND_MODIFY_DUST_COST = 1000
+local RESHAPE_DUST_COST = 250
+local RESHAPE_OFFER_COUNT = 3
+local RESHAPE_OFFER_TTL_MS = 30000
+local RESOURCE_FORGE_DUST = 23
+local RESOURCE_PROFICIENCY_DUST_LIMIT = 88
 
 -- The first MAX_PERK_LEVEL thresholds unlock perk slots. The remaining
 -- thresholds keep mastery progression active until the final experience cap.
@@ -45,6 +63,10 @@ local catalogByServerId = {}
 local serverIdByClientId = {}
 local proficiencyTableReady = false
 local proficiencyDefinitionsById = {}
+local proficiencyDefinitionsByName = {}
+local proficiencyIdsByWeaponItem = {}
+local proficiencyIdsByUniqueItemName = {}
+local duplicateProficiencyItemNames = {}
 local refreshProfileSpellAugments
 
 local function logError(message)
@@ -56,10 +78,6 @@ local function logError(message)
 end
 
 local function loadProficiencyDefinitions()
-	if not isAugmentSystemEnabled() then
-		return
-	end
-
 	local file = io.open(DATA_DIRECTORY .. "/items/proficiencies.json", "r")
 	if not file then
 		logError("[WeaponProficiency] Failed to open data/items/proficiencies.json.")
@@ -79,6 +97,35 @@ local function loadProficiencyDefinitions()
 		local proficiencyId = tonumber(definition.ProficiencyId)
 		if proficiencyId then
 			proficiencyDefinitionsById[proficiencyId] = definition
+			local name = tostring(definition.Name or ""):lower()
+			if name ~= "" then
+				proficiencyDefinitionsByName[name] = proficiencyId
+
+				local weaponType, handedness, itemName = name:match("^(%a+) ([12]h) (.+)$")
+				if weaponType == "sword" or weaponType == "axe" or weaponType == "club"
+					or weaponType == "wand" or weaponType == "rod" or weaponType == "caster"
+					or weaponType == "distance" or weaponType == "bow" or weaponType == "crossbow"
+					or weaponType == "fist" then
+					proficiencyIdsByWeaponItem[string.format("%s:%s:%s", weaponType, handedness, itemName)] = proficiencyId
+					if proficiencyIdsByUniqueItemName[itemName]
+						and proficiencyIdsByUniqueItemName[itemName] ~= proficiencyId then
+						duplicateProficiencyItemNames[itemName] = true
+					else
+						proficiencyIdsByUniqueItemName[itemName] = proficiencyId
+					end
+				end
+
+				local thrownItemName = name:match("^throw %- (.+)$")
+				if thrownItemName then
+					proficiencyIdsByWeaponItem["throw:2h:" .. thrownItemName] = proficiencyId
+					if proficiencyIdsByUniqueItemName[thrownItemName]
+						and proficiencyIdsByUniqueItemName[thrownItemName] ~= proficiencyId then
+						duplicateProficiencyItemNames[thrownItemName] = true
+					else
+						proficiencyIdsByUniqueItemName[thrownItemName] = proficiencyId
+					end
+				end
+			end
 		end
 	end
 end
@@ -113,6 +160,7 @@ local function ensureTables()
 			`item_id` smallint unsigned NOT NULL,
 			`experience` int unsigned NOT NULL DEFAULT '0',
 			`perks` varchar(64) NOT NULL DEFAULT '',
+			`modifiers` varchar(512) NOT NULL DEFAULT '',
 			PRIMARY KEY (`player_id`, `item_id`),
 			FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
@@ -127,7 +175,20 @@ local function ensureTables()
 end
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+end
+
+local function sendProficiencyBanner(player, itemId, message)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local out = NetworkMessage(player)
+	out:addByte(0x75)
+	out:addByte(10) -- SCREENSHOT_AND_BANNER_TYPE_PROFICIENCY
+	out:addU16(itemId)
+	out:addString(message)
+	return out:sendToPlayer(player)
 end
 
 local function getItemType(itemId)
@@ -136,6 +197,117 @@ local function getItemType(itemId)
 		return nil
 	end
 	return itemType
+end
+
+local DEFAULT_PROFICIENCY_BY_CATEGORY = {
+	[17] = 8,
+	[18] = 9,
+	[19] = 13,
+	[20] = 6,
+	[21] = 15,
+	[27] = 14,
+}
+
+-- Most profile names describe a weapon family (for example "Soul 2H Sword"),
+-- while older weapons use an exact suffix (for example "Sword 1H Ice Rapier").
+-- Resolve both forms once while building the catalog so each weapon keeps its
+-- own tree instead of inheriting one tree from its market category.
+local PROFICIENCY_TIER_PATTERNS = {
+	"siphoning inferniarch",
+	"draining inferniarch",
+	"rending inferniarch",
+	"stellar moonsilver",
+	"gilded eldritch",
+	"grand sanguine",
+	"master umbral",
+	"crude umbral",
+	"destruction",
+	"inferniarch",
+	"moonsilver",
+	"sanguine",
+	"eldritch",
+	"umbral",
+	"jungle",
+	"falcon",
+	"glooth",
+	"crypt",
+	"amber",
+	"cobra",
+	"lion",
+	"naga",
+	"soul",
+}
+
+local function findProficiencyId(candidates)
+	for _, candidate in ipairs(candidates) do
+		local proficiencyId = proficiencyDefinitionsByName[candidate]
+			or proficiencyIdsByWeaponItem[candidate]
+		if proficiencyId then
+			return proficiencyId
+		end
+	end
+	return nil
+end
+
+local function resolveItemProficiencyId(itemType, category)
+	local itemName = tostring(itemType:getName() or ""):lower()
+	local handedness = itemType:isTwoHanded() and "2h" or "1h"
+	local weaponTypes = {}
+
+	if category == 17 then
+		weaponTypes = { "axe" }
+	elseif category == 18 then
+		weaponTypes = { "club" }
+	elseif category == 19 then
+		handedness = "2h"
+		weaponTypes = itemName:find("crossbow", 1, true) and { "crossbow", "distance", "bow" }
+			or { "bow", "distance", "crossbow", "throw" }
+	elseif category == 20 then
+		weaponTypes = { "sword" }
+	elseif category == 21 then
+		if itemName:find("rod", 1, true) then
+			weaponTypes = { "rod", "caster", "wand" }
+		elseif itemName:find("wand", 1, true) then
+			weaponTypes = { "wand", "caster", "rod" }
+		else
+			weaponTypes = { "caster", "wand", "rod" }
+		end
+	elseif category == 27 then
+		handedness = "2h"
+		weaponTypes = { "fist" }
+	end
+
+	local exactCandidates = { itemName }
+	for _, weaponType in ipairs(weaponTypes) do
+		exactCandidates[#exactCandidates + 1] = string.format("%s:%s:%s", weaponType, handedness, itemName)
+	end
+	local proficiencyId = findProficiencyId(exactCandidates)
+	if proficiencyId then
+		return proficiencyId
+	end
+	if not duplicateProficiencyItemNames[itemName] and proficiencyIdsByUniqueItemName[itemName] then
+		return proficiencyIdsByUniqueItemName[itemName]
+	end
+
+	local tier
+	for _, pattern in ipairs(PROFICIENCY_TIER_PATTERNS) do
+		if itemName:find(pattern, 1, true) then
+			tier = pattern
+			break
+		end
+	end
+	if tier then
+		local tierCandidates = {}
+		for _, weaponType in ipairs(weaponTypes) do
+			tierCandidates[#tierCandidates + 1] = string.format("%s %s %s", tier, handedness, weaponType)
+		end
+		proficiencyId = findProficiencyId(tierCandidates)
+		if proficiencyId then
+			return proficiencyId
+		end
+	end
+
+	return DEFAULT_PROFICIENCY_BY_CATEGORY[category]
 end
 
 local function isValidWeaponId(itemId)
@@ -174,6 +346,7 @@ local function ensureCatalog()
 					clientId = clientId,
 					category = WEAPON_CATALOG[serverId],
 					name = itemType:getName(),
+					proficiencyId = resolveItemProficiencyId(itemType, WEAPON_CATALOG[serverId]),
 				}
 				catalogEntries[#catalogEntries + 1] = entry
 				serverIdByClientId[clientId] = serverId
@@ -273,6 +446,63 @@ local function decodePerks(encoded)
 	return perks
 end
 
+local function modifierKey(level, position)
+	return level .. ":" .. position
+end
+
+local function isValidModifierEnum(modifierEnum)
+	if modifierEnum >= 1 and modifierEnum <= 250 then
+		local offset = (modifierEnum - 1) % 50
+		local group = math.floor(offset / 10)
+		return group <= 4 and offset % 10 <= 5
+	end
+	return (modifierEnum >= 251 and modifierEnum <= 271)
+		or (modifierEnum >= 281 and modifierEnum <= 288)
+		or (modifierEnum >= 291 and modifierEnum <= 297)
+		or (modifierEnum >= 301 and modifierEnum <= 307)
+		or (modifierEnum >= 311 and modifierEnum <= 317 and modifierEnum ~= 313)
+		or (modifierEnum >= 321 and modifierEnum <= 323)
+end
+
+local function encodeModifiers(modifiers)
+	local entries = {}
+	for _, modifier in pairs(modifiers) do
+		entries[#entries + 1] = modifier
+	end
+	table.sort(entries, function(left, right)
+		return left.level == right.level and left.position < right.position or left.level < right.level
+	end)
+
+	local encoded = {}
+	for _, modifier in ipairs(entries) do
+		encoded[#encoded + 1] = string.format("%d:%d:%d:%d", modifier.level, modifier.position,
+			modifier.modifierEnum, modifier.refineLevel)
+	end
+	return table.concat(encoded, ",")
+end
+
+local function decodeModifiers(encoded)
+	local modifiers = {}
+	local count = 0
+	for entry in tostring(encoded or ""):gmatch("[^,]+") do
+		local level, position, modifierEnum, refineLevel = entry:match("^(%d+):(%d+):(%d+):(%d+)$")
+		level, position = tonumber(level), tonumber(position)
+		modifierEnum, refineLevel = tonumber(modifierEnum), tonumber(refineLevel)
+		if count < MAX_MODIFIED_SLOTS and level and position and modifierEnum and refineLevel
+			and level >= 0 and level < MAX_PERK_LEVEL and position >= 0 and position <= MAX_PERK_POSITION
+			and isValidModifierEnum(modifierEnum) and refineLevel >= 1 and refineLevel <= MAX_MODIFIER_RANK then
+			modifiers[modifierKey(level, position)] = {
+				level = level,
+				position = position,
+				modifierEnum = modifierEnum,
+				refineLevel = refineLevel,
+			}
+			count = count + 1
+		end
+	end
+	return modifiers
+end
+
 local supportsAliasedUpsert
 
 local function canUseAliasedUpsert()
@@ -304,15 +534,16 @@ local function saveState(guid, itemId, state)
 		return
 	end
 
-	local upsertClause = "ON DUPLICATE KEY UPDATE `experience` = VALUES(`experience`), `perks` = VALUES(`perks`)"
+	local upsertClause = "ON DUPLICATE KEY UPDATE `experience` = VALUES(`experience`), `perks` = VALUES(`perks`), `modifiers` = VALUES(`modifiers`)"
 	if canUseAliasedUpsert() then
-		upsertClause = "AS new ON DUPLICATE KEY UPDATE `experience` = new.`experience`, `perks` = new.`perks`"
+		upsertClause = "AS new ON DUPLICATE KEY UPDATE `experience` = new.`experience`, `perks` = new.`perks`, `modifiers` = new.`modifiers`"
 	end
 
 	db.asyncQuery(string.format(
-		"INSERT INTO `player_weapon_proficiency` (`player_id`, `item_id`, `experience`, `perks`) VALUES (%d, %d, %d, %s) " ..
+		"INSERT INTO `player_weapon_proficiency` (`player_id`, `item_id`, `experience`, `perks`, `modifiers`) VALUES (%d, %d, %d, %s, %s) " ..
 		upsertClause,
-		guid, itemId, state.experience, db.escapeString(encodePerks(state.perks))
+		guid, itemId, state.experience, db.escapeString(encodePerks(state.perks)),
+		db.escapeString(encodeModifiers(state.modifiers))
 	))
 end
 
@@ -326,7 +557,7 @@ local function loadProfile(player)
 	local profile = { weapons = {}, dirty = {}, catalogSent = false }
 	if ensureTables() then
 		local resultId = db.storeQuery(
-			"SELECT `item_id`, `experience`, `perks` FROM `player_weapon_proficiency` WHERE `player_id` = " .. guid
+			"SELECT `item_id`, `experience`, `perks`, `modifiers` FROM `player_weapon_proficiency` WHERE `player_id` = " .. guid
 		)
 		if resultId then
 			repeat
@@ -336,6 +567,7 @@ local function loadProfile(player)
 					profile.weapons[canonicalId] = {
 						experience = math.max(0, result.getDataInt(resultId, "experience")),
 						perks = decodePerks(result.getDataString(resultId, "perks")),
+						modifiers = decodeModifiers(result.getDataString(resultId, "modifiers")),
 					}
 				end
 			until not result.next(resultId)
@@ -378,8 +610,9 @@ end
 local function getState(player, itemId)
 	local profile = loadProfile(player)
 	if not profile.weapons[itemId] then
-		profile.weapons[itemId] = { experience = 0, perks = {} }
+		profile.weapons[itemId] = { experience = 0, perks = {}, modifiers = {} }
 	end
+	profile.weapons[itemId].modifiers = profile.weapons[itemId].modifiers or {}
 	return profile.weapons[itemId]
 end
 
@@ -399,6 +632,145 @@ local function getEquippedWeaponId(player)
 		end
 	end
 	return 0
+end
+
+local MODIFIER_SPELLS = {
+	[0] = { 80, 105, 106, 59, 316, 261 },
+	[1] = { 124, 302, 303, 258, 57, 122 },
+	[2] = { 13, 24, 240, 260, 310, 23 },
+	[3] = { 43, 120, 262, 263, 317, 318 },
+	[4] = { 289, 288, 294, 287, 301, 290 },
+}
+
+local MODIFIER_SPELL_OFFSETS = { 1, 2, 3, 4, 5, 11, 12, 13, 14, 15, 21, 22, 23, 24, 25 }
+local MODIFIER_GENERAL_POOL = {}
+for value = 251, 271 do MODIFIER_GENERAL_POOL[#MODIFIER_GENERAL_POOL + 1] = value end
+for value = 281, 288 do MODIFIER_GENERAL_POOL[#MODIFIER_GENERAL_POOL + 1] = value end
+for value = 291, 297 do MODIFIER_GENERAL_POOL[#MODIFIER_GENERAL_POOL + 1] = value end
+for value = 301, 307 do MODIFIER_GENERAL_POOL[#MODIFIER_GENERAL_POOL + 1] = value end
+for value = 311, 317 do
+	if value ~= 313 then MODIFIER_GENERAL_POOL[#MODIFIER_GENERAL_POOL + 1] = value end
+end
+for value = 321, 323 do MODIFIER_GENERAL_POOL[#MODIFIER_GENERAL_POOL + 1] = value end
+
+local MODIFIER_SKILLS = { 1, 6, 7, 8, 9, 10, 11 }
+
+local function interpolateModifierValue(minimum, maximum, rank)
+	rank = math.max(0, math.min(MAX_MODIFIER_RANK, tonumber(rank) or 0))
+	return minimum + math.floor(((maximum - minimum) / MAX_MODIFIER_RANK) * rank)
+end
+
+local function modifierPercent(minimum, maximum, rank)
+	return interpolateModifierValue(minimum, maximum, rank) / 10000
+end
+
+local function getModifierPerkData(modifierEnum, rank)
+	if modifierEnum >= 1 and modifierEnum <= 250 then
+		local region = math.floor((modifierEnum - 1) / 50)
+		local offset = (modifierEnum - 1) % 50
+		local spellIndex = offset % 10
+		local group = math.floor(offset / 10)
+		local spellId = MODIFIER_SPELLS[region] and MODIFIER_SPELLS[region][spellIndex + 1]
+		if not spellId or group > 4 then
+			return nil
+		end
+		local augmentTypes = { 17, 16, 2, 15, 14 }
+		local ranges = {
+			{ 100, 300 }, { 500, 2000 }, { 100, 300 }, { 100, 600 }, { 100, 1200 },
+		}
+		return {
+			Type = 5,
+			SpellId = spellId,
+			AugmentType = augmentTypes[group + 1],
+			Value = modifierPercent(ranges[group + 1][1], ranges[group + 1][2], rank),
+		}
+	end
+
+	if modifierEnum >= 251 and modifierEnum <= 271 then
+		return { Type = 6, BestiaryId = modifierEnum - 250, Value = modifierPercent(50, 250, rank) }
+	end
+
+	local direct = {
+		[281] = { Type = 16, Value = modifierPercent(100, 800, rank) },
+		[282] = { Type = 17, Value = modifierPercent(100, 1600, rank) },
+		[283] = { Type = 18, Value = interpolateModifierValue(2, 12, rank) },
+		[284] = { Type = 19, Value = interpolateModifierValue(5, 25, rank) },
+		[285] = { Type = 20, Value = interpolateModifierValue(4, 24, rank) },
+		[286] = { Type = 21, Value = interpolateModifierValue(10, 50, rank) },
+		[287] = { Type = 28, Value = modifierPercent(200, 1000, rank) },
+		[288] = { Type = 29, Value = modifierPercent(100, 400, rank) },
+		[321] = { Type = 30, Value = modifierPercent(500, 1500, rank) },
+		[322] = { Type = 31, Value = modifierPercent(500, 1500, rank), AllElements = true },
+		[323] = { Type = 7, Value = modifierPercent(100, 500, rank) },
+	}
+	if direct[modifierEnum] then
+		return direct[modifierEnum]
+	end
+
+	local rangeStart, perkType, minimum, maximum
+	if modifierEnum >= 291 and modifierEnum <= 297 then
+		rangeStart, perkType, minimum, maximum = 291, 25, 200, 1000
+	elseif modifierEnum >= 301 and modifierEnum <= 307 then
+		rangeStart, perkType, minimum, maximum = 301, 26, 100, 800
+	elseif modifierEnum >= 311 and modifierEnum <= 317 and modifierEnum ~= 313 then
+		rangeStart, perkType, minimum, maximum = 311, 27, 200, 1000
+	end
+	if rangeStart then
+		return {
+			Type = perkType,
+			SkillId = MODIFIER_SKILLS[modifierEnum - rangeStart + 1],
+			Value = modifierPercent(minimum, maximum, rank),
+		}
+	end
+
+	return nil
+end
+
+local function getModifierRegion(player, itemId)
+	local function getBaseVocationId()
+		local vocation = player:getVocation()
+		for _ = 1, 4 do
+			local demotion = vocation and vocation:getDemotion() or nil
+			if not demotion or demotion:getId() == vocation:getId() then
+				break
+			end
+			vocation = demotion
+		end
+		return vocation and vocation:getId() or 4
+	end
+
+	local itemType = getItemType(itemId)
+	local weaponType = itemType and itemType:getWeaponType() or WEAPON_NONE
+	if weaponType == WEAPON_SWORD or weaponType == WEAPON_AXE or weaponType == WEAPON_CLUB then
+		return 0
+	elseif weaponType == WEAPON_DISTANCE or weaponType == WEAPON_AMMO then
+		return 1
+	elseif WEAPON_FIST and weaponType == WEAPON_FIST then
+		return 4
+	elseif weaponType == WEAPON_WAND then
+		return getBaseVocationId() == 2 and 3 or 2
+	end
+
+	local vocationId = getBaseVocationId()
+	return ({ [4] = 0, [3] = 1, [1] = 2, [2] = 3, [5] = 4 })[vocationId] or 0
+end
+
+local function rollModifier(player, itemId, excluded)
+	local region = getModifierRegion(player, itemId)
+	local poolSize = #MODIFIER_SPELL_OFFSETS + #MODIFIER_GENERAL_POOL
+	for _ = 1, 100 do
+		local index = math.random(poolSize)
+		local modifierEnum
+		if index <= #MODIFIER_SPELL_OFFSETS then
+			modifierEnum = region * 50 + MODIFIER_SPELL_OFFSETS[index]
+		else
+			modifierEnum = MODIFIER_GENERAL_POOL[index - #MODIFIER_SPELL_OFFSETS]
+		end
+		if not excluded[modifierEnum] and getModifierPerkData(modifierEnum, 1) then
+			return modifierEnum
+		end
+	end
+	return nil
 end
 
 refreshProfileSpellAugments = function(player, profile)
@@ -433,20 +805,6 @@ refreshProfileSpellAugments = function(player, profile)
 		[13] = SKILL_FISHING,
 	}
 
-	-- Market category -> Proficiency ID (matches client getProficiencyIdFromCategory)
-	local MARKET_CATEGORY_TO_PROFICIENCY = {
-		[17] = 8,  -- Axes → Sanguine 1H Axe
-		[18] = 9,  -- Clubs → Sanguine 1H Club
-		[19] = 13, -- Distance → Sanguine 2H Bow
-		[20] = 6,  -- Swords → Sanguine 1H Sword
-		[21] = 15, -- Wands/Rods → Sanguine 1H Wand
-		[27] = 14, -- Fist → Sanguine 2H Fist
-	}
-
-	local function categoryToProficiencyId(category)
-		return MARKET_CATEGORY_TO_PROFICIENCY[category] or category
-	end
-
 	local function cipbiaSkillToTfs(cipbiaSkill)
 		if not cipbiaSkill then return SKILL_FIST end
 		return CIPBIA_SKILL_TO_TFS[cipbiaSkill] or SKILL_FIST
@@ -472,22 +830,29 @@ refreshProfileSpellAugments = function(player, profile)
 	end
 
 	local equippedId = getEquippedWeaponId(player)
+	local elementalTypes = {
+		COMBAT_PHYSICALDAMAGE, COMBAT_FIREDAMAGE, COMBAT_EARTHDAMAGE,
+		COMBAT_ENERGYDAMAGE, COMBAT_ICEDAMAGE, COMBAT_HOLYDAMAGE, COMBAT_DEATHDAMAGE,
+	}
 
-	local perkCount = 0
 	for itemId, state in pairs(profile.weapons) do
 		local entry = getCatalogEntry(itemId)
-		local proficiencyId = categoryToProficiencyId(entry and entry.category)
+		local proficiencyId = entry and entry.proficiencyId
 		local definition = proficiencyDefinitionsById[proficiencyId]
 		if definition and type(definition.Levels) == "table" then
 			local isEquipped = (itemId == equippedId)
 			for level, position in pairs(state.perks) do
 				local levelData = definition.Levels[level + 1]
 				local perk = levelData and levelData.Perks and levelData.Perks[position + 1]
+				local modifier = state.modifiers and state.modifiers[modifierKey(level, position)]
+				if modifier then
+					perk = getModifierPerkData(modifier.modifierEnum, modifier.refineLevel)
+				end
 				if perk then
 					local perkType = tonumber(perk.Type)
-					local value = tonumber(perk.Value)
+					local value = tonumber(perk.Value) or 0
 					local rawSkillId = tonumber(perk.SkillId)
-					if perkType and value then
+					if perkType then
 						if perkType == 5 then
 							-- Type 5 (Spell Augment): always register for lookup
 							local spellId = tonumber(perk.SpellId)
@@ -502,7 +867,15 @@ refreshProfileSpellAugments = function(player, profile)
 							local element = getElementFromJson(perk)
 							local range = tonumber(perk.Range) or 0
 							local bestiaryId = tonumber(perk.BestiaryId) or 0
-							player:applyWeaponProficiencyPerk(perkType, value, spellId, augmentType, skillId, element, range, bestiaryId)
+							if perk.AllElements then
+								for _, combatType in ipairs(elementalTypes) do
+									player:applyWeaponProficiencyPerk(perkType, value, 0, 0, skillId, combatType)
+								end
+							else
+								player:applyWeaponProficiencyPerk(perkType, value, spellId, augmentType, skillId, element,
+									range, bestiaryId, tonumber(perk.MissileId) or 0,
+									tonumber(perk.Multiplier) or 0, tonumber(perk.Probability) or 0)
+							end
 						end
 					end
 				end
@@ -533,7 +906,65 @@ local function writeInfoPayload(out, entry, state)
 		out:addByte(level)
 		out:addByte(state.perks[level])
 	end
+
+	local modifiers = {}
+	for _, modifier in pairs(state.modifiers or {}) do
+		modifiers[#modifiers + 1] = modifier
+	end
+	table.sort(modifiers, function(left, right)
+		return left.level == right.level and left.position < right.position or left.level < right.level
+	end)
+	out:addByte(math.min(#modifiers, MAX_MODIFIED_SLOTS))
+	for index = 1, math.min(#modifiers, MAX_MODIFIED_SLOTS) do
+		local modifier = modifiers[index]
+		out:addByte(modifier.level)
+		out:addByte(modifier.position)
+		out:addU16(modifier.modifierEnum)
+		out:addByte(modifier.refineLevel)
+	end
 	out:addU16(entry.category)
+end
+
+local function getForgeDust(player)
+	local value = player:getStorageValue(PlayerStorageKeys.forgeDust)
+	return value and value > 0 and value or 0
+end
+
+local function getForgeDustLimit(player)
+	local value = player:getStorageValue(PlayerStorageKeys.forgeDustLimit)
+	if not value or value <= 0 then
+		value = 100
+		player:setStorageValue(PlayerStorageKeys.forgeDustLimit, value)
+	end
+	return value
+end
+
+local function sendForgeDustBalance(player)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_RESOURCE_BALANCE)
+	out:addByte(RESOURCE_FORGE_DUST)
+	out:addU64(getForgeDust(player))
+	local balanceSent = out:sendToPlayer(player)
+
+	local limitOut = NetworkMessage(player)
+	limitOut:addByte(OPCODE_RESOURCE_BALANCE)
+	limitOut:addByte(RESOURCE_PROFICIENCY_DUST_LIMIT)
+	limitOut:addU64(getForgeDustLimit(player))
+	local limitSent = limitOut:sendToPlayer(player)
+	return balanceSent and limitSent
+end
+
+local function removeForgeDust(player, amount)
+	local current = getForgeDust(player)
+	if current < amount then
+		return false
+	end
+	player:setStorageValue(PlayerStorageKeys.forgeDust, current - amount)
+	sendForgeDustBalance(player)
+	return true
 end
 
 local function sendInfo(player, itemId)
@@ -545,7 +976,9 @@ local function sendInfo(player, itemId)
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_INFO)
 	writeInfoPayload(out, entry, getState(player, itemId))
-	return out:sendToPlayer(player)
+	local sent = out:sendToPlayer(player)
+	sendForgeDustBalance(player)
+	return sent
 end
 
 local function sendExperience(player, itemId)
@@ -577,6 +1010,7 @@ local function sendCatalog(player)
 		local entry = catalogEntries[index]
 		out:addU16(entry.clientId)
 		out:addU16(entry.category)
+		out:addU16(entry.proficiencyId or 0)
 		out:addString(entry.name)
 	end
 	return out:sendToPlayer(player)
@@ -602,7 +1036,9 @@ local function sendAllInfo(player, itemIds)
 	for _, info in ipairs(entries) do
 		writeInfoPayload(out, info.entry, getState(player, info.itemId))
 	end
-	return out:sendToPlayer(player)
+	local sent = out:sendToPlayer(player)
+	sendForgeDustBalance(player)
+	return sent
 end
 
 local function sendAll(player, forceCatalog)
@@ -620,9 +1056,22 @@ local function sendAll(player, forceCatalog)
 	sendAllInfo(player, itemIds)
 end
 
+local function sendProficiencyFailure(player, message)
+	player:sendTextMessage(MESSAGE_STATUS_SMALL, message)
+	return false
+end
+
+local function canChangePerks(player)
+	local tile = player:getTile()
+	return tile and tile:hasFlag(TILESTATE_PROTECTIONZONE) or false
+end
+
 local function clearPerks(player, itemId)
 	if not isValidWeaponId(itemId) then
 		return
+	end
+	if not canChangePerks(player) then
+		return sendProficiencyFailure(player, "You can only reset weapon proficiency inside a protection zone.")
 	end
 
 	local state = getState(player, itemId)
@@ -635,6 +1084,9 @@ end
 local function applyPerks(player, msg, itemId)
 	if not isValidWeaponId(itemId) or msg:len() - msg:tell() < 1 then
 		return
+	end
+	if not canChangePerks(player) then
+		return sendProficiencyFailure(player, "You can only change weapon proficiency inside a protection zone.")
 	end
 
 	local state = getState(player, itemId)
@@ -659,6 +1111,182 @@ local function applyPerks(player, msg, itemId)
 	refreshProfileSpellAugments(player)
 	queueSave(player, itemId)
 	sendInfo(player, itemId)
+end
+
+local function sendShapeFailure(player, message)
+	return sendProficiencyFailure(player, message)
+end
+
+local function validateShapeSlot(player, itemId, level, position, requireModifier)
+	if not isValidWeaponId(itemId) or level < 0 or level >= MAX_PERK_LEVEL
+		or position < 0 or position > MAX_PERK_POSITION then
+		return nil, sendShapeFailure(player, "Invalid weapon proficiency slot.")
+	end
+	local tile = player:getTile()
+	if not tile or not tile:hasFlag(TILESTATE_PROTECTIONZONE) then
+		return nil, sendShapeFailure(player, "You can only shape weapon proficiency inside a protection zone.")
+	end
+
+	local state = getState(player, itemId)
+	if getUnlockedLevelCount(itemId, state.experience) < MIN_SHAPING_UNLOCKED_LEVELS then
+		return nil, sendShapeFailure(player, "Level 3 has not been unlocked.")
+	end
+	if state.perks[level] ~= position then
+		return nil, sendShapeFailure(player, "Select and apply this perk before shaping it.")
+	end
+	local modifier = state.modifiers[modifierKey(level, position)]
+	if requireModifier and not modifier then
+		return nil, sendShapeFailure(player, "That perk has not been modified yet.")
+	end
+	return state, modifier
+end
+
+local function countModifiers(state)
+	local count = 0
+	for _ in pairs(state.modifiers) do count = count + 1 end
+	return count
+end
+
+local function getModifyDustCost(state)
+	return countModifiers(state) == 0 and FIRST_MODIFY_DUST_COST or SECOND_MODIFY_DUST_COST
+end
+
+local function getRefineDustCost(refineLevel)
+	return 125 + math.max(0, tonumber(refineLevel) or 0) * 75
+end
+
+local function finishShapeChange(player, itemId)
+	refreshProfileSpellAugments(player)
+	queueSave(player, itemId)
+	sendInfo(player, itemId)
+end
+
+local function modifySlot(player, itemId, level, position)
+	local state, modifier = validateShapeSlot(player, itemId, level, position, false)
+	if not state then return end
+	if modifier then
+		return sendShapeFailure(player, "That perk is already modified.")
+	end
+	if countModifiers(state) >= MAX_MODIFIED_SLOTS then
+		return sendShapeFailure(player, "You can modify at most two perks on this weapon.")
+	end
+	local dustCost = getModifyDustCost(state)
+	if getForgeDust(player) < dustCost then
+		return sendShapeFailure(player, string.format("You need %d dust to modify this perk.", dustCost))
+	end
+
+	local excluded = {}
+	for _, current in pairs(state.modifiers) do excluded[current.modifierEnum] = true end
+	local modifierEnum = rollModifier(player, itemId, excluded)
+	if not modifierEnum then
+		return sendShapeFailure(player, "No valid proficiency modifier is available.")
+	end
+	if not removeForgeDust(player, dustCost) then return end
+	state.modifiers[modifierKey(level, position)] = {
+		level = level,
+		position = position,
+		modifierEnum = modifierEnum,
+		refineLevel = 1,
+	}
+	finishShapeChange(player, itemId)
+end
+
+local function refineSlot(player, itemId, level, position)
+	local state, modifier = validateShapeSlot(player, itemId, level, position, true)
+	if not state then return end
+	if modifier.refineLevel >= MAX_MODIFIER_RANK then
+		return sendShapeFailure(player, "This modifier is already at maximum rank.")
+	end
+	local dustCost = getRefineDustCost(modifier.refineLevel)
+	if not removeForgeDust(player, dustCost) then
+		return sendShapeFailure(player, string.format("You need %d dust to refine this perk.", dustCost))
+	end
+	modifier.refineLevel = modifier.refineLevel + 1
+	finishShapeChange(player, itemId)
+end
+
+local function maximiseSlot(player, itemId, level, position)
+	local state, modifier = validateShapeSlot(player, itemId, level, position, true)
+	if not state then return end
+	if modifier.refineLevel >= MAX_MODIFIER_RANK then
+		return sendShapeFailure(player, "This modifier is already at maximum rank.")
+	end
+	-- The official action consumes a Lunar Ascension Orb. That item is not part of this
+	-- server's current OTB, so never grant a free maximum-rank upgrade.
+	return sendShapeFailure(player, "Maximise requires a Lunar Ascension Orb, which is not available yet.")
+end
+
+local function clearSlot(player, itemId, level, position)
+	local state = validateShapeSlot(player, itemId, level, position, true)
+	if not state then return end
+	state.modifiers[modifierKey(level, position)] = nil
+	local profile = loadProfile(player)
+	profile.pendingReshape = nil
+	finishShapeChange(player, itemId)
+end
+
+local function sendReshapeOffers(player, itemId, level, position, offers, rank)
+	local entry = getCatalogEntry(itemId)
+	if not entry then return false end
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_RESHAPE)
+	out:addU16(entry.clientId)
+	out:addByte(level)
+	out:addByte(position)
+	out:addByte(#offers)
+	for _, modifierEnum in ipairs(offers) do
+		out:addU16(modifierEnum)
+		out:addByte(rank)
+	end
+	return out:sendToPlayer(player)
+end
+
+local function reshapeSlot(player, itemId, level, position)
+	local state, modifier = validateShapeSlot(player, itemId, level, position, true)
+	if not state then return end
+	if getForgeDust(player) < RESHAPE_DUST_COST then
+		return sendShapeFailure(player, string.format("You need %d dust to reshape this perk.", RESHAPE_DUST_COST))
+	end
+
+	local excluded = { [modifier.modifierEnum] = true }
+	local offers = {}
+	for _ = 1, RESHAPE_OFFER_COUNT do
+		local offer = rollModifier(player, itemId, excluded)
+		if not offer then
+			return sendShapeFailure(player, "Unable to create reshape offers.")
+		end
+		excluded[offer] = true
+		offers[#offers + 1] = offer
+	end
+	if not removeForgeDust(player, RESHAPE_DUST_COST) then return end
+
+	local profile = loadProfile(player)
+	profile.pendingReshape = {
+		itemId = itemId,
+		level = level,
+		position = position,
+		offers = offers,
+		expiresAt = os.mtime() + RESHAPE_OFFER_TTL_MS,
+	}
+	sendReshapeOffers(player, itemId, level, position, offers, modifier.refineLevel)
+end
+
+local function pickReshapeOffer(player, itemId, level, position, offerIndex)
+	local profile = loadProfile(player)
+	local pending = profile.pendingReshape
+	profile.pendingReshape = nil
+	if not pending or pending.expiresAt < os.mtime() or pending.itemId ~= itemId
+		or pending.level ~= level or pending.position ~= position then
+		return sendShapeFailure(player, "These reshape offers have expired.")
+	end
+	local chosen = pending.offers[offerIndex + 1]
+	if not chosen then
+		return sendShapeFailure(player, "Invalid reshape offer.")
+	end
+	local state, modifier = validateShapeSlot(player, itemId, level, position, true)
+	if not state then return end
+	modifier.modifierEnum = chosen
+	finishShapeChange(player, itemId)
 end
 
 function System.addExperience(player, source, experience, itemId, applyMultiplier)
@@ -697,6 +1325,8 @@ function System.addExperience(player, source, experience, itemId, applyMultiplie
 
 	if getUnlockedLevelCount(itemId, state.experience) > previousUnlocked then
 		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your weapon proficiency has unlocked a new perk.")
+		local itemType = getItemType(itemId)
+		sendProficiencyBanner(player, itemId, itemType and itemType:getName() or "your weapon")
 		sendInfo(player, itemId)
 	end
 	return true
@@ -769,6 +1399,26 @@ function requestHandler.onReceive(player, msg)
 		clearPerks(player, itemId)
 	elseif action == ACTION_APPLY_PERKS then
 		applyPerks(player, msg, itemId)
+	elseif action >= ACTION_MODIFY_SLOT and action <= ACTION_CLEAR_SLOT then
+		if not itemId or msg:len() - msg:tell() < 2 then
+			return
+		end
+		local level = msg:getByte()
+		local position = msg:getByte()
+		if action == ACTION_MODIFY_SLOT then
+			modifySlot(player, itemId, level, position)
+		elseif action == ACTION_REFINE_SLOT then
+			refineSlot(player, itemId, level, position)
+		elseif action == ACTION_MAXIMISE_SLOT then
+			maximiseSlot(player, itemId, level, position)
+		elseif action == ACTION_RESHAPE_SLOT then
+			reshapeSlot(player, itemId, level, position)
+		elseif action == ACTION_PICK_RESHAPE then
+			if msg:len() - msg:tell() < 1 then return end
+			pickReshapeOffer(player, itemId, level, position, msg:getByte())
+		elseif action == ACTION_CLEAR_SLOT then
+			clearSlot(player, itemId, level, position)
+		end
 	end
 end
 

@@ -2566,6 +2566,15 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 
 	auto text = msg.getString();
 	const bool forceCastOnFoot = consumeHelperCastOnFoot();
+	Position spellAimPos;
+	bool hasSpellAimPos = false;
+	if (getUnreadBytes(msg) >= 6) {
+		const uint8_t aimMode = msg.getByte();
+		if (aimMode != 0 && getUnreadBytes(msg) >= 5) {
+			spellAimPos = msg.getPosition();
+			hasSpellAimPos = true;
+		}
+	}
 	if (text.length() > 255) {
 		return;
 	}
@@ -2575,7 +2584,13 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 		return;
 	}
 
+	if (hasSpellAimPos) {
+		player->setSpellAimPosition(spellAimPos);
+	} else {
+		player->clearSpellAimPosition();
+	}
 	g_game.playerSay(player->getID(), channelId, type, receiver, text, forceCastOnFoot);
+	player->clearSpellAimPosition();
 }
 
 void ProtocolGame::parseAttack(NetworkMessage& msg)
@@ -4142,6 +4157,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	}
 
 	sendPlayerInventory();
+	player->restoreStances();
 
 	sendStats();
 	sendSkills();
@@ -4843,6 +4859,106 @@ void ProtocolGame::sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time)
 	msg.addByte(0xA5);
 	msg.addByte(groupId);
 	msg.add<uint32_t>(time);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendStanceProtocol(const std::vector<uint16_t>& spellIds)
+{
+	if (!isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0xC1);
+	msg.addByte(0x02);
+	msg.addByte(static_cast<uint8_t>(std::min<std::size_t>(spellIds.size(), 255)));
+	for (std::size_t i = 0; i < spellIds.size() && i < 255; ++i) {
+		msg.add<uint16_t>(spellIds[i]);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendBannerType(Banner_t bannerType)
+{
+	if (!isAstraClient || bannerType == BANNER_TYPE_NONE) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_BANNER_INFO);
+	msg.addByte(bannerType);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendScreenshotAndBannerUnlockedCosmetic(std::string_view skinName, uint16_t lookType,
+                                                            uint8_t skinType)
+{
+	if (!isAstraClient || skinName.empty() || lookType == 0 || skinType > 3) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_COSMETIC);
+	msg.add<uint16_t>(lookType);
+	msg.addString(skinName);
+	msg.addByte(skinType);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendScreenshotAndBannerUpLevel(uint16_t level)
+{
+	if (!isAstraClient || level == 0) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_LEVEL);
+	msg.add<uint16_t>(level);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendScreenshotAndBannerUpSkill(skills_t skill, uint16_t level)
+{
+	if (!isAstraClient || level == 0) {
+		return;
+	}
+
+	uint8_t clientSkill = 0;
+	switch (skill) {
+		case SKILL_MAGLEVEL: clientSkill = 1; break;
+		case SKILL_SWORD: clientSkill = 2; break;
+		case SKILL_CLUB: clientSkill = 3; break;
+		case SKILL_AXE: clientSkill = 4; break;
+		case SKILL_FIST: clientSkill = 5; break;
+		case SKILL_DISTANCE: clientSkill = 6; break;
+		case SKILL_SHIELD: clientSkill = 7; break;
+		case SKILL_FISHING: clientSkill = 8; break;
+		default: return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_SKILL);
+	msg.addByte(clientSkill);
+	msg.add<uint16_t>(level);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss)
+{
+	if (!isAstraClient || raceId == 0 || progressLevel == 0) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(isBoss ? SCREENSHOT_AND_BANNER_TYPE_BOSSTIARY_PROGRESS :
+	                       SCREENSHOT_AND_BANNER_TYPE_BESTIARY_PROGRESS);
+	msg.add<uint16_t>(raceId);
+	msg.addByte(progressLevel);
 	writeToOutputBuffer(msg);
 }
 

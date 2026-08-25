@@ -56,6 +56,8 @@ bool isAstraOnlyLuaOpcode(uint8_t opcode)
 {
 	switch (opcode) {
 		case 0x2C: // custom boss cooldown
+		case 0x3D: // weapon proficiency reshape offers
+		case 0x3E: // custom boss difficulty selection
 		case 0x37: // custom battle pass
 		case 0x53: // task board data
 		case 0x9B: // blessing window

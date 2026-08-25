@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Lost Husher")
 local monster = {}
 
-monster.name = "Lost Husher"
 monster.description = "a lost husher"
 monster.experience = 1100
 monster.outfit = {
@@ -87,7 +86,7 @@ monster.loot = {
 	{ name = "brown mushroom", chance = 14920, maxCount = 2 },
 	{ name = "spiked squelcher", chance = 50 },
 	{ name = "strong health potion", chance = 11050, maxCount = 3 },
-	{ name = "great mana potion", chance = 10770, maxCount = 2 },
+	{ id = 238, chance = 10770, maxCount = 2 }, -- great mana potion
 	{ name = "terra legs", chance = 50 },
 	{ name = "terra boots", chance = 880 },
 	{ name = "small topaz", chance = 9780 },
@@ -104,7 +103,7 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_DEATHDAMAGE, minDamage = -150, maxDamage = -300, length = 6, spread = 0, effect = CONST_ME_BLACKSMOKE, target = false },
-	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_DEATHDAMAGE, minDamage = -150, maxDamage = -200, range = 7, shootEffect = CONST_ANI_SUDDENDEATH, effect = CONST_ME_MORTAREA, target = true },
+	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_DEATHDAMAGE, minDamage = -150, maxDamage = -200, range = 7, shootEffect = CONST_ANI_SUDDENDEATH, effect = CONST_ME_MORTAREA, target = false },
 	{ name = "combat", interval = 2000, chance = 10, type = COMBAT_EARTHDAMAGE, minDamage = -150, maxDamage = -250, range = 7, radius = 2, shootEffect = CONST_ANI_SMALLEARTH, effect = CONST_ME_MAGIC_GREEN, target = true },
 	{ name = "drunk", interval = 2000, chance = 10, radius = 4, effect = CONST_ME_SOUND_RED, target = false, duration = 6000 },
 }

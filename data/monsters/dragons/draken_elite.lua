@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Draken Elite")
 local monster = {}
 
-monster.name = "Draken Elite"
 monster.description = "a draken elite"
 monster.experience = 4200
 monster.outfit = {
@@ -82,7 +81,7 @@ monster.loot = {
 	{ name = "broken draken mail", chance = 25000 },
 	{ name = "broken slicer", chance = 25000 },
 	{ name = "ultimate health potion", chance = 12040, maxCount = 3 },
-	{ name = "great mana potion", chance = 9260, maxCount = 3 },
+	{ id = 238, chance = 9260, maxCount = 3 }, -- great mana potion
 	{ name = "draken sulphur", chance = 6480 },
 	{ name = "draken wristbands", chance = 6480 },
 	{ name = "small diamond", chance = 1850, maxCount = 2 },
@@ -107,8 +106,7 @@ monster.attacks = {
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_EARTHDAMAGE, minDamage = -280, maxDamage = -410, radius = 4, effect = CONST_ME_POFF, target = true },
 	{ name = "soulfire rune", interval = 2000, chance = 10, target = false },
 	-- poison
-	{ name = "condition", interval = 2000, chance = 10, target = true, condition =
-	{ type = CONDITION_POISON, minDamage = -250, maxDamage = -320, range = 7, shootEffect = CONST_ANI_POISON } },
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 10, minDamage = -250, maxDamage = -320, range = 7, shootEffect = CONST_ANI_POISON, target = true },
 }
 
 monster.defenses = {

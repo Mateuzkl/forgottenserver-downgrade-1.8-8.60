@@ -156,6 +156,10 @@ function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHi
 	if creature and creature:getMaster() then
 		return true
 	end
+	if creature and creature.hasBossDifficulty and creature:hasBossDifficulty()
+		and creature:getBossDifficulty() == 0 then
+		return true
+	end
 
 	local players = getKillPlayers(creature, killer, mostDamageKiller)
 	if next(players) == nil then

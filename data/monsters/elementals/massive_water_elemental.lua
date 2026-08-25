@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Massive Water Elemental")
 local monster = {}
 
-monster.name = "Massive Water Elemental"
 monster.description = "a massive water elemental"
 monster.experience = 1100
 monster.outfit = {
@@ -86,17 +85,16 @@ monster.loot = {
 	{ id = 3578, chance = 40000, maxCount = 2 }, -- fish
 	{ name = "rainbow trout", chance = 1340 },
 	{ name = "green perch", chance = 1590 },
-	{ name = "great mana potion", chance = 10400 },
+	{ id = 238, chance = 10400 }, -- great mana potion
 	{ name = "great health potion", chance = 10000 },
 }
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -220, condition = { type = CONDITION_POISON, totalDamage = 300, interval = 4000 } },
 	{ name = "combat", interval = 2000, chance = 15, type = COMBAT_DROWNDAMAGE, minDamage = -330, maxDamage = -450, range = 7, radius = 2, effect = CONST_ME_LOSEENERGY, target = true },
-	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_ICEDAMAGE, minDamage = -170, maxDamage = -210, range = 7, shootEffect = CONST_ANI_SMALLICE, target = true },
+	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_ICEDAMAGE, minDamage = -170, maxDamage = -210, range = 7, shootEffect = CONST_ANI_SMALLICE, target = false },
 	-- poison
-	{ name = "condition", interval = 2000, chance = 20, target = false, condition =
-	{ type = CONDITION_POISON, minDamage = -355, maxDamage = -420, radius = 5, effect = CONST_ME_POISONAREA } },
+	{ name = "condition", type = CONDITION_POISON, interval = 2000, chance = 20, minDamage = -355, maxDamage = -420, radius = 5, effect = CONST_ME_POISONAREA, target = false },
 }
 
 monster.defenses = {

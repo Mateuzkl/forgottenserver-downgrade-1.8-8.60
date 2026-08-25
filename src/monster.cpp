@@ -6,6 +6,7 @@
 #include "monster.h"
 
 #include "configmanager.h"
+#include "database.h"
 #include "events.h"
 #include "game.h"
 #include "iologindata.h"
@@ -42,6 +43,86 @@ double reward_boss::calculateLootRate(double contributionScore, int32_t totalSco
 
 	return std::min((contributionScore / expectedScore) * baseRate, 1.0);
 }
+
+double boss_difficulty::healthMultiplier(uint16_t difficulty)
+{
+	return difficulty == 0 ? 1.0 : 1.0 + static_cast<double>(difficulty) * 0.04;
+}
+
+double boss_difficulty::damageMultiplier(uint16_t difficulty)
+{
+	return difficulty == 0 ? 0.5 : 1.0 + static_cast<double>(difficulty) * 0.08;
+}
+
+double boss_difficulty::lootMultiplier(uint16_t difficulty)
+{
+	return difficulty == 0 ? 0.0 : 1.0 + static_cast<double>(difficulty) * 0.016;
+}
+
+namespace {
+constexpr uint32_t BOSS_DIFFICULTY_BAD_LUCK_INCREMENT = 20; // per-mille (2%)
+
+bool isMoonsilverItem(uint16_t itemId)
+{
+	std::string name = Item::items[itemId].name;
+	std::ranges::transform(name, name.begin(), [](unsigned char character) {
+		return static_cast<char>(std::tolower(character));
+	});
+	return name.find("moonsilver") != std::string::npos;
+}
+
+std::unordered_map<uint32_t, uint32_t> loadBossDifficultyBadLuck(
+    uint16_t raceId, const Game::RewardBossContributionInfo& contributionInfo)
+{
+	std::unordered_map<uint32_t, uint32_t> badLuckByPlayer;
+	if (raceId == 0 || contributionInfo.playerScoreTable.empty()) {
+		return badLuckByPlayer;
+	}
+
+	std::string playerIds;
+	for (const auto& [playerId, _] : contributionInfo.playerScoreTable) {
+		if (!playerIds.empty()) {
+			playerIds += ',';
+		}
+		playerIds += std::to_string(playerId);
+	}
+
+	auto result = Database::getInstance().storeQuery(fmt::format(
+	    "SELECT `player_id`, `bad_luck` FROM `player_boss_difficulty` WHERE `boss_race_id` = {:d} AND "
+	    "`player_id` IN ({:s})",
+	    raceId, playerIds));
+	if (!result) {
+		return badLuckByPlayer;
+	}
+
+	do {
+		badLuckByPlayer[result->getNumber<uint32_t>("player_id")] = result->getNumber<uint32_t>("bad_luck");
+	} while (result->next());
+	return badLuckByPlayer;
+}
+
+void saveBossDifficultyBadLuck(uint16_t raceId, const std::unordered_map<uint32_t, bool>& moonsilverByPlayer)
+{
+	if (raceId == 0 || moonsilverByPlayer.empty()) {
+		return;
+	}
+
+	std::string values;
+	for (const auto& [playerId, receivedMoonsilver] : moonsilverByPlayer) {
+		if (!values.empty()) {
+			values += ',';
+		}
+		values += fmt::format("({:d}, {:d}, 1, 0, 1, {:d})", playerId, raceId,
+		                      receivedMoonsilver ? 0 : BOSS_DIFFICULTY_BAD_LUCK_INCREMENT);
+	}
+
+	Database::getInstance().executeQuery(fmt::format(
+	    "INSERT INTO `player_boss_difficulty` (`player_id`, `boss_race_id`, `unlocked_difficulty`, "
+	    "`highest_defeated`, `selected_difficulty`, `bad_luck`) VALUES {:s} ON DUPLICATE KEY UPDATE "
+	    "`bad_luck` = IF(VALUES(`bad_luck`) = 0, 0, LEAST(`bad_luck` + VALUES(`bad_luck`), 4294967295))",
+	    values));
+}
+} // namespace
 
 std::unique_ptr<Monster> Monster::createMonster(const std::string& name)
 {
@@ -161,6 +242,50 @@ void Monster::setFiendish(bool v)
 	g_game.updateCreatureSkull(this);
 }
 
+bool Monster::applyEchoWarden(double healthMultiplier, double attackMultiplier)
+{
+	if (echoWarden || isSummon() || isBoss() || influenced || fiendish || !std::isfinite(healthMultiplier) ||
+	    !std::isfinite(attackMultiplier) || healthMultiplier <= 0.0 || attackMultiplier <= 0.0) {
+		return false;
+	}
+
+	echoWarden = true;
+	echoWardenAttackMultiplier = std::clamp(attackMultiplier, 0.1, 100.0);
+	const auto scaledHealth = static_cast<int64_t>(std::llround(static_cast<double>(healthMax) * healthMultiplier));
+	healthMax = static_cast<int32_t>(std::clamp<int64_t>(scaledHealth, 1, std::numeric_limits<int32_t>::max()));
+	health = healthMax;
+
+	setIcon("echo_warden", CreatureIcon(CreatureIconModifications_Fiendish));
+	g_game.updateCreatureIcon(this);
+	g_game.addCreatureHealth(this);
+	return true;
+}
+
+bool Monster::applyBossDifficulty(uint16_t difficulty, uint16_t raceId)
+{
+	if (bossDifficultyApplied) {
+		return false;
+	}
+
+	bossDifficultyApplied = true;
+	bossDifficulty = difficulty;
+	bossDifficultyRaceId = raceId;
+	bossDifficultyAttackMultiplier = boss_difficulty::damageMultiplier(difficulty);
+	if (difficulty == 0) {
+		return true;
+	}
+
+	const double healthMultiplier = boss_difficulty::healthMultiplier(difficulty);
+	const auto scaledHealth = static_cast<int64_t>(std::llround(static_cast<double>(healthMax) * healthMultiplier));
+	healthMax = static_cast<int32_t>(std::clamp<int64_t>(scaledHealth, 1, std::numeric_limits<int32_t>::max()));
+	health = healthMax;
+
+	if (!isRemoved()) {
+		g_game.addCreatureHealth(this);
+	}
+	return true;
+}
+
 Monster::Monster(const std::shared_ptr<MonsterType>& mType) : Creature(), nameDescription(mType->nameDescription), mType(mType)
 {
 	defaultOutfit = mType->info.outfit;
@@ -229,7 +354,13 @@ uint64_t Monster::getLostExperience() const
 
 void Monster::addList() { g_game.addMonster(this); }
 
-void Monster::removeList() { g_game.removeMonster(this); }
+void Monster::removeList()
+{
+	if (isRewardBoss()) {
+		g_game.resetDamageTracking(getID());
+	}
+	g_game.removeMonster(this);
+}
 
 const std::string& Monster::getName() const
 {
@@ -1394,6 +1525,14 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 			elementMod = it->second;
 		}
 
+		if (elementMod > 0 && attacker &&
+		    ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			if (Player* attackerPlayer = attacker->getPlayer()) {
+				const double_t pierce = attackerPlayer->weaponProficiency().getElementalPierce(combatType);
+				elementMod -= static_cast<int32_t>(std::floor(elementMod * pierce));
+			}
+		}
+
 		if (elementMod != 0) {
 			damage = static_cast<int32_t>(std::round(damage * ((100 - elementMod) / 100.)));
 			if (damage <= 0) {
@@ -2024,6 +2163,9 @@ void Monster::onThinkDefense(uint32_t interval)
 			if (summonUnique) {
 				std::shared_ptr<Monster> summon(std::move(summonUnique));
 				summon->setInstanceID(getInstanceID());
+				if (bossDifficultyApplied) {
+					summon->applyBossDifficulty(bossDifficulty, bossDifficultyRaceId);
+				}
 				if (g_game.placeCreature(summon.get(), getPosition(), false, summonBlock.force, summonBlock.effect)) {
 					auto summonRef = g_game.getCreatureSharedRef<Monster>(summon.get());
 					summonRef->setDropLoot(false);
@@ -2720,8 +2862,25 @@ void Monster::death(Creature*)
 			}
 		}
 		const auto& creatureLoot = mType->info.lootItems;
+		const uint16_t difficulty = getBossDifficulty();
+		const bool difficultyActive = hasBossDifficulty();
+		const uint16_t raceId = getBossDifficultyRaceId();
+		const double difficultyLootRate = difficultyActive ? boss_difficulty::lootMultiplier(difficulty) : 1.0;
+		const auto badLuckByPlayer = difficultyActive && difficulty > 0
+		                                 ? loadBossDifficultyBadLuck(raceId, scoreInfo)
+		                                 : std::unordered_map<uint32_t, uint32_t>{};
+		std::unordered_map<uint32_t, bool> moonsilverByPlayer;
 		int64_t currentTime = time(nullptr);
 		for (const auto& [playerId, playerScoreInfo] : rewardBossContributionInfo[monsterId].playerScoreTable) {
+			auto player = g_game.getPlayerByGUID(playerId);
+			if (difficultyActive && difficulty == 0) {
+				if (player) {
+					player->sendTextMessage(MESSAGE_STATUS_DEFAULT,
+					                        "Practice difficulty grants no loot or Bosstiary progress.");
+				}
+				continue;
+			}
+
 			double damageDone = playerScoreInfo.damageDone;
 			double damageTaken = playerScoreInfo.damageTaken;
 			double healingDone = playerScoreInfo.healingDone;
@@ -2738,8 +2897,11 @@ void Monster::death(Creature*)
 			}
 			const double lootRate = reward_boss::calculateLootRate(
 			    contrubutionScore, totalScore, contributors,
-			    ConfigManager::getFloat(ConfigManager::REWARD_BASE_RATE));
-			auto player = g_game.getPlayerByGUID(playerId);
+			    ConfigManager::getFloat(ConfigManager::REWARD_BASE_RATE)) * difficultyLootRate;
+			const auto badLuckIt = badLuckByPlayer.find(playerId);
+			const double moonsilverMultiplier =
+			    badLuckIt == badLuckByPlayer.end() ? 1.0 : 1.0 + static_cast<double>(badLuckIt->second) / 1000.0;
+			bool receivedMoonsilver = false;
 			auto rewardItem = Item::CreateItem(ITEM_REWARD_CONTAINER);
 			if (!rewardItem) {
 				return;
@@ -2760,13 +2922,18 @@ void Monster::death(Creature*)
 				if (lootBlock.id == 0) {
 					continue;
 				}
-				float adjustedChance =
+				const bool moonsilver = isMoonsilverItem(lootBlock.id);
+				double adjustedChance =
 				    (lootBlock.chance * lootRate) * ConfigManager::getInteger(ConfigManager::RATE_LOOT);
+				if (moonsilver) {
+					adjustedChance *= moonsilverMultiplier;
+				}
 				if (lootBlock.unique && mostScoreContributor == playerId) {
 					// Ensure that the mostScoreContributor can receive multiple unique items
 					const ItemType& itemType = Item::items[lootBlock.id];
 					if (itemType.stackable) {
 						stackableCounts[lootBlock.id] += uniform_random(1, lootBlock.countmax);
+						receivedMoonsilver = receivedMoonsilver || moonsilver;
 						continue;
 					}
 
@@ -2780,12 +2947,14 @@ void Monster::death(Creature*)
 					pendingItems.push_back(lootItem);
 					rewardContainer->internalAddThing(lootItem.get());
 					hasLoot = true;
+					receivedMoonsilver = receivedMoonsilver || moonsilver;
 				} else if (!lootBlock.unique) {
 					// Normal loot distribution for non-unique items
 					if (uniform_random(1, MAX_LOOTCHANCE) <= adjustedChance) {
 						const ItemType& itemType = Item::items[lootBlock.id];
 						if (itemType.stackable) {
 							stackableCounts[lootBlock.id] += uniform_random(1, lootBlock.countmax);
+							receivedMoonsilver = receivedMoonsilver || moonsilver;
 							continue;
 						}
 
@@ -2799,6 +2968,7 @@ void Monster::death(Creature*)
 						pendingItems.push_back(lootItem);
 						rewardContainer->internalAddThing(lootItem.get());
 						hasLoot = true;
+						receivedMoonsilver = receivedMoonsilver || moonsilver;
 					}
 				}
 			}
@@ -2815,6 +2985,9 @@ void Monster::death(Creature*)
 					}
 					totalCount -= batch;
 				}
+			}
+			if (difficultyActive) {
+				moonsilverByPlayer[playerId] = receivedMoonsilver;
 			}
 			if (hasLoot) {
 				if (player) {
@@ -2847,6 +3020,9 @@ void Monster::death(Creature*)
 					player->sendTextMessage(MESSAGE_STATUS_DEFAULT, "You did not receive any loot.");
 				}
 			}
+		}
+		if (difficultyActive && difficulty > 0) {
+			saveBossDifficultyBadLuck(raceId, moonsilverByPlayer);
 		}
 		g_game.resetDamageTracking(monsterId);
 	}
@@ -2936,6 +3112,15 @@ bool Monster::getCombatValues(int32_t& min, int32_t& max)
 		double mult = dmgMult[influencedLevel];
 		min = static_cast<int32_t>(min * mult);
 		max = static_cast<int32_t>(max * mult);
+	}
+
+	if (echoWarden) {
+		min = static_cast<int32_t>(std::clamp<double>(min * echoWardenAttackMultiplier,
+		                                               std::numeric_limits<int32_t>::min(),
+		                                               std::numeric_limits<int32_t>::max()));
+		max = static_cast<int32_t>(std::clamp<double>(max * echoWardenAttackMultiplier,
+		                                               std::numeric_limits<int32_t>::min(),
+		                                               std::numeric_limits<int32_t>::max()));
 	}
 
 	return true;

@@ -278,6 +278,18 @@ bool BestiaryCharmSystem::setMinorCharmEchoes(uint32_t playerGuid, uint32_t echo
 	    playerGuid, echoes, maxEchoes));
 }
 
+bool BestiaryCharmSystem::addMinorCharmEchoes(uint32_t playerGuid, uint32_t amount) const
+{
+	const auto [echoes, maxEchoes] = getMinorCharmEchoes(playerGuid);
+	const uint32_t updatedEchoes = echoes > std::numeric_limits<uint32_t>::max() - amount
+	                                 ? std::numeric_limits<uint32_t>::max()
+	                                 : echoes + amount;
+	const uint32_t updatedMaximum = maxEchoes > std::numeric_limits<uint32_t>::max() - amount
+	                                  ? std::numeric_limits<uint32_t>::max()
+	                                  : maxEchoes + amount;
+	return setMinorCharmEchoes(playerGuid, updatedEchoes, updatedMaximum);
+}
+
 bool BestiaryCharmSystem::hasGold(const Player& player, uint64_t amount) const
 {
 	if (amount == 0) {

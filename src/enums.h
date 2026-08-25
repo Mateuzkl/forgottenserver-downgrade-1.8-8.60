@@ -221,6 +221,8 @@ enum SpellGroup_t : uint8_t
 	SPELLGROUP_HEALING = 2,
 	SPELLGROUP_SUPPORT = 3,
 	SPELLGROUP_SPECIAL = 4,
+	SPELLGROUP_FOCUS = 10,
+	SPELLGROUP_STANCE = 11,
 };
 
 enum SpellType_t : uint8_t
@@ -228,6 +230,66 @@ enum SpellType_t : uint8_t
 	SPELL_UNDEFINED = 0,
 	SPELL_INSTANT = 1,
 	SPELL_RUNE = 2,
+};
+
+enum ScreenshotAndBanner_t : uint8_t
+{
+	SCREENSHOT_AND_BANNER_TYPE_NONE = 0,
+	SCREENSHOT_AND_BANNER_TYPE_BANNER_INFO = 1,
+	SCREENSHOT_AND_BANNER_TYPE_ACHIEVEMENT = 2,
+	SCREENSHOT_AND_BANNER_TYPE_TITLE = 3,
+	SCREENSHOT_AND_BANNER_TYPE_LEVEL = 4,
+	SCREENSHOT_AND_BANNER_TYPE_SKILL = 5,
+	SCREENSHOT_AND_BANNER_TYPE_BESTIARY_PROGRESS = 6,
+	SCREENSHOT_AND_BANNER_TYPE_BOSSTIARY_PROGRESS = 7,
+	SCREENSHOT_AND_BANNER_TYPE_QUEST = 8,
+	SCREENSHOT_AND_BANNER_TYPE_COSMETIC = 9,
+	SCREENSHOT_AND_BANNER_TYPE_PROFICIENCY = 10,
+	SCREENSHOT_AND_BANNER_TYPE_ECHO_WARDEN = 14,
+};
+
+enum Banner_t : uint8_t
+{
+	BANNER_TYPE_NONE = 0,
+	BANNER_TYPE_BOSSDEFEATED = 1,
+	BANNER_TYPE_DEATHPVE = 2,
+	BANNER_TYPE_DEATHPVP = 3,
+	BANNER_TYPE_PLAYERKILLASSIST = 4,
+	BANNER_TYPE_PLAYERKILL = 5,
+	BANNER_TYPE_PLAYERATTACKING = 6,
+	BANNER_TYPE_TREASUREFOUND = 7,
+	BANNER_TYPE_GIFTOFLIFE = 8,
+	BANNER_TYPE_ATTACKSTOPPED = 9,
+	BANNER_TYPE_CAPACITYLIMIT = 10,
+	BANNER_TYPE_OUTOFAMMO = 11,
+	BANNER_TYPE_TARGETTOOCLOSE = 12,
+	BANNER_TYPE_OUTOFSOULPOINTS = 13,
+	BANNER_TYPE_TUTORIALCOMPLETE = 14,
+	BANNER_TYPE_PROMOTION_GRANTED = 15,
+};
+
+enum AttrSubId_t : uint32_t
+{
+	AttrSubId_None = 0,
+	AttrSubId_TrainParty = 1,
+	AttrSubId_ProtectParty = 2,
+	AttrSubId_EnchantParty = 3,
+	AttrSubId_JeanPierreMagic = 4,
+	AttrSubId_JeanPierreMelee = 5,
+	AttrSubId_JeanPierreDistance = 6,
+	AttrSubId_JeanPierreDefense = 7,
+	AttrSubId_JeanPierreFishing = 8,
+	AttrSubId_BloodRageProtector = 9,
+	AttrSubId_Sharpshooter = 10,
+	AttrSubId_SwiftFoot = 11,
+	AttrSubId_DivineDefiance = 12,
+	AttrSubId_SorcererMasterOfFlames = 13,
+	AttrSubId_SorcererMasterOfThunder = 14,
+	AttrSubId_SorcererMasterOfDecay = 15,
+	AttrSubId_DruidSharedConservation = 16,
+	AttrSubId_DruidElementalSynthesis = 17,
+	AttrSubId_SorcererSapStrengthAura = 18,
+	AttrSubId_SorcererExposeWeaknessAura = 19,
 };
 
 enum AccountType_t : uint8_t
@@ -308,6 +370,8 @@ enum CombatParam_t
 	COMBAT_PARAM_USECHARGES,
 	COMBAT_PARAM_CHAIN_EFFECT,
 	COMBAT_PARAM_RESET_DAMAGE_MULTIPLIER,
+	COMBAT_PARAM_CASTSOUND,
+	COMBAT_PARAM_IMPACTSOUND,
 };
 
 enum class CallBackParam
@@ -386,6 +450,9 @@ enum ConditionParam_t
 	CONDITION_PARAM_CASTER_POSITION = 62,
 	CONDITION_PARAM_STAT_CAPACITY = 63,
 	CONDITION_PARAM_STAT_CAPACITYPERCENT = 64,
+	CONDITION_PARAM_BUFF_DAMAGEDEALT = 65,
+	CONDITION_PARAM_BUFF_DAMAGERECEIVED = 66,
+	CONDITION_PARAM_BUFF_HEALINGRECEIVED = 67,
 };
 
 enum BlockType_t : uint8_t
@@ -517,6 +584,11 @@ enum PlayerSex_t : uint8_t
 };
 
 inline constexpr uint16_t VOCATION_NONE = 0;
+inline constexpr uint16_t VOCATION_SORCERER = 1;
+inline constexpr uint16_t VOCATION_DRUID = 2;
+inline constexpr uint16_t VOCATION_PALADIN = 3;
+inline constexpr uint16_t VOCATION_KNIGHT = 4;
+inline constexpr uint16_t VOCATION_MONK = 9;
 
 inline constexpr int32_t STORAGE_FAMILIAR_SUMMON_TIME = 845232;
 inline constexpr int32_t STORAGE_FAMILIAR_TIMER_10 = 845233;
@@ -781,6 +853,7 @@ struct CombatDamage
 	bool fatal = false;
 	bool dodge = false;
 	bool preyApplied = false;
+	bool bossDifficultyApplied = false;
 	bool initialOriginCaptured = false;
 	bool equipmentDamageBonusApplied = false;
 	bool equipmentDamageReductionApplied = false;

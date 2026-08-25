@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Swan Maiden")
 local monster = {}
 
-monster.name = "Swan Maiden"
 monster.description = "a swan maiden"
 monster.experience = 700
 monster.outfit = {
@@ -88,7 +87,7 @@ monster.loot = {
 	{ name = "opal", chance = 492, maxCount = 2 },
 	{ name = "strong mana potion", chance = 6800 },
 	{ name = "clerical mace", chance = 5155 },
-	{ name = "great mana potion", chance = 591 },
+	{ id = 238, chance = 591 }, -- great mana potion
 	{ name = "colourful snail shell", chance = 5800 },
 	{ name = "diamond sceptre", chance = 3400 },
 	{ name = "coral brooch", chance = 3400 },

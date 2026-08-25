@@ -367,4 +367,37 @@ TEST_CASE(monster_clears_faction_target_when_policy_is_disabled)
 	CHECK(monster->getIdleStatus());
 }
 
+TEST_CASE(boss_difficulty_scales_health_and_attack_once)
+{
+	auto monster = makeMonster();
+	CHECK(monster->getHealth() == 100);
+	CHECK(monster->getMaxHealth() == 100);
+
+	CHECK(monster->applyBossDifficulty(5, 1003));
+	CHECK(monster->getBossDifficulty() == 5);
+	CHECK(monster->getBossDifficultyRaceId() == 1003);
+	CHECK(monster->getHealth() == 120);
+	CHECK(monster->getMaxHealth() == 120);
+	CHECK(monster->getBossDifficultyAttackMultiplier() > 1.399);
+	CHECK(monster->getBossDifficultyAttackMultiplier() < 1.401);
+
+	CHECK(!monster->applyBossDifficulty(10));
+	CHECK(monster->getHealth() == 120);
+	CHECK(monster->getMaxHealth() == 120);
+
+	auto highDifficulty = makeMonster();
+	CHECK(highDifficulty->applyBossDifficulty(300, 1003));
+	CHECK(highDifficulty->getBossDifficulty() == 300);
+	CHECK(highDifficulty->getHealth() == 1300);
+
+	auto practice = makeMonster();
+	CHECK(practice->applyBossDifficulty(0, 1003));
+	CHECK(practice->getHealth() == 100);
+	CHECK(practice->getBossDifficultyAttackMultiplier() > 0.499);
+	CHECK(practice->getBossDifficultyAttackMultiplier() < 0.501);
+	CHECK(boss_difficulty::lootMultiplier(0) == 0.0);
+	CHECK(boss_difficulty::lootMultiplier(5) > 1.079);
+	CHECK(boss_difficulty::lootMultiplier(5) < 1.081);
+}
+
 TFS_TEST_MAIN()

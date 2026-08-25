@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "bed.h"
+#include "bestiary_charm.h"
 #include "chat.h"
 #include "configmanager.h"
 #include "game.h"
@@ -932,10 +933,24 @@ int luaPlayerGetCombatAbsorbPercent(lua_State* L)
 	// player:getCombatAbsorbPercent(combatType)
 	const Player* player = getUserdata<const Player>(L, 1);
 	if (player) {
-		lua_pushinteger(L, player->getCombatAbsorbPercent(getInteger<CombatType_t>(L, 2)));
+		lua_pushnumber(L, player->getCombatAbsorbPercent(getInteger<CombatType_t>(L, 2)));
 	} else {
 		lua_pushnil(L);
 	}
+	return 1;
+}
+
+int luaPlayerAddCombatAbsorbPercent(lua_State* L)
+{
+	// player:addCombatAbsorbPercent(combatType, value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addCombatAbsorbPercent(getInteger<CombatType_t>(L, 2), getNumber<float>(L, 3));
+	pushBoolean(L, true);
 	return 1;
 }
 
@@ -949,6 +964,34 @@ int luaPlayerAddMitigation(lua_State* L)
 	}
 
 	player->addMitigation(getNumber<float>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddWheelMitigationMultiplier(lua_State* L)
+{
+	// player:addWheelMitigationMultiplier(value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addWheelMitigationMultiplier(getNumber<float>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddWheelDodgeChance(lua_State* L)
+{
+	// player:addWheelDodgeChance(value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addWheelDodgeChance(getNumber<float>(L, 2));
 	pushBoolean(L, true);
 	return 1;
 }
@@ -1465,6 +1508,76 @@ int luaPlayerSetVirtue(lua_State* L)
 		uint8_t virtue = getNumber<uint8_t>(L, 2, 0);
 		player->setVirtue(static_cast<VirtueMonk_t>(virtue));
 		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetStance(lua_State* L)
+{
+	// player:getStance()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, static_cast<int>(player->getStance()));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetStance(lua_State* L)
+{
+	// player:setStance(stance)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		const auto stance = static_cast<Stance_t>(getNumber<uint8_t>(L, 2, 0));
+		const bool result = player->setStance(stance);
+		if (result) {
+			player->persistStances();
+		}
+		pushBoolean(L, result);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetElementalStance(lua_State* L)
+{
+	// player:getElementalStance()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, static_cast<int>(player->getElementalStance()));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetElementalStance(lua_State* L)
+{
+	// player:setElementalStance(stance)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		const auto stance = static_cast<Stance_t>(getNumber<uint8_t>(L, 2, 0));
+		const bool result = player->setElementalStance(stance);
+		if (result) {
+			player->persistStances();
+		}
+		pushBoolean(L, result);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerGetSpellAimPosition(lua_State* L)
+{
+	// player:getSpellAimPosition()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player && player->hasSpellAimPosition()) {
+		pushPosition(L, player->getSpellAimPosition());
 	} else {
 		lua_pushnil(L);
 	}
@@ -2097,6 +2210,20 @@ int luaPlayerSendTextMessage(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSendBannerType(lua_State* L)
+{
+	// player:sendBannerType(bannerType)
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->sendBannerType(getInteger<Banner_t>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerSendStats(lua_State* L)
 {
 	// player:sendStats()
@@ -2318,6 +2445,45 @@ int luaPlayerAddWheelSpellAugment(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetWheelSpellAdditionalArea(lua_State* L)
+{
+	// player:getWheelSpellAdditionalArea(spellName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushBoolean(L, player->getWheelSpellAdditionalArea(getString(L, 2)));
+	return 1;
+}
+
+int luaPlayerGetWheelSpellAdditionalTarget(lua_State* L)
+{
+	// player:getWheelSpellAdditionalTarget(spellName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, player->getWheelSpellAdditionalTarget(getString(L, 2)));
+	return 1;
+}
+
+int luaPlayerGetWheelSpellAdditionalDuration(lua_State* L)
+{
+	// player:getWheelSpellAdditionalDuration(spellName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, player->getWheelSpellAdditionalDuration(getString(L, 2)));
+	return 1;
+}
+
 int luaPlayerResetWeaponProficiencyStats(lua_State* L)
 {
 	// player:resetWeaponProficiencyStats()
@@ -2334,7 +2500,8 @@ int luaPlayerResetWeaponProficiencyStats(lua_State* L)
 
 int luaPlayerApplyWeaponProficiencyPerk(lua_State* L)
 {
-	// player:applyWeaponProficiencyPerk(perkType, value[, spellId, augmentType, skillId, element, range, bestiaryId])
+	// player:applyWeaponProficiencyPerk(perkType, value[, spellId, augmentType, skillId, element, range,
+	//                                    bestiaryId, missileId, missileMultiplier, missileProbability])
 	Player* player = getUserdata<Player>(L, 1);
 	if (!player) {
 		lua_pushnil(L);
@@ -2349,9 +2516,27 @@ int luaPlayerApplyWeaponProficiencyPerk(lua_State* L)
 	CombatType_t element = static_cast<CombatType_t>(getInteger<uint16_t>(L, 7, COMBAT_NONE));
 	uint8_t range = getInteger<uint8_t>(L, 8, 0);
 	uint16_t bestiaryId = getInteger<uint16_t>(L, 9, 0);
+	uint16_t missileId = getInteger<uint16_t>(L, 10, 0);
+	double missileMultiplier = getNumber<double>(L, 11, 0);
+	double missileProbability = getNumber<double>(L, 12, 0);
 
-	player->weaponProficiency().applyPerk(perkType, value, spellId, augmentType, skillId, element, range, bestiaryId);
+	player->weaponProficiency().applyPerk(perkType, value, spellId, augmentType, skillId, element, range,
+	                                      bestiaryId, missileId, missileMultiplier, missileProbability);
 	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddMinorCharmEchoes(lua_State* L)
+{
+	// player:addMinorCharmEchoes(amount)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const uint32_t amount = getInteger<uint32_t>(L, 2);
+	pushBoolean(L, g_bestiaryCharmSystem.addMinorCharmEchoes(player->getGUID(), amount));
 	return 1;
 }
 
@@ -4674,7 +4859,10 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getArmor", luaPlayerGetArmor);
 	registerMethod("Player", "getDefense", luaPlayerGetDefense);
 	registerMethod("Player", "getCombatAbsorbPercent", luaPlayerGetCombatAbsorbPercent);
+	registerMethod("Player", "addCombatAbsorbPercent", luaPlayerAddCombatAbsorbPercent);
 	registerMethod("Player", "addMitigation", luaPlayerAddMitigation);
+	registerMethod("Player", "addWheelMitigationMultiplier", luaPlayerAddWheelMitigationMultiplier);
+	registerMethod("Player", "addWheelDodgeChance", luaPlayerAddWheelDodgeChance);
 
 	registerMethod("Player", "getItemCount", luaPlayerGetItemCount);
 	registerMethod("Player", "getItemById", luaPlayerGetItemById);
@@ -4719,6 +4907,11 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "setSereneCooldown", luaPlayerSetSereneCooldown);
 	registerMethod("Player", "getVirtue", luaPlayerGetVirtue);
 	registerMethod("Player", "setVirtue", luaPlayerSetVirtue);
+	registerMethod("Player", "getStance", luaPlayerGetStance);
+	registerMethod("Player", "setStance", luaPlayerSetStance);
+	registerMethod("Player", "getElementalStance", luaPlayerGetElementalStance);
+	registerMethod("Player", "setElementalStance", luaPlayerSetElementalStance);
+	registerMethod("Player", "getSpellAimPosition", luaPlayerGetSpellAimPosition);
 	registerMethod("Player", "clearSpellCooldowns", luaPlayerClearSpellCooldowns);
 
 	registerMethod("Player", "getBankBalance", luaPlayerGetBankBalance);
@@ -4755,6 +4948,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "showTextDialog", luaPlayerShowTextDialog);
 
 	registerMethod("Player", "sendTextMessage", luaPlayerSendTextMessage);
+	registerMethod("Player", "sendBannerType", luaPlayerSendBannerType);
 	registerMethod("Player", "sendStats", luaPlayerSendStats);
 	registerMethod("Player", "sendSkills", luaPlayerSendSkills);
 	registerMethod("Player", "sendItemValues", luaPlayerSendItemValues);
@@ -4770,8 +4964,12 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addProficiencySpellAugment", luaPlayerAddProficiencySpellAugment);
 	registerMethod("Player", "clearWheelSpellAugments", luaPlayerClearWheelSpellAugments);
 	registerMethod("Player", "addWheelSpellAugment", luaPlayerAddWheelSpellAugment);
+	registerMethod("Player", "getWheelSpellAdditionalArea", luaPlayerGetWheelSpellAdditionalArea);
+	registerMethod("Player", "getWheelSpellAdditionalTarget", luaPlayerGetWheelSpellAdditionalTarget);
+	registerMethod("Player", "getWheelSpellAdditionalDuration", luaPlayerGetWheelSpellAdditionalDuration);
 	registerMethod("Player", "resetWeaponProficiencyStats", luaPlayerResetWeaponProficiencyStats);
 	registerMethod("Player", "applyWeaponProficiencyPerk", luaPlayerApplyWeaponProficiencyPerk);
+	registerMethod("Player", "addMinorCharmEchoes", luaPlayerAddMinorCharmEchoes);
 
 	registerMethod("Player", "getParty", luaPlayerGetParty);
 

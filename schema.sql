@@ -482,6 +482,7 @@ CREATE TABLE IF NOT EXISTS `player_weapon_proficiency` (
   `item_id` smallint unsigned NOT NULL,
   `experience` int unsigned NOT NULL DEFAULT '0',
   `perks` varchar(64) NOT NULL DEFAULT '',
+  `modifiers` varchar(512) NOT NULL DEFAULT '',
   PRIMARY KEY (`player_id`,`item_id`),
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
@@ -775,7 +776,7 @@ CREATE TABLE IF NOT EXISTS `player_hirelings` (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT INTO server_config (config, value) VALUES ('db_version', '62'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO server_config (config, value) VALUES ('db_version', '63'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 CREATE TABLE IF NOT EXISTS guild_transactions (
   id SERIAL PRIMARY KEY,

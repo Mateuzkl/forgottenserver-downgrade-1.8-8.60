@@ -117,7 +117,7 @@ function Game.createQuest(name, quest)
 	return quest
 end
 
-function Game.isQuestStorage(key, value, oldValue)
+function Game.isQuestStorage(key, value, oldValue, player)
 	key = tonumber(key)
 	value = tonumber(value)
 	oldValue = tonumber(oldValue) or -1
@@ -130,7 +130,9 @@ function Game.isQuestStorage(key, value, oldValue)
 		local questStorageId = tonumber(quest.storageId)
 		local questStorageValue = tonumber(quest.storageValue)
 
-		if questStorageId == key and questStorageValue == value and oldValue ~= value then return true end
+		if questStorageId == key and questStorageValue == value and oldValue ~= value then
+			return true, quest.name, player and quest:isCompleted(player) or false
+		end
 	end
 
 	for _, mission in pairs(missions) do
@@ -138,9 +140,15 @@ function Game.isQuestStorage(key, value, oldValue)
 		local startValue = tonumber(mission.startValue)
 		local endValue = tonumber(mission.endValue)
 
-		if storageId == key and startValue and endValue and value >= startValue and value <=
-			endValue then
-			return oldValue ~= value
+		if storageId == key and startValue and endValue and value >= startValue and value <= endValue
+			and oldValue ~= value then
+			local completedNow = (mission.ignoreEndValue and value >= endValue and oldValue < endValue)
+				or (not mission.ignoreEndValue and value == endValue and oldValue ~= endValue)
+			local quest = quests[mission.questId]
+			if completedNow and player and quest and quest:isCompleted(player) then
+				return true, quest.name, true
+			end
+			return true
 		end
 	end
 	return false

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Crawler")
 local monster = {}
 
-monster.name = "Crawler"
 monster.description = "a crawler"
 monster.experience = 1000
 monster.outfit = {
@@ -79,7 +78,7 @@ monster.loot = {
 	{ name = "gold coin", chance = 50000, maxCount = 90 },
 	{ name = "yellow gem", chance = 530 },
 	{ name = "war hammer", chance = 2070 },
-	{ name = "great mana potion", chance = 9300 },
+	{ id = 238, chance = 9300 }, -- great mana potion
 	{ name = "great health potion", chance = 6200 },
 	{ name = "springsprout rod", chance = 710 },
 	{ name = "small topaz", chance = 10040, maxCount = 2 },
@@ -90,7 +89,7 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -228, condition = { type = CONDITION_POISON, totalDamage = 80, interval = 4000 } },
-	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_EARTHDAMAGE, minDamage = -100, maxDamage = -180, range = 7, shootEffect = CONST_ANI_SMALLEARTH, target = true },
+	{ name = "combat", interval = 2000, chance = 20, type = COMBAT_EARTHDAMAGE, minDamage = -100, maxDamage = -180, range = 7, shootEffect = CONST_ANI_SMALLEARTH, target = false },
 }
 
 monster.defenses = {

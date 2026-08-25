@@ -6231,6 +6231,61 @@ void Game::changeLight(const Creature* creature)
 	}
 }
 
+namespace {
+bool isBossDifficultyTarget(const Creature* target)
+{
+	if (!target) {
+		return false;
+	}
+	if (target->getPlayer()) {
+		return true;
+	}
+	const auto master = target->getMaster();
+	return master && master->getPlayer();
+}
+
+Monster* getBossDifficultyAttacker(Creature* attacker)
+{
+	if (!attacker) {
+		return nullptr;
+	}
+	if (Monster* monster = attacker->getMonster(); monster && monster->hasBossDifficulty()) {
+		return monster;
+	}
+	const auto master = attacker->getMaster();
+	Monster* monster = master ? master->getMonster() : nullptr;
+	return monster && monster->hasBossDifficulty() ? monster : nullptr;
+}
+
+void applyBossDifficultyDamage(CombatDamage& damage, Creature* attacker, Creature* target)
+{
+	if (damage.bossDifficultyApplied || !isBossDifficultyTarget(target)) {
+		return;
+	}
+
+	Monster* monster = getBossDifficultyAttacker(attacker);
+	if (!monster) {
+		return;
+	}
+
+	damage.bossDifficultyApplied = true;
+	const double multiplier = monster->getBossDifficultyAttackMultiplier();
+	const auto scale = [multiplier](int32_t value) {
+		return static_cast<int32_t>(std::clamp<double>(std::round(static_cast<double>(value) * multiplier),
+		                                               std::numeric_limits<int32_t>::min(),
+		                                               std::numeric_limits<int32_t>::max()));
+	};
+	if (damage.primary.type != COMBAT_NONE && damage.primary.type != COMBAT_HEALING &&
+	    damage.primary.type != COMBAT_AGONYDAMAGE) {
+		damage.primary.value = scale(damage.primary.value);
+	}
+	if (damage.secondary.type != COMBAT_NONE && damage.secondary.type != COMBAT_HEALING &&
+	    damage.secondary.type != COMBAT_AGONYDAMAGE) {
+		damage.secondary.value = scale(damage.secondary.value);
+	}
+}
+} // namespace
+
 bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* target, bool checkDefense,
                           bool checkArmor, bool field, bool ignoreResistances /*= false */)
 {
@@ -6323,6 +6378,11 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 	} else {
 		secondaryBlockType = BLOCK_NONE;
 	}
+
+	// Difficulty modifies the damage the character actually receives, after
+	// armor, defense and resistances. combatChangeHealth/Mana provides the
+	// fallback for direct damage paths that do not call combatBlockHit.
+	applyBossDifficultyDamage(damage, attacker, target);
 
 	damage.blockType = primaryBlockType;
 
@@ -6555,6 +6615,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 	if (attacker && !attacker->compareInstance(target->getInstanceID())) {
 		return false;
 	}
+
+	applyBossDifficultyDamage(damage, attacker, target);
 
 	auto targetRef = target->weak_from_this().lock();
 	if (!targetRef) {
@@ -7083,6 +7145,8 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 	if (attacker && !attacker->compareInstance(target->getInstanceID())) {
 		return false;
 	}
+
+	applyBossDifficultyDamage(damage, attacker, target);
 
 	std::shared_ptr<Creature> attackerRef;
 	if (attacker) {

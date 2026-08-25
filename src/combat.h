@@ -92,6 +92,8 @@ struct CombatParams
 
 	uint16_t impactEffect = CONST_ME_NONE;
 	uint16_t distanceEffect = CONST_ANI_NONE;
+	uint16_t soundCastEffect = 0;
+	uint16_t soundImpactEffect = 0;
 
 	bool blockedByArmor = false;
 	bool blockedByShield = false;

@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Renegade Quara Hydromancer")
 local monster = {}
 
-monster.name = "Renegade Quara Hydromancer"
 monster.description = "a renegade quara hydromancer"
 monster.experience = 1800
 monster.outfit = {
@@ -64,6 +63,7 @@ monster.flags = {
 	canWalkOnEnergy = false,
 	canWalkOnFire = true,
 	canWalkOnPoison = false,
+	isPreyExclusive = true,
 }
 
 monster.light = {
@@ -83,7 +83,7 @@ monster.loot = {
 	{ name = "shrimp", chance = 7380 },
 	{ name = "small topaz", chance = 6450, maxCount = 2 },
 	{ name = "small emerald", chance = 7050, maxCount = 2 },
-	{ name = "great mana potion", chance = 5490, maxCount = 2 },
+	{ id = 238, chance = 5490, maxCount = 2 }, -- great mana potion
 	{ name = "spirit cloak", chance = 5000 },
 	{ name = "great health potion", chance = 5060, maxCount = 2 },
 	{ name = "yellow piece of cloth", chance = 2580 },

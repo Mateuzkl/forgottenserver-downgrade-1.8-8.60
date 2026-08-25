@@ -21,13 +21,28 @@ end
 
 combat:setCallback(CallBackParam.SKILLVALUE, callback)
 
+local combatWOD = Combat()
+combatWOD:setParameter(COMBAT_PARAM_TYPE, COMBAT_PHYSICALDAMAGE)
+combatWOD:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_HITAREA)
+combatWOD:setParameter(COMBAT_PARAM_BLOCKARMOR, true)
+combatWOD:setParameter(COMBAT_PARAM_USECHARGES, true)
+combatWOD:setArea(createCombatArea(AREA_FRONT_SWEEP_WOD, AREADIAGONAL_FRONT_SWEEP_WOD))
+combatWOD:setCallback(CallBackParam.SKILLVALUE, callback)
+
 local spell = Spell("instant")
-function spell.onCastSpell(creature, variant) return combat:execute(creature, variant) end
+function spell.onCastSpell(creature, variant)
+	local player = creature:getPlayer()
+	if player and player:getWheelSpellAdditionalArea("Front Sweep") then
+		return combatWOD:execute(creature, variant)
+	end
+	return combat:execute(creature, variant)
+end
 
 spell:group("attack")
 spell:id(59)
 spell:name("Front Sweep")
 spell:words("exori min")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_FRONT_SWEEP)
 spell:level(70)
 spell:mana(200)
 spell:isPremium(true)

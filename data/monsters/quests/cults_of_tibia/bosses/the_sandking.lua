@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("The Sandking")
 local monster = {}
 
-monster.name = "The Sandking"
 monster.description = "The Sandking"
 monster.experience = 0
 monster.outfit = {
@@ -12,6 +11,10 @@ monster.outfit = {
 	lookFeet = 0,
 	lookAddons = 0,
 	lookMount = 0,
+}
+
+monster.events = {
+	"CultsOfTibiaBossDeath",
 }
 
 monster.bosstiary = {
@@ -78,7 +81,7 @@ monster.loot = {
 	{ name = "small diamond", chance = 21000, maxCount = 10 },
 	{ name = "green gem", chance = 12000 },
 	{ name = "luminous orb", chance = 35000 },
-	{ name = "great mana potion", chance = 31230, maxCount = 10 },
+	{ id = 238, chance = 31230, maxCount = 10 }, -- great mana potion
 	{ name = "ultimate health potion", chance = 28230, maxCount = 10 },
 	{ name = "cobra crown", chance = 400 },
 	{ name = "silver token", chance = 25520 },
@@ -118,6 +121,7 @@ monster.attacks = {
 monster.defenses = {
 	defense = 30,
 	armor = 30,
+	--	mitigation = ???,
 }
 
 monster.elements = {

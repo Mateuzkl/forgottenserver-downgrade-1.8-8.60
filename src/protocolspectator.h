@@ -960,6 +960,78 @@ class ProtocolSpectator {
                 spy->sendSpellCooldown(spellId, time);
         }
 
+        void sendStanceProtocol(const std::vector<uint16_t>& spellIds) {
+            auto o = owner.lock();
+            if (o)
+                o->sendStanceProtocol(spellIds);
+
+            for (auto &it : spectators)
+                it->sendStanceProtocol(spellIds);
+
+            for (auto &spy : spyClients_)
+                spy->sendStanceProtocol(spellIds);
+        }
+
+        void sendBannerType(Banner_t bannerType) {
+            auto o = owner.lock();
+            if (o)
+                o->sendBannerType(bannerType);
+
+            for (auto &it : spectators)
+                it->sendBannerType(bannerType);
+
+            for (auto &spy : spyClients_)
+                spy->sendBannerType(bannerType);
+        }
+
+        void sendScreenshotAndBannerUpLevel(uint16_t level) {
+            auto o = owner.lock();
+            if (o)
+                o->sendScreenshotAndBannerUpLevel(level);
+
+            for (auto &it : spectators)
+                it->sendScreenshotAndBannerUpLevel(level);
+
+            for (auto &spy : spyClients_)
+                spy->sendScreenshotAndBannerUpLevel(level);
+        }
+
+        void sendScreenshotAndBannerUnlockedCosmetic(std::string_view skinName, uint16_t lookType, uint8_t skinType) {
+            auto o = owner.lock();
+            if (o)
+                o->sendScreenshotAndBannerUnlockedCosmetic(skinName, lookType, skinType);
+
+            for (auto &it : spectators)
+                it->sendScreenshotAndBannerUnlockedCosmetic(skinName, lookType, skinType);
+
+            for (auto &spy : spyClients_)
+                spy->sendScreenshotAndBannerUnlockedCosmetic(skinName, lookType, skinType);
+        }
+
+        void sendScreenshotAndBannerUpSkill(skills_t skill, uint16_t level) {
+            auto o = owner.lock();
+            if (o)
+                o->sendScreenshotAndBannerUpSkill(skill, level);
+
+            for (auto &it : spectators)
+                it->sendScreenshotAndBannerUpSkill(skill, level);
+
+            for (auto &spy : spyClients_)
+                spy->sendScreenshotAndBannerUpSkill(skill, level);
+        }
+
+        void sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss) {
+            auto o = owner.lock();
+            if (o)
+                o->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+
+            for (auto &it : spectators)
+                it->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+
+            for (auto &spy : spyClients_)
+                spy->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+        }
+
         void sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time) {
             auto o = owner.lock();
             if (o)

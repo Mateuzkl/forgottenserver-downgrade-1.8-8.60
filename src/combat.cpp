@@ -115,6 +115,16 @@ void applyFatalDamage(CombatDamage& damage)
 	damage.fatal = true;
 }
 
+void applyPercentToDamage(CombatDamage& damage, int32_t percent)
+{
+	if (percent == 100) {
+		return;
+	}
+
+	damage.primary.value = static_cast<int32_t>(std::round(damage.primary.value * (percent / 100.0)));
+	damage.secondary.value = static_cast<int32_t>(std::round(damage.secondary.value * (percent / 100.0)));
+}
+
 } // namespace
 
 static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatType)
@@ -698,6 +708,16 @@ bool Combat::setParam(CombatParam_t param, uint32_t value)
 			params.resetDamageMultiplier = f;
 			return true;
 		}
+
+		case COMBAT_PARAM_CASTSOUND: {
+			params.soundCastEffect = static_cast<uint16_t>(value);
+			return true;
+		}
+
+		case COMBAT_PARAM_IMPACTSOUND: {
+			params.soundImpactEffect = static_cast<uint16_t>(value);
+			return true;
+		}
 	}
 	return false;
 }
@@ -734,6 +754,12 @@ int32_t Combat::getParam(CombatParam_t param) const
 
 		case COMBAT_PARAM_USECHARGES:
 			return params.useCharges ? 1 : 0;
+
+		case COMBAT_PARAM_CASTSOUND:
+			return params.soundCastEffect;
+
+		case COMBAT_PARAM_IMPACTSOUND:
+			return params.soundImpactEffect;
 
 		default:
 			return std::numeric_limits<int32_t>().max();
@@ -1195,25 +1221,27 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 				damage.primary.type != COMBAT_HEALING &&
 				damage.origin != ORIGIN_CONDITION) {
 			Player *targetPlayer = target->getPlayer();
+			double dodgeChance = targetPlayer->getWheelDodgeChance();
 			Item *armor = targetPlayer->getInventoryItem(CONST_SLOT_ARMOR);
 			if (armor && armor->getTier() > 0) {
-				double dodgeChance = armor->getDodgeChance();
+				double armorDodgeChance = armor->getDodgeChance();
 				Item *boots = targetPlayer->getInventoryItem(CONST_SLOT_FEET);
 				if (boots && boots->getTier() > 0) {
 					double ampChance = boots->getMomentumChance()* 0.02;
-					dodgeChance *= (1.0 + ampChance);
+					armorDodgeChance *= (1.0 + ampChance);
 				}
-				if (dodgeChance > 0 && (normal_random(1, 10000) / 100.0) < dodgeChance) {
-					damage.primary.value = 0;
-					damage.secondary.value = 0;
-					damage.blockType = BLOCK_DODGE;
-					damage.dodge = true;
-					SpectatorVec dodgeSpectators;
-					g_game.map.getSpectators(dodgeSpectators, target->getPosition(), true, true);
-					InstanceUtils::sendMagicEffectToInstance(dodgeSpectators,
-						target->getPosition(), CONST_ME_DODGE, target->getInstanceID());
-					return;
-				}
+				dodgeChance += armorDodgeChance;
+			}
+			if (dodgeChance > 0 && (normal_random(1, 10000) / 100.0) < dodgeChance) {
+				damage.primary.value = 0;
+				damage.secondary.value = 0;
+				damage.blockType = BLOCK_DODGE;
+				damage.dodge = true;
+				SpectatorVec dodgeSpectators;
+				g_game.map.getSpectators(dodgeSpectators, target->getPosition(), true, true);
+				InstanceUtils::sendMagicEffectToInstance(dodgeSpectators,
+					target->getPosition(), CONST_ME_DODGE, target->getInstanceID());
+				return;
 			}
 		}
 
@@ -1286,6 +1314,22 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 			if (auto targetMonster = lockMonster(target)) {
 				casterPlayer->weaponProficiency().applyBestiaryDamage(damage, targetMonster);
 				casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damage, targetMonster);
+			}
+			casterPlayer->weaponProficiency().applyTargetHealthDamage(damage, target);
+		}
+
+		if (damage.primary.type == COMBAT_HEALING) {
+			if (target) {
+				applyPercentToDamage(
+				    damage, target->getConditionParamPercent(CONDITION_PARAM_BUFF_HEALINGRECEIVED));
+			}
+		} else if (damage.origin != ORIGIN_CONDITION) {
+			if (caster) {
+				applyPercentToDamage(damage, caster->getConditionParamPercent(CONDITION_PARAM_BUFF_DAMAGEDEALT));
+			}
+			if (target) {
+				applyPercentToDamage(
+				    damage, target->getConditionParamPercent(CONDITION_PARAM_BUFF_DAMAGERECEIVED));
 			}
 		}
 
@@ -1507,13 +1551,6 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 
 	if (wpEnabled) {
 		casterPlayer->weaponProficiency().applySkillAutoAttackPercentage(damage);
-		if (!damage.instantSpellName.empty()) {
-			if (damage.primary.type == COMBAT_HEALING) {
-				casterPlayer->weaponProficiency().applySkillSpellPercentage(damage, true);
-			} else {
-				casterPlayer->weaponProficiency().applySkillSpellPercentage(damage);
-			}
-		}
 	}
 
 	int32_t criticalPrimary = 0;
@@ -1701,6 +1738,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 					casterPlayer->weaponProficiency().applyBestiaryDamage(damageCopy, targetMonster);
 					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damageCopy, targetMonster);
 				}
+				casterPlayer->weaponProficiency().applyTargetHealthDamage(damageCopy, creature.get());
 			}
 
 			success = g_game.combatChangeHealth(caster, creature.get(), damageCopy);

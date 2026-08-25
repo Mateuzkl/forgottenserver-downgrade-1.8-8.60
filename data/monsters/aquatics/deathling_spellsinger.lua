@@ -1,7 +1,6 @@
 local mType = Game.createMonsterType("Deathling Spellsinger")
 local monster = {}
 
-monster.name = "Deathling Spellsinger"
 monster.description = "a deathling spellsinger"
 monster.experience = 6400
 monster.outfit = {
@@ -87,7 +86,7 @@ monster.loot = {
 	{ name = "deepling ridge", chance = 9020 },
 	{ name = "great health potion", chance = 8750 },
 	{ name = "deepling warts", chance = 8280 },
-	{ name = "great mana potion", chance = 7970 },
+	{ id = 238, chance = 7970 }, -- great mana potion
 	{ name = "vortex bolt", chance = 5350, maxCount = 25 },
 	{ name = "eye of a deepling", chance = 4840 },
 	{ name = "warrior's shield", chance = 3370 },
@@ -101,8 +100,8 @@ monster.loot = {
 
 monster.attacks = {
 	{ name = "melee", interval = 2000, chance = 100, minDamage = 0, maxDamage = -300, effect = CONST_ME_DRAWBLOOD },
-	{ name = "combat", interval = 4000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = -200, maxDamage = -400, range = 5, shootEffect = CONST_ANI_HUNTINGSPEAR, target = true },
-	{ name = "combat", interval = 4000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = -150, maxDamage = -300, range = 5, shootEffect = CONST_ANI_LARGEROCK, target = true },
+	{ name = "combat", interval = 4000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = -200, maxDamage = -400, range = 5, shootEffect = CONST_ANI_HUNTINGSPEAR, target = false },
+	{ name = "combat", interval = 4000, chance = 15, type = COMBAT_PHYSICALDAMAGE, minDamage = -150, maxDamage = -300, range = 5, shootEffect = CONST_ANI_LARGEROCK, target = false },
 	{ name = "combat", interval = 2000, chance = 14, type = COMBAT_HOLYDAMAGE, minDamage = -400, maxDamage = -700, length = 8, spread = 0, effect = CONST_ME_HOLYAREA, target = false },
 }
 
