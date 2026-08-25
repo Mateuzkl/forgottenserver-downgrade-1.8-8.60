@@ -19,6 +19,7 @@ class StoreInbox;
 class Player;
 
 bool isBrowseFieldVisibleItem(const Item* item);
+bool isInsideRewardContainer(const Cylinder* cylinder);
 
 class ContainerIterator
 {

@@ -48,6 +48,19 @@ bool isBrowseFieldVisibleItem(const Item* item)
 	       (Item::items[item->getID()].wrapableTo != 0 && !item->hasProperty(CONST_PROP_BLOCKPATH));
 }
 
+bool isInsideRewardContainer(const Cylinder* cylinder)
+{
+	while (cylinder) {
+		const auto* container = dynamic_cast<const Container*>(cylinder);
+		if (container && (container->getID() == ITEM_REWARD_CONTAINER || container->getRewardChest() ||
+		                  container->isRewardCorpse())) {
+			return true;
+		}
+		cylinder = cylinder->getParent();
+	}
+	return false;
+}
+
 Container::Container(uint16_t type) : Container(type, items[type].maxItems) {}
 
 Container::Container(uint16_t type, uint16_t size) : Item(type), maxSize(size)
