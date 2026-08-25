@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "bed.h"
+#include "bestiary_charm.h"
 #include "chat.h"
 #include "configmanager.h"
 #include "game.h"
@@ -2499,7 +2500,8 @@ int luaPlayerResetWeaponProficiencyStats(lua_State* L)
 
 int luaPlayerApplyWeaponProficiencyPerk(lua_State* L)
 {
-	// player:applyWeaponProficiencyPerk(perkType, value[, spellId, augmentType, skillId, element, range, bestiaryId])
+	// player:applyWeaponProficiencyPerk(perkType, value[, spellId, augmentType, skillId, element, range,
+	//                                    bestiaryId, missileId, missileMultiplier, missileProbability])
 	Player* player = getUserdata<Player>(L, 1);
 	if (!player) {
 		lua_pushnil(L);
@@ -2514,9 +2516,27 @@ int luaPlayerApplyWeaponProficiencyPerk(lua_State* L)
 	CombatType_t element = static_cast<CombatType_t>(getInteger<uint16_t>(L, 7, COMBAT_NONE));
 	uint8_t range = getInteger<uint8_t>(L, 8, 0);
 	uint16_t bestiaryId = getInteger<uint16_t>(L, 9, 0);
+	uint16_t missileId = getInteger<uint16_t>(L, 10, 0);
+	double missileMultiplier = getNumber<double>(L, 11, 0);
+	double missileProbability = getNumber<double>(L, 12, 0);
 
-	player->weaponProficiency().applyPerk(perkType, value, spellId, augmentType, skillId, element, range, bestiaryId);
+	player->weaponProficiency().applyPerk(perkType, value, spellId, augmentType, skillId, element, range,
+	                                      bestiaryId, missileId, missileMultiplier, missileProbability);
 	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddMinorCharmEchoes(lua_State* L)
+{
+	// player:addMinorCharmEchoes(amount)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const uint32_t amount = getInteger<uint32_t>(L, 2);
+	pushBoolean(L, g_bestiaryCharmSystem.addMinorCharmEchoes(player->getGUID(), amount));
 	return 1;
 }
 
@@ -4949,6 +4969,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getWheelSpellAdditionalDuration", luaPlayerGetWheelSpellAdditionalDuration);
 	registerMethod("Player", "resetWeaponProficiencyStats", luaPlayerResetWeaponProficiencyStats);
 	registerMethod("Player", "applyWeaponProficiencyPerk", luaPlayerApplyWeaponProficiencyPerk);
+	registerMethod("Player", "addMinorCharmEchoes", luaPlayerAddMinorCharmEchoes);
 
 	registerMethod("Player", "getParty", luaPlayerGetParty);
 

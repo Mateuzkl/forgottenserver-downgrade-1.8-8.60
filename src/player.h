@@ -1338,6 +1338,30 @@ public:
 			client->sendBannerType(bannerType);
 		}
 	}
+	void sendScreenshotAndBannerUpLevel(uint16_t newLevel) const
+	{
+		if (client) {
+			client->sendScreenshotAndBannerUpLevel(newLevel);
+		}
+	}
+	void sendScreenshotAndBannerUnlockedCosmetic(std::string_view skinName, uint16_t lookType, uint8_t skinType) const
+	{
+		if (client) {
+			client->sendScreenshotAndBannerUnlockedCosmetic(skinName, lookType, skinType);
+		}
+	}
+	void sendScreenshotAndBannerUpSkill(skills_t skill, uint16_t newLevel) const
+	{
+		if (client) {
+			client->sendScreenshotAndBannerUpSkill(skill, newLevel);
+		}
+	}
+	void sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss = false) const
+	{
+		if (client) {
+			client->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+		}
+	}
 	void sendPing();
 	void sendStats();
 	void sendBasicData() const

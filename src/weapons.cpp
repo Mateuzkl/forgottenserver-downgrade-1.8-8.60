@@ -506,6 +506,8 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 		}
 	}
 
+	player->weaponProficiency().tryProcHomingMissile(target);
+
 	onUsedWeapon(player, item, target->getTile());
 }
 

@@ -1648,6 +1648,7 @@ void Player::addSkillAdvance(skills_t skill, uint64_t count, bool artificial /*=
 
 		sendTextMessage(MESSAGE_EVENT_ADVANCE,
 		                fmt::format("You advanced to {:s} level {:d}.", getSkillName(skill), skills[skill].level));
+		sendScreenshotAndBannerUpSkill(skill, skills[skill].level);
 
 		g_creatureEvents->playerAdvance(this, skill, (skills[skill].level - 1), skills[skill].level);
 
@@ -3371,6 +3372,7 @@ void Player::addManaSpent(uint64_t amount, bool artificial /*= false*/)
 		manaSpent = 0;
 
 		sendTextMessage(MESSAGE_EVENT_ADVANCE, fmt::format("You advanced to magic level {:d}.", magLevel));
+		sendScreenshotAndBannerUpSkill(SKILL_MAGLEVEL, magLevel);
 
 		g_creatureEvents->playerAdvance(this, SKILL_MAGLEVEL, magLevel - 1, magLevel);
 
@@ -3496,6 +3498,7 @@ void Player::addExperience(const std::shared_ptr<Creature>& source, uint64_t exp
 
 		sendTextMessage(MESSAGE_EVENT_ADVANCE,
 		                fmt::format("You advanced from Level {:d} to Level {:d}.", prevLevel, level));
+		sendScreenshotAndBannerUpLevel(level);
 	}
 
 	if (nextLevelExp > currLevelExp) {
@@ -5981,11 +5984,29 @@ void Player::addOutfit(uint16_t lookType, uint8_t addons)
 {
 	for (auto& [outfit, addon] : outfits) {
 		if (outfit == lookType) {
+			const uint8_t newAddons = addons & ~addon;
 			addon |= addons;
+			if (!isLoading() && newAddons != 0) {
+				const Outfit* outfitInfo = Outfits::getInstance().getOutfitByLookType(lookType, sex);
+				if (outfitInfo) {
+					if ((newAddons & 1) != 0) {
+						sendScreenshotAndBannerUnlockedCosmetic(outfitInfo->name, lookType, 1);
+					}
+					if ((newAddons & 2) != 0) {
+						sendScreenshotAndBannerUnlockedCosmetic(outfitInfo->name, lookType, 2);
+					}
+				}
+			}
 			return;
 		}
 	}
 	outfits.emplace(lookType, addons);
+	if (!isLoading()) {
+		const Outfit* outfitInfo = Outfits::getInstance().getOutfitByLookType(lookType, sex);
+		if (outfitInfo) {
+			sendScreenshotAndBannerUnlockedCosmetic(outfitInfo->name, lookType, 0);
+		}
+	}
 }
 
 bool Player::removeOutfit(uint16_t lookType)
@@ -6811,6 +6832,9 @@ bool Player::tameMount(uint16_t mountId)
 	}
 
 	mounts.insert(mountId);
+	if (!isLoading()) {
+		sendScreenshotAndBannerUnlockedCosmetic(mount->name, mount->clientId, 3);
+	}
 	return true;
 }
 
@@ -8980,6 +9004,7 @@ bool Player::addOfflineTrainingTries(skills_t skill, uint64_t tries)
 
 		if (magLevel != currMagLevel) {
 			sendTextMessage(MESSAGE_EVENT_ADVANCE, fmt::format("You advanced to magic level {:d}.", magLevel));
+			sendScreenshotAndBannerUpSkill(SKILL_MAGLEVEL, magLevel);
 		}
 
 		uint8_t newPercent;
@@ -9033,6 +9058,7 @@ bool Player::addOfflineTrainingTries(skills_t skill, uint64_t tries)
 		if (currSkillLevel != skills[skill].level) {
 			sendTextMessage(MESSAGE_EVENT_ADVANCE,
 			                fmt::format("You advanced to {:s} level {:d}.", getSkillName(skill), skills[skill].level));
+			sendScreenshotAndBannerUpSkill(skill, skills[skill].level);
 		}
 
 		uint8_t newPercent;

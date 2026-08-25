@@ -4891,6 +4891,77 @@ void ProtocolGame::sendBannerType(Banner_t bannerType)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendScreenshotAndBannerUnlockedCosmetic(std::string_view skinName, uint16_t lookType,
+                                                            uint8_t skinType)
+{
+	if (!isAstraClient || skinName.empty() || lookType == 0 || skinType > 3) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_COSMETIC);
+	msg.add<uint16_t>(lookType);
+	msg.addString(skinName);
+	msg.addByte(skinType);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendScreenshotAndBannerUpLevel(uint16_t level)
+{
+	if (!isAstraClient || level == 0) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_LEVEL);
+	msg.add<uint16_t>(level);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendScreenshotAndBannerUpSkill(skills_t skill, uint16_t level)
+{
+	if (!isAstraClient || level == 0) {
+		return;
+	}
+
+	uint8_t clientSkill = 0;
+	switch (skill) {
+		case SKILL_MAGLEVEL: clientSkill = 1; break;
+		case SKILL_SWORD: clientSkill = 2; break;
+		case SKILL_CLUB: clientSkill = 3; break;
+		case SKILL_AXE: clientSkill = 4; break;
+		case SKILL_FIST: clientSkill = 5; break;
+		case SKILL_DISTANCE: clientSkill = 6; break;
+		case SKILL_SHIELD: clientSkill = 7; break;
+		case SKILL_FISHING: clientSkill = 8; break;
+		default: return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_SKILL);
+	msg.addByte(clientSkill);
+	msg.add<uint16_t>(level);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss)
+{
+	if (!isAstraClient || raceId == 0 || progressLevel == 0) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(isBoss ? SCREENSHOT_AND_BANNER_TYPE_BOSSTIARY_PROGRESS :
+	                       SCREENSHOT_AND_BANNER_TYPE_BESTIARY_PROGRESS);
+	msg.add<uint16_t>(raceId);
+	msg.addByte(progressLevel);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendUseItemCooldown(uint32_t time)
 {
 	if (!isOTC) {

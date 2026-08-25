@@ -102,6 +102,8 @@ public:
 	void setInfluencedLevel(uint8_t level) { influencedLevel = level; }
 	bool isFiendish() const { return fiendish; }
 	void setFiendish(bool v);
+	bool applyEchoWarden(double healthMultiplier, double attackMultiplier);
+	bool isEchoWarden() const { return echoWarden; }
 	Skulls_t getSkull() const override;
 	int32_t getLevel() const { return level; }
 
@@ -219,6 +221,8 @@ private:
 	bool influenced = false;
 	uint8_t influencedLevel = 0;
 	bool fiendish = false;
+	bool echoWarden = false;
+	double echoWardenAttackMultiplier = 1.0;
 
 	void onCreatureEnter(Creature* creature);
 	void onCreatureLeave(Creature* creature);

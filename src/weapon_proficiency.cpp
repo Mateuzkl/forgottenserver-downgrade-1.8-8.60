@@ -43,10 +43,12 @@ void WeaponProficiency::resetStats()
 	m_autoAttackCritical = {};
 	m_runesCritical = {};
 	m_elementCritical.fill({});
+	m_elementalPierce.fill(0);
 	m_powerfulFoeDamage = 0;
 	m_perfectShot = {};
 	m_bestiaryDamage.clear();
 	m_skillPercentages.clear();
+	m_homingMissiles.clear();
 
 	if (m_lifeLeechAdded != 0) {
 		m_player.setVarSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT, -m_lifeLeechAdded);
@@ -61,7 +63,8 @@ void WeaponProficiency::resetStats()
 void WeaponProficiency::applyPerk(uint8_t perkType, double_t value, uint16_t /*spellId*/,
                                   uint8_t /*augmentType*/, skills_t skillId,
                                   CombatType_t element, uint8_t range,
-                                  uint16_t bestiaryId)
+                                  uint16_t bestiaryId, uint16_t missileId,
+                                  double_t missileMultiplier, double_t missileProbability)
 {
 	if (!isEnabled()) {
 		return;
@@ -131,10 +134,40 @@ void WeaponProficiency::applyPerk(uint8_t perkType, double_t value, uint16_t /*s
 			applySkillPercentageBonus(perkType, skillId, value);
 			break;
 
+		case ELEMENTAL_PIERCE: {
+			if (element == COMBAT_NONE) {
+				break;
+			}
+			const size_t index = combatTypeToIndex(element);
+			if (index < m_elementalPierce.size() && std::isfinite(value) && value > 0) {
+				m_elementalPierce[index] += value;
+			}
+			break;
+		}
+
+		case HOMING_MISSILE:
+			if (element != COMBAT_NONE && missileId > 0 && std::isfinite(missileMultiplier)
+			    && std::isfinite(missileProbability) && missileMultiplier > 0
+			    && missileProbability > 0 && missileProbability <= 1) {
+				m_homingMissiles.push_back({element, missileId, missileMultiplier, missileProbability});
+			}
+			break;
+
 		default:
 			addStat(static_cast<WeaponProficiencyBonus_t>(perkType), value);
 			break;
 	}
+}
+
+double_t WeaponProficiency::getArmorPenetration() const
+{
+	return std::clamp(getStat(WeaponProficiencyBonus_t::ARMOR_PENETRATION), 0.0, 1.0);
+}
+
+double_t WeaponProficiency::getElementalPierce(CombatType_t type) const
+{
+	const size_t index = combatTypeToIndex(type);
+	return index < m_elementalPierce.size() ? std::clamp(m_elementalPierce[index], 0.0, 1.0) : 0;
 }
 
 void WeaponProficiency::addStat(WeaponProficiencyBonus_t stat, double_t value)
@@ -472,7 +505,12 @@ void WeaponProficiency::applySkillAutoAttackPercentage(CombatDamage& damage) con
 		if (sp.autoAttack > 0) {
 			const int32_t extra = static_cast<int32_t>(
 			    std::ceil(m_player.getSkillLevel(sp.skill) * sp.autoAttack));
-			damage.primary.value += extra;
+			if (damage.primary.value < 0) {
+				damage.primary.value -= extra;
+			}
+			if (damage.secondary.value < 0) {
+				damage.secondary.value -= extra;
+			}
 		}
 	}
 }
@@ -488,10 +526,68 @@ void WeaponProficiency::applySkillSpellPercentage(CombatDamage& damage, bool hea
 		double_t value = healing ? sp.spellHealing : sp.spellDamage;
 
 		if (value > 0) {
+			const uint32_t skillLevel = sp.skill == SKILL_MAGLEVEL
+			                                ? m_player.getMagicLevel()
+			                                : m_player.getSkillLevel(sp.skill);
 			const int32_t extra = static_cast<int32_t>(
-			    std::ceil(m_player.getSkillLevel(sp.skill) * value));
-			damage.primary.value += extra;
+			    std::ceil(skillLevel * value));
+			if (healing && damage.primary.value > 0) {
+				damage.primary.value += extra;
+			} else if (!healing) {
+				if (damage.primary.value < 0) {
+					damage.primary.value -= extra;
+				}
+				if (damage.secondary.value < 0) {
+					damage.secondary.value -= extra;
+				}
+			}
 		}
+	}
+}
+
+void WeaponProficiency::applyTargetHealthDamage(CombatDamage& damage, const Creature* target) const
+{
+	if (!target || target->getMaxHealth() <= 0 ||
+	    (damage.primary.value >= 0 && damage.secondary.value >= 0)) {
+		return;
+	}
+
+	const double_t healthRatio = static_cast<double_t>(target->getHealth()) / target->getMaxHealth();
+	if (healthRatio >= 0.95) {
+		applyDamageMultiplier(damage, getStat(WeaponProficiencyBonus_t::DAMAGE_VS_FULL_HP));
+	} else if (healthRatio <= 0.30) {
+		applyDamageMultiplier(damage, getStat(WeaponProficiencyBonus_t::DAMAGE_VS_LOW_HP));
+	}
+}
+
+void WeaponProficiency::tryProcHomingMissile(Creature* target) const
+{
+	if (!isEnabled() || !target || target->isRemoved() || target->getHealth() <= 0) {
+		return;
+	}
+
+	for (const auto& missile : m_homingMissiles) {
+		if (!boolean_random(missile.probability)) {
+			continue;
+		}
+
+		const double_t scaledAmount = std::floor(
+		    missile.multiplier * static_cast<double_t>(m_player.getLevel()));
+		const int32_t amount = static_cast<int32_t>(std::clamp<double_t>(
+		    scaledAmount, 0, std::numeric_limits<int32_t>::max()));
+		if (amount <= 0) {
+			continue;
+		}
+
+		g_game.addDistanceEffect(m_player.getPosition(), target->getPosition(), missile.missileId,
+		                         m_player.getInstanceID());
+
+		CombatDamage damage;
+		damage.origin = ORIGIN_SPELL;
+		damage.primary.type = missile.element;
+		damage.primary.value = -amount;
+		g_game.combatChangeHealth(&m_player, target, damage);
+		return;
 	}
 }
 

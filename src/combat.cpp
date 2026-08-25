@@ -1315,6 +1315,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 				casterPlayer->weaponProficiency().applyBestiaryDamage(damage, targetMonster);
 				casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damage, targetMonster);
 			}
+			casterPlayer->weaponProficiency().applyTargetHealthDamage(damage, target);
 		}
 
 		if (damage.primary.type == COMBAT_HEALING) {
@@ -1737,6 +1738,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 					casterPlayer->weaponProficiency().applyBestiaryDamage(damageCopy, targetMonster);
 					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damageCopy, targetMonster);
 				}
+				casterPlayer->weaponProficiency().applyTargetHealthDamage(damageCopy, creature.get());
 			}
 
 			success = g_game.combatChangeHealth(caster, creature.get(), damageCopy);

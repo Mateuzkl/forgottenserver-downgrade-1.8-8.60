@@ -249,6 +249,17 @@ function CustomBosstiary.addKill(players, entry)
 					awardedPoints .. " boss points.")
 			end
 		end
+
+		local oldProgress = CustomBosstiary.getProgress(entry, oldKills)
+		local newProgress = CustomBosstiary.getProgress(entry, newKills)
+		if player and newProgress > oldProgress and player.isUsingAstraClient and player:isUsingAstraClient() then
+			local message<close> = NetworkMessage(player)
+			message:addByte(0x75)
+			message:addByte(7)
+			message:addU16(entry.raceId)
+			message:addByte(newProgress)
+			message:sendToPlayer(player)
+		end
 	end
 	return true
 end

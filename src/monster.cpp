@@ -161,6 +161,25 @@ void Monster::setFiendish(bool v)
 	g_game.updateCreatureSkull(this);
 }
 
+bool Monster::applyEchoWarden(double healthMultiplier, double attackMultiplier)
+{
+	if (echoWarden || isSummon() || isBoss() || influenced || fiendish || !std::isfinite(healthMultiplier) ||
+	    !std::isfinite(attackMultiplier) || healthMultiplier <= 0.0 || attackMultiplier <= 0.0) {
+		return false;
+	}
+
+	echoWarden = true;
+	echoWardenAttackMultiplier = std::clamp(attackMultiplier, 0.1, 100.0);
+	const auto scaledHealth = static_cast<int64_t>(std::llround(static_cast<double>(healthMax) * healthMultiplier));
+	healthMax = static_cast<int32_t>(std::clamp<int64_t>(scaledHealth, 1, std::numeric_limits<int32_t>::max()));
+	health = healthMax;
+
+	setIcon("echo_warden", CreatureIcon(CreatureIconModifications_Fiendish));
+	g_game.updateCreatureIcon(this);
+	g_game.addCreatureHealth(this);
+	return true;
+}
+
 Monster::Monster(const std::shared_ptr<MonsterType>& mType) : Creature(), nameDescription(mType->nameDescription), mType(mType)
 {
 	defaultOutfit = mType->info.outfit;
@@ -1392,6 +1411,14 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 		auto it = mType->info.elementMap.find(combatType);
 		if (it != mType->info.elementMap.end()) {
 			elementMod = it->second;
+		}
+
+		if (elementMod > 0 && attacker &&
+		    ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			if (Player* attackerPlayer = attacker->getPlayer()) {
+				const double_t pierce = attackerPlayer->weaponProficiency().getElementalPierce(combatType);
+				elementMod -= static_cast<int32_t>(std::floor(elementMod * pierce));
+			}
 		}
 
 		if (elementMod != 0) {
@@ -2936,6 +2963,15 @@ bool Monster::getCombatValues(int32_t& min, int32_t& max)
 		double mult = dmgMult[influencedLevel];
 		min = static_cast<int32_t>(min * mult);
 		max = static_cast<int32_t>(max * mult);
+	}
+
+	if (echoWarden) {
+		min = static_cast<int32_t>(std::clamp<double>(min * echoWardenAttackMultiplier,
+		                                               std::numeric_limits<int32_t>::min(),
+		                                               std::numeric_limits<int32_t>::max()));
+		max = static_cast<int32_t>(std::clamp<double>(max * echoWardenAttackMultiplier,
+		                                               std::numeric_limits<int32_t>::min(),
+		                                               std::numeric_limits<int32_t>::max()));
 	}
 
 	return true;

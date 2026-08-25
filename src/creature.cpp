@@ -687,6 +687,11 @@ void Creature::onDeath()
 				const BestiaryCreatureInfo& info = registeredMonster->get();
 				for (const auto& [_, player] : recipients) {
 					const auto [oldCount, newCount] = player->addBestiaryKillCount(raceId, 1);
+					const uint8_t oldProgress = BestiaryCharmSystem::getProgress(info, oldCount);
+					const uint8_t newProgress = BestiaryCharmSystem::getProgress(info, newCount);
+					if (oldProgress != newProgress) {
+						player->sendScreenshotAndBannerProgressRace(raceId, newProgress);
+					}
 					const bool completed = oldCount < info.toKill && newCount >= info.toKill;
 					if (completed) {
 						player->addBestiaryCharmPoints(info.charmPoints);
@@ -963,6 +968,12 @@ BlockType_t Creature::blockHit(const std::shared_ptr<Creature>& attacker, Combat
 
 		if (checkArmor) {
 			int32_t armor = getArmor();
+			if (attacker && ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+				if (Player* attackerPlayer = attacker->getPlayer()) {
+					const double_t penetration = attackerPlayer->weaponProficiency().getArmorPenetration();
+					armor -= static_cast<int32_t>(std::floor(armor * penetration));
+				}
+			}
 			if (armor > 3) {
 				damage -= uniform_random(armor / 2, armor - (armor % 2 + 1));
 			} else if (armor > 0) {
