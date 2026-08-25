@@ -649,6 +649,7 @@ void Creature::onDeath()
 	// map contributes direct players only. GUID deduplication gives one base kill per
 	// player and death; party sharing is deliberately not introduced here.
 	if (Monster* monster = getMonster(); monster && !monster->isSummon() &&
+	    !(monster->hasBossDifficulty() && monster->getBossDifficulty() == 0) &&
 	    ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED)) {
 		const MonsterType* monsterType = monster->getMonsterType();
 		const uint32_t monsterRaceId = monsterType ? monsterType->raceId : 0;

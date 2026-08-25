@@ -853,6 +853,7 @@ struct CombatDamage
 	bool fatal = false;
 	bool dodge = false;
 	bool preyApplied = false;
+	bool bossDifficultyApplied = false;
 	bool initialOriginCaptured = false;
 	bool equipmentDamageBonusApplied = false;
 	bool equipmentDamageReductionApplied = false;

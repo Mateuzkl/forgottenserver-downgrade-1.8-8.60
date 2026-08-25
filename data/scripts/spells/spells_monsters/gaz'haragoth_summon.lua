@@ -25,8 +25,12 @@ function spell.onCastSpell(creature, var)
 
     if check < GazVariables.MinionsNow then
         for i = 1, (GazVariables.MinionsNow - check) do
-            local monster = Game.createMonster("Minion of Gaz'haragoth", creature:getPosition(), true, false)
+            local monster = Game.createMonster("Minion of Gaz'haragoth", creature:getPosition(), true, false,
+                CONST_ME_NONE, creature:getInstanceId())
             if monster then
+                if creature.hasBossDifficulty and creature:hasBossDifficulty() then
+                    monster:applyBossDifficulty(creature:getBossDifficulty(), 1003)
+                end
                 monster:setMaster(creature)
             end
         end
@@ -34,8 +38,12 @@ function spell.onCastSpell(creature, var)
         creature:getPosition():sendMagicEffect(CONST_ME_SOUND_RED)
     else
         if math.random(0, 100) < 25 then
-            local monster = Game.createMonster("Minion of Gaz'haragoth", creature:getPosition(), true, false)
+            local monster = Game.createMonster("Minion of Gaz'haragoth", creature:getPosition(), true, false,
+                CONST_ME_NONE, creature:getInstanceId())
             if monster then
+                if creature.hasBossDifficulty and creature:hasBossDifficulty() then
+                    monster:applyBossDifficulty(creature:getBossDifficulty(), 1003)
+                end
                 monster:setMaster(creature)
                 GazVariables.MinionsNow = GazVariables.MinionsNow + 1
             end

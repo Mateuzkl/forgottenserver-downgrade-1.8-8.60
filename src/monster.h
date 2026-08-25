@@ -16,6 +16,12 @@ namespace reward_boss {
 	                                       double baseRate);
 }
 
+namespace boss_difficulty {
+	[[nodiscard]] double healthMultiplier(uint16_t difficulty);
+	[[nodiscard]] double damageMultiplier(uint16_t difficulty);
+	[[nodiscard]] double lootMultiplier(uint16_t difficulty);
+}
+
 using CreatureWeakHashSet = std::set<std::weak_ptr<Creature>, std::owner_less<std::weak_ptr<Creature>>>;
 using CreatureWeakList = std::vector<std::weak_ptr<Creature>>;
 
@@ -104,6 +110,11 @@ public:
 	void setFiendish(bool v);
 	bool applyEchoWarden(double healthMultiplier, double attackMultiplier);
 	bool isEchoWarden() const { return echoWarden; }
+	bool applyBossDifficulty(uint16_t difficulty, uint16_t raceId = 0);
+	bool hasBossDifficulty() const { return bossDifficultyApplied; }
+	uint16_t getBossDifficulty() const { return bossDifficulty; }
+	uint16_t getBossDifficultyRaceId() const { return bossDifficultyRaceId; }
+	double getBossDifficultyAttackMultiplier() const { return bossDifficultyAttackMultiplier; }
 	Skulls_t getSkull() const override;
 	int32_t getLevel() const { return level; }
 
@@ -223,6 +234,10 @@ private:
 	bool fiendish = false;
 	bool echoWarden = false;
 	double echoWardenAttackMultiplier = 1.0;
+	bool bossDifficultyApplied = false;
+	uint16_t bossDifficulty = 0;
+	uint16_t bossDifficultyRaceId = 0;
+	double bossDifficultyAttackMultiplier = 1.0;
 
 	void onCreatureEnter(Creature* creature);
 	void onCreatureLeave(Creature* creature);

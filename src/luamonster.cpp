@@ -545,6 +545,45 @@ int luaMonsterApplyEchoWarden(lua_State* L)
 	return 1;
 }
 
+int luaMonsterApplyBossDifficulty(lua_State* L)
+{
+	// monster:applyBossDifficulty(difficulty[, raceId = 0])
+	Monster* monster = getUserdata<Monster>(L, 1);
+	if (!monster) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushBoolean(L, monster->applyBossDifficulty(getInteger<uint16_t>(L, 2), getInteger<uint16_t>(L, 3, 0)));
+	return 1;
+}
+
+int luaMonsterGetBossDifficulty(lua_State* L)
+{
+	// monster:getBossDifficulty()
+	const Monster* monster = getUserdata<const Monster>(L, 1);
+	if (!monster) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, monster->getBossDifficulty());
+	return 1;
+}
+
+int luaMonsterHasBossDifficulty(lua_State* L)
+{
+	// monster:hasBossDifficulty()
+	const Monster* monster = getUserdata<const Monster>(L, 1);
+	if (!monster) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushBoolean(L, monster->hasBossDifficulty());
+	return 1;
+}
+
 } // namespace
 
 void LuaScriptInterface::registerMonster()
@@ -597,4 +636,7 @@ void LuaScriptInterface::registerMonster()
 	registerMethod("Monster", "getLevel", luaMonsterGetLevel);
 	registerMethod("Monster", "blockFleeing", luaMonsterBlockFleeing);
 	registerMethod("Monster", "applyEchoWarden", luaMonsterApplyEchoWarden);
+	registerMethod("Monster", "applyBossDifficulty", luaMonsterApplyBossDifficulty);
+	registerMethod("Monster", "getBossDifficulty", luaMonsterGetBossDifficulty);
+	registerMethod("Monster", "hasBossDifficulty", luaMonsterHasBossDifficulty);
 }
