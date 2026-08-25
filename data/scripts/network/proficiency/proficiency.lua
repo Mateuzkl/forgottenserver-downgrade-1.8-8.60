@@ -39,12 +39,14 @@ local SAVE_DELAY_MS = 5000
 local LIST_INFO_COOLDOWN_MS = 1000
 local MAX_MODIFIED_SLOTS = 2
 local MAX_MODIFIER_RANK = 10
-local MODIFY_DUST_COST = 250
-local REFINE_DUST_COST = 200
+local MIN_SHAPING_UNLOCKED_LEVELS = 3
+local FIRST_MODIFY_DUST_COST = 250
+local SECOND_MODIFY_DUST_COST = 1000
 local RESHAPE_DUST_COST = 250
 local RESHAPE_OFFER_COUNT = 3
 local RESHAPE_OFFER_TTL_MS = 30000
 local RESOURCE_FORGE_DUST = 23
+local RESOURCE_PROFICIENCY_DUST_LIMIT = 88
 
 -- The first MAX_PERK_LEVEL thresholds unlock perk slots. The remaining
 -- thresholds keep mastery progression active until the final experience cap.
@@ -928,6 +930,15 @@ local function getForgeDust(player)
 	return value and value > 0 and value or 0
 end
 
+local function getForgeDustLimit(player)
+	local value = player:getStorageValue(PlayerStorageKeys.forgeDustLimit)
+	if not value or value <= 0 then
+		value = 100
+		player:setStorageValue(PlayerStorageKeys.forgeDustLimit, value)
+	end
+	return value
+end
+
 local function sendForgeDustBalance(player)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -936,7 +947,14 @@ local function sendForgeDustBalance(player)
 	out:addByte(OPCODE_RESOURCE_BALANCE)
 	out:addByte(RESOURCE_FORGE_DUST)
 	out:addU64(getForgeDust(player))
-	return out:sendToPlayer(player)
+	local balanceSent = out:sendToPlayer(player)
+
+	local limitOut = NetworkMessage(player)
+	limitOut:addByte(OPCODE_RESOURCE_BALANCE)
+	limitOut:addByte(RESOURCE_PROFICIENCY_DUST_LIMIT)
+	limitOut:addU64(getForgeDustLimit(player))
+	local limitSent = limitOut:sendToPlayer(player)
+	return balanceSent and limitSent
 end
 
 local function removeForgeDust(player, amount)
@@ -1039,7 +1057,7 @@ local function sendAll(player, forceCatalog)
 end
 
 local function sendProficiencyFailure(player, message)
-	player:sendTextMessage(MESSAGE_FAILURE, message)
+	player:sendTextMessage(MESSAGE_STATUS_SMALL, message)
 	return false
 end
 
@@ -1110,6 +1128,9 @@ local function validateShapeSlot(player, itemId, level, position, requireModifie
 	end
 
 	local state = getState(player, itemId)
+	if getUnlockedLevelCount(itemId, state.experience) < MIN_SHAPING_UNLOCKED_LEVELS then
+		return nil, sendShapeFailure(player, "Level 3 has not been unlocked.")
+	end
 	if state.perks[level] ~= position then
 		return nil, sendShapeFailure(player, "Select and apply this perk before shaping it.")
 	end
@@ -1124,6 +1145,14 @@ local function countModifiers(state)
 	local count = 0
 	for _ in pairs(state.modifiers) do count = count + 1 end
 	return count
+end
+
+local function getModifyDustCost(state)
+	return countModifiers(state) == 0 and FIRST_MODIFY_DUST_COST or SECOND_MODIFY_DUST_COST
+end
+
+local function getRefineDustCost(refineLevel)
+	return 125 + math.max(0, tonumber(refineLevel) or 0) * 75
 end
 
 local function finishShapeChange(player, itemId)
@@ -1141,8 +1170,9 @@ local function modifySlot(player, itemId, level, position)
 	if countModifiers(state) >= MAX_MODIFIED_SLOTS then
 		return sendShapeFailure(player, "You can modify at most two perks on this weapon.")
 	end
-	if getForgeDust(player) < MODIFY_DUST_COST then
-		return sendShapeFailure(player, string.format("You need %d dust to modify this perk.", MODIFY_DUST_COST))
+	local dustCost = getModifyDustCost(state)
+	if getForgeDust(player) < dustCost then
+		return sendShapeFailure(player, string.format("You need %d dust to modify this perk.", dustCost))
 	end
 
 	local excluded = {}
@@ -1151,7 +1181,7 @@ local function modifySlot(player, itemId, level, position)
 	if not modifierEnum then
 		return sendShapeFailure(player, "No valid proficiency modifier is available.")
 	end
-	if not removeForgeDust(player, MODIFY_DUST_COST) then return end
+	if not removeForgeDust(player, dustCost) then return end
 	state.modifiers[modifierKey(level, position)] = {
 		level = level,
 		position = position,
@@ -1167,8 +1197,9 @@ local function refineSlot(player, itemId, level, position)
 	if modifier.refineLevel >= MAX_MODIFIER_RANK then
 		return sendShapeFailure(player, "This modifier is already at maximum rank.")
 	end
-	if not removeForgeDust(player, REFINE_DUST_COST) then
-		return sendShapeFailure(player, string.format("You need %d dust to refine this perk.", REFINE_DUST_COST))
+	local dustCost = getRefineDustCost(modifier.refineLevel)
+	if not removeForgeDust(player, dustCost) then
+		return sendShapeFailure(player, string.format("You need %d dust to refine this perk.", dustCost))
 	end
 	modifier.refineLevel = modifier.refineLevel + 1
 	finishShapeChange(player, itemId)
