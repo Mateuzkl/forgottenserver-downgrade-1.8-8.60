@@ -61,6 +61,10 @@ local catalogByServerId = {}
 local serverIdByClientId = {}
 local proficiencyTableReady = false
 local proficiencyDefinitionsById = {}
+local proficiencyDefinitionsByName = {}
+local proficiencyIdsByWeaponItem = {}
+local proficiencyIdsByUniqueItemName = {}
+local duplicateProficiencyItemNames = {}
 local refreshProfileSpellAugments
 
 local function logError(message)
@@ -72,10 +76,6 @@ local function logError(message)
 end
 
 local function loadProficiencyDefinitions()
-	if not isAugmentSystemEnabled() then
-		return
-	end
-
 	local file = io.open(DATA_DIRECTORY .. "/items/proficiencies.json", "r")
 	if not file then
 		logError("[WeaponProficiency] Failed to open data/items/proficiencies.json.")
@@ -95,6 +95,35 @@ local function loadProficiencyDefinitions()
 		local proficiencyId = tonumber(definition.ProficiencyId)
 		if proficiencyId then
 			proficiencyDefinitionsById[proficiencyId] = definition
+			local name = tostring(definition.Name or ""):lower()
+			if name ~= "" then
+				proficiencyDefinitionsByName[name] = proficiencyId
+
+				local weaponType, handedness, itemName = name:match("^(%a+) ([12]h) (.+)$")
+				if weaponType == "sword" or weaponType == "axe" or weaponType == "club"
+					or weaponType == "wand" or weaponType == "rod" or weaponType == "caster"
+					or weaponType == "distance" or weaponType == "bow" or weaponType == "crossbow"
+					or weaponType == "fist" then
+					proficiencyIdsByWeaponItem[string.format("%s:%s:%s", weaponType, handedness, itemName)] = proficiencyId
+					if proficiencyIdsByUniqueItemName[itemName]
+						and proficiencyIdsByUniqueItemName[itemName] ~= proficiencyId then
+						duplicateProficiencyItemNames[itemName] = true
+					else
+						proficiencyIdsByUniqueItemName[itemName] = proficiencyId
+					end
+				end
+
+				local thrownItemName = name:match("^throw %- (.+)$")
+				if thrownItemName then
+					proficiencyIdsByWeaponItem["throw:2h:" .. thrownItemName] = proficiencyId
+					if proficiencyIdsByUniqueItemName[thrownItemName]
+						and proficiencyIdsByUniqueItemName[thrownItemName] ~= proficiencyId then
+						duplicateProficiencyItemNames[thrownItemName] = true
+					else
+						proficiencyIdsByUniqueItemName[thrownItemName] = proficiencyId
+					end
+				end
+			end
 		end
 	end
 end
@@ -168,6 +197,117 @@ local function getItemType(itemId)
 	return itemType
 end
 
+local DEFAULT_PROFICIENCY_BY_CATEGORY = {
+	[17] = 8,
+	[18] = 9,
+	[19] = 13,
+	[20] = 6,
+	[21] = 15,
+	[27] = 14,
+}
+
+-- Most profile names describe a weapon family (for example "Soul 2H Sword"),
+-- while older weapons use an exact suffix (for example "Sword 1H Ice Rapier").
+-- Resolve both forms once while building the catalog so each weapon keeps its
+-- own tree instead of inheriting one tree from its market category.
+local PROFICIENCY_TIER_PATTERNS = {
+	"siphoning inferniarch",
+	"draining inferniarch",
+	"rending inferniarch",
+	"stellar moonsilver",
+	"gilded eldritch",
+	"grand sanguine",
+	"master umbral",
+	"crude umbral",
+	"destruction",
+	"inferniarch",
+	"moonsilver",
+	"sanguine",
+	"eldritch",
+	"umbral",
+	"jungle",
+	"falcon",
+	"glooth",
+	"crypt",
+	"amber",
+	"cobra",
+	"lion",
+	"naga",
+	"soul",
+}
+
+local function findProficiencyId(candidates)
+	for _, candidate in ipairs(candidates) do
+		local proficiencyId = proficiencyDefinitionsByName[candidate]
+			or proficiencyIdsByWeaponItem[candidate]
+		if proficiencyId then
+			return proficiencyId
+		end
+	end
+	return nil
+end
+
+local function resolveItemProficiencyId(itemType, category)
+	local itemName = tostring(itemType:getName() or ""):lower()
+	local handedness = itemType:isTwoHanded() and "2h" or "1h"
+	local weaponTypes = {}
+
+	if category == 17 then
+		weaponTypes = { "axe" }
+	elseif category == 18 then
+		weaponTypes = { "club" }
+	elseif category == 19 then
+		handedness = "2h"
+		weaponTypes = itemName:find("crossbow", 1, true) and { "crossbow", "distance", "bow" }
+			or { "bow", "distance", "crossbow", "throw" }
+	elseif category == 20 then
+		weaponTypes = { "sword" }
+	elseif category == 21 then
+		if itemName:find("rod", 1, true) then
+			weaponTypes = { "rod", "caster", "wand" }
+		elseif itemName:find("wand", 1, true) then
+			weaponTypes = { "wand", "caster", "rod" }
+		else
+			weaponTypes = { "caster", "wand", "rod" }
+		end
+	elseif category == 27 then
+		handedness = "2h"
+		weaponTypes = { "fist" }
+	end
+
+	local exactCandidates = { itemName }
+	for _, weaponType in ipairs(weaponTypes) do
+		exactCandidates[#exactCandidates + 1] = string.format("%s:%s:%s", weaponType, handedness, itemName)
+	end
+	local proficiencyId = findProficiencyId(exactCandidates)
+	if proficiencyId then
+		return proficiencyId
+	end
+	if not duplicateProficiencyItemNames[itemName] and proficiencyIdsByUniqueItemName[itemName] then
+		return proficiencyIdsByUniqueItemName[itemName]
+	end
+
+	local tier
+	for _, pattern in ipairs(PROFICIENCY_TIER_PATTERNS) do
+		if itemName:find(pattern, 1, true) then
+			tier = pattern
+			break
+		end
+	end
+	if tier then
+		local tierCandidates = {}
+		for _, weaponType in ipairs(weaponTypes) do
+			tierCandidates[#tierCandidates + 1] = string.format("%s %s %s", tier, handedness, weaponType)
+		end
+		proficiencyId = findProficiencyId(tierCandidates)
+		if proficiencyId then
+			return proficiencyId
+		end
+	end
+
+	return DEFAULT_PROFICIENCY_BY_CATEGORY[category]
+end
+
 local function isValidWeaponId(itemId)
 	itemId = tonumber(itemId)
 	if not itemId or itemId <= 0 or itemId > 0xFFFF or itemId % 1 ~= 0 then
@@ -204,6 +344,7 @@ local function ensureCatalog()
 					clientId = clientId,
 					category = WEAPON_CATALOG[serverId],
 					name = itemType:getName(),
+					proficiencyId = resolveItemProficiencyId(itemType, WEAPON_CATALOG[serverId]),
 				}
 				catalogEntries[#catalogEntries + 1] = entry
 				serverIdByClientId[clientId] = serverId
@@ -662,28 +803,6 @@ refreshProfileSpellAugments = function(player, profile)
 		[13] = SKILL_FISHING,
 	}
 
-	-- Market category -> Proficiency ID (matches client getProficiencyIdFromCategory)
-	local MARKET_CATEGORY_TO_PROFICIENCY = {
-		[17] = 8,  -- Axes → Sanguine 1H Axe
-		[18] = 9,  -- Clubs → Sanguine 1H Club
-		[19] = 13, -- Distance → Sanguine 2H Bow
-		[20] = 6,  -- Swords → Sanguine 1H Sword
-		[21] = 15, -- Wands/Rods → Sanguine 1H Wand
-		[27] = 14, -- Fist → Sanguine 2H Fist
-	}
-	local STELLAR_PROFICIENCY_BY_ITEM = {
-		[53208] = 489, [53210] = 496,
-		[53212] = 486, [53214] = 491,
-		[53216] = 487, [53218] = 493,
-		[53220] = 490, [53222] = 488,
-		[53224] = 495, [53226] = 492,
-		[53228] = 494,
-	}
-
-	local function getProficiencyId(itemId, category)
-		return STELLAR_PROFICIENCY_BY_ITEM[itemId] or MARKET_CATEGORY_TO_PROFICIENCY[category] or category
-	end
-
 	local function cipbiaSkillToTfs(cipbiaSkill)
 		if not cipbiaSkill then return SKILL_FIST end
 		return CIPBIA_SKILL_TO_TFS[cipbiaSkill] or SKILL_FIST
@@ -716,7 +835,7 @@ refreshProfileSpellAugments = function(player, profile)
 
 	for itemId, state in pairs(profile.weapons) do
 		local entry = getCatalogEntry(itemId)
-		local proficiencyId = getProficiencyId(itemId, entry and entry.category)
+		local proficiencyId = entry and entry.proficiencyId
 		local definition = proficiencyDefinitionsById[proficiencyId]
 		if definition and type(definition.Levels) == "table" then
 			local isEquipped = (itemId == equippedId)
@@ -873,6 +992,7 @@ local function sendCatalog(player)
 		local entry = catalogEntries[index]
 		out:addU16(entry.clientId)
 		out:addU16(entry.category)
+		out:addU16(entry.proficiencyId or 0)
 		out:addString(entry.name)
 	end
 	return out:sendToPlayer(player)
@@ -918,9 +1038,22 @@ local function sendAll(player, forceCatalog)
 	sendAllInfo(player, itemIds)
 end
 
+local function sendProficiencyFailure(player, message)
+	player:sendTextMessage(MESSAGE_FAILURE, message)
+	return false
+end
+
+local function canChangePerks(player)
+	local tile = player:getTile()
+	return tile and tile:hasFlag(TILESTATE_PROTECTIONZONE) or false
+end
+
 local function clearPerks(player, itemId)
 	if not isValidWeaponId(itemId) then
 		return
+	end
+	if not canChangePerks(player) then
+		return sendProficiencyFailure(player, "You can only reset weapon proficiency inside a protection zone.")
 	end
 
 	local state = getState(player, itemId)
@@ -933,6 +1066,9 @@ end
 local function applyPerks(player, msg, itemId)
 	if not isValidWeaponId(itemId) or msg:len() - msg:tell() < 1 then
 		return
+	end
+	if not canChangePerks(player) then
+		return sendProficiencyFailure(player, "You can only change weapon proficiency inside a protection zone.")
 	end
 
 	local state = getState(player, itemId)
@@ -960,8 +1096,7 @@ local function applyPerks(player, msg, itemId)
 end
 
 local function sendShapeFailure(player, message)
-	player:sendTextMessage(MESSAGE_FAILURE, message)
-	return false
+	return sendProficiencyFailure(player, message)
 end
 
 local function validateShapeSlot(player, itemId, level, position, requireModifier)
