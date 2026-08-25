@@ -48,7 +48,9 @@ function BossDifficulty.open(player, options)
 	local minimum = clampDifficulty(options.minimum or 0, 0, MAX_DIFFICULTY)
 	local maximum = clampDifficulty(options.maximum or MAX_DIFFICULTY, minimum, MAX_DIFFICULTY)
 	local difficulty = clampDifficulty(options.difficulty or minimum, minimum, maximum)
-	local players = type(options.players) == "table" and options.players or { player:getName() }
+	local banners = type(options.banners) == "table" and options.banners
+		or type(options.players) == "table" and options.players
+		or {}
 
 	local session = {
 		minimum = minimum,
@@ -57,7 +59,7 @@ function BossDifficulty.open(player, options)
 		raceId = math.max(0, math.min(0xFFFF, math.floor(tonumber(options.raceId) or 0))),
 		personalMaximum = clampDifficulty(options.personalMaximum or maximum, minimum, MAX_DIFFICULTY),
 		badLuck = math.max(0, math.min(0xFFFFFFFF, math.floor(tonumber(options.badLuck) or 0))),
-		players = players,
+		banners = banners,
 		negativeModifiers = options.negativeModifiers or {},
 		positiveModifiers = options.positiveModifiers or {},
 		spinnerEnabled = options.spinnerEnabled ~= false,
@@ -76,7 +78,7 @@ function BossDifficulty.open(player, options)
 	message:addU16(session.personalMaximum)
 	message:addU32(session.badLuck)
 	for index = 1, 5 do
-		message:addString(tostring(session.players[index] or ""))
+		message:addString(tostring(session.banners[index] or ""))
 	end
 	message:addU16(session.difficulty)
 	addStrings(message, session.negativeModifiers)
@@ -169,15 +171,29 @@ logout:register()
 local testCommand = TalkAction("/bossdiff")
 
 function testCommand.onSay(player, words, param)
-	local raceId, difficulty = tostring(param or ""):match("^(%d*)%s*(%d*)$")
+	local arguments = {}
+	for value in tostring(param or ""):gmatch("%d+") do
+		arguments[#arguments + 1] = tonumber(value)
+	end
+
+	local raceId = arguments[1] or 100
+	local difficulty = arguments[2] or 5
+	if #arguments == 1 and arguments[1] <= MAX_DIFFICULTY then
+		-- Convenient shorthand: /bossdiff 2 selects difficulty 2 on the
+		-- reference race. The original /bossdiff <raceId> <difficulty> form
+		-- remains available when two arguments are supplied.
+		raceId = 100
+		difficulty = arguments[1]
+	end
+
 	return BossDifficulty.open(player, {
-		raceId = tonumber(raceId) or 100,
-		difficulty = tonumber(difficulty) or 5,
+		raceId = raceId,
+		difficulty = difficulty,
 		minimum = 0,
 		maximum = 25,
 		personalMaximum = 5,
-		badLuck = 2000,
-		players = { player:getName() },
+		badLuck = 20, -- per-mille: displayed as 2%
+		banners = { "Yvara", "Gryllan", "Frost Walker", "Drift Reaper", "Eradrel" },
 		negativeModifiers = {
 			"All characters and their summons receive 40% more damage.",
 			"Hit points of monsters increased by 20%.",
