@@ -2203,6 +2203,12 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	// check if we can add this item
 	ReturnValue ret = toCylinder->queryAdd(index, *item, count, flags, actor);
 	if (ret == RETURNVALUE_NEEDEXCHANGE) {
+		// Reward containers are read-only destinations. An equipment swap would
+		// otherwise move the currently equipped item back into the reward container.
+		if (isInsideRewardContainer(fromCylinder)) {
+			return RETURNVALUE_NOTPOSSIBLE;
+		}
+
 		// check if we can add it to source cylinder
 		ret = fromCylinder->queryAdd(fromCylinder->getThingIndex(item), *toItem, toItem->getItemCount(), 0);
 		if (ret == RETURNVALUE_NOERROR) {
