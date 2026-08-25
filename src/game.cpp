@@ -2205,9 +2205,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	if (ret == RETURNVALUE_NEEDEXCHANGE) {
 		// Reward containers are read-only destinations. An equipment swap would
 		// otherwise move the currently equipped item back into the reward container.
-		if (const Container* sourceContainer = dynamic_cast<const Container*>(fromCylinder);
-		    sourceContainer && (sourceContainer->getID() == ITEM_REWARD_CONTAINER ||
-		                        sourceContainer->getRewardChest() || sourceContainer->isRewardCorpse())) {
+		if (isInsideRewardContainer(fromCylinder)) {
 			return RETURNVALUE_NOTPOSSIBLE;
 		}
 
