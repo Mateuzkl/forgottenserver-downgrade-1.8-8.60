@@ -3480,6 +3480,33 @@ int luaPlayerIsUsingOtcV8(lua_State* L)
 	return 1;
 }
 
+int luaPlayerIsMiniBotTaskRestricted(lua_State* L)
+{
+	// player:isMiniBotTaskRestricted()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushBoolean(L, player->isMiniBotTaskRestricted());
+	return 1;
+}
+
+int luaPlayerSetMiniBotTaskRestricted(lua_State* L)
+{
+	// player:setMiniBotTaskRestricted(restricted)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setMiniBotTaskRestricted(getBoolean(L, 2, false));
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerIsUsingAstraClient(lua_State* L)
 {
 	// player:isUsingAstraClient()
@@ -4884,6 +4911,8 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "setXpBoostTime", luaPlayerSetXpBoostTime);
 
 	registerMethod("Player", "isUsingOtcV8", luaPlayerIsUsingOtcV8);
+	registerMethod("Player", "isMiniBotTaskRestricted", luaPlayerIsMiniBotTaskRestricted);
+	registerMethod("Player", "setMiniBotTaskRestricted", luaPlayerSetMiniBotTaskRestricted);
 	registerMethod("Player", "isUsingAstraClient", luaPlayerIsUsingAstraClient);
 	registerMethod("Player", "isUsingFonticakClient", luaPlayerIsUsingFonticakClient);
 	registerMethod("Player", "isUsingOtc", luaPlayerIsUsingOtc);

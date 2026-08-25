@@ -93,10 +93,8 @@ std::size_t getReadableBytes(const NetworkMessage& msg)
 std::deque<std::pair<int64_t, uint32_t>> waitList; // (timeout, player guid)
 std::size_t priorityCount = 0;
 constexpr int64_t CAST_SWITCH_COOLDOWN_MS = 500;
-constexpr uint8_t HELPER_OPCODE_CAVEBOT = 210;
 constexpr uint8_t HELPER_OPCODE_CAST_ON_FOOT = 211;
 constexpr uint8_t HELPER_OPCODE_SMART_FOLLOW = 212;
-constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
 constexpr uint32_t STORAGE_ASTRA_HELPER_SMART_FOLLOW = 99998;
 constexpr auto STORE_OUTFIT_OFFERS_PATH = "data/store/gamestore.xml";
 constexpr uint8_t ITEM_VALUES_OPCODE = 0xC6;
@@ -413,8 +411,6 @@ bool isEnabledHelperBuffer(std::string_view buffer)
 std::optional<uint32_t> getHelperStateStorageKey(uint8_t opcode)
 {
 	switch (opcode) {
-		case HELPER_OPCODE_CAVEBOT:
-			return STORAGE_ASTRA_HELPER_CAVEBOT;
 		case HELPER_OPCODE_SMART_FOLLOW:
 			return STORAGE_ASTRA_HELPER_SMART_FOLLOW;
 		default:

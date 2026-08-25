@@ -50,6 +50,17 @@ extern LuaEnvironment g_luaEnvironment;
 
 namespace {
 
+// Freezes the most restrictive MiniBot mode observed while the player was
+// contributing to a reward boss, so a logout or a last-second Task toggle cannot
+// upgrade already-earned loot. This runs on every damage/heal tick of the whole
+// fight, so once the flag is latched no further work is done for that player.
+inline void recordMiniBotRewardMode(Game::PlayerScoreInfo& score, const Player* player) noexcept
+{
+	if (!score.miniBotTaskRestricted && player && player->isMiniBotTaskRestricted()) {
+		score.miniBotTaskRestricted = true;
+	}
+}
+
 bool areDifferentNonZeroInstances(const Creature* first, const Creature* second)
 {
 	if (!first || !second) {
@@ -6660,8 +6671,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					const Position& monsterPos = monster->getPosition();
 					double distBetweenTargetAndBoss = std::sqrt(std::pow(playerPos.x - monsterPos.x, 2) + std::pow(playerPos.y - monsterPos.y, 2));
 					if (distBetweenTargetAndBoss < 7) {
-						uint32_t playerGuid = target->getPlayer()->getGUID();
-						rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageTaken += realHealthChange * ConfigManager::getFloat(ConfigManager::REWARD_RATE_HEALING_DONE);
+						Player* rewardPlayer = target->getPlayer();
+						uint32_t playerGuid = rewardPlayer->getGUID();
+						auto& score = rewardBossTracking[monsterId].playerScoreTable[playerGuid];
+						recordMiniBotRewardMode(score, rewardPlayer);
+						score.damageTaken += realHealthChange * ConfigManager::getFloat(ConfigManager::REWARD_RATE_HEALING_DONE);
 					}
 				}
 			}
@@ -7028,8 +7042,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					rewardBossTracking[monsterId] = RewardBossContributionInfo();
 				}
 				if (attacker && attacker->getPlayer()) {
-					uint32_t playerGuid = attacker->getPlayer()->getGUID();
-					rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageDone += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_DONE);
+					Player* rewardPlayer = attacker->getPlayer();
+					uint32_t playerGuid = rewardPlayer->getGUID();
+					auto& score = rewardBossTracking[monsterId].playerScoreTable[playerGuid];
+					recordMiniBotRewardMode(score, rewardPlayer);
+					score.damageDone += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_DONE);
 				}
 			}
 			// rewardboss boss attacking player
@@ -7039,8 +7056,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					rewardBossTracking[monsterId] = RewardBossContributionInfo();
 				}
 				if (target->getPlayer()) {
-					uint32_t playerGuid = target->getPlayer()->getGUID();
-					rewardBossTracking[monsterId].playerScoreTable[playerGuid].damageTaken += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_TAKEN);
+					Player* rewardPlayer = target->getPlayer();
+					uint32_t playerGuid = rewardPlayer->getGUID();
+					auto& score = rewardBossTracking[monsterId].playerScoreTable[playerGuid];
+					recordMiniBotRewardMode(score, rewardPlayer);
+					score.damageTaken += realDamage * ConfigManager::getFloat(ConfigManager::REWARD_RATE_DAMAGE_TAKEN);
 				}
 			}
 

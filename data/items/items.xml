@@ -66592,6 +66592,273 @@
 		</attribute>
 		<attribute key="classification" value="4" />
 	</item>
+	<!-- AstraClient Assistant training equipment. These custom tiers are not
+	     part of the upstream item catalogue, so their default charge counts are
+	     declared here to make every client-advertised variant usable. -->
+	<item id="40621" article="a" name="deus exercise dummy">
+		<attribute key="description" value="You can train your skills by using training weapons with this expert exercise dummy." />
+		<attribute key="rotateto" value="40622" />
+	</item>
+	<item id="40622" article="a" name="deus exercise dummy">
+		<attribute key="description" value="You can train your skills by using training weapons with this expert exercise dummy." />
+		<attribute key="rotateto" value="40621" />
+	</item>
+	<item id="40629" article="a" name="special exercise sword">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="500" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40630" article="a" name="special exercise axe">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="500" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40631" article="a" name="special exercise club">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="500" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40632" article="a" name="special exercise bow">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="500" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40633" article="a" name="special exercise rod">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="500" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40634" article="a" name="special exercise wand">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="500" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40635" article="a" name="special exercise shield">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="500" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40636" article="a" name="daily exercise axe">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="50" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40637" article="a" name="daily exercise bow">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="50" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40638" article="a" name="daily exercise club">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="50" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40639" article="a" name="daily exercise rod">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="50" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40640" article="a" name="daily exercise shield">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="50" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40641" article="a" name="daily exercise sword">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="50" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40642" article="a" name="daily exercise wand">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="50" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40647" article="a" name="super exercise dummy">
+		<attribute key="description" value="You can train your skills by using training weapons with this expert exercise dummy." />
+		<attribute key="rotateto" value="40648" />
+	</item>
+	<item id="40648" article="a" name="super exercise dummy">
+		<attribute key="description" value="You can train your skills by using training weapons with this expert exercise dummy." />
+		<attribute key="rotateto" value="40647" />
+	</item>
+	<item id="40687" article="a" name="weak exercise axe">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="25" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40688" article="a" name="weak exercise bow">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="25" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40689" article="a" name="weak exercise club">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="25" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40690" article="a" name="weak exercise rod">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="25" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40691" article="a" name="weak exercise shield">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="25" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40692" article="a" name="weak exercise sword">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="25" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40693" article="a" name="weak exercise wand">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="25" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40815" article="a" name="mystic exercise club">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="14400" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40816" article="a" name="mystic exercise rod">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="14400" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40817" article="a" name="mystic exercise shield">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="14400" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40818" article="a" name="mystic exercise sword">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="14400" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40819" article="a" name="mystic exercise wand">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="14400" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40820" article="a" name="mystic exercise axe">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="14400" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40821" article="a" name="mystic exercise bow">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="14400" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40851" article="an" name="epic exercise club">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="1800" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40852" article="an" name="epic exercise rod">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="1800" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40853" article="an" name="epic exercise shield">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="1800" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40854" article="an" name="epic exercise sword">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="1800" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40855" article="an" name="epic exercise wand">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="1800" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40856" article="an" name="epic exercise axe">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="1800" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40857" article="an" name="epic exercise bow">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="1800" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40858" article="a" name="legend exercise club">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="7200" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40859" article="a" name="legend exercise rod">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="7200" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40860" article="a" name="legend exercise shield">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="7200" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40861" article="a" name="legend exercise sword">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="7200" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40862" article="a" name="legend exercise wand">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="7200" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40863" article="a" name="legend exercise axe">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="7200" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="40864" article="a" name="legend exercise bow">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="7200" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="41021" article="a" name="special exercise wraps">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="500" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="41022" article="a" name="daily exercise wraps">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="50" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="41023" article="a" name="weak exercise wraps">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="25" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="41024" article="an" name="epic exercise wraps">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="1800" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="41025" article="a" name="legend exercise wraps">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="7200" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="41026" article="a" name="mystic exercise wraps">
+		<attribute key="showCharges" value="1" />
+		<attribute key="charges" value="14400" />
+		<attribute key="weight" value="1000" />
+	</item>
+	<item id="41259" article="a" name="future mage exercise dummy">
+		<attribute key="description" value="You can train your skills by using training weapons with this expert exercise dummy." />
+		<attribute key="rotateto" value="41260" />
+	</item>
+	<item id="41260" article="a" name="future mage exercise dummy">
+		<attribute key="description" value="You can train your skills by using training weapons with this expert exercise dummy." />
+		<attribute key="rotateto" value="41259" />
+	</item>
 	<item id="42050" article="a" name="dead iks">
 		<attribute key="decayTo" value="0" />
 		<attribute key="duration" value="60" />

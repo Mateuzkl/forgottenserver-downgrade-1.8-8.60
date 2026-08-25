@@ -66,8 +66,8 @@ end
 
 -- Applies the player's drop bonus (equipped items) to the loot chance.
 -- Returns true if the item should be added, false otherwise.
-local function rollWithDropBonus(lootChance, player)
-	local chance = lootChance
+local function rollWithDropBonus(lootChance, player, chanceMultiplier)
+	local chance = lootChance * (chanceMultiplier or 1)
 	local rateLoot = configManager.getNumber(configKeys.RATE_LOOT)
 	if rateLoot > 0 then
 		chance = chance * rateLoot
@@ -82,6 +82,21 @@ local function rollWithDropBonus(lootChance, player)
 	end
 	-- Maximum TFS chance is MAX_LOOTCHANCE (100000)
 	return math.random(1, 100000) <= chance
+end
+
+local function rollMiniBotAdjustedLoot(lootChance, player, chanceMultiplier)
+	chanceMultiplier = math.max(0, tonumber(chanceMultiplier) or 1)
+	if lootChance >= 100000 then
+		return chanceMultiplier >= 1 or math.random() <= chanceMultiplier
+	end
+	return rollWithDropBonus(lootChance, player, chanceMultiplier)
+end
+
+local function getMiniBotLootMultiplier(player)
+	if not player or not AstraHelper or not AstraHelper.getMiniBotLootMultiplier then
+		return 1
+	end
+	return math.max(0, tonumber(AstraHelper.getMiniBotLootMultiplier(player)) or 1)
 end
 
 local function createGuaranteedLootItem(corpse, lootItem)
@@ -102,6 +117,7 @@ event.onDropLoot = function(self, corpse)
 	if configManager.getNumber(configKeys.RATE_LOOT) == 0 then return end
 
 	local player = Player(corpse:getCorpseOwner())
+	local miniBotLootMultiplier = getMiniBotLootMultiplier(player)
 	local mType = self:getType()
 	local mTypeRaceId = mType:raceId()
 
@@ -133,14 +149,16 @@ event.onDropLoot = function(self, corpse)
 
 				-- Applies the drop bonus.
 				if player and lootItem.chance and lootItem.chance < 100000 then
-					if rollWithDropBonus(lootItem.chance, player) then
+					if rollMiniBotAdjustedLoot(lootItem.chance, player, miniBotLootMultiplier) then
 						createGuaranteedLootItem(corpse, lootItem)
 					end
 				else
 					-- Items with a 100% chance or no defined chance.
-					local item = corpse:createLootItem(lootItem)
-					if not item then
-						print("[Warning] DropLoot:", "Could not add loot item to corpse.")
+					if rollMiniBotAdjustedLoot(100000, player, miniBotLootMultiplier) then
+						local item = corpse:createLootItem(lootItem)
+						if not item then
+							print("[Warning] DropLoot:", "Could not add loot item to corpse.")
+						end
 					end
 				end
 			end
@@ -154,7 +172,8 @@ event.onDropLoot = function(self, corpse)
 				for i = 1, #monsterLoot do
 					local lootItem = monsterLoot[i]
 					local chance = lootItem.chance or 100000
-					if math.random(1, 100) <= bonusValue and (chance >= 100000 or rollWithDropBonus(chance, player)) then
+					if math.random(1, 100) <= bonusValue and
+						rollMiniBotAdjustedLoot(chance, player, miniBotLootMultiplier) then
 						createGuaranteedLootItem(corpse, lootItem)
 					end
 				end
@@ -168,7 +187,7 @@ event.onDropLoot = function(self, corpse)
 				for i = 1, #monsterLoot do
 					local lootItem = monsterLoot[i]
 					local chance = lootItem.chance or 100000
-					if chance >= 100000 or rollWithDropBonus(chance, player) then
+					if rollMiniBotAdjustedLoot(chance, player, miniBotLootMultiplier) then
 						createGuaranteedLootItem(corpse, lootItem)
 					end
 				end

@@ -90,6 +90,39 @@ end
 
 event:register()
 
+-- Task mode must be applied after the standard experience formula above, but
+-- before consumers such as Weapon Proficiency (priority 100) and the message
+-- aggregator (priority math.huge). This keeps every downstream consumer in
+-- agreement with the experience that is actually awarded.
+local miniBotTaskExperience = Event()
+
+function miniBotTaskExperience.onGainExperience(player, source, exp)
+	-- Same guard as the standard formula above, and it is load bearing.
+	-- Player::addExperience() runs this whole chain (src/player.cpp), including
+	-- every direct player:addExperience() call: quest rewards, task board rewards,
+	-- /addexp and the reset system's experience restore all arrive here with no
+	-- source. Task mode may only reduce hunting experience, so anything without a
+	-- monster source is passed through untouched. Callers that award monster
+	-- experience through addExperience() (the Fiendish bonus) apply the multiplier
+	-- themselves, which keeps it applied exactly once.
+	if not source or source:isPlayer() then
+		return exp
+	end
+
+	if not AstraHelper or not AstraHelper.getMiniBotExperienceMultiplier then
+		return exp
+	end
+
+	-- Clamp to [0, 1]: Task mode may only reduce experience, never grant a bonus.
+	-- Round here so every downstream consumer sees the same whole number that is
+	-- actually awarded.
+	local multiplier = tonumber(AstraHelper.getMiniBotExperienceMultiplier(player)) or 1
+	multiplier = math.min(1, math.max(0, multiplier))
+	return math.floor(exp * multiplier + 0.5)
+end
+
+miniBotTaskExperience:register(50)
+
 
 local message = Event()
 

@@ -14,8 +14,9 @@ function exerciseTraining.onUse(player, item, fromPosition, target, toPosition, 
 		(table.contains(HouseDummies, targetId) or table.contains(FreeDummies, targetId)) then
 		if onExerciseTraining[playerId] then
 			player:sendTextMessage(MESSAGE_EVENT_ADVANCE,
-			                       "This exercise dummy can only be used after a 30 seconds cooldown.")
-			LeaveTraining(playerId)
+			                       "You are already training with an exercise weapon.")
+			-- A repeated hotkey/Assistant request must be idempotent. Stopping the
+			-- existing event here made Auto Training cancel itself after it started.
 			return true
 		end
 

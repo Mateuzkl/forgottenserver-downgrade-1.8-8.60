@@ -134,6 +134,7 @@ public:
 		int32_t damageDone = 0;  // Damage dealt by the player to the boss
 		int32_t damageTaken = 0; // Damage taken by the player from the boss
 		int32_t healingDone = 0; // Healing done to players near boss
+		bool miniBotTaskRestricted = false; // Latched when MiniBot Task mode was active while contributing
 	};
 	// Struct to store contribution info for a rewardboss
 	struct RewardBossContributionInfo
