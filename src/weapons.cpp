@@ -20,6 +20,8 @@ extern Vocations g_vocations;
 
 namespace {
 
+constexpr double PLAYER_DAMAGE_VARIATION = 0.15;
+
 int32_t getPerfectShotDamageForRange(const Item* item, int32_t range)
 {
 	if (!item || range == 0 || item->getPerfectShotRange() != range) {
@@ -178,6 +180,14 @@ int32_t Weapons::getMaxWeaponDamage(uint32_t level, int32_t attackSkill, int32_t
 {
 	return static_cast<int32_t>(
 	    std::round((level / 5) + (((((attackSkill / 4.) + 1) * (attackValue / 3.)) * 1.03) / attackFactor)));
+}
+
+int32_t Weapons::getStablePlayerDamage(int32_t minDamage, int32_t maxDamage)
+{
+	const double average = (static_cast<double>(minDamage) + static_cast<double>(maxDamage)) / 2.0;
+	const double variation = std::abs(average) * PLAYER_DAMAGE_VARIATION;
+	return normal_random(static_cast<int32_t>(std::lround(average - variation)),
+	                     static_cast<int32_t>(std::lround(average + variation)));
 }
 
 void Weapon::configureWeapon(const ItemType& it) { id = it.id; }
@@ -725,7 +735,8 @@ int32_t WeaponMelee::getElementDamage(const Player* player, const Creature*, con
 	float attackFactor = player->getAttackFactor();
 
 	int32_t maxValue = Weapons::getMaxWeaponDamage(player->getLevel(), attackSkill, attackValue, attackFactor);
-	return -normal_random(0, static_cast<int32_t>(maxValue * player->getVocation()->meleeDamageMultiplier));
+	return -Weapons::getStablePlayerDamage(
+	    0, static_cast<int32_t>(maxValue * player->getVocation()->meleeDamageMultiplier));
 }
 
 int32_t WeaponMelee::getWeaponDamage(const Player* player, const Creature*, const Item* item,
@@ -742,7 +753,7 @@ int32_t WeaponMelee::getWeaponDamage(const Player* player, const Creature*, cons
 		return -maxValue;
 	}
 
-	return -normal_random(0, maxValue);
+	return -Weapons::getStablePlayerDamage(0, maxValue);
 }
 
 WeaponDistance::WeaponDistance(LuaScriptInterface* interface) : Weapon(interface)
@@ -951,7 +962,8 @@ int32_t WeaponDistance::getElementDamage(const Player* player, const Creature* t
 		}
 	}
 
-	return -normal_random(minValue, static_cast<int32_t>(maxValue * player->getVocation()->distDamageMultiplier));
+	return -Weapons::getStablePlayerDamage(
+	    minValue, static_cast<int32_t>(maxValue * player->getVocation()->distDamageMultiplier));
 }
 
 int32_t WeaponDistance::getWeaponDamage(const Player* player, const Creature* target, const Item* item,
@@ -986,7 +998,7 @@ int32_t WeaponDistance::getWeaponDamage(const Player* player, const Creature* ta
 	} else {
 		minValue = 0;
 	}
-	return -normal_random(minValue, maxValue);
+	return -Weapons::getStablePlayerDamage(minValue, maxValue);
 }
 
 bool WeaponDistance::getSkillType(const Player* player, const Item*, skills_t& skill, uint32_t& skillpoint) const

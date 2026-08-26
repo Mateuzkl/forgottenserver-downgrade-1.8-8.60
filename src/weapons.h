@@ -34,6 +34,7 @@ public:
 
 	static int32_t getMaxMeleeDamage(int32_t attackSkill, int32_t attackValue);
 	static int32_t getMaxWeaponDamage(uint32_t level, int32_t attackSkill, int32_t attackValue, float attackFactor);
+	static int32_t getStablePlayerDamage(int32_t minDamage, int32_t maxDamage);
 
 	bool registerLuaEvent(std::unique_ptr<Weapon> weapon);
 	void clear(bool fromLua) override final;
