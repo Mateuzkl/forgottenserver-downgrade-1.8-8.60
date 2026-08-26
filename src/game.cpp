@@ -3579,6 +3579,16 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
+	// The root reward containers remain accessible, but nested containers stay
+	// closed so they cannot be used to bypass the read-only reward behavior.
+	Container* container = item->getContainer();
+	const bool isRewardRoot = container && (container->getID() == ITEM_REWARD_CONTAINER ||
+	                                        container->getRewardChest() || container->isRewardCorpse());
+	if (container && !isRewardRoot && isInsideRewardContainer(item->getParent())) {
+		player->sendCancelMessage("Nao e possivel abrir containers que estejam dentro de uma recompensa.");
+		return;
+	}
+
 	if (player->isAstraClient() && isMonsterPodiumId(item->getID())) {
 		if (pos.x == 0xFFFF || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
 			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
