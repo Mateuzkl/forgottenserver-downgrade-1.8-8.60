@@ -65,6 +65,31 @@ struct MoveEventsFixture
 	~MoveEventsFixture() { g_moveEvents = previous; }
 };
 
+struct PlayerWorldEventsFixture
+{
+	// Construct Lua first and destroy it after all interfaces using that state.
+	MoveEventsFixture movement;
+	GlobalEvents globalEvents;
+	Events events;
+	Chat chat;
+	GlobalEvents* previousGlobalEvents = g_globalEvents;
+	Events* previousEvents = g_events;
+	Chat* previousChat = g_chat;
+
+	PlayerWorldEventsFixture()
+	{
+		g_globalEvents = &globalEvents;
+		g_events = &events;
+		g_chat = &chat;
+	}
+	~PlayerWorldEventsFixture()
+	{
+		g_globalEvents = previousGlobalEvents;
+		g_events = previousEvents;
+		g_chat = previousChat;
+	}
+};
+
 // These players are placed directly on tiles, without online registry/DB state.
 struct TilePlayersGuard
 {
@@ -326,9 +351,11 @@ struct OfflineSleeperState
 	bool failSave = false;
 	int loadCount = 0;
 	int saveCount = 0;
+	int committedSaveCount = 0;
 	int32_t savedHealth = 0;
 	uint32_t savedMana = 0;
 	uint8_t savedSoul = 0;
+	std::vector<OfflineSleeperState*> batchStates;
 };
 
 class OfflineTestBedItem final : public BedItem
@@ -359,15 +386,34 @@ protected:
 		    Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_REGENERATION, -1, 0));
 	}
 
-	bool saveOfflineSleeper(Player* player) const override
+	bool saveOfflineSleepers(const std::vector<Player*>& players) const override
 	{
-		++state.saveCount;
-		if (state.failSave) {
-			return false;
+		// Simulate the same atomic boundary as SaveManager: a later write
+		// failure must not commit any earlier player's regenerated state.
+		std::vector<std::pair<Player*, OfflineSleeperState*>> pending;
+		for (Player* player : players) {
+			OfflineSleeperState* target = player->getGUID() == state.guid ? &state : nullptr;
+			for (auto* candidate : state.batchStates) {
+				if (candidate->guid == player->getGUID()) {
+					target = candidate;
+					break;
+				}
+			}
+			if (!target) {
+				return false;
+			}
+			++target->saveCount;
+			if (target->failSave) {
+				return false;
+			}
+			pending.emplace_back(player, target);
 		}
-		state.savedHealth = player->getHealth();
-		state.savedMana = player->getMana();
-		state.savedSoul = player->getSoul();
+		for (const auto& [player, target] : pending) {
+			++target->committedSaveCount;
+			target->savedHealth = player->getHealth();
+			target->savedMana = player->getMana();
+			target->savedSoul = player->getSoul();
+		}
 		return true;
 	}
 
@@ -2007,6 +2053,202 @@ TEST_CASE(offline_bed_save_failure_preserves_sleep_until_removal_retry)
 		for (bool removePartner : {false, true}) {
 			checkFailedOfflineBedRemoval(true, removeWholeTile, removePartner);
 		}
+	}
+}
+
+namespace {
+
+void checkAtomicBedTeardown(bool failSave, bool firstOnline)
+{
+	ensureItemTypes();
+	ensureVocations();
+	OfflineSleeperState states[2];
+	states[0].guid = 914;
+	states[1].guid = 915;
+	for (auto& state : states) {
+		state.batchStates = {&states[0], &states[1]};
+	}
+	ItemTypePropertyGuard firstTypeGuard(694);
+	ItemTypePropertyGuard secondTypeGuard(695);
+	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
+	Item::items.getItemType(695).bedPartnerDir = DIRECTION_EAST;
+	int removalCallbacks = 0;
+	MapTileGuard tileGuard;
+	PlayerWorldEventsFixture fixture;
+	struct FailureGuard {
+		OfflineSleeperState* states;
+		~FailureGuard()
+		{
+			for (size_t i = 0; i < 2; ++i) {
+				states[i].failLoad = states[i].failSave = false;
+			}
+		}
+	} failureGuard{states};
+	const Position pos{174, 170, 7};
+	const Position firstPartnerPos{174, 171, 7};
+	const Position secondPartnerPos{175, 170, 7};
+	const Position onlinePos{176, 170, 7};
+	constexpr ZoneId zoneId = 914;
+	auto house = std::make_shared<House>(914);
+	for (const auto& tilePos : {pos, firstPartnerPos, secondPartnerPos}) {
+		tileGuard.track(tilePos.x, tilePos.y, tilePos.z);
+		auto tile = std::make_unique<HouseTile>(tilePos.x, tilePos.y, tilePos.z, house);
+		tile->internalAddThing(std::make_shared<Item>(100).get());
+		tile->setZoneIds({zoneId});
+		g_game.map.setTile(tilePos.x, tilePos.y, tilePos.z, std::move(tile));
+	}
+	tileGuard.track(onlinePos.x, onlinePos.y, onlinePos.z);
+	auto onlineTile = std::make_unique<DynamicTile>(onlinePos.x, onlinePos.y, onlinePos.z);
+	onlineTile->internalAddThing(std::make_shared<Item>(100).get());
+	g_game.map.setTile(onlinePos.x, onlinePos.y, onlinePos.z, std::move(onlineTile));
+	auto* source = g_game.map.getTile(pos);
+	auto firstBed = std::make_shared<OfflineTestBedItem>(694, states[0]);
+	auto secondBed = std::make_shared<OfflineTestBedItem>(695, states[1]);
+	auto firstPartner = std::make_shared<BedItem>(694);
+	auto secondPartner = std::make_shared<BedItem>(695);
+	g_game.map.getTile(firstPartnerPos)->internalAddThing(firstPartner.get());
+	g_game.map.getTile(secondPartnerPos)->internalAddThing(secondPartner.get());
+	// Insertion at the beginning of down-items makes the successful bed first.
+	source->internalAddThing(secondBed.get());
+	source->internalAddThing(firstBed.get());
+	CHECK(source->getThingIndex(firstBed.get()) < source->getThingIndex(secondBed.get()));
+	TilePlayersGuard players{{makeTestPlayer(914, "FirstBatchSleeper"), makeTestPlayer(915, "SecondBatchSleeper")}};
+	for (size_t i = 0; i < 2; ++i) {
+		auto player = players.players[i];
+		CHECK(player->setVocation(0));
+		player->setMaxHealth(100);
+		player->setHealth(10);
+		player->setMaxMana(100);
+		player->setMana(10);
+		CHECK(player->addCondition(Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_REGENERATION, -1, 0)));
+		source->internalAddThing(player.get());
+		CHECK((i == 0 ? firstBed : secondBed)->sleep(player.get()));
+		player->getTile()->removeThing(player.get(), 0);
+		player->setParent(nullptr);
+	}
+	struct OnlineGuard {
+		std::shared_ptr<Player> player;
+		~OnlineGuard()
+		{
+			if (player && !player->isRemoved()) {
+				g_game.removeCreature(player.get());
+			}
+		}
+	} onlineGuard;
+	if (firstOnline) {
+		CHECK(g_game.internalPlaceCreature(players.players[0].get(), onlinePos, false, true));
+		onlineGuard.player = players.players[0];
+		CHECK(g_game.getPlayerByGUID(states[0].guid) == onlineGuard.player);
+	}
+
+	const std::vector<std::shared_ptr<BedItem>> allBeds{firstBed, secondBed, firstPartner, secondPartner};
+	PropWriteStream writeStream;
+	writeStream.write<uint32_t>(static_cast<uint32_t>(std::time(nullptr) - 1800));
+	const auto sleepStart = writeStream.getStream();
+	std::vector<std::string> attributesBefore;
+	std::vector<std::string> descriptionsBefore;
+	std::vector<uint16_t> idsBefore;
+	auto sleepAttributes = [](const BedItem& bed) {
+		PropWriteStream stream;
+		bed.serializeAttr(stream);
+		return std::string(stream.getStream());
+	};
+	for (const auto& bed : allBeds) {
+		PropStream readStream;
+		readStream.init(sleepStart.data(), sleepStart.size());
+		CHECK(bed->readAttr(ATTR_SLEEPSTART, readStream) == ATTR_READ_CONTINUE);
+		attributesBefore.push_back(sleepAttributes(*bed));
+		descriptionsBefore.emplace_back(bed->getSpecialDescription());
+		idsBefore.push_back(bed->getID());
+	}
+	auto item = std::make_shared<Item>(2160);
+	source->internalAddThing(item.get());
+	const auto* items = source->getItemList();
+	const std::vector<std::shared_ptr<Item>> itemsBefore(items->begin(), items->end());
+	auto event = std::make_unique<MoveEvent>(fixture.movement.events.getScriptInterfacePtr());
+	event->setEventType(MOVE_EVENT_REMOVE_ITEM);
+	event->addPosList(pos);
+	event->moveFunction = [&](Item*, Item*, const Position&) {
+		++removalCallbacks;
+		return 1;
+	};
+	CHECK(fixture.movement.events.registerLuaEvent(event.release()));
+
+	states[1].failLoad = !failSave;
+	states[1].failSave = failSave;
+	CHECK(!g_game.map.removeTile(pos));
+	g_game.cleanup();
+	CHECK(removalCallbacks == 0);
+	CHECK(states[0].loadCount == (firstOnline ? 0 : 1));
+	CHECK(states[1].loadCount == 1);
+	CHECK(states[0].saveCount == (failSave && !firstOnline ? 1 : 0));
+	CHECK(states[1].saveCount == (failSave ? 1 : 0));
+	for (const auto& state : states) {
+		CHECK(state.committedSaveCount == 0);
+		CHECK(state.savedHealth == 0);
+		CHECK(state.savedMana == 0);
+		CHECK(state.savedSoul == 0);
+	}
+	CHECK(g_game.map.getTile(pos) == source);
+	CHECK(std::vector<std::shared_ptr<Item>>(source->getItemList()->begin(), source->getItemList()->end()) == itemsBefore);
+	CHECK(item->getParent() == source);
+	CHECK(house->getBeds().size() == 4);
+	CHECK(Zones::getZonesByPosition(pos) == std::vector<ZoneId>{zoneId});
+	CHECK(g_game.getBedBySleeper(states[0].guid) == firstBed);
+	CHECK(g_game.getBedBySleeper(states[1].guid) == secondBed);
+	for (size_t i = 0; i < allBeds.size(); ++i) {
+		CHECK(sleepAttributes(*allBeds[i]) == attributesBefore[i]);
+		CHECK(allBeds[i]->getSpecialDescription() == descriptionsBefore[i]);
+		CHECK(allBeds[i]->getID() == idsBefore[i]);
+	}
+	CHECK(players.players[0]->getHealth() == 10);
+	CHECK(players.players[0]->getMana() == 10);
+	CHECK(players.players[0]->getSoul() == 0);
+
+	states[1].failLoad = states[1].failSave = false;
+	CHECK(g_game.map.removeTile(pos));
+	g_game.cleanup();
+	CHECK(g_game.map.getTile(pos) == nullptr);
+	CHECK(item->isRemoved());
+	CHECK(removalCallbacks > 0);
+	CHECK(Zones::getZonesByPosition(pos).empty());
+	for (size_t i = firstOnline ? 1 : 0; i < 2; ++i) {
+		CHECK(states[i].loadCount == 2);
+		CHECK(states[i].committedSaveCount == 1);
+		CHECK(states[i].savedHealth == 70);
+		CHECK(states[i].savedMana == 70);
+		CHECK(states[i].savedSoul == 2);
+	}
+	if (firstOnline) {
+		CHECK(states[0].loadCount == 0);
+		CHECK(states[0].saveCount == 0);
+		CHECK(players.players[0]->getHealth() == 70);
+		CHECK(players.players[0]->getMana() == 70);
+		CHECK(players.players[0]->getSoul() == 2);
+	}
+	CHECK(house->getBeds().size() == 2);
+	for (const auto& bed : allBeds) {
+		CHECK(bed->getSleeper() == 0);
+	}
+	CHECK(g_game.getBedBySleeper(states[0].guid) == nullptr);
+	CHECK(g_game.getBedBySleeper(states[1].guid) == nullptr);
+	CHECK(BedItem::wakeUpAll(allBeds));
+	CHECK(states[1].committedSaveCount == 1);
+}
+
+} // namespace
+
+TEST_CASE(map_bed_batch_load_failure_leaves_all_sleepers_unchanged)
+{
+	for (bool firstOnline : {false, true}) {
+		checkAtomicBedTeardown(false, firstOnline);
+	}
+}
+
+TEST_CASE(map_bed_batch_save_failure_leaves_all_sleepers_unchanged)
+{
+	for (bool firstOnline : {false, true}) {
+		checkAtomicBedTeardown(true, firstOnline);
 	}
 }
 

@@ -12,6 +12,8 @@
 #include "scheduler.h"
 #include "tasks.h"
 
+#include <unordered_set>
+
 using namespace std::chrono;
 
 extern Game g_game;
@@ -194,12 +196,12 @@ bool BedItem::wakeUp(Player* player)
 			if (!loadOfflineSleeper(&regenPlayer, sleeperGUID)) {
 				return false;
 			}
-			regeneratePlayer(&regenPlayer);
-			if (!saveOfflineSleeper(&regenPlayer)) {
+			regeneratePlayer(&regenPlayer, sleepStart);
+			if (!saveOfflineSleepers({&regenPlayer})) {
 				return false;
 			}
 		} else {
-			regeneratePlayer(player);
+			regeneratePlayer(player, sleepStart);
 			g_game.addCreatureHealth(player);
 		}
 	}
@@ -225,11 +227,87 @@ bool BedItem::wakeUp(Player* player)
 	return true;
 }
 
+bool BedItem::wakeUpAll(const std::vector<std::shared_ptr<BedItem>>& beds)
+{
+	struct WakeSession {
+		std::shared_ptr<Player> player;
+		uint32_t guid;
+		uint64_t sleepStart;
+		bool offline;
+	};
+	std::vector<WakeSession> sessions;
+	std::vector<std::pair<std::shared_ptr<BedItem>, uint32_t>> bedsToClear;
+	std::unordered_set<uint32_t> sleeperGuids;
+	std::unordered_set<BedItem*> seenBeds;
+	std::vector<Player*> offlinePlayers;
+	std::shared_ptr<BedItem> offlineWriter;
+	auto collectBed = [&](const std::shared_ptr<BedItem>& bed, uint32_t guid) {
+		if (bed && bed->getSleeper() == guid && seenBeds.insert(bed.get()).second) {
+			bedsToClear.emplace_back(bed, guid);
+		}
+	};
+
+	// Preparing temporary offline players must not change a live player, bed,
+	// registry entry or appearance. Either all loads succeed, or nothing wakes.
+	for (const auto& bed : beds) {
+		if (!bed || bed->isRemoved() || bed->getSleeper() == 0) {
+			continue;
+		}
+		const uint32_t guid = bed->getSleeper();
+		collectBed(bed, guid);
+		collectBed(bed->getNextBedItem(), guid);
+		if (!sleeperGuids.insert(guid).second) {
+			continue;
+		}
+		auto player = g_game.getPlayerByGUID(guid);
+		const bool offline = !player;
+		if (offline) {
+			player = std::make_shared<Player>(nullptr);
+			if (!bed->loadOfflineSleeper(player.get(), guid)) {
+				return false;
+			}
+			regeneratePlayer(player.get(), bed->sleepStart);
+			offlinePlayers.push_back(player.get());
+			if (!offlineWriter) {
+				offlineWriter = bed;
+			}
+		}
+		sessions.push_back({std::move(player), guid, bed->sleepStart, offline});
+	}
+	if (offlineWriter && !offlineWriter->saveOfflineSleepers(offlinePlayers)) {
+		return false;
+	}
+
+	// The batch is committed. Clear every session before any live-player or
+	// appearance notification can reenter map removal or wake another bed.
+	for (const auto& session : sessions) {
+		g_game.removeBedSleeper(session.guid);
+	}
+	for (const auto& [bed, guid] : bedsToClear) {
+		if (bed->getSleeper() == guid) {
+			bed->internalRemoveSleeper();
+		}
+	}
+	for (const auto& session : sessions) {
+		if (!session.offline) {
+			regeneratePlayer(session.player.get(), session.sleepStart);
+			g_game.addCreatureHealth(session.player.get());
+		}
+	}
+	for (const auto& entry : bedsToClear) {
+		const auto& bed = entry.first;
+		if (!bed->isRemoved() && bed->getSleeper() == 0) {
+			bed->updateAppearance(nullptr);
+		}
+	}
+	return true;
+}
+
 bool BedItem::loadOfflineSleeper(Player* player, uint32_t guid) const
 {
 	// On the dispatcher, the pending-flush state cannot change between this
-	// check and saveOfflineSleeper(). Otherwise savePlayerSync can enqueue a
-	// save yet return false, making a retry apply the same regeneration twice.
+	// check and saveOfflineSleepers(). Do not load stale state while an older
+	// save is still in flight; the batch save also rejects pending flushes.
 	if (!g_dispatcher.isDispatcherThread() || g_saveManager.hasPendingPlayerSave(guid) ||
 	    g_saveManager.hasFailedRecovery(guid)) {
 		return false;
@@ -237,12 +315,12 @@ bool BedItem::loadOfflineSleeper(Player* player, uint32_t guid) const
 	return IOLoginData::loadPlayerById(player, guid);
 }
 
-bool BedItem::saveOfflineSleeper(Player* player) const
+bool BedItem::saveOfflineSleepers(const std::vector<Player*>& players) const
 {
-	return g_saveManager.savePlayerSync(player);
+	return g_saveManager.savePlayersSync(players);
 }
 
-void BedItem::regeneratePlayer(Player* player) const
+void BedItem::regeneratePlayer(Player* player, uint64_t sleepStart)
 {
 	const auto now = system_clock::now();
 	const auto currentTime = static_cast<uint64_t>(

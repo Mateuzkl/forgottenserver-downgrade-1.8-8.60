@@ -190,6 +190,72 @@ bool SaveManager::savePlayerSync(Player* player)
 	return success;
 }
 
+bool SaveManager::savePlayersSync(const std::vector<Player*>& players)
+{
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[SaveManager] savePlayersSync must be called on the dispatcher thread.");
+		return false;
+	}
+	if (players.empty()) {
+		return true;
+	}
+	Database& db = Database::getInstance();
+	if (db.isInTransaction()) {
+		// A nested BEGIN/COMMIT would commit the caller's transaction.
+		return false;
+	}
+
+	std::unordered_set<uint32_t> guids;
+	std::vector<IOLoginData::PlayerSaveSnapshot> saves;
+	saves.reserve(players.size());
+	for (Player* player : players) {
+		if (!player || hasPendingPlayerSave(player->getGUID()) || hasFailedRecovery(player->getGUID()) ||
+		    !guids.insert(player->getGUID()).second) {
+			return false;
+		}
+		auto save = IOLoginData::buildPlayerSave(player);
+		if (!save) {
+			return false;
+		}
+		saves.push_back(std::move(*save));
+	}
+
+	struct FlushGuard {
+		std::unordered_set<uint32_t>& inFlight;
+		const std::unordered_set<uint32_t>& guids;
+		~FlushGuard()
+		{
+			for (uint32_t guid : guids) {
+				inFlight.erase(guid);
+			}
+		}
+	} guard{flushInFlight, guids};
+	flushInFlight.insert(guids.begin(), guids.end());
+
+	// Only SQL belongs inside the retryable transaction. In particular, do not
+	// call flushPlayerSave here: it would start/commit a transaction per player.
+	if (!DBTransaction::executeWithinTransactionRollbackOnFailure([&db, &saves]() {
+		for (const auto& save : saves) {
+			for (const auto& query : save.queries) {
+				if (!db.executeQuery(query)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	})) {
+		return false;
+	}
+	for (size_t i = 0; i < players.size(); ++i) {
+		const auto& save = saves[i];
+		players[i]->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
+		    save.storageSnapshotId, save.snapshotModifiedKeys, save.snapshotRemovedKeys});
+		players[i]->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
+		    save.bestiarySnapshotId, save.snapshotModifiedBestiaryRaceIds});
+	}
+	return true;
+}
+
 void SaveManager::drainPlayerFlushAsync(uint32_t guid, std::function<void(bool)> callback)
 {
 	g_dispatcher.addTask([this, guid, callback = std::move(callback)]() mutable {

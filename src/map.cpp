@@ -252,19 +252,13 @@ bool Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 					}
 				}
 			}
-			for (const auto& bed : bedsToWake) {
-				if (bed->isRemoved() || bed->getSleeper() == 0 || tile->getThingIndex(bed.get()) == -1) {
-					continue;
-				}
-				auto sleeper = g_game.getPlayerByGUID(bed->getSleeper());
-				const bool wokeUp = bed->wakeUp(sleeper.get());
-				// Appearance callbacks may remove/recreate the source tile.
-				if (tilePair.first != tile) {
-					return true;
-				}
-				if (!wokeUp) {
-					return false;
-				}
+			const bool wokeUp = BedItem::wakeUpAll(bedsToWake);
+			// Appearance callbacks may remove/recreate the source tile.
+			if (tilePair.first != tile) {
+				return true;
+			}
+			if (!wokeUp) {
+				return false;
 			}
 		}
 

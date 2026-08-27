@@ -7,6 +7,7 @@
 #include "item.h"
 
 #include <memory>
+#include <vector>
 
 class House;
 class Player;
@@ -42,16 +43,19 @@ public:
 	bool sleep(Player* player);
 	// A failed offline load/save leaves the sleep session intact for retry.
 	bool wakeUp(Player* player);
+	// Persist every offline sleeper before clearing any of the sleep sessions.
+	static bool wakeUpAll(const std::vector<std::shared_ptr<BedItem>>& beds);
 
 	[[nodiscard]] std::shared_ptr<BedItem> getNextBedItem() const;
 
 protected:
 	virtual bool loadOfflineSleeper(Player* player, uint32_t guid) const;
-	virtual bool saveOfflineSleeper(Player* player) const;
+	// Must persist the whole batch atomically, with no deferred writes on failure.
+	virtual bool saveOfflineSleepers(const std::vector<Player*>& players) const;
 
 private:
 	void updateAppearance(const Player* player);
-	void regeneratePlayer(Player* player) const;
+	static void regeneratePlayer(Player* player, uint64_t sleepStart);
 	void internalSetSleeper(const Player* player);
 	void internalRemoveSleeper() noexcept;
 
