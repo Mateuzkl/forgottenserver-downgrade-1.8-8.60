@@ -1862,4 +1862,132 @@ TEST_CASE(lua_tile_userdata_is_invalidated_after_map_removal)
 	lua_gc(L, LUA_GCCOLLECT, 0);
 }
 
+TEST_CASE(lua_tile_house_userdata_preserves_house_lifetime_until_gc)
+{
+	ensureItemTypes();
+	LuaFixture fixture;
+	lua_State* L = fixture.L;
+	std::weak_ptr<House> weakHouse;
+	std::weak_ptr<HouseTile> weakTile;
+
+	{
+		Houses houses;
+		auto house = houses.addHouse(920);
+		house->setName("Lua Lifetime House");
+		house->setRent(250);
+		weakHouse = house;
+		auto tile = std::make_shared<HouseTile>(170, 170, 7, house);
+		house->addTile(tile);
+		weakTile = tile;
+
+		Lua::pushUserdata<Tile>(L, tile.get());
+		Lua::setMetatable(L, -1, "Tile");
+		lua_setglobal(L, "lifetimeHouseTile");
+		CHECK(luaL_dostring(L, "heldHouse = lifetimeHouseTile:getHouse()") == LUA_OK);
+
+		lua_getglobal(L, "heldHouse");
+		CHECK(lua_rawlen(L, -1) == sizeof(std::shared_ptr<House>));
+		CHECK(Lua::getSharedUserdata<House>(L, -1) == house.get());
+		CHECK(Lua::getSharedUserdata<const House>(L, -1) == house.get());
+		lua_pop(L, 1);
+	}
+
+	// Both the native registry and the tile are gone; only Lua owns the house.
+	CHECK(weakTile.expired());
+	CHECK(!weakHouse.expired());
+	CHECK(luaL_dostring(L,
+	                    "collectgarbage('collect')\n"
+	                    "assert(lifetimeHouseTile:getHouse() == nil)\n"
+	                    "assert(getmetatable(heldHouse) == House)\n"
+	                    "assert(heldHouse:getId() == 920)\n"
+	                    "assert(heldHouse:getName() == 'Lua Lifetime House')\n"
+	                    "assert(heldHouse:getRent() == 250)\n"
+	                    "assert(heldHouse:setRent(500))\n"
+	                    "assert(heldHouse:getRent() == 500)\n"
+	                    "assert(heldHouse:getTileCount() == 0)") == LUA_OK);
+	CHECK(!weakHouse.expired());
+
+	CHECK(luaL_dostring(L,
+	                    "heldHouse = nil\n"
+	                    "lifetimeHouseTile = nil\n"
+	                    "collectgarbage('collect')\n"
+	                    "collectgarbage('collect')") == LUA_OK);
+	CHECK(weakHouse.expired());
+}
+
+TEST_CASE(lua_house_shared_userdata_preserves_identity_and_idempotent_gc)
+{
+	ensureItemTypes();
+	LuaFixture fixture;
+	lua_State* L = fixture.L;
+	auto house = std::make_shared<House>(921);
+	std::weak_ptr<House> weakHouse = house;
+	auto tile = std::make_shared<HouseTile>(171, 171, 7, house);
+	// Equal IDs must not make distinct House objects compare equal.
+	auto otherHouse = std::make_shared<House>(921);
+	auto otherTile = std::make_shared<HouseTile>(172, 172, 7, otherHouse);
+	auto player = makeTestPlayer(921, "LuaHousePlayer");
+
+	Lua::pushUserdata<Tile>(L, tile.get());
+	Lua::setMetatable(L, -1, "Tile");
+	lua_setglobal(L, "houseTile");
+	Lua::pushUserdata<Tile>(L, otherTile.get());
+	Lua::setMetatable(L, -1, "Tile");
+	lua_setglobal(L, "otherHouseTile");
+	Lua::pushUserdata<Player>(L, player.get());
+	Lua::setMetatable(L, -1, "Player");
+	lua_setglobal(L, "houseTestPlayer");
+	lua_pushinteger(L, GUEST_LIST);
+	lua_setglobal(L, "houseGuestList");
+
+	CHECK(luaL_dostring(L,
+	                    "houseA = houseTile:getHouse()\n"
+	                    "houseB = houseTile:getHouse()\n"
+	                    "houseC = otherHouseTile:getHouse()\n"
+	                    "assert(not rawequal(houseA, houseB))\n"
+	                    "assert(houseA == houseB)\n"
+	                    "assert(houseA ~= houseC)\n"
+	                    "assert(houseA ~= houseTile and houseTile ~= houseA)\n"
+	                    "assert(House.getId(houseTile) == nil)\n"
+	                    "assert(House.getRent(houseTile) == nil)\n"
+	                    "assert(houseTestPlayer:setEditHouse(houseA, houseGuestList))\n"
+	                    "assert(houseTestPlayer:sendHouseWindow(houseB, houseGuestList))\n"
+	                    "assert(houseTestPlayer:setEditHouse(houseTile, houseGuestList) == nil)\n"
+	                    "assert(houseTestPlayer:sendHouseWindow(houseTile, houseGuestList) == nil)") == LUA_OK);
+	uint32_t windowTextId = 0;
+	uint32_t listId = 0;
+	CHECK(player->getEditHouse(windowTextId, listId) == house.get());
+	CHECK(listId == GUEST_LIST);
+	house.reset();
+	CHECK(weakHouse.use_count() == 2);
+
+	CHECK(luaL_dostring(L,
+	                    "local gc = rawgetmetatable('House').__gc\n"
+	                    "assert(type(gc) == 'function')\n"
+	                    "gc(houseA)\n"
+	                    "gc(houseA)\n"
+	                    "assert(houseA:getId() == nil)\n"
+	                    "assert(houseA:getRent() == nil)\n"
+	                    "assert(houseA:setRent(1) == nil)\n"
+	                    "assert(houseA ~= houseB)\n"
+	                    "assert(houseB:getId() == 921)") == LUA_OK);
+	CHECK(weakHouse.use_count() == 1);
+
+	CHECK(luaL_dostring(L,
+	                    "local gc = rawgetmetatable('House').__gc\n"
+	                    "gc(houseB)\n"
+	                    "gc(houseB)\n"
+	                    "assert(houseB:getId() == nil)\n"
+	                    "assert(houseTile:getHouse() == nil)\n"
+	                    "assert(houseTestPlayer:setEditHouse(houseB, houseGuestList) == nil)\n"
+	                    "assert(houseTestPlayer:sendHouseWindow(houseB, houseGuestList) == nil)\n"
+	                    "houseA = nil\n"
+	                    "houseB = nil\n"
+	                    "houseC = nil\n"
+	                    "collectgarbage('collect')\n"
+	                    "collectgarbage('collect')") == LUA_OK);
+	CHECK(weakHouse.expired());
+	CHECK(player->getEditHouse(windowTextId, listId) == nullptr);
+}
+
 TFS_TEST_MAIN()

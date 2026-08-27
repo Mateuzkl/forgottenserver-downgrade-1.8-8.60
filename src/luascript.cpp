@@ -4509,6 +4509,13 @@ int LuaScriptInterface::luaUserdataCompare(lua_State* L)
 		return 1;
 	}
 
+	if (typeA == LuaData_House || typeB == LuaData_House) {
+		Lua::pushBoolean(L,
+		                 typeA == typeB &&
+		                     Lua::getSharedUserdata<House>(L, 1) == Lua::getSharedUserdata<House>(L, 2));
+		return 1;
+	}
+
 	Lua::pushBoolean(L, Lua::getUserdata<void>(L, 1, false) == Lua::getUserdata<void>(L, 2, false));
 	return 1;
 }

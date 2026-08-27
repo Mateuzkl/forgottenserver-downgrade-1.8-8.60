@@ -2907,7 +2907,7 @@ int luaPlayerGetHouse(lua_State* L)
 
 	auto house = g_game.map.houses.getHouseByPlayerId(player->getGUID());
 	if (house) {
-		pushUserdata<House>(L, house.get());
+		pushSharedPtr(L, house);
 		setMetatable(L, -1, "House");
 	} else {
 		lua_pushnil(L);
@@ -2924,7 +2924,7 @@ int luaPlayerSendHouseWindow(lua_State* L)
 		return 1;
 	}
 
-	House* house = getUserdata<House>(L, 2);
+	House* house = getSharedUserdata<House>(L, 2);
 	if (!house) {
 		lua_pushnil(L);
 		return 1;
@@ -2945,7 +2945,7 @@ int luaPlayerSetEditHouse(lua_State* L)
 		return 1;
 	}
 
-	House* house = getUserdata<House>(L, 2);
+	House* house = getSharedUserdata<House>(L, 2);
 	if (!house) {
 		lua_pushnil(L);
 		return 1;
