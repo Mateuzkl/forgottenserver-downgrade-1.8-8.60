@@ -49,8 +49,7 @@ int luaTileRemove(lua_State* L)
 		g_game.removeTileToClean(tile);
 	}
 
-	g_game.map.removeTile(tile->getPosition());
-	pushBoolean(L, true);
+	pushBoolean(L, g_game.map.removeTile(tile->getPosition()));
 	return 1;
 }
 

@@ -206,6 +206,7 @@ private:
 	bool transferToDepot() const;
 	bool transferToDepot(Player* player) const;
 	void updateDoorDescription() const;
+	std::vector<std::shared_ptr<HouseTile>> getTilesSnapshot() const;
 
 	AccessList guestList;
 	AccessList subOwnerList;

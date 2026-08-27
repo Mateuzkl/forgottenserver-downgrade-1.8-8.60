@@ -27,6 +27,12 @@ public:
 	void saveMapAsync();
 	bool savePlayerSync(Player* player);
 
+	// Dispatcher-thread only, like the save queue bookkeeping itself.
+	[[nodiscard]] bool hasPendingPlayerSave(uint32_t guid) const noexcept
+	{
+		return flushInFlight.contains(guid) || pendingFlushes.contains(guid);
+	}
+
 	/**
 	 * @brief Non-blocking: invokes callback(bool) when pending save operations for
 	 * the given GUID have been fully persisted to the database (or on timeout).

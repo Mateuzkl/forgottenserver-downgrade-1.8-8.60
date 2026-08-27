@@ -30,18 +30,7 @@ void House::addTile(HouseTile* tile)
 
 	tile->setFlag(TILESTATE_PROTECTIONZONE);
 	if (auto tileRef = tile->weak_from_this().lock()) {
-		auto houseTileRef = std::static_pointer_cast<HouseTile>(tileRef);
-		for (auto it = houseTiles.begin(); it != houseTiles.end();) {
-			auto locked = it->lock();
-			if (!locked) {
-				it = houseTiles.erase(it);
-			} else if (locked == houseTileRef) {
-				return;
-			} else {
-				++it;
-			}
-		}
-		houseTiles.push_back(houseTileRef);
+		addTile(std::static_pointer_cast<HouseTile>(tileRef));
 	}
 }
 
@@ -74,6 +63,18 @@ size_t House::getTileCount() const
 		}
 	}
 	return count;
+}
+
+std::vector<std::shared_ptr<HouseTile>> House::getTilesSnapshot() const
+{
+	std::vector<std::shared_ptr<HouseTile>> tiles;
+	tiles.reserve(houseTiles.size());
+	for (const auto& weakTile : houseTiles) {
+		if (auto tile = weakTile.lock()) {
+			tiles.push_back(std::move(tile));
+		}
+	}
+	return tiles;
 }
 
 std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> House::initializeOwnerDataFromDatabase(uint32_t guid_guild, HouseType_t type)
@@ -147,16 +148,17 @@ void House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 			transferToDepot();
 		}
 
-		for (auto it = houseTiles.begin(); it != houseTiles.end();) {
-			if (auto tile = it->lock()) {
-				if (const CreatureVector* creatures = tile->getCreatures()) {
-					for (int32_t i = creatures->size(); --i >= 0;) {
-						kickPlayer(nullptr, (*creatures)[i]->getPlayer());
+		// Kicking a player runs movement callbacks, which may remove other
+		// creatures or unregister this tile from the house.
+		for (const auto& tile : getTilesSnapshot()) {
+			if (const CreatureVector* creatures = tile->getCreatures()) {
+				const auto snapshot = *creatures;
+				for (auto it = snapshot.rbegin(); it != snapshot.rend(); ++it) {
+					const auto& creature = *it;
+					if (creature && !creature->isRemoved() && creature->getTile() == tile.get()) {
+						kickPlayer(nullptr, creature->getPlayer());
 					}
 				}
-				++it;
-			} else {
-				it = houseTiles.erase(it);
 			}
 		}
 
@@ -325,19 +327,19 @@ void House::setAccessList(uint32_t listId, std::string_view textlist)
 	}
 
 	// kick uninvited players
-	for (auto it = houseTiles.begin(); it != houseTiles.end();) {
-		if (auto tile = it->lock()) {
-			if (CreatureVector* creatures = tile->getCreatures()) {
-				for (int32_t i = creatures->size(); --i >= 0;) {
-					Player* player = (*creatures)[i]->getPlayer();
-					if (player && !isInvited(player)) {
-						kickPlayer(nullptr, player);
-					}
+	for (const auto& tile : getTilesSnapshot()) {
+		if (const CreatureVector* creatures = tile->getCreatures()) {
+			const auto snapshot = *creatures;
+			for (auto it = snapshot.rbegin(); it != snapshot.rend(); ++it) {
+				const auto& creature = *it;
+				if (!creature || creature->isRemoved() || creature->getTile() != tile.get()) {
+					continue;
+				}
+				Player* player = creature->getPlayer();
+				if (player && !isInvited(player)) {
+					kickPlayer(nullptr, player);
 				}
 			}
-			++it;
-		} else {
-			it = houseTiles.erase(it);
 		}
 	}
 }
@@ -412,12 +414,8 @@ bool House::transferToDepot(Player* player) const
 		}
 	}
 
-	for (const auto& weakTile : houseTiles) {
-		auto tile = weakTile.lock();
-		if (!tile) {
-			continue;
-		}
-
+	// Moving items also runs callbacks that can mutate the house tile registry.
+	for (const auto& tile : getTilesSnapshot()) {
 		const TileItemVector* items = tile->getItemList();
 		if (!items) {
 			continue;
@@ -603,7 +601,7 @@ std::shared_ptr<Door> House::getDoorByNumber(uint32_t doorId) const
 	for (const auto& weakDoor : doorList) {
 		auto door = weakDoor.lock();
 		if (door && door->getDoorId() == doorId) {
-			return std::static_pointer_cast<Door>(door);
+			return door;
 		}
 	}
 	return nullptr;
@@ -614,7 +612,7 @@ std::shared_ptr<Door> House::getDoorByPosition(const Position& pos) const
 	for (const auto& weakDoor : doorList) {
 		auto door = weakDoor.lock();
 		if (door && door->getPosition() == pos) {
-			return std::static_pointer_cast<Door>(door);
+			return door;
 		}
 	}
 	return nullptr;
@@ -626,7 +624,7 @@ std::vector<std::shared_ptr<Door>> House::getDoors() const
 	result.reserve(doorList.size());
 	for (const auto& weakDoor : doorList) {
 		if (auto door = weakDoor.lock()) {
-			result.push_back(std::static_pointer_cast<Door>(door));
+			result.push_back(std::move(door));
 		}
 	}
 	return result;
@@ -649,7 +647,7 @@ std::vector<std::shared_ptr<BedItem>> House::getBeds() const
 	result.reserve(bedsList.size());
 	for (const auto& weakBed : bedsList) {
 		if (auto bed = weakBed.lock()) {
-			result.push_back(std::static_pointer_cast<BedItem>(bed));
+			result.push_back(std::move(bed));
 		}
 	}
 	return result;

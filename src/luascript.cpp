@@ -1116,13 +1116,8 @@ void Lua::setMetatable(lua_State* L, int32_t index, std::string_view name)
 	if (name == "Tile") {
 		if (Tile** userdata = static_cast<Tile**>(lua_touserdata(L, index))) {
 			if (*userdata) {
-				std::weak_ptr<Tile> weakTile;
-				try {
-					weakTile = (*userdata)->weak_from_this();
-				} catch (const std::bad_weak_ptr&) {
-				}
 				new (lua_newuserdatauv(L, sizeof(std::weak_ptr<Tile>), 0))
-				    std::weak_ptr<Tile>(std::move(weakTile));
+				    std::weak_ptr<Tile>((*userdata)->weak_from_this());
 				lua_setiuservalue(L, index - 1, 1);
 			}
 		}
@@ -1229,11 +1224,6 @@ Creature* Lua::getValidatedCreatureUserdata(lua_State* L, int32_t arg)
 
 Tile* Lua::getValidatedTileUserdata(lua_State* L, int32_t arg)
 {
-	Tile* rawTile = nullptr;
-	if (Tile** userdata = static_cast<Tile**>(lua_touserdata(L, arg))) {
-		rawTile = *userdata;
-	}
-
 	const int userValueType = lua_getiuservalue(L, arg, 1);
 	if (userValueType == LUA_TUSERDATA) {
 		auto* weakPtr = static_cast<std::weak_ptr<Tile>*>(lua_touserdata(L, -1));
@@ -1246,11 +1236,9 @@ Tile* Lua::getValidatedTileUserdata(lua_State* L, int32_t arg)
 
 		return nullptr;
 	}
-	if (userValueType != LUA_TNONE) {
-		lua_pop(L, 1);
-	}
-
-	return rawTile;
+	lua_pop(L, 1);
+	// A Tile must have its ownership token; never revive an unvalidated raw address.
+	return nullptr;
 }
 
 // Is
@@ -4513,6 +4501,12 @@ int LuaScriptInterface::luaUserdataCompare(lua_State* L)
 		Lua::pushBoolean(L,
 		                 typeA == typeB &&
 		                     Lua::getSharedUserdata<House>(L, 1) == Lua::getSharedUserdata<House>(L, 2));
+		return 1;
+	}
+
+	if (typeA == LuaData_Tile || typeB == LuaData_Tile) {
+		const Tile* tile = Lua::getUserdata<Tile>(L, 1);
+		Lua::pushBoolean(L, typeA == typeB && tile && tile == Lua::getUserdata<Tile>(L, 2));
 		return 1;
 	}
 

@@ -10,6 +10,7 @@
 #include "iologindata.h"
 #include "save_manager.h"
 #include "scheduler.h"
+#include "tasks.h"
 
 using namespace std::chrono;
 
@@ -34,10 +35,6 @@ void BedItem::setHouse(const std::shared_ptr<House>& h) noexcept
 void BedItem::onRemoved()
 {
 	Item::onRemoved();
-
-	if (auto h = getHouse()) {
-		h->removeBed(this);
-	}
 	setHouse(nullptr);
 }
 
@@ -189,14 +186,17 @@ bool BedItem::sleep(Player* player)
 	return true;
 }
 
-void BedItem::wakeUp(Player* player)
+bool BedItem::wakeUp(Player* player)
 {
 	if (sleeperGUID != 0) {
 		if (!player) {
 			Player regenPlayer(nullptr);
-			if (loadOfflineSleeper(&regenPlayer, sleeperGUID)) {
-				regeneratePlayer(&regenPlayer);
-				saveOfflineSleeper(&regenPlayer);
+			if (!loadOfflineSleeper(&regenPlayer, sleeperGUID)) {
+				return false;
+			}
+			regeneratePlayer(&regenPlayer);
+			if (!saveOfflineSleeper(&regenPlayer)) {
+				return false;
 			}
 		} else {
 			regeneratePlayer(player);
@@ -222,10 +222,18 @@ void BedItem::wakeUp(Player* player)
 	if (nextBedItem) {
 		nextBedItem->updateAppearance(nullptr);
 	}
+	return true;
 }
 
 bool BedItem::loadOfflineSleeper(Player* player, uint32_t guid) const
 {
+	// On the dispatcher, the pending-flush state cannot change between this
+	// check and saveOfflineSleeper(). Otherwise savePlayerSync can enqueue a
+	// save yet return false, making a retry apply the same regeneration twice.
+	if (!g_dispatcher.isDispatcherThread() || g_saveManager.hasPendingPlayerSave(guid) ||
+	    g_saveManager.hasFailedRecovery(guid)) {
+		return false;
+	}
 	return IOLoginData::loadPlayerById(player, guid);
 }
 

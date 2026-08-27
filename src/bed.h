@@ -40,7 +40,8 @@ public:
 
 	bool trySleep(Player* player);
 	bool sleep(Player* player);
-	void wakeUp(Player* player);
+	// A failed offline load/save leaves the sleep session intact for retry.
+	bool wakeUp(Player* player);
 
 	[[nodiscard]] std::shared_ptr<BedItem> getNextBedItem() const;
 

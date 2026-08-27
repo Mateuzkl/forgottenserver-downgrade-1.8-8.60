@@ -12,12 +12,15 @@
 #include "../inbox.h"
 #include "../item.h"
 #include "../luascript.h"
+#include "../movement.h"
 #include "../player.h"
 #include "../scriptmanager.h"
 #include "../storeinbox.h"
 #include "../vocation.h"
+#include "../zones.h"
 
 #include "test_support.h"
+#include <cstddef>
 #include <memory>
 
 extern bool isValidItemPointer(Item* item);
@@ -50,6 +53,31 @@ public:
 	lua_State* L = nullptr;
 	bool prevWarnUnsafe{false};
 	bool prevConvertUnsafe{false};
+};
+
+struct MoveEventsFixture
+{
+	LuaFixture lua;
+	MoveEvents events;
+	MoveEvents* previous = g_moveEvents;
+
+	MoveEventsFixture() { g_moveEvents = &events; }
+	~MoveEventsFixture() { g_moveEvents = previous; }
+};
+
+// These players are placed directly on tiles, without online registry/DB state.
+struct TilePlayersGuard
+{
+	std::vector<std::shared_ptr<Player>> players;
+	~TilePlayersGuard()
+	{
+		for (const auto& player : players) {
+			if (auto tile = player->getTileShared()) {
+				tile->removeThing(player.get(), 0);
+			}
+			player->setParent(nullptr);
+		}
+	}
 };
 
 struct ItemTypePropertyGuard
@@ -294,6 +322,8 @@ struct OfflineSleeperState
 {
 	uint32_t guid = 0;
 	uint32_t loadedGuid = 0;
+	bool failLoad = false;
+	bool failSave = false;
 	int loadCount = 0;
 	int saveCount = 0;
 	int32_t savedHealth = 0;
@@ -311,7 +341,7 @@ protected:
 	{
 		++state.loadCount;
 		state.loadedGuid = guid;
-		if (guid != state.guid) {
+		if (state.failLoad || guid != state.guid) {
 			return false;
 		}
 
@@ -332,6 +362,9 @@ protected:
 	bool saveOfflineSleeper(Player* player) const override
 	{
 		++state.saveCount;
+		if (state.failSave) {
+			return false;
+		}
 		state.savedHealth = player->getHealth();
 		state.savedMana = player->getMana();
 		state.savedSoul = player->getSoul();
@@ -401,8 +434,8 @@ TEST_CASE(item_get_door_returns_nullptr_for_regular_item_and_valid_shared_ptr_fo
 	// Regular Item returns nullptr
 	auto regularItem = std::make_shared<Item>(100);
 	CHECK(regularItem->getDoor() == nullptr);
-	const auto& constRegularItem = regularItem;
-	CHECK(constRegularItem->getDoor() == nullptr);
+	const Item& constRegularItem = *regularItem;
+	CHECK(constRegularItem.getDoor() == nullptr);
 
 	// Door returns valid shared_ptr and preserves identity
 	auto door = std::make_shared<Door>(0);
@@ -415,8 +448,8 @@ TEST_CASE(item_get_door_returns_nullptr_for_regular_item_and_valid_shared_ptr_fo
 	CHECK(nonConstDoor.get() == rawDoor);
 	CHECK(nonConstDoor->getDoorId() == 45);
 
-	const auto& constDoor = door;
-	std::shared_ptr<const Door> constDoorRef = constDoor->getDoor();
+	const Door& constDoor = *door;
+	std::shared_ptr<const Door> constDoorRef = constDoor.getDoor();
 	CHECK(constDoorRef != nullptr);
 	CHECK(constDoorRef == door);
 	CHECK(constDoorRef.get() == rawDoor);
@@ -459,8 +492,8 @@ TEST_CASE(item_get_bed_returns_nullptr_for_regular_item_and_valid_shared_ptr_for
 	// Regular Item returns nullptr
 	auto regularItem = std::make_shared<Item>(100);
 	CHECK(regularItem->getBed() == nullptr);
-	const auto& constRegularItem = regularItem;
-	CHECK(constRegularItem->getBed() == nullptr);
+	const Item& constRegularItem = *regularItem;
+	CHECK(constRegularItem.getBed() == nullptr);
 
 	// BedItem returns valid shared_ptr and preserves identity
 	auto bed = std::make_shared<BedItem>(694);
@@ -471,8 +504,8 @@ TEST_CASE(item_get_bed_returns_nullptr_for_regular_item_and_valid_shared_ptr_for
 	CHECK(nonConstBed == bed);
 	CHECK(nonConstBed.get() == rawBed);
 
-	const auto& constBed = bed;
-	std::shared_ptr<const BedItem> constBedRef = constBed->getBed();
+	const BedItem& constBed = *bed;
+	std::shared_ptr<const BedItem> constBedRef = constBed.getBed();
 	CHECK(constBedRef != nullptr);
 	CHECK(constBedRef == bed);
 	CHECK(constBedRef.get() == rawBed);
@@ -1547,6 +1580,10 @@ TEST_CASE(orphan_house_tile_fails_closed_for_players_and_allows_map_cleanup)
 	uint32_t destinationFlags = 0;
 	CHECK(orphanTile->queryDestination(destinationIndex, *player, &destinationItem, destinationFlags, 0) ==
 	      &Tile::nullptr_tile);
+	// Forced placement must not attach the player to the sentinel tile or
+	// dereference the nonexistent quadtree node at its fallback coordinates.
+	CHECK(!g_game.map.placeCreature(pos, player.get(), false, true));
+	CHECK(player->getParent() == nullptr);
 
 	// A nested container must not bypass the expired House permissions.
 	bool prevOnlyInvited = ConfigManager::getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS);
@@ -1796,6 +1833,161 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 	CHECK(weakBed.expired());
 }
 
+namespace {
+
+void checkFailedOfflineBedRemoval(bool failSave, bool removeWholeTile, bool removePartner)
+{
+	ensureItemTypes();
+	ensureVocations();
+
+	// Keep injected state and partner directions alive until map cleanup, even
+	// when a CHECK throws while an occupied bed is still attached to its tile.
+	OfflineSleeperState offlineState;
+	offlineState.guid = 913;
+	ItemTypePropertyGuard bedTypeGuard(694);
+	ItemTypePropertyGuard partnerTypeGuard(695);
+	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
+	Item::items.getItemType(695).bedPartnerDir = DIRECTION_NORTH;
+	MapTileGuard tileGuard;
+	struct FailureGuard {
+		OfflineSleeperState& state;
+		~FailureGuard() { state.failLoad = state.failSave = false; }
+	} failureGuard{offlineState};
+
+	const Position bedPos{172, 170, 7};
+	const Position partnerPos{172, 171, 7};
+	constexpr ZoneId zoneId = 913;
+	auto house = std::make_shared<House>(913);
+	for (const auto& pos : {bedPos, partnerPos}) {
+		tileGuard.track(pos.x, pos.y, pos.z);
+		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+		tile->internalAddThing(std::make_shared<Item>(100).get());
+		tile->setZoneIds({zoneId});
+		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
+	}
+
+	auto bed = std::make_shared<OfflineTestBedItem>(694, offlineState);
+	auto partnerBed = std::make_shared<OfflineTestBedItem>(695, offlineState);
+	g_game.map.getTile(bedPos)->internalAddThing(bed.get());
+	g_game.map.getTile(partnerPos)->internalAddThing(partnerBed.get());
+	TilePlayersGuard players{{makeTestPlayer(offlineState.guid, "OfflineSleepingPlayer")}};
+	auto player = players.players.front();
+	CHECK(player->setVocation(0));
+	// No online registration: exercise the real sleep/regen logic without DB.
+	g_game.map.getTile(bedPos)->internalAddThing(player.get());
+	CHECK(bed->sleep(player.get()));
+	player->getTile()->removeThing(player.get(), 0);
+	player->setParent(nullptr);
+	CHECK(g_game.getPlayerByGUID(offlineState.guid) == nullptr);
+
+	PropWriteStream writeStream;
+	writeStream.write<uint32_t>(static_cast<uint32_t>(std::time(nullptr) - 1800));
+	const auto sleepStart = writeStream.getStream();
+	for (const auto& half : {bed, partnerBed}) {
+		PropStream readStream;
+		readStream.init(sleepStart.data(), sleepStart.size());
+		CHECK(half->readAttr(ATTR_SLEEPSTART, readStream) == ATTR_READ_CONTINUE);
+	}
+	auto sleepAttributes = [](const BedItem& half) {
+		PropWriteStream stream;
+		half.serializeAttr(stream);
+		return std::string(stream.getStream());
+	};
+	const auto bedAttributes = sleepAttributes(*bed);
+	const auto partnerAttributes = sleepAttributes(*partnerBed);
+	const auto bedId = bed->getID();
+	const auto partnerId = partnerBed->getID();
+	const std::string bedDescription(bed->getSpecialDescription());
+	const std::string partnerDescription(partnerBed->getSpecialDescription());
+	const Position targetPos = removePartner ? partnerPos : bedPos;
+	auto targetBed = removePartner ? partnerBed : bed;
+	Tile* targetTile = g_game.map.getTile(targetPos);
+	Item* ground = targetTile->getGround();
+
+	offlineState.failLoad = !failSave;
+	offlineState.failSave = failSave;
+	CHECK(g_game.internalRemoveItem(targetBed.get(), -1, true, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE) ==
+	      RETURNVALUE_NOERROR);
+	CHECK(offlineState.loadCount == 0);
+	CHECK(offlineState.saveCount == 0);
+	CHECK(!targetBed->wakeUp(nullptr));
+	if (removeWholeTile) {
+		CHECK(!g_game.map.removeTile(targetPos));
+	} else {
+		CHECK(g_game.internalRemoveItem(targetBed.get(), -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE) ==
+		      RETURNVALUE_NOTPOSSIBLE);
+	}
+	g_game.cleanup();
+
+	CHECK(offlineState.loadCount == 2);
+	CHECK(offlineState.saveCount == (failSave ? 2 : 0));
+	CHECK(offlineState.savedHealth == 0);
+	CHECK(offlineState.savedMana == 0);
+	CHECK(offlineState.savedSoul == 0);
+	CHECK(g_game.map.getTile(targetPos) == targetTile);
+	CHECK(targetTile->getGround() == ground);
+	CHECK(targetTile->getThingIndex(targetBed.get()) != -1);
+	CHECK(!targetBed->isRemoved());
+	CHECK(house->getBeds().size() == 2);
+	CHECK(house->getTileCount() == 2);
+	CHECK(g_game.getBedBySleeper(offlineState.guid) == bed);
+	CHECK(bed->getSleeper() == offlineState.guid);
+	CHECK(partnerBed->getSleeper() == offlineState.guid);
+	CHECK(sleepAttributes(*bed) == bedAttributes);
+	CHECK(sleepAttributes(*partnerBed) == partnerAttributes);
+	CHECK(bed->getID() == bedId);
+	CHECK(partnerBed->getID() == partnerId);
+	CHECK(bed->getSpecialDescription() == bedDescription);
+	CHECK(partnerBed->getSpecialDescription() == partnerDescription);
+	CHECK(Zones::getZonesByPosition(targetPos) == std::vector<ZoneId>{zoneId});
+
+	// Recovery must grant the original session once and only then remove it.
+	offlineState.failLoad = offlineState.failSave = false;
+	if (removeWholeTile) {
+		CHECK(g_game.map.removeTile(targetPos));
+		CHECK(g_game.map.getTile(targetPos) == nullptr);
+		CHECK(Zones::getZonesByPosition(targetPos).empty());
+	} else {
+		CHECK(g_game.internalRemoveItem(targetBed.get(), -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE) ==
+		      RETURNVALUE_NOERROR);
+		CHECK(g_game.map.getTile(targetPos) == targetTile);
+	}
+	g_game.cleanup();
+	CHECK(offlineState.loadCount == 3);
+	CHECK(offlineState.saveCount == (failSave ? 3 : 1));
+	CHECK(offlineState.savedHealth == 70);
+	CHECK(offlineState.savedMana == 70);
+	CHECK(offlineState.savedSoul == 2);
+	CHECK(targetBed->isRemoved());
+	CHECK(house->getBeds().size() == 1);
+	CHECK(bed->getSleeper() == 0);
+	CHECK(partnerBed->getSleeper() == 0);
+	CHECK(g_game.getBedBySleeper(offlineState.guid) == nullptr);
+	CHECK(targetBed->wakeUp(nullptr));
+	CHECK(offlineState.loadCount == 3);
+	CHECK(offlineState.saveCount == (failSave ? 3 : 1));
+}
+
+} // namespace
+
+TEST_CASE(offline_bed_load_failure_preserves_sleep_until_removal_retry)
+{
+	for (bool removeWholeTile : {false, true}) {
+		for (bool removePartner : {false, true}) {
+			checkFailedOfflineBedRemoval(false, removeWholeTile, removePartner);
+		}
+	}
+}
+
+TEST_CASE(offline_bed_save_failure_preserves_sleep_until_removal_retry)
+{
+	for (bool removeWholeTile : {false, true}) {
+		for (bool removePartner : {false, true}) {
+			checkFailedOfflineBedRemoval(true, removeWholeTile, removePartner);
+		}
+	}
+}
+
 TEST_CASE(lua_tile_userdata_is_invalidated_after_map_removal)
 {
 	ensureItemTypes();
@@ -1988,6 +2180,200 @@ TEST_CASE(lua_house_shared_userdata_preserves_identity_and_idempotent_gc)
 	                    "collectgarbage('collect')") == LUA_OK);
 	CHECK(weakHouse.expired());
 	CHECK(player->getEditHouse(windowTextId, listId) == nullptr);
+}
+
+TEST_CASE(house_access_list_kicks_survive_tile_and_creature_removal_callbacks)
+{
+	ensureItemTypes();
+	MapTileGuard tileGuard;
+	MoveEventsFixture fixture;
+	const bool previousOwnedByAccount = ConfigManager::getBoolean(ConfigManager::HOUSE_OWNED_BY_ACCOUNT);
+	struct AccountOwnershipGuard {
+		bool previous;
+		~AccountOwnershipGuard() { ConfigManager::setBoolean(ConfigManager::HOUSE_OWNED_BY_ACCOUNT, previous); }
+	} accountGuard{previousOwnedByAccount};
+	ConfigManager::setBoolean(ConfigManager::HOUSE_OWNED_BY_ACCOUNT, false);
+
+	const Position firstPos{180, 180, 7};
+	const Position secondPos{181, 180, 7};
+	const Position exitPos{182, 180, 7};
+	auto house = std::make_shared<House>(930);
+	house->setEntryPos(exitPos);
+	for (const auto& pos : {firstPos, secondPos}) {
+		tileGuard.track(pos.x, pos.y, pos.z);
+		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+		tile->internalAddThing(std::make_shared<Item>(100).get());
+		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
+	}
+	tileGuard.track(exitPos.x, exitPos.y, exitPos.z);
+	auto exitTile = std::make_unique<DynamicTile>(exitPos.x, exitPos.y, exitPos.z);
+	exitTile->internalAddThing(std::make_shared<Item>(100).get());
+	g_game.map.setTile(exitPos.x, exitPos.y, exitPos.z, std::move(exitTile));
+
+	TilePlayersGuard players{{makeTestPlayer(930, "FirstGuest"), makeTestPlayer(931, "SecondGuest"),
+	                          makeTestPlayer(932, "ThirdGuest")}};
+	g_game.map.getTile(firstPos)->internalAddThing(players.players[0].get());
+	g_game.map.getTile(firstPos)->internalAddThing(players.players[1].get());
+	g_game.map.getTile(secondPos)->internalAddThing(players.players[2].get());
+
+	bool callbackRan = false;
+	auto event = std::make_unique<MoveEvent>(fixture.events.getScriptInterfacePtr());
+	event->setEventType(MOVE_EVENT_STEP_OUT);
+	event->addPosList(firstPos);
+	event->stepFunction = [&](Creature*, Item*, const Position&) {
+		if (!callbackRan) {
+			callbackRan = true;
+			// Remove another entry from the live creature vector and erase the
+			// current house-list node before the original kick returns.
+			CHECK(g_game.internalTeleport(players.players[1].get(), exitPos, true, 0, CONST_ME_NONE) ==
+			      RETURNVALUE_NOERROR);
+			g_game.map.removeTile(firstPos);
+		}
+		return 1;
+	};
+	CHECK(fixture.events.registerLuaEvent(event.release()));
+
+	house->setAccessList(GUEST_LIST, "");
+	CHECK(callbackRan);
+	CHECK(g_game.map.getTile(firstPos) == nullptr);
+	CHECK(house->getTileCount() == 1);
+	for (const auto& player : players.players) {
+		CHECK(player->getPosition() == exitPos);
+	}
+}
+
+TEST_CASE(removal_callbacks_can_remove_and_recreate_the_source_tile)
+{
+	ensureItemTypes();
+	for (bool removeWholeTile : {false, true}) {
+		MapTileGuard tileGuard;
+		MoveEventsFixture fixture;
+		const Position pos{190, 190, 7};
+		tileGuard.track(pos.x, pos.y, pos.z);
+		auto house = std::make_shared<House>(940);
+		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+		tile->internalAddThing(std::make_shared<Item>(100).get());
+		auto originalItem = std::make_shared<Item>(2160);
+		tile->internalAddThing(originalItem.get());
+		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
+		std::weak_ptr<Tile> oldTile = g_game.map.getTile(pos)->weak_from_this();
+
+		auto replacementItem = std::make_shared<Item>(2160);
+		bool callbackRan = false;
+		auto event = std::make_unique<MoveEvent>(fixture.events.getScriptInterfacePtr());
+		event->setEventType(MOVE_EVENT_REMOVE_ITEM);
+		event->addPosList(pos);
+		event->moveFunction = [&](Item*, Item*, const Position&) {
+			if (!callbackRan) {
+				callbackRan = true;
+				g_game.map.removeTile(pos);
+				CHECK(g_game.map.getTile(pos) == nullptr);
+				CHECK(!oldTile.expired()); // The outer notification still uses this object.
+				auto replacement = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+				replacement->internalAddThing(std::make_shared<Item>(100).get());
+				replacement->internalAddThing(replacementItem.get());
+				g_game.map.setTile(pos.x, pos.y, pos.z, std::move(replacement));
+			}
+			return 1;
+		};
+		CHECK(fixture.events.registerLuaEvent(event.release()));
+
+		if (removeWholeTile) {
+			g_game.map.removeTile(pos);
+		} else {
+			CHECK(g_game.internalRemoveItem(originalItem.get()) == RETURNVALUE_NOERROR);
+		}
+		CHECK(callbackRan);
+		CHECK(oldTile.expired());
+		CHECK(originalItem->isRemoved());
+		CHECK(g_game.map.getTile(pos) != nullptr);
+		CHECK(replacementItem->getParent() == g_game.map.getTile(pos));
+		CHECK(house->getTileCount() == 1);
+	}
+	g_game.cleanup();
+}
+
+TEST_CASE(map_removal_does_not_remove_items_moved_away_by_callbacks)
+{
+	ensureItemTypes();
+	ItemTypePropertyGuard itemTypeGuard(2160);
+	Item::items.getItemType(2160).stackable = false;
+	Item::items.getItemType(2160).moveable = true;
+	MapTileGuard tileGuard;
+	MoveEventsFixture fixture;
+	const Position sourcePos{191, 190, 7};
+	const Position destinationPos{192, 190, 7};
+	for (const auto& pos : {sourcePos, destinationPos}) {
+		tileGuard.track(pos.x, pos.y, pos.z);
+		auto tile = std::make_unique<DynamicTile>(pos.x, pos.y, pos.z);
+		tile->internalAddThing(std::make_shared<Item>(100).get());
+		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
+	}
+	Tile* source = g_game.map.getTile(sourcePos);
+	source->internalAddThing(std::make_shared<Item>(2160).get());
+	source->internalAddThing(std::make_shared<Item>(2160).get());
+	const auto movedItem = (*source->getItemList())[1];
+	bool callbackRan = false;
+	auto event = std::make_unique<MoveEvent>(fixture.events.getScriptInterfacePtr());
+	event->setEventType(MOVE_EVENT_REMOVE_ITEM);
+	event->addPosList(sourcePos);
+	event->moveFunction = [&](Item*, Item*, const Position&) {
+		if (!callbackRan) {
+			callbackRan = true;
+			CHECK(g_game.internalMoveItem(source, g_game.map.getTile(destinationPos), INDEX_WHEREEVER,
+			                              movedItem.get(), movedItem->getItemCount(), nullptr, FLAG_NOLIMIT) ==
+			      RETURNVALUE_NOERROR);
+		}
+		return 1;
+	};
+	CHECK(fixture.events.registerLuaEvent(event.release()));
+
+	g_game.map.removeTile(sourcePos);
+	CHECK(callbackRan);
+	CHECK(movedItem->getParent() == g_game.map.getTile(destinationPos));
+	CHECK(!movedItem->isRemoved());
+	g_game.cleanup();
+}
+
+TEST_CASE(lua_tile_equality_rejects_reused_addresses_and_missing_ownership_tokens)
+{
+	LuaFixture fixture;
+	lua_State* L = fixture.L;
+	alignas(DynamicTile) std::byte storage[sizeof(DynamicTile)];
+	auto makeTile = [&] {
+		return std::shared_ptr<DynamicTile>(
+		    std::construct_at(reinterpret_cast<DynamicTile*>(storage), 195, 195, 7),
+		    [](DynamicTile* tile) { std::destroy_at(tile); });
+	};
+	auto tile = makeTile();
+	Lua::pushUserdata<Tile>(L, tile.get());
+	Lua::setMetatable(L, -1, "Tile");
+	lua_setglobal(L, "oldTile");
+	tile.reset();
+	tile = makeTile(); // Deterministic ABA: a different object at exactly the same address.
+	for (const char* name : {"newTile", "newTileAlias"}) {
+		Lua::pushUserdata<Tile>(L, tile.get());
+		Lua::setMetatable(L, -1, "Tile");
+		lua_setglobal(L, name);
+	}
+	CHECK(luaL_dostring(L,
+	                    "assert(oldTile:getPosition() == nil)\n"
+	                    "assert(oldTile ~= newTile and newTile ~= oldTile)\n"
+	                    "assert(newTile == newTileAlias)\n"
+	                    "local gc = rawgetmetatable('Tile').__gc\n"
+	                    "gc(oldTile)\n"
+	                    "gc(oldTile)\n"
+	                    "assert(oldTile:getPosition() == nil)") == LUA_OK);
+
+	// An unvalidated raw pointer must not bypass the weak-token check, and
+	// lua_getiuservalue's nil result must be popped even when no slot exists.
+	*static_cast<Tile**>(lua_newuserdatauv(L, sizeof(Tile*), 0)) = tile.get();
+	luaL_getmetatable(L, "Tile");
+	lua_setmetatable(L, -2);
+	const int top = lua_gettop(L);
+	CHECK(Lua::getUserdata<Tile>(L, -1) == nullptr);
+	CHECK(lua_gettop(L) == top);
+	lua_pop(L, 1);
 }
 
 TFS_TEST_MAIN()

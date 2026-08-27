@@ -2497,9 +2497,12 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	std::shared_ptr<Tile> browseFieldTile = getBrowseFieldTile(cylinder);
-	if (browseFieldTile) {
-		cylinder = browseFieldTile.get();
+	std::shared_ptr<Tile> cylinderTile = getBrowseFieldTile(cylinder);
+	if (cylinderTile) {
+		cylinder = cylinderTile.get();
+	} else if (auto* tile = dynamic_cast<Tile*>(cylinder)) {
+		// Bed transforms and removal notifications can remove the source tile.
+		cylinderTile = tile->weak_from_this().lock();
 	}
 
 	if (count == -1) {
@@ -2529,7 +2532,17 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 		// clear the partner bed and registry exactly once before destruction.
 		if (auto bed = item->getBed(); bed && bed->getSleeper() != 0) {
 			auto sleeper = getPlayerByGUID(bed->getSleeper());
-			bed->wakeUp(sleeper.get());
+			if (!bed->wakeUp(sleeper.get())) {
+				return RETURNVALUE_NOTPOSSIBLE;
+			}
+			if (item->isRemoved()) {
+				return RETURNVALUE_NOERROR;
+			}
+			// Appearance callbacks may move/remove the bed or reorder tile items.
+			index = cylinder->getThingIndex(item);
+			if (index == -1) {
+				return RETURNVALUE_NOTPOSSIBLE;
+			}
 		}
 
 		// remove the item
