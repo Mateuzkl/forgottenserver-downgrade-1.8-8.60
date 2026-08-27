@@ -1903,6 +1903,16 @@ void checkFailedOfflineBedRemoval(bool failSave, bool removeWholeTile, bool remo
 	auto targetBed = removePartner ? partnerBed : bed;
 	Tile* targetTile = g_game.map.getTile(targetPos);
 	Item* ground = targetTile->getGround();
+	// Down-items added after the bed are visited first by the removal loop.
+	// They must survive a failed wake, not just the occupied bed itself.
+	const std::vector<std::shared_ptr<Item>> downItems{
+	    std::make_shared<Item>(2160), std::make_shared<Item>(2160)};
+	for (const auto& item : downItems) {
+		targetTile->internalAddThing(item.get());
+		CHECK(targetTile->getThingIndex(item.get()) < targetTile->getThingIndex(targetBed.get()));
+	}
+	const auto* itemList = targetTile->getItemList();
+	const std::vector<std::shared_ptr<Item>> itemsBefore(itemList->begin(), itemList->end());
 
 	offlineState.failLoad = !failSave;
 	offlineState.failSave = failSave;
@@ -1927,6 +1937,12 @@ void checkFailedOfflineBedRemoval(bool failSave, bool removeWholeTile, bool remo
 	CHECK(g_game.map.getTile(targetPos) == targetTile);
 	CHECK(targetTile->getGround() == ground);
 	CHECK(targetTile->getThingIndex(targetBed.get()) != -1);
+	itemList = targetTile->getItemList();
+	CHECK(std::vector<std::shared_ptr<Item>>(itemList->begin(), itemList->end()) == itemsBefore);
+	for (const auto& item : downItems) {
+		CHECK(!item->isRemoved());
+		CHECK(item->getParent() == targetTile);
+	}
 	CHECK(!targetBed->isRemoved());
 	CHECK(house->getBeds().size() == 2);
 	CHECK(house->getTileCount() == 2);
@@ -1959,6 +1975,12 @@ void checkFailedOfflineBedRemoval(bool failSave, bool removeWholeTile, bool remo
 	CHECK(offlineState.savedMana == 70);
 	CHECK(offlineState.savedSoul == 2);
 	CHECK(targetBed->isRemoved());
+	for (const auto& item : downItems) {
+		CHECK(item->isRemoved() == removeWholeTile);
+		if (!removeWholeTile) {
+			CHECK(item->getParent() == targetTile);
+		}
+	}
 	CHECK(house->getBeds().size() == 1);
 	CHECK(bed->getSleeper() == 0);
 	CHECK(partnerBed->getSleeper() == 0);

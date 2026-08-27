@@ -5,6 +5,7 @@
 
 #include "map.h"
 
+#include "bed.h"
 #include "combat.h"
 #include "creature.h"
 #include "game.h"
@@ -231,6 +232,42 @@ bool Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 	// Keep the original object alive without holding a reference to its map slot.
 	auto tile = tilePair.first;
 	if (tile) {
+		// Finish occupied sleep sessions before removing any tile contents. A
+		// failed offline load/save must not destroy earlier down-items. Do not
+		// remove beds in this pass either: another sleeper may still fail.
+		{
+			std::vector<std::shared_ptr<BedItem>> bedsToWake;
+			if (Item* ground = tile->getGround()) {
+				if (auto bed = ground->getBed(); bed && bed->getSleeper() != 0) {
+					bedsToWake.push_back(std::move(bed));
+				}
+			}
+			if (const TileItemVector* items = tile->getItemList()) {
+				for (const auto& item : *items) {
+					if (!item) {
+						continue;
+					}
+					if (auto bed = item->getBed(); bed && bed->getSleeper() != 0) {
+						bedsToWake.push_back(std::move(bed));
+					}
+				}
+			}
+			for (const auto& bed : bedsToWake) {
+				if (bed->isRemoved() || bed->getSleeper() == 0 || tile->getThingIndex(bed.get()) == -1) {
+					continue;
+				}
+				auto sleeper = g_game.getPlayerByGUID(bed->getSleeper());
+				const bool wokeUp = bed->wakeUp(sleeper.get());
+				// Appearance callbacks may remove/recreate the source tile.
+				if (tilePair.first != tile) {
+					return true;
+				}
+				if (!wokeUp) {
+					return false;
+				}
+			}
+		}
+
 		if (const CreatureVector* creatures = tile->getCreatures()) {
 			const auto snapshot = *creatures;
 			for (auto it = snapshot.rbegin(); it != snapshot.rend(); ++it) {
