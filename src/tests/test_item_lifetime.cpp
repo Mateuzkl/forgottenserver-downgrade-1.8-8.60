@@ -58,11 +58,15 @@ public:
 struct MoveEventsFixture
 {
 	LuaFixture lua;
-	MoveEvents events;
-	MoveEvents* previous = g_moveEvents;
+	std::unique_ptr<MoveEvents> previous;
+	MoveEvents& events;
 
-	MoveEventsFixture() { g_moveEvents = &events; }
-	~MoveEventsFixture() { g_moveEvents = previous; }
+	MoveEventsFixture() : previous(std::make_unique<MoveEvents>()), events(*previous)
+	{
+		g_moveEvents.swap(previous);
+	}
+	// Restore the original owner; destroy the test events before closing Lua.
+	~MoveEventsFixture() { g_moveEvents.swap(previous); }
 };
 
 struct PlayerWorldEventsFixture
@@ -2576,7 +2580,7 @@ TEST_CASE(map_removal_does_not_remove_items_moved_away_by_callbacks)
 	Tile* source = g_game.map.getTile(sourcePos);
 	source->internalAddThing(std::make_shared<Item>(2160).get());
 	source->internalAddThing(std::make_shared<Item>(2160).get());
-	const auto movedItem = (*source->getItemList())[1];
+	const auto movedItem = source->getItemList()->at(1);
 	bool callbackRan = false;
 	auto event = std::make_unique<MoveEvent>(fixture.events.getScriptInterfacePtr());
 	event->setEventType(MOVE_EVENT_REMOVE_ITEM);
