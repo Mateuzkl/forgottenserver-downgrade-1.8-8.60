@@ -1305,7 +1305,10 @@ TEST_CASE(map_remove_tile_safely_removes_all_items_without_iterator_invalidation
 	std::weak_ptr<Door> weakDoor = door;
 	std::weak_ptr<BedItem> weakBed = bed;
 
-	rawTile->setGround(ground);
+	// Use the insertion path: setGround() alone does not attach the parent.
+	rawTile->internalAddThing(ground.get());
+	CHECK(rawTile->getGround() == ground.get());
+	CHECK(ground->getParent() == rawTile);
 	rawTile->internalAddThing(0, item1.get());
 	rawTile->internalAddThing(0, item2.get());
 	rawTile->internalAddThing(0, door.get());
@@ -1331,7 +1334,7 @@ TEST_CASE(map_remove_tile_safely_removes_all_items_without_iterator_invalidation
 	CHECK(!weakBed.expired());
 
 	// Remove tile from map: must remove all items safely via snapshot
-	g_game.map.removeTile(tilePos);
+	CHECK(g_game.map.removeTile(tilePos));
 	CHECK(g_game.map.getTile(tilePos) == nullptr);
 
 	// Flush deferred releases
@@ -1495,10 +1498,12 @@ TEST_CASE(flag_nolimit_does_not_remove_special_nonremovable_containers)
 	tileGuard.track(pos.x, pos.y, pos.z);
 
 	auto tile = std::make_unique<DynamicTile>(pos.x, pos.y, pos.z);
-	tile->setGround(std::make_shared<Item>(100));
+	tile->internalAddThing(std::make_shared<Item>(100).get());
 	g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
 	Tile* rawTile = g_game.map.getTile(pos);
 	CHECK(rawTile != nullptr);
+	CHECK(rawTile->getGround() != nullptr);
+	CHECK(rawTile->getGround()->getParent() == rawTile);
 
 	std::vector<std::shared_ptr<Item>> specialItems{
 	    std::make_shared<Inbox>(ITEM_INBOX),
@@ -1520,7 +1525,8 @@ TEST_CASE(flag_nolimit_does_not_remove_special_nonremovable_containers)
 
 	// The dedicated Map cleanup path can still tear down the tile completely.
 	specialItems.clear();
-	g_game.map.removeTile(pos);
+	CHECK(g_game.map.removeTile(pos));
+	CHECK(g_game.map.getTile(pos) == nullptr);
 	g_game.cleanup();
 	for (const auto& weakItem : weakItems) {
 		CHECK(weakItem.expired());
@@ -1602,7 +1608,9 @@ TEST_CASE(orphan_house_tile_fails_closed_for_players_and_allows_map_cleanup)
 	Item::items.getItemType(100).pickupable = true;
 
 	auto ground = std::make_shared<Item>(100);
-	orphanTile->setGround(ground);
+	orphanTile->internalAddThing(ground.get());
+	CHECK(orphanTile->getGround() == ground.get());
+	CHECK(ground->getParent() == orphanTile);
 
 	auto container = std::make_shared<Container>(ITEM_BAG, 10);
 	orphanTile->internalAddThing(container.get());
@@ -1644,6 +1652,7 @@ TEST_CASE(orphan_house_tile_fails_closed_for_players_and_allows_map_cleanup)
 	CHECK(container->queryRemove(*nestedItem, 1, 0, nullptr) == RETURNVALUE_NOERROR);
 	ConfigManager::setBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS, prevOnlyInvited);
 
+	std::weak_ptr<Item> weakGround = ground;
 	std::weak_ptr<Container> weakContainer = container;
 	std::weak_ptr<Item> weakNestedItem = nestedItem;
 	std::weak_ptr<Door> weakDoor = door;
@@ -1655,9 +1664,11 @@ TEST_CASE(orphan_house_tile_fails_closed_for_players_and_allows_map_cleanup)
 	door.reset();
 	bed.reset();
 
-	g_game.map.removeTile(pos);
+	CHECK(g_game.map.removeTile(pos));
+	CHECK(g_game.map.getTile(pos) == nullptr);
 	g_game.cleanup();
 	CHECK(weakTile.expired());
+	CHECK(weakGround.expired());
 	CHECK(weakContainer.expired());
 	CHECK(weakNestedItem.expired());
 	CHECK(weakDoor.expired());
@@ -1787,16 +1798,22 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 	tileGuard.track(partnerPos.x, partnerPos.y, partnerPos.z);
 
 	auto startTile = std::make_unique<DynamicTile>(startPos.x, startPos.y, startPos.z);
-	startTile->setGround(std::make_shared<Item>(100));
+	startTile->internalAddThing(std::make_shared<Item>(100).get());
 	g_game.map.setTile(startPos.x, startPos.y, startPos.z, std::move(startTile));
 
 	auto house = std::make_shared<House>(912);
 	auto houseTile = std::make_unique<HouseTile>(bedPos.x, bedPos.y, bedPos.z, house);
-	houseTile->setGround(std::make_shared<Item>(100));
+	houseTile->internalAddThing(std::make_shared<Item>(100).get());
 	g_game.map.setTile(bedPos.x, bedPos.y, bedPos.z, std::move(houseTile));
 	auto partnerTile = std::make_unique<HouseTile>(partnerPos.x, partnerPos.y, partnerPos.z, house);
-	partnerTile->setGround(std::make_shared<Item>(100));
+	partnerTile->internalAddThing(std::make_shared<Item>(100).get());
 	g_game.map.setTile(partnerPos.x, partnerPos.y, partnerPos.z, std::move(partnerTile));
+	for (const auto& pos : {startPos, bedPos, partnerPos}) {
+		const auto* tile = g_game.map.getTile(pos);
+		CHECK(tile != nullptr);
+		CHECK(tile->getGround() != nullptr);
+		CHECK(tile->getGround()->getParent() == tile);
+	}
 
 	ItemTypePropertyGuard bedTypeGuard(694);
 	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
@@ -1856,7 +1873,8 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 	CHECK(player->isRemoved());
 	CHECK(g_game.getPlayerByGUID(player->getGUID()) == nullptr);
 
-	g_game.map.removeTile(bedPos);
+	CHECK(g_game.map.removeTile(bedPos));
+	CHECK(g_game.map.getTile(bedPos) == nullptr);
 	g_game.cleanup();
 
 	CHECK(offlineState.loadCount == 1);
