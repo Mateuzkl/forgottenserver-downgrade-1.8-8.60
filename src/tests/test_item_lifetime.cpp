@@ -324,6 +324,25 @@ void ensureItemTypes()
 	CHECK(loaded);
 }
 
+std::shared_ptr<Item> makeTestGround()
+{
+	ensureItemTypes();
+	// Client IDs can change classification between OTB versions. Select an
+	// actual walkable ground instead of assuming item 100 is always ground.
+	static const uint16_t groundId = [] {
+		for (size_t id = 1; id < Item::items.size(); ++id) {
+			const auto& type = Item::items[id];
+			if (type.id != 0 && type.isGroundTile() && !type.blockSolid && !type.blockPathFind) {
+				return type.id;
+			}
+		}
+		return uint16_t{0};
+	}();
+	CHECK(groundId != 0);
+	CHECK(Item::items[groundId].isGroundTile());
+	return std::make_shared<Item>(groundId);
+}
+
 void ensureVocations()
 {
 	static const bool loaded = [] {
@@ -1292,7 +1311,7 @@ TEST_CASE(map_remove_tile_safely_removes_all_items_without_iterator_invalidation
 	Tile* rawTile = g_game.map.getTile(tilePos);
 	CHECK(rawTile != nullptr);
 
-	auto ground = std::make_shared<Item>(100);
+	auto ground = makeTestGround();
 	auto item1 = std::make_shared<Item>(2160);
 	auto item2 = std::make_shared<Item>(2160);
 	auto door = std::make_shared<Door>(0);
@@ -1498,7 +1517,7 @@ TEST_CASE(flag_nolimit_does_not_remove_special_nonremovable_containers)
 	tileGuard.track(pos.x, pos.y, pos.z);
 
 	auto tile = std::make_unique<DynamicTile>(pos.x, pos.y, pos.z);
-	tile->internalAddThing(std::make_shared<Item>(100).get());
+	tile->internalAddThing(makeTestGround().get());
 	g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
 	Tile* rawTile = g_game.map.getTile(pos);
 	CHECK(rawTile != nullptr);
@@ -1607,7 +1626,7 @@ TEST_CASE(orphan_house_tile_fails_closed_for_players_and_allows_map_cleanup)
 	Item::items.getItemType(100).moveable = true;
 	Item::items.getItemType(100).pickupable = true;
 
-	auto ground = std::make_shared<Item>(100);
+	auto ground = makeTestGround();
 	orphanTile->internalAddThing(ground.get());
 	CHECK(orphanTile->getGround() == ground.get());
 	CHECK(ground->getParent() == orphanTile);
@@ -1798,15 +1817,15 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 	tileGuard.track(partnerPos.x, partnerPos.y, partnerPos.z);
 
 	auto startTile = std::make_unique<DynamicTile>(startPos.x, startPos.y, startPos.z);
-	startTile->internalAddThing(std::make_shared<Item>(100).get());
+	startTile->internalAddThing(makeTestGround().get());
 	g_game.map.setTile(startPos.x, startPos.y, startPos.z, std::move(startTile));
 
 	auto house = std::make_shared<House>(912);
 	auto houseTile = std::make_unique<HouseTile>(bedPos.x, bedPos.y, bedPos.z, house);
-	houseTile->internalAddThing(std::make_shared<Item>(100).get());
+	houseTile->internalAddThing(makeTestGround().get());
 	g_game.map.setTile(bedPos.x, bedPos.y, bedPos.z, std::move(houseTile));
 	auto partnerTile = std::make_unique<HouseTile>(partnerPos.x, partnerPos.y, partnerPos.z, house);
-	partnerTile->internalAddThing(std::make_shared<Item>(100).get());
+	partnerTile->internalAddThing(makeTestGround().get());
 	g_game.map.setTile(partnerPos.x, partnerPos.y, partnerPos.z, std::move(partnerTile));
 	for (const auto& pos : {startPos, bedPos, partnerPos}) {
 		const auto* tile = g_game.map.getTile(pos);
@@ -1929,7 +1948,7 @@ void checkFailedOfflineBedRemoval(bool failSave, bool removeWholeTile, bool remo
 	for (const auto& pos : {bedPos, partnerPos}) {
 		tileGuard.track(pos.x, pos.y, pos.z);
 		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
-		tile->internalAddThing(std::make_shared<Item>(100).get());
+		tile->internalAddThing(makeTestGround().get());
 		tile->setZoneIds({zoneId});
 		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
 	}
@@ -2115,13 +2134,13 @@ void checkAtomicBedTeardown(bool failSave, bool firstOnline)
 	for (const auto& tilePos : {pos, firstPartnerPos, secondPartnerPos}) {
 		tileGuard.track(tilePos.x, tilePos.y, tilePos.z);
 		auto tile = std::make_unique<HouseTile>(tilePos.x, tilePos.y, tilePos.z, house);
-		tile->internalAddThing(std::make_shared<Item>(100).get());
+		tile->internalAddThing(makeTestGround().get());
 		tile->setZoneIds({zoneId});
 		g_game.map.setTile(tilePos.x, tilePos.y, tilePos.z, std::move(tile));
 	}
 	tileGuard.track(onlinePos.x, onlinePos.y, onlinePos.z);
 	auto onlineTile = std::make_unique<DynamicTile>(onlinePos.x, onlinePos.y, onlinePos.z);
-	onlineTile->internalAddThing(std::make_shared<Item>(100).get());
+	onlineTile->internalAddThing(makeTestGround().get());
 	g_game.map.setTile(onlinePos.x, onlinePos.y, onlinePos.z, std::move(onlineTile));
 	auto* source = g_game.map.getTile(pos);
 	auto firstBed = std::make_shared<OfflineTestBedItem>(694, states[0]);
@@ -2488,12 +2507,12 @@ TEST_CASE(house_access_list_kicks_survive_tile_and_creature_removal_callbacks)
 	for (const auto& pos : {firstPos, secondPos}) {
 		tileGuard.track(pos.x, pos.y, pos.z);
 		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
-		tile->internalAddThing(std::make_shared<Item>(100).get());
+		tile->internalAddThing(makeTestGround().get());
 		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
 	}
 	tileGuard.track(exitPos.x, exitPos.y, exitPos.z);
 	auto exitTile = std::make_unique<DynamicTile>(exitPos.x, exitPos.y, exitPos.z);
-	exitTile->internalAddThing(std::make_shared<Item>(100).get());
+	exitTile->internalAddThing(makeTestGround().get());
 	g_game.map.setTile(exitPos.x, exitPos.y, exitPos.z, std::move(exitTile));
 
 	TilePlayersGuard players{{makeTestPlayer(930, "FirstGuest"), makeTestPlayer(931, "SecondGuest"),
@@ -2538,7 +2557,7 @@ TEST_CASE(removal_callbacks_can_remove_and_recreate_the_source_tile)
 		tileGuard.track(pos.x, pos.y, pos.z);
 		auto house = std::make_shared<House>(940);
 		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
-		tile->internalAddThing(std::make_shared<Item>(100).get());
+		tile->internalAddThing(makeTestGround().get());
 		auto originalItem = std::make_shared<Item>(2160);
 		tile->internalAddThing(originalItem.get());
 		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
@@ -2556,7 +2575,7 @@ TEST_CASE(removal_callbacks_can_remove_and_recreate_the_source_tile)
 				CHECK(g_game.map.getTile(pos) == nullptr);
 				CHECK(!oldTile.expired()); // The outer notification still uses this object.
 				auto replacement = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
-				replacement->internalAddThing(std::make_shared<Item>(100).get());
+				replacement->internalAddThing(makeTestGround().get());
 				replacement->internalAddThing(replacementItem.get());
 				g_game.map.setTile(pos.x, pos.y, pos.z, std::move(replacement));
 			}
@@ -2592,7 +2611,7 @@ TEST_CASE(map_removal_does_not_remove_items_moved_away_by_callbacks)
 	for (const auto& pos : {sourcePos, destinationPos}) {
 		tileGuard.track(pos.x, pos.y, pos.z);
 		auto tile = std::make_unique<DynamicTile>(pos.x, pos.y, pos.z);
-		tile->internalAddThing(std::make_shared<Item>(100).get());
+		tile->internalAddThing(makeTestGround().get());
 		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
 	}
 	Tile* source = g_game.map.getTile(sourcePos);
