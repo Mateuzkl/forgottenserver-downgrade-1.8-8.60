@@ -878,20 +878,13 @@ namespace veque
         {
             static_assert( sizeof...(args) <= 1, "This is for default- or copy-constructing" );
 
-            if constexpr ( std::is_trivially_copy_constructible_v<T> && _calls_default_constructor_directly &&
-                           (sizeof...(args) != 0 || std::is_trivially_default_constructible_v<T>) )
+            if constexpr ( sizeof...(args) == 0 && std::is_trivially_copy_constructible_v<T> &&
+                           std::is_trivially_default_constructible_v<T> && _calls_default_constructor_directly )
             {
-                if constexpr ( sizeof...(args) == 0 )
+                auto count = std::distance( b, e );
+                if ( count )
                 {
-                    auto count = std::distance( b, e );
-                    if ( count )
-                    {
-                        std::memset( _mutable_iterator(b), 0, count * sizeof(T) );
-                    }
-                }
-                else
-                {
-                    std::fill( _mutable_iterator(b), _mutable_iterator(e), args...);
+                    std::memset( _mutable_iterator(b), 0, count * sizeof(T) );
                 }
             }
             else
