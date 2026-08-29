@@ -5,6 +5,7 @@
 
 #include "tile.h"
 
+#include "bed.h"
 #include "combat.h"
 #include "configmanager.h"
 #include "container.h"
@@ -281,20 +282,22 @@ Mailbox* Tile::getMailbox() const
 	return nullptr;
 }
 
-BedItem* Tile::getBedItem() const
+std::shared_ptr<BedItem> Tile::getBedItem() const
 {
 	if (!hasFlag(TILESTATE_BED)) {
 		return nullptr;
 	}
 
-	if (ground && ground->getBed()) {
-		return ground->getBed();
+	if (ground) {
+		if (auto bed = ground->getBed()) {
+			return std::const_pointer_cast<BedItem>(bed);
+		}
 	}
 
 	if (const TileItemVector* items = getItemList()) {
 		for (auto it = items->rbegin(), end = items->rend(); it != end; ++it) {
-			if ((*it)->getBed()) {
-				return (*it)->getBed();
+			if (auto bed = (*it)->getBed()) {
+				return std::const_pointer_cast<BedItem>(bed);
 			}
 		}
 	}
@@ -1607,10 +1610,12 @@ void Tile::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t 
 		}
 
 		// calling movement scripts
-		if (creature) {
-			g_moveEvents->onCreatureMove(creature, this, MOVE_EVENT_STEP_IN);
-		} else if (item) {
-			g_moveEvents->onItemMove(item, this, true);
+		if (g_moveEvents) {
+			if (creature) {
+				g_moveEvents->onCreatureMove(creature, this, MOVE_EVENT_STEP_IN);
+			} else if (item) {
+				g_moveEvents->onItemMove(item, this, true);
+			}
 		}
 	}
 
@@ -1640,10 +1645,12 @@ void Tile::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32
 		player->postRemoveNotification(thing, newParent, index, LINK_NEAR);
 	}
 
-	if (Creature* creature = thing->getCreature()) {
-		g_moveEvents->onCreatureMove(creature, this, MOVE_EVENT_STEP_OUT);
-	} else if (Item* item = thing->getItem()) {
-		g_moveEvents->onItemMove(item, this, false);
+	if (g_moveEvents) {
+		if (Creature* creature = thing->getCreature()) {
+			g_moveEvents->onCreatureMove(creature, this, MOVE_EVENT_STEP_OUT);
+		} else if (Item* item = thing->getItem()) {
+			g_moveEvents->onItemMove(item, this, false);
+		}
 	}
 }
 

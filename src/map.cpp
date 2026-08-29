@@ -5,6 +5,7 @@
 
 #include "map.h"
 
+#include "bed.h"
 #include "combat.h"
 #include "creature.h"
 #include "game.h"
@@ -200,59 +201,129 @@ void Map::setTile(uint16_t x, uint16_t y, uint8_t z, std::unique_ptr<Tile> newTi
 	}
 
 	if (tile) {
+		if (HouseTile* houseTile = tile->getHouseTile()) {
+			if (auto house = houseTile->getHouse()) {
+				house->addTile(houseTile);
+			}
+		}
 		Zones::registerPositionZones(Position(x, y, z), tile->getZoneIds());
 	}
 }
 
-void Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
+bool Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 {
 	if (z >= MAP_MAX_LAYERS) {
-		return;
+		return false;
 	}
 
 	const QTreeLeafNode* leaf = QTreeNode::getLeafStatic<const QTreeLeafNode*, const QTreeNode*>(&root, x, y);
 	if (!leaf) {
-		return;
+		return false;
 	}
 
 	Floor* floor = const_cast<Floor*>(leaf->getFloor(z));
 	if (!floor) {
-		return;
+		return false;
 	}
 
 	auto& tilePair = floor->tiles[x & FLOOR_MASK][y & FLOOR_MASK];
-	Zones::unregisterPosition(Position(x, y, z));
 
-	auto& tile = tilePair.first;
+	// Callbacks can recursively remove this tile and even recreate its position.
+	// Keep the original object alive without holding a reference to its map slot.
+	auto tile = tilePair.first;
 	if (tile) {
+		// Finish occupied sleep sessions before removing any tile contents. A
+		// failed offline load/save must not destroy earlier down-items. Do not
+		// remove beds in this pass either: another sleeper may still fail.
+		{
+			std::vector<std::shared_ptr<BedItem>> bedsToWake;
+			if (Item* ground = tile->getGround()) {
+				if (auto bed = ground->getBed(); bed && bed->getSleeper() != 0) {
+					bedsToWake.push_back(std::move(bed));
+				}
+			}
+			if (const TileItemVector* items = tile->getItemList()) {
+				for (const auto& item : *items) {
+					if (!item) {
+						continue;
+					}
+					if (auto bed = item->getBed(); bed && bed->getSleeper() != 0) {
+						bedsToWake.push_back(std::move(bed));
+					}
+				}
+			}
+			const bool wokeUp = BedItem::wakeUpAll(bedsToWake);
+			// Appearance callbacks may remove/recreate the source tile.
+			if (tilePair.first != tile) {
+				return true;
+			}
+			if (!wokeUp) {
+				return false;
+			}
+		}
+
 		if (const CreatureVector* creatures = tile->getCreatures()) {
-			for (int32_t i = creatures->size(); --i >= 0;) {
-				if (Player* player = (*creatures)[i]->getPlayer()) {
+			const auto snapshot = *creatures;
+			for (auto it = snapshot.rbegin(); it != snapshot.rend(); ++it) {
+				const auto& creature = *it;
+				if (!creature || creature->isRemoved() || creature->getTile() != tile.get()) {
+					continue;
+				}
+				if (Player* player = creature->getPlayer()) {
 					g_game.internalTeleport(player, player->getTown()->getTemplePosition(), false, FLAG_NOLIMIT);
 				} else {
-					g_game.removeCreature((*creatures)[i].get());
+					g_game.removeCreature(creature.get());
+				}
+				if (tilePair.first != tile) {
+					return true;
 				}
 			}
 		}
 
 		if (TileItemVector* items = tile->getItemList()) {
-			for (auto it = items->begin(), end = items->end(); it != end; ++it) {
-				g_game.internalRemoveItem(it->get());
+			std::vector<std::shared_ptr<Item>> itemsToRemove(items->begin(), items->end());
+			for (const auto& item : itemsToRemove) {
+				if (!item || item->isRemoved() || tile->getThingIndex(item.get()) == -1) {
+					continue;
+				}
+				const auto ret = g_game.internalRemoveItem(item.get(), -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE);
+				if (tilePair.first != tile) {
+					return true;
+				}
+				if (ret != RETURNVALUE_NOERROR) {
+					// In particular, an offline sleeper's failed save must keep
+					// the occupied bed, its tile and zone registrations alive.
+					return false;
+				}
 			}
 		}
 
 		Item* ground = tile->getGround();
 		if (ground) {
-			g_game.internalRemoveItem(ground);
+			const auto ret = g_game.internalRemoveItem(ground, -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE);
+			if (tilePair.first != tile) {
+				return true;
+			}
+			if (ret != RETURNVALUE_NOERROR) {
+				return false;
+			}
 			tile->setGround(nullptr);
 		}
-		
+		// Unregister HouseTile from its House before releasing
+		if (HouseTile* houseTile = tile->getHouseTile()) {
+			if (auto house = houseTile->getHouse()) {
+				house->removeTile(houseTile);
+			}
+		}
+
 		// Reset shared_ptr to release the tile
-		tile.reset();
+		tilePair.first.reset();
 	}
-	
+
+	Zones::unregisterPosition(Position(x, y, z));
 	// Also clear cache
 	tilePair.second = 0;
+	return true;
 }
 
 bool Map::placeCreature(const Position& centerPos, Creature* creature, bool extendedPos /* = false*/,
@@ -315,6 +386,9 @@ bool Map::placeCreature(const Position& centerPos, Creature* creature, bool exte
 	Item* toItem = nullptr;
 
 	Cylinder* toCylinder = tile->queryDestination(index, *creature, &toItem, flags, creature->getInstanceID());
+	if (!toCylinder || toCylinder == &Tile::nullptr_tile) {
+		return false;
+	}
 	toCylinder->internalAddThing(creature);
 
 	const Position& dest = toCylinder->getPosition();
@@ -1339,6 +1413,14 @@ Tile* Floor::getTile(uint16_t x, uint16_t y, uint8_t z) {
 	
 	tilePair.first = MapCacheUtils::createTileFromBasic(basicTile, x, y, z, g_game.map.houses);
 	tilePair.second = 0; // Clear cache
+
+	if (tilePair.first) {
+		if (HouseTile* houseTile = tilePair.first->getHouseTile()) {
+			if (auto house = houseTile->getHouse()) {
+				house->addTile(houseTile);
+			}
+		}
+	}
 	
 	return tilePair.first.get();
 }

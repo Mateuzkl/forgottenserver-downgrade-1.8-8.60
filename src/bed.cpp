@@ -10,6 +10,9 @@
 #include "iologindata.h"
 #include "save_manager.h"
 #include "scheduler.h"
+#include "tasks.h"
+
+#include <unordered_set>
 
 using namespace std::chrono;
 
@@ -21,13 +24,20 @@ static constexpr uint32_t SOUL_REGEN_INTERVAL_SECONDS = 60 * 15;
 
 BedItem::BedItem(uint16_t id) : Item(id) { internalRemoveSleeper(); }
 
-void BedItem::setHouse(House* h) noexcept
+void BedItem::setHouse(const std::shared_ptr<House>& h) noexcept
 {
-	if (h) {
-		house = h->weak_from_this().lock();
-	} else {
-		house.reset();
+	if (auto current = house.lock()) {
+		if (current != h) {
+			current->removeBed(this);
+		}
 	}
+	house = h;
+}
+
+void BedItem::onRemoved()
+{
+	Item::onRemoved();
+	setHouse(nullptr);
 }
 
 Attr_ReadValue BedItem::readAttr(AttrTypes_t attr, PropStream& propStream)
@@ -79,7 +89,7 @@ void BedItem::serializeAttr(PropWriteStream& propWriteStream) const
 	}
 }
 
-BedItem* BedItem::getNextBedItem() const
+std::shared_ptr<BedItem> BedItem::getNextBedItem() const
 {
 	const auto dir = Item::items[id].bedPartnerDir;
 	const auto targetPos = getNextPosition(dir, getPosition());
@@ -93,7 +103,12 @@ BedItem* BedItem::getNextBedItem() const
 
 bool BedItem::canUse(Player* player)
 {
-	if (!player || house.expired() || !player->isPremium() || player->getZone() != ZONE_PROTECTION) {
+	if (!player || !player->isPremium() || player->getZone() != ZONE_PROTECTION) {
+		return false;
+	}
+
+	auto h = getHouse();
+	if (!h) {
 		return false;
 	}
 
@@ -101,7 +116,7 @@ bool BedItem::canUse(Player* player)
 		return true;
 	}
 
-	if (getHouse()->getHouseAccessLevel(player) == HOUSE_OWNER) {
+	if (h->getHouseAccessLevel(player) == HOUSE_OWNER) {
 		return true;
 	}
 
@@ -110,18 +125,23 @@ bool BedItem::canUse(Player* player)
 		return false;
 	}
 
-	return getHouse()->getHouseAccessLevel(&sleeper) <= getHouse()->getHouseAccessLevel(player);
+	return h->getHouseAccessLevel(&sleeper) <= h->getHouseAccessLevel(player);
 }
 
 bool BedItem::trySleep(Player* player)
 {
-	if (house.expired() || player->isRemoved()) {
+	if (player->isRemoved()) {
+		return false;
+	}
+
+	auto h = getHouse();
+	if (!h) {
 		return false;
 	}
 
 	if (sleeperGUID != 0) {
 		const auto& itemType = Item::items[id];
-		if (itemType.transformToFree != 0 && getHouse()->getOwner() == player->getGUID()) {
+		if (itemType.transformToFree != 0 && h->getOwner() == player->getGUID()) {
 			wakeUp(nullptr);
 		}
 
@@ -137,7 +157,7 @@ bool BedItem::sleep(Player* player)
 		return false;
 	}
 
-	auto* nextBedItem = getNextBedItem();
+	auto nextBedItem = getNextBedItem();
 
 	internalSetSleeper(player);
 
@@ -168,21 +188,20 @@ bool BedItem::sleep(Player* player)
 	return true;
 }
 
-void BedItem::wakeUp(Player* player)
+bool BedItem::wakeUp(Player* player)
 {
-	if (house.expired()) {
-		return;
-	}
-
 	if (sleeperGUID != 0) {
 		if (!player) {
 			Player regenPlayer(nullptr);
-			if (IOLoginData::loadPlayerById(&regenPlayer, sleeperGUID)) {
-				regeneratePlayer(&regenPlayer);
-				g_saveManager.savePlayerSync(&regenPlayer);
+			if (!loadOfflineSleeper(&regenPlayer, sleeperGUID)) {
+				return false;
+			}
+			regeneratePlayer(&regenPlayer, sleepStart);
+			if (!saveOfflineSleepers({&regenPlayer})) {
+				return false;
 			}
 		} else {
-			regeneratePlayer(player);
+			regeneratePlayer(player, sleepStart);
 			g_game.addCreatureHealth(player);
 		}
 	}
@@ -190,7 +209,7 @@ void BedItem::wakeUp(Player* player)
 	// update the bedSleepersMap
 	g_game.removeBedSleeper(sleeperGUID);
 
-	auto* nextBedItem = getNextBedItem();
+	auto nextBedItem = getNextBedItem();
 
 	// unset sleep info
 	internalRemoveSleeper();
@@ -205,9 +224,103 @@ void BedItem::wakeUp(Player* player)
 	if (nextBedItem) {
 		nextBedItem->updateAppearance(nullptr);
 	}
+	return true;
 }
 
-void BedItem::regeneratePlayer(Player* player) const
+bool BedItem::wakeUpAll(const std::vector<std::shared_ptr<BedItem>>& beds)
+{
+	struct WakeSession {
+		std::shared_ptr<Player> player;
+		uint32_t guid;
+		uint64_t sleepStart;
+		bool offline;
+	};
+	std::vector<WakeSession> sessions;
+	std::vector<std::pair<std::shared_ptr<BedItem>, uint32_t>> bedsToClear;
+	std::unordered_set<uint32_t> sleeperGuids;
+	std::unordered_set<BedItem*> seenBeds;
+	std::vector<Player*> offlinePlayers;
+	std::shared_ptr<BedItem> offlineWriter;
+	auto collectBed = [&](const std::shared_ptr<BedItem>& bed, uint32_t guid) {
+		if (bed && bed->getSleeper() == guid && seenBeds.insert(bed.get()).second) {
+			bedsToClear.emplace_back(bed, guid);
+		}
+	};
+
+	// Preparing temporary offline players must not change a live player, bed,
+	// registry entry or appearance. Either all loads succeed, or nothing wakes.
+	for (const auto& bed : beds) {
+		if (!bed || bed->isRemoved() || bed->getSleeper() == 0) {
+			continue;
+		}
+		const uint32_t guid = bed->getSleeper();
+		collectBed(bed, guid);
+		collectBed(bed->getNextBedItem(), guid);
+		if (!sleeperGuids.insert(guid).second) {
+			continue;
+		}
+		auto player = g_game.getPlayerByGUID(guid);
+		const bool offline = !player;
+		if (offline) {
+			player = std::make_shared<Player>(nullptr);
+			if (!bed->loadOfflineSleeper(player.get(), guid)) {
+				return false;
+			}
+			regeneratePlayer(player.get(), bed->sleepStart);
+			offlinePlayers.push_back(player.get());
+			if (!offlineWriter) {
+				offlineWriter = bed;
+			}
+		}
+		sessions.push_back({std::move(player), guid, bed->sleepStart, offline});
+	}
+	if (offlineWriter && !offlineWriter->saveOfflineSleepers(offlinePlayers)) {
+		return false;
+	}
+
+	// The batch is committed. Clear every session before any live-player or
+	// appearance notification can reenter map removal or wake another bed.
+	for (const auto& session : sessions) {
+		g_game.removeBedSleeper(session.guid);
+	}
+	for (const auto& [bed, guid] : bedsToClear) {
+		if (bed->getSleeper() == guid) {
+			bed->internalRemoveSleeper();
+		}
+	}
+	for (const auto& session : sessions) {
+		if (!session.offline) {
+			regeneratePlayer(session.player.get(), session.sleepStart);
+			g_game.addCreatureHealth(session.player.get());
+		}
+	}
+	for (const auto& entry : bedsToClear) {
+		const auto& bed = entry.first;
+		if (!bed->isRemoved() && bed->getSleeper() == 0) {
+			bed->updateAppearance(nullptr);
+		}
+	}
+	return true;
+}
+
+bool BedItem::loadOfflineSleeper(Player* player, uint32_t guid) const
+{
+	// On the dispatcher, the pending-flush state cannot change between this
+	// check and saveOfflineSleepers(). Do not load stale state while an older
+	// save is still in flight; the batch save also rejects pending flushes.
+	if (!g_dispatcher.isDispatcherThread() || g_saveManager.hasPendingPlayerSave(guid) ||
+	    g_saveManager.hasFailedRecovery(guid)) {
+		return false;
+	}
+	return IOLoginData::loadPlayerById(player, guid);
+}
+
+bool BedItem::saveOfflineSleepers(const std::vector<Player*>& players) const
+{
+	return g_saveManager.savePlayersSync(players);
+}
+
+void BedItem::regeneratePlayer(Player* player, uint64_t sleepStart)
 {
 	const auto now = system_clock::now();
 	const auto currentTime = static_cast<uint64_t>(

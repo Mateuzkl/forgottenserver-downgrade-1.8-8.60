@@ -359,6 +359,21 @@ ReturnValue MoveEvents::onPlayerDeEquip(Player* player, Item* item, slots_t slot
 
 uint32_t MoveEvents::onItemMove(Item* item, Tile* tile, bool isAdd)
 {
+	// Lua callbacks can remove the tile or other items in this event batch.
+	// Keep the original objects alive and do not iterate a mutating tile list.
+	const auto tileRef = tile->weak_from_this().lock();
+	const auto itemRef = item->weak_from_this().lock();
+	const Position pos = tile->getPosition();
+	std::vector<std::shared_ptr<Item>> tileItems;
+	for (size_t i = tile->getFirstIndex(), end = tile->getLastIndex(); i < end; ++i) {
+		Thing* thing = tile->getThing(i);
+		if (Item* tileItem = thing ? thing->getItem() : nullptr; tileItem && tileItem != item) {
+			if (auto ref = tileItem->weak_from_this().lock()) {
+				tileItems.push_back(std::move(ref));
+			}
+		}
+	}
+
 	MoveEvent_t eventType1, eventType2;
 	if (isAdd) {
 		eventType1 = MOVE_EVENT_ADD_ITEM;
@@ -371,28 +386,22 @@ uint32_t MoveEvents::onItemMove(Item* item, Tile* tile, bool isAdd)
 	uint32_t ret = 1;
 	MoveEvent* moveEvent = getEvent(tile, eventType1);
 	if (moveEvent) {
-		ret &= moveEvent->fireAddRemItem(item, nullptr, tile->getPosition());
+		ret &= moveEvent->fireAddRemItem(item, nullptr, pos);
 	}
 
 	moveEvent = getEvent(item, eventType1);
 	if (moveEvent) {
-		ret &= moveEvent->fireAddRemItem(item, nullptr, tile->getPosition());
+		ret &= moveEvent->fireAddRemItem(item, nullptr, pos);
 	}
 
-	for (size_t i = tile->getFirstIndex(), j = tile->getLastIndex(); i < j; ++i) {
-		Thing* thing = tile->getThing(i);
-		if (!thing) {
+	for (const auto& tileItem : tileItems) {
+		if (tileItem->isRemoved() || tile->getThingIndex(tileItem.get()) == -1) {
 			continue;
 		}
 
-		Item* tileItem = thing->getItem();
-		if (!tileItem || tileItem == item) {
-			continue;
-		}
-
-		moveEvent = getEvent(tileItem, eventType2);
+		moveEvent = getEvent(tileItem.get(), eventType2);
 		if (moveEvent) {
-			ret &= moveEvent->fireAddRemItem(item, tileItem, tile->getPosition());
+			ret &= moveEvent->fireAddRemItem(item, tileItem.get(), pos);
 		}
 	}
 	return ret;

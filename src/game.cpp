@@ -408,7 +408,7 @@ ReturnValue moveQuickLootItem(Game& game, Player* player, const std::shared_ptr<
 		}
 
 		for (ContainerIterator it = current->iterator(); it.hasNext(); it.advance()) {
-			Item* child = *it;
+			auto child = *it;
 			if (Container* childContainer = child ? child->getContainer() : nullptr) {
 				if (ContainerPtr childRef = game.getContainerSharedRef(childContainer)) {
 					destinations.push_back(childRef);
@@ -457,20 +457,27 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 
 	std::vector<std::shared_ptr<Item>> lootItems;
 	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-		Item* item = *it;
-		if (!item || item->isRemoved() || !shouldQuickLootItem(player, item)) {
+		auto item = *it;
+		if (!item || item->isRemoved() || !shouldQuickLootItem(player, item.get())) {
 			continue;
 		}
 
-		if (std::shared_ptr<Item> itemRef = game.getItemSharedRef(item)) {
-			result.hadLoot = true;
-			lootItems.push_back(itemRef);
-		}
+		result.hadLoot = true;
+		lootItems.push_back(std::move(item));
 	}
 
 	for (const std::shared_ptr<Item>& itemRef : lootItems) {
 		Item* item = itemRef.get();
-		if (!item || item->isRemoved()) {
+		if (!item || item->isRemoved() || container->isRemoved() || player->isRemoved()) {
+			continue;
+		}
+		const Cylinder* parent = item->getParent();
+		// A selected bag can be moved before its contents are routed to their
+		// own categories. Continue only inside the corpse or this player.
+		while (parent && parent != container && parent != player) {
+			parent = parent->getParent();
+		}
+		if (!parent) {
 			continue;
 		}
 
@@ -509,7 +516,7 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, uint32_t maxCorpses,
                               bool& foundCorpse, ReturnValue& firstFailure)
 {
-	Tile* tile = game.map.getTile(pos);
+	const auto tile = game.getTileSharedRef(game.map.getTile(pos));
 	if (!tile) {
 		firstFailure = RETURNVALUE_NOTPOSSIBLE;
 		return 0;
@@ -521,9 +528,16 @@ uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, u
 	}
 
 	uint32_t lootedCorpses = 0;
-	for (const auto& itemRef : *itemList) {
+	const std::vector<std::shared_ptr<Item>> snapshot(itemList->begin(), itemList->end());
+	for (const auto& itemRef : snapshot) {
 		if (lootedCorpses >= maxCorpses) {
 			break;
+		}
+		if (game.map.getTile(pos) != tile.get()) {
+			break;
+		}
+		if (!itemRef || itemRef->isRemoved() || tile->getThingIndex(itemRef.get()) == -1) {
+			continue;
 		}
 
 		Container* container = itemRef ? itemRef->getContainer() : nullptr;
@@ -871,7 +885,7 @@ Thing* Game::internalGetThing(Player* player, const Position& pos, int32_t index
 		}
 
 		uint8_t slot = pos.z;
-		return parentContainer->getItemByIndex(player->getContainerIndex(fromCid) + slot);
+		return parentContainer->getItemByIndex(player->getContainerIndex(fromCid) + slot).get();
 	} else if (pos.y == 0 && pos.z == 0) {
 		const ItemType& it = Item::items[static_cast<uint16_t>(spriteId)];
 		if (it.id == 0) {
@@ -2057,6 +2071,30 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
                                    Creature* actor /* = nullptr*/, Item* tradeItem /* = nullptr*/,
                                    const Position* fromPos /*= nullptr*/, const Position* toPos /*= nullptr*/)
 {
+	if (!fromCylinder || !toCylinder || !item) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+	const auto itemRef = getItemSharedRef(item);
+	if (!itemRef) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+	// Removal/equip callbacks may release either cylinder while the rest of
+	// this move still needs it. Stack-owned internal cylinders have no anchor.
+	auto retainCylinder = [](Cylinder* cylinder) -> std::shared_ptr<Thing> {
+		if (Item* owner = cylinder->getItem()) {
+			return owner->weak_from_this().lock();
+		}
+		if (Creature* owner = cylinder->getCreature()) {
+			return owner->weak_from_this().lock();
+		}
+		if (auto tile = dynamic_cast<Tile*>(cylinder)) {
+			return tile->weak_from_this().lock();
+		}
+		return nullptr;
+	};
+	const auto sourceRef = retainCylinder(fromCylinder);
+	const auto originalDestinationRef = retainCylinder(toCylinder);
+	const auto actorRef = actor ? actor->weak_from_this().lock() : nullptr;
 	std::shared_ptr<Tile> browseFieldTile = getBrowseFieldTile(fromCylinder);
 	if (browseFieldTile) {
 		fromCylinder = browseFieldTile.get();
@@ -2081,11 +2119,14 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		if (ret != RETURNVALUE_NOERROR) {
 			return ret;
 		}
+		if (item->isRemoved() || fromCylinder->getThingIndex(item) == -1 || toCylinder->isRemoved()) {
+			return RETURNVALUE_NOTPOSSIBLE;
+		}
 
 		if (!actorPlayer->hasFlag(PlayerFlag_CanEditHouses)) {
 			if (Tile* fromTile = fromCylinder->getTile()) {
 				if (HouseTile* fromHouseTile = dynamic_cast<HouseTile*>(fromTile)) {
-					House* fromHouse = fromHouseTile->getHouse();
+					auto fromHouse = fromHouseTile->getHouse();
 					if (fromHouse && !fromHouse->canModifyItems(actorPlayer)) {
 						return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
 					}
@@ -2103,7 +2144,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 
 			if (Tile* toTile = toCylinder->getTile()) {
 				if (HouseTile* toHouseTile = dynamic_cast<HouseTile*>(toTile)) {
-					House* toHouse = toHouseTile->getHouse();
+					auto toHouse = toHouseTile->getHouse();
 					if (toHouse && !toHouse->canModifyItems(actorPlayer)) {
 						return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
 					}
@@ -2130,6 +2171,8 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 			break;
 		}
 	}
+	const auto destinationRef = retainCylinder(toCylinder);
+	const auto destinationItemRef = getItemSharedRef(toItem);
 
 	if (actorPlayer) {
 		const ReturnValue storeInboxLockRet = getStoreInboxLockedItemMoveReturn(item);
@@ -2304,10 +2347,6 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	int32_t itemIndex = fromCylinder->getThingIndex(item);
 	Item* updateItem = nullptr;
 	std::shared_ptr<Item> clonedMoveItem;
-	auto itemRef = getItemSharedRef(item);
-	if (!itemRef) {
-		return RETURNVALUE_NOTPOSSIBLE;
-	}
 	fromCylinder->removeThing(item, m);
 
 	// update item(s)
@@ -2505,9 +2544,12 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	std::shared_ptr<Tile> browseFieldTile = getBrowseFieldTile(cylinder);
-	if (browseFieldTile) {
-		cylinder = browseFieldTile.get();
+	std::shared_ptr<Tile> cylinderTile = getBrowseFieldTile(cylinder);
+	if (cylinderTile) {
+		cylinder = cylinderTile.get();
+	} else if (auto* tile = dynamic_cast<Tile*>(cylinder)) {
+		// Bed transforms and removal notifications can remove the source tile.
+		cylinderTile = tile->weak_from_this().lock();
 	}
 
 	if (count == -1) {
@@ -2520,7 +2562,7 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 		return ret;
 	}
 
-	if (!item->canRemove()) {
+	if (!hasBitSet(FLAG_IGNORECANREMOVE, flags) && !item->canRemove()) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
@@ -2530,6 +2572,24 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 		auto itemRef = getItemSharedRef(item);
 		if (!itemRef) {
 			return RETURNVALUE_NOTPOSSIBLE;
+		}
+
+		// End an occupied bed session while the BedItem is still attached to its
+		// tile and House. This preserves sleeper regeneration and lets wakeUp()
+		// clear the partner bed and registry exactly once before destruction.
+		if (auto bed = item->getBed(); bed && bed->getSleeper() != 0) {
+			auto sleeper = getPlayerByGUID(bed->getSleeper());
+			if (!bed->wakeUp(sleeper.get())) {
+				return RETURNVALUE_NOTPOSSIBLE;
+			}
+			if (item->isRemoved()) {
+				return RETURNVALUE_NOERROR;
+			}
+			// Appearance callbacks may move/remove the bed or reorder tile items.
+			index = cylinder->getThingIndex(item);
+			if (index == -1) {
+				return RETURNVALUE_NOTPOSSIBLE;
+			}
 		}
 
 		// remove the item
@@ -2979,8 +3039,9 @@ Item* searchForItem(Container* container, uint16_t itemId, bool hasTier = false,
 	}
 
 	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-		if ((*it)->getID() == itemId && (!hasTier || (*it)->getTier() == tier)) {
-			return *it;
+		auto item = *it;
+		if (item->getID() == itemId && (!hasTier || item->getTier() == tier)) {
+			return item.get();
 		}
 	}
 
@@ -4526,7 +4587,7 @@ void Game::playerWrapableItem(uint32_t playerId, const Position& pos, uint8_t st
 
 	Tile* tile = item->getTile();
 	HouseTile* houseTile = tile ? tile->getHouseTile() : nullptr;
-	House* house = houseTile ? houseTile->getHouse() : nullptr;
+	auto house = houseTile ? houseTile->getHouse() : nullptr;
 	if (!house) {
 		player->sendCancelMessage("You may construct this only inside a house.");
 		return;
@@ -4730,9 +4791,10 @@ void Game::playerRequestTrade(uint32_t playerId, const Position& pos, uint8_t st
 	if (getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
 		if (const auto tile = tradeItem->getTile()) {
 			if (const auto houseTile = tile->getHouseTile()) {
-			if (!tradeItem->getTopParent()->getCreature() && !houseTile->getHouse()->isInvited(player)) {
-				player->sendCancelMessage(RETURNVALUE_PLAYERISNOTINVITED);
-				return;
+				auto house = houseTile->getHouse();
+				if (!tradeItem->getTopParent()->getCreature() && (!house || !house->isInvited(player))) {
+					player->sendCancelMessage(RETURNVALUE_PLAYERISNOTINVITED);
+					return;
 				}
 			}
 		}
@@ -8653,26 +8715,32 @@ void Game::addGuild(Guild_ptr guild)
 
 void Game::removeGuild(uint32_t guildId) { guilds.erase(guildId); }
 
-void Game::internalRemoveItems(std::vector<ObserverPtr<Item>> itemList, uint32_t amount, bool stackable)
+void Game::internalRemoveItems(std::vector<std::shared_ptr<Item>> itemList, uint32_t amount, bool stackable)
 {
 	if (stackable) {
-		for (Item* item : itemList) {
+		for (const auto& item : itemList) {
+			if (!item || item->isRemoved()) {
+				continue;
+			}
 			if (item->getItemCount() > amount) {
-				internalRemoveItem(item, amount);
+				internalRemoveItem(item.get(), amount);
 				break;
 			} else {
 				amount -= item->getItemCount();
-				internalRemoveItem(item);
+				internalRemoveItem(item.get());
 			}
 		}
 	} else {
-		for (Item* item : itemList) {
-			internalRemoveItem(item);
+		for (const auto& item : itemList) {
+			if (!item || item->isRemoved()) {
+				continue;
+			}
+			internalRemoveItem(item.get());
 		}
 	}
 }
 
-BedItem* Game::getBedBySleeper(uint32_t guid)
+std::shared_ptr<BedItem> Game::getBedBySleeper(uint32_t guid)
 {
 	auto it = bedSleepersMap.find(guid);
 	if (it == bedSleepersMap.end()) {
@@ -8684,7 +8752,7 @@ BedItem* Game::getBedBySleeper(uint32_t guid)
 		bedSleepersMap.erase(it);
 		return nullptr;
 	}
-	return bed.get();
+	return bed;
 }
 
 void Game::setBedSleeper(BedItem* bed, uint32_t guid)

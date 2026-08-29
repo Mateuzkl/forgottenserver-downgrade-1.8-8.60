@@ -452,7 +452,7 @@ int luaGameGetHouses(lua_State* L)
 
 	int index = 0;
 	for (auto& houseEntry : houses) {
-		pushUserdata<House>(L, houseEntry.second.get());
+		pushSharedPtr(L, houseEntry.second);
 		setMetatable(L, -1, "House");
 		lua_rawseti(L, -2, ++index);
 	}

@@ -800,11 +800,11 @@ Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 					Container* quiverContainer = rightItem->getContainer();
 					if (quiverContainer) {
 						for (ContainerIterator cit = quiverContainer->iterator(); cit.hasNext(); cit.advance()) {
-							Item* quiverAmmo = *cit;
+							auto quiverAmmo = *cit;
 							if (quiverAmmo->getAmmoType() == it.ammoType) {
-								const Weapon* quiverAmmoWeapon = g_weapons->getWeapon(quiverAmmo);
+								const Weapon* quiverAmmoWeapon = g_weapons->getWeapon(quiverAmmo.get());
 								if (quiverAmmoWeapon && quiverAmmoWeapon->ammoCheck(this)) {
-									return quiverAmmo;
+									return quiverAmmo.get();
 								}
 							}
 						}
@@ -2375,18 +2375,21 @@ void Player::sendAddContainerItem(const Container* container, const Item* item)
 		}
 
 		uint16_t slot = openContainer.index;
+		std::shared_ptr<Item> itemToSendRef;
 		const Item* itemToSend = item;
 		if (container->getID() == ITEM_BROWSEFIELD && container->size() > 0) {
 			const uint16_t containerSize = static_cast<uint16_t>(container->size() - 1);
 			const uint16_t pageEnd = openContainer.index + static_cast<uint16_t>(container->capacity()) - 1;
 			if (containerSize > pageEnd) {
 				slot = pageEnd;
-				itemToSend = container->getItemByIndex(pageEnd);
+				itemToSendRef = container->getItemByIndex(pageEnd);
+				itemToSend = itemToSendRef.get();
 			} else {
 				slot = containerSize;
 			}
 		} else if (openContainer.index >= container->capacity()) {
-			itemToSend = container->getItemByIndex(openContainer.index);
+			itemToSendRef = container->getItemByIndex(openContainer.index);
+			itemToSend = itemToSendRef.get();
 		}
 
 		if (itemToSend) {
@@ -2457,10 +2460,11 @@ void Player::sendRemoveContainerItem(const Container* container, uint16_t slot)
 		}
 
 		const uint32_t capacity = container->capacity();
-		const Item* lastItem = capacity > 0 ?
-		                           container->getItemByIndex(firstIndex + static_cast<uint16_t>(capacity)) :
-		                           nullptr;
-		client->sendRemoveContainerItem(it->first, std::max<uint16_t>(slot, firstIndex), lastItem);
+		std::shared_ptr<Item> lastItem;
+		if (capacity > 0) {
+			lastItem = container->getItemByIndex(firstIndex + static_cast<uint16_t>(capacity));
+		}
+		client->sendRemoveContainerItem(it->first, std::max<uint16_t>(slot, firstIndex), lastItem.get());
 		++it;
 	}
 }
@@ -2532,8 +2536,7 @@ void Player::onCreatureAppear(Creature* creature, bool isLogin)
 
 		updateRegeneration();
 
-		BedItem* bed = g_game.getBedBySleeper(guid);
-		if (bed) {
+		if (auto bed = g_game.getBedBySleeper(guid)) {
 			bed->wakeUp(this);
 		}
 
@@ -4572,7 +4575,8 @@ ReturnValue Player::queryMaxCount(int32_t index, const Thing& thing, uint32_t co
 
 					// iterate through all items, including sub-containers (deep search)
 					for (ContainerIterator it = subContainer->iterator(); it.hasNext(); it.advance()) {
-						if (Container* tmpContainer = (*it)->getContainer()) {
+						auto containerItem = *it;
+						if (Container* tmpContainer = containerItem->getContainer()) {
 							queryCount = 0;
 							tmpContainer->queryMaxCount(INDEX_WHEREEVER, *item, item->getItemCount(), queryCount,
 							                            flags);
@@ -4960,8 +4964,9 @@ uint32_t Player::getItemTypeCount(uint16_t itemId, int32_t subType /*= -1*/, boo
 
 		if (Container* container = item->getContainer()) {
 			for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-				if ((*it)->getID() == itemId) {
-					count += Item::countByType(*it, subType);
+				auto containerItem = *it;
+				if (containerItem->getID() == itemId) {
+					count += Item::countByType(containerItem.get(), subType);
 				}
 			}
 		}
@@ -4975,7 +4980,7 @@ bool Player::removeItemOfType(uint16_t itemId, uint32_t amount, int32_t subType,
 		return true;
 	}
 
-	std::vector<Item*> itemList;
+	std::vector<std::shared_ptr<Item>> itemList;
 
 	uint32_t count = 0;
 	for (int32_t i = CONST_SLOT_FIRST; i <= CONST_SLOT_LAST; i++) {
@@ -4990,7 +4995,7 @@ bool Player::removeItemOfType(uint16_t itemId, uint32_t amount, int32_t subType,
 				continue;
 			}
 
-			itemList.push_back(item);
+			itemList.push_back(inventory[i]);
 
 			count += itemCount;
 			if (count >= amount) {
@@ -4999,14 +5004,15 @@ bool Player::removeItemOfType(uint16_t itemId, uint32_t amount, int32_t subType,
 			}
 		} else if (Container* container = item->getContainer()) {
 			for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-				Item* containerItem = *it;
+				auto containerItemRef = *it;
+				Item* containerItem = containerItemRef.get();
 				if (containerItem->getID() == itemId) {
 					uint32_t itemCount = Item::countByType(containerItem, subType);
 					if (itemCount == 0) {
 						continue;
 					}
 
-					itemList.push_back(containerItem);
+					itemList.push_back(containerItemRef);
 
 					count += itemCount;
 					if (count >= amount) {
@@ -5032,7 +5038,8 @@ std::unordered_map<uint32_t, uint32_t>& Player::getAllItemTypeCount(std::unorder
 
 		if (Container* container = item->getContainer()) {
 			for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-				countMap[(*it)->getID()] += Item::countByType(*it, -1);
+				auto containerItem = *it;
+				countMap[containerItem->getID()] += Item::countByType(containerItem.get(), -1);
 			}
 		}
 	}
@@ -5059,14 +5066,18 @@ void Player::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_
 
 	if (link == LINK_OWNER) {
 		// calling movement scripts
-		g_moveEvents->onPlayerEquip(this, thing->getItem(), static_cast<slots_t>(index), false);
+		if (g_moveEvents) {
+			g_moveEvents->onPlayerEquip(this, thing->getItem(), static_cast<slots_t>(index), false);
+		}
 		if (isInventorySlot(static_cast<slots_t>(index))) {
 			Item* item = thing->getItem();
 			if (item && item->hasImbuements()) {
 				addItemImbuements(thing->getItem(), static_cast<slots_t>(index));
 			}
 		}
-		g_events->eventPlayerOnUpdateInventory(this, thing->getItem(), static_cast<slots_t>(index), true);
+		if (g_events) {
+			g_events->eventPlayerOnUpdateInventory(this, thing->getItem(), static_cast<slots_t>(index), true);
+		}
 	}
 
 	bool requireListUpdate = false;
@@ -5124,14 +5135,18 @@ void Player::postRemoveNotification(Thing* thing, const Cylinder* newParent, int
 {
 	if (link == LINK_OWNER) {
 		// calling movement scripts
-		g_moveEvents->onPlayerDeEquip(this, thing->getItem(), static_cast<slots_t>(index));
+		if (g_moveEvents) {
+			g_moveEvents->onPlayerDeEquip(this, thing->getItem(), static_cast<slots_t>(index));
+		}
 		if (isInventorySlot(static_cast<slots_t>(index))) {
 			Item* item = thing->getItem();
 			if (item && item->hasImbuements()) {
 				removeItemImbuements(thing->getItem(), static_cast<slots_t>(index));
 			}
 		}
-		g_events->eventPlayerOnUpdateInventory(this, thing->getItem(), static_cast<slots_t>(index), false);
+		if (g_events) {
+			g_events->eventPlayerOnUpdateInventory(this, thing->getItem(), static_cast<slots_t>(index), false);
+		}
 	}
 
 	bool requireListUpdate = false;
@@ -7259,7 +7274,7 @@ Container* Player::findGoldPouch() const
 
 			if (const auto container = storeItem->getContainer()) {
 				for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-					Item* item = *it;
+					auto item = *it;
 					if (item && item->getID() == ITEM_GOLD_POUCH) {
 						return item->getContainer();
 					}
@@ -7284,7 +7299,7 @@ Container* Player::findGoldPouch() const
 		}
 
 		for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-			Item* item = *it;
+			auto item = *it;
 			if (item && item->getID() == ITEM_GOLD_POUCH) {
 				return item->getContainer();
 			}
@@ -7300,7 +7315,9 @@ Container* Player::getOrCreateGoldPouchPage(Container* pouch)
 
 void Player::lootCorpse(Container* container)
 {
-	if (!container) {
+	const auto corpseRef = g_game.getContainerSharedRef(container);
+	const auto playerRef = weak_from_this().lock();
+	if (!corpseRef || container->isRemoved()) {
 		return;
 	}
 
@@ -7318,17 +7335,19 @@ void Player::lootCorpse(Container* container)
 	const bool autobankEnabled = ConfigManager::getBoolean(ConfigManager::AUTOLOOT_AUTO_BANK);
 	const bool autolootGoldPouchEnabled = ConfigManager::getBoolean(ConfigManager::AUTOLOOT_GOLD_POUCH);
 
-	auto goldPouchDestination = autolootGoldPouchEnabled ? findGoldPouch() : nullptr;
-	auto storeInboxDestination = getStoreInbox();
+	const auto goldPouchRef = g_game.getContainerSharedRef(autolootGoldPouchEnabled ? findGoldPouch() : nullptr);
+	const auto storeInboxRef = g_game.getContainerSharedRef(getStoreInbox());
+	auto goldPouchDestination = goldPouchRef.get();
+	auto storeInboxDestination = storeInboxRef.get();
 	if (goldPouchDestination && !storeInboxDestination) {
 		sendTextMessage(MESSAGE_EVENT_ORANGE, "Your store inbox is unavailable. Items will fall back to backpack.");
 	}
 
-	std::vector<std::pair<Item*, uint16_t>> toMove;
+	std::vector<std::pair<std::shared_ptr<Item>, uint16_t>> toMove;
 
 	AutoLootMap::iterator iter;
 	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-		Item* item = *it;
+		auto item = *it;
 		if (autolootConfig.lootAnything) {
 			toMove.push_back(std::make_pair(item, 0));
 		} else {
@@ -7339,18 +7358,34 @@ void Player::lootCorpse(Container* container)
 		}
 	}
 
-	std::vector<std::pair<Item*, uint64_t>> moneyItemsToDeposit;
+	std::vector<std::pair<std::shared_ptr<Item>, uint64_t>> moneyItemsToDeposit;
 	std::unordered_set<Item*> queuedMoneyItems;
 	bool missingGoldPouchMessageSent = false;
 	bool skipCoinMessageSent = false;
 
+	auto isPendingLoot = [&](const Item* item) {
+		if (!item || item->isRemoved() || container->isRemoved() || isRemoved()) {
+			return false;
+		}
+		for (const Cylinder* parent = item->getParent(); parent; parent = parent->getParent()) {
+			// Loot-all may already have moved the enclosing bag to the player.
+			if (parent == container || parent == this) {
+				return true;
+			}
+		}
+		return false;
+	};
+
 	auto moveAutolootItem = [&](Item* item, uint16_t backpackId = 0) {
+		if (!isPendingLoot(item)) {
+			return false;
+		}
 		ReturnValue ret;
 		Cylinder* primaryDestination = nullptr;
 		Cylinder* fallbackDestination = nullptr;
 		bool usedGoldPouch = false;
 
-		if (autolootGoldPouchEnabled && goldPouchDestination) {
+		if (autolootGoldPouchEnabled && goldPouchDestination && !goldPouchDestination->isRemoved()) {
 			primaryDestination = goldPouchDestination;
 			fallbackDestination = storeInboxDestination;
 			usedGoldPouch = true;
@@ -7368,7 +7403,7 @@ void Player::lootCorpse(Container* container)
 			fallbackDestination = storeInboxDestination;
 		}
 
-		ret = g_game.internalMoveItem(container, primaryDestination, INDEX_WHEREEVER, item,
+		ret = g_game.internalMoveItem(item->getParent(), primaryDestination, INDEX_WHEREEVER, item,
 		                                          item->getItemCount(), nullptr);
 		if (ret == RETURNVALUE_NOERROR) {
 			return true;
@@ -7378,8 +7413,11 @@ void Player::lootCorpse(Container* container)
 			return false;
 		}
 
-		if (fallbackDestination && fallbackDestination != primaryDestination) {
-			ret = g_game.internalMoveItem(container, fallbackDestination, INDEX_WHEREEVER, item,
+		if (!isPendingLoot(item)) {
+			return false;
+		}
+		if (fallbackDestination && !fallbackDestination->isRemoved() && fallbackDestination != primaryDestination) {
+			ret = g_game.internalMoveItem(item->getParent(), fallbackDestination, INDEX_WHEREEVER, item,
 			                                          item->getItemCount(), nullptr);
 			if (ret == RETURNVALUE_NOERROR) {
 				if (usedGoldPouch) {
@@ -7400,10 +7438,13 @@ void Player::lootCorpse(Container* container)
 			return false;
 		}
 
+		if (!isPendingLoot(item)) {
+			return false;
+		}
 		auto backpackItem = getInventoryItem(CONST_SLOT_BACKPACK);
 		auto backpack = backpackItem ? backpackItem->getContainer() : nullptr;
 		if (backpack) {
-			ret = g_game.internalMoveItem(container, backpack, INDEX_WHEREEVER, item, item->getItemCount(), nullptr);
+			ret = g_game.internalMoveItem(item->getParent(), backpack, INDEX_WHEREEVER, item, item->getItemCount(), nullptr);
 			if (ret == RETURNVALUE_NOERROR) {
 				sendTextMessage(MESSAGE_STATUS_SMALL, "Your store inbox is full. Item sent to backpack.");
 				return true;
@@ -7419,7 +7460,11 @@ void Player::lootCorpse(Container* container)
 	};
 
 	for (const auto& pair : toMove) {
-		Item* item = pair.first;
+		const auto& itemRef = pair.first;
+		Item* item = itemRef.get();
+		if (!isPendingLoot(item)) {
+			continue;
+		}
 		const uint16_t itemId = item->getID();
 		const int64_t rawWorth = item->getWorth();
 		const uint64_t value = rawWorth > 0 ? static_cast<uint64_t>(rawWorth) : 0;
@@ -7439,7 +7484,7 @@ void Player::lootCorpse(Container* container)
 				}
 			}
 			if (autobankEnabled) {
-				moneyItemsToDeposit.emplace_back(item, value);
+				moneyItemsToDeposit.emplace_back(itemRef, value);
 				continue;
 			}
 		}
@@ -7448,14 +7493,14 @@ void Player::lootCorpse(Container* container)
 	}
 
 	if (autolootConfig.goldEnabled) {
-		std::vector<Item*> moneyItemsToMove;
+		std::vector<std::shared_ptr<Item>> moneyItemsToMove;
 		for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
-			Item* goldItem = *it;
+			auto goldItem = *it;
 			const uint16_t itemId = goldItem->getID();
 			const int64_t rawWorth = goldItem->getWorth();
 			const uint64_t worth = rawWorth > 0 ? static_cast<uint64_t>(rawWorth) : 0;
-			if (moneyIds.contains(itemId) && worth > 0 && !queuedMoneyItems.contains(goldItem)) {
-				queuedMoneyItems.insert(goldItem);
+			if (moneyIds.contains(itemId) && worth > 0 && !queuedMoneyItems.contains(goldItem.get())) {
+				queuedMoneyItems.insert(goldItem.get());
 				if (autobankEnabled) {
 					moneyItemsToDeposit.emplace_back(goldItem, worth);
 				} else {
@@ -7464,15 +7509,16 @@ void Player::lootCorpse(Container* container)
 			}
 		}
 
-		for (Item* goldItem : moneyItemsToMove) {
-			moveAutolootItem(goldItem);
+		for (const auto& goldItem : moneyItemsToMove) {
+			moveAutolootItem(goldItem.get());
 		}
 	}
 
 	uint64_t totalDepositValue = 0;
 	if (autobankEnabled) {
 		for (const auto& [item, value] : moneyItemsToDeposit) {
-			if (g_game.internalRemoveItem(item, item->getItemCount()) == RETURNVALUE_NOERROR) {
+			if (isPendingLoot(item.get()) &&
+			    g_game.internalRemoveItem(item.get(), item->getItemCount()) == RETURNVALUE_NOERROR) {
 				totalDepositValue += value;
 			}
 		}
@@ -7528,7 +7574,7 @@ Container* findHeldContainerByIdentity(Container* parent, uint16_t itemId, uint6
 	}
 
 	for (ContainerIterator it = parent->iterator(); it.hasNext(); it.advance()) {
-		Item* item = *it;
+		auto item = *it;
 		if (!item) {
 			continue;
 		}
@@ -7824,7 +7870,7 @@ void Player::addPendingLoot(std::string monsterName, Container* corpse)
 	group->killCount++;
 
 	for (ContainerIterator it = corpse->iterator(); it.hasNext(); it.advance()) {
-		Item* item = *it;
+		auto item = *it;
 		if (!item) {
 			continue;
 		}
@@ -8330,8 +8376,7 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 			                    Database::getInstance().escapeString(managerData.string1), guid))) {
 				Database::getInstance().executeQuery(
 				    fmt::format("DELETE FROM `player_namelocks` WHERE `player_id` = {:d}", guid));
-
-				if (House* house = g_game.map.houses.getHouseByPlayerId(guid)) {
+				if (auto house = g_game.map.houses.getHouseByPlayerId(guid)) {
 					house->updateOwnerName(managerData.string1);
 				}
 

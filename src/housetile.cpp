@@ -13,16 +13,7 @@
 
 extern Game g_game;
 
-namespace {
-
-std::shared_ptr<House> getSharedHouse(House* house)
-{
-	return house ? house->weak_from_this().lock() : nullptr;
-}
-
-} // namespace
-
-HouseTile::HouseTile(uint16_t x, uint16_t y, uint8_t z, House* house) : DynamicTile(x, y, z), house(getSharedHouse(house)) {}
+HouseTile::HouseTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<House>& house) : DynamicTile(x, y, z), house(house) {}
 
 void HouseTile::addThing(int32_t index, Thing* thing)
 {
@@ -56,15 +47,20 @@ void HouseTile::updateHouse(Item* item)
 		return;
 	}
 
-	Door* door = item->getDoor();
+	auto house = getHouse();
+	if (!house) {
+		return;
+	}
+
+	auto door = item->getDoor();
 	if (door) {
 		if (door->getDoorId() != 0) {
-			getHouse()->addDoor(door);
+			house->addDoor(door.get());
 		}
 	} else {
-		BedItem* bed = item->getBed();
+		auto bed = item->getBed();
 		if (bed) {
-			getHouse()->addBed(bed);
+			house->addBed(bed.get());
 		}
 	}
 }
@@ -72,14 +68,25 @@ void HouseTile::updateHouse(Item* item)
 ReturnValue HouseTile::queryAdd(int32_t index, const Thing& thing, uint32_t count, uint32_t flags,
                                 Creature* actor /* = nullptr*/) const
 {
+	auto house = getHouse();
+	if (!house) {
+		// A HouseTile whose House has expired must not silently become a normal,
+		// unrestricted tile. Actor-less item operations are kept available for
+		// internal maintenance; creature and actor-driven operations fail closed.
+		if (thing.getCreature() || actor) {
+			return RETURNVALUE_NOTPOSSIBLE;
+		}
+		return Tile::queryAdd(index, thing, count, flags, actor);
+	}
+
 	if (hasBitSet(FLAG_NOLIMIT, flags)) {
 		return RETURNVALUE_NOERROR;
 	}
 
 	if (const Creature* creature = thing.getCreature()) {
 		if (const Player* player = creature->getPlayer()) {
-			if (!getHouse()->isInvited(player)) {
-				if (getHouse()->getType() == HOUSE_TYPE_GUILDHALL) {
+			if (!house->isInvited(player)) {
+				if (house->getType() == HOUSE_TYPE_GUILDHALL) {
 					return RETURNVALUE_ONLYGUILDMEMBERSMAYENTER;
 				}
 				return RETURNVALUE_PLAYERISNOTINVITED;
@@ -93,11 +100,11 @@ ReturnValue HouseTile::queryAdd(int32_t index, const Thing& thing, uint32_t coun
 		}
 
 		if (actor) {
-			if (getHouse()->getProtected() && !getHouse()->canModifyItems(actor->getPlayer())) {
+			if (house->getProtected() && !house->canModifyItems(actor->getPlayer())) {
 				return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
 			}
 			Player* actorPlayer = actor->getPlayer();
-			if (!getHouse()->isInvited(actorPlayer)) {
+			if (!house->isInvited(actorPlayer)) {
 				return RETURNVALUE_CANNOTTHROW;
 			}
 		}
@@ -110,11 +117,18 @@ Tile* HouseTile::queryDestination(int32_t& index, const Thing& thing, Item** des
 {
 	if (const Creature* creature = thing.getCreature()) {
 		if (const Player* player = creature->getPlayer()) {
-			if (!getHouse()->isInvited(player)) {
-				const Position& entryPos = getHouse()->getEntryPosition();
+			auto house = getHouse();
+			if (!house) {
+				index = -1;
+				*destItem = nullptr;
+				return &Tile::nullptr_tile;
+			}
+
+			if (!house->isInvited(player)) {
+				const Position& entryPos = house->getEntryPosition();
 				Tile* destTile = g_game.map.getTile(entryPos);
 				if (!destTile) {
-					LOG_ERROR(fmt::format("[HouseTile::queryDestination] House entry not correct - Name: {} - House id: {} - Tile not found: {}", getHouse()->getName(), getHouse()->getId(), entryPos));
+					LOG_ERROR(fmt::format("[HouseTile::queryDestination] House entry not correct - Name: {} - House id: {} - Tile not found: {}", house->getName(), house->getId(), entryPos));
 
 					destTile = g_game.map.getTile(player->getTemplePosition());
 					if (!destTile) {
@@ -140,13 +154,20 @@ ReturnValue HouseTile::queryRemove(const Thing& thing, uint32_t count, uint32_t 
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	if (actor && getHouse()->getProtected() && !getHouse()->canModifyItems(actor->getPlayer())) {
-		return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
-	}
+	if (actor) {
+		auto house = getHouse();
+		if (!house) {
+			return RETURNVALUE_NOTPOSSIBLE;
+		}
 
-	if (actor && getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
-		if (!getHouse()->isInvited(actor->getPlayer())) {
-			return RETURNVALUE_PLAYERISNOTINVITED;
+		if (house->getProtected() && !house->canModifyItems(actor->getPlayer())) {
+			return RETURNVALUE_CANNOTMOVEITEMISPROTECTED;
+		}
+
+		if (getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
+			if (!house->isInvited(actor->getPlayer())) {
+				return RETURNVALUE_PLAYERISNOTINVITED;
+			}
 		}
 	}
 

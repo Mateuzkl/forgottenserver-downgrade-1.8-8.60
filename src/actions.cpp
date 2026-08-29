@@ -203,7 +203,7 @@ Action* Actions::getAction(const Position& pos)
 ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_t index,
                                      const std::shared_ptr<Item>& item, bool isHotkey)
 {
-	if (Door* door = item->getDoor()) {
+	if (auto door = item->getDoor()) {
 		if (!door->canUse(player)) {
 			return RETURNVALUE_NOTPOSSIBLE;
 		}
@@ -243,7 +243,7 @@ ReturnValue Actions::internalUseItem(Player* player, const Position& pos, uint8_
 		}
 	}
 
-	if (BedItem* bed = item->getBed()) {
+	if (auto bed = item->getBed()) {
 		if (!bed->canUse(player)) {
 			if (!bed->getHouse()) {
 				return RETURNVALUE_YOUCANNOTUSETHISBED;
@@ -424,7 +424,8 @@ bool Actions::useItem(Player* player, const Position& pos, uint8_t index, const 
 	if (getBoolean(ConfigManager::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS)) {
 		if (const auto tile = item->getTile()) {
 			if (const auto houseTile = tile->getHouseTile()) {
-				if (!item->getTopParent()->getCreature() && !houseTile->getHouse()->isInvited(player)) {
+				auto house = houseTile->getHouse();
+				if (!item->getTopParent()->getCreature() && (!house || !house->isInvited(player))) {
 					player->sendCancelMessage(RETURNVALUE_PLAYERISNOTINVITED);
 					return false;
 				}

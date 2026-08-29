@@ -234,11 +234,11 @@ public:
 	}
 
 	/**
-	 * Removes a single tile.
+	 * Removes a single tile. Returns false if removal cannot be completed.
 	 */
 
-	void removeTile(uint16_t x, uint16_t y, uint8_t z);
-	void removeTile(const Position& pos) { removeTile(pos.x, pos.y, pos.z); }
+	bool removeTile(uint16_t x, uint16_t y, uint8_t z);
+	bool removeTile(const Position& pos) { return removeTile(pos.x, pos.y, pos.z); }
 
 	/**
 	 * Place a creature on the map

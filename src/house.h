@@ -43,10 +43,16 @@ public:
 	Door(const Door&) = delete;
 	Door& operator=(const Door&) = delete;
 
-	Door* getDoor() override { return this; }
-	const Door* getDoor() const override { return this; }
+	[[nodiscard]] std::shared_ptr<Door> getDoor() override
+	{
+		return std::static_pointer_cast<Door>(weak_from_this().lock());
+	}
+	[[nodiscard]] std::shared_ptr<const Door> getDoor() const override
+	{
+		return std::static_pointer_cast<const Door>(weak_from_this().lock());
+	}
 
-	House* getHouse() { return house.lock().get(); }
+	std::shared_ptr<House> getHouse() const { return house.lock(); }
 
 	// serialization
 	Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream) override;
@@ -90,8 +96,7 @@ enum HouseType_t
 	HOUSE_TYPE_GUILDHALL = 2,
 };
 
-using HouseTileList = std::list<ObserverPtr<HouseTile>>;
-using HouseBedItemList = std::list<ObserverPtr<BedItem>>;
+using HouseTileList = std::list<std::weak_ptr<HouseTile>>;
 
 class HouseTransferItem final : public Item
 {
@@ -111,9 +116,10 @@ class House : public std::enable_shared_from_this<House>
 {
 public:
 	explicit House(uint32_t houseId);
-	~House();
+	virtual ~House();
 
 	void addTile(HouseTile* tile);
+	void addTile(const std::shared_ptr<HouseTile>& tile);
 
 	bool canEditAccessList(uint32_t listId, const Player* player) const;
 	// listId special values:
@@ -134,7 +140,7 @@ public:
 	std::string_view getName() const { return houseName; }
 
 	std::string_view getOwnerName() const { return ownerName; }
-	void setOwner(uint32_t guid_guild, bool updateDatabase = true, Player* previousPlayer = nullptr);
+	bool setOwner(uint32_t guid_guild, bool updateDatabase = true, Player* previousPlayer = nullptr);
 	uint32_t getOwner() const { return owner; }
 	uint32_t getOwnerAccountId() const { return ownerAccountId; }
 
@@ -166,24 +172,24 @@ public:
 
 	void addDoor(Door* door);
 	void removeDoor(Door* door);
-	Door* getDoorByNumber(uint32_t doorId) const;
-	Door* getDoorByPosition(const Position& pos) const;
+	[[nodiscard]] std::shared_ptr<Door> getDoorByNumber(uint32_t doorId) const;
+	[[nodiscard]] std::shared_ptr<Door> getDoorByPosition(const Position& pos) const;
 
-	HouseTransferItem* getTransferItem();
+	std::shared_ptr<HouseTransferItem> getTransferItem();
 	void resetTransferItem();
 	bool executeTransfer(HouseTransferItem* item, Player* newOwner);
 
 	const HouseTileList& getTiles() const { return houseTiles; }
+	size_t getTileCount() const;
+	void removeTile(const HouseTile* tile);
 
-	const std::set<ObserverPtr<Door>>& getDoors() const { return doorSet; }
+	[[nodiscard]] std::vector<std::shared_ptr<Door>> getDoors() const;
+	[[nodiscard]] size_t getDoorCount() const;
 
 	void addBed(BedItem* bed);
-	const HouseBedItemList& getBeds() const { return bedsList; }
-	uint32_t getBedCount() const
-	{
-		return static_cast<uint32_t>(
-		    std::ceil(bedsList.size() / 2.)); // each bed takes 2 sqms of space, ceil is just for bad maps
-	}
+	void removeBed(BedItem* bed);
+	[[nodiscard]] std::vector<std::shared_ptr<BedItem>> getBeds() const;
+	uint32_t getBedCount() const;
 
 	// Protection guest management and permission checks
 	bool addProtectionGuest(uint32_t playerId);
@@ -195,11 +201,16 @@ public:
 	bool getProtected() const { return isProtected; }
 	void setProtected(bool protect) { isProtected = protect; }
 
+protected:
+	using OwnerData = std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string>;
+	virtual OwnerData initializeOwnerDataFromDatabase(uint32_t guid_guild, HouseType_t type);
+	virtual bool updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection);
+
 private:
-	std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> initializeOwnerDataFromDatabase(uint32_t guid_guild, HouseType_t type);
 	bool transferToDepot() const;
 	bool transferToDepot(Player* player) const;
 	void updateDoorDescription() const;
+	std::vector<std::shared_ptr<HouseTile>> getTilesSnapshot() const;
 
 	AccessList guestList;
 	AccessList subOwnerList;
@@ -207,8 +218,8 @@ private:
 	Container transfer_container{ITEM_LOCKER};
 
 	HouseTileList houseTiles;
-	std::set<ObserverPtr<Door>> doorSet;
-	HouseBedItemList bedsList;
+	std::vector<std::weak_ptr<Door>> doorList;
+	std::vector<std::weak_ptr<BedItem>> bedsList;
 
 	std::string houseName;
 	std::string ownerName;
@@ -228,6 +239,7 @@ private:
 	Position posEntry = {};
 
 	bool isLoaded = false;
+	bool ownerTransitionInProgress = false;
 
 	// Protection state and guest list
 	bool isProtected = false;
@@ -258,27 +270,27 @@ public:
 	Houses(const Houses&) = delete;
 	Houses& operator=(const Houses&) = delete;
 
-	House* addHouse(uint32_t id)
+	std::shared_ptr<House> addHouse(uint32_t id)
 	{
 		auto it = houseMap.find(id);
 		if (it != houseMap.end()) {
-			return it->second.get();
+			return it->second;
 		}
 
 		auto [ins, ok] = houseMap.emplace(id, std::make_shared<House>(id));
-		return ins->second.get();
+		return ins->second;
 	}
 
-	[[nodiscard]] House* getHouse(uint32_t houseId)
+	[[nodiscard]] std::shared_ptr<House> getHouse(uint32_t houseId)
 	{
 		auto it = houseMap.find(houseId);
 		if (it == houseMap.end()) {
 			return nullptr;
 		}
-		return it->second.get();
+		return it->second;
 	}
 
-	[[nodiscard]] House* getHouseByPlayerId(uint32_t playerId);
+	[[nodiscard]] std::shared_ptr<House> getHouseByPlayerId(uint32_t playerId) const;
 
 	bool loadHousesXML(const std::string& filename);
 

@@ -27,7 +27,7 @@ public:
 	bool hasNext() const { return index < items.size(); }
 
 	void advance();
-	Item* operator*() const;
+	std::shared_ptr<Item> operator*() const;
 
 private:
 	ItemVector items;
@@ -94,8 +94,7 @@ public:
 
 	bool addItem(const std::shared_ptr<Item>& item);
 	bool addItem(Item* item);
-	Item* getItemByIndex(size_t index) const;
-	std::shared_ptr<Item> getItemByIndexRef(size_t index) const;
+	std::shared_ptr<Item> getItemByIndex(size_t index) const;
 	bool isHoldingItem(const Item* item) const;
 	bool isRewardCorpse() const;
 

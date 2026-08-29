@@ -26,6 +26,14 @@ public:
 	bool savePlayer(Player* player);
 	void saveMapAsync();
 	bool savePlayerSync(Player* player);
+	// All-or-nothing synchronous batch. Never queues behind another save.
+	bool savePlayersSync(const std::vector<Player*>& players);
+
+	// Dispatcher-thread only, like the save queue bookkeeping itself.
+	[[nodiscard]] bool hasPendingPlayerSave(uint32_t guid) const noexcept
+	{
+		return flushInFlight.contains(guid) || pendingFlushes.contains(guid);
+	}
 
 	/**
 	 * @brief Non-blocking: invokes callback(bool) when pending save operations for
