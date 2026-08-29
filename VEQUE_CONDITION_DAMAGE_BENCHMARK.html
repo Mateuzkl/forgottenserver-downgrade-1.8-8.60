@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ConditionDamage veque benchmark</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101318; --panel:#181d25; --text:#eef2f7; --muted:#9ba7b7; --base:#e37b5b; --new:#38c9a3; --line:#2b3442; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; }
+    main { max-width:1180px; margin:auto; padding:40px 24px 64px; }
+    h1 { margin:0 0 8px; font-size:clamp(28px,5vw,48px); letter-spacing:-.04em; }
+    h2 { margin:36px 0 14px; }
+    .lead { color:var(--muted); max-width:850px; }
+    .badge { display:inline-block; margin:18px 0; padding:8px 13px; border:1px solid #2f9f83; border-radius:999px; color:#71e0c2; font-weight:750; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+    .card,.chart,table { background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+    .card { padding:18px; }
+    .metric { font-size:28px; font-weight:780; color:var(--new); }
+    .label { color:var(--muted); }
+    .chart { padding:18px; overflow:hidden; }
+    .row { display:grid; grid-template-columns:minmax(180px,1.5fr) minmax(260px,4fr) 85px; gap:12px; align-items:center; margin:12px 0; }
+    .bars { display:grid; gap:4px; }
+    .bar { height:11px; min-width:2px; border-radius:999px; }
+    .baseline { width:100%; background:var(--base); }
+    .veque { background:var(--new); }
+    .delta { text-align:right; color:#71e0c2; font-variant-numeric:tabular-nums; }
+    .legend { display:flex; gap:18px; color:var(--muted); margin-bottom:18px; }
+    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; }
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; overflow:hidden; }
+    th,td { padding:10px 12px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+    th:first-child,td:first-child { text-align:left; }
+    th { color:var(--muted); font-weight:650; }
+    tr:last-child td { border:0; }
+    code { color:#b8c8ff; }
+    footer { margin-top:32px; color:var(--muted); }
+    @media (max-width:720px) { .row { grid-template-columns:1fr 2fr 70px; font-size:12px; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1><code>ConditionDamage::damageList</code></h1>
+  <p class="lead">Real A/B results for <code>std::list&lt;IntervalInfo&gt;</code> versus <code>veque&lt;IntervalInfo, veque::std_vector_traits&gt;</code>. Same WSL2 host, GCC 13.3, Release flags, CPU 0, and 10 observations per scenario.</p>
+  <div class="badge">SAFE TO MERGE</div>
+
+  <section class="grid" aria-label="Highlights">
+    <div class="card"><div class="metric">41 / 41</div><div class="label">full non-benchmark tests passed</div></div>
+    <div class="card"><div class="metric">9 / 9</div><div class="label">new behavior tests passed with ASan + UBSan</div></div>
+    <div class="card"><div class="metric">-98.38%</div><div class="label">heap allocation calls in queue churn</div></div>
+    <div class="card"><div class="metric">-22.27%</div><div class="label">mean peak RSS across full runs</div></div>
+  </section>
+
+  <h2>CPU time by scenario</h2>
+  <p class="lead">Each orange bar is the baseline normalized to 100%. The green bar is the measured <code>veque</code> CPU time. Shorter is better.</p>
+  <div class="chart">
+    <div class="legend"><span><i class="dot" style="background:var(--base)"></i>std::list</span><span><i class="dot" style="background:var(--new)"></i>veque</span></div>
+    <div class="row"><span>Condition / 4 ticks</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:90.71%"></i></div><strong class="delta">-9.29%</strong></div>
+    <div class="row"><span>Condition / 1,000 ticks</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:69.08%"></i></div><strong class="delta">-30.92%</strong></div>
+    <div class="row"><span>100 creatures</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:48.96%"></i></div><strong class="delta">-51.04%</strong></div>
+    <div class="row"><span>1,000 creatures</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:44.89%"></i></div><strong class="delta">-55.11%</strong></div>
+    <div class="row"><span>10,000 conditions</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:49.43%"></i></div><strong class="delta">-50.57%</strong></div>
+    <div class="row"><span>Queue churn / 10,000</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:69.98%"></i></div><strong class="delta">-30.02%</strong></div>
+    <div class="row"><span>Copy / 8 ticks</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:17.84%"></i></div><strong class="delta">-82.16%</strong></div>
+    <div class="row"><span>Copy / 1,000 ticks</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:1.96%"></i></div><strong class="delta">-98.04%</strong></div>
+    <div class="row"><span>Serialize / 8 ticks</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:89.63%"></i></div><strong class="delta">-10.37%</strong></div>
+    <div class="row"><span>Serialize / 256 ticks</span><div class="bars"><i class="bar baseline"></i><i class="bar veque" style="width:62.76%"></i></div><strong class="delta">-37.24%</strong></div>
+  </div>
+
+  <h2>Measured means</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Scenario</th><th>Baseline ns</th><th>veque ns</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td>Condition, 4 ticks</td><td>296.497</td><td>268.943</td><td>-9.29%</td></tr>
+      <tr><td>Condition, 1,000 ticks</td><td>79,778.377</td><td>55,109.172</td><td>-30.92%</td></tr>
+      <tr><td>100 creatures with DoT</td><td>71,953.631</td><td>35,227.339</td><td>-51.04%</td></tr>
+      <tr><td>1,000 creatures with DoT</td><td>762,328.703</td><td>342,220.721</td><td>-55.11%</td></tr>
+      <tr><td>10,000 conditions</td><td>9,906,422.333</td><td>4,896,878.553</td><td>-50.57%</td></tr>
+      <tr><td>Queue churn, 10,000 ops</td><td>930,030.909</td><td>650,841.120</td><td>-30.02%</td></tr>
+      <tr><td>Copy, 8 ticks</td><td>152.320</td><td>27.172</td><td>-82.16%</td></tr>
+      <tr><td>Copy, 1,000 ticks</td><td>24,609.280</td><td>481.697</td><td>-98.04%</td></tr>
+      <tr><td>Serialize, 8 ticks</td><td>908.886</td><td>814.591</td><td>-10.37%</td></tr>
+      <tr><td>Serialize, 256 ticks</td><td>22,901.805</td><td>14,373.501</td><td>-37.24%</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Memory and low-level counters</h2>
+  <section class="grid">
+    <div class="card"><div class="metric">0</div><div class="label">Valgrind errors and definitely lost bytes</div></div>
+    <div class="card"><div class="metric">-0.57%</div><div class="label">Massif peak heap + allocator overhead</div></div>
+    <div class="card"><div class="metric">-23.99%</div><div class="label">simulated D1 cache misses</div></div>
+    <div class="card"><div class="metric">-89.05%</div><div class="label">simulated branch mispredicts</div></div>
+  </section>
+
+  <h2>Important qualifications</h2>
+  <p class="lead">TSan compiled, but WSL2 rejected its shadow-memory mapping before <code>main</code>; that result is inconclusive. No Windows compiler was installed. Cache figures are Cachegrind simulations, not hardware <code>perf</code> counters. <code>ConditionDamage</code> grows from 96 to 104 bytes, while measured allocation calls, peak heap, and peak RSS fall.</p>
+  <footer>Full methodology, commands, medians, min/max/p95, sanitizer output, and limitations are documented in <code>VEQUE_CONDITION_DAMAGE_BENCHMARK.md</code>.</footer>
+</main>
+</body>
+</html>

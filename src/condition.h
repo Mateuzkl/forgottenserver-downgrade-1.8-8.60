@@ -7,6 +7,7 @@
 #include "enums.h"
 #include "fileloader.h"
 #include "position.h"
+#include "third_party/veque/veque.hpp"
 
 #include <memory>
 
@@ -327,7 +328,7 @@ private:
 
 	bool init();
 
-	std::list<IntervalInfo> damageList;
+	veque::veque<IntervalInfo, veque::std_vector_traits> damageList;
 
 	bool getNextDamage(int32_t& damage);
 	bool doDamage(Creature* creature, int32_t healthChange);
