@@ -7034,7 +7034,9 @@ Container* Player::getOrCreateGoldPouchPage(Container* pouch)
 
 void Player::lootCorpse(Container* container)
 {
-	if (!container) {
+	const auto corpseRef = g_game.getContainerSharedRef(container);
+	const auto playerRef = weak_from_this().lock();
+	if (!corpseRef || container->isRemoved()) {
 		return;
 	}
 
@@ -7052,8 +7054,10 @@ void Player::lootCorpse(Container* container)
 	const bool autobankEnabled = ConfigManager::getBoolean(ConfigManager::AUTOLOOT_AUTO_BANK);
 	const bool autolootGoldPouchEnabled = ConfigManager::getBoolean(ConfigManager::AUTOLOOT_GOLD_POUCH);
 
-	auto goldPouchDestination = autolootGoldPouchEnabled ? findGoldPouch() : nullptr;
-	auto storeInboxDestination = getStoreInbox();
+	const auto goldPouchRef = g_game.getContainerSharedRef(autolootGoldPouchEnabled ? findGoldPouch() : nullptr);
+	const auto storeInboxRef = g_game.getContainerSharedRef(getStoreInbox());
+	auto goldPouchDestination = goldPouchRef.get();
+	auto storeInboxDestination = storeInboxRef.get();
 	if (goldPouchDestination && !storeInboxDestination) {
 		sendTextMessage(MESSAGE_EVENT_ORANGE, "Your store inbox is unavailable. Items will fall back to backpack.");
 	}
@@ -7078,13 +7082,29 @@ void Player::lootCorpse(Container* container)
 	bool missingGoldPouchMessageSent = false;
 	bool skipCoinMessageSent = false;
 
+	auto isPendingLoot = [&](const Item* item) {
+		if (!item || item->isRemoved() || container->isRemoved() || isRemoved()) {
+			return false;
+		}
+		for (const Cylinder* parent = item->getParent(); parent; parent = parent->getParent()) {
+			// Loot-all may already have moved the enclosing bag to the player.
+			if (parent == container || parent == this) {
+				return true;
+			}
+		}
+		return false;
+	};
+
 	auto moveAutolootItem = [&](Item* item, uint16_t backpackId = 0) {
+		if (!isPendingLoot(item)) {
+			return false;
+		}
 		ReturnValue ret;
 		Cylinder* primaryDestination = nullptr;
 		Cylinder* fallbackDestination = nullptr;
 		bool usedGoldPouch = false;
 
-		if (autolootGoldPouchEnabled && goldPouchDestination) {
+		if (autolootGoldPouchEnabled && goldPouchDestination && !goldPouchDestination->isRemoved()) {
 			primaryDestination = goldPouchDestination;
 			fallbackDestination = storeInboxDestination;
 			usedGoldPouch = true;
@@ -7102,7 +7122,7 @@ void Player::lootCorpse(Container* container)
 			fallbackDestination = storeInboxDestination;
 		}
 
-		ret = g_game.internalMoveItem(container, primaryDestination, INDEX_WHEREEVER, item,
+		ret = g_game.internalMoveItem(item->getParent(), primaryDestination, INDEX_WHEREEVER, item,
 		                                          item->getItemCount(), nullptr);
 		if (ret == RETURNVALUE_NOERROR) {
 			return true;
@@ -7112,8 +7132,11 @@ void Player::lootCorpse(Container* container)
 			return false;
 		}
 
-		if (fallbackDestination && fallbackDestination != primaryDestination) {
-			ret = g_game.internalMoveItem(container, fallbackDestination, INDEX_WHEREEVER, item,
+		if (!isPendingLoot(item)) {
+			return false;
+		}
+		if (fallbackDestination && !fallbackDestination->isRemoved() && fallbackDestination != primaryDestination) {
+			ret = g_game.internalMoveItem(item->getParent(), fallbackDestination, INDEX_WHEREEVER, item,
 			                                          item->getItemCount(), nullptr);
 			if (ret == RETURNVALUE_NOERROR) {
 				if (usedGoldPouch) {
@@ -7134,10 +7157,13 @@ void Player::lootCorpse(Container* container)
 			return false;
 		}
 
+		if (!isPendingLoot(item)) {
+			return false;
+		}
 		auto backpackItem = getInventoryItem(CONST_SLOT_BACKPACK);
 		auto backpack = backpackItem ? backpackItem->getContainer() : nullptr;
 		if (backpack) {
-			ret = g_game.internalMoveItem(container, backpack, INDEX_WHEREEVER, item, item->getItemCount(), nullptr);
+			ret = g_game.internalMoveItem(item->getParent(), backpack, INDEX_WHEREEVER, item, item->getItemCount(), nullptr);
 			if (ret == RETURNVALUE_NOERROR) {
 				sendTextMessage(MESSAGE_STATUS_SMALL, "Your store inbox is full. Item sent to backpack.");
 				return true;
@@ -7155,6 +7181,9 @@ void Player::lootCorpse(Container* container)
 	for (const auto& pair : toMove) {
 		const auto& itemRef = pair.first;
 		Item* item = itemRef.get();
+		if (!isPendingLoot(item)) {
+			continue;
+		}
 		const uint16_t itemId = item->getID();
 		const int64_t rawWorth = item->getWorth();
 		const uint64_t value = rawWorth > 0 ? static_cast<uint64_t>(rawWorth) : 0;
@@ -7207,7 +7236,8 @@ void Player::lootCorpse(Container* container)
 	uint64_t totalDepositValue = 0;
 	if (autobankEnabled) {
 		for (const auto& [item, value] : moneyItemsToDeposit) {
-			if (g_game.internalRemoveItem(item.get(), item->getItemCount()) == RETURNVALUE_NOERROR) {
+			if (isPendingLoot(item.get()) &&
+			    g_game.internalRemoveItem(item.get(), item->getItemCount()) == RETURNVALUE_NOERROR) {
 				totalDepositValue += value;
 			}
 		}

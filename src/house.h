@@ -116,7 +116,7 @@ class House : public std::enable_shared_from_this<House>
 {
 public:
 	explicit House(uint32_t houseId);
-	~House();
+	virtual ~House();
 
 	void addTile(HouseTile* tile);
 	void addTile(const std::shared_ptr<HouseTile>& tile);
@@ -140,7 +140,7 @@ public:
 	std::string_view getName() const { return houseName; }
 
 	std::string_view getOwnerName() const { return ownerName; }
-	void setOwner(uint32_t guid_guild, bool updateDatabase = true, Player* previousPlayer = nullptr);
+	bool setOwner(uint32_t guid_guild, bool updateDatabase = true, Player* previousPlayer = nullptr);
 	uint32_t getOwner() const { return owner; }
 	uint32_t getOwnerAccountId() const { return ownerAccountId; }
 
@@ -201,8 +201,12 @@ public:
 	bool getProtected() const { return isProtected; }
 	void setProtected(bool protect) { isProtected = protect; }
 
+protected:
+	using OwnerData = std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string>;
+	virtual OwnerData initializeOwnerDataFromDatabase(uint32_t guid_guild, HouseType_t type);
+	virtual bool updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection);
+
 private:
-	std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> initializeOwnerDataFromDatabase(uint32_t guid_guild, HouseType_t type);
 	bool transferToDepot() const;
 	bool transferToDepot(Player* player) const;
 	void updateDoorDescription() const;
@@ -235,6 +239,7 @@ private:
 	Position posEntry = {};
 
 	bool isLoaded = false;
+	bool ownerTransitionInProgress = false;
 
 	// Protection state and guest list
 	bool isProtected = false;

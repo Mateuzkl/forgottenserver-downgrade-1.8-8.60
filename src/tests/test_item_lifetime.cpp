@@ -2681,4 +2681,465 @@ TEST_CASE(lua_tile_equality_rejects_reused_addresses_and_missing_ownership_token
 	lua_pop(L, 1);
 }
 
+namespace {
+
+struct QuickLootLifetimeFixture
+{
+	PlayerWorldEventsFixture events;
+	MapTileGuard tiles;
+	ItemTypePropertyGuard lootType{2160};
+	const bool previousEnabled = ConfigManager::getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
+	const Position playerPos{200, 200, 7};
+	const Position corpsePos{201, 200, 7};
+	std::shared_ptr<Player> player;
+	std::shared_ptr<Container> backpack;
+	std::shared_ptr<Container> corpse;
+
+	explicit QuickLootLifetimeFixture(uint16_t capacity = 8)
+	{
+		ConfigManager::setBoolean(ConfigManager::QUICK_LOOT_ENABLED, true);
+		auto& type = Item::items.getItemType(2160);
+		type.moveable = true;
+		type.pickupable = true;
+		type.stackable = false; // Track identities, independently of OTB stack settings.
+		for (const auto& pos : {playerPos, corpsePos}) {
+			tiles.track(pos.x, pos.y, pos.z);
+			auto tile = std::make_unique<DynamicTile>(pos.x, pos.y, pos.z);
+			tile->internalAddThing(makeTestGround().get());
+			g_game.map.setTile(pos, std::move(tile));
+		}
+		player = makeTestPlayer(960, "QuickLootLifetimePlayer");
+		player->setCapacity(1000000);
+		CHECK(g_game.internalPlaceCreature(player.get(), playerPos, false, true));
+		backpack = std::make_shared<Container>(ITEM_BACKPACK, capacity);
+		static_cast<Cylinder&>(*player).internalAddThing(CONST_SLOT_BACKPACK, backpack.get());
+		corpse = std::make_shared<Container>(ITEM_BAG, 16);
+		corpse->setCorpseOwner(player->getID());
+		g_game.map.getTile(corpsePos)->internalAddThing(corpse.get());
+	}
+
+	~QuickLootLifetimeFixture()
+	{
+		if (player && !player->isRemoved()) {
+			g_game.removeCreature(player.get());
+		}
+		ConfigManager::setBoolean(ConfigManager::QUICK_LOOT_ENABLED, previousEnabled);
+	}
+
+	std::shared_ptr<Item> addLoot(Container* destination = nullptr)
+	{
+		auto item = std::make_shared<Item>(2160);
+		(destination ? destination : corpse.get())->internalAddThing(item.get());
+		return item;
+	}
+
+	void collect() { g_game.playerQuickLootCorpse(player->getID(), corpse.get()); }
+};
+
+} // namespace
+
+TEST_CASE(quickloot_nested_items_move_once_and_release_after_cleanup)
+{
+	ensureItemTypes();
+	std::vector<std::weak_ptr<Item>> weakItems;
+	{
+		QuickLootLifetimeFixture fixture;
+		auto nested = std::make_shared<Container>(ITEM_BAG, 8);
+		fixture.corpse->internalAddThing(nested.get());
+		for (size_t i = 0; i < 6; ++i) {
+			weakItems.push_back(fixture.addLoot(i % 2 ? nested.get() : nullptr));
+		}
+		fixture.collect();
+		for (const auto& weak : weakItems) {
+			auto item = weak.lock();
+			CHECK(item && item->getTopParent() == fixture.player.get());
+		}
+		const auto count = fixture.backpack->getItemTypeCount(2160);
+		CHECK(count == 6);
+		fixture.collect();
+		CHECK(fixture.backpack->getItemTypeCount(2160) == count);
+		CHECK(fixture.corpse->getItemTypeCount(2160) == 0);
+	}
+	g_game.cleanup();
+	for (const auto& weak : weakItems) {
+		CHECK(weak.expired());
+	}
+}
+
+TEST_CASE(quickloot_full_destination_preserves_items_and_can_retry)
+{
+	ensureItemTypes();
+	QuickLootLifetimeFixture fixture(1);
+	auto filler = fixture.addLoot(fixture.backpack.get());
+	auto loot = fixture.addLoot();
+	fixture.collect();
+	CHECK(loot->getParent() == fixture.corpse.get());
+	CHECK(fixture.corpse->size() == 1);
+	CHECK(fixture.backpack->size() == 1);
+	CHECK(g_game.internalRemoveItem(filler.get()) == RETURNVALUE_NOERROR);
+	fixture.collect();
+	CHECK(loot->getParent() == fixture.backpack.get());
+	CHECK(fixture.corpse->empty());
+	CHECK(fixture.backpack->size() == 1);
+	fixture.collect();
+	CHECK(fixture.backpack->size() == 1);
+}
+
+TEST_CASE(quickloot_rejects_foreign_or_disabled_corpses_without_moving_items)
+{
+	ensureItemTypes();
+	QuickLootLifetimeFixture fixture;
+	auto loot = fixture.addLoot();
+	fixture.corpse->setCorpseOwner(fixture.player->getID() + 100);
+	fixture.collect();
+	CHECK(loot->getParent() == fixture.corpse.get());
+	CHECK(fixture.backpack->empty());
+	fixture.corpse->setCorpseOwner(fixture.player->getID());
+	fixture.corpse->setCustomAttribute("QuickLootDisabled", true);
+	fixture.collect();
+	CHECK(loot->getParent() == fixture.corpse.get());
+	CHECK(fixture.backpack->empty());
+}
+
+TEST_CASE(quickloot_tile_removed_by_movement_callback_stops_the_batch)
+{
+	ensureItemTypes();
+	QuickLootLifetimeFixture fixture;
+	struct MaxCorpsesGuard {
+		int64_t previous = ConfigManager::getInteger(ConfigManager::QUICK_LOOT_MAX_CORPSES);
+		~MaxCorpsesGuard() { ConfigManager::setInteger(ConfigManager::QUICK_LOOT_MAX_CORPSES, previous); }
+	} maxGuard;
+	ConfigManager::setInteger(ConfigManager::QUICK_LOOT_MAX_CORPSES, 10);
+	fixture.addLoot();
+	auto second = std::make_shared<Container>(ITEM_BAG, 8);
+	second->setCorpseOwner(fixture.player->getID());
+	fixture.addLoot(second.get());
+	g_game.map.getTile(fixture.corpsePos)->internalAddThing(second.get());
+	const std::weak_ptr<Tile> weakTile = g_game.map.getTile(fixture.corpsePos)->weak_from_this();
+	bool callbackRan = false;
+	auto event = std::make_unique<MoveEvent>(fixture.events.movement.events.getScriptInterfacePtr());
+	event->setEventType(MOVE_EVENT_REMOVE_ITEM);
+	event->addPosList(fixture.corpsePos);
+	event->moveFunction = [&](Item*, Item*, const Position&) {
+		if (!callbackRan) {
+			callbackRan = true;
+			CHECK(g_game.map.removeTile(fixture.corpsePos));
+		}
+		return 1;
+	};
+	CHECK(fixture.events.movement.events.registerLuaEvent(event.release()));
+	g_game.playerQuickLoot(fixture.player->getID(), fixture.corpsePos, fixture.corpse->getClientID(), 1, true);
+	CHECK(callbackRan);
+	CHECK(g_game.map.getTile(fixture.corpsePos) == nullptr);
+	CHECK(weakTile.expired());
+	CHECK(fixture.backpack->getItemTypeCount(2160) == 1);
+}
+
+namespace {
+
+struct AutoLootLifetimeFixture : QuickLootLifetimeFixture
+{
+	const bool previousAutoloot = ConfigManager::getBoolean(ConfigManager::AUTOLOOT_ENABLED);
+	const bool previousBank = ConfigManager::getBoolean(ConfigManager::AUTOLOOT_AUTO_BANK);
+	const bool previousPouch = ConfigManager::getBoolean(ConfigManager::AUTOLOOT_GOLD_POUCH);
+
+	AutoLootLifetimeFixture()
+	{
+		ConfigManager::setBoolean(ConfigManager::AUTOLOOT_ENABLED, true);
+		ConfigManager::setBoolean(ConfigManager::AUTOLOOT_AUTO_BANK, false);
+		ConfigManager::setBoolean(ConfigManager::AUTOLOOT_GOLD_POUCH, false);
+		lua_State* L = events.movement.lua.L;
+		Lua::pushUserdata<Player>(L, player.get());
+		Lua::setMetatable(L, -1, "Player");
+		lua_setglobal(L, "looter");
+		CHECK(luaL_dostring(L, "assert(looter:setAutoLootEnabled(true))") == LUA_OK);
+		player->parseAutoLootWindow("*");
+	}
+	~AutoLootLifetimeFixture()
+	{
+		ConfigManager::setBoolean(ConfigManager::AUTOLOOT_ENABLED, previousAutoloot);
+		ConfigManager::setBoolean(ConfigManager::AUTOLOOT_AUTO_BANK, previousBank);
+		ConfigManager::setBoolean(ConfigManager::AUTOLOOT_GOLD_POUCH, previousPouch);
+	}
+};
+
+class OwnerTransitionTestHouse final : public House
+{
+public:
+	using House::House;
+	int ownerWrites = 0;
+	bool failLookup = false;
+	bool failWrite = false;
+
+protected:
+	OwnerData initializeOwnerDataFromDatabase(uint32_t guid, HouseType_t) override
+	{
+		if (failLookup) {
+			throw std::runtime_error("Test owner lookup failure");
+		}
+		return {guid, 700, "TestOwner", guid, "TestGuild"};
+	}
+	bool updateOwnerInDatabase(uint32_t, bool) override
+	{
+		++ownerWrites;
+		for (const auto& bed : getBeds()) {
+			CHECK(bed->getSleeper() == 0);
+		}
+		return !failWrite;
+	}
+};
+
+void checkHouseOwnerBedFailure(bool failSave)
+{
+	ensureItemTypes();
+	ensureVocations();
+	OfflineSleeperState states[2];
+	states[0].guid = 970;
+	states[1].guid = 971;
+	for (auto& state : states) {
+		state.batchStates = {&states[0], &states[1]};
+	}
+	PlayerWorldEventsFixture fixture;
+	MapTileGuard tiles;
+	struct FailureGuard {
+		OfflineSleeperState* states;
+		~FailureGuard() { states[1].failLoad = states[1].failSave = false; }
+	} failureGuard{states};
+	auto house = std::make_shared<OwnerTransitionTestHouse>(970);
+	CHECK(house->setOwner(970, false));
+	house->setProtected(true);
+	house->setAccessList(GUEST_LIST, "*");
+	house->setPayRentWarnings(3);
+	house->setPaidUntil(12345);
+	TilePlayersGuard players{{makeTestPlayer(970, "FirstOwnerSleeper"), makeTestPlayer(971, "SecondOwnerSleeper")}};
+	std::vector<std::shared_ptr<BedItem>> beds;
+	std::vector<std::string> before;
+	for (size_t i = 0; i < 2; ++i) {
+		const Position pos{static_cast<uint16_t>(220 + i * 3), 220, 7};
+		tiles.track(pos.x, pos.y, pos.z);
+		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+		tile->internalAddThing(makeTestGround().get());
+		g_game.map.setTile(pos, std::move(tile));
+		auto bed = std::make_shared<OfflineTestBedItem>(694, states[i]);
+		auto* source = g_game.map.getTile(pos);
+		source->internalAddThing(bed.get());
+		source->internalAddThing(players.players[i].get());
+		CHECK(bed->sleep(players.players[i].get()));
+		source->removeThing(players.players[i].get(), 0);
+		players.players[i]->setParent(nullptr);
+		PropWriteStream age;
+		age.write<uint32_t>(static_cast<uint32_t>(std::time(nullptr) - 1800));
+		PropStream input;
+		input.init(age.getStream().data(), age.getStream().size());
+		CHECK(bed->readAttr(ATTR_SLEEPSTART, input) == ATTR_READ_CONTINUE);
+		PropWriteStream attributes;
+		bed->serializeAttr(attributes);
+		before.emplace_back(attributes.getStream());
+		beds.push_back(std::move(bed));
+	}
+	states[1].failLoad = !failSave;
+	states[1].failSave = failSave;
+	CHECK(!house->setOwner(0));
+	// Lua callers must receive the failure too, not a false success.
+	lua_State* L = fixture.movement.lua.L;
+	Lua::pushSharedPtr(L, std::static_pointer_cast<House>(house));
+	Lua::setMetatable(L, -1, "House");
+	lua_setglobal(L, "ownerHouse");
+	CHECK(luaL_dostring(L, "assert(ownerHouse:setOwnerGuid(0) == false)") == LUA_OK);
+	CHECK(house->ownerWrites == 0);
+	CHECK(house->getOwner() == 970);
+	CHECK(house->getOwnerAccountId() == 700);
+	CHECK(house->getOwnerName() == "TestOwner");
+	CHECK(house->getProtected());
+	CHECK(house->getAccessList(GUEST_LIST).value() == "*");
+	CHECK(house->getPayRentWarnings() == 3);
+	CHECK(house->getPaidUntil() == 12345);
+	for (size_t i = 0; i < 2; ++i) {
+		CHECK(states[i].loadCount == 2);
+		CHECK(states[i].committedSaveCount == 0);
+		PropWriteStream attributes;
+		beds[i]->serializeAttr(attributes);
+		CHECK(attributes.getStream() == before[i]);
+		CHECK(g_game.getBedBySleeper(states[i].guid) == beds[i]);
+	}
+	states[1].failLoad = states[1].failSave = false;
+	CHECK(house->setOwner(0));
+	CHECK(house->ownerWrites == 1);
+	CHECK(house->getOwner() == 0);
+	for (size_t i = 0; i < 2; ++i) {
+		CHECK(states[i].committedSaveCount == 1);
+		CHECK(states[i].savedHealth == 70);
+		CHECK(beds[i]->getSleeper() == 0);
+		CHECK(g_game.getBedBySleeper(states[i].guid) == nullptr);
+	}
+	CHECK(house->setOwner(0));
+	CHECK(house->ownerWrites == 1);
+}
+
+} // namespace
+
+TEST_CASE(autoloot_nested_items_use_their_actual_parent_without_duplicates)
+{
+	ensureItemTypes();
+	AutoLootLifetimeFixture fixture;
+	auto nested = std::make_shared<Container>(ITEM_BAG, 8);
+	fixture.corpse->internalAddThing(nested.get());
+	auto first = fixture.addLoot(nested.get());
+	auto second = fixture.addLoot();
+	fixture.player->lootCorpse(fixture.corpse.get());
+	CHECK(first->getTopParent() == fixture.player.get());
+	CHECK(second->getTopParent() == fixture.player.get());
+	CHECK(fixture.corpse->empty());
+	CHECK(fixture.backpack->getItemTypeCount(2160) == 2);
+	fixture.player->lootCorpse(fixture.corpse.get());
+	CHECK(fixture.backpack->getItemTypeCount(2160) == 2);
+}
+
+TEST_CASE(autoloot_source_removed_by_callback_does_not_move_detached_loot)
+{
+	ensureItemTypes();
+	AutoLootLifetimeFixture fixture;
+	fixture.addLoot();
+	fixture.addLoot();
+	bool callbackRan = false;
+	auto event = std::make_unique<MoveEvent>(fixture.events.movement.events.getScriptInterfacePtr());
+	event->setEventType(MOVE_EVENT_REMOVE_ITEM);
+	event->addPosList(fixture.corpsePos);
+	event->moveFunction = [&](Item*, Item*, const Position&) {
+		if (!callbackRan) {
+			callbackRan = true;
+			CHECK(g_game.map.removeTile(fixture.corpsePos));
+		}
+		return 1;
+	};
+	CHECK(fixture.events.movement.events.registerLuaEvent(event.release()));
+	fixture.player->lootCorpse(fixture.corpse.get());
+	CHECK(callbackRan);
+	CHECK(g_game.map.getTile(fixture.corpsePos) == nullptr);
+	CHECK(fixture.backpack->getItemTypeCount(2160) == 1);
+}
+
+TEST_CASE(autoloot_filtered_nested_leaf_moves_without_moving_its_container)
+{
+	ensureItemTypes();
+	AutoLootLifetimeFixture fixture;
+	struct ListGuard {
+		const int64_t previousFree = ConfigManager::getInteger(ConfigManager::AUTOLOOT_MAXITEMS_FREE);
+		const int64_t previousPremium = ConfigManager::getInteger(ConfigManager::AUTOLOOT_MAXITEMS_PREMIUM);
+		~ListGuard()
+		{
+			Item::items.nameToItems.erase("pr264 lifetime loot");
+			ConfigManager::setInteger(ConfigManager::AUTOLOOT_MAXITEMS_FREE, previousFree);
+			ConfigManager::setInteger(ConfigManager::AUTOLOOT_MAXITEMS_PREMIUM, previousPremium);
+		}
+	} guard;
+	CHECK(Item::items.nameToItems.emplace("pr264 lifetime loot", 2160).second);
+	ConfigManager::setInteger(ConfigManager::AUTOLOOT_MAXITEMS_FREE, 5);
+	ConfigManager::setInteger(ConfigManager::AUTOLOOT_MAXITEMS_PREMIUM, 5);
+	fixture.player->parseAutoLootWindow("pr264 lifetime loot");
+	auto nested = std::make_shared<Container>(ITEM_BAG, 8);
+	fixture.corpse->internalAddThing(nested.get());
+	auto loot = fixture.addLoot(nested.get());
+	fixture.player->lootCorpse(fixture.corpse.get());
+	CHECK(loot->getParent() == fixture.backpack.get());
+	CHECK(nested->getParent() == fixture.corpse.get());
+	CHECK(nested->empty());
+	fixture.player->lootCorpse(fixture.corpse.get());
+	CHECK(fixture.backpack->getItemTypeCount(2160) == 1);
+}
+
+TEST_CASE(browse_field_removal_recreation_and_close_release_original_tile)
+{
+	ensureItemTypes();
+	QuickLootLifetimeFixture fixture;
+	auto* original = g_game.map.getTile(fixture.corpsePos);
+	const std::weak_ptr<Tile> weakOriginal = original->weak_from_this();
+	g_game.playerBrowseField(fixture.player->getID(), fixture.corpsePos);
+	auto browse = g_game.getBrowseFieldContainer(original, fixture.player->getInstanceID());
+	CHECK(browse);
+	CHECK(g_game.getBrowseFieldTile(browse.get()).get() == original);
+	CHECK(g_game.map.removeTile(fixture.corpsePos));
+	CHECK(browse->empty());
+	auto replacement = std::make_unique<DynamicTile>(fixture.corpsePos.x, fixture.corpsePos.y, fixture.corpsePos.z);
+	replacement->internalAddThing(makeTestGround().get());
+	g_game.map.setTile(fixture.corpsePos, std::move(replacement));
+	CHECK(g_game.getBrowseFieldContainer(g_game.map.getTile(fixture.corpsePos)) == nullptr);
+	const uint8_t cid = 0x0F - static_cast<uint8_t>((fixture.corpsePos.x % 3) * 3 + (fixture.corpsePos.y % 3));
+	fixture.player->closeContainer(cid);
+	g_game.cleanupBrowseFields();
+	browse.reset();
+	g_game.cleanup();
+	CHECK(weakOriginal.expired());
+	CHECK(g_game.map.getTile(fixture.corpsePos) != nullptr);
+}
+
+TEST_CASE(house_owner_bed_load_failure_preserves_the_entire_batch)
+{
+	checkHouseOwnerBedFailure(false);
+}
+
+TEST_CASE(house_owner_bed_save_failure_preserves_the_entire_batch)
+{
+	checkHouseOwnerBedFailure(true);
+}
+
+TEST_CASE(house_transfer_failure_releases_the_stale_document_identity)
+{
+	ensureItemTypes();
+	auto house = std::make_shared<OwnerTransitionTestHouse>(971);
+	CHECK(house->setOwner(971, false));
+	auto transferItem = house->getTransferItem();
+	CHECK(transferItem);
+	auto recipient = makeTestPlayer(972, "FailedHouseRecipient");
+	house->failLookup = true;
+	transferItem->onTradeEvent(ON_TRADE_TRANSFER, recipient.get());
+	CHECK(transferItem->getParent() == nullptr);
+	auto replacement = house->getTransferItem();
+	CHECK(replacement);
+	CHECK(replacement != transferItem);
+	CHECK(house->getOwner() == 971);
+}
+
+TEST_CASE(house_depot_transfer_survives_removal_of_a_queued_subcontainer)
+{
+	ensureItemTypes();
+	QuickLootLifetimeFixture fixture;
+	auto house = std::make_shared<OwnerTransitionTestHouse>(972);
+	CHECK(house->setOwner(fixture.player->getGUID(), false));
+	house->setTownId(1);
+	const Position pos{230, 230, 7};
+	fixture.tiles.track(pos.x, pos.y, pos.z);
+	auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
+	tile->internalAddThing(makeTestGround().get());
+	g_game.map.setTile(pos, std::move(tile));
+	auto root = std::make_shared<Container>(ITEM_BAG, 8);
+	g_game.map.getTile(pos)->internalAddThing(root.get());
+	auto trigger = fixture.addLoot(root.get());
+	auto queued = std::make_shared<Container>(ITEM_BAG, 8);
+	fixture.addLoot(queued.get());
+	root->internalAddThing(queued.get()); // Visited and queued before trigger.
+	const std::weak_ptr<Container> weakQueued = queued;
+	queued.reset();
+	auto callbackRan = std::make_shared<bool>(false);
+	auto event = std::make_unique<MoveEvent>(fixture.events.movement.events.getScriptInterfacePtr());
+	event->setEventType(MOVE_EVENT_REMOVE_ITEM);
+	event->addPosList(pos);
+	event->moveFunction = [trigger, weakQueued, callbackRan](Item* item, Item*, const Position&) {
+		if (item == trigger.get() && !*callbackRan) {
+			*callbackRan = true;
+			auto victim = weakQueued.lock();
+			CHECK(victim);
+			CHECK(g_game.internalRemoveItem(victim.get()) == RETURNVALUE_NOERROR);
+			g_game.cleanup();
+		}
+		return 1;
+	};
+	CHECK(fixture.events.movement.events.registerLuaEvent(event.release()));
+	CHECK(house->setOwner(0, true, fixture.player.get()));
+	CHECK(*callbackRan);
+	CHECK(weakQueued.expired());
+	CHECK(trigger->getParent() == fixture.player->getInbox(1));
+	CHECK(root->getParent() == fixture.player->getInbox(1));
+}
+
 TFS_TEST_MAIN()

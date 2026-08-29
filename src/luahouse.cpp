@@ -241,8 +241,7 @@ int luaHouseSetOwnerGuid(lua_State* L)
 		Player* previousPlayer = lua_gettop(L) >= 4 ? getUserdata<Player>(L, 4) : nullptr;
 
 		if (house->getType() == HOUSE_TYPE_GUILDHALL && guid_guild == 0) {
-			house->setOwner(0, updateDatabase, previousPlayer);
-			pushBoolean(L, true);
+			pushBoolean(L, house->setOwner(0, updateDatabase, previousPlayer));
 			return 1;
 		}
 
@@ -257,8 +256,7 @@ int luaHouseSetOwnerGuid(lua_State* L)
 				return 1;
 			}
 		}
-		house->setOwner(guid_guild, updateDatabase);
-		pushBoolean(L, true);
+		pushBoolean(L, house->setOwner(guid_guild, updateDatabase, previousPlayer));
 	} else {
 		lua_pushnil(L);
 	}

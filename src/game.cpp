@@ -468,7 +468,16 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 
 	for (const std::shared_ptr<Item>& itemRef : lootItems) {
 		Item* item = itemRef.get();
-		if (!item || item->isRemoved()) {
+		if (!item || item->isRemoved() || container->isRemoved() || player->isRemoved()) {
+			continue;
+		}
+		const Cylinder* parent = item->getParent();
+		// A selected bag can be moved before its contents are routed to their
+		// own categories. Continue only inside the corpse or this player.
+		while (parent && parent != container && parent != player) {
+			parent = parent->getParent();
+		}
+		if (!parent) {
 			continue;
 		}
 
@@ -507,7 +516,7 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, uint32_t maxCorpses,
                               bool& foundCorpse, ReturnValue& firstFailure)
 {
-	Tile* tile = game.map.getTile(pos);
+	const auto tile = game.getTileSharedRef(game.map.getTile(pos));
 	if (!tile) {
 		firstFailure = RETURNVALUE_NOTPOSSIBLE;
 		return 0;
@@ -519,9 +528,16 @@ uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, u
 	}
 
 	uint32_t lootedCorpses = 0;
-	for (const auto& itemRef : *itemList) {
+	const std::vector<std::shared_ptr<Item>> snapshot(itemList->begin(), itemList->end());
+	for (const auto& itemRef : snapshot) {
 		if (lootedCorpses >= maxCorpses) {
 			break;
+		}
+		if (game.map.getTile(pos) != tile.get()) {
+			break;
+		}
+		if (!itemRef || itemRef->isRemoved() || tile->getThingIndex(itemRef.get()) == -1) {
+			continue;
 		}
 
 		Container* container = itemRef ? itemRef->getContainer() : nullptr;
@@ -2055,6 +2071,30 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
                                    Creature* actor /* = nullptr*/, Item* tradeItem /* = nullptr*/,
                                    const Position* fromPos /*= nullptr*/, const Position* toPos /*= nullptr*/)
 {
+	if (!fromCylinder || !toCylinder || !item) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+	const auto itemRef = getItemSharedRef(item);
+	if (!itemRef) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+	// Removal/equip callbacks may release either cylinder while the rest of
+	// this move still needs it. Stack-owned internal cylinders have no anchor.
+	auto retainCylinder = [](Cylinder* cylinder) -> std::shared_ptr<Thing> {
+		if (Item* owner = cylinder->getItem()) {
+			return owner->weak_from_this().lock();
+		}
+		if (Creature* owner = cylinder->getCreature()) {
+			return owner->weak_from_this().lock();
+		}
+		if (auto tile = dynamic_cast<Tile*>(cylinder)) {
+			return tile->weak_from_this().lock();
+		}
+		return nullptr;
+	};
+	const auto sourceRef = retainCylinder(fromCylinder);
+	const auto originalDestinationRef = retainCylinder(toCylinder);
+	const auto actorRef = actor ? actor->weak_from_this().lock() : nullptr;
 	std::shared_ptr<Tile> browseFieldTile = getBrowseFieldTile(fromCylinder);
 	if (browseFieldTile) {
 		fromCylinder = browseFieldTile.get();
@@ -2078,6 +2118,9 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		                                                        *fromPos, *toPos, fromCylinder, toCylinder);
 		if (ret != RETURNVALUE_NOERROR) {
 			return ret;
+		}
+		if (item->isRemoved() || fromCylinder->getThingIndex(item) == -1 || toCylinder->isRemoved()) {
+			return RETURNVALUE_NOTPOSSIBLE;
 		}
 
 		if (!actorPlayer->hasFlag(PlayerFlag_CanEditHouses)) {
@@ -2128,6 +2171,8 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 			break;
 		}
 	}
+	const auto destinationRef = retainCylinder(toCylinder);
+	const auto destinationItemRef = getItemSharedRef(toItem);
 
 	if (actorPlayer) {
 		const ReturnValue storeInboxLockRet = getStoreInboxLockedItemMoveReturn(item);
@@ -2296,10 +2341,6 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	int32_t itemIndex = fromCylinder->getThingIndex(item);
 	Item* updateItem = nullptr;
 	std::shared_ptr<Item> clonedMoveItem;
-	auto itemRef = getItemSharedRef(item);
-	if (!itemRef) {
-		return RETURNVALUE_NOTPOSSIBLE;
-	}
 	fromCylinder->removeThing(item, m);
 
 	// update item(s)
