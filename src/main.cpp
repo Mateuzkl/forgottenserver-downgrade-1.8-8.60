@@ -5,6 +5,8 @@
 #include "outputmessage.h"
 #include "tools.h"
 
+#include <cstdio>
+
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
