@@ -97,7 +97,7 @@ void bench_condition_copy(benchmark::State& state)
 	const ConditionDamage source = makeDamageCondition(rounds);
 	for ([[maybe_unused]] auto _ : state) {
 		ConditionDamage copy(source);
-		benchmark::DoNotOptimize(copy.getTotalDamage());
+		benchmark::DoNotOptimize(copy);
 	}
 	state.SetItemsProcessed(state.iterations() * rounds);
 }

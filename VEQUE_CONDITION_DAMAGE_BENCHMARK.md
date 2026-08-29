@@ -11,7 +11,7 @@ Build system: CMake 3.28.3 + Ninja 1.11.1
 
 **SAFE TO MERGE**
 
-The migration is restricted to `ConditionDamage::damageList`. The Linux Release build and the complete non-benchmark test suite pass on both the baseline and the branch. The dedicated behavior tests pass under Release and under AddressSanitizer plus UndefinedBehaviorSanitizer. No tested benchmark regressed: CPU time improved from 9.29% to 98.04%, depending on the workload. Valgrind found no invalid access or leak, and the queue-churn workload reduced allocation calls by 98.38%.
+The migration is restricted to `ConditionDamage::damageList`. The Linux Release build and the complete non-benchmark test suite pass on both the baseline and the branch. The dedicated behavior tests pass under Release and under AddressSanitizer plus UndefinedBehaviorSanitizer. No tested benchmark regressed: CPU time improved from 9.29% to 99.20%, depending on the workload. Valgrind found no invalid access or leak, and the queue-churn workload reduced allocation calls by 98.38%.
 
 ThreadSanitizer compiled successfully after retaining its third-party warning as a warning, but its runtime aborted before `main` with `FATAL: ThreadSanitizer: unexpected memory mapping` under WSL2. Therefore TSan is explicitly inconclusive, not clean or failed. A native Windows toolchain was not available on this host.
 
@@ -65,7 +65,7 @@ The +8-byte object cost is outweighed in the measured dynamic workloads by fewer
 
 ## Tests added
 
-Nine automated test cases cover all requested behaviors:
+Nine automated tests cover the following twelve behavior categories:
 
 1. poison, fire, and energy;
 2. several `IntervalInfo` entries;
@@ -114,6 +114,8 @@ The first parallel ASan/UBSan attempt exhausted the 7.7 GiB WSL link environment
 - CPU time is reported in nanoseconds per benchmark iteration.
 - For ten observations, nearest-rank p95 is the maximum.
 
+After the copy benchmark sink was tightened to observe the copied object directly, the two copy scenarios were rerun in balanced A-B-B-A order with ten observations and `--benchmark_min_time=0.20s`. The corrected copy results below replace the original measurements; the other eight scenarios are unchanged.
+
 Scenarios exercise actual `ConditionDamage` construction, queue population, ticking, copying, and stream serialization. Damage delivery is intentionally suppressed by a test creature so the measurement isolates condition queue behavior rather than combat scripting.
 
 ## CPU benchmark: before vs after
@@ -128,8 +130,8 @@ Lower is better.
 | 1,000 creatures with DoT | 762,328.703 | 342,220.721 | **-55.11%** | 772,104.487 | 338,682.905 | 704,350.000 | 328,899.361 | 814,847.059 | 382,213.099 |
 | 10,000 conditions | 9,906,422.333 | 4,896,878.553 | **-50.57%** | 9,779,661.667 | 4,777,969.792 | 8,089,240.000 | 4,451,177.778 | 11,364,800.000 | 5,689,325.926 |
 | Queue churn, 10,000 operations | 930,030.909 | 650,841.120 | **-30.02%** | 929,945.508 | 634,083.929 | 867,225.444 | 598,038.288 | 975,081.657 | 735,648.168 |
-| Copy, 8 ticks | 152.320 | 27.172 | **-82.16%** | 150.471 | 27.193 | 132.622 | 25.839 | 178.187 | 28.408 |
-| Copy, 1,000 ticks | 24,609.280 | 481.697 | **-98.04%** | 24,694.159 | 486.850 | 22,374.556 | 439.963 | 26,461.295 | 534.921 |
+| Copy, 8 ticks | 112.950 | 17.830 | **-84.22%** | 113.420 | 17.240 | 110.470 | 16.910 | 116.340 | 23.510 |
+| Copy, 1,000 ticks | 17,200.020 | 137.930 | **-99.20%** | 17,171.780 | 136.760 | 16,763.770 | 135.040 | 17,679.780 | 146.330 |
 | Serialize/unserialize, 8 ticks | 908.886 | 814.591 | **-10.37%** | 903.231 | 811.406 | 838.555 | 763.007 | 1,043.691 | 909.708 |
 | Serialize/unserialize, 256 ticks | 22,901.805 | 14,373.501 | **-37.24%** | 22,986.875 | 14,361.025 | 21,599.532 | 13,920.007 | 24,726.012 | 14,763.288 |
 

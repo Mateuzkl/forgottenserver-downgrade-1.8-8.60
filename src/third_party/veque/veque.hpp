@@ -878,7 +878,8 @@ namespace veque
         {
             static_assert( sizeof...(args) <= 1, "This is for default- or copy-constructing" );
 
-            if constexpr ( std::is_trivially_copy_constructible_v<T> && _calls_default_constructor_directly )
+            if constexpr ( std::is_trivially_copy_constructible_v<T> && _calls_default_constructor_directly &&
+                           (sizeof...(args) != 0 || std::is_trivially_default_constructible_v<T>) )
             {
                 if constexpr ( sizeof...(args) == 0 )
                 {
