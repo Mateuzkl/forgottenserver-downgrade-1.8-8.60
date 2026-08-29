@@ -5,9 +5,13 @@
 #include "outputmessage.h"
 #include "tools.h"
 
+#include <cstdio>
+
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
+#else
+#include <signal.h>
 #endif
 
 namespace {
@@ -45,6 +49,17 @@ void waitForInteractiveConsoleOnStartupFailure()
 }
 #else
 void waitForInteractiveConsoleOnStartupFailure() {}
+
+bool ignoreSigPipe()
+{
+	struct sigaction action {};
+	action.sa_handler = SIG_IGN;
+	if (sigemptyset(&action.sa_mask) != 0 || sigaction(SIGPIPE, &action, nullptr) != 0) {
+		std::perror("Failed to ignore SIGPIPE");
+		return false;
+	}
+	return true;
+}
 #endif
 
 } // namespace
@@ -87,6 +102,12 @@ static bool argumentsHandler(const std::vector<std::string_view>& args)
 
 int main(int argc, const char** argv)
 {
+#ifndef _WIN32
+	if (!ignoreSigPipe()) {
+		return EXIT_FAILURE;
+	}
+#endif
+
 	std::vector<std::string_view> args(argv, argv + argc);
 	if (!argumentsHandler(args)) {
 		return 1;
