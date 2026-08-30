@@ -181,6 +181,17 @@ characterBazaarCommissionPercent = 10
 characterBazaarMinDurationHours = 24
 characterBazaarMaxDurationDays = 7
 
+-- Server Minimap
+-- Optional automatic minimap synchronization for compatible OTClient clients.
+-- The classic OTMM is generated from the loaded map. The HD artifact must be a
+-- pre-rendered HDRB raster archive; structured HD item/tile archives are rejected.
+-- Extended opcode 230 is reserved by this feature. No map or raster asset is
+-- included in the source tree.
+serverMinimapEnabled = false
+serverMinimapMaxSizeMB = 16
+serverMinimapHDRasterFile = "data/minimap/minimap-hd-raster.hdr"
+serverMinimapHDRasterMaxSizeMB = 256
+
 -- Enable Task Hunt / Task Board system.
 -- Requires compatible AstraClient/OTCv8 support.
 -- Default: false keeps classic 8.60 behaviour.

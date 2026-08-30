@@ -601,6 +601,7 @@ bool Items::loadFromOtb(const std::string& file)
 		uint16_t wareId = 0;
 		uint8_t lightLevel = 0;
 		uint8_t lightColor = 0;
+		uint8_t minimapColor = 0;
 		uint8_t alwaysOnTopOrder = 0;
 
 		uint8_t attrib;
@@ -656,6 +657,19 @@ bool Items::loadFromOtb(const std::string& file)
 
 					lightLevel = static_cast<uint8_t>(lb2.lightLevel);
 					lightColor = static_cast<uint8_t>(lb2.lightColor);
+					break;
+				}
+
+				case ITEM_ATTR_MINIMAPCOLOR: {
+					if (datalen != sizeof(uint16_t)) {
+						return false;
+					}
+
+					uint16_t color = 0;
+					if (!stream.read<uint16_t>(color)) {
+						return false;
+					}
+					minimapColor = static_cast<uint8_t>(color);
 					break;
 				}
 
@@ -757,6 +771,7 @@ bool Items::loadFromOtb(const std::string& file)
 		iType.speed = speed;
 		iType.lightLevel = lightLevel;
 		iType.lightColor = lightColor;
+		iType.minimapColor = minimapColor;
 		iType.wareId = wareId;
 		iType.alwaysOnTopOrder = alwaysOnTopOrder;
 	}

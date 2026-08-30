@@ -466,6 +466,7 @@ public:
 	uint8_t alwaysOnTopOrder = 0;
 	uint8_t lightLevel = 0;
 	uint8_t lightColor = 0;
+	uint8_t minimapColor = 0;
 	uint8_t shootRange = 1;
 	int8_t hitChance = 0;
 

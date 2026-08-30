@@ -325,6 +325,7 @@ private:
 
 	// otclient
 	void parseExtendedOpcode(NetworkMessage& msg);
+	void parseServerMinimapRequest(std::string_view buffer);
 	bool consumeHelperCastOnFoot()
 	{
 		const bool value = helperCastOnFootNextSay;
@@ -450,6 +451,12 @@ private:
 	std::array<CustomPingEntry, CUSTOM_PING_MAX_TRACKED> customPings = {};
 	int64_t nextCastSwitchTime = 0;
 	int64_t nextCastSwitchCooldownMessageTime = 0;
+	bool serverMinimapManifestHandled = false;
+	bool serverMinimapHDManifestHandled = false;
+	std::string serverMinimapTransferVersion;
+	std::string serverMinimapHDTransferVersion;
+	size_t serverMinimapNextChunk = 0;
+	size_t serverMinimapHDNextChunk = 0;
 
 	int64_t moveWindowStart = 0;
 	uint16_t movePacketCount = 0;

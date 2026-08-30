@@ -1473,6 +1473,47 @@ void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const std::shared_ptr<
 	setBasicTile(x, y, z, MapCache::tryGetTileFromCache(std::move(cacheCandidate)));
 }
 
+void Map::forEachStaticTile(
+    const std::function<void(const Position&, const Tile*, const BasicTile*)>& visitor) const
+{
+	auto walk = [&](auto&& self, const QTreeNode* node, int32_t level, uint32_t baseX, uint32_t baseY) -> void {
+		if (!node) {
+			return;
+		}
+
+		if (node->isLeaf()) {
+			const auto* leaf = static_cast<const QTreeLeafNode*>(node);
+			for (uint8_t z = 0; z < MAP_MAX_LAYERS; ++z) {
+				const Floor* floor = leaf->getFloor(z);
+				if (!floor) {
+					continue;
+				}
+
+				for (uint32_t x = 0; x < FLOOR_SIZE; ++x) {
+					for (uint32_t y = 0; y < FLOOR_SIZE; ++y) {
+						const auto& [tile, cacheId] = floor->tiles[x][y];
+						const BasicTile* basicTile = tile ? nullptr : MapCache::getTileById(cacheId);
+						if (tile || basicTile) {
+							visitor(Position(static_cast<uint16_t>(baseX + x),
+							                 static_cast<uint16_t>(baseY + y), z),
+							        tile.get(), basicTile);
+						}
+					}
+				}
+			}
+			return;
+		}
+
+		for (uint32_t index = 0; index < 4; ++index) {
+			const uint32_t childX = baseX | ((index & 1U) ? (1U << level) : 0U);
+			const uint32_t childY = baseY | ((index & 2U) ? (1U << level) : 0U);
+			self(self, node->child[index].get(), level - 1, childX, childY);
+		}
+	};
+
+	walk(walk, &root, 15, 0, 0);
+}
+
 void Map::forEachBasicFloorBlock(
     const std::function<void(uint16_t, uint16_t, uint8_t, const std::array<uint32_t, FLOOR_SIZE * FLOOR_SIZE>&)>& visitor) const
 {
