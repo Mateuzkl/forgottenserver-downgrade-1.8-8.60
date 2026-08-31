@@ -1772,7 +1772,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xCD:
-			if (isAstraClient) {
+			if (isAstraClient || isFonticakClient) {
 				parseInspectionObject(msg);
 			}
 			break;
@@ -4685,7 +4685,7 @@ void ProtocolGame::sendOutfitWindow()
 
 void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType)
 {
-	if (!isAstraClient) {
+	if (!isAstraClient && !isFonticakClient) {
 		return;
 	}
 
@@ -4722,9 +4722,41 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 		msg.addItem(itemId, itemCount, shouldSendItemTierData(), shouldSendItemTierByte(),
 		            shouldSendQuickLootFlags(), canSendAstraItemState(), shouldSendAstraQuiverCountU16());
 	}
-	msg.addByte(0);
+	// Imbuement icon data for the UI
+	{
+		const uint16_t totalSlots = item ? item->getImbuementSlots() : itemType.imbuementSlot;
+		msg.addByte(static_cast<uint8_t>(totalSlots));
+
+		if (item && totalSlots > 0) {
+			const auto& imbuements = item->getImbuements();
+			for (uint16_t slotIndex = 0; slotIndex < totalSlots; ++slotIndex) {
+				if (slotIndex < imbuements.size()) {
+					const auto& imb = imbuements[slotIndex];
+					const ImbuementDefinition* def = nullptr;
+					for (const auto& d : Imbuements::getInstance().getDefinitions()) {
+						if (d.imbuementType == imb->imbuetype && d.baseId == imb->baseId) {
+							def = &d;
+							break;
+						}
+					}
+					if (def) {
+						msg.add<uint16_t>(def->iconId);
+					} else {
+						msg.add<uint16_t>(0);
+					}
+				} else {
+					msg.add<uint16_t>(0);
+				}
+			}
+		} else {
+			for (uint16_t i = 0; i < totalSlots; ++i) {
+				msg.add<uint16_t>(0);
+			}
+		}
+	}
 
 	std::vector<std::pair<std::string, std::string>> descriptions;
+
 	if (!itemType.description.empty()) {
 		descriptions.emplace_back("Description", itemType.description);
 	}
@@ -4732,6 +4764,207 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 		const std::string weight = item->getWeightDescription();
 		if (!weight.empty()) {
 			descriptions.emplace_back("Weight", weight);
+		}
+	} else if (itemType.weight > 0) {
+		const std::string weight = Item::getWeightDescription(itemType, itemType.weight * itemCount, itemCount);
+		if (!weight.empty()) {
+			descriptions.emplace_back("Weight", weight);
+		}
+	}
+
+	if (itemType.armor > 0) {
+		descriptions.emplace_back("Armor", std::to_string(itemType.armor));
+	}
+
+	static const char* combatNames[] = {
+		"physical", "energy", "earth", "fire", "undefined", "lifedrain", "manadrain",
+		"healing", "drown", "ice", "holy", "death", "agony"
+	};
+
+	if (itemType.abilities) {
+		std::string protectionParts;
+		for (int i = 0; i < COMBAT_COUNT; ++i) {
+			if (itemType.abilities->absorbPercent[i] > 0) {
+				if (!protectionParts.empty()) {
+					protectionParts += ", ";
+				}
+				protectionParts += std::string(combatNames[i]) + " +" + std::to_string(itemType.abilities->absorbPercent[i]) + "%";
+			}
+			if (itemType.abilities->fieldAbsorbPercent[i] > 0) {
+				if (!protectionParts.empty()) {
+					protectionParts += ", ";
+				}
+				protectionParts += std::string(combatNames[i]) + " field +" + std::to_string(itemType.abilities->fieldAbsorbPercent[i]) + "%";
+			}
+		}
+		if (!protectionParts.empty()) {
+			descriptions.emplace_back("Protection", protectionParts);
+		}
+	}
+
+	if (itemType.defense > 0) {
+		descriptions.emplace_back("Defense", std::to_string(itemType.defense));
+	}
+	if (itemType.extraDefense != 0) {
+		descriptions.emplace_back("Extra Def", std::to_string(itemType.extraDefense));
+	}
+
+	static const char* weaponTypeNames[] = {
+		"", "sword", "club", "axe", "shield", "distance", "wand", "amunition", "quiver", "fist"
+	};
+	if (itemType.weaponType != WEAPON_NONE) {
+		const char* wname = (itemType.weaponType <= WEAPON_FIST) ? weaponTypeNames[itemType.weaponType] : "";
+		if (wname[0] != '\0') {
+			descriptions.emplace_back("Weapon Type", wname);
+		}
+	}
+
+	if (itemType.attack != 0) {
+		std::string attackStr = std::to_string(itemType.attack);
+		if (itemType.abilities && itemType.abilities->elementType != COMBAT_NONE && itemType.abilities->elementDamage > 0) {
+			static const char* elementNames[] = {
+				"", "energy", "earth", "fire", "", "lifedrain", "manadrain",
+				"", "drown", "ice", "holy", "death", ""
+			};
+			int idx = 0;
+			uint64_t mask = itemType.abilities->elementType;
+			while (mask > 0) {
+				if ((mask & 1) && elementNames[idx][0] != '\0') {
+					attackStr += ", " + std::string(elementNames[idx]) + " +" + std::to_string(itemType.abilities->elementDamage);
+				}
+				mask >>= 1;
+				idx++;
+			}
+		}
+		descriptions.emplace_back("Attack", attackStr);
+	}
+	if (itemType.hitChance != 0) {
+		descriptions.emplace_back("Hit Chance", std::string("+") + std::to_string(static_cast<int>(itemType.hitChance)) + "%");
+	}
+	if (itemType.shootRange > 1) {
+		descriptions.emplace_back("Range", std::to_string(itemType.shootRange));
+	}
+
+	static const char* skillNames[] = {
+		"Fist", "Club", "Sword", "Axe", "Distance", "Shielding", "Fishing"
+	};
+	static const char* statNames[] = {
+		"", "", "", "Magic Level", ""
+	};
+	static const char* specialSkillNames[] = {
+		"Critical Hit Chance", "Critical Hit Amount",
+		"Life Leech Chance", "Life Leech Amount",
+		"Mana Leech Chance", "Mana Leech Amount"
+	};
+	if (itemType.abilities) {
+		std::string skillBonusParts;
+
+		for (int i = STAT_FIRST; i <= STAT_LAST; ++i) {
+			if (itemType.abilities->stats[i] > 0 && statNames[i][0] != '\0') {
+				if (!skillBonusParts.empty()) skillBonusParts += ", ";
+				skillBonusParts += std::string(statNames[i]) + " +" + std::to_string(itemType.abilities->stats[i]);
+			}
+		}
+		for (int i = SKILL_FIST; i <= SKILL_FISHING; ++i) {
+			if (itemType.abilities->skills[i] > 0) {
+				if (!skillBonusParts.empty()) skillBonusParts += ", ";
+				skillBonusParts += std::string(skillNames[i]) + " +" + std::to_string(itemType.abilities->skills[i]);
+			}
+		}
+		if (itemType.abilities->speed > 0) {
+			if (!skillBonusParts.empty()) skillBonusParts += ", ";
+			skillBonusParts += "Speed +" + std::to_string(itemType.abilities->speed);
+		}
+		for (int i = SPECIALSKILL_FIRST; i <= SPECIALSKILL_LAST; ++i) {
+			if (itemType.abilities->specialSkills[i] > 0) {
+				if (!skillBonusParts.empty()) skillBonusParts += ", ";
+				skillBonusParts += std::string(specialSkillNames[i]) + " +" + std::to_string(itemType.abilities->specialSkills[i]) + "%";
+			}
+		}
+		if (!skillBonusParts.empty()) {
+			descriptions.emplace_back("Skill Bonus", skillBonusParts);
+		}
+	}
+
+	const uint16_t totalSlots = item ? item->getImbuementSlots() : itemType.imbuementSlot;
+	if (totalSlots > 0) {
+		descriptions.emplace_back("Imbuement Slots", std::to_string(totalSlots));
+
+		if (item) {
+			const auto& imbuements = item->getImbuements();
+			for (uint16_t slotIndex = 0; slotIndex < totalSlots; ++slotIndex) {
+				std::string slotKey = "Imbuement Slot " + std::to_string(slotIndex + 1);
+				if (slotIndex < imbuements.size()) {
+					const auto& imb = imbuements[slotIndex];
+					const ImbuementDefinition* def = nullptr;
+					for (const auto& d : Imbuements::getInstance().getDefinitions()) {
+						if (d.imbuementType == imb->imbuetype && d.baseId == imb->baseId) {
+							def = &d;
+							break;
+						}
+					}
+					if (def) {
+						descriptions.emplace_back(slotKey, def->name);
+					} else {
+						descriptions.emplace_back(slotKey, "Imbuement");
+					}
+				} else {
+					descriptions.emplace_back(slotKey, "(Empty Slot)");
+				}
+			}
+		} else {
+			for (uint16_t slotIndex = 0; slotIndex < totalSlots; ++slotIndex) {
+				descriptions.emplace_back("Imbuement Slot " + std::to_string(slotIndex + 1), "(Empty Slot)");
+			}
+		}
+	}
+
+	const uint8_t itemTier = item ? item->getTier() : static_cast<uint8_t>(itemType.tier);
+	if (itemTier > 0) {
+		descriptions.emplace_back("Tier", std::to_string(itemTier));
+	}
+	if (itemType.classification > 0) {
+		descriptions.emplace_back("Classification", std::to_string(itemType.classification));
+	}
+
+	if (itemType.minReqLevel > 0) {
+		descriptions.emplace_back("Required Level", std::to_string(itemType.minReqLevel));
+	}
+	if (itemType.minReqMagicLevel > 0) {
+		descriptions.emplace_back("Required Magic Level", std::to_string(itemType.minReqMagicLevel));
+	}
+
+	if (!itemType.vocationString.empty()) {
+		descriptions.emplace_back("Professions", itemType.vocationString);
+	}
+
+	descriptions.emplace_back("Tradeable", itemType.isPickupable() ? "yes" : "no");
+
+	if (itemType.slotPosition != SLOTP_WHEREEVER) {
+		std::string bodyPosition;
+		if (itemType.slotPosition & SLOTP_HEAD) {
+			bodyPosition = "head";
+		} else if (itemType.slotPosition & SLOTP_NECKLACE) {
+			bodyPosition = "necklace";
+		} else if (itemType.slotPosition & SLOTP_BACKPACK) {
+			bodyPosition = "backpack";
+		} else if (itemType.slotPosition & SLOTP_ARMOR) {
+			bodyPosition = "body";
+		} else if (itemType.slotPosition & SLOTP_RIGHT) {
+			bodyPosition = "right hand";
+		} else if (itemType.slotPosition & SLOTP_LEFT) {
+			bodyPosition = "left hand";
+		} else if (itemType.slotPosition & SLOTP_LEGS) {
+			bodyPosition = "legs";
+		} else if (itemType.slotPosition & SLOTP_FEET) {
+			bodyPosition = "feet";
+		} else if (itemType.slotPosition & SLOTP_RING) {
+			bodyPosition = "ring";
+		} else if (itemType.slotPosition & SLOTP_AMMO) {
+			bodyPosition = "amunition";
+		}
+		if (!bodyPosition.empty()) {
+			descriptions.emplace_back("Body Position", bodyPosition);
 		}
 	}
 

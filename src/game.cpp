@@ -3838,7 +3838,7 @@ void Game::playerInspectItem(uint32_t playerId, const Position& pos)
 {
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
-	if (!player || !player->isAstraClient()) {
+	if (!player || !(player->isAstraClient() || player->isFonticakClient())) {
 		return;
 	}
 
@@ -3875,7 +3875,7 @@ void Game::playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCou
 {
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
-	if (!player || !player->isAstraClient() || itemId >= Item::items.size() || Item::items[itemId].id == 0) {
+	if (!player || !(player->isAstraClient() || player->isFonticakClient()) || itemId >= Item::items.size() || Item::items[itemId].id == 0) {
 		return;
 	}
 	player->sendItemInspection(nullptr, itemId, itemCount, inspectionType);
