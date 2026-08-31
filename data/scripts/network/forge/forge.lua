@@ -128,6 +128,7 @@ local SLIVERS_GENERATED = 3
 local SLIVERS_TO_CORE = 50
 local MAX_DUST_LIMIT = 325
 local FORGE_HISTORY_LIMIT = 50
+local FORGE_HISTORY_PAGE_SIZE = 10
 
 local DUST_FUSION = 100
 local DUST_FUSION_CONVERGENCE = 130
@@ -762,15 +763,25 @@ local function addHistory(player, action, details)
 		" ORDER BY `created_at` DESC, `id` DESC LIMIT " .. FORGE_HISTORY_LIMIT .. ") AS `keep_history`)")
 end
 
-local function sendHistory(player)
+local function sendHistory(player, requestedPage)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
 
 	local history = {}
+	local page = math.max(tonumber(requestedPage) or 0, 0)
+	local totalHistory = 0
 	if ensureForgeHistoryTable() then
+		local countResult = db.storeQuery("SELECT COUNT(*) AS `total` FROM `player_forge_history` WHERE `player_id` = " .. player:getGuid())
+		if countResult ~= false then
+			totalHistory = result.getDataInt(countResult, "total")
+			result.free(countResult)
+		end
+
+		local pageCount = math.max(1, math.ceil(totalHistory / FORGE_HISTORY_PAGE_SIZE))
+		page = math.min(page, pageCount - 1)
 		local resultId = db.storeQuery("SELECT `created_at`, `action`, `details` FROM `player_forge_history` WHERE `player_id` = " ..
-			player:getGuid() .. " ORDER BY `created_at` DESC, `id` DESC LIMIT " .. FORGE_HISTORY_LIMIT)
+			player:getGuid() .. " ORDER BY `created_at` DESC, `id` DESC LIMIT " .. (page * FORGE_HISTORY_PAGE_SIZE) .. ", " .. FORGE_HISTORY_PAGE_SIZE)
 		if resultId ~= false then
 			repeat
 				history[#history + 1] = {
@@ -786,6 +797,8 @@ local function sendHistory(player)
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_FORGE_SEND)
 	out:addByte(RESPONSE_HISTORY)
+	out:addU16(page)
+	out:addU16(math.max(1, math.ceil(totalHistory / FORGE_HISTORY_PAGE_SIZE)))
 	out:addU16(math.min(#history, 0xFFFF))
 	for i = 1, math.min(#history, 0xFFFF) do
 		out:addU32(history[i][1])
@@ -1174,7 +1187,7 @@ function forgeHandler.onReceive(player, msg)
 	elseif action == REQUEST_CONVERT then
 		handleConvert(player, msg)
 	elseif action == REQUEST_HISTORY then
-		sendHistory(player)
+		sendHistory(player, msg:len() - msg:tell() >= 2 and msg:getU16() or 0)
 	else
 		debugForge(player, "packet ignored: unknown action=" .. tostring(action))
 	end
