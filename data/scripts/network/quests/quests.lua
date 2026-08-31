@@ -12,7 +12,9 @@ log:register()
 local line = PacketHandler(0xF1)
 
 function line.onReceive(player, msg)
-	if not NetworkGuard.cooldown(player, "quest-line", 250) then
+	-- Quest Line requests are lightweight and the client may switch quests
+	-- quickly. Keep a small anti-spam guard without dropping the latest view.
+	if not NetworkGuard.cooldown(player, "quest-line", 50) then
 		return
 	end
 
