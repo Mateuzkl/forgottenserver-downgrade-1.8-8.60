@@ -2195,7 +2195,7 @@ void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 	} else {
 		newOutfit.lookMount = 0;
 	}
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient) {
 		const uint16_t requestedFamiliar = msg.get<uint16_t>();
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		newOutfit.lookFamiliar =
@@ -4562,7 +4562,7 @@ void ProtocolGame::sendOutfitWindow()
 	}
 
 	AddOutfit(msg, currentOutfit);
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient) {
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		if (!familiar || currentOutfit.lookFamiliar != familiar->lookType) {
 			currentOutfit.lookFamiliar = 0;
@@ -4645,7 +4645,7 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient) {
 		const auto familiar = Familiar::getFamiliarInfo(player.get());
 		msg.add<uint16_t>(familiar ? 1 : 0);
 		if (familiar) {
@@ -5488,6 +5488,10 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
+	}
+	// Fonticak outfit familiar extension (feature id 138).
+	if (isFonticakClient) {
+		features[GameFeature::PlayerFamiliars] = true;
 	}
 	if (supportsNativeZoneWeather()) {
 		features[GameFeature::ZoneWeather] = true;
