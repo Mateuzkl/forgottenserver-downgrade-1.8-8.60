@@ -3129,7 +3129,7 @@ void ProtocolGame::sendStats()
 
 void ProtocolGame::sendBasicData()
 {
-	if (!player || !isAstraClient) {
+	if (!player || (!isAstraClient && !isFonticakClient)) {
 		return;
 	}
 
@@ -3145,13 +3145,28 @@ void ProtocolGame::sendBasicData()
 	// prey - OTC client expects 1 byte for prey status when GamePrey feature is enabled
 	msg.addByte(0x00);
 
+	// AstraClient always reads U16 spell ids (no GameUshortSpell gate), so keep
+	// them wide for Astra regardless of the protocol version.
+	const bool usesU16SpellIds = isAstraClient || getVersion() >= 1300;
+	constexpr uint16_t maxU8SpellId = std::numeric_limits<uint8_t>::max();
+
 	std::vector<uint16_t> knownSpells;
 	if (g_spells) {
 		for (const auto& entry : g_spells->getInstantSpells()) {
 			const auto& spell = entry.second;
-			if (spell.getId() != 0 && spell.canCast(player.get())) {
-				knownSpells.push_back(spell.getId());
+			const uint16_t spellId = spell.getId();
+
+			if (spellId == 0 || !spell.canCast(player.get())) {
+				continue;
 			}
+
+			// Protocols without GameUshortSpell read one byte per spell.
+			// Skip unsupported IDs instead of truncating them on the wire.
+			if (!usesU16SpellIds && spellId > maxU8SpellId) {
+				continue;
+			}
+
+			knownSpells.push_back(spellId);
 		}
 	}
 
@@ -3159,10 +3174,20 @@ void ProtocolGame::sendBasicData()
 	knownSpells.erase(std::unique(knownSpells.begin(), knownSpells.end()), knownSpells.end());
 
 	msg.add<uint16_t>(static_cast<uint16_t>(knownSpells.size()));
-	for (uint16_t spellId : knownSpells) {
-		msg.add<uint16_t>(spellId);
+	for (const uint16_t spellId : knownSpells) {
+		if (usesU16SpellIds) {
+			msg.add<uint16_t>(spellId);
+		} else {
+			msg.addByte(static_cast<uint8_t>(spellId));
+		}
 	}
-	msg.addByte(player->getVocation()->getMagicShield());
+
+	// AstraClient always reads the magic shield byte after the spell list, so
+	// send it for Astra even on protocols older than 1281.
+	if (isAstraClient || getVersion() >= 1281) {
+		const auto* vocation = player->getVocation();
+		msg.addByte(vocation ? vocation->getMagicShield() : 0);
+	}
 
 	writeToOutputBuffer(msg);
 }
@@ -4162,7 +4187,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	sendStats();
 	sendSkills();
 
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient) {
 		sendBasicData();
 	}
 
