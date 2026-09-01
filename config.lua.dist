@@ -173,7 +173,9 @@ enableQuickLoot = true
 quickLootMaxCorpses = 30
 
 -- Allow the /reload command (god only). Set false to disable it.
-reloadCommandEnabled = false
+-- Be careful when using it: it reloads all scripts, which can overload the server
+-- and may even cause a crash if you have a lot of files or many modifications.
+reloadCommandEnabled = true
 
 -- Character Bazaar (accounts.tibia_coins is the transferable coin balance)
 characterBazaarEnabled = false

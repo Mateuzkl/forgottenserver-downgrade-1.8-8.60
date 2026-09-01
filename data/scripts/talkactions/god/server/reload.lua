@@ -62,7 +62,7 @@ function talkaction.onSay(player, words, param)
 	logCommand(player, words, param)
 
 	if not configManager.getBoolean(configKeys.RELOAD_COMMAND_ENABLED) then
-		player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "The reload command is disabled in config.lua.")
+		player:sendTextMessage(MESSAGE_INFO_DESCR, "The reload command is disabled in config.lua.")
 		return false
 	end
 
