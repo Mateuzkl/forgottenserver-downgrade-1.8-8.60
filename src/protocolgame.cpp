@@ -4940,32 +4940,30 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 
 	descriptions.emplace_back("Tradeable", itemType.isPickupable() ? "yes" : "no");
 
-	if (itemType.slotPosition != SLOTP_WHEREEVER) {
-		std::string bodyPosition;
-		if (itemType.slotPosition & SLOTP_HEAD) {
-			bodyPosition = "head";
-		} else if (itemType.slotPosition & SLOTP_NECKLACE) {
-			bodyPosition = "necklace";
-		} else if (itemType.slotPosition & SLOTP_BACKPACK) {
-			bodyPosition = "backpack";
-		} else if (itemType.slotPosition & SLOTP_ARMOR) {
-			bodyPosition = "body";
-		} else if (itemType.slotPosition & SLOTP_RIGHT) {
-			bodyPosition = "right hand";
-		} else if (itemType.slotPosition & SLOTP_LEFT) {
-			bodyPosition = "left hand";
-		} else if (itemType.slotPosition & SLOTP_LEGS) {
-			bodyPosition = "legs";
-		} else if (itemType.slotPosition & SLOTP_FEET) {
-			bodyPosition = "feet";
-		} else if (itemType.slotPosition & SLOTP_RING) {
-			bodyPosition = "ring";
-		} else if (itemType.slotPosition & SLOTP_AMMO) {
-			bodyPosition = "amunition";
-		}
-		if (!bodyPosition.empty()) {
-			descriptions.emplace_back("Body Position", bodyPosition);
-		}
+	std::string bodyPosition;
+	if (itemType.slotPosition & SLOTP_HEAD) {
+		bodyPosition = "head";
+	} else if (itemType.slotPosition & SLOTP_NECKLACE) {
+		bodyPosition = "necklace";
+	} else if (itemType.slotPosition & SLOTP_BACKPACK) {
+		bodyPosition = "backpack";
+	} else if (itemType.slotPosition & SLOTP_ARMOR) {
+		bodyPosition = "body";
+	} else if (itemType.slotPosition & SLOTP_RIGHT) {
+		bodyPosition = "right hand";
+	} else if (itemType.slotPosition & SLOTP_LEFT) {
+		bodyPosition = "left hand";
+	} else if (itemType.slotPosition & SLOTP_LEGS) {
+		bodyPosition = "legs";
+	} else if (itemType.slotPosition & SLOTP_FEET) {
+		bodyPosition = "feet";
+	} else if (itemType.slotPosition & SLOTP_RING) {
+		bodyPosition = "ring";
+	} else if (itemType.slotPosition & SLOTP_AMMO) {
+		bodyPosition = "amunition";
+	}
+	if (!bodyPosition.empty()) {
+		descriptions.emplace_back("Body Position", bodyPosition);
 	}
 
 	msg.addByte(static_cast<uint8_t>(descriptions.size()));
