@@ -172,6 +172,9 @@ enableItemUpgradeClassification = false
 enableQuickLoot = true
 quickLootMaxCorpses = 30
 
+-- Allow the /reload command (god only). Set false to disable it.
+reloadCommandEnabled = false
+
 -- Character Bazaar (accounts.tibia_coins is the transferable coin balance)
 characterBazaarEnabled = false
 characterBazaarMinLevel = 50
