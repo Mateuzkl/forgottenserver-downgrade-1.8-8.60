@@ -1210,6 +1210,31 @@ PreySystem._tickToken = (PreySystem._tickToken or 0) + 1
 preyTickToken = PreySystem._tickToken
 addEvent(preyTick, PREY_TICK_INTERVAL)
 
+-- Push the shared resource balances periodically so the prey window (and other
+-- resource based UIs) refresh on their own instead of only on window open/use.
+local PREY_BALANCE_SYNC_INTERVAL = 3000
+local preyBalanceSyncToken = 0
+
+local function preyBalanceSync()
+	if PreySystem._balanceSyncToken ~= preyBalanceSyncToken then
+		return
+	end
+
+	for _, player in ipairs(Game.getPlayers()) do
+		if supportsCustomNetwork(player) then
+			player:sendResource("bank", player:getBankBalance())
+			player:sendResource("inventory", player:getMoney())
+			player:sendResource("prey", getPlayerBonusRerolls(player))
+		end
+	end
+
+	addEvent(preyBalanceSync, PREY_BALANCE_SYNC_INTERVAL)
+end
+
+PreySystem._balanceSyncToken = (PreySystem._balanceSyncToken or 0) + 1
+preyBalanceSyncToken = PreySystem._balanceSyncToken
+addEvent(preyBalanceSync, PREY_BALANCE_SYNC_INTERVAL)
+
 local loginEvent = CreatureEvent("PreySystemLogin")
 function loginEvent.onLogin(player)
 	local prey = getPlayerPrey(player)
