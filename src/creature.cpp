@@ -421,7 +421,7 @@ void Creature::addEventWalk(bool firstStep)
 	const uint32_t generation = walkGeneration;
 
 	eventWalk = g_scheduler.addEvent(
-	    createSchedulerTask(safeTicks, [cid, generation]() { g_game.checkCreatureWalk(cid, generation); }));
+	    createSchedulerTask(safeTicks, ([cid, generation]() { g_game.checkCreatureWalk(cid, generation); })));
 }
 
 void Creature::stopEventWalk()
