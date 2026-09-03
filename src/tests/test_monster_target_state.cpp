@@ -109,7 +109,8 @@ public:
 	WorldFixture()
 	    : oldChat(g_chat), oldEvents(g_events), oldGlobalEvents(g_globalEvents),
 	      oldFactionSystem(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM)),
-	      oldRequirePlayer(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY))
+	      oldRequirePlayer(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY)),
+	      previousMoveEvents(std::make_unique<MoveEvents>())
 	{
 		ensureItemTypes();
 		g_chat = &chat;
@@ -117,9 +118,7 @@ public:
 		g_globalEvents = &globalEvents;
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_SYSTEM, true);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY, false);
-		if (!g_moveEvents) {
-			g_moveEvents = std::make_unique<MoveEvents>();
-		}
+		g_moveEvents.swap(previousMoveEvents);
 	}
 
 	~WorldFixture()
@@ -129,6 +128,7 @@ public:
 				g_game.removeCreature(creature.get(), false);
 			}
 		}
+		g_moveEvents.swap(previousMoveEvents);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_SYSTEM, oldFactionSystem);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY, oldRequirePlayer);
 		g_globalEvents = oldGlobalEvents;
@@ -152,6 +152,7 @@ private:
 	GlobalEvents globalEvents;
 	bool oldFactionSystem;
 	bool oldRequirePlayer;
+	std::unique_ptr<MoveEvents> previousMoveEvents;
 	std::vector<std::weak_ptr<Creature>> creatures;
 };
 
