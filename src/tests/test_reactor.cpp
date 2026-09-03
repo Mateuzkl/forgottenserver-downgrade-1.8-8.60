@@ -125,6 +125,95 @@ TEST_CASE(test_reactor_cancel_zero_is_noop)
 	CHECK(executed);
 }
 
+TEST_CASE(test_reactor_cancel_from_earlier_task_in_same_batch)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	uint32_t victimId = 0;
+	std::vector<int> order;
+
+	reactor.schedule(0, [&] {
+		order.push_back(1);
+		reactor.cancel(victimId);
+		reactor.cancel(victimId); // repeated cancellation must also be consumed
+	});
+	victimId = reactor.schedule(0, [&] { order.push_back(2); });
+	reactor.send([&] { order.push_back(3); });
+	reactor.runOnce();
+
+	CHECK(order == std::vector<int>({1, 3}));
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_cancel_and_replace_within_batch_keeps_single_lineage)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	uint32_t victimId = 0;
+	int victimRuns = 0;
+	int replacementRuns = 0;
+
+	reactor.send([&] {
+		reactor.cancel(victimId);
+		reactor.schedule(0, [&] { ++replacementRuns; });
+	});
+	victimId = reactor.schedule(0, [&] { ++victimRuns; });
+	reactor.runOnce();
+	CHECK(victimRuns == 0);
+	CHECK(replacementRuns == 0); // replacement belongs to the next batch
+	CHECK(reactor.hasPendingTasks());
+
+	reactor.runOnce();
+	reactor.runOnce();
+	CHECK(victimRuns == 0);
+	CHECK(replacementRuns == 1);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_same_batch_check_preserves_cancel_of_new_schedule)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	bool newTaskExecuted = false;
+	bool tailExecuted = false;
+
+	reactor.schedule(0, [&] {
+		const auto newId = reactor.schedule(0, [&] { newTaskExecuted = true; });
+		reactor.cancel(newId);
+	});
+	// Checking this ready task must not discard newId's cancellation just
+	// because newId has not yet been registered in activeIdentifiers.
+	reactor.schedule(0, [&] { tailExecuted = true; });
+	reactor.runOnce();
+	CHECK(tailExecuted);
+	reactor.runOnce();
+	CHECK(!newTaskExecuted);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_cancel_in_same_batch_preserves_fairness_deferral)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxTasksPerCycle(2);
+	uint32_t victimId = 0;
+	std::vector<int> order;
+
+	reactor.schedule(0, [&] {
+		order.push_back(1);
+		reactor.cancel(victimId);
+	});
+	victimId = reactor.schedule(0, [&] { order.push_back(2); });
+	reactor.schedule(0, [&] { order.push_back(3); });
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1}));
+	CHECK(reactor.hasPendingTasks());
+
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 3}));
+	CHECK(!reactor.hasPendingTasks());
+}
+
 TEST_CASE(test_reactor_expired_send_is_discarded)
 {
 	TaskReactor reactor;
@@ -177,6 +266,7 @@ TEST_CASE(test_reactor_cancel_after_execution_is_safe)
 	reactor.runOnce();
 
 	CHECK(executions == 1);
+	CHECK(!reactor.hasPendingTasks());
 }
 
 TEST_CASE(test_reactor_shutdown_wakes_run_loop)

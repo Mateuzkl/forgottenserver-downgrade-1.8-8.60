@@ -5995,12 +5995,12 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 	return true;
 }
 
-void Game::checkCreatureWalk(uint32_t creatureId)
+void Game::checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatureWalk);
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
-	if (creature && !creature->isRemoved() && !creature->isDead()) {
+	if (creature && creature->walkGeneration == walkGeneration && !creature->isRemoved() && !creature->isDead()) {
 		creature->onWalk();
 	}
 }

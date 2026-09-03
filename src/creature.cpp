@@ -295,6 +295,10 @@ void Creature::onIdleStatus()
 
 void Creature::onWalk()
 {
+	// Completion, teleport or a speed change may stop this lineage and arm a
+	// replacement from inside the callback. Do not overwrite that new event.
+	const uint32_t generationAtEntry = walkGeneration;
+
 	if (getWalkDelay() <= 0) {
 		Direction dir;
 		uint32_t flags = FLAG_IGNOREFIELDDAMAGE;
@@ -323,7 +327,7 @@ void Creature::onWalk()
 		cancelNextWalk = false;
 	}
 
-	if (eventWalk != 0) {
+	if (walkGeneration == generationAtEntry && eventWalk != 0) {
 		eventWalk = 0;
 		addEventWalk();
 	}
@@ -414,13 +418,17 @@ void Creature::addEventWalk(bool firstStep)
 
 	const uint32_t safeTicks = static_cast<uint32_t>(std::max<int64_t>(1, ticks));
 	const uint32_t cid = getID();
+	const uint32_t generation = walkGeneration;
 
-	eventWalk = g_scheduler.addEvent(createSchedulerTask(safeTicks,
-	                                                     [cid]() { g_game.checkCreatureWalk(cid); }));
+	eventWalk = g_scheduler.addEvent(
+	    createSchedulerTask(safeTicks, [cid, generation]() { g_game.checkCreatureWalk(cid, generation); }));
 }
 
 void Creature::stopEventWalk()
 {
+	// Invalidate even if getNextStep() already cleared eventWalk: an in-flight
+	// callback must not rearm over a replacement created by onWalkComplete().
+	++walkGeneration;
 	if (eventWalk != 0) {
 		g_scheduler.stopEvent(eventWalk);
 		eventWalk = 0;

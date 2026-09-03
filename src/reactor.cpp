@@ -392,8 +392,15 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		// the first unprocessed task in the deferral loop below, so a skipped task
 		// still has to advance it.
 		if (task.identifier != 0) {
+			// An earlier callback can cancel another task already in this ready
+			// batch. Consume its inbox entries before committing to execution.
+			// Leave other ids for drainInbox(), which registers newly scheduled
+			// tasks before applying their cancellations.
+			std::scoped_lock lock(mutex);
+			const bool cancelledInBatch = std::erase(cancelInbox, task.identifier) > 0;
 			activeIdentifiers.erase(task.identifier);
-			if (cancelled.erase(task.identifier) > 0) {
+			const bool cancelledPreviously = cancelled.erase(task.identifier) > 0;
+			if (cancelledInBatch || cancelledPreviously) {
 				++tasksExecuted;
 				continue;
 			}
