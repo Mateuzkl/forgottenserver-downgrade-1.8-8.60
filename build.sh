@@ -1108,8 +1108,8 @@ configure_tfs() {
     -DCMAKE_BUILD_TYPE=Release
     "${compiler_args[@]}"
     -DHTTP="${HTTP}"
-    -DDISABLE_STATS=0
-    -DENABLE_SLOW_TASK_DETECTION=ON
+    -DDISABLE_STATS=1
+    -DENABLE_SLOW_TASK_DETECTION=OFF
     -DUSE_MIMALLOC="${USE_MIMALLOC}"
     -DLUA_INCLUDE_DIR="${LUA_PREFIX}/include"
     -DLUA_LIBRARY="${LUA_PREFIX}/lib/liblua.a"
