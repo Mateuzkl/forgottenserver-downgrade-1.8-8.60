@@ -177,13 +177,24 @@ local function debugForge(player, message)
 end
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+	if not player or not player:isPlayer() then
+		return false
+	end
+	if player.isUsingOtClient and player:isUsingOtClient() then
+		return true
+	end
+	if player.isUsingOtc and player:isUsingOtc() then
+		return true
+	end
+	return false
 end
 
 local function sendForgeMessage(player, message)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
+
+	player:sendTextMessage(MESSAGE_STATUS_SMALL, message)
 
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_FORGE_SEND)
@@ -206,8 +217,39 @@ local function getForgeDustLimit(player)
 	return value
 end
 
+local function sendForgeDustBalance(player)
+	if type(player) == "number" then
+		player = Player(player)
+	end
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+	local dust = getForgeDust(player)
+	local limit = getForgeDustLimit(player)
+
+	local out = NetworkMessage(player)
+	out:addByte(0xEE)
+	out:addByte(23)
+	out:addU64(dust)
+	local sent = out:sendToPlayer(player)
+
+	local out20 = NetworkMessage(player)
+	out20:addByte(0xEE)
+	out20:addByte(20)
+	out20:addU64(dust)
+	out20:sendToPlayer(player)
+
+	local limitOut = NetworkMessage(player)
+	limitOut:addByte(0xEE)
+	limitOut:addByte(88)
+	limitOut:addU64(limit)
+	limitOut:sendToPlayer(player)
+	return sent
+end
+
 local function setForgeDust(player, value)
 	player:setStorageValue(FORGE_STORAGE.dust, math.max(0, math.min(value, getForgeDustLimit(player))))
+	sendForgeDustBalance(player)
 end
 
 local function removeForgeDust(player, amount)
@@ -216,6 +258,7 @@ local function removeForgeDust(player, amount)
 		return false
 	end
 	player:setStorageValue(FORGE_STORAGE.dust, current - amount)
+	sendForgeDustBalance(player)
 	return true
 end
 
@@ -1090,6 +1133,8 @@ local function handleConvert(player, msg)
 				return false
 			end
 			addHistory(player, HISTORY_CONVERSION, string.format("%d Dust -> %d Slivers", DUST_TO_SLIVERS, SLIVERS_GENERATED))
+			player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("You successfully converted %d Dust into %d Slivers.", DUST_TO_SLIVERS, SLIVERS_GENERATED))
+			player:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 		elseif action == 3 then
 			if not player:removeItem(FORGE_ITEM_IDS.sliver, SLIVERS_TO_CORE) then
 				sendForgeMessage(player, "You need more Slivers to generate an Exalted Core.")
@@ -1104,6 +1149,8 @@ local function handleConvert(player, msg)
 				return false
 			end
 			addHistory(player, HISTORY_CONVERSION, string.format("%d Slivers -> 1 Exalted Core", SLIVERS_TO_CORE))
+			player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("You successfully converted %d Slivers into 1 Exalted Core.", SLIVERS_TO_CORE))
+			player:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 		elseif action == 4 then
 			local limit = getForgeDustLimit(player)
 			if limit >= MAX_DUST_LIMIT then
@@ -1121,6 +1168,8 @@ local function handleConvert(player, msg)
 
 			player:setStorageValue(FORGE_STORAGE.dustLimit, limit + 1)
 			addHistory(player, HISTORY_CONVERSION, string.format("Dust limit %d -> %d", limit, limit + 1))
+			player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("Your Dust limit increased to %d.", limit + 1))
+			player:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 		else
 			sendForgeMessage(player, "Invalid forge conversion.")
 			refreshForge(player)
@@ -1188,6 +1237,8 @@ function forgeHandler.onReceive(player, msg)
 		handleConvert(player, msg)
 	elseif action == REQUEST_HISTORY then
 		sendHistory(player, msg:len() - msg:tell() >= 2 and msg:getU16() or 0)
+	elseif action == 7 then
+		sendForgeDustBalance(player)
 	else
 		debugForge(player, "packet ignored: unknown action=" .. tostring(action))
 	end
@@ -1205,7 +1256,13 @@ forgeSessionCleanup:register()
 
 local forgeSessionInit = CreatureEvent("CustomForgeSessionInit")
 function forgeSessionInit.onLogin(player)
+	if not supportsCustomNetwork(player) then
+		return true
+	end
 	player:registerEvent("CustomForgeSessionCleanup")
+	sendForgeDustBalance(player)
+	addEvent(sendForgeDustBalance, 400, player:getId())
+	addEvent(sendForgeDustBalance, 1200, player:getId())
 	return true
 end
 forgeSessionInit:register()

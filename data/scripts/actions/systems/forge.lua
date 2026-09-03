@@ -116,6 +116,33 @@ function Player:getForgeDustLimit()
     return v
 end
 
+function Player:sendForgeDustBalance()
+    if not (self.isUsingOtClient and self:isUsingOtClient() or self.isUsingOtc and self:isUsingOtc()) then
+        return false
+    end
+
+    local dust = self:getForgeDust()
+    local limit = self:getForgeDustLimit()
+
+    local out = NetworkMessage(self)
+    out:addByte(0xEE)
+    out:addByte(23)
+    out:addU64(dust)
+    out:sendToPlayer(self)
+
+    local out20 = NetworkMessage(self)
+    out20:addByte(0xEE)
+    out20:addByte(20)
+    out20:addU64(dust)
+    out20:sendToPlayer(self)
+
+    local limitOut = NetworkMessage(self)
+    limitOut:addByte(0xEE)
+    limitOut:addByte(88)
+    limitOut:addU64(limit)
+    limitOut:sendToPlayer(self)
+end
+
 function Player:addForgeDust(amount)
     if not isForgeEnabled() then return 0 end
 
@@ -123,6 +150,7 @@ function Player:addForgeDust(amount)
     local limit = self:getForgeDustLimit()
     local new = math.min(cur + amount, limit)
     self:setStorageValue(FORGE_STORAGE.dust, new)
+    self:sendForgeDustBalance()
     return new - cur
 end
 
@@ -132,6 +160,7 @@ function Player:removeForgeDust(amount)
     local cur = self:getForgeDust()
     if cur < amount then return false end
     self:setStorageValue(FORGE_STORAGE.dust, cur - amount)
+    self:sendForgeDustBalance()
     return true
 end
 
