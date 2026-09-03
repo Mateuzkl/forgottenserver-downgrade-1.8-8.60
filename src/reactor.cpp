@@ -10,6 +10,8 @@
 #include "performance_metrics.h"
 #include "stats.h"
 
+#include <limits>
+
 TaskReactor g_reactor;
 thread_local const TaskReactor* TaskReactor::currentReactor = nullptr;
 
@@ -125,15 +127,10 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 		return 0;
 	}
 
-	uint32_t identifier = nextIdentifier.fetch_add(1, std::memory_order_relaxed) + 1;
-	if (identifier == 0) {
-		identifier = nextIdentifier.fetch_add(1, std::memory_order_relaxed) + 1;
-	}
-
+	uint32_t identifier = 0;
 	Task task{
 	    .fireAt = std::chrono::steady_clock::now() + delay,
 	    .deadline = distantFuture(),
-	    .identifier = identifier,
 	    .sequence = nextSequence.fetch_add(1, std::memory_order_relaxed),
 	    .description = std::move(description),
 	    .origin = std::move(origin),
@@ -147,7 +144,25 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 			LOG_WARN("[TaskReactor] scheduleInbox overflow ({}), dropping scheduled task", scheduleInbox.size());
 			return 0;
 		}
-		scheduleInbox.push_back(std::move(task));
+		if (activeIdentifiers.size() >= (std::numeric_limits<uint32_t>::max)()) {
+			g_performanceMetrics.recordTaskDropped();
+			LOG_WARN("[TaskReactor] task identifier space exhausted, dropping scheduled task");
+			return 0;
+		}
+
+		// A wrapped counter must skip ids still owned by pending tasks. Reserve
+		// the id before publishing the task, including while it is in the inbox.
+		do {
+			identifier = ++nextIdentifier;
+		} while (identifier == 0 || activeIdentifiers.contains(identifier));
+		activeIdentifiers.insert(identifier);
+		task.identifier = identifier;
+		try {
+			scheduleInbox.push_back(std::move(task));
+		} catch (...) {
+			activeIdentifiers.erase(identifier);
+			throw;
+		}
 	}
 
 	conditionVariable.notify_one();
@@ -167,6 +182,9 @@ void TaskReactor::cancel(uint32_t taskIdentifier)
 
 	{
 		std::scoped_lock lock(mutex);
+		if (!activeIdentifiers.contains(taskIdentifier)) {
+			return;
+		}
 		if (maxInboxSize > 0 && cancelInbox.size() >= maxInboxSize) {
 			LOG_WARN("[TaskReactor] cancelInbox overflow ({}), dropping cancellation", cancelInbox.size());
 			return;
@@ -299,15 +317,14 @@ void TaskReactor::drainInbox(std::vector<Task>& readyTasks)
 	}
 
 	for (auto& task : scheduledTasks) {
-		activeIdentifiers.insert(task.identifier);
 		taskHeap.push_back(std::move(task));
 		std::push_heap(taskHeap.begin(), taskHeap.end(), taskComesAfter);
 	}
 
 	for (uint32_t identifier : cancellations) {
-		if (activeIdentifiers.contains(identifier)) {
-			cancelled.insert(identifier);
-		}
+		// cancel() only queues live ids, and retirement removes queued entries
+		// before releasing the reservation for reuse after a counter wrap.
+		cancelled.insert(identifier);
 	}
 
 	const auto now = std::chrono::steady_clock::now();
@@ -317,15 +334,15 @@ void TaskReactor::drainInbox(std::vector<Task>& readyTasks)
 		// stopEvent() silently does nothing for any task that got deferred and the
 		// callback runs after the caller retired it. Plain send() tasks carry
 		// identifier 0 and are never cancellable.
-		if (task.identifier != 0 && cancelled.erase(task.identifier) > 0) {
-			activeIdentifiers.erase(task.identifier);
+		if (task.identifier != 0 && cancelled.contains(task.identifier)) {
+			retireIdentifier(task.identifier);
 			continue;
 		}
 
 		if (!task.hasExpired(now)) {
 			readyTasks.push_back(std::move(task));
 		} else {
-			activeIdentifiers.erase(task.identifier);
+			retireIdentifier(task.identifier);
 			g_performanceMetrics.recordTaskExpired();
 		}
 	}
@@ -340,19 +357,34 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
 		auto readyTask = std::move(taskHeap.back());
 		taskHeap.pop_back();
 
-		if (cancelled.erase(readyTask.identifier) > 0 || readyTask.hasExpired(now)) {
-			activeIdentifiers.erase(readyTask.identifier);
+		if (cancelled.contains(readyTask.identifier) || readyTask.hasExpired(now)) {
+			retireIdentifier(readyTask.identifier);
 			if (readyTask.hasExpired(now)) {
 				g_performanceMetrics.recordTaskExpired();
 			}
 			continue;
 		}
 
-		// The identifier deliberately stays active until the task actually runs.
-		// Retiring it here would make a later cancel() a no-op, because cancel()
-		// only records cancellations for identifiers still in activeIdentifiers.
+		// Keep the identifier reserved until execution or discard, so cancellation
+		// remains valid and a wrapped counter cannot assign it to another task.
 		readyTasks.push_back(std::move(readyTask));
 	}
+}
+
+bool TaskReactor::retireIdentifier(uint32_t identifier)
+{
+	if (identifier == 0) {
+		return false;
+	}
+
+	// Called only by the runOnce() driver. Consume both cancellation sources
+	// before another producer can reuse this id, and release the lock before
+	// invoking the callback. Other tasks' cancellations stay queued.
+	std::scoped_lock lock(mutex);
+	const bool cancelledInBatch = std::erase(cancelInbox, identifier) > 0;
+	const bool cancelledPreviously = cancelled.erase(identifier) > 0;
+	activeIdentifiers.erase(identifier);
+	return cancelledInBatch || cancelledPreviously;
 }
 
 void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
@@ -375,6 +407,7 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 	for (size_t index = 0; index < readyTasks.size(); ++index) {
 		auto& task = readyTasks[index];
 		if (!task.function) {
+			retireIdentifier(task.identifier);
 			++tasksExecuted;
 			continue;
 		}
@@ -391,19 +424,9 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		// drop the task if it was cancelled. tasksExecuted doubles as the index of
 		// the first unprocessed task in the deferral loop below, so a skipped task
 		// still has to advance it.
-		if (task.identifier != 0) {
-			// An earlier callback can cancel another task already in this ready
-			// batch. Consume its inbox entries before committing to execution.
-			// Leave other ids for drainInbox(), which registers newly scheduled
-			// tasks before applying their cancellations.
-			std::scoped_lock lock(mutex);
-			const bool cancelledInBatch = std::erase(cancelInbox, task.identifier) > 0;
-			activeIdentifiers.erase(task.identifier);
-			const bool cancelledPreviously = cancelled.erase(task.identifier) > 0;
-			if (cancelledInBatch || cancelledPreviously) {
-				++tasksExecuted;
-				continue;
-			}
+		if (retireIdentifier(task.identifier)) {
+			++tasksExecuted;
+			continue;
 		}
 
 		const auto taskStart = std::chrono::steady_clock::now();
