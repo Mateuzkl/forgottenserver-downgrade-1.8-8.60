@@ -45,11 +45,12 @@ jobs:
     runs-on: windows-2022
 
     env:
-      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      # Keep dependency source/object paths below MSVC's path length limits.
+      VCPKG_ROOT: D:\vcpkg
       VCPKG_BUILD_TYPE: release
-      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/x64-windows-static-release
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg_cache
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
+      VCPKG_INSTALLED_DIR: D:\vi
+      VCPKG_DEFAULT_BINARY_CACHE: D:\vcache
+      VCPKG_BINARY_SOURCES: clear;files,D:\vcache,readwrite
 
     defaults:
       run:
@@ -77,7 +78,7 @@ jobs:
       - name: Cache vcpkg binary packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ github.workspace }}/vcpkg_cache
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-windows-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**', 'CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
           restore-keys: |
             vcpkg-windows-
@@ -90,6 +91,25 @@ jobs:
           path: vcpkg
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Move pinned vcpkg to short path
+        run: |
+          # actions/checkout requires a path inside GITHUB_WORKSPACE. Relocate
+          # before bootstrap so buildtrees, packages and tools use the short root.
+          $workspacePath = (Resolve-Path -LiteralPath $env:GITHUB_WORKSPACE).Path
+          $checkoutPath = [IO.Path]::GetFullPath((Join-Path $workspacePath 'vcpkg'))
+          $vcpkgPath = [IO.Path]::GetFullPath($env:VCPKG_ROOT)
+          if (-not $checkoutPath.StartsWith("$workspacePath\", [StringComparison]::OrdinalIgnoreCase) -or $vcpkgPath -ne 'D:\vcpkg') {
+            throw 'Unexpected vcpkg relocation paths.'
+          }
+          if (Test-Path -LiteralPath $vcpkgPath) {
+            throw "Refusing to overwrite existing vcpkg directory: $vcpkgPath"
+          }
+          Move-Item -LiteralPath $checkoutPath -Destination $vcpkgPath
+          $actualCommit = & git -C $vcpkgPath rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $actualCommit -ne '${{ steps.vcpkg-baseline.outputs.commit }}') {
+            throw 'Relocated vcpkg does not match the pinned baseline.'
+          }
 
       - name: Bootstrap vcpkg
         run: |
@@ -129,7 +149,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: logs-windows-${{ github.sha }}
-          path: ${{ github.workspace }}/vcpkg/buildtrees/**/*.log
+          path: |
+            ${{ env.VCPKG_ROOT }}/buildtrees/**/*.log
+            ${{ github.workspace }}/build/vcpkg-manifest-install.log
         if: ${{ failure() }}
 
       - name: Upload artifact binary
