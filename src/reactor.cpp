@@ -371,15 +371,30 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
 	}
 }
 
+bool TaskReactor::consumeCancellation(uint32_t identifier)
+{
+	if (identifier == 0) {
+		return false;
+	}
+
+	std::scoped_lock lock(mutex);
+	const bool cancelledInBatch = std::erase(cancelInbox, identifier) > 0;
+	const bool cancelledPreviously = cancelled.erase(identifier) > 0;
+	const bool wasCancelled = cancelledInBatch || cancelledPreviously;
+	if (wasCancelled) {
+		activeIdentifiers.erase(identifier);
+	}
+	return wasCancelled;
+}
+
 bool TaskReactor::retireIdentifier(uint32_t identifier)
 {
 	if (identifier == 0) {
 		return false;
 	}
 
-	// Called only by the runOnce() driver. Consume both cancellation sources
-	// before another producer can reuse this id, and release the lock before
-	// invoking the callback. Other tasks' cancellations stay queued.
+	// Consume cancellations that arrived after execution was committed before
+	// releasing the reservation, so they cannot target a reused identifier.
 	std::scoped_lock lock(mutex);
 	const bool cancelledInBatch = std::erase(cancelInbox, identifier) > 0;
 	const bool cancelledPreviously = cancelled.erase(identifier) > 0;
@@ -419,12 +434,11 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		}
 
 		// Past every deferral point, so this task is committed to running now.
-		// Deferred tasks keep their identifier registered precisely so a cancel()
-		// that landed while they waited is still honoured here; retire it now and
-		// drop the task if it was cancelled. tasksExecuted doubles as the index of
-		// the first unprocessed task in the deferral loop below, so a skipped task
-		// still has to advance it.
-		if (retireIdentifier(task.identifier)) {
+		// Honour cancellations that landed while it waited, but keep its identifier
+		// reserved until the callback returns so a wrapped counter cannot reuse it.
+		// tasksExecuted doubles as the index of the first unprocessed task in the
+		// deferral loop below, so a skipped task still has to advance it.
+		if (consumeCancellation(task.identifier)) {
 			++tasksExecuted;
 			continue;
 		}
@@ -447,8 +461,9 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 			          taskLabel(task.description, task.origin));
 		}
 
-		++tasksExecuted;
 		const auto taskEnd = std::chrono::steady_clock::now();
+		retireIdentifier(task.identifier);
+		++tasksExecuted;
 		const auto taskDuration = taskEnd - taskStart;
 		if (g_performanceMetrics.isEnabled()) {
 			const auto taskNanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(taskDuration).count();

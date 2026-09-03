@@ -72,6 +72,7 @@ private:
 	void drainInbox(std::vector<Task>& readyTasks);
 	void drainReadyTasks(std::vector<Task>& readyTasks);
 	void executeReadyTasks(std::vector<Task>& readyTasks);
+	bool consumeCancellation(uint32_t identifier);
 	bool retireIdentifier(uint32_t identifier);
 	void waitForWork();
 	static bool taskComesAfter(const Task& lhs, const Task& rhs) noexcept;

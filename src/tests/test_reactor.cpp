@@ -334,6 +334,46 @@ TEST_CASE(test_reactor_identifier_wrap_during_ready_batch_cancels_only_new_task)
 	CHECK(!reactor.hasPendingTasks());
 }
 
+TEST_CASE(test_reactor_identifier_stays_reserved_while_callback_runs)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	std::atomic_bool callbackStarted = false;
+	std::atomic_bool releaseCallback = false;
+	std::atomic_int replacementRuns = 0;
+
+	const auto oldId = reactor.schedule(0, [&] {
+		callbackStarted.store(true, std::memory_order_release);
+		while (!releaseCallback.load(std::memory_order_acquire)) {
+			std::this_thread::yield();
+		}
+	});
+	std::jthread driver([&] { reactor.runOnce(); });
+
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+	while (!callbackStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::yield();
+	}
+
+	const bool started = callbackStarted.load(std::memory_order_acquire);
+	uint32_t replacementId = 0;
+	if (started) {
+		TaskReactorTestAccess::setLastIdentifier(reactor, (std::numeric_limits<uint32_t>::max)());
+		replacementId = reactor.schedule(0, [&] { replacementRuns.fetch_add(1, std::memory_order_relaxed); });
+		reactor.cancel(oldId);
+	}
+
+	releaseCallback.store(true, std::memory_order_release);
+	driver.join();
+	CHECK(started);
+	CHECK(replacementId != 0);
+	CHECK(replacementId != oldId);
+
+	reactor.runOnce();
+	CHECK(replacementRuns.load(std::memory_order_relaxed) == 1);
+	CHECK(!reactor.hasPendingTasks());
+}
+
 TEST_CASE(test_reactor_identifier_wrap_keeps_deferred_and_new_tasks_distinct)
 {
 	TaskReactor reactor;
