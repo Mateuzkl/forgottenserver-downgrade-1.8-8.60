@@ -262,7 +262,7 @@ endif()
 ### END MIMALLOC ###
 
 ### SLOW TASK DETECTION ###
-option(ENABLE_SLOW_TASK_DETECTION "Enable slow task detection logging (adds overhead)" OFF)
+option(ENABLE_SLOW_TASK_DETECTION "Enable slow task detection logging (adds overhead)" ON)
 if (ENABLE_SLOW_TASK_DETECTION)
     ADD_DEFINITIONS(-DSLOW_TASK_DETECTION)
     message(STATUS "Slow task detection enabled. Disable for production: -DENABLE_SLOW_TASK_DETECTION=OFF")
