@@ -6046,8 +6046,15 @@ void Game::addCreatureCheck(Creature* creature)
 		return;
 	}
 
+	// Keep the work performed by each periodic callback balanced. Random placement
+	// can create a much larger bucket and turn one checkCreatures callback into a
+	// long game-thread stall under load. EVENT_CREATURECOUNT is deliberately small,
+	// so selecting the shortest bucket is cheaper than the work it evens out.
+	auto targetBucket = std::min_element(
+	    std::begin(checkCreatureLists), std::end(checkCreatureLists),
+	    [](const auto& lhs, const auto& rhs) { return lhs.size() < rhs.size(); });
 	creature->inCheckCreaturesVector = true;
-	checkCreatureLists[uniform_random(0, EVENT_CREATURECOUNT - 1)].push_back(getCreatureSharedRef(creature));
+	targetBucket->push_back(getCreatureSharedRef(creature));
 }
 
 void Game::reserveStartupCreatures(size_t monsterCount, size_t npcCount)
