@@ -54,22 +54,6 @@ function loginMessage.onLogin(player)
 
     player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Mount] Use Ctrl+M to mount or dismount your mount.")
 
-    if player.sendForgeDustBalance then
-        player:sendForgeDustBalance()
-        addEvent(function(pid)
-            local p = Player(pid)
-            if p and p.sendForgeDustBalance then
-                p:sendForgeDustBalance()
-            end
-        end, 400, player:getId())
-        addEvent(function(pid)
-            local p = Player(pid)
-            if p and p.sendForgeDustBalance then
-                p:sendForgeDustBalance()
-            end
-        end, 1200, player:getId())
-    end
-
     return true
 end
 loginMessage:register()
