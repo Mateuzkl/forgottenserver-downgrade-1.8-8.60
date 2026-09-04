@@ -116,6 +116,12 @@ function Player:getForgeDustLimit()
     return v
 end
 
+function Player:sendForgeDustBalance()
+    if CustomForge and CustomForge.sendBalance then
+        return CustomForge.sendBalance(self)
+    end
+end
+
 function Player:addForgeDust(amount)
     if not isForgeEnabled() then return 0 end
 
@@ -123,6 +129,7 @@ function Player:addForgeDust(amount)
     local limit = self:getForgeDustLimit()
     local new = math.min(cur + amount, limit)
     self:setStorageValue(FORGE_STORAGE.dust, new)
+    self:sendForgeDustBalance()
     return new - cur
 end
 
@@ -132,6 +139,7 @@ function Player:removeForgeDust(amount)
     local cur = self:getForgeDust()
     if cur < amount then return false end
     self:setStorageValue(FORGE_STORAGE.dust, cur - amount)
+    self:sendForgeDustBalance()
     return true
 end
 

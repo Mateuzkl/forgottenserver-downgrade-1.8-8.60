@@ -59,6 +59,7 @@ local PREY_NATIVE_ACTION_REQUEST_ALL_MONSTERS = 3
 local PREY_NATIVE_ACTION_CHANGE_FROM_ALL = 4
 local PREY_NATIVE_ACTION_LOCK_PREY = 5
 local PREY_NATIVE_ACTION_UNLOCK_PERMANENT = 6
+local PREY_NATIVE_ACTION_CLOSE = 7
 
 local PREY_BONUS_NONE = 0
 local PREY_BONUS_DMG_BOOST = 1
@@ -418,9 +419,21 @@ local function sendPreyBalances(player)
 	end
 
 	local prey = getPlayerPrey(player)
-	player:sendResource("prey", prey.wildcards)
-	player:sendResource("bank", player:getBankBalance())
-	player:sendResource("inventory", player:getMoney())
+	local bank = player:getBankBalance()
+	local inventory = player:getMoney()
+	local wildcards = (prey and prey.wildcards) or getPlayerBonusRerolls(player)
+
+	player:sendResource("prey", wildcards)
+	player:sendResource("bank", bank)
+	player:sendResource("inventory", inventory)
+
+	if PreySystem.cachedBalances then
+		PreySystem.cachedBalances[player:getId()] = {
+			bank = bank,
+			inventory = inventory,
+			prey = wildcards,
+		}
+	end
 	return true
 end
 
@@ -943,6 +956,7 @@ end
 local openHandler = PacketHandler(PREY_OPCODE_OPEN)
 function openHandler.onReceive(player, msg)
 	setPreyNetworkMode(player, "fonticak")
+	PreySystem.openWindows[player:getId()] = true
 	initializeEmptySlots(player)
 	sendFullPrey(player)
 	saveAllSlots(player)
@@ -1210,21 +1224,55 @@ PreySystem._tickToken = (PreySystem._tickToken or 0) + 1
 preyTickToken = PreySystem._tickToken
 addEvent(preyTick, PREY_TICK_INTERVAL)
 
--- Push the shared resource balances periodically so the prey window (and other
--- resource based UIs) refresh on their own instead of only on window open/use.
+-- Push the shared resource balances periodically so the prey window
+-- refreshes while open without lagging the server.
+-- Only sync players who currently have the prey window open, and only
+-- when the values have actually changed.
 local PREY_BALANCE_SYNC_INTERVAL = 3000
 local preyBalanceSyncToken = 0
+
+PreySystem.openWindows = PreySystem.openWindows or {}
+PreySystem.cachedBalances = PreySystem.cachedBalances or {}
 
 local function preyBalanceSync()
 	if PreySystem._balanceSyncToken ~= preyBalanceSyncToken then
 		return
 	end
 
-	for _, player in ipairs(Game.getPlayers()) do
-		if supportsCustomNetwork(player) then
-			player:sendResource("bank", player:getBankBalance())
-			player:sendResource("inventory", player:getMoney())
-			player:sendResource("prey", getPlayerBonusRerolls(player))
+	for playerId, _ in pairs(PreySystem.openWindows) do
+		local player = Player(playerId)
+		if not player then
+			PreySystem.openWindows[playerId] = nil
+			PreySystem.cachedBalances[playerId] = nil
+		elseif supportsCustomNetwork(player) then
+			local cached = PreySystem.cachedBalances[playerId]
+			local bank = player:getBankBalance()
+			local inventory = player:getMoney()
+			local wildcards = getPlayerBonusRerolls(player)
+
+			if not cached then
+				player:sendResource("bank", bank)
+				player:sendResource("inventory", inventory)
+				player:sendResource("prey", wildcards)
+				PreySystem.cachedBalances[playerId] = {
+					bank = bank,
+					inventory = inventory,
+					prey = wildcards,
+				}
+			else
+				if cached.bank ~= bank then
+					player:sendResource("bank", bank)
+					cached.bank = bank
+				end
+				if cached.inventory ~= inventory then
+					player:sendResource("inventory", inventory)
+					cached.inventory = inventory
+				end
+				if cached.prey ~= wildcards then
+					player:sendResource("prey", wildcards)
+					cached.prey = wildcards
+				end
+			end
 		end
 	end
 
@@ -1240,18 +1288,24 @@ function loginEvent.onLogin(player)
 	local prey = getPlayerPrey(player)
 	syncPreyCombatBonuses(player, prey)
 	player:registerEvent("PreySystemLogout")
+	if supportsCustomNetwork(player) then
+		sendPreyBalances(player)
+	end
 	return true
 end
 loginEvent:register()
 
 local logoutEvent = CreatureEvent("PreySystemLogout")
 function logoutEvent.onLogout(player)
+	local playerId = player:getId()
+	PreySystem.openWindows[playerId] = nil
+	PreySystem.cachedBalances[playerId] = nil
 	saveAllSlots(player)
 	if player.clearPreyCombatBonuses then
 		player:clearPreyCombatBonuses()
 	end
-	preyCache[player:getId()] = nil
-	preyNetworkMode[player:getId()] = nil
+	preyCache[playerId] = nil
+	preyNetworkMode[playerId] = nil
 	return true
 end
 logoutEvent:register()
@@ -1461,6 +1515,7 @@ end
 local nativeRequestHandler = PacketHandler(PREY_NATIVE_OPCODE_REQUEST)
 function nativeRequestHandler.onReceive(player, msg)
 	setPreyNetworkMode(player, "native")
+	PreySystem.openWindows[player:getId()] = true
 	initializeEmptySlots(player)
 	sendFullPrey(player)
 	saveAllSlots(player)
@@ -1516,9 +1571,15 @@ function nativeActionHandler.onReceive(player, msg)
 		return
 	end
 
-	setPreyNetworkMode(player, "native")
 	local slot = msg:getByte()
 	local action = msg:getByte()
+	if action == PREY_NATIVE_ACTION_CLOSE then
+		PreySystem.openWindows[player:getId()] = nil
+		PreySystem.cachedBalances[player:getId()] = nil
+		return true
+	end
+
+	setPreyNetworkMode(player, "native")
 	if slot >= PREY_SLOTS then
 		return sendError(player, "Invalid slot.")
 	end
