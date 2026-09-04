@@ -328,8 +328,12 @@ void Creature::onWalk()
 	}
 
 	if (walkGeneration == generationAtEntry && eventWalk != 0) {
-		eventWalk = 0;
-		addEventWalk();
+		if (listWalkDir.empty() && !shouldScheduleWalkCompletion()) {
+			stopEventWalk();
+		} else {
+			eventWalk = 0;
+			addEventWalk();
+		}
 	}
 }
 

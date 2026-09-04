@@ -242,6 +242,7 @@ public:
 	virtual void onWalk(Direction& dir);
 	virtual void onWalkAborted() {}
 	virtual void onWalkComplete() {}
+	virtual bool shouldScheduleWalkCompletion() const { return true; }
 
 	// follow functions
 	std::shared_ptr<Creature> getFollowCreatureShared() const { return followCreature.lock(); }
@@ -514,6 +515,7 @@ protected:
 	friend class Game;
 	friend class Map;
 	friend class LuaScriptInterface;
+	friend struct CreatureWalkTestAccess;
 
 public:
 	std::vector<CreatureIcon> getIcons() const {

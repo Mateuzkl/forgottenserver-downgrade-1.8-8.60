@@ -5471,6 +5471,8 @@ void Player::onWalkComplete()
 	}
 }
 
+bool Player::shouldScheduleWalkCompletion() const { return walkTask != nullptr; }
+
 void Player::stopWalk() { cancelNextWalk = true; }
 
 LightInfo Player::getCreatureLight() const
