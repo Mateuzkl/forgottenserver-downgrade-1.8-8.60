@@ -5236,6 +5236,15 @@ bool Player::updateSaleShopList(const Item* item)
 	return true;
 }
 
+bool Player::hasShopItem(uint32_t itemId, uint8_t subType) const
+{
+	const ItemType& itemType = Item::items[itemId];
+	return std::any_of(shopItemList.begin(), shopItemList.end(), [&](const ShopInfo& shopInfo) {
+		return shopInfo.itemId == itemId &&
+		       (!itemType.isFluidContainer() || shopInfo.subType == subType);
+	});
+}
+
 bool Player::hasShopItemForSale(uint32_t itemId, uint8_t subType) const
 {
 	const ItemType& itemType = Item::items[itemId];
