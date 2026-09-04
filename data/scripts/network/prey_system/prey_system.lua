@@ -956,7 +956,7 @@ end
 local openHandler = PacketHandler(PREY_OPCODE_OPEN)
 function openHandler.onReceive(player, msg)
 	setPreyNetworkMode(player, "fonticak")
-	PreySystem.openWindows[player:getId()] = true
+	PreySystem.openWindows[player:getId()] = os.time()
 	initializeEmptySlots(player)
 	sendFullPrey(player)
 	saveAllSlots(player)
@@ -966,6 +966,7 @@ openHandler:register()
 local selectHandler = PacketHandler(PREY_OPCODE_SELECT)
 function selectHandler.onReceive(player, msg)
 	setPreyNetworkMode(player, "fonticak")
+	PreySystem.openWindows[player:getId()] = os.time()
 	if msg:len() - msg:tell() < 2 then
 		return
 	end
@@ -1020,6 +1021,7 @@ selectHandler:register()
 local listRerollHandler = PacketHandler(PREY_OPCODE_LIST_REROLL)
 function listRerollHandler.onReceive(player, msg)
 	setPreyNetworkMode(player, "fonticak")
+	PreySystem.openWindows[player:getId()] = os.time()
 	if msg:len() - msg:tell() < 1 then
 		return
 	end
@@ -1074,6 +1076,7 @@ listRerollHandler:register()
 local clearHandler = PacketHandler(PREY_OPCODE_CLEAR)
 function clearHandler.onReceive(player, msg)
 	setPreyNetworkMode(player, "fonticak")
+	PreySystem.openWindows[player:getId()] = os.time()
 	if msg:len() - msg:tell() < 1 then
 		return
 	end
@@ -1095,6 +1098,7 @@ clearHandler:register()
 local autoBonusHandler = PacketHandler(PREY_OPCODE_TOGGLE_AUTO)
 function autoBonusHandler.onReceive(player, msg)
 	setPreyNetworkMode(player, "fonticak")
+	PreySystem.openWindows[player:getId()] = os.time()
 	if msg:len() - msg:tell() < 2 then
 		return
 	end
@@ -1119,6 +1123,7 @@ autoBonusHandler:register()
 local lockPreyHandler = PacketHandler(PREY_OPCODE_TOGGLE_LOCK)
 function lockPreyHandler.onReceive(player, msg)
 	setPreyNetworkMode(player, "fonticak")
+	PreySystem.openWindows[player:getId()] = os.time()
 	if msg:len() - msg:tell() < 2 then
 		return
 	end
@@ -1229,6 +1234,7 @@ addEvent(preyTick, PREY_TICK_INTERVAL)
 -- Only sync players who currently have the prey window open, and only
 -- when the values have actually changed.
 local PREY_BALANCE_SYNC_INTERVAL = 3000
+local PREY_FONTICAK_WINDOW_TIMEOUT = 60
 local preyBalanceSyncToken = 0
 
 PreySystem.openWindows = PreySystem.openWindows or {}
@@ -1239,9 +1245,12 @@ local function preyBalanceSync()
 		return
 	end
 
-	for playerId, _ in pairs(PreySystem.openWindows) do
+	local now = os.time()
+	for playerId, openedAt in pairs(PreySystem.openWindows) do
 		local player = Player(playerId)
-		if not player then
+		-- Expire stale Fonticak windows (timestamp entries) after timeout.
+		-- Native windows use `true` and have an explicit close action.
+		if not player or (type(openedAt) == "number" and now - openedAt > PREY_FONTICAK_WINDOW_TIMEOUT) then
 			PreySystem.openWindows[playerId] = nil
 			PreySystem.cachedBalances[playerId] = nil
 		elseif supportsCustomNetwork(player) then
