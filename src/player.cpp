@@ -3753,7 +3753,7 @@ BlockType_t Player::blockHit(const std::shared_ptr<Creature>& attacker, CombatTy
 	    Creature::blockHit(attacker, combatType, damage, checkDefense, checkArmor, field, ignoreResistances, origin);
 
 	if (attacker && combatType != COMBAT_HEALING) {
-		sendCreatureSquare(attacker.get(), SQ_COLOR_YELLOW);
+		sendCreatureSquare(attacker.get(), getCreatureSquare(attacker.get()));
 	}
 
 	if (blockType != BLOCK_NONE) {
@@ -6296,7 +6296,18 @@ bool Player::isInPvpSituation() const { return !attackedSet.empty() || !attacked
 
 SquareColor_t Player::getCreatureSquare(const Creature* creature) const
 {
-	if (g_game.getWorldType() != WORLD_TYPE_PVP || !creature) {
+	if (!creature) {
+		return SQ_COLOR_NONE;
+	}
+
+	if (const Monster* monster = creature->getMonster()) {
+		if (auto target = monster->getAttackedCreatureShared(); target && target.get() == this) {
+			return SQ_COLOR_BLACK;
+		}
+		return SQ_COLOR_NONE;
+	}
+
+	if (g_game.getWorldType() != WORLD_TYPE_PVP) {
 		return SQ_COLOR_NONE;
 	}
 

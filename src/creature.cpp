@@ -1077,6 +1077,10 @@ bool Creature::setAttackedCreature(Creature* creature)
 		attackedCreature.reset();
 	}
 
+	if (getMonster()) {
+		g_game.updateCreatureSquare(this);
+	}
+
 	for (const auto& summonRef : summons) {
 		if (auto summon = summonRef.lock()) {
 			summon->setAttackedCreature(creature);

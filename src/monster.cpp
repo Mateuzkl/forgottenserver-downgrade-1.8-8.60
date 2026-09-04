@@ -1634,6 +1634,8 @@ bool Monster::selectTarget(Creature* creature)
 			g_dispatcher.addTask([id = getID()]() { g_game.checkCreatureAttack(id); });
 		}
 	}
+
+	g_game.updateCreatureSquare(this);
 	return setFollowCreature(creature);
 }
 

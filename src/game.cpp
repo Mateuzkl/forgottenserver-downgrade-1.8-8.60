@@ -8199,7 +8199,7 @@ void Game::updateCreatureSkull(const Creature* creature)
 
 void Game::updateCreatureSquare(const Creature* creature)
 {
-	if (!creature || !creature->getPlayer() || getWorldType() != WORLD_TYPE_PVP) {
+	if (!creature) {
 		return;
 	}
 
