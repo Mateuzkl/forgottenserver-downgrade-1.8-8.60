@@ -543,6 +543,11 @@ ReturnValue Container::queryMaxCount(int32_t index, const Thing& thing, uint32_t
 		return RETURNVALUE_NOERROR;
 	}
 
+	if (getWeaponType() == WEAPON_QUIVER && item->getWeaponType() != WEAPON_AMMO) {
+		maxQueryCount = 0;
+		return RETURNVALUE_CONTAINERNOTENOUGHROOM;
+	}
+
 	uint32_t freeSlots = getFreeSlotsFor(item, count);
 
 	if (item->isStackable()) {

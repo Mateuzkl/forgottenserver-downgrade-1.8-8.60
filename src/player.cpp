@@ -4515,15 +4515,13 @@ ReturnValue Player::queryAdd(int32_t index, const Thing& thing, uint32_t count, 
 
 		case CONST_SLOT_WHEREEVER:
 		case -1:
-			ret = RETURNVALUE_NOTENOUGHROOM;
-			break;
+			return RETURNVALUE_NOTENOUGHROOM;
 
 		default:
-			ret = RETURNVALUE_NOTPOSSIBLE;
-			break;
+			return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	if (ret != RETURNVALUE_NOERROR && ret != RETURNVALUE_NOTENOUGHROOM) {
+	if (ret != RETURNVALUE_NOERROR) {
 		return ret;
 	}
 
@@ -4569,18 +4567,22 @@ ReturnValue Player::queryMaxCount(int32_t index, const Thing& thing, uint32_t co
 			Item* inventoryItem = inventory[slotIndex].get();
 			if (inventoryItem) {
 				if (Container* subContainer = inventoryItem->getContainer()) {
-					uint32_t queryCount = 0;
-					subContainer->queryMaxCount(INDEX_WHEREEVER, *item, item->getItemCount(), queryCount, flags);
-					n += queryCount;
+					if (subContainer->getWeaponType() != WEAPON_QUIVER || item->getWeaponType() == WEAPON_AMMO) {
+						uint32_t queryCount = 0;
+						subContainer->queryMaxCount(INDEX_WHEREEVER, *item, item->getItemCount(), queryCount, flags);
+						n += queryCount;
 
-					// iterate through all items, including sub-containers (deep search)
-					for (ContainerIterator it = subContainer->iterator(); it.hasNext(); it.advance()) {
-						auto containerItem = *it;
-						if (Container* tmpContainer = containerItem->getContainer()) {
-							queryCount = 0;
-							tmpContainer->queryMaxCount(INDEX_WHEREEVER, *item, item->getItemCount(), queryCount,
-							                            flags);
-							n += queryCount;
+						// iterate through all items, including sub-containers (deep search)
+						for (ContainerIterator it = subContainer->iterator(); it.hasNext(); it.advance()) {
+							auto containerItem = *it;
+							if (Container* tmpContainer = containerItem->getContainer()) {
+								if (tmpContainer->getWeaponType() != WEAPON_QUIVER || item->getWeaponType() == WEAPON_AMMO) {
+									queryCount = 0;
+									tmpContainer->queryMaxCount(INDEX_WHEREEVER, *item, item->getItemCount(), queryCount,
+									                            flags);
+									n += queryCount;
+								}
+							}
 						}
 					}
 				} else if (inventoryItem->isStackable() && item->equals(inventoryItem) &&
@@ -4695,10 +4697,14 @@ Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** de
 					}
 
 					if (Container* subContainer = inventoryItem->getContainer()) {
-						containers.push_back(subContainer);
+						if (subContainer->getWeaponType() != WEAPON_QUIVER || item->getWeaponType() == WEAPON_AMMO) {
+							containers.push_back(subContainer);
+						}
 					}
 				} else if (Container* subContainer = inventoryItem->getContainer()) {
-					containers.push_back(subContainer);
+					if (subContainer->getWeaponType() != WEAPON_QUIVER || item->getWeaponType() == WEAPON_AMMO) {
+						containers.push_back(subContainer);
+					}
 				}
 			} else if (queryAdd(slotIndex, *item, item->getItemCount(), flags) == RETURNVALUE_NOERROR) { // empty slot
 				index = slotIndex;
@@ -4727,7 +4733,9 @@ Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** de
 
 				for (const auto& tmpContainerItem : tmpContainer->getItemList()) {
 					if (Container* subContainer = tmpContainerItem->getContainer()) {
-						containers.push_back(subContainer);
+						if (subContainer->getWeaponType() != WEAPON_QUIVER || item->getWeaponType() == WEAPON_AMMO) {
+							containers.push_back(subContainer);
+						}
 					}
 				}
 
@@ -4754,7 +4762,9 @@ Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** de
 				}
 
 				if (Container* subContainer = tmpItem->getContainer()) {
-					containers.push_back(subContainer);
+					if (subContainer->getWeaponType() != WEAPON_QUIVER || item->getWeaponType() == WEAPON_AMMO) {
+						containers.push_back(subContainer);
+					}
 				}
 
 				n++;
