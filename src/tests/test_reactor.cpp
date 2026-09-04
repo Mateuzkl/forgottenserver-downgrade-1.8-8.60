@@ -6,6 +6,17 @@
 
 #include "test_support.h"
 
+#include <limits>
+
+struct TaskReactorTestAccess
+{
+	static void setLastIdentifier(TaskReactor& reactor, uint32_t identifier)
+	{
+		std::scoped_lock lock(reactor.mutex);
+		reactor.nextIdentifier = identifier;
+	}
+};
+
 namespace {
 
 void startReactor(TaskReactor& reactor)
@@ -125,6 +136,95 @@ TEST_CASE(test_reactor_cancel_zero_is_noop)
 	CHECK(executed);
 }
 
+TEST_CASE(test_reactor_cancel_from_earlier_task_in_same_batch)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	uint32_t victimId = 0;
+	std::vector<int> order;
+
+	reactor.schedule(0, [&] {
+		order.push_back(1);
+		reactor.cancel(victimId);
+		reactor.cancel(victimId); // repeated cancellation must also be consumed
+	});
+	victimId = reactor.schedule(0, [&] { order.push_back(2); });
+	reactor.send([&] { order.push_back(3); });
+	reactor.runOnce();
+
+	CHECK(order == std::vector<int>({1, 3}));
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_cancel_and_replace_within_batch_keeps_single_lineage)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	uint32_t victimId = 0;
+	int victimRuns = 0;
+	int replacementRuns = 0;
+
+	reactor.send([&] {
+		reactor.cancel(victimId);
+		reactor.schedule(0, [&] { ++replacementRuns; });
+	});
+	victimId = reactor.schedule(0, [&] { ++victimRuns; });
+	reactor.runOnce();
+	CHECK(victimRuns == 0);
+	CHECK(replacementRuns == 0); // replacement belongs to the next batch
+	CHECK(reactor.hasPendingTasks());
+
+	reactor.runOnce();
+	reactor.runOnce();
+	CHECK(victimRuns == 0);
+	CHECK(replacementRuns == 1);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_same_batch_check_preserves_cancel_of_new_schedule)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	bool newTaskExecuted = false;
+	bool tailExecuted = false;
+
+	reactor.schedule(0, [&] {
+		const auto newId = reactor.schedule(0, [&] { newTaskExecuted = true; });
+		reactor.cancel(newId);
+	});
+	// Checking this ready task must preserve newId's cancellation while the
+	// newly scheduled task is still waiting for the next inbox drain.
+	reactor.schedule(0, [&] { tailExecuted = true; });
+	reactor.runOnce();
+	CHECK(tailExecuted);
+	reactor.runOnce();
+	CHECK(!newTaskExecuted);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_cancel_in_same_batch_preserves_fairness_deferral)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxTasksPerCycle(2);
+	uint32_t victimId = 0;
+	std::vector<int> order;
+
+	reactor.schedule(0, [&] {
+		order.push_back(1);
+		reactor.cancel(victimId);
+	});
+	victimId = reactor.schedule(0, [&] { order.push_back(2); });
+	reactor.schedule(0, [&] { order.push_back(3); });
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1}));
+	CHECK(reactor.hasPendingTasks());
+
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 3}));
+	CHECK(!reactor.hasPendingTasks());
+}
+
 TEST_CASE(test_reactor_expired_send_is_discarded)
 {
 	TaskReactor reactor;
@@ -165,6 +265,166 @@ TEST_CASE(test_reactor_identifiers_are_unique)
 	CHECK(second != third);
 }
 
+TEST_CASE(test_reactor_identifier_wrap_skips_zero_and_ids_in_schedule_inbox)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	int oldRuns = 0;
+	int lastRuns = 0;
+	int wrappedRuns = 0;
+	const auto oldId = reactor.schedule(0, [&] { ++oldRuns; });
+	const auto maxIdentifier = (std::numeric_limits<uint32_t>::max)();
+	TaskReactorTestAccess::setLastIdentifier(reactor, maxIdentifier - 1);
+	const auto lastId = reactor.schedule(0, [&] { ++lastRuns; });
+	const auto wrappedId = reactor.schedule(0, [&] { ++wrappedRuns; });
+
+	CHECK(lastId == maxIdentifier);
+	CHECK(wrappedId != 0);
+	CHECK(wrappedId != oldId);
+	CHECK(wrappedId != lastId);
+	reactor.cancel(wrappedId);
+	reactor.runOnce();
+	CHECK(oldRuns == 1);
+	CHECK(lastRuns == 1);
+	CHECK(wrappedRuns == 0);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_identifier_wrap_preserves_heap_reservation)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	bool oldExecuted = false;
+	bool newExecuted = false;
+	const auto oldId = reactor.schedule(std::chrono::hours(1), [&] { oldExecuted = true; });
+	reactor.runOnce(); // move the old task from scheduleInbox into taskHeap
+	TaskReactorTestAccess::setLastIdentifier(reactor, (std::numeric_limits<uint32_t>::max)());
+	const auto newId = reactor.schedule(0, [&] { newExecuted = true; });
+
+	CHECK(newId != 0);
+	CHECK(newId != oldId);
+	reactor.cancel(newId);
+	reactor.runOnce();
+	CHECK(!newExecuted);
+	CHECK(!oldExecuted);
+	CHECK(reactor.hasPendingTasks()); // the old, future task is still pending
+}
+
+TEST_CASE(test_reactor_identifier_wrap_during_ready_batch_cancels_only_new_task)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	int oldRuns = 0;
+	int newRuns = 0;
+	uint32_t newId = 0;
+	reactor.send([&] {
+		TaskReactorTestAccess::setLastIdentifier(reactor, (std::numeric_limits<uint32_t>::max)());
+		newId = reactor.schedule(0, [&] { ++newRuns; });
+		reactor.cancel(newId);
+	});
+	const auto oldId = reactor.schedule(0, [&] { ++oldRuns; });
+	reactor.runOnce();
+
+	CHECK(newId != 0);
+	CHECK(newId != oldId);
+	CHECK(oldRuns == 1);
+	CHECK(newRuns == 0);
+	reactor.runOnce();
+	CHECK(newRuns == 0);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_identifier_stays_reserved_while_callback_runs)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	std::atomic_bool callbackStarted = false;
+	std::atomic_bool releaseCallback = false;
+	std::atomic_int replacementRuns = 0;
+
+	const auto oldId = reactor.schedule(0, [&] {
+		callbackStarted.store(true, std::memory_order_release);
+		while (!releaseCallback.load(std::memory_order_acquire)) {
+			std::this_thread::yield();
+		}
+	});
+	std::jthread driver([&] { reactor.runOnce(); });
+
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+	while (!callbackStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::yield();
+	}
+
+	const bool started = callbackStarted.load(std::memory_order_acquire);
+	uint32_t replacementId = 0;
+	if (started) {
+		TaskReactorTestAccess::setLastIdentifier(reactor, (std::numeric_limits<uint32_t>::max)());
+		replacementId = reactor.schedule(0, [&] { replacementRuns.fetch_add(1, std::memory_order_relaxed); });
+		reactor.cancel(oldId);
+	}
+
+	releaseCallback.store(true, std::memory_order_release);
+	driver.join();
+	CHECK(started);
+	CHECK(replacementId != 0);
+	CHECK(replacementId != oldId);
+
+	reactor.runOnce();
+	CHECK(replacementRuns.load(std::memory_order_relaxed) == 1);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_identifier_wrap_keeps_deferred_and_new_tasks_distinct)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxTasksPerCycle(1);
+	int deferredRuns = 0;
+	int newRuns = 0;
+	const auto firstId = reactor.schedule(0, [] {});
+	const auto deferredId = reactor.schedule(0, [&] { ++deferredRuns; });
+	reactor.runOnce();
+	CHECK(deferredRuns == 0);
+
+	TaskReactorTestAccess::setLastIdentifier(reactor, (std::numeric_limits<uint32_t>::max)());
+	const auto reusedId = reactor.schedule(0, [] {});
+	const auto newId = reactor.schedule(0, [&] { ++newRuns; });
+	CHECK(reusedId == firstId); // the executed task's reservation was released
+	CHECK(newId != 0);
+	CHECK(newId != deferredId);
+	CHECK(newId != reusedId);
+	reactor.cancel(newId);
+	reactor.setMaxTasksPerCycle(0);
+	reactor.runOnce();
+	CHECK(deferredRuns == 1);
+	CHECK(newRuns == 0);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_reused_identifier_does_not_inherit_consumed_cancellations)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	int oldRuns = 0;
+	int newRuns = 0;
+	const auto oldId = reactor.schedule(0, [&] { ++oldRuns; });
+	reactor.cancel(oldId);
+	reactor.cancel(oldId);
+	reactor.runOnce();
+	CHECK(oldRuns == 0);
+	CHECK(!reactor.hasPendingTasks());
+
+	// A cancellation issued after retirement must not wait around for reuse.
+	reactor.cancel(oldId);
+	CHECK(!reactor.hasPendingTasks());
+	TaskReactorTestAccess::setLastIdentifier(reactor, (std::numeric_limits<uint32_t>::max)());
+	const auto newId = reactor.schedule(0, [&] { ++newRuns; });
+	CHECK(newId == oldId);
+	reactor.runOnce();
+	CHECK(newRuns == 1);
+	CHECK(!reactor.hasPendingTasks());
+}
+
 TEST_CASE(test_reactor_cancel_after_execution_is_safe)
 {
 	TaskReactor reactor;
@@ -177,6 +437,7 @@ TEST_CASE(test_reactor_cancel_after_execution_is_safe)
 	reactor.runOnce();
 
 	CHECK(executions == 1);
+	CHECK(!reactor.hasPendingTasks());
 }
 
 TEST_CASE(test_reactor_shutdown_wakes_run_loop)

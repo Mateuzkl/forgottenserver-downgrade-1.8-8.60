@@ -810,6 +810,7 @@ public:
 	void onWalk(Direction& dir) override;
 	void onWalkAborted() override;
 	void onWalkComplete() override;
+	bool shouldScheduleWalkCompletion() const override;
 
 	void stopWalk();
 	void openShopWindow(const std::list<ShopInfo>& shop);
@@ -1977,6 +1978,7 @@ private:
 	friend class IOLoginData;
 	friend class ProtocolGame;
 	friend class ProtocolSpectator;
+	friend struct CreatureWalkTestAccess;
 };
 
 #endif

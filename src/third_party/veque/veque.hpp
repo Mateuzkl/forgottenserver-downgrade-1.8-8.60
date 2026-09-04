@@ -1052,8 +1052,8 @@ namespace veque
                 // Shift elements toward front
                 auto distance = _offset - new_offset;
                 _shift_front( begin(), end(), distance  );
-                _move_begin(-distance);
-                _move_end(-distance);
+                _move_begin(-static_cast<difference_type>(distance));
+                _move_end(-static_cast<difference_type>(distance));
             }
             else
             {

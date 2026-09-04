@@ -72,6 +72,8 @@ private:
 	void drainInbox(std::vector<Task>& readyTasks);
 	void drainReadyTasks(std::vector<Task>& readyTasks);
 	void executeReadyTasks(std::vector<Task>& readyTasks);
+	bool consumeCancellation(uint32_t identifier);
+	bool retireIdentifier(uint32_t identifier);
 	void waitForWork();
 	static bool taskComesAfter(const Task& lhs, const Task& rhs) noexcept;
 
@@ -79,7 +81,7 @@ private:
 	std::condition_variable conditionVariable;
 
 #ifndef NDEBUG
-	// taskHeap, activeIdentifiers and cancelled are deliberately touched without
+	// taskHeap and cancelled are deliberately touched without
 	// the mutex, because they belong to whichever single thread drives runOnce().
 	// Nothing enforced that, and when it was broken the symptom was heap
 	// corruption far from the cause. Counts concurrent entries so the next
@@ -90,12 +92,14 @@ private:
 	std::vector<Task> sendInbox;
 	std::vector<Task> scheduleInbox;
 	std::vector<uint32_t> cancelInbox;
+	// Protected by mutex, from acceptance into scheduleInbox until retirement.
+	// Keep ids reserved across heap, ready-batch and fairness deferral states.
+	std::unordered_set<uint32_t> activeIdentifiers;
+	uint32_t nextIdentifier = 0;
 
 	std::unordered_set<uint32_t> cancelled;
-	std::unordered_set<uint32_t> activeIdentifiers;
 	std::vector<Task> taskHeap;
 
-	std::atomic<uint32_t> nextIdentifier{0};
 	std::atomic<uint64_t> nextSequence{0};
 	std::atomic<ThreadState> threadState{THREAD_STATE_TERMINATED};
 
@@ -104,6 +108,8 @@ private:
 	uint32_t maxTasksPerCycle = 0;
 	std::chrono::milliseconds timeBudget{0};
 	size_t maxInboxSize = REACTOR_MAX_INBOX_SIZE;
+
+	friend struct TaskReactorTestAccess;
 };
 
 extern TaskReactor g_reactor;

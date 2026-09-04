@@ -242,6 +242,7 @@ public:
 	virtual void onWalk(Direction& dir);
 	virtual void onWalkAborted() {}
 	virtual void onWalkComplete() {}
+	virtual bool shouldScheduleWalkCompletion() const { return true; }
 
 	// follow functions
 	std::shared_ptr<Creature> getFollowCreatureShared() const { return followCreature.lock(); }
@@ -452,6 +453,8 @@ protected:
 	uint32_t id = 0;
 	uint32_t scriptEventsBitField = 0;
 	uint32_t eventWalk = 0;
+	// Dispatcher-owned epoch; equality is the only operation on captured values.
+	uint32_t walkGeneration = 0;
 	uint32_t walkUpdateTicks = 0;
 	uint32_t blockCount = 0;
 	uint32_t blockTicks = 0;
@@ -512,6 +515,7 @@ protected:
 	friend class Game;
 	friend class Map;
 	friend class LuaScriptInterface;
+	friend struct CreatureWalkTestAccess;
 
 public:
 	std::vector<CreatureIcon> getIcons() const {
