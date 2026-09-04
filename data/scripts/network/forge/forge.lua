@@ -1273,6 +1273,7 @@ CustomForge = {
 	open = openForge,
 	close = closeForge,
 	refresh = refreshForge,
+	sendBalance = sendForgeDustBalance,
 	isOpen = function(player)
 		return forgeOpenSessions[player:getId()] == true
 	end

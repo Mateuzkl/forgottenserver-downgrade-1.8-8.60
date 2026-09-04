@@ -117,30 +117,9 @@ function Player:getForgeDustLimit()
 end
 
 function Player:sendForgeDustBalance()
-    if not (self.isUsingOtClient and self:isUsingOtClient() or self.isUsingOtc and self:isUsingOtc()) then
-        return false
+    if CustomForge and CustomForge.sendBalance then
+        return CustomForge.sendBalance(self)
     end
-
-    local dust = self:getForgeDust()
-    local limit = self:getForgeDustLimit()
-
-    local out = NetworkMessage(self)
-    out:addByte(0xEE)
-    out:addByte(23)
-    out:addU64(dust)
-    out:sendToPlayer(self)
-
-    local out20 = NetworkMessage(self)
-    out20:addByte(0xEE)
-    out20:addByte(20)
-    out20:addU64(dust)
-    out20:sendToPlayer(self)
-
-    local limitOut = NetworkMessage(self)
-    limitOut:addByte(0xEE)
-    limitOut:addByte(88)
-    limitOut:addU64(limit)
-    limitOut:sendToPlayer(self)
 end
 
 function Player:addForgeDust(amount)
