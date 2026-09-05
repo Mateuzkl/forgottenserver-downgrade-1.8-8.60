@@ -1,10 +1,11 @@
-local OPCODE_REWARD_OPEN = 0xB4
-local OPCODE_REWARD_HISTORY = 0xB5
-local OPCODE_REWARD_SELECT = 0xB6
+local OPCODE_REWARD_OPEN = 0xD8
+local OPCODE_REWARD_HISTORY = 0xD9
+local OPCODE_REWARD_SELECT = 0xDA
 
 local SERVER_PACKET_OPEN_REWARD_WALL = 0xE2
 local SERVER_PACKET_DAILY_REWARD_BASIC = 0xE4
 local SERVER_PACKET_DAILY_REWARD_HISTORY = 0xE5
+local SERVER_PACKET_DAILY_REWARD_COLLECTION_STATE = 0xDE
 
 local DAILY_STATE_ALREADY_CLAIMED = 0
 local DAILY_STATE_MISSED = 1
@@ -22,7 +23,12 @@ local STORAGES = {
 	rewardIndex = PlayerStorageKeys.dailyRewardIndex,
 	streak = PlayerStorageKeys.dailyRewardStreak,
 	jokerTokens = PlayerStorageKeys.dailyRewardJokerTokens,
+	instantTokens = PlayerStorageKeys.dailyRewardInstantTokens or 90724,
+	jokerMonth = PlayerStorageKeys.dailyRewardJokerMonth or 90725,
 }
+
+local RESOURCE_BALANCE_OPCODE = 0xEE
+local RESOURCE_DAILYREWARD_INSTANT = 20
 
 local POTION_REWARDS = { 266, 268, 236, 237, 238, 239, 7643, 23373, 23375 }
 local EXERCISE_REWARDS = { 28552, 28553, 28554, 28555, 28556, 28557, 44065, 50293 }
@@ -50,6 +56,18 @@ local schemaChecked = false
 
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
+end
+
+local function sendResourceBalance(player, resourceType, value)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local msg = NetworkMessage(player)
+	msg:addByte(RESOURCE_BALANCE_OPCODE)
+	msg:addByte(resourceType)
+	msg:addU64(math.max(0, tonumber(value) or 0))
+	return msg:sendToPlayer(player)
 end
 
 local function clamp(value, minValue, maxValue)
@@ -81,6 +99,19 @@ local function isPremiumPlayer(player)
 	return player and player.isPremium and player:isPremium()
 end
 
+local function checkMonthlyJoker(player)
+	local currentMonth = tonumber(os.date("%Y%m")) or 0
+	local lastMonth = getStorageNumber(player, STORAGES.jokerMonth, 0)
+	if lastMonth < currentMonth then
+		local maxJokers = isPremiumPlayer(player) and 5 or 3
+		local currentJokers = getStorageNumber(player, STORAGES.jokerTokens, 0)
+		if currentJokers < maxJokers then
+			setStorageNumber(player, STORAGES.jokerTokens, math.min(maxJokers, currentJokers + 1))
+		end
+		setStorageNumber(player, STORAGES.jokerMonth, currentMonth)
+	end
+end
+
 local function getRewardAmount(reward, premium)
 	return premium and (reward.premiumAmount or reward.freeAmount or 1) or (reward.freeAmount or 1)
 end
@@ -106,8 +137,21 @@ local function getDailyState(player)
 	end
 
 	if lastDay > 0 and lastDay < today - 1 then
-		resetMissedReward(player)
-		return DAILY_STATE_MISSED
+		local missedDays = (today - 1) - lastDay
+		local jokers = getStorageNumber(player, STORAGES.jokerTokens, 0)
+		if jokers >= missedDays then
+			setStorageNumber(player, STORAGES.jokerTokens, jokers - missedDays)
+			setStorageNumber(player, STORAGES.lastDay, today - 1)
+			player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("You missed %d day%s. %d Daily Reward Joker%s used to protect your streak!", missedDays, missedDays == 1 and "" or "s", missedDays, missedDays == 1 and " was" or "s were"))
+			return DAILY_STATE_AVAILABLE
+		else
+			if jokers > 0 then
+				setStorageNumber(player, STORAGES.jokerTokens, 0)
+				player:sendTextMessage(MESSAGE_INFO_DESCR, "You did not have enough Daily Reward Jokers to protect your streak. Your streak has been reset.")
+			end
+			resetMissedReward(player)
+			return DAILY_STATE_MISSED
+		end
 	end
 
 	return DAILY_STATE_AVAILABLE
@@ -201,6 +245,20 @@ local function sendDailyReward(player)
 	return out:sendToPlayer(player)
 end
 
+local function sendDailyRewardCollectionState(player)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	local dailyState = getDailyState(player)
+	local state = (dailyState == DAILY_STATE_AVAILABLE or dailyState == DAILY_STATE_MISSED) and 1 or 0
+
+	local out = NetworkMessage(player)
+	out:addByte(SERVER_PACKET_DAILY_REWARD_COLLECTION_STATE)
+	out:addByte(state)
+	return out:sendToPlayer(player)
+end
+
 local function sendOpenRewardWall(player, fromShrine)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -240,13 +298,17 @@ function DailyRewardSystem.openRewardWall(player, fromShrine)
 		return false
 	end
 
+	checkMonthlyJoker(player)
+	sendResourceBalance(player, RESOURCE_DAILYREWARD_INSTANT, getStorageNumber(player, STORAGES.instantTokens, 0))
+
 	ensureDailyRewardSchema()
 	sendDailyReward(player)
-	return sendOpenRewardWall(player, fromShrine ~= false)
+	return sendOpenRewardWall(player, fromShrine == true)
 end
 
+
 local function openRewardWall(player)
-	return DailyRewardSystem.openRewardWall(player, true)
+	return DailyRewardSystem.openRewardWall(player, false)
 end
 
 local function sendRewardHistory(player)
@@ -402,9 +464,15 @@ local function claimReward(player, msg)
 	if not NetworkGuard.canRead(msg, 1) then
 		return sendClaimError(player, "Invalid daily reward request.")
 	end
-	local fromShrine = NetworkGuard.readByte(msg)
-	-- Astra sends this shrine/shortcut flag before the selected item list.
-	-- Claims currently use the same validation path either way, but the byte must be consumed.
+	local claimType = NetworkGuard.readByte(msg)
+	local isInstantClaim = (claimType == 1)
+
+	if isInstantClaim then
+		local instantTokens = getStorageNumber(player, STORAGES.instantTokens, 0)
+		if instantTokens < 1 then
+			return sendClaimError(player, "You need an Instant Reward Access token to claim outside of a shrine. Visit a reward shrine to claim for free.")
+		end
+	end
 
 	local selectedItems = parseSelectedItems(msg)
 	if not selectedItems then
@@ -438,6 +506,13 @@ local function claimReward(player, msg)
 		return sendClaimError(player, description or "Could not claim your daily reward.")
 	end
 
+	if isInstantClaim then
+		local currentTokens = getStorageNumber(player, STORAGES.instantTokens, 0)
+		local newTokens = math.max(0, currentTokens - 1)
+		setStorageNumber(player, STORAGES.instantTokens, newTokens)
+		sendResourceBalance(player, RESOURCE_DAILYREWARD_INSTANT, newTokens)
+	end
+
 	local today = currentDailyDay()
 	local lastDay = getStorageNumber(player, STORAGES.lastDay, 0)
 	local streak = lastDay == today - 1 and (getStreakLevel(player) + 1) or 1
@@ -451,7 +526,8 @@ local function claimReward(player, msg)
 	player:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 
 	sendDailyReward(player)
-	return sendOpenRewardWall(player, true)
+	sendDailyRewardCollectionState(player)
+	return sendOpenRewardWall(player, not isInstantClaim)
 end
 
 local openHandler = PacketHandler(OPCODE_REWARD_OPEN)
@@ -463,6 +539,15 @@ function openHandler.onReceive(player, msg)
 end
 openHandler:register()
 
+local openHandlerB4 = PacketHandler(0xB4)
+function openHandlerB4.onReceive(player, msg)
+	if not NetworkGuard.cooldown(player, "daily-reward-open", 500) then
+		return
+	end
+	openRewardWall(player)
+end
+openHandlerB4:register()
+
 local historyHandler = PacketHandler(OPCODE_REWARD_HISTORY)
 function historyHandler.onReceive(player, msg)
 	if not NetworkGuard.cooldown(player, "daily-reward-history", 500) then
@@ -472,8 +557,32 @@ function historyHandler.onReceive(player, msg)
 end
 historyHandler:register()
 
+local historyHandlerB5 = PacketHandler(0xB5)
+function historyHandlerB5.onReceive(player, msg)
+	if not NetworkGuard.cooldown(player, "daily-reward-history", 500) then
+		return
+	end
+	sendRewardHistory(player)
+end
+historyHandlerB5:register()
+
 local claimHandler = PacketHandler(OPCODE_REWARD_SELECT)
 function claimHandler.onReceive(player, msg)
 	claimReward(player, msg)
 end
 claimHandler:register()
+
+local claimHandlerB6 = PacketHandler(0xB6)
+function claimHandlerB6.onReceive(player, msg)
+	claimReward(player, msg)
+end
+claimHandlerB6:register()
+
+local dailyRewardLogin = CreatureEvent("DailyRewardLogin")
+function dailyRewardLogin.onLogin(player)
+	checkMonthlyJoker(player)
+	sendDailyRewardCollectionState(player)
+	sendResourceBalance(player, RESOURCE_DAILYREWARD_INSTANT, getStorageNumber(player, STORAGES.instantTokens, 0))
+	return true
+end
+dailyRewardLogin:register()

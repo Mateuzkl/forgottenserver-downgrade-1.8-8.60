@@ -33,6 +33,8 @@ PlayerStorageKeys = {
     dailyRewardIndex = 90721,
     dailyRewardStreak = 90722,
     dailyRewardJokerTokens = 90723,
+    dailyRewardInstantTokens = 90724,
+    dailyRewardJokerMonth = 90725,
 
     -- Battle Pass
     -- The detailed state is persisted in player KV under the "battlepass" scope.
