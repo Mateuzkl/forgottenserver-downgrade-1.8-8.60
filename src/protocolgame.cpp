@@ -651,7 +651,7 @@ bool ProtocolGame::canSendAstraItemState() const
 
 bool ProtocolGame::shouldSendAstraQuiverCountU16() const
 {
-	return isAstraClient;
+	return isAstraClient || isFonticakClient;
 }
 
 bool ProtocolGame::shouldSendItemTierByte() const
@@ -691,7 +691,7 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 	if (isOTC) {
 		// Player loading can emit status packets before finishLogin(). Astra
 		// therefore needs its final wire-format features advertised up front.
-		sendFeatures(isAstraClient);
+		sendFeatures(isAstraClient || isFonticakClient);
 
 		NetworkMessage opcodeMessage;
 		opcodeMessage.addByte(0x32);
@@ -5738,9 +5738,10 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
 	}
-	// Fonticak outfit familiar extension (feature id 138).
+	// Fonticak outfit familiar extension (feature id 138) and quiver count (feature id 141).
 	if (isFonticakClient) {
 		features[GameFeature::PlayerFamiliars] = true;
+		features[GameFeature::AstraQuiverCountU16] = true;
 	}
 	if (supportsNativeZoneWeather()) {
 		features[GameFeature::ZoneWeather] = true;
