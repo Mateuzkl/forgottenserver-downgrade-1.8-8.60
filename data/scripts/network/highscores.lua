@@ -20,11 +20,11 @@ local categoryOrder = {0, 1, 2, 3, 4, 5, 6, 7, 8}
 
 local vocations = {
 	{id = ALL_VOCATIONS, name = "(all)"},
-	{id = 1, name = "Knight", ids = {1, 11}},
-	{id = 2, name = "Paladin", ids = {2, 12}},
-	{id = 3, name = "Sorcerer", ids = {3, 13}},
-	{id = 4, name = "Druid", ids = {4, 14}},
-	{id = 5, name = "Monk", ids = {5, 15}},
+	{id = 1, name = "Knight", ids = {4, 8, 11}},
+	{id = 2, name = "Paladin", ids = {3, 7, 12}},
+	{id = 3, name = "Sorcerer", ids = {1, 5, 13}},
+	{id = 4, name = "Druid", ids = {2, 6, 14}},
+	{id = 5, name = "Monk", ids = {9, 10, 15}},
 }
 
 local vocationById = {}
@@ -32,8 +32,17 @@ for _, vocation in ipairs(vocations) do
 	vocationById[vocation.id] = vocation
 end
 
-local function supportsAstraClient(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+local function supportsHighscores(player)
+	if not player then
+		return false
+	end
+	if player.isUsingAstraClient and player:isUsingAstraClient() then
+		return true
+	end
+	if player.isUsingFonticakClient and player:isUsingFonticakClient() then
+		return true
+	end
+	return false
 end
 
 local function clamp(value, minValue, maxValue)
@@ -138,7 +147,7 @@ local function loadRows(column, vocationCondition, page, entriesPerPage)
 end
 
 local function sendHighscores(player, requestType, categoryId, vocationId, worldName, page, entriesPerPage)
-	if not supportsAstraClient(player) then
+	if not supportsHighscores(player) then
 		return false
 	end
 
@@ -204,7 +213,7 @@ end
 
 local highscoresHandler = PacketHandler(OPCODE_HIGHSCORES)
 function highscoresHandler.onReceive(player, msg)
-	if not supportsAstraClient(player) then
+	if not supportsHighscores(player) then
 		return
 	end
 
