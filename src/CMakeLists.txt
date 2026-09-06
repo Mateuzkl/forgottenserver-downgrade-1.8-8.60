@@ -90,6 +90,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/monsters.cpp
 	${CMAKE_CURRENT_LIST_DIR}/mounts.cpp
 	${CMAKE_CURRENT_LIST_DIR}/movement.cpp
+	${CMAKE_CURRENT_LIST_DIR}/movement_diagnostics.cpp
 	${CMAKE_CURRENT_LIST_DIR}/networkmessage.cpp
 	${CMAKE_CURRENT_LIST_DIR}/npc.cpp
 	${CMAKE_CURRENT_LIST_DIR}/otserv.cpp
@@ -206,6 +207,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/monsters.h
 	${CMAKE_CURRENT_LIST_DIR}/mounts.h
 	${CMAKE_CURRENT_LIST_DIR}/movement.h
+	${CMAKE_CURRENT_LIST_DIR}/movement_diagnostics.h
 	${CMAKE_CURRENT_LIST_DIR}/networkmessage.h
 	${CMAKE_CURRENT_LIST_DIR}/npc.h
 	${CMAKE_CURRENT_LIST_DIR}/otserv.h

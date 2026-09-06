@@ -472,6 +472,7 @@ protected:
 	void registerXML();
 	void registerKV();
 	void registerStressReactor();
+	void registerMovementDiagnostics();
 
 	void registerMethod(std::string_view globalName, std::string_view methodName, lua_CFunction func);
 

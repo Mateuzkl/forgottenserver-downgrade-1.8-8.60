@@ -9,6 +9,7 @@
 #include "../groups.h"
 #include "../item.h"
 #include "../movement.h"
+#include "../movement_diagnostics.h"
 #include "../player.h"
 #include "../reactor.h"
 #include "../scheduler.h"
@@ -456,4 +457,83 @@ TEST_CASE(player_multistep_autowalk_keeps_each_physical_step)
 	CHECK(!g_reactor.hasPendingTasks());
 }
 
+TEST_CASE(diagnostics_generation_token_integrity_and_stale_tracking)
+{
+	WalkFixture world;
+	auto& creature = *world.creature;
+
+	g_movementDiagnostics.setEnabled(true);
+	g_movementDiagnostics.reset();
+
+	creature.addEventWalk();
+	const uint32_t firstGen = creature.generation();
+	CHECK(creature.eventId() != 0);
+
+	// Stop walk event (bumps generation)
+	creature.stopEventWalk();
+	CHECK(g_movementDiagnostics.getWalkCallbacksCancelled() == 1);
+	CHECK(creature.generation() != firstGen);
+
+	// Fire checkCreatureWalk with the stale generation
+	g_game.checkCreatureWalk(creature.getID(), firstGen);
+	CHECK(creature.walkCalls == 0);
+	CHECK(g_movementDiagnostics.getWalkCallbacksStale() == 1);
+
+	// Now rearm and fire with matching generation
+	creature.addEventWalk();
+	const uint32_t currentGen = creature.generation();
+	g_game.checkCreatureWalk(creature.getID(), currentGen);
+	CHECK(creature.walkCalls == 1);
+
+	g_movementDiagnostics.setEnabled(false);
+	g_movementDiagnostics.reset();
+}
+
+TEST_CASE(diagnostics_walk_timing_and_sample_recording)
+{
+	PlayerWalkFixture world;
+	auto& player = *world.player;
+
+	g_movementDiagnostics.setEnabled(true);
+	g_movementDiagnostics.reset();
+
+	g_game.playerMove(player.getID(), DIRECTION_NORTH);
+	world.runScheduledTasks();
+
+	CHECK(player.getPosition() == (Position{1050, 1049, 7}));
+	CHECK(g_movementDiagnostics.getWalkCallbacksExecuted() >= 1);
+	CHECK(g_movementDiagnostics.getSampleCount() >= 1);
+
+	auto totalPercentiles = g_movementDiagnostics.getTotalLatencyPercentiles();
+	CHECK(totalPercentiles.count >= 1);
+
+	g_movementDiagnostics.setEnabled(false);
+	g_movementDiagnostics.reset();
+}
+
+TEST_CASE(scheduler_deadline_fairness_preserves_walk_order)
+{
+	PlayerWalkFixture world;
+	auto& player = *world.player;
+
+	// In TFS, listWalkDir is processed via pop_back(), so pass directions in reverse order:
+	// 1st: DIRECTION_NORTH, 2nd: DIRECTION_EAST, 3rd: DIRECTION_SOUTH
+	g_game.playerAutoWalk(player.getID(), {DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_NORTH});
+	world.runScheduledTasks();
+	CHECK(player.getPosition() == (Position{1050, 1049, 7}));
+
+	// Finish cooldown for step 2
+	CreatureWalkTestAccess::finishCooldown(player);
+	world.runScheduledTasks();
+	CHECK(player.getPosition() == (Position{1051, 1049, 7}));
+
+	// Finish cooldown for step 3
+	CreatureWalkTestAccess::finishCooldown(player);
+	world.runScheduledTasks();
+	CHECK(player.getPosition() == (Position{1051, 1050, 7}));
+	CHECK(CreatureWalkTestAccess::pendingDirections(player) == 0);
+	CHECK(!g_reactor.hasPendingTasks());
+}
+
 TFS_TEST_MAIN()
+

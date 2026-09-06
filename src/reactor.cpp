@@ -7,6 +7,7 @@
 
 #include "configmanager.h"
 #include "logger.h"
+#include "movement_diagnostics.h"
 #include "performance_metrics.h"
 #include "stats.h"
 
@@ -68,6 +69,7 @@ bool TaskReactor::send(ReactorCallback&& callback, std::string description, std:
 	{
 		std::scoped_lock lock(mutex);
 		if (maxInboxSize > 0 && sendInbox.size() >= maxInboxSize) {
+			tasksDroppedTotal.fetch_add(1, std::memory_order_relaxed);
 			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] sendInbox overflow ({}), dropping task", sendInbox.size());
 			return false;
@@ -99,6 +101,7 @@ bool TaskReactor::send(std::chrono::milliseconds expirationTime, ReactorCallback
 	{
 		std::scoped_lock lock(mutex);
 		if (maxInboxSize > 0 && sendInbox.size() >= maxInboxSize) {
+			tasksDroppedTotal.fetch_add(1, std::memory_order_relaxed);
 			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] sendInbox overflow ({}), dropping timed task", sendInbox.size());
 			return false;
@@ -140,11 +143,13 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 	{
 		std::scoped_lock lock(mutex);
 		if (maxInboxSize > 0 && scheduleInbox.size() >= maxInboxSize) {
+			tasksDroppedTotal.fetch_add(1, std::memory_order_relaxed);
 			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] scheduleInbox overflow ({}), dropping scheduled task", scheduleInbox.size());
 			return 0;
 		}
 		if (activeIdentifiers.size() >= (std::numeric_limits<uint32_t>::max)()) {
+			tasksDroppedTotal.fetch_add(1, std::memory_order_relaxed);
 			g_performanceMetrics.recordTaskDropped();
 			LOG_WARN("[TaskReactor] task identifier space exhausted, dropping scheduled task");
 			return 0;
@@ -248,6 +253,9 @@ void TaskReactor::runOnce()
 		g_performanceMetrics.recordQueueSize(sendInbox.size() + scheduleInbox.size() + cancelInbox.size() + taskHeap.size());
 	}
 	g_performanceMetrics.maybeReport();
+	if (g_movementDiagnostics.isEnabled()) {
+		g_movementDiagnostics.maybeReport();
+	}
 }
 
 void TaskReactor::shutdown() noexcept
@@ -428,8 +436,10 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		}
 
 		if (maxTasksPerCycle > 0 && tasksExecuted >= maxTasksPerCycle) {
+			const size_t deferred = readyTasks.size() - tasksExecuted;
+			deferredByMaxTasksTotal.fetch_add(deferred, std::memory_order_relaxed);
 			LOG_WARN("[TaskReactor] fairness limit reached ({} tasks/cycle), deferring {} tasks; next: {}",
-			         maxTasksPerCycle, readyTasks.size() - tasksExecuted, taskLabel(task.description, task.origin));
+			         maxTasksPerCycle, deferred, taskLabel(task.description, task.origin));
 			break;
 		}
 
@@ -464,6 +474,7 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		const auto taskEnd = std::chrono::steady_clock::now();
 		retireIdentifier(task.identifier);
 		++tasksExecuted;
+		tasksExecutedTotal.fetch_add(1, std::memory_order_relaxed);
 		const auto taskDuration = taskEnd - taskStart;
 		if (g_performanceMetrics.isEnabled()) {
 			const auto taskNanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(taskDuration).count();
@@ -476,6 +487,8 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		}
 
 		if (timeBudget.count() > 0 && taskEnd - cycleStart >= timeBudget) {
+			const size_t deferred = readyTasks.size() - tasksExecuted;
+			deferredByTimeBudgetTotal.fetch_add(deferred, std::memory_order_relaxed);
 			if (getBoolean(ConfigManager::SLOW_TASK_WARNING)) {
 				const auto cycleMicros =
 				    std::chrono::duration_cast<std::chrono::microseconds>(taskEnd - cycleStart).count();
@@ -531,3 +544,34 @@ void TaskReactor::waitForWork()
 	}
 #endif
 }
+
+ReactorQueueSnapshot TaskReactor::getQueueSnapshot() const
+{
+	std::scoped_lock lock(mutex);
+	return ReactorQueueSnapshot{
+		.sendInboxSize = sendInbox.size(),
+		.scheduleInboxSize = scheduleInbox.size(),
+		.cancelInboxSize = cancelInbox.size(),
+		.taskHeapSize = taskHeap.size(),
+		.totalPending = sendInbox.size() + scheduleInbox.size() + cancelInbox.size() + taskHeap.size(),
+	};
+}
+
+ReactorStatsSnapshot TaskReactor::getStatsSnapshot() const
+{
+	return ReactorStatsSnapshot{
+		.tasksExecuted = tasksExecutedTotal.load(std::memory_order_relaxed),
+		.deferredByMaxTasks = deferredByMaxTasksTotal.load(std::memory_order_relaxed),
+		.deferredByTimeBudget = deferredByTimeBudgetTotal.load(std::memory_order_relaxed),
+		.tasksDropped = tasksDroppedTotal.load(std::memory_order_relaxed),
+	};
+}
+
+void TaskReactor::resetStatsSnapshot()
+{
+	tasksExecutedTotal.store(0, std::memory_order_relaxed);
+	deferredByMaxTasksTotal.store(0, std::memory_order_relaxed);
+	deferredByTimeBudgetTotal.store(0, std::memory_order_relaxed);
+	tasksDroppedTotal.store(0, std::memory_order_relaxed);
+}
+

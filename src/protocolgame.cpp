@@ -1527,33 +1527,42 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			}
 			break;
 		case 0x64:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			parseAutoWalk(msg);
 			break;
 		case 0x65:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			g_game.playerMove(player->getID(), DIRECTION_NORTH);
 			break;
 		case 0x66:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			g_game.playerMove(player->getID(), DIRECTION_EAST);
 			break;
 		case 0x67:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			g_game.playerMove(player->getID(), DIRECTION_SOUTH);
 			break;
 		case 0x68:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			g_game.playerMove(player->getID(), DIRECTION_WEST);
 			break;
 		case 0x69:
 			g_game.playerStopAutoWalk(player->getID());
 			break;
 		case 0x6A:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			g_game.playerMove(player->getID(), DIRECTION_NORTHEAST);
 			break;
 		case 0x6B:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			g_game.playerMove(player->getID(), DIRECTION_SOUTHEAST);
 			break;
 		case 0x6C:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			g_game.playerMove(player->getID(), DIRECTION_SOUTHWEST);
 			break;
 		case 0x6D:
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
 			g_game.playerMove(player->getID(), DIRECTION_NORTHWEST);
 			break;
 		case 0x6F:

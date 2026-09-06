@@ -19,6 +19,7 @@
 #include "protocollogin.h"
 #include "protocoladmin.h"
 #include "protocolstatus.h"
+#include "movement_diagnostics.h"
 #include "performance_metrics.h"
 #include "reactor.h"
 #include "rsa.h"
@@ -751,6 +752,14 @@ int startServer()
 		g_reactor.setTimeBudget(std::chrono::milliseconds(getInteger(ConfigManager::REACTOR_TIME_BUDGET_MS)));
 		g_reactor.setMaxInboxSize(static_cast<size_t>(getInteger(ConfigManager::REACTOR_MAX_INBOX_SIZE)));
 		g_performanceMetrics.setEnabled(getBoolean(ConfigManager::PERFORMANCE_METRICS_ENABLED));
+		g_movementDiagnostics.setEnabled(getBoolean(ConfigManager::MOVEMENT_LATENCY_DIAGNOSTICS));
+		g_movementDiagnostics.setReportIntervalSeconds(
+		    static_cast<uint32_t>(getInteger(ConfigManager::MOVEMENT_LATENCY_REPORT_SECONDS)));
+
+		if (getBoolean(ConfigManager::MOVEMENT_LATENCY_DIAGNOSTICS)) {
+			LOG_INFO(">> Movement latency diagnostics enabled (report interval: {}s)",
+			         getInteger(ConfigManager::MOVEMENT_LATENCY_REPORT_SECONDS));
+		}
 
 		LOG_INFO(">> Reactor limits: maxTasks={}, timeBudget={}ms, maxInbox={}",
 		    getInteger(ConfigManager::REACTOR_MAX_TASKS_PER_CYCLE),

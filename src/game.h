@@ -29,6 +29,7 @@ class Creature;
 class Monster;
 class Npc;
 class CombatInfo;
+struct WalkTimingContext;
 
 enum stackPosType_t
 {
@@ -511,7 +512,7 @@ public:
 	void saveGameState(bool crash = false);
 
 	// Events
-	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration);
+	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration, std::shared_ptr<WalkTimingContext> timing = nullptr);
 	void updateCreatureWalk(uint32_t creatureId);
 	void checkCreatureAttack(uint32_t creatureId);
 	void checkCreatures(size_t index);

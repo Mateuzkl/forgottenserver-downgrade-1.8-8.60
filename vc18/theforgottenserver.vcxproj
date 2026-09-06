@@ -269,6 +269,7 @@
     <ClCompile Include="..\src\monsters.cpp" />
     <ClCompile Include="..\src\mounts.cpp" />
     <ClCompile Include="..\src\movement.cpp" />
+    <ClCompile Include="..\src\movement_diagnostics.cpp" />
     <ClCompile Include="..\src\networkmessage.cpp" />
     <ClCompile Include="..\src\npc.cpp" />
     <ClCompile Include="..\src\otpch.cpp">
@@ -389,6 +390,7 @@
     <ClInclude Include="..\src\monsters.h" />
     <ClInclude Include="..\src\mounts.h" />
     <ClInclude Include="..\src\movement.h" />
+    <ClInclude Include="..\src\movement_diagnostics.h" />
     <ClInclude Include="..\src\networkmessage.h" />
     <ClInclude Include="..\src\npc.h" />
     <ClInclude Include="..\src\observer_ptr.h" />

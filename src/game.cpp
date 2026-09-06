@@ -22,6 +22,7 @@
 #include "items.h"
 #include "monster.h"
 #include "movement.h"
+#include "movement_diagnostics.h"
 #include "outputmessage.h"
 #include "performance_metrics.h"
 #include "pugicast.h"
@@ -3241,6 +3242,12 @@ void Game::playerMove(uint32_t playerId, Direction direction)
 	player->resetIdleTime();
 	player->setNextWalkActionTask(nullptr);
 
+	if (g_movementDiagnostics.isEnabled()) {
+		if (player->getLastMovementRequestTime() == std::chrono::steady_clock::time_point{}) {
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
+		}
+	}
+
 	player->startAutoWalk(direction);
 }
 
@@ -3428,6 +3435,12 @@ void Game::playerAutoWalk(uint32_t playerId, const std::vector<Direction>& listD
 	}
 
 	player->resetIdleTime();
+
+	if (g_movementDiagnostics.isEnabled()) {
+		if (player->getLastMovementRequestTime() == std::chrono::steady_clock::time_point{}) {
+			player->setLastMovementRequestTime(std::chrono::steady_clock::now());
+		}
+	}
 
 	if (player->getCondition(CONDITION_CLIPORT, CONDITIONID_DEFAULT)) {
 		const Position& playerPos = player->getPosition();
@@ -5995,13 +6008,37 @@ bool Game::internalCreatureSay(Creature* creature, SpeakClasses type, std::strin
 	return true;
 }
 
-void Game::checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration)
+void Game::checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration, std::shared_ptr<WalkTimingContext> timing)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatureWalk);
+	if (timing && g_movementDiagnostics.isEnabled()) {
+		timing->checkWalkStartTime = std::chrono::steady_clock::now();
+		g_movementDiagnostics.recordWalkCallbackExecuted();
+	}
+
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
-	if (creature && creature->walkGeneration == walkGeneration && !creature->isRemoved() && !creature->isDead()) {
-		creature->onWalk();
+	if (creature) {
+		if (creature->walkGeneration != walkGeneration) {
+			if (g_movementDiagnostics.isEnabled()) {
+				g_movementDiagnostics.recordWalkStale();
+			}
+			return;
+		}
+
+		if (!creature->isRemoved() && !creature->isDead()) {
+			if (timing && g_movementDiagnostics.isEnabled()) {
+				if (auto player = creature->getPlayer()) {
+					player->setActiveWalkTiming(timing);
+				}
+			}
+			creature->onWalk();
+			if (timing && g_movementDiagnostics.isEnabled()) {
+				if (auto player = creature->getPlayer()) {
+					player->setActiveWalkTiming(nullptr);
+				}
+			}
+		}
 	}
 }
 
