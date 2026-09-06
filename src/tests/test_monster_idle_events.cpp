@@ -59,14 +59,13 @@ public:
 	WorldFixture()
 	    : oldEvents(g_events),
 	      oldFactionSystem(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM)),
-	      oldRequirePlayer(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY))
+	      oldRequirePlayer(ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY)),
+	      previousMoveEvents(std::make_unique<MoveEvents>())
 	{
 		g_events = &events;
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_SYSTEM, true);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY, false);
-		if (!g_moveEvents) {
-			g_moveEvents = std::make_unique<MoveEvents>();
-		}
+		g_moveEvents.swap(previousMoveEvents);
 	}
 
 	~WorldFixture()
@@ -76,6 +75,7 @@ public:
 				g_game.removeCreature(creature.get(), false);
 			}
 		}
+		g_moveEvents.swap(previousMoveEvents);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_SYSTEM, oldFactionSystem);
 		ConfigManager::setBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY, oldRequirePlayer);
 		g_events = oldEvents;
@@ -93,6 +93,7 @@ private:
 	Events events;
 	bool oldFactionSystem;
 	bool oldRequirePlayer;
+	std::unique_ptr<MoveEvents> previousMoveEvents;
 	std::vector<std::weak_ptr<Creature>> creatures;
 };
 

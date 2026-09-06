@@ -11,8 +11,6 @@ on:
   push:
     branches:
       - main
-      - 'fix/**'
-      - 'feat/**'
 
     paths:
       - .github/workflows/build-vcpkg.yml
@@ -26,6 +24,8 @@ on:
       - tools/*.cmake
 
   pull_request:
+    branches:
+      - main
     paths:
       - .github/workflows/build-vcpkg.yml
       - cmake/**
@@ -45,62 +45,117 @@ jobs:
     runs-on: windows-2022
 
     env:
+      # Keep dependency source/object paths below MSVC's path length limits.
+      VCPKG_ROOT: D:\vcpkg
       VCPKG_BUILD_TYPE: release
-      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/x64-windows-static-release
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg_cache
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
-      SCCACHE_GHA_ENABLED: "true"
+      VCPKG_INSTALLED_DIR: D:\vi
+      VCPKG_DEFAULT_BINARY_CACHE: D:\vcache
+      VCPKG_BINARY_SOURCES: clear;files,D:\vcache,readwrite
+
+    defaults:
+      run:
+        shell: pwsh
 
     steps:
-      - uses: actions/checkout@v7.0.1
-
-      - name: Setup MSVC environment
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+      # Use GitHub-owned actions to comply with repository policy. Build with
+      # the runner's native tools instead of external setup/build actions.
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          arch: x64
+          persist-credentials: false
 
-      - name: Create vcpkg binary cache directory
-        run: mkdir -p "${{ github.workspace }}/vcpkg_cache"
-        shell: bash
-
-      - name: Get latest CMake
-        uses: lukka/get-cmake@v4.4.2
+      - name: Read vcpkg baseline and prepare cache
+        id: vcpkg-baseline
+        run: |
+          $manifest = Get-Content -LiteralPath vcpkg.json -Raw | ConvertFrom-Json
+          $baseline = $manifest.'builtin-baseline'
+          if ($baseline -notmatch '^[0-9a-f]{40}$') {
+            throw 'vcpkg.json must pin builtin-baseline to a full commit SHA.'
+          }
+          "commit=$baseline" >> $env:GITHUB_OUTPUT
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
 
       - name: Cache vcpkg binary packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ github.workspace }}/vcpkg_cache
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-windows-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**', 'CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
           restore-keys: |
             vcpkg-windows-
 
-      - name: Run vcpkg
-        uses: lukka/run-vcpkg@v11
+      - name: Checkout pinned vcpkg source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          vcpkgJsonGlob: 'vcpkg.json'
+          repository: microsoft/vcpkg
+          ref: ${{ steps.vcpkg-baseline.outputs.commit }}
+          path: vcpkg
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+      - name: Move pinned vcpkg to short path
+        run: |
+          # actions/checkout requires a path inside GITHUB_WORKSPACE. Relocate
+          # before bootstrap so buildtrees, packages and tools use the short root.
+          $workspacePath = (Resolve-Path -LiteralPath $env:GITHUB_WORKSPACE).Path
+          $checkoutPath = [IO.Path]::GetFullPath((Join-Path $workspacePath 'vcpkg'))
+          $vcpkgPath = [IO.Path]::GetFullPath($env:VCPKG_ROOT)
+          if (-not $checkoutPath.StartsWith("$workspacePath\", [StringComparison]::OrdinalIgnoreCase) -or $vcpkgPath -ne 'D:\vcpkg') {
+            throw 'Unexpected vcpkg relocation paths.'
+          }
+          if (Test-Path -LiteralPath $vcpkgPath) {
+            throw "Refusing to overwrite existing vcpkg directory: $vcpkgPath"
+          }
+          Move-Item -LiteralPath $checkoutPath -Destination $vcpkgPath
+          $actualCommit = & git -C $vcpkgPath rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $actualCommit -ne '${{ steps.vcpkg-baseline.outputs.commit }}') {
+            throw 'Relocated vcpkg does not match the pinned baseline.'
+          }
 
-      - name: Build with CMake
-        uses: lukka/run-cmake@v10.9
-        with:
-          configurePreset: vcpkg
-          buildPreset: vcpkg
-          configurePresetAdditionalArgs: "['-GNinja', '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_TESTING=ON', '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl', '-DCMAKE_C_COMPILER_LAUNCHER=sccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=sccache', '-DVCPKG_TARGET_TRIPLET=x64-windows-static', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded']"
+      - name: Bootstrap vcpkg
+        run: |
+          & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Configure MSVC and build with CMake
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $visualStudioPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($visualStudioPath)) {
+            throw 'An x64 MSVC installation was not found on the runner.'
+          }
+          Import-Module (Join-Path $visualStudioPath 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $visualStudioPath -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+
+          $configureArgs = @(
+            '--preset', 'vcpkg',
+            '-G', 'Ninja',
+            '-DCMAKE_BUILD_TYPE=Release',
+            '-DBUILD_TESTING=ON',
+            '-DCMAKE_C_COMPILER=cl',
+            '-DCMAKE_CXX_COMPILER=cl',
+            '-DVCPKG_TARGET_TRIPLET=x64-windows-static',
+            "-DVCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR",
+            '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded'
+          )
+          cmake @configureArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build --preset vcpkg --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
 
       - name: Upload build logs
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: logs-windows-${{ github.sha }}
-          path: ${{ github.workspace }}/vcpkg/buildtrees/**/*.log
+          path: |
+            ${{ env.VCPKG_ROOT }}/buildtrees/**/*.log
+            ${{ github.workspace }}/build/vcpkg-manifest-install.log
         if: ${{ failure() }}
 
       - name: Upload artifact binary
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tfs-windows-${{ github.sha }}
           path: ${{ github.workspace }}/build/tfs.exe

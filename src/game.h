@@ -511,7 +511,7 @@ public:
 	void saveGameState(bool crash = false);
 
 	// Events
-	void checkCreatureWalk(uint32_t creatureId);
+	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration);
 	void updateCreatureWalk(uint32_t creatureId);
 	void checkCreatureAttack(uint32_t creatureId);
 	void checkCreatures(size_t index);
