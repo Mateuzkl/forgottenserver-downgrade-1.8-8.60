@@ -18,6 +18,7 @@
 #include "luavariant.h"
 #include "matrixarea.h"
 #include "monster.h"
+#include "movement_diagnostics.h"
 #include "npc.h"
 #include "player.h"
 #include "protocolstatus.h"
@@ -3342,6 +3343,7 @@ void LuaScriptInterface::registerFunctions()
 	registerXML();
 	registerKV();
 	registerStressReactor();
+	registerMovementDiagnostics();
 }
 
 #undef registerEnum
@@ -5068,6 +5070,43 @@ void LuaScriptInterface::registerStressReactor()
 	registerVariable("configKeys", "STRESS_TEST_MIXED_DELAYS_COUNT", static_cast<int64_t>(ConfigManager::STRESS_TEST_MIXED_DELAYS_COUNT));
 	registerVariable("configKeys", "STRESS_TEST_LEAK_COUNT", static_cast<int64_t>(ConfigManager::STRESS_TEST_LEAK_COUNT));
 	registerVariable("configKeys", "STRESS_TEST_SHUTDOWN_SEND_COUNT", static_cast<int64_t>(ConfigManager::STRESS_TEST_SHUTDOWN_SEND_COUNT));
+}
+
+void LuaScriptInterface::registerMovementDiagnostics()
+{
+	lua_register(luaState, "getMovementDiagnosticsReport", [](lua_State* L) {
+		std::string report = g_movementDiagnostics.formatReportSnapshot();
+		Lua::pushString(L, report);
+		return 1;
+	});
+
+	lua_register(luaState, "isMovementDiagnosticsEnabled", [](lua_State* L) {
+		lua_pushboolean(L, g_movementDiagnostics.isEnabled() ? 1 : 0);
+		return 1;
+	});
+
+	lua_register(luaState, "setMovementDiagnosticsEnabled", [](lua_State* L) {
+		bool enabled = lua_toboolean(L, 1) != 0;
+		g_movementDiagnostics.setEnabled(enabled);
+		return 0;
+	});
+
+	lua_register(luaState, "resetMovementDiagnostics", [](lua_State*) {
+		g_movementDiagnostics.reset();
+		return 0;
+	});
+
+	lua_register(luaState, "startMovementDiagnosticsStress", [](lua_State* L) {
+		uint32_t level = static_cast<uint32_t>(lua_tointeger(L, 1));
+		bool success = g_movementDiagnostics.startStressTest(level);
+		lua_pushboolean(L, success ? 1 : 0);
+		return 1;
+	});
+
+	lua_register(luaState, "stopMovementDiagnosticsStress", [](lua_State*) {
+		g_movementDiagnostics.stopStressTest();
+		return 0;
+	});
 }
 
 int LuaScriptInterface::luaKVScoped(lua_State* L) {

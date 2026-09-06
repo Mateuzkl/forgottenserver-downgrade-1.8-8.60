@@ -9,6 +9,7 @@
 #include "events.h"
 #include "game.h"
 #include "monster.h"
+#include "movement_diagnostics.h"
 #include "performance_metrics.h"
 #include "player.h"
 #include "scheduler.h"
@@ -311,6 +312,13 @@ void Creature::onWalk()
 				}
 
 				forceUpdateFollowPath = true;
+			} else if (g_movementDiagnostics.isEnabled()) {
+				if (Player* player = getPlayer()) {
+					if (auto timing = player->getActiveWalkTiming()) {
+						timing->physicalMoveTime = std::chrono::steady_clock::now();
+						g_movementDiagnostics.recordSample(*timing);
+					}
+				}
 			}
 		} else {
 			stopEventWalk();
@@ -332,6 +340,11 @@ void Creature::onWalk()
 			stopEventWalk();
 		} else {
 			eventWalk = 0;
+			if (g_movementDiagnostics.isEnabled()) {
+				if (Player* player = getPlayer()) {
+					player->setLastMovementRequestTime(std::chrono::steady_clock::now());
+				}
+			}
 			addEventWalk();
 		}
 	}
@@ -424,8 +437,30 @@ void Creature::addEventWalk(bool firstStep)
 	const uint32_t cid = getID();
 	const uint32_t generation = walkGeneration;
 
-	eventWalk = g_scheduler.addEvent(
-	    createSchedulerTask(safeTicks, ([cid, generation]() { g_game.checkCreatureWalk(cid, generation); })));
+	if (g_movementDiagnostics.isEnabled()) {
+		auto timing = std::make_shared<WalkTimingContext>();
+		timing->playerId = (getPlayer() ? cid : 0);
+		timing->generation = generation;
+		timing->requestedDelayMs = safeTicks;
+		timing->scheduleTime = std::chrono::steady_clock::now();
+		timing->fireAt = timing->scheduleTime + std::chrono::milliseconds(safeTicks);
+		if (auto player = getPlayer()) {
+			timing->requestTime = player->getLastMovementRequestTime();
+			if (timing->requestTime == std::chrono::steady_clock::time_point{}) {
+				timing->requestTime = timing->scheduleTime;
+			}
+		} else {
+			timing->requestTime = timing->scheduleTime;
+		}
+
+		eventWalk = g_scheduler.addEvent(createSchedulerTask(safeTicks, ([cid, generation, timing]() {
+			timing->reactorStartTime = std::chrono::steady_clock::now();
+			g_game.checkCreatureWalk(cid, generation, timing);
+		})));
+	} else {
+		eventWalk = g_scheduler.addEvent(
+		    createSchedulerTask(safeTicks, ([cid, generation]() { g_game.checkCreatureWalk(cid, generation); })));
+	}
 }
 
 void Creature::stopEventWalk()
@@ -434,6 +469,9 @@ void Creature::stopEventWalk()
 	// callback must not rearm over a replacement created by onWalkComplete().
 	++walkGeneration;
 	if (eventWalk != 0) {
+		if (g_movementDiagnostics.isEnabled()) {
+			g_movementDiagnostics.recordWalkCancelled();
+		}
 		g_scheduler.stopEvent(eventWalk);
 		eventWalk = 0;
 	}

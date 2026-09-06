@@ -539,6 +539,7 @@ bool ConfigManager::load()
 	booleans[Boolean::CONSOLE_COLORS] = getGlobalBoolean(L, "consoleColors", true);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", false);
 	booleans[Boolean::PERFORMANCE_METRICS_ENABLED] = getGlobalBoolean(L, "performanceMetricsEnabled", false);
+	booleans[Boolean::MOVEMENT_LATENCY_DIAGNOSTICS] = getGlobalBoolean(L, "movementLatencyDiagnostics", false);
 	booleans[Boolean::STATS_MONITOR_ENABLED] = getGlobalBoolean(L, "statsEnabled", false);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");
@@ -792,6 +793,8 @@ bool ConfigManager::load()
 	    std::clamp<int64_t>(getGlobalInteger(L, "reactorTimeBudgetMS", 25), 0, 1000);
 	integers[Integer::REACTOR_MAX_INBOX_SIZE] =
 	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxInboxSize", 200000), 1, 10'000'000);
+	integers[Integer::MOVEMENT_LATENCY_REPORT_SECONDS] =
+	    std::max<int64_t>(1, getGlobalInteger(L, "movementLatencyReportSeconds", 10));
 
 	loaded = true;
 	// ownedL destructor calls lua_close via LuaStateDeleter

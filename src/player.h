@@ -35,6 +35,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+struct WalkTimingContext;
+
 enum VirtueMonk_t : uint8_t {
 	VIRTUE_NONE = 0,
 	VIRTUE_HARMONY = 1,
@@ -813,6 +815,10 @@ public:
 	bool shouldScheduleWalkCompletion() const override;
 
 	void stopWalk();
+	void setLastMovementRequestTime(std::chrono::steady_clock::time_point time) noexcept { lastMovementRequestTime = time; }
+	[[nodiscard]] std::chrono::steady_clock::time_point getLastMovementRequestTime() const noexcept { return lastMovementRequestTime; }
+	void setActiveWalkTiming(std::shared_ptr<WalkTimingContext> timing) noexcept { activeWalkTiming = std::move(timing); }
+	[[nodiscard]] std::shared_ptr<WalkTimingContext> getActiveWalkTiming() const noexcept { return activeWalkTiming; }
 	void openShopWindow(const std::list<ShopInfo>& shop);
 	bool closeShopWindow(bool sendCloseShopWindow = true);
 	bool updateSaleShopList(const Item* item);
@@ -1969,6 +1975,9 @@ private:
 		uint32_t flushEventId = 0;
 	};
 	std::unordered_map<std::string, std::shared_ptr<LootGroup>> m_pendingLootGroups;
+
+	std::chrono::steady_clock::time_point lastMovementRequestTime{};
+	std::shared_ptr<WalkTimingContext> activeWalkTiming{nullptr};
 
 	friend class Game;
 	friend class Npc;

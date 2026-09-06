@@ -25,6 +25,23 @@ using ReactorCallback = std::move_only_function<void()>;
 inline constexpr size_t REACTOR_MAX_INBOX_SIZE = 100000;
 inline constexpr std::chrono::milliseconds REACTOR_DRAIN_TIMEOUT{5000};
 
+struct ReactorQueueSnapshot
+{
+	size_t sendInboxSize = 0;
+	size_t scheduleInboxSize = 0;
+	size_t cancelInboxSize = 0;
+	size_t taskHeapSize = 0;
+	size_t totalPending = 0;
+};
+
+struct ReactorStatsSnapshot
+{
+	uint64_t tasksExecuted = 0;
+	uint64_t deferredByMaxTasks = 0;
+	uint64_t deferredByTimeBudget = 0;
+	uint64_t tasksDropped = 0;
+};
+
 class TaskReactor
 {
 public:
@@ -54,6 +71,9 @@ public:
 	[[nodiscard]] bool isReactorThread() const noexcept;
 	[[nodiscard]] ThreadState getState() const noexcept;
 	[[nodiscard]] bool hasPendingTasks() const;
+	[[nodiscard]] ReactorQueueSnapshot getQueueSnapshot() const;
+	[[nodiscard]] ReactorStatsSnapshot getStatsSnapshot() const;
+	void resetStatsSnapshot();
 
 private:
 	struct Task
@@ -108,6 +128,11 @@ private:
 	uint32_t maxTasksPerCycle = 0;
 	std::chrono::milliseconds timeBudget{0};
 	size_t maxInboxSize = REACTOR_MAX_INBOX_SIZE;
+
+	mutable std::atomic<uint64_t> tasksExecutedTotal{0};
+	mutable std::atomic<uint64_t> deferredByMaxTasksTotal{0};
+	mutable std::atomic<uint64_t> deferredByTimeBudgetTotal{0};
+	mutable std::atomic<uint64_t> tasksDroppedTotal{0};
 
 	friend struct TaskReactorTestAccess;
 };
