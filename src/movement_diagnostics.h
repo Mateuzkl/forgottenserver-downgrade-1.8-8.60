@@ -111,11 +111,13 @@ private:
 	mutable std::atomic<size_t> maxQueueObserved{0};
 
 	// Stress test state
-	void stepStressTest();
+	void stepStressTest(uint64_t generation);
 	std::atomic<bool> stressRunning{false};
+	std::atomic<uint64_t> stressGeneration{0};
 	uint32_t stressTicksRemaining = 0;
 	uint32_t stressTasksPerTick = 0;
 	uint32_t stressActiveLevel = 0;
+	uint32_t stressEventId = 0;
 };
 
 inline MovementDiagnostics& g_movementDiagnostics = MovementDiagnostics::getInstance();

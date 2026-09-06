@@ -273,14 +273,15 @@ void MovementDiagnostics::reset()
 	nextReportNanoseconds.store((now + interval).count(), std::memory_order_relaxed);
 }
 
-void MovementDiagnostics::stepStressTest()
+void MovementDiagnostics::stepStressTest(uint64_t generation)
 {
-	if (!stressRunning.load(std::memory_order_relaxed)) {
+	if (!stressRunning.load(std::memory_order_acquire) || generation != stressGeneration.load(std::memory_order_acquire)) {
 		return;
 	}
 
 	if (stressTicksRemaining == 0) {
 		stressRunning.store(false, std::memory_order_release);
+		stressEventId = 0;
 		LOG_INFO("[MovementLag] Reactor stress test completed.");
 		return;
 	}
@@ -297,11 +298,12 @@ void MovementDiagnostics::stepStressTest()
 	}
 
 	if (stressTicksRemaining > 0) {
-		g_scheduler.addEvent(createSchedulerTask(50, [this]() {
-			stepStressTest();
-		}));
+		stressEventId = g_scheduler.addEvent(createSchedulerTask(50, ([this, generation]() {
+			stepStressTest(generation);
+		})));
 	} else {
 		stressRunning.store(false, std::memory_order_release);
+		stressEventId = 0;
 		LOG_INFO("[MovementLag] Reactor stress test completed.");
 	}
 }
@@ -317,6 +319,7 @@ bool MovementDiagnostics::startStressTest(uint32_t level)
 		return false;
 	}
 
+	const uint64_t generation = ++stressGeneration;
 	stressActiveLevel = level;
 	stressTicksRemaining = 200;
 	if (level == 1) {
@@ -330,14 +333,19 @@ bool MovementDiagnostics::startStressTest(uint32_t level)
 	LOG_WARN("[MovementLag] Starting controlled Reactor stress test level {} (~{} tasks/s for 10s). Local/test only!",
 	         level, stressTasksPerTick * 20);
 
-	g_scheduler.addEvent(createSchedulerTask(50, [this]() {
-		stepStressTest();
-	}));
+	stressEventId = g_scheduler.addEvent(createSchedulerTask(50, ([this, generation]() {
+		stepStressTest(generation);
+	})));
 	return true;
 }
 
 void MovementDiagnostics::stopStressTest()
 {
+	++stressGeneration;
 	stressRunning.store(false, std::memory_order_release);
 	stressTicksRemaining = 0;
+	if (stressEventId != 0) {
+		g_scheduler.stopEvent(stressEventId);
+		stressEventId = 0;
+	}
 }
