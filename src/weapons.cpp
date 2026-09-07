@@ -303,6 +303,60 @@ bool Weapon::ammoCheck(const Player* player) const
 	return true;
 }
 
+namespace {
+// Client weaponType (1-6) maps to melee swing effect 304-309. Jump-table is not contiguous.
+uint8_t getWeaponAttackMark(const Item* item)
+{
+	if (!item) {
+		return 4; // fist
+	}
+
+	switch (item->getWeaponType()) {
+		case WEAPON_SWORD:
+			return 1;
+		case WEAPON_CLUB:
+			return 2;
+		case WEAPON_AXE:
+			return 3;
+		case WEAPON_FIST:
+			switch (item->getID()) {
+				case ITEM_BAMBO_JO:
+				case ITEM_COBRA_BO:
+				case ITEM_DRACHAKU:
+				case ITEM_JO_STAFF:
+				case ITEM_LIGHT_JO_STAFF:
+				case ITEM_NUNCHAKU_OF_DESTRUCTION:
+				case ITEM_NUNCHAKU_OF_ENLIGHTENMENT:
+				case ITEM_SIMPLE_JO_STAFF:
+					return 5;
+				case ITEM_AMBER_KUSARIGAMA:
+				case ITEM_CRUDE_UMBRAL_KATAR:
+				case ITEM_FALCON_SAI:
+				case ITEM_NAGA_KATAR:
+				case ITEM_SAI_OF_ENLIGHTENMENT:
+				case ITEM_SAI:
+				case ITEM_SOULKAMAS:
+				case ITEM_TRADITIONAL_SAI:
+				case ITEM_UMBRAL_KATAR:
+				case ITEM_MASTER_UMBRAL_KATAR:
+					return 6;
+				default:
+					return 4;
+			}
+		default:
+			return 0;
+	}
+}
+
+void sendMeleeAttackMark(Player* player, Creature* target, const Item* item)
+{
+	const uint8_t weaponMark = getWeaponAttackMark(item);
+	if (weaponMark != 0) {
+		player->sendCreatureWeaponAttackMark(target, weaponMark);
+	}
+}
+} // namespace
+
 bool Weapon::useFist(Player* player, Creature* target)
 {
 	if (!player->getPosition().isInRange(target->getPosition(), 1, 1)) {
@@ -327,6 +381,7 @@ bool Weapon::useFist(Player* player, Creature* target)
 
 	CombatDamage cleaveSnapshot = damage;
 	uint32_t targetId = target->getID();
+	sendMeleeAttackMark(player, target, nullptr);
 	Combat::doTargetCombat(player, target, damage, params);
 	if (player->checkCleaveSystem()) {
 		uint32_t cleavePercent = Combat::getCleaveFistPercent();
@@ -341,80 +396,11 @@ bool Weapon::useFist(Player* player, Creature* target)
 	return true;
 }
 
-namespace {
-    [[maybe_unused]] uint8_t markWeaponType(WeaponType_t weaponType) {
-        switch (weaponType) {
-            case WEAPON_SWORD: return 1;
-            case WEAPON_CLUB:  return 2;
-            case WEAPON_AXE:   return 3;
-            case WEAPON_FIST:  return 4;
-            default:           return 4; // fallback fist
-        }
-    }
-}
-
-uint16_t Weapon::getWeaponAttackEffect(const Item* item) const {
-    if (!item) {
-        return CONST_ME_FIST_ATTACK; // Fist attack when no weapon
-    }
-
-	const WeaponType_t weaponType = item->getWeaponType();
-
-	// Determine attack effect based on weapon type
-	switch (weaponType) {
-		case WEAPON_SWORD:
-			return CONST_ME_SWORD_ATTACK;
-
-		case WEAPON_CLUB:
-			return CONST_ME_CLUB_ATTACK;
-
-		case WEAPON_AXE:
-			return CONST_ME_AXE_ATTACK;
-
-		case WEAPON_FIST: {
-			switch (item->getID()) {
-				// Staff weapons
-				case ITEM_BAMBO_JO:
-				case ITEM_COBRA_BO:
-				case ITEM_DRACHAKU:
-				case ITEM_JO_STAFF:
-				case ITEM_LIGHT_JO_STAFF:
-				case ITEM_NUNCHAKU_OF_DESTRUCTION:
-				case ITEM_NUNCHAKU_OF_ENLIGHTENMENT:
-				case ITEM_SIMPLE_JO_STAFF:
-					return CONST_ME_MONK_STAFF_ATTACK;
-
-				// Dagger weapons
-				case ITEM_AMBER_KUSARIGAMA:
-				case ITEM_CRUDE_UMBRAL_KATAR:
-				case ITEM_FALCON_SAI:
-				case ITEM_NAGA_KATAR:
-				case ITEM_SAI_OF_ENLIGHTENMENT:
-				case ITEM_SAI:
-				case ITEM_SOULKAMAS:
-				case ITEM_TRADITIONAL_SAI:
-				case ITEM_UMBRAL_KATAR:
-				case ITEM_MASTER_UMBRAL_KATAR:
-					return CONST_ME_MONK_DAGGERS_ATTACK;
-				default:
-					return CONST_ME_FIST_ATTACK;
-			}
-		}
-
-		default:
-			return CONST_ME_NONE;
-	}
-}
-
 void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const
 {
 	WeaponType_t weaponType = item ? item->getWeaponType() : WEAPON_FIST;
 
-	if (weaponType == WEAPON_SWORD || weaponType == WEAPON_CLUB ||
-		weaponType == WEAPON_AXE   || weaponType == WEAPON_FIST)
-	{
-		g_game.addMagicEffect(target->getPosition(), getWeaponAttackEffect(item), target->getInstanceID());
-	}
+	sendMeleeAttackMark(player, target, item);
 
 	if (scripted) {
 		LuaVariant var;

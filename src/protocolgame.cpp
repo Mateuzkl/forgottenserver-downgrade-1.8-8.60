@@ -3093,6 +3093,20 @@ void ProtocolGame::sendCreatureSquare(const Creature* creature, SquareColor_t co
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendCreatureWeaponAttackMark(const Creature* target, uint8_t weaponType)
+{
+	if (!isFonticakClient || !target || weaponType == 0 || !canSee(target)) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x93);
+	msg.add<uint32_t>(target->getID());
+	msg.addByte(SQ_PLAYER_ATTACK);
+	msg.addByte(weaponType);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendTutorial(uint8_t tutorialId)
 {
 	NetworkMessage msg;
