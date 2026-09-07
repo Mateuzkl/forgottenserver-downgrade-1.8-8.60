@@ -5365,7 +5365,7 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 	msg.add<uint16_t>(static_cast<uint16_t>(player->getLevel()));
 	msg.addByte(player->getLevelPercent());
 
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient) {
 		msg.add<uint16_t>(player->getBaseXpGain());
 		msg.add<uint16_t>(0); // voucher XP boost
 		msg.add<uint16_t>(player->getDisplayGrindingXpBoost());
@@ -5389,12 +5389,12 @@ void ProtocolGame::AddPlayerStats(NetworkMessage& msg)
 
 	if (isOTC) {
 		msg.add<uint16_t>(player->getBaseSpeed() / 2);
-		if (isAstraClient) {
+		if (isAstraClient || isFonticakClient) {
 			auto condition = player->getCondition(CONDITION_REGENERATION, CONDITIONID_DEFAULT);
 			msg.add<uint16_t>(getRegenerationTimeSeconds(condition ? condition->getTicks() : 0));
 		}
 		msg.add<uint16_t>(player->getOfflineTrainingTime() / 60 / 1000);
-		if (isAstraClient) {
+		if (isAstraClient || isFonticakClient) {
 			msg.add<uint16_t>(player->getXpBoostTime());
 			// 0x00 means boost is active and cannot be bought; 0x01 means the client may buy one.
 			msg.addByte(player->getXpBoostTime() > 0 ? 0x00 : 0x01);
@@ -5738,8 +5738,10 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
 	}
-	// Fonticak outfit familiar extension (feature id 138) and quiver count (feature id 141).
+	// Fonticak outfit familiar extension (feature id 138), quiver count (feature id 141), regeneration time and experience bonus.
 	if (isFonticakClient) {
+		features[GameFeature::PlayerRegenerationTime] = true;
+		features[GameFeature::ExperienceBonus] = true;
 		features[GameFeature::PlayerFamiliars] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 	}
