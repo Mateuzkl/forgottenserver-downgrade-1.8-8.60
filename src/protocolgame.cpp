@@ -4184,7 +4184,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 		sendBasicData();
 	}
 
-	if (isAstraClient && (player->getVocationId() == 9 || player->getVocationId() == 10)) {
+	if ((isAstraClient || isFonticakClient) && (player->getVocationId() == 9 || player->getVocationId() == 10)) {
 		player->sendMonkData();
 	}
 

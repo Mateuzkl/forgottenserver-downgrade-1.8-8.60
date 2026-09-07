@@ -820,7 +820,7 @@ Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 
 void Player::sendMonkData()
 {
-	if (!client || !client->isAstraClient) {
+	if (!client || (!client->isAstraClient && !client->isFonticakClient)) {
 		return;
 	}
 	std::string json = fmt::format(
