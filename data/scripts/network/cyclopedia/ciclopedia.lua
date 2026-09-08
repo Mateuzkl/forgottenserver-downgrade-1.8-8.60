@@ -74,7 +74,7 @@ local function ensureTables()
 		return false
 	end
 
-	db.query([[
+	if not db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_kills` (
 			`player_id` INT NOT NULL,
 			`raceid` SMALLINT UNSIGNED NOT NULL,
@@ -83,9 +83,11 @@ local function ensureTables()
 			CONSTRAINT `fk_player_bestiary_kills_player`
 				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
-	]])
+	]]) then
+		return false
+	end
 
-	db.query([[
+	if not db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_charms` (
 			`player_id` INT NOT NULL,
 			`charm_id` TINYINT UNSIGNED NOT NULL,
@@ -96,9 +98,11 @@ local function ensureTables()
 			CONSTRAINT `fk_player_bestiary_charms_player`
 				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
-	]])
+	]]) then
+		return false
+	end
 
-	db.query([[
+	if not db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_resources` (
 			`player_id` INT NOT NULL,
 			`minor_charm_echoes` INT UNSIGNED NOT NULL DEFAULT 0,
@@ -107,9 +111,11 @@ local function ensureTables()
 			CONSTRAINT `fk_player_bestiary_resources_player`
 				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
-	]])
+	]]) then
+		return false
+	end
 
-	db.query([[
+	if not db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_tracker` (
 			`player_id` INT NOT NULL,
 			`raceid` SMALLINT UNSIGNED NOT NULL,
@@ -119,8 +125,16 @@ local function ensureTables()
 			CONSTRAINT `fk_player_bestiary_tracker_player`
 				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
-	]])
+	]]) then
+		return false
+	end
 	return true
+end
+
+local schemaReady = ensureTables()
+if not schemaReady then
+	logError("[CustomBestiary] Database schema is not ready; Cyclopedia handlers are disabled.")
+	return
 end
 
 local function getPlayerGuid(player)
@@ -1097,5 +1111,3 @@ function bestiaryLogin.onLogin(player)
 	return true
 end
 bestiaryLogin:register()
-
-ensureTables()
