@@ -1,4 +1,9 @@
-if not configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED) or not CustomBosstiary then
+local function isBestiaryEnabled()
+	return configManager and configManager.getBoolean and configKeys
+		and configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED)
+end
+
+if not isBestiaryEnabled() or not CustomBosstiary then
 	return
 end
 
@@ -28,13 +33,18 @@ local function clamp(value, minValue, maxValue)
 end
 
 local function ensurePlayerRow(playerGuid)
-	CustomBosstiary.ensureTables()
+	if not isBestiaryEnabled() or not CustomBosstiary.ensureTables() then
+		return false
+	end
 	db.query("INSERT IGNORE INTO `player_bosstiary` (`player_id`) VALUES (" .. playerGuid .. ")")
+	return true
 end
 
 local function loadState(playerGuid)
-	ensurePlayerRow(playerGuid)
 	local state = {points = 0, slotOne = 0, slotTwo = 0, removeTimes = 0}
+	if not ensurePlayerRow(playerGuid) then
+		return state
+	end
 	local resultId = db.storeQuery("SELECT `points`, `slot_one`, `slot_two`, `remove_times` FROM `player_bosstiary` WHERE `player_id` = " .. playerGuid)
 	if resultId ~= false then
 		state.points = result.getDataInt(resultId, "points")
@@ -50,6 +60,10 @@ local function loadState(playerGuid)
 end
 
 local function loadKills(playerGuid)
+	if not isBestiaryEnabled() then
+		return {}
+	end
+
 	if Game.getBestiaryKills then
 		return Game.getBestiaryKills(playerGuid)
 	end
@@ -67,6 +81,10 @@ end
 
 local function loadTracker(playerGuid)
 	local tracker = {}
+	if not isBestiaryEnabled() then
+		return tracker
+	end
+
 	local resultId = db.storeQuery("SELECT `bossid` FROM `player_bosstiary_tracker` WHERE `player_id` = " ..
 		playerGuid .. " ORDER BY `slot` ASC, `bossid` ASC")
 	if resultId ~= false then
@@ -124,7 +142,7 @@ local function writeOptionalCreatureInfo(out, entry)
 end
 
 local function sendBaseData(player)
-	if not supportsCustomNetwork(player) then
+	if not isBestiaryEnabled() or not supportsCustomNetwork(player) then
 		return false
 	end
 
@@ -144,7 +162,7 @@ local function sendBaseData(player)
 end
 
 local function sendWindow(player)
-	if not supportsCustomNetwork(player) then
+	if not isBestiaryEnabled() or not supportsCustomNetwork(player) then
 		return false
 	end
 
@@ -196,7 +214,7 @@ local function sendSlotBytes(out, entry, kills, lootBonus, killBonus, inactive, 
 end
 
 local function sendSlots(player)
-	if not supportsCustomNetwork(player) then
+	if not isBestiaryEnabled() or not supportsCustomNetwork(player) then
 		return false
 	end
 
@@ -289,7 +307,7 @@ local function removePlayerGold(player, amount)
 end
 
 local function handleSlotAction(player, slot, raceId)
-	if slot ~= 1 and slot ~= 2 then
+	if not isBestiaryEnabled() or (slot ~= 1 and slot ~= 2) then
 		return
 	end
 
@@ -326,7 +344,7 @@ local function handleSlotAction(player, slot, raceId)
 end
 
 local function toggleTracker(player, raceId, enabled)
-	if not CustomBosstiary.getMonster(raceId) then
+	if not isBestiaryEnabled() or not CustomBosstiary.getMonster(raceId) then
 		return
 	end
 
@@ -346,18 +364,28 @@ end
 
 local openHandler = PacketHandler(OPCODE_BOSSTIARY_OPEN)
 function openHandler.onReceive(player, msg)
+	if not isBestiaryEnabled() then
+		return
+	end
 	sendWindow(player)
 end
 openHandler:register()
 
 local slotsHandler = PacketHandler(OPCODE_BOSSTIARY_OPEN_SLOTS)
 function slotsHandler.onReceive(player, msg)
+	if not isBestiaryEnabled() then
+		return
+	end
 	sendSlots(player)
 end
 slotsHandler:register()
 
 local slotActionHandler = PacketHandler(OPCODE_BOSSTIARY_SLOT_ACTION)
 function slotActionHandler.onReceive(player, msg)
+	if not isBestiaryEnabled() then
+		return
+	end
+
 	if msg:len() - msg:tell() < 5 then
 		return
 	end
@@ -367,6 +395,10 @@ slotActionHandler:register()
 
 local trackerHandler = PacketHandler(OPCODE_BOSSTIARY_TRACKER)
 function trackerHandler.onReceive(player, msg)
+	if not isBestiaryEnabled() then
+		return
+	end
+
 	if msg:len() - msg:tell() < 5 then
 		return
 	end

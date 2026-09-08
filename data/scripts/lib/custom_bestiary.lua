@@ -1,4 +1,9 @@
-if not configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED) then
+local function isBestiaryEnabled()
+	return configManager and configManager.getBoolean and configKeys
+		and configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED)
+end
+
+if not isBestiaryEnabled() then
 	CustomBestiary = nil
 	function Game.getMonstersByBestiaryStars(_stars)
 		return {}
@@ -7,6 +12,7 @@ if not configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED) then
 end
 
 CustomBestiary = CustomBestiary or {}
+CustomBestiary.isEnabled = isBestiaryEnabled
 
 CustomBestiary.monstersByRaceId = CustomBestiary.monstersByRaceId or {}
 CustomBestiary.classOrder = CustomBestiary.classOrder or {}
@@ -197,6 +203,10 @@ local function addToClass(entry)
 end
 
 function CustomBestiary.registerMonster(monsterType, mask)
+	if not isBestiaryEnabled() then
+		return false
+	end
+
 	if type(mask) ~= "table" or type(mask.Bestiary) ~= "table" then
 		return false
 	end
@@ -271,10 +281,17 @@ function CustomBestiary.registerMonster(monsterType, mask)
 end
 
 function CustomBestiary.getMonster(raceId)
+	if not isBestiaryEnabled() then
+		return nil
+	end
 	return CustomBestiary.monstersByRaceId[tonumber(raceId) or 0]
 end
 
 function CustomBestiary.getClasses()
+	if not isBestiaryEnabled() then
+		return {}, {}
+	end
+
 	if classesDirty then
 		table.sort(CustomBestiary.classOrder, function(a, b)
 			local orderA = CustomBestiary.classRace[a] or 0
@@ -327,6 +344,10 @@ end
 
 function CustomBestiary.getMonstersByStars(starFilter)
 	local result = {}
+	if not isBestiaryEnabled() then
+		return result
+	end
+
 	starFilter = tonumber(starFilter) or 0
 	for _, entry in pairs(CustomBestiary.monstersByRaceId or {}) do
 		if entry.stars == starFilter then

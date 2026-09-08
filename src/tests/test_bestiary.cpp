@@ -8,6 +8,23 @@
 
 namespace {
 
+/// RAII helper to set a boolean config value and restore it on scope exit.
+struct ScopedConfigOverride
+{
+	ConfigManager::Boolean key;
+	bool original;
+
+	ScopedConfigOverride(ConfigManager::Boolean k, bool value) : key(k), original(ConfigManager::getBoolean(k))
+	{
+		ConfigManager::setBoolean(k, value);
+	}
+
+	~ScopedConfigOverride() { ConfigManager::setBoolean(key, original); }
+
+	ScopedConfigOverride(const ScopedConfigOverride&) = delete;
+	ScopedConfigOverride& operator=(const ScopedConfigOverride&) = delete;
+};
+
 void ensureItemTypesLoaded()
 {
 	if (Item::items.size() != 0) {
@@ -55,6 +72,7 @@ TEST_CASE(bestiary_progress_keeps_discovery_before_first_unlock)
 
 TEST_CASE(bestiary_registration_uses_race_id_as_legacy_identity)
 {
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, true);
 	BestiaryCharmSystem system;
 	BestiaryCreatureInfo first;
 	first.raceId = 2764;
@@ -119,6 +137,119 @@ TEST_CASE(bestiary_first_kill_is_recorded_when_race_id_is_patched_after_death)
 	CHECK(newCount == 1);
 	CHECK(player.getBestiaryKillCount(patchedRaceId) == 1);
 	CHECK(player.getBestiaryDirtySnapshot().modifiedRaceIds.contains(patchedRaceId));
+}
+
+// ---------------------------------------------------------------------------
+// OFF-mode regression tests: verify that disabled Bestiary produces safe
+// neutral values and never reaches DB access paths.
+// ---------------------------------------------------------------------------
+
+TEST_CASE(bestiary_charm_system_disabled_registration_is_noop_and_get_returns_nullopt)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	BestiaryCharmSystem system;
+	BestiaryCreatureInfo info;
+	info.raceId = 9999;
+	info.toKill = 100;
+	info.firstUnlock = 10;
+	info.secondUnlock = 50;
+	system.registerMonster(info);
+
+	const auto registered = system.getMonster(9999);
+	CHECK(!registered.has_value());
+}
+
+TEST_CASE(bestiary_charm_system_disabled_returns_zero_tier)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	ensureItemTypesLoaded();
+	Player player(nullptr);
+
+	// Even if a valid charm definition exists, tier must be 0 when disabled.
+	CHECK(g_bestiaryCharmSystem.getAssignedCharmTier(player, 0, 100) == 0);
+	CHECK(g_bestiaryCharmSystem.getAssignedCharmTier(player, 15, 100) == 0);
+}
+
+TEST_CASE(bestiary_charm_system_disabled_returns_zero_bonus)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	// Bonus must be 0.0 for any charm/tier combination when disabled.
+	CHECK(g_bestiaryCharmSystem.getCharmBonus(0, 1) == 0.0);
+	CHECK(g_bestiaryCharmSystem.getCharmBonus(15, 3) == 0.0);
+}
+
+TEST_CASE(bestiary_charm_system_disabled_handle_action_returns_disabled)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	ensureItemTypesLoaded();
+	Player player(nullptr);
+
+	const auto result = g_bestiaryCharmSystem.handleCharmAction(player, 0, 0, 100);
+	CHECK(!result.success);
+	CHECK(result.message == "Bestiary system is disabled.");
+}
+
+TEST_CASE(bestiary_charm_system_disabled_add_minor_echoes_returns_false)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	// addMinorCharmEchoes must return false (no-op) when disabled.
+	CHECK(!g_bestiaryCharmSystem.addMinorCharmEchoes(1, 100));
+}
+
+TEST_CASE(bestiary_charm_system_enabled_returns_nonzero_bonus)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, true);
+	CHECK(BestiaryCharmSystem::isEnabled());
+
+	// Charm 0 tier 1 should return a non-zero bonus when enabled.
+	CHECK(g_bestiaryCharmSystem.getCharmBonus(0, 1) > 0.0);
+}
+
+TEST_CASE(bestiary_dirty_snapshot_preserved_when_system_disabled_during_save)
+{
+	ensureItemTypesLoaded();
+	Player player(nullptr);
+	player.clearBestiaryDirty();
+
+	// 1. Bestiary is enabled, player registers kills
+	{
+		ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, true);
+		player.addBestiaryKillCount(100, 5);
+		CHECK(player.getBestiaryDirtySnapshot().modifiedRaceIds.contains(100));
+	}
+
+	// 2. Bestiary is toggled OFF (simulating config reload before save).
+	// buildPlayerSave only captures an empty snapshot when BESTIARY_SYSTEM_ENABLED is false.
+	{
+		ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+		const Player::BestiaryDirtySnapshot bestiarySnapshot =
+		    ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED)
+		        ? player.getBestiaryDirtySnapshot()
+		        : Player::BestiaryDirtySnapshot{};
+
+		CHECK(bestiarySnapshot.modifiedRaceIds.empty());
+
+		// Flush acknowledgement with empty snapshot must NOT clear the dirty kill.
+		player.acknowledgeBestiaryDirty(bestiarySnapshot);
+	}
+
+	// 3. Bestiary is toggled back ON
+	{
+		ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, true);
+		// Dirty state was NOT cleared by the OFF-mode save
+		const auto newSnapshot = player.getBestiaryDirtySnapshot();
+		CHECK(newSnapshot.modifiedRaceIds.contains(100));
+	}
 }
 
 TFS_TEST_MAIN()

@@ -6,6 +6,10 @@ if not CustomBestiary then
 	return
 end
 
+local function isBestiaryEnabled()
+	return CustomBestiary and CustomBestiary.isEnabled and CustomBestiary.isEnabled()
+end
+
 local function getBestiaryEntryByName(name)
 	local targetName = tostring(name or ""):lower()
 	if targetName == "" or not CustomBestiary or not CustomBestiary.monstersByRaceId then
@@ -149,7 +153,7 @@ end
 local bestiaryKill = CreatureEvent("CustomBestiaryKill")
 
 function bestiaryKill.onDeath(creature, corpse, killer, mostDamageKiller, lastHitUnjustified, mostDamageUnjustified)
-	if not CustomBestiary then
+	if not isBestiaryEnabled() then
 		return true
 	end
 
@@ -235,7 +239,7 @@ bestiaryKill:register()
 
 local bestiarySpawn = MonsterEvent and MonsterEvent("CustomBestiarySpawn") or Event()
 function bestiarySpawn.onSpawn(monster)
-	if CustomBestiary and monster then
+	if isBestiaryEnabled() and monster then
 		local entry = getBestiaryEntryForCreature(monster)
 		if entry then
 			monster:registerEvent("CustomBestiaryKill")

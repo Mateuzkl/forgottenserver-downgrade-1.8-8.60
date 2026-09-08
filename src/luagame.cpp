@@ -1448,6 +1448,11 @@ int luaGameCleanupSupplyStash(lua_State* L)
 int luaGameRegisterBestiaryMonsterData(lua_State* L)
 {
 	// Game.registerBestiaryMonsterData(raceId, name, toKill, firstUnlock, secondUnlock, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
 	BestiaryCreatureInfo info;
 	info.raceId = getInteger<uint16_t>(L, 1);
 	info.name = getString(L, 2);
@@ -1482,6 +1487,12 @@ int luaGameRegisterBestiaryMonsterData(lua_State* L)
 int luaGameHandleBestiaryCharmAction(lua_State* L)
 {
 	// Game.handleBestiaryCharmAction(player, charmId, action, raceId)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		pushBoolean(L, false);
+		pushString(L, "Bestiary system is disabled.");
+		return 2;
+	}
+
 	Player* player = getPlayer(L, 1);
 	if (!player) {
 		pushBoolean(L, false);
@@ -1502,6 +1513,11 @@ int luaGameHandleBestiaryCharmAction(lua_State* L)
 int luaGameGetBestiaryKills(lua_State* L)
 {
 	// Game.getBestiaryKills(playerGuid)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_createtable(L, 0, 0);
+		return 1;
+	}
+
 	const auto player = getPlayer(L, 1);
 	if (!player) {
 		lua_createtable(L, 0, 0);
@@ -1520,6 +1536,11 @@ int luaGameGetBestiaryKills(lua_State* L)
 int luaGameGetBestiaryKillCount(lua_State* L)
 {
 	// Game.getBestiaryKillCount(playerGuid, raceId)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_pushinteger(L, 0);
+		return 1;
+	}
+
 	const auto player = getPlayer(L, 1);
 	const uint16_t raceId = getInteger<uint16_t>(L, 2);
 	lua_pushinteger(L, player ? player->getBestiaryKillCount(raceId) : 0);
@@ -1529,6 +1550,12 @@ int luaGameGetBestiaryKillCount(lua_State* L)
 int luaGameAddBestiaryKill(lua_State* L)
 {
 	// Game.addBestiaryKill(player, raceId[, amount = 1]) -> oldCount, newCount
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_pushinteger(L, 0);
+		lua_pushinteger(L, 0);
+		return 2;
+	}
+
 	Player* player = getPlayer(L, 1);
 	if (!player) {
 		lua_pushinteger(L, 0);
@@ -1547,6 +1574,11 @@ int luaGameAddBestiaryKill(lua_State* L)
 int luaGameTakeBestiaryKill(lua_State* L)
 {
 	// Game.takeBestiaryKill(player, raceId, victimId) -> handled, oldCount, newCount, charmPointsAwarded
+	if (!BestiaryCharmSystem::isEnabled()) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
 	Player* player = getPlayer(L, 1);
 	const uint16_t raceId = getInteger<uint16_t>(L, 2);
 	const uint32_t victimId = getInteger<uint32_t>(L, 3);
@@ -1571,6 +1603,11 @@ int luaGameTakeBestiaryKill(lua_State* L)
 int luaGameSetBestiaryKillCount(lua_State* L)
 {
 	// Game.setBestiaryKillCount(player, raceId, count)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
 	Player* player = getPlayer(L, 1);
 	if (!player) {
 		pushBoolean(L, false);
@@ -1585,6 +1622,11 @@ int luaGameSetBestiaryKillCount(lua_State* L)
 int luaGameGetBestiaryCharmPoints(lua_State* L)
 {
 	// Game.getBestiaryCharmPoints(playerGuid)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_pushinteger(L, 0);
+		return 1;
+	}
+
 	const auto player = getPlayer(L, 1);
 	lua_pushinteger(L, player ? player->getBestiaryCharmPoints() : 0);
 	return 1;
@@ -1593,6 +1635,12 @@ int luaGameGetBestiaryCharmPoints(lua_State* L)
 int luaGameAddBestiaryCharmPoints(lua_State* L)
 {
 	// Game.addBestiaryCharmPoints(playerGuid, amount) -> oldPoints, newPoints
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_pushinteger(L, 0);
+		lua_pushinteger(L, 0);
+		return 2;
+	}
+
 	const auto player = getPlayer(L, 1);
 	if (!player) {
 		lua_pushinteger(L, 0);
@@ -1609,6 +1657,11 @@ int luaGameAddBestiaryCharmPoints(lua_State* L)
 int luaGameSetBestiaryCharmPoints(lua_State* L)
 {
 	// Game.setBestiaryCharmPoints(playerGuid, points)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
 	const auto player = getPlayer(L, 1);
 	if (!player) {
 		pushBoolean(L, false);
@@ -1623,6 +1676,11 @@ int luaGameSetBestiaryCharmPoints(lua_State* L)
 int luaGameGetBosstiaryPoints(lua_State* L)
 {
 	// Game.getBosstiaryPoints(playerGuid)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_pushinteger(L, 0);
+		return 1;
+	}
+
 	const auto player = getPlayer(L, 1);
 	lua_pushinteger(L, player ? player->getBosstiaryPoints() : 0);
 	return 1;
@@ -1631,6 +1689,12 @@ int luaGameGetBosstiaryPoints(lua_State* L)
 int luaGameAddBosstiaryPoints(lua_State* L)
 {
 	// Game.addBosstiaryPoints(playerGuid, amount) -> oldPoints, newPoints
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_pushinteger(L, 0);
+		lua_pushinteger(L, 0);
+		return 2;
+	}
+
 	const auto player = getPlayer(L, 1);
 	if (!player) {
 		lua_pushinteger(L, 0);

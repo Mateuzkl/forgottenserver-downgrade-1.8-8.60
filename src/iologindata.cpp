@@ -904,16 +904,19 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 
 	// Bestiary and Bosstiary kills stay in the Player object while online. This mirrors
 	// the Crystal design and keeps database reads out of the creature death pipeline.
-	if ((result = db.storeQuery(fmt::format(
-	         "SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = {:d}", player->getGUID())))) {
-		do {
-			player->setBestiaryKillCount(result->getNumber<uint16_t>("raceid"), result->getNumber<uint32_t>("kills"));
-		} while (result->next());
-	}
-	player->clearBestiaryDirty();
-	if ((result = db.storeQuery(fmt::format(
-	         "SELECT `points` FROM `player_bosstiary` WHERE `player_id` = {:d}", player->getGUID())))) {
-		player->bosstiaryPoints = result->getNumber<uint32_t>("points");
+	if (ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED)) {
+		if ((result = db.storeQuery(fmt::format(
+		         "SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = {:d}", player->getGUID())))) {
+			do {
+				player->setBestiaryKillCount(result->getNumber<uint16_t>("raceid"), result->getNumber<uint32_t>("kills"));
+			} while (result->next());
+		}
+		player->clearBestiaryDirty();
+
+		if ((result = db.storeQuery(fmt::format(
+		         "SELECT `points` FROM `player_bosstiary` WHERE `player_id` = {:d}", player->getGUID())))) {
+			player->bosstiaryPoints = result->getNumber<uint32_t>("points");
+		}
 	}
 
 	// load vip list
@@ -1096,7 +1099,10 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 	}
 
 	const Player::StorageDirtySnapshot storageSnapshot = player->getStorageDirtySnapshot();
-	const Player::BestiaryDirtySnapshot bestiarySnapshot = player->getBestiaryDirtySnapshot();
+	const Player::BestiaryDirtySnapshot bestiarySnapshot =
+	    ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED)
+	        ? player->getBestiaryDirtySnapshot()
+	        : Player::BestiaryDirtySnapshot{};
 	std::vector<std::string> queries;
 	try {
 		QueryCaptureScope capture{queries};
@@ -1499,28 +1505,31 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 
 	// Persist the in-memory Bestiary map in the same captured player-save transaction.
 	// No SQL is executed by onDeath/onKill.
-	if (!bestiarySnapshot.modifiedRaceIds.empty()) {
-		const auto& bestiaryKills = player->getBestiaryKillMap();
-		DBInsert bestiaryQuery("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES ");
-		bestiaryQuery.upsert(std::vector<std::string>{"kills"});
-		for (const uint16_t raceId : bestiarySnapshot.modifiedRaceIds) {
-			const auto killIt = bestiaryKills.find(raceId);
-			if (killIt == bestiaryKills.end()) {
-				continue;
+	if (ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED)) {
+		if (!bestiarySnapshot.modifiedRaceIds.empty()) {
+			const auto& bestiaryKills = player->getBestiaryKillMap();
+			DBInsert bestiaryQuery("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES ");
+			bestiaryQuery.upsert(std::vector<std::string>{"kills"});
+			for (const uint16_t raceId : bestiarySnapshot.modifiedRaceIds) {
+				const auto killIt = bestiaryKills.find(raceId);
+				if (killIt == bestiaryKills.end()) {
+					continue;
+				}
+				if (!bestiaryQuery.addRow(fmt::format("{:d}, {:d}, {:d}", player->getGUID(), raceId, killIt->second))) {
+					return false;
+				}
 			}
-			if (!bestiaryQuery.addRow(fmt::format("{:d}, {:d}, {:d}", player->getGUID(), raceId, killIt->second))) {
+			if (!bestiaryQuery.execute()) {
 				return false;
 			}
 		}
-		if (!bestiaryQuery.execute()) {
+
+		if (!db.executeQuery(fmt::format(
+		        "INSERT INTO `player_bosstiary` (`player_id`, `points`) VALUES ({:d}, {:d}) "
+		        "ON DUPLICATE KEY UPDATE `points` = VALUES(`points`)",
+		        player->getGUID(), player->bosstiaryPoints))) {
 			return false;
 		}
-	}
-	if (!db.executeQuery(fmt::format(
-	        "INSERT INTO `player_bosstiary` (`player_id`, `points`) VALUES ({:d}, {:d}) "
-	        "ON DUPLICATE KEY UPDATE `points` = VALUES(`points`)",
-	        player->getGUID(), player->bosstiaryPoints))) {
-		return false;
 	}
 
 	// save outfits & addons
