@@ -105,6 +105,10 @@ BestiaryCharmSystem g_bestiaryCharmSystem;
 
 void BestiaryCharmSystem::registerMonster(BestiaryCreatureInfo info)
 {
+	if (!isEnabled()) {
+		return;
+	}
+
 	if (info.raceId == 0 || info.toKill == 0) {
 		LOG_ERROR("[Bestiary] Refusing invalid monster registration: raceId={}, name='{}', toKill={}",
 		          info.raceId, info.name, info.toKill);
@@ -126,6 +130,10 @@ void BestiaryCharmSystem::registerMonster(BestiaryCreatureInfo info)
 
 std::optional<std::reference_wrapper<const BestiaryCreatureInfo>> BestiaryCharmSystem::getMonster(uint16_t raceId) const
 {
+	if (!isEnabled()) {
+		return std::nullopt;
+	}
+
 	const auto it = monstersByRaceId.find(raceId);
 	if (it == monstersByRaceId.end()) {
 		return std::nullopt;
