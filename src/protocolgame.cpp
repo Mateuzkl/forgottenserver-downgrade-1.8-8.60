@@ -691,7 +691,7 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 	if (isOTC) {
 		// Player loading can emit status packets before finishLogin(). Astra
 		// therefore needs its final wire-format features advertised up front.
-		sendFeatures(isAstraClient || isFonticakClient);
+		sendFeatures(isAstraClient);
 
 		NetworkMessage opcodeMessage;
 		opcodeMessage.addByte(0x32);
