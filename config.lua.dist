@@ -156,6 +156,8 @@ imbuementSystemEnabled = false
 monkVocationEnabled = false
 familiarSystemEnabled = false
 wheelSystemEnabled = false
+-- Enabling Bestiary loads its scripts and monster registry during startup.
+-- Restart the server after changing this option from false to true.
 bestiarySystemEnabled = false
 marketSystemEnabled = false
 preySystemEnabled = false

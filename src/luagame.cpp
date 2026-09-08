@@ -1676,6 +1676,11 @@ int luaGameSetBestiaryCharmPoints(lua_State* L)
 int luaGameGetBosstiaryPoints(lua_State* L)
 {
 	// Game.getBosstiaryPoints(playerGuid)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_pushinteger(L, 0);
+		return 1;
+	}
+
 	const auto player = getPlayer(L, 1);
 	lua_pushinteger(L, player ? player->getBosstiaryPoints() : 0);
 	return 1;
@@ -1684,6 +1689,12 @@ int luaGameGetBosstiaryPoints(lua_State* L)
 int luaGameAddBosstiaryPoints(lua_State* L)
 {
 	// Game.addBosstiaryPoints(playerGuid, amount) -> oldPoints, newPoints
+	if (!BestiaryCharmSystem::isEnabled()) {
+		lua_pushinteger(L, 0);
+		lua_pushinteger(L, 0);
+		return 2;
+	}
+
 	const auto player = getPlayer(L, 1);
 	if (!player) {
 		lua_pushinteger(L, 0);

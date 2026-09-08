@@ -29,6 +29,11 @@ local function supportsCustomNetwork(player)
 	return player and player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
+local function isBestiaryEnabled()
+	return configManager and configManager.getBoolean and configKeys
+		and configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED)
+end
+
 local DAY_SECONDS = 24 * 60 * 60
 local WEEK_SECONDS = 7 * DAY_SECONDS
 
@@ -1017,6 +1022,10 @@ local function deliverReward(player, reward, objectId)
 		end
 		return true
 	elseif definition.type == "charms" then
+		if not isBestiaryEnabled() then
+			return false, "Bestiary System is not available."
+		end
+
 		local delivered
 		if Game.addBestiaryCharmPoints then
 			Game.addBestiaryCharmPoints(player:getGuid(), reward.count)
@@ -1104,6 +1113,10 @@ local function deliverShopEntry(player, entry)
 		end
 		return true
 	elseif entry.type == "charms" then
+		if not isBestiaryEnabled() then
+			return false, "Bestiary System is not available."
+		end
+
 		local count = math.max(1, tonumber(entry.count) or 1)
 		local delivered
 		if Game.addBestiaryCharmPoints then

@@ -1,7 +1,12 @@
 -- Custom Cyclopedia PacketHandler
 -- Client sends 0x39, 0x3A, 0x3B, 0x3E and 0x3F. Server responds through 0x39 with a response byte.
 
-if not configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED) or not CustomBestiary then
+local function isBestiaryEnabled()
+	return configManager and configManager.getBoolean and configKeys
+		and configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED)
+end
+
+if not isBestiaryEnabled() or not CustomBestiary then
 	return
 end
 
@@ -65,24 +70,32 @@ end
 -- have not yet run the migration. All statements use CREATE TABLE IF NOT
 -- EXISTS and are harmless when the tables already exist.
 local function ensureTables()
+	if not isBestiaryEnabled() then
+		return false
+	end
+
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_kills` (
 			`player_id` INT NOT NULL,
 			`raceid` SMALLINT UNSIGNED NOT NULL,
 			`kills` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`player_id`, `raceid`)
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
+			PRIMARY KEY (`player_id`, `raceid`),
+			CONSTRAINT `fk_player_bestiary_kills_player`
+				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
 	]])
 
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_charms` (
 			`player_id` INT NOT NULL,
 			`charm_id` TINYINT UNSIGNED NOT NULL,
-			`unlocked` TINYINT(1) NOT NULL DEFAULT 0,
+			`unlocked` TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			`raceid` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY (`player_id`, `charm_id`),
-			KEY `idx_player_bestiary_charms_race` (`player_id`, `raceid`)
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
+			KEY `idx_player_bestiary_charms_race` (`player_id`, `raceid`),
+			CONSTRAINT `fk_player_bestiary_charms_player`
+				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
 	]])
 
 	db.query([[
@@ -90,8 +103,10 @@ local function ensureTables()
 			`player_id` INT NOT NULL,
 			`minor_charm_echoes` INT UNSIGNED NOT NULL DEFAULT 0,
 			`max_minor_charm_echoes` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`player_id`)
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
+			PRIMARY KEY (`player_id`),
+			CONSTRAINT `fk_player_bestiary_resources_player`
+				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
 	]])
 
 	db.query([[
@@ -100,9 +115,12 @@ local function ensureTables()
 			`raceid` SMALLINT UNSIGNED NOT NULL,
 			`slot` TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY (`player_id`, `raceid`),
-			KEY `idx_player_bestiary_tracker_slot` (`player_id`, `slot`)
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
+			KEY `idx_player_bestiary_tracker_slot` (`player_id`, `slot`),
+			CONSTRAINT `fk_player_bestiary_tracker_player`
+				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
 	]])
+	return true
 end
 
 local function getPlayerGuid(player)
@@ -110,6 +128,10 @@ local function getPlayerGuid(player)
 end
 
 local function getPlayerCharmPoints(playerGuid)
+	if not isBestiaryEnabled() then
+		return 0
+	end
+
 	if Game.getBestiaryCharmPoints then
 		return Game.getBestiaryCharmPoints(playerGuid)
 	end
@@ -131,6 +153,10 @@ local function getPlayerCharmPoints(playerGuid)
 end
 
 local function setPlayerCharmPoints(playerGuid, points)
+	if not isBestiaryEnabled() then
+		return 0
+	end
+
 	points = math.max(0, tonumber(points) or 0)
 	charmPointsCache[playerGuid] = points
 	if Game.setBestiaryCharmPoints then
@@ -142,6 +168,10 @@ local function setPlayerCharmPoints(playerGuid, points)
 end
 
 local function getPlayerMinorCharmEchoes(playerGuid)
+	if not isBestiaryEnabled() then
+		return 0, 0
+	end
+
 	local cached = minorResourcesCache[playerGuid]
 	if cached then
 		return cached.echoes, cached.maxEchoes
@@ -161,6 +191,10 @@ local function getPlayerMinorCharmEchoes(playerGuid)
 end
 
 local function setPlayerMinorCharmEchoes(playerGuid, echoes, maxEchoes)
+	if not isBestiaryEnabled() then
+		return 0, 0
+	end
+
 	echoes = math.max(0, tonumber(echoes) or 0)
 	maxEchoes = math.max(echoes, tonumber(maxEchoes) or 0)
 	minorResourcesCache[playerGuid] = {echoes = echoes, maxEchoes = maxEchoes}
@@ -186,6 +220,10 @@ if CustomBestiary then
 end
 
 local function loadKillMap(playerGuid)
+	if not isBestiaryEnabled() then
+		return {}
+	end
+
 	if Game.getBestiaryKills then
 		return Game.getBestiaryKills(playerGuid)
 	end
@@ -210,6 +248,10 @@ local function loadKillMap(playerGuid)
 end
 
 local function loadCharmMap(playerGuid)
+	if not isBestiaryEnabled() then
+		return {}
+	end
+
 	local cached = charmCache[playerGuid]
 	if cached then
 		return cached
@@ -245,6 +287,10 @@ local function loadCharmMap(playerGuid)
 end
 
 local function loadTrackerList(playerGuid)
+	if not isBestiaryEnabled() then
+		return {}
+	end
+
 	local cached = trackerCache[playerGuid]
 	if cached then
 		return cached
@@ -287,6 +333,10 @@ rebuildEarnedPoints = function(playerGuid, kills)
 end
 
 local function updateKillCache(playerGuid, raceId, amount, oldKills, newKills)
+	if not isBestiaryEnabled() then
+		return false
+	end
+
 	playerGuid = tonumber(playerGuid) or 0
 	raceId = tonumber(raceId) or 0
 	amount = tonumber(amount) or 0
@@ -322,6 +372,10 @@ local function updateKillCache(playerGuid, raceId, amount, oldKills, newKills)
 end
 
 local function getKillCount(playerGuid, raceId)
+	if not isBestiaryEnabled() then
+		return 0
+	end
+
 	playerGuid = tonumber(playerGuid) or 0
 	raceId = tonumber(raceId) or 0
 	if playerGuid <= 0 or raceId <= 0 then
@@ -336,6 +390,10 @@ local function getKillCount(playerGuid, raceId)
 end
 
 local function preloadPlayer(playerGuid)
+	if not isBestiaryEnabled() then
+		return false
+	end
+
 	playerGuid = tonumber(playerGuid) or 0
 	if playerGuid <= 0 then
 		return false
@@ -356,6 +414,10 @@ if CustomBestiary then
 	CustomBestiary.getKillCount = getKillCount
 	CustomBestiary.preloadPlayer = preloadPlayer
 	CustomBestiary.updateCharmPointCache = function(playerGuid, amount)
+		if not isBestiaryEnabled() then
+			return false
+		end
+
 		playerGuid = tonumber(playerGuid) or 0
 		amount = tonumber(amount) or 0
 		if playerGuid <= 0 or amount == 0 then
@@ -850,6 +912,10 @@ CustomBestiary.sendTrackerIfTracked = sendTrackerIfTracked
 CustomBestiary.sendProgress = sendBestiaryProgress
 
 local function toggleTracker(player, raceId)
+	if not isBestiaryEnabled() then
+		return
+	end
+
 	local playerGuid = getPlayerGuid(player)
 	if raceId <= 0 then
 		sendTracker(player)
@@ -884,6 +950,10 @@ local function toggleTracker(player, raceId)
 end
 
 local function handleCharmAction(player, charmId, action, raceId)
+	if not isBestiaryEnabled() then
+		return
+	end
+
 	local playerGuid = getPlayerGuid(player)
 	local charm = CustomBestiary.charmById[charmId]
 	if not charm then
@@ -911,7 +981,7 @@ end
 
 local infoHandler = PacketHandler(OPCODE_CYCLOPEDIA_INFO)
 function infoHandler.onReceive(player, msg)
-	if not CustomBestiary then
+	if not isBestiaryEnabled() or not CustomBestiary then
 		logError("[CustomBestiary] CustomBestiary lib was not loaded.")
 		return
 	end
@@ -923,6 +993,10 @@ infoHandler:register()
 
 local categoryHandler = PacketHandler(OPCODE_CYCLOPEDIA_CATEGORY)
 function categoryHandler.onReceive(player, msg)
+	if not isBestiaryEnabled() then
+		return
+	end
+
 	if msg:len() - msg:tell() < 3 then
 		return
 	end
@@ -946,6 +1020,10 @@ categoryHandler:register()
 
 local monsterHandler = PacketHandler(OPCODE_CYCLOPEDIA_MONSTER)
 function monsterHandler.onReceive(player, msg)
+	if not isBestiaryEnabled() then
+		return
+	end
+
 	if msg:len() - msg:tell() < 2 then
 		return
 	end
@@ -961,6 +1039,10 @@ monsterHandler:register()
 
 local charmHandler = PacketHandler(OPCODE_CYCLOPEDIA_CHARM)
 function charmHandler.onReceive(player, msg)
+	if not isBestiaryEnabled() then
+		return
+	end
+
 	if msg:len() - msg:tell() < 4 then
 		return
 	end
@@ -978,6 +1060,10 @@ charmHandler:register()
 
 local trackerHandler = PacketHandler(OPCODE_CYCLOPEDIA_TRACKER)
 function trackerHandler.onReceive(player, msg)
+	if not isBestiaryEnabled() then
+		return
+	end
+
 	if msg:len() - msg:tell() < 2 then
 		return
 	end
@@ -1000,6 +1086,10 @@ bestiaryLogout:register()
 
 local bestiaryLogin = CreatureEvent("CustomBestiaryLogin")
 function bestiaryLogin.onLogin(player)
+	if not isBestiaryEnabled() then
+		return true
+	end
+
 	if CustomBestiary and CustomBestiary.preloadPlayer then
 		CustomBestiary.preloadPlayer(player:getGuid())
 	end

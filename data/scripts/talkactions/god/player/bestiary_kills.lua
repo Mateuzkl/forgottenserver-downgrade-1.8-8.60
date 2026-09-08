@@ -1,5 +1,10 @@
 local bestiaryKills = TalkAction("/bestiarykills")
 
+local function isBestiaryEnabled()
+	return configManager and configManager.getBoolean and configKeys
+		and configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED)
+end
+
 local function normalizeName(value)
 	return tostring(value or ""):lower():gsub("^%s*(.-)%s*$", "%1")
 end
@@ -87,8 +92,8 @@ local function updateCharmPointsForCompletion(playerGuid, entry, oldKills, newKi
 end
 
 function bestiaryKills.onSay(player, words, param)
-	if not CustomBestiary then
-		player:sendCancelMessage("Custom Bestiary is not loaded.")
+	if not isBestiaryEnabled() or not CustomBestiary then
+		player:sendCancelMessage("Custom Bestiary is disabled or not loaded.")
 		return false
 	end
 
