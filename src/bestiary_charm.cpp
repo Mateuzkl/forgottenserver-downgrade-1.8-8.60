@@ -164,6 +164,10 @@ bool BestiaryCharmSystem::isMinorCharm(uint8_t charmId) const
 
 uint8_t BestiaryCharmSystem::getAssignedCharmTier(const Player& player, uint8_t charmId, uint16_t raceId) const
 {
+	if (!isEnabled()) {
+		return 0;
+	}
+
 	if (raceId == 0 || !getCharmDefinition(charmId)) {
 		return 0;
 	}
@@ -178,6 +182,10 @@ uint8_t BestiaryCharmSystem::getAssignedCharmTier(const Player& player, uint8_t 
 
 double BestiaryCharmSystem::getCharmBonus(uint8_t charmId, uint8_t tier) const
 {
+	if (!isEnabled()) {
+		return 0.0;
+	}
+
 	const auto definition = getCharmDefinition(charmId);
 	if (!definition || tier == 0 || tier > definition->bonuses.size()) {
 		return 0.0;
@@ -188,6 +196,9 @@ double BestiaryCharmSystem::getCharmBonus(uint8_t charmId, uint8_t tier) const
 BestiaryCharmSystem::CharmStateMap BestiaryCharmSystem::loadCharmStates(uint32_t playerGuid) const
 {
 	CharmStateMap states;
+	if (!isEnabled()) {
+		return states;
+	}
 	auto result = Database::getInstance().storeQuery(fmt::format(
 	    "SELECT `charm_id`, `unlocked`, `raceid` FROM `player_bestiary_charms` WHERE `player_id` = {:d}",
 	    playerGuid));
@@ -280,6 +291,10 @@ bool BestiaryCharmSystem::setMinorCharmEchoes(uint32_t playerGuid, uint32_t echo
 
 bool BestiaryCharmSystem::addMinorCharmEchoes(uint32_t playerGuid, uint32_t amount) const
 {
+	if (!isEnabled()) {
+		return false;
+	}
+
 	const auto [echoes, maxEchoes] = getMinorCharmEchoes(playerGuid);
 	const uint32_t updatedEchoes = echoes > std::numeric_limits<uint32_t>::max() - amount
 	                                 ? std::numeric_limits<uint32_t>::max()
@@ -388,6 +403,10 @@ bool BestiaryCharmSystem::restoreCharmStatesAndResources(uint32_t playerGuid, co
 
 BestiaryCharmActionResult BestiaryCharmSystem::handleCharmAction(Player& player, uint8_t charmId, uint8_t action, uint16_t raceId) const
 {
+	if (!isEnabled()) {
+		return { false, "Bestiary system is disabled." };
+	}
+
 	const uint32_t playerGuid = player.getGUID();
 	const auto charm = getCharmDefinition(charmId);
 	if (action != 3 && !charm) {

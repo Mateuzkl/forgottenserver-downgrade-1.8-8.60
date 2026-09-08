@@ -904,11 +904,13 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 
 	// Bestiary and Bosstiary kills stay in the Player object while online. This mirrors
 	// the Crystal design and keeps database reads out of the creature death pipeline.
-	if ((result = db.storeQuery(fmt::format(
-	         "SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = {:d}", player->getGUID())))) {
-		do {
-			player->setBestiaryKillCount(result->getNumber<uint16_t>("raceid"), result->getNumber<uint32_t>("kills"));
-		} while (result->next());
+	if (ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED)) {
+		if ((result = db.storeQuery(fmt::format(
+		         "SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = {:d}", player->getGUID())))) {
+			do {
+				player->setBestiaryKillCount(result->getNumber<uint16_t>("raceid"), result->getNumber<uint32_t>("kills"));
+			} while (result->next());
+		}
 	}
 	player->clearBestiaryDirty();
 	if ((result = db.storeQuery(fmt::format(
@@ -1499,7 +1501,8 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 
 	// Persist the in-memory Bestiary map in the same captured player-save transaction.
 	// No SQL is executed by onDeath/onKill.
-	if (!bestiarySnapshot.modifiedRaceIds.empty()) {
+	if (ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED) &&
+	    !bestiarySnapshot.modifiedRaceIds.empty()) {
 		const auto& bestiaryKills = player->getBestiaryKillMap();
 		DBInsert bestiaryQuery("INSERT INTO `player_bestiary_kills` (`player_id`, `raceid`, `kills`) VALUES ");
 		bestiaryQuery.upsert(std::vector<std::string>{"kills"});

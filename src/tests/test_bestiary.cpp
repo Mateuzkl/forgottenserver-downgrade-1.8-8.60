@@ -121,4 +121,84 @@ TEST_CASE(bestiary_first_kill_is_recorded_when_race_id_is_patched_after_death)
 	CHECK(player.getBestiaryDirtySnapshot().modifiedRaceIds.contains(patchedRaceId));
 }
 
+// ---------------------------------------------------------------------------
+// OFF-mode regression tests: verify that disabled Bestiary produces safe
+// neutral values and never reaches DB access paths.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// RAII helper to set a boolean config value and restore it on scope exit.
+struct ScopedConfigOverride
+{
+	ConfigManager::Boolean key;
+	bool original;
+
+	ScopedConfigOverride(ConfigManager::Boolean k, bool value) : key(k), original(ConfigManager::getBoolean(k))
+	{
+		ConfigManager::setBoolean(k, value);
+	}
+
+	~ScopedConfigOverride() { ConfigManager::setBoolean(key, original); }
+
+	ScopedConfigOverride(const ScopedConfigOverride&) = delete;
+	ScopedConfigOverride& operator=(const ScopedConfigOverride&) = delete;
+};
+
+} // namespace
+
+TEST_CASE(bestiary_charm_system_disabled_returns_zero_tier)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	ensureItemTypesLoaded();
+	Player player(nullptr);
+
+	// Even if a valid charm definition exists, tier must be 0 when disabled.
+	CHECK(g_bestiaryCharmSystem.getAssignedCharmTier(player, 0, 100) == 0);
+	CHECK(g_bestiaryCharmSystem.getAssignedCharmTier(player, 15, 100) == 0);
+}
+
+TEST_CASE(bestiary_charm_system_disabled_returns_zero_bonus)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	// Bonus must be 0.0 for any charm/tier combination when disabled.
+	CHECK(g_bestiaryCharmSystem.getCharmBonus(0, 1) == 0.0);
+	CHECK(g_bestiaryCharmSystem.getCharmBonus(15, 3) == 0.0);
+}
+
+TEST_CASE(bestiary_charm_system_disabled_handle_action_returns_disabled)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	ensureItemTypesLoaded();
+	Player player(nullptr);
+
+	const auto result = g_bestiaryCharmSystem.handleCharmAction(player, 0, 0, 100);
+	CHECK(!result.success);
+	CHECK(result.message == "Bestiary system is disabled.");
+}
+
+TEST_CASE(bestiary_charm_system_disabled_add_minor_echoes_returns_false)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, false);
+	CHECK(!BestiaryCharmSystem::isEnabled());
+
+	// addMinorCharmEchoes must return false (no-op) when disabled.
+	CHECK(!g_bestiaryCharmSystem.addMinorCharmEchoes(1, 100));
+}
+
+TEST_CASE(bestiary_charm_system_enabled_returns_nonzero_bonus)
+{
+	ScopedConfigOverride guard(ConfigManager::BESTIARY_SYSTEM_ENABLED, true);
+	CHECK(BestiaryCharmSystem::isEnabled());
+
+	// Charm 0 tier 1 should return a non-zero bonus when enabled.
+	CHECK(g_bestiaryCharmSystem.getCharmBonus(0, 1) > 0.0);
+}
+
 TFS_TEST_MAIN()

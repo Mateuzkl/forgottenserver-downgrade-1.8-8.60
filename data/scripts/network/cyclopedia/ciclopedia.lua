@@ -60,6 +60,10 @@ local function trimText(text)
 	return tostring(text or ""):gsub("^%s*(.-)%s*$", "%1")
 end
 
+-- Compatibility fallback: the authoritative table definitions are now in
+-- schema.sql and migration 64. This function is kept for installations that
+-- have not yet run the migration. All statements use CREATE TABLE IF NOT
+-- EXISTS and are harmless when the tables already exist.
 local function ensureTables()
 	db.query([[
 		CREATE TABLE IF NOT EXISTS `player_bestiary_kills` (

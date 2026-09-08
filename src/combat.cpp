@@ -51,6 +51,10 @@ uint16_t getMonsterRaceId(const Monster* monster)
 
 int32_t getCharmBonusBasisPoints(const Player& player, uint16_t raceId, uint8_t charmId)
 {
+	if (!BestiaryCharmSystem::isEnabled()) {
+		return 0;
+	}
+
 	const uint8_t tier = g_bestiaryCharmSystem.getAssignedCharmTier(player, charmId, raceId);
 	if (tier == 0) {
 		return 0;
