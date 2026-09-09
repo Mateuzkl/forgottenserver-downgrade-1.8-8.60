@@ -79,6 +79,8 @@ public:
 
 	uint16_t getVersion() const { return version; }
 	bool canSendAstraItemState() const;
+	bool canSendAstraItemMetadata() const;
+	bool canSendPackedPlayerInventory() const;
 	bool shouldSendAstraQuiverCountU16() const;
 	static void rebuildItemValuesCache();
 	static void invalidateItemValuesCache();

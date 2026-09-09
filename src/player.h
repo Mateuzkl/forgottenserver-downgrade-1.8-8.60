@@ -1276,6 +1276,7 @@ public:
 	void onUpdateInventoryItem(Item* oldItem, Item* newItem);
 	void onRemoveInventoryItem(Item* item);
 	bool canReceiveAstraItemState() const;
+	bool canReceivePackedPlayerInventory() const;
 	void sendAstraPlayerInventorySnapshot() const;
 	void scheduleAstraPlayerInventorySnapshot();
 
