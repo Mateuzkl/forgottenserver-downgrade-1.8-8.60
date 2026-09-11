@@ -461,7 +461,7 @@ std::string StoreService::deliverHouseItem(Player& player, const StoreOffer& off
 	return "";
 }
 
-std::string StoreService::deliverNameChange(Player& player, const StoreOffer& offer,
+std::string StoreService::deliverNameChange(Player& player, [[maybe_unused]] const StoreOffer& offer,
                                              const StorePurchaseExtra& extra)
 {
 	const std::string newName = CharacterNameValidator::formatName(extra.name);
@@ -492,7 +492,7 @@ std::string StoreService::deliverNameChange(Player& player, const StoreOffer& of
 	return "";
 }
 
-std::string StoreService::deliverSexChange(Player& player, const StoreOffer& offer)
+std::string StoreService::deliverSexChange(Player& player, [[maybe_unused]] const StoreOffer& offer)
 {
 	if (playerIsInCombat(player)) {
 		return "You cannot do this during a fight.";
