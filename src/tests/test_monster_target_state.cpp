@@ -35,6 +35,22 @@ public:
 		}
 	}
 	void markDead() { health = 0; }
+	void seedFollowPath(Direction direction)
+	{
+		stopEventWalk();
+		listWalkDir = {direction};
+		hasFollowPath = true;
+		forceUpdateFollowPath = false;
+	}
+	void runFollowPathUpdate()
+	{
+		isUpdatingPath = false;
+		goToFollowCreature();
+	}
+	bool hasPhysicalFollowPath() const { return hasFollowPath; }
+	bool hasPendingFollowPathUpdate() const { return isUpdatingPath; }
+	bool hasScheduledWalk() const { return eventWalk != 0; }
+	size_t getFollowPathSize() const { return listWalkDir.size(); }
 
 private:
 	inline static uint32_t nextId = 0x50000000;
@@ -80,6 +96,15 @@ void ensureTile(const Position& position)
 	Tile* tile = g_game.map.getTile(position);
 	if (!tile->getGround()) {
 		tile->setGround(std::make_shared<Item>(0));
+	}
+}
+
+void ensureArea(const Position& center, int32_t rangeX, int32_t rangeY)
+{
+	for (int32_t x = -rangeX; x <= rangeX; ++x) {
+		for (int32_t y = -rangeY; y <= rangeY; ++y) {
+			ensureTile(Position{static_cast<uint16_t>(center.x + x), static_cast<uint16_t>(center.y + y), center.z});
+		}
 	}
 }
 
@@ -307,6 +332,114 @@ TEST_CASE(summon_preserves_master_follow_across_floor_change)
 	CHECK(summon->getFollowCreatureShared() == master);
 }
 
+TEST_CASE(summon_does_not_pathfind_to_master_on_different_floor)
+{
+	WorldFixture world;
+	auto summon = std::make_shared<TestCreature>();
+	auto master = std::make_shared<TestCreature>();
+	const Position summonPosition{700, 500, 7};
+	const Position oldMasterPosition{701, 500, 7};
+	const Position newMasterPosition{701, 500, 8};
+	world.place(summon, summonPosition);
+	world.place(master, oldMasterPosition);
+	CHECK(summon->setMaster(master.get()));
+	CHECK(summon->setFollowCreature(master.get()));
+	summon->runFollowPathUpdate();
+	summon->seedFollowPath(DIRECTION_SOUTH);
+
+	moveCreatureForMonster(master, newMasterPosition);
+
+	CHECK(summon->getMaster() == master);
+	CHECK(summon->getFollowCreatureShared() == master);
+	CHECK(!summon->hasPhysicalFollowPath());
+	CHECK(summon->getFollowPathSize() == 0);
+	CHECK(!summon->hasScheduledWalk());
+
+	summon->runFollowPathUpdate();
+	CHECK(!summon->hasPhysicalFollowPath());
+	CHECK(summon->getFollowPathSize() == 0);
+	CHECK(!summon->hasScheduledWalk());
+}
+
+TEST_CASE(summon_does_not_move_when_master_moves_on_other_floor)
+{
+	WorldFixture world;
+	auto summon = std::make_shared<TestCreature>();
+	auto master = std::make_shared<TestCreature>();
+	const Position summonPosition{720, 500, 7};
+	world.place(summon, summonPosition);
+	world.place(master, Position{721, 500, 7});
+	CHECK(summon->setMaster(master.get()));
+	CHECK(summon->setFollowCreature(master.get()));
+	summon->runFollowPathUpdate();
+	summon->seedFollowPath(DIRECTION_SOUTH);
+
+	for (const Position& masterPosition : {Position{721, 500, 8}, Position{722, 500, 8}, Position{723, 500, 8}}) {
+		moveCreatureForMonster(master, masterPosition);
+		summon->onThink(2000);
+		CHECK(!summon->hasPendingFollowPathUpdate());
+		summon->onWalk();
+		CHECK(summon->getPosition() == summonPosition);
+		CHECK(summon->getFollowPathSize() == 0);
+	}
+}
+
+TEST_CASE(summon_resumes_follow_when_master_returns_to_same_floor)
+{
+	WorldFixture world;
+	auto summon = std::make_shared<TestCreature>();
+	auto master = std::make_shared<TestCreature>();
+	const Position summonPosition{740, 500, 7};
+	const Position oldMasterPosition{741, 500, 7};
+	const Position otherFloorPosition{744, 500, 8};
+	const Position returnedMasterPosition{744, 500, 7};
+	for (uint16_t x = summonPosition.x; x <= returnedMasterPosition.x; ++x) {
+		ensureTile(Position{x, summonPosition.y, summonPosition.z});
+	}
+	world.place(summon, summonPosition);
+	world.place(master, oldMasterPosition);
+	CHECK(summon->setMaster(master.get()));
+	CHECK(summon->setFollowCreature(master.get()));
+	summon->runFollowPathUpdate();
+
+	moveCreatureForMonster(master, otherFloorPosition);
+	summon->onThink(2000);
+	CHECK(!summon->hasPendingFollowPathUpdate());
+	CHECK(!summon->hasPhysicalFollowPath());
+
+	moveCreatureForMonster(master, returnedMasterPosition);
+	summon->onThink(2000);
+	CHECK(summon->hasPendingFollowPathUpdate());
+	summon->runFollowPathUpdate();
+
+	CHECK(summon->getFollowCreatureShared() == master);
+	CHECK(summon->hasPhysicalFollowPath());
+	CHECK(summon->getFollowPathSize() > 0);
+	summon->onWalk();
+	CHECK(summon->getPosition() != summonPosition);
+}
+
+TEST_CASE(no_duplicate_follow_update_tasks_across_floors)
+{
+	WorldFixture world;
+	auto summon = std::make_shared<TestCreature>();
+	auto master = std::make_shared<TestCreature>();
+	world.place(summon, Position{760, 500, 7});
+	world.place(master, Position{761, 500, 7});
+	CHECK(summon->setMaster(master.get()));
+	CHECK(summon->setFollowCreature(master.get()));
+	summon->runFollowPathUpdate();
+
+	moveCreatureForMonster(master, Position{761, 500, 8});
+	for (uint8_t i = 0; i < 5; ++i) {
+		summon->requestFollowPathUpdate();
+		summon->onThink(2000);
+		CHECK(!summon->hasPendingFollowPathUpdate());
+		CHECK(!summon->hasPhysicalFollowPath());
+		CHECK(summon->getFollowPathSize() == 0);
+	}
+}
+
 TEST_CASE(monster_does_not_duplicate_known_target)
 {
 	WorldFixture world;
@@ -345,9 +478,10 @@ TEST_CASE(monster_cleans_target_that_changes_floor)
 	WorldFixture world;
 	auto monster = makeMonster();
 	auto target = makeMonster(true);
+	const Position monsterPosition{599, 500, 7};
 	const Position oldPosition{600, 500, 7};
 	const Position newPosition{600, 500, 6};
-	world.place(monster, Position{599, 500, 7});
+	world.place(monster, monsterPosition);
 	world.place(target, oldPosition);
 	selectTarget(monster, target);
 	CHECK(monster->canSee(oldPosition));
@@ -363,6 +497,9 @@ TEST_CASE(monster_cleans_target_that_changes_floor)
 	CHECK(!monster->getAttackedCreatureShared());
 	CHECK(!monster->getFollowCreatureShared());
 	CHECK(monster->getIdleStatus());
+	g_game.updateCreatureWalk(monster->getID());
+	monster->onWalk();
+	CHECK(monster->getPosition() == monsterPosition);
 
 	moveCreatureForMonster(target, oldPosition);
 	CHECK(hasTarget(monster, target.get()));
@@ -575,6 +712,120 @@ TEST_CASE(moving_monster_discovers_new_stationary_target)
 	CHECK(monster->canSee(stationaryTarget->getPosition()));
 	CHECK(hasTarget(monster, followedTarget.get()));
 	CHECK(hasTarget(monster, stationaryTarget.get()));
+}
+
+TEST_CASE(monster_follows_player_in_all_cardinal_directions)
+{
+	struct ChaseCase
+	{
+		int32_t dx;
+		int32_t dy;
+		Direction direction;
+	};
+	const std::array<ChaseCase, 4> cases = {{
+	    {1, 0, DIRECTION_EAST},
+	    {-1, 0, DIRECTION_WEST},
+	    {0, 1, DIRECTION_SOUTH},
+	    {0, -1, DIRECTION_NORTH},
+	}};
+
+	for (size_t index = 0; index < cases.size(); ++index) {
+		WorldFixture world;
+		const ChaseCase& chase = cases[index];
+		const Position monsterPosition{static_cast<uint16_t>(1000 + index * 30), 700, 7};
+		const Position playerPosition{static_cast<uint16_t>(monsterPosition.x + chase.dx * 4),
+		                              static_cast<uint16_t>(monsterPosition.y + chase.dy * 4), 7};
+		const Position movedPlayerPosition{static_cast<uint16_t>(playerPosition.x + chase.dx),
+		                                   static_cast<uint16_t>(playerPosition.y + chase.dy), 7};
+		ensureArea(monsterPosition, 6, 6);
+		auto monster = makeMonster();
+		auto player = makePlayer();
+		world.place(monster, monsterPosition);
+		world.place(player, playerPosition);
+		selectTarget(monster, player);
+		g_game.updateCreatureWalk(monster->getID());
+
+		moveCreatureForMonster(player, movedPlayerPosition);
+		g_game.updateCreatureWalk(monster->getID());
+
+		Direction direction = DIRECTION_NONE;
+		uint32_t flags = 0;
+		CHECK(monster->getNextStep(direction, flags));
+		CHECK(direction == chase.direction);
+		CHECK(monster->getAttackedCreatureShared() == player);
+		CHECK(monster->getFollowCreatureShared() == player);
+	}
+}
+
+TEST_CASE(moving_monster_discovers_targets_at_all_view_edges)
+{
+	struct EdgeCase
+	{
+		int32_t moveX;
+		int32_t moveY;
+		int32_t targetX;
+		int32_t targetY;
+	};
+	const std::array<EdgeCase, 4> cases = {{
+	    {1, 0, Map::maxClientViewportX + 2, 0},
+	    {-1, 0, -(Map::maxClientViewportX + 2), 0},
+	    {0, 1, 0, Map::maxClientViewportY + 2},
+	    {0, -1, 0, -(Map::maxClientViewportY + 2)},
+	}};
+
+	for (size_t index = 0; index < cases.size(); ++index) {
+		WorldFixture world;
+		const EdgeCase& edge = cases[index];
+		const Position oldPosition{static_cast<uint16_t>(1200 + index * 40), 700, 7};
+		const Position newPosition{static_cast<uint16_t>(oldPosition.x + edge.moveX),
+		                           static_cast<uint16_t>(oldPosition.y + edge.moveY), 7};
+		const Position edgeTargetPosition{static_cast<uint16_t>(oldPosition.x + edge.targetX),
+		                                  static_cast<uint16_t>(oldPosition.y + edge.targetY), 7};
+		auto monster = makeMonster();
+		auto followedTarget = makeMonster(true);
+		auto edgeTarget = makeMonster(true);
+		world.place(monster, oldPosition);
+		world.place(followedTarget,
+		            Position{static_cast<uint16_t>(oldPosition.x + 1), static_cast<uint16_t>(oldPosition.y + 1), 7});
+		world.place(edgeTarget, edgeTargetPosition);
+		selectTarget(monster, followedTarget);
+		CHECK(!monster->canSee(edgeTargetPosition));
+
+		moveCreatureForMonster(monster, newPosition);
+
+		CHECK(monster->canSee(edgeTargetPosition));
+		CHECK(hasTarget(monster, followedTarget.get()));
+		CHECK(hasTarget(monster, edgeTarget.get()));
+	}
+}
+
+TEST_CASE(non_master_follow_clears_cross_floor_path_and_recovers)
+{
+	WorldFixture world;
+	auto follower = std::make_shared<TestCreature>();
+	auto target = std::make_shared<TestCreature>();
+	const Position followerPosition{1400, 700, 7};
+	const Position oldTargetPosition{1401, 700, 7};
+	const Position otherFloorPosition{1401, 700, 8};
+	world.place(follower, followerPosition);
+	world.place(target, oldTargetPosition);
+	CHECK(follower->setFollowCreature(target.get()));
+	follower->seedFollowPath(DIRECTION_EAST);
+
+	moveCreatureForMonster(target, otherFloorPosition);
+
+	CHECK(!follower->getFollowCreatureShared());
+	CHECK(!follower->hasPhysicalFollowPath());
+	CHECK(follower->getFollowPathSize() == 0);
+	g_game.updateCreatureWalk(follower->getID());
+	follower->onWalk();
+	CHECK(follower->getPosition() == followerPosition);
+	CHECK(!follower->setFollowCreature(target.get()));
+
+	moveCreatureForMonster(target, oldTargetPosition);
+	CHECK(follower->setFollowCreature(target.get()));
+	follower->runFollowPathUpdate();
+	CHECK(follower->getFollowCreatureShared() == target);
 }
 
 TFS_TEST_MAIN()
