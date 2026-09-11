@@ -304,6 +304,49 @@ bool Weapon::ammoCheck(const Player* player) const
 }
 
 namespace {
+uint16_t getWeaponAttackEffect(const Item* item)
+{
+	if (!item) {
+		return CONST_ME_FIST_ATTACK;
+	}
+
+	switch (item->getWeaponType()) {
+		case WEAPON_SWORD:
+			return CONST_ME_SWORD_ATTACK;
+		case WEAPON_CLUB:
+			return CONST_ME_CLUB_ATTACK;
+		case WEAPON_AXE:
+			return CONST_ME_AXE_ATTACK;
+		case WEAPON_FIST:
+			switch (item->getID()) {
+				case ITEM_BAMBO_JO:
+				case ITEM_COBRA_BO:
+				case ITEM_DRACHAKU:
+				case ITEM_JO_STAFF:
+				case ITEM_LIGHT_JO_STAFF:
+				case ITEM_NUNCHAKU_OF_DESTRUCTION:
+				case ITEM_NUNCHAKU_OF_ENLIGHTENMENT:
+				case ITEM_SIMPLE_JO_STAFF:
+					return CONST_ME_MONK_STAFF_ATTACK;
+				case ITEM_AMBER_KUSARIGAMA:
+				case ITEM_CRUDE_UMBRAL_KATAR:
+				case ITEM_FALCON_SAI:
+				case ITEM_NAGA_KATAR:
+				case ITEM_SAI_OF_ENLIGHTENMENT:
+				case ITEM_SAI:
+				case ITEM_SOULKAMAS:
+				case ITEM_TRADITIONAL_SAI:
+				case ITEM_UMBRAL_KATAR:
+				case ITEM_MASTER_UMBRAL_KATAR:
+					return CONST_ME_MONK_DAGGERS_ATTACK;
+				default:
+					return CONST_ME_FIST_ATTACK;
+			}
+		default:
+			return CONST_ME_NONE;
+	}
+}
+
 // Client weaponType (1-6) maps to melee swing effect 304-309. Jump-table is not contiguous.
 uint8_t getWeaponAttackMark(const Item* item)
 {
@@ -350,9 +393,24 @@ uint8_t getWeaponAttackMark(const Item* item)
 
 void sendMeleeAttackMark(Player* player, Creature* target, const Item* item)
 {
+	const WeaponType_t weaponType = item ? item->getWeaponType() : WEAPON_FIST;
+	if (weaponType != WEAPON_SWORD && weaponType != WEAPON_CLUB && weaponType != WEAPON_AXE &&
+	    weaponType != WEAPON_FIST) {
+		return;
+	}
+
 	const uint8_t weaponMark = getWeaponAttackMark(item);
-	if (weaponMark != 0) {
+	const bool canReceiveAttackMark = player->isFonticakClient();
+
+	if (canReceiveAttackMark && weaponMark != 0) {
 		player->sendCreatureWeaponAttackMark(target, weaponMark);
+	}
+
+	if (!canReceiveAttackMark) {
+		const uint16_t effect = getWeaponAttackEffect(item);
+		if (effect != CONST_ME_NONE) {
+			g_game.addMagicEffect(target->getPosition(), effect, target->getInstanceID());
+		}
 	}
 }
 } // namespace
