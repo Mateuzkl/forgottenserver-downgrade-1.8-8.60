@@ -5,6 +5,10 @@
 #ifndef FS_THREAD_POOL_H
 #define FS_THREAD_POOL_H
 
+#include "move_only_function.h"
+
+#include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <future>
@@ -12,14 +16,8 @@
 #include <queue>
 #include <thread>
 #include <vector>
-#include <condition_variable>
-#include <atomic>
 
-#if !defined(__cpp_lib_move_only_function) || __cpp_lib_move_only_function < 202110L
-#error "ThreadPool requires C++23 std::move_only_function support"
-#endif
-
-using ThreadPoolTask = std::move_only_function<void()>;
+using ThreadPoolTask = MoveOnlyFunction;
 
 class ThreadPool
 {
