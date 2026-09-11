@@ -41,7 +41,7 @@ require_occurrences("${first_message_block}" "opcodeMessage\\.addByte\\(0x32\\)"
 require_occurrences("${features_block}" "GameFeature::PlayerRegenerationTime" 1 "Astra regeneration feature negotiation")
 require_occurrences("${stats_block}" "getRegenerationTimeSeconds\\(condition \\? condition->getTicks\\(\\) : 0\\)" 1 "Astra regeneration stats field")
 
-string(FIND "${login_block}" "sendFeatures(isAstraClient);" features_position)
+string(FIND "${login_block}" "sendFeatures(isAstraClient || isFonticakClient);" features_position)
 string(FIND "${login_block}" "connect(foundPlayer->getID(), operatingSystem);" reconnect_position)
 if(features_position EQUAL -1 OR reconnect_position EQUAL -1 OR features_position GREATER reconnect_position)
     message(FATAL_ERROR "Astra features must be negotiated before the reconnect path")
