@@ -4110,11 +4110,10 @@ void ProtocolGame::sendStoreCatalog()
 			msg.addString(fo.offer->name);
 			msg.addString(fo.offer->icon);
 			msg.add<uint32_t>(fo.offer->price);
-			msg.addByte(0); // non-configurable in current schema
-			msg.addByte(0); // serviceType/disabled
 			msg.add<uint16_t>(fo.displayId);
 			msg.add<uint16_t>(fo.offer->count);
 			msg.addString(fo.offer->description);
+			msg.addString(storeOfferTypeToString(fo.offer->type));
 		}
 	}
 
