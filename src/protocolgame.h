@@ -154,6 +154,13 @@ private:
 	void parseImbuementDurations(NetworkMessage& msg);
 	void parseCharacterBazaar(NetworkMessage& msg);
 
+	// Game store
+	void parseStoreOpen(NetworkMessage& msg);
+	void parseStorePurchase(NetworkMessage& msg);
+	void parseStoreHistory(NetworkMessage& msg);
+	void parseStoreTransfer(NetworkMessage& msg);
+
+
 	// trade methods
 	void parseRequestTrade(NetworkMessage& msg);
 	void parseLookInTrade(NetworkMessage& msg);
@@ -250,6 +257,13 @@ private:
 	void sendExtendedOpcode(uint8_t opcode, std::string_view data);
 	void sendBlessingWindow();
 	void sendBlessStatus();
+
+	// Game store
+	void sendStoreCatalog();
+	void sendStoreError(std::string_view message);
+	void sendStorePurchaseSuccess(uint32_t offerId, std::string_view message, uint32_t newBalance);
+	void sendStoreHistory();
+
 
 	// tiles
 	void sendMapDescription(const Position& pos);
