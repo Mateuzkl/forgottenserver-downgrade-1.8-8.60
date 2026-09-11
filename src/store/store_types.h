@@ -105,7 +105,7 @@ struct StoreBanner
 struct StoreHistoryEntry
 {
 	std::string date;
-	int32_t price = 0;        ///< negative = debit, positive = credit
+	int64_t price = 0;        ///< negative = debit, positive = credit
 	int32_t costSecond = 0;   ///< secondary cost flag
 	std::string title;
 	uint16_t count = 0;

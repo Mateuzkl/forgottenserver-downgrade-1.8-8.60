@@ -24,7 +24,7 @@ public:
 
 	/// Record a purchase/transfer in the shop_history table.
 	[[nodiscard]] bool addHistory(uint32_t accountId, uint32_t playerGuid,
-	                              std::string_view title, int32_t price,
+	                              std::string_view title, int64_t price,
 	                              uint16_t count, std::string_view target = "");
 
 	/// Transactional character rename with death-table history update.

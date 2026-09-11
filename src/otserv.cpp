@@ -617,9 +617,13 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 	}
 	startupProgress().update(1, 2, "outfits");
 
-	LOG_INFO(">> Loading game store catalog");
-	if (!StoreManager::getInstance().loadCatalog()) {
-		LOG_WARN(">> Unable to load game store catalog from data/store/gamestore.xml");
+	if (getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		LOG_INFO(">> Loading game store catalog");
+		if (!StoreManager::getInstance().loadCatalog()) {
+			LOG_WARN(">> Unable to load game store catalog from data/store/gamestore.xml");
+		}
+	} else {
+		LOG_INFO(">> Game store is disabled in config");
 	}
 
 	LOG_INFO(">> Checking world type... ");

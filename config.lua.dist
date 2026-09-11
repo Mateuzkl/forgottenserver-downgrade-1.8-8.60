@@ -602,3 +602,12 @@ stressTestLeak = true
 stressTestLeakCount = 10000
 stressTestShutdownSend = true
 stressTestShutdownSendCount = 10000
+
+-- Game Store
+-- gameStore: Enables or disables the native in-game store subsystem (catalog, purchases, coin transfer)
+gameStore = true
+-- storeXpBoostPercent: Experience bonus percentage granted by Store XP boosts (default: 50%)
+storeXpBoostPercent = 50
+-- storeXpBoostDefaultDuration: Default duration in seconds for Store XP boosts when not specified by offer (default: 3600s = 1h)
+storeXpBoostDefaultDuration = 3600
+

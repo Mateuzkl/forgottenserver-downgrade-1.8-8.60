@@ -8,14 +8,14 @@ function onUpdateDatabase()
 		{tableName = "player_deaths_backup", indexName = "idx_pdb_mostdamage_by", columnName = "mostdamage_by"}
 	}
 
-	local function indexExists(tableName, indexName)
-		local resultId = db.storeQuery(
-			"SELECT 1 FROM `information_schema`.`STATISTICS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = " ..
-				db.escapeString(tableName) ..
-				" AND `INDEX_NAME` = " ..
-				db.escapeString(indexName) ..
-				" LIMIT 1"
+	local function hasFirstColumnIndex(tableName, columnName)
+		local query = string.format(
+			"SELECT 1 FROM `information_schema`.`STATISTICS` " ..
+			"WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s AND `COLUMN_NAME` = %s AND `SEQ_IN_INDEX` = 1 LIMIT 1",
+			db.escapeString(tableName),
+			db.escapeString(columnName)
 		)
+		local resultId = db.storeQuery(query)
 		if resultId ~= false then
 			result.free(resultId)
 			return true
@@ -25,8 +25,10 @@ function onUpdateDatabase()
 
 	for _, idx in ipairs(indexes) do
 		local tableExists = (not db.tableExists or db.tableExists(idx.tableName))
-		if tableExists and not indexExists(idx.tableName, idx.indexName) then
-			if not db.query(string.format("ALTER TABLE `%s` ADD INDEX `%s` (`%s`(64))", idx.tableName, idx.indexName, idx.columnName)) then
+		if tableExists and not hasFirstColumnIndex(idx.tableName, idx.columnName) then
+			local query = string.format("ALTER TABLE `%s` ADD INDEX `%s` (`%s`(64))", idx.tableName, idx.indexName, idx.columnName)
+			if not db.query(query) then
+				print(string.format("[Migration 65] Failed to add index '%s' on `%s`.`%s`", idx.indexName, idx.tableName, idx.columnName))
 				return false
 			end
 		end

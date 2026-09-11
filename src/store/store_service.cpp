@@ -8,11 +8,13 @@
 #include "account_coins.h"
 #include "configmanager.h"
 #include "game.h"
+#include "iologindata.h"
 #include "item.h"
 #include "logger.h"
 #include "luascript.h"
 #include "mounts.h"
 #include "player.h"
+#include "scheduler.h"
 #include "script.h"
 #include "scriptmanager.h"
 #include "store/store_catalog.h"
@@ -25,9 +27,6 @@
 extern Game g_game;
 
 namespace {
-
-constexpr int64_t XP_BOOST_PERCENT = 50;
-constexpr int64_t XP_BOOST_DEFAULT_SECONDS = 3600;
 
 bool playerIsInCombat(const Player& player)
 {
@@ -109,6 +108,7 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 	if (now - rateLimit.lastPurchase < PurchaseCooldown) {
 		return {false, "You are purchasing too fast. Please wait a moment."};
 	}
+	rateLimit.lastPurchase = now;
 
 	// 1. Resolve immutable offer from catalog.
 	auto catalog = StoreManager::getInstance().catalogSnapshot();
@@ -182,7 +182,7 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 
 	if (!StoreRepository::getInstance().addHistory(
 	        accountId, player.getGUID(), offer->name,
-	        -static_cast<int32_t>(offer->price), historyCount)) {
+	        -static_cast<int64_t>(offer->price), historyCount)) {
 		LOG_WARN(fmt::format(
 		    "[StoreService::purchase] Failed to persist purchase history for account={} player={} offer='{}'",
 		    accountId, player.getName(), offer->name));
@@ -196,14 +196,19 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 	} else if (offer->type == StoreOfferType::ChangeName) {
 		successMessage = "Your character name has been changed. You will be disconnected in 3 seconds. "
 		                 "Please log in again to use your new name.";
-		// Schedule kick after name change.
+		// Schedule kick after 3 seconds, verifying player identity on execution.
 		const uint32_t creatureId = player.getID();
-		g_dispatcher.addTask([creatureId]() { g_game.kickPlayer(creatureId, true); });
+		const uint32_t playerGuid = player.getGUID();
+		g_scheduler.addEvent(3000, [creatureId, playerGuid]() {
+			const auto p = g_game.getPlayerByID(creatureId);
+			if (p && p->getGUID() == playerGuid) {
+				g_game.kickPlayer(creatureId, true);
+			}
+		});
 	} else {
 		successMessage = "Purchase complete: " + offer->name;
 	}
 
-	rateLimit.lastPurchase = std::chrono::steady_clock::now();
 	return {true, successMessage};
 }
 
@@ -215,6 +220,7 @@ StoreResult StoreService::transferCoins(Player& player, std::string_view targetN
 	if (now - rateLimit.lastTransfer < TransferCooldown) {
 		return {false, "You are transferring coins too fast. Please wait a moment."};
 	}
+	rateLimit.lastTransfer = now;
 
 	if (amount == 0) {
 		return {false, "Invalid amount."};
@@ -253,22 +259,22 @@ StoreResult StoreService::transferCoins(Player& player, std::string_view targetN
 
 	// Record history for both accounts.
 	auto& repo = StoreRepository::getInstance();
+	const int64_t transferAmount = static_cast<int64_t>(amount);
 	if (!repo.addHistory(sourceAccountId, player.getGUID(),
 	                     "Coin Transfer to " + targetInfo->playerName,
-	                     -static_cast<int32_t>(amount), 1, targetInfo->playerName)) {
+	                     -transferAmount, 1, targetInfo->playerName)) {
 		LOG_WARN(fmt::format(
 		    "[StoreService::transferCoins] Failed to persist source transfer history for account={} player={}",
 		    sourceAccountId, player.getName()));
 	}
 	if (!repo.addHistory(targetInfo->accountId, targetInfo->playerId,
 	                     "Coin Transfer from " + player.getName(),
-	                     static_cast<int32_t>(amount), 1, player.getName())) {
+	                     transferAmount, 1, player.getName())) {
 		LOG_WARN(fmt::format(
 		    "[StoreService::transferCoins] Failed to persist target transfer history for account={} player={}",
 		    targetInfo->accountId, targetInfo->playerName));
 	}
 
-	rateLimit.lastTransfer = std::chrono::steady_clock::now();
 	return {true, fmt::format("You sent {} Tibia Coins to {}.", amount, targetInfo->playerName)};
 }
 
@@ -330,6 +336,7 @@ std::string StoreService::deliverPremium(Player& player, const StoreOffer& offer
 	}
 	const time_t newEnd = currentEnd + (offer.value * 86400);
 	player.setPremiumTime(newEnd);
+	IOLoginData::updatePremiumTime(player.getAccount(), newEnd);
 	return "";
 }
 
@@ -413,9 +420,14 @@ std::string StoreService::deliverXpBoost(Player& player, const StoreOffer& offer
 		return "You already have an active XP boost.";
 	}
 
-	const int64_t duration = offer.value > 0 ? offer.value : XP_BOOST_DEFAULT_SECONDS;
-	player.setXpBoostPercent(static_cast<int32_t>(XP_BOOST_PERCENT));
-	player.setXpBoostTime(static_cast<uint16_t>(std::min<int64_t>(65535, duration)));
+	const int64_t configuredPercent = ConfigManager::getInteger(ConfigManager::STORE_XP_BOOST_PERCENT);
+	const int64_t configuredDefaultDuration = ConfigManager::getInteger(ConfigManager::STORE_XP_BOOST_DEFAULT_DURATION);
+	const int32_t percent = static_cast<int32_t>(std::clamp<int64_t>(configuredPercent > 0 ? configuredPercent : 50, 1, 1000));
+	const int64_t fallbackDuration = configuredDefaultDuration > 0 ? configuredDefaultDuration : 3600;
+
+	const int64_t duration = offer.value > 0 ? offer.value : fallbackDuration;
+	player.setXpBoostPercent(percent);
+	player.setXpBoostTime(static_cast<uint16_t>(std::clamp<int64_t>(duration, 1, 65535)));
 	return "";
 }
 

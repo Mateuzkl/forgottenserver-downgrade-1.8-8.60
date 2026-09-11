@@ -1822,12 +1822,21 @@ void ProtocolGame::parseStoreOpen(NetworkMessage&)
 	if (!player) {
 		return;
 	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
 	sendStoreCatalog();
 }
 
 void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 {
 	if (!player) {
+		return;
+	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		skipUnreadBytes(msg);
+		sendStoreError("Store is currently unavailable.");
 		return;
 	}
 	if (!requireUnreadBytes(msg, sizeof(uint32_t))) {
@@ -1888,12 +1897,21 @@ void ProtocolGame::parseStoreHistory(NetworkMessage&)
 	if (!player) {
 		return;
 	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
 	sendStoreHistory();
 }
 
 void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 {
 	if (!player) {
+		return;
+	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		skipUnreadBytes(msg);
+		sendStoreError("Store is currently unavailable.");
 		return;
 	}
 	if (getUnreadBytes(msg) < sizeof(uint16_t) + sizeof(uint32_t)) {
@@ -3994,9 +4012,14 @@ void ProtocolGame::sendStoreCatalog()
 	if (!player) {
 		return;
 	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
 
 	const auto catalog = StoreManager::getInstance().catalogSnapshot();
 	if (!catalog) {
+		sendStoreError("Store is currently unavailable.");
 		return;
 	}
 
@@ -4087,10 +4110,11 @@ void ProtocolGame::sendStoreCatalog()
 			msg.addString(fo.offer->name);
 			msg.addString(fo.offer->icon);
 			msg.add<uint32_t>(fo.offer->price);
+			msg.addByte(0); // non-configurable in current schema
+			msg.addByte(0); // serviceType/disabled
 			msg.add<uint16_t>(fo.displayId);
 			msg.add<uint16_t>(fo.offer->count);
 			msg.addString(fo.offer->description);
-			msg.addString(storeOfferTypeToString(fo.offer->type));
 		}
 	}
 
@@ -4131,6 +4155,10 @@ void ProtocolGame::sendStoreHistory()
 	if (!player) {
 		return;
 	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
 
 	const auto history = StoreRepository::getInstance().loadHistory(player->getAccount(), 100);
 
@@ -4141,7 +4169,9 @@ void ProtocolGame::sendStoreHistory()
 
 	for (const auto& entry : history) {
 		msg.addString(entry.date);
-		msg.add<uint32_t>(static_cast<uint32_t>(std::abs(entry.price)));
+		const uint64_t magnitude = (entry.price < 0) ? (0ULL - static_cast<uint64_t>(entry.price)) : static_cast<uint64_t>(entry.price);
+		const uint32_t wirePrice = static_cast<uint32_t>(std::min<uint64_t>(magnitude, std::numeric_limits<uint32_t>::max()));
+		msg.add<uint32_t>(wirePrice);
 		msg.addByte(entry.price >= 0 ? 1 : 0);
 		msg.addByte(entry.costSecond == 1 ? 1 : 0);
 		msg.addString(entry.title);

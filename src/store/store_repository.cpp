@@ -34,7 +34,7 @@ std::vector<StoreHistoryEntry> StoreRepository::loadHistory(uint32_t accountId, 
 	do {
 		StoreHistoryEntry entry;
 		entry.date = result->getString("date");
-		entry.price = result->getNumber<int32_t>("price");
+		entry.price = result->getNumber<int64_t>("price");
 		entry.costSecond = result->getNumber<int32_t>("costSecond");
 		entry.title = result->getString("title");
 		entry.count = static_cast<uint16_t>(result->getNumber<int32_t>("count"));
@@ -45,7 +45,7 @@ std::vector<StoreHistoryEntry> StoreRepository::loadHistory(uint32_t accountId, 
 }
 
 bool StoreRepository::addHistory(uint32_t accountId, uint32_t playerGuid,
-                                 std::string_view title, int32_t price,
+                                 std::string_view title, int64_t price,
                                  uint16_t count, std::string_view target)
 {
 	if (accountId == 0) {
