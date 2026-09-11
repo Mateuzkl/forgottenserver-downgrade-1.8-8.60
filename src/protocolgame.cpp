@@ -5757,18 +5757,18 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 	features[GameFeature::CreatureIcons] = true;
 	features[GameFeature::ContainerPagination] = true;
 	features[GameFeature::BrowseField] = true;
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient) {
 		features[GameFeature::PlayerRegenerationTime] = true;
 		features[GameFeature::ExperienceBonus] = true;
+	}
+	if (isAstraClient) {
 		features[GameFeature::PlayerFamiliars] = true;
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
 	}
-	// Fonticak outfit familiar extension (feature id 138), quiver count (feature id 141), regeneration time and experience bonus.
+	// Fonticak outfit familiar extension (feature id 138) and quiver count (feature id 141).
 	if (isFonticakClient) {
-		features[GameFeature::PlayerRegenerationTime] = true;
-		features[GameFeature::ExperienceBonus] = true;
 		features[GameFeature::PlayerFamiliars] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 	}
