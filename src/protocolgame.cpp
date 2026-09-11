@@ -26,6 +26,7 @@
 #include "player.h"
 #include "protocolgame.h"
 #include "protocollogin.h"
+#include "protocolspectator.h"
 #include "imbuement.h"
 #include "familiar.h"
 #include "logger.h"
@@ -1918,9 +1919,9 @@ void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 	sendStorePurchaseSuccess(0, result.message, currentCoins);
 	sendStoreHistory();
 
-	Player* targetPlayer = g_game.getPlayerByName(targetName);
+	const auto targetPlayer = g_game.getPlayerByName(targetName);
 	if (targetPlayer && targetPlayer->client) {
-		auto* targetProtocol = dynamic_cast<ProtocolGame*>(targetPlayer->client.get());
+		const auto targetProtocol = targetPlayer->client->protocol();
 		if (targetProtocol) {
 			targetProtocol->sendStoreCatalog();
 			targetProtocol->sendStoreHistory();
