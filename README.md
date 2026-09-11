@@ -19,6 +19,7 @@
 ![Lua](https://img.shields.io/badge/Lua-5.5-2C2D72?style=for-the-badge&logo=lua&logoColor=white)
 ![MariaDB](https://img.shields.io/badge/MariaDB-003545?style=for-the-badge&logo=mariadb&logoColor=white)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04%20%7C%2026.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
+![Debian](https://img.shields.io/badge/Debian-11%20%7C%2012%20%7C%2013-A81D33?style=for-the-badge&logo=debian&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-vcpkg-0078D4?style=for-the-badge&logo=windows&logoColor=white)
 
 <br />
@@ -41,7 +42,7 @@ Developed and maintained by [Mateuzkl](https://github.com/Mateuzkl), based on [N
 | Core | TFS 1.8 engine, protocol 8.60, C++23, Lua 5.5, MariaDB, optimized decay |
 | Maps | ClientID-native maps and items |
 | Clients | OTCv8, Mehah, CipSoft, and custom client options |
-| Tooling | Automatic Ubuntu/WSL build and Windows support through vcpkg |
+| Tooling | Automatic Ubuntu/Debian/WSL build and Windows support through vcpkg |
 
 ---
 
@@ -119,16 +120,21 @@ Both Lua/RevScript NPC backends and their folders are already configured. An unk
 
 ## Compilation
 
-### Linux / WSL
+### Linux / WSL — Ubuntu & Debian
 
-On Ubuntu 22.04, 24.04, or 26.04, run:
+Supported distributions:
+
+- **Ubuntu:** 22.04, 24.04, 26.04
+- **Debian:** 11 (Bullseye), 12 (Bookworm), 13 (Trixie)
+
+Run:
 
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
 
-The script detects the Ubuntu version, installs all required dependencies automatically, and builds the server in Release mode.
+The build script automatically detects the supported Linux distribution and version, installs the required dependencies, and builds the server in Release mode. The same workflow can be used on native Linux or WSL.
 
 After the build finishes:
 
