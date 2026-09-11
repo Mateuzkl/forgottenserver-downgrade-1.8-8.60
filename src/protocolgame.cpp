@@ -701,7 +701,7 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 	if (isOTC) {
 		// Player loading can emit status packets before finishLogin(). Astra and
 		// Fonticak need item-state wire-format features advertised before map/inventory.
-		sendFeatures(isAstraClient);
+		sendFeatures(isAstraClient || isFonticakClient);
 
 		NetworkMessage opcodeMessage;
 		opcodeMessage.addByte(0x32);
@@ -5776,7 +5776,7 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::ZoneWeather] = true;
 		zoneWeatherFeatureEnabled = true;
 	}
-	if ((advertiseAstraItemState || isFonticakClient) && (isAstraClient || isFonticakClient) &&
+	if (advertiseAstraItemState && (isAstraClient || isFonticakClient) &&
 	    getBoolean(ConfigManager::ASTRA_ITEM_STATE_ENABLED)) {
 		features[GameFeature::DisplayItemDuration] = true;
 		features[GameFeature::DisplayItemCharges] = true;

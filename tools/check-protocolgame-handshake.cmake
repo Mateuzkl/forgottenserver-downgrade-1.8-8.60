@@ -30,7 +30,7 @@ extract_block("void ProtocolGame::onRecvFirstMessage" "void ProtocolGame::onConn
 extract_block("void ProtocolGame::AddPlayerStats" "void ProtocolGame::AddPlayerSkills" stats_block)
 extract_block("void ProtocolGame::sendFeatures" "void ProtocolGame::spectatorTurn" features_block)
 
-require_occurrences("${login_block}" "sendFeatures\\(isAstraClient\\)" 1 "login feature negotiation")
+require_occurrences("${login_block}" "sendFeatures\\(isAstraClient \\|\\| isFonticakClient\\)" 1 "login feature negotiation")
 require_occurrences("${login_block}" "opcodeMessage\\.addByte\\(0x32\\)" 1 "login extended-opcode negotiation")
 require_occurrences("${connect_block}" "sendFeatures\\(" 0 "reconnect duplicate feature negotiation")
 require_occurrences("${connect_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "reconnect duplicate extended-opcode negotiation")
