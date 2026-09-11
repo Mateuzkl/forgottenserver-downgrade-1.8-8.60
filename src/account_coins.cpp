@@ -121,11 +121,11 @@ std::optional<CharacterAccountInfo> findCharacterAccount(const std::string& play
 	if (!result) {
 		return std::nullopt;
 	}
-	return CharacterAccountInfo{
-	    .playerId = result->getNumber<uint32_t>("id"),
-	    .accountId = result->getNumber<uint32_t>("account_id"),
-	    .playerName = result->getString("name"),
-	};
+	CharacterAccountInfo info;
+	info.playerId = result->getNumber<uint32_t>("id");
+	info.accountId = result->getNumber<uint32_t>("account_id");
+	info.playerName = std::string(result->getString("name"));
+	return info;
 }
 
 } // namespace AccountCoins

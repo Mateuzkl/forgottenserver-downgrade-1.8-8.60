@@ -12,6 +12,7 @@
 #include "logger.h"
 #include "mounts.h"
 #include "player.h"
+#include "luascript.h"
 #include "store/store_catalog.h"
 #include "store/store_name_validator.h"
 #include "store/store_repository.h"
@@ -20,6 +21,7 @@
 #include <cmath>
 
 extern Game g_game;
+extern LuaEnvironment g_luaEnvironment;
 
 namespace {
 
@@ -28,8 +30,7 @@ constexpr int64_t XP_BOOST_DEFAULT_SECONDS = 3600;
 
 bool playerIsInCombat(const Player& player)
 {
-	return player.hasCondition(CONDITION_INFIGHT, CONDITIONID_DEFAULT) ||
-	       player.hasCondition(CONDITION_INFIGHT, CONDITIONID_COMBAT);
+	return player.hasCondition(CONDITION_INFIGHT);
 }
 
 bool playerIsInProtectionZone(const Player& player)
@@ -172,7 +173,7 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 		historyCount = 1;
 	}
 
-	StoreRepository::getInstance().addHistory(
+	(void)StoreRepository::getInstance().addHistory(
 	    accountId, player.getGUID(), offer->name,
 	    -static_cast<int32_t>(offer->price), historyCount);
 
@@ -234,12 +235,12 @@ StoreResult StoreService::transferCoins(Player& player, std::string_view targetN
 
 	// Record history for both accounts.
 	auto& repo = StoreRepository::getInstance();
-	repo.addHistory(sourceAccountId, player.getGUID(),
-	                "Coin Transfer to " + targetInfo->playerName,
-	                -static_cast<int32_t>(amount), 1, targetInfo->playerName);
-	repo.addHistory(targetInfo->accountId, targetInfo->playerId,
-	                "Coin Transfer from " + player.getName(),
-	                static_cast<int32_t>(amount), 1, player.getName());
+	(void)repo.addHistory(sourceAccountId, player.getGUID(),
+	                      "Coin Transfer to " + targetInfo->playerName,
+	                      -static_cast<int32_t>(amount), 1, targetInfo->playerName);
+	(void)repo.addHistory(targetInfo->accountId, targetInfo->playerId,
+	                      "Coin Transfer from " + player.getName(),
+	                      static_cast<int32_t>(amount), 1, player.getName());
 
 	return {true, fmt::format("You sent {} Tibia Coins to {}.", amount, targetInfo->playerName)};
 }
@@ -402,13 +403,12 @@ std::string StoreService::deliverItem(Player& player, const StoreOffer& offer)
 		return "Your store inbox is not available.";
 	}
 
-	Item* item = Item::CreateItem(offer.itemId, offer.count);
+	auto item = Item::CreateItem(offer.itemId, offer.count);
 	if (!item) {
 		return "Failed to create item.";
 	}
 
-	if (inbox->addThing(item) != RETURNVALUE_NOERROR) {
-		delete item;
+	if (g_game.internalAddItem(inbox, item.get(), INDEX_WHEREEVER, FLAG_NOLIMIT) != RETURNVALUE_NOERROR) {
 		return "Your store inbox is full.";
 	}
 
@@ -431,22 +431,16 @@ std::string StoreService::deliverHouseItem(Player& player, const StoreOffer& off
 		return "Invalid house item.";
 	}
 
-	// Create all decoration kit items. Track them for rollback on partial failure.
-	std::vector<Item*> createdItems;
+	// Create all decoration kit items.
+	std::vector<std::shared_ptr<Item>> createdItems;
 	for (uint16_t itemId : deliveryIds) {
 		const ItemType& it = Item::items[itemId];
 		if (it.id == 0) {
-			for (Item* created : createdItems) {
-				delete created;
-			}
 			return "Invalid house item.";
 		}
 
-		Item* kit = Item::CreateItem(ITEM_DECORATION_KIT, 1);
+		auto kit = Item::CreateItem(ITEM_DECORATION_KIT, 1);
 		if (!kit) {
-			for (Item* created : createdItems) {
-				delete created;
-			}
 			return "Failed to create item.";
 		}
 
@@ -454,15 +448,11 @@ std::string StoreService::deliverHouseItem(Player& player, const StoreOffer& off
 		    "You bought this item in the Store.\nUnwrap it in your own house to create a <" +
 		    it.name + ">.");
 		kit->setIntAttr(ITEM_ATTRIBUTE_WRAPID, itemId);
-		createdItems.push_back(kit);
+		createdItems.push_back(std::move(kit));
 	}
 
-	for (Item* item : createdItems) {
-		if (inbox->addThing(item) != RETURNVALUE_NOERROR) {
-			// Rollback: remove items that were added and delete remaining.
-			for (Item* created : createdItems) {
-				delete created;
-			}
+	for (auto& item : createdItems) {
+		if (g_game.internalAddItem(inbox, item.get(), INDEX_WHEREEVER, FLAG_NOLIMIT) != RETURNVALUE_NOERROR) {
 			return "Your store inbox is full.";
 		}
 	}
@@ -560,8 +550,8 @@ std::string StoreService::deliverViaLuaCallback(Player& player, const StoreOffer
 	}
 
 	// Push arguments: player, offerType, value, displayId, extraName, extraSex
-	LuaScriptInterface::pushUserdata(L, &player);
-	LuaScriptInterface::setMetatable(L, -1, "Player");
+	Lua::pushUserdata<Player>(L, &player);
+	Lua::setMetatable(L, -1, "Player");
 	lua_pushstring(L, std::string(storeOfferTypeToString(offer.type)).c_str());
 	lua_pushinteger(L, offer.value);
 	lua_pushinteger(L, offer.displayId);
