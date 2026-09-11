@@ -14,9 +14,17 @@ SIMDUTF_DIR="${HOME}/.cache/tfs-build/simdutf"
 SIMDUTF_PREFIX="${HOME}/.local"
 MIO_DIR="${HOME}/.cache/tfs-build/mio"
 
-BUILD_DIR="build-release"
+BUILD_DIR="${TFS_BUILD_DIR:-}"
 OUTPUT_BIN=""
-UBUNTU_TARGET="${TFS_UBUNTU_TARGET:-auto}"
+TARGET_DISTRO="${TFS_DISTRO_TARGET:-auto}"
+TARGET_VERSION="auto"
+if [[ -n "${TFS_DEBIAN_TARGET:-}" ]]; then
+  TARGET_DISTRO="debian"
+  TARGET_VERSION="${TFS_DEBIAN_TARGET}"
+elif [[ -n "${TFS_UBUNTU_TARGET:-}" ]]; then
+  TARGET_DISTRO="ubuntu"
+  TARGET_VERSION="${TFS_UBUNTU_TARGET}"
+fi
 UI_LANG="${TFS_BUILD_LANG:-}"
 JOBS="${JOBS:-}"
 HTTP="ON"
@@ -26,11 +34,20 @@ CLEAN_BUILD=0
 SKIP_DEPS=0
 SKIP_BUILD=0
 NONINTERACTIVE=0
+PORTABLE_DEBIAN=0
+
+ZIG_VERSION="0.15.2"
+CMAKE_PORTABLE_VERSION="3.31.12"
+VCPKG_BASELINE="9e593bb18ea69cc5095e012465dcd675a822ed0d"
+TOOLCHAIN_CACHE="${TFS_TOOLCHAIN_CACHE:-${HOME}/.cache/tfs-build/toolchains}"
+VCPKG_ROOT="${TFS_VCPKG_ROOT:-${HOME}/.cache/tfs-build/vcpkg}"
+TFS_VCPKG_TRIPLET=""
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LUA_PATCH_FILE="${SCRIPT_DIR}/tools/patches/lua-5.5.0-write-barrier.patch"
 APT_UPDATED=0
 SUDO=()
+APT_OPTIONS=()
 
 if [[ -t 1 ]]; then
   BOLD=$'\033[1m'
@@ -54,7 +71,7 @@ fi
 
 declare -A MSG_PT=(
   [banner_title]="Assistente de build TFS 1.8 - 8.60"
-  [banner_subtitle]="Ubuntu/WSL, dependencias, Lua 5.5, Asio, mio e CMake"
+  [banner_subtitle]="Debian/Ubuntu/WSL, dependencias, Lua 5.5, Asio, mio e CMake"
   [choose_lang]="Escolha o idioma:"
   [language_set]="Idioma: Portugues"
   [detect_system]="Sistema detectado"
@@ -63,6 +80,7 @@ declare -A MSG_PT=(
   [ubuntu_prompt]="Digite 1, 2 ou 3 [detectado: %s]: "
   [invalid_option]="opcao invalida"
   [using_ubuntu]="Usando configuracao para Ubuntu %s"
+  [using_platform]="Usando configuracao para %s %s"
   [section_preflight]="Verificando ambiente"
   [section_deps]="Verificando dependencias apt"
   [section_lua]="Verificando Lua 5.5"
@@ -70,6 +88,7 @@ declare -A MSG_PT=(
   [section_repo]="Verificando projeto TFS"
   [section_build]="Compilando TFS em Release"
   [need_ubuntu]="Este script foi feito para Ubuntu 22.04/24.04/26.04 com apt/dpkg."
+  [need_platform]="Este script suporta Debian 11/12/13 e Ubuntu 22.04/24.04/26.04 com apt/dpkg."
   [need_sudo]="sudo nao encontrado. Rode como root ou instale sudo."
   [pkg_present]="pacote ja instalado: %s"
   [pkg_installing]="instalando pacotes ausentes: %s"
@@ -112,7 +131,7 @@ declare -A MSG_PT=(
 
 declare -A MSG_EN=(
   [banner_title]="TFS 1.8 - 8.60 build assistant"
-  [banner_subtitle]="Ubuntu/WSL, dependencies, Lua 5.5, Asio, mio and CMake"
+  [banner_subtitle]="Debian/Ubuntu/WSL, dependencies, Lua 5.5, Asio, mio and CMake"
   [choose_lang]="Choose language:"
   [language_set]="Language: English"
   [detect_system]="Detected system"
@@ -121,6 +140,7 @@ declare -A MSG_EN=(
   [ubuntu_prompt]="Type 1, 2 or 3 [detected: %s]: "
   [invalid_option]="invalid option"
   [using_ubuntu]="Using Ubuntu %s configuration"
+  [using_platform]="Using %s %s configuration"
   [section_preflight]="Checking environment"
   [section_deps]="Checking apt dependencies"
   [section_lua]="Checking Lua 5.5"
@@ -128,6 +148,7 @@ declare -A MSG_EN=(
   [section_repo]="Checking TFS project"
   [section_build]="Building TFS Release"
   [need_ubuntu]="This script is intended for Ubuntu 22.04/24.04/26.04 with apt/dpkg."
+  [need_platform]="This script supports Debian 11/12/13 and Ubuntu 22.04/24.04/26.04 with apt/dpkg."
   [need_sudo]="sudo was not found. Run as root or install sudo."
   [pkg_present]="package already installed: %s"
   [pkg_installing]="installing missing packages: %s"
@@ -170,7 +191,7 @@ declare -A MSG_EN=(
 
 declare -A MSG_ES=(
   [banner_title]="Asistente de build TFS 1.8 - 8.60"
-  [banner_subtitle]="Ubuntu/WSL, dependencias, Lua 5.5, Asio, mio y CMake"
+  [banner_subtitle]="Debian/Ubuntu/WSL, dependencias, Lua 5.5, Asio, mio y CMake"
   [choose_lang]="Elige el idioma:"
   [language_set]="Idioma: Espanol"
   [detect_system]="Sistema detectado"
@@ -179,6 +200,7 @@ declare -A MSG_ES=(
   [ubuntu_prompt]="Escribe 1, 2 o 3 [detectado: %s]: "
   [invalid_option]="opcion invalida"
   [using_ubuntu]="Usando configuracion para Ubuntu %s"
+  [using_platform]="Usando configuracion para %s %s"
   [section_preflight]="Verificando entorno"
   [section_deps]="Verificando dependencias apt"
   [section_lua]="Verificando Lua 5.5"
@@ -186,6 +208,7 @@ declare -A MSG_ES=(
   [section_repo]="Verificando proyecto TFS"
   [section_build]="Compilando TFS Release"
   [need_ubuntu]="Este script fue hecho para Ubuntu 22.04/24.04/26.04 con apt/dpkg."
+  [need_platform]="Este script soporta Debian 11/12/13 y Ubuntu 22.04/24.04/26.04 con apt/dpkg."
   [need_sudo]="sudo no fue encontrado. Ejecuta como root o instala sudo."
   [pkg_present]="paquete ya instalado: %s"
   [pkg_installing]="instalando paquetes faltantes: %s"
@@ -297,11 +320,13 @@ Usage: ./build.sh [options]
 
 Options:
   --lang pt|en|es        Select language without prompt
+  --debian 11|12|13      Select Debian dependency strategy
   --ubuntu 22.04|24.04|26.04
                           Select Ubuntu dependency strategy
   --jobs N               Parallel build jobs
-  --clean                Remove build-release before configuring
-  --output PATH          Copy final binary to PATH (default: ./tfs)
+  --build-dir PATH       CMake build directory
+  --clean                Remove the selected build directory before configuring
+  --output PATH          Copy the final binary to PATH (default: target-specific)
   --http on|off          Configure CMake HTTP option (default: on)
   --no-mimalloc          Disable mimalloc in CMake
   --skip-deps            Do not install/check dependencies
@@ -311,7 +336,12 @@ Options:
 
 Environment:
   TFS_BUILD_LANG=pt|en|es
+  TFS_DISTRO_TARGET=debian|ubuntu
+  TFS_DEBIAN_TARGET=11|12|13
   TFS_UBUNTU_TARGET=22.04|24.04|26.04
+  TFS_BUILD_DIR=PATH
+  TFS_TOOLCHAIN_CACHE=PATH
+  TFS_VCPKG_ROOT=PATH
   JOBS=N
 EOF
 }
@@ -336,12 +366,24 @@ parse_args() {
         ;;
       --ubuntu)
         [[ $# -ge 2 ]] || die "--ubuntu requires a value"
-        UBUNTU_TARGET="$2"
+        TARGET_DISTRO="ubuntu"
+        TARGET_VERSION="$2"
+        shift 2
+        ;;
+      --debian)
+        [[ $# -ge 2 ]] || die "--debian requires a value"
+        TARGET_DISTRO="debian"
+        TARGET_VERSION="$2"
         shift 2
         ;;
       --jobs)
         [[ $# -ge 2 ]] || die "--jobs requires a value"
         JOBS="$2"
+        shift 2
+        ;;
+      --build-dir)
+        [[ $# -ge 2 ]] || die "--build-dir requires a value"
+        BUILD_DIR="$2"
         shift 2
         ;;
       --clean)
@@ -436,7 +478,7 @@ detect_os_id() {
   fi
 }
 
-detect_ubuntu_version() {
+detect_os_version() {
   if [[ -f /etc/os-release ]]; then
     # shellcheck disable=SC1091
     source /etc/os-release
@@ -446,51 +488,68 @@ detect_ubuntu_version() {
   fi
 }
 
-choose_ubuntu() {
-  local detected default_choice choice
-  detected="$(detect_ubuntu_version)"
+choose_platform() {
+  local detected_id detected_version choice
+  detected_id="$(detect_os_id)"
+  detected_version="$(detect_os_version)"
 
-  info "$(msg detect_system): Ubuntu ${detected}"
+  info "$(msg detect_system): ${detected_id} ${detected_version}"
   info "$(msg wsl_detected): $(detect_wsl)"
 
-  case "${UBUNTU_TARGET}" in
-    22.04|24.04|26.04)
-      sayf using_ubuntu "${UBUNTU_TARGET}"
-      return
+  if [[ "${TARGET_DISTRO}" == "auto" ]]; then
+    TARGET_DISTRO="${detected_id}"
+  fi
+  if [[ "${TARGET_VERSION}" == "auto" ]]; then
+    TARGET_VERSION="${detected_version}"
+  fi
+
+  case "${TARGET_DISTRO}:${TARGET_VERSION}" in
+    debian:11|debian:12|debian:13|ubuntu:22.04|ubuntu:24.04|ubuntu:26.04) ;;
+    *)
+      if [[ "${NONINTERACTIVE}" -eq 1 || ! -t 0 ]]; then
+        die "$(msg need_platform)"
+      fi
+      printf '\n%s\n' "Choose the target system / Escolha o sistema alvo:"
+      printf '  1) Debian 11\n  2) Debian 12\n  3) Debian 13\n'
+      printf '  4) Ubuntu 22.04\n  5) Ubuntu 24.04\n  6) Ubuntu 26.04\n\n'
+      read -r -p "> " choice || choice=""
+      case "${choice}" in
+        1) TARGET_DISTRO="debian"; TARGET_VERSION="11" ;;
+        2) TARGET_DISTRO="debian"; TARGET_VERSION="12" ;;
+        3) TARGET_DISTRO="debian"; TARGET_VERSION="13" ;;
+        4) TARGET_DISTRO="ubuntu"; TARGET_VERSION="22.04" ;;
+        5) TARGET_DISTRO="ubuntu"; TARGET_VERSION="24.04" ;;
+        6) TARGET_DISTRO="ubuntu"; TARGET_VERSION="26.04" ;;
+        *) die "$(msg invalid_option)" ;;
+      esac
       ;;
   esac
 
-  if [[ "${detected}" == "22.04" ]]; then
-    default_choice="1"
-  elif [[ "${detected}" == "24.04" ]]; then
-    default_choice="2"
-  elif [[ "${detected}" == "26.04" ]]; then
-    default_choice="3"
-  else
-    default_choice=""
+  if [[ "${TARGET_DISTRO}" != "${detected_id}" || "${TARGET_VERSION}" != "${detected_version}" ]]; then
+    die "Selected ${TARGET_DISTRO} ${TARGET_VERSION}, but this host is ${detected_id} ${detected_version}. Run each target inside its matching WSL distribution or container."
   fi
 
-  if [[ "${NONINTERACTIVE}" -eq 1 || ! -t 0 ]]; then
-    [[ -n "${default_choice}" ]] || die "$(msg need_ubuntu)"
-    choice="${default_choice}"
-  else
-    printf '\n%s\n' "$(msg choose_ubuntu)"
-    printf '  1) Ubuntu 22.04\n'
-    printf '  2) Ubuntu 24.04\n'
-    printf '  3) Ubuntu 26.04\n\n'
-    printf "$(msg ubuntu_prompt)" "${default_choice:-nenhum}"
-    read -r choice || choice=""
-    choice="${choice:-$default_choice}"
+  if [[ -z "${BUILD_DIR}" ]]; then
+    if [[ "${TARGET_DISTRO}" == "debian" ]]; then
+      BUILD_DIR="build-release-debian-${TARGET_VERSION}"
+    else
+      BUILD_DIR="build-release"
+    fi
   fi
 
-  case "${choice}" in
-    1) UBUNTU_TARGET="22.04" ;;
-    2) UBUNTU_TARGET="24.04" ;;
-    3) UBUNTU_TARGET="26.04" ;;
-    *) die "$(msg invalid_option)" ;;
-  esac
+  if [[ "${TARGET_DISTRO}:${TARGET_VERSION}" == "debian:11" || "${TARGET_DISTRO}:${TARGET_VERSION}" == "debian:12" ]]; then
+    PORTABLE_DEBIAN=1
+  fi
 
-  sayf using_ubuntu "${UBUNTU_TARGET}"
+  if [[ "${TARGET_DISTRO}:${TARGET_VERSION}" == "debian:11" ]]; then
+    APT_OPTIONS=(
+      -o "Dir::Etc::sourcelist=${SCRIPT_DIR}/tools/apt/debian-11-archive.list"
+      -o "Dir::Etc::sourceparts=-"
+      -o "Acquire::Check-Valid-Until=false"
+    )
+  fi
+
+  sayf using_platform "${TARGET_DISTRO^}" "${TARGET_VERSION}"
 }
 
 init_sudo() {
@@ -502,13 +561,9 @@ init_sudo() {
   fi
 }
 
-require_ubuntu_tools() {
-  command -v apt >/dev/null 2>&1 || die "$(msg need_ubuntu)"
+require_apt_tools() {
+  command -v apt-get >/dev/null 2>&1 || die "$(msg need_platform)"
   command -v dpkg-query >/dev/null 2>&1 || die "$(msg need_ubuntu)"
-
-  local os_id
-  os_id="$(detect_os_id)"
-  [[ "${os_id}" == "ubuntu" ]] || warn "$(msg need_ubuntu)"
 }
 
 version_ge() {
@@ -531,7 +586,7 @@ tool_version() {
 
 preflight() {
   section section_preflight
-  require_ubuntu_tools
+  require_apt_tools
   init_sudo
 
   local cmake_version gcc_version gxx_version
@@ -543,7 +598,7 @@ preflight() {
   sayf tool_version "gcc" "${gcc_version}"
   sayf tool_version "g++" "${gxx_version}"
 
-  if [[ "${cmake_version}" != "missing" ]] && ! version_ge "${cmake_version}" "3.20"; then
+  if [[ "${PORTABLE_DEBIAN}" -eq 0 && "${cmake_version}" != "missing" ]] && ! version_ge "${cmake_version}" "3.20"; then
     die "$(printf "$(msg cmake_too_old)" "${cmake_version}")"
   fi
 }
@@ -551,7 +606,7 @@ preflight() {
 apt_update_once() {
   if [[ "${APT_UPDATED}" -eq 0 ]]; then
     info "$(msg apt_update)"
-    "${SUDO[@]}" apt update
+    "${SUDO[@]}" apt-get "${APT_OPTIONS[@]}" update
     APT_UPDATED=1
   fi
 }
@@ -607,7 +662,7 @@ apt_install_missing() {
 
   apt_update_once
   info "$(printf "$(msg pkg_installing)" "$(join_by_space "${missing[@]}")")"
-  "${SUDO[@]}" apt install -y "${missing[@]}"
+  "${SUDO[@]}" apt-get "${APT_OPTIONS[@]}" install -y "${missing[@]}"
 }
 
 install_common_deps() {
@@ -638,7 +693,7 @@ install_common_deps() {
     libasio-dev
   )
 
-  if [[ "${UBUNTU_TARGET}" == "22.04" ]]; then
+  if [[ "${TARGET_DISTRO}:${TARGET_VERSION}" == "ubuntu:22.04" ]]; then
     packages+=(
       gcc-12
       g++-12
@@ -647,6 +702,129 @@ install_common_deps() {
 
   apt_install_missing "${packages[@]}"
   ensure_mysql_client_dev
+}
+
+install_portable_debian_bootstrap() {
+  section section_deps
+  apt_install_missing \
+    autoconf autoconf-archive automake bison build-essential ca-certificates curl file flex \
+    git gzip libtool linux-libc-dev make ninja-build patch perl pkg-config python3 tar unzip xz-utils zip
+}
+
+download_verified() {
+  local url="$1"
+  local sha256="$2"
+  local destination="$3"
+
+  mkdir -p "$(dirname "${destination}")"
+  if [[ -f "${destination}" ]] && printf '%s  %s\n' "${sha256}" "${destination}" | sha256sum -c - >/dev/null 2>&1; then
+    return
+  fi
+
+  rm -f -- "${destination}"
+  curl --fail --show-error --location --retry 5 --retry-all-errors --retry-delay 3 \
+    --connect-timeout 30 --max-time 900 --output "${destination}" "${url}"
+  printf '%s  %s\n' "${sha256}" "${destination}" | sha256sum -c -
+}
+
+portable_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) printf 'x86_64' ;;
+    aarch64|arm64) printf 'aarch64' ;;
+    *) die "Portable Debian builds support x86_64 and aarch64; found $(uname -m)." ;;
+  esac
+}
+
+ensure_portable_cmake() {
+  local arch cmake_arch sha256 archive install_dir
+  arch="$(portable_arch)"
+  install_dir="${TOOLCHAIN_CACHE}/cmake-${CMAKE_PORTABLE_VERSION}-${arch}"
+
+  if [[ "${arch}" == "x86_64" ]]; then
+    cmake_arch="x86_64"
+    sha256="0dc2e9a6860f06bf10bd8fadc03e35d9eeb4df46e33763a7e480e987758f385c"
+  else
+    cmake_arch="aarch64"
+    sha256="83f8fd91d2038a56556e1400390fcfe42f79602940c494f6c6f1cdae7f9e7f40"
+  fi
+
+  if [[ ! -x "${install_dir}/bin/cmake" ]]; then
+    [[ ! -e "${install_dir}" ]] || die "Incomplete CMake toolchain at ${install_dir}; remove that directory and retry."
+    archive="${TOOLCHAIN_CACHE}/downloads/cmake-${CMAKE_PORTABLE_VERSION}-linux-${cmake_arch}.tar.gz"
+    download_verified \
+      "https://github.com/Kitware/CMake/releases/download/v${CMAKE_PORTABLE_VERSION}/cmake-${CMAKE_PORTABLE_VERSION}-linux-${cmake_arch}.tar.gz" \
+      "${sha256}" "${archive}"
+    mkdir -p "${install_dir}"
+    tar -xzf "${archive}" --strip-components=1 -C "${install_dir}"
+  fi
+
+  export PATH="${install_dir}/bin:${PATH}"
+}
+
+ensure_portable_zig() {
+  local arch zig_arch sha256 archive install_dir
+  arch="$(portable_arch)"
+  install_dir="${TOOLCHAIN_CACHE}/zig-${ZIG_VERSION}-${arch}"
+
+  if [[ "${arch}" == "x86_64" ]]; then
+    zig_arch="x86_64"
+    sha256="02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239"
+    TFS_VCPKG_TRIPLET="x64-linux-tfs-zig"
+  else
+    zig_arch="aarch64"
+    sha256="958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f"
+    TFS_VCPKG_TRIPLET="arm64-linux-tfs-zig"
+  fi
+
+  if [[ ! -x "${install_dir}/zig" ]]; then
+    [[ ! -e "${install_dir}" ]] || die "Incomplete Zig toolchain at ${install_dir}; remove that directory and retry."
+    archive="${TOOLCHAIN_CACHE}/downloads/zig-${zig_arch}-linux-${ZIG_VERSION}.tar.xz"
+    download_verified "https://ziglang.org/download/${ZIG_VERSION}/zig-${zig_arch}-linux-${ZIG_VERSION}.tar.xz" \
+      "${sha256}" "${archive}"
+    mkdir -p "${install_dir}"
+    tar -xJf "${archive}" --strip-components=1 -C "${install_dir}"
+  fi
+
+  export TFS_ZIG_BIN="${install_dir}/zig"
+  chmod +x "${SCRIPT_DIR}"/tools/toolchains/zig-*
+}
+
+ensure_vcpkg() {
+  mkdir -p "$(dirname "${VCPKG_ROOT}")"
+  if [[ ! -d "${VCPKG_ROOT}/.git" ]]; then
+    [[ ! -e "${VCPKG_ROOT}" ]] || die "${VCPKG_ROOT} exists but is not a vcpkg checkout."
+    git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"
+  fi
+
+  git -C "${VCPKG_ROOT}" fetch --depth 1 origin "${VCPKG_BASELINE}"
+  git -C "${VCPKG_ROOT}" checkout --detach "${VCPKG_BASELINE}"
+  "${VCPKG_ROOT}/bootstrap-vcpkg.sh" -disableMetrics
+}
+
+ensure_portable_debian_toolchain() {
+  ensure_portable_cmake
+  ensure_portable_zig
+  ensure_vcpkg
+  cmake --version | head -n 1
+  "${TFS_ZIG_BIN}" version
+  "${VCPKG_ROOT}/vcpkg" version | head -n 1
+}
+
+activate_portable_debian_toolchain() {
+  local arch
+  arch="$(portable_arch)"
+  export TFS_ZIG_BIN="${TOOLCHAIN_CACHE}/zig-${ZIG_VERSION}-${arch}/zig"
+  export PATH="${TOOLCHAIN_CACHE}/cmake-${CMAKE_PORTABLE_VERSION}-${arch}/bin:${PATH}"
+  if [[ "${arch}" == "x86_64" ]]; then
+    TFS_VCPKG_TRIPLET="x64-linux-tfs-zig"
+  else
+    TFS_VCPKG_TRIPLET="arm64-linux-tfs-zig"
+  fi
+
+  [[ -x "${TFS_ZIG_BIN}" && -x "${VCPKG_ROOT}/vcpkg" ]] ||
+    die "Portable Debian dependencies are missing. Run without --skip-deps once."
+  command -v cmake >/dev/null 2>&1 || die "Portable CMake is missing. Run without --skip-deps once."
+  chmod +x "${SCRIPT_DIR}"/tools/toolchains/zig-*
 }
 
 lua_header_declares_55() {
@@ -832,8 +1010,8 @@ remove_old_lua_versions() {
   if ((${#old_pkgs[@]} > 0)); then
     info "Removendo versoes antigas de Lua: $(join_by_space "${old_pkgs[@]}")"
     apt_update_once
-    "${SUDO[@]}" apt remove -y "${old_pkgs[@]}" || true
-    "${SUDO[@]}" apt autoremove -y || true
+    "${SUDO[@]}" apt-get "${APT_OPTIONS[@]}" remove -y "${old_pkgs[@]}" || true
+    "${SUDO[@]}" apt-get "${APT_OPTIONS[@]}" autoremove -y || true
   fi
 
   # Remove manually-installed Lua binaries for versions other than 5.5
@@ -1067,7 +1245,7 @@ cmake_prefix_path() {
 select_cxx_compiler() {
   TFS_CXX_COMPILER=""
 
-  if [[ "${UBUNTU_TARGET}" != "22.04" ]]; then
+  if [[ "${TARGET_DISTRO}:${TARGET_VERSION}" != "ubuntu:22.04" ]]; then
     return
   fi
 
@@ -1075,6 +1253,36 @@ select_cxx_compiler() {
   [[ -n "${TFS_CXX_COMPILER}" ]] || die "$(printf "$(msg compiler_missing)" "g++-12")"
 
   info "$(printf "$(msg compiler_selected)" "Ubuntu 22.04" "${TFS_CXX_COMPILER}")"
+}
+
+configure_portable_tfs() {
+  local -a args=(
+    -S .
+    -B "${BUILD_DIR}"
+    -G Ninja
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_C_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cc"
+    -DCMAKE_CXX_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cxx"
+    -DCMAKE_AR="${SCRIPT_DIR}/tools/toolchains/zig-ar"
+    -DCMAKE_RANLIB="${SCRIPT_DIR}/tools/toolchains/zig-ranlib"
+    -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    -DVCPKG_OVERLAY_TRIPLETS="${SCRIPT_DIR}/tools/triplets"
+    -DVCPKG_TARGET_TRIPLET="${TFS_VCPKG_TRIPLET}"
+    -DHTTP="${HTTP}"
+    -DDISABLE_STATS=1
+    -DENABLE_NATIVE_OPTIMIZATIONS=OFF
+    -DENABLE_SLOW_TASK_DETECTION=OFF
+    -DUSE_MIMALLOC=OFF
+  )
+
+  TFS_CXX_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cxx"
+  reset_build_dir_if_compiler_changed
+
+  if ! cmake -Wno-dev "${args[@]}"; then
+    warn "$(msg configure_retry)"
+    safe_remove_build_dir "${BUILD_DIR}"
+    cmake -Wno-dev "${args[@]}"
+  fi
 }
 
 reset_build_dir_if_compiler_changed() {
@@ -1092,6 +1300,11 @@ reset_build_dir_if_compiler_changed() {
 configure_tfs() {
   local prefix_path
   local -a compiler_args=()
+
+  if [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
+    configure_portable_tfs
+    return
+  fi
 
   require_lua_for_configure
   prefix_path="$(cmake_prefix_path)"
@@ -1142,7 +1355,11 @@ build_tfs() {
   [[ -f "CMakeLists.txt" ]] || die "CMakeLists.txt not found"
 
   if [[ -z "${OUTPUT_BIN}" ]]; then
-    OUTPUT_BIN="./tfs"
+    if [[ "${TARGET_DISTRO}" == "debian" ]]; then
+      OUTPUT_BIN="./tfs-debian-${TARGET_VERSION}"
+    else
+      OUTPUT_BIN="./tfs"
+    fi
   fi
   OUTPUT_BIN="$(absolute_path "${OUTPUT_BIN}")"
 
@@ -1182,12 +1399,18 @@ main() {
   fi
 
   banner
-  choose_ubuntu
+  choose_platform
   preflight
   prepare_repo
 
   if [[ "${SKIP_DEPS}" -eq 1 ]]; then
     warn "$(msg skip_deps)"
+    if [[ "${PORTABLE_DEBIAN}" -eq 1 && "${SKIP_BUILD}" -eq 0 ]]; then
+      activate_portable_debian_toolchain
+    fi
+  elif [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
+    install_portable_debian_bootstrap
+    ensure_portable_debian_toolchain
   else
     install_common_deps
     ensure_lua_55

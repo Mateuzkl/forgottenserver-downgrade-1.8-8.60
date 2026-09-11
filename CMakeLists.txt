@@ -53,7 +53,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 endif ()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    add_compile_options(-Wimplicit-fallthrough -Wmove)
+    add_compile_options(-Wimplicit-fallthrough -Wmove -Wno-error=date-time)
 endif ()
 
 if (ENABLE_ASAN)

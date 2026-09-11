@@ -5,6 +5,7 @@
 #define FS_REACTOR_H
 
 #include "enums.h"
+#include "move_only_function.h"
 
 #include <atomic>
 #include <chrono>
@@ -16,11 +17,7 @@
 #include <unordered_set>
 #include <vector>
 
-#if !defined(__cpp_lib_move_only_function) || __cpp_lib_move_only_function < 202110L
-#error "TaskReactor requires C++23 std::move_only_function support"
-#endif
-
-using ReactorCallback = std::move_only_function<void()>;
+using ReactorCallback = MoveOnlyFunction;
 
 inline constexpr size_t REACTOR_MAX_INBOX_SIZE = 100000;
 inline constexpr std::chrono::milliseconds REACTOR_DRAIN_TIMEOUT{5000};
