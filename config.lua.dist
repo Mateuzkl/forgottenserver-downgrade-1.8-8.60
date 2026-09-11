@@ -48,6 +48,9 @@ stairJumpExhaustion = 2000
 experienceByKillingPlayers = false
 pzLockSkullAttacker = false
 allowAutoAttackWithoutExhaustion = true
+-- Directional melee swing marks for AstraClient and OTC-Fonticak (opcode 0x93).
+-- When false, clients fall back to classic tile magic effects.
+meleeWeaponSwingMarksEnabled = true
 
 -- Protection Time
 -- Grants protection upon connection if monsters are nearby, to give you a grace period; if you move or attack, the protection is deactivated.

@@ -3106,7 +3106,7 @@ void ProtocolGame::sendCreatureSquare(const Creature* creature, SquareColor_t co
 
 void ProtocolGame::sendCreatureWeaponAttackMark(const Creature* target, uint8_t weaponType)
 {
-	if (!isFonticakClient || !target || weaponType == 0 || !canSee(target)) {
+	if ((!isFonticakClient && !isAstraClient) || !target || weaponType == 0 || !canSee(target)) {
 		return;
 	}
 

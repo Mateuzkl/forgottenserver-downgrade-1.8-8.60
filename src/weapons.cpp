@@ -400,7 +400,8 @@ void sendMeleeAttackMark(Player* player, Creature* target, const Item* item)
 	}
 
 	const uint8_t weaponMark = getWeaponAttackMark(item);
-	const bool canReceiveAttackMark = player->isFonticakClient();
+	const bool canReceiveAttackMark = getBoolean(ConfigManager::MELEE_WEAPON_SWING_MARKS_ENABLED) &&
+	                                  (player->isFonticakClient() || player->isAstraClient());
 
 	if (canReceiveAttackMark && weaponMark != 0) {
 		player->sendCreatureWeaponAttackMark(target, weaponMark);
