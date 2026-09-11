@@ -1246,10 +1246,11 @@ configure_portable_tfs() {
     -B "${BUILD_DIR}"
     -G Ninja
     -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_C_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cc"
     -DCMAKE_CXX_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cxx"
     -DCMAKE_AR="${SCRIPT_DIR}/tools/toolchains/zig-ar"
     -DCMAKE_RANLIB="${SCRIPT_DIR}/tools/toolchains/zig-ranlib"
+    -DCMAKE_CXX_COMPILER_AR="${SCRIPT_DIR}/tools/toolchains/zig-ar"
+    -DCMAKE_CXX_COMPILER_RANLIB="${SCRIPT_DIR}/tools/toolchains/zig-ranlib"
     -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
     -DVCPKG_OVERLAY_TRIPLETS="${SCRIPT_DIR}/tools/triplets"
     -DVCPKG_TARGET_TRIPLET="${TFS_VCPKG_TRIPLET}"
