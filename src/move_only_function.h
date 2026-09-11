@@ -23,10 +23,18 @@ public:
 	MoveOnlyFunction(std::nullptr_t) noexcept {}
 
 	template <typename Callable>
-	    requires(!std::same_as<std::remove_cvref_t<Callable>, MoveOnlyFunction> && std::invocable<Callable&>)
-	MoveOnlyFunction(Callable&& callable) :
-	    target(std::make_unique<Model<std::decay_t<Callable>>>(std::forward<Callable>(callable)))
-	{}
+	    requires(!std::same_as<std::remove_cvref_t<Callable>, MoveOnlyFunction> &&
+	             std::invocable<std::decay_t<Callable>&>)
+	MoveOnlyFunction(Callable&& callable)
+	{
+		using StoredCallable = std::decay_t<Callable>;
+		if constexpr (std::is_pointer_v<StoredCallable>) {
+			if (callable == nullptr) {
+				return;
+			}
+		}
+		target = std::make_unique<Model<StoredCallable>>(std::forward<Callable>(callable));
+	}
 
 	MoveOnlyFunction(MoveOnlyFunction&&) noexcept = default;
 	MoveOnlyFunction& operator=(MoveOnlyFunction&&) noexcept = default;

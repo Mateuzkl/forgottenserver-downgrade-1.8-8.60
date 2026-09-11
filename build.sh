@@ -121,7 +121,7 @@ declare -A MSG_PT=(
   [binary_path]="Binario pronto em: %s"
   [ldd_ok]="ldd nao encontrou bibliotecas ausentes."
   [ldd_missing]="ldd encontrou bibliotecas ausentes no binario."
-  [run_hint]="Para rodar: cd %s && ./tfs"
+  [run_hint]="Para rodar: cd %s && ./%s"
   [done]="Tudo pronto."
   [fail_line]="Falha na linha %s com codigo %s."
   [safe_delete_refused]="Recusei remover caminho fora do projeto: %s"
@@ -181,7 +181,7 @@ declare -A MSG_EN=(
   [binary_path]="Binary ready at: %s"
   [ldd_ok]="ldd did not find missing libraries."
   [ldd_missing]="ldd found missing libraries in the binary."
-  [run_hint]="To run: cd %s && ./tfs"
+  [run_hint]="To run: cd %s && ./%s"
   [done]="All done."
   [fail_line]="Failed at line %s with exit code %s."
   [safe_delete_refused]="Refused to remove path outside project: %s"
@@ -241,7 +241,7 @@ declare -A MSG_ES=(
   [binary_path]="Binario listo en: %s"
   [ldd_ok]="ldd no encontro bibliotecas faltantes."
   [ldd_missing]="ldd encontro bibliotecas faltantes en el binario."
-  [run_hint]="Para ejecutar: cd %s && ./tfs"
+  [run_hint]="Para ejecutar: cd %s && ./%s"
   [done]="Todo listo."
   [fail_line]="Fallo en la linea %s con codigo %s."
   [safe_delete_refused]="Rechace remover una ruta fuera del proyecto: %s"
@@ -489,7 +489,7 @@ detect_os_version() {
 }
 
 choose_platform() {
-  local detected_id detected_version choice
+  local detected_id detected_version
   detected_id="$(detect_os_id)"
   detected_version="$(detect_os_version)"
 
@@ -506,22 +506,7 @@ choose_platform() {
   case "${TARGET_DISTRO}:${TARGET_VERSION}" in
     debian:11|debian:12|debian:13|ubuntu:22.04|ubuntu:24.04|ubuntu:26.04) ;;
     *)
-      if [[ "${NONINTERACTIVE}" -eq 1 || ! -t 0 ]]; then
-        die "$(msg need_platform)"
-      fi
-      printf '\n%s\n' "Choose the target system / Escolha o sistema alvo:"
-      printf '  1) Debian 11\n  2) Debian 12\n  3) Debian 13\n'
-      printf '  4) Ubuntu 22.04\n  5) Ubuntu 24.04\n  6) Ubuntu 26.04\n\n'
-      read -r -p "> " choice || choice=""
-      case "${choice}" in
-        1) TARGET_DISTRO="debian"; TARGET_VERSION="11" ;;
-        2) TARGET_DISTRO="debian"; TARGET_VERSION="12" ;;
-        3) TARGET_DISTRO="debian"; TARGET_VERSION="13" ;;
-        4) TARGET_DISTRO="ubuntu"; TARGET_VERSION="22.04" ;;
-        5) TARGET_DISTRO="ubuntu"; TARGET_VERSION="24.04" ;;
-        6) TARGET_DISTRO="ubuntu"; TARGET_VERSION="26.04" ;;
-        *) die "$(msg invalid_option)" ;;
-      esac
+      die "Unsupported target ${TARGET_DISTRO} ${TARGET_VERSION} on detected host ${detected_id} ${detected_version}. $(msg need_platform)"
       ;;
   esac
 
@@ -1387,7 +1372,7 @@ build_tfs() {
   verify_binary_links "${OUTPUT_BIN}"
   say build_done
   sayf binary_path "${OUTPUT_BIN}"
-  sayf run_hint "$(dirname "${OUTPUT_BIN}")"
+  sayf run_hint "$(dirname "${OUTPUT_BIN}")" "$(basename "${OUTPUT_BIN}")"
 }
 
 main() {
