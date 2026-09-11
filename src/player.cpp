@@ -7991,8 +7991,9 @@ void Player::flushPendingLoot(const std::string& groupKey)
 			}
 			first = false;
 			if (colorized) {
-				const uint64_t itemValue =
-				    static_cast<uint64_t>(itemType.sellPrice > 0 ? itemType.sellPrice : itemType.buyPrice) * count;
+				const uint64_t unitValue = itemType.sellPrice > 0 ? itemType.sellPrice :
+				                           (itemType.buyPrice > 0 ? itemType.buyPrice : itemType.worth);
+				const uint64_t itemValue = unitValue * count;
 				text << "{" << itemId << ":" << itemValue << "|";
 			}
 			if (count > 1) {

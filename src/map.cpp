@@ -815,8 +815,47 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 		                                       success ? dirList.size() : 0);
 		return success;
 	};
+	const Position start_position = creature.getPosition();
+	const Position& target_position = pathCondition.targetPos;
+
+	// --- Fast rejects: the A* below only walks a single floor (z never
+	// changes) and is bounded by maxSearchDist around the start. Failing fast
+	// here avoids exploring up to MAX_NODES tiles with queryAdd on every
+	// neighbor, which is the dominant pathfinder CPU cost when monsters chase
+	// distant/off-floor targets.
+	if (start_position.z != target_position.z) {
+		return finish(false);
+	}
+	const int32_t startDx = start_position.getDistanceX(target_position);
+	const int32_t startDy = start_position.getDistanceY(target_position);
+	if (fpp.maxSearchDist != 0 && fpp.maxTargetDist >= 0) {
+		const int32_t startChebyshev = std::max(startDx, startDy);
+		if (startChebyshev > fpp.maxSearchDist + fpp.maxTargetDist) {
+			return finish(false);
+		}
+	}
+
+	int32_t best_match = 0;
+	// Already exactly at the preferred target (e.g. monster adjacent to target
+	// re-pathing every tick): same result the A* would produce (empty path)
+	// without touching the thread-local workspace (which costs O(used nodes)
+	// to reset). Only valid when best_match == 0, i.e. the search would stop
+	// at the start node; otherwise the A* keeps looking for a better match.
+	if (pathCondition(start_position, start_position, fpp, best_match) && best_match == 0) {
+		dirList.clear();
+		return finish(true);
+	}
+	// The probe above may have touched best_match (non-zero = "acceptable but
+	// not ideal"); the search below must start from a clean state.
+	best_match = 0;
+
+	dirList.clear();
+	// Typical follow paths are short; pre-size to avoid push_back reallocs.
+	// clear() above keeps existing capacity, reserve only grows fresh vectors.
+	dirList.reserve(32);
+
 	Position end_position;
-	auto position = creature.getPosition();
+	auto position = start_position;
 	auto nodes = AStarNodes(position.x, position.y);
 	const QTreeLeafNode* pathLeaf = nullptr;
 	Floor* pathFloor = nullptr;
@@ -845,9 +884,12 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 
 		return pathFloor ? pathFloor->getTile(tilePosition.x, tilePosition.y, tilePosition.z) : nullptr;
 	};
+	const Tile* creatureTile = creature.getTile();
 	const auto canWalkToForPath = [&](const Position& tilePosition) -> const Tile* {
 		const Tile* tile = getPathTile(tilePosition);
-		if (creature.getTile() != tile) {
+		// Hoisted: Creature::getTile() locks a weak_ptr (atomic refcount) per
+		// call; the creature tile cannot change during the search.
+		if (creatureTile != tile) {
 			if (!tile) {
 				return nullptr;
 			}
@@ -859,28 +901,17 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 		}
 		return tile;
 	};
-	const auto &target_position = pathCondition.targetPos;
-	const auto manhattan_heuristic = [&](const int_fast32_t nx, const int_fast32_t ny) -> int_fast32_t
-	{
-		return (std::abs(nx - static_cast<int_fast32_t>(target_position.x)) +
-						std::abs(ny - static_cast<int_fast32_t>(target_position.y))) *
-					 MAP_NORMALWALKCOST;
-	};
-
-	int32_t best_match = 0;
-
-	static int_fast32_t dirNeighbors[8][5][2] = {
-	    {{-1, 0}, {0, 1}, {1, 0}, {1, 1}, {-1, 1}},    {{-1, 0}, {0, 1}, {0, -1}, {-1, -1}, {-1, 1}},
-	    {{-1, 0}, {1, 0}, {0, -1}, {-1, -1}, {1, -1}}, {{0, 1}, {1, 0}, {0, -1}, {1, -1}, {1, 1}},
-	    {{1, 0}, {0, -1}, {-1, -1}, {1, -1}, {1, 1}},  {{-1, 0}, {0, -1}, {-1, -1}, {1, -1}, {-1, 1}},
-	    {{0, 1}, {1, 0}, {1, -1}, {1, 1}, {-1, 1}},    {{-1, 0}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}}};
-
-	static int_fast32_t allNeighbors[8][2] = {{-1, 0}, {0, 1}, {1, 0}, {0, -1}, {-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
-
-	const Position start_position = position;
+	// Hoisted loop invariants.
+	const bool allowDiagonal = fpp.allowDiagonal;
+	const bool keepDistance = fpp.keepDistance;
+	const int32_t maxSearchDist = fpp.maxSearchDist;
+	const int32_t targetX = static_cast<int32_t>(target_position.x);
+	const int32_t targetY = static_cast<int32_t>(target_position.y);
+	const int32_t startX = static_cast<int32_t>(start_position.x);
+	const int32_t startY = static_cast<int32_t>(start_position.y);
 
 	uint16_t found = ASTAR_NODE_NONE;
-	while (fpp.maxSearchDist != 0 || nodes.GetClosedNodes() < 100) {
+	while (maxSearchDist != 0 || nodes.GetClosedNodes() < 100) {
 		const uint16_t nodeIdx = nodes.GetBestNode();
 		if (nodeIdx == ASTAR_NODE_NONE) {
 			if (found != ASTAR_NODE_NONE) {
@@ -904,46 +935,70 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 			}
 		}
 
+		// JPS-style pruning: same expansion order as before, but indexed
+		// instead of pointer-chasing through int_fast32_t*.
+		static constexpr int8_t dirNeighbors[8][5][2] = {
+			{{-1, 0}, {0, 1}, {1, 0}, {1, 1}, {-1, 1}},
+			{{-1, 0}, {0, 1}, {0, -1}, {-1, -1}, {-1, 1}},
+			{{-1, 0}, {1, 0}, {0, -1}, {-1, -1}, {1, -1}},
+			{{0, 1}, {1, 0}, {0, -1}, {1, -1}, {1, 1}},
+			{{1, 0}, {0, -1}, {-1, -1}, {1, -1}, {1, 1}},
+			{{-1, 0}, {0, -1}, {-1, -1}, {1, -1}, {-1, 1}},
+			{{0, 1}, {1, 0}, {1, -1}, {1, 1}, {-1, 1}},
+			{{-1, 0}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}},
+		};
+		static constexpr int8_t allNeighbors[8][2] = {
+			{-1, 0}, {0, 1}, {1, 0}, {0, -1}, {-1, -1}, {1, -1}, {1, 1}, {-1, 1},
+		};
+
 		uint_fast32_t direction_count;
-		int_fast32_t* neighbors;
+		const int8_t(*neighbors)[2];
 		if (node.parent != ASTAR_NODE_NONE) {
 			const AStarNode& parent = nodes.GetNode(node.parent);
 			const int_fast32_t x_offset = parent.x - x;
 			const int_fast32_t y_offset = parent.y - y;
 
+			uint_fast32_t dirIdx;
 			if (y_offset == 0) {
-				neighbors = (x_offset == -1) ? *dirNeighbors[DIRECTION_WEST]
-											: *dirNeighbors[DIRECTION_EAST];
-			} else if (!fpp.allowDiagonal || x_offset == 0) {
-				neighbors = (y_offset == -1) ? *dirNeighbors[DIRECTION_NORTH]
-											: *dirNeighbors[DIRECTION_SOUTH];
+				dirIdx = (x_offset == -1) ? DIRECTION_WEST : DIRECTION_EAST;
+			} else if (!allowDiagonal || x_offset == 0) {
+				dirIdx = (y_offset == -1) ? DIRECTION_NORTH : DIRECTION_SOUTH;
 			} else if (y_offset == -1) {
-				neighbors = (x_offset == -1) ? *dirNeighbors[DIRECTION_NORTHWEST]
-											: *dirNeighbors[DIRECTION_NORTHEAST];
+				dirIdx = (x_offset == -1) ? DIRECTION_NORTHWEST : DIRECTION_NORTHEAST;
 			} else {
-				neighbors = (x_offset == -1) ? *dirNeighbors[DIRECTION_SOUTHWEST]
-											: *dirNeighbors[DIRECTION_SOUTHEAST];
+				dirIdx = (x_offset == -1) ? DIRECTION_SOUTHWEST : DIRECTION_SOUTHEAST;
 			}
+			neighbors = dirNeighbors[dirIdx];
 
-			direction_count = fpp.allowDiagonal ? 5 : 3;
+			direction_count = allowDiagonal ? 5 : 3;
 		} else {
 			direction_count = 8;
-			neighbors = *allNeighbors;
+			neighbors = allNeighbors;
 		}
 
 		const int_fast32_t parent_g_score = node.g_score;
 
 		for (uint_fast32_t i = 0; i < direction_count; ++i) {
-			position.x = x + *neighbors++;
-			position.y = y + *neighbors++;
+			const int_fast32_t dx = neighbors[i][0];
+			const int_fast32_t dy = neighbors[i][1];
+			position.x = x + dx;
+			position.y = y + dy;
 
-			if (fpp.maxSearchDist != 0 &&
-					(start_position.getDistanceX(position) > fpp.maxSearchDist ||
-					 start_position.getDistanceY(position) > fpp.maxSearchDist)) {
-				continue;
+			if (maxSearchDist != 0) {
+				int32_t adx = static_cast<int32_t>(position.x) - startX;
+				if (adx < 0) {
+					adx = -adx;
+				}
+				int32_t ady = static_cast<int32_t>(position.y) - startY;
+				if (ady < 0) {
+					ady = -ady;
+				}
+				if (adx > maxSearchDist || ady > maxSearchDist) {
+					continue;
+				}
 			}
 
-			if (fpp.keepDistance &&
+			if (keepDistance &&
 					!pathCondition.isInRange(start_position, position, fpp)) {
 				continue;
 			}
@@ -957,13 +1012,20 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 				continue;
 			}
 
-			const int_fast32_t cost = AStarNodes::GetMapWalkCost(node, position);
+			// Inline GetMapWalkCost: orthogonal vs diagonal without abs().
+			const int_fast32_t cost = (dx != 0 && dy != 0) ? MAP_DIAGONALWALKCOST : MAP_NORMALWALKCOST;
 			const int_fast32_t extra_cost =
 					AStarNodes::GetTileWalkCost(creature, tile);
 			const int_fast32_t neighbor_g_score = parent_g_score + cost + extra_cost;
-			const int_fast32_t neighbor_h_score =
-					manhattan_heuristic(position.x, position.y);
-			const int_fast32_t neighbor_f_score = neighbor_g_score + neighbor_h_score;
+			int32_t hdx = static_cast<int32_t>(position.x) - targetX;
+			if (hdx < 0) {
+				hdx = -hdx;
+			}
+			int32_t hdy = static_cast<int32_t>(position.y) - targetY;
+			if (hdy < 0) {
+				hdy = -hdy;
+			}
+			const int_fast32_t neighbor_f_score = neighbor_g_score + (hdx + hdy) * MAP_NORMALWALKCOST;
 
 			if (hasNeighborNode) {
 				AStarNode& neighborNode = nodes.GetNode(neighborNodeIdx);
@@ -1245,19 +1307,31 @@ const AStarNode& AStarNodes::GetNode(uint16_t nodeIdx) const
 
 int_fast32_t AStarNodes::GetMapWalkCost(const AStarNode& node, const Position& neighborPos)
 {
-	if (std::abs(node.x - neighborPos.x) == std::abs(node.y - neighborPos.y)) {
-		// diagonal movement extra cost
-		return MAP_DIAGONALWALKCOST;
+	// Orthogonal iff x or y matches (neighbors are always adjacent and never
+	// the node itself). Same result as the abs() comparison without abs().
+	if (node.x == neighborPos.x || node.y == neighborPos.y) {
+		return MAP_NORMALWALKCOST;
 	}
-	return MAP_NORMALWALKCOST;
+	// diagonal movement extra cost
+	return MAP_DIAGONALWALKCOST;
 }
 
 int_fast32_t AStarNodes::GetTileWalkCost(const Creature& creature, const Tile* tile)
 {
 	int_fast32_t cost = 0;
 
-	if (tile->getTopVisibleCreature(&creature)) {
-		cost += MAP_NORMALWALKCOST* 3;
+	// Fast path: most tiles are empty and field-free. A single virtual
+	// getCreatures() + flag check avoids getTopVisibleCreature() (which loops
+	// with canSeeCreature) and getFieldItem() (which scans items) entirely.
+	const CreatureVector* creatures = tile->getCreatures();
+	if (creatures && !creatures->empty()) {
+		if (tile->getTopVisibleCreature(&creature)) {
+			cost += MAP_NORMALWALKCOST* 3;
+		}
+	}
+
+	if (!tile->hasFlag(TILESTATE_MAGICFIELD)) {
+		return cost;
 	}
 
 	if (const MagicField* field = tile->getFieldItem(creature.getInstanceID())) {

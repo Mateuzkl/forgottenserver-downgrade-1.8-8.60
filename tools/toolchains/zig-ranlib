@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exec "${TFS_ZIG_BIN:?TFS_ZIG_BIN is not set}" ranlib "$@"

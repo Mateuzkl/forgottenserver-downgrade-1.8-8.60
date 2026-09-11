@@ -2529,6 +2529,11 @@ int luaPlayerApplyWeaponProficiencyPerk(lua_State* L)
 int luaPlayerAddMinorCharmEchoes(lua_State* L)
 {
 	// player:addMinorCharmEchoes(amount)
+	if (!BestiaryCharmSystem::isEnabled()) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
 	Player* player = getUserdata<Player>(L, 1);
 	if (!player) {
 		lua_pushnil(L);

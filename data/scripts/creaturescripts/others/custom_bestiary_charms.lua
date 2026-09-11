@@ -2,6 +2,10 @@ if not CustomBestiary then
 	return
 end
 
+local function isBestiaryEnabled()
+	return CustomBestiary and CustomBestiary.isEnabled and CustomBestiary.isEnabled()
+end
+
 local CHARM = {
 	WOUND = 0,
 	ENFLAME = 1,
@@ -139,6 +143,10 @@ local function getRaceId(creature)
 end
 
 local function getPlayerCharms(player)
+	if not isBestiaryEnabled() then
+		return { byRace = {} }
+	end
+
 	local guid = player:getGuid()
 	if playerCharmCache[guid] then
 		return playerCharmCache[guid]
@@ -210,6 +218,10 @@ function CustomBestiary.refreshPlayerCharms(player)
 end
 
 function CustomBestiary.getToolCharmBonuses(player, corpseId)
+	if not isBestiaryEnabled() then
+		return { scavenge = 0, scavengeCharmId = 0, gut = 0, gutCharmId = 0 }
+	end
+
 	local raceId = CustomBestiary.corpseRaceById[tonumber(corpseId) or 0] or 0
 	local charmId, tier = getCharmForRace(player, raceId, CHARM_CATEGORY.MINOR)
 	return {
@@ -317,7 +329,7 @@ end
 
 local charmHealth = CreatureEvent("CustomBestiaryCharmHealth")
 function charmHealth.onHealthChange(creature, attacker, primaryDamage, primaryType, secondaryDamage, secondaryType, origin)
-	if charmDamageGuard or not CustomBestiary then
+	if charmDamageGuard or not isBestiaryEnabled() then
 		return primaryDamage, primaryType, secondaryDamage, secondaryType
 	end
 
@@ -390,6 +402,10 @@ charmHealth:register()
 
 local charmMana = CreatureEvent("CustomBestiaryCharmMana")
 function charmMana.onManaChange(creature, attacker, primaryDamage, primaryType, secondaryDamage, secondaryType, origin)
+	if not isBestiaryEnabled() then
+		return primaryDamage, primaryType, secondaryDamage, secondaryType
+	end
+
 	if creature and creature:isPlayer() and primaryType == COMBAT_MANADRAIN then
 		local charmId, tier = getCharmForRace(creature, getRaceId(attacker), CHARM_CATEGORY.MINOR)
 		if charmId == CHARM.VOID_INVERSION and primaryDamage < 0 and roll(getCharmChance(charmId, tier, 20)) then
@@ -404,6 +420,10 @@ charmMana:register()
 
 local charmDeath = CreatureEvent("CustomBestiaryCharmDeath")
 function charmDeath.onDeath(creature, corpse, killer, mostDamageKiller, lastHitUnjustified, mostDamageUnjustified)
+	if not isBestiaryEnabled() then
+		return true
+	end
+
 	local player = getPlayerFromCreature(killer) or getPlayerFromCreature(mostDamageKiller)
 	if not player or not creature or not creature:isMonster() then
 		return true
@@ -431,6 +451,10 @@ charmDeath:register()
 
 local charmPrepareDeath = CreatureEvent("CustomBestiaryCharmPrepareDeath")
 function charmPrepareDeath.onPrepareDeath(player, killer)
+	if not isBestiaryEnabled() then
+		return true
+	end
+
 	local charmId, tier = getCharmForRace(player, getRaceId(killer), CHARM_CATEGORY.MINOR)
 	if player and player:isPlayer() and charmId == CHARM.BLESS and player.setTemporaryDeathLossReduction then
 		notifyCharmActivated(player, charmId)
@@ -442,6 +466,10 @@ charmPrepareDeath:register()
 
 local charmLogin = CreatureEvent("CustomBestiaryCharmLogin")
 function charmLogin.onLogin(player)
+	if not isBestiaryEnabled() then
+		return true
+	end
+
 	player:registerEvent("CustomBestiaryCharmHealth")
 	player:registerEvent("CustomBestiaryCharmMana")
 	player:registerEvent("CustomBestiaryCharmPrepareDeath")
@@ -466,7 +494,7 @@ charmLogout:register()
 
 local charmSpawn = MonsterEvent and MonsterEvent("CustomBestiaryCharmSpawn") or Event()
 function charmSpawn.onSpawn(monster)
-	if monster then
+	if isBestiaryEnabled() and monster then
 		monster:registerEvent("CustomBestiaryCharmHealth")
 		monster:registerEvent("CustomBestiaryCharmDeath")
 	end
@@ -476,6 +504,10 @@ charmSpawn:register()
 
 local charmTarget = Event()
 function charmTarget.onTargetCombat(creature, target)
+	if not isBestiaryEnabled() then
+		return RETURNVALUE_NOERROR
+	end
+
 	if creature and creature:isPlayer() then
 		creature:registerEvent("CustomBestiaryCharmHealth")
 		creature:registerEvent("CustomBestiaryCharmMana")

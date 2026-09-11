@@ -1,9 +1,15 @@
-if not configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED) then
+local function isBestiaryEnabled()
+	return configManager and configManager.getBoolean and configKeys
+		and configManager.getBoolean(configKeys.BESTIARY_SYSTEM_ENABLED)
+end
+
+if not isBestiaryEnabled() then
 	CustomBosstiary = nil
 	return
 end
 
 CustomBosstiary = CustomBosstiary or {}
+CustomBosstiary.isEnabled = isBestiaryEnabled
 CustomBosstiary.monstersByRaceId = CustomBosstiary.monstersByRaceId or {}
 CustomBosstiary.monstersByName = CustomBosstiary.monstersByName or {}
 CustomBosstiary.boostedBoss = CustomBosstiary.boostedBoss or nil
@@ -69,6 +75,10 @@ local function normalizeOutfit(outfit)
 end
 
 function CustomBosstiary.ensureTables()
+	if not isBestiaryEnabled() then
+		return false
+	end
+
 	if CustomBosstiary.tablesReady then
 		return true
 	end
@@ -78,8 +88,10 @@ function CustomBosstiary.ensureTables()
 			`player_id` INT NOT NULL,
 			`raceid` SMALLINT UNSIGNED NOT NULL,
 			`kills` INT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (`player_id`, `raceid`)
-		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8
+			PRIMARY KEY (`player_id`, `raceid`),
+			CONSTRAINT `fk_player_bestiary_kills_player`
+				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4
 	]])
 
 	db.query([[
@@ -126,6 +138,10 @@ function CustomBosstiary.ensureTables()
 end
 
 function CustomBosstiary.registerMonster(monsterType, mask)
+	if not isBestiaryEnabled() then
+		return false
+	end
+
 	if type(mask) ~= "table" or type(mask.bosstiary) ~= "table" then
 		return false
 	end
@@ -148,17 +164,24 @@ function CustomBosstiary.registerMonster(monsterType, mask)
 end
 
 function CustomBosstiary.getMonster(raceId)
+	if not isBestiaryEnabled() then
+		return nil
+	end
 	return CustomBosstiary.monstersByRaceId[tonumber(raceId) or 0]
 end
 
 function CustomBosstiary.getMonsterForCreature(creature)
-	if not creature then
+	if not isBestiaryEnabled() or not creature then
 		return nil
 	end
 	return CustomBosstiary.monstersByName[tostring(creature:getName() or ""):lower()]
 end
 
 function CustomBosstiary.getBoostedMonster()
+	if not isBestiaryEnabled() then
+		return nil
+	end
+
 	local entries = {}
 	for _, entry in pairs(CustomBosstiary.monstersByRaceId) do
 		entries[#entries + 1] = entry
@@ -209,7 +232,7 @@ function CustomBosstiary.getAwardedPoints(entry, oldKills, newKills)
 end
 
 function CustomBosstiary.addKill(players, entry)
-	if not entry then
+	if not isBestiaryEnabled() or not entry then
 		return false
 	end
 
@@ -265,6 +288,10 @@ function CustomBosstiary.addKill(players, entry)
 end
 
 function CustomBosstiary.loadBoostedBoss()
+	if not isBestiaryEnabled() then
+		return nil
+	end
+
 	CustomBosstiary.ensureTables()
 
 	local today = getBoostedBossDateKey()
@@ -302,10 +329,18 @@ function CustomBosstiary.loadBoostedBoss()
 end
 
 function CustomBosstiary.getBoostedBoss()
+	if not isBestiaryEnabled() then
+		return nil
+	end
+
 	return CustomBosstiary.boostedBoss
 end
 
 function CustomBosstiary.setBoostedBoss(entry)
+	if not isBestiaryEnabled() then
+		return false
+	end
+
 	if not entry then
 		return false
 	end
@@ -336,6 +371,10 @@ function CustomBosstiary.setBoostedBoss(entry)
 end
 
 function CustomBosstiary.pickNewBoostedBoss()
+	if not isBestiaryEnabled() then
+		return nil
+	end
+
 	local archfoeBosses = {}
 	local registeredBossCount = 0
 	for _, entry in pairs(CustomBosstiary.monstersByRaceId) do

@@ -322,7 +322,7 @@ int luaNetworkMessageAddItem(lua_State* L)
 	const auto& message = getNetworkMessage(L);
 	if (message) {
 		if (getAssociatedValue(L, 1, 1)) {
-			if (const auto player = getPlayer(L, -1)) {
+			if (getPlayer(L, -1)) {
 				message->addItem(item);
 			} else {
 				reportErrorFunc(L, LuaScriptInterface::getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
@@ -360,7 +360,7 @@ int luaNetworkMessageAddItemId(lua_State* L)
 	}
 
 	if (getAssociatedValue(L, 1, 1)) {
-		if (const auto player = getPlayer(L, -1)) {
+		if (getPlayer(L, -1)) {
 			message->addItemId(itemId);
 		} else {
 			reportErrorFunc(L, LuaScriptInterface::getErrorDesc(LuaErrorCode::PLAYER_NOT_FOUND));
