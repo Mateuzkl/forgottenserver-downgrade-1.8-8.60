@@ -214,6 +214,8 @@ private:
 	void sendCreatureSkull(const Creature* creature);
 	void sendCreatureEmblem(const Creature* creature);
 	void sendCreatureIcon(const Creature* creature);
+	void sendCreatureVocation(const Creature* creature);
+	void sendVisiblePlayerVocations(const Position& centerPos);
 
 	void sendShop(const ShopInfoList& itemList);
 	void sendCloseShop();

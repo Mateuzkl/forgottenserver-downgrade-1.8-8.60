@@ -3356,6 +3356,51 @@ void ProtocolGame::sendCreatureIcon(const Creature* creature)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendCreatureVocation(const Creature* creature)
+{
+	if (!creature || !player || (!isAstraClient && !isFonticakClient)) {
+		return;
+	}
+
+	const Player* otherPlayer = creature->getPlayer();
+	if (!otherPlayer || otherPlayer == player.get()) {
+		return;
+	}
+
+	if (!canSee(creature)) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x8B);
+	msg.add<uint32_t>(creature->getID());
+	msg.addByte(13);
+	msg.addByte(static_cast<uint8_t>(otherPlayer->getVocationId()));
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendVisiblePlayerVocations(const Position& centerPos)
+{
+	if (!player || (!isAstraClient && !isFonticakClient)) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, centerPos, false, true, Map::maxClientViewportX, Map::maxClientViewportX,
+	                         Map::maxClientViewportY, Map::maxClientViewportY);
+	for (const auto& spectator : spectators) {
+		if (!spectator || spectator.get() == player.get()) {
+			continue;
+		}
+
+		if (!spectator->getPlayer() || !player->canSeeCreature(spectator.get())) {
+			continue;
+		}
+
+		sendCreatureVocation(spectator.get());
+	}
+}
+
 void ProtocolGame::AddCreatureIcon(NetworkMessage& msg, const Creature* creature)
 {
 	if (!creature) {
@@ -3970,6 +4015,7 @@ void ProtocolGame::sendMapDescription(const Position& pos)
 	GetMapDescription(pos.x - Map::maxClientViewportX, pos.y - Map::maxClientViewportY, pos.z,
 	                  (Map::maxClientViewportX * 2) + 2, (Map::maxClientViewportY * 2) + 2, msg);
 	writeToOutputBuffer(msg);
+	sendVisiblePlayerVocations(pos);
 }
 
 void ProtocolGame::refreshWorldView()
@@ -4157,6 +4203,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 			AddCreature(msg, creature, known, removedKnown);
 			writeToOutputBuffer(msg);
 			sendCreatureSquare(creature, player->getCreatureSquare(creature));
+			sendCreatureVocation(creature);
 		}
 
 		if (magicEffect != CONST_ME_NONE) {
