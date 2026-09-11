@@ -75,31 +75,42 @@ bool StoreRepository::renameCharacter(uint32_t playerId, std::string_view oldNam
 	}
 
 	Database& db = Database::getInstance();
-
-	// Attempt the rename in a single query — the UNIQUE constraint on players.name
-	// will reject duplicates at the DB level, which is stronger than SELECT-then-UPDATE.
-	if (!db.executeQuery(fmt::format(
-	        "UPDATE `players` SET `name` = {:s} WHERE `id` = {:d}",
-	        db.escapeString(std::string(newName)), playerId)) ||
-	    db.getAffectedRows() != 1) {
-		reason = "Character name already taken or character not found.";
-		return false;
-	}
-
-	// Update death-history tables to reflect the new name.
-	// These are best-effort — failure here does not roll back the rename.
 	const std::string escapedOld = db.escapeString(std::string(oldName));
 	const std::string escapedNew = db.escapeString(std::string(newName));
 
-	db.executeQuery(fmt::format(
-	    "UPDATE `player_deaths` SET `killed_by` = {:s}, `mostdamage_by` = {:s} "
-	    "WHERE `killed_by` = {:s} OR `mostdamage_by` = {:s}",
-	    escapedNew, escapedNew, escapedOld, escapedOld));
+	const bool success = DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
+		if (!db.executeQuery(fmt::format(
+		        "UPDATE `players` SET `name` = {:s} WHERE `id` = {:d}",
+		        escapedNew, playerId)) ||
+		    db.getAffectedRows() != 1) {
+			return false;
+		}
 
-	db.executeQuery(fmt::format(
-	    "UPDATE `player_deaths_backup` SET `killed_by` = {:s}, `mostdamage_by` = {:s} "
-	    "WHERE `killed_by` = {:s} OR `mostdamage_by` = {:s}",
-	    escapedNew, escapedNew, escapedOld, escapedOld));
+		if (!db.executeQuery(fmt::format(
+		        "UPDATE `player_deaths` SET "
+		        "`killed_by` = CASE WHEN `killed_by` = {:s} THEN {:s} ELSE `killed_by` END, "
+		        "`mostdamage_by` = CASE WHEN `mostdamage_by` = {:s} THEN {:s} ELSE `mostdamage_by` END "
+		        "WHERE `killed_by` = {:s} OR `mostdamage_by` = {:s}",
+		        escapedOld, escapedNew, escapedOld, escapedNew, escapedOld, escapedOld))) {
+			return false;
+		}
+
+		if (!db.executeQuery(fmt::format(
+		        "UPDATE `player_deaths_backup` SET "
+		        "`killed_by` = CASE WHEN `killed_by` = {:s} THEN {:s} ELSE `killed_by` END, "
+		        "`mostdamage_by` = CASE WHEN `mostdamage_by` = {:s} THEN {:s} ELSE `mostdamage_by` END "
+		        "WHERE `killed_by` = {:s} OR `mostdamage_by` = {:s}",
+		        escapedOld, escapedNew, escapedOld, escapedNew, escapedOld, escapedOld))) {
+			return false;
+		}
+
+		return true;
+	});
+
+	if (!success) {
+		reason = "Character name already taken or database update failed.";
+		return false;
+	}
 
 	reason.clear();
 	return true;

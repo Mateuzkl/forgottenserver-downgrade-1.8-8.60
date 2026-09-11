@@ -5,7 +5,9 @@
 #define FS_STORE_TYPES_H
 
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 /// All offer types discovered from data/store/gamestore.xml.

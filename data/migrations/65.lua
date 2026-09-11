@@ -26,7 +26,9 @@ function onUpdateDatabase()
 	for _, idx in ipairs(indexes) do
 		local tableExists = (not db.tableExists or db.tableExists(idx.tableName))
 		if tableExists and not indexExists(idx.tableName, idx.indexName) then
-			db.query(string.format("ALTER TABLE `%s` ADD INDEX `%s` (`%s`(64))", idx.tableName, idx.indexName, idx.columnName))
+			if not db.query(string.format("ALTER TABLE `%s` ADD INDEX `%s` (`%s`(64))", idx.tableName, idx.indexName, idx.columnName)) then
+				return false
+			end
 		end
 	end
 

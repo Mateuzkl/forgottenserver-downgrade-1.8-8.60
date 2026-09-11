@@ -87,9 +87,8 @@ private:
 	[[nodiscard]] std::string deliverXpBoost(Player& player, const StoreOffer& offer);
 	[[nodiscard]] std::string deliverItem(Player& player, const StoreOffer& offer);
 	[[nodiscard]] std::string deliverHouseItem(Player& player, const StoreOffer& offer);
-	[[nodiscard]] std::string deliverNameChange(Player& player, const StoreOffer& offer,
-	                                             const StorePurchaseExtra& extra);
-	[[nodiscard]] std::string deliverSexChange(Player& player, const StoreOffer& offer);
+	[[nodiscard]] std::string deliverNameChange(Player& player, const StorePurchaseExtra& extra);
+	[[nodiscard]] std::string deliverSexChange(Player& player);
 	[[nodiscard]] std::string deliverHireling(Player& player, const StoreOffer& offer,
 	                                           const StorePurchaseExtra& extra);
 	[[nodiscard]] std::string deliverHirelingSkill(Player& player, const StoreOffer& offer);

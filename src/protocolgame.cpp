@@ -4057,9 +4057,12 @@ void ProtocolGame::sendStoreCatalog()
 			}
 		}
 
-		const std::string lowerName = asLowerCaseString(cat.name);
-		const bool isRestrictedCategory = (lowerName == "hirelings" || lowerName == "hireling dresses" ||
-		                                   lowerName == "task hunt" || lowerName == "battle pass");
+		const bool isRestrictedCategory = !cat.offers.empty() && std::all_of(
+		    cat.offers.begin(), cat.offers.end(), [](const StoreOffer& offer) {
+			    return isHirelingOfferType(offer.type) ||
+			           isTaskBoardOfferType(offer.type) ||
+			           offer.type == StoreOfferType::BattlePass;
+		    });
 
 		if (!fcat.offers.empty() || !isRestrictedCategory) {
 			visibleCategories.push_back(std::move(fcat));

@@ -54,11 +54,53 @@ std::string toLower(std::string_view sv)
 	return s;
 }
 
-std::vector<uint16_t> parseItemList(std::string_view value)
+bool parseCompleteU16(std::string_view sv, uint16_t& out)
 {
-	std::vector<uint16_t> items;
+	if (sv.empty()) {
+		return false;
+	}
+	uint64_t val = 0;
+	auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
+	if (ec != std::errc{} || ptr != sv.data() + sv.size() || val > std::numeric_limits<uint16_t>::max()) {
+		return false;
+	}
+	out = static_cast<uint16_t>(val);
+	return true;
+}
+
+bool parseCompleteU32(std::string_view sv, uint32_t& out)
+{
+	if (sv.empty()) {
+		return false;
+	}
+	uint64_t val = 0;
+	auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
+	if (ec != std::errc{} || ptr != sv.data() + sv.size() || val > std::numeric_limits<uint32_t>::max()) {
+		return false;
+	}
+	out = static_cast<uint32_t>(val);
+	return true;
+}
+
+bool parseCompleteI64(std::string_view sv, int64_t& out)
+{
+	if (sv.empty()) {
+		return false;
+	}
+	int64_t val = 0;
+	auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
+	if (ec != std::errc{} || ptr != sv.data() + sv.size()) {
+		return false;
+	}
+	out = val;
+	return true;
+}
+
+bool parseItemList(std::string_view value, std::vector<uint16_t>& items)
+{
+	items.clear();
 	if (value.empty()) {
-		return items;
+		return true;
 	}
 	// Parse comma-or-space-separated item IDs.
 	std::string str(value);
@@ -73,13 +115,13 @@ std::vector<uint16_t> parseItemList(std::string_view value)
 				continue;
 			}
 			uint16_t id = 0;
-			auto [ptr, ec] = std::from_chars(sub.data(), sub.data() + sub.size(), id);
-			if (ec == std::errc{} && id != 0) {
-				items.push_back(id);
+			if (!parseCompleteU16(sub, id) || id == 0) {
+				return false;
 			}
+			items.push_back(id);
 		}
 	}
-	return items;
+	return true;
 }
 
 } // namespace
@@ -164,10 +206,11 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 
 		for (auto offerNode : categoryNode.children("offer")) {
 			StoreOffer offer;
-			offer.id = offerNode.attribute("id").as_uint(0);
-			if (offer.id == 0) {
-				LOG_WARN(fmt::format("[StoreCatalog::loadFromXML] Offer with id=0 in category '{}', skipping.",
-				                     category.name));
+			const auto idAttr = offerNode.attribute("id");
+			if (idAttr.empty() || !parseCompleteU32(idAttr.as_string(), offer.id) || offer.id == 0) {
+				LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Malformed or missing offer id '{}' in category '{}'.",
+				                     idAttr.as_string(), category.name));
+				hasFatalError = true;
 				continue;
 			}
 
@@ -182,7 +225,16 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 
 			offer.name = offerNode.attribute("name").as_string("Unknown");
 			offer.icon = offerNode.attribute("icon").as_string("");
-			offer.price = offerNode.attribute("price").as_uint(0);
+
+			const auto priceAttr = offerNode.attribute("price");
+			if (!priceAttr.empty()) {
+				if (!parseCompleteU32(priceAttr.as_string(), offer.price)) {
+					LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Malformed offer price '{}' in offer id={}.",
+					                     priceAttr.as_string(), offer.id));
+					hasFatalError = true;
+					continue;
+				}
+			}
 
 			if (offer.price == 0) {
 				LOG_WARN(fmt::format(
@@ -201,12 +253,84 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 			}
 			offer.type = *maybeType;
 
-			offer.displayId = static_cast<uint16_t>(offerNode.attribute("eid").as_uint(0));
-			offer.itemId = static_cast<uint16_t>(offerNode.attribute("itemid").as_uint(0));
-			offer.count = static_cast<uint16_t>(std::max(1u, offerNode.attribute("count").as_uint(1)));
+			const auto eidAttr = offerNode.attribute("eid");
+			if (!eidAttr.empty()) {
+				if (!parseCompleteU16(eidAttr.as_string(), offer.displayId)) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has malformed or out-of-range eid '{}'.",
+					    offer.id, eidAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
+			}
+
+			const auto itemIdAttr = offerNode.attribute("itemid");
+			if (!itemIdAttr.empty()) {
+				if (!parseCompleteU16(itemIdAttr.as_string(), offer.itemId)) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has malformed or out-of-range itemid '{}'.",
+					    offer.id, itemIdAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
+			}
+
+			const auto countAttr = offerNode.attribute("count");
+			if (!countAttr.empty()) {
+				if (!parseCompleteU16(countAttr.as_string(), offer.count)) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has malformed or out-of-range count '{}'.",
+					    offer.id, countAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
+				if (offer.count == 0) {
+					offer.count = 1;
+				}
+			} else {
+				offer.count = 1;
+			}
+
 			offer.description = offerNode.attribute("description").as_string("");
-			offer.value = offerNode.attribute("value").as_llong(0);
-			offer.femaleValue = offerNode.attribute("femalevalue").as_llong(0);
+
+			const auto valAttr = offerNode.attribute("value");
+			if (!valAttr.empty()) {
+				if (!parseCompleteI64(valAttr.as_string(), offer.value)) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has malformed value '{}'.",
+					    offer.id, valAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
+			}
+
+			const auto fvalAttr = offerNode.attribute("femalevalue");
+			if (!fvalAttr.empty()) {
+				if (!parseCompleteI64(fvalAttr.as_string(), offer.femaleValue)) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has malformed femalevalue '{}'.",
+					    offer.id, fvalAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
+			}
+
+			if (offer.type == StoreOfferType::Outfit) {
+				if (offer.value < 0 || offer.value > std::numeric_limits<uint16_t>::max()) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has out-of-range outfit look type value {}.",
+					    offer.id, offer.value));
+					hasFatalError = true;
+					continue;
+				}
+				if (offer.femaleValue < 0 || offer.femaleValue > std::numeric_limits<uint16_t>::max()) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has out-of-range outfit look type femalevalue {}.",
+					    offer.id, offer.femaleValue));
+					hasFatalError = true;
+					continue;
+				}
+			}
 
 			uint32_t addonValue = offerNode.attribute("addon").as_uint(0);
 			if (addonValue > 3) {
@@ -218,9 +342,15 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 			offer.addon = static_cast<uint8_t>(addonValue);
 
 			// Parse multi-item list for house offers.
-			const std::string_view itemsStr = offerNode.attribute("items").as_string("");
-			if (!itemsStr.empty()) {
-				offer.items = parseItemList(itemsStr);
+			const auto itemsAttr = offerNode.attribute("items");
+			if (!itemsAttr.empty()) {
+				if (!parseItemList(itemsAttr.as_string(), offer.items)) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has malformed or out-of-range items attribute '{}'.",
+					    offer.id, itemsAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
 			}
 
 			category.offers.push_back(std::move(offer));

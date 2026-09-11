@@ -10,9 +10,11 @@
 #include "game.h"
 #include "item.h"
 #include "logger.h"
+#include "luascript.h"
 #include "mounts.h"
 #include "player.h"
-#include "luascript.h"
+#include "script.h"
+#include "scriptmanager.h"
 #include "store/store_catalog.h"
 #include "store/store_name_validator.h"
 #include "store/store_repository.h"
@@ -21,7 +23,6 @@
 #include <cmath>
 
 extern Game g_game;
-extern LuaEnvironment g_luaEnvironment;
 
 namespace {
 
@@ -103,6 +104,12 @@ bool StoreService::isOfferAvailable(const Player& player, const StoreOffer& offe
 StoreResult StoreService::purchase(Player& player, uint32_t offerId,
                                    const StorePurchaseExtra& extra)
 {
+	const auto now = std::chrono::steady_clock::now();
+	auto& rateLimit = getRateLimit(player.getID());
+	if (now - rateLimit.lastPurchase < PurchaseCooldown) {
+		return {false, "You are purchasing too fast. Please wait a moment."};
+	}
+
 	// 1. Resolve immutable offer from catalog.
 	auto catalog = StoreManager::getInstance().catalogSnapshot();
 	if (!catalog) {
@@ -173,9 +180,13 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 		historyCount = 1;
 	}
 
-	(void)StoreRepository::getInstance().addHistory(
-	    accountId, player.getGUID(), offer->name,
-	    -static_cast<int32_t>(offer->price), historyCount);
+	if (!StoreRepository::getInstance().addHistory(
+	        accountId, player.getGUID(), offer->name,
+	        -static_cast<int32_t>(offer->price), historyCount)) {
+		LOG_WARN(fmt::format(
+		    "[StoreService::purchase] Failed to persist purchase history for account={} player={} offer='{}'",
+		    accountId, player.getName(), offer->name));
+	}
 
 	// 8. Build success message.
 	std::string successMessage;
@@ -192,12 +203,19 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 		successMessage = "Purchase complete: " + offer->name;
 	}
 
+	rateLimit.lastPurchase = std::chrono::steady_clock::now();
 	return {true, successMessage};
 }
 
 StoreResult StoreService::transferCoins(Player& player, std::string_view targetName,
                                          uint32_t amount)
 {
+	const auto now = std::chrono::steady_clock::now();
+	auto& rateLimit = getRateLimit(player.getID());
+	if (now - rateLimit.lastTransfer < TransferCooldown) {
+		return {false, "You are transferring coins too fast. Please wait a moment."};
+	}
+
 	if (amount == 0) {
 		return {false, "Invalid amount."};
 	}
@@ -235,13 +253,22 @@ StoreResult StoreService::transferCoins(Player& player, std::string_view targetN
 
 	// Record history for both accounts.
 	auto& repo = StoreRepository::getInstance();
-	(void)repo.addHistory(sourceAccountId, player.getGUID(),
-	                      "Coin Transfer to " + targetInfo->playerName,
-	                      -static_cast<int32_t>(amount), 1, targetInfo->playerName);
-	(void)repo.addHistory(targetInfo->accountId, targetInfo->playerId,
-	                      "Coin Transfer from " + player.getName(),
-	                      static_cast<int32_t>(amount), 1, player.getName());
+	if (!repo.addHistory(sourceAccountId, player.getGUID(),
+	                     "Coin Transfer to " + targetInfo->playerName,
+	                     -static_cast<int32_t>(amount), 1, targetInfo->playerName)) {
+		LOG_WARN(fmt::format(
+		    "[StoreService::transferCoins] Failed to persist source transfer history for account={} player={}",
+		    sourceAccountId, player.getName()));
+	}
+	if (!repo.addHistory(targetInfo->accountId, targetInfo->playerId,
+	                     "Coin Transfer from " + player.getName(),
+	                     static_cast<int32_t>(amount), 1, player.getName())) {
+		LOG_WARN(fmt::format(
+		    "[StoreService::transferCoins] Failed to persist target transfer history for account={} player={}",
+		    targetInfo->accountId, targetInfo->playerName));
+	}
 
+	rateLimit.lastTransfer = std::chrono::steady_clock::now();
 	return {true, fmt::format("You sent {} Tibia Coins to {}.", amount, targetInfo->playerName)};
 }
 
@@ -266,9 +293,9 @@ std::string StoreService::deliverOffer(Player& player, const StoreOffer& offer,
 		case StoreOfferType::House:
 			return deliverHouseItem(player, offer);
 		case StoreOfferType::ChangeName:
-			return deliverNameChange(player, offer, extra);
+			return deliverNameChange(player, extra);
 		case StoreOfferType::SexChange:
-			return deliverSexChange(player, offer);
+			return deliverSexChange(player);
 		case StoreOfferType::Hireling:
 			return deliverHireling(player, offer, extra);
 		case StoreOfferType::HirelingSkill:
@@ -408,7 +435,7 @@ std::string StoreService::deliverItem(Player& player, const StoreOffer& offer)
 		return "Failed to create item.";
 	}
 
-	if (g_game.internalAddItem(inbox, item.get(), INDEX_WHEREEVER, FLAG_NOLIMIT) != RETURNVALUE_NOERROR) {
+	if (g_game.internalAddItem(inbox, item.get(), INDEX_WHEREEVER, 0) != RETURNVALUE_NOERROR) {
 		return "Your store inbox is full.";
 	}
 
@@ -451,18 +478,22 @@ std::string StoreService::deliverHouseItem(Player& player, const StoreOffer& off
 		createdItems.push_back(std::move(kit));
 	}
 
+	std::vector<std::shared_ptr<Item>> insertedItems;
 	for (auto& item : createdItems) {
-		if (g_game.internalAddItem(inbox, item.get(), INDEX_WHEREEVER, FLAG_NOLIMIT) != RETURNVALUE_NOERROR) {
+		if (g_game.internalAddItem(inbox, item.get(), INDEX_WHEREEVER, 0) != RETURNVALUE_NOERROR) {
+			for (auto& inserted : insertedItems) {
+				g_game.internalRemoveItem(inserted.get());
+			}
 			return "Your store inbox is full.";
 		}
+		insertedItems.push_back(item);
 	}
 
 	player.sendTextMessage(MESSAGE_STATUS_SMALL, "Your house item was sent to your store inbox.");
 	return "";
 }
 
-std::string StoreService::deliverNameChange(Player& player, [[maybe_unused]] const StoreOffer& offer,
-                                             const StorePurchaseExtra& extra)
+std::string StoreService::deliverNameChange(Player& player, const StorePurchaseExtra& extra)
 {
 	const std::string newName = CharacterNameValidator::formatName(extra.name);
 	const std::string validationError = CharacterNameValidator::validate(newName);
@@ -492,7 +523,7 @@ std::string StoreService::deliverNameChange(Player& player, [[maybe_unused]] con
 	return "";
 }
 
-std::string StoreService::deliverSexChange(Player& player, [[maybe_unused]] const StoreOffer& offer)
+std::string StoreService::deliverSexChange(Player& player)
 {
 	if (playerIsInCombat(player)) {
 		return "You cannot do this during a fight.";
@@ -537,7 +568,11 @@ std::string StoreService::deliverViaLuaCallback(Player& player, const StoreOffer
 {
 	// Bridge to Lua for subsystems that only exist in Lua.
 	// We call a global Lua function "StoreDeliverLuaOffer" if it exists.
-	lua_State* L = g_luaEnvironment.getLuaState();
+	if (!g_scripts) {
+		return "Lua script environment is not available.";
+	}
+
+	lua_State* L = g_scripts->getScriptInterface().getLuaState();
 	if (!L) {
 		return "Lua environment is not available.";
 	}
