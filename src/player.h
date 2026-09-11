@@ -1114,7 +1114,7 @@ public:
 	}
 	void sendCreatureWeaponAttackMark(const Creature* target, uint8_t weaponType) const
 	{
-		if (!client || weaponType == 0 || (!client->isFonticakClient && !client->isAstraClient)) {
+		if (!client || weaponType == 0) {
 			return;
 		}
 		client->sendCreatureWeaponAttackMark(target, weaponType);
