@@ -656,7 +656,7 @@ bool ProtocolGame::canSendAstraItemMetadata() const
 
 bool ProtocolGame::canSendPackedPlayerInventory() const
 {
-	return canSendAstraItemMetadata();
+	return canSendAstraItemState() && (isAstraClient || isFonticakClient);
 }
 
 bool ProtocolGame::shouldSendAstraQuiverCountU16() const
@@ -1579,7 +1579,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			g_game.playerTurn(player->getID(), DIRECTION_WEST);
 			break;
 		case 0x77:
-			if (isAstraClient) {
+			if (isAstraClient || isFonticakClient) {
 				parseHotkeyEquip(msg);
 			} else {
 				skipUnreadBytes(msg);
@@ -2302,7 +2302,7 @@ void ProtocolGame::parseSeekInContainer(NetworkMessage& msg)
 void ProtocolGame::parseHotkeyEquip(NetworkMessage& msg)
 {
 	const std::size_t packetSize = getUnreadBytes(msg);
-	if (!player || !isAstraClient || isSpectator || player->isAccountManager()) {
+	if (!player || (!isAstraClient && !isFonticakClient) || isSpectator || player->isAccountManager()) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -5780,8 +5780,10 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 	    getBoolean(ConfigManager::ASTRA_ITEM_STATE_ENABLED)) {
 		features[GameFeature::DisplayItemDuration] = true;
 		features[GameFeature::DisplayItemCharges] = true;
-		if (isAstraClient) {
+		if (isAstraClient || isFonticakClient) {
 			features[GameFeature::PackedPlayerInventory] = true;
+		}
+		if (isAstraClient) {
 			features[GameFeature::AstraItemMetadata] = true;
 		}
 	}
