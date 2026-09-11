@@ -7,6 +7,7 @@
 
 #include "configmanager.h"
 #include "game.h"
+#include "instance_utils.h"
 #include "monster.h"
 #include "monsters.h"
 #include "player.h"
@@ -601,13 +602,35 @@ void WeaponProficiency::applyOn(WeaponProficiencyHealth_t healthType, WeaponProf
 
 	if (healthType == LIFE) {
 		value = getStat(gainType == HIT ? LIFE_GAIN_ON_HIT : LIFE_GAIN_ON_KILL);
-		if (value > 0) {
-			m_player.gainHealth(nullptr, static_cast<int32_t>(std::llround(value)));
-		}
 	} else if (healthType == MANA) {
 		value = getStat(gainType == HIT ? MANA_GAIN_ON_HIT : MANA_GAIN_ON_KILL);
-		if (value > 0) {
-			m_player.changeMana(static_cast<int32_t>(std::llround(value)));
+	}
+
+	const int32_t amount = static_cast<int32_t>(std::llround(value));
+	if (amount <= 0) {
+		return;
+	}
+
+	const Position& position = m_player.getPosition();
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, position, false, true);
+	InstanceUtils::filterByInstanceInPlace(spectators, m_player.getInstanceID());
+
+	if (healthType == LIFE) {
+		int32_t realHealthGain = m_player.getHealth();
+		m_player.gainHealth(nullptr, amount);
+		realHealthGain = m_player.getHealth() - realHealthGain;
+		if (realHealthGain > 0) {
+			g_game.addAnimatedText(spectators, fmt::format("{:+d}", realHealthGain), position,
+			                       static_cast<TextColor_t>(getInteger(ConfigManager::HEALTH_GAIN_COLOUR)));
+		}
+	} else if (healthType == MANA) {
+		int32_t realManaGain = m_player.getMana();
+		m_player.changeMana(amount);
+		realManaGain = m_player.getMana() - realManaGain;
+		if (realManaGain > 0) {
+			g_game.addAnimatedText(spectators, fmt::format("{:+d}", realManaGain), position,
+			                       static_cast<TextColor_t>(getInteger(ConfigManager::MANA_GAIN_COLOUR)));
 		}
 	}
 }

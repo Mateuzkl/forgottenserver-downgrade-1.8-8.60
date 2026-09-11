@@ -522,7 +522,7 @@ ProtocolGame::~ProtocolGame()
 
 void ProtocolGame::sendBlessingWindow()
 {
-	if (!player || !isAstraClient) return;
+	if (!player || (!isAstraClient && !isFonticakClient)) return;
 
 	NetworkMessage msg;
 	msg.addByte(0x9B);
@@ -578,7 +578,7 @@ void ProtocolGame::sendBlessingWindow()
 
 void ProtocolGame::sendBlessStatus()
 {
-	if (!player || !isAstraClient) return;
+	if (!player || (!isAstraClient && !isFonticakClient)) return;
 
 	uint8_t totalCount = 0;
 	for (uint8_t i = 2; i <= 8; i++) {
@@ -1753,7 +1753,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xCF:
-			if (isAstraClient) {
+			if (isAstraClient || isFonticakClient) {
 				sendBlessingWindow();
 			}
 			break;
@@ -4262,7 +4262,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 		player->sendMonkData();
 	}
 
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient) {
 		sendBlessStatus();
 	}
 

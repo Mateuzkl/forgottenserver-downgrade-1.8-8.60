@@ -602,7 +602,7 @@ local function deliverOffer(player, offer, extra)
 			return nil
 		end
 
-		if offer.value >= 1 and offer.value <= 5 then
+		if offer.value >= 1 and offer.value <= 8 then
 			if player:hasBlessing(offer.value) then
 				return "You already have this blessing."
 			end

@@ -19,12 +19,9 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 		return true
 	end
 
-	if destinationTile:queryAdd(player) ~= RETURNVALUE_NOERROR then
+	if not player:teleportTo(fromPosition, false, CONST_ME_NONE) then
 		player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
-		return true
 	end
-
-	player:teleportTo(fromPosition, false, CONST_ME_NONE)
 	return true
 end
 
