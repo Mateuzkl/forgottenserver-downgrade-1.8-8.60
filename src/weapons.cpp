@@ -400,18 +400,19 @@ void sendMeleeAttackMark(Player* player, Creature* target, const Item* item)
 	}
 
 	const uint8_t weaponMark = getWeaponAttackMark(item);
-	const bool canReceiveAttackMark = getBoolean(ConfigManager::MELEE_WEAPON_SWING_MARKS_ENABLED) &&
-	                                  (player->isFonticakClient() || player->isAstraClient());
+	const bool isOtcSwingClient = player->isFonticakClient() || player->isAstraClient();
+	const bool swingMarksEnabled = getBoolean(ConfigManager::MELEE_WEAPON_SWING_MARKS_ENABLED);
 
-	if (canReceiveAttackMark && weaponMark != 0) {
-		player->sendCreatureWeaponAttackMark(target, weaponMark);
+	if (isOtcSwingClient) {
+		if (swingMarksEnabled && weaponMark != 0) {
+			player->sendCreatureWeaponAttackMark(target, weaponMark);
+		}
+		return;
 	}
 
-	if (!canReceiveAttackMark) {
-		const uint16_t effect = getWeaponAttackEffect(item);
-		if (effect != CONST_ME_NONE) {
-			g_game.addMagicEffect(target->getPosition(), effect, target->getInstanceID());
-		}
+	const uint16_t effect = getWeaponAttackEffect(item);
+	if (effect != CONST_ME_NONE) {
+		g_game.addMagicEffect(target->getPosition(), effect, target->getInstanceID());
 	}
 }
 } // namespace
