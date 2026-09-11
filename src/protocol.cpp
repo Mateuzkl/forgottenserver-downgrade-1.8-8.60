@@ -6,6 +6,7 @@
 #include "protocol.h"
 
 #include "outputmessage.h"
+#include "packet_size_histogram.h"
 #include "rsa.h"
 #include "tasks.h"
 #include "xtea.h"
@@ -21,6 +22,8 @@ void XTEA_encrypt(OutputMessage& msg, const xtea::round_keys& key)
 	}
 
 	uint8_t* buffer = msg.getOutputBuffer();
+	// Compiles to nothing unless -DENABLE_PACKET_SIZE_HISTOGRAM=ON.
+	TFS_RECORD_OUTGOING_PACKET_SIZE(msg.getLength());
 	xtea::encrypt(buffer, msg.getLength(), key);
 }
 
@@ -31,6 +34,7 @@ bool XTEA_decrypt(NetworkMessage& msg, const xtea::round_keys& key)
 	}
 
 	uint8_t* buffer = msg.getBuffer() + msg.getBufferPosition();
+	TFS_RECORD_INCOMING_PACKET_SIZE(msg.getLength() - 6);
 	xtea::decrypt(buffer, msg.getLength() - 6, key);
 
 	uint16_t innerLength = msg.get<uint16_t>();
