@@ -147,7 +147,7 @@ void addAstraItemMetadata(NetworkMessage& msg, const ItemType& it)
 } // namespace
 
 void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
-                             bool sendAstraItemState, bool sendAstraQuiverCountU16)
+                             bool sendAstraItemState, bool sendAstraQuiverCountU16, bool sendAstraItemMetadata)
 {
 	static_cast<void>(sendQuickLootFlags);
 	addItemId(id);
@@ -170,12 +170,15 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 	if (sendAstraItemState) {
 		addByte(0); // no instance duration is available in the id/count overload
 		addByte(0); // no instance charges are available in the id/count overload
-		addAstraItemMetadata(*this, it);
+		if (sendAstraItemMetadata) {
+			addAstraItemMetadata(*this, it);
+		}
 	}
 }
 
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
-                             bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16)
+                             bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16,
+                             bool sendAstraItemMetadata)
 {
 	static_cast<void>(sendQuickLootFlags);
 	addItemId(item->getID());
@@ -219,10 +222,16 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 		addByte(charges > 0 ? 1 : 0);
 		if (charges > 0) {
 			add<uint32_t>(charges);
-			addByte((it.charges != 0 && charges == it.charges) ? 1 : 0);
+			if (it.charges != 0) {
+				addByte(static_cast<uint8_t>(std::min<uint32_t>(255, it.charges)));
+			} else {
+				addByte(charges > 0 ? 1 : 0);
+			}
 		}
 
-		addAstraItemMetadata(*this, it);
+		if (sendAstraItemMetadata) {
+			addAstraItemMetadata(*this, it);
+		}
 	}
 }
 

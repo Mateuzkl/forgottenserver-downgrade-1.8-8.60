@@ -1112,6 +1112,13 @@ public:
 			client->sendCreatureSquare(creature, color);
 		}
 	}
+	void sendCreatureWeaponAttackMark(const Creature* target, uint8_t weaponType) const
+	{
+		if (!client || weaponType == 0) {
+			return;
+		}
+		client->sendCreatureWeaponAttackMark(target, weaponType);
+	}
 	void sendCreatureChangeOutfit(const Creature* creature, const Outfit_t& outfit)
 	{
 		if (client) {
@@ -1269,6 +1276,7 @@ public:
 	void onUpdateInventoryItem(Item* oldItem, Item* newItem);
 	void onRemoveInventoryItem(Item* item);
 	bool canReceiveAstraItemState() const;
+	bool canReceivePackedPlayerInventory() const;
 	void sendAstraPlayerInventorySnapshot() const;
 	void scheduleAstraPlayerInventorySnapshot();
 

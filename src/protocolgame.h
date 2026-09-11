@@ -79,6 +79,8 @@ public:
 
 	uint16_t getVersion() const { return version; }
 	bool canSendAstraItemState() const;
+	bool canSendAstraItemMetadata() const;
+	bool canSendPackedPlayerInventory() const;
 	bool shouldSendAstraQuiverCountU16() const;
 	static void rebuildItemValuesCache();
 	static void invalidateItemValuesCache();
@@ -212,6 +214,8 @@ private:
 	void sendCreatureSkull(const Creature* creature);
 	void sendCreatureEmblem(const Creature* creature);
 	void sendCreatureIcon(const Creature* creature);
+	void sendCreatureVocation(const Creature* creature);
+	void sendVisiblePlayerVocations(const Position& centerPos);
 
 	void sendShop(const ShopInfoList& itemList);
 	void sendCloseShop();
@@ -238,6 +242,7 @@ private:
 	void sendWorldLight(LightInfo lightInfo);
 
 	void sendCreatureSquare(const Creature* creature, SquareColor_t color);
+	void sendCreatureWeaponAttackMark(const Creature* target, uint8_t weaponType);
 	void sendSpellCooldown(uint16_t spellId, uint32_t time);
 	void sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time);
 	void sendUseItemCooldown(uint32_t time);

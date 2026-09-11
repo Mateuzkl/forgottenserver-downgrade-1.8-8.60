@@ -723,6 +723,18 @@ class ProtocolSpectator {
                 spy->sendCreatureSquare(creature, color);
         }
 
+        void sendCreatureWeaponAttackMark(const Creature *target, uint8_t weaponType) {
+            auto o = owner.lock();
+            if (o)
+                o->sendCreatureWeaponAttackMark(target, weaponType);
+
+            for (auto &it : spectators)
+                it->sendCreatureWeaponAttackMark(target, weaponType);
+
+            for (auto &spy : spyClients_)
+                spy->sendCreatureWeaponAttackMark(target, weaponType);
+        }
+
         //tiles
         void sendMapDescription(const Position &pos) {
             auto o = owner.lock();
