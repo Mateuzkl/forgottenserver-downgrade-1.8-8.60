@@ -171,6 +171,7 @@ public:
 
 	[[nodiscard]] uint64_t getMonsterIdleMetric(
 	    MonsterIdleMetric metric) const noexcept;
+	[[nodiscard]] uint64_t getPathSteps() const noexcept;
 
 	void maybeReport();
 
