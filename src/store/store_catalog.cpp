@@ -330,6 +330,22 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 					hasFatalError = true;
 					continue;
 				}
+			} else if (offer.type == StoreOfferType::Mount) {
+				if (offer.value <= 0 || offer.value > std::numeric_limits<uint16_t>::max()) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has out-of-range mount id value {}.",
+					    offer.id, offer.value));
+					hasFatalError = true;
+					continue;
+				}
+			} else if (offer.type == StoreOfferType::Premium) {
+				if (offer.value <= 0 || offer.value > 36500) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has invalid premium days value {}.",
+					    offer.id, offer.value));
+					hasFatalError = true;
+					continue;
+				}
 			}
 
 			uint32_t addonValue = offerNode.attribute("addon").as_uint(0);

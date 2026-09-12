@@ -21,6 +21,11 @@
 class StoreCatalog final
 {
 public:
+	StoreCatalog(const StoreCatalog&) = delete;
+	StoreCatalog& operator=(const StoreCatalog&) = delete;
+	StoreCatalog(StoreCatalog&&) = delete;
+	StoreCatalog& operator=(StoreCatalog&&) = delete;
+
 	/// Load catalog from an XML file. Returns nullptr on fatal validation error.
 	/// Warnings are logged but do not prevent loading.
 	[[nodiscard]] static std::shared_ptr<const StoreCatalog> loadFromXML(std::string_view path);

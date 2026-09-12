@@ -4,6 +4,8 @@
 #include "../store/store_name_validator.h"
 #include "../store/store_protocol.h"
 #include "../store/store_types.h"
+#include "../store/store_service.h"
+#include "../tools.h"
 
 #include "test_support.h"
 
@@ -86,6 +88,30 @@ TEST_CASE(test_store_catalog_load)
 		CHECK(!catalog->categories().empty());
 		CHECK(catalog->bannerDelay() > 0);
 	}
+}
+
+TEST_CASE(test_transfer_target_normalization)
+{
+	// Whitespace trimming
+	CHECK(asTrimmedString("  Bob  ") == "Bob");
+	CHECK(asTrimmedString("\tAlice\n") == "Alice");
+	CHECK(asTrimmedString("Charlie") == "Charlie");
+
+	// Case-insensitive comparison against sender
+	CHECK(caseInsensitiveEqual("John", "john"));
+	CHECK(caseInsensitiveEqual("John", "JOHN"));
+	CHECK(caseInsensitiveEqual("John", "JoHn"));
+	CHECK(!caseInsensitiveEqual("John", "Johnny"));
+}
+
+TEST_CASE(test_store_rate_limit_cleanup)
+{
+	auto& service = StoreService::getInstance();
+	// Verify rate limit access and explicit cleanup
+	service.clearRateLimit(999999);
+	auto& limit = service.getRateLimit(999999);
+	limit.lastPurchase = std::chrono::steady_clock::now();
+	service.clearRateLimit(999999);
 }
 
 TFS_TEST_MAIN()

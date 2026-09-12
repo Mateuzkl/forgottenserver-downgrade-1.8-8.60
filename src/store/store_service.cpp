@@ -20,6 +20,7 @@
 #include "store/store_catalog.h"
 #include "store/store_name_validator.h"
 #include "store/store_repository.h"
+#include "tools.h"
 
 #include <algorithm>
 #include <cmath>
@@ -49,6 +50,14 @@ StoreService& StoreService::getInstance()
 
 StoreRateLimit& StoreService::getRateLimit(uint32_t playerId)
 {
+	const auto now = std::chrono::steady_clock::now();
+	if (rateLimits_.size() > 64) {
+		std::erase_if(rateLimits_, [now](const auto& pair) {
+			const auto& limit = pair.second;
+			return (now - limit.lastPurchase > std::chrono::seconds(60)) &&
+			       (now - limit.lastTransfer > std::chrono::seconds(60));
+		});
+	}
 	return rateLimits_[playerId];
 }
 
@@ -226,13 +235,13 @@ StoreResult StoreService::transferCoins(Player& player, std::string_view targetN
 		return {false, "Invalid amount."};
 	}
 
-	const std::string trimmedTarget(targetName);
+	const std::string trimmedTarget = asTrimmedString(targetName);
 	if (trimmedTarget.empty() || trimmedTarget.size() > 50) {
 		return {false, "Target player not found."};
 	}
 
-	// Cannot transfer to self.
-	if (player.getName() == trimmedTarget) {
+	// Cannot transfer to self (case-insensitive).
+	if (caseInsensitiveEqual(player.getName(), trimmedTarget)) {
 		return {false, "You cannot transfer coins to yourself."};
 	}
 
@@ -252,27 +261,15 @@ StoreResult StoreService::transferCoins(Player& player, std::string_view targetN
 		return {false, "Not enough Tibia Coins."};
 	}
 
-	// Execute transfer in a single DB transaction.
-	if (!AccountCoins::transfer(sourceAccountId, targetInfo->accountId, amount)) {
+	// Execute transfer + history logging in a single atomic DB transaction.
+	AccountCoins::TransferHistoryDetails historyDetails{
+	    .sourcePlayerId = player.getGUID(),
+	    .sourcePlayerName = player.getName(),
+	    .destPlayerId = targetInfo->playerId,
+	    .destPlayerName = targetInfo->playerName,
+	};
+	if (!AccountCoins::transfer(sourceAccountId, targetInfo->accountId, amount, historyDetails)) {
 		return {false, "Transfer failed, please try again."};
-	}
-
-	// Record history for both accounts.
-	auto& repo = StoreRepository::getInstance();
-	const int64_t transferAmount = static_cast<int64_t>(amount);
-	if (!repo.addHistory(sourceAccountId, player.getGUID(),
-	                     "Coin Transfer to " + targetInfo->playerName,
-	                     -transferAmount, 1, targetInfo->playerName)) {
-		LOG_WARN(fmt::format(
-		    "[StoreService::transferCoins] Failed to persist source transfer history for account={} player={}",
-		    sourceAccountId, player.getName()));
-	}
-	if (!repo.addHistory(targetInfo->accountId, targetInfo->playerId,
-	                     "Coin Transfer from " + player.getName(),
-	                     transferAmount, 1, player.getName())) {
-		LOG_WARN(fmt::format(
-		    "[StoreService::transferCoins] Failed to persist target transfer history for account={} player={}",
-		    targetInfo->accountId, targetInfo->playerName));
 	}
 
 	return {true, fmt::format("You sent {} Tibia Coins to {}.", amount, targetInfo->playerName)};
@@ -324,7 +321,7 @@ std::string StoreService::deliverOffer(Player& player, const StoreOffer& offer,
 
 std::string StoreService::deliverPremium(Player& player, const StoreOffer& offer)
 {
-	if (offer.value <= 0) {
+	if (offer.value <= 0 || offer.value > 36500) {
 		return "Invalid premium amount.";
 	}
 
@@ -398,7 +395,7 @@ std::string StoreService::deliverOutfit(Player& player, const StoreOffer& offer)
 
 std::string StoreService::deliverMount(Player& player, const StoreOffer& offer)
 {
-	if (offer.value <= 0) {
+	if (offer.value <= 0 || offer.value > std::numeric_limits<uint16_t>::max()) {
 		return "Failed to deliver mount.";
 	}
 
@@ -498,7 +495,12 @@ std::string StoreService::deliverHouseItem(Player& player, const StoreOffer& off
 	for (auto& item : createdItems) {
 		if (g_game.internalAddItem(inbox, item.get(), INDEX_WHEREEVER, 0) != RETURNVALUE_NOERROR) {
 			for (auto& inserted : insertedItems) {
-				g_game.internalRemoveItem(inserted.get());
+				const ReturnValue ret = g_game.internalRemoveItem(inserted.get());
+				if (ret != RETURNVALUE_NOERROR) {
+					LOG_ERROR(fmt::format(
+					    "[StoreService::deliverHouseItem] CRITICAL: Failed to remove inserted item id={} (ret={}) during rollback for player={}",
+					    inserted->getID(), static_cast<int>(ret), player.getName()));
+				}
 			}
 			return "Your store inbox is full.";
 		}

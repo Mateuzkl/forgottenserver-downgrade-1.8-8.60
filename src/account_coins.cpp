@@ -58,7 +58,8 @@ bool credit(uint32_t accountId, uint64_t amount)
 	       db.getAffectedRows() == 1;
 }
 
-bool transfer(uint32_t sourceAccountId, uint32_t destAccountId, uint64_t amount)
+bool transfer(uint32_t sourceAccountId, uint32_t destAccountId, uint64_t amount,
+              const std::optional<TransferHistoryDetails>& history)
 {
 	if (sourceAccountId == 0 || destAccountId == 0 || amount == 0) {
 		return false;
@@ -102,6 +103,27 @@ bool transfer(uint32_t sourceAccountId, uint32_t destAccountId, uint64_t amount)
 		        amount, destAccountId, MaxCoins - amount)) ||
 		    db.getAffectedRows() != 1) {
 			return false;
+		}
+
+		// Atomic history logging within the same transaction.
+		if (history) {
+			const int64_t transferAmount = static_cast<int64_t>(amount);
+			if (!db.executeQuery(fmt::format(
+			        "INSERT INTO `shop_history` (`account`, `player`, `date`, `title`, `price`, `costSecond`, `count`, `target`) "
+			        "VALUES ({:d}, {:d}, NOW(), {:s}, {:d}, 0, 1, {:s})",
+			        sourceAccountId, history->sourcePlayerId,
+			        db.escapeString("Coin Transfer to " + history->destPlayerName),
+			        -transferAmount, db.escapeString(history->destPlayerName)))) {
+				return false;
+			}
+			if (!db.executeQuery(fmt::format(
+			        "INSERT INTO `shop_history` (`account`, `player`, `date`, `title`, `price`, `costSecond`, `count`, `target`) "
+			        "VALUES ({:d}, {:d}, NOW(), {:s}, {:d}, 0, 1, {:s})",
+			        destAccountId, history->destPlayerId,
+			        db.escapeString("Coin Transfer from " + history->sourcePlayerName),
+			        transferAmount, db.escapeString(history->sourcePlayerName)))) {
+				return false;
+			}
 		}
 
 		return true;

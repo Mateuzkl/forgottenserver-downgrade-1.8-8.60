@@ -30,11 +30,21 @@ inline constexpr uint64_t MaxCoins = 4'294'967'295ULL;
 /// Returns true only if exactly 1 row was affected (no overflow).
 [[nodiscard]] bool credit(uint32_t accountId, uint64_t amount);
 
+struct TransferHistoryDetails
+{
+	uint32_t sourcePlayerId = 0;
+	std::string sourcePlayerName;
+	uint32_t destPlayerId = 0;
+	std::string destPlayerName;
+};
+
 /// Transfer `amount` coins between two accounts in a single DB transaction.
 /// Debits source, credits destination, with deterministic lock ordering
 /// (min account ID locked first) to prevent deadlocks.
+/// If `history` is provided, inserts shop_history entries inside the same transaction.
 /// Returns true on success; on failure the transaction is rolled back atomically.
-[[nodiscard]] bool transfer(uint32_t sourceAccountId, uint32_t destAccountId, uint64_t amount);
+[[nodiscard]] bool transfer(uint32_t sourceAccountId, uint32_t destAccountId, uint64_t amount,
+                            const std::optional<TransferHistoryDetails>& history = std::nullopt);
 
 struct CharacterAccountInfo
 {

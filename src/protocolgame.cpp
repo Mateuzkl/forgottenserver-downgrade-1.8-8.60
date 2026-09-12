@@ -537,6 +537,7 @@ void ProtocolGame::release()
 			}
 			spectatorNames.erase(asLowerCaseString(spectator_name));
 		} else {
+			StoreService::getInstance().clearRateLimit(player->getID());
 			auto clientRef = player->client;
 			if (clientRef) {
 				auto clientProtocol = clientRef->protocol();
