@@ -4172,6 +4172,9 @@ void ProtocolGame::sendStoreCatalog()
 	struct FilteredOffer {
 		const StoreOffer* offer;
 		uint16_t displayId;
+		uint32_t price;
+		StoreHighlightState state;
+		uint32_t validUntilTimestamp;
 	};
 	struct FilteredCategory {
 		const StoreCategory* category;
@@ -4184,6 +4187,7 @@ void ProtocolGame::sendStoreCatalog()
 	    std::chrono::system_clock::now().time_since_epoch()).count();
 	const uint32_t nowTimestamp = static_cast<uint32_t>(std::clamp<int64_t>(
 	    nowSeconds, int64_t{0}, static_cast<int64_t>(std::numeric_limits<uint32_t>::max())));
+	const auto dailyOffers = StoreManager::getInstance().dailyOffersSnapshot(nowTimestamp);
 	const bool taskEnabled = ConfigManager::getBoolean(ConfigManager::TASK_HUNTING_SYSTEM_ENABLED);
 	const bool bountyEnabled = taskEnabled && ConfigManager::getBoolean(ConfigManager::BOUNTY_TASKS_ENABLED);
 	const bool weeklyEnabled = taskEnabled && ConfigManager::getBoolean(ConfigManager::WEEKLY_TASKS_ENABLED);
@@ -4192,6 +4196,17 @@ void ProtocolGame::sendStoreCatalog()
 	                             ConfigManager::getBoolean(ConfigManager::ASTRA_HIRELING_PROTOCOL_ENABLED) && isAstra;
 
 	std::vector<FilteredCategory> visibleCategories;
+	std::unordered_map<std::string, StoreHighlightState> automaticCategoryStates;
+	const auto includeCategoryState = [&automaticCategoryStates](std::string_view categoryName,
+	                                                           StoreHighlightState state) {
+		if (state != StoreHighlightState::Sale && state != StoreHighlightState::Timed) {
+			return;
+		}
+		auto& current = automaticCategoryStates[std::string(categoryName)];
+		if (current == StoreHighlightState::None || state == StoreHighlightState::Sale) {
+			current = state;
+		}
+	};
 
 	for (const auto& cat : catalog->categories()) {
 		FilteredCategory fcat{&cat, {}};
@@ -4224,7 +4239,17 @@ void ProtocolGame::sendStoreCatalog()
 				if (offer.type == StoreOfferType::Outfit && player->getSex() == PLAYERSEX_FEMALE && offer.femaleValue > 0) {
 					displayId = static_cast<uint16_t>(offer.femaleValue);
 				}
-				fcat.offers.push_back({&offer, displayId});
+				const StoreDailyOffer* dailyOffer = dailyOffers.find(offer.id);
+				fcat.offers.push_back({
+				    &offer,
+				    displayId,
+				    dailyOffer ? dailyOffer->price : offer.price,
+				    dailyOffer ? dailyOffer->state : offer.state,
+				    dailyOffer ? dailyOffer->validUntilTimestamp : offer.saleValidUntilTimestamp,
+				});
+				if (dailyOffer) {
+					includeCategoryState(cat.name, dailyOffer->state);
+				}
 			}
 		}
 
@@ -4240,6 +4265,24 @@ void ProtocolGame::sendStoreCatalog()
 		}
 	}
 
+	// Bubble automatic highlights to parent category buttons without changing
+	// the catalog itself. This keeps the category tree useful for Daily Offers.
+	for (std::size_t pass = 0; pass < visibleCategories.size(); ++pass) {
+		bool changed = false;
+		for (const auto& fcat : visibleCategories) {
+			const auto stateIt = automaticCategoryStates.find(fcat.category->name);
+			if (stateIt == automaticCategoryStates.end() || fcat.category->parent.empty()) {
+				continue;
+			}
+			const auto previous = automaticCategoryStates[fcat.category->parent];
+			includeCategoryState(fcat.category->parent, stateIt->second);
+			changed = changed || previous != automaticCategoryStates[fcat.category->parent];
+		}
+		if (!changed) {
+			break;
+		}
+	}
+
 	NetworkMessage msg;
 	msg.addByte(StoreProtocol::ServerOpcode);
 	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog));
@@ -4251,20 +4294,25 @@ void ProtocolGame::sendStoreCatalog()
 		msg.addString(fcat.category->icon);
 		msg.addString(fcat.category->parent);
 		msg.addString(fcat.category->description);
-		StoreProtocol::addCategoryHighlight(msg, sendHighlights, fcat.category->state);
+		StoreHighlightState categoryState = fcat.category->state;
+		if (const auto stateIt = automaticCategoryStates.find(fcat.category->name);
+		    stateIt != automaticCategoryStates.end()) {
+			categoryState = stateIt->second;
+		}
+		StoreProtocol::addCategoryHighlight(msg, sendHighlights, categoryState);
 		msg.add<uint16_t>(static_cast<uint16_t>(fcat.offers.size()));
 
 		for (const auto& fo : fcat.offers) {
 			msg.add<uint32_t>(fo.offer->id);
 			msg.addString(fo.offer->name);
 			msg.addString(fo.offer->icon);
-			msg.add<uint32_t>(fo.offer->price);
+			msg.add<uint32_t>(fo.price);
 			msg.add<uint16_t>(fo.displayId);
 			msg.add<uint16_t>(fo.offer->count);
 			msg.addString(fo.offer->description);
 			msg.addString(storeOfferTypeToString(fo.offer->type));
-			StoreProtocol::addOfferHighlight(msg, sendHighlights, fo.offer->state,
-			                                 fo.offer->saleValidUntilTimestamp, nowTimestamp);
+			StoreProtocol::addOfferHighlight(msg, sendHighlights, fo.state,
+			                                 fo.validUntilTimestamp, nowTimestamp);
 		}
 	}
 

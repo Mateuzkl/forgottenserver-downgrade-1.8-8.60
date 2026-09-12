@@ -213,14 +213,21 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 	}
 
 	// 4. Validate the price before touching the account.
-	if (offer->price == 0) {
+	const auto epochSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+	    std::chrono::system_clock::now().time_since_epoch()).count();
+	const uint32_t nowTimestamp = static_cast<uint32_t>(std::clamp<int64_t>(
+	    epochSeconds, int64_t{0}, static_cast<int64_t>(std::numeric_limits<uint32_t>::max())));
+	const auto dailyOffers = StoreManager::getInstance().dailyOffersSnapshot(nowTimestamp);
+	const StoreDailyOffer* dailyOffer = dailyOffers.find(offerId);
+	const uint32_t purchasePrice = dailyOffer ? dailyOffer->price : offer->price;
+	if (purchasePrice == 0) {
 		return {false, "Invalid offer price."};
 	}
 
 	const uint32_t accountId = player.getAccount();
 	// 5. Atomically validate and debit in one query. A separate balance SELECT
 	// would add DB traffic and could only provide a stale pre-check.
-	if (!AccountCoins::debit(accountId, offer->price)) {
+	if (!AccountCoins::debit(accountId, purchasePrice)) {
 		return {false, "Not enough Tibia Coins."};
 	}
 
@@ -228,11 +235,11 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 	const std::string deliveryError = deliverOffer(player, *offer, extra);
 	if (!deliveryError.empty()) {
 		// Delivery failed — refund coins atomically.
-		if (!AccountCoins::credit(accountId, offer->price)) {
+		if (!AccountCoins::credit(accountId, purchasePrice)) {
 			LOG_ERROR(fmt::format(
 			    "[StoreService::purchase] CRITICAL: Refund failed! account={} player={} (guid={}) "
 			    "offer={} amount={} — coins may be lost!",
-			    accountId, player.getName(), player.getGUID(), offerId, offer->price));
+			    accountId, player.getName(), player.getGUID(), offerId, purchasePrice));
 		}
 		return {false, deliveryError};
 	}
@@ -252,7 +259,7 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 
 	if (!StoreRepository::getInstance().addHistory(
 	        accountId, player.getGUID(), offer->name,
-	        -static_cast<int64_t>(offer->price), historyCount)) {
+	        -static_cast<int64_t>(purchasePrice), historyCount)) {
 		LOG_WARN(fmt::format(
 		    "[StoreService::purchase] Failed to persist purchase history for account={} player={} offer='{}'",
 		    accountId, player.getName(), offer->name));

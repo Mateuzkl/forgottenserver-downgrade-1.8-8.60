@@ -69,6 +69,26 @@ enum class StoreHighlightState : uint8_t
 	Timed = 3,
 };
 
+enum class StoreDailyHighlightMode : uint8_t
+{
+	Sale,
+	Timed,
+	Mixed,
+};
+
+/// Rotation settings parsed from the optional <dailyOffers> catalog node.
+struct StoreDailyOffersConfig
+{
+	bool enabled = false;
+	bool rotateOnStartup = false;
+	uint16_t offerCount = 2;
+	uint32_t rotationSeconds = 24 * 60 * 60;
+	uint8_t minimumDiscountPercent = 10;
+	uint8_t maximumDiscountPercent = 25;
+	StoreDailyHighlightMode highlightMode = StoreDailyHighlightMode::Mixed;
+	std::string stateFile = "data/store/daily_offers_state.xml";
+};
+
 [[nodiscard]] std::optional<StoreHighlightState> parseStoreHighlightState(std::string_view stateStr);
 
 [[nodiscard]] constexpr bool storeHighlightHasExpiration(StoreHighlightState state) noexcept
@@ -94,6 +114,7 @@ struct StoreOffer
 	StoreOfferType type = StoreOfferType::Item;
 	StoreHighlightState state = StoreHighlightState::None;
 	uint32_t saleValidUntilTimestamp = 0;
+	bool dailyEligible = true;
 
 	int64_t value = 0;       ///< type-specific value (days, seconds, blessing index, lookType, etc.)
 	int64_t femaleValue = 0; ///< female lookType for outfit offers

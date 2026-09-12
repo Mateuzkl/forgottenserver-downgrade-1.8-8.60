@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <pugixml.hpp>
 #include <sstream>
 #include <unordered_set>
@@ -95,6 +96,20 @@ bool parseCompleteI64(std::string_view sv, int64_t& out)
 	}
 	out = val;
 	return true;
+}
+
+bool parseCompleteBool(std::string_view sv, bool& out)
+{
+	const auto lower = toLower(sv);
+	if (lower == "true" || lower == "1" || lower == "yes") {
+		out = true;
+		return true;
+	}
+	if (lower == "false" || lower == "0" || lower == "no") {
+		out = false;
+		return true;
+	}
+	return false;
 }
 
 bool parseItemList(std::string_view value, std::vector<uint16_t>& items)
@@ -211,6 +226,98 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 	std::unordered_set<uint32_t> seenOfferIds;
 	bool hasFatalError = false;
 
+	if (const auto dailyNode = root.child("dailyOffers")) {
+		auto& config = catalog->dailyOffersConfig_;
+		config.enabled = true;
+
+		if (const auto enabledAttr = dailyNode.attribute("enabled"); !enabledAttr.empty() &&
+		    !parseCompleteBool(enabledAttr.as_string(), config.enabled)) {
+			LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Invalid Daily Offers enabled value '{}'.",
+			                      enabledAttr.as_string()));
+			hasFatalError = true;
+		}
+		if (const auto rotateAttr = dailyNode.attribute("rotateOnStartup"); !rotateAttr.empty() &&
+		    !parseCompleteBool(rotateAttr.as_string(), config.rotateOnStartup)) {
+			LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Invalid Daily Offers rotateOnStartup value '{}'.",
+			                      rotateAttr.as_string()));
+			hasFatalError = true;
+		}
+
+		uint32_t numericValue = 0;
+		if (const auto countAttr = dailyNode.attribute("count"); !countAttr.empty()) {
+			if (!parseCompleteU32(countAttr.as_string(), numericValue) || numericValue == 0 ||
+			    numericValue > std::numeric_limits<uint16_t>::max()) {
+				LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Invalid Daily Offers count '{}'.",
+				                      countAttr.as_string()));
+				hasFatalError = true;
+			} else {
+				config.offerCount = static_cast<uint16_t>(numericValue);
+			}
+		}
+
+		const auto hoursAttr = dailyNode.attribute("rotationHours");
+		const auto daysAttr = dailyNode.attribute("rotationDays");
+		if (!hoursAttr.empty() && !daysAttr.empty()) {
+			LOG_ERROR("[StoreCatalog::loadFromXML] Daily Offers must use rotationHours or rotationDays, not both.");
+			hasFatalError = true;
+		} else if (!hoursAttr.empty() || !daysAttr.empty()) {
+			const auto durationAttr = !hoursAttr.empty() ? hoursAttr : daysAttr;
+			const uint32_t multiplier = !hoursAttr.empty() ? 60U * 60U : 24U * 60U * 60U;
+			if (!parseCompleteU32(durationAttr.as_string(), numericValue) || numericValue == 0 ||
+			    numericValue > std::numeric_limits<uint32_t>::max() / multiplier) {
+				LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Invalid Daily Offers rotation '{}'.",
+				                      durationAttr.as_string()));
+				hasFatalError = true;
+			} else {
+				config.rotationSeconds = numericValue * multiplier;
+			}
+		}
+
+		if (const auto minAttr = dailyNode.attribute("minDiscountPercent"); !minAttr.empty()) {
+			if (!parseCompleteU32(minAttr.as_string(), numericValue) || numericValue > 99) {
+				LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Invalid minimum Daily Offers discount '{}'.",
+				                      minAttr.as_string()));
+				hasFatalError = true;
+			} else {
+				config.minimumDiscountPercent = static_cast<uint8_t>(numericValue);
+			}
+		}
+		if (const auto maxAttr = dailyNode.attribute("maxDiscountPercent"); !maxAttr.empty()) {
+			if (!parseCompleteU32(maxAttr.as_string(), numericValue) || numericValue > 99) {
+				LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Invalid maximum Daily Offers discount '{}'.",
+				                      maxAttr.as_string()));
+				hasFatalError = true;
+			} else {
+				config.maximumDiscountPercent = static_cast<uint8_t>(numericValue);
+			}
+		}
+		if (config.minimumDiscountPercent > config.maximumDiscountPercent) {
+			LOG_ERROR("[StoreCatalog::loadFromXML] Daily Offers minimum discount exceeds its maximum discount.");
+			hasFatalError = true;
+		}
+
+		const auto highlightMode = toLower(dailyNode.attribute("state").as_string("mixed"));
+		if (highlightMode == "sale") {
+			config.highlightMode = StoreDailyHighlightMode::Sale;
+		} else if (highlightMode == "timed") {
+			config.highlightMode = StoreDailyHighlightMode::Timed;
+		} else if (highlightMode == "mixed") {
+			config.highlightMode = StoreDailyHighlightMode::Mixed;
+		} else {
+			LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Invalid Daily Offers state '{}'.",
+			                      highlightMode));
+			hasFatalError = true;
+		}
+
+		if (const auto stateFileAttr = dailyNode.attribute("stateFile"); !stateFileAttr.empty()) {
+			config.stateFile = stateFileAttr.as_string();
+			if (config.stateFile.empty()) {
+				LOG_ERROR("[StoreCatalog::loadFromXML] Daily Offers stateFile cannot be empty.");
+				hasFatalError = true;
+			}
+		}
+	}
+
 	for (auto categoryNode : root.children("category")) {
 		StoreCategory category;
 		category.name = categoryNode.attribute("name").as_string("");
@@ -256,6 +363,15 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 
 			offer.name = offerNode.attribute("name").as_string("Unknown");
 			offer.icon = offerNode.attribute("icon").as_string("");
+			if (const auto dailyEligibleAttr = offerNode.attribute("dailyEligible");
+			    !dailyEligibleAttr.empty() &&
+			    !parseCompleteBool(dailyEligibleAttr.as_string(), offer.dailyEligible)) {
+				LOG_ERROR(fmt::format(
+				    "[StoreCatalog::loadFromXML] Offer id={} has invalid dailyEligible value '{}'.",
+				    offer.id, dailyEligibleAttr.as_string()));
+				hasFatalError = true;
+				continue;
+			}
 			const auto offerStateAttr = offerNode.attribute("state");
 			if (!offerStateAttr.empty()) {
 				const auto state = parseStoreHighlightState(offerStateAttr.as_string());
@@ -567,6 +683,12 @@ bool StoreManager::loadCatalog(std::string_view path)
 	if (!newCatalog) {
 		return false;
 	}
+
+	const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+	    std::chrono::system_clock::now().time_since_epoch()).count();
+	const uint32_t nowTimestamp = static_cast<uint32_t>(std::clamp<int64_t>(
+	    nowSeconds, int64_t{0}, static_cast<int64_t>(std::numeric_limits<uint32_t>::max())));
+	dailyOffers_.configure(newCatalog, nowTimestamp);
 	catalog_ = std::move(newCatalog);
 	return true;
 }
@@ -574,4 +696,9 @@ bool StoreManager::loadCatalog(std::string_view path)
 std::shared_ptr<const StoreCatalog> StoreManager::catalogSnapshot() const noexcept
 {
 	return catalog_;
+}
+
+StoreDailyOffersSnapshot StoreManager::dailyOffersSnapshot(uint32_t nowTimestamp)
+{
+	return dailyOffers_.snapshot(nowTimestamp);
 }

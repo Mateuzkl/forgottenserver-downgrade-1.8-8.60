@@ -121,6 +121,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/spells.cpp
 	${CMAKE_CURRENT_LIST_DIR}/storeinbox.cpp
 	${CMAKE_CURRENT_LIST_DIR}/store/store_catalog.cpp
+	${CMAKE_CURRENT_LIST_DIR}/store/store_daily_offers.cpp
 	${CMAKE_CURRENT_LIST_DIR}/store/store_name_validator.cpp
 	${CMAKE_CURRENT_LIST_DIR}/store/store_repository.cpp
 	${CMAKE_CURRENT_LIST_DIR}/store/store_service.cpp
@@ -245,6 +246,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/spells.h
 	${CMAKE_CURRENT_LIST_DIR}/storeinbox.h
 	${CMAKE_CURRENT_LIST_DIR}/store/store_catalog.h
+	${CMAKE_CURRENT_LIST_DIR}/store/store_daily_offers.h
 	${CMAKE_CURRENT_LIST_DIR}/store/store_name_validator.h
 	${CMAKE_CURRENT_LIST_DIR}/store/store_protocol.h
 	${CMAKE_CURRENT_LIST_DIR}/store/store_repository.h

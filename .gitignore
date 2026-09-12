@@ -207,6 +207,7 @@ pip-log.txt
 ## TFS / OT
 #############
 config.lua
+data/store/daily_offers_state.xml
 jenkins-credentials.txt
 
 # Ignorar ejecutable principal en linux

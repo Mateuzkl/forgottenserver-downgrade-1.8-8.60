@@ -4,6 +4,7 @@
 #include "../networkmessage.h"
 #include "../player.h"
 #include "../store/store_catalog.h"
+#include "../store/store_daily_offers.h"
 #include "../store/store_name_validator.h"
 #include "../store/store_protocol.h"
 #include "../store/store_service.h"
@@ -14,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <unordered_set>
 
 #include "test_support.h"
 
@@ -50,6 +52,27 @@ std::filesystem::path writeStoreHighlightFixture()
   </category>
   <category name="Normal" icon="normal">
     <offer id="990003" name="Normal" price="10" itemid="268"/>
+  </category>
+</store>)xml";
+	output.close();
+	return path;
+}
+
+std::filesystem::path writeDailyOffersFixture(const std::filesystem::path& statePath)
+{
+	const auto path = std::filesystem::temp_directory_path() / "tfs_store_daily_offers_test.xml";
+	std::ofstream output(path, std::ios::trunc);
+	output << R"xml(<?xml version="1.0"?>
+<store>
+  <dailyOffers enabled="true" count="2" rotationHours="1" rotateOnStartup="false"
+               minDiscountPercent="20" maxDiscountPercent="20" state="sale" stateFile=")xml"
+	       << statePath.generic_string() << R"xml("/>
+  <category name="Daily">
+    <offer id="991001" name="One" price="10" itemid="268"/>
+    <offer id="991002" name="Two" price="20" itemid="268"/>
+    <offer id="991003" name="Three" price="30" itemid="268"/>
+    <offer id="991004" name="Four" price="40" itemid="268"/>
+    <offer id="991005" name="Excluded" price="50" itemid="268" dailyEligible="false"/>
   </category>
 </store>)xml";
 	output.close();
@@ -223,6 +246,76 @@ TEST_CASE(test_store_catalog_highlights_and_defaults)
 	CHECK(normal != nullptr);
 	CHECK(normal->state == StoreHighlightState::None);
 	CHECK(normal->saleValidUntilTimestamp == 0);
+}
+
+TEST_CASE(test_store_daily_offers_rotate_persist_and_avoid_immediate_repeats)
+{
+	ensureItemTypesLoaded();
+	const auto statePath = std::filesystem::temp_directory_path() / "tfs_store_daily_offers_state.xml";
+	const auto fixturePath = writeDailyOffersFixture(statePath);
+	std::error_code error;
+	std::filesystem::remove(statePath, error);
+	error.clear();
+	std::filesystem::remove(statePath.string() + ".tmp", error);
+
+	const auto catalog = StoreCatalog::loadFromXML(fixturePath.string());
+	CHECK(catalog != nullptr);
+	if (!catalog) {
+		return;
+	}
+
+	const auto& config = catalog->dailyOffersConfig();
+	CHECK(config.enabled);
+	CHECK(config.offerCount == 2);
+	CHECK(config.rotationSeconds == 3600);
+	CHECK(config.minimumDiscountPercent == 20);
+	CHECK(config.maximumDiscountPercent == 20);
+
+	StoreDailyOffers firstManager(12345);
+	firstManager.configure(catalog, 1000);
+	const auto first = firstManager.snapshot(1000);
+	CHECK(first.offers.size() == 2);
+	CHECK(first.validUntilTimestamp == 4600);
+	std::unordered_set<uint32_t> firstIds;
+	for (const auto& [offerId, dailyOffer] : first.offers) {
+		const StoreOffer* catalogOffer = catalog->findOffer(offerId);
+		CHECK(catalogOffer != nullptr);
+		CHECK(offerId != 991005);
+		CHECK(dailyOffer.state == StoreHighlightState::Sale);
+		CHECK(dailyOffer.discountPercent == 20);
+		CHECK(dailyOffer.price == StoreDailyOffers::discountedPrice(catalogOffer->price, 20));
+		firstIds.insert(offerId);
+	}
+
+	// A reconnect/restart before expiry restores the same IDs instead of rerolling.
+	StoreDailyOffers restoredManager(67890);
+	restoredManager.configure(catalog, 2000);
+	const auto restored = restoredManager.snapshot(2000);
+	CHECK(restored.offers.size() == first.offers.size());
+	for (const auto& [offerId, unused] : restored.offers) {
+		(void)unused;
+		CHECK(firstIds.contains(offerId));
+	}
+
+	// At equality the old rotation is expired. With enough alternatives, none
+	// of the immediately previous offers is selected again.
+	const auto rotated = restoredManager.snapshot(4600);
+	CHECK(rotated.offers.size() == 2);
+	CHECK(rotated.validUntilTimestamp == 8200);
+	for (const auto& [offerId, unused] : rotated.offers) {
+		(void)unused;
+		CHECK(!firstIds.contains(offerId));
+	}
+
+	CHECK(StoreDailyOffers::discountedPrice(1, 99) == 1);
+	CHECK(StoreDailyOffers::discountedPrice(100, 25) == 75);
+
+	error.clear();
+	std::filesystem::remove(fixturePath, error);
+	error.clear();
+	std::filesystem::remove(statePath, error);
+	error.clear();
+	std::filesystem::remove(statePath.string() + ".tmp", error);
 }
 
 TEST_CASE(test_store_catalog_load)

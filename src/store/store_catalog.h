@@ -5,6 +5,7 @@
 #define FS_STORE_CATALOG_H
 
 #include "store/store_types.h"
+#include "store/store_daily_offers.h"
 
 #include <memory>
 #include <span>
@@ -42,6 +43,12 @@ public:
 	/// Banner rotation delay in seconds.
 	[[nodiscard]] uint8_t bannerDelay() const noexcept { return bannerDelay_; }
 
+	/// Automatic Daily Offers rotation settings.
+	[[nodiscard]] const StoreDailyOffersConfig& dailyOffersConfig() const noexcept
+	{
+		return dailyOffersConfig_;
+	}
+
 	/// Find the outfit offer data for a given lookType (male or female).
 	/// Used by ProtocolGame to check store outfit ownership without a separate XML parser.
 	struct OutfitOfferInfo
@@ -57,6 +64,7 @@ private:
 	std::vector<StoreCategory> categories_;
 	std::vector<StoreBanner> banners_;
 	uint8_t bannerDelay_ = 10;
+	StoreDailyOffersConfig dailyOffersConfig_;
 
 	/// O(1) offer ID → pointer (valid as long as this catalog is alive).
 	std::unordered_map<uint32_t, const StoreOffer*> offerById_;
@@ -78,9 +86,13 @@ public:
 	/// Get the current immutable catalog snapshot.
 	[[nodiscard]] std::shared_ptr<const StoreCatalog> catalogSnapshot() const noexcept;
 
+	/// Resolve the active automatic Daily Offers overlay at a single timestamp.
+	[[nodiscard]] StoreDailyOffersSnapshot dailyOffersSnapshot(uint32_t nowTimestamp);
+
 private:
 	StoreManager() = default;
 	std::shared_ptr<const StoreCatalog> catalog_;
+	StoreDailyOffers dailyOffers_;
 };
 
 #endif // FS_STORE_CATALOG_H
