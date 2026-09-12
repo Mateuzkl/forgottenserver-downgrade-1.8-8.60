@@ -432,7 +432,29 @@ local function readItemXmlAttributes(itemNode)
 	return attributes
 end
 
-local function addMarketItem(itemId, xmlName, xmlAttributes)
+local function readMoveeventAttribute(itemNode, key)
+	if not itemNode or not key then
+		return nil
+	end
+
+	for attributeNode in itemNode:children() do
+		if attributeNode:name() == "attribute" then
+			local nodeKey = attributeNode:attribute("key")
+			local nodeValue = attributeNode:attribute("value")
+			if nodeKey == "script" and nodeValue == "moveevent" then
+				for subNode in attributeNode:children() do
+					if subNode:name() == "attribute" and subNode:attribute("key") == key then
+						return subNode:attribute("value")
+					end
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+local function addMarketItem(itemId, xmlName, xmlAttributes, itemNode)
 	itemId = tonumber(itemId)
 	if not itemId or marketItemsById[itemId] or not isMarketableItem(itemId) then
 		return
@@ -444,10 +466,18 @@ local function addMarketItem(itemId, xmlName, xmlAttributes)
 		return
 	end
 
+	local moveeventVocation = readMoveeventAttribute(itemNode, "vocation")
+	local moveeventLevel = tonumber(readMoveeventAttribute(itemNode, "level")) or 0
+	local requiredLevel = math.max(tonumber(itemType:getMinReqLevel()) or 0, moveeventLevel)
+	local restrictVocation = 0
+
 	local entry = {
 		id = itemId,
 		name = name,
-		category = getItemCategory(itemType)
+		category = getItemCategory(itemType),
+		moveeventVocation = moveeventVocation,
+		requiredLevel = requiredLevel,
+		restrictVocation = restrictVocation,
 	}
 
 	marketItemsById[itemId] = entry
@@ -481,10 +511,10 @@ local function loadMarketCatalog()
 			local attributes = readItemXmlAttributes(itemNode)
 
 			if id then
-				addMarketItem(id, name, attributes)
+				addMarketItem(id, name, attributes, itemNode)
 			elseif fromId and toId and toId >= fromId then
 				for itemId = fromId, toId do
-					addMarketItem(itemId, name, attributes)
+					addMarketItem(itemId, name, attributes, itemNode)
 				end
 			end
 		end
@@ -745,6 +775,110 @@ local function getMarketItemClassification(itemId)
 	return tonumber(xmlAttributes.classification) or tonumber(itemType:getClassification()) or 0
 end
 
+-- Client cyclopedia/market filters use OTC vocation ids (1=sorc, 2=druid, 3=pally, 4=knight, 9=monk).
+local MARKET_VOCATION_NAME_TO_CLIENT_ID = {
+	["sorcerer"] = 1,
+	["master sorcerer"] = 1,
+	["druid"] = 2,
+	["elder druid"] = 2,
+	["paladin"] = 3,
+	["royal paladin"] = 3,
+	["knight"] = 4,
+	["elite knight"] = 4,
+	["monk"] = 9,
+	["exalted monk"] = 9,
+}
+
+local marketRestrictVocationCache = {}
+
+local function normalizeMarketVocationName(name)
+	name = name:gsub("^%s+", ""):gsub("%s+$", ""):lower()
+	if name:sub(-1) == "s" then
+		name = name:sub(1, -2)
+	end
+	return name
+end
+
+local function addVocationMaskFromName(mask, rawName)
+	local name = normalizeMarketVocationName(rawName:match("^([^;]+)") or rawName)
+	local clientVocId = MARKET_VOCATION_NAME_TO_CLIENT_ID[name]
+	if clientVocId and clientVocId > 0 then
+		return mask | (2 ^ (clientVocId - 1))
+	end
+	return mask
+end
+
+local function parseVocationMaskFromRawAttribute(vocationValue)
+	if not vocationValue or vocationValue == "" then
+		return 0
+	end
+
+	local mask = 0
+	for part in vocationValue:gmatch("[^,]+") do
+		mask = addVocationMaskFromName(mask, part)
+	end
+	return mask
+end
+
+local function parseVocationMaskFromDisplayString(vocationString)
+	if not vocationString or vocationString == "" then
+		return 0
+	end
+
+	local normalized = vocationString:lower():gsub("%s+and%s+", ",")
+	local mask = 0
+	for part in normalized:gmatch("[^,]+") do
+		mask = addVocationMaskFromName(mask, part)
+	end
+	return mask
+end
+
+local function getMarketRestrictVocation(itemId)
+	itemId = tonumber(itemId) or 0
+	if itemId <= 0 then
+		return 0
+	end
+
+	if marketRestrictVocationCache[itemId] ~= nil then
+		return marketRestrictVocationCache[itemId]
+	end
+
+	local entry = marketItemsById[itemId]
+	if entry and entry.restrictVocation and entry.restrictVocation > 0 then
+		marketRestrictVocationCache[itemId] = entry.restrictVocation
+		return entry.restrictVocation
+	end
+
+	local mask = 0
+	if entry and entry.moveeventVocation then
+		mask = parseVocationMaskFromRawAttribute(entry.moveeventVocation)
+	end
+
+	if mask == 0 then
+		mask = parseVocationMaskFromDisplayString(ItemType(itemId):getVocationString())
+	end
+
+	if entry then
+		entry.restrictVocation = mask
+	end
+	marketRestrictVocationCache[itemId] = mask
+	return mask
+end
+
+local function getMarketRequiredLevel(itemId)
+	itemId = tonumber(itemId) or 0
+	if itemId <= 0 then
+		return 0
+	end
+
+	local entry = marketItemsById[itemId]
+	if entry and entry.requiredLevel and entry.requiredLevel > 0 then
+		return entry.requiredLevel
+	end
+
+	return math.max(0, tonumber(ItemType(itemId):getMinReqLevel()) or 0)
+end
+
 -- Builds the list of catalog entries to send to a player when entering the market.
 -- Each entry represents a catalog item and the available amount the player has for a specific tier.
 -- @param depotMap Table mapping keys of the form "itemId:tier" to the available amount for that item/tier. If nil, treated as empty.
@@ -777,13 +911,17 @@ local function buildMarketEnterEntries(depotMap)
 
 	for _, entry in ipairs(marketItems) do
 		local classification = getMarketItemClassification(entry.id)
+		local requiredLevel = getMarketRequiredLevel(entry.id)
+		local restrictVocation = getMarketRestrictVocation(entry.id)
 		entries[#entries + 1] = {
 			id = entry.id,
 			category = entry.category,
 			name = entry.name,
 			amount = depotMap[getDepotItemKey(entry.id, 0)] or 0,
 			tier = 0,
-			classification = classification
+			classification = classification,
+			requiredLevel = requiredLevel,
+			restrictVocation = restrictVocation
 		}
 
 		local tierAmounts = tierAmountsByItem[entry.id]
@@ -797,7 +935,9 @@ local function buildMarketEnterEntries(depotMap)
 						name = entry.name,
 						amount = amount,
 						tier = tier,
-						classification = classification
+						classification = classification,
+						requiredLevel = requiredLevel,
+						restrictVocation = restrictVocation
 					}
 				end
 			end
@@ -1645,6 +1785,8 @@ local function sendMarketEnter(player, depotMap)
 			out:addU16(math.min(entry.amount or 0, 0xFFFF))
 			out:addByte(entry.tier or 0)
 			out:addByte(entry.classification or 0)
+			out:addU16(entry.requiredLevel or 0)
+			out:addU16(entry.restrictVocation or 0)
 		end
 
 		out:sendToPlayer(player)
