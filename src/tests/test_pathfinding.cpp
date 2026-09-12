@@ -2,6 +2,7 @@
 
 #include "../creature.h"
 #include "../map.h"
+#include "../performance_metrics.h"
 #include "../tile.h"
 #include "test_support.h"
 
@@ -36,6 +37,18 @@ public:
 
 private:
 	bool walkable;
+};
+
+class PathMetricsFixture
+{
+public:
+	PathMetricsFixture() : wasEnabled(g_performanceMetrics.isEnabled()) { g_performanceMetrics.setEnabled(true); }
+	~PathMetricsFixture() { g_performanceMetrics.setEnabled(wasEnabled); }
+
+	uint64_t getPathSteps() const { return g_performanceMetrics.getPathSteps(); }
+
+private:
+	bool wasEnabled;
 };
 
 using BlockedPositions = std::set<std::pair<uint16_t, uint16_t>>;
@@ -223,6 +236,32 @@ TEST_CASE(pathfinding_preserves_prefilled_direction_output_contract)
 	std::vector<Direction> inRangeDirections = prefix;
 	CHECK(findPath(map, Position{601, 601, 7}, Position{601, 601, 7}, exactPathParams(), inRangeDirections));
 	CHECK(inRangeDirections == prefix);
+}
+
+TEST_CASE(pathfinding_metrics_count_only_steps_appended_by_successful_search)
+{
+	PathMetricsFixture metrics;
+	const uint64_t initialPathSteps = metrics.getPathSteps();
+	Map map;
+	addGrid(map, 650, 654, 650, 652);
+	std::vector<Direction> directions = {DIRECTION_NORTH, DIRECTION_EAST};
+
+	CHECK(findPath(map, Position{651, 651, 7}, Position{653, 651, 7}, exactPathParams(false), directions));
+	CHECK(directions.size() == 4);
+	CHECK(metrics.getPathSteps() == initialPathSteps + 2);
+}
+
+TEST_CASE(pathfinding_metrics_count_zero_new_steps_when_already_in_range)
+{
+	PathMetricsFixture metrics;
+	const uint64_t initialPathSteps = metrics.getPathSteps();
+	Map map;
+	addGrid(map, 660, 660, 660, 660);
+	std::vector<Direction> directions = {DIRECTION_NORTH, DIRECTION_EAST};
+
+	CHECK(findPath(map, Position{660, 660, 7}, Position{660, 660, 7}, exactPathParams(), directions));
+	CHECK(directions.size() == 2);
+	CHECK(metrics.getPathSteps() == initialPathSteps);
 }
 
 TEST_CASE(pathfinding_keeps_origin_tile_alive_for_const_creature_search)

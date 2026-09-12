@@ -808,11 +808,12 @@ struct PathSearchMetrics
 bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirList,
                           const FrozenPathingConditionCall& pathCondition, const FindPathParams& fpp) const
 {
+	const size_t initialDirListSize = dirList.size();
 	PerformanceScope performanceScope(PerformanceMetric::MapGetPathMatching);
 	PathSearchMetrics searchMetrics;
 	const auto finish = [&](bool success) {
 		g_performanceMetrics.recordPathRequest(success, searchMetrics.nodesVisited, searchMetrics.tilesRead,
-		                                       success ? dirList.size() : 0);
+		                                       success ? dirList.size() - initialDirListSize : 0);
 		return success;
 	};
 	const Position start_position = creature.getPosition();
