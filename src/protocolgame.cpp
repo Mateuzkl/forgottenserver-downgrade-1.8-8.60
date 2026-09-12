@@ -5813,6 +5813,7 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
+		features[GameFeature::AstraSingleCreatureMarks] = true;
 	}
 	// Fonticak outfit familiar extension (feature id 138) and quiver count (feature id 141).
 	if (isFonticakClient) {

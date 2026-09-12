@@ -994,8 +994,9 @@ enum class GameFeature : uint8_t {
 	AstraOutfitStoreMode = 142,
 	AstraItemMetadata = 143,
 	ZoneWeather = 144,
+	AstraSingleCreatureMarks = 145,
 
-	Last = 144
+	Last = 145
 };
 
 inline constexpr int32_t CHANNEL_GUILD = 0x00;
