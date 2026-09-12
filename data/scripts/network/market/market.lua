@@ -1453,6 +1453,18 @@ local function buildSkillBoostDescription(itemType)
 		end
 	end
 
+	if abilities.specialMagicLevel then
+		for element, value in pairs(abilities.specialMagicLevel) do
+			value = tonumber(value) or 0
+			if value ~= 0 and getCombatName then
+				local elementName = getCombatName(2 ^ (element - 1))
+				if elementName then
+					parts[#parts + 1] = string.format("%s magic level %+d", elementName, value)
+				end
+			end
+		end
+	end
+
 	if abilities.specialSkills then
 		for skillIndex, value in pairs(abilities.specialSkills) do
 			value = tonumber(value) or 0
