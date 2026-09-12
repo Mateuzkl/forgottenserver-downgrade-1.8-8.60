@@ -123,8 +123,10 @@ private:
 	                      uint32_t clientIP);
 	void getCastList(const std::string& password, uint32_t clientIP);
 	void getAstraCastList();
+	void getFonticakBoostedInfo();
 
 	bool isAstraClient_ = false;
+	bool isFonticakClient_ = false;
 };
 
 #endif
