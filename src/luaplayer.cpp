@@ -22,6 +22,7 @@
 #include "vocation.h"
 #include "familiar.h"
 #include "weapons.h"
+#include "weapon_proficiency.h"
 #include "kv/kv.h"
 
 extern Game g_game;
@@ -2498,6 +2499,42 @@ int luaPlayerResetWeaponProficiencyStats(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetWeaponProficiencyDisplayStats(lua_State* L)
+{
+	// player:getWeaponProficiencyDisplayStats()
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const auto& proficiency = player->weaponProficiency();
+	const auto& generalCritical = proficiency.getGeneralCritical();
+	const auto& autoAttackCritical = proficiency.getAutoAttackCritical();
+
+	lua_createtable(L, 0, 6);
+
+	lua_pushnumber(L, generalCritical.chance + autoAttackCritical.chance);
+	lua_setfield(L, -2, "criticalChance");
+
+	lua_pushnumber(L, generalCritical.damage + autoAttackCritical.damage);
+	lua_setfield(L, -2, "criticalDamage");
+
+	lua_pushnumber(L, proficiency.getStat(WeaponProficiencyBonus_t::LIFE_GAIN_ON_HIT));
+	lua_setfield(L, -2, "lifeGainOnHit");
+
+	lua_pushnumber(L, proficiency.getStat(WeaponProficiencyBonus_t::LIFE_GAIN_ON_KILL));
+	lua_setfield(L, -2, "lifeGainOnKill");
+
+	lua_pushnumber(L, proficiency.getStat(WeaponProficiencyBonus_t::MANA_GAIN_ON_HIT));
+	lua_setfield(L, -2, "manaGainOnHit");
+
+	lua_pushnumber(L, proficiency.getStat(WeaponProficiencyBonus_t::MANA_GAIN_ON_KILL));
+	lua_setfield(L, -2, "manaGainOnKill");
+
+	return 1;
+}
+
 int luaPlayerApplyWeaponProficiencyPerk(lua_State* L)
 {
 	// player:applyWeaponProficiencyPerk(perkType, value[, spellId, augmentType, skillId, element, range,
@@ -4970,6 +5007,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getWheelSpellAdditionalTarget", luaPlayerGetWheelSpellAdditionalTarget);
 	registerMethod("Player", "getWheelSpellAdditionalDuration", luaPlayerGetWheelSpellAdditionalDuration);
 	registerMethod("Player", "resetWeaponProficiencyStats", luaPlayerResetWeaponProficiencyStats);
+	registerMethod("Player", "getWeaponProficiencyDisplayStats", luaPlayerGetWeaponProficiencyDisplayStats);
 	registerMethod("Player", "applyWeaponProficiencyPerk", luaPlayerApplyWeaponProficiencyPerk);
 	registerMethod("Player", "addMinorCharmEchoes", luaPlayerAddMinorCharmEchoes);
 

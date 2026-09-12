@@ -30,6 +30,9 @@ function ec.onUpdateInventory(player, item, slot, equip)
     if player.wheelSendSkillStats then
         player:wheelSendSkillStats()
     end
+    if player.cyclopediaSendCharacterOffence then
+        player:cyclopediaSendCharacterOffence()
+    end
 
     if slot == CONST_SLOT_LEFT or slot == CONST_SLOT_RIGHT then
         local playerGuid = player:getGuid()

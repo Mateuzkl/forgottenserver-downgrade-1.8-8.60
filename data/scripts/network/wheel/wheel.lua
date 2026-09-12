@@ -9,6 +9,7 @@ local OPCODE_WHEEL_GEM_ACTION = 0xE7
 local OPCODE_WHEEL_WINDOW = 0x5F
 local OPCODE_RESOURCE_BALANCE = 0xEE
 local OPCODE_WHEEL_SKILLS = 0x91
+local OPCODE_CYCLOPEDIA_CHARACTER = 147
 
 local WHEEL_MIN_LEVEL = 51
 local WHEEL_POINTS_PER_LEVEL = 1
@@ -371,7 +372,11 @@ local WHEEL_SLOT_PREREQUISITES = {
 }
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+	return player and (
+		(player.isUsingOtClient and player:isUsingOtClient())
+		or (player.isUsingAstraClient and player:isUsingAstraClient())
+		or (player.isUsingFonticakClient and player:isUsingFonticakClient())
+	)
 end
 
 local function wheelKV(player)
@@ -1245,11 +1250,17 @@ local SHOOT_TO_CIPBIA_ELEMENT = {
 	[CONST_ANI_SMALLHOLY] = 5,    [CONST_ANI_HOLY] = 5,
 }
 
-local function sendWheelSkillStats(player)
-	if not supportsCustomNetwork(player) or not player.sendExtendedOpcode then
-		return false
+local function getProficiencyDisplayStats(player)
+	if player.getWeaponProficiencyDisplayStats then
+		local stats = player:getWeaponProficiencyDisplayStats()
+		if type(stats) == "table" then
+			return stats
+		end
 	end
+	return {}
+end
 
+local function buildWheelSkillStatsPayload(player)
 	local lifeLeech = player:getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT) / 10000
 	local manaLeech = player:getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT) / 10000
 	local criticalChance = player:getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE) / 10000
@@ -1304,7 +1315,7 @@ local function sendWheelSkillStats(player)
 
 	damageAndHealing = attackValue
 
-	return player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, json.encode({
+	return {
 		lifeLeech = lifeLeech,
 		manaLeech = manaLeech,
 		criticalChance = criticalChance,
@@ -1318,11 +1329,49 @@ local function sendWheelSkillStats(player)
 		attackElement = attackElement,
 		convertedValue = convertedValue,
 		convertedElement = convertedElement,
-	}))
+	}
+end
+
+local function buildCyclopediaCharacterPayload(player)
+	local payload = buildWheelSkillStatsPayload(player)
+	local proficiencyStats = getProficiencyDisplayStats(player)
+
+	payload.criticalChanceBase = payload.criticalChance
+	payload.criticalDamageBase = payload.criticalDamage
+	payload.criticalChanceProficiency = tonumber(proficiencyStats.criticalChance) or 0
+	payload.criticalDamageProficiency = tonumber(proficiencyStats.criticalDamage) or 0
+	payload.criticalChance = payload.criticalChanceBase + payload.criticalChanceProficiency
+	payload.criticalDamage = payload.criticalDamageBase + payload.criticalDamageProficiency
+	payload.lifeGainOnHit = math.floor((tonumber(proficiencyStats.lifeGainOnHit) or 0) + 0.5)
+	payload.lifeGainOnKill = math.floor((tonumber(proficiencyStats.lifeGainOnKill) or 0) + 0.5)
+	payload.manaGainOnHit = math.floor((tonumber(proficiencyStats.manaGainOnHit) or 0) + 0.5)
+	payload.manaGainOnKill = math.floor((tonumber(proficiencyStats.manaGainOnKill) or 0) + 0.5)
+
+	return payload
+end
+
+local function sendWheelSkillStats(player)
+	if not supportsCustomNetwork(player) or not player.sendExtendedOpcode then
+		return false
+	end
+
+	return player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, json.encode(buildWheelSkillStatsPayload(player)))
+end
+
+local function sendCyclopediaCharacterOffence(player)
+	if not supportsCustomNetwork(player) or not player.sendExtendedOpcode then
+		return false
+	end
+
+	return player:sendExtendedOpcode(OPCODE_CYCLOPEDIA_CHARACTER, json.encode(buildCyclopediaCharacterPayload(player)))
 end
 
 function Player.wheelSendSkillStats(self)
 	return sendWheelSkillStats(self)
+end
+
+function Player.cyclopediaSendCharacterOffence(self)
+	return sendCyclopediaCharacterOffence(self)
 end
 
 local function applyWheelBonuses(player)

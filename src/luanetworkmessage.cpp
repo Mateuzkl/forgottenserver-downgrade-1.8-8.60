@@ -56,7 +56,6 @@ bool isAstraOnlyLuaOpcode(uint8_t opcode)
 {
 	switch (opcode) {
 		case 0x2C: // custom boss cooldown
-		case 0x3D: // weapon proficiency reshape offers
 		case 0x3E: // custom boss difficulty selection
 		case 0x37: // custom battle pass
 		case 0x53: // task board data
@@ -81,11 +80,14 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 	}
 
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
+	if (opcode == 0x3D) { // weapon proficiency reshape offers
+		return player.isAstraClient() || player.isFonticakClient();
+	}
 	if (isAstraOnlyLuaOpcode(opcode)) {
 		return player.isAstraClient();
 	}
 	if (isOtcOrAstraLuaOpcode(opcode)) {
-		return player.isOTC() || player.isAstraClient();
+		return player.isOTC() || player.isAstraClient() || player.isFonticakClient();
 	}
 	return !isOtcOnlyLuaOpcode(opcode) || player.isOTC();
 }

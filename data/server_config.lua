@@ -48,7 +48,7 @@ lootGroupingEnabled = true
 -- spawntime value written to each generated <monster> node, in seconds.
 -- Monsters created within this radius on the same floor are grouped into the same spawn block using x/y offsets.
 -- Direction values: 0 = north, 1 = east, 2 = south, 3 = west.
-raidSpawnFileEnabled = true
+raidSpawnFileEnabled = false
 raidSpawnFileDirectory = "data/raids"
 raidSpawnFileSpawntime = 60
 raidSpawnFileRadius = 1

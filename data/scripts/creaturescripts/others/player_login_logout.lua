@@ -54,6 +54,18 @@ function loginMessage.onLogin(player)
 
     player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Mount] Use Ctrl+M to mount or dismount your mount.")
 
+    if player.wheelSendSkillStats then
+        addEvent(function(playerId)
+            local onlinePlayer = Player(playerId)
+            if onlinePlayer then
+                onlinePlayer:wheelSendSkillStats()
+                if onlinePlayer.cyclopediaSendCharacterOffence then
+                    onlinePlayer:cyclopediaSendCharacterOffence()
+                end
+            end
+        end, 250, player:getId())
+    end
+
     return true
 end
 loginMessage:register()
