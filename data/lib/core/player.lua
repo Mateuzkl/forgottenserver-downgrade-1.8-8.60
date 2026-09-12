@@ -525,6 +525,8 @@ do
 		if staminaMinutes > 2400 and self:isPremium() then
 			self:setExperienceRate(ExperienceRateType.STAMINA, 150)
 		elseif staminaMinutes <= 840 then
+			self:setExperienceRate(ExperienceRateType.STAMINA, 50)
+		else
 			self:setExperienceRate(ExperienceRateType.STAMINA, 100)
 		end
 		return true

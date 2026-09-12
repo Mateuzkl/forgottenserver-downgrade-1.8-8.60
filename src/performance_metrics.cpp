@@ -261,6 +261,11 @@ uint64_t PerformanceMetrics::getMonsterIdleMetric(MonsterIdleMetric metric) cons
 	return monsterIdle[static_cast<size_t>(metric)].load(std::memory_order_relaxed);
 }
 
+uint64_t PerformanceMetrics::getPathSteps() const noexcept
+{
+	return path.pathLength.load(std::memory_order_relaxed);
+}
+
 void PerformanceMetrics::maybeReport()
 {
 	if (!isEnabled()) {

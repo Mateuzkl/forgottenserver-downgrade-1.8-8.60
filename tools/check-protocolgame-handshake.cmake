@@ -30,7 +30,7 @@ extract_block("void ProtocolGame::onRecvFirstMessage" "void ProtocolGame::onConn
 extract_block("void ProtocolGame::AddPlayerStats" "void ProtocolGame::AddPlayerSkills" stats_block)
 extract_block("void ProtocolGame::sendFeatures" "void ProtocolGame::spectatorTurn" features_block)
 
-require_occurrences("${login_block}" "sendFeatures\\(isAstraClient\\)" 1 "login feature negotiation")
+require_occurrences("${login_block}" "sendFeatures\\(isAstraClient \\|\\| isFonticakClient\\)" 1 "login feature negotiation")
 require_occurrences("${login_block}" "opcodeMessage\\.addByte\\(0x32\\)" 1 "login extended-opcode negotiation")
 require_occurrences("${connect_block}" "sendFeatures\\(" 0 "reconnect duplicate feature negotiation")
 require_occurrences("${connect_block}" "opcodeMessage\\.addByte\\(0x32\\)" 0 "reconnect duplicate extended-opcode negotiation")
@@ -41,7 +41,7 @@ require_occurrences("${first_message_block}" "opcodeMessage\\.addByte\\(0x32\\)"
 require_occurrences("${features_block}" "GameFeature::PlayerRegenerationTime" 1 "Astra regeneration feature negotiation")
 require_occurrences("${stats_block}" "getRegenerationTimeSeconds\\(condition \\? condition->getTicks\\(\\) : 0\\)" 1 "Astra regeneration stats field")
 
-string(FIND "${login_block}" "sendFeatures(isAstraClient);" features_position)
+string(FIND "${login_block}" "sendFeatures(isAstraClient || isFonticakClient);" features_position)
 string(FIND "${login_block}" "connect(foundPlayer->getID(), operatingSystem);" reconnect_position)
 if(features_position EQUAL -1 OR reconnect_position EQUAL -1 OR features_position GREATER reconnect_position)
     message(FATAL_ERROR "Astra features must be negotiated before the reconnect path")

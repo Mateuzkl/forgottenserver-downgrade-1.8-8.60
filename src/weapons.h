@@ -54,7 +54,6 @@ class Weapon : public Event
 {
 public:
 	explicit Weapon(LuaScriptInterface* interface) : Event(interface) {}
-	uint16_t getWeaponAttackEffect(const Item* item) const;
 
 	virtual void configureWeapon(const ItemType& it);
 	virtual bool interruptSwing() const { return false; }

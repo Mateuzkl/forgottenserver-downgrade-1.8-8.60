@@ -808,11 +808,12 @@ struct PathSearchMetrics
 bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirList,
                           const FrozenPathingConditionCall& pathCondition, const FindPathParams& fpp) const
 {
+	const size_t initialDirListSize = dirList.size();
 	PerformanceScope performanceScope(PerformanceMetric::MapGetPathMatching);
 	PathSearchMetrics searchMetrics;
 	const auto finish = [&](bool success) {
 		g_performanceMetrics.recordPathRequest(success, searchMetrics.nodesVisited, searchMetrics.tilesRead,
-		                                       success ? dirList.size() : 0);
+		                                       success ? dirList.size() - initialDirListSize : 0);
 		return success;
 	};
 	const Position start_position = creature.getPosition();
@@ -823,14 +824,16 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 	// here avoids exploring up to MAX_NODES tiles with queryAdd on every
 	// neighbor, which is the dominant pathfinder CPU cost when monsters chase
 	// distant/off-floor targets.
-	if (start_position.z != target_position.z) {
+	if (fpp.clearSight && start_position.z != target_position.z) {
 		return finish(false);
 	}
 	const int32_t startDx = start_position.getDistanceX(target_position);
 	const int32_t startDy = start_position.getDistanceY(target_position);
-	if (fpp.maxSearchDist != 0 && fpp.maxTargetDist >= 0) {
+	if (fpp.maxSearchDist > 0 && fpp.maxTargetDist >= 0) {
 		const int32_t startChebyshev = std::max(startDx, startDy);
-		if (startChebyshev > fpp.maxSearchDist + fpp.maxTargetDist) {
+		const int64_t maxReach = static_cast<int64_t>(fpp.maxSearchDist) +
+		                         static_cast<int64_t>(fpp.maxTargetDist);
+		if (static_cast<int64_t>(startChebyshev) > maxReach) {
 			return finish(false);
 		}
 	}
@@ -842,17 +845,11 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 	// to reset). Only valid when best_match == 0, i.e. the search would stop
 	// at the start node; otherwise the A* keeps looking for a better match.
 	if (pathCondition(start_position, start_position, fpp, best_match) && best_match == 0) {
-		dirList.clear();
 		return finish(true);
 	}
 	// The probe above may have touched best_match (non-zero = "acceptable but
 	// not ideal"); the search below must start from a clean state.
 	best_match = 0;
-
-	dirList.clear();
-	// Typical follow paths are short; pre-size to avoid push_back reallocs.
-	// clear() above keeps existing capacity, reserve only grows fresh vectors.
-	dirList.reserve(32);
 
 	Position end_position;
 	auto position = start_position;
@@ -884,7 +881,10 @@ bool Map::getPathMatching(const Creature& creature, std::vector<Direction>& dirL
 
 		return pathFloor ? pathFloor->getTile(tilePosition.x, tilePosition.y, tilePosition.z) : nullptr;
 	};
-	const Tile* creatureTile = creature.getTile();
+	// Pin the origin tile once for the complete search, then use its raw pointer
+	// in the hot loop without repeated weak_ptr locks or reference-count traffic.
+	const auto creatureTileRef = creature.getTileShared();
+	const Tile* const creatureTile = creatureTileRef.get();
 	const auto canWalkToForPath = [&](const Position& tilePosition) -> const Tile* {
 		const Tile* tile = getPathTile(tilePosition);
 		// Hoisted: Creature::getTile() locks a weak_ptr (atomic refcount) per
@@ -1307,13 +1307,11 @@ const AStarNode& AStarNodes::GetNode(uint16_t nodeIdx) const
 
 int_fast32_t AStarNodes::GetMapWalkCost(const AStarNode& node, const Position& neighborPos)
 {
-	// Orthogonal iff x or y matches (neighbors are always adjacent and never
-	// the node itself). Same result as the abs() comparison without abs().
-	if (node.x == neighborPos.x || node.y == neighborPos.y) {
-		return MAP_NORMALWALKCOST;
+	if (std::abs(node.x - neighborPos.x) == std::abs(node.y - neighborPos.y)) {
+		// diagonal movement extra cost
+		return MAP_DIAGONALWALKCOST;
 	}
-	// diagonal movement extra cost
-	return MAP_DIAGONALWALKCOST;
+	return MAP_NORMALWALKCOST;
 }
 
 int_fast32_t AStarNodes::GetTileWalkCost(const Creature& creature, const Tile* tile)
