@@ -621,7 +621,7 @@ void ProtocolGame::release()
 
 bool ProtocolGame::shouldSendQuickLootFlags() const
 {
-	return isAstraClient && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
+	return (isAstraClient || isFonticakClient) && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
 }
 
 bool ProtocolGame::shouldSendContainerPagination() const
