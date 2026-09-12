@@ -177,50 +177,6 @@ bool isPlayerOnActiveAuction(uint32_t playerId)
 	    AUCTION_STATUS_ACTIVE));
 }
 
-uint64_t getTransferableCoins(uint32_t accountId)
-{
-	if (accountId == 0) {
-		return 0;
-	}
-	auto result = Database::getInstance().storeQuery(
-	    fmt::format("SELECT `tibia_coins` FROM `accounts` WHERE `id` = {:d}", accountId));
-	return result ? result->getNumber<uint64_t>("tibia_coins") : 0;
-}
-
-bool debitTransferableCoins(uint32_t accountId, uint64_t amount)
-{
-	if (accountId == 0) {
-		return false;
-	}
-	if (amount == 0) {
-		return true;
-	}
-	Database& db = Database::getInstance();
-	return db.executeQuery(fmt::format(
-	           "UPDATE `accounts` SET `tibia_coins` = `tibia_coins` - {:d} WHERE `id` = {:d} AND `tibia_coins` >= {:d}",
-	           amount, accountId, amount)) &&
-	       db.getAffectedRows() == 1;
-}
-
-bool creditTransferableCoins(uint32_t accountId, uint64_t amount)
-{
-	if (accountId == 0) {
-		return false;
-	}
-	if (amount == 0) {
-		return true;
-	}
-	if (amount > MAX_TIBIA_COINS) {
-		return false;
-	}
-	Database& db = Database::getInstance();
-	return db.executeQuery(fmt::format(
-	           "UPDATE `accounts` SET `tibia_coins` = `tibia_coins` + {:d} WHERE `id` = {:d} "
-	           "AND `tibia_coins` <= {:d}",
-	           amount, accountId, MAX_TIBIA_COINS - amount)) &&
-	       db.getAffectedRows() == 1;
-}
-
 bool addHistory(uint32_t auctionId, const std::string& action, uint32_t accountId, uint32_t playerId, uint64_t amount,
 	            const std::string& message)
 {

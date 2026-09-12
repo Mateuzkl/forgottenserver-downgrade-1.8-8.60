@@ -1,5 +1,6 @@
 set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/otpch.cpp
+	${CMAKE_CURRENT_LIST_DIR}/account_coins.cpp
 	${CMAKE_CURRENT_LIST_DIR}/actions.cpp
 	${CMAKE_CURRENT_LIST_DIR}/admin.cpp
 	${CMAKE_CURRENT_LIST_DIR}/ban.cpp
@@ -119,6 +120,11 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/spectators.cpp
 	${CMAKE_CURRENT_LIST_DIR}/spells.cpp
 	${CMAKE_CURRENT_LIST_DIR}/storeinbox.cpp
+	${CMAKE_CURRENT_LIST_DIR}/store/store_catalog.cpp
+	${CMAKE_CURRENT_LIST_DIR}/store/store_daily_offers.cpp
+	${CMAKE_CURRENT_LIST_DIR}/store/store_name_validator.cpp
+	${CMAKE_CURRENT_LIST_DIR}/store/store_repository.cpp
+	${CMAKE_CURRENT_LIST_DIR}/store/store_service.cpp
 	${CMAKE_CURRENT_LIST_DIR}/spy.cpp
 	${CMAKE_CURRENT_LIST_DIR}/stats.cpp
 	${CMAKE_CURRENT_LIST_DIR}/startup_progress.cpp
@@ -143,6 +149,7 @@ set(tfs_SRC
 set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/otpch.h
 	${CMAKE_CURRENT_LIST_DIR}/account.h
+	${CMAKE_CURRENT_LIST_DIR}/account_coins.h
 	${CMAKE_CURRENT_LIST_DIR}/actions.h
 	${CMAKE_CURRENT_LIST_DIR}/admin.h
 	${CMAKE_CURRENT_LIST_DIR}/astraclient.h
@@ -238,6 +245,13 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/spectators.h
 	${CMAKE_CURRENT_LIST_DIR}/spells.h
 	${CMAKE_CURRENT_LIST_DIR}/storeinbox.h
+	${CMAKE_CURRENT_LIST_DIR}/store/store_catalog.h
+	${CMAKE_CURRENT_LIST_DIR}/store/store_daily_offers.h
+	${CMAKE_CURRENT_LIST_DIR}/store/store_name_validator.h
+	${CMAKE_CURRENT_LIST_DIR}/store/store_protocol.h
+	${CMAKE_CURRENT_LIST_DIR}/store/store_repository.h
+	${CMAKE_CURRENT_LIST_DIR}/store/store_service.h
+	${CMAKE_CURRENT_LIST_DIR}/store/store_types.h
 	${CMAKE_CURRENT_LIST_DIR}/spy.h
 	${CMAKE_CURRENT_LIST_DIR}/stats.h
 	${CMAKE_CURRENT_LIST_DIR}/startup_progress.h

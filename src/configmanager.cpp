@@ -518,6 +518,7 @@ bool ConfigManager::load()
 	booleans[Boolean::CLEAVE_SYSTEM_ENABLED] = getGlobalBoolean(L, "cleavesystem", true);
 	booleans[Boolean::CHARACTER_BAZAAR_ENABLED] = getGlobalBoolean(L, "characterBazaarEnabled", false);
 	booleans[Boolean::RELOAD_COMMAND_ENABLED] = getGlobalBoolean(L, "reloadCommandEnabled", true);
+	booleans[Boolean::GAME_STORE_ENABLED] = getGlobalBoolean(L, "gameStore", true);
 
 	integers[Integer::CLEAVE_DEFAULT_PERCENT] = std::clamp<int64_t>(getGlobalInteger(L, "cleaveDefaultPercent", 30), 0, 100);
 	integers[Integer::CLEAVE_FIST_PERCENT] = std::clamp<int64_t>(getGlobalInteger(L, "cleaveFistPercent", 20), 0, 100);
@@ -530,6 +531,11 @@ bool ConfigManager::load()
 	    std::max<int64_t>(1, getGlobalInteger(L, "characterBazaarMinDurationHours", 24));
 	integers[Integer::CHARACTER_BAZAAR_MAX_DURATION_DAYS] =
 	    std::max<int64_t>(1, getGlobalInteger(L, "characterBazaarMaxDurationDays", 7));
+	integers[Integer::STORE_XP_BOOST_PERCENT] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "storeXpBoostPercent", 50), 1, 255);
+	integers[Integer::STORE_XP_BOOST_DEFAULT_DURATION] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "storeXpBoostDefaultDuration", 3600), 60,
+	                        std::numeric_limits<uint16_t>::max());
 
 	// Admin Config
 	booleans[Boolean::ADMIN_LOCALHOST_ONLY] = getGlobalBoolean(L, "adminLocalhostOnly", true);

@@ -12,6 +12,7 @@
 namespace AstraClient {
 
 inline constexpr std::string_view LOGIN_MARKER = "A";
+inline constexpr std::string_view STORE_HIGHLIGHTS_MARKER = "AstraStoreHighlights";
 inline constexpr std::string_view SINGLE_CREATURE_MARKS_MARKER = "AstraSingleCreatureMarks";
 inline constexpr std::string_view REQUIRED_MESSAGE = "This server requires AstraClient.";
 

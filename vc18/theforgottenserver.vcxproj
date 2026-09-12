@@ -308,6 +308,12 @@
     <ClCompile Include="..\src\startup_progress.cpp" />
     <ClCompile Include="..\src\stress_test.cpp" />
     <ClCompile Include="..\src\storeinbox.cpp" />
+    <ClCompile Include="..\src\account_coins.cpp" />
+    <ClCompile Include="..\src\store\store_catalog.cpp" />
+    <ClCompile Include="..\src\store\store_daily_offers.cpp" />
+    <ClCompile Include="..\src\store\store_name_validator.cpp" />
+    <ClCompile Include="..\src\store\store_repository.cpp" />
+    <ClCompile Include="..\src\store\store_service.cpp" />
     <ClCompile Include="..\src\protocolstatus.cpp" />
     <ClCompile Include="..\src\talkaction.cpp" />
     <ClCompile Include="..\src\tasks.cpp" />
@@ -443,6 +449,14 @@
     <ClInclude Include="..\src\xtea.h" />
     <ClInclude Include="..\src\zoneweather.h" />
     <ClInclude Include="..\src\zones.h" />
+    <ClInclude Include="..\src\account_coins.h" />
+    <ClInclude Include="..\src\store\store_catalog.h" />
+    <ClInclude Include="..\src\store\store_daily_offers.h" />
+    <ClInclude Include="..\src\store\store_name_validator.h" />
+    <ClInclude Include="..\src\store\store_protocol.h" />
+    <ClInclude Include="..\src\store\store_repository.h" />
+    <ClInclude Include="..\src\store\store_service.h" />
+    <ClInclude Include="..\src\store\store_types.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="theforgottenserver.rc" />

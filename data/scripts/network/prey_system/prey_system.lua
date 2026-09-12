@@ -1334,8 +1334,20 @@ function PreySystem.addWildcards(player, amount)
 
 	local prey = getPlayerPrey(player)
 	prey.wildcards = setPlayerBonusRerolls(player, prey.wildcards + amount)
-	sendFullPrey(player, false)
-	sendPreyBalances(player)
+	-- Wildcards are authoritative after setPlayerBonusRerolls. Keep a failed
+	-- client refresh from surfacing as failed delivery and refunding the Store.
+	local notifyOk, notifyError = pcall(function()
+		sendFullPrey(player, false)
+		sendPreyBalances(player)
+	end)
+	if not notifyOk then
+		local message = "[PreySystem] Wildcards delivered, but client refresh failed: " .. tostring(notifyError)
+		if logger and logger.error then
+			logger.error(message)
+		else
+			print(message)
+		end
+	end
 	return true
 end
 

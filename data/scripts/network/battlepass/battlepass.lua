@@ -1397,9 +1397,21 @@ function BattlePassSystem.purchasePremium(player, skipCoinCharge)
 
 	state.premium = true
 	saveState(store, state)
-	player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Deluxe Battle Pass purchased.")
-	sendMissionState(player, state, season, daily)
-	BattlePassSystem.sendRewards(player)
+	-- The premium flag is authoritative once saved. Notification failures must
+	-- not escape to the Store bridge and cause a coin refund after delivery.
+	local notifyOk, notifyError = pcall(function()
+		player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Deluxe Battle Pass purchased.")
+		sendMissionState(player, state, season, daily)
+		BattlePassSystem.sendRewards(player)
+	end)
+	if not notifyOk then
+		local message = "[BattlePass] Premium delivered, but client refresh failed: " .. tostring(notifyError)
+		if logger and logger.error then
+			logger.error(message)
+		else
+			print(message)
+		end
+	end
 	return nil
 end
 

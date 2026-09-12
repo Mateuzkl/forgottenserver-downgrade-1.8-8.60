@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <store>
+	<!-- Optional highlights: state="none|new|sale|timed". SALE/TIMED offers may use
+	     saleValidUntilTimestamp="<Unix timestamp>"; expired highlights fall back to NONE.
+	     Set dailyEligible="false" on an offer to keep it out of automatic rotations. -->
+	<!-- Automatic Daily Offers reuse the catalog entries and persist their current rotation.
+	     Use rotationDays instead of rotationHours if day-based configuration is preferred. -->
+	<dailyOffers enabled="true" count="2" rotationHours="24" rotateOnStartup="false"
+	              minDiscountPercent="10" maxDiscountPercent="25" state="mixed"
+	              stateFile="data/store/daily_offers_state.xml"/>
 
     <category name="Premium Time" icon="store_premium" description="Premium Time enhances your account with premium areas, transportation, more spells, house rental, guild creation, offline training and larger depots. It is valid for all characters on this account and is activated immediately after purchase.">
         <offer id="1001" name="30 Days of Premium Time" icon="30_days" price="250" eid="0" itemid="0" type="premium" value="30" count="30" description="&lt;i&gt;Premium Time enhances your account with premium areas, transportation, more spells, house rental, guild creation, offline training and larger depots.&lt;/i&gt;&#10;&#10;{account}&#10;{activated}&#10;{info} valid for all characters on this account"/>

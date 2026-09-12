@@ -1,0 +1,139 @@
+// Copyright 2026 The Forgotten Server Authors. All rights reserved.
+// Use of this source code is governed by the GPL-2.0 License that can be found in the LICENSE file.
+
+#include "otpch.h"
+
+#include "store/store_repository.h"
+
+#include "database.h"
+#include "logger.h"
+
+#include <algorithm>
+#include <fmt/core.h>
+#include <limits>
+
+StoreRepository& StoreRepository::getInstance()
+{
+	static StoreRepository instance;
+	return instance;
+}
+
+std::vector<StoreHistoryEntry> StoreRepository::loadHistory(uint32_t accountId, size_t limit)
+{
+	std::vector<StoreHistoryEntry> history;
+	if (accountId == 0 || limit == 0) {
+		return history;
+	}
+
+	auto result = Database::getInstance().storeQuery(fmt::format(
+	    "SELECT `date`, `price`, `costSecond`, `title`, `count` FROM `shop_history` "
+	    "WHERE `account` = {:d} ORDER BY `id` DESC LIMIT {:d}",
+	    accountId, limit));
+	if (!result) {
+		return history;
+	}
+
+	do {
+		StoreHistoryEntry entry;
+		entry.date = result->getString("date");
+		entry.price = result->getNumber<int64_t>("price");
+		entry.costSecond = result->getNumber<int32_t>("costSecond");
+		entry.title = result->getString("title");
+		entry.count = static_cast<uint16_t>(std::clamp<int64_t>(
+		    result->getNumber<int64_t>("count"), 0, std::numeric_limits<uint16_t>::max()));
+		history.push_back(std::move(entry));
+	} while (result->next());
+
+	return history;
+}
+
+bool StoreRepository::addHistory(uint32_t accountId, uint32_t playerGuid,
+                                 std::string_view title, int64_t price,
+                                 uint16_t count, std::string_view target)
+{
+	if (accountId == 0) {
+		return false;
+	}
+
+	Database& db = Database::getInstance();
+	const std::string safeTitle = std::string(title).substr(0, 100);
+
+	std::string targetSql = "NULL";
+	if (!target.empty()) {
+		targetSql = db.escapeString(std::string(target));
+	}
+
+	return db.executeQuery(fmt::format(
+	    "INSERT INTO `shop_history` (`account`, `player`, `date`, `title`, `price`, `costSecond`, `count`, `target`) "
+	    "VALUES ({:d}, {:d}, NOW(), {:s}, {:d}, 0, {:d}, {:s})",
+	    accountId, playerGuid, db.escapeString(safeTitle), price, count, targetSql));
+}
+
+bool StoreRepository::renameCharacter(uint32_t playerId, std::string_view oldName,
+                                       std::string_view newName, std::string& reason)
+{
+	if (playerId == 0 || oldName.empty() || newName.empty()) {
+		reason = "Invalid rename parameters.";
+		return false;
+	}
+
+	Database& db = Database::getInstance();
+	const std::string escapedOld = db.escapeString(std::string(oldName));
+	const std::string escapedNew = db.escapeString(std::string(newName));
+
+	const bool success = DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
+		if (!db.executeQuery(fmt::format(
+		        "UPDATE `players` SET `name` = {:s} WHERE `id` = {:d}",
+		        escapedNew, playerId)) ||
+		    db.getAffectedRows() != 1) {
+			return false;
+		}
+
+		if (!db.executeQuery(fmt::format(
+		        "UPDATE `player_deaths` SET "
+		        "`killed_by` = CASE WHEN `killed_by` = {:s} THEN {:s} ELSE `killed_by` END, "
+		        "`mostdamage_by` = CASE WHEN `mostdamage_by` = {:s} THEN {:s} ELSE `mostdamage_by` END "
+		        "WHERE `killed_by` = {:s} OR `mostdamage_by` = {:s}",
+		        escapedOld, escapedNew, escapedOld, escapedNew, escapedOld, escapedOld))) {
+			return false;
+		}
+
+		if (!db.executeQuery(fmt::format(
+		        "UPDATE `player_deaths_backup` SET "
+		        "`killed_by` = CASE WHEN `killed_by` = {:s} THEN {:s} ELSE `killed_by` END, "
+		        "`mostdamage_by` = CASE WHEN `mostdamage_by` = {:s} THEN {:s} ELSE `mostdamage_by` END "
+		        "WHERE `killed_by` = {:s} OR `mostdamage_by` = {:s}",
+		        escapedOld, escapedNew, escapedOld, escapedNew, escapedOld, escapedOld))) {
+			return false;
+		}
+
+		return true;
+	});
+
+	if (!success) {
+		reason = "Character name already taken or database update failed.";
+		return false;
+	}
+
+	reason.clear();
+	return true;
+}
+
+void StoreRepository::recordNameChange(uint32_t playerId, std::string_view oldName, std::string_view newName)
+{
+	Database& db = Database::getInstance();
+
+	// Check if table exists by attempting a lightweight query.
+	auto tableCheck = db.storeQuery(
+	    "SELECT 1 FROM `information_schema`.`TABLES` WHERE `TABLE_SCHEMA` = DATABASE() "
+	    "AND `TABLE_NAME` = 'change_name_history' LIMIT 1");
+	if (!tableCheck) {
+		return;
+	}
+
+	db.executeQuery(fmt::format(
+	    "INSERT INTO `change_name_history` (`player_id`, `last_name`, `current_name`, `changed_name_in`) "
+	    "VALUES ({:d}, {:s}, {:s}, {:d})",
+	    playerId, db.escapeString(std::string(oldName)), db.escapeString(std::string(newName)),
+	    static_cast<uint32_t>(time(nullptr))));
+}

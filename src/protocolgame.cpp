@@ -8,6 +8,13 @@
 #include "fonticakclient.h"
 #include "ban.h"
 #include "character_bazaar.h"
+#include "account_coins.h"
+#include "store/store_catalog.h"
+#include "store/store_name_validator.h"
+#include "store/store_protocol.h"
+#include "store/store_repository.h"
+#include "store/store_service.h"
+#include "store/store_types.h"
 #include "configmanager.h"
 #include "creatureevent.h"
 #include "game.h"
@@ -20,6 +27,7 @@
 #include "player.h"
 #include "protocolgame.h"
 #include "protocollogin.h"
+#include "protocolspectator.h"
 #include "imbuement.h"
 #include "familiar.h"
 #include "logger.h"
@@ -98,7 +106,6 @@ constexpr uint8_t HELPER_OPCODE_CAST_ON_FOOT = 211;
 constexpr uint8_t HELPER_OPCODE_SMART_FOLLOW = 212;
 constexpr uint32_t STORAGE_ASTRA_HELPER_CAVEBOT = 99997;
 constexpr uint32_t STORAGE_ASTRA_HELPER_SMART_FOLLOW = 99998;
-constexpr auto STORE_OUTFIT_OFFERS_PATH = "data/store/gamestore.xml";
 constexpr uint8_t ITEM_VALUES_OPCODE = 0xC6;
 constexpr size_t ITEM_VALUE_WIRE_SIZE = sizeof(uint16_t) + sizeof(uint32_t);
 constexpr size_t ITEM_VALUES_PACKET_HEADER_SIZE = sizeof(uint8_t) + sizeof(uint16_t);
@@ -145,79 +152,6 @@ void logPlayerSession(const Player& player, uint32_t ip, bool login)
 
 using PlayerInventoryKey = std::pair<uint16_t, uint8_t>;
 using PlayerInventoryCounts = std::map<PlayerInventoryKey, uint32_t>;
-
-struct StoreOutfitOffer
-{
-	uint32_t offerId = 0;
-	uint8_t addons = 3;
-};
-
-using StoreOutfitOfferMap = std::unordered_map<uint16_t, StoreOutfitOffer>;
-
-StoreOutfitOfferMap loadStoreOutfitOffers()
-{
-	StoreOutfitOfferMap offers;
-
-	pugi::xml_document doc;
-	if (!doc.load_file(STORE_OUTFIT_OFFERS_PATH)) {
-		return offers;
-	}
-
-	auto addLookType = [&offers](uint16_t lookType, uint32_t offerId, uint8_t addons) {
-		if (lookType != 0) {
-			offers[lookType] = StoreOutfitOffer{offerId, addons};
-		}
-	};
-
-	for (auto categoryNode : doc.child("store").children("category")) {
-		for (auto offerNode : categoryNode.children("offer")) {
-			const std::string_view type = offerNode.attribute("type").as_string();
-			if (type != "outfit") {
-				continue;
-			}
-
-			const uint32_t offerId = offerNode.attribute("id").as_uint();
-			if (offerId == 0) {
-				continue;
-			}
-
-			uint32_t addonValue = offerNode.attribute("addon").as_uint(3);
-			if (addonValue > 3) {
-				addonValue = 3;
-			}
-
-			const auto addons = static_cast<uint8_t>(addonValue);
-			const auto maleLookType = static_cast<uint16_t>(offerNode.attribute("value").as_uint(offerNode.attribute("eid").as_uint()));
-			const auto femaleLookType = static_cast<uint16_t>(offerNode.attribute("femalevalue").as_uint());
-
-			addLookType(maleLookType, offerId, addons);
-			addLookType(femaleLookType, offerId, addons);
-		}
-	}
-
-	return offers;
-}
-
-const StoreOutfitOfferMap& getStoreOutfitOffers()
-{
-	static StoreOutfitOfferMap offers;
-	static std::filesystem::file_time_type lastWriteTime{};
-	static bool loaded = false;
-
-	std::error_code errorCode;
-	auto currentWriteTime = std::filesystem::last_write_time(STORE_OUTFIT_OFFERS_PATH, errorCode);
-	if (errorCode) {
-		currentWriteTime = {};
-	}
-
-	if (!loaded || currentWriteTime != lastWriteTime) {
-		offers = loadStoreOutfitOffers();
-		lastWriteTime = currentWriteTime;
-		loaded = true;
-	}
-
-	return offers;
-}
 
 uint32_t getPlayerInventoryItemAmount(const Item* item)
 {
@@ -604,6 +538,7 @@ void ProtocolGame::release()
 			}
 			spectatorNames.erase(asLowerCaseString(spectator_name));
 		} else {
+			StoreService::getInstance().clearRateLimit(player->getID());
 			auto clientRef = player->client;
 			if (clientRef) {
 				auto clientProtocol = clientRef->protocol();
@@ -1099,6 +1034,7 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 		}
 	}
 
+	StoreService::getInstance().clearRateLimit(player->getID());
 	logPlayerSession(*player, player->getIP(), false);
 	player->client->clear();
 	disconnect();
@@ -1196,6 +1132,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    AstraClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
+					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
 					supportsAstraSingleCreatureMarks = isAstraClient;
 				} else if (marker == FonticakClient::LOGIN_MARKER) {
@@ -1206,6 +1144,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    FonticakClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == FonticakClient::STORE_HIGHLIGHTS_MARKER) {
+					supportsGameStoreHighlights = isFonticakClient;
 				} else {
 					break;
 				}
@@ -1829,10 +1769,35 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xF8: /* custom store transfer */
+			if (isOTC) {
+				parseStoreTransfer(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
+			break;
+
 		case 0xFA: /* custom store history */
+			if (isOTC) {
+				parseStoreHistory(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
+			break;
+
 		case 0xFB: /* custom store open */
+			if (isOTC) {
+				parseStoreOpen(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
+			break;
+
 		case 0xFC: /* custom store buy */
-			handlePlayerNetworkMessage(recvbyte);
+			if (isOTC) {
+				parseStorePurchase(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 
 		case 0xF9:
@@ -1884,6 +1849,182 @@ void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 	std::string result;
 	const bool success = CharacterBazaar::createAuction(player.get(), startPrice, duration, description, result);
 	CharacterBazaar::sendCreateResult(player.get(), success, result);
+}
+
+void ProtocolGame::parseStoreOpen(NetworkMessage& msg)
+{
+	if (!player || !isOTC) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	if (getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	const auto now = std::chrono::steady_clock::now();
+	auto& rateLimit = StoreService::getInstance().getRateLimit(player->getID());
+	if (now - rateLimit.lastCatalog < StoreService::CatalogCooldown) {
+		return;
+	}
+	rateLimit.lastCatalog = now;
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
+	sendStoreCatalog();
+}
+
+void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
+{
+	if (!player || !isOTC) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		skipUnreadBytes(msg);
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
+	if (!requireUnreadBytes(msg, sizeof(uint32_t))) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	const uint32_t offerId = msg.get<uint32_t>();
+	const auto catalog = StoreManager::getInstance().catalogSnapshot();
+	if (!catalog) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
+
+	const auto* offer = catalog->findOffer(offerId);
+	if (!offer) {
+		sendStoreError("Offer not found.");
+		return;
+	}
+
+	StorePurchaseExtra extra;
+	if (offer->type == StoreOfferType::ChangeName) {
+		if (getUnreadBytes(msg) < sizeof(uint16_t)) {
+			sendStoreError("You need to choose a new character name.");
+			return;
+		}
+		const uint16_t nameLength = msg.get<uint16_t>();
+		if (nameLength == 0 || nameLength > CharacterNameValidator::MaxNameLength ||
+		    getUnreadBytes(msg) != nameLength) {
+			skipUnreadBytes(msg);
+			sendStoreError("You need to choose a new character name.");
+			return;
+		}
+		extra.name = msg.getString(nameLength);
+	} else if (offer->type == StoreOfferType::Hireling) {
+		if (getUnreadBytes(msg) < sizeof(uint16_t) + 1) {
+			sendStoreError("You need to choose a hireling name.");
+			return;
+		}
+		const uint16_t nameLength = msg.get<uint16_t>();
+		if (nameLength == 0 || nameLength > 20 ||
+		    getUnreadBytes(msg) != static_cast<std::size_t>(nameLength) + 1) {
+			skipUnreadBytes(msg);
+			sendStoreError("You need to choose a hireling name.");
+			return;
+		}
+		extra.name = msg.getString(nameLength);
+		extra.sex = msg.getByte();
+	} else if (getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		sendStoreError("Malformed purchase request.");
+		return;
+	}
+
+	if (msg.isOverrun() || getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		sendStoreError("Malformed purchase request.");
+		return;
+	}
+
+	const auto result = StoreService::getInstance().purchase(*player, offerId, extra);
+	if (!result.success) {
+		sendStoreError(result.message);
+		return;
+	}
+
+	const uint32_t currentCoins = static_cast<uint32_t>(std::min<uint64_t>(
+		AccountCoins::get(player->getAccount()), UINT32_MAX));
+	sendStorePurchaseSuccess(offerId, result.message, currentCoins);
+}
+
+void ProtocolGame::parseStoreHistory(NetworkMessage& msg)
+{
+	if (!player || !isOTC) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	if (getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	const auto now = std::chrono::steady_clock::now();
+	auto& rateLimit = StoreService::getInstance().getRateLimit(player->getID());
+	if (now - rateLimit.lastHistory < StoreService::HistoryCooldown) {
+		return;
+	}
+	rateLimit.lastHistory = now;
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
+	sendStoreHistory();
+}
+
+void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
+{
+	if (!player || !isOTC) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		skipUnreadBytes(msg);
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
+	if (getUnreadBytes(msg) < sizeof(uint16_t) + sizeof(uint32_t)) {
+		skipUnreadBytes(msg);
+		return;
+	}
+
+	const uint16_t targetNameLength = msg.get<uint16_t>();
+	if (targetNameLength == 0 || targetNameLength > 50 ||
+	    getUnreadBytes(msg) != targetNameLength + sizeof(uint32_t)) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	const std::string targetName = asTrimmedString(msg.getString(targetNameLength));
+
+	const uint32_t amount = msg.get<uint32_t>();
+	if (msg.isOverrun() || getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	const auto result = StoreService::getInstance().transferCoins(*player, targetName, amount);
+	if (!result.success) {
+		sendStoreError(result.message);
+		return;
+	}
+
+	const uint32_t currentCoins = static_cast<uint32_t>(std::min<uint64_t>(
+		AccountCoins::get(player->getAccount()), UINT32_MAX));
+	sendStorePurchaseSuccess(0, result.message, currentCoins);
+	sendStoreHistory();
+
+	const auto targetPlayer = g_game.getPlayerByName(targetName);
+	if (targetPlayer && targetPlayer->client) {
+		const auto targetProtocol = targetPlayer->client->protocol();
+		if (targetProtocol) {
+			targetProtocol->sendStoreCatalog();
+			targetProtocol->sendStoreHistory();
+		}
+	}
 }
 
 void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
@@ -4009,6 +4150,243 @@ void ProtocolGame::sendFYIBox(std::string_view message)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendStoreCatalog()
+{
+	if (!player || !isOTC) {
+		return;
+	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
+
+	const auto catalog = StoreManager::getInstance().catalogSnapshot();
+	if (!catalog) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
+
+	const uint32_t coins = static_cast<uint32_t>(std::min<uint64_t>(
+		AccountCoins::get(player->getAccount()), UINT32_MAX));
+
+	struct FilteredOffer {
+		const StoreOffer* offer;
+		uint16_t displayId;
+		uint32_t price;
+		StoreHighlightState state;
+		uint32_t validUntilTimestamp;
+	};
+	struct FilteredCategory {
+		const StoreCategory* category;
+		std::vector<FilteredOffer> offers;
+	};
+
+	const bool isAstra = isAstraClient;
+	const bool sendHighlights = supportsGameStoreHighlights;
+	const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+	    std::chrono::system_clock::now().time_since_epoch()).count();
+	const uint32_t nowTimestamp = static_cast<uint32_t>(std::clamp<int64_t>(
+	    nowSeconds, int64_t{0}, static_cast<int64_t>(std::numeric_limits<uint32_t>::max())));
+	const auto dailyOffers = StoreManager::getInstance().dailyOffersSnapshot(nowTimestamp);
+	const bool taskEnabled = ConfigManager::getBoolean(ConfigManager::TASK_HUNTING_SYSTEM_ENABLED);
+	const bool bountyEnabled = taskEnabled && ConfigManager::getBoolean(ConfigManager::BOUNTY_TASKS_ENABLED);
+	const bool weeklyEnabled = taskEnabled && ConfigManager::getBoolean(ConfigManager::WEEKLY_TASKS_ENABLED);
+	const bool battlePassEnabled = ConfigManager::getBoolean(ConfigManager::BATTLEPASS_SYSTEM_ENABLED) && isAstra;
+	const bool hirelingEnabled = ConfigManager::getBoolean(ConfigManager::HIRELING_SYSTEM_ENABLED) &&
+	                             ConfigManager::getBoolean(ConfigManager::ASTRA_HIRELING_PROTOCOL_ENABLED) && isAstra;
+
+	std::vector<FilteredCategory> visibleCategories;
+	std::unordered_map<std::string, StoreHighlightState> automaticCategoryStates;
+	const auto includeCategoryState = [&automaticCategoryStates](std::string_view categoryName,
+	                                                           StoreHighlightState state) {
+		if (state != StoreHighlightState::Sale && state != StoreHighlightState::Timed) {
+			return;
+		}
+		auto& current = automaticCategoryStates[std::string(categoryName)];
+		if (current == StoreHighlightState::None || state == StoreHighlightState::Sale) {
+			current = state;
+		}
+	};
+
+	for (const auto& cat : catalog->categories()) {
+		FilteredCategory fcat{&cat, {}};
+
+		for (const auto& offer : cat.offers) {
+			bool visible = true;
+			switch (offer.type) {
+				case StoreOfferType::BountyKillBoost:
+					visible = isAstra && bountyEnabled;
+					break;
+				case StoreOfferType::WeeklyKillBoost:
+				case StoreOfferType::WeeklyReducedItems:
+				case StoreOfferType::WeeklyTaskExpansion:
+					visible = isAstra && weeklyEnabled;
+					break;
+				case StoreOfferType::BattlePass:
+					visible = battlePassEnabled;
+					break;
+				case StoreOfferType::Hireling:
+				case StoreOfferType::HirelingSkill:
+				case StoreOfferType::HirelingOutfit:
+					visible = hirelingEnabled;
+					break;
+				default:
+					break;
+			}
+
+			if (visible) {
+				uint16_t displayId = offer.displayId;
+				if (offer.type == StoreOfferType::Outfit && player->getSex() == PLAYERSEX_FEMALE && offer.femaleValue > 0) {
+					displayId = static_cast<uint16_t>(offer.femaleValue);
+				}
+				const StoreDailyOffer* dailyOffer = dailyOffers.find(offer.id);
+				fcat.offers.push_back({
+				    &offer,
+				    displayId,
+				    dailyOffer ? dailyOffer->price : offer.price,
+				    dailyOffer ? dailyOffer->state : offer.state,
+				    dailyOffer ? dailyOffer->validUntilTimestamp : offer.saleValidUntilTimestamp,
+				});
+				if (dailyOffer) {
+					includeCategoryState(cat.name, dailyOffer->state);
+				}
+			}
+		}
+
+		const bool isRestrictedCategory = !cat.offers.empty() && std::all_of(
+		    cat.offers.begin(), cat.offers.end(), [](const StoreOffer& offer) {
+			    return isHirelingOfferType(offer.type) ||
+			           isTaskBoardOfferType(offer.type) ||
+			           offer.type == StoreOfferType::BattlePass;
+		    });
+
+		if (!fcat.offers.empty() || !isRestrictedCategory) {
+			visibleCategories.push_back(std::move(fcat));
+		}
+	}
+
+	// Bubble automatic highlights to parent category buttons without changing
+	// the catalog itself. This keeps the category tree useful for Daily Offers.
+	for (std::size_t pass = 0; pass < visibleCategories.size(); ++pass) {
+		bool changed = false;
+		for (const auto& fcat : visibleCategories) {
+			const auto stateIt = automaticCategoryStates.find(fcat.category->name);
+			if (stateIt == automaticCategoryStates.end() || fcat.category->parent.empty()) {
+				continue;
+			}
+			const auto previous = automaticCategoryStates[fcat.category->parent];
+			includeCategoryState(fcat.category->parent, stateIt->second);
+			changed = changed || previous != automaticCategoryStates[fcat.category->parent];
+		}
+		if (!changed) {
+			break;
+		}
+	}
+
+	NetworkMessage msg;
+	msg.addByte(StoreProtocol::ServerOpcode);
+	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog));
+	msg.add<uint32_t>(coins);
+	msg.add<uint16_t>(static_cast<uint16_t>(visibleCategories.size()));
+
+	for (const auto& fcat : visibleCategories) {
+		msg.addString(fcat.category->name);
+		msg.addString(fcat.category->icon);
+		msg.addString(fcat.category->parent);
+		msg.addString(fcat.category->description);
+		StoreHighlightState categoryState = fcat.category->state;
+		if (const auto stateIt = automaticCategoryStates.find(fcat.category->name);
+		    stateIt != automaticCategoryStates.end()) {
+			categoryState = stateIt->second;
+		}
+		StoreProtocol::addCategoryHighlight(msg, sendHighlights, categoryState);
+		msg.add<uint16_t>(static_cast<uint16_t>(fcat.offers.size()));
+
+		for (const auto& fo : fcat.offers) {
+			msg.add<uint32_t>(fo.offer->id);
+			msg.addString(fo.offer->name);
+			msg.addString(fo.offer->icon);
+			msg.add<uint32_t>(fo.price);
+			msg.add<uint16_t>(fo.displayId);
+			msg.add<uint16_t>(fo.offer->count);
+			msg.addString(fo.offer->description);
+			msg.addString(storeOfferTypeToString(fo.offer->type));
+			StoreProtocol::addOfferHighlight(msg, sendHighlights, fo.state,
+			                                 fo.validUntilTimestamp, nowTimestamp);
+		}
+	}
+
+	const auto banners = catalog->banners();
+	msg.addByte(static_cast<uint8_t>(banners.size()));
+	for (const auto& banner : banners) {
+		msg.addString(banner.image);
+		msg.addByte(banner.action);
+		msg.add<uint32_t>(banner.target);
+	}
+	msg.addByte(catalog->bannerDelay());
+
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendStoreError(std::string_view message)
+{
+	if (!isOTC) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(StoreProtocol::ServerOpcode);
+	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Error));
+	msg.addString(message);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendStorePurchaseSuccess(uint32_t offerId, std::string_view message, uint32_t newBalance)
+{
+	if (!isOTC) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(StoreProtocol::ServerOpcode);
+	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Success));
+	msg.add<uint32_t>(offerId);
+	msg.addString(message);
+	msg.add<uint32_t>(newBalance);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendStoreHistory()
+{
+	if (!player || !isOTC) {
+		return;
+	}
+	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		sendStoreError("Store is currently unavailable.");
+		return;
+	}
+
+	const auto history = StoreRepository::getInstance().loadHistory(player->getAccount(), 100);
+
+	NetworkMessage msg;
+	msg.addByte(StoreProtocol::ServerOpcode);
+	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::History));
+	msg.add<uint16_t>(static_cast<uint16_t>(history.size()));
+
+	for (const auto& entry : history) {
+		msg.addString(entry.date);
+		const uint64_t magnitude = (entry.price < 0) ? (0ULL - static_cast<uint64_t>(entry.price)) : static_cast<uint64_t>(entry.price);
+		const uint32_t wirePrice = static_cast<uint32_t>(std::min<uint64_t>(magnitude, std::numeric_limits<uint32_t>::max()));
+		msg.add<uint32_t>(wirePrice);
+		msg.addByte(entry.price >= 0 ? 1 : 0);
+		msg.addByte(entry.costSecond == 1 ? 1 : 0);
+		msg.addString(entry.title);
+		msg.add<uint16_t>(static_cast<uint16_t>(std::max<int32_t>(entry.count, 0)));
+	}
+
+	writeToOutputBuffer(msg);
+}
+
 // tile
 void ProtocolGame::sendMapDescription(const Position& pos)
 {
@@ -4670,7 +5048,7 @@ void ProtocolGame::sendOutfitWindow()
 		protocolOutfits.emplace_back("Gamemaster", 75, 0);
 	}
 
-	const auto& storeOutfitOffers = getStoreOutfitOffers();
+	const auto storeCatalog = StoreManager::getInstance().catalogSnapshot();
 	size_t maxProtocolOutfits = static_cast<size_t>(getInteger(ConfigManager::MAX_PROTOCOL_OUTFITS));
 	if (isOTC) {
 		maxProtocolOutfits = std::min<size_t>(maxProtocolOutfits, std::numeric_limits<uint8_t>::max());
@@ -4689,14 +5067,14 @@ void ProtocolGame::sendOutfitWindow()
 		if (player->getOutfitAddons(*outfit, addons)) {
 			// available outfit
 		} else if (isAstra860) {
-			const auto offerIt = storeOutfitOffers.find(outfit->lookType);
-			if (offerIt == storeOutfitOffers.end()) {
+			const auto* offerInfo = storeCatalog ? storeCatalog->findOutfitByLookType(outfit->lookType) : nullptr;
+			if (!offerInfo) {
 				continue;
 			}
 
 			mode = 1;
-			addons = offerIt->second.addons;
-			storeOfferId = offerIt->second.offerId;
+			addons = offerInfo->addons;
+			storeOfferId = offerInfo->offerId;
 		} else {
 			continue;
 		}
@@ -5824,6 +6202,9 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 	if (isFonticakClient) {
 		features[GameFeature::PlayerFamiliars] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
+	}
+	if (supportsGameStoreHighlights) {
+		features[GameFeature::IngameStoreHighlights] = true;
 	}
 	if (supportsNativeZoneWeather()) {
 		features[GameFeature::ZoneWeather] = true;

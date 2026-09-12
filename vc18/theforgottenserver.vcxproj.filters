@@ -216,6 +216,12 @@
     <ClCompile Include="..\src\luaxml.cpp">
       <Filter>Lua Modules</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\account_coins.cpp" />
+    <ClCompile Include="..\src\store\store_catalog.cpp" />
+    <ClCompile Include="..\src\store\store_daily_offers.cpp" />
+    <ClCompile Include="..\src\store\store_name_validator.cpp" />
+    <ClCompile Include="..\src\store\store_repository.cpp" />
+    <ClCompile Include="..\src\store\store_service.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\account.h" />
@@ -334,6 +340,14 @@
     <ClInclude Include="..\src\zones.h" />
     <ClInclude Include="..\src\storeinbox.h" />
     <ClInclude Include="..\src\weapon_proficiency.h" />
+    <ClInclude Include="..\src\account_coins.h" />
+    <ClInclude Include="..\src\store\store_catalog.h" />
+    <ClInclude Include="..\src\store\store_daily_offers.h" />
+    <ClInclude Include="..\src\store\store_name_validator.h" />
+    <ClInclude Include="..\src\store\store_protocol.h" />
+    <ClInclude Include="..\src\store\store_repository.h" />
+    <ClInclude Include="..\src\store\store_service.h" />
+    <ClInclude Include="..\src\store\store_types.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="theforgottenserver.rc" />

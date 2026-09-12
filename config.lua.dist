@@ -182,6 +182,14 @@ quickLootMaxCorpses = 30
 -- and may even cause a crash if you have a lot of files or many modifications.
 reloadCommandEnabled = true
 
+-- Game Store (uses accounts.tibia_coins as its coin balance)
+-- Native catalog, purchases and coin transfers for compatible OTClient clients.
+gameStore = true
+-- Experience bonus percentage granted by Store XP boosts (1-255, default: 50%).
+storeXpBoostPercent = 50
+-- Default duration in seconds when an offer omits it (60-65535, default: 3600s = 1h).
+storeXpBoostDefaultDuration = 3600
+
 -- Character Bazaar (accounts.tibia_coins is the transferable coin balance)
 characterBazaarEnabled = false
 characterBazaarMinLevel = 50
@@ -605,3 +613,4 @@ stressTestLeak = true
 stressTestLeakCount = 10000
 stressTestShutdownSend = true
 stressTestShutdownSendCount = 10000
+

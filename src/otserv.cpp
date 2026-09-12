@@ -12,6 +12,7 @@
 #include "game.h"
 #include "imbuement.h"
 #include "outfit.h"
+#include "store/store_catalog.h"
 #include "logger.h"
 #include "mapcache.h"
 #include "outputmessage.h"
@@ -615,6 +616,15 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 		return false;
 	}
 	startupProgress().update(1, 2, "outfits");
+
+	if (getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
+		LOG_INFO(">> Loading game store catalog");
+		if (!StoreManager::getInstance().loadCatalog()) {
+			LOG_WARN(">> Unable to load game store catalog from data/store/gamestore.xml");
+		}
+	} else {
+		LOG_INFO(">> Game store is disabled in config");
+	}
 
 	LOG_INFO(">> Checking world type... ");
 	auto worldType = asLowerCaseString(std::string{getString(ConfigManager::WORLD_TYPE)});
