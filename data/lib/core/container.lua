@@ -72,7 +72,10 @@ local function getLootItemValue(item)
 	end
 
 	local value = 0
-	if itemType.getDefaultPrice then
+	if ItemPriceRegistry and ItemPriceRegistry.getDefaultValue then
+		value = tonumber(ItemPriceRegistry.getDefaultValue(item:getId())) or 0
+	end
+	if value <= 0 and itemType.getDefaultPrice then
 		value = tonumber(itemType:getDefaultPrice()) or 0
 	end
 	if value <= 0 and itemType.getWorth then
