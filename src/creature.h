@@ -394,6 +394,7 @@ public:
 	Tile* getTile() override final { return tile.lock().get(); }
 	const Tile* getTile() const override final { return tile.lock().get(); }
 	std::shared_ptr<Tile> getTileShared() { return tile.lock(); }
+	std::shared_ptr<const Tile> getTileShared() const { return tile.lock(); }
 
 	const Position& getLastPosition() const { return lastPosition; }
 	void setLastPosition(Position newLastPos) { lastPosition = newLastPos; }
