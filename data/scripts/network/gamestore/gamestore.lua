@@ -20,7 +20,7 @@ local function logError(message)
 end
 
 --- Fulfill store purchase delivery for offers backed by Lua subsystems.
---- Called by C++ StoreService via lua_pcall.
+--- Called synchronously by C++ StoreService through LuaScriptInterface.
 --- @param player Player The player receiving the purchase.
 --- @param offerType string Canonical offer type string.
 --- @param value integer The numeric offer value from catalog XML.
@@ -72,7 +72,10 @@ function StoreDeliverLuaOffer(player, offerType, value, displayId, extraName, ex
 			return "Failed to activate reduced weekly item amounts."
 		end
 		if _TASK_BOARD_WEEKLY_MODULE and _TASK_BOARD_WEEKLY_MODULE.applyReducedItems then
-			_TASK_BOARD_WEEKLY_MODULE.applyReducedItems(player)
+			local ok, err = pcall(_TASK_BOARD_WEEKLY_MODULE.applyReducedItems, player)
+			if not ok then
+				logError("[GameStore] Failed to refresh reduced weekly items after delivery: " .. tostring(err))
+			end
 		end
 		return nil
 	end
@@ -88,7 +91,10 @@ function StoreDeliverLuaOffer(player, offerType, value, displayId, extraName, ex
 		end
 		player:setWeeklyExpansion(true)
 		if _TASK_BOARD_WEEKLY_MODULE and _TASK_BOARD_WEEKLY_MODULE.applyExpansion then
-			_TASK_BOARD_WEEKLY_MODULE.applyExpansion(player)
+			local ok, err = pcall(_TASK_BOARD_WEEKLY_MODULE.applyExpansion, player)
+			if not ok then
+				logError("[GameStore] Failed to refresh weekly expansion after delivery: " .. tostring(err))
+			end
 		end
 		return nil
 	end

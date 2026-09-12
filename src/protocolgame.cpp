@@ -10,6 +10,7 @@
 #include "character_bazaar.h"
 #include "account_coins.h"
 #include "store/store_catalog.h"
+#include "store/store_name_validator.h"
 #include "store/store_protocol.h"
 #include "store/store_repository.h"
 #include "store/store_service.h"
@@ -1752,19 +1753,35 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xF8: /* custom store transfer */
-			parseStoreTransfer(msg);
+			if (isOTC) {
+				parseStoreTransfer(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 
 		case 0xFA: /* custom store history */
-			parseStoreHistory(msg);
+			if (isOTC) {
+				parseStoreHistory(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 
 		case 0xFB: /* custom store open */
-			parseStoreOpen(msg);
+			if (isOTC) {
+				parseStoreOpen(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 
 		case 0xFC: /* custom store buy */
-			parseStorePurchase(msg);
+			if (isOTC) {
+				parseStorePurchase(msg);
+			} else {
+				skipUnreadBytes(msg);
+			}
 			break;
 
 		case 0xF9:
@@ -1818,11 +1835,22 @@ void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 	CharacterBazaar::sendCreateResult(player.get(), success, result);
 }
 
-void ProtocolGame::parseStoreOpen(NetworkMessage&)
+void ProtocolGame::parseStoreOpen(NetworkMessage& msg)
 {
-	if (!player) {
+	if (!player || !isOTC) {
+		skipUnreadBytes(msg);
 		return;
 	}
+	if (getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	const auto now = std::chrono::steady_clock::now();
+	auto& rateLimit = StoreService::getInstance().getRateLimit(player->getID());
+	if (now - rateLimit.lastCatalog < StoreService::CatalogCooldown) {
+		return;
+	}
+	rateLimit.lastCatalog = now;
 	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
 		sendStoreError("Store is currently unavailable.");
 		return;
@@ -1832,7 +1860,8 @@ void ProtocolGame::parseStoreOpen(NetworkMessage&)
 
 void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 {
-	if (!player) {
+	if (!player || !isOTC) {
+		skipUnreadBytes(msg);
 		return;
 	}
 	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
@@ -1864,22 +1893,38 @@ void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 			sendStoreError("You need to choose a new character name.");
 			return;
 		}
-		extra.name = msg.getString();
-		if (extra.name.empty() || extra.name.size() > 20) {
+		const uint16_t nameLength = msg.get<uint16_t>();
+		if (nameLength == 0 || nameLength > CharacterNameValidator::MaxNameLength ||
+		    getUnreadBytes(msg) != nameLength) {
+			skipUnreadBytes(msg);
 			sendStoreError("You need to choose a new character name.");
 			return;
 		}
+		extra.name = msg.getString(nameLength);
 	} else if (offer->type == StoreOfferType::Hireling) {
 		if (getUnreadBytes(msg) < sizeof(uint16_t) + 1) {
 			sendStoreError("You need to choose a hireling name.");
 			return;
 		}
-		extra.name = msg.getString();
-		if (extra.name.empty() || extra.name.size() > 20) {
+		const uint16_t nameLength = msg.get<uint16_t>();
+		if (nameLength == 0 || nameLength > 20 ||
+		    getUnreadBytes(msg) != static_cast<std::size_t>(nameLength) + 1) {
+			skipUnreadBytes(msg);
 			sendStoreError("You need to choose a hireling name.");
 			return;
 		}
+		extra.name = msg.getString(nameLength);
 		extra.sex = msg.getByte();
+	} else if (getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		sendStoreError("Malformed purchase request.");
+		return;
+	}
+
+	if (msg.isOverrun() || getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		sendStoreError("Malformed purchase request.");
+		return;
 	}
 
 	const auto result = StoreService::getInstance().purchase(*player, offerId, extra);
@@ -1893,11 +1938,22 @@ void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 	sendStorePurchaseSuccess(offerId, result.message, currentCoins);
 }
 
-void ProtocolGame::parseStoreHistory(NetworkMessage&)
+void ProtocolGame::parseStoreHistory(NetworkMessage& msg)
 {
-	if (!player) {
+	if (!player || !isOTC) {
+		skipUnreadBytes(msg);
 		return;
 	}
+	if (getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		return;
+	}
+	const auto now = std::chrono::steady_clock::now();
+	auto& rateLimit = StoreService::getInstance().getRateLimit(player->getID());
+	if (now - rateLimit.lastHistory < StoreService::HistoryCooldown) {
+		return;
+	}
+	rateLimit.lastHistory = now;
 	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
 		sendStoreError("Store is currently unavailable.");
 		return;
@@ -1907,7 +1963,8 @@ void ProtocolGame::parseStoreHistory(NetworkMessage&)
 
 void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 {
-	if (!player) {
+	if (!player || !isOTC) {
+		skipUnreadBytes(msg);
 		return;
 	}
 	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
@@ -1920,13 +1977,19 @@ void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 		return;
 	}
 
-	const std::string targetName = asTrimmedString(msg.getString());
-	if (msg.isOverrun() || getUnreadBytes(msg) < sizeof(uint32_t)) {
+	const uint16_t targetNameLength = msg.get<uint16_t>();
+	if (targetNameLength == 0 || targetNameLength > 50 ||
+	    getUnreadBytes(msg) != targetNameLength + sizeof(uint32_t)) {
 		skipUnreadBytes(msg);
 		return;
 	}
+	const std::string targetName = asTrimmedString(msg.getString(targetNameLength));
 
 	const uint32_t amount = msg.get<uint32_t>();
+	if (msg.isOverrun() || getUnreadBytes(msg) != 0) {
+		skipUnreadBytes(msg);
+		return;
+	}
 	const auto result = StoreService::getInstance().transferCoins(*player, targetName, amount);
 	if (!result.success) {
 		sendStoreError(result.message);
@@ -4010,7 +4073,7 @@ void ProtocolGame::sendFYIBox(std::string_view message)
 
 void ProtocolGame::sendStoreCatalog()
 {
-	if (!player) {
+	if (!player || !isOTC) {
 		return;
 	}
 	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {
@@ -4132,6 +4195,10 @@ void ProtocolGame::sendStoreCatalog()
 
 void ProtocolGame::sendStoreError(std::string_view message)
 {
+	if (!isOTC) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(StoreProtocol::ServerOpcode);
 	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Error));
@@ -4141,6 +4208,10 @@ void ProtocolGame::sendStoreError(std::string_view message)
 
 void ProtocolGame::sendStorePurchaseSuccess(uint32_t offerId, std::string_view message, uint32_t newBalance)
 {
+	if (!isOTC) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(StoreProtocol::ServerOpcode);
 	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Success));
@@ -4152,7 +4223,7 @@ void ProtocolGame::sendStorePurchaseSuccess(uint32_t offerId, std::string_view m
 
 void ProtocolGame::sendStoreHistory()
 {
-	if (!player) {
+	if (!player || !isOTC) {
 		return;
 	}
 	if (!getBoolean(ConfigManager::GAME_STORE_ENABLED)) {

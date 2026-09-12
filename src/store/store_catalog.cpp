@@ -5,6 +5,7 @@
 
 #include "store/store_catalog.h"
 
+#include "item.h"
 #include "logger.h"
 #include "pugicast.h"
 
@@ -237,8 +238,10 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 			}
 
 			if (offer.price == 0) {
-				LOG_WARN(fmt::format(
+				LOG_ERROR(fmt::format(
 				    "[StoreCatalog::loadFromXML] Offer id={} '{}' has price=0.", offer.id, offer.name));
+				hasFatalError = true;
+				continue;
 			}
 
 			// Parse type string → enum.
@@ -285,7 +288,10 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 					continue;
 				}
 				if (offer.count == 0) {
-					offer.count = 1;
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has count=0.", offer.id));
+					hasFatalError = true;
+					continue;
 				}
 			} else {
 				offer.count = 1;
@@ -346,14 +352,41 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 					hasFatalError = true;
 					continue;
 				}
+			} else if (offer.type == StoreOfferType::ExpBoost) {
+				if (offer.value < 0 || offer.value > std::numeric_limits<uint16_t>::max()) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has out-of-range XP boost duration {}.",
+					    offer.id, offer.value));
+					hasFatalError = true;
+					continue;
+				}
+			} else if (offer.type == StoreOfferType::PreyWildcard) {
+				if (offer.value <= 0 || offer.value > std::numeric_limits<uint16_t>::max()) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has invalid Prey Wildcard amount {}.",
+					    offer.id, offer.value));
+					hasFatalError = true;
+					continue;
+				}
+			} else if (offer.type == StoreOfferType::Blessing) {
+				if (offer.value != -1 && (offer.value < 1 || offer.value > 5)) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has invalid blessing value {}.",
+					    offer.id, offer.value));
+					hasFatalError = true;
+					continue;
+				}
 			}
 
-			uint32_t addonValue = offerNode.attribute("addon").as_uint(0);
-			if (addonValue > 3) {
-				LOG_WARN(fmt::format(
-				    "[StoreCatalog::loadFromXML] Offer id={} has addon={} > 3, clamping to 3.",
-				    offer.id, addonValue));
-				addonValue = 3;
+			uint16_t addonValue = 0;
+			const auto addonAttr = offerNode.attribute("addon");
+			if (!addonAttr.empty() &&
+			    (!parseCompleteU16(addonAttr.as_string(), addonValue) || addonValue > 3)) {
+				LOG_ERROR(fmt::format(
+				    "[StoreCatalog::loadFromXML] Offer id={} has malformed or out-of-range addon '{}'.",
+				    offer.id, addonAttr.as_string()));
+				hasFatalError = true;
+				continue;
 			}
 			offer.addon = static_cast<uint8_t>(addonValue);
 
@@ -364,6 +397,41 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 					LOG_ERROR(fmt::format(
 					    "[StoreCatalog::loadFromXML] Offer id={} has malformed or out-of-range items attribute '{}'.",
 					    offer.id, itemsAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
+				if (offer.items.size() > std::numeric_limits<uint16_t>::max()) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} contains too many house items.", offer.id));
+					hasFatalError = true;
+					continue;
+				}
+			}
+
+			if (offer.type == StoreOfferType::Item) {
+				if (offer.itemId == 0 || Item::items[offer.itemId].id == 0) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} references invalid itemid {}.",
+					    offer.id, offer.itemId));
+					hasFatalError = true;
+					continue;
+				}
+			} else if (offer.type == StoreOfferType::House) {
+				if (offer.items.empty() && offer.itemId == 0) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] House offer id={} has no delivery items.", offer.id));
+					hasFatalError = true;
+					continue;
+				}
+
+				const bool invalidItem = !offer.items.empty()
+				    ? std::any_of(offer.items.begin(), offer.items.end(), [](uint16_t itemId) {
+					      return Item::items[itemId].id == 0;
+				      })
+				    : Item::items[offer.itemId].id == 0;
+				if (invalidItem) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] House offer id={} references an invalid item.", offer.id));
 					hasFatalError = true;
 					continue;
 				}

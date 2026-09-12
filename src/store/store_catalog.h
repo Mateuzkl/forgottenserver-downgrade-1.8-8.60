@@ -16,8 +16,8 @@
 /// Immutable, server-global store catalog parsed from data/store/gamestore.xml.
 /// This is the single source of truth for all offer data.
 ///
-/// The catalog is loaded once at startup (or on explicit reload).
-/// All lookups are read-only and safe for concurrent access.
+/// The catalog is loaded once during startup before game requests are accepted.
+/// All later lookups are read-only.
 class StoreCatalog final
 {
 public:

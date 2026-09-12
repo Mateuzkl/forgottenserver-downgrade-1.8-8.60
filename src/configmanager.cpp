@@ -530,9 +530,10 @@ bool ConfigManager::load()
 	integers[Integer::CHARACTER_BAZAAR_MAX_DURATION_DAYS] =
 	    std::max<int64_t>(1, getGlobalInteger(L, "characterBazaarMaxDurationDays", 7));
 	integers[Integer::STORE_XP_BOOST_PERCENT] =
-	    std::clamp<int64_t>(getGlobalInteger(L, "storeXpBoostPercent", 50), 1, 1000);
+	    std::clamp<int64_t>(getGlobalInteger(L, "storeXpBoostPercent", 50), 1, 255);
 	integers[Integer::STORE_XP_BOOST_DEFAULT_DURATION] =
-	    std::clamp<int64_t>(getGlobalInteger(L, "storeXpBoostDefaultDuration", 3600), 60, 86400 * 30);
+	    std::clamp<int64_t>(getGlobalInteger(L, "storeXpBoostDefaultDuration", 3600), 60,
+	                        std::numeric_limits<uint16_t>::max());
 
 	// Admin Config
 	booleans[Boolean::ADMIN_LOCALHOST_ONLY] = getGlobalBoolean(L, "adminLocalhostOnly", true);

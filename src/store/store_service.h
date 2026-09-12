@@ -15,6 +15,7 @@
 
 class Player;
 class StoreCatalog;
+struct StoreServiceTestAccess;
 
 /// Extra data sent by the client alongside a purchase request.
 struct StorePurchaseExtra
@@ -35,6 +36,8 @@ struct StoreRateLimit
 {
 	std::chrono::steady_clock::time_point lastPurchase{};
 	std::chrono::steady_clock::time_point lastTransfer{};
+	std::chrono::steady_clock::time_point lastCatalog{};
+	std::chrono::steady_clock::time_point lastHistory{};
 };
 
 /// Core store business logic — purchase state machine, delivery dispatch,
@@ -68,9 +71,15 @@ public:
 	/// Purchase cooldown duration.
 	static constexpr auto PurchaseCooldown = std::chrono::seconds{2};
 	static constexpr auto TransferCooldown = std::chrono::seconds{2};
+	static constexpr auto CatalogCooldown = std::chrono::seconds{1};
+	static constexpr auto HistoryCooldown = std::chrono::seconds{1};
 
 private:
 	StoreService() = default;
+
+	// Narrow test seam for exercising the real item-delivery path without a
+	// database-backed purchase. Defined only by the Store regression test.
+	friend struct StoreServiceTestAccess;
 
 	/// Check if a player can see/purchase a specific offer type.
 	[[nodiscard]] bool isOfferAvailable(const Player& player, const StoreOffer& offer) const;
@@ -99,6 +108,7 @@ private:
 	                                                 const StorePurchaseExtra& extra);
 
 	std::unordered_map<uint32_t, StoreRateLimit> rateLimits_;
+	std::chrono::steady_clock::time_point lastRateLimitCleanup_{};
 };
 
 #endif // FS_STORE_SERVICE_H

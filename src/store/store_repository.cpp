@@ -8,7 +8,9 @@
 #include "database.h"
 #include "logger.h"
 
+#include <algorithm>
 #include <fmt/core.h>
+#include <limits>
 
 StoreRepository& StoreRepository::getInstance()
 {
@@ -37,7 +39,8 @@ std::vector<StoreHistoryEntry> StoreRepository::loadHistory(uint32_t accountId, 
 		entry.price = result->getNumber<int64_t>("price");
 		entry.costSecond = result->getNumber<int32_t>("costSecond");
 		entry.title = result->getString("title");
-		entry.count = static_cast<uint16_t>(result->getNumber<int32_t>("count"));
+		entry.count = static_cast<uint16_t>(std::clamp<int64_t>(
+		    result->getNumber<int64_t>("count"), 0, std::numeric_limits<uint16_t>::max()));
 		history.push_back(std::move(entry));
 	} while (result->next());
 

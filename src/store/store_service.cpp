@@ -24,6 +24,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <unordered_map>
 
 extern Game g_game;
 
@@ -40,6 +42,66 @@ bool playerIsInProtectionZone(const Player& player)
 	return tile && tile->hasFlag(TILESTATE_PROTECTIONZONE);
 }
 
+struct InboxItemSnapshot
+{
+	std::shared_ptr<Item> item;
+	uint16_t count;
+};
+
+std::vector<InboxItemSnapshot> snapshotInboxItems(const StoreInbox& inbox)
+{
+	std::vector<InboxItemSnapshot> snapshot;
+	snapshot.reserve(inbox.size());
+	for (const auto& item : inbox.getItemList()) {
+		if (item) {
+			snapshot.push_back({item, item->getItemCount()});
+		}
+	}
+	return snapshot;
+}
+
+void rollbackInboxDelivery(StoreInbox& inbox, const std::vector<InboxItemSnapshot>& snapshot,
+	                       const Player& player)
+{
+	std::unordered_map<Item*, uint16_t> originalCounts;
+	originalCounts.reserve(snapshot.size());
+	for (const auto& entry : snapshot) {
+		originalCounts.emplace(entry.item.get(), entry.count);
+	}
+
+	// internalRemoveItem mutates the inbox list, so retain shared ownership in a
+	// separate vector while undoing newly inserted items and stack increments.
+	std::vector<std::shared_ptr<Item>> currentItems(inbox.getItemList().begin(), inbox.getItemList().end());
+	for (const auto& item : currentItems) {
+		if (!item || item->isRemoved()) {
+			continue;
+		}
+
+		const auto original = originalCounts.find(item.get());
+		if (original == originalCounts.end()) {
+			const ReturnValue ret = g_game.internalRemoveItem(item.get());
+			if (ret != RETURNVALUE_NOERROR) {
+				LOG_ERROR(fmt::format(
+				    "[StoreService::deliverItem] CRITICAL: Failed to remove newly inserted item id={} "
+				    "(ret={}) during rollback for player={}",
+				    item->getID(), static_cast<int>(ret), player.getName()));
+			}
+			continue;
+		}
+
+		if (item->isStackable() && item->getItemCount() > original->second) {
+			const uint16_t addedCount = item->getItemCount() - original->second;
+			const ReturnValue ret = g_game.internalRemoveItem(item.get(), addedCount);
+			if (ret != RETURNVALUE_NOERROR) {
+				LOG_ERROR(fmt::format(
+				    "[StoreService::deliverItem] CRITICAL: Failed to restore stack id={} by {} "
+				    "(ret={}) during rollback for player={}",
+				    item->getID(), addedCount, static_cast<int>(ret), player.getName()));
+			}
+		}
+	}
+}
+
 } // namespace
 
 StoreService& StoreService::getInstance()
@@ -51,11 +113,14 @@ StoreService& StoreService::getInstance()
 StoreRateLimit& StoreService::getRateLimit(uint32_t playerId)
 {
 	const auto now = std::chrono::steady_clock::now();
-	if (rateLimits_.size() > 64) {
+	if (rateLimits_.size() > 64 && now - lastRateLimitCleanup_ > std::chrono::seconds(60)) {
+		lastRateLimitCleanup_ = now;
 		std::erase_if(rateLimits_, [now](const auto& pair) {
 			const auto& limit = pair.second;
 			return (now - limit.lastPurchase > std::chrono::seconds(60)) &&
-			       (now - limit.lastTransfer > std::chrono::seconds(60));
+			       (now - limit.lastTransfer > std::chrono::seconds(60)) &&
+			       (now - limit.lastCatalog > std::chrono::seconds(60)) &&
+			       (now - limit.lastHistory > std::chrono::seconds(60));
 		});
 	}
 	return rateLimits_[playerId];
@@ -147,18 +212,14 @@ StoreResult StoreService::purchase(Player& player, uint32_t offerId,
 		}
 	}
 
-	// 4. Validate balance.
+	// 4. Validate the price before touching the account.
 	if (offer->price == 0) {
 		return {false, "Invalid offer price."};
 	}
 
 	const uint32_t accountId = player.getAccount();
-	const uint64_t currentBalance = AccountCoins::get(accountId);
-	if (currentBalance < offer->price) {
-		return {false, "Not enough Tibia Coins."};
-	}
-
-	// 5. Atomically debit coins BEFORE delivery.
+	// 5. Atomically validate and debit in one query. A separate balance SELECT
+	// would add DB traffic and could only provide a stale pre-check.
 	if (!AccountCoins::debit(accountId, offer->price)) {
 		return {false, "Not enough Tibia Coins."};
 	}
@@ -328,11 +389,14 @@ std::string StoreService::deliverPremium(Player& player, const StoreOffer& offer
 	// addPremiumDays(days) = setPremiumTime(getPremiumEndsAt + days * 86400)
 	const time_t now = time(nullptr);
 	const time_t previousEnd = player.getPremiumEndsAt();
-	time_t currentEnd = previousEnd;
-	if (currentEnd < now) {
-		currentEnd = now;
+	const int64_t currentEnd = std::max<int64_t>(static_cast<int64_t>(previousEnd), static_cast<int64_t>(now));
+	constexpr int64_t maxPersistedPremiumEnd = std::numeric_limits<uint32_t>::max();
+	constexpr int64_t secondsPerDay = 86400;
+	if (currentEnd < 0 || currentEnd > maxPersistedPremiumEnd ||
+	    offer.value > (maxPersistedPremiumEnd - currentEnd) / secondsPerDay) {
+		return "Premium duration exceeds the supported date range.";
 	}
-	const time_t newEnd = currentEnd + (offer.value * 86400);
+	const time_t newEnd = static_cast<time_t>(currentEnd + offer.value * secondsPerDay);
 	player.setPremiumTime(newEnd);
 	if (!IOLoginData::updatePremiumTime(player.getAccount(), newEnd)) {
 		player.setPremiumTime(previousEnd);
@@ -382,7 +446,12 @@ std::string StoreService::deliverOutfit(Player& player, const StoreOffer& offer)
 	bool added = false;
 	for (uint16_t lookType : lookTypes) {
 		if (lookType > 0 && !player.hasOutfit(lookType, offer.addon)) {
-			player.addOutfit(lookType, offer.addon);
+			// Preserve the Lua delivery behavior: unlock the base outfit first,
+			// then its addons so the corresponding cosmetic notifications fire.
+			player.addOutfit(lookType, 0);
+			if (offer.addon > 0) {
+				player.addOutfit(lookType, offer.addon);
+			}
 			added = true;
 		}
 	}
@@ -423,12 +492,16 @@ std::string StoreService::deliverXpBoost(Player& player, const StoreOffer& offer
 
 	const int64_t configuredPercent = ConfigManager::getInteger(ConfigManager::STORE_XP_BOOST_PERCENT);
 	const int64_t configuredDefaultDuration = ConfigManager::getInteger(ConfigManager::STORE_XP_BOOST_DEFAULT_DURATION);
-	const int32_t percent = static_cast<int32_t>(std::clamp<int64_t>(configuredPercent > 0 ? configuredPercent : 50, 1, 1000));
+	const int32_t percent = static_cast<int32_t>(
+	    std::clamp<int64_t>(configuredPercent > 0 ? configuredPercent : 50, 1, 255));
 	const int64_t fallbackDuration = configuredDefaultDuration > 0 ? configuredDefaultDuration : 3600;
 
 	const int64_t duration = offer.value > 0 ? offer.value : fallbackDuration;
+	if (duration > std::numeric_limits<uint16_t>::max()) {
+		return "XP boost duration exceeds the supported limit.";
+	}
 	player.setXpBoostPercent(percent);
-	player.setXpBoostTime(static_cast<uint16_t>(std::clamp<int64_t>(duration, 1, 65535)));
+	player.setXpBoostTime(static_cast<uint16_t>(std::max<int64_t>(duration, 1)));
 	return "";
 }
 
@@ -443,13 +516,56 @@ std::string StoreService::deliverItem(Player& player, const StoreOffer& offer)
 		return "Your store inbox is not available.";
 	}
 
-	auto item = Item::CreateItem(offer.itemId, offer.count);
-	if (!item) {
+	const ItemType& itemType = Item::items[offer.itemId];
+	if (itemType.id == 0 || offer.count == 0) {
+		return "Invalid item.";
+	}
+
+	std::vector<std::shared_ptr<Item>> deliveryItems;
+	if (itemType.stackable) {
+		const uint16_t stackSize = std::max<uint16_t>(1, itemType.stackSize);
+		deliveryItems.reserve((offer.count + stackSize - 1) / stackSize);
+		uint32_t remaining = offer.count;
+		while (remaining > 0) {
+			const uint16_t stackCount = static_cast<uint16_t>(std::min<uint32_t>(remaining, stackSize));
+			auto item = Item::CreateItem(offer.itemId, stackCount);
+			if (!item || item->getItemCount() != stackCount) {
+				return "Failed to create item.";
+			}
+			deliveryItems.push_back(std::move(item));
+			remaining -= stackCount;
+		}
+	} else {
+		deliveryItems.reserve(offer.count);
+		for (uint16_t i = 0; i < offer.count; ++i) {
+			auto item = Item::CreateItem(offer.itemId);
+			if (!item) {
+				return "Failed to create item.";
+			}
+			deliveryItems.push_back(std::move(item));
+		}
+	}
+
+	if (deliveryItems.empty()) {
 		return "Failed to create item.";
 	}
 
-	if (g_game.internalAddItem(inbox, item.get(), INDEX_WHEREEVER, 0) != RETURNVALUE_NOERROR) {
+	uint32_t maxQueryCount = 0;
+	const ReturnValue capacityResult = inbox->queryMaxCount(
+	    INDEX_WHEREEVER, *deliveryItems.front(), offer.count, maxQueryCount, 0);
+	if (capacityResult != RETURNVALUE_NOERROR || maxQueryCount < offer.count) {
 		return "Your store inbox is full.";
+	}
+
+	const auto snapshot = snapshotInboxItems(*inbox);
+	for (const auto& item : deliveryItems) {
+		uint32_t remainderCount = 0;
+		const ReturnValue addResult = g_game.internalAddItem(
+		    inbox, item.get(), INDEX_WHEREEVER, 0, false, remainderCount);
+		if (addResult != RETURNVALUE_NOERROR || remainderCount != 0) {
+			rollbackInboxDelivery(*inbox, snapshot, player);
+			return "Your store inbox is full.";
+		}
 	}
 
 	player.sendTextMessage(MESSAGE_STATUS_SMALL, "Your item was sent to your store inbox.");
@@ -590,17 +706,28 @@ std::string StoreService::deliverViaLuaCallback(Player& player, const StoreOffer
 		return "Lua script environment is not available.";
 	}
 
-	lua_State* L = g_scripts->getScriptInterface().getLuaState();
+	LuaScriptInterface& scriptInterface = g_scripts->getScriptInterface();
+	lua_State* L = scriptInterface.getLuaState();
 	if (!L) {
 		return "Lua environment is not available.";
 	}
+	const int stackTop = lua_gettop(L);
 
 	lua_getglobal(L, "StoreDeliverLuaOffer");
 	if (!lua_isfunction(L, -1)) {
-		lua_pop(L, 1);
+		lua_settop(L, stackTop);
 		// If the Lua bridge function doesn't exist, the offer type is unsupported.
 		return "This offer type is not available.";
 	}
+
+	if (!scriptInterface.reserveScriptEnv()) {
+		lua_settop(L, stackTop);
+		LOG_ERROR("[StoreService::deliverViaLuaCallback] Lua call stack overflow");
+		return "Delivery failed due to an internal error.";
+	}
+
+	ScriptEnvironment* env = scriptInterface.getScriptEnv();
+	env->setScriptId(EVENT_ID_USER, &scriptInterface);
 
 	// Push arguments: player, offerType, value, displayId, extraName, extraSex
 	Lua::pushUserdata<Player>(L, &player);
@@ -612,10 +739,10 @@ std::string StoreService::deliverViaLuaCallback(Player& player, const StoreOffer
 	lua_pushinteger(L, extra.sex);
 
 	// pcall with 6 args, 1 result.
-	if (lua_pcall(L, 6, 1, 0) != LUA_OK) {
-		const char* err = lua_tostring(L, -1);
-		LOG_ERROR(fmt::format("[StoreService::deliverViaLuaCallback] Lua error: {}", err ? err : "unknown"));
-		lua_pop(L, 1);
+	if (scriptInterface.protectedCall(L, 6, 1) != LUA_OK) {
+		LuaScriptInterface::reportError("StoreDeliverLuaOffer", Lua::popString(L));
+		lua_settop(L, stackTop);
+		scriptInterface.resetScriptEnv();
 		return "Delivery failed due to an internal error.";
 	}
 
@@ -624,6 +751,7 @@ std::string StoreService::deliverViaLuaCallback(Player& player, const StoreOffer
 	if (lua_isstring(L, -1)) {
 		result = lua_tostring(L, -1);
 	}
-	lua_pop(L, 1);
+	lua_settop(L, stackTop);
+	scriptInterface.resetScriptEnv();
 	return result;
 }
