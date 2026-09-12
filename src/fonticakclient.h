@@ -9,6 +9,7 @@
 namespace FonticakClient {
 
 inline constexpr std::string_view LOGIN_MARKER = "F";
+inline constexpr std::string_view STORE_HIGHLIGHTS_MARKER = "FonticakStoreHighlights";
 inline constexpr std::string_view REQUIRED_MESSAGE = "This server requires OTC-Fonticak.";
 
 inline uint32_t rotateLeft(uint32_t value, uint8_t bits)

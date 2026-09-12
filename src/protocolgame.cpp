@@ -1123,7 +1123,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    AstraClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
 				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
-					supportsAstraStoreHighlights = isAstraClient;
+					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == FonticakClient::LOGIN_MARKER) {
 					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
 						break;
@@ -1132,6 +1132,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    FonticakClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == FonticakClient::STORE_HIGHLIGHTS_MARKER) {
+					supportsGameStoreHighlights = isFonticakClient;
 				} else {
 					break;
 				}
@@ -4102,7 +4104,7 @@ void ProtocolGame::sendStoreCatalog()
 	};
 
 	const bool isAstra = isAstraClient;
-	const bool sendHighlights = isAstra && supportsAstraStoreHighlights;
+	const bool sendHighlights = supportsGameStoreHighlights;
 	const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
 	    std::chrono::system_clock::now().time_since_epoch()).count();
 	const uint32_t nowTimestamp = static_cast<uint32_t>(std::clamp<int64_t>(
@@ -6065,14 +6067,14 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
-		if (supportsAstraStoreHighlights) {
-			features[GameFeature::IngameStoreHighlights] = true;
-		}
 	}
 	// Fonticak outfit familiar extension (feature id 138) and quiver count (feature id 141).
 	if (isFonticakClient) {
 		features[GameFeature::PlayerFamiliars] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
+	}
+	if (supportsGameStoreHighlights) {
+		features[GameFeature::IngameStoreHighlights] = true;
 	}
 	if (supportsNativeZoneWeather()) {
 		features[GameFeature::ZoneWeather] = true;
