@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Automatic Daily Offers runtime state.
+
+  Configure the system in data/store/gamestore.xml through <dailyOffers>:
+    enabled                 Enables or disables automatic rotations.
+    count                   Number of existing catalog offers selected.
+    rotationHours/Days      Duration of each rotation.
+    rotateOnStartup         Generates a new rotation on every server start.
+    min/maxDiscountPercent  Random discount range.
+    state                   sale, timed, or mixed.
+    stateFile               Path to this persistence file.
+
+  Leave this root empty for the first start. The server will select unique
+  offers from gamestore.xml, avoid the previous rotation when possible, set
+  their expiration, and replace this file automatically. Do not edit active
+  offer IDs while the server is running.
+-->
+<dailyOffers/>
