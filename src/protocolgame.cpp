@@ -1196,6 +1196,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    AstraClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
+					supportsAstraSingleCreatureMarks = isAstraClient;
 				} else if (marker == FonticakClient::LOGIN_MARKER) {
 					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
 						break;
@@ -3106,7 +3108,8 @@ void ProtocolGame::sendCreatureSquare(const Creature* creature, SquareColor_t co
 
 void ProtocolGame::sendCreatureWeaponAttackMark(const Creature* target, uint8_t weaponType)
 {
-	if ((!isFonticakClient && !isAstraClient) || !target || weaponType == 0 || !canSee(target)) {
+	if ((!isFonticakClient && !(isAstraClient && supportsAstraSingleCreatureMarks)) || !target ||
+	    weaponType == 0 || !canSee(target)) {
 		return;
 	}
 
@@ -5813,7 +5816,9 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
-		features[GameFeature::AstraSingleCreatureMarks] = true;
+		if (supportsAstraSingleCreatureMarks) {
+			features[GameFeature::AstraSingleCreatureMarks] = true;
+		}
 	}
 	// Fonticak outfit familiar extension (feature id 138) and quiver count (feature id 141).
 	if (isFonticakClient) {
