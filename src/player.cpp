@@ -8016,7 +8016,9 @@ void Player::flushPendingLoot(const std::string& groupKey)
 	const std::string colorizedText = colorizedLootEnabled ? buildLootText(true) : plainText;
 	const auto sendLootText = [&](Player& recipient) {
 		recipient.sendChannelMessage(
-		    "", colorizedLootEnabled && recipient.isAstraClient() ? colorizedText : plainText, TALKTYPE_CHANNEL_O, 10);
+		    "", colorizedLootEnabled && (recipient.isAstraClient() || recipient.isFonticakClient()) ? colorizedText
+		                                                                                             : plainText,
+		    TALKTYPE_CHANNEL_O, 10);
 	};
 
 	const auto& party = getParty();
