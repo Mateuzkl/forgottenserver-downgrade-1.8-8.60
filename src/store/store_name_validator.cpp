@@ -36,19 +36,6 @@ std::string toLowerStr(std::string_view sv)
 	return result;
 }
 
-std::string trimWhitespace(std::string_view sv)
-{
-	size_t start = 0;
-	while (start < sv.size() && std::isspace(static_cast<unsigned char>(sv[start]))) {
-		++start;
-	}
-	size_t end = sv.size();
-	while (end > start && std::isspace(static_cast<unsigned char>(sv[end - 1]))) {
-		--end;
-	}
-	return std::string(sv.substr(start, end - start));
-}
-
 size_t countWords(std::string_view name)
 {
 	size_t count = 0;
