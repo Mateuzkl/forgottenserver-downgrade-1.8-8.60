@@ -117,11 +117,24 @@ TEST_CASE(test_transfer_target_normalization)
 TEST_CASE(test_store_rate_limit_cleanup)
 {
 	auto& service = StoreService::getInstance();
-	// Verify rate limit access and explicit cleanup
-	service.clearRateLimit(999999);
-	auto& limit = service.getRateLimit(999999);
+	constexpr uint32_t testPlayerId = 999999;
+
+	// Populate rate limit entry with a non-default timestamp
+	service.clearRateLimit(testPlayerId);
+	auto& limit = service.getRateLimit(testPlayerId);
 	limit.lastPurchase = std::chrono::steady_clock::now();
-	service.clearRateLimit(999999);
+	limit.lastTransfer = std::chrono::steady_clock::now();
+
+	// Clear entry
+	service.clearRateLimit(testPlayerId);
+
+	// Verify that subsequent access yields a fresh, default-initialized entry
+	const auto& freshLimit = service.getRateLimit(testPlayerId);
+	CHECK(freshLimit.lastPurchase == std::chrono::steady_clock::time_point{});
+	CHECK(freshLimit.lastTransfer == std::chrono::steady_clock::time_point{});
+
+	// Clean up after test
+	service.clearRateLimit(testPlayerId);
 }
 
 TFS_TEST_MAIN()

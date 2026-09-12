@@ -1920,7 +1920,7 @@ void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 		return;
 	}
 
-	const std::string targetName = msg.getString();
+	const std::string targetName = asTrimmedString(msg.getString());
 	if (msg.isOverrun() || getUnreadBytes(msg) < sizeof(uint32_t)) {
 		skipUnreadBytes(msg);
 		return;
