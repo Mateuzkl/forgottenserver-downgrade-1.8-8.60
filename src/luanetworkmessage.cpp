@@ -82,7 +82,7 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
 	if (isAstraOnlyLuaOpcode(opcode)) {
-		return player.isAstraClient();
+		return player.isAstraClient() || player.isFonticakClient();
 	}
 	if (isOtcOrAstraLuaOpcode(opcode)) {
 		return player.isOTC() || player.isAstraClient();

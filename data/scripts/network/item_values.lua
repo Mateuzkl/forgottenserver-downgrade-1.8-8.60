@@ -18,7 +18,10 @@ local MARKET_DETAIL_NAMES = {
 	[15] = "Weight",
 	[16] = "Imbuement Slots",
 	[17] = "Classification",
-	[18] = "Tier"
+	[18] = "Tier",
+	[19] = "Skill Boost",
+	[20] = "Protection",
+	[21] = "Augments"
 }
 
 local function supportsCustomNetwork(player)

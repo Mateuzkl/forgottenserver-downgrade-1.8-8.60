@@ -4953,6 +4953,26 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 		}
 	}
 
+	{
+		const std::string augmentDescription = itemType.parseAugmentDescription();
+		if (!augmentDescription.empty()) {
+			std::string augmentValue = augmentDescription;
+			if (!augmentValue.empty() && augmentValue.front() == '\n') {
+				augmentValue.erase(0, 1);
+			}
+			constexpr std::string_view augmentPrefix = "Augments: ";
+			if (augmentValue.rfind(augmentPrefix.data(), 0) == 0) {
+				augmentValue.erase(0, augmentPrefix.size());
+			}
+			if (!augmentValue.empty() && augmentValue.back() == '.') {
+				augmentValue.pop_back();
+			}
+			if (!augmentValue.empty()) {
+				descriptions.emplace_back("Augments", augmentValue);
+			}
+		}
+	}
+
 	const uint16_t totalSlots = item ? item->getImbuementSlots() : itemType.imbuementSlot;
 	if (totalSlots > 0) {
 		descriptions.emplace_back("Imbuement Slots", std::to_string(totalSlots));

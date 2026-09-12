@@ -44,6 +44,9 @@ local MARKET_DESC_WEIGHT = 15
 local MARKET_DESC_IMBUEMENTS = 16
 local MARKET_DESC_CLASSIFICATION = 17
 local MARKET_DESC_TIER = 18
+local MARKET_DESC_SKILL_BOOST = 19
+local MARKET_DESC_PROTECTION = 20
+local MARKET_DESC_AUGMENTS = 21
 
 local MARKET_REQUEST_MY_OFFERS = 0xFFFE
 local MARKET_REQUEST_MY_HISTORY = 0xFFFF
@@ -731,6 +734,17 @@ local function buildDepotItemMap(player)
 	return depotMap
 end
 
+local function getMarketItemClassification(itemId)
+	itemId = tonumber(itemId) or 0
+	if itemId <= 0 then
+		return 0
+	end
+
+	local xmlAttributes = marketItemXmlAttributes[itemId] or {}
+	local itemType = ItemType(itemId)
+	return tonumber(xmlAttributes.classification) or tonumber(itemType:getClassification()) or 0
+end
+
 -- Builds the list of catalog entries to send to a player when entering the market.
 -- Each entry represents a catalog item and the available amount the player has for a specific tier.
 -- @param depotMap Table mapping keys of the form "itemId:tier" to the available amount for that item/tier. If nil, treated as empty.
@@ -762,12 +776,14 @@ local function buildMarketEnterEntries(depotMap)
 	end
 
 	for _, entry in ipairs(marketItems) do
+		local classification = getMarketItemClassification(entry.id)
 		entries[#entries + 1] = {
 			id = entry.id,
 			category = entry.category,
 			name = entry.name,
 			amount = depotMap[getDepotItemKey(entry.id, 0)] or 0,
-			tier = 0
+			tier = 0,
+			classification = classification
 		}
 
 		local tierAmounts = tierAmountsByItem[entry.id]
@@ -780,7 +796,8 @@ local function buildMarketEnterEntries(depotMap)
 						category = entry.category,
 						name = entry.name,
 						amount = amount,
-						tier = tier
+						tier = tier,
+						classification = classification
 					}
 				end
 			end
@@ -1262,6 +1279,133 @@ local function buildAbilityDescription(itemType)
 	return table.concat(parts, ", ")
 end
 
+local function buildSkillBoostDescription(itemType)
+	local abilities = itemType:getAbilities()
+	if not abilities then
+		return nil
+	end
+
+	local parts = {}
+
+	if abilities.stats then
+		for statIndex, value in pairs(abilities.stats) do
+			value = tonumber(value) or 0
+			if value ~= 0 and getStatName then
+				local statId = (tonumber(statIndex) or 1) - 1
+				local statName = getStatName(statId)
+				if statName and statName ~= "unknown" then
+					parts[#parts + 1] = string.format("%s %+d", statName, value)
+				end
+			end
+		end
+	end
+
+	if abilities.skills then
+		for skillIndex, value in pairs(abilities.skills) do
+			value = tonumber(value) or 0
+			if value ~= 0 and getSkillName then
+				local skillId = (tonumber(skillIndex) or 1) - 1
+				local skillName = getSkillName(skillId)
+				if skillName and skillName ~= "unknown" then
+					parts[#parts + 1] = string.format("%s %+d", skillName, value)
+				end
+			end
+		end
+	end
+
+	if abilities.specialSkills then
+		for skillIndex, value in pairs(abilities.specialSkills) do
+			value = tonumber(value) or 0
+			if value ~= 0 and getSpecialSkillName then
+				local specialSkillId = (tonumber(skillIndex) or 1) - 1
+				local skillName = getSpecialSkillName(specialSkillId)
+				if skillName and skillName ~= "unknown" then
+					local formattedValue
+					if specialSkillId >= 6 then
+						formattedValue = string.format("%g", value / 100)
+					else
+						formattedValue = string.format("%+g", value / 100)
+					end
+					parts[#parts + 1] = string.format("%s %s%%", skillName, formattedValue)
+				end
+			end
+		end
+	end
+
+	if #parts == 0 then
+		return nil
+	end
+	return table.concat(parts, ", ")
+end
+
+local function addSkillBoostDescriptions(descriptions, itemType)
+	local text = buildSkillBoostDescription(itemType)
+	if text then
+		addDescription(descriptions, MARKET_DESC_SKILL_BOOST, text)
+	end
+end
+
+local function formatAugmentDescription(itemType)
+	local text = itemType:getAugmentDescription()
+	if not text or text == "" then
+		return nil
+	end
+
+	text = text:gsub("^%s+", "")
+	text = text:gsub("^Augments:%s*", "")
+	if text:sub(-1) == "." then
+		text = text:sub(1, -2)
+	end
+	if text == "" then
+		return nil
+	end
+	return text
+end
+
+local function addAugmentDescriptions(descriptions, itemType)
+	local text = formatAugmentDescription(itemType)
+	if text then
+		addDescription(descriptions, MARKET_DESC_AUGMENTS, text)
+	end
+end
+
+local function buildProtectionDescription(itemType)
+	local abilities = itemType:getAbilities()
+	if not abilities or not abilities.absorbPercent then
+		return nil
+	end
+
+	local absorbPercent = abilities.absorbPercent
+	local protectionPhysical = absorbPercent[1]
+	for elem = 2, #absorbPercent do
+		local val = absorbPercent[elem]
+		if protectionPhysical ~= val then
+			protectionPhysical = nil
+			break
+		end
+	end
+
+	if protectionPhysical and protectionPhysical ~= 0 then
+		return string.format("all %+d%%", protectionPhysical)
+	end
+
+	local protections = {}
+	for element, value in pairs(absorbPercent) do
+		value = tonumber(value) or 0
+		if value ~= 0 and getCombatName then
+			local elementName = getCombatName(2 ^ (element - 1))
+			if elementName then
+				protections[#protections + 1] = string.format("%s %+d%%", elementName, value)
+			end
+		end
+	end
+
+	if #protections == 0 then
+		return nil
+	end
+	return table.concat(protections, ", ")
+end
+
 local function buildMarketDescriptions(itemId)
 	local itemType = ItemType(itemId)
 	local descriptions = {}
@@ -1273,6 +1417,11 @@ local function buildMarketDescriptions(itemId)
 	local armor = tonumber(itemType:getArmor()) or 0
 	if armor > 0 then
 		addDescription(descriptions, MARKET_DESC_ARMOR, armor)
+	end
+
+	local protection = buildProtectionDescription(itemType)
+	if protection then
+		addDescription(descriptions, MARKET_DESC_PROTECTION, protection)
 	end
 
 	local attack = tonumber(itemType:getAttack()) or 0
@@ -1342,6 +1491,8 @@ local function buildMarketDescriptions(itemId)
 	end
 
 	addDescription(descriptions, MARKET_DESC_ABILITY, buildAbilityDescription(itemType))
+	addSkillBoostDescriptions(descriptions, itemType)
+	addAugmentDescriptions(descriptions, itemType)
 
 	local charges = tonumber(itemType:getCharges()) or 0
 	if charges > 0 then
@@ -1493,6 +1644,7 @@ local function sendMarketEnter(player, depotMap)
 			out:addString(entry.name)
 			out:addU16(math.min(entry.amount or 0, 0xFFFF))
 			out:addByte(entry.tier or 0)
+			out:addByte(entry.classification or 0)
 		end
 
 		out:sendToPlayer(player)
@@ -1604,15 +1756,16 @@ end
 
 local openHandler = PacketHandler(OPCODE_MARKET_OPEN)
 function openHandler.onReceive(player, msg)
+	expireOffers()
+
+	-- Cyclopedia/OTC can request the catalog without opening a market session.
 	if not hasCurrentMarketAccess(player) then
-		sendMarketMessage(player, "You need to be near a depot or market.")
-		sendMarketLeave(player)
+		sendMarketEnter(player, {})
 		return
 	end
 
 	setMarketDepotId(player, getPlayerLastDepotId(player))
 	setMarketOpen(player)
-	expireOffers()
 	sendMarketEnter(player)
 end
 openHandler:register()
