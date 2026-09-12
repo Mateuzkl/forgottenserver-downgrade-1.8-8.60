@@ -1122,6 +1122,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    AstraClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
+					supportsAstraStoreHighlights = isAstraClient;
 				} else if (marker == FonticakClient::LOGIN_MARKER) {
 					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
 						break;
@@ -4100,6 +4102,11 @@ void ProtocolGame::sendStoreCatalog()
 	};
 
 	const bool isAstra = isAstraClient;
+	const bool sendHighlights = isAstra && supportsAstraStoreHighlights;
+	const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+	    std::chrono::system_clock::now().time_since_epoch()).count();
+	const uint32_t nowTimestamp = static_cast<uint32_t>(std::clamp<int64_t>(
+	    nowSeconds, int64_t{0}, static_cast<int64_t>(std::numeric_limits<uint32_t>::max())));
 	const bool taskEnabled = ConfigManager::getBoolean(ConfigManager::TASK_HUNTING_SYSTEM_ENABLED);
 	const bool bountyEnabled = taskEnabled && ConfigManager::getBoolean(ConfigManager::BOUNTY_TASKS_ENABLED);
 	const bool weeklyEnabled = taskEnabled && ConfigManager::getBoolean(ConfigManager::WEEKLY_TASKS_ENABLED);
@@ -4167,6 +4174,7 @@ void ProtocolGame::sendStoreCatalog()
 		msg.addString(fcat.category->icon);
 		msg.addString(fcat.category->parent);
 		msg.addString(fcat.category->description);
+		StoreProtocol::addCategoryHighlight(msg, sendHighlights, fcat.category->state);
 		msg.add<uint16_t>(static_cast<uint16_t>(fcat.offers.size()));
 
 		for (const auto& fo : fcat.offers) {
@@ -4178,6 +4186,8 @@ void ProtocolGame::sendStoreCatalog()
 			msg.add<uint16_t>(fo.offer->count);
 			msg.addString(fo.offer->description);
 			msg.addString(storeOfferTypeToString(fo.offer->type));
+			StoreProtocol::addOfferHighlight(msg, sendHighlights, fo.offer->state,
+			                                 fo.offer->saleValidUntilTimestamp, nowTimestamp);
 		}
 	}
 
@@ -6055,6 +6065,9 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
+		if (supportsAstraStoreHighlights) {
+			features[GameFeature::IngameStoreHighlights] = true;
+		}
 	}
 	// Fonticak outfit familiar extension (feature id 138) and quiver count (feature id 141).
 	if (isFonticakClient) {

@@ -4,6 +4,9 @@
 #ifndef FS_STORE_PROTOCOL_H
 #define FS_STORE_PROTOCOL_H
 
+#include "networkmessage.h"
+#include "store/store_types.h"
+
 #include <cstdint>
 
 /// Named constants for the custom 8.60 store wire protocol.
@@ -28,6 +31,38 @@ enum class ResponseType : uint8_t
 	Success = 0x02,
 	History = 0x03,
 };
+
+[[nodiscard]] constexpr StoreHighlightState effectiveHighlightState(StoreHighlightState state,
+                                                                    uint32_t validUntilTimestamp,
+                                                                    uint32_t nowTimestamp) noexcept
+{
+	if (storeHighlightHasExpiration(state) && validUntilTimestamp != 0 &&
+	    validUntilTimestamp <= nowTimestamp) {
+		return StoreHighlightState::None;
+	}
+	return state;
+}
+
+inline void addCategoryHighlight(NetworkMessage& msg, bool enabled, StoreHighlightState state)
+{
+	if (enabled) {
+		msg.addByte(static_cast<uint8_t>(state));
+	}
+}
+
+inline void addOfferHighlight(NetworkMessage& msg, bool enabled, StoreHighlightState state,
+                              uint32_t validUntilTimestamp, uint32_t nowTimestamp)
+{
+	if (!enabled) {
+		return;
+	}
+
+	const auto effectiveState = effectiveHighlightState(state, validUntilTimestamp, nowTimestamp);
+	msg.addByte(static_cast<uint8_t>(effectiveState));
+	if (storeHighlightHasExpiration(effectiveState)) {
+		msg.add<uint32_t>(validUntilTimestamp);
+	}
+}
 
 } // namespace StoreProtocol
 

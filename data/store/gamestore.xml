@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <store>
+	<!-- Optional highlights: state="none|new|sale|timed". SALE/TIMED offers may use
+	     saleValidUntilTimestamp="<Unix timestamp>"; expired highlights fall back to NONE. -->
 
-    <category name="Premium Time" icon="store_premium" description="Premium Time enhances your account with premium areas, transportation, more spells, house rental, guild creation, offline training and larger depots. It is valid for all characters on this account and is activated immediately after purchase.">
-        <offer id="1001" name="30 Days of Premium Time" icon="30_days" price="250" eid="0" itemid="0" type="premium" value="30" count="30" description="Adds 30 days of Premium Time to your account immediately."/>
-        <offer id="1002" name="90 Days of Premium Time" icon="90_days" price="750" eid="0" itemid="0" type="premium" value="90" count="90" description="Adds 90 days of Premium Time to your account immediately."/>
-        <offer id="1003" name="180 Days of Premium Time" icon="180_days" price="1500" eid="0" itemid="0" type="premium" value="180" count="180" description="Adds 180 days of Premium Time to your account immediately."/>
+    <category name="Premium Time" icon="store_premium" state="new" description="Premium Time enhances your account with premium areas, transportation, more spells, house rental, guild creation, offline training and larger depots. It is valid for all characters on this account and is activated immediately after purchase.">
+        <offer id="1001" name="30 Days of Premium Time" icon="30_days" price="250" eid="0" itemid="0" type="premium" value="30" count="30" state="new" description="Adds 30 days of Premium Time to your account immediately."/>
+        <offer id="1002" name="90 Days of Premium Time" icon="90_days" price="750" eid="0" itemid="0" type="premium" value="90" count="90" state="sale" saleValidUntilTimestamp="1789832436" description="Adds 90 days of Premium Time to your account immediately."/>
+        <offer id="1003" name="180 Days of Premium Time" icon="180_days" price="1500" eid="0" itemid="0" type="premium" value="180" count="180" state="timed" saleValidUntilTimestamp="1789486836" description="Adds 180 days of Premium Time to your account immediately."/>
         <offer id="1004" name="360 Days of Premium Time" icon="360_days" price="3000" eid="0" itemid="0" type="premium" value="360" count="360" description="Adds 360 days of Premium Time to your account immediately."/>
     </category>
 

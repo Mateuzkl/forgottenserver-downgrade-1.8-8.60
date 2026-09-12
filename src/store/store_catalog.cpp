@@ -149,6 +149,24 @@ std::string_view storeOfferTypeToString(StoreOfferType type) noexcept
 	return "item";
 }
 
+std::optional<StoreHighlightState> parseStoreHighlightState(std::string_view stateStr)
+{
+	const auto lower = toLower(stateStr);
+	if (lower == "0" || lower == "none" || lower == "state_none") {
+		return StoreHighlightState::None;
+	}
+	if (lower == "1" || lower == "new" || lower == "state_new") {
+		return StoreHighlightState::New;
+	}
+	if (lower == "2" || lower == "sale" || lower == "state_sale") {
+		return StoreHighlightState::Sale;
+	}
+	if (lower == "3" || lower == "timed" || lower == "state_timed") {
+		return StoreHighlightState::Timed;
+	}
+	return std::nullopt;
+}
+
 // ─── StoreCatalog ────────────────────────────────────────────────────────────
 
 const StoreOffer* StoreCatalog::findOffer(uint32_t id) const noexcept
@@ -199,6 +217,18 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 		category.icon = categoryNode.attribute("icon").as_string("");
 		category.parent = categoryNode.attribute("parent").as_string("");
 		category.description = categoryNode.attribute("description").as_string("");
+		const auto categoryStateAttr = categoryNode.attribute("state");
+		if (!categoryStateAttr.empty()) {
+			const auto state = parseStoreHighlightState(categoryStateAttr.as_string());
+			if (!state) {
+				LOG_ERROR(fmt::format(
+				    "[StoreCatalog::loadFromXML] Category '{}' has invalid highlight state '{}'.",
+				    category.name, categoryStateAttr.as_string()));
+				hasFatalError = true;
+				continue;
+			}
+			category.state = *state;
+		}
 
 		if (category.name.empty()) {
 			LOG_WARN("[StoreCatalog::loadFromXML] Category with empty name, skipping.");
@@ -226,6 +256,39 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 
 			offer.name = offerNode.attribute("name").as_string("Unknown");
 			offer.icon = offerNode.attribute("icon").as_string("");
+			const auto offerStateAttr = offerNode.attribute("state");
+			if (!offerStateAttr.empty()) {
+				const auto state = parseStoreHighlightState(offerStateAttr.as_string());
+				if (!state) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has invalid highlight state '{}'.",
+					    offer.id, offerStateAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
+				offer.state = *state;
+			}
+
+			pugi::xml_attribute validUntilAttr = offerNode.attribute("saleValidUntilTimestamp");
+			if (validUntilAttr.empty()) {
+				validUntilAttr = offerNode.attribute("validuntil");
+			}
+			if (!validUntilAttr.empty()) {
+				if (!parseCompleteU32(validUntilAttr.as_string(), offer.saleValidUntilTimestamp)) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} has malformed expiration timestamp '{}'.",
+					    offer.id, validUntilAttr.as_string()));
+					hasFatalError = true;
+					continue;
+				}
+				if (!storeHighlightHasExpiration(offer.state) && offer.saleValidUntilTimestamp != 0) {
+					LOG_ERROR(fmt::format(
+					    "[StoreCatalog::loadFromXML] Offer id={} defines an expiration without state SALE or TIMED.",
+					    offer.id));
+					hasFatalError = true;
+					continue;
+				}
+			}
 
 			const auto priceAttr = offerNode.attribute("price");
 			if (!priceAttr.empty()) {

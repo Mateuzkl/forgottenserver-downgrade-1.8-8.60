@@ -432,6 +432,7 @@ private:
 	bool isOTC = false;
 	bool isAstraClient = false;
 	bool isFonticakClient = false;
+	bool supportsAstraStoreHighlights = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;

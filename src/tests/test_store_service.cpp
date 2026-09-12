@@ -1,6 +1,7 @@
 #include "../otpch.h"
 
 #include "../item.h"
+#include "../networkmessage.h"
 #include "../player.h"
 #include "../store/store_catalog.h"
 #include "../store/store_name_validator.h"
@@ -11,6 +12,7 @@
 #include "../tools.h"
 
 #include <filesystem>
+#include <fstream>
 #include <limits>
 
 #include "test_support.h"
@@ -34,6 +36,24 @@ void ensureItemTypesLoaded()
 	const auto itemsPath = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() /
 	                       "data/items/items.otb";
 	CHECK(Item::items.loadFromOtb(itemsPath.string()));
+}
+
+std::filesystem::path writeStoreHighlightFixture()
+{
+	const auto path = std::filesystem::temp_directory_path() / "tfs_store_highlights_test.xml";
+	std::ofstream output(path, std::ios::trunc);
+	output << R"xml(<?xml version="1.0"?>
+<store>
+  <category name="Featured" icon="featured" state="new">
+    <offer id="990001" name="Sale" price="10" itemid="268" state="sale" saleValidUntilTimestamp="4102444800"/>
+    <offer id="990002" name="Timed" price="10" itemid="268" state="timed" validuntil="1"/>
+  </category>
+  <category name="Normal" icon="normal">
+    <offer id="990003" name="Normal" price="10" itemid="268"/>
+  </category>
+</store>)xml";
+	output.close();
+	return path;
 }
 
 } // namespace
@@ -119,6 +139,90 @@ TEST_CASE(test_store_protocol_opcodes)
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog) == 0x01);
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::Success) == 0x02);
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::History) == 0x03);
+}
+
+TEST_CASE(test_store_highlight_states_and_packet_layout)
+{
+	CHECK(parseStoreHighlightState("none") == StoreHighlightState::None);
+	CHECK(parseStoreHighlightState("new") == StoreHighlightState::New);
+	CHECK(parseStoreHighlightState("sale") == StoreHighlightState::Sale);
+	CHECK(parseStoreHighlightState("timed") == StoreHighlightState::Timed);
+	CHECK(parseStoreHighlightState("STATE_NEW") == StoreHighlightState::New);
+	CHECK(parseStoreHighlightState("4") == std::nullopt);
+
+	CHECK(StoreProtocol::effectiveHighlightState(StoreHighlightState::Sale, 200, 100) ==
+	      StoreHighlightState::Sale);
+	CHECK(StoreProtocol::effectiveHighlightState(StoreHighlightState::Timed, 100, 100) ==
+	      StoreHighlightState::None);
+	CHECK(StoreProtocol::effectiveHighlightState(StoreHighlightState::Timed, 0, 100) ==
+	      StoreHighlightState::Timed);
+
+	NetworkMessage legacy;
+	legacy.addByte(0xAA);
+	StoreProtocol::addCategoryHighlight(legacy, false, StoreHighlightState::New);
+	StoreProtocol::addOfferHighlight(legacy, false, StoreHighlightState::Sale, 200, 100);
+	legacy.addByte(0xBB);
+	CHECK(legacy.getLength() == 2);
+	CHECK(legacy.setBufferPosition(0));
+	CHECK(legacy.getByte() == 0xAA);
+	CHECK(legacy.getByte() == 0xBB);
+	CHECK(legacy.getBufferPosition() == NetworkMessage::INITIAL_BUFFER_POSITION + legacy.getLength());
+
+	NetworkMessage highlighted;
+	highlighted.addByte(0xAA);
+	StoreProtocol::addCategoryHighlight(highlighted, true, StoreHighlightState::New);
+	StoreProtocol::addOfferHighlight(highlighted, true, StoreHighlightState::Sale, 200, 100);
+	StoreProtocol::addOfferHighlight(highlighted, true, StoreHighlightState::Timed, 300, 100);
+	StoreProtocol::addOfferHighlight(highlighted, true, StoreHighlightState::Timed, 100, 100);
+	StoreProtocol::addOfferHighlight(highlighted, true, StoreHighlightState::None, 0, 100);
+	highlighted.addByte(0xBB);
+
+	CHECK(highlighted.setBufferPosition(0));
+	CHECK(highlighted.getByte() == 0xAA);
+	CHECK(highlighted.getByte() == static_cast<uint8_t>(StoreHighlightState::New));
+	CHECK(highlighted.getByte() == static_cast<uint8_t>(StoreHighlightState::Sale));
+	CHECK(highlighted.get<uint32_t>() == 200);
+	CHECK(highlighted.getByte() == static_cast<uint8_t>(StoreHighlightState::Timed));
+	CHECK(highlighted.get<uint32_t>() == 300);
+	CHECK(highlighted.getByte() == static_cast<uint8_t>(StoreHighlightState::None));
+	CHECK(highlighted.getByte() == static_cast<uint8_t>(StoreHighlightState::None));
+	CHECK(highlighted.getByte() == 0xBB);
+	CHECK(highlighted.getBufferPosition() == NetworkMessage::INITIAL_BUFFER_POSITION + highlighted.getLength());
+}
+
+TEST_CASE(test_store_catalog_highlights_and_defaults)
+{
+	ensureItemTypesLoaded();
+	const auto fixturePath = writeStoreHighlightFixture();
+	const auto catalog = StoreCatalog::loadFromXML(fixturePath.string());
+	std::error_code error;
+	std::filesystem::remove(fixturePath, error);
+
+	CHECK(catalog != nullptr);
+	CHECK(!error);
+	if (!catalog) {
+		return;
+	}
+
+	CHECK(catalog->categories().size() == 2);
+	CHECK(catalog->categories()[0].state == StoreHighlightState::New);
+	CHECK(catalog->categories()[1].state == StoreHighlightState::None);
+
+	const auto* sale = catalog->findOffer(990001);
+	CHECK(sale != nullptr);
+	CHECK(sale->state == StoreHighlightState::Sale);
+	CHECK(sale->saleValidUntilTimestamp == 4102444800U);
+
+	const auto* timed = catalog->findOffer(990002);
+	CHECK(timed != nullptr);
+	CHECK(timed->state == StoreHighlightState::Timed);
+	CHECK(StoreProtocol::effectiveHighlightState(timed->state, timed->saleValidUntilTimestamp, 2) ==
+	      StoreHighlightState::None);
+
+	const auto* normal = catalog->findOffer(990003);
+	CHECK(normal != nullptr);
+	CHECK(normal->state == StoreHighlightState::None);
+	CHECK(normal->saleValidUntilTimestamp == 0);
 }
 
 TEST_CASE(test_store_catalog_load)

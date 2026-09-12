@@ -61,6 +61,21 @@ enum class StoreOfferType : uint8_t
 	return type == StoreOfferType::ExpBoost;
 }
 
+enum class StoreHighlightState : uint8_t
+{
+	None = 0,
+	New = 1,
+	Sale = 2,
+	Timed = 3,
+};
+
+[[nodiscard]] std::optional<StoreHighlightState> parseStoreHighlightState(std::string_view stateStr);
+
+[[nodiscard]] constexpr bool storeHighlightHasExpiration(StoreHighlightState state) noexcept
+{
+	return state == StoreHighlightState::Sale || state == StoreHighlightState::Timed;
+}
+
 /// A single purchasable offer in the store catalog.
 struct StoreOffer
 {
@@ -77,6 +92,8 @@ struct StoreOffer
 
 	std::string description;
 	StoreOfferType type = StoreOfferType::Item;
+	StoreHighlightState state = StoreHighlightState::None;
+	uint32_t saleValidUntilTimestamp = 0;
 
 	int64_t value = 0;       ///< type-specific value (days, seconds, blessing index, lookType, etc.)
 	int64_t femaleValue = 0; ///< female lookType for outfit offers
@@ -90,6 +107,7 @@ struct StoreCategory
 	std::string icon;
 	std::string parent;
 	std::string description;
+	StoreHighlightState state = StoreHighlightState::None;
 	std::vector<StoreOffer> offers;
 };
 
