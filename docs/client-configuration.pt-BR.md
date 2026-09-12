@@ -81,6 +81,7 @@ PlayerFamiliars = true
 AstraCreatureIcons = true
 AstraQuiverCountU16 = true
 AstraOutfitStoreMode = true
+AstraSingleCreatureMarks = true
 DisplayItemDuration = true
 DisplayItemCharges = true
 PackedPlayerInventory = true
@@ -202,6 +203,7 @@ GameAstraCreatureIcons
 GameAstraQuiverCountU16
 GameAstraOutfitStoreMode
 GameAstraItemMetadata
+GameAstraSingleCreatureMarks
 ```
 
 Essas flags so devem ser usadas quando o server reconhece AstraClient e a config relacionada esta ativa.
