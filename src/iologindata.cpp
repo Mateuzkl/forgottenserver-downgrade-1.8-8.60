@@ -1820,9 +1820,9 @@ void IOLoginData::removeVIPEntry(uint32_t accountId, uint32_t guid)
 	    fmt::format("DELETE FROM `account_viplist` WHERE `account_id` = {:d} AND `player_id` = {:d}", accountId, guid));
 }
 
-void IOLoginData::updatePremiumTime(uint32_t accountId, time_t endTime)
+bool IOLoginData::updatePremiumTime(uint32_t accountId, time_t endTime)
 {
-	Database::getInstance().executeQuery(
+	return Database::getInstance().executeQuery(
 	    fmt::format("UPDATE `accounts` SET `premium_ends_at` = {:d} WHERE `id` = {:d}", endTime, accountId));
 }
 

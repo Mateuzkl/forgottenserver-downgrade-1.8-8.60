@@ -330,13 +330,17 @@ std::string StoreService::deliverPremium(Player& player, const StoreOffer& offer
 
 	// addPremiumDays(days) = setPremiumTime(getPremiumEndsAt + days * 86400)
 	const time_t now = time(nullptr);
-	time_t currentEnd = player.getPremiumEndsAt();
+	const time_t previousEnd = player.getPremiumEndsAt();
+	time_t currentEnd = previousEnd;
 	if (currentEnd < now) {
 		currentEnd = now;
 	}
 	const time_t newEnd = currentEnd + (offer.value * 86400);
 	player.setPremiumTime(newEnd);
-	IOLoginData::updatePremiumTime(player.getAccount(), newEnd);
+	if (!IOLoginData::updatePremiumTime(player.getAccount(), newEnd)) {
+		player.setPremiumTime(previousEnd);
+		return "Failed to update premium time in database.";
+	}
 	return "";
 }
 
