@@ -7,6 +7,8 @@
 #include "../store/store_service.h"
 #include "../tools.h"
 
+#include <filesystem>
+
 #include "test_support.h"
 
 TEST_CASE(test_character_name_validation)
@@ -82,7 +84,15 @@ TEST_CASE(test_store_protocol_opcodes)
 
 TEST_CASE(test_store_catalog_load)
 {
-	auto catalog = StoreCatalog::loadFromXML("data/store/gamestore.xml");
+	const auto repoPath = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() /
+	                      "data/store/gamestore.xml";
+	auto catalog = StoreCatalog::loadFromXML(repoPath.string());
+	if (!catalog) {
+		catalog = StoreCatalog::loadFromXML("data/store/gamestore.xml");
+	}
+	if (!catalog) {
+		catalog = StoreCatalog::loadFromXML("../data/store/gamestore.xml");
+	}
 	CHECK(catalog != nullptr);
 	if (catalog) {
 		CHECK(!catalog->categories().empty());

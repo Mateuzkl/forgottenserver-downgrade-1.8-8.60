@@ -70,24 +70,27 @@ size_t countWords(std::string_view name)
 
 std::string formatName(std::string_view rawName)
 {
-	std::string name = trimWhitespace(rawName);
-	// Convert to lowercase first.
-	std::transform(name.begin(), name.end(), name.begin(),
-	               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	std::string result;
+	bool capitalize = true;
 
-	// Capitalize first letter of each word.
-	bool capitalizeNext = true;
-	for (char& c : name) {
-		if (std::isalpha(static_cast<unsigned char>(c))) {
-			if (capitalizeNext) {
-				c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-				capitalizeNext = false;
+	for (char c : rawName) {
+		if (std::isspace(static_cast<unsigned char>(c))) {
+			if (!result.empty() && result.back() != ' ') {
+				result += ' ';
+				capitalize = true;
 			}
 		} else {
-			capitalizeNext = true;
+			result += capitalize ? static_cast<char>(std::toupper(static_cast<unsigned char>(c)))
+			                     : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			capitalize = false;
 		}
 	}
-	return name;
+
+	if (!result.empty() && result.back() == ' ') {
+		result.pop_back();
+	}
+
+	return result;
 }
 
 std::string validate(std::string_view name)
