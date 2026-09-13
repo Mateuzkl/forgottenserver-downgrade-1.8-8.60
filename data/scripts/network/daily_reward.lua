@@ -521,6 +521,7 @@ local function claimReward(player, msg)
 	setStorageNumber(player, STORAGES.streak, streak)
 	setStorageNumber(player, STORAGES.rewardIndex, (rewardIndex + 1) % #DAILY_REWARDS)
 	addRewardHistory(player, streak, description)
+	player:save()
 
 	player:sendTextMessage(MESSAGE_INFO_DESCR, "You have claimed your daily reward: " .. description .. ".")
 	player:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
