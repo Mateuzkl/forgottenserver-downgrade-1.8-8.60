@@ -165,6 +165,11 @@ bestiarySystemEnabled = false
 marketSystemEnabled = false
 preySystemEnabled = false
 battlePassSystemEnabled = false
+-- Highest reward level transmitted by the Battle Pass reward track.
+battlePassRewardMaxStep = 50
+-- Level that must be completed before the Battle Pass shop is unlocked.
+-- Must be between 1 and battlePassRewardMaxStep.
+battlePassShopUnlockStep = 50
 weaponProficiencySystemEnabled = false
 augmentSystemEnabled = false
 monsterLevelEnabled = false
@@ -613,4 +618,3 @@ stressTestLeak = true
 stressTestLeakCount = 10000
 stressTestShutdownSend = true
 stressTestShutdownSendCount = 10000
-

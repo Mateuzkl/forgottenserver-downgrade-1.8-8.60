@@ -779,6 +779,8 @@ bool ConfigManager::load()
 	integers[Integer::AUGMENT_POWERFUL_IMPACT_PERCENT] = getGlobalInteger(L, "augmentPowerfulImpactPercent", 7);
 	integers[Integer::AUGMENT_STRONG_IMPACT_PERCENT] = getGlobalInteger(L, "augmentStrongImpactPercent", 10);
 	integers[Integer::QUICK_LOOT_MAX_CORPSES] = getGlobalInteger(L, "quickLootMaxCorpses", 30);
+	integers[Integer::BATTLEPASS_REWARD_MAX_STEP] = getGlobalInteger(L, "battlePassRewardMaxStep", 50);
+	integers[Integer::BATTLEPASS_SHOP_UNLOCK_STEP] = getGlobalInteger(L, "battlePassShopUnlockStep", 50);
 
 	strings[String::ADMIN_PASSWORD] = getGlobalString(L, "adminPassword", "");
 	strings[String::ADMIN_ENCRYPTION] = getGlobalString(L, "adminEncryption", "");
