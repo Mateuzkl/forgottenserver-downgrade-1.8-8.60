@@ -158,7 +158,7 @@ Condição no server:
 QuickLootFlags = shouldSendQuickLootFlags()
 ```
 
-`shouldSendQuickLootFlags()` e verdadeiro apenas para AstraClient quando quick loot esta habilitado na config.
+`shouldSendQuickLootFlags()` é verdadeiro para AstraClient e FonticakClient quando quick loot está habilitado na configuração.
 
 ### GameThingUpgradeClassification
 

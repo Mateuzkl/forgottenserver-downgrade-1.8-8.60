@@ -6,7 +6,11 @@ NPC_SHOP_BUY_EXHAUST_MS = NPC_SHOP_BUY_EXHAUST_MS or 500
 NPC_SHOP_EXHAUST_MESSAGE = NPC_SHOP_EXHAUST_MESSAGE or "Please wait before buying again."
 
 function msgcontains(message, keyword)
-	local message, keyword = message:lower(), keyword:lower()
+	if message == nil or keyword == nil then
+		return false
+	end
+
+	message, keyword = message:lower(), keyword:lower()
 	if message == keyword then return true end
 
 	return message:find(keyword) and not message:find('(%w+)' .. keyword)
@@ -562,6 +566,31 @@ do
 	if not compat.originalNpcHandlerSay then
 		compat.originalNpcHandlerSay = NpcHandler.say
 
+		local function buildSayParseInfo(focusId)
+			local player = Player(focusId)
+			local playerName = player and player:getName() or ""
+			return {
+				[TAG_PLAYERNAME] = playerName,
+				["|TIME|"] = Game.getFormattedWorldTime(),
+			}
+		end
+
+		local function parseSayMessage(handler, message, parseInfo)
+			if type(message) == "table" then
+				local parsed = {}
+				for index = 1, #message do
+					parsed[index] = handler:parseMessage(message[index], parseInfo)
+				end
+				return parsed
+			end
+
+			if type(message) == "string" then
+				return handler:parseMessage(message, parseInfo)
+			end
+
+			return message
+		end
+
 		function NpcHandler:say(message, focus, publicize, shallDelay, delay)
 			local actualFocus = focus
 			local actualPublicize = publicize
@@ -573,6 +602,10 @@ do
 				else
 					actualFocus = getPlayerId(focus)
 				end
+			end
+
+			if actualFocus and actualFocus ~= 0 then
+				message = parseSayMessage(self, message, buildSayParseInfo(actualFocus))
 			end
 
 			return compat.originalNpcHandlerSay(self, message, actualFocus, actualPublicize, shallDelay, delay)
@@ -587,7 +620,11 @@ do
 				return compat.originalNpcHandlerResetNpc(self)
 			end
 
-			return compat.originalNpcHandlerResetNpc(self, getPlayerId(target))
+			local playerId = getPlayerId(target)
+			if self.__lastPlayerMessage then
+				self.__lastPlayerMessage[playerId] = nil
+			end
+			return compat.originalNpcHandlerResetNpc(self, playerId)
 		end
 	end
 
@@ -935,6 +972,38 @@ do
 		return openCompatShopWindow(self, player, itemsTable)
 	end
 
+	local function rememberPlayerMessage(handler, cid, message)
+		if not handler or not cid or message == nil then
+			return
+		end
+
+		handler.__lastPlayerMessage = handler.__lastPlayerMessage or {}
+		handler.__lastPlayerMessage[cid] = message
+	end
+
+	local function installLastMessageTracking(handler)
+		if not handler or not handler.keywordHandler or handler.__modernCompatMessageTrackingInstalled then
+			return
+		end
+
+		handler.__modernCompatMessageTrackingInstalled = true
+		local keywordHandler = handler.keywordHandler
+		local originalProcessMessage = keywordHandler.processMessage
+		local originalReleaseFocus = handler.releaseFocus
+
+		function keywordHandler:processMessage(cid, message)
+			rememberPlayerMessage(handler, cid, message)
+			return originalProcessMessage(self, cid, message)
+		end
+
+		function handler:releaseFocus(focus)
+			if self.__lastPlayerMessage then
+				self.__lastPlayerMessage[focus] = nil
+			end
+			return originalReleaseFocus(self, focus)
+		end
+	end
+
 	local function wrapHandlerCallback(handler, callbackId, wrapperFactory)
 		local callback = handler:getCallback(callbackId)
 		if not callback then
@@ -1087,10 +1156,12 @@ do
 
 		if handler then
 			handler.__modernCompatNpcName = npcName
+			installLastMessageTracking(handler)
 
 			wrapHandlerCallback(handler, CALLBACK_GREET, function(callback)
-				return function(cid)
-					return callModernCallback(callback, getCurrentNpc(handler), getCreatureObject(cid))
+				return function(cid, message)
+					message = message or (handler.__lastPlayerMessage and handler.__lastPlayerMessage[cid])
+					return callModernCallback(callback, getCurrentNpc(handler), getCreatureObject(cid), message)
 				end
 			end)
 

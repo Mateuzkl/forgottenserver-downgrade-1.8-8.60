@@ -34,6 +34,7 @@ constexpr uint8_t ASTRA_LOGIN_CAST_LIST_MARKER = 0xA2;
 constexpr uint8_t ASTRA_LOGIN_CAST_LIST_VERSION = 1;
 constexpr size_t ASTRA_LOGIN_CAST_LIST_LIMIT = std::numeric_limits<uint8_t>::max();
 constexpr std::string_view ASTRA_LOGIN_CAST_LIST_REQUEST = "__astra_casts_v1__";
+constexpr std::string_view FONTICAK_LOGIN_BOOSTED_REQUEST = "__fonticak_boosted_v1__";
 
 struct LoginCastEntry {
 	std::string name;
@@ -516,12 +517,20 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 		}
 	}
 
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient_) {
 		addAstraLoginBoostedInfo(output);
 	}
 
 	send(output);
 
+	disconnect();
+}
+
+void ProtocolLogin::getFonticakBoostedInfo()
+{
+	auto output = OutputMessagePool::getOutputMessage();
+	addAstraLoginBoostedInfo(output);
+	send(output);
 	disconnect();
 }
 
@@ -700,7 +709,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 
 	// Always detect AstraClient and FonticakClient, regardless of astraClientOnly setting.
 	// This allows sending the correct packet format (0x65 vs 0x64) to each client.
-	bool isFonticakClient_ = false;
+	isFonticakClient_ = false;
 	if (msg.getBufferPosition() + 2 <= msg.getLength()) {
 		uint16_t markerLength = msg.get<uint16_t>();
 		if (markerLength > 0 && markerLength <= 64 && msg.getBufferPosition() + markerLength <= msg.getLength()) {
@@ -731,6 +740,8 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 
 	const bool isAstraCastListRequest =
 	    accountName.empty() && isAstraClient_ && password == ASTRA_LOGIN_CAST_LIST_REQUEST;
+	const bool isFonticakBoostedRequest =
+	    accountName.empty() && isFonticakClient_ && password == FONTICAK_LOGIN_BOOSTED_REQUEST;
 	if (isAstraClient_ && !isAstraCastListRequest) {
 		LOG_DEBUG("[AstraClient] Login protocol client accepted");
 	}
@@ -752,10 +763,14 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	g_dispatcher.addTask([=, thisPtr = std::static_pointer_cast<ProtocolLogin>(shared_from_this()),
 	                      accountName = std::string{accountName},
 	                      password = std::string{password},
-	                      astraCastListRequest = isAstraCastListRequest]() {
+	                      astraCastListRequest = isAstraCastListRequest,
+	                      fonticakBoostedRequest = isFonticakBoostedRequest]() {
 		if (astraCastListRequest) {
 			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
 			thisPtr->getAstraCastList();
+		} else if (fonticakBoostedRequest) {
+			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
+			thisPtr->getFonticakBoostedInfo();
 		} else if (accountName.empty()) {
 			thisPtr->getCastList(password, clientIP);
 		} else {

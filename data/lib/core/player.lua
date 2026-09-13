@@ -217,6 +217,20 @@ function Player.isUsingOtClient(self)
 		       (os >= CLIENTOS_OTCLIENTV8_LINUX and os <= CLIENTOS_OTCLIENTV8_WEB)
 end
 
+function Player.supportsColorizedLoot(self)
+	if not self then
+		return false
+	end
+	if self.isUsingAstraClient and self:isUsingAstraClient() then
+		return true
+	end
+	return self.isUsingFonticakClient and self:isUsingFonticakClient()
+end
+
+function Player.supportsCustomItemNetwork(self)
+	return self:supportsColorizedLoot()
+end
+
 function Player.sendExtendedOpcode(self, opcode, buffer)
 	if not self:isUsingOtClient() then return false end
 	buffer = buffer or ""

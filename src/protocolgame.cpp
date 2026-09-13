@@ -456,7 +456,7 @@ ProtocolGame::~ProtocolGame()
 
 void ProtocolGame::sendBlessingWindow()
 {
-	if (!player || !isAstraClient) return;
+	if (!player || (!isAstraClient && !isFonticakClient)) return;
 
 	NetworkMessage msg;
 	msg.addByte(0x9B);
@@ -512,7 +512,7 @@ void ProtocolGame::sendBlessingWindow()
 
 void ProtocolGame::sendBlessStatus()
 {
-	if (!player || !isAstraClient) return;
+	if (!player || (!isAstraClient && !isFonticakClient)) return;
 
 	uint8_t totalCount = 0;
 	for (uint8_t i = 2; i <= 8; i++) {
@@ -556,7 +556,7 @@ void ProtocolGame::release()
 
 bool ProtocolGame::shouldSendQuickLootFlags() const
 {
-	return isAstraClient && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
+	return (isAstraClient || isFonticakClient) && getBoolean(ConfigManager::QUICK_LOOT_ENABLED);
 }
 
 bool ProtocolGame::shouldSendContainerPagination() const
@@ -1695,7 +1695,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xCF:
-			if (isAstraClient) {
+			if (isAstraClient || isFonticakClient) {
 				sendBlessingWindow();
 			}
 			break;
@@ -3088,7 +3088,7 @@ void ProtocolGame::sendKillTrackerUpdate(const std::shared_ptr<Container>& corps
 
 void ProtocolGame::sendItemValues()
 {
-	if (!isAstraClient) {
+	if (!isAstraClient && !isFonticakClient) {
 		return;
 	}
 
@@ -4643,7 +4643,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 		player->sendMonkData();
 	}
 
-	if (isAstraClient) {
+	if (isAstraClient || isFonticakClient) {
 		sendBlessStatus();
 	}
 
@@ -5296,41 +5296,75 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 	static const char* skillNames[] = {
 		"Fist", "Club", "Sword", "Axe", "Distance", "Shielding", "Fishing"
 	};
-	static const char* statNames[] = {
-		"", "", "", "Magic Level", ""
-	};
 	static const char* specialSkillNames[] = {
 		"Critical Hit Chance", "Critical Hit Amount",
 		"Life Leech Chance", "Life Leech Amount",
 		"Mana Leech Chance", "Mana Leech Amount"
 	};
 	if (itemType.abilities) {
-		std::string skillBonusParts;
+		const auto appendSignedBonus = [&descriptions](const std::string& key, int32_t value) {
+			if (value == 0) {
+				return;
+			}
+			const std::string formatted = value > 0 ? "+" + std::to_string(value) : std::to_string(value);
+			descriptions.emplace_back(key, formatted);
+		};
 
-		for (int i = STAT_FIRST; i <= STAT_LAST; ++i) {
-			if (itemType.abilities->stats[i] > 0 && statNames[i][0] != '\0') {
-				if (!skillBonusParts.empty()) skillBonusParts += ", ";
-				skillBonusParts += std::string(statNames[i]) + " +" + std::to_string(itemType.abilities->stats[i]);
+		const auto appendPercentBonus = [&descriptions](const std::string& key, int32_t value) {
+			if (value == 0) {
+				return;
 			}
+			const std::string formatted = value > 0 ? "+" + std::to_string(value) + "%" : std::to_string(value) + "%";
+			descriptions.emplace_back(key, formatted);
+		};
+
+		if (itemType.abilities->stats[STAT_MAGICPOINTS] != 0) {
+			appendSignedBonus("Magic Level", itemType.abilities->stats[STAT_MAGICPOINTS]);
 		}
+
+		for (int i = 0; i < COMBAT_COUNT; ++i) {
+			const int16_t value = itemType.abilities->specialMagicLevelSkill[i];
+			if (value == 0) {
+				continue;
+			}
+			const char* combatName = combatNames[i];
+			if (combatName == nullptr || combatName[0] == '\0') {
+				continue;
+			}
+			std::string label = combatName;
+			label[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(label[0])));
+			label += " Magic Level";
+			appendSignedBonus(label, value);
+		}
+
 		for (int i = SKILL_FIST; i <= SKILL_FISHING; ++i) {
-			if (itemType.abilities->skills[i] > 0) {
-				if (!skillBonusParts.empty()) skillBonusParts += ", ";
-				skillBonusParts += std::string(skillNames[i]) + " +" + std::to_string(itemType.abilities->skills[i]);
-			}
+			appendSignedBonus(skillNames[i], itemType.abilities->skills[i]);
 		}
-		if (itemType.abilities->speed > 0) {
-			if (!skillBonusParts.empty()) skillBonusParts += ", ";
-			skillBonusParts += "Speed +" + std::to_string(itemType.abilities->speed);
-		}
+
+		appendSignedBonus("Speed", itemType.abilities->speed);
+
 		for (int i = SPECIALSKILL_FIRST; i <= SPECIALSKILL_LAST; ++i) {
-			if (itemType.abilities->specialSkills[i] > 0) {
-				if (!skillBonusParts.empty()) skillBonusParts += ", ";
-				skillBonusParts += std::string(specialSkillNames[i]) + " +" + std::to_string(itemType.abilities->specialSkills[i]) + "%";
-			}
+			appendPercentBonus(specialSkillNames[i], itemType.abilities->specialSkills[i]);
 		}
-		if (!skillBonusParts.empty()) {
-			descriptions.emplace_back("Skill Bonus", skillBonusParts);
+	}
+
+	{
+		const std::string augmentDescription = itemType.parseAugmentDescription();
+		if (!augmentDescription.empty()) {
+			std::string augmentValue = augmentDescription;
+			if (!augmentValue.empty() && augmentValue.front() == '\n') {
+				augmentValue.erase(0, 1);
+			}
+			constexpr std::string_view augmentPrefix = "Augments: ";
+			if (augmentValue.rfind(augmentPrefix.data(), 0) == 0) {
+				augmentValue.erase(0, augmentPrefix.size());
+			}
+			if (!augmentValue.empty() && augmentValue.back() == '.') {
+				augmentValue.pop_back();
+			}
+			if (!augmentValue.empty()) {
+				descriptions.emplace_back("Augments", augmentValue);
+			}
 		}
 	}
 
