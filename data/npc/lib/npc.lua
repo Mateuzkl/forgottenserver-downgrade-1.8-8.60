@@ -985,10 +985,18 @@ do
 		handler.__modernCompatMessageTrackingInstalled = true
 		local keywordHandler = handler.keywordHandler
 		local originalProcessMessage = keywordHandler.processMessage
+		local originalReleaseFocus = handler.releaseFocus
 
 		function keywordHandler:processMessage(cid, message)
 			rememberPlayerMessage(handler, cid, message)
 			return originalProcessMessage(self, cid, message)
+		end
+
+		function handler:releaseFocus(focus)
+			if self.__lastPlayerMessage then
+				self.__lastPlayerMessage[focus] = nil
+			end
+			return originalReleaseFocus(self, focus)
 		end
 	end
 
