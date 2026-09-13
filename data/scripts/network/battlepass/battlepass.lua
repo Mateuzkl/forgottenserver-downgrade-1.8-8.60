@@ -47,6 +47,7 @@ local rateLimitedActions = {
 	getMissions = true,
 	getRewards = true,
 	getShop = true,
+	reroll = true,
 	buyShop = true,
 }
 local lastRequest = {}
@@ -88,6 +89,33 @@ local function clamp(value, minValue, maxValue)
 		return maxValue
 	end
 	return value
+end
+
+local seasonConfig = config.season
+if type(seasonConfig) ~= "table" then
+	error("[Battle Pass] Missing season configuration.")
+end
+
+-- maxStep is accepted only as a migration fallback for configurations created
+-- before reward progression and shop unlock were separate concepts.
+local rewardMaxStep = math.floor(tonumber(seasonConfig.rewardMaxStep) or tonumber(seasonConfig.maxStep) or 0)
+local shopUnlockStep = math.floor(tonumber(seasonConfig.shopUnlockStep) or rewardMaxStep)
+local pointsPerStep = math.floor(tonumber(seasonConfig.pointsPerStep) or 0)
+if rewardMaxStep < 1 or rewardMaxStep > 0xFFFF then
+	error("[Battle Pass] season.rewardMaxStep must be between 1 and 65535.")
+end
+if shopUnlockStep < 1 or shopUnlockStep > rewardMaxStep then
+	error("[Battle Pass] season.shopUnlockStep must be between 1 and season.rewardMaxStep.")
+end
+if pointsPerStep < 1 or rewardMaxStep * pointsPerStep > 0xFFFFFFFF then
+	error("[Battle Pass] season.pointsPerStep produces an invalid reward-track point range.")
+end
+
+local rewardTrackMaxPoints = rewardMaxStep * pointsPerStep
+local shopUnlockPoints = shopUnlockStep * pointsPerStep
+
+local function isShopUnlocked(state)
+	return (tonumber(state.points) or 0) >= shopUnlockPoints
 end
 
 local function getSeason()
@@ -142,11 +170,13 @@ local function ensureStateTables(state)
 	state.dailySlots = type(state.dailySlots) == "table" and state.dailySlots or {}
 	state.claimed = type(state.claimed) == "table" and state.claimed or {}
 	state.shopPurchases = type(state.shopPurchases) == "table" and state.shopPurchases or {}
-	state.points = clamp(state.points, 0, config.season.maxStep * config.season.pointsPerStep)
-	state.shopPoints = clamp(state.shopPoints, 0, 0xFFFFFFFF)
-	state.rerollCounter = tonumber(state.rerollCounter) or 0
+	state.points = math.floor(clamp(state.points, 0, rewardTrackMaxPoints))
+	state.shopPoints = math.floor(clamp(state.shopPoints, 0, 0xFFFFFFFF))
+	state.rerollCounter = math.floor(clamp(state.rerollCounter, 0, 0xFFFFFFFF))
 	state.premium = state.premium == true
-	state.completed = state.points >= config.season.maxStep * config.season.pointsPerStep
+	-- Kept for persisted-state compatibility. It exclusively means that the
+	-- reward track is complete and is recomputed on every load.
+	state.completed = state.points >= rewardTrackMaxPoints
 end
 
 local function resetStateForSeason(season)
@@ -216,9 +246,8 @@ local function setMissionAwarded(state, mission, daily)
 end
 
 local function addBattlePassPoints(state, amount)
-	local maxPoints = config.season.maxStep * config.season.pointsPerStep
-	state.points = clamp((tonumber(state.points) or 0) + amount, 0, maxPoints)
-	state.completed = state.points >= maxPoints
+	state.points = clamp((tonumber(state.points) or 0) + amount, 0, rewardTrackMaxPoints)
+	state.completed = state.points >= rewardTrackMaxPoints
 end
 
 local function addShopPoints(state, amount)
@@ -291,7 +320,7 @@ local function isPremiumActive(state)
 end
 
 local function getCurrentRewardStep(points)
-	return math.min(config.season.maxStep, math.floor((tonumber(points) or 0) / config.season.pointsPerStep))
+	return math.min(rewardMaxStep, math.floor((tonumber(points) or 0) / pointsPerStep))
 end
 
 local function getCurrentWeek(season)
@@ -307,7 +336,7 @@ end
 
 local function buildMissionsPayload(player, state, season, daily)
 	local currentRewardStep = getCurrentRewardStep(state.points)
-	local nextStepPoints = math.min((currentRewardStep + 1) * config.season.pointsPerStep, config.season.maxStep * config.season.pointsPerStep)
+	local nextStepPoints = math.min((currentRewardStep + 1) * pointsPerStep, rewardTrackMaxPoints)
 
 	local dailyMissions = {}
 	for _, mission in ipairs(getActiveDailyMissions(state, daily.key)) do
@@ -338,7 +367,7 @@ local function buildMissionsPayload(player, state, season, daily)
 		dailyMissions = dailyMissions,
 		generalMissions = generalPayload,
 		shopPoints = state.shopPoints,
-		shopUnlocked = state.completed,
+		shopUnlocked = isShopUnlocked(state),
 	}
 end
 
@@ -626,7 +655,7 @@ function BattlePassSystem.sendShop(player)
 
 	return sendBattlePassMessage(player, RESPONSE_SHOP, function(out)
 		writeU32(out, state.shopPoints)
-		writeBool(out, state.completed)
+		writeBool(out, isShopUnlocked(state))
 		writeU16(out, #entries)
 		for _, entry in ipairs(entries) do
 			local itemClientId = 0
@@ -747,7 +776,7 @@ end
 
 local function buildRewardSteps(state)
 	local steps = {}
-	for step = 1, config.season.maxStep do
+	for step = 1, rewardMaxStep do
 		local rewards = {}
 		local configuredStep = config.rewards[step] or {}
 
@@ -846,7 +875,7 @@ end
 local function findReward(step, rewardId)
 	step = tonumber(step) or 0
 	rewardId = tonumber(rewardId) or 0
-	if step < 1 or step > config.season.maxStep then
+	if step < 1 or step > rewardMaxStep then
 		return nil
 	end
 
@@ -1144,8 +1173,8 @@ function BattlePassSystem.purchaseShopEntry(player, shopId)
 	if os.time() < season.beginTime or os.time() >= season.endTime then
 		return false, "The Battle Pass season is not active."
 	end
-	if not state.completed then
-		return false, string.format("Complete Battle Pass level %d before using the shop.", config.season.maxStep)
+	if not isShopUnlocked(state) then
+		return false, string.format("Complete Battle Pass level %d before using the shop.", shopUnlockStep)
 	end
 
 	local entry = getShopEntry(shopId)
@@ -1254,6 +1283,16 @@ function BattlePassSystem.rerollDailyMission(player, data)
 		return false
 	end
 
+	local activeMission = missionById[missionId]
+	if not activeMission then
+		player:sendCancelMessage("[Battle Pass] This daily mission is invalid.")
+		return false
+	end
+	if wasMissionAwarded(state, activeMission, true) or getMissionProgress(state, activeMission, true) >= activeMission.maxProgress then
+		player:sendCancelMessage("[Battle Pass] A completed mission cannot be rerolled.")
+		return false
+	end
+
 	local pool = slotKey == "1" and dailyFreeMissions or dailyDeluxeMissions
 	if #pool < 2 then
 		player:sendCancelMessage("[Battle Pass] This mission cannot be rerolled right now.")
@@ -1314,10 +1353,10 @@ local function updateMissionProgress(player, state, mission, daily, monsterName)
 
 	if current >= mission.maxProgress and not wasMissionAwarded(state, mission, daily) then
 		setMissionAwarded(state, mission, daily)
-		if state.completed and daily then
+		if state.completed then
 			local shopPoints = math.max(0, tonumber(mission.shopPoints) or tonumber(mission.points) or 0)
 			addShopPoints(state, shopPoints)
-			player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Daily mission completed: " .. mission.name .. " (+" .. shopPoints .. " shop points).")
+			player:sendTextMessage(MESSAGE_STATUS_DEFAULT, "[Battle Pass] Mission completed: " .. mission.name .. " (+" .. shopPoints .. " shop points).")
 		else
 			local battlePassPoints = math.max(0, tonumber(mission.points) or 0)
 			addBattlePassPoints(state, battlePassPoints)
@@ -1348,7 +1387,7 @@ function BattlePassSystem.onKill(player, target)
 	local monsterName = target:getName()
 	local changed = false
 	local previousStep = getCurrentRewardStep(state.points)
-	local wasCompleted = state.completed
+	local wasShopUnlocked = isShopUnlocked(state)
 	local previousShopPoints = state.shopPoints
 
 	local dailyMissions = getActiveDailyMissions(state, daily.key)
@@ -1360,7 +1399,7 @@ function BattlePassSystem.onKill(player, target)
 	end
 
 	for _, mission in ipairs(generalMissions) do
-		if not state.completed and isGeneralMissionUnlocked(mission, season) then
+		if isGeneralMissionUnlocked(mission, season) then
 			changed = updateMissionProgress(player, state, mission, false, monsterName) or changed
 		end
 	end
@@ -1371,7 +1410,7 @@ function BattlePassSystem.onKill(player, target)
 		if getCurrentRewardStep(state.points) > previousStep then
 			BattlePassSystem.sendRewards(player)
 		end
-		if (not wasCompleted and state.completed) or state.shopPoints ~= previousShopPoints then
+		if (not wasShopUnlocked and isShopUnlocked(state)) or state.shopPoints ~= previousShopPoints then
 			BattlePassSystem.sendShop(player)
 		end
 	end
@@ -1441,8 +1480,8 @@ function BattlePassSystem.addShopPoints(player, amount)
 	end
 
 	local state, store, season, daily = loadState(player)
-	if not state.completed then
-		return false, string.format("Complete Battle Pass level %d before adding shop points. Use /battlepass unlockshop <player> for testing.", config.season.maxStep)
+	if not isShopUnlocked(state) then
+		return false, string.format("Complete Battle Pass level %d before adding shop points. Use /battlepass unlockshop <player> for testing.", shopUnlockStep)
 	end
 	addShopPoints(state, amount)
 	saveState(store, state)
@@ -1460,7 +1499,7 @@ function BattlePassSystem.unlockShop(player)
 	end
 
 	local state, store, season, daily = loadState(player)
-	state.points = config.season.maxStep * config.season.pointsPerStep
+	state.points = math.max(tonumber(state.points) or 0, shopUnlockPoints)
 	ensureStateTables(state)
 	saveState(store, state)
 	if supportsCustomNetwork(player) then
@@ -1469,6 +1508,32 @@ function BattlePassSystem.unlockShop(player)
 		BattlePassSystem.sendShop(player)
 	end
 	return true
+end
+
+function BattlePassSystem.prepareTestPlayer(player, shopPointAmount)
+	if not player then
+		return false, "Player not found."
+	end
+
+	shopPointAmount = math.floor(tonumber(shopPointAmount) or 10000)
+	if shopPointAmount < 0 then
+		return false, "Shop point amount cannot be negative."
+	end
+
+	local state, store, season, daily = loadState(player)
+	state.points = rewardTrackMaxPoints
+	state.completed = true
+	state.premium = true
+	-- This command prepares a deterministic test state. Repeating it with the
+	-- same value must not keep increasing the balance.
+	state.shopPoints = clamp(shopPointAmount, 0, 0xFFFFFFFF)
+	saveState(store, state)
+	if supportsCustomNetwork(player) then
+		sendMissionState(player, state, season, daily)
+		BattlePassSystem.sendRewards(player)
+		BattlePassSystem.sendShop(player)
+	end
+	return true, state.shopPoints
 end
 
 function BattlePassSystem.startNewSeason()

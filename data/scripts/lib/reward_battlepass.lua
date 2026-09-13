@@ -21,10 +21,10 @@ BattlePassConfig = {
 		startsAt = 0,
 		durationDays = 35,
 		resetHour = 10,
-		-- The existing Season 2 mission pool can award 6,775 points. Eighty
-		-- points per step keeps the 80-level track attainable without changing
-		-- the published mission values.
-		maxStep = 80,
+		-- Rewards end at level 50. Missions remain active afterwards and award
+		-- shop points instead of extending the reward track.
+		rewardMaxStep = 50,
+		shopUnlockStep = 50,
 		pointsPerStep = 80,
 	},
 
@@ -36,10 +36,10 @@ BattlePassConfig = {
 		goldPerLevel = 800,
 	},
 
-	-- The shop unlocks when the player completes level 80. From then until the
-	-- season ends, completed daily missions award their normal point value as
-	-- shop points. `shopPoints` can be added to an individual daily mission to
-	-- override that amount. All catalog data is seasonal and lives here.
+	-- The shop unlocks at shopUnlockStep. Once the reward track is complete,
+	-- completed daily and general missions award their normal point value as
+	-- shop points. `shopPoints` on a mission overrides that amount. All catalog
+	-- data is seasonal and lives here.
 	shop = {
 		items = {
 			{ id = 1, type = "mount", title = "Black Sheep Mount", description = "A dark and dependable companion.", price = 250, mountId = 4, looktype = 371 },
@@ -182,27 +182,3 @@ reward[47] = { deluxe = item(36726) }
 reward[48] = { free = { type = "doubleSkill", durationHours = 12 }, deluxe = { type = "doubleSkill", durationHours = 12 } }
 reward[49] = { free = { type = "xpBoost", durationHours = 2, percent = 50 }, deluxe = item(36725) }
 reward[50] = { free = { type = "level", count = 2 }, deluxe = { type = "outfit", male = { { looktype = 1289, name = "Dragon Slayer" } }, female = { { looktype = 1289, name = "Dragon Slayer" } }, addons = 3 } }
-
--- Levels 51-80 keep the same supported reward types and only use ids that
--- exist in this data pack. Change this table freely for a later season.
-local extendedRewards = {
-	{ free = item(3043, 5), deluxe = item(36725) },
-	{ deluxe = { type = "prey", count = 3 } },
-	{ free = exercise(exerciseWeapons, 3600), deluxe = exercise(durableWeapons, 3600, true) },
-	{ deluxe = { type = "charms", count = 50 } },
-	{ free = { type = "doubleSkill", durationHours = 3 }, deluxe = { type = "regeneration", durationHours = 6 } },
-	{ deluxe = item(28558) },
-	{ free = randomItem({ 3043, 2160 }, 2), deluxe = { type = "xpBoost", durationHours = 2, percent = 50 } },
-	{ deluxe = { type = "randomMount", mounts = { { id = 4, looktype = 371, name = "Black Sheep" }, { id = 16, looktype = 390, name = "Crystal Wolf" }, { id = 31, looktype = 506, name = "Dragonling" } } } },
-	{ free = { type = "prey", count = 2 }, deluxe = item(36726) },
-	{ deluxe = { type = "multiItem", items = { { itemId = 36725, count = 1 }, { itemId = 3043, count = 3 } } } },
-}
-
-for step = 51, 80 do
-	reward[step] = extendedRewards[((step - 51) % #extendedRewards) + 1]
-end
-
-reward[80] = {
-	free = { type = "level", count = 2 },
-	deluxe = { type = "charms", count = 250 },
-}

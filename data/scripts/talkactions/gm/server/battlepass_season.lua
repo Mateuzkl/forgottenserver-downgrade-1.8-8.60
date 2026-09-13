@@ -2,7 +2,7 @@ local talk = TalkAction("/battlepass")
 
 local function usage(player)
 	player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
-		"Usage: /battlepass status | newseason | reset <player> | sync <player> | unlockshop <player> | shopcoins|coins <player> <amount>")
+		"Usage: /battlepass status | newseason | reset <player> | sync <player> | unlockshop <player> | shopcoins|coins <player> <amount> | test [player] [shop points]")
 end
 
 function talk.onSay(player, words, param)
@@ -19,6 +19,7 @@ function talk.onSay(player, words, param)
 	targetName = (targetName or ""):trim()
 	local isShopCoinsAction = action == "shopcoins" or action == "coins" or action == "addcoins"
 	local isUnlockShopAction = action == "unlockshop" or action == "completeshop"
+	local isTestAction = action == "test" or action == "testplayer"
 
 	if action == "status" then
 		local season = BattlePassSystem.getSeasonInfo()
@@ -35,8 +36,8 @@ function talk.onSay(player, words, param)
 		return false
 	end
 
-	if action == "reset" or action == "sync" or isShopCoinsAction or isUnlockShopAction then
-		if targetName == "" then
+	if action == "reset" or action == "sync" or isShopCoinsAction or isUnlockShopAction or isTestAction then
+		if targetName == "" and not isTestAction then
 			usage(player)
 			return false
 		end
@@ -50,9 +51,24 @@ function talk.onSay(player, words, param)
 				usage(player)
 				return false
 			end
+		elseif isTestAction then
+			if targetName == "" then
+				amount = 10000
+			elseif targetName:match("^%d+$") then
+				amount = tonumber(targetName)
+				targetName = ""
+			else
+				local parsedName, parsedAmount = targetName:match("^(.-)%s+(%d+)$")
+				if parsedName then
+				targetName = parsedName:trim()
+				amount = tonumber(parsedAmount)
+				else
+					amount = 10000
+				end
+			end
 		end
 
-		local target = Player(targetName)
+		local target = isTestAction and targetName == "" and player or Player(targetName)
 		if not target then
 			player:sendCancelMessage("Player must be online.")
 			return false
@@ -82,6 +98,14 @@ function talk.onSay(player, words, param)
 			end
 			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
 				string.format("Added %d Battle Pass shop points to %s. New balance: %d.", amount, target:getName(), balanceOrError))
+		elseif isTestAction then
+			local ok, balanceOrError = BattlePassSystem.prepareTestPlayer(target, amount)
+			if not ok then
+				player:sendCancelMessage(balanceOrError or "Could not prepare the Battle Pass test state.")
+				return false
+			end
+			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
+				string.format("Battle Pass test state enabled for %s: level 50, Deluxe, shop unlocked, balance %d.", target:getName(), balanceOrError))
 		else
 			local ok, errorMessage = BattlePassSystem.unlockShop(target)
 			if not ok then
