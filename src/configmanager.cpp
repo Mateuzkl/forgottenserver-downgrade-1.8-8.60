@@ -448,6 +448,7 @@ bool ConfigManager::load()
 	booleans[Boolean::FAMILIAR_SYSTEM_ENABLED] = getGlobalBoolean(L, "familiarSystemEnabled", false);
 	booleans[Boolean::WHEEL_SYSTEM_ENABLED] = getGlobalBoolean(L, "wheelSystemEnabled", false);
 	booleans[Boolean::BESTIARY_SYSTEM_ENABLED] = getGlobalBoolean(L, "bestiarySystemEnabled", false);
+	booleans[Boolean::ECHO_RAID_SYSTEM_ENABLED] = getGlobalBoolean(L, "echoRaidSystemEnabled", true);
 	booleans[Boolean::MARKET_SYSTEM_ENABLED] = getGlobalBoolean(L, "marketSystemEnabled", false);
 	booleans[Boolean::PREY_SYSTEM_ENABLED] = getGlobalBoolean(L, "preySystemEnabled", false);
 	booleans[Boolean::BATTLEPASS_SYSTEM_ENABLED] = getGlobalBoolean(L, "battlePassSystemEnabled", false);

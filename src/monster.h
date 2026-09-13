@@ -110,6 +110,19 @@ public:
 	void setFiendish(bool v);
 	bool applyEchoWarden(double healthMultiplier, double attackMultiplier);
 	bool isEchoWarden() const { return echoWarden; }
+	uint64_t getEchoRaidId() const { return echoRaidId; }
+	void setEchoRaidId(uint64_t raidId) { echoRaidId = raidId; }
+	bool isEchoRaidSpawn() const { return echoRaidId != 0; }
+	bool isEchoWardProtected() const { return echoWardProtected; }
+	void setEchoWardProtected(bool value);
+	bool markEchoWardenLootGranted()
+	{
+		if (echoWardenLootGranted) {
+			return false;
+		}
+		echoWardenLootGranted = true;
+		return true;
+	}
 	bool applyBossDifficulty(uint16_t difficulty, uint16_t raceId = 0);
 	bool hasBossDifficulty() const { return bossDifficultyApplied; }
 	uint16_t getBossDifficulty() const { return bossDifficulty; }
@@ -233,6 +246,9 @@ private:
 	uint8_t influencedLevel = 0;
 	bool fiendish = false;
 	bool echoWarden = false;
+	bool echoWardProtected = false;
+	bool echoWardenLootGranted = false;
+	uint64_t echoRaidId = 0;
 	double echoWardenAttackMultiplier = 1.0;
 	bool bossDifficultyApplied = false;
 	uint16_t bossDifficulty = 0;

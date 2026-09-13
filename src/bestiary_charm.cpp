@@ -124,6 +124,8 @@ void BestiaryCharmSystem::registerMonster(BestiaryCreatureInfo info)
 	if (info.secondUnlock < info.firstUnlock || info.secondUnlock > info.toKill) {
 		info.secondUnlock = info.toKill;
 	}
+	info.stars = std::min<uint8_t>(info.stars, 5);
+	info.occurrence = std::min<uint8_t>(info.occurrence, 4);
 
 	monstersByRaceId[info.raceId] = std::move(info);
 }

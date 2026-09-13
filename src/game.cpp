@@ -14,6 +14,7 @@
 #include "databasetasks.h"
 #include "enums.h"
 #include "equipment_combat_bonus.h"
+#include "echo_raid.h"
 #include "events.h"
 #include "globalevent.h"
 #include "housetile.h"
@@ -691,6 +692,7 @@ void Game::setGameState(GameState_t newState)
 			g_globalEvents->save();
 			g_globalEvents->shutdown();
 			LOG_INFO(">> Global events saved and shutdown.");
+			g_echoRaidManager.cleanupAll();
 
 			// kick all players that are still online
 			while (true) {
@@ -1305,6 +1307,7 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 	creature->setRemoved();
 
 	removeCreatureCheck(creature);
+	g_echoRaidManager.onCreatureRemoved(creature->getID());
 
 	// Explicitly clear each summon master before recursive removal so the
 	// relationship is detached while both shared references are still held.
@@ -6086,6 +6089,7 @@ void Game::removeCreatureCheck(Creature* creature)
 void Game::checkCreatures(size_t index)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatures);
+	g_echoRaidManager.tick(static_cast<uint64_t>(OTSYS_TIME()));
 	auto& checkCreatureList = checkCreatureLists[index];
 	size_t i = 0;
 
@@ -6930,6 +6934,18 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		int32_t healthChange = damage.primary.value + damage.secondary.value;
 		if (healthChange == 0) {
 			return true;
+		}
+		if (!damage.echoWardDodgeChecked) {
+			damage.echoWardDodgeChecked = true;
+			if (const Monster* targetMonster = target->getMonster();
+			    targetMonster && g_echoRaidManager.tryEchoWardDodge(*targetMonster)) {
+				damage.primary.value = 0;
+				damage.secondary.value = 0;
+				damage.blockType = BLOCK_DODGE;
+				damage.dodge = true;
+				addMagicEffect(targetPos, CONST_ME_DODGE, target->getInstanceID());
+				return true;
+			}
 		}
 
 		TextMessage message;
@@ -8848,6 +8864,9 @@ bool Game::reload(ReloadTypes_t reloadType)
 		}
 		case RELOAD_TYPE_CONFIG: {
 			bool result = ConfigManager::load();
+			if (result && !g_echoRaidManager.isEnabled()) {
+				g_echoRaidManager.cleanupAll();
+			}
 			if (result) LOG_INFO("Config reloaded successfully.");
 			return result;
 		}
@@ -8872,10 +8891,14 @@ bool Game::reload(ReloadTypes_t reloadType)
 			return true;
 		}
 		case RELOAD_TYPE_ITEMS: {
+			g_echoRaidManager.cleanupAll();
 			for (const auto& player : getPlayers()) {
 				player->reloadEquipmentStats();
 			}
 			bool result = Item::items.reload();
+			if (result && g_echoRaidManager.isConfigured()) {
+				result = g_echoRaidManager.configure(g_echoRaidManager.getConfig());
+			}
 			if (result) LOG_INFO("Items reloaded successfully.");
 			for (const auto& player : getPlayers()) {
 				player->applyEquipmentStats();

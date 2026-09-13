@@ -1044,6 +1044,18 @@ class ProtocolSpectator {
                 spy->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
         }
 
+        void sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints) {
+            auto o = owner.lock();
+            if (o)
+                o->sendEchoWardenReward(raceId, charmPoints);
+
+            for (auto &it : spectators)
+                it->sendEchoWardenReward(raceId, charmPoints);
+
+            for (auto &spy : spyClients_)
+                spy->sendEchoWardenReward(raceId, charmPoints);
+        }
+
         void sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time) {
             auto o = owner.lock();
             if (o)

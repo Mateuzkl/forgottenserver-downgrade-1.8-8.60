@@ -7,6 +7,7 @@
 
 #include "configmanager.h"
 #include "database.h"
+#include "echo_raid.h"
 #include "events.h"
 #include "game.h"
 #include "iologindata.h"
@@ -244,7 +245,8 @@ void Monster::setFiendish(bool v)
 
 bool Monster::applyEchoWarden(double healthMultiplier, double attackMultiplier)
 {
-	if (echoWarden || isSummon() || isBoss() || influenced || fiendish || !std::isfinite(healthMultiplier) ||
+	if (echoWarden || isSummon() || mType->info.isBoss || isRewardBoss() || influenced || fiendish ||
+	    !std::isfinite(healthMultiplier) ||
 	    !std::isfinite(attackMultiplier) || healthMultiplier <= 0.0 || attackMultiplier <= 0.0) {
 		return false;
 	}
@@ -259,6 +261,20 @@ bool Monster::applyEchoWarden(double healthMultiplier, double attackMultiplier)
 	g_game.updateCreatureIcon(this);
 	g_game.addCreatureHealth(this);
 	return true;
+}
+
+void Monster::setEchoWardProtected(bool value)
+{
+	if (echoWardProtected == value) {
+		return;
+	}
+	echoWardProtected = value;
+	if (value) {
+		setIcon("echo_ward", CreatureIcon(CreatureIconModifications_Influenced));
+	} else {
+		removeIcon("echo_ward");
+	}
+	g_game.updateCreatureIcon(this);
 }
 
 bool Monster::applyBossDifficulty(uint16_t difficulty, uint16_t raceId)
@@ -3175,6 +3191,8 @@ void Monster::dropLoot(Container* corpse, Creature*)
 	} else if (lootDrop) {
 		g_events->eventMonsterOnDropLoot(this, corpse);
 	}
+
+	g_echoRaidManager.addWardenLoot(*this, *corpse);
 }
 
 void Monster::setNormalCreatureLight() { internalLight = mType->info.light; }

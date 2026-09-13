@@ -5,6 +5,7 @@
 
 #include "bestiary_charm.h"
 #include "configmanager.h"
+#include "echo_raid.h"
 #include "events.h"
 #include "game.h"
 #include "luascript.h"
@@ -31,6 +32,41 @@ extern LuaEnvironment g_luaEnvironment;
 
 namespace {
 using namespace Lua;
+
+template <typename T>
+T getEchoIntegerField(lua_State* L, int tableIndex, const char* field, T defaultValue)
+{
+	lua_getfield(L, tableIndex, field);
+	const T value = lua_isnumber(L, -1) ? getNumber<T>(L, -1) : defaultValue;
+	lua_pop(L, 1);
+	return value;
+}
+
+double getEchoNumberField(lua_State* L, int tableIndex, const char* field, double defaultValue)
+{
+	lua_getfield(L, tableIndex, field);
+	const double value = lua_isnumber(L, -1) ? getNumber<double>(L, -1) : defaultValue;
+	lua_pop(L, 1);
+	return value;
+}
+
+bool getEchoBooleanField(lua_State* L, int tableIndex, const char* field, bool defaultValue)
+{
+	lua_getfield(L, tableIndex, field);
+	const bool value = lua_isboolean(L, -1) ? getBoolean(L, -1) : defaultValue;
+	lua_pop(L, 1);
+	return value;
+}
+
+template <typename Callback>
+void withEchoTableField(lua_State* L, int tableIndex, const char* field, Callback&& callback)
+{
+	lua_getfield(L, tableIndex, field);
+	if (lua_istable(L, -1)) {
+		callback(lua_gettop(L));
+	}
+	lua_pop(L, 1);
+}
 
 // Game
 int luaGameGetSpectators(lua_State* L)
@@ -1447,7 +1483,8 @@ int luaGameCleanupSupplyStash(lua_State* L)
 
 int luaGameRegisterBestiaryMonsterData(lua_State* L)
 {
-	// Game.registerBestiaryMonsterData(raceId, name, toKill, firstUnlock, secondUnlock, charmPoints, lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons)
+	// Game.registerBestiaryMonsterData(raceId, name, toKill, firstUnlock, secondUnlock, charmPoints,
+	// lookType, lookHead, lookBody, lookLegs, lookFeet, lookAddons[, stars[, occurrence]])
 	if (!BestiaryCharmSystem::isEnabled()) {
 		pushBoolean(L, false);
 		return 1;
@@ -1467,6 +1504,8 @@ int luaGameRegisterBestiaryMonsterData(lua_State* L)
 		info.lookLegs = getInteger<uint8_t>(L, 10, 0);
 		info.lookFeet = getInteger<uint8_t>(L, 11, 0);
 		info.lookAddons = getInteger<uint8_t>(L, 12, 0);
+		info.stars = getInteger<uint8_t>(L, 13, 0);
+		info.occurrence = getInteger<uint8_t>(L, 14, 0);
 	} else {
 		info.firstUnlock = 1;
 		info.secondUnlock = info.toKill;
@@ -1482,6 +1521,145 @@ int luaGameRegisterBestiaryMonsterData(lua_State* L)
 	g_bestiaryCharmSystem.registerMonster(info);
 	pushBoolean(L, true);
 	return 1;
+}
+
+int luaGameConfigureEchoRaid(lua_State* L)
+{
+	// Game.configureEchoRaid(config)
+	if (!lua_istable(L, 1)) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	EchoRaidConfig config;
+	config.enabled = getEchoBooleanField(L, 1, "enabled", config.enabled);
+	config.lifetimeMs = getEchoIntegerField<uint32_t>(L, 1, "lifetimeMs", config.lifetimeMs);
+
+	withEchoTableField(L, 1, "portal", [&](int table) {
+		config.portalItemId = getEchoIntegerField<uint16_t>(L, table, "itemId", config.portalItemId);
+		config.portalDelayMs = getEchoIntegerField<uint32_t>(L, table, "delayMs", config.portalDelayMs);
+		config.portalTtlMs = getEchoIntegerField<uint32_t>(L, table, "ttlMs", config.portalTtlMs);
+	});
+	withEchoTableField(L, 1, "eligibility", [&](int table) {
+		withEchoTableField(L, table, "occurrences", [&](int occurrences) {
+			config.eligibleOccurrences.fill(false);
+			const size_t count = lua_objlen(L, occurrences);
+			for (size_t index = 1; index <= count; ++index) {
+				lua_rawgeti(L, occurrences, static_cast<int>(index));
+				const uint8_t value = lua_isnumber(L, -1) ? getNumber<uint8_t>(L, -1) : 0;
+				lua_pop(L, 1);
+				if (value < config.eligibleOccurrences.size()) {
+					config.eligibleOccurrences[value] = true;
+				}
+			}
+		});
+	});
+	withEchoTableField(L, 1, "spawn", [&](int table) {
+		config.spawnChanceNumerator =
+		    getEchoIntegerField<uint32_t>(L, table, "numerator", config.spawnChanceNumerator);
+		config.spawnChanceDenominator =
+		    getEchoIntegerField<uint32_t>(L, table, "denominator", config.spawnChanceDenominator);
+		config.spawnRadius = getEchoIntegerField<uint8_t>(L, table, "radius", config.spawnRadius);
+	});
+	withEchoTableField(L, 1, "outcomes", [&](int table) {
+		config.normalWeight = getEchoIntegerField<uint32_t>(L, table, "normalWeight", config.normalWeight);
+		config.influencedWeight =
+		    getEchoIntegerField<uint32_t>(L, table, "influencedWeight", config.influencedWeight);
+		config.wardenWeight = getEchoIntegerField<uint32_t>(L, table, "wardenWeight", config.wardenWeight);
+		config.completedBestiaryWardenMultiplier = getEchoNumberField(
+		    L, table, "completedBestiaryWardenMultiplier", config.completedBestiaryWardenMultiplier);
+	});
+	withEchoTableField(L, 1, "normal", [&](int table) {
+		config.normalCountMin = getEchoIntegerField<uint8_t>(L, table, "countMin", config.normalCountMin);
+		config.normalCountMax = getEchoIntegerField<uint8_t>(L, table, "countMax", config.normalCountMax);
+	});
+	withEchoTableField(L, 1, "influenced", [&](int table) {
+		config.influencedCount = getEchoIntegerField<uint8_t>(L, table, "count", config.influencedCount);
+		config.influencedLevelMin =
+		    getEchoIntegerField<uint8_t>(L, table, "levelMin", config.influencedLevelMin);
+		config.influencedLevelMax =
+		    getEchoIntegerField<uint8_t>(L, table, "levelMax", config.influencedLevelMax);
+	});
+	withEchoTableField(L, 1, "warden", [&](int table) {
+		config.wardenHealthMultiplier =
+		    getEchoNumberField(L, table, "healthMultiplier", config.wardenHealthMultiplier);
+		config.wardenAttackMultiplier =
+		    getEchoNumberField(L, table, "attackMultiplier", config.wardenAttackMultiplier);
+		config.wardenMinionCountMin =
+		    getEchoIntegerField<uint8_t>(L, table, "minionCountMin", config.wardenMinionCountMin);
+		config.wardenMinionCountMax =
+		    getEchoIntegerField<uint8_t>(L, table, "minionCountMax", config.wardenMinionCountMax);
+		config.auraRange = getEchoIntegerField<uint8_t>(L, table, "auraRange", config.auraRange);
+		config.auraIntervalMs =
+		    getEchoIntegerField<uint32_t>(L, table, "auraIntervalMs", config.auraIntervalMs);
+		config.auraDodgeChancePercent =
+		    getEchoNumberField(L, table, "auraDodgeChancePercent", config.auraDodgeChancePercent);
+	});
+	withEchoTableField(L, 1, "rewards", [&](int table) {
+		withEchoTableField(L, table, "charmPointsByStars", [&](int points) {
+			for (size_t stars = 0; stars < config.charmPointsByStars.size(); ++stars) {
+				lua_rawgeti(L, points, static_cast<int>(stars));
+				if (lua_isnumber(L, -1)) {
+					config.charmPointsByStars[stars] = getNumber<uint32_t>(L, -1);
+				}
+				lua_pop(L, 1);
+			}
+		});
+		withEchoTableField(L, table, "basicScrollItemIds", [&](int items) {
+			config.basicScrollItemIds.clear();
+			const size_t count = lua_objlen(L, items);
+			config.basicScrollItemIds.reserve(count);
+			for (size_t index = 1; index <= count; ++index) {
+				lua_rawgeti(L, items, static_cast<int>(index));
+				if (lua_isnumber(L, -1)) {
+					config.basicScrollItemIds.push_back(getNumber<uint16_t>(L, -1));
+				}
+				lua_pop(L, 1);
+			}
+		});
+		withEchoTableField(L, table, "catalysts", [&](int catalysts) {
+			config.catalystItems.clear();
+			const size_t count = lua_objlen(L, catalysts);
+			config.catalystItems.reserve(count);
+			for (size_t index = 1; index <= count; ++index) {
+				lua_rawgeti(L, catalysts, static_cast<int>(index));
+				if (lua_istable(L, -1)) {
+					const int entry = lua_gettop(L);
+					config.catalystItems.push_back({
+					    getEchoIntegerField<uint16_t>(L, entry, "itemId", 0),
+					    getEchoIntegerField<uint32_t>(L, entry, "weight", 0),
+					});
+				}
+				lua_pop(L, 1);
+			}
+		});
+	});
+
+	pushBoolean(L, g_echoRaidManager.configure(std::move(config)));
+	return 1;
+}
+
+int luaGameActivateEchoRaid(lua_State* L)
+{
+	// Game.activateEchoRaid(player, item) -> success, message
+	Player* player = getUserdata<Player>(L, 1);
+	Item* item = getUserdata<Item>(L, 2);
+	std::string message;
+	const bool success = player && item && g_echoRaidManager.activateEcho(*player, *item, message);
+	pushBoolean(L, success);
+	pushString(L, message.empty() ? "The Echo could not be activated." : message);
+	return 2;
+}
+
+int luaGameEchoRaidCommand(lua_State* L)
+{
+	// Game.echoRaidCommand(player, command) -> success, message
+	Player* player = getUserdata<Player>(L, 1);
+	std::string message;
+	const bool success = player && g_echoRaidManager.executeDebugCommand(*player, getString(L, 2), message);
+	pushBoolean(L, success);
+	pushString(L, message);
+	return 2;
 }
 
 int luaGameHandleBestiaryCharmAction(lua_State* L)
@@ -1735,6 +1913,9 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "removeSupplyStashAmount", luaGameRemoveSupplyStashAmount);
 	registerMethod("Game", "cleanupSupplyStash", luaGameCleanupSupplyStash);
 	registerMethod("Game", "registerBestiaryMonsterData", luaGameRegisterBestiaryMonsterData);
+	registerMethod("Game", "configureEchoRaid", luaGameConfigureEchoRaid);
+	registerMethod("Game", "activateEchoRaid", luaGameActivateEchoRaid);
+	registerMethod("Game", "echoRaidCommand", luaGameEchoRaidCommand);
 	registerMethod("Game", "handleBestiaryCharmAction", luaGameHandleBestiaryCharmAction);
 	registerMethod("Game", "getBestiaryKills", luaGameGetBestiaryKills);
 	registerMethod("Game", "getBestiaryKillCount", luaGameGetBestiaryKillCount);

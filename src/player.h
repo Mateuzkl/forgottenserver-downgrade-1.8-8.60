@@ -1372,6 +1372,12 @@ public:
 			client->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
 		}
 	}
+	void sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints) const
+	{
+		if (client) {
+			client->sendEchoWardenReward(raceId, charmPoints);
+		}
+	}
 	void sendPing();
 	void sendStats();
 	void sendBasicData() const

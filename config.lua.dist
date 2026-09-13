@@ -162,6 +162,8 @@ wheelSystemEnabled = false
 -- Enabling Bestiary loads its scripts and monster registry during startup.
 -- Restart the server after changing this option from false to true.
 bestiarySystemEnabled = false
+-- Echo Raid requires Bestiary. Detailed balance and item IDs live in data/lib/core/echo.lua.
+echoRaidSystemEnabled = true
 marketSystemEnabled = false
 preySystemEnabled = false
 battlePassSystemEnabled = false

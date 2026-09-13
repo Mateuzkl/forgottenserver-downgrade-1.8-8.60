@@ -5700,6 +5700,20 @@ void ProtocolGame::sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t 
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints)
+{
+	if (!isAstraClient || raceId == 0 || charmPoints == 0) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x75);
+	msg.addByte(SCREENSHOT_AND_BANNER_TYPE_ECHO_WARDEN);
+	msg.add<uint16_t>(raceId);
+	msg.add<uint32_t>(charmPoints);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendUseItemCooldown(uint32_t time)
 {
 	if (!isOTC) {
