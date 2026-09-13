@@ -1132,6 +1132,17 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    AstraClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == AstraClient::CAPABILITIES_MARKER) {
+					if (!isAstraClient || getReadableBytes(msg) < sizeof(uint8_t)) {
+						break;
+					}
+					const uint8_t capabilities = msg.getByte();
+					supportsGameStoreHighlights =
+					    (capabilities & AstraClient::StoreHighlights) != 0;
+					supportsAstraSingleCreatureMarks =
+					    (capabilities & AstraClient::SingleCreatureMarks) != 0;
+					supportsAstraEchoRaidVisuals =
+					    supportsAstraSingleCreatureMarks && (capabilities & AstraClient::EchoRaidVisuals) != 0;
 				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
