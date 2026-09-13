@@ -3270,6 +3270,8 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::EXP_FROM_PLAYERS_LEVEL_RANGE);
 	registerEnumIn("configKeys", ConfigManager::MAX_PACKETS_PER_SECOND);
 	registerEnumIn("configKeys", ConfigManager::QUICK_LOOT_MAX_CORPSES);
+	registerEnumIn("configKeys", ConfigManager::ECHO_RAID_PORTAL_SPAWN_NUMERATOR);
+	registerEnumIn("configKeys", ConfigManager::ECHO_RAID_PORTAL_SPAWN_DENOMINATOR);
 	registerEnumIn("configKeys", ConfigManager::BATTLEPASS_REWARD_MAX_STEP);
 	registerEnumIn("configKeys", ConfigManager::BATTLEPASS_SHOP_UNLOCK_STEP);
 	registerEnumIn("configKeys", ConfigManager::STAMINA_REGEN_MINUTE);

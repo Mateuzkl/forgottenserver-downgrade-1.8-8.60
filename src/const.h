@@ -426,8 +426,8 @@ enum SquareColor_t : uint8_t
 enum class EchoRaidVisualState : int8_t
 {
 	None = -1,
-	Leader = 0,
-	Minion = 1,
+	Warden = 0,
+	Empowered = 1,
 };
 
 enum TextColor_t : uint8_t

@@ -1,6 +1,7 @@
 #include "../otpch.h"
 
 #include "../configmanager.h"
+#include "../astraclient.h"
 #include "../echo_raid.h"
 #include "../item.h"
 
@@ -33,6 +34,9 @@ void ensureItemTypesLoaded()
 }
 
 constexpr std::array<bool, 5> commonAndUncommon = {false, true, true, false, false};
+
+static_assert(AstraClient::SINGLE_CREATURE_MARK_OPCODE == 0x93);
+static_assert(AstraClient::ECHO_RAID_VISUAL_MARK_TYPE == 15);
 
 } // namespace
 
@@ -90,6 +94,27 @@ TEST_CASE(completed_bestiary_doubles_only_the_warden_outcome_weight)
 	CHECK(completedWardenSlots == 4);
 }
 
+TEST_CASE(echo_warden_spawn_plan_is_one_warden_with_two_normal_and_two_influenced_companions)
+{
+	const auto plan = EchoRaidManager::buildSpawnPlan(EchoRaidOutcome::Warden, 0, 0, 2, 2);
+	CHECK(plan.size() == 4);
+	CHECK(!plan[0]);
+	CHECK(!plan[1]);
+	CHECK(plan[2]);
+	CHECK(plan[3]);
+}
+
+TEST_CASE(echo_raid_spawn_plans_keep_normal_and_influenced_outcomes_separate)
+{
+	const auto normal = EchoRaidManager::buildSpawnPlan(EchoRaidOutcome::Normal, 5, 4, 2, 2);
+	CHECK(normal.size() == 5);
+	CHECK(std::none_of(normal.begin(), normal.end(), [](bool influenced) { return influenced; }));
+
+	const auto influenced = EchoRaidManager::buildSpawnPlan(EchoRaidOutcome::Influenced, 5, 4, 2, 2);
+	CHECK(influenced.size() == 4);
+	CHECK(std::all_of(influenced.begin(), influenced.end(), [](bool value) { return value; }));
+}
+
 TEST_CASE(echo_raid_item_ids_are_aligned_and_present_in_otb)
 {
 	ensureItemTypesLoaded();
@@ -139,7 +164,7 @@ TEST_CASE(echo_raid_lifecycle_model_releases_all_runtime_records_after_10000_cyc
 		CHECK(portals.erase(raidId) == 1); // first activation consumes once
 		CHECK(portals.erase(raidId) == 0); // same-tick second activation is rejected
 		raids.insert(raidId);
-		for (uint32_t offset = 0; offset < 13; ++offset) {
+		for (uint32_t offset = 0; offset < 5; ++offset) {
 			creatureToRaid.emplace(static_cast<uint32_t>(raidId * 16 + offset), raidId);
 		}
 		for (auto it = creatureToRaid.begin(); it != creatureToRaid.end();) {

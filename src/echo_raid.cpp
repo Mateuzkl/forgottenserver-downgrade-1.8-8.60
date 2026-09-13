@@ -8,10 +8,10 @@
 #include "bestiary_charm.h"
 #include "configmanager.h"
 #include "container.h"
+#include "database.h"
 #include "events.h"
 #include "game.h"
 #include "item.h"
-#include "kv/kv.h"
 #include "logger.h"
 #include "monster.h"
 #include "monsters.h"
@@ -125,19 +125,24 @@ bool EchoRaidManager::validateConfig(const EchoRaidConfig& candidate, std::strin
 		error = fmt::format("portal item {} is missing from items.otb", candidate.portalItemId);
 		return false;
 	}
+	constexpr uint64_t randomLimit = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
 	if (candidate.portalTtlMs == 0 || candidate.lifetimeMs == 0 || candidate.spawnChanceDenominator == 0 ||
-	    candidate.spawnChanceNumerator > candidate.spawnChanceDenominator) {
+	    candidate.spawnChanceNumerator > candidate.spawnChanceDenominator ||
+	    candidate.spawnChanceNumerator > randomLimit || candidate.spawnChanceDenominator > randomLimit) {
 		error = "invalid lifetime or spawn chance";
 		return false;
 	}
-	if (candidate.normalWeight + candidate.influencedWeight + candidate.wardenWeight == 0) {
-		error = "outcome weights sum to zero";
+	const uint32_t maximumWardenWeight =
+	    saturatingScaledWeight(candidate.wardenWeight, candidate.completedBestiaryWardenMultiplier);
+	const uint64_t maximumOutcomeWeight = static_cast<uint64_t>(candidate.normalWeight) +
+	                                      candidate.influencedWeight + maximumWardenWeight;
+	if (maximumOutcomeWeight == 0 || maximumOutcomeWeight > randomLimit) {
+		error = "invalid outcome weights";
 		return false;
 	}
 	if (candidate.normalCountMin == 0 || candidate.normalCountMin > candidate.normalCountMax ||
 	    candidate.influencedCount == 0 || candidate.influencedLevelMin == 0 ||
-	    candidate.influencedLevelMin > candidate.influencedLevelMax || candidate.wardenMinionCountMin == 0 ||
-	    candidate.wardenMinionCountMin > candidate.wardenMinionCountMax || candidate.auraRange == 0 ||
+	    candidate.influencedLevelMin > candidate.influencedLevelMax || candidate.auraRange == 0 ||
 	    candidate.auraIntervalMs == 0 || candidate.spawnRadius == 0 || candidate.spawnIntervalMs == 0) {
 		error = "invalid raid size, level, aura, or radius";
 		return false;
@@ -211,6 +216,27 @@ EchoRaidOutcome EchoRaidManager::selectOutcome(uint64_t roll, uint32_t normalWei
 		return EchoRaidOutcome::Influenced;
 	}
 	return EchoRaidOutcome::Warden;
+}
+
+std::deque<bool> EchoRaidManager::buildSpawnPlan(EchoRaidOutcome outcome, uint8_t normalCount,
+	                                               uint8_t influencedCount,
+	                                               uint8_t wardenNormalCompanionCount,
+	                                               uint8_t wardenInfluencedCompanionCount)
+{
+	std::deque<bool> plan;
+	switch (outcome) {
+		case EchoRaidOutcome::Normal:
+			plan.assign(normalCount, false);
+			break;
+		case EchoRaidOutcome::Influenced:
+			plan.assign(influencedCount, true);
+			break;
+		case EchoRaidOutcome::Warden:
+			plan.insert(plan.end(), wardenNormalCompanionCount, false);
+			plan.insert(plan.end(), wardenInfluencedCompanionCount, true);
+			break;
+	}
+	return plan;
 }
 
 bool EchoRaidManager::isEligibleMonster(const Monster& monster) const
@@ -322,15 +348,20 @@ void EchoRaidManager::expirePortals(uint64_t now)
 		}
 	}
 	for (uint64_t token : expired) {
-		auto it = portals.find(token);
-		if (it == portals.end()) {
-			continue;
-		}
-		auto item = it->second.item.lock();
-		portals.erase(it);
-		if (item && !item->isRemoved()) {
-			g_game.internalRemoveItem(item.get(), -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE);
-		}
+		removePortal(token, true);
+	}
+}
+
+void EchoRaidManager::removePortal(uint64_t token, bool removeItem)
+{
+	auto it = portals.find(token);
+	if (it == portals.end()) {
+		return;
+	}
+	auto item = it->second.item.lock();
+	portals.erase(it);
+	if (removeItem && item && !item->isRemoved()) {
+		g_game.internalRemoveItem(item.get(), -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE);
 	}
 }
 
@@ -370,23 +401,34 @@ bool EchoRaidManager::activateEcho(Player& player, Item& item, std::string& mess
 	}
 	PortalRecord portal = it->second;
 	auto trackedItem = portal.item.lock();
-	if (!trackedItem || trackedItem.get() != &item || static_cast<uint64_t>(OTSYS_TIME()) >= portal.expiresAt) {
-		portals.erase(it);
+	const uint64_t now = static_cast<uint64_t>(OTSYS_TIME());
+	if (!trackedItem || trackedItem.get() != &item || now >= portal.expiresAt) {
+		removePortal(token, true);
 		message = "This Echo has expired.";
 		return false;
 	}
 
-	// Erasing first is the atomic consume marker. Step-in and use execute on the
-	// game dispatcher, so a second hook in the same tick cannot start another raid.
+	// Erasing the record is the activation lock. The physical portal remains until
+	// raid startup succeeds, so an environmental spawn failure is recoverable.
 	portals.erase(it);
+	const EchoRaidOutcome outcome = rollOutcome(player, portal.raceId);
+	uint64_t raidId = 0;
+	if (!startRaid(portal.position, portal.instanceId, portal.raceId, portal.monsterName, outcome, message, &raidId)) {
+		if (!item.isRemoved() && static_cast<uint64_t>(OTSYS_TIME()) < portal.expiresAt) {
+			portals.emplace(token, std::move(portal));
+		} else if (!item.isRemoved()) {
+			g_game.internalRemoveItem(&item, -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE);
+		}
+		return false;
+	}
+
 	if (g_game.internalRemoveItem(&item, -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE) != RETURNVALUE_NOERROR) {
+		cleanupRaid(raidId);
 		portals.emplace(token, std::move(portal));
 		message = "The Echo could not be consumed.";
 		return false;
 	}
-
-	const EchoRaidOutcome outcome = rollOutcome(player, portal.raceId);
-	return startRaid(portal.position, portal.instanceId, portal.raceId, portal.monsterName, outcome, message);
+	return true;
 }
 
 std::optional<Position> EchoRaidManager::findSpawnPosition(Monster& monster, const RaidInstance& raid) const
@@ -446,9 +488,7 @@ std::shared_ptr<Monster> EchoRaidManager::spawnRaidMonster(RaidInstance& raid, b
 		                                                               config.influencedLevelMax)));
 	}
 	if (warden) {
-		monster->setEchoRaidVisualState(EchoRaidVisualState::Leader);
-	} else if (raid.outcome == EchoRaidOutcome::Warden) {
-		monster->setEchoRaidVisualState(EchoRaidVisualState::Minion);
+		monster->setEchoRaidVisualState(EchoRaidVisualState::Warden);
 	}
 
 	raid.creatureIds.insert(monster->getID());
@@ -461,13 +501,16 @@ std::shared_ptr<Monster> EchoRaidManager::spawnRaidMonster(RaidInstance& raid, b
 
 bool EchoRaidManager::spawnNextRaidMonster(RaidInstance& raid)
 {
-	if (raid.pendingSpawnCount == 0) {
+	if (raid.pendingSpawns.empty()) {
 		return false;
 	}
 
-	--raid.pendingSpawnCount;
-	const bool spawned = static_cast<bool>(spawnRaidMonster(raid, false, raid.pendingInfluenced));
-	if (raid.pendingSpawnCount > 0) {
+	const bool influenced = raid.pendingSpawns.front();
+	const bool spawned = static_cast<bool>(spawnRaidMonster(raid, false, influenced));
+	if (spawned) {
+		raid.pendingSpawns.pop_front();
+	}
+	if (!raid.pendingSpawns.empty()) {
 		raid.nextSpawnAt = static_cast<uint64_t>(OTSYS_TIME()) + config.spawnIntervalMs;
 	} else {
 		raid.nextSpawnAt = 0;
@@ -476,7 +519,8 @@ bool EchoRaidManager::spawnNextRaidMonster(RaidInstance& raid)
 }
 
 bool EchoRaidManager::startRaid(const Position& origin, uint32_t instanceId, uint16_t raceId,
-	                             std::string_view monsterName, EchoRaidOutcome outcome, std::string& message)
+	                             std::string_view monsterName, EchoRaidOutcome outcome, std::string& message,
+	                             uint64_t* startedRaidId)
 {
 	RaidInstance raid;
 	raid.id = nextRaidId++;
@@ -492,36 +536,34 @@ bool EchoRaidManager::startRaid(const Position& origin, uint32_t instanceId, uin
 	raids.emplace(raidId, std::move(raid));
 	RaidInstance& activeRaid = raids.at(raidId);
 
-	uint32_t requestedCount = 0;
-	bool warden = false;
-	bool influenced = false;
+	const bool warden = outcome == EchoRaidOutcome::Warden;
+	const uint8_t normalCount = outcome == EchoRaidOutcome::Normal
+	                                ? static_cast<uint8_t>(uniform_random(config.normalCountMin,
+	                                                                      config.normalCountMax))
+	                                : 0;
+	activeRaid.pendingSpawns = buildSpawnPlan(outcome, normalCount, config.influencedCount,
+	                                          config.wardenNormalCompanionCount,
+	                                          config.wardenInfluencedCompanionCount);
 	switch (outcome) {
 		case EchoRaidOutcome::Normal:
-			requestedCount = static_cast<uint32_t>(uniform_random(config.normalCountMin, config.normalCountMax));
 			message = "A normal Echo Raid has begun.";
 			break;
 		case EchoRaidOutcome::Influenced:
-			requestedCount = config.influencedCount;
-			influenced = true;
 			message = "An influenced Echo Raid has begun.";
 			break;
 		case EchoRaidOutcome::Warden:
-			warden = true;
-			requestedCount = static_cast<uint32_t>(uniform_random(config.wardenMinionCountMin,
-			                                                       config.wardenMinionCountMax));
 			message = "An Echo Warden has emerged.";
 			break;
 	}
 
-	activeRaid.pendingSpawnCount = requestedCount;
-	activeRaid.pendingInfluenced = influenced;
 	if (warden) {
 		if (!spawnRaidMonster(activeRaid, true, false)) {
 			cleanupRaid(raidId);
 			message = "The Echo Warden could not find a valid spawn tile.";
 			return false;
 		}
-		activeRaid.nextSpawnAt = activeRaid.createdAt + config.spawnIntervalMs;
+		activeRaid.nextSpawnAt = activeRaid.pendingSpawns.empty() ? 0 :
+		                         activeRaid.createdAt + config.spawnIntervalMs;
 	} else if (!spawnNextRaidMonster(activeRaid)) {
 		cleanupRaid(raidId);
 		message = "The Echo Raid could not find a valid spawn tile.";
@@ -532,6 +574,9 @@ bool EchoRaidManager::startRaid(const Position& origin, uint32_t instanceId, uin
 	if (warden) {
 		updateWardenAura(activeRaid, activeRaid.createdAt);
 	}
+	if (startedRaidId) {
+		*startedRaidId = raidId;
+	}
 	return true;
 }
 
@@ -541,7 +586,7 @@ void EchoRaidManager::clearWardenProtection(RaidInstance& raid)
 		if (auto monster = g_game.getMonsterByIDShared(creatureId)) {
 			if (monster->getEchoWardOwnerRaidId() == raid.id) {
 				monster->setEchoWardProtected(false);
-				if (monster->getEchoRaidId() != raid.id) {
+				if (monster->getEchoRaidVisualState() == EchoRaidVisualState::Empowered) {
 					monster->setEchoRaidVisualState(EchoRaidVisualState::None);
 				}
 			}
@@ -567,7 +612,7 @@ void EchoRaidManager::updateWardenAura(RaidInstance& raid, uint64_t now)
 		Monster* monster = static_cast<Monster*>(spectator.get());
 		const MonsterType* monsterType = monster ? monster->getMonsterType() : nullptr;
 		if (!monster || monster == warden.get() || monster->isRemoved() || monster->isSummon() || monster->isBoss() ||
-		    monster->isFiendish() || monster->isInfluenced() || !monster->compareInstance(raid.instanceId) ||
+		    monster->isFiendish() || !monster->compareInstance(raid.instanceId) ||
 		    !monsterType || monsterType->raceId != raid.raceId ||
 		    (monster->getEchoRaidId() != 0 && monster->getEchoRaidId() != raid.id) ||
 		    (monster->getEchoWardOwnerRaidId() != 0 && monster->getEchoWardOwnerRaidId() != raid.id)) {
@@ -575,7 +620,7 @@ void EchoRaidManager::updateWardenAura(RaidInstance& raid, uint64_t now)
 		}
 		protectedNow.insert(monster->getID());
 		monster->setEchoWardProtected(true, raid.id);
-		monster->setEchoRaidVisualState(EchoRaidVisualState::Minion);
+		monster->setEchoRaidVisualState(EchoRaidVisualState::Empowered);
 	}
 
 	for (uint32_t previousId : raid.protectedCreatureIds) {
@@ -583,7 +628,7 @@ void EchoRaidManager::updateWardenAura(RaidInstance& raid, uint64_t now)
 			if (auto monster = g_game.getMonsterByIDShared(previousId)) {
 				if (monster->getEchoWardOwnerRaidId() == raid.id) {
 					monster->setEchoWardProtected(false);
-					if (monster->getEchoRaidId() != raid.id) {
+					if (monster->getEchoRaidVisualState() == EchoRaidVisualState::Empowered) {
 						monster->setEchoRaidVisualState(EchoRaidVisualState::None);
 					}
 				}
@@ -642,7 +687,7 @@ void EchoRaidManager::tick(uint64_t now)
 			expiredRaids.push_back(raidId);
 			continue;
 		}
-		if (raid.pendingSpawnCount > 0 && now >= raid.nextSpawnAt) {
+		if (!raid.pendingSpawns.empty() && now >= raid.nextSpawnAt) {
 			(void)spawnNextRaidMonster(raid);
 		}
 		if (raid.wardenId != 0 && now >= raid.nextAuraAt) {
@@ -671,9 +716,10 @@ void EchoRaidManager::onCreatureRemoved(uint32_t creatureId)
 	raid.protectedCreatureIds.erase(creatureId);
 	if (raid.wardenId == creatureId) {
 		raid.wardenId = 0;
+		raid.pendingSpawns.clear();
 		clearWardenProtection(raid);
 	}
-	if (raid.creatureIds.empty()) {
+	if (raid.creatureIds.empty() && raid.pendingSpawns.empty()) {
 		raids.erase(raidIt);
 	}
 }
@@ -688,15 +734,7 @@ void EchoRaidManager::cleanupAll()
 		portalTokens.push_back(token);
 	}
 	for (uint64_t token : portalTokens) {
-		auto it = portals.find(token);
-		if (it == portals.end()) {
-			continue;
-		}
-		auto item = it->second.item.lock();
-		portals.erase(it);
-		if (item && !item->isRemoved()) {
-			g_game.internalRemoveItem(item.get(), -1, false, FLAG_NOLIMIT | FLAG_IGNORECANREMOVE);
-		}
+		removePortal(token, true);
 	}
 
 	std::vector<uint64_t> raidIds;
@@ -736,17 +774,38 @@ void EchoRaidManager::grantWardenRewards(Monster& monster,
 		if (!player || player->isRemoved()) {
 			continue;
 		}
-		auto rewardKv = KVStore::getInstance()
-		                    .scoped("player")
-		                    ->scoped(fmt::format("{}", player->getGUID()))
-		                    ->scoped("echo_warden_first_kill");
-		const std::string key = fmt::format("race_{}", raceId);
-		if (const auto existing = rewardKv->get(key, true); existing && existing->get<BooleanType>()) {
+
+		bool insertedClaim = false;
+		const bool persisted = DBTransaction::executeWithinTransactionRollbackOnFailure([&] {
+			Database& database = Database::getInstance();
+			if (!database.storeQuery(
+			        fmt::format("SELECT `id` FROM `players` WHERE `id` = {} FOR UPDATE", player->getGUID()))) {
+				return false;
+			}
+			if (!database.executeQuery(fmt::format(
+			        "INSERT IGNORE INTO `player_echo_warden_rewards` (`player_id`, `raceid`) VALUES ({}, {})",
+			        player->getGUID(), raceId))) {
+				return false;
+			}
+			insertedClaim = database.getAffectedRows() == 1;
+			if (!insertedClaim) {
+				return true;
+			}
+			return database.executeQuery(fmt::format(
+			           "UPDATE `players` SET `charmpoints` = LEAST(4294967295, `charmpoints` + {}) "
+			           "WHERE `id` = {}",
+			           amount, player->getGUID()));
+		});
+		if (!persisted) {
+			LOG_ERROR("[EchoRaid] Failed to persist first Warden reward for player {} and race {}",
+			          player->getGUID(), raceId);
+			continue;
+		}
+		if (!insertedClaim) {
 			continue;
 		}
 
 		player->addBestiaryCharmPoints(amount);
-		rewardKv->set(key, true);
 		player->sendEchoWardenReward(raceId, amount);
 		player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
 		                        fmt::format("First Echo Warden defeated for this species: +{} Charm Points.", amount));
@@ -800,7 +859,7 @@ EchoRaidRuntimeStatus EchoRaidManager::getStatus() const
 {
 	size_t pendingSpawns = 0;
 	for (const auto& [_, raid] : raids) {
-		pendingSpawns += raid.pendingSpawnCount;
+		pendingSpawns += raid.pendingSpawns.size();
 	}
 	return {isEnabled(), pendingEchoes.size(), portals.size(), raids.size(), creatureToRaid.size(), pendingSpawns};
 }
@@ -874,7 +933,8 @@ bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view comma
 		message = fmt::format("Echo portal created for {}.", monsterName);
 		return true;
 	}
-	if (operation == "visualleader" || operation == "visualminion") {
+	if (operation == "visualwarden" || operation == "visualleader" ||
+	    operation == "visualempowered" || operation == "visualminion") {
 		RaidInstance raid;
 		raid.id = nextRaidId++;
 		raid.raceId = raceId;
@@ -888,13 +948,20 @@ bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view comma
 		const uint64_t raidId = raid.id;
 		raids.emplace(raidId, std::move(raid));
 		RaidInstance& activeRaid = raids.at(raidId);
-		const bool leader = operation == "visualleader";
-		if (!spawnRaidMonster(activeRaid, leader, false)) {
+		const bool warden = operation == "visualwarden" || operation == "visualleader";
+		auto monster = spawnRaidMonster(activeRaid, warden, false);
+		if (!monster) {
 			cleanupRaid(raidId);
 			message = "The visual test creature could not find a valid spawn tile.";
 			return false;
 		}
-		message = fmt::format("Echo {} visual created for {}.", leader ? "leader" : "minion", monsterName);
+		if (!warden) {
+			monster->setEchoWardProtected(true, raidId);
+			monster->setEchoRaidVisualState(EchoRaidVisualState::Empowered);
+			activeRaid.protectedCreatureIds.insert(monster->getID());
+		}
+		message = fmt::format("Echo {} name shader created for {}.", warden ? "Warden" : "empowered",
+		                      monsterName);
 		return true;
 	}
 
@@ -907,7 +974,7 @@ bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view comma
 		outcome = EchoRaidOutcome::Warden;
 	}
 	if (!outcome) {
-		message = "Usage: /echo spawn|normal|influenced|warden|visualleader|visualminion [monster] | cleanup | status";
+		message = "Usage: /echo spawn|normal|influenced|warden|visualwarden|visualempowered [monster] | cleanup | status";
 		return false;
 	}
 	return startRaid(player.getPosition(), player.getInstanceID(), raceId, monsterName, *outcome, message);

@@ -6,7 +6,7 @@ EchoConfig = {
 
 	portal = {
 		itemId = 54133,
-		delayMs = 0, -- Test mode: create the portal on the next runtime tick.
+		delayMs = 30 * 1000,
 		ttlMs = 2 * 60 * 1000,
 	},
 
@@ -15,8 +15,6 @@ EchoConfig = {
 	},
 
 	spawn = {
-		numerator = 1, -- Test mode: 1/1 means a 100% spawn chance.
-		denominator = 1,
 		radius = 3,
 		intervalMs = 400, -- Crystal reference timing; configurable, not claimed as an official rate.
 	},
@@ -46,8 +44,10 @@ EchoConfig = {
 		-- configurable because no official numerical values are published.
 		healthMultiplier = 3.0,
 		attackMultiplier = 1.5,
-		minionCountMin = 7,
-		minionCountMax = 12,
+		-- Current composition: one Warden followed by two normal and two
+		-- influenced companions. Counts remain configurable for custom worlds.
+		normalCompanionCount = 2,
+		influencedCompanionCount = 2,
 		auraRange = 5,
 		auraIntervalMs = 2000,
 		auraDodgeChancePercent = 10.0,

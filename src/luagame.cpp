@@ -23,6 +23,8 @@
 #include "stash.h"
 #include "zones.h"
 #include <fmt/format.h>
+#include <cmath>
+#include <limits>
 
 extern Vocations g_vocations;
 extern Game g_game;
@@ -34,10 +36,31 @@ namespace {
 using namespace Lua;
 
 template <typename T>
-T getEchoIntegerField(lua_State* L, int tableIndex, const char* field, T defaultValue)
+T getEchoIntegerValue(lua_State* L, int index, T defaultValue, bool& valid)
+{
+	if (lua_isnil(L, index)) {
+		return defaultValue;
+	}
+	if (!lua_isnumber(L, index)) {
+		valid = false;
+		return defaultValue;
+	}
+
+	const long double value = static_cast<long double>(lua_tonumber(L, index));
+	if (!std::isfinite(value) || std::trunc(value) != value ||
+	    value < static_cast<long double>(std::numeric_limits<T>::lowest()) ||
+	    value > static_cast<long double>(std::numeric_limits<T>::max())) {
+		valid = false;
+		return defaultValue;
+	}
+	return static_cast<T>(value);
+}
+
+template <typename T>
+T getEchoIntegerField(lua_State* L, int tableIndex, const char* field, T defaultValue, bool& valid)
 {
 	lua_getfield(L, tableIndex, field);
-	const T value = lua_isnumber(L, -1) ? getNumber<T>(L, -1) : defaultValue;
+	const T value = getEchoIntegerValue<T>(L, -1, defaultValue, valid);
 	lua_pop(L, 1);
 	return value;
 }
@@ -1532,13 +1555,30 @@ int luaGameConfigureEchoRaid(lua_State* L)
 	}
 
 	EchoRaidConfig config;
+	bool integerFieldsValid = true;
+	const int64_t configuredNumerator =
+	    ConfigManager::getInteger(ConfigManager::ECHO_RAID_PORTAL_SPAWN_NUMERATOR);
+	const int64_t configuredDenominator =
+	    ConfigManager::getInteger(ConfigManager::ECHO_RAID_PORTAL_SPAWN_DENOMINATOR);
+	config.spawnChanceNumerator = configuredNumerator >= 0 &&
+	                                      configuredNumerator <= std::numeric_limits<uint32_t>::max()
+	                                  ? static_cast<uint32_t>(configuredNumerator)
+	                                  : std::numeric_limits<uint32_t>::max();
+	config.spawnChanceDenominator = configuredDenominator > 0 &&
+	                                        configuredDenominator <= std::numeric_limits<uint32_t>::max()
+	                                    ? static_cast<uint32_t>(configuredDenominator)
+	                                    : 0;
 	config.enabled = getEchoBooleanField(L, 1, "enabled", config.enabled);
-	config.lifetimeMs = getEchoIntegerField<uint32_t>(L, 1, "lifetimeMs", config.lifetimeMs);
+	config.lifetimeMs =
+	    getEchoIntegerField<uint32_t>(L, 1, "lifetimeMs", config.lifetimeMs, integerFieldsValid);
 
 	withEchoTableField(L, 1, "portal", [&](int table) {
-		config.portalItemId = getEchoIntegerField<uint16_t>(L, table, "itemId", config.portalItemId);
-		config.portalDelayMs = getEchoIntegerField<uint32_t>(L, table, "delayMs", config.portalDelayMs);
-		config.portalTtlMs = getEchoIntegerField<uint32_t>(L, table, "ttlMs", config.portalTtlMs);
+		config.portalItemId = getEchoIntegerField<uint16_t>(L, table, "itemId", config.portalItemId,
+		                                                    integerFieldsValid);
+		config.portalDelayMs = getEchoIntegerField<uint32_t>(L, table, "delayMs", config.portalDelayMs,
+		                                                      integerFieldsValid);
+		config.portalTtlMs = getEchoIntegerField<uint32_t>(L, table, "ttlMs", config.portalTtlMs,
+		                                                    integerFieldsValid);
 	});
 	withEchoTableField(L, 1, "eligibility", [&](int table) {
 		withEchoTableField(L, table, "occurrences", [&](int occurrences) {
@@ -1546,54 +1586,61 @@ int luaGameConfigureEchoRaid(lua_State* L)
 			const size_t count = lua_objlen(L, occurrences);
 			for (size_t index = 1; index <= count; ++index) {
 				lua_rawgeti(L, occurrences, static_cast<int>(index));
-				const uint8_t value = lua_isnumber(L, -1) ? getNumber<uint8_t>(L, -1) : 0;
+				const uint8_t value = getEchoIntegerValue<uint8_t>(L, -1, 0, integerFieldsValid);
 				lua_pop(L, 1);
 				if (value < config.eligibleOccurrences.size()) {
 					config.eligibleOccurrences[value] = true;
+				} else {
+					integerFieldsValid = false;
 				}
 			}
 		});
 	});
 	withEchoTableField(L, 1, "spawn", [&](int table) {
-		config.spawnChanceNumerator =
-		    getEchoIntegerField<uint32_t>(L, table, "numerator", config.spawnChanceNumerator);
-		config.spawnChanceDenominator =
-		    getEchoIntegerField<uint32_t>(L, table, "denominator", config.spawnChanceDenominator);
-		config.spawnRadius = getEchoIntegerField<uint8_t>(L, table, "radius", config.spawnRadius);
+		config.spawnRadius =
+		    getEchoIntegerField<uint8_t>(L, table, "radius", config.spawnRadius, integerFieldsValid);
 		config.spawnIntervalMs =
-		    getEchoIntegerField<uint32_t>(L, table, "intervalMs", config.spawnIntervalMs);
+		    getEchoIntegerField<uint32_t>(L, table, "intervalMs", config.spawnIntervalMs, integerFieldsValid);
 	});
 	withEchoTableField(L, 1, "outcomes", [&](int table) {
-		config.normalWeight = getEchoIntegerField<uint32_t>(L, table, "normalWeight", config.normalWeight);
+		config.normalWeight = getEchoIntegerField<uint32_t>(L, table, "normalWeight", config.normalWeight,
+		                                                    integerFieldsValid);
 		config.influencedWeight =
-		    getEchoIntegerField<uint32_t>(L, table, "influencedWeight", config.influencedWeight);
-		config.wardenWeight = getEchoIntegerField<uint32_t>(L, table, "wardenWeight", config.wardenWeight);
+		    getEchoIntegerField<uint32_t>(L, table, "influencedWeight", config.influencedWeight,
+		                                  integerFieldsValid);
+		config.wardenWeight = getEchoIntegerField<uint32_t>(L, table, "wardenWeight", config.wardenWeight,
+		                                                    integerFieldsValid);
 		config.completedBestiaryWardenMultiplier = getEchoNumberField(
 		    L, table, "completedBestiaryWardenMultiplier", config.completedBestiaryWardenMultiplier);
 	});
 	withEchoTableField(L, 1, "normal", [&](int table) {
-		config.normalCountMin = getEchoIntegerField<uint8_t>(L, table, "countMin", config.normalCountMin);
-		config.normalCountMax = getEchoIntegerField<uint8_t>(L, table, "countMax", config.normalCountMax);
+		config.normalCountMin =
+		    getEchoIntegerField<uint8_t>(L, table, "countMin", config.normalCountMin, integerFieldsValid);
+		config.normalCountMax =
+		    getEchoIntegerField<uint8_t>(L, table, "countMax", config.normalCountMax, integerFieldsValid);
 	});
 	withEchoTableField(L, 1, "influenced", [&](int table) {
-		config.influencedCount = getEchoIntegerField<uint8_t>(L, table, "count", config.influencedCount);
+		config.influencedCount =
+		    getEchoIntegerField<uint8_t>(L, table, "count", config.influencedCount, integerFieldsValid);
 		config.influencedLevelMin =
-		    getEchoIntegerField<uint8_t>(L, table, "levelMin", config.influencedLevelMin);
+		    getEchoIntegerField<uint8_t>(L, table, "levelMin", config.influencedLevelMin, integerFieldsValid);
 		config.influencedLevelMax =
-		    getEchoIntegerField<uint8_t>(L, table, "levelMax", config.influencedLevelMax);
+		    getEchoIntegerField<uint8_t>(L, table, "levelMax", config.influencedLevelMax, integerFieldsValid);
 	});
 	withEchoTableField(L, 1, "warden", [&](int table) {
 		config.wardenHealthMultiplier =
 		    getEchoNumberField(L, table, "healthMultiplier", config.wardenHealthMultiplier);
 		config.wardenAttackMultiplier =
 		    getEchoNumberField(L, table, "attackMultiplier", config.wardenAttackMultiplier);
-		config.wardenMinionCountMin =
-		    getEchoIntegerField<uint8_t>(L, table, "minionCountMin", config.wardenMinionCountMin);
-		config.wardenMinionCountMax =
-		    getEchoIntegerField<uint8_t>(L, table, "minionCountMax", config.wardenMinionCountMax);
-		config.auraRange = getEchoIntegerField<uint8_t>(L, table, "auraRange", config.auraRange);
+		config.wardenNormalCompanionCount = getEchoIntegerField<uint8_t>(
+		    L, table, "normalCompanionCount", config.wardenNormalCompanionCount, integerFieldsValid);
+		config.wardenInfluencedCompanionCount = getEchoIntegerField<uint8_t>(
+		    L, table, "influencedCompanionCount", config.wardenInfluencedCompanionCount, integerFieldsValid);
+		config.auraRange =
+		    getEchoIntegerField<uint8_t>(L, table, "auraRange", config.auraRange, integerFieldsValid);
 		config.auraIntervalMs =
-		    getEchoIntegerField<uint32_t>(L, table, "auraIntervalMs", config.auraIntervalMs);
+		    getEchoIntegerField<uint32_t>(L, table, "auraIntervalMs", config.auraIntervalMs,
+		                                  integerFieldsValid);
 		config.auraDodgeChancePercent =
 		    getEchoNumberField(L, table, "auraDodgeChancePercent", config.auraDodgeChancePercent);
 	});
@@ -1602,7 +1649,8 @@ int luaGameConfigureEchoRaid(lua_State* L)
 			for (size_t stars = 0; stars < config.charmPointsByStars.size(); ++stars) {
 				lua_rawgeti(L, points, static_cast<int>(stars));
 				if (lua_isnumber(L, -1)) {
-					config.charmPointsByStars[stars] = getNumber<uint32_t>(L, -1);
+					config.charmPointsByStars[stars] = getEchoIntegerValue<uint32_t>(
+					    L, -1, config.charmPointsByStars[stars], integerFieldsValid);
 				}
 				lua_pop(L, 1);
 			}
@@ -1614,7 +1662,10 @@ int luaGameConfigureEchoRaid(lua_State* L)
 			for (size_t index = 1; index <= count; ++index) {
 				lua_rawgeti(L, items, static_cast<int>(index));
 				if (lua_isnumber(L, -1)) {
-					config.basicScrollItemIds.push_back(getNumber<uint16_t>(L, -1));
+					config.basicScrollItemIds.push_back(
+					    getEchoIntegerValue<uint16_t>(L, -1, 0, integerFieldsValid));
+				} else {
+					integerFieldsValid = false;
 				}
 				lua_pop(L, 1);
 			}
@@ -1628,15 +1679,21 @@ int luaGameConfigureEchoRaid(lua_State* L)
 				if (lua_istable(L, -1)) {
 					const int entry = lua_gettop(L);
 					config.catalystItems.push_back({
-					    getEchoIntegerField<uint16_t>(L, entry, "itemId", 0),
-					    getEchoIntegerField<uint32_t>(L, entry, "weight", 0),
+					    getEchoIntegerField<uint16_t>(L, entry, "itemId", 0, integerFieldsValid),
+					    getEchoIntegerField<uint32_t>(L, entry, "weight", 0, integerFieldsValid),
 					});
+				} else {
+					integerFieldsValid = false;
 				}
 				lua_pop(L, 1);
 			}
 		});
 	});
 
+	if (!integerFieldsValid) {
+		LOG_ERROR("[EchoRaid] One or more integer fields are non-integral or out of range");
+		config.spawnChanceDenominator = 0;
+	}
 	pushBoolean(L, g_echoRaidManager.configure(std::move(config)));
 	return 1;
 }

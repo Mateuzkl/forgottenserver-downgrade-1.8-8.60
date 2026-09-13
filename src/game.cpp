@@ -6935,7 +6935,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		if (healthChange == 0) {
 			return true;
 		}
-		if (!damage.echoWardDodgeChecked) {
+		if (!damage.echoWardDodgeChecked && damage.initialOrigin != ORIGIN_CONDITION &&
+		    damage.initialOrigin != ORIGIN_REFLECT) {
 			damage.echoWardDodgeChecked = true;
 			if (const Monster* targetMonster = target->getMonster();
 			    targetMonster && g_echoRaidManager.tryEchoWardDodge(*targetMonster)) {

@@ -3268,7 +3268,7 @@ void ProtocolGame::sendCreatureWeaponAttackMark(const Creature* target, uint8_t 
 	}
 
 	NetworkMessage msg;
-	msg.addByte(0x93);
+	msg.addByte(AstraClient::SINGLE_CREATURE_MARK_OPCODE);
 	msg.add<uint32_t>(target->getID());
 	msg.addByte(SQ_PLAYER_ATTACK);
 	msg.addByte(weaponType);
@@ -3532,9 +3532,9 @@ void ProtocolGame::sendCreatureEchoRaidVisual(const Creature* creature, bool for
 	}
 
 	NetworkMessage msg;
-	msg.addByte(0x8B);
+	msg.addByte(AstraClient::SINGLE_CREATURE_MARK_OPCODE);
 	msg.add<uint32_t>(creature->getID());
-	msg.addByte(15);
+	msg.addByte(AstraClient::ECHO_RAID_VISUAL_MARK_TYPE);
 	msg.addByte(state == EchoRaidVisualState::None ? 0xFF : static_cast<uint8_t>(state));
 	writeToOutputBuffer(msg);
 

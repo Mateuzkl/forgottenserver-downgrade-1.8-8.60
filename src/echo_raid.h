@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <string>
@@ -56,8 +57,8 @@ struct EchoRaidConfig
 
 	double wardenHealthMultiplier = 3.0;
 	double wardenAttackMultiplier = 1.5;
-	uint8_t wardenMinionCountMin = 7;
-	uint8_t wardenMinionCountMax = 12;
+	uint8_t wardenNormalCompanionCount = 2;
+	uint8_t wardenInfluencedCompanionCount = 2;
 	uint8_t auraRange = 5;
 	uint32_t auraIntervalMs = 2000;
 	double auraDodgeChancePercent = 10.0;
@@ -110,6 +111,10 @@ public:
 	                                                   uint32_t influencedWeight, uint32_t wardenWeight,
 	                                                   bool bestiaryCompleted,
 	                                                   double completedBestiaryWardenMultiplier);
+	[[nodiscard]] static std::deque<bool> buildSpawnPlan(EchoRaidOutcome outcome, uint8_t normalCount,
+	                                                     uint8_t influencedCount,
+	                                                     uint8_t wardenNormalCompanionCount,
+	                                                     uint8_t wardenInfluencedCompanionCount);
 
 private:
 	struct PositionKey
@@ -157,8 +162,7 @@ private:
 		uint64_t expiresAt = 0;
 		uint64_t nextAuraAt = 0;
 		uint64_t nextSpawnAt = 0;
-		uint32_t pendingSpawnCount = 0;
-		bool pendingInfluenced = false;
+		std::deque<bool> pendingSpawns;
 		uint32_t wardenId = 0;
 		std::unordered_set<uint32_t> creatureIds;
 		std::unordered_set<uint32_t> protectedCreatureIds;
@@ -168,10 +172,12 @@ private:
 	[[nodiscard]] bool isEligibleMonster(const Monster& monster) const;
 	[[nodiscard]] bool isValidPortalTile(const Position& position, uint32_t instanceId) const;
 	[[nodiscard]] bool createPortal(const PositionKey& key, const PendingEcho& pending);
+	void removePortal(uint64_t token, bool removeItem);
 	void expirePortals(uint64_t now);
 	[[nodiscard]] EchoRaidOutcome rollOutcome(const Player& player, uint16_t raceId) const;
 	[[nodiscard]] bool startRaid(const Position& origin, uint32_t instanceId, uint16_t raceId,
-	                             std::string_view monsterName, EchoRaidOutcome outcome, std::string& message);
+	                             std::string_view monsterName, EchoRaidOutcome outcome, std::string& message,
+	                             uint64_t* startedRaidId = nullptr);
 	[[nodiscard]] std::shared_ptr<Monster> spawnRaidMonster(RaidInstance& raid, bool warden, bool influenced);
 	[[nodiscard]] bool spawnNextRaidMonster(RaidInstance& raid);
 	[[nodiscard]] std::optional<Position> findSpawnPosition(Monster& monster, const RaidInstance& raid) const;
