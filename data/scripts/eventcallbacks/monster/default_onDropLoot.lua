@@ -8,16 +8,6 @@ local function formatHundredthsPercent(value)
 	return string.format("%.2f", (tonumber(value) or 0) / 100):gsub("0+$", ""):gsub("%.$", "")
 end
 
-local function supportsColorizedLoot(player)
-	if not player then
-		return false
-	end
-	if player.isUsingAstraClient and player:isUsingAstraClient() then
-		return true
-	end
-	return player.isUsingFonticakClient and player:isUsingFonticakClient()
-end
-
 local function addLootRecipient(recipients, player)
 	if player then
 		recipients[#recipients + 1] = player
@@ -50,7 +40,7 @@ local function sendUngroupedLootMessage(player, corpse, monsterName, preyLootTex
 
 	if useColorized then
 		for _, recipient in ipairs(recipients) do
-			if supportsColorizedLoot(recipient) then
+			if recipient.supportsColorizedLoot and recipient:supportsColorizedLoot() then
 				needColorized = true
 				break
 			end
@@ -63,7 +53,7 @@ local function sendUngroupedLootMessage(player, corpse, monsterName, preyLootTex
 	end
 
 	for _, recipient in ipairs(recipients) do
-		local wantsColorized = needColorized and supportsColorizedLoot(recipient)
+		local wantsColorized = needColorized and recipient.supportsColorizedLoot and recipient:supportsColorizedLoot()
 		if wantsColorized then
 			colorizedText = colorizedText or buildText(true)
 			sendLootMessage(recipient, colorizedText)

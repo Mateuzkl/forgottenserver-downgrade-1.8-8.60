@@ -8012,16 +8012,50 @@ void Player::flushPendingLoot(const std::string& groupKey)
 	};
 
 	const bool colorizedLootEnabled = ConfigManager::getBoolean(ConfigManager::COLORIZED_LOOT_VALUE);
-	const std::string plainText = buildLootText(false);
-	const std::string colorizedText = colorizedLootEnabled ? buildLootText(true) : plainText;
-	const auto sendLootText = [&](Player& recipient) {
-		recipient.sendChannelMessage(
-		    "", colorizedLootEnabled && (recipient.isAstraClient() || recipient.isFonticakClient()) ? colorizedText
-		                                                                                             : plainText,
-		    TALKTYPE_CHANNEL_O, 10);
+	std::string plainText;
+	std::string colorizedText;
+	bool needColorized = false;
+
+	const auto wantsColorizedLoot = [](const Player& recipient) {
+		return recipient.isAstraClient() || recipient.isFonticakClient();
 	};
 
 	const auto& party = getParty();
+	if (colorizedLootEnabled) {
+		if (party && party->isSharedExperienceEnabled()) {
+			const auto& leader = party->getLeader();
+			if (leader && wantsColorizedLoot(*leader)) {
+				needColorized = true;
+			}
+			if (!needColorized) {
+				for (auto& member : party->getMembers()) {
+					if (auto memberPtr = member.lock(); memberPtr && wantsColorizedLoot(*memberPtr)) {
+						needColorized = true;
+						break;
+					}
+				}
+			}
+		} else if (wantsColorizedLoot(*this)) {
+			needColorized = true;
+		}
+	}
+
+	const auto sendLootText = [&](Player& recipient) {
+		const bool useColorized = needColorized && wantsColorizedLoot(recipient);
+		if (useColorized) {
+			if (colorizedText.empty()) {
+				colorizedText = buildLootText(true);
+			}
+			recipient.sendChannelMessage("", colorizedText, TALKTYPE_CHANNEL_O, 10);
+			return;
+		}
+
+		if (plainText.empty()) {
+			plainText = buildLootText(false);
+		}
+		recipient.sendChannelMessage("", plainText, TALKTYPE_CHANNEL_O, 10);
+	};
+
 	if (party && party->isSharedExperienceEnabled()) {
 		const auto& leader = party->getLeader();
 		if (leader) {

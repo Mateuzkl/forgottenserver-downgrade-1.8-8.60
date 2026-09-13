@@ -620,7 +620,11 @@ do
 				return compat.originalNpcHandlerResetNpc(self)
 			end
 
-			return compat.originalNpcHandlerResetNpc(self, getPlayerId(target))
+			local playerId = getPlayerId(target)
+			if self.__lastPlayerMessage then
+				self.__lastPlayerMessage[playerId] = nil
+			end
+			return compat.originalNpcHandlerResetNpc(self, playerId)
 		end
 	end
 

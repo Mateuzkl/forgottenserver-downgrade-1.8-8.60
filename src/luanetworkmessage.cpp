@@ -52,8 +52,9 @@ bool isOtcOrAstraLuaOpcode(uint8_t opcode)
 	}
 }
 
-bool isAstraOnlyLuaOpcode(uint8_t opcode)
+bool isExtendedClientLuaOpcode(uint8_t opcode)
 {
+	// Opcodes shared by AstraClient and FonticakClient custom item/blessing protocols.
 	switch (opcode) {
 		case 0x2C: // custom boss cooldown
 		case 0x3D: // weapon proficiency reshape offers
@@ -81,7 +82,7 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 	}
 
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
-	if (isAstraOnlyLuaOpcode(opcode)) {
+	if (isExtendedClientLuaOpcode(opcode)) {
 		return player.isAstraClient() || player.isFonticakClient();
 	}
 	if (isOtcOrAstraLuaOpcode(opcode)) {
