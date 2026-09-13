@@ -21,10 +21,10 @@ BattlePassConfig = {
 		startsAt = 0,
 		durationDays = 35,
 		resetHour = 10,
-		-- Rewards end at level 50. Missions remain active afterwards and award
-		-- shop points instead of extending the reward track.
-		rewardMaxStep = 50,
-		shopUnlockStep = 50,
+		-- These limits are configured in config.lua so operators can change them
+		-- without editing the seasonal reward definitions in this file.
+		rewardMaxStep = configManager.getNumber(configKeys.BATTLEPASS_REWARD_MAX_STEP),
+		shopUnlockStep = configManager.getNumber(configKeys.BATTLEPASS_SHOP_UNLOCK_STEP),
 		pointsPerStep = 80,
 	},
 

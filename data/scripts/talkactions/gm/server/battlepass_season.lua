@@ -99,13 +99,13 @@ function talk.onSay(player, words, param)
 			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
 				string.format("Added %d Battle Pass shop points to %s. New balance: %d.", amount, target:getName(), balanceOrError))
 		elseif isTestAction then
-			local ok, balanceOrError = BattlePassSystem.prepareTestPlayer(target, amount)
+			local ok, balanceOrError, rewardMaxStep = BattlePassSystem.prepareTestPlayer(target, amount)
 			if not ok then
 				player:sendCancelMessage(balanceOrError or "Could not prepare the Battle Pass test state.")
 				return false
 			end
 			player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
-				string.format("Battle Pass test state enabled for %s: level 50, Deluxe, shop unlocked, balance %d.", target:getName(), balanceOrError))
+				string.format("Battle Pass test state enabled for %s: level %d, Deluxe, shop unlocked, balance %d.", target:getName(), rewardMaxStep, balanceOrError))
 		else
 			local ok, errorMessage = BattlePassSystem.unlockShop(target)
 			if not ok then

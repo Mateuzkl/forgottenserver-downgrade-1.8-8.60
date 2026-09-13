@@ -96,16 +96,16 @@ if type(seasonConfig) ~= "table" then
 	error("[Battle Pass] Missing season configuration.")
 end
 
--- maxStep is accepted only as a migration fallback for configurations created
--- before reward progression and shop unlock were separate concepts.
-local rewardMaxStep = math.floor(tonumber(seasonConfig.rewardMaxStep) or tonumber(seasonConfig.maxStep) or 0)
-local shopUnlockStep = math.floor(tonumber(seasonConfig.shopUnlockStep) or rewardMaxStep)
+-- Track limits are authoritative ConfigManager values and are also copied into
+-- BattlePassConfig by reward_battlepass.lua for the seasonal data consumers.
+local rewardMaxStep = math.floor(configManager.getNumber(configKeys.BATTLEPASS_REWARD_MAX_STEP))
+local shopUnlockStep = math.floor(configManager.getNumber(configKeys.BATTLEPASS_SHOP_UNLOCK_STEP))
 local pointsPerStep = math.floor(tonumber(seasonConfig.pointsPerStep) or 0)
 if rewardMaxStep < 1 or rewardMaxStep > 0xFFFF then
-	error("[Battle Pass] season.rewardMaxStep must be between 1 and 65535.")
+	error("[Battle Pass] battlePassRewardMaxStep must be between 1 and 65535.")
 end
 if shopUnlockStep < 1 or shopUnlockStep > rewardMaxStep then
-	error("[Battle Pass] season.shopUnlockStep must be between 1 and season.rewardMaxStep.")
+	error("[Battle Pass] battlePassShopUnlockStep must be between 1 and battlePassRewardMaxStep.")
 end
 if pointsPerStep < 1 or rewardMaxStep * pointsPerStep > 0xFFFFFFFF then
 	error("[Battle Pass] season.pointsPerStep produces an invalid reward-track point range.")
@@ -1533,7 +1533,7 @@ function BattlePassSystem.prepareTestPlayer(player, shopPointAmount)
 		BattlePassSystem.sendRewards(player)
 		BattlePassSystem.sendShop(player)
 	end
-	return true, state.shopPoints
+	return true, state.shopPoints, rewardMaxStep
 end
 
 function BattlePassSystem.startNewSeason()
