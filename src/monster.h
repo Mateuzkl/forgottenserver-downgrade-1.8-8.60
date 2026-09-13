@@ -113,8 +113,11 @@ public:
 	uint64_t getEchoRaidId() const { return echoRaidId; }
 	void setEchoRaidId(uint64_t raidId) { echoRaidId = raidId; }
 	bool isEchoRaidSpawn() const { return echoRaidId != 0; }
+	EchoRaidVisualState getEchoRaidVisualState() const { return echoRaidVisualState; }
+	void setEchoRaidVisualState(EchoRaidVisualState state);
 	bool isEchoWardProtected() const { return echoWardProtected; }
-	void setEchoWardProtected(bool value);
+	uint64_t getEchoWardOwnerRaidId() const { return echoWardOwnerRaidId; }
+	void setEchoWardProtected(bool value, uint64_t ownerRaidId = 0);
 	bool markEchoWardenLootGranted()
 	{
 		if (echoWardenLootGranted) {
@@ -247,8 +250,10 @@ private:
 	bool fiendish = false;
 	bool echoWarden = false;
 	bool echoWardProtected = false;
+	uint64_t echoWardOwnerRaidId = 0;
 	bool echoWardenLootGranted = false;
 	uint64_t echoRaidId = 0;
+	EchoRaidVisualState echoRaidVisualState = EchoRaidVisualState::None;
 	double echoWardenAttackMultiplier = 1.0;
 	bool bossDifficultyApplied = false;
 	uint16_t bossDifficulty = 0;

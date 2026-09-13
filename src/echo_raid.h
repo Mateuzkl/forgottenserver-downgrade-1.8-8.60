@@ -62,6 +62,7 @@ struct EchoRaidConfig
 	uint32_t auraIntervalMs = 2000;
 	double auraDodgeChancePercent = 10.0;
 	uint8_t spawnRadius = 3;
+	uint32_t spawnIntervalMs = 400;
 	uint32_t lifetimeMs = 10 * 60 * 1000;
 
 	std::array<uint32_t, 6> charmPointsByStars = {1, 2, 5, 10, 15, 30};
@@ -76,6 +77,7 @@ struct EchoRaidRuntimeStatus
 	size_t portals = 0;
 	size_t activeRaids = 0;
 	size_t trackedCreatures = 0;
+	size_t pendingSpawns = 0;
 };
 
 class EchoRaidManager
@@ -154,6 +156,9 @@ private:
 		uint64_t createdAt = 0;
 		uint64_t expiresAt = 0;
 		uint64_t nextAuraAt = 0;
+		uint64_t nextSpawnAt = 0;
+		uint32_t pendingSpawnCount = 0;
+		bool pendingInfluenced = false;
 		uint32_t wardenId = 0;
 		std::unordered_set<uint32_t> creatureIds;
 		std::unordered_set<uint32_t> protectedCreatureIds;
@@ -168,6 +173,7 @@ private:
 	[[nodiscard]] bool startRaid(const Position& origin, uint32_t instanceId, uint16_t raceId,
 	                             std::string_view monsterName, EchoRaidOutcome outcome, std::string& message);
 	[[nodiscard]] std::shared_ptr<Monster> spawnRaidMonster(RaidInstance& raid, bool warden, bool influenced);
+	[[nodiscard]] bool spawnNextRaidMonster(RaidInstance& raid);
 	[[nodiscard]] std::optional<Position> findSpawnPosition(Monster& monster, const RaidInstance& raid) const;
 	void updateWardenAura(RaidInstance& raid, uint64_t now);
 	void clearWardenProtection(RaidInstance& raid);

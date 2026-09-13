@@ -996,6 +996,12 @@ public:
 		}
 		client->sendCreatureIcon(creature);
 	}
+	void sendCreatureEchoRaidVisual(const Creature* creature, bool force = false) const
+	{
+		if (client) {
+			client->sendCreatureEchoRaidVisual(creature, force);
+		}
+	}
 
 	void checkSkullTicks(int64_t ticks);
 

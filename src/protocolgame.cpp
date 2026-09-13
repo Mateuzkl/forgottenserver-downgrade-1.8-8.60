@@ -1136,6 +1136,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
 					supportsAstraSingleCreatureMarks = isAstraClient;
+				} else if (marker == AstraClient::ECHO_RAID_VISUALS_MARKER) {
+					supportsAstraEchoRaidVisuals = isAstraClient && supportsAstraSingleCreatureMarks;
 				} else if (marker == FonticakClient::LOGIN_MARKER) {
 					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
 						break;
@@ -3500,6 +3502,68 @@ void ProtocolGame::sendCreatureIcon(const Creature* creature)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendCreatureEchoRaidVisual(const Creature* creature, bool force)
+{
+	if (!creature || !player || !supportsAstraEchoRaidVisuals || !canSee(creature) ||
+	    !player->canSeeCreature(creature)) {
+		return;
+	}
+
+	const Monster* monster = creature->getMonster();
+	const EchoRaidVisualState state = monster ? monster->getEchoRaidVisualState() : EchoRaidVisualState::None;
+	const auto cached = echoRaidVisualCache.find(creature->getID());
+	if (state == EchoRaidVisualState::None) {
+		if (cached == echoRaidVisualCache.end()) {
+			return;
+		}
+	} else if (!force && cached != echoRaidVisualCache.end() && cached->second == state) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x8B);
+	msg.add<uint32_t>(creature->getID());
+	msg.addByte(15);
+	msg.addByte(state == EchoRaidVisualState::None ? 0xFF : static_cast<uint8_t>(state));
+	writeToOutputBuffer(msg);
+
+	if (state == EchoRaidVisualState::None) {
+		echoRaidVisualCache.erase(creature->getID());
+	} else {
+		echoRaidVisualCache[creature->getID()] = state;
+	}
+}
+
+void ProtocolGame::sendVisibleEchoRaidVisuals(const Position& centerPos)
+{
+	if (!player || !supportsAstraEchoRaidVisuals) {
+		echoRaidVisualCache.clear();
+		return;
+	}
+
+	std::unordered_set<uint32_t> visibleEchoCreatures;
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, centerPos, false, false, Map::maxClientViewportX,
+	                         Map::maxClientViewportX, Map::maxClientViewportY, Map::maxClientViewportY);
+	for (const auto& spectator : spectators.monsters()) {
+		const Monster* monster = spectator ? spectator->getMonster() : nullptr;
+		if (!monster || monster->getEchoRaidVisualState() == EchoRaidVisualState::None ||
+		    !player->canSeeCreature(monster)) {
+			continue;
+		}
+		visibleEchoCreatures.insert(monster->getID());
+		sendCreatureEchoRaidVisual(monster);
+	}
+
+	for (auto it = echoRaidVisualCache.begin(); it != echoRaidVisualCache.end();) {
+		if (!visibleEchoCreatures.contains(it->first)) {
+			it = echoRaidVisualCache.erase(it);
+		} else {
+			++it;
+		}
+	}
+}
+
 void ProtocolGame::sendCreatureVocation(const Creature* creature)
 {
 	if (!creature || !player || (!isAstraClient && !isFonticakClient)) {
@@ -4397,6 +4461,7 @@ void ProtocolGame::sendMapDescription(const Position& pos)
 	                  (Map::maxClientViewportX * 2) + 2, (Map::maxClientViewportY * 2) + 2, msg);
 	writeToOutputBuffer(msg);
 	sendVisiblePlayerVocations(pos);
+	sendVisibleEchoRaidVisuals(pos);
 }
 
 void ProtocolGame::refreshWorldView()
@@ -4585,6 +4650,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 			writeToOutputBuffer(msg);
 			sendCreatureSquare(creature, player->getCreatureSquare(creature));
 			sendCreatureVocation(creature);
+			sendCreatureEchoRaidVisual(creature, true);
 		}
 
 		if (magicEffect != CONST_ME_NONE) {
@@ -4767,6 +4833,7 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 			writeToOutputBuffer(msg);
 		}
 		sendZoneWeather(newPos);
+		sendVisibleEchoRaidVisuals(newPos);
 	} else if (canSee(oldPos) && canSee(creature->getPosition())) {
 		if (teleport || (oldPos.z == 7 && newPos.z >= 8) || oldStackPos >= MAX_STACKPOS_THINGS) {
 			sendRemoveTileThing(oldPos, oldStackPos);
@@ -6244,6 +6311,9 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraOutfitStoreMode] = true;
 		if (supportsAstraSingleCreatureMarks) {
 			features[GameFeature::AstraSingleCreatureMarks] = true;
+		}
+		if (supportsAstraEchoRaidVisuals) {
+			features[GameFeature::AstraEchoRaidVisuals] = true;
 		}
 	}
 	// Fonticak outfit familiar extension (feature id 138) and quiver count (feature id 141).

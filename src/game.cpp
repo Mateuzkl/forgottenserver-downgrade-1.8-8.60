@@ -8189,6 +8189,23 @@ void Game::updateCreatureIcon(const Creature* creature)
 	}
 }
 
+void Game::updateCreatureEchoRaidVisual(const Creature* creature)
+{
+	if (!creature || !creature->getTile()) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	map.getSpectators(spectators, creature->getPosition(), true, true);
+	const uint32_t creatureInstance = creature->getInstanceID();
+	for (const auto& spectator : spectators.players()) {
+		Player* player = static_cast<Player*>(spectator.get());
+		if (player->compareInstance(creatureInstance) && player->canSeeCreature(creature)) {
+			player->sendCreatureEchoRaidVisual(creature);
+		}
+	}
+}
+
 void Game::updateCreatureSkull(const Creature* creature)
 {
 	// Allow influenced/fiendish monsters to show skull in any world type

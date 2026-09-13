@@ -423,6 +423,13 @@ enum SquareColor_t : uint8_t
 	SQ_COLOR_NONE = 255,
 };
 
+enum class EchoRaidVisualState : int8_t
+{
+	None = -1,
+	Leader = 0,
+	Minion = 1,
+};
+
 enum TextColor_t : uint8_t
 {
 	TEXTCOLOR_BLACK = 0,
@@ -995,8 +1002,9 @@ enum class GameFeature : uint8_t {
 	AstraItemMetadata = 143,
 	ZoneWeather = 144,
 	AstraSingleCreatureMarks = 145,
+	AstraEchoRaidVisuals = 146,
 
-	Last = 145
+	Last = 146
 };
 
 inline constexpr int32_t CHANNEL_GUILD = 0x00;

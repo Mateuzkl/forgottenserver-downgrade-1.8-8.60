@@ -18,6 +18,7 @@ EchoConfig = {
 		numerator = 1, -- Test mode: 1/1 means a 100% spawn chance.
 		denominator = 1,
 		radius = 3,
+		intervalMs = 400, -- Crystal reference timing; configurable, not claimed as an official rate.
 	},
 
 	-- Exact Global probabilities are not public. These weights are deliberately

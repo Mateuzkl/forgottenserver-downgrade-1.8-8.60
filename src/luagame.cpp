@@ -1560,6 +1560,8 @@ int luaGameConfigureEchoRaid(lua_State* L)
 		config.spawnChanceDenominator =
 		    getEchoIntegerField<uint32_t>(L, table, "denominator", config.spawnChanceDenominator);
 		config.spawnRadius = getEchoIntegerField<uint8_t>(L, table, "radius", config.spawnRadius);
+		config.spawnIntervalMs =
+		    getEchoIntegerField<uint32_t>(L, table, "intervalMs", config.spawnIntervalMs);
 	});
 	withEchoTableField(L, 1, "outcomes", [&](int table) {
 		config.normalWeight = getEchoIntegerField<uint32_t>(L, table, "normalWeight", config.normalWeight);

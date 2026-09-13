@@ -221,6 +221,8 @@ private:
 	void sendCreatureSkull(const Creature* creature);
 	void sendCreatureEmblem(const Creature* creature);
 	void sendCreatureIcon(const Creature* creature);
+	void sendCreatureEchoRaidVisual(const Creature* creature, bool force = false);
+	void sendVisibleEchoRaidVisuals(const Position& centerPos);
 	void sendCreatureVocation(const Creature* creature);
 	void sendVisiblePlayerVocations(const Position& centerPos);
 
@@ -440,9 +442,11 @@ private:
 	bool isFonticakClient = false;
 	bool supportsGameStoreHighlights = false;
 	bool supportsAstraSingleCreatureMarks = false;
+	bool supportsAstraEchoRaidVisuals = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
+	std::unordered_map<uint32_t, EchoRaidVisualState> echoRaidVisualCache;
 	uint32_t dllWeatherSequence = 0;
 	bool isUsingFonticakClient() const { return isFonticakClient; }
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }

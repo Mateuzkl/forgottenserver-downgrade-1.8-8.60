@@ -33,7 +33,7 @@ EchoRaidManager g_echoRaidManager;
 
 namespace {
 
-constexpr uint64_t ECHO_TICK_INTERVAL_MS = 250;
+constexpr uint64_t ECHO_TICK_INTERVAL_MS = 100;
 
 std::string trim(std::string_view value)
 {
@@ -138,7 +138,7 @@ bool EchoRaidManager::validateConfig(const EchoRaidConfig& candidate, std::strin
 	    candidate.influencedCount == 0 || candidate.influencedLevelMin == 0 ||
 	    candidate.influencedLevelMin > candidate.influencedLevelMax || candidate.wardenMinionCountMin == 0 ||
 	    candidate.wardenMinionCountMin > candidate.wardenMinionCountMax || candidate.auraRange == 0 ||
-	    candidate.auraIntervalMs == 0 || candidate.spawnRadius == 0) {
+	    candidate.auraIntervalMs == 0 || candidate.spawnRadius == 0 || candidate.spawnIntervalMs == 0) {
 		error = "invalid raid size, level, aura, or radius";
 		return false;
 	}
@@ -392,27 +392,29 @@ bool EchoRaidManager::activateEcho(Player& player, Item& item, std::string& mess
 std::optional<Position> EchoRaidManager::findSpawnPosition(Monster& monster, const RaidInstance& raid) const
 {
 	const int32_t radius = config.spawnRadius;
-	const int32_t width = radius * 2 + 1;
-	const int32_t candidates = width * width;
-	const int32_t offset = uniform_random(0, candidates - 1);
-	for (int32_t index = 0; index < candidates; ++index) {
-		const int32_t candidate = (offset + index) % candidates;
-		const int32_t dx = candidate % width - radius;
-		const int32_t dy = candidate / width - radius;
-		const int32_t x = static_cast<int32_t>(raid.origin.x) + dx;
-		const int32_t y = static_cast<int32_t>(raid.origin.y) + dy;
-		if (x <= 0 || x > std::numeric_limits<uint16_t>::max() || y <= 0 ||
-		    y > std::numeric_limits<uint16_t>::max()) {
-			continue;
-		}
-		const Position position{static_cast<uint16_t>(x), static_cast<uint16_t>(y), raid.origin.z};
-		Tile* tile = g_game.map.getTile(position);
-		if (!tile || !tile->getGround() || tile->hasFlag(TILESTATE_BLOCKSOLID | TILESTATE_PROTECTIONZONE |
-		                                                TILESTATE_FLOORCHANGE | TILESTATE_TELEPORT)) {
-			continue;
-		}
-		if (tile->queryAdd(0, monster, 1, 0, &monster) == RETURNVALUE_NOERROR) {
-			return position;
+	for (int32_t ring = 0; ring <= radius; ++ring) {
+		for (int32_t dy = -ring; dy <= ring; ++dy) {
+			for (int32_t dx = -ring; dx <= ring; ++dx) {
+				if (std::max(std::abs(dx), std::abs(dy)) != ring) {
+					continue;
+				}
+				const int32_t x = static_cast<int32_t>(raid.origin.x) + dx;
+				const int32_t y = static_cast<int32_t>(raid.origin.y) + dy;
+				if (x <= 0 || x > std::numeric_limits<uint16_t>::max() || y <= 0 ||
+				    y > std::numeric_limits<uint16_t>::max()) {
+					continue;
+				}
+				const Position position{static_cast<uint16_t>(x), static_cast<uint16_t>(y), raid.origin.z};
+				Tile* tile = g_game.map.getTile(position);
+				if (!tile || !tile->getGround() ||
+				    tile->hasFlag(TILESTATE_BLOCKSOLID | TILESTATE_PROTECTIONZONE | TILESTATE_FLOORCHANGE |
+				                  TILESTATE_TELEPORT)) {
+					continue;
+				}
+				if (tile->queryAdd(0, monster, 1, 0, &monster) == RETURNVALUE_NOERROR) {
+					return position;
+				}
+			}
 		}
 	}
 	return std::nullopt;
@@ -443,6 +445,11 @@ std::shared_ptr<Monster> EchoRaidManager::spawnRaidMonster(RaidInstance& raid, b
 		monster->setInfluencedLevel(static_cast<uint8_t>(uniform_random(config.influencedLevelMin,
 		                                                               config.influencedLevelMax)));
 	}
+	if (warden) {
+		monster->setEchoRaidVisualState(EchoRaidVisualState::Leader);
+	} else if (raid.outcome == EchoRaidOutcome::Warden) {
+		monster->setEchoRaidVisualState(EchoRaidVisualState::Minion);
+	}
 
 	raid.creatureIds.insert(monster->getID());
 	creatureToRaid[monster->getID()] = raid.id;
@@ -450,6 +457,22 @@ std::shared_ptr<Monster> EchoRaidManager::spawnRaidMonster(RaidInstance& raid, b
 		raid.wardenId = monster->getID();
 	}
 	return monster;
+}
+
+bool EchoRaidManager::spawnNextRaidMonster(RaidInstance& raid)
+{
+	if (raid.pendingSpawnCount == 0) {
+		return false;
+	}
+
+	--raid.pendingSpawnCount;
+	const bool spawned = static_cast<bool>(spawnRaidMonster(raid, false, raid.pendingInfluenced));
+	if (raid.pendingSpawnCount > 0) {
+		raid.nextSpawnAt = static_cast<uint64_t>(OTSYS_TIME()) + config.spawnIntervalMs;
+	} else {
+		raid.nextSpawnAt = 0;
+	}
+	return spawned;
 }
 
 bool EchoRaidManager::startRaid(const Position& origin, uint32_t instanceId, uint16_t raceId,
@@ -490,18 +513,16 @@ bool EchoRaidManager::startRaid(const Position& origin, uint32_t instanceId, uin
 			break;
 	}
 
-	if (warden && !spawnRaidMonster(activeRaid, true, false)) {
-		cleanupRaid(raidId);
-		message = "The Echo Warden could not find a valid spawn tile.";
-		return false;
-	}
-	uint32_t spawned = 0;
-	for (uint32_t index = 0; index < requestedCount; ++index) {
-		if (spawnRaidMonster(activeRaid, false, influenced)) {
-			++spawned;
+	activeRaid.pendingSpawnCount = requestedCount;
+	activeRaid.pendingInfluenced = influenced;
+	if (warden) {
+		if (!spawnRaidMonster(activeRaid, true, false)) {
+			cleanupRaid(raidId);
+			message = "The Echo Warden could not find a valid spawn tile.";
+			return false;
 		}
-	}
-	if (!warden && spawned == 0) {
+		activeRaid.nextSpawnAt = activeRaid.createdAt + config.spawnIntervalMs;
+	} else if (!spawnNextRaidMonster(activeRaid)) {
 		cleanupRaid(raidId);
 		message = "The Echo Raid could not find a valid spawn tile.";
 		return false;
@@ -518,7 +539,12 @@ void EchoRaidManager::clearWardenProtection(RaidInstance& raid)
 {
 	for (uint32_t creatureId : raid.protectedCreatureIds) {
 		if (auto monster = g_game.getMonsterByIDShared(creatureId)) {
-			monster->setEchoWardProtected(false);
+			if (monster->getEchoWardOwnerRaidId() == raid.id) {
+				monster->setEchoWardProtected(false);
+				if (monster->getEchoRaidId() != raid.id) {
+					monster->setEchoRaidVisualState(EchoRaidVisualState::None);
+				}
+			}
 		}
 	}
 	raid.protectedCreatureIds.clear();
@@ -542,17 +568,25 @@ void EchoRaidManager::updateWardenAura(RaidInstance& raid, uint64_t now)
 		const MonsterType* monsterType = monster ? monster->getMonsterType() : nullptr;
 		if (!monster || monster == warden.get() || monster->isRemoved() || monster->isSummon() || monster->isBoss() ||
 		    monster->isFiendish() || monster->isInfluenced() || !monster->compareInstance(raid.instanceId) ||
-		    !monsterType || monsterType->raceId != raid.raceId) {
+		    !monsterType || monsterType->raceId != raid.raceId ||
+		    (monster->getEchoRaidId() != 0 && monster->getEchoRaidId() != raid.id) ||
+		    (monster->getEchoWardOwnerRaidId() != 0 && monster->getEchoWardOwnerRaidId() != raid.id)) {
 			continue;
 		}
 		protectedNow.insert(monster->getID());
-		monster->setEchoWardProtected(true);
+		monster->setEchoWardProtected(true, raid.id);
+		monster->setEchoRaidVisualState(EchoRaidVisualState::Minion);
 	}
 
 	for (uint32_t previousId : raid.protectedCreatureIds) {
 		if (!protectedNow.contains(previousId)) {
 			if (auto monster = g_game.getMonsterByIDShared(previousId)) {
-				monster->setEchoWardProtected(false);
+				if (monster->getEchoWardOwnerRaidId() == raid.id) {
+					monster->setEchoWardProtected(false);
+					if (monster->getEchoRaidId() != raid.id) {
+						monster->setEchoRaidVisualState(EchoRaidVisualState::None);
+					}
+				}
 			}
 		}
 	}
@@ -573,6 +607,9 @@ void EchoRaidManager::cleanupRaid(uint64_t raidId)
 	clearWardenProtection(raid);
 	for (uint32_t creatureId : raid.creatureIds) {
 		if (auto creature = g_game.getCreatureByIDShared(creatureId); creature && !creature->isRemoved()) {
+			if (Monster* monster = creature->getMonster()) {
+				monster->setEchoRaidVisualState(EchoRaidVisualState::None);
+			}
 			g_game.removeCreature(creature.get(), false);
 		}
 	}
@@ -603,7 +640,12 @@ void EchoRaidManager::tick(uint64_t now)
 	for (auto& [raidId, raid] : raids) {
 		if (now >= raid.expiresAt) {
 			expiredRaids.push_back(raidId);
-		} else if (raid.wardenId != 0 && now >= raid.nextAuraAt) {
+			continue;
+		}
+		if (raid.pendingSpawnCount > 0 && now >= raid.nextSpawnAt) {
+			(void)spawnNextRaidMonster(raid);
+		}
+		if (raid.wardenId != 0 && now >= raid.nextAuraAt) {
 			updateWardenAura(raid, now);
 		}
 	}
@@ -756,7 +798,11 @@ bool EchoRaidManager::tryEchoWardDodge(const Monster& monster) const
 
 EchoRaidRuntimeStatus EchoRaidManager::getStatus() const
 {
-	return {isEnabled(), pendingEchoes.size(), portals.size(), raids.size(), creatureToRaid.size()};
+	size_t pendingSpawns = 0;
+	for (const auto& [_, raid] : raids) {
+		pendingSpawns += raid.pendingSpawnCount;
+	}
+	return {isEnabled(), pendingEchoes.size(), portals.size(), raids.size(), creatureToRaid.size(), pendingSpawns};
 }
 
 bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view command, std::string& message)
@@ -773,9 +819,9 @@ bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view comma
 
 	if (operation == "status") {
 		const EchoRaidRuntimeStatus status = getStatus();
-		message = fmt::format("EchoRaid: {}, pending={}, portals={}, raids={}, creatures={}",
+		message = fmt::format("EchoRaid: {}, pending={}, portals={}, raids={}, creatures={}, queued-spawns={}",
 		                      status.enabled ? "enabled" : "disabled", status.pendingEchoes, status.portals,
-		                      status.activeRaids, status.trackedCreatures);
+		                      status.activeRaids, status.trackedCreatures, status.pendingSpawns);
 		return true;
 	}
 	if (operation == "cleanup") {
@@ -828,6 +874,29 @@ bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view comma
 		message = fmt::format("Echo portal created for {}.", monsterName);
 		return true;
 	}
+	if (operation == "visualleader" || operation == "visualminion") {
+		RaidInstance raid;
+		raid.id = nextRaidId++;
+		raid.raceId = raceId;
+		raid.monsterName = monsterName;
+		raid.origin = player.getPosition();
+		raid.instanceId = player.getInstanceID();
+		raid.outcome = EchoRaidOutcome::Warden;
+		raid.createdAt = static_cast<uint64_t>(OTSYS_TIME());
+		raid.expiresAt = raid.createdAt + config.lifetimeMs;
+		raid.nextAuraAt = raid.expiresAt;
+		const uint64_t raidId = raid.id;
+		raids.emplace(raidId, std::move(raid));
+		RaidInstance& activeRaid = raids.at(raidId);
+		const bool leader = operation == "visualleader";
+		if (!spawnRaidMonster(activeRaid, leader, false)) {
+			cleanupRaid(raidId);
+			message = "The visual test creature could not find a valid spawn tile.";
+			return false;
+		}
+		message = fmt::format("Echo {} visual created for {}.", leader ? "leader" : "minion", monsterName);
+		return true;
+	}
 
 	std::optional<EchoRaidOutcome> outcome;
 	if (operation == "normal") {
@@ -838,7 +907,7 @@ bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view comma
 		outcome = EchoRaidOutcome::Warden;
 	}
 	if (!outcome) {
-		message = "Usage: /echo spawn|normal|influenced|warden [monster] | cleanup | status";
+		message = "Usage: /echo spawn|normal|influenced|warden|visualleader|visualminion [monster] | cleanup | status";
 		return false;
 	}
 	return startRaid(player.getPosition(), player.getInstanceID(), raceId, monsterName, *outcome, message);

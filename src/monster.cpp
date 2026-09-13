@@ -263,18 +263,29 @@ bool Monster::applyEchoWarden(double healthMultiplier, double attackMultiplier)
 	return true;
 }
 
-void Monster::setEchoWardProtected(bool value)
+void Monster::setEchoWardProtected(bool value, uint64_t ownerRaidId)
 {
-	if (echoWardProtected == value) {
+	const uint64_t normalizedOwner = value ? ownerRaidId : 0;
+	if (echoWardProtected == value && echoWardOwnerRaidId == normalizedOwner) {
 		return;
 	}
 	echoWardProtected = value;
+	echoWardOwnerRaidId = normalizedOwner;
 	if (value) {
 		setIcon("echo_ward", CreatureIcon(CreatureIconModifications_Influenced));
 	} else {
 		removeIcon("echo_ward");
 	}
 	g_game.updateCreatureIcon(this);
+}
+
+void Monster::setEchoRaidVisualState(EchoRaidVisualState state)
+{
+	if (echoRaidVisualState == state) {
+		return;
+	}
+	echoRaidVisualState = state;
+	g_game.updateCreatureEchoRaidVisual(this);
 }
 
 bool Monster::applyBossDifficulty(uint16_t difficulty, uint16_t raceId)
