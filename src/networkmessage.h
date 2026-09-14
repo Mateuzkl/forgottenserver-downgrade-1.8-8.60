@@ -11,7 +11,6 @@
 class Item;
 class Creature;
 class Player;
-class Player;
 struct Position;
 class RSA;
 
