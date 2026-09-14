@@ -243,16 +243,16 @@ void Monster::setFiendish(bool v)
 	g_game.updateCreatureSkull(this);
 }
 
-bool Monster::applyEchoWarden(double healthMultiplier, double attackMultiplier)
+bool Monster::applyEchoWarden(double healthMultiplier, double selfAttackMultiplier)
 {
 	if (echoWarden || isSummon() || mType->info.isBoss || isRewardBoss() || influenced || fiendish ||
 	    !std::isfinite(healthMultiplier) ||
-	    !std::isfinite(attackMultiplier) || healthMultiplier <= 0.0 || attackMultiplier <= 0.0) {
+	    !std::isfinite(selfAttackMultiplier) || healthMultiplier <= 0.0 || selfAttackMultiplier <= 0.0) {
 		return false;
 	}
 
 	echoWarden = true;
-	echoWardenAttackMultiplier = std::clamp(attackMultiplier, 0.1, 100.0);
+	echoWardenSelfAttackMultiplier = std::clamp(selfAttackMultiplier, 0.1, 100.0);
 	const auto scaledHealth = static_cast<int64_t>(std::llround(static_cast<double>(healthMax) * healthMultiplier));
 	healthMax = static_cast<int32_t>(std::clamp<int64_t>(scaledHealth, 1, std::numeric_limits<int32_t>::max()));
 	health = healthMax;
@@ -263,14 +263,39 @@ bool Monster::applyEchoWarden(double healthMultiplier, double attackMultiplier)
 	return true;
 }
 
-void Monster::setEchoWardProtected(bool value, uint64_t ownerRaidId)
+int32_t Monster::scaleEchoRaidCombatValue(int32_t value, double multiplier)
+{
+	if (!std::isfinite(multiplier) || multiplier <= 0.0 || multiplier == 1.0) {
+		return value;
+	}
+	return static_cast<int32_t>(std::clamp<double>(
+	    std::round(static_cast<double>(value) * multiplier), std::numeric_limits<int32_t>::min(),
+	    std::numeric_limits<int32_t>::max()));
+}
+
+double Monster::getEchoRaidDamageMultiplier() const
+{
+	double multiplier = echoWarden ? echoWardenSelfAttackMultiplier : 1.0;
+	if (echoWardProtected) {
+		multiplier *= echoWardDamageMultiplier;
+	}
+	return multiplier;
+}
+
+void Monster::setEchoWardProtected(bool value, uint64_t ownerRaidId, double damageMultiplier)
 {
 	const uint64_t normalizedOwner = value ? ownerRaidId : 0;
-	if (echoWardProtected == value && echoWardOwnerRaidId == normalizedOwner) {
+	const double normalizedDamageMultiplier =
+	    value && std::isfinite(damageMultiplier) && damageMultiplier > 0.0
+	        ? std::clamp(damageMultiplier, 0.1, 100.0)
+	        : 1.0;
+	if (echoWardProtected == value && echoWardOwnerRaidId == normalizedOwner &&
+	    echoWardDamageMultiplier == normalizedDamageMultiplier) {
 		return;
 	}
 	echoWardProtected = value;
 	echoWardOwnerRaidId = normalizedOwner;
+	echoWardDamageMultiplier = normalizedDamageMultiplier;
 	if (value) {
 		setIcon("echo_ward", CreatureIcon(CreatureIconModifications_Influenced));
 	} else {
@@ -3141,15 +3166,6 @@ bool Monster::getCombatValues(int32_t& min, int32_t& max)
 		double mult = dmgMult[influencedLevel];
 		min = static_cast<int32_t>(min * mult);
 		max = static_cast<int32_t>(max * mult);
-	}
-
-	if (echoWarden) {
-		min = static_cast<int32_t>(std::clamp<double>(min * echoWardenAttackMultiplier,
-		                                               std::numeric_limits<int32_t>::min(),
-		                                               std::numeric_limits<int32_t>::max()));
-		max = static_cast<int32_t>(std::clamp<double>(max * echoWardenAttackMultiplier,
-		                                               std::numeric_limits<int32_t>::min(),
-		                                               std::numeric_limits<int32_t>::max()));
 	}
 
 	return true;

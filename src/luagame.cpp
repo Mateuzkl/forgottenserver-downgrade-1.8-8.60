@@ -1630,8 +1630,10 @@ int luaGameConfigureEchoRaid(lua_State* L)
 	withEchoTableField(L, 1, "warden", [&](int table) {
 		config.wardenHealthMultiplier =
 		    getEchoNumberField(L, table, "healthMultiplier", config.wardenHealthMultiplier);
-		config.wardenAttackMultiplier =
-		    getEchoNumberField(L, table, "attackMultiplier", config.wardenAttackMultiplier);
+		config.wardenSelfAttackMultiplier =
+		    getEchoNumberField(L, table, "selfAttackMultiplier", config.wardenSelfAttackMultiplier);
+		config.empoweredDamageMultiplier =
+		    getEchoNumberField(L, table, "empoweredDamageMultiplier", config.empoweredDamageMultiplier);
 		config.wardenNormalCompanionCount = getEchoIntegerField<uint8_t>(
 		    L, table, "normalCompanionCount", config.wardenNormalCompanionCount, integerFieldsValid);
 		config.wardenInfluencedCompanionCount = getEchoIntegerField<uint8_t>(
@@ -1645,6 +1647,8 @@ int luaGameConfigureEchoRaid(lua_State* L)
 		    getEchoNumberField(L, table, "auraDodgeChancePercent", config.auraDodgeChancePercent);
 	});
 	withEchoTableField(L, 1, "rewards", [&](int table) {
+		config.wardenDust =
+		    getEchoIntegerField<uint32_t>(L, table, "wardenDust", config.wardenDust, integerFieldsValid);
 		withEchoTableField(L, table, "charmPointsByStars", [&](int points) {
 			for (size_t stars = 0; stars < config.charmPointsByStars.size(); ++stars) {
 				lua_rawgeti(L, points, static_cast<int>(stars));

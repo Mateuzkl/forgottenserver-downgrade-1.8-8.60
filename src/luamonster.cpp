@@ -532,7 +532,7 @@ int luaMonsterBlockFleeing(lua_State* L)
 
 int luaMonsterApplyEchoWarden(lua_State* L)
 {
-	// monster:applyEchoWarden(healthMultiplier[, attackMultiplier = 1.0])
+	// monster:applyEchoWarden(healthMultiplier[, selfAttackMultiplier = 1.0])
 	Monster* monster = getUserdata<Monster>(L, 1);
 	if (!monster) {
 		lua_pushnil(L);
@@ -540,8 +540,8 @@ int luaMonsterApplyEchoWarden(lua_State* L)
 	}
 
 	const double healthMultiplier = getNumber<double>(L, 2);
-	const double attackMultiplier = getNumber<double>(L, 3, 1.0);
-	pushBoolean(L, monster->applyEchoWarden(healthMultiplier, attackMultiplier));
+	const double selfAttackMultiplier = getNumber<double>(L, 3, 1.0);
+	pushBoolean(L, monster->applyEchoWarden(healthMultiplier, selfAttackMultiplier));
 	return 1;
 }
 

@@ -4,6 +4,7 @@
 #include "../astraclient.h"
 #include "../echo_raid.h"
 #include "../item.h"
+#include "../monster.h"
 
 #include "test_support.h"
 
@@ -115,6 +116,56 @@ TEST_CASE(echo_raid_spawn_plans_keep_normal_and_influenced_outcomes_separate)
 	CHECK(std::all_of(influenced.begin(), influenced.end(), [](bool value) { return value; }));
 }
 
+TEST_CASE(echo_raid_fixed_spawn_position_never_falls_back_from_the_portal_origin)
+{
+	const Position origin{321, 654, 7};
+	const auto available = EchoRaidManager::selectFixedSpawnPosition(origin, true);
+	CHECK(available.has_value());
+	if (available) {
+		CHECK(available->x == origin.x);
+		CHECK(available->y == origin.y);
+		CHECK(available->z == origin.z);
+	}
+	CHECK(!EchoRaidManager::selectFixedSpawnPosition(origin, false).has_value());
+}
+
+TEST_CASE(echo_raid_failed_spawn_attempt_preserves_warden_and_companion_queue)
+{
+	bool wardenPending = true;
+	std::deque<bool> companions = {false, false, true, true};
+
+	EchoRaidManager::finishSpawnAttempt(false, true, wardenPending, companions);
+	CHECK(wardenPending);
+	CHECK(companions.size() == 4);
+
+	EchoRaidManager::finishSpawnAttempt(true, true, wardenPending, companions);
+	CHECK(!wardenPending);
+	CHECK(companions.size() == 4);
+
+	EchoRaidManager::finishSpawnAttempt(false, false, wardenPending, companions);
+	CHECK(companions.size() == 4);
+	EchoRaidManager::finishSpawnAttempt(true, false, wardenPending, companions);
+	CHECK(companions.size() == 3);
+	CHECK(!companions.front());
+}
+
+TEST_CASE(echo_raid_damage_multiplier_scales_each_damage_component_once)
+{
+	CHECK(Monster::scaleEchoRaidCombatValue(-100, 1.0) == -100);
+	CHECK(Monster::scaleEchoRaidCombatValue(-100, 1.5) == -150);
+	CHECK(Monster::scaleEchoRaidCombatValue(-40, 1.5) == -60);
+	CHECK(Monster::scaleEchoRaidCombatValue(100, 1.5) == 150);
+	CHECK(Monster::scaleEchoRaidCombatValue(-100, 0.0) == -100);
+}
+
+TEST_CASE(echo_warden_reward_authority_accepts_each_death_only_once)
+{
+	auto monsterType = std::make_shared<MonsterType>();
+	Monster monster(monsterType);
+	CHECK(monster.markEchoWardenRewardsGranted());
+	CHECK(!monster.markEchoWardenRewardsGranted());
+}
+
 TEST_CASE(echo_raid_item_ids_are_aligned_and_present_in_otb)
 {
 	ensureItemTypesLoaded();
@@ -137,6 +188,9 @@ TEST_CASE(echo_raid_startup_validation_accepts_the_real_portal_and_loot_items)
 	ScopedBooleanConfig bestiary(ConfigManager::BESTIARY_SYSTEM_ENABLED, true);
 	ScopedBooleanConfig echo(ConfigManager::ECHO_RAID_SYSTEM_ENABLED, true);
 	EchoRaidConfig config;
+	CHECK(config.wardenSelfAttackMultiplier == 1.0);
+	CHECK(config.empoweredDamageMultiplier == 1.5);
+	CHECK(config.wardenDust == 15);
 	for (uint16_t itemId = 53751; itemId <= 53774; ++itemId) {
 		config.basicScrollItemIds.push_back(itemId);
 	}

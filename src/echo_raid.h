@@ -56,7 +56,8 @@ struct EchoRaidConfig
 	uint8_t influencedLevelMax = 5;
 
 	double wardenHealthMultiplier = 3.0;
-	double wardenAttackMultiplier = 1.5;
+	double wardenSelfAttackMultiplier = 1.0;
+	double empoweredDamageMultiplier = 1.5;
 	uint8_t wardenNormalCompanionCount = 2;
 	uint8_t wardenInfluencedCompanionCount = 2;
 	uint8_t auraRange = 5;
@@ -67,6 +68,7 @@ struct EchoRaidConfig
 	uint32_t lifetimeMs = 10 * 60 * 1000;
 
 	std::array<uint32_t, 6> charmPointsByStars = {1, 2, 5, 10, 15, 30};
+	uint32_t wardenDust = 15;
 	std::vector<uint16_t> basicScrollItemIds;
 	std::vector<EchoRaidWeightedItem> catalystItems;
 };
@@ -115,6 +117,10 @@ public:
 	                                                     uint8_t influencedCount,
 	                                                     uint8_t wardenNormalCompanionCount,
 	                                                     uint8_t wardenInfluencedCompanionCount);
+	[[nodiscard]] static std::optional<Position> selectFixedSpawnPosition(const Position& origin,
+	                                                                      bool originAvailable);
+	static void finishSpawnAttempt(bool spawned, bool attemptedWarden, bool& wardenPending,
+	                               std::deque<bool>& pendingSpawns);
 
 private:
 	struct PositionKey
@@ -162,6 +168,7 @@ private:
 		uint64_t expiresAt = 0;
 		uint64_t nextAuraAt = 0;
 		uint64_t nextSpawnAt = 0;
+		bool wardenPending = false;
 		std::deque<bool> pendingSpawns;
 		uint32_t wardenId = 0;
 		std::unordered_set<uint32_t> creatureIds;
@@ -180,6 +187,7 @@ private:
 	                             uint64_t* startedRaidId = nullptr);
 	[[nodiscard]] std::shared_ptr<Monster> spawnRaidMonster(RaidInstance& raid, bool warden, bool influenced);
 	[[nodiscard]] bool spawnNextRaidMonster(RaidInstance& raid);
+	[[nodiscard]] static bool hasPendingSpawns(const RaidInstance& raid);
 	[[nodiscard]] std::optional<Position> findSpawnPosition(Monster& monster, const RaidInstance& raid) const;
 	void updateWardenAura(RaidInstance& raid, uint64_t now);
 	void clearWardenProtection(RaidInstance& raid);

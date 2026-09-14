@@ -108,7 +108,7 @@ public:
 	void setInfluencedLevel(uint8_t level) { influencedLevel = level; }
 	bool isFiendish() const { return fiendish; }
 	void setFiendish(bool v);
-	bool applyEchoWarden(double healthMultiplier, double attackMultiplier);
+	bool applyEchoWarden(double healthMultiplier, double selfAttackMultiplier);
 	bool isEchoWarden() const { return echoWarden; }
 	uint64_t getEchoRaidId() const { return echoRaidId; }
 	void setEchoRaidId(uint64_t raidId) { echoRaidId = raidId; }
@@ -117,7 +117,17 @@ public:
 	void setEchoRaidVisualState(EchoRaidVisualState state);
 	bool isEchoWardProtected() const { return echoWardProtected; }
 	uint64_t getEchoWardOwnerRaidId() const { return echoWardOwnerRaidId; }
-	void setEchoWardProtected(bool value, uint64_t ownerRaidId = 0);
+	double getEchoRaidDamageMultiplier() const;
+	void setEchoWardProtected(bool value, uint64_t ownerRaidId = 0, double damageMultiplier = 1.0);
+	[[nodiscard]] static int32_t scaleEchoRaidCombatValue(int32_t value, double multiplier);
+	bool markEchoWardenRewardsGranted()
+	{
+		if (echoWardenRewardsGranted) {
+			return false;
+		}
+		echoWardenRewardsGranted = true;
+		return true;
+	}
 	bool markEchoWardenLootGranted()
 	{
 		if (echoWardenLootGranted) {
@@ -251,10 +261,12 @@ private:
 	bool echoWarden = false;
 	bool echoWardProtected = false;
 	uint64_t echoWardOwnerRaidId = 0;
+	bool echoWardenRewardsGranted = false;
 	bool echoWardenLootGranted = false;
 	uint64_t echoRaidId = 0;
 	EchoRaidVisualState echoRaidVisualState = EchoRaidVisualState::None;
-	double echoWardenAttackMultiplier = 1.0;
+	double echoWardenSelfAttackMultiplier = 1.0;
+	double echoWardDamageMultiplier = 1.0;
 	bool bossDifficultyApplied = false;
 	uint16_t bossDifficulty = 0;
 	uint16_t bossDifficultyRaceId = 0;

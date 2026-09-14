@@ -13,9 +13,11 @@
 #include "game.h"
 #include "item.h"
 #include "logger.h"
+#include "luascript.h"
 #include "monster.h"
 #include "monsters.h"
 #include "player.h"
+#include "script.h"
 #include "scriptmanager.h"
 #include "tile.h"
 #include "tools.h"
@@ -60,6 +62,56 @@ uint32_t saturatingScaledWeight(uint32_t weight, double multiplier)
 	}
 	const double scaled = std::round(static_cast<double>(weight) * multiplier);
 	return static_cast<uint32_t>(std::clamp(scaled, 1.0, static_cast<double>(std::numeric_limits<uint32_t>::max())));
+}
+
+std::optional<uint32_t> grantForgeDust(Player& player, uint32_t amount)
+{
+	if (amount == 0) {
+		return 0;
+	}
+	if (!g_scripts) {
+		return std::nullopt;
+	}
+
+	LuaScriptInterface& scriptInterface = g_scripts->getScriptInterface();
+	lua_State* L = scriptInterface.getLuaState();
+	if (!L) {
+		return std::nullopt;
+	}
+	const int stackTop = lua_gettop(L);
+	lua_getglobal(L, "EchoRaidGrantForgeDust");
+	if (!lua_isfunction(L, -1)) {
+		lua_settop(L, stackTop);
+		return std::nullopt;
+	}
+	if (!scriptInterface.reserveScriptEnv()) {
+		lua_settop(L, stackTop);
+		return std::nullopt;
+	}
+
+	ScriptEnvironment* env = scriptInterface.getScriptEnv();
+	env->setScriptId(EVENT_ID_USER, &scriptInterface);
+	Lua::pushUserdata<Player>(L, &player);
+	Lua::setMetatable(L, -1, "Player");
+	lua_pushinteger(L, static_cast<lua_Integer>(amount));
+	if (scriptInterface.protectedCall(L, 2, 1) != LUA_OK) {
+		LuaScriptInterface::reportError("EchoRaidGrantForgeDust", Lua::popString(L));
+		lua_settop(L, stackTop);
+		scriptInterface.resetScriptEnv();
+		return std::nullopt;
+	}
+
+	std::optional<uint32_t> granted;
+	if (lua_isnumber(L, -1)) {
+		const lua_Number value = lua_tonumber(L, -1);
+		if (std::isfinite(value) && value >= 0 && value <= std::numeric_limits<uint32_t>::max() &&
+		    std::floor(value) == value) {
+			granted = static_cast<uint32_t>(value);
+		}
+	}
+	lua_settop(L, stackTop);
+	scriptInterface.resetScriptEnv();
+	return granted;
 }
 
 } // namespace
@@ -149,8 +201,9 @@ bool EchoRaidManager::validateConfig(const EchoRaidConfig& candidate, std::strin
 	}
 	if (!std::isfinite(candidate.completedBestiaryWardenMultiplier) ||
 	    candidate.completedBestiaryWardenMultiplier <= 0.0 || !std::isfinite(candidate.wardenHealthMultiplier) ||
-	    candidate.wardenHealthMultiplier <= 0.0 || !std::isfinite(candidate.wardenAttackMultiplier) ||
-	    candidate.wardenAttackMultiplier <= 0.0 || !std::isfinite(candidate.auraDodgeChancePercent) ||
+	    candidate.wardenHealthMultiplier <= 0.0 || !std::isfinite(candidate.wardenSelfAttackMultiplier) ||
+	    candidate.wardenSelfAttackMultiplier <= 0.0 || !std::isfinite(candidate.empoweredDamageMultiplier) ||
+	    candidate.empoweredDamageMultiplier <= 0.0 || !std::isfinite(candidate.auraDodgeChancePercent) ||
 	    candidate.auraDodgeChancePercent < 0.0 || candidate.auraDodgeChancePercent > 100.0) {
 		error = "invalid multiplier or dodge chance";
 		return false;
@@ -237,6 +290,24 @@ std::deque<bool> EchoRaidManager::buildSpawnPlan(EchoRaidOutcome outcome, uint8_
 			break;
 	}
 	return plan;
+}
+
+std::optional<Position> EchoRaidManager::selectFixedSpawnPosition(const Position& origin, bool originAvailable)
+{
+	return originAvailable ? std::optional<Position>(origin) : std::nullopt;
+}
+
+void EchoRaidManager::finishSpawnAttempt(bool spawned, bool attemptedWarden, bool& wardenPending,
+	                                      std::deque<bool>& pendingSpawns)
+{
+	if (!spawned) {
+		return;
+	}
+	if (attemptedWarden) {
+		wardenPending = false;
+	} else if (!pendingSpawns.empty()) {
+		pendingSpawns.pop_front();
+	}
 }
 
 bool EchoRaidManager::isEligibleMonster(const Monster& monster) const
@@ -433,33 +504,12 @@ bool EchoRaidManager::activateEcho(Player& player, Item& item, std::string& mess
 
 std::optional<Position> EchoRaidManager::findSpawnPosition(Monster& monster, const RaidInstance& raid) const
 {
-	const int32_t radius = config.spawnRadius;
-	for (int32_t ring = 0; ring <= radius; ++ring) {
-		for (int32_t dy = -ring; dy <= ring; ++dy) {
-			for (int32_t dx = -ring; dx <= ring; ++dx) {
-				if (std::max(std::abs(dx), std::abs(dy)) != ring) {
-					continue;
-				}
-				const int32_t x = static_cast<int32_t>(raid.origin.x) + dx;
-				const int32_t y = static_cast<int32_t>(raid.origin.y) + dy;
-				if (x <= 0 || x > std::numeric_limits<uint16_t>::max() || y <= 0 ||
-				    y > std::numeric_limits<uint16_t>::max()) {
-					continue;
-				}
-				const Position position{static_cast<uint16_t>(x), static_cast<uint16_t>(y), raid.origin.z};
-				Tile* tile = g_game.map.getTile(position);
-				if (!tile || !tile->getGround() ||
-				    tile->hasFlag(TILESTATE_BLOCKSOLID | TILESTATE_PROTECTIONZONE | TILESTATE_FLOORCHANGE |
-				                  TILESTATE_TELEPORT)) {
-					continue;
-				}
-				if (tile->queryAdd(0, monster, 1, 0, &monster) == RETURNVALUE_NOERROR) {
-					return position;
-				}
-			}
-		}
-	}
-	return std::nullopt;
+	Tile* tile = g_game.map.getTile(raid.origin);
+	const bool originAvailable = tile && tile->getGround() &&
+	                             !tile->hasFlag(TILESTATE_BLOCKSOLID | TILESTATE_PROTECTIONZONE |
+	                                            TILESTATE_FLOORCHANGE | TILESTATE_TELEPORT) &&
+	                             tile->queryAdd(0, monster, 1, 0, &monster) == RETURNVALUE_NOERROR;
+	return selectFixedSpawnPosition(raid.origin, originAvailable);
 }
 
 std::shared_ptr<Monster> EchoRaidManager::spawnRaidMonster(RaidInstance& raid, bool warden, bool influenced)
@@ -478,7 +528,7 @@ std::shared_ptr<Monster> EchoRaidManager::spawnRaidMonster(RaidInstance& raid, b
 		return nullptr;
 	}
 
-	if (warden && !monster->applyEchoWarden(config.wardenHealthMultiplier, config.wardenAttackMultiplier)) {
+	if (warden && !monster->applyEchoWarden(config.wardenHealthMultiplier, config.wardenSelfAttackMultiplier)) {
 		g_game.removeCreature(monster.get(), false);
 		return nullptr;
 	}
@@ -501,16 +551,15 @@ std::shared_ptr<Monster> EchoRaidManager::spawnRaidMonster(RaidInstance& raid, b
 
 bool EchoRaidManager::spawnNextRaidMonster(RaidInstance& raid)
 {
-	if (raid.pendingSpawns.empty()) {
+	if (!hasPendingSpawns(raid)) {
 		return false;
 	}
 
-	const bool influenced = raid.pendingSpawns.front();
-	const bool spawned = static_cast<bool>(spawnRaidMonster(raid, false, influenced));
-	if (spawned) {
-		raid.pendingSpawns.pop_front();
-	}
-	if (!raid.pendingSpawns.empty()) {
+	const bool attemptedWarden = raid.wardenPending;
+	const bool influenced = !attemptedWarden && raid.pendingSpawns.front();
+	const bool spawned = static_cast<bool>(spawnRaidMonster(raid, attemptedWarden, influenced));
+	finishSpawnAttempt(spawned, attemptedWarden, raid.wardenPending, raid.pendingSpawns);
+	if (hasPendingSpawns(raid)) {
 		raid.nextSpawnAt = static_cast<uint64_t>(OTSYS_TIME()) + config.spawnIntervalMs;
 	} else {
 		raid.nextSpawnAt = 0;
@@ -518,10 +567,20 @@ bool EchoRaidManager::spawnNextRaidMonster(RaidInstance& raid)
 	return spawned;
 }
 
+bool EchoRaidManager::hasPendingSpawns(const RaidInstance& raid)
+{
+	return raid.wardenPending || !raid.pendingSpawns.empty();
+}
+
 bool EchoRaidManager::startRaid(const Position& origin, uint32_t instanceId, uint16_t raceId,
 	                             std::string_view monsterName, EchoRaidOutcome outcome, std::string& message,
 	                             uint64_t* startedRaidId)
 {
+	if (!g_monsters.getMonsterType(std::string(monsterName))) {
+		message = "The Echo creature is no longer registered.";
+		return false;
+	}
+
 	RaidInstance raid;
 	raid.id = nextRaidId++;
 	raid.raceId = raceId;
@@ -537,6 +596,7 @@ bool EchoRaidManager::startRaid(const Position& origin, uint32_t instanceId, uin
 	RaidInstance& activeRaid = raids.at(raidId);
 
 	const bool warden = outcome == EchoRaidOutcome::Warden;
+	activeRaid.wardenPending = warden;
 	const uint8_t normalCount = outcome == EchoRaidOutcome::Normal
 	                                ? static_cast<uint8_t>(uniform_random(config.normalCountMin,
 	                                                                      config.normalCountMax))
@@ -556,22 +616,14 @@ bool EchoRaidManager::startRaid(const Position& origin, uint32_t instanceId, uin
 			break;
 	}
 
-	if (warden) {
-		if (!spawnRaidMonster(activeRaid, true, false)) {
-			cleanupRaid(raidId);
-			message = "The Echo Warden could not find a valid spawn tile.";
-			return false;
-		}
-		activeRaid.nextSpawnAt = activeRaid.pendingSpawns.empty() ? 0 :
-		                         activeRaid.createdAt + config.spawnIntervalMs;
-	} else if (!spawnNextRaidMonster(activeRaid)) {
-		cleanupRaid(raidId);
-		message = "The Echo Raid could not find a valid spawn tile.";
-		return false;
-	}
+	// The origin may still be occupied by the player who activated the Echo.
+	// Keep the first spawn pending and retry at the configured interval instead
+	// of consuming it or falling back to a neighboring tile.
+	activeRaid.nextSpawnAt = activeRaid.createdAt;
+	(void)spawnNextRaidMonster(activeRaid);
 
 	g_game.addMagicEffect(origin, CONST_ME_AGONY, instanceId);
-	if (warden) {
+	if (warden && activeRaid.wardenId != 0) {
 		updateWardenAura(activeRaid, activeRaid.createdAt);
 	}
 	if (startedRaidId) {
@@ -619,7 +671,7 @@ void EchoRaidManager::updateWardenAura(RaidInstance& raid, uint64_t now)
 			continue;
 		}
 		protectedNow.insert(monster->getID());
-		monster->setEchoWardProtected(true, raid.id);
+		monster->setEchoWardProtected(true, raid.id, config.empoweredDamageMultiplier);
 		monster->setEchoRaidVisualState(EchoRaidVisualState::Empowered);
 	}
 
@@ -687,7 +739,7 @@ void EchoRaidManager::tick(uint64_t now)
 			expiredRaids.push_back(raidId);
 			continue;
 		}
-		if (!raid.pendingSpawns.empty() && now >= raid.nextSpawnAt) {
+		if (hasPendingSpawns(raid) && now >= raid.nextSpawnAt) {
 			(void)spawnNextRaidMonster(raid);
 		}
 		if (raid.wardenId != 0 && now >= raid.nextAuraAt) {
@@ -716,10 +768,11 @@ void EchoRaidManager::onCreatureRemoved(uint32_t creatureId)
 	raid.protectedCreatureIds.erase(creatureId);
 	if (raid.wardenId == creatureId) {
 		raid.wardenId = 0;
+		raid.wardenPending = false;
 		raid.pendingSpawns.clear();
 		clearWardenProtection(raid);
 	}
-	if (raid.creatureIds.empty() && raid.pendingSpawns.empty()) {
+	if (raid.creatureIds.empty() && !hasPendingSpawns(raid)) {
 		raids.erase(raidIt);
 	}
 }
@@ -757,21 +810,40 @@ uint32_t EchoRaidManager::firstWardenCharmPoints(uint8_t stars) const
 void EchoRaidManager::grantWardenRewards(Monster& monster,
 	                                      const std::vector<std::shared_ptr<Player>>& recipients)
 {
-	if (!isEnabled() || !monster.isEchoWarden() || recipients.empty()) {
+	if (!isEnabled() || !monster.isEchoWarden() || recipients.empty() ||
+	    !monster.markEchoWardenRewardsGranted()) {
 		return;
 	}
+
 	const MonsterType* monsterType = monster.getMonsterType();
-	if (!monsterType || monsterType->raceId == 0 || monsterType->raceId > std::numeric_limits<uint16_t>::max()) {
-		return;
+	uint16_t raceId = 0;
+	uint32_t charmPoints = 0;
+	bool hasFirstKillReward = false;
+	if (monsterType && monsterType->raceId > 0 && monsterType->raceId <= std::numeric_limits<uint16_t>::max()) {
+		raceId = static_cast<uint16_t>(monsterType->raceId);
+		if (const auto entry = g_bestiaryCharmSystem.getMonster(raceId)) {
+			charmPoints = firstWardenCharmPoints(entry->get().stars);
+			hasFirstKillReward = true;
+		}
 	}
-	const uint16_t raceId = static_cast<uint16_t>(monsterType->raceId);
-	const auto entry = g_bestiaryCharmSystem.getMonster(raceId);
-	if (!entry) {
-		return;
-	}
-	const uint32_t amount = firstWardenCharmPoints(entry->get().stars);
+
+	std::unordered_set<uint32_t> rewardedPlayers;
 	for (const auto& player : recipients) {
-		if (!player || player->isRemoved()) {
+		if (!player || player->isRemoved() || !rewardedPlayers.insert(player->getGUID()).second) {
+			continue;
+		}
+
+		if (config.wardenDust > 0) {
+			const auto dustGranted = grantForgeDust(*player, config.wardenDust);
+			if (!dustGranted) {
+				LOG_ERROR("[EchoRaid] Failed to grant Forge Dust to player {}", player->getGUID());
+			} else if (*dustGranted > 0) {
+				player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
+				                        fmt::format("Echo Warden reward: +{} Forge Dust.", *dustGranted));
+			}
+		}
+
+		if (!hasFirstKillReward) {
 			continue;
 		}
 
@@ -794,7 +866,7 @@ void EchoRaidManager::grantWardenRewards(Monster& monster,
 			return database.executeQuery(fmt::format(
 			           "UPDATE `players` SET `charmpoints` = LEAST(4294967295, `charmpoints` + {}) "
 			           "WHERE `id` = {}",
-			           amount, player->getGUID()));
+			           charmPoints, player->getGUID()));
 		});
 		if (!persisted) {
 			LOG_ERROR("[EchoRaid] Failed to persist first Warden reward for player {} and race {}",
@@ -805,10 +877,11 @@ void EchoRaidManager::grantWardenRewards(Monster& monster,
 			continue;
 		}
 
-		player->addBestiaryCharmPoints(amount);
-		player->sendEchoWardenReward(raceId, amount);
+		player->addBestiaryCharmPoints(charmPoints);
+		player->sendEchoWardenReward(raceId, charmPoints);
 		player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
-		                        fmt::format("First Echo Warden defeated for this species: +{} Charm Points.", amount));
+		                        fmt::format("First Echo Warden defeated for this species: +{} Charm Points.",
+		                                    charmPoints));
 	}
 }
 
@@ -859,7 +932,7 @@ EchoRaidRuntimeStatus EchoRaidManager::getStatus() const
 {
 	size_t pendingSpawns = 0;
 	for (const auto& [_, raid] : raids) {
-		pendingSpawns += raid.pendingSpawns.size();
+		pendingSpawns += raid.pendingSpawns.size() + static_cast<size_t>(raid.wardenPending);
 	}
 	return {isEnabled(), pendingEchoes.size(), portals.size(), raids.size(), creatureToRaid.size(), pendingSpawns};
 }
@@ -956,7 +1029,7 @@ bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view comma
 			return false;
 		}
 		if (!warden) {
-			monster->setEchoWardProtected(true, raidId);
+			monster->setEchoWardProtected(true, raidId, config.empoweredDamageMultiplier);
 			monster->setEchoRaidVisualState(EchoRaidVisualState::Empowered);
 			activeRaid.protectedCreatureIds.insert(monster->getID());
 		}

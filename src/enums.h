@@ -854,6 +854,7 @@ struct CombatDamage
 	bool dodge = false;
 	bool preyApplied = false;
 	bool bossDifficultyApplied = false;
+	bool echoRaidDamageApplied = false;
 	bool echoWardDodgeChecked = false;
 	bool initialOriginCaptured = false;
 	bool equipmentDamageBonusApplied = false;

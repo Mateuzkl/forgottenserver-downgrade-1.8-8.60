@@ -15,6 +15,8 @@ EchoConfig = {
 	},
 
 	spawn = {
+		-- Retained for configuration compatibility. Echo Raid creatures always
+		-- materialize at the portal origin and never use a radius fallback.
 		radius = 3,
 		intervalMs = 400, -- Crystal reference timing; configurable, not claimed as an official rate.
 	},
@@ -40,10 +42,11 @@ EchoConfig = {
 	},
 
 	warden = {
-		-- Community references document 3x health. Attack and dodge values are
-		-- configurable because no official numerical values are published.
+		-- Community references document 3x health. The official announcement
+		-- confirms a damage bonus for other monsters, but publishes no percentage.
 		healthMultiplier = 3.0,
-		attackMultiplier = 1.5,
+		selfAttackMultiplier = 1.0,
+		empoweredDamageMultiplier = 1.5,
 		-- Current composition: one Warden followed by two normal and two
 		-- influenced companions. Counts remain configurable for custom worlds.
 		normalCompanionCount = 2,
@@ -56,6 +59,7 @@ EchoConfig = {
 	lifetimeMs = 10 * 60 * 1000,
 
 	rewards = {
+		wardenDust = 15,
 		-- First Warden per raceId: Harmless through Challenging.
 		charmPointsByStars = { [0] = 1, [1] = 2, [2] = 5, [3] = 10, [4] = 15, [5] = 30 },
 		basicScrollItemIds = {

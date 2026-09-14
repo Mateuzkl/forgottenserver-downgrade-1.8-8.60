@@ -6367,6 +6367,32 @@ void applyBossDifficultyDamage(CombatDamage& damage, Creature* attacker, Creatur
 		damage.secondary.value = scale(damage.secondary.value);
 	}
 }
+
+void applyEchoRaidDamage(CombatDamage& damage, Creature* attacker)
+{
+	if (damage.echoRaidDamageApplied || !attacker) {
+		return;
+	}
+
+	const Monster* monster = attacker->getMonster();
+	if (!monster) {
+		return;
+	}
+
+	const double multiplier = monster->getEchoRaidDamageMultiplier();
+	if (multiplier == 1.0) {
+		return;
+	}
+	damage.echoRaidDamageApplied = true;
+	if (damage.primary.type != COMBAT_NONE && damage.primary.type != COMBAT_HEALING &&
+	    damage.primary.type != COMBAT_AGONYDAMAGE) {
+		damage.primary.value = Monster::scaleEchoRaidCombatValue(damage.primary.value, multiplier);
+	}
+	if (damage.secondary.type != COMBAT_NONE && damage.secondary.type != COMBAT_HEALING &&
+	    damage.secondary.type != COMBAT_AGONYDAMAGE) {
+		damage.secondary.value = Monster::scaleEchoRaidCombatValue(damage.secondary.value, multiplier);
+	}
+}
 } // namespace
 
 bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* target, bool checkDefense,
@@ -6393,6 +6419,11 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 			return true;
 		}
 	}
+
+	// Apply the Echo aura once before armor, defense and resistances. The flag is
+	// preserved into combatChangeHealth/Mana, which also covers callers that skip
+	// combatBlockHit without multiplying direct hits or condition ticks twice.
+	applyEchoRaidDamage(damage, attacker);
 
 	uint32_t targetInstanceId = target->getInstanceID();
 	const auto sendBlockEffect = [targetInstanceId](BlockType_t blockType, CombatType_t combatType,
@@ -6700,6 +6731,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 	}
 
 	applyBossDifficultyDamage(damage, attacker, target);
+	applyEchoRaidDamage(damage, attacker);
 
 	auto targetRef = target->weak_from_this().lock();
 	if (!targetRef) {
@@ -7243,6 +7275,7 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 	}
 
 	applyBossDifficultyDamage(damage, attacker, target);
+	applyEchoRaidDamage(damage, attacker);
 
 	std::shared_ptr<Creature> attackerRef;
 	if (attacker) {
