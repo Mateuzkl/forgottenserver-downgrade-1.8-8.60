@@ -444,7 +444,6 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	}
 
 	Database& db = Database::getInstance();
-	constexpr uint32_t STORAGE_DAILY_REWARD_LAST_DAY = 90720;
 	const auto currentDay = static_cast<int64_t>(time(nullptr) / 86400);
 
 	DBResult_ptr result = db.storeQuery(fmt::format(
