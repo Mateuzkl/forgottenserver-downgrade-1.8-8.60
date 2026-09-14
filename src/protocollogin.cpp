@@ -506,9 +506,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 			output->addByte(character.lookAddons);
 			output->add<uint32_t>(character.level);
 			output->addString(character.vocation);
-			if (isFonticakClient_) {
-				output->addByte(character.dailyReward);
-			}
+			output->addByte(character.dailyReward);
 		}
 	} else {
 		// Standard 8.60 character list for OTCv8 Classic, Fonticak, CIP, etc.
