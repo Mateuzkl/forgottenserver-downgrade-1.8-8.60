@@ -1575,6 +1575,49 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 	return true;
 }
 
+bool IOLoginData::savePlayerDailyRewardStorages(Player* player)
+{
+	if (!player || player->getGUID() == 0) {
+		return false;
+	}
+
+	static constexpr std::array<uint32_t, 3> DAILY_REWARD_STORAGE_KEYS = {
+	    STORAGE_DAILY_REWARD_LAST_DAY,
+	    STORAGE_DAILY_REWARD_INDEX,
+	    STORAGE_DAILY_REWARD_STREAK,
+	};
+
+	const uint32_t playerId = player->getGUID();
+	const Player::StorageDirtySnapshot storageSnapshot = player->getStorageDirtySnapshot();
+
+	DBInsert storageQuery("INSERT INTO `player_storage` (`player_id`, `key`, `value`) VALUES ");
+	storageQuery.upsert(std::vector<std::string>{"value"});
+
+	for (const uint32_t key : DAILY_REWARD_STORAGE_KEYS) {
+		const int64_t value = player->getStorageValue(key).value_or(0);
+		if (!storageQuery.addRow(fmt::format("{:d}, {:d}, {:d}", playerId, key, value))) {
+			return false;
+		}
+	}
+
+	if (!storageQuery.execute()) {
+		return false;
+	}
+
+	Player::StorageDirtySnapshot acknowledgedSnapshot;
+	acknowledgedSnapshot.snapshotId = storageSnapshot.snapshotId;
+	for (const uint32_t key : DAILY_REWARD_STORAGE_KEYS) {
+		if (storageSnapshot.modifiedKeys.count(key)) {
+			acknowledgedSnapshot.modifiedKeys.insert(key);
+		}
+		if (storageSnapshot.removedKeys.count(key)) {
+			acknowledgedSnapshot.removedKeys.insert(key);
+		}
+	}
+	player->acknowledgeStorageDirty(acknowledgedSnapshot);
+	return true;
+}
+
 bool IOLoginData::loadAutoLootConfig(Player* player)
 {
 	Database& db = Database::getInstance();

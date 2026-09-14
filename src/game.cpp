@@ -7743,20 +7743,21 @@ void Game::internalDecayItem(std::shared_ptr<Item> item)
 // Loot Highlight System
 // ============================================================
 
-// Called once after loot is dropped into a corpse container.
-// ownerPlayerId: the player who has exclusive rights to open the corpse.
-// The highlight pulses every 2 seconds.
-// Phase 1 (0-10s): effect visible only to owner.
-// Phase 2 (10s+):  effect visible to everyone until corpse is opened/decayed.
 void Game::startLootHighlight(Container* corpse, uint32_t ownerPlayerId)
 {
-	if (!corpse || corpse->empty()) {
+	if (!corpse || corpse->empty() || ownerPlayerId == 0) {
 		return;
 	}
 
-	// Send the first effect immediately to owner and party
+	corpse->setLootHighlightActive(true);
+	corpse->notifyTileUpdate();
+
 	auto ownerRef = getPlayerByID(ownerPlayerId);
 	Player* owner = ownerRef.get();
+	if (owner && (owner->isFonticakClient() || owner->isAstraClient())) {
+		return;
+	}
+
 	if (owner && InstanceUtils::isPlayerInSameInstance(owner, corpse->getInstanceID())) {
 		owner->sendMagicEffect(corpse->getPosition(), CONST_ME_LOOT_HIGHLIGHT);
 		if (Party* party = owner->getParty()) {
@@ -7784,7 +7785,6 @@ void Game::startLootHighlight(Container* corpse, uint32_t ownerPlayerId)
 	auto scheduledEventId = std::make_shared<uint32_t>(0);
 	cleanupExpiredLootHighlightEvents();
 
-	// Schedule the first repeating tick
 	uint32_t eventId = g_scheduler.addEvent(createSchedulerTask(
 	    LOOT_HIGHLIGHT_PULSE_MS,
 	    ([this, weakCorpse, scheduledEventId, ownerPlayerId,
@@ -7817,23 +7817,20 @@ void Game::checkLootHighlight(std::shared_ptr<Item> corpseItem, uint32_t ownerPl
 
 	std::weak_ptr<Item> weakCorpse = corpseItem;
 
-	// Remove entry first
 	auto it = lootHighlightEvents.find(weakCorpse);
 	if (it == lootHighlightEvents.end() || it->second != eventId) {
 		return;
 	}
 	lootHighlightEvents.erase(it);
 
-	// Validate stop conditions
 	Tile* tile = corpse->getTile();
 	if (!tile || corpse->isRemoved() || corpse->empty() || totalTicksLeft < 0) {
-		return; // Stop permanently
+		return;
 	}
 
 	const Position& pos = corpse->getPosition();
 
 	if (ownerTicksLeft > 0) {
-		// Phase 1 — Owner and Party
 		auto ownerRef = getPlayerByID(ownerPlayerId);
 		Player* owner = ownerRef.get();
 		if (owner && InstanceUtils::isPlayerInSameInstance(owner, corpse->getInstanceID())) {
@@ -7854,12 +7851,12 @@ void Game::checkLootHighlight(std::shared_ptr<Item> corpseItem, uint32_t ownerPl
 			}
 		}
 	} else {
-		// Phase 2 — Public
 		SpectatorVec spectators;
 		map.getSpectators(spectators, pos, false, true);
 		for (const auto& spec : spectators) {
 			if (Player* p = spec->getPlayer()) {
-				if (!InstanceUtils::isPlayerInSameInstance(p, corpse->getInstanceID())) {
+				if (!InstanceUtils::isPlayerInSameInstance(p, corpse->getInstanceID()) ||
+				    p->isFonticakClient() || p->isAstraClient()) {
 					continue;
 				}
 
@@ -7868,7 +7865,6 @@ void Game::checkLootHighlight(std::shared_ptr<Item> corpseItem, uint32_t ownerPl
 		}
 	}
 
-	// Reschedule with decreased timers
 	auto scheduledEventId = std::make_shared<uint32_t>(0);
 	uint32_t newEventId = g_scheduler.addEvent(createSchedulerTask(
 	    LOOT_HIGHLIGHT_PULSE_MS,
@@ -7894,6 +7890,8 @@ void Game::stopLootHighlight(Container* corpse)
 		return;
 	}
 
+	corpse->clearLootHighlight();
+
 	auto corpseItem = corpse->weak_from_this().lock();
 	if (!corpseItem) {
 		return;
@@ -7902,7 +7900,7 @@ void Game::stopLootHighlight(Container* corpse)
 	std::weak_ptr<Item> weakCorpse = corpseItem;
 	auto it = lootHighlightEvents.find(weakCorpse);
 	if (it == lootHighlightEvents.end()) {
-		return; // No highlight active for this corpse
+		return;
 	}
 
 	g_scheduler.stopEvent(it->second);

@@ -10,7 +10,6 @@ AstraHelper.OPCODES = {
 AstraHelper.STORAGES = {
 	Cavebot = 99997,
 	SmartFollow = 99998,
-	MehahClient = 99999,
 }
 
 function AstraHelper.isCavebotEnabled(player)

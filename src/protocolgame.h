@@ -357,7 +357,10 @@ private:
 	// OTCv8
 	void sendFeatures(bool advertiseAstraItemState = false);
 	bool shouldSendQuickLootFlags() const;
+	bool shouldSendContainerTypes() const;
 	bool shouldSendContainerPagination() const;
+	void appendItem(NetworkMessage& msg, const Item* item) const;
+	void appendItem(NetworkMessage& msg, uint16_t itemId, uint8_t count) const;
 	bool shouldPaginateContainer(const Container* container) const;
 	bool shouldSendItemTierByte() const;
 	bool shouldSendThingUpgradeClassification() const;
@@ -441,6 +444,7 @@ private:
 	bool isAstraClient = false;
 	bool isFonticakClient = false;
 	bool supportsGameStoreHighlights = false;
+	bool supportsContainerTypes = false;
 	bool supportsAstraSingleCreatureMarks = false;
 	bool supportsAstraEchoRaidVisuals = false;
 	bool supportsZoneWeather = false;
