@@ -2993,6 +2993,18 @@ int luaPlayerSave(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSaveDailyReward(lua_State* L)
+{
+	// player:saveDailyReward()
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		pushBoolean(L, player->saveDailyReward());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerSaveAsync(lua_State* L)
 {
 	// player:saveAsync()
@@ -5007,6 +5019,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addMapMark", luaPlayerAddMapMark);
 
 	registerMethod("Player", "save", luaPlayerSave);
+	registerMethod("Player", "saveDailyReward", luaPlayerSaveDailyReward);
 	registerMethod("Player", "saveAsync", luaPlayerSaveAsync);
 	registerMethod("Player", "drainAsyncSave", luaPlayerDrainAsyncSave);
 	registerMethod("Player", "popupFYI", luaPlayerPopupFYI);

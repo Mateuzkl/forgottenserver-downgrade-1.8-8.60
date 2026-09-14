@@ -535,6 +535,7 @@ public:
 	StorageDirtySnapshot getStorageDirtySnapshot() const;
 	void acknowledgeStorageDirty(const StorageDirtySnapshot& snapshot);
 	void clearStorageDirty();
+	bool saveDailyReward();
 
 	void setGroup(const std::shared_ptr<Group>& newGroup) { group = newGroup; }
 	Group* getGroup() const { return group.get(); }

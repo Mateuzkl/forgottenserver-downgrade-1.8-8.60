@@ -429,6 +429,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 		uint8_t lookFeet = 76;
 		uint8_t lookAddons = 0;
 		std::string vocation = "None";
+		uint8_t dailyReward = 1;
 	};
 
 	std::vector<CharacterListEntry> characters;
@@ -443,9 +444,15 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	}
 
 	Database& db = Database::getInstance();
+	const auto currentDay = static_cast<int64_t>(time(nullptr) / 86400);
+
 	DBResult_ptr result = db.storeQuery(fmt::format(
-	    "SELECT `name`, `level`, `vocation`, `looktype`, `lookhead`, `lookbody`, `looklegs`, `lookfeet`, `lookaddons` FROM `players` WHERE `account_id` = {:d} AND `deletion` = 0 ORDER BY `name` ASC",
-	    account.id));
+	    "SELECT p.`name`, p.`level`, p.`vocation`, p.`looktype`, p.`lookhead`, p.`lookbody`, p.`looklegs`, p.`lookfeet`, p.`lookaddons`, "
+	    "COALESCE(s.`value`, 0) AS `daily_storage` "
+	    "FROM `players` p "
+	    "LEFT JOIN `player_storage` s ON s.`player_id` = p.`id` AND s.`key` = {:d} "
+	    "WHERE p.`account_id` = {:d} AND p.`deletion` = 0 ORDER BY p.`name` ASC",
+	    STORAGE_DAILY_REWARD_LAST_DAY, account.id));
 	if (result) {
 		do {
 			CharacterListEntry character;
@@ -457,6 +464,14 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 			character.lookLegs = result->getNumber<uint8_t>("looklegs");
 			character.lookFeet = result->getNumber<uint8_t>("lookfeet");
 			character.lookAddons = result->getNumber<uint8_t>("lookaddons");
+
+			int64_t lastClaimDay = result->getNumber<int64_t>("daily_storage");
+			if (const auto onlinePlayer = g_game.getPlayerByName(character.name)) {
+				if (const auto onlineVal = onlinePlayer->getStorageValue(STORAGE_DAILY_REWARD_LAST_DAY)) {
+					lastClaimDay = *onlineVal;
+				}
+			}
+			character.dailyReward = (lastClaimDay == currentDay) ? 0 : 1;
 
 			const uint16_t vocationId = result->getNumber<uint16_t>("vocation");
 			if (const auto* vocation = g_vocations.getVocation(vocationId)) {
@@ -473,8 +488,8 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), characters.size());
 
-	if (isAstraClient) {
-		// AstraClient extends the 8.60 list with outfit, level and vocation metadata.
+	if (isAstraClient || isFonticakClient_) {
+		// AstraClient and FonticakClient extend the 8.60 list with outfit, level and vocation metadata.
 		output->addByte(0x65);
 		output->addByte(size);
 		for (uint8_t i = 0; i < size; ++i) {
@@ -491,6 +506,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 			output->addByte(character.lookAddons);
 			output->add<uint32_t>(character.level);
 			output->addString(character.vocation);
+			output->addByte(character.dailyReward);
 		}
 	} else {
 		// Standard 8.60 character list for OTCv8 Classic, Fonticak, CIP, etc.
@@ -774,7 +790,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		} else if (accountName.empty()) {
 			thisPtr->getCastList(password, clientIP);
 		} else {
-			thisPtr->getCharacterList(accountName, password, thisPtr->isAstraClient_, clientIP);
+			thisPtr->getCharacterList(accountName, password, thisPtr->isAstraClient_ || thisPtr->isFonticakClient_, clientIP);
 		}
 	});
 }

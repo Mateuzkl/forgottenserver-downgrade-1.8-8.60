@@ -2021,6 +2021,11 @@ void Player::clearStorageDirty()
 	storageDirtyKeyRevisions.clear();
 }
 
+bool Player::saveDailyReward()
+{
+	return IOLoginData::savePlayerDailyRewardStorages(this);
+}
+
 bool Player::canSee(const Position& pos) const
 {
 	if (!client) {
