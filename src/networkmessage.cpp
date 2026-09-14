@@ -155,7 +155,7 @@ void addContainerSpecialType(NetworkMessage& msg, const Item* item, bool sendCon
 		return;
 	}
 
-	const uint8_t containerType = viewer ? static_cast<uint8_t>(container->getSpecialCategory(viewer)) : CONTAINER_SPECIAL_NONE;
+	const uint8_t containerType = static_cast<uint8_t>(viewer ? container->getSpecialCategory(viewer) : CONTAINER_SPECIAL_NONE);
 	msg.addByte(containerType);
 }
 
