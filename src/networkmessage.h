@@ -11,6 +11,7 @@
 class Item;
 class Creature;
 class Player;
+class Player;
 struct Position;
 class RSA;
 
@@ -135,10 +136,12 @@ public:
 	void addItemId(uint16_t itemId);
 	void addItem(uint16_t id, uint8_t count, bool sendTier = false, bool alwaysSendTier = false,
 	             bool sendQuickLootFlags = false, bool sendAstraItemState = false,
-	             bool sendAstraQuiverCountU16 = false, bool sendAstraItemMetadata = false);
+	             bool sendAstraQuiverCountU16 = false, bool sendAstraItemMetadata = false,
+	             bool sendContainerTypes = false, const Player* viewer = nullptr);
 	void addItem(const Item* item, bool sendTier = false, bool alwaysSendTier = false, bool sendQuiverCount = false,
 	             bool sendQuickLootFlags = false, bool sendAstraItemState = false,
-	             bool sendAstraQuiverCountU16 = false, bool sendAstraItemMetadata = false);
+	             bool sendAstraQuiverCountU16 = false, bool sendAstraItemMetadata = false,
+	             bool sendContainerTypes = false, const Player* viewer = nullptr);
 
 	MsgSize_t getLength() const { return info.length; }
 

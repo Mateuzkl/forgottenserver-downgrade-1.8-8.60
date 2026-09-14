@@ -97,6 +97,12 @@ public:
 	std::shared_ptr<Item> getItemByIndex(size_t index) const;
 	bool isHoldingItem(const Item* item) const;
 	bool isRewardCorpse() const;
+	bool isLootCorpse() const;
+	bool hasLootHighlight() const { return lootHighlightActive; }
+	void setLootHighlightActive(bool value) { lootHighlightActive = value; }
+	uint8_t getSpecialCategory(const Player* viewer) const;
+	void clearLootHighlight();
+	void notifyTileUpdate() const;
 
 	uint32_t getItemHoldingCount() const;
 	uint32_t getWeight() const override final;
@@ -148,6 +154,7 @@ private:
 	uint32_t ammoCount = 0;
 	uint32_t totalWeight = 0;
 	uint32_t serializationCount = 0;
+	bool lootHighlightActive = false;
 
 	void onAddContainerItem(Item* item) const;
 	void onUpdateContainerItem(uint32_t index, Item* oldItem, Item* newItem) const;

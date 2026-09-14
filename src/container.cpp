@@ -13,6 +13,7 @@
 #include "instance_utils.h"
 #include "iomap.h"
 #include "logger.h"
+#include "player.h"
 
 #include <queue>
 
@@ -872,6 +873,10 @@ void Container::removeThing(Thing* thing, uint32_t count)
 		auto itemSp = *(itemlist.begin() + index); // prevent destruction during erase
 		item->setParent(nullptr);
 		itemlist.erase(itemlist.begin() + index);
+
+		if (isLootCorpse() && empty() && lootHighlightActive) {
+			clearLootHighlight();
+		}
 	}
 }
 
@@ -1054,6 +1059,58 @@ bool Container::isRewardCorpse() const
 		}
 	}
 	return false;
+}
+
+bool Container::isLootCorpse() const
+{
+	if (lootHighlightActive) {
+		return true;
+	}
+
+	const ItemType& type = Item::items[getID()];
+	return type.corpseType != RACE_NONE || getCorpseOwner() != 0;
+}
+
+uint8_t Container::getSpecialCategory(const Player* viewer) const
+{
+	if (!viewer || !lootHighlightActive || empty() || isRewardCorpse()) {
+		return CONTAINER_SPECIAL_NONE;
+	}
+
+	const uint32_t corpseOwner = getCorpseOwner();
+	if (corpseOwner != 0 &&
+	    corpseOwner != static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) &&
+	    !viewer->canOpenCorpse(corpseOwner) && !viewer->hasFlag(PlayerFlag_CanEditHouses)) {
+		return CONTAINER_SPECIAL_NONE;
+	}
+
+	return CONTAINER_SPECIAL_LOOT_HIGHLIGHT;
+}
+
+void Container::clearLootHighlight()
+{
+	if (!lootHighlightActive) {
+		return;
+	}
+
+	lootHighlightActive = false;
+	notifyTileUpdate();
+}
+
+void Container::notifyTileUpdate() const
+{
+	if (isRemoved()) {
+		return;
+	}
+
+	Cylinder* parent = getParent();
+	if (!parent) {
+		return;
+	}
+
+	if (Tile* tile = parent->getTile()) {
+		tile->refreshThing(const_cast<Container*>(this));
+	}
 }
 
 std::shared_ptr<Item> ContainerIterator::operator*() const

@@ -144,10 +144,26 @@ void addAstraItemMetadata(NetworkMessage& msg, const ItemType& it)
 	msg.addByte(getAstraItemMetadataFlags(it));
 }
 
+void addContainerSpecialType(NetworkMessage& msg, const Item* item, bool sendContainerTypes, const Player* viewer)
+{
+	if (!sendContainerTypes || !item) {
+		return;
+	}
+
+	const Container* container = item->getContainer();
+	if (!container) {
+		return;
+	}
+
+	const uint8_t containerType = viewer ? container->getSpecialCategory(viewer) : CONTAINER_SPECIAL_NONE;
+	msg.addByte(containerType);
+}
+
 } // namespace
 
 void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
-                             bool sendAstraItemState, bool sendAstraQuiverCountU16, bool sendAstraItemMetadata)
+                             bool sendAstraItemState, bool sendAstraQuiverCountU16, bool sendAstraItemMetadata,
+                             bool sendContainerTypes, const Player* viewer)
 {
 	static_cast<void>(sendQuickLootFlags);
 	addItemId(id);
@@ -174,11 +190,15 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 			addAstraItemMetadata(*this, it);
 		}
 	}
+
+	if (it.isContainer() && sendContainerTypes) {
+		addByte(CONTAINER_SPECIAL_NONE);
+	}
 }
 
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
                              bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16,
-                             bool sendAstraItemMetadata)
+                             bool sendAstraItemMetadata, bool sendContainerTypes, const Player* viewer)
 {
 	static_cast<void>(sendQuickLootFlags);
 	addItemId(item->getID());
@@ -232,6 +252,10 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 		if (sendAstraItemMetadata) {
 			addAstraItemMetadata(*this, it);
 		}
+	}
+
+	if (it.isContainer()) {
+		addContainerSpecialType(*this, item, sendContainerTypes, viewer);
 	}
 }
 
