@@ -19,7 +19,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 		return true
 	end
 
-	if destinationTile:queryAdd(player) ~= RETURNVALUE_NOERROR then
+	if destinationTile:queryAdd(player, FLAG_IGNOREBLOCKCREATURE) ~= RETURNVALUE_NOERROR then
 		player:sendCancelMessage(RETURNVALUE_NOTPOSSIBLE)
 		return true
 	end

@@ -1355,7 +1355,6 @@ read_globals = {
 	"MESSAGE_WALKAWAY_MALE",
 	"MONK",
 	"MaxAllowedOnADummy",
-	"MehahClient",
 	"Mission",
 	"Modules",
 	"MsgContains",

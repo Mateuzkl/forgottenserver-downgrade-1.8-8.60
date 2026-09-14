@@ -1,6 +1,5 @@
 -- data/scripts/network/huntanalyzer.lua
 
-local STORAGE_MEHAH_CLIENT = 99999 -- Must match extendedopcode.lua
 local HUNT_ANALYZER_DROP_TRIGGER = 100
 
 local function isItemStackable(itemId)
@@ -30,9 +29,6 @@ local function sendLootStatsRecursive(player, container)
 end
 
 local function supportsHuntAnalyzer(player)
-	if player:getStorageValue(STORAGE_MEHAH_CLIENT) == 1 then
-		return true
-	end
 	if player.isUsingOtcV8 and player:isUsingOtcV8() then
 		return true
 	end
