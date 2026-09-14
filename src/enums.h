@@ -597,6 +597,8 @@ inline constexpr int32_t STORAGE_EXP_COLOR = 50100;
 inline constexpr int32_t STORAGE_HEALTH_DISPLAY = 50101;
 inline constexpr int32_t STORAGE_EMOTE_SPELLS = 50102;
 inline constexpr int32_t STORAGE_DAILY_REWARD_LAST_DAY = 90720;
+inline constexpr int32_t STORAGE_DAILY_REWARD_INDEX = 90721;
+inline constexpr int32_t STORAGE_DAILY_REWARD_STREAK = 90722;
 
 enum ReturnValue
 {

@@ -85,18 +85,23 @@ local RESOURCE_INVENTORY = 1
 local RESOURCE_PREY = 10
 
 local preyCache = {}
--- The wire protocol is chosen per player from the opcode the client actually
--- uses: native clients (Astra/CrystalOTC) request prey with 0xED, Fonticak's
--- custom module opens with 0xE8. Tracking the mode by request keeps both
--- working without hard-coding client brands.
+-- Wire format is chosen per player from the opcode the client uses to open prey:
+-- OTC/Fonticak request prey with 0xED (native Tibia opcodes 0xE8/0xE9/0xE7).
+-- Legacy custom prey UI opens with 0xE8 and expects server payloads on 0xED.
 local preyNetworkMode = {}
 
 local function setPreyNetworkMode(player, mode)
 	preyNetworkMode[player:getId()] = mode
 end
 
+local function usesFonticakPreyProtocol(player)
+	return preyNetworkMode[player:getId()] == "fonticak"
+end
+
 local function usesNativePreyProtocol(player)
-	return preyNetworkMode[player:getId()] == "native"
+	-- Fonticak OTC requests prey with 0xED and expects Tibia prey opcodes (0xE8/0xE9).
+	-- The legacy 0xED server->client channel is only used after an explicit 0xE8 open.
+	return not usesFonticakPreyProtocol(player)
 end
 
 local function isAstraClient(player)
@@ -438,7 +443,7 @@ local function sendPreyBalances(player)
 end
 
 local function sendError(player, message)
-	if supportsCustomNetwork(player) and not usesNativePreyProtocol(player) then
+	if supportsCustomNetwork(player) and usesFonticakPreyProtocol(player) then
 		local out = NetworkMessage(player)
 		out:addByte(PREY_OPCODE_SEND)
 		out:addByte(PREY_SEND_ERROR)
@@ -830,20 +835,20 @@ local function sendFullPrey(player, sendBalances)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
-	if usesNativePreyProtocol(player) then
-		return sendAstraFullPrey(player, sendBalances)
+	if usesFonticakPreyProtocol(player) then
+		return sendFonticakFullPrey(player, sendBalances)
 	end
-	return sendFonticakFullPrey(player, sendBalances)
+	return sendAstraFullPrey(player, sendBalances)
 end
 
 local function sendSlotUpdate(player, slot, save)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
-	if usesNativePreyProtocol(player) then
-		return sendAstraSlotUpdate(player, slot, save)
+	if usesFonticakPreyProtocol(player) then
+		return sendFonticakSlotUpdate(player, slot, save)
 	end
-	return sendFonticakSlotUpdate(player, slot, save)
+	return sendAstraSlotUpdate(player, slot, save)
 end
 
 getOtherSlotMonsters = function(player, prey, excludedSlot)
@@ -1337,7 +1342,9 @@ function PreySystem.addWildcards(player, amount)
 	-- Wildcards are authoritative after setPlayerBonusRerolls. Keep a failed
 	-- client refresh from surfacing as failed delivery and refunding the Store.
 	local notifyOk, notifyError = pcall(function()
-		sendFullPrey(player, false)
+		if PreySystem.openWindows[player:getId()] then
+			sendFullPrey(player, false)
+		end
 		sendPreyBalances(player)
 	end)
 	if not notifyOk then

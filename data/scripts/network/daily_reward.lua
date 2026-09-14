@@ -520,7 +520,10 @@ local function claimReward(player, msg)
 	setStorageNumber(player, STORAGES.lastDay, today)
 	setStorageNumber(player, STORAGES.streak, streak)
 	setStorageNumber(player, STORAGES.rewardIndex, (rewardIndex + 1) % #DAILY_REWARDS)
-	player:save()
+	if not player:saveDailyReward() then
+		player:sendTextMessage(MESSAGE_STATUS_WARNING, "Your daily reward was granted but its progress could not be saved. Please contact a gamemaster if this persists.")
+		return false
+	end
 	addRewardHistory(player, streak, description)
 
 	player:sendTextMessage(MESSAGE_INFO_DESCR, "You have claimed your daily reward: " .. description .. ".")
