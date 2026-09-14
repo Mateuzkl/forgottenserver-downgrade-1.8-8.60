@@ -6393,6 +6393,33 @@ void applyEchoRaidDamage(CombatDamage& damage, Creature* attacker)
 		damage.secondary.value = Monster::scaleEchoRaidCombatValue(damage.secondary.value, multiplier);
 	}
 }
+
+bool tryApplyEchoWardDodge(CombatDamage& damage, Creature* target)
+{
+	const bool hasDamage =
+	    (damage.primary.type != COMBAT_NONE && damage.primary.type != COMBAT_HEALING &&
+	     damage.primary.value < 0) ||
+	    (damage.secondary.type != COMBAT_NONE && damage.secondary.type != COMBAT_HEALING &&
+	     damage.secondary.value < 0);
+	const CombatOrigin initialOrigin = damage.initialOriginCaptured ? damage.initialOrigin : damage.origin;
+	if (!hasDamage || damage.echoWardDodgeChecked || initialOrigin == ORIGIN_CONDITION ||
+	    initialOrigin == ORIGIN_REFLECT) {
+		return false;
+	}
+
+	damage.echoWardDodgeChecked = true;
+	const Monster* targetMonster = target ? target->getMonster() : nullptr;
+	if (!targetMonster || !g_echoRaidManager.tryEchoWardDodge(*targetMonster)) {
+		return false;
+	}
+
+	damage.primary.value = 0;
+	damage.secondary.value = 0;
+	damage.blockType = BLOCK_DODGE;
+	damage.dodge = true;
+	g_game.addMagicEffect(target->getPosition(), CONST_ME_DODGE, target->getInstanceID());
+	return true;
+}
 } // namespace
 
 bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* target, bool checkDefense,
@@ -6418,6 +6445,9 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 			                      static_cast<const void*>(attacker)));
 			return true;
 		}
+	}
+	if (tryApplyEchoWardDodge(damage, target)) {
+		return true;
 	}
 
 	// Apply the Echo aura once before armor, defense and resistances. The flag is
@@ -6745,6 +6775,9 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			return false;
 		}
 	}
+	if (tryApplyEchoWardDodge(damage, target)) {
+		return true;
+	}
 
 	const Position& targetPos = target->getPosition();
 	if (damage.primary.type == COMBAT_HEALING) {
@@ -6967,20 +7000,6 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		if (healthChange == 0) {
 			return true;
 		}
-		if (!damage.echoWardDodgeChecked && damage.initialOrigin != ORIGIN_CONDITION &&
-		    damage.initialOrigin != ORIGIN_REFLECT) {
-			damage.echoWardDodgeChecked = true;
-			if (const Monster* targetMonster = target->getMonster();
-			    targetMonster && g_echoRaidManager.tryEchoWardDodge(*targetMonster)) {
-				damage.primary.value = 0;
-				damage.secondary.value = 0;
-				damage.blockType = BLOCK_DODGE;
-				damage.dodge = true;
-				addMagicEffect(targetPos, CONST_ME_DODGE, target->getInstanceID());
-				return true;
-			}
-		}
-
 		TextMessage message;
 
 		SpectatorVec spectators;

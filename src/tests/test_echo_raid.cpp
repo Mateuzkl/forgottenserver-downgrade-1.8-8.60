@@ -1,5 +1,6 @@
 #include "../otpch.h"
 
+#include "../bestiary_charm.h"
 #include "../configmanager.h"
 #include "../astraclient.h"
 #include "../echo_raid.h"
@@ -208,31 +209,45 @@ TEST_CASE(echo_raid_startup_validation_accepts_the_real_portal_and_loot_items)
 	CHECK(!manager.isEnabled());
 }
 
-TEST_CASE(echo_raid_lifecycle_model_releases_all_runtime_records_after_10000_cycles)
+TEST_CASE(echo_raid_cleanup_all_releases_pending_runtime_state_after_10000_cycles)
 {
-	std::unordered_set<uint64_t> portals;
-	std::unordered_set<uint64_t> raids;
-	std::unordered_map<uint32_t, uint64_t> creatureToRaid;
-	for (uint64_t raidId = 1; raidId <= 10000; ++raidId) {
-		CHECK(portals.insert(raidId).second);
-		CHECK(portals.erase(raidId) == 1); // first activation consumes once
-		CHECK(portals.erase(raidId) == 0); // same-tick second activation is rejected
-		raids.insert(raidId);
-		for (uint32_t offset = 0; offset < 5; ++offset) {
-			creatureToRaid.emplace(static_cast<uint32_t>(raidId * 16 + offset), raidId);
-		}
-		for (auto it = creatureToRaid.begin(); it != creatureToRaid.end();) {
-			if (it->second == raidId) {
-				it = creatureToRaid.erase(it);
-			} else {
-				++it;
-			}
-		}
-		raids.erase(raidId);
+	ensureItemTypesLoaded();
+	ScopedBooleanConfig bestiary(ConfigManager::BESTIARY_SYSTEM_ENABLED, true);
+	ScopedBooleanConfig echo(ConfigManager::ECHO_RAID_SYSTEM_ENABLED, true);
+
+	BestiaryCreatureInfo bestiaryInfo;
+	bestiaryInfo.raceId = 65530;
+	bestiaryInfo.name = "Echo lifecycle test";
+	bestiaryInfo.toKill = 1;
+	bestiaryInfo.occurrence = 1;
+	g_bestiaryCharmSystem.registerMonster(bestiaryInfo);
+
+	auto monsterType = std::make_shared<MonsterType>();
+	monsterType->raceId = bestiaryInfo.raceId;
+	monsterType->name = bestiaryInfo.name;
+	monsterType->nameDescription = bestiaryInfo.name;
+	Monster monster(monsterType);
+
+	EchoRaidConfig config;
+	config.spawnChanceNumerator = 1;
+	config.spawnChanceDenominator = 1;
+	for (uint16_t itemId = 53751; itemId <= 53774; ++itemId) {
+		config.basicScrollItemIds.push_back(itemId);
 	}
-	CHECK(portals.empty());
-	CHECK(raids.empty());
-	CHECK(creatureToRaid.empty());
+	config.catalystItems = {{54266, 80}, {51588, 18}, {51589, 2}};
+
+	EchoRaidManager manager;
+	CHECK(manager.configure(config));
+	for (uint32_t cycle = 0; cycle < 10000; ++cycle) {
+		manager.onMonsterDeath(monster);
+		CHECK(manager.getStatus().pendingEchoes == 1);
+		manager.cleanupAll();
+		const EchoRaidRuntimeStatus status = manager.getStatus();
+		CHECK(status.pendingEchoes == 0);
+		CHECK(status.portals == 0);
+		CHECK(status.activeRaids == 0);
+		CHECK(status.trackedCreatures == 0);
+	}
 }
 
 TFS_TEST_MAIN()

@@ -3554,7 +3554,7 @@ void ProtocolGame::sendVisibleEchoRaidVisuals(const Position& centerPos)
 
 	std::unordered_set<uint32_t> visibleEchoCreatures;
 	SpectatorVec spectators;
-	g_game.map.getSpectators(spectators, centerPos, false, false, Map::maxClientViewportX,
+	g_game.map.getSpectators(spectators, centerPos, true, false, Map::maxClientViewportX,
 	                         Map::maxClientViewportX, Map::maxClientViewportY, Map::maxClientViewportY);
 	for (const auto& spectator : spectators.monsters()) {
 		const Monster* monster = spectator ? spectator->getMonster() : nullptr;

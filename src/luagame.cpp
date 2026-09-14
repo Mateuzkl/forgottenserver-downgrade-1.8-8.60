@@ -41,7 +41,7 @@ T getEchoIntegerValue(lua_State* L, int index, T defaultValue, bool& valid)
 	if (lua_isnil(L, index)) {
 		return defaultValue;
 	}
-	if (!lua_isnumber(L, index)) {
+	if (lua_type(L, index) != LUA_TNUMBER) {
 		valid = false;
 		return defaultValue;
 	}
@@ -1652,10 +1652,8 @@ int luaGameConfigureEchoRaid(lua_State* L)
 		withEchoTableField(L, table, "charmPointsByStars", [&](int points) {
 			for (size_t stars = 0; stars < config.charmPointsByStars.size(); ++stars) {
 				lua_rawgeti(L, points, static_cast<int>(stars));
-				if (lua_isnumber(L, -1)) {
-					config.charmPointsByStars[stars] = getEchoIntegerValue<uint32_t>(
-					    L, -1, config.charmPointsByStars[stars], integerFieldsValid);
-				}
+				config.charmPointsByStars[stars] = getEchoIntegerValue<uint32_t>(
+				    L, -1, config.charmPointsByStars[stars], integerFieldsValid);
 				lua_pop(L, 1);
 			}
 		});
@@ -1665,12 +1663,8 @@ int luaGameConfigureEchoRaid(lua_State* L)
 			config.basicScrollItemIds.reserve(count);
 			for (size_t index = 1; index <= count; ++index) {
 				lua_rawgeti(L, items, static_cast<int>(index));
-				if (lua_isnumber(L, -1)) {
-					config.basicScrollItemIds.push_back(
-					    getEchoIntegerValue<uint16_t>(L, -1, 0, integerFieldsValid));
-				} else {
-					integerFieldsValid = false;
-				}
+				config.basicScrollItemIds.push_back(
+				    getEchoIntegerValue<uint16_t>(L, -1, 0, integerFieldsValid));
 				lua_pop(L, 1);
 			}
 		});
