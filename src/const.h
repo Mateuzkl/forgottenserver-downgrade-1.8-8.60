@@ -976,7 +976,7 @@ enum class GameFeature : uint8_t {
 	SendIdentifiers = 103,
 	WingsAndAura = 104,
 	PlayerStateU32 = 105,
-	OutfitShaders = 106,
+	ContainerTypes = 106, // OTC GameContainerTypes
 
 	// advanced features
 	PacketSizeU32 = 110,
@@ -995,8 +995,20 @@ enum class GameFeature : uint8_t {
 	AstraItemMetadata = 143,
 	ZoneWeather = 144,
 	AstraSingleCreatureMarks = 145,
+	AstraContainerTypes = 146, // Astra GameContainerTypes (OTC Fonticak uses 106)
 
-	Last = 145
+	Last = 146
+};
+
+enum ContainerSpecialType : uint8_t
+{
+	CONTAINER_SPECIAL_NONE = 0,
+	CONTAINER_SPECIAL_LOOT_CONTAINER = 1,
+	CONTAINER_SPECIAL_CONTENT_COUNTER = 2,
+	CONTAINER_SPECIAL_LOOT_HIGHLIGHT = 4,
+	CONTAINER_SPECIAL_OBTAIN = 8,
+	CONTAINER_SPECIAL_MANAGER = 9,
+	CONTAINER_SPECIAL_QUIVER_LOOT = 11,
 };
 
 inline constexpr int32_t CHANNEL_GUILD = 0x00;
