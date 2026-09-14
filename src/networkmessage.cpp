@@ -155,7 +155,7 @@ void addContainerSpecialType(NetworkMessage& msg, const Item* item, bool sendCon
 		return;
 	}
 
-	const uint8_t containerType = viewer ? container->getSpecialCategory(viewer) : CONTAINER_SPECIAL_NONE;
+	const uint8_t containerType = viewer ? static_cast<uint8_t>(container->getSpecialCategory(viewer)) : CONTAINER_SPECIAL_NONE;
 	msg.addByte(containerType);
 }
 
@@ -166,6 +166,7 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
                              bool sendContainerTypes, const Player* viewer)
 {
 	static_cast<void>(sendQuickLootFlags);
+	static_cast<void>(viewer);
 	addItemId(id);
 
 	const ItemType& it = Item::items[id];
