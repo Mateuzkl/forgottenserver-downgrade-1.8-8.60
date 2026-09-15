@@ -716,6 +716,8 @@ public:
 
 
 private:
+	friend struct LootHighlightTestAccess;
+
 	StorageMap storageMap;
 
 	bool playerSaySpell(Player* player, SpeakClasses type, std::string_view text, bool forceCastOnFoot = false);
