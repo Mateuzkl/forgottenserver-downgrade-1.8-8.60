@@ -1960,6 +1960,21 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 						int32_t count = 1;
 						int32_t initDamage = -1;
 						int32_t damage = 0;
+						bool startDamageGenerated = false;
+						for (auto subAttributeNode : attributeNode.children()) {
+							const pugi::xml_attribute subKeyAttribute = subAttributeNode.attribute("key");
+							const pugi::xml_attribute subValueAttribute = subAttributeNode.attribute("value");
+							if (!subKeyAttribute || !subValueAttribute) {
+								continue;
+							}
+
+							tmpStrValue = asLowerCaseString(subKeyAttribute.as_string());
+							if (tmpStrValue == "start") {
+								start = std::max<int32_t>(0, pugi::cast<int32_t>(subValueAttribute.value()));
+								break;
+							}
+						}
+
 						for (auto subAttributeNode : attributeNode.children()) {
 							pugi::xml_attribute subKeyAttribute = subAttributeNode.attribute("key");
 							if (!subKeyAttribute) {
@@ -1978,23 +1993,30 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 								ticks = pugi::cast<uint32_t>(subValueAttribute.value());
 							} else if (tmpStrValue == "count") {
 								count = std::max<int32_t>(1, pugi::cast<int32_t>(subValueAttribute.value()));
-							} else if (tmpStrValue == "start") {
-								start = std::max<int32_t>(0, pugi::cast<int32_t>(subValueAttribute.value()));
 							} else if (tmpStrValue == "damage") {
 								damage = -pugi::cast<int32_t>(subValueAttribute.value());
 								if (start > 0) {
-									const int32_t damageEnd = std::max<int32_t>(0, -damage);
-									const int32_t tickInterval = 1000;
-									const int32_t tickCount = std::max<int32_t>(1, static_cast<int32_t>(ticks / tickInterval));
+									if (combatType == COMBAT_AGONYDAMAGE) {
+										const int32_t damageEnd = std::max<int32_t>(0, -damage);
+										const int32_t tickInterval = 1000;
+										const int32_t tickCount = std::max<int32_t>(1, static_cast<int32_t>(ticks / tickInterval));
 
-									conditionDamage->setInitDamage(-start);
-									for (int32_t i = 1; i <= tickCount; ++i) {
-										const int32_t damageValue = start - ((start - damageEnd) * i / tickCount);
-										conditionDamage->addDamage(1, tickInterval, -std::max<int32_t>(damageEnd, damageValue));
+										conditionDamage->setInitDamage(-start);
+										for (int32_t i = 1; i <= tickCount; ++i) {
+											const int32_t damageValue = start - ((start - damageEnd) * i / tickCount);
+											conditionDamage->addDamage(1, tickInterval,
+											                           -std::max<int32_t>(damageEnd, damageValue));
+										}
+									} else {
+										std::list<int32_t> damageList;
+										ConditionDamage::generateDamageList(damage, start, damageList);
+										for (int32_t damageValue : damageList) {
+											conditionDamage->addDamage(1, ticks, -damageValue);
+										}
 									}
 
 									start = 0;
-									initDamage = 0;
+									startDamageGenerated = true;
 								} else {
 									conditionDamage->addDamage(count, ticks, damage);
 								}
@@ -2008,7 +2030,7 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 							conditionDamage->setInitDamage(-initDamage);
 						} else if (initDamage == -1 && start != 0) {
 							conditionDamage->setInitDamage(start);
-						} else if (initDamage == -1 && damage != 0) {
+						} else if (initDamage == -1 && damage != 0 && !startDamageGenerated) {
 							conditionDamage->setInitDamage(damage);
 						}
 
