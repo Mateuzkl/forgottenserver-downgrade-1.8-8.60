@@ -31,10 +31,14 @@ namespace {
 
 constexpr uint8_t ASTRA_LOGIN_BOOSTED_INFO_MARKER = 0xA1;
 constexpr uint8_t ASTRA_LOGIN_CAST_LIST_MARKER = 0xA2;
+constexpr uint8_t ASTRA_LOGIN_CAPABILITIES_MARKER = 0xA3;
 constexpr uint8_t ASTRA_LOGIN_CAST_LIST_VERSION = 1;
+constexpr uint8_t ASTRA_LOGIN_CAPABILITIES_VERSION = 1;
+constexpr uint8_t ASTRA_LOGIN_CAPABILITY_DAILY_REWARD = 1U << 0;
 constexpr size_t ASTRA_LOGIN_CAST_LIST_LIMIT = std::numeric_limits<uint8_t>::max();
 constexpr std::string_view ASTRA_LOGIN_CAST_LIST_REQUEST = "__astra_casts_v1__";
 constexpr std::string_view FONTICAK_LOGIN_BOOSTED_REQUEST = "__fonticak_boosted_v1__";
+constexpr std::string_view ASTRA_LOGIN_CAPABILITIES_REQUEST_MARKER = "C";
 
 struct LoginCastEntry {
 	std::string name;
@@ -393,7 +397,7 @@ void ProtocolLogin::disconnectClient(std::string_view message)
 }
 
 void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient,
-                                     uint32_t clientIP)
+                                     bool includeDailyReward, uint32_t clientIP)
 {
 	Account account;
 	const auto authentication = IOLoginData::loginserverAuthentication(accountName, password, account);
@@ -489,6 +493,11 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), characters.size());
 
 	if (isAstraClient || isFonticakClient_) {
+		if (isAstraClient_ && astraLoginCapabilities_ != 0) {
+			output->addByte(ASTRA_LOGIN_CAPABILITIES_MARKER);
+			output->addByte(ASTRA_LOGIN_CAPABILITIES_VERSION);
+			output->addByte(astraLoginCapabilities_);
+		}
 		// AstraClient and FonticakClient extend the 8.60 list with outfit, level and vocation metadata.
 		output->addByte(0x65);
 		output->addByte(size);
@@ -506,7 +515,9 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 			output->addByte(character.lookAddons);
 			output->add<uint32_t>(character.level);
 			output->addString(character.vocation);
-			output->addByte(character.dailyReward);
+			if (includeDailyReward) {
+				output->addByte(character.dailyReward);
+			}
 		}
 	} else {
 		// Standard 8.60 character list for OTCv8 Classic, Fonticak, CIP, etc.
@@ -726,6 +737,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// Always detect AstraClient and FonticakClient, regardless of astraClientOnly setting.
 	// This allows sending the correct packet format (0x65 vs 0x64) to each client.
 	isFonticakClient_ = false;
+	astraLoginCapabilities_ = 0;
 	if (msg.getBufferPosition() + 2 <= msg.getLength()) {
 		uint16_t markerLength = msg.get<uint16_t>();
 		if (markerLength > 0 && markerLength <= 64 && msg.getBufferPosition() + markerLength <= msg.getLength()) {
@@ -736,6 +748,16 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 			} else if (marker == FonticakClient::LOGIN_MARKER && msg.getBufferPosition() + sizeof(uint32_t) <= msg.getLength()) {
 				isFonticakClient_ =
 				    msg.get<uint32_t>() == FonticakClient::generateSignature(operatingSystem, version, key);
+			}
+		}
+	}
+	if (isAstraClient_ && msg.getBufferPosition() + 2 <= msg.getLength()) {
+		const uint16_t markerLength = msg.get<uint16_t>();
+		if (markerLength == ASTRA_LOGIN_CAPABILITIES_REQUEST_MARKER.size() &&
+		    msg.getBufferPosition() + markerLength + sizeof(uint8_t) <= msg.getLength()) {
+			const auto marker = msg.getString(markerLength);
+			if (marker == ASTRA_LOGIN_CAPABILITIES_REQUEST_MARKER) {
+				astraLoginCapabilities_ = msg.getByte() & ASTRA_LOGIN_CAPABILITY_DAILY_REWARD;
 			}
 		}
 	}
@@ -790,7 +812,11 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		} else if (accountName.empty()) {
 			thisPtr->getCastList(password, clientIP);
 		} else {
-			thisPtr->getCharacterList(accountName, password, thisPtr->isAstraClient_ || thisPtr->isFonticakClient_, clientIP);
+			const bool includeDailyReward = thisPtr->isFonticakClient_ ||
+			    (thisPtr->astraLoginCapabilities_ & ASTRA_LOGIN_CAPABILITY_DAILY_REWARD) != 0;
+			thisPtr->getCharacterList(accountName, password,
+			                              thisPtr->isAstraClient_ || thisPtr->isFonticakClient_,
+			                              includeDailyReward, clientIP);
 		}
 	});
 }

@@ -3574,7 +3574,7 @@ void ProtocolGame::sendVisibleEchoRaidVisuals(const Position& centerPos)
 	for (const auto& spectator : spectators.monsters()) {
 		const Monster* monster = spectator ? spectator->getMonster() : nullptr;
 		if (!monster || monster->getEchoRaidVisualState() == EchoRaidVisualState::None ||
-		    !player->canSeeCreature(monster)) {
+		    !canSee(monster) || !player->canSeeCreature(monster)) {
 			continue;
 		}
 		visibleEchoCreatures.insert(monster->getID());

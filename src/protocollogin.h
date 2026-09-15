@@ -120,13 +120,14 @@ private:
 	void disconnectClient(std::string_view message);
 
 	void getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient,
-	                      uint32_t clientIP);
+	                      bool includeDailyReward, uint32_t clientIP);
 	void getCastList(const std::string& password, uint32_t clientIP);
 	void getAstraCastList();
 	void getFonticakBoostedInfo();
 
 	bool isAstraClient_ = false;
 	bool isFonticakClient_ = false;
+	uint8_t astraLoginCapabilities_ = 0;
 };
 
 #endif

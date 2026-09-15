@@ -178,6 +178,15 @@ private:
 		std::unordered_set<uint32_t> protectedCreatureIds;
 	};
 
+	struct PendingWardenReward
+	{
+		uint32_t playerGuid = 0;
+		uint16_t raceId = 0;
+		uint32_t charmPoints = 0;
+		uint64_t nextAttemptAt = 0;
+		uint8_t attempts = 0;
+	};
+
 	[[nodiscard]] bool validateConfig(const EchoRaidConfig& candidate, std::string& error) const;
 	[[nodiscard]] bool isEligibleMonster(const Monster& monster) const;
 	[[nodiscard]] bool isValidPortalTile(const Position& position, uint32_t instanceId) const;
@@ -195,6 +204,10 @@ private:
 	void updateWardenAura(RaidInstance& raid, uint64_t now);
 	void clearWardenProtection(RaidInstance& raid);
 	void cleanupRaid(uint64_t raidId);
+	void queueWardenRewardRetry(uint32_t playerGuid, uint16_t raceId, uint32_t charmPoints);
+	void retryPendingWardenRewards(uint64_t now);
+	[[nodiscard]] static bool persistWardenReward(uint32_t playerGuid, uint16_t raceId, uint32_t charmPoints,
+	                                               bool& insertedClaim);
 	[[nodiscard]] uint16_t selectBasicScroll() const;
 	[[nodiscard]] uint16_t selectCatalyst() const;
 	[[nodiscard]] uint32_t firstWardenCharmPoints(uint8_t stars) const;
@@ -207,6 +220,7 @@ private:
 	std::unordered_map<uint64_t, PortalRecord> portals;
 	std::unordered_map<uint64_t, RaidInstance> raids;
 	std::unordered_map<uint32_t, uint64_t> creatureToRaid;
+	std::unordered_map<uint64_t, PendingWardenReward> pendingWardenRewards;
 };
 
 extern EchoRaidManager g_echoRaidManager;

@@ -36,6 +36,8 @@ EchoRaidManager g_echoRaidManager;
 namespace {
 
 constexpr uint64_t ECHO_TICK_INTERVAL_MS = 100;
+constexpr uint64_t WARDEN_REWARD_RETRY_INITIAL_MS = 1000;
+constexpr uint64_t WARDEN_REWARD_RETRY_MAX_MS = 60000;
 
 std::string trim(std::string_view value)
 {
@@ -714,10 +716,14 @@ void EchoRaidManager::cleanupRaid(uint64_t raidId)
 
 void EchoRaidManager::tick(uint64_t now)
 {
-	if (!isEnabled() || now < nextTickAt) {
+	if (now < nextTickAt) {
 		return;
 	}
 	nextTickAt = now + ECHO_TICK_INTERVAL_MS;
+	retryPendingWardenRewards(now);
+	if (!isEnabled()) {
+		return;
+	}
 
 	std::vector<std::pair<PositionKey, PendingEcho>> ready;
 	for (auto it = pendingEchoes.begin(); it != pendingEchoes.end();) {
@@ -808,6 +814,66 @@ uint32_t EchoRaidManager::firstWardenCharmPoints(uint8_t stars) const
 	return config.charmPointsByStars[index];
 }
 
+bool EchoRaidManager::persistWardenReward(uint32_t playerGuid, uint16_t raceId, uint32_t charmPoints,
+	                                      bool& insertedClaim)
+{
+	return DBTransaction::executeWithinTransactionRollbackOnFailure([&] {
+		insertedClaim = false;
+		Database& database = Database::getInstance();
+		if (!database.executeQuery(fmt::format(
+		        "INSERT IGNORE INTO `player_echo_warden_rewards` (`player_id`, `raceid`) VALUES ({}, {})",
+		        playerGuid, raceId))) {
+			return false;
+		}
+
+		insertedClaim = database.getAffectedRows() == 1;
+		return !insertedClaim || database.executeQuery(fmt::format(
+		    "UPDATE `players` SET `charmpoints` = LEAST(4294967295, `charmpoints` + {}) WHERE `id` = {}",
+		    charmPoints, playerGuid));
+	});
+}
+
+void EchoRaidManager::queueWardenRewardRetry(uint32_t playerGuid, uint16_t raceId, uint32_t charmPoints)
+{
+	const uint64_t key = (static_cast<uint64_t>(playerGuid) << 16) | raceId;
+	pendingWardenRewards.try_emplace(key, PendingWardenReward{
+	    playerGuid, raceId, charmPoints, static_cast<uint64_t>(OTSYS_TIME()) + WARDEN_REWARD_RETRY_INITIAL_MS, 0});
+}
+
+void EchoRaidManager::retryPendingWardenRewards(uint64_t now)
+{
+	for (auto it = pendingWardenRewards.begin(); it != pendingWardenRewards.end();) {
+		PendingWardenReward& reward = it->second;
+		if (now < reward.nextAttemptAt) {
+			++it;
+			continue;
+		}
+
+		bool insertedClaim = false;
+		if (!persistWardenReward(reward.playerGuid, reward.raceId, reward.charmPoints, insertedClaim)) {
+			reward.attempts = std::min<uint8_t>(static_cast<uint8_t>(reward.attempts + 1), 6);
+			const uint64_t retryDelay = std::min<uint64_t>(
+			    WARDEN_REWARD_RETRY_INITIAL_MS << reward.attempts, WARDEN_REWARD_RETRY_MAX_MS);
+			reward.nextAttemptAt = now + retryDelay;
+			LOG_ERROR("[EchoRaid] First Warden reward retry failed for player {} and race {}; retrying in {} ms",
+			          reward.playerGuid, reward.raceId, retryDelay);
+			++it;
+			continue;
+		}
+
+		if (insertedClaim) {
+			if (const auto player = g_game.getPlayerByGUID(reward.playerGuid); player && !player->isRemoved()) {
+				player->addBestiaryCharmPoints(reward.charmPoints);
+				player->sendEchoWardenReward(reward.raceId, reward.charmPoints);
+				player->sendTextMessage(
+				    MESSAGE_EVENT_ADVANCE,
+				    fmt::format("First Echo Warden defeated for this species: +{} Charm Points.", reward.charmPoints));
+			}
+		}
+		it = pendingWardenRewards.erase(it);
+	}
+}
+
 void EchoRaidManager::grantWardenRewards(Monster& monster,
 	                                      const std::vector<std::shared_ptr<Player>>& recipients)
 {
@@ -878,6 +944,9 @@ void EchoRaidManager::grantWardenRewards(Monster& monster,
 	if (!persisted) {
 		LOG_ERROR("[EchoRaid] Failed to persist first Warden rewards for race {} ({} recipients)", raceId,
 		          eligibleRecipients.size());
+		for (const auto& player : eligibleRecipients) {
+			queueWardenRewardRetry(player->getGUID(), raceId, charmPoints);
+		}
 		return;
 	}
 
