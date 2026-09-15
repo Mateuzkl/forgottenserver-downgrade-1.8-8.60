@@ -195,8 +195,8 @@ bool EchoRaidManager::validateConfig(const EchoRaidConfig& candidate, std::strin
 	if (candidate.normalCountMin == 0 || candidate.normalCountMin > candidate.normalCountMax ||
 	    candidate.influencedCount == 0 || candidate.influencedLevelMin == 0 ||
 	    candidate.influencedLevelMin > candidate.influencedLevelMax || candidate.auraRange == 0 ||
-	    candidate.auraIntervalMs == 0 || candidate.spawnRadius == 0 || candidate.spawnIntervalMs == 0) {
-		error = "invalid raid size, level, aura, or radius";
+	    candidate.auraIntervalMs == 0 || candidate.spawnIntervalMs == 0) {
+		error = "invalid raid size, level, aura, or spawn interval";
 		return false;
 	}
 	if (!std::isfinite(candidate.completedBestiaryWardenMultiplier) ||
@@ -769,7 +769,8 @@ void EchoRaidManager::onCreatureRemoved(uint32_t creatureId)
 	if (raid.wardenId == creatureId) {
 		raid.wardenId = 0;
 		raid.wardenPending = false;
-		raid.pendingSpawns.clear();
+		// The Warden is authoritative only for its aura. Its already scheduled
+		// companions belong to the raid and must still materialize after it dies.
 		clearWardenProtection(raid);
 	}
 	if (raid.creatureIds.empty() && !hasPendingSpawns(raid)) {
@@ -827,11 +828,14 @@ void EchoRaidManager::grantWardenRewards(Monster& monster,
 		}
 	}
 
+	std::vector<std::shared_ptr<Player>> eligibleRecipients;
+	eligibleRecipients.reserve(recipients.size());
 	std::unordered_set<uint32_t> rewardedPlayers;
 	for (const auto& player : recipients) {
 		if (!player || player->isRemoved() || !rewardedPlayers.insert(player->getGUID()).second) {
 			continue;
 		}
+		eligibleRecipients.push_back(player);
 
 		if (config.wardenDust > 0) {
 			const auto dustGranted = grantForgeDust(*player, config.wardenDust);
@@ -842,41 +846,46 @@ void EchoRaidManager::grantWardenRewards(Monster& monster,
 				                        fmt::format("Echo Warden reward: +{} Forge Dust.", *dustGranted));
 			}
 		}
+	}
 
-		if (!hasFirstKillReward) {
-			continue;
-		}
+	if (!hasFirstKillReward || eligibleRecipients.empty()) {
+		return;
+	}
 
-		bool insertedClaim = false;
-		const bool persisted = DBTransaction::executeWithinTransactionRollbackOnFailure([&] {
-			Database& database = Database::getInstance();
-			if (!database.storeQuery(
-			        fmt::format("SELECT `id` FROM `players` WHERE `id` = {} FOR UPDATE", player->getGUID()))) {
-				return false;
-			}
+	// One death uses one transaction for all recipients. The unique key remains
+	// the authority for first-kill eligibility, while avoiding a transaction and
+	// an unnecessary SELECT ... FOR UPDATE for every damage participant.
+	std::vector<bool> insertedClaims(eligibleRecipients.size(), false);
+	const bool persisted = DBTransaction::executeWithinTransactionRollbackOnFailure([&] {
+		Database& database = Database::getInstance();
+		for (size_t index = 0; index < eligibleRecipients.size(); ++index) {
+			const uint32_t playerGuid = eligibleRecipients[index]->getGUID();
 			if (!database.executeQuery(fmt::format(
 			        "INSERT IGNORE INTO `player_echo_warden_rewards` (`player_id`, `raceid`) VALUES ({}, {})",
-			        player->getGUID(), raceId))) {
+			        playerGuid, raceId))) {
 				return false;
 			}
-			insertedClaim = database.getAffectedRows() == 1;
-			if (!insertedClaim) {
-				return true;
+			insertedClaims[index] = database.getAffectedRows() == 1;
+			if (insertedClaims[index] && !database.executeQuery(fmt::format(
+			        "UPDATE `players` SET `charmpoints` = LEAST(4294967295, `charmpoints` + {}) "
+			        "WHERE `id` = {}",
+			        charmPoints, playerGuid))) {
+				return false;
 			}
-			return database.executeQuery(fmt::format(
-			           "UPDATE `players` SET `charmpoints` = LEAST(4294967295, `charmpoints` + {}) "
-			           "WHERE `id` = {}",
-			           charmPoints, player->getGUID()));
-		});
-		if (!persisted) {
-			LOG_ERROR("[EchoRaid] Failed to persist first Warden reward for player {} and race {}",
-			          player->getGUID(), raceId);
-			continue;
 		}
-		if (!insertedClaim) {
-			continue;
-		}
+		return true;
+	});
+	if (!persisted) {
+		LOG_ERROR("[EchoRaid] Failed to persist first Warden rewards for race {} ({} recipients)", raceId,
+		          eligibleRecipients.size());
+		return;
+	}
 
+	for (size_t index = 0; index < eligibleRecipients.size(); ++index) {
+		if (!insertedClaims[index]) {
+			continue;
+		}
+		const auto& player = eligibleRecipients[index];
 		player->addBestiaryCharmPoints(charmPoints);
 		player->sendEchoWardenReward(raceId, charmPoints);
 		player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
@@ -935,6 +944,14 @@ EchoRaidRuntimeStatus EchoRaidManager::getStatus() const
 		pendingSpawns += raid.pendingSpawns.size() + static_cast<size_t>(raid.wardenPending);
 	}
 	return {isEnabled(), pendingEchoes.size(), portals.size(), raids.size(), creatureToRaid.size(), pendingSpawns};
+}
+
+bool EchoRaidManager::hasActiveVisuals() const
+{
+	return std::ranges::any_of(raids, [](const auto& entry) {
+		const RaidInstance& raid = entry.second;
+		return raid.wardenId != 0 || !raid.protectedCreatureIds.empty();
+	});
 }
 
 bool EchoRaidManager::executeDebugCommand(Player& player, std::string_view command, std::string& message)

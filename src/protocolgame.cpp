@@ -17,6 +17,7 @@
 #include "store/store_types.h"
 #include "configmanager.h"
 #include "creatureevent.h"
+#include "echo_raid.h"
 #include "game.h"
 #include "iologindata.h"
 #include "save_manager.h"
@@ -3558,6 +3559,10 @@ void ProtocolGame::sendCreatureEchoRaidVisual(const Creature* creature, bool for
 void ProtocolGame::sendVisibleEchoRaidVisuals(const Position& centerPos)
 {
 	if (!player || !supportsAstraEchoRaidVisuals) {
+		echoRaidVisualCache.clear();
+		return;
+	}
+	if (!g_echoRaidManager.hasActiveVisuals()) {
 		echoRaidVisualCache.clear();
 		return;
 	}

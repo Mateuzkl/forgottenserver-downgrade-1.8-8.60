@@ -9,6 +9,28 @@
 
 #include "test_support.h"
 
+struct EchoRaidManagerTestAccess
+{
+	static uint64_t addWardenRaid(EchoRaidManager& manager, uint32_t wardenId, std::deque<bool> companions)
+	{
+		EchoRaidManager::RaidInstance raid;
+		raid.id = manager.nextRaidId++;
+		raid.wardenId = wardenId;
+		raid.wardenPending = false;
+		raid.pendingSpawns = std::move(companions);
+		raid.creatureIds.insert(wardenId);
+		manager.creatureToRaid[wardenId] = raid.id;
+		const uint64_t raidId = raid.id;
+		manager.raids.emplace(raidId, std::move(raid));
+		return raidId;
+	}
+
+	static size_t pendingCompanions(const EchoRaidManager& manager, uint64_t raidId)
+	{
+		return manager.raids.at(raidId).pendingSpawns.size();
+	}
+};
+
 namespace {
 
 struct ScopedBooleanConfig
@@ -148,6 +170,21 @@ TEST_CASE(echo_raid_failed_spawn_attempt_preserves_warden_and_companion_queue)
 	EchoRaidManager::finishSpawnAttempt(true, false, wardenPending, companions);
 	CHECK(companions.size() == 3);
 	CHECK(!companions.front());
+}
+
+TEST_CASE(echo_raid_warden_removal_preserves_scheduled_companions)
+{
+	EchoRaidManager manager;
+	constexpr uint32_t wardenId = 0x40000123;
+	const uint64_t raidId = EchoRaidManagerTestAccess::addWardenRaid(
+	    manager, wardenId, std::deque<bool>{false, false, true, true});
+
+	CHECK(manager.hasActiveVisuals());
+	manager.onCreatureRemoved(wardenId);
+	CHECK(!manager.hasActiveVisuals());
+	CHECK(manager.getStatus().activeRaids == 1);
+	CHECK(manager.getStatus().pendingSpawns == 4);
+	CHECK(EchoRaidManagerTestAccess::pendingCompanions(manager, raidId) == 4);
 }
 
 TEST_CASE(echo_raid_damage_multiplier_scales_each_damage_component_once)

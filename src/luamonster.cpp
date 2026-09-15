@@ -530,21 +530,6 @@ int luaMonsterBlockFleeing(lua_State* L)
 	return 1;
 }
 
-int luaMonsterApplyEchoWarden(lua_State* L)
-{
-	// monster:applyEchoWarden(healthMultiplier[, selfAttackMultiplier = 1.0])
-	Monster* monster = getUserdata<Monster>(L, 1);
-	if (!monster) {
-		lua_pushnil(L);
-		return 1;
-	}
-
-	const double healthMultiplier = getNumber<double>(L, 2);
-	const double selfAttackMultiplier = getNumber<double>(L, 3, 1.0);
-	pushBoolean(L, monster->applyEchoWarden(healthMultiplier, selfAttackMultiplier));
-	return 1;
-}
-
 int luaMonsterApplyBossDifficulty(lua_State* L)
 {
 	// monster:applyBossDifficulty(difficulty[, raceId = 0])
@@ -635,7 +620,6 @@ void LuaScriptInterface::registerMonster()
 	registerMethod("Monster", "setInfluencedLevel", luaMonsterSetInfluencedLevel);
 	registerMethod("Monster", "getLevel", luaMonsterGetLevel);
 	registerMethod("Monster", "blockFleeing", luaMonsterBlockFleeing);
-	registerMethod("Monster", "applyEchoWarden", luaMonsterApplyEchoWarden);
 	registerMethod("Monster", "applyBossDifficulty", luaMonsterApplyBossDifficulty);
 	registerMethod("Monster", "getBossDifficulty", luaMonsterGetBossDifficulty);
 	registerMethod("Monster", "hasBossDifficulty", luaMonsterHasBossDifficulty);

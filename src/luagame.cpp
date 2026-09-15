@@ -1597,8 +1597,6 @@ int luaGameConfigureEchoRaid(lua_State* L)
 		});
 	});
 	withEchoTableField(L, 1, "spawn", [&](int table) {
-		config.spawnRadius =
-		    getEchoIntegerField<uint8_t>(L, table, "radius", config.spawnRadius, integerFieldsValid);
 		config.spawnIntervalMs =
 		    getEchoIntegerField<uint32_t>(L, table, "intervalMs", config.spawnIntervalMs, integerFieldsValid);
 	});

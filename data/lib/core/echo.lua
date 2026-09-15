@@ -15,9 +15,6 @@ EchoConfig = {
 	},
 
 	spawn = {
-		-- Retained for configuration compatibility. Echo Raid creatures always
-		-- materialize at the portal origin and never use a radius fallback.
-		radius = 3,
 		intervalMs = 400, -- Crystal reference timing; configurable, not claimed as an official rate.
 	},
 
@@ -59,6 +56,8 @@ EchoConfig = {
 	lifetimeMs = 10 * 60 * 1000,
 
 	rewards = {
+		-- Every online damage contributor (including a summon owner) receives
+		-- Dust on every Warden kill. Charm Points remain first-kill-per-race.
 		wardenDust = 15,
 		-- First Warden per raceId: Harmless through Challenging.
 		charmPointsByStars = { [0] = 1, [1] = 2, [2] = 5, [3] = 10, [4] = 15, [5] = 30 },

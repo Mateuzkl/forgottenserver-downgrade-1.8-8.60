@@ -21,6 +21,7 @@ class Container;
 class Item;
 class Monster;
 class Player;
+struct EchoRaidManagerTestAccess;
 
 enum class EchoRaidOutcome : uint8_t
 {
@@ -63,7 +64,6 @@ struct EchoRaidConfig
 	uint8_t auraRange = 5;
 	uint32_t auraIntervalMs = 2000;
 	double auraDodgeChancePercent = 10.0;
-	uint8_t spawnRadius = 3;
 	uint32_t spawnIntervalMs = 400;
 	uint32_t lifetimeMs = 10 * 60 * 1000;
 
@@ -102,6 +102,7 @@ public:
 	void onCreatureRemoved(uint32_t creatureId);
 	void cleanupAll();
 	[[nodiscard]] EchoRaidRuntimeStatus getStatus() const;
+	[[nodiscard]] bool hasActiveVisuals() const;
 
 	[[nodiscard]] static bool isOccurrenceEligible(uint8_t occurrence,
 	                                               const std::array<bool, 5>& eligibleOccurrences);
@@ -123,6 +124,8 @@ public:
 	                               std::deque<bool>& pendingSpawns);
 
 private:
+	friend struct EchoRaidManagerTestAccess;
+
 	struct PositionKey
 	{
 		Position position;

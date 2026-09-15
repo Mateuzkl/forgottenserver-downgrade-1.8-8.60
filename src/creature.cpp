@@ -720,6 +720,8 @@ void Creature::onDeath()
 	}
 
 	if (Monster* monster = getMonster(); monster && monster->isEchoWarden()) {
+		// Reward authority is the final damage snapshot: every still-online direct
+		// attacker or summon master is eligible, independent of death-time range.
 		std::unordered_map<uint32_t, std::shared_ptr<Player>> rewardRecipients;
 		auto addPlayerOwner = [&rewardRecipients](const std::shared_ptr<Creature>& attacker) {
 			if (!attacker) {
