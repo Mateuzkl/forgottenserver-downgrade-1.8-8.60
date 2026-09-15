@@ -183,6 +183,7 @@
     <ClCompile Include="..\src\ban.cpp" />
     <ClCompile Include="..\src\baseevents.cpp" />
     <ClCompile Include="..\src\bestiary_charm.cpp" />
+    <ClCompile Include="..\src\echo_raid.cpp" />
     <ClCompile Include="..\src\bed.cpp" />
     <ClCompile Include="..\src\character_bazaar.cpp" />
     <ClCompile Include="..\src\chat.cpp" />
@@ -340,6 +341,7 @@
     <ClInclude Include="..\src\ban.h" />
     <ClInclude Include="..\src\baseevents.h" />
     <ClInclude Include="..\src\bestiary_charm.h" />
+    <ClInclude Include="..\src\echo_raid.h" />
     <ClInclude Include="..\src\bed.h" />
     <ClInclude Include="..\src\character_bazaar.h" />
     <ClInclude Include="..\src\chat.h" />

@@ -504,6 +504,7 @@ public:
 	void updateCreatureEmblem(Creature* creature);
 	void updateCreatureIcon(const Player* spectator, const Creature* creature);
 	void updateCreatureIcon(const Creature* creature);
+	void updateCreatureEchoRaidVisual(const Creature* creature);
 	void updateKnownCreature(const Creature* creature);
 
 	GameState_t getGameState() const;

@@ -423,6 +423,13 @@ enum SquareColor_t : uint8_t
 	SQ_COLOR_NONE = 255,
 };
 
+enum class EchoRaidVisualState : int8_t
+{
+	None = -1,
+	Warden = 0,
+	Empowered = 1,
+};
+
 enum TextColor_t : uint8_t
 {
 	TEXTCOLOR_BLACK = 0,
@@ -996,8 +1003,9 @@ enum class GameFeature : uint8_t {
 	ZoneWeather = 144,
 	AstraSingleCreatureMarks = 145,
 	AstraContainerTypes = 146, // Astra GameContainerTypes (OTC Fonticak uses 106)
+	AstraEchoRaidVisuals = 147,
 
-	Last = 146
+	Last = 147
 };
 
 enum ContainerSpecialType : uint8_t

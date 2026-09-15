@@ -14,6 +14,7 @@
 #include "databasetasks.h"
 #include "enums.h"
 #include "equipment_combat_bonus.h"
+#include "echo_raid.h"
 #include "events.h"
 #include "globalevent.h"
 #include "housetile.h"
@@ -691,6 +692,7 @@ void Game::setGameState(GameState_t newState)
 			g_globalEvents->save();
 			g_globalEvents->shutdown();
 			LOG_INFO(">> Global events saved and shutdown.");
+			g_echoRaidManager.cleanupAll();
 
 			// kick all players that are still online
 			while (true) {
@@ -1305,6 +1307,7 @@ bool Game::removeCreature(Creature* creature, bool isLogout /* = true*/)
 	creature->setRemoved();
 
 	removeCreatureCheck(creature);
+	g_echoRaidManager.onCreatureRemoved(creature->getID());
 
 	// Explicitly clear each summon master before recursive removal so the
 	// relationship is detached while both shared references are still held.
@@ -6086,6 +6089,7 @@ void Game::removeCreatureCheck(Creature* creature)
 void Game::checkCreatures(size_t index)
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameCheckCreatures);
+	g_echoRaidManager.tick(static_cast<uint64_t>(OTSYS_TIME()));
 	auto& checkCreatureList = checkCreatureLists[index];
 	size_t i = 0;
 
@@ -6363,6 +6367,59 @@ void applyBossDifficultyDamage(CombatDamage& damage, Creature* attacker, Creatur
 		damage.secondary.value = scale(damage.secondary.value);
 	}
 }
+
+void applyEchoRaidDamage(CombatDamage& damage, Creature* attacker)
+{
+	if (damage.echoRaidDamageApplied || !attacker) {
+		return;
+	}
+
+	const Monster* monster = attacker->getMonster();
+	if (!monster) {
+		return;
+	}
+
+	const double multiplier = monster->getEchoRaidDamageMultiplier();
+	if (multiplier == 1.0) {
+		return;
+	}
+	damage.echoRaidDamageApplied = true;
+	if (damage.primary.type != COMBAT_NONE && damage.primary.type != COMBAT_HEALING &&
+	    damage.primary.type != COMBAT_AGONYDAMAGE) {
+		damage.primary.value = Monster::scaleEchoRaidCombatValue(damage.primary.value, multiplier);
+	}
+	if (damage.secondary.type != COMBAT_NONE && damage.secondary.type != COMBAT_HEALING &&
+	    damage.secondary.type != COMBAT_AGONYDAMAGE) {
+		damage.secondary.value = Monster::scaleEchoRaidCombatValue(damage.secondary.value, multiplier);
+	}
+}
+
+bool tryApplyEchoWardDodge(CombatDamage& damage, Creature* target)
+{
+	const bool hasDamage =
+	    (damage.primary.type != COMBAT_NONE && damage.primary.type != COMBAT_HEALING &&
+	     damage.primary.value < 0) ||
+	    (damage.secondary.type != COMBAT_NONE && damage.secondary.type != COMBAT_HEALING &&
+	     damage.secondary.value < 0);
+	const CombatOrigin initialOrigin = damage.initialOriginCaptured ? damage.initialOrigin : damage.origin;
+	if (!hasDamage || damage.echoWardDodgeChecked || initialOrigin == ORIGIN_CONDITION ||
+	    initialOrigin == ORIGIN_REFLECT) {
+		return false;
+	}
+
+	damage.echoWardDodgeChecked = true;
+	const Monster* targetMonster = target ? target->getMonster() : nullptr;
+	if (!targetMonster || !g_echoRaidManager.tryEchoWardDodge(*targetMonster)) {
+		return false;
+	}
+
+	damage.primary.value = 0;
+	damage.secondary.value = 0;
+	damage.blockType = BLOCK_DODGE;
+	damage.dodge = true;
+	g_game.addMagicEffect(target->getPosition(), CONST_ME_DODGE, target->getInstanceID());
+	return true;
+}
 } // namespace
 
 bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* target, bool checkDefense,
@@ -6389,6 +6446,14 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 			return true;
 		}
 	}
+	if (tryApplyEchoWardDodge(damage, target)) {
+		return true;
+	}
+
+	// Apply the Echo aura once before armor, defense and resistances. The flag is
+	// preserved into combatChangeHealth/Mana, which also covers callers that skip
+	// combatBlockHit without multiplying direct hits or condition ticks twice.
+	applyEchoRaidDamage(damage, attacker);
 
 	uint32_t targetInstanceId = target->getInstanceID();
 	const auto sendBlockEffect = [targetInstanceId](BlockType_t blockType, CombatType_t combatType,
@@ -6696,6 +6761,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 	}
 
 	applyBossDifficultyDamage(damage, attacker, target);
+	applyEchoRaidDamage(damage, attacker);
 
 	auto targetRef = target->weak_from_this().lock();
 	if (!targetRef) {
@@ -6708,6 +6774,9 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		if (!attackerRef) {
 			return false;
 		}
+	}
+	if (tryApplyEchoWardDodge(damage, target)) {
+		return true;
 	}
 
 	const Position& targetPos = target->getPosition();
@@ -6931,7 +7000,6 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		if (healthChange == 0) {
 			return true;
 		}
-
 		TextMessage message;
 
 		SpectatorVec spectators;
@@ -7226,6 +7294,7 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 	}
 
 	applyBossDifficultyDamage(damage, attacker, target);
+	applyEchoRaidDamage(damage, attacker);
 
 	std::shared_ptr<Creature> attackerRef;
 	if (attacker) {
@@ -8171,6 +8240,23 @@ void Game::updateCreatureIcon(const Creature* creature)
 	}
 }
 
+void Game::updateCreatureEchoRaidVisual(const Creature* creature)
+{
+	if (!creature || !creature->getTile()) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	map.getSpectators(spectators, creature->getPosition(), true, true);
+	const uint32_t creatureInstance = creature->getInstanceID();
+	for (const auto& spectator : spectators.players()) {
+		Player* player = static_cast<Player*>(spectator.get());
+		if (player->compareInstance(creatureInstance) && player->canSeeCreature(creature)) {
+			player->sendCreatureEchoRaidVisual(creature);
+		}
+	}
+}
+
 void Game::updateCreatureSkull(const Creature* creature)
 {
 	// Allow influenced/fiendish monsters to show skull in any world type
@@ -8846,6 +8932,9 @@ bool Game::reload(ReloadTypes_t reloadType)
 		}
 		case RELOAD_TYPE_CONFIG: {
 			bool result = ConfigManager::load();
+			if (result && !g_echoRaidManager.isEnabled()) {
+				g_echoRaidManager.cleanupAll();
+			}
 			if (result) LOG_INFO("Config reloaded successfully.");
 			return result;
 		}
@@ -8870,10 +8959,14 @@ bool Game::reload(ReloadTypes_t reloadType)
 			return true;
 		}
 		case RELOAD_TYPE_ITEMS: {
+			g_echoRaidManager.cleanupAll();
 			for (const auto& player : getPlayers()) {
 				player->reloadEquipmentStats();
 			}
 			bool result = Item::items.reload();
+			if (result && g_echoRaidManager.isConfigured()) {
+				result = g_echoRaidManager.configure(g_echoRaidManager.getConfig());
+			}
 			if (result) LOG_INFO("Items reloaded successfully.");
 			for (const auto& player : getPlayers()) {
 				player->applyEquipmentStats();

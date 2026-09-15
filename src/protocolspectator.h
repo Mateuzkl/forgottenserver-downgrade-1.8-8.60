@@ -372,6 +372,18 @@ class ProtocolSpectator {
                 spy->sendCreatureIcon(creature);
         }
 
+        void sendCreatureEchoRaidVisual(const Creature* creature, bool force = false) {
+            auto o = owner.lock();
+            if (o)
+                o->sendCreatureEchoRaidVisual(creature, force);
+
+            for (auto &it : spectators)
+                it->sendCreatureEchoRaidVisual(creature, force);
+
+            for (auto &spy : spyClients_)
+                spy->sendCreatureEchoRaidVisual(creature, force);
+        }
+
         void sendExtendedOpcode(uint8_t opcode, std::string_view data) {
             auto o = owner.lock();
             if (o)
@@ -1042,6 +1054,12 @@ class ProtocolSpectator {
 
             for (auto &spy : spyClients_)
                 spy->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+        }
+
+        void sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints) {
+            auto o = owner.lock();
+            if (o)
+                o->sendEchoWardenReward(raceId, charmPoints);
         }
 
         void sendSpellGroupCooldown(SpellGroup_t groupId, uint32_t time) {

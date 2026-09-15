@@ -133,6 +133,15 @@ function Player:addForgeDust(amount)
     return new - cur
 end
 
+-- C++ Echo Raid rewards use this bridge so Forge Dust keeps one authoritative
+-- implementation for limits, persistence, and resource-balance updates.
+function EchoRaidGrantForgeDust(player, amount)
+    if not player or type(amount) ~= "number" or amount <= 0 then
+        return 0
+    end
+    return player:addForgeDust(math.floor(amount))
+end
+
 function Player:removeForgeDust(amount)
     if not isForgeEnabled() then return false end
 

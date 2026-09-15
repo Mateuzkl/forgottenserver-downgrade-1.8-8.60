@@ -29,6 +29,8 @@ struct BestiaryCreatureInfo
 	uint32_t firstUnlock = 0;
 	uint32_t secondUnlock = 0;
 	uint16_t charmPoints = 0;
+	uint8_t stars = 0;
+	uint8_t occurrence = 0;
 	uint16_t lookType = 0;
 	uint8_t lookHead = 0;
 	uint8_t lookBody = 0;

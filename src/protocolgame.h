@@ -221,6 +221,8 @@ private:
 	void sendCreatureSkull(const Creature* creature);
 	void sendCreatureEmblem(const Creature* creature);
 	void sendCreatureIcon(const Creature* creature);
+	void sendCreatureEchoRaidVisual(const Creature* creature, bool force = false);
+	void sendVisibleEchoRaidVisuals(const Position& centerPos);
 	void sendCreatureVocation(const Creature* creature);
 	void sendVisiblePlayerVocations(const Position& centerPos);
 
@@ -259,6 +261,7 @@ private:
 	void sendScreenshotAndBannerUpLevel(uint16_t level);
 	void sendScreenshotAndBannerUpSkill(skills_t skill, uint16_t level);
 	void sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss = false);
+	void sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints);
 	void sendExtendedOpcode(uint8_t opcode, std::string_view data);
 	void sendBlessingWindow();
 	void sendBlessStatus();
@@ -443,9 +446,11 @@ private:
 	bool supportsGameStoreHighlights = false;
 	bool supportsContainerTypes = false;
 	bool supportsAstraSingleCreatureMarks = false;
+	bool supportsAstraEchoRaidVisuals = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
+	std::unordered_map<uint32_t, EchoRaidVisualState> echoRaidVisualCache;
 	uint32_t dllWeatherSequence = 0;
 	bool isUsingFonticakClient() const { return isFonticakClient; }
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }

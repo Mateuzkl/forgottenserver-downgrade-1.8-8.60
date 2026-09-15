@@ -997,6 +997,12 @@ public:
 		}
 		client->sendCreatureIcon(creature);
 	}
+	void sendCreatureEchoRaidVisual(const Creature* creature, bool force = false) const
+	{
+		if (client) {
+			client->sendCreatureEchoRaidVisual(creature, force);
+		}
+	}
 
 	void checkSkullTicks(int64_t ticks);
 
@@ -1371,6 +1377,12 @@ public:
 	{
 		if (client) {
 			client->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+		}
+	}
+	void sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints) const
+	{
+		if (client) {
+			client->sendEchoWardenReward(raceId, charmPoints);
 		}
 	}
 	void sendPing();

@@ -78504,4 +78504,110 @@
 		<attribute key="description" value="A broken staff with a skull on one end. One of the means of which an evil warlock controlled the minds of others."/>
 		<attribute key="weight" value="1001"/>
 	</item>
+	<!-- Echo Raid / Echo Warden (aligned client IDs, no server/client conversion). -->
+	<item id="53751" article="a" name="basic bash scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53752" article="a" name="basic blockade scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53753" article="a" name="basic chop scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53754" article="a" name="basic cloud fabric scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53755" article="a" name="basic demon presence scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53756" article="a" name="basic dragon hide scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53757" article="a" name="basic electrify scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53758" article="a" name="basic epiphany scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53759" article="a" name="basic featherweight scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53760" article="a" name="basic frost scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53761" article="a" name="basic lich shroud scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53762" article="a" name="basic precision scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53763" article="a" name="basic punch scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53764" article="a" name="basic quara scale scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53765" article="a" name="basic reap scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53766" article="a" name="basic scorch scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53767" article="a" name="basic slash scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53768" article="a" name="basic snake skin scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53769" article="a" name="basic strike scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53770" article="a" name="basic swiftness scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53771" article="a" name="basic vampirism scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53772" article="a" name="basic venom scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53773" article="a" name="basic vibrancy scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="53774" article="a" name="basic void scroll">
+		<attribute key="primarytype" value="documents and papers"/>
+		<attribute key="weight" value="250"/>
+	</item>
+	<item id="54133" article="an" name="echo warden portal">
+		<attribute key="description" value="An unstable echo of a slain creature. Step onto it to release what it remembers."/>
+		<attribute key="allowdistread" value="1"/>
+	</item>
+	<item id="54266" article="a" name="lesser proficiency catalyst">
+		<attribute key="primarytype" value="valuables"/>
+		<attribute key="description" value="A catalyst used to enhance proficiencies."/>
+		<attribute key="weight" value="100"/>
+	</item>
 </items>

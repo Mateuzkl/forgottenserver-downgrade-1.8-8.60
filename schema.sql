@@ -477,6 +477,14 @@ CREATE TABLE IF NOT EXISTS `player_bestiary_kills` (
     FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `player_echo_warden_rewards` (
+  `player_id` INT NOT NULL,
+  `raceid` SMALLINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`player_id`, `raceid`),
+  CONSTRAINT `fk_player_echo_warden_rewards_player`
+    FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `player_bestiary_charms` (
   `player_id` INT NOT NULL,
   `charm_id` TINYINT UNSIGNED NOT NULL,

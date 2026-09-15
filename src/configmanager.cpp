@@ -448,6 +448,7 @@ bool ConfigManager::load()
 	booleans[Boolean::FAMILIAR_SYSTEM_ENABLED] = getGlobalBoolean(L, "familiarSystemEnabled", false);
 	booleans[Boolean::WHEEL_SYSTEM_ENABLED] = getGlobalBoolean(L, "wheelSystemEnabled", false);
 	booleans[Boolean::BESTIARY_SYSTEM_ENABLED] = getGlobalBoolean(L, "bestiarySystemEnabled", false);
+	booleans[Boolean::ECHO_RAID_SYSTEM_ENABLED] = getGlobalBoolean(L, "echoRaidSystemEnabled", false);
 	booleans[Boolean::MARKET_SYSTEM_ENABLED] = getGlobalBoolean(L, "marketSystemEnabled", false);
 	booleans[Boolean::PREY_SYSTEM_ENABLED] = getGlobalBoolean(L, "preySystemEnabled", false);
 	booleans[Boolean::BATTLEPASS_SYSTEM_ENABLED] = getGlobalBoolean(L, "battlePassSystemEnabled", false);
@@ -779,6 +780,10 @@ bool ConfigManager::load()
 	integers[Integer::AUGMENT_POWERFUL_IMPACT_PERCENT] = getGlobalInteger(L, "augmentPowerfulImpactPercent", 7);
 	integers[Integer::AUGMENT_STRONG_IMPACT_PERCENT] = getGlobalInteger(L, "augmentStrongImpactPercent", 10);
 	integers[Integer::QUICK_LOOT_MAX_CORPSES] = getGlobalInteger(L, "quickLootMaxCorpses", 30);
+	integers[Integer::ECHO_RAID_PORTAL_SPAWN_NUMERATOR] =
+	    getGlobalInteger(L, "echoRaidPortalSpawnNumerator", 100);
+	integers[Integer::ECHO_RAID_PORTAL_SPAWN_DENOMINATOR] =
+	    getGlobalInteger(L, "echoRaidPortalSpawnDenominator", 200000);
 	integers[Integer::BATTLEPASS_REWARD_MAX_STEP] = getGlobalInteger(L, "battlePassRewardMaxStep", 50);
 	integers[Integer::BATTLEPASS_SHOP_UNLOCK_STEP] = getGlobalInteger(L, "battlePassShopUnlockStep", 50);
 

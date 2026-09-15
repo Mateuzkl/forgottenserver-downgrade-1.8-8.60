@@ -12,9 +12,19 @@
 namespace AstraClient {
 
 inline constexpr std::string_view LOGIN_MARKER = "A";
+inline constexpr std::string_view CAPABILITIES_MARKER = "C";
 inline constexpr std::string_view STORE_HIGHLIGHTS_MARKER = "AstraStoreHighlights";
 inline constexpr std::string_view SINGLE_CREATURE_MARKS_MARKER = "AstraSingleCreatureMarks";
+inline constexpr std::string_view ECHO_RAID_VISUALS_MARKER = "AstraEchoRaidVisuals";
 inline constexpr std::string_view REQUIRED_MESSAGE = "This server requires AstraClient.";
+inline constexpr uint8_t SINGLE_CREATURE_MARK_OPCODE = 0x93;
+inline constexpr uint8_t ECHO_RAID_VISUAL_MARK_TYPE = 15;
+
+enum Capability : uint8_t {
+	StoreHighlights = 1U << 0,
+	SingleCreatureMarks = 1U << 1,
+	EchoRaidVisuals = 1U << 2,
+};
 
 inline uint32_t rotateLeft(uint32_t value, uint8_t bits)
 {
