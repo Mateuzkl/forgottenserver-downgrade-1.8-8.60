@@ -1767,6 +1767,7 @@ local function sendMarketEnter(player, depotMap)
 
 	local balance = getPlayerTotalMoney(player)
 	local playerGuid = player:getGuid()
+	local sendItemMetadata = player.supportsCustomItemNetwork and player:supportsCustomItemNetwork()
 	local offers = offerCountCache[playerGuid]
 	if offers == nil then
 		offers = clamp(Game.getMarketOfferCount(playerGuid), 0, MARKET_MAX_OFFERS)
@@ -1796,9 +1797,11 @@ local function sendMarketEnter(player, depotMap)
 			out:addString(entry.name)
 			out:addU16(math.min(entry.amount or 0, 0xFFFF))
 			out:addByte(entry.tier or 0)
-			out:addByte(entry.classification or 0)
-			out:addU16(entry.requiredLevel or 0)
-			out:addU16(entry.restrictVocation or 0)
+			if sendItemMetadata then
+				out:addByte(entry.classification or 0)
+				out:addU16(entry.requiredLevel or 0)
+				out:addU16(entry.restrictVocation or 0)
+			end
 		end
 
 		out:sendToPlayer(player)
@@ -2331,6 +2334,7 @@ function marketSessionCleanup.onLogout(player)
 	lastAction[player:getId()] = nil
 	marketDepotSessions[player:getId()] = nil
 	marketOpenSessions[player:getId()] = nil
+	offerCountCache[player:getGuid()] = nil
 	return true
 end
 marketSessionCleanup:register()

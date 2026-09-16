@@ -599,6 +599,9 @@ inline constexpr int32_t STORAGE_EMOTE_SPELLS = 50102;
 inline constexpr int32_t STORAGE_DAILY_REWARD_LAST_DAY = 90720;
 inline constexpr int32_t STORAGE_DAILY_REWARD_INDEX = 90721;
 inline constexpr int32_t STORAGE_DAILY_REWARD_STREAK = 90722;
+inline constexpr int32_t STORAGE_DAILY_REWARD_JOKER_TOKENS = 90723;
+inline constexpr int32_t STORAGE_DAILY_REWARD_INSTANT_TOKENS = 90724;
+inline constexpr int32_t STORAGE_DAILY_REWARD_JOKER_MONTH = 90725;
 
 enum ReturnValue
 {

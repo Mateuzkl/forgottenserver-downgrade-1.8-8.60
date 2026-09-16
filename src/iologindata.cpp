@@ -1581,10 +1581,13 @@ bool IOLoginData::savePlayerDailyRewardStorages(Player* player)
 		return false;
 	}
 
-	static constexpr std::array<uint32_t, 3> DAILY_REWARD_STORAGE_KEYS = {
+	static constexpr std::array<uint32_t, 6> DAILY_REWARD_STORAGE_KEYS = {
 	    STORAGE_DAILY_REWARD_LAST_DAY,
 	    STORAGE_DAILY_REWARD_INDEX,
 	    STORAGE_DAILY_REWARD_STREAK,
+	    STORAGE_DAILY_REWARD_JOKER_TOKENS,
+	    STORAGE_DAILY_REWARD_INSTANT_TOKENS,
+	    STORAGE_DAILY_REWARD_JOKER_MONTH,
 	};
 
 	const uint32_t playerId = player->getGUID();

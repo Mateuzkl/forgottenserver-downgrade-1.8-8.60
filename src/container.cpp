@@ -875,7 +875,7 @@ void Container::removeThing(Thing* thing, uint32_t count)
 		itemlist.erase(itemlist.begin() + index);
 
 		if (isLootCorpse() && empty() && lootHighlightActive) {
-			clearLootHighlight();
+			g_game.stopLootHighlight(this);
 		}
 	}
 }

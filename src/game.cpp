@@ -7778,6 +7778,7 @@ void Game::startLootHighlight(Container* corpse, uint32_t ownerPlayerId)
 
 	auto corpseItem = corpse->weak_from_this().lock();
 	if (!corpseItem) {
+		corpse->clearLootHighlight();
 		return;
 	}
 
@@ -7799,6 +7800,11 @@ void Game::startLootHighlight(Container* corpse, uint32_t ownerPlayerId)
 		    checkLootHighlight(corpseItem, ownerPlayerId, ownerTicksLeft, totalTicksLeft, *scheduledEventId);
 	    })));
 
+	if (eventId == 0) {
+		corpse->clearLootHighlight();
+		return;
+	}
+
 	*scheduledEventId = eventId;
 	lootHighlightEvents[weakCorpse] = eventId;
 }
@@ -7810,11 +7816,6 @@ void Game::checkLootHighlight(std::shared_ptr<Item> corpseItem, uint32_t ownerPl
 		return;
 	}
 
-	Container* corpse = corpseItem->getContainer();
-	if (!corpse) {
-		return;
-	}
-
 	std::weak_ptr<Item> weakCorpse = corpseItem;
 
 	auto it = lootHighlightEvents.find(weakCorpse);
@@ -7823,8 +7824,14 @@ void Game::checkLootHighlight(std::shared_ptr<Item> corpseItem, uint32_t ownerPl
 	}
 	lootHighlightEvents.erase(it);
 
+	Container* corpse = corpseItem->getContainer();
+	if (!corpse) {
+		return;
+	}
+
 	Tile* tile = corpse->getTile();
 	if (!tile || corpse->isRemoved() || corpse->empty() || totalTicksLeft < 0) {
+		corpse->clearLootHighlight();
 		return;
 	}
 
@@ -7879,6 +7886,11 @@ void Game::checkLootHighlight(std::shared_ptr<Item> corpseItem, uint32_t ownerPl
 
 		    checkLootHighlight(corpseItem, ownerPlayerId, nextOwnerTicks, nextTotalTicks, *scheduledEventId);
 	    })));
+
+	if (newEventId == 0) {
+		corpse->clearLootHighlight();
+		return;
+	}
 
 	*scheduledEventId = newEventId;
 	lootHighlightEvents[weakCorpse] = newEventId;

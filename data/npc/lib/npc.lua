@@ -901,6 +901,7 @@ do
 				end
 
 				local sellResult = compat.lastSellResult[playerId]
+				compat.lastSellResult[playerId] = nil
 				if sellResult and sellResult.amount < amount then
 					if sellResult.reason == "capacity" then
 						playerObj:sendCancelMessage("You do not have enough capacity.")
