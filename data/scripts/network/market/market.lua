@@ -372,13 +372,16 @@ local function ensureMarketAccess(player)
 	return false
 end
 
+local LEGACY_QUIVER_ITEM_IDS = {
+	-- Genuine quivers should use WEAPON_QUIVER; keep verified legacy IDs here only.
+}
+
 local function isQuiverItem(itemType)
 	if itemType:getWeaponType() == WEAPON_QUIVER then
 		return true
 	end
 
-	local name = itemType:getName():lower()
-	return name:find("quiver", 1, true) ~= nil
+	return LEGACY_QUIVER_ITEM_IDS[itemType:getId()] == true
 end
 
 local function isPremiumScrollItem(itemType)
