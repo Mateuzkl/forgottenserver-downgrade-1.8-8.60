@@ -7643,11 +7643,17 @@ Container* findHeldContainerByIdentity(Container* parent, uint16_t itemId, uint6
 	return nullptr;
 }
 
+void persistPlayerQuickLootValue(uint32_t guid, const std::string& key, const ValueWrapper& value)
+{
+	getPlayerQuickLootKV(guid)->set(key, value);
+	KVStore::getInstance().save(fmt::format("player.{}.quickloot.{}", guid, key), value);
+}
+
 } // namespace
 
 void Player::sendLootContainers() const
 {
-	if (client && isAstraClient()) {
+	if (client && (isAstraClient() || isFonticakClient())) {
 		client->sendLootContainers();
 	}
 }
@@ -7736,7 +7742,7 @@ void Player::ensureQuickLootStateLoaded()
 
 void Player::saveQuickLootState() const
 {
-	auto store = getPlayerQuickLootKV(getGUID());
+	const uint32_t guid = getGUID();
 
 	MapType serializedContainers;
 	for (const auto& [category, containers] : managedLootContainers) {
@@ -7752,8 +7758,8 @@ void Player::saveQuickLootState() const
 		serializedContainers.emplace(std::to_string(static_cast<uint8_t>(category)), std::make_shared<ValueWrapper>(entry));
 	}
 
-	store->set("managedContainers", ValueWrapper(serializedContainers));
-	store->set("fallback", ValueWrapper(quickLootFallbackToMainContainer));
+	persistPlayerQuickLootValue(guid, "managedContainers", ValueWrapper(serializedContainers));
+	persistPlayerQuickLootValue(guid, "fallback", ValueWrapper(quickLootFallbackToMainContainer));
 }
 
 void Player::setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, uint64_t containerUid, bool isLootContainer)
