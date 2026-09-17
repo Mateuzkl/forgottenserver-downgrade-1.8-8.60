@@ -38,18 +38,18 @@ require_occurrences("${shop_block}" "written < itemsToSend" 2 "sendShop bounded 
 extract_block("${protocolgame_source}" "void ProtocolGame::sendFeatures" "void ProtocolGame::spectatorTurn" features_block)
 require_occurrences("${features_block}" "GameFeature::AstraShopCountU16" 1 "sendFeatures AstraShopCountU16 negotiation")
 
-# 4. Check ProtocolGame::sendMonsterPodiumWindow trailing fields
+# 4. Check ProtocolGame::sendMonsterPodiumWindow trailing serialization statements
 extract_block("${protocolgame_source}" "void ProtocolGame::sendMonsterPodiumWindow" "void ProtocolGame::sendUpdatedVIPStatus" podium_block)
-string(FIND "${podium_block}" "LookDirection" dir_pos)
-string(FIND "${podium_block}" "PodiumVisible" pod_pos)
-string(FIND "${podium_block}" "MonsterVisible" mon_pos)
+string(FIND "${podium_block}" "msg.addByte(static_cast<uint8_t>(getAttribute(\"LookDirection\"" dir_pos)
+string(FIND "${podium_block}" "msg.addByte(static_cast<uint8_t>(getAttribute(\"PodiumVisible\"" pod_pos)
+string(FIND "${podium_block}" "msg.addByte(static_cast<uint8_t>(getAttribute(\"MonsterVisible\"" mon_pos)
 
 if(dir_pos EQUAL -1 OR pod_pos EQUAL -1 OR mon_pos EQUAL -1)
-    message(FATAL_ERROR "sendMonsterPodiumWindow missing trailing fields")
+    message(FATAL_ERROR "sendMonsterPodiumWindow missing trailing msg.addByte serialization statements")
 endif()
 
 if(dir_pos GREATER pod_pos OR pod_pos GREATER mon_pos)
-    message(FATAL_ERROR "sendMonsterPodiumWindow trailing field order must be: LookDirection, PodiumVisible, MonsterVisible")
+    message(FATAL_ERROR "sendMonsterPodiumWindow trailing serialization order must be: LookDirection, PodiumVisible, MonsterVisible")
 endif()
 
 message(STATUS "ProtocolGame shop and monster podium invariants verified successfully.")

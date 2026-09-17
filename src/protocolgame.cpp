@@ -3748,23 +3748,56 @@ void ProtocolGame::sendShop(const ShopInfoList& itemList)
 	NetworkMessage msg;
 	msg.addByte(0x7A);
 
+	constexpr size_t maxPayloadBytes =
+		NetworkMessage::MAX_BODY_LENGTH > (NetworkMessage::INITIAL_BUFFER_POSITION + 1)
+			? (NetworkMessage::MAX_BODY_LENGTH - NetworkMessage::INITIAL_BUFFER_POSITION - 1)
+			: 0;
+
 	if (isAstraClient) {
-		const uint16_t itemsToSend = static_cast<uint16_t>(
-			std::min<size_t>(itemList.size(), std::numeric_limits<uint16_t>::max())
-		);
+		const size_t maxCount = std::min<size_t>(itemList.size(), std::numeric_limits<uint16_t>::max());
+		uint16_t itemsToSend = 0;
+		size_t currentBytes = sizeof(uint8_t) + sizeof(uint16_t); // 0x7A opcode + uint16 count
+
+		for (const auto& item : itemList) {
+			if (itemsToSend >= maxCount) {
+				break;
+			}
+			const size_t itemBytes = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint16_t) + item.realName.size() +
+			                         sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+			if (currentBytes + itemBytes > maxPayloadBytes) {
+				break;
+			}
+			currentBytes += itemBytes;
+			++itemsToSend;
+		}
+
 		msg.add<uint16_t>(itemsToSend);
 
-		size_t written = 0;
+		uint16_t written = 0;
 		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
 			AddShopItem(msg, *it);
 		}
 	} else {
-		const uint8_t itemsToSend = static_cast<uint8_t>(
-			std::min<size_t>(itemList.size(), std::numeric_limits<uint8_t>::max())
-		);
+		const size_t maxCount = std::min<size_t>(itemList.size(), std::numeric_limits<uint8_t>::max());
+		uint8_t itemsToSend = 0;
+		size_t currentBytes = sizeof(uint8_t) + sizeof(uint8_t); // 0x7A opcode + uint8 count
+
+		for (const auto& item : itemList) {
+			if (itemsToSend >= maxCount) {
+				break;
+			}
+			const size_t itemBytes = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint16_t) + item.realName.size() +
+			                         sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+			if (currentBytes + itemBytes > maxPayloadBytes) {
+				break;
+			}
+			currentBytes += itemBytes;
+			++itemsToSend;
+		}
+
 		msg.addByte(itemsToSend);
 
-		size_t written = 0;
+		uint8_t written = 0;
 		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
 			AddShopItem(msg, *it);
 		}
