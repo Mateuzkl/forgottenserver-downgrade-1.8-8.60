@@ -73,6 +73,7 @@ local CATEGORY_ARMORS = 1
 local CATEGORY_AMULETS = 2
 local CATEGORY_BOOTS = 3
 local CATEGORY_CONTAINERS = 4
+local CATEGORY_DECORATION = 5
 local CATEGORY_FOOD = 6
 local CATEGORY_HELMETS = 7
 local CATEGORY_LEGS = 8
@@ -89,7 +90,48 @@ local CATEGORY_CLUBS = 18
 local CATEGORY_DISTANCE = 19
 local CATEGORY_SWORDS = 20
 local CATEGORY_WANDS = 21
+local CATEGORY_PREMIUM_SCROLLS = 22
+local CATEGORY_CREATURE_PRODUCTS = 24
+local CATEGORY_QUIVERS = 25
+local CATEGORY_SOUL_CORES = 26
 local CATEGORY_GOLD = 30
+
+local shopCategoryLookups = {
+	[CATEGORY_CREATURE_PRODUCTS] = {},
+	[CATEGORY_DECORATION] = {},
+}
+
+local SHOP_CATEGORY_NAMES = {
+	[CATEGORY_CREATURE_PRODUCTS] = "creature products",
+	[CATEGORY_DECORATION] = "decoration",
+}
+
+local function buildShopCategoryLookups()
+	for categoryId in pairs(shopCategoryLookups) do
+		shopCategoryLookups[categoryId] = {}
+	end
+
+	if type(LootShopConfigTable) ~= "table" then
+		return
+	end
+
+	for categoryId, shopName in pairs(SHOP_CATEGORY_NAMES) do
+		local items = LootShopConfigTable[shopName]
+		if type(items) == "table" then
+			for _, entry in ipairs(items) do
+				local itemId = tonumber(entry.clientId)
+				if itemId and itemId > 0 then
+					shopCategoryLookups[categoryId][itemId] = true
+				end
+			end
+		end
+	end
+end
+
+local function isShopCategoryItem(categoryId, itemId)
+	local lookup = shopCategoryLookups[categoryId]
+	return lookup ~= nil and lookup[itemId] == true
+end
 
 local marketItems = {}
 local marketItemsById = {}
@@ -330,13 +372,39 @@ local function ensureMarketAccess(player)
 	return false
 end
 
+local LEGACY_QUIVER_ITEM_IDS = {
+	-- Genuine quivers should use WEAPON_QUIVER; keep verified legacy IDs here only.
+}
+
+local function isQuiverItem(itemType)
+	if itemType:getWeaponType() == WEAPON_QUIVER then
+		return true
+	end
+
+	return LEGACY_QUIVER_ITEM_IDS[itemType:getId()] == true
+end
+
+local function isPremiumScrollItem(itemType)
+	if not itemType or itemType:getId() == 0 then
+		return false
+	end
+
+	return itemType:getName():lower():find("premium scroll", 1, true) ~= nil
+end
+
 local function getItemCategory(itemType)
 	if itemType:isRune() then
 		return CATEGORY_RUNES
 	end
+
+	if isQuiverItem(itemType) then
+		return CATEGORY_QUIVERS
+	end
+
 	if itemType:isContainer() then
 		return CATEGORY_CONTAINERS
 	end
+
 	local weaponType = itemType:getWeaponType()
 	if weaponType == WEAPON_SWORD then
 		return CATEGORY_SWORDS
@@ -370,7 +438,24 @@ local function getItemCategory(itemType)
 		return CATEGORY_GOLD
 	end
 
+	if isShopCategoryItem(CATEGORY_DECORATION, itemType:getId()) then
+		return CATEGORY_DECORATION
+	end
+
+	if isShopCategoryItem(CATEGORY_CREATURE_PRODUCTS, itemType:getId()) then
+		return CATEGORY_CREATURE_PRODUCTS
+	end
+
 	local name = itemType:getName():lower()
+
+	if isPremiumScrollItem(itemType) then
+		return CATEGORY_PREMIUM_SCROLLS
+	end
+
+	if name:find("soul core", 1, true) then
+		return CATEGORY_SOUL_CORES
+	end
+
 	if name:find("potion", 1, true) then
 		return CATEGORY_POTIONS
 	elseif name:find("fish", 1, true) or name:find("meat", 1, true) or name:find("bread", 1, true) or name:find("ham", 1, true) then
@@ -401,6 +486,10 @@ local function isMarketableItem(itemId)
 
 	if itemType:isCorpse() or itemType:isDoor() or itemType:isFluidContainer() or itemType:isMagicField() or itemType:isGroundTile() then
 		return false
+	end
+
+	if isPremiumScrollItem(itemType) then
+		return true
 	end
 
 	return itemType:isMovable() and itemType:isPickupable()
@@ -486,6 +575,7 @@ local function addMarketItem(itemId, xmlName, xmlAttributes, itemNode)
 end
 
 local function loadMarketCatalog()
+	buildShopCategoryLookups()
 	marketItems = {}
 	marketItemsById = {}
 	marketItemXmlAttributes = {}
