@@ -3748,12 +3748,26 @@ void ProtocolGame::sendShop(const ShopInfoList& itemList)
 	NetworkMessage msg;
 	msg.addByte(0x7A);
 
-	uint16_t itemsToSend = std::min<size_t>(itemList.size(), std::numeric_limits<uint16_t>::max());
-	msg.addByte(itemsToSend);
+	if (isAstraClient) {
+		const uint16_t itemsToSend = static_cast<uint16_t>(
+			std::min<size_t>(itemList.size(), std::numeric_limits<uint16_t>::max())
+		);
+		msg.add<uint16_t>(itemsToSend);
 
-	uint16_t i = 0;
-	for (auto it = itemList.begin(); i < itemsToSend; ++it, ++i) {
-		AddShopItem(msg, *it);
+		size_t written = 0;
+		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
+			AddShopItem(msg, *it);
+		}
+	} else {
+		const uint8_t itemsToSend = static_cast<uint8_t>(
+			std::min<size_t>(itemList.size(), std::numeric_limits<uint8_t>::max())
+		);
+		msg.addByte(itemsToSend);
+
+		size_t written = 0;
+		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
+			AddShopItem(msg, *it);
+		}
 	}
 
 	writeToOutputBuffer(msg);
@@ -5604,6 +5618,8 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	msg.addPosition(position);
 	msg.add<uint16_t>(itemId);
 	msg.addByte(stackPos);
+	// Trailing podium flags layout contract (matches AstraClient protocol.lua and parseSetMonsterPodium):
+	// U8 direction, U8 podiumVisible, U8 monsterVisible
 	msg.addByte(static_cast<uint8_t>(getAttribute("LookDirection", DIRECTION_SOUTH)));
 	msg.addByte(static_cast<uint8_t>(getAttribute("PodiumVisible", 1) != 0));
 	msg.addByte(static_cast<uint8_t>(getAttribute("MonsterVisible", currentRaceId != 0) != 0));
@@ -6310,6 +6326,7 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
+		features[GameFeature::AstraShopCountU16] = true;
 		if (supportsAstraSingleCreatureMarks) {
 			features[GameFeature::AstraSingleCreatureMarks] = true;
 		}
