@@ -3731,14 +3731,17 @@ void ProtocolGame::sendLootContainers()
 		msg.add<uint16_t>(managedContainer.loot);
 	}
 
-	msg.addByte(obtainContainerCount);
-	for (const auto& [category, managedContainer] : containers) {
-		if (managedContainer.obtain == 0) {
-			continue;
-		}
+	// Fonticak clients only parse the loot-container list; obtain containers are Astra-only.
+	if (isAstraClient) {
+		msg.addByte(obtainContainerCount);
+		for (const auto& [category, managedContainer] : containers) {
+			if (managedContainer.obtain == 0) {
+				continue;
+			}
 
-		msg.addByte(static_cast<uint8_t>(category));
-		msg.add<uint16_t>(managedContainer.obtain);
+			msg.addByte(static_cast<uint8_t>(category));
+			msg.add<uint16_t>(managedContainer.obtain);
+		}
 	}
 	writeToOutputBuffer(msg);
 }

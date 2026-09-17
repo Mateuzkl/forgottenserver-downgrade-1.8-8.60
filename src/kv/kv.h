@@ -77,6 +77,9 @@ public:
 	// SQL persistence
 	std::optional<ValueWrapper> load(const std::string &key);
 	bool save(const std::string &key, const ValueWrapper &value);
+	[[nodiscard]] std::string buildSaveQuery(const std::string &key, const ValueWrapper &value) const;
+	[[nodiscard]] std::string buildBatchSaveQuery(
+	    const std::vector<std::pair<std::string, ValueWrapper>> &entries) const;
 	std::vector<std::string> loadPrefix(const std::string &prefix = "");
 
 protected:
