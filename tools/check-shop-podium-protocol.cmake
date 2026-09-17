@@ -33,6 +33,7 @@ require_occurrences("${shop_block}" "if \\(isAstraClient\\)" 1 "sendShop isAstra
 require_occurrences("${shop_block}" "msg\\.add<uint16_t>\\(itemsToSend\\)" 1 "sendShop AstraClient uint16 count")
 require_occurrences("${shop_block}" "msg\\.addByte\\(itemsToSend\\)" 1 "sendShop standard client uint8 count")
 require_occurrences("${shop_block}" "written < itemsToSend" 2 "sendShop bounded loop invariant")
+require_occurrences("${shop_block}" "maxPayloadBytes" 3 "sendShop byte budget capacity guard")
 
 # 3. Check ProtocolGame::sendFeatures block
 extract_block("${protocolgame_source}" "void ProtocolGame::sendFeatures" "void ProtocolGame::spectatorTurn" features_block)
