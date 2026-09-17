@@ -285,32 +285,31 @@ bool KVStore::save(const std::string &key, const ValueWrapper &value) {
 	return update.execute();
 }
 
-std::string KVStore::buildSaveQuery(const std::string &key, const ValueWrapper &value) const {
-	if (value.isDeleted()) {
-		Database &db = Database::getInstance();
-		return fmt::format("DELETE FROM `kv_store` WHERE `key_name` = {}", db.escapeString(key));
-	}
-
-	Database &db = Database::getInstance();
-	const auto serialized = value.serialize();
-	DBInsert update = dbUpdate();
-	update.addRow(fmt::format("{}, {}, {}", db.escapeString(key), value.getTimestamp(),
-	                          db.escapeBlob(serialized.data(), static_cast<uint32_t>(serialized.size()))));
-	return update.buildQuery();
-}
-
-std::string KVStore::buildBatchSaveQuery(const std::vector<std::pair<std::string, ValueWrapper>> &entries) const {
+bool KVStore::buildBatchSaveQuery(const std::vector<std::pair<std::string, ValueWrapper>> &entries,
+                                  std::string &query) const
+{
 	DBInsert update = dbUpdate();
 	Database &db = Database::getInstance();
+	bool hasRows = false;
 	for (const auto &[key, value] : entries) {
 		if (value.isDeleted()) {
 			continue;
 		}
 		const auto serialized = value.serialize();
-		update.addRow(fmt::format("{}, {}, {}", db.escapeString(key), value.getTimestamp(),
-		                          db.escapeBlob(serialized.data(), static_cast<uint32_t>(serialized.size()))));
+		if (!update.addRow(fmt::format("{}, {}, {}", db.escapeString(key), value.getTimestamp(),
+		                               db.escapeBlob(serialized.data(), static_cast<uint32_t>(serialized.size()))))) {
+			return false;
+		}
+		hasRows = true;
 	}
-	return update.buildQuery();
+
+	if (!hasRows) {
+		query.clear();
+		return true;
+	}
+
+	query = update.buildQuery();
+	return !query.empty();
 }
 
 bool KVStore::prepareSave(const std::string &key, const ValueWrapper &value, DBInsert &update) const {
@@ -363,7 +362,7 @@ bool KVStore::saveAll() {
 	return success;
 }
 
-DBInsert KVStore::dbUpdate() {
+DBInsert KVStore::dbUpdate() const {
 	auto insert = DBInsert("INSERT INTO `kv_store` (`key_name`, `timestamp`, `value`) VALUES");
 	insert.upsert({ "key_name", "timestamp", "value" });
 	return insert;

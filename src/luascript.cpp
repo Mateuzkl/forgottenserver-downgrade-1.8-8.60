@@ -2455,7 +2455,6 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(MESSAGE_EVENT_DEFAULT);
 	registerEnum(MESSAGE_EVENT_ORANGE);
 	registerEnum(MESSAGE_STATUS_CONSOLE_ORANGE);
-	registerEnum(MESSAGE_LOOT);
 
 	registerEnum(CREATURETYPE_PLAYER);
 	registerEnum(CREATURETYPE_MONSTER);

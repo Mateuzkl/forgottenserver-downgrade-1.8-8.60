@@ -77,9 +77,8 @@ public:
 	// SQL persistence
 	std::optional<ValueWrapper> load(const std::string &key);
 	bool save(const std::string &key, const ValueWrapper &value);
-	[[nodiscard]] std::string buildSaveQuery(const std::string &key, const ValueWrapper &value) const;
-	[[nodiscard]] std::string buildBatchSaveQuery(
-	    const std::vector<std::pair<std::string, ValueWrapper>> &entries) const;
+	[[nodiscard]] bool buildBatchSaveQuery(const std::vector<std::pair<std::string, ValueWrapper>> &entries,
+	                                     std::string &query) const;
 	std::vector<std::string> loadPrefix(const std::string &prefix = "");
 
 protected:
@@ -92,7 +91,7 @@ private:
 	bool processEvictions();
 
 	bool prepareSave(const std::string &key, const ValueWrapper &value, DBInsert &update) const;
-	DBInsert dbUpdate();
+	DBInsert dbUpdate() const;
 
 	StoreMap store_;
 	std::list<std::string> lruQueue_;

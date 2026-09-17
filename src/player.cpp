@@ -7654,11 +7654,8 @@ void persistPlayerQuickLootValue(uint32_t guid, const std::string& key, const Va
 	getPlayerQuickLootKV(guid)->set(key, value);
 }
 
-std::vector<std::pair<std::string, ValueWrapper>> buildQuickLootPersistenceSnapshot(const Player& player)
+MapType serializeManagedLootContainers(const Player& player)
 {
-	const uint32_t guid = player.getGUID();
-	const std::string prefix = fmt::format("player.{}.quickloot.", guid);
-
 	MapType serializedContainers;
 	for (const auto& [category, containers] : player.getManagedLootContainers()) {
 		if (containers.loot == 0 && containers.obtain == 0) {
@@ -7672,10 +7669,15 @@ std::vector<std::pair<std::string, ValueWrapper>> buildQuickLootPersistenceSnaps
 		entry.emplace("obtainUid", std::make_shared<ValueWrapper>(std::to_string(containers.obtainUid)));
 		serializedContainers.emplace(std::to_string(static_cast<uint8_t>(category)), std::make_shared<ValueWrapper>(entry));
 	}
+	return serializedContainers;
+}
 
+std::vector<std::pair<std::string, ValueWrapper>> buildQuickLootPersistenceSnapshot(const Player& player)
+{
+	const std::string prefix = fmt::format("player.{}.quickloot", player.getGUID());
 	return {
-	    {prefix + "managedContainers", ValueWrapper(serializedContainers)},
-	    {prefix + "fallback", ValueWrapper(player.getQuickLootFallbackToMainContainer())},
+	    {prefix + ".managedContainers", ValueWrapper(serializeManagedLootContainers(player))},
+	    {prefix + ".fallback", ValueWrapper(player.getQuickLootFallbackToMainContainer())},
 	};
 }
 
@@ -7773,11 +7775,8 @@ void Player::ensureQuickLootStateLoaded()
 void Player::saveQuickLootState() const
 {
 	const uint32_t guid = getGUID();
-	const auto snapshot = buildQuickLootPersistenceSnapshot(*this);
-	for (const auto& [fullKey, value] : snapshot) {
-		const std::string prefix = fmt::format("player.{}.quickloot.", guid);
-		persistPlayerQuickLootValue(guid, fullKey.substr(prefix.length()), value);
-	}
+	persistPlayerQuickLootValue(guid, "managedContainers", ValueWrapper(serializeManagedLootContainers(*this)));
+	persistPlayerQuickLootValue(guid, "fallback", ValueWrapper(quickLootFallbackToMainContainer));
 	quickLootSaveDirty = true;
 	scheduleQuickLootPersistence();
 }
@@ -7829,20 +7828,43 @@ void Player::flushQuickLootPersistence(bool sync) const
 	}
 
 	const auto snapshot = buildQuickLootPersistenceSnapshot(*this);
-	const std::string query = KVStore::getInstance().buildBatchSaveQuery(snapshot);
+	std::string query;
+	if (!KVStore::getInstance().buildBatchSaveQuery(snapshot, query)) {
+		scheduleQuickLootPersistence();
+		return;
+	}
+
 	if (query.empty()) {
 		quickLootSaveDirty = false;
 		return;
 	}
 
+	const uint32_t playerId = getID();
 	if (sync) {
-		Database::getInstance().executeQuery(query);
-	} else {
-		static_cast<void>(g_databaseTasks.addTask(query));
+		if (!Database::getInstance().executeQuery(query)) {
+			scheduleQuickLootPersistence();
+			return;
+		}
+		quickLootSaveDirty = false;
+		lastQuickLootDbSave = std::chrono::steady_clock::now();
+		return;
 	}
 
-	quickLootSaveDirty = false;
-	lastQuickLootDbSave = std::chrono::steady_clock::now();
+	if (!g_databaseTasks.addTask(std::move(query), [playerId](DBResult_ptr, bool success, uint64_t) {
+		    auto playerRef = g_game.getPlayerByID(playerId);
+		    Player* player = playerRef.get();
+		    if (!player) {
+			    return;
+		    }
+		    if (!success) {
+			    player->scheduleQuickLootPersistence();
+			    return;
+		    }
+		    player->quickLootSaveDirty = false;
+		    player->lastQuickLootDbSave = std::chrono::steady_clock::now();
+	    })) {
+		scheduleQuickLootPersistence();
+	}
 }
 
 void Player::setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, uint64_t containerUid, bool isLootContainer)

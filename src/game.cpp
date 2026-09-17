@@ -233,11 +233,7 @@ struct QuickLootResult
 	ReturnValue failure = RETURNVALUE_NOERROR;
 };
 
-MessageClasses getQuickLootMessageType(const Player* /*player*/)
-{
-	// MESSAGE_LOOT (28) is not recognized by 8.60 clients; use a compatible class.
-	return MESSAGE_STATUS_SMALL;
-}
+constexpr MessageClasses QUICK_LOOT_MESSAGE_TYPE = MESSAGE_STATUS_SMALL;
 
 bool hasQuickLootFeedback(const QuickLootResult& result)
 {
@@ -320,7 +316,7 @@ void sendQuickLootResultMessage(Player* player, const QuickLootResult& result)
 		ss << "No loot";
 	}
 	ss << '.';
-	player->sendTextMessage(getQuickLootMessageType(player), ss.str());
+	player->sendTextMessage(QUICK_LOOT_MESSAGE_TYPE, ss.str());
 
 	if (result.shouldNotifyCapacity) {
 		player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
@@ -328,6 +324,19 @@ void sendQuickLootResultMessage(Player* player, const QuickLootResult& result)
 	} else if (result.shouldNotifyNotEnoughRoom) {
 		player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
 		                        "Attention! One of your assigned loot containers is full.");
+	}
+}
+
+void dispatchQuickLootFeedback(Player* player, const QuickLootResult& result)
+{
+	if (!player) {
+		return;
+	}
+
+	if (!hasQuickLootFeedback(result) && result.failure != RETURNVALUE_NOERROR) {
+		player->sendCancelMessage(result.failure);
+	} else if (hasQuickLootFeedback(result)) {
+		sendQuickLootResultMessage(player, result);
 	}
 }
 
@@ -643,7 +652,9 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 					result.missedAnyItem = true;
 				}
 			}
-			if (ret == RETURNVALUE_CONTAINERNOTENOUGHROOM) {
+			if (ret == RETURNVALUE_NOTENOUGHCAPACITY) {
+				result.shouldNotifyCapacity = true;
+			} else if (ret == RETURNVALUE_CONTAINERNOTENOUGHROOM) {
 				result.shouldNotifyNotEnoughRoom = true;
 			}
 			continue;
@@ -4172,7 +4183,7 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 			} else if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
 				player->sendCancelMessage(firstFailure);
 			} else if (lootedCorpses > 1) {
-				player->sendTextMessage(getQuickLootMessageType(player),
+				player->sendTextMessage(QUICK_LOOT_MESSAGE_TYPE,
 				                        fmt::format("You looted {:d} corpses.", lootedCorpses));
 			}
 			player->maintainAttackFlow();
@@ -4215,12 +4226,7 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 			return;
 		}
 
-		QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
-		if (!hasQuickLootFeedback(result) && result.failure != RETURNVALUE_NOERROR) {
-			player->sendCancelMessage(result.failure);
-		} else if (hasQuickLootFeedback(result)) {
-			sendQuickLootResultMessage(player, result);
-		}
+		dispatchQuickLootFeedback(player, collectQuickLootContainer(*this, player, containerRef));
 		player->maintainAttackFlow();
 		return;
 	}
@@ -4301,7 +4307,7 @@ void Game::playerLootNearby(uint32_t playerId)
 	} else if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
 		player->sendCancelMessage(firstFailure);
 	} else if (lootedCorpses > 1) {
-		player->sendTextMessage(getQuickLootMessageType(player),
+		player->sendTextMessage(QUICK_LOOT_MESSAGE_TYPE,
 		                        fmt::format("You looted {:d} corpses.", lootedCorpses));
 	}
 	player->maintainAttackFlow();
@@ -4324,12 +4330,7 @@ void Game::playerQuickLootCorpse(uint32_t playerId, Container* container)
 		return;
 	}
 
-	QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
-	if (!hasQuickLootFeedback(result) && result.failure != RETURNVALUE_NOERROR) {
-		player->sendCancelMessage(result.failure);
-	} else if (hasQuickLootFeedback(result)) {
-		sendQuickLootResultMessage(player, result);
-	}
+	dispatchQuickLootFeedback(player, collectQuickLootContainer(*this, player, containerRef));
 }
 
 void Game::playerSetManagedLootContainer(uint32_t playerId, ObjectCategory_t category, const Position& pos,
