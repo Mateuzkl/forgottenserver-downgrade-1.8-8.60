@@ -778,6 +778,50 @@ void Player::addConditionSuppressions(uint64_t conditions) { conditionSuppressio
 
 void Player::removeConditionSuppressions(uint64_t conditions) { conditionSuppressions &= ~conditions; }
 
+Item* Player::getEquippedQuiver() const
+{
+	Item* rightItem = inventory[CONST_SLOT_RIGHT].get();
+	if (rightItem && rightItem->getWeaponType() == WEAPON_QUIVER) {
+		return rightItem;
+	}
+
+	Item* leftItem = inventory[CONST_SLOT_LEFT].get();
+	if (leftItem && leftItem->getWeaponType() == WEAPON_QUIVER) {
+		return leftItem;
+	}
+
+	return nullptr;
+}
+
+Item* Player::getDistanceAmmo(Ammo_t ammoType) const
+{
+	Item* quiverItem = getEquippedQuiver();
+	if (quiverItem) {
+		const Container* quiverContainer = quiverItem->getContainer();
+		if (!quiverContainer) {
+			return nullptr;
+		}
+
+		for (const auto& ammoItem : quiverContainer->getItemList()) {
+			if (!ammoItem || ammoItem->getAmmoType() != ammoType) {
+				continue;
+			}
+
+			const Weapon* quiverAmmoWeapon = g_weapons->getWeapon(ammoItem.get());
+			if (quiverAmmoWeapon && quiverAmmoWeapon->ammoCheck(this)) {
+				return ammoItem.get();
+			}
+		}
+		return nullptr;
+	}
+
+	Item* ammoItem = inventory[CONST_SLOT_AMMO].get();
+	if (!ammoItem || ammoItem->getAmmoType() != ammoType) {
+		return nullptr;
+	}
+	return ammoItem;
+}
+
 Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 {
 	Item* item = inventory[slot].get();
@@ -793,26 +837,7 @@ Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 	if (!ignoreAmmo && weaponType == WEAPON_DISTANCE) {
 		const ItemType& it = Item::items[item->getID()];
 		if (it.ammoType != AMMO_NONE) {
-			Item* ammoItem = inventory[CONST_SLOT_AMMO].get();
-			if (!ammoItem || ammoItem->getAmmoType() != it.ammoType) {
-				Item* rightItem = inventory[CONST_SLOT_RIGHT].get();
-				if (rightItem && rightItem->getWeaponType() == WEAPON_QUIVER) {
-					Container* quiverContainer = rightItem->getContainer();
-					if (quiverContainer) {
-						for (ContainerIterator cit = quiverContainer->iterator(); cit.hasNext(); cit.advance()) {
-							auto quiverAmmo = *cit;
-							if (quiverAmmo->getAmmoType() == it.ammoType) {
-								const Weapon* quiverAmmoWeapon = g_weapons->getWeapon(quiverAmmo.get());
-								if (quiverAmmoWeapon && quiverAmmoWeapon->ammoCheck(this)) {
-									return quiverAmmo.get();
-								}
-							}
-						}
-					}
-				}
-				return nullptr;
-			}
-			item = ammoItem;
+			return getDistanceAmmo(it.ammoType);
 		}
 	}
 	return item;
@@ -4523,7 +4548,11 @@ ReturnValue Player::queryAdd(int32_t index, const Thing& thing, uint32_t count, 
 
 		case CONST_SLOT_AMMO: {
 			if ((slotPosition & SLOTP_AMMO) || getBoolean(ConfigManager::CLASSIC_EQUIPMENT_SLOTS)) {
-				ret = RETURNVALUE_NOERROR;
+				if (item->getWeaponType() == WEAPON_AMMO && getEquippedQuiver()) {
+					ret = RETURNVALUE_CANNOTBEDRESSED;
+				} else {
+					ret = RETURNVALUE_NOERROR;
+				}
 			}
 			break;
 		}

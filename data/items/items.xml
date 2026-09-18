@@ -44100,6 +44100,7 @@
 	<item id="25755" name="RESERVED SPRITE" />
 	<item id="25756" article="an" name="energized tile" />
 	<item id="25757" article="a" name="diamond arrow">
+		<attribute key="weaponType" value="ammunition" />
 		<attribute key="ammotype" value="arrow" />
 		<attribute key="attack" value="37" />
 		<attribute key="decayTo" value="0" />
