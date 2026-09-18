@@ -803,7 +803,12 @@ Item* Player::getDistanceAmmo(Ammo_t ammoType) const
 		}
 
 		for (const auto& ammoItem : quiverContainer->getItemList()) {
-			if (ammoItem && ammoItem->getAmmoType() == ammoType) {
+			if (!ammoItem || ammoItem->getAmmoType() != ammoType) {
+				continue;
+			}
+
+			const Weapon* quiverAmmoWeapon = g_weapons->getWeapon(ammoItem.get());
+			if (quiverAmmoWeapon && quiverAmmoWeapon->ammoCheck(this)) {
 				return ammoItem.get();
 			}
 		}
