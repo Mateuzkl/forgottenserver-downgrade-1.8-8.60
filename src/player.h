@@ -1703,7 +1703,7 @@ private:
 	void checkTradeState(const Item* item);
 	bool hasCapacity(const Item* item, uint32_t count) const;
 	Item* getEquippedQuiver() const;
-	Item* getDistanceAmmo(ammo_t ammoType) const;
+	Item* getDistanceAmmo(Ammo_t ammoType) const;
 
 	void handleNamelockManager(const std::string& text, std::ostringstream& msg, bool& shouldShowHelp);
 	void handleAccountManager(const std::string& text, std::ostringstream& msg, bool& shouldShowHelp);

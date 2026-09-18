@@ -793,7 +793,7 @@ Item* Player::getEquippedQuiver() const
 	return nullptr;
 }
 
-Item* Player::getDistanceAmmo(ammo_t ammoType) const
+Item* Player::getDistanceAmmo(Ammo_t ammoType) const
 {
 	Item* quiverItem = getEquippedQuiver();
 	if (quiverItem) {
