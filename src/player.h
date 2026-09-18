@@ -1892,6 +1892,7 @@ private:
 	bool quickLootFallbackToMainContainer = true;
 	bool quickLootStateLoaded = false;
 	mutable bool quickLootSaveDirty = false;
+	mutable uint64_t quickLootSaveGeneration = 0;
 	mutable uint32_t quickLootSaveEventId = 0;
 	mutable std::chrono::steady_clock::time_point lastQuickLootDbSave{};
 	int32_t temporaryDeathLossReduction = 0;

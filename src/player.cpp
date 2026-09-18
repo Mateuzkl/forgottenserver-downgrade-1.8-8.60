@@ -7777,6 +7777,7 @@ void Player::saveQuickLootState() const
 	const uint32_t guid = getGUID();
 	persistPlayerQuickLootValue(guid, "managedContainers", ValueWrapper(serializeManagedLootContainers(*this)));
 	persistPlayerQuickLootValue(guid, "fallback", ValueWrapper(quickLootFallbackToMainContainer));
+	++quickLootSaveGeneration;
 	quickLootSaveDirty = true;
 	scheduleQuickLootPersistence();
 }
@@ -7827,6 +7828,12 @@ void Player::flushQuickLootPersistence(bool sync) const
 		return;
 	}
 
+	const uint64_t flushGeneration = quickLootSaveGeneration;
+
+	if (sync) {
+		g_databaseTasks.flush();
+	}
+
 	const auto snapshot = buildQuickLootPersistenceSnapshot(*this);
 	std::string query;
 	if (!KVStore::getInstance().buildBatchSaveQuery(snapshot, query)) {
@@ -7835,7 +7842,11 @@ void Player::flushQuickLootPersistence(bool sync) const
 	}
 
 	if (query.empty()) {
-		quickLootSaveDirty = false;
+		if (quickLootSaveGeneration == flushGeneration) {
+			quickLootSaveDirty = false;
+		} else {
+			scheduleQuickLootPersistence();
+		}
 		return;
 	}
 
@@ -7845,12 +7856,16 @@ void Player::flushQuickLootPersistence(bool sync) const
 			scheduleQuickLootPersistence();
 			return;
 		}
-		quickLootSaveDirty = false;
 		lastQuickLootDbSave = std::chrono::steady_clock::now();
+		if (quickLootSaveGeneration == flushGeneration) {
+			quickLootSaveDirty = false;
+		} else {
+			scheduleQuickLootPersistence();
+		}
 		return;
 	}
 
-	if (!g_databaseTasks.addTask(std::move(query), [playerId](DBResult_ptr, bool success, uint64_t) {
+	if (!g_databaseTasks.addTask(std::move(query), [playerId, flushGeneration](DBResult_ptr, bool success, uint64_t) {
 		    auto playerRef = g_game.getPlayerByID(playerId);
 		    Player* player = playerRef.get();
 		    if (!player) {
@@ -7860,8 +7875,12 @@ void Player::flushQuickLootPersistence(bool sync) const
 			    player->scheduleQuickLootPersistence();
 			    return;
 		    }
-		    player->quickLootSaveDirty = false;
 		    player->lastQuickLootDbSave = std::chrono::steady_clock::now();
+		    if (player->quickLootSaveGeneration == flushGeneration) {
+			    player->quickLootSaveDirty = false;
+		    } else {
+			    player->scheduleQuickLootPersistence();
+		    }
 	    })) {
 		scheduleQuickLootPersistence();
 	}
