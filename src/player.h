@@ -25,6 +25,7 @@
 #include "kv/kv.h"
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <deque>
 #include <limits>
 #include <map>
@@ -1583,6 +1584,8 @@ public:
 	bool isQuickLootAutoEnabled() const;
 	void ensureQuickLootStateLoaded();
 	void saveQuickLootState() const;
+	void flushQuickLootPersistence(bool sync = false) const;
+	void scheduleQuickLootPersistence() const;
 	void setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, uint64_t containerUid, bool isLootContainer);
 	void clearManagedLootContainer(ObjectCategory_t category, bool isLootContainer);
 	uint16_t getManagedLootContainerId(ObjectCategory_t category, bool isLootContainer) const;
@@ -1888,6 +1891,10 @@ private:
 	QuickLootFilter_t quickLootFilter = QUICKLOOTFILTER_SKIPPEDLOOT;
 	bool quickLootFallbackToMainContainer = true;
 	bool quickLootStateLoaded = false;
+	mutable bool quickLootSaveDirty = false;
+	mutable uint64_t quickLootSaveGeneration = 0;
+	mutable uint32_t quickLootSaveEventId = 0;
+	mutable std::chrono::steady_clock::time_point lastQuickLootDbSave{};
 	int32_t temporaryDeathLossReduction = 0;
 
 	uint16_t lastStatsTrainingTime = 0;

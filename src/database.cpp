@@ -778,13 +778,21 @@ bool DBInsert::addRow(std::ostringstream& row)
 	return ret;
 }
 
+std::string DBInsert::buildQuery() const
+{
+	if (values.empty()) {
+		return {};
+	}
+	return query + " " + values + upsertClause;
+}
+
 bool DBInsert::execute()
 {
 	if (values.empty()) {
 		return true;
 	}
 
-	std::string fullQuery = query + " " + values + upsertClause;
+	std::string fullQuery = buildQuery();
 	bool res = Database::getInstance().executeQuery(fullQuery);
 	values.clear();
 	length = query.length();
