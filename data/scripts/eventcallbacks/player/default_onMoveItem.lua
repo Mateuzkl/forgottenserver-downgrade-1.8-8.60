@@ -63,11 +63,44 @@ local function isSupplyStashCylinder(cylinder)
 	return false
 end
 
+local function getContainerSlotItem(player, toPosition)
+	if not toPosition or toPosition.x ~= CONTAINER_POSITION or toPosition.y < 64 then
+		return nil
+	end
+
+	local container = player:getContainerById(toPosition.y - 64)
+	if not container then
+		return nil
+	end
+
+	return container:getItem(toPosition.z)
+end
+
+local function isSupplyStashMoveTarget(player, toCylinder, toPosition)
+	if isSupplyStashCylinder(toCylinder) then
+		return true
+	end
+
+	local targetItem = getContainerSlotItem(player, toPosition)
+	return targetItem and targetItem:getId() == SUPPLY_STASH_ITEM_ID
+end
+
+local function tryStowOnSupplyStashMove(player, item, count)
+	if not CustomSupplyStash or not CustomSupplyStash.stowItem then
+		return false
+	end
+	if not player.isUsingOtClient or not player:isUsingOtClient() then
+		return false
+	end
+
+	return CustomSupplyStash.stowItem(player, item, count)
+end
+
 local event = Event()
 event.onMoveItem = function(self, item, count, fromPosition, toPosition,
                             fromCylinder, toCylinder)
-	if isSupplyStashCylinder(toCylinder) then
-		self:sendCancelMessage("Put items inside Depot Locker boxes 1 to 15, then use Stow All.")
+	if isSupplyStashMoveTarget(self, toCylinder, toPosition) then
+		tryStowOnSupplyStashMove(self, item, count)
 		return RETURNVALUE_NOTPOSSIBLE
 	end
 
