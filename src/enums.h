@@ -603,6 +603,13 @@ inline constexpr int32_t STORAGE_DAILY_REWARD_JOKER_TOKENS = 90723;
 inline constexpr int32_t STORAGE_DAILY_REWARD_INSTANT_TOKENS = 90724;
 inline constexpr int32_t STORAGE_DAILY_REWARD_JOKER_MONTH = 90725;
 
+inline constexpr int32_t DAILY_REWARD_HP_REGENERATION = 2;
+inline constexpr int32_t DAILY_REWARD_MP_REGENERATION = 3;
+inline constexpr int32_t DAILY_REWARD_STAMINA_REGENERATION = 4;
+inline constexpr int32_t DAILY_REWARD_DOUBLE_HP_REGENERATION = 5;
+inline constexpr int32_t DAILY_REWARD_DOUBLE_MP_REGENERATION = 6;
+inline constexpr int32_t DAILY_REWARD_SOUL_REGENERATION = 7;
+
 enum ReturnValue
 {
 	RETURNVALUE_NOERROR,

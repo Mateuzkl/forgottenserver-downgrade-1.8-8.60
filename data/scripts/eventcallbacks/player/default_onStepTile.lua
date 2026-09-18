@@ -14,6 +14,9 @@ event.onStepTile = function(self, fromPosition, toPosition)
 	if ImbuingWindow and ImbuingWindow.onStepTile then
 		ImbuingWindow.onStepTile(self)
 	end
+	if RestingAreaSystem and RestingAreaSystem.refresh then
+		RestingAreaSystem.refresh(self)
+	end
 	return true
 end
 
