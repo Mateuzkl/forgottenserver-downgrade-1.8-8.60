@@ -3,6 +3,9 @@ local SUPPLY_STASH_ITEM_ID = ITEM_SUPPLY_STASH or 28750
 local OPCODE_SUPPLY_STASH_REQUEST = 0x28
 local OPCODE_SUPPLY_STASH_SEND = 0x29
 
+local NATIVE_ACTION_STOW_ITEM = 0
+local NATIVE_ACTION_STOW_CONTAINER = 1
+local NATIVE_ACTION_STOW_STACK = 2
 local ACTION_OPEN = 1
 local ACTION_STOW_ALL = 2
 local ACTION_WITHDRAW = 3
@@ -428,11 +431,12 @@ end
 -- If the player does not support the custom network protocol, no message is sent.
 -- @param player The player to receive the stash payload.
 -- @return `true` if the stash message was sent to the player, `false` otherwise.
-local function sendStash(player)
+local function sendStash(player, showWindow)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
 
+	showWindow = showWindow == true
 	local rows = getRows(player)
 	local freeSlots = math.max(0, SUPPLY_STASH_MAX_UNIQUE_ITEMS - #rows)
 
@@ -456,6 +460,7 @@ local function sendStash(player)
 		msg:addByte(itemType and itemType:isStackable() and 1 or 0)
 		msg:addU32(itemType and itemType.getDefaultPrice and itemType:getDefaultPrice() or 0)
 	end
+	msg:addByte(showWindow and 1 or 0)
 	return msg:sendToPlayer(player)
 end
 
@@ -532,6 +537,123 @@ local function canAddUniqueTypes(player, amounts)
 		end
 	end
 	return #rows + newTypes <= SUPPLY_STASH_MAX_UNIQUE_ITEMS
+end
+
+local function getItemFromClientSelection(player, position, itemId, stackpos)
+	if not position then
+		return nil
+	end
+
+	stackpos = tonumber(stackpos) or 0
+	local item
+	if position.x == 0xFFFF then
+		if position.y >= 64 then
+			local container = player:getContainerById(position.y - 64)
+			if container then
+				item = container:getItem(position.z)
+				if not item and stackpos >= 0 then
+					item = container:getItem(stackpos)
+				end
+			end
+		else
+			item = player:getSlotItem(position.y)
+		end
+	else
+		local tile = Tile(position)
+		local thing = tile and tile:getThing(stackpos)
+		if thing then
+			if thing.isItem and thing:isItem() then
+				item = thing
+			elseif thing.getItem then
+				item = thing:getItem()
+			end
+		end
+	end
+
+	if item and item:getId() == itemId then
+		return item
+	end
+	return nil
+end
+
+local function formatStowedMessage(count)
+	count = math.floor(tonumber(count) or 0)
+	if count == 1 then
+		return "Stowed 1 object."
+	end
+	return string.format("Stowed %d objects.", count)
+end
+
+local function formatRetrievedMessage(count, itemId)
+	local itemType = getItemType(itemId)
+	local name = itemType and itemType:getName() or "item"
+	return string.format("Retrieved %dx %s.", count, name:lower())
+end
+
+local function stowItemInstance(player, item, count)
+	if not ensureSupplyStashAccess(player) then
+		return false
+	end
+
+	if not item or not isPristineSupplyItem(item) then
+		player:sendCancelMessage("This item cannot be stowed in your supply stash.")
+		sendStash(player)
+		return false
+	end
+
+	local itemId = item:getId()
+	count = math.floor(tonumber(count) or 0)
+	local amount = getSupplyItemAmount(item)
+	if count > 0 then
+		amount = math.min(amount, count)
+	end
+	if amount <= 0 then
+		sendStash(player)
+		return false
+	end
+
+	local tier = getItemTier(item)
+	local key = itemId .. ":" .. tier
+	if not canAddUniqueTypes(player, { [key] = true }) then
+		player:sendCancelMessage("Your supply stash does not have enough free slots.")
+		sendStash(player)
+		return false
+	end
+
+	if not addStoredAmount(player, itemId, amount, tier) then
+		player:sendCancelMessage("Could not store this item in your supply stash.")
+		sendStash(player)
+		return false
+	end
+
+	if not item:remove(amount) then
+		removeStoredAmount(player, itemId, amount, tier)
+		cleanupEmptyRows(player)
+		player:sendCancelMessage("Could not remove the item from its source.")
+		sendStash(player)
+		return false
+	end
+
+	player:sendTextMessage(MESSAGE_STATUS_SMALL, formatStowedMessage(amount))
+	cleanupEmptyRows(player)
+	sendStash(player)
+	return true
+end
+
+local function stowItemFromClient(player, position, itemId, stackpos, count)
+	itemId = tonumber(itemId) or 0
+	stackpos = tonumber(stackpos) or 0
+	count = math.floor(tonumber(count) or 0)
+
+	local item = getItemFromClientSelection(player, position, itemId, stackpos)
+	if not item then
+		player:sendCancelMessage("This item is no longer available.")
+		sendStash(player)
+		return true
+	end
+
+	stowItemInstance(player, item, count)
+	return true
 end
 
 -- Stores all eligible supply items found in the player's depot boxes (1–15) and worn/backpack inventory into the player's supply stash.
@@ -714,6 +836,7 @@ local function withdraw(player, itemId, amount, tier)
 	end
 
 	cleanupEmptyRows(player)
+	player:sendTextMessage(MESSAGE_STATUS_SMALL, formatRetrievedMessage(amount, itemId))
 	sendStash(player)
 	return true
 end
@@ -737,7 +860,9 @@ function handler.onReceive(player, msg)
 	end
 
 	local cooldown = 300
-	if action == ACTION_STOW_ALL then
+	if action == NATIVE_ACTION_STOW_ITEM then
+		cooldown = 500
+	elseif action == ACTION_STOW_ALL or action == NATIVE_ACTION_STOW_STACK then
 		cooldown = 1000
 	elseif action == ACTION_WITHDRAW then
 		cooldown = 500
@@ -746,14 +871,28 @@ function handler.onReceive(player, msg)
 		return true
 	end
 
-	if action == ACTION_OPEN then
+	if action == NATIVE_ACTION_STOW_ITEM then
+		if not NetworkGuard.canRead(msg, 12) then
+			return true
+		end
+
+		local position = NetworkGuard.readPosition(msg)
+		local itemId = NetworkGuard.readU16(msg)
+		local stackpos = NetworkGuard.readByte(msg)
+		local count = NetworkGuard.readU32(msg)
+		if not position or not itemId or stackpos == nil or not count then
+			return true
+		end
+
+		stowItemFromClient(player, position, itemId, stackpos, count)
+	elseif action == ACTION_OPEN or (action == NATIVE_ACTION_STOW_CONTAINER and NetworkGuard.remaining(msg) < 8) then
 		if not hasCurrentSupplyStashAccess(player) then
 			player:sendCancelMessage("You need to be near a depot to open the supply stash.")
 			return true
 		end
 		setSupplyStashDepotId(player, getPlayerLastDepotId(player))
-		sendStash(player)
-	elseif action == ACTION_STOW_ALL then
+		sendStash(player, true)
+	elseif action == ACTION_STOW_ALL or (action == NATIVE_ACTION_STOW_STACK and NetworkGuard.remaining(msg) < 8) then
 		if ensureSupplyStashAccess(player) then
 			stowAll(player)
 		end
@@ -809,6 +948,12 @@ CustomSupplyStash = {
 			return false
 		end
 		setSupplyStashDepotId(player, depotId or getPlayerLastDepotId(player))
-		return sendStash(player)
+		return sendStash(player, true)
+	end,
+	stowItem = function(player, item, count)
+		if not supportsCustomNetwork(player) or not item then
+			return false
+		end
+		return stowItemInstance(player, item, count)
 	end
 }
