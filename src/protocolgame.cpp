@@ -4293,6 +4293,7 @@ void ProtocolGame::sendStoreCatalog()
 		const StoreOffer* offer;
 		uint16_t displayId;
 		uint32_t price;
+		uint32_t basePrice;
 		StoreHighlightState state;
 		uint32_t validUntilTimestamp;
 	};
@@ -4364,6 +4365,7 @@ void ProtocolGame::sendStoreCatalog()
 				    &offer,
 				    displayId,
 				    dailyOffer ? dailyOffer->price : offer.price,
+				    offer.price,
 				    dailyOffer ? dailyOffer->state : offer.state,
 				    dailyOffer ? dailyOffer->validUntilTimestamp : offer.saleValidUntilTimestamp,
 				});
@@ -4426,7 +4428,9 @@ void ProtocolGame::sendStoreCatalog()
 			msg.add<uint32_t>(fo.offer->id);
 			msg.addString(fo.offer->name);
 			msg.addString(fo.offer->icon);
-			msg.add<uint32_t>(fo.price);
+			// Astra's highlighted catalog carries both values so the client
+			// never has to reconstruct the original price from a percentage.
+			StoreProtocol::addOfferPrices(msg, sendHighlights, fo.price, fo.basePrice);
 			msg.add<uint16_t>(fo.displayId);
 			msg.add<uint16_t>(fo.offer->count);
 			msg.addString(fo.offer->description);

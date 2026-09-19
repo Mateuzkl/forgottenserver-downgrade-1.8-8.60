@@ -164,6 +164,28 @@ TEST_CASE(test_store_protocol_opcodes)
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::History) == 0x03);
 }
 
+TEST_CASE(test_store_effective_and_base_price_packet_layout)
+{
+	NetworkMessage legacy;
+	legacy.addByte(0xAA);
+	StoreProtocol::addOfferPrices(legacy, false, 75, 100);
+	legacy.addByte(0xBB);
+	CHECK(legacy.setBufferPosition(0));
+	CHECK(legacy.getByte() == 0xAA);
+	CHECK(legacy.get<uint32_t>() == 75);
+	CHECK(legacy.getByte() == 0xBB);
+
+	NetworkMessage enhanced;
+	enhanced.addByte(0xAA);
+	StoreProtocol::addOfferPrices(enhanced, true, 75, 100);
+	enhanced.addByte(0xBB);
+	CHECK(enhanced.setBufferPosition(0));
+	CHECK(enhanced.getByte() == 0xAA);
+	CHECK(enhanced.get<uint32_t>() == 75);
+	CHECK(enhanced.get<uint32_t>() == 100);
+	CHECK(enhanced.getByte() == 0xBB);
+}
+
 TEST_CASE(test_store_highlight_states_and_packet_layout)
 {
 	CHECK(parseStoreHighlightState("none") == StoreHighlightState::None);

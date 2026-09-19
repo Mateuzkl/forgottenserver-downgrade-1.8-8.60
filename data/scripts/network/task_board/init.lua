@@ -87,6 +87,8 @@ end
 -- ============================================
 
 local OPCODE_TASK_BOARD_ACTION = 0x5F
+local TASK_BOARD_ACTION_COOLDOWN_MS = 150
+local lastTaskBoardAction = {}
 
 local taskBoardActionHandler = PacketHandler(OPCODE_TASK_BOARD_ACTION)
 
@@ -99,6 +101,17 @@ function taskBoardActionHandler.onReceive(player, msg)
 	end
 
 	local option = payload.option
+	local now = os.mtime()
+	local playerId = player:getId()
+	local lastAction = lastTaskBoardAction[playerId] or 0
+	-- Read-only opens may be repeated while switching tabs. Mutating actions
+	-- are throttled to prevent double clicks from charging or claiming twice.
+	if option ~= 0 and option ~= 1 and option ~= 10 and option ~= 17 and option ~= 18 then
+		if now - lastAction < TASK_BOARD_ACTION_COOLDOWN_MS then
+			return
+		end
+		lastTaskBoardAction[playerId] = now
+	end
 
 	if option == 0 then -- Open Bounty
 		if not bountyEnabled then return end
