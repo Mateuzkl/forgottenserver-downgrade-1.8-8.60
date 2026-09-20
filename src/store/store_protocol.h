@@ -50,11 +50,11 @@ inline void addCategoryHighlight(NetworkMessage& msg, bool enabled, StoreHighlig
 	}
 }
 
-inline void addOfferPrices(NetworkMessage& msg, bool enhancedCatalog, uint32_t effectivePrice,
+inline void addOfferPrices(NetworkMessage& msg, bool includeBasePrice, uint32_t effectivePrice,
                            uint32_t basePrice)
 {
 	msg.add<uint32_t>(effectivePrice);
-	if (enhancedCatalog) {
+	if (includeBasePrice) {
 		msg.add<uint32_t>(basePrice);
 	}
 }

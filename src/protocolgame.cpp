@@ -1163,6 +1163,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    (capabilities & AstraClient::SingleCreatureMarks) != 0;
 					supportsAstraEchoRaidVisuals =
 					    supportsAstraSingleCreatureMarks && (capabilities & AstraClient::EchoRaidVisuals) != 0;
+					supportsAstraStoreBasePrice =
+					    (capabilities & AstraClient::StoreBasePrice) != 0;
 				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
@@ -4428,9 +4430,9 @@ void ProtocolGame::sendStoreCatalog()
 			msg.add<uint32_t>(fo.offer->id);
 			msg.addString(fo.offer->name);
 			msg.addString(fo.offer->icon);
-			// Astra's highlighted catalog carries both values so the client
+			// The negotiated Astra layout carries both values so the client
 			// never has to reconstruct the original price from a percentage.
-			StoreProtocol::addOfferPrices(msg, sendHighlights, fo.price, fo.basePrice);
+			StoreProtocol::addOfferPrices(msg, supportsAstraStoreBasePrice, fo.price, fo.basePrice);
 			msg.add<uint16_t>(fo.displayId);
 			msg.add<uint16_t>(fo.offer->count);
 			msg.addString(fo.offer->description);
@@ -6364,6 +6366,9 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
 		features[GameFeature::AstraShopCountU16] = true;
+		if (supportsAstraStoreBasePrice) {
+			features[GameFeature::AstraStoreBasePrice] = true;
+		}
 		if (supportsAstraSingleCreatureMarks) {
 			features[GameFeature::AstraSingleCreatureMarks] = true;
 		}

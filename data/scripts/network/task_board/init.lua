@@ -87,8 +87,26 @@ end
 -- ============================================
 
 local OPCODE_TASK_BOARD_ACTION = 0x5F
-local TASK_BOARD_ACTION_COOLDOWN_MS = 150
+local TASK_BOARD_DUPLICATE_WINDOW_MS = 150
 local lastTaskBoardAction = {}
+
+local function getTaskBoardActionKey(payload)
+	return table.concat({
+		payload.option,
+		payload.difficulty or "",
+		payload.taskIndex or "",
+		payload.pathIndex or "",
+		payload.offerIndex or "",
+		payload.slot or "",
+		payload.raceId or "",
+	}, ":")
+end
+
+function TaskBoardClearActionThrottle(player)
+	if player then
+		lastTaskBoardAction[player:getId()] = nil
+	end
+end
 
 local taskBoardActionHandler = PacketHandler(OPCODE_TASK_BOARD_ACTION)
 
@@ -103,14 +121,15 @@ function taskBoardActionHandler.onReceive(player, msg)
 	local option = payload.option
 	local now = os.mtime()
 	local playerId = player:getId()
-	local lastAction = lastTaskBoardAction[playerId] or 0
-	-- Read-only opens may be repeated while switching tabs. Mutating actions
-	-- are throttled to prevent double clicks from charging or claiming twice.
+	-- This is an exact-duplicate debounce, not a global rate limit. Distinct
+	-- actions (including assignments to different slots) must not be dropped.
 	if option ~= 0 and option ~= 1 and option ~= 10 and option ~= 17 and option ~= 18 then
-		if now - lastAction < TASK_BOARD_ACTION_COOLDOWN_MS then
+		local actionKey = getTaskBoardActionKey(payload)
+		local previous = lastTaskBoardAction[playerId]
+		if previous and previous.key == actionKey and now - previous.time < TASK_BOARD_DUPLICATE_WINDOW_MS then
 			return
 		end
-		lastTaskBoardAction[playerId] = now
+		lastTaskBoardAction[playerId] = { key = actionKey, time = now }
 	end
 
 	if option == 0 then -- Open Bounty

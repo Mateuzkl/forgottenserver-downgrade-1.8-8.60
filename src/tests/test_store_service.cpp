@@ -1,5 +1,6 @@
 #include "../otpch.h"
 
+#include "../astraclient.h"
 #include "../item.h"
 #include "../networkmessage.h"
 #include "../player.h"
@@ -166,6 +167,9 @@ TEST_CASE(test_store_protocol_opcodes)
 
 TEST_CASE(test_store_effective_and_base_price_packet_layout)
 {
+	CHECK(static_cast<uint8_t>(AstraClient::StoreBasePrice) == (1U << 3));
+	CHECK(static_cast<uint8_t>(GameFeature::AstraStoreBasePrice) == 149);
+
 	NetworkMessage legacy;
 	legacy.addByte(0xAA);
 	StoreProtocol::addOfferPrices(legacy, false, 75, 100);
