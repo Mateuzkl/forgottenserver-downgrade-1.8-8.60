@@ -1005,8 +1005,9 @@ enum class GameFeature : uint8_t {
 	AstraContainerTypes = 146, // Astra GameContainerTypes (OTC Fonticak uses 106)
 	AstraEchoRaidVisuals = 147,
 	AstraShopCountU16 = 148,
+	AstraStoreBasePrice = 149,
 
-	Last = 148
+	Last = 149
 };
 
 enum ContainerSpecialType : uint8_t

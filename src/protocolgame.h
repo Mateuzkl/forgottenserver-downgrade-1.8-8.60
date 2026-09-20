@@ -447,6 +447,7 @@ private:
 	bool supportsContainerTypes = false;
 	bool supportsAstraSingleCreatureMarks = false;
 	bool supportsAstraEchoRaidVisuals = false;
+	bool supportsAstraStoreBasePrice = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;

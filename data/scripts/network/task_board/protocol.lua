@@ -49,6 +49,29 @@ local ACTION_OPEN_SOULSEAL = 17
 local ACTION_OPEN_PREFERRED = 18
 local ACTION_SOULSEAL_FIGHT = 19
 
+local VALID_ACTIONS = {
+	[ACTION_OPEN_BOUNTY] = true,
+	[ACTION_OPEN_WEEKLY] = true,
+	[ACTION_CHANGE_DIFFICULTY] = true,
+	[ACTION_REROLL_TASKS] = true,
+	[ACTION_CLAIM_DAILY] = true,
+	[ACTION_SELECT_TASK] = true,
+	[ACTION_CLAIM_REWARD] = true,
+	[ACTION_TALISMAN_UPGRADE] = true,
+	[ACTION_WEEKLY_DELIVER] = true,
+	[ACTION_WEEKLY_SELECT_DIFFICULTY] = true,
+	[ACTION_OPEN_HUNT_SHOP] = true,
+	[ACTION_BUY_SHOP_OFFER] = true,
+	[ACTION_UNLOCK_PREFERRED] = true,
+	[ACTION_CLEAR_PREFERRED] = true,
+	[ACTION_CLEAR_UNWANTED] = true,
+	[ACTION_ASSIGN_PREFERRED] = true,
+	[ACTION_ASSIGN_UNWANTED] = true,
+	[ACTION_OPEN_SOULSEAL] = true,
+	[ACTION_OPEN_PREFERRED] = true,
+	[ACTION_SOULSEAL_FIGHT] = true,
+}
+
 TaskBoardProtocol.ACTION_OPEN_BOUNTY = ACTION_OPEN_BOUNTY
 TaskBoardProtocol.ACTION_OPEN_WEEKLY = ACTION_OPEN_WEEKLY
 TaskBoardProtocol.ACTION_CHANGE_DIFFICULTY = ACTION_CHANGE_DIFFICULTY
@@ -396,7 +419,7 @@ function TaskBoardProtocol.parseTaskBoardAction(msg)
 	end
 
 	local option = NetworkGuard.readByte(msg)
-	if option == nil then
+	if option == nil or not VALID_ACTIONS[option] then
 		return nil
 	end
 
@@ -462,6 +485,12 @@ function TaskBoardProtocol.parseTaskBoardAction(msg)
 		if (msg:len() - msg:tell()) < 2 then return nil end
 		payload.raceId = NetworkGuard.readU16(msg)
 		if payload.raceId == nil then return nil end
+	end
+
+	-- Every Task Board action has a fixed payload. Reject trailing data so a
+	-- malformed action cannot be reinterpreted by later protocol code.
+	if (msg:len() - msg:tell()) ~= 0 then
+		return nil
 	end
 
 	return payload
