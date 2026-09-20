@@ -25,6 +25,7 @@ struct ConnectionTestAccess
 {
 	static asio::ip::tcp::socket& socket(Connection& connection) { return connection.socket; }
 	static size_t queueSize(Connection& connection) { return connection.messageQueue.size(); }
+	static size_t timestampQueueSize(Connection& connection) { return connection.messageQueueTimestamps.size(); }
 	static bool isClosed(Connection& connection) { return connection.closed; }
 	static void setProtocol(Connection& connection, Protocol_ptr protocol)
 	{
@@ -155,6 +156,7 @@ TEST_CASE(test_queue_overflow_does_not_free_in_flight_write_buffer)
 		connection.send(makeMessage(16));
 	}
 	CHECK(ConnectionTestAccess::queueSize(connection) == MAX_PENDING_WRITE_MESSAGES);
+	CHECK(ConnectionTestAccess::timestampQueueSize(connection) == MAX_PENDING_WRITE_MESSAGES);
 	CHECK(!ConnectionTestAccess::isClosed(connection));
 
 	// One more send trips the backpressure limit and force-closes.
@@ -171,6 +173,7 @@ TEST_CASE(test_queue_overflow_does_not_free_in_flight_write_buffer)
 	pair.ioContext.restart();
 
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
+	CHECK(ConnectionTestAccess::timestampQueueSize(connection) == 0);
 	CHECK(ConnectionTestAccess::isClosed(connection));
 	CHECK(inFlight.expired()); // released only after the write completed
 
@@ -187,13 +190,16 @@ TEST_CASE(test_write_completion_on_empty_queue_is_safe)
 
 	connection.close(Connection::FORCE_CLOSE);
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
+	CHECK(ConnectionTestAccess::timestampQueueSize(connection) == 0);
 
 	// Before the fix this was an unconditional pop_front() on an empty deque.
 	ConnectionTestAccess::onWriteOperation(connection, asio::error::operation_aborted);
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
+	CHECK(ConnectionTestAccess::timestampQueueSize(connection) == 0);
 
 	ConnectionTestAccess::onWriteOperation(connection, {});
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
+	CHECK(ConnectionTestAccess::timestampQueueSize(connection) == 0);
 	CHECK(ConnectionTestAccess::isClosed(connection));
 
 	resetConnectionManager();
@@ -222,6 +228,7 @@ TEST_CASE(test_forced_close_with_pending_write_terminates_cleanly)
 
 	connection.send(makeMessage(32));
 	CHECK(ConnectionTestAccess::queueSize(connection) == 2);
+	CHECK(ConnectionTestAccess::timestampQueueSize(connection) == 2);
 
 	connection.close(Connection::FORCE_CLOSE);
 	CHECK(manager.getConnectionCount() == 0);
@@ -231,6 +238,7 @@ TEST_CASE(test_forced_close_with_pending_write_terminates_cleanly)
 	pair.ioContext.restart();
 
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
+	CHECK(ConnectionTestAccess::timestampQueueSize(connection) == 0);
 	CHECK(inFlight.expired());
 
 	resetConnectionManager();
@@ -250,6 +258,7 @@ TEST_CASE(test_normal_send_below_limit_is_unaffected)
 
 	// Small write against an empty socket buffer completes immediately and drains.
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
+	CHECK(ConnectionTestAccess::timestampQueueSize(connection) == 0);
 	CHECK(!ConnectionTestAccess::isClosed(connection));
 
 	connection.close(Connection::FORCE_CLOSE);
