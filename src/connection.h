@@ -6,6 +6,8 @@
 
 #include "networkmessage.h"
 
+#include <chrono>
+
 inline constexpr int32_t CONNECTION_WRITE_TIMEOUT = 30;
 inline constexpr int32_t CONNECTION_READ_TIMEOUT = 30;
 
@@ -98,7 +100,8 @@ private:
 	void parseHeader(const asio::error_code& error);
 	void parsePacket(const asio::error_code& error);
 
-	void onWriteOperation(const asio::error_code& error);
+	void onWriteOperation(const asio::error_code& error, size_t bytesTransferred = 0,
+	                      const OutputMessage_ptr& completedMessage = {});
 
 	static void handleTimeout(ConnectionWeak_ptr connectionWeak, const asio::error_code& error);
 
@@ -125,6 +128,7 @@ private:
 	std::recursive_mutex connectionLock;
 
 	std::deque<OutputMessage_ptr> messageQueue;
+	std::deque<std::chrono::steady_clock::time_point> messageQueueTimestamps;
 
 	ConstServicePort_ptr service_port;
 	Protocol_ptr protocol;

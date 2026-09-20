@@ -8,8 +8,6 @@
 #include "networkmessage.h"
 #include "tools.h"
 
-#include <chrono>
-
 class OutputMessage : public NetworkMessage
 {
 public:
@@ -104,6 +102,11 @@ private:
 class OutputMessagePool
 {
 public:
+	struct AllocationStats
+	{
+		uint64_t fresh = 0;
+		uint64_t reused = 0;
+	};
 	// non-copyable
 	OutputMessagePool(const OutputMessagePool&) = delete;
 	OutputMessagePool& operator=(const OutputMessagePool&) = delete;
@@ -115,6 +118,7 @@ public:
 	}
 
 	static OutputMessage_ptr getOutputMessage();
+	[[nodiscard]] static AllocationStats takeAllocationStats() noexcept;
 
 	static void prewarmPool(size_t count);
 
