@@ -68,6 +68,7 @@ function exerciseTraining.onUse(player, item, fromPosition, target, toPosition, 
 		}
 
 		onExerciseTraining[playerId] = training
+		player:setMovementSessionActive(MOVEMENT_SESSION_EXERCISE, true)
 
 		player:sendTextMessage(
 			MESSAGE_EVENT_ADVANCE,

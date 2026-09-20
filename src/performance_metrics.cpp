@@ -21,6 +21,7 @@ constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Co
 	"TaskReactor::queueLatency", "Game::checkCreatures", "Game::checkCreatureWalk",
 	"Game::updateCreatureWalk", "Creature::goToFollowCreature", "Creature::onAttacking",
 	"Game::internalMoveCreature", "Map::getPathMatching", "Map::moveCreature", "Map::getSpectators",
+	"Tile::postAddNotification", "Tile::postRemoveNotification",
 	"Monster::onThink",
 	"Monster::onWalk", "Monster::doAttacking", "CombatSpell::castSpell",
 	"Combat::doCombat", "Combat::doAreaCombat", "Combat::area.buildTiles",
@@ -160,6 +161,31 @@ void PerformanceMetrics::recordNetworkConnectionCount(size_t current) noexcept
 	updateMaximum(network.connectionsMaximum, current);
 }
 
+void PerformanceMetrics::recordMovementAttempt() noexcept
+{
+	if (isEnabled()) movement.attempts.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordMovementResult(bool success) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	(success ? movement.successes : movement.failures).fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordMovementStepHook(uint8_t movementSessionFlags) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	movement.luaStepHooks.fetch_add(1, std::memory_order_relaxed);
+	if ((movementSessionFlags & (1 << 0)) != 0) movement.exerciseCallbacks.fetch_add(1, std::memory_order_relaxed);
+	if ((movementSessionFlags & (1 << 1)) != 0) movement.marketCallbacks.fetch_add(1, std::memory_order_relaxed);
+	if ((movementSessionFlags & (1 << 2)) != 0) movement.forgeCallbacks.fetch_add(1, std::memory_order_relaxed);
+	if ((movementSessionFlags & (1 << 3)) != 0) movement.imbuingCallbacks.fetch_add(1, std::memory_order_relaxed);
+}
+
 void PerformanceMetrics::recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
                                                       std::string_view origin) noexcept
 {
@@ -266,6 +292,11 @@ uint64_t PerformanceMetrics::getPathSteps() const noexcept
 	return path.pathLength.load(std::memory_order_relaxed);
 }
 
+uint64_t PerformanceMetrics::getMetricCalls(PerformanceMetric metric) const noexcept
+{
+	return metrics[static_cast<size_t>(metric)].calls.load(std::memory_order_relaxed);
+}
+
 void PerformanceMetrics::maybeReport()
 {
 	if (!isEnabled()) {
@@ -311,6 +342,18 @@ void PerformanceMetrics::maybeReport()
 		reactor.deferred.exchange(0, std::memory_order_relaxed),
 		reactor.expired.exchange(0, std::memory_order_relaxed),
 		reactor.dropped.exchange(0, std::memory_order_relaxed));
+
+	report += fmt::format(
+		"[Perf] movement attempts={} success={} failure={} lua_step_hooks={} exercise_callbacks={} "
+		"market_callbacks={} market_add_events=0 forge_callbacks={} imbuing_callbacks={}\n",
+		movement.attempts.exchange(0, std::memory_order_relaxed),
+		movement.successes.exchange(0, std::memory_order_relaxed),
+		movement.failures.exchange(0, std::memory_order_relaxed),
+		movement.luaStepHooks.exchange(0, std::memory_order_relaxed),
+		movement.exerciseCallbacks.exchange(0, std::memory_order_relaxed),
+		movement.marketCallbacks.exchange(0, std::memory_order_relaxed),
+		movement.forgeCallbacks.exchange(0, std::memory_order_relaxed),
+		movement.imbuingCallbacks.exchange(0, std::memory_order_relaxed));
 
 	const uint64_t areaCombatCasts = areaCombat.casts.exchange(0, std::memory_order_relaxed);
 	if (areaCombatCasts > 0) {

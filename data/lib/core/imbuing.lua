@@ -359,6 +359,12 @@ end
 
 local function clearSession(player)
 	sessions[player:getId()] = nil
+	player:setMovementSessionActive(MOVEMENT_SESSION_IMBUING, false)
+end
+
+local function setSession(player, session)
+	sessions[player:getId()] = session
+	player:setMovementSessionActive(MOVEMENT_SESSION_IMBUING, true)
 end
 
 local function itemBelongsToPlayer(player, item)
@@ -579,7 +585,7 @@ function ImbuingWindow.openChoice(player, silent, sourcePosition, sourceThing)
 	end
 
 	setAccessContext(session, player, sourceThing, sourcePosition)
-	sessions[player:getId()] = session
+	setSession(player, session)
 	return sendChoiceWindow(player)
 end
 
@@ -615,7 +621,7 @@ function ImbuingWindow.openScroll(player, silent, sourcePosition, sourceThing)
 		return rejectMissingAccessContext(player, silent)
 	end
 
-	sessions[player:getId()] = session
+	setSession(player, session)
 	return sendScrollWindow(player)
 end
 
@@ -650,7 +656,7 @@ function ImbuingWindow.open(player, container, silent)
 
 	local session = {mode = "item", container = container, item = item}
 	setAccessContext(session, player, container)
-	sessions[player:getId()] = session
+	setSession(player, session)
 	return sendWindow(player, item)
 end
 
@@ -705,7 +711,7 @@ function ImbuingWindow.openItem(player, item, silent, sourcePosition, sourceThin
 	else
 		return rejectMissingAccessContext(player, silent)
 	end
-	sessions[player:getId()] = session
+	setSession(player, session)
 	return sendWindow(player, item)
 end
 

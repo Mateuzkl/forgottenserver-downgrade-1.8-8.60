@@ -15,6 +15,7 @@
 #include "mailbox.h"
 #include "monster.h"
 #include "movement.h"
+#include "performance_metrics.h"
 #include "scriptmanager.h"
 #include "teleport.h"
 #include "trashholder.h"
@@ -1573,6 +1574,13 @@ void Tile::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t 
 {
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, getPosition(), true, true);
+	postAddNotification(thing, oldParent, index, link, spectators);
+}
+
+void Tile::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index, cylinderlink_t link,
+                               const SpectatorVec& spectators)
+{
+	PerformanceScope performanceScope(PerformanceMetric::TilePostAddNotification);
 	for (const auto& spectator : spectators.players()) {
 		Player* player = static_cast<Player*>(spectator.get());
 		if (!InstanceUtils::isPlayerInSameInstance(player, thing->getInstanceID())) {
@@ -1625,12 +1633,18 @@ void Tile::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t 
 	}
 }
 
-void Tile::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t)
+void Tile::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t link)
 {
-	const auto thingCount = getThingCount();
-
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, tilePos, true, true);
+	postRemoveNotification(thing, newParent, index, link, spectators);
+}
+
+void Tile::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t,
+                                  const SpectatorVec& spectators)
+{
+	PerformanceScope performanceScope(PerformanceMetric::TilePostRemoveNotification);
+	const auto thingCount = getThingCount();
 
 	for (const auto& spectator : spectators.players()) {
 		Player* player = static_cast<Player*>(spectator.get());

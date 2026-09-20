@@ -1,20 +1,25 @@
 local event = Event()
-event.onStepTile = function(self, fromPosition, toPosition)
-	-- Exercise weapons
-	local playerId = self:getId()
-	if onExerciseTraining[playerId] then
-		LeaveTraining(playerId)
-		self:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You can't move while you train, the training has stopped.")
-		return true
+event.onStepTile = function(self, fromPosition, toPosition, movementSessionFlags)
+	local function isActive(flag)
+		return movementSessionFlags % (flag * 2) >= flag
 	end
 
-	if CustomForge and CustomForge.isOpen(self) then
+	if isActive(MOVEMENT_SESSION_EXERCISE) then
+		LeaveTraining(self:getId(), self)
+		self:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You can't move while you train, the training has stopped.")
+	end
+
+	if isActive(MOVEMENT_SESSION_MARKET) and CustomMarket and CustomMarket.checkAccess then
+		CustomMarket.checkAccess(self)
+	end
+
+	if isActive(MOVEMENT_SESSION_FORGE) and CustomForge and CustomForge.close then
 		CustomForge.close(self)
 	end
-	if ImbuingWindow and ImbuingWindow.onStepTile then
+
+	if isActive(MOVEMENT_SESSION_IMBUING) and ImbuingWindow and ImbuingWindow.onStepTile then
 		ImbuingWindow.onStepTile(self)
 	end
-	return true
 end
 
 event:register()

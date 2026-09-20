@@ -1665,11 +1665,15 @@ ReturnValue Game::internalMoveCreature(Creature* creature, Direction direction, 
 {
 	PerformanceScope performanceScope(PerformanceMetric::GameInternalMoveCreature);
 	creature->setLastPosition(creature->getPosition());
-	const Position& currentPos = creature->getPosition();
+	const Position currentPos = creature->getPosition();
 	Position destPos = getNextPosition(direction, currentPos);
 	Player* player = creature->getPlayer();
+	if (player) {
+		g_performanceMetrics.recordMovementAttempt();
+	}
 	if (player && player->isTokenLocked()) {
 		player->sendCancelMessage("You are locked by Token Protection.");
+		g_performanceMetrics.recordMovementResult(false);
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
@@ -1707,9 +1711,16 @@ ReturnValue Game::internalMoveCreature(Creature* creature, Direction direction, 
 
 	Tile* toTile = map.getTile(destPos);
 	if (!toTile) {
+		if (player) {
+			g_performanceMetrics.recordMovementResult(false);
+		}
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
-	return internalMoveCreature(*creature, *toTile, flags);
+	const ReturnValue result = internalMoveCreature(*creature, *toTile, flags);
+	if (player) {
+		g_performanceMetrics.recordMovementResult(result == RETURNVALUE_NOERROR && creature->getPosition() != currentPos);
+	}
+	return result;
 }
 
 ReturnValue Game::internalMoveCreature(Creature& creature, Tile& toTile, uint32_t flags /*= 0*/)
@@ -1723,6 +1734,10 @@ ReturnValue Game::internalMoveCreature(Creature& creature, Tile& toTile, uint32_
 	if (ret != RETURNVALUE_NOERROR) {
 		return ret;
 	}
+
+	// Coalesce floor changes and teleports triggered by tile callbacks into one
+	// successful-movement event with the real origin and final position.
+	PlayerMovementEventScope movementEventScope(creature.getPlayer());
 
 	map.moveCreature(creature, toTile);
 	if (creature.getParent() != &toTile) {

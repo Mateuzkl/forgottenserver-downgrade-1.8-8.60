@@ -31,6 +31,8 @@ enum class PerformanceMetric : uint8_t
 	MapGetPathMatching,
 	MapMoveCreature,
 	MapGetSpectators,
+	TilePostAddNotification,
+	TilePostRemoveNotification,
 	MonsterOnThink,
 	MonsterOnWalk,
 	MonsterDoAttacking,
@@ -145,6 +147,10 @@ public:
 	void recordNetworkIpLimitRejection() noexcept;
 	void recordNetworkConnectionCount(size_t current) noexcept;
 
+	void recordMovementAttempt() noexcept;
+	void recordMovementResult(bool success) noexcept;
+	void recordMovementStepHook(uint8_t movementSessionFlags) noexcept;
+
 	void recordReactorCallbackSource(
 	    uint64_t nanoseconds,
 	    std::string_view description,
@@ -172,6 +178,7 @@ public:
 	[[nodiscard]] uint64_t getMonsterIdleMetric(
 	    MonsterIdleMetric metric) const noexcept;
 	[[nodiscard]] uint64_t getPathSteps() const noexcept;
+	[[nodiscard]] uint64_t getMetricCalls(PerformanceMetric metric) const noexcept;
 
 	void maybeReport();
 
@@ -239,6 +246,18 @@ private:
 		std::atomic<uint64_t> connectionsMaximum{0};
 	};
 
+	struct MovementData
+	{
+		std::atomic<uint64_t> attempts{0};
+		std::atomic<uint64_t> successes{0};
+		std::atomic<uint64_t> failures{0};
+		std::atomic<uint64_t> luaStepHooks{0};
+		std::atomic<uint64_t> exerciseCallbacks{0};
+		std::atomic<uint64_t> marketCallbacks{0};
+		std::atomic<uint64_t> forgeCallbacks{0};
+		std::atomic<uint64_t> imbuingCallbacks{0};
+	};
+
 	struct SlowestReactorCallback
 	{
 		std::mutex mutex;
@@ -262,6 +281,7 @@ private:
 	PathData path;
 	AreaCombatData areaCombat;
 	NetworkData network;
+	MovementData movement;
 
 	std::array<
 	    std::atomic<uint64_t>,

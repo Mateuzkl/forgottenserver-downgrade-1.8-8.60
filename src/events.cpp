@@ -11,6 +11,7 @@
 #include "tasks.h"
 #include "imbuement.h"
 #include "logger.h"
+#include "performance_metrics.h"
 #include <fmt/format.h>
 
 namespace {
@@ -828,16 +829,17 @@ bool Events::eventPlayerOnMoveCreature(Player* player, Creature* creature, const
 	return scriptInterface.callFunction(4);
 }
 
-bool Events::eventPlayerOnStepTile(Player* player, const Position& fromPosition, const Position& toPosition)
+void Events::eventPlayerOnStepTile(Player* player, const Position& fromPosition, const Position& toPosition,
+                                   uint8_t movementSessionFlags)
 {
-	// Player:onStepTile(fromPosition, toPosition) or Player.onStepTile(self, fromPosition, toPosition)
+	// Player:onStepTile(fromPosition, toPosition, movementSessionFlags)
 	if (info.playerOnStepTile == -1) {
-		return true;
+		return;
 	}
 
 	if (!scriptInterface.reserveScriptEnv()) {
 		LOG_ERROR("[Error - Events::eventPlayerOnStepTile] Call stack overflow");
-		return false;
+		return;
 	}
 
 	ScriptEnvironment* env = scriptInterface.getScriptEnv();
@@ -850,8 +852,10 @@ bool Events::eventPlayerOnStepTile(Player* player, const Position& fromPosition,
 	Lua::setMetatable(L, -1, "Player");
 	Lua::pushPosition(L, fromPosition, 0, player->getInstanceID());
 	Lua::pushPosition(L, toPosition, 0, player->getInstanceID());
+	lua_pushinteger(L, movementSessionFlags);
 
-	bool result = scriptInterface.callFunction(3);
+	g_performanceMetrics.recordMovementStepHook(movementSessionFlags);
+	scriptInterface.callVoidFunction(4);
 
 	// Incremental GC to reduce memory pressure from frequent step events
 	static uint32_t stepCounter = 0;
@@ -860,7 +864,6 @@ bool Events::eventPlayerOnStepTile(Player* player, const Position& fromPosition,
 		lua_gc(L, LUA_GCSTEP, 50);
 	}
 
-	return result;
 }
 
 void Events::eventPlayerOnReportRuleViolation(Player* player, std::string_view targetName, uint8_t reportType,

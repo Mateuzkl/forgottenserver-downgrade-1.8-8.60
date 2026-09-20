@@ -35,6 +35,38 @@
 extern Game g_game;
 extern Vocations g_vocations;
 
+PlayerMovementEventScope::PlayerMovementEventScope(Player* player) :
+	player(player ? std::dynamic_pointer_cast<Player>(player->weak_from_this().lock()) : nullptr)
+{
+	if (!player) {
+		return;
+	}
+
+	if (player->movementEventScopeDepth++ == 0) {
+		player->movementEventOrigin = player->getPosition();
+	}
+}
+
+PlayerMovementEventScope::~PlayerMovementEventScope()
+{
+	if (!player) {
+		return;
+	}
+
+	assert(player->movementEventScopeDepth > 0);
+	if (--player->movementEventScopeDepth != 0 || player->isRemoved()) {
+		return;
+	}
+
+	const Position finalPosition = player->getPosition();
+	if (finalPosition == player->movementEventOrigin || player->movementSessionFlags == 0 || !g_events) {
+		return;
+	}
+
+	g_events->eventPlayerOnStepTile(player.get(), player->movementEventOrigin, finalPosition,
+	                                player->movementSessionFlags);
+}
+
 namespace {
 constexpr uint32_t CHAIN_SYSTEM_STORAGE = 40001;
 
@@ -2927,14 +2959,28 @@ bool Player::closeShopWindow(bool sendCloseShopWindow /*= true*/)
 
 void Player::onWalk(Direction& dir)
 {
-	const Position& fromPos = getPosition();
-	const Position& toPos = getNextPosition(dir, fromPos);
-	if (!g_events->eventPlayerOnStepTile(this, fromPos, toPos)) {
+	Creature::onWalk(dir);
+	setNextActionTask(nullptr);
+}
+
+void Player::setMovementSessionActive(MovementSessionFlag flag, bool active)
+{
+	const uint8_t mask = static_cast<uint8_t>(flag) & MOVEMENT_SESSION_ALL;
+	if (mask == 0) {
 		return;
 	}
 
-	Creature::onWalk(dir);
-	setNextActionTask(nullptr);
+	if (active) {
+		movementSessionFlags |= mask;
+	} else {
+		movementSessionFlags &= static_cast<uint8_t>(~mask);
+	}
+}
+
+bool Player::hasMovementSession(MovementSessionFlag flag) const
+{
+	const uint8_t mask = static_cast<uint8_t>(flag) & MOVEMENT_SESSION_ALL;
+	return mask != 0 && (movementSessionFlags & mask) == mask;
 }
 
 void Player::onCreatureMove(Creature* creature, const Tile* newTile, const Position& newPos, const Tile* oldTile,

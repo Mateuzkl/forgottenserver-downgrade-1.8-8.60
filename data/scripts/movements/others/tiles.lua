@@ -1,13 +1,6 @@
 local increasing = {[419] = 420, [431] = 430, [452] = 453, [563] = 564, [549] = 562, [10145] = 10146}
 local decreasing = {[420] = 419, [430] = 431, [453] = 452, [564] = 563, [562] = 549, [10146] = 10145}
 
-local function checkMarketAccess(playerId)
-    local player = Player(playerId)
-    if player and CustomMarket and CustomMarket.checkAccess then
-        CustomMarket.checkAccess(player)
-    end
-end
-
 local stepIn = MoveEvent()
 function stepIn.onStepIn(creature, item, position, fromPosition)
     if not increasing[item.itemid] then return true end
@@ -67,9 +60,6 @@ function stepOut.onStepOut(creature, item, position, fromPosition)
     if creature:isPlayer() and creature:isInGhostMode() then return true end
 
     item:transform(decreasing[item.itemid])
-    if creature:isPlayer() then
-        addEvent(checkMarketAccess, 0, creature:getId())
-    end
     return true
 end
 stepOut:type("stepout")

@@ -15,6 +15,7 @@
 #include "mapcache.h"
 #include "monster.h"
 #include "performance_metrics.h"
+#include "player.h"
 #include "spectators.h"
 #include "startup_progress.h"
 #include "logger.h"
@@ -406,14 +407,19 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 		return;
 	}
 
+	// Direct map moves (beds and teleports) still need the same post-move
+	// semantics. This nests with Game::internalMoveCreature when present.
+	PlayerMovementEventScope movementEventScope(creature.getPlayer());
+
 	Position oldPos = oldTile.getPosition();
 	Position newPos = newTile.getPosition();
 
 	bool teleport = forceTeleport || !newTile.getGround() || !oldPos.isInRange(newPos, 1, 1, 0);
 
-	SpectatorVec spectators, newPosSpectators;
-	getSpectators(spectators, oldPos, true);
+	SpectatorVec oldPosSpectators, newPosSpectators;
+	getSpectators(oldPosSpectators, oldPos, true);
 	getSpectators(newPosSpectators, newPos, true);
+	SpectatorVec spectators = oldPosSpectators;
 	spectators.addSpectators(newPosSpectators);
 	spectators.partitionByType();
 
@@ -478,8 +484,8 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 		spectator->onCreatureMove(&creature, &newTile, newPos, &oldTile, oldPos, teleport);
 	}
 
-	oldTile.postRemoveNotification(&creature, &newTile, 0);
-	newTile.postAddNotification(&creature, &oldTile, 0);
+	oldTile.postRemoveNotification(&creature, &newTile, 0, LINK_OWNER, oldPosSpectators);
+	newTile.postAddNotification(&creature, &oldTile, 0, LINK_OWNER, newPosSpectators);
 }
 
 void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& centerPos, int32_t minRangeX,

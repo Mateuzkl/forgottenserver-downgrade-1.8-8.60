@@ -62,7 +62,12 @@ local function isItemOwnedByPlayer(item, player)
 	return false
 end
 
-function LeaveTraining(playerId)
+function LeaveTraining(playerId, player)
+	player = player or Player(playerId)
+	if player then
+		player:setMovementSessionActive(MOVEMENT_SESSION_EXERCISE, false)
+	end
+
 	local training = onExerciseTraining[playerId]
 	if not training then
 		return
