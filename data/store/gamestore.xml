@@ -17,11 +17,11 @@
     </category>
 
     <category name="Battle Pass" icon="store_premium" description="Deluxe Battle Pass unlocks the premium reward track for the current Battle Pass season. It is activated immediately for the purchasing character.">
-        <offer id="9001" name="Deluxe Battle Pass" icon="store_premium" price="250" eid="0" itemid="0" type="battlepass" value="1" count="1" description="&lt;i&gt;Unlocks the premium reward track for the current Battle Pass season.&lt;/i&gt;&#10;&#10;{character}&#10;{activated}"/>
+        <offer id="9001" name="Deluxe Battle Pass" icon="store_premium" price="250" eid="0" itemid="0" type="battlepass" value="1" count="1" state="new" description="&lt;i&gt;Unlocks the premium reward track for the current Battle Pass season.&lt;/i&gt;&#10;&#10;{character}&#10;{activated}"/>
     </category>
 
     <category name="Boosts" icon="xp_boost" description="Temporary boosts applied directly to your character.">
-        <offer id="65583" name="XP Boost" icon="xp_boost" price="30" eid="0" itemid="0" type="expboost" value="3600" count="1" description="&lt;i&gt;Purchase a boost that increases the experience points your character gains from hunting by 50%!&lt;/i&gt;&#10;&#10;{character}&#10;{info} lasts for 1 hour hunting time&#10;{info} paused if stamina falls under 14 hours&#10;{info} can be purchased up to 5 times between 2 server saves&#10;{info} price increases with every purchase&#10;{info} cannot be purchased if an XP boost is already active"/>
+        <offer id="65583" name="XP Boost" icon="xp_boost" price="30" eid="0" itemid="0" type="expboost" value="3600" count="1" state="new" description="&lt;i&gt;Purchase a boost that increases the experience points your character gains from hunting by 50%!&lt;/i&gt;&#10;&#10;{character}&#10;{info} lasts for 1 hour hunting time&#10;{info} paused if stamina falls under 14 hours&#10;{info} can be purchased up to 5 times between 2 server saves&#10;{info} price increases with every purchase&#10;{info} cannot be purchased if an XP boost is already active"/>
     </category>
 
     <category name="Consumables" icon="store_consumables" description="Consumables and character protection services."/>
@@ -440,10 +440,10 @@
     </category>
 
     <category name="Task Hunt" icon="task_hunt.png" description="Task Hunt boosts and permanent weekly task upgrades. These offers are available only on AstraClient.">
-        <offer id="13001" name="Bounty Double Kill Boost (1H)" icon="double_bounty_kill.png" price="30" eid="0" itemid="0" type="bounty_kill_boost" value="3600" count="1" description="&lt;i&gt;Bounty task kills count twice for one hour.&lt;/i&gt;&#10;&#10;{character}&#10;{activated}"/>
-        <offer id="13002" name="Weekly Double Kill Boost (1H)" icon="double_weekly_kill.png" price="30" eid="0" itemid="0" type="weekly_kill_boost" value="3600" count="1" description="&lt;i&gt;Weekly kill task progress counts twice for one hour.&lt;/i&gt;&#10;&#10;{character}&#10;{activated}"/>
-        <offer id="13003" name="Reduced Weekly Bounty Items" icon="reduced_items.png" price="30" eid="0" itemid="0" type="weekly_reduced_items" value="3600" count="1" description="&lt;i&gt;Halves the required amounts of unfinished weekly delivery tasks and applies to newly generated tasks for one hour.&lt;/i&gt;&#10;&#10;{character}&#10;{activated}"/>
-        <offer id="13004" name="Permanent Weekly Task Expansion" icon="Permanent_Hunting_Task_Slot.png" price="450" eid="0" itemid="0" type="weekly_task_expansion" value="1" count="1" description="&lt;i&gt;Permanently expands weekly kill and delivery tasks from 6 to 9 slots.&lt;/i&gt;&#10;&#10;{character}&#10;{once}"/>
+        <offer id="13001" name="Bounty Double Kill Boost (1H)" icon="double_bounty_kill.png" price="30" eid="0" itemid="0" type="bounty_kill_boost" value="3600" count="1" state="new" description="&lt;i&gt;Bounty task kills count twice for one hour.&lt;/i&gt;&#10;&#10;{character}&#10;{activated}"/>
+        <offer id="13002" name="Weekly Double Kill Boost (1H)" icon="double_weekly_kill.png" price="30" eid="0" itemid="0" type="weekly_kill_boost" value="3600" count="1" state="new" description="&lt;i&gt;Weekly kill task progress counts twice for one hour.&lt;/i&gt;&#10;&#10;{character}&#10;{activated}"/>
+        <offer id="13003" name="Reduced Weekly Bounty Items" icon="reduced_items.png" price="30" eid="0" itemid="0" type="weekly_reduced_items" value="3600" count="1" state="new" description="&lt;i&gt;Halves the required amounts of unfinished weekly delivery tasks and applies to newly generated tasks for one hour.&lt;/i&gt;&#10;&#10;{character}&#10;{activated}"/>
+        <offer id="13004" name="Permanent Weekly Task Expansion" icon="Permanent_Hunting_Task_Slot.png" price="450" eid="0" itemid="0" type="weekly_task_expansion" value="1" count="1" state="new" description="&lt;i&gt;Permanently expands weekly kill and delivery tasks from 6 to 9 slots.&lt;/i&gt;&#10;&#10;{character}&#10;{once}"/>
     </category>
 
 </store>
