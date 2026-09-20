@@ -548,6 +548,8 @@ bool ConfigManager::load()
 	booleans[Boolean::CONSOLE_COLORS] = getGlobalBoolean(L, "consoleColors", true);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", false);
 	booleans[Boolean::PERFORMANCE_METRICS_ENABLED] = getGlobalBoolean(L, "performanceMetricsEnabled", false);
+	booleans[Boolean::POST_MOVEMENT_SESSION_CLEANUP_ENABLED] =
+	    getGlobalBoolean(L, "postMovementSessionCleanupEnabled", true);
 	booleans[Boolean::STATS_MONITOR_ENABLED] = getGlobalBoolean(L, "statsEnabled", false);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");

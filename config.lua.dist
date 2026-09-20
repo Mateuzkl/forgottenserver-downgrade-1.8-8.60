@@ -123,6 +123,9 @@ reactorMaxInboxSize = 400000
 -- Aggregated 5-second latency/hotspot report. Keep disabled outside profiling runs.
 performanceMetricsEnabled = false
 
+-- Run the post-movement Player:onStepTile session cleanup hook.
+postMovementSessionCleanupEnabled = true
+
 -- Deaths
 -- NOTE: Leave deathLosePercent as -1 if you want to use the default
 -- death penalty formula. For the old formula, set it to 10. For

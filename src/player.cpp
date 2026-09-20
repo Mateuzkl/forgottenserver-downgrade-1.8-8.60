@@ -59,7 +59,8 @@ PlayerMovementEventScope::~PlayerMovementEventScope()
 	}
 
 	const Position finalPosition = player->getPosition();
-	if (finalPosition == player->movementEventOrigin || !g_events) {
+	if (finalPosition == player->movementEventOrigin || !g_events ||
+	    !ConfigManager::getBoolean(ConfigManager::POST_MOVEMENT_SESSION_CLEANUP_ENABLED)) {
 		return;
 	}
 

@@ -267,6 +267,8 @@ public:
 	    : oldChat(g_chat), oldEvents(g_events), oldGlobalEvents(g_globalEvents),
 	      oldMinSpeed(ConfigManager::getInteger(ConfigManager::PLAYER_MIN_SPEED)),
 	      oldMaxSpeed(ConfigManager::getInteger(ConfigManager::PLAYER_MAX_SPEED)),
+	      oldPostMovementSessionCleanup(
+	          ConfigManager::getBoolean(ConfigManager::POST_MOVEMENT_SESSION_CLEANUP_ENABLED)),
 	      previousMoveEvents(std::make_unique<MoveEvents>())
 	{
 		ensureItemTypes();
@@ -276,6 +278,7 @@ public:
 		g_moveEvents.swap(previousMoveEvents);
 		ConfigManager::setInteger(ConfigManager::PLAYER_MIN_SPEED, 10);
 		ConfigManager::setInteger(ConfigManager::PLAYER_MAX_SPEED, 5000);
+		ConfigManager::setBoolean(ConfigManager::POST_MOVEMENT_SESSION_CLEANUP_ENABLED, true);
 
 		g_dispatcher.start();
 		g_scheduler.start();
@@ -315,6 +318,8 @@ public:
 		g_moveEvents.swap(previousMoveEvents);
 		ConfigManager::setInteger(ConfigManager::PLAYER_MIN_SPEED, oldMinSpeed);
 		ConfigManager::setInteger(ConfigManager::PLAYER_MAX_SPEED, oldMaxSpeed);
+		ConfigManager::setBoolean(ConfigManager::POST_MOVEMENT_SESSION_CLEANUP_ENABLED,
+		                          oldPostMovementSessionCleanup);
 		g_globalEvents = oldGlobalEvents;
 		g_events = oldEvents;
 		g_chat = oldChat;
@@ -362,6 +367,7 @@ private:
 	GlobalEvents* oldGlobalEvents;
 	int64_t oldMinSpeed;
 	int64_t oldMaxSpeed;
+	bool oldPostMovementSessionCleanup;
 	std::unique_ptr<MoveEvents> previousMoveEvents;
 	Chat chat;
 	Events events;
@@ -583,6 +589,16 @@ TEST_CASE(player_successful_step_hook_preserves_generic_callback_without_session
 	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
 	CHECK(world.movementHookTo() == player.getPosition());
 	CHECK(world.movementHookFlags() == 0);
+}
+
+TEST_CASE(player_post_movement_session_cleanup_can_be_disabled)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	ConfigManager::setBoolean(ConfigManager::POST_MOVEMENT_SESSION_CLEANUP_ENABLED, false);
+
+	CHECK(g_game.internalMoveCreature(world.player.get(), DIRECTION_NORTH) == RETURNVALUE_NOERROR);
+	CHECK(world.movementHookCalls() == 0);
 }
 
 TEST_CASE(player_failed_step_does_not_run_success_hook)
