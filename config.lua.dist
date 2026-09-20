@@ -214,6 +214,10 @@ characterBazaarMaxDurationDays = 7
 -- Default: false keeps classic 8.60 behaviour.
 taskHuntingSystemEnabled = false
 
+-- Ignore an identical repeated Task Board mutation inside this window.
+-- Set to 0 to disable duplicate-action debounce.
+taskBoardActionCooldownMs = 150
+
 -- Enable Bounty Tasks inside Task Board.
 -- Requires taskHuntingSystemEnabled.
 bountyTasksEnabled = false

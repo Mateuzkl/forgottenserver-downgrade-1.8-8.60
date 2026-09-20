@@ -87,7 +87,8 @@ end
 -- ============================================
 
 local OPCODE_TASK_BOARD_ACTION = 0x5F
-local TASK_BOARD_DUPLICATE_WINDOW_MS = 150
+local taskBoardDuplicateWindowMs = math.max(0,
+	math.floor(configManager.getNumber(configKeys.TASK_BOARD_ACTION_COOLDOWN_MS)))
 local lastTaskBoardAction = {}
 
 local function getTaskBoardActionKey(payload)
@@ -126,7 +127,7 @@ function taskBoardActionHandler.onReceive(player, msg)
 	if option ~= 0 and option ~= 1 and option ~= 10 and option ~= 17 and option ~= 18 then
 		local actionKey = getTaskBoardActionKey(payload)
 		local previous = lastTaskBoardAction[playerId]
-		if previous and previous.key == actionKey and now - previous.time < TASK_BOARD_DUPLICATE_WINDOW_MS then
+		if previous and previous.key == actionKey and now - previous.time < taskBoardDuplicateWindowMs then
 			return
 		end
 		lastTaskBoardAction[playerId] = { key = actionKey, time = now }
