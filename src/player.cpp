@@ -59,7 +59,7 @@ PlayerMovementEventScope::~PlayerMovementEventScope()
 	}
 
 	const Position finalPosition = player->getPosition();
-	if (finalPosition == player->movementEventOrigin || player->movementSessionFlags == 0 || !g_events) {
+	if (finalPosition == player->movementEventOrigin || !g_events) {
 		return;
 	}
 

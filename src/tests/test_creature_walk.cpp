@@ -3,6 +3,7 @@
 #include "../chat.h"
 #include "../condition.h"
 #include "../configmanager.h"
+#include "../container.h"
 #include "../creature.h"
 #include "../events.h"
 #include "../game.h"
@@ -570,6 +571,20 @@ TEST_CASE(player_successful_step_hook_runs_once_with_real_positions)
 	CHECK(world.movementHookFlags() == static_cast<uint8_t>(MovementSessionFlag::Market));
 }
 
+TEST_CASE(player_successful_step_hook_preserves_generic_callback_without_session)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+
+	CHECK(player.getMovementSessionFlags() == 0);
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTH) == RETURNVALUE_NOERROR);
+	CHECK(world.movementHookCalls() == 1);
+	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
+	CHECK(world.movementHookTo() == player.getPosition());
+	CHECK(world.movementHookFlags() == 0);
+}
+
 TEST_CASE(player_failed_step_does_not_run_success_hook)
 {
 	PlayerWalkFixture world;
@@ -588,6 +603,26 @@ TEST_CASE(player_failed_step_does_not_run_success_hook)
 	CHECK(player.getPosition() == PlayerWalkFixture::start);
 	CHECK(world.movementHookCalls() == 0);
 	CHECK(player.hasMovementSession(MovementSessionFlag::Exercise));
+
+	CHECK(g_game.removeCreature(blocker.get(), false));
+}
+
+TEST_CASE(player_failed_step_without_session_does_not_run_generic_callback)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+
+	auto blocker = std::make_shared<Player>(nullptr);
+	blocker->setName("movement blocker without session");
+	blocker->setGroup(std::make_shared<Group>());
+	const Position destination{PlayerWalkFixture::start.x, static_cast<uint16_t>(PlayerWalkFixture::start.y - 1),
+	                           PlayerWalkFixture::start.z};
+	CHECK(g_game.internalPlaceCreature(blocker.get(), destination, false, true));
+
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTH) != RETURNVALUE_NOERROR);
+	CHECK(player.getPosition() == PlayerWalkFixture::start);
+	CHECK(world.movementHookCalls() == 0);
 
 	CHECK(g_game.removeCreature(blocker.get(), false));
 }
@@ -682,10 +717,39 @@ TEST_CASE(player_teleport_emits_one_final_position_hook)
 	                           static_cast<uint16_t>(PlayerWalkFixture::start.y + 2),
 	                           PlayerWalkFixture::start.z};
 
+	g_performanceMetrics.setEnabled(true);
+	const uint64_t spectatorsBefore = g_performanceMetrics.getMetricCalls(PerformanceMetric::MapGetSpectators);
 	CHECK(g_game.internalTeleport(&player, destination, false, 0, CONST_ME_NONE) == RETURNVALUE_NOERROR);
+	const uint64_t spectatorsAfter = g_performanceMetrics.getMetricCalls(PerformanceMetric::MapGetSpectators);
+	g_performanceMetrics.setEnabled(false);
+	// Teleports use fresh post-move notification snapshots in addition to the
+	// pre-move snapshots used for movement visibility and stack positions.
+	CHECK(spectatorsAfter - spectatorsBefore >= 4);
 	CHECK(world.movementHookCalls() == 1);
 	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
 	CHECK(world.movementHookTo() == destination);
+}
+
+TEST_CASE(player_long_teleport_closes_world_containers_out_of_range)
+{
+	PlayerWalkFixture world;
+	auto& player = *world.player;
+	Tile* oldTile = player.getTile();
+	CHECK(oldTile != nullptr);
+
+	auto container = std::make_shared<Container>(ITEM_BAG, 8);
+	oldTile->addThing(container.get());
+	player.addContainer(0, container.get());
+	CHECK(player.getContainerByID(0) == container.get());
+
+	const Position destination{static_cast<uint16_t>(PlayerWalkFixture::start.x + 10),
+	                           static_cast<uint16_t>(PlayerWalkFixture::start.y + 10),
+	                           PlayerWalkFixture::start.z};
+	ensureWalkTile(destination);
+	CHECK(g_game.internalTeleport(&player, destination, false, 0, CONST_ME_NONE) == RETURNVALUE_NOERROR);
+	CHECK(player.getContainerByID(0) == nullptr);
+
+	oldTile->removeThing(container.get(), 0);
 }
 
 TEST_CASE(player_diagonal_step_reports_the_exact_destination)

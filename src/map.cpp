@@ -484,8 +484,17 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 		spectator->onCreatureMove(&creature, &newTile, newPos, &oldTile, oldPos, teleport);
 	}
 
-	oldTile.postRemoveNotification(&creature, &newTile, 0, LINK_OWNER, oldPosSpectators);
-	newTile.postAddNotification(&creature, &oldTile, 0, LINK_OWNER, newPosSpectators);
+	if (teleport) {
+		// The destination snapshot was collected before the creature was added.
+		// Preserve the original post-move notification semantics for teleports,
+		// floor changes and long moves so the player receives self-notification
+		// and closes containers that are no longer in range.
+		oldTile.postRemoveNotification(&creature, &newTile, 0, LINK_OWNER);
+		newTile.postAddNotification(&creature, &oldTile, 0, LINK_OWNER);
+	} else {
+		oldTile.postRemoveNotification(&creature, &newTile, 0, LINK_OWNER, oldPosSpectators);
+		newTile.postAddNotification(&creature, &oldTile, 0, LINK_OWNER, newPosSpectators);
+	}
 }
 
 void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& centerPos, int32_t minRangeX,

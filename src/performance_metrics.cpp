@@ -345,7 +345,7 @@ void PerformanceMetrics::maybeReport()
 
 	report += fmt::format(
 		"[Perf] movement attempts={} success={} failure={} lua_step_hooks={} exercise_callbacks={} "
-		"market_callbacks={} market_add_events=0 forge_callbacks={} imbuing_callbacks={}\n",
+		"market_callbacks={} forge_callbacks={} imbuing_callbacks={}\n",
 		movement.attempts.exchange(0, std::memory_order_relaxed),
 		movement.successes.exchange(0, std::memory_order_relaxed),
 		movement.failures.exchange(0, std::memory_order_relaxed),
