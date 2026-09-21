@@ -14,6 +14,8 @@ local WHEEL_MIN_LEVEL = 51
 local WHEEL_POINTS_PER_LEVEL = 1
 local WHEEL_SLOT_COUNT = 36
 local WHEEL_NO_GEM = -1
+-- TFS stores capacity in 0.01 oz units (see iologindata cap * 100); wheel values are display oz.
+local CAPACITY_STAT_SCALE = 100
 local WHEEL_REQUIRE_PROMOTION = true
 local WHEEL_CONDITION_SUBID = 86061
 
@@ -758,6 +760,9 @@ end
 
 local function addBonus(bonuses, key, value)
 	if value and value ~= 0 then
+		if key == "capacity" then
+			value = value * CAPACITY_STAT_SCALE
+		end
 		bonuses[key] = (bonuses[key] or 0) + value
 	end
 end
