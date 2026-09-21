@@ -1245,6 +1245,56 @@ local SHOOT_TO_CIPBIA_ELEMENT = {
 	[CONST_ANI_SMALLHOLY] = 5,    [CONST_ANI_HOLY] = 5,
 }
 
+local function getForgeAmplification(player)
+	local feet = player:getSlotItem(CONST_SLOT_FEET)
+	if feet and feet:getId() ~= 0 and feet:getTier() > 0 then
+		return feet:getMomentumChance()
+	end
+	return 0
+end
+
+local function getForgeOnslaught(player)
+	local weapon = player:getSlotItem(CONST_SLOT_LEFT)
+	if not weapon or weapon:getId() == 0 then
+		weapon = player:getSlotItem(CONST_SLOT_RIGHT)
+	end
+	if not weapon or weapon:getId() == 0 or weapon:getTier() == 0 then
+		return 0
+	end
+
+	local fatalChance = weapon:getFatalChance()
+	if fatalChance <= 0 then
+		return 0
+	end
+
+	local amplification = getForgeAmplification(player)
+	return (fatalChance * (1.0 + (amplification * 0.02))) / 100
+end
+
+local function getForgeRuse(player)
+	local amplification = getForgeAmplification(player)
+	local totalChance = 0
+
+	for _, slot in ipairs({CONST_SLOT_ARMOR, CONST_SLOT_LEFT, CONST_SLOT_RIGHT}) do
+		local item = player:getSlotItem(slot)
+		if item and item:getId() ~= 0 and item:getTier() > 0 then
+			local itemType = ItemType(item:getId())
+			if itemType:isArmor() or itemType:isShield() then
+				local dodgeChance = item:getDodgeChance()
+				if dodgeChance > 0 then
+					totalChance = totalChance + (dodgeChance * (1.0 + (amplification * 0.02)))
+				end
+			end
+		end
+	end
+
+	if totalChance <= 0 then
+		return 0
+	end
+
+	return totalChance / 100
+end
+
 local function sendWheelSkillStats(player)
 	if not supportsCustomNetwork(player) or not player.sendExtendedOpcode then
 		return false
@@ -1258,7 +1308,10 @@ local function sendWheelSkillStats(player)
 	local absorbs = {}
 	if player.getCombatAbsorbPercent then
 		for name, combatType in pairs(WHEEL_SKILL_ABSORBS) do
-			absorbs[name] = player:getCombatAbsorbPercent(combatType) / 100
+			local percent = player:getCombatAbsorbPercent(combatType)
+			if percent ~= 0 then
+				absorbs[name] = percent / 100
+			end
 		end
 	end
 
@@ -1309,9 +1362,12 @@ local function sendWheelSkillStats(player)
 		manaLeech = manaLeech,
 		criticalChance = criticalChance,
 		criticalDamage = criticalDamage,
+		onslaught = getForgeOnslaught(player),
 		defense = defense,
 		armor = armor,
+		mantra = player.getMantraTotal and player:getMantraTotal() or 0,
 		mitigation = player:getMitigation() / 100,
+		dodge = getForgeRuse(player),
 		absorbs = absorbs,
 		damageAndHealing = damageAndHealing,
 		attackValue = attackValue,

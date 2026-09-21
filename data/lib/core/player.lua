@@ -211,6 +211,10 @@ function Player.isUsingOtClient(self)
 		return true
 	end
 
+	if self.isUsingFonticakClient and self:isUsingFonticakClient() then
+		return true
+	end
+
 	local client = self:getClient()
 	local os = client and client.os or CLIENTOS_NONE
 	return os == CLIENTOS_OTCLIENT_LINUX or os == CLIENTOS_OTCLIENT_WINDOWS or os == CLIENTOS_OTCLIENT_MAC or

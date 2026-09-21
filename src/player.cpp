@@ -1216,10 +1216,6 @@ float Player::getCombatAbsorbPercent(CombatType_t combatType) const
 {
 	float total = varCombatAbsorbPercent[combatTypeToIndex(combatType)];
 	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_AMMO; ++slot) {
-		if (!isItemAbilityEnabled(static_cast<slots_t>(slot))) {
-			continue;
-		}
-
 		const std::shared_ptr<Item>& item = inventory[slot];
 		if (!item) {
 			continue;
