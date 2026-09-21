@@ -896,9 +896,7 @@ bool Creature::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreatur
 							corpseOwner->addPendingLoot(getNameDescription(), corpseContainer);
 						}
 						const Monster* deadMonster = getMonster();
-						const bool canAutoQuickLootCorpse = deadMonster &&
-						                                   !deadMonster->getMonsterType()->info.isBoss &&
-						                                   !deadMonster->isRewardBoss();
+						const bool canAutoQuickLootCorpse = deadMonster && !deadMonster->isRewardBoss();
 						if (ConfigManager::getBoolean(ConfigManager::QUICK_LOOT_ENABLED)) {
 							if (canAutoQuickLootCorpse) {
 								if (corpseOwner->isQuickLootAutoEnabled()) {
