@@ -402,6 +402,22 @@ bool Spell::playerSpellCheck(Player* player) const
 		return false;
 	}
 
+	if (player->getStance() == STANCE_SHARPSHOOTER && spellId != 313 && getName() != "Sharpshooter") {
+		const bool augmentedSupport =
+		    ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED) &&
+		    player->getWheelSpellAugmentBonus("Sharpshooter").secondaryGroupCooldownReduction >= 8000;
+
+		const bool blockedGroup = group == SPELLGROUP_HEALING ||
+		                          (!augmentedSupport && group == SPELLGROUP_SUPPORT);
+		if (blockedGroup) {
+			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+			if (isInstant()) {
+				g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF, player->getInstanceID());
+			}
+			return false;
+		}
+	}
+
 	if ((aggressive || pzLock) && !player->hasFlag(PlayerFlag_IgnoreProtectionZone) &&
 	    player->getZone() == ZONE_PROTECTION) {
 		player->sendCancelMessage(RETURNVALUE_ACTIONNOTPERMITTEDINPROTECTIONZONE);

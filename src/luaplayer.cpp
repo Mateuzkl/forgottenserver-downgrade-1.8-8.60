@@ -996,6 +996,20 @@ int luaPlayerAddWheelDodgeChance(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSetWheelBallisticMastery(lua_State* L)
+{
+	// player:setWheelBallisticMastery(enabled)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setWheelBallisticMastery(getBoolean(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerGetItemCount(lua_State* L)
 {
 	// player:getItemCount(itemId[, subType = -1[, ignoreEquipped = false]])
@@ -4877,6 +4891,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addMitigation", luaPlayerAddMitigation);
 	registerMethod("Player", "addWheelMitigationMultiplier", luaPlayerAddWheelMitigationMultiplier);
 	registerMethod("Player", "addWheelDodgeChance", luaPlayerAddWheelDodgeChance);
+	registerMethod("Player", "setWheelBallisticMastery", luaPlayerSetWheelBallisticMastery);
 
 	registerMethod("Player", "getItemCount", luaPlayerGetItemCount);
 	registerMethod("Player", "getItemById", luaPlayerGetItemById);

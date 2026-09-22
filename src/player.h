@@ -928,6 +928,10 @@ public:
 	void addWheelMitigationMultiplier(float modifier) { varWheelMitigationMultiplier += modifier; }
 	float getWheelDodgeChance() const { return varWheelDodgeChance; }
 	void addWheelDodgeChance(float modifier) { varWheelDodgeChance += modifier; }
+	bool hasWheelBallisticMastery() const { return wheelBallisticMastery; }
+	void setWheelBallisticMastery(bool enabled) { wheelBallisticMastery = enabled; }
+	int32_t getWheelBallisticMasteryCriticalBonus(CombatOrigin origin) const;
+	int32_t getWheelBallisticMasteryElementPierce(CombatType_t combatType) const;
 
 	float getAttackFactor() const override;
 	float getDefenseFactor() const override;
@@ -1875,6 +1879,7 @@ private:
 	float varMitigation = 0.0f;
 	float varWheelMitigationMultiplier = 0.0f;
 	float varWheelDodgeChance = 0.0f;
+	bool wheelBallisticMastery = false;
 	std::array<float, COMBAT_COUNT> varCombatAbsorbPercent = {0};
 	std::array<int16_t, COMBAT_COUNT> specialMagicLevelSkill = {0};
 	std::array<int32_t, static_cast<size_t>(ExperienceRateType::STAMINA) + 1> experienceRate = {0};

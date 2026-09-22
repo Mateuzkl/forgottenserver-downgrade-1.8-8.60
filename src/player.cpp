@@ -759,6 +759,34 @@ int32_t Player::getWheelSpellAdditionalDuration(std::string_view spellName) cons
 	return getWheelSpellAugmentBonus(spellName).additionalDuration;
 }
 
+int32_t Player::getWheelBallisticMasteryCriticalBonus(CombatOrigin origin) const
+{
+	if (!wheelBallisticMastery || origin != ORIGIN_RANGED) {
+		return 0;
+	}
+
+	const Item* weapon = getWeapon();
+	if (!weapon || weapon->getWeaponType() != WEAPON_DISTANCE) {
+		return 0;
+	}
+
+	return Item::items[weapon->getID()].ammoType == AMMO_BOLT ? 1000 : 0;
+}
+
+int32_t Player::getWheelBallisticMasteryElementPierce(CombatType_t combatType) const
+{
+	if (!wheelBallisticMastery || (combatType != COMBAT_PHYSICALDAMAGE && combatType != COMBAT_HOLYDAMAGE)) {
+		return 0;
+	}
+
+	const Item* weapon = getWeapon();
+	if (!weapon || weapon->getWeaponType() != WEAPON_DISTANCE) {
+		return 0;
+	}
+
+	return Item::items[weapon->getID()].ammoType == AMMO_ARROW ? 2 : 0;
+}
+
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const
 {
 	if (!item || slot < CONST_SLOT_FIRST || slot > CONST_SLOT_LAST) {
