@@ -1998,6 +1998,98 @@ local function destroyWheelGem(player, profile, state, gemIndex)
 	return true
 end
 
+local ITEM_CRUSHER = 46627
+local ITEM_AMBER_CRUSHER = 46628
+
+local GEM_ITEM_TO_QUALITY = {}
+for _, gems in pairs(GEM_ITEMS) do
+	GEM_ITEM_TO_QUALITY[gems[1]] = GEM_QUALITY.LESSER
+	GEM_ITEM_TO_QUALITY[gems[2]] = GEM_QUALITY.REGULAR
+	GEM_ITEM_TO_QUALITY[gems[3]] = GEM_QUALITY.GREATER
+end
+
+-- Unrevealed gem yields (official Fragment Workshop rates).
+local UNREVEALED_FRAGMENT_YIELD = {
+	[GEM_QUALITY.LESSER] = { id = ITEM_LESSER_FRAGMENT, min = 1, max = 2 },
+	[GEM_QUALITY.REGULAR] = { id = ITEM_LESSER_FRAGMENT, min = 2, max = 4 },
+	[GEM_QUALITY.GREATER] = { id = ITEM_GREATER_FRAGMENT, min = 1, max = 2 },
+}
+
+local function consumeCrusherCharge(crusherItem)
+	local crusherId = crusherItem:getId()
+	if crusherId == ITEM_AMBER_CRUSHER then
+		return true
+	end
+	if crusherId ~= ITEM_CRUSHER then
+		return false
+	end
+
+	local charges = crusherItem:getCharges()
+	if charges <= 0 then
+		return false
+	end
+
+	if charges <= 1 then
+		crusherItem:remove(1)
+	else
+		crusherItem:transform(crusherId, charges - 1)
+	end
+	return true
+end
+
+local function refreshWheelFragmentBalances(player)
+	if not supportsCustomNetwork(player) then
+		return
+	end
+
+	sendResourceBalance(player, RESOURCE_LESSER_FRAGMENTS, player:getItemCount(ITEM_LESSER_FRAGMENT))
+	sendResourceBalance(player, RESOURCE_GREATER_FRAGMENTS, player:getItemCount(ITEM_GREATER_FRAGMENT))
+
+	local gemItems = GEM_ITEMS[getWheelVocation(player)] or {}
+	sendResourceBalance(player, RESOURCE_LESSER_GEMS, gemItems[1] and player:getItemCount(gemItems[1]) or 0)
+	sendResourceBalance(player, RESOURCE_REGULAR_GEMS, gemItems[2] and player:getItemCount(gemItems[2]) or 0)
+	sendResourceBalance(player, RESOURCE_GREATER_GEMS, gemItems[3] and player:getItemCount(gemItems[3]) or 0)
+end
+
+function Player.wheelCrushGem(self, crusherItem, gemItem)
+	if not crusherItem or not gemItem then
+		return false, "Invalid target."
+	end
+
+	local crusherId = crusherItem:getId()
+	if crusherId ~= ITEM_CRUSHER and crusherId ~= ITEM_AMBER_CRUSHER then
+		return false, "Invalid crusher."
+	end
+
+	if crusherId == ITEM_CRUSHER and crusherItem:getCharges() <= 0 then
+		return false, "Your crusher has no charges left."
+	end
+
+	local gemId = gemItem:getId()
+	local quality = GEM_ITEM_TO_QUALITY[gemId]
+	if quality == nil then
+		return false, "You can only use the crusher on gems."
+	end
+
+	local yield = UNREVEALED_FRAGMENT_YIELD[quality]
+	local count = math.random(yield.min, yield.max)
+	if not gemItem:remove(1) then
+		return false, "Could not remove the gem."
+	end
+
+	if not self:addItem(yield.id, count) then
+		self:addItem(gemId, 1)
+		return false, "There is no room for the gem fragments."
+	end
+
+	if not consumeCrusherCharge(crusherItem) then
+		return false, "Your crusher has no charges left."
+	end
+
+	refreshWheelFragmentBalances(self)
+	return true, count, yield.id
+end
+
 local NEXT_GEM_AFFINITY = {
 	[0] = 1,
 	[1] = 3,
