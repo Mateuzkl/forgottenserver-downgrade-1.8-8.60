@@ -75,7 +75,7 @@ Container* findReplacementStaticContainer(Tile* tile)
 	return replacement;
 }
 
-void transferContainerContents(Container* source, Cylinder* destination)
+void transferContainerContents(Container* source, Container* destination)
 {
 	if (!source || !destination) {
 		return;
@@ -83,6 +83,9 @@ void transferContainerContents(Container* source, Cylinder* destination)
 
 	const ItemVector contents = source->getItems();
 	for (const auto& item : contents) {
+		if (destination->size() >= destination->capacity()) {
+			break;
+		}
 		if (!item || source->getThingIndex(item.get()) == -1) {
 			continue;
 		}
