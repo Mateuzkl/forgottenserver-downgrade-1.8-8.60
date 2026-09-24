@@ -57,6 +57,21 @@ int luaItemTypeIsDoor(lua_State* L)
 	return 1;
 }
 
+int luaItemTypeSetPersistentTransformFamily(lua_State* L)
+{
+	// itemType:setPersistentTransformFamily(familyId)
+	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
+	const uint16_t familyId = getInteger<uint16_t>(L, 2);
+	if (!itemType || itemType->id == 0 || !itemType->isDoor() || familyId == 0) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	Item::items.getItemType(itemType->id).persistentTransformFamily = familyId;
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaItemTypeIsContainer(lua_State* L)
 {
 	// itemType:isContainer()
@@ -1240,6 +1255,7 @@ void LuaScriptInterface::registerItemType()
 	registerMethod("ItemType", "isUseable", luaItemTypeIsUseable);
 	registerMethod("ItemType", "isPickupable", luaItemTypeIsPickupable);
 	registerMethod("ItemType", "isStoreItem", luaItemTypeIsStoreItem);
+	registerMethod("ItemType", "setPersistentTransformFamily", luaItemTypeSetPersistentTransformFamily);
 
 	registerMethod("ItemType", "getType", luaItemTypeGetType);
 	registerMethod("ItemType", "getGroup", luaItemTypeGetGroup);

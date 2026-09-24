@@ -309,6 +309,26 @@ LevelDoorTable = {
 	{ closedDoor = 30038, openDoor = 30040 },
 }
 
+-- House persistence must only restore a saved open/closed state when both
+-- IDs belong to the same configured door family. Keep this metadata sourced
+-- from the authoritative door tables instead of relying on ID arithmetic.
+local function registerPersistentDoorFamilies(doorTable)
+	for _, family in ipairs(doorTable) do
+		local familyId = family.openDoor
+		for _, key in ipairs({"lockedDoor", "closedDoor", "openDoor"}) do
+			local itemId = family[key]
+			if itemId then
+				ItemType(itemId):setPersistentTransformFamily(familyId)
+			end
+		end
+	end
+end
+
+registerPersistentDoorFamilies(KeyDoorTable)
+registerPersistentDoorFamilies(CustomDoorTable)
+registerPersistentDoorFamilies(QuestDoorTable)
+registerPersistentDoorFamilies(LevelDoorTable)
+
 -- Window table for toggling windows open/closed
 windowTable = {
 	{closedWindow = 5302, openWindow = 6447},

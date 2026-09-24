@@ -140,6 +140,13 @@ houseRentPeriod = "never"
 houseOwnedByAccount = false
 houseDoorShowPrice = true
 onlyInvitedCanMoveHouseItems = true
+-- House persistence deployment policy:
+-- "preserve" keeps player items and reconciles only proven fixture transforms.
+-- "reconcile" currently uses the same conservative, non-destructive policy.
+-- "reset" is maintenance-only and deletes all tile_store rows on startup.
+houseMapUpdateMode = "preserve"
+-- Log exact, transformed, and rejected static-fixture reconciliation decisions.
+housePersistenceDiagnostics = false
 
 -- Item Usage
 timeBetweenActions = 200

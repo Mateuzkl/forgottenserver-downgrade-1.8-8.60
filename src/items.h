@@ -450,6 +450,9 @@ public:
 
 	uint16_t imbuementSlot = 0;
 	uint16_t wrapableTo = 0;
+	// Runtime metadata used to reconcile persisted static fixtures with their
+	// configured transform variants (for example, an open/closed door pair).
+	uint16_t persistentTransformFamily = 0;
 	std::unordered_map<std::string, uint8_t> imbuementAllowedTypes;
 	std::vector<std::shared_ptr<AugmentInfo>> augments;
 	int16_t mantra = 0;
