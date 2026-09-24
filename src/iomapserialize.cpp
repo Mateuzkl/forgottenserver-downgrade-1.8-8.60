@@ -52,6 +52,50 @@ void logStaleHouseFixture(const Tile* tile, uint16_t mapId, uint16_t persistedId
 	                "reason=different-family action=keep-map-fixture",
 	                position.x, position.y, position.z, mapId, persistedId, fixtureType);
 }
+
+Container* findReplacementStaticContainer(Tile* tile)
+{
+	Container* replacement = nullptr;
+	const TileItemVector* items = tile ? tile->getItemList() : nullptr;
+	if (!items) {
+		return nullptr;
+	}
+
+	for (const auto& item : *items) {
+		const ItemType& itemType = Item::items[item->getID()];
+		Container* candidate = item->getContainer();
+		if (!candidate || itemType.moveable || itemType.forceSerialize) {
+			continue;
+		}
+		if (replacement) {
+			return nullptr;
+		}
+		replacement = candidate;
+	}
+	return replacement;
+}
+
+void transferContainerContents(Container* source, Cylinder* destination)
+{
+	if (!source || !destination) {
+		return;
+	}
+
+	const ItemVector contents = source->getItems();
+	for (const auto& item : contents) {
+		if (!item || source->getThingIndex(item.get()) == -1) {
+			continue;
+		}
+
+		source->removeThing(item.get(), item->getItemCount());
+		destination->internalAddThing(item.get());
+		if (!mapSerializeCylinderOwnsThing(destination, item.get())) {
+			// Keep ownership in the temporary container so the caller can try a
+			// fallback destination without losing the item.
+			source->internalAddThing(item.get());
+		}
+	}
+}
 } // namespace
 
 bool IOMapSerialize::isSamePersistentFixtureFamily(const ItemType& mapType, const ItemType& persistedType)
@@ -326,6 +370,35 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 				if (container) {
 					if (!loadContainer(propStream, container)) {
 						return false;
+					}
+
+					const size_t persistedContentCount = container->size();
+					Container* replacementContainer = findReplacementStaticContainer(tile);
+					if (replacementContainer) {
+						transferContainerContents(container, replacementContainer);
+					}
+
+					// If there is no unambiguous replacement container, or a child
+					// cannot be transferred, retain the old container itself as a
+					// no-loss fallback instead of destroying player-owned data.
+					if (!container->empty()) {
+						Item* raw = dummy.get();
+						tile->internalAddThing(raw);
+						if (!mapSerializeCylinderOwnsThing(tile, raw)) {
+							const Position& position = tile->getPosition();
+							LOG_ERROR(fmt::format("[HousePersistence] could not preserve stale container {} at {},{},{}",
+							                      id, position.x, position.y, position.z));
+							return false;
+						}
+						raw->startDecaying();
+						dummy.reset();
+					}
+
+					if (persistedContentCount != 0) {
+						const Position& position = tile->getPosition();
+						g_logger().warn("[HousePersistence] preserved {} item(s) from replaced static container {} "
+						                "at {},{},{}",
+						                persistedContentCount, id, position.x, position.y, position.z);
 					}
 				} else if (BedItem* bedItem = dynamic_cast<BedItem*>(dummy.get())) {
 					uint32_t sleeperGUID = bedItem->getSleeper();

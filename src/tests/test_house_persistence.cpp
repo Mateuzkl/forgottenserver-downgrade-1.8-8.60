@@ -62,4 +62,34 @@ TEST_CASE(different_door_transform_families_do_not_match)
 	CHECK(!IOMapSerialize::isSamePersistentFixtureFamily(doorA, doorB));
 }
 
+TEST_CASE(locked_door_does_not_match_open_or_closed_family)
+{
+	auto lockedDoor = makeFixture(399, ITEM_TYPE_DOOR);
+	auto closedDoor = makeFixture(400, ITEM_TYPE_DOOR);
+	closedDoor.persistentTransformFamily = 401;
+	auto openDoor = makeFixture(401, ITEM_TYPE_DOOR);
+	openDoor.persistentTransformFamily = 401;
+
+	CHECK(!IOMapSerialize::isSamePersistentFixtureFamily(lockedDoor, closedDoor));
+	CHECK(!IOMapSerialize::isSamePersistentFixtureFamily(lockedDoor, openDoor));
+}
+
+TEST_CASE(related_window_transform_family_matches)
+{
+	auto closedWindow = makeFixture(5302, ITEM_TYPE_DOOR);
+	closedWindow.persistentTransformFamily = 5302;
+	auto openWindow = makeFixture(6447, ITEM_TYPE_DOOR);
+	openWindow.persistentTransformFamily = 5302;
+	CHECK(IOMapSerialize::isSamePersistentFixtureFamily(closedWindow, openWindow));
+}
+
+TEST_CASE(unrelated_window_transform_families_do_not_match)
+{
+	auto firstWindow = makeFixture(5302, ITEM_TYPE_DOOR);
+	firstWindow.persistentTransformFamily = 5302;
+	auto secondWindow = makeFixture(5303, ITEM_TYPE_DOOR);
+	secondWindow.persistentTransformFamily = 5303;
+	CHECK(!IOMapSerialize::isSamePersistentFixtureFamily(firstWindow, secondWindow));
+}
+
 TFS_TEST_MAIN()
