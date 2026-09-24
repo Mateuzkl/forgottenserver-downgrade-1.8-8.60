@@ -3108,7 +3108,10 @@ std::shared_ptr<Item> Monster::getCorpse(Creature* lastHitCreature, Creature* mo
 	}
 
 	if (corpse) {
-		if (mType->info.isBoss || mType->info.isRewardBoss) {
+		const bool ordinaryBossQuickLootDisabled =
+		    mType->info.isBoss && !isRewardBoss() &&
+		    !ConfigManager::getBoolean(ConfigManager::QUICK_LOOT_ALLOW_ORDINARY_BOSSES);
+		if (isRewardBoss() || ordinaryBossQuickLootDisabled) {
 			corpse->setCustomAttribute("QuickLootDisabled", true);
 		}
 
