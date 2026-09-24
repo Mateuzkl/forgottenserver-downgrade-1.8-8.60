@@ -481,6 +481,8 @@ bool ConfigManager::load()
 	booleans[Boolean::ITEM_TIER_DISPLAY] = getGlobalBoolean(L, "enableItemTierDisplay", false);
 	booleans[Boolean::ITEM_UPGRADE_CLASSIFICATION] = getGlobalBoolean(L, "enableItemUpgradeClassification", false);
 	booleans[Boolean::QUICK_LOOT_ENABLED] = getGlobalBoolean(L, "enableQuickLoot", false);
+	booleans[Boolean::QUICK_LOOT_ALLOW_ORDINARY_BOSSES] =
+	    getGlobalBoolean(L, "quickLootAllowOrdinaryBosses", true);
 	booleans[Boolean::TASK_HUNTING_SYSTEM_ENABLED] = getGlobalBoolean(L, "taskHuntingSystemEnabled", false);
 	booleans[Boolean::BOUNTY_TASKS_ENABLED] = getGlobalBoolean(L, "bountyTasksEnabled", false);
 	booleans[Boolean::WEEKLY_TASKS_ENABLED] = getGlobalBoolean(L, "weeklyTasksEnabled", false);

@@ -185,6 +185,8 @@ enableColorizedLootValue = false
 enableItemTierDisplay = false
 enableItemUpgradeClassification = false
 enableQuickLoot = true
+-- Allow ordinary bosses to use automatic quick loot. Reward bosses remain excluded.
+quickLootAllowOrdinaryBosses = true
 quickLootMaxCorpses = 30
 
 -- Allow the /reload command (god only). Set false to disable it.
