@@ -8,6 +8,12 @@ function onGetFormulaValues(player, level, magicLevel)
 	-- Vocation Adjustment: heal more consistently (lower highs, higher lows) -- 10/14 -> 11/13.
 	local min = (level * 0.2 + magicLevel * 11) + 4
 	local max = (level * 0.2 + magicLevel * 13) + 5
+
+	local healingBonus = player:getWheelSpellHealingPercentBonus("Heal Friend")
+	if healingBonus > 0 then
+		min = math.floor(min * (1 + healingBonus))
+		max = math.floor(max * (1 + healingBonus))
+	end
 	return min, max
 end
 
@@ -25,6 +31,12 @@ sharedConservationCombat:setParameter(COMBAT_PARAM_AGGRESSIVE, false)
 function onGetFormulaValuesSharedConservation(player, level, magicLevel)
 	local min = (level * 0.2 + magicLevel * 11) + 4
 	local max = (level * 0.2 + magicLevel * 13) + 5
+
+	local healingBonus = player:getWheelSpellHealingPercentBonus("Heal Friend")
+	if healingBonus > 0 then
+		min = math.floor(min * (1 + healingBonus))
+		max = math.floor(max * (1 + healingBonus))
+	end
 	return min * SHARED_CONSERVATION_RATIO, max * SHARED_CONSERVATION_RATIO
 end
 
@@ -65,8 +77,14 @@ local spell = Spell("instant")
 
 function spell.onCastSpell(creature, variant)
 	creature:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
+	local player = creature:getPlayer()
+	local target = Creature(variant:getNumber())
+	local hpBefore = target and target:getHealth() or 0
 	local result = combat:execute(creature, variant)
-	shareConservationHeal(creature:getPlayer(), variant:getNumber())
+	if result and player and target then
+		player:applyWheelHealingLinkSelfHeal(target, hpBefore)
+	end
+	shareConservationHeal(player, variant:getNumber())
 	return result
 end
 

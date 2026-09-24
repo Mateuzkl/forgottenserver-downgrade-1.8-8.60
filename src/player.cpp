@@ -26,6 +26,8 @@
 #include "save_manager.h"
 #include "scriptmanager.h"
 #include "scheduler.h"
+#include "spells.h"
+#include "vocation.h"
 #include "logger.h"
 #include <fmt/format.h>
 #include <cstdlib>
@@ -34,6 +36,7 @@
 
 extern Game g_game;
 extern Vocations g_vocations;
+extern std::unique_ptr<Spells> g_spells;
 
 namespace {
 constexpr uint32_t CHAIN_SYSTEM_STORAGE = 40001;
@@ -785,6 +788,68 @@ int32_t Player::getWheelBallisticMasteryElementPierce(CombatType_t combatType) c
 	}
 
 	return Item::items[weapon->getID()].ammoType == AMMO_ARROW ? 2 : 0;
+}
+
+namespace {
+
+bool canPlayerVocationCreateRune(const Player* player, const Spell* runeSpell)
+{
+	if (!player || !runeSpell || !g_spells) {
+		return false;
+	}
+
+	const InstantSpell* conjureSpell = g_spells->getInstantSpellByName(runeSpell->getName());
+	if (!conjureSpell) {
+		return false;
+	}
+
+	const auto& vocMap = conjureSpell->getVocationSpellMap();
+	if (vocMap.empty()) {
+		return false;
+	}
+
+	const auto vocationMatches = [&vocMap](uint16_t vocationId) {
+		return vocMap.find(vocationId) != vocMap.end();
+	};
+
+	const uint16_t playerVocationId = player->getVocationId();
+	if (vocationMatches(playerVocationId)) {
+		return true;
+	}
+
+	if (const Vocation* vocation = g_vocations.getVocation(playerVocationId)) {
+		const uint32_t fromVocation = vocation->getFromVocation();
+		if (fromVocation != 0 && vocationMatches(static_cast<uint16_t>(fromVocation))) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+} // namespace
+
+void Player::tryWheelRunicMastery(const Spell* runeSpell)
+{
+	wheelRunicMasteryBonus = 0;
+	if (!wheelRunicMastery || !runeSpell || !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	if (uniform_random(1, 100) > 25) {
+		return;
+	}
+
+	const uint8_t percent = canPlayerVocationCreateRune(this, runeSpell) ? 20 : 10;
+	const int32_t baseMagicLevel = static_cast<int32_t>(magLevel);
+	wheelRunicMasteryBonus = (baseMagicLevel * static_cast<int32_t>(percent)) / 100;
+	if (wheelRunicMasteryBonus <= 0 && baseMagicLevel > 0) {
+		wheelRunicMasteryBonus = 1;
+	}
+
+	if (wheelRunicMasteryBonus > 0) {
+		sendTextMessage(MESSAGE_STATUS_SMALL, "(Runic Mastery)");
+	}
 }
 
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const

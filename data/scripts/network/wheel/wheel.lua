@@ -18,6 +18,16 @@ local WHEEL_NO_GEM = -1
 local CAPACITY_STAT_SCALE = 100
 local WHEEL_REQUIRE_PROMOTION = false
 local WHEEL_CONDITION_SUBID = 86061
+-- Must match WHEEL_SPELL_CD_STORAGE_BASE in src/spells.cpp (8600000 + spellId).
+local WHEEL_SPELL_CD_STORAGE_BASE = 8600000
+-- Must match WHEEL_SPELL_FLAT_MANA_STORAGE_BASE in src/spells.cpp (8611000 + spellId).
+local WHEEL_SPELL_FLAT_MANA_STORAGE_BASE = 8611000
+local WHEEL_HEALING_LINK_STORAGE = 8600051
+local WHEEL_SPELL_FLAT_MANA_SPELLS = {
+	["Heal Friend"] = true,
+}
+local WHEEL_APPLIED_CD_STORAGES = {}
+local WHEEL_APPLIED_FLAT_MANA_STORAGES = {}
 local WHEEL_AUGMENT_DEBUG = true
 
 local AUGMENT_TYPE_NAMES = {
@@ -230,7 +240,6 @@ local SPECIAL_MAGE_SPELLS = {
 	"Strong Energy Strike", "Strong Flame Strike", "Strong Ice Strike", "Strong Terra Strike",
 	"Ultimate Energy Strike", "Ultimate Flame Strike", "Ultimate Ice Strike", "Ultimate Terra Strike",
 }
-local FORKED_DRUID_SPELLS = { "Forked Glacier", "Forked Thorns" }
 
 -- Kept in the same order as Canary's wheel spell table. Each spell_N node exists
 -- twice on the wheel: completing one unlocks grade I and completing both unlocks grade II.
@@ -310,17 +319,17 @@ local WHEEL_SPELL_BONUSES = {
 			{ { AUGMENT_TYPE.BASE_HEALING, 0.04 } },
 			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
 		} },
-		spell_3 = { names = FORKED_DRUID_SPELLS, grades = {
-			{ { AUGMENT_TYPE.COOLDOWN, -2 } },
-			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 1 } },
+		spell_3 = { names = { "Nature's Embrace" }, grades = {
+			{ { AUGMENT_TYPE.BASE_HEALING, 0.11 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -10 } },
 		} },
 		spell_4 = { names = { "Terra Wave" }, grades = {
 			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.065 } },
 			{ { AUGMENT_TYPE.LIFE_LEECH, 0.10 } },
 		} },
 		spell_5 = { names = { "Heal Friend" }, grades = {
-			{ { AUGMENT_TYPE.BASE_HEALING, 0.04 } },
-			{ { AUGMENT_TYPE.BASE_HEALING, 0.06 } },
+			{ { AUGMENT_TYPE.MANA_COST, -10 } },
+			{ { AUGMENT_TYPE.BASE_HEALING, 0.05 } },
 		} },
 	},
 	[5] = {
@@ -1145,8 +1154,14 @@ local function calculateWheelBonuses(player, points, activeGems)
 				end
 			elseif conviction == "special_1" and vocationId == 2 then
 				bonuses.positionalTactics = true
+			elseif conviction == "special_1" and vocationId == 3 then
+				bonuses.runicMastery = true
+			elseif conviction == "special_1" and vocationId == 4 then
+				bonuses.healingLink = true
 			elseif conviction == "special_2" and vocationId == 2 then
 				bonuses.ballisticMastery = true
+			elseif conviction == "special_2" and vocationId == 4 then
+				bonuses.runicMastery = true
 			elseif WHEEL_SPELL_BONUSES[vocationId] and WHEEL_SPELL_BONUSES[vocationId][conviction] then
 				addWheelSpellGrade(bonuses, conviction)
 			end
@@ -1339,8 +1354,112 @@ function Player.updatePositionalTactics(self)
 	return true
 end
 
+local function clearWheelSpellCooldownStorages(player)
+	local key = getWheelPlayerKey(player)
+	local applied = WHEEL_APPLIED_CD_STORAGES[key]
+	if not applied then
+		return
+	end
+	for _, storageKey in ipairs(applied) do
+		player:setStorageValue(storageKey, -1)
+	end
+	WHEEL_APPLIED_CD_STORAGES[key] = nil
+end
+
+local function syncWheelSpellCooldownStorages(player, spellAugments)
+	clearWheelSpellCooldownStorages(player)
+
+	local totals = {}
+	for _, augment in ipairs(spellAugments) do
+		if augment.augmentType == AUGMENT_TYPE.COOLDOWN then
+			local ms = math.floor(math.abs(tonumber(augment.value) or 0) * 1000)
+			totals[augment.spellName] = (totals[augment.spellName] or 0) + ms
+		end
+	end
+
+	local function getInstantSpellIdByName(spellName)
+		local spell = Spell(spellName)
+		if not spell then
+			return nil
+		end
+		local id = spell:id()
+		if type(id) == "number" and id > 0 then
+			return id
+		end
+		return nil
+	end
+
+	local key = getWheelPlayerKey(player)
+	local applied = {}
+	for spellName, ms in pairs(totals) do
+		local spellId = getInstantSpellIdByName(spellName)
+		if spellId and ms > 0 then
+			local storageKey = WHEEL_SPELL_CD_STORAGE_BASE + spellId
+			player:setStorageValue(storageKey, ms)
+			applied[#applied + 1] = storageKey
+			if spellName == "Nature's Embrace" then
+				print(string.format(
+					"[wheel-aug][storage] %s Nature's Embrace id=%d wheelCooldownReductionMs=%d",
+					player:getName(), spellId, ms))
+			end
+		end
+	end
+	WHEEL_APPLIED_CD_STORAGES[key] = applied
+end
+
+local function clearWheelSpellFlatManaStorages(player)
+	local key = getWheelPlayerKey(player)
+	local applied = WHEEL_APPLIED_FLAT_MANA_STORAGES[key]
+	if not applied then
+		return
+	end
+	for _, storageKey in ipairs(applied) do
+		player:setStorageValue(storageKey, -1)
+	end
+	WHEEL_APPLIED_FLAT_MANA_STORAGES[key] = nil
+end
+
+local function syncWheelSpellFlatManaStorages(player, spellAugments)
+	clearWheelSpellFlatManaStorages(player)
+
+	local totals = {}
+	for _, augment in ipairs(spellAugments) do
+		if augment.augmentType == AUGMENT_TYPE.MANA_COST and WHEEL_SPELL_FLAT_MANA_SPELLS[augment.spellName] then
+			local flat = math.floor(math.abs(tonumber(augment.value) or 0))
+			totals[augment.spellName] = (totals[augment.spellName] or 0) + flat
+		end
+	end
+
+	local function getInstantSpellIdByName(spellName)
+		local spell = Spell(spellName)
+		if not spell then
+			return nil
+		end
+		local id = spell:id()
+		if type(id) == "number" and id > 0 then
+			return id
+		end
+		return nil
+	end
+
+	local key = getWheelPlayerKey(player)
+	local applied = {}
+	for spellName, flatMana in pairs(totals) do
+		local spellId = getInstantSpellIdByName(spellName)
+		if spellId and flatMana > 0 then
+			local storageKey = WHEEL_SPELL_FLAT_MANA_STORAGE_BASE + spellId
+			player:setStorageValue(storageKey, flatMana)
+			applied[#applied + 1] = storageKey
+		end
+	end
+	WHEEL_APPLIED_FLAT_MANA_STORAGES[key] = applied
+end
+
 local function removeWheelBonuses(player)
 	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, WHEEL_CONDITION_SUBID, true)
+	clearWheelSpellCooldownStorages(player)
+	clearWheelSpellFlatManaStorages(player)
+	player:setStorageValue(WHEEL_HEALING_LINK_STORAGE, -1)
 	if player.clearWheelSpellAugments then
 		player:clearWheelSpellAugments()
 	end
@@ -1352,6 +1471,9 @@ local function removeWheelBonuses(player)
 	removeAppliedPositionalTactics(player)
 	if player.setWheelBallisticMastery then
 		player:setWheelBallisticMastery(false)
+	end
+	if player.setWheelRunicMastery then
+		player:setWheelRunicMastery(false)
 	end
 
 	local key = getWheelPlayerKey(player)
@@ -1614,13 +1736,39 @@ local function applyWheelBonuses(player)
 		player:addCondition(condition)
 	end
 
+	if not player.addWheelSpellAugment then
+		print(string.format(
+			"[wheel-aug] WARNING %s: server binary missing Player.addWheelSpellAugment — recompile TFS for wheel spell cooldowns.",
+			player:getName()))
+	end
+
+	syncWheelSpellCooldownStorages(player, bonuses.spellAugments)
+	syncWheelSpellFlatManaStorages(player, bonuses.spellAugments)
+
 	if player.addWheelSpellAugment then
 		for _, augment in ipairs(bonuses.spellAugments) do
-			if augment.spellName == "Strong Ethereal Spear" then
-				logWheelSpellAugment(player, augment, "apply")
+			local skipFlatMana = augment.spellName == "Heal Friend" and augment.augmentType == AUGMENT_TYPE.MANA_COST
+			if not skipFlatMana then
+				if augment.spellName == "Strong Ethereal Spear" then
+					logWheelSpellAugment(player, augment, "apply")
+				end
+				if augment.spellName == "Nature's Embrace" then
+					print(string.format(
+						"[wheel-aug][apply] %s spell=%s type=%s value=%s",
+						player:getName(),
+						augment.spellName,
+						AUGMENT_TYPE_NAMES[augment.augmentType] or tostring(augment.augmentType),
+						tostring(augment.value)))
+				end
+				player:addWheelSpellAugment(augment.spellName, augment.augmentType, augment.value)
 			end
-			player:addWheelSpellAugment(augment.spellName, augment.augmentType, augment.value)
 		end
+	end
+
+	if bonuses.healingLink then
+		player:setStorageValue(WHEEL_HEALING_LINK_STORAGE, 1)
+	else
+		player:setStorageValue(WHEEL_HEALING_LINK_STORAGE, -1)
 	end
 
 	local key = getWheelPlayerKey(player)
@@ -1689,6 +1837,10 @@ local function applyWheelBonuses(player)
 		player:setWheelBallisticMastery(true)
 	end
 
+	if bonuses.runicMastery and player.setWheelRunicMastery then
+		player:setWheelRunicMastery(true)
+	end
+
 	if SharpshooterWheel and SharpshooterWheel.refreshActive then
 		SharpshooterWheel.refreshActive(player)
 	end
@@ -1706,6 +1858,59 @@ function Player.wheelApplyBonuses(self)
 	return applyWheelBonuses(self)
 end
 
+function Player.hasWheelHealingLink(self)
+	return self:getStorageValue(WHEEL_HEALING_LINK_STORAGE) == 1
+end
+
+-- 10% of healing applied to the primary target is returned to the caster (Healing Link perk).
+function Player.applyWheelHealingLinkSelfHeal(self, target, hpBefore)
+	if not self or not target or not self:hasWheelHealingLink() then
+		return
+	end
+	if target:getId() == self:getId() then
+		return
+	end
+	local healed = target:getHealth() - (hpBefore or 0)
+	if healed <= 0 then
+		return
+	end
+	local amount = math.max(1, math.floor(healed * 0.10))
+	doTargetCombatHealth(0, self, COMBAT_HEALING, amount, amount, CONST_ME_MAGIC_BLUE)
+end
+
+-- Sum of BASE_HEALING wheel augments for a spell (conviction grades + gem mods).
+function Player.getWheelSpellHealingPercentBonus(self, spellName)
+	if not spellName or spellName == "" then
+		return 0
+	end
+
+	local profile = loadProfile(self)
+	local bonuses = calculateWheelBonuses(self, profile.points, profile.gems)
+	local total = 0
+	for _, augment in ipairs(bonuses.spellAugments) do
+		if augment.spellName == spellName and augment.augmentType == AUGMENT_TYPE.BASE_HEALING then
+			total = total + (tonumber(augment.value) or 0)
+		end
+	end
+	return total
+end
+
+function Player.getWheelSpellCooldownReductionMs(self, spellName)
+	if not spellName or spellName == "" then
+		return 0
+	end
+
+	local profile = loadProfile(self)
+	local bonuses = calculateWheelBonuses(self, profile.points, profile.gems)
+	local totalMs = 0
+	for _, augment in ipairs(bonuses.spellAugments) do
+		if augment.spellName == spellName and augment.augmentType == AUGMENT_TYPE.COOLDOWN then
+			totalMs = totalMs + math.floor(math.abs(tonumber(augment.value) or 0) * 1000)
+		end
+	end
+	return totalMs
+end
+
 function Player.getWheelAugmentReport(self, spellName)
 	spellName = spellName ~= "" and spellName or "Strong Ethereal Spear"
 	local profile = loadProfile(self)
@@ -1716,6 +1921,14 @@ function Player.getWheelAugmentReport(self, spellName)
 		slotA, slotB = 6, 21
 	elseif spellName == "Swift Foot" then
 		slotA, slotB = 13, 29
+	elseif spellName == "Mass Healing" then
+		slotA, slotB = 8, 24
+	elseif spellName == "Terra Wave" then
+		slotA, slotB = 13, 29
+	elseif spellName == "Nature's Embrace" then
+		slotA, slotB = 11, 26
+	elseif spellName == "Heal Friend" then
+		slotA, slotB = 16, 31
 	end
 	local lines = {
 		string.format("%s: grade=%d", spellName, grade),
@@ -1750,6 +1963,18 @@ function Player.getWheelAugmentReport(self, spellName)
 			lines[#lines + 1] = "Grade I active: -2s cooldown on Strong Ethereal Spear."
 		elseif grade >= 2 then
 			lines[#lines + 1] = "Grade I+II active: -2s cooldown and +380% base damage."
+		end
+	elseif spellName == "Nature's Embrace" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: +11% base healing on Nature's Embrace."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: +11% base healing and -10s cooldown."
+		end
+	elseif spellName == "Heal Friend" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: -10 mana cost on Heal Friend."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: -10 mana cost and +5% base healing on Heal Friend."
 		end
 	else
 		lines[#lines + 1] = string.format("Grade %d active.", grade)

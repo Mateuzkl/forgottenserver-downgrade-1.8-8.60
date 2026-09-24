@@ -1010,6 +1010,21 @@ int luaPlayerSetWheelBallisticMastery(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSetWheelRunicMastery(lua_State* L)
+{
+	// player:setWheelRunicMastery(enabled)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setWheelRunicMastery(getBoolean(L, 2));
+	player->clearWheelRunicMasteryBonus();
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerGetItemCount(lua_State* L)
 {
 	// player:getItemCount(itemId[, subType = -1[, ignoreEquipped = false]])
@@ -4892,6 +4907,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addWheelMitigationMultiplier", luaPlayerAddWheelMitigationMultiplier);
 	registerMethod("Player", "addWheelDodgeChance", luaPlayerAddWheelDodgeChance);
 	registerMethod("Player", "setWheelBallisticMastery", luaPlayerSetWheelBallisticMastery);
+	registerMethod("Player", "setWheelRunicMastery", luaPlayerSetWheelRunicMastery);
 
 	registerMethod("Player", "getItemCount", luaPlayerGetItemCount);
 	registerMethod("Player", "getItemById", luaPlayerGetItemById);

@@ -11,7 +11,15 @@ function onGetFormulaValues(player, level, maglevel)
 	-- Vocation Adjustment: heal more consistently (lower highs, higher lows) -- 20/28 -> 22/26.
 	local min = (level / 2.5) + (maglevel * 22)
 	local max = (level / 2.5) + (maglevel * 26)
-	return math.floor(min * HEAL_SCALE), math.floor(max * HEAL_SCALE)
+	min = math.floor(min * HEAL_SCALE)
+	max = math.floor(max * HEAL_SCALE)
+
+	local healingBonus = player:getWheelSpellHealingPercentBonus("Nature's Embrace")
+	if healingBonus > 0 then
+		min = math.floor(min * (1 + healingBonus))
+		max = math.floor(max * (1 + healingBonus))
+	end
+	return min, max
 end
 
 combat:setCallback(CALLBACK_PARAM_LEVELMAGICVALUE, "onGetFormulaValues")
@@ -28,7 +36,15 @@ sharedConservationCombat:setParameter(COMBAT_PARAM_AGGRESSIVE, 0)
 function onGetFormulaValuesSharedConservation(player, level, maglevel)
 	local min = (level / 2.5) + (maglevel * 22)
 	local max = (level / 2.5) + (maglevel * 26)
-	return math.floor(min * HEAL_SCALE * SHARED_CONSERVATION_RATIO), math.floor(max * HEAL_SCALE * SHARED_CONSERVATION_RATIO)
+	min = math.floor(min * HEAL_SCALE * SHARED_CONSERVATION_RATIO)
+	max = math.floor(max * HEAL_SCALE * SHARED_CONSERVATION_RATIO)
+
+	local healingBonus = player:getWheelSpellHealingPercentBonus("Nature's Embrace")
+	if healingBonus > 0 then
+		min = math.floor(min * (1 + healingBonus))
+		max = math.floor(max * (1 + healingBonus))
+	end
+	return min, max
 end
 
 sharedConservationCombat:setCallback(CALLBACK_PARAM_LEVELMAGICVALUE, "onGetFormulaValuesSharedConservation")
@@ -71,11 +87,21 @@ function spell.onCastSpell(creature, var)
 		creature:sendCancelMessage("You can't cast this spell to yourself.")
 		creature:getPosition():sendMagicEffect(CONST_ME_POFF)
 		return false
-	else
-		local result = combat:execute(creature, var)
-		shareConservationHeal(creature:getPlayer(), var:getNumber())
-		return result
 	end
+
+	local player = creature:getPlayer()
+	if not player then
+		return false
+	end
+
+	local target = Creature(var:getNumber())
+	local hpBefore = target and target:getHealth() or 0
+	local result = combat:execute(creature, var)
+	if result and target then
+		player:applyWheelHealingLinkSelfHeal(target, hpBefore)
+	end
+	shareConservationHeal(player, var:getNumber())
+	return result
 end
 
 spell:group("healing")
@@ -87,7 +113,7 @@ spell:level(300)
 spell:mana(400)
 spell:isPremium(true)
 spell:needTarget(true)
-spell:cooldown(60 * 1000)
+spell:cooldown(20 * 1000)
 spell:groupCooldown(1 * 1000)
 spell:isAggressive(false)
 spell:isBlockingWalls(true)

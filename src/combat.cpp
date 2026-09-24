@@ -137,7 +137,8 @@ static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatT
 		return 0;
 	}
 
-	int32_t magicLevel = static_cast<int32_t>(player->getMagicLevel()) + static_cast<int32_t>(player->getSpecialMagicLevel(combatType));
+	int32_t magicLevel = static_cast<int32_t>(player->getMagicLevel()) + static_cast<int32_t>(player->getSpecialMagicLevel(combatType)) +
+	                     player->getWheelRunicMasteryBonus();
 	return std::max<int32_t>(0, magicLevel);
 }
 
