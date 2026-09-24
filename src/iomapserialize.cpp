@@ -19,7 +19,112 @@ bool mapSerializeCylinderOwnsThing(const Cylinder* cylinder, const Thing* thing)
 {
 	return cylinder && thing && thing->getParent() == cylinder && cylinder->getThingIndex(thing) != -1;
 }
+
+std::array<uint16_t, 4> getBedTransformIds(const ItemType& itemType)
+{
+	if (!itemType.isBed()) {
+		return {};
+	}
+
+	return {itemType.id, itemType.transformToFree, itemType.transformToOnUse[PLAYERSEX_FEMALE],
+	        itemType.transformToOnUse[PLAYERSEX_MALE]};
+}
+
+std::string_view persistentFixtureTypeName(const ItemType& itemType)
+{
+	if (itemType.isBed()) {
+		return "bed";
+	}
+	if (itemType.isDoor()) {
+		return "door";
+	}
+	return "static";
+}
+
+void logStaleHouseFixture(const Tile* tile, uint16_t mapId, uint16_t persistedId, std::string_view fixtureType)
+{
+	if (!tile) {
+		return;
+	}
+
+	const Position& position = tile->getPosition();
+	g_logger().warn("[HousePersistence] stale fixture ignored: position={},{},{} mapId={} persistedId={} type={} "
+	                "reason=different-family action=keep-map-fixture",
+	                position.x, position.y, position.z, mapId, persistedId, fixtureType);
+}
+
+Container* findReplacementStaticContainer(Tile* tile)
+{
+	Container* replacement = nullptr;
+	const TileItemVector* items = tile ? tile->getItemList() : nullptr;
+	if (!items) {
+		return nullptr;
+	}
+
+	for (const auto& item : *items) {
+		const ItemType& itemType = Item::items[item->getID()];
+		Container* candidate = item->getContainer();
+		if (!candidate || itemType.moveable || itemType.forceSerialize) {
+			continue;
+		}
+		if (replacement) {
+			return nullptr;
+		}
+		replacement = candidate;
+	}
+	return replacement;
+}
+
+void transferContainerContents(Container* source, Container* destination)
+{
+	if (!source || !destination) {
+		return;
+	}
+
+	const ItemVector contents = source->getItems();
+	for (const auto& item : contents) {
+		if (destination->size() >= destination->capacity()) {
+			break;
+		}
+		if (!item || source->getThingIndex(item.get()) == -1) {
+			continue;
+		}
+
+		source->removeThing(item.get(), item->getItemCount());
+		destination->internalAddThing(item.get());
+		if (!mapSerializeCylinderOwnsThing(destination, item.get())) {
+			// Keep ownership in the temporary container so the caller can try a
+			// fallback destination without losing the item.
+			source->internalAddThing(item.get());
+		}
+	}
+}
 } // namespace
+
+bool IOMapSerialize::isSamePersistentFixtureFamily(const ItemType& mapType, const ItemType& persistedType)
+{
+	if (mapType.id == 0 || persistedType.id == 0) {
+		return false;
+	}
+	if (mapType.id == persistedType.id) {
+		return true;
+	}
+
+	if (mapType.isBed() && persistedType.isBed()) {
+		const auto mapTransforms = getBedTransformIds(mapType);
+		const auto persistedTransforms = getBedTransformIds(persistedType);
+		return std::ranges::any_of(mapTransforms, [&](uint16_t mapId) {
+			return mapId != 0 && std::ranges::find(persistedTransforms, mapId) != persistedTransforms.end();
+		});
+	}
+
+	if (mapType.isDoor() && persistedType.isDoor()) {
+		return mapType.persistentTransformFamily != 0 &&
+		       mapType.persistentTransformFamily == persistedType.persistentTransformFamily;
+	}
+
+	return false;
+}
 
 void IOMapSerialize::loadHouseItems(Map* map)
 {
@@ -186,19 +291,26 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 			}
 		}
 	} else {
-		// Stationary items like doors/beds/blackboards/bookcases
+		// Stationary items like doors/beds/blackboards/bookcases. Exact identity
+		// always wins; a transformed state is accepted only with family proof.
 		Item* staticItem = nullptr;
+		bool exactMatch = false;
 		if (const TileItemVector* items = tile->getItemList()) {
 			for (const auto& findItem : *items) {
 				if (findItem->getID() == id) {
 					staticItem = findItem.get();
+					exactMatch = true;
 					break;
-				} else if (iType.isDoor() && findItem->getDoor()) {
-					staticItem = findItem.get();
-					break;
-				} else if (iType.isBed() && findItem->getBed()) {
-					staticItem = findItem.get();
-					break;
+				}
+			}
+
+			if (!staticItem && (iType.isDoor() || iType.isBed())) {
+				for (const auto& findItem : *items) {
+					const ItemType& mapType = Item::items[findItem->getID()];
+					if (isSamePersistentFixtureFamily(mapType, iType)) {
+						staticItem = findItem.get();
+						break;
+					}
 				}
 			}
 		}
@@ -210,7 +322,9 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 					return false;
 				}
 
-				g_game.transformItem(staticItem, id);
+				if (!exactMatch) {
+					g_game.transformItem(staticItem, id);
+				}
 			} else {
 				LOG_WARN(fmt::format("WARNING: Unserialization error in IOMapSerialize::loadItem() {}", id));
 			}
@@ -238,13 +352,56 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 			}
 		} else {
 			// The map changed since the last save, just read the attributes
+			Item* changedFixture = nullptr;
+			if (const TileItemVector* items = tile->getItemList(); items && (iType.isDoor() || iType.isBed())) {
+				for (const auto& findItem : *items) {
+					const ItemType& mapType = Item::items[findItem->getID()];
+					if ((iType.isDoor() && mapType.isDoor()) || (iType.isBed() && mapType.isBed())) {
+						changedFixture = findItem.get();
+						break;
+					}
+				}
+			}
+
 			auto dummy = Item::CreateItem(id);
 			if (dummy) {
-				dummy->unserializeAttr(propStream);
+				if (!dummy->unserializeAttr(propStream)) {
+					LOG_WARN(fmt::format("WARNING: Unserialization error in IOMapSerialize::loadItem() {}", id));
+					return false;
+				}
 				Container* container = dummy->getContainer();
 				if (container) {
 					if (!loadContainer(propStream, container)) {
 						return false;
+					}
+
+					const size_t persistedContentCount = container->size();
+					Container* replacementContainer = findReplacementStaticContainer(tile);
+					if (replacementContainer) {
+						transferContainerContents(container, replacementContainer);
+					}
+
+					// If there is no unambiguous replacement container, or a child
+					// cannot be transferred, retain the old container itself as a
+					// no-loss fallback instead of destroying player-owned data.
+					if (!container->empty()) {
+						Item* raw = dummy.get();
+						tile->internalAddThing(raw);
+						if (!mapSerializeCylinderOwnsThing(tile, raw)) {
+							const Position& position = tile->getPosition();
+							LOG_ERROR(fmt::format("[HousePersistence] could not preserve stale container {} at {},{},{}",
+							                      id, position.x, position.y, position.z));
+							return false;
+						}
+						raw->startDecaying();
+						dummy.reset();
+					}
+
+					if (persistedContentCount != 0) {
+						const Position& position = tile->getPosition();
+						g_logger().warn("[HousePersistence] preserved {} item(s) from replaced static container {} "
+						                "at {},{},{}",
+						                persistedContentCount, id, position.x, position.y, position.z);
 					}
 				} else if (BedItem* bedItem = dynamic_cast<BedItem*>(dummy.get())) {
 					uint32_t sleeperGUID = bedItem->getSleeper();
@@ -252,6 +409,10 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 						g_game.removeBedSleeper(sleeperGUID);
 					}
 				}
+			}
+
+			if (changedFixture) {
+				logStaleHouseFixture(tile, changedFixture->getID(), id, persistentFixtureTypeName(iType));
 			}
 		}
 	}

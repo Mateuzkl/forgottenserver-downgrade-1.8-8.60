@@ -309,6 +309,26 @@ LevelDoorTable = {
 	{ closedDoor = 30038, openDoor = 30040 },
 }
 
+-- House persistence must only restore a saved open/closed state when both
+-- IDs belong to the same configured door family. Keep this metadata sourced
+-- from the authoritative door tables instead of relying on ID arithmetic.
+local function registerPersistentDoorFamilies(doorTable)
+	for _, family in ipairs(doorTable) do
+		local familyId = family.openDoor
+		for _, key in ipairs({"closedDoor", "openDoor"}) do
+			local itemId = family[key]
+			if itemId then
+				ItemType(itemId):setPersistentTransformFamily(familyId)
+			end
+		end
+	end
+end
+
+registerPersistentDoorFamilies(KeyDoorTable)
+registerPersistentDoorFamilies(CustomDoorTable)
+registerPersistentDoorFamilies(QuestDoorTable)
+registerPersistentDoorFamilies(LevelDoorTable)
+
 -- Window table for toggling windows open/closed
 windowTable = {
 	{closedWindow = 5302, openWindow = 6447},
@@ -404,3 +424,42 @@ windowTable = {
 	{closedWindow = 33644, openWindow = 33642},
 	{closedWindow = 33645, openWindow = 33643},
 }
+
+-- Some window pairs are listed in both directions. Build connected families
+-- first so reciprocal (and any transitive) entries receive one stable ID.
+local function registerPersistentWindowFamilies(windows)
+	local parent = {}
+
+	local function find(itemId)
+		if not parent[itemId] then
+			parent[itemId] = itemId
+		elseif parent[itemId] ~= itemId then
+			parent[itemId] = find(parent[itemId])
+		end
+		return parent[itemId]
+	end
+
+	local function unite(firstId, secondId)
+		local firstRoot = find(firstId)
+		local secondRoot = find(secondId)
+		if firstRoot == secondRoot then return end
+		if firstRoot < secondRoot then
+			parent[secondRoot] = firstRoot
+		else
+			parent[firstRoot] = secondRoot
+		end
+	end
+
+	for _, family in ipairs(windows) do
+		unite(family.closedWindow, family.openWindow)
+	end
+
+	for itemId in pairs(parent) do
+		local familyId = find(itemId)
+		if not ItemType(itemId):setPersistentTransformFamily(familyId) then
+			print(string.format("[Warning - registerPersistentWindowFamilies] Could not register item %d in family %d.", itemId, familyId))
+		end
+	end
+end
+
+registerPersistentWindowFamilies(windowTable)

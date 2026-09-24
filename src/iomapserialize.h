@@ -18,6 +18,10 @@ public:
 
 	static bool saveHouse(const House* house);
 
+	// Exact IDs always match. Different IDs only match when item metadata
+	// proves that they are transform states of the same static fixture.
+	static bool isSamePersistentFixtureFamily(const ItemType& mapType, const ItemType& persistedType);
+
 private:
 	static void saveItem(PropWriteStream& stream, const Item* item);
 	static void saveTile(PropWriteStream& stream, const Tile* tile);

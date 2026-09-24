@@ -37070,7 +37070,9 @@
 	<item fromid="20419" toid="20422" article="a" name="city foundation" />
 	<item fromid="20423" toid="20424" article="a" name="wall" />
 	<item fromid="20425" toid="20440" article="a" name="buttress" />
-	<item fromid="20441" toid="20442" article="an" name="open window" />
+	<item fromid="20441" toid="20442" article="an" name="open window">
+		<attribute key="type" value="door" />
+	</item>
 	<item id="20443" article="a" name="closed door" editorsuffix="(it is locked)">
 		<attribute key="type" value="door" />
 		<attribute key="description" value="It is locked." />
@@ -37139,7 +37141,9 @@
 	</item>
 	<item fromid="20461" toid="20466" article="a" name="rosetta window">
 	</item>
-	<item fromid="20467" toid="20468" article="a" name="closed window" />
+	<item fromid="20467" toid="20468" article="a" name="closed window">
+		<attribute key="type" value="door" />
+	</item>
 	<item fromid="20469" toid="20473" name="ladder rung">
 		<attribute key="floorchange" value="down" />
 	</item>
