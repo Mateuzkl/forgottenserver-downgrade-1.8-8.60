@@ -455,7 +455,10 @@ local function registerPersistentWindowFamilies(windows)
 	end
 
 	for itemId in pairs(parent) do
-		ItemType(itemId):setPersistentTransformFamily(find(itemId))
+		local familyId = find(itemId)
+		if not ItemType(itemId):setPersistentTransformFamily(familyId) then
+			print(string.format("[Warning - registerPersistentWindowFamilies] Could not register item %d in family %d.", itemId, familyId))
+		end
 	end
 end
 
