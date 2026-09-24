@@ -6,7 +6,6 @@
 #include "iomapserialize.h"
 
 #include "bed.h"
-#include "configmanager.h"
 #include "game.h"
 #include "tools.h"
 #include "logger.h"
@@ -42,16 +41,16 @@ std::string_view persistentFixtureTypeName(const ItemType& itemType)
 	return "static";
 }
 
-void logHousePersistenceDecision(const Tile* tile, uint16_t mapId, uint16_t persistedId,
-                                 std::string_view fixtureType, bool sameFamily, std::string_view action)
+void logStaleHouseFixture(const Tile* tile, uint16_t mapId, uint16_t persistedId, std::string_view fixtureType)
 {
-	if (!tile || !ConfigManager::getBoolean(ConfigManager::HOUSE_PERSISTENCE_DIAGNOSTICS)) {
+	if (!tile) {
 		return;
 	}
 
 	const Position& position = tile->getPosition();
-	g_logger().info("[HousePersistence] position={},{},{} mapId={} persistedId={} type={} sameFamily={} action={}",
-	                position.x, position.y, position.z, mapId, persistedId, fixtureType, sameFamily, action);
+	g_logger().warn("[HousePersistence] stale fixture ignored: position={},{},{} mapId={} persistedId={} type={} "
+	                "reason=different-family action=keep-map-fixture",
+	                position.x, position.y, position.z, mapId, persistedId, fixtureType);
 }
 } // namespace
 
@@ -85,25 +84,7 @@ void IOMapSerialize::loadHouseItems(Map* map)
     AutoStat stat("loadHouseItems", "full");
     int64_t start = OTSYS_TIME();
     
-	Database& database = Database::getInstance();
-	std::string updateMode = asLowerCaseString(std::string{ConfigManager::getString(ConfigManager::HOUSE_MAP_UPDATE_MODE)});
-	if (updateMode != "preserve" && updateMode != "reconcile" && updateMode != "reset") {
-		g_logger().warn("[HousePersistence] unknown houseMapUpdateMode '{}'; using 'preserve'.", updateMode);
-		updateMode = "preserve";
-	}
-	if (updateMode == "reset") {
-		if (!database.executeQuery("DELETE FROM `tile_store`")) {
-			g_logger().error("[HousePersistence] reset requested, but tile_store could not be cleared.");
-			return;
-		}
-		g_logger().warn("[HousePersistence] reset mode cleared all persisted house tile data.");
-		return;
-	}
-	if (updateMode == "reconcile") {
-		g_logger().warn("[HousePersistence] reconcile mode is experimental; using conservative fixture-family reconciliation.");
-	}
-
-    DBResult_ptr result = database.storeQuery(
+    DBResult_ptr result = Database::getInstance().storeQuery(
         "SELECT `house_id`, `data` FROM `tile_store` ORDER BY `house_id`"
     );
     
@@ -288,7 +269,6 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 		}
 
 		if (staticItem) {
-			const uint16_t mapItemId = staticItem->getID();
 			if (staticItem->unserializeAttr(propStream)) {
 				Container* container = staticItem->getContainer();
 				if (container && !loadContainer(propStream, container)) {
@@ -298,8 +278,6 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 				if (!exactMatch) {
 					g_game.transformItem(staticItem, id);
 				}
-				logHousePersistenceDecision(tile, mapItemId, id, persistentFixtureTypeName(iType), true,
-				                            exactMatch ? "restore-attributes" : "restore-transform-state");
 			} else {
 				LOG_WARN(fmt::format("WARNING: Unserialization error in IOMapSerialize::loadItem() {}", id));
 			}
@@ -358,8 +336,7 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 			}
 
 			if (changedFixture) {
-				logHousePersistenceDecision(tile, changedFixture->getID(), id, persistentFixtureTypeName(iType), false,
-				                            "keep-map-fixture");
+				logStaleHouseFixture(tile, changedFixture->getID(), id, persistentFixtureTypeName(iType));
 			}
 		}
 	}

@@ -362,7 +362,6 @@ bool ConfigManager::load()
 		strings[String::MAP_CACHE_DIRECTORY] = getGlobalString(L, "mapCacheDirectory", "data/cache/maps");
 		strings[String::MAP_AUTHOR] = getGlobalString(L, "mapAuthor", "Unknown");
 		strings[String::HOUSE_RENT_PERIOD] = getGlobalString(L, "houseRentPeriod", "never");
-		strings[String::HOUSE_MAP_UPDATE_MODE] = getGlobalString(L, "houseMapUpdateMode", "preserve");
 
 		strings[String::MYSQL_HOST] = getGlobalString(L, "mysqlHost", getEnv("MYSQL_HOST", "127.0.0.1"));
 		strings[String::MYSQL_USER] = getGlobalString(L, "mysqlUser", getEnv("MYSQL_USER", "forgottenserver"));
@@ -421,7 +420,6 @@ bool ConfigManager::load()
 	booleans[Boolean::CLEAN_PROTECTION_ZONES] = getGlobalBoolean(L, "cleanProtectionZones", false);
 	booleans[Boolean::HOUSE_DOOR_SHOW_PRICE] = getGlobalBoolean(L, "houseDoorShowPrice", true);
 	booleans[Boolean::ONLY_INVITED_CAN_MOVE_HOUSE_ITEMS] = getGlobalBoolean(L, "onlyInvitedCanMoveHouseItems", true);
-	booleans[Boolean::HOUSE_PERSISTENCE_DIAGNOSTICS] = getGlobalBoolean(L, "housePersistenceDiagnostics", false);
 	booleans[Boolean::REMOVE_ON_DESPAWN] = getGlobalBoolean(L, "removeOnDespawn", true);
 	booleans[Boolean::MONSTER_OVERSPAWN] = getGlobalBoolean(L, "monsterOverspawn", false);
 	booleans[Boolean::MANASHIELD_BREAKABLE] = getGlobalBoolean(L, "useBreakableManaShield", false);
