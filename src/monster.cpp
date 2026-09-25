@@ -2097,6 +2097,10 @@ void Monster::onThinkTarget(uint32_t interval)
 		if (overrideTargetDistanceDuration <= 0) {
 			overrideTargetDistanceDuration = 0;
 			overrideTargetDistance = 0;
+			if (!followCreature.expired() || !attackedCreature.expired()) {
+				forceUpdateFollowPath = true;
+				requestFollowPathUpdate();
+			}
 		}
 	}
 
@@ -2493,7 +2497,7 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 					} else if (getEffectiveTargetDistance() > 1 &&
 					           mType->info.staticAttackChance < static_cast<uint32_t>(uniform_random(1, 100))) {
 						result = getDanceStep(getPosition(), direction);
-					} else if (getEffectiveTargetDistance() <= 1) {
+					} else if (overrideTargetDistanceDuration > 0 && getEffectiveTargetDistance() <= 1) {
 						forceUpdateFollowPath = true;
 						requestFollowPathUpdate();
 					}

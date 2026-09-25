@@ -859,6 +859,7 @@ void Player::setWheelFocusMastery(bool enabled)
 	if (!enabled) {
 		wheelFocusMasteryReady = false;
 		wheelFocusMasteryExpireTime = 0;
+		wheelFocusMasteryCastMultiplier = 1.0f;
 		sendWheelFocusMasteryClientState("idle", 0);
 	}
 }
@@ -882,33 +883,46 @@ void Player::tryArmWheelFocusMastery(const Spell* spell)
 	sendWheelFocusMasteryClientState("armed", 12000);
 }
 
-void Player::applyWheelFocusMasteryBonus(CombatDamage& damage, const Spell* spell)
+void Player::applyWheelFocusMasteryCastMultiplier(CombatDamage& damage) const
 {
+	if (wheelFocusMasteryCastMultiplier <= 1.0f || damage.primary.type == COMBAT_HEALING || damage.primary.value >= 0) {
+		return;
+	}
+
+	damage.primary.value = static_cast<int32_t>(
+	    std::lround(static_cast<double>(damage.primary.value) * wheelFocusMasteryCastMultiplier));
+	if (damage.secondary.value != 0) {
+		damage.secondary.value = static_cast<int32_t>(
+		    std::lround(static_cast<double>(damage.secondary.value) * wheelFocusMasteryCastMultiplier));
+	}
+}
+
+float Player::consumeWheelFocusMasteryForCast(const Spell* spell)
+{
+	if (wheelFocusMasteryCastMultiplier > 1.0f) {
+		return wheelFocusMasteryCastMultiplier;
+	}
+
 	if (!wheelFocusMastery || !wheelFocusMasteryReady || !spell ||
 	    !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
-		return;
+		return 1.0f;
 	}
 
 	if (OTSYS_TIME() > wheelFocusMasteryExpireTime) {
 		wheelFocusMasteryReady = false;
 		sendWheelFocusMasteryClientState("expired", 0);
-		return;
+		return 1.0f;
 	}
 
-	if (!spell->getAggressive() || damage.primary.type == COMBAT_HEALING || damage.primary.value >= 0) {
-		return;
-	}
-
-	damage.primary.value =
-	    static_cast<int32_t>(std::lround(static_cast<double>(damage.primary.value) * 1.35));
-	if (damage.secondary.value != 0) {
-		damage.secondary.value =
-		    static_cast<int32_t>(std::lround(static_cast<double>(damage.secondary.value) * 1.35));
+	if (!spell->getAggressive()) {
+		return 1.0f;
 	}
 
 	wheelFocusMasteryReady = false;
+	wheelFocusMasteryCastMultiplier = 1.35f;
 	sendTextMessage(MESSAGE_STATUS_SMALL, "(Focus Mastery)");
 	sendWheelFocusMasteryClientState("consumed", 0);
+	return wheelFocusMasteryCastMultiplier;
 }
 
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const

@@ -2498,15 +2498,16 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget, instantSpellName);
 					const bool effectOnly =
 					    damage.primary.type == COMBAT_NONE && damage.secondary.type == COMBAT_NONE;
+					bool canCombat = !self->params.aggressive ||
+					                 (resolvedCaster != nextTarget &&
+					                  Combat::canDoCombat(resolvedCaster, nextTarget) == RETURNVALUE_NOERROR);
+					if (!canCombat) {
+						return;
+					}
 					if (effectOnly && self->params.targetCallback) {
 						self->params.targetCallback->onTargetCombat(resolvedCaster, nextTarget);
 					} else {
-						bool canCombat = !self->params.aggressive ||
-						                 (resolvedCaster != nextTarget &&
-						                  Combat::canDoCombat(resolvedCaster, nextTarget) == RETURNVALUE_NOERROR);
-						if (canCombat) {
-							doTargetCombat(resolvedCaster, nextTarget, damage, self->params);
-						}
+						doTargetCombat(resolvedCaster, nextTarget, damage, self->params);
 					}
 				}
 			});

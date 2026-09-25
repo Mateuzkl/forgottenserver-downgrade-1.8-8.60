@@ -172,7 +172,7 @@ int luaItemSplit(lua_State* L)
 
 int luaItemRemove(lua_State* L)
 {
-	// item:remove([count = -1])
+	// item:remove([count = -1[, actor = player]])
 	auto& itemPtr = getSharedPtr<Item>(L, 1);
 	if (!itemPtr) {
 		lua_pushnil(L);
@@ -187,8 +187,22 @@ int luaItemRemove(lua_State* L)
 		return 1;
 	}
 
-	int32_t count = getInteger<int32_t>(L, 2, -1);
-	ReturnValue ret = g_game.internalRemoveItem(item, count);
+	int32_t count = -1;
+	Creature* actor = nullptr;
+	if (lua_gettop(L) >= 2) {
+		if (Player* player = getPlayer(L, 2)) {
+			actor = player;
+		} else {
+			count = getInteger<int32_t>(L, 2, -1);
+			if (lua_gettop(L) >= 3) {
+				if (Player* player = getPlayer(L, 3)) {
+					actor = player;
+				}
+			}
+		}
+	}
+
+	ReturnValue ret = g_game.internalRemoveItem(item, count, false, 0, actor);
 
 	if (ret != RETURNVALUE_NOERROR) {
 		itemPtr.reset();

@@ -697,7 +697,8 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 	if (wheelSystemEnabled) {
 		applyBonus(player->getWheelSpellAugmentBonus(getName()));
 		if (aggressive) {
-			player->applyWheelFocusMasteryBonus(damage, this);
+			player->consumeWheelFocusMasteryForCast(this);
+			player->applyWheelFocusMasteryCastMultiplier(damage);
 		}
 	}
 }
@@ -895,7 +896,12 @@ uint32_t Spell::getManaCost(const Player* player) const
 	if (ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED) && spellId != 0) {
 		if (const auto stored = player->getStorageValue(WHEEL_SPELL_FLAT_MANA_STORAGE_BASE + spellId)) {
 			if (*stored > 0) {
-				manaCost = std::max<uint32_t>(0, manaCost - static_cast<uint32_t>(*stored));
+				const uint32_t flatReduction = static_cast<uint32_t>(*stored);
+				if (flatReduction >= manaCost) {
+					manaCost = 0;
+				} else {
+					manaCost -= flatReduction;
+				}
 			}
 		}
 	}
@@ -909,6 +915,8 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool fo
 	if (!playerSpellCheck(player)) {
 		return false;
 	}
+
+	player->resetWheelFocusMasteryCastMultiplier();
 
 	LuaVariant var;
 	var.instantName = getName();

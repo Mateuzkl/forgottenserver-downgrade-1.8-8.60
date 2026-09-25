@@ -8,12 +8,6 @@ function onGetFormulaValues(player, level, magicLevel)
 	-- Vocation Adjustment: heal more consistently (lower highs, higher lows) -- 10/14 -> 11/13.
 	local min = (level * 0.2 + magicLevel * 11) + 4
 	local max = (level * 0.2 + magicLevel * 13) + 5
-
-	local healingBonus = player:getWheelSpellHealingPercentBonus("Heal Friend")
-	if healingBonus > 0 then
-		min = math.floor(min * (1 + healingBonus))
-		max = math.floor(max * (1 + healingBonus))
-	end
 	return min, max
 end
 

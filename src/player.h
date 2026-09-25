@@ -950,7 +950,9 @@ public:
 	bool hasWheelFocusMastery() const { return wheelFocusMastery; }
 	void setWheelFocusMastery(bool enabled);
 	void tryArmWheelFocusMastery(const Spell* spell);
-	void applyWheelFocusMasteryBonus(CombatDamage& damage, const Spell* spell);
+	void resetWheelFocusMasteryCastMultiplier() { wheelFocusMasteryCastMultiplier = 1.0f; }
+	float consumeWheelFocusMasteryForCast(const Spell* spell);
+	void applyWheelFocusMasteryCastMultiplier(CombatDamage& damage) const;
 
 	float getAttackFactor() const override;
 	float getDefenseFactor() const override;
@@ -1909,6 +1911,7 @@ private:
 	bool wheelFocusMastery = false;
 	bool wheelFocusMasteryReady = false;
 	int64_t wheelFocusMasteryExpireTime = 0;
+	float wheelFocusMasteryCastMultiplier = 1.0f;
 	std::array<float, COMBAT_COUNT> varCombatAbsorbPercent = {0};
 	std::array<int16_t, COMBAT_COUNT> specialMagicLevelSkill = {0};
 	std::array<int32_t, static_cast<size_t>(ExperienceRateType::STAMINA) + 1> experienceRate = {0};

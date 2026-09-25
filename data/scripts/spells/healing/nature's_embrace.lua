@@ -13,12 +13,6 @@ function onGetFormulaValues(player, level, maglevel)
 	local max = (level / 2.5) + (maglevel * 26)
 	min = math.floor(min * HEAL_SCALE)
 	max = math.floor(max * HEAL_SCALE)
-
-	local healingBonus = player:getWheelSpellHealingPercentBonus("Nature's Embrace")
-	if healingBonus > 0 then
-		min = math.floor(min * (1 + healingBonus))
-		max = math.floor(max * (1 + healingBonus))
-	end
 	return min, max
 end
 

@@ -10,13 +10,13 @@ local OPCODE_WHEEL_WINDOW = 0x5F
 local OPCODE_RESOURCE_BALANCE = 0xEE
 local OPCODE_WHEEL_SKILLS = 0x91
 
-local WHEEL_MIN_LEVEL = 1
+local WHEEL_MIN_LEVEL = 51
 local WHEEL_POINTS_PER_LEVEL = 1
 local WHEEL_SLOT_COUNT = 36
 local WHEEL_NO_GEM = -1
 -- TFS stores capacity in 0.01 oz units (see iologindata cap * 100); wheel values are display oz.
 local CAPACITY_STAT_SCALE = 100
-local WHEEL_REQUIRE_PROMOTION = false
+local WHEEL_REQUIRE_PROMOTION = true
 local WHEEL_CONDITION_SUBID = 86061
 -- Must match WHEEL_SPELL_CD_STORAGE_BASE in src/spells.cpp (8600000 + spellId).
 local WHEEL_SPELL_CD_STORAGE_BASE = 8600000
@@ -363,7 +363,6 @@ local WHEEL_APPLIED_RESISTANCES = {}
 local WHEEL_APPLIED_DODGE = {}
 local WHEEL_LAST_SKILL_STATS_PAYLOAD = {}
 local WHEEL_SPELL_HEALING_BONUSES = {}
-local WHEEL_SPELL_COOLDOWN_REDUCTIONS = {}
 local WHEEL_POSITIONAL_TACTICS_SUBID = 86062
 local WHEEL_APPLIED_POSITIONAL_TACTICS = {}
 local WHEEL_POSITIONAL_TACTICS_PLAYERS = {}
@@ -1206,19 +1205,15 @@ end
 local function cacheWheelSpellAugments(player, bonuses)
 	local key = getWheelPlayerKey(player)
 	local healing = {}
-	local cooldowns = {}
 
 	for _, augment in ipairs(bonuses.spellAugments) do
 		local value = tonumber(augment.value) or 0
 		if augment.augmentType == AUGMENT_TYPE.BASE_HEALING then
 			healing[augment.spellName] = (healing[augment.spellName] or 0) + value
-		elseif augment.augmentType == AUGMENT_TYPE.COOLDOWN then
-			cooldowns[augment.spellName] = (cooldowns[augment.spellName] or 0) + math.floor(math.abs(value) * 1000)
 		end
 	end
 
 	WHEEL_SPELL_HEALING_BONUSES[key] = healing
-	WHEEL_SPELL_COOLDOWN_REDUCTIONS[key] = cooldowns
 end
 
 local function removeAppliedSpecialMagic(player)
@@ -1463,6 +1458,18 @@ function Player.updatePositionalTactics(self)
 	return true
 end
 
+local function getInstantSpellIdByName(spellName)
+	local spell = Spell(spellName)
+	if not spell then
+		return nil
+	end
+	local id = spell:id()
+	if type(id) == "number" and id > 0 then
+		return id
+	end
+	return nil
+end
+
 local function clearWheelSpellCooldownStorages(player)
 	for spellName in pairs(WHEEL_COOLDOWN_SPELL_NAMES) do
 		local spell = Spell(spellName)
@@ -1482,18 +1489,6 @@ local function syncWheelSpellCooldownStorages(player, spellAugments)
 			local ms = math.floor(math.abs(tonumber(augment.value) or 0) * 1000)
 			totals[augment.spellName] = (totals[augment.spellName] or 0) + ms
 		end
-	end
-
-	local function getInstantSpellIdByName(spellName)
-		local spell = Spell(spellName)
-		if not spell then
-			return nil
-		end
-		local id = spell:id()
-		if type(id) == "number" and id > 0 then
-			return id
-		end
-		return nil
 	end
 
 	for spellName, ms in pairs(totals) do
@@ -1524,18 +1519,6 @@ local function syncWheelSpellFlatManaStorages(player, spellAugments)
 			local flat = math.floor(math.abs(tonumber(augment.value) or 0))
 			totals[augment.spellName] = (totals[augment.spellName] or 0) + flat
 		end
-	end
-
-	local function getInstantSpellIdByName(spellName)
-		local spell = Spell(spellName)
-		if not spell then
-			return nil
-		end
-		local id = spell:id()
-		if type(id) == "number" and id > 0 then
-			return id
-		end
-		return nil
 	end
 
 	for spellName, flatMana in pairs(totals) do
@@ -2007,24 +1990,11 @@ function Player.getWheelSpellHealingPercentBonus(self, spellName)
 	end
 
 	local key = getWheelPlayerKey(self)
-	if not WHEEL_SPELL_HEALING_BONUSES[key] then
-		local profile = loadProfile(self)
-		cacheWheelSpellAugments(self, calculateWheelBonuses(self, profile.points, profile.gems))
-	end
-	return WHEEL_SPELL_HEALING_BONUSES[key][spellName] or 0
-end
-
-function Player.getWheelSpellCooldownReductionMs(self, spellName)
-	if not spellName or spellName == "" then
+	local bonuses = WHEEL_SPELL_HEALING_BONUSES[key]
+	if not bonuses then
 		return 0
 	end
-
-	local key = getWheelPlayerKey(self)
-	if not WHEEL_SPELL_COOLDOWN_REDUCTIONS[key] then
-		local profile = loadProfile(self)
-		cacheWheelSpellAugments(self, calculateWheelBonuses(self, profile.points, profile.gems))
-	end
-	return WHEEL_SPELL_COOLDOWN_REDUCTIONS[key][spellName] or 0
+	return bonuses[spellName] or 0
 end
 
 function Player.getWheelAugmentReport(self, spellName)
@@ -2498,7 +2468,7 @@ function Player.wheelCrushGem(self, crusherItem, gemItem)
 
 	local yield = UNREVEALED_FRAGMENT_YIELD[quality]
 	local count = math.random(yield.min, yield.max)
-	if not gemItem:remove(1) then
+	if not gemItem:remove(1, self) then
 		return false, "Could not remove the gem."
 	end
 
@@ -2714,6 +2684,8 @@ local wheelLogoutEvent = CreatureEvent("WheelOfDestinyLogout")
 function wheelLogoutEvent.onLogout(player)
 	local key = getWheelPlayerKey(player)
 	WHEEL_APPLIED_SPECIAL_MAGIC[key] = nil
+	WHEEL_APPLIED_POSITIONAL_TACTICS[key] = nil
+	WHEEL_APPLIED_BATTLE_INSTINCT[key] = nil
 	WHEEL_POSITIONAL_TACTICS_PLAYERS[key] = nil
 	WHEEL_BATTLE_INSTINCT_PLAYERS[key] = nil
 	removeAppliedPositionalTactics(player)
@@ -2724,7 +2696,6 @@ function wheelLogoutEvent.onLogout(player)
 	WHEEL_APPLIED_DODGE[key] = nil
 	WHEEL_LAST_SKILL_STATS_PAYLOAD[key] = nil
 	WHEEL_SPELL_HEALING_BONUSES[key] = nil
-	WHEEL_SPELL_COOLDOWN_REDUCTIONS[key] = nil
 	return true
 end
 
