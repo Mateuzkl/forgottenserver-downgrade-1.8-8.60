@@ -47,6 +47,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <simdutf.h>
+
 uint32_t ProtocolGame::spectatorId = 1;
 std::set<std::string> ProtocolGame::spectatorNames;
 extern Monsters g_monsters;
@@ -1165,6 +1167,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    supportsAstraSingleCreatureMarks && (capabilities & AstraClient::EchoRaidVisuals) != 0;
 					supportsAstraStoreBasePrice =
 					    (capabilities & AstraClient::StoreBasePrice) != 0;
+					supportsAstraStoreCatalogChunks =
+					    (capabilities & AstraClient::StoreCatalogChunks) != 0;
 				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
@@ -4407,10 +4411,50 @@ void ProtocolGame::sendStoreCatalog()
 		}
 	}
 
+	const auto banners = catalog->banners();
+	if (visibleCategories.size() > std::numeric_limits<uint16_t>::max() ||
+	    banners.size() > std::numeric_limits<uint8_t>::max()) {
+		LOG_ERROR("[StoreCatalog] Catalog category or banner count exceeds the wire format.");
+		sendStoreError("Store catalog contains too many categories or banners.");
+		return;
+	}
+
+	const auto canEncodeStoreString = [](std::string_view value) {
+		if (!simdutf::validate_utf8(value.data(), value.size())) {
+			return false;
+		}
+		const size_t latin1Length = simdutf::latin1_length_from_utf8(value.data(), value.size());
+		if (latin1Length > NetworkMessage::MAX_STRING_LENGTH) {
+			return false;
+		}
+		if (value.empty()) {
+			return true;
+		}
+		std::string converted(latin1Length, '\0');
+		return simdutf::convert_utf8_to_latin1(value.data(), value.size(), converted.data()) == latin1Length;
+	};
+	const bool hasInvalidString = std::any_of(
+	    visibleCategories.begin(), visibleCategories.end(), [&](const FilteredCategory& fcat) {
+		    if (!canEncodeStoreString(fcat.category->name) || !canEncodeStoreString(fcat.category->icon) ||
+		        !canEncodeStoreString(fcat.category->parent) || !canEncodeStoreString(fcat.category->description)) {
+			    return true;
+		    }
+		    return std::any_of(fcat.offers.begin(), fcat.offers.end(), [&](const FilteredOffer& fo) {
+			    return !canEncodeStoreString(fo.offer->name) || !canEncodeStoreString(fo.offer->icon) ||
+			           !canEncodeStoreString(fo.offer->description) ||
+			           !canEncodeStoreString(storeOfferTypeToString(fo.offer->type));
+		    });
+	    }) ||
+	    std::any_of(banners.begin(), banners.end(),
+	                [&](const auto& banner) { return !canEncodeStoreString(banner.image); });
+	if (hasInvalidString) {
+		LOG_ERROR("[StoreCatalog] Catalog contains text that cannot be represented by the wire format.");
+		sendStoreError("Store catalog contains text that is too long or cannot be encoded.");
+		return;
+	}
+
 	const auto stringWireSize = [](std::string_view value) {
-		// NetworkMessage converts UTF-8 to Latin-1, so the UTF-8 byte count is a
-		// conservative upper bound for planning packet sizes.
-		return sizeof(uint16_t) + value.size();
+		return sizeof(uint16_t) + simdutf::latin1_length_from_utf8(value.data(), value.size());
 	};
 	const auto categoryHeaderWireSize = [&](const FilteredCategory& fcat) {
 		return stringWireSize(fcat.category->name) + stringWireSize(fcat.category->icon) +
@@ -4432,7 +4476,7 @@ void ProtocolGame::sendStoreCatalog()
 	};
 	const auto bannersWireSize = [&]() {
 		size_t size = sizeof(uint8_t) + sizeof(uint8_t);
-		for (const auto& banner : catalog->banners()) {
+		for (const auto& banner : banners) {
 			size += stringWireSize(banner.image) + sizeof(uint8_t) + sizeof(uint32_t);
 		}
 		return size;
@@ -4469,7 +4513,6 @@ void ProtocolGame::sendStoreCatalog()
 	};
 
 	const auto addBanners = [&](NetworkMessage& msg) {
-		const auto banners = catalog->banners();
 		msg.addByte(static_cast<uint8_t>(banners.size()));
 		for (const auto& banner : banners) {
 			msg.addString(banner.image);
@@ -4490,7 +4533,7 @@ void ProtocolGame::sendStoreCatalog()
 		}
 	}
 
-	if (estimatedLegacySize <= StoreProtocol::CatalogChunkTargetSize) {
+	if (StoreProtocol::shouldUseLegacyCatalog(estimatedLegacySize, supportsAstraStoreCatalogChunks)) {
 		NetworkMessage msg;
 		msg.addByte(StoreProtocol::ServerOpcode);
 		msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog));
@@ -4503,10 +4546,10 @@ void ProtocolGame::sendStoreCatalog()
 		writeToOutputBuffer(msg);
 		return;
 	}
-	if (!isAstra) {
+	if (!supportsAstraStoreCatalogChunks) {
 		LOG_WARN(
 		    fmt::format("[StoreCatalog] Refusing to send an estimated {}-byte catalog to a client "
-		                "without Astra catalog chunk support.",
+		                "without negotiated catalog chunk support.",
 		                estimatedLegacySize));
 		sendStoreError("This Store catalog requires an updated AstraClient.");
 		return;
@@ -4582,12 +4625,9 @@ void ProtocolGame::sendStoreCatalog()
 		const bool first = chunkIndex == 0;
 		const bool last = chunkIndex + 1 == chunks.size();
 		NetworkMessage msg;
-		msg.addByte(StoreProtocol::ServerOpcode);
-		msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::CatalogChunk));
-		msg.addByte((first ? StoreProtocol::CatalogChunkStart : 0) | (last ? StoreProtocol::CatalogChunkEnd : 0));
-		msg.add<uint32_t>(coins);
-		msg.add<uint16_t>(static_cast<uint16_t>(visibleCategories.size()));
-		msg.add<uint16_t>(static_cast<uint16_t>(chunks[chunkIndex].parts.size()));
+		StoreProtocol::addCatalogChunkHeader(
+		    msg, (first ? StoreProtocol::CatalogChunkStart : 0) | (last ? StoreProtocol::CatalogChunkEnd : 0), coins,
+		    static_cast<uint16_t>(visibleCategories.size()), static_cast<uint16_t>(chunks[chunkIndex].parts.size()));
 		for (const auto& part : chunks[chunkIndex].parts) {
 			addCategoryPart(msg, *part.category, part.firstOffer, part.offerCount);
 		}
