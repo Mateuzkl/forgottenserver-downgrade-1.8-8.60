@@ -2704,8 +2704,7 @@ wheelLogoutEvent:register()
 local wheelAugReport = TalkAction("/wheelaug", "!wheelaug")
 
 function wheelAugReport.onSay(player, words, param)
-	if not canOpenWheel(player) then
-		player:sendTextMessage(MESSAGE_STATUS_SMALL, "The Wheel of Destiny is not available for your character.")
+	if not player:getGroup():getAccess() then
 		return false
 	end
 
@@ -2722,6 +2721,7 @@ function wheelAugReport.onSay(player, words, param)
 end
 
 wheelAugReport:separator(" ")
+wheelAugReport:accountType(6)
 wheelAugReport:register()
 
 local function updatePositionalTacticsNearPosition(position)
