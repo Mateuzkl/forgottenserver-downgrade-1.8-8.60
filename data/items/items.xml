@@ -49210,9 +49210,7 @@
 		<attribute key="weaponType" value="club" />
 		<attribute key="slotType" value="two-handed" />
 	</item>
-	<item id="28750" name="your stash">
-		<attribute key="containersize" value="10" />
-		</item>
+	<item id="28750" name="your stash" />
 	<item id="28751" article="a" name="dead burning book">
 		<attribute key="duration" value="60" />
 		<attribute key="decayTo" value="0" />
