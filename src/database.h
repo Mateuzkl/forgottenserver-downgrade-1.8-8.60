@@ -283,6 +283,7 @@ public:
 	bool addRow(std::string_view row);
 	bool addRow(std::ostringstream& row);
 	bool execute();
+	[[nodiscard]] std::string buildQuery() const;
 
 	void upsert(const std::vector<std::string>& columns);
 

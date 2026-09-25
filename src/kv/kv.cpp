@@ -285,6 +285,33 @@ bool KVStore::save(const std::string &key, const ValueWrapper &value) {
 	return update.execute();
 }
 
+bool KVStore::buildBatchSaveQuery(const std::vector<std::pair<std::string, ValueWrapper>> &entries,
+                                  std::string &query) const
+{
+	DBInsert update = dbUpdate();
+	Database &db = Database::getInstance();
+	bool hasRows = false;
+	for (const auto &[key, value] : entries) {
+		if (value.isDeleted()) {
+			continue;
+		}
+		const auto serialized = value.serialize();
+		if (!update.addRow(fmt::format("{}, {}, {}", db.escapeString(key), value.getTimestamp(),
+		                               db.escapeBlob(serialized.data(), static_cast<uint32_t>(serialized.size()))))) {
+			return false;
+		}
+		hasRows = true;
+	}
+
+	if (!hasRows) {
+		query.clear();
+		return true;
+	}
+
+	query = update.buildQuery();
+	return !query.empty();
+}
+
 bool KVStore::prepareSave(const std::string &key, const ValueWrapper &value, DBInsert &update) const {
 	Database &db = Database::getInstance();
 
@@ -335,7 +362,7 @@ bool KVStore::saveAll() {
 	return success;
 }
 
-DBInsert KVStore::dbUpdate() {
+DBInsert KVStore::dbUpdate() const {
 	auto insert = DBInsert("INSERT INTO `kv_store` (`key_name`, `timestamp`, `value`) VALUES");
 	insert.upsert({ "key_name", "timestamp", "value" });
 	return insert;

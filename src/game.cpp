@@ -223,9 +223,122 @@ void closeContainersFromOtherInstances(Player* player)
 struct QuickLootResult
 {
 	uint32_t movedItems = 0;
+	uint32_t totalLootedGold = 0;
+	uint32_t totalLootedItems = 0;
 	bool hadLoot = false;
+	bool missedAnyGold = false;
+	bool missedAnyItem = false;
+	bool shouldNotifyCapacity = false;
+	bool shouldNotifyNotEnoughRoom = false;
 	ReturnValue failure = RETURNVALUE_NOERROR;
 };
+
+constexpr MessageClasses QUICK_LOOT_MESSAGE_TYPE = MESSAGE_STATUS_SMALL;
+
+bool hasQuickLootFeedback(const QuickLootResult& result)
+{
+	return result.movedItems > 0 || result.hadLoot || result.missedAnyGold || result.missedAnyItem;
+}
+
+void mergeQuickLootResult(QuickLootResult& aggregate, const QuickLootResult& result)
+{
+	aggregate.movedItems += result.movedItems;
+	aggregate.totalLootedGold += result.totalLootedGold;
+	aggregate.totalLootedItems += result.totalLootedItems;
+	aggregate.hadLoot = aggregate.hadLoot || result.hadLoot;
+	aggregate.missedAnyGold = aggregate.missedAnyGold || result.missedAnyGold;
+	aggregate.missedAnyItem = aggregate.missedAnyItem || result.missedAnyItem;
+	aggregate.shouldNotifyCapacity = aggregate.shouldNotifyCapacity || result.shouldNotifyCapacity;
+	aggregate.shouldNotifyNotEnoughRoom = aggregate.shouldNotifyNotEnoughRoom || result.shouldNotifyNotEnoughRoom;
+	if (result.failure != RETURNVALUE_NOERROR && aggregate.failure == RETURNVALUE_NOERROR) {
+		aggregate.failure = result.failure;
+	}
+}
+
+void sendQuickLootResultMessage(Player* player, const QuickLootResult& result)
+{
+	if (!player) {
+		return;
+	}
+
+	std::ostringstream ss;
+	if (result.totalLootedGold != 0 || result.missedAnyGold || result.totalLootedItems != 0 || result.missedAnyItem) {
+		const bool lootedAllGold = result.totalLootedGold != 0 && !result.missedAnyGold;
+		const bool lootedAllItems = result.totalLootedItems != 0 && !result.missedAnyItem;
+		if (lootedAllGold) {
+			if (result.totalLootedItems != 0 || result.missedAnyItem) {
+				ss << "You looted the complete " << result.totalLootedGold << " gold";
+				if (lootedAllItems) {
+					ss << " and all dropped items";
+				} else if (result.totalLootedItems != 0) {
+					ss << ", but you only looted some of the items";
+				} else if (result.missedAnyItem) {
+					ss << " but none of the dropped items";
+				}
+			} else {
+				ss << "You looted " << result.totalLootedGold << " gold";
+			}
+		} else if (lootedAllItems) {
+			if (result.totalLootedItems == 1) {
+				ss << "You looted 1 item";
+			} else if (result.totalLootedGold != 0 || result.missedAnyGold) {
+				ss << "You looted all of the dropped items";
+			} else {
+				ss << "You looted all items";
+			}
+
+			if (result.totalLootedGold != 0) {
+				ss << ", but you only looted " << result.totalLootedGold << " of the dropped gold";
+			} else if (result.missedAnyGold) {
+				ss << " but none of the dropped gold";
+			}
+		} else if (result.totalLootedGold != 0) {
+			ss << "You only looted " << result.totalLootedGold << " of the dropped gold";
+			if (result.totalLootedItems != 0) {
+				ss << " and some of the dropped items";
+			} else if (result.missedAnyItem) {
+				ss << " but none of the dropped items";
+			}
+		} else if (result.totalLootedItems != 0) {
+			ss << "You looted some of the dropped items";
+			if (result.missedAnyGold) {
+				ss << " but none of the dropped gold";
+			}
+		} else if (result.missedAnyGold) {
+			ss << "You looted none of the dropped gold";
+			if (result.missedAnyItem) {
+				ss << " and none of the items";
+			}
+		} else if (result.missedAnyItem) {
+			ss << "You looted none of the dropped items";
+		}
+	} else {
+		ss << "No loot";
+	}
+	ss << '.';
+	player->sendTextMessage(QUICK_LOOT_MESSAGE_TYPE, ss.str());
+
+	if (result.shouldNotifyCapacity) {
+		player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
+		                        "Attention! The loot you are trying to pick up is too heavy for you to carry.");
+	} else if (result.shouldNotifyNotEnoughRoom) {
+		player->sendTextMessage(MESSAGE_EVENT_ADVANCE,
+		                        "Attention! One of your assigned loot containers is full.");
+	}
+}
+
+void dispatchQuickLootFeedback(Player* player, const QuickLootResult& result)
+{
+	if (!player) {
+		return;
+	}
+
+	if (!hasQuickLootFeedback(result) && result.failure != RETURNVALUE_NOERROR) {
+		player->sendCancelMessage(result.failure);
+	} else if (hasQuickLootFeedback(result)) {
+		sendQuickLootResultMessage(player, result);
+	}
+}
 
 bool hasQuickLootDisabled(const Item* item)
 {
@@ -459,7 +572,16 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 	std::vector<std::shared_ptr<Item>> lootItems;
 	for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
 		auto item = *it;
-		if (!item || item->isRemoved() || !shouldQuickLootItem(player, item.get())) {
+		if (!item || item->isRemoved()) {
+			continue;
+		}
+
+		if (!shouldQuickLootItem(player, item.get())) {
+			if (item->getWorth() > 0) {
+				result.missedAnyGold = true;
+			} else if (item->isPickupable()) {
+				result.missedAnyItem = true;
+			}
 			continue;
 		}
 
@@ -488,6 +610,12 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 			if (result.failure == RETURNVALUE_NOERROR) {
 				result.failure = RETURNVALUE_CONTAINERNOTENOUGHROOM;
 			}
+			result.shouldNotifyNotEnoughRoom = true;
+			if (item->getWorth() > 0) {
+				result.missedAnyGold = true;
+			} else {
+				result.missedAnyItem = true;
+			}
 			continue;
 		}
 
@@ -497,16 +625,53 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 		}
 
 		const uint16_t originalCount = item->getItemCount();
+		const uint32_t originalWorth = item->getWorth();
 		ReturnValue ret = moveQuickLootItem(game, player, itemRef, destination);
 		if (ret == RETURNVALUE_NOERROR) {
 			++result.movedItems;
+			if (originalWorth > 0) {
+				result.totalLootedGold += originalWorth;
+			} else {
+				++result.totalLootedItems;
+			}
 			continue;
 		}
 
 		const uint16_t remainingCount = item->isRemoved() ? 0 : item->getItemCount();
 		if (remainingCount < originalCount) {
 			++result.movedItems;
-		} else if (result.failure == RETURNVALUE_NOERROR) {
+			if (originalWorth > 0) {
+				const uint32_t remainingWorth = item->isRemoved() ? 0 : item->getWorth();
+				result.totalLootedGold += originalWorth - remainingWorth;
+				if (remainingWorth > 0) {
+					result.missedAnyGold = true;
+				}
+			} else {
+				++result.totalLootedItems;
+				if (!item->isRemoved()) {
+					result.missedAnyItem = true;
+				}
+			}
+			if (ret == RETURNVALUE_NOTENOUGHCAPACITY) {
+				result.shouldNotifyCapacity = true;
+			} else if (ret == RETURNVALUE_CONTAINERNOTENOUGHROOM) {
+				result.shouldNotifyNotEnoughRoom = true;
+			}
+			continue;
+		}
+
+		if (ret == RETURNVALUE_NOTENOUGHCAPACITY) {
+			result.shouldNotifyCapacity = true;
+		} else if (ret == RETURNVALUE_CONTAINERNOTENOUGHROOM) {
+			result.shouldNotifyNotEnoughRoom = true;
+		}
+
+		if (originalWorth > 0) {
+			result.missedAnyGold = true;
+		} else {
+			result.missedAnyItem = true;
+		}
+		if (result.failure == RETURNVALUE_NOERROR) {
 			result.failure = ret;
 		}
 	}
@@ -515,7 +680,7 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 }
 
 uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, uint32_t maxCorpses,
-                              bool& foundCorpse, ReturnValue& firstFailure)
+                              bool& foundCorpse, ReturnValue& firstFailure, QuickLootResult& aggregate)
 {
 	const auto tile = game.getTileSharedRef(game.map.getTile(pos));
 	if (!tile) {
@@ -553,6 +718,7 @@ uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, u
 
 		foundCorpse = true;
 		QuickLootResult result = collectQuickLootContainer(game, player, containerRef);
+		mergeQuickLootResult(aggregate, result);
 		if (result.movedItems > 0) {
 			++lootedCorpses;
 		} else if (result.failure != RETURNVALUE_NOERROR && firstFailure == RETURNVALUE_NOERROR) {
@@ -4008,13 +4174,17 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 
 		bool foundCorpse = false;
 		ReturnValue firstFailure = RETURNVALUE_NOERROR;
+		QuickLootResult aggregate;
 		const uint32_t lootedCorpses = collectQuickLootTile(*this, player, pos, maxQuickLootCorpses, foundCorpse,
-		                                                    firstFailure);
+		                                                    firstFailure, aggregate);
 		if (foundCorpse) {
-			if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
+			if (hasQuickLootFeedback(aggregate)) {
+				sendQuickLootResultMessage(player, aggregate);
+			} else if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
 				player->sendCancelMessage(firstFailure);
 			} else if (lootedCorpses > 1) {
-				player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You looted {:d} corpses.", lootedCorpses));
+				player->sendTextMessage(QUICK_LOOT_MESSAGE_TYPE,
+				                        fmt::format("You looted {:d} corpses.", lootedCorpses));
 			}
 			player->maintainAttackFlow();
 			return;
@@ -4056,10 +4226,7 @@ void Game::playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t item
 			return;
 		}
 
-		QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
-		if (result.movedItems == 0 && result.failure != RETURNVALUE_NOERROR) {
-			player->sendCancelMessage(result.failure);
-		}
+		dispatchQuickLootFeedback(player, collectQuickLootContainer(*this, player, containerRef));
 		player->maintainAttackFlow();
 		return;
 	}
@@ -4119,6 +4286,7 @@ void Game::playerLootNearby(uint32_t playerId)
 	uint32_t lootedCorpses = 0;
 	bool foundCorpse = false;
 	ReturnValue firstFailure = RETURNVALUE_NOERROR;
+	QuickLootResult aggregate;
 
 	for (int32_t x = -1; x <= 1 && lootedCorpses < maxQuickLootCorpses; ++x) {
 		for (int32_t y = -1; y <= 1 && lootedCorpses < maxQuickLootCorpses; ++y) {
@@ -4127,16 +4295,20 @@ void Game::playerLootNearby(uint32_t playerId)
 			    static_cast<uint16_t>(static_cast<int32_t>(playerPos.y) + y),
 			    playerPos.z);
 			lootedCorpses += collectQuickLootTile(*this, player, tilePos,
-			                                      maxQuickLootCorpses - lootedCorpses, foundCorpse, firstFailure);
+			                                      maxQuickLootCorpses - lootedCorpses, foundCorpse, firstFailure,
+			                                      aggregate);
 		}
 	}
 
 	if (!foundCorpse) {
 		player->sendCancelMessage("No lootable corpses nearby.");
+	} else if (hasQuickLootFeedback(aggregate)) {
+		sendQuickLootResultMessage(player, aggregate);
 	} else if (lootedCorpses == 0 && firstFailure != RETURNVALUE_NOERROR) {
 		player->sendCancelMessage(firstFailure);
 	} else if (lootedCorpses > 1) {
-		player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("You looted {:d} corpses.", lootedCorpses));
+		player->sendTextMessage(QUICK_LOOT_MESSAGE_TYPE,
+		                        fmt::format("You looted {:d} corpses.", lootedCorpses));
 	}
 	player->maintainAttackFlow();
 }
@@ -4158,10 +4330,7 @@ void Game::playerQuickLootCorpse(uint32_t playerId, Container* container)
 		return;
 	}
 
-	QuickLootResult result = collectQuickLootContainer(*this, player, containerRef);
-	if (result.movedItems == 0 && result.hadLoot && result.failure != RETURNVALUE_NOERROR) {
-		player->sendCancelMessage(result.failure);
-	}
+	dispatchQuickLootFeedback(player, collectQuickLootContainer(*this, player, containerRef));
 }
 
 void Game::playerSetManagedLootContainer(uint32_t playerId, ObjectCategory_t category, const Position& pos,
