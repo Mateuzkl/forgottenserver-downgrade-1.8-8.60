@@ -696,6 +696,9 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 	}
 	if (wheelSystemEnabled) {
 		applyBonus(player->getWheelSpellAugmentBonus(getName()));
+		if (aggressive) {
+			player->applyWheelFocusMasteryBonus(damage, this);
+		}
 	}
 }
 
@@ -856,6 +859,8 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
         if (aggressive) {
             player->addInFightTicks();
         }
+
+        player->tryArmWheelFocusMastery(this);
     }
 
     if (payCost) { 

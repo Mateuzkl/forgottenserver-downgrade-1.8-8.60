@@ -486,6 +486,7 @@ public:
 	}
 
 	void sendMonkData();
+	void sendWheelFocusMasteryClientState(const std::string& state, uint32_t durationMs = 0);
 	void sendStanceProtocol() const;
 	std::vector<uint16_t> buildActiveStanceSpellIds() const;
 	Stance_t getStance() const { return m_stancePrimary; }
@@ -939,6 +940,10 @@ public:
 	void tryWheelRunicMastery(const Spell* runeSpell);
 	void clearWheelRunicMasteryBonus() { wheelRunicMasteryBonus = 0; }
 	int32_t getWheelRunicMasteryBonus() const { return wheelRunicMasteryBonus; }
+	bool hasWheelFocusMastery() const { return wheelFocusMastery; }
+	void setWheelFocusMastery(bool enabled);
+	void tryArmWheelFocusMastery(const Spell* spell);
+	void applyWheelFocusMasteryBonus(CombatDamage& damage, const Spell* spell);
 
 	float getAttackFactor() const override;
 	float getDefenseFactor() const override;
@@ -1889,6 +1894,9 @@ private:
 	bool wheelBallisticMastery = false;
 	bool wheelRunicMastery = false;
 	int32_t wheelRunicMasteryBonus = 0;
+	bool wheelFocusMastery = false;
+	bool wheelFocusMasteryReady = false;
+	int64_t wheelFocusMasteryExpireTime = 0;
 	std::array<float, COMBAT_COUNT> varCombatAbsorbPercent = {0};
 	std::array<int16_t, COMBAT_COUNT> specialMagicLevelSkill = {0};
 	std::array<int32_t, static_cast<size_t>(ExperienceRateType::STAMINA) + 1> experienceRate = {0};

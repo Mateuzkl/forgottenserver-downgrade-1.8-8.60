@@ -852,6 +852,79 @@ void Player::tryWheelRunicMastery(const Spell* runeSpell)
 	}
 }
 
+void Player::setWheelFocusMastery(bool enabled)
+{
+	wheelFocusMastery = enabled;
+	if (!enabled) {
+		wheelFocusMasteryReady = false;
+		wheelFocusMasteryExpireTime = 0;
+		sendWheelFocusMasteryClientState("idle", 0);
+	}
+}
+
+void Player::tryArmWheelFocusMastery(const Spell* spell)
+{
+	if (!wheelFocusMastery || !spell || !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	if (spell->getAggressive()) {
+		return;
+	}
+
+	if (spell->getGroup() != SPELLGROUP_FOCUS && spell->getSecondaryGroup() != SPELLGROUP_FOCUS) {
+		return;
+	}
+
+	wheelFocusMasteryReady = true;
+	wheelFocusMasteryExpireTime = OTSYS_TIME() + 12000;
+	const std::string line = fmt::format(
+	    "[Focus Mastery] {} armed by '{}' (next damage spell within 12s gets +35%%)",
+	    getName(), spell->getName());
+	g_logger().info(line);
+	std::cout << line << std::endl;
+	sendWheelFocusMasteryClientState("armed", 12000);
+}
+
+void Player::applyWheelFocusMasteryBonus(CombatDamage& damage, const Spell* spell)
+{
+	if (!wheelFocusMastery || !wheelFocusMasteryReady || !spell ||
+	    !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	if (OTSYS_TIME() > wheelFocusMasteryExpireTime) {
+		wheelFocusMasteryReady = false;
+		const std::string line =
+		    fmt::format("[Focus Mastery] {} expired before a damage spell was cast", getName());
+		g_logger().info(line);
+		std::cout << line << std::endl;
+		sendWheelFocusMasteryClientState("expired", 0);
+		return;
+	}
+
+	if (!spell->getAggressive() || damage.primary.type == COMBAT_HEALING || damage.primary.value >= 0) {
+		return;
+	}
+
+	const int32_t primaryBefore = damage.primary.value;
+	damage.primary.value =
+	    static_cast<int32_t>(std::lround(static_cast<double>(damage.primary.value) * 1.35));
+	if (damage.secondary.value != 0) {
+		damage.secondary.value =
+		    static_cast<int32_t>(std::lround(static_cast<double>(damage.secondary.value) * 1.35));
+	}
+
+	wheelFocusMasteryReady = false;
+	sendTextMessage(MESSAGE_STATUS_SMALL, "(Focus Mastery)");
+	const std::string line = fmt::format(
+	    "[Focus Mastery] {} consumed on '{}' (primary damage {} -> {})",
+	    getName(), spell->getName(), primaryBefore, damage.primary.value);
+	g_logger().info(line);
+	std::cout << line << std::endl;
+	sendWheelFocusMasteryClientState("consumed", 0);
+}
+
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const
 {
 	if (!item || slot < CONST_SLOT_FIRST || slot > CONST_SLOT_LAST) {
@@ -956,6 +1029,15 @@ void Player::sendMonkData()
 		static_cast<uint8_t>(m_stanceElemental)
 	);
 	client->sendExtendedOpcode(0x92, json);
+}
+
+void Player::sendWheelFocusMasteryClientState(const std::string& state, uint32_t durationMs)
+{
+	if (!client || !client->isFonticakClient || !wheelFocusMastery) {
+		return;
+	}
+	std::string json = fmt::format("{{\"state\":\"{}\",\"duration\":{}}}", state, durationMs);
+	client->sendExtendedOpcode(0x93, json);
 }
 
 void Player::updateKillTracker(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Container>& corpse) const
