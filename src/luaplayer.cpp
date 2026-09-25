@@ -3841,6 +3841,38 @@ int luaPlayerSetOfflineTrainingSkill(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSetMovementSessionActive(lua_State* L)
+{
+	// player:setMovementSessionActive(flag, active)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const uint8_t rawFlag = getInteger<uint8_t>(L, 2);
+	if (rawFlag == 0 || (rawFlag & MOVEMENT_SESSION_ALL) != rawFlag || (rawFlag & (rawFlag - 1)) != 0) {
+		pushBoolean(L, false);
+		return 1;
+	}
+
+	player->setMovementSessionActive(static_cast<MovementSessionFlag>(rawFlag), getBoolean(L, 3));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerGetMovementSessionFlags(lua_State* L)
+{
+	// player:getMovementSessionFlags()
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getMovementSessionFlags());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerIsNearBed(lua_State* L)
 {
 	// player:isNearBed()
@@ -4792,6 +4824,11 @@ int luaPlayerResetCachedSettings(lua_State* L);
 
 void LuaScriptInterface::registerPlayer()
 {
+	registerGlobalVariable("MOVEMENT_SESSION_EXERCISE", static_cast<uint8_t>(MovementSessionFlag::Exercise));
+	registerGlobalVariable("MOVEMENT_SESSION_MARKET", static_cast<uint8_t>(MovementSessionFlag::Market));
+	registerGlobalVariable("MOVEMENT_SESSION_FORGE", static_cast<uint8_t>(MovementSessionFlag::Forge));
+	registerGlobalVariable("MOVEMENT_SESSION_IMBUING", static_cast<uint8_t>(MovementSessionFlag::Imbuing));
+
     // Player
     registerClass("Player", "Creature", luaPlayerCreate);
     registerMetaMethod("Player", "__eq", LuaScriptInterface::luaUserdataCompare);
@@ -5109,6 +5146,8 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addOfflineTrainingTries", luaPlayerAddOfflineTrainingTries);
 	registerMethod("Player", "getOfflineTrainingSkill", luaPlayerGetOfflineTrainingSkill);
 	registerMethod("Player", "setOfflineTrainingSkill", luaPlayerSetOfflineTrainingSkill);
+	registerMethod("Player", "setMovementSessionActive", luaPlayerSetMovementSessionActive);
+	registerMethod("Player", "getMovementSessionFlags", luaPlayerGetMovementSessionFlags);
 	registerMethod("Player", "isNearBed", luaPlayerIsNearBed);
 	registerMethod("Player", "startOfflineTraining", luaPlayerStartOfflineTraining);
 

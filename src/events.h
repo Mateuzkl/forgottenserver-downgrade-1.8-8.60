@@ -113,7 +113,8 @@ public:
 	                            const Position& toPosition, Cylinder* fromCylinder, Cylinder* toCylinder);
 	bool eventPlayerOnMoveCreature(Player* player, Creature* creature, const Position& fromPosition,
 	                               const Position& toPosition);
-	bool eventPlayerOnStepTile(Player* player, const Position& fromPosition, const Position& toPosition);
+	void eventPlayerOnStepTile(Player* player, const Position& fromPosition, const Position& toPosition,
+	                           uint8_t movementSessionFlags);
 	void eventPlayerOnReportRuleViolation(Player* player, std::string_view targetName, uint8_t reportType,
 	                                      uint8_t reportReason, std::string_view comment, std::string_view translation);
 	bool eventPlayerOnReportBug(Player* player, std::string_view message);
@@ -151,6 +152,8 @@ public:
 	};
 
 private:
+	friend struct EventsTestAccess;
+
 	LuaScriptInterface scriptInterface;
 	EventsInfo info;
 };

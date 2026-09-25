@@ -173,6 +173,23 @@ inline constexpr int32_t AVATAR_TIMER_STORAGE = 50099;
 inline constexpr int32_t AVATAR_DAMAGE_REDUCTION_PERCENT = 10;
 inline constexpr int32_t DUAL_WIELD_DAMAGE_BOOST_STORAGE = 50001;
 
+enum class MovementSessionFlag : uint8_t
+{
+	None = 0,
+	Exercise = 1 << 0,
+	Market = 1 << 1,
+	Forge = 1 << 2,
+	Imbuing = 1 << 3,
+};
+
+inline constexpr uint8_t MOVEMENT_SESSION_ALL =
+	static_cast<uint8_t>(MovementSessionFlag::Exercise) |
+	static_cast<uint8_t>(MovementSessionFlag::Market) |
+	static_cast<uint8_t>(MovementSessionFlag::Forge) |
+	static_cast<uint8_t>(MovementSessionFlag::Imbuing);
+
+class PlayerMovementEventScope;
+
 class Player final : public Creature, public Cylinder
 {
 friend class Item;
@@ -293,6 +310,10 @@ public:
 
 	int32_t getOfflineTrainingSkill() const { return offlineTrainingSkill; }
 	void setOfflineTrainingSkill(int32_t skill) { offlineTrainingSkill = skill; }
+
+	void setMovementSessionActive(MovementSessionFlag flag, bool active);
+	[[nodiscard]] bool hasMovementSession(MovementSessionFlag flag) const;
+	[[nodiscard]] uint8_t getMovementSessionFlags() const { return movementSessionFlags; }
 
 	Guild_ptr getGuild() const { return guild.lock(); }
 	void setGuild(Guild_ptr guild);
@@ -1954,6 +1975,9 @@ private:
 	Position m_spellAimPosition;
 	bool m_hasSpellAim = false;
 	bool loading = false;
+	uint8_t movementSessionFlags = 0;
+	uint16_t movementEventScopeDepth = 0;
+	Position movementEventOrigin;
 
 	AccountManagerMode accountManager{ACCOUNT_MANAGER_NONE};
 	std::array<bool, 15> managerTalkState{};
@@ -2002,7 +2026,21 @@ private:
 	friend class IOLoginData;
 	friend class ProtocolGame;
 	friend class ProtocolSpectator;
+	friend class PlayerMovementEventScope;
 	friend struct CreatureWalkTestAccess;
+};
+
+class PlayerMovementEventScope final
+{
+public:
+	explicit PlayerMovementEventScope(Player* player);
+	~PlayerMovementEventScope();
+
+	PlayerMovementEventScope(const PlayerMovementEventScope&) = delete;
+	PlayerMovementEventScope& operator=(const PlayerMovementEventScope&) = delete;
+
+private:
+	std::shared_ptr<Player> player;
 };
 
 #endif

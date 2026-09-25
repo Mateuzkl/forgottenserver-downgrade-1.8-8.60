@@ -1,7 +1,9 @@
 #include "../otpch.h"
 
 #include "../chat.h"
+#include "../condition.h"
 #include "../configmanager.h"
+#include "../container.h"
 #include "../creature.h"
 #include "../events.h"
 #include "../game.h"
@@ -10,6 +12,7 @@
 #include "../item.h"
 #include "../movement.h"
 #include "../player.h"
+#include "../performance_metrics.h"
 #include "../reactor.h"
 #include "../scheduler.h"
 #include "../scriptmanager.h"
@@ -19,6 +22,56 @@
 #include "test_support.h"
 
 #include <filesystem>
+
+extern LuaEnvironment g_luaEnvironment;
+
+struct EventsTestAccess
+{
+	static bool installMovementRecorder(Events& events)
+	{
+		if (!events.scriptInterface.initState()) {
+			return false;
+		}
+
+		lua_State* L = events.scriptInterface.getLuaState();
+		constexpr const char* script = R"lua(
+			movementHookCalls = 0
+			movementHookFromX = 0
+			movementHookFromY = 0
+			movementHookFromZ = 0
+			movementHookToX = 0
+			movementHookToY = 0
+			movementHookToZ = 0
+			movementHookFlags = 0
+			function Player:onStepTile(fromPosition, toPosition, movementSessionFlags)
+				movementHookCalls = movementHookCalls + 1
+				movementHookFromX = fromPosition.x
+				movementHookFromY = fromPosition.y
+				movementHookFromZ = fromPosition.z
+				movementHookToX = toPosition.x
+				movementHookToY = toPosition.y
+				movementHookToZ = toPosition.z
+				movementHookFlags = movementSessionFlags
+			end
+		)lua";
+		if (luaL_dostring(L, script) != LUA_OK) {
+			lua_pop(L, 1);
+			return false;
+		}
+
+		events.info.playerOnStepTile = events.scriptInterface.getMetaEvent("Player", "onStepTile");
+		return events.info.playerOnStepTile != -1;
+	}
+
+	static int64_t globalInteger(const Events& events, const char* name)
+	{
+		lua_State* L = events.scriptInterface.getLuaState();
+		lua_getglobal(L, name);
+		const int64_t value = lua_tointeger(L, -1);
+		lua_pop(L, 1);
+		return value;
+	}
+};
 
 struct TaskReactorTestAccess
 {
@@ -84,6 +137,8 @@ struct CreatureWalkTestAccess
 		player.setNextWalkActionTask(nullptr);
 		player.setNextWalkTask(nullptr);
 	}
+
+	static void setPzLocked(Player& player, bool value) { player.pzLocked = value; }
 };
 
 namespace {
@@ -253,6 +308,9 @@ public:
 		}
 		g_scheduler.shutdown();
 		g_dispatcher.shutdown();
+		if (luaInitialized) {
+			g_luaEnvironment.closeState();
+		}
 
 		g_moveEvents.swap(previousMoveEvents);
 		ConfigManager::setInteger(ConfigManager::PLAYER_MIN_SPEED, oldMinSpeed);
@@ -270,6 +328,31 @@ public:
 
 	uint64_t processedTasks() const { return g_dispatcher.getTotalTasksProcessed() - processedAtStart; }
 
+	void installMovementRecorder()
+	{
+		CHECK(!luaInitialized);
+		CHECK(g_luaEnvironment.initState());
+		luaInitialized = true;
+		CHECK(EventsTestAccess::installMovementRecorder(events));
+	}
+
+	int64_t movementHookCalls() const { return EventsTestAccess::globalInteger(events, "movementHookCalls"); }
+	int64_t movementHookFlags() const { return EventsTestAccess::globalInteger(events, "movementHookFlags"); }
+	Position movementHookFrom() const
+	{
+		return Position{
+			static_cast<uint16_t>(EventsTestAccess::globalInteger(events, "movementHookFromX")),
+			static_cast<uint16_t>(EventsTestAccess::globalInteger(events, "movementHookFromY")),
+			static_cast<uint8_t>(EventsTestAccess::globalInteger(events, "movementHookFromZ"))};
+	}
+	Position movementHookTo() const
+	{
+		return Position{
+			static_cast<uint16_t>(EventsTestAccess::globalInteger(events, "movementHookToX")),
+			static_cast<uint16_t>(EventsTestAccess::globalInteger(events, "movementHookToY")),
+			static_cast<uint8_t>(EventsTestAccess::globalInteger(events, "movementHookToZ"))};
+	}
+
 	static constexpr Position start{1050, 1050, 7};
 	std::shared_ptr<Player> player;
 
@@ -284,6 +367,7 @@ private:
 	Events events;
 	GlobalEvents globalEvents;
 	uint64_t processedAtStart = 0;
+	bool luaInitialized = false;
 };
 
 } // namespace
@@ -454,6 +538,248 @@ TEST_CASE(player_multistep_autowalk_keeps_each_physical_step)
 	CHECK(CreatureWalkTestAccess::eventId(player) == 0);
 	CHECK(world.processedTasks() == 2);
 	CHECK(!g_reactor.hasPendingTasks());
+}
+
+TEST_CASE(player_movement_sessions_use_native_flags)
+{
+	PlayerWalkFixture world;
+	auto& player = *world.player;
+
+	CHECK(player.getMovementSessionFlags() == 0);
+	player.setMovementSessionActive(MovementSessionFlag::Exercise, true);
+	player.setMovementSessionActive(MovementSessionFlag::Market, true);
+	CHECK(player.hasMovementSession(MovementSessionFlag::Exercise));
+	CHECK(player.hasMovementSession(MovementSessionFlag::Market));
+	CHECK(!player.hasMovementSession(MovementSessionFlag::Forge));
+
+	player.setMovementSessionActive(MovementSessionFlag::Exercise, false);
+	CHECK(!player.hasMovementSession(MovementSessionFlag::Exercise));
+	CHECK(player.hasMovementSession(MovementSessionFlag::Market));
+}
+
+TEST_CASE(player_successful_step_hook_runs_once_with_real_positions)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+	player.setMovementSessionActive(MovementSessionFlag::Market, true);
+
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTH) == RETURNVALUE_NOERROR);
+	CHECK(world.movementHookCalls() == 1);
+	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
+	CHECK(world.movementHookTo() == player.getPosition());
+	CHECK(world.movementHookFlags() == static_cast<uint8_t>(MovementSessionFlag::Market));
+}
+
+TEST_CASE(player_successful_step_hook_preserves_generic_callback_without_session)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+
+	CHECK(player.getMovementSessionFlags() == 0);
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTH) == RETURNVALUE_NOERROR);
+	CHECK(world.movementHookCalls() == 1);
+	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
+	CHECK(world.movementHookTo() == player.getPosition());
+	CHECK(world.movementHookFlags() == 0);
+}
+
+TEST_CASE(player_failed_step_does_not_run_success_hook)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+	player.setMovementSessionActive(MovementSessionFlag::Exercise, true);
+
+	auto blocker = std::make_shared<Player>(nullptr);
+	blocker->setName("movement blocker");
+	blocker->setGroup(std::make_shared<Group>());
+	const Position destination{PlayerWalkFixture::start.x, static_cast<uint16_t>(PlayerWalkFixture::start.y - 1),
+	                           PlayerWalkFixture::start.z};
+	CHECK(g_game.internalPlaceCreature(blocker.get(), destination, false, true));
+
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTH) != RETURNVALUE_NOERROR);
+	CHECK(player.getPosition() == PlayerWalkFixture::start);
+	CHECK(world.movementHookCalls() == 0);
+	CHECK(player.hasMovementSession(MovementSessionFlag::Exercise));
+
+	CHECK(g_game.removeCreature(blocker.get(), false));
+}
+
+TEST_CASE(player_failed_step_without_session_does_not_run_generic_callback)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+
+	auto blocker = std::make_shared<Player>(nullptr);
+	blocker->setName("movement blocker without session");
+	blocker->setGroup(std::make_shared<Group>());
+	const Position destination{PlayerWalkFixture::start.x, static_cast<uint16_t>(PlayerWalkFixture::start.y - 1),
+	                           PlayerWalkFixture::start.z};
+	CHECK(g_game.internalPlaceCreature(blocker.get(), destination, false, true));
+
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTH) != RETURNVALUE_NOERROR);
+	CHECK(player.getPosition() == PlayerWalkFixture::start);
+	CHECK(world.movementHookCalls() == 0);
+
+	CHECK(g_game.removeCreature(blocker.get(), false));
+}
+
+TEST_CASE(player_blocked_tile_does_not_run_success_hook)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+	player.setMovementSessionActive(MovementSessionFlag::Market, true);
+
+	const Position destination{PlayerWalkFixture::start.x, static_cast<uint16_t>(PlayerWalkFixture::start.y - 1),
+	                           PlayerWalkFixture::start.z};
+	Tile* destinationTile = g_game.map.getTile(destination);
+	destinationTile->setFlag(TILESTATE_BLOCKSOLID);
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTH) != RETURNVALUE_NOERROR);
+	destinationTile->resetFlag(TILESTATE_BLOCKSOLID);
+
+	CHECK(player.getPosition() == PlayerWalkFixture::start);
+	CHECK(world.movementHookCalls() == 0);
+}
+
+TEST_CASE(player_pz_restriction_does_not_run_success_hook)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+	player.setMovementSessionActive(MovementSessionFlag::Imbuing, true);
+	CreatureWalkTestAccess::setPzLocked(player, true);
+
+	const Position destination{PlayerWalkFixture::start.x, static_cast<uint16_t>(PlayerWalkFixture::start.y - 1),
+	                           PlayerWalkFixture::start.z};
+	Tile* destinationTile = g_game.map.getTile(destination);
+	destinationTile->setFlag(TILESTATE_PROTECTIONZONE);
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTH) == RETURNVALUE_PLAYERISPZLOCKED);
+	destinationTile->resetFlag(TILESTATE_PROTECTIONZONE);
+	CreatureWalkTestAccess::setPzLocked(player, false);
+
+	CHECK(player.getPosition() == PlayerWalkFixture::start);
+	CHECK(world.movementHookCalls() == 0);
+}
+
+TEST_CASE(player_drunk_step_hook_reports_the_actual_destination)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+	player.setMovementSessionActive(MovementSessionFlag::Forge, true);
+
+	auto drunk = Condition::createCondition(CONDITIONID_COMBAT, CONDITION_DRUNK, 60'000, 100);
+	CHECK(drunk != nullptr);
+	CHECK(player.addCondition(std::move(drunk)));
+
+	Direction actualDirection = DIRECTION_NORTH;
+	player.onWalk(actualDirection);
+	const Position expectedDestination = getNextPosition(actualDirection, PlayerWalkFixture::start);
+	CHECK(g_game.internalMoveCreature(&player, actualDirection) == RETURNVALUE_NOERROR);
+	CHECK(player.getPosition() == expectedDestination);
+	CHECK(world.movementHookCalls() == 1);
+	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
+	CHECK(world.movementHookTo() == expectedDestination);
+}
+
+TEST_CASE(player_nested_map_moves_emit_one_final_position_hook)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+	player.setMovementSessionActive(MovementSessionFlag::Imbuing, true);
+
+	const Position east{static_cast<uint16_t>(PlayerWalkFixture::start.x + 1), PlayerWalkFixture::start.y,
+	                    PlayerWalkFixture::start.z};
+	const Position southeast{east.x, static_cast<uint16_t>(east.y + 1), east.z};
+	{
+		PlayerMovementEventScope logicalMove(&player);
+		g_game.map.moveCreature(player, *g_game.map.getTile(east));
+		g_game.map.moveCreature(player, *g_game.map.getTile(southeast));
+	}
+
+	CHECK(world.movementHookCalls() == 1);
+	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
+	CHECK(world.movementHookTo() == southeast);
+}
+
+TEST_CASE(player_teleport_emits_one_final_position_hook)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+	player.setMovementSessionActive(MovementSessionFlag::Market, true);
+	const Position destination{static_cast<uint16_t>(PlayerWalkFixture::start.x + 2),
+	                           static_cast<uint16_t>(PlayerWalkFixture::start.y + 2),
+	                           PlayerWalkFixture::start.z};
+
+	g_performanceMetrics.setEnabled(true);
+	const uint64_t spectatorsBefore = g_performanceMetrics.getMetricCalls(PerformanceMetric::MapGetSpectators);
+	CHECK(g_game.internalTeleport(&player, destination, false, 0, CONST_ME_NONE) == RETURNVALUE_NOERROR);
+	const uint64_t spectatorsAfter = g_performanceMetrics.getMetricCalls(PerformanceMetric::MapGetSpectators);
+	g_performanceMetrics.setEnabled(false);
+	// Teleports use fresh post-move notification snapshots in addition to the
+	// pre-move snapshots used for movement visibility and stack positions.
+	CHECK(spectatorsAfter - spectatorsBefore >= 4);
+	CHECK(world.movementHookCalls() == 1);
+	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
+	CHECK(world.movementHookTo() == destination);
+}
+
+TEST_CASE(player_long_teleport_closes_world_containers_out_of_range)
+{
+	PlayerWalkFixture world;
+	auto& player = *world.player;
+	Tile* oldTile = player.getTile();
+	CHECK(oldTile != nullptr);
+
+	auto container = std::make_shared<Container>(ITEM_BAG, 8);
+	oldTile->addThing(container.get());
+	player.addContainer(0, container.get());
+	CHECK(player.getContainerByID(0) == container.get());
+
+	const Position destination{static_cast<uint16_t>(PlayerWalkFixture::start.x + 10),
+	                           static_cast<uint16_t>(PlayerWalkFixture::start.y + 10),
+	                           PlayerWalkFixture::start.z};
+	ensureWalkTile(destination);
+	CHECK(g_game.internalTeleport(&player, destination, false, 0, CONST_ME_NONE) == RETURNVALUE_NOERROR);
+	CHECK(player.getContainerByID(0) == nullptr);
+
+	oldTile->removeThing(container.get(), 0);
+}
+
+TEST_CASE(player_diagonal_step_reports_the_exact_destination)
+{
+	PlayerWalkFixture world;
+	world.installMovementRecorder();
+	auto& player = *world.player;
+	player.setMovementSessionActive(MovementSessionFlag::Forge, true);
+	const Position destination{static_cast<uint16_t>(PlayerWalkFixture::start.x + 1),
+	                           static_cast<uint16_t>(PlayerWalkFixture::start.y - 1),
+	                           PlayerWalkFixture::start.z};
+
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_NORTHEAST) == RETURNVALUE_NOERROR);
+	CHECK(world.movementHookCalls() == 1);
+	CHECK(world.movementHookFrom() == PlayerWalkFixture::start);
+	CHECK(world.movementHookTo() == destination);
+}
+
+TEST_CASE(player_map_move_reuses_tile_spectator_snapshots)
+{
+	PlayerWalkFixture world;
+	auto& player = *world.player;
+	g_performanceMetrics.setEnabled(true);
+	const uint64_t before = g_performanceMetrics.getMetricCalls(PerformanceMetric::MapGetSpectators);
+
+	CHECK(g_game.internalMoveCreature(&player, DIRECTION_EAST) == RETURNVALUE_NOERROR);
+
+	const uint64_t after = g_performanceMetrics.getMetricCalls(PerformanceMetric::MapGetSpectators);
+	g_performanceMetrics.setEnabled(false);
+	CHECK(after - before == 2);
 }
 
 TFS_TEST_MAIN()

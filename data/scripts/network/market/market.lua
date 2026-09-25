@@ -344,10 +344,12 @@ end
 
 local function setMarketOpen(player)
 	marketOpenSessions[player:getId()] = true
+	player:setMovementSessionActive(MOVEMENT_SESSION_MARKET, true)
 end
 
 local function clearMarketOpen(player)
 	marketOpenSessions[player:getId()] = nil
+	player:setMovementSessionActive(MOVEMENT_SESSION_MARKET, false)
 end
 
 local function closeMarket(player, message)
@@ -2423,7 +2425,7 @@ local marketSessionCleanup = CreatureEvent("CustomMarketSessionCleanup")
 function marketSessionCleanup.onLogout(player)
 	lastAction[player:getId()] = nil
 	marketDepotSessions[player:getId()] = nil
-	marketOpenSessions[player:getId()] = nil
+	clearMarketOpen(player)
 	offerCountCache[player:getGuid()] = nil
 	return true
 end

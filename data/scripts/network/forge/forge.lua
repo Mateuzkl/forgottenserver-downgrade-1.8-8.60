@@ -1314,6 +1314,7 @@ local function openForge(player)
 	debugForge(player, "open start")
 	invalidateForgeCache(player)
 	forgeOpenSessions[player:getId()] = true
+	player:setMovementSessionActive(MOVEMENT_SESSION_FORGE, true)
 	local initSent = sendForgeInit(player)
 	local dataSent = refreshForge(player)
 	debugForge(player, "open done init=" .. tostring(initSent) .. " data=" .. tostring(dataSent))
@@ -1328,6 +1329,7 @@ local function closeForge(player)
 
 	debugForge(player, "close")
 	forgeOpenSessions[player:getId()] = nil
+	player:setMovementSessionActive(MOVEMENT_SESSION_FORGE, false)
 	invalidateForgeCache(player)
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_FORGE_SEND)
@@ -1390,6 +1392,7 @@ forgeHandler:register()
 local forgeSessionCleanup = CreatureEvent("CustomForgeSessionCleanup")
 function forgeSessionCleanup.onLogout(player)
 	forgeOpenSessions[player:getId()] = nil
+	player:setMovementSessionActive(MOVEMENT_SESSION_FORGE, false)
 	forgeLocks[player:getGuid()] = nil
 	invalidateForgeCache(player)
 	return true
