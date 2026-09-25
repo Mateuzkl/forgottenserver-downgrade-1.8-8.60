@@ -30,7 +30,12 @@ enum class ResponseType : uint8_t
 	Catalog = 0x01,
 	Success = 0x02,
 	History = 0x03,
+	CatalogChunk = 0x04,
 };
+
+inline constexpr uint8_t CatalogChunkStart = 1 << 0;
+inline constexpr uint8_t CatalogChunkEnd = 1 << 1;
+inline constexpr size_t CatalogChunkTargetSize = 48 * 1024;
 
 [[nodiscard]] constexpr StoreHighlightState effectiveHighlightState(StoreHighlightState state,
                                                                     uint32_t validUntilTimestamp,

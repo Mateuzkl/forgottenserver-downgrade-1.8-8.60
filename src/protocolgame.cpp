@@ -4407,13 +4407,39 @@ void ProtocolGame::sendStoreCatalog()
 		}
 	}
 
-	NetworkMessage msg;
-	msg.addByte(StoreProtocol::ServerOpcode);
-	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog));
-	msg.add<uint32_t>(coins);
-	msg.add<uint16_t>(static_cast<uint16_t>(visibleCategories.size()));
+	const auto stringWireSize = [](std::string_view value) {
+		// NetworkMessage converts UTF-8 to Latin-1, so the UTF-8 byte count is a
+		// conservative upper bound for planning packet sizes.
+		return sizeof(uint16_t) + value.size();
+	};
+	const auto categoryHeaderWireSize = [&](const FilteredCategory& fcat) {
+		return stringWireSize(fcat.category->name) + stringWireSize(fcat.category->icon) +
+		       stringWireSize(fcat.category->parent) + stringWireSize(fcat.category->description) +
+		       (sendHighlights ? sizeof(uint8_t) : 0) + sizeof(uint16_t);
+	};
+	const auto offerWireSize = [&](const FilteredOffer& fo) {
+		size_t size = sizeof(uint32_t) + stringWireSize(fo.offer->name) + stringWireSize(fo.offer->icon) +
+		              sizeof(uint32_t) + (supportsAstraStoreBasePrice ? sizeof(uint32_t) : 0) + sizeof(uint16_t) * 2 +
+		              stringWireSize(fo.offer->description) + stringWireSize(storeOfferTypeToString(fo.offer->type));
+		if (sendHighlights) {
+			const auto state = StoreProtocol::effectiveHighlightState(fo.state, fo.validUntilTimestamp, nowTimestamp);
+			size += sizeof(uint8_t);
+			if (storeHighlightHasExpiration(state)) {
+				size += sizeof(uint32_t);
+			}
+		}
+		return size;
+	};
+	const auto bannersWireSize = [&]() {
+		size_t size = sizeof(uint8_t) + sizeof(uint8_t);
+		for (const auto& banner : catalog->banners()) {
+			size += stringWireSize(banner.image) + sizeof(uint8_t) + sizeof(uint32_t);
+		}
+		return size;
+	};
 
-	for (const auto& fcat : visibleCategories) {
+	const auto addCategoryPart = [&](NetworkMessage& msg, const FilteredCategory& fcat, size_t firstOffer,
+	                                 size_t offerCount) {
 		msg.addString(fcat.category->name);
 		msg.addString(fcat.category->icon);
 		msg.addString(fcat.category->parent);
@@ -4424,9 +4450,10 @@ void ProtocolGame::sendStoreCatalog()
 			categoryState = stateIt->second;
 		}
 		StoreProtocol::addCategoryHighlight(msg, sendHighlights, categoryState);
-		msg.add<uint16_t>(static_cast<uint16_t>(fcat.offers.size()));
+		msg.add<uint16_t>(static_cast<uint16_t>(offerCount));
 
-		for (const auto& fo : fcat.offers) {
+		for (size_t offerIndex = firstOffer; offerIndex < firstOffer + offerCount; ++offerIndex) {
+			const auto& fo = fcat.offers[offerIndex];
 			msg.add<uint32_t>(fo.offer->id);
 			msg.addString(fo.offer->name);
 			msg.addString(fo.offer->icon);
@@ -4437,21 +4464,141 @@ void ProtocolGame::sendStoreCatalog()
 			msg.add<uint16_t>(fo.offer->count);
 			msg.addString(fo.offer->description);
 			msg.addString(storeOfferTypeToString(fo.offer->type));
-			StoreProtocol::addOfferHighlight(msg, sendHighlights, fo.state,
-			                                 fo.validUntilTimestamp, nowTimestamp);
+			StoreProtocol::addOfferHighlight(msg, sendHighlights, fo.state, fo.validUntilTimestamp, nowTimestamp);
+		}
+	};
+
+	const auto addBanners = [&](NetworkMessage& msg) {
+		const auto banners = catalog->banners();
+		msg.addByte(static_cast<uint8_t>(banners.size()));
+		for (const auto& banner : banners) {
+			msg.addString(banner.image);
+			msg.addByte(banner.action);
+			msg.add<uint32_t>(banner.target);
+		}
+		msg.addByte(catalog->bannerDelay());
+	};
+
+	constexpr size_t legacyHeaderSize = sizeof(uint8_t) * 2 + sizeof(uint32_t) + sizeof(uint16_t);
+	size_t estimatedLegacySize = legacyHeaderSize + bannersWireSize();
+	size_t visibleOfferCount = 0;
+	for (const auto& fcat : visibleCategories) {
+		estimatedLegacySize += categoryHeaderWireSize(fcat);
+		for (const auto& fo : fcat.offers) {
+			estimatedLegacySize += offerWireSize(fo);
+			++visibleOfferCount;
 		}
 	}
 
-	const auto banners = catalog->banners();
-	msg.addByte(static_cast<uint8_t>(banners.size()));
-	for (const auto& banner : banners) {
-		msg.addString(banner.image);
-		msg.addByte(banner.action);
-		msg.add<uint32_t>(banner.target);
+	if (estimatedLegacySize <= StoreProtocol::CatalogChunkTargetSize) {
+		NetworkMessage msg;
+		msg.addByte(StoreProtocol::ServerOpcode);
+		msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog));
+		msg.add<uint32_t>(coins);
+		msg.add<uint16_t>(static_cast<uint16_t>(visibleCategories.size()));
+		for (const auto& fcat : visibleCategories) {
+			addCategoryPart(msg, fcat, 0, fcat.offers.size());
+		}
+		addBanners(msg);
+		writeToOutputBuffer(msg);
+		return;
 	}
-	msg.addByte(catalog->bannerDelay());
+	if (!isAstra) {
+		LOG_WARN(
+		    fmt::format("[StoreCatalog] Refusing to send an estimated {}-byte catalog to a client "
+		                "without Astra catalog chunk support.",
+		                estimatedLegacySize));
+		sendStoreError("This Store catalog requires an updated AstraClient.");
+		return;
+	}
 
-	writeToOutputBuffer(msg);
+	struct CategoryPart
+	{
+		const FilteredCategory* category = nullptr;
+		size_t firstOffer = 0;
+		size_t offerCount = 0;
+	};
+	struct CatalogChunk
+	{
+		std::vector<CategoryPart> parts;
+		size_t estimatedSize = 0;
+	};
+
+	constexpr size_t chunkHeaderSize = sizeof(uint8_t) * 3 + sizeof(uint32_t) + sizeof(uint16_t) * 2;
+	std::vector<CatalogChunk> chunks(1, CatalogChunk{{}, chunkHeaderSize});
+	for (const auto& fcat : visibleCategories) {
+		const size_t categorySize = categoryHeaderWireSize(fcat);
+		if (fcat.offers.empty()) {
+			if (!chunks.back().parts.empty() &&
+			    chunks.back().estimatedSize + categorySize > StoreProtocol::CatalogChunkTargetSize) {
+				chunks.push_back(CatalogChunk{{}, chunkHeaderSize});
+			}
+			chunks.back().parts.push_back(CategoryPart{&fcat, 0, 0});
+			chunks.back().estimatedSize += categorySize;
+			continue;
+		}
+
+		size_t offerIndex = 0;
+		while (offerIndex < fcat.offers.size()) {
+			const size_t firstOfferSize = offerWireSize(fcat.offers[offerIndex]);
+			if (!chunks.back().parts.empty() &&
+			    chunks.back().estimatedSize + categorySize + firstOfferSize > StoreProtocol::CatalogChunkTargetSize) {
+				chunks.push_back(CatalogChunk{{}, chunkHeaderSize});
+			}
+
+			CategoryPart part{&fcat, offerIndex, 0};
+			chunks.back().estimatedSize += categorySize;
+			while (offerIndex < fcat.offers.size()) {
+				const size_t size = offerWireSize(fcat.offers[offerIndex]);
+				if (part.offerCount > 0 && chunks.back().estimatedSize + size > StoreProtocol::CatalogChunkTargetSize) {
+					break;
+				}
+				chunks.back().estimatedSize += size;
+				++part.offerCount;
+				++offerIndex;
+			}
+			chunks.back().parts.push_back(part);
+			if (offerIndex < fcat.offers.size()) {
+				chunks.push_back(CatalogChunk{{}, chunkHeaderSize});
+			}
+		}
+	}
+
+	if (chunks.back().estimatedSize + bannersWireSize() > StoreProtocol::CatalogChunkTargetSize) {
+		chunks.push_back(CatalogChunk{{}, chunkHeaderSize});
+	}
+	chunks.back().estimatedSize += bannersWireSize();
+
+	if (std::any_of(chunks.begin(), chunks.end(), [](const CatalogChunk& chunk) {
+		    return chunk.estimatedSize > NetworkMessage::MAX_PROTOCOL_BODY_LENGTH;
+	    })) {
+		LOG_ERROR(fmt::format("[StoreCatalog] A catalog chunk exceeds the protocol limit ({} bytes).",
+		                      static_cast<size_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH)));
+		sendStoreError("Store catalog contains an entry that is too large.");
+		return;
+	}
+
+	for (size_t chunkIndex = 0; chunkIndex < chunks.size(); ++chunkIndex) {
+		const bool first = chunkIndex == 0;
+		const bool last = chunkIndex + 1 == chunks.size();
+		NetworkMessage msg;
+		msg.addByte(StoreProtocol::ServerOpcode);
+		msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::CatalogChunk));
+		msg.addByte((first ? StoreProtocol::CatalogChunkStart : 0) | (last ? StoreProtocol::CatalogChunkEnd : 0));
+		msg.add<uint32_t>(coins);
+		msg.add<uint16_t>(static_cast<uint16_t>(visibleCategories.size()));
+		msg.add<uint16_t>(static_cast<uint16_t>(chunks[chunkIndex].parts.size()));
+		for (const auto& part : chunks[chunkIndex].parts) {
+			addCategoryPart(msg, *part.category, part.firstOffer, part.offerCount);
+		}
+		if (last) {
+			addBanners(msg);
+		}
+		writeToOutputBuffer(msg);
+	}
+
+	LOG_DEBUG(fmt::format("[StoreCatalog] Sent {} offers in {} chunks (estimated {} bytes).", visibleOfferCount,
+	                      chunks.size(), estimatedLegacySize));
 }
 
 void ProtocolGame::sendStoreError(std::string_view message)

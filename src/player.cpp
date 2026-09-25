@@ -6116,12 +6116,9 @@ bool Player::getOutfitAddons(const Outfit& outfit, uint8_t& addons) const
 		return false;
 	}
 
-	for (const auto& [lookType, addon] : outfits) {
-		if (lookType != outfit.lookType) {
-			continue;
-		}
-
-		addons = addon;
+	const auto it = outfits.find(outfit.lookType);
+	if (it != outfits.end()) {
+		addons = it->second;
 		return true;
 	}
 

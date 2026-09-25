@@ -163,6 +163,10 @@ TEST_CASE(test_store_protocol_opcodes)
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog) == 0x01);
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::Success) == 0x02);
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::History) == 0x03);
+	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::CatalogChunk) == 0x04);
+	CHECK(StoreProtocol::CatalogChunkStart == 0x01);
+	CHECK(StoreProtocol::CatalogChunkEnd == 0x02);
+	CHECK(StoreProtocol::CatalogChunkTargetSize < NetworkMessage::MAX_PROTOCOL_BODY_LENGTH);
 }
 
 TEST_CASE(test_store_effective_and_base_price_packet_layout)
