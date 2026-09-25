@@ -236,6 +236,22 @@ TEST_CASE(test_store_catalog_chunk_packet_layout)
 	CHECK(chunk.getBufferPosition() == NetworkMessage::INITIAL_BUFFER_POSITION + chunk.getLength());
 }
 
+TEST_CASE(test_store_catalog_string_fallback_preserves_packet)
+{
+	NetworkMessage message;
+	message.addString(std::string(NetworkMessage::MAX_STRING_LENGTH + 1, 'x'));
+	message.addString("\xF0\x9F\x98\x80");
+	message.addString("valid");
+	message.addByte(0xAB);
+
+	CHECK(message.setBufferPosition(0));
+	CHECK(message.getString().empty());
+	CHECK(message.getString().empty());
+	CHECK(message.getString() == "valid");
+	CHECK(message.getByte() == 0xAB);
+	CHECK(message.getBufferPosition() == NetworkMessage::INITIAL_BUFFER_POSITION + message.getLength());
+}
+
 TEST_CASE(test_store_effective_and_base_price_packet_layout)
 {
 	CHECK(static_cast<uint8_t>(AstraClient::StoreBasePrice) == (1U << 3));

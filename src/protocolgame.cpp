@@ -43,6 +43,7 @@
 #include <limits>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -4419,42 +4420,44 @@ void ProtocolGame::sendStoreCatalog()
 		return;
 	}
 
-	const auto canEncodeStoreString = [](std::string_view value) {
+	const auto encodedStoreStringLength = [](std::string_view value) -> std::optional<size_t> {
 		if (!simdutf::validate_utf8(value.data(), value.size())) {
-			return false;
+			return std::nullopt;
 		}
 		const size_t latin1Length = simdutf::latin1_length_from_utf8(value.data(), value.size());
 		if (latin1Length > NetworkMessage::MAX_STRING_LENGTH) {
-			return false;
+			return std::nullopt;
 		}
 		if (value.empty()) {
-			return true;
+			return 0;
 		}
 		std::string converted(latin1Length, '\0');
-		return simdutf::convert_utf8_to_latin1(value.data(), value.size(), converted.data()) == latin1Length;
+		if (simdutf::convert_utf8_to_latin1(value.data(), value.size(), converted.data()) != latin1Length) {
+			return std::nullopt;
+		}
+		return latin1Length;
 	};
-	const bool hasInvalidString = std::any_of(
+	const bool usesEmptyStringFallback = std::any_of(
 	    visibleCategories.begin(), visibleCategories.end(), [&](const FilteredCategory& fcat) {
-		    if (!canEncodeStoreString(fcat.category->name) || !canEncodeStoreString(fcat.category->icon) ||
-		        !canEncodeStoreString(fcat.category->parent) || !canEncodeStoreString(fcat.category->description)) {
+		    if (!encodedStoreStringLength(fcat.category->name) || !encodedStoreStringLength(fcat.category->icon) ||
+		        !encodedStoreStringLength(fcat.category->parent) ||
+		        !encodedStoreStringLength(fcat.category->description)) {
 			    return true;
 		    }
 		    return std::any_of(fcat.offers.begin(), fcat.offers.end(), [&](const FilteredOffer& fo) {
-			    return !canEncodeStoreString(fo.offer->name) || !canEncodeStoreString(fo.offer->icon) ||
-			           !canEncodeStoreString(fo.offer->description) ||
-			           !canEncodeStoreString(storeOfferTypeToString(fo.offer->type));
+			    return !encodedStoreStringLength(fo.offer->name) || !encodedStoreStringLength(fo.offer->icon) ||
+			           !encodedStoreStringLength(fo.offer->description) ||
+			           !encodedStoreStringLength(storeOfferTypeToString(fo.offer->type));
 		    });
 	    }) ||
 	    std::any_of(banners.begin(), banners.end(),
-	                [&](const auto& banner) { return !canEncodeStoreString(banner.image); });
-	if (hasInvalidString) {
-		LOG_ERROR("[StoreCatalog] Catalog contains text that cannot be represented by the wire format.");
-		sendStoreError("Store catalog contains text that is too long or cannot be encoded.");
-		return;
+	                [&](const auto& banner) { return !encodedStoreStringLength(banner.image); });
+	if (usesEmptyStringFallback) {
+		LOG_WARN("[StoreCatalog] One or more text fields cannot be encoded and will be sent empty.");
 	}
 
-	const auto stringWireSize = [](std::string_view value) {
-		return sizeof(uint16_t) + simdutf::latin1_length_from_utf8(value.data(), value.size());
+	const auto stringWireSize = [&](std::string_view value) {
+		return sizeof(uint16_t) + encodedStoreStringLength(value).value_or(0);
 	};
 	const auto categoryHeaderWireSize = [&](const FilteredCategory& fcat) {
 		return stringWireSize(fcat.category->name) + stringWireSize(fcat.category->icon) +
