@@ -46,6 +46,7 @@ public:
 	{
 		MAX_PROTOCOL_BODY_LENGTH = MAX_BODY_LENGTH - 10
 	};
+	static constexpr size_t MAX_STRING_LENGTH = 8192;
 
 	NetworkMessage() = default;
 
