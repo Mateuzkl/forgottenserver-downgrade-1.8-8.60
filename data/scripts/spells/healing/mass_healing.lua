@@ -43,6 +43,10 @@ function onTargetCreature(creature, target)
 	return healTarget(creature, target)
 end
 
+function onTargetCreatureWOD(creature, target)
+	return healTarget(creature, target)
+end
+
 local function createMassHealingCombat(area, callbackName)
 	local combat = Combat()
 	combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_MAGIC_BLUE)
@@ -53,7 +57,7 @@ local function createMassHealingCombat(area, callbackName)
 end
 
 local combat = createMassHealingCombat(AREA_CIRCLE3X3, "onTargetCreature")
-local combatWOD = createMassHealingCombat(AREA_CIRCLE5X5, "onTargetCreature")
+local combatWOD = createMassHealingCombat(AREA_CIRCLE5X5, "onTargetCreatureWOD")
 
 local spell = Spell("instant")
 
