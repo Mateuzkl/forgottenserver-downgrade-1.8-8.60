@@ -13,6 +13,7 @@
 #include "events.h"
 #include "familiar.h"
 #include "game.h"
+#include "party.h"
 #include "house.h"
 #include "iologindata.h"
 #include "instance_utils.h"
@@ -768,7 +769,7 @@ int32_t Player::getWheelBallisticMasteryCriticalBonus(CombatOrigin origin) const
 		return 0;
 	}
 
-	const Item* weapon = getWeapon();
+	const Item* weapon = getWeapon(true);
 	if (!weapon || weapon->getWeaponType() != WEAPON_DISTANCE) {
 		return 0;
 	}
@@ -782,7 +783,7 @@ int32_t Player::getWheelBallisticMasteryElementPierce(CombatType_t combatType) c
 		return 0;
 	}
 
-	const Item* weapon = getWeapon();
+	const Item* weapon = getWeapon(true);
 	if (!weapon || weapon->getWeaponType() != WEAPON_DISTANCE) {
 		return 0;
 	}
@@ -878,11 +879,6 @@ void Player::tryArmWheelFocusMastery(const Spell* spell)
 
 	wheelFocusMasteryReady = true;
 	wheelFocusMasteryExpireTime = OTSYS_TIME() + 12000;
-	const std::string line = fmt::format(
-	    "[Focus Mastery] {} armed by '{}' (next damage spell within 12s gets +35%%)",
-	    getName(), spell->getName());
-	g_logger().info(line);
-	std::cout << line << std::endl;
 	sendWheelFocusMasteryClientState("armed", 12000);
 }
 
@@ -895,10 +891,6 @@ void Player::applyWheelFocusMasteryBonus(CombatDamage& damage, const Spell* spel
 
 	if (OTSYS_TIME() > wheelFocusMasteryExpireTime) {
 		wheelFocusMasteryReady = false;
-		const std::string line =
-		    fmt::format("[Focus Mastery] {} expired before a damage spell was cast", getName());
-		g_logger().info(line);
-		std::cout << line << std::endl;
 		sendWheelFocusMasteryClientState("expired", 0);
 		return;
 	}
@@ -907,7 +899,6 @@ void Player::applyWheelFocusMasteryBonus(CombatDamage& damage, const Spell* spel
 		return;
 	}
 
-	const int32_t primaryBefore = damage.primary.value;
 	damage.primary.value =
 	    static_cast<int32_t>(std::lround(static_cast<double>(damage.primary.value) * 1.35));
 	if (damage.secondary.value != 0) {
@@ -917,11 +908,6 @@ void Player::applyWheelFocusMasteryBonus(CombatDamage& damage, const Spell* spel
 
 	wheelFocusMasteryReady = false;
 	sendTextMessage(MESSAGE_STATUS_SMALL, "(Focus Mastery)");
-	const std::string line = fmt::format(
-	    "[Focus Mastery] {} consumed on '{}' (primary damage {} -> {})",
-	    getName(), spell->getName(), primaryBefore, damage.primary.value);
-	g_logger().info(line);
-	std::cout << line << std::endl;
 	sendWheelFocusMasteryClientState("consumed", 0);
 }
 
@@ -1033,7 +1019,7 @@ void Player::sendMonkData()
 
 void Player::sendWheelFocusMasteryClientState(const std::string& state, uint32_t durationMs)
 {
-	if (!client || !client->isFonticakClient || !wheelFocusMastery) {
+	if (!client || !client->isFonticakClient) {
 		return;
 	}
 	std::string json = fmt::format("{{\"state\":\"{}\",\"duration\":{}}}", state, durationMs);
@@ -1391,6 +1377,10 @@ float Player::getCombatAbsorbPercent(CombatType_t combatType) const
 {
 	float total = varCombatAbsorbPercent[combatTypeToIndex(combatType)];
 	for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_AMMO; ++slot) {
+		if (!isItemAbilityEnabled(static_cast<slots_t>(slot))) {
+			continue;
+		}
+
 		const std::shared_ptr<Item>& item = inventory[slot];
 		if (!item) {
 			continue;
@@ -1458,7 +1448,138 @@ int32_t Player::getMantraTotal() const
 	if (isSerene()) {
 		mantraTotal *= 2;
 	}
+
+	const Party* party = getParty();
+	if (!party) {
+		return mantraTotal;
+	}
+
+	const Position& myPos = getPosition();
+	auto addGuidingPresenceShare = [&](const Player* source) {
+		if (!source || source == this || !source->hasWheelGuidingPresence()) {
+			return;
+		}
+		if (!myPos.isInRange(source->getPosition(), 30, 30, 1)) {
+			return;
+		}
+
+		int32_t sourceMantra = 0;
+		for (const slots_t& slot : mantraSlots) {
+			if (!source->isItemAbilityEnabled(slot)) {
+				continue;
+			}
+			std::shared_ptr<Item> item = source->inventory[slot];
+			if (!item) {
+				continue;
+			}
+			const ItemType& itemType = Item::items[item->getID()];
+			sourceMantra += getItemTypeMantraValue(itemType, COMBAT_ENERGYDAMAGE);
+		}
+		if (source->isSerene()) {
+			sourceMantra *= 2;
+		}
+		mantraTotal += sourceMantra / 2;
+	};
+
+	if (const std::shared_ptr<Player> leader = party->getLeader()) {
+		addGuidingPresenceShare(leader.get());
+	}
+	for (const auto& memberWeak : party->getMembers()) {
+		if (const std::shared_ptr<Player> member = memberWeak.lock()) {
+			addGuidingPresenceShare(member.get());
+		}
+	}
+
 	return mantraTotal;
+}
+
+namespace {
+
+bool isWheelSanctuaryAdjacent(const Position& a, const Position& b)
+{
+	if (a.z != b.z) {
+		return false;
+	}
+	return a.isInRange(b, 1, 1, 0) && a != b;
+}
+
+} // namespace
+
+void Player::setWheelSanctuary(bool enabled)
+{
+	wheelSanctuary = enabled;
+	if (!enabled) {
+		wheelSanctuaryBonusPercent = 0;
+		wheelSanctuaryExpireTime = 0;
+	}
+}
+
+void Player::triggerWheelSanctuary(uint8_t harmonyConsumed, const Position& position)
+{
+	if (!wheelSanctuary || harmonyConsumed == 0 ||
+	    !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	wheelSanctuaryBonusPercent = static_cast<uint8_t>(std::min<int>(harmonyConsumed * 2, 100));
+	wheelSanctuaryExpireTime = OTSYS_TIME() + 5000;
+	wheelSanctuaryFieldPosition = position;
+	g_game.addMagicEffect(position, CONST_ME_MAGIC_GREEN);
+}
+
+int32_t Player::getWheelSanctuaryHealingBonusPercent(const Creature* healTarget) const
+{
+	if (!wheelSanctuary || wheelSanctuaryBonusPercent == 0 || OTSYS_TIME() > wheelSanctuaryExpireTime) {
+		return 0;
+	}
+
+	if (!getPosition().isInRange(wheelSanctuaryFieldPosition, 1, 1, 0)) {
+		return 0;
+	}
+
+	int32_t bonus = wheelSanctuaryBonusPercent;
+	if (healTarget && healTarget->getPlayer() && isWheelSanctuaryAdjacent(getPosition(), healTarget->getPosition())) {
+		bonus += 10;
+	}
+	return bonus;
+}
+
+void Player::applyWheelSanctuaryCombatBonus(CombatDamage& damage, const Creature* target) const
+{
+	if (damage.primary.type == COMBAT_HEALING) {
+		const int32_t bonus = getWheelSanctuaryHealingBonusPercent(target);
+		if (bonus <= 0) {
+			return;
+		}
+		const double multiplier = 1.0 + (bonus / 100.0);
+		damage.primary.value =
+		    static_cast<int32_t>(std::lround(static_cast<double>(damage.primary.value) * multiplier));
+		if (damage.secondary.value != 0) {
+			damage.secondary.value =
+			    static_cast<int32_t>(std::lround(static_cast<double>(damage.secondary.value) * multiplier));
+		}
+		return;
+	}
+
+	if (!wheelSanctuary || wheelSanctuaryBonusPercent == 0 || OTSYS_TIME() > wheelSanctuaryExpireTime) {
+		return;
+	}
+
+	if (!getPosition().isInRange(wheelSanctuaryFieldPosition, 1, 1, 0)) {
+		return;
+	}
+
+	int32_t bonus = wheelSanctuaryBonusPercent;
+	if (target && target != this && isWheelSanctuaryAdjacent(getPosition(), target->getPosition())) {
+		bonus += 10;
+	}
+
+	const double multiplier = 1.0 + (bonus / 100.0);
+	damage.primary.value = static_cast<int32_t>(std::lround(static_cast<double>(damage.primary.value) * multiplier));
+	if (damage.secondary.value != 0) {
+		damage.secondary.value =
+		    static_cast<int32_t>(std::lround(static_cast<double>(damage.secondary.value) * multiplier));
+	}
 }
 
 int16_t Player::getMantraAbsorbPercent(int32_t mantraTotal) const

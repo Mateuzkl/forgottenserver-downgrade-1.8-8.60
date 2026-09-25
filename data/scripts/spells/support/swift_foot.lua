@@ -1,12 +1,13 @@
-local WHEEL_AUGMENT_DEBUG = true
 local spellDuration = 10000
 local SWIFT_FOOT_DAMAGE_SUBID = 86064
+local SWIFT_FOOT_HASTE_SUBID = 86065
 
 local combat = Combat()
 combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_MAGIC_GREEN)
 combat:setParameter(COMBAT_PARAM_AGGRESSIVE, 0)
 
 local hasteCondition = Condition(CONDITION_HASTE)
+hasteCondition:setParameter(CONDITION_PARAM_SUBID, SWIFT_FOOT_HASTE_SUBID)
 hasteCondition:setParameter(CONDITION_PARAM_TICKS, spellDuration)
 hasteCondition:setFormula(1.8, 72, 1.8, 72)
 combat:addCondition(hasteCondition)
@@ -31,7 +32,7 @@ local function removeSwiftFootDamageDebuff(creature)
 	creature:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, SWIFT_FOOT_DAMAGE_SUBID)
 end
 
-local function applySwiftFootDamageDebuff(creature, grade)
+local function applySwiftFootDamageDebuff(creature, grade, duration)
 	removeSwiftFootDamageDebuff(creature)
 
 	local damagePercent = getDamageDealtPercent(grade)
@@ -41,7 +42,7 @@ local function applySwiftFootDamageDebuff(creature, grade)
 
 	local damageDebuff = Condition(CONDITION_ATTRIBUTES)
 	damageDebuff:setParameter(CONDITION_PARAM_SUBID, SWIFT_FOOT_DAMAGE_SUBID)
-	damageDebuff:setParameter(CONDITION_PARAM_TICKS, spellDuration)
+	damageDebuff:setParameter(CONDITION_PARAM_TICKS, duration or spellDuration)
 	damageDebuff:setParameter(CONDITION_PARAM_BUFF_DAMAGEDEALT, damagePercent)
 	damageDebuff:setParameter(CONDITION_PARAM_BUFF_SPELL, true)
 	creature:addCondition(damageDebuff)
@@ -73,27 +74,12 @@ function spell.onCastSpell(creature, var)
 	local player = creature:getPlayer()
 	local grade = player and getSwiftFootGrade(player) or 0
 
-	applyFamiliarHaste(creature)
-
 	if not combat:execute(creature, var) then
 		return false
 	end
 
+	applyFamiliarHaste(creature)
 	applySwiftFootDamageDebuff(creature, grade)
-
-	if WHEEL_AUGMENT_DEBUG and player then
-		local damageText = "none"
-		local damagePercent = getDamageDealtPercent(grade)
-		if damagePercent then
-			damageText = string.format("%d%% dealt (-%d%% penalty)", damagePercent, 100 - damagePercent)
-		end
-		print(string.format(
-			"[wheel-aug][swift-foot] player=%s grade=%d damageDealt=%s",
-			player:getName(),
-			grade,
-			damageText
-		))
-	end
 
 	return true
 end
@@ -105,15 +91,13 @@ function SwiftFootWheel.refreshActive(player)
 		return
 	end
 
-	local grade = getSwiftFootGrade(player)
-	if player:getCondition(CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, SWIFT_FOOT_DAMAGE_SUBID) then
-		applySwiftFootDamageDebuff(player, grade)
-	elseif WHEEL_AUGMENT_DEBUG then
-		print(string.format(
-			"[wheel-aug][swift-foot] player=%s refresh skipped (Swift Foot not active)",
-			player:getName()
-		))
+	local haste = player:getCondition(CONDITION_HASTE, CONDITIONID_COMBAT, SWIFT_FOOT_HASTE_SUBID)
+	if not haste then
+		removeSwiftFootDamageDebuff(player)
+		return
 	end
+
+	applySwiftFootDamageDebuff(player, getSwiftFootGrade(player), math.max(1, haste:getTicks()))
 end
 
 spell:name("Swift Foot")

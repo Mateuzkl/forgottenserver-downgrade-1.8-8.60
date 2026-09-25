@@ -933,6 +933,13 @@ public:
 	void addWheelDodgeChance(float modifier) { varWheelDodgeChance += modifier; }
 	bool hasWheelBallisticMastery() const { return wheelBallisticMastery; }
 	void setWheelBallisticMastery(bool enabled) { wheelBallisticMastery = enabled; }
+	bool hasWheelGuidingPresence() const { return wheelGuidingPresence; }
+	void setWheelGuidingPresence(bool enabled) { wheelGuidingPresence = enabled; }
+	bool hasWheelSanctuary() const { return wheelSanctuary; }
+	void setWheelSanctuary(bool enabled);
+	void triggerWheelSanctuary(uint8_t harmonyConsumed, const Position& position);
+	void applyWheelSanctuaryCombatBonus(CombatDamage& damage, const Creature* target) const;
+	int32_t getWheelSanctuaryHealingBonusPercent(const Creature* healTarget) const;
 	int32_t getWheelBallisticMasteryCriticalBonus(CombatOrigin origin) const;
 	int32_t getWheelBallisticMasteryElementPierce(CombatType_t combatType) const;
 	bool hasWheelRunicMastery() const { return wheelRunicMastery; }
@@ -1892,6 +1899,11 @@ private:
 	float varWheelMitigationMultiplier = 0.0f;
 	float varWheelDodgeChance = 0.0f;
 	bool wheelBallisticMastery = false;
+	bool wheelGuidingPresence = false;
+	bool wheelSanctuary = false;
+	uint8_t wheelSanctuaryBonusPercent = 0;
+	int64_t wheelSanctuaryExpireTime = 0;
+	Position wheelSanctuaryFieldPosition;
 	bool wheelRunicMastery = false;
 	int32_t wheelRunicMasteryBonus = 0;
 	bool wheelFocusMastery = false;

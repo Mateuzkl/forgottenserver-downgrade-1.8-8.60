@@ -29,9 +29,6 @@ local WHEEL_SPELL_FLAT_MANA_SPELLS = {
 	["Chivalrous Challenge"] = true,
 	["Fierce Berserk"] = true,
 }
-local WHEEL_APPLIED_CD_STORAGES = {}
-local WHEEL_APPLIED_FLAT_MANA_STORAGES = {}
-local WHEEL_AUGMENT_DEBUG = true
 
 local AUGMENT_TYPE_NAMES = {
 	[1] = "MANA_COST",
@@ -364,11 +361,13 @@ local WHEEL_APPLIED_MITIGATION = {}
 local WHEEL_APPLIED_MITIGATION_MULTIPLIER = {}
 local WHEEL_APPLIED_RESISTANCES = {}
 local WHEEL_APPLIED_DODGE = {}
+local WHEEL_LAST_SKILL_STATS_PAYLOAD = {}
+local WHEEL_SPELL_HEALING_BONUSES = {}
+local WHEEL_SPELL_COOLDOWN_REDUCTIONS = {}
 local WHEEL_POSITIONAL_TACTICS_SUBID = 86062
 local WHEEL_APPLIED_POSITIONAL_TACTICS = {}
 local WHEEL_POSITIONAL_TACTICS_PLAYERS = {}
 local POSITIONAL_TACTICS_BONUS = 3
-local WHEEL_POSITIONAL_TACTICS_DEBUG = true
 
 local WHEEL_BATTLE_INSTINCT_SUBID = 86063
 local WHEEL_APPLIED_BATTLE_INSTINCT = {}
@@ -377,16 +376,6 @@ local BATTLE_INSTINCT_MIN_CREATURES = 5
 local BATTLE_INSTINCT_MAX_CREATURES = 8
 local BATTLE_INSTINCT_SHIELD_PER_TIER = 6
 local BATTLE_INSTINCT_FIGHTING_PER_TIER = 1
-
-local function logPositionalTactics(tag, player, extra)
-	if not WHEEL_POSITIONAL_TACTICS_DEBUG then
-		return
-	end
-
-	local playerName = player and player:getName() or "nil"
-	local msg = string.format("[wheel-positional][%s] player=%s %s", tag, playerName, extra or "")
-	print(msg)
-end
 
 local WHEEL_SLOT_PREREQUISITES = {
 	[1] = { 2, 7 },
@@ -990,6 +979,26 @@ local SUPREME_EFFECTS = {
 	[93] = { revelation = 3, value = 150 },
 }
 
+local WHEEL_COOLDOWN_SPELL_NAMES = {}
+for _, vocationSpells in pairs(WHEEL_SPELL_BONUSES) do
+	for _, spell in pairs(vocationSpells) do
+		for _, grade in ipairs(spell.grades) do
+			for _, augment in ipairs(grade) do
+				if augment[1] == AUGMENT_TYPE.COOLDOWN then
+					for _, spellName in ipairs(spell.names) do
+						WHEEL_COOLDOWN_SPELL_NAMES[spellName] = true
+					end
+				end
+			end
+		end
+	end
+end
+for _, effect in pairs(SUPREME_EFFECTS) do
+	if effect.spell and effect.augment == AUGMENT_TYPE.COOLDOWN then
+		WHEEL_COOLDOWN_SPELL_NAMES[effect.spell] = true
+	end
+end
+
 local function getGradeMultiplier(grade)
 	if grade == 1 then
 		return 1.1
@@ -1171,6 +1180,8 @@ local function calculateWheelBonuses(player, points, activeGems)
 				bonuses.runicMastery = true
 			elseif conviction == "special_1" and vocationId == 4 then
 				bonuses.healingLink = true
+			elseif conviction == "special_1" and vocationId == 5 then
+				bonuses.guidingPresence = true
 			elseif conviction == "special_2" and vocationId == 1 then
 				bonuses.battleHealing = true
 			elseif conviction == "special_2" and vocationId == 2 then
@@ -1179,6 +1190,8 @@ local function calculateWheelBonuses(player, points, activeGems)
 				bonuses.focusMastery = true
 			elseif conviction == "special_2" and vocationId == 4 then
 				bonuses.runicMastery = true
+			elseif conviction == "special_2" and vocationId == 5 then
+				bonuses.sanctuary = true
 			elseif WHEEL_SPELL_BONUSES[vocationId] and WHEEL_SPELL_BONUSES[vocationId][conviction] then
 				addWheelSpellGrade(bonuses, conviction)
 			end
@@ -1188,6 +1201,24 @@ local function calculateWheelBonuses(player, points, activeGems)
 	applyActiveGemBonuses(player, bonuses, points, activeGems or emptyGems())
 	buildWheelSpellAugments(bonuses, vocationId)
 	return bonuses
+end
+
+local function cacheWheelSpellAugments(player, bonuses)
+	local key = getWheelPlayerKey(player)
+	local healing = {}
+	local cooldowns = {}
+
+	for _, augment in ipairs(bonuses.spellAugments) do
+		local value = tonumber(augment.value) or 0
+		if augment.augmentType == AUGMENT_TYPE.BASE_HEALING then
+			healing[augment.spellName] = (healing[augment.spellName] or 0) + value
+		elseif augment.augmentType == AUGMENT_TYPE.COOLDOWN then
+			cooldowns[augment.spellName] = (cooldowns[augment.spellName] or 0) + math.floor(math.abs(value) * 1000)
+		end
+	end
+
+	WHEEL_SPELL_HEALING_BONUSES[key] = healing
+	WHEEL_SPELL_COOLDOWN_REDUCTIONS[key] = cooldowns
 end
 
 local function removeAppliedSpecialMagic(player)
@@ -1358,7 +1389,7 @@ function Player.updateBattleInstinct(self)
 	condition:setParameter(CONDITION_PARAM_SKILL_CLUB, fightingBonus)
 	self:addCondition(condition)
 	WHEEL_APPLIED_BATTLE_INSTINCT[key] = { tier = tier }
-	self:reloadData()
+	self:sendSkills()
 	return true
 end
 
@@ -1380,7 +1411,6 @@ local function removeAppliedPositionalTactics(player)
 		end
 	end
 
-	logPositionalTactics("remove", player, string.format("mode=%s", applied.mode))
 	WHEEL_APPLIED_POSITIONAL_TACTICS[key] = nil
 end
 
@@ -1388,15 +1418,7 @@ local function refreshPositionalTacticsTracking(player)
 	local key = getWheelPlayerKey(player)
 	if hasPositionalTacticsUnlocked(player) then
 		WHEEL_POSITIONAL_TACTICS_PLAYERS[key] = player:getId()
-		logPositionalTactics(
-			"track",
-			player,
-			string.format("enabled slot1=%d/%d", loadProfile(player).points[1] or 0, WHEEL_SLOT_MAX_POINTS[1])
-		)
 	else
-		if WHEEL_POSITIONAL_TACTICS_PLAYERS[key] then
-			logPositionalTactics("track", player, "disabled")
-		end
 		WHEEL_POSITIONAL_TACTICS_PLAYERS[key] = nil
 		removeAppliedPositionalTactics(player)
 	end
@@ -1416,7 +1438,6 @@ function Player.updatePositionalTactics(self)
 		return false
 	end
 
-	local previousMode = applied and applied.mode or "none"
 	removeAppliedPositionalTactics(self)
 
 	if wantMode == "distance" then
@@ -1426,12 +1447,6 @@ function Player.updatePositionalTactics(self)
 		condition:setParameter(CONDITION_PARAM_SKILL_DISTANCE, POSITIONAL_TACTICS_BONUS)
 		self:addCondition(condition)
 		WHEEL_APPLIED_POSITIONAL_TACTICS[key] = { mode = "distance" }
-		logPositionalTactics(
-			"apply",
-			self,
-			string.format("mode=distance adjacentMonster=%s bonus=+%d distance %s -> %s",
-				tostring(adjacentMonster), POSITIONAL_TACTICS_BONUS, previousMode, wantMode)
-		)
 	else
 		if self.addSpecialMagicLevel then
 			self:addSpecialMagicLevel(COMBAT_HOLYDAMAGE, POSITIONAL_TACTICS_BONUS)
@@ -1442,28 +1457,20 @@ function Player.updatePositionalTactics(self)
 			holy = POSITIONAL_TACTICS_BONUS,
 			healing = POSITIONAL_TACTICS_BONUS,
 		}
-		logPositionalTactics(
-			"apply",
-			self,
-			string.format("mode=magic adjacentMonster=%s bonus=+%d holy/+%d healing %s -> %s",
-				tostring(adjacentMonster), POSITIONAL_TACTICS_BONUS, POSITIONAL_TACTICS_BONUS, previousMode, wantMode)
-		)
 	end
 
-	self:reloadData()
+	self:sendSkills()
 	return true
 end
 
 local function clearWheelSpellCooldownStorages(player)
-	local key = getWheelPlayerKey(player)
-	local applied = WHEEL_APPLIED_CD_STORAGES[key]
-	if not applied then
-		return
+	for spellName in pairs(WHEEL_COOLDOWN_SPELL_NAMES) do
+		local spell = Spell(spellName)
+		local spellId = spell and spell:id()
+		if type(spellId) == "number" and spellId > 0 then
+			player:setStorageValue(WHEEL_SPELL_CD_STORAGE_BASE + spellId, -1)
+		end
 	end
-	for _, storageKey in ipairs(applied) do
-		player:setStorageValue(storageKey, -1)
-	end
-	WHEEL_APPLIED_CD_STORAGES[key] = nil
 end
 
 local function syncWheelSpellCooldownStorages(player, spellAugments)
@@ -1489,34 +1496,23 @@ local function syncWheelSpellCooldownStorages(player, spellAugments)
 		return nil
 	end
 
-	local key = getWheelPlayerKey(player)
-	local applied = {}
 	for spellName, ms in pairs(totals) do
 		local spellId = getInstantSpellIdByName(spellName)
 		if spellId and ms > 0 then
 			local storageKey = WHEEL_SPELL_CD_STORAGE_BASE + spellId
 			player:setStorageValue(storageKey, ms)
-			applied[#applied + 1] = storageKey
-			if spellName == "Nature's Embrace" then
-				print(string.format(
-					"[wheel-aug][storage] %s Nature's Embrace id=%d wheelCooldownReductionMs=%d",
-					player:getName(), spellId, ms))
-			end
 		end
 	end
-	WHEEL_APPLIED_CD_STORAGES[key] = applied
 end
 
 local function clearWheelSpellFlatManaStorages(player)
-	local key = getWheelPlayerKey(player)
-	local applied = WHEEL_APPLIED_FLAT_MANA_STORAGES[key]
-	if not applied then
-		return
+	for spellName in pairs(WHEEL_SPELL_FLAT_MANA_SPELLS) do
+		local spell = Spell(spellName)
+		local spellId = spell and spell:id()
+		if type(spellId) == "number" and spellId > 0 then
+			player:setStorageValue(WHEEL_SPELL_FLAT_MANA_STORAGE_BASE + spellId, -1)
+		end
 	end
-	for _, storageKey in ipairs(applied) do
-		player:setStorageValue(storageKey, -1)
-	end
-	WHEEL_APPLIED_FLAT_MANA_STORAGES[key] = nil
 end
 
 local function syncWheelSpellFlatManaStorages(player, spellAugments)
@@ -1542,17 +1538,13 @@ local function syncWheelSpellFlatManaStorages(player, spellAugments)
 		return nil
 	end
 
-	local key = getWheelPlayerKey(player)
-	local applied = {}
 	for spellName, flatMana in pairs(totals) do
 		local spellId = getInstantSpellIdByName(spellName)
 		if spellId and flatMana > 0 then
 			local storageKey = WHEEL_SPELL_FLAT_MANA_STORAGE_BASE + spellId
 			player:setStorageValue(storageKey, flatMana)
-			applied[#applied + 1] = storageKey
 		end
 	end
-	WHEEL_APPLIED_FLAT_MANA_STORAGES[key] = applied
 end
 
 local function removeWheelBonuses(player)
@@ -1573,6 +1565,12 @@ local function removeWheelBonuses(player)
 	removeAppliedBattleInstinct(player)
 	if player.setWheelBallisticMastery then
 		player:setWheelBallisticMastery(false)
+	end
+	if player.setWheelGuidingPresence then
+		player:setWheelGuidingPresence(false)
+	end
+	if player.setWheelSanctuary then
+		player:setWheelSanctuary(false)
 	end
 	if player.setWheelRunicMastery then
 		player:setWheelRunicMastery(false)
@@ -1651,9 +1649,13 @@ local function getForgeAmplification(player)
 end
 
 local function getForgeOnslaught(player)
-	local weapon = player:getSlotItem(CONST_SLOT_LEFT)
-	if not weapon or weapon:getId() == 0 then
-		weapon = player:getSlotItem(CONST_SLOT_RIGHT)
+	local weapon
+	for _, slot in ipairs({ CONST_SLOT_LEFT, CONST_SLOT_RIGHT }) do
+		local candidate = player:getSlotItem(slot)
+		if candidate and candidate:getId() ~= 0 and ItemType(candidate:getId()):isWeapon() then
+			weapon = candidate
+			break
+		end
 	end
 	if not weapon or weapon:getId() == 0 or weapon:getTier() == 0 then
 		return 0
@@ -1670,26 +1672,17 @@ end
 
 local function getForgeRuse(player)
 	local amplification = getForgeAmplification(player)
-	local totalChance = 0
-
-	for _, slot in ipairs({CONST_SLOT_ARMOR, CONST_SLOT_LEFT, CONST_SLOT_RIGHT}) do
-		local item = player:getSlotItem(slot)
-		if item and item:getId() ~= 0 and item:getTier() > 0 then
-			local itemType = ItemType(item:getId())
-			if itemType:isArmor() or itemType:isShield() then
-				local dodgeChance = item:getDodgeChance()
-				if dodgeChance > 0 then
-					totalChance = totalChance + (dodgeChance * (1.0 + (amplification * 0.02)))
-				end
-			end
-		end
-	end
-
-	if totalChance <= 0 then
+	local armor = player:getSlotItem(CONST_SLOT_ARMOR)
+	if not armor or armor:getId() == 0 or armor:getTier() == 0 then
 		return 0
 	end
 
-	return totalChance / 100
+	local dodgeChance = armor:getDodgeChance()
+	if dodgeChance <= 0 then
+		return 0
+	end
+
+	return (dodgeChance * (1.0 + (amplification * 0.02))) / 100
 end
 
 local function sendWheelSkillStats(player)
@@ -1754,7 +1747,7 @@ local function sendWheelSkillStats(player)
 
 	damageAndHealing = attackValue
 
-	return player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, json.encode({
+	local payload = json.encode({
 		lifeLeech = lifeLeech,
 		manaLeech = manaLeech,
 		criticalChance = criticalChance,
@@ -1771,28 +1764,20 @@ local function sendWheelSkillStats(player)
 		attackElement = attackElement,
 		convertedValue = convertedValue,
 		convertedElement = convertedElement,
-	}))
+	})
+	local key = getWheelPlayerKey(player)
+	if WHEEL_LAST_SKILL_STATS_PAYLOAD[key] == payload then
+		return true
+	end
+	local sent = player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, payload)
+	if sent then
+		WHEEL_LAST_SKILL_STATS_PAYLOAD[key] = payload
+	end
+	return sent
 end
 
 function Player.wheelSendSkillStats(self)
 	return sendWheelSkillStats(self)
-end
-
-local function logWheelSpellAugment(player, augment, phase)
-	if not WHEEL_AUGMENT_DEBUG then
-		return
-	end
-
-	local typeName = AUGMENT_TYPE_NAMES[augment.augmentType] or tostring(augment.augmentType)
-	local msg = string.format(
-		"[wheel-aug][%s] player=%s spell=%s type=%s value=%s",
-		phase,
-		player:getName(),
-		augment.spellName,
-		typeName,
-		tostring(augment.value)
-	)
-	print(msg)
 end
 
 local function applyWheelBonuses(player)
@@ -1800,6 +1785,7 @@ local function applyWheelBonuses(player)
 
 	local profile = loadProfile(player)
 	local bonuses = calculateWheelBonuses(player, profile.points, profile.gems)
+	cacheWheelSpellAugments(player, bonuses)
 	wheelKV(player):set("revelationStages",
 	                   buildRevelationStages(calculateDomainPoints(profile.points), getWheelVocation(player),
 	                                         bonuses.revelation, getMaxGradeModifierPoints(player)))
@@ -1842,12 +1828,6 @@ local function applyWheelBonuses(player)
 		player:addCondition(condition)
 	end
 
-	if not player.addWheelSpellAugment then
-		print(string.format(
-			"[wheel-aug] WARNING %s: server binary missing Player.addWheelSpellAugment — recompile TFS for wheel spell cooldowns.",
-			player:getName()))
-	end
-
 	syncWheelSpellCooldownStorages(player, bonuses.spellAugments)
 	syncWheelSpellFlatManaStorages(player, bonuses.spellAugments)
 
@@ -1855,17 +1835,6 @@ local function applyWheelBonuses(player)
 		for _, augment in ipairs(bonuses.spellAugments) do
 			local skipFlatMana = augment.augmentType == AUGMENT_TYPE.MANA_COST and WHEEL_SPELL_FLAT_MANA_SPELLS[augment.spellName]
 			if not skipFlatMana then
-				if augment.spellName == "Strong Ethereal Spear" then
-					logWheelSpellAugment(player, augment, "apply")
-				end
-				if augment.spellName == "Nature's Embrace" then
-					print(string.format(
-						"[wheel-aug][apply] %s spell=%s type=%s value=%s",
-						player:getName(),
-						augment.spellName,
-						AUGMENT_TYPE_NAMES[augment.augmentType] or tostring(augment.augmentType),
-						tostring(augment.value)))
-				end
 				player:addWheelSpellAugment(augment.spellName, augment.augmentType, augment.value)
 			end
 		end
@@ -1951,6 +1920,14 @@ local function applyWheelBonuses(player)
 		player:setWheelBallisticMastery(true)
 	end
 
+	if bonuses.guidingPresence and player.setWheelGuidingPresence then
+		player:setWheelGuidingPresence(true)
+	end
+
+	if bonuses.sanctuary and player.setWheelSanctuary then
+		player:setWheelSanctuary(true)
+	end
+
 	if bonuses.runicMastery and player.setWheelRunicMastery then
 		player:setWheelRunicMastery(true)
 	end
@@ -1967,7 +1944,8 @@ local function applyWheelBonuses(player)
 		SwiftFootWheel.refreshActive(player)
 	end
 
-	player:reloadData()
+	player:sendSkills()
+	player:sendStats()
 	sendWheelSkillStats(player)
 	return bonuses
 end
@@ -2028,15 +2006,12 @@ function Player.getWheelSpellHealingPercentBonus(self, spellName)
 		return 0
 	end
 
-	local profile = loadProfile(self)
-	local bonuses = calculateWheelBonuses(self, profile.points, profile.gems)
-	local total = 0
-	for _, augment in ipairs(bonuses.spellAugments) do
-		if augment.spellName == spellName and augment.augmentType == AUGMENT_TYPE.BASE_HEALING then
-			total = total + (tonumber(augment.value) or 0)
-		end
+	local key = getWheelPlayerKey(self)
+	if not WHEEL_SPELL_HEALING_BONUSES[key] then
+		local profile = loadProfile(self)
+		cacheWheelSpellAugments(self, calculateWheelBonuses(self, profile.points, profile.gems))
 	end
-	return total
+	return WHEEL_SPELL_HEALING_BONUSES[key][spellName] or 0
 end
 
 function Player.getWheelSpellCooldownReductionMs(self, spellName)
@@ -2044,15 +2019,12 @@ function Player.getWheelSpellCooldownReductionMs(self, spellName)
 		return 0
 	end
 
-	local profile = loadProfile(self)
-	local bonuses = calculateWheelBonuses(self, profile.points, profile.gems)
-	local totalMs = 0
-	for _, augment in ipairs(bonuses.spellAugments) do
-		if augment.spellName == spellName and augment.augmentType == AUGMENT_TYPE.COOLDOWN then
-			totalMs = totalMs + math.floor(math.abs(tonumber(augment.value) or 0) * 1000)
-		end
+	local key = getWheelPlayerKey(self)
+	if not WHEEL_SPELL_COOLDOWN_REDUCTIONS[key] then
+		local profile = loadProfile(self)
+		cacheWheelSpellAugments(self, calculateWheelBonuses(self, profile.points, profile.gems))
 	end
-	return totalMs
+	return WHEEL_SPELL_COOLDOWN_REDUCTIONS[key][spellName] or 0
 end
 
 function Player.getWheelAugmentReport(self, spellName)
@@ -2307,7 +2279,7 @@ local function addWheelGrades(out, vocationId, state)
 	end
 end
 
-local function sendWheelWindow(player, ownerId)
+local function sendWheelWindow(player, ownerId, includeResources)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
@@ -2315,7 +2287,9 @@ local function sendWheelWindow(player, ownerId)
 	ownerId = tonumber(ownerId) or player:getId()
 	local vocationId = getWheelVocation(player)
 	local canView = canOpenWheel(player)
-	sendWheelResources(player, vocationId)
+	if includeResources ~= false then
+		sendWheelResources(player, vocationId)
+	end
 
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_WHEEL_WINDOW)
@@ -2385,6 +2359,19 @@ local function consumeGemActionCost(player, itemId, itemCount, money)
 	return true
 end
 
+local function addItemCountWithoutMapDrop(player, itemId, count)
+	local before = player:getItemCount(itemId)
+	player:addItem(itemId, count, false)
+	local added = player:getItemCount(itemId) - before
+	if added == count then
+		return true
+	end
+	if added > 0 then
+		player:removeItem(itemId, added)
+	end
+	return false
+end
+
 local function revealWheelGem(player, state, quality)
 	local vocationId = getWheelVocation(player)
 	local gemItemId = GEM_ITEMS[vocationId] and GEM_ITEMS[vocationId][quality + 1]
@@ -2419,7 +2406,7 @@ local function destroyWheelGem(player, profile, state, gemIndex)
 	else
 		fragmentId, fragmentCount = ITEM_GREATER_FRAGMENT, math.random(1, 5)
 	end
-	if not player:addItem(fragmentId, fragmentCount) then
+	if not addItemCountWithoutMapDrop(player, fragmentId, fragmentCount) then
 		return false, "There is no room for the gem fragments."
 	end
 
@@ -2466,11 +2453,10 @@ local function consumeCrusherCharge(crusherItem)
 	end
 
 	if charges <= 1 then
-		crusherItem:remove(1)
+		return crusherItem:remove(1)
 	else
-		crusherItem:transform(crusherId, charges - 1)
+		return crusherItem:transform(crusherId, charges - 1) ~= nil
 	end
-	return true
 end
 
 local function refreshWheelFragmentBalances(player)
@@ -2490,6 +2476,9 @@ end
 function Player.wheelCrushGem(self, crusherItem, gemItem)
 	if not crusherItem or not gemItem then
 		return false, "Invalid target."
+	end
+	if crusherItem:getTopParent() ~= self or gemItem:getTopParent() ~= self then
+		return false, "The crusher and gem must be in your inventory."
 	end
 
 	local crusherId = crusherItem:getId()
@@ -2513,12 +2502,14 @@ function Player.wheelCrushGem(self, crusherItem, gemItem)
 		return false, "Could not remove the gem."
 	end
 
-	if not self:addItem(yield.id, count) then
-		self:addItem(gemId, 1)
+	if not addItemCountWithoutMapDrop(self, yield.id, count) then
+		self:addItem(gemId, 1, false)
 		return false, "There is no room for the gem fragments."
 	end
 
 	if not consumeCrusherCharge(crusherItem) then
+		self:removeItem(yield.id, count)
+		self:addItem(gemId, 1, false)
 		return false, "Your crusher has no charges left."
 	end
 
@@ -2649,7 +2640,7 @@ function saveHandler.onReceive(player, msg)
 
 	saveProfile(player, points, validatedGems)
 	applyWheelBonuses(player)
-	sendWheelWindow(player, player:getId())
+	sendWheelWindow(player, player:getId(), false)
 end
 
 saveHandler:register()
@@ -2696,11 +2687,14 @@ function gemActionHandler.onReceive(player, msg)
 	if success then
 		saveGemState(player, state)
 		saveProfile(player, profile.points, validateActiveGems(profile.gems, state.revealed))
-		applyWheelBonuses(player)
+		if action == GEM_ACTION.DESTROY or action == GEM_ACTION.SWITCH_DOMAIN or
+		    action == GEM_ACTION.IMPROVE_GRADE then
+			applyWheelBonuses(player)
+		end
 	elseif reason then
 		player:sendTextMessage(MESSAGE_STATUS_SMALL, reason)
 	end
-	sendWheelWindow(player, player:getId())
+	sendWheelWindow(player, player:getId(), action ~= GEM_ACTION.TOGGLE_LOCK)
 end
 
 gemActionHandler:register()
@@ -2728,14 +2722,17 @@ function wheelLogoutEvent.onLogout(player)
 	WHEEL_APPLIED_MITIGATION_MULTIPLIER[key] = nil
 	WHEEL_APPLIED_RESISTANCES[key] = nil
 	WHEEL_APPLIED_DODGE[key] = nil
+	WHEEL_LAST_SKILL_STATS_PAYLOAD[key] = nil
+	WHEEL_SPELL_HEALING_BONUSES[key] = nil
+	WHEEL_SPELL_COOLDOWN_REDUCTIONS[key] = nil
 	return true
 end
 
 wheelLogoutEvent:register()
 
-local wheelAugDebug = TalkAction("/wheelaug", "!wheelaug")
+local wheelAugReport = TalkAction("/wheelaug", "!wheelaug")
 
-function wheelAugDebug.onSay(player, words, param)
+function wheelAugReport.onSay(player, words, param)
 	if not canOpenWheel(player) then
 		player:sendTextMessage(MESSAGE_STATUS_SMALL, "The Wheel of Destiny is not available for your character.")
 		return false
@@ -2750,14 +2747,11 @@ function wheelAugDebug.onSay(player, words, param)
 
 	local report = player:getWheelAugmentReport(spellName)
 	player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, report)
-	if player:getGroup():getAccess() then
-		print(string.format("[wheel-aug] %s\n%s", player:getName(), report))
-	end
 	return false
 end
 
-wheelAugDebug:separator(" ")
-wheelAugDebug:register()
+wheelAugReport:separator(" ")
+wheelAugReport:register()
 
 local function updatePositionalTacticsNearPosition(position)
 	local spectators = Game.getSpectators(position, false, true, 1, 1, 1, 1)

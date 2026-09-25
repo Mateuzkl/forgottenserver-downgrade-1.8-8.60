@@ -817,23 +817,6 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
             if (cooldown > 0) {
                 int32_t adjustedCooldown =
                     std::max<int32_t>(1000, static_cast<int32_t>(cooldown) - momentumReduction - augmentCooldownReduction);
-                if (getName() == "Nature's Embrace") {
-                    const auto wheelBonus = player->getWheelSpellAugmentBonus(getName());
-                    int32_t storageReductionMs = 0;
-                    if (wheelBonus.cooldownReduction <= 0 && spellId != 0) {
-                        if (const auto stored = player->getStorageValue(WHEEL_SPELL_CD_STORAGE_BASE + spellId)) {
-                            if (*stored > 0) {
-                                storageReductionMs = static_cast<int32_t>(*stored);
-                            }
-                        }
-                    }
-                    const std::string line = fmt::format(
-                        "[Wheel CD] {} Nature's Embrace baseMs={} wheelReductionMs={} storageFallbackMs={} augmentTotalMs={} momentumMs={} appliedMs={}",
-                        player->getName(), static_cast<int32_t>(cooldown), wheelBonus.cooldownReduction,
-                        storageReductionMs, augmentCooldownReduction, momentumReduction, adjustedCooldown);
-                    g_logger().info(line);
-                    std::cout << line << std::endl;
-                }
                 auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_SPELLCOOLDOWN,
                                                             adjustedCooldown, 0, false, spellId);
                 player->addCondition(std::move(condition));
@@ -868,6 +851,10 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
 	}
 
 	if (harmony) {
+		const uint8_t consumedHarmony = player->getHarmony();
+		if (consumedHarmony > 0) {
+			player->triggerWheelSanctuary(consumedHarmony, player->getPosition());
+		}
 		player->setHarmony(0);
 	}
 }

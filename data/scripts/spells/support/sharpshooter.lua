@@ -1,4 +1,3 @@
-local WHEEL_AUGMENT_DEBUG = true
 local SHARPSHOOTER_GRADE_II_DISTANCE = 5
 local SHARPSHOOTER_FLAT_SUBID = 86063
 
@@ -11,13 +10,6 @@ local function getSharpshooterGrade(player)
 		return 0
 	end
 	return player:upgradeSpellsWOD("Sharpshooter")
-end
-
-local function getEffectiveDistance(player)
-	if player.getEffectiveSkillLevel then
-		return player:getEffectiveSkillLevel(SKILL_DISTANCE)
-	end
-	return player:getSkillLevel(SKILL_DISTANCE)
 end
 
 local function isSharpshooterActive(player)
@@ -47,27 +39,16 @@ local function removeSharpshooterConditions(player)
 	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, SHARPSHOOTER_FLAT_SUBID)
 end
 
-local function deactivateSharpshooter(player, reason)
+local function deactivateSharpshooter(player)
 	removeSharpshooterConditions(player)
 	if player:getStance() == STANCE_SHARPSHOOTER then
 		player:setStance(STANCE_NONE)
 	end
 	player:getPosition():sendMagicEffect(CONST_ME_POFF)
-
-	if WHEEL_AUGMENT_DEBUG then
-		print(string.format(
-			"[wheel-aug][sharpshooter] player=%s action=%s grade=%d distance=%d",
-			player:getName(),
-			reason,
-			getSharpshooterGrade(player),
-			getEffectiveDistance(player)
-		))
-	end
 end
 
 local function applySharpshooterBuff(player, creature, variant)
 	local grade = getSharpshooterGrade(player)
-	local distanceBefore = getEffectiveDistance(player)
 
 	if player:getStance() == STANCE_SHARPSHOOTER then
 		player:setStance(STANCE_NONE)
@@ -87,17 +68,6 @@ local function applySharpshooterBuff(player, creature, variant)
 		return false
 	end
 
-	if WHEEL_AUGMENT_DEBUG then
-		print(string.format(
-			"[wheel-aug][sharpshooter] player=%s action=activate grade=%d distance %d -> %d (+40%%%s)",
-			player:getName(),
-			grade,
-			distanceBefore,
-			getEffectiveDistance(player),
-			grade >= 2 and string.format(" +%d flat", SHARPSHOOTER_GRADE_II_DISTANCE) or ""
-		))
-	end
-
 	return true
 end
 
@@ -110,7 +80,7 @@ function spell.onCastSpell(creature, variant)
 	end
 
 	if isSharpshooterActive(player) then
-		deactivateSharpshooter(player, "deactivate")
+		deactivateSharpshooter(player)
 		return true
 	end
 
@@ -124,8 +94,11 @@ function SharpshooterWheel.refreshActive(player)
 		return
 	end
 
-	local variant = Variant(player:getId())
-	applySharpshooterBuff(player, player, variant)
+	removeSharpshooterConditions(player)
+	player:addCondition(buildSharpshooterPercentCondition())
+	if getSharpshooterGrade(player) >= 2 then
+		player:addCondition(buildSharpshooterFlatCondition())
+	end
 end
 
 spell:name("Sharpshooter")

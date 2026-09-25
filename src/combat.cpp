@@ -98,7 +98,7 @@ bool rollFatalHit(const Player* player, const CombatDamage& damage)
 		return false;
 	}
 
-	const Item* weapon = player->getWeapon();
+	const Item* weapon = player->getWeapon(true);
 	if (!weapon || weapon->getTier() == 0) {
 		return false;
 	}
@@ -320,11 +320,15 @@ CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target, std::
 		}
 	}
 
-	if (creature && g_spells && !damage.instantSpellName.empty()) {
+	if (creature) {
 		if (const auto player = std::dynamic_pointer_cast<Player>(creature->weak_from_this().lock())) {
-			if (const auto spell = g_spells->getInstantSpellByName(damage.instantSpellName)) {
-				spell->getCombatDataAugment(player, damage);
+			if (g_spells && !damage.instantSpellName.empty()) {
+				if (const auto spell = g_spells->getInstantSpellByName(damage.instantSpellName)) {
+					spell->getCombatDataAugment(player, damage);
+				}
 			}
+
+			player->applyWheelSanctuaryCombatBonus(damage, target);
 
 			if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
 				if (damage.primary.type == COMBAT_HEALING) {

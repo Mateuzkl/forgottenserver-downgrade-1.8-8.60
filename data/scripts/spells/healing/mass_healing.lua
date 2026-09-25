@@ -34,6 +34,7 @@ local function healTarget(creature, target)
 		max = math.floor(max * (1 + healingBonus))
 	end
 
+	target:removeCondition(CONDITION_PARALYZE)
 	doTargetCombatHealth(creature:getId(), target, COMBAT_HEALING, min, max, CONST_ME_NONE)
 	return true
 end
@@ -49,7 +50,6 @@ end
 local function createMassHealingCombat(area, callbackName)
 	local combat = Combat()
 	combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_MAGIC_BLUE)
-	combat:setParameter(COMBAT_PARAM_DISPEL, CONDITION_PARALYZE)
 	combat:setParameter(COMBAT_PARAM_AGGRESSIVE, false)
 	combat:setArea(createCombatArea(area))
 	combat:setCallback(CALLBACK_PARAM_TARGETCREATURE, callbackName)
