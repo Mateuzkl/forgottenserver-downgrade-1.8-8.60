@@ -1,51 +1,103 @@
 local spellDuration = 10000
+local SWIFT_FOOT_DAMAGE_SUBID = 86064
+local SWIFT_FOOT_HASTE_SUBID = 86065
 
 local combat = Combat()
 combat:setParameter(COMBAT_PARAM_EFFECT, CONST_ME_MAGIC_GREEN)
 combat:setParameter(COMBAT_PARAM_AGGRESSIVE, 0)
 
-local condition = Condition(CONDITION_HASTE)
-condition:setParameter(CONDITION_PARAM_TICKS, spellDuration)
-condition:setFormula(1.8, 72, 1.8, 72)
-combat:addCondition(condition)
+local hasteCondition = Condition(CONDITION_HASTE)
+hasteCondition:setParameter(CONDITION_PARAM_SUBID, SWIFT_FOOT_HASTE_SUBID)
+hasteCondition:setParameter(CONDITION_PARAM_TICKS, spellDuration)
+hasteCondition:setFormula(1.8, 72, 1.8, 72)
+combat:addCondition(hasteCondition)
+
+local function getSwiftFootGrade(player)
+	if not player or not player.upgradeSpellsWOD then
+		return 0
+	end
+	return player:upgradeSpellsWOD("Swift Foot")
+end
+
+local function getDamageDealtPercent(grade)
+	if grade >= 2 then
+		return nil
+	elseif grade >= 1 then
+		return 50
+	end
+	return 70
+end
+
+local function removeSwiftFootDamageDebuff(creature)
+	creature:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, SWIFT_FOOT_DAMAGE_SUBID)
+end
+
+local function applySwiftFootDamageDebuff(creature, grade, duration)
+	removeSwiftFootDamageDebuff(creature)
+
+	local damagePercent = getDamageDealtPercent(grade)
+	if not damagePercent then
+		return
+	end
+
+	local damageDebuff = Condition(CONDITION_ATTRIBUTES)
+	damageDebuff:setParameter(CONDITION_PARAM_SUBID, SWIFT_FOOT_DAMAGE_SUBID)
+	damageDebuff:setParameter(CONDITION_PARAM_TICKS, duration or spellDuration)
+	damageDebuff:setParameter(CONDITION_PARAM_BUFF_DAMAGEDEALT, damagePercent)
+	damageDebuff:setParameter(CONDITION_PARAM_BUFF_SPELL, true)
+	creature:addCondition(damageDebuff)
+end
+
+local function applyFamiliarHaste(creature)
+	local summons = creature:getSummons()
+	if not summons or type(summons) ~= "table" or #summons == 0 then
+		return
+	end
+
+	for i = 1, #summons do
+		local summon = summons[i]
+		local summonType = summon:getType()
+		if summonType and summonType:familiar() then
+			local deltaSpeed = math.max(creature:getBaseSpeed() - summon:getBaseSpeed(), 0)
+			local familiarSpeed = ((summon:getBaseSpeed() + deltaSpeed) * 0.8) - 72
+			local familiarHaste = Condition(CONDITION_HASTE)
+			familiarHaste:setParameter(CONDITION_PARAM_TICKS, spellDuration)
+			familiarHaste:setParameter(CONDITION_PARAM_SPEED, familiarSpeed)
+			summon:addCondition(familiarHaste)
+		end
+	end
+end
 
 local spell = Spell("instant")
 
 function spell.onCastSpell(creature, var)
-	local summons = creature:getSummons()
-	if summons and type(summons) == "table" and #summons > 0 then
-		for i = 1, #summons do
-			local summon = summons[i]
-			local summon_t = summon:getType()
-			if summon_t and summon_t:familiar() then
-				local deltaSpeed = math.max(creature:getBaseSpeed() - summon:getBaseSpeed(), 0)
-				local FamiliarSpeed = ((summon:getBaseSpeed() + deltaSpeed) * 0.8) - 72
-				local FamiliarHaste = Condition(CONDITION_HASTE)
-				FamiliarHaste:setParameter(CONDITION_PARAM_TICKS, spellDuration)
-				FamiliarHaste:setParameter(CONDITION_PARAM_SPEED, FamiliarSpeed)
-				summon:addCondition(FamiliarHaste)
-			end
-		end
+	local player = creature:getPlayer()
+	local grade = player and getSwiftFootGrade(player) or 0
+
+	if not combat:execute(creature, var) then
+		return false
 	end
 
-	if combat:execute(creature, var) then
-		local grade = creature:upgradeSpellsWOD("Swift Foot")
-		if grade == WHEEL_GRADE_NONE then
-			-- Vocation Adjustment: attacking/casting is now ALLOWED while active; -30% damage instead.
-			local damageDebuff = Condition(CONDITION_ATTRIBUTES)
-			damageDebuff:setParameter(CONDITION_PARAM_TICKS, spellDuration)
-			damageDebuff:setParameter(CONDITION_PARAM_BUFF_DAMAGEDEALT, 70) -- 70% of damage dealt = -30%
-			creature:addCondition(damageDebuff)
-		elseif grade == WHEEL_GRADE_REGULAR then
-			local damageDebuff = Condition(CONDITION_ATTRIBUTES)
-			damageDebuff:setParameter(CONDITION_PARAM_TICKS, spellDuration)
-			damageDebuff:setParameter(CONDITION_PARAM_BUFF_DAMAGEDEALT, 50)
-			creature:addCondition(damageDebuff)
-		end
-		return true
+	applyFamiliarHaste(creature)
+	applySwiftFootDamageDebuff(creature, grade)
+
+	return true
+end
+
+SwiftFootWheel = SwiftFootWheel or {}
+
+function SwiftFootWheel.refreshActive(player)
+	if not player then
+		return
 	end
 
-	return false
+	local haste = player:getCondition(CONDITION_HASTE, CONDITIONID_COMBAT, SWIFT_FOOT_HASTE_SUBID)
+	if not haste then
+		removeSwiftFootDamageDebuff(player)
+		return
+	end
+
+	applySwiftFootDamageDebuff(player, getSwiftFootGrade(player), math.max(1, haste:getTicks()))
 end
 
 spell:name("Swift Foot")

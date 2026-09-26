@@ -11,7 +11,7 @@ local spell = Spell("instant")
 function spell.onCastSpell(creature, variant) return combat:execute(creature, variant) end
 
 
-spell:group("support")
+spell:group("support", "focus")
 spell:id(145)
 spell:name("Strong Haste")
 spell:words("utani gran hur")
@@ -20,7 +20,7 @@ spell:mana(100)
 spell:isPremium(true)
 spell:isSelfTarget(true)
 spell:cooldown(2 * 1000)
-spell:groupCooldown(0 * 1000)
+spell:groupCooldown(2 * 1000, 2 * 1000)
 spell:needLearn(false)
 spell:isAggressive(false)
 spell:vocation("sorcerer", "master sorcerer", "druid", "elder druid", "monk", "exalted monk")

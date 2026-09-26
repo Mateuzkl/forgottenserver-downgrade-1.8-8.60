@@ -13,6 +13,7 @@
 #include "events.h"
 #include "familiar.h"
 #include "game.h"
+#include "party.h"
 #include "house.h"
 #include "iologindata.h"
 #include "instance_utils.h"
@@ -26,6 +27,8 @@
 #include "save_manager.h"
 #include "scriptmanager.h"
 #include "scheduler.h"
+#include "spells.h"
+#include "vocation.h"
 #include "logger.h"
 #include <fmt/format.h>
 #include <cstdlib>
@@ -34,6 +37,7 @@
 
 extern Game g_game;
 extern Vocations g_vocations;
+extern std::unique_ptr<Spells> g_spells;
 
 namespace {
 constexpr uint32_t CHAIN_SYSTEM_STORAGE = 40001;
@@ -759,6 +763,168 @@ int32_t Player::getWheelSpellAdditionalDuration(std::string_view spellName) cons
 	return getWheelSpellAugmentBonus(spellName).additionalDuration;
 }
 
+int32_t Player::getWheelBallisticMasteryCriticalBonus(CombatOrigin origin) const
+{
+	if (!wheelBallisticMastery || origin != ORIGIN_RANGED) {
+		return 0;
+	}
+
+	const Item* weapon = getWeapon(true);
+	if (!weapon || weapon->getWeaponType() != WEAPON_DISTANCE) {
+		return 0;
+	}
+
+	return Item::items[weapon->getID()].ammoType == AMMO_BOLT ? 1000 : 0;
+}
+
+int32_t Player::getWheelBallisticMasteryElementPierce(CombatType_t combatType) const
+{
+	if (!wheelBallisticMastery || (combatType != COMBAT_PHYSICALDAMAGE && combatType != COMBAT_HOLYDAMAGE)) {
+		return 0;
+	}
+
+	const Item* weapon = getWeapon(true);
+	if (!weapon || weapon->getWeaponType() != WEAPON_DISTANCE) {
+		return 0;
+	}
+
+	return Item::items[weapon->getID()].ammoType == AMMO_ARROW ? 2 : 0;
+}
+
+namespace {
+
+bool canPlayerVocationCreateRune(const Player* player, const Spell* runeSpell)
+{
+	if (!player || !runeSpell || !g_spells) {
+		return false;
+	}
+
+	const InstantSpell* conjureSpell = g_spells->getInstantSpellByName(runeSpell->getName());
+	if (!conjureSpell) {
+		return false;
+	}
+
+	const auto& vocMap = conjureSpell->getVocationSpellMap();
+	if (vocMap.empty()) {
+		return false;
+	}
+
+	const auto vocationMatches = [&vocMap](uint16_t vocationId) {
+		return vocMap.find(vocationId) != vocMap.end();
+	};
+
+	const uint16_t playerVocationId = player->getVocationId();
+	if (vocationMatches(playerVocationId)) {
+		return true;
+	}
+
+	if (const Vocation* vocation = g_vocations.getVocation(playerVocationId)) {
+		const uint32_t fromVocation = vocation->getFromVocation();
+		if (fromVocation != 0 && vocationMatches(static_cast<uint16_t>(fromVocation))) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+} // namespace
+
+void Player::tryWheelRunicMastery(const Spell* runeSpell)
+{
+	wheelRunicMasteryBonus = 0;
+	if (!wheelRunicMastery || !runeSpell || !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	if (uniform_random(1, 100) > 25) {
+		return;
+	}
+
+	const uint8_t percent = canPlayerVocationCreateRune(this, runeSpell) ? 20 : 10;
+	const int32_t baseMagicLevel = static_cast<int32_t>(magLevel);
+	wheelRunicMasteryBonus = (baseMagicLevel * static_cast<int32_t>(percent)) / 100;
+	if (wheelRunicMasteryBonus <= 0 && baseMagicLevel > 0) {
+		wheelRunicMasteryBonus = 1;
+	}
+
+	if (wheelRunicMasteryBonus > 0) {
+		sendTextMessage(MESSAGE_STATUS_SMALL, "(Runic Mastery)");
+	}
+}
+
+void Player::setWheelFocusMastery(bool enabled)
+{
+	wheelFocusMastery = enabled;
+	if (!enabled) {
+		wheelFocusMasteryReady = false;
+		wheelFocusMasteryExpireTime = 0;
+		wheelFocusMasteryCastMultiplier = 1.0f;
+		sendWheelFocusMasteryClientState("idle", 0);
+	}
+}
+
+void Player::tryArmWheelFocusMastery(const Spell* spell)
+{
+	if (!wheelFocusMastery || !spell || !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	if (spell->getAggressive()) {
+		return;
+	}
+
+	if (spell->getGroup() != SPELLGROUP_FOCUS && spell->getSecondaryGroup() != SPELLGROUP_FOCUS) {
+		return;
+	}
+
+	wheelFocusMasteryReady = true;
+	wheelFocusMasteryExpireTime = OTSYS_TIME() + 12000;
+	sendWheelFocusMasteryClientState("armed", 12000);
+}
+
+void Player::applyWheelFocusMasteryCastMultiplier(CombatDamage& damage) const
+{
+	if (wheelFocusMasteryCastMultiplier <= 1.0f || damage.primary.type == COMBAT_HEALING || damage.primary.value >= 0) {
+		return;
+	}
+
+	damage.primary.value = static_cast<int32_t>(
+	    std::lround(static_cast<double>(damage.primary.value) * wheelFocusMasteryCastMultiplier));
+	if (damage.secondary.value != 0) {
+		damage.secondary.value = static_cast<int32_t>(
+		    std::lround(static_cast<double>(damage.secondary.value) * wheelFocusMasteryCastMultiplier));
+	}
+}
+
+float Player::consumeWheelFocusMasteryForCast(const Spell* spell)
+{
+	if (wheelFocusMasteryCastMultiplier > 1.0f) {
+		return wheelFocusMasteryCastMultiplier;
+	}
+
+	if (!wheelFocusMastery || !wheelFocusMasteryReady || !spell ||
+	    !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
+		return 1.0f;
+	}
+
+	if (OTSYS_TIME() > wheelFocusMasteryExpireTime) {
+		wheelFocusMasteryReady = false;
+		sendWheelFocusMasteryClientState("expired", 0);
+		return 1.0f;
+	}
+
+	if (!spell->getAggressive()) {
+		return 1.0f;
+	}
+
+	wheelFocusMasteryReady = false;
+	wheelFocusMasteryCastMultiplier = 1.35f;
+	sendTextMessage(MESSAGE_STATUS_SMALL, "(Focus Mastery)");
+	sendWheelFocusMasteryClientState("consumed", 0);
+	return wheelFocusMasteryCastMultiplier;
+}
+
 bool Player::hasInventoryItem(slots_t slot, const std::shared_ptr<const Item>& item) const
 {
 	if (!item || slot < CONST_SLOT_FIRST || slot > CONST_SLOT_LAST) {
@@ -863,6 +1029,15 @@ void Player::sendMonkData()
 		static_cast<uint8_t>(m_stanceElemental)
 	);
 	client->sendExtendedOpcode(0x92, json);
+}
+
+void Player::sendWheelFocusMasteryClientState(const std::string& state, uint32_t durationMs)
+{
+	if (!client || !client->isFonticakClient) {
+		return;
+	}
+	std::string json = fmt::format("{{\"state\":\"{}\",\"duration\":{}}}", state, durationMs);
+	client->sendExtendedOpcode(0x93, json);
 }
 
 void Player::updateKillTracker(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Container>& corpse) const
@@ -1287,7 +1462,138 @@ int32_t Player::getMantraTotal() const
 	if (isSerene()) {
 		mantraTotal *= 2;
 	}
+
+	const Party* party = getParty();
+	if (!party) {
+		return mantraTotal;
+	}
+
+	const Position& myPos = getPosition();
+	auto addGuidingPresenceShare = [&](const Player* source) {
+		if (!source || source == this || !source->hasWheelGuidingPresence()) {
+			return;
+		}
+		if (!myPos.isInRange(source->getPosition(), 30, 30, 1)) {
+			return;
+		}
+
+		int32_t sourceMantra = 0;
+		for (const slots_t& slot : mantraSlots) {
+			if (!source->isItemAbilityEnabled(slot)) {
+				continue;
+			}
+			std::shared_ptr<Item> item = source->inventory[slot];
+			if (!item) {
+				continue;
+			}
+			const ItemType& itemType = Item::items[item->getID()];
+			sourceMantra += getItemTypeMantraValue(itemType, COMBAT_ENERGYDAMAGE);
+		}
+		if (source->isSerene()) {
+			sourceMantra *= 2;
+		}
+		mantraTotal += sourceMantra / 2;
+	};
+
+	if (const std::shared_ptr<Player> leader = party->getLeader()) {
+		addGuidingPresenceShare(leader.get());
+	}
+	for (const auto& memberWeak : party->getMembers()) {
+		if (const std::shared_ptr<Player> member = memberWeak.lock()) {
+			addGuidingPresenceShare(member.get());
+		}
+	}
+
 	return mantraTotal;
+}
+
+namespace {
+
+bool isWheelSanctuaryAdjacent(const Position& a, const Position& b)
+{
+	if (a.z != b.z) {
+		return false;
+	}
+	return a.isInRange(b, 1, 1, 0) && a != b;
+}
+
+} // namespace
+
+void Player::setWheelSanctuary(bool enabled)
+{
+	wheelSanctuary = enabled;
+	if (!enabled) {
+		wheelSanctuaryBonusPercent = 0;
+		wheelSanctuaryExpireTime = 0;
+	}
+}
+
+void Player::triggerWheelSanctuary(uint8_t harmonyConsumed, const Position& position)
+{
+	if (!wheelSanctuary || harmonyConsumed == 0 ||
+	    !ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED)) {
+		return;
+	}
+
+	wheelSanctuaryBonusPercent = static_cast<uint8_t>(std::min<int>(harmonyConsumed * 2, 100));
+	wheelSanctuaryExpireTime = OTSYS_TIME() + 5000;
+	wheelSanctuaryFieldPosition = position;
+	g_game.addMagicEffect(position, CONST_ME_MAGIC_GREEN);
+}
+
+int32_t Player::getWheelSanctuaryHealingBonusPercent(const Creature* healTarget) const
+{
+	if (!wheelSanctuary || wheelSanctuaryBonusPercent == 0 || OTSYS_TIME() > wheelSanctuaryExpireTime) {
+		return 0;
+	}
+
+	if (!getPosition().isInRange(wheelSanctuaryFieldPosition, 1, 1, 0)) {
+		return 0;
+	}
+
+	int32_t bonus = wheelSanctuaryBonusPercent;
+	if (healTarget && healTarget->getPlayer() && isWheelSanctuaryAdjacent(getPosition(), healTarget->getPosition())) {
+		bonus += 10;
+	}
+	return bonus;
+}
+
+void Player::applyWheelSanctuaryCombatBonus(CombatDamage& damage, const Creature* target) const
+{
+	if (damage.primary.type == COMBAT_HEALING) {
+		const int32_t bonus = getWheelSanctuaryHealingBonusPercent(target);
+		if (bonus <= 0) {
+			return;
+		}
+		const double multiplier = 1.0 + (bonus / 100.0);
+		damage.primary.value =
+		    static_cast<int32_t>(std::lround(static_cast<double>(damage.primary.value) * multiplier));
+		if (damage.secondary.value != 0) {
+			damage.secondary.value =
+			    static_cast<int32_t>(std::lround(static_cast<double>(damage.secondary.value) * multiplier));
+		}
+		return;
+	}
+
+	if (!wheelSanctuary || wheelSanctuaryBonusPercent == 0 || OTSYS_TIME() > wheelSanctuaryExpireTime) {
+		return;
+	}
+
+	if (!getPosition().isInRange(wheelSanctuaryFieldPosition, 1, 1, 0)) {
+		return;
+	}
+
+	int32_t bonus = wheelSanctuaryBonusPercent;
+	if (target && target != this && isWheelSanctuaryAdjacent(getPosition(), target->getPosition())) {
+		bonus += 10;
+	}
+
+	const double multiplier = 1.0 + (bonus / 100.0);
+	damage.primary.value = static_cast<int32_t>(std::lround(static_cast<double>(damage.primary.value) * multiplier));
+	if (damage.secondary.value != 0) {
+		damage.secondary.value =
+		    static_cast<int32_t>(std::lround(static_cast<double>(damage.secondary.value) * multiplier));
+	}
 }
 
 int16_t Player::getMantraAbsorbPercent(int32_t mantraTotal) const

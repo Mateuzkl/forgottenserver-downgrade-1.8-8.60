@@ -1,3 +1,13 @@
+local function applyWheelHealingBonuses(player, target, amount)
+	if player.getWheelSanctuaryHealingBonusPercent then
+		local sanctuaryBonus = player:getWheelSanctuaryHealingBonusPercent(target)
+		if sanctuaryBonus > 0 then
+			amount = math.floor(amount * (1 + sanctuaryBonus / 100))
+		end
+	end
+	return amount
+end
+
 local function targetFunction(creature, target)
 	local player = creature:getPlayer()
 	if not player then
@@ -10,12 +20,23 @@ local function targetFunction(creature, target)
 	-- Vocation Adjustment: Mass Spirit Mend is no longer a spender, so harmony no longer amplifies it.
 	local min = math.floor((level / 5) + (magicLevel * 5.7) + 26)
 	local max = math.floor((level / 5) + (magicLevel * 10.43) + 62)
+
+	local healingBonus = player:getWheelSpellHealingPercentBonus("Mass Spirit Mend")
+	if healingBonus > 0 then
+		min = math.floor(min * (1 + healingBonus))
+		max = math.floor(max * (1 + healingBonus))
+	end
+
 	local healAmount = math.random(min, max)
 
 	-- The caster receives only a lesser effect (~ a regular Spirit Mend).
 	if target:getId() == creature:getId() then
 		local sMin = math.floor((level * 0.2) + (magicLevel * 12) + 75)
 		local sMax = math.floor((level * 0.2) + (magicLevel * 20) + 125)
+		if healingBonus > 0 then
+			sMin = math.floor(sMin * (1 + healingBonus))
+			sMax = math.floor(sMax * (1 + healingBonus))
+		end
 		healAmount = math.random(sMin, sMax)
 	end
 
@@ -37,13 +58,13 @@ local function targetFunction(creature, target)
 	}
 
 	if target:isPlayer() and target:getName():lower() ~= excludeCreature then
-		target:addHealth(healAmount)
+		target:addHealth(applyWheelHealingBonuses(player, target, healAmount))
 		target:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 	elseif target:isMonster() and table.contains(damageMechanicCreatures, target:getName():lower()) and target:getName():lower() ~= excludeCreature then
-		target:addHealth(healAmount)
+		target:addHealth(applyWheelHealingBonuses(player, target, healAmount))
 		target:getPosition():sendMagicEffect(CONST_ME_MAGIC_RED)
 	elseif target:isMonster() and table.contains(bosses, target:getName():lower()) and target:getName():lower() ~= excludeCreature then
-		target:addHealth(healAmount)
+		target:addHealth(applyWheelHealingBonuses(player, target, healAmount))
 		target:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
 	end
 end

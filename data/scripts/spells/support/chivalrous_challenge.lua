@@ -34,6 +34,9 @@ function onChain(creature, target)
 	if target and target:isMonster() then
 		doChallengeCreature(player, target:getMonster(), 12000)
 		target:changeTargetDistance(1, duration)
+		if player.applyWheelBattleHealingForChallenge then
+			player:applyWheelBattleHealingForChallenge()
+		end
 	end
 	return true
 end

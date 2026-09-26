@@ -365,6 +365,7 @@ private:
 	bool shouldSendItemTierByte() const;
 	bool shouldSendThingUpgradeClassification() const;
 	bool shouldSendItemTierData() const;
+	bool usesExtendedSpellIds() const;
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 	void parseCustomClientPing(NetworkMessage& msg);

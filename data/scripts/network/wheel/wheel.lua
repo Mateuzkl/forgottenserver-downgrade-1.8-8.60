@@ -14,8 +14,36 @@ local WHEEL_MIN_LEVEL = 51
 local WHEEL_POINTS_PER_LEVEL = 1
 local WHEEL_SLOT_COUNT = 36
 local WHEEL_NO_GEM = -1
+-- TFS stores capacity in 0.01 oz units (see iologindata cap * 100); wheel values are display oz.
+local CAPACITY_STAT_SCALE = 100
 local WHEEL_REQUIRE_PROMOTION = true
 local WHEEL_CONDITION_SUBID = 86061
+-- Must match WHEEL_SPELL_CD_STORAGE_BASE in src/spells.cpp (8600000 + spellId).
+local WHEEL_SPELL_CD_STORAGE_BASE = 8600000
+-- Must match WHEEL_SPELL_FLAT_MANA_STORAGE_BASE in src/spells.cpp (8611000 + spellId).
+local WHEEL_SPELL_FLAT_MANA_STORAGE_BASE = 8611000
+local WHEEL_HEALING_LINK_STORAGE = 8600051
+local WHEEL_BATTLE_HEALING_STORAGE = 8600052
+local WHEEL_SPELL_FLAT_MANA_SPELLS = {
+	["Heal Friend"] = true,
+	["Chivalrous Challenge"] = true,
+	["Fierce Berserk"] = true,
+}
+
+local AUGMENT_TYPE_NAMES = {
+	[1] = "MANA_COST",
+	[2] = "BASE_DAMAGE",
+	[3] = "BASE_HEALING",
+	[4] = "DURATION_INCREASED",
+	[5] = "ADDITIONAL_TARGETS",
+	[6] = "COOLDOWN",
+	[7] = "SECONDARY_GROUP_COOLDOWN",
+	[8] = "AFFECTED_AREA_ENLARGED",
+	[14] = "LIFE_LEECH",
+	[15] = "MANA_LEECH",
+	[16] = "CRITICAL_EXTRA_DAMAGE",
+	[17] = "CRITICAL_HIT_CHANCE",
+}
 
 local RESOURCE_BANK = 0
 local RESOURCE_INVENTORY = 1
@@ -207,28 +235,27 @@ local AUGMENT_TYPE = {
 	CRITICAL_HIT_CHANCE = 17,
 }
 
-local FOCUS_MAGE_SPELLS = { "Eternal Winter", "Hell's Core", "Rage of the Skies", "Wrath of Nature" }
+local FOCUS_AUGMENT_SPELLS = { "Hell's Core", "Rage of the Skies" }
 local SPECIAL_MAGE_SPELLS = {
 	"Strong Energy Strike", "Strong Flame Strike", "Strong Ice Strike", "Strong Terra Strike",
 	"Ultimate Energy Strike", "Ultimate Flame Strike", "Ultimate Ice Strike", "Ultimate Terra Strike",
 }
-local FORKED_DRUID_SPELLS = { "Forked Glacier", "Forked Thorns" }
 
 -- Kept in the same order as Canary's wheel spell table. Each spell_N node exists
 -- twice on the wheel: completing one unlocks grade I and completing both unlocks grade II.
 local WHEEL_SPELL_BONUSES = {
 	[1] = {
 		spell_1 = { names = { "Front Sweep" }, grades = {
-			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.40 } },
-			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
+			{ { AUGMENT_TYPE.LIFE_LEECH, 0.05 } },
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.14 } },
 		} },
 		spell_2 = { names = { "Groundshaker" }, grades = {
-			{ { AUGMENT_TYPE.COOLDOWN, -2 } },
 			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.125 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -2 } },
 		} },
-		spell_3 = { names = { "Shield Slam" }, grades = {
-			{ { AUGMENT_TYPE.LIFE_LEECH, 0.15 } },
-			{ { AUGMENT_TYPE.INCREASED_DAMAGE_REDUCTION, 0.25 } },
+		spell_3 = { names = { "Chivalrous Challenge" }, grades = {
+			{ { AUGMENT_TYPE.MANA_COST, -20 } },
+			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 1 } },
 		} },
 		spell_4 = { names = { "Intense Wound Cleansing" }, grades = {
 			{ { AUGMENT_TYPE.BASE_HEALING, 1.25 } },
@@ -240,21 +267,21 @@ local WHEEL_SPELL_BONUSES = {
 		} },
 	},
 	[2] = {
-		spell_1 = { names = { "Ethereal Barrage" }, grades = {
-			{ { AUGMENT_TYPE.LIFE_LEECH, 0.10 } },
-			{ { AUGMENT_TYPE.CRITICAL_HIT_CHANCE, 0.10 } },
+		spell_1 = { names = { "Sharpshooter" }, grades = {
+			{ { AUGMENT_TYPE.SECONDARY_GROUP_COOLDOWN, -8 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -6 } },
 		} },
 		spell_2 = { names = { "Strong Ethereal Spear" }, grades = {
 			{ { AUGMENT_TYPE.COOLDOWN, -2 } },
 			{ { AUGMENT_TYPE.BASE_DAMAGE, 3.80 } },
 		} },
 		spell_3 = { names = { "Divine Dazzle" }, grades = {
-			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 2 } },
-			{ { AUGMENT_TYPE.DURATION_INCREASED, 4 }, { AUGMENT_TYPE.COOLDOWN, -8 } },
+			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 1 } },
+			{ { AUGMENT_TYPE.DURATION_INCREASED, 4 }, { AUGMENT_TYPE.COOLDOWN, -4 } },
 		} },
-		spell_4 = { names = { "Divine Barrage" }, grades = {
-			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.10 } },
-			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.15 } },
+		spell_4 = { names = { "Swift Foot" }, grades = {
+			{ { AUGMENT_TYPE.SECONDARY_GROUP_COOLDOWN, -8 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -6 } },
 		} },
 		spell_5 = { names = { "Divine Caldera" }, grades = {
 			{ { AUGMENT_TYPE.MANA_COST, -20 } },
@@ -262,17 +289,17 @@ local WHEEL_SPELL_BONUSES = {
 		} },
 	},
 	[3] = {
-		spell_1 = { names = FOCUS_MAGE_SPELLS, grades = {
-			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.05 } },
+		spell_1 = { names = FOCUS_AUGMENT_SPELLS, grades = {
+			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.08 } },
 			{ { AUGMENT_TYPE.COOLDOWN, -4 }, { AUGMENT_TYPE.SECONDARY_GROUP_COOLDOWN, -4 } },
 		} },
 		spell_2 = { names = SPECIAL_MAGE_SPELLS, grades = {
 			{ { AUGMENT_TYPE.COOLDOWN, -4 } },
 			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.50 } },
 		} },
-		spell_3 = { names = { "Death Echo" }, grades = {
-			{ { AUGMENT_TYPE.COOLDOWN, -2 } },
-			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.08 } },
+		spell_3 = { names = { "Sap Strength" }, grades = {
+			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
+			{ { AUGMENT_TYPE.INCREASED_DAMAGE_REDUCTION, 0.25 } },
 		} },
 		spell_4 = { names = { "Energy Wave" }, grades = {
 			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
@@ -292,17 +319,17 @@ local WHEEL_SPELL_BONUSES = {
 			{ { AUGMENT_TYPE.BASE_HEALING, 0.04 } },
 			{ { AUGMENT_TYPE.AFFECTED_AREA_ENLARGED, 1 } },
 		} },
-		spell_3 = { names = FORKED_DRUID_SPELLS, grades = {
-			{ { AUGMENT_TYPE.COOLDOWN, -2 } },
-			{ { AUGMENT_TYPE.ADDITIONAL_TARGETS, 1 } },
+		spell_3 = { names = { "Nature's Embrace" }, grades = {
+			{ { AUGMENT_TYPE.BASE_HEALING, 0.11 } },
+			{ { AUGMENT_TYPE.COOLDOWN, -10 } },
 		} },
 		spell_4 = { names = { "Terra Wave" }, grades = {
 			{ { AUGMENT_TYPE.BASE_DAMAGE, 0.065 } },
 			{ { AUGMENT_TYPE.LIFE_LEECH, 0.10 } },
 		} },
 		spell_5 = { names = { "Heal Friend" }, grades = {
-			{ { AUGMENT_TYPE.BASE_HEALING, 0.04 } },
-			{ { AUGMENT_TYPE.BASE_HEALING, 0.06 } },
+			{ { AUGMENT_TYPE.MANA_COST, -10 } },
+			{ { AUGMENT_TYPE.BASE_HEALING, 0.05 } },
 		} },
 	},
 	[5] = {
@@ -334,6 +361,20 @@ local WHEEL_APPLIED_MITIGATION = {}
 local WHEEL_APPLIED_MITIGATION_MULTIPLIER = {}
 local WHEEL_APPLIED_RESISTANCES = {}
 local WHEEL_APPLIED_DODGE = {}
+local WHEEL_LAST_SKILL_STATS_PAYLOAD = {}
+local WHEEL_SPELL_HEALING_BONUSES = {}
+local WHEEL_POSITIONAL_TACTICS_SUBID = 86062
+local WHEEL_APPLIED_POSITIONAL_TACTICS = {}
+local WHEEL_POSITIONAL_TACTICS_PLAYERS = {}
+local POSITIONAL_TACTICS_BONUS = 3
+
+local WHEEL_BATTLE_INSTINCT_SUBID = 86063
+local WHEEL_APPLIED_BATTLE_INSTINCT = {}
+local WHEEL_BATTLE_INSTINCT_PLAYERS = {}
+local BATTLE_INSTINCT_MIN_CREATURES = 5
+local BATTLE_INSTINCT_MAX_CREATURES = 8
+local BATTLE_INSTINCT_SHIELD_PER_TIER = 6
+local BATTLE_INSTINCT_FIGHTING_PER_TIER = 1
 
 local WHEEL_SLOT_PREREQUISITES = {
 	[1] = { 2, 7 },
@@ -758,6 +799,9 @@ end
 
 local function addBonus(bonuses, key, value)
 	if value and value ~= 0 then
+		if key == "capacity" then
+			value = value * CAPACITY_STAT_SCALE
+		end
 		bonuses[key] = (bonuses[key] or 0) + value
 	end
 end
@@ -934,6 +978,26 @@ local SUPREME_EFFECTS = {
 	[93] = { revelation = 3, value = 150 },
 }
 
+local WHEEL_COOLDOWN_SPELL_NAMES = {}
+for _, vocationSpells in pairs(WHEEL_SPELL_BONUSES) do
+	for _, spell in pairs(vocationSpells) do
+		for _, grade in ipairs(spell.grades) do
+			for _, augment in ipairs(grade) do
+				if augment[1] == AUGMENT_TYPE.COOLDOWN then
+					for _, spellName in ipairs(spell.names) do
+						WHEEL_COOLDOWN_SPELL_NAMES[spellName] = true
+					end
+				end
+			end
+		end
+	end
+end
+for _, effect in pairs(SUPREME_EFFECTS) do
+	if effect.spell and effect.augment == AUGMENT_TYPE.COOLDOWN then
+		WHEEL_COOLDOWN_SPELL_NAMES[effect.spell] = true
+	end
+end
+
 local function getGradeMultiplier(grade)
 	if grade == 1 then
 		return 1.1
@@ -1107,9 +1171,26 @@ local function calculateWheelBonuses(player, points, activeGems)
 				elseif vocationId == 5 then
 					addBonus(bonuses, "fist", WHEEL_CONVICTION_VALUES.skill)
 				end
+			elseif conviction == "special_1" and vocationId == 1 then
+				bonuses.battleInstinct = true
 			elseif conviction == "special_1" and vocationId == 2 then
-				addSpecialMagicBonus(bonuses, COMBAT_HOLYDAMAGE, 3)
-				addSpecialMagicBonus(bonuses, COMBAT_HEALING, 3)
+				bonuses.positionalTactics = true
+			elseif conviction == "special_1" and vocationId == 3 then
+				bonuses.runicMastery = true
+			elseif conviction == "special_1" and vocationId == 4 then
+				bonuses.healingLink = true
+			elseif conviction == "special_1" and vocationId == 5 then
+				bonuses.guidingPresence = true
+			elseif conviction == "special_2" and vocationId == 1 then
+				bonuses.battleHealing = true
+			elseif conviction == "special_2" and vocationId == 2 then
+				bonuses.ballisticMastery = true
+			elseif conviction == "special_2" and vocationId == 3 then
+				bonuses.focusMastery = true
+			elseif conviction == "special_2" and vocationId == 4 then
+				bonuses.runicMastery = true
+			elseif conviction == "special_2" and vocationId == 5 then
+				bonuses.sanctuary = true
 			elseif WHEEL_SPELL_BONUSES[vocationId] and WHEEL_SPELL_BONUSES[vocationId][conviction] then
 				addWheelSpellGrade(bonuses, conviction)
 			end
@@ -1119,6 +1200,20 @@ local function calculateWheelBonuses(player, points, activeGems)
 	applyActiveGemBonuses(player, bonuses, points, activeGems or emptyGems())
 	buildWheelSpellAugments(bonuses, vocationId)
 	return bonuses
+end
+
+local function cacheWheelSpellAugments(player, bonuses)
+	local key = getWheelPlayerKey(player)
+	local healing = {}
+
+	for _, augment in ipairs(bonuses.spellAugments) do
+		local value = tonumber(augment.value) or 0
+		if augment.augmentType == AUGMENT_TYPE.BASE_HEALING then
+			healing[augment.spellName] = (healing[augment.spellName] or 0) + value
+		end
+	end
+
+	WHEEL_SPELL_HEALING_BONUSES[key] = healing
 end
 
 local function removeAppliedSpecialMagic(player)
@@ -1177,8 +1272,270 @@ local function removeAppliedDodge(player)
 	WHEEL_APPLIED_DODGE[key] = nil
 end
 
+local function hasPositionalTacticsUnlocked(player)
+	if getWheelVocation(player) ~= 2 then
+		return false
+	end
+
+	local profile = loadProfile(player)
+	return (profile.points[1] or 0) >= WHEEL_SLOT_MAX_POINTS[1]
+end
+
+local function isPositionalTacticsMonster(creature, player)
+	if not creature or creature:getId() == player:getId() or not creature:isMonster() then
+		return false
+	end
+
+	local master = creature:getMaster()
+	if master and master:isPlayer() and master:getId() == player:getId() then
+		return false
+	end
+
+	return true
+end
+
+local function hasAdjacentMonster(player)
+	local position = player:getPosition()
+	local spectators = Game.getSpectators(position, false, false, 1, 1, 1, 1)
+	for _, spectator in ipairs(spectators) do
+		if isPositionalTacticsMonster(spectator, player) then
+			return true
+		end
+	end
+	return false
+end
+
+local function hasBattleInstinctUnlocked(player)
+	if getWheelVocation(player) ~= 1 then
+		return false
+	end
+
+	local profile = loadProfile(player)
+	return (profile.points[1] or 0) >= WHEEL_SLOT_MAX_POINTS[1]
+end
+
+local function countAdjacentBattleCreatures(player)
+	local position = player:getPosition()
+	local spectators = Game.getSpectators(position, false, false, 1, 1, 1, 1)
+	local count = 0
+	for _, spectator in ipairs(spectators) do
+		if isPositionalTacticsMonster(spectator, player) then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+local function getBattleInstinctTier(creatureCount)
+	if creatureCount < BATTLE_INSTINCT_MIN_CREATURES then
+		return 0
+	end
+	return math.min(creatureCount, BATTLE_INSTINCT_MAX_CREATURES) - (BATTLE_INSTINCT_MIN_CREATURES - 1)
+end
+
+local function removeAppliedBattleInstinct(player)
+	local key = getWheelPlayerKey(player)
+	local applied = WHEEL_APPLIED_BATTLE_INSTINCT[key]
+	if not applied then
+		return
+	end
+
+	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, WHEEL_BATTLE_INSTINCT_SUBID, true)
+	WHEEL_APPLIED_BATTLE_INSTINCT[key] = nil
+end
+
+local function refreshBattleInstinctTracking(player)
+	local key = getWheelPlayerKey(player)
+	if hasBattleInstinctUnlocked(player) then
+		WHEEL_BATTLE_INSTINCT_PLAYERS[key] = player:getId()
+	else
+		WHEEL_BATTLE_INSTINCT_PLAYERS[key] = nil
+		removeAppliedBattleInstinct(player)
+	end
+end
+
+function Player.updateBattleInstinct(self)
+	if not self or not self:isPlayer() or not hasBattleInstinctUnlocked(self) then
+		removeAppliedBattleInstinct(self)
+		return false
+	end
+
+	local key = getWheelPlayerKey(self)
+	local creatureCount = countAdjacentBattleCreatures(self)
+	local tier = getBattleInstinctTier(creatureCount)
+	local applied = WHEEL_APPLIED_BATTLE_INSTINCT[key]
+	if applied and applied.tier == tier then
+		return false
+	end
+
+	removeAppliedBattleInstinct(self)
+	if tier <= 0 then
+		return true
+	end
+
+	local shieldBonus = tier * BATTLE_INSTINCT_SHIELD_PER_TIER
+	local fightingBonus = tier * BATTLE_INSTINCT_FIGHTING_PER_TIER
+	local condition = Condition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT)
+	condition:setParameter(CONDITION_PARAM_SUBID, WHEEL_BATTLE_INSTINCT_SUBID)
+	condition:setParameter(CONDITION_PARAM_TICKS, -1)
+	condition:setParameter(CONDITION_PARAM_SKILL_SHIELD, shieldBonus)
+	condition:setParameter(CONDITION_PARAM_SKILL_SWORD, fightingBonus)
+	condition:setParameter(CONDITION_PARAM_SKILL_AXE, fightingBonus)
+	condition:setParameter(CONDITION_PARAM_SKILL_CLUB, fightingBonus)
+	self:addCondition(condition)
+	WHEEL_APPLIED_BATTLE_INSTINCT[key] = { tier = tier }
+	self:sendSkills()
+	return true
+end
+
+local function removeAppliedPositionalTactics(player)
+	local key = getWheelPlayerKey(player)
+	local applied = WHEEL_APPLIED_POSITIONAL_TACTICS[key]
+	if not applied then
+		return
+	end
+
+	if applied.mode == "distance" then
+		player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, WHEEL_POSITIONAL_TACTICS_SUBID, true)
+	elseif applied.mode == "magic" and player.addSpecialMagicLevel then
+		if applied.holy and applied.holy ~= 0 then
+			player:addSpecialMagicLevel(COMBAT_HOLYDAMAGE, -applied.holy)
+		end
+		if applied.healing and applied.healing ~= 0 then
+			player:addSpecialMagicLevel(COMBAT_HEALING, -applied.healing)
+		end
+	end
+
+	WHEEL_APPLIED_POSITIONAL_TACTICS[key] = nil
+end
+
+local function refreshPositionalTacticsTracking(player)
+	local key = getWheelPlayerKey(player)
+	if hasPositionalTacticsUnlocked(player) then
+		WHEEL_POSITIONAL_TACTICS_PLAYERS[key] = player:getId()
+	else
+		WHEEL_POSITIONAL_TACTICS_PLAYERS[key] = nil
+		removeAppliedPositionalTactics(player)
+	end
+end
+
+function Player.updatePositionalTactics(self)
+	if not self or not self:isPlayer() or not hasPositionalTacticsUnlocked(self) then
+		removeAppliedPositionalTactics(self)
+		return false
+	end
+
+	local key = getWheelPlayerKey(self)
+	local adjacentMonster = hasAdjacentMonster(self)
+	local wantMode = adjacentMonster and "magic" or "distance"
+	local applied = WHEEL_APPLIED_POSITIONAL_TACTICS[key]
+	if applied and applied.mode == wantMode then
+		return false
+	end
+
+	removeAppliedPositionalTactics(self)
+
+	if wantMode == "distance" then
+		local condition = Condition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT)
+		condition:setParameter(CONDITION_PARAM_SUBID, WHEEL_POSITIONAL_TACTICS_SUBID)
+		condition:setParameter(CONDITION_PARAM_TICKS, -1)
+		condition:setParameter(CONDITION_PARAM_SKILL_DISTANCE, POSITIONAL_TACTICS_BONUS)
+		self:addCondition(condition)
+		WHEEL_APPLIED_POSITIONAL_TACTICS[key] = { mode = "distance" }
+	else
+		if self.addSpecialMagicLevel then
+			self:addSpecialMagicLevel(COMBAT_HOLYDAMAGE, POSITIONAL_TACTICS_BONUS)
+			self:addSpecialMagicLevel(COMBAT_HEALING, POSITIONAL_TACTICS_BONUS)
+		end
+		WHEEL_APPLIED_POSITIONAL_TACTICS[key] = {
+			mode = "magic",
+			holy = POSITIONAL_TACTICS_BONUS,
+			healing = POSITIONAL_TACTICS_BONUS,
+		}
+	end
+
+	self:sendSkills()
+	return true
+end
+
+local function getInstantSpellIdByName(spellName)
+	local spell = Spell(spellName)
+	if not spell then
+		return nil
+	end
+	local id = spell:id()
+	if type(id) == "number" and id > 0 then
+		return id
+	end
+	return nil
+end
+
+local function clearWheelSpellCooldownStorages(player)
+	for spellName in pairs(WHEEL_COOLDOWN_SPELL_NAMES) do
+		local spell = Spell(spellName)
+		local spellId = spell and spell:id()
+		if type(spellId) == "number" and spellId > 0 then
+			player:setStorageValue(WHEEL_SPELL_CD_STORAGE_BASE + spellId, -1)
+		end
+	end
+end
+
+local function syncWheelSpellCooldownStorages(player, spellAugments)
+	clearWheelSpellCooldownStorages(player)
+
+	local totals = {}
+	for _, augment in ipairs(spellAugments) do
+		if augment.augmentType == AUGMENT_TYPE.COOLDOWN then
+			local ms = math.floor(math.abs(tonumber(augment.value) or 0) * 1000)
+			totals[augment.spellName] = (totals[augment.spellName] or 0) + ms
+		end
+	end
+
+	for spellName, ms in pairs(totals) do
+		local spellId = getInstantSpellIdByName(spellName)
+		if spellId and ms > 0 then
+			local storageKey = WHEEL_SPELL_CD_STORAGE_BASE + spellId
+			player:setStorageValue(storageKey, ms)
+		end
+	end
+end
+
+local function clearWheelSpellFlatManaStorages(player)
+	for spellName in pairs(WHEEL_SPELL_FLAT_MANA_SPELLS) do
+		local spell = Spell(spellName)
+		local spellId = spell and spell:id()
+		if type(spellId) == "number" and spellId > 0 then
+			player:setStorageValue(WHEEL_SPELL_FLAT_MANA_STORAGE_BASE + spellId, -1)
+		end
+	end
+end
+
+local function syncWheelSpellFlatManaStorages(player, spellAugments)
+	clearWheelSpellFlatManaStorages(player)
+
+	local totals = {}
+	for _, augment in ipairs(spellAugments) do
+		if augment.augmentType == AUGMENT_TYPE.MANA_COST and WHEEL_SPELL_FLAT_MANA_SPELLS[augment.spellName] then
+			local flat = math.floor(math.abs(tonumber(augment.value) or 0))
+			totals[augment.spellName] = (totals[augment.spellName] or 0) + flat
+		end
+	end
+
+	for spellName, flatMana in pairs(totals) do
+		local spellId = getInstantSpellIdByName(spellName)
+		if spellId and flatMana > 0 then
+			local storageKey = WHEEL_SPELL_FLAT_MANA_STORAGE_BASE + spellId
+			player:setStorageValue(storageKey, flatMana)
+		end
+	end
+end
+
 local function removeWheelBonuses(player)
 	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, WHEEL_CONDITION_SUBID, true)
+	clearWheelSpellCooldownStorages(player)
+	clearWheelSpellFlatManaStorages(player)
+	player:setStorageValue(WHEEL_HEALING_LINK_STORAGE, -1)
+	player:setStorageValue(WHEEL_BATTLE_HEALING_STORAGE, -1)
 	if player.clearWheelSpellAugments then
 		player:clearWheelSpellAugments()
 	end
@@ -1187,6 +1544,27 @@ local function removeWheelBonuses(player)
 	removeAppliedMitigationMultiplier(player)
 	removeAppliedResistances(player)
 	removeAppliedDodge(player)
+	removeAppliedPositionalTactics(player)
+	removeAppliedBattleInstinct(player)
+	if player.setWheelBallisticMastery then
+		player:setWheelBallisticMastery(false)
+	end
+	if player.setWheelGuidingPresence then
+		player:setWheelGuidingPresence(false)
+	end
+	if player.setWheelSanctuary then
+		player:setWheelSanctuary(false)
+	end
+	if player.setWheelRunicMastery then
+		player:setWheelRunicMastery(false)
+	end
+	if player.setWheelFocusMastery then
+		player:setWheelFocusMastery(false)
+	end
+
+	local key = getWheelPlayerKey(player)
+	WHEEL_POSITIONAL_TACTICS_PLAYERS[key] = nil
+	WHEEL_BATTLE_INSTINCT_PLAYERS[key] = nil
 
 	local appliedStore = wheelAppliedKV(player)
 	appliedStore:set("conditionSubId", WHEEL_CONDITION_SUBID)
@@ -1245,6 +1623,51 @@ local SHOOT_TO_CIPBIA_ELEMENT = {
 	[CONST_ANI_SMALLHOLY] = 5,    [CONST_ANI_HOLY] = 5,
 }
 
+local function getForgeAmplification(player)
+	local feet = player:getSlotItem(CONST_SLOT_FEET)
+	if feet and feet:getId() ~= 0 and feet:getTier() > 0 then
+		return feet:getMomentumChance()
+	end
+	return 0
+end
+
+local function getForgeOnslaught(player)
+	local weapon
+	for _, slot in ipairs({ CONST_SLOT_LEFT, CONST_SLOT_RIGHT }) do
+		local candidate = player:getSlotItem(slot)
+		if candidate and candidate:getId() ~= 0 and ItemType(candidate:getId()):isWeapon() then
+			weapon = candidate
+			break
+		end
+	end
+	if not weapon or weapon:getId() == 0 or weapon:getTier() == 0 then
+		return 0
+	end
+
+	local fatalChance = weapon:getFatalChance()
+	if fatalChance <= 0 then
+		return 0
+	end
+
+	local amplification = getForgeAmplification(player)
+	return (fatalChance * (1.0 + (amplification * 0.02))) / 100
+end
+
+local function getForgeRuse(player)
+	local amplification = getForgeAmplification(player)
+	local armor = player:getSlotItem(CONST_SLOT_ARMOR)
+	if not armor or armor:getId() == 0 or armor:getTier() == 0 then
+		return 0
+	end
+
+	local dodgeChance = armor:getDodgeChance()
+	if dodgeChance <= 0 then
+		return 0
+	end
+
+	return (dodgeChance * (1.0 + (amplification * 0.02))) / 100
+end
+
 local function sendWheelSkillStats(player)
 	if not supportsCustomNetwork(player) or not player.sendExtendedOpcode then
 		return false
@@ -1258,7 +1681,10 @@ local function sendWheelSkillStats(player)
 	local absorbs = {}
 	if player.getCombatAbsorbPercent then
 		for name, combatType in pairs(WHEEL_SKILL_ABSORBS) do
-			absorbs[name] = player:getCombatAbsorbPercent(combatType) / 100
+			local percent = player:getCombatAbsorbPercent(combatType)
+			if percent ~= 0 then
+				absorbs[name] = percent / 100
+			end
 		end
 	end
 
@@ -1304,21 +1730,33 @@ local function sendWheelSkillStats(player)
 
 	damageAndHealing = attackValue
 
-	return player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, json.encode({
+	local payload = json.encode({
 		lifeLeech = lifeLeech,
 		manaLeech = manaLeech,
 		criticalChance = criticalChance,
 		criticalDamage = criticalDamage,
+		onslaught = getForgeOnslaught(player),
 		defense = defense,
 		armor = armor,
+		mantra = player.getMantraTotal and player:getMantraTotal() or 0,
 		mitigation = player:getMitigation() / 100,
+		dodge = getForgeRuse(player),
 		absorbs = absorbs,
 		damageAndHealing = damageAndHealing,
 		attackValue = attackValue,
 		attackElement = attackElement,
 		convertedValue = convertedValue,
 		convertedElement = convertedElement,
-	}))
+	})
+	local key = getWheelPlayerKey(player)
+	if WHEEL_LAST_SKILL_STATS_PAYLOAD[key] == payload then
+		return true
+	end
+	local sent = player:sendExtendedOpcode(OPCODE_WHEEL_SKILLS, payload)
+	if sent then
+		WHEEL_LAST_SKILL_STATS_PAYLOAD[key] = payload
+	end
+	return sent
 end
 
 function Player.wheelSendSkillStats(self)
@@ -1330,6 +1768,7 @@ local function applyWheelBonuses(player)
 
 	local profile = loadProfile(player)
 	local bonuses = calculateWheelBonuses(player, profile.points, profile.gems)
+	cacheWheelSpellAugments(player, bonuses)
 	wheelKV(player):set("revelationStages",
 	                   buildRevelationStages(calculateDomainPoints(profile.points), getWheelVocation(player),
 	                                         bonuses.revelation, getMaxGradeModifierPoints(player)))
@@ -1372,10 +1811,28 @@ local function applyWheelBonuses(player)
 		player:addCondition(condition)
 	end
 
+	syncWheelSpellCooldownStorages(player, bonuses.spellAugments)
+	syncWheelSpellFlatManaStorages(player, bonuses.spellAugments)
+
 	if player.addWheelSpellAugment then
 		for _, augment in ipairs(bonuses.spellAugments) do
-			player:addWheelSpellAugment(augment.spellName, augment.augmentType, augment.value)
+			local skipFlatMana = augment.augmentType == AUGMENT_TYPE.MANA_COST and WHEEL_SPELL_FLAT_MANA_SPELLS[augment.spellName]
+			if not skipFlatMana then
+				player:addWheelSpellAugment(augment.spellName, augment.augmentType, augment.value)
+			end
 		end
+	end
+
+	if bonuses.healingLink then
+		player:setStorageValue(WHEEL_HEALING_LINK_STORAGE, 1)
+	else
+		player:setStorageValue(WHEEL_HEALING_LINK_STORAGE, -1)
+	end
+
+	if bonuses.battleHealing then
+		player:setStorageValue(WHEEL_BATTLE_HEALING_STORAGE, 1)
+	else
+		player:setStorageValue(WHEEL_BATTLE_HEALING_STORAGE, -1)
 	end
 
 	local key = getWheelPlayerKey(player)
@@ -1437,13 +1894,246 @@ local function applyWheelBonuses(player)
 	appliedStore:set("dodge", bonuses.dodge or 0)
 	appliedStore:set("updatedAt", os.time())
 
-	player:reloadData()
+	refreshPositionalTacticsTracking(player)
+	player:updatePositionalTactics()
+	refreshBattleInstinctTracking(player)
+	player:updateBattleInstinct()
+
+	if bonuses.ballisticMastery and player.setWheelBallisticMastery then
+		player:setWheelBallisticMastery(true)
+	end
+
+	if bonuses.guidingPresence and player.setWheelGuidingPresence then
+		player:setWheelGuidingPresence(true)
+	end
+
+	if bonuses.sanctuary and player.setWheelSanctuary then
+		player:setWheelSanctuary(true)
+	end
+
+	if bonuses.runicMastery and player.setWheelRunicMastery then
+		player:setWheelRunicMastery(true)
+	end
+
+	if bonuses.focusMastery and player.setWheelFocusMastery then
+		player:setWheelFocusMastery(true)
+	end
+
+	if SharpshooterWheel and SharpshooterWheel.refreshActive then
+		SharpshooterWheel.refreshActive(player)
+	end
+
+	if SwiftFootWheel and SwiftFootWheel.refreshActive then
+		SwiftFootWheel.refreshActive(player)
+	end
+
+	player:sendSkills()
+	player:sendStats()
 	sendWheelSkillStats(player)
 	return bonuses
 end
 
 function Player.wheelApplyBonuses(self)
 	return applyWheelBonuses(self)
+end
+
+function Player.hasWheelHealingLink(self)
+	return self:getStorageValue(WHEEL_HEALING_LINK_STORAGE) == 1
+end
+
+function Player.hasWheelBattleHealing(self)
+	return self:getStorageValue(WHEEL_BATTLE_HEALING_STORAGE) == 1
+end
+
+-- Heal on each target hit by Chivalrous Challenge when Battle Healing (slot 36) is unlocked.
+function Player.applyWheelBattleHealingForChallenge(self)
+	if not self or not self:hasWheelBattleHealing() then
+		return
+	end
+
+	local shielding = self:getEffectiveSkillLevel(SKILL_SHIELD)
+	local heal = math.max(1, math.floor(shielding * 0.2 + self:getLevel() * 0.05))
+	local maxHp = self:getMaxHealth()
+	if maxHp > 0 then
+		local ratio = self:getHealth() / maxHp
+		if ratio < 0.30 then
+			heal = heal * 3
+		elseif ratio < 0.60 then
+			heal = heal * 2
+		end
+	end
+
+	self:addHealth(heal)
+	self:getPosition():sendMagicEffect(CONST_ME_MAGIC_BLUE)
+end
+
+-- 10% of healing applied to the primary target is returned to the caster (Healing Link perk).
+function Player.applyWheelHealingLinkSelfHeal(self, target, hpBefore)
+	if not self or not target or not self:hasWheelHealingLink() then
+		return
+	end
+	if target:getId() == self:getId() then
+		return
+	end
+	local healed = target:getHealth() - (hpBefore or 0)
+	if healed <= 0 then
+		return
+	end
+	local amount = math.max(1, math.floor(healed * 0.10))
+	doTargetCombatHealth(0, self, COMBAT_HEALING, amount, amount, CONST_ME_MAGIC_BLUE)
+end
+
+-- Sum of BASE_HEALING wheel augments for a spell (conviction grades + gem mods).
+function Player.getWheelSpellHealingPercentBonus(self, spellName)
+	if not spellName or spellName == "" then
+		return 0
+	end
+
+	local key = getWheelPlayerKey(self)
+	local bonuses = WHEEL_SPELL_HEALING_BONUSES[key]
+	if not bonuses then
+		return 0
+	end
+	return bonuses[spellName] or 0
+end
+
+function Player.getWheelAugmentReport(self, spellName)
+	spellName = spellName ~= "" and spellName or "Strong Ethereal Spear"
+	if spellName == "Focus Mastery" or spellName == "Runic Mastery" then
+		local profile = loadProfile(self)
+		local vocationId = getWheelVocation(self)
+		local slot = 36
+		if spellName == "Runic Mastery" then
+			slot = vocationId == 3 and 1 or 36
+		end
+		local bonuses = calculateWheelBonuses(self, profile.points, profile.gems)
+		local active = spellName == "Focus Mastery" and bonuses.focusMastery or bonuses.runicMastery
+		return string.format(
+			"%s: %s\nslot%d=%d/%d\n%s",
+			spellName,
+			active and "ACTIVE" or "inactive",
+			slot,
+			profile.points[slot] or 0,
+			WHEEL_SLOT_MAX_POINTS[slot],
+			spellName == "Focus Mastery"
+				and "Cast Haste/Magic Shield/Invisibility (Focus group), then an attack within 12s for +35% damage."
+				or "25% chance on rune use for +10% or +20% magic level on that cast.")
+	elseif spellName == "Battle Healing" or spellName == "Battle Instinct" then
+		local profile = loadProfile(self)
+		local slot = spellName == "Battle Instinct" and 1 or 36
+		local bonuses = calculateWheelBonuses(self, profile.points, profile.gems)
+		local active = spellName == "Battle Instinct" and bonuses.battleInstinct or bonuses.battleHealing
+		return string.format(
+			"%s: %s\nslot%d=%d/%d",
+			spellName,
+			active and "ACTIVE" or "inactive",
+			slot,
+			profile.points[slot] or 0,
+			WHEEL_SLOT_MAX_POINTS[slot]
+		)
+	end
+
+	local profile = loadProfile(self)
+	local bonuses = calculateWheelBonuses(self, profile.points, profile.gems)
+	local grade = self:upgradeSpellsWOD(spellName)
+	local slotA, slotB = 8, 24
+	if spellName == "Sharpshooter" then
+		slotA, slotB = 6, 21
+	elseif spellName == "Swift Foot" then
+		slotA, slotB = 13, 29
+	elseif spellName == "Mass Healing" then
+		slotA, slotB = 8, 24
+	elseif spellName == "Terra Wave" then
+		slotA, slotB = 13, 29
+	elseif spellName == "Nature's Embrace" then
+		slotA, slotB = 11, 26
+	elseif spellName == "Heal Friend" then
+		slotA, slotB = 16, 31
+	elseif spellName == "Sap Strength" then
+		slotA, slotB = 11, 26
+	elseif spellName == "Hell's Core" or spellName == "Rage of the Skies" then
+		slotA, slotB = 6, 21
+	elseif spellName == "Great Fire Wave" then
+		slotA, slotB = 16, 31
+	elseif spellName == "Front Sweep" then
+		slotA, slotB = 6, 21
+	elseif spellName == "Chivalrous Challenge" then
+		slotA, slotB = 11, 26
+	elseif spellName == "Intense Wound Cleansing" then
+		slotA, slotB = 13, 29
+	elseif spellName == "Fierce Berserk" then
+		slotA, slotB = 16, 31
+	end
+	local lines = {
+		string.format("%s: grade=%d", spellName, grade),
+		string.format("slot%d=%d/%d slot%d=%d/%d",
+			slotA, profile.points[slotA] or 0, WHEEL_SLOT_MAX_POINTS[slotA],
+			slotB, profile.points[slotB] or 0, WHEEL_SLOT_MAX_POINTS[slotB]),
+	}
+
+	for _, augment in ipairs(bonuses.spellAugments) do
+		if augment.spellName == spellName then
+			local typeName = AUGMENT_TYPE_NAMES[augment.augmentType] or tostring(augment.augmentType)
+			lines[#lines + 1] = string.format("  %s = %s", typeName, tostring(augment.value))
+		end
+	end
+
+	if grade == 0 then
+		lines[#lines + 1] = "No augment active."
+	elseif spellName == "Sharpshooter" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: support spells while active; -8s Focus secondary group CD."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: support while active, -8s Focus CD, -6s Sharpshooter CD, +5 distance."
+		end
+	elseif spellName == "Swift Foot" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: -8s Focus CD; attacks enabled with -50% damage dealt."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: -8s Focus CD, -6s Swift Foot CD, no damage penalty."
+		end
+	elseif spellName == "Strong Ethereal Spear" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: -2s cooldown on Strong Ethereal Spear."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: -2s cooldown and +380% base damage."
+		end
+	elseif spellName == "Nature's Embrace" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: +11% base healing on Nature's Embrace."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: +11% base healing and -10s cooldown."
+		end
+	elseif spellName == "Heal Friend" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: -10 mana cost on Heal Friend."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: -10 mana cost and +5% base healing on Heal Friend."
+		end
+	elseif spellName == "Sap Strength" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: enlarged area on Sap Strength."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: enlarged area and stronger damage reduction (80% dealt)."
+		end
+	elseif spellName == "Hell's Core" or spellName == "Rage of the Skies" then
+		if grade == 1 then
+			lines[#lines + 1] = string.format("Grade I active: +8%% base damage on %s.", spellName)
+		elseif grade >= 2 then
+			lines[#lines + 1] = string.format(
+				"Grade I+II active: +8%% base damage, -4s cooldown and -4s Focus secondary group on %s.", spellName)
+		end
+	elseif spellName == "Great Fire Wave" then
+		if grade == 1 then
+			lines[#lines + 1] = "Grade I active: +15% critical extra damage and +10% critical hit chance."
+		elseif grade >= 2 then
+			lines[#lines + 1] = "Grade I+II active: crit bonuses and +5% base damage on Great Fire Wave."
+		end
+	else
+		lines[#lines + 1] = string.format("Grade %d active.", grade)
+	end
+
+	return table.concat(lines, "\n")
 end
 
 function Player.upgradeSpellsWOD(self, spellName)
@@ -1559,7 +2249,7 @@ local function addWheelGrades(out, vocationId, state)
 	end
 end
 
-local function sendWheelWindow(player, ownerId)
+local function sendWheelWindow(player, ownerId, includeResources)
 	if not supportsCustomNetwork(player) then
 		return false
 	end
@@ -1567,7 +2257,9 @@ local function sendWheelWindow(player, ownerId)
 	ownerId = tonumber(ownerId) or player:getId()
 	local vocationId = getWheelVocation(player)
 	local canView = canOpenWheel(player)
-	sendWheelResources(player, vocationId)
+	if includeResources ~= false then
+		sendWheelResources(player, vocationId)
+	end
 
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_WHEEL_WINDOW)
@@ -1637,6 +2329,19 @@ local function consumeGemActionCost(player, itemId, itemCount, money)
 	return true
 end
 
+local function addItemCountWithoutMapDrop(player, itemId, count)
+	local before = player:getItemCount(itemId)
+	player:addItem(itemId, count, false)
+	local added = player:getItemCount(itemId) - before
+	if added == count then
+		return true
+	end
+	if added > 0 then
+		player:removeItem(itemId, added)
+	end
+	return false
+end
+
 local function revealWheelGem(player, state, quality)
 	local vocationId = getWheelVocation(player)
 	local gemItemId = GEM_ITEMS[vocationId] and GEM_ITEMS[vocationId][quality + 1]
@@ -1671,7 +2376,7 @@ local function destroyWheelGem(player, profile, state, gemIndex)
 	else
 		fragmentId, fragmentCount = ITEM_GREATER_FRAGMENT, math.random(1, 5)
 	end
-	if not player:addItem(fragmentId, fragmentCount) then
+	if not addItemCountWithoutMapDrop(player, fragmentId, fragmentCount) then
 		return false, "There is no room for the gem fragments."
 	end
 
@@ -1684,6 +2389,102 @@ local function destroyWheelGem(player, profile, state, gemIndex)
 		end
 	end
 	return true
+end
+
+local ITEM_CRUSHER = 46627
+local ITEM_AMBER_CRUSHER = 46628
+
+local GEM_ITEM_TO_QUALITY = {}
+for _, gems in pairs(GEM_ITEMS) do
+	GEM_ITEM_TO_QUALITY[gems[1]] = GEM_QUALITY.LESSER
+	GEM_ITEM_TO_QUALITY[gems[2]] = GEM_QUALITY.REGULAR
+	GEM_ITEM_TO_QUALITY[gems[3]] = GEM_QUALITY.GREATER
+end
+
+-- Unrevealed gem yields (official Fragment Workshop rates).
+local UNREVEALED_FRAGMENT_YIELD = {
+	[GEM_QUALITY.LESSER] = { id = ITEM_LESSER_FRAGMENT, min = 1, max = 2 },
+	[GEM_QUALITY.REGULAR] = { id = ITEM_LESSER_FRAGMENT, min = 2, max = 4 },
+	[GEM_QUALITY.GREATER] = { id = ITEM_GREATER_FRAGMENT, min = 1, max = 2 },
+}
+
+local function consumeCrusherCharge(crusherItem)
+	local crusherId = crusherItem:getId()
+	if crusherId == ITEM_AMBER_CRUSHER then
+		return true
+	end
+	if crusherId ~= ITEM_CRUSHER then
+		return false
+	end
+
+	local charges = crusherItem:getCharges()
+	if charges <= 0 then
+		return false
+	end
+
+	if charges <= 1 then
+		return crusherItem:remove(1)
+	else
+		return crusherItem:transform(crusherId, charges - 1) ~= nil
+	end
+end
+
+local function refreshWheelFragmentBalances(player)
+	if not supportsCustomNetwork(player) then
+		return
+	end
+
+	sendResourceBalance(player, RESOURCE_LESSER_FRAGMENTS, player:getItemCount(ITEM_LESSER_FRAGMENT))
+	sendResourceBalance(player, RESOURCE_GREATER_FRAGMENTS, player:getItemCount(ITEM_GREATER_FRAGMENT))
+
+	local gemItems = GEM_ITEMS[getWheelVocation(player)] or {}
+	sendResourceBalance(player, RESOURCE_LESSER_GEMS, gemItems[1] and player:getItemCount(gemItems[1]) or 0)
+	sendResourceBalance(player, RESOURCE_REGULAR_GEMS, gemItems[2] and player:getItemCount(gemItems[2]) or 0)
+	sendResourceBalance(player, RESOURCE_GREATER_GEMS, gemItems[3] and player:getItemCount(gemItems[3]) or 0)
+end
+
+function Player.wheelCrushGem(self, crusherItem, gemItem)
+	if not crusherItem or not gemItem then
+		return false, "Invalid target."
+	end
+	if crusherItem:getTopParent() ~= self or gemItem:getTopParent() ~= self then
+		return false, "The crusher and gem must be in your inventory."
+	end
+
+	local crusherId = crusherItem:getId()
+	if crusherId ~= ITEM_CRUSHER and crusherId ~= ITEM_AMBER_CRUSHER then
+		return false, "Invalid crusher."
+	end
+
+	if crusherId == ITEM_CRUSHER and crusherItem:getCharges() <= 0 then
+		return false, "Your crusher has no charges left."
+	end
+
+	local gemId = gemItem:getId()
+	local quality = GEM_ITEM_TO_QUALITY[gemId]
+	if quality == nil then
+		return false, "You can only use the crusher on gems."
+	end
+
+	local yield = UNREVEALED_FRAGMENT_YIELD[quality]
+	local count = math.random(yield.min, yield.max)
+	if not gemItem:remove(1, self) then
+		return false, "Could not remove the gem."
+	end
+
+	if not addItemCountWithoutMapDrop(self, yield.id, count) then
+		self:addItem(gemId, 1, false)
+		return false, "There is no room for the gem fragments."
+	end
+
+	if not consumeCrusherCharge(crusherItem) then
+		self:removeItem(yield.id, count)
+		self:addItem(gemId, 1, false)
+		return false, "Your crusher has no charges left."
+	end
+
+	refreshWheelFragmentBalances(self)
+	return true, count, yield.id
 end
 
 local NEXT_GEM_AFFINITY = {
@@ -1809,7 +2610,7 @@ function saveHandler.onReceive(player, msg)
 
 	saveProfile(player, points, validatedGems)
 	applyWheelBonuses(player)
-	sendWheelWindow(player, player:getId())
+	sendWheelWindow(player, player:getId(), false)
 end
 
 saveHandler:register()
@@ -1856,11 +2657,14 @@ function gemActionHandler.onReceive(player, msg)
 	if success then
 		saveGemState(player, state)
 		saveProfile(player, profile.points, validateActiveGems(profile.gems, state.revealed))
-		applyWheelBonuses(player)
+		if action == GEM_ACTION.DESTROY or action == GEM_ACTION.SWITCH_DOMAIN or
+		    action == GEM_ACTION.IMPROVE_GRADE then
+			applyWheelBonuses(player)
+		end
 	elseif reason then
 		player:sendTextMessage(MESSAGE_STATUS_SMALL, reason)
 	end
-	sendWheelWindow(player, player:getId())
+	sendWheelWindow(player, player:getId(), action ~= GEM_ACTION.TOGGLE_LOCK)
 end
 
 gemActionHandler:register()
@@ -1880,11 +2684,109 @@ local wheelLogoutEvent = CreatureEvent("WheelOfDestinyLogout")
 function wheelLogoutEvent.onLogout(player)
 	local key = getWheelPlayerKey(player)
 	WHEEL_APPLIED_SPECIAL_MAGIC[key] = nil
+	WHEEL_APPLIED_POSITIONAL_TACTICS[key] = nil
+	WHEEL_APPLIED_BATTLE_INSTINCT[key] = nil
+	WHEEL_POSITIONAL_TACTICS_PLAYERS[key] = nil
+	WHEEL_BATTLE_INSTINCT_PLAYERS[key] = nil
+	removeAppliedPositionalTactics(player)
+	removeAppliedBattleInstinct(player)
 	WHEEL_APPLIED_MITIGATION[key] = nil
 	WHEEL_APPLIED_MITIGATION_MULTIPLIER[key] = nil
 	WHEEL_APPLIED_RESISTANCES[key] = nil
 	WHEEL_APPLIED_DODGE[key] = nil
+	WHEEL_LAST_SKILL_STATS_PAYLOAD[key] = nil
+	WHEEL_SPELL_HEALING_BONUSES[key] = nil
 	return true
 end
 
 wheelLogoutEvent:register()
+
+local wheelAugReport = TalkAction("/wheelaug", "!wheelaug")
+
+function wheelAugReport.onSay(player, words, param)
+	if not player:getGroup():getAccess() then
+		return false
+	end
+
+	local spellName = param:trim()
+	if spellName == "" then
+		player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
+			"Wheel augments: /wheelaug <spell name>\nExamples: Nature's Embrace, Hell's Core, Focus Mastery, Sap Strength")
+		return false
+	end
+
+	local report = player:getWheelAugmentReport(spellName)
+	player:sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, report)
+	return false
+end
+
+wheelAugReport:separator(" ")
+wheelAugReport:accountType(6)
+wheelAugReport:register()
+
+local function updatePositionalTacticsNearPosition(position)
+	local spectators = Game.getSpectators(position, false, true, 1, 1, 1, 1)
+	for _, spectator in ipairs(spectators) do
+		if spectator:isPlayer() then
+			if spectator.updatePositionalTactics and spectator:updatePositionalTactics() then
+				sendWheelSkillStats(spectator)
+			end
+			if spectator.updateBattleInstinct and spectator:updateBattleInstinct() then
+				sendWheelSkillStats(spectator)
+			end
+		end
+	end
+end
+
+local wheelPositionalTacticsStep = Event()
+wheelPositionalTacticsStep.onStepTile = function(player, fromPosition, toPosition)
+	local updated = false
+	if player.updatePositionalTactics and player:updatePositionalTactics() then
+		updated = true
+	end
+	if player.updateBattleInstinct and player:updateBattleInstinct() then
+		updated = true
+	end
+	if updated then
+		sendWheelSkillStats(player)
+	end
+	return true
+end
+wheelPositionalTacticsStep:register()
+
+local wheelPositionalTacticsMove = Event()
+wheelPositionalTacticsMove.onMoveCreature = function(player, creature, fromPosition, toPosition)
+	updatePositionalTacticsNearPosition(fromPosition)
+	updatePositionalTacticsNearPosition(toPosition)
+	return true
+end
+wheelPositionalTacticsMove:register()
+
+local wheelPositionalTacticsThink = GlobalEvent("WheelPositionalTacticsThink")
+function wheelPositionalTacticsThink.onThink(interval)
+	for key, playerId in pairs(WHEEL_POSITIONAL_TACTICS_PLAYERS) do
+		local trackedPlayer = Player(playerId)
+		if trackedPlayer then
+			if trackedPlayer:updatePositionalTactics() then
+				sendWheelSkillStats(trackedPlayer)
+			end
+		else
+			WHEEL_POSITIONAL_TACTICS_PLAYERS[key] = nil
+			WHEEL_APPLIED_POSITIONAL_TACTICS[key] = nil
+		end
+	end
+	for key, playerId in pairs(WHEEL_BATTLE_INSTINCT_PLAYERS) do
+		local trackedPlayer = Player(playerId)
+		if trackedPlayer then
+			if trackedPlayer:updateBattleInstinct() then
+				sendWheelSkillStats(trackedPlayer)
+			end
+		else
+			WHEEL_BATTLE_INSTINCT_PLAYERS[key] = nil
+			WHEEL_APPLIED_BATTLE_INSTINCT[key] = nil
+		end
+	end
+	return true
+end
+wheelPositionalTacticsThink:interval(500)
+wheelPositionalTacticsThink:register()

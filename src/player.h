@@ -173,6 +173,8 @@ inline constexpr int32_t AVATAR_TIMER_STORAGE = 50099;
 inline constexpr int32_t AVATAR_DAMAGE_REDUCTION_PERCENT = 10;
 inline constexpr int32_t DUAL_WIELD_DAMAGE_BOOST_STORAGE = 50001;
 
+class Spell;
+
 class Player final : public Creature, public Cylinder
 {
 friend class Item;
@@ -484,6 +486,7 @@ public:
 	}
 
 	void sendMonkData();
+	void sendWheelFocusMasteryClientState(const std::string& state, uint32_t durationMs = 0);
 	void sendStanceProtocol() const;
 	std::vector<uint16_t> buildActiveStanceSpellIds() const;
 	Stance_t getStance() const { return m_stancePrimary; }
@@ -928,6 +931,28 @@ public:
 	void addWheelMitigationMultiplier(float modifier) { varWheelMitigationMultiplier += modifier; }
 	float getWheelDodgeChance() const { return varWheelDodgeChance; }
 	void addWheelDodgeChance(float modifier) { varWheelDodgeChance += modifier; }
+	bool hasWheelBallisticMastery() const { return wheelBallisticMastery; }
+	void setWheelBallisticMastery(bool enabled) { wheelBallisticMastery = enabled; }
+	bool hasWheelGuidingPresence() const { return wheelGuidingPresence; }
+	void setWheelGuidingPresence(bool enabled) { wheelGuidingPresence = enabled; }
+	bool hasWheelSanctuary() const { return wheelSanctuary; }
+	void setWheelSanctuary(bool enabled);
+	void triggerWheelSanctuary(uint8_t harmonyConsumed, const Position& position);
+	void applyWheelSanctuaryCombatBonus(CombatDamage& damage, const Creature* target) const;
+	int32_t getWheelSanctuaryHealingBonusPercent(const Creature* healTarget) const;
+	int32_t getWheelBallisticMasteryCriticalBonus(CombatOrigin origin) const;
+	int32_t getWheelBallisticMasteryElementPierce(CombatType_t combatType) const;
+	bool hasWheelRunicMastery() const { return wheelRunicMastery; }
+	void setWheelRunicMastery(bool enabled) { wheelRunicMastery = enabled; }
+	void tryWheelRunicMastery(const Spell* runeSpell);
+	void clearWheelRunicMasteryBonus() { wheelRunicMasteryBonus = 0; }
+	int32_t getWheelRunicMasteryBonus() const { return wheelRunicMasteryBonus; }
+	bool hasWheelFocusMastery() const { return wheelFocusMastery; }
+	void setWheelFocusMastery(bool enabled);
+	void tryArmWheelFocusMastery(const Spell* spell);
+	void resetWheelFocusMasteryCastMultiplier() { wheelFocusMasteryCastMultiplier = 1.0f; }
+	float consumeWheelFocusMasteryForCast(const Spell* spell);
+	void applyWheelFocusMasteryCastMultiplier(CombatDamage& damage) const;
 
 	float getAttackFactor() const override;
 	float getDefenseFactor() const override;
@@ -1875,6 +1900,18 @@ private:
 	float varMitigation = 0.0f;
 	float varWheelMitigationMultiplier = 0.0f;
 	float varWheelDodgeChance = 0.0f;
+	bool wheelBallisticMastery = false;
+	bool wheelGuidingPresence = false;
+	bool wheelSanctuary = false;
+	uint8_t wheelSanctuaryBonusPercent = 0;
+	int64_t wheelSanctuaryExpireTime = 0;
+	Position wheelSanctuaryFieldPosition;
+	bool wheelRunicMastery = false;
+	int32_t wheelRunicMasteryBonus = 0;
+	bool wheelFocusMastery = false;
+	bool wheelFocusMasteryReady = false;
+	int64_t wheelFocusMasteryExpireTime = 0;
+	float wheelFocusMasteryCastMultiplier = 1.0f;
 	std::array<float, COMBAT_COUNT> varCombatAbsorbPercent = {0};
 	std::array<int16_t, COMBAT_COUNT> specialMagicLevelSkill = {0};
 	std::array<int32_t, static_cast<size_t>(ExperienceRateType::STAMINA) + 1> experienceRate = {0};

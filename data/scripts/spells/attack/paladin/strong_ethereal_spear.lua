@@ -14,6 +14,15 @@ combat:setCallback(CALLBACK_PARAM_SKILLVALUE, "onGetFormulaValues")
 local spell = Spell("instant")
 
 function spell.onCastSpell(creature, var)
+	local player = creature:getPlayer()
+	if player and player.upgradeSpellsWOD then
+		local grade = player:upgradeSpellsWOD("Strong Ethereal Spear")
+		print(string.format(
+			"[wheel-aug][cast] player=%s spell=Strong Ethereal Spear grade=%d (0=none, 1=-2s CD, 2=+380%% dmg too)",
+			player:getName(),
+			grade
+		))
+	end
 	return combat:execute(creature, var)
 end
 

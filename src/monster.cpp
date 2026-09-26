@@ -1501,7 +1501,7 @@ bool Monster::selectBlockerTarget()
 	}
 
 	// Only for monsters that want to be close (melee)
-	if (mType->info.targetDistance > 1) {
+	if (getEffectiveTargetDistance() > 1) {
 		return false;
 	}
 
@@ -1580,8 +1580,13 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 		if (elementMod > 0 && attacker &&
 		    ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
 			if (Player* attackerPlayer = attacker->getPlayer()) {
+				elementMod -= attackerPlayer->getWheelBallisticMasteryElementPierce(combatType);
 				const double_t pierce = attackerPlayer->weaponProficiency().getElementalPierce(combatType);
 				elementMod -= static_cast<int32_t>(std::floor(elementMod * pierce));
+			}
+		} else if (attacker) {
+			if (Player* attackerPlayer = attacker->getPlayer()) {
+				elementMod -= attackerPlayer->getWheelBallisticMasteryElementPierce(combatType);
 			}
 		}
 
@@ -2087,6 +2092,18 @@ bool Monster::canUseSpell(const Position& pos, const Position& targetPos, const 
 
 void Monster::onThinkTarget(uint32_t interval)
 {
+	if (overrideTargetDistanceDuration > 0) {
+		overrideTargetDistanceDuration -= interval;
+		if (overrideTargetDistanceDuration <= 0) {
+			overrideTargetDistanceDuration = 0;
+			overrideTargetDistance = 0;
+			if (!followCreature.expired() || !attackedCreature.expired()) {
+				forceUpdateFollowPath = true;
+				requestFollowPathUpdate();
+			}
+		}
+	}
+
 	if (!isSummon()) {
 		// protection time
 		if (auto target = getAttackedCreatureShared();
@@ -2477,8 +2494,12 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 				if (auto ac = attackedCreature.lock(); ac && ac == followCreature.lock()) {
 					if (isFleeing()) {
 						result = getDanceStep(getPosition(), direction, false, false);
-					} else if (mType->info.staticAttackChance < static_cast<uint32_t>(uniform_random(1, 100))) {
+					} else if (getEffectiveTargetDistance() > 1 &&
+					           mType->info.staticAttackChance < static_cast<uint32_t>(uniform_random(1, 100))) {
 						result = getDanceStep(getPosition(), direction);
+					} else if (overrideTargetDistanceDuration > 0 && getEffectiveTargetDistance() <= 1) {
+						forceUpdateFollowPath = true;
+						requestFollowPathUpdate();
 					}
 				}
 			}
@@ -2786,14 +2807,15 @@ void Monster::fleeFromTarget(const Position& targetPos, Direction& direction)
 bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, bool flee /* = false */)
 {
 	const Position& creaturePos = getPosition();
+	const int32_t effectiveTargetDistance = getEffectiveTargetDistance();
 
 	int32_t dx = creaturePos.getDistanceX(targetPos);
 	int32_t dy = creaturePos.getDistanceY(targetPos);
 	int32_t distance = std::max(dx, dy);
 
-	if (!flee && (distance > mType->info.targetDistance || !g_game.isSightClear(creaturePos, targetPos, true))) {
+	if (!flee && (distance > effectiveTargetDistance || !g_game.isSightClear(creaturePos, targetPos, true))) {
 		return false; // let the A* calculate it
-	} else if (!flee && distance == mType->info.targetDistance) {
+	} else if (!flee && distance == effectiveTargetDistance) {
 		return true; // already at target distance, dance step handles position
 	}
 
@@ -2810,7 +2832,7 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 		return true;
 	}
 
-	if (distance < mType->info.targetDistance) {
+	if (distance < effectiveTargetDistance) {
 		fleeFromTarget(targetPos, direction);
 		return true;
 	}
@@ -3253,6 +3275,11 @@ bool Monster::challengeCreature(Creature* creature, bool force /* = false*/)
 		return false;
 	}
 
+	if (creature && isOpponent(creature)) {
+		addTarget(creature, true);
+		updateIdleStatus();
+	}
+
 	bool result = selectTarget(creature);
 	if (result) {
 		targetChangeCooldown = 8000;
@@ -3262,19 +3289,47 @@ bool Monster::challengeCreature(Creature* creature, bool force /* = false*/)
 	return result;
 }
 
+void Monster::changeTargetDistance(int32_t distance, int32_t duration)
+{
+	if (isSummon() || distance < 1 || duration <= 0) {
+		return;
+	}
+
+	overrideTargetDistance = distance;
+	overrideTargetDistanceDuration = duration;
+	setIdle(false);
+
+	if (auto follow = followCreature.lock()) {
+		forceUpdateFollowPath = true;
+		requestFollowPathUpdate();
+	} else if (auto attacked = attackedCreature.lock()) {
+		setFollowCreature(attacked.get());
+	}
+}
+
+int32_t Monster::getEffectiveTargetDistance() const
+{
+	if (overrideTargetDistance > 0 && overrideTargetDistanceDuration > 0) {
+		return overrideTargetDistance;
+	}
+	return mType->info.targetDistance;
+}
+
 void Monster::getPathSearchParams(const Creature* creature, FindPathParams& fpp) const
 {
 	Creature::getPathSearchParams(creature, fpp);
 
+	const int32_t effectiveTargetDistance = getEffectiveTargetDistance();
+
 	fpp.minTargetDist = 1;
-	fpp.maxTargetDist = mType->info.targetDistance;
+	fpp.maxTargetDist = effectiveTargetDistance;
 
 	if (isSummon()) {
 		auto master = getMaster();
 		if (master && master.get() == creature) {
 			fpp.maxTargetDist = 2;
 			fpp.fullPathSearch = true;
-		} else if (mType->info.targetDistance <= 1) {
+		} else if (effectiveTargetDistance <= 1) {
 			fpp.fullPathSearch = true;
 		} else {
 			fpp.fullPathSearch = !canUseAttack(getPosition(), creature);
@@ -3285,7 +3340,7 @@ void Monster::getPathSearchParams(const Creature* creature, FindPathParams& fpp)
 		fpp.clearSight = false;
 		fpp.keepDistance = true;
 		fpp.fullPathSearch = false;
-	} else if (mType->info.targetDistance <= 1) {
+	} else if (effectiveTargetDistance <= 1) {
 		fpp.fullPathSearch = true;
 	} else {
 		fpp.fullPathSearch = !canUseAttack(getPosition(), creature);
