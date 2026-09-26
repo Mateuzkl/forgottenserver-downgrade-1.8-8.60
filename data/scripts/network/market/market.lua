@@ -96,14 +96,6 @@ local CATEGORY_QUIVERS = 25
 local CATEGORY_SOUL_CORES = 26
 local CATEGORY_GOLD = 30
 
--- Mirrors ItemTypes_t order in src/items.h (after ITEM_TYPE_CARPET).
-local ITEM_TYPE_FOOD = 14
-local ITEM_TYPE_POTION = 15
-local ITEM_TYPE_VALUABLE = 16
-local ITEM_TYPE_CREATUREPRODUCT = 17
-local ITEM_TYPE_TOOL = 18
-local ITEM_TYPE_DECORATION = 19
-
 local METADATA_CATEGORY_BY_TOKEN = {
 	["food"] = CATEGORY_FOOD,
 	["potion"] = CATEGORY_POTIONS,
@@ -118,13 +110,14 @@ local METADATA_CATEGORY_BY_TOKEN = {
 	["decoration"] = CATEGORY_DECORATION,
 }
 
+-- ItemTypes_t loot categories (src/items.h, after ITEM_TYPE_CARPET).
 local ITEM_TYPE_CATEGORY = {
-	[ITEM_TYPE_FOOD] = CATEGORY_FOOD,
-	[ITEM_TYPE_POTION] = CATEGORY_POTIONS,
-	[ITEM_TYPE_VALUABLE] = CATEGORY_VALUABLES,
-	[ITEM_TYPE_CREATUREPRODUCT] = CATEGORY_CREATURE_PRODUCTS,
-	[ITEM_TYPE_TOOL] = CATEGORY_TOOLS,
-	[ITEM_TYPE_DECORATION] = CATEGORY_DECORATION,
+	[14] = CATEGORY_FOOD,
+	[15] = CATEGORY_POTIONS,
+	[16] = CATEGORY_VALUABLES,
+	[17] = CATEGORY_CREATURE_PRODUCTS,
+	[18] = CATEGORY_TOOLS,
+	[19] = CATEGORY_DECORATION,
 }
 
 local shopCategoryLookups = {
@@ -2501,7 +2494,7 @@ function acceptHandler.onReceive(player, msg)
 end
 acceptHandler:register()
 
-local marketSessionCleanup = CreatureEvent("CustomMarketSessionCleanup")
+marketSessionCleanup = CreatureEvent("CustomMarketSessionCleanup")
 function marketSessionCleanup.onLogout(player)
 	lastAction[player:getId()] = nil
 	marketDepotSessions[player:getId()] = nil
@@ -2511,7 +2504,7 @@ function marketSessionCleanup.onLogout(player)
 end
 marketSessionCleanup:register()
 
-local marketSessionInit = CreatureEvent("CustomMarketSessionInit")
+marketSessionInit = CreatureEvent("CustomMarketSessionInit")
 function marketSessionInit.onLogin(player)
 	player:registerEvent("CustomMarketSessionCleanup")
 	return true
