@@ -3730,8 +3730,8 @@ void ProtocolGame::sendLootContainers()
 		msg.add<uint16_t>(managedContainer.loot);
 	}
 
-	// Fonticak clients only parse the loot-container list; obtain containers are Astra-only.
-	if (isAstraClient) {
+	// OTC-Fonticak (< 13.32) reads obtain as a second list when extra bytes are present; Astra uses the same layout.
+	if (isAstraClient || isFonticakClient) {
 		msg.addByte(obtainContainerCount);
 		for (const auto& [category, managedContainer] : containers) {
 			if (managedContainer.obtain == 0) {
