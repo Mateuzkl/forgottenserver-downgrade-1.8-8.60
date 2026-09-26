@@ -171,6 +171,8 @@ public:
 	void onThink(uint32_t interval) override;
 
 	bool challengeCreature(Creature* creature, bool force = false) override;
+	void changeTargetDistance(int32_t distance, int32_t duration);
+	[[nodiscard]] int32_t getEffectiveTargetDistance() const;
 
 	void setNormalCreatureLight() override;
 	bool getCombatValues(int32_t& min, int32_t& max) override;
@@ -245,6 +247,8 @@ private:
 	int32_t maxCombatValue = 0;
 	int32_t targetChangeCooldown = 0;
 	int32_t challengeFocusDuration = 0;
+	int32_t overrideTargetDistance = 0;
+	int32_t overrideTargetDistanceDuration = 0;
 	int32_t stepDuration = 0;
 	int64_t fleeBlockUntil = 0;
 

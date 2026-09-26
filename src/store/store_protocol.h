@@ -30,7 +30,29 @@ enum class ResponseType : uint8_t
 	Catalog = 0x01,
 	Success = 0x02,
 	History = 0x03,
+	CatalogChunk = 0x04,
 };
+
+inline constexpr uint8_t CatalogChunkStart = 1 << 0;
+inline constexpr uint8_t CatalogChunkEnd = 1 << 1;
+inline constexpr size_t CatalogChunkTargetSize = 48 * 1024;
+
+[[nodiscard]] constexpr bool shouldUseLegacyCatalog(size_t estimatedSize, bool supportsCatalogChunks) noexcept
+{
+	return estimatedSize <= CatalogChunkTargetSize ||
+	       (!supportsCatalogChunks && estimatedSize <= NetworkMessage::MAX_PROTOCOL_BODY_LENGTH);
+}
+
+inline void addCatalogChunkHeader(NetworkMessage& msg, uint8_t flags, uint32_t coins,
+                                  uint16_t categoryCount, uint16_t categoryPartCount)
+{
+	msg.addByte(ServerOpcode);
+	msg.addByte(static_cast<uint8_t>(ResponseType::CatalogChunk));
+	msg.addByte(flags);
+	msg.add<uint32_t>(coins);
+	msg.add<uint16_t>(categoryCount);
+	msg.add<uint16_t>(categoryPartCount);
+}
 
 [[nodiscard]] constexpr StoreHighlightState effectiveHighlightState(StoreHighlightState state,
                                                                     uint32_t validUntilTimestamp,
@@ -47,6 +69,15 @@ inline void addCategoryHighlight(NetworkMessage& msg, bool enabled, StoreHighlig
 {
 	if (enabled) {
 		msg.addByte(static_cast<uint8_t>(state));
+	}
+}
+
+inline void addOfferPrices(NetworkMessage& msg, bool includeBasePrice, uint32_t effectivePrice,
+                           uint32_t basePrice)
+{
+	msg.add<uint32_t>(effectivePrice);
+	if (includeBasePrice) {
+		msg.add<uint32_t>(basePrice);
 	}
 }
 

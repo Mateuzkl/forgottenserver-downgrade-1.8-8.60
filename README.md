@@ -35,6 +35,27 @@ Developed and maintained by [Mateuzkl](https://github.com/Mateuzkl), based on [N
 
 ---
 
+# 🚨 IMPORTANT — CLEAN BASE / CONTENT NOT INCLUDED 🚨
+
+![Clean Base](https://img.shields.io/badge/BASE-CLEAN%20ENGINE-red?style=for-the-badge)
+![Content](https://img.shields.io/badge/GLOBAL%20CONTENT-NOT%20INCLUDED-red?style=for-the-badge)
+
+> ## ⚠️ PLEASE READ BEFORE USING THIS PROJECT
+>
+> This repository is a **clean TFS 1.8-based server engine for protocol 8.60**. It is **not** a complete Global/Canary/Crystal datapack and it is **not intended to ship every quest, hunting area, boss, mechanic, script, map, or gameplay system from newer Tibia versions**.
+>
+> The project provides the **server core, protocol support, ClientID-native item/map compatibility, optional engine features, libraries, and selected systems**. Content that belongs to a specific datapack or world must be added separately.
+>
+> If you want to use content from **Crystal Server, Canary, Global maps, custom datapacks, Baiak, or another project**, you are responsible for **porting and adapting that content to this TFS base**. This may include maps, quests, monsters, NPCs, actions, movements, events, bosses, hunting areas, mechanics, scripts, configuration, and any related database changes.
+>
+> This is the same general concept as starting from a clean **TFS 1.4.2, Nekiro downgrade, or other engine-focused distribution**: the engine is the foundation, while the final datapack and game content are built or ported by the server owner.
+>
+> **Enabling an optional feature in `config.lua` does not automatically import the complete official content associated with that feature.** A feature flag enables the server-side support that exists in this project; any missing world content, quest logic, NPCs, monsters, maps, assets, or supplementary scripts still need to be ported separately when required.
+>
+> **In short:** if you want a full Crystal/Canary/Global experience, **port the required content to this TFS base**. The goal of this repository is to provide a clean, modern, extensible 8.60 foundation—not a prebuilt full global datapack.
+
+---
+
 ## Highlights
 
 | Area | Features |

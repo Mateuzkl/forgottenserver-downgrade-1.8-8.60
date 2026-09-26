@@ -304,6 +304,12 @@ if (BUILD_TESTING)
             -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
             -P ${CMAKE_SOURCE_DIR}/tools/check-protocolgame-handshake.cmake
     )
+    add_test(
+        NAME check_shop_podium_protocol
+        COMMAND ${CMAKE_COMMAND}
+            -DPROJECT_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -P ${CMAKE_SOURCE_DIR}/tools/check-shop-podium-protocol.cmake
+    )
 endif()
 
 # Option to disable unity builds

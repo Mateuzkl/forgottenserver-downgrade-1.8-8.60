@@ -118,6 +118,7 @@ private:
 	void parseInspectionObject(NetworkMessage& msg);
 	void parseSetMonsterPodium(NetworkMessage& msg);
 	void parseSay(NetworkMessage& msg);
+	void parseSelectSpellAim(NetworkMessage& msg);
 	void parseLookAt(NetworkMessage& msg);
 	void parseLookInBattleList(NetworkMessage& msg);
 	void parseAttack(NetworkMessage& msg);
@@ -365,6 +366,7 @@ private:
 	bool shouldSendItemTierByte() const;
 	bool shouldSendThingUpgradeClassification() const;
 	bool shouldSendItemTierData() const;
+	bool usesExtendedSpellIds() const;
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 	void parseCustomClientPing(NetworkMessage& msg);
@@ -447,6 +449,8 @@ private:
 	bool supportsContainerTypes = false;
 	bool supportsAstraSingleCreatureMarks = false;
 	bool supportsAstraEchoRaidVisuals = false;
+	bool supportsAstraStoreBasePrice = false;
+	bool supportsAstraStoreCatalogChunks = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;

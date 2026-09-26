@@ -8,6 +8,7 @@
 #include "events.h"
 #include "game.h"
 #include "luascript.h"
+#include "monster.h"
 #include "player.h"
 #include "scriptmanager.h"
 
@@ -1437,6 +1438,29 @@ int luaCreatureClearIcons(lua_State* L)
 	return 1;
 }
 
+int luaCreatureChangeTargetDistance(lua_State* L)
+{
+	// creature:changeTargetDistance(distance, duration)
+	Creature* creature = getCreature(L, 1);
+	if (!creature) {
+		reportErrorFunc(L, LuaScriptInterface::getErrorDesc(LuaErrorCode::CREATURE_NOT_FOUND));
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
+
+	Monster* monster = creature->getMonster();
+	if (!monster) {
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
+
+	const int32_t distance = getInteger<int32_t>(L, 2);
+	const int32_t duration = getInteger<int32_t>(L, 3);
+	monster->changeTargetDistance(distance, duration);
+	Lua::pushBoolean(L, true);
+	return 1;
+}
+
 int luaCreatureSendCreatureIcon(lua_State* L)
 {
 	// creature:sendCreatureIcon() — send icon update to all spectators
@@ -1482,6 +1506,7 @@ void LuaScriptInterface::registerCreature()
 
 	registerMethod("Creature", "getTarget", luaCreatureGetTarget);
 	registerMethod("Creature", "setTarget", luaCreatureSetTarget);
+	registerMethod("Creature", "changeTargetDistance", luaCreatureChangeTargetDistance);
 
 	registerMethod("Creature", "getFollowCreature", luaCreatureGetFollowCreature);
 	registerMethod("Creature", "setFollowCreature", luaCreatureSetFollowCreature);

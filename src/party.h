@@ -29,6 +29,7 @@ public:
 
 	std::shared_ptr<Player> getLeader() const { return leader.lock(); }
 	PlayerVector& getMembers() { return memberList; }
+	const PlayerVector& getMembers() const { return memberList; }
 	const PlayerVector& getInvitees() const { return inviteList; }
 	size_t getMemberCount() const { return memberList.size(); }
 	size_t getInvitationCount() const { return inviteList.size(); }

@@ -24,6 +24,8 @@ enum Capability : uint8_t {
 	StoreHighlights = 1U << 0,
 	SingleCreatureMarks = 1U << 1,
 	EchoRaidVisuals = 1U << 2,
+	StoreBasePrice = 1U << 3,
+	StoreCatalogChunks = 1U << 4,
 };
 
 inline uint32_t rotateLeft(uint32_t value, uint8_t bits)

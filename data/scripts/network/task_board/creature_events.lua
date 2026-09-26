@@ -147,6 +147,10 @@ taskBoardLogin:register()
 local taskBoardLogout = CreatureEvent("TaskBoardLogout")
 
 function taskBoardLogout.onLogout(player)
+	if TaskBoardClearActionThrottle then
+		TaskBoardClearActionThrottle(player)
+	end
+
 	local taskHunting = getTaskHuntingModule()
 	if taskHunting and taskHunting.onLogout then
 		taskHunting.onLogout(player)

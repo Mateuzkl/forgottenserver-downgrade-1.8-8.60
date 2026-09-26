@@ -174,8 +174,8 @@ public:
 	uint16_t getImpactSound() const { return impactSound; }
 	void setImpactSound(uint16_t sound) { impactSound = sound; }
 	void getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDamage& damage) const;
-	int32_t calculateAugmentSpellCooldownReduction(const std::shared_ptr<Player>& player) const;
-	int32_t calculateAugmentSpellSecondaryGroupCooldownReduction(const std::shared_ptr<Player>& player) const;
+	int32_t calculateAugmentSpellCooldownReduction(const Player* player) const;
+	int32_t calculateAugmentSpellSecondaryGroupCooldownReduction(const Player* player) const;
 	int32_t calculateAugmentSpellManaCostReduction(const Player* player) const;
 
 	int32_t getRange() const { return range; }

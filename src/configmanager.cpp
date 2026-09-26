@@ -481,6 +481,8 @@ bool ConfigManager::load()
 	booleans[Boolean::ITEM_TIER_DISPLAY] = getGlobalBoolean(L, "enableItemTierDisplay", false);
 	booleans[Boolean::ITEM_UPGRADE_CLASSIFICATION] = getGlobalBoolean(L, "enableItemUpgradeClassification", false);
 	booleans[Boolean::QUICK_LOOT_ENABLED] = getGlobalBoolean(L, "enableQuickLoot", false);
+	booleans[Boolean::QUICK_LOOT_ALLOW_ORDINARY_BOSSES] =
+	    getGlobalBoolean(L, "quickLootAllowOrdinaryBosses", true);
 	booleans[Boolean::TASK_HUNTING_SYSTEM_ENABLED] = getGlobalBoolean(L, "taskHuntingSystemEnabled", false);
 	booleans[Boolean::BOUNTY_TASKS_ENABLED] = getGlobalBoolean(L, "bountyTasksEnabled", false);
 	booleans[Boolean::WEEKLY_TASKS_ENABLED] = getGlobalBoolean(L, "weeklyTasksEnabled", false);
@@ -780,6 +782,8 @@ bool ConfigManager::load()
 	integers[Integer::AUGMENT_POWERFUL_IMPACT_PERCENT] = getGlobalInteger(L, "augmentPowerfulImpactPercent", 7);
 	integers[Integer::AUGMENT_STRONG_IMPACT_PERCENT] = getGlobalInteger(L, "augmentStrongImpactPercent", 10);
 	integers[Integer::QUICK_LOOT_MAX_CORPSES] = getGlobalInteger(L, "quickLootMaxCorpses", 30);
+	integers[Integer::TASK_BOARD_ACTION_COOLDOWN_MS] =
+	    std::max<int64_t>(0, getGlobalInteger(L, "taskBoardActionCooldownMs", 150));
 	integers[Integer::ECHO_RAID_PORTAL_SPAWN_NUMERATOR] =
 	    getGlobalInteger(L, "echoRaidPortalSpawnNumerator", 100);
 	integers[Integer::ECHO_RAID_PORTAL_SPAWN_DENOMINATOR] =

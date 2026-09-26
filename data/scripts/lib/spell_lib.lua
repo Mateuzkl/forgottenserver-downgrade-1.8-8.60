@@ -596,3 +596,8 @@ function Creature:addAttributeCondition(parameters)
 
 	self:addCondition(condition)
 end
+
+function calculateBaseDamageHealing(level)
+	local step = math.floor((math.sqrt(2 * level + 2025) + 5) / 10)
+	return math.floor((level + 1000) / step) + 50 * step - 450
+end

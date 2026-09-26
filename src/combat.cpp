@@ -98,7 +98,7 @@ bool rollFatalHit(const Player* player, const CombatDamage& damage)
 		return false;
 	}
 
-	const Item* weapon = player->getWeapon();
+	const Item* weapon = player->getWeapon(true);
 	if (!weapon || weapon->getTier() == 0) {
 		return false;
 	}
@@ -137,7 +137,8 @@ static int32_t getEffectiveMagicLevel(const Player* player, CombatType_t combatT
 		return 0;
 	}
 
-	int32_t magicLevel = static_cast<int32_t>(player->getMagicLevel()) + static_cast<int32_t>(player->getSpecialMagicLevel(combatType));
+	int32_t magicLevel = static_cast<int32_t>(player->getMagicLevel()) + static_cast<int32_t>(player->getSpecialMagicLevel(combatType)) +
+	                     player->getWheelRunicMasteryBonus();
 	return std::max<int32_t>(0, magicLevel);
 }
 
@@ -319,11 +320,15 @@ CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target, std::
 		}
 	}
 
-	if (creature && g_spells && !damage.instantSpellName.empty()) {
+	if (creature) {
 		if (const auto player = std::dynamic_pointer_cast<Player>(creature->weak_from_this().lock())) {
-			if (const auto spell = g_spells->getInstantSpellByName(damage.instantSpellName)) {
-				spell->getCombatDataAugment(player, damage);
+			if (g_spells && !damage.instantSpellName.empty()) {
+				if (const auto spell = g_spells->getInstantSpellByName(damage.instantSpellName)) {
+					spell->getCombatDataAugment(player, damage);
+				}
 			}
+
+			player->applyWheelSanctuaryCombatBonus(damage, target);
 
 			if (ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
 				if (damage.primary.type == COMBAT_HEALING) {
@@ -1215,6 +1220,9 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 		const bool perfectShotBypassesBlock =
 		    damage.blockType == BLOCK_DEFENSE || damage.blockType == BLOCK_ARMOR;
 		if (fullyBlocked && (perfectShotDamage == 0 || !perfectShotBypassesBlock)) {
+			if (params.targetCallback && damage.primary.type == COMBAT_NONE && damage.secondary.type == COMBAT_NONE) {
+				params.targetCallback->onTargetCombat(caster, target);
+			}
 			return;
 		}
 		if (damage.blockType == BLOCK_NONE || perfectShotBypassesBlock) {
@@ -1280,7 +1288,8 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 				const int32_t chance = std::clamp<int32_t>(baseChance + lowBlowBonus, 0, 10000);
 				int32_t skill = std::max<int32_t>(
 				    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT)) +
-				           damage.criticalDamage + savageBonus);
+				           damage.criticalDamage + savageBonus +
+				           casterPlayer->getWheelBallisticMasteryCriticalBonus(damage.origin));
 				const int32_t roll = uniform_random(1, 10000);
 				if (skill == 0 && lowBlowBonus > 0 && roll > baseChance) {
 					skill = 5000;
@@ -1574,7 +1583,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 		    0, 10000);
 		int32_t skill = std::max<int32_t>(
 		    0, static_cast<int32_t>(casterPlayer->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT)) +
-		           damage.criticalDamage);
+		           damage.criticalDamage + casterPlayer->getWheelBallisticMasteryCriticalBonus(damage.origin));
 
 		if (chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance) {
 			criticalPrimary = std::round(damage.primary.value * (skill / 10000.));
@@ -2487,10 +2496,17 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect, nextTarget->getInstanceID());
 				if (resolvedCaster) {
 					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget, instantSpellName);
+					const bool effectOnly =
+					    damage.primary.type == COMBAT_NONE && damage.secondary.type == COMBAT_NONE;
 					bool canCombat = !self->params.aggressive ||
 					                 (resolvedCaster != nextTarget &&
 					                  Combat::canDoCombat(resolvedCaster, nextTarget) == RETURNVALUE_NOERROR);
-					if (canCombat) {
+					if (!canCombat) {
+						return;
+					}
+					if (effectOnly && self->params.targetCallback) {
+						self->params.targetCallback->onTargetCombat(resolvedCaster, nextTarget);
+					} else {
 						doTargetCombat(resolvedCaster, nextTarget, damage, self->params);
 					}
 				}

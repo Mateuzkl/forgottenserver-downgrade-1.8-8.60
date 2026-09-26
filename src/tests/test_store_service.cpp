@@ -1,5 +1,6 @@
 #include "../otpch.h"
 
+#include "../astraclient.h"
 #include "../item.h"
 #include "../networkmessage.h"
 #include "../player.h"
@@ -162,6 +163,118 @@ TEST_CASE(test_store_protocol_opcodes)
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog) == 0x01);
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::Success) == 0x02);
 	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::History) == 0x03);
+	CHECK(static_cast<uint8_t>(StoreProtocol::ResponseType::CatalogChunk) == 0x04);
+	CHECK(StoreProtocol::CatalogChunkStart == 0x01);
+	CHECK(StoreProtocol::CatalogChunkEnd == 0x02);
+	CHECK(StoreProtocol::CatalogChunkTargetSize < NetworkMessage::MAX_PROTOCOL_BODY_LENGTH);
+	CHECK(static_cast<uint8_t>(AstraClient::StoreCatalogChunks) == (1U << 4));
+
+	CHECK(StoreProtocol::shouldUseLegacyCatalog(StoreProtocol::CatalogChunkTargetSize, true));
+	CHECK(!StoreProtocol::shouldUseLegacyCatalog(StoreProtocol::CatalogChunkTargetSize + 1, true));
+	CHECK(StoreProtocol::shouldUseLegacyCatalog(StoreProtocol::CatalogChunkTargetSize + 1, false));
+	CHECK(StoreProtocol::shouldUseLegacyCatalog(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH, false));
+	CHECK(!StoreProtocol::shouldUseLegacyCatalog(
+	    static_cast<size_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH) + 1, false));
+}
+
+TEST_CASE(test_store_catalog_chunk_packet_layout)
+{
+	NetworkMessage chunk;
+	StoreProtocol::addCatalogChunkHeader(
+	    chunk, StoreProtocol::CatalogChunkStart | StoreProtocol::CatalogChunkEnd, 999, 1, 1);
+	chunk.addString("Outfits");
+	chunk.addString("store_outfits");
+	chunk.addString("Cosmetics");
+	chunk.addString("Outfit offers");
+	StoreProtocol::addCategoryHighlight(chunk, true, StoreHighlightState::New);
+	chunk.add<uint16_t>(1);
+	chunk.add<uint32_t>(70001);
+	chunk.addString("Citizen");
+	chunk.addString("");
+	StoreProtocol::addOfferPrices(chunk, true, 75, 100);
+	chunk.add<uint16_t>(128);
+	chunk.add<uint16_t>(1);
+	chunk.addString("Citizen outfit");
+	chunk.addString("outfit");
+	StoreProtocol::addOfferHighlight(chunk, true, StoreHighlightState::Sale, 200, 100);
+	chunk.addByte(1);
+	chunk.addString("store/banner.png");
+	chunk.addByte(2);
+	chunk.add<uint32_t>(70001);
+	chunk.addByte(10);
+
+	CHECK(chunk.getLength() < NetworkMessage::MAX_PROTOCOL_BODY_LENGTH);
+	CHECK(chunk.setBufferPosition(0));
+	CHECK(chunk.getByte() == StoreProtocol::ServerOpcode);
+	CHECK(chunk.getByte() == static_cast<uint8_t>(StoreProtocol::ResponseType::CatalogChunk));
+	CHECK(chunk.getByte() == (StoreProtocol::CatalogChunkStart | StoreProtocol::CatalogChunkEnd));
+	CHECK(chunk.get<uint32_t>() == 999);
+	CHECK(chunk.get<uint16_t>() == 1);
+	CHECK(chunk.get<uint16_t>() == 1);
+	CHECK(chunk.getString() == "Outfits");
+	CHECK(chunk.getString() == "store_outfits");
+	CHECK(chunk.getString() == "Cosmetics");
+	CHECK(chunk.getString() == "Outfit offers");
+	CHECK(chunk.getByte() == static_cast<uint8_t>(StoreHighlightState::New));
+	CHECK(chunk.get<uint16_t>() == 1);
+	CHECK(chunk.get<uint32_t>() == 70001);
+	CHECK(chunk.getString() == "Citizen");
+	CHECK(chunk.getString().empty());
+	CHECK(chunk.get<uint32_t>() == 75);
+	CHECK(chunk.get<uint32_t>() == 100);
+	CHECK(chunk.get<uint16_t>() == 128);
+	CHECK(chunk.get<uint16_t>() == 1);
+	CHECK(chunk.getString() == "Citizen outfit");
+	CHECK(chunk.getString() == "outfit");
+	CHECK(chunk.getByte() == static_cast<uint8_t>(StoreHighlightState::Sale));
+	CHECK(chunk.get<uint32_t>() == 200);
+	CHECK(chunk.getByte() == 1);
+	CHECK(chunk.getString() == "store/banner.png");
+	CHECK(chunk.getByte() == 2);
+	CHECK(chunk.get<uint32_t>() == 70001);
+	CHECK(chunk.getByte() == 10);
+	CHECK(chunk.getBufferPosition() == NetworkMessage::INITIAL_BUFFER_POSITION + chunk.getLength());
+}
+
+TEST_CASE(test_store_catalog_string_fallback_preserves_packet)
+{
+	NetworkMessage message;
+	message.addString(std::string(NetworkMessage::MAX_STRING_LENGTH + 1, 'x'));
+	message.addString("\xF0\x9F\x98\x80");
+	message.addString("valid");
+	message.addByte(0xAB);
+
+	CHECK(message.setBufferPosition(0));
+	CHECK(message.getString().empty());
+	CHECK(message.getString().empty());
+	CHECK(message.getString() == "valid");
+	CHECK(message.getByte() == 0xAB);
+	CHECK(message.getBufferPosition() == NetworkMessage::INITIAL_BUFFER_POSITION + message.getLength());
+}
+
+TEST_CASE(test_store_effective_and_base_price_packet_layout)
+{
+	CHECK(static_cast<uint8_t>(AstraClient::StoreBasePrice) == (1U << 3));
+	CHECK(static_cast<uint8_t>(GameFeature::AstraStoreBasePrice) == 149);
+
+	NetworkMessage legacy;
+	legacy.addByte(0xAA);
+	StoreProtocol::addOfferPrices(legacy, false, 75, 100);
+	legacy.addByte(0xBB);
+	CHECK(legacy.setBufferPosition(0));
+	CHECK(legacy.getByte() == 0xAA);
+	CHECK(legacy.get<uint32_t>() == 75);
+	CHECK(legacy.getByte() == 0xBB);
+
+	NetworkMessage enhanced;
+	enhanced.addByte(0xAA);
+	StoreProtocol::addOfferPrices(enhanced, true, 75, 100);
+	enhanced.addByte(0xBB);
+	CHECK(enhanced.setBufferPosition(0));
+	CHECK(enhanced.getByte() == 0xAA);
+	CHECK(enhanced.get<uint32_t>() == 75);
+	CHECK(enhanced.get<uint32_t>() == 100);
+	CHECK(enhanced.getByte() == 0xBB);
 }
 
 TEST_CASE(test_store_highlight_states_and_packet_layout)

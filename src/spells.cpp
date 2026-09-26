@@ -14,6 +14,7 @@
 #include "performance_metrics.h"
 #include "pugicast.h"
 #include "scriptmanager.h"
+#include "tools.h"
 #include "logger.h"
 #include <fmt/format.h>
 
@@ -22,6 +23,31 @@ extern Monsters g_monsters;
 extern LuaEnvironment g_luaEnvironment;
 
 namespace {
+// Set from wheel applyWheelBonuses (Lua); fallback when wheelSpellAugments map is empty.
+constexpr uint32_t WHEEL_SPELL_CD_STORAGE_BASE = 8600000;
+constexpr uint32_t WHEEL_SPELL_FLAT_MANA_STORAGE_BASE = 8611000;
+
+std::shared_ptr<Creature> resolveSpellAimTurnTarget(const Player* player)
+{
+	if (!player) {
+		return nullptr;
+	}
+
+	if (const auto attacked = player->getAttackedCreatureShared()) {
+		if (!attacked->isRemoved() && !attacked->isDead()) {
+			return attacked;
+		}
+	}
+
+	if (const auto followed = player->getFollowCreatureShared()) {
+		if (!followed->isRemoved() && !followed->isDead()) {
+			return followed;
+		}
+	}
+
+	return nullptr;
+}
+
 bool spellsIsMonkVocationId(uint16_t vocationId)
 {
 	return vocationId == 9 || vocationId == 10;
@@ -402,6 +428,22 @@ bool Spell::playerSpellCheck(Player* player) const
 		return false;
 	}
 
+	if (player->getStance() == STANCE_SHARPSHOOTER && spellId != 313 && getName() != "Sharpshooter") {
+		const bool augmentedSupport =
+		    ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED) &&
+		    player->getWheelSpellAugmentBonus("Sharpshooter").secondaryGroupCooldownReduction >= 8000;
+
+		const bool blockedGroup = group == SPELLGROUP_HEALING ||
+		                          (!augmentedSupport && group == SPELLGROUP_SUPPORT);
+		if (blockedGroup) {
+			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+			if (isInstant()) {
+				g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF, player->getInstanceID());
+			}
+			return false;
+		}
+	}
+
 	if ((aggressive || pzLock) && !player->hasFlag(PlayerFlag_IgnoreProtectionZone) &&
 	    player->getZone() == ZONE_PROTECTION) {
 		player->sendCancelMessage(RETURNVALUE_ACTIONNOTPERMITTEDINPROTECTIONZONE);
@@ -676,10 +718,14 @@ void Spell::getCombatDataAugment(const std::shared_ptr<Player>& player, CombatDa
 	}
 	if (wheelSystemEnabled) {
 		applyBonus(player->getWheelSpellAugmentBonus(getName()));
+		if (aggressive) {
+			player->consumeWheelFocusMasteryForCast(this);
+			player->applyWheelFocusMasteryCastMultiplier(damage);
+		}
 	}
 }
 
-int32_t Spell::calculateAugmentSpellCooldownReduction(const std::shared_ptr<Player>& player) const
+int32_t Spell::calculateAugmentSpellCooldownReduction(const Player* player) const
 {
 	const bool augmentSystemEnabled = ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	const bool wheelSystemEnabled = ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED);
@@ -699,12 +745,21 @@ int32_t Spell::calculateAugmentSpellCooldownReduction(const std::shared_ptr<Play
 		reduction = saturatingAdd(reduction, player->getProficiencySpellAugmentBonus(getId()).cooldownReduction);
 	}
 	if (wheelSystemEnabled) {
-		reduction = saturatingAdd(reduction, player->getWheelSpellAugmentBonus(getName()).cooldownReduction);
+		int32_t wheelReduction = player->getWheelSpellAugmentBonus(getName()).cooldownReduction;
+		if (wheelReduction <= 0 && spellId != 0) {
+			if (const auto stored = player->getStorageValue(WHEEL_SPELL_CD_STORAGE_BASE + spellId)) {
+				if (*stored > 0) {
+					wheelReduction = static_cast<int32_t>(
+					    std::min<int64_t>(*stored, static_cast<int64_t>(std::numeric_limits<int32_t>::max())));
+				}
+			}
+		}
+		reduction = saturatingAdd(reduction, wheelReduction);
 	}
 	return reduction;
 }
 
-int32_t Spell::calculateAugmentSpellSecondaryGroupCooldownReduction(const std::shared_ptr<Player>& player) const
+int32_t Spell::calculateAugmentSpellSecondaryGroupCooldownReduction(const Player* player) const
 {
 	const bool augmentSystemEnabled = ConfigManager::getBoolean(ConfigManager::AUGMENT_SYSTEM_ENABLED);
 	const bool wheelSystemEnabled = ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED);
@@ -762,14 +817,9 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
 	if (finishedCast) {
         if (!player->hasFlag(PlayerFlag_HasNoExhaustion)) {
             int32_t momentumReduction = 0;
-            int32_t augmentCooldownReduction = 0;
-            int32_t augmentSecondaryGroupCooldownReduction = 0;
-
-            if (const auto playerRef = std::dynamic_pointer_cast<Player>(player->weak_from_this().lock())) {
-                augmentCooldownReduction = calculateAugmentSpellCooldownReduction(playerRef);
-                augmentSecondaryGroupCooldownReduction =
-                    calculateAugmentSpellSecondaryGroupCooldownReduction(playerRef);
-            }
+            int32_t augmentCooldownReduction = calculateAugmentSpellCooldownReduction(player);
+            int32_t augmentSecondaryGroupCooldownReduction =
+                calculateAugmentSpellSecondaryGroupCooldownReduction(player);
 
             Item* helmet = player->getInventoryItem(CONST_SLOT_HEAD);
             if (helmet && helmet->getTier() > 0) {
@@ -815,6 +865,8 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
         if (aggressive) {
             player->addInFightTicks();
         }
+
+        player->tryArmWheelFocusMastery(this);
     }
 
     if (payCost) { 
@@ -822,6 +874,10 @@ void Spell::postCastSpell(Player* player, bool finishedCast /*= true*/, bool pay
 	}
 
 	if (harmony) {
+		const uint8_t consumedHarmony = player->getHarmony();
+		if (consumedHarmony > 0) {
+			player->triggerWheelSanctuary(consumedHarmony, player->getPosition());
+		}
 		player->setHarmony(0);
 	}
 }
@@ -857,7 +913,21 @@ uint32_t Spell::getManaCost(const Player* player) const
 	}
 
 	const int32_t reduction = calculateAugmentSpellManaCostReduction(player);
-	return static_cast<uint32_t>(std::lround(manaCost * ((100.0 - reduction) / 100.0)));
+	manaCost = static_cast<uint32_t>(std::lround(manaCost * ((100.0 - reduction) / 100.0)));
+
+	if (ConfigManager::getBoolean(ConfigManager::WHEEL_SYSTEM_ENABLED) && spellId != 0) {
+		if (const auto stored = player->getStorageValue(WHEEL_SPELL_FLAT_MANA_STORAGE_BASE + spellId)) {
+			if (*stored > 0) {
+				const uint32_t flatReduction = static_cast<uint32_t>(*stored);
+				if (flatReduction >= manaCost) {
+					manaCost = 0;
+				} else {
+					manaCost -= flatReduction;
+				}
+			}
+		}
+	}
+	return manaCost;
 }
 
 std::string_view InstantSpell::getScriptEventName() const { return "onCastSpell"; }
@@ -867,6 +937,8 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool fo
 	if (!playerSpellCheck(player)) {
 		return false;
 	}
+
+	player->resetWheelFocusMasteryCastMultiplier();
 
 	LuaVariant var;
 	var.instantName = getName();
@@ -987,7 +1059,20 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool fo
 		var.setString(param);
 	} else {
 		if (needDirection) {
-			var.setPosition(Spells::getCasterPosition(player, player->getDirection()));
+			Direction dir = player->getDirection();
+			const auto aimTarget = resolveSpellAimTurnTarget(player);
+			const bool aimEnabled = player->isFonticakClient() && player->isSpellAimAtTargetEnabled(spellId);
+
+			if (aimTarget && aimEnabled) {
+				dir = getDirectionTo(player->getPosition(), aimTarget->getPosition(), true);
+				if (dir == DIRECTION_NONE) {
+					dir = player->getDirection();
+				} else if (dir != player->getDirection()) {
+					g_game.internalCreatureTurn(player, dir);
+				}
+			}
+
+			var.setPosition(Spells::getCasterPosition(player, dir));
 		} else if (needPosition && to.x != 0) {
 			var.setPosition(to);
 		} else {
@@ -1171,7 +1256,10 @@ bool RuneSpell::executeUse(Player* player, const std::shared_ptr<Item>& item, co
 		var.setPosition(toPosition);
 	}
 
+	player->tryWheelRunicMastery(this);
+
 	if (!internalCastSpell(player, var, isHotkey)) {
+		player->clearWheelRunicMasteryBonus();
 		return false;
 	}
 
@@ -1191,6 +1279,7 @@ bool RuneSpell::executeUse(Player* player, const std::shared_ptr<Item>& item, co
 		int32_t newCount = std::max<int32_t>(0, item->getItemCount() - 1);
 		g_game.transformItem(item.get(), item->getID(), newCount);
 	}
+	player->clearWheelRunicMasteryBonus();
 	return true;
 }
 

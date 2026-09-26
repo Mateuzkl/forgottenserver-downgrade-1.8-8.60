@@ -43,9 +43,12 @@
 #include <limits>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+
+#include <simdutf.h>
 
 uint32_t ProtocolGame::spectatorId = 1;
 std::set<std::string> ProtocolGame::spectatorNames;
@@ -645,6 +648,11 @@ bool ProtocolGame::shouldSendItemTierData() const
 	return shouldSendItemTierByte() || shouldSendThingUpgradeClassification();
 }
 
+bool ProtocolGame::usesExtendedSpellIds() const
+{
+	return isAstraClient || isFonticakClient || getVersion() >= 1300;
+}
+
 void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem)
 {
 	if (CharacterBazaar::isPlayerOnActiveAuction(characterId)) {
@@ -1163,6 +1171,10 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    (capabilities & AstraClient::SingleCreatureMarks) != 0;
 					supportsAstraEchoRaidVisuals =
 					    supportsAstraSingleCreatureMarks && (capabilities & AstraClient::EchoRaidVisuals) != 0;
+					supportsAstraStoreBasePrice =
+					    (capabilities & AstraClient::StoreBasePrice) != 0;
+					supportsAstraStoreCatalogChunks =
+					    (capabilities & AstraClient::StoreCatalogChunks) != 0;
 				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
@@ -1731,6 +1743,10 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			if (isAstraClient || isFonticakClient) {
 				sendBlessingWindow();
 			}
+			break;
+
+		case 0xC8:
+			parseSelectSpellAim(msg);
 			break;
 
 		case 0xC9: /* update tile */
@@ -2718,6 +2734,42 @@ void ProtocolGame::parseLookInBattleList(NetworkMessage& msg)
 	g_game.playerLookInBattleList(player->getID(), creatureId);
 }
 
+void ProtocolGame::parseSelectSpellAim(NetworkMessage& msg)
+{
+	if (!player) {
+		return;
+	}
+
+	if (getUnreadBytes(msg) < 1) {
+		return;
+	}
+
+	const uint8_t spellListSize = msg.getByte();
+	const size_t entriesSize = static_cast<size_t>(spellListSize) * 3;
+	if (getUnreadBytes(msg) < entriesSize) {
+		return;
+	}
+
+	std::unordered_map<uint16_t, uint8_t> spellAimUpdates;
+	for (uint8_t i = 0; i < spellListSize; ++i) {
+		const uint16_t spellId = msg.get<uint16_t>();
+		const uint8_t spellAim = msg.getByte();
+		spellAimUpdates[spellId] = spellAim;
+	}
+
+	if (msg.isOverrun()) {
+		return;
+	}
+
+	if (!isFonticakClient) {
+		return;
+	}
+
+	for (const auto& [spellId, spellAim] : spellAimUpdates) {
+		player->setSpellAimAtTargetEnabled(spellId, spellAim);
+	}
+}
+
 void ProtocolGame::parseSay(NetworkMessage& msg)
 {
 	std::string receiver;
@@ -3336,8 +3388,8 @@ void ProtocolGame::sendBasicData()
 	// prey - OTC client expects 1 byte for prey status when GamePrey feature is enabled
 	msg.addByte(0x00);
 
-	// Astra/Fonticak always read U16 spell ids (GameUshortSpell on 8.60 OTC).
-	const bool usesU16SpellIds = isAstraClient || isFonticakClient || getVersion() >= 1300;
+	// AstraClient and Fonticak read U16 spell ids when GameUshortSpell is enabled.
+	const bool usesU16SpellIds = usesExtendedSpellIds();
 	constexpr uint16_t maxU8SpellId = std::numeric_limits<uint8_t>::max();
 
 	std::vector<uint16_t> knownSpells;
@@ -3750,12 +3802,59 @@ void ProtocolGame::sendShop(const ShopInfoList& itemList)
 	NetworkMessage msg;
 	msg.addByte(0x7A);
 
-	uint16_t itemsToSend = std::min<size_t>(itemList.size(), std::numeric_limits<uint16_t>::max());
-	msg.addByte(itemsToSend);
+	constexpr size_t maxPayloadBytes =
+		NetworkMessage::MAX_BODY_LENGTH > (NetworkMessage::INITIAL_BUFFER_POSITION + 1)
+			? (NetworkMessage::MAX_BODY_LENGTH - NetworkMessage::INITIAL_BUFFER_POSITION - 1)
+			: 0;
 
-	uint16_t i = 0;
-	for (auto it = itemList.begin(); i < itemsToSend; ++it, ++i) {
-		AddShopItem(msg, *it);
+	if (isAstraClient) {
+		const size_t maxCount = std::min<size_t>(itemList.size(), std::numeric_limits<uint16_t>::max());
+		uint16_t itemsToSend = 0;
+		size_t currentBytes = sizeof(uint8_t) + sizeof(uint16_t); // 0x7A opcode + uint16 count
+
+		for (const auto& item : itemList) {
+			if (itemsToSend >= maxCount) {
+				break;
+			}
+			const size_t itemBytes = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint16_t) + item.realName.size() +
+			                         sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+			if (currentBytes + itemBytes > maxPayloadBytes) {
+				break;
+			}
+			currentBytes += itemBytes;
+			++itemsToSend;
+		}
+
+		msg.add<uint16_t>(itemsToSend);
+
+		uint16_t written = 0;
+		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
+			AddShopItem(msg, *it);
+		}
+	} else {
+		const size_t maxCount = std::min<size_t>(itemList.size(), std::numeric_limits<uint8_t>::max());
+		uint8_t itemsToSend = 0;
+		size_t currentBytes = sizeof(uint8_t) + sizeof(uint8_t); // 0x7A opcode + uint8 count
+
+		for (const auto& item : itemList) {
+			if (itemsToSend >= maxCount) {
+				break;
+			}
+			const size_t itemBytes = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint16_t) + item.realName.size() +
+			                         sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+			if (currentBytes + itemBytes > maxPayloadBytes) {
+				break;
+			}
+			currentBytes += itemBytes;
+			++itemsToSend;
+		}
+
+		msg.addByte(itemsToSend);
+
+		uint8_t written = 0;
+		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
+			AddShopItem(msg, *it);
+		}
 	}
 
 	writeToOutputBuffer(msg);
@@ -4248,6 +4347,7 @@ void ProtocolGame::sendStoreCatalog()
 		const StoreOffer* offer;
 		uint16_t displayId;
 		uint32_t price;
+		uint32_t basePrice;
 		StoreHighlightState state;
 		uint32_t validUntilTimestamp;
 	};
@@ -4319,6 +4419,7 @@ void ProtocolGame::sendStoreCatalog()
 				    &offer,
 				    displayId,
 				    dailyOffer ? dailyOffer->price : offer.price,
+				    offer.price,
 				    dailyOffer ? dailyOffer->state : offer.state,
 				    dailyOffer ? dailyOffer->validUntilTimestamp : offer.saleValidUntilTimestamp,
 				});
@@ -4358,13 +4459,81 @@ void ProtocolGame::sendStoreCatalog()
 		}
 	}
 
-	NetworkMessage msg;
-	msg.addByte(StoreProtocol::ServerOpcode);
-	msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog));
-	msg.add<uint32_t>(coins);
-	msg.add<uint16_t>(static_cast<uint16_t>(visibleCategories.size()));
+	const auto banners = catalog->banners();
+	if (visibleCategories.size() > std::numeric_limits<uint16_t>::max() ||
+	    banners.size() > std::numeric_limits<uint8_t>::max()) {
+		LOG_ERROR("[StoreCatalog] Catalog category or banner count exceeds the wire format.");
+		sendStoreError("Store catalog contains too many categories or banners.");
+		return;
+	}
 
-	for (const auto& fcat : visibleCategories) {
+	const auto encodedStoreStringLength = [](std::string_view value) -> std::optional<size_t> {
+		if (!simdutf::validate_utf8(value.data(), value.size())) {
+			return std::nullopt;
+		}
+		const size_t latin1Length = simdutf::latin1_length_from_utf8(value.data(), value.size());
+		if (latin1Length > NetworkMessage::MAX_STRING_LENGTH) {
+			return std::nullopt;
+		}
+		if (value.empty()) {
+			return 0;
+		}
+		std::string converted(latin1Length, '\0');
+		if (simdutf::convert_utf8_to_latin1(value.data(), value.size(), converted.data()) != latin1Length) {
+			return std::nullopt;
+		}
+		return latin1Length;
+	};
+	const bool usesEmptyStringFallback = std::any_of(
+	    visibleCategories.begin(), visibleCategories.end(), [&](const FilteredCategory& fcat) {
+		    if (!encodedStoreStringLength(fcat.category->name) || !encodedStoreStringLength(fcat.category->icon) ||
+		        !encodedStoreStringLength(fcat.category->parent) ||
+		        !encodedStoreStringLength(fcat.category->description)) {
+			    return true;
+		    }
+		    return std::any_of(fcat.offers.begin(), fcat.offers.end(), [&](const FilteredOffer& fo) {
+			    return !encodedStoreStringLength(fo.offer->name) || !encodedStoreStringLength(fo.offer->icon) ||
+			           !encodedStoreStringLength(fo.offer->description) ||
+			           !encodedStoreStringLength(storeOfferTypeToString(fo.offer->type));
+		    });
+	    }) ||
+	    std::any_of(banners.begin(), banners.end(),
+	                [&](const auto& banner) { return !encodedStoreStringLength(banner.image); });
+	if (usesEmptyStringFallback) {
+		LOG_WARN("[StoreCatalog] One or more text fields cannot be encoded and will be sent empty.");
+	}
+
+	const auto stringWireSize = [&](std::string_view value) {
+		return sizeof(uint16_t) + encodedStoreStringLength(value).value_or(0);
+	};
+	const auto categoryHeaderWireSize = [&](const FilteredCategory& fcat) {
+		return stringWireSize(fcat.category->name) + stringWireSize(fcat.category->icon) +
+		       stringWireSize(fcat.category->parent) + stringWireSize(fcat.category->description) +
+		       (sendHighlights ? sizeof(uint8_t) : 0) + sizeof(uint16_t);
+	};
+	const auto offerWireSize = [&](const FilteredOffer& fo) {
+		size_t size = sizeof(uint32_t) + stringWireSize(fo.offer->name) + stringWireSize(fo.offer->icon) +
+		              sizeof(uint32_t) + (supportsAstraStoreBasePrice ? sizeof(uint32_t) : 0) + sizeof(uint16_t) * 2 +
+		              stringWireSize(fo.offer->description) + stringWireSize(storeOfferTypeToString(fo.offer->type));
+		if (sendHighlights) {
+			const auto state = StoreProtocol::effectiveHighlightState(fo.state, fo.validUntilTimestamp, nowTimestamp);
+			size += sizeof(uint8_t);
+			if (storeHighlightHasExpiration(state)) {
+				size += sizeof(uint32_t);
+			}
+		}
+		return size;
+	};
+	const auto bannersWireSize = [&]() {
+		size_t size = sizeof(uint8_t) + sizeof(uint8_t);
+		for (const auto& banner : banners) {
+			size += stringWireSize(banner.image) + sizeof(uint8_t) + sizeof(uint32_t);
+		}
+		return size;
+	};
+
+	const auto addCategoryPart = [&](NetworkMessage& msg, const FilteredCategory& fcat, size_t firstOffer,
+	                                 size_t offerCount) {
 		msg.addString(fcat.category->name);
 		msg.addString(fcat.category->icon);
 		msg.addString(fcat.category->parent);
@@ -4375,32 +4544,151 @@ void ProtocolGame::sendStoreCatalog()
 			categoryState = stateIt->second;
 		}
 		StoreProtocol::addCategoryHighlight(msg, sendHighlights, categoryState);
-		msg.add<uint16_t>(static_cast<uint16_t>(fcat.offers.size()));
+		msg.add<uint16_t>(static_cast<uint16_t>(offerCount));
 
-		for (const auto& fo : fcat.offers) {
+		for (size_t offerIndex = firstOffer; offerIndex < firstOffer + offerCount; ++offerIndex) {
+			const auto& fo = fcat.offers[offerIndex];
 			msg.add<uint32_t>(fo.offer->id);
 			msg.addString(fo.offer->name);
 			msg.addString(fo.offer->icon);
-			msg.add<uint32_t>(fo.price);
+			// The negotiated Astra layout carries both values so the client
+			// never has to reconstruct the original price from a percentage.
+			StoreProtocol::addOfferPrices(msg, supportsAstraStoreBasePrice, fo.price, fo.basePrice);
 			msg.add<uint16_t>(fo.displayId);
 			msg.add<uint16_t>(fo.offer->count);
 			msg.addString(fo.offer->description);
 			msg.addString(storeOfferTypeToString(fo.offer->type));
-			StoreProtocol::addOfferHighlight(msg, sendHighlights, fo.state,
-			                                 fo.validUntilTimestamp, nowTimestamp);
+			StoreProtocol::addOfferHighlight(msg, sendHighlights, fo.state, fo.validUntilTimestamp, nowTimestamp);
+		}
+	};
+
+	const auto addBanners = [&](NetworkMessage& msg) {
+		msg.addByte(static_cast<uint8_t>(banners.size()));
+		for (const auto& banner : banners) {
+			msg.addString(banner.image);
+			msg.addByte(banner.action);
+			msg.add<uint32_t>(banner.target);
+		}
+		msg.addByte(catalog->bannerDelay());
+	};
+
+	constexpr size_t legacyHeaderSize = sizeof(uint8_t) * 2 + sizeof(uint32_t) + sizeof(uint16_t);
+	size_t estimatedLegacySize = legacyHeaderSize + bannersWireSize();
+	size_t visibleOfferCount = 0;
+	for (const auto& fcat : visibleCategories) {
+		estimatedLegacySize += categoryHeaderWireSize(fcat);
+		for (const auto& fo : fcat.offers) {
+			estimatedLegacySize += offerWireSize(fo);
+			++visibleOfferCount;
 		}
 	}
 
-	const auto banners = catalog->banners();
-	msg.addByte(static_cast<uint8_t>(banners.size()));
-	for (const auto& banner : banners) {
-		msg.addString(banner.image);
-		msg.addByte(banner.action);
-		msg.add<uint32_t>(banner.target);
+	if (StoreProtocol::shouldUseLegacyCatalog(estimatedLegacySize, supportsAstraStoreCatalogChunks)) {
+		NetworkMessage msg;
+		msg.addByte(StoreProtocol::ServerOpcode);
+		msg.addByte(static_cast<uint8_t>(StoreProtocol::ResponseType::Catalog));
+		msg.add<uint32_t>(coins);
+		msg.add<uint16_t>(static_cast<uint16_t>(visibleCategories.size()));
+		for (const auto& fcat : visibleCategories) {
+			addCategoryPart(msg, fcat, 0, fcat.offers.size());
+		}
+		addBanners(msg);
+		writeToOutputBuffer(msg);
+		return;
 	}
-	msg.addByte(catalog->bannerDelay());
+	if (!supportsAstraStoreCatalogChunks) {
+		LOG_WARN(
+		    fmt::format("[StoreCatalog] Refusing to send an estimated {}-byte catalog to a client "
+		                "without negotiated catalog chunk support.",
+		                estimatedLegacySize));
+		sendStoreError("This Store catalog requires an updated AstraClient.");
+		return;
+	}
 
-	writeToOutputBuffer(msg);
+	struct CategoryPart
+	{
+		const FilteredCategory* category = nullptr;
+		size_t firstOffer = 0;
+		size_t offerCount = 0;
+	};
+	struct CatalogChunk
+	{
+		std::vector<CategoryPart> parts;
+		size_t estimatedSize = 0;
+	};
+
+	constexpr size_t chunkHeaderSize = sizeof(uint8_t) * 3 + sizeof(uint32_t) + sizeof(uint16_t) * 2;
+	std::vector<CatalogChunk> chunks(1, CatalogChunk{{}, chunkHeaderSize});
+	for (const auto& fcat : visibleCategories) {
+		const size_t categorySize = categoryHeaderWireSize(fcat);
+		if (fcat.offers.empty()) {
+			if (!chunks.back().parts.empty() &&
+			    chunks.back().estimatedSize + categorySize > StoreProtocol::CatalogChunkTargetSize) {
+				chunks.push_back(CatalogChunk{{}, chunkHeaderSize});
+			}
+			chunks.back().parts.push_back(CategoryPart{&fcat, 0, 0});
+			chunks.back().estimatedSize += categorySize;
+			continue;
+		}
+
+		size_t offerIndex = 0;
+		while (offerIndex < fcat.offers.size()) {
+			const size_t firstOfferSize = offerWireSize(fcat.offers[offerIndex]);
+			if (!chunks.back().parts.empty() &&
+			    chunks.back().estimatedSize + categorySize + firstOfferSize > StoreProtocol::CatalogChunkTargetSize) {
+				chunks.push_back(CatalogChunk{{}, chunkHeaderSize});
+			}
+
+			CategoryPart part{&fcat, offerIndex, 0};
+			chunks.back().estimatedSize += categorySize;
+			while (offerIndex < fcat.offers.size()) {
+				const size_t size = offerWireSize(fcat.offers[offerIndex]);
+				if (part.offerCount > 0 && chunks.back().estimatedSize + size > StoreProtocol::CatalogChunkTargetSize) {
+					break;
+				}
+				chunks.back().estimatedSize += size;
+				++part.offerCount;
+				++offerIndex;
+			}
+			chunks.back().parts.push_back(part);
+			if (offerIndex < fcat.offers.size()) {
+				chunks.push_back(CatalogChunk{{}, chunkHeaderSize});
+			}
+		}
+	}
+
+	if (chunks.back().estimatedSize + bannersWireSize() > StoreProtocol::CatalogChunkTargetSize) {
+		chunks.push_back(CatalogChunk{{}, chunkHeaderSize});
+	}
+	chunks.back().estimatedSize += bannersWireSize();
+
+	if (std::any_of(chunks.begin(), chunks.end(), [](const CatalogChunk& chunk) {
+		    return chunk.estimatedSize > NetworkMessage::MAX_PROTOCOL_BODY_LENGTH;
+	    })) {
+		LOG_ERROR(fmt::format("[StoreCatalog] A catalog chunk exceeds the protocol limit ({} bytes).",
+		                      static_cast<size_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH)));
+		sendStoreError("Store catalog contains an entry that is too large.");
+		return;
+	}
+
+	for (size_t chunkIndex = 0; chunkIndex < chunks.size(); ++chunkIndex) {
+		const bool first = chunkIndex == 0;
+		const bool last = chunkIndex + 1 == chunks.size();
+		NetworkMessage msg;
+		StoreProtocol::addCatalogChunkHeader(
+		    msg, (first ? StoreProtocol::CatalogChunkStart : 0) | (last ? StoreProtocol::CatalogChunkEnd : 0), coins,
+		    static_cast<uint16_t>(visibleCategories.size()), static_cast<uint16_t>(chunks[chunkIndex].parts.size()));
+		for (const auto& part : chunks[chunkIndex].parts) {
+			addCategoryPart(msg, *part.category, part.firstOffer, part.offerCount);
+		}
+		if (last) {
+			addBanners(msg);
+		}
+		writeToOutputBuffer(msg);
+	}
+
+	LOG_DEBUG(fmt::format("[StoreCatalog] Sent {} offers in {} chunks (estimated {} bytes).", visibleOfferCount,
+	                      chunks.size(), estimatedLegacySize));
 }
 
 void ProtocolGame::sendStoreError(std::string_view message)
@@ -5606,6 +5894,8 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	msg.addPosition(position);
 	msg.add<uint16_t>(itemId);
 	msg.addByte(stackPos);
+	// Trailing podium flags layout contract (matches AstraClient protocol.lua and parseSetMonsterPodium):
+	// U8 direction, U8 podiumVisible, U8 monsterVisible
 	msg.addByte(static_cast<uint8_t>(getAttribute("LookDirection", DIRECTION_SOUTH)));
 	msg.addByte(static_cast<uint8_t>(getAttribute("PodiumVisible", 1) != 0));
 	msg.addByte(static_cast<uint8_t>(getAttribute("MonsterVisible", currentRaceId != 0) != 0));
@@ -5650,14 +5940,14 @@ void ProtocolGame::sendSpellCooldown(uint16_t spellId, uint32_t time)
 		return;
 	}
 
-	const bool usesU16SpellIds = isAstraClient || isFonticakClient || getVersion() >= 1300;
-	if (!usesU16SpellIds && spellId > std::numeric_limits<uint8_t>::max()) {
+	const bool wideSpellIds = usesExtendedSpellIds();
+	if (!wideSpellIds && spellId > std::numeric_limits<uint8_t>::max()) {
 		return;
 	}
 
 	NetworkMessage msg;
 	msg.addByte(0xA4);
-	if (usesU16SpellIds) {
+	if (wideSpellIds) {
 		msg.add<uint16_t>(spellId);
 	} else {
 		msg.addByte(static_cast<uint8_t>(spellId));
@@ -6321,6 +6611,10 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraCreatureIcons] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
+		features[GameFeature::AstraShopCountU16] = true;
+		if (supportsAstraStoreBasePrice) {
+			features[GameFeature::AstraStoreBasePrice] = true;
+		}
 		if (supportsAstraSingleCreatureMarks) {
 			features[GameFeature::AstraSingleCreatureMarks] = true;
 		}

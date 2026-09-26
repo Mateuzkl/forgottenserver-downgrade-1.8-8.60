@@ -32,6 +32,7 @@ function onChain(creature, target)
 		duration = duration + (player:getWheelSpellAdditionalDuration("Divine Dazzle") * 1000)
 	end
 	if target and target:isMonster() then
+		doChallengeCreature(player, target:getMonster(), true)
 		target:changeTargetDistance(1, duration)
 	end
 	return true

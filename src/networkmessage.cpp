@@ -48,7 +48,7 @@ void NetworkMessage::addString(std::string_view value)
 	}
 
 	const auto stringLen = simdutf::latin1_length_from_utf8(value.data(), value.size());
-	if (stringLen > 8192 || !canAdd(stringLen + sizeof(uint16_t))) {
+	if (stringLen > MAX_STRING_LENGTH || !canAdd(stringLen + sizeof(uint16_t))) {
 		add<uint16_t>(0);
 		return;
 	}

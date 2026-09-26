@@ -1,28 +1,104 @@
-local condition = Condition(CONDITION_ATTRIBUTES)
-condition:setParameter(CONDITION_PARAM_SUBID, AttrSubId_Sharpshooter)
-condition:setParameter(CONDITION_PARAM_TICKS, -1)
-condition:setParameter(CONDITION_PARAM_SKILL_DISTANCEPERCENT, 140)
-condition:setParameter(CONDITION_PARAM_BUFF_SPELL, true)
+local SHARPSHOOTER_GRADE_II_DISTANCE = 5
+local SHARPSHOOTER_FLAT_SUBID = 86063
 
 local combat = Combat()
 combat:setParameter(COMBAT_PARAM_EFFECT, 5)
 combat:setParameter(COMBAT_PARAM_AGGRESSIVE, false)
-combat:addCondition(condition)
+
+local function getSharpshooterGrade(player)
+	if not player.upgradeSpellsWOD then
+		return 0
+	end
+	return player:upgradeSpellsWOD("Sharpshooter")
+end
+
+local function isSharpshooterActive(player)
+	return player:getCondition(CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, AttrSubId_Sharpshooter) ~= nil
+end
+
+local function buildSharpshooterPercentCondition()
+	local condition = Condition(CONDITION_ATTRIBUTES)
+	condition:setParameter(CONDITION_PARAM_SUBID, AttrSubId_Sharpshooter)
+	condition:setParameter(CONDITION_PARAM_TICKS, -1)
+	condition:setParameter(CONDITION_PARAM_SKILL_DISTANCEPERCENT, 140)
+	condition:setParameter(CONDITION_PARAM_BUFF_SPELL, true)
+	return condition
+end
+
+local function buildSharpshooterFlatCondition()
+	local condition = Condition(CONDITION_ATTRIBUTES)
+	condition:setParameter(CONDITION_PARAM_SUBID, SHARPSHOOTER_FLAT_SUBID)
+	condition:setParameter(CONDITION_PARAM_TICKS, -1)
+	condition:setParameter(CONDITION_PARAM_SKILL_DISTANCE, SHARPSHOOTER_GRADE_II_DISTANCE)
+	condition:setParameter(CONDITION_PARAM_BUFF_SPELL, true)
+	return condition
+end
+
+local function removeSharpshooterConditions(player)
+	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, AttrSubId_Sharpshooter)
+	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, SHARPSHOOTER_FLAT_SUBID)
+end
+
+local function deactivateSharpshooter(player)
+	removeSharpshooterConditions(player)
+	if player:getStance() == STANCE_SHARPSHOOTER then
+		player:setStance(STANCE_NONE)
+	end
+	player:getPosition():sendMagicEffect(CONST_ME_POFF)
+end
+
+local function applySharpshooterBuff(player, creature, variant)
+	local grade = getSharpshooterGrade(player)
+
+	if player:getStance() == STANCE_SHARPSHOOTER then
+		player:setStance(STANCE_NONE)
+	end
+
+	removeSharpshooterConditions(player)
+	combat:clearConditions()
+	combat:addCondition(buildSharpshooterPercentCondition())
+	if grade >= 2 then
+		combat:addCondition(buildSharpshooterFlatCondition())
+	end
+	player:setStance(STANCE_SHARPSHOOTER)
+
+	if not combat:execute(creature, variant) then
+		removeSharpshooterConditions(player)
+		player:setStance(STANCE_NONE)
+		return false
+	end
+
+	return true
+end
 
 local spell = Spell("instant")
 
 function spell.onCastSpell(creature, variant)
 	local player = creature:getPlayer()
-	if player and player:getStance() == STANCE_SHARPSHOOTER then
-		player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_COMBAT, AttrSubId_Sharpshooter)
-		player:setStance(STANCE_NONE)
-		player:getPosition():sendMagicEffect(CONST_ME_POFF)
+	if not player then
+		return false
+	end
+
+	if isSharpshooterActive(player) then
+		deactivateSharpshooter(player)
 		return true
 	end
-	if player then
-		player:setStance(STANCE_SHARPSHOOTER)
+
+	return applySharpshooterBuff(player, creature, variant)
+end
+
+SharpshooterWheel = SharpshooterWheel or {}
+
+function SharpshooterWheel.refreshActive(player)
+	if not player or not isSharpshooterActive(player) then
+		return
 	end
-	return combat:execute(creature, variant)
+
+	removeSharpshooterConditions(player)
+	player:addCondition(buildSharpshooterPercentCondition())
+	if getSharpshooterGrade(player) >= 2 then
+		player:addCondition(buildSharpshooterFlatCondition())
+	end
 end
 
 spell:name("Sharpshooter")
