@@ -6,6 +6,7 @@
 #include "outputmessage.h"
 
 #include "lockfree.h"
+#include "performance_metrics.h"
 #include "protocol.h"
 #include "scheduler.h"
 
@@ -18,6 +19,7 @@ using namespace std::chrono_literals;
 // Inline constexpr constants avoid ODR issues and are friendly to headers/optimizations
 inline constexpr uint16_t OUTPUTMESSAGE_FREE_LIST_CAPACITY = 2048;
 inline constexpr auto AUTOSEND_DELAY_DEFAULT = 10ms;
+struct OutputMessageAllocatorStatsTag {};
 
 } // namespace
 
@@ -93,7 +95,16 @@ OutputMessage_ptr OutputMessagePool::getOutputMessage()
 	 *
 	 * Pool capacity: 2048 messages
 	 */
-	return std::allocate_shared<OutputMessage>(LockfreePoolingAllocator<void, OUTPUTMESSAGE_FREE_LIST_CAPACITY>());
+	g_performanceMetrics.recordOutboundPoolGet();
+	return std::allocate_shared<OutputMessage>(
+		LockfreePoolingAllocator<void, OUTPUTMESSAGE_FREE_LIST_CAPACITY, OutputMessageAllocatorStatsTag>());
+}
+
+OutputMessagePool::AllocationStats OutputMessagePool::takeAllocationStats() noexcept
+{
+	const auto stats = LockfreePoolingAllocator<
+		void, OUTPUTMESSAGE_FREE_LIST_CAPACITY, OutputMessageAllocatorStatsTag>::takeAllocationStats();
+	return {stats.fresh, stats.reused};
 }
 
 void OutputMessagePool::prewarmPool(size_t count)

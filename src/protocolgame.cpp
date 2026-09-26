@@ -27,6 +27,8 @@
 #include "outputmessage.h"
 #include "player.h"
 #include "protocolgame.h"
+
+#include "performance_metrics.h"
 #include "protocollogin.h"
 #include "protocolspectator.h"
 #include "imbuement.h"
@@ -1349,6 +1351,12 @@ void ProtocolGame::dispatchCancelMessage(ReturnValue message) const
 
 void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 {
+	const auto length = msg.getLength();
+	const auto* buffer = msg.getBuffer();
+	// NetworkMessage::position is the append cursor; outbound payloads always
+	// begin at the reserved eight-byte header area.
+	const auto opcode = length > 0 ? buffer[NetworkMessage::INITIAL_BUFFER_POSITION] : 0;
+	g_performanceMetrics.recordOutboundLogical(opcode, length);
 	auto out = getOutputBuffer(msg.getLength());
 	out->append(msg);
 }

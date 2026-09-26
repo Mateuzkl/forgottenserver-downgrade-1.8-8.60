@@ -6,6 +6,7 @@
 #include "protocol.h"
 
 #include "outputmessage.h"
+#include "performance_metrics.h"
 #include "rsa.h"
 #include "tasks.h"
 #include "xtea.h"
@@ -46,6 +47,8 @@ bool XTEA_decrypt(NetworkMessage& msg, const xtea::round_keys& key)
 
 void Protocol::onSendMessage(const OutputMessage_ptr& msg) const
 {
+	PerformanceScope scope(PerformanceMetric::OutboundOnSendMessage);
+	const auto bytesBefore = msg->getLength();
 	if (!rawMessages) {
 		msg->writeMessageLength();
 
@@ -53,6 +56,18 @@ void Protocol::onSendMessage(const OutputMessage_ptr& msg) const
 			XTEA_encrypt(*msg, key);
 			msg->addCryptoHeader(checksumEnabled);
 		}
+	}
+	g_performanceMetrics.recordOutboundWrite(bytesBefore, msg->getLength());
+}
+
+void Protocol::send(OutputMessage_ptr msg) const
+{
+	if (!msg) {
+		return;
+	}
+	g_performanceMetrics.recordOutboundBuffer(msg->getLength());
+	if (auto connection = getConnection()) {
+		connection->send(msg);
 	}
 }
 

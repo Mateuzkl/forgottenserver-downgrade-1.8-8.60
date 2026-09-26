@@ -6,8 +6,10 @@
 #include "performance_metrics.h"
 
 #include "logger.h"
+#include "outputmessage.h"
 
 #include <bit>
+#include <utility>
 
 PerformanceMetrics g_performanceMetrics;
 
@@ -26,6 +28,14 @@ constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Co
 	"Combat::doCombat", "Combat::doAreaCombat", "Combat::area.buildTiles",
 	"Combat::area.prepareDamage", "Combat::area.collectSpectators", "Combat::area.processTiles+collectTargets",
 	"Combat::area.applyTargets", "Creature::executeConditions",
+	"Protocol::outboundQueueLatency", "Protocol::onSendMessage", "Connection::outboundWriteLatency",
+};
+
+constexpr std::array<std::string_view, static_cast<size_t>(OutboundCategory::Count)> OUTBOUND_CATEGORY_NAMES = {
+	"other", "creature_movement", "add_creature", "remove_creature", "creature_health",
+	"creature_outfit", "creature_speed", "magic_effect", "distance_effect", "animated_text",
+	"player_stats", "player_skills", "inventory", "tile_add", "tile_update", "tile_remove",
+	"map_description", "floor_change", "combat", "chat_text", "ping", "login_initial_state",
 };
 
 constexpr std::array<std::string_view, static_cast<size_t>(MonsterIdleMetric::Count)> MONSTER_IDLE_METRIC_NAMES = {
@@ -83,6 +93,9 @@ void updateMaximum(std::atomic<uint64_t>& maximum, uint64_t value) noexcept
 
 void PerformanceMetrics::setEnabled(bool value) noexcept
 {
+	if (value) {
+		(void)OutputMessagePool::takeAllocationStats();
+	}
 	enabled.store(value, std::memory_order_relaxed);
 	if (value) {
 		const auto next = std::chrono::steady_clock::now() + REPORT_INTERVAL;
@@ -158,6 +171,113 @@ void PerformanceMetrics::recordNetworkConnectionCount(size_t current) noexcept
 	}
 	network.connectionsCurrent.store(current, std::memory_order_relaxed);
 	updateMaximum(network.connectionsMaximum, current);
+}
+
+namespace {
+OutboundCategory classifyOutboundOpcode(uint8_t opcode) noexcept
+{
+	switch (opcode) {
+		case 0x64: return OutboundCategory::MapDescription;
+		case 0x65:
+		case 0x66: return OutboundCategory::FloorChange;
+		case 0x67: return OutboundCategory::TileAdd;
+		case 0x68: return OutboundCategory::TileUpdate;
+		case 0x69: return OutboundCategory::TileUpdate;
+		case 0x6A: return OutboundCategory::AddCreature;
+		case 0x6B: return OutboundCategory::TileUpdate;
+		case 0x6C: return OutboundCategory::TileRemove;
+		case 0x6D: return OutboundCategory::CreatureMovement;
+		case 0x78:
+		case 0x79:
+		case 0xF5: return OutboundCategory::Inventory;
+		case 0x8C: return OutboundCategory::CreatureHealth;
+		case 0x8E: return OutboundCategory::CreatureOutfit;
+		case 0x8F: return OutboundCategory::CreatureSpeed;
+		case 0x83: return OutboundCategory::MagicEffect;
+		case 0x85: return OutboundCategory::DistanceEffect;
+		case 0x84: return OutboundCategory::AnimatedText;
+		case 0xAA: return OutboundCategory::ChatText;
+		case 0x1E:
+		case 0x1F: return OutboundCategory::Ping;
+		case 0x28:
+		case 0x32: return OutboundCategory::Combat;
+		case 0xA0: return OutboundCategory::PlayerStats;
+		case 0xA1: return OutboundCategory::PlayerSkills;
+		case 0x0A: return OutboundCategory::LoginInitialState;
+		default: return OutboundCategory::Other;
+	}
+}
+} // namespace
+
+void PerformanceMetrics::recordOutboundLogical(uint8_t opcode, uint64_t bytes) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	++outbound.logicalMessages;
+	outbound.logicalBytes += bytes;
+	const auto category = static_cast<size_t>(classifyOutboundOpcode(opcode));
+	++outbound.categoryCalls[category];
+	outbound.categoryBytes[category] += bytes;
+}
+
+void PerformanceMetrics::recordOutboundBuffer(uint64_t bytes) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	outbound.buffersFlushed.fetch_add(1, std::memory_order_relaxed);
+	outbound.bufferBytes.fetch_add(bytes, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordOutboundQueued(uint64_t bytes, size_t pending) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	outbound.queuedMessages.fetch_add(1, std::memory_order_relaxed);
+	outbound.queuedBytes.fetch_add(bytes, std::memory_order_relaxed);
+	outbound.pendingCurrent.store(pending, std::memory_order_relaxed);
+	updateMaximum(outbound.pendingMaximum, pending);
+}
+
+void PerformanceMetrics::recordOutboundPending(size_t pending) noexcept
+{
+	if (isEnabled()) {
+		outbound.pendingCurrent.store(pending, std::memory_order_relaxed);
+	}
+}
+
+void PerformanceMetrics::recordOutboundWrite(uint64_t bytesBefore, uint64_t bytesAfter) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	outbound.preEncryptionBytes.fetch_add(bytesBefore, std::memory_order_relaxed);
+	outbound.wireBytes.fetch_add(bytesAfter, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordOutboundWriteStarted() noexcept
+{
+	if (isEnabled()) {
+		outbound.asyncWritesStarted.fetch_add(1, std::memory_order_relaxed);
+	}
+}
+
+void PerformanceMetrics::recordOutboundWriteComplete(uint64_t bytes, uint64_t wireBytes) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	outbound.asyncWritesCompleted.fetch_add(1, std::memory_order_relaxed);
+	outbound.completedBytes.fetch_add(wireBytes != 0 ? wireBytes : bytes, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordOutboundPoolGet() noexcept
+{
+	if (isEnabled()) {
+		outbound.poolGets.fetch_add(1, std::memory_order_relaxed);
+	}
 }
 
 void PerformanceMetrics::recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
@@ -424,6 +544,38 @@ void PerformanceMetrics::maybeReport()
 		}
 		report += fmt::format("[Perf] reactor slowest_callback={} max_us={:.3f}\n", label,
 		                      slowestNanoseconds / 1'000.0);
+	}
+	const uint64_t outboundMessages = std::exchange(outbound.logicalMessages, 0);
+	if (outboundMessages > 0 || outbound.buffersFlushed.load(std::memory_order_relaxed) > 0) {
+		const auto poolAllocations = OutputMessagePool::takeAllocationStats();
+		report += fmt::format(
+			"[Perf] outbound logical_msgs={} logical_bytes={} buffers={} buffer_bytes={} queued={} "
+			"queued_bytes={} pre_xtea_bytes={} wire_bytes={} writes_started={} writes_completed={} "
+			"completed_bytes={} pending={} pending_max={} pool_gets={} pool_fresh={} pool_reused={}\n",
+			outboundMessages,
+			std::exchange(outbound.logicalBytes, 0),
+			outbound.buffersFlushed.exchange(0, std::memory_order_relaxed),
+			outbound.bufferBytes.exchange(0, std::memory_order_relaxed),
+			outbound.queuedMessages.exchange(0, std::memory_order_relaxed),
+			outbound.queuedBytes.exchange(0, std::memory_order_relaxed),
+			outbound.preEncryptionBytes.exchange(0, std::memory_order_relaxed),
+			outbound.wireBytes.exchange(0, std::memory_order_relaxed),
+			outbound.asyncWritesStarted.exchange(0, std::memory_order_relaxed),
+			outbound.asyncWritesCompleted.exchange(0, std::memory_order_relaxed),
+			outbound.completedBytes.exchange(0, std::memory_order_relaxed),
+			outbound.pendingCurrent.load(std::memory_order_relaxed),
+			outbound.pendingMaximum.exchange(0, std::memory_order_relaxed),
+			outbound.poolGets.exchange(0, std::memory_order_relaxed),
+			poolAllocations.fresh, poolAllocations.reused);
+
+		for (size_t category = 0; category < static_cast<size_t>(OutboundCategory::Count); ++category) {
+			const auto calls = std::exchange(outbound.categoryCalls[category], 0);
+			const auto bytes = std::exchange(outbound.categoryBytes[category], 0);
+			if (calls != 0) {
+				report += fmt::format("[Perf] outbound_category={} calls={} bytes={}\n",
+				                     OUTBOUND_CATEGORY_NAMES[category], calls, bytes);
+			}
+		}
 	}
 	report += fmt::format(
 		"[Perf] path requests={} success={} failure={} nodes={} tiles={} path_steps={}",

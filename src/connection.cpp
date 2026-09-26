@@ -351,6 +351,12 @@ void Connection::send(const OutputMessage_ptr& msg)
 
 	bool noPendingWrite = messageQueue.empty();
 	messageQueue.emplace_back(msg);
+	const auto queuedAt = g_performanceMetrics.isEnabled() ? std::chrono::steady_clock::now() :
+	                                                        std::chrono::steady_clock::time_point{};
+	messageQueueTimestamps.emplace_back(queuedAt);
+	if (g_performanceMetrics.isEnabled()) {
+		g_performanceMetrics.recordOutboundQueued(msg->getLength(), messageQueue.size());
+	}
 	if (noPendingWrite) {
 		try {
 			asio::post(socket.get_executor(),
@@ -369,6 +375,13 @@ void Connection::send(const OutputMessage_ptr& msg)
 void Connection::internalSend(OutputMessage_ptr msg)
 {
 	std::scoped_lock lockClass(connectionLock);
+	if (g_performanceMetrics.isEnabled() && !messageQueueTimestamps.empty() &&
+	    messageQueueTimestamps.front().time_since_epoch().count() != 0) {
+		const auto queueLatency = std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now() - messageQueueTimestamps.front()).count();
+		g_performanceMetrics.record(PerformanceMetric::OutboundQueueLatency,
+		                            queueLatency > 0 ? static_cast<uint64_t>(queueLatency) : 0);
+	}
 
 	// releaseAllProtocols() clears protocol during shutdown, and this runs on the
 	// strand, so the pointer can legitimately be gone by the time a queued send
@@ -391,11 +404,21 @@ void Connection::internalSend(OutputMessage_ptr msg)
 		// NETWORKMESSAGE_MAXSIZE buffer handed to asio::buffer() below — stays alive
 		// for the whole write no matter what happens to messageQueue meanwhile. The
 		// queue is a scheduling structure, not the owner of the in-flight buffer.
+		const auto writeStarted = g_performanceMetrics.isEnabled() ? std::chrono::steady_clock::now() :
+		                                                           std::chrono::steady_clock::time_point{};
 		asio::async_write(
 		    socket, asio::buffer(msg->getOutputBuffer(), msg->getLength()),
-		    [thisPtr = shared_from_this(), msg](const asio::error_code& error, auto /*bytes_transferred*/) {
-			    thisPtr->onWriteOperation(error);
+		    [thisPtr = shared_from_this(), msg, writeStarted](const asio::error_code& error,
+		                                                        size_t bytes_transferred) {
+			    if (writeStarted.time_since_epoch().count() != 0) {
+				    const auto latency = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					    std::chrono::steady_clock::now() - writeStarted).count();
+				    g_performanceMetrics.record(PerformanceMetric::OutboundWriteLatency,
+					                                latency > 0 ? static_cast<uint64_t>(latency) : 0);
+			    }
+			    thisPtr->onWriteOperation(error, bytes_transferred, msg);
 		    });
+		g_performanceMetrics.recordOutboundWriteStarted();
 	} catch (std::system_error& e) {
 		LOG_NETWORK(fmt::format("Error - Connection::internalSend: {}", e.what()));
 		closeLocked(FORCE_CLOSE);
@@ -425,10 +448,14 @@ uint32_t Connection::getIPLocked()
 	return cachedPeerIp;
 }
 
-void Connection::onWriteOperation(const asio::error_code& error)
+void Connection::onWriteOperation(const asio::error_code& error, size_t bytesTransferred,
+                                  const OutputMessage_ptr& completedMessage)
 {
 	std::scoped_lock lockClass(connectionLock);
 	writeTimer.cancel();
+	if (completedMessage) {
+		g_performanceMetrics.recordOutboundWriteComplete(completedMessage->getLength(), bytesTransferred);
+	}
 
 	// This completion owns the message it wrote, so the queue is allowed to be empty
 	// here — a close path may have drained it while the write was still in flight.
@@ -436,12 +463,18 @@ void Connection::onWriteOperation(const asio::error_code& error)
 	if (!messageQueue.empty()) {
 		messageQueue.pop_front();
 	}
+	if (!messageQueueTimestamps.empty()) {
+		messageQueueTimestamps.pop_front();
+	}
+	g_performanceMetrics.recordOutboundPending(messageQueue.size());
 
 	// Clearing the queue is only safe from this side: reaching onWriteOperation()
 	// means the write that owned the front message has finished, so no buffer handed
 	// to Asio is still in use. Producer-side paths must never do this.
 	if (error) {
 		messageQueue.clear();
+		messageQueueTimestamps.clear();
+		g_performanceMetrics.recordOutboundPending(0);
 		closeLocked(FORCE_CLOSE);
 		return;
 	}
@@ -456,6 +489,7 @@ void Connection::onWriteOperation(const asio::error_code& error)
 			// Nothing left can be flushed, and no write is in flight, so release the
 			// remainder and finish the teardown.
 			messageQueue.clear();
+			messageQueueTimestamps.clear();
 			closeSocket();
 		}
 		return;

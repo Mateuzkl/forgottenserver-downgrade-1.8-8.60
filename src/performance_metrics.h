@@ -43,6 +43,36 @@ enum class PerformanceMetric : uint8_t
 	CombatAreaProcessTiles,
 	CombatAreaApplyTargets,
 	CreatureExecuteConditions,
+	OutboundQueueLatency,
+	OutboundOnSendMessage,
+	OutboundWriteLatency,
+	Count,
+};
+
+enum class OutboundCategory : uint8_t
+{
+	Other,
+	CreatureMovement,
+	AddCreature,
+	RemoveCreature,
+	CreatureHealth,
+	CreatureOutfit,
+	CreatureSpeed,
+	MagicEffect,
+	DistanceEffect,
+	AnimatedText,
+	PlayerStats,
+	PlayerSkills,
+	Inventory,
+	TileAdd,
+	TileUpdate,
+	TileRemove,
+	MapDescription,
+	FloorChange,
+	Combat,
+	ChatText,
+	Ping,
+	LoginInitialState,
 	Count,
 };
 
@@ -144,6 +174,14 @@ public:
 	void recordNetworkRateLimitRejection() noexcept;
 	void recordNetworkIpLimitRejection() noexcept;
 	void recordNetworkConnectionCount(size_t current) noexcept;
+	void recordOutboundLogical(uint8_t opcode, uint64_t bytes) noexcept;
+	void recordOutboundBuffer(uint64_t bytes) noexcept;
+	void recordOutboundQueued(uint64_t bytes, size_t pending) noexcept;
+	void recordOutboundPending(size_t pending) noexcept;
+	void recordOutboundWrite(uint64_t bytesBefore, uint64_t bytesAfter) noexcept;
+	void recordOutboundWriteStarted() noexcept;
+	void recordOutboundWriteComplete(uint64_t bytes, uint64_t wireBytes) noexcept;
+	void recordOutboundPoolGet() noexcept;
 
 	void recordReactorCallbackSource(
 	    uint64_t nanoseconds,
@@ -239,6 +277,28 @@ private:
 		std::atomic<uint64_t> connectionsMaximum{0};
 	};
 
+	struct OutboundData
+	{
+		// ProtocolGame appends and maybeReport run on the dispatcher thread. Keep
+		// these high-frequency counters non-atomic to avoid four atomics per packet.
+		uint64_t logicalMessages = 0;
+		uint64_t logicalBytes = 0;
+		std::atomic<uint64_t> buffersFlushed{0};
+		std::atomic<uint64_t> bufferBytes{0};
+		std::atomic<uint64_t> queuedMessages{0};
+		std::atomic<uint64_t> queuedBytes{0};
+		std::atomic<uint64_t> preEncryptionBytes{0};
+		std::atomic<uint64_t> wireBytes{0};
+		std::atomic<uint64_t> asyncWritesStarted{0};
+		std::atomic<uint64_t> asyncWritesCompleted{0};
+		std::atomic<uint64_t> completedBytes{0};
+		std::atomic<uint64_t> pendingCurrent{0};
+		std::atomic<uint64_t> pendingMaximum{0};
+		std::atomic<uint64_t> poolGets{0};
+		std::array<uint64_t, static_cast<size_t>(OutboundCategory::Count)> categoryCalls{};
+		std::array<uint64_t, static_cast<size_t>(OutboundCategory::Count)> categoryBytes{};
+	};
+
 	struct SlowestReactorCallback
 	{
 		std::mutex mutex;
@@ -262,6 +322,7 @@ private:
 	PathData path;
 	AreaCombatData areaCombat;
 	NetworkData network;
+	OutboundData outbound;
 
 	std::array<
 	    std::atomic<uint64_t>,

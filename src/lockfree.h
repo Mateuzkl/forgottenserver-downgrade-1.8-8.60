@@ -6,6 +6,7 @@
 #define FS_LOCKFREE_H
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <mutex>
@@ -122,7 +123,28 @@ struct LockfreeFreeList
  * @tparam T Type to allocate
  * @tparam CAPACITY Maximum number of pooled objects
  */
-template <typename T, std::size_t CAPACITY>
+template <typename Tag>
+struct LockfreeAllocatorStats
+{
+	struct Snapshot
+	{
+		uint64_t fresh = 0;
+		uint64_t reused = 0;
+	};
+
+	inline static std::atomic<uint64_t> fresh{0};
+	inline static std::atomic<uint64_t> reused{0};
+
+	[[nodiscard]] static Snapshot take() noexcept
+	{
+		return {
+			fresh.exchange(0, std::memory_order_relaxed),
+			reused.exchange(0, std::memory_order_relaxed),
+		};
+	}
+};
+
+template <typename T, std::size_t CAPACITY, typename StatsTag = void>
 class LockfreePoolingAllocator
 {
 public:
@@ -135,14 +157,20 @@ public:
 	// Rebind is deprecated in C++17 but kept for backward compatibility
 	template<typename U>
 	struct rebind {
-		using other = LockfreePoolingAllocator<U, CAPACITY>;
+		using other = LockfreePoolingAllocator<U, CAPACITY, StatsTag>;
 	};
 
 	constexpr LockfreePoolingAllocator() noexcept = default;
 	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator&) noexcept = default;
 
 	template <typename U>
-	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator<U, CAPACITY>&) noexcept {}
+	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator<U, CAPACITY, StatsTag>&) noexcept {}
+
+	using AllocationStats = typename LockfreeAllocatorStats<StatsTag>::Snapshot;
+	[[nodiscard]] static AllocationStats takeAllocationStats() noexcept
+	{
+		return LockfreeAllocatorStats<StatsTag>::take();
+	}
 
 	/**
 	 * Allocate memory for n objects of type T
@@ -170,11 +198,13 @@ public:
 
 		if (freeList.pop(p)) [[likely]] {
 			// Successfully reused memory from pool
+			LockfreeAllocatorStats<StatsTag>::reused.fetch_add(1, std::memory_order_relaxed);
 			return static_cast<T*>(p);
 		}
 
 		// Intentional raw storage allocation: STL allocators must return
 		// unconstructed memory; object lifetime is managed by the container.
+		LockfreeAllocatorStats<StatsTag>::fresh.fetch_add(1, std::memory_order_relaxed);
 		return static_cast<T*>(operator new(sizeof(T)));
 	}
 

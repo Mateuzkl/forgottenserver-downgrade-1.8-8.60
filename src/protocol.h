@@ -36,12 +36,7 @@ public:
 
 	OutputMessage_ptr& getCurrentBuffer() { return outputBuffer; }
 
-	void send(OutputMessage_ptr msg) const
-	{
-		if (auto connection = getConnection()) {
-			connection->send(msg);
-		}
-	}
+	void send(OutputMessage_ptr msg) const;
 
 protected:
 	void disconnect() const
