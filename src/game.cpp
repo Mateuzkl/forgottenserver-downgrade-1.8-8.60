@@ -418,6 +418,92 @@ bool isValidObjectCategory(ObjectCategory_t category)
 	return value >= OBJECTCATEGORY_FIRST && value <= OBJECTCATEGORY_LAST && value != 26;
 }
 
+std::optional<ObjectCategory_t> getQuickLootCategoryFromPrimaryType(const ItemType& itemType)
+{
+	if (itemType.primaryType.empty()) {
+		return std::nullopt;
+	}
+
+	static const std::unordered_map<std::string, ObjectCategory_t> categoryByPrimaryType = {
+	    {"food", OBJECTCATEGORY_FOOD},
+	    {"potion", OBJECTCATEGORY_POTIONS},
+	    {"potions", OBJECTCATEGORY_POTIONS},
+	    {"creatureproduct", OBJECTCATEGORY_CREATUREPRODUCTS},
+	    {"creature products", OBJECTCATEGORY_CREATUREPRODUCTS},
+	    {"valuable", OBJECTCATEGORY_VALUABLES},
+	    {"valuables", OBJECTCATEGORY_VALUABLES},
+	    {"tool", OBJECTCATEGORY_TOOLS},
+	    {"tools", OBJECTCATEGORY_TOOLS},
+	    {"decoration", OBJECTCATEGORY_DECORATION},
+	};
+
+	const auto it = categoryByPrimaryType.find(itemType.primaryType);
+	if (it == categoryByPrimaryType.end()) {
+		return std::nullopt;
+	}
+	return it->second;
+}
+
+std::optional<ObjectCategory_t> getQuickLootCategoryFromItemType(ItemTypes_t type)
+{
+	switch (type) {
+		case ITEM_TYPE_CREATUREPRODUCT:
+			return OBJECTCATEGORY_CREATUREPRODUCTS;
+		case ITEM_TYPE_FOOD:
+			return OBJECTCATEGORY_FOOD;
+		case ITEM_TYPE_VALUABLE:
+			return OBJECTCATEGORY_VALUABLES;
+		case ITEM_TYPE_POTION:
+			return OBJECTCATEGORY_POTIONS;
+		case ITEM_TYPE_TOOL:
+			return OBJECTCATEGORY_TOOLS;
+		case ITEM_TYPE_DECORATION:
+			return OBJECTCATEGORY_DECORATION;
+		default:
+			return std::nullopt;
+	}
+}
+
+bool isQuickLootPotionByName(const ItemType& itemType)
+{
+	const std::string& name = asLowerCaseString(itemType.name);
+	return name.find("potion") != std::string::npos || name.find("antidote") != std::string::npos;
+}
+
+bool isQuickLootFoodByUseAction(const Item* item, const ItemType& itemType)
+{
+	if (!item || !g_actions || itemType.isRune() || itemType.type == ITEM_TYPE_POTION || !itemType.useable) {
+		return false;
+	}
+
+	if (isQuickLootPotionByName(itemType)) {
+		return false;
+	}
+
+	return g_actions->hasRegisteredUseAction(item->getID());
+}
+
+bool isQuickLootCreatureProductByWareId(const ItemType& itemType)
+{
+	if (!itemType.isPickupable() || itemType.weaponType != WEAPON_NONE || itemType.useable) {
+		return false;
+	}
+
+	if (itemType.type == ITEM_TYPE_RUNE || itemType.type == ITEM_TYPE_CONTAINER || itemType.isRune()) {
+		return false;
+	}
+
+	if (itemType.slotPosition != 0 && itemType.slotPosition != SLOTP_HAND) {
+		return false;
+	}
+
+	if (itemType.armor != 0 || itemType.attack != 0 || itemType.defense != 0) {
+		return false;
+	}
+
+	return itemType.wareId != 0;
+}
+
 ObjectCategory_t getQuickLootObjectCategory(const Item* item)
 {
 	if (!item) {
@@ -479,6 +565,25 @@ ObjectCategory_t getQuickLootObjectCategory(const Item* item)
 	if (itemType.type == ITEM_TYPE_CONTAINER) {
 		return OBJECTCATEGORY_CONTAINERS;
 	}
+
+	if (const auto category = getQuickLootCategoryFromItemType(itemType.type); category.has_value()) {
+		return *category;
+	}
+
+	if (const auto category = getQuickLootCategoryFromPrimaryType(itemType); category.has_value()) {
+		return *category;
+	}
+
+	if (isQuickLootPotionByName(itemType)) {
+		return OBJECTCATEGORY_POTIONS;
+	}
+	if (isQuickLootFoodByUseAction(item, itemType)) {
+		return OBJECTCATEGORY_FOOD;
+	}
+	if (isQuickLootCreatureProductByWareId(itemType)) {
+		return OBJECTCATEGORY_CREATUREPRODUCTS;
+	}
+
 	return OBJECTCATEGORY_DEFAULT;
 }
 

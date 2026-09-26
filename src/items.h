@@ -43,6 +43,12 @@ enum ItemTypes_t
 	ITEM_TYPE_PODIUM,
 	ITEM_TYPE_REWARDCHEST,
 	ITEM_TYPE_CARPET,
+	ITEM_TYPE_FOOD,
+	ITEM_TYPE_POTION,
+	ITEM_TYPE_VALUABLE,
+	ITEM_TYPE_CREATUREPRODUCT,
+	ITEM_TYPE_TOOL,
+	ITEM_TYPE_DECORATION,
 	ITEM_TYPE_LAST
 };
 
@@ -238,6 +244,7 @@ enum ItemParseAttributes_t
 	ITEM_PARSE_REDUCESKILLLOSS,
 	ITEM_PARSE_DROPBONUS,
 	ITEM_PARSE_PRIMARYTYPE,
+	ITEM_PARSE_LOOTTYPE,
 	ITEM_PARSE_ELEMENTALBOND,
 	ITEM_PARSE_SCRIPT,
 	ITEM_PARSE_IMBUEMENTSLOT,
@@ -540,6 +547,8 @@ public:
 	uint32_t buildNumber = 0;
 
 	bool loadFromXml();
+	ItemTypes_t getLootType(const std::string& strValue) const;
+	void applyQuickLootTypeFromMetadata(ItemType& itemType);
 	void parseItemNode(const pugi::xml_node& itemNode, uint16_t id);
 	void parseScriptAttribute(ItemType& it, const pugi::xml_node& attributeNode, const pugi::xml_attribute& valueAttribute);
 

@@ -101,6 +101,11 @@ public:
 	bool registerLuaEvent(Action* event);
 	void clear(bool fromLua) override final;
 
+	[[nodiscard]] bool hasRegisteredUseAction(uint16_t itemId) const
+	{
+		return useItemMap.find(itemId) != useItemMap.end();
+	}
+
 private:
 	ReturnValue internalUseItem(Player*, const Position&, uint8_t, const std::shared_ptr<Item>&, bool);
 
