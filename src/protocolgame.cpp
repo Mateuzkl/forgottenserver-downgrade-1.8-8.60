@@ -2740,13 +2740,13 @@ void ProtocolGame::parseSelectSpellAim(NetworkMessage& msg)
 		return;
 	}
 
-	if (msg.getLength() - msg.getBufferPosition() < 1) {
+	if (getUnreadBytes(msg) < 1) {
 		return;
 	}
 
 	const uint8_t spellListSize = msg.getByte();
 	const size_t entriesSize = static_cast<size_t>(spellListSize) * 3;
-	if (msg.getLength() - msg.getBufferPosition() < entriesSize) {
+	if (getUnreadBytes(msg) < entriesSize) {
 		return;
 	}
 
