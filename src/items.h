@@ -395,6 +395,8 @@ public:
 
 	itemgroup_t group = ITEM_GROUP_NONE;
 	ItemTypes_t type = ITEM_TYPE_NONE;
+	// Quick Loot category metadata (loottype / primarytype); does not replace structural type.
+	ItemTypes_t lootType = ITEM_TYPE_NONE;
 	uint16_t id = 0;
 	bool stackable = false;
 

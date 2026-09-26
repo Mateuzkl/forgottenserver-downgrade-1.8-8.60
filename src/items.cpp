@@ -811,6 +811,10 @@ ItemTypes_t Items::getLootType(const std::string& strValue) const
 
 void Items::applyQuickLootTypeFromMetadata(ItemType& itemType)
 {
+	if (itemType.lootType != ITEM_TYPE_NONE) {
+		return;
+	}
+
 	switch (itemType.type) {
 		case ITEM_TYPE_FOOD:
 		case ITEM_TYPE_POTION:
@@ -818,6 +822,7 @@ void Items::applyQuickLootTypeFromMetadata(ItemType& itemType)
 		case ITEM_TYPE_CREATUREPRODUCT:
 		case ITEM_TYPE_TOOL:
 		case ITEM_TYPE_DECORATION:
+			itemType.lootType = itemType.type;
 			return;
 		default:
 			break;
@@ -825,15 +830,14 @@ void Items::applyQuickLootTypeFromMetadata(ItemType& itemType)
 
 	if (!itemType.primaryType.empty()) {
 		if (const ItemTypes_t fromPrimary = getLootType(itemType.primaryType); fromPrimary != ITEM_TYPE_NONE) {
-			itemType.type = fromPrimary;
+			itemType.lootType = fromPrimary;
 			return;
 		}
 
 		if (itemType.primaryType == "liquids") {
 			const std::string& name = asLowerCaseString(itemType.name);
 			if (name.find("potion") != std::string::npos || name.find("antidote") != std::string::npos) {
-				itemType.type = ITEM_TYPE_POTION;
-				return;
+				itemType.lootType = ITEM_TYPE_POTION;
 			}
 		}
 	}
@@ -2282,9 +2286,9 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 				}
 
 				case ITEM_PARSE_LOOTTYPE: {
-					const ItemTypes_t lootType = getLootType(valueAttribute.as_string());
-					if (lootType != ITEM_TYPE_NONE) {
-						it.type = lootType;
+					const ItemTypes_t parsedLootType = getLootType(valueAttribute.as_string());
+					if (parsedLootType != ITEM_TYPE_NONE) {
+						it.lootType = parsedLootType;
 					}
 					break;
 				}

@@ -472,7 +472,8 @@ bool isQuickLootPotionByName(const ItemType& itemType)
 
 bool isQuickLootFoodByUseAction(const Item* item, const ItemType& itemType)
 {
-	if (!item || !g_actions || itemType.isRune() || itemType.type == ITEM_TYPE_POTION || !itemType.useable) {
+	if (!item || !g_actions || itemType.isRune() || itemType.type == ITEM_TYPE_POTION ||
+	    itemType.lootType == ITEM_TYPE_POTION || !itemType.useable) {
 		return false;
 	}
 
@@ -566,12 +567,18 @@ ObjectCategory_t getQuickLootObjectCategory(const Item* item)
 		return OBJECTCATEGORY_CONTAINERS;
 	}
 
-	if (const auto category = getQuickLootCategoryFromItemType(itemType.type); category.has_value()) {
+	if (itemType.lootType != ITEM_TYPE_NONE) {
+		if (const auto category = getQuickLootCategoryFromItemType(itemType.lootType); category.has_value()) {
+			return *category;
+		}
+	} else if (const auto category = getQuickLootCategoryFromItemType(itemType.type); category.has_value()) {
 		return *category;
 	}
 
-	if (const auto category = getQuickLootCategoryFromPrimaryType(itemType); category.has_value()) {
-		return *category;
+	if (itemType.lootType == ITEM_TYPE_NONE) {
+		if (const auto category = getQuickLootCategoryFromPrimaryType(itemType); category.has_value()) {
+			return *category;
+		}
 	}
 
 	if (isQuickLootPotionByName(itemType)) {
