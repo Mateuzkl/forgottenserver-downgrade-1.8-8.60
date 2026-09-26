@@ -2745,16 +2745,24 @@ void ProtocolGame::parseSelectSpellAim(NetworkMessage& msg)
 	}
 
 	const uint8_t spellListSize = msg.getByte();
-	for (uint8_t i = 0; i < spellListSize; ++i) {
-		if (msg.getLength() - msg.getBufferPosition() < 3) {
-			return;
-		}
+	const size_t entriesSize = static_cast<size_t>(spellListSize) * 3;
+	if (msg.getLength() - msg.getBufferPosition() < entriesSize) {
+		return;
+	}
 
+	std::unordered_map<uint16_t, uint8_t> spellAimUpdates;
+	for (uint8_t i = 0; i < spellListSize; ++i) {
 		const uint16_t spellId = msg.get<uint16_t>();
 		const uint8_t spellAim = msg.getByte();
-		if (isFonticakClient) {
-			player->spellActivedAimMap[spellId] = spellAim;
-		}
+		spellAimUpdates[spellId] = spellAim;
+	}
+
+	if (!isFonticakClient) {
+		return;
+	}
+
+	for (const auto& [spellId, spellAim] : spellAimUpdates) {
+		player->spellActivedAimMap[spellId] = spellAim;
 	}
 }
 
