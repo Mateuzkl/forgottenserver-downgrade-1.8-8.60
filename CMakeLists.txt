@@ -30,6 +30,7 @@ option(ENABLE_ASAN "Enable AddressSanitizer for memory diagnostics" OFF)
 option(ENABLE_TSAN "Enable ThreadSanitizer for data race diagnostics" OFF)
 option(ENABLE_NATIVE_OPTIMIZATIONS "Enable -march=native/-mtune=native for local Release builds" ON)
 option(ENABLE_PACKET_BACKLOG_DIAGNOSTICS "Enable ProtocolGame packet backlog diagnostics" OFF)
+option(ENABLE_PACKET_SIZE_HISTOGRAM "Measure the packet size distribution seen by XTEA (diagnostics only)" OFF)
 
 option(USE_LUAJIT "Use LuaJIT" OFF)
 if (USE_LUAJIT)
@@ -272,6 +273,16 @@ endif()
 if (ENABLE_PACKET_BACKLOG_DIAGNOSTICS)
     ADD_DEFINITIONS(-DPROTOCOLGAME_BACKLOG_DIAGNOSTICS)
     message(STATUS "ProtocolGame packet backlog diagnostics enabled")
+endif()
+
+# Measures the size distribution of the buffers handed to xtea::encrypt/decrypt.
+# benchmarks/perf_baseline shows the SIMD kernels winning or losing depending on
+# exactly that distribution, so it has to be measured on a real server before
+# anyone decides whether to port them. Off by default: with the option off the
+# macros in src/packet_size_histogram.h expand to nothing.
+if (ENABLE_PACKET_SIZE_HISTOGRAM)
+    ADD_DEFINITIONS(-DTFS_PACKET_SIZE_HISTOGRAM)
+    message(STATUS "Packet size histogram enabled. Disable for production: -DENABLE_PACKET_SIZE_HISTOGRAM=OFF")
 endif()
 
 if (BUILD_TESTING OR BUILD_BENCHMARKING)
