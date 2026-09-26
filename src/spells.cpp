@@ -14,6 +14,7 @@
 #include "performance_metrics.h"
 #include "pugicast.h"
 #include "scriptmanager.h"
+#include "tools.h"
 #include "logger.h"
 #include <fmt/format.h>
 
@@ -25,6 +26,27 @@ namespace {
 // Set from wheel applyWheelBonuses (Lua); fallback when wheelSpellAugments map is empty.
 constexpr uint32_t WHEEL_SPELL_CD_STORAGE_BASE = 8600000;
 constexpr uint32_t WHEEL_SPELL_FLAT_MANA_STORAGE_BASE = 8611000;
+
+std::shared_ptr<Creature> resolveSpellAimTurnTarget(const Player* player)
+{
+	if (!player) {
+		return nullptr;
+	}
+
+	if (const auto attacked = player->getAttackedCreatureShared()) {
+		if (!attacked->isRemoved() && !attacked->isDead()) {
+			return attacked;
+		}
+	}
+
+	if (const auto followed = player->getFollowCreatureShared()) {
+		if (!followed->isRemoved() && !followed->isDead()) {
+			return followed;
+		}
+	}
+
+	return nullptr;
+}
 
 bool spellsIsMonkVocationId(uint16_t vocationId)
 {
@@ -1037,7 +1059,20 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool fo
 		var.setString(param);
 	} else {
 		if (needDirection) {
-			var.setPosition(Spells::getCasterPosition(player, player->getDirection()));
+			Direction dir = player->getDirection();
+			const auto aimTarget = resolveSpellAimTurnTarget(player);
+			const bool aimEnabled = player->isFonticakClient() && player->isSpellAimAtTargetEnabled(spellId);
+
+			if (aimTarget && aimEnabled) {
+				dir = getDirectionTo(player->getPosition(), aimTarget->getPosition(), true);
+				if (dir == DIRECTION_NONE) {
+					dir = player->getDirection();
+				} else if (dir != player->getDirection()) {
+					g_game.internalCreatureTurn(player, dir);
+				}
+			}
+
+			var.setPosition(Spells::getCasterPosition(player, dir));
 		} else if (needPosition && to.x != 0) {
 			var.setPosition(to);
 		} else {

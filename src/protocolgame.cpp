@@ -1745,6 +1745,10 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			}
 			break;
 
+		case 0xC8:
+			parseSelectSpellAim(msg);
+			break;
+
 		case 0xC9: /* update tile */
 			break;
 
@@ -2728,6 +2732,42 @@ void ProtocolGame::parseLookInBattleList(NetworkMessage& msg)
 {
 	uint32_t creatureId = msg.get<uint32_t>();
 	g_game.playerLookInBattleList(player->getID(), creatureId);
+}
+
+void ProtocolGame::parseSelectSpellAim(NetworkMessage& msg)
+{
+	if (!player) {
+		return;
+	}
+
+	if (getUnreadBytes(msg) < 1) {
+		return;
+	}
+
+	const uint8_t spellListSize = msg.getByte();
+	const size_t entriesSize = static_cast<size_t>(spellListSize) * 3;
+	if (getUnreadBytes(msg) < entriesSize) {
+		return;
+	}
+
+	std::unordered_map<uint16_t, uint8_t> spellAimUpdates;
+	for (uint8_t i = 0; i < spellListSize; ++i) {
+		const uint16_t spellId = msg.get<uint16_t>();
+		const uint8_t spellAim = msg.getByte();
+		spellAimUpdates[spellId] = spellAim;
+	}
+
+	if (msg.isOverrun()) {
+		return;
+	}
+
+	if (!isFonticakClient) {
+		return;
+	}
+
+	for (const auto& [spellId, spellAim] : spellAimUpdates) {
+		player->setSpellAimAtTargetEnabled(spellId, spellAim);
+	}
 }
 
 void ProtocolGame::parseSay(NetworkMessage& msg)
