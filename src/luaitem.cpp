@@ -190,8 +190,8 @@ int luaItemRemove(lua_State* L)
 	int32_t count = -1;
 	Creature* actor = nullptr;
 	if (lua_gettop(L) >= 2) {
-		if (Player* player = getPlayer(L, 2)) {
-			actor = player;
+		if (isUserdata(L, 2) && getUserdataType(L, 2) == LuaData_Player) {
+			actor = getUserdata<Player>(L, 2);
 		} else {
 			count = getInteger<int32_t>(L, 2, -1);
 			if (lua_gettop(L) >= 3) {
