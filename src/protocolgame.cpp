@@ -1745,6 +1745,10 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			}
 			break;
 
+		case 0xC8:
+			parseSelectSpellAim(msg);
+			break;
+
 		case 0xC9: /* update tile */
 			break;
 
@@ -2728,6 +2732,30 @@ void ProtocolGame::parseLookInBattleList(NetworkMessage& msg)
 {
 	uint32_t creatureId = msg.get<uint32_t>();
 	g_game.playerLookInBattleList(player->getID(), creatureId);
+}
+
+void ProtocolGame::parseSelectSpellAim(NetworkMessage& msg)
+{
+	if (!player) {
+		return;
+	}
+
+	if (msg.getLength() - msg.getBufferPosition() < 1) {
+		return;
+	}
+
+	const uint8_t spellListSize = msg.getByte();
+	for (uint8_t i = 0; i < spellListSize; ++i) {
+		if (msg.getLength() - msg.getBufferPosition() < 3) {
+			return;
+		}
+
+		const uint16_t spellId = msg.get<uint16_t>();
+		const uint8_t spellAim = msg.getByte();
+		if (isFonticakClient) {
+			player->spellActivedAimMap[spellId] = spellAim;
+		}
+	}
 }
 
 void ProtocolGame::parseSay(NetworkMessage& msg)

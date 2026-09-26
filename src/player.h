@@ -565,6 +565,7 @@ public:
 	void clearSpellAimPosition() { m_hasSpellAim = false; }
 	bool hasSpellAimPosition() const { return m_hasSpellAim; }
 	const Position& getSpellAimPosition() const { return m_spellAimPosition; }
+	std::unordered_map<uint16_t, uint8_t> spellActivedAimMap;
 	uint32_t getReset() const { return reset; }
 	void setReset(uint32_t newReset) { reset = newReset; }
 	uint8_t getLevelPercent() const { return levelPercent; }

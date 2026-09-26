@@ -14,6 +14,7 @@
 #include "performance_metrics.h"
 #include "pugicast.h"
 #include "scriptmanager.h"
+#include "tools.h"
 #include "logger.h"
 #include <fmt/format.h>
 
@@ -1037,7 +1038,35 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool fo
 		var.setString(param);
 	} else {
 		if (needDirection) {
-			var.setPosition(Spells::getCasterPosition(player, player->getDirection()));
+			Direction dir = player->getDirection();
+			const Creature* aimTarget = nullptr;
+			if (const auto attacked = player->getAttackedCreatureShared()) {
+				if (!attacked->isRemoved() && !attacked->isDead()) {
+					aimTarget = attacked.get();
+				}
+			}
+			if (!aimTarget) {
+				if (const auto followed = player->getFollowCreatureShared()) {
+					if (!followed->isRemoved() && !followed->isDead()) {
+						aimTarget = followed.get();
+					}
+				}
+			}
+
+			const auto aimIt = player->spellActivedAimMap.find(spellId);
+			const bool aimEnabled =
+			    player->isFonticakClient() && aimIt != player->spellActivedAimMap.end() && aimIt->second == 1;
+
+			if (aimTarget && aimEnabled) {
+				dir = getDirectionTo(player->getPosition(), aimTarget->getPosition(), true);
+				if (dir == DIRECTION_NONE) {
+					dir = player->getDirection();
+				} else if (dir != player->getDirection()) {
+					g_game.internalCreatureTurn(player, dir);
+				}
+			}
+
+			var.setPosition(Spells::getCasterPosition(player, dir));
 		} else if (needPosition && to.x != 0) {
 			var.setPosition(to);
 		} else {

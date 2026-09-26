@@ -118,6 +118,7 @@ private:
 	void parseInspectionObject(NetworkMessage& msg);
 	void parseSetMonsterPodium(NetworkMessage& msg);
 	void parseSay(NetworkMessage& msg);
+	void parseSelectSpellAim(NetworkMessage& msg);
 	void parseLookAt(NetworkMessage& msg);
 	void parseLookInBattleList(NetworkMessage& msg);
 	void parseAttack(NetworkMessage& msg);
