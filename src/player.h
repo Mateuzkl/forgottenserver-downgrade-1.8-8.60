@@ -565,7 +565,19 @@ public:
 	void clearSpellAimPosition() { m_hasSpellAim = false; }
 	bool hasSpellAimPosition() const { return m_hasSpellAim; }
 	const Position& getSpellAimPosition() const { return m_spellAimPosition; }
-	std::unordered_map<uint16_t, uint8_t> spellActivedAimMap;
+	void setSpellAimAtTargetEnabled(uint16_t spellId, uint8_t enabled)
+	{
+		if (enabled == 1) {
+			m_spellActivedAimMap[spellId] = 1;
+		} else {
+			m_spellActivedAimMap.erase(spellId);
+		}
+	}
+	bool isSpellAimAtTargetEnabled(uint16_t spellId) const
+	{
+		const auto it = m_spellActivedAimMap.find(spellId);
+		return it != m_spellActivedAimMap.end() && it->second == 1;
+	}
 	uint32_t getReset() const { return reset; }
 	void setReset(uint32_t newReset) { reset = newReset; }
 	uint8_t getLevelPercent() const { return levelPercent; }
@@ -1991,6 +2003,7 @@ private:
 	CombatType_t m_pendingElementConversion = COMBAT_NONE;
 	Position m_spellAimPosition;
 	bool m_hasSpellAim = false;
+	std::unordered_map<uint16_t, uint8_t> m_spellActivedAimMap;
 	bool loading = false;
 
 	AccountManagerMode accountManager{ACCOUNT_MANAGER_NONE};

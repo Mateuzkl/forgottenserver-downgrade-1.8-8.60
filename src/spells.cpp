@@ -27,6 +27,27 @@ namespace {
 constexpr uint32_t WHEEL_SPELL_CD_STORAGE_BASE = 8600000;
 constexpr uint32_t WHEEL_SPELL_FLAT_MANA_STORAGE_BASE = 8611000;
 
+std::shared_ptr<Creature> resolveSpellAimTurnTarget(const Player* player)
+{
+	if (!player) {
+		return nullptr;
+	}
+
+	if (const auto attacked = player->getAttackedCreatureShared()) {
+		if (!attacked->isRemoved() && !attacked->isDead()) {
+			return attacked;
+		}
+	}
+
+	if (const auto followed = player->getFollowCreatureShared()) {
+		if (!followed->isRemoved() && !followed->isDead()) {
+			return followed;
+		}
+	}
+
+	return nullptr;
+}
+
 bool spellsIsMonkVocationId(uint16_t vocationId)
 {
 	return vocationId == 9 || vocationId == 10;
@@ -1039,23 +1060,8 @@ bool InstantSpell::playerCastInstant(Player* player, std::string& param, bool fo
 	} else {
 		if (needDirection) {
 			Direction dir = player->getDirection();
-			const Creature* aimTarget = nullptr;
-			if (const auto attacked = player->getAttackedCreatureShared()) {
-				if (!attacked->isRemoved() && !attacked->isDead()) {
-					aimTarget = attacked.get();
-				}
-			}
-			if (!aimTarget) {
-				if (const auto followed = player->getFollowCreatureShared()) {
-					if (!followed->isRemoved() && !followed->isDead()) {
-						aimTarget = followed.get();
-					}
-				}
-			}
-
-			const auto aimIt = player->spellActivedAimMap.find(spellId);
-			const bool aimEnabled =
-			    player->isFonticakClient() && aimIt != player->spellActivedAimMap.end() && aimIt->second == 1;
+			const auto aimTarget = resolveSpellAimTurnTarget(player);
+			const bool aimEnabled = player->isFonticakClient() && player->isSpellAimAtTargetEnabled(spellId);
 
 			if (aimTarget && aimEnabled) {
 				dir = getDirectionTo(player->getPosition(), aimTarget->getPosition(), true);

@@ -2757,12 +2757,16 @@ void ProtocolGame::parseSelectSpellAim(NetworkMessage& msg)
 		spellAimUpdates[spellId] = spellAim;
 	}
 
+	if (msg.isOverrun()) {
+		return;
+	}
+
 	if (!isFonticakClient) {
 		return;
 	}
 
 	for (const auto& [spellId, spellAim] : spellAimUpdates) {
-		player->spellActivedAimMap[spellId] = spellAim;
+		player->setSpellAimAtTargetEnabled(spellId, spellAim);
 	}
 }
 
