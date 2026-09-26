@@ -3336,9 +3336,8 @@ void ProtocolGame::sendBasicData()
 	// prey - OTC client expects 1 byte for prey status when GamePrey feature is enabled
 	msg.addByte(0x00);
 
-	// AstraClient always reads U16 spell ids (no GameUshortSpell gate), so keep
-	// them wide for Astra regardless of the protocol version.
-	const bool usesU16SpellIds = isAstraClient || getVersion() >= 1300;
+	// Astra/Fonticak always read U16 spell ids (GameUshortSpell on 8.60 OTC).
+	const bool usesU16SpellIds = isAstraClient || isFonticakClient || getVersion() >= 1300;
 	constexpr uint16_t maxU8SpellId = std::numeric_limits<uint8_t>::max();
 
 	std::vector<uint16_t> knownSpells;
@@ -5647,13 +5646,22 @@ void ProtocolGame::sendAnimatedText(std::string_view message, const Position& po
 
 void ProtocolGame::sendSpellCooldown(uint16_t spellId, uint32_t time)
 {
-	if (!isOTC || spellId > std::numeric_limits<uint8_t>::max()) {
+	if (!isOTC) {
+		return;
+	}
+
+	const bool usesU16SpellIds = isAstraClient || isFonticakClient || getVersion() >= 1300;
+	if (!usesU16SpellIds && spellId > std::numeric_limits<uint8_t>::max()) {
 		return;
 	}
 
 	NetworkMessage msg;
 	msg.addByte(0xA4);
-	msg.addByte(static_cast<uint8_t>(spellId));
+	if (usesU16SpellIds) {
+		msg.add<uint16_t>(spellId);
+	} else {
+		msg.addByte(static_cast<uint8_t>(spellId));
+	}
 	msg.add<uint32_t>(time);
 	writeToOutputBuffer(msg);
 }
