@@ -676,6 +676,10 @@ QuickLootResult collectQuickLootContainer(Game& game, Player* player, const Cont
 		}
 	}
 
+	if (!container->isRemoved()) {
+		game.stopLootHighlight(container);
+	}
+
 	return result;
 }
 

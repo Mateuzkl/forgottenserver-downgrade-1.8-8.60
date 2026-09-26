@@ -2785,6 +2785,21 @@ TEST_CASE(quickloot_full_destination_preserves_items_and_can_retry)
 	CHECK(fixture.backpack->size() == 1);
 }
 
+TEST_CASE(quickloot_clears_loot_highlight_while_items_remain)
+{
+	ensureItemTypes();
+	QuickLootLifetimeFixture fixture(1);
+	fixture.corpse->setLootHighlightActive(true);
+	auto filler = fixture.addLoot(fixture.backpack.get());
+	auto loot = fixture.addLoot();
+	fixture.collect();
+	CHECK(loot->getParent() == fixture.corpse.get());
+	CHECK(!fixture.corpse->hasLootHighlight());
+	CHECK(g_game.internalRemoveItem(filler.get()) == RETURNVALUE_NOERROR);
+	fixture.collect();
+	CHECK(loot->getParent() == fixture.backpack.get());
+}
+
 TEST_CASE(quickloot_rejects_foreign_or_disabled_corpses_without_moving_items)
 {
 	ensureItemTypes();
