@@ -8193,20 +8193,18 @@ bool Player::flushQuickLootPersistence(bool sync) const
 			if (query.empty()) {
 				if (quickLootSaveGeneration == flushGeneration) {
 					quickLootSaveDirty = false;
-				} else {
-					scheduleQuickLootPersistence();
+					return true;
 				}
-				return true;
+				continue;
 			}
 
 			if (Database::getInstance().executeQuery(query)) {
 				lastQuickLootDbSave = std::chrono::steady_clock::now();
 				if (quickLootSaveGeneration == flushGeneration) {
 					quickLootSaveDirty = false;
-				} else {
-					scheduleQuickLootPersistence();
+					return true;
 				}
-				return true;
+				continue;
 			}
 		}
 		LOG_ERROR(fmt::format("[QuickLoot] Synchronous persistence failed for player id {}", playerId));
