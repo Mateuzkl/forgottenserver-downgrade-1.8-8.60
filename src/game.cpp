@@ -2956,6 +2956,11 @@ ReturnValue Game::internalPlayerAddItem(Player* player, Item* item, bool dropOnM
                                         slots_t slot /*= CONST_SLOT_WHEREEVER*/)
 {
 	uint32_t remainderCount = 0;
+	std::shared_ptr<Item> itemSnapshot;
+	if (slot == CONST_SLOT_WHEREEVER && item) {
+		itemSnapshot = item->clone();
+	}
+
 	ReturnValue ret;
 	if (slot == CONST_SLOT_WHEREEVER) {
 		const ObjectCategory_t category = getQuickLootObjectCategory(item);
@@ -2969,7 +2974,13 @@ ReturnValue Game::internalPlayerAddItem(Player* player, Item* item, bool dropOnM
 	}
 
 	if (remainderCount != 0) {
-		auto remainderItem = Item::CreateItem(item->getID(), static_cast<uint16_t>(remainderCount));
+		std::shared_ptr<Item> remainderItem;
+		if (itemSnapshot) {
+			remainderItem = itemSnapshot->clone();
+			remainderItem->setItemCount(static_cast<uint16_t>(remainderCount));
+		} else {
+			remainderItem = Item::CreateItem(item->getID(), static_cast<uint16_t>(remainderCount));
+		}
 		internalAddItem(player->getTile(), remainderItem.get(), INDEX_WHEREEVER, FLAG_NOLIMIT);
 	}
 

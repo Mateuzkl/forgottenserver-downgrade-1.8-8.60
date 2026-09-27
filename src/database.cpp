@@ -36,6 +36,12 @@ static constexpr unsigned int MYSQL_TIMEOUT_SECONDS = 30;
 static constexpr uint64_t DB_INSERT_PACKET_SAFETY_MARGIN = 4096;
 
 namespace {
+uint64_t projectedInsertQueryLength(size_t currentLength, size_t additionalGrowth, size_t upsertClauseLength)
+{
+	// buildQuery() returns: query + " " + values + upsertClause
+	return static_cast<uint64_t>(currentLength) + additionalGrowth + 1 + upsertClauseLength;
+}
+
 thread_local std::vector<std::string>* tlsQueryCapture = nullptr;
 thread_local bool tlsSuppressConnectionErrorLogging = false;
 
@@ -750,7 +756,9 @@ bool DBInsert::addRow(std::string_view row)
 
 	const bool hasRows = !values.empty();
 	const size_t projectedRowLength = rowLength + (hasRows ? 3 : 2);
-	if (hasRows && static_cast<uint64_t>(length + projectedRowLength) > maxQueryLength && !execute()) {
+	if (hasRows &&
+	    projectedInsertQueryLength(length, projectedRowLength, upsertClause.length()) > maxQueryLength &&
+	    !execute()) {
 		return false;
 	}
 
@@ -781,7 +789,7 @@ bool DBInsert::appendRowForBatch(std::string_view row)
 
 	const bool hasRows = !values.empty();
 	const size_t projectedRowLength = rowLength + (hasRows ? 3 : 2);
-	if (static_cast<uint64_t>(length + projectedRowLength) > maxQueryLength) {
+	if (projectedInsertQueryLength(length, projectedRowLength, upsertClause.length()) > maxQueryLength) {
 		return false;
 	}
 
