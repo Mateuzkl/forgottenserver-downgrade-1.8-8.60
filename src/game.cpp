@@ -647,13 +647,14 @@ void collectManagedContainerDestinations(Game& game, const ContainerPtr& root, s
 }
 
 ReturnValue depositItemInManagedContainers(Game& game, Player* player, const std::shared_ptr<Item>& itemRef,
-                                           const ContainerPtr& destination)
+                                           const ContainerPtr& destination, uint32_t& remainderCount)
 {
 	Item* item = itemRef.get();
 	if (!player || !item || !destination) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
+	remainderCount = 0;
 	std::vector<ContainerPtr> destinations;
 	collectManagedContainerDestinations(game, destination, destinations);
 
@@ -678,10 +679,11 @@ ReturnValue depositItemInManagedContainers(Game& game, Player* player, const std
 			ret = game.internalMoveItem(itemParent, target, INDEX_WHEREEVER, item, item->getItemCount(), nullptr, 0,
 			                            actor);
 		} else {
-			uint32_t remainderCount = 0;
-			ret = game.internalAddItem(target, item, INDEX_WHEREEVER, 0, false, remainderCount);
-			if (ret == RETURNVALUE_NOERROR && remainderCount != 0) {
-				ret = RETURNVALUE_CONTAINERNOTENOUGHROOM;
+			uint32_t addRemainder = 0;
+			ret = game.internalAddItem(target, item, INDEX_WHEREEVER, 0, false, addRemainder);
+			if (ret == RETURNVALUE_NOERROR || item->isRemoved()) {
+				remainderCount = addRemainder;
+				return RETURNVALUE_NOERROR;
 			}
 		}
 
@@ -700,11 +702,12 @@ ReturnValue depositItemInManagedContainers(Game& game, Player* player, const std
 ReturnValue moveQuickLootItem(Game& game, Player* player, const std::shared_ptr<Item>& itemRef,
                               const ContainerPtr& destination)
 {
-	return depositItemInManagedContainers(game, player, itemRef, destination);
+	uint32_t unusedRemainder = 0;
+	return depositItemInManagedContainers(game, player, itemRef, destination, unusedRemainder);
 }
 
 ReturnValue internalCollectManagedItems(Game& game, Player* player, Item* item, ObjectCategory_t category,
-                                        bool isLootContainer)
+                                        bool isLootContainer, uint32_t& remainderCount)
 {
 	if (!player || !item) {
 		return RETURNVALUE_NOTPOSSIBLE;
@@ -724,7 +727,7 @@ ReturnValue internalCollectManagedItems(Game& game, Player* player, Item* item, 
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	return depositItemInManagedContainers(game, player, itemRef, destination);
+	return depositItemInManagedContainers(game, player, itemRef, destination, remainderCount);
 }
 
 QuickLootResult collectQuickLootContainer(Game& game, Player* player, const ContainerPtr& containerRef)
@@ -2956,8 +2959,9 @@ ReturnValue Game::internalPlayerAddItem(Player* player, Item* item, bool dropOnM
 	ReturnValue ret;
 	if (slot == CONST_SLOT_WHEREEVER) {
 		const ObjectCategory_t category = getQuickLootObjectCategory(item);
-		ret = internalCollectManagedItems(*this, player, item, category, false);
+		ret = internalCollectManagedItems(*this, player, item, category, false, remainderCount);
 		if (ret != RETURNVALUE_NOERROR) {
+			remainderCount = 0;
 			ret = internalAddItem(player, item, static_cast<int32_t>(slot), 0, false, remainderCount);
 		}
 	} else {

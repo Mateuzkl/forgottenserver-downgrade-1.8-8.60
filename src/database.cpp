@@ -771,6 +771,37 @@ bool DBInsert::addRow(std::string_view row)
 	return true;
 }
 
+bool DBInsert::appendRowForBatch(std::string_view row)
+{
+	const size_t rowLength = row.length();
+	const uint64_t maxPacketSize = Database::getInstance().getMaxPacketSize();
+	const uint64_t maxQueryLength = maxPacketSize > DB_INSERT_PACKET_SAFETY_MARGIN
+	                                    ? maxPacketSize - DB_INSERT_PACKET_SAFETY_MARGIN
+	                                    : maxPacketSize;
+
+	const bool hasRows = !values.empty();
+	const size_t projectedRowLength = rowLength + (hasRows ? 3 : 2);
+	if (static_cast<uint64_t>(length + projectedRowLength) > maxQueryLength) {
+		return false;
+	}
+
+	const bool firstRow = values.empty();
+	if (firstRow) {
+		values.reserve(rowLength + 2);
+		values.push_back('(');
+		values.append(row);
+		values.push_back(')');
+	} else {
+		values.reserve(values.length() + rowLength + 3);
+		values.push_back(',');
+		values.push_back('(');
+		values.append(row);
+		values.push_back(')');
+	}
+	length += rowLength + (firstRow ? 2 : 3);
+	return true;
+}
+
 bool DBInsert::addRow(std::ostringstream& row)
 {
 	bool ret = addRow(row.str());

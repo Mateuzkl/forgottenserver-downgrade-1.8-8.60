@@ -296,8 +296,9 @@ bool KVStore::buildBatchSaveQuery(const std::vector<std::pair<std::string, Value
 			continue;
 		}
 		const auto serialized = value.serialize();
-		if (!update.addRow(fmt::format("{}, {}, {}", db.escapeString(key), value.getTimestamp(),
-		                               db.escapeBlob(serialized.data(), static_cast<uint32_t>(serialized.size()))))) {
+		if (!update.appendRowForBatch(fmt::format("{}, {}, {}", db.escapeString(key), value.getTimestamp(),
+		                                          db.escapeBlob(serialized.data(),
+		                                                        static_cast<uint32_t>(serialized.size()))))) {
 			return false;
 		}
 		hasRows = true;

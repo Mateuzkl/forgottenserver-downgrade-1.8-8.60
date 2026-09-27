@@ -2132,7 +2132,7 @@ int luaPlayerAddItemEx(lua_State* L)
 	} else {
 		int32_t index = getInteger<int32_t>(L, 4, INDEX_WHEREEVER);
 		uint32_t flags = getInteger<uint32_t>(L, 5, 0);
-		if (index == INDEX_WHEREEVER) {
+		if (index == INDEX_WHEREEVER && flags == 0) {
 			returnValue = g_game.internalPlayerAddItem(player, item, false, CONST_SLOT_WHEREEVER);
 		} else {
 			returnValue = g_game.internalAddItem(player, item, index, flags);
