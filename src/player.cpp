@@ -3181,7 +3181,17 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 		IOLoginData::removeOnlineStatus(guid);
 
 		Familiar::onPlayerLogout(this);
-		flushQuickLootPersistence(true);
+
+		bool quickLootPersisted = false;
+		for (uint32_t tries = 0; tries < 3; ++tries) {
+			if (flushQuickLootPersistence(true)) {
+				quickLootPersisted = true;
+				break;
+			}
+		}
+		if (!quickLootPersisted && quickLootSaveDirty) {
+			LOG_ERROR(fmt::format("[QuickLoot] Failed to persist settings on logout for player {}", getName()));
+		}
 
 		bool saved = false;
 		for (uint32_t tries = 0; tries < 3; ++tries) {
@@ -8149,7 +8159,7 @@ void Player::scheduleQuickLootPersistence() const
 	});
 }
 
-void Player::flushQuickLootPersistence(bool sync) const
+bool Player::flushQuickLootPersistence(bool sync) const
 {
 	if (quickLootSaveEventId != 0) {
 		g_scheduler.stopEvent(quickLootSaveEventId);
@@ -8157,24 +8167,58 @@ void Player::flushQuickLootPersistence(bool sync) const
 	}
 
 	if (!quickLootSaveDirty) {
-		return;
+		return true;
 	}
 
-	const uint64_t flushGeneration = quickLootSaveGeneration;
+	const uint32_t playerId = getID();
 
 	if (sync) {
 		g_databaseTasks.flush();
+		static constexpr uint32_t kSyncSaveAttempts = 3;
+		for (uint32_t attempt = 0; attempt < kSyncSaveAttempts; ++attempt) {
+			if (attempt > 0) {
+				g_databaseTasks.flush();
+			}
+			if (!quickLootSaveDirty) {
+				return true;
+			}
+
+			const uint64_t flushGeneration = quickLootSaveGeneration;
+			const auto snapshot = buildQuickLootPersistenceSnapshot(*this);
+			std::string query;
+			if (!KVStore::getInstance().buildBatchSaveQuery(snapshot, query)) {
+				continue;
+			}
+
+			if (query.empty()) {
+				if (quickLootSaveGeneration == flushGeneration) {
+					quickLootSaveDirty = false;
+				} else {
+					scheduleQuickLootPersistence();
+				}
+				return true;
+			}
+
+			if (Database::getInstance().executeQuery(query)) {
+				lastQuickLootDbSave = std::chrono::steady_clock::now();
+				if (quickLootSaveGeneration == flushGeneration) {
+					quickLootSaveDirty = false;
+				} else {
+					scheduleQuickLootPersistence();
+				}
+				return true;
+			}
+		}
+		LOG_ERROR(fmt::format("[QuickLoot] Synchronous persistence failed for player id {}", playerId));
+		return false;
 	}
 
-	auto snapshot = buildQuickLootPersistenceSnapshot(*this);
+	const uint64_t flushGeneration = quickLootSaveGeneration;
+	const auto snapshot = buildQuickLootPersistenceSnapshot(*this);
 	std::string query;
 	if (!KVStore::getInstance().buildBatchSaveQuery(snapshot, query)) {
-		if (sync) {
-			LOG_ERROR(fmt::format("[QuickLoot] Failed to build persistence query for player id {}", getID()));
-		} else {
-			scheduleQuickLootPersistence();
-		}
-		return;
+		scheduleQuickLootPersistence();
+		return false;
 	}
 
 	if (query.empty()) {
@@ -8183,28 +8227,7 @@ void Player::flushQuickLootPersistence(bool sync) const
 		} else {
 			scheduleQuickLootPersistence();
 		}
-		return;
-	}
-
-	const uint32_t playerId = getID();
-	if (sync) {
-		static constexpr uint32_t kSyncSaveAttempts = 3;
-		for (uint32_t attempt = 0; attempt < kSyncSaveAttempts; ++attempt) {
-			if (attempt > 0) {
-				g_databaseTasks.flush();
-			}
-			if (Database::getInstance().executeQuery(query)) {
-				lastQuickLootDbSave = std::chrono::steady_clock::now();
-				if (quickLootSaveGeneration == flushGeneration) {
-					quickLootSaveDirty = false;
-				} else {
-					scheduleQuickLootPersistence();
-				}
-				return;
-			}
-		}
-		LOG_ERROR(fmt::format("[QuickLoot] Synchronous persistence failed for player id {}", playerId));
-		return;
+		return true;
 	}
 
 	if (!g_databaseTasks.addTask(std::move(query), [playerId, flushGeneration](DBResult_ptr, bool success, uint64_t) {
@@ -8225,7 +8248,9 @@ void Player::flushQuickLootPersistence(bool sync) const
 		    }
 	    })) {
 		scheduleQuickLootPersistence();
+		return false;
 	}
+	return true;
 }
 
 void Player::setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, uint64_t containerUid, bool isLootContainer)

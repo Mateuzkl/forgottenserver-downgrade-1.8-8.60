@@ -1622,7 +1622,7 @@ public:
 	bool isQuickLootAutoEnabled() const;
 	void ensureQuickLootStateLoaded();
 	void saveQuickLootState() const;
-	void flushQuickLootPersistence(bool sync = false) const;
+	bool flushQuickLootPersistence(bool sync = false) const;
 	void scheduleQuickLootPersistence() const;
 	void setManagedLootContainer(ObjectCategory_t category, uint16_t containerId, uint64_t containerUid, bool isLootContainer);
 	void clearManagedLootContainer(ObjectCategory_t category, bool isLootContainer);
