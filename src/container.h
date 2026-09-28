@@ -20,6 +20,8 @@ class Player;
 
 bool isBrowseFieldVisibleItem(const Item* item);
 bool isInsideRewardContainer(const Cylinder* cylinder);
+// True when the client should show the container "up/parent" arrow (nested inside another container).
+bool containerHasParent(const Container* container, const Player* player = nullptr);
 
 class ContainerIterator
 {

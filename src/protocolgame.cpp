@@ -6818,7 +6818,7 @@ void ProtocolGame::syncOpenContainers()
 		if (!container) {
 			continue;
 		}
-		bool hasParent = (dynamic_cast<const Container*>(container->getParent()) != nullptr);
+		bool hasParent = containerHasParent(container.get(), player.get());
 		sendContainer(it.first, container.get(), hasParent, openContainer.index);
 	}
 }

@@ -1113,6 +1113,29 @@ void Container::notifyTileUpdate() const
 	}
 }
 
+bool containerHasParent(const Container* container, const Player* player)
+{
+	if (!container) {
+		return false;
+	}
+
+	if (player) {
+		const Item* containerItem = container;
+		for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+			if (player->getInventoryItem(static_cast<slots_t>(slot)) == containerItem) {
+				return false;
+			}
+		}
+	}
+
+	const Cylinder* parent = container->getParent();
+	if (!parent || dynamic_cast<const Player*>(parent)) {
+		return false;
+	}
+
+	return dynamic_cast<const Container*>(parent) != nullptr;
+}
+
 std::shared_ptr<Item> ContainerIterator::operator*() const
 {
 	if (!hasNext()) {

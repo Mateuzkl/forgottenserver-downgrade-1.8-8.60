@@ -2310,7 +2310,7 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
 				for (const auto& [cid, openCont] : player->getOpenContainers()) {
 					auto openContPtr = openCont.container.lock();
 					if (openContPtr && openContPtr.get() == srcContainer) {
-						player->sendContainer(cid, srcContainer, srcContainer->getParent() != nullptr, openCont.index);
+						player->sendContainer(cid, srcContainer, containerHasParent(srcContainer, player), openCont.index);
 						break;
 					}
 				}
@@ -2322,7 +2322,7 @@ void Game::playerMoveItem(Player* player, const Position& fromPos, uint16_t spri
 				for (const auto& [cid, openCont] : player->getOpenContainers()) {
 					auto openContPtr = openCont.container.lock();
 					if (openContPtr && openContPtr.get() == dstContainer) {
-						player->sendContainer(cid, dstContainer, dstContainer->getParent() != nullptr, openCont.index);
+						player->sendContainer(cid, dstContainer, containerHasParent(dstContainer, player), openCont.index);
 						break;
 					}
 				}
@@ -4046,8 +4046,8 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		for (const auto& [cid, openCont] : player->getOpenContainers()) {
 			auto openContPtr = openCont.container.lock();
 			if (openContPtr) {
-				player->sendContainer(cid, openContPtr.get(),
-				                      openContPtr->getParent() != nullptr, openCont.index);
+				player->sendContainer(cid, openContPtr.get(), containerHasParent(openContPtr.get(), player),
+				                      openCont.index);
 			}
 		}
 
@@ -4196,7 +4196,7 @@ void Game::playerSeekInContainer(uint32_t playerId, uint8_t containerId, uint16_
 		return;
 	}
 
-	const bool hasParent = dynamic_cast<const Container*>(container->getParent()) != nullptr;
+	const bool hasParent = containerHasParent(container, player);
 	player->setContainerIndex(containerId, index);
 	player->sendContainer(containerId, container, hasParent, index);
 }
@@ -4627,7 +4627,7 @@ void Game::playerOpenManagedLootContainer(uint32_t playerId, ObjectCategory_t ca
 	const int8_t openContainerId = player->getContainerID(container);
 	if (openContainerId >= 0) {
 		player->sendContainer(static_cast<uint8_t>(openContainerId), container,
-		                      dynamic_cast<const Container*>(container->getParent()) != nullptr,
+		                      containerHasParent(container, player),
 		                      player->getContainerIndex(static_cast<uint8_t>(openContainerId)));
 		return;
 	}
@@ -4638,7 +4638,7 @@ void Game::playerOpenManagedLootContainer(uint32_t playerId, ObjectCategory_t ca
 		}
 
 		player->addContainer(cid, container);
-		player->sendContainer(cid, container, dynamic_cast<const Container*>(container->getParent()) != nullptr, 0);
+		player->sendContainer(cid, container, containerHasParent(container, player), 0);
 		return;
 	}
 
@@ -4868,7 +4868,7 @@ void Game::playerMoveUpContainer(uint32_t playerId, uint8_t cid)
 		return;
 	}
 
-	bool hasParent = (dynamic_cast<const Container*>(parentContainer->getParent()) != nullptr);
+	bool hasParent = containerHasParent(parentContainer, player);
 	player->addContainer(cid, parentContainer);
 	player->sendContainer(cid, parentContainer, hasParent, player->getContainerIndex(cid));
 }
@@ -4886,7 +4886,7 @@ void Game::playerUpdateContainer(uint32_t playerId, uint8_t cid)
 		return;
 	}
 
-	bool hasParent = (dynamic_cast<const Container*>(container->getParent()) != nullptr);
+	bool hasParent = containerHasParent(container, player);
 	player->sendContainer(cid, container, hasParent, player->getContainerIndex(cid));
 }
 
