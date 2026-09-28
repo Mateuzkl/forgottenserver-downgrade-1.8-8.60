@@ -167,6 +167,8 @@ public:
 	void onWalkComplete() override;
 	bool getNextStep(Direction& direction, uint32_t& flags) override;
 	void onFollowCreatureComplete(const Creature* creature) override;
+	void goToFollowCreature() override;
+	bool shouldRepathAfterTargetStep();
 
 	void onThink(uint32_t interval) override;
 
@@ -251,6 +253,8 @@ private:
 	int32_t overrideTargetDistanceDuration = 0;
 	int32_t stepDuration = 0;
 	int64_t fleeBlockUntil = 0;
+	int64_t lastFollowRepathTime = 0;
+	int32_t followDistanceAtLastRepath = -1;
 
 	Position masterPos;
 
