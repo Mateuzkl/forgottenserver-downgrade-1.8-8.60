@@ -278,6 +278,7 @@ function CustomBosstiary.addKill(players, entry)
 		if player and newProgress > oldProgress and player.isUsingAstraClient and player:isUsingAstraClient() then
 			player:sendBestiaryBanner(entry.raceId, newProgress, entry.name, {
 				lookType = entry.outfit.type,
+				lookTypeEx = entry.outfit.typeEx,
 				lookHead = entry.outfit.head,
 				lookBody = entry.outfit.body,
 				lookLegs = entry.outfit.legs,

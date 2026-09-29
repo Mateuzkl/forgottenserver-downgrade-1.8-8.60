@@ -2344,6 +2344,7 @@ int luaPlayerSendBestiaryBanner(lua_State* L)
 	info.raceId = getInteger<uint16_t>(L, 2);
 	info.name = getString(L, 4);
 	info.lookType = outfit.lookType;
+	info.lookTypeEx = outfit.lookTypeEx;
 	info.lookHead = outfit.lookHead;
 	info.lookBody = outfit.lookBody;
 	info.lookLegs = outfit.lookLegs;

@@ -6072,11 +6072,15 @@ bool BestiaryNotificationProtocol::writeProgress(NetworkMessage& msg, const Best
 	if (includeCreatureData) {
 		msg.addString(info.name);
 		msg.add<uint16_t>(info.lookType);
-		msg.addByte(info.lookHead);
-		msg.addByte(info.lookBody);
-		msg.addByte(info.lookLegs);
-		msg.addByte(info.lookFeet);
-		msg.addByte(info.lookAddons);
+		if (info.lookType != 0) {
+			msg.addByte(info.lookHead);
+			msg.addByte(info.lookBody);
+			msg.addByte(info.lookLegs);
+			msg.addByte(info.lookFeet);
+			msg.addByte(info.lookAddons);
+		} else {
+			msg.addItemId(info.lookTypeEx);
+		}
 	}
 	return true;
 }
