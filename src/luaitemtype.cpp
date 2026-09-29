@@ -62,7 +62,7 @@ int luaItemTypeSetPersistentTransformFamily(lua_State* L)
 	// itemType:setPersistentTransformFamily(familyId)
 	const ItemType* itemType = getUserdata<const ItemType>(L, 1);
 	const uint16_t familyId = getInteger<uint16_t>(L, 2);
-	if (!itemType || itemType->id == 0 || !itemType->isDoor() || familyId == 0) {
+	if (!itemType || itemType->id == 0 || familyId == 0) {
 		pushBoolean(L, false);
 		return 1;
 	}

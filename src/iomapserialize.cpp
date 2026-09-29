@@ -118,7 +118,7 @@ bool IOMapSerialize::isSamePersistentFixtureFamily(const ItemType& mapType, cons
 		});
 	}
 
-	if (mapType.isDoor() && persistedType.isDoor()) {
+	if (mapType.persistentTransformFamily != 0 || persistedType.persistentTransformFamily != 0) {
 		return mapType.persistentTransformFamily != 0 &&
 		       mapType.persistentTransformFamily == persistedType.persistentTransformFamily;
 	}
