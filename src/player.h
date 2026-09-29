@@ -2061,6 +2061,7 @@ private:
 	friend class ProtocolGame;
 	friend class ProtocolSpectator;
 	friend struct CreatureWalkTestAccess;
+	friend struct QuickLootTestAccess;
 };
 
 #endif

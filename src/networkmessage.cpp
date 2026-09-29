@@ -165,6 +165,8 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
                              bool sendAstraItemState, bool sendAstraQuiverCountU16, bool sendAstraItemMetadata,
                              bool sendContainerTypes, const Player* viewer)
 {
+	// Kept in the shared overload signature for legacy call-site compatibility;
+	// container state is encoded by sendContainerTypes below.
 	static_cast<void>(sendQuickLootFlags);
 	static_cast<void>(viewer);
 	addItemId(id);
@@ -201,6 +203,8 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
                              bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16,
                              bool sendAstraItemMetadata, bool sendContainerTypes, const Player* viewer)
 {
+	// Kept in the shared overload signature for legacy call-site compatibility;
+	// container state is encoded by sendContainerTypes below.
 	static_cast<void>(sendQuickLootFlags);
 	addItemId(item->getID());
 

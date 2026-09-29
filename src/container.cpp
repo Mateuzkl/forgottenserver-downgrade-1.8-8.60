@@ -1071,9 +1071,16 @@ bool Container::isLootCorpse() const
 	return type.corpseType != RACE_NONE || getCorpseOwner() != 0;
 }
 
+bool Container::isQuickLootDisabled() const
+{
+	const auto* attribute = getCustomAttribute("QuickLootDisabled");
+	const bool* disabled = attribute ? std::get_if<bool>(&attribute->value) : nullptr;
+	return disabled && *disabled;
+}
+
 uint8_t Container::getSpecialCategory(const Player* viewer) const
 {
-	if (!viewer || !lootHighlightActive || empty() || isRewardCorpse()) {
+	if (!viewer || !lootHighlightActive || empty() || isRewardCorpse() || isQuickLootDisabled()) {
 		return CONTAINER_SPECIAL_NONE;
 	}
 

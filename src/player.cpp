@@ -4465,6 +4465,9 @@ std::shared_ptr<Item> Player::getCorpse(Creature* lastHitCreature, Creature* mos
 {
 	auto corpse = Creature::getCorpse(lastHitCreature, mostDamageCreature);
 	if (corpse && corpse->getContainer()) {
+		// Player corpses use the normal container format but must never enter
+		// the monster Quick Loot flow.
+		corpse->setCustomAttribute("QuickLootDisabled", true);
 		size_t killersSize = getKillers().size();
 
 		if (lastHitCreature) {
@@ -7927,7 +7930,7 @@ namespace {
 bool isValidQuickLootCategory(ObjectCategory_t category)
 {
 	const uint8_t value = static_cast<uint8_t>(category);
-	return value >= OBJECTCATEGORY_FIRST && value <= OBJECTCATEGORY_LAST && value != 26;
+	return value >= OBJECTCATEGORY_FIRST && value <= OBJECTCATEGORY_LAST;
 }
 
 std::shared_ptr<KV> getPlayerQuickLootKV(uint32_t guid)

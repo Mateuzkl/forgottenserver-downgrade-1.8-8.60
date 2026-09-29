@@ -340,17 +340,10 @@ void dispatchQuickLootFeedback(Player* player, const QuickLootResult& result)
 	}
 }
 
-bool hasQuickLootDisabled(const Item* item)
-{
-	const auto* attribute = item ? item->getCustomAttribute("QuickLootDisabled") : nullptr;
-	const bool* disabled = attribute ? std::get_if<bool>(&attribute->value) : nullptr;
-	return disabled && *disabled;
-}
-
 bool shouldUseContainerInsteadOfQuickLoot(const Container* container)
 {
 	return container && (container->getRewardChest() || container->getID() == ITEM_REWARD_CONTAINER ||
-	                     container->isRewardCorpse() || hasQuickLootDisabled(container));
+	                     container->isRewardCorpse() || container->isQuickLootDisabled());
 }
 
 bool isQuickLootCorpseType(const Container* container)
@@ -415,7 +408,7 @@ bool shouldQuickLootItem(const Player* player, const Item* item)
 bool isValidObjectCategory(ObjectCategory_t category)
 {
 	const uint8_t value = static_cast<uint8_t>(category);
-	return value >= OBJECTCATEGORY_FIRST && value <= OBJECTCATEGORY_LAST && value != 26;
+	return value >= OBJECTCATEGORY_FIRST && value <= OBJECTCATEGORY_LAST;
 }
 
 std::optional<ObjectCategory_t> getQuickLootCategoryFromPrimaryType(const ItemType& itemType)
@@ -435,6 +428,7 @@ std::optional<ObjectCategory_t> getQuickLootCategoryFromPrimaryType(const ItemTy
 	    {"tool", OBJECTCATEGORY_TOOLS},
 	    {"tools", OBJECTCATEGORY_TOOLS},
 	    {"decoration", OBJECTCATEGORY_DECORATION},
+	    {"soul cores", OBJECTCATEGORY_SOULCORES},
 	};
 
 	const auto it = categoryByPrimaryType.find(itemType.primaryType);
@@ -8112,7 +8106,8 @@ void Game::internalDecayItem(std::shared_ptr<Item> item)
 
 void Game::startLootHighlight(Container* corpse, uint32_t ownerPlayerId)
 {
-	if (!corpse || corpse->empty() || ownerPlayerId == 0) {
+	if (!corpse || corpse->empty() || ownerPlayerId == 0 || corpse->isRewardCorpse() ||
+	    corpse->isQuickLootDisabled()) {
 		return;
 	}
 

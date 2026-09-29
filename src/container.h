@@ -98,6 +98,7 @@ public:
 	bool isHoldingItem(const Item* item) const;
 	bool isRewardCorpse() const;
 	bool isLootCorpse() const;
+	bool isQuickLootDisabled() const;
 	bool hasLootHighlight() const { return lootHighlightActive; }
 	void setLootHighlightActive(bool value) { lootHighlightActive = value; }
 	uint8_t getSpecialCategory(const Player* viewer) const;
