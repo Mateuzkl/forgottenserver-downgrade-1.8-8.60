@@ -116,13 +116,19 @@ struct ItemTypePropertyGuard
 	bool origStackable;
 	bool origPickupable;
 	Direction origBedPartnerDir;
+	ItemTypes_t origLootType;
+	uint64_t origWorth;
+	std::string origPrimaryType;
 
 	explicit ItemTypePropertyGuard(uint16_t id)
 	    : itemId(id),
 	      origMoveable(Item::items.getItemType(id).moveable),
 	      origStackable(Item::items.getItemType(id).stackable),
 	      origPickupable(Item::items.getItemType(id).pickupable),
-	      origBedPartnerDir(Item::items.getItemType(id).bedPartnerDir)
+	      origBedPartnerDir(Item::items.getItemType(id).bedPartnerDir),
+	      origLootType(Item::items.getItemType(id).lootType),
+	      origWorth(Item::items.getItemType(id).worth),
+	      origPrimaryType(Item::items.getItemType(id).primaryType)
 	{
 	}
 
@@ -132,6 +138,9 @@ struct ItemTypePropertyGuard
 		Item::items.getItemType(itemId).stackable = origStackable;
 		Item::items.getItemType(itemId).pickupable = origPickupable;
 		Item::items.getItemType(itemId).bedPartnerDir = origBedPartnerDir;
+		Item::items.getItemType(itemId).lootType = origLootType;
+		Item::items.getItemType(itemId).worth = origWorth;
+		Item::items.getItemType(itemId).primaryType = origPrimaryType;
 	}
 };
 
@@ -2814,6 +2823,45 @@ TEST_CASE(quickloot_rejects_foreign_or_disabled_corpses_without_moving_items)
 	fixture.collect();
 	CHECK(loot->getParent() == fixture.corpse.get());
 	CHECK(fixture.backpack->empty());
+}
+
+TEST_CASE(quickloot_start_does_not_highlight_disabled_corpses)
+{
+	ensureItemTypes();
+	QuickLootLifetimeFixture fixture;
+	fixture.addLoot();
+	fixture.corpse->setCustomAttribute("QuickLootDisabled", true);
+
+	CHECK(g_scheduler.getState() != THREAD_STATE_RUNNING);
+	g_scheduler.start();
+	g_game.startLootHighlight(fixture.corpse.get(), fixture.player->getID());
+	const bool highlighted = fixture.corpse->hasLootHighlight();
+	g_game.stopLootHighlight(fixture.corpse.get());
+	g_scheduler.shutdown();
+
+	CHECK(!highlighted);
+}
+
+TEST_CASE(quickloot_routes_soul_cores_from_primary_type_metadata)
+{
+	ensureItemTypes();
+	QuickLootLifetimeFixture fixture;
+	auto& lootType = Item::items.getItemType(2160);
+	lootType.lootType = ITEM_TYPE_NONE;
+	lootType.worth = 0;
+	lootType.primaryType = "soul cores";
+	fixture.player->setPremiumTime(time(nullptr) + 3600);
+
+	auto soulCoreBag = std::make_shared<Container>(ITEM_BAG, 8);
+	soulCoreBag->setItemUID(Item::generateItemUID());
+	fixture.backpack->internalAddThing(soulCoreBag.get());
+	fixture.player->setManagedLootContainer(OBJECTCATEGORY_SOULCORES, soulCoreBag->getClientID(),
+	                                        soulCoreBag->getItemUID(), true);
+
+	auto soulCore = fixture.addLoot();
+	fixture.collect();
+
+	CHECK(soulCore->getParent() == soulCoreBag.get());
 }
 
 TEST_CASE(quickloot_tile_removed_by_movement_callback_stops_the_batch)
