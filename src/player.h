@@ -1412,10 +1412,11 @@ public:
 			client->sendScreenshotAndBannerUpSkill(skill, newLevel);
 		}
 	}
-	void sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss = false) const
+	void sendScreenshotAndBannerProgressRace(const BestiaryCreatureInfo& info, uint8_t progressLevel,
+	                                         bool isBoss = false) const
 	{
 		if (client) {
-			client->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+			client->sendScreenshotAndBannerProgressRace(info, progressLevel, isBoss);
 		}
 	}
 	void sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints) const

@@ -26,6 +26,7 @@ enum Capability : uint8_t {
 	EchoRaidVisuals = 1U << 2,
 	StoreBasePrice = 1U << 3,
 	StoreCatalogChunks = 1U << 4,
+	BestiaryBannerCreatureData = 1U << 5,
 };
 
 inline uint32_t rotateLeft(uint32_t value, uint8_t bits)

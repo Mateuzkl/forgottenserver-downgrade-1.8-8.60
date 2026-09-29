@@ -25,12 +25,18 @@ class Item;
 class Tile;
 class Connection;
 class ProtocolGame;
+struct BestiaryCreatureInfo;
 struct ProtocolGameCustomPingTestAccess;
 struct ProtocolGameAstraRegenerationTestAccess;
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 class ProtocolSpectator;
 
 extern Game g_game;
+
+namespace BestiaryNotificationProtocol {
+bool writeProgress(NetworkMessage& msg, const BestiaryCreatureInfo& info, uint8_t progressLevel, bool isBoss,
+                   bool includeCreatureData);
+}
 
 struct TextMessage
 {
@@ -261,7 +267,8 @@ private:
 	void sendScreenshotAndBannerUnlockedCosmetic(std::string_view skinName, uint16_t lookType, uint8_t skinType);
 	void sendScreenshotAndBannerUpLevel(uint16_t level);
 	void sendScreenshotAndBannerUpSkill(skills_t skill, uint16_t level);
-	void sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss = false);
+	void sendScreenshotAndBannerProgressRace(const BestiaryCreatureInfo& info, uint8_t progressLevel,
+	                                         bool isBoss = false);
 	void sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints);
 	void sendExtendedOpcode(uint8_t opcode, std::string_view data);
 	void sendBlessingWindow();
@@ -451,6 +458,7 @@ private:
 	bool supportsAstraEchoRaidVisuals = false;
 	bool supportsAstraStoreBasePrice = false;
 	bool supportsAstraStoreCatalogChunks = false;
+	bool supportsAstraBestiaryBannerCreatureData = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;

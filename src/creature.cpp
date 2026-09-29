@@ -707,7 +707,7 @@ void Creature::onDeath()
 					const uint8_t oldProgress = BestiaryCharmSystem::getProgress(info, oldCount);
 					const uint8_t newProgress = BestiaryCharmSystem::getProgress(info, newCount);
 					if (oldProgress != newProgress) {
-						player->sendScreenshotAndBannerProgressRace(raceId, newProgress);
+						player->sendScreenshotAndBannerProgressRace(info, newProgress);
 					}
 					const bool completed = oldCount < info.toKill && newCount >= info.toKill;
 					if (completed) {

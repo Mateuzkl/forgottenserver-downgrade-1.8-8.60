@@ -5,6 +5,7 @@
 
 #include "actions.h"
 #include "astraclient.h"
+#include "bestiary_charm.h"
 #include "fonticakclient.h"
 #include "ban.h"
 #include "character_bazaar.h"
@@ -1175,6 +1176,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    (capabilities & AstraClient::StoreBasePrice) != 0;
 					supportsAstraStoreCatalogChunks =
 					    (capabilities & AstraClient::StoreCatalogChunks) != 0;
+					supportsAstraBestiaryBannerCreatureData =
+					    (capabilities & AstraClient::BestiaryBannerCreatureData) != 0;
 				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
@@ -6054,18 +6057,42 @@ void ProtocolGame::sendScreenshotAndBannerUpSkill(skills_t skill, uint16_t level
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss)
+bool BestiaryNotificationProtocol::writeProgress(NetworkMessage& msg, const BestiaryCreatureInfo& info,
+                                                 uint8_t progressLevel, bool isBoss, bool includeCreatureData)
 {
-	if (!isAstraClient || raceId == 0 || progressLevel == 0) {
+	if (info.raceId == 0 || progressLevel == 0) {
+		return false;
+	}
+
+	msg.addByte(0x75);
+	msg.addByte(isBoss ? SCREENSHOT_AND_BANNER_TYPE_BOSSTIARY_PROGRESS :
+	                       SCREENSHOT_AND_BANNER_TYPE_BESTIARY_PROGRESS);
+	msg.add<uint16_t>(info.raceId);
+	msg.addByte(progressLevel);
+	if (includeCreatureData) {
+		msg.addString(info.name);
+		msg.add<uint16_t>(info.lookType);
+		msg.addByte(info.lookHead);
+		msg.addByte(info.lookBody);
+		msg.addByte(info.lookLegs);
+		msg.addByte(info.lookFeet);
+		msg.addByte(info.lookAddons);
+	}
+	return true;
+}
+
+void ProtocolGame::sendScreenshotAndBannerProgressRace(const BestiaryCreatureInfo& info, uint8_t progressLevel,
+                                                       bool isBoss)
+{
+	if (!isAstraClient) {
 		return;
 	}
 
 	NetworkMessage msg;
-	msg.addByte(0x75);
-	msg.addByte(isBoss ? SCREENSHOT_AND_BANNER_TYPE_BOSSTIARY_PROGRESS :
-	                       SCREENSHOT_AND_BANNER_TYPE_BESTIARY_PROGRESS);
-	msg.add<uint16_t>(raceId);
-	msg.addByte(progressLevel);
+	if (!BestiaryNotificationProtocol::writeProgress(msg, info, progressLevel, isBoss,
+	                                                 supportsAstraBestiaryBannerCreatureData)) {
+		return;
+	}
 	writeToOutputBuffer(msg);
 }
 
@@ -6614,6 +6641,9 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraShopCountU16] = true;
 		if (supportsAstraStoreBasePrice) {
 			features[GameFeature::AstraStoreBasePrice] = true;
+		}
+		if (supportsAstraBestiaryBannerCreatureData) {
+			features[GameFeature::AstraBestiaryBannerCreatureData] = true;
 		}
 		if (supportsAstraSingleCreatureMarks) {
 			features[GameFeature::AstraSingleCreatureMarks] = true;

@@ -276,12 +276,14 @@ function CustomBosstiary.addKill(players, entry)
 		local oldProgress = CustomBosstiary.getProgress(entry, oldKills)
 		local newProgress = CustomBosstiary.getProgress(entry, newKills)
 		if player and newProgress > oldProgress and player.isUsingAstraClient and player:isUsingAstraClient() then
-			local message<close> = NetworkMessage(player)
-			message:addByte(0x75)
-			message:addByte(7)
-			message:addU16(entry.raceId)
-			message:addByte(newProgress)
-			message:sendToPlayer(player)
+			player:sendBestiaryBanner(entry.raceId, newProgress, entry.name, {
+				lookType = entry.outfit.type,
+				lookHead = entry.outfit.head,
+				lookBody = entry.outfit.body,
+				lookLegs = entry.outfit.legs,
+				lookFeet = entry.outfit.feet,
+				lookAddons = entry.outfit.addons,
+			}, true)
 		end
 	end
 	return true

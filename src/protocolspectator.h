@@ -1044,16 +1044,16 @@ class ProtocolSpectator {
                 spy->sendScreenshotAndBannerUpSkill(skill, level);
         }
 
-        void sendScreenshotAndBannerProgressRace(uint16_t raceId, uint8_t progressLevel, bool isBoss) {
+        void sendScreenshotAndBannerProgressRace(const BestiaryCreatureInfo& info, uint8_t progressLevel, bool isBoss) {
             auto o = owner.lock();
             if (o)
-                o->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+                o->sendScreenshotAndBannerProgressRace(info, progressLevel, isBoss);
 
             for (auto &it : spectators)
-                it->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+                it->sendScreenshotAndBannerProgressRace(info, progressLevel, isBoss);
 
             for (auto &spy : spyClients_)
-                spy->sendScreenshotAndBannerProgressRace(raceId, progressLevel, isBoss);
+                spy->sendScreenshotAndBannerProgressRace(info, progressLevel, isBoss);
         }
 
         void sendEchoWardenReward(uint16_t raceId, uint32_t charmPoints) {

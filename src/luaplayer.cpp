@@ -2330,6 +2330,30 @@ int luaPlayerSendBannerType(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSendBestiaryBanner(lua_State* L)
+{
+	// player:sendBestiaryBanner(raceId, progressLevel, name, outfit[, isBoss])
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const Outfit_t outfit = getOutfit(L, 5);
+	BestiaryCreatureInfo info;
+	info.raceId = getInteger<uint16_t>(L, 2);
+	info.name = getString(L, 4);
+	info.lookType = outfit.lookType;
+	info.lookHead = outfit.lookHead;
+	info.lookBody = outfit.lookBody;
+	info.lookLegs = outfit.lookLegs;
+	info.lookFeet = outfit.lookFeet;
+	info.lookAddons = outfit.lookAddons;
+	player->sendScreenshotAndBannerProgressRace(info, getInteger<uint8_t>(L, 3), getBoolean(L, 6, false));
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerSendStats(lua_State* L)
 {
 	// player:sendStats()
@@ -5076,6 +5100,7 @@ void LuaScriptInterface::registerPlayer()
 
 	registerMethod("Player", "sendTextMessage", luaPlayerSendTextMessage);
 	registerMethod("Player", "sendBannerType", luaPlayerSendBannerType);
+	registerMethod("Player", "sendBestiaryBanner", luaPlayerSendBestiaryBanner);
 	registerMethod("Player", "sendStats", luaPlayerSendStats);
 	registerMethod("Player", "sendSkills", luaPlayerSendSkills);
 	registerMethod("Player", "sendItemValues", luaPlayerSendItemValues);
