@@ -18,6 +18,7 @@
 #include "spells.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <fmt/format.h>
 #include <limits>
@@ -30,11 +31,14 @@ namespace {
 constexpr int32_t MONSTER_DIRECT_CHASE_MAX_DISTANCE = 10;
 constexpr int64_t MONSTER_FOLLOW_REPATH_INTERVAL_MS = 400;
 
-void appendCardinalsTowardTarget(const Position& from, const Position& targetPos, std::vector<Direction>& out)
+using ChaseStepCandidates = std::array<Direction, 3>;
+
+void appendCardinalsTowardTarget(const Position& from, const Position& targetPos, ChaseStepCandidates& out,
+                                 size_t& count)
 {
 	auto append = [&](Direction direction) {
-		if (std::find(out.begin(), out.end(), direction) == out.end()) {
-			out.push_back(direction);
+		if (std::find(out.begin(), out.begin() + count, direction) == out.begin() + count) {
+			out[count++] = direction;
 		}
 	};
 
@@ -2961,10 +2965,11 @@ bool Monster::canWalkTo(Position pos, Direction direction) const
 }
 
 bool Monster::tryChaseStepCandidates(const Position& from, const Position& targetPos, int32_t dist,
-                                     const std::vector<Direction>& candidates,
+	                                   const ChaseStepCandidates& candidates, size_t candidateCount,
                                      std::vector<Direction>& dirList) const
 {
-	for (const Direction direction : candidates) {
+	for (size_t i = 0; i < candidateCount; ++i) {
+		const Direction direction = candidates[i];
 		const Position next = getNextPosition(direction, from);
 		if (!canWalkTo(from, direction)) {
 			continue;
@@ -2999,9 +3004,10 @@ bool Monster::tryMonsterChaseStep(const Position& targetPos, const FindPathParam
 		return false;
 	}
 
-	std::vector<Direction> cardinals;
-	appendCardinalsTowardTarget(from, targetPos, cardinals);
-	return tryChaseStepCandidates(from, targetPos, dist, cardinals, dirList);
+	ChaseStepCandidates cardinals{};
+	size_t cardinalCount = 0;
+	appendCardinalsTowardTarget(from, targetPos, cardinals, cardinalCount);
+	return tryChaseStepCandidates(from, targetPos, dist, cardinals, cardinalCount, dirList);
 }
 
 void Monster::death(Creature*)
@@ -3414,24 +3420,25 @@ bool Monster::shouldRepathAfterTargetStep()
 		return true;
 	}
 
-	const int32_t dist =
-	    std::max(getPosition().getDistanceX(follow->getPosition()), getPosition().getDistanceY(follow->getPosition()));
-
 	if (listWalkDir.empty()) {
-		followDistanceAtLastRepath = dist;
 		lastFollowRepathTime = OTSYS_TIME();
 		return true;
 	}
 
-	if (followDistanceAtLastRepath >= 0 && dist > followDistanceAtLastRepath) {
-		followDistanceAtLastRepath = dist;
-		lastFollowRepathTime = OTSYS_TIME();
-		return true;
+	FindPathParams fpp;
+	getPathSearchParams(follow.get(), fpp);
+	const int32_t endDistance = std::max(followPathEnd.getDistanceX(follow->getPosition()),
+	                                     followPathEnd.getDistanceY(follow->getPosition()));
+	const bool routeStillReachesTarget = followPathEnd.z == follow->getPosition().z &&
+	                                     endDistance >= fpp.minTargetDist && endDistance <= fpp.maxTargetDist &&
+	                                     (!fpp.clearSight ||
+	                                      g_game.isSightClear(followPathEnd, follow->getPosition(), true));
+	if (routeStillReachesTarget) {
+		return false;
 	}
 
 	const int64_t now = OTSYS_TIME();
 	if (now - lastFollowRepathTime >= MONSTER_FOLLOW_REPATH_INTERVAL_MS) {
-		followDistanceAtLastRepath = dist;
 		lastFollowRepathTime = now;
 		return true;
 	}
@@ -3442,35 +3449,51 @@ bool Monster::shouldRepathAfterTargetStep()
 void Monster::goToFollowCreature()
 {
 	// Consume the forced update before walking to avoid redundant requests.
+	const bool forcedPathUpdate = forceUpdateFollowPath;
 	forceUpdateFollowPath = false;
 
 	if (auto follow = followCreature.lock()) {
 		FindPathParams fpp;
 		getPathSearchParams(follow.get(), fpp);
 
-		std::vector<Direction> newPath;
-		bool pathFound = tryMonsterChaseStep(follow->getPosition(), fpp, newPath);
+		bool canReusePath = !forcedPathUpdate && !listWalkDir.empty() &&
+		                    canWalkTo(getPosition(), listWalkDir.back());
+		if (canReusePath) {
+			const int32_t endDistance =
+			    std::max(followPathEnd.getDistanceX(follow->getPosition()),
+			             followPathEnd.getDistanceY(follow->getPosition()));
+			canReusePath = followPathEnd.z == follow->getPosition().z && endDistance >= fpp.minTargetDist &&
+			               endDistance <= fpp.maxTargetDist &&
+			               (!fpp.clearSight || g_game.isSightClear(followPathEnd, follow->getPosition(), true));
+		}
+		if (canReusePath) {
+			lastFollowRepathTime = OTSYS_TIME();
+			onFollowCreatureComplete(follow.get());
+			return;
+		}
+
+		listWalkDir.clear();
+		bool pathFound = tryMonsterChaseStep(follow->getPosition(), fpp, listWalkDir);
 		if (!pathFound) {
 			fpp.allowDiagonal = false;
-			pathFound = getPathTo(follow->getPosition(), newPath, fpp);
+			pathFound = getPathTo(follow->getPosition(), listWalkDir, fpp);
 		}
 		if (!pathFound && fpp.maxTargetDist <= 1 && !fpp.keepDistance) {
 			// The restricted search can fail when a melee monster must route
 			// around a wall. Retry with complete A* while keeping movement cardinal.
 			fpp.fullPathSearch = true;
-			pathFound = getPathTo(follow->getPosition(), newPath, fpp);
+			pathFound = getPathTo(follow->getPosition(), listWalkDir, fpp);
 		}
 
-		listWalkDir.clear();
 		if (pathFound) {
-			listWalkDir = std::move(newPath);
 			hasFollowPath = true;
-			followDistanceAtLastRepath =
-			    std::max(getPosition().getDistanceX(follow->getPosition()),
-			             getPosition().getDistanceY(follow->getPosition()));
+			followPathEnd = getPosition();
+			for (auto direction = listWalkDir.rbegin(); direction != listWalkDir.rend(); ++direction) {
+				followPathEnd = getNextPosition(*direction, followPathEnd);
+			}
 			lastFollowRepathTime = OTSYS_TIME();
 			if (!listWalkDir.empty()) {
-				startAutoWalk(listWalkDir);
+				startAutoWalk();
 			}
 		} else {
 			hasFollowPath = false;
