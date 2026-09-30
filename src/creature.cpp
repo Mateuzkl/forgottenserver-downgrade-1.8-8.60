@@ -554,7 +554,18 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
 		if (hasFollowPath) {
-			requestFollowPathUpdate();
+			if (Monster* monster = getMonster()) {
+				const bool targetMoved = creature == fc.get();
+				if (targetMoved) {
+					if (forceUpdateFollowPath || monster->shouldRepathAfterTargetStep()) {
+						requestFollowPathUpdate();
+					}
+				} else if (listWalkDir.empty() || forceUpdateFollowPath) {
+					requestFollowPathUpdate();
+				}
+			} else {
+				requestFollowPathUpdate();
+			}
 		}
 
 		auto masterCreature = master.lock();
