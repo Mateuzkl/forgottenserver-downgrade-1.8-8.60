@@ -3430,7 +3430,8 @@ bool Monster::shouldRepathAfterTargetStep()
 	const int32_t endDistance = std::max(followPathEnd.getDistanceX(follow->getPosition()),
 	                                     followPathEnd.getDistanceY(follow->getPosition()));
 	const bool routeStillReachesTarget = followPathEnd.z == follow->getPosition().z &&
-	                                     endDistance >= fpp.minTargetDist && endDistance <= fpp.maxTargetDist &&
+	                                     !fpp.keepDistance && endDistance >= fpp.minTargetDist &&
+	                                     endDistance <= fpp.maxTargetDist &&
 	                                     (!fpp.clearSight ||
 	                                      g_game.isSightClear(followPathEnd, follow->getPosition(), true));
 	if (routeStillReachesTarget) {
@@ -3462,7 +3463,8 @@ void Monster::goToFollowCreature()
 			const int32_t endDistance =
 			    std::max(followPathEnd.getDistanceX(follow->getPosition()),
 			             followPathEnd.getDistanceY(follow->getPosition()));
-			canReusePath = followPathEnd.z == follow->getPosition().z && endDistance >= fpp.minTargetDist &&
+			canReusePath = followPathEnd.z == follow->getPosition().z && !fpp.keepDistance &&
+			               endDistance >= fpp.minTargetDist &&
 			               endDistance <= fpp.maxTargetDist &&
 			               (!fpp.clearSight || g_game.isSightClear(followPathEnd, follow->getPosition(), true));
 		}
