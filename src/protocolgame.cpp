@@ -654,6 +654,12 @@ bool ProtocolGame::usesExtendedSpellIds() const
 	return isAstraClient || isFonticakClient || getVersion() >= 1300;
 }
 
+bool ProtocolGame::usesExtendedSpellCooldownIds() const
+{
+	// The 0x9F spell list has an independent U16 contract. Only 0xA4 is negotiated.
+	return isAstraClient ? supportsAstraExtendedSpellIds : usesExtendedSpellIds();
+}
+
 void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem)
 {
 	if (CharacterBazaar::isPlayerOnActiveAuction(characterId)) {
@@ -1178,6 +1184,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    (capabilities & AstraClient::StoreCatalogChunks) != 0;
 					supportsAstraBestiaryBannerCreatureData =
 					    (capabilities & AstraClient::BestiaryBannerCreatureData) != 0;
+					supportsAstraExtendedSpellIds =
+					    (capabilities & AstraClient::ExtendedSpellIds) != 0;
 				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
@@ -5943,7 +5951,7 @@ void ProtocolGame::sendSpellCooldown(uint16_t spellId, uint32_t time)
 		return;
 	}
 
-	const bool wideSpellIds = usesExtendedSpellIds();
+	const bool wideSpellIds = usesExtendedSpellCooldownIds();
 	if (!wideSpellIds && spellId > std::numeric_limits<uint8_t>::max()) {
 		return;
 	}
@@ -6648,6 +6656,9 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		}
 		if (supportsAstraBestiaryBannerCreatureData) {
 			features[GameFeature::AstraBestiaryBannerCreatureData] = true;
+		}
+		if (supportsAstraExtendedSpellIds) {
+			features[GameFeature::AstraExtendedSpellIds] = true;
 		}
 		if (supportsAstraSingleCreatureMarks) {
 			features[GameFeature::AstraSingleCreatureMarks] = true;

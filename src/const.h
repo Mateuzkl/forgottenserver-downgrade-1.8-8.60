@@ -1007,8 +1007,9 @@ enum class GameFeature : uint8_t {
 	AstraShopCountU16 = 148,
 	AstraStoreBasePrice = 149,
 	AstraBestiaryBannerCreatureData = 151,
+	AstraExtendedSpellIds = 152,
 
-	Last = 151
+	Last = 152
 };
 
 enum ContainerSpecialType : uint8_t

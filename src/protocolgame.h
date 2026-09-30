@@ -374,6 +374,7 @@ private:
 	bool shouldSendThingUpgradeClassification() const;
 	bool shouldSendItemTierData() const;
 	bool usesExtendedSpellIds() const;
+	bool usesExtendedSpellCooldownIds() const;
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 	void parseCustomClientPing(NetworkMessage& msg);
@@ -459,6 +460,7 @@ private:
 	bool supportsAstraStoreBasePrice = false;
 	bool supportsAstraStoreCatalogChunks = false;
 	bool supportsAstraBestiaryBannerCreatureData = false;
+	bool supportsAstraExtendedSpellIds = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
