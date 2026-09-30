@@ -167,8 +167,6 @@ public:
 	void onWalkComplete() override;
 	bool getNextStep(Direction& direction, uint32_t& flags) override;
 	void onFollowCreatureComplete(const Creature* creature) override;
-	void goToFollowCreature() override;
-	bool shouldRepathAfterTargetStep();
 
 	void onThink(uint32_t interval) override;
 
@@ -253,8 +251,6 @@ private:
 	int32_t overrideTargetDistanceDuration = 0;
 	int32_t stepDuration = 0;
 	int64_t fleeBlockUntil = 0;
-	int64_t lastFollowRepathTime = 0;
-	int32_t followDistanceAtLastRepath = -1;
 
 	Position masterPos;
 
@@ -316,10 +312,6 @@ private:
 	bool getDanceStep(const Position& creaturePos, Direction& direction, bool keepAttack = true,
 	                  bool keepDistance = true);
 	bool canWalkTo(Position pos, Direction direction) const;
-	bool tryChaseStepCandidates(const Position& from, const Position& targetPos, int32_t dist,
-	                            const std::vector<Direction>& candidates, std::vector<Direction>& dirList) const;
-	bool tryMonsterChaseStep(const Position& targetPos, const FindPathParams& fpp,
-	                         std::vector<Direction>& dirList) const;
 	void fleeFromTarget(const Position& targetPos, Direction& direction);
 
 	static bool pushItem(Item* item);
