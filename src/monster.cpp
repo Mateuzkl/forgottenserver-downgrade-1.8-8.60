@@ -30,24 +30,6 @@ namespace {
 constexpr int32_t MONSTER_DIRECT_CHASE_MAX_DISTANCE = 10;
 constexpr int64_t MONSTER_FOLLOW_REPATH_INTERVAL_MS = 400;
 
-bool tryChaseStepCandidates(const Monster& monster, const Position& from, const Position& targetPos, int32_t dist,
-                            const std::vector<Direction>& candidates, std::vector<Direction>& dirList)
-{
-	for (const Direction direction : candidates) {
-		const Position next = getNextPosition(direction, from);
-		if (!g_game.map.canWalkTo(monster, next)) {
-			continue;
-		}
-
-		const int32_t newDist = std::max(next.getDistanceX(targetPos), next.getDistanceY(targetPos));
-		if (newDist < dist) {
-			dirList.push_back(direction);
-			return true;
-		}
-	}
-	return false;
-}
-
 void appendCardinalsTowardTarget(const Position& from, const Position& targetPos, std::vector<Direction>& out)
 {
 	auto append = [&](Direction direction) {
@@ -87,63 +69,6 @@ void appendCardinalsTowardTarget(const Position& from, const Position& targetPos
 			append(DIRECTION_WEST);
 		}
 	}
-}
-
-void appendDiagonalsTowardTarget(const Position& from, const Position& targetPos, std::vector<Direction>& out)
-{
-	auto append = [&](Direction direction) {
-		if (std::find(out.begin(), out.end(), direction) == out.end()) {
-			out.push_back(direction);
-		}
-	};
-
-	const Direction primary = getDirectionTo(from, targetPos, true);
-	if ((primary & DIRECTION_DIAGONAL_MASK) != 0) {
-		append(primary);
-	}
-
-	static constexpr Direction kDiagonals[] = {DIRECTION_NORTHEAST, DIRECTION_SOUTHEAST, DIRECTION_SOUTHWEST,
-	                                           DIRECTION_NORTHWEST};
-	for (const Direction direction : kDiagonals) {
-		append(direction);
-	}
-}
-
-bool tryMonsterChaseStep(const Monster& monster, const Position& targetPos, const FindPathParams& fpp,
-                         std::vector<Direction>& dirList)
-{
-	if (fpp.keepDistance) {
-		return false;
-	}
-
-	const Position& from = monster.getPosition();
-	if (from.z != targetPos.z) {
-		return false;
-	}
-
-	const int32_t dist = std::max(from.getDistanceX(targetPos), from.getDistanceY(targetPos));
-
-	if (fpp.minTargetDist >= 1 && dist >= fpp.minTargetDist && dist <= fpp.maxTargetDist) {
-		return true;
-	}
-
-	if (dist == 0 || dist > MONSTER_DIRECT_CHASE_MAX_DISTANCE) {
-		return false;
-	}
-
-	if (fpp.clearSight && !g_game.isSightClear(from, targetPos, true)) {
-		return false;
-	}
-
-	std::vector<Direction> cardinals;
-	appendCardinalsTowardTarget(from, targetPos, cardinals);
-	if (tryChaseStepCandidates(monster, from, targetPos, dist, cardinals, dirList)) {
-		return true;
-	}
-
-	std::vector<Direction> diagonals;
-	appendDiagonalsTowardTarget(from, targetPos, diagonals);
-	return tryChaseStepCandidates(monster, from, targetPos, dist, diagonals, dirList);
 }
 
 } // namespace
@@ -3035,6 +2960,50 @@ bool Monster::canWalkTo(Position pos, Direction direction) const
 	return false;
 }
 
+bool Monster::tryChaseStepCandidates(const Position& from, const Position& targetPos, int32_t dist,
+                                     const std::vector<Direction>& candidates,
+                                     std::vector<Direction>& dirList) const
+{
+	for (const Direction direction : candidates) {
+		const Position next = getNextPosition(direction, from);
+		if (!canWalkTo(from, direction)) {
+			continue;
+		}
+
+		const int32_t newDist = std::max(next.getDistanceX(targetPos), next.getDistanceY(targetPos));
+		if (newDist < dist) {
+			dirList.push_back(direction);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Monster::tryMonsterChaseStep(const Position& targetPos, const FindPathParams& fpp,
+                                  std::vector<Direction>& dirList) const
+{
+	if (fpp.keepDistance || getPosition().z != targetPos.z) {
+		return false;
+	}
+
+	const Position& from = getPosition();
+	const int32_t dist = std::max(from.getDistanceX(targetPos), from.getDistanceY(targetPos));
+	if (fpp.clearSight && !g_game.isSightClear(from, targetPos, true)) {
+		return false;
+	}
+
+	if (fpp.minTargetDist >= 1 && dist >= fpp.minTargetDist && dist <= fpp.maxTargetDist) {
+		return true;
+	}
+	if (dist == 0 || dist > MONSTER_DIRECT_CHASE_MAX_DISTANCE) {
+		return false;
+	}
+
+	std::vector<Direction> cardinals;
+	appendCardinalsTowardTarget(from, targetPos, cardinals);
+	return tryChaseStepCandidates(from, targetPos, dist, cardinals, dirList);
+}
+
 void Monster::death(Creature*)
 {
 	// rewardboss
@@ -3472,18 +3441,23 @@ bool Monster::shouldRepathAfterTargetStep()
 
 void Monster::goToFollowCreature()
 {
+	// Consume the forced update before walking to avoid redundant requests.
+	forceUpdateFollowPath = false;
+
 	if (auto follow = followCreature.lock()) {
 		FindPathParams fpp;
 		getPathSearchParams(follow.get(), fpp);
 
 		std::vector<Direction> newPath;
-		bool pathFound = tryMonsterChaseStep(*this, follow->getPosition(), fpp, newPath);
+		bool pathFound = tryMonsterChaseStep(follow->getPosition(), fpp, newPath);
 		if (!pathFound) {
 			fpp.allowDiagonal = false;
 			pathFound = getPathTo(follow->getPosition(), newPath, fpp);
 		}
-		if (!pathFound) {
-			fpp.allowDiagonal = true;
+		if (!pathFound && fpp.maxTargetDist <= 1 && !fpp.keepDistance) {
+			// The restricted search can fail when a melee monster must route
+			// around a wall. Retry with complete A* while keeping movement cardinal.
+			fpp.fullPathSearch = true;
 			pathFound = getPathTo(follow->getPosition(), newPath, fpp);
 		}
 

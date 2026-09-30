@@ -316,6 +316,10 @@ private:
 	bool getDanceStep(const Position& creaturePos, Direction& direction, bool keepAttack = true,
 	                  bool keepDistance = true);
 	bool canWalkTo(Position pos, Direction direction) const;
+	bool tryChaseStepCandidates(const Position& from, const Position& targetPos, int32_t dist,
+	                            const std::vector<Direction>& candidates, std::vector<Direction>& dirList) const;
+	bool tryMonsterChaseStep(const Position& targetPos, const FindPathParams& fpp,
+	                         std::vector<Direction>& dirList) const;
 	void fleeFromTarget(const Position& targetPos, Direction& direction);
 
 	static bool pushItem(Item* item);
