@@ -134,7 +134,7 @@ if not NpcRequirements then
     function NpcRequirements:removeItem(item, count, subType, ignoreEquipped)
         local count = count or 1
         local subType = subType or -1
-        local ignoreEquipped = ignoreEquipped or true
+        local ignoreEquipped = ignoreEquipped ~= false
         self.requireRemoveItem = {{item = item, count = count, subType = subType, ignoreEquipped = ignoreEquipped}}
     end
 
@@ -143,7 +143,7 @@ if not NpcRequirements then
     function NpcRequirements:removeItems(table)
         self.requireRemoveItem = table
         for k, v in pairs(table) do
-            table[k].ignoreEquipped = table[k].ignoreEquipped or true
+            table[k].ignoreEquipped = table[k].ignoreEquipped ~= false
         end
     end
 
@@ -317,7 +317,7 @@ if not NpcRequirements then
             if self.requireInfight and not player:getCondition(CONDITION_INFIGHT, CONDITIONID_DEFAULT) and not player:getCondition(CONDITION_INFIGHT, CONDITIONID_COMBAT) then
                 return false, MESSAGE_LIST.infight, REQUIREMENTS.inFight
             end
-            if not self.requireInfight and player:getCondition(CONDITION_INFIGHT, CONDITIONID_DEFAULT) and player:getCondition(CONDITION_INFIGHT, CONDITIONID_COMBAT) then
+            if not self.requireInfight and (player:getCondition(CONDITION_INFIGHT, CONDITIONID_DEFAULT) or player:getCondition(CONDITION_INFIGHT, CONDITIONID_COMBAT)) then
                 return false, MESSAGE_LIST.notInfight, REQUIREMENTS.inFight
             end
         end

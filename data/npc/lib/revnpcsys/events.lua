@@ -76,6 +76,18 @@ if not NpcEvents then
     ---@param npc Npc The NPC that the player closed the channel with.
     ---@param creature Creature The creature (player) that closed the channel with the NPC.
     function NpcEvents.onPlayerCloseChannel(npc, creature)
+        if not creature:isPlayer() then
+            return
+        end
+        local focus = NpcFocus(npc)
+        if focus:isFocused(creature) then
+            focus:removeFocus(creature)
+            closeShopWindow(creature)
+            NpcTalkQueue(npc):clearQueue(creature)
+            local handler = NpcsHandler(npc)
+            handler:setTalkState(handler, creature)
+            handler:resetData(creature)
+        end
     end
 
     -- onPlayerEndTrade function is called when a player ends the trade with an NPC.
@@ -178,7 +190,7 @@ if not NpcEvents then
         end
 
         local normalMessage = message
-        local message = message:lower()
+        local message = message:lower():match("^%s*(.-)%s*$")
         -- initlialize the handler, focus and talkQueue
         local handler = NpcsHandler(npc)
         local focus = NpcFocus(npc)
