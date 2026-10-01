@@ -7,6 +7,8 @@ on:
       - "v*"
     paths:
       - ".github/workflows/lua-check.yml"
+      - ".github/tests/npc_travel_keywords.lua"
+      - ".github/tests/npc_conversation_timeout.lua"
       - "config.lua.dist"
       - "data/**/*.lua"
 
@@ -16,6 +18,8 @@ on:
       - "v*"
     paths:
       - ".github/workflows/lua-check.yml"
+      - ".github/tests/npc_travel_keywords.lua"
+      - ".github/tests/npc_conversation_timeout.lua"
       - "config.lua.dist"
       - "data/**/*.lua"
 
@@ -49,6 +53,21 @@ jobs:
         run: |
           luac5.4 -p config.lua.dist
           find data/ -type f -name '*.lua' -print0 | xargs -0 -r -n1 luac5.4 -p
+
+      - name: Test NPC travel keyword and equipped-item policy
+        run: |
+          lua5.4 .github/tests/npc_travel_keywords.lua \
+            data/npc/lib/revnpcsys/handler.lua \
+            data/npc/lib/revnpcsys/requirements.lua \
+            data/npc/lib/revnpcsys/modules.lua
+
+      - name: Test NPC conversation timeout signaling
+        run: |
+          lua5.4 .github/tests/npc_conversation_timeout.lua \
+            data/lib/functions/astra_helper.lua \
+            data/npc/lib/npcsystem/npchandler.lua \
+            data/npc/lib/revnpcsys/focus.lua \
+            data/npc/lib/revnpcsys/events.lua
 
   lint:
     name: Lua lint

@@ -271,8 +271,10 @@ if NpcHandler == nil then
             self:processModuleCallback(CALLBACK_ONRELEASEFOCUS, focus)
         end
 
-        if Player(focus) then
+        local player = Player(focus)
+        if player then
             closeShopWindow(focus) -- Even if it can not exist, we need to prevent it.
+            AstraHelper.sendNpcConversationEnd(player, Npc(getNpcCid()))
         end
         self:updateFocus()
     end

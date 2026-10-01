@@ -34,7 +34,9 @@ function NpcsHandler:travelTo(params)
         local toDest = traveling:keyword(name)
         -- Cities are also valid immediately after greeting (and after listing
         -- destinations), not only after the player explicitly says "travel".
-        greet.keywords[name] = toDest
+        if rawget(greet.keywords, name) == nil then
+            greet.keywords[name] = toDest
+        end
         toDest:respond(string.format("Do you want to travel to {%s} for {%d} gold?", name, dest.money and dest.money or 0))
         table.insert(words, "{" .. name .. "}")
 

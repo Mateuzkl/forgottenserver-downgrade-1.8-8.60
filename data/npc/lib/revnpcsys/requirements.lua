@@ -130,7 +130,7 @@ if not NpcRequirements then
     ---@param item number: The item ID.
     ---@param count number (optional): The amount of the item to remove. Defaults to 1.
     ---@param subType number (optional): The subtype of the item to remove. Defaults to -1.
-    ---@param ignoreEquipped boolean (optional): If true, the item will not be removed even if it is equipped. Defaults to false.
+    ---@param ignoreEquipped boolean (optional): Exclude equipped items from counting and removal. Defaults to true; pass false to allow their removal.
     function NpcRequirements:removeItem(item, count, subType, ignoreEquipped)
         local count = count or 1
         local subType = subType or -1
@@ -139,6 +139,7 @@ if not NpcRequirements then
     end
 
     -- Sets the items to remove for a keyword.
+    -- Entries default ignoreEquipped to true, just like removeItem.
     ---@param table table<number, table>: The table of items to remove.
     function NpcRequirements:removeItems(table)
         self.requireRemoveItem = table

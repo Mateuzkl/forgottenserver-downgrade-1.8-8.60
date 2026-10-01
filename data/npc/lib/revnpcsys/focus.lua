@@ -15,6 +15,7 @@
 ]]
 
 ---@class NpcFocus
+---@field npcId number
 ---@field focus table<number, number>
 ---@field currentFocus number|nil
 ---@field addFocus fun(player: Player)
@@ -32,6 +33,7 @@ if not NpcFocus then
 			-- If the NPC doesn't have a NpcFocus, one is created for it
 			if not self[npc:getId()] then
 				self[npc:getId()] = {
+					npcId = npc:getId(),
 					focus = {},
 					currentFocus = nil
 				}
@@ -63,9 +65,13 @@ if not NpcFocus then
 	---@param player Player The player to remove focus from.
 	function NpcFocus:removeFocus(player)
 		local playerId = type(player) == "number" and player or player:getId()
+		local wasFocused = self.focus[playerId] ~= nil
 		self.focus[playerId] = nil
 		if self.currentFocus == playerId then
 			self.currentFocus = next(self.focus)
+		end
+		if wasFocused then
+			AstraHelper.sendNpcConversationEnd(Player(playerId), Npc(self.npcId))
 		end
 	end
 

@@ -4,6 +4,7 @@ AstraHelper.OPCODES = {
 	Cavebot = 210,
 	CastOnFoot = 211,
 	SmartFollow = 212,
+	NpcConversationEnd = 213,
 	BotCheckAlert = 230,
 }
 
@@ -30,4 +31,13 @@ function AstraHelper.sendBotCheckAlert(player, enabled)
 	end
 
 	return player:sendExtendedOpcode(AstraHelper.OPCODES.BotCheckAlert, enabled and "start" or "stop")
+end
+
+-- An explicit focus-release signal; do not infer farewell from localized text
+-- or mistake a shop-close packet for the end of a conversation.
+function AstraHelper.sendNpcConversationEnd(player, npc)
+	if not player or not npc or not player:isUsingAstraClient() then
+		return false
+	end
+	return player:sendExtendedOpcode(AstraHelper.OPCODES.NpcConversationEnd, npc:getName())
 end
