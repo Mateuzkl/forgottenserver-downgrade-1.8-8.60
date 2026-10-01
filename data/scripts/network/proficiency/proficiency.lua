@@ -175,7 +175,10 @@ local function ensureTables()
 end
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	return player and (
+		(player.isUsingAstraClient and player:isUsingAstraClient())
+		or (player.isUsingFonticakClient and player:isUsingFonticakClient())
+	)
 end
 
 local function sendProficiencyBanner(player, itemId, message)
