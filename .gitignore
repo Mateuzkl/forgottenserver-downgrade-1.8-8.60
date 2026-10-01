@@ -216,7 +216,8 @@ tfs
 !data/npc/lib/tfs/init.lua
 
 # Others
-*.emmyrc.jsondata/scripts/meus/
+*.emmyrc.json
+data/scripts/meus/
 build-valgrind-linux/
 tfs-valgrind
 callgrind.out.*
@@ -225,3 +226,9 @@ analysis-reports/
 compile_commands.json
 *.plist
 *.sarif
+
+# Generated local benchmark, stress, and static-analysis snapshots
+/VEQUE_CONDITION_DAMAGE_BENCHMARK.md
+/VEQUE_CONDITION_DAMAGE_BENCHMARK.html
+/stress-test-results.html
+/tools/tfs18_static_analysis_report.html
