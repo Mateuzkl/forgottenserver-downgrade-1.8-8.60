@@ -54,3 +54,5 @@ Existing `test_protocolgame_pipeline`, `test_custom_ping_tracker`,
 See the client `docs/ping-latency.md` for bounded RTT tracking, smoothing and Lua
 APIs. Stress validation is reported separately; no performance or production
 capacity guarantee follows from this instrumentation change.
+See [astra-ping-validation.md](astra-ping-validation.md) for measured results
+and limitations, including failed private-observer attempts and successful repeats.
