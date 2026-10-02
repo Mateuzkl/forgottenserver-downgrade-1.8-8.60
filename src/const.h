@@ -874,7 +874,8 @@ enum ReloadTypes_t : uint8_t
 };
 
 // OTCv8 features (from src/client/const.h)
-enum class GameFeature : uint8_t {
+enum class GameFeature : uint8_t
+{
 	ProtocolChecksum = 1,
 	AccountNames = 2,
 	ChallengeOnLogin = 3,
@@ -1008,8 +1009,9 @@ enum class GameFeature : uint8_t {
 	AstraStoreBasePrice = 149,
 	AstraBestiaryBannerCreatureData = 151,
 	AstraExtendedSpellIds = 152,
+	AstraPingTelemetry = 153,
 
-	Last = 152
+	Last = 153
 };
 
 enum ContainerSpecialType : uint8_t

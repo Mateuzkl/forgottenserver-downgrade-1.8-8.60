@@ -12,6 +12,7 @@
 #include "zoneweather.h"
 
 #include <array>
+#include <chrono>
 #include <optional>
 #include <span>
 #include <string>
@@ -118,7 +119,7 @@ private:
 
 	// we have all the parse methods
 	void parsePacket(NetworkMessage& msg) override;
-	void parsePacketOnDispatcher(NetworkMessage_ptr& packet);
+	void parsePacketOnDispatcher(NetworkMessage_ptr& packet, std::chrono::steady_clock::time_point pingReceivedAt = {});
 	void onRecvFirstMessage(NetworkMessage& msg) override;
 	void onConnect() override;
 
@@ -379,8 +380,8 @@ private:
 	bool shouldSendItemTierData() const;
 	bool usesExtendedSpellIds() const;
 	bool usesExtendedSpellCooldownIds() const;
-	void sendNewPing(uint32_t pingId);
-	void parseNewPing(NetworkMessage& msg);
+	void sendNewPing(uint32_t pingId, uint32_t queueMicros);
+	void parseNewPing(NetworkMessage& msg, uint32_t queueMicros);
 	void parseCustomClientPing(NetworkMessage& msg);
 	static uint32_t nextCustomPingId(uint32_t current);
 	static uint32_t customPingSeedFromEntropy(uint64_t entropy);
@@ -403,6 +404,7 @@ private:
 	friend struct ProtocolGameCustomPingTestAccess;
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
+	friend struct ProtocolGamePingTelemetryTestAccess;
 	friend struct ProtocolGameCombatTestAccess;
 
 	//cast
@@ -467,6 +469,8 @@ private:
 	bool supportsAstraStoreCatalogChunks = false;
 	bool supportsAstraBestiaryBannerCreatureData = false;
 	bool supportsAstraExtendedSpellIds = false;
+	bool supportsAstraPingTelemetry = false;
+	bool pingTelemetryEnabled = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;

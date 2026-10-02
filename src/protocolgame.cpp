@@ -7,6 +7,7 @@
 
 #include "account_coins.h"
 #include "actions.h"
+#include "astra_ping.h"
 #include "astraclient.h"
 #include "ban.h"
 #include "bestiary_charm.h"
@@ -1188,6 +1189,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    (capabilities & AstraClient::BestiaryBannerCreatureData) != 0;
 					supportsAstraExtendedSpellIds =
 					    (capabilities & AstraClient::ExtendedSpellIds) != 0;
+					supportsAstraPingTelemetry = (capabilities & AstraClient::PingTelemetry) != 0;
 				} else if (marker == AstraClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isAstraClient;
 				} else if (marker == AstraClient::SINGLE_CREATURE_MARKS_MARKER) {
@@ -1389,6 +1391,8 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 	}
 
 	const uint8_t opcode = msg.getBuffer()[msg.getBufferPosition()];
+	// Capture before admission/copy, without reading any dispatcher-owned state.
+	const auto pingReceivedAt = opcode == 0x40 ? AstraClient::PingClock::now() : AstraClient::PingClock::time_point{};
 	auto admission = packetBacklog.tryAcquire();
 	if (!admission) {
 		if (admission.requestDisconnect) {
@@ -1410,13 +1414,14 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 	// The ASIO thread only owns the incoming bytes. Protocol and player state
 	// are read exclusively by the dispatcher task below.
 	auto packet = tfs::net::make_network_message(msg);
-	auto task = [thisPtr = getThis(), packet = std::move(packet), ticket = std::move(admission.ticket)]() mutable {
+	auto task = [thisPtr = getThis(), packet = std::move(packet), ticket = std::move(admission.ticket),
+	             pingReceivedAt]() mutable {
 		(void)ticket;
 		if (thisPtr->isConnectionExpired()) {
 			return;
 		}
 
-		thisPtr->parsePacketOnDispatcher(packet);
+		thisPtr->parsePacketOnDispatcher(packet, pingReceivedAt);
 	};
 
 	if (tfs::net::shouldExpireQueuedGamePacket(opcode)) {
@@ -1426,8 +1431,12 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 	}
 }
 
-void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
+void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet,
+                                           AstraClient::PingClock::time_point pingReceivedAt)
 {
+	const auto queueMicros = pingReceivedAt != AstraClient::PingClock::time_point{}
+	                             ? AstraClient::pingQueueMicros(pingReceivedAt, AstraClient::PingClock::now())
+	                             : 0;
 	assert(g_dispatcher.isDispatcherThread() && "ProtocolGame packet state must be handled by the dispatcher");
 	NetworkMessage& msg = *packet;
 
@@ -1488,7 +1497,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 				break; // otclient extended opcode
 			case 0x40:
 				if (isOTC) {
-					parseNewPing(msg);
+					parseNewPing(msg, queueMicros);
 				}
 				break; // GameClientExtendedPing
 			case 0x6F:
@@ -1539,7 +1548,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break; // otclient extended opcode
 		case 0x40:
 			if (isOTC) {
-				parseNewPing(msg);
+				parseNewPing(msg, queueMicros);
 			}
 			break; // GameClientExtendedPing
 		case 0x60:
@@ -6580,14 +6589,15 @@ void ProtocolGame::parseExtendedOpcode(NetworkMessage& msg)
 	g_game.parsePlayerExtendedOpcode(player->getID(), opcode, buffer);
 }
 
-void ProtocolGame::sendNewPing(uint32_t pingId)
+void ProtocolGame::sendNewPing(uint32_t pingId, uint32_t queueMicros)
 {
-	// if (!isOTCv8) return;
-
-	NetworkMessage msg;
+	tfs::net::PacketBuffer<9> msg;
 	msg.addByte(0x40);
 	msg.add<uint32_t>(pingId);
-	writeToOutputBuffer(msg);
+	if (isAstraClient && supportsAstraPingTelemetry && pingTelemetryEnabled) {
+		msg.add<uint32_t>(queueMicros);
+	}
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendExtendedOpcode(uint8_t opcode, std::string_view data)
@@ -6607,11 +6617,15 @@ void ProtocolGame::sendExtendedOpcode(uint8_t opcode, std::string_view data)
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::parseNewPing(NetworkMessage& msg)
+void ProtocolGame::parseNewPing(NetworkMessage& msg, uint32_t queueMicros)
 {
+	if (getReadableBytes(msg) < sizeof(uint32_t)) {
+		return;
+	}
 	uint32_t pingId = msg.get<uint32_t>();
 	if (g_game.getGameState() == GAME_STATE_NORMAL && player) {
-		sendNewPing(pingId);
+		// Historical OTCv8 localPing/fps u16 fields are intentionally ignored.
+		sendNewPing(pingId, queueMicros);
 	}
 }
 
@@ -6642,6 +6656,7 @@ std::optional<uint32_t> ProtocolGame::readCustomPingId(NetworkMessage& msg)
 void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 {
 	zoneWeatherFeatureEnabled = false;
+	pingTelemetryEnabled = false;
 
 	if (isMehah && !isOTCv8) {
 		std::unordered_map<GameFeature, bool> features;
@@ -6693,6 +6708,10 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		}
 		if (supportsAstraExtendedSpellIds) {
 			features[GameFeature::AstraExtendedSpellIds] = true;
+		}
+		if (supportsAstraPingTelemetry) {
+			features[GameFeature::AstraPingTelemetry] = true;
+			pingTelemetryEnabled = true;
 		}
 		if (supportsAstraSingleCreatureMarks) {
 			features[GameFeature::AstraSingleCreatureMarks] = true;

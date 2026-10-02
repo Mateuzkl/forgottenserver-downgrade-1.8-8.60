@@ -20,7 +20,8 @@ inline constexpr std::string_view REQUIRED_MESSAGE = "This server requires Astra
 inline constexpr uint8_t SINGLE_CREATURE_MARK_OPCODE = 0x93;
 inline constexpr uint8_t ECHO_RAID_VISUAL_MARK_TYPE = 15;
 
-enum Capability : uint8_t {
+enum Capability : uint8_t
+{
 	StoreHighlights = 1U << 0,
 	SingleCreatureMarks = 1U << 1,
 	EchoRaidVisuals = 1U << 2,
@@ -28,6 +29,7 @@ enum Capability : uint8_t {
 	StoreCatalogChunks = 1U << 4,
 	BestiaryBannerCreatureData = 1U << 5,
 	ExtendedSpellIds = 1U << 6,
+	PingTelemetry = 1U << 7,
 };
 
 inline uint32_t rotateLeft(uint32_t value, uint8_t bits)
