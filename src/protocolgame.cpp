@@ -5789,6 +5789,14 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 		descriptions.emplace_back("Professions", itemType.vocationString);
 	}
 
+	if (itemType.charges > 0 || itemType.showCharges) {
+		uint16_t chargeCount = itemType.charges;
+		if (item) {
+			chargeCount = item->getCharges();
+		}
+		descriptions.emplace_back("Charges", std::to_string(chargeCount));
+	}
+
 	descriptions.emplace_back("Tradeable", itemType.isPickupable() ? "yes" : "no");
 
 	std::string bodyPosition;

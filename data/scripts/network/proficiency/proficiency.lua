@@ -34,8 +34,18 @@ local ACTION_CLEAR_SLOT = 9
 
 local MAX_PERK_LEVEL = 7
 local MAX_PERK_POSITION = 2
-local EXPERIENCE_GAIN_MULTIPLIER = 0.01
+local DEFAULT_EXPERIENCE_GAIN_MULTIPLIER = 0.01
 local SAVE_DELAY_MS = 5000
+
+local function getExperienceGainMultiplier()
+	if configManager and configKeys and configManager.getFloat then
+		local value = configManager.getFloat(configKeys.WEAPON_PROFICIENCY_EXPERIENCE_GAIN_MULTIPLIER)
+		if value and value > 0 then
+			return value
+		end
+	end
+	return DEFAULT_EXPERIENCE_GAIN_MULTIPLIER
+end
 local LIST_INFO_COOLDOWN_MS = 1000
 local MAX_MODIFIED_SLOTS = 2
 local MAX_MODIFIER_RANK = 10
@@ -1311,7 +1321,7 @@ function System.addExperience(player, source, experience, itemId, applyMultiplie
 		return false
 	end
 	if applyMultiplier ~= false then
-		experience = math.floor(experience * EXPERIENCE_GAIN_MULTIPLIER)
+		experience = math.floor(experience * getExperienceGainMultiplier())
 	else
 		experience = math.floor(experience)
 	end

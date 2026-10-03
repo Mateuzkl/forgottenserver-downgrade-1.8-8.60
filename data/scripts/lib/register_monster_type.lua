@@ -65,6 +65,11 @@ end
 registerMonsterType.raceId = function(mtype, mask)
 	if mask.raceId then mtype:raceId(mask.raceId) end
 end
+registerMonsterType.Bestiary = function(mtype, mask)
+	if type(mask.Bestiary) == "table" and mask.Bestiary.race then
+		mtype:bestiaryClass(mask.Bestiary.race)
+	end
+end
 registerMonsterType.description = function(mtype, mask)
 	if mask.description then mtype:nameDescription(mask.description) end
 end

@@ -176,6 +176,7 @@ battlePassRewardMaxStep = 50
 -- Must be between 1 and battlePassRewardMaxStep.
 battlePassShopUnlockStep = 50
 weaponProficiencySystemEnabled = false
+weaponProficiencyExperienceGainMultiplier = 0.01 -- share of kill experience granted to equipped weapon proficiency
 augmentSystemEnabled = false
 monsterLevelEnabled = false
 monsterFactionSystem = false

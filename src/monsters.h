@@ -187,6 +187,7 @@ public:
 	std::string name;
 	std::string nameDescription;
 	uint32_t raceId = 0;
+	uint8_t bestiaryClass = 0; // BESTY_RACE_* from monster Bestiary.race (for weapon proficiency class damage)
 
 	MonsterInfo info{};
 

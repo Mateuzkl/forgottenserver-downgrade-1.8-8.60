@@ -363,6 +363,23 @@ int32_t luaMonsterTypeRaceId(lua_State* L)
 	return 1;
 }
 
+int32_t luaMonsterTypeBestiaryClass(lua_State* L)
+{
+	// get: monsterType:bestiaryClass() set: monsterType:bestiaryClass(classId)
+	MonsterType* monsterType = getUserdata<MonsterType>(L, 1);
+	if (monsterType) {
+		if (lua_gettop(L) == 1) {
+			lua_pushinteger(L, monsterType->bestiaryClass);
+		} else {
+			monsterType->bestiaryClass = getInteger<uint8_t>(L, 2);
+			pushBoolean(L, true);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaMonsterTypeHealth(lua_State* L)
 {
 	// get: monsterType:health() set: monsterType:health(health)
@@ -1536,6 +1553,7 @@ void LuaScriptInterface::registerMonsterType()
 	registerMethod("MonsterType", "name", luaMonsterTypeName);
 	registerMethod("MonsterType", "nameDescription", luaMonsterTypeNameDescription);
 	registerMethod("MonsterType", "raceId", luaMonsterTypeRaceId);
+	registerMethod("MonsterType", "bestiaryClass", luaMonsterTypeBestiaryClass);
 
 	registerMethod("MonsterType", "health", luaMonsterTypeHealth);
 	registerMethod("MonsterType", "maxHealth", luaMonsterTypeMaxHealth);

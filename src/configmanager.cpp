@@ -677,6 +677,8 @@ bool ConfigManager::load()
 	floats[BOOSTED_EXP_MULTIPLIER] = getGlobalFloat(L, "boostedExpMultiplier", 2.0f);
 	floats[BOOSTED_LOOT_MULTIPLIER] = getGlobalFloat(L, "boostedLootMultiplier", 2.0f);
 	floats[BOOSTED_SPAWN_MULTIPLIER] = getGlobalFloat(L, "boostedSpawnMultiplier", 0.5f);
+	floats[WEAPON_PROFICIENCY_EXPERIENCE_GAIN_MULTIPLIER] =
+	    getGlobalFloat(L, "weaponProficiencyExperienceGainMultiplier", 0.01f);
 	integers[Integer::BOOSTED_BOSS_LOOT_BONUS] = getGlobalInteger(L, "boostedBossLootBonus", 250);
 	integers[Integer::BOOSTED_BOSS_KILL_BONUS] = getGlobalInteger(L, "boostedBossKillBonus", 3);
 
