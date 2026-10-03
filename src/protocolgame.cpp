@@ -2883,7 +2883,7 @@ void ProtocolGame::parsePlayerPurchase(NetworkMessage& msg)
 {
 	uint16_t id = msg.get<uint16_t>();
 	uint8_t count = msg.getByte();
-	uint8_t amount = msg.getByte();
+	uint16_t amount = (isAstraClient || isFonticakClient) ? msg.get<uint16_t>() : msg.getByte();
 	bool ignoreCap = msg.getByte() != 0;
 	bool inBackpacks = msg.getByte() != 0;
 	g_game.playerPurchaseItem(player->getID(), id, count, amount, ignoreCap, inBackpacks);
@@ -2893,7 +2893,7 @@ void ProtocolGame::parsePlayerSale(NetworkMessage& msg)
 {
 	uint16_t id = msg.get<uint16_t>();
 	uint8_t count = msg.getByte();
-	uint8_t amount = msg.getByte();
+	uint16_t amount = (isAstraClient || isFonticakClient) ? msg.get<uint16_t>() : msg.getByte();
 	bool ignoreEquipped = msg.getByte() != 0;
 	g_game.playerSellItem(player->getID(), id, count, amount, ignoreEquipped);
 }
@@ -6651,6 +6651,7 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
 		features[GameFeature::AstraShopCountU16] = true;
+		features[GameFeature::DoubleShopSellAmount] = true;
 		if (supportsAstraStoreBasePrice) {
 			features[GameFeature::AstraStoreBasePrice] = true;
 		}
@@ -6671,6 +6672,7 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 	if (isFonticakClient) {
 		features[GameFeature::PlayerFamiliars] = true;
 		features[GameFeature::AstraQuiverCountU16] = true;
+		features[GameFeature::DoubleShopSellAmount] = true;
 	}
 	// Loot highlight container types (OTC GameContainerTypes) — negotiated per client.
 	if (isAstraClient || isFonticakClient) {
