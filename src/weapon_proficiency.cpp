@@ -54,7 +54,6 @@ uint8_t proficiencyBestiaryIdToServerRace(uint16_t proficiencyBestiaryId)
 	return PROFICIENCY_BESTIARY_TO_SERVER_RACE[proficiencyBestiaryId];
 }
 
-
 int32_t saturatingAddWeapon(int32_t value, int64_t increase)
 {
 	return static_cast<int32_t>(std::clamp<int64_t>(static_cast<int64_t>(value) + increase,

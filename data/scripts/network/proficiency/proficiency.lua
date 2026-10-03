@@ -40,7 +40,7 @@ local SAVE_DELAY_MS = 5000
 local function getExperienceGainMultiplier()
 	if configManager and configKeys and configManager.getFloat then
 		local value = configManager.getFloat(configKeys.WEAPON_PROFICIENCY_EXPERIENCE_GAIN_MULTIPLIER)
-		if value and value > 0 then
+		if type(value) == "number" and value >= 0 then
 			return value
 		end
 	end
@@ -82,6 +82,8 @@ local refreshProfileSpellAugments
 local function logError(message)
 	if logger and logger.error then
 		logger.error(message)
+	else
+		print(message)
 	end
 end
 
@@ -1125,9 +1127,9 @@ local function applyPerks(player, msg, itemId)
 	end
 
 	state.perks = perks
-	for key, modifier in pairs(state.modifiers) do
+	for key, modifier in pairs(state.modifiers or {}) do
 		local selectedPosition = state.perks[modifier.level]
-		if selectedPosition ~= nil and selectedPosition ~= modifier.position then
+		if selectedPosition == nil or selectedPosition ~= modifier.position then
 			state.modifiers[key] = nil
 		end
 	end
