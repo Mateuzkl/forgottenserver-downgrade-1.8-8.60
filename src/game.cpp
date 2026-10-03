@@ -6374,9 +6374,11 @@ void Game::updateCreatureWalk(uint32_t creatureId)
 	PerformanceScope performanceScope(PerformanceMetric::GameUpdateCreatureWalk);
 	auto creatureRef = getCreatureByIDShared(creatureId);
 	Creature* creature = creatureRef.get();
-	if (creature && !creature->isRemoved() && !creature->isDead()) {
+	if (creature) {
 		creature->isUpdatingPath = false;
-		creature->goToFollowCreature();
+		if (!creature->isRemoved() && !creature->isDead()) {
+			creature->goToFollowCreature();
+		}
 	}
 }
 

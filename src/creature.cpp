@@ -250,7 +250,6 @@ void Creature::onThink(uint32_t interval)
 		walkUpdateTicks += interval;
 		if (forceUpdateFollowPath || walkUpdateTicks >= 2000) {
 			walkUpdateTicks = 0;
-			forceUpdateFollowPath = false;
 			requestFollowPathUpdate();
 		}
 	}
@@ -554,7 +553,18 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
 		if (hasFollowPath) {
-			requestFollowPathUpdate();
+			if (Monster* monster = getMonster()) {
+				const bool targetMoved = creature == fc.get();
+				if (targetMoved) {
+					if (forceUpdateFollowPath || monster->shouldRepathAfterTargetStep()) {
+						requestFollowPathUpdate();
+					}
+				} else if (listWalkDir.empty() || forceUpdateFollowPath) {
+					requestFollowPathUpdate();
+				}
+			} else {
+				requestFollowPathUpdate();
+			}
 		}
 
 		auto masterCreature = master.lock();
@@ -1153,6 +1163,8 @@ void Creature::getPathSearchParams(const Creature*, FindPathParams& fpp) const
 void Creature::goToFollowCreature()
 {
 	PerformanceScope performanceScope(PerformanceMetric::CreatureGoToFollow);
+	// Keep forced requests latched until this queued update is actually handled.
+	forceUpdateFollowPath = false;
 	if (auto fc = followCreature.lock()) {
 		FindPathParams fpp;
 		getPathSearchParams(fc.get(), fpp);
@@ -1190,7 +1202,6 @@ bool Creature::setFollowCreature(Creature* creature)
 
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
-			isUpdatingPath = false;
 			hasFollowPath = false;
 			followCreature.reset();
 			return false;
@@ -1205,7 +1216,6 @@ bool Creature::setFollowCreature(Creature* creature)
 		forceUpdateFollowPath = false;
 		auto creatureRef = getSharedCreature(creature);
 		if (!creatureRef) {
-			isUpdatingPath = false;
 			hasFollowPath = false;
 			followCreature.reset();
 			return false;
@@ -1213,7 +1223,6 @@ bool Creature::setFollowCreature(Creature* creature)
 		followCreature = creatureRef;
 		requestFollowPathUpdate();
 	} else {
-		isUpdatingPath = false;
 		hasFollowPath = false;
 		followCreature.reset();
 	}
