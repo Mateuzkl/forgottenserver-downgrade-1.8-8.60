@@ -993,6 +993,7 @@ enum class GameFeature : uint8_t {
 	DisplayItemDuration = 129,
 	ThingUpgradeClassification = 130,
 	ItemTierByte = 131,
+	Proficiency = 132, // OTC GameProficiency: catalog proficiencyId + shaped perk slots in info payload
 	AstraCreatureIcons = 133,
 	PlayerFamiliars = 138,
 	DisplayItemCharges = 139,

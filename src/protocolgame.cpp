@@ -6713,6 +6713,9 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 	features[GameFeature::QuickLootFlags] = shouldSendQuickLootFlags();
 	features[GameFeature::ThingUpgradeClassification] = shouldSendThingUpgradeClassification();
 	features[GameFeature::ItemTierByte] = shouldSendItemTierByte();
+	if (getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+		features[GameFeature::Proficiency] = true;
+	}
 
 	if (features.empty()) return;
 
