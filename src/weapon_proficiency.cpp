@@ -19,8 +19,6 @@
 
 namespace {
 
-constexpr bool WEAPON_PROFICIENCY_DEBUG_BESTIARY = true;
-
 // Proficiency JSON uses Cipbia bestiary class ids (1 = Amphibic, 11 = Humanoid, ...).
 // Monsters use BESTY_RACE_* from data/lib/core/constants.lua.
 constexpr std::array<uint8_t, 22> PROFICIENCY_BESTIARY_TO_SERVER_RACE = {
@@ -510,13 +508,6 @@ void WeaponProficiency::applyBestiaryDamage(CombatDamage& damage, const std::sha
 		return;
 	}
 
-	if (WEAPON_PROFICIENCY_DEBUG_BESTIARY && mType->bestiaryClass == 0) {
-		LOG_INFO(fmt::format(
-		    "[WeaponProficiency.bestiary] {} hit {} but monster bestiaryClass=0 (add Bestiary.race in monster lua)",
-		    m_player.getName(), mType->name));
-		return;
-	}
-
 	if (mType->bestiaryClass == 0) {
 		return;
 	}
@@ -531,35 +522,8 @@ void WeaponProficiency::applyBestiaryDamage(CombatDamage& damage, const std::sha
 		}
 	}
 
-	if (WEAPON_PROFICIENCY_DEBUG_BESTIARY && totalBonus <= 0) {
-		std::string perkSummary;
-		for (const auto& [proficiencyBestiaryId, bonus] : m_bestiaryDamage) {
-			if (bonus <= 0) {
-				continue;
-			}
-			if (!perkSummary.empty()) {
-				perkSummary += ", ";
-			}
-			perkSummary += fmt::format("id{}->{:.2f}%", proficiencyBestiaryId, bonus * 100.0);
-		}
-		LOG_INFO(fmt::format(
-		    "[WeaponProficiency.bestiary] {} vs {} (bestyRace={}): no perk match [{}]",
-		    m_player.getName(), mType->name, mType->bestiaryClass, perkSummary));
-		return;
-	}
-
 	if (totalBonus > 0) {
-		const int32_t damageBefore = damage.primary.value;
 		applyDamageMultiplier(damage, totalBonus);
-		if (WEAPON_PROFICIENCY_DEBUG_BESTIARY) {
-			LOG_INFO(fmt::format(
-			    "[WeaponProficiency.bestiary] {} +{:.2f}% vs {} (bestyRace={}): primary dmg {} -> {}",
-			    m_player.getName(), totalBonus * 100.0, mType->name, mType->bestiaryClass, damageBefore,
-			    damage.primary.value));
-			m_player.sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE,
-			                         fmt::format("Bestiary damage +{:.2f}% on {}.", totalBonus * 100.0,
-			                                     mType->name));
-		}
 	}
 }
 
