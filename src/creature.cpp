@@ -250,7 +250,6 @@ void Creature::onThink(uint32_t interval)
 		walkUpdateTicks += interval;
 		if (forceUpdateFollowPath || walkUpdateTicks >= 2000) {
 			walkUpdateTicks = 0;
-			forceUpdateFollowPath = false;
 			requestFollowPathUpdate();
 		}
 	}
@@ -1164,6 +1163,8 @@ void Creature::getPathSearchParams(const Creature*, FindPathParams& fpp) const
 void Creature::goToFollowCreature()
 {
 	PerformanceScope performanceScope(PerformanceMetric::CreatureGoToFollow);
+	// Keep forced requests latched until this queued update is actually handled.
+	forceUpdateFollowPath = false;
 	if (auto fc = followCreature.lock()) {
 		FindPathParams fpp;
 		getPathSearchParams(fc.get(), fpp);
@@ -1201,7 +1202,6 @@ bool Creature::setFollowCreature(Creature* creature)
 
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
-			isUpdatingPath = false;
 			hasFollowPath = false;
 			followCreature.reset();
 			return false;
@@ -1216,7 +1216,6 @@ bool Creature::setFollowCreature(Creature* creature)
 		forceUpdateFollowPath = false;
 		auto creatureRef = getSharedCreature(creature);
 		if (!creatureRef) {
-			isUpdatingPath = false;
 			hasFollowPath = false;
 			followCreature.reset();
 			return false;
@@ -1224,7 +1223,6 @@ bool Creature::setFollowCreature(Creature* creature)
 		followCreature = creatureRef;
 		requestFollowPathUpdate();
 	} else {
-		isUpdatingPath = false;
 		hasFollowPath = false;
 		followCreature.reset();
 	}
