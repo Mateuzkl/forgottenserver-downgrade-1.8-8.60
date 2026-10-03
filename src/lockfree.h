@@ -12,6 +12,30 @@
 #include <system_error>
 #include <vector>
 
+#ifdef OUTPUTMESSAGE_POOL_DIAGNOSTICS
+#include <atomic>
+#include <cstdint>
+
+template <std::size_t CAPACITY>
+struct LockfreePoolDiagnostics
+{
+	inline static std::atomic<uint64_t> hits{0};
+	inline static std::atomic<uint64_t> misses{0};
+	inline static std::atomic<uint64_t> inUse{0};
+	inline static std::atomic<uint64_t> peakInUse{0};
+	inline static std::atomic<uint64_t> overflowFrees{0};
+
+	static void allocated(bool hit) noexcept
+	{
+		(hit ? hits : misses).fetch_add(1, std::memory_order_relaxed);
+		const auto current = inUse.fetch_add(1, std::memory_order_relaxed) + 1;
+		auto peak = peakInUse.load(std::memory_order_relaxed);
+		while (current > peak && !peakInUse.compare_exchange_weak(peak, current, std::memory_order_relaxed)) {
+		}
+	}
+};
+#endif
+
 /**
  * Registry of pool drain callbacks.
  * Each LockfreeFreeList instance registers itself here on first use,
@@ -122,7 +146,7 @@ struct LockfreeFreeList
  * @tparam T Type to allocate
  * @tparam CAPACITY Maximum number of pooled objects
  */
-template <typename T, std::size_t CAPACITY>
+template <typename T, std::size_t CAPACITY, bool TRACK_DIAGNOSTICS = false>
 class LockfreePoolingAllocator
 {
 public:
@@ -135,14 +159,15 @@ public:
 	// Rebind is deprecated in C++17 but kept for backward compatibility
 	template<typename U>
 	struct rebind {
-		using other = LockfreePoolingAllocator<U, CAPACITY>;
+		using other = LockfreePoolingAllocator<U, CAPACITY, TRACK_DIAGNOSTICS>;
 	};
 
 	constexpr LockfreePoolingAllocator() noexcept = default;
 	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator&) noexcept = default;
 
 	template <typename U>
-	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator<U, CAPACITY>&) noexcept {}
+	constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator<U, CAPACITY, TRACK_DIAGNOSTICS>&) noexcept
+	{}
 
 	/**
 	 * Allocate memory for n objects of type T
@@ -169,13 +194,24 @@ public:
 		void* p;
 
 		if (freeList.pop(p)) [[likely]] {
+#ifdef OUTPUTMESSAGE_POOL_DIAGNOSTICS
+			if constexpr (TRACK_DIAGNOSTICS) {
+				LockfreePoolDiagnostics<CAPACITY>::allocated(true);
+			}
+#endif
 			// Successfully reused memory from pool
 			return static_cast<T*>(p);
 		}
 
 		// Intentional raw storage allocation: STL allocators must return
 		// unconstructed memory; object lifetime is managed by the container.
-		return static_cast<T*>(operator new(sizeof(T)));
+		auto* allocated = static_cast<T*>(operator new(sizeof(T)));
+#ifdef OUTPUTMESSAGE_POOL_DIAGNOSTICS
+		if constexpr (TRACK_DIAGNOSTICS) {
+			LockfreePoolDiagnostics<CAPACITY>::allocated(false);
+		}
+#endif
+		return allocated;
 	}
 
 	/**
@@ -203,6 +239,11 @@ public:
 
 		// Single object deallocation - try to return to pool
 		auto& freeList = LockfreeFreeList<sizeof(T), CAPACITY>::get();
+#ifdef OUTPUTMESSAGE_POOL_DIAGNOSTICS
+		if constexpr (TRACK_DIAGNOSTICS) {
+			LockfreePoolDiagnostics<CAPACITY>::inUse.fetch_sub(1, std::memory_order_relaxed);
+		}
+#endif
 
 		if (freeList.bounded_push(p)) [[likely]] {
 			// Successfully returned memory to pool
@@ -211,6 +252,11 @@ public:
 
 		// Pool is full, release raw storage. The container already called the
 		// destructor before returning memory to the allocator.
+#ifdef OUTPUTMESSAGE_POOL_DIAGNOSTICS
+		if constexpr (TRACK_DIAGNOSTICS) {
+			LockfreePoolDiagnostics<CAPACITY>::overflowFrees.fetch_add(1, std::memory_order_relaxed);
+		}
+#endif
 		operator delete(p);
 	}
 

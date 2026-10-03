@@ -10,6 +10,13 @@
 
 struct TaskReactorTestAccess
 {
+	static void executeAfterBudgetConsumed(TaskReactor& reactor)
+	{
+		std::vector<TaskReactor::Task> ready;
+		reactor.drainInbox(ready);
+		reactor.drainReadyTasks(ready);
+		reactor.executeReadyTasks(ready, std::chrono::steady_clock::now() - std::chrono::milliseconds(10));
+	}
 	static void setLastIdentifier(TaskReactor& reactor, uint32_t identifier)
 	{
 		std::scoped_lock lock(reactor.mutex);
@@ -593,6 +600,23 @@ TEST_CASE(test_scheduler_dispatcher_move_only_pipeline)
 
 	g_scheduler.shutdown();
 	g_dispatcher.shutdown();
+}
+
+TEST_CASE(test_reactor_budget_includes_preprocessing_and_still_makes_progress)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setTimeBudget(std::chrono::milliseconds(1));
+	std::vector<int> order;
+	CHECK(reactor.send([&] { order.push_back(1); }));
+	CHECK(reactor.send([&] { order.push_back(2); }));
+	CHECK(reactor.send([&] { order.push_back(3); }));
+	TaskReactorTestAccess::executeAfterBudgetConsumed(reactor);
+	CHECK(order == std::vector<int>({1}));
+	CHECK(reactor.hasPendingTasks());
+	reactor.setTimeBudget(std::chrono::milliseconds(0));
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 2, 3}));
 }
 
 TFS_TEST_MAIN()

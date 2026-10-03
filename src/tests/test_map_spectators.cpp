@@ -2,6 +2,8 @@
 
 #include "../creature.h"
 #include "../map.h"
+#include "../monster.h"
+#include "../npc.h"
 #include "../tile.h"
 #include "test_support.h"
 
@@ -161,6 +163,51 @@ TEST_CASE(spectator_type_filters_return_only_requested_categories)
 	CHECK(contains(npcs, npc.get()));
 
 	removeCreature(map, player);
+	removeCreature(map, monster);
+	removeCreature(map, npc);
+}
+
+TEST_CASE(player_only_multifloor_query_matches_the_all_creature_player_set)
+{
+	// A future non-player item callback must revisit the tile optimization.
+	static_assert(std::is_same_v<decltype(&Monster::onUpdateTileItem), decltype(&Creature::onUpdateTileItem)>);
+	static_assert(std::is_same_v<decltype(&Npc::onUpdateTileItem), decltype(&Creature::onUpdateTileItem)>);
+	static_assert(std::is_same_v<decltype(&Monster::onRemoveTileItem), decltype(&Creature::onRemoveTileItem)>);
+	static_assert(std::is_same_v<decltype(&Npc::onRemoveTileItem), decltype(&Creature::onRemoveTileItem)>);
+	Map map;
+	const Position center{200, 200, 7};
+	auto player = std::make_shared<TestPlayer>();
+	auto upstairs = std::make_shared<TestPlayer>();
+	auto distant = std::make_shared<TestPlayer>();
+	auto monster = std::make_shared<TestMonster>();
+	auto npc = std::make_shared<TestNpc>();
+	player->setInstanceID(42);
+	upstairs->setInstanceID(43);
+	addCreature(map, center, player);
+	addCreature(map, Position{201, 201, 6}, upstairs);
+	addCreature(map, Position{250, 250, 7}, distant);
+	addCreature(map, Position{202, 202, 7}, monster);
+	addCreature(map, Position{203, 203, 7}, npc);
+
+	SpectatorVec all, players;
+	map.getSpectators(all, center, true);
+	map.getSpectators(players, center, true, true);
+	CHECK(players.size() == all.players().size());
+	CHECK(players.size() == 2);
+	CHECK(players.monsters().empty());
+	CHECK(players.npcs().empty());
+	for (const auto& spectator : all.players()) {
+		CHECK(contains(players, spectator.get()));
+	}
+	CHECK(!contains(players, distant.get()));
+	// Map collection remains instance-agnostic; each tile notification keeps its
+	// existing InstanceUtils visibility checks rather than changing them here.
+	CHECK(contains(players, player.get()));
+	CHECK(contains(players, upstairs.get()));
+
+	removeCreature(map, player);
+	removeCreature(map, upstairs);
+	removeCreature(map, distant);
 	removeCreature(map, monster);
 	removeCreature(map, npc);
 }

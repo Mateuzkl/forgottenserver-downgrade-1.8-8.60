@@ -48,7 +48,7 @@ public:
 	};
 	static constexpr size_t MAX_STRING_LENGTH = 8192;
 
-	NetworkMessage() = default;
+	NetworkMessage() noexcept : buffer{} {}
 
 	void reset()
 	{
@@ -176,6 +176,11 @@ public:
 	uint8_t* getRemainingBuffer() { return &buffer[0] + info.position; }
 
 protected:
+	// OutputMessage writes every transmitted byte, including crypto padding.
+	// Receive/Lua messages retain the zeroed-buffer default constructor above.
+	struct UninitializedBuffer {};
+	explicit NetworkMessage(UninitializedBuffer) noexcept {}
+
 	struct NetworkMessageInfo
 	{
 		MsgSize_t length = 0;
@@ -184,7 +189,7 @@ protected:
 	};
 
 	NetworkMessageInfo info = {};
-	std::array<uint8_t, NETWORKMESSAGE_MAXSIZE> buffer = {};
+	std::array<uint8_t, NETWORKMESSAGE_MAXSIZE> buffer;
 
 private:
 	bool canAdd(size_t size) const { return (size + info.position) < MAX_BODY_LENGTH; }

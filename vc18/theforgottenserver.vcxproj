@@ -192,7 +192,9 @@
     <ClCompile Include="..\src\configmanager.cpp" />
     <ClCompile Include="..\src\connection.cpp" />
     <ClCompile Include="..\src\connection_rate_limiter.cpp" />
-    <ClCompile Include="..\src\container.cpp" />
+    <ClCompile Include="..\src\container.cpp">
+      <IncludeInUnityFile>false</IncludeInUnityFile>
+    </ClCompile>
     <ClCompile Include="..\src\creature.cpp" />
     <ClCompile Include="..\src\creatureevent.cpp" />
     <ClCompile Include="..\src\cylinder.cpp" />
@@ -284,7 +286,9 @@
     <ClCompile Include="..\src\outputmessage.cpp" />
     <ClCompile Include="..\src\party.cpp" />
     <ClCompile Include="..\src\performance_metrics.cpp" />
-    <ClCompile Include="..\src\player.cpp" />
+    <ClCompile Include="..\src\player.cpp">
+      <IncludeInUnityFile>false</IncludeInUnityFile>
+    </ClCompile>
     <ClCompile Include="..\src\position.cpp" />
     <ClCompile Include="..\src\protocol.cpp" />
     <ClCompile Include="..\src\protocolgame.cpp" />
@@ -321,14 +325,31 @@
     <ClCompile Include="..\src\thread_pool.cpp" />
     <ClCompile Include="..\src\teleport.cpp" />
     <ClCompile Include="..\src\thing.cpp" />
-    <ClCompile Include="..\src\tile.cpp" />
+    <ClCompile Include="..\src\tile.cpp">
+      <IncludeInUnityFile>false</IncludeInUnityFile>
+    </ClCompile>
     <ClCompile Include="..\src\tools.cpp" />
     <ClCompile Include="..\src\trashholder.cpp" />
     <ClCompile Include="..\src\vocation.cpp" />
     <ClCompile Include="..\src\weapon_proficiency.cpp" />
     <ClCompile Include="..\src\weapons.cpp" />
     <ClCompile Include="..\src\wildcardtree.cpp" />
-    <ClCompile Include="..\src\xtea.cpp" />
+    <ClCompile Include="..\src\xtea.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <IncludeInUnityFile>false</IncludeInUnityFile>
+    </ClCompile>
+    <ClCompile Include="..\src\xtea_sse2.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <IncludeInUnityFile>false</IncludeInUnityFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <EnableEnhancedInstructionSet Condition="'$(Platform)'=='Win32'">StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <ClCompile Include="..\src\xtea_avx2.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <IncludeInUnityFile>false</IncludeInUnityFile>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
     <ClCompile Include="..\src\zoneweather.cpp" />
     <ClCompile Include="..\src\zones.cpp" />
   </ItemGroup>
@@ -449,6 +470,7 @@
     <ClInclude Include="..\src\weapons.h" />
     <ClInclude Include="..\src\wildcardtree.h" />
     <ClInclude Include="..\src\xtea.h" />
+    <ClInclude Include="..\src\xtea_simd.h" />
     <ClInclude Include="..\src\zoneweather.h" />
     <ClInclude Include="..\src\zones.h" />
     <ClInclude Include="..\src\account_coins.h" />

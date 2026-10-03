@@ -39,7 +39,7 @@ TEST_CASE(imbuement_add_twice_remove_once_leaves_nothing_behind)
 {
 	EventsGuard eventsGuard;
 
-	auto item = std::make_shared<Item>(0);
+	auto item = Item::make<Item>(0);
 	CHECK(item->addImbuementSlots(2));
 
 	auto imbuement = makeSwordImbuement(5);
@@ -66,7 +66,7 @@ TEST_CASE(imbuement_distinct_objects_are_still_accepted)
 {
 	EventsGuard eventsGuard;
 
-	auto item = std::make_shared<Item>(0);
+	auto item = Item::make<Item>(0);
 	CHECK(item->addImbuementSlots(2));
 
 	auto first = makeSwordImbuement(5);
@@ -88,7 +88,7 @@ TEST_CASE(imbuement_respects_slot_limit)
 {
 	EventsGuard eventsGuard;
 
-	auto item = std::make_shared<Item>(0);
+	auto item = Item::make<Item>(0);
 	CHECK(item->addImbuementSlots(1));
 
 	CHECK(item->addImbuement(makeSwordImbuement(5), false));

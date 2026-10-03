@@ -469,7 +469,7 @@ void Tile::onAddTileItem(Item* item)
 	const Position& cylinderMapPos = getPosition();
 
 	SpectatorVec spectators;
-	g_game.map.getSpectators(spectators, cylinderMapPos, true);
+	g_game.map.getSpectators(spectators, cylinderMapPos, true, true);
 
 	// send to client
 	for (const auto& spectator : spectators.players()) {
@@ -508,7 +508,9 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 	const Position& cylinderMapPos = getPosition();
 
 	SpectatorVec spectators;
-	g_game.map.getSpectators(spectators, cylinderMapPos, true);
+	// Only Player overrides the item update/removal callbacks. Monster and Npc
+	// inherit Creature's no-op methods; movement callbacks still query everyone.
+	g_game.map.getSpectators(spectators, cylinderMapPos, true, true);
 
 	// send to client
 	for (const auto& spectator : spectators.players()) {
@@ -1251,7 +1253,7 @@ void Tile::removeThing(Thing* thing, uint32_t count)
 		groundSp->setParent(nullptr);
 
 		SpectatorVec spectators;
-		g_game.map.getSpectators(spectators, getPosition(), true);
+		g_game.map.getSpectators(spectators, getPosition(), true, true);
 		onRemoveTileItem(spectators, std::vector<int32_t>(spectators.size(), 0), item);
 		return;
 	}
@@ -1269,7 +1271,7 @@ void Tile::removeThing(Thing* thing, uint32_t count)
 		}
 
 		SpectatorVec spectators;
-		g_game.map.getSpectators(spectators, getPosition(), true);
+		g_game.map.getSpectators(spectators, getPosition(), true, true);
 
 		std::vector<int32_t> oldStackPosVector;
 		oldStackPosVector.reserve(spectators.size());
@@ -1295,7 +1297,7 @@ void Tile::removeThing(Thing* thing, uint32_t count)
 			onUpdateTileItem(item, itemType, item, itemType);
 		} else {
 			SpectatorVec spectators;
-			g_game.map.getSpectators(spectators, getPosition(), true);
+			g_game.map.getSpectators(spectators, getPosition(), true, true);
 
 			std::vector<int32_t> oldStackPosVector;
 			oldStackPosVector.reserve(spectators.size());

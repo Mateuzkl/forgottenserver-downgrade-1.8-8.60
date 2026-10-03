@@ -331,6 +331,7 @@ void Connection::parsePacket(const asio::error_code& error)
 
 void Connection::send(const OutputMessage_ptr& msg)
 {
+	PerformanceScope scope(PerformanceMetric::ConnectionEnqueue);
 	std::scoped_lock lockClass(connectionLock);
 	if (closed) {
 		return;

@@ -265,6 +265,7 @@ void Creature::onThink(uint32_t interval)
 void Creature::onAttacking(uint32_t interval)
 {
 	PerformanceScope performanceScope(PerformanceMetric::CreatureOnAttacking);
+	CombatPacketScope packetScope;
 	// OPTIMIZATION: Removed redundant isDead/isRemoved checks.
 	// checkCreatures() already validates creature state before calling this.
 
@@ -553,13 +554,16 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 	}
 
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
-		if (hasFollowPath) {
+		// A successful step can consume the existing route. Target movement,
+		// teleport/floor change, exhausted routes and blocked steps still refresh.
+		if (hasFollowPath &&
+		    (creature != this || teleport || newPos.z != oldPos.z || listWalkDir.empty() || forceUpdateFollowPath)) {
 			requestFollowPathUpdate();
 		}
 
 		auto masterCreature = master.lock();
-		const bool followsLiveMaster = masterCreature && masterCreature == fc && !masterCreature->isRemoved() &&
-		                               !masterCreature->isDead();
+		const bool followsLiveMaster =
+		    masterCreature && masterCreature == fc && !masterCreature->isRemoved() && !masterCreature->isDead();
 		if (!followsLiveMaster && (newPos.z != oldPos.z || !canSee(fc->getPosition()))) {
 			onCreatureDisappear(fc.get(), false);
 		}
@@ -1176,8 +1180,31 @@ void Creature::requestFollowPathUpdate()
 		return;
 	}
 
+	auto self = getSharedCreature(this);
+	if (!self) {
+		return;
+	}
+
+	const auto generation = ++followPathGeneration;
+	const std::weak_ptr<Creature> weakSelf = self;
+	auto task = createTaskWithStats(
+	    [weakSelf, generation] {
+		    auto creature = weakSelf.lock();
+		    if (creature && creature->followPathGeneration == generation && creature->isUpdatingPath &&
+		        !creature->isRemoved() && !creature->isDead()) {
+			    g_game.updateCreatureWalk(creature->getID());
+		    }
+	    },
+	    "Creature::requestFollowPathUpdate", TASK_SOURCE_LOCATION);
 	isUpdatingPath = true;
-	g_dispatcher.addTask(createTask([id = getID()] { g_game.updateCreatureWalk(id); }));
+	try {
+		if (!g_dispatcher.tryAddTask(std::move(task))) {
+			isUpdatingPath = false;
+		}
+	} catch (...) {
+		isUpdatingPath = false;
+		throw;
+	}
 }
 
 bool Creature::setFollowCreature(Creature* creature)
@@ -1188,6 +1215,10 @@ bool Creature::setFollowCreature(Creature* creature)
 			return true;
 		}
 
+		// Supersede a queued request belonging to the previous target, without
+		// allowing its callback to clear the replacement request's pending state.
+		++followPathGeneration;
+		isUpdatingPath = false;
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
 			isUpdatingPath = false;
@@ -1216,6 +1247,7 @@ bool Creature::setFollowCreature(Creature* creature)
 		isUpdatingPath = false;
 		hasFollowPath = false;
 		followCreature.reset();
+		++followPathGeneration;
 	}
 
 	onFollowCreature(creature);

@@ -6,6 +6,9 @@
 #include "performance_metrics.h"
 
 #include "logger.h"
+#ifdef OUTPUTMESSAGE_POOL_DIAGNOSTICS
+#include "outputmessage.h"
+#endif
 
 #include <bit>
 
@@ -16,17 +19,99 @@ constexpr auto REPORT_INTERVAL = std::chrono::seconds(5);
 constexpr auto AREA_COMBAT_SLOW_SAMPLE_THRESHOLD = std::chrono::milliseconds(1);
 
 constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Count)> METRIC_NAMES = {
-	"TaskReactor::runOnce", "TaskReactor::drainInbox", "TaskReactor::drainReadyTasks",
-	"TaskReactor::sort", "TaskReactor::callbacks", "TaskReactor::callback",
-	"TaskReactor::queueLatency", "Game::checkCreatures", "Game::checkCreatureWalk",
-	"Game::updateCreatureWalk", "Creature::goToFollowCreature", "Creature::onAttacking",
-	"Game::internalMoveCreature", "Map::getPathMatching", "Map::moveCreature", "Map::getSpectators",
-	"Monster::onThink",
-	"Monster::onWalk", "Monster::doAttacking", "CombatSpell::castSpell",
-	"Combat::doCombat", "Combat::doAreaCombat", "Combat::area.buildTiles",
-	"Combat::area.prepareDamage", "Combat::area.collectSpectators", "Combat::area.processTiles+collectTargets",
-	"Combat::area.applyTargets", "Creature::executeConditions",
+    "TaskReactor::runOnce",
+    "TaskReactor::drainInbox",
+    "TaskReactor::drainReadyTasks",
+    "TaskReactor::sort",
+    "TaskReactor::callbacks",
+    "TaskReactor::callback",
+    "TaskReactor::queueLatency",
+    "Game::checkCreatures",
+    "Game::checkCreatureWalk",
+    "Game::updateCreatureWalk",
+    "Creature::goToFollowCreature",
+    "Creature::onAttacking",
+    "Game::internalMoveCreature",
+    "Map::getPathMatching",
+    "Map::moveCreature",
+    "Map::getSpectators",
+    "Monster::onThink",
+    "Monster::onWalk",
+    "Monster::doAttacking",
+    "CombatSpell::castSpell",
+    "Combat::doCombat",
+    "Combat::doAreaCombat",
+    "Combat::area.buildTiles",
+    "Combat::area.prepareDamage",
+    "Combat::area.collectSpectators",
+    "Combat::area.processTiles",
+    "Combat::area.applyTargets",
+    "Creature::executeConditions",
+    "Player::doAttacking",
+    "Game::combatChangeHealth",
+    "Game::combatChangeMana",
+    "Combat::healthCallbacks",
+    "Combat::manaCallbacks",
+    "Combat::applyHealth",
+    "Combat::applyMana",
+    "Combat::prepareDeath",
+    "Combat::broadcastHealth",
+    "Combat::broadcastEffect",
+    "Combat::broadcastDistance",
+    "Combat::broadcastText",
+    "Combat::area.collectTargets",
+    "ProtocolGame::sendMagicEffect",
+    "ProtocolGame::sendDistanceShoot",
+    "ProtocolGame::sendCreatureHealth",
+    "ProtocolGame::sendAnimatedText",
+    "ProtocolGame::sendTextMessage",
+    "ProtocolGame::sendCreatureTurn",
+    "ProtocolGame::sendAddCreature",
+    "ProtocolGame::sendMoveCreature",
+    "ProtocolGame::outputAppend",
+    "Protocol::cryptoFrame",
+    "Protocol::xteaEncrypt",
+    "Protocol::xteaDecrypt",
+    "Protocol::cryptoHeader",
+    "Connection::enqueue",
 };
+
+constexpr std::array<std::string_view, static_cast<size_t>(CombatWork::Count)> COMBAT_WORK_NAMES = {
+    "events",
+    "attack_attempts",
+    "successful_attacks",
+    "health_entries",
+    "mana_entries",
+    "health_callbacks",
+    "mana_callbacks",
+    "prepare_death_callbacks",
+    "payload_writes",
+    "payload_bytes",
+    "serializer_initializations",
+    "serializer_initialized_bytes",
+    "append_bytes",
+    "wire_messages",
+    "wire_bytes",
+};
+constexpr std::array<std::string_view, static_cast<size_t>(CombatDistribution::Count)> DISTRIBUTION_NAMES = {
+    "health_candidates", "effect_candidates",   "distance_candidates",
+    "text_candidates",   "event_payload_bytes", "event_payload_writes",
+};
+thread_local uint32_t combatPacketDepth = 0;
+thread_local uint64_t combatPacketBytes = 0, combatPacketWrites = 0;
+
+uint64_t callbackIdentity(std::string_view description, std::string_view origin) noexcept
+{
+	uint64_t hash = 14695981039346656037ULL;
+	for (const unsigned char c : description) {
+		hash = (hash ^ c) * 1099511628211ULL;
+	}
+	hash = (hash ^ 0xff) * 1099511628211ULL;
+	for (const unsigned char c : origin) {
+		hash = (hash ^ c) * 1099511628211ULL;
+	}
+	return hash == 0 ? 1 : hash;
+}
 
 constexpr std::array<std::string_view, static_cast<size_t>(MonsterIdleMetric::Count)> MONSTER_IDLE_METRIC_NAMES = {
 	"refresh_calls", "decision_true", "decision_false", "transition_to_idle", "transition_to_active",
@@ -92,7 +177,7 @@ void PerformanceMetrics::setEnabled(bool value) noexcept
 	}
 }
 
-void PerformanceMetrics::record(PerformanceMetric metric, uint64_t nanoseconds) noexcept
+void PerformanceMetrics::record(PerformanceMetric metric, uint64_t nanoseconds, uint64_t bytes) noexcept
 {
 	if (!isEnabled()) {
 		return;
@@ -100,6 +185,9 @@ void PerformanceMetrics::record(PerformanceMetric metric, uint64_t nanoseconds) 
 	auto& data = metrics[static_cast<size_t>(metric)];
 	data.calls.fetch_add(1, std::memory_order_relaxed);
 	data.totalNanoseconds.fetch_add(nanoseconds, std::memory_order_relaxed);
+	if (bytes != 0) {
+		data.bytes.fetch_add(bytes, std::memory_order_relaxed);
+	}
 	updateMaximum(data.maximumNanoseconds, nanoseconds);
 	data.histogram[histogramIndex(nanoseconds)].fetch_add(1, std::memory_order_relaxed);
 }
@@ -161,13 +249,41 @@ void PerformanceMetrics::recordNetworkConnectionCount(size_t current) noexcept
 }
 
 void PerformanceMetrics::recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
-                                                      std::string_view origin) noexcept
+                                                     std::string_view origin, uint64_t queueNanoseconds) noexcept
 {
 	if (!isEnabled()) {
 		return;
 	}
 
 	try {
+		{
+			std::scoped_lock sourceLock(callbackSourcesMutex);
+			const auto identity = callbackIdentity(description, origin);
+			auto* source = &callbackSources.back();
+			for (size_t i = 0; i < CallbackSourceCapacity; ++i) {
+				if (callbackSources[i].identity == identity || callbackSources[i].identity == 0) {
+					source = &callbackSources[i];
+					if (source->identity == 0) {
+						source->identity = identity;
+						std::copy_n(description.data(), std::min(description.size(), source->description.size() - 1),
+						            source->description.data());
+						std::copy_n(origin.data(), std::min(origin.size(), source->origin.size() - 1),
+						            source->origin.data());
+					}
+					break;
+				}
+			}
+			++source->calls;
+			source->total += nanoseconds;
+			source->maximum = std::max(source->maximum, nanoseconds);
+			source->queueMaximum = std::max(source->queueMaximum, queueNanoseconds);
+			++source->duration[histogramIndex(nanoseconds)];
+			++source->queue[histogramIndex(queueNanoseconds)];
+			constexpr std::array<uint64_t, 5> thresholds{5'000'000, 10'000'000, 25'000'000, 50'000'000, 100'000'000};
+			for (size_t i = 0; i < thresholds.size(); ++i) {
+				source->slow[i] += nanoseconds > thresholds[i];
+			}
+		}
 		std::scoped_lock lock(slowestReactorCallback.mutex);
 		if (nanoseconds <= slowestReactorCallback.nanoseconds) {
 			return;
@@ -179,6 +295,63 @@ void PerformanceMetrics::recordReactorCallbackSource(uint64_t nanoseconds, std::
 		slowestReactorCallback.nanoseconds = nanoseconds;
 	} catch (...) {
 		// Profiling must never interfere with task execution.
+	}
+}
+
+void PerformanceMetrics::recordCombatWork(CombatWork counter, uint64_t value) noexcept
+{
+	if (isEnabled()) {
+		combatWork[static_cast<size_t>(counter)].fetch_add(value, std::memory_order_relaxed);
+	}
+}
+
+void PerformanceMetrics::recordCombatDistribution(CombatDistribution distribution, uint64_t value) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	auto& data = combatDistributions[static_cast<size_t>(distribution)];
+	data.calls.fetch_add(1, std::memory_order_relaxed);
+	data.totalNanoseconds.fetch_add(value, std::memory_order_relaxed); // Unit is count/bytes, not time.
+	updateMaximum(data.maximumNanoseconds, value);
+	data.histogram[histogramIndex(value)].fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordSerializerInitialization(uint64_t bytes) noexcept
+{
+	recordCombatWork(CombatWork::SerializerInitializations);
+	recordCombatWork(CombatWork::SerializerInitializedBytes, bytes);
+}
+
+void PerformanceMetrics::recordOutputPayload(uint8_t opcode, uint64_t bytes) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	packets[opcode].writes.fetch_add(1, std::memory_order_relaxed);
+	packets[opcode].bytes.fetch_add(bytes, std::memory_order_relaxed);
+	recordCombatWork(CombatWork::AppendBytes, bytes);
+	if (combatPacketDepth != 0) {
+		combatPacketBytes += bytes;
+		++combatPacketWrites;
+		recordCombatWork(CombatWork::PayloadWrites);
+		recordCombatWork(CombatWork::PayloadBytes, bytes);
+	}
+}
+
+CombatPacketScope::CombatPacketScope() noexcept : active(g_performanceMetrics.isEnabled())
+{
+	if (active && combatPacketDepth++ == 0) {
+		combatPacketBytes = combatPacketWrites = 0;
+		g_performanceMetrics.recordCombatWork(CombatWork::Events);
+	}
+}
+
+CombatPacketScope::~CombatPacketScope()
+{
+	if (active && --combatPacketDepth == 0) {
+		g_performanceMetrics.recordCombatDistribution(CombatDistribution::EventPayloadBytes, combatPacketBytes);
+		g_performanceMetrics.recordCombatDistribution(CombatDistribution::EventPayloadWrites, combatPacketWrites);
 	}
 }
 
@@ -290,6 +463,7 @@ void PerformanceMetrics::maybeReport()
 		}
 		const uint64_t total = data.totalNanoseconds.exchange(0, std::memory_order_relaxed);
 		const uint64_t maximum = data.maximumNanoseconds.exchange(0, std::memory_order_relaxed);
+		const uint64_t bytes = data.bytes.exchange(0, std::memory_order_relaxed);
 		std::array<uint64_t, HistogramBuckets> histogram{};
 		for (size_t i = 0; i < histogram.size(); ++i) {
 			histogram[i] = data.histogram[i].exchange(0, std::memory_order_relaxed);
@@ -302,6 +476,12 @@ void PerformanceMetrics::maybeReport()
 			total / static_cast<double>(calls) / 1'000.0, maximum / 1'000.0,
 			percentile(histogram, calls, 50) / 1'000.0, percentile(histogram, calls, 95) / 1'000.0,
 			percentile(histogram, calls, 99) / 1'000.0);
+		if (metricIndex == static_cast<size_t>(PerformanceMetric::ProtocolXteaEncrypt) ||
+		    metricIndex == static_cast<size_t>(PerformanceMetric::ProtocolXteaDecrypt)) {
+			report += fmt::format("[Perf] {} bytes={} ns_call={:.3f} ns_byte={:.3f}\n",
+			                      METRIC_NAMES[metricIndex], bytes, total / static_cast<double>(calls),
+			                      bytes ? total / static_cast<double>(bytes) : 0.0);
+		}
 	}
 
 	report += fmt::format(
@@ -311,6 +491,58 @@ void PerformanceMetrics::maybeReport()
 		reactor.deferred.exchange(0, std::memory_order_relaxed),
 		reactor.expired.exchange(0, std::memory_order_relaxed),
 		reactor.dropped.exchange(0, std::memory_order_relaxed));
+
+	report += "[Perf] combat_work";
+	for (size_t i = 0; i < combatWork.size(); ++i) {
+		report += fmt::format(" {}={}", COMBAT_WORK_NAMES[i], combatWork[i].exchange(0, std::memory_order_relaxed));
+	}
+	report += '\n';
+	for (size_t i = 0; i < combatDistributions.size(); ++i) {
+		auto& data = combatDistributions[i];
+		const auto calls = data.calls.exchange(0, std::memory_order_relaxed);
+		if (calls == 0) {
+			continue;
+		}
+		const auto total = data.totalNanoseconds.exchange(0, std::memory_order_relaxed);
+		const auto maximum = data.maximumNanoseconds.exchange(0, std::memory_order_relaxed);
+		std::array<uint64_t, HistogramBuckets> histogram{};
+		for (size_t b = 0; b < histogram.size(); ++b) {
+			histogram[b] = data.histogram[b].exchange(0, std::memory_order_relaxed);
+		}
+		report += fmt::format("[Perf] fanout {} calls={} total={} avg={:.3f} p95={} p99={} max={}\n",
+		                      DISTRIBUTION_NAMES[i], calls, total, total / static_cast<double>(calls),
+		                      percentile(histogram, calls, 95), percentile(histogram, calls, 99), maximum);
+	}
+	for (size_t i = 0; i < packets.size(); ++i) {
+		const auto writes = packets[i].writes.exchange(0, std::memory_order_relaxed);
+		if (writes == 0) {
+			continue;
+		}
+		report += fmt::format("[Perf] payload opcode=0x{:02x} writes={} bytes={}\n", i, writes,
+		                      packets[i].bytes.exchange(0, std::memory_order_relaxed));
+	}
+	{
+		std::scoped_lock sourceLock(callbackSourcesMutex);
+		for (size_t i = 0; i < callbackSources.size(); ++i) {
+			auto& s = callbackSources[i];
+			if (s.calls == 0) {
+				continue;
+			}
+			report += fmt::format(
+			    "[Perf] callback_source={} @ {} calls={} total_ms={:.3f} avg_us={:.3f} p95_us={:.3f} p99_us={:.3f} max_us={:.3f} "
+			    "queue_p95_us={:.3f} queue_p99_us={:.3f} queue_max_us={:.3f} over5={} over10={} over25={} over50={} over100={}\n",
+			    i == CallbackSourceCapacity ? "[overflow]" : s.description.data(), s.origin.data(), s.calls,
+			    s.total / 1'000'000.0, s.total / static_cast<double>(s.calls) / 1'000.0,
+			    percentile(s.duration, s.calls, 95) / 1'000.0, percentile(s.duration, s.calls, 99) / 1'000.0,
+			    s.maximum / 1'000.0, percentile(s.queue, s.calls, 95) / 1'000.0,
+			    percentile(s.queue, s.calls, 99) / 1'000.0, s.queueMaximum / 1'000.0, s.slow[0], s.slow[1], s.slow[2],
+			    s.slow[3], s.slow[4]);
+			s.calls = s.total = s.maximum = s.queueMaximum = 0;
+			s.duration.fill(0);
+			s.queue.fill(0);
+			s.slow.fill(0);
+		}
+	}
 
 	const uint64_t areaCombatCasts = areaCombat.casts.exchange(0, std::memory_order_relaxed);
 	if (areaCombatCasts > 0) {
@@ -383,24 +615,21 @@ void PerformanceMetrics::maybeReport()
 	}
 	if (slowestAreaNanoseconds > 0) {
 		report += fmt::format(
-			"[Perf] area_combat slowest_us={:.3f} monster={} spell={} mode={} pos=({},{},{}) "
-			"geometry={}x{} active={} tiles={} created={} targets={} item={} effect={} "
-			"conditions={} tile_callback={} target_callback={} "
-			"phases_us={{build:{:.3f},prepare:{:.3f},spectators:{:.3f},process_tiles_collect_targets:{:.3f},apply_targets:{:.3f}}}\n",
-			slowestAreaNanoseconds / 1'000.0,
-			slowestAreaMonster.empty() ? "none" : slowestAreaMonster,
-			slowestAreaSpell.empty() ? "unknown" : slowestAreaSpell,
-			slowestAreaSample.scripted ? "scripted" : "native",
-			slowestAreaSample.positionX, slowestAreaSample.positionY, slowestAreaSample.positionZ,
-			slowestAreaSample.areaRows, slowestAreaSample.areaColumns, slowestAreaSample.activeCells,
-			slowestAreaSample.tilesReturned, slowestAreaSample.tilesCreated, slowestAreaSample.targets,
-			slowestAreaSample.itemId, slowestAreaSample.impactEffect,
-			slowestAreaSample.hasConditions, slowestAreaSample.hasTileCallback, slowestAreaSample.hasTargetCallback,
-			slowestAreaSample.buildTilesNanoseconds / 1'000.0,
-			slowestAreaSample.prepareDamageNanoseconds / 1'000.0,
-			slowestAreaSample.collectSpectatorsNanoseconds / 1'000.0,
-			slowestAreaSample.processTilesNanoseconds / 1'000.0,
-			slowestAreaSample.applyTargetsNanoseconds / 1'000.0);
+		    "[Perf] area_combat slowest_us={:.3f} monster={} spell={} mode={} pos=({},{},{}) "
+		    "geometry={}x{} active={} tiles={} created={} targets={} item={} effect={} "
+		    "conditions={} tile_callback={} target_callback={} "
+		    "phases_us={{build:{:.3f},prepare:{:.3f},spectators:{:.3f},process_tiles:{:.3f},collect_targets:{:.3f},apply_targets:{:.3f}}}\n",
+		    slowestAreaNanoseconds / 1'000.0, slowestAreaMonster.empty() ? "none" : slowestAreaMonster,
+		    slowestAreaSpell.empty() ? "unknown" : slowestAreaSpell, slowestAreaSample.scripted ? "scripted" : "native",
+		    slowestAreaSample.positionX, slowestAreaSample.positionY, slowestAreaSample.positionZ,
+		    slowestAreaSample.areaRows, slowestAreaSample.areaColumns, slowestAreaSample.activeCells,
+		    slowestAreaSample.tilesReturned, slowestAreaSample.tilesCreated, slowestAreaSample.targets,
+		    slowestAreaSample.itemId, slowestAreaSample.impactEffect, slowestAreaSample.hasConditions,
+		    slowestAreaSample.hasTileCallback, slowestAreaSample.hasTargetCallback,
+		    slowestAreaSample.buildTilesNanoseconds / 1'000.0, slowestAreaSample.prepareDamageNanoseconds / 1'000.0,
+		    slowestAreaSample.collectSpectatorsNanoseconds / 1'000.0,
+		    slowestAreaSample.processTilesNanoseconds / 1'000.0, slowestAreaSample.collectTargetsNanoseconds / 1'000.0,
+		    slowestAreaSample.applyTargetsNanoseconds / 1'000.0);
 	}
 
 	uint64_t slowestNanoseconds = 0;
@@ -445,11 +674,16 @@ void PerformanceMetrics::maybeReport()
 		network.acceptErrors.exchange(0, std::memory_order_relaxed),
 		network.rateLimitRejections.exchange(0, std::memory_order_relaxed),
 		network.ipLimitRejections.exchange(0, std::memory_order_relaxed), currentConnections, maximumConnections);
+#ifdef OUTPUTMESSAGE_POOL_DIAGNOSTICS
+	const auto pool = OutputMessagePool::getDiagnostics();
+	report += fmt::format("\n[Perf] output_pool hits={} misses={} in_use={} peak_in_use={} overflow_frees={}",
+	                      pool.hits, pool.misses, pool.inUse, pool.peakInUse, pool.overflowFrees);
+#endif
 	LOG_INFO("{}", report);
 }
 
-PerformanceScope::PerformanceScope(PerformanceMetric metric) noexcept :
-	metric(metric), active(g_performanceMetrics.isEnabled())
+PerformanceScope::PerformanceScope(PerformanceMetric metric, uint64_t* accumulator, uint64_t bytes) noexcept :
+    metric(metric), active(g_performanceMetrics.isEnabled()), accumulator(accumulator), bytes(bytes)
 {
 	if (active) {
 		started = std::chrono::steady_clock::now();
@@ -461,6 +695,10 @@ PerformanceScope::~PerformanceScope()
 	if (active) {
 		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
 			std::chrono::steady_clock::now() - started).count();
-		g_performanceMetrics.record(metric, elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0);
+		const auto nanoseconds = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
+		g_performanceMetrics.record(metric, nanoseconds, bytes);
+		if (accumulator) {
+			*accumulator += nanoseconds;
+		}
 	}
 }

@@ -771,7 +771,7 @@ std::shared_ptr<HouseTransferItem> HouseTransferItem::createHouseTransferItem(Ho
 		return nullptr;
 	}
 
-	auto transferItem = std::make_shared<HouseTransferItem>(houseRef);
+	auto transferItem = Item::make<HouseTransferItem>(houseRef);
 	transferItem->setID(ITEM_DOCUMENT_RO);
 	transferItem->setSubType(1);
 	transferItem->setSpecialDescription(fmt::format("It is a house transfer document for '{:s}'.", house->getName()));

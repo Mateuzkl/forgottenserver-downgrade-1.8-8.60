@@ -23,7 +23,6 @@
 #include <cstddef>
 #include <memory>
 
-extern bool isValidItemPointer(Item* item);
 extern LuaEnvironment g_luaEnvironment;
 extern Vocations g_vocations;
 
@@ -164,12 +163,12 @@ TEST_CASE(item_lifetime_registry_tracks_destroyed_item)
 {
 	Item* rawItem = nullptr;
 	{
-		auto item = std::make_shared<Item>(0);
+		auto item = Item::make<Item>(0);
 		rawItem = item.get();
-		CHECK(isValidItemPointer(rawItem));
+		CHECK(Item::pin(rawItem).get() == rawItem);
 	}
 
-	CHECK(!isValidItemPointer(rawItem));
+	CHECK(!Item::pin(rawItem));
 }
 
 TEST_CASE(house_transfer_item_keeps_identity_until_reset)
@@ -289,7 +288,7 @@ TEST_CASE(houses_get_house_by_player_id_preserves_lifetime_and_semantics)
 TEST_CASE(door_get_house_returns_valid_shared_ptr_and_preserves_identity)
 {
 	auto house = std::make_shared<House>(100);
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(1);
 
 	CHECK(door->getHouse() == nullptr);
@@ -307,7 +306,7 @@ TEST_CASE(door_get_house_returns_valid_shared_ptr_and_preserves_identity)
 
 TEST_CASE(door_get_house_returns_nullptr_when_house_is_destroyed)
 {
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(2);
 
 	{
@@ -349,7 +348,7 @@ std::shared_ptr<Item> makeTestGround()
 	}();
 	CHECK(groundId != 0);
 	CHECK(Item::items[groundId].isGroundTile());
-	return std::make_shared<Item>(groundId);
+	return Item::make<Item>(groundId);
 }
 
 void ensureVocations()
@@ -456,7 +455,7 @@ private:
 TEST_CASE(door_can_use_and_access_list_behavior)
 {
 	auto house = std::make_shared<House>(300);
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(3);
 	house->addDoor(door.get());
 
@@ -510,13 +509,13 @@ TEST_CASE(housetile_get_house_returns_nullptr_when_house_is_null_or_destroyed)
 TEST_CASE(item_get_door_returns_nullptr_for_regular_item_and_valid_shared_ptr_for_door)
 {
 	// Regular Item returns nullptr
-	auto regularItem = std::make_shared<Item>(100);
+	auto regularItem = Item::make<Item>(100);
 	CHECK(regularItem->getDoor() == nullptr);
 	const Item& constRegularItem = *regularItem;
 	CHECK(constRegularItem.getDoor() == nullptr);
 
 	// Door returns valid shared_ptr and preserves identity
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(45);
 	Door* rawDoor = door.get();
 
@@ -547,7 +546,7 @@ TEST_CASE(housetile_update_house_registers_door_using_get_door_and_handles_destr
 	auto houseTile = std::make_shared<HouseTile>(112, 112, 7, house);
 	house->addTile(houseTile);
 
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(77);
 	CHECK(door->getHouse() == nullptr);
 
@@ -568,13 +567,13 @@ TEST_CASE(housetile_update_house_registers_door_using_get_door_and_handles_destr
 TEST_CASE(item_get_bed_returns_nullptr_for_regular_item_and_valid_shared_ptr_for_bed_item)
 {
 	// Regular Item returns nullptr
-	auto regularItem = std::make_shared<Item>(100);
+	auto regularItem = Item::make<Item>(100);
 	CHECK(regularItem->getBed() == nullptr);
 	const Item& constRegularItem = *regularItem;
 	CHECK(constRegularItem.getBed() == nullptr);
 
 	// BedItem returns valid shared_ptr and preserves identity
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	BedItem* rawBed = bed.get();
 
 	std::shared_ptr<BedItem> nonConstBed = bed->getBed();
@@ -602,7 +601,7 @@ TEST_CASE(housetile_update_house_registers_bed_item_using_get_bed)
 	auto houseTile = std::make_shared<HouseTile>(110, 110, 7, house);
 	house->addTile(houseTile);
 
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	CHECK(bed->getHouse() == nullptr);
 
 	// Adding bed to houseTile updates house registration
@@ -615,7 +614,7 @@ TEST_CASE(housetile_update_house_registers_bed_item_using_get_bed)
 
 TEST_CASE(bed_get_house_returns_valid_shared_ptr_and_preserves_identity)
 {
-	auto bed = std::make_shared<BedItem>(0);
+	auto bed = Item::make<BedItem>(0);
 	CHECK(bed->getHouse() == nullptr);
 
 	auto house = std::make_shared<House>(700);
@@ -630,7 +629,7 @@ TEST_CASE(bed_get_house_returns_valid_shared_ptr_and_preserves_identity)
 
 TEST_CASE(bed_get_house_returns_nullptr_when_house_is_destroyed_and_can_remove)
 {
-	auto bed = std::make_shared<BedItem>(0);
+	auto bed = Item::make<BedItem>(0);
 	CHECK(bed->canRemove());
 
 	{
@@ -657,7 +656,7 @@ TEST_CASE(house_add_bed_ignores_nullptr_and_set_owner_succeeds)
 
 TEST_CASE(bed_get_house_preserves_lifetime_for_caller)
 {
-	auto bed = std::make_shared<BedItem>(0);
+	auto bed = Item::make<BedItem>(0);
 	std::shared_ptr<House> callerHouseRef;
 
 	{
@@ -680,7 +679,7 @@ TEST_CASE(bed_get_house_preserves_lifetime_for_caller)
 
 TEST_CASE(bed_set_house_preserves_identity_and_handles_nullptr_and_expiration)
 {
-	auto bed = std::make_shared<BedItem>(0);
+	auto bed = Item::make<BedItem>(0);
 	CHECK(bed->getHouse() == nullptr);
 
 	auto house = std::make_shared<House>(900);
@@ -725,8 +724,8 @@ TEST_CASE(bed_get_next_bed_item_finds_partner_and_preserves_identity_and_lifetim
 	tileGuard.track(100, 100, 7);
 	tileGuard.track(100, 101, 7);
 
-	auto bed1 = std::make_shared<BedItem>(694);
-	auto bed2 = std::make_shared<BedItem>(695);
+	auto bed1 = Item::make<BedItem>(694);
+	auto bed2 = Item::make<BedItem>(695);
 	std::weak_ptr<BedItem> weakBed2 = bed2;
 
 	auto tile1 = std::make_unique<DynamicTile>(100, 100, 7);
@@ -786,7 +785,7 @@ TEST_CASE(bed_get_next_bed_item_returns_nullptr_when_partner_absent)
 	tileGuard.track(200, 200, 7);
 	tileGuard.track(200, 201, 7);
 
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	auto tile = std::make_unique<DynamicTile>(200, 200, 7);
 	Tile* rawTile = tile.get();
 
@@ -811,7 +810,7 @@ TEST_CASE(tile_get_bed_item_returns_nullptr_when_no_bed)
 	auto tile = std::make_unique<DynamicTile>(50, 50, 7);
 	CHECK(tile->getBedItem() == nullptr);
 
-	auto regularItem = std::make_shared<Item>(0);
+	auto regularItem = Item::make<Item>(0);
 	tile->internalAddThing(regularItem.get());
 	CHECK(tile->getBedItem() == nullptr);
 }
@@ -821,7 +820,7 @@ TEST_CASE(tile_get_bed_item_from_ground_preserves_identity_and_lifetime)
 	ensureItemTypes();
 
 	auto tile = std::make_unique<DynamicTile>(51, 51, 7);
-	auto bedGround = std::make_shared<BedItem>(694);
+	auto bedGround = Item::make<BedItem>(694);
 	BedItem* rawBed = bedGround.get();
 
 	tile->setGround(bedGround);
@@ -855,7 +854,7 @@ TEST_CASE(tile_get_bed_item_from_item_list_preserves_identity_and_lifetime)
 	ensureItemTypes();
 
 	auto tile = std::make_unique<DynamicTile>(52, 52, 7);
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	BedItem* rawBed = bed.get();
 
 	tile->internalAddThing(bed.get());
@@ -888,7 +887,7 @@ TEST_CASE(tile_get_bed_item_from_item_list_preserves_identity_and_lifetime)
 TEST_CASE(house_get_door_by_number_finds_door_and_preserves_identity_and_lifetime)
 {
 	auto house = std::make_shared<House>(500);
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(10);
 	Door* rawDoor = door.get();
 
@@ -924,7 +923,7 @@ TEST_CASE(house_get_door_by_number_returns_nullptr_when_door_is_destroyed)
 	auto house = std::make_shared<House>(501);
 
 	{
-		auto door = std::make_shared<Door>(0);
+		auto door = Item::make<Door>(0);
 		door->setDoorId(20);
 		house->addDoor(door.get());
 		CHECK(house->getDoorByNumber(20) != nullptr);
@@ -941,7 +940,7 @@ TEST_CASE(house_get_door_by_position_finds_door_and_preserves_identity_and_lifet
 
 	const Position doorPos{105, 105, 7};
 	auto house = std::make_shared<House>(502);
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(30);
 	Door* rawDoor = door.get();
 
@@ -988,7 +987,7 @@ TEST_CASE(house_get_door_by_position_returns_nullptr_when_door_is_destroyed)
 	auto house = std::make_shared<House>(503);
 
 	{
-		auto door = std::make_shared<Door>(0);
+		auto door = Item::make<Door>(0);
 		auto tile = std::make_unique<DynamicTile>(doorPos.x, doorPos.y, doorPos.z);
 		Tile* rawTile = tile.get();
 		rawTile->internalAddThing(door.get());
@@ -1005,8 +1004,8 @@ TEST_CASE(house_get_door_by_position_returns_nullptr_when_door_is_destroyed)
 
 TEST_CASE(container_get_item_by_index_preserves_item_lifetime)
 {
-	auto container = std::make_shared<Container>(0, 2);
-	auto insertedItem = std::make_shared<Item>(0);
+	auto container = Item::make<Container>(0, 2);
+	auto insertedItem = Item::make<Item>(0);
 	Item* rawItem = insertedItem.get();
 	CHECK(container->addItem(insertedItem));
 	insertedItem.reset();
@@ -1018,14 +1017,14 @@ TEST_CASE(container_get_item_by_index_preserves_item_lifetime)
 
 	container->removeThing(rawItem, rawItem->getItemCount());
 	CHECK(container->empty());
-	CHECK(isValidItemPointer(item.get()));
+	CHECK(Item::pin(item.get()) == item);
 	CHECK(item->getID() == 0);
 }
 
 TEST_CASE(container_iterator_preserves_item_lifetime)
 {
-	auto container = std::make_shared<Container>(0, 1);
-	auto insertedItem = std::make_shared<Item>(0);
+	auto container = Item::make<Container>(0, 1);
+	auto insertedItem = Item::make<Item>(0);
 	Item* rawItem = insertedItem.get();
 	CHECK(container->addItem(insertedItem));
 	insertedItem.reset();
@@ -1043,15 +1042,15 @@ TEST_CASE(container_iterator_preserves_item_lifetime)
 
 	container->removeThing(rawItem, rawItem->getItemCount());
 	CHECK(container->empty());
-	CHECK(isValidItemPointer(item.get()));
+	CHECK(Item::pin(item.get()) == item);
 	CHECK(item->getID() == 0);
 }
 
 TEST_CASE(lua_container_item_userdata_preserves_item_lifetime)
 {
 	LuaFixture fixture;
-	auto container = std::make_shared<Container>(0, 1);
-	auto insertedItem = std::make_shared<Item>(0);
+	auto container = Item::make<Container>(0, 1);
+	auto insertedItem = Item::make<Item>(0);
 	Item* rawItem = insertedItem.get();
 	std::weak_ptr<Item> weakItem = insertedItem;
 	CHECK(container->addItem(insertedItem));
@@ -1091,20 +1090,20 @@ TEST_CASE(player_remove_item_of_type_inventory_and_container_lifetime)
 	auto player = makeTestPlayer(100, "RemoveItemPlayer");
 
 	// Non-stackable items spread across inventory and backpack container
-	auto backpack = std::make_shared<Container>(ITEM_BAG, 10);
+	auto backpack = Item::make<Container>(ITEM_BAG, 10);
 	static_cast<Cylinder*>(player.get())->internalAddThing(CONST_SLOT_BACKPACK, backpack.get());
 
-	auto invItem = std::make_shared<Item>(100);
+	auto invItem = Item::make<Item>(100);
 	std::weak_ptr<Item> weakInvItem = invItem;
 	static_cast<Cylinder*>(player.get())->internalAddThing(CONST_SLOT_RIGHT, invItem.get());
 	invItem.reset();
 
-	auto contItem1 = std::make_shared<Item>(100);
+	auto contItem1 = Item::make<Item>(100);
 	std::weak_ptr<Item> weakContItem1 = contItem1;
 	backpack->addItem(contItem1);
 	contItem1.reset();
 
-	auto contItem2 = std::make_shared<Item>(100);
+	auto contItem2 = Item::make<Item>(100);
 	std::weak_ptr<Item> weakContItem2 = contItem2;
 	backpack->addItem(contItem2);
 	contItem2.reset();
@@ -1138,15 +1137,15 @@ TEST_CASE(player_remove_item_of_type_stackable_partial_and_multi_container)
 
 	auto player = makeTestPlayer(101, "StackablePlayer");
 
-	auto backpack = std::make_shared<Container>(ITEM_BAG, 10);
+	auto backpack = Item::make<Container>(ITEM_BAG, 10);
 	static_cast<Cylinder*>(player.get())->internalAddThing(CONST_SLOT_BACKPACK, backpack.get());
 
-	auto stack1 = std::make_shared<Item>(2160, 50);
+	auto stack1 = Item::make<Item>(2160, 50);
 	std::weak_ptr<Item> weakStack1 = stack1;
 	backpack->addItem(stack1);
 	stack1.reset();
 
-	auto stack2 = std::make_shared<Item>(2160, 100);
+	auto stack2 = Item::make<Item>(2160, 100);
 	std::weak_ptr<Item> weakStack2 = stack2;
 	backpack->addItem(stack2);
 	stack2.reset();
@@ -1174,12 +1173,12 @@ TEST_CASE(game_internal_remove_items_robust_against_concurrent_pre_removal)
 	Item::items.getItemType(100).moveable = true;
 
 	auto player = makeTestPlayer(102, "PreRemovePlayer");
-	auto container = std::make_shared<Container>(ITEM_BAG, 5);
+	auto container = Item::make<Container>(ITEM_BAG, 5);
 	static_cast<Cylinder*>(player.get())->internalAddThing(CONST_SLOT_BACKPACK, container.get());
 
-	auto item1 = std::make_shared<Item>(100);
-	auto item2 = std::make_shared<Item>(100);
-	auto item3 = std::make_shared<Item>(100);
+	auto item1 = Item::make<Item>(100);
+	auto item2 = Item::make<Item>(100);
+	auto item3 = Item::make<Item>(100);
 
 	std::weak_ptr<Item> weak1 = item1;
 	std::weak_ptr<Item> weak2 = item2;
@@ -1209,7 +1208,7 @@ TEST_CASE(game_internal_remove_items_robust_against_concurrent_pre_removal)
 TEST_CASE(house_bed_list_drops_destroyed_bed)
 {
 	auto house = std::make_shared<House>(705);
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	BedItem* rawBed = bed.get();
 
 	house->addBed(rawBed);
@@ -1252,7 +1251,7 @@ TEST_CASE(house_tile_list_survives_map_tile_removal)
 
 TEST_CASE(get_bed_by_sleeper_keeps_bed_alive_for_caller)
 {
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	BedItem* rawBed = bed.get();
 	std::weak_ptr<BedItem> weakBed = bed;
 
@@ -1286,7 +1285,7 @@ TEST_CASE(house_door_set_drops_tile_destroyed_door)
 	tileGuard.track(121, 121, 7);
 
 	auto house = std::make_shared<House>(707);
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(88);
 
 	auto tile = std::make_unique<DynamicTile>(doorPos.x, doorPos.y, doorPos.z);
@@ -1321,11 +1320,11 @@ TEST_CASE(map_remove_tile_safely_removes_all_items_without_iterator_invalidation
 	CHECK(rawTile != nullptr);
 
 	auto ground = makeTestGround();
-	auto item1 = std::make_shared<Item>(2160);
-	auto item2 = std::make_shared<Item>(2160);
-	auto door = std::make_shared<Door>(0);
+	auto item1 = Item::make<Item>(2160);
+	auto item2 = Item::make<Item>(2160);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(99);
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 
 	std::weak_ptr<Item> weakGround = ground;
 	std::weak_ptr<Item> weak1 = item1;
@@ -1390,7 +1389,7 @@ TEST_CASE(door_reparenting_between_houses_and_destruction_lifetime)
 	houseA->addTile(houseTileA);
 	houseB->addTile(houseTileB);
 
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(101);
 	std::weak_ptr<Door> weakDoor = door;
 
@@ -1438,7 +1437,7 @@ TEST_CASE(bed_reparenting_between_houses_and_destruction_lifetime)
 	houseA->addTile(houseTileA);
 	houseB->addTile(houseTileB);
 
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	std::weak_ptr<BedItem> weakBed = bed;
 
 	// Add bed to houseTileA
@@ -1487,7 +1486,7 @@ TEST_CASE(map_cleanup_flag_is_distinct_from_flag_nolimit)
 	Tile* rawTile = g_game.map.getTile(pos);
 	CHECK(rawTile != nullptr);
 
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	std::weak_ptr<BedItem> weakBed = bed;
 	rawTile->internalAddThing(0, bed.get());
 	house->addBed(bed.get());
@@ -1534,10 +1533,10 @@ TEST_CASE(flag_nolimit_does_not_remove_special_nonremovable_containers)
 	CHECK(rawTile->getGround()->getParent() == rawTile);
 
 	std::vector<std::shared_ptr<Item>> specialItems{
-	    std::make_shared<Inbox>(ITEM_INBOX),
-	    std::make_shared<StoreInbox>(ITEM_STORE_INBOX),
-	    std::make_shared<DepotChest>(ITEM_DEPOT),
-	    std::make_shared<DepotLocker>(ITEM_LOCKER),
+	    Item::make<Inbox>(ITEM_INBOX),
+	    Item::make<StoreInbox>(ITEM_STORE_INBOX),
+	    Item::make<DepotChest>(ITEM_DEPOT),
+	    Item::make<DepotLocker>(ITEM_LOCKER),
 	};
 	std::vector<std::weak_ptr<Item>> weakItems;
 	weakItems.reserve(specialItems.size());
@@ -1566,9 +1565,9 @@ TEST_CASE(house_reassigns_door_and_bed_without_stale_back_references)
 	auto houseA = std::make_shared<House>(901);
 	auto houseB = std::make_shared<House>(902);
 
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(1);
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 
 	// Register in House A
 	houseA->addDoor(door.get());
@@ -1640,17 +1639,17 @@ TEST_CASE(orphan_house_tile_fails_closed_for_players_and_allows_map_cleanup)
 	CHECK(orphanTile->getGround() == ground.get());
 	CHECK(ground->getParent() == orphanTile);
 
-	auto container = std::make_shared<Container>(ITEM_BAG, 10);
+	auto container = Item::make<Container>(ITEM_BAG, 10);
 	orphanTile->internalAddThing(container.get());
 
-	auto nestedItem = std::make_shared<Item>(100);
+	auto nestedItem = Item::make<Item>(100);
 	container->addItem(nestedItem);
-	auto incomingItem = std::make_shared<Item>(100);
+	auto incomingItem = Item::make<Item>(100);
 
-	auto door = std::make_shared<Door>(0);
+	auto door = Item::make<Door>(0);
 	door->setDoorId(10);
 	orphanTile->internalAddThing(door.get());
-	auto bed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<BedItem>(694);
 	orphanTile->internalAddThing(bed.get());
 	CHECK(door->getHouse() == nullptr);
 	CHECK(bed->getHouse() == nullptr);
@@ -1731,9 +1730,9 @@ TEST_CASE(door_and_bed_remove_with_expired_first_element_regression)
 	auto house = std::make_shared<House>(910);
 
 	// Create two doors
-	auto door1 = std::make_shared<Door>(0);
+	auto door1 = Item::make<Door>(0);
 	door1->setDoorId(1);
-	auto door2 = std::make_shared<Door>(0);
+	auto door2 = Item::make<Door>(0);
 	door2->setDoorId(2);
 
 	// Add both doors
@@ -1751,8 +1750,8 @@ TEST_CASE(door_and_bed_remove_with_expired_first_element_regression)
 	CHECK(house->getDoors().empty());
 
 	// Create two beds
-	auto bed1 = std::make_shared<BedItem>(694);
-	auto bed2 = std::make_shared<BedItem>(694);
+	auto bed1 = Item::make<BedItem>(694);
+	auto bed2 = Item::make<BedItem>(694);
 
 	// Add both beds
 	house->addBed(bed1.get());
@@ -1775,11 +1774,11 @@ TEST_CASE(house_door_bed_tile_pruning_prevents_unbounded_registry_growth)
 
 	// Repeat add -> expire -> add cycle multiple times
 	for (int i = 0; i < 5; ++i) {
-		auto door = std::make_shared<Door>(0);
+		auto door = Item::make<Door>(0);
 		door->setDoorId(100 + i);
 		house->addDoor(door.get());
 
-		auto bed = std::make_shared<BedItem>(694);
+		auto bed = Item::make<BedItem>(694);
 		house->addBed(bed.get());
 
 		auto tile = std::make_shared<HouseTile>(10 + i, 10 + i, 7, house);
@@ -1793,11 +1792,11 @@ TEST_CASE(house_door_bed_tile_pruning_prevents_unbounded_registry_growth)
 	}
 
 	// Now add one new live door, bed, and tile
-	auto liveDoor = std::make_shared<Door>(0);
+	auto liveDoor = Item::make<Door>(0);
 	liveDoor->setDoorId(999);
 	house->addDoor(liveDoor.get());
 
-	auto liveBed = std::make_shared<BedItem>(694);
+	auto liveBed = Item::make<BedItem>(694);
 	house->addBed(liveBed.get());
 
 	auto liveTile = std::make_shared<HouseTile>(50, 50, 7, house);
@@ -1847,8 +1846,8 @@ TEST_CASE(occupied_house_bed_removed_by_map_preserves_sleeper_regeneration)
 	Item::items.getItemType(694).bedPartnerDir = DIRECTION_SOUTH;
 	OfflineSleeperState offlineState;
 	offlineState.guid = 912;
-	auto bed = std::make_shared<OfflineTestBedItem>(694, offlineState);
-	auto partnerBed = std::make_shared<BedItem>(694);
+	auto bed = Item::make<OfflineTestBedItem>(694, offlineState);
+	auto partnerBed = Item::make<BedItem>(694);
 	std::weak_ptr<BedItem> weakBed = bed;
 	g_game.map.getTile(bedPos)->internalAddThing(bed.get());
 	g_game.map.getTile(partnerPos)->internalAddThing(partnerBed.get());
@@ -1962,8 +1961,8 @@ void checkFailedOfflineBedRemoval(bool failSave, bool removeWholeTile, bool remo
 		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
 	}
 
-	auto bed = std::make_shared<OfflineTestBedItem>(694, offlineState);
-	auto partnerBed = std::make_shared<OfflineTestBedItem>(695, offlineState);
+	auto bed = Item::make<OfflineTestBedItem>(694, offlineState);
+	auto partnerBed = Item::make<OfflineTestBedItem>(695, offlineState);
 	g_game.map.getTile(bedPos)->internalAddThing(bed.get());
 	g_game.map.getTile(partnerPos)->internalAddThing(partnerBed.get());
 	TilePlayersGuard players{{makeTestPlayer(offlineState.guid, "OfflineSleepingPlayer")}};
@@ -2001,8 +2000,7 @@ void checkFailedOfflineBedRemoval(bool failSave, bool removeWholeTile, bool remo
 	Item* ground = targetTile->getGround();
 	// Down-items added after the bed are visited first by the removal loop.
 	// They must survive a failed wake, not just the occupied bed itself.
-	const std::vector<std::shared_ptr<Item>> downItems{
-	    std::make_shared<Item>(2160), std::make_shared<Item>(2160)};
+	const std::vector<std::shared_ptr<Item>> downItems{Item::make<Item>(2160), Item::make<Item>(2160)};
 	for (const auto& item : downItems) {
 		targetTile->internalAddThing(item.get());
 		CHECK(targetTile->getThingIndex(item.get()) < targetTile->getThingIndex(targetBed.get()));
@@ -2152,10 +2150,10 @@ void checkAtomicBedTeardown(bool failSave, bool firstOnline)
 	onlineTile->internalAddThing(makeTestGround().get());
 	g_game.map.setTile(onlinePos.x, onlinePos.y, onlinePos.z, std::move(onlineTile));
 	auto* source = g_game.map.getTile(pos);
-	auto firstBed = std::make_shared<OfflineTestBedItem>(694, states[0]);
-	auto secondBed = std::make_shared<OfflineTestBedItem>(695, states[1]);
-	auto firstPartner = std::make_shared<BedItem>(694);
-	auto secondPartner = std::make_shared<BedItem>(695);
+	auto firstBed = Item::make<OfflineTestBedItem>(694, states[0]);
+	auto secondBed = Item::make<OfflineTestBedItem>(695, states[1]);
+	auto firstPartner = Item::make<BedItem>(694);
+	auto secondPartner = Item::make<BedItem>(695);
 	g_game.map.getTile(firstPartnerPos)->internalAddThing(firstPartner.get());
 	g_game.map.getTile(secondPartnerPos)->internalAddThing(secondPartner.get());
 	// Insertion at the beginning of down-items makes the successful bed first.
@@ -2211,7 +2209,7 @@ void checkAtomicBedTeardown(bool failSave, bool firstOnline)
 		descriptionsBefore.emplace_back(bed->getSpecialDescription());
 		idsBefore.push_back(bed->getID());
 	}
-	auto item = std::make_shared<Item>(2160);
+	auto item = Item::make<Item>(2160);
 	source->internalAddThing(item.get());
 	const auto* items = source->getItemList();
 	const std::vector<std::shared_ptr<Item>> itemsBefore(items->begin(), items->end());
@@ -2567,12 +2565,12 @@ TEST_CASE(removal_callbacks_can_remove_and_recreate_the_source_tile)
 		auto house = std::make_shared<House>(940);
 		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
 		tile->internalAddThing(makeTestGround().get());
-		auto originalItem = std::make_shared<Item>(2160);
+		auto originalItem = Item::make<Item>(2160);
 		tile->internalAddThing(originalItem.get());
 		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
 		std::weak_ptr<Tile> oldTile = g_game.map.getTile(pos)->weak_from_this();
 
-		auto replacementItem = std::make_shared<Item>(2160);
+		auto replacementItem = Item::make<Item>(2160);
 		bool callbackRan = false;
 		auto event = std::make_unique<MoveEvent>(fixture.events.getScriptInterfacePtr());
 		event->setEventType(MOVE_EVENT_REMOVE_ITEM);
@@ -2624,8 +2622,8 @@ TEST_CASE(map_removal_does_not_remove_items_moved_away_by_callbacks)
 		g_game.map.setTile(pos.x, pos.y, pos.z, std::move(tile));
 	}
 	Tile* source = g_game.map.getTile(sourcePos);
-	source->internalAddThing(std::make_shared<Item>(2160).get());
-	source->internalAddThing(std::make_shared<Item>(2160).get());
+	source->internalAddThing(Item::make<Item>(2160).get());
+	source->internalAddThing(Item::make<Item>(2160).get());
 	const auto movedItem = source->getItemList()->at(1);
 	bool callbackRan = false;
 	auto event = std::make_unique<MoveEvent>(fixture.events.getScriptInterfacePtr());
@@ -2720,9 +2718,9 @@ struct QuickLootLifetimeFixture
 		player = makeTestPlayer(960, "QuickLootLifetimePlayer");
 		player->setCapacity(1000000);
 		CHECK(g_game.internalPlaceCreature(player.get(), playerPos, false, true));
-		backpack = std::make_shared<Container>(ITEM_BACKPACK, capacity);
+		backpack = Item::make<Container>(ITEM_BACKPACK, capacity);
 		static_cast<Cylinder&>(*player).internalAddThing(CONST_SLOT_BACKPACK, backpack.get());
-		corpse = std::make_shared<Container>(ITEM_BAG, 16);
+		corpse = Item::make<Container>(ITEM_BAG, 16);
 		corpse->setCorpseOwner(player->getID());
 		g_game.map.getTile(corpsePos)->internalAddThing(corpse.get());
 	}
@@ -2737,7 +2735,7 @@ struct QuickLootLifetimeFixture
 
 	std::shared_ptr<Item> addLoot(Container* destination = nullptr)
 	{
-		auto item = std::make_shared<Item>(2160);
+		auto item = Item::make<Item>(2160);
 		(destination ? destination : corpse.get())->internalAddThing(item.get());
 		return item;
 	}
@@ -2753,7 +2751,7 @@ TEST_CASE(quickloot_nested_items_move_once_and_release_after_cleanup)
 	std::vector<std::weak_ptr<Item>> weakItems;
 	{
 		QuickLootLifetimeFixture fixture;
-		auto nested = std::make_shared<Container>(ITEM_BAG, 8);
+		auto nested = Item::make<Container>(ITEM_BAG, 8);
 		fixture.corpse->internalAddThing(nested.get());
 		for (size_t i = 0; i < 6; ++i) {
 			weakItems.push_back(fixture.addLoot(i % 2 ? nested.get() : nullptr));
@@ -2852,7 +2850,7 @@ TEST_CASE(quickloot_routes_soul_cores_from_primary_type_metadata)
 	lootType.primaryType = "soul cores";
 	fixture.player->setPremiumTime(time(nullptr) + 3600);
 
-	auto soulCoreBag = std::make_shared<Container>(ITEM_BAG, 8);
+	auto soulCoreBag = Item::make<Container>(ITEM_BAG, 8);
 	soulCoreBag->setItemUID(Item::generateItemUID());
 	fixture.backpack->internalAddThing(soulCoreBag.get());
 	fixture.player->setManagedLootContainer(OBJECTCATEGORY_SOULCORES, soulCoreBag->getClientID(),
@@ -2874,7 +2872,7 @@ TEST_CASE(quickloot_tile_removed_by_movement_callback_stops_the_batch)
 	} maxGuard;
 	ConfigManager::setInteger(ConfigManager::QUICK_LOOT_MAX_CORPSES, 10);
 	fixture.addLoot();
-	auto second = std::make_shared<Container>(ITEM_BAG, 8);
+	auto second = Item::make<Container>(ITEM_BAG, 8);
 	second->setCorpseOwner(fixture.player->getID());
 	fixture.addLoot(second.get());
 	g_game.map.getTile(fixture.corpsePos)->internalAddThing(second.get());
@@ -2983,7 +2981,7 @@ void checkHouseOwnerBedFailure(bool failSave)
 		auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
 		tile->internalAddThing(makeTestGround().get());
 		g_game.map.setTile(pos, std::move(tile));
-		auto bed = std::make_shared<OfflineTestBedItem>(694, states[i]);
+		auto bed = Item::make<OfflineTestBedItem>(694, states[i]);
 		auto* source = g_game.map.getTile(pos);
 		source->internalAddThing(bed.get());
 		source->internalAddThing(players.players[i].get());
@@ -3045,7 +3043,7 @@ TEST_CASE(autoloot_nested_items_use_their_actual_parent_without_duplicates)
 {
 	ensureItemTypes();
 	AutoLootLifetimeFixture fixture;
-	auto nested = std::make_shared<Container>(ITEM_BAG, 8);
+	auto nested = Item::make<Container>(ITEM_BAG, 8);
 	fixture.corpse->internalAddThing(nested.get());
 	auto first = fixture.addLoot(nested.get());
 	auto second = fixture.addLoot();
@@ -3100,7 +3098,7 @@ TEST_CASE(autoloot_filtered_nested_leaf_moves_without_moving_its_container)
 	ConfigManager::setInteger(ConfigManager::AUTOLOOT_MAXITEMS_FREE, 5);
 	ConfigManager::setInteger(ConfigManager::AUTOLOOT_MAXITEMS_PREMIUM, 5);
 	fixture.player->parseAutoLootWindow("pr264 lifetime loot");
-	auto nested = std::make_shared<Container>(ITEM_BAG, 8);
+	auto nested = Item::make<Container>(ITEM_BAG, 8);
 	fixture.corpse->internalAddThing(nested.get());
 	auto loot = fixture.addLoot(nested.get());
 	fixture.player->lootCorpse(fixture.corpse.get());
@@ -3175,10 +3173,10 @@ TEST_CASE(house_depot_transfer_survives_removal_of_a_queued_subcontainer)
 	auto tile = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, house);
 	tile->internalAddThing(makeTestGround().get());
 	g_game.map.setTile(pos, std::move(tile));
-	auto root = std::make_shared<Container>(ITEM_BAG, 8);
+	auto root = Item::make<Container>(ITEM_BAG, 8);
 	g_game.map.getTile(pos)->internalAddThing(root.get());
 	auto trigger = fixture.addLoot(root.get());
-	auto queued = std::make_shared<Container>(ITEM_BAG, 8);
+	auto queued = Item::make<Container>(ITEM_BAG, 8);
 	fixture.addLoot(queued.get());
 	root->internalAddThing(queued.get()); // Visited and queued before trigger.
 	const std::weak_ptr<Container> weakQueued = queued;

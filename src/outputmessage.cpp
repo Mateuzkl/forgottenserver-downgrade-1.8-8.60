@@ -15,7 +15,9 @@ namespace {
 
 using namespace std::chrono_literals;
 
-// Inline constexpr constants avoid ODR issues and are friendly to headers/optimizations
+// Retained free blocks, not a limit on outstanding messages. Each slot costs
+// about 64 KiB (2048 ~= 128 MiB; 4096 ~= 256 MiB; 8192 ~= 512 MiB).
+// Increase only when sustained profiling shows misses after the initial ramp.
 inline constexpr uint16_t OUTPUTMESSAGE_FREE_LIST_CAPACITY = 2048;
 inline constexpr auto AUTOSEND_DELAY_DEFAULT = 10ms;
 
@@ -93,8 +95,19 @@ OutputMessage_ptr OutputMessagePool::getOutputMessage()
 	 *
 	 * Pool capacity: 2048 messages
 	 */
-	return std::allocate_shared<OutputMessage>(LockfreePoolingAllocator<void, OUTPUTMESSAGE_FREE_LIST_CAPACITY>());
+	return std::allocate_shared<OutputMessage>(
+	    LockfreePoolingAllocator<void, OUTPUTMESSAGE_FREE_LIST_CAPACITY, true>());
 }
+
+#ifdef OUTPUTMESSAGE_POOL_DIAGNOSTICS
+OutputMessagePool::Diagnostics OutputMessagePool::getDiagnostics() noexcept
+{
+	using Counters = LockfreePoolDiagnostics<OUTPUTMESSAGE_FREE_LIST_CAPACITY>;
+	return {Counters::hits.load(std::memory_order_relaxed), Counters::misses.load(std::memory_order_relaxed),
+	        Counters::inUse.load(std::memory_order_relaxed), Counters::peakInUse.load(std::memory_order_relaxed),
+	        Counters::overflowFrees.load(std::memory_order_relaxed)};
+}
+#endif
 
 void OutputMessagePool::prewarmPool(size_t count)
 {

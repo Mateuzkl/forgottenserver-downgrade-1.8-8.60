@@ -43,6 +43,65 @@ enum class PerformanceMetric : uint8_t
 	CombatAreaProcessTiles,
 	CombatAreaApplyTargets,
 	CreatureExecuteConditions,
+	PlayerDoAttacking,
+	CombatChangeHealth,
+	CombatChangeMana,
+	CombatHealthCallbacks,
+	CombatManaCallbacks,
+	CombatApplyHealth,
+	CombatApplyMana,
+	CombatPrepareDeath,
+	CombatBroadcastHealth,
+	CombatBroadcastEffect,
+	CombatBroadcastDistance,
+	CombatBroadcastText,
+	CombatAreaCollectTargets,
+	ProtocolMagicEffect,
+	ProtocolDistanceEffect,
+	ProtocolCreatureHealth,
+	ProtocolAnimatedText,
+	ProtocolTextMessage,
+	ProtocolCreatureTurn,
+	ProtocolCreatureAdd,
+	ProtocolCreatureMove,
+	ProtocolOutputAppend,
+	ProtocolCryptoFrame,
+	ProtocolXteaEncrypt,
+	ProtocolXteaDecrypt,
+	ProtocolCryptoHeader,
+	ConnectionEnqueue,
+	Count,
+};
+
+// Fixed diagnostic counters/distributions; no maps or allocations in hot paths.
+enum class CombatWork : uint8_t
+{
+	Events,
+	AttackAttempts,
+	SuccessfulAttacks,
+	HealthEntries,
+	ManaEntries,
+	HealthCallbacks,
+	ManaCallbacks,
+	PrepareDeathCallbacks,
+	PayloadWrites,
+	PayloadBytes,
+	SerializerInitializations,
+	SerializerInitializedBytes,
+	AppendBytes,
+	WireMessages,
+	WireBytes,
+	Count,
+};
+
+enum class CombatDistribution : uint8_t
+{
+	HealthCandidates,
+	EffectCandidates,
+	DistanceCandidates,
+	TextCandidates,
+	EventPayloadBytes,
+	EventPayloadWrites,
 	Count,
 };
 
@@ -89,6 +148,7 @@ struct AreaCombatMetricsSample
 	uint64_t prepareDamageNanoseconds = 0;
 	uint64_t collectSpectatorsNanoseconds = 0;
 	uint64_t processTilesNanoseconds = 0;
+	uint64_t collectTargetsNanoseconds = 0;
 	uint64_t applyTargetsNanoseconds = 0;
 	uint64_t totalNanoseconds = 0;
 
@@ -132,7 +192,7 @@ public:
 		return enabled.load(std::memory_order_relaxed);
 	}
 
-	void record(PerformanceMetric metric, uint64_t nanoseconds) noexcept;
+	void record(PerformanceMetric metric, uint64_t nanoseconds, uint64_t bytes = 0) noexcept;
 
 	void recordQueueSize(size_t current) noexcept;
 	void recordTaskDeferred(uint64_t count = 1) noexcept;
@@ -145,10 +205,12 @@ public:
 	void recordNetworkIpLimitRejection() noexcept;
 	void recordNetworkConnectionCount(size_t current) noexcept;
 
-	void recordReactorCallbackSource(
-	    uint64_t nanoseconds,
-	    std::string_view description,
-	    std::string_view origin) noexcept;
+	void recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description, std::string_view origin,
+	                                 uint64_t queueNanoseconds = 0) noexcept;
+	void recordCombatWork(CombatWork counter, uint64_t value = 1) noexcept;
+	void recordCombatDistribution(CombatDistribution distribution, uint64_t value) noexcept;
+	void recordOutputPayload(uint8_t opcode, uint64_t bytes) noexcept;
+	void recordSerializerInitialization(uint64_t bytes) noexcept;
 
 	void recordPathRequest(
 	    bool success,
@@ -183,6 +245,7 @@ private:
 		std::atomic<uint64_t> calls{0};
 		std::atomic<uint64_t> totalNanoseconds{0};
 		std::atomic<uint64_t> maximumNanoseconds{0};
+		std::atomic<uint64_t> bytes{0};
 		std::array<std::atomic<uint64_t>, HistogramBuckets> histogram{};
 	};
 
@@ -256,6 +319,27 @@ private:
 		std::string spellName;
 	};
 
+	struct CallbackSourceData
+	{
+		uint64_t identity = 0;
+		std::array<char, 96> description{};
+		std::array<char, 192> origin{};
+		uint64_t calls = 0, total = 0, maximum = 0, queueMaximum = 0;
+		std::array<uint64_t, HistogramBuckets> duration{}, queue{};
+		std::array<uint64_t, 5> slow{}; // >5/10/25/50/100 ms (inclusive counts)
+	};
+	static constexpr size_t CallbackSourceCapacity = 128;
+	std::mutex callbackSourcesMutex;
+	// Last slot aggregates overflow rather than silently dropping samples.
+	std::array<CallbackSourceData, CallbackSourceCapacity + 1> callbackSources{};
+	std::array<MetricData, static_cast<size_t>(CombatDistribution::Count)> combatDistributions;
+	std::array<std::atomic<uint64_t>, static_cast<size_t>(CombatWork::Count)> combatWork{};
+	struct PacketData
+	{
+		std::atomic<uint64_t> writes{0}, bytes{0};
+	};
+	std::array<PacketData, 256> packets;
+
 	std::array<MetricData, static_cast<size_t>(PerformanceMetric::Count)> metrics;
 
 	ReactorData reactor;
@@ -278,12 +362,13 @@ private:
 
 	std::atomic_bool enabled{false};
 	std::atomic<int64_t> nextReportNanoseconds{0};
+	friend struct PerformanceMetricsTestAccess;
 };
 
 class PerformanceScope
 {
 public:
-	explicit PerformanceScope(PerformanceMetric metric) noexcept;
+	explicit PerformanceScope(PerformanceMetric metric, uint64_t* accumulator = nullptr, uint64_t bytes = 0) noexcept;
 	~PerformanceScope();
 
 	PerformanceScope(const PerformanceScope&) = delete;
@@ -293,8 +378,24 @@ private:
 	PerformanceMetric metric;
 	std::chrono::steady_clock::time_point started;
 	bool active;
+	uint64_t* accumulator;
+	uint64_t bytes;
 };
 
 extern PerformanceMetrics g_performanceMetrics;
+
+// Nested combat/Lua calls contribute to the outer synchronous event exactly once.
+// This does not hold ownership or cache gameplay state across callbacks.
+class CombatPacketScope
+{
+public:
+	CombatPacketScope() noexcept;
+	~CombatPacketScope();
+	CombatPacketScope(const CombatPacketScope&) = delete;
+	CombatPacketScope& operator=(const CombatPacketScope&) = delete;
+
+private:
+	bool active;
+};
 
 #endif // FS_PERFORMANCE_METRICS_H

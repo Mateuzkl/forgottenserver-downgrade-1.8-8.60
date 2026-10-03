@@ -694,10 +694,7 @@ public:
 		return std::dynamic_pointer_cast<Player>(getCreatureSharedRef(playerId));
 	}
 
-	std::shared_ptr<Item> getItemSharedRef(Item* item) const
-	{
-		return item ? item->weak_from_this().lock() : nullptr;
-	}
+	std::shared_ptr<Item> getItemSharedRef(Item* item) const { return Item::pin(item); }
 
 	std::shared_ptr<Container> getContainerSharedRef(Container* container) const
 	{

@@ -144,6 +144,8 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/weapons.cpp
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.cpp
 	${CMAKE_CURRENT_LIST_DIR}/xtea.cpp
+	${CMAKE_CURRENT_LIST_DIR}/xtea_sse2.cpp
+	${CMAKE_CURRENT_LIST_DIR}/xtea_avx2.cpp
 	${CMAKE_CURRENT_LIST_DIR}/zoneweather.cpp
 	${CMAKE_CURRENT_LIST_DIR}/zones.cpp
 )
@@ -272,6 +274,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/weapons.h
 	${CMAKE_CURRENT_LIST_DIR}/wildcardtree.h
 	${CMAKE_CURRENT_LIST_DIR}/xtea.h
+	${CMAKE_CURRENT_LIST_DIR}/xtea_simd.h
 	${CMAKE_CURRENT_LIST_DIR}/zoneweather.h
 	${CMAKE_CURRENT_LIST_DIR}/zones.h
 )
@@ -279,6 +282,7 @@ set(tfs_HDR
 set(tfs_MAIN ${CMAKE_CURRENT_LIST_DIR}/main.cpp PARENT_SCOPE)
 
 add_library(tfslib STATIC ${tfs_SRC})
+tfs_configure_xtea(tfslib)
 target_include_directories(tfslib PRIVATE ${LUA_INCLUDE_DIR})
 target_link_libraries(tfslib PUBLIC
 	asio::asio

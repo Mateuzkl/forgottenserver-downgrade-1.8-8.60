@@ -56,6 +56,7 @@ public:
 	void shutdown() noexcept;
 
 	void addTask(std::unique_ptr<Task>&& task);
+	bool tryAddTask(std::unique_ptr<Task>&& task);
 	void addTask(TaskFunc&& f, const std::source_location location = std::source_location::current())
 	{
 		addTask(createTaskWithStats(std::move(f), location.function_name(),

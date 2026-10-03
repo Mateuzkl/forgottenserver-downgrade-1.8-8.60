@@ -1042,6 +1042,7 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 void Combat::doCombat(Creature* caster, Creature* target, std::string_view instantSpellName) const
 {
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
+	CombatPacketScope packetScope;
 	if (params.chainCallback) {
 		if (doCombatChain(caster, target, params.aggressive, std::string(instantSpellName))) {
 			return;
@@ -1114,6 +1115,7 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 void Combat::doCombat(Creature* caster, const Position& position, std::string_view instantSpellName) const
 {
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
+	CombatPacketScope packetScope;
 	if (params.chainCallback) {
 		if (doCombatChain(caster, nullptr, params.aggressive, std::string(instantSpellName))) {
 			return;
@@ -1524,6 +1526,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
                           const CombatParams& params)
 {
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoAreaCombat);
+	CombatPacketScope packetScope;
 	const bool metricsEnabled = g_performanceMetrics.isEnabled();
 	std::optional<AreaCombatMetricsSample> areaMetrics;
 	if (metricsEnabled) {
@@ -1550,6 +1553,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 		const auto now = MetricsClock::now();
 		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(now - phaseStarted).count();
 		metrics->*destination = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
+		if (metric == PerformanceMetric::CombatAreaProcessTiles) {
+			metrics->*destination -= std::min(metrics->*destination, metrics->collectTargetsNanoseconds);
+		}
 		g_performanceMetrics.record(metric, metrics->*destination);
 		phaseStarted = now;
 	};
@@ -1638,6 +1644,8 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 		combatTileEffects(spectators, caster, tile, params, metrics);
 
 		if (CreatureVector* creatures = tile->getCreatures()) {
+			PerformanceScope collectScope(PerformanceMetric::CombatAreaCollectTargets,
+			                              metrics ? &metrics->collectTargetsNanoseconds : nullptr);
 			const Creature* topCreature = tile->getTopCreature();
 			for (const auto& creature : *creatures) {
 				if (params.targetCasterOrTopMost) {
