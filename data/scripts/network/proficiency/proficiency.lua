@@ -82,8 +82,6 @@ local refreshProfileSpellAugments
 local function logError(message)
 	if logger and logger.error then
 		logger.error(message)
-	else
-		print(message)
 	end
 end
 
@@ -703,17 +701,18 @@ local function getModifierPerkData(modifierEnum, rank)
 		return { Type = 6, BestiaryId = modifierEnum - 250, Value = modifierPercent(50, 250, rank) }
 	end
 
+	-- Type values must match WeaponProficiencyBonus_t in src/weapon_proficiency.h (same as client PERK_* ids).
 	local direct = {
-		[281] = { Type = 16, Value = modifierPercent(100, 800, rank) },
-		[282] = { Type = 17, Value = modifierPercent(100, 1600, rank) },
-		[283] = { Type = 18, Value = interpolateModifierValue(2, 12, rank) },
-		[284] = { Type = 19, Value = interpolateModifierValue(5, 25, rank) },
+		[281] = { Type = 17, Value = modifierPercent(100, 800, rank) },
+		[282] = { Type = 16, Value = modifierPercent(100, 1600, rank) },
+		[283] = { Type = 19, Value = interpolateModifierValue(2, 12, rank) },
+		[284] = { Type = 18, Value = interpolateModifierValue(5, 25, rank) },
 		[285] = { Type = 20, Value = interpolateModifierValue(4, 24, rank) },
 		[286] = { Type = 21, Value = interpolateModifierValue(10, 50, rank) },
-		[287] = { Type = 28, Value = modifierPercent(200, 1000, rank) },
-		[288] = { Type = 29, Value = modifierPercent(100, 400, rank) },
-		[321] = { Type = 30, Value = modifierPercent(500, 1500, rank) },
-		[322] = { Type = 31, Value = modifierPercent(500, 1500, rank), AllElements = true },
+		[287] = { Type = 30, Value = modifierPercent(200, 1000, rank) },
+		[288] = { Type = 31, Value = modifierPercent(100, 400, rank) },
+		[321] = { Type = 28, Value = modifierPercent(500, 1500, rank) },
+		[322] = { Type = 29, Value = modifierPercent(500, 1500, rank), AllElements = true },
 		[323] = { Type = 7, Value = modifierPercent(100, 500, rank) },
 	}
 	if direct[modifierEnum] then
@@ -722,17 +721,21 @@ local function getModifierPerkData(modifierEnum, rank)
 
 	local rangeStart, perkType, minimum, maximum
 	if modifierEnum >= 291 and modifierEnum <= 297 then
-		rangeStart, perkType, minimum, maximum = 291, 25, 200, 1000
+		rangeStart, perkType, minimum, maximum = 291, 3, 200, 1000
 	elseif modifierEnum >= 301 and modifierEnum <= 307 then
 		rangeStart, perkType, minimum, maximum = 301, 26, 100, 800
 	elseif modifierEnum >= 311 and modifierEnum <= 317 and modifierEnum ~= 313 then
 		rangeStart, perkType, minimum, maximum = 311, 27, 200, 1000
 	end
 	if rangeStart then
+		local value = modifierPercent(minimum, maximum, rank)
+		if perkType == 3 then
+			value = math.floor(interpolateModifierValue(minimum, maximum, rank) / 100)
+		end
 		return {
 			Type = perkType,
 			SkillId = MODIFIER_SKILLS[modifierEnum - rangeStart + 1],
-			Value = modifierPercent(minimum, maximum, rank),
+			Value = value,
 		}
 	end
 
@@ -1088,6 +1091,7 @@ local function clearPerks(player, itemId)
 	end
 
 	local state = getState(player, itemId)
+	-- Reset perk picks only; shaped modifiers stay (official / CrystalOTC behaviour).
 	state.perks = {}
 	refreshProfileSpellAugments(player)
 	queueSave(player, itemId)
@@ -1121,6 +1125,12 @@ local function applyPerks(player, msg, itemId)
 	end
 
 	state.perks = perks
+	for key, modifier in pairs(state.modifiers) do
+		local selectedPosition = state.perks[modifier.level]
+		if selectedPosition ~= nil and selectedPosition ~= modifier.position then
+			state.modifiers[key] = nil
+		end
+	end
 	refreshProfileSpellAugments(player)
 	queueSave(player, itemId)
 	sendInfo(player, itemId)
