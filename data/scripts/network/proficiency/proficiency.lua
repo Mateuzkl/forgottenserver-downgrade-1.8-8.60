@@ -712,9 +712,9 @@ local function getModifierPerkData(modifierEnum, rank)
 		[285] = { Type = 20, Value = interpolateModifierValue(4, 24, rank) },
 		[286] = { Type = 21, Value = interpolateModifierValue(10, 50, rank) },
 		[287] = { Type = 30, Value = modifierPercent(200, 1000, rank) },
-		[288] = { Type = 31, Value = modifierPercent(100, 400, rank) },
+		[288] = { Type = 31, Value = modifierPercent(100, 400, rank), AllElements = true },
 		[321] = { Type = 28, Value = modifierPercent(500, 1500, rank) },
-		[322] = { Type = 29, Value = modifierPercent(500, 1500, rank), AllElements = true },
+		[322] = { Type = 29, Value = modifierPercent(500, 1500, rank) },
 		[323] = { Type = 7, Value = modifierPercent(100, 500, rank) },
 	}
 	if direct[modifierEnum] then
