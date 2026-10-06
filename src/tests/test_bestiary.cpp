@@ -252,4 +252,19 @@ TEST_CASE(bestiary_dirty_snapshot_preserved_when_system_disabled_during_save)
 	}
 }
 
+TEST_CASE(bestiary_dirty_acknowledgement_preserves_a_newer_kill)
+{
+	ensureItemTypesLoaded();
+	ScopedConfigOverride enabled(ConfigManager::BESTIARY_SYSTEM_ENABLED, true);
+	Player player(nullptr);
+	player.clearBestiaryDirty();
+	player.addBestiaryKillCount(100, 1);
+	const auto old = player.getBestiaryDirtySnapshot();
+	player.addBestiaryKillCount(100, 1);
+	player.acknowledgeBestiaryDirty(old);
+	CHECK(player.getBestiaryDirtySnapshot().modifiedRaceIds.contains(100));
+	player.acknowledgeBestiaryDirty(player.getBestiaryDirtySnapshot());
+	CHECK(!player.getBestiaryDirtySnapshot().modifiedRaceIds.contains(100));
+}
+
 TFS_TEST_MAIN()

@@ -71,14 +71,20 @@ ThreadPool::~ThreadPool()
 
 void ThreadPool::detach_task(ThreadPoolTask&& task)
 {
+	(void)try_detach_task(std::move(task));
+}
+
+bool ThreadPool::try_detach_task(ThreadPoolTask&& task)
+{
 	{
 		std::scoped_lock lock(queueMutex);
 		if (!task || stopped) {
-			return;
+			return false;
 		}
 		taskQueue.emplace(std::move(task));
 	}
 	condition.notify_one();
+	return true;
 }
 
 void ThreadPool::workerMain()

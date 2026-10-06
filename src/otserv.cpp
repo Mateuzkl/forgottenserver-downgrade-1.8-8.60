@@ -501,7 +501,10 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 	}
 
 	// Recover any pending async saves from a previous crash
-	g_saveManager.recoverPendingFlushes();
+	if (!g_saveManager.recoverPendingFlushes()) {
+		startupErrorMessage("Cannot inspect the player save journal. Verify the database/migrations before starting.");
+		return false;
+	}
 
 	if (getBoolean(ConfigManager::OPTIMIZE_DATABASE) && !DatabaseManager::optimizeTables()) {
 		LOG_INFO(">> No tables were optimized.");
@@ -1136,10 +1139,10 @@ void printServerVersion()
 
 #ifndef _WIN32
 // Called by GDB on crash — must be extern "C" and __attribute__((used)) to prevent stripping
-extern "C" __attribute__((used)) void saveServer()
+extern "C" __attribute__((used)) bool saveServer()
 {
-	if (g_game.getPlayersOnline() > 0) {
-		g_game.saveGameState(true);
-	}
+	// Capture only on the dispatcher, and wait for the latest worker chains.
+	// Returns false on rejection, failure or timeout, never on mere acceptance.
+	return g_game.saveCrashStateAndWait();
 }
 #endif

@@ -130,6 +130,9 @@ public:
 	void replaceThing(uint32_t index, Thing* thing) override final;
 
 	void removeThing(Thing* thing, uint32_t count) override final;
+	// Dispatcher-only publication of an already committed house transfer.
+	bool removeItemForHouseTransfer(Item* item);
+	bool restoreItemForHouseTransfer(Item* item, int32_t index);
 
 	int32_t getThingIndex(const Thing* thing) const override final;
 	size_t getFirstIndex() const override final;

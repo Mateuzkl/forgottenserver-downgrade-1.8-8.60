@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS `players` (
   `blessings7` tinyint unsigned NOT NULL DEFAULT '0',
   `blessings8` tinyint unsigned NOT NULL DEFAULT '0',
   `onlinetime` bigint NOT NULL DEFAULT '0',
+  `save_generation` bigint unsigned NOT NULL DEFAULT '0',
   `deletion` bigint NOT NULL DEFAULT '0',
   `balance` bigint unsigned NOT NULL DEFAULT '0',
   `task_hunting_points` bigint unsigned NOT NULL DEFAULT '0',
@@ -551,6 +552,16 @@ CREATE TABLE IF NOT EXISTS `player_save_async_pending` (
   `query_text` LONGBLOB NOT NULL,
   `created_at` BIGINT NOT NULL,
   PRIMARY KEY (`guid`, `query_index`),
+  FOREIGN KEY (`guid`) REFERENCES `players`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `player_save_journal` (
+  `guid` INT NOT NULL,
+  `generation` BIGINT UNSIGNED NOT NULL,
+  `payload` LONGBLOB NOT NULL,
+  `payload_hash` BINARY(32) NOT NULL,
+  `created_at` BIGINT NOT NULL,
+  PRIMARY KEY (`guid`),
   FOREIGN KEY (`guid`) REFERENCES `players`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

@@ -334,6 +334,8 @@
     <ClInclude Include="..\src\startup_progress.h" />
     <ClInclude Include="..\src\protocolspectator.h" />
     <ClInclude Include="..\src\save_manager.h" />
+    <ClInclude Include="..\src\save_journal.h" />
+    <ClInclude Include="..\src\transaction_retry.h" />
     <ClInclude Include="..\src\thread_pool.h" />
     <ClInclude Include="..\src\imbuement.h" />
     <ClInclude Include="..\src\familiar.h" />

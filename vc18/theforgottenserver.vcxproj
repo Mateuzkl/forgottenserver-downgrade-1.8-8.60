@@ -420,6 +420,8 @@
     <ClInclude Include="..\src\rewardchest.h" />
     <ClInclude Include="..\src\rsa.h" />
     <ClInclude Include="..\src\save_manager.h" />
+    <ClInclude Include="..\src\save_journal.h" />
+    <ClInclude Include="..\src\transaction_retry.h" />
     <ClInclude Include="..\src\scheduler.h" />
     <ClInclude Include="..\src\script.h" />
     <ClInclude Include="..\src\scriptmanager.h" />

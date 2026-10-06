@@ -660,6 +660,17 @@ public:
 	uint64_t getExperience() const { return experience; }
 
 	time_t getLastLoginSaved() const { return lastLoginSaved; }
+	uint64_t getSaveGeneration() const { return saveGeneration; }
+	void acknowledgeSaveGeneration(uint64_t generation) { saveGeneration = std::max(saveGeneration, generation); }
+	uint64_t getOnlineTime(time_t now) const
+	{
+		const uint64_t elapsed = onlineTimeStarted != 0 && now > onlineTimeStarted
+		                             ? static_cast<uint64_t>(now - onlineTimeStarted) : 0;
+		return elapsed > std::numeric_limits<uint64_t>::max() - onlineTime
+		           ? std::numeric_limits<uint64_t>::max() : onlineTime + elapsed;
+	}
+	// Start only on a real login, not when an offline temporary player is loaded.
+	void startOnlineTime(time_t now) { onlineTimeStarted = now; }
 
 	time_t getLastLogout() const { return lastLogout; }
 
@@ -1790,6 +1801,7 @@ private:
 	void replaceThing(uint32_t index, Thing* thing) override;
 
 	void removeThing(Thing* thing, uint32_t count) override;
+	bool removeItemForHouseTransfer(Item* item);
 
 	int32_t getThingIndex(const Thing* thing) const override;
 	size_t getFirstIndex() const override;
@@ -1837,6 +1849,9 @@ private:
 	std::map<ObjectCategory_t, ManagedLootContainer> managedLootContainers;
 
 	time_t lastLoginSaved = 0;
+	time_t onlineTimeStarted = 0;
+	uint64_t onlineTime = 0;
+	uint64_t saveGeneration = 0;
 	time_t lastLogout = 0;
 	time_t premiumEndsAt = 0;
 
@@ -2054,6 +2069,7 @@ private:
 	std::unordered_map<std::string, std::shared_ptr<LootGroup>> m_pendingLootGroups;
 
 	friend class Game;
+	friend class HouseTransferItem;
 	friend class Npc;
 	friend class LuaScriptInterface;
 	friend class Map;

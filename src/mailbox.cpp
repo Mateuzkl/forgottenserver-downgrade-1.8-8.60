@@ -175,7 +175,7 @@ bool Mailbox::sendItem(Item* item) const
 		if (g_game.internalMoveItem(originalParent, inbox, INDEX_WHEREEVER, item, item->getItemCount(), nullptr,
 		                            FLAG_NOLIMIT) == RETURNVALUE_NOERROR) {
 			g_game.transformItem(item, originalItemId + 1);
-			if (g_saveManager.savePlayerSync(&tmpPlayer)) {
+			if (g_saveManager.savePlayerSync(&tmpPlayer) == SaveResult::Persisted) {
 				return true;
 			}
 

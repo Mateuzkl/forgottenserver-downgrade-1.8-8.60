@@ -7,6 +7,7 @@
 #include "pugicast.h"
 #include <mysql/mysql.h>
 #include "logger.h"
+#include "transaction_retry.h"
 #include <fmt/format.h>
 #include <cassert>
 #include <cstdint>
@@ -355,42 +356,9 @@ public:
 	template <typename Func>
 	static bool executeWithinTransactionRollbackOnFailure(const Func& callback)
 	{
-		for (uint8_t attempt = 1; attempt <= TRANSACTION_MAX_ATTEMPTS; ++attempt) {
-			DBTransaction transaction;
-			if (!transaction.begin()) {
-				LOG_ERROR("[DBTransaction] Failed to begin transaction.");
-				return false;
-			}
-
-			try {
-				if (!callback()) {
-					transaction.rollback();
-					if (Database::getInstance().lastQueryWasDeadlock() && attempt < TRANSACTION_MAX_ATTEMPTS) {
-						LOG_WARN(fmt::format("[DBTransaction] Transaction deadlock/lock timeout, retrying ({}/{})",
-						                     attempt, TRANSACTION_MAX_ATTEMPTS));
-						continue;
-					}
-					return false;
-				}
-
-				if (transaction.commit()) {
-					return true;
-				}
-
-				if (Database::getInstance().lastQueryWasDeadlock() && attempt < TRANSACTION_MAX_ATTEMPTS) {
-					LOG_WARN(fmt::format("[DBTransaction] Transaction commit deadlock/lock timeout, retrying ({}/{})",
-					                     attempt, TRANSACTION_MAX_ATTEMPTS));
-					continue;
-				}
-				return false;
-			} catch (const std::exception& e) {
-				transaction.rollback();
-				LOG_ERROR(fmt::format("[DBTransaction] Exception during transaction: {}", e.what()));
-				return false;
-			}
-		}
-
-		return false;
+		return tfs::database::runTransaction<DBTransaction>(
+		    callback, [] { return Database::getInstance().lastQueryWasDeadlock(); },
+		    [](const char* error) { LOG_ERROR("[DBTransaction] Exception: {}", error); }, TRANSACTION_MAX_ATTEMPTS);
 	}
 
 private:

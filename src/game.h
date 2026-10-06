@@ -510,7 +510,10 @@ public:
 
 	GameState_t getGameState() const;
 	void setGameState(GameState_t newState);
-	void saveGameState(bool crash = false);
+	// Returns request acceptance, not durable completion. Callback runs on dispatcher.
+	bool saveGameState(bool crash = false, std::function<void(bool)> completion = {});
+	// Debugger-only terminal save: an off-dispatcher caller waits for durable completion.
+	bool saveCrashStateAndWait(uint32_t timeoutMs = 30000);
 
 	// Events
 	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration);
@@ -711,6 +714,7 @@ public:
 
 	std::shared_ptr<Container> getBrowseFieldContainer(Tile* tile, uint32_t instanceId);
 	std::shared_ptr<Container> getBrowseFieldContainer(Tile* tile);
+	std::vector<ContainerPtr> getBrowseFieldContainers(Tile* tile);
 	std::shared_ptr<Tile> getBrowseFieldTile(const Cylinder* cylinder);
 	void releaseBrowseFieldContainer(const Container* container);
 	void cleanupBrowseFields();

@@ -1313,6 +1313,19 @@ void Tile::removeThing(Thing* thing, uint32_t count)
 	}
 }
 
+bool Tile::removeItemForHouseTransfer(Item* item)
+{
+	auto* items = getItemList();
+	if (!items || !item || item == ground.get()) return false;
+	const auto it = std::find_if(items->begin(), items->end(), [item](const auto& ref) { return ref.get() == item; });
+	if (it == items->end()) return false;
+	if (!item->isAlwaysOnTop()) items->addDownItemCount(-1);
+	item->setParent(nullptr);
+	resetTileFlags(item);
+	items->erase(it);
+	return true;
+}
+
 bool Tile::hasCreature(Creature* creature) const
 {
 	if (const CreatureVector* creatures = getCreatures()) {

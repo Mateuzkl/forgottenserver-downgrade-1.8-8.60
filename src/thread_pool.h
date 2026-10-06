@@ -45,6 +45,8 @@ public:
 	 * Thread-safe - can be called from any thread.
 	 */
 	void detach_task(ThreadPoolTask&& task);
+	// Explicit acceptance for persistence tasks: rejection must not strand a chain.
+	[[nodiscard]] bool try_detach_task(ThreadPoolTask&& task);
 
 	/**
 	 * @brief Submit a task and get a future for its result.

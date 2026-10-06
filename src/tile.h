@@ -228,6 +228,8 @@ public:
 	void replaceThing(uint32_t index, Thing* thing) override final;
 
 	void removeThing(Thing* thing, uint32_t count) override final;
+	// No movement/trade callbacks until every committed transfer item is published.
+	bool removeItemForHouseTransfer(Item* item);
 
 	bool hasCreature(Creature* creature) const;
 	void removeCreature(Creature* creature);

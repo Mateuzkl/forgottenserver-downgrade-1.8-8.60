@@ -14,6 +14,13 @@ on:
       - 'tools/*.cmake'
       - 'tools/patches/lua-5.5.0-write-barrier.patch'
       - '.github/workflows/build.yml'
+      - '.github/tests/server_save.lua'
+      - '.github/tests/save_journal_migration.lua'
+      - '.github/tests/house_transfer_*.py'
+      - 'data/scripts/talkactions/stress/dupe_test.lua'
+      - 'data/scripts/globalevents/serversave.lua'
+      - 'data/migrations/68.lua'
+      - 'schema.sql'
   pull_request:
     branches:
       - main
@@ -25,6 +32,13 @@ on:
       - 'tools/*.cmake'
       - 'tools/patches/lua-5.5.0-write-barrier.patch'
       - '.github/workflows/build.yml'
+      - '.github/tests/server_save.lua'
+      - '.github/tests/save_journal_migration.lua'
+      - '.github/tests/house_transfer_*.py'
+      - 'data/scripts/talkactions/stress/dupe_test.lua'
+      - 'data/scripts/globalevents/serversave.lua'
+      - 'data/migrations/68.lua'
+      - 'schema.sql'
   workflow_dispatch:
 
 concurrency:
@@ -54,7 +68,7 @@ jobs:
             libssl-dev zlib1g-dev libfmt-dev libspdlog-dev \
             libpugixml-dev libabsl-dev \
             libasio-dev \
-            default-libmysqlclient-dev
+            default-libmysqlclient-dev mariadb-server
 
       - name: Cache Lua 5.5 source
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -155,6 +169,29 @@ jobs:
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
+
+      - name: Run server-save trigger regression
+        run: |
+          /usr/local/bin/lua .github/tests/server_save.lua
+          /usr/local/bin/lua .github/tests/save_journal_migration.lua
+
+      - name: Run save persistence regressions against disposable MariaDB
+        run: |
+          sudo systemctl start mariadb
+          sudo mariadb -e 'CREATE DATABASE tfs_save_audit_ci CHARACTER SET utf8mb4;'
+          sudo env TFS_SAVE_TEST_DB=tfs_save_audit_ci ./build/src/tests/test_save_persistence
+          sudo env TFS_SAVE_TEST_DB=tfs_save_audit_ci ./build/src/tests/test_save_persistence --crash-save-wait
+          sudo env TFS_SAVE_TEST_DB=tfs_save_audit_ci ./build/src/tests/test_save_persistence --crash-save-failure
+          sudo env TFS_SAVE_TEST_DB=tfs_save_audit_ci ./build/src/tests/test_save_persistence --crash-save-timeout
+
+      - name: Run atomic house transfers and existing dupe scenarios
+        run: |
+          sudo mariadb -e 'CREATE DATABASE tfs_save_audit_house_ci CHARACTER SET utf8mb4;'
+          sudo mariadb tfs_save_audit_house_ci < schema.sql
+          sudo env TFS_HOUSE_TEST_DB=tfs_save_audit_house_ci ./build/src/tests/test_house_transfer_atomicity
+          sudo env TFS_HOUSE_TEST_DB=tfs_save_audit_house_ci ./build/src/tests/test_house_transfer_atomicity --dupe
+          sudo env TFS_HOUSE_TEST_DB=tfs_save_audit_house_ci python3 .github/tests/house_transfer_crash.py ./build/src/tests/test_house_transfer_atomicity
+          sudo env TFS_HOUSE_TEST_DB=tfs_save_audit_house_ci python3 .github/tests/house_transfer_commit_reply.py ./build/src/tests/test_house_transfer_atomicity
 
       - name: Verify binary
         run: |

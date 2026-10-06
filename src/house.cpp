@@ -9,7 +9,9 @@
 #include "configmanager.h"
 #include "game.h"
 #include "iologindata.h"
+#include "iomapserialize.h"
 #include "save_manager.h"
+#include "tasks.h"
 #include "pugicast.h"
 #include "logger.h"
 #include <fmt/format.h>
@@ -120,27 +122,45 @@ std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> House::initia
 bool House::updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection)
 {
 	Database& db = Database::getInstance();
+	if (!db.isInTransaction()) {
+		// Also persist empty houses: a previous tile checkpoint must not survive
+		// an ownership change just because there are no current depot moves.
+		const auto image = IOMapSerialize::buildHouseSave(this, {});
+		if (!image) return false;
+		return g_saveManager.commitTransfer(
+		    fmt::format("SELECT `owner` AS `receipt` FROM `houses` WHERE `id` = {} FOR UPDATE", id), owner, guid_guild,
+		    [&] {
+			    for (const auto& query : *image)
+				    if (!db.executeQuery(query)) return false;
+			    return updateOwnerInDatabase(guid_guild, resetProtection) &&
+			           db.executeQuery(fmt::format("DELETE FROM `house_lists` WHERE `house_id` = {}", id)) &&
+			           db.executeQuery(fmt::format("DELETE FROM `house_guests` WHERE `house_id` = {}", id));
+		    });
+	}
 	if (resetProtection) {
 		return db.executeQuery(fmt::format(
 		    "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0, `is_protected` = 0 WHERE `id` = {:d}",
 		    guid_guild, id));
 	}
 	return db.executeQuery(fmt::format(
-	    "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0 WHERE `id` = {:d}",
+	    "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0, `is_protected` = 0 WHERE `id` = {:d}",
 	    guid_guild, id));
 }
 
-bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Player* previousPlayer /* = nullptr*/)
+bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Player* previousPlayer /* = nullptr*/,
+                     const std::vector<Player*>& participants)
 {
-	if (ownerTransitionInProgress) {
+	if (ownerTransitionInProgress || g_saveManager.isPersistenceBlocked()) {
 		return false;
 	}
 	if (isLoaded && owner == guid_guild) {
 		return true;
 	}
 	const auto houseRef = weak_from_this().lock();
+	const bool replacingOwner = owner != 0 && updateDatabase;
 	ownerTransitionInProgress = true;
-	struct TransitionGuard {
+	struct TransitionGuard
+	{
 		bool& inProgress;
 		~TransitionGuard() { inProgress = false; }
 	} transitionGuard{ownerTransitionInProgress};
@@ -160,49 +180,32 @@ bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 	if (owner != 0 && updateDatabase && !BedItem::wakeUpAll(getBeds())) {
 		return false;
 	}
+	std::function<void()> notifyTransfer;
 	if (updateDatabase && owner != guid_guild) {
 		const bool resetProtection = (guid_guild == 0 || owner == 0);
-		if (!updateOwnerInDatabase(guid_guild, resetProtection)) {
+		if (!(owner ? transferToDepot(guid_guild, resetProtection, previousPlayer, notifyTransfer, participants)
+		            : updateOwnerInDatabase(guid_guild, resetProtection))) {
 			return false;
 		}
 		if (resetProtection) {
 			setProtected(false);
 		}
+		protectionGuests.clear(); // SQL removal committed with the ownership change.
 	}
 
 	isLoaded = true;
 
 	if (owner != 0 && updateDatabase) {
-		// send items to depot
-		if (previousPlayer) {
-			transferToDepot(previousPlayer);
-		} else {
-			transferToDepot();
-		}
-
-		// Kicking a player runs movement callbacks, which may remove other
-		// creatures or unregister this tile from the house.
-		for (const auto& tile : getTilesSnapshot()) {
-			if (const CreatureVector* creatures = tile->getCreatures()) {
-				const auto snapshot = *creatures;
-				for (auto it = snapshot.rbegin(); it != snapshot.rend(); ++it) {
-					const auto& creature = *it;
-					if (creature && !creature->isRemoved() && creature->getTile() == tile.get()) {
-						kickPlayer(nullptr, creature->getPlayer());
-					}
-				}
-			}
-		}
-
+		// Publish the new owner before kicks/access-list callbacks can save the world.
+		owner = guid_guild;
+		ownerAccountId = std::get<1>(newOwnerData);
+		ownerName = type == HOUSE_TYPE_GUILDHALL ? "The " + std::get<4>(newOwnerData) : std::get<2>(newOwnerData);
 		// clean access lists
-		owner = 0;
-		ownerAccountId = 0;
-		ownerName.clear();
 		if (updateDatabase) {
 			isProtected = false;
 		}
-		setAccessList(SUBOWNER_LIST, "");
-		setAccessList(GUEST_LIST, "");
+		subOwnerList.parseList("");
+		guestList.parseList("");
 
 		{
 			auto doorsSnapshot = getDoors();
@@ -211,8 +214,7 @@ bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 			}
 		}
 	} else {
-		auto strRentPeriod =
-		    asLowerCaseString(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
+		auto strRentPeriod = asLowerCaseString(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
 		time_t currentTime = time(nullptr);
 		if (strRentPeriod == "yearly" || strRentPeriod == "annual") {
 			currentTime += 24 * 60 * 60 * 365;
@@ -252,6 +254,22 @@ bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 		ownerName.clear();
 		updateDoorDescription();
 	}
+	if (replacingOwner) {
+		// Kicking a player runs movement callbacks, which may remove other
+		// creatures or unregister this tile from the house.
+		for (const auto& tile : getTilesSnapshot()) {
+			if (const CreatureVector* creatures = tile->getCreatures()) {
+				const auto snapshot = *creatures;
+				for (auto it = snapshot.rbegin(); it != snapshot.rend(); ++it) {
+					const auto& creature = *it;
+					if (creature && !creature->isRemoved() && creature->getTile() == tile.get()) {
+						kickPlayer(nullptr, creature->getPlayer());
+					}
+				}
+			}
+		}
+	}
+	if (notifyTransfer) notifyTransfer();
 	return true;
 }
 
@@ -363,163 +381,238 @@ void House::setAccessList(uint32_t listId, std::string_view textlist)
 	}
 }
 
-bool House::transferToDepot() const
+bool House::transferToDepot(uint32_t newOwner, bool resetProtection, Player* previousPlayer,
+                            std::function<void()>& notify, const std::vector<Player*>& participants)
 {
-	if (townId == 0 || owner == 0) {
-		return false;
-	}
-
-	std::shared_ptr<Player> onlinePlayerRef;
-	Player* onlinePlayer = nullptr;
-	Player tmpPlayer(nullptr);
-	Player* targetPlayer = nullptr;
-	bool needsSave = false;
-
-	if (type == HOUSE_TYPE_NORMAL) {
-		onlinePlayerRef = g_game.getPlayerByGUID(owner);
-		onlinePlayer = onlinePlayerRef.get();
-		if (onlinePlayer) {
-			targetPlayer = onlinePlayer;
-		} else if (IOLoginData::loadPlayerById(&tmpPlayer, owner)) {
-			targetPlayer = &tmpPlayer;
-			needsSave = true;
+	struct Move
+	{
+		std::shared_ptr<Item> source;
+		std::shared_ptr<Item> destination;
+		std::shared_ptr<Item> image;
+		std::shared_ptr<HouseTile> tile;
+		std::shared_ptr<Container> container;
+		std::vector<std::shared_ptr<Container>> browseFields;
+		int32_t index;
+	};
+	std::vector<Move> moves;
+	std::unordered_set<const Item*> excluded;
+	const auto tiles = getTilesSnapshot();
+	const auto addMove = [&](const std::shared_ptr<Item>& item, const std::shared_ptr<HouseTile>& tile) {
+		if (!excluded.insert(item.get()).second) return;
+		auto* container = dynamic_cast<Container*>(item->getParent());
+		// Browse Field temporarily owns the parent pointer of a tile item, but
+		// the actual house tile still contains it. Remove both references before
+		// publishing the inbox item, otherwise the next map save can duplicate it.
+		const bool onTile = tile->getThingIndex(item.get()) >= 0;
+		auto parent = g_game.getContainerSharedRef(container);
+		std::vector<ContainerPtr> fields;
+		if (onTile) {
+			if (parent) fields.push_back(parent);
+			for (const auto& field : g_game.getBrowseFieldContainers(tile.get())) {
+				if (field != parent && field->getThingIndex(item.get()) >= 0) fields.push_back(field);
+			}
 		}
-	} else { // HOUSE_TYPE_GUILDHALL
+		moves.push_back({item,
+		                 item,
+		                 {},
+		                 tile,
+		                 onTile ? nullptr : parent,
+		                 std::move(fields),
+		                 onTile ? tile->getThingIndex(item.get()) : item->getParent()->getThingIndex(item.get())});
+	};
+	// Preserve the existing transfer layout: pickupable leaves first, then their
+	// (now emptied) bags; static furniture remains and releases its contents.
+	for (const auto& tile : tiles) {
+		if (const auto* items = tile->getItemList()) {
+			for (const auto& item : *items) {
+				if (auto* root = item->getContainer()) {
+					std::vector<Container*> queue{root};
+					for (size_t i = 0; i < queue.size(); ++i) {
+						for (const auto& child : queue[i]->getItemList()) {
+							if (auto* nested = child->getContainer())
+								queue.push_back(nested);
+							else if (child->isPickupable() || child->getIntAttr(ITEM_ATTRIBUTE_WRAPID) != 0)
+								addMove(child, tile);
+						}
+					}
+				}
+				if (item->isPickupable() || item->getIntAttr(ITEM_ATTRIBUTE_WRAPID) != 0) {
+					addMove(item, tile);
+				} else if (const auto* container = item->getContainer()) {
+					for (const auto& child : container->getItemList()) {
+						addMove(child, tile);
+					}
+				}
+			}
+		}
+	}
+	// No recipient is needed for an empty house (including houses without a town).
+	if (moves.empty() && participants.empty()) return updateOwnerInDatabase(newOwner, resetProtection);
+	if (!g_dispatcher.isDispatcherThread()) return false;
+	const auto keepItems = [&] {
+		if (participants.empty()) return updateOwnerInDatabase(newOwner, resetProtection);
+		const auto image = IOMapSerialize::buildHouseSave(this, {});
+		if (!image) return false;
+		return g_saveManager.savePlayerTransfer(
+		    participants.front(), {},
+		    [&] {
+			    Database& db = Database::getInstance();
+			    const auto row =
+			        db.storeQuery(fmt::format("SELECT `owner` FROM `houses` WHERE `id` = {} FOR UPDATE", id));
+			    if (!row || row->getNumber<uint32_t>("owner") != owner) return false;
+			    for (const auto& query : *image)
+				    if (!db.executeQuery(query)) return false;
+			    return updateOwnerInDatabase(newOwner, resetProtection) &&
+			           db.executeQuery(fmt::format("DELETE FROM `house_lists` WHERE `house_id` = {}", id)) &&
+			           db.executeQuery(fmt::format("DELETE FROM `house_guests` WHERE `house_id` = {}", id));
+		    },
+		    participants);
+	};
+
+	uint32_t recipientGuid = owner;
+	if (type == HOUSE_TYPE_GUILDHALL) {
 		auto guild = g_game.getGuild(owner);
+		if (!guild) guild = IOGuild::loadGuild(owner);
 		if (!guild) {
-			guild = IOGuild::loadGuild(owner);
+			// COUNT distinguishes a deleted guild from a failed load/query.
+			const auto row = Database::getInstance().storeQuery(
+			    fmt::format("SELECT COUNT(*) AS `count` FROM `guilds` WHERE `id` = {}", owner));
+			return row && row->getNumber<uint32_t>("count") == 0 && keepItems();
 		}
-		if (guild) {
-			onlinePlayerRef = g_game.getPlayerByGUID(guild->getOwnerGUID());
-			onlinePlayer = onlinePlayerRef.get();
-			if (onlinePlayer) {
-				targetPlayer = onlinePlayer;
-			} else if (IOLoginData::loadPlayerById(&tmpPlayer, guild->getOwnerGUID())) {
-				targetPlayer = &tmpPlayer;
-				needsSave = true;
+		recipientGuid = guild->getOwnerGUID();
+	}
+	// Never credit an arbitrary Player supplied by a caller.
+	if (previousPlayer && previousPlayer->getGUID() != recipientGuid) return false;
+	const auto online = g_game.getPlayerByGUID(recipientGuid);
+	Player offline(nullptr);
+	Player* player = online ? online.get() : previousPlayer;
+	if (!player) {
+		if (!IOLoginData::loadPlayerById(&offline, recipientGuid)) {
+			// Retain orphaned items on their tiles; never treat a broken existing
+			// player load (or a database error) as proof that the owner was deleted.
+			const auto row = Database::getInstance().storeQuery(
+			    fmt::format("SELECT COUNT(*) AS `count` FROM `players` WHERE `id` = {}", recipientGuid));
+			return row && row->getNumber<uint32_t>("count") == 0 && keepItems();
+		}
+		player = &offline;
+	}
+	if (g_saveManager.hasPendingPlayerSave(recipientGuid) || g_saveManager.hasFailedRecovery(recipientGuid))
+		return false;
+	if (townId == 0 && !moves.empty()) return false;
+	Inbox* inbox = player->getInbox(townId);
+	if ((!inbox && !moves.empty()) || !player->getSaveFlag()) return false;
+
+	// Detached projections preserve item identity/attributes; clone() intentionally
+	// allocates new UIDs and therefore is not appropriate for a transfer snapshot.
+	const auto project = [&](auto&& self, const std::shared_ptr<Item>& item) -> std::shared_ptr<Item> {
+		const auto wrap = static_cast<uint16_t>(item->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
+		const uint16_t id = wrap ? wrap : item->getID();
+		if (Item::items[id].id == 0) return {};
+		auto copy = Item::CreateItem(id, item->getSubType());
+		if (!copy) return {};
+		PropWriteStream attributes;
+		item->serializeAttr(attributes);
+		attributes.write<uint8_t>(0);
+		PropStream input;
+		input.init(attributes.getStream().data(), attributes.getStream().size());
+		if (!copy->unserializeAttr(input)) return {};
+		if (const auto* contents = item->getContainer()) {
+			Container* target = copy->getContainer();
+			// Fail closed instead of destroying contents when incompatible furniture
+			// is configured to wrap into a non-container.
+			for (auto it = contents->getReversedItems(); it != contents->getReversedEnd(); ++it) {
+				if (excluded.contains(it->get())) continue;
+				if (!target) return {};
+				auto child = self(self, *it);
+				if (!child) return {};
+				target->internalAddThing(child.get());
 			}
 		}
-	}
-
-	if (!targetPlayer) {
-		LOG_WARN(fmt::format("[House::transferToDepot] Could not find owner for house {}. Items remain on tiles.", id));
-		return false;
-	}
-
-	transferToDepot(targetPlayer);
-	if (needsSave) {
-		if (!g_saveManager.savePlayerSync(&tmpPlayer)) {
-			LOG_ERROR(fmt::format("[House::transferToDepot] Failed to save temporary player {} data.", tmpPlayer.getName()));
-			return false;
+		return copy;
+	};
+	ItemBlockList credit;
+	const auto needsProjection = [&](auto&& self, const Item* item) -> bool {
+		const uint16_t wrap = static_cast<uint16_t>(item->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
+		if (wrap && wrap != item->getID()) return true;
+		if (const auto* container = item->getContainer()) {
+			for (const auto& child : container->getItemList()) {
+				if (!excluded.contains(child.get()) && self(self, child.get())) return true;
+			}
 		}
+		return false;
+	};
+	for (auto& move : moves) {
+		move.image = project(project, move.source);
+		if (!move.image) return false;
+		if (needsProjection(needsProjection, move.source.get())) move.destination = move.image;
+		credit.emplace_back(static_cast<int32_t>(townId), move.image.get());
 	}
+	const auto houseSave = IOMapSerialize::buildHouseSave(this, excluded);
+	if (!houseSave) return false;
+	Database& db = Database::getInstance();
+	const auto sideChanges = [&] {
+		const auto row = db.storeQuery(fmt::format("SELECT `owner` FROM `houses` WHERE `id` = {} FOR UPDATE", id));
+		if (!row || row->getNumber<uint32_t>("owner") != owner) return false;
+		for (const auto& query : *houseSave)
+			if (!db.executeQuery(query)) return false;
+		if (!updateOwnerInDatabase(newOwner, resetProtection)) return false;
+		return db.executeQuery(fmt::format("DELETE FROM `house_lists` WHERE `house_id` = {}", id)) &&
+		       db.executeQuery(fmt::format("DELETE FROM `house_guests` WHERE `house_id` = {}", id));
+	};
+	if (!g_saveManager.savePlayerTransfer(player, credit, sideChanges, participants)) return false;
+
+	// Publish all items before invoking Lua/trade notifications. No move can be
+	// declined after the DB credit: these operations bypass capacity/stack merging.
+	// Every source parent is kept alive and the dispatcher has not yielded.
+	for (auto& move : moves) {
+		const bool removed = move.container ? move.container->removeItemForHouseTransfer(move.source.get())
+		                                    : move.tile->removeItemForHouseTransfer(move.source.get());
+		if (!removed) std::terminate(); // Invariant failure: never save a half-published transfer.
+		for (const auto& field : move.browseFields) {
+			if (!field->removeItemForHouseTransfer(move.source.get())) std::terminate();
+		}
+		// Originals are now detached; stop their decay, including nested contents,
+		// before publishing the identity-preserving replacement tree.
+		if (move.destination != move.source) {
+			move.source->stopDecaying();
+			if (auto* container = move.source->getContainer()) {
+				for (const auto& child : container->getItems(true)) child->stopDecaying();
+			}
+		}
+		inbox->internalAddThing(move.destination.get());
+		if (move.destination->getParent() != inbox) std::terminate();
+		move.destination->startDecaying();
+	}
+	// Owner/access-list publication must also finish before a callback can save
+	// the world. Capture shared references, never a temporary offline Player.
+	notify = [moves = std::move(moves), tiles, online, town = townId] {
+		if (online) {
+			online->onReceiveMail();
+			online->onSendContainer(online->getInbox(town));
+		}
+		for (const auto& move : moves) {
+			// Container parents may now be in the inbox, or already removed by an
+			// earlier callback. Notify the captured original tile, not its new parent.
+			move.tile->postRemoveNotification(move.destination.get(), nullptr, move.index);
+		}
+		for (const auto& tile : tiles) {
+			SpectatorVec spectators;
+			g_game.map.getSpectators(spectators, tile->getPosition(), true, true);
+			for (const auto& spectator : spectators.players()) {
+				auto* viewer = static_cast<Player*>(spectator.get());
+				viewer->sendUpdateTile(tile.get(), tile->getPosition());
+				for (const auto& move : moves) {
+					if (move.tile != tile) continue;
+					if (move.container) viewer->onSendContainer(move.container.get());
+					for (const auto& field : move.browseFields) viewer->onSendContainer(field.get());
+					viewer->onRemoveTileItem(tile.get(), tile->getPosition(), Item::items[move.source->getID()],
+					                         move.source.get());
+				}
+			}
+		}
+	};
 	return true;
 }
-
-bool House::transferToDepot(Player* player) const
-{
-	if (townId == 0 || owner == 0) {
-		return false;
-	}
-
-	Inbox* targetInbox = player->getInbox(townId);
-	if (!targetInbox) {
-		targetInbox = player->getInbox();
-		if (targetInbox) {
-			LOG_WARN(fmt::format("[House::transferToDepot] Fallback to player default inbox for house {} (townId {})", id, townId));
-		} else {
-			LOG_WARN(fmt::format("[House::transferToDepot] No inbox found for player when transferring house {} items", id));
-			return false;
-		}
-	}
-
-	// Moving items also runs callbacks that can mutate the house tile registry.
-	for (const auto& tile : getTilesSnapshot()) {
-		const TileItemVector* items = tile->getItemList();
-		if (!items) {
-			continue;
-		}
-
-		std::vector<std::shared_ptr<Item>> toProcess;
-		for (const auto& item : *items) {
-			toProcess.push_back(item);
-		}
-
-		for (const auto& item : toProcess) {
-			if (!item || item->isRemoved() || tile->getThingIndex(item.get()) == -1) {
-				continue;
-			}
-			if (Container* container = item->getContainer()) {
-				std::vector<std::shared_ptr<Container>> subContainers = {g_game.getContainerSharedRef(container)};
-				size_t idx = 0;
-				while (idx < subContainers.size()) {
-					const auto current = subContainers[idx++];
-					if (!current || current->isRemoved() || current->getTile() != tile.get()) {
-						continue;
-					}
-					std::vector<std::shared_ptr<Item>> children;
-					for (const auto& child : current->getItemList()) {
-						children.push_back(child);
-					}
-
-					for (const auto& child : children) {
-						if (!child || child->isRemoved() || child->getParent() != current.get()) {
-							continue;
-						}
-						auto processedChild = child;
-						if (child->hasAttribute(ITEM_ATTRIBUTE_WRAPID)) {
-							uint16_t wrapId = static_cast<uint16_t>(child->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
-							if (wrapId != 0) {
-								processedChild = g_game.getItemSharedRef(g_game.transformItem(child.get(), wrapId));
-							}
-						}
-
-						if (!processedChild || processedChild->isRemoved()) {
-							continue;
-						}
-						if (Container* sub = processedChild->getContainer()) {
-							subContainers.push_back(g_game.getContainerSharedRef(sub));
-						} else if (processedChild->isPickupable()) {
-							g_game.internalMoveItem(processedChild->getParent(), targetInbox, INDEX_WHEREEVER, processedChild.get(), processedChild->getItemCount(), nullptr, FLAG_NOLIMIT);
-						}
-					}
-				}
-			}
-
-			auto processedItem = item;
-			if (processedItem->isRemoved() || tile->getThingIndex(processedItem.get()) == -1) {
-				continue;
-			}
-			if (processedItem->hasAttribute(ITEM_ATTRIBUTE_WRAPID)) {
-				uint16_t wrapId = static_cast<uint16_t>(processedItem->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
-				if (wrapId != 0) {
-					if (Item* newItem = g_game.transformItem(processedItem.get(), wrapId)) {
-						processedItem = g_game.getItemSharedRef(newItem);
-					}
-				}
-			}
-
-			if (!processedItem || processedItem->isRemoved()) {
-				continue;
-			}
-			if (processedItem->isPickupable()) {
-				g_game.internalMoveItem(processedItem->getParent(), targetInbox, INDEX_WHEREEVER, processedItem.get(), processedItem->getItemCount(), nullptr, FLAG_NOLIMIT);
-			} else if (Container* container = processedItem->getContainer()) {
-				std::vector<std::shared_ptr<Item>> contents;
-				for (const auto& content : container->getItemList()) {
-					contents.push_back(content);
-				}
-				for (const auto& content : contents) {
-					if (content && !content->isRemoved() && content->getParent() == container) {
-						g_game.internalMoveItem(content->getParent(), targetInbox, INDEX_WHEREEVER, content.get(), content->getItemCount(), nullptr, FLAG_NOLIMIT);
-					}
-				}
-			}
-		}
-	}
-	return true;
-}
-
 std::optional<std::string_view> House::getAccessList(uint32_t listId) const
 {
 	if (listId == GUEST_LIST) {
@@ -802,7 +895,92 @@ void HouseTransferItem::onTradeEvent(TradeEvents_t event, Player* owner)
 	}
 }
 
-bool House::executeTransfer(HouseTransferItem* item, Player* newOwner)
+bool HouseTransferItem::executeAtomicTrade(Player* seller, Player* buyer, Item* payment)
+{
+	const auto h = house.lock();
+	const auto item = g_game.getItemSharedRef(payment);
+	if (!h || !seller || !buyer || seller == buyer || !item || h->getTransferItem().get() != this ||
+	    payment->getTopParent() != buyer || !g_dispatcher.isDispatcherThread())
+		return false;
+	if (h->getType() == HOUSE_TYPE_NORMAL && (h->getOwner() != seller->getGUID() || h->getOwner() == buyer->getGUID()))
+		return false;
+	if (h->getType() == HOUSE_TYPE_GUILDHALL && (!seller->getGuild() || seller->getGuild()->getId() != h->getOwner() ||
+	                                             !buyer->getGuild() || buyer->getGuild()->getId() == h->getOwner()))
+		return false;
+	if (g_saveManager.hasPendingPlayerSave(seller->getGUID()) || g_saveManager.hasPendingPlayerSave(buyer->getGUID()) ||
+	    g_saveManager.isPersistenceBlocked())
+		return false;
+
+	Cylinder* source = payment->getParent();
+	const auto sourceContainer = g_game.getContainerSharedRef(dynamic_cast<Container*>(source));
+	const int32_t sourceIndex = source->getThingIndex(payment);
+	int32_t destinationIndex = INDEX_WHEREEVER;
+	uint32_t flags = FLAG_IGNOREAUTOSTACK;
+	Item* destinationItem = nullptr;
+	Cylinder* destination =
+	    seller->queryDestination(destinationIndex, *payment, &destinationItem, flags, seller->getInstanceID());
+	const auto destinationContainer = g_game.getContainerSharedRef(dynamic_cast<Container*>(destination));
+	if (sourceIndex < 0 || (!sourceContainer && source != buyer) || (!destinationContainer && destination != seller) ||
+	    destination->queryAdd(destinationIndex, *payment, payment->getItemCount(), flags, nullptr) !=
+	        RETURNVALUE_NOERROR)
+		return false;
+
+	// Stage just the payment without notifications, merging or yielding. Both
+	// inventories and the house/inbox commit together. On failure the exact
+	// original slot/container order is restored before the trade is cancelled.
+	if (!(sourceContainer ? sourceContainer->removeItemForHouseTransfer(payment)
+	                      : buyer->removeItemForHouseTransfer(payment)))
+		return false;
+	destination->internalAddThing(static_cast<uint32_t>(destinationIndex), payment);
+	if (payment->getParent() != destination) std::terminate();
+	const auto restorePayment = [&] {
+		if (!(destinationContainer ? destinationContainer->removeItemForHouseTransfer(payment)
+		                           : seller->removeItemForHouseTransfer(payment)))
+			std::terminate();
+		if (sourceContainer) {
+			if (!sourceContainer->restoreItemForHouseTransfer(payment, sourceIndex)) std::terminate();
+		} else
+			source->internalAddThing(static_cast<uint32_t>(sourceIndex), payment);
+		if (payment->getParent() != source) std::terminate();
+	};
+	const uint64_t buyerGeneration = buyer->getSaveGeneration();
+	const uint64_t sellerGeneration = seller->getSaveGeneration();
+	try {
+		if (!h->executeTransfer(this, buyer, {seller, buyer})) {
+			restorePayment();
+			return false;
+		}
+	} catch (...) {
+		// Never undo a committed payment if a post-commit notification throws.
+		// Terminating preserves the coherent DB image for restart recovery.
+		if (buyer->getSaveGeneration() != buyerGeneration || seller->getSaveGeneration() != sellerGeneration)
+			std::terminate();
+		restorePayment();
+		throw;
+	}
+	// The virtual document never enters either persisted inventory.
+	g_game.internalRemoveItem(this, 1);
+	if (sourceContainer)
+		buyer->onSendContainer(sourceContainer.get());
+	else {
+		buyer->sendInventoryItem(static_cast<slots_t>(sourceIndex),
+		                         buyer->getInventoryItem(static_cast<slots_t>(sourceIndex)));
+		buyer->onRemoveInventoryItem(payment);
+	}
+	source->postRemoveNotification(payment, destination, sourceIndex);
+	if (payment->getParent() == destination) {
+		destination->postAddNotification(payment, source, destination->getThingIndex(payment));
+		if (destinationContainer)
+			seller->onSendContainer(destinationContainer.get());
+		else
+			seller->refreshThing(payment);
+	}
+	buyer->scheduleAstraPlayerInventorySnapshot();
+	seller->scheduleAstraPlayerInventorySnapshot();
+	return true;
+}
+
+bool House::executeTransfer(HouseTransferItem* item, Player* newOwner, const std::vector<Player*>& participants)
 {
 	if (!newOwner) {
 		return false;
@@ -813,12 +991,12 @@ bool House::executeTransfer(HouseTransferItem* item, Player* newOwner)
 	}
 
 	if (type == HOUSE_TYPE_NORMAL) {
-		if (!setOwner(newOwner->getGUID())) {
+		if (!setOwner(newOwner->getGUID(), true, nullptr, participants)) {
 			return false;
 		}
 	} else {
 		const auto& newOwnerGuild = newOwner->getGuild();
-		if (!newOwnerGuild || !setOwner(newOwnerGuild->getId())) {
+		if (!newOwnerGuild || !setOwner(newOwnerGuild->getId(), true, nullptr, participants)) {
 			return false;
 		}
 	}
@@ -1192,7 +1370,7 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 				}
 			}
 
-			if (!g_saveManager.savePlayerSync(&player)) {
+			if (g_saveManager.savePlayerSync(&player) != SaveResult::Persisted) {
 				LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
 				continue;
 			}
@@ -1247,7 +1425,7 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 					house->setOwner(0, true, &player);
 				}
 
-			if (!g_saveManager.savePlayerSync(&player)) {
+			if (g_saveManager.savePlayerSync(&player) != SaveResult::Persisted) {
 				LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
 				continue;
 			}

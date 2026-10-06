@@ -1,557 +1,551 @@
 // Copyright 2023 The Forgotten Server Authors. All rights reserved.
-// Use of this source code is governed by the GPL-2.0 License that can be found in the LICENSE file.
-// SaveManager - Async save coordination using ThreadPool
+// Use of this source code is governed by the GPL-2.0 License in the LICENSE file.
 
 #include "otpch.h"
 
 #include "save_manager.h"
 
-#include <thread>
-
-#include "database.h"
 #include "game.h"
 #include "iomapserialize.h"
-#include "logger.h"
-#include "thread_pool.h"
-#include "tasks.h"
 #include "kv/kv.h"
+#include "logger.h"
+#include "save_journal.h"
+#include "scheduler.h"
+#include "tasks.h"
+#include "thread_pool.h"
 
-extern Game g_game;
+#include <openssl/sha.h>
 
 SaveManager g_saveManager;
 
-void SaveManager::saveAll()
+namespace {
+int64_t saveClock()
 {
-	if (isSaving() || saving.exchange(true)) {
-		LOG_INFO(fmt::format(">> {}: {}",
-			fmt::format(fg(fmt::color::magenta), "SaveManager"),
-			fmt::format(fg(fmt::color::yellow), "Save already in progress, skipping.")));
-		return;
+	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+	    .count();
+}
+} // namespace
+
+bool SaveManager::saveAll(Completion completion)
+{
+	if (!g_dispatcher.isDispatcherThread() || !accepting) {
+		if (completion) completion(false);
+		return false;
 	}
-
-	auto now = std::chrono::steady_clock::now().time_since_epoch();
-	int64_t nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-	int64_t lastSave = lastSaveTimestamp.load(std::memory_order_relaxed);
-
-	if (lastSave > 0 && (nowMs - lastSave) < MIN_SAVE_INTERVAL_MS) {
-		LOG_INFO(fmt::format(">> {}: {}",
-			fmt::format(fg(fmt::color::magenta), "SaveManager"),
-			fmt::format(fg(fmt::color::yellow), "Save throttled (min {}ms interval).", MIN_SAVE_INTERVAL_MS)));
-		saving.store(false);
-		return;
+	if (isSaving()) {
+		// One intentional follow-up generation snapshots the latest state. No time
+		// throttle can discard requests, and all callers receive their completion.
+		saveAgain = true;
+		if (completion) nextSaveCallbacks.push_back(std::move(completion));
+		return true;
 	}
-
-	lastSaveTimestamp.store(nowMs, std::memory_order_relaxed);
-	auto startTime = std::chrono::high_resolution_clock::now();
-
-	LOG_INFO(fmt::format(">> {}: {}",
-		fmt::format(fg(fmt::color::magenta), "SaveManager"),
-		fmt::format(fg(fmt::color::cyan), "Saving server state...")));
-
-	// Save game storage values (on dispatcher thread - fast)
-	if (!g_game.saveGameStorageValues()) {
-		LOG_ERROR("[SaveManager] Failed to save game storage values.");
-	}
-
-	if (!g_game.saveAccountStorageValues()) {
-		LOG_ERROR("[SaveManager] Failed to save account storage values.");
-	}
-
-	// Save KV store
-	if (!KVStore::getInstance().saveAll()) {
-		LOG_ERROR("[SaveManager] Failed to save KV store.");
-	}
-
-	// Build all online players on dispatcher and flush SQL on the thread pool.
-	uint32_t playerCount = 0;
-	const auto& players = g_game.getPlayers();
-
-	for (const auto& player : players) {
-		if (schedulePlayerFlush(player.get(), true)) {
-			playerCount++;
+	if (completion) saveCallbacks.push_back(std::move(completion));
+	saving.store(true, std::memory_order_release);
+	++saveGenerationId;
+	saveStartedMs = saveClock();
+	generationSucceeded = true;
+	pendingSaveFlushes = 1; // Sentinel: completion cannot fire while snapshotting/map save runs.
+	generationSucceeded &= g_game.saveGameStorageValues();
+	generationSucceeded &= g_game.saveAccountStorageValues();
+	generationSucceeded &= KVStore::getInstance().saveAll();
+	uint32_t count = 0;
+	for (const auto& player : g_game.getPlayers()) {
+		if (schedulePlayerFlush(player.get(), true) != SaveResult::Failed) {
+			++count;
+		} else {
+			generationSucceeded = false;
 		}
 	}
-
-	// Save map synchronously on the dispatcher thread (reads g_game.map.houses — not thread-safe).
-	beginTrackedFlush();
-	bool mapSaved = false;
-	for (uint32_t tries = 0; tries < 3; tries++) {
-		if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
-			mapSaved = true;
-			break;
-		}
-	}
-	if (!mapSaved) {
-		LOG_ERROR("[SaveManager] Failed to save map data after 3 retries.");
-	}
-	completeTrackedFlush();
-
-	auto endTime = std::chrono::high_resolution_clock::now();
-	auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-
-	lastSaveDurationMs.store(static_cast<uint64_t>(durationMs), std::memory_order_relaxed);
-	lastPlayersSaved.store(playerCount, std::memory_order_relaxed);
-
-	LOG_INFO(fmt::format(">> {}: Queued {} player save(s) in {} (map/player SQL flushing async)",
-		fmt::format(fg(fmt::color::magenta), "SaveManager"),
-		fmt::format(fg(fmt::color::lime_green), "{}", playerCount),
-		fmt::format(fg(fmt::color::cyan), "{}ms", durationMs)));
-
+	lastPlayersSaved.store(count);
+	generationSucceeded &= saveMap();
+	LOG_INFO("[SaveManager] Generation {}: scheduled {} player snapshots in {}ms; waiting for durable completion.",
+	         saveGenerationId, count, saveClock() - saveStartedMs);
+	completeTrackedFlush(true);
+	return true;
 }
 
-bool SaveManager::savePlayer(Player* player)
+std::optional<IOLoginData::PlayerSaveSnapshot> SaveManager::snapshot(Player* player, const ItemBlockList& inboxCredit)
 {
-	if (!player) {
-		return false;
-	}
-
-	if (!g_dispatcher.isDispatcherThread()) {
-		LOG_ERROR("[SaveManager] savePlayer must be called on the dispatcher thread.");
-		return false;
-	}
-
-	auto startTime = std::chrono::high_resolution_clock::now();
-	const bool queued = schedulePlayerFlush(player);
-	auto endTime = std::chrono::high_resolution_clock::now();
-	auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-
-	if (queued) {
-		LOG_INFO(fmt::format(">> {}: Player {} save queued in {}",
-			fmt::format(fg(fmt::color::magenta), "SaveManager"),
-			fmt::format(fg(fmt::color::lime_green), "{}", player->getName()),
-			fmt::format(fg(fmt::color::cyan), "{}ms", durationMs)));
-	}
-
-	return queued;
+	if (!player || player->isRemoved() || !accepting || hasFailedRecovery(player->getGUID())) return {};
+	auto save = IOLoginData::buildPlayerSave(player, inboxCredit);
+	if (!save) return {};
+	auto& generation = generations[player->getGUID()];
+	generation = std::max(generation, player->getSaveGeneration());
+	if (generation == std::numeric_limits<uint64_t>::max()) return {};
+	save->generation = ++generation;
+	return save;
 }
 
-bool SaveManager::savePlayerSync(Player* player)
+SaveResult SaveManager::savePlayer(Player* player)
 {
-	if (!player) {
-		return false;
+	if (!g_dispatcher.isDispatcherThread() || Database::getInstance().isInTransaction()) {
+		return SaveResult::Failed;
 	}
-
-	if (!g_dispatcher.isDispatcherThread()) {
-		LOG_ERROR("[SaveManager] savePlayerSync must be called on the dispatcher thread.");
-		return false;
-	}
-
+	auto save = snapshot(player);
+	if (!save) return SaveResult::Failed;
 	const uint32_t guid = player->getGUID();
+	// Public per-player async saves retain WAL-durable acceptance. Global saves
+	// write their journals on workers and claim durability only on completion.
+	if (!IOLoginData::writePlayerJournal(*save)) {
+		sessionSaveFailed = true;
+		failedRecoveryGuids.insert(guid);
+		return SaveResult::Failed;
+	}
+	queueSnapshot(guid, {player->getName(), std::move(*save), false, true});
+	return hasFailedRecovery(guid) ? SaveResult::Failed : SaveResult::Queued;
+}
 
+SaveResult SaveManager::schedulePlayerFlush(Player* player, bool tracked)
+{
+	if (!g_dispatcher.isDispatcherThread()) return SaveResult::Failed;
+	auto save = snapshot(player);
+	if (!save) return SaveResult::Failed;
+	queueSnapshot(player->getGUID(), {player->getName(), std::move(*save), tracked, false});
+	return hasFailedRecovery(player->getGUID()) ? SaveResult::Failed : SaveResult::Scheduled;
+}
+
+void SaveManager::queueSnapshot(uint32_t guid, PendingPlayerFlush pending)
+{
 	if (flushInFlight.contains(guid)) {
-		auto save = IOLoginData::buildPlayerSave(player);
-		if (!save) {
-			return false;
+		auto old = pendingFlushes.find(guid);
+		if (old != pendingFlushes.end()) {
+			pending.trackedBySaveAll |= old->second.trackedBySaveAll;
 		}
-		bool tracked = false;
-		if (auto it = pendingFlushes.find(guid); it != pendingFlushes.end()) {
-			tracked = it->second.trackedBySaveAll;
+		if (pending.trackedBySaveAll && (old == pendingFlushes.end() || !old->second.trackedBySaveAll)) {
+			++pendingSaveFlushes;
 		}
-		PendingPlayerFlush pending{player->getName(), std::move(*save), tracked};
-		if (!savePendingFlushToDB(guid, pending.save)) {
-			LOG_ERROR(fmt::format("[SaveManager] WAL write failed for pending flush guid={}, save may be lost", guid));
-		}
-		pendingFlushes[guid] = std::move(pending);
-		return false; // enqueued behind in-flight flush; save will complete via onPlayerFlushed
+		pendingFlushes.insert_or_assign(guid, std::move(pending));
+		return;
 	}
-
-	auto save = IOLoginData::buildPlayerSave(player);
-	if (!save) {
-		return false;
-	}
-
 	flushInFlight.insert(guid);
-	bool success = false;
-	for (uint32_t tries = 0; tries < 3; ++tries) {
-		if (IOLoginData::flushPlayerSave(*save)) {
-			player->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
-				save->storageSnapshotId,
-				save->snapshotModifiedKeys,
-				save->snapshotRemovedKeys
-			});
-			player->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
-				save->bestiarySnapshotId,
-				save->snapshotModifiedBestiaryRaceIds
-			});
-			success = true;
-			break;
+	if (pending.trackedBySaveAll) ++pendingSaveFlushes;
+	dispatchPlayerFlush(guid, std::move(pending));
+}
+
+SaveResult SaveManager::savePlayerSync(Player* player, bool allowDurableQueue)
+{
+	if (!g_dispatcher.isDispatcherThread() || !player || !accepting || hasFailedRecovery(player->getGUID()) ||
+	    Database::getInstance().isInTransaction()) {
+		return SaveResult::Failed;
+	}
+	const uint32_t guid = player->getGUID();
+	// A synchronous API does not mutate/queue a snapshot it cannot persist now.
+	if (hasPendingPlayerSave(guid) && !allowDurableQueue) return SaveResult::Failed;
+	auto save = snapshot(player);
+	if (!save) {
+		if (allowDurableQueue) {
+			sessionSaveFailed = true;
+			failedRecoveryGuids.insert(guid);
 		}
+		return SaveResult::Failed;
 	}
-	flushInFlight.erase(guid);
-
-	auto it = pendingFlushes.find(guid);
-	if (it != pendingFlushes.end()) {
-		PendingPlayerFlush pending = std::move(it->second);
-		pendingFlushes.erase(it);
-		flushInFlight.insert(guid);
-		dispatchPlayerFlush(guid, std::move(pending));
+	// Offline transfer callers such as mail restore their mutation on sync failure.
+	// Do not leave a replayable snapshot of that rolled-back transfer behind.
+	// Logout cannot restore its removed Player, so it explicitly requires WAL.
+	if (allowDurableQueue && !IOLoginData::writePlayerJournal(*save)) {
+		sessionSaveFailed = true;
+		failedRecoveryGuids.insert(guid);
+		LOG_ERROR("[SaveManager] Journal write failed for guid={}; latest save was not accepted as durable.", guid);
+		return SaveResult::Failed;
 	}
-
-	return success;
+	if (flushInFlight.contains(guid)) {
+		queueSnapshot(guid, {player->getName(), std::move(*save), false, true});
+		return SaveResult::Queued;
+	}
+	const bool success = IOLoginData::flushPlayerSave(*save);
+	if (success) {
+		player->acknowledgeSaveGeneration(save->generation);
+		player->acknowledgeStorageDirty(
+		    {save->storageSnapshotId, save->snapshotModifiedKeys, save->snapshotRemovedKeys});
+		player->acknowledgeBestiaryDirty({save->bestiarySnapshotId, save->snapshotModifiedBestiaryRaceIds});
+		return SaveResult::Persisted;
+	}
+	if (allowDurableQueue) {
+		sessionSaveFailed = true;
+		failedRecoveryGuids.insert(guid);
+	}
+	LOG_ERROR("[SaveManager] Player commit failed for guid={}. {}", guid,
+	          allowDurableQueue ? "Login blocked; logout journal retained."
+	                            : "Synchronous mutation was not accepted as durable; caller must restore it.");
+	return SaveResult::Failed;
 }
 
 bool SaveManager::savePlayersSync(const std::vector<Player*>& players)
 {
-	if (!g_dispatcher.isDispatcherThread()) {
-		LOG_ERROR("[SaveManager] savePlayersSync must be called on the dispatcher thread.");
-		return false;
-	}
-	if (players.empty()) {
-		return true;
-	}
-	Database& db = Database::getInstance();
-	if (db.isInTransaction()) {
-		// A nested BEGIN/COMMIT would commit the caller's transaction.
-		return false;
-	}
-
+	if (!g_dispatcher.isDispatcherThread() || !accepting || Database::getInstance().isInTransaction()) return false;
 	std::unordered_set<uint32_t> guids;
 	std::vector<IOLoginData::PlayerSaveSnapshot> saves;
-	saves.reserve(players.size());
 	for (Player* player : players) {
-		if (!player || hasPendingPlayerSave(player->getGUID()) || hasFailedRecovery(player->getGUID()) ||
-		    !guids.insert(player->getGUID()).second) {
-			return false;
-		}
-		auto save = IOLoginData::buildPlayerSave(player);
-		if (!save) {
-			return false;
-		}
+		if (!player || hasPendingPlayerSave(player->getGUID()) || !guids.insert(player->getGUID()).second) return false;
+		auto save = snapshot(player);
+		if (!save) return false;
 		saves.push_back(std::move(*save));
 	}
-
-	struct FlushGuard {
-		std::unordered_set<uint32_t>& inFlight;
-		const std::unordered_set<uint32_t>& guids;
-		~FlushGuard()
-		{
-			for (uint32_t guid : guids) {
-				inFlight.erase(guid);
-			}
-		}
-	} guard{flushInFlight, guids};
-	flushInFlight.insert(guids.begin(), guids.end());
-
-	// Only SQL belongs inside the retryable transaction. In particular, do not
-	// call flushPlayerSave here: it would start/commit a transaction per player.
-	if (!DBTransaction::executeWithinTransactionRollbackOnFailure([&db, &saves]() {
-		for (const auto& save : saves) {
-			for (const auto& query : save.queries) {
-				if (!db.executeQuery(query)) {
-					return false;
-				}
-			}
-		}
-		return true;
-	})) {
+	if (!DBTransaction::executeWithinTransactionRollbackOnFailure([&saves]() {
+		    for (const auto& save : saves) {
+			    if (!IOLoginData::applyPlayerSave(save)) return false;
+		    }
+		    return true;
+	    }))
 		return false;
-	}
 	for (size_t i = 0; i < players.size(); ++i) {
 		const auto& save = saves[i];
-		players[i]->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
-		    save.storageSnapshotId, save.snapshotModifiedKeys, save.snapshotRemovedKeys});
-		players[i]->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
-		    save.bestiarySnapshotId, save.snapshotModifiedBestiaryRaceIds});
+		players[i]->acknowledgeSaveGeneration(save.generation);
+		players[i]->acknowledgeStorageDirty(
+		    {save.storageSnapshotId, save.snapshotModifiedKeys, save.snapshotRemovedKeys});
+		players[i]->acknowledgeBestiaryDirty({save.bestiarySnapshotId, save.snapshotModifiedBestiaryRaceIds});
 	}
 	return true;
 }
 
-void SaveManager::drainPlayerFlushAsync(uint32_t guid, std::function<void(bool)> callback)
+bool SaveManager::savePlayerTransfer(Player* player, const ItemBlockList& inboxCredit,
+                                     const std::function<bool()>& sideChanges, const std::vector<Player*>& participants)
 {
-	g_dispatcher.addTask([this, guid, callback = std::move(callback)]() mutable {
-		if (flushInFlight.contains(guid) || pendingFlushes.contains(guid)) {
-			flushChainCallbacks[guid].push_back(std::move(callback));
-		} else {
-			// No flush pending, deliver callback on dispatcher
-			g_dispatcher.addTask([callback = std::move(callback)]() mutable {
-				callback(true);
-			});
-		}
-	});
-}
-
-bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = false */)
-{
-	if (!player) {
+	Database& db = Database::getInstance();
+	if (!g_dispatcher.isDispatcherThread() || !accepting || !player || !player->getSaveFlag() ||
+	    hasPendingPlayerSave(player->getGUID()) || db.isInTransaction())
 		return false;
+	const uint64_t expectedGeneration = player->getSaveGeneration();
+	const auto save = snapshot(player, inboxCredit);
+	if (!save) return false;
+	std::vector<std::pair<Player*, IOLoginData::PlayerSaveSnapshot>> peers;
+	std::unordered_set<uint32_t> guids{player->getGUID()};
+	for (Player* peer : participants) {
+		if (!peer || !peer->getSaveFlag() || hasPendingPlayerSave(peer->getGUID())) return false;
+		if (!guids.insert(peer->getGUID()).second) continue;
+		auto image = snapshot(peer);
+		if (!image) return false;
+		peers.emplace_back(peer, std::move(*image));
 	}
-
-	if (!g_dispatcher.isDispatcherThread()) {
-		LOG_ERROR("[SaveManager] schedulePlayerFlush must run on the dispatcher thread.");
+	if (!commitTransfer(
+	        fmt::format("SELECT `save_generation` AS `receipt` FROM `players` WHERE `id` = {} FOR UPDATE", save->guid),
+	        expectedGeneration, save->generation, [&] {
+		        if (!IOLoginData::applyPlayerSave(*save)) return false;
+		        for (const auto& [peer, image] : peers) {
+			        const auto row = db.storeQuery(
+			            fmt::format("SELECT `save_generation` FROM `players` WHERE `id` = {} FOR UPDATE", image.guid));
+			        if (!row || row->getNumber<uint64_t>("save_generation") != peer->getSaveGeneration() ||
+			            !IOLoginData::applyPlayerSave(image))
+				        return false;
+		        }
+		        return sideChanges();
+	        }))
 		return false;
+	player->acknowledgeSaveGeneration(save->generation);
+	player->acknowledgeStorageDirty({save->storageSnapshotId, save->snapshotModifiedKeys, save->snapshotRemovedKeys});
+	player->acknowledgeBestiaryDirty({save->bestiarySnapshotId, save->snapshotModifiedBestiaryRaceIds});
+	for (const auto& [peer, image] : peers) {
+		peer->acknowledgeSaveGeneration(image.generation);
+		peer->acknowledgeStorageDirty({image.storageSnapshotId, image.snapshotModifiedKeys, image.snapshotRemovedKeys});
+		peer->acknowledgeBestiaryDirty({image.bestiarySnapshotId, image.snapshotModifiedBestiaryRaceIds});
 	}
-
-	auto save = IOLoginData::buildPlayerSave(player);
-	if (!save) {
-		LOG_ERROR(fmt::format("[SaveManager] Failed to build save for player: {}", player->getName()));
-		return false;
-	}
-
-	const uint32_t guid = player->getGUID();
-	const std::string name = player->getName();
-	if (flushInFlight.contains(guid)) {
-		bool oldTracked = false;
-		if (auto it = pendingFlushes.find(guid); it != pendingFlushes.end()) {
-			oldTracked = it->second.trackedBySaveAll;
-		}
-		bool newTracked = oldTracked | trackSaveAll;
-		if (trackSaveAll && !oldTracked) {
-			beginTrackedFlush();
-		}
-		PendingPlayerFlush pending{name, std::move(*save), newTracked};
-		if (!savePendingFlushToDB(guid, pending.save)) {
-			LOG_ERROR(fmt::format("[SaveManager] WAL write failed for pending flush guid={}, save may be lost", guid));
-		}
-		pendingFlushes[guid] = std::move(pending);
-		return true;
-	}
-
-	flushInFlight.insert(guid);
-	if (trackSaveAll) {
-		beginTrackedFlush();
-	}
-	dispatchPlayerFlush(guid, PendingPlayerFlush{name, std::move(*save), trackSaveAll});
 	return true;
 }
 
-void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll, bool success, IOLoginData::PlayerSaveSnapshot save)
+bool SaveManager::commitTransfer(std::string_view receiptQuery, uint64_t expected, uint64_t committedValue,
+                                 const std::function<bool()>& apply)
 {
-	if (success) {
-		acknowledgePlayerSave(guid, save);
-	}
-
-	if (trackedBySaveAll) {
-		completeTrackedFlush();
-	}
-
-	auto it = pendingFlushes.find(guid);
-	if (it == pendingFlushes.end()) {
-		flushInFlight.erase(guid);
-
-		// Chain complete: delete WAL on success, keep on failure for recovery
-		if (success) {
-			deletePendingFlushFromDB(guid);
-		} else {
-			LOG_ERROR(fmt::format("[SaveManager] Flush failed for guid={}, WAL entry preserved for recovery", guid));
-		}
-
-		// Invoke all registered callbacks for this flush chain
-		auto cbIt = flushChainCallbacks.find(guid);
-		if (cbIt != flushChainCallbacks.end()) {
-			for (auto& cb : cbIt->second) {
-				g_dispatcher.addTask([cb = std::move(cb), success]() mutable {
-					cb(success);
-				});
+	Database& db = Database::getInstance();
+	if (!g_dispatcher.isDispatcherThread() || !accepting || db.isInTransaction()) return false;
+	const auto blockPersistence = [&] {
+		// Never let a lost COMMIT reply turn into a rollback of the live world.
+		persistenceBlocked = true;
+		accepting = false;
+		LOG_CRITICAL(
+		    "[SaveManager] Transfer outcome could not be established. Persistence is blocked; "
+		    "reconnect the database and restart before saving again.");
+	};
+	for (uint8_t attempt = 0; attempt < DBTransaction::TRANSACTION_MAX_ATTEMPTS; ++attempt) {
+		bool commitAttempted = false;
+		bool retryable = false;
+		{
+			DBTransaction transaction;
+			if (!transaction.begin()) return false;
+			const auto row = db.storeQuery(receiptQuery);
+			// A stale Player must not let applyPlayerSave skip the inbox credit
+			// while still committing removal of its source house items.
+			if (!row || row->getNumber<uint64_t>("receipt") != expected) return false;
+			if (apply()) {
+				commitAttempted = true;
+				if (transaction.commit()) return true;
 			}
-			flushChainCallbacks.erase(cbIt);
+			retryable = db.lastQueryWasDeadlock();
+			if (!transaction.rollback() && !commitAttempted) {
+				blockPersistence();
+				return false;
+			}
 		}
-
-		return;
+		if (commitAttempted) {
+			// A fresh locking read waits for the old transaction to finish, even
+			// after reconnecting. A committed generation/owner is its receipt.
+			DBTransaction verification;
+			if (!verification.begin()) {
+				blockPersistence();
+				return false;
+			}
+			const auto row = db.storeQuery(receiptQuery);
+			if (!row) {
+				blockPersistence();
+				return false;
+			}
+			const uint64_t receipt = row->getNumber<uint64_t>("receipt");
+			if (receipt != committedValue && receipt != expected) {
+				blockPersistence();
+				return false;
+			}
+			if (!verification.rollback()) {
+				blockPersistence();
+				return false;
+			}
+			if (receipt == committedValue) return true;
+		}
+		if (!retryable) return false;
 	}
-
-	PendingPlayerFlush pending = std::move(it->second);
-	pendingFlushes.erase(it);
-	dispatchPlayerFlush(guid, std::move(pending));
+	return false;
 }
 
 void SaveManager::dispatchPlayerFlush(uint32_t guid, PendingPlayerFlush pending)
 {
-	// Persist to WAL before dispatch so crash recovery can replay
-	if (!savePendingFlushToDB(guid, pending.save)) {
-		LOG_ERROR(fmt::format("[SaveManager] WAL write failed for guid={}, aborting flush chain", guid));
-		flushInFlight.erase(guid);
-		pendingFlushes.erase(guid);
-
-		// Notify all waiting callbacks with failure
-		auto cbIt = flushChainCallbacks.find(guid);
-		if (cbIt != flushChainCallbacks.end()) {
-			for (auto& cb : cbIt->second) {
-				g_dispatcher.addTask([cb = std::move(cb)]() mutable {
-					cb(false);
-				});
-			}
-			flushChainCallbacks.erase(cbIt);
-		}
-
-		if (pending.trackedBySaveAll) {
-			completeTrackedFlush();
-		}
-		return;
+	// Values only: no live Player*, Lua reference or dispatcher-owned map is read by the worker.
+	const bool tracked = pending.trackedBySaveAll;
+	// Shared ownership is only of a value snapshot, never of a live game object.
+	// It also preserves the rejection result without duplicating the SQL payload.
+	auto work = std::make_shared<PendingPlayerFlush>(std::move(pending));
+	if (!g_threadPool.try_detach_task([this, guid, work]() mutable {
+		    bool success = false;
+		    try {
+			    success = (work->journalDurable || IOLoginData::writePlayerJournal(work->save)) &&
+			              IOLoginData::flushPlayerSave(work->save);
+		    } catch (const std::exception& e) {
+			    LOG_ERROR("[SaveManager] Save worker failed for guid={}: {}", guid, e.what());
+		    } catch (...) {
+			    LOG_ERROR("[SaveManager] Save worker failed for guid={}: unknown exception", guid);
+		    }
+		    // Retry completion delivery, never SQL, if a load spike fills the inbox.
+		    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+		    while (g_dispatcher.getState() == THREAD_STATE_RUNNING) {
+			    if (g_dispatcher.addTask([this, guid, work, success]() mutable {
+				        onPlayerFlushed(guid, work->trackedBySaveAll, success, std::move(work->save));
+			        }))
+				    return;
+			    if (std::chrono::steady_clock::now() >= deadline) break;
+			    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		    }
+		    // Leave the in-flight barrier blocked, rather than report false success.
+		    LOG_CRITICAL("[SaveManager] Completion delivery failed for guid={}; persistence barrier remains blocked.",
+		                 guid);
+	    })) {
+		onPlayerFlushed(guid, tracked, false, std::move(work->save));
 	}
+}
 
-	g_threadPool.detach_task([this, guid, pending = std::move(pending)]() mutable {
-		std::string name = std::move(pending.name);
-		IOLoginData::PlayerSaveSnapshot save = std::move(pending.save);
-		const bool trackSaveAll = pending.trackedBySaveAll;
-
-		const bool success = IOLoginData::flushPlayerSave(save);
+void SaveManager::onPlayerFlushed(uint32_t guid, bool tracked, bool success, IOLoginData::PlayerSaveSnapshot save)
+{
+	if (success) acknowledgePlayerSave(guid, save);
+	auto next = pendingFlushes.find(guid);
+	if (next != pendingFlushes.end()) {
+		PendingPlayerFlush pending = std::move(next->second);
+		pendingFlushes.erase(next);
+		dispatchPlayerFlush(guid, std::move(pending));
+	} else {
+		flushInFlight.erase(guid);
 		if (!success) {
-			LOG_ERROR(fmt::format("[SaveManager] Failed to flush save for player: {}", name));
+			sessionSaveFailed = true;
+			failedRecoveryGuids.insert(guid);
+			LOG_ERROR("[SaveManager] Save chain failed for guid={}; login and new saves are blocked.", guid);
 		}
-
-		g_dispatcher.addTask([this, guid, trackSaveAll, success, save = std::move(save)]() mutable {
-			onPlayerFlushed(guid, trackSaveAll, success, std::move(save));
-		});
-	});
+		finishWaiters(guid, success && !hasFailedRecovery(guid));
+	}
+	if (tracked) completeTrackedFlush(success);
+	finishShutdown();
 }
 
 void SaveManager::acknowledgePlayerSave(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save)
 {
 	if (auto player = g_game.getPlayerByGUID(guid)) {
-		player->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
-			save.storageSnapshotId,
-			save.snapshotModifiedKeys,
-			save.snapshotRemovedKeys
-		});
-		player->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
-			save.bestiarySnapshotId,
-			save.snapshotModifiedBestiaryRaceIds
-		});
+		player->acknowledgeSaveGeneration(save.generation);
+		player->acknowledgeStorageDirty({save.storageSnapshotId, save.snapshotModifiedKeys, save.snapshotRemovedKeys});
+		player->acknowledgeBestiaryDirty({save.bestiarySnapshotId, save.snapshotModifiedBestiaryRaceIds});
 	}
 }
 
-void SaveManager::beginTrackedFlush() noexcept
+void SaveManager::completeTrackedFlush(bool success)
 {
-	pendingSaveFlushes.fetch_add(1, std::memory_order_release);
-}
-
-void SaveManager::completeTrackedFlush() noexcept
-{
-	uint32_t prev = pendingSaveFlushes.fetch_sub(1, std::memory_order_acq_rel);
-	if (prev == 0) {
-		pendingSaveFlushes.fetch_add(1, std::memory_order_relaxed);
-		LOG_ERROR("[SaveManager] completeTrackedFlush underflow detected! begin/complete call mismatch.");
-		saving.store(false, std::memory_order_release);
+	generationSucceeded &= success;
+	if (pendingSaveFlushes == 0) {
+		LOG_CRITICAL("[SaveManager] Save generation counter mismatch.");
 		return;
 	}
-	if (prev == 1) {
-		saving.store(false, std::memory_order_release);
+	if (--pendingSaveFlushes == 0) finishSaveGeneration();
+}
+
+void SaveManager::finishSaveGeneration()
+{
+	lastSaveDurationMs.store(static_cast<uint64_t>(saveClock() - saveStartedMs));
+	const bool success = generationSucceeded;
+	sessionSaveFailed |= !success;
+	LOG_INFO("[SaveManager] Generation {}: {} after {}ms.", saveGenerationId, success ? "durably completed" : "FAILED",
+	         getLastSaveTime());
+	saving.store(false, std::memory_order_release);
+	auto callbacks = std::move(saveCallbacks);
+	const bool repeat = std::exchange(saveAgain, false);
+	auto nextCallbacks = std::move(nextSaveCallbacks);
+	{
+		// A no-player follow-up may finish synchronously and request shutdown.
+		// Keep teardown blocked until callbacks of all completing generations ran.
+		struct CompletionScope
+		{
+			uint32_t& count;
+			explicit CompletionScope(uint32_t& count) : count(count) { ++count; }
+			~CompletionScope() { --count; }
+		} scope(completingGenerations);
+		// Queue the already-accepted follow-up before callbacks (e.g. shutdown) can
+		// stop admission. Reentrant calls see this new generation and coalesce.
+		if (repeat) {
+			const bool previousAccepting = accepting;
+			accepting = !persistenceBlocked;
+			saveCallbacks = std::move(nextCallbacks);
+			const bool scheduled = saveAll();
+			accepting = previousAccepting && !shutdownRequested && !persistenceBlocked;
+			if (!scheduled) {
+				auto rejected = std::exchange(saveCallbacks, {});
+				for (auto& callback : rejected) callback(false);
+			}
+		}
+		for (auto& callback : callbacks) callback(success);
+	}
+	finishShutdown();
+}
+
+void SaveManager::drainPlayerFlushAsync(uint32_t guid, Completion callback, uint32_t timeoutMs)
+{
+	if (!g_dispatcher.isDispatcherThread()) {
+		g_dispatcher.addTask([this, guid, callback = std::move(callback), timeoutMs]() mutable {
+			drainPlayerFlushAsync(guid, std::move(callback), timeoutMs);
+		});
+		return;
+	}
+	if (!callback) return;
+	if (!hasPendingPlayerSave(guid)) {
+		callback(!hasFailedRecovery(guid));
+		return;
+	}
+	const uint64_t id = ++nextWaiterId;
+	const uint32_t event = g_scheduler.addEvent(timeoutMs, [this, guid, id] { timeoutWaiter(guid, id); });
+	if (event == 0) {
+		callback(false);
+		return;
+	}
+	flushChainCallbacks[guid].push_back({id, event, std::move(callback)});
+}
+
+void SaveManager::timeoutWaiter(uint32_t guid, uint64_t id)
+{
+	auto chain = flushChainCallbacks.find(guid);
+	if (chain == flushChainCallbacks.end()) return;
+	auto waiter = std::ranges::find(chain->second, id, &Waiter::id);
+	if (waiter == chain->second.end()) return;
+	auto callback = std::move(waiter->callback);
+	chain->second.erase(waiter);
+	if (chain->second.empty()) flushChainCallbacks.erase(chain);
+	callback(false);
+}
+
+void SaveManager::finishWaiters(uint32_t guid, bool success)
+{
+	auto chain = flushChainCallbacks.find(guid);
+	if (chain == flushChainCallbacks.end()) return;
+	auto waiters = std::move(chain->second);
+	flushChainCallbacks.erase(chain);
+	for (auto& waiter : waiters) {
+		g_scheduler.stopEvent(waiter.timeoutEvent);
+		waiter.callback(success);
 	}
 }
 
-bool SaveManager::savePendingFlushToDB(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save)
+void SaveManager::shutdownAsync(Completion completion)
 {
-	// Se recovery falhou para este GUID, nao sobrescrever WAL - exigir intervencao manual
-	if (failedRecoveryGuids.contains(guid)) {
-		LOG_CRITICAL(fmt::format("[SaveManager] Cannot overwrite WAL for guid={}: recovery previously failed. "
-			"Manual intervention required to clear player_save_async_pending entries.", guid));
-		return false;
-	}
+	shutdownRequested = true;
+	accepting = false;
+	if (completion) shutdownCallbacks.push_back(std::move(completion));
+	finishShutdown();
+}
 
+void SaveManager::finishShutdown()
+{
+	if (!shutdownRequested || isSaving() || saveAgain || completingGenerations != 0 || !flushInFlight.empty() ||
+	    !pendingFlushes.empty())
+		return;
+	auto callbacks = std::move(shutdownCallbacks);
+	for (auto& callback : callbacks) callback(!persistenceBlocked && !sessionSaveFailed);
+}
+
+bool SaveManager::recoverPendingFlushes()
+{
 	Database& db = Database::getInstance();
-
-	DBTransaction transaction;
-	if (!transaction.begin()) {
-		LOG_ERROR(fmt::format("[SaveManager] Failed to begin WAL transaction for guid={}", guid));
-		return false;
+	std::unordered_set<uint32_t> legacyGuids;
+	// COUNT distinguishes an empty journal from failed SELECT/schema/connection.
+	const auto counts = db.storeQuery(
+	    "SELECT (SELECT COUNT(*) FROM `player_save_journal`) AS `journal_count`, "
+	    "(SELECT COUNT(*) FROM `player_save_async_pending`) AS `legacy_count`, "
+	    "(SELECT MAX(`save_generation`) FROM `players`) AS `latest_generation`");
+	if (!counts) return false;
+	if (counts->getNumber<uint64_t>("legacy_count") != 0) {
+		auto legacy = db.storeQuery("SELECT DISTINCT `guid` FROM `player_save_async_pending`");
+		if (!legacy) return false;
+		do {
+			const auto guid = legacy->getNumber<uint32_t>("guid");
+			legacyGuids.insert(guid);
+			failedRecoveryGuids.insert(guid);
+			LOG_CRITICAL(
+			    "[SaveManager] Legacy WAL for guid={} has no generation. Evidence retained; manual reconciliation required.",
+			    guid);
+		} while (legacy->next());
 	}
-
-	if (!db.executeQuery(fmt::format("DELETE FROM `player_save_async_pending` WHERE `guid` = {}", guid))) {
-		LOG_ERROR(fmt::format("[SaveManager] Failed to clear old WAL entries for guid={}", guid));
-		transaction.rollback();
-		return false;
-	}
-
-	for (size_t i = 0; i < save.queries.size(); ++i) {
-		const std::string escaped = db.escapeString(save.queries[i]);
-		if (!db.executeQuery(fmt::format(
-			"INSERT INTO `player_save_async_pending` (`guid`, `query_index`, `query_text`, `created_at`) "
-			"VALUES ({}, {}, {}, UNIX_TIMESTAMP())",
-			guid, i, escaped)))
-		{
-			LOG_ERROR(fmt::format("[SaveManager] Failed to insert WAL entry for guid={}, query_index={}", guid, i));
-			transaction.rollback();
-			return false;
+	if (counts->getNumber<uint64_t>("journal_count") == 0) return true;
+	auto result = db.storeQuery(
+	    "SELECT `guid`, `generation`, `payload`, `payload_hash` FROM `player_save_journal` ORDER BY `guid`");
+	if (!result) return false;
+	do {
+		const auto guid = result->getNumber<uint32_t>("guid");
+		const auto generation = result->getNumber<uint64_t>("generation");
+		generations[guid] = std::max(generations[guid], generation);
+		// Poison before any decoding/begin/query/commit. Clear only on proven success.
+		const bool legacyFailed = legacyGuids.contains(guid);
+		failedRecoveryGuids.insert(guid);
+		const auto payload = result->getString("payload");
+		const auto hash = result->getString("payload_hash");
+		unsigned char digest[SHA256_DIGEST_LENGTH];
+		if (legacyFailed || hash.size() != sizeof(digest) ||
+		    !SHA256(reinterpret_cast<const unsigned char*>(payload.data()), payload.size(), digest) ||
+		    std::memcmp(hash.data(), digest, sizeof(digest)) != 0) {
+			LOG_CRITICAL("[SaveManager] Unresolved or corrupt journal for guid={}; preserved and blocked.", guid);
+			continue;
 		}
-	}
-
-	if (!transaction.commit()) {
-		LOG_ERROR(fmt::format("[SaveManager] Failed to commit WAL transaction for guid={}", guid));
-		return false;
-	}
-
+		auto queries = tfs::save::decode(payload, guid, generation);
+		if (!queries) {
+			LOG_CRITICAL("[SaveManager] Malformed journal for guid={}; preserved and blocked.", guid);
+			continue;
+		}
+		IOLoginData::PlayerSaveSnapshot save;
+		save.guid = guid;
+		save.generation = generation;
+		save.queries = std::move(*queries);
+		if (IOLoginData::flushPlayerSave(save)) {
+			failedRecoveryGuids.erase(guid);
+			LOG_INFO("[SaveManager] Recovered guid={} generation={}.", guid, generation);
+		} else {
+			LOG_CRITICAL("[SaveManager] Recovery failed for guid={}; journal preserved and login blocked.", guid);
+		}
+	} while (result->next());
 	return true;
 }
 
-void SaveManager::deletePendingFlushFromDB(uint32_t guid)
+bool SaveManager::saveMap()
 {
-	Database::getInstance().executeQuery(
-		fmt::format("DELETE FROM `player_save_async_pending` WHERE `guid` = {}", guid));
-}
-
-void SaveManager::recoverPendingFlushes()
-{
-	Database& db = Database::getInstance();
-	DBResult_ptr result = db.storeQuery(
-		"SELECT `guid`, `query_index`, `query_text` FROM `player_save_async_pending` ORDER BY `guid`, `query_index`");
-	if (!result) {
-		LOG_INFO(">> [SaveManager] No pending async saves to recover.");
-		return;
-	}
-
-	std::unordered_map<uint32_t, std::vector<std::string>> pendingByGuid;
-	do {
-		const uint32_t guid = result->getNumber<uint32_t>("guid");
-		const std::string query{result->getString("query_text")};
-		pendingByGuid[guid].push_back(std::move(query));
-	} while (result->next());
-
-	for (auto& [guid, queries] : pendingByGuid) {
-		LOG_INFO(fmt::format(">> [SaveManager] Recovering {} pending query(es) for guid={}", queries.size(), guid));
-		bool allOk = true;
-		DBTransaction transaction;
-		if (!transaction.begin()) {
-			LOG_ERROR(fmt::format("[SaveManager] Failed to begin recovery transaction for guid={}", guid));
-			continue;
-		}
-		for (const auto& q : queries) {
-			if (!db.executeQuery(q)) {
-				allOk = false;
-				LOG_ERROR(fmt::format("[SaveManager] Recovery query failed for guid={}: {}", guid, q));
-				break;
-			}
-		}
-		if (allOk) {
-			if (transaction.commit()) {
-				db.executeQuery(fmt::format("DELETE FROM `player_save_async_pending` WHERE `guid` = {}", guid));
-				LOG_INFO(fmt::format(">> [SaveManager] Successfully recovered save for guid={}", guid));
-			} else {
-				transaction.rollback();
-				LOG_ERROR(fmt::format("[SaveManager] Recovery commit failed for guid={}", guid));
-			}
-		} else {
-			transaction.rollback();
-			failedRecoveryGuids.insert(guid);
-			LOG_ERROR(fmt::format("[SaveManager] Recovery failed for guid={}, manual intervention required. "
-				"WAL entries preserved; savePendingFlushToDB will skip this GUID to prevent silent data loss.", guid));
-		}
-	}
-}
-
-void SaveManager::saveMapAsync()
-{
-	LOG_INFO(fmt::format(">> {}: {}",
-		fmt::format(fg(fmt::color::magenta), "SaveManager"),
-		fmt::format(fg(fmt::color::cyan), "Saving map...")));
-
-	auto startTime = std::chrono::high_resolution_clock::now();
-
-	bool mapSaved = false;
-	for (uint32_t tries = 0; tries < 3; tries++) {
-		if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
-			mapSaved = true;
-			break;
-		}
-	}
-
-	auto endTime = std::chrono::high_resolution_clock::now();
-	auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-
-	if (mapSaved) {
-		LOG_INFO(fmt::format(">> {}: Map saved in {}",
-			fmt::format(fg(fmt::color::magenta), "SaveManager"),
-			fmt::format(fg(fmt::color::lime_green), "{}ms", durationMs)));
-	} else {
-		LOG_ERROR("[SaveManager] Failed to save map after 3 retries.");
-	}
+	if (persistenceBlocked) return false;
+	// Never inspect mutable map/house state from a database worker.
+	const bool success = IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems();
+	if (!success) LOG_ERROR("[SaveManager] Map save failed.");
+	return success;
 }

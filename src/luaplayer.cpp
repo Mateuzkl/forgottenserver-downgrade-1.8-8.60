@@ -19,6 +19,7 @@
 #include "scriptmanager.h"
 #include "spells.h"
 #include "tile.h"
+#include "tasks.h"
 #include "vocation.h"
 #include "familiar.h"
 #include "weapons.h"
@@ -3117,7 +3118,17 @@ int luaPlayerSave(lua_State* L)
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
 		player->setLoginPosition(player->getPosition());
-		pushBoolean(L, g_saveManager.savePlayerSync(player));
+		if (g_dispatcher.isDispatcherThread() && g_saveManager.hasPendingPlayerSave(player->getGUID()) &&
+		    g_game.getPlayerByGUID(player->getGUID()).get() == player) {
+			// Preserve the latest online state behind an in-flight save. Returning
+			// false still means it has not committed synchronously; drainAsyncSave
+			// reports completion. Offline transfer callers must remain strict so a
+			// rejected/rolled-back mutation never acquires a replayable journal.
+			g_saveManager.savePlayer(player);
+			pushBoolean(L, false);
+		} else {
+			pushBoolean(L, g_saveManager.savePlayerSync(player) == SaveResult::Persisted);
+		}
 	} else {
 		lua_pushnil(L);
 	}
@@ -3138,11 +3149,11 @@ int luaPlayerSaveDailyReward(lua_State* L)
 
 int luaPlayerSaveAsync(lua_State* L)
 {
-	// player:saveAsync()
+	// player:saveAsync(): true means WAL-durable; drainAsyncSave waits for player commit.
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
 		player->setLoginPosition(player->getPosition());
-		pushBoolean(L, g_saveManager.savePlayer(player));
+		pushBoolean(L, g_saveManager.savePlayer(player) == SaveResult::Queued);
 	} else {
 		lua_pushnil(L);
 	}
@@ -3152,8 +3163,8 @@ int luaPlayerSaveAsync(lua_State* L)
 int luaPlayerDrainAsyncSave(lua_State* L)
 {
 	// player:drainAsyncSave(callback)
-	// Non-blocking: invoca callback(true) quando o flush chain para este player completar,
-	// ou callback(false) em caso de timeout.
+	// Exactly once on dispatcher: true after durable completion, false on failure/timeout.
+	// SaveManager owns the timeout and releases its callback on every outcome.
 	Player* player = getUserdata<Player>(L, 1);
 	if (!player) {
 		lua_pushnil(L);
@@ -3166,24 +3177,30 @@ int luaPlayerDrainAsyncSave(lua_State* L)
 		return 2;
 	}
 
+	lua_pushvalue(L, 2);
 	int32_t cbRef = luaL_ref(L, LUA_REGISTRYINDEX);
 	const uint32_t guid = player->getGUID();
+	const int32_t scriptId = LuaScriptInterface::hasScriptEnv() ? LuaScriptInterface::getScriptEnv()->getScriptId() : 0;
 
-	g_saveManager.drainPlayerFlushAsync(guid,
-		[cbRef](bool success) {
-			g_dispatcher.addTask([cbRef, success]() {
-				lua_State* luaState = g_luaEnvironment.getLuaState();
-				if (!luaState) return;
+	g_saveManager.drainPlayerFlushAsync(guid, [cbRef, scriptId](bool success) {
+		lua_State* luaState = g_luaEnvironment.getLuaState();
+		if (!luaState) return;
+		if (!LuaScriptInterface::reserveScriptEnv()) {
+			luaL_unref(luaState, LUA_REGISTRYINDEX, cbRef);
+			LOG_ERROR("[luaPlayerDrainAsyncSave] Callback script stack overflow");
+			return;
+		}
+		LuaScriptInterface::getScriptEnv()->setScriptId(scriptId, &g_luaEnvironment);
 
-				lua_rawgeti(luaState, LUA_REGISTRYINDEX, cbRef);
-				lua_pushboolean(luaState, success ? 1 : 0);
-				if (lua_pcall(luaState, 1, 0, 0) != LUA_OK) {
-					LOG_ERROR(fmt::format("[luaPlayerDrainAsyncSave] callback error: {}",
-						lua_tostring(luaState, -1)));
-				}
-				luaL_unref(luaState, LUA_REGISTRYINDEX, cbRef);
-			});
-		});
+		lua_rawgeti(luaState, LUA_REGISTRYINDEX, cbRef);
+		lua_pushboolean(luaState, success ? 1 : 0);
+		if (lua_pcall(luaState, 1, 0, 0) != LUA_OK) {
+			LOG_ERROR(fmt::format("[luaPlayerDrainAsyncSave] callback error: {}", lua_tostring(luaState, -1)));
+			lua_pop(luaState, 1);
+		}
+		LuaScriptInterface::resetScriptEnv();
+		luaL_unref(luaState, LUA_REGISTRYINDEX, cbRef);
+	});
 
 	pushBoolean(L, true);
 	return 1;

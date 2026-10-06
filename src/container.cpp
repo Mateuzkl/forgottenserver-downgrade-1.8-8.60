@@ -880,6 +880,28 @@ void Container::removeThing(Thing* thing, uint32_t count)
 	}
 }
 
+bool Container::removeItemForHouseTransfer(Item* item)
+{
+	const int32_t index = getThingIndex(item);
+	if (index < 0) return false;
+	updateItemWeight(-static_cast<int32_t>(item->getWeight()));
+	updateAmmoCount(item, -static_cast<int32_t>(item->getItemCount()));
+	item->setParent(nullptr);
+	itemlist.erase(itemlist.begin() + index);
+	return true;
+}
+
+bool Container::restoreItemForHouseTransfer(Item* item, int32_t index)
+{
+	const auto ref = getSharedItem(item);
+	if (!ref || item->getParent() || index < 0 || static_cast<size_t>(index) > itemlist.size()) return false;
+	itemlist.insert(itemlist.begin() + index, ref);
+	item->setParent(this);
+	updateAmmoCount(item, item->getItemCount());
+	updateItemWeight(item->getWeight());
+	return true;
+}
+
 int32_t Container::getThingIndex(const Thing* thing) const
 {
 	int32_t index = 0;

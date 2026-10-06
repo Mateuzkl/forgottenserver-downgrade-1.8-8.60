@@ -3163,7 +3163,7 @@ TEST_CASE(house_transfer_failure_releases_the_stale_document_identity)
 	CHECK(house->getOwner() == 971);
 }
 
-TEST_CASE(house_depot_transfer_survives_removal_of_a_queued_subcontainer)
+TEST_CASE(house_depot_transfer_without_a_durable_context_preserves_every_item)
 {
 	ensureItemTypes();
 	QuickLootLifetimeFixture fixture;
@@ -3198,11 +3198,14 @@ TEST_CASE(house_depot_transfer_survives_removal_of_a_queued_subcontainer)
 		return 1;
 	};
 	CHECK(fixture.events.movement.events.registerLuaEvent(event.release()));
-	CHECK(house->setOwner(0, true, fixture.player.get()));
-	CHECK(*callbackRan);
-	CHECK(weakQueued.expired());
-	CHECK(trigger->getParent() == fixture.player->getInbox(1));
-	CHECK(root->getParent() == fixture.player->getInbox(1));
+	// A successful transfer now requires the real dispatcher and atomic DB
+	// transaction. Its callback-removal scenario is covered by the DB suite.
+	CHECK(!house->setOwner(0, true, fixture.player.get()));
+	CHECK(!*callbackRan);
+	CHECK(!weakQueued.expired());
+	CHECK(trigger->getParent() == root.get());
+	CHECK(root->getParent() == g_game.map.getTile(pos));
+	CHECK(house->getOwner() == fixture.player->getGUID());
 }
 
 TFS_TEST_MAIN()

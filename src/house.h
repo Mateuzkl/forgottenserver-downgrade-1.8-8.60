@@ -106,6 +106,7 @@ public:
 	explicit HouseTransferItem(std::shared_ptr<House> house);
 
 	void onTradeEvent(TradeEvents_t event, Player* owner) override;
+	bool executeAtomicTrade(Player* seller, Player* buyer, Item* payment);
 	bool canTransform() const override { return false; }
 
 private:
@@ -140,7 +141,8 @@ public:
 	std::string_view getName() const { return houseName; }
 
 	std::string_view getOwnerName() const { return ownerName; }
-	bool setOwner(uint32_t guid_guild, bool updateDatabase = true, Player* previousPlayer = nullptr);
+	bool setOwner(uint32_t guid_guild, bool updateDatabase = true, Player* previousPlayer = nullptr,
+	              const std::vector<Player*>& participants = {});
 	uint32_t getOwner() const { return owner; }
 	uint32_t getOwnerAccountId() const { return ownerAccountId; }
 
@@ -177,7 +179,7 @@ public:
 
 	std::shared_ptr<HouseTransferItem> getTransferItem();
 	void resetTransferItem();
-	bool executeTransfer(HouseTransferItem* item, Player* newOwner);
+	bool executeTransfer(HouseTransferItem* item, Player* newOwner, const std::vector<Player*>& participants = {});
 
 	const HouseTileList& getTiles() const { return houseTiles; }
 	size_t getTileCount() const;
@@ -207,8 +209,8 @@ protected:
 	virtual bool updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection);
 
 private:
-	bool transferToDepot() const;
-	bool transferToDepot(Player* player) const;
+	bool transferToDepot(uint32_t newOwner, bool resetProtection, Player* previousPlayer,
+	                     std::function<void()>& notify, const std::vector<Player*>& participants);
 	void updateDoorDescription() const;
 	std::vector<std::shared_ptr<HouseTile>> getTilesSnapshot() const;
 

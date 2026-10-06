@@ -15,6 +15,10 @@
 #include "vocation.h"
 #include "logger.h"
 #include "tools.h"
+#include "save_journal.h"
+#include "save_manager.h"
+#include "tasks.h"
+#include <openssl/sha.h>
 #include <fmt/format.h>
 
 extern Game g_game;
@@ -294,7 +298,7 @@ bool IOLoginData::loadPlayerById(Player* player, uint32_t id, bool deferWorldDat
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `onlinetime`, `save_generation`, `save` FROM `players` WHERE `id` = {:d}",
 	        id)), deferWorldData);
 }
 
@@ -304,7 +308,7 @@ bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `onlinetime`, `save_generation`, `save` FROM `players` WHERE `name` = {:s}",
 	        db.escapeString(name))));
 }
 
@@ -417,6 +421,13 @@ void IOLoginData::loadPlayerWorldData(Player* player)
 bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorldData)
 {
 	if (!result) {
+		return false;
+	}
+	// Offline house/mailbox loads must not read underneath an older save chain.
+	// Login workers already pass the dispatcher-owned drain barrier before loading.
+	const uint32_t guid = result->getNumber<uint32_t>("id");
+	if (g_dispatcher.isDispatcherThread() &&
+	    (g_saveManager.hasPendingPlayerSave(guid) || g_saveManager.hasFailedRecovery(guid))) {
 		return false;
 	}
 
@@ -562,6 +573,8 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	player->loginPosition.z = result->getNumber<uint16_t>("posz");
 
 	player->lastLoginSaved = result->getNumber<time_t>("lastlogin");
+	player->onlineTime = result->getNumber<uint64_t>("onlinetime");
+	player->saveGeneration = result->getNumber<uint64_t>("save_generation");
 	player->lastLogout = result->getNumber<time_t>("lastlogout");
 
 	player->offlineTrainingTime = result->getNumber<int32_t>("offlinetraining_time") * 1000;
@@ -1092,9 +1105,13 @@ bool IOLoginData::addRewardItems(uint32_t playerId, const ItemBlockList& itemLis
     return query_insert.execute();
 }
 
-std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Player* player)
+std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Player* player, const ItemBlockList& inboxCredit)
 {
 	if (!player) {
+		return std::nullopt;
+	}
+	if (player->getSaveFlag() && (!player->getGroup() || !player->getTown() || !player->getVocation())) {
+		LOG_ERROR("[IOLoginData::buildPlayerSave] Player metadata is incomplete for guid={}", player->getGUID());
 		return std::nullopt;
 	}
 
@@ -1106,7 +1123,7 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 	std::vector<std::string> queries;
 	try {
 		QueryCaptureScope capture{queries};
-		if (!savePlayerQueries(player, bestiarySnapshot)) {
+		if (!savePlayerQueries(player, bestiarySnapshot, inboxCredit)) {
 			return std::nullopt;
 		}
 	} catch (const std::exception& e) {
@@ -1120,46 +1137,87 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 		storageSnapshot.modifiedKeys,
 		storageSnapshot.removedKeys,
 		bestiarySnapshot.snapshotId,
-		bestiarySnapshot.modifiedRaceIds
+		bestiarySnapshot.modifiedRaceIds,
+		player->getGUID()
 	};
 }
 
 bool IOLoginData::flushPlayerSave(const PlayerSaveSnapshot& snapshot)
 {
-	return DBTransaction::executeWithinTransactionRollbackOnFailure([&snapshot]() {
-		Database& db = Database::getInstance();
+	if (Database::getInstance().isInTransaction()) return false;
+	return DBTransaction::executeWithinTransactionRollbackOnFailure([&snapshot]() { return applyPlayerSave(snapshot); });
+}
+
+bool IOLoginData::applyPlayerSave(const PlayerSaveSnapshot& snapshot)
+{
+	Database& db = Database::getInstance();
+	if (!db.isInTransaction() || snapshot.guid == 0 || snapshot.generation == 0 || snapshot.queries.empty()) {
+		return false;
+	}
+	const auto row = db.storeQuery(fmt::format(
+	    "SELECT `save_generation` FROM `players` WHERE `id` = {} FOR UPDATE", snapshot.guid));
+	if (!row) {
+		return false; // Missing player and SQL failure both fail closed.
+	}
+	if (row->getNumber<uint64_t>("save_generation") < snapshot.generation) {
 		for (const auto& query : snapshot.queries) {
 			if (!db.executeQuery(query)) {
 				return false;
 			}
 		}
-		return true;
+		if (!db.executeQuery(fmt::format("UPDATE `players` SET `save_generation` = {} WHERE `id` = {}",
+		                                 snapshot.generation, snapshot.guid))) {
+			return false;
+		}
+	}
+	// No committed player state can have an obsolete WAL left by failed cleanup.
+	// A newer durable pending snapshot must survive completion of an older save.
+	return db.executeQuery(fmt::format(
+	    "DELETE FROM `player_save_journal` WHERE `guid` = {} AND `generation` <= {}",
+	    snapshot.guid, snapshot.generation));
+}
+
+bool IOLoginData::writePlayerJournal(const PlayerSaveSnapshot& snapshot)
+{
+	if (Database::getInstance().isInTransaction()) return false;
+	const auto payload = tfs::save::encode(snapshot.guid, snapshot.generation, snapshot.queries);
+	if (!payload) {
+		return false;
+	}
+	unsigned char digest[SHA256_DIGEST_LENGTH];
+	if (!SHA256(reinterpret_cast<const unsigned char*>(payload->data()), payload->size(), digest)) {
+		return false;
+	}
+	Database& db = Database::getInstance();
+	const std::string insert = fmt::format(
+	    "INSERT INTO `player_save_journal` (`guid`, `generation`, `payload`, `payload_hash`, `created_at`) "
+	    "VALUES ({}, {}, {}, {}, UNIX_TIMESTAMP()) ON DUPLICATE KEY UPDATE "
+	    "`payload` = IF(`generation` <= VALUES(`generation`), VALUES(`payload`), `payload`), "
+	    "`payload_hash` = IF(`generation` <= VALUES(`generation`), VALUES(`payload_hash`), `payload_hash`), "
+	    "`created_at` = IF(`generation` <= VALUES(`generation`), VALUES(`created_at`), `created_at`), "
+	    "`generation` = GREATEST(`generation`, VALUES(`generation`))",
+	    snapshot.guid, snapshot.generation, db.escapeString(*payload),
+	    db.escapeBlob(reinterpret_cast<const char*>(digest), sizeof(digest)));
+	if (insert.size() >= db.getMaxPacketSize()) {
+		LOG_ERROR("[SaveManager] Save journal exceeds max_allowed_packet for guid={}", snapshot.guid);
+		return false;
+	}
+	return DBTransaction::executeWithinTransactionRollbackOnFailure([&]() {
+		// Same lock order as the player commit: player first, journal second.
+		const auto row = db.storeQuery(fmt::format(
+		    "SELECT `save_generation` FROM `players` WHERE `id` = {} FOR UPDATE", snapshot.guid));
+		if (!row) {
+			return false;
+		}
+		if (row->getNumber<uint64_t>("save_generation") >= snapshot.generation) {
+			return true; // Already committed: do not recreate an obsolete journal.
+		}
+		return db.executeQuery(insert);
 	});
 }
 
-bool IOLoginData::savePlayer(Player* player)
-{
-	auto queries = buildPlayerSave(player);
-	if (!queries) {
-		return false;
-	}
-
-	const bool success = flushPlayerSave(*queries);
-	if (success) {
-		player->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
-			queries->storageSnapshotId,
-			queries->snapshotModifiedKeys,
-			queries->snapshotRemovedKeys
-		});
-		player->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
-			queries->bestiarySnapshotId,
-			queries->snapshotModifiedBestiaryRaceIds
-		});
-	}
-	return success;
-}
-
-bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot)
+bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot,
+                                  const ItemBlockList& inboxCredit)
 {
 	AutoStat stat("savePlayer", "full");
 
@@ -1275,9 +1333,8 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 	query << "`direction` = " << static_cast<uint16_t>(player->getDirection()) << ',';
 	query << "`protection_time` = " << ConfigManager::getInteger(ConfigManager::PROTECTION_TIME) << ',';
 
-	if (!player->isOffline()) {
-		query << "`onlinetime` = `onlinetime` + " << (time(nullptr) - player->lastLoginSaved) << ',';
-	}
+	// Absolute values make repeated saves, transaction retries and WAL replay idempotent.
+	query << "`onlinetime` = " << player->getOnlineTime(time(nullptr)) << ',';
 	for (int i = 1; i <= 8; i++) {
 		query << "`blessings" << i << "` = " << static_cast<uint16_t>(player->getBlessingCount(i)) << ',';
 	}
@@ -1385,6 +1442,8 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 		    "INSERT INTO `player_inboxitems` (`player_id`, `pid`, `sid`, `itemtype`, `count`, `attributes`) VALUES ");
 		ItemBlockList itemList;
 		collectInboxItems(player, itemList);
+		// Project a house transfer without exposing uncommitted items to the world.
+		itemList.insert(itemList.end(), inboxCredit.begin(), inboxCredit.end());
 
 		if (!saveItems(player, itemList, inboxQuery, propWriteStream)) {
 			return false;

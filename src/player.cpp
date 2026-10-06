@@ -3193,15 +3193,9 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 			LOG_ERROR(fmt::format("[QuickLoot] Failed to persist settings on logout for player {}", getName()));
 		}
 
-		bool saved = false;
-		for (uint32_t tries = 0; tries < 3; ++tries) {
-			if (g_saveManager.savePlayerSync(this)) {
-				saved = true;
-				break;
-			}
-		}
-
-		if (!saved) {
+		// DBTransaction owns transient transaction retries. Queued means that the
+		// newest logout snapshot is already durable in WAL, not a failed save.
+		if (g_saveManager.savePlayerSync(this, true) == SaveResult::Failed) {
 			LOG_ERROR(fmt::format("Error while saving player: {}", getName()));
 		}
 	}
@@ -5309,6 +5303,15 @@ void Player::removeThing(Thing* thing, uint32_t count)
 		inventory[index].reset();
 		scheduleAstraPlayerInventorySnapshot();
 	}
+}
+
+bool Player::removeItemForHouseTransfer(Item* item)
+{
+	const int32_t index = getThingIndex(item);
+	if (index < CONST_SLOT_FIRST || index > CONST_SLOT_LAST) return false;
+	item->setParent(nullptr);
+	inventory[index].reset();
+	return true;
 }
 
 int32_t Player::getThingIndex(const Thing* thing) const

@@ -45,6 +45,8 @@
 #include "luascript.h"
 #include "save_manager.h"
 
+#include <future>
+
 extern Vocations g_vocations;
 extern Monsters g_monsters;
 extern LuaEnvironment g_luaEnvironment;
@@ -1049,16 +1051,22 @@ void Game::setGameState(GameState_t newState)
 			}
 
 			saveMotdNum();
-			saveGameState();
-
-			g_scheduler.stop();
-			g_databaseTasks.stop();
-			g_dispatcher.stop();
+			saveGameState(false, [this](bool saved) {
+				g_saveManager.shutdownAsync([this, saved](bool drained) {
+					if (!saved || !drained) {
+						LOG_CRITICAL("[SaveManager] Shutdown blocked: persistence failed. Database/dispatcher retained; resolve the journal before terminating.");
+						return;
+					}
+					g_scheduler.stop();
+					g_databaseTasks.stop();
+					g_dispatcher.stop();
 #ifdef STATS_ENABLED
-			g_stats.stop();
+					g_stats.stop();
 #endif
-			shutdown();
-			LOG_INFO(">> Shutdown complete.");
+					shutdown();
+					LOG_INFO(">> Shutdown complete (latest player snapshots durable).");
+				});
+			});
 			break;
 		}
 
@@ -1081,8 +1089,13 @@ void Game::setGameState(GameState_t newState)
 	}
 }
 
-void Game::saveGameState(bool crash /* = false */)
+bool Game::saveGameState(bool crash, std::function<void(bool)> completion)
 {
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[SaveManager] Game snapshots must run on dispatcher; off-thread emergency save rejected.");
+		if (completion) completion(false);
+		return false;
+	}
 	AutoStat stat("Game::saveGameState", crash ? "crash" : "full");
 	if (gameState == GAME_STATE_NORMAL) {
 		setGameState(GAME_STATE_MAINTAIN);
@@ -1107,16 +1120,41 @@ void Game::saveGameState(bool crash /* = false */)
 		++savedCount;
 	}
 
-	g_saveManager.saveAll();
-	g_databaseTasks.flush();
+	return g_saveManager.saveAll([this, crash, savedCount, completion = std::move(completion)](bool success) {
+		// DatabaseTasks is a separate queue; it is not a SaveManager drain barrier.
+		g_databaseTasks.flush();
+		if (crash && savedCount > 0) {
+			LOG_WARN("[Anti-Rollback] Emergency save {} — {} player snapshot(s).",
+			         success ? "durably completed" : "FAILED", savedCount);
+		}
+		if (gameState == GAME_STATE_MAINTAIN) setGameState(GAME_STATE_NORMAL);
+		if (completion) completion(success);
+	});
+}
 
-	if (crash && savedCount > 0) {
-		LOG_WARN(fmt::format("[Anti-Rollback] Emergency save completed — {} player(s) saved at temple.", savedCount));
+bool Game::saveCrashStateAndWait(uint32_t timeoutMs)
+{
+	// Blocking the dispatcher would strand worker acknowledgements and any
+	// pending save chains. A crash on that thread must recover existing WAL.
+	if (g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[Anti-Rollback] Cannot wait for an emergency save on the dispatcher; preserve existing journals.");
+		return false;
 	}
-
-	if (gameState == GAME_STATE_MAINTAIN) {
-		setGameState(GAME_STATE_NORMAL);
+	auto completion = std::make_shared<std::promise<bool>>();
+	auto result = completion->get_future();
+	if (!g_dispatcher.addTask([this, completion] {
+		    saveGameState(true, [completion](bool saved) {
+			    // Includes offline/logout chains not tracked by this global generation.
+			    g_saveManager.shutdownAsync(
+			        [completion, saved](bool drained) { completion->set_value(saved && drained); });
+		    });
+	    }))
+		return false;
+	if (result.wait_for(std::chrono::milliseconds(timeoutMs)) != std::future_status::ready) {
+		LOG_ERROR("[Anti-Rollback] Emergency save did not complete before its deadline; preserve existing journals.");
+		return false;
 	}
+	return result.get();
 }
 
 bool Game::loadMainMap(std::string_view filename)
@@ -1721,6 +1759,17 @@ std::shared_ptr<Container> Game::getBrowseFieldContainer(Tile* tile)
 		}
 	}
 	return nullptr;
+}
+
+std::vector<ContainerPtr> Game::getBrowseFieldContainers(Tile* tile)
+{
+	std::vector<ContainerPtr> result;
+	const auto tileRef = getTileSharedRef(tile);
+	if (!tileRef) return result;
+	for (const auto& [key, container] : browseFields) {
+		if (key.tile == tileRef && container) result.push_back(container);
+	}
+	return result;
 }
 
 std::shared_ptr<Tile> Game::getBrowseFieldTile(const Cylinder* cylinder)
@@ -5376,15 +5425,30 @@ void Game::playerAcceptTrade(uint32_t playerId)
 				playerRet = internalRemoveItem(playerTradeItem, playerTradeItem->getItemCount(), true);
 				tradePartnerRet = internalRemoveItem(partnerTradeItem, partnerTradeItem->getItemCount(), true);
 				if (tradePartnerRet == RETURNVALUE_NOERROR && playerRet == RETURNVALUE_NOERROR) {
-					tradePartnerRet = internalMoveItem(playerTradeItem->getParent(), tradePartner, INDEX_WHEREEVER,
-					                                   playerTradeItem, playerTradeItem->getItemCount(), nullptr,
-					                                   FLAG_IGNOREAUTOSTACK, nullptr, partnerTradeItem);
-					if (tradePartnerRet == RETURNVALUE_NOERROR) {
-						internalMoveItem(partnerTradeItem->getParent(), player, INDEX_WHEREEVER, partnerTradeItem,
-						                 partnerTradeItem->getItemCount(), nullptr, FLAG_IGNOREAUTOSTACK);
-						playerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, tradePartner);
-						partnerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, player);
-						isSuccess = true;
+					auto* playerHouse = dynamic_cast<HouseTransferItem*>(playerTradeItem);
+					auto* partnerHouse = dynamic_cast<HouseTransferItem*>(partnerTradeItem);
+					if (playerHouse || partnerHouse) {
+						// House ownership, source tiles, inbox credit and both payment
+						// inventories form one durable transaction, not two item moves
+						// followed by a fallible void onTradeEvent callback.
+						if (playerHouse && !partnerHouse) {
+							isSuccess = playerHouse->executeAtomicTrade(player, tradePartner, partnerTradeItem);
+							if (isSuccess) partnerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, player);
+						} else if (partnerHouse && !playerHouse) {
+							isSuccess = partnerHouse->executeAtomicTrade(tradePartner, player, playerTradeItem);
+							if (isSuccess) playerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, tradePartner);
+						}
+					} else {
+						tradePartnerRet = internalMoveItem(playerTradeItem->getParent(), tradePartner, INDEX_WHEREEVER,
+						                                   playerTradeItem, playerTradeItem->getItemCount(), nullptr,
+						                                   FLAG_IGNOREAUTOSTACK, nullptr, partnerTradeItem);
+						if (tradePartnerRet == RETURNVALUE_NOERROR) {
+							internalMoveItem(partnerTradeItem->getParent(), player, INDEX_WHEREEVER, partnerTradeItem,
+							                 partnerTradeItem->getItemCount(), nullptr, FLAG_IGNOREAUTOSTACK);
+							playerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, tradePartner);
+							partnerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, player);
+							isSuccess = true;
+						}
 					}
 				}
 			}

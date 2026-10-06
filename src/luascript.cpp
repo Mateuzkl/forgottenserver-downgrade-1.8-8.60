@@ -4227,8 +4227,7 @@ int LuaScriptInterface::luaSaveServer(lua_State* L)
 {
 	// saveServer()
 	g_globalEvents->save();
-	g_game.saveGameState();
-	Lua::pushBoolean(L, true);
+	Lua::pushBoolean(L, g_game.saveGameState()); // Request accepted; completion is asynchronous.
 	return 1;
 }
 

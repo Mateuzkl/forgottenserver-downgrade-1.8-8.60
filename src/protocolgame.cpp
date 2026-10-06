@@ -784,48 +784,37 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 		}
 
 		const auto loginPlayer = player;
-		g_threadPool.detach_task([self = getThis(), loginPlayer, reservedGuid, accountId, operatingSystem]() {
-			// Shared atomic: guards mutual exclusion between timeout and callback
-			auto completed = std::make_shared<std::atomic<bool>>(false);
-
-			const uint32_t timeoutEventId = g_scheduler.addEvent(10000, [self, reservedGuid, completed]() {
-				if (completed->exchange(true)) {
-					return; // callback already handled
+		// SaveManager owns the sole timeout and delivers exactly once on dispatcher.
+		g_saveManager.drainPlayerFlushAsync(reservedGuid, [self = getThis(), reservedGuid, accountId, loginPlayer,
+		                                                   operatingSystem](bool drained) {
+			if (!drained || self->isConnectionExpired()) {
+				g_game.releaseLogin(reservedGuid);
+				if (!self->isConnectionExpired()) {
+					self->disconnectClient(
+					    "Character data could not be drained. Please try again or contact an administrator.");
 				}
-				g_dispatcher.addTask([self, reservedGuid]() {
-					g_game.releaseLogin(reservedGuid);
-					if (self->player) {
-						self->disconnectClient("Login timed out waiting for save to complete.");
-					}
-				});
-			});
-
-			g_saveManager.drainPlayerFlushAsync(reservedGuid,
-				[self, reservedGuid, accountId, loginPlayer, operatingSystem, timeoutEventId, completed](bool drained) {
-				g_scheduler.stopEvent(timeoutEventId);
-				if (completed->exchange(true)) {
-					// Timeout already handled this login
-					return;
-				}
-
-				if (!drained) {
-					g_dispatcher.addTask([self, reservedGuid]() {
-						g_game.releaseLogin(reservedGuid);
-						if (self->player) {
-							self->disconnectClient(
-								"Character data is still being saved. Please try again in a few seconds.");
-						}
-					});
-					return;
-				}
-
-				g_threadPool.detach_task([self, reservedGuid, accountId, loginPlayer, operatingSystem]() {
-					const bool loaded = IOLoginData::loadPlayerById(loginPlayer.get(), reservedGuid, true);
-					g_dispatcher.addTask([self, reservedGuid, accountId, loaded, operatingSystem]() {
-						self->finishLogin(reservedGuid, accountId, loaded, operatingSystem);
-					});
-				});
-			});
+				return;
+			}
+			if (!g_threadPool.try_detach_task([self, reservedGuid, accountId, loginPlayer, operatingSystem]() {
+				    const bool loaded = IOLoginData::loadPlayerById(loginPlayer.get(), reservedGuid, true);
+				    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+				    while (g_dispatcher.getState() == THREAD_STATE_RUNNING) {
+					    if (g_dispatcher.addTask([self, reservedGuid, accountId, loaded, operatingSystem]() {
+						        self->finishLogin(reservedGuid, accountId, loaded, operatingSystem);
+					        }))
+						    return;
+					    if (std::chrono::steady_clock::now() >= deadline) break;
+					    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				    }
+				    // Reservation and Connection have their own mutexes; no world/Player
+				    // mutation is allowed on this worker when delivery is rejected.
+				    g_game.releaseLogin(reservedGuid);
+				    self->disconnect();
+				    LOG_ERROR("[Login] Completion delivery failed for guid={}; reservation released.", reservedGuid);
+			    })) {
+				g_game.releaseLogin(reservedGuid);
+				self->disconnectClient("Server is shutting down.");
+			}
 		});
 		return;
 	} else {
@@ -837,8 +826,7 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 
 		auto clientRef = foundPlayer->client;
 		if (clientRef && clientRef->protocol()) {
-			clientRef->disconnectClient(
-			    "You are already logged in.\nSomeone is trying to access your account?");
+			clientRef->disconnectClient("You are already logged in.\nSomeone is trying to access your account?");
 			clientRef->disconnect();
 			clientRef->setOwner(nullptr);
 			g_scheduler.addEvent(
@@ -862,6 +850,12 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	if (!loaded) {
 		g_game.releaseLogin(reservedGuid);
 		disconnectClient("Your character could not be loaded.");
+		return;
+	}
+	if (g_game.getGameState() == GAME_STATE_SHUTDOWN ||
+	    (g_game.getGameState() == GAME_STATE_CLOSED && !player->hasFlag(PlayerFlag_CanAlwaysLogin))) {
+		g_game.releaseLogin(reservedGuid);
+		disconnectClient("Server is closed.");
 		return;
 	}
 
@@ -912,6 +906,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
+	player->startOnlineTime(time(nullptr));
 	acceptPackets = true;
 	logPlayerSession(*player, player->lastIP, true);
 	g_game.releaseLogin(reservedGuid);

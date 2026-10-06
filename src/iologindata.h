@@ -60,9 +60,14 @@ public:
 		std::unordered_set<uint32_t> snapshotRemovedKeys;
 		uint64_t bestiarySnapshotId = 0;
 		std::unordered_set<uint16_t> snapshotModifiedBestiaryRaceIds;
+		uint32_t guid = 0;
+		uint64_t generation = 0;
 	};
-	static std::optional<PlayerSaveSnapshot> buildPlayerSave(Player* player);
+	static std::optional<PlayerSaveSnapshot> buildPlayerSave(Player* player, const ItemBlockList& inboxCredit = {});
 	static bool flushPlayerSave(const PlayerSaveSnapshot& snapshot);
+	static bool writePlayerJournal(const PlayerSaveSnapshot& snapshot);
+	// Used inside an existing transaction by the all-or-nothing offline batch.
+	static bool applyPlayerSave(const PlayerSaveSnapshot& snapshot);
 	static bool addRewardItems(uint32_t playerId, const ItemBlockList& itemList, DBInsert& query_insert, PropWriteStream& propWriteStream);
 	// Gathers every inbox item of every town locker, keyed by depot id. Exposed so the
 	// persistence tests can assert on it without a database round trip.
@@ -111,8 +116,8 @@ private:
 	static void loadItems(ItemMap& itemMap, DBResult_ptr result);
 	static void cleanupItemMap(ItemMap& itemMap);
 	static void loadPlayerGuild(Player* player);
-	static bool savePlayer(Player* player);
-	static bool savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot);
+	static bool savePlayerQueries(Player* player, const Player::BestiaryDirtySnapshot& bestiarySnapshot,
+	                              const ItemBlockList& inboxCredit);
 };
 
 #endif

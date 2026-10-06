@@ -11,17 +11,20 @@ local function ServerSave()
         Game.setGameState(GAME_STATE_SHUTDOWN)
     else
         local closeAtServerSave = configManager.getBoolean(configKeys.SERVER_SAVE_CLOSE)
-        if closeAtServerSave then
+        local wasClosed = Game.getGameState() == GAME_STATE_CLOSED
+        if closeAtServerSave and not wasClosed then
+            -- CLOSED invokes the global events and requests its own save.
             Game.setGameState(GAME_STATE_CLOSED)
+        else
+            -- An already-closed state is a no-op, so request a save explicitly.
+            saveServer()
         end
-
-        saveServer()
 
         if configManager.getBoolean(configKeys.SERVER_SAVE_CLEAN_MAP) then
             cleanMap()
         end
 
-        if closeAtServerSave then
+        if closeAtServerSave and not wasClosed then
             Game.setGameState(GAME_STATE_NORMAL)
         end
     end

@@ -7,6 +7,7 @@
 
 #include "bed.h"
 #include "game.h"
+#include "save_manager.h"
 #include "tools.h"
 #include "logger.h"
 #include <fmt/format.h>
@@ -181,6 +182,7 @@ void IOMapSerialize::loadHouseItems(Map* map)
 
 bool IOMapSerialize::saveHouseItems()
 {
+	if (g_saveManager.isPersistenceBlocked()) return false;
 	AutoStat stat("saveHouseItems", "full");
 	int64_t start = OTSYS_TIME();
 	Database& db = Database::getInstance();
@@ -419,7 +421,8 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 	return true;
 }
 
-void IOMapSerialize::saveItem(PropWriteStream& stream, const Item* item)
+void IOMapSerialize::saveItem(PropWriteStream& stream, const Item* item,
+                             const std::unordered_set<const Item*>& excluded)
 {
 	const Container* container = item->getContainer();
 
@@ -430,16 +433,19 @@ void IOMapSerialize::saveItem(PropWriteStream& stream, const Item* item)
 	if (container) {
 		// Hack our way into the attributes
 		stream.write<uint8_t>(ATTR_CONTAINER_ITEMS);
-		stream.write<uint32_t>(container->size());
+		const auto count = std::count_if(container->getItemList().begin(), container->getItemList().end(),
+		                                [&](const auto& child) { return !excluded.contains(child.get()); });
+		stream.write<uint32_t>(static_cast<uint32_t>(count));
 		for (auto it = container->getReversedItems(), end = container->getReversedEnd(); it != end; ++it) {
-			saveItem(stream, it->get());
+			if (!excluded.contains(it->get())) saveItem(stream, it->get(), excluded);
 		}
 	}
 
 	stream.write<uint8_t>(0x00); // attr end
 }
 
-void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile)
+void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile,
+                             const std::unordered_set<const Item*>& excluded)
 {
 	const TileItemVector* tileItems = tile->getItemList();
 	if (!tileItems) {
@@ -449,6 +455,7 @@ void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile)
 	std::forward_list<Item*> items;
 	uint16_t count = 0;
 	for (const auto& item : *tileItems) {
+		if (excluded.contains(item.get())) continue;
 		const ItemType& it = Item::items[item->getID()];
 
 		// Note that these are NEGATED, ie. these are the items that will be saved.
@@ -469,7 +476,7 @@ void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile)
 
 		stream.write<uint32_t>(count);
 		for (const Item* item : items) {
-			saveItem(stream, item);
+			saveItem(stream, item, excluded);
 		}
 	}
 }
@@ -533,6 +540,7 @@ bool IOMapSerialize::loadHouseInfo()
 
 bool IOMapSerialize::saveHouseInfo()
 {
+	if (g_saveManager.isPersistenceBlocked()) return false;
 	Database& db = Database::getInstance();
 
 	DBTransaction transaction;
@@ -620,6 +628,7 @@ bool IOMapSerialize::saveHouseInfo()
 
 bool IOMapSerialize::saveHouse(const House* house)
 {
+	if (g_saveManager.isPersistenceBlocked()) return false;
 	Database& db = Database::getInstance();
 
 	// Start the transaction
@@ -657,4 +666,24 @@ bool IOMapSerialize::saveHouse(const House* house)
 
 	// End the transaction
 	return transaction.commit();
+}
+
+std::optional<std::vector<std::string>> IOMapSerialize::buildHouseSave(
+    const House* house, const std::unordered_set<const Item*>& excluded)
+{
+	Database& db = Database::getInstance();
+	std::vector<std::string> queries;
+	QueryCaptureScope capture{queries};
+	queries.push_back(fmt::format("DELETE FROM `tile_store` WHERE `house_id` = {}", house->getId()));
+	DBInsert insert("INSERT INTO `tile_store` (`house_id`, `data`) VALUES ");
+	for (const auto& weakTile : house->getTiles()) {
+		if (const auto tile = weakTile.lock()) {
+			PropWriteStream stream;
+			saveTile(stream, tile.get(), excluded);
+			if (!stream.getStream().empty() &&
+			    !insert.addRow(fmt::format("{}, {}", house->getId(), db.escapeString(stream.getStream())))) return {};
+		}
+	}
+	if (!insert.execute()) return {};
+	return queries;
 }
