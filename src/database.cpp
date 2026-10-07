@@ -4,9 +4,11 @@
 #include "otpch.h"
 
 #include "database.h"
-#include "stats.h"
 
 #include "configmanager.h"
+#include "performance_metrics.h"
+#include "stats.h"
+#include "tasks.h"
 
 #if __has_include(<mariadb/errmsg.h>)
 #  include <mariadb/errmsg.h>
@@ -36,6 +38,21 @@ static constexpr unsigned int MYSQL_TIMEOUT_SECONDS = 30;
 static constexpr uint64_t DB_INSERT_PACKET_SAFETY_MARGIN = 4096;
 
 namespace {
+// Wall time includes connection/retry waits, not only database CPU time.
+class DispatcherQueryScope final
+{
+public:
+	DispatcherQueryScope()
+	{
+		if (g_performanceMetrics.isEnabled() && g_dispatcher.isDispatcherThread()) {
+			scope.emplace(PerformanceMetric::DatabaseQueryDispatcher);
+		}
+	}
+
+private:
+	std::optional<PerformanceScope> scope;
+};
+
 uint64_t projectedInsertQueryLength(size_t currentLength, size_t additionalGrowth, size_t upsertClauseLength)
 {
 	// buildQuery() returns: query + " " + values + upsertClause
@@ -459,6 +476,7 @@ bool Database::executeQuery(std::string_view query)
 		return true;
 	}
 
+	DispatcherQueryScope performanceScope;
 	ConnectionContext& ctx = getContext();
 	if (!ctx.handle) {
 		LOG_ERROR(">> Database: not initialized.");
@@ -553,8 +571,12 @@ bool Database::executeQuery(std::string_view query)
 	return success;
 }
 
-DBResult_ptr Database::storeQuery(std::string_view query)
+DBResult_ptr Database::storeQuery(std::string_view query, bool* succeeded)
 {
+	if (succeeded) {
+		*succeeded = false;
+	}
+	DispatcherQueryScope performanceScope;
 	ConnectionContext& ctx = getContext();
 	if (!ctx.handle) {
 		LOG_ERROR(">> Database: not initialized.");
@@ -604,6 +626,9 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 
 	// retrieving results of query
 	DBResult_ptr result = std::make_shared<DBResult>(std::move(res));
+	if (succeeded) {
+		*succeeded = true;
+	}
 	if (!result->hasNext()) {
 		return nullptr;
 	}

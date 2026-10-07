@@ -168,6 +168,7 @@ void Map::setTile(uint16_t x, uint16_t y, uint8_t z, std::unique_ptr<Tile> newTi
 		return;
 	}
 
+	++tileLayoutRevision;
 	QTreeLeafNode* leaf = getOrCreateLeaf(x, y);
 	Floor* floor = leaf->createFloor(z);
 	uint32_t offsetX = x & FLOOR_MASK;
@@ -226,6 +227,7 @@ bool Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 		return false;
 	}
 
+	++tileLayoutRevision;
 	auto& tilePair = floor->tiles[x & FLOOR_MASK][y & FLOOR_MASK];
 
 	// Callbacks can recursively remove this tile and even recreate its position.
@@ -317,6 +319,9 @@ bool Map::removeTile(uint16_t x, uint16_t y, uint8_t z)
 		}
 
 		// Reset shared_ptr to release the tile
+		// Removal callbacks may have populated a walk cache again after the
+		// entry invalidation. Invalidate once more immediately before disposal.
+		++tileLayoutRevision;
 		tilePair.first.reset();
 	}
 
@@ -410,12 +415,10 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 	Position newPos = newTile.getPosition();
 
 	bool teleport = forceTeleport || !newTile.getGround() || !oldPos.isInRange(newPos, 1, 1, 0);
+	g_performanceMetrics.recordMovementWork(MovementWork::MovementEvents);
 
-	SpectatorVec spectators, newPosSpectators;
-	getSpectators(spectators, oldPos, true);
-	getSpectators(newPosSpectators, newPos, true);
-	spectators.addSpectators(newPosSpectators);
-	spectators.partitionByType();
+	SpectatorVec spectators;
+	getMovementSpectators(spectators, oldPos, newPos, teleport);
 
 	std::vector<int32_t> oldStackPosVector;
 	oldStackPosVector.reserve(spectators.size());
@@ -458,6 +461,7 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 	}
 
 	// send to client
+	g_performanceMetrics.recordMovementWork(MovementWork::MovementRecipients, spectators.players().size());
 	size_t i = 0;
 	for (const auto& spectator : spectators.players()) {
 		Player* tmpPlayer = static_cast<Player*>(spectator.get());
@@ -482,10 +486,44 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 	newTile.postAddNotification(&creature, &oldTile, 0);
 }
 
+void Map::getMovementSpectators(SpectatorVec& spectators, const Position& oldPos,
+                                const Position& newPos, bool teleport)
+{
+	if (teleport || !oldPos.isInRange(newPos, 1, 1, 0)) {
+		SpectatorVec newPosSpectators;
+		getSpectators(spectators, oldPos, true);
+		getSpectators(newPosSpectators, newPos, true);
+		spectators.addSpectators(newPosSpectators);
+	} else {
+		// Scan the bounding rectangle once. For diagonal steps it contains two
+		// extra corners, which must NOT receive movement callbacks or packets.
+		getSpectators(spectators, oldPos, true, false,
+		              maxViewportX + (newPos.x < oldPos.x), maxViewportX + (newPos.x > oldPos.x),
+		              maxViewportY + (newPos.y < oldPos.y), maxViewportY + (newPos.y > oldPos.y));
+		auto inViewport = [](const Position& pos, const Position& center) {
+			const int32_t offsetZ = center.getOffsetZ(pos);
+			return pos.x >= center.x - maxViewportX + offsetZ &&
+			       pos.x <= center.x + maxViewportX + offsetZ &&
+			       pos.y >= center.y - maxViewportY + offsetZ &&
+			       pos.y <= center.y + maxViewportY + offsetZ;
+		};
+		spectators.eraseIf([&](const auto& spectator) {
+			const Position& pos = spectator->getPosition();
+			return !inViewport(pos, oldPos) && !inViewport(pos, newPos);
+		});
+		// Preserve the pointer-sorted union/partition ordering of the old path.
+		spectators.sortAndUnique();
+	}
+	spectators.partitionByType();
+}
+
 void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& centerPos, int32_t minRangeX,
                                 int32_t maxRangeX, int32_t minRangeY, int32_t maxRangeY, int32_t minRangeZ,
                                 int32_t maxRangeZ, bool onlyPlayers, bool onlyMonsters, bool onlyNpcs) const
 {
+	const bool measure = g_performanceMetrics.isEnabled();
+	uint64_t leaves = 0, candidates = 0;
+	const size_t previousSize = spectators.size();
 	auto min_y = centerPos.y + minRangeY;
 	auto min_x = centerPos.x + minRangeX;
 	auto max_y = centerPos.y + maxRangeY;
@@ -514,6 +552,10 @@ void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& center
 		for (int_fast32_t nx = startx1; nx <= endx2; nx += FLOOR_SIZE) {
 			if (leafE) {
 				const CreatureVector& node_list = (onlyPlayers ? leafE->player_list : leafE->creature_list);
+				if (measure) {
+					++leaves;
+					candidates += node_list.size();
+				}
 				for (const auto& creature : node_list) {
 					if (!creature || creature->isRemoved()) {
 						continue;
@@ -552,6 +594,11 @@ void Map::getSpectatorsInternal(SpectatorVec& spectators, const Position& center
 			leafS = QTreeNode::getLeafStatic<const QTreeLeafNode*, const QTreeNode*>(&root, startx1, ny + FLOOR_SIZE);
 		}
 	}
+	if (measure) {
+		g_performanceMetrics.recordMovementWork(MovementWork::SpectatorLeaves, leaves);
+		g_performanceMetrics.recordMovementWork(MovementWork::SpectatorCandidates, candidates);
+		g_performanceMetrics.recordMovementWork(MovementWork::SpectatorResults, spectators.size() - previousSize);
+	}
 }
 
 void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, bool multifloor /*= false*/,
@@ -559,6 +606,7 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
                         int32_t minRangeY /*= 0*/, int32_t maxRangeY /*= 0*/, bool onlyMonsters /*= false*/, bool onlyNpcs /*= false*/)
 {
 	PerformanceScope performanceScope(PerformanceMetric::MapGetSpectators);
+	g_performanceMetrics.recordMovementWork(MovementWork::SpectatorQueries);
 	if (centerPos.z >= MAP_MAX_LAYERS) {
 		return;
 	}
@@ -1519,6 +1567,7 @@ void Map::setBasicTile(uint16_t x, uint16_t y, uint8_t z, const BasicTile* basic
 		return;
 	}
 
+	++tileLayoutRevision;
 	QTreeLeafNode* leaf = getOrCreateLeaf(x, y);
 	Floor* floor = leaf->createFloor(z);
 	floor->setTileCache(x, y, basicTile);
@@ -1595,6 +1644,7 @@ void Map::setBasicFloorBlock(uint16_t baseX, uint16_t baseY, uint8_t z,
 		return;
 	}
 
+	++tileLayoutRevision;
 	QTreeLeafNode* leaf = getOrCreateLeaf(baseX, baseY);
 	Floor* floor = leaf->createFloor(z);
 	const bool registerZones = MapCache::hasZoneTemplates();

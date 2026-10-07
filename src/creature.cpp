@@ -264,6 +264,7 @@ void Creature::onThink(uint32_t interval)
 void Creature::onAttacking(uint32_t interval)
 {
 	PerformanceScope performanceScope(PerformanceMetric::CreatureOnAttacking);
+	CombatPacketScope packetScope;
 	// OPTIMIZATION: Removed redundant isDead/isRemoved checks.
 	// checkCreatures() already validates creature state before calling this.
 
@@ -553,23 +554,25 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
 		if (hasFollowPath) {
-			if (Monster* monster = getMonster()) {
-				const bool targetMoved = creature == fc.get();
-				if (targetMoved) {
-					if (forceUpdateFollowPath || monster->shouldRepathAfterTargetStep()) {
-						requestFollowPathUpdate();
-					}
-				} else if (listWalkDir.empty() || forceUpdateFollowPath) {
-					requestFollowPathUpdate();
+			// Consume successful steps without discarding the route. Urgent changes
+			// bypass the monster target-step budget; normal target steps retain it.
+			bool shouldRepath = teleport || newPos.z != oldPos.z || forceUpdateFollowPath;
+			if (!shouldRepath) {
+				if (creature == fc.get()) {
+					Monster* monster = getMonster();
+					shouldRepath = !monster || monster->shouldRepathAfterTargetStep();
+				} else {
+					shouldRepath = listWalkDir.empty();
 				}
-			} else {
+			}
+			if (shouldRepath) {
 				requestFollowPathUpdate();
 			}
 		}
 
 		auto masterCreature = master.lock();
-		const bool followsLiveMaster = masterCreature && masterCreature == fc && !masterCreature->isRemoved() &&
-		                               !masterCreature->isDead();
+		const bool followsLiveMaster =
+		    masterCreature && masterCreature == fc && !masterCreature->isRemoved() && !masterCreature->isDead();
 		if (!followsLiveMaster && (newPos.z != oldPos.z || !canSee(fc->getPosition()))) {
 			onCreatureDisappear(fc.get(), false);
 		}
@@ -1188,8 +1191,31 @@ void Creature::requestFollowPathUpdate()
 		return;
 	}
 
+	auto self = getSharedCreature(this);
+	if (!self) {
+		return;
+	}
+
+	const auto generation = ++followPathGeneration;
+	const std::weak_ptr<Creature> weakSelf = self;
+	auto task = createTaskWithStats(
+	    [weakSelf, generation] {
+		    auto creature = weakSelf.lock();
+		    if (creature && creature->followPathGeneration == generation && creature->isUpdatingPath &&
+		        !creature->isRemoved() && !creature->isDead()) {
+			    g_game.updateCreatureWalk(creature->getID());
+		    }
+	    },
+	    "Creature::requestFollowPathUpdate", TASK_SOURCE_LOCATION);
 	isUpdatingPath = true;
-	g_dispatcher.addTask(createTask([id = getID()] { g_game.updateCreatureWalk(id); }));
+	try {
+		if (!g_dispatcher.tryAddTask(std::move(task))) {
+			isUpdatingPath = false;
+		}
+	} catch (...) {
+		isUpdatingPath = false;
+		throw;
+	}
 }
 
 bool Creature::setFollowCreature(Creature* creature)
@@ -1200,6 +1226,10 @@ bool Creature::setFollowCreature(Creature* creature)
 			return true;
 		}
 
+		// Supersede a queued request belonging to the previous target, without
+		// allowing its callback to clear the replacement request's pending state.
+		++followPathGeneration;
+		isUpdatingPath = false;
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
 			hasFollowPath = false;
@@ -1223,8 +1253,10 @@ bool Creature::setFollowCreature(Creature* creature)
 		followCreature = creatureRef;
 		requestFollowPathUpdate();
 	} else {
+		isUpdatingPath = false;
 		hasFollowPath = false;
 		followCreature.reset();
+		++followPathGeneration;
 	}
 
 	onFollowCreature(creature);

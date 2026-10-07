@@ -198,6 +198,14 @@ public:
 
 	static bool save();
 
+	// Dispatcher-only. Invalidates non-owning local tile lookups before a slot
+	// can be destroyed/replaced (including recursive removal callbacks).
+	uint64_t getTileLayoutRevision() const { return tileLayoutRevision; }
+
+	// Synchronous, owning snapshot: the exact union of the old/new viewports.
+	void getMovementSpectators(SpectatorVec& spectators, const Position& oldPos,
+	                           const Position& newPos, bool teleport);
+
 	/**
 	 * Get a single tile.
 	 * \returns A pointer to that tile.
@@ -316,6 +324,7 @@ public:
 
 private:
 	QTreeNode root;
+	uint64_t tileLayoutRevision = 1;
 
 	// Single-entry cache of the last leaf touched by setTile/setBasicTile.
 	// Protected by the same single-writer discipline as the quadtree itself;

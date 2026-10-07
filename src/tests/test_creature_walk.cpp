@@ -15,7 +15,7 @@
 #include "../scriptmanager.h"
 #include "../tasks.h"
 #include "../tile.h"
-
+#include "../weapons.h"
 #include "test_support.h"
 
 #include <filesystem>
@@ -83,6 +83,15 @@ struct CreatureWalkTestAccess
 	{
 		player.setNextWalkActionTask(nullptr);
 		player.setNextWalkTask(nullptr);
+		player.stopAttackCheck();
+	}
+	static uint32_t attackEvent(const Player& player) { return player.attackCheckEvent; }
+	static void scheduleAttack(Player& player, uint32_t delay) { player.scheduleAttackCheck(delay); }
+	static void prepareAttack(Player& player, const std::shared_ptr<Creature>& target)
+	{
+		player.vocation = std::make_shared<Vocation>(0);
+		player.attackedCreature = target;
+		player.lastAttack = OTSYS_TIME() - player.getAttackSpeed() - 1;
 	}
 };
 
@@ -106,6 +115,19 @@ public:
 
 	uint32_t generation() const { return walkGeneration; }
 	uint32_t eventId() const { return eventWalk; }
+	bool updatingPath() const { return isUpdatingPath; }
+	void goToFollowCreature() override
+	{
+		++followUpdates;
+		lastFollowTarget = getFollowCreatureShared();
+	}
+	void keepRoute()
+	{
+		hasFollowPath = true;
+		listWalkDir = {DIRECTION_EAST, DIRECTION_EAST};
+	}
+	int followUpdates = 0;
+	std::shared_ptr<Creature> lastFollowTarget;
 
 	void onWalk() override
 	{
@@ -201,7 +223,7 @@ void ensureWalkTile(const Position& position)
 	}
 	Tile* tile = g_game.map.getTile(position);
 	if (!tile->getGround()) {
-		tile->setGround(std::make_shared<Item>(0));
+		tile->setGround(Item::make<Item>(0));
 	}
 }
 
@@ -454,6 +476,154 @@ TEST_CASE(player_multistep_autowalk_keeps_each_physical_step)
 	CHECK(CreatureWalkTestAccess::eventId(player) == 0);
 	CHECK(world.processedTasks() == 2);
 	CHECK(!g_reactor.hasPendingTasks());
+}
+
+namespace {
+class FollowFixture
+{
+public:
+	FollowFixture()
+	{
+		for (uint16_t x : {951, 952}) {
+			const Position position{x, 950, 7};
+			if (!g_game.map.getTile(position)) {
+				g_game.map.setTile(x, 950, 7, std::make_unique<StaticTile>(x, 950, 7));
+			}
+			auto target = std::make_shared<WalkCreature>();
+			CHECK(g_game.internalPlaceCreature(target.get(), position, false, true));
+			targets.push_back(std::move(target));
+		}
+	}
+	~FollowFixture()
+	{
+		world.creature->setFollowCreature(nullptr);
+		g_reactor.setMaxInboxSize(REACTOR_MAX_INBOX_SIZE);
+		for (const auto& target : targets) {
+			g_game.removeCreature(target.get(), false);
+		}
+	}
+	WalkFixture world;
+	std::vector<std::shared_ptr<WalkCreature>> targets;
+};
+} // namespace
+
+TEST_CASE(follow_request_retries_after_enqueue_rejection)
+{
+	FollowFixture fixture;
+	auto& follower = *fixture.world.creature;
+	g_reactor.setMaxInboxSize(1);
+	CHECK(g_reactor.send([] {}));
+	CHECK(follower.setFollowCreature(fixture.targets[0].get()));
+	CHECK(!follower.updatingPath());
+	g_reactor.runOnce();
+	CHECK(follower.setFollowCreature(fixture.targets[0].get()));
+	CHECK(follower.updatingPath());
+	g_reactor.runOnce();
+	CHECK(follower.followUpdates == 1);
+	CHECK(!follower.updatingPath());
+}
+
+TEST_CASE(follow_requests_deduplicate_and_discard_superseded_targets)
+{
+	FollowFixture fixture;
+	auto& follower = *fixture.world.creature;
+	CHECK(follower.setFollowCreature(fixture.targets[0].get()));
+	CHECK(follower.setFollowCreature(fixture.targets[0].get()));
+	CHECK(follower.setFollowCreature(fixture.targets[1].get()));
+	g_reactor.runOnce();
+	CHECK(follower.followUpdates == 1);
+	CHECK(follower.lastFollowTarget == fixture.targets[1]);
+	CHECK(!follower.updatingPath());
+	CHECK(follower.setFollowCreature(fixture.targets[0].get()));
+	follower.setFollowCreature(nullptr);
+	g_reactor.runOnce();
+	CHECK(follower.followUpdates == 1);
+}
+
+TEST_CASE(follow_successful_step_keeps_remaining_route_but_target_move_refreshes)
+{
+	FollowFixture fixture;
+	auto& follower = *fixture.world.creature;
+	CHECK(follower.setFollowCreature(fixture.targets[0].get()));
+	g_reactor.runOnce();
+	follower.keepRoute();
+	const Tile* tile = follower.getTile();
+	follower.onCreatureMove(&follower, tile, Position{951, 950, 7}, tile, Position{950, 950, 7}, false);
+	CHECK(!follower.updatingPath());
+	follower.onCreatureMove(fixture.targets[0].get(), tile, Position{952, 950, 7}, tile, Position{951, 950, 7}, false);
+	CHECK(follower.updatingPath());
+	g_reactor.runOnce();
+	CHECK(follower.followUpdates == 2);
+}
+
+TEST_CASE(player_attack_retries_keep_one_earliest_event_and_cancel_cleanly)
+{
+	PlayerWalkFixture world;
+	auto& player = *world.player;
+	CreatureWalkTestAccess::scheduleAttack(player, 2000);
+	const auto first = CreatureWalkTestAccess::attackEvent(player);
+	CHECK(first != 0);
+	for (int i = 0; i < 100; ++i) {
+		CreatureWalkTestAccess::scheduleAttack(player, 2000);
+	}
+	CHECK(CreatureWalkTestAccess::attackEvent(player) == first);
+	CreatureWalkTestAccess::scheduleAttack(player, 100);
+	const auto earlier = CreatureWalkTestAccess::attackEvent(player);
+	CHECK(earlier != 0 && earlier != first);
+	world.runScheduledTasks();
+	CHECK(CreatureWalkTestAccess::attackEvent(player) == 0);
+	CHECK(world.processedTasks() == 1);
+	CreatureWalkTestAccess::scheduleAttack(player, 100);
+	CHECK(player.setAttackedCreature(nullptr));
+	world.runScheduledTasks();
+	CHECK(CreatureWalkTestAccess::attackEvent(player) == 0);
+	CHECK(world.processedTasks() == 1);
+}
+
+TEST_CASE(player_failed_fist_swings_do_not_multiply_retry_timers)
+{
+	PlayerWalkFixture world;
+	const Position targetPosition{PlayerWalkFixture::start.x + 2, PlayerWalkFixture::start.y, 7};
+	auto target = std::make_shared<WalkCreature>();
+	CHECK(g_game.internalPlaceCreature(target.get(), targetPosition, false, true));
+	Weapons weapons;
+	struct RestoreAttackGlobals
+	{
+		Weapons* previousWeapons = g_weapons;
+		bool previousExhaustion = getBoolean(ConfigManager::ALLOW_AUTO_ATTACK_WITHOUT_EXHAUSTION);
+		~RestoreAttackGlobals()
+		{
+			g_weapons = previousWeapons;
+			ConfigManager::setBoolean(ConfigManager::ALLOW_AUTO_ATTACK_WITHOUT_EXHAUSTION, previousExhaustion);
+		}
+	} restore;
+	g_weapons = &weapons;
+	ConfigManager::setBoolean(ConfigManager::ALLOW_AUTO_ATTACK_WITHOUT_EXHAUSTION, true);
+	auto group = std::make_shared<Group>();
+	group->flags = PlayerFlag_NotGainInFight;
+	world.player->setGroup(group);
+	world.player->setChaseMode(false);
+	CreatureWalkTestAccess::prepareAttack(*world.player, target);
+	world.player->doAttacking(0); // Fist cannot reach a target two tiles away.
+	const auto first = CreatureWalkTestAccess::attackEvent(*world.player);
+	CHECK(first != 0);
+	for (int i = 0; i < 100; ++i) {
+		world.player->doAttacking(0);
+	}
+	CHECK(CreatureWalkTestAccess::attackEvent(*world.player) == first);
+	CHECK(world.player->setAttackedCreature(nullptr));
+	g_game.removeCreature(target.get(), false);
+}
+
+TEST_CASE(player_attack_timer_retries_after_scheduler_rejection)
+{
+	PlayerWalkFixture world;
+	g_scheduler.stop();
+	CreatureWalkTestAccess::scheduleAttack(*world.player, 100);
+	CHECK(CreatureWalkTestAccess::attackEvent(*world.player) == 0);
+	g_scheduler.start();
+	CreatureWalkTestAccess::scheduleAttack(*world.player, 100);
+	CHECK(CreatureWalkTestAccess::attackEvent(*world.player) != 0);
 }
 
 TFS_TEST_MAIN()

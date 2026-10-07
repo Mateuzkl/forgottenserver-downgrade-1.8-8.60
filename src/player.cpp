@@ -289,9 +289,13 @@ uint32_t Player::playerAutoID = 0x10000000;
 
 // storedConditionList is now a per-instance member (see player.h)
 
-Player::Player(ProtocolGame_ptr p) : Creature(), client(std::make_shared<ProtocolSpectator>(std::move(p))), lastPing(OTSYS_TIME()), lastPong(lastPing),
-	m_weaponProficiency(std::make_unique<WeaponProficiency>(*this)),
-	storeInbox(std::make_shared<StoreInbox>(ITEM_STORE_INBOX))
+Player::Player(ProtocolGame_ptr p) :
+    Creature(),
+    client(std::make_shared<ProtocolSpectator>(std::move(p))),
+    lastPing(OTSYS_TIME()),
+    lastPong(lastPing),
+    m_weaponProficiency(std::make_unique<WeaponProficiency>(*this)),
+    storeInbox(Item::make<StoreInbox>(ITEM_STORE_INBOX))
 {
 	storeInbox->setParent(this);
 	experienceRate.fill(100);
@@ -2489,7 +2493,7 @@ DepotChest* Player::getDepotChest(uint32_t depotId, bool autoCreate)
 		return nullptr;
 	}
 
-	auto chest = std::make_shared<DepotChest>(ITEM_DEPOT);
+	auto chest = Item::make<DepotChest>(ITEM_DEPOT);
 	DepotChest* rawPtr = chest.get();
 
 	depotChests.emplace(depotId, std::move(chest));
@@ -2506,7 +2510,7 @@ DepotLocker* Player::getDepotLocker(uint32_t depotId)
 		return it->second.get();
 	}
 
-	it = depotLockerMap.emplace(depotId, std::make_shared<DepotLocker>(ITEM_LOCKER)).first;
+	it = depotLockerMap.emplace(depotId, Item::make<DepotLocker>(ITEM_LOCKER)).first;
 	it->second->setDepotId(static_cast<uint16_t>(depotId));
 
 	bool hasMarket = false;
@@ -2577,7 +2581,7 @@ void Player::checkDepotBoxes(DepotChest* chest)
 RewardChest& Player::getRewardChest()
 {
 	if (!rewardChest) {
-		rewardChest = std::make_shared<RewardChest>(ITEM_REWARD_CHEST);
+		rewardChest = Item::make<RewardChest>(ITEM_REWARD_CHEST);
 	}
 	return *rewardChest;
 }
@@ -3260,11 +3264,6 @@ void Player::onCreatureMove(Creature* creature, const Tile* newTile, const Posit
                             const Position& oldPos, bool teleport)
 {
 	Creature::onCreatureMove(creature, newTile, newPos, oldTile, oldPos, teleport);
-
-	auto follow = followCreature.lock();
-	if (hasFollowPath && (creature == follow.get() || (creature == this && follow))) {
-		requestFollowPathUpdate();
-	}
 
 	if (creature != this) {
 		return;
@@ -5672,7 +5671,12 @@ bool Player::setFollowCreature(Creature* creature)
 
 bool Player::setAttackedCreature(Creature* creature)
 {
+	const bool targetChanged = attackedCreature.lock().get() != creature;
+	if (targetChanged || !creature) {
+		stopAttackCheck();
+	}
 	if (!Creature::setAttackedCreature(creature)) {
+		stopAttackCheck();
 		sendCancelTarget();
 		// Stop stamina trainer regeneration if we stop attacking
 		staminaTrainerActive = false;
@@ -5689,13 +5693,56 @@ bool Player::setAttackedCreature(Creature* creature)
 		setFollowCreature(nullptr);
 	}
 
-	if (creature) {
-		g_dispatcher.addTask([id = getID()]() { g_game.checkCreatureAttack(id); });
-	} else {
+	if (creature && targetChanged) {
+		// Refreshing the same target must not start another retry lineage.
+		auto self = std::static_pointer_cast<Player>(weak_from_this().lock());
+		auto target = attackedCreature.lock();
+		g_dispatcher.addTask([weakSelf = std::weak_ptr<Player>(self), weakTarget = std::weak_ptr<Creature>(target)]() {
+			if (auto player = weakSelf.lock(); player && !player->isRemoved() && !player->isDead()) {
+				if (auto target = weakTarget.lock(); target && player->attackedCreature.lock() == target) {
+					player->onAttacking(0);
+				}
+			}
+		});
+	} else if (!creature) {
 		// Stop stamina trainer regeneration if we stop attacking
 		staminaTrainerActive = false;
 	}
 	return true;
+}
+
+void Player::stopAttackCheck()
+{
+	++attackCheckGeneration;
+	if (attackCheckEvent != 0) {
+		g_scheduler.stopEvent(attackCheckEvent);
+		attackCheckEvent = 0;
+	}
+}
+
+void Player::scheduleAttackCheck(uint32_t delay)
+{
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(delay);
+	if (attackCheckEvent != 0 && attackCheckDeadline <= deadline) {
+		return; // Keep the earliest pending retry, including one already ready.
+	}
+	stopAttackCheck();
+	const auto generation = attackCheckGeneration;
+	auto self = std::static_pointer_cast<Player>(weak_from_this().lock());
+	attackCheckDeadline = deadline;
+	attackCheckEvent = g_scheduler.addEvent(createSchedulerTaskWithStats(
+	    delay,
+	    [weakSelf = std::weak_ptr<Player>(self), generation]() {
+		    auto player = weakSelf.lock();
+		    if (!player || player->attackCheckGeneration != generation) {
+			    return;
+		    }
+		    player->attackCheckEvent = 0;
+		    if (!player->isRemoved() && !player->isDead()) {
+			    player->onAttacking(0);
+		    }
+	    },
+	    "Player::attackCheck", TASK_SOURCE_LOCATION));
 }
 
 void Player::goToFollowCreature()
@@ -5721,6 +5768,7 @@ void Player::getPathSearchParams(const Creature* creature, FindPathParams& fpp) 
 
 void Player::doAttacking(uint32_t)
 {
+	PerformanceScope performanceScope(PerformanceMetric::PlayerDoAttacking);
 	if (lastAttack == 0) {
 		lastAttack = OTSYS_TIME() - getAttackSpeed() - 1;
 	}
@@ -5730,6 +5778,7 @@ void Player::doAttacking(uint32_t)
 	}
 
 	if ((OTSYS_TIME() - lastAttack) >= getAttackSpeed()) {
+		g_performanceMetrics.recordCombatWork(CombatWork::AttackAttempts);
 		bool result = false;
 
 		Item* tool = getWeapon();
@@ -5751,16 +5800,16 @@ void Player::doAttacking(uint32_t)
 			result = Weapon::useFist(this, ac.get());
 		}
 
-		auto task = createSchedulerTask(std::max<uint32_t>(MIN_TASK_INTERVAL, delay),
-		                                          [id = getID()]() { g_game.checkCreatureAttack(id); });
-
 		if (!classicSpeed && !allowAutoAttackWithoutExhaustion) {
+			auto task = createSchedulerTask(std::max<uint32_t>(MIN_TASK_INTERVAL, delay),
+			                                [id = getID()]() { g_game.checkCreatureAttack(id); });
 			setNextActionTask(std::move(task), false);
 		} else {
-			g_scheduler.addEvent(std::move(task));
+			scheduleAttackCheck(std::max<uint32_t>(MIN_TASK_INTERVAL, delay));
 		}
 
 		if (result) {
+			g_performanceMetrics.recordCombatWork(CombatWork::SuccessfulAttacks);
 			lastAttack = OTSYS_TIME();
 		}
 	}
@@ -5777,13 +5826,13 @@ void Player::maintainAttackFlow()
 		if ((OTSYS_TIME() - lastAttack) >= getAttackSpeed()) {
 			lastAttack = OTSYS_TIME() - getAttackSpeed() + 100;
 
-			auto task = createSchedulerTask(100, [id = getID()]() { g_game.checkCreatureAttack(id); });
 			bool classicSpeed = getBoolean(ConfigManager::CLASSIC_ATTACK_SPEED);
 
 			if (!classicSpeed && !allowAutoAttackWithoutExhaustion) {
+				auto task = createSchedulerTask(100, [id = getID()]() { g_game.checkCreatureAttack(id); });
 				setNextActionTask(std::move(task), false);
 			} else {
-				g_scheduler.addEvent(std::move(task));
+				scheduleAttackCheck(100);
 			}
 		}
 	}
@@ -6903,6 +6952,15 @@ bool Player::isPremium() const
 
 void Player::setPremiumTime(time_t premiumEndsAt) { this->premiumEndsAt = premiumEndsAt; }
 
+const std::shared_ptr<KV>& Player::getSettingsKV() const
+{
+	if (!cachedPlayerSettings_) {
+		cachedPlayerSettings_ =
+		    KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("settings");
+	}
+	return cachedPlayerSettings_;
+}
+
 bool Player::checkChainSystem() const
 {
 	if (!ConfigManager::getBoolean(ConfigManager::CHAIN_SYSTEM_ENABLED)) {
@@ -6917,10 +6975,7 @@ bool Player::checkChainSystem() const
 		return false;
 	}
 
-	if (!cachedPlayerSettings_) {
-		cachedPlayerSettings_ = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("settings");
-	}
-	auto chainValue = cachedPlayerSettings_->get("chainSystem");
+	auto chainValue = getSettingsKV()->get("chainSystem");
 	if (chainValue.has_value()) {
 		return chainValue->get<BooleanType>();
 	}
@@ -6931,7 +6986,7 @@ bool Player::checkChainSystem() const
 	}
 
 	const bool enabled = legacyValue.value() == 1;
-	cachedPlayerSettings_->set("chainSystem", ValueWrapper(enabled));
+	getSettingsKV()->set("chainSystem", ValueWrapper(enabled));
 	return enabled;
 }
 
@@ -6945,10 +7000,7 @@ bool Player::checkCleaveSystem() const
 		return false;
 	}
 
-	if (!cachedPlayerSettings_) {
-		cachedPlayerSettings_ = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("settings");
-	}
-	auto cleaveValue = cachedPlayerSettings_->get("cleaveSystem");
+	auto cleaveValue = getSettingsKV()->get("cleaveSystem");
 	if (cleaveValue.has_value()) {
 		return cleaveValue->get<BooleanType>();
 	}
@@ -8067,8 +8119,9 @@ void Player::setQuickLootFallbackToMainContainer(bool fallback)
 
 bool Player::isQuickLootAutoEnabled() const
 {
-	auto settings = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("settings");
-	const auto value = settings->get("quickLoot", true);
+	// Settings written by talkactions are authoritative before the next database
+	// flush. Forcing a reload here would ignore those pending on/off changes.
+	const auto value = getSettingsKV()->get("quickLoot");
 	return value.has_value() && value->get<BooleanType>();
 }
 

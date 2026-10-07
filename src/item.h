@@ -13,6 +13,9 @@
 #include "tools.h"
 #include "imbuement.h"
 
+#include <type_traits>
+#include <utility>
+
 class BedItem;
 class Container;
 class Door;
@@ -471,6 +474,21 @@ class Item : virtual public Thing, public std::enable_shared_from_this<Item>
 public:
 	// Factory member to create item of right type based on type
 	[[nodiscard]] static std::shared_ptr<Item> CreateItem(const uint16_t type, uint16_t count = 0);
+	// Shared items (including derived types/copies) must be created here so their
+	// weak ownership is registered after make_shared establishes the control block,
+	// before publication. Raw/embedded objects are deliberately not pinnable.
+	template <typename T = Item, typename... Args>
+	[[nodiscard]] static std::shared_ptr<T> make(Args&&... args)
+	{
+		static_assert(std::is_base_of_v<Item, T>);
+		auto owner = std::make_shared<T>(std::forward<Args>(args)...);
+		registerOwner(owner);
+		return owner;
+	}
+
+	// Address-only lookup: never dereferences candidate, and returns a lifetime
+	// pin, not a promise about logical removal or concurrent gameplay mutation.
+	[[nodiscard]] static std::shared_ptr<Item> pin(Item* candidate);
 	static void clearGlobalRegistry();
 	[[nodiscard]] static std::shared_ptr<Container> CreateItemAsContainer(const uint16_t type, uint16_t size);
 	[[nodiscard]] static std::shared_ptr<Item> CreateItem(PropStream& propStream);
@@ -1050,6 +1068,7 @@ protected:
 	uint16_t id; // the same id as in ItemType
 
 private:
+	static void registerOwner(const std::shared_ptr<Item>& owner);
 	std::string getWeightDescription(uint32_t weight) const;
 
 	std::unique_ptr<ItemAttributes> attributes;

@@ -2,6 +2,8 @@
 
 #include "../creature.h"
 #include "../map.h"
+#include "../monster.h"
+#include "../npc.h"
 #include "../tile.h"
 #include "test_support.h"
 
@@ -161,6 +163,120 @@ TEST_CASE(spectator_type_filters_return_only_requested_categories)
 	CHECK(contains(npcs, npc.get()));
 
 	removeCreature(map, player);
+	removeCreature(map, monster);
+	removeCreature(map, npc);
+}
+
+TEST_CASE(player_only_multifloor_query_matches_the_all_creature_player_set)
+{
+	// A future non-player item callback must revisit the tile optimization.
+	static_assert(std::is_same_v<decltype(&Monster::onUpdateTileItem), decltype(&Creature::onUpdateTileItem)>);
+	static_assert(std::is_same_v<decltype(&Npc::onUpdateTileItem), decltype(&Creature::onUpdateTileItem)>);
+	static_assert(std::is_same_v<decltype(&Monster::onRemoveTileItem), decltype(&Creature::onRemoveTileItem)>);
+	static_assert(std::is_same_v<decltype(&Npc::onRemoveTileItem), decltype(&Creature::onRemoveTileItem)>);
+	Map map;
+	const Position center{200, 200, 7};
+	auto player = std::make_shared<TestPlayer>();
+	auto upstairs = std::make_shared<TestPlayer>();
+	auto distant = std::make_shared<TestPlayer>();
+	auto monster = std::make_shared<TestMonster>();
+	auto npc = std::make_shared<TestNpc>();
+	player->setInstanceID(42);
+	upstairs->setInstanceID(43);
+	addCreature(map, center, player);
+	addCreature(map, Position{201, 201, 6}, upstairs);
+	addCreature(map, Position{250, 250, 7}, distant);
+	addCreature(map, Position{202, 202, 7}, monster);
+	addCreature(map, Position{203, 203, 7}, npc);
+
+	SpectatorVec all, players;
+	map.getSpectators(all, center, true);
+	map.getSpectators(players, center, true, true);
+	CHECK(players.size() == all.players().size());
+	CHECK(players.size() == 2);
+	CHECK(players.monsters().empty());
+	CHECK(players.npcs().empty());
+	for (const auto& spectator : all.players()) {
+		CHECK(contains(players, spectator.get()));
+	}
+	CHECK(!contains(players, distant.get()));
+	// Map collection remains instance-agnostic; each tile notification keeps its
+	// existing InstanceUtils visibility checks rather than changing them here.
+	CHECK(contains(players, player.get()));
+	CHECK(contains(players, upstairs.get()));
+
+	removeCreature(map, player);
+	removeCreature(map, upstairs);
+	removeCreature(map, distant);
+	removeCreature(map, monster);
+	removeCreature(map, npc);
+}
+
+TEST_CASE(movement_snapshot_matches_two_live_queries_at_viewport_edges_and_floors)
+{
+	Map map;
+	std::vector<std::shared_ptr<TestCreature>> creatures;
+	// Dense boundary grid includes the diagonal bounding rectangle's extra corners.
+	for (uint8_t z = 5; z <= 10; ++z) {
+		for (uint16_t x = 88; x <= 113; ++x) {
+			for (uint16_t y = 88; y <= 113; ++y) {
+				auto creature = std::make_shared<TestMonster>();
+				addCreature(map, Position{x, y, z}, creature);
+				creatures.push_back(std::move(creature));
+			}
+		}
+	}
+	for (uint8_t z : {uint8_t{7}, uint8_t{8}}) {
+		const Position oldPos{100, 100, z};
+		for (int dx = -1; dx <= 1; ++dx) {
+			for (int dy = -1; dy <= 1; ++dy) {
+				const Position newPos{static_cast<uint16_t>(100 + dx), static_cast<uint16_t>(100 + dy), z};
+				SpectatorVec expected, next, actual;
+				map.getSpectators(expected, oldPos, true);
+				map.getSpectators(next, newPos, true);
+				expected.addSpectators(next);
+				expected.partitionByType();
+				map.getMovementSpectators(actual, oldPos, newPos, false);
+				CHECK(actual.size() == expected.size());
+				CHECK(std::ranges::equal(actual, expected));
+			}
+		}
+	}
+	for (const auto& creature : creatures) {
+		removeCreature(map, creature);
+	}
+}
+
+TEST_CASE(movement_snapshot_keeps_teleport_floor_instance_and_lifetime_semantics)
+{
+	Map map;
+	auto player = std::make_shared<TestPlayer>();
+	auto monster = std::make_shared<TestMonster>();
+	auto npc = std::make_shared<TestNpc>();
+	player->setInstanceID(42);
+	monster->setInstanceID(43);
+	addCreature(map, Position{0, 0, 7}, player);
+	addCreature(map, Position{65535, 65535, 8}, monster);
+	addCreature(map, Position{1, 1, 6}, npc);
+	for (const Position newPos : {Position{1, 1, 7}, Position{65535, 65535, 8}, Position{0, 0, 8}}) {
+		SpectatorVec expected, next, actual;
+		map.getSpectators(expected, Position{0, 0, 7}, true);
+		map.getSpectators(next, newPos, true);
+		expected.addSpectators(next);
+		expected.partitionByType();
+		map.getMovementSpectators(actual, Position{0, 0, 7}, newPos, newPos.z != 7);
+		CHECK(std::ranges::equal(actual, expected));
+		CHECK(actual.players().size() == expected.players().size());
+		CHECK(actual.npcs().size() == expected.npcs().size());
+	}
+	SpectatorVec pinned;
+	map.getMovementSpectators(pinned, Position{0, 0, 7}, Position{1, 1, 7}, false);
+	std::weak_ptr<TestPlayer> weak = player;
+	removeCreature(map, player);
+	player.reset();
+	CHECK(!weak.expired());
+	pinned = {};
+	CHECK(weak.expired());
 	removeCreature(map, monster);
 	removeCreature(map, npc);
 }

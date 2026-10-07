@@ -89,7 +89,11 @@ void NetworkMessage::addBytes(const char* bytes, size_t size)
 
 void NetworkMessage::addPaddingBytes(size_t n)
 {
-	if (!canAdd(n)) {
+	// Serialization reserves space for crypto headers/padding. At the maximum
+	// protocol payload canAdd() rejects that reserved padding, even though it fits
+	// the physical buffer, leaving XTEA to read an incomplete final block.
+	if (n > buffer.size() || info.position > buffer.size() - n ||
+	    n > static_cast<size_t>(std::numeric_limits<MsgSize_t>::max() - info.length)) {
 		return;
 	}
 

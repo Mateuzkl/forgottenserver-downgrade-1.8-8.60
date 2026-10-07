@@ -2944,11 +2944,47 @@ bool Monster::getDistanceStep(const Position& targetPos, Direction& direction, b
 	return false;
 }
 
+Tile* Monster::getWalkTile(const Position& pos) const
+{
+	const Position& center = getPosition();
+	const uint64_t revision = g_game.map.getTileLayoutRevision();
+	if (walkTileRevision != revision || walkTileInstance != getInstanceID() ||
+	    !walkTileCenter.isInRange(center, 1, 1, 0)) {
+		walkTiles.fill(WalkTileEntry{});
+	}
+	walkTileRevision = revision;
+	walkTileCenter = center;
+	walkTileInstance = getInstanceID();
+	if (!pos.isInRange(center, 1, 1, 0)) {
+		g_performanceMetrics.recordMovementWork(MovementWork::WalkTileCacheMisses);
+		return g_game.map.getTile(pos);
+	}
+	const uint64_t key = uint64_t{pos.x} | (uint64_t{pos.y} << 16) | (uint64_t{pos.z} << 32);
+	auto& entry = walkTiles[(pos.y % 3) * 3 + pos.x % 3];
+	if (entry.positionKey == key) {
+		g_performanceMetrics.recordMovementWork(MovementWork::WalkTileCacheHits);
+		return entry.tile;
+	}
+	g_performanceMetrics.recordMovementWork(MovementWork::WalkTileCacheMisses);
+	entry = {key, g_game.map.getTile(pos)};
+	return entry.tile;
+}
+
 bool Monster::canWalkTo(Position pos, Direction direction) const
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterCanWalkTo);
+	g_performanceMetrics.recordMovementWork(MovementWork::WalkChecks);
 	pos = getNextPosition(direction, pos);
 	if (isInSpawnRange(pos)) {
-		Tile* tile = g_game.map.getTile(pos);
+		Tile* tile = getWalkTile(pos);
+		// Only unconditional PATHFINDING failures. Read current metadata on
+		// every visit: removing a blocker/ground or changing a field is live.
+		if (!tile || !tile->getGround() ||
+		    tile->hasFlag(TILESTATE_FLOORCHANGE | TILESTATE_TELEPORT | TILESTATE_IMMOVABLEBLOCKSOLID |
+		                  TILESTATE_IMMOVABLENOFIELDBLOCKPATH)) {
+			g_performanceMetrics.recordMovementWork(MovementWork::WalkFastRejects);
+			return false;
+		}
 		uint32_t pathFlags = FLAG_PATHFINDING;
 		if (isFamiliar() || ignoreFieldDamage) {
 			pathFlags |= FLAG_IGNOREFIELDDAMAGE;
@@ -2956,9 +2992,9 @@ bool Monster::canWalkTo(Position pos, Direction direction) const
 		if (isSummon() && !isFamiliar() && tile && tile->hasFlag(TILESTATE_PROTECTIONZONE)) {
 			return false;
 		}
-		if (tile && tile->getTopVisibleCreature(this) == nullptr &&
-		    tile->queryAdd(0, *this, 1, pathFlags) == RETURNVALUE_NOERROR) {
-			return true;
+		if (tile->getTopVisibleCreature(this) == nullptr) {
+			g_performanceMetrics.recordMovementWork(MovementWork::WalkQueryAddCalls);
+			return tile->queryAdd(0, *this, 1, pathFlags) == RETURNVALUE_NOERROR;
 		}
 	}
 	return false;
@@ -3449,6 +3485,7 @@ bool Monster::shouldRepathAfterTargetStep()
 
 void Monster::goToFollowCreature()
 {
+	PerformanceScope performanceScope(PerformanceMetric::CreatureGoToFollow);
 	// Consume the forced update before walking to avoid redundant requests.
 	const bool forcedPathUpdate = forceUpdateFollowPath;
 	forceUpdateFollowPath = false;

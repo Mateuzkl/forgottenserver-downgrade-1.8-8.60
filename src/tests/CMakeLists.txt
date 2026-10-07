@@ -9,5 +9,8 @@ foreach(test_src ${tests_SRC})
         OpenSSL::Crypto
         absl::flat_hash_map
     )
+    if(TFS_XTEA_FORCE_SCALAR AND test_name STREQUAL "test_xtea_simd")
+        target_compile_definitions(${test_name} PRIVATE TFS_XTEA_FORCE_SCALAR=1)
+    endif()
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()

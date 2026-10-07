@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -29,6 +30,7 @@ struct BestiaryCreatureInfo;
 struct ProtocolGameCustomPingTestAccess;
 struct ProtocolGameAstraRegenerationTestAccess;
 struct ProtocolGameSpellCooldownTestAccess;
+struct ProtocolGameCombatTestAccess;
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 class ProtocolSpectator;
 
@@ -104,6 +106,7 @@ private:
 	void disconnectClient(std::string_view message) const;
 	void dispatchCancelMessage(ReturnValue message) const;
 	void writeToOutputBuffer(const NetworkMessage& msg);
+	void writeToOutputBuffer(std::span<const uint8_t> bytes);
 
 	void release() override;
 
@@ -400,6 +403,7 @@ private:
 	friend struct ProtocolGameCustomPingTestAccess;
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
+	friend struct ProtocolGameCombatTestAccess;
 
 	//cast
 	void spectatorTurn(uint8_t direction);

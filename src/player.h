@@ -1733,6 +1733,7 @@ public:
 	int32_t totalDropBonus = 0;
 
 private:
+	const std::shared_ptr<KV>& getSettingsKV() const;
 	mutable std::shared_ptr<KV> cachedPlayerSettings_;
 
 	struct PreyCombatBonus {
@@ -1766,6 +1767,8 @@ private:
 	void setNextWalkActionTask(std::unique_ptr<SchedulerTask> task);
 	void setNextWalkTask(std::unique_ptr<SchedulerTask> task);
 	void setNextActionTask(std::unique_ptr<SchedulerTask> task, bool resetIdleTime = true);
+	void scheduleAttackCheck(uint32_t delay);
+	void stopAttackCheck();
 
 	void death(Creature* lastHitCreature) override;
 	bool dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreature, bool lastHitUnjustified,
@@ -1843,6 +1846,9 @@ private:
 	uint64_t experience = 0;
 	uint64_t manaSpent = 0;
 	uint64_t lastAttack = 0;
+	uint32_t attackCheckEvent = 0;
+	uint64_t attackCheckGeneration = 0;
+	std::chrono::steady_clock::time_point attackCheckDeadline{};
 	uint64_t bankBalance = 0;
 	uint64_t preyWildcards = 0;
 	uint32_t bestiaryCharmPoints = 0;
@@ -2063,6 +2069,7 @@ private:
 	friend class ProtocolSpectator;
 	friend struct CreatureWalkTestAccess;
 	friend struct QuickLootTestAccess;
+	friend struct PlayerSettingsTestAccess;
 };
 
 #endif

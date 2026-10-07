@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <mutex>
+#include <unordered_map>
 
 #include "actions.h"
 #include "bed.h"
@@ -57,9 +58,10 @@ void Item::setTier(uint8_t tier)
 	}
 }
 
-// Global observer registry used only to reject stale raw Item* callbacks after
-// the owning shared_ptr has destroyed the item. Constructors insert, the
-// destructor erases, and clearGlobalRegistry() retires the registry at shutdown.
+// Weak lifetime metadata, registered by Item::make only after shared ownership
+// exists. An address lookup can lock the control block without accessing Item
+// storage, even while a derived destructor is running. The registry never owns
+// an Item strongly; its mutex protects metadata, not gameplay/callbacks.
 //
 // Intentionally immortal: the registry must outlive every Item, including items
 // still owned by globals (g_game) when static destructors run. Static
@@ -80,7 +82,9 @@ void Item::setTier(uint8_t tier)
 namespace {
 struct ItemRegistry
 {
-	std::unordered_set<Item*> items;
+	// Threaded login constructs/destroys inventory items outside the dispatcher.
+	std::mutex mutex;
+	std::unordered_map<Item*, std::weak_ptr<Item>> items;
 	bool enabled = true;
 };
 
@@ -89,7 +93,17 @@ ItemRegistry& getItemRegistry()
 	static auto* registry = new ItemRegistry();
 	return *registry;
 }
+
 } // namespace
+
+void Item::registerOwner(const std::shared_ptr<Item>& owner)
+{
+	auto& registry = getItemRegistry();
+	std::lock_guard lock(registry.mutex);
+	if (registry.enabled) {
+		registry.items.insert_or_assign(owner.get(), owner);
+	}
+}
 
 namespace {
 	constexpr uint64_t UID_COUNTER_BITS = 21;
@@ -136,39 +150,39 @@ std::shared_ptr<Item> Item::CreateItem(const uint16_t type, uint16_t count /*= 0
 	};
 
 	if (it.isDepot()) {
-		return std::make_shared<DepotLocker>(type);
+		return Item::make<DepotLocker>(type);
 	} else if (it.isRewardChest()) {
-		return std::make_shared<RewardChest>(type);
+		return Item::make<RewardChest>(type);
 	} else if (it.id >= ITEM_DEPOT_BOX_1 && it.id <= ITEM_DEPOT_BOX_17) {
-		return std::make_shared<DepotBox>(type);
+		return Item::make<DepotBox>(type);
 	} else if (it.id == ITEM_INBOX) {
-		return std::make_shared<Inbox>(type);
+		return Item::make<Inbox>(type);
 	} else if (it.isContainer()) {
-		return assignUID(std::make_shared<Container>(type));
+		return assignUID(Item::make<Container>(type));
 	} else if (it.isTeleport()) {
-		return std::make_shared<Teleport>(type);
+		return Item::make<Teleport>(type);
 	} else if (it.isMagicField()) {
-		return std::make_shared<MagicField>(type);
+		return Item::make<MagicField>(type);
 	} else if (it.isDoor()) {
-		return std::make_shared<Door>(type);
+		return Item::make<Door>(type);
 	} else if (it.isTrashHolder()) {
-		return std::make_shared<TrashHolder>(type);
+		return Item::make<TrashHolder>(type);
 	} else if (it.isMailbox()) {
-		return std::make_shared<Mailbox>(type);
+		return Item::make<Mailbox>(type);
 	} else if (it.isBed()) {
-		return std::make_shared<BedItem>(type);
+		return Item::make<BedItem>(type);
 	} else if (it.id >= 3094 && it.id <= 3096) { // magic rings
-		return assignUID(std::make_shared<Item>(type - 3, count));
+		return assignUID(Item::make<Item>(type - 3, count));
 	} else if (it.id == 3099 || it.id == 3100) { // magic rings
-		return assignUID(std::make_shared<Item>(type - 2, count));
+		return assignUID(Item::make<Item>(type - 2, count));
 	} else if (it.id >= 3086 && it.id <= 3090) { // magic rings
-		return assignUID(std::make_shared<Item>(type - 37, count));
+		return assignUID(Item::make<Item>(type - 37, count));
 	} else if (it.id == 3549) { // soft boots
-		return assignUID(std::make_shared<Item>(6529, count));
+		return assignUID(Item::make<Item>(6529, count));
 	} else if (it.id == 6299) { // death ring
-		return assignUID(std::make_shared<Item>(6300, count));
+		return assignUID(Item::make<Item>(6300, count));
 	}
-	return assignUID(std::make_shared<Item>(type, count));
+	return assignUID(Item::make<Item>(type, count));
 }
 
 std::shared_ptr<Container> Item::CreateItemAsContainer(const uint16_t type, uint16_t size)
@@ -179,7 +193,7 @@ std::shared_ptr<Container> Item::CreateItemAsContainer(const uint16_t type, uint
 		return nullptr;
 	}
 
-	auto item = std::make_shared<Container>(type, size);
+	auto item = Item::make<Container>(type, size);
 	if (!item->isStackable()) {
 		item->setItemUID(Item::generateItemUID());
 	}
@@ -229,12 +243,8 @@ std::shared_ptr<Item> Item::CreateItem(PropStream& propStream)
 	return Item::CreateItem(id, 0);
 }
 
-
 Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
 {
-	if (auto& registry = getItemRegistry(); registry.enabled) {
-		registry.items.insert(this);
-	}
 	const ItemType& it = items[id];
 
 	if (it.isFluidContainer() || it.isSplash()) {
@@ -260,11 +270,9 @@ Item::Item(const uint16_t type, uint16_t count /*= 0*/) : id(type)
 	setDefaultDuration();
 }
 
-Item::Item(const Item& i) : Thing(), std::enable_shared_from_this<Item>(), id(i.id), count(i.count), loadedFromMap(i.loadedFromMap)
+Item::Item(const Item& i) :
+    Thing(), std::enable_shared_from_this<Item>(), id(i.id), count(i.count), loadedFromMap(i.loadedFromMap)
 {
-	if (auto& registry = getItemRegistry(); registry.enabled) {
-		registry.items.insert(this);
-	}
 	if (i.attributes) {
 		attributes = std::make_unique<ItemAttributes>(*i.attributes);
 	}
@@ -272,24 +280,35 @@ Item::Item(const Item& i) : Thing(), std::enable_shared_from_this<Item>(), id(i.
 
 Item::~Item()
 {
-	if (auto& registry = getItemRegistry(); registry.enabled) {
+	auto& registry = getItemRegistry();
+	std::lock_guard lock(registry.mutex);
+	if (registry.enabled) {
 		registry.items.erase(this);
 	}
 }
 
-bool isValidItemPointer(Item* item)
+std::shared_ptr<Item> Item::pin(Item* candidate)
 {
-	const auto& registry = getItemRegistry();
-	return item && registry.enabled && registry.items.count(item) > 0;
+	if (!candidate) {
+		return {};
+	}
+	auto& registry = getItemRegistry();
+	std::lock_guard lock(registry.mutex);
+	if (!registry.enabled) {
+		return {};
+	}
+	const auto entry = registry.items.find(candidate);
+	return entry != registry.items.end() ? entry->second.lock() : std::shared_ptr<Item>{};
 }
 
 void Item::clearGlobalRegistry()
 {
 	// Drop the tracked entries and retire the registry, matching what the old
-	// g_validItems.reset() did: nothing registers again and every pointer reads as
-	// invalid from here on. The container itself stays alive, so ~Item() calls that
+	// g_validItems.reset() did: nothing registers again and every new pin fails.
+	// Existing external owners/pins remain valid. The container stays alive, so ~Item() calls that
 	// happen after shutdown are still safe.
 	auto& registry = getItemRegistry();
+	std::lock_guard lock(registry.mutex);
 	registry.items.clear();
 	registry.enabled = false;
 }

@@ -88,9 +88,11 @@ public:
 	 *
 	 * Executes query which generates results (mostly SELECT).
 	 *
-	 * @return results object (nullptr on error)
+	 * @param succeeded optional status distinguishing an empty result from an error
+	 * @return results object
+	 * (nullptr on error or an empty result)
 	 */
-	DBResult_ptr storeQuery(std::string_view query);
+	DBResult_ptr storeQuery(std::string_view query, bool* succeeded = nullptr);
 
 	/**
 	 * Escapes string for query.

@@ -228,6 +228,7 @@ void TaskReactor::runOnce()
 #endif
 
 	PerformanceScope cycleScope(PerformanceMetric::ReactorCycle);
+	const auto cycleStart = std::chrono::steady_clock::now();
 	std::vector<Task> readyTasks;
 	readyTasks.reserve(128);
 
@@ -241,7 +242,7 @@ void TaskReactor::runOnce()
 	}
 	{
 		PerformanceScope scope(PerformanceMetric::ReactorCallbacks);
-		executeReadyTasks(readyTasks);
+		executeReadyTasks(readyTasks, cycleStart);
 	}
 	{
 		std::scoped_lock lock(mutex);
@@ -402,7 +403,7 @@ bool TaskReactor::retireIdentifier(uint32_t identifier)
 	return cancelledInBatch || cancelledPreviously;
 }
 
-void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
+void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks, std::chrono::steady_clock::time_point cycleStart)
 {
 	{
 		PerformanceScope scope(PerformanceMetric::ReactorSort);
@@ -414,7 +415,6 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		});
 	}
 
-	const auto cycleStart = std::chrono::steady_clock::now();
 	uint32_t tasksExecuted = 0;
 	std::chrono::steady_clock::duration slowestDuration{};
 	std::optional<size_t> slowestTaskIndex;
@@ -444,10 +444,12 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		}
 
 		const auto taskStart = std::chrono::steady_clock::now();
+		uint64_t queueNanoseconds = 0;
 		try {
 			if (g_performanceMetrics.isEnabled()) {
 				const auto callbackStart = std::chrono::steady_clock::now();
 				const auto queueLatency = callbackStart > task.fireAt ? callbackStart - task.fireAt : std::chrono::steady_clock::duration::zero();
+				queueNanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(queueLatency).count();
 				g_performanceMetrics.record(PerformanceMetric::ReactorQueueLatency,
 					std::chrono::duration_cast<std::chrono::nanoseconds>(queueLatency).count());
 			}
@@ -468,7 +470,8 @@ void TaskReactor::executeReadyTasks(std::vector<Task>& readyTasks)
 		if (g_performanceMetrics.isEnabled()) {
 			const auto taskNanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(taskDuration).count();
 			g_performanceMetrics.recordReactorCallbackSource(
-				taskNanoseconds > 0 ? static_cast<uint64_t>(taskNanoseconds) : 0, task.description, task.origin);
+			    taskNanoseconds > 0 ? static_cast<uint64_t>(taskNanoseconds) : 0, task.description, task.origin,
+			    queueNanoseconds);
 		}
 		if (taskDuration > slowestDuration) {
 			slowestDuration = taskDuration;

@@ -98,7 +98,7 @@ std::shared_ptr<Container> Container::createBrowseField(const TilePtr& tile, uin
 		return nullptr;
 	}
 
-	auto browseField = std::make_shared<Container>(ITEM_BROWSEFIELD, 30);
+	auto browseField = Item::make<Container>(ITEM_BROWSEFIELD, 30);
 	const TileItemVector* itemVector = tile->getItemList();
 	if (itemVector) {
 		for (const auto& item : *itemVector) {

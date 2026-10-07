@@ -2873,10 +2873,11 @@ ReturnValue Game::internalAddItem(Cylinder* toCylinder, Item* item, int32_t inde
 ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool test /*= false*/, uint32_t flags /*= 0*/,
                                      Creature* actor /*= nullptr*/)
 {
-	extern bool isValidItemPointer(Item*);
-	if (!isValidItemPointer(item)) {
+	const auto itemRef = Item::pin(item);
+	if (!itemRef) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
+	item = itemRef.get(); // Hold ownership through queryRemove and all callbacks.
 
 	Cylinder* cylinder = item->getParent();
 	if (cylinder == nullptr) {
@@ -2907,11 +2908,6 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 
 	if (!test) {
 		int32_t index = cylinder->getThingIndex(item);
-
-		auto itemRef = getItemSharedRef(item);
-		if (!itemRef) {
-			return RETURNVALUE_NOTPOSSIBLE;
-		}
 
 		// End an occupied bed session while the BedItem is still attached to its
 		// tile and House. This preserves sleeper regeneration and lets wakeUp()
@@ -3144,6 +3140,11 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 
 Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 {
+	const auto itemRef = Item::pin(item);
+	if (!itemRef) {
+		return nullptr;
+	}
+	item = itemRef.get();
 	if (item->getID() == newId && (newCount == -1 || (newCount == item->getSubType() &&
 	                                                  newCount != 0))) { // chargeless item placed on map = infinite
 		return item;
@@ -3170,11 +3171,6 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 
 	const ItemType& newType = Item::items[newId];
 	if (newType.id == 0) {
-		return item;
-	}
-
-	auto itemRef = getItemSharedRef(item);
-	if (!itemRef) {
 		return item;
 	}
 
@@ -6947,6 +6943,7 @@ void Game::combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColo
 			}
 
 			if (splash) {
+				PerformanceScope splashScope(PerformanceMetric::CombatSplash);
 				splash->setInstanceID(target->getInstanceID());
 				// targetTile is captured once and reused — same tile where the
 				// PZ check was made; splash is only created when tile != nullptr.
@@ -7111,6 +7108,9 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 
 bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage& damage)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatChangeHealth);
+	CombatPacketScope packetScope;
+	g_performanceMetrics.recordCombatWork(CombatWork::HealthEntries);
 	if (!target || target->isDead() || target->isRemoved()) {
 		return false;
 	}
@@ -7186,6 +7186,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		const auto& healEvents = target->getCreatureEvents(CREATURE_EVENT_HEALTHCHANGE);
 		if (!healEvents.empty()) {
 			for (CreatureEvent* creatureEvent : healEvents) {
+				PerformanceScope callbackScope(PerformanceMetric::CombatHealthCallbacks);
+				g_performanceMetrics.recordCombatWork(CombatWork::HealthCallbacks);
 				creatureEvent->executeHealthChange(target, attacker, damage);
 			}
 		}
@@ -7212,6 +7214,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			const auto& events = target->getCreatureEvents(CREATURE_EVENT_HEALTHCHANGE);
 			if (!events.empty()) {
 				for (CreatureEvent* creatureEvent : events) {
+					PerformanceScope callbackScope(PerformanceMetric::CombatHealthCallbacks);
+					g_performanceMetrics.recordCombatWork(CombatWork::HealthCallbacks);
 					creatureEvent->executeHealthChange(target, attacker, damage);
 				}
 				damage.origin = ORIGIN_NONE;
@@ -7374,6 +7378,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 					const auto& events = target->getCreatureEvents(CREATURE_EVENT_MANACHANGE);
 					if (!events.empty()) {
 						for (CreatureEvent* creatureEvent : events) {
+							PerformanceScope callbackScope(PerformanceMetric::CombatManaCallbacks);
+							g_performanceMetrics.recordCombatWork(CombatWork::ManaCallbacks);
 							creatureEvent->executeManaChange(target, attacker, damage);
 						}
 						healthChange = damage.primary.value + damage.secondary.value;
@@ -7463,6 +7469,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			const auto& events = target->getCreatureEvents(CREATURE_EVENT_HEALTHCHANGE);
 			if (!events.empty()) {
 				for (CreatureEvent* creatureEvent : events) {
+					PerformanceScope callbackScope(PerformanceMetric::CombatHealthCallbacks);
+					g_performanceMetrics.recordCombatWork(CombatWork::HealthCallbacks);
 					creatureEvent->executeHealthChange(target, attacker, damage);
 				}
 				damage.origin = ORIGIN_NONE;
@@ -7619,13 +7627,18 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 		if (realDamage >= targetHealth) {
 			for (CreatureEvent* creatureEvent : target->getCreatureEvents(CREATURE_EVENT_PREPAREDEATH)) {
+				PerformanceScope callbackScope(PerformanceMetric::CombatPrepareDeath);
+				g_performanceMetrics.recordCombatWork(CombatWork::PrepareDeathCallbacks);
 				if (!creatureEvent->executeOnPrepareDeath(target, attacker)) {
 					return false;
 				}
 			}
 		}
 
-		target->drainHealth(attackerRef, realDamage);
+		{
+			PerformanceScope applyScope(PerformanceMetric::CombatApplyHealth);
+			target->drainHealth(attackerRef, realDamage);
+		}
 		addCreatureHealth(spectators, target);
 
 		// onPlayerAttack callback
@@ -7647,6 +7660,9 @@ bool Game::combatChangeHealth(const std::shared_ptr<Creature>& attacker, const s
 
 bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& damage)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatChangeMana);
+	CombatPacketScope packetScope;
+	g_performanceMetrics.recordCombatWork(CombatWork::ManaEntries);
 	Player* targetPlayer = target->getPlayer();
 	if (!targetPlayer) {
 		return true;
@@ -7698,6 +7714,8 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 			const auto& events = target->getCreatureEvents(CREATURE_EVENT_MANACHANGE);
 			if (!events.empty()) {
 				for (CreatureEvent* creatureEvent : events) {
+					PerformanceScope callbackScope(PerformanceMetric::CombatManaCallbacks);
+					g_performanceMetrics.recordCombatWork(CombatWork::ManaCallbacks);
 					creatureEvent->executeManaChange(target, attacker, damage);
 				}
 				damage.origin = ORIGIN_NONE;
@@ -7784,6 +7802,8 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 			const auto& events = target->getCreatureEvents(CREATURE_EVENT_MANACHANGE);
 			if (!events.empty()) {
 				for (CreatureEvent* creatureEvent : events) {
+					PerformanceScope callbackScope(PerformanceMetric::CombatManaCallbacks);
+					g_performanceMetrics.recordCombatWork(CombatWork::ManaCallbacks);
 					creatureEvent->executeManaChange(target, attacker, damage);
 				}
 				damage.origin = ORIGIN_NONE;
@@ -7791,7 +7811,10 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 			}
 		}
 
-		targetPlayer->drainMana(attackerRef, manaLoss);
+		{
+			PerformanceScope applyScope(PerformanceMetric::CombatApplyMana);
+			targetPlayer->drainMana(attackerRef, manaLoss);
+		}
 
 		std::string spectatorMessage;
 
@@ -7855,13 +7878,17 @@ void Game::addCreatureHealth(const Creature* target)
 
 void Game::addCreatureHealth(const SpectatorVec& spectators, const Creature* target)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatBroadcastHealth);
+	uint64_t candidates = 0;
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
 		player->sendCreatureHealth(target);
+		++candidates;
 	}
+	g_performanceMetrics.recordCombatDistribution(CombatDistribution::HealthCandidates, candidates);
 }
 
 void Game::addAnimatedText(std::string_view message, const Position& pos, TextColor_t color, uint32_t instanceId)
@@ -7879,13 +7906,17 @@ void Game::addAnimatedText(std::string_view message, const Position& pos, TextCo
 void Game::addAnimatedText(const SpectatorVec& spectators, std::string_view message, const Position& pos,
                            TextColor_t color)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatBroadcastText);
+	uint64_t candidates = 0;
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
 		player->sendAnimatedText(message, pos, color);
+		++candidates;
 	}
+	g_performanceMetrics.recordCombatDistribution(CombatDistribution::TextCandidates, candidates);
 }
 
 void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanceId)
@@ -7898,13 +7929,17 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 
 void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatBroadcastEffect);
+	uint64_t candidates = 0;
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
 		player->sendMagicEffect(pos, effect);
+		++candidates;
 	}
+	g_performanceMetrics.recordCombatDistribution(CombatDistribution::EffectCandidates, candidates);
 }
 
 void InstanceUtils::sendMagicEffectToInstance(const Position &pos, uint32_t instanceId, uint8_t effect)
@@ -7928,13 +7963,17 @@ void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uin
 void Game::addDistanceEffect(const SpectatorVec& spectators, const Position& fromPos, const Position& toPos,
                              uint16_t effect)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CombatBroadcastDistance);
+	uint64_t candidates = 0;
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
 		player->sendDistanceShoot(fromPos, toPos, effect);
+		++candidates;
 	}
+	g_performanceMetrics.recordCombatDistribution(CombatDistribution::DistanceCandidates, candidates);
 }
 
 void Game::setAccountStorageValue(const uint32_t accountId, const uint32_t key, const int32_t value)

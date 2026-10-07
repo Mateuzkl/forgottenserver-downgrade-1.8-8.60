@@ -8,6 +8,7 @@
 #include "tile.h"
 
 #include <array>
+#include <cstdint>
 
 class Creature;
 class Game;
@@ -232,6 +233,20 @@ public:
 	void callPlayerAttackEvent(Player* player);
 
 private:
+	struct WalkTileEntry
+	{
+		uint64_t positionKey = UINT64_MAX;
+		Tile* tile = nullptr;
+	};
+	// A lazy 3x3 ring retains overlapping cells on a single-tile step. No
+	// creatures, flags, fields, permissions or queryAdd results are cached.
+	mutable std::array<WalkTileEntry, 9> walkTiles{};
+	mutable uint64_t walkTileRevision = 0;
+	mutable Position walkTileCenter;
+	mutable uint32_t walkTileInstance = 0;
+	Tile* getWalkTile(const Position& position) const;
+	friend struct MonsterWalkTestAccess;
+
 	CreatureWeakHashSet friendList;
 	CreatureWeakList targetList;
 

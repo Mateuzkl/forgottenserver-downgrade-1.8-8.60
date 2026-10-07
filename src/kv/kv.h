@@ -82,18 +82,28 @@ public:
 	std::vector<std::string> loadPrefix(const std::string &prefix = "");
 
 protected:
+	struct LoadResult
+	{
+		std::optional<ValueWrapper> value;
+		bool succeeded = false;
+	};
+	virtual LoadResult loadForCache(const std::string& key);
+
 	using StoreEntry = std::pair<ValueWrapper, std::list<std::string>::iterator>;
 	using StoreMap = std::unordered_map<std::string, StoreEntry>;
 	StoreMap getStore();
 
 private:
-	void setLocked(const std::string &key, const ValueWrapper &value);
+	void setLocked(const std::string& key, const std::optional<ValueWrapper>& value);
 	bool processEvictions();
 
 	bool prepareSave(const std::string &key, const ValueWrapper &value, DBInsert &update) const;
 	DBInsert dbUpdate() const;
 
-	StoreMap store_;
+	// nullopt means a confirmed database miss, not a pending DELETE. Both kinds
+	// share the bounded LRU, but misses must never be written back to the database.
+	using CacheEntry = std::pair<std::optional<ValueWrapper>, std::list<std::string>::iterator>;
+	std::unordered_map<std::string, CacheEntry> store_;
 	std::list<std::string> lruQueue_;
 	std::mutex mutex_;
 	std::vector<std::pair<std::string, ValueWrapper>> pendingEvictions_;

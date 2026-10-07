@@ -59,14 +59,15 @@ void KVStore::set(const std::string &key, const ValueWrapper &value) {
 	processEvictions();
 }
 
-void KVStore::setLocked(const std::string &key, const ValueWrapper &value) {
+void KVStore::setLocked(const std::string& key, const std::optional<ValueWrapper>& value)
+{
 	auto it = store_.find(key);
 	if (it != store_.end()) {
 		it->second.first = value;
 		lruQueue_.splice(lruQueue_.begin(), lruQueue_, it->second.second);
 	} else {
 		std::string evictKey;
-		ValueWrapper evictValue;
+		std::optional<ValueWrapper> evictValue;
 		bool needsEviction = false;
 
 		if (store_.size() >= MAX_SIZE && !lruQueue_.empty()) {
@@ -82,7 +83,9 @@ void KVStore::setLocked(const std::string &key, const ValueWrapper &value) {
 		store_.try_emplace(key, std::make_pair(value, lruQueue_.begin()));
 
 		if (needsEviction) {
-			pendingEvictions_.emplace_back(evictKey, evictValue);
+			if (evictValue) {
+				pendingEvictions_.emplace_back(evictKey, *evictValue);
+			}
 		}
 	}
 }
@@ -94,7 +97,7 @@ std::optional<ValueWrapper> KVStore::get(const std::string &key, bool forceLoad)
 			auto it = store_.find(key);
 			if (it != store_.end()) {
 				auto &[value, lruIt] = it->second;
-				if (value.isDeleted()) {
+				if (value && value->isDeleted()) {
 					lruQueue_.splice(lruQueue_.end(), lruQueue_, lruIt);
 					return std::nullopt;
 				}
@@ -104,17 +107,22 @@ std::optional<ValueWrapper> KVStore::get(const std::string &key, bool forceLoad)
 		}
 	}
 
-	auto value = load(key);
-	if (value) {
-		{
-			std::scoped_lock lock(mutex_);
-			if (store_.find(key) == store_.end()) {
-				setLocked(key, *value);
-			}
+	auto loaded = loadForCache(key);
+	{
+		std::scoped_lock lock(mutex_);
+		auto it = store_.find(key);
+		if (!forceLoad && it != store_.end() && it->second.first) {
+			// A writer may have changed the setting while the SQL query was running.
+			const auto& current = it->second.first;
+			loaded.value = current->isDeleted() ? std::nullopt : current;
+		} else if (loaded.succeeded && (it == store_.end() || !it->second.first)) {
+			// Cache confirmed misses too, but retry errors on the next read. Explicit
+			// forceLoad can refresh a miss without overwriting unsaved positive values.
+			setLocked(key, loaded.value);
 		}
-		processEvictions();
 	}
-	return value;
+	processEvictions();
+	return loaded.value;
 }
 
 std::unordered_set<std::string> KVStore::keys(const std::string &prefix) {
@@ -123,7 +131,7 @@ std::unordered_set<std::string> KVStore::keys(const std::string &prefix) {
 	{
 		std::scoped_lock lock(mutex_);
 		for (const auto &[key, value] : store_) {
-			if (key.find(prefix) == 0 && !value.first.isDeleted()) {
+			if (key.find(prefix) == 0 && value.first && !value.first->isDeleted()) {
 				std::string suffix = key.substr(prefix.size());
 				keys.insert(suffix);
 			}
@@ -134,7 +142,7 @@ std::unordered_set<std::string> KVStore::keys(const std::string &prefix) {
 		{
 			std::scoped_lock lock(mutex_);
 			auto it = store_.find(prefix + key);
-			if (it != store_.end() && it->second.first.isDeleted()) {
+			if (it != store_.end() && it->second.first && it->second.first->isDeleted()) {
 				continue;
 			}
 		}
@@ -179,7 +187,9 @@ void KVStore::flush() {
 		std::scoped_lock lock(mutex_);
 		snapshot.reserve(store_.size() + pendingEvictions_.size());
 		for (const auto &[k, v] : store_) {
-			snapshot.emplace_back(k, v.first);
+			if (v.first) {
+				snapshot.emplace_back(k, *v.first);
+			}
 		}
 		snapshot.insert(snapshot.end(), pendingEvictions_.begin(), pendingEvictions_.end());
 	}
@@ -194,6 +204,7 @@ void KVStore::flush() {
 	if (allSaved) {
 		std::scoped_lock lock(mutex_);
 		store_.clear();
+		lruQueue_.clear();
 		pendingEvictions_.clear();
 	}
 }
@@ -202,29 +213,37 @@ KVStore::StoreMap KVStore::getStore() {
 	std::scoped_lock lock(mutex_);
 	StoreMap copy;
 	for (const auto &[key, value] : store_) {
-		copy.try_emplace(key, value);
+		if (value.first) {
+			copy.try_emplace(key, std::make_pair(*value.first, value.second));
+		}
 	}
 	return copy;
 }
 
 // ============ SQL Persistence ============
 
-std::optional<ValueWrapper> KVStore::load(const std::string &key) {
+std::optional<ValueWrapper> KVStore::load(const std::string& key) { return loadForCache(key).value; }
+
+KVStore::LoadResult KVStore::loadForCache(const std::string& key)
+{
 	Database &db = Database::getInstance();
 	const auto query = fmt::format("SELECT `key_name`, `timestamp`, `value` FROM `kv_store` WHERE `key_name` = {}", db.escapeString(key));
-	const auto result = db.storeQuery(query);
+	bool succeeded = false;
+	const auto result = db.storeQuery(query, &succeeded);
 	if (result == nullptr) {
-		return std::nullopt;
+		return {std::nullopt, succeeded};
 	}
 
 	unsigned long size = 0;
 	auto data = result->getStream("value", size);
 	if (data.data() == nullptr || size == 0) {
-		return std::nullopt;
+		return {};
 	}
 
 	auto timestamp = result->getNumber<uint64_t>("timestamp");
-	return ValueWrapper::deserialize(data.data(), size, timestamp);
+	auto value = ValueWrapper::deserialize(data.data(), size, timestamp);
+	const bool valid = value.has_value();
+	return {std::move(value), valid};
 }
 
 std::vector<std::string> KVStore::loadPrefix(const std::string &prefix) {
@@ -260,7 +279,8 @@ std::vector<std::string> KVStore::loadPrefix(const std::string &prefix) {
 		}
 
 		std::scoped_lock lock(mutex_);
-		if (store_.find(fullKey) == store_.end()) {
+		auto it = store_.find(fullKey);
+		if (it == store_.end() || !it->second.first) {
 			setLocked(fullKey, *value);
 		}
 	} while (result->next());

@@ -23,6 +23,21 @@ class SpectatorVec
 public:
 	SpectatorVec() { vec.reserve(32); }
 
+	template <typename Predicate>
+	void eraseIf(Predicate predicate)
+	{
+		std::erase_if(vec, predicate);
+		partitioned_ = false;
+	}
+
+	void sortAndUnique()
+	{
+		std::erase(vec, nullptr);
+		std::sort(vec.begin(), vec.end());
+		vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
+		partitioned_ = false;
+	}
+
 	void addSpectators(const SpectatorVec& spectators)
 	{
 		if (spectators.vec.empty() || &spectators == this) {
@@ -32,15 +47,9 @@ public:
 		vec.reserve(vec.size() + spectators.vec.size());
 		vec.insert(vec.end(), spectators.vec.begin(), spectators.vec.end());
 
-		vec.erase(std::remove_if(vec.begin(), vec.end(),
-			[](const auto& spectator) { return !spectator; }), vec.end());
-
 		// shared_ptr's default comparisons are .get()-based under a strict total
 		// order (C++20 [util.smartptr.shared.cmp]), so no custom comparators needed.
-		std::sort(vec.begin(), vec.end());
-		vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
-
-		partitioned_ = false;
+		sortAndUnique();
 	}
 
 	void erase(Creature* spectator)

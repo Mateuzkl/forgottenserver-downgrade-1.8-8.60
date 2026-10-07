@@ -79,7 +79,7 @@ void ensureTile(const Position& position)
 
 	Tile* tile = g_game.map.getTile(position);
 	if (!tile->getGround()) {
-		tile->setGround(std::make_shared<Item>(0));
+		tile->setGround(Item::make<Item>(0));
 	}
 }
 
@@ -97,7 +97,7 @@ void addStairHeight(Tile* tile)
 	}();
 	CHECK(heightItemId != 0);
 	for (uint8_t i = 0; i < 3; ++i) {
-		auto item = std::make_shared<Item>(heightItemId);
+		auto item = Item::make<Item>(heightItemId);
 		tile->internalAddThing(item.get());
 	}
 	CHECK(tile->hasHeight(3));

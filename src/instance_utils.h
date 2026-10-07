@@ -7,6 +7,7 @@
 
 #include "creature.h"
 #include "item.h"
+#include "performance_metrics.h"
 #include "player.h"
 #include "spectators.h"
 
@@ -79,12 +80,16 @@ inline void sendMagicEffectToInstance(const SpectatorVec &spectators,
                                        const Position &pos, uint8_t effect,
                                        uint32_t instanceId)
 {
-    for (const auto& spectator : spectators.players()) {
+	PerformanceScope scope(PerformanceMetric::CombatBroadcastEffect);
+	uint64_t candidates = 0;
+	for (const auto& spectator : spectators.players()) {
         Player *p = static_cast<Player*>(spectator.get());
         if (p->compareInstance(instanceId)) {
             p->sendMagicEffect(pos, effect);
-        }
+			++candidates;
+		}
     }
+	g_performanceMetrics.recordCombatDistribution(CombatDistribution::EffectCandidates, candidates);
 }
 
 void sendMagicEffectToInstance(const Position &pos, uint32_t instanceId,
@@ -95,12 +100,16 @@ inline void sendDistanceEffectToInstance(const SpectatorVec &spectators,
                                          const Position &to, uint8_t effect,
                                          uint32_t instanceId)
 {
-    for (const auto& spectator : spectators.players()) {
+	PerformanceScope scope(PerformanceMetric::CombatBroadcastDistance);
+	uint64_t candidates = 0;
+	for (const auto& spectator : spectators.players()) {
         Player *p = static_cast<Player*>(spectator.get());
         if (p->compareInstance(instanceId)) {
             p->sendDistanceShoot(from, to, effect);
-        }
+			++candidates;
+		}
     }
+	g_performanceMetrics.recordCombatDistribution(CombatDistribution::DistanceCandidates, candidates);
 }
 
 } // namespace InstanceUtils
