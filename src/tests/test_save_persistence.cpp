@@ -758,9 +758,13 @@ TEST_CASE(worker_rejection_does_not_strand_an_in_flight_save)
 }
 
 #ifndef _WIN32
-// Test-only export lets the unmodified production GDB crash script exercise
-// its inferior-call wait without crashing a real server or using its database.
-extern "C" __attribute__((used)) bool saveServer() { return g_game.saveCrashStateAndWait(); }
+// The production GDB export lives in otserv.cpp (part of tfslib). Defining a
+// second copy here breaks the Linux link with "multiple definition of
+// `saveServer'" whenever the unity chunk holding otserv.cpp is pulled in.
+// Referencing the library symbol instead keeps it in this binary for the
+// unmodified production GDB crash script, in both unity and non-unity builds.
+extern "C" bool saveServer();
+[[maybe_unused]] __attribute__((used)) static bool (*const keepSaveServerExport)() = &saveServer;
 #endif
 
 // Exercise the same wait/drain method called by the GDB export, without

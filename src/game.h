@@ -512,6 +512,8 @@ public:
 	void setGameState(GameState_t newState);
 	// Returns request acceptance, not durable completion. Callback runs on dispatcher.
 	bool saveGameState(bool crash = false, std::function<void(bool)> completion = {});
+	// Set when shutdown finished with unresolved persistence failures; drives the exit code.
+	[[nodiscard]] bool hadShutdownPersistenceFailure() const noexcept { return shutdownPersistenceFailed; }
 	// Debugger-only terminal save: an off-dispatcher caller waits for durable completion.
 	bool saveCrashStateAndWait(uint32_t timeoutMs = 30000);
 
@@ -722,6 +724,8 @@ public:
 
 private:
 	friend struct LootHighlightTestAccess;
+
+	bool shutdownPersistenceFailed = false;
 
 	StorageMap storageMap;
 

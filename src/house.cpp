@@ -127,9 +127,22 @@ bool House::updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection)
 		// an ownership change just because there are no current depot moves.
 		const auto image = IOMapSerialize::buildHouseSave(this, {});
 		if (!image) return false;
+		// Releasing a house whose owner row was deleted: the optional
+		// `ondelete_players` trigger (schema.sql; migration 13 asks admins to
+		// recreate it) has already set houses.owner to 0 in the database while
+		// the loaded House still holds the old GUID. Comparing the receipt to
+		// that GUID would reject the release forever, so the house could never
+		// be reset or auctioned. When the target is 0, a database owner of 0 is
+		// the expected state, not a concurrent change.
+		uint64_t expectedOwner = owner;
+		if (guid_guild == 0 && owner != 0) {
+			const auto row = db.storeQuery(fmt::format("SELECT `owner` FROM `houses` WHERE `id` = {}", id));
+			if (!row) return false;
+			if (row->getNumber<uint32_t>("owner") == 0) expectedOwner = 0;
+		}
 		return g_saveManager.commitTransfer(
-		    fmt::format("SELECT `owner` AS `receipt` FROM `houses` WHERE `id` = {} FOR UPDATE", id), owner, guid_guild,
-		    [&] {
+		    fmt::format("SELECT `owner` AS `receipt` FROM `houses` WHERE `id` = {} FOR UPDATE", id), expectedOwner,
+		    guid_guild, [&] {
 			    for (const auto& query : *image)
 				    if (!db.executeQuery(query)) return false;
 			    return updateOwnerInDatabase(guid_guild, resetProtection) &&

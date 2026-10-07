@@ -454,6 +454,70 @@ TEST_CASE(failure_at_each_write_rolls_back_house_owner_and_inbox_together)
 	}
 }
 
+// Unlike dispatch(), keeps running until the test calls stop(), so asynchronous
+// save completions from workers can still be delivered. stop() cancels the
+// timeout guard first: timers outlive runLoop() in the shared reactor, and the
+// reactor ignores cancellation once it has stopped, so a guard left behind would
+// fire during a later test and write through a dangling reference.
+template <typename Function>
+void dispatchUntilStopped(Function function)
+{
+	g_dispatcher.start();
+	g_scheduler.start();
+	std::exception_ptr error;
+	bool timedOut = false;
+	uint32_t guard = 0;
+	const auto stop = [&guard] {
+		g_scheduler.stopEvent(std::exchange(guard, 0));
+		g_reactor.shutdown();
+	};
+	guard = g_scheduler.addEvent(10000, [&] {
+		guard = 0;
+		timedOut = true;
+		g_reactor.shutdown();
+	});
+	g_dispatcher.addTask([&] {
+		try {
+			function(stop);
+		} catch (...) {
+			error = std::current_exception();
+			stop();
+		}
+	});
+	g_reactor.runLoop();
+	g_scheduler.shutdown();
+	g_dispatcher.shutdown();
+	if (error) std::rethrow_exception(error);
+	CHECK(!timedOut);
+}
+
+// A transient failure while saving an online player must not block that player
+// for the rest of the session. The live Player supersedes the failed chain: the
+// next save takes a higher generation and replaces the stale journal row.
+TEST_CASE(failed_save_of_online_player_does_not_block_later_saves)
+{
+	World world;
+	bool retried = false;
+	sql("CREATE TRIGGER fail_online_save BEFORE UPDATE ON players FOR EACH ROW "
+	    "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected online save failure'");
+	dispatchUntilStopped([&](const auto& stop) {
+		world.online();
+		CHECK(g_saveManager.savePlayer(world.owner.get()) == SaveResult::Queued);
+		g_saveManager.drainPlayerFlushAsync(7, [&, stop](bool drained) {
+			CHECK(!drained);
+			CHECK(!g_saveManager.hasFailedRecovery(7));
+			CHECK(db().executeQuery("DROP TRIGGER fail_online_save"));
+			CHECK(g_saveManager.savePlayerSync(world.owner.get()) == SaveResult::Persisted);
+			retried = true;
+			stop();
+		});
+	});
+	db().executeQuery("DROP TRIGGER IF EXISTS fail_online_save");
+	CHECK(retried);
+	CHECK(number("SELECT COUNT(*) AS value FROM player_save_journal WHERE guid=7") == 0);
+	CHECK(number("SELECT save_generation AS value FROM players WHERE id=7") == world.owner->getSaveGeneration());
+}
+
 TEST_CASE(pending_old_save_and_wrong_recipient_cannot_remove_source_items)
 {
 	World world;
@@ -488,6 +552,26 @@ TEST_CASE(deleted_house_owner_releases_ownership_without_moving_items)
 		CHECK(after && after->getString("data") == image);
 		CHECK(number("SELECT COUNT(*) AS value FROM house_lists WHERE house_id=701") == 0);
 	});
+}
+
+// Migration 13 drops `ondelete_players` and asks admins to recreate it by hand,
+// so production databases exist both with and without it. Without the trigger
+// houses.owner still holds the deleted GUID, and the release must work too.
+TEST_CASE(deleted_house_owner_without_delete_trigger_releases_ownership)
+{
+	World world;
+	sql("DROP TRIGGER IF EXISTS ondelete_players");
+	sql("DELETE FROM players WHERE id=7");
+	CHECK(number("SELECT owner AS value FROM houses WHERE id=701") == 7);
+	bool released = false;
+	dispatch([&] {
+		released = world.house->setOwner(0);
+		CHECK(world.house->getOwner() == 0 && world.root->getParent() == world.tile.get());
+		CHECK(number("SELECT owner AS value FROM houses WHERE id=701") == 0);
+	});
+	sql("CREATE TRIGGER ondelete_players BEFORE DELETE ON players FOR EACH ROW "
+	    "UPDATE houses SET owner = 0 WHERE owner = OLD.id");
+	CHECK(released);
 }
 
 TEST_CASE(missing_guild_releases_ownership_without_moving_items)

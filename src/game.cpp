@@ -1053,9 +1053,15 @@ void Game::setGameState(GameState_t newState)
 			saveMotdNum();
 			saveGameState(false, [this](bool saved) {
 				g_saveManager.shutdownAsync([this, saved](bool drained) {
+					// Every save chain has finished by now (finishShutdown waits for
+					// them), so holding the process cannot make anything more durable:
+					// unresolved journals stay in the database and startup recovery
+					// replays or blocks them. Staying alive in SHUTDOWN only kept the
+					// server offline - players kicked, logins refused - and a restart
+					// loop waiting for an exit that never came.
 					if (!saved || !drained) {
-						LOG_CRITICAL("[SaveManager] Shutdown blocked: persistence failed. Database/dispatcher retained; resolve the journal before terminating.");
-						return;
+						shutdownPersistenceFailed = true;
+						LOG_CRITICAL("[SaveManager] Shutdown with unresolved persistence failures. Journals are retained in the database for startup recovery; exiting with a failure code.");
 					}
 					g_scheduler.stop();
 					g_databaseTasks.stop();

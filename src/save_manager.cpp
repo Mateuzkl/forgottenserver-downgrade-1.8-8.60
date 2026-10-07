@@ -87,8 +87,10 @@ SaveResult SaveManager::savePlayer(Player* player)
 	// Public per-player async saves retain WAL-durable acceptance. Global saves
 	// write their journals on workers and claim durability only on completion.
 	if (!IOLoginData::writePlayerJournal(*save)) {
-		sessionSaveFailed = true;
-		failedRecoveryGuids.insert(guid);
+		// Nothing durable was written, so there is nothing to reconcile. Blocking
+		// the GUID here would reject every later save of a live player for the
+		// rest of the session. Report the failure and let the next save retry.
+		LOG_ERROR("[SaveManager] Journal write failed for guid={}; the next save will retry.", guid);
 		return SaveResult::Failed;
 	}
 	queueSnapshot(guid, {player->getName(), std::move(*save), false, true});
@@ -350,9 +352,22 @@ void SaveManager::onPlayerFlushed(uint32_t guid, bool tracked, bool success, IOL
 	} else {
 		flushInFlight.erase(guid);
 		if (!success) {
-			sessionSaveFailed = true;
-			failedRecoveryGuids.insert(guid);
-			LOG_ERROR("[SaveManager] Save chain failed for guid={}; login and new saves are blocked.", guid);
+			if (g_game.getPlayerByGUID(guid)) {
+				// The live Player supersedes whatever this chain left behind: the
+				// next snapshot takes a higher generation, the journal upsert keeps
+				// the newest payload and applyPlayerSave skips committed ones. So a
+				// retry is safe whether the journal write failed, the apply rolled
+				// back or the COMMIT reply was lost. Blocking here instead would
+				// reject every later save for the session and lose the progress at
+				// logout, because logout refuses a blocked GUID.
+				LOG_ERROR("[SaveManager] Save chain failed for online guid={}; the next save will retry.", guid);
+			} else {
+				// Offline: the journal may hold the only copy of the latest state.
+				// Keep login blocked until startup recovery replays it.
+				sessionSaveFailed = true;
+				failedRecoveryGuids.insert(guid);
+				LOG_ERROR("[SaveManager] Save chain failed for guid={}; login and new saves are blocked.", guid);
+			}
 		}
 		finishWaiters(guid, success && !hasFailedRecovery(guid));
 	}

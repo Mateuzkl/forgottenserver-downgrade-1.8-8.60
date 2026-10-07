@@ -1056,7 +1056,9 @@ int startServer()
 
 	// Cleanup MySQL connection and library
 	Database::shutdown();
-	return startupCompleted ? EXIT_SUCCESS : EXIT_FAILURE;
+	// A shutdown that left persistence failures behind still exits, but not as
+	// a success: the restart loop and the admin see that a journal needs recovery.
+	return startupCompleted && !g_game.hadShutdownPersistenceFailure() ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 void printServerVersion()
