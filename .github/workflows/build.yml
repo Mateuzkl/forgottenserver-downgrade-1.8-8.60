@@ -160,6 +160,7 @@ jobs:
 
       - name: Configure CMake
         run: |
+          cmake --list-presets=all
           bash cmake/ci/run-stage.sh configure cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_NATIVE_OPTIMIZATIONS=OFF -DENABLE_SLOW_TASK_DETECTION=OFF -DUSE_MIMALLOC=OFF -DBUILD_TESTING=ON -DENABLE_TEST_LTO=OFF -DSKIP_GIT=OFF -DLUA_INCLUDE_DIR=/usr/local/include -DLUA_LIBRARY=/usr/local/lib/liblua.a "-DLUA_LIBRARIES=/usr/local/lib/liblua.a;m;dl" -DLUA_VERSION_STRING=5.5.0 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build

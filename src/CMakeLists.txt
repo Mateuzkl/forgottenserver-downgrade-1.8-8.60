@@ -304,7 +304,8 @@ add_custom_target(format COMMAND /usr/bin/clang-format -style=file -i ${tfs_HDR}
 
 if (BUILD_TESTING)
 	set(tfs_TEST_LIBRARY tfslib)
-	if (NOT ENABLE_TEST_LTO AND (CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OR CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO))
+	if (NOT ENABLE_TEST_LTO AND (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo)$")
+		AND (CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OR CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO))
 		# Avoid repeating whole-program optimization for every test executable.
 		# The production library and tfs retain their original IPO settings.
 		add_tfs_library(tfs_testlib)

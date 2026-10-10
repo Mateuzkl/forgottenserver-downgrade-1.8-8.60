@@ -139,6 +139,8 @@ jobs:
           Import-Module (Join-Path $visualStudioPath 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')
           Enter-VsDevShell -VsInstallPath $visualStudioPath -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
 
+          cmake --list-presets=all
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $configureArgs = @(
             '--preset', 'vcpkg',
             '-G', 'Ninja',

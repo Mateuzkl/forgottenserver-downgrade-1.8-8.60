@@ -28,3 +28,16 @@ The production tfslib and tfs keep their existing Release IPO/LTO settings.
 This trades an extra library compilation for faster test linking; compiler caches
 retain both variants. The option defaults to ON, preserving other build profiles.
 Generated build.ninja files are included in diagnostics to inspect target flags.
+
+Local developers can use the same fast test builds:
+
+```sh
+cmake --preset release-tests-vcpkg
+cmake --build --preset release-tests-vcpkg
+ctest --preset release-tests-vcpkg
+```
+
+Use release-tests with system dependencies, or the corresponding
+release-tests-lto / release-tests-vcpkg-lto profiles for tests linked with the
+production LTO library. Each profile uses a separate build directory. Benchmarks
+and existing sanitizer profiles retain their previous settings.
