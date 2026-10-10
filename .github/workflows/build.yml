@@ -4,27 +4,27 @@ on:
   push:
     branches:
       - main
-      - 'fix/**'
-      - 'feat/**'
+      - fix/**
+      - feat/**
     paths:
-      - 'src/**'
-      - 'cmake/**'
+      - src/**
+      - cmake/**
       - CMakeLists.txt
       - vcpkg.json
-      - 'tools/*.cmake'
-      - 'tools/patches/lua-5.5.0-write-barrier.patch'
-      - '.github/workflows/build.yml'
+      - tools/*.cmake
+      - tools/patches/lua-5.5.0-write-barrier.patch
+      - .github/workflows/build.yml
   pull_request:
     branches:
       - main
     paths:
-      - 'src/**'
-      - 'cmake/**'
+      - src/**
+      - cmake/**
       - CMakeLists.txt
       - vcpkg.json
-      - 'tools/*.cmake'
-      - 'tools/patches/lua-5.5.0-write-barrier.patch'
-      - '.github/workflows/build.yml'
+      - tools/*.cmake
+      - tools/patches/lua-5.5.0-write-barrier.patch
+      - .github/workflows/build.yml
   workflow_dispatch:
 
 concurrency:
@@ -35,20 +35,25 @@ jobs:
   linux:
     name: Linux (Ubuntu 24.04, GCC, Release)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-
+    timeout-minutes: 60
     permissions:
       contents: read
-
     steps:
+
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize diagnostics
+        run: |
+          mkdir -p build/diagnostics
+          printf "### Linux build stages\n| Stage | Exit code | Seconds |\n| --- | --- | --- |\n" >> "$GITHUB_STEP_SUMMARY"
+          git rev-parse HEAD > build/diagnostics/commit.txt
 
       - name: Install apt dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
-            cmake ninja-build build-essential pkg-config \
+            cmake ninja-build build-essential pkg-config ccache \
             patch \
             gcc g++ \
             libssl-dev zlib1g-dev libfmt-dev libspdlog-dev \
@@ -56,8 +61,22 @@ jobs:
             libasio-dev \
             default-libmysqlclient-dev
 
+      - name: Identify compiler cache namespace
+        id: compiler
+        run: |
+          echo "version=$(g++ -dumpfullversion)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache compiler objects
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-gcc-${{ steps.compiler.outputs.version }}-${{ hashFiles('src/**', 'cmake/**', 'CMakeLists.txt', 'tools/patches/**') }}
+          restore-keys: |
+            ccache-linux-gcc-${{ steps.compiler.outputs.version }}-
+            ccache-linux-gcc-
+
       - name: Cache Lua 5.5 source
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ github.workspace }}/.cache/lua/lua-5.5.0.tar.gz
           key: lua-source-5.5.0-57ccc32bbbd005cab75bcc52444052535
@@ -137,32 +156,50 @@ jobs:
           rm -rf mio
 
       - name: Configure CMake
-        run: >
-          cmake -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DENABLE_NATIVE_OPTIMIZATIONS=OFF
-          -DENABLE_SLOW_TASK_DETECTION=OFF
-          -DUSE_MIMALLOC=OFF
-          -DBUILD_TESTING=ON
-          -DSKIP_GIT=OFF
-          -DLUA_INCLUDE_DIR=/usr/local/include
-          -DLUA_LIBRARY=/usr/local/lib/liblua.a
-          "-DLUA_LIBRARIES=/usr/local/lib/liblua.a;m;dl"
-          -DLUA_VERSION_STRING=5.5.0
+        run: |
+          bash cmake/ci/run-stage.sh configure cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_NATIVE_OPTIMIZATIONS=OFF -DENABLE_SLOW_TASK_DETECTION=OFF -DUSE_MIMALLOC=OFF -DBUILD_TESTING=ON -DSKIP_GIT=OFF -DLUA_INCLUDE_DIR=/usr/local/include -DLUA_LIBRARY=/usr/local/lib/liblua.a "-DLUA_LIBRARIES=/usr/local/lib/liblua.a;m;dl" -DLUA_VERSION_STRING=5.5.0 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: cmake --build build --parallel $(nproc)
+        run: |
+          bash cmake/ci/run-stage.sh build cmake --build build --parallel "$(nproc)"
 
       - name: Run tests
-        run: ctest --test-dir build --output-on-failure
+        run: |
+          bash cmake/ci/run-stage.sh test ctest --test-dir build --output-on-failure --no-tests=error --timeout 120 --output-junit "$GITHUB_WORKSPACE/build/diagnostics/tests.xml"
+          test -s build/diagnostics/tests.xml
 
       - name: Verify binary
         run: |
+          bash cmake/ci/run-stage.sh dependencies ldd build/tfs
+          ! grep -q "not found" build/diagnostics/dependencies.log
           file build/tfs
-          ldd build/tfs
 
       - name: Upload artifact binary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tfs-linux-${{ github.sha }}
           path: ${{ github.workspace }}/build/tfs
+
+      - name: Record compiler cache statistics
+        if: always()
+        run: |
+          bash cmake/ci/run-stage.sh compiler-cache ccache --show-stats
+        continue-on-error: true
+
+      - name: Upload build diagnostics
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: linux-diagnostics-${{ github.sha }}
+          path: |
+            build/diagnostics/
+            build/CMakeCache.txt
+            build/CMakeFiles/CMakeConfigureLog.yaml
+            build/Testing/Temporary/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1G
+      CCACHE_COMPILERCHECK: content
