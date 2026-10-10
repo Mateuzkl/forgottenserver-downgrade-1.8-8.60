@@ -8,6 +8,6 @@ tar -xzf $archive -C $directory
 if ($LASTEXITCODE -ne 0) { throw 'sccache extraction failed.' }
 $executable = Join-Path $directory 'sccache-v0.16.0-x86_64-pc-windows-msvc/sccache.exe'
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'sccache executable missing.' }
-Split-Path $executable >> $env:GITHUB_PATH
 & $executable --start-server
 if ($LASTEXITCODE -ne 0) { throw 'sccache server startup failed; compiler fallback remains enabled.' }
+Split-Path $executable >> $env:GITHUB_PATH

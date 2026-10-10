@@ -80,21 +80,14 @@ jobs:
             vcpkg-windows-x64-
             vcpkg-windows-
 
-      - name: Expose compiler cache runtime
+      - name: Install verified compiler cache
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        continue-on-error: true
         with:
           script: |
-            for (const name of ['ACTIONS_RESULTS_URL', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_CACHE_SERVICE_V2']) {
-              const value = process.env[name] || '';
-              if (name.endsWith('TOKEN') && value) core.setSecret(value);
-              core.exportVariable(name, value);
-            }
-
-      - name: Install verified compiler cache
-        shell: pwsh
-        run: |
-          & ./cmake/ci/SetupCompilerCache.ps1
-        continue-on-error: true
+            // Runtime credentials are inherited only by setup and the cache daemon.
+            if (process.env.ACTIONS_RUNTIME_TOKEN) core.setSecret(process.env.ACTIONS_RUNTIME_TOKEN);
+            await exec.exec('pwsh', ['-NoLogo', '-NoProfile', '-File', 'cmake/ci/SetupCompilerCache.ps1']);
 
       - name: Checkout pinned vcpkg source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
