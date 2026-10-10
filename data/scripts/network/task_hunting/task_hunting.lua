@@ -62,7 +62,13 @@ local function debug(message, ...)
 end
 
 local function supportsAstra(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	if not player then
+		return false
+	end
+	if player.isUsingAstraClient and player:isUsingAstraClient() then
+		return true
+	end
+	return player.isUsingFonticakClient and player:isUsingFonticakClient()
 end
 
 local function clamp(value, minimum, maximum)
@@ -537,6 +543,7 @@ function TaskHunting.sendBasicData(player)
 		out:addU16(option.secondReward)
 	end
 
+	-- Trailing fields must match OTC-Fonticak parseTaskHuntingBasicData (8.60 custom).
 	out:addU32(getRerollPrice(player))
 	out:addU32(getRerollPrice(player))
 	out:addByte(WILDCARD_SELECT_PRICE)
@@ -592,6 +599,7 @@ function TaskHunting.sendSlotData(player, slot)
 		out:addByte(slotData.upgraded and 1 or 0)
 		out:addU16(requiredKills)
 		out:addU16(clamp(slotData.currentKills, 0, requiredKills))
+		-- Rarity byte is required for 8.60 Fonticak (PREY_TASK_STATE_COMPLETED parser).
 		out:addByte(clamp(slotData.rarity, 1, 5))
 	end
 

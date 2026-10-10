@@ -24,9 +24,46 @@
 #include "teleport.h"
 #include "trashholder.h"
 #include "rewardchest.h"
+#include "luascript.h"
 
 extern Game g_game;
 extern Vocations g_vocations;
+extern LuaEnvironment g_luaEnvironment;
+
+namespace {
+uint64_t getRegistryDefaultLootUnitValue(uint16_t itemId)
+{
+	lua_State* L = g_luaEnvironment.getLuaState();
+	if (!L) {
+		return 0;
+	}
+
+	lua_getglobal(L, "ItemPriceRegistry");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return 0;
+	}
+
+	lua_getfield(L, -1, "getDefaultValue");
+	if (!lua_isfunction(L, -1)) {
+		lua_pop(L, 2);
+		return 0;
+	}
+
+	lua_pushinteger(L, itemId);
+	if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
+		lua_pop(L, 2);
+		return 0;
+	}
+
+	uint64_t value = 0;
+	if (lua_isnumber(L, -1)) {
+		value = static_cast<uint64_t>(lua_tonumber(L, -1));
+	}
+	lua_pop(L, 2);
+	return value;
+}
+} // namespace
 
 Items Item::items;
 
@@ -1235,6 +1272,24 @@ std::string Item::getNameDescription() const
 {
 	const ItemType& it = items[id];
 	return getNameDescription(it, this);
+}
+
+uint64_t Item::getLootMessageValue() const
+{
+	const ItemType& itemType = items[id];
+	uint64_t unitValue = getRegistryDefaultLootUnitValue(id);
+	if (unitValue <= 0) {
+		if (itemType.sellPrice > 0) {
+			unitValue = itemType.sellPrice;
+		} else if (itemType.buyPrice > 0) {
+			unitValue = itemType.buyPrice;
+		} else {
+			unitValue = itemType.worth;
+		}
+	}
+
+	const uint32_t count = itemType.stackable ? std::max<uint32_t>(1, getItemCount()) : 1;
+	return unitValue * count;
 }
 
 std::string Item::getWeightDescription(const ItemType& it, uint32_t weight, uint32_t count /*= 1*/)

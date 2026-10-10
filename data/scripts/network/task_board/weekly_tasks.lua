@@ -1,9 +1,26 @@
 -- Weekly Tasks logic: kill/delivery task generation, tracking, weekly reset, soulseal rewards.
 -- Uses KV store for simple values, DB table for complex data.
 
+-- The revscript loader also executes this file after task_board/init.lua dofile's it.
+-- Without a singleton, a second copy registers onItemMoved with protocol still nil.
+if _TASK_BOARD_WEEKLY_MODULE then
+	return _TASK_BOARD_WEEKLY_MODULE
+end
+
 local WeeklyTasks = {}
 
-local protocol -- set by init.lua
+local protocol -- set by init.lua (or TaskBoardProtocol once init finishes)
+
+local function getProtocol()
+	if protocol then
+		return protocol
+	end
+	if TaskBoardProtocol then
+		protocol = TaskBoardProtocol
+		return protocol
+	end
+	return nil
+end
 
 -- Difficulty constants
 local DIFFICULTY_BEGINNER = 0
@@ -330,17 +347,23 @@ function WeeklyTasks.distributeRewards(player)
 		return false
 	end
 
+	local proto = getProtocol()
+
 	-- Give hunting task points
 	if data.rewardHTP > 0 then
 		player:addTaskHuntingPoints(data.rewardHTP)
-		protocol.sendResourceBalance(player, protocol.RESOURCE_TASK_HUNTING, player:getTaskHuntingPoints())
+		if proto then
+			proto.sendResourceBalance(player, proto.RESOURCE_TASK_HUNTING, player:getTaskHuntingPoints())
+		end
 	end
 
 	-- Give soulseals
 	if data.rewardSoulseals > 0 then
 		player:addSoulsealsPoints(data.rewardSoulseals)
 		data.soulsealsPoints = player:getSoulsealsPoints()
-		protocol.sendResourceBalance(player, protocol.RESOURCE_SOULSEALS_POINTS, data.soulsealsPoints)
+		if proto then
+			proto.sendResourceBalance(player, proto.RESOURCE_SOULSEALS_POINTS, data.soulsealsPoints)
+		end
 	end
 
 	data.needsReward = false
@@ -699,6 +722,15 @@ end
 -- SEND TO CLIENT
 -- ============================================
 
+function WeeklyTasks.openWeekly(player)
+	local playerGuid = getPlayerGuid(player)
+	local data = loadWeeklyData(playerGuid)
+	if data.weeklyProgressFinished ~= 1 and #data.killTasks == 0 and #data.deliveryTasks == 0 then
+		WeeklyTasks.generateTasks(player)
+	end
+	return WeeklyTasks.sendWeeklyData(player)
+end
+
 function WeeklyTasks.sendWeeklyData(player)
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
@@ -761,7 +793,11 @@ function WeeklyTasks.sendWeeklyData(player)
 		hasExpansion = data.hasExpansion or false,
 	}
 
-	return protocol.sendWeeklyTaskData(player, protocolData)
+	local proto = getProtocol()
+	if not proto or not proto.sendWeeklyTaskData then
+		return false
+	end
+	return proto.sendWeeklyTaskData(player, protocolData)
 end
 
 function WeeklyTasks.setProtocol(protoModule)
@@ -825,10 +861,16 @@ local function notifyDeliveryItemChange(player, item)
 	WeeklyTasks.sendWeeklyData(player)
 end
 
-local weeklyDeliveryItemMoved = Event()
-weeklyDeliveryItemMoved.onItemMoved = function(player, item)
-	notifyDeliveryItemChange(player, item)
+if not _WEEKLY_DELIVERY_ITEM_MOVED_EVENT_REGISTERED then
+	_WEEKLY_DELIVERY_ITEM_MOVED_EVENT_REGISTERED = true
+
+	local weeklyDeliveryItemMoved = Event()
+	weeklyDeliveryItemMoved.onItemMoved = function(player, item)
+		notifyDeliveryItemChange(player, item)
+	end
+	weeklyDeliveryItemMoved:register()
 end
-weeklyDeliveryItemMoved:register()
+
+_TASK_BOARD_WEEKLY_MODULE = WeeklyTasks
 
 return WeeklyTasks

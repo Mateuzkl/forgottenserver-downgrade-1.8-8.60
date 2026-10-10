@@ -38,9 +38,12 @@ end
 -- Weekly tasks
 local weekly = nil
 if weeklyEnabled then
-	weekly = dofile("data/scripts/network/task_board/weekly_tasks.lua")
+	weekly = _TASK_BOARD_WEEKLY_MODULE or dofile("data/scripts/network/task_board/weekly_tasks.lua")
 	if weekly and weekly.setProtocol then
 		weekly.setProtocol(protocol)
+	end
+	if weekly then
+		_TASK_BOARD_WEEKLY_MODULE = weekly
 	end
 end
 
@@ -112,7 +115,10 @@ end
 local taskBoardActionHandler = PacketHandler(OPCODE_TASK_BOARD_ACTION)
 
 function taskBoardActionHandler.onReceive(player, msg)
-	if not player or not player.isUsingAstraClient or not player:isUsingAstraClient() then return end
+	if not player then return end
+	local customClient = (player.isUsingAstraClient and player:isUsingAstraClient())
+		or (player.isUsingFonticakClient and player:isUsingFonticakClient())
+	if not customClient then return end
 
 	local payload = protocol.parseTaskBoardAction(msg)
 	if not payload then
@@ -139,7 +145,11 @@ function taskBoardActionHandler.onReceive(player, msg)
 
     elseif option == 1 then -- Open Weekly
         if not weeklyEnabled then return end
-        if weekly then weekly.sendWeeklyData(player) end
+        if weekly and weekly.openWeekly then
+            weekly.openWeekly(player)
+        elseif weekly then
+            weekly.sendWeeklyData(player)
+        end
 	elseif option == 2 then -- Change Difficulty
 		if not bountyEnabled then return end
 		if bounty then bounty.changeDifficulty(player, payload.difficulty) end

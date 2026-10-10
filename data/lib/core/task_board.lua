@@ -13,7 +13,13 @@ TaskBoard.Storage = {
 }
 
 local function supportsTaskBoardNetwork(player)
-    return player and player.isUsingAstraClient and player:isUsingAstraClient()
+    if not player then
+        return false
+    end
+    if player.isUsingAstraClient and player:isUsingAstraClient() then
+        return true
+    end
+    return player.isUsingFonticakClient and player:isUsingFonticakClient()
 end
 
 local function clamp(value, maxValue)

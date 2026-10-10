@@ -18,7 +18,16 @@ local MAX_TRACKER_SLOTS = 5
 local SLOT_TWO_POINTS = 1500
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	if not player then
+		return false
+	end
+	if player.isUsingOtClient and player:isUsingOtClient() then
+		return true
+	end
+	if player.isUsingFonticakClient and player:isUsingFonticakClient() then
+		return true
+	end
+	return player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function clamp(value, minValue, maxValue)

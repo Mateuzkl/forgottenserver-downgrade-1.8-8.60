@@ -702,6 +702,7 @@ public:
 
 	std::string getNameDescription() const;
 	std::string getWeightDescription() const;
+	uint64_t getLootMessageValue() const;
 
 	// serialization
 	virtual Attr_ReadValue readAttr(AttrTypes_t attr, PropStream& propStream);

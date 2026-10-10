@@ -105,7 +105,13 @@ local OPCODE_RESOURCE_BALANCE = 0xEE
 local BOUNTY_EXTENSION_MARKER = 0x5441534B424F4152
 
 local function supportsCustomNetwork(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	if not player then
+		return false
+	end
+	if player.isUsingAstraClient and player:isUsingAstraClient() then
+		return true
+	end
+	return player.isUsingFonticakClient and player:isUsingFonticakClient()
 end
 
 local function clamp(value, minValue, maxValue)
