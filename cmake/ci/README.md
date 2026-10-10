@@ -16,6 +16,6 @@ Windows binary artifacts retain their previous scope, rather than bundling an
 entire installation. They expire after fourteen days and validate x64 PE headers
 and packaged DLL dependency closure. Windows resolves API-set imports.
 
-Linux/GCC and WebAssembly jobs use bounded ccache storage. Linking, tests and
+Linux/GCC and WebAssembly jobs use bounded ccache storage. Restored statistics\nare reset before compilation so hit/miss reports describe the current run. Linking, tests and
 package validation still execute on each run. Compare cold and warm timings
 separately; CI validation does not replace interactive application testing.
