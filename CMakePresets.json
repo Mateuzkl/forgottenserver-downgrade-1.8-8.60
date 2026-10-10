@@ -96,6 +96,51 @@
 				"BUILD_TESTING": "OFF",
 				"CMAKE_BUILD_TYPE": "Release"
 			}
+		},
+		{
+			"name": "release-tests",
+			"inherits": [
+				"default"
+			],
+			"description": "Release tests with fast linking; production server retains LTO",
+			"binaryDir": "${sourceDir}/build-release-tests",
+			"cacheVariables": {
+				"BUILD_TESTING": "ON",
+				"CMAKE_BUILD_TYPE": "Release",
+				"ENABLE_TEST_LTO": "OFF"
+			}
+		},
+		{
+			"name": "release-tests-lto",
+			"inherits": [
+				"release-tests"
+			],
+			"description": "Release tests linked with the production LTO library",
+			"binaryDir": "${sourceDir}/build-release-tests-lto",
+			"cacheVariables": {
+				"ENABLE_TEST_LTO": "ON"
+			}
+		},
+		{
+			"name": "release-tests-vcpkg",
+			"inherits": [
+				"release-tests",
+				"vcpkg"
+			],
+			"description": "Fast Release tests using vcpkg dependencies",
+			"binaryDir": "${sourceDir}/build-release-tests-vcpkg",
+			"cacheVariables": {}
+		},
+		{
+			"name": "release-tests-vcpkg-lto",
+			"inherits": [
+				"release-tests-vcpkg"
+			],
+			"description": "Release tests with vcpkg and the production LTO library",
+			"binaryDir": "${sourceDir}/build-release-tests-vcpkg-lto",
+			"cacheVariables": {
+				"ENABLE_TEST_LTO": "ON"
+			}
 		}
 	],
 	"buildPresets": [
@@ -135,6 +180,26 @@
 		{
 			"name": "vcpkg-benchmarks",
 			"configurePreset": "vcpkg-benchmarks",
+			"configuration": "Release"
+		},
+		{
+			"name": "release-tests",
+			"configurePreset": "release-tests",
+			"configuration": "Release"
+		},
+		{
+			"name": "release-tests-lto",
+			"configurePreset": "release-tests-lto",
+			"configuration": "Release"
+		},
+		{
+			"name": "release-tests-vcpkg",
+			"configurePreset": "release-tests-vcpkg",
+			"configuration": "Release"
+		},
+		{
+			"name": "release-tests-vcpkg-lto",
+			"configurePreset": "release-tests-vcpkg-lto",
 			"configuration": "Release"
 		}
 	],
@@ -176,6 +241,50 @@
 			"name": "vcpkg-benchmarks",
 			"configurePreset": "vcpkg-benchmarks",
 			"configuration": "Release"
+		},
+		{
+			"name": "release-tests",
+			"configurePreset": "release-tests",
+			"configuration": "Release",
+			"output": {
+				"outputOnFailure": true
+			},
+			"execution": {
+				"noTestsAction": "error"
+			}
+		},
+		{
+			"name": "release-tests-lto",
+			"configurePreset": "release-tests-lto",
+			"configuration": "Release",
+			"output": {
+				"outputOnFailure": true
+			},
+			"execution": {
+				"noTestsAction": "error"
+			}
+		},
+		{
+			"name": "release-tests-vcpkg",
+			"configurePreset": "release-tests-vcpkg",
+			"configuration": "Release",
+			"output": {
+				"outputOnFailure": true
+			},
+			"execution": {
+				"noTestsAction": "error"
+			}
+		},
+		{
+			"name": "release-tests-vcpkg-lto",
+			"configurePreset": "release-tests-vcpkg-lto",
+			"configuration": "Release",
+			"output": {
+				"outputOnFailure": true
+			},
+			"execution": {
+				"noTestsAction": "error"
+			}
 		}
 	]
 }
