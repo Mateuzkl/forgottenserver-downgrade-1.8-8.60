@@ -20,3 +20,11 @@ The Linux/GCC job uses bounded ccache storage. Restored statistics
 are reset before compilation so hit/miss reports describe the current run. Linking, tests and
 package validation still execute on each run. Compare cold and warm timings
 separately; CI validation does not replace interactive application testing.
+
+The Windows and Linux/GCC CI jobs set ENABLE_TEST_LTO=OFF. Tests share a separate
+library compiled from the same sources and dependency settings without IPO/LTO,
+avoiding repeated whole-program optimization when linking each test executable.
+The production tfslib and tfs keep their existing Release IPO/LTO settings.
+This trades an extra library compilation for faster test linking; compiler caches
+retain both variants. The option defaults to ON, preserving other build profiles.
+Generated build.ninja files are included in diagnostics to inspect target flags.

@@ -278,27 +278,42 @@ set(tfs_HDR
 
 set(tfs_MAIN ${CMAKE_CURRENT_LIST_DIR}/main.cpp PARENT_SCOPE)
 
-add_library(tfslib STATIC ${tfs_SRC})
-target_include_directories(tfslib PRIVATE ${LUA_INCLUDE_DIR})
-target_link_libraries(tfslib PUBLIC
-	asio::asio
-	fmt::fmt
-	mio::mio
-	spdlog::spdlog
-	pugixml::pugixml
-	absl::flat_hash_map
-	simdutf::simdutf
-	${CMAKE_THREAD_LIBS_INIT}
-	${Crypto++_LIBRARIES}
-	${LUA_LIBRARIES}
-	${MYSQL_CLIENT_LIBS}
-	)
-target_compile_definitions(tfslib PUBLIC ASIO_STANDALONE)
-set_target_properties(tfslib PROPERTIES UNITY_BUILD ${ENABLE_UNITY_BUILD})
+function(add_tfs_library target)
+	add_library(${target} STATIC ${tfs_SRC})
+	target_include_directories(${target} PRIVATE ${LUA_INCLUDE_DIR})
+	target_link_libraries(${target} PUBLIC
+		asio::asio
+		fmt::fmt
+		mio::mio
+		spdlog::spdlog
+		pugixml::pugixml
+		absl::flat_hash_map
+		simdutf::simdutf
+		${CMAKE_THREAD_LIBS_INIT}
+		${Crypto++_LIBRARIES}
+		${LUA_LIBRARIES}
+		${MYSQL_CLIENT_LIBS}
+		)
+	target_compile_definitions(${target} PUBLIC ASIO_STANDALONE)
+	set_target_properties(${target} PROPERTIES UNITY_BUILD ${ENABLE_UNITY_BUILD})
+endfunction()
+
+add_tfs_library(tfslib)
 
 add_custom_target(format COMMAND /usr/bin/clang-format -style=file -i ${tfs_HDR} ${tfs_SRC} ${tfs_MAIN})
 
 if (BUILD_TESTING)
+	set(tfs_TEST_LIBRARY tfslib)
+	if (NOT ENABLE_TEST_LTO AND (CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OR CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO))
+		# Avoid repeating whole-program optimization for every test executable.
+		# The production library and tfs retain their original IPO settings.
+		add_tfs_library(tfs_testlib)
+		set_target_properties(tfs_testlib PROPERTIES
+			INTERPROCEDURAL_OPTIMIZATION FALSE
+			INTERPROCEDURAL_OPTIMIZATION_RELEASE FALSE
+			INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO FALSE)
+		set(tfs_TEST_LIBRARY tfs_testlib)
+	endif()
 	add_subdirectory(tests)
 endif()
 

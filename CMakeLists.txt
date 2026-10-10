@@ -17,6 +17,7 @@ if (HTTP)
 endif()
 
 option(BUILD_TESTING "Build unit tests" OFF)
+option(ENABLE_TEST_LTO "Use production LTO library for unit tests" ON)
 if (BUILD_TESTING)
     list(APPEND VCPKG_MANIFEST_FEATURES "unit-tests")
 endif()

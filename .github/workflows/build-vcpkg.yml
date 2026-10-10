@@ -144,6 +144,7 @@ jobs:
             '-G', 'Ninja',
             '-DCMAKE_BUILD_TYPE=Release',
             '-DBUILD_TESTING=ON',
+            '-DENABLE_TEST_LTO=OFF',
             '-DCMAKE_C_COMPILER=cl',
             '-DCMAKE_CXX_COMPILER=cl',
             '-DVCPKG_TARGET_TRIPLET=x64-windows-static',
@@ -199,6 +200,7 @@ jobs:
           path: |
             build/diagnostics/
             build/CMakeCache.txt
+            build/build.ninja
             build/CMakeFiles/CMakeConfigureLog.yaml
             build/Testing/Temporary/
             build/vcpkg-manifest-install.log
