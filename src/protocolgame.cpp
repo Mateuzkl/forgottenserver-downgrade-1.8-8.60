@@ -4368,6 +4368,7 @@ void ProtocolGame::sendStoreCatalog()
 	};
 
 	const bool isAstra = isAstraClient;
+	const bool taskBoardStoreClient = isAstra || isFonticakClient;
 	const bool sendHighlights = supportsGameStoreHighlights;
 	const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
 	    std::chrono::system_clock::now().time_since_epoch()).count();
@@ -4401,12 +4402,12 @@ void ProtocolGame::sendStoreCatalog()
 			bool visible = true;
 			switch (offer.type) {
 				case StoreOfferType::BountyKillBoost:
-					visible = isAstra && bountyEnabled;
+					visible = taskBoardStoreClient && bountyEnabled;
 					break;
 				case StoreOfferType::WeeklyKillBoost:
 				case StoreOfferType::WeeklyReducedItems:
 				case StoreOfferType::WeeklyTaskExpansion:
-					visible = isAstra && weeklyEnabled;
+					visible = taskBoardStoreClient && weeklyEnabled;
 					break;
 				case StoreOfferType::BattlePass:
 					visible = battlePassEnabled;

@@ -134,10 +134,11 @@ void StoreService::clearRateLimit(uint32_t playerId)
 bool StoreService::isOfferAvailable(const Player& player, const StoreOffer& offer) const
 {
 	const bool astra = player.isAstraClient();
+	const bool taskBoardClient = astra || player.isFonticakClient();
 
-	// Task Board offers require corresponding systems + AstraClient.
+	// Task Board offers require corresponding systems + Astra/Fonticak client.
 	if (isTaskBoardOfferType(offer.type)) {
-		if (!astra) {
+		if (!taskBoardClient) {
 			return false;
 		}
 		if (!ConfigManager::getBoolean(ConfigManager::TASK_HUNTING_SYSTEM_ENABLED)) {

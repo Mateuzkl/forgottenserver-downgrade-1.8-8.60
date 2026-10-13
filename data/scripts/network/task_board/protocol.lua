@@ -278,6 +278,10 @@ function TaskBoardProtocol.sendBountyTaskData(player, data)
 		end
 	end
 
+	if TaskBoard and TaskBoard.getTimedBoostRemaining and TaskBoard.Storage then
+		out:addU32(clamp(TaskBoard.getTimedBoostRemaining(player, TaskBoard.Storage.BOUNTY_KILL_BOOST_UNTIL), 0, 0xFFFFFFFF))
+	end
+
 	return out:sendToPlayer(player)
 end
 
@@ -334,6 +338,11 @@ function TaskBoardProtocol.sendWeeklyTaskData(player, data)
 	out:addU32(clamp(data.soulsealsBalance or 0, 0, 0xFFFFFFFF))
 	out:addByte(data.needsReward and 1 or 0)
 	out:addByte(data.hasExpansion and 1 or 0)
+
+	if TaskBoard and TaskBoard.getTimedBoostRemaining and TaskBoard.Storage then
+		out:addU32(clamp(TaskBoard.getTimedBoostRemaining(player, TaskBoard.Storage.WEEKLY_KILL_BOOST_UNTIL), 0, 0xFFFFFFFF))
+		out:addU32(clamp(TaskBoard.getTimedBoostRemaining(player, TaskBoard.Storage.WEEKLY_REDUCED_ITEMS_UNTIL), 0, 0xFFFFFFFF))
+	end
 
 	return out:sendToPlayer(player)
 end
