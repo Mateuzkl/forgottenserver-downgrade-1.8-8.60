@@ -1405,10 +1405,10 @@ Thing* Lua::getThing(lua_State* L, int32_t arg)
 				thing = getSharedPtr<Item>(L, arg).get();
 				break;
 			case LuaData_Container:
-				thing = getSharedPtr<Item>(L, arg)->getContainer();
+				thing = getItemUserdata<Container>(L, arg);
 				break;
 			case LuaData_Teleport:
-				thing = getSharedPtr<Item>(L, arg)->getTeleport();
+				thing = getItemUserdata<Teleport>(L, arg);
 				break;
 			case LuaData_Player:
 				thing = getUserdata<Player>(L, arg);

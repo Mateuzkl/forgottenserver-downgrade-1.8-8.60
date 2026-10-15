@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <span>
 #include <vector>
@@ -31,16 +32,23 @@ public:
 
 		vec.reserve(vec.size() + spectators.vec.size());
 		vec.insert(vec.end(), spectators.vec.begin(), spectators.vec.end());
+		sortAndDeduplicate();
+	}
 
-		vec.erase(std::remove_if(vec.begin(), vec.end(),
-			[](const auto& spectator) { return !spectator; }), vec.end());
+	// Consume a disposable snapshot without copying its shared ownership. The
+	// destination anchors every surviving reference before the source is cleared.
+	void addSpectators(SpectatorVec&& spectators)
+	{
+		if (spectators.vec.empty() || &spectators == this) {
+			return;
+		}
 
-		// shared_ptr's default comparisons are .get()-based under a strict total
-		// order (C++20 [util.smartptr.shared.cmp]), so no custom comparators needed.
-		std::sort(vec.begin(), vec.end());
-		vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
-
-		partitioned_ = false;
+		vec.reserve(vec.size() + spectators.vec.size());
+		vec.insert(vec.end(), std::make_move_iterator(spectators.vec.begin()),
+		           std::make_move_iterator(spectators.vec.end()));
+		spectators.vec.clear();
+		spectators.partitioned_ = false;
+		sortAndDeduplicate();
 	}
 
 	void erase(Creature* spectator)
@@ -96,6 +104,17 @@ public:
 	void emplaceNull() { vec.emplace_back(); partitioned_ = false; }
 
 private:
+	void sortAndDeduplicate()
+	{
+		vec.erase(std::remove_if(vec.begin(), vec.end(),
+			[](const auto& spectator) { return !spectator; }), vec.end());
+
+		// shared_ptr comparisons keep the same pointer-based order in both paths.
+		std::sort(vec.begin(), vec.end());
+		vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
+		partitioned_ = false;
+	}
+
 	Vec vec;
 	size_t playerEnd_ = 0;
 	size_t monsterEnd_ = 0;

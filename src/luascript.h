@@ -877,6 +877,11 @@ struct OwnedUserdata {
 
 inline int deleteOwnedUserdata(lua_State* L)
 {
+	// Lookup APIs can expose a borrowed pointer with the same metatable. Such
+	// userdata is only sizeof(T*) bytes, not an OwnedUserdataHeader.
+	if (lua_type(L, 1) != LUA_TUSERDATA || lua_rawlen(L, 1) < sizeof(OwnedUserdataHeader)) {
+		return 0;
+	}
 	auto* header = static_cast<OwnedUserdataHeader*>(lua_touserdata(L, 1));
 	if (header && header->value && header->magic == OwnedUserdataMagic && header->destroy) {
 		header->destroy(header);

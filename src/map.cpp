@@ -414,11 +414,11 @@ void Map::moveCreature(Creature& creature, Tile& newTile, bool forceTeleport /* 
 	SpectatorVec spectators, newPosSpectators;
 	getSpectators(spectators, oldPos, true);
 	getSpectators(newPosSpectators, newPos, true);
-	spectators.addSpectators(newPosSpectators);
+	spectators.addSpectators(std::move(newPosSpectators));
 	spectators.partitionByType();
 
 	std::vector<int32_t> oldStackPosVector;
-	oldStackPosVector.reserve(spectators.size());
+	oldStackPosVector.reserve(spectators.players().size());
 	for (const auto& spectator : spectators.players()) {
 		Player* tmpPlayer = static_cast<Player*>(spectator.get());
 		if (tmpPlayer->canSeeCreature(&creature)) {

@@ -1023,7 +1023,7 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 			SpectatorVec spectators, toPosSpectators;
 			g_game.map.getSpectators(spectators, fromPos, true, true);
 			g_game.map.getSpectators(toPosSpectators, toPos, true, true);
-			spectators.addSpectators(toPosSpectators);
+			spectators.addSpectators(std::move(toPosSpectators));
 			spectators.partitionByType();
 			SpectatorVec filtered;
 			for (const auto& s : spectators.players()) {

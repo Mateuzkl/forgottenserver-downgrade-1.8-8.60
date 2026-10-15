@@ -7919,7 +7919,7 @@ void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uin
 	SpectatorVec spectators, toPosSpectators;
 	map.getSpectators(spectators, fromPos, true, true);
 	map.getSpectators(toPosSpectators, toPos, true, true);
-	spectators.addSpectators(toPosSpectators);
+	spectators.addSpectators(std::move(toPosSpectators));
 
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	addDistanceEffect(spectators, fromPos, toPos, effect);

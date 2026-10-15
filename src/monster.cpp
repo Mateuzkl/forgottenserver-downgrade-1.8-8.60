@@ -969,7 +969,7 @@ void Monster::updateTargetListAfterMovement(const Position& oldPosition, const P
 	const auto addEdgeSpectators = [&spectators](const Position& center, int32_t rangeX, int32_t rangeY) {
 		SpectatorVec edgeSpectators;
 		g_game.map.getSpectators(edgeSpectators, center, false, false, rangeX, rangeX, rangeY, rangeY);
-		spectators.addSpectators(edgeSpectators);
+		spectators.addSpectators(std::move(edgeSpectators));
 	};
 
 	if (newPosition.x > oldPosition.x) {

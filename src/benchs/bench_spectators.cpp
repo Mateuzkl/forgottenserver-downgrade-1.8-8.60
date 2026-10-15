@@ -11,6 +11,7 @@
 #include <benchmark/benchmark.h>
 
 #include <random>
+#include <thread>
 
 namespace {
 
@@ -121,6 +122,38 @@ static void bench_addSpectators_sortUnique(benchmark::State& state)
 	}
 }
 BENCHMARK(bench_addSpectators_sortUnique)->ArgsProduct({{35, 150}, {0, 50, 90}});
+
+// Both variants build the same two strong snapshots, as moveCreature does.
+// false preserves the baseline const-source merge; true consumes the source.
+template <bool Consume>
+static void bench_addSpectators_snapshots(benchmark::State& state)
+{
+	// The server is multithreaded. Also exercise the atomic shared_ptr path on
+	// libstdc++/glibc, which can otherwise optimize counts in single-threaded apps.
+	std::thread([] {}).join();
+	auto [dstPool, srcPool] = makePools(state.range(0), state.range(1));
+	SpectatorVec dst, src;
+	for (const auto& c : dstPool) {
+		dst.emplace_back(c);
+	}
+	for (const auto& c : srcPool) {
+		src.emplace_back(c);
+	}
+
+	for ([[maybe_unused]] auto _ : state) {
+		SpectatorVec oldSnapshot = dst;
+		SpectatorVec newSnapshot = src;
+		if constexpr (Consume) {
+			oldSnapshot.addSpectators(std::move(newSnapshot));
+		} else {
+			oldSnapshot.addSpectators(newSnapshot);
+		}
+		oldSnapshot.partitionByType();
+		benchmark::DoNotOptimize(oldSnapshot);
+	}
+}
+BENCHMARK_TEMPLATE(bench_addSpectators_snapshots, false)->ArgsProduct({{5, 50, 200}, {0, 50, 90}});
+BENCHMARK_TEMPLATE(bench_addSpectators_snapshots, true)->ArgsProduct({{5, 50, 200}, {0, 50, 90}});
 
 static void bench_addSpectators_abslHashSet(benchmark::State& state)
 {

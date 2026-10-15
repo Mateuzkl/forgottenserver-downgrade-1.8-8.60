@@ -1254,11 +1254,8 @@ int LuaScriptInterface::luaItemGetTranscendenceChance(lua_State *L)
 
 int LuaScriptInterface::luaItemGC(lua_State* L)
 {
-	auto* ptr = static_cast<std::shared_ptr<Item>*>(lua_touserdata(L, 1));
-	if (ptr) {
-		std::destroy_at(ptr);
-	}
-	return 0;
+	// Item, Container and Teleport all store shared_ptr<Item> in this slot.
+	return luaSharedPtrGC<Item>(L);
 }
 
 /**
