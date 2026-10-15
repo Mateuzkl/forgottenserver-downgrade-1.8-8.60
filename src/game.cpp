@@ -6788,6 +6788,7 @@ bool tryApplyEchoWardDodge(CombatDamage& damage, Creature* target)
 bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* target, bool checkDefense,
                           bool checkArmor, bool field, bool ignoreResistances /*= false */)
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameCombatBlockHit);
 	if (damage.primary.type == COMBAT_NONE && damage.secondary.type == COMBAT_NONE) {
 		return true;
 	}
@@ -7111,6 +7112,7 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 
 bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage& damage)
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameCombatChangeHealth);
 	if (!target || target->isDead() || target->isRemoved()) {
 		return false;
 	}
@@ -8466,6 +8468,7 @@ void Game::shutdown()
 
 void Game::cleanup()
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameCleanup);
 	// free memory
 	ToReleaseCreatures.clear();
 	ToReleaseCreatureSet.clear();

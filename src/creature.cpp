@@ -255,6 +255,7 @@ void Creature::onThink(uint32_t interval)
 	}
 
 	// scripting event - onThink
+	PerformanceScope thinkEventsScope(PerformanceMetric::CreatureThinkEvents);
 	const CreatureEventList& thinkEvents = getCreatureEvents(CREATURE_EVENT_THINK);
 	for (CreatureEvent* thinkEvent : thinkEvents) {
 		thinkEvent->executeOnThink(this, interval);
@@ -1486,6 +1487,7 @@ void Creature::removeMaster()
 
 bool Creature::addCondition(Condition_ptr condition, bool force /* = false*/)
 {
+	PerformanceScope performanceScope(PerformanceMetric::CreatureAddCondition);
 	if (!condition) {
 		return false;
 	}

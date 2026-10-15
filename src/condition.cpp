@@ -3,6 +3,8 @@
 
 #include "otpch.h"
 
+#include "performance_metrics.h"
+
 #include "condition.h"
 
 #include "configmanager.h"
@@ -1603,6 +1605,7 @@ bool ConditionDamage::getNextDamage(int32_t& damage)
 
 bool ConditionDamage::doDamage(Creature* creature, int32_t healthChange)
 {
+	PerformanceScope performanceScope(PerformanceMetric::ConditionDamageDoDamage);
 	if (!creature || creature->isDead() || creature->isRemoved()) {
 		return false;
 	}

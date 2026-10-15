@@ -1,0 +1,9 @@
+[2026-10-15 12:00:00.000] [INFO] [Perf] TaskReactor::runOnce calls=1 total_ms=2.500 avg_us=2500.000 max_us=2500.000 p50_us=4194.304 p95_us=4194.304 p99_us=4194.304
+[Perf] Game::checkCreatures calls=2 total_ms=1.250 avg_us=625.000 max_us=1000.000 p50_us=1048.576 p95_us=1048.576 p99_us=1048.576
+[Perf] reactor queue=5 backlog_max=7 deferred=2 expired=0 dropped=0
+[Perf] area_combat casts=3 applied=12 recipients=400
+[Perf] path requests=4 success=3 failure=1 nodes=40 tiles=60 path_steps=8
+[Perf] network accept_started=1 accept_ok=1 accept_error=0 rate_limited=0 ip_limited=0 active=400 active_max=400
+Unrelated text is data, never evaluated as code.
+[2026-10-15 12:00:05.000] [INFO] [Perf] TaskReactor::runOnce calls=1 total_ms=999.000 avg_us=999000.000 max_us=999000.000 p50_us=1048576.000 p95_us=1048576.000 p99_us=1048576.000
+[Perf] Game::checkCreatures calls=1 total_ms=999.000 avg_us=999000.000 max_us=999000.000 p50_us=1048576.000 p95_us=1048576.000 p99_us=1048576.000

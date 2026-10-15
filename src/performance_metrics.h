@@ -43,6 +43,51 @@ enum class PerformanceMetric : uint8_t
 	CombatAreaProcessTiles,
 	CombatAreaApplyTargets,
 	CreatureExecuteConditions,
+	PlayerOnThink,
+	CreatureThinkEvents,
+	GameCleanup,
+	GameCombatBlockHit,
+	GameCombatChangeHealth,
+	CreatureAddCondition,
+	ConditionDamageDoDamage,
+	MonsterMoveCallback,
+	MonsterFullRefresh,
+	MonsterEdgeRefresh,
+	MonsterPruneTargets,
+	MonsterCreatureFound,
+	MonsterSearchTarget,
+	MonsterFollowPath,
+	Count,
+};
+
+// Fixed cardinality: never create series indexed by monster/player IDs or positions.
+enum class MonsterAiMetric : uint8_t
+{
+	MoveCallbacks,
+	SelfMoves,
+	FullSummon,
+	FullTeleport,
+	FullFloorChange,
+	FullNoFollow,
+	EdgeMoves,
+	RefreshSpectators,
+	SearchCandidates,
+	SearchValidCandidates,
+	SearchAttackChecks,
+	SearchSelected,
+	SearchFailed,
+	FollowForced,
+	FollowReused,
+	FollowDirectAttempts,
+	FollowDirectSuccess,
+	FollowPrimaryAttempts,
+	FollowPrimarySuccess,
+	FollowFallbackAttempts,
+	FollowFallbackSuccess,
+	FollowFailed,
+	AttackTicks,
+	AttackSpells,
+	AttackCasts,
 	Count,
 };
 
@@ -172,10 +217,15 @@ public:
 	[[nodiscard]] uint64_t getMonsterIdleMetric(
 	    MonsterIdleMetric metric) const noexcept;
 	[[nodiscard]] uint64_t getPathSteps() const noexcept;
+	void recordMonsterAi(MonsterAiMetric metric, uint64_t count = 1) noexcept;
+	void recordMonsterTargetCount(size_t count) noexcept;
+	using MonsterAiCounters = std::array<uint64_t, static_cast<size_t>(MonsterAiMetric::Count)>;
+	[[nodiscard]] MonsterAiCounters takeMonsterAiCounters() noexcept;
 
 	void maybeReport();
 
 private:
+	friend struct PerformanceMetricsTestAccess;
 	static constexpr size_t HistogramBuckets = 64;
 
 	struct MetricData
@@ -262,6 +312,13 @@ private:
 	PathData path;
 	AreaCombatData areaCombat;
 	NetworkData network;
+	std::array<std::atomic<uint64_t>, static_cast<size_t>(MonsterAiMetric::Count)> monsterAi{};
+	struct TargetSizeData
+	{
+		std::atomic<uint64_t> samples{0};
+		std::atomic<uint64_t> maximum{0};
+		std::array<std::atomic<uint64_t>, HistogramBuckets> histogram{};
+	} targetSizes;
 
 	std::array<
 	    std::atomic<uint64_t>,

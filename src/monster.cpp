@@ -603,6 +603,8 @@ void Monster::onRemoveCreature(Creature* creature, bool isLogout)
 void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Position& newPos, const Tile* oldTile,
                              const Position& oldPos, bool teleport)
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterMoveCallback);
+	g_performanceMetrics.recordMonsterAi(MonsterAiMetric::MoveCallbacks);
 	Creature::onCreatureMove(creature, newTile, newPos, oldTile, oldPos, teleport);
 
 	if (mType->info.creatureMoveEvent != -1) {
@@ -632,8 +634,15 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 	}
 
 	if (creature == this) {
-		const bool needsFullTargetRefresh = isSummon() || teleport || oldPos.z != newPos.z || followCreature.expired();
-		if (isSummon()) {
+		const bool summon = isSummon();
+		const bool needsFullTargetRefresh = summon || teleport || oldPos.z != newPos.z || followCreature.expired();
+		g_performanceMetrics.recordMonsterAi(MonsterAiMetric::SelfMoves);
+		// Exclusive reason classification, following the existing full-refresh predicate order.
+		g_performanceMetrics.recordMonsterAi(
+		    summon ? MonsterAiMetric::FullSummon : teleport ? MonsterAiMetric::FullTeleport :
+		    oldPos.z != newPos.z ? MonsterAiMetric::FullFloorChange : needsFullTargetRefresh ? MonsterAiMetric::FullNoFollow :
+		    MonsterAiMetric::EdgeMoves);
+		if (summon) {
 			auto master = getMaster();
 			if (master) {
 				const bool sameInstance = getInstanceID() == master->getInstanceID();
@@ -879,6 +888,7 @@ bool Monster::isValidKnownTarget(const std::shared_ptr<Creature>& creature) cons
 
 bool Monster::pruneInvalidTargetState()
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterPruneTargets);
 	const bool metricsEnabled = g_performanceMetrics.isEnabled();
 	if (metricsEnabled) {
 		g_performanceMetrics.recordMonsterIdle(MonsterIdleMetric::PruneCalls);
@@ -934,11 +944,13 @@ bool Monster::pruneInvalidTargetState()
 
 void Monster::updateTargetList()
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterFullRefresh);
 	pruneInvalidTargetState();
 
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, position);
 	spectators.erase(this);
+	g_performanceMetrics.recordMonsterAi(MonsterAiMetric::RefreshSpectators, spectators.size());
 	for (const auto& spectator : spectators) {
 		onCreatureFound(spectator.get(), false, false);
 	}
@@ -948,10 +960,12 @@ void Monster::updateTargetList()
 	if (isIdle) {
 		clearFriendList();
 	}
+	g_performanceMetrics.recordMonsterTargetCount(targetList.size());
 }
 
 void Monster::updateTargetListAfterMovement(const Position& oldPosition, const Position& newPosition)
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterEdgeRefresh);
 	bool changed = pruneInvalidTargetState();
 	const size_t targetCount = targetList.size();
 	const size_t friendCount = friendList.size();
@@ -990,6 +1004,7 @@ void Monster::updateTargetListAfterMovement(const Position& oldPosition, const P
 	}
 
 	changed = changed || targetList.size() != targetCount || friendList.size() != friendCount;
+	g_performanceMetrics.recordMonsterAi(MonsterAiMetric::RefreshSpectators, spectators.size());
 	changed = clearFactionTargetIfNotAllowed() || changed;
 	if (changed) {
 		updateIdleStatus();
@@ -997,6 +1012,7 @@ void Monster::updateTargetListAfterMovement(const Position& oldPosition, const P
 			clearFriendList();
 		}
 	}
+	g_performanceMetrics.recordMonsterTargetCount(targetList.size());
 }
 
 void Monster::clearTargetList()
@@ -1011,6 +1027,7 @@ void Monster::clearFriendList()
 
 void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/, bool refreshIdle /* = true*/)
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterCreatureFound);
 	if (!creature) {
 		return;
 	}
@@ -1307,8 +1324,14 @@ void Monster::onCreatureLeave(Creature* creature)
 
 bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAULT*/)
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterSearchTarget);
+	g_performanceMetrics.recordMonsterTargetCount(targetList.size());
+	const auto finishSearch = [](bool selected) {
+		g_performanceMetrics.recordMonsterAi(selected ? MonsterAiMetric::SearchSelected : MonsterAiMetric::SearchFailed);
+		return selected;
+	};
 	if (isRemoved()) {
-		return false;
+		return finishSearch(false);
 	}
 
 	std::vector<std::shared_ptr<Creature>> resultList;
@@ -1341,11 +1364,15 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 
 		auto follow = followCreature.lock();
 		if (follow.get() != creature.get() && isTarget(creature.get())) {
+			g_performanceMetrics.recordMonsterAi(MonsterAiMetric::SearchAttackChecks,
+			                                    searchType == TARGETSEARCH_RANDOM ? 0 : 1);
 			if (searchType == TARGETSEARCH_RANDOM || canUseAttack(myPos, creature.get())) {
 				resultList.push_back(std::move(creature));
 			}
 		}
 	}
+	g_performanceMetrics.recordMonsterAi(MonsterAiMetric::SearchCandidates, targetList.size());
+	g_performanceMetrics.recordMonsterAi(MonsterAiMetric::SearchValidCandidates, resultList.size());
 
 	switch (searchType) {
 		case TARGETSEARCH_NEAREST: {
@@ -1393,7 +1420,7 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 			}
 
 			if (target && selectTarget(target.get())) {
-				return true;
+				return finishSearch(true);
 			}
 			break;
 		}
@@ -1425,7 +1452,7 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 			}
 
 			if (target && selectTarget(target.get())) {
-				return true;
+				return finishSearch(true);
 			}
 			break;
 		}
@@ -1463,7 +1490,7 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 			}
 
 			if (target && selectTarget(target.get())) {
-				return true;
+				return finishSearch(true);
 			}
 			break;
 		}
@@ -1482,15 +1509,15 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 						}
 					}
 					if (!playerTargets.empty()) {
-						return selectTarget(playerTargets[uniform_random(0, playerTargets.size() - 1)].get());
+						return finishSearch(selectTarget(playerTargets[uniform_random(0, playerTargets.size() - 1)].get()));
 					}
 				}
 
-				return selectTarget(resultList[uniform_random(0, resultList.size() - 1)].get());
+				return finishSearch(selectTarget(resultList[uniform_random(0, resultList.size() - 1)].get()));
 			}
 
 			if (searchType == TARGETSEARCH_ATTACKRANGE) {
-				return false;
+				return finishSearch(false);
 			}
 
 			break;
@@ -1516,7 +1543,7 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 
 			auto follow = followCreature.lock();
 			if (follow.get() != target.get() && isTarget(target.get()) && isPlayerTarget(target) && selectTarget(target.get())) {
-				return true;
+				return finishSearch(true);
 			}
 		}
 	}
@@ -1528,10 +1555,10 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 
 		auto follow = followCreature.lock();
 		if (follow.get() != target.get() && isTarget(target.get()) && selectTarget(target.get())) {
-			return true;
+			return finishSearch(true);
 		}
 	}
-	return false;
+	return finishSearch(false);
 }
 
 bool Monster::selectBlockerTarget()
@@ -2023,12 +2050,14 @@ void Monster::doAttacking(uint32_t interval)
 	}
 
 	bool updateLook = true;
+	g_performanceMetrics.recordMonsterAi(MonsterAiMetric::AttackTicks);
 	bool resetTicks = interval != 0;
 	attackTicks += interval;
 
 	const Position& myPos = getPosition();
 
 	for (const spellBlock_t& spellBlock : mType->info.attackSpells) {
+		g_performanceMetrics.recordMonsterAi(MonsterAiMetric::AttackSpells);
 		// OPTIMIZATION: Single validity check per spell iteration instead of
 		// 5+ redundant isDead/isRemoved checks that were here before.
 		auto victim = attackedCreature.lock();
@@ -2061,6 +2090,7 @@ void Monster::doAttacking(uint32_t interval)
 				minCombatValue = minVal;
 				maxCombatValue = maxVal;
 
+				g_performanceMetrics.recordMonsterAi(MonsterAiMetric::AttackCasts);
 				spellBlock.spell->castSpell(this, victim.get());
 
 				// Check after cast — this is the only place state can actually change
@@ -3449,8 +3479,10 @@ bool Monster::shouldRepathAfterTargetStep()
 
 void Monster::goToFollowCreature()
 {
+	PerformanceScope performanceScope(PerformanceMetric::MonsterFollowPath);
 	// Consume the forced update before walking to avoid redundant requests.
 	const bool forcedPathUpdate = forceUpdateFollowPath;
+	g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowForced, forcedPathUpdate ? 1 : 0);
 	forceUpdateFollowPath = false;
 
 	if (auto follow = followCreature.lock()) {
@@ -3460,6 +3492,7 @@ void Monster::goToFollowCreature()
 		bool canReusePath = !forcedPathUpdate && !listWalkDir.empty() &&
 		                    canWalkTo(getPosition(), listWalkDir.back());
 		if (canReusePath) {
+			g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowReused);
 			const int32_t endDistance =
 			    std::max(followPathEnd.getDistanceX(follow->getPosition()),
 			             followPathEnd.getDistanceY(follow->getPosition()));
@@ -3475,16 +3508,22 @@ void Monster::goToFollowCreature()
 		}
 
 		listWalkDir.clear();
+		g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowDirectAttempts);
 		bool pathFound = tryMonsterChaseStep(follow->getPosition(), fpp, listWalkDir);
+		g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowDirectSuccess, pathFound ? 1 : 0);
 		if (!pathFound) {
+			g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowPrimaryAttempts);
 			fpp.allowDiagonal = false;
 			pathFound = getPathTo(follow->getPosition(), listWalkDir, fpp);
+			g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowPrimarySuccess, pathFound ? 1 : 0);
 		}
 		if (!pathFound && fpp.maxTargetDist <= 1 && !fpp.keepDistance) {
 			// The restricted search can fail when a melee monster must route
 			// around a wall. Retry with complete A* while keeping movement cardinal.
 			fpp.fullPathSearch = true;
+			g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowFallbackAttempts);
 			pathFound = getPathTo(follow->getPosition(), listWalkDir, fpp);
+			g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowFallbackSuccess, pathFound ? 1 : 0);
 		}
 
 		if (pathFound) {
@@ -3499,6 +3538,7 @@ void Monster::goToFollowCreature()
 			}
 		} else {
 			hasFollowPath = false;
+			g_performanceMetrics.recordMonsterAi(MonsterAiMetric::FollowFailed);
 		}
 	}
 
