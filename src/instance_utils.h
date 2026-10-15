@@ -79,10 +79,11 @@ inline void sendMagicEffectToInstance(const SpectatorVec &spectators,
                                        const Position &pos, uint8_t effect,
                                        uint32_t instanceId)
 {
+    MagicEffectPacket packet;
     for (const auto& spectator : spectators.players()) {
         Player *p = static_cast<Player*>(spectator.get());
         if (p->compareInstance(instanceId)) {
-            p->sendMagicEffect(pos, effect);
+            p->sendMagicEffect(pos, effect, packet);
         }
     }
 }

@@ -7900,12 +7900,13 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 
 void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect)
 {
+	MagicEffectPacket packet;
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
-		player->sendMagicEffect(pos, effect);
+		player->sendMagicEffect(pos, effect, packet);
 	}
 }
 
