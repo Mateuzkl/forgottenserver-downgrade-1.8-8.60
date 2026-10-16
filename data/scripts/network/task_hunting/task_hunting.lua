@@ -128,7 +128,11 @@ local function ensureSchema()
 
 	schemaReady = tableReady and wildcardColumnReady and preyWildcardColumnReady and true or nil
 	if not schemaReady then
-		print("[TaskHunting] Database schema is not ready; will retry on next use.")
+		if logger and logger.warn then
+			logger.warn("[TaskHunting] Database schema is not ready; will retry on next use.")
+		else
+			print("[TaskHunting] Database schema is not ready; will retry on next use.")
+		end
 		return false
 	end
 	return true

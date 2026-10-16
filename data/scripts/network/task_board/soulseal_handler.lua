@@ -13,8 +13,13 @@ if not SoulPit then
 	dofile("data/lib/others/soulpit.lua")
 end
 
+if _TASK_BOARD_SOULSEAL_MODULE then
+	return _TASK_BOARD_SOULSEAL_MODULE
+end
+
 local protocol
 local SoulSealHandler = {}
+_TASK_BOARD_SOULSEAL_MODULE = SoulSealHandler
 
 local function isNearSoulpitObelisk(player)
 	local playerPosition = player and player:getPosition()

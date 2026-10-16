@@ -3,7 +3,12 @@
 --           0xEE (resource balance). Task Hunting owns 0xBA/0xBB.
 -- All send functions use NetworkMessage. All receive handlers use PacketHandler + NetworkGuard.
 
+if _TASK_BOARD_PROTOCOL_MODULE then
+	return _TASK_BOARD_PROTOCOL_MODULE
+end
+
 local TaskBoardProtocol = {}
+_TASK_BOARD_PROTOCOL_MODULE = TaskBoardProtocol
 
 -- Resource type constants matching Crystal ServerDefinitions.hpp
 local RESOURCE_TASK_HUNTING = TaskBoard.Resources.TASK_HUNTING

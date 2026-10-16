@@ -1,7 +1,12 @@
 -- Hunting Task Shop: offer browsing, purchase validation, item/mount/outfit delivery.
 -- Shop offers loaded from Lua config table.
 
+if _TASK_BOARD_SHOP_MODULE then
+	return _TASK_BOARD_SHOP_MODULE
+end
+
 local HuntingShop = {}
+_TASK_BOARD_SHOP_MODULE = HuntingShop
 
 local protocol -- set by init.lua
 

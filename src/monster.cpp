@@ -3171,12 +3171,12 @@ void Monster::death(Creature*)
 					std::string lootString;
 					const auto& itemList = rewardContainer->getItemList();
 					for (auto lootIt = itemList.begin(); lootIt != itemList.end(); ++lootIt) {
-						if (lootIt != itemList.begin()) {
-							lootString += ", ";
-						}
 						const Item* lootItem = lootIt->get();
 						if (!lootItem) {
 							continue;
+						}
+						if (!lootString.empty()) {
+							lootString += ", ";
 						}
 						const std::string description = lootItem->getNameDescription();
 						if (!useColorizedLoot) {

@@ -1,7 +1,12 @@
 -- Bounty Tasks logic: creature generation, selection, reroll, kill tracking, reward claiming.
 -- Uses TaskBoardProtocol for byte serialization and KV store for persistence.
 
+if _TASK_BOARD_BOUNTY_MODULE then
+	return _TASK_BOARD_BOUNTY_MODULE
+end
+
 local BountyTasks = {}
+_TASK_BOARD_BOUNTY_MODULE = BountyTasks
 
 local protocol -- set by init.lua after loading
 

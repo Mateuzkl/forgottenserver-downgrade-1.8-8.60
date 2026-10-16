@@ -1277,13 +1277,14 @@ std::string Item::getNameDescription() const
 uint64_t Item::getLootMessageValue() const
 {
 	const ItemType& itemType = items[id];
-	uint64_t unitValue = getRegistryDefaultLootUnitValue(id);
-	if (unitValue <= 0) {
-		if (itemType.sellPrice > 0) {
-			unitValue = itemType.sellPrice;
-		} else if (itemType.buyPrice > 0) {
-			unitValue = itemType.buyPrice;
-		} else {
+	uint64_t unitValue = 0;
+	if (itemType.sellPrice > 0) {
+		unitValue = itemType.sellPrice;
+	} else if (itemType.buyPrice > 0) {
+		unitValue = itemType.buyPrice;
+	} else {
+		unitValue = getRegistryDefaultLootUnitValue(id);
+		if (unitValue == 0) {
 			unitValue = itemType.worth;
 		}
 	}

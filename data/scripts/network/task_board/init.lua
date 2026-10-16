@@ -24,12 +24,12 @@ local soulsealsEnabled = configManager.getBoolean(configKeys.SOULSEALS_SYSTEM_EN
 -- ============================================
 
 -- Protocol (always needed for resource balance at minimum)
-local protocol = dofile("data/scripts/network/task_board/protocol.lua")
+local protocol = _TASK_BOARD_PROTOCOL_MODULE or dofile("data/scripts/network/task_board/protocol.lua")
 
 -- Bounty tasks
 local bounty = nil
 if bountyEnabled then
-	bounty = dofile("data/scripts/network/task_board/bounty_tasks.lua")
+	bounty = _TASK_BOARD_BOUNTY_MODULE or dofile("data/scripts/network/task_board/bounty_tasks.lua")
 	if bounty and bounty.setProtocol then
 		bounty.setProtocol(protocol)
 	end
@@ -42,20 +42,17 @@ if weeklyEnabled then
 	if weekly and weekly.setProtocol then
 		weekly.setProtocol(protocol)
 	end
-	if weekly then
-		_TASK_BOARD_WEEKLY_MODULE = weekly
-	end
 end
 
 -- Hunting shop
-local shop = dofile("data/scripts/network/task_board/hunting_shop.lua")
+local shop = _TASK_BOARD_SHOP_MODULE or dofile("data/scripts/network/task_board/hunting_shop.lua")
 if shop and shop.setProtocol then
 	shop.setProtocol(protocol)
 end
 
 local soulseal = nil
 if soulsealsEnabled then
-	soulseal = dofile("data/scripts/network/task_board/soulseal_handler.lua")
+	soulseal = _TASK_BOARD_SOULSEAL_MODULE or dofile("data/scripts/network/task_board/soulseal_handler.lua")
 	if soulseal and soulseal.setProtocol then
 		soulseal.setProtocol(protocol)
 	end

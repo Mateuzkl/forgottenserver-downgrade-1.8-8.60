@@ -602,13 +602,15 @@ function WeeklyTasks.onKill(player, raceId)
 		if shouldSave or shouldFullSync then
 			saveWeeklyData(playerGuid)
 		end
-		if protocol and protocol.sendWeeklyKillUpdate then
-			for _, update in ipairs(killUpdates) do
-				protocol.sendWeeklyKillUpdate(player, update.raceId, update.current, update.total, update.completed)
-			end
-		end
 		if shouldFullSync then
 			WeeklyTasks.sendWeeklyData(player)
+		else
+			local proto = getProtocol()
+			if proto and proto.sendWeeklyKillUpdate then
+				for _, update in ipairs(killUpdates) do
+					proto.sendWeeklyKillUpdate(player, update.raceId, update.current, update.total, update.completed)
+				end
+			end
 		end
 	end
 
@@ -807,7 +809,16 @@ function WeeklyTasks.setProtocol(protoModule)
 	protocol = protoModule
 end
 
+local ITEM_NOTIFY_INTERVAL = 200
+local weeklyDeliveryNotifyEvents = {}
+
 function WeeklyTasks.saveOnLogout(player)
+	local playerId = player:getId()
+	if weeklyDeliveryNotifyEvents[playerId] then
+		stopEvent(weeklyDeliveryNotifyEvents[playerId])
+		weeklyDeliveryNotifyEvents[playerId] = nil
+	end
+
 	local playerGuid = getPlayerGuid(player)
 	local data = loadWeeklyData(playerGuid)
 	data.hasExpansion = player:hasWeeklyExpansion()
@@ -830,9 +841,6 @@ function WeeklyTasks.checkRewardsOnLogin(player)
 		WeeklyTasks.performWeeklyReset(player)
 	end
 end
-
-local ITEM_NOTIFY_INTERVAL = 200
-local weeklyDeliveryNotifyEvents = {}
 
 local function notifyDeliveryItemChange(player, item)
 	if not player or not item or not item.getId then
