@@ -147,8 +147,6 @@ function taskBoardActionHandler.onReceive(player, msg)
         if not weeklyEnabled then return end
         if weekly and weekly.openWeekly then
             weekly.openWeekly(player)
-        elseif weekly then
-            weekly.sendWeeklyData(player)
         end
 	elseif option == 2 then -- Change Difficulty
 		if not bountyEnabled then return end

@@ -45,6 +45,9 @@ function StoreDeliverLuaOffer(player, offerType, value, displayId, extraName, ex
 		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.BOUNTY_KILL_BOOST_UNTIL, value) then
 			return "Failed to activate the bounty kill boost."
 		end
+		if _TASK_BOARD_BOUNTY_MODULE and _TASK_BOARD_BOUNTY_MODULE.sendBountyData then
+			pcall(_TASK_BOARD_BOUNTY_MODULE.sendBountyData, player, false)
+		end
 		return nil
 	end
 
@@ -57,6 +60,9 @@ function StoreDeliverLuaOffer(player, offerType, value, displayId, extraName, ex
 		end
 		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.WEEKLY_KILL_BOOST_UNTIL, value) then
 			return "Failed to activate the weekly kill boost."
+		end
+		if _TASK_BOARD_WEEKLY_MODULE and _TASK_BOARD_WEEKLY_MODULE.sendWeeklyData then
+			pcall(_TASK_BOARD_WEEKLY_MODULE.sendWeeklyData, player)
 		end
 		return nil
 	end

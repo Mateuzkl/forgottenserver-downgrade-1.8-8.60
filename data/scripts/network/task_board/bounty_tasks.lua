@@ -686,9 +686,6 @@ function BountyTasks.claimReward(player)
 
 	saveBountyData(playerGuid)
 
-	-- Notify client of new bounty points
-	sendBountyBalances(player, data)
-
 	-- Generate new creature list immediately (like Crystal Server)
 	BountyTasks.openBounty(player)
 

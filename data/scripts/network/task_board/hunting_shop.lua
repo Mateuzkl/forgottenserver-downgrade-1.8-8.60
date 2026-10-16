@@ -61,7 +61,6 @@ end
 -- ============================================
 
 function HuntingShop.sendShopData(player)
-	local playerGuid = getPlayerGuid(player)
 	local taskHuntingPoints = player:getTaskHuntingPoints()
 
 	-- Mark offers as purchased if player already owns the item/mount/outfit
@@ -175,6 +174,9 @@ function HuntingShop.purchaseOffer(player, offerIndex)
 
 	elseif offer.type == OFFER_WEEKLY_EXPANSION then
 		player:setWeeklyExpansion(true)
+		if _TASK_BOARD_WEEKLY_MODULE and _TASK_BOARD_WEEKLY_MODULE.applyExpansion then
+			pcall(_TASK_BOARD_WEEKLY_MODULE.applyExpansion, player)
+		end
 		success = true
 	end
 

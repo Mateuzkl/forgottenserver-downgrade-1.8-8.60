@@ -627,11 +627,14 @@ function WeeklyTasks.deliverTask(player, taskIndex)
 
 	local dt = data.deliveryTasks[taskIndex + 1]
 	if not dt then return false end
-	if dt.delivered == 1 then return false end
+	if tonumber(dt.delivered) == 1 then return false end
 
 	-- Count items in player inventory
 	local itemId = dt.itemId
-	local required = dt.required
+	local required = tonumber(dt.required) or tonumber(dt.amount) or 0
+	if required <= 0 or not itemId then
+		return false
+	end
 
 	local countResult = player:getItemCount(itemId, -1, true) or 0
 	if countResult >= required then
@@ -828,6 +831,9 @@ function WeeklyTasks.checkRewardsOnLogin(player)
 	end
 end
 
+local ITEM_NOTIFY_INTERVAL = 200
+local weeklyDeliveryNotifyEvents = {}
+
 local function notifyDeliveryItemChange(player, item)
 	if not player or not item or not item.getId then
 		return
@@ -852,13 +858,28 @@ local function notifyDeliveryItemChange(player, item)
 		return
 	end
 
-	local now = os.mtime and os.mtime() or (os.time() * 1000)
-	if now - (data.lastItemNotify or 0) < ITEM_NOTIFY_INTERVAL then
+	local playerId = player:getId()
+	if weeklyDeliveryNotifyEvents[playerId] then
 		return
 	end
 
-	data.lastItemNotify = now
-	WeeklyTasks.sendWeeklyData(player)
+	local now = os.mtime and os.mtime() or (os.time() * 1000)
+	local elapsed = now - (data.lastItemNotify or 0)
+	local delay = ITEM_NOTIFY_INTERVAL
+	if elapsed < ITEM_NOTIFY_INTERVAL then
+		delay = ITEM_NOTIFY_INTERVAL - elapsed
+	end
+
+	weeklyDeliveryNotifyEvents[playerId] = addEvent(function()
+		weeklyDeliveryNotifyEvents[playerId] = nil
+		local onlinePlayer = Player(playerId)
+		if not onlinePlayer then
+			return
+		end
+		local freshData = loadWeeklyData(getPlayerGuid(onlinePlayer))
+		freshData.lastItemNotify = os.mtime and os.mtime() or (os.time() * 1000)
+		WeeklyTasks.sendWeeklyData(onlinePlayer)
+	end, delay)
 end
 
 if not _WEEKLY_DELIVERY_ITEM_MOVED_EVENT_REGISTERED then
