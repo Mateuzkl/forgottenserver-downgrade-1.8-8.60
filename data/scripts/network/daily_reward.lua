@@ -531,6 +531,9 @@ local function claimReward(player, msg)
 
 	sendDailyReward(player)
 	sendDailyRewardCollectionState(player)
+	if RestingAreaSystem and RestingAreaSystem.refresh then
+		RestingAreaSystem.refresh(player)
+	end
 	return sendOpenRewardWall(player, not isInstantClaim)
 end
 
