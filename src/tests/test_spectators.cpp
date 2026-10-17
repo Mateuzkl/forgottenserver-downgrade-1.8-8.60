@@ -335,4 +335,98 @@ TEST_CASE(filterPlayers_removes_rejected_players_and_keeps_the_rest)
 	CHECK(spanContains(a.npcs(), n1.get()));
 }
 
+TEST_CASE(consuming_merge_matches_copy_merge_and_empties_source)
+{
+	auto c1 = makeTestCreature(), c2 = makeTestCreature(), c3 = makeTestCreature();
+	SpectatorVec destination, source;
+	destination.emplace_back(c1);
+	destination.emplace_back(c1);
+	destination.emplaceNull();
+	source.emplace_back(c2);
+	source.emplace_back(c1);
+	source.emplace_back(c3);
+	source.emplace_back(c2);
+	source.emplaceNull();
+	SpectatorVec expected = destination;
+	expected.addSpectators(source);
+
+	destination.addSpectators(std::move(source));
+	CHECK(destination.size() == expected.size());
+	CHECK(std::equal(destination.begin(), destination.end(), expected.begin()));
+	CHECK(source.empty());
+	source.partitionByType();
+	CHECK(source.players().empty());
+	CHECK(source.monsters().empty());
+	CHECK(source.npcs().empty());
+	// A consumed snapshot remains reusable.
+	source.emplace_back(c3);
+	source.partitionByType();
+	CHECK(source.npcs().size() == 1);
+}
+
+TEST_CASE(consuming_merge_retains_the_last_strong_owner_until_destination_is_released)
+{
+	SpectatorVec destination, source;
+	auto creature = makeTestCreature();
+	std::weak_ptr<Creature> weak = creature;
+	source.emplace_back(std::move(creature));
+	CHECK(weak.use_count() == 1);
+	destination.addSpectators(std::move(source));
+	CHECK(source.empty());
+	CHECK(weak.use_count() == 1);
+	CHECK(destination[0]->getName() == "test creature");
+	destination = {};
+	CHECK(weak.expired());
+}
+
+TEST_CASE(consuming_self_and_empty_merges_preserve_partitioned_destination)
+{
+	SpectatorVec destination, empty;
+	auto creature = makeTestCreature();
+	destination.emplace_back(creature);
+	destination.emplace_back(creature);
+	destination.partitionByType();
+	destination.addSpectators(std::move(destination));
+	CHECK(destination.npcs().size() == 2);
+	destination.addSpectators(std::move(empty));
+	CHECK(destination.npcs().size() == 2);
+}
+
+TEST_CASE(consuming_merge_preserves_mixed_type_partitions_and_filters)
+{
+	auto player = std::make_shared<TestPlayerLike>();
+	auto monster = std::make_shared<TestMonsterLike>();
+	auto npc = makeTestCreature();
+	SpectatorVec destination, source;
+	destination.emplace_back(player);
+	source.emplace_back(monster);
+	source.emplace_back(player);
+	source.emplace_back(npc);
+	source.partitionByType();
+	destination.addSpectators(std::move(source));
+	destination.partitionByType();
+	CHECK(destination.players().size() == 1);
+	CHECK(destination.monsters().size() == 1);
+	CHECK(destination.npcs().size() == 1);
+	destination.filterPlayers([](const Player*) { return false; });
+	CHECK(destination.players().empty());
+	CHECK(destination.monsters().size() == 1);
+	CHECK(destination.npcs().size() == 1);
+}
+
+TEST_CASE(copy_merge_keeps_source_ownership_while_consuming_nulls_releases_source)
+{
+	auto creature = makeTestCreature();
+	SpectatorVec destination, source;
+	source.emplace_back(creature);
+	destination.addSpectators(source);
+	CHECK(source.size() == 1);
+	CHECK(creature.use_count() == 3);
+	SpectatorVec nulls;
+	nulls.emplaceNull();
+	destination.addSpectators(std::move(nulls));
+	CHECK(nulls.empty());
+	CHECK(destination.size() == 1);
+}
+
 TFS_TEST_MAIN()

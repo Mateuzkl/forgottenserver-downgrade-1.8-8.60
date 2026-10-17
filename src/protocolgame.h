@@ -30,6 +30,8 @@ struct ProtocolGameCustomPingTestAccess;
 struct ProtocolGameAstraRegenerationTestAccess;
 struct ProtocolGameSpellCooldownTestAccess;
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
+// Event-local wire payload: opcode, position and this server's 16-bit effect ID.
+using MagicEffectPacket = std::optional<std::array<uint8_t, 8>>;
 class ProtocolSpectator;
 
 extern Game g_game;
@@ -204,6 +206,7 @@ private:
 
 	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type);
 	void sendMagicEffect(const Position& pos, uint16_t type);
+	void sendMagicEffect(const Position& pos, uint16_t type, MagicEffectPacket& packet);
 	void sendCreatureHealth(const Creature* creature);
 	void sendSkills();
 	void sendPing();
@@ -400,6 +403,7 @@ private:
 	friend struct ProtocolGameCustomPingTestAccess;
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
+	friend struct ProtocolGameCombatPacketsTestAccess;
 
 	//cast
 	void spectatorTurn(uint8_t direction);

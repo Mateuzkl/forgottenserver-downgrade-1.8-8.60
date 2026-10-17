@@ -403,15 +403,20 @@ class ProtocolSpectator {
         }
 
         void sendMagicEffect(const Position &pos, uint16_t type) {
+            MagicEffectPacket packet;
+            sendMagicEffect(pos, type, packet);
+        }
+
+        void sendMagicEffect(const Position &pos, uint16_t type, MagicEffectPacket& packet) {
             auto o = owner.lock();
             if (o)
-                o->sendMagicEffect(pos, type);
+                o->sendMagicEffect(pos, type, packet);
 
             for (auto &it : spectators)
-                it->sendMagicEffect(pos, type);
+                it->sendMagicEffect(pos, type, packet);
 
             for (auto &spy : spyClients_)
-                spy->sendMagicEffect(pos, type);
+                spy->sendMagicEffect(pos, type, packet);
         }
 
         void sendCreatureHealth(const Creature *creature) {
@@ -1128,6 +1133,7 @@ class ProtocolSpectator {
         friend class ProtocolGame;
         friend class Player;
         friend class SpySystem;
+        friend struct ProtocolGameCombatPacketsTestAccess;
 
         std::weak_ptr<ProtocolGame> owner;
         std::set<ProtocolGame_ptr> spectators;

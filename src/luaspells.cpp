@@ -1003,6 +1003,8 @@ void LuaScriptInterface::registerSpells()
 	// Spells
 	registerClass("Spell", "", luaSpellCreate);
 	registerMetaMethod("Spell", "__eq", LuaScriptInterface::luaUserdataCompare);
+	registerMetaMethod("Spell", "__gc", Lua::deleteOwnedUserdata);
+	registerMetaMethod("Spell", "__close", Lua::deleteOwnedUserdata);
 
 	registerMethod("Spell", "onCastSpell", luaSpellOnCastSpell);
 	registerMethod("Spell", "register", luaSpellRegister);

@@ -4307,6 +4307,12 @@ void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, u
 
 void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 {
+	MagicEffectPacket packet;
+	sendMagicEffect(pos, type, packet);
+}
+
+void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type, MagicEffectPacket& packet)
+{
 	if (!canSee(pos)) {
 		return;
 	}
@@ -4316,11 +4322,19 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 		return;
 	}
 
-	NetworkMessage msg;
-	msg.addByte(0x83);
-	msg.addPosition(pos);
-	msg.add<uint16_t>(type);
-	writeToOutputBuffer(msg);
+	// One synchronous event only: keep every recipient's visibility/ground checks,
+	// then prepare the identical bytes lazily. OutputMessage::append copies them;
+	// neither the packet nor a view into it escapes into an asynchronous write.
+	if (!packet) {
+		NetworkMessage msg;
+		msg.addByte(0x83);
+		msg.addPosition(pos);
+		msg.add<uint16_t>(type);
+		auto& bytes = packet.emplace();
+		std::memcpy(bytes.data(), msg.getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, bytes.size());
+	}
+	auto out = getOutputBuffer(static_cast<int32_t>(packet->size()));
+	out->append(std::span<const uint8_t>{*packet});
 }
 
 void ProtocolGame::sendCreatureHealth(const Creature* creature)

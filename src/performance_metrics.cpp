@@ -26,6 +26,19 @@ constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Co
 	"Combat::doCombat", "Combat::doAreaCombat", "Combat::area.buildTiles",
 	"Combat::area.prepareDamage", "Combat::area.collectSpectators", "Combat::area.processTiles+collectTargets",
 	"Combat::area.applyTargets", "Creature::executeConditions",
+	"Player::onThink", "Creature::thinkEvents", "Game::cleanup", "Game::combatBlockHit",
+	"Game::combatChangeHealth", "Creature::addCondition", "ConditionDamage::doDamage",
+	"Monster::onCreatureMove", "Monster::updateTargetList", "Monster::updateTargetListAfterMovement",
+	"Monster::pruneInvalidTargetState", "Monster::onCreatureFound", "Monster::searchTarget",
+	"Monster::goToFollowCreature",
+};
+
+constexpr std::array<std::string_view, static_cast<size_t>(MonsterAiMetric::Count)> MONSTER_AI_NAMES = {
+	"move_callbacks", "self_moves", "full_summon", "full_teleport", "full_floor_change", "full_no_follow",
+	"edge_moves", "refresh_spectators", "search_candidates", "search_valid_candidates", "search_attack_checks",
+	"search_selected", "search_failed", "follow_forced", "follow_reused", "direct_attempts", "direct_success",
+	"primary_attempts", "primary_success", "fallback_attempts", "fallback_success", "follow_failed",
+	"attack_ticks", "attack_spells", "attack_casts",
 };
 
 constexpr std::array<std::string_view, static_cast<size_t>(MonsterIdleMetric::Count)> MONSTER_IDLE_METRIC_NAMES = {
@@ -62,7 +75,7 @@ uint64_t percentile(const std::array<uint64_t, 64>& histogram, uint64_t calls, u
 	if (calls == 0) {
 		return 0;
 	}
-	const uint64_t wanted = std::max<uint64_t>(1, (calls * numerator + 99) / 100);
+	const uint64_t wanted = std::max<uint64_t>(1, (calls / 100) * numerator + ((calls % 100) * numerator + 99) / 100);
 	uint64_t seen = 0;
 	for (size_t i = 0; i < histogram.size(); ++i) {
 		seen += histogram[i];
@@ -77,6 +90,17 @@ void updateMaximum(std::atomic<uint64_t>& maximum, uint64_t value) noexcept
 {
 	auto current = maximum.load(std::memory_order_relaxed);
 	while (current < value && !maximum.compare_exchange_weak(current, value, std::memory_order_relaxed)) {
+	}
+}
+
+void saturatingAdd(std::atomic<uint64_t>& counter, uint64_t value) noexcept
+{
+	auto current = counter.load(std::memory_order_relaxed);
+	while (true) {
+		const auto next = current + std::min(value, std::numeric_limits<uint64_t>::max() - current);
+		if (counter.compare_exchange_weak(current, next, std::memory_order_relaxed)) {
+			return;
+		}
 	}
 }
 } // namespace
@@ -266,6 +290,33 @@ uint64_t PerformanceMetrics::getPathSteps() const noexcept
 	return path.pathLength.load(std::memory_order_relaxed);
 }
 
+void PerformanceMetrics::recordMonsterAi(MonsterAiMetric metric, uint64_t count) noexcept
+{
+	const auto index = static_cast<size_t>(metric);
+	if (count != 0 && isEnabled() && index < monsterAi.size()) {
+		saturatingAdd(monsterAi[index], count);
+	}
+}
+
+void PerformanceMetrics::recordMonsterTargetCount(size_t count) noexcept
+{
+	if (!isEnabled()) {
+		return;
+	}
+	saturatingAdd(targetSizes.samples, 1);
+	updateMaximum(targetSizes.maximum, count);
+	saturatingAdd(targetSizes.histogram[histogramIndex(count)], 1);
+}
+
+PerformanceMetrics::MonsterAiCounters PerformanceMetrics::takeMonsterAiCounters() noexcept
+{
+	MonsterAiCounters result{};
+	for (size_t index = 0; index < result.size(); ++index) {
+		result[index] = monsterAi[index].exchange(0, std::memory_order_relaxed);
+	}
+	return result;
+}
+
 void PerformanceMetrics::maybeReport()
 {
 	if (!isEnabled()) {
@@ -311,6 +362,26 @@ void PerformanceMetrics::maybeReport()
 		reactor.deferred.exchange(0, std::memory_order_relaxed),
 		reactor.expired.exchange(0, std::memory_order_relaxed),
 		reactor.dropped.exchange(0, std::memory_order_relaxed));
+
+	const auto aiCounters = takeMonsterAiCounters();
+	if (std::ranges::any_of(aiCounters, [](uint64_t count) { return count != 0; })) {
+		report += "[Perf] monster_ai";
+		for (size_t index = 0; index < aiCounters.size(); ++index) {
+			report += fmt::format(" {}={}", MONSTER_AI_NAMES[index], aiCounters[index]);
+		}
+		report += '\n';
+	}
+	const auto targetSamples = targetSizes.samples.exchange(0, std::memory_order_relaxed);
+	if (targetSamples != 0) {
+		const auto maximum = targetSizes.maximum.exchange(0, std::memory_order_relaxed);
+		std::array<uint64_t, HistogramBuckets> histogram{};
+		for (size_t index = 0; index < histogram.size(); ++index) {
+			histogram[index] = targetSizes.histogram[index].exchange(0, std::memory_order_relaxed);
+		}
+		report += fmt::format("[Perf] monster_targets samples={} max={} p95_upper={} p99_upper={}\n",
+		                      targetSamples, maximum, percentile(histogram, targetSamples, 95),
+		                      percentile(histogram, targetSamples, 99));
+	}
 
 	const uint64_t areaCombatCasts = areaCombat.casts.exchange(0, std::memory_order_relaxed);
 	if (areaCombatCasts > 0) {

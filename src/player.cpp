@@ -3,6 +3,8 @@
 
 #include "otpch.h"
 
+#include "performance_metrics.h"
+
 #include "bed.h"
 #include "chat.h"
 #include "combat.h"
@@ -3541,6 +3543,7 @@ uint32_t Player::getNextActionTime() const { return std::max<int64_t>(MIN_TASK_I
 
 void Player::onThink(uint32_t interval)
 {
+	PerformanceScope performanceScope(PerformanceMetric::PlayerOnThink);
 	Creature::onThink(interval);
 
 	// O protocolo 8.6 exibe o opcode 0x86 como um quadrado temporário.

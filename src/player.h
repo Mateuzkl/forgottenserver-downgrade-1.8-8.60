@@ -1378,6 +1378,12 @@ public:
 			client->sendMagicEffect(pos, type);
 		}
 	}
+	void sendMagicEffect(const Position& pos, uint16_t type, MagicEffectPacket& packet) const
+	{
+		if (client) {
+			client->sendMagicEffect(pos, type, packet);
+		}
+	}
 	void sendCharmActivated(uint8_t charmId) const
 	{
 		if (client) {

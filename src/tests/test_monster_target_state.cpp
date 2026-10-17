@@ -9,6 +9,7 @@
 #include "../item.h"
 #include "../monster.h"
 #include "../movement.h"
+#include "../performance_metrics.h"
 #include "../player.h"
 #include "../scriptmanager.h"
 #include "../tile.h"
@@ -575,6 +576,41 @@ TEST_CASE(moving_monster_discovers_new_stationary_target)
 	CHECK(monster->canSee(stationaryTarget->getPosition()));
 	CHECK(hasTarget(monster, followedTarget.get()));
 	CHECK(hasTarget(monster, stationaryTarget.get()));
+}
+
+TEST_CASE(monster_search_metrics_cover_400_candidates_without_changing_target_rules)
+{
+	WorldFixture world;
+	struct MetricsGuard
+	{
+		bool previous = g_performanceMetrics.isEnabled();
+		~MetricsGuard() { g_performanceMetrics.setEnabled(previous); }
+	} metricsGuard;
+	g_performanceMetrics.setEnabled(false);
+	static_cast<void>(g_performanceMetrics.takeMonsterAiCounters());
+	auto monster = makeMonster();
+	world.place(monster, Position{1000, 500, 7});
+	std::vector<std::shared_ptr<Monster>> targets;
+	for (size_t index = 0; index < 400; ++index) {
+		auto target = makeMonster(true);
+		world.place(target, Position{1001, 500, 7});
+		CHECK(monster->addTarget(target.get()));
+		targets.push_back(std::move(target));
+	}
+	CHECK(monster->searchTarget(TARGETSEARCH_RANDOM));
+	CHECK(monster->getAttackedCreatureShared() != nullptr);
+	for (auto count : g_performanceMetrics.takeMonsterAiCounters()) {
+		CHECK(count == 0);
+	}
+	g_performanceMetrics.setEnabled(true);
+	CHECK(monster->searchTarget(TARGETSEARCH_RANDOM));
+	const auto counters = g_performanceMetrics.takeMonsterAiCounters();
+	CHECK(counters[static_cast<size_t>(MonsterAiMetric::SearchCandidates)] == 400);
+	CHECK(counters[static_cast<size_t>(MonsterAiMetric::SearchValidCandidates)] == 399);
+	CHECK(counters[static_cast<size_t>(MonsterAiMetric::SearchAttackChecks)] == 0);
+	CHECK(counters[static_cast<size_t>(MonsterAiMetric::SearchSelected)] == 1);
+	CHECK(counters[static_cast<size_t>(MonsterAiMetric::SearchFailed)] == 0);
+	CHECK(monster->getAttackedCreatureShared()->getInstanceID() == monster->getInstanceID());
 }
 
 TFS_TEST_MAIN()

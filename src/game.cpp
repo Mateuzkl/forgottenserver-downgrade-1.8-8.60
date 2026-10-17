@@ -6788,6 +6788,7 @@ bool tryApplyEchoWardDodge(CombatDamage& damage, Creature* target)
 bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* target, bool checkDefense,
                           bool checkArmor, bool field, bool ignoreResistances /*= false */)
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameCombatBlockHit);
 	if (damage.primary.type == COMBAT_NONE && damage.secondary.type == COMBAT_NONE) {
 		return true;
 	}
@@ -7111,6 +7112,7 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 
 bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage& damage)
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameCombatChangeHealth);
 	if (!target || target->isDead() || target->isRemoved()) {
 		return false;
 	}
@@ -7898,12 +7900,13 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 
 void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect)
 {
+	MagicEffectPacket packet;
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
-		player->sendMagicEffect(pos, effect);
+		player->sendMagicEffect(pos, effect, packet);
 	}
 }
 
@@ -7919,7 +7922,7 @@ void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uin
 	SpectatorVec spectators, toPosSpectators;
 	map.getSpectators(spectators, fromPos, true, true);
 	map.getSpectators(toPosSpectators, toPos, true, true);
-	spectators.addSpectators(toPosSpectators);
+	spectators.addSpectators(std::move(toPosSpectators));
 
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	addDistanceEffect(spectators, fromPos, toPos, effect);
@@ -8466,6 +8469,7 @@ void Game::shutdown()
 
 void Game::cleanup()
 {
+	PerformanceScope performanceScope(PerformanceMetric::GameCleanup);
 	// free memory
 	ToReleaseCreatures.clear();
 	ToReleaseCreatureSet.clear();
