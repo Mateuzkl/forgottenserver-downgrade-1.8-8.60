@@ -463,6 +463,7 @@ private:
 	bool supportsAstraStoreCatalogChunks = false;
 	bool supportsAstraBestiaryBannerCreatureData = false;
 	bool supportsAstraExtendedSpellIds = false;
+	bool supportsAstraShopBuyAmountU16 = false;
 	bool supportsZoneWeather = false;
 	bool supportsDllZoneWeather = false;
 	bool zoneWeatherFeatureEnabled = false;
