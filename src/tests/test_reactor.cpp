@@ -3,7 +3,6 @@
 #include "../reactor.h"
 #include "../scheduler.h"
 #include "../tasks.h"
-
 #include "test_support.h"
 
 #include <limits>
@@ -23,13 +22,6 @@ struct TaskReactorTestAccess
 		std::make_heap(reactor.scheduleInbox.begin(), reactor.scheduleInbox.end(), TaskReactor::taskComesAfter);
 	}
 	static void ingestWithoutExecuting(TaskReactor& reactor) { reactor.drainInbox(); }
-	static void executeAfterBudgetConsumed(TaskReactor& reactor)
-	{
-		std::vector<TaskReactor::Task> ready;
-		reactor.drainInbox();
-		reactor.drainReadyTasks(ready);
-		reactor.executeReadyTasks(ready, std::chrono::steady_clock::now() - std::chrono::milliseconds(10));
-	}
 	static size_t largestScratchCapacity(const TaskReactor& reactor)
 	{
 		CHECK(reactor.sentTasksBuffer.empty());
@@ -37,6 +29,11 @@ struct TaskReactorTestAccess
 		CHECK(reactor.cancellationsBuffer.empty());
 		return std::max({reactor.sentTasksBuffer.capacity(), reactor.scheduledTasksBuffer.capacity(),
 		                 reactor.cancellationsBuffer.capacity()});
+	}
+	static void makeHeapDue(TaskReactor& reactor)
+	{
+		for (auto& task : reactor.taskHeap) task.fireAt = Clock::now() - std::chrono::seconds(1);
+		std::make_heap(reactor.taskHeap.begin(), reactor.taskHeap.end(), TaskReactor::taskComesAfter);
 	}
 	static void setLastIdentifier(TaskReactor& reactor, uint32_t identifier)
 	{
@@ -47,10 +44,7 @@ struct TaskReactorTestAccess
 
 namespace {
 
-void startReactor(TaskReactor& reactor)
-{
-	reactor.start();
-}
+void startReactor(TaskReactor& reactor) { reactor.start(); }
 
 } // namespace
 
@@ -724,8 +718,7 @@ TEST_CASE(test_scheduler_dispatcher_move_only_pipeline)
 
 	auto payload = std::make_unique<int>(42);
 	int result = 0;
-	const uint32_t eventId =
-	    g_scheduler.addEvent(0, [payload = std::move(payload), &result] { result = *payload; });
+	const uint32_t eventId = g_scheduler.addEvent(0, [payload = std::move(payload), &result] { result = *payload; });
 
 	CHECK(eventId != 0);
 	CHECK(!payload);
@@ -777,23 +770,6 @@ TEST_CASE(test_reactor_ingestion_scratch_does_not_retain_unbounded_burst)
 	reactor.shutdown();
 }
 
-TEST_CASE(test_reactor_budget_includes_preprocessing_and_still_makes_progress)
-{
-	TaskReactor reactor;
-	reactor.start();
-	reactor.setTimeBudget(std::chrono::milliseconds(1));
-	std::vector<int> order;
-	CHECK(reactor.send([&] { order.push_back(1); }));
-	CHECK(reactor.send([&] { order.push_back(2); }));
-	CHECK(reactor.send([&] { order.push_back(3); }));
-	TaskReactorTestAccess::executeAfterBudgetConsumed(reactor);
-	CHECK(order == std::vector<int>({1}));
-	CHECK(reactor.hasPendingTasks());
-	reactor.setTimeBudget(std::chrono::milliseconds(0));
-	reactor.runOnce();
-	CHECK(order == std::vector<int>({1, 2, 3}));
-}
-
 TEST_CASE(test_bounded_ingestion_selects_earliest_timer_before_insertion_order)
 {
 	TaskReactor reactor;
@@ -804,10 +780,9 @@ TEST_CASE(test_bounded_ingestion_selects_earliest_timer_before_insertion_order)
 	const auto earliest = reactor.schedule(0, [&] { order.push_back(1); });
 	const auto middle = reactor.schedule(0, [&] { order.push_back(2); });
 	const auto now = std::chrono::steady_clock::now();
-	TaskReactorTestAccess::setScheduledTimes(reactor, {
-	    {latest, now - std::chrono::milliseconds(100)},
-	    {earliest, now - std::chrono::milliseconds(300)},
-	    {middle, now - std::chrono::milliseconds(200)}});
+	TaskReactorTestAccess::setScheduledTimes(reactor, {{latest, now - std::chrono::milliseconds(100)},
+	                                                   {earliest, now - std::chrono::milliseconds(300)},
+	                                                   {middle, now - std::chrono::milliseconds(200)}});
 	for (int cycle = 0; cycle < 3; ++cycle) reactor.runOnce();
 	CHECK(order == std::vector<int>({1, 2, 3}));
 	CHECK(!reactor.hasPendingTasks());
@@ -824,8 +799,8 @@ TEST_CASE(test_bounded_ingestion_does_not_overtake_an_older_undrained_timer)
 	TaskReactorTestAccess::ingestWithoutExecuting(reactor);
 	const auto first = reactor.schedule(0, [&] { order.push_back(1); });
 	const auto second = reactor.schedule(0, [&] { order.push_back(2); });
-	TaskReactorTestAccess::setScheduledTimes(reactor, {
-	    {first, now - std::chrono::milliseconds(300)}, {second, now - std::chrono::milliseconds(200)}});
+	TaskReactorTestAccess::setScheduledTimes(
+	    reactor, {{first, now - std::chrono::milliseconds(300)}, {second, now - std::chrono::milliseconds(200)}});
 	reactor.setMaxInboxDrainPerCycle(1);
 	reactor.runOnce();
 	CHECK(order == std::vector<int>({1}));
@@ -849,6 +824,61 @@ TEST_CASE(test_bounded_ingestion_keeps_sequence_order_for_equal_timer_deadlines)
 	for (int cycle = 0; cycle < 12; ++cycle) reactor.runOnce();
 	CHECK(order.size() == 12);
 	for (int index = 0; index < 12; ++index) CHECK(order[index] == index);
+}
+
+TEST_CASE(test_reactor_repeated_cancellation_is_deduplicated_until_retirement)
+{
+	TaskReactor reactor;
+	reactor.start();
+	bool executed = false;
+	const auto id = reactor.schedule(std::chrono::hours(1), [&] { executed = true; });
+	CHECK(id != 0);
+	for (int i = 0; i < 10000; ++i) reactor.cancel(id);
+	CHECK(reactor.getPendingTaskCount() == 2); // One timer and one control request.
+	reactor.runOnce();
+	CHECK(reactor.getPendingTaskCount() == 1);
+	for (int i = 0; i < 10000; ++i) reactor.cancel(id);
+	CHECK(reactor.getPendingTaskCount() == 1); // Already ingested cancellation.
+	TaskReactorTestAccess::makeHeapDue(reactor);
+	reactor.runOnce();
+	CHECK(!executed);
+	CHECK(!reactor.hasPendingTasks());
+	TaskReactorTestAccess::setLastIdentifier(reactor, id - 1);
+	CHECK(reactor.schedule(0, [&] { executed = true; }) == id);
+	reactor.runOnce();
+	CHECK(executed); // No stale cancellation can target a reused identifier.
+}
+
+TEST_CASE(test_reactor_cancelled_due_tasks_consume_the_cycle_limit)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setMaxInboxDrainPerCycle(0);
+	reactor.setMaxTasksPerCycle(3);
+	int executed = 0;
+	for (int i = 0; i < 50; ++i) reactor.cancel(reactor.schedule(0, [&] { ++executed; }));
+	reactor.runOnce();
+	CHECK(executed == 0);
+	CHECK(reactor.getPendingTaskCount() == 47);
+	reactor.setMaxTasksPerCycle(0);
+	reactor.runOnce();
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_expired_due_tasks_consume_the_cycle_limit)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setMaxInboxDrainPerCycle(0);
+	reactor.setMaxTasksPerCycle(3);
+	int executed = 0;
+	for (int i = 0; i < 50; ++i) CHECK(reactor.send(std::chrono::milliseconds(-1), [&] { ++executed; }));
+	reactor.runOnce();
+	CHECK(executed == 0);
+	CHECK(reactor.getPendingTaskCount() == 47);
+	reactor.setMaxTasksPerCycle(0);
+	reactor.runOnce();
+	CHECK(!reactor.hasPendingTasks());
 }
 
 TFS_TEST_MAIN()

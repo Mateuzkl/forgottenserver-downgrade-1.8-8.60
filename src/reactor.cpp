@@ -210,10 +210,15 @@ void TaskReactor::cancel(uint32_t taskIdentifier)
 	size_t pendingInbox = 0;
 	{
 		std::scoped_lock lock(mutex);
-		if (!activeIdentifiers.contains(taskIdentifier)) {
+		if (!activeIdentifiers.contains(taskIdentifier) || !cancellationRequests.insert(taskIdentifier).second) {
 			return;
 		}
-		cancelInbox.push_back(taskIdentifier);
+		try {
+			cancelInbox.insert(taskIdentifier);
+		} catch (...) {
+			cancellationRequests.erase(taskIdentifier);
+			throw;
+		}
 		pendingInbox = sendInbox.size() + scheduleInbox.size() + cancelInbox.size();
 		if (maxInboxSize > 0 && pendingInbox >= maxInboxSize && !inboxAboveSoftLimit) {
 			inboxAboveSoftLimit = true;
@@ -338,7 +343,8 @@ size_t TaskReactor::getPendingTaskCount() const
 
 size_t TaskReactor::pendingTaskCountUnsafe() const noexcept
 {
-	return sendInbox.size() + scheduleInbox.size() + cancelInbox.size() + taskHeapSize.load(std::memory_order_relaxed);
+	return sendInbox.size() + scheduleInbox.size() + cancelInbox.size() + inboxTasksInFlight +
+	       taskHeapSize.load(std::memory_order_relaxed);
 }
 
 bool TaskReactor::isReactorThread() const noexcept { return currentReactor == this; }
@@ -382,10 +388,9 @@ void TaskReactor::drainInbox()
 		}
 		// Cancellation is control traffic: drain it every cycle so a large task
 		// burst cannot cause a stopped event to run before its cancellation.
-		while (!cancelInbox.empty()) {
-			cancellations.push_back(cancelInbox.front());
-			cancelInbox.pop_front();
-		}
+		for (uint32_t identifier : cancelInbox) cancellations.push_back(identifier);
+		cancelInbox.clear();
+		inboxTasksInFlight = sentTasks.size() + scheduledTasks.size() + cancellations.size();
 
 		undrainedTaskFrontier.reset();
 		if (!sendInbox.empty() || !scheduleInbox.empty()) {
@@ -433,13 +438,19 @@ void TaskReactor::drainInbox()
 				std::push_heap(taskHeap.begin(), taskHeap.begin() + heapSize, taskComesAfter);
 			}
 		}
-		taskHeapSize.store(taskHeap.size(), std::memory_order_relaxed);
 	}
 
 	for (uint32_t identifier : cancellations) {
 		// cancel() only queues live ids; retirement consumes queued cancellation
 		// before releasing their reservation. This also covers undrained tasks.
 		cancelled.insert(identifier);
+	}
+	{
+		// Publication and removal of the in-flight count are one producer-visible
+		// operation: admission must never observe neither representation.
+		std::scoped_lock lock(mutex);
+		taskHeapSize.store(taskHeap.size(), std::memory_order_relaxed);
+		inboxTasksInFlight = 0;
 	}
 
 	// Retain only storage, never task captures. An exceptional unbounded control
@@ -457,7 +468,8 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
 	const auto now = std::chrono::steady_clock::now();
 
 	const size_t readyLimit = maxTasksPerCycle > 0 ? maxTasksPerCycle : std::numeric_limits<size_t>::max();
-	while (readyTasks.size() < readyLimit && !taskHeap.empty() && taskHeap.front().fireAt <= now) {
+	size_t processed = 0;
+	while (processed < readyLimit && !taskHeap.empty() && taskHeap.front().fireAt <= now) {
 		if (undrainedTaskFrontier &&
 		    *undrainedTaskFrontier < std::pair{taskHeap.front().fireAt, taskHeap.front().sequence}) {
 			break;
@@ -465,6 +477,7 @@ void TaskReactor::drainReadyTasks(std::vector<Task>& readyTasks)
 		std::pop_heap(taskHeap.begin(), taskHeap.end(), taskComesAfter);
 		auto readyTask = std::move(taskHeap.back());
 		taskHeap.pop_back();
+		++processed; // Retired due entries consume the cycle limit too.
 
 		if (cancelled.contains(readyTask.identifier) || readyTask.hasExpired(now)) {
 			retireIdentifier(readyTask.identifier);
@@ -488,10 +501,11 @@ bool TaskReactor::consumeCancellation(uint32_t identifier)
 	}
 
 	std::scoped_lock lock(mutex);
-	const bool cancelledInBatch = std::erase(cancelInbox, identifier) > 0;
+	const bool cancelledInBatch = cancelInbox.erase(identifier) > 0;
 	const bool cancelledPreviously = cancelled.erase(identifier) > 0;
 	const bool wasCancelled = cancelledInBatch || cancelledPreviously;
 	if (wasCancelled) {
+		cancellationRequests.erase(identifier);
 		activeIdentifiers.erase(identifier);
 	}
 	return wasCancelled;
@@ -506,8 +520,9 @@ bool TaskReactor::retireIdentifier(uint32_t identifier)
 	// Consume cancellations received after execution was committed before
 	// releasing the reservation, so they cannot target a reused identifier.
 	std::scoped_lock lock(mutex);
-	const bool cancelledInBatch = std::erase(cancelInbox, identifier) > 0;
+	const bool cancelledInBatch = cancelInbox.erase(identifier) > 0;
 	const bool cancelledPreviously = cancelled.erase(identifier) > 0;
+	cancellationRequests.erase(identifier);
 	activeIdentifiers.erase(identifier);
 	return cancelledInBatch || cancelledPreviously;
 }
@@ -625,8 +640,8 @@ void TaskReactor::waitForWork()
 
 #ifdef STATS_ENABLED
 	if (g_stats.isEnabled() && g_stats.isRunning()) {
-		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-		    std::chrono::steady_clock::now() - waitStart).count();
+		const auto elapsed =
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - waitStart).count();
 		g_stats.addDispatcherWaitTime(0, elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0);
 	}
 #endif

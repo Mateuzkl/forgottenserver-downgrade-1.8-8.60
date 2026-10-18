@@ -101,7 +101,13 @@ private:
 	std::deque<Task> sendInbox;
 	// A producer-side heap exposes the earliest undrained timer.
 	std::vector<Task> scheduleInbox;
-	std::deque<uint32_t> cancelInbox;
+	std::unordered_set<uint32_t> cancelInbox;
+	// Deduplicate from the first request until its scheduled task retires,
+	// including after ingestion has moved the request to the owner thread.
+	std::unordered_set<uint32_t> cancellationRequests;
+	// Protected by mutex. Entries removed from inboxes still count during
+	// heap construction, until the owner publishes its new heap size.
+	size_t inboxTasksInFlight = 0;
 	// Protected by mutex, from acceptance into scheduleInbox until retirement.
 	// Keep ids reserved across bounded ingestion, heap, ready-batch and deferral.
 	std::unordered_set<uint32_t> activeIdentifiers;

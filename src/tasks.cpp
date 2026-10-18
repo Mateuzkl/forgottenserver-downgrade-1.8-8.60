@@ -10,7 +10,6 @@
 #include "performance_metrics.h"
 #include "tools.h"
 
-namespace {
 bool shouldCaptureTaskMetadata() noexcept
 {
 	if (g_performanceMetrics.isEnabled() || getBoolean(ConfigManager::SLOW_TASK_WARNING)) {
@@ -22,13 +21,12 @@ bool shouldCaptureTaskMetadata() noexcept
 	return false;
 #endif
 }
-} // namespace
 
-Task::Task(TaskFunc&& f, const std::string& description, const std::string& extraDescription) :
+Task::Task(TaskFunc&& f, std::string_view description, std::string_view extraDescription) :
     description(description), extraDescription(extraDescription), func(std::move(f))
 {}
 
-Task::Task(uint32_t ms, TaskFunc&& f, const std::string& description, const std::string& extraDescription) :
+Task::Task(uint32_t ms, TaskFunc&& f, std::string_view description, std::string_view extraDescription) :
     description(description),
     extraDescription(extraDescription),
     expiration(std::chrono::steady_clock::now() + std::chrono::milliseconds(ms)),
@@ -43,8 +41,7 @@ bool Task::hasExpired() const
 	return expiration < std::chrono::steady_clock::now();
 }
 
-std::unique_ptr<Task> createTaskWithStats(TaskFunc&& f, const std::string& description,
-                                          const std::string& extraDescription)
+std::unique_ptr<Task> createTaskWithStats(TaskFunc&& f, std::string_view description, std::string_view extraDescription)
 {
 	if (shouldCaptureTaskMetadata()) {
 		return std::make_unique<Task>(std::move(f), description, extraDescription);
@@ -52,8 +49,8 @@ std::unique_ptr<Task> createTaskWithStats(TaskFunc&& f, const std::string& descr
 	return std::make_unique<Task>(std::move(f), "", "");
 }
 
-std::unique_ptr<Task> createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description,
-                                          const std::string& extraDescription)
+std::unique_ptr<Task> createTaskWithStats(uint32_t expiration, TaskFunc&& f, std::string_view description,
+                                          std::string_view extraDescription)
 {
 	if (shouldCaptureTaskMetadata()) {
 		return std::make_unique<Task>(expiration, std::move(f), description, extraDescription);
@@ -149,8 +146,8 @@ void Dispatcher::executeTask(std::unique_ptr<Task> task)
 	(*task)();
 
 	if (shouldMeasure) {
-		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-		    std::chrono::steady_clock::now() - taskStart).count();
+		const auto elapsed =
+		    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - taskStart).count();
 		const uint64_t elapsedNs = elapsed > 0 ? static_cast<uint64_t>(elapsed) : 0;
 
 		if (slowTaskWarning && elapsedNs > slowThresholdNs && !task->skipSlowDetection) {

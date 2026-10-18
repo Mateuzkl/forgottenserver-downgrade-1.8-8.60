@@ -812,7 +812,7 @@ bool ConfigManager::load()
 	integers[Integer::REACTOR_TIME_BUDGET_MS] =
 	    std::clamp<int64_t>(getGlobalInteger(L, "reactorTimeBudgetMS", 25), 0, 1000);
 	integers[Integer::REACTOR_MAX_INBOX_SIZE] =
-	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxInboxSize", 200000), 1, 10'000'000);
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxInboxSize", 100000), 1, 10'000'000);
 
 	loaded = true;
 	// ownedL destructor calls lua_close via LuaStateDeleter

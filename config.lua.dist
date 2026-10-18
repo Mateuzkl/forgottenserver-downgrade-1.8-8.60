@@ -111,7 +111,10 @@ connectionRateLimitMS = 500
 -- Reactor Limits Config
 -- WARNING: reactorMaxTasksPerCycle = 0 means unlimited; use only on dedicated hardware with controlled workloads
 -- NOTE: reactorTimeBudgetMS: max time in ms per cycle (0 = unlimited, max = 1000)
--- NOTE: reactorMaxInboxSize: max queued tasks before dropping new ones (min = 1, max = 10000000)
+-- NOTE: reactorMaxInboxSize: queued-work threshold for rejecting expiring sends
+--       (min = 1, max = 10000000; fallback when omitted = 100000).
+--       Sends without expiration, scheduled tasks and cancellations remain lossless;
+--       this threshold does not impose a hard memory cap on those queues.
 --
 -- Presets:
 --   Low    (small VPS / few players):   250 / 3  / 50000

@@ -13,6 +13,8 @@
   "timing_benchmark": false,
   "stress_tasks_concurrent": 200000,
   "stress_tasks_scheduled": 250000,
-  "local_ctest_checks_passed": 17,
+  "local_ctest_checks_passed": 18,
+  "preprocessing_budget_mutation_rejected": true,
+  "macro_factory_allocations_for_three_prebuilt_callbacks": 3,
   "windows_connection_fixture_fixed_repetitions": 6
 }

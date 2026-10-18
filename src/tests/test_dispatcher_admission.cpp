@@ -6,6 +6,7 @@
 #include "../database.h"
 #include "../logger.h"
 #include "../performance_metrics.h"
+#include "../scheduler.h"
 #include "../stats.h"
 #include "../tasks.h"
 #include "test_support.h"
@@ -20,12 +21,15 @@
 namespace allocation_probe {
 // Only the calling test thread is counted. Stats' worker allocations cannot
 // contaminate the scope. Latency and allocation windows are separate passes.
+// Test-only fault injection into a real allocation during runOnce ingestion.
+thread_local void (*nextAllocationHook)() = nullptr;
 thread_local bool active = false;
 thread_local uint64_t calls = 0;
 thread_local uint64_t bytes = 0;
 
 void record(size_t size) noexcept
 {
+	if (auto hook = std::exchange(nextAllocationHook, nullptr)) hook();
 	if (active) {
 		++calls;
 		bytes += size;
@@ -142,6 +146,12 @@ struct TaskReactorTestAccess
 		std::scoped_lock lock(reactor.mutex);
 		CHECK(!reactor.sendInbox.empty());
 		return {reactor.sendInbox.front().description, reactor.sendInbox.front().origin};
+	}
+	static void reserveIngestionBuffers(TaskReactor& reactor, size_t count)
+	{
+		reactor.sentTasksBuffer.reserve(count);
+		reactor.scheduledTasksBuffer.reserve(count);
+		reactor.cancellationsBuffer.reserve(count);
 	}
 	static std::chrono::steady_clock::time_point nextDeadline(const TaskReactor& reactor)
 	{
@@ -350,6 +360,119 @@ TEST_CASE(dispatcher_set_dont_expire_keeps_authoritative_work_lossless)
 	CHECK(g_dispatcher.addTask(std::move(task)));
 	g_reactor.runOnce();
 	CHECK(calls == 2);
+}
+
+TEST_CASE(task_macros_and_scheduled_factories_do_not_allocate_unobserved_metadata)
+{
+	Fixture fixture;
+	static_assert(std::string_view(TASK_SOURCE_LOCATION).size() > 32);
+	TaskFunc plainCallback = [] {};
+	TaskFunc timedCallback = [] {};
+	TaskFunc scheduledCallback = [] {};
+	uint64_t allocations = 0;
+	{
+		allocation_probe::Window window;
+		auto plain = createTask(std::move(plainCallback));
+		auto timed = createTimedTask(1000, std::move(timedCallback));
+		auto scheduled = createSchedulerTask(50, std::move(scheduledCallback));
+		CHECK(plain->description.empty() && plain->extraDescription.empty());
+		CHECK(timed->description.empty() && timed->extraDescription.empty());
+		CHECK(scheduled->description.empty() && scheduled->extraDescription.empty());
+		CHECK(timed->hasExpiration());
+		CHECK(scheduled->getDelay() == 50);
+		allocations = allocation_probe::calls;
+	}
+	CHECK(allocations == 3); // Only the three owned Task objects.
+}
+
+TEST_CASE(scheduler_metadata_is_owned_and_preserved_for_each_consumer)
+{
+	Fixture fixture;
+	for (int consumer = 0; consumer < 3; ++consumer) {
+		g_stats.setEnabled(consumer == 0);
+		g_performanceMetrics.setEnabled(consumer == 1);
+		ConfigManager::setBoolean(ConfigManager::SLOW_TASK_WARNING, consumer == 2);
+		std::string label = description + " trailing bytes";
+		std::string location = origin + " trailing bytes";
+		auto task = createSchedulerTaskWithStats(
+		    75, [] {}, std::string_view(label.data(), description.size()),
+		    std::string_view(location.data(), origin.size()));
+		label.clear();
+		location.clear();
+#ifndef STATS_ENABLED
+		if (consumer == 0) {
+			CHECK(task->description.empty() && task->extraDescription.empty());
+			continue;
+		}
+#endif
+		CHECK(task->description == description);
+		CHECK(task->extraDescription == origin);
+		CHECK(task->getDelay() == 75);
+	}
+}
+
+namespace {
+bool preprocessingDelayed = false;
+void slowPreprocessingAllocation()
+{
+	std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	preprocessingDelayed = true;
+}
+
+TaskReactor* transferringReactor = nullptr;
+size_t producerPendingCount = 0;
+bool producerAccepted = true;
+void submitDuringHeapAllocation()
+{
+	std::thread producer([] {
+		producerPendingCount = transferringReactor->getPendingTaskCount();
+		producerAccepted = transferringReactor->send(std::chrono::seconds(1), [] {});
+	});
+	producer.join();
+}
+} // namespace
+
+TEST_CASE(test_reactor_budget_includes_preprocessing_and_still_makes_progress)
+{
+	Fixture fixture;
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setTimeBudget(std::chrono::milliseconds(1));
+	std::vector<int> order;
+	order.reserve(3);
+	for (int i = 1; i <= 3; ++i) CHECK(reactor.send([&, i] { order.push_back(i); }));
+	preprocessingDelayed = false;
+	allocation_probe::nextAllocationHook = slowPreprocessingAllocation;
+	reactor.runOnce(); // The first ingestion reserve consumes this real cycle's budget.
+	allocation_probe::nextAllocationHook = nullptr;
+	CHECK(preprocessingDelayed);
+	CHECK(order == std::vector<int>({1}));
+	CHECK(reactor.hasPendingTasks());
+	reactor.setTimeBudget(std::chrono::milliseconds(0));
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 2, 3}));
+}
+
+TEST_CASE(expiring_admission_counts_tasks_during_inbox_to_heap_transfer)
+{
+	Fixture fixture;
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setMaxInboxSize(3);
+	for (int i = 0; i < 3; ++i) CHECK(reactor.send([] {}));
+	TaskReactorTestAccess::reserveIngestionBuffers(reactor, 3);
+	transferringReactor = &reactor;
+	producerPendingCount = 0;
+	producerAccepted = true;
+	// With ingestion already reserved, the next allocation grows the owner heap
+	// after releasing the producer mutex and before publishing its new size.
+	allocation_probe::nextAllocationHook = submitDuringHeapAllocation;
+	reactor.runOnce();
+	allocation_probe::nextAllocationHook = nullptr;
+	transferringReactor = nullptr;
+	CHECK(producerPendingCount == 3);
+	CHECK(!producerAccepted);
+	CHECK(!reactor.hasPendingTasks());
 }
 
 int main(int argc, char** argv)

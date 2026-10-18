@@ -10,6 +10,9 @@ Task descriptions and source locations are constructed when performance
 telemetry, slow-task warnings or enabled statistics consume them. Statistics
 enabled before its worker starts still retains startup metadata. The common
 unobserved path avoids constructing the source-location strings.
+Task and scheduler factories accept `std::string_view`, so macro literals and
+borrowed inputs do not become temporary owned strings before the consumer check.
+The task owns copies when metadata is observed, including scheduler tasks.
 
 `Dispatcher::addTask` returns whether submission was accepted. An expired task
 is rejected before publication. A task with an expiration uses the reactor's
@@ -27,6 +30,10 @@ deadline cannot make an expired Task run.
 - Admit up to 1,024 new tasks into the owner heap per cycle by default; zero
   disables this ingestion limit. Cancellation control traffic is drained every
   cycle. Existing callback-count and cooperative time budgets remain available.
+  Cancelled and expired due entries also consume the per-cycle task count.
+- Deduplicate cancellations from their first admission until the scheduled task
+  retires. Repeating a cancellation after ingestion adds no control work, and
+  retirement clears cancellation state before an identifier can be reused.
 - Merge both incoming task types into the persistent owner heap, with batched
   heap construction and amortized capacity growth. This removes the additional
   ready-list sort and leaves deferred callbacks in the heap.
@@ -34,10 +41,15 @@ deadline cannot make an expired Task run.
   guaranteeing progress through at least one eligible callback.
 - Observe heap size through an atomic snapshot instead of concurrently reading
   the owner's vector from a different thread.
+- Keep transferred inbox entries in the pending count until heap publication.
+  Publishing the new heap size and clearing that transfer count use the producer
+  mutex together, so expiring admission cannot observe a gap between the queues.
 
 The upstream-compatible callback wrapper is preserved, including its fallback
-for toolchains without `std::move_only_function`. The existing default backlog
-threshold of 100,000 is preserved. At that threshold, expiring work can be
+for toolchains without `std::move_only_function`. Both the class default and the
+startup fallback when `reactorMaxInboxSize` is omitted are 100,000. An explicit
+configuration overrides that value; `config.lua.dist` selects the high-load
+preset of 400,000. At the configured threshold, expiring work can be
 rejected, while authoritative work without a deadline, scheduled events and
 cancellations remain accepted. This is not a hard memory limit for a sustained
 producer of lossless work.
@@ -76,12 +88,21 @@ disabled produced these counts:
 | Task construction with unobserved description/origin | 30,000 | 10,000 |
 | Idle reactor cycles after warmup | Not measured | 0 |
 
-All 17 selected CTest checks passed, including the native 200,000-task concurrent
+All 18 selected CTest checks passed, including the native 200,000-task concurrent
 producer stress and 250,000 scheduled-task fairness stress. These are tasks,
 not player sessions. The original Windows connection-write fixture also exposed
 an accept-completion race on the previous engine and the candidate. It now
 establishes its TCP pair synchronously and releases connection-manager ownership
 before destroying its I/O context; six fresh processes passed with that fixture.
+
+Review regressions exercise repeated cancellation before and after ingestion,
+bounded discard of cancelled/expired tasks, allocations through the task macros,
+scheduler metadata ownership, and real configuration loading. The preprocessing
+budget test calls `runOnce()` and delays a test-only ingestion allocation. A
+separate allocation hook lets an actual producer submit while the owner heap is
+being constructed, making the inbox-to-heap admission window reproducible.
+Starting the budget clock after preprocessing makes the real `runOnce()` test
+fail, as verified by a temporary mutation of the isolated engine.
 
 [Machine-readable results](dispatcher-reactor-results.json) record the component
 counts and validation scope. No production runtime or datapack was changed.

@@ -12,7 +12,7 @@ inline constexpr int32_t SCHEDULER_MINTICKS = MIN_TASK_INTERVAL;
 class SchedulerTask : public Task
 {
 public:
-	SchedulerTask(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription);
+	SchedulerTask(uint32_t delay, TaskFunc&& f, std::string_view description, std::string_view extraDescription);
 
 	void setEventId(uint32_t id) noexcept { eventId = id; }
 	[[nodiscard]] constexpr uint32_t getEventId() const noexcept { return eventId; }
@@ -22,10 +22,12 @@ private:
 	uint32_t eventId = 0;
 	uint32_t delay = 0;
 
-	friend std::unique_ptr<SchedulerTask> createSchedulerTaskWithStats(uint32_t, TaskFunc&&, const std::string&, const std::string&);
+	friend std::unique_ptr<SchedulerTask> createSchedulerTaskWithStats(uint32_t, TaskFunc&&, std::string_view,
+	                                                                   std::string_view);
 };
 
-std::unique_ptr<SchedulerTask> createSchedulerTaskWithStats(uint32_t delay, TaskFunc&& f, const std::string& description, const std::string& extraDescription);
+std::unique_ptr<SchedulerTask> createSchedulerTaskWithStats(uint32_t delay, TaskFunc&& f, std::string_view description,
+                                                            std::string_view extraDescription);
 
 class Scheduler
 {
