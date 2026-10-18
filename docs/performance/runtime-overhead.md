@@ -21,11 +21,28 @@ Regression tests cover disabled/stopped/running collectors, nested scope state
 changes, callback return values and errors, Lua stack restoration, timer origins,
 active statistics output, task expiration/exclusion, and independent slow warnings.
 
+Callbacks recheck whether collection is enabled and running immediately before
+constructing a record. Four allocation regressions cover disabling and stopping
+collection inside boolean and void callbacks. Each compares completion allocations
+with an otherwise identical callback that entered with collection disabled; this
+excludes unrelated Lua/database cleanup. All four fail with the original gate.
+
+The recursive-scope regression parses the outer duration and call count written
+to `special.log`. It checks the measured exclusive interval, including observed
+destructor overhead and millisecond-format tolerance. Removing nested-time
+subtraction makes this assertion fail.
+
 ## Allocate spectator storage when an entry is inserted
 
 An empty `SpectatorVec` no longer reserves 32 entries. Its first insertion keeps
 the previous initial capacity, including null insertion and merging from another
 vector. Empty partition spans avoid arithmetic on a null storage pointer.
+
+The empty-span case checks the accessor contract. It does not claim that null
+pointer plus zero is undefined: C++ explicitly defines that result as null, and
+Clang's pointer-overflow sanitizer excludes arithmetic where both pointers are
+null. See [C++ additive operators](https://eel.is/c++draft/expr.add#4.1) and
+[UBSan checks](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html#available-checks).
 
 The allocation regression executes 10,000 iterations, each constructing two
 vectors, ignoring a null insertion and merging an empty source. A second case

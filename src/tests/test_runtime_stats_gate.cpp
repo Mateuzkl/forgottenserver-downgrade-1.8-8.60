@@ -5,6 +5,7 @@
 #include "../configmanager.h"
 #include "../database.h"
 #include "../logger.h"
+#include "../luascript.h"
 #include "../performance_metrics.h"
 #include "../stats.h"
 #include "../tasks.h"
@@ -16,6 +17,8 @@
 #ifdef _WIN32
 #include <malloc.h>
 #endif
+
+extern LuaEnvironment g_luaEnvironment;
 
 namespace allocation_probe {
 // Only the calling test thread is counted. Stats' worker allocations cannot
@@ -303,6 +306,8 @@ TEST_CASE(active_monitor_keeps_samples_descriptions_origins_and_execution)
 TEST_CASE(nested_exclusive_time_survives_disabling_and_reenabling_collection)
 {
 	Fixture fixture(true, true);
+	uint64_t exclusiveBeforeDestruction = 0;
+	Clock::time_point beforeDestruction;
 	{
 		ProbeRecursive outer("gate_active_outer");
 		CHECK(outer.timed());
@@ -312,7 +317,7 @@ TEST_CASE(nested_exclusive_time_survives_disabling_and_reenabling_collection)
 			CHECK(child.timed());
 			{
 				ProbeRecursive leaf("gate_disabled_leaf");
-				std::this_thread::sleep_for(std::chrono::milliseconds(2));
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
 			}
 			CHECK(child.excluded() > 0);
 			CHECK(child.excluded() <= child.elapsed());
@@ -321,9 +326,27 @@ TEST_CASE(nested_exclusive_time_survives_disabling_and_reenabling_collection)
 		CHECK(outer.excluded() <= outer.elapsed());
 		g_stats.setEnabled(true);
 		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		exclusiveBeforeDestruction = outer.elapsed() - outer.excluded();
+		beforeDestruction = Clock::now();
 	}
+	const auto destructionNs = static_cast<uint64_t>(
+	    std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - beforeDestruction).count());
 	const auto text = fixture.statsText("special.log");
-	CHECK(text.find("gate_active_outer") != std::string::npos);
+	bool found = false;
+	std::istringstream lines(text);
+	for (std::string line; std::getline(lines, line);) {
+		if (line.find("gate_active_outer") == std::string::npos) continue;
+		std::istringstream row(line);
+		uint64_t milliseconds = 0, calls = 0;
+		CHECK(static_cast<bool>(row >> milliseconds >> calls));
+		CHECK(calls == 1);
+		// The file truncates to whole milliseconds. Bound destructor overhead
+		// by its observed wall time, with 2 ms for clock/format quantization.
+		CHECK(milliseconds >= exclusiveBeforeDestruction / 1'000'000);
+		CHECK(milliseconds <= (exclusiveBeforeDestruction + destructionNs) / 1'000'000 + 2);
+		found = true;
+	}
+	CHECK(found);
 	CHECK(text.find("gate_disabled_child") == std::string::npos);
 	CHECK(text.find("gate_disabled_leaf") == std::string::npos);
 }
@@ -400,6 +423,87 @@ TEST_CASE(task_exclusion_and_expiration_remain_effective_with_monitor_active)
 	const auto text = fixture.statsText("dispatcher.log");
 	CHECK(text.find("gate_excluded_task") == std::string::npos);
 	CHECK(text.find("gate_expired_task") == std::string::npos);
+}
+
+namespace {
+int deactivateCollector(lua_State* state)
+{
+	if (lua_toboolean(state, 1))
+		g_stats.shutdown();
+	else
+		g_stats.setEnabled(false);
+	// Measure only completion work after the callback changes collector state.
+	allocation_probe::calls = allocation_probe::bytes = 0;
+	allocation_probe::active = true;
+	lua_pushboolean(state, true);
+	return 1;
+}
+
+void checkLuaCollectorDeactivation(bool stop, bool withResult)
+{
+	Fixture fixture(false, true);
+	CHECK(!LuaScriptInterface::hasScriptEnv());
+	CHECK(g_luaEnvironment.initState());
+	LuaScriptInterface interface("Collector deactivation regression");
+	CHECK(interface.initState());
+	lua_State* state = interface.getLuaState();
+	lua_pushcfunction(state, deactivateCollector);
+	lua_setglobal(state, "gate_deactivate_collector_during_lua_callback");
+	const auto event = interface.getEvent("gate_deactivate_collector_during_lua_callback");
+	CHECK(event >= 0);
+	const auto invoke = [&](bool initiallyEnabled) {
+		if (!g_stats.isRunning()) {
+			g_stats.join();
+			g_stats.start();
+		}
+		g_stats.setEnabled(initiallyEnabled);
+		CHECK(LuaScriptInterface::reserveScriptEnv());
+		LuaScriptInterface::getScriptEnv()->setScriptId(event, &interface);
+		CHECK(interface.pushFunction(event));
+		lua_pushboolean(state, stop);
+		uint64_t allocations = 0;
+		{
+			allocation_probe::Window window;
+			allocation_probe::active = false;
+			if (withResult)
+				CHECK(interface.callFunction(1));
+			else
+				interface.callVoidFunction(1);
+			allocation_probe::active = false;
+			allocations = allocation_probe::calls;
+		}
+		CHECK(lua_gettop(state) == 0);
+		CHECK(!LuaScriptInterface::hasScriptEnv());
+		CHECK(stop ? !g_stats.isRunning() : !g_stats.isEnabled());
+		return allocations;
+	};
+	invoke(false); // Warm up shared Lua/database cleanup outside the comparison.
+	const auto inactiveAllocations = invoke(false);
+	const auto deactivatedAllocations = invoke(true);
+	// Cleanup may allocate independently of statistics. Starting with an active
+	// collector must add no allocations after the callback disables/stops it.
+	CHECK(deactivatedAllocations == inactiveAllocations);
+}
+} // namespace
+
+TEST_CASE(boolean_lua_callback_does_not_allocate_stats_after_disabling_collection)
+{
+	checkLuaCollectorDeactivation(false, true);
+}
+
+TEST_CASE(void_lua_callback_does_not_allocate_stats_after_disabling_collection)
+{
+	checkLuaCollectorDeactivation(false, false);
+}
+
+TEST_CASE(boolean_lua_callback_does_not_allocate_stats_after_stopping_collection)
+{
+	checkLuaCollectorDeactivation(true, true);
+}
+
+TEST_CASE(void_lua_callback_does_not_allocate_stats_after_stopping_collection)
+{
+	checkLuaCollectorDeactivation(true, false);
 }
 
 TFS_TEST_MAIN()

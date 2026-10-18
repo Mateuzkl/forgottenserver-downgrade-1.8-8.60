@@ -925,7 +925,7 @@ bool LuaScriptInterface::callFunction(int params)
 			         ns / 1'000'000, scriptFile);
 		}
 #ifdef STATS_ENABLED
-		if (shouldCollectStats) {
+		if (shouldCollectStats && g_stats.isEnabled() && g_stats.isRunning()) {
 			const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
 			                                           getFileByIdForStats(scriptId);
 			g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
@@ -982,7 +982,7 @@ void LuaScriptInterface::callVoidFunction(int params)
 			         ns / 1'000'000, scriptFile);
 		}
 #ifdef STATS_ENABLED
-		if (shouldCollectStats) {
+		if (shouldCollectStats && g_stats.isEnabled() && g_stats.isRunning()) {
 			const std::string scriptFile = !timerOrigin.empty() ? timerOrigin :
 			    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId));
 			g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
