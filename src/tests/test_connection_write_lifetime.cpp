@@ -16,7 +16,6 @@
 #include "../connection.h"
 #include "../outputmessage.h"
 #include "../protocol.h"
-
 #include "test_support.h"
 
 // Grants the tests access to Connection internals. Declared as a friend in
@@ -85,10 +84,11 @@ struct ConnectedPair
 		connection = ConnectionManager::getInstance().createConnection(ioContext, {});
 		ConnectionTestAccess::setProtocol(*connection, std::make_shared<NullProtocol>(connection));
 
-		acceptor.async_accept(ConnectionTestAccess::socket(*connection), [](const asio::error_code&) {});
+		// Establish the pair synchronously. One poll() after async_accept() does
+		// not guarantee that Windows has delivered the accept completion yet.
+		// The asynchronous operation exercised by these tests is async_write().
 		peer.connect(acceptor.local_endpoint());
-		ioContext.poll();
-		ioContext.restart();
+		acceptor.accept(ConnectionTestAccess::socket(*connection));
 
 		// Keep the kernel buffers small so saturating them below is cheap.
 		ConnectionTestAccess::socket(*connection).set_option(asio::socket_base::send_buffer_size{2048});
@@ -117,6 +117,9 @@ struct ConnectedPair
 
 	~ConnectedPair()
 	{
+		// Assertions can throw before a case reaches resetConnectionManager().
+		// Release the manager's ownership before destroying this io_context.
+		if (connection) connection->close(Connection::FORCE_CLOSE);
 		asio::error_code ignored;
 		peer.close(ignored);
 		acceptor.close(ignored);

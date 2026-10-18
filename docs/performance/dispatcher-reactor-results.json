@@ -1,0 +1,18 @@
+{
+  "iterations": 10000,
+  "original_factory_allocations": 30000,
+  "optimized_factory_allocations": 10000,
+  "optimized_idle_reactor_cycle_allocations": 0,
+  "baseline": "original_factory_body_same_native_Task",
+  "gameplay_measured": false,
+  "date": "2026-10-18",
+  "base_commit": "ecd8ff9575e6dd4636448b8399abdbbf6f39c836",
+  "compiler": "MSVC 19.44 x64",
+  "configuration": "Release, statistics compiled, test LTO disabled",
+  "allocation_scope": "calling_thread_cpp_operator_new",
+  "timing_benchmark": false,
+  "stress_tasks_concurrent": 200000,
+  "stress_tasks_scheduled": 250000,
+  "local_ctest_checks_passed": 17,
+  "windows_connection_fixture_fixed_repetitions": 6
+}

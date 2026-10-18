@@ -10,6 +10,34 @@
 
 struct TaskReactorTestAccess
 {
+	using Clock = std::chrono::steady_clock;
+	static void setScheduledTimes(TaskReactor& reactor,
+	                              const std::vector<std::pair<uint32_t, Clock::time_point>>& times)
+	{
+		std::scoped_lock lock(reactor.mutex);
+		for (auto& task : reactor.scheduleInbox) {
+			for (const auto& [identifier, fireAt] : times) {
+				if (task.identifier == identifier) task.fireAt = fireAt;
+			}
+		}
+		std::make_heap(reactor.scheduleInbox.begin(), reactor.scheduleInbox.end(), TaskReactor::taskComesAfter);
+	}
+	static void ingestWithoutExecuting(TaskReactor& reactor) { reactor.drainInbox(); }
+	static void executeAfterBudgetConsumed(TaskReactor& reactor)
+	{
+		std::vector<TaskReactor::Task> ready;
+		reactor.drainInbox();
+		reactor.drainReadyTasks(ready);
+		reactor.executeReadyTasks(ready, std::chrono::steady_clock::now() - std::chrono::milliseconds(10));
+	}
+	static size_t largestScratchCapacity(const TaskReactor& reactor)
+	{
+		CHECK(reactor.sentTasksBuffer.empty());
+		CHECK(reactor.scheduledTasksBuffer.empty());
+		CHECK(reactor.cancellationsBuffer.empty());
+		return std::max({reactor.sentTasksBuffer.capacity(), reactor.scheduledTasksBuffer.capacity(),
+		                 reactor.cancellationsBuffer.capacity()});
+	}
 	static void setLastIdentifier(TaskReactor& reactor, uint32_t identifier)
 	{
 		std::scoped_lock lock(reactor.mutex);
@@ -310,6 +338,53 @@ TEST_CASE(test_reactor_identifier_wrap_preserves_heap_reservation)
 	CHECK(reactor.hasPendingTasks()); // the old, future task is still pending
 }
 
+TEST_CASE(test_reactor_identifier_wrap_preserves_cancelled_bounded_inbox_reservation)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	// DragonKeep ingests large bursts over several cycles. The cancellation
+	// must stay attached to an undrained task even when new ids wrap around.
+	reactor.setMaxInboxDrainPerCycle(1);
+	reactor.send([] {});
+	int cancelledRuns = 0;
+	int survivorRuns = 0;
+	int replacementRuns = 0;
+	const auto cancelledId = reactor.schedule(0, [&] { ++cancelledRuns; });
+	const auto survivorId = reactor.schedule(0, [&] { ++survivorRuns; });
+	reactor.cancel(cancelledId);
+	reactor.runOnce(); // only the immediate task is ingested
+
+	TaskReactorTestAccess::setLastIdentifier(reactor, (std::numeric_limits<uint32_t>::max)());
+	const auto replacementId = reactor.schedule(0, [&] { ++replacementRuns; });
+	CHECK(replacementId != 0);
+	CHECK(replacementId != cancelledId);
+	CHECK(replacementId != survivorId);
+	for (size_t cycle = 0; cycle < 3; ++cycle) {
+		reactor.runOnce();
+	}
+
+	CHECK(cancelledRuns == 0);
+	CHECK(survivorRuns == 1);
+	CHECK(replacementRuns == 1);
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_same_batch_cancellation_releases_captures_before_next_cycle)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	uint32_t victimId = 0;
+	reactor.send([&] { reactor.cancel(victimId); });
+	auto ownership = std::make_shared<int>(42);
+	std::weak_ptr<int> observer = ownership;
+	victimId = reactor.schedule(0, [ownership = std::move(ownership)] {});
+	CHECK(!observer.expired());
+
+	reactor.runOnce();
+	CHECK(observer.expired());
+	CHECK(!reactor.hasPendingTasks());
+}
+
 TEST_CASE(test_reactor_identifier_wrap_during_ready_batch_cancels_only_new_task)
 {
 	TaskReactor reactor;
@@ -492,10 +567,8 @@ TEST_CASE(test_reactor_exception_does_not_stop_other_callbacks)
 	CHECK(executedAfterException);
 }
 
-// A task pushed past the fairness limit goes back through sendInbox to run next
-// cycle. Cancelling it while it sits there must be honoured: before the fix,
-// drainInbox() ignored cancellations on that path, so stopEvent() silently did
-// nothing and the callback ran anyway after the caller had retired it.
+// A task kept in the persistent ready heap by the fairness limit must remain
+// cancellable before the next cycle.
 TEST_CASE(test_reactor_cancel_while_deferred_by_fairness_limit_prevents_execution)
 {
 	TaskReactor reactor;
@@ -567,6 +640,83 @@ TEST_CASE(test_reactor_deferred_task_still_runs_when_not_cancelled)
 	CHECK(executions == 1); // runs exactly once
 }
 
+TEST_CASE(test_reactor_soft_inbox_limit_never_drops_gameplay_tasks)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxInboxSize(1);
+
+	int executions = 0;
+	CHECK(reactor.send([&executions] { ++executions; }));
+	CHECK(reactor.send([&executions] { ++executions; }));
+	CHECK(reactor.send([&executions] { ++executions; }));
+
+	const uint32_t scheduled = reactor.schedule(0, [&executions] { ++executions; });
+	CHECK(scheduled != 0);
+	reactor.runOnce();
+	CHECK(executions == 4);
+}
+
+TEST_CASE(test_reactor_heap_preserves_order_across_fairness_cycles)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxTasksPerCycle(2);
+
+	std::vector<int> order;
+	for (int value = 0; value < 7; ++value) {
+		CHECK(reactor.schedule(0, [&order, value] { order.push_back(value); }) != 0);
+	}
+
+	while (order.size() < 7) {
+		reactor.runOnce();
+	}
+	const std::vector<int> expected{0, 1, 2, 3, 4, 5, 6};
+	CHECK(order == expected);
+}
+
+TEST_CASE(test_reactor_cancels_event_still_waiting_in_bounded_inbox)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxInboxDrainPerCycle(1);
+
+	int executions = 0;
+	CHECK(reactor.schedule(0, [&executions] { ++executions; }) != 0);
+	CHECK(reactor.schedule(0, [&executions] { ++executions; }) != 0);
+	const uint32_t cancelledId = reactor.schedule(0, [&executions] { executions += 100; });
+	CHECK(cancelledId != 0);
+	reactor.cancel(cancelledId);
+
+	for (int cycle = 0; cycle < 5; ++cycle) {
+		reactor.runOnce();
+	}
+	CHECK(executions == 2);
+}
+
+TEST_CASE(test_reactor_bounds_expiring_work_but_preserves_critical_work)
+{
+	TaskReactor reactor;
+	startReactor(reactor);
+	reactor.setMaxInboxSize(2);
+
+	int executed = 0;
+	CHECK(reactor.canAcceptExpiringTask());
+	CHECK(reactor.send(std::chrono::seconds(1), [&executed] { ++executed; }));
+	CHECK(reactor.send(std::chrono::seconds(1), [&executed] { ++executed; }));
+	CHECK(!reactor.canAcceptExpiringTask());
+	CHECK(!reactor.send(std::chrono::seconds(1), [&executed] { executed += 100; }));
+	CHECK(reactor.getPendingTaskCount() == 2);
+
+	// Lossless work is accepted even while expiring work is shedding.
+	CHECK(reactor.send([&executed] { executed += 10; }));
+	CHECK(reactor.getPendingTaskCount() == 3);
+	reactor.runOnce();
+	CHECK(executed == 12);
+	CHECK(reactor.getPendingTaskCount() == 0);
+	reactor.shutdown();
+}
+
 TEST_CASE(test_scheduler_dispatcher_move_only_pipeline)
 {
 	g_dispatcher.start();
@@ -587,12 +737,118 @@ TEST_CASE(test_scheduler_dispatcher_move_only_pipeline)
 
 	bool dispatcherAcceptedAfterStop = false;
 	g_dispatcher.stop();
-	g_dispatcher.addTask([&dispatcherAcceptedAfterStop] { dispatcherAcceptedAfterStop = true; });
+	CHECK(!g_dispatcher.addTask([&dispatcherAcceptedAfterStop] { dispatcherAcceptedAfterStop = true; }));
 	g_reactor.runOnce();
 	CHECK(!dispatcherAcceptedAfterStop);
 
 	g_scheduler.shutdown();
 	g_dispatcher.shutdown();
+}
+
+TEST_CASE(test_reactor_reused_ingestion_storage_releases_completed_captures)
+{
+	TaskReactor reactor;
+	reactor.start();
+	for (int cycle = 0; cycle < 3; ++cycle) {
+		auto value = std::make_shared<int>(cycle);
+		std::weak_ptr<int> observer = value;
+		CHECK(reactor.send([value] {}));
+		value.reset();
+		reactor.runOnce();
+		CHECK(observer.expired());
+		CHECK(TaskReactorTestAccess::largestScratchCapacity(reactor) <= REACTOR_MAX_RETAINED_SCRATCH);
+	}
+	reactor.shutdown();
+}
+
+TEST_CASE(test_reactor_ingestion_scratch_does_not_retain_unbounded_burst)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setMaxInboxDrainPerCycle(0);
+	int executed = 0;
+	for (size_t i = 0; i < REACTOR_MAX_RETAINED_SCRATCH + 1; ++i) {
+		CHECK(reactor.send([&executed] { ++executed; }));
+	}
+	reactor.runOnce();
+	CHECK(executed == REACTOR_MAX_RETAINED_SCRATCH + 1);
+	CHECK(!reactor.hasPendingTasks());
+	CHECK(TaskReactorTestAccess::largestScratchCapacity(reactor) <= REACTOR_MAX_RETAINED_SCRATCH);
+	reactor.shutdown();
+}
+
+TEST_CASE(test_reactor_budget_includes_preprocessing_and_still_makes_progress)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setTimeBudget(std::chrono::milliseconds(1));
+	std::vector<int> order;
+	CHECK(reactor.send([&] { order.push_back(1); }));
+	CHECK(reactor.send([&] { order.push_back(2); }));
+	CHECK(reactor.send([&] { order.push_back(3); }));
+	TaskReactorTestAccess::executeAfterBudgetConsumed(reactor);
+	CHECK(order == std::vector<int>({1}));
+	CHECK(reactor.hasPendingTasks());
+	reactor.setTimeBudget(std::chrono::milliseconds(0));
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 2, 3}));
+}
+
+TEST_CASE(test_bounded_ingestion_selects_earliest_timer_before_insertion_order)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setMaxInboxDrainPerCycle(1);
+	std::vector<int> order;
+	const auto latest = reactor.schedule(0, [&] { order.push_back(3); });
+	const auto earliest = reactor.schedule(0, [&] { order.push_back(1); });
+	const auto middle = reactor.schedule(0, [&] { order.push_back(2); });
+	const auto now = std::chrono::steady_clock::now();
+	TaskReactorTestAccess::setScheduledTimes(reactor, {
+	    {latest, now - std::chrono::milliseconds(100)},
+	    {earliest, now - std::chrono::milliseconds(300)},
+	    {middle, now - std::chrono::milliseconds(200)}});
+	for (int cycle = 0; cycle < 3; ++cycle) reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 2, 3}));
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_bounded_ingestion_does_not_overtake_an_older_undrained_timer)
+{
+	TaskReactor reactor;
+	reactor.start();
+	std::vector<int> order;
+	const auto now = std::chrono::steady_clock::now();
+	const auto alreadyInHeap = reactor.schedule(0, [&] { order.push_back(3); });
+	TaskReactorTestAccess::setScheduledTimes(reactor, {{alreadyInHeap, now - std::chrono::milliseconds(100)}});
+	TaskReactorTestAccess::ingestWithoutExecuting(reactor);
+	const auto first = reactor.schedule(0, [&] { order.push_back(1); });
+	const auto second = reactor.schedule(0, [&] { order.push_back(2); });
+	TaskReactorTestAccess::setScheduledTimes(reactor, {
+	    {first, now - std::chrono::milliseconds(300)}, {second, now - std::chrono::milliseconds(200)}});
+	reactor.setMaxInboxDrainPerCycle(1);
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1}));
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 2, 3}));
+	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_bounded_ingestion_keeps_sequence_order_for_equal_timer_deadlines)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setMaxInboxDrainPerCycle(1);
+	std::vector<int> order;
+	const auto now = std::chrono::steady_clock::now();
+	std::vector<std::pair<uint32_t, std::chrono::steady_clock::time_point>> times;
+	for (int value = 0; value < 12; ++value) {
+		times.emplace_back(reactor.schedule(0, [&, value] { order.push_back(value); }), now);
+	}
+	TaskReactorTestAccess::setScheduledTimes(reactor, times);
+	for (int cycle = 0; cycle < 12; ++cycle) reactor.runOnce();
+	CHECK(order.size() == 12);
+	for (int index = 0; index < 12; ++index) CHECK(order[index] == index);
 }
 
 TFS_TEST_MAIN()

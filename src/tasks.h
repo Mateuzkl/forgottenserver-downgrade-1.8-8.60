@@ -28,6 +28,8 @@ public:
 
 	void setDontExpire() { expiration = SYSTEM_TIME_ZERO; }
 	[[nodiscard]] bool hasExpired() const;
+	[[nodiscard]] bool hasExpiration() const noexcept { return expiration != SYSTEM_TIME_ZERO; }
+	[[nodiscard]] std::chrono::steady_clock::time_point getExpiration() const noexcept { return expiration; }
 
 	const std::string description;
 	const std::string extraDescription;
@@ -42,8 +44,10 @@ private:
 	TaskFunc func;
 };
 
-std::unique_ptr<Task> createTaskWithStats(TaskFunc&& f, const std::string& description, const std::string& extraDescription);
-std::unique_ptr<Task> createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description, const std::string& extraDescription);
+std::unique_ptr<Task> createTaskWithStats(TaskFunc&& f, const std::string& description,
+                                          const std::string& extraDescription);
+std::unique_ptr<Task> createTaskWithStats(uint32_t expiration, TaskFunc&& f, const std::string& description,
+                                          const std::string& extraDescription);
 
 class Dispatcher
 {
@@ -55,18 +59,10 @@ public:
 	void join() noexcept {}
 	void shutdown() noexcept;
 
-	void addTask(std::unique_ptr<Task>&& task);
-	void addTask(TaskFunc&& f, const std::source_location location = std::source_location::current())
-	{
-		addTask(createTaskWithStats(std::move(f), location.function_name(),
-		                            std::string(location.file_name()) + ":" + std::to_string(location.line())));
-	}
-	void addTask(uint32_t expiration, TaskFunc&& f,
-	             const std::source_location location = std::source_location::current())
-	{
-		addTask(createTaskWithStats(expiration, std::move(f), location.function_name(),
-		                            std::string(location.file_name()) + ":" + std::to_string(location.line())));
-	}
+	bool addTask(std::unique_ptr<Task>&& task);
+	bool addTask(TaskFunc&& f, const std::source_location location = std::source_location::current());
+	bool addTask(uint32_t expiration, TaskFunc&& f,
+	             const std::source_location location = std::source_location::current());
 	void executeTask(std::unique_ptr<Task> task);
 
 	template <typename Func, typename Callback>
