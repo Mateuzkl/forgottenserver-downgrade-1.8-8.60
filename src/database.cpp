@@ -68,6 +68,10 @@ private:
 #ifdef STATS_ENABLED
 void recordSqlStats(std::string_view query, std::chrono::steady_clock::time_point start)
 {
+	if (!g_stats.isEnabled() || !g_stats.isRunning()) {
+		return;
+	}
+
 	uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
 	g_stats.addSqlStats(std::make_unique<Stat>(ns, std::string(query.substr(0, 100)), std::string(query.substr(0, 256))));
 }

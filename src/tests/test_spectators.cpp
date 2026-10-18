@@ -335,4 +335,19 @@ TEST_CASE(filterPlayers_removes_rejected_players_and_keeps_the_rest)
 	CHECK(spanContains(a.npcs(), n1.get()));
 }
 
+TEST_CASE(empty_partitions_are_valid_before_any_storage_is_allocated)
+{
+	SpectatorVec spectators;
+	spectators.partitionByType();
+	CHECK(spectators.players().empty());
+	CHECK(spectators.monsters().empty());
+	CHECK(spectators.npcs().empty());
+	const auto& immutable = spectators;
+	CHECK(immutable.players().empty());
+	CHECK(immutable.monsters().empty());
+	CHECK(immutable.npcs().empty());
+	spectators.filterPlayers([](const Player*) { return false; });
+	CHECK(spectators.empty());
+}
+
 TFS_TEST_MAIN()
