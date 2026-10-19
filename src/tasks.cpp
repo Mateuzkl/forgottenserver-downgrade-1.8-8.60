@@ -135,7 +135,8 @@ void Dispatcher::executeTask(std::unique_ptr<Task> task)
 		}
 	}
 #ifdef STATS_ENABLED
-	const bool shouldMeasure = true;
+	const bool collectStats = g_stats.isEnabled() && g_stats.isRunning() && task->trackInStats;
+	const bool shouldMeasure = slowTaskWarning || collectStats;
 #else
 	const bool shouldMeasure = slowTaskWarning;
 #endif
@@ -161,7 +162,7 @@ void Dispatcher::executeTask(std::unique_ptr<Task> task)
 		}
 
 #ifdef STATS_ENABLED
-		if (g_stats.isEnabled() && g_stats.isRunning() && task->trackInStats) {
+		if (collectStats && g_stats.isEnabled() && g_stats.isRunning()) {
 			g_stats.addDispatcherStat(0, std::make_unique<Stat>(elapsedNs, task->description, task->extraDescription));
 		}
 #endif

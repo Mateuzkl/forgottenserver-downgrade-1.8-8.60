@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-18",
+  "baseline_commit": "ecd8ff9575e6dd4636448b8399abdbbf6f39c836",
+  "compiler": "MSVC 19.44 x64",
+  "configuration": [
+    "/std:c++latest",
+    "/O2",
+    "/EHsc",
+    "/MD"
+  ],
+  "counter": "calling_thread_operator_new_calls",
+  "empty_iterations": 10000,
+  "vectors_per_empty_iteration": 2,
+  "original": {
+    "empty_queries_and_merges_allocations": 20000,
+    "construct_and_insert_32_allocations": 1,
+    "construct_and_merge_32_allocations": 1
+  },
+  "modified": {
+    "empty_queries_and_merges_allocations": 0,
+    "construct_and_insert_32_allocations": 1,
+    "construct_and_merge_32_allocations": 1
+  },
+  "expected_original_regression_exit": 1,
+  "modified_test_exit": 0,
+  "gameplay_latency_measured": false,
+  "player_capacity_measured": false,
+  "sql_timing_measured": false
+}

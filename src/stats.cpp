@@ -151,8 +151,8 @@ thread_local AutoStatRecursive* AutoStatRecursive::activeStat = nullptr;
 
 AutoStat::AutoStat(const std::string& description, const std::string& extraDescription)
 {
-	time_point = std::chrono::steady_clock::now();
-	if (g_stats.isEnabled()) {
+	if (g_stats.isEnabled() && g_stats.isRunning()) {
+		time_point = std::chrono::steady_clock::now();
 		stat = std::make_unique<Stat>(0, description, extraDescription);
 	}
 }
@@ -160,7 +160,7 @@ AutoStat::AutoStat(const std::string& description, const std::string& extraDescr
 AutoStat::~AutoStat() noexcept
 {
 	try {
-		if (!stat) {
+		if (!stat || !g_stats.isEnabled() || !g_stats.isRunning()) {
 			return;
 		}
 
@@ -183,11 +183,22 @@ AutoStatRecursive::AutoStatRecursive(const std::string& description, const std::
 	AutoStat(description, extraDescription)
 {
 	parent = activeStat;
+	if (time_point == std::chrono::steady_clock::time_point{}) {
+		if (!parent) {
+			return;
+		}
+		// A timed parent still needs the child's inclusive duration when
+		// collection is disabled during a recursive scope.
+		time_point = std::chrono::steady_clock::now();
+	}
 	activeStat = this;
 }
 
 AutoStatRecursive::~AutoStatRecursive() noexcept
 {
+	if (time_point == std::chrono::steady_clock::time_point{}) {
+		return;
+	}
 	activeStat = parent;
 	if (parent) {
 		parent->minusTime += std::chrono::duration_cast<std::chrono::nanoseconds>(

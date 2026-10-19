@@ -84,21 +84,20 @@ struct ConnectedPair
 		connection = ConnectionManager::getInstance().createConnection(ioContext, {});
 		ConnectionTestAccess::setProtocol(*connection, std::make_shared<NullProtocol>(connection));
 
-		// Establish the pair synchronously. One poll() after async_accept() does
-		// not guarantee that Windows has delivered the accept completion yet.
-		// The asynchronous operation exercised by these tests is async_write().
+		peer.open(localhost.protocol());
+		peer.set_option(asio::socket_base::receive_buffer_size{2048});
 		peer.connect(acceptor.local_endpoint());
+		// A single poll does not guarantee async_accept completion on Windows.
+		// Establish the fixture synchronously before configuring the accepted socket.
 		acceptor.accept(ConnectionTestAccess::socket(*connection));
 
 		// Keep the kernel buffers small so saturating them below is cheap.
 		ConnectionTestAccess::socket(*connection).set_option(asio::socket_base::send_buffer_size{2048});
-		peer.set_option(asio::socket_base::receive_buffer_size{2048});
 	}
 
-	// Writes until the socket reports would_block. The peer never reads, so from here
-	// any async_write() is guaranteed to stay pending rather than completing inside
-	// poll() — which is what makes "a write is in flight" deterministic instead of
-	// dependent on however much the kernel felt like buffering.
+	// Fill the currently available send space without reading from the peer.
+	// TCP acknowledgements can still free space after would_block, so the caller
+	// must observe whether the subsequent asynchronous write actually stays pending.
 	void saturateSendBuffer()
 	{
 		auto& socket = ConnectionTestAccess::socket(*connection);
@@ -115,6 +114,36 @@ struct ConnectedPair
 		CHECK(error == asio::error::would_block);
 	}
 
+	std::weak_ptr<OutputMessage> startPendingWrite()
+	{
+		// would_block can be transient while TCP acknowledgements free send space.
+		// Observe a pending write instead of assuming the next send cannot finish.
+		for (int attempt = 0; attempt < 100; ++attempt) {
+			saturateSendBuffer();
+			std::weak_ptr<OutputMessage> inFlight;
+			{
+				auto msg = makeMessage(4'096);
+				inFlight = msg;
+				connection->send(msg);
+			}
+			ioContext.poll();
+			ioContext.restart();
+			if (!inFlight.expired() && ConnectionTestAccess::queueSize(*connection) == 1) {
+				return inFlight;
+			}
+			CHECK(ConnectionTestAccess::queueSize(*connection) == 0);
+			CHECK(!ConnectionTestAccess::isClosed(*connection));
+		}
+		throw std::runtime_error("Loopback fixture could not establish a pending write");
+	}
+
+	void drain()
+	{
+		// IOCP cancellation/completion need not be ready during a single poll.
+		ioContext.run_for(std::chrono::seconds{1});
+		ioContext.restart();
+	}
+
 	~ConnectedPair()
 	{
 		// Assertions can throw before a case reaches resetConnectionManager().
@@ -123,6 +152,7 @@ struct ConnectedPair
 		asio::error_code ignored;
 		peer.close(ignored);
 		acceptor.close(ignored);
+		drain();
 	}
 };
 
@@ -135,19 +165,11 @@ TEST_CASE(test_queue_overflow_does_not_free_in_flight_write_buffer)
 	resetConnectionManager();
 	ConnectedPair pair;
 	auto& connection = *pair.connection;
-	pair.saturateSendBuffer();
 
 	// Start a write that cannot drain, then drop the test's own reference. From here
 	// the only owners are Connection's queue and — after the fix — the completion
 	// handler that Asio holds while the write is in flight.
-	std::weak_ptr<OutputMessage> inFlight;
-	{
-		auto msg = makeMessage(4'096);
-		inFlight = msg;
-		connection.send(msg);
-	}
-	pair.ioContext.poll();
-	pair.ioContext.restart();
+	const auto inFlight = pair.startPendingWrite();
 
 	CHECK(!inFlight.expired());
 	CHECK(ConnectionTestAccess::queueSize(connection) == 1);
@@ -170,8 +192,7 @@ TEST_CASE(test_queue_overflow_does_not_free_in_flight_write_buffer)
 
 	// Let the cancelled write's completion run. It must pop safely, drain the queue
 	// from the completion side, and terminate the connection without UB.
-	pair.ioContext.poll();
-	pair.ioContext.restart();
+	pair.drain();
 
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
 	CHECK(ConnectionTestAccess::isClosed(connection));
@@ -211,16 +232,7 @@ TEST_CASE(test_forced_close_with_pending_write_terminates_cleanly)
 	ConnectedPair pair;
 	auto& connection = *pair.connection;
 	CHECK(manager.getConnectionCount() == 1);
-	pair.saturateSendBuffer();
-
-	std::weak_ptr<OutputMessage> inFlight;
-	{
-		auto msg = makeMessage(4'096);
-		inFlight = msg;
-		connection.send(msg);
-	}
-	pair.ioContext.poll();
-	pair.ioContext.restart();
+	const auto inFlight = pair.startPendingWrite();
 	CHECK(!inFlight.expired());
 
 	connection.send(makeMessage(32));
@@ -230,8 +242,7 @@ TEST_CASE(test_forced_close_with_pending_write_terminates_cleanly)
 	CHECK(manager.getConnectionCount() == 0);
 	CHECK(!inFlight.expired()); // still owned by the pending write
 
-	pair.ioContext.poll();
-	pair.ioContext.restart();
+	pair.drain();
 
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
 	CHECK(inFlight.expired());
@@ -248,8 +259,7 @@ TEST_CASE(test_normal_send_below_limit_is_unaffected)
 	auto& connection = *pair.connection;
 
 	connection.send(makeMessage(8));
-	pair.ioContext.poll();
-	pair.ioContext.restart();
+	pair.drain();
 
 	// Small write against an empty socket buffer completes immediately and drains.
 	CHECK(ConnectionTestAccess::queueSize(connection) == 0);

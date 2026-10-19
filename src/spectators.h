@@ -21,7 +21,7 @@ class SpectatorVec
 	using ConstIterator = Vec::const_iterator;
 
 public:
-	SpectatorVec() { vec.reserve(32); }
+	SpectatorVec() = default;
 
 	void addSpectators(const SpectatorVec& spectators)
 	{
@@ -29,6 +29,7 @@ public:
 			return;
 		}
 
+		reserveOnFirstInsertion();
 		vec.reserve(vec.size() + spectators.vec.size());
 		vec.insert(vec.end(), spectators.vec.begin(), spectators.vec.end());
 
@@ -64,11 +65,11 @@ public:
 	}
 	std::span<std::shared_ptr<Creature>> monsters() {
 		assert(partitioned_);
-		return {vec.data() + playerEnd_, monsterEnd_ - playerEnd_};
+		return {playerEnd_ == 0 ? vec.data() : vec.data() + playerEnd_, monsterEnd_ - playerEnd_};
 	}
 	std::span<std::shared_ptr<Creature>> npcs() {
 		assert(partitioned_);
-		return {vec.data() + monsterEnd_, vec.size() - monsterEnd_};
+		return {monsterEnd_ == 0 ? vec.data() : vec.data() + monsterEnd_, vec.size() - monsterEnd_};
 	}
 
 	std::span<const std::shared_ptr<Creature>> players() const {
@@ -77,11 +78,11 @@ public:
 	}
 	std::span<const std::shared_ptr<Creature>> monsters() const {
 		assert(partitioned_);
-		return {vec.data() + playerEnd_, monsterEnd_ - playerEnd_};
+		return {playerEnd_ == 0 ? vec.data() : vec.data() + playerEnd_, monsterEnd_ - playerEnd_};
 	}
 	std::span<const std::shared_ptr<Creature>> npcs() const {
 		assert(partitioned_);
-		return {vec.data() + monsterEnd_, vec.size() - monsterEnd_};
+		return {monsterEnd_ == 0 ? vec.data() : vec.data() + monsterEnd_, vec.size() - monsterEnd_};
 	}
 
 	size_t size() const { return vec.size(); }
@@ -92,10 +93,26 @@ public:
 	ConstIterator begin() const { return vec.begin(); }
 	Iterator end() { return vec.end(); }
 	ConstIterator end() const { return vec.end(); }
-	void emplace_back(std::shared_ptr<Creature> c) { if (c) { vec.emplace_back(std::move(c)); partitioned_ = false; } }
-	void emplaceNull() { vec.emplace_back(); partitioned_ = false; }
+	void emplace_back(std::shared_ptr<Creature> c)
+	{
+		if (c) {
+			reserveOnFirstInsertion();
+			vec.emplace_back(std::move(c));
+			partitioned_ = false;
+		}
+	}
+	void emplaceNull() { reserveOnFirstInsertion(); vec.emplace_back(); partitioned_ = false; }
 
 private:
+	// Empty spectator queries do not need storage. Keep the existing initial
+	// capacity for the first actual entry, including explicit null entries.
+	void reserveOnFirstInsertion()
+	{
+		if (vec.capacity() == 0) {
+			vec.reserve(32);
+		}
+	}
+
 	Vec vec;
 	size_t playerEnd_ = 0;
 	size_t monsterEnd_ = 0;

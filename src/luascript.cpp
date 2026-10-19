@@ -894,7 +894,8 @@ bool LuaScriptInterface::callFunction(int params)
 		}
 	}
 #ifdef STATS_ENABLED
-	const bool shouldMeasure = true;
+	const bool shouldCollectStats = g_stats.isEnabled() && g_stats.isRunning();
+	const bool shouldMeasure = slowTaskWarning || shouldCollectStats;
 #else
 	const bool shouldMeasure = slowTaskWarning;
 #endif
@@ -924,9 +925,11 @@ bool LuaScriptInterface::callFunction(int params)
 			         ns / 1'000'000, scriptFile);
 		}
 #ifdef STATS_ENABLED
-		const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
-		                                           getFileByIdForStats(scriptId);
-		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
+		if (shouldCollectStats && g_stats.isEnabled() && g_stats.isRunning()) {
+			const auto& scriptFile = scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) :
+			                                           getFileByIdForStats(scriptId);
+			g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
+		}
 #endif
 	}
 
@@ -942,7 +945,6 @@ void LuaScriptInterface::callVoidFunction(int params)
 	LuaScriptInterface* scriptInterface;
 	getScriptEnv()->getEventInfo(scriptId, scriptInterface, callbackId, timerEvent);
 	(void)callbackId;
-	const std::string timerOrigin = timerEvent ? getScriptEnv()->getTimerEventOrigin() : std::string{};
 	const bool slowTaskWarning = getBoolean(ConfigManager::SLOW_TASK_WARNING);
 	uint64_t slowThresholdNs = SLOW_TASK_THRESHOLD_NS;
 	if (slowTaskWarning) {
@@ -952,10 +954,12 @@ void LuaScriptInterface::callVoidFunction(int params)
 		}
 	}
 #ifdef STATS_ENABLED
-	const bool shouldMeasure = true;
+	const bool shouldCollectStats = g_stats.isEnabled() && g_stats.isRunning();
+	const bool shouldMeasure = slowTaskWarning || shouldCollectStats;
 #else
 	const bool shouldMeasure = slowTaskWarning;
 #endif
+	const std::string timerOrigin = shouldMeasure && timerEvent ? getScriptEnv()->getTimerEventOrigin() : std::string{};
 	const auto time_point = shouldMeasure ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
 	int size = lua_gettop(luaState);
@@ -978,9 +982,11 @@ void LuaScriptInterface::callVoidFunction(int params)
 			         ns / 1'000'000, scriptFile);
 		}
 #ifdef STATS_ENABLED
-		const std::string scriptFile = !timerOrigin.empty() ? timerOrigin :
-		    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId));
-		g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
+		if (shouldCollectStats && g_stats.isEnabled() && g_stats.isRunning()) {
+			const std::string scriptFile = !timerOrigin.empty() ? timerOrigin :
+			    (scriptInterface ? scriptInterface->getFileByIdForStats(scriptId) : getFileByIdForStats(scriptId));
+			g_stats.addLuaStats(std::make_unique<Stat>(ns, scriptFile, ""));
+		}
 #endif
 	}
 
