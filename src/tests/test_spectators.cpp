@@ -79,6 +79,18 @@ bool spanContains(std::span<const std::shared_ptr<Creature>> span, const Creatur
 	return false;
 }
 
+void checkEmptyPartitions(SpectatorVec& spectators)
+{
+	CHECK(spectators.empty());
+	CHECK(spectators.players().empty());
+	CHECK(spectators.monsters().empty());
+	CHECK(spectators.npcs().empty());
+	const auto& immutable = spectators;
+	CHECK(immutable.players().empty());
+	CHECK(immutable.monsters().empty());
+	CHECK(immutable.npcs().empty());
+}
+
 } // namespace
 
 TEST_CASE(addSpectators_deduplicates_across_vectors)
@@ -339,15 +351,47 @@ TEST_CASE(empty_partitions_are_valid_before_any_storage_is_allocated)
 {
 	SpectatorVec spectators;
 	spectators.partitionByType();
-	CHECK(spectators.players().empty());
-	CHECK(spectators.monsters().empty());
-	CHECK(spectators.npcs().empty());
-	const auto& immutable = spectators;
-	CHECK(immutable.players().empty());
-	CHECK(immutable.monsters().empty());
-	CHECK(immutable.npcs().empty());
+	checkEmptyPartitions(spectators);
+	spectators.partitionByType();
+	checkEmptyPartitions(spectators);
+}
+
+TEST_CASE(filterPlayers_partitions_an_empty_vector_without_calling_the_predicate)
+{
+	SpectatorVec spectators;
+	size_t invocations = 0;
+	spectators.filterPlayers([&invocations](const Player*) { ++invocations; return true; });
+	CHECK(invocations == 0);
+	checkEmptyPartitions(spectators);
+}
+
+TEST_CASE(empty_partition_resets_bounds_after_erasing_the_last_spectators)
+{
+	auto player = std::make_shared<TestPlayerLike>();
+	auto monster = std::make_shared<TestMonsterLike>();
+	SpectatorVec spectators;
+	spectators.emplace_back(player);
+	spectators.emplace_back(monster);
+	spectators.partitionByType();
+	CHECK(spectators.players().size() == 1);
+	CHECK(spectators.monsters().size() == 1);
+	spectators.erase(player.get());
+	spectators.erase(monster.get());
+	spectators.partitionByType();
+	checkEmptyPartitions(spectators);
+}
+
+TEST_CASE(null_only_and_fully_filtered_vectors_have_empty_partitions)
+{
+	SpectatorVec spectators;
+	spectators.emplaceNull();
+	spectators.partitionByType();
+	checkEmptyPartitions(spectators);
+	spectators.emplace_back(std::make_shared<TestPlayerLike>());
 	spectators.filterPlayers([](const Player*) { return false; });
-	CHECK(spectators.empty());
+	checkEmptyPartitions(spectators);
+	spectators.partitionByType();
+	checkEmptyPartitions(spectators);
 }
 
 TFS_TEST_MAIN()

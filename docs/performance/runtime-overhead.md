@@ -38,6 +38,12 @@ An empty `SpectatorVec` no longer reserves 32 entries. Its first insertion keeps
 the previous initial capacity, including null insertion and merging from another
 vector. Empty partition spans avoid arithmetic on a null storage pointer.
 
+Partitioning an empty vector resets both partition boundaries and returns before
+running the partition algorithms or computing iterator differences. Regressions
+cover fresh empty vectors, implicit partitioning during filtering, erasing all
+spectators, null-only storage, and filtering out every player. Each empty result
+is checked through the mutable and const span accessors.
+
 The empty-span case checks the accessor contract. It does not claim that null
 pointer plus zero is undefined: C++ explicitly defines that result as null, and
 Clang's pointer-overflow sanitizer excludes arithmetic where both pointers are

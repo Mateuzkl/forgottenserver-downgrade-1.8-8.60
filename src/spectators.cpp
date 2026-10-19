@@ -10,6 +10,13 @@
 
 void SpectatorVec::partitionByType()
 {
+	if (vec.empty()) {
+		playerEnd_ = 0;
+		monsterEnd_ = 0;
+		partitioned_ = true;
+		return;
+	}
+
 	vec.erase(std::remove_if(vec.begin(), vec.end(),
 		[](const auto& c) { return !c; }), vec.end());
 
