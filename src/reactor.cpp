@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "reactor.h"
+#include "reactor_heap.h"
 
 #include "configmanager.h"
 #include "logger.h"
@@ -430,8 +431,7 @@ void TaskReactor::drainInbox()
 	// A burst is heapified once in linear time. With only a few arrivals and a
 	// large future-event heap, incremental insertion avoids rebuilding it all.
 	if (incomingTasks > 0) {
-		const bool rebuildHeap = previousHeapSize == 0 || incomingTasks >= 64 || incomingTasks * 4 >= previousHeapSize;
-		if (rebuildHeap) {
+		if (reactor_detail::shouldRebuildHeap(previousHeapSize, incomingTasks)) {
 			std::make_heap(taskHeap.begin(), taskHeap.end(), taskComesAfter);
 		} else {
 			for (size_t heapSize = previousHeapSize + 1; heapSize <= taskHeap.size(); ++heapSize) {

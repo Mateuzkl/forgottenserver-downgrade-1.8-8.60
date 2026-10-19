@@ -1,6 +1,7 @@
 #include "../otpch.h"
 
 #include "../reactor.h"
+#include "../reactor_heap.h"
 #include "../scheduler.h"
 #include "../tasks.h"
 #include "test_support.h"
@@ -22,6 +23,28 @@ struct TaskReactorTestAccess
 		std::make_heap(reactor.scheduleInbox.begin(), reactor.scheduleInbox.end(), TaskReactor::taskComesAfter);
 	}
 	static void ingestWithoutExecuting(TaskReactor& reactor) { reactor.drainInbox(); }
+	static bool validHeap(const TaskReactor& reactor)
+	{
+		return std::is_heap(reactor.taskHeap.begin(), reactor.taskHeap.end(), TaskReactor::taskComesAfter);
+	}
+	static void expectIncrementalSendIngestion(TaskReactor& reactor)
+	{
+		// Check the actual algorithm choice without wall-clock thresholds or a
+		// production counter: rebuilding this heap produces a different layout.
+		CHECK(reactor.scheduleInbox.empty());
+		using Key = std::pair<Clock::time_point, uint64_t>;
+		std::vector<Key> expected;
+		for (const auto& task : reactor.taskHeap) expected.emplace_back(task.fireAt, task.sequence);
+		for (const auto& task : reactor.sendInbox) {
+			expected.emplace_back(task.fireAt, task.sequence);
+			std::push_heap(expected.begin(), expected.end(), std::greater<Key>{});
+		}
+		reactor.drainInbox();
+		CHECK(reactor.taskHeap.size() == expected.size());
+		for (size_t i = 0; i < expected.size(); ++i) {
+			CHECK((Key{reactor.taskHeap[i].fireAt, reactor.taskHeap[i].sequence} == expected[i]));
+		}
+	}
 	static size_t largestScratchCapacity(const TaskReactor& reactor)
 	{
 		CHECK(reactor.sentTasksBuffer.empty());
@@ -879,6 +902,86 @@ TEST_CASE(test_reactor_expired_due_tasks_consume_the_cycle_limit)
 	reactor.setMaxTasksPerCycle(0);
 	reactor.runOnce();
 	CHECK(!reactor.hasPendingTasks());
+}
+
+TEST_CASE(test_reactor_heap_policy_is_proportional_and_overflow_safe)
+{
+	using reactor_detail::shouldRebuildHeap;
+	CHECK(!shouldRebuildHeap(0, 0));
+	CHECK(shouldRebuildHeap(0, 1024));
+	CHECK(shouldRebuildHeap(64, 64));
+	CHECK(!shouldRebuildHeap(100000, 64));
+	CHECK(!shouldRebuildHeap(100000, 1024));
+	CHECK(!shouldRebuildHeap(200000, 1024));
+	CHECK(shouldRebuildHeap(100000, 32768));
+	const auto maximum = std::numeric_limits<size_t>::max();
+	CHECK(!shouldRebuildHeap(maximum, 0));
+	CHECK(!shouldRebuildHeap(maximum, 1024));
+	CHECK(shouldRebuildHeap(maximum, maximum));
+}
+
+TEST_CASE(test_reactor_large_future_heap_accepts_small_earlier_batch)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setMaxInboxSize(0);
+	reactor.setMaxInboxDrainPerCycle(0);
+	for (int i = 0; i < 100000; ++i) {
+		CHECK(reactor.schedule(std::chrono::hours(1), [] {}) != 0);
+	}
+	TaskReactorTestAccess::ingestWithoutExecuting(reactor);
+	CHECK(TaskReactorTestAccess::validHeap(reactor));
+	std::vector<int> order;
+	for (int i = 0; i < 64; ++i) CHECK(reactor.send([&, i] { order.push_back(i); }));
+	TaskReactorTestAccess::expectIncrementalSendIngestion(reactor);
+	reactor.runOnce();
+	CHECK(TaskReactorTestAccess::validHeap(reactor));
+	CHECK(reactor.getPendingTaskCount() == 100000);
+	CHECK(order.size() == 64);
+	for (int i = 0; i < 64; ++i) CHECK(order[i] == i);
+}
+
+TEST_CASE(test_reactor_heap_mixed_insertion_cancellation_deferral_and_equal_deadlines)
+{
+	TaskReactor reactor;
+	reactor.start();
+	std::vector<int> order;
+	std::vector<uint32_t> future;
+	for (int i = 0; i < 20; ++i) {
+		future.push_back(reactor.schedule(std::chrono::hours(1), [&] { order.push_back(-1); }));
+	}
+	TaskReactorTestAccess::ingestWithoutExecuting(reactor);
+	const auto due = TaskReactorTestAccess::Clock::now() - std::chrono::seconds(2);
+	uint32_t victim = 0;
+	const auto first = reactor.schedule(0, [&] {
+		order.push_back(1);
+		reactor.cancel(victim);
+		reactor.cancel(victim);
+		const auto earlier = reactor.schedule(0, [&] { order.push_back(2); });
+		const auto equal = reactor.schedule(0, [&] { order.push_back(4); });
+		TaskReactorTestAccess::setScheduledTimes(reactor, {{earlier, due - std::chrono::seconds(1)}, {equal, due}});
+		std::this_thread::sleep_for(std::chrono::milliseconds(3));
+	});
+	victim = reactor.schedule(0, [&] { order.push_back(-2); });
+	const auto tail = reactor.schedule(0, [&] { order.push_back(3); });
+	TaskReactorTestAccess::setScheduledTimes(reactor, {{first, due}, {victim, due}, {tail, due}});
+	reactor.setTimeBudget(std::chrono::milliseconds(1));
+	reactor.runOnce(); // First callback consumes the budget, deferring victim and tail.
+	CHECK(order == std::vector<int>({1}));
+	CHECK(TaskReactorTestAccess::validHeap(reactor));
+	reactor.setTimeBudget(std::chrono::milliseconds(0));
+	reactor.setMaxInboxDrainPerCycle(1);
+	reactor.setMaxTasksPerCycle(3);
+	reactor.runOnce(); // Earlier new timer precedes deferred work; equal new timer remains in inbox.
+	CHECK(order == std::vector<int>({1, 2, 3}));
+	CHECK(TaskReactorTestAccess::validHeap(reactor));
+	reactor.runOnce();
+	CHECK(order == std::vector<int>({1, 2, 3, 4})); // Sequence breaks the tie with the older tail.
+	for (auto id : future) reactor.cancel(id);
+	TaskReactorTestAccess::makeHeapDue(reactor);
+	for (int i = 0; i < 10 && reactor.hasPendingTasks(); ++i) reactor.runOnce();
+	CHECK(!reactor.hasPendingTasks());
+	CHECK(order == std::vector<int>({1, 2, 3, 4}));
 }
 
 TFS_TEST_MAIN()
