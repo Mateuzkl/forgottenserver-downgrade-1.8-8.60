@@ -710,8 +710,10 @@ void Tile::onAddTileItem(Item* item)
 void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newItem, const ItemType& newType)
 {
 	// Reconciliation can remove this tile; retain it through the rest of the hook.
-	// An unshared tile still runs its native flag/notification logic.
 	const auto self = weak_from_this().lock();
+	if (!self) {
+		return;
+	}
 
 	if (auto browseField = g_game.getBrowseFieldContainer(this)) {
 		if (isBrowseFieldVisibleItem(newItem)) {
@@ -766,8 +768,12 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item)
 {
 	// Reconciliation can remove this tile; retain it through the rest of the hook.
-	// An unshared tile still runs its native flag/notification logic.
 	const auto self = weak_from_this().lock();
+	if (!self) {
+		// Standalone tiles still need native bookkeeping before map ownership.
+		resetTileFlags(item);
+		return;
+	}
 
 	if (isBrowseFieldVisibleItem(item)) {
 		if (auto browseField = g_game.getBrowseFieldContainer(this)) {
@@ -1270,6 +1276,8 @@ void Tile::addThing(int32_t, Thing* thing)
 				ground = itemRef;
 				onAddTileItem(item);
 			} else {
+				// The update callback can detach this tile before postRemoveNotification.
+				const auto self = weak_from_this().lock();
 				const ItemType& oldType = Item::items[ground->getID()];
 
 				auto oldGroundSp = std::move(ground);

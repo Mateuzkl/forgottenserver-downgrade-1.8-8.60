@@ -26,8 +26,10 @@ house-wide scan or timer is introduced. Each destination reconciles separately,
 suppresses reentrant reconciliation and elects again after native removals and
 insertions, because movement callbacks can change the sources or destination.
 Tile references are retained for the entire update/removal hooks, including work
-after reconciliation returns. Detached/replaced tiles are not modified by
-reconciliation; standalone tiles retain native flag and notification behavior.
+after reconciliation returns. Ground replacement also retains the tile through
+the following removal notification. Detached/replaced tiles are not modified by
+reconciliation; standalone tiles retain native flags and skip observer callbacks
+until shared ownership exists.
 Reconciliation is bounded to 16 passes; a continuously changing
 script leaves no generated decoration and waits for a later relevant event.
 
@@ -63,7 +65,8 @@ parts, 100 C++ cycles, 100 Lua cycles, replacement/removal, manual carpet priori
 competing sources in both placement orders, house/ground/instance boundaries and
 serializer restoration, reentrant source/manual-carpet changes, ground lifecycle
 updates, capacity retries, furniture/blocker lifecycle, native wrap transforms,
-unshared tile flags and deletion of a source tile during raw update/removal calls.
+unshared tile flags and deletion of a source tile during raw update/removal and
+ground replacement calls.
 Boundary destinations are checked using an active
 instance-0 source. Lua permission decisions use controlled responses;
 they are not an authenticated player test.

@@ -623,6 +623,7 @@ TEST_CASE(unshared_tile_hooks_preserve_native_flags)
 {
 	// Standalone tiles can be populated before Map acquires shared ownership.
 	auto tile = std::make_unique<DynamicTile>(30000, 30000, 7);
+	CHECK(tile->weak_from_this().expired());
 	auto bed = Item::CreateItem(694);
 	tile->addThing(bed.get());
 	CHECK(tile->hasFlag(TILESTATE_BED));
@@ -642,7 +643,7 @@ TEST_CASE(tile_hooks_survive_source_deletion_without_a_callers_shared_reference)
 		~ConfigGuard() { ConfigManager::setBoolean(ConfigManager::CLEAN_PROTECTION_ZONES, previous); }
 	} configGuard{previous};
 	ConfigManager::setBoolean(ConfigManager::CLEAN_PROTECTION_ZONES, true);
-	for (bool replace : {false, true}) {
+	for (int operation : {0, 1, 2}) {
 		Fixture f;
 		auto* source = f.tile(0, 0);
 		auto* target = f.tile(1, 0);
@@ -664,10 +665,13 @@ TEST_CASE(tile_hooks_survive_source_deletion_without_a_callers_shared_reference)
 		CHECK(g_moveEvents->registerLuaEvent(event.release()));
 		// Unlike Game::internalRemoveItem/transformItem, these raw Tile callers
 		// do not retain a cylinderTile for the duration of the hook.
-		if (replace) {
+		if (operation == 1) {
 			auto replacement = Item::CreateItem(22736);
 			replacement->setInstanceID(11);
 			source->replaceThing(source->getThingIndex(carpet.get()), replacement.get());
+		} else if (operation == 2) {
+			auto ground = Item::CreateItem(101);
+			source->addThing(ground.get());
 		} else {
 			source->removeThing(carpet.get(), 1);
 		}
