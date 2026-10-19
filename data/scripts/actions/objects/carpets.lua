@@ -260,6 +260,9 @@ function carpets.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	if not house:canModifyItems(player) then
 		return fail(player, "You cannot modify items in this protected house.")
 	end
+	if item:getCustomAttribute("__auto_carpet_source") then
+		return fail(player, "Use the original carpet to change this decoration.")
+	end
 
 	if tile:getItemCountById(itemId) >= 1 then
 		for otherId in pairs(carpetItems) do

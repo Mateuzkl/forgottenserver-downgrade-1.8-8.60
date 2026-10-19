@@ -11,6 +11,7 @@
 #include "container.h"
 #include "creature.h"
 #include "game.h"
+#include "housetile.h"
 #include "instance_utils.h"
 #include "mailbox.h"
 #include "monster.h"
@@ -47,6 +48,14 @@ void logSharedItemLockFailure(std::string_view context, const Item* item)
 {
 	LOG_WARN("[Warning - {}] Failed to lock item shared ownership. item={}, id={}", context,
 	         static_cast<const void*>(item), item ? item->getID() : 0);
+}
+
+// Match the surface and blocker conditions in synchronizeAutoCarpet. A bed is
+// a surface only while stationary; flat top-layer blockers also support it.
+bool affectsAutoCarpetFurniture(const ItemType& type)
+{
+	const bool surface = !type.moveable && (type.isBed() || (type.blockSolid && type.alwaysOnTop && !type.hasHeight));
+	return surface || type.blockSolid;
 }
 
 } // namespace
@@ -455,6 +464,210 @@ Thing* Tile::getTopVisibleThing(const Creature* creature)
 	return ground.get();
 }
 
+void Tile::synchronizeAutoCarpets(uint32_t instanceId)
+{
+	const auto* originHouseTile = getHouseTile();
+	const auto house = originHouseTile ? originHouseTile->getHouse() : nullptr;
+	// Thing::instanceID is not serialized with house items.
+	if (!house || instanceId != 0) {
+		return;
+	}
+	const auto originRef = weak_from_this().lock();
+	if (!originRef) {
+		return;
+	}
+	const Position origin = getPosition();
+	// Eight destinations, plus this tile for manual carpet priority and ground updates.
+	for (int dy = -1; dy <= 1; ++dy) {
+		for (int dx = -1; dx <= 1; ++dx) {
+			const int x = int(origin.x) + dx, y = int(origin.y) + dy;
+			if (x <= 0 || y <= 0 || x >= 0xFFFF || y >= 0xFFFF) {
+				continue;
+			}
+			Tile* target = g_game.map.getTile(uint16_t(x), uint16_t(y), origin.z);
+			const auto* houseTile = target ? target->getHouseTile() : nullptr;
+			if (houseTile && houseTile->getHouse() == house) {
+				target->synchronizeAutoCarpet();
+			}
+		}
+	}
+}
+
+void Tile::synchronizeAutoCarpet()
+{
+	if (autoCarpetSynchronizing) {
+		// The outer reconciliation rechecks after every native mutation/callback.
+		return;
+	}
+	const auto tileRef = weak_from_this().lock();
+	const auto* houseTile = getHouseTile();
+	const auto house = houseTile ? houseTile->getHouse() : nullptr;
+	if (!tileRef || !house || g_game.map.getTile(getPosition()) != this) {
+		return;
+	}
+	autoCarpetSynchronizing = true;
+	struct ReconciliationGuard
+	{
+		bool& active;
+		~ReconciliationGuard() { active = false; }
+	} guard{autoCarpetSynchronizing};
+	constexpr uint32_t instanceId = 0;
+	constexpr auto marker = "__auto_carpet_source";
+	const auto sameHouse = [house](const Tile* tile) {
+		const auto* houseTile = tile ? tile->getHouseTile() : nullptr;
+		return houseTile && houseTile->getHouse() == house;
+	};
+	const auto visible = [](const Item* item) {
+		return item->getInstanceID() == 0 || item->getInstanceID() == instanceId;
+	};
+	const auto deployed = [](const Item* item) {
+		const auto& type = Item::items[item->getID()];
+		// Only a flat, stationary top-layer decoration can go below furniture.
+		return type.isCarpet() && !type.moveable && !type.stackable && type.alwaysOnTop && !type.hasHeight &&
+		       !type.blockSolid && !type.blockPathFind;
+	};
+	const auto nearby = [](const Position& position, int dx, int dy) -> Tile* {
+		const int x = int(position.x) + dx, y = int(position.y) + dy;
+		if (x <= 0 || y <= 0 || x >= 0xFFFF || y >= 0xFFFF) {
+			return nullptr;
+		}
+		return g_game.map.getTile(uint16_t(x), uint16_t(y), position.z);
+	};
+
+	// Bound scripts which continually change the source in response to decorations.
+	for (unsigned attempt = 0; attempt < 16; ++attempt) {
+		autoCarpetPending = false;
+		if (g_game.map.getTile(getPosition()) != this) {
+			return;
+		}
+		const auto* items = getItemList();
+		if (!items) {
+			return;
+		}
+		ItemVector generated;
+		bool manualCarpet = false;
+		for (const auto& item : *items) {
+			if (item->getInstanceID() == instanceId && item->getCustomAttribute(marker)) {
+				generated.push_back(item); // retain ownership before any mutation
+			} else if (visible(item.get()) && item->isCarpet() && !item->getCustomAttribute(marker)) {
+				manualCarpet = true;
+			}
+		}
+
+		std::shared_ptr<Item> winner;
+		std::string owner;
+		const auto* ground = getGround();
+		if (!manualCarpet && ground && visible(ground) &&
+		    !hasFlag(TILESTATE_FLOORCHANGE | TILESTATE_TELEPORT | TILESTATE_TRASHHOLDER | TILESTATE_MAILBOX)) {
+			// y, x, item ID priority is independent of placement order; removal elects a fallback.
+			for (int sy = -1; sy <= 1 && !winner; ++sy) {
+				for (int sx = -1; sx <= 1 && !winner; ++sx) {
+					if (sx == 0 && sy == 0) {
+						continue;
+					}
+					const Tile* source = nearby(getPosition(), sx, sy);
+					if (!sameHouse(source) || !source->getGround() || !visible(source->getGround()) ||
+					    source->getGround()->getID() != ground->getID() || !source->getItemList()) {
+						continue;
+					}
+					for (const auto& candidate : *source->getItemList()) {
+						if (candidate->getInstanceID() != instanceId || !deployed(candidate.get()) ||
+						    candidate->getCustomAttribute(marker)) {
+							continue;
+						}
+						bool supported = false, blocked = false;
+						const auto order = Item::items[candidate->getID()].alwaysOnTopOrder;
+						for (const auto& furniture : *items) {
+							if (!visible(furniture.get()) || furniture->getCustomAttribute(marker)) {
+								continue;
+							}
+							const bool surface =
+							    !furniture->isMoveable() && (furniture->getBed() || furniture->canReceiveAutoCarpet());
+							if (surface) {
+								supported = true;
+								const auto& type = Item::items[furniture->getID()];
+								blocked |= type.alwaysOnTop && type.alwaysOnTopOrder <= order;
+							} else if (furniture->isBlocking()) {
+								blocked = true;
+							}
+						}
+						if (supported && !blocked && (!winner || candidate->getID() < winner->getID())) {
+							winner = candidate;
+						}
+					}
+					if (winner) {
+						const auto& pos = source->getPosition();
+						owner = std::to_string(house->getId()) + ":" + std::to_string(instanceId) + ":" +
+						        std::to_string(pos.x) + ":" + std::to_string(pos.y) + ":" + std::to_string(pos.z);
+					}
+				}
+			}
+		}
+
+		bool retained = false, removed = false, removalFailed = false;
+		for (const auto& item : generated) {
+			const auto* attr = item->getCustomAttribute(marker);
+			const auto* savedOwner = attr ? std::get_if<std::string>(&attr->value) : nullptr;
+			if (!retained && winner && item->getID() == winner->getID() && savedOwner && *savedOwner == owner) {
+				retained = true;
+				continue;
+			}
+			if (item->getParent() != this) {
+				continue;
+			}
+			const auto result = g_game.internalRemoveItem(item.get(), -1, false, FLAG_IGNORENOTMOVEABLE);
+			removalFailed |= result != RETURNVALUE_NOERROR;
+			removed |= result == RETURNVALUE_NOERROR;
+			if (g_game.map.getTile(getPosition()) != this) {
+				return;
+			}
+		}
+		// Removal notifications can change sources, ground, furniture or manual carpets.
+		// Always elect again from the live lists before committing an insertion.
+		if (removed) {
+			continue;
+		}
+		if (removalFailed || !winner || retained) {
+			return;
+		}
+		if (getThingCount() >= MAX_STACKPOS_THINGS) {
+			autoCarpetPending = true;
+			return;
+		}
+		if (winner) {
+			// A fresh decoration deliberately inherits no UID, AID, wrap/quest/decay attributes.
+			auto underlay = Item::CreateItem(winner->getID(), 1);
+			if (underlay) {
+				underlay->setInstanceID(instanceId);
+				underlay->setCustomAttribute(marker, owner);
+				addThing(underlay.get());
+				if (underlay->getParent() == this) {
+					postAddNotification(underlay.get(), nullptr, getThingIndex(underlay.get()));
+					continue; // insertion callbacks also require a fresh eligibility check
+				}
+			}
+		}
+		return;
+	}
+
+	// A script cycle must not leave a stale decision or recurse indefinitely.
+	// Fail closed and retry only on a later relevant event/capacity notification.
+	ItemVector remaining;
+	if (const auto* items = getItemList()) {
+		for (const auto& item : *items) {
+			if (item->getInstanceID() == instanceId && item->getCustomAttribute(marker)) {
+				remaining.push_back(item);
+			}
+		}
+	}
+	for (const auto& item : remaining) {
+		if (item->getParent() == this) {
+			g_game.internalRemoveItem(item.get(), -1, false, FLAG_IGNORENOTMOVEABLE);
+		}
+	}
+	autoCarpetPending = true;
+}
+
 void Tile::onAddTileItem(Item* item)
 {
 	if (isBrowseFieldVisibleItem(item)) {
@@ -485,10 +698,23 @@ void Tile::onAddTileItem(Item* item)
 			g_game.addTileToClean(this);
 		}
 	}
+	if ((item->isCarpet() || Item::items[item->getID()].isGroundTile()) &&
+	    !item->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpets(item->getInstanceID());
+	} else if (affectsAutoCarpetFurniture(Item::items[item->getID()]) && item->getInstanceID() == 0 &&
+	           !item->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpet();
+	}
 }
 
 void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newItem, const ItemType& newType)
 {
+	// Reconciliation can remove this tile; retain it through the rest of the hook.
+	const auto self = weak_from_this().lock();
+	if (!self) {
+		return;
+	}
+
 	if (auto browseField = g_game.getBrowseFieldContainer(this)) {
 		if (isBrowseFieldVisibleItem(newItem)) {
 			const int32_t index = browseField->getThingIndex(oldItem);
@@ -522,10 +748,33 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 	for (const auto& spectator : spectators) {
 		spectator->onUpdateTileItem(this, cylinderMapPos, oldItem, oldType, newItem, newType);
 	}
+	const bool sourceChange =
+	    oldType.isCarpet() || newType.isCarpet() || oldType.isGroundTile() || newType.isGroundTile();
+	if ((sourceChange || affectsAutoCarpetFurniture(oldType) || affectsAutoCarpetFurniture(newType)) &&
+	    !oldItem->getCustomAttribute("__auto_carpet_source") && !newItem->getCustomAttribute("__auto_carpet_source")) {
+		// Do not read raw item pointers after callbacks may have removed them.
+		const auto oldInstance = oldItem->getInstanceID(), newInstance = newItem->getInstanceID();
+		if (sourceChange) {
+			synchronizeAutoCarpets(oldInstance);
+			if (newInstance != oldInstance) {
+				synchronizeAutoCarpets(newInstance);
+			}
+		} else if (oldInstance == 0 || newInstance == 0) {
+			synchronizeAutoCarpet();
+		}
+	}
 }
 
 void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item)
 {
+	// Reconciliation can remove this tile; retain it through the rest of the hook.
+	const auto self = weak_from_this().lock();
+	if (!self) {
+		// Standalone tiles still need native bookkeeping before map ownership.
+		resetTileFlags(item);
+		return;
+	}
+
 	if (isBrowseFieldVisibleItem(item)) {
 		if (auto browseField = g_game.getBrowseFieldContainer(this)) {
 			browseField->removeThing(item, item->getItemCount());
@@ -550,6 +799,12 @@ void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<in
 	// event methods
 	for (const auto& spectator : spectators) {
 		spectator->onRemoveTileItem(this, cylinderMapPos, iType, item);
+	}
+	if ((iType.isCarpet() || iType.isGroundTile()) && !item->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpets(item->getInstanceID());
+	} else if (affectsAutoCarpetFurniture(iType) && item->getInstanceID() == 0 &&
+	           !item->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpet();
 	}
 
 	if (!hasFlag(TILESTATE_PROTECTIONZONE) || getBoolean(ConfigManager::CLEAN_PROTECTION_ZONES)) {
@@ -1021,6 +1276,8 @@ void Tile::addThing(int32_t, Thing* thing)
 				ground = itemRef;
 				onAddTileItem(item);
 			} else {
+				// The update callback can detach this tile before postRemoveNotification.
+				const auto self = weak_from_this().lock();
 				const ItemType& oldType = Item::items[ground->getID()];
 
 				auto oldGroundSp = std::move(ground);
@@ -1628,6 +1885,8 @@ void Tile::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t 
 void Tile::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32_t index, cylinderlink_t)
 {
 	const auto thingCount = getThingCount();
+	// Movement callbacks may delete this tile. Only pending destinations need a hold.
+	const auto pendingCarpetTile = autoCarpetPending ? weak_from_this().lock() : nullptr;
 
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, tilePos, true, true);
@@ -1651,6 +1910,11 @@ void Tile::postRemoveNotification(Thing* thing, const Cylinder* newParent, int32
 		} else if (Item* item = thing->getItem()) {
 			g_moveEvents->onItemMove(item, this, false);
 		}
+	}
+	// Ordinary removals only check this flag; no neighborhood lookup or timer.
+	if (pendingCarpetTile && pendingCarpetTile->autoCarpetPending &&
+	    pendingCarpetTile->getThingCount() < MAX_STACKPOS_THINGS) {
+		pendingCarpetTile->synchronizeAutoCarpet();
 	}
 }
 
