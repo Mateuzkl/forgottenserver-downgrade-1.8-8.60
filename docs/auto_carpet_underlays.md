@@ -5,9 +5,9 @@ under eligible furniture in the eight adjacent tiles. This includes native beds,
 whose parts can be down items with height rather than always-on-top items.
 The bed objects, sleeper state and structural ground remain unchanged.
 
-`Tile::synchronizeAutoCarpets` is called after manual carpet add, update and remove
-events. This covers Lua `Item:transform`, including both remove/add transitions
-and in-place updates. Generated decorations carry the persistent custom attribute
+`Tile::synchronizeAutoCarpets` is called after manual carpet or ground add, update
+and remove events. This covers Lua `Item:transform`, including remove/add
+transitions and in-place updates. Generated decorations carry the persistent custom attribute
 `__auto_carpet_source` and do not start another propagation event.
 
 The destination must have the same house, floor and ground item ID. Unsupported
@@ -19,7 +19,12 @@ Manual carpets take priority. Competing sources use ascending `(y, x, item ID)`
 priority, and removing the winner selects another eligible adjacent source.
 Only marked generated items are removed. Correct existing copies are retained.
 Each affected destination checks only eight neighboring source positions; no
-house-wide scan, timer or creature movement hook is introduced.
+house-wide scan or timer is introduced. Each destination reconciles separately,
+suppresses reentrant reconciliation and elects again after native removals and
+insertions, because movement callbacks can change the sources or destination.
+Tile references are retained across callbacks and detached/replaced tiles are
+not modified. Reconciliation is bounded to 16 passes; a continuously changing
+script leaves no generated decoration and waits for a later relevant event.
 
 Generated decorations use a fresh `Item::CreateItem` with their original item ID
 and a source marker. They inherit no source UID, action ID, quest attributes,
@@ -38,16 +43,21 @@ carpet serialization and retains its source marker when restored through
 
 Every covered bed part must be an immediate neighbor of the source. Adding or
 removing furniture later requires using/changing the carpet again. A destination
-with ten things does not receive an additional decoration. Opaque bed sprites can
+with ten things records a pending insertion. Its next item/creature removal
+notification retries only that destination if capacity is available; ordinary
+removals only check the pending flag and do not scan neighboring tiles. Removing
+or invalidating the source clears the pending decision. Opaque bed sprites can
 hide an underlying carpet even when the server stack is correct.
 
 ## Validation
 
 `test_auto_carpet` loads the repository OTB/XML and exercises actual tile methods,
-Lua action/binding and house tile serialization. Its nine cases cover two bed
+Lua action/binding and house tile serialization. Its 15 regression cases cover two bed
 parts, 100 C++ cycles, 100 Lua cycles, replacement/removal, manual carpet priority,
 competing sources in both placement orders, house/ground/instance boundaries and
-serializer restoration. Lua permission decisions use controlled responses;
+serializer restoration, reentrant source/manual-carpet changes, ground lifecycle
+updates and capacity retries. Boundary destinations are checked using an active
+instance-0 source. Lua permission decisions use controlled responses;
 they are not an authenticated player test.
 
 Before gameplay acceptance, the following remain **NOT TESTED**:

@@ -11,6 +11,7 @@
 #include "../logger.h"
 #include "../luascript.h"
 #include "../movement.h"
+#include "../player.h"
 #include "../scriptmanager.h"
 #include "../weapons.h"
 #include "test_support.h"
@@ -230,9 +231,194 @@ TEST_CASE(boundaries_ground_furniture_and_instances)
 	f.add(worldTarget, 694);
 	auto worldCarpet = f.add(source, 22736);
 	CHECK(copies(worldTarget).size() == 1);
-	CHECK(copies(supported).empty());
-	CHECK(copies(differentInstance).empty());
+	for (auto* tile : {other, differentGround, noGround, unsupported, differentInstance, supported}) {
+		CHECK(copies(tile).empty());
+		CHECK(copies(tile, 11).empty());
+	}
 	remove(worldCarpet);
+}
+
+TEST_CASE(removal_callbacks_revalidate_competing_sources_and_manual_carpet)
+{
+	for (int change = 0; change < 3; ++change) {
+		Fixture f;
+		auto* a = f.tile(-1, 0);
+		auto* b = f.tile(1, 0);
+		auto* target = f.tile(0, 0);
+		f.add(target, 694);
+		auto first = f.add(a, 22736);
+		auto second = f.add(b, 23537);
+		bool ran = false;
+		std::shared_ptr<Item> manual;
+		auto event = std::make_unique<MoveEvent>(g_moveEvents->getScriptInterfacePtr());
+		event->setEventType(MOVE_EVENT_REMOVE_ITEM);
+		event->addPosList(target->getPosition());
+		event->moveFunction = [&](Item* item, Item*, const Position&) {
+			if (!ran && item->getCustomAttribute(marker)) {
+				ran = true;
+				if (change == 0) {
+					manual = f.add(target, 22736);
+				} else if (change == 1) {
+					remove(second);
+				} else {
+					g_game.transformItem(second.get(), 23536, 1);
+				}
+			}
+			return 1;
+		};
+		CHECK(g_moveEvents->registerLuaEvent(event.release()));
+		remove(first);
+		CHECK(ran);
+		CHECK(copies(target).empty());
+		if (manual) {
+			CHECK(manual->getParent() == target);
+		}
+	}
+}
+
+TEST_CASE(ground_add_update_and_remove_reconcile_existing_underlays)
+{
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	f.add(target, 694);
+	auto carpet = f.add(source, 22736);
+	for (auto* tile : {source, target}) {
+		CHECK(copies(target).size() == 1);
+		f.add(tile, 101);
+		CHECK(copies(target).empty());
+		f.add(tile, 100);
+		CHECK(copies(target).size() == 1);
+		auto ground = tile->getGround()->shared_from_this();
+		CHECK(g_game.internalRemoveItem(ground.get(), -1, false, FLAG_IGNORENOTMOVEABLE) == RETURNVALUE_NOERROR);
+		CHECK(copies(target).empty());
+		f.add(tile, 100);
+		CHECK(copies(target).size() == 1);
+		g_game.transformItem(tile->getGround(), 101, 1);
+		CHECK(copies(target).empty());
+		g_game.transformItem(tile->getGround(), 100, 1);
+		CHECK(copies(target).size() == 1);
+	}
+	remove(carpet);
+	CHECK(copies(target).empty());
+}
+
+TEST_CASE(full_destination_retries_only_while_capacity_is_pending)
+{
+	CHECK(!Item::items[3043].blockSolid && !Item::items[3043].isGroundTile());
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	f.add(target, 694);
+	ItemVector filling;
+	while (target->getThingCount() < MAX_STACKPOS_THINGS) {
+		filling.push_back(f.add(target, 3043));
+	}
+	auto carpet = f.add(source, 22736);
+	CHECK(copies(target).empty());
+	remove(filling.back());
+	filling.pop_back();
+	CHECK(copies(target).size() == 1);
+	CHECK(target->getThingCount() == MAX_STACKPOS_THINGS);
+	remove(carpet);
+	remove(filling.back());
+	CHECK(copies(target).empty());
+}
+
+TEST_CASE(pending_destination_retries_after_creature_removal_and_cancels_without_source)
+{
+	for (bool cancel : {false, true}) {
+		Fixture f;
+		auto* source = f.tile(0, 0);
+		auto* target = f.tile(1, 0);
+		f.add(target, 694);
+		auto creature = std::make_shared<Player>(nullptr);
+		creature->setGroup(std::make_shared<Group>());
+		target->internalAddThing(creature.get());
+		while (target->getThingCount() < MAX_STACKPOS_THINGS) {
+			f.add(target, 3043);
+		}
+		auto carpet = f.add(source, 22736);
+		CHECK(copies(target).empty());
+		if (cancel) {
+			remove(carpet);
+		}
+		target->removeThing(creature.get(), 0);
+		creature->setParent(nullptr);
+		target->postRemoveNotification(creature.get(), nullptr, 0);
+		CHECK(copies(target).size() == (cancel ? 0 : 1));
+		CHECK(target->getThingCount() <= MAX_STACKPOS_THINGS);
+	}
+}
+
+TEST_CASE(insertion_callbacks_can_remove_source_item_or_source_tile_or_replace_destination)
+{
+	for (int change = 0; change < 3; ++change) {
+		Fixture f;
+		auto* source = f.tile(0, 0);
+		auto* target = f.tile(1, 0);
+		f.add(target, 694);
+		auto carpet = f.add(source, 22737);
+		const Position pos = target->getPosition();
+		std::weak_ptr<Tile> oldTile = target->weak_from_this();
+		bool ran = false;
+		auto event = std::make_unique<MoveEvent>(g_moveEvents->getScriptInterfacePtr());
+		event->setEventType(MOVE_EVENT_ADD_ITEM);
+		event->addPosList(pos);
+		event->moveFunction = [&](Item* item, Item*, const Position&) {
+			if (!ran && item->getCustomAttribute(marker)) {
+				ran = true;
+				if (change == 0) {
+					CHECK(g_game.map.removeTile(pos));
+					CHECK(!oldTile.expired());
+					auto replacement = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, f.house);
+					auto ground = Item::CreateItem(100);
+					replacement->internalAddThing(ground.get());
+					g_game.map.setTile(pos, std::move(replacement));
+				} else if (change == 1) {
+					remove(carpet);
+				} else {
+					CHECK(g_game.map.removeTile(source->getPosition()));
+				}
+			}
+			return 1;
+		};
+		CHECK(g_moveEvents->registerLuaEvent(event.release()));
+		g_game.transformItem(carpet.get(), 22736, 1);
+		CHECK(ran);
+		CHECK(copies(g_game.map.getTile(pos)).empty());
+		if (change == 0) {
+			CHECK(oldTile.expired());
+		}
+	}
+}
+
+TEST_CASE(continuously_changing_source_is_bounded_and_leaves_no_stale_copy)
+{
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	f.add(target, 694);
+	auto carpet = f.add(source, 22737);
+	unsigned calls = 0;
+	auto event = std::make_unique<MoveEvent>(g_moveEvents->getScriptInterfacePtr());
+	event->setEventType(MOVE_EVENT_ADD_ITEM);
+	event->addPosList(target->getPosition());
+	event->moveFunction = [&](Item* item, Item*, const Position&) {
+		if (item->getCustomAttribute(marker)) {
+			++calls;
+			g_game.transformItem(carpet.get(), carpet->getID() == 22736 ? 23537 : 22736, 1);
+		}
+		return 1;
+	};
+	CHECK(g_moveEvents->registerLuaEvent(event.release()));
+	g_game.transformItem(carpet.get(), 22736, 1);
+	CHECK(calls > 1 && calls <= 16);
+	CHECK(copies(target).empty());
+	g_moveEvents->clear(false);
+	g_game.transformItem(carpet.get(), 22737, 1);
+	g_game.transformItem(carpet.get(), 22736, 1);
+	CHECK(copies(target).size() == 1);
 }
 
 TEST_CASE(manual_carpet_has_priority_and_survives)
