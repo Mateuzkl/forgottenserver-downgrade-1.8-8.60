@@ -11,6 +11,7 @@
 #include "container.h"
 #include "creature.h"
 #include "game.h"
+#include "housetile.h"
 #include "instance_utils.h"
 #include "mailbox.h"
 #include "monster.h"
@@ -455,6 +456,137 @@ Thing* Tile::getTopVisibleThing(const Creature* creature)
 	return ground.get();
 }
 
+void Tile::synchronizeAutoCarpets(uint32_t instanceId)
+{
+	const auto* originHouseTile = getHouseTile();
+	const auto house = originHouseTile ? originHouseTile->getHouse() : nullptr;
+	// House persistence does not serialize Thing::instanceID. Keep generated items
+	// in the persistent world until instanced-house persistence has its own support.
+	if (!house || instanceId != 0) {
+		return;
+	}
+
+	constexpr auto marker = "__auto_carpet_source";
+	const auto sameHouse = [house](const Tile* tile) {
+		const auto* houseTile = tile ? tile->getHouseTile() : nullptr;
+		return houseTile && houseTile->getHouse() == house;
+	};
+	const auto visible = [instanceId](const Item* item) {
+		return item->getInstanceID() == 0 || item->getInstanceID() == instanceId;
+	};
+	const auto deployed = [](const Item* item) {
+		const auto& type = Item::items[item->getID()];
+		// Only a flat, stationary top-layer decoration can go below furniture.
+		return type.isCarpet() && !type.moveable && !type.stackable && type.alwaysOnTop &&
+		       !type.hasHeight && !type.blockSolid && !type.blockPathFind;
+	};
+	const auto nearby = [](const Position& position, int dx, int dy) -> Tile* {
+		const int x = int(position.x) + dx, y = int(position.y) + dy;
+		if (x <= 0 || y <= 0 || x >= 0xFFFF || y >= 0xFFFF) {
+			return nullptr;
+		}
+		return g_game.map.getTile(uint16_t(x), uint16_t(y), position.z);
+	};
+
+	// Eight destinations, plus this tile to give a newly placed manual carpet priority.
+	// A contested destination examines only its eight neighbors, never the house/map.
+	for (int dy = -1; dy <= 1; ++dy) {
+		for (int dx = -1; dx <= 1; ++dx) {
+			Tile* target = nearby(getPosition(), dx, dy);
+			if (!sameHouse(target)) {
+				continue;
+			}
+			const auto* items = target->getItemList();
+			if (!items) {
+				continue;
+			}
+			ItemVector generated;
+			bool manualCarpet = false;
+			for (const auto& item : *items) {
+				if (item->getInstanceID() == instanceId && item->getCustomAttribute(marker)) {
+					generated.push_back(item); // retain ownership before any mutation
+				} else if (visible(item.get()) && item->isCarpet() && !item->getCustomAttribute(marker)) {
+					manualCarpet = true;
+				}
+			}
+
+			std::shared_ptr<Item> winner;
+			std::string owner;
+			const auto* ground = target->getGround();
+			if (!manualCarpet && ground && visible(ground) &&
+			    !target->hasFlag(TILESTATE_FLOORCHANGE | TILESTATE_TELEPORT | TILESTATE_TRASHHOLDER | TILESTATE_MAILBOX)) {
+				// y, x, item ID priority is independent of placement order; removal elects a fallback.
+				for (int sy = -1; sy <= 1 && !winner; ++sy) {
+					for (int sx = -1; sx <= 1 && !winner; ++sx) {
+						if (sx == 0 && sy == 0) {
+							continue;
+						}
+						const Tile* source = nearby(target->getPosition(), sx, sy);
+						if (!sameHouse(source) || !source->getGround() || !visible(source->getGround()) ||
+						    source->getGround()->getID() != ground->getID() || !source->getItemList()) {
+							continue;
+						}
+						for (const auto& candidate : *source->getItemList()) {
+							if (candidate->getInstanceID() != instanceId || !deployed(candidate.get()) ||
+							    candidate->getCustomAttribute(marker)) {
+								continue;
+							}
+							bool supported = false, blocked = false;
+							const auto order = Item::items[candidate->getID()].alwaysOnTopOrder;
+							for (const auto& furniture : *items) {
+								if (!visible(furniture.get()) || furniture->getCustomAttribute(marker)) {
+									continue;
+								}
+								const bool surface = !furniture->isMoveable() &&
+								    (furniture->getBed() || furniture->canReceiveAutoCarpet());
+								if (surface) {
+									supported = true;
+									const auto& type = Item::items[furniture->getID()];
+									blocked |= type.alwaysOnTop && type.alwaysOnTopOrder <= order;
+								} else if (furniture->isBlocking()) {
+									blocked = true;
+								}
+							}
+							if (supported && !blocked && (!winner || candidate->getID() < winner->getID())) {
+								winner = candidate;
+							}
+						}
+						if (winner) {
+							const auto& pos = source->getPosition();
+							owner = std::to_string(house->getId()) + ":" + std::to_string(instanceId) + ":" +
+							        std::to_string(pos.x) + ":" + std::to_string(pos.y) + ":" + std::to_string(pos.z);
+						}
+					}
+				}
+			}
+
+			bool retained = false, removalFailed = false;
+			for (const auto& item : generated) {
+				const auto* attr = item->getCustomAttribute(marker);
+				const auto* savedOwner = attr ? std::get_if<std::string>(&attr->value) : nullptr;
+				if (!retained && winner && item->getID() == winner->getID() && savedOwner && *savedOwner == owner) {
+					retained = true;
+					continue;
+				}
+				removalFailed |= g_game.internalRemoveItem(item.get(), -1, false, FLAG_IGNORENOTMOVEABLE) !=
+				                 RETURNVALUE_NOERROR;
+			}
+			if (winner && !retained && !removalFailed && target->getThingCount() < MAX_STACKPOS_THINGS) {
+				// A fresh decoration deliberately inherits no UID, AID, wrap/quest/decay attributes.
+				auto underlay = Item::CreateItem(winner->getID(), 1);
+				if (underlay) {
+					underlay->setInstanceID(instanceId);
+					underlay->setCustomAttribute(marker, owner);
+					target->addThing(underlay.get());
+					if (underlay->getParent() == target) {
+						target->postAddNotification(underlay.get(), nullptr, target->getThingIndex(underlay.get()));
+					}
+				}
+			}
+		}
+	}
+}
+
 void Tile::onAddTileItem(Item* item)
 {
 	if (isBrowseFieldVisibleItem(item)) {
@@ -484,6 +616,9 @@ void Tile::onAddTileItem(Item* item)
 		if (!getHouseTile()) {
 			g_game.addTileToClean(this);
 		}
+	}
+	if (item->isCarpet() && !item->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpets(item->getInstanceID());
 	}
 }
 
@@ -522,6 +657,13 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 	for (const auto& spectator : spectators) {
 		spectator->onUpdateTileItem(this, cylinderMapPos, oldItem, oldType, newItem, newType);
 	}
+	if ((oldType.isCarpet() || newType.isCarpet()) &&
+	    !oldItem->getCustomAttribute("__auto_carpet_source") && !newItem->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpets(oldItem->getInstanceID());
+		if (newItem->getInstanceID() != oldItem->getInstanceID()) {
+			synchronizeAutoCarpets(newItem->getInstanceID());
+		}
+	}
 }
 
 void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item)
@@ -550,6 +692,9 @@ void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<in
 	// event methods
 	for (const auto& spectator : spectators) {
 		spectator->onRemoveTileItem(this, cylinderMapPos, iType, item);
+	}
+	if (iType.isCarpet() && !item->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpets(item->getInstanceID());
 	}
 
 	if (!hasFlag(TILESTATE_PROTECTIONZONE) || getBoolean(ConfigManager::CLEAN_PROTECTION_ZONES)) {

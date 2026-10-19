@@ -1,0 +1,403 @@
+#include "../otpch.h"
+
+#include "../bed.h"
+#include "../chat.h"
+#include "../creatureevent.h"
+#include "../events.h"
+#include "../game.h"
+#include "../globalevent.h"
+#include "../housetile.h"
+#include "../iomapserialize.h"
+#include "../logger.h"
+#include "../luascript.h"
+#include "../movement.h"
+#include "../scriptmanager.h"
+#include "../weapons.h"
+#include "test_support.h"
+
+extern Game g_game;
+extern LuaEnvironment g_luaEnvironment;
+
+struct IOMapSerializeTestAccess
+{
+	static std::string save(const Tile* tile)
+	{
+		PropWriteStream stream;
+		IOMapSerialize::saveTile(stream, tile);
+		return std::string(stream.getStream());
+	}
+	static bool load(const std::string& bytes, Tile* tile)
+	{
+		PropStream stream;
+		stream.init(bytes.data(), bytes.size());
+		uint16_t x, y;
+		uint8_t z;
+		uint32_t count;
+		if (!stream.read(x) || !stream.read(y) || !stream.read(z) || !stream.read(count) ||
+		    tile->getPosition() != Position(x, y, z)) {
+			return false;
+		}
+		for (uint32_t i = 0; i < count; ++i) {
+			if (!IOMapSerialize::loadItem(stream, tile)) {
+				return false;
+			}
+		}
+		return true;
+	}
+};
+
+namespace {
+constexpr auto marker = "__auto_carpet_source";
+
+struct Fixture
+{
+	static inline uint16_t next = 1000;
+	uint16_t x = next += 10;
+	uint16_t y = 2000;
+	std::shared_ptr<House> house = std::make_shared<House>(x);
+	std::shared_ptr<House> otherHouse = std::make_shared<House>(x + 1);
+	std::unique_ptr<MoveEvents> previous = std::make_unique<MoveEvents>();
+	std::vector<Position> positions;
+	Fixture() { g_moveEvents.swap(previous); }
+	~Fixture()
+	{
+		for (const auto& pos : positions) {
+			auto* tile = g_game.map.getTile(pos);
+			while (tile && tile->getItemList() && !tile->getItemList()->empty()) {
+				auto item = *tile->getItemList()->begin();
+				tile->removeThing(item.get(), item->getItemCount());
+			}
+			g_game.map.removeTile(pos);
+		}
+		g_moveEvents.swap(previous);
+	}
+	Tile* tile(int dx, int dy, const std::shared_ptr<House>& owner = {}, uint16_t groundId = 100)
+	{
+		Position pos{uint16_t(x + dx), uint16_t(y + dy), 7};
+		auto result = std::make_unique<HouseTile>(pos.x, pos.y, pos.z, owner ? owner : house);
+		auto* raw = result.get();
+		if (groundId) {
+			auto ground = Item::CreateItem(groundId);
+			raw->internalAddThing(ground.get());
+		}
+		g_game.map.setTile(pos, std::move(result));
+		positions.push_back(pos);
+		return raw;
+	}
+	std::shared_ptr<Item> add(Tile* tile, uint16_t id, uint32_t instance = 0, bool notify = true)
+	{
+		auto item = Item::CreateItem(id, 1);
+		CHECK(item);
+		item->setInstanceID(instance);
+		if (notify) {
+			tile->addThing(item.get());
+		} else {
+			tile->internalAddThing(item.get());
+		}
+		CHECK(item->getParent() == tile);
+		return item;
+	}
+};
+
+ItemVector copies(Tile* tile, uint32_t instance = 0)
+{
+	ItemVector result;
+	if (const auto* items = tile->getItemList()) {
+		for (const auto& item : *items) {
+			if (item->getInstanceID() == instance && item->getCustomAttribute(marker)) {
+				result.push_back(item);
+			}
+		}
+	}
+	return result;
+}
+
+void remove(const std::shared_ptr<Item>& item) { CHECK(g_game.internalRemoveItem(item.get()) == RETURNVALUE_NOERROR); }
+} // namespace
+
+TEST_CASE(real_item_metadata)
+{
+	for (uint16_t id :
+	     {uint16_t(22736), uint16_t(22737), uint16_t(23536), uint16_t(23537), uint16_t(694), uint16_t(695)}) {
+		const auto& t = Item::items[id];
+		std::cout << "ITEM " << id << " client=" << Item::CreateItem(id)->getClientID() << " type=" << int(t.type)
+		          << " move=" << t.moveable << " top=" << t.alwaysOnTop << " order=" << int(t.alwaysOnTopOrder)
+		          << " height=" << t.hasHeight << " solid=" << t.blockSolid << " path=" << t.blockPathFind << '\n';
+	}
+	CHECK(Item::items[22736].isCarpet());
+	CHECK(Item::items[694].isBed());
+}
+
+TEST_CASE(real_bed_parts_transform_update_and_100_cycles)
+{
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* head = f.tile(0, 1);
+	auto* foot = f.tile(1, 1);
+	auto bedHead = f.add(head, 694);
+	auto bedFoot = f.add(foot, 695);
+	CHECK(bedHead->getBed());
+	const auto sleeper = bedHead->getBed()->getSleeper();
+	auto directCarpet = Item::CreateItem(22737);
+	const auto directResult = head->queryAdd(0, *directCarpet, 1, 0);
+	std::cout << "Direct placement under bed queryAdd=" << int(directResult) << '\n';
+	CHECK(directResult == RETURNVALUE_NOTENOUGHROOM);
+	auto carpet = f.add(source, 22737);
+	CHECK(copies(head).empty());
+	for (int i = 0; i < 100; ++i) {
+		CHECK(g_game.transformItem(carpet.get(), 22736, 1) == carpet.get());
+		CHECK(copies(head).size() == 1);
+		CHECK(copies(foot).size() == 1);
+		CHECK(copies(head).front()->getID() == 22736);
+		CHECK(g_game.transformItem(carpet.get(), 22737, 1) == carpet.get());
+		CHECK(copies(head).empty());
+		CHECK(copies(foot).empty());
+	}
+	CHECK(bedHead->getParent() == head && bedHead->getID() == 694);
+	CHECK(bedFoot->getParent() == foot && bedFoot->getID() == 695);
+	CHECK(bedHead->getBed()->getSleeper() == sleeper);
+	CHECK(head->hasFlag(TILESTATE_BED));
+}
+
+TEST_CASE(add_replace_type_remove_and_no_attribute_inheritance)
+{
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	f.add(target, 694);
+	auto carpet = Item::CreateItem(22736);
+	carpet->setActionId(58001);
+	carpet->setText("manual quest attributes");
+	source->addThing(carpet.get());
+	CHECK(copies(target).size() == 1);
+	CHECK(copies(target).front()->getActionId() == 0);
+	CHECK(copies(target).front()->getText().empty());
+	CHECK(copies(target).front()->getItemUID() != carpet->getItemUID());
+	g_game.transformItem(carpet.get(), 23537, 1);
+	CHECK(copies(target).size() == 1);
+	CHECK(copies(target).front()->getID() == 23537);
+	remove(carpet);
+	CHECK(copies(target).empty());
+}
+
+TEST_CASE(empty_house_and_public_source_do_not_create_underlays)
+{
+	Fixture f;
+	auto* empty = f.tile(0, 0);
+	auto carpet = f.add(empty, 22736);
+	CHECK(empty->getItemList()->size() == 1);
+	g_game.transformItem(carpet.get(), 22737, 1);
+	CHECK(empty->getItemList()->size() == 1);
+	auto* neighbor = f.tile(1, 0);
+	f.add(neighbor, 694);
+	Position publicPosition{uint16_t(f.x), f.y, 7};
+	// Clear the old house tile before placing a synthetic public tile at that position.
+	empty->removeThing(carpet.get(), 1);
+	g_game.map.removeTile(publicPosition);
+	auto publicTile = std::make_unique<DynamicTile>(publicPosition.x, publicPosition.y, publicPosition.z);
+	auto ground = Item::CreateItem(100);
+	publicTile->internalAddThing(ground.get());
+	g_game.map.setTile(publicPosition, std::move(publicTile));
+	f.add(g_game.map.getTile(publicPosition), 22736);
+	CHECK(copies(neighbor).empty());
+}
+
+TEST_CASE(boundaries_ground_furniture_and_instances)
+{
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* other = f.tile(1, 0, f.otherHouse);
+	auto* differentGround = f.tile(-1, 0, nullptr, 101);
+	auto* noGround = f.tile(0, -1, nullptr, 0);
+	auto* unsupported = f.tile(1, 1);
+	auto* differentInstance = f.tile(-1, -1);
+	auto* supported = f.tile(-1, 1);
+	f.add(other, 694);
+	f.add(differentGround, 694);
+	f.add(noGround, 694);
+	f.add(unsupported, 2472);
+	f.add(differentInstance, 694, 22);
+	f.add(supported, 694, 11);
+	auto carpet = f.add(source, 22736, 11);
+	for (auto* tile : {other, differentGround, noGround, unsupported, differentInstance}) {
+		CHECK(copies(tile, 11).empty());
+	}
+	CHECK(copies(supported, 11).empty());
+	CHECK(copies(supported).empty());
+	remove(carpet);
+	CHECK(copies(supported, 11).empty());
+	auto* worldTarget = f.tile(0, 1);
+	f.add(worldTarget, 694);
+	auto worldCarpet = f.add(source, 22736);
+	CHECK(copies(worldTarget).size() == 1);
+	CHECK(copies(supported).empty());
+	CHECK(copies(differentInstance).empty());
+	remove(worldCarpet);
+}
+
+TEST_CASE(manual_carpet_has_priority_and_survives)
+{
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	f.add(target, 694);
+	auto carpet = f.add(source, 22736);
+	CHECK(copies(target).size() == 1);
+	auto manual = f.add(target, 23537);
+	CHECK(copies(target).empty());
+	remove(carpet);
+	CHECK(manual->getParent() == target);
+	CHECK(manual->getID() == 23537);
+}
+
+TEST_CASE(contested_sources_are_order_independent_and_fall_back)
+{
+	for (bool reverse : {false, true}) {
+		Fixture f;
+		auto* a = f.tile(-1, 0);
+		auto* b = f.tile(1, 0);
+		auto* target = f.tile(0, 0);
+		f.add(target, 694);
+		std::shared_ptr<Item> first, second;
+		if (reverse) {
+			second = f.add(b, 23537);
+			first = f.add(a, 22736);
+		} else {
+			first = f.add(a, 22736);
+			second = f.add(b, 23537);
+		}
+		CHECK(copies(target).size() == 1);
+		CHECK(copies(target).front()->getID() == 22736);
+		remove(first);
+		CHECK(copies(target).size() == 1);
+		CHECK(copies(target).front()->getID() == 23537);
+		remove(second);
+		CHECK(copies(target).empty());
+	}
+}
+
+TEST_CASE(house_item_serializer_round_trip_without_duplication)
+{
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	f.add(target, 694);
+	auto carpet = f.add(source, 22736);
+	CHECK(copies(target).size() == 1);
+	const auto savedSource = IOMapSerializeTestAccess::save(source);
+	const auto savedCopy = IOMapSerializeTestAccess::save(target);
+	remove(carpet);
+	CHECK(copies(target).empty());
+	CHECK(IOMapSerializeTestAccess::load(savedCopy, target));
+	CHECK(IOMapSerializeTestAccess::load(savedSource, source));
+	CHECK(copies(target).size() == 1);
+	auto loaded = *source->getItemList()->begin();
+	g_game.transformItem(loaded.get(), 23537, 1);
+	CHECK(copies(target).size() == 1);
+	CHECK(copies(target).front()->getID() == 23537);
+	remove(loaded);
+	CHECK(copies(target).empty());
+}
+
+TEST_CASE(real_lua_action_gates_and_native_transform)
+{
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	f.add(target, 694);
+	auto carpet = f.add(source, 22737);
+	CHECK(g_luaEnvironment.getLuaState());
+	LuaScriptInterface script{"Auto carpet test"};
+	CHECK(script.initState());
+	auto* L = script.getLuaState();
+	CHECK(LuaScriptInterface::reserveScriptEnv());
+	Lua::pushSharedPtr(L, carpet);
+	Lua::setItemMetatable(L, -1, carpet.get());
+	lua_setglobal(L, "nativeCarpet");
+	const auto run = [L](const char* code) {
+		if (luaL_dostring(L, code) != LUA_OK) {
+			throw std::runtime_error(lua_tostring(L, -1));
+		}
+	};
+	// The actual action runs with controlled permission answers and a native Item transform.
+	run(R"lua(
+Action = function() captured = {id=function() end, register=function() end}; return captured end
+MESSAGE_FAILURE = 1
+dofile('data/scripts/actions/objects/carpets.lua')
+invited, modifiable, inHouse = true, true, true
+house = {isInvited=function() return invited end, canModifyItems=function() return modifiable end}
+tile = {getHouse=function() if inHouse then return house end end,
+        getItemCountById=function(_, id) return nativeCarpet:getId() == id and 1 or 0 end}
+proxy = {getId=function() return nativeCarpet:getId() end,
+         getPosition=function() return {getTile=function() return tile end} end,
+         getCount=function() return nativeCarpet:getCount() end,
+         getCustomAttribute=function(_, k) return nativeCarpet:getCustomAttribute(k) end,
+         transform=function(_, ...) return nativeCarpet:transform(...) end}
+player = {sendTextMessage=function(_, _, text) lastFailure = text end}
+local function use() assert(captured.onUse(player, proxy, {}, nil, {}, false)) end
+invited=false; use(); assert(nativeCarpet:getId()==22737)
+assert(lastFailure:find("another person's house", 1, true))
+invited=true; modifiable=false; use(); assert(nativeCarpet:getId()==22737)
+assert(lastFailure:find('protected house', 1, true))
+modifiable=true; inHouse=false; use(); assert(nativeCarpet:getId()==22737)
+assert(lastFailure:find('only inside a house', 1, true))
+inHouse=true; use(); assert(nativeCarpet:getId()==22736)
+)lua");
+	CHECK(copies(target).size() == 1);
+	Lua::pushSharedPtr(L, copies(target).front());
+	Lua::setItemMetatable(L, -1, copies(target).front().get());
+	lua_setglobal(L, "generated");
+	run(R"lua(
+local original = nativeCarpet
+nativeCarpet = generated
+assert(captured.onUse(player, proxy, {}, nil, {}, false))
+assert(generated:getId()==22736)
+assert(lastFailure:find('original carpet', 1, true))
+nativeCarpet = original
+for i=1,100 do
+ assert(captured.onUse(player, proxy, {}, nil, {}, false)); assert(nativeCarpet:getId()==22737)
+ assert(captured.onUse(player, proxy, {}, nil, {}, false)); assert(nativeCarpet:getId()==22736)
+end
+)lua");
+	CHECK(copies(target).size() == 1);
+	LuaScriptInterface::resetScriptEnv();
+}
+
+int main()
+{
+	std::cout << std::unitbuf;
+	std::cout << "Loading real item metadata\n";
+	if (!initLogger(LogLevel::CRITICAL)) {
+		return EXIT_FAILURE;
+	}
+	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+	std::filesystem::current_path(root);
+	Events events;
+	g_events = &events;
+	ScriptingManager bootstrap;
+	if (!bootstrap.loadPreItems()) {
+		return EXIT_FAILURE;
+	}
+	std::cout << "Pre-items ready\n";
+	if (!Item::items.loadFromOtb("data/items/items.otb")) {
+		return EXIT_FAILURE;
+	}
+	std::cout << "OTB ready\n";
+	if (!Item::items.loadFromXml()) {
+		return EXIT_FAILURE;
+	}
+	std::cout << "Running carpet tests\n";
+	int result = EXIT_SUCCESS;
+	for (const auto& test : tfs::tests::registry()) {
+		std::cout << "[RUN] " << test.name << '\n';
+		try {
+			test.function();
+		} catch (const std::exception& error) {
+			std::cerr << "[FAIL] " << error.what() << '\n';
+			result = EXIT_FAILURE;
+		}
+	}
+	std::cout << tfs::tests::registry().size() << " tests completed, result=" << result << '\n';
+	shutdownLogger();
+	return result;
+}

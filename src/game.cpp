@@ -4991,6 +4991,10 @@ void Game::playerWrapableItem(uint32_t playerId, const Position& pos, uint8_t st
 	}
 
 	const uint16_t previousId = item->getID();
+	if (item->getCustomAttribute("__auto_carpet_source")) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
 	uint16_t targetId = getWrapTargetId(item);
 	if (targetId == 0 && previousId != ITEM_DECORATION_KIT) {
 		targetId = Item::items[previousId].wrapableTo;

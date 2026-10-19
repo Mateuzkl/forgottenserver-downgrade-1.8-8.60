@@ -265,6 +265,7 @@ public:
 
 private:
 	void onAddTileItem(Item* item);
+	void synchronizeAutoCarpets(uint32_t instanceId);
 	void onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newItem, const ItemType& newType);
 	void onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item);
 
