@@ -50,6 +50,14 @@ void logSharedItemLockFailure(std::string_view context, const Item* item)
 	         static_cast<const void*>(item), item ? item->getID() : 0);
 }
 
+// Match the surface and blocker conditions in synchronizeAutoCarpet. A bed is
+// a surface only while stationary; flat top-layer blockers also support it.
+bool affectsAutoCarpetFurniture(const ItemType& type)
+{
+	const bool surface = !type.moveable && (type.isBed() || (type.blockSolid && type.alwaysOnTop && !type.hasHeight));
+	return surface || type.blockSolid;
+}
+
 } // namespace
 
 StaticTile real_nullptr_tile(0xFFFF, 0xFFFF, 0xFF);
@@ -693,11 +701,18 @@ void Tile::onAddTileItem(Item* item)
 	if ((item->isCarpet() || Item::items[item->getID()].isGroundTile()) &&
 	    !item->getCustomAttribute("__auto_carpet_source")) {
 		synchronizeAutoCarpets(item->getInstanceID());
+	} else if (affectsAutoCarpetFurniture(Item::items[item->getID()]) && item->getInstanceID() == 0 &&
+	           !item->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpet();
 	}
 }
 
 void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newItem, const ItemType& newType)
 {
+	// Reconciliation can remove this tile; retain it through the rest of the hook.
+	// An unshared tile still runs its native flag/notification logic.
+	const auto self = weak_from_this().lock();
+
 	if (auto browseField = g_game.getBrowseFieldContainer(this)) {
 		if (isBrowseFieldVisibleItem(newItem)) {
 			const int32_t index = browseField->getThingIndex(oldItem);
@@ -731,17 +746,29 @@ void Tile::onUpdateTileItem(Item* oldItem, const ItemType& oldType, Item* newIte
 	for (const auto& spectator : spectators) {
 		spectator->onUpdateTileItem(this, cylinderMapPos, oldItem, oldType, newItem, newType);
 	}
-	if ((oldType.isCarpet() || newType.isCarpet() || oldType.isGroundTile() || newType.isGroundTile()) &&
+	const bool sourceChange =
+	    oldType.isCarpet() || newType.isCarpet() || oldType.isGroundTile() || newType.isGroundTile();
+	if ((sourceChange || affectsAutoCarpetFurniture(oldType) || affectsAutoCarpetFurniture(newType)) &&
 	    !oldItem->getCustomAttribute("__auto_carpet_source") && !newItem->getCustomAttribute("__auto_carpet_source")) {
-		synchronizeAutoCarpets(oldItem->getInstanceID());
-		if (newItem->getInstanceID() != oldItem->getInstanceID()) {
-			synchronizeAutoCarpets(newItem->getInstanceID());
+		// Do not read raw item pointers after callbacks may have removed them.
+		const auto oldInstance = oldItem->getInstanceID(), newInstance = newItem->getInstanceID();
+		if (sourceChange) {
+			synchronizeAutoCarpets(oldInstance);
+			if (newInstance != oldInstance) {
+				synchronizeAutoCarpets(newInstance);
+			}
+		} else if (oldInstance == 0 || newInstance == 0) {
+			synchronizeAutoCarpet();
 		}
 	}
 }
 
 void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<int32_t>& oldStackPosVector, Item* item)
 {
+	// Reconciliation can remove this tile; retain it through the rest of the hook.
+	// An unshared tile still runs its native flag/notification logic.
+	const auto self = weak_from_this().lock();
+
 	if (isBrowseFieldVisibleItem(item)) {
 		if (auto browseField = g_game.getBrowseFieldContainer(this)) {
 			browseField->removeThing(item, item->getItemCount());
@@ -769,6 +796,9 @@ void Tile::onRemoveTileItem(const SpectatorVec& spectators, const std::vector<in
 	}
 	if ((iType.isCarpet() || iType.isGroundTile()) && !item->getCustomAttribute("__auto_carpet_source")) {
 		synchronizeAutoCarpets(item->getInstanceID());
+	} else if (affectsAutoCarpetFurniture(iType) && item->getInstanceID() == 0 &&
+	           !item->getCustomAttribute("__auto_carpet_source")) {
+		synchronizeAutoCarpet();
 	}
 
 	if (!hasFlag(TILESTATE_PROTECTIONZONE) || getBoolean(ConfigManager::CLEAN_PROTECTION_ZONES)) {

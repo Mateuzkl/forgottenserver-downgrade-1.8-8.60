@@ -2,6 +2,7 @@
 
 #include "../bed.h"
 #include "../chat.h"
+#include "../configmanager.h"
 #include "../creatureevent.h"
 #include "../events.h"
 #include "../game.h"
@@ -62,6 +63,9 @@ struct Fixture
 	Fixture() { g_moveEvents.swap(previous); }
 	~Fixture()
 	{
+		// Test callback captures may already be out of scope during fixture teardown.
+		g_moveEvents->clear(false);
+		g_moveEvents->clear(true);
 		for (const auto& pos : positions) {
 			auto* tile = g_game.map.getTile(pos);
 			while (tile && tile->getItemList() && !tile->getItemList()->empty()) {
@@ -547,6 +551,131 @@ end
 )lua");
 	CHECK(copies(target).size() == 1);
 	LuaScriptInterface::resetScriptEnv();
+}
+
+TEST_CASE(real_wrap_target_removes_and_restores_furniture_underlay)
+{
+	uint16_t furnitureId = 0, wrappedId = 0;
+	for (size_t id = 1; id < Item::items.size(); ++id) {
+		const auto& type = Item::items[id];
+		if (!type.wrapableTo || type.moveable ||
+		    (!type.isBed() && !(type.blockSolid && type.alwaysOnTop && !type.hasHeight)) ||
+		    (type.alwaysOnTop && type.alwaysOnTopOrder <= Item::items[22736].alwaysOnTopOrder)) {
+			continue;
+		}
+		const auto& wrapped = Item::items[type.wrapableTo];
+		if (wrapped.id && !wrapped.blockSolid && !wrapped.isBed() && !wrapped.isCarpet() && !wrapped.isGroundTile()) {
+			furnitureId = uint16_t(id);
+			wrappedId = type.wrapableTo;
+			break;
+		}
+	}
+	CHECK(furnitureId != 0);
+	std::cout << "Native wrap fixture: " << furnitureId << " -> " << wrappedId << '\n';
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	auto furniture = f.add(target, furnitureId);
+	auto carpet = f.add(source, 22736);
+	CHECK(copies(target).size() == 1);
+	// Exercise the same native transform used by playerWrapableItem.
+	auto* wrapped = g_game.transformItem(furniture.get(), wrappedId);
+	CHECK(wrapped && wrapped->getParent() == target);
+	CHECK(copies(target).empty());
+	auto* restored = g_game.transformItem(wrapped, furnitureId);
+	CHECK(restored && restored->getParent() == target);
+	CHECK(copies(target).size() == 1);
+	CHECK(copies(target).front()->getID() == carpet->getID());
+}
+
+TEST_CASE(furniture_and_blocker_lifecycle_reconciles_only_the_destination)
+{
+	uint16_t blockerId = 0;
+	for (size_t id = 1; id < Item::items.size(); ++id) {
+		const auto& type = Item::items[id];
+		if (type.type == ITEM_TYPE_NONE && type.blockSolid && type.moveable && !type.isGroundTile()) {
+			blockerId = uint16_t(id);
+			break;
+		}
+	}
+	CHECK(blockerId != 0);
+	Fixture f;
+	auto* source = f.tile(0, 0);
+	auto* target = f.tile(1, 0);
+	auto carpet = f.add(source, 22736);
+	auto bed = f.add(target, 694);
+	CHECK(copies(target).size() == 1);
+	auto blocker = f.add(target, blockerId);
+	CHECK(copies(target).empty());
+	remove(blocker);
+	CHECK(copies(target).size() == 1);
+	CHECK(g_game.internalRemoveItem(bed.get()) == RETURNVALUE_NOTPOSSIBLE);
+	// Simulate native house cleanup without weakening the stationary bed's guard.
+	CHECK(g_game.internalRemoveItem(bed.get(), -1, false, FLAG_IGNORECANREMOVE) == RETURNVALUE_NOERROR);
+	CHECK(copies(target).empty());
+	f.add(target, 694);
+	CHECK(copies(target).size() == 1);
+	remove(carpet);
+	CHECK(copies(target).empty());
+}
+
+TEST_CASE(unshared_tile_hooks_preserve_native_flags)
+{
+	// Standalone tiles can be populated before Map acquires shared ownership.
+	auto tile = std::make_unique<DynamicTile>(30000, 30000, 7);
+	auto bed = Item::CreateItem(694);
+	tile->addThing(bed.get());
+	CHECK(tile->hasFlag(TILESTATE_BED));
+	tile->updateThing(bed.get(), 695, 1);
+	CHECK(tile->hasFlag(TILESTATE_BED));
+	tile->removeThing(bed.get(), 1);
+	CHECK(!tile->hasFlag(TILESTATE_BED));
+	CHECK(bed->isRemoved());
+}
+
+TEST_CASE(tile_hooks_survive_source_deletion_without_a_callers_shared_reference)
+{
+	const bool previous = ConfigManager::getBoolean(ConfigManager::CLEAN_PROTECTION_ZONES);
+	struct ConfigGuard
+	{
+		bool previous;
+		~ConfigGuard() { ConfigManager::setBoolean(ConfigManager::CLEAN_PROTECTION_ZONES, previous); }
+	} configGuard{previous};
+	ConfigManager::setBoolean(ConfigManager::CLEAN_PROTECTION_ZONES, true);
+	for (bool replace : {false, true}) {
+		Fixture f;
+		auto* source = f.tile(0, 0);
+		auto* target = f.tile(1, 0);
+		f.add(target, 694);
+		auto carpet = f.add(source, 22736);
+		const Position pos = source->getPosition();
+		std::weak_ptr<Tile> sourceLifetime = source->weak_from_this();
+		bool ran = false;
+		auto event = std::make_unique<MoveEvent>(g_moveEvents->getScriptInterfacePtr());
+		event->setEventType(MOVE_EVENT_REMOVE_ITEM);
+		event->addPosList(target->getPosition());
+		event->moveFunction = [&](Item* item, Item*, const Position&) {
+			if (!ran && item->getCustomAttribute(marker)) {
+				ran = true;
+				CHECK(g_game.map.removeTile(pos));
+			}
+			return 1;
+		};
+		CHECK(g_moveEvents->registerLuaEvent(event.release()));
+		// Unlike Game::internalRemoveItem/transformItem, these raw Tile callers
+		// do not retain a cylinderTile for the duration of the hook.
+		if (replace) {
+			auto replacement = Item::CreateItem(22736);
+			replacement->setInstanceID(11);
+			source->replaceThing(source->getThingIndex(carpet.get()), replacement.get());
+		} else {
+			source->removeThing(carpet.get(), 1);
+		}
+		CHECK(ran);
+		CHECK(g_game.map.getTile(pos) == nullptr);
+		CHECK(sourceLifetime.expired());
+		CHECK(copies(target).empty());
+	}
 }
 
 int main()
