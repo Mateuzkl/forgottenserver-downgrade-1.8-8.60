@@ -4,6 +4,7 @@
 #include "../otpch.h"
 
 #include "../bed.h"
+#include "../game.h"
 #include "../housetile.h"
 #include "../iomap.h"
 #include "../iomapserialize.h"
@@ -23,6 +24,16 @@ struct IOMapSerializeTestAccess
 		PropStream stream;
 		stream.init(bytes.data(), bytes.size());
 		return IOMapSerialize::loadItem(stream, parent) && stream.size() == 0;
+	}
+	static bool loadBatch(const std::vector<std::string>& records, Cylinder* parent)
+	{
+		std::vector<Item*> restored;
+		for (const auto& bytes : records) {
+			PropStream stream;
+			stream.init(bytes.data(), bytes.size());
+			if (!IOMapSerialize::loadItem(stream, parent, &restored) || stream.size() != 0) return false;
+		}
+		return true;
 	}
 };
 
@@ -131,7 +142,8 @@ void checkMapBeds(bool childItems)
 		CHECK(bed->isLoadedFromMap());
 		CHECK(bed->isMoveable()); // Do not globally change OTB movement flags.
 		CHECK(tile->queryRemove(*bed, 1, 0) == RETURNVALUE_NOTMOVEABLE);
-		CHECK(tile->queryRemove(*bed, 1, FLAG_IGNORENOTMOVEABLE) == RETURNVALUE_NOERROR);
+		CHECK(tile->queryRemove(*bed, 1, FLAG_IGNORENOTMOVEABLE) == RETURNVALUE_NOTMOVEABLE);
+		CHECK(tile->queryRemove(*bed, 1, FLAG_IGNORECANREMOVE) == RETURNVALUE_NOERROR);
 		CHECK(tile->hasFlag(TILESTATE_BED));
 		CHECK(tile->getItemList()->size() == 1);
 	}
@@ -162,7 +174,7 @@ TEST_CASE(map_bed_persistence_reuses_identity_and_does_not_duplicate)
 		CHECK(IOMapSerializeTestAccess::load(state, tile));
 		CHECK(tile->getItemList()->size() == 1);
 		CHECK(tile->getBedItem() == bed);
-		CHECK(IOMapSerializeTestAccess::save(bed.get()) == state);
+		CHECK(IOMapSerializeTestAccess::save(bed.get()).ends_with(state.substr(sizeof(uint16_t))));
 		CHECK(house->getBeds().size() == 4);
 	}
 }
@@ -218,6 +230,83 @@ TEST_CASE(map_bed_persistence_reuses_rotated_orientation)
 	CHECK(bed->isLoadedFromMap());
 }
 
+TEST_CASE(saved_player_beds_do_not_overwrite_map_beds_in_either_record_order)
+{
+	for (bool playerFirst : {false, true}) {
+		TestHouseMap fixture(true);
+		auto* tile = fixture.map.getTile(positions[1]);
+		const auto mapBed = tile->getBedItem();
+		CHECK(mapBed);
+		auto playerBed = Item::CreateItem(mapBed->getID());
+		const auto mapState = IOMapSerializeTestAccess::save(mapBed.get());
+		const auto legacy = sleepingState(playerBed->getID());
+		PropStream attributes;
+		attributes.init(legacy.data() + sizeof(uint16_t), legacy.size() - sizeof(uint16_t));
+		CHECK(playerBed->unserializeAttr(attributes));
+		const auto playerState = IOMapSerializeTestAccess::save(playerBed.get());
+		CHECK(IOMapSerializeTestAccess::loadBatch(playerFirst ? std::vector{playerState, mapState}
+		                                                     : std::vector{mapState, playerState}, tile));
+		CHECK(tile->getItemList()->size() == 2);
+		CHECK(mapBed->isLoadedFromMap());
+		CHECK(IOMapSerializeTestAccess::save(mapBed.get()) == mapState);
+		CHECK(fixture.map.houses.getHouse(4)->getBeds().size() == 5);
+	}
+}
+
+TEST_CASE(legacy_records_consume_each_map_fixture_only_once)
+{
+	for (uint16_t id : {uint16_t{39437}, uint16_t{694}}) {
+		TestHouseMap fixture(false);
+		auto* tile = fixture.map.getTile(positions[1]);
+		const auto original = tile->getBedItem();
+		tile->removeThing(original.get(), 1);
+		auto bed = Item::CreateItem(id);
+		bed->setLoadedFromMap(true);
+		tile->internalAddThing(bed.get());
+		CHECK(IOMapSerializeTestAccess::loadBatch({sleepingState(id), sleepingState(id)}, tile));
+		CHECK(tile->getItemList()->size() == 2);
+	}
+}
+
+TEST_CASE(proven_stale_map_beds_are_ignored_but_unrelated_player_beds_survive)
+{
+	TestHouseMap source(true);
+	auto* sourceTile = source.map.getTile(positions[1]);
+	const auto oldMapState = IOMapSerializeTestAccess::save(sourceTile->getBedItem().get());
+	// Replace the map fixture with another real bed family, without changing global metadata.
+	TestHouseMap destination(true);
+	auto* tile = destination.map.getTile(positions[1]);
+	const auto old = tile->getBedItem();
+	tile->removeThing(old.get(), 1);
+	auto replacement = Item::CreateItem(694);
+	CHECK(replacement && replacement->getBed());
+	replacement->setLoadedFromMap(true);
+	tile->internalAddThing(replacement.get());
+	CHECK(IOMapSerializeTestAccess::load(oldMapState, tile));
+	CHECK(tile->getItemList()->size() == 1);
+	CHECK(tile->getBedItem() == replacement->getBed());
+	auto playerBed = Item::CreateItem(39437);
+	CHECK(IOMapSerializeTestAccess::load(IOMapSerializeTestAccess::save(playerBed.get()), tile));
+	CHECK(tile->getItemList()->size() == 2);
+	CHECK(replacement->getID() == 694);
+}
+
+TEST_CASE(default_script_flags_cannot_move_or_remove_map_beds_but_native_cleanup_can)
+{
+	TestHouseMap fixture(true);
+	auto* source = fixture.map.getTile(positions[1]);
+	auto* destination = fixture.map.getTile(positions[0]);
+	const auto bed = source->getBedItem();
+	constexpr uint32_t scriptFlags = FLAG_NOLIMIT | FLAG_IGNOREBLOCKITEM | FLAG_IGNOREBLOCKCREATURE |
+	                                 FLAG_IGNORENOTMOVEABLE;
+	CHECK(g_game.internalMoveItem(source, destination, INDEX_WHEREEVER, bed.get(), 1, nullptr, scriptFlags) ==
+	      RETURNVALUE_NOTMOVEABLE);
+	CHECK(g_game.internalRemoveItem(bed.get()) != RETURNVALUE_NOERROR);
+	CHECK(bed->getParent() == source);
+	CHECK(g_game.internalRemoveItem(bed.get(), -1, false, FLAG_IGNORECANREMOVE) == RETURNVALUE_NOERROR);
+	CHECK(bed->isRemoved());
+}
+
 int main()
 {
 	if (!initLogger(LogLevel::CRITICAL)) return EXIT_FAILURE;
@@ -228,7 +317,8 @@ int main()
 	if (!document.load_file((root / "data/items/items.xml").string().c_str())) return EXIT_FAILURE;
 	for (auto item : document.child("items").children("item")) {
 		const auto id = item.attribute("id").as_uint();
-		if (id >= 39429 && id <= 39440) Item::items.parseItemNode(item, static_cast<uint16_t>(id));
+		if ((id >= 39429 && id <= 39440) || id == 694 || id == 695)
+			Item::items.parseItemNode(item, static_cast<uint16_t>(id));
 	}
 	const int result = tfs::tests::run();
 	shutdownLogger();

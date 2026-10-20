@@ -28,7 +28,7 @@ private:
 	static void saveTile(PropWriteStream& stream, const Tile* tile);
 
 	static bool loadContainer(PropStream& propStream, Container* container);
-	static bool loadItem(PropStream& propStream, Cylinder* parent);
+	static bool loadItem(PropStream& propStream, Cylinder* parent, std::vector<Item*>* restoredMapBeds = nullptr);
 };
 
 #endif

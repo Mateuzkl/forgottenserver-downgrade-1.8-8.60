@@ -15,6 +15,28 @@
 extern Game g_game;
 
 namespace {
+enum class BedOrigin { Legacy, Player, Map };
+constexpr std::string_view bedOriginKey = "__tfs_house_bed_origin_v1";
+
+// Keep the on-disk attribute format backward-readable. New saves put this
+// reserved custom attribute first; consume it without mutating the live item.
+bool readBedOrigin(PropStream& stream, BedOrigin& origin)
+{
+	auto probe = stream;
+	uint8_t attribute;
+	uint64_t count;
+	if (!probe.read(attribute) || attribute != ATTR_CUSTOM_ATTRIBUTES || !probe.read(count) || count != 1) return true;
+	const auto [key, ok] = probe.readString();
+	if (!ok || key != bedOriginKey) return true;
+	ItemAttributes::CustomAttribute value;
+	if (!value.unserialize(probe)) return false;
+	const auto* flag = std::get_if<int64_t>(&value.value);
+	if (!flag || (*flag != 0 && *flag != 1)) return false;
+	origin = *flag == 1 ? BedOrigin::Map : BedOrigin::Player;
+	stream = probe;
+	return true;
+}
+
 bool mapSerializeCylinderOwnsThing(const Cylinder* cylinder, const Thing* thing)
 {
 	return cylinder && thing && thing->getParent() == cylinder && cylinder->getThingIndex(thing) != -1;
@@ -169,8 +191,9 @@ void IOMapSerialize::loadHouseItems(Map* map)
             tileCount++;
             itemCount += item_count;
             
+            std::vector<Item*> restoredMapBeds;
             while (item_count--) {
-                loadItem(propStream, tile);
+                if (!loadItem(propStream, tile, &restoredMapBeds)) break;
             }
         } while (result->next());
     }
@@ -254,7 +277,7 @@ bool IOMapSerialize::loadContainer(PropStream& propStream, Container* container)
 	return true;
 }
 
-bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
+bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent, std::vector<Item*>* restoredMapBeds)
 {
 	uint16_t id;
 	if (!propStream.read<uint16_t>(id)) {
@@ -267,14 +290,17 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 	}
 
 	const ItemType& iType = Item::items[id];
+	BedOrigin origin = BedOrigin::Legacy;
+	if (iType.isBed() && !readBedOrigin(propStream, origin)) return false;
 	// A map-installed bed may have moveable OTB flags. Restore its saved state
 	// onto that fixture instead of creating a duplicate on each startup. Beds
 	// placed by players (and unrelated families) retain normal item restoration.
 	Item* mapBed = nullptr;
-	if (tile && iType.isBed()) {
+	if (tile && iType.isBed() && origin != BedOrigin::Player) {
 		if (const auto* items = tile->getItemList()) {
 			for (const auto& candidate : *items) {
 				if (!candidate->isLoadedFromMap() || !candidate->getBed() ||
+				    (restoredMapBeds && std::ranges::find(*restoredMapBeds, candidate.get()) != restoredMapBeds->end()) ||
 				    !isSamePersistentFixtureFamily(Item::items[candidate->getID()], iType)) {
 					continue;
 				}
@@ -283,7 +309,19 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 			}
 		}
 	}
-	if (!mapBed && (iType.moveable || iType.forceSerialize || !tile)) {
+	if (origin == BedOrigin::Map && !mapBed) {
+		// Proven map-origin state with no matching fixture is stale. Consume
+		// attributes without BedItem's sleeper registration / database effects.
+		Item discarded(id);
+		if (!discarded.unserializeAttr(propStream)) return false;
+		const auto current = tile ? tile->getBedItem() : nullptr;
+		logStaleHouseFixture(tile, current ? current->getID() : 0, id, "bed");
+		return true;
+	}
+	const bool unmatchedLegacyBed = origin == BedOrigin::Legacy && iType.isBed() && !mapBed &&
+	                                restoredMapBeds && !restoredMapBeds->empty();
+	if (origin == BedOrigin::Player || unmatchedLegacyBed ||
+	    (!mapBed && (iType.moveable || iType.forceSerialize || !tile))) {
 		// create a new item
 		auto item = Item::CreateItem(id);
 		if (item) {
@@ -333,6 +371,7 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 
 		if (staticItem) {
 			if (staticItem->unserializeAttr(propStream)) {
+				if (mapBed && restoredMapBeds) restoredMapBeds->push_back(mapBed);
 				Container* container = staticItem->getContainer();
 				if (container && !loadContainer(propStream, container)) {
 					return false;
@@ -441,6 +480,13 @@ void IOMapSerialize::saveItem(PropWriteStream& stream, const Item* item)
 
 	// Write ID & props
 	stream.write<uint16_t>(item->getID());
+	if (item->getBed()) {
+		stream.write<uint8_t>(ATTR_CUSTOM_ATTRIBUTES);
+		stream.write<uint64_t>(1);
+		stream.writeString(bedOriginKey);
+		const bool mapFixture = item->isLoadedFromMap() && item->getParent() == item->getTile();
+		ItemAttributes::CustomAttribute(int64_t{mapFixture ? 1 : 0}).serialize(stream);
+	}
 	item->serializeAttr(stream);
 
 	if (container) {
