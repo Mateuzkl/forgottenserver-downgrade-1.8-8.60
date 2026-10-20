@@ -524,7 +524,8 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                             return false;
                         }
 
-                        if (item->isMoveable()) {
+                        // Bed metadata identifies a house fixture even when its OTB flags allow movement.
+                        if (item->isMoveable() && !item->getBed()) {
                             g_logger().warn("Moveable item with ID: {} in house: {} at position [x: {}, y: {}, z: {}].",
                                           item->getID(), house->getId(), x, y, z);
                         } else {
@@ -585,7 +586,7 @@ bool IOMap::parseTileArea(OTB::Loader& loader, const OTB::Node& tileAreaNode, Ma
                     return false;
                 }
 
-                if (item->isMoveable()) {
+                if (item->isMoveable() && !item->getBed()) {
                     g_logger().warn("Moveable item with ID: {} in house: {} at position [x: {}, y: {}, z: {}].",
                                   item->getID(), house->getId(), x, y, z);
                 } else {

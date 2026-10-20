@@ -20,14 +20,14 @@ bool mapSerializeCylinderOwnsThing(const Cylinder* cylinder, const Thing* thing)
 	return cylinder && thing && thing->getParent() == cylinder && cylinder->getThingIndex(thing) != -1;
 }
 
-std::array<uint16_t, 4> getBedTransformIds(const ItemType& itemType)
+std::array<uint16_t, 5> getBedTransformIds(const ItemType& itemType)
 {
 	if (!itemType.isBed()) {
 		return {};
 	}
 
 	return {itemType.id, itemType.transformToFree, itemType.transformToOnUse[PLAYERSEX_FEMALE],
-	        itemType.transformToOnUse[PLAYERSEX_MALE]};
+	        itemType.transformToOnUse[PLAYERSEX_MALE], itemType.rotateTo};
 }
 
 std::string_view persistentFixtureTypeName(const ItemType& itemType)
@@ -267,7 +267,23 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 	}
 
 	const ItemType& iType = Item::items[id];
-	if (iType.moveable || iType.forceSerialize || !tile) {
+	// A map-installed bed may have moveable OTB flags. Restore its saved state
+	// onto that fixture instead of creating a duplicate on each startup. Beds
+	// placed by players (and unrelated families) retain normal item restoration.
+	Item* mapBed = nullptr;
+	if (tile && iType.isBed()) {
+		if (const auto* items = tile->getItemList()) {
+			for (const auto& candidate : *items) {
+				if (!candidate->isLoadedFromMap() || !candidate->getBed() ||
+				    !isSamePersistentFixtureFamily(Item::items[candidate->getID()], iType)) {
+					continue;
+				}
+				if (!mapBed || candidate->getID() == id) mapBed = candidate.get();
+				if (mapBed->getID() == id) break; // Exact identity wins over related states.
+			}
+		}
+	}
+	if (!mapBed && (iType.moveable || iType.forceSerialize || !tile)) {
 		// create a new item
 		auto item = Item::CreateItem(id);
 		if (item) {
@@ -293,9 +309,9 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent)
 	} else {
 		// Stationary items like doors/beds/blackboards/bookcases. Exact identity
 		// always wins; a transformed state is accepted only with family proof.
-		Item* staticItem = nullptr;
-		bool exactMatch = false;
-		if (const TileItemVector* items = tile->getItemList()) {
+		Item* staticItem = mapBed;
+		bool exactMatch = staticItem && staticItem->getID() == id;
+		if (const TileItemVector* items = tile->getItemList(); items && !staticItem) {
 			for (const auto& findItem : *items) {
 				if (findItem->getID() == id) {
 					staticItem = findItem.get();

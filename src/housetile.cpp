@@ -171,5 +171,12 @@ ReturnValue HouseTile::queryRemove(const Thing& thing, uint32_t count, uint32_t 
 		}
 	}
 
-	return Tile::queryRemove(thing, count, flags);
+	const auto result = Tile::queryRemove(thing, count, flags);
+	// Map beds are permanent fixtures even when their OTB flags say moveable.
+	// Moving one would respawn the map original alongside its persisted copy.
+	if (result == RETURNVALUE_NOERROR && !hasBitSet(FLAG_IGNORENOTMOVEABLE, flags) &&
+	    item->isLoadedFromMap() && item->getBed()) {
+		return RETURNVALUE_NOTMOVEABLE;
+	}
+	return result;
 }
