@@ -9,6 +9,24 @@
 #include "test_support.h"
 
 struct ProtocolGameMovementTestAccess {
+	static void setup(ProtocolGame& protocol, const std::shared_ptr<Player>& viewer)
+	{
+		protocol.player = viewer;
+		protocol.isOTC = true;
+		protocol.getCurrentBuffer() = std::make_shared<OutputMessage>();
+	}
+	static void moveActor(ProtocolGame& protocol, const Creature* actor, const Position& oldPos,
+	                      int32_t oldStack, const Position& newPos, int32_t newStack)
+	{
+		protocol.sendMoveCreature(actor, newPos, newStack, oldPos, oldStack, false);
+	}
+	static void remove(ProtocolGame& protocol, const Position& pos, uint32_t stack)
+	{
+		protocol.sendRemoveTileThing(pos, stack);
+	}
+	static void emblem(ProtocolGame& protocol, const Creature* actor) { protocol.sendCreatureEmblem(actor); }
+	static void remember(ProtocolGame& protocol, uint32_t id) { protocol.knownCreatureSet.insert(id); }
+	static bool knows(ProtocolGame& protocol, uint32_t id) { return protocol.knownCreatureSet.contains(id); }
 	static void move(ProtocolGame& protocol, const std::shared_ptr<Player>& viewer,
 	                 const Position& oldPos, int32_t oldStack, const Position& newPos, int32_t newStack)
 	{
@@ -161,6 +179,97 @@ TEST_CASE(detached_viewer_is_not_injected_from_a_stale_parent_pointer)
 	for (size_t i = 0; i < stack.size; ++i) CHECK(stack.things[i] != f.player.get());
 	CHECK(f.tile->getClientIndexOfCreature(f.player.get(), f.player.get()) == -1);
 	f.player->setParent(nullptr);
+}
+
+TEST_CASE(moving_into_an_omitted_destination_refreshes_both_tiles_instead_of_0x6d)
+{
+	Fixture f(12);
+	ProtocolGame protocol(nullptr);
+	ProtocolGameMovementTestAccess::setup(protocol, f.player);
+	const auto pos = f.tile->getPosition();
+	const Position oldPos{uint16_t(pos.x - 1), pos.y, pos.z};
+	ProtocolGameMovementTestAccess::moveActor(protocol, f.npc.get(), oldPos, 1, pos, MAX_STACKPOS_THINGS);
+	auto& msg = *protocol.getCurrentBuffer();
+	CHECK(msg.setBufferPosition(0));
+	CHECK(msg.getByte() == 0x69);
+	CHECK(msg.getPosition() == oldPos);
+	CHECK(msg.get<uint16_t>() == 0xFF01); // No source tile in this asset-free fixture.
+	CHECK(msg.getByte() == 0x69);
+	CHECK(msg.getPosition() == pos);
+	ProtocolGame expectedProtocol(nullptr);
+	const auto expected = ProtocolGameMovementTestAccess::describe(expectedProtocol, f.player, f.tile.get());
+	CHECK(std::memcmp(msg.getBuffer() + msg.getBufferPosition(),
+	                  expected.getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, expected.getLength()) == 0);
+	CHECK(msg.getLength() == 8 + 6 + expected.getLength() + 2);
+}
+
+TEST_CASE(overflow_removal_sends_post_removal_tile_contents)
+{
+	Fixture f(2);
+	const auto pos = f.tile->getPosition();
+	auto tile = std::make_unique<StaticTile>(pos.x, pos.y, pos.z);
+	tile->internalAddThing(std::make_shared<Item>(100).get());
+	tile->internalAddThing(std::make_shared<Item>(101).get());
+	g_game.map.setTile(pos, std::move(tile));
+	struct Cleanup { Position pos; ~Cleanup() { g_game.map.removeTile(pos); } } cleanup{pos};
+	ProtocolGame protocol(nullptr), expectedProtocol(nullptr);
+	ProtocolGameMovementTestAccess::setup(protocol, f.player);
+	ProtocolGameMovementTestAccess::remove(protocol, pos, MAX_STACKPOS_THINGS);
+	const auto expected = ProtocolGameMovementTestAccess::describe(expectedProtocol, f.player, g_game.map.getTile(pos));
+	auto& msg = *protocol.getCurrentBuffer();
+	CHECK(msg.setBufferPosition(0));
+	CHECK(msg.getByte() == 0x69);
+	CHECK(msg.getPosition() == pos);
+	CHECK(msg.getLength() == 6 + expected.getLength() + 2);
+	CHECK(std::memcmp(msg.getBuffer() + msg.getBufferPosition(),
+	                  expected.getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, expected.getLength()) == 0);
+}
+
+TEST_CASE(overflow_emblem_refreshes_tile_and_invalidates_known_description)
+{
+	Fixture f(12);
+	ProtocolGame protocol(nullptr);
+	ProtocolGameMovementTestAccess::setup(protocol, f.player);
+	ProtocolGameMovementTestAccess::remember(protocol, f.npc->getID());
+	ProtocolGameMovementTestAccess::emblem(protocol, f.npc.get());
+	CHECK(!ProtocolGameMovementTestAccess::knows(protocol, f.npc->getID()));
+	auto& msg = *protocol.getCurrentBuffer();
+	CHECK(msg.setBufferPosition(0));
+	CHECK(msg.getByte() == 0x69);
+	CHECK(msg.getPosition() == f.tile->getPosition());
+}
+
+TEST_CASE(ordinary_emblems_keep_legacy_remove_add_stack)
+{
+	Fixture f(2);
+	ProtocolGame protocol(nullptr);
+	ProtocolGameMovementTestAccess::setup(protocol, f.player);
+	ProtocolGameMovementTestAccess::emblem(protocol, f.npc.get());
+	auto& msg = *protocol.getCurrentBuffer();
+	CHECK(msg.setBufferPosition(0));
+	CHECK(msg.getByte() == 0x6C);
+	CHECK(msg.getPosition() == f.tile->getPosition());
+	CHECK(msg.getByte() == 3);
+	CHECK(msg.getByte() == 0x6A);
+	CHECK(msg.getPosition() == f.tile->getPosition());
+	CHECK(msg.getByte() == 3);
+}
+
+TEST_CASE(local_movement_into_reserved_last_slot_uses_a_full_map_description)
+{
+	Fixture f(12);
+	ProtocolGame protocol(nullptr);
+	ProtocolGameMovementTestAccess::setup(protocol, f.player);
+	const auto pos = f.tile->getPosition();
+	const Position oldPos{uint16_t(pos.x - 1), pos.y, pos.z};
+	ProtocolGameMovementTestAccess::moveActor(protocol, f.player.get(), oldPos, 1, pos, 9);
+	auto& msg = *protocol.getCurrentBuffer();
+	CHECK(msg.setBufferPosition(0));
+	CHECK(msg.getByte() == 0x6C);
+	CHECK(msg.getPosition() == oldPos);
+	CHECK(msg.getByte() == 1);
+	CHECK(msg.getByte() == 0x64);
+	CHECK(msg.getPosition() == pos);
 }
 
 int main()

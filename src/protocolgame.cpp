@@ -3042,6 +3042,14 @@ void ProtocolGame::sendCreatureEmblem(const Creature* creature)
 	// Remove creature from client and re-add to update
 	Position pos = creature->getPosition();
 	int32_t stackpos = creature->getTile()->getClientIndexOfCreature(player.get(), creature);
+	if (stackpos < 0) return;
+	if (stackpos >= MAX_STACKPOS_THINGS) {
+		// The omitted creature cannot be re-added at stack 10. Forget its
+		// cached description so its next appearance includes the new emblem.
+		knownCreatureSet.erase(creature->getID());
+		sendUpdateTile(creature->getTile(), pos);
+		return;
+	}
 	sendRemoveTileThing(pos, stackpos);
 	NetworkMessage msg;
 	msg.addByte(0x6A);
@@ -4853,6 +4861,14 @@ void ProtocolGame::sendRemoveTileThing(const Position& pos, uint32_t stackpos)
 	if (!canSee(pos)) {
 		return;
 	}
+	if (stackpos >= MAX_STACKPOS_THINGS) {
+		if (stackpos != std::numeric_limits<uint32_t>::max()) {
+			// Removal callers have already changed the tile. An old overflow
+			// index cannot identify a client thing; replace the post-change tile.
+			sendUpdateTile(g_game.map.getTile(pos), pos);
+		}
+		return;
+	}
 
 	NetworkMessage msg;
 	RemoveTileThing(msg, pos, stackpos);
@@ -5023,7 +5039,8 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 	if (spyActive_ && creature->getID() == spyTargetCreatureId_) {
 		spyViewportPos_ = newPos;
 
-		if (teleport || oldStackPos >= MAX_STACKPOS_THINGS) {
+		if (teleport || oldStackPos < 0 || oldStackPos >= MAX_STACKPOS_THINGS ||
+		    newStackPos < 0 || newStackPos >= MAX_STACKPOS_THINGS - 1) {
 			sendRemoveTileThing(oldPos, oldStackPos);
 			sendMapDescription(newPos);
 			return;
@@ -5073,9 +5090,21 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 		}
 		return;
 	}
+	if (creature != player.get() &&
+	    (oldStackPos < 0 || oldStackPos >= MAX_STACKPOS_THINGS ||
+	     newStackPos < 0 || newStackPos >= MAX_STACKPOS_THINGS)) {
+		// Both positions describe post-move state. Never move a creature into
+		// the client's stack when the bounded destination actually omits it.
+		if (canSee(oldPos)) sendUpdateTile(g_game.map.getTile(oldPos), oldPos);
+		if (newPos != oldPos && canSee(newPos)) sendUpdateTile(creature->getTile(), newPos);
+		return;
+	}
 
 	if (creature == player.get()) {
-		if (teleport || oldStackPos >= MAX_STACKPOS_THINGS) {
+		// At the reserved last slot the client may still have a full cached
+		// destination. A plain implicit insertion can immediately evict self.
+		if (teleport || oldStackPos < 0 || oldStackPos >= MAX_STACKPOS_THINGS ||
+		    newStackPos < 0 || newStackPos >= MAX_STACKPOS_THINGS - 1) {
 			sendRemoveTileThing(oldPos, oldStackPos);
 			sendMapDescription(newPos);
 		} else {
@@ -5121,6 +5150,10 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 				}
 			}
 			writeToOutputBuffer(msg);
+		}
+		if (oldStackPos == MAX_STACKPOS_THINGS - 1 && oldPos != newPos && canSee(oldPos)) {
+			// Leaving self's reserved slot can expose a previously omitted thing.
+			sendUpdateTile(g_game.map.getTile(oldPos), oldPos);
 		}
 		sendZoneWeather(newPos);
 		sendVisibleEchoRaidVisuals(newPos);

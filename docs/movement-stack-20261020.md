@@ -15,6 +15,15 @@ cannot resolve to an unrelated serialized object. Overflow visible creatures
 retain the existing >=10 full-update path instead of emitting invalid 0x6D
 references. The stack is a fixed array, with no heap allocation.
 
+All overflow consumers must honor that sentinel. Movement now replaces affected
+post-move tiles instead of implicitly inserting a creature omitted from the
+destination stack. Overflow removals replace the post-removal tile. Emblem
+updates do not add at stack 10: they invalidate the cached creature description
+and refresh the tile, allowing the next visible appearance to include its emblem.
+Entering self's reserved last slot uses a full map description, and leaving
+that slot refreshes the old tile so newly exposed contents are not omitted.
+Sparse movement and ordinary emblem updates retain their original wire format.
+
 Regression tests compare actual serialized bytes with the expected stack,
 exercise NPC ordering and instance isolation, and verify the 0x6D source stack
 when moving out of a dense tile. Existing house and item lifetime tests remain
