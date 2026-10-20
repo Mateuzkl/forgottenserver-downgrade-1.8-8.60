@@ -400,6 +400,7 @@ private:
 	friend struct ProtocolGameCustomPingTestAccess;
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
+	friend struct ProtocolGameMovementTestAccess;
 
 	//cast
 	void spectatorTurn(uint8_t direction);

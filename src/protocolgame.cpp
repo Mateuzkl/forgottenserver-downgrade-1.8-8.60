@@ -41,6 +41,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
+#include <cstdlib>
 #include <limits>
 #include <map>
 #include <mutex>
@@ -56,6 +58,20 @@ std::set<std::string> ProtocolGame::spectatorNames;
 extern Monsters g_monsters;
 
 namespace {
+
+bool traceMovementFor(const Player* viewer)
+{
+	// Explicit, process-local opt-in for one test session; never log credentials.
+	static const uint32_t target = [] {
+		const char* value = std::getenv("TFS_WALK_TRACE_PLAYER_GUID");
+		uint32_t result = 0;
+		if (!value) return result;
+		const char* end = value + std::char_traits<char>::length(value);
+		const auto parsed = std::from_chars(value, end, result);
+		return parsed.ec == std::errc{} && parsed.ptr == end ? result : uint32_t{0};
+	}();
+	return target != 0 && viewer && viewer->getGUID() == target;
+}
 
 // 0x3C is reserved for native ZoneId weather on negotiated custom clients.
 constexpr uint8_t ZONE_WEATHER_OPCODE = 0x3C;
@@ -1363,6 +1379,13 @@ void ProtocolGame::dispatchCancelMessage(ReturnValue message) const
 void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 {
 	auto out = getOutputBuffer(msg.getLength());
+	if (msg.getLength() != 0 && traceMovementFor(player.get())) {
+		const auto opcode = msg.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
+		if ((opcode >= 0x64 && opcode <= 0x6D) || opcode == 0xC6 || opcode == 0xC7) {
+			LOG_INFO("[NetworkWalkTrace] ms={} viewer={} opcode=0x{:02x} output_offset={} bytes={}",
+			         OTSYS_TIME(), player->getID(), opcode, out->getLength(), msg.getLength());
+		}
+	}
 	out->append(msg);
 }
 
@@ -2091,71 +2114,13 @@ void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 
 void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 {
-	const uint32_t playerInstanceId = player->getInstanceID();
-	int32_t count;
-	Item* ground = tile->getGround();
-	if (ground) {
-		appendItem(msg, ground);
-		count = 1;
-	} else {
-		count = 0;
-	}
-
-	const TileItemVector* items = tile->getItemList();
-	if (items) {
-		for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
-			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
-				continue;
-			}
-			appendItem(msg, it->get());
-			count++;
-			if (count == 9 && tile->getPosition() == player->getPosition()) {
-				break;
-			} else if (count == 10) {
-				return;
-			}
-		}
-	}
-
-	const bool isStacked = player->getPosition() == tile->getPosition();
-
-	const CreatureVector* creatures = tile->getCreatures();
-	if (creatures) {
-		bool playerAdded = false;
-		for (auto it = creatures->rbegin(), end = creatures->rend(); it != end; ++it) {
-			const Creature* creature = it->get();
-
-			if (!player->canSeeCreature(creature)) {
-				continue;
-			}
-
-			if (!isOTC && isStacked && count == 9 && !playerAdded) {
-				creature = player.get();
-			}
-
-			if (creature->getID() == player->getID()) {
-				playerAdded = true;
-			}
-
+	const auto stack = tile->getClientStack(player.get());
+	for (size_t index = 0; index < stack.size; ++index) {
+		if (const auto* item = stack.things[index]->getItem()) {
+			appendItem(msg, item);
+		} else if (const auto* creature = stack.things[index]->getCreature()) {
 			auto [known, removedKnown] = isKnownCreature(creature->getID());
 			AddCreature(msg, creature, known, removedKnown);
-
-			if (++count == MAX_STACKPOS_THINGS) {
-				if (!isOTC) return;
-				break;
-			}
-		}
-	}
-
-	if (items && count < MAX_STACKPOS_THINGS) {
-		for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
-			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
-				continue;
-			}
-			appendItem(msg, it->get());
-			if (++count == MAX_STACKPOS_THINGS) {
-				return;
-			}
 		}
 	}
 }
@@ -5050,6 +5015,11 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& newPos, int32_t newStackPos,
                                     const Position& oldPos, int32_t oldStackPos, bool teleport)
 {
+	if (traceMovementFor(player.get())) {
+		LOG_INFO("[NetworkWalkTrace] ms={} viewer={} creature={} old=({},{},{}) stack={} new=({},{},{}) stack={} teleport={}",
+		         OTSYS_TIME(), player->getID(), creature->getID(), oldPos.x, oldPos.y, oldPos.z, oldStackPos,
+		         newPos.x, newPos.y, newPos.z, newStackPos, teleport);
+	}
 	if (spyActive_ && creature->getID() == spyTargetCreatureId_) {
 		spyViewportPos_ = newPos;
 

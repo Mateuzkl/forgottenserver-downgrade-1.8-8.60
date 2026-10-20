@@ -1637,32 +1637,70 @@ int32_t Tile::getThingIndex(const Thing* thing) const
 	return -1;
 }
 
-int32_t Tile::getClientIndexOfCreature(const Player* player, const Creature* creature) const
+Tile::ClientStack Tile::getClientStack(const Player* player) const
 {
-	int32_t n;
+	ClientStack stack;
 	if (ground) {
-		n = 1;
-	} else {
-		n = 0;
+		stack.things[stack.size++] = ground.get();
 	}
-
+	const auto* creatures = getCreatures();
+	Creature* viewerCreature = nullptr;
+	if (player->getTile() == this && creatures) {
+		for (const auto& creature : *creatures) {
+			if (creature.get() == player) {
+				viewerCreature = creature.get();
+				break;
+			}
+		}
+	}
+	const bool ownTile = viewerCreature != nullptr;
+	const size_t topLimit = ownTile ? MAX_STACKPOS_THINGS - 1 : MAX_STACKPOS_THINGS;
 	const uint32_t viewerInstanceId = player->getInstanceID();
 	const TileItemVector* items = getItemList();
 	if (items) {
 		for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
+			if (stack.size == topLimit) break;
 			if (InstanceUtils::canSeeItemInInstance(viewerInstanceId, it->get())) {
-				++n;
+				stack.things[stack.size++] = it->get();
 			}
 		}
 	}
-
-	if (const CreatureVector* creatures = getCreatures()) {
+	if (creatures) {
+		bool playerAdded = false;
 		for (auto it = creatures->rbegin(), end = creatures->rend(); it != end; ++it) {
-			const Creature* c = it->get();
-			if (c == creature) {
-				return n;
-			} else if (player->canSeeCreature(c)) {
-				++n;
+			if (stack.size == MAX_STACKPOS_THINGS) break;
+			Creature* creature = it->get();
+			if (!player->canSeeCreature(creature)) continue;
+			// Keep the viewer on its own tile even when NPCs or other players
+			// would otherwise fill the last slot. Apply this to OTC as well.
+			if (ownTile && stack.size == MAX_STACKPOS_THINGS - 1 && !playerAdded)
+				creature = viewerCreature;
+			stack.things[stack.size++] = creature;
+			playerAdded = playerAdded || creature == player;
+		}
+	}
+	if (items) {
+		for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
+			if (stack.size == MAX_STACKPOS_THINGS) break;
+			if (InstanceUtils::canSeeItemInInstance(viewerInstanceId, it->get()))
+				stack.things[stack.size++] = it->get();
+		}
+	}
+	return stack;
+}
+
+int32_t Tile::getClientIndexOfCreature(const Player* player, const Creature* creature) const
+{
+	const auto stack = getClientStack(player);
+	for (size_t index = 0; index < stack.size; ++index) {
+		if (stack.things[index] == creature) return static_cast<int32_t>(index);
+	}
+	// A visible creature outside the wire stack still needs the existing full
+	// update path, not a movement referencing an unrelated client stack entry.
+	if (creature && creature->getTile() == this && player->canSeeCreature(creature)) {
+		if (const auto* creatures = getCreatures()) {
+			for (const auto& candidate : *creatures) {
+				if (candidate.get() == creature) return MAX_STACKPOS_THINGS;
 			}
 		}
 	}
@@ -1671,52 +1709,9 @@ int32_t Tile::getClientIndexOfCreature(const Player* player, const Creature* cre
 
 int32_t Tile::getStackposOfItem(const Player* player, const Item* item) const
 {
-	int32_t n = 0;
-	if (ground) {
-		if (ground.get() == item) {
-			return n;
-		}
-		++n;
-	}
-
-	const uint32_t viewerInstanceId = player->getInstanceID();
-	const TileItemVector* items = getItemList();
-	if (items) {
-		if (item->isAlwaysOnTop()) {
-			for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
-				if (it->get() == item) {
-					return n;
-				}
-				if (InstanceUtils::canSeeItemInInstance(viewerInstanceId, it->get())) {
-					++n;
-				}
-			}
-		} else {
-			for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
-				if (InstanceUtils::canSeeItemInInstance(viewerInstanceId, it->get())) {
-					++n;
-				}
-			}
-		}
-	}
-
-	if (const CreatureVector* creatures = getCreatures()) {
-		for (const auto& creature : *creatures) {
-			if (player->canSeeCreature(creature.get())) {
-				++n;
-			}
-		}
-	}
-
-	if (items && !item->isAlwaysOnTop()) {
-		for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
-			if (it->get() == item) {
-				return n;
-			}
-			if (InstanceUtils::canSeeItemInInstance(viewerInstanceId, it->get())) {
-				++n;
-			}
-		}
+	const auto stack = getClientStack(player);
+	for (size_t index = 0; index < stack.size; ++index) {
+		if (stack.things[index] == item) return static_cast<int32_t>(index);
 	}
 	return -1;
 }
@@ -1780,49 +1775,8 @@ Thing* Tile::getThing(const Player* player, size_t index) const
 	if (!player) {
 		return getThing(index);
 	}
-
-	if (ground) {
-		if (index == 0) {
-			return ground.get();
-		}
-		--index;
-	}
-
-	const uint32_t instanceId = player->getInstanceID();
-	const TileItemVector* items = getItemList();
-	if (items) {
-		for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
-			if (!InstanceUtils::canSeeItemInInstance(instanceId, it->get())) {
-				continue;
-			}
-			if (index-- == 0) {
-				return it->get();
-			}
-		}
-	}
-
-	if (const CreatureVector* creatures = getCreatures()) {
-		for (auto it = creatures->rbegin(), end = creatures->rend(); it != end; ++it) {
-			if (!player->canSeeCreature(it->get())) {
-				continue;
-			}
-			if (index-- == 0) {
-				return it->get();
-			}
-		}
-	}
-
-	if (items) {
-		for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
-			if (!InstanceUtils::canSeeItemInInstance(instanceId, it->get())) {
-				continue;
-			}
-			if (index-- == 0) {
-				return it->get();
-			}
-		}
-	}
-	return nullptr;
+	const auto stack = getClientStack(player);
+	return index < stack.size ? stack.things[index] : nullptr;
 }
 
 void Tile::postAddNotification(Thing* thing, const Cylinder* oldParent, int32_t index,
