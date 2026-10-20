@@ -2193,6 +2193,7 @@ std::pair<bool, uint32_t> ProtocolGame::isKnownCreature(uint32_t id)
 		if (unseenIt != knownCreatureSet.end()) {
 			uint32_t removedCreatureId = *unseenIt;
 			knownCreatureSet.erase(unseenIt);
+			pendingCreatureEmblems.erase(removedCreatureId);
 			return {false, removedCreatureId};
 		}
 
@@ -2203,6 +2204,7 @@ std::pair<bool, uint32_t> ProtocolGame::isKnownCreature(uint32_t id)
 
 		uint32_t removedId = *it;
 		knownCreatureSet.erase(it);
+		pendingCreatureEmblems.erase(removedId);
 		return {false, removedId};
 	}
 	return {false, 0};
@@ -3044,9 +3046,11 @@ void ProtocolGame::sendCreatureEmblem(const Creature* creature)
 	int32_t stackpos = creature->getTile()->getClientIndexOfCreature(player.get(), creature);
 	if (stackpos < 0) return;
 	if (stackpos >= MAX_STACKPOS_THINGS) {
-		// The omitted creature cannot be re-added at stack 10. Forget its
-		// cached description so its next appearance includes the new emblem.
-		knownCreatureSet.erase(creature->getID());
+		// Keep the client's known cache in sync until the creature reappears.
+		// Unknown creatures already receive a full description on their next add.
+		if (knownCreatureSet.contains(creature->getID())) {
+			pendingCreatureEmblems.insert(creature->getID());
+		}
 		sendUpdateTile(creature->getTile(), pos);
 		return;
 	}
@@ -4762,6 +4766,7 @@ void ProtocolGame::sendMapDescription(const Position& pos)
 void ProtocolGame::refreshWorldView()
 {
 	knownCreatureSet.clear();
+	pendingCreatureEmblems.clear();
 	sendMapDescription(player->getPosition());
 	sendZoneWeather(player->getPosition(), true);
 }
@@ -5097,6 +5102,11 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 		// the client's stack when the bounded destination actually omits it.
 		if (canSee(oldPos)) sendUpdateTile(g_game.map.getTile(oldPos), oldPos);
 		if (newPos != oldPos && canSee(newPos)) sendUpdateTile(creature->getTile(), newPos);
+		if (newStackPos >= 0 && newStackPos < MAX_STACKPOS_THINGS && canSee(newPos)) {
+			sendCreatureSquare(creature, player->getCreatureSquare(creature));
+			sendCreatureVocation(creature);
+			sendCreatureEchoRaidVisual(creature, true);
+		}
 		return;
 	}
 
@@ -6160,6 +6170,11 @@ void ProtocolGame::sendUseItemCooldown(uint32_t time)
 ////////////// Add common messages
 void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bool known, uint32_t remove)
 {
+	const bool refreshEmblem = pendingCreatureEmblems.contains(creature->getID());
+	if (refreshEmblem) {
+		known = false;
+		remove = creature->getID();
+	}
 	const Player* otherPlayer = creature->getPlayer();
 	if (known) {
 		msg.add<uint16_t>(0x62);
@@ -6261,6 +6276,9 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	}
 
 	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
+	if (refreshEmblem) {
+		pendingCreatureEmblems.erase(creature->getID());
+	}
 }
 
 uint16_t ProtocolGame::getRegenerationTimeSeconds(int32_t ticks)
@@ -6808,6 +6826,7 @@ void ProtocolGame::spectatorTurn(uint8_t direction)
 	player = _player;
 
 	knownCreatureSet.clear();
+	pendingCreatureEmblems.clear();
 	sendAddCreature(player.get(), player->getPosition(), 0, CONST_ME_NONE);
 	sendCastChannel();
 	syncOpenContainers();
@@ -6930,6 +6949,7 @@ void ProtocolGame::parseSwitchCast(uint8_t direction)
 				player->client->removeSpectator(getThis());
 				player->client->sendCastMessage(spectator_name, spectator_name + " has left the cast.", TALKTYPE_CHANNEL_O);
 					knownCreatureSet.clear();
+					pendingCreatureEmblems.clear();
 				player = g_game.getCreatureSharedRef<Player>(newCaster);
 				player->client->addSpectator(getThis());
 				sendAddCreature(player.get(), player->getPosition(), 0, CONST_ME_NONE);
@@ -6965,6 +6985,7 @@ void ProtocolGame::parseSwitchCast(uint8_t direction)
 	player->client->removeSpectator(getThis());
 	player->client->sendCastMessage(spectator_name, spectator_name + " has left the cast.", TALKTYPE_CHANNEL_O);
 	knownCreatureSet.clear();
+	pendingCreatureEmblems.clear();
 	player = g_game.getCreatureSharedRef<Player>(newCaster);
 	player->client->addSpectator(getThis());
 	sendAddCreature(player.get(), player->getPosition(), 0, CONST_ME_NONE);

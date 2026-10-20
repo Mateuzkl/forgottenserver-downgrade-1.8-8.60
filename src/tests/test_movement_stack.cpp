@@ -5,6 +5,7 @@
 #include "../player.h"
 #include "../protocolgame.h"
 #include "../outputmessage.h"
+#include "../astraclient.h"
 #include "../tile.h"
 #include "test_support.h"
 
@@ -27,6 +28,16 @@ struct ProtocolGameMovementTestAccess {
 	static void emblem(ProtocolGame& protocol, const Creature* actor) { protocol.sendCreatureEmblem(actor); }
 	static void remember(ProtocolGame& protocol, uint32_t id) { protocol.knownCreatureSet.insert(id); }
 	static bool knows(ProtocolGame& protocol, uint32_t id) { return protocol.knownCreatureSet.contains(id); }
+	static bool pendingEmblem(ProtocolGame& protocol, uint32_t id) { return protocol.pendingCreatureEmblems.contains(id); }
+	static void cacheEchoVisual(ProtocolGame& protocol, uint32_t id)
+	{
+		protocol.supportsAstraEchoRaidVisuals = true;
+		protocol.echoRaidVisualCache[id] = EchoRaidVisualState::None;
+	}
+	static bool hasEchoVisual(ProtocolGame& protocol, uint32_t id) { return protocol.echoRaidVisualCache.contains(id); }
+	static std::pair<bool, uint32_t> know(ProtocolGame& protocol, uint32_t id) { return protocol.isKnownCreature(id); }
+	static void pendEmblem(ProtocolGame& protocol, uint32_t id) { protocol.pendingCreatureEmblems.insert(id); }
+	static void refresh(ProtocolGame& protocol) { protocol.refreshWorldView(); }
 	static void move(ProtocolGame& protocol, const std::shared_ptr<Player>& viewer,
 	                 const Position& oldPos, int32_t oldStack, const Position& newPos, int32_t newStack)
 	{
@@ -186,6 +197,7 @@ TEST_CASE(moving_into_an_omitted_destination_refreshes_both_tiles_instead_of_0x6
 	Fixture f(12);
 	ProtocolGame protocol(nullptr);
 	ProtocolGameMovementTestAccess::setup(protocol, f.player);
+	ProtocolGameMovementTestAccess::cacheEchoVisual(protocol, f.npc->getID());
 	const auto pos = f.tile->getPosition();
 	const Position oldPos{uint16_t(pos.x - 1), pos.y, pos.z};
 	ProtocolGameMovementTestAccess::moveActor(protocol, f.npc.get(), oldPos, 1, pos, MAX_STACKPOS_THINGS);
@@ -201,6 +213,30 @@ TEST_CASE(moving_into_an_omitted_destination_refreshes_both_tiles_instead_of_0x6
 	CHECK(std::memcmp(msg.getBuffer() + msg.getBufferPosition(),
 	                  expected.getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, expected.getLength()) == 0);
 	CHECK(msg.getLength() == 8 + 6 + expected.getLength() + 2);
+	CHECK(ProtocolGameMovementTestAccess::hasEchoVisual(protocol, f.npc->getID()));
+}
+
+TEST_CASE(moving_from_an_omitted_stack_sends_followups_even_at_the_same_position)
+{
+	for (bool samePosition : {false, true}) {
+		Fixture f(2);
+		ProtocolGame protocol(nullptr);
+		ProtocolGameMovementTestAccess::setup(protocol, f.player);
+		ProtocolGameMovementTestAccess::cacheEchoVisual(protocol, f.npc->getID());
+		const auto pos = f.tile->getPosition();
+		const Position oldPos{uint16_t(pos.x - (samePosition ? 0 : 1)), pos.y, pos.z};
+		ProtocolGameMovementTestAccess::moveActor(protocol, f.npc.get(), oldPos, MAX_STACKPOS_THINGS, pos, 3);
+		auto& msg = *protocol.getCurrentBuffer();
+		CHECK(msg.setBufferPosition(0));
+		CHECK(msg.getByte() == 0x69); // Tile updates must precede the follow-ups.
+		CHECK(msg.getPosition() == oldPos);
+		CHECK(msg.setBufferPosition(msg.getLength() - 7));
+		CHECK(msg.getByte() == AstraClient::SINGLE_CREATURE_MARK_OPCODE);
+		CHECK(msg.get<uint32_t>() == f.npc->getID());
+		CHECK(msg.getByte() == AstraClient::ECHO_RAID_VISUAL_MARK_TYPE);
+		CHECK(msg.getByte() == 0xFF);
+		CHECK(!ProtocolGameMovementTestAccess::hasEchoVisual(protocol, f.npc->getID()));
+	}
 }
 
 TEST_CASE(overflow_removal_sends_post_removal_tile_contents)
@@ -225,18 +261,65 @@ TEST_CASE(overflow_removal_sends_post_removal_tile_contents)
 	                  expected.getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, expected.getLength()) == 0);
 }
 
-TEST_CASE(overflow_emblem_refreshes_tile_and_invalidates_known_description)
+TEST_CASE(overflow_emblem_preserves_known_cache_and_replaces_description_once)
 {
 	Fixture f(12);
 	ProtocolGame protocol(nullptr);
 	ProtocolGameMovementTestAccess::setup(protocol, f.player);
 	ProtocolGameMovementTestAccess::remember(protocol, f.npc->getID());
 	ProtocolGameMovementTestAccess::emblem(protocol, f.npc.get());
-	CHECK(!ProtocolGameMovementTestAccess::knows(protocol, f.npc->getID()));
+	CHECK(ProtocolGameMovementTestAccess::knows(protocol, f.npc->getID()));
+	CHECK(ProtocolGameMovementTestAccess::pendingEmblem(protocol, f.npc->getID()));
 	auto& msg = *protocol.getCurrentBuffer();
 	CHECK(msg.setBufferPosition(0));
 	CHECK(msg.getByte() == 0x69);
 	CHECK(msg.getPosition() == f.tile->getPosition());
+	auto refreshed = ProtocolGameMovementTestAccess::expected(protocol, f.player, {f.npc.get()});
+	CHECK(refreshed.setBufferPosition(0));
+	CHECK(refreshed.get<uint16_t>() == 0x61);
+	CHECK(refreshed.get<uint32_t>() == f.npc->getID()); // Replace this cached ID, not a different creature.
+	CHECK(refreshed.get<uint32_t>() == f.npc->getID());
+	CHECK(ProtocolGameMovementTestAccess::knows(protocol, f.npc->getID()));
+	CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, f.npc->getID()));
+	auto unchanged = ProtocolGameMovementTestAccess::expected(protocol, f.player, {f.npc.get()});
+	CHECK(unchanged.setBufferPosition(0));
+	CHECK(unchanged.get<uint16_t>() == 0x62);
+	CHECK(unchanged.get<uint32_t>() == f.npc->getID());
+}
+
+TEST_CASE(overflow_emblem_for_unknown_creatures_keeps_normal_cache_insertion)
+{
+	Fixture f(12);
+	ProtocolGame protocol(nullptr);
+	ProtocolGameMovementTestAccess::setup(protocol, f.player);
+	ProtocolGameMovementTestAccess::emblem(protocol, f.npc.get());
+	CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, f.npc->getID()));
+	auto description = ProtocolGameMovementTestAccess::expected(protocol, f.player, {f.npc.get()});
+	CHECK(description.setBufferPosition(0));
+	CHECK(description.get<uint16_t>() == 0x61);
+	CHECK(description.get<uint32_t>() == 0);
+	CHECK(description.get<uint32_t>() == f.npc->getID());
+}
+
+TEST_CASE(pending_emblems_are_pruned_on_cache_eviction_and_world_refresh)
+{
+	Fixture f(2);
+	ProtocolGame protocol(nullptr);
+	ProtocolGameMovementTestAccess::setup(protocol, f.player);
+	for (uint32_t id = 1; id <= 250; ++id) {
+		ProtocolGameMovementTestAccess::remember(protocol, id);
+		ProtocolGameMovementTestAccess::pendEmblem(protocol, id);
+	}
+	const auto [known, removed] = ProtocolGameMovementTestAccess::know(protocol, 251);
+	CHECK(!known);
+	CHECK(removed != 0);
+	CHECK(!ProtocolGameMovementTestAccess::knows(protocol, removed));
+	CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, removed));
+	ProtocolGameMovementTestAccess::refresh(protocol);
+	for (uint32_t id = 1; id <= 251; ++id) {
+		CHECK(!ProtocolGameMovementTestAccess::knows(protocol, id));
+		CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, id));
+	}
 }
 
 TEST_CASE(ordinary_emblems_keep_legacy_remove_add_stack)

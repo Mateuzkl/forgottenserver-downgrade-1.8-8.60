@@ -431,6 +431,7 @@ private:
 	bool isSpyActive() const { return spyActive_; }
 
 	std::unordered_set<uint32_t> knownCreatureSet;
+	std::unordered_set<uint32_t> pendingCreatureEmblems;
 	std::shared_ptr<Player> player;
 	tfs::net::PacketBacklog packetBacklog;
 
