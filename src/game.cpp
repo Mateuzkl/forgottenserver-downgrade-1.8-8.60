@@ -7020,13 +7020,14 @@ void Game::combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColo
 	}
 }
 
-static uint16_t getPreyDamageBoostPercent(const std::shared_ptr<Player>& player, const std::shared_ptr<Creature>& target)
+static uint16_t getPreyDamageBoostPercent(Player* player, const std::shared_ptr<Creature>& target)
 {
 	if (!player || !target) {
 		return 0;
 	}
 
-	auto targetMonster = std::dynamic_pointer_cast<Monster>(target);
+	// The shared target keeps this borrowed monster pointer alive.
+	Monster* const targetMonster = target->getMonster();
 	if (!targetMonster || targetMonster->getMaster()) {
 		return 0;
 	}
@@ -7034,13 +7035,14 @@ static uint16_t getPreyDamageBoostPercent(const std::shared_ptr<Player>& player,
 	return player->getPreyDamageBoost(targetMonster->getName());
 }
 
-static uint16_t getPreyDamageReductionPercent(const std::shared_ptr<Player>& player, const std::shared_ptr<Creature>& attacker)
+static uint16_t getPreyDamageReductionPercent(Player* player, const std::shared_ptr<Creature>& attacker)
 {
 	if (!player || !attacker) {
 		return 0;
 	}
 
-	auto attackerMonster = std::dynamic_pointer_cast<Monster>(attacker);
+	// The shared attacker keeps this borrowed monster pointer alive.
+	Monster* const attackerMonster = attacker->getMonster();
 	if (!attackerMonster || attackerMonster->getMaster()) {
 		return 0;
 	}
@@ -7055,7 +7057,7 @@ static void applyPreyCombatBonuses(CombatDamage& damage, const std::shared_ptr<C
 	}
 	damage.preyApplied = true;
 
-	auto attackerPlayer = std::dynamic_pointer_cast<Player>(attacker);
+	Player* const attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
 	if (attackerPlayer) {
 		const uint16_t boost = getPreyDamageBoostPercent(attackerPlayer, target);
 		damage.primary.value = EquipmentCombatBonus::increaseDamageByPercent(damage.primary.value, boost);
@@ -7063,7 +7065,7 @@ static void applyPreyCombatBonuses(CombatDamage& damage, const std::shared_ptr<C
 		return;
 	}
 
-	auto targetPlayer = std::dynamic_pointer_cast<Player>(target);
+	Player* const targetPlayer = target ? target->getPlayer() : nullptr;
 	if (targetPlayer) {
 		const uint16_t reduction = getPreyDamageReductionPercent(targetPlayer, attacker);
 		damage.primary.value = EquipmentCombatBonus::reduceDamageByPercent(damage.primary.value, reduction);
@@ -7412,8 +7414,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 				addAnimatedText(spectators, fmt::format("{:+d}", -manaDamage), targetPos,
 				                static_cast<TextColor_t>(getInteger(ConfigManager::MANA_LOSS_COLOUR)));
 
-				const uint16_t preyBoost = getPreyDamageBoostPercent(std::dynamic_pointer_cast<Player>(attackerRef), targetRef);
-				const uint16_t preyReduction = getPreyDamageReductionPercent(std::dynamic_pointer_cast<Player>(targetRef), attackerRef);
+				const uint16_t preyBoost = getPreyDamageBoostPercent(attackerPlayer, targetRef);
+				const uint16_t preyReduction = getPreyDamageReductionPercent(targetPlayer, attackerRef);
 
 				for (const auto& spectator : spectators) {
 					Player* tmpPlayer = static_cast<Player*>(spectator.get());
@@ -7558,8 +7560,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			auto damageString = getHitpointStatusString(realDamage);
 
 			std::string spectatorMessage;
-			const uint16_t preyBoost = getPreyDamageBoostPercent(std::dynamic_pointer_cast<Player>(attackerRef), targetRef);
-			const uint16_t preyReduction = getPreyDamageReductionPercent(std::dynamic_pointer_cast<Player>(targetRef), attackerRef);
+			const uint16_t preyBoost = getPreyDamageBoostPercent(attackerPlayer, targetRef);
+			const uint16_t preyReduction = getPreyDamageReductionPercent(targetPlayer, attackerRef);
 
 			for (const auto& spectator : spectators) {
 				Player* tmpPlayer = static_cast<Player*>(spectator.get());
