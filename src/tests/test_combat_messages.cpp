@@ -124,10 +124,35 @@ void checkObservers(int kind)
 	}
 }
 
+void checkObserversOnDispatcher(int kind)
+{
+	struct DispatcherScope
+	{
+		DispatcherScope() { g_dispatcher.start(); }
+		~DispatcherScope() { g_dispatcher.shutdown(); }
+	} dispatcherScope;
+	bool ran = false;
+	std::exception_ptr failure;
+	CHECK(g_dispatcher.addTask([&] {
+		try {
+			checkObservers(kind);
+		} catch (...) {
+			failure = std::current_exception();
+		}
+		ran = true;
+		g_dispatcher.shutdown();
+	}));
+	// Drive the real reactor loop synchronously: it establishes dispatcher
+	// affinity, without disabling the production getOutputBuffer assertion.
+	g_reactor.runLoop();
+	CHECK(ran);
+	if (failure) std::rethrow_exception(failure);
+}
+
 } // namespace
 
-TEST_CASE(healing_observers_do_not_receive_another_players_message) { checkObservers(0); }
-TEST_CASE(mana_shield_observers_do_not_receive_another_players_message) { checkObservers(1); }
-TEST_CASE(mana_drain_observers_do_not_receive_another_players_message) { checkObservers(2); }
+TEST_CASE(healing_observers_do_not_receive_another_players_message) { checkObserversOnDispatcher(0); }
+TEST_CASE(mana_shield_observers_do_not_receive_another_players_message) { checkObserversOnDispatcher(1); }
+TEST_CASE(mana_drain_observers_do_not_receive_another_players_message) { checkObserversOnDispatcher(2); }
 
 TFS_TEST_MAIN()

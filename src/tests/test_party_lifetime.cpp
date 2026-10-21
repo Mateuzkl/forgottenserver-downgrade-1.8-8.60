@@ -1,5 +1,6 @@
 #include "../otpch.h"
 
+#include "../chat.h"
 #include "../events.h"
 #include "../game.h"
 #include "../party.h"
@@ -28,7 +29,9 @@ namespace {
 struct Fixture
 {
 	Events* previous = g_events;
+	Chat* previousChat = g_chat;
 	std::unique_ptr<Events> events;
+	std::unique_ptr<Chat> chat;
 	std::vector<std::shared_ptr<Player>> players;
 	void track(const std::shared_ptr<Player>& player)
 	{
@@ -40,6 +43,8 @@ struct Fixture
 		CHECK(g_luaEnvironment.initState());
 		events = std::make_unique<Events>();
 		g_events = events.get();
+		chat = std::make_unique<Chat>();
+		g_chat = chat.get();
 	}
 	~Fixture()
 	{
@@ -48,7 +53,9 @@ struct Fixture
 			PartyLifetimeTestAccess::remove(*player);
 		}
 		g_events = previous;
+		g_chat = previousChat;
 		events.reset();
+		chat.reset();
 		g_luaEnvironment.closeState();
 	}
 };
