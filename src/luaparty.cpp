@@ -95,7 +95,7 @@ int luaPartyGetMembers(lua_State* L)
 	int index = 0;
 	lua_createtable(L, party->getMemberCount(), 0);
 	for (auto& weakMember : party->getMembers()) {
-		if (Player* player = weakMember.lock().get()) {
+		if (const auto playerRef = weakMember.lock(); Player* player = playerRef.get()) {
 			pushUserdata<Player>(L, player);
 			setMetatable(L, -1, "Player");
 			lua_rawseti(L, -2, ++index);
@@ -125,7 +125,7 @@ int luaPartyGetInvitees(lua_State* L)
 
 		int index = 0;
 		for (auto& weakInvitee : party->getInvitees()) {
-			if (Player* player = weakInvitee.lock().get()) {
+			if (const auto playerRef = weakInvitee.lock(); Player* player = playerRef.get()) {
 				pushUserdata<Player>(L, player);
 				setMetatable(L, -1, "Player");
 				lua_rawseti(L, -2, ++index);

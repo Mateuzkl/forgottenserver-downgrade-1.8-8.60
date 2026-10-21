@@ -29,6 +29,7 @@ struct BestiaryCreatureInfo;
 struct ProtocolGameCustomPingTestAccess;
 struct ProtocolGameAstraRegenerationTestAccess;
 struct ProtocolGameSpellCooldownTestAccess;
+struct ProtocolGameAuditTestAccess;
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 class ProtocolSpectator;
 
@@ -400,6 +401,7 @@ private:
 	friend struct ProtocolGameCustomPingTestAccess;
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
+	friend struct ProtocolGameAuditTestAccess;
 
 	//cast
 	void spectatorTurn(uint8_t direction);
