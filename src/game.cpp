@@ -7291,6 +7291,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 						spectatorMessage[0] = static_cast<char>(std::toupper(spectatorMessage[0]));
 					}
 					message.type = MESSAGE_STATUS_DEFAULT;
+					message.text = spectatorMessage;
 				}
 				tmpPlayer->sendTextMessage(message);
 			}
@@ -7447,6 +7448,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 							}
 							spectatorMessage[0] = static_cast<char>(std::toupper(spectatorMessage[0]));
 						}
+						message.text = spectatorMessage;
 					}
 					tmpPlayer->sendTextMessage(message);
 				}
@@ -7842,6 +7844,7 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 					}
 					spectatorMessage[0] = static_cast<char>(std::toupper(spectatorMessage[0]));
 				}
+				message.text = spectatorMessage;
 			}
 			tmpPlayer->sendTextMessage(message);
 		}
