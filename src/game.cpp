@@ -7073,11 +7073,18 @@ static void applyPreyCombatBonuses(CombatDamage& damage, const std::shared_ptr<C
 
 void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer, Player* targetPlayer)
 {
+	const bool isHeal = (damage.primary.type == COMBAT_HEALING);
+	// Healing returns without recursive reentry and area leech reuses its
+	// CombatDamage for separate heals. Only the damage stage needs this guard.
+	if (!isHeal) {
+		if (damage.resetDamageBonusesApplied) {
+			return;
+		}
+		damage.resetDamageBonusesApplied = true;
+	}
 	if (!ConfigManager::getBoolean(ConfigManager::RESET_SYSTEM_ENABLED)) {
 		return;
 	}
-
-	const bool isHeal = (damage.primary.type == COMBAT_HEALING);
 
 	// Damage bonus: Attacker is player, target is NOT a player (PvE only)
 	if (!isHeal && attackerPlayer && !targetPlayer) {
@@ -7317,9 +7324,10 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			return false;
 		}
 
-		if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED)) {
+		if (!damage.monsterLevelBonusApplied) {
+			damage.monsterLevelBonusApplied = true;
 			Monster* monster = attacker ? attacker->getMonster() : nullptr;
-			if (monster && monster->getLevel() > 0) {
+			if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED) && monster && monster->getLevel() > 0) {
 				float bonusDmg = monster_level::getBonusDamage() * monster->getLevel();
 				if (bonusDmg != 0.0f) {
 					damage.primary.value += static_cast<int32_t>(std::round(damage.primary.value * bonusDmg));
@@ -7346,9 +7354,12 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		// Reset system: apply damage/defense bonuses (PvE only)
 		applyResetSystemBonuses(damage, attackerPlayer, targetPlayer);
 
-		if (targetPlayer && targetPlayer->isAvatarActive()) {
-			damage.primary.value -= static_cast<int32_t>(std::ceil(damage.primary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
-			damage.secondary.value -= static_cast<int32_t>(std::ceil(damage.secondary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+		if (!damage.avatarReductionApplied) {
+			damage.avatarReductionApplied = true;
+			if (targetPlayer && targetPlayer->isAvatarActive()) {
+				damage.primary.value -= static_cast<int32_t>(std::ceil(damage.primary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+				damage.secondary.value -= static_cast<int32_t>(std::ceil(damage.secondary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+			}
 		}
 
 		applyPreyCombatBonuses(damage, attackerRef, targetRef);
@@ -7676,9 +7687,10 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 		}
 	}
 
-	if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED)) {
+	if (!damage.monsterLevelBonusApplied) {
+		damage.monsterLevelBonusApplied = true;
 		Monster* monster = attacker ? attacker->getMonster() : nullptr;
-		if (monster && monster->getLevel() > 0) {
+		if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED) && monster && monster->getLevel() > 0) {
 			float bonusDmg = monster_level::getBonusDamage() * monster->getLevel();
 			if (bonusDmg != 0.0f) {
 				if (damage.primary.value < 0) {
