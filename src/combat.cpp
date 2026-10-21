@@ -36,7 +36,12 @@ std::shared_ptr<Creature> lockCreature(Creature* creature)
 
 std::shared_ptr<Monster> lockMonster(Creature* creature)
 {
-	return std::dynamic_pointer_cast<Monster>(lockCreature(creature));
+	auto owner = lockCreature(creature);
+	if (!owner || !owner->getMonster()) {
+		return nullptr;
+	}
+	// Preserve the lifetime anchor while avoiding an additional RTTI cast.
+	return std::static_pointer_cast<Monster>(std::move(owner));
 }
 
 uint16_t getMonsterRaceId(const Monster* monster)
@@ -1684,12 +1689,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			}
 		}
 
-		uint16_t targetRaceId = 0;
-		if (casterPlayer) {
-			if (const auto targetMonster = std::dynamic_pointer_cast<Monster>(creature)) {
-				targetRaceId = getMonsterRaceId(targetMonster.get());
-			}
-		}
+		// The owning toDamageCreatures snapshot anchors the borrowed subtype pointer.
+		Monster* const targetMonster = creature->getMonster();
+		const uint16_t targetRaceId = casterPlayer ? getMonsterRaceId(targetMonster) : 0;
 
 		int32_t targetCriticalPrimary = criticalPrimary;
 		int32_t targetCriticalSecondary = criticalSecondary;
@@ -1747,9 +1749,11 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			}
 
 			if (casterPlayer && wpEnabled) {
-				if (auto targetMonster = std::dynamic_pointer_cast<Monster>(creature)) {
-					casterPlayer->weaponProficiency().applyBestiaryDamage(damageCopy, targetMonster);
-					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damageCopy, targetMonster);
+				if (targetMonster) {
+					// These APIs require ownership; reuse the already-anchored target owner.
+					auto targetMonsterOwner = std::static_pointer_cast<Monster>(creature);
+					casterPlayer->weaponProficiency().applyBestiaryDamage(damageCopy, targetMonsterOwner);
+					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damageCopy, targetMonsterOwner);
 				}
 				casterPlayer->weaponProficiency().applyTargetHealthDamage(damageCopy, creature.get());
 			}
