@@ -75,6 +75,21 @@ IOLoginData::AuthenticationResult failedQueryAuthenticationResult(const Database
 	                              : IOLoginData::AuthenticationResult::DatabaseError;
 }
 
+std::string accountIdentifierMatches(const Database& db, std::string_view identifier)
+{
+	const std::string escaped = db.escapeString(identifier);
+	return fmt::format(
+	    "(LOWER(`name`) = LOWER({:s}) OR (`email` != '' AND LOWER(`email`) = LOWER({:s})))", escaped, escaped);
+}
+
+std::string accountIdentifierMatches(const Database& db, std::string_view identifier, std::string_view tableAlias)
+{
+	const std::string escaped = db.escapeString(identifier);
+	return fmt::format(
+	    "(LOWER(`{:s}`.`name`) = LOWER({:s}) OR (`{:s}`.`email` != '' AND LOWER(`{:s}`.`email`) = LOWER({:s})))",
+	    tableAlias, escaped, tableAlias, tableAlias, escaped);
+}
+
 } // namespace
 
 IOLoginData::AuthenticationResult IOLoginData::loginserverAuthentication(std::string_view name,
@@ -84,8 +99,8 @@ IOLoginData::AuthenticationResult IOLoginData::loginserverAuthentication(std::st
     Database& db = Database::getInstance();
 
     DBResult_ptr result = db.storeQuery(fmt::format(
-        "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret`, `type`, `premium_ends_at`, `tibia_coins` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})",
-        db.escapeString(name)));
+        "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret`, `type`, `premium_ends_at`, `tibia_coins` FROM `accounts` WHERE {}",
+        accountIdentifierMatches(db, name)));
     if (!result) {
 		return failedQueryAuthenticationResult(db);
     }
@@ -128,8 +143,8 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
     Database& db = Database::getInstance();
     
     std::string query = fmt::format(
-        "SELECT `a`.`id` AS `account_id`, UNHEX(`a`.`password`) AS `password`, `a`.`secret`, `p`.`id` AS `character_id` FROM `accounts` `a` JOIN `players` `p` ON `a`.`id` = `p`.`account_id` WHERE LOWER(`a`.`name`) = LOWER({:s}) AND LOWER(`p`.`name`) = LOWER({:s}) AND `p`.`deletion` = 0",
-        db.escapeString(accountName), db.escapeString(characterName));
+        "SELECT `a`.`id` AS `account_id`, UNHEX(`a`.`password`) AS `password`, `a`.`secret`, `p`.`id` AS `character_id` FROM `accounts` `a` JOIN `players` `p` ON `a`.`id` = `p`.`account_id` WHERE {} AND LOWER(`p`.`name`) = LOWER({:s}) AND `p`.`deletion` = 0",
+        accountIdentifierMatches(db, accountName, "a"), db.escapeString(characterName));
 
     DBResult_ptr result = db.storeQuery(query);
     if (!result) {
@@ -139,8 +154,8 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
 
         // Fallback path: validate account and use the first available character of the account
         DBResult_ptr accountCheck = db.storeQuery(fmt::format(
-            "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})",
-            db.escapeString(accountName)));
+            "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret` FROM `accounts` WHERE {}",
+            accountIdentifierMatches(db, accountName)));
         if (!accountCheck) {
 			return {failedQueryAuthenticationResult(db)};
         }
