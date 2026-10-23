@@ -96,6 +96,8 @@ public:
 	static void updateTibiaCoins(uint32_t accountId, uint64_t tibiaCoins);
 
 	static bool createAccount(const std::string& name, const std::string& password, uint32_t& accountId);
+	static bool setAccountEmail(uint32_t accountId, const std::string& email);
+	static bool accountEmailExists(std::string_view email);
 	static bool setPassword(uint32_t accountId, const std::string& newPassword);
 	static bool setRecoveryKey(uint32_t accountId, const std::string& recoveryKey);
 	static bool createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex);
@@ -103,6 +105,8 @@ public:
 	static std::vector<std::string> getPlayersByAccountId(uint32_t accountId);
 	static bool playerNameExists(const std::string& name);
 	static bool accountNameExists(const std::string& name);
+	// Resolves a login identifier (account name or email) to the stored account name.
+	static std::optional<std::string> resolveAccountNameByIdentifier(std::string_view identifier);
 
 	static GuildWarVector getWarList(uint32_t guildId);
 	static std::vector<std::pair<std::string, std::string>> getCastList(const std::string& password);

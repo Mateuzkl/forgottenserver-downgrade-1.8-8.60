@@ -1976,6 +1976,21 @@ void IOLoginData::updateTibiaCoins(uint32_t accountId, uint64_t tibiaCoins)
 	    fmt::format("UPDATE `accounts` SET `tibia_coins` = {:d} WHERE `id` = {:d}", tibiaCoins, accountId));
 }
 
+bool IOLoginData::setAccountEmail(uint32_t accountId, const std::string& email)
+{
+	Database& db = Database::getInstance();
+	return db.executeQuery(
+	    fmt::format("UPDATE `accounts` SET `email` = {:s} WHERE `id` = {:d}", db.escapeString(email), accountId));
+}
+
+bool IOLoginData::accountEmailExists(std::string_view email)
+{
+	Database& db = Database::getInstance();
+	DBResult_ptr result = db.storeQuery(fmt::format(
+	    "SELECT `id` FROM `accounts` WHERE `email` != '' AND LOWER(`email`) = LOWER({:s})", db.escapeString(email)));
+	return result != nullptr;
+}
+
 bool IOLoginData::createAccount(const std::string& name, const std::string& password, uint32_t& accountId)
 {
 	Database& db = Database::getInstance();
@@ -2087,6 +2102,23 @@ bool IOLoginData::accountNameExists(const std::string& name)
 	Database& db = Database::getInstance();
 	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})", db.escapeString(name)));
 	return result != nullptr;
+}
+
+std::optional<std::string> IOLoginData::resolveAccountNameByIdentifier(std::string_view identifier)
+{
+	Database& db = Database::getInstance();
+	const auto lookup = lookupUniqueAccountId(db, identifier);
+	if (lookup.outcome != UniqueAccountIdentifierLookup::Outcome::Unique) {
+		return std::nullopt;
+	}
+
+	DBResult_ptr result =
+	    db.storeQuery(fmt::format("SELECT `name` FROM `accounts` WHERE `id` = {:d}", lookup.accountId));
+	if (!result) {
+		return std::nullopt;
+	}
+
+	return std::string{result->getString("name")};
 }
 
 std::vector<std::pair<std::string, std::string>> IOLoginData::getCastList(const std::string& password)
