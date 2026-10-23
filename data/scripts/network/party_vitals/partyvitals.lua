@@ -2,6 +2,7 @@
 -- Sends vitals to all OTC party members even when they are far from each other.
 
 local OPCODE_PARTY_VITALS = 0x34
+local PARTY_VITALS_PROTOCOL_VERSION = 2
 
 PartyVitals = PartyVitals or {}
 
@@ -67,15 +68,28 @@ function PartyVitals.sendToPlayer(recipient, roster)
 		return
 	end
 
+	local party = recipient:getParty()
+	local leader = party and party:getLeader()
+	local leaderId = leader and leader:getId()
+
 	local out = NetworkMessage(recipient)
 	out:addByte(OPCODE_PARTY_VITALS)
 	out:addByte(math.min(#entries, 255))
+	out:addByte(PARTY_VITALS_PROTOCOL_VERSION)
 	for i = 1, math.min(#entries, 255) do
 		local e = entries[i]
+		local member = roster[e.id]
+		local pos = member and member:getPosition() or Position(0, 0, 0)
 		out:addU32(e.id)
 		out:addByte(e.hp)
 		out:addByte(e.mana)
 		out:addU16(e.level or 0)
+		out:addU16(pos.x)
+		out:addU16(pos.y)
+		out:addByte(pos.z)
+		out:addByte(leaderId and e.id == leaderId and 1 or 0)
+		out:addByte(member and member:getVocation() or 0)
+		out:addString(member and member:getName() or "")
 	end
 	out:sendToPlayer(recipient)
 end
