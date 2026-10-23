@@ -1281,7 +1281,9 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	// cast password instead, so it only meets the per-IP spray guard - watching a
 	// stream keeps working while one account on the same address is locked out.
 	const uint32_t clientIP = getIP();
-	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, accountName)) {
+	const std::string accountLimiterKey =
+	    accountName.empty() ? std::string{} : IOLoginData::accountLimiterKey(accountName);
+	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, accountLimiterKey)) {
 		disconnectClient("Too many failed login attempts. Please try again later.");
 		return;
 	}
@@ -1297,11 +1299,11 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	const uint32_t characterId = authentication.characterId;
 
 	if (authentication.status == IOLoginData::AuthenticationResult::Rejected) {
-		LoginAttemptLimiter::getInstance().commitFailure(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().commitFailure(clientIP, accountLimiterKey);
 	} else if (authentication.status == IOLoginData::AuthenticationResult::Success) {
-		LoginAttemptLimiter::getInstance().commitSuccess(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().commitSuccess(clientIP, accountLimiterKey);
 	} else {
-		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountLimiterKey);
 		disconnectClient("The login service is temporarily unavailable. Please try again later.");
 		return;
 	}

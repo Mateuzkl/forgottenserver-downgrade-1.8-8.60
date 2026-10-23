@@ -34,6 +34,10 @@ public:
 
 	static Account loadAccount(uint32_t accno);
 
+	// Canonical per-account brute-force key: resolved account name when the
+	// identifier matches name or email, otherwise the trimmed lower-cased input.
+	static std::string accountLimiterKey(std::string_view identifier);
+
 	static AuthenticationResult loginserverAuthentication(std::string_view name, std::string_view password,
 	                                                        Account& account);
 	static GameworldAuthenticationResult gameworldAuthentication(std::string_view accountName,

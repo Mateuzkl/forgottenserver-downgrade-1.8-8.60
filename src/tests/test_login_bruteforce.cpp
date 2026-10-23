@@ -18,6 +18,7 @@ constexpr uint32_t IP_CAST = 0x0A000005;
 constexpr uint32_t IP_CASE = 0x0A000006;
 constexpr uint32_t IP_CAST_GUESS = 0x0A000007;
 constexpr uint32_t IP_PENDING = 0x0A000008;
+constexpr uint32_t IP_ALIAS = 0x0A000009;
 
 } // namespace
 
@@ -108,6 +109,21 @@ TEST_CASE(bruteforce_account_names_are_normalized)
 
 	CHECK(!limiter().allowLogin(IP_CASE, "mixed"));
 	CHECK(!limiter().allowLogin(IP_CASE, "  MIXED  "));
+}
+
+// Without resolving to one key, alternating identifiers double the attempt budget.
+// Production calls IOLoginData::accountLimiterKey() first so both paths share one bucket.
+TEST_CASE(bruteforce_unresolved_email_alias_would_double_attempt_budget)
+{
+	const std::string canonical = "player1";
+	const std::string emailAlias = "player1@example.com";
+
+	for (int i = 0; i < 5; ++i) {
+		limiter().recordFailure(IP_ALIAS, canonical);
+	}
+
+	CHECK(!limiter().allowLogin(IP_ALIAS, canonical));
+	CHECK(limiter().allowLogin(IP_ALIAS, emailAlias));
 }
 
 // A rejected cast password is recorded with an empty account name, so it feeds
