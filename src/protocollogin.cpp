@@ -159,6 +159,21 @@ std::string normalizeAccountName(std::string_view accountName)
 
 } // namespace
 
+bool reserveBruteForceLogin(uint32_t clientIP, std::string_view accountName, std::string& accountLimiterKey)
+{
+	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, "")) {
+		return false;
+	}
+
+	accountLimiterKey = accountName.empty() ? std::string{} : IOLoginData::accountLimiterKey(accountName);
+	if (!accountLimiterKey.empty() && !LoginAttemptLimiter::getInstance().reserveAccount(clientIP, accountLimiterKey)) {
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, "");
+		return false;
+	}
+
+	return true;
+}
+
 uint32_t LoginAttemptLimiter::accountFailureThreshold()
 {
 	const int64_t configured = ConfigManager::getInteger(ConfigManager::BRUTEFORCE_ACCOUNT_FAILURES);
@@ -276,6 +291,26 @@ bool LoginAttemptLimiter::reserveLogin(uint32_t ip, std::string_view accountName
 	if (accountInfo) {
 		++accountInfo->pending;
 	}
+	return true;
+}
+
+bool LoginAttemptLimiter::reserveAccount(uint32_t ip, std::string_view accountName)
+{
+	std::scoped_lock lock(mu);
+	const int64_t now = OTSYS_TIME();
+	cleanup(now);
+
+	const std::string account = normalizeAccountName(accountName);
+	if (account.empty()) {
+		return true;
+	}
+
+	AttemptInfo& accountInfo = accountAttempts[AccountKey{ip, account}];
+	if (!hasCapacity(accountInfo, now, accountFailureThreshold())) {
+		return false;
+	}
+
+	++accountInfo.pending;
 	return true;
 }
 
@@ -793,9 +828,8 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// watching a stream still works while one account on the same address is
 	// locked out.
 	uint32_t clientIP = connection ? connection->getIP() : 0;
-	const std::string accountLimiterKey =
-	    accountName.empty() ? std::string{} : IOLoginData::accountLimiterKey(accountName);
-	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, accountLimiterKey)) {
+	std::string accountLimiterKey;
+	if (!reserveBruteForceLogin(clientIP, accountName, accountLimiterKey)) {
 		disconnectClient("Too many failed login attempts. Please try again later.");
 		return;
 	}

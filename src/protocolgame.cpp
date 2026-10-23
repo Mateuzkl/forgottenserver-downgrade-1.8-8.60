@@ -1281,9 +1281,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	// cast password instead, so it only meets the per-IP spray guard - watching a
 	// stream keeps working while one account on the same address is locked out.
 	const uint32_t clientIP = getIP();
-	const std::string accountLimiterKey =
-	    accountName.empty() ? std::string{} : IOLoginData::accountLimiterKey(accountName);
-	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, accountLimiterKey)) {
+	std::string accountLimiterKey;
+	if (!reserveBruteForceLogin(clientIP, accountName, accountLimiterKey)) {
 		disconnectClient("Too many failed login attempts. Please try again later.");
 		return;
 	}

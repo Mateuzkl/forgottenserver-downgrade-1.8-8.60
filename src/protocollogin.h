@@ -30,6 +30,8 @@ public:
 	// as a cast list request - and only the per-IP guard applies.
 	[[nodiscard]] bool allowLogin(uint32_t ip, std::string_view accountName);
 	[[nodiscard]] bool reserveLogin(uint32_t ip, std::string_view accountName);
+	// Reserves only the per-account bucket; call after reserveLogin(ip, "") succeeds.
+	[[nodiscard]] bool reserveAccount(uint32_t ip, std::string_view accountName);
 	void commitFailure(uint32_t ip, std::string_view accountName);
 	void commitSuccess(uint32_t ip, std::string_view accountName);
 	void releaseReservation(uint32_t ip, std::string_view accountName);
@@ -93,6 +95,9 @@ private:
 	static constexpr uint32_t DEFAULT_IP_FAILURES = 20;
 	static constexpr int64_t DEFAULT_BLOCK_SECONDS = 300;
 };
+
+// Checks the per-IP limit before resolving the account identifier, then reserves the canonical account bucket.
+bool reserveBruteForceLogin(uint32_t clientIP, std::string_view accountName, std::string& accountLimiterKey);
 
 class ProtocolLogin : public Protocol
 {
