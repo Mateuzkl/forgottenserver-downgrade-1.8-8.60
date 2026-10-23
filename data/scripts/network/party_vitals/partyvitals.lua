@@ -54,7 +54,12 @@ function PartyVitals.sendToPlayer(recipient, roster)
 	for id, member in pairs(roster) do
 		if member and member:isPlayer() then
 			local hp, mana = memberVitals(member)
-			table.insert(entries, { id = id, hp = hp, mana = mana })
+			table.insert(entries, {
+				id = id,
+				hp = hp,
+				mana = mana,
+				level = member:getLevel(),
+			})
 		end
 	end
 
@@ -70,6 +75,7 @@ function PartyVitals.sendToPlayer(recipient, roster)
 		out:addU32(e.id)
 		out:addByte(e.hp)
 		out:addByte(e.mana)
+		out:addU16(e.level or 0)
 	end
 	out:sendToPlayer(recipient)
 end
