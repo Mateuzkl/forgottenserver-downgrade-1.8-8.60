@@ -38,6 +38,7 @@ constexpr OfferTypeEntry offerTypeTable[] = {
     {"blessing", StoreOfferType::Blessing},
     {"bless", StoreOfferType::Blessing},
     {"prey_wildcard", StoreOfferType::PreyWildcard},
+    {"lunar_ascension_orb", StoreOfferType::LunarAscensionOrb},
     {"changename", StoreOfferType::ChangeName},
     {"sexchange", StoreOfferType::SexChange},
     {"hireling", StoreOfferType::Hireling},
@@ -544,6 +545,12 @@ std::shared_ptr<const StoreCatalog> StoreCatalog::loadFromXML(std::string_view p
 					LOG_ERROR(fmt::format(
 					    "[StoreCatalog::loadFromXML] Offer id={} has invalid Prey Wildcard amount {}.",
 					    offer.id, offer.value));
+					hasFatalError = true;
+					continue;
+				}
+			} else if (offer.type == StoreOfferType::LunarAscensionOrb) {
+				if (offer.value != 1) {
+					LOG_ERROR(fmt::format("[StoreCatalog::loadFromXML] Offer id={} must grant exactly one Lunar Ascension Orb.", offer.id));
 					hasFatalError = true;
 					continue;
 				}

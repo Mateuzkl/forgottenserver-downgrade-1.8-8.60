@@ -180,7 +180,7 @@ function influencedSpawn.onThink(interval)
 
     return true
 end
-influencedSpawn:interval(CONFIG.spawnInterval * 4000)
+influencedSpawn:interval(CONFIG.spawnInterval * 1000)
 influencedSpawn:register()
 
 local influencedDamage = CreatureEvent("InfluencedDamage")
@@ -222,6 +222,14 @@ end
 influencedDamage:register()
 
 local influencedDeath = CreatureEvent("InfluencedDeath")
+local function getResponsiblePlayer(attacker)
+    if not attacker then return nil end
+    if attacker:isPlayer() then return attacker:getPlayer() end
+    local master = attacker:getMaster()
+    if master and master:isPlayer() then return master:getPlayer() end
+    return nil
+end
+
 function influencedDeath.onDeath(creature, corpse, killer, mostDamageKiller, lastHitUnjustified, mostDamageUnjustified)
     if not configManager.getBoolean(configKeys.FORGE_SYSTEM_ENABLED) then
         return true
@@ -236,12 +244,7 @@ function influencedDeath.onDeath(creature, corpse, killer, mostDamageKiller, las
         return true
     end
 
-    local player = nil
-    if mostDamageKiller and mostDamageKiller:isPlayer() then
-        player = mostDamageKiller:getPlayer()
-    elseif killer and killer:isPlayer() then
-        player = killer:getPlayer()
-    end
+    local player = getResponsiblePlayer(mostDamageKiller) or getResponsiblePlayer(killer)
 
     if not player then
         return true
@@ -249,8 +252,12 @@ function influencedDeath.onDeath(creature, corpse, killer, mostDamageKiller, las
 
     if monster:isFiendish() then
         local dustAmount = math.random(CONFIG.fiendish.dustMin, CONFIG.fiendish.dustMax)
-        player:addForgeDust(dustAmount)
-        player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("You killed a Fiendish monster and received %d Dust!", dustAmount))
+        local credited = player:addForgeDust(dustAmount)
+        if type(credited) == "number" and credited > 0 then
+            player:sendTextMessage(MESSAGE_INFO_DESCR, string.format("You killed a Fiendish monster and received %d Dust!", credited))
+        elseif credited ~= 0 then
+            print(string.format("[ForgeDust] Could not credit Fiendish reward to player %d.", player:getGuid()))
+        end
 
         local baseExp = monster:getType():experience()
         if baseExp > 0 then
@@ -281,7 +288,9 @@ function influencedDeath.onDeath(creature, corpse, killer, mostDamageKiller, las
     if math.random(1, 10000) <= (chance * 100) then
         local sliverAmount = math.random(starData.sliverMin, starData.sliverMax)
         if corpse and corpse:isContainer() then
-            corpse:addItem(CONFIG.sliverItemId, sliverAmount)
+            if not corpse:addItem(CONFIG.sliverItemId, sliverAmount) then
+                print(string.format("[ForgeDust] Could not add %d Sliver to corpse of %s.", sliverAmount, monster:getName()))
+            end
         end
     end
     return true

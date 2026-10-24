@@ -26,6 +26,10 @@
 
     <category name="Consumables" icon="store_consumables" description="Consumables and character protection services."/>
 
+    <category name="Weapon Proficiency" parent="Consumables" icon="store_consumables" description="Special resources for your weapon perks.">
+        <offer id="9301" name="Lunar Ascension Orb" icon="icon_lunar_ascension_orb_currency" price="100" eid="0" itemid="0" type="lunar_ascension_orb" value="1" count="1" state="new" dailyEligible="false" description="Adds one Lunar Ascension Orb to this character. Use Maximise on an already modified Weapon Proficiency perk to raise it directly to rank 10 without spending Dust on intermediate refinements. One Orb is consumed per use in a protection zone."/>
+    </category>
+
     <category name="Prey Wildcards" icon="store_prey">
         <offer id="4001" name="Prey Wildcard x1" icon="prey_wildcard" price="10" itemid="0" type="prey_wildcard" value="1" description="&lt;i&gt;Use Prey Wildcards to reroll the bonus of an active prey, to lock your active prey or to select a prey of your choice.&lt;/i&gt;&#10;&#10;{character}&#10;{info} added directly to Prey dialog&#10;{limit|50} maximum amount that can be owned by character: 50"/>
         <offer id="4002" name="Prey Wildcard x5" icon="prey_wildcard" price="50" itemid="0" type="prey_wildcard" value="5" description="&lt;i&gt;Use Prey Wildcards to reroll the bonus of an active prey, to lock your active prey or to select a prey of your choice.&lt;/i&gt;&#10;&#10;{character}&#10;{info} added directly to Prey dialog&#10;{limit|50} maximum amount that can be owned by character: 50"/>

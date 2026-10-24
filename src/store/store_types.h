@@ -23,6 +23,7 @@ enum class StoreOfferType : uint8_t
 	ExpBoost,
 	Blessing,
 	PreyWildcard,
+	LunarAscensionOrb,
 	ChangeName,
 	SexChange,
 	Hireling,
