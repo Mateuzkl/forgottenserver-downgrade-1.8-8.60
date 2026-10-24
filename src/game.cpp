@@ -21,7 +21,9 @@
 #include "instance_utils.h"
 #include "iologindata.h"
 #include "items.h"
+#include "bestiary_charm.h"
 #include "monster.h"
+#include "monsters.h"
 #include "movement.h"
 #include "outputmessage.h"
 #include "performance_metrics.h"
@@ -898,6 +900,29 @@ uint32_t collectQuickLootTile(Game& game, Player* player, const Position& pos, u
 }
 
 } // namespace
+
+bool canPlayerSelectMonsterForPodium(const Player& player, uint16_t itemId, const MonsterType& monsterType)
+{
+	if (monsterType.raceId == 0 || monsterType.raceId > std::numeric_limits<uint16_t>::max()) {
+		return false;
+	}
+
+	const uint16_t raceId = static_cast<uint16_t>(monsterType.raceId);
+	if (player.getBestiaryKillCount(raceId) == 0) {
+		return false;
+	}
+
+	const bool bossPodium = itemId == 38707;
+	if (bossPodium) {
+		return monsterType.info.isBoss;
+	}
+
+	if (monsterType.info.isBoss) {
+		return false;
+	}
+
+	return true;
+}
 
 void Game::start(const std::shared_ptr<ServiceManager>& manager)
 {
@@ -4011,7 +4036,7 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
-	if (player->isAstraClient() && isMonsterPodiumId(item->getID())) {
+	if ((player->isAstraClient() || player->isFonticakClient()) && isMonsterPodiumId(item->getID())) {
 		if (pos.x == 0xFFFF || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
 			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
 			return;
@@ -4247,7 +4272,8 @@ void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Posi
 {
 	auto playerRef = getPlayerByID(playerId);
 	Player* player = playerRef.get();
-	if (!player || !player->isAstraClient() || pos.x == 0xFFFF || direction > DIRECTION_WEST) {
+	if (!player || !(player->isAstraClient() || player->isFonticakClient()) || pos.x == 0xFFFF ||
+	    direction > DIRECTION_WEST) {
 		return;
 	}
 
@@ -4266,6 +4292,11 @@ void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Posi
 
 	MonsterType* monsterType = raceId == 0 ? nullptr : g_monsters.getMonsterType(raceId);
 	if (raceId != 0 && !monsterType) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	if (monsterType && !canPlayerSelectMonsterForPodium(*player, item->getID(), *monsterType)) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
 	}

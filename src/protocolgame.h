@@ -89,6 +89,7 @@ public:
 	bool canSendAstraItemMetadata() const;
 	bool canSendPackedPlayerInventory() const;
 	bool shouldSendAstraQuiverCountU16() const;
+	bool shouldSendPodiumState() const;
 	static void rebuildItemValuesCache();
 	static void invalidateItemValuesCache();
 

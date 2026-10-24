@@ -27,8 +27,11 @@
 class ServiceManager;
 class Creature;
 class Monster;
+class MonsterType;
 class Npc;
 class CombatInfo;
+
+bool canPlayerSelectMonsterForPodium(const Player& player, uint16_t itemId, const MonsterType& monsterType);
 
 enum stackPosType_t
 {

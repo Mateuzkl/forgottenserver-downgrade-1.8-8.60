@@ -589,7 +589,7 @@ void ProtocolGame::appendItem(NetworkMessage& msg, const Item* item) const
 {
 	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
 	            canSendAstraItemState(), shouldSendAstraQuiverCountU16(), canSendAstraItemMetadata(),
-	            shouldSendContainerTypes(), player.get());
+	            shouldSendContainerTypes(), player.get(), shouldSendPodiumState());
 }
 
 void ProtocolGame::appendItem(NetworkMessage& msg, uint16_t itemId, uint8_t count) const
@@ -637,6 +637,11 @@ bool ProtocolGame::canSendPackedPlayerInventory() const
 bool ProtocolGame::shouldSendAstraQuiverCountU16() const
 {
 	return isAstraClient || isFonticakClient;
+}
+
+bool ProtocolGame::shouldSendPodiumState() const
+{
+	return (isOTC || isFonticakClient) && player;
 }
 
 bool ProtocolGame::shouldSendItemTierByte() const
@@ -1723,7 +1728,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0x9F:
-			if (isAstraClient) {
+			if (isAstraClient || isFonticakClient) {
 				parseSetMonsterPodium(msg);
 			}
 			break;
@@ -5859,10 +5864,28 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 	writeToOutputBuffer(msg);
 }
 
+namespace {
+
+const MonsterType* getMonsterTypeByRaceId(uint16_t raceId)
+{
+	if (MonsterType* monsterType = g_monsters.getMonsterType(raceId)) {
+		return monsterType;
+	}
+
+	for (const auto& [_, monsterType] : g_monsters.monsters) {
+		if (monsterType && monsterType->raceId == raceId) {
+			return monsterType.get();
+		}
+	}
+	return nullptr;
+}
+
+} // namespace
+
 void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId,
                                             uint8_t stackPos)
 {
-	if (!isAstraClient || !podium) {
+	if ((!isAstraClient && !isFonticakClient) || !podium) {
 		return;
 	}
 
@@ -5892,10 +5915,17 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	const uint16_t currentRaceId = static_cast<uint16_t>(getAttribute("PodiumMonsterRaceId"));
 	const bool bossPodium = itemId == 38707;
 
-	std::map<uint16_t, const MonsterType*> availableMonsters;
-	for (const auto& [_, monsterType] : g_monsters.monsters) {
-		if (monsterType && monsterType->raceId > 0 && monsterType->raceId <= std::numeric_limits<uint16_t>::max()) {
-			availableMonsters.insert_or_assign(static_cast<uint16_t>(monsterType->raceId), monsterType.get());
+	std::map<uint16_t, const MonsterType*> availableByRace;
+	if (player) {
+		for (const auto& [raceId, kills] : player->getBestiaryKillMap()) {
+			if (kills == 0) {
+				continue;
+			}
+			const MonsterType* monsterType = getMonsterTypeByRaceId(raceId);
+			if (!monsterType || !canPlayerSelectMonsterForPodium(*player, itemId, *monsterType)) {
+				continue;
+			}
+			availableByRace.insert_or_assign(raceId, monsterType);
 		}
 	}
 
@@ -5913,27 +5943,28 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	}
 	msg.add<uint16_t>(0);
 	msg.addByte(bossPodium);
-	const size_t monsterCount = std::min<size_t>(availableMonsters.size(), std::numeric_limits<uint16_t>::max());
-	msg.add<uint16_t>(static_cast<uint16_t>(monsterCount));
+	const uint16_t monsterCount =
+	    static_cast<uint16_t>(std::min<size_t>(availableByRace.size(), std::numeric_limits<uint16_t>::max()));
+	msg.add<uint16_t>(monsterCount);
 	size_t sentMonsters = 0;
-	for (const auto& [raceId, monsterType] : availableMonsters) {
+	for (const auto& [raceId, monsterType] : availableByRace) {
 		if (sentMonsters++ >= monsterCount) {
 			break;
 		}
 		msg.add<uint16_t>(raceId);
-		if (bossPodium) {
-			msg.addString(monsterType->name);
-			const Outfit_t& outfit = monsterType->info.outfit;
-			msg.add<uint16_t>(outfit.lookType);
-			if (outfit.lookType != 0) {
-				msg.addByte(outfit.lookHead);
-				msg.addByte(outfit.lookBody);
-				msg.addByte(outfit.lookLegs);
-				msg.addByte(outfit.lookFeet);
-				msg.addByte(outfit.lookAddons);
-			} else {
-				msg.add<uint16_t>(outfit.lookTypeEx);
-			}
+		// Fonticak/Astra clients need name + outfit for every entry: server raceIds do not
+		// always match staticdata race banks used by g_things.getRaceData on the client.
+		msg.addString(monsterType->name);
+		const Outfit_t& outfit = monsterType->info.outfit;
+		msg.add<uint16_t>(outfit.lookType);
+		if (outfit.lookType != 0) {
+			msg.addByte(outfit.lookHead);
+			msg.addByte(outfit.lookBody);
+			msg.addByte(outfit.lookLegs);
+			msg.addByte(outfit.lookFeet);
+			msg.addByte(outfit.lookAddons);
+		} else {
+			msg.add<uint16_t>(outfit.lookTypeEx);
 		}
 	}
 	msg.addPosition(position);
