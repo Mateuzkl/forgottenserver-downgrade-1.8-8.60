@@ -187,6 +187,28 @@ bool isRenownPodiumId(uint16_t itemId)
 	return itemId == 35973 || itemId == 35974;
 }
 
+bool playerCanUseLookTypeOnPodium(Player& player, uint16_t lookType, uint8_t addons)
+{
+	if (player.hasOutfit(lookType, addons)) {
+		return true;
+	}
+
+	const Outfit* requested = Outfits::getInstance().getOutfitByLookType(lookType);
+	if (!requested) {
+		return false;
+	}
+
+	for (const Outfit* ownedType : Outfits::getInstance().getOutfits(player.getSex())) {
+		if (!ownedType || ownedType->name != requested->name) {
+			continue;
+		}
+		if (player.hasOutfit(ownedType->lookType, addons)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 int64_t getMoveItemExhaustionDelay(const Position& toPos)
 {
 	if (ConfigManager::getBoolean(ConfigManager::SEPARATE_RING_NECKLACE_EXHAUSTION) && toPos.x == 0xFFFF &&
@@ -4367,7 +4389,10 @@ void Game::playerSetPlayerPodium(uint32_t playerId, const Outfit_t& outfit, uint
 		return;
 	}
 
-	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_TOPDOWN_ITEM);
+	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_USEITEM);
+	if (!thing) {
+		thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_TOPDOWN_ITEM);
+	}
 	Item* item = thing ? thing->getItem() : nullptr;
 	if (!item || !isRenownPodiumId(item->getID()) || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
@@ -4384,7 +4409,7 @@ void Game::playerSetPlayerPodium(uint32_t playerId, const Outfit_t& outfit, uint
 
 	const bool hasDisplayOutfit = creatureVisible && outfit.lookType != 0;
 	if (hasDisplayOutfit) {
-		if (!player->hasOutfit(outfit.lookType, outfit.lookAddons)) {
+		if (!playerCanUseLookTypeOnPodium(*player, outfit.lookType, outfit.lookAddons)) {
 			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 			return;
 		}
