@@ -27,8 +27,11 @@
 class ServiceManager;
 class Creature;
 class Monster;
+class MonsterType;
 class Npc;
 class CombatInfo;
+
+bool canPlayerSelectMonsterForPodium(const Player& player, uint16_t itemId, const MonsterType& monsterType);
 
 enum stackPosType_t
 {
@@ -421,6 +424,9 @@ public:
 	void playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType);
 	void playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Position& pos, uint8_t stackPos,
 	                            uint16_t itemId, uint8_t direction, bool podiumVisible, bool creatureVisible);
+	void playerSetPlayerPodium(uint32_t playerId, const Outfit_t& outfit, uint8_t lookMountHead, uint8_t lookMountBody,
+	                           uint8_t lookMountLegs, uint8_t lookMountFeet, const Position& pos, uint8_t stackPos,
+	                           uint16_t itemId, uint8_t direction, bool podiumVisible, bool creatureVisible);
 	void playerUseWithCreature(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint32_t creatureId,
 	                           uint16_t spriteId);
 	void playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,

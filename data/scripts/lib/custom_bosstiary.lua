@@ -160,6 +160,13 @@ function CustomBosstiary.registerMonster(monsterType, mask)
 	}
 	CustomBosstiary.monstersByRaceId[bossRaceId] = entry
 	CustomBosstiary.monstersByName[entry.name:lower()] = entry
+
+	-- Bosstiary kills are stored under bossRaceId; monster podium (Vigour) resolves types by raceId.
+	if monsterType then
+		monsterType:isBoss(true)
+		monsterType:raceId(bossRaceId)
+	end
+
 	return true
 end
 

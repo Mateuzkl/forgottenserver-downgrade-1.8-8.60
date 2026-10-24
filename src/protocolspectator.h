@@ -656,6 +656,12 @@ class ProtocolSpectator {
                 o->sendMonsterPodiumWindow(podium, position, itemId, stackPos);
         }
 
+        void sendPlayerPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos) {
+            auto o = owner.lock();
+            if (o)
+                o->sendPlayerPodiumWindow(podium, position, itemId, stackPos);
+        }
+
         void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus) {
             auto o = owner.lock();
             if (o)

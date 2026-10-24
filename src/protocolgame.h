@@ -89,6 +89,7 @@ public:
 	bool canSendAstraItemMetadata() const;
 	bool canSendPackedPlayerInventory() const;
 	bool shouldSendAstraQuiverCountU16() const;
+	bool shouldSendPodiumState() const;
 	static void rebuildItemValuesCache();
 	static void invalidateItemValuesCache();
 
@@ -124,6 +125,7 @@ private:
 	void parseSetOutfit(NetworkMessage& msg);
 	void parseInspectionObject(NetworkMessage& msg);
 	void parseSetMonsterPodium(NetworkMessage& msg);
+	void parseSetPlayerPodium(NetworkMessage& msg);
 	void parseSay(NetworkMessage& msg);
 	void parseSelectSpellAim(NetworkMessage& msg);
 	void parseLookAt(NetworkMessage& msg);
@@ -247,6 +249,7 @@ private:
 	void sendItemInspection(std::shared_ptr<Item> item = nullptr, uint16_t itemId = 0, uint8_t itemCount = 1,
 	                        uint8_t inspectionType = INSPECT_NORMALOBJECT);
 	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos);
+	void sendPlayerPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos);
 
 	void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus);
 	void sendVIP(uint32_t guid, std::string_view name, VipStatus_t status);

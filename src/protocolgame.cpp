@@ -589,7 +589,7 @@ void ProtocolGame::appendItem(NetworkMessage& msg, const Item* item) const
 {
 	msg.addItem(item, shouldSendItemTierData(), shouldSendItemTierByte(), isOTC, shouldSendQuickLootFlags(),
 	            canSendAstraItemState(), shouldSendAstraQuiverCountU16(), canSendAstraItemMetadata(),
-	            shouldSendContainerTypes(), player.get());
+	            shouldSendContainerTypes(), player.get(), shouldSendPodiumState());
 }
 
 void ProtocolGame::appendItem(NetworkMessage& msg, uint16_t itemId, uint8_t count) const
@@ -637,6 +637,11 @@ bool ProtocolGame::canSendPackedPlayerInventory() const
 bool ProtocolGame::shouldSendAstraQuiverCountU16() const
 {
 	return isAstraClient || isFonticakClient;
+}
+
+bool ProtocolGame::shouldSendPodiumState() const
+{
+	return (isOTC || isFonticakClient) && player;
 }
 
 bool ProtocolGame::shouldSendItemTierByte() const
@@ -1723,7 +1728,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0x9F:
-			if (isAstraClient) {
+			if (isAstraClient || isFonticakClient) {
 				parseSetMonsterPodium(msg);
 			}
 			break;
@@ -1845,6 +1850,12 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 		case 0xE7: /* thank you / custom wheel gem action */
 			handlePlayerNetworkMessage(recvbyte);
+			break;
+
+		case 0xF1:
+			if (isAstraClient || isFonticakClient) {
+				parseSetPlayerPodium(msg);
+			}
 			break;
 
 		case 0xF2:
@@ -2426,6 +2437,57 @@ void ProtocolGame::parseSetMonsterPodium(NetworkMessage& msg)
 
 	g_game.playerSetMonsterPodium(player->getID(), raceId, position, stackPos, itemId, direction, podiumVisible,
 	                              creatureVisible);
+}
+
+void ProtocolGame::parseSetPlayerPodium(NetworkMessage& msg)
+{
+	if (!requireUnreadBytes(msg, 14)) {
+		return;
+	}
+
+	Outfit_t outfit;
+	outfit.lookType = msg.get<uint16_t>();
+	if (outfit.lookType != 0) {
+		if (!requireUnreadBytes(msg, 5)) {
+			return;
+		}
+		outfit.lookHead = msg.getByte();
+		outfit.lookBody = msg.getByte();
+		outfit.lookLegs = msg.getByte();
+		outfit.lookFeet = msg.getByte();
+		outfit.lookAddons = msg.getByte();
+	} else {
+		outfit.lookTypeEx = msg.get<uint16_t>();
+	}
+
+	outfit.lookMount = msg.get<uint16_t>();
+	uint8_t lookMountHead = 0;
+	uint8_t lookMountBody = 0;
+	uint8_t lookMountLegs = 0;
+	uint8_t lookMountFeet = 0;
+	if (outfit.lookMount != 0) {
+		if (!requireUnreadBytes(msg, 4)) {
+			return;
+		}
+		lookMountHead = msg.getByte();
+		lookMountBody = msg.getByte();
+		lookMountLegs = msg.getByte();
+		lookMountFeet = msg.getByte();
+	}
+
+	if (!requireUnreadBytes(msg, 11)) {
+		return;
+	}
+
+	const Position position = msg.getPosition();
+	const uint16_t itemId = msg.get<uint16_t>();
+	const uint8_t stackPos = msg.getByte();
+	const uint8_t direction = msg.getByte();
+	const bool podiumVisible = msg.getByte() != 0;
+	const bool creatureVisible = msg.getByte() != 0;
+
+	g_game.playerSetPlayerPodium(player->getID(), outfit, lookMountHead, lookMountBody, lookMountLegs, lookMountFeet,
+	                             position, stackPos, itemId, direction, podiumVisible, creatureVisible);
 }
 
 void ProtocolGame::parseUseItem(NetworkMessage& msg)
@@ -5859,10 +5921,28 @@ void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemI
 	writeToOutputBuffer(msg);
 }
 
+namespace {
+
+const MonsterType* getMonsterTypeByRaceId(uint16_t raceId)
+{
+	if (MonsterType* monsterType = g_monsters.getMonsterType(raceId)) {
+		return monsterType;
+	}
+
+	for (const auto& [_, monsterType] : g_monsters.monsters) {
+		if (monsterType && monsterType->raceId == raceId) {
+			return monsterType.get();
+		}
+	}
+	return nullptr;
+}
+
+} // namespace
+
 void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId,
                                             uint8_t stackPos)
 {
-	if (!isAstraClient || !podium) {
+	if ((!isAstraClient && !isFonticakClient) || !podium) {
 		return;
 	}
 
@@ -5892,10 +5972,17 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	const uint16_t currentRaceId = static_cast<uint16_t>(getAttribute("PodiumMonsterRaceId"));
 	const bool bossPodium = itemId == 38707;
 
-	std::map<uint16_t, const MonsterType*> availableMonsters;
-	for (const auto& [_, monsterType] : g_monsters.monsters) {
-		if (monsterType && monsterType->raceId > 0 && monsterType->raceId <= std::numeric_limits<uint16_t>::max()) {
-			availableMonsters.insert_or_assign(static_cast<uint16_t>(monsterType->raceId), monsterType.get());
+	std::map<uint16_t, const MonsterType*> availableByRace;
+	if (player) {
+		for (const auto& [raceId, kills] : player->getBestiaryKillMap()) {
+			if (kills == 0) {
+				continue;
+			}
+			const MonsterType* monsterType = getMonsterTypeByRaceId(raceId);
+			if (!monsterType || !canPlayerSelectMonsterForPodium(*player, itemId, *monsterType)) {
+				continue;
+			}
+			availableByRace.insert_or_assign(raceId, monsterType);
 		}
 	}
 
@@ -5913,27 +6000,28 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	}
 	msg.add<uint16_t>(0);
 	msg.addByte(bossPodium);
-	const size_t monsterCount = std::min<size_t>(availableMonsters.size(), std::numeric_limits<uint16_t>::max());
-	msg.add<uint16_t>(static_cast<uint16_t>(monsterCount));
+	const uint16_t monsterCount =
+	    static_cast<uint16_t>(std::min<size_t>(availableByRace.size(), std::numeric_limits<uint16_t>::max()));
+	msg.add<uint16_t>(monsterCount);
 	size_t sentMonsters = 0;
-	for (const auto& [raceId, monsterType] : availableMonsters) {
+	for (const auto& [raceId, monsterType] : availableByRace) {
 		if (sentMonsters++ >= monsterCount) {
 			break;
 		}
 		msg.add<uint16_t>(raceId);
-		if (bossPodium) {
-			msg.addString(monsterType->name);
-			const Outfit_t& outfit = monsterType->info.outfit;
-			msg.add<uint16_t>(outfit.lookType);
-			if (outfit.lookType != 0) {
-				msg.addByte(outfit.lookHead);
-				msg.addByte(outfit.lookBody);
-				msg.addByte(outfit.lookLegs);
-				msg.addByte(outfit.lookFeet);
-				msg.addByte(outfit.lookAddons);
-			} else {
-				msg.add<uint16_t>(outfit.lookTypeEx);
-			}
+		// Fonticak/Astra clients need name + outfit for every entry: server raceIds do not
+		// always match staticdata race banks used by g_things.getRaceData on the client.
+		msg.addString(monsterType->name);
+		const Outfit_t& outfit = monsterType->info.outfit;
+		msg.add<uint16_t>(outfit.lookType);
+		if (outfit.lookType != 0) {
+			msg.addByte(outfit.lookHead);
+			msg.addByte(outfit.lookBody);
+			msg.addByte(outfit.lookLegs);
+			msg.addByte(outfit.lookFeet);
+			msg.addByte(outfit.lookAddons);
+		} else {
+			msg.add<uint16_t>(outfit.lookTypeEx);
 		}
 	}
 	msg.addPosition(position);
@@ -5944,6 +6032,96 @@ void ProtocolGame::sendMonsterPodiumWindow(const Item* podium, const Position& p
 	msg.addByte(static_cast<uint8_t>(getAttribute("LookDirection", DIRECTION_SOUTH)));
 	msg.addByte(static_cast<uint8_t>(getAttribute("PodiumVisible", 1) != 0));
 	msg.addByte(static_cast<uint8_t>(getAttribute("MonsterVisible", currentRaceId != 0) != 0));
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendPlayerPodiumWindow(const Item* podium, const Position& position, uint16_t itemId,
+                                            uint8_t stackPos)
+{
+	if ((!isAstraClient && !isFonticakClient) || !podium || !player) {
+		return;
+	}
+
+	auto getAttribute = [podium](std::string_view key, int64_t defaultValue = 0) {
+		const auto* attribute = podium->getCustomAttribute(std::string(key));
+		if (!attribute) {
+			return defaultValue;
+		}
+		if (const auto* value = std::get_if<int64_t>(&attribute->value)) {
+			return *value;
+		}
+		if (const auto* value = std::get_if<bool>(&attribute->value)) {
+			return static_cast<int64_t>(*value);
+		}
+		return defaultValue;
+	};
+
+	Outfit_t currentOutfit;
+	currentOutfit.lookType = static_cast<uint16_t>(getAttribute("LookType"));
+	currentOutfit.lookTypeEx = static_cast<uint16_t>(getAttribute("LookTypeEx"));
+	currentOutfit.lookHead = static_cast<uint8_t>(getAttribute("LookHead"));
+	currentOutfit.lookBody = static_cast<uint8_t>(getAttribute("LookBody"));
+	currentOutfit.lookLegs = static_cast<uint8_t>(getAttribute("LookLegs"));
+	currentOutfit.lookFeet = static_cast<uint8_t>(getAttribute("LookFeet"));
+	currentOutfit.lookAddons = static_cast<uint8_t>(getAttribute("LookAddons"));
+	currentOutfit.lookMount = static_cast<uint16_t>(getAttribute("LookMount"));
+
+	const bool monkVocationEnabled = ConfigManager::getBoolean(ConfigManager::MONK_VOCATION_ENABLED);
+	const auto& outfitCatalog = Outfits::getInstance().getOutfits(player->getSex());
+
+	std::vector<std::tuple<uint16_t, std::string, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>> availableOutfits;
+	for (const Outfit* outfitType : outfitCatalog) {
+		if (!outfitType || (!monkVocationEnabled && outfitType->name == "Monk")) {
+			continue;
+		}
+
+		uint8_t addons = 0;
+		if (!player->getOutfitAddons(*outfitType, addons)) {
+			continue;
+		}
+
+		availableOutfits.emplace_back(outfitType->lookType, outfitType->name, addons, currentOutfit.lookHead,
+		                              currentOutfit.lookBody, currentOutfit.lookLegs, currentOutfit.lookFeet);
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0xC5); // player renown podium (0xC3 is cyclopedia house auction on OTC)
+	msg.add<uint16_t>(currentOutfit.lookType);
+	if (currentOutfit.lookType != 0) {
+		msg.addByte(currentOutfit.lookHead);
+		msg.addByte(currentOutfit.lookBody);
+		msg.addByte(currentOutfit.lookLegs);
+		msg.addByte(currentOutfit.lookFeet);
+		msg.addByte(currentOutfit.lookAddons);
+	} else {
+		msg.add<uint16_t>(currentOutfit.lookTypeEx);
+	}
+	msg.add<uint16_t>(currentOutfit.lookMount);
+	if (currentOutfit.lookMount != 0) {
+		msg.addByte(static_cast<uint8_t>(getAttribute("LookMountHead")));
+		msg.addByte(static_cast<uint8_t>(getAttribute("LookMountBody")));
+		msg.addByte(static_cast<uint8_t>(getAttribute("LookMountLegs")));
+		msg.addByte(static_cast<uint8_t>(getAttribute("LookMountFeet")));
+	}
+	msg.add<uint16_t>(0);
+	const uint16_t outfitCount =
+	    static_cast<uint16_t>(std::min<size_t>(availableOutfits.size(), std::numeric_limits<uint16_t>::max()));
+	msg.add<uint16_t>(outfitCount);
+	for (const auto& [lookType, name, addons, head, body, legs, feet] : availableOutfits) {
+		msg.add<uint16_t>(lookType);
+		msg.addString(name);
+		msg.addByte(addons);
+		msg.addByte(head);
+		msg.addByte(body);
+		msg.addByte(legs);
+		msg.addByte(feet);
+	}
+	msg.addPosition(position);
+	msg.add<uint16_t>(itemId);
+	msg.addByte(stackPos);
+	msg.addByte(static_cast<uint8_t>(getAttribute("LookDirection", DIRECTION_SOUTH)));
+	msg.addByte(static_cast<uint8_t>(getAttribute("PodiumVisible", 1) != 0));
+	msg.addByte(static_cast<uint8_t>(getAttribute("MonsterVisible", currentOutfit.lookType != 0) != 0));
 	writeToOutputBuffer(msg);
 }
 

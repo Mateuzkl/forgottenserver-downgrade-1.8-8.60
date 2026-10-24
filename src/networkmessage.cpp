@@ -8,6 +8,7 @@
 #include "configmanager.h"
 #include "container.h"
 #include "creature.h"
+#include "item.h"
 #include "lockfree.h"
 
 #include <simdutf.h>
@@ -159,16 +160,73 @@ void addContainerSpecialType(NetworkMessage& msg, const Item* item, bool sendCon
 	msg.addByte(containerType);
 }
 
+bool isOtcPodiumItemId(uint16_t itemId)
+{
+	return itemId == 38707 || itemId == 42367 || itemId == 42368 || itemId == 35973 || itemId == 35974;
+}
+
+int64_t getPodiumCustomAttribute(const Item* item, std::string_view key, int64_t defaultValue = 0)
+{
+	if (!item) {
+		return defaultValue;
+	}
+
+	const auto* attribute = item->getCustomAttribute(std::string(key));
+	if (!attribute) {
+		return defaultValue;
+	}
+
+	if (const auto* value = std::get_if<int64_t>(&attribute->value)) {
+		return *value;
+	}
+
+	if (const auto* value = std::get_if<bool>(&attribute->value)) {
+		return static_cast<int64_t>(*value);
+	}
+
+	return defaultValue;
+}
+
+void addOtcPodiumItemState(NetworkMessage& msg, const Item* item)
+{
+	const uint16_t lookType = static_cast<uint16_t>(getPodiumCustomAttribute(item, "LookType"));
+	msg.add<uint16_t>(lookType);
+	if (lookType != 0) {
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookHead")));
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookBody")));
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookLegs")));
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookFeet")));
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookAddons")));
+	} else {
+		msg.add<uint16_t>(static_cast<uint16_t>(getPodiumCustomAttribute(item, "LookTypeEx")));
+	}
+
+	const uint16_t lookMount = static_cast<uint16_t>(getPodiumCustomAttribute(item, "LookMount"));
+	msg.add<uint16_t>(lookMount);
+	if (lookMount != 0) {
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookMountHead")));
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookMountBody")));
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookMountLegs")));
+		msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookMountFeet")));
+	}
+
+	msg.addByte(static_cast<uint8_t>(getPodiumCustomAttribute(item, "LookDirection", DIRECTION_SOUTH)));
+	const bool monsterVisible = getPodiumCustomAttribute(item, "MonsterVisible") != 0;
+	const bool podiumVisible = getPodiumCustomAttribute(item, "PodiumVisible", 1) != 0;
+	msg.addByte(monsterVisible && podiumVisible ? 1 : 0);
+}
+
 } // namespace
 
 void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
                              bool sendAstraItemState, bool sendAstraQuiverCountU16, bool sendAstraItemMetadata,
-                             bool sendContainerTypes, const Player* viewer)
+                             bool sendContainerTypes, const Player* viewer, bool sendPodiumState)
 {
 	// Kept in the shared overload signature for legacy call-site compatibility;
 	// container state is encoded by sendContainerTypes below.
 	static_cast<void>(sendQuickLootFlags);
 	static_cast<void>(viewer);
+	static_cast<void>(sendPodiumState); // podium bytes need Item* overload
 	addItemId(id);
 
 	const ItemType& it = Item::items[id];
@@ -201,7 +259,8 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
                              bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16,
-                             bool sendAstraItemMetadata, bool sendContainerTypes, const Player* viewer)
+                             bool sendAstraItemMetadata, bool sendContainerTypes, const Player* viewer,
+                             bool sendPodiumState)
 {
 	// Kept in the shared overload signature for legacy call-site compatibility;
 	// container state is encoded by sendContainerTypes below.
@@ -261,6 +320,10 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 
 	if (it.isContainer()) {
 		addContainerSpecialType(*this, item, sendContainerTypes, viewer);
+	}
+
+	if (sendPodiumState && isOtcPodiumItemId(item->getID())) {
+		addOtcPodiumItemState(*this, item);
 	}
 }
 
