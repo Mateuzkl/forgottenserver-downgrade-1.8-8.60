@@ -1542,6 +1542,12 @@ public:
 			client->sendMonsterPodiumWindow(podium, position, itemId, stackPos);
 		}
 	}
+	void sendPlayerPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos)
+	{
+		if (client) {
+			client->sendPlayerPodiumWindow(podium, position, itemId, stackPos);
+		}
+	}
 	void sendCloseContainer(uint8_t cid)
 	{
 		if (client) {

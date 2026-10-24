@@ -182,6 +182,11 @@ bool isMonsterPodiumId(uint16_t itemId)
 	return itemId == 38707 || itemId == 42367 || itemId == 42368;
 }
 
+bool isRenownPodiumId(uint16_t itemId)
+{
+	return itemId == 35973 || itemId == 35974;
+}
+
 int64_t getMoveItemExhaustionDelay(const Position& toPos)
 {
 	if (ConfigManager::getBoolean(ConfigManager::SEPARATE_RING_NECKLACE_EXHAUSTION) && toPos.x == 0xFFFF &&
@@ -4045,6 +4050,15 @@ void Game::playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPo
 		return;
 	}
 
+	if ((player->isAstraClient() || player->isFonticakClient()) && isRenownPodiumId(item->getID())) {
+		if (pos.x == 0xFFFF || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
+			player->sendCancelMessage(RETURNVALUE_TOOFARAWAY);
+			return;
+		}
+		player->sendPlayerPodiumWindow(item, pos, spriteId, stackPos);
+		return;
+	}
+
 	if (item->isUseable()) {
 		player->sendCancelMessage(RETURNVALUE_CANNOTUSETHISOBJECT);
 		return;
@@ -4324,6 +4338,89 @@ void Game::playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Posi
 		itemRef->removeCustomAttribute("LookLegs");
 		itemRef->removeCustomAttribute("LookFeet");
 		itemRef->removeCustomAttribute("LookAddons");
+	}
+
+	itemRef->setCustomAttribute("PodiumVisible", static_cast<int64_t>(podiumVisible));
+	itemRef->setCustomAttribute("MonsterVisible", static_cast<int64_t>(creatureVisible));
+	itemRef->setCustomAttribute("LookDirection", static_cast<int64_t>(direction));
+
+	if (Tile* tile = map.getTile(pos)) {
+		SpectatorVec spectators;
+		map.getSpectators(spectators, pos, true, true);
+		for (const auto& spectator : spectators.players()) {
+			Player* tmpPlayer = static_cast<Player*>(spectator.get());
+			if (InstanceUtils::canSeeItemInInstance(tmpPlayer->getInstanceID(), itemRef.get())) {
+				tmpPlayer->sendUpdateTileItem(tile, pos, itemRef.get());
+			}
+		}
+	}
+}
+
+void Game::playerSetPlayerPodium(uint32_t playerId, const Outfit_t& outfit, uint8_t lookMountHead, uint8_t lookMountBody,
+                                 uint8_t lookMountLegs, uint8_t lookMountFeet, const Position& pos, uint8_t stackPos,
+                                 uint16_t itemId, uint8_t direction, bool podiumVisible, bool creatureVisible)
+{
+	auto playerRef = getPlayerByID(playerId);
+	Player* player = playerRef.get();
+	if (!player || !(player->isAstraClient() || player->isFonticakClient()) || pos.x == 0xFFFF ||
+	    direction > DIRECTION_WEST) {
+		return;
+	}
+
+	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_TOPDOWN_ITEM);
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item || !isRenownPodiumId(item->getID()) || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	auto itemRef = getItemSharedRef(item);
+	if (!itemRef) {
+		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+		return;
+	}
+
+	itemRef->removeCustomAttribute("PodiumMonsterRaceId");
+
+	const bool hasDisplayOutfit = creatureVisible && outfit.lookType != 0;
+	if (hasDisplayOutfit) {
+		if (!player->hasOutfit(outfit.lookType, outfit.lookAddons)) {
+			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
+			return;
+		}
+
+		itemRef->setCustomAttribute("LookType", static_cast<int64_t>(outfit.lookType));
+		itemRef->setCustomAttribute("LookTypeEx", static_cast<int64_t>(outfit.lookTypeEx));
+		itemRef->setCustomAttribute("LookHead", static_cast<int64_t>(outfit.lookHead));
+		itemRef->setCustomAttribute("LookBody", static_cast<int64_t>(outfit.lookBody));
+		itemRef->setCustomAttribute("LookLegs", static_cast<int64_t>(outfit.lookLegs));
+		itemRef->setCustomAttribute("LookFeet", static_cast<int64_t>(outfit.lookFeet));
+		itemRef->setCustomAttribute("LookAddons", static_cast<int64_t>(outfit.lookAddons));
+		itemRef->setCustomAttribute("LookMount", static_cast<int64_t>(outfit.lookMount));
+		if (outfit.lookMount != 0) {
+			itemRef->setCustomAttribute("LookMountHead", static_cast<int64_t>(lookMountHead));
+			itemRef->setCustomAttribute("LookMountBody", static_cast<int64_t>(lookMountBody));
+			itemRef->setCustomAttribute("LookMountLegs", static_cast<int64_t>(lookMountLegs));
+			itemRef->setCustomAttribute("LookMountFeet", static_cast<int64_t>(lookMountFeet));
+		} else {
+			itemRef->removeCustomAttribute("LookMountHead");
+			itemRef->removeCustomAttribute("LookMountBody");
+			itemRef->removeCustomAttribute("LookMountLegs");
+			itemRef->removeCustomAttribute("LookMountFeet");
+		}
+	} else {
+		itemRef->removeCustomAttribute("LookType");
+		itemRef->removeCustomAttribute("LookTypeEx");
+		itemRef->removeCustomAttribute("LookHead");
+		itemRef->removeCustomAttribute("LookBody");
+		itemRef->removeCustomAttribute("LookLegs");
+		itemRef->removeCustomAttribute("LookFeet");
+		itemRef->removeCustomAttribute("LookAddons");
+		itemRef->removeCustomAttribute("LookMount");
+		itemRef->removeCustomAttribute("LookMountHead");
+		itemRef->removeCustomAttribute("LookMountBody");
+		itemRef->removeCustomAttribute("LookMountLegs");
+		itemRef->removeCustomAttribute("LookMountFeet");
 	}
 
 	itemRef->setCustomAttribute("PodiumVisible", static_cast<int64_t>(podiumVisible));
