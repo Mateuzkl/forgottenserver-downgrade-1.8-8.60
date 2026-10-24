@@ -4389,11 +4389,24 @@ void Game::playerSetPlayerPodium(uint32_t playerId, const Outfit_t& outfit, uint
 		return;
 	}
 
-	Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_USEITEM);
-	if (!thing) {
-		thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_TOPDOWN_ITEM);
+	Item* item = nullptr;
+	if (Tile* tile = map.getTile(pos)) {
+		if (const TileItemVector* items = tile->getItemList()) {
+			for (auto it = items->rbegin(); it != items->rend(); ++it) {
+				if (!InstanceUtils::canSeeItemInInstance(player->getInstanceID(), it->get())) {
+					continue;
+				}
+				if (isRenownPodiumId((*it)->getID())) {
+					item = it->get();
+					break;
+				}
+			}
+		}
 	}
-	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item) {
+		Thing* thing = internalGetThing(player, pos, stackPos, itemId, STACKPOS_TOPDOWN_ITEM);
+		item = thing ? thing->getItem() : nullptr;
+	}
 	if (!item || !isRenownPodiumId(item->getID()) || !pos.isInRange(player->getPosition(), 1, 1, 0)) {
 		player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 		return;
