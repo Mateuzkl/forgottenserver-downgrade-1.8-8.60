@@ -89,7 +89,14 @@ function PartyVitals.sendToPlayer(recipient, roster)
 		out:addU16(pos.y)
 		out:addByte(pos.z)
 		out:addByte(leaderId and e.id == leaderId and 1 or 0)
-		out:addByte(member and member:getVocation() or 0)
+		local vocationId = 0
+		if member then
+			local vocation = member:getVocation()
+			if vocation then
+				vocationId = vocation:getId()
+			end
+		end
+		out:addByte(vocationId)
 		out:addString(member and member:getName() or "")
 	end
 	out:sendToPlayer(recipient)
