@@ -123,6 +123,9 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 				missingLeader = true;
 			} else if (nextLeader) {
 				passPartyLeadership(nextLeader.get(), true);
+				if (disbanding) {
+					return false;
+				}
 				currentLeader = leader.lock();
 			} else {
 				missingLeader = true;

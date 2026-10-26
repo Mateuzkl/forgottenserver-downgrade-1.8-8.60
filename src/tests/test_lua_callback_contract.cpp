@@ -3,13 +3,22 @@
 #include "test_support.h"
 
 namespace {
-void checkCallbackChain(bool reject)
+void checkCallbackChain(bool reject, bool legacyLibraries = false)
 {
 	std::unique_ptr<lua_State, decltype(&lua_close)> state(luaL_newstate(), &lua_close);
 	CHECK(state != nullptr);
 	auto* L = state.get();
 	luaL_openlibs(L);
-	CHECK(luaL_dostring(L, "unpack = table.unpack; RETURNVALUE_NOERROR = 0; "
+	if (legacyLibraries) {
+		// Model LuaJIT without LUA52COMPAT using its existing global unpack.
+		CHECK(luaL_dostring(L, "unpack = unpack or table.unpack; table.unpack = nil; table.pack = nil") == LUA_OK);
+	}
+	CHECK(luaL_dostring(L, "local existingUnpack = unpack; unpack = unpack or table.unpack; "
+	                       "assert(not existingUnpack or unpack == existingUnpack); "
+	                       "table.pack = table.pack or function(...) return {n=select('#', ...), ...} end; "
+	                       "local packed = table.pack(1, nil, 3); "
+	                       "assert(packed.n == 3 and select('#', unpack(packed, 1, packed.n)) == 3); "
+	                       "RETURNVALUE_NOERROR = 0; "
 	                       "isScriptsInterface = function() return true end; debugPrint = error") == LUA_OK);
 	const auto data = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path() / "data";
 	CHECK(luaL_dofile(L, (data / "scripts/lib/event_callbacks.lua").string().c_str()) == LUA_OK);
@@ -30,5 +39,7 @@ void checkCallbackChain(bool reject)
 
 TEST_CASE(default_target_combat_callback_preserves_following_hooks) { checkCallbackChain(false); }
 TEST_CASE(default_target_combat_callback_preserves_following_rejection) { checkCallbackChain(true); }
+TEST_CASE(target_combat_callback_keeps_legacy_global_unpack) { checkCallbackChain(false, true); }
+TEST_CASE(target_combat_callback_preserves_legacy_rejection) { checkCallbackChain(true, true); }
 
 TFS_TEST_MAIN()

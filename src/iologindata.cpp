@@ -75,7 +75,71 @@ IOLoginData::AuthenticationResult failedQueryAuthenticationResult(const Database
 	                              : IOLoginData::AuthenticationResult::DatabaseError;
 }
 
+std::string accountIdentifierMatches(const Database& db, std::string_view identifier)
+{
+	const std::string escaped = db.escapeString(identifier);
+	return fmt::format(
+	    "(LOWER(`name`) = LOWER({:s}) OR (`email` != '' AND LOWER(`email`) = LOWER({:s})))", escaped, escaped);
+}
+
+struct UniqueAccountIdentifierLookup
+{
+	enum class Outcome : uint8_t
+	{
+		Unique,
+		NotFound,
+		Ambiguous,
+		DatabaseError,
+	};
+
+	Outcome outcome = Outcome::NotFound;
+	uint32_t accountId = 0;
+};
+
+UniqueAccountIdentifierLookup lookupUniqueAccountId(Database& db, std::string_view identifier)
+{
+	DBResult_ptr result = db.storeQuery(
+	    fmt::format("SELECT `id` FROM `accounts` WHERE {} LIMIT 2", accountIdentifierMatches(db, identifier)));
+	if (!result) {
+		return {db.getLastErrno() != 0 ? UniqueAccountIdentifierLookup::Outcome::DatabaseError
+		                               : UniqueAccountIdentifierLookup::Outcome::NotFound,
+		        0};
+	}
+
+	const uint32_t accountId = result->getNumber<uint32_t>("id");
+	if (result->next()) {
+		return {UniqueAccountIdentifierLookup::Outcome::Ambiguous, 0};
+	}
+
+	return {UniqueAccountIdentifierLookup::Outcome::Unique, accountId};
+}
+
 } // namespace
+
+std::string IOLoginData::accountLimiterKey(std::string_view identifier)
+{
+	std::string fallback = asTrimmedString(identifier);
+	if (fallback.empty()) {
+		return {};
+	}
+	toLowerCaseString(fallback);
+
+	Database& db = Database::getInstance();
+	const auto lookup = lookupUniqueAccountId(db, identifier);
+	if (lookup.outcome != UniqueAccountIdentifierLookup::Outcome::Unique) {
+		return fallback;
+	}
+
+	DBResult_ptr result =
+	    db.storeQuery(fmt::format("SELECT `name` FROM `accounts` WHERE `id` = {:d}", lookup.accountId));
+	if (!result) {
+		return fallback;
+	}
+
+	std::string canonical = std::string{result->getString("name")};
+	toLowerCaseString(canonical);
+	return canonical;
+}
 
 IOLoginData::AuthenticationResult IOLoginData::loginserverAuthentication(std::string_view name,
                                                                          std::string_view password,
@@ -83,9 +147,20 @@ IOLoginData::AuthenticationResult IOLoginData::loginserverAuthentication(std::st
 {
     Database& db = Database::getInstance();
 
+	const auto lookup = lookupUniqueAccountId(db, name);
+	if (lookup.outcome == UniqueAccountIdentifierLookup::Outcome::DatabaseError) {
+		return AuthenticationResult::DatabaseError;
+	}
+	if (lookup.outcome == UniqueAccountIdentifierLookup::Outcome::Ambiguous) {
+		return AuthenticationResult::Rejected;
+	}
+	if (lookup.outcome == UniqueAccountIdentifierLookup::Outcome::NotFound) {
+		return failedQueryAuthenticationResult(db);
+	}
+
     DBResult_ptr result = db.storeQuery(fmt::format(
-        "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret`, `type`, `premium_ends_at`, `tibia_coins` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})",
-        db.escapeString(name)));
+        "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret`, `type`, `premium_ends_at`, `tibia_coins` FROM `accounts` WHERE `id` = {:d}",
+        lookup.accountId));
     if (!result) {
 		return failedQueryAuthenticationResult(db);
     }
@@ -126,10 +201,23 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
 	}
 
     Database& db = Database::getInstance();
-    
+
+	const auto lookup = lookupUniqueAccountId(db, accountName);
+	if (lookup.outcome == UniqueAccountIdentifierLookup::Outcome::DatabaseError) {
+		return {AuthenticationResult::DatabaseError};
+	}
+	if (lookup.outcome == UniqueAccountIdentifierLookup::Outcome::Ambiguous) {
+		return {AuthenticationResult::Rejected};
+	}
+	if (lookup.outcome == UniqueAccountIdentifierLookup::Outcome::NotFound) {
+		return {failedQueryAuthenticationResult(db)};
+	}
+
+	const uint32_t resolvedAccountId = lookup.accountId;
+
     std::string query = fmt::format(
-        "SELECT `a`.`id` AS `account_id`, UNHEX(`a`.`password`) AS `password`, `a`.`secret`, `p`.`id` AS `character_id` FROM `accounts` `a` JOIN `players` `p` ON `a`.`id` = `p`.`account_id` WHERE LOWER(`a`.`name`) = LOWER({:s}) AND LOWER(`p`.`name`) = LOWER({:s}) AND `p`.`deletion` = 0",
-        db.escapeString(accountName), db.escapeString(characterName));
+        "SELECT `a`.`id` AS `account_id`, UNHEX(`a`.`password`) AS `password`, `a`.`secret`, `p`.`id` AS `character_id` FROM `accounts` `a` JOIN `players` `p` ON `a`.`id` = `p`.`account_id` WHERE `a`.`id` = {:d} AND LOWER(`p`.`name`) = LOWER({:s}) AND `p`.`deletion` = 0",
+        resolvedAccountId, db.escapeString(characterName));
 
     DBResult_ptr result = db.storeQuery(query);
     if (!result) {
@@ -139,8 +227,8 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
 
         // Fallback path: validate account and use the first available character of the account
         DBResult_ptr accountCheck = db.storeQuery(fmt::format(
-            "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})",
-            db.escapeString(accountName)));
+            "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret` FROM `accounts` WHERE `id` = {:d}",
+            resolvedAccountId));
         if (!accountCheck) {
 			return {failedQueryAuthenticationResult(db)};
         }
@@ -1888,6 +1976,21 @@ void IOLoginData::updateTibiaCoins(uint32_t accountId, uint64_t tibiaCoins)
 	    fmt::format("UPDATE `accounts` SET `tibia_coins` = {:d} WHERE `id` = {:d}", tibiaCoins, accountId));
 }
 
+bool IOLoginData::setAccountEmail(uint32_t accountId, const std::string& email)
+{
+	Database& db = Database::getInstance();
+	return db.executeQuery(
+	    fmt::format("UPDATE `accounts` SET `email` = {:s} WHERE `id` = {:d}", db.escapeString(email), accountId));
+}
+
+bool IOLoginData::accountEmailExists(std::string_view email)
+{
+	Database& db = Database::getInstance();
+	DBResult_ptr result = db.storeQuery(fmt::format(
+	    "SELECT `id` FROM `accounts` WHERE `email` != '' AND LOWER(`email`) = LOWER({:s})", db.escapeString(email)));
+	return result != nullptr;
+}
+
 bool IOLoginData::createAccount(const std::string& name, const std::string& password, uint32_t& accountId)
 {
 	Database& db = Database::getInstance();
@@ -1999,6 +2102,23 @@ bool IOLoginData::accountNameExists(const std::string& name)
 	Database& db = Database::getInstance();
 	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})", db.escapeString(name)));
 	return result != nullptr;
+}
+
+std::optional<std::string> IOLoginData::resolveAccountNameByIdentifier(std::string_view identifier)
+{
+	Database& db = Database::getInstance();
+	const auto lookup = lookupUniqueAccountId(db, identifier);
+	if (lookup.outcome != UniqueAccountIdentifierLookup::Outcome::Unique) {
+		return std::nullopt;
+	}
+
+	DBResult_ptr result =
+	    db.storeQuery(fmt::format("SELECT `name` FROM `accounts` WHERE `id` = {:d}", lookup.accountId));
+	if (!result) {
+		return std::nullopt;
+	}
+
+	return std::string{result->getString("name")};
 }
 
 std::vector<std::pair<std::string, std::string>> IOLoginData::getCastList(const std::string& password)

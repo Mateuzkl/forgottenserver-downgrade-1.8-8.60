@@ -310,8 +310,11 @@ TEST_CASE(enabled_stopped_stats_do_not_allocate_or_time_unobserved_scopes) { che
 
 TEST_CASE(active_monitor_keeps_samples_descriptions_origins_and_execution)
 {
-	Fixture fixture(true, true);
+	Fixture fixture(true, false);
+	// Publish configuration before the stats thread starts reading it.
 	ConfigManager::setInteger(ConfigManager::STATS_SLOW_LOG_TIME, 1);
+	g_stats.start();
+	CHECK(g_stats.isRunning());
 	{
 		ProbeStat scope(description, origin);
 		CHECK(scope.timed());

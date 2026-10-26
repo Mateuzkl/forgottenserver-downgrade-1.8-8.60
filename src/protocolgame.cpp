@@ -41,6 +41,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
+#include <cstdlib>
 #include <limits>
 #include <map>
 #include <mutex>
@@ -56,6 +58,20 @@ std::set<std::string> ProtocolGame::spectatorNames;
 extern Monsters g_monsters;
 
 namespace {
+
+bool traceMovementFor(const Player* viewer)
+{
+	// Explicit, process-local opt-in for one test session; never log credentials.
+	static const uint32_t target = [] {
+		const char* value = std::getenv("TFS_WALK_TRACE_PLAYER_GUID");
+		uint32_t result = 0;
+		if (!value) return result;
+		const char* end = value + std::char_traits<char>::length(value);
+		const auto parsed = std::from_chars(value, end, result);
+		return parsed.ec == std::errc{} && parsed.ptr == end ? result : uint32_t{0};
+	}();
+	return target != 0 && viewer && viewer->getGUID() == target;
+}
 
 // 0x3C is reserved for native ZoneId weather on negotiated custom clients.
 constexpr uint8_t ZONE_WEATHER_OPCODE = 0x3C;
@@ -1265,7 +1281,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	// cast password instead, so it only meets the per-IP spray guard - watching a
 	// stream keeps working while one account on the same address is locked out.
 	const uint32_t clientIP = getIP();
-	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, accountName)) {
+	std::string accountLimiterKey;
+	if (!reserveBruteForceLogin(clientIP, accountName, accountLimiterKey)) {
 		disconnectClient("Too many failed login attempts. Please try again later.");
 		return;
 	}
@@ -1281,11 +1298,11 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	const uint32_t characterId = authentication.characterId;
 
 	if (authentication.status == IOLoginData::AuthenticationResult::Rejected) {
-		LoginAttemptLimiter::getInstance().commitFailure(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().commitFailure(clientIP, accountLimiterKey);
 	} else if (authentication.status == IOLoginData::AuthenticationResult::Success) {
-		LoginAttemptLimiter::getInstance().commitSuccess(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().commitSuccess(clientIP, accountLimiterKey);
 	} else {
-		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountLimiterKey);
 		disconnectClient("The login service is temporarily unavailable. Please try again later.");
 		return;
 	}
@@ -1363,6 +1380,13 @@ void ProtocolGame::dispatchCancelMessage(ReturnValue message) const
 void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 {
 	auto out = getOutputBuffer(msg.getLength());
+	if (msg.getLength() != 0 && traceMovementFor(player.get())) {
+		const auto opcode = msg.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
+		if ((opcode >= 0x64 && opcode <= 0x6D) || opcode == 0xC6 || opcode == 0xC7) {
+			LOG_INFO("[NetworkWalkTrace] ms={} viewer={} opcode=0x{:02x} output_offset={} bytes={}",
+			         OTSYS_TIME(), player->getID(), opcode, out->getLength(), msg.getLength());
+		}
+	}
 	out->append(msg);
 }
 
@@ -2091,71 +2115,13 @@ void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 
 void ProtocolGame::GetTileDescription(const Tile* tile, NetworkMessage& msg)
 {
-	const uint32_t playerInstanceId = player->getInstanceID();
-	int32_t count;
-	Item* ground = tile->getGround();
-	if (ground) {
-		appendItem(msg, ground);
-		count = 1;
-	} else {
-		count = 0;
-	}
-
-	const TileItemVector* items = tile->getItemList();
-	if (items) {
-		for (auto it = items->getBeginTopItem(), end = items->getEndTopItem(); it != end; ++it) {
-			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
-				continue;
-			}
-			appendItem(msg, it->get());
-			count++;
-			if (count == 9 && tile->getPosition() == player->getPosition()) {
-				break;
-			} else if (count == 10) {
-				return;
-			}
-		}
-	}
-
-	const bool isStacked = player->getPosition() == tile->getPosition();
-
-	const CreatureVector* creatures = tile->getCreatures();
-	if (creatures) {
-		bool playerAdded = false;
-		for (auto it = creatures->rbegin(), end = creatures->rend(); it != end; ++it) {
-			const Creature* creature = it->get();
-
-			if (!player->canSeeCreature(creature)) {
-				continue;
-			}
-
-			if (!isOTC && isStacked && count == 9 && !playerAdded) {
-				creature = player.get();
-			}
-
-			if (creature->getID() == player->getID()) {
-				playerAdded = true;
-			}
-
+	const auto stack = tile->getClientStack(player.get());
+	for (size_t index = 0; index < stack.size; ++index) {
+		if (const auto* item = stack.things[index]->getItem()) {
+			appendItem(msg, item);
+		} else if (const auto* creature = stack.things[index]->getCreature()) {
 			auto [known, removedKnown] = isKnownCreature(creature->getID());
 			AddCreature(msg, creature, known, removedKnown);
-
-			if (++count == MAX_STACKPOS_THINGS) {
-				if (!isOTC) return;
-				break;
-			}
-		}
-	}
-
-	if (items && count < MAX_STACKPOS_THINGS) {
-		for (auto it = items->getBeginDownItem(), end = items->getEndDownItem(); it != end; ++it) {
-			if (!InstanceUtils::canSeeItemInInstance(playerInstanceId, it->get())) {
-				continue;
-			}
-			appendItem(msg, it->get());
-			if (++count == MAX_STACKPOS_THINGS) {
-				return;
-			}
 		}
 	}
 }
@@ -2228,6 +2194,7 @@ std::pair<bool, uint32_t> ProtocolGame::isKnownCreature(uint32_t id)
 		if (unseenIt != knownCreatureSet.end()) {
 			uint32_t removedCreatureId = *unseenIt;
 			knownCreatureSet.erase(unseenIt);
+			pendingCreatureEmblems.erase(removedCreatureId);
 			return {false, removedCreatureId};
 		}
 
@@ -2238,6 +2205,7 @@ std::pair<bool, uint32_t> ProtocolGame::isKnownCreature(uint32_t id)
 
 		uint32_t removedId = *it;
 		knownCreatureSet.erase(it);
+		pendingCreatureEmblems.erase(removedId);
 		return {false, removedId};
 	}
 	return {false, 0};
@@ -3077,6 +3045,16 @@ void ProtocolGame::sendCreatureEmblem(const Creature* creature)
 	// Remove creature from client and re-add to update
 	Position pos = creature->getPosition();
 	int32_t stackpos = creature->getTile()->getClientIndexOfCreature(player.get(), creature);
+	if (stackpos < 0) return;
+	if (stackpos >= MAX_STACKPOS_THINGS) {
+		// Keep the client's known cache in sync until the creature reappears.
+		// Unknown creatures already receive a full description on their next add.
+		if (knownCreatureSet.contains(creature->getID())) {
+			pendingCreatureEmblems.insert(creature->getID());
+		}
+		sendUpdateTile(creature->getTile(), pos);
+		return;
+	}
 	sendRemoveTileThing(pos, stackpos);
 	NetworkMessage msg;
 	msg.addByte(0x6A);
@@ -4789,6 +4767,7 @@ void ProtocolGame::sendMapDescription(const Position& pos)
 void ProtocolGame::refreshWorldView()
 {
 	knownCreatureSet.clear();
+	pendingCreatureEmblems.clear();
 	sendMapDescription(player->getPosition());
 	sendZoneWeather(player->getPosition(), true);
 }
@@ -4886,6 +4865,14 @@ void ProtocolGame::sendUpdateTileItem(const Position& pos, uint32_t stackpos, co
 void ProtocolGame::sendRemoveTileThing(const Position& pos, uint32_t stackpos)
 {
 	if (!canSee(pos)) {
+		return;
+	}
+	if (stackpos >= MAX_STACKPOS_THINGS) {
+		if (stackpos != std::numeric_limits<uint32_t>::max()) {
+			// Removal callers have already changed the tile. An old overflow
+			// index cannot identify a client thing; replace the post-change tile.
+			sendUpdateTile(g_game.map.getTile(pos), pos);
+		}
 		return;
 	}
 
@@ -5050,10 +5037,16 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& newPos, int32_t newStackPos,
                                     const Position& oldPos, int32_t oldStackPos, bool teleport)
 {
+	if (traceMovementFor(player.get())) {
+		LOG_INFO("[NetworkWalkTrace] ms={} viewer={} creature={} old=({},{},{}) stack={} new=({},{},{}) stack={} teleport={}",
+		         OTSYS_TIME(), player->getID(), creature->getID(), oldPos.x, oldPos.y, oldPos.z, oldStackPos,
+		         newPos.x, newPos.y, newPos.z, newStackPos, teleport);
+	}
 	if (spyActive_ && creature->getID() == spyTargetCreatureId_) {
 		spyViewportPos_ = newPos;
 
-		if (teleport || oldStackPos >= MAX_STACKPOS_THINGS) {
+		if (teleport || oldStackPos < 0 || oldStackPos >= MAX_STACKPOS_THINGS ||
+		    newStackPos < 0 || newStackPos >= MAX_STACKPOS_THINGS - 1) {
 			sendRemoveTileThing(oldPos, oldStackPos);
 			sendMapDescription(newPos);
 			return;
@@ -5103,9 +5096,26 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 		}
 		return;
 	}
+	if (creature != player.get() &&
+	    (oldStackPos < 0 || oldStackPos >= MAX_STACKPOS_THINGS ||
+	     newStackPos < 0 || newStackPos >= MAX_STACKPOS_THINGS)) {
+		// Both positions describe post-move state. Never move a creature into
+		// the client's stack when the bounded destination actually omits it.
+		if (canSee(oldPos)) sendUpdateTile(g_game.map.getTile(oldPos), oldPos);
+		if (newPos != oldPos && canSee(newPos)) sendUpdateTile(creature->getTile(), newPos);
+		if (newStackPos >= 0 && newStackPos < MAX_STACKPOS_THINGS && canSee(newPos)) {
+			sendCreatureSquare(creature, player->getCreatureSquare(creature));
+			sendCreatureVocation(creature);
+			sendCreatureEchoRaidVisual(creature, true);
+		}
+		return;
+	}
 
 	if (creature == player.get()) {
-		if (teleport || oldStackPos >= MAX_STACKPOS_THINGS) {
+		// At the reserved last slot the client may still have a full cached
+		// destination. A plain implicit insertion can immediately evict self.
+		if (teleport || oldStackPos < 0 || oldStackPos >= MAX_STACKPOS_THINGS ||
+		    newStackPos < 0 || newStackPos >= MAX_STACKPOS_THINGS - 1) {
 			sendRemoveTileThing(oldPos, oldStackPos);
 			sendMapDescription(newPos);
 		} else {
@@ -5151,6 +5161,10 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 				}
 			}
 			writeToOutputBuffer(msg);
+		}
+		if (oldStackPos == MAX_STACKPOS_THINGS - 1 && oldPos != newPos && canSee(oldPos)) {
+			// Leaving self's reserved slot can expose a previously omitted thing.
+			sendUpdateTile(g_game.map.getTile(oldPos), oldPos);
 		}
 		sendZoneWeather(newPos);
 		sendVisibleEchoRaidVisuals(newPos);
@@ -6157,6 +6171,11 @@ void ProtocolGame::sendUseItemCooldown(uint32_t time)
 ////////////// Add common messages
 void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bool known, uint32_t remove)
 {
+	const bool refreshEmblem = pendingCreatureEmblems.contains(creature->getID());
+	if (refreshEmblem) {
+		known = false;
+		remove = creature->getID();
+	}
 	const Player* otherPlayer = creature->getPlayer();
 	if (known) {
 		msg.add<uint16_t>(0x62);
@@ -6258,6 +6277,9 @@ void ProtocolGame::AddCreature(NetworkMessage& msg, const Creature* creature, bo
 	}
 
 	msg.addByte(player->canWalkthroughEx(creature) ? 0x00 : 0x01);
+	if (refreshEmblem) {
+		pendingCreatureEmblems.erase(creature->getID());
+	}
 }
 
 uint16_t ProtocolGame::getRegenerationTimeSeconds(int32_t ticks)
@@ -6805,6 +6827,7 @@ void ProtocolGame::spectatorTurn(uint8_t direction)
 	player = _player;
 
 	knownCreatureSet.clear();
+	pendingCreatureEmblems.clear();
 	sendAddCreature(player.get(), player->getPosition(), 0, CONST_ME_NONE);
 	sendCastChannel();
 	syncOpenContainers();
@@ -6927,6 +6950,7 @@ void ProtocolGame::parseSwitchCast(uint8_t direction)
 				player->client->removeSpectator(getThis());
 				player->client->sendCastMessage(spectator_name, spectator_name + " has left the cast.", TALKTYPE_CHANNEL_O);
 					knownCreatureSet.clear();
+					pendingCreatureEmblems.clear();
 				player = g_game.getCreatureSharedRef<Player>(newCaster);
 				player->client->addSpectator(getThis());
 				sendAddCreature(player.get(), player->getPosition(), 0, CONST_ME_NONE);
@@ -6962,6 +6986,7 @@ void ProtocolGame::parseSwitchCast(uint8_t direction)
 	player->client->removeSpectator(getThis());
 	player->client->sendCastMessage(spectator_name, spectator_name + " has left the cast.", TALKTYPE_CHANNEL_O);
 	knownCreatureSet.clear();
+	pendingCreatureEmblems.clear();
 	player = g_game.getCreatureSharedRef<Player>(newCaster);
 	player->client->addSpectator(getThis());
 	sendAddCreature(player.get(), player->getPosition(), 0, CONST_ME_NONE);

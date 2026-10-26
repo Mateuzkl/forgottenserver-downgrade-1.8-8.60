@@ -402,6 +402,7 @@ private:
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
 	friend struct ProtocolGameAuditTestAccess;
+	friend struct ProtocolGameMovementTestAccess;
 
 	//cast
 	void spectatorTurn(uint8_t direction);
@@ -432,6 +433,7 @@ private:
 	bool isSpyActive() const { return spyActive_; }
 
 	std::unordered_set<uint32_t> knownCreatureSet;
+	std::unordered_set<uint32_t> pendingCreatureEmblems;
 	std::shared_ptr<Player> player;
 	tfs::net::PacketBacklog packetBacklog;
 

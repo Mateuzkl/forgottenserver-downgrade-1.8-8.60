@@ -23,7 +23,7 @@ sistemas DBO nem o trabalho posterior de autosend/métricas de rede.
    `integers`, entre `getInteger` e `setInteger`. Esse é o mesmo armazenamento
    envolvido no alerta anteriormente registrado para `test_runtime_stats_gate`.
 
-Os testes de reprodução foram executados contra os fontes ainda sem estes
+Os testes de reprodução foram executados contra o código-fonte ainda sem estes
 fixes. Os logs originais foram preservados localmente.
 
 ## Alterações
@@ -117,16 +117,19 @@ declarar redução de CPU ou capacidade para determinada quantidade de jogadores
 ### Repetir nos builds locais configurados
 
 ```sh
-cmake --build /home/mateus/tfs18-pr337-review-asan --parallel 3
+ASAN_BUILD_DIR="${ASAN_BUILD_DIR:-$HOME/tfs18-pr337-review-asan}"
+TSAN_BUILD_DIR="${TSAN_BUILD_DIR:-$HOME/tfs18-pr337-review-tsan}"
+
+cmake --build "$ASAN_BUILD_DIR" --parallel 3
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-ctest --test-dir /home/mateus/tfs18-pr337-review-asan \
+ctest --test-dir "$ASAN_BUILD_DIR" \
   --output-on-failure --timeout 120 -j 1
 
-cmake --build /home/mateus/tfs18-pr337-review-tsan \
+cmake --build "$TSAN_BUILD_DIR" \
   --target test_runtime_stats_gate test_configmanager_concurrency --parallel 1
 TSAN_OPTIONS=halt_on_error=1 \
-ctest --test-dir /home/mateus/tfs18-pr337-review-tsan \
+ctest --test-dir "$TSAN_BUILD_DIR" \
   --output-on-failure --timeout 180 \
   -R 'test_(runtime_stats_gate|configmanager_concurrency)$'
 ```
@@ -142,3 +145,62 @@ Em `%TEMP%` do Windows:
   compilação e suíte ASan/UBSan finais.
 - `tfs18-pr337-full-tsan-build.log` e `tfs18-pr337-full-tsan-tests.log`:
   compilação e testes da engine instrumentada com TSan.
+
+## Rodada de revisão e integração com main
+
+Rodada seguinte ao commit `5317383`, incorporando `main` em
+`432f8afefae91cdd0bb8a3167e11ea0b0f1ae62b`. O único conflito textual estava em
+`src/protocolgame.h`: foram preservados tanto `ProtocolGameAuditTestAccess`
+quanto `ProtocolGameMovementTestAccess`. As mudanças aprovadas de movimento/
+stack e login por e-mail foram mantidas.
+
+### Comentários verificados
+
+| Achado | Tratamento |
+|---|---|
+| CodeRabbit: ccache obrigatório nos scripts | Os builds candidate e Clang detectam a ferramenta; sem ela, limpam o launcher em vez de depender de um executável ausente ou de um valor antigo no cache. |
+| CodeRabbit: compatibilidade de unpack/pack | Bootstrap conserva `unpack` existente e fornece fallback de `table.pack`. Testes cobrem contagem de argumentos com nil e as recusas dos callbacks. |
+| CodeRabbit: disband durante transferência forçada de liderança | Reproduzido retorno indevido de sucesso em `leaveParty`. Após `passPartyLeadership`, a função agora verifica `disbanding` e para antes de emitir sucesso/continuar a limpeza. |
+| Greptile: fixtures incompatíveis com baseline | O accessor de combate reutiliza o friend já existente através de alias exclusivo do teste. Party usa uma fixture específica compatível com `void disband()` e sem acesso privado a Events. Headers/layout de produção do baseline não são alterados. |
+| CodeRabbit: comandos com caminho pessoal | Os comandos de reprodução usam `ASAN_BUILD_DIR` e `TSAN_BUILD_DIR`, configuráveis, com defaults em `$HOME`. |
+| CodeRabbit: redação do relatório | A referência ao estado anterior foi esclarecida como “código-fonte”. |
+| Aviso da configuração CodeRabbit | Removidos os blocos raiz `build` e `tools`, que o bot já ignorava por não serem reconhecidos. A configuração válida de idioma foi preservada. |
+| Comentário de espectadores já resolvido | Mantidas as correções do commit anterior; não se acrescentou outra filtragem ao mesmo caminho. |
+
+Referências de compatibilidade:
+[LuaJIT — extensões](https://luajit.org/extensions.html) e
+[configuração CodeRabbit](https://docs.coderabbit.ai/reference/configuration).
+
+### Validação específica dos scripts e LuaJIT
+
+- Quatro fontes de regressão (mensagens, mapa, reentrada e a fixture de party)
+  passaram pela compilação sintática estrita com os headers originais de
+  `49db3276`. As verificações de hash confirmaram que `game.h`, `party.h` e
+  `events.h` do baseline permaneceram intactos.
+- Essa verificação não recompilou nem executou a biblioteca antiga do baseline.
+  O script continua exigindo seu build imutável para executar os testes vermelhos.
+- `bash -n` aprovado nos três scripts alterados.
+- Harness de argumentos com comandos simulados validou seis combinações:
+  candidate Release, candidate ASan e Clang, cada um com e sem ccache. As flags
+  de ASan também foram conferidas. Isso valida a seleção do launcher; não é um
+  novo benchmark ou seis builds completos da engine.
+- **LuaJIT 2.1.1703358377 real: quatro casos aprovados**, com `table.unpack` e
+  `table.pack` ausentes na biblioteca original. O teste foi compilado e ligado
+  diretamente contra a biblioteca LuaJIT instalada.
+
+### Validação integrada após o merge
+
+A primeira suíte encontrou a nova fixture de movimento executando senders fora
+do dispatcher. O runner desse teste agora usa o dispatcher/reactor reais,
+mantendo a asserção de afinidade e as conferências de bytes/stack da produção.
+
+- Suíte ASan/UBSan completa após esse ajuste: **66/66 alvos CTest aprovados,
+  zero falhas, 40,01 s**. Servidor e executáveis de teste compilados; sem
+  diagnósticos dos sanitizers no conjunto exercitado. O cenário SQL opcional
+  continua sem execução do round trip com banco.
+- Engine instrumentada com TSan: **2/2 alvos aprovados, 1,31 s**, incluindo
+  `test_runtime_stats_gate` e `test_configmanager_concurrency`.
+
+Logs locais da rodada em `%TEMP%`: `tfs18-pr337-review2-repro-test.log`,
+`tfs18-pr337-review2-probes.log`, `tfs18-pr337-review2-final-build.log`,
+`tfs18-pr337-review2-final-tests.log` e `tfs18-pr337-review2-tsan-tests.log`.

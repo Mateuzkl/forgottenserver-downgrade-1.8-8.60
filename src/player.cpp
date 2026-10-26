@@ -49,6 +49,11 @@ std::shared_ptr<Item> getSharedItem(Item* item)
 	return item ? item->weak_from_this().lock() : nullptr;
 }
 
+bool accountManagerEmailLooksValid(const std::string& email)
+{
+	return email.find('@') != std::string::npos;
+}
+
 void logSharedItemLockFailure(std::string_view context, const Item* item)
 {
 	LOG_WARN("[Warning - {}] Failed to lock item shared ownership. item={}, id={}", context,
@@ -9298,7 +9303,7 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (checkText(text, "recover") && !managerTalkState[1]) {
-		msg << "What is your account name?";
+		msg << "What is your account name or email?";
 		managerTalkState[1] = true;
 		managerTalkState[6] = true;
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
@@ -9310,18 +9315,19 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 		trimString(tmp);
 
 		if (tmp.length() < 3) {
-			msg << "That account name is too short, at least 3 digits are required. Please select a longer account name.";
+			msg << "That account name or email is too short, at least 3 characters are required. Please try again.";
 			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 			return;
 		}
 
-		if (!IOLoginData::accountNameExists(tmp)) {
-			msg << "An account with that name does not exist, please try another account name or type 'account' to create a new account.";
+		const auto resolvedAccount = IOLoginData::resolveAccountNameByIdentifier(tmp);
+		if (!resolvedAccount) {
+			msg << "An account with that name or email does not exist, please try again or type 'account' to create a new account.";
 			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 			return;
 		}
 
-		managerData.accountName = tmp;
+		managerData.accountName = *resolvedAccount;
 		managerTalkState[6] = false;
 		managerTalkState[7] = true;
 		msg << "What is your recovery key?";
@@ -9412,24 +9418,17 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			}
 
 			if (accountCreated) {
-				accountManager = ACCOUNT_MANAGER_ACCOUNT;
 				managerData.accountId = newAccountId;
 				accountNumber = newAccountId;
 
-				managerTalkState[1] = true;
-				for (int8_t i = 2; i <= 5; i++) {
+				for (int8_t i = 2; i <= 13; i++) {
 					managerTalkState[i] = false;
 				}
+				managerTalkState[13] = true;
 
-				msg << "Your account has been created, you may manage it now, but remember your account name: '"
-				    << managerData.accountName << "' and password: '" << managerData.string1
-				    << "'! If the account name is too hard to remember, please note it somewhere.";
+				msg << "Your account number is '" << managerData.accountName
+				    << "'. What is your email address?";
 				sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
-
-				std::ostringstream msgWelcome;
-				msgWelcome
-				    << "Account Manager: Do you want to change your 'password', 'recovery key', 'character' or 'delete'?";
-				sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msgWelcome.str());
 				return;
 			} else {
 				msg << "Sorry, your account could not be created (all account numbers taken or system error). Please contact an administrator.";
@@ -9461,22 +9460,68 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	if (managerTalkState[4]) {
 		std::string tmp = text;
 		trimString(tmp);
-		if (tmp.length() < 3) {
-			msg << "That account name is too short, at least 3 digits are required. Please select a longer account name.";
+		if (tmp.find('@') != std::string::npos) {
+			msg << "That looks like an email address. Please enter your account name only; you will be asked for your email next.";
+		} else if (tmp.length() < 3) {
+			msg << "That account name is too short, at least 3 characters are required. Please select a longer account name.";
 		} else if (tmp.length() > 25) {
-			msg << "That account name is too long, not more than 25 digits are required. Please select a shorter account name.";
+			msg << "That account name is too long, not more than 25 characters are allowed. Please select a shorter account name.";
+		} else if (IOLoginData::accountNameExists(tmp)) {
+			msg << "An account with that name already exists, please try another account name.";
 		} else {
 			std::string lowerTmp = tmp;
 			std::string lowerPassword = managerData.string1;
 			toLowerCaseString(lowerTmp);
 			toLowerCaseString(lowerPassword);
 			if (lowerTmp == lowerPassword) {
-				msg << "Your account name cannot be same as password, please choose another one.";
+				msg << "Your account name cannot be the same as your password, please choose another one.";
 			} else {
 				managerData.accountName = tmp;
-				msg << managerData.accountName << ", are you sure? Type 'yes' to confirm or 'no' to cancel.";
 				managerTalkState[4] = false;
+				managerTalkState[13] = true;
+				msg << "What is your email address?";
+			}
+		}
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+		return;
+	}
+
+	if (managerTalkState[13]) {
+		std::string email = text;
+		trimString(email);
+
+		if (!accountManagerEmailLooksValid(email)) {
+			msg << "That email address is invalid. Please enter a valid email address containing '@'.";
+		} else if (email.length() > 255) {
+			msg << "That email address is too long. Please enter a shorter email address.";
+		} else if (IOLoginData::accountEmailExists(email) || IOLoginData::resolveAccountNameByIdentifier(email)) {
+			msg << "An account with that email already exists, please try another email address.";
+		} else {
+			managerData.string2 = email;
+			managerTalkState[13] = false;
+
+			if (managerData.accountId != 0) {
+				if (IOLoginData::setAccountEmail(managerData.accountId, managerData.string2)) {
+					accountManager = ACCOUNT_MANAGER_ACCOUNT;
+					managerTalkState[1] = true;
+
+					msg << "Your account has been created, you may manage it now, but remember your account name: '"
+					    << managerData.accountName << "', email: '" << managerData.string2 << "' and password: '"
+					    << managerData.string1
+					    << "'! If the account name is too hard to remember, please note it somewhere.";
+					sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+
+					std::ostringstream msgWelcome;
+					msgWelcome << "Account Manager: Do you want to change your 'password', 'recovery key', 'character' or 'delete'?";
+					sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msgWelcome.str());
+					return;
+				}
+
+				msg << "Your account was created but the email could not be saved. Please contact an administrator.";
+			} else {
 				managerTalkState[5] = true;
+				msg << "Account name '" << managerData.accountName << "' with email '" << managerData.string2
+				    << "', are you sure? Type 'yes' to confirm or 'no' to cancel.";
 			}
 		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
@@ -9484,37 +9529,36 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (checkText(text, "yes") && managerTalkState[5]) {
-		if (!IOLoginData::accountNameExists(managerData.accountName)) {
-			uint32_t newAccountId = 0;
-			if (IOLoginData::createAccount(managerData.accountName, managerData.string1, newAccountId)) {
-				accountManager = ACCOUNT_MANAGER_ACCOUNT;
-				managerData.accountId = newAccountId;
-				accountNumber = newAccountId;
+		uint32_t newAccountId = 0;
+		if (IOLoginData::createAccount(managerData.accountName, managerData.string1, newAccountId) &&
+		    IOLoginData::setAccountEmail(newAccountId, managerData.string2)) {
+			accountManager = ACCOUNT_MANAGER_ACCOUNT;
+			managerData.accountId = newAccountId;
+			accountNumber = newAccountId;
 
-				managerTalkState[1] = true;
-				for (int8_t i = 2; i <= 5; i++) {
-					managerTalkState[i] = false;
-				}
-
-				msg << "Your account has been created, you may manage it now, but remember your account name: '"
-				    << managerData.accountName << "' and password: '" << managerData.string1 << "'!";
-				sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
-
-				std::ostringstream msgWelcome;
-				msgWelcome
-				    << "Account Manager: Do you want to change your 'password', 'recovery key', 'character' or 'delete'?";
-				sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msgWelcome.str());
-				return;
-			} else {
-				msg << "Your account could not be created, please try again.";
-				for (int8_t i = 2; i <= 5; i++) {
-					managerTalkState[i] = false;
-				}
+			managerTalkState[1] = true;
+			for (int8_t i = 2; i <= 13; i++) {
+				managerTalkState[i] = false;
 			}
+
+			msg << "Your account has been created, you may manage it now, but remember your account name: '"
+			    << managerData.accountName << "', email: '" << managerData.string2 << "' and password: '"
+			    << managerData.string1 << "'!";
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+
+			std::ostringstream msgWelcome;
+			msgWelcome << "Account Manager: Do you want to change your 'password', 'recovery key', 'character' or 'delete'?";
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msgWelcome.str());
+			return;
+		}
+
+		if (newAccountId != 0) {
+			msg << "Your account was created but the email could not be saved. Please contact an administrator.";
 		} else {
-			msg << "An account with that name already exists, please try another account name.";
-			managerTalkState[4] = true;
-			managerTalkState[5] = false;
+			msg << "Your account could not be created, please try again.";
+		}
+		for (int8_t i = 2; i <= 13; i++) {
+			managerTalkState[i] = false;
 		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
@@ -9522,8 +9566,8 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 
 	if (checkText(text, "no") && managerTalkState[5]) {
 		managerTalkState[5] = false;
-		managerTalkState[4] = true;
-		msg << "What else would you like as your account name?";
+		managerTalkState[13] = true;
+		msg << "What is your email address?";
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
 	}

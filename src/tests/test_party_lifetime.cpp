@@ -50,6 +50,12 @@ struct PartyLifetimeTestAccess
 		events.info.playerOnGainExperience = events.scriptInterface.getEvent("auditOnGainExperience");
 		CHECK(events.info.playerOnGainExperience != -1);
 	}
+	static void leadershipHook(Events& events, const char* code)
+	{
+		CHECK(luaL_dostring(events.scriptInterface.getLuaState(), code) == LUA_OK);
+		events.info.partyOnPassLeadership = events.scriptInterface.getEvent("auditOnPassLeadership");
+		CHECK(events.info.partyOnPassLeadership != -1);
+	}
 };
 
 namespace {
@@ -222,6 +228,20 @@ TEST_CASE(native_party_leave_handles_disband_from_inside_its_callback)
 	CHECK(!raw->leaveParty(member.get()));
 	CHECK(weak.expired());
 	CHECK(member->getParty() == nullptr && leader->getParty() == nullptr);
+}
+
+TEST_CASE(leader_leave_stops_when_forced_transfer_callback_disbands_party)
+{
+	Fixture f;
+	auto leader = player("Leader"), first = player("First"), second = player("Second");
+	for (const auto& member : {leader, first, second}) f.track(member);
+	auto party = Party::create(leader.get());
+	CHECK(party->invitePlayer(*first) && party->joinParty(*first));
+	CHECK(party->invitePlayer(*second) && party->joinParty(*second));
+	PartyLifetimeTestAccess::leadershipHook(*f.events,
+	    "function auditOnPassLeadership(party, player) assert(party:disband()); return true end");
+	CHECK(!party->leaveParty(leader.get()));
+	CHECK(!leader->getParty() && !first->getParty() && !second->getParty());
 }
 
 TEST_CASE(shared_experience_leadership_change_does_not_duplicate_or_lose_a_share)

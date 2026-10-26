@@ -2,6 +2,8 @@
 set -euo pipefail
 audit_root=${1:?pass the isolated audit root}
 build_dir="$audit_root/candidate-clang-diagnostic"
+launcher=(-DCMAKE_CXX_COMPILER_LAUNCHER=)
+if command -v ccache >/dev/null 2>&1; then launcher=(-DCMAKE_CXX_COMPILER_LAUNCHER=ccache); fi
 cmake -S "$audit_root/candidate-source" -B "$build_dir" -G Ninja \
   -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   '-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O1 -g1 -DNDEBUG' -DBUILD_TESTING=ON \
@@ -9,7 +11,7 @@ cmake -S "$audit_root/candidate-source" -B "$build_dir" -G Ninja \
   "-DLUA_INCLUDE_DIR=${TFS_AUDIT_LUA_INCLUDE:-/usr/local/include}" \
   "-DLUA_LIBRARY=${TFS_AUDIT_LUA_LIBRARY:-/usr/local/lib/liblua.a}" \
   "-DCMAKE_PREFIX_PATH=${TFS_AUDIT_PREFIX_PATH:-/usr/local;$HOME/.local}" \
-  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache > "$audit_root/clang-configure.log" 2>&1
+  "${launcher[@]}" > "$audit_root/clang-configure.log" 2>&1
 targets=(test_combat_messages test_combat_reentry test_map_spectators
   test_party_lifetime test_lua_callback_contract test_networkmessage_wire
   test_protocolgame_pipeline test_connection_write_lifetime test_xtea

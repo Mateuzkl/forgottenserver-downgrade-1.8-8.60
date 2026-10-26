@@ -9,12 +9,16 @@ if [[ ! -d "$regression_source" ]]; then cp -a "$audit_root/baseline-source" "$r
 # Never compile current CombatDamage headers against the old library: its
 # layout changed. Copy only the new tests/probe into a baseline source copy.
 for relative in src/tests/test_combat_messages.cpp src/tests/test_map_spectators.cpp \
-  src/tests/test_combat_reentry.cpp src/tests/test_party_lifetime.cpp \
+  src/tests/test_combat_reentry.cpp \
   src/tests/test_lua_callback_contract.cpp src/tests/test_networkmessage_wire.cpp \
   src/tests/protocolgame_audit_support.h src/benchs/bench_networkmessage.cpp \
   src/benchs/small_packet_probe.h; do
   cp "$repo_root/$relative" "$regression_source/$relative"
 done
+# The full candidate party tests require new Events access and bool disband().
+# Use the baseline API fixture without modifying any production header/layout.
+cp "$repo_root/scripts/profiling/fixtures/party_lifetime.cpp" \
+  "$regression_source/src/tests/test_party_lifetime.cpp"
 mkdir -p "$audit_root/red-tests"
 cd "$audit_root/baseline-build"
 read -r -a original <<< "$(ninja -t commands test_combat | tail -1)"
@@ -26,7 +30,7 @@ for test_name in "$@"; do
   for arg in "${original[@]}"; do
     case "$arg" in
       :|'&&') ;;
-      src/tests/CMakeFiles/test_combat.dir/Unity/unity_0_cxx.cxx.o)
+      src/tests/CMakeFiles/test_combat.dir/Unity/unity_0_cxx.cxx.o|src/tests/CMakeFiles/test_combat.dir/test_combat.cpp.o)
         args+=("$source_path");;
       src/tests/test_combat) args+=("$audit_root/red-tests/$test_name");;
       *) args+=("$arg");;
@@ -39,7 +43,8 @@ for test_name in "$@"; do
     # Test-only access aliases reuse friends that already exist on baseline;
     # no production field, class layout, or baseline header is modified.
     -DProtocolGameAuditTestAccess=ProtocolGameSpellCooldownTestAccess
-    -DPartyLifetimeTestAccess=LootHighlightTestAccess)
+    -DPartyLifetimeTestAccess=LootHighlightTestAccess
+    -DCombatReentryTestAccess=LootHighlightTestAccess)
   if [[ "$test_name" == bench_* ]]; then args+=(-lbenchmark); fi
   "${args[@]}" > "$audit_root/red-tests/$test_name-build.log" 2>&1 || {
     tail -50 "$audit_root/red-tests/$test_name-build.log"; exit 1;

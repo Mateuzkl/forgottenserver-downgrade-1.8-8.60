@@ -12,6 +12,8 @@ rsync -a "$repo_root/data/scripts/eventcallbacks/creature/default_onTargetCombat
 build_dir="$audit_root/candidate-$mode"
 printf 'Candidate mode=%s source=%s build=%s\n' "$mode" "$source_dir" "$build_dir"
 flags=(-DCMAKE_BUILD_TYPE=Release -DENABLE_TEST_LTO=OFF)
+launcher=(-DCMAKE_CXX_COMPILER_LAUNCHER=)
+if command -v ccache >/dev/null 2>&1; then launcher=(-DCMAKE_CXX_COMPILER_LAUNCHER=ccache); fi
 parallel=2
 if [[ "$mode" == asan ]]; then
   flags=(-DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON '-DCMAKE_CXX_FLAGS=-fsanitize=undefined' '-DCMAKE_CXX_FLAGS_DEBUG=-O1 -g1')
@@ -24,7 +26,7 @@ cmake -S "$source_dir" -B "$build_dir" -G Ninja -DBUILD_TESTING=ON \
   "-DLUA_INCLUDE_DIR=${TFS_AUDIT_LUA_INCLUDE:-/usr/local/include}" \
   "-DLUA_LIBRARY=${TFS_AUDIT_LUA_LIBRARY:-/usr/local/lib/liblua.a}" \
   "-DCMAKE_PREFIX_PATH=${TFS_AUDIT_PREFIX_PATH:-/usr/local;$HOME/.local}" \
-  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache "${flags[@]}" \
+  "${launcher[@]}" "${flags[@]}" \
   > "$audit_root/candidate-$mode-configure.log" 2>&1
 targets=()
 for test_path in "$source_dir"/src/tests/test_*.cpp; do targets+=("$(basename "$test_path" .cpp)"); done

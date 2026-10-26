@@ -23,12 +23,15 @@ public:
 	// with a higher threshold still catches account spraying, where each individual
 	// account sees only a handful of guesses.
 	//
-	// accountName is normalized (trimmed, lower-cased) by the limiter, so callers
-	// may pass whatever the client sent. An empty account name means "no account
+	// accountName is normalized (trimmed, lower-cased) by the limiter. Callers
+	// should pass IOLoginData::accountLimiterKey() so name and email aliases for
+	// the same account share one bucket. An empty account name means "no account
 	// dimension" - the caller is doing something that is not an account login, such
 	// as a cast list request - and only the per-IP guard applies.
 	[[nodiscard]] bool allowLogin(uint32_t ip, std::string_view accountName);
 	[[nodiscard]] bool reserveLogin(uint32_t ip, std::string_view accountName);
+	// Reserves only the per-account bucket; call after reserveLogin(ip, "") succeeds.
+	[[nodiscard]] bool reserveAccount(uint32_t ip, std::string_view accountName);
 	void commitFailure(uint32_t ip, std::string_view accountName);
 	void commitSuccess(uint32_t ip, std::string_view accountName);
 	void releaseReservation(uint32_t ip, std::string_view accountName);
@@ -93,6 +96,9 @@ private:
 	static constexpr int64_t DEFAULT_BLOCK_SECONDS = 300;
 };
 
+// Checks the per-IP limit before resolving the account identifier, then reserves the canonical account bucket.
+bool reserveBruteForceLogin(uint32_t clientIP, std::string_view accountName, std::string& accountLimiterKey);
+
 class ProtocolLogin : public Protocol
 {
 public:
@@ -120,7 +126,7 @@ private:
 	void disconnectClient(std::string_view message);
 
 	void getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient,
-	                      bool includeDailyReward, uint32_t clientIP);
+	                      bool includeDailyReward, uint32_t clientIP, std::string_view accountLimiterKey);
 	void getCastList(const std::string& password, uint32_t clientIP);
 	void getAstraCastList();
 	void getFonticakBoostedInfo();

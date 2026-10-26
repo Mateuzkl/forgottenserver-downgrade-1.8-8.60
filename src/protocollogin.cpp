@@ -159,6 +159,21 @@ std::string normalizeAccountName(std::string_view accountName)
 
 } // namespace
 
+bool reserveBruteForceLogin(uint32_t clientIP, std::string_view accountName, std::string& accountLimiterKey)
+{
+	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, "")) {
+		return false;
+	}
+
+	accountLimiterKey = accountName.empty() ? std::string{} : IOLoginData::accountLimiterKey(accountName);
+	if (!accountLimiterKey.empty() && !LoginAttemptLimiter::getInstance().reserveAccount(clientIP, accountLimiterKey)) {
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, "");
+		return false;
+	}
+
+	return true;
+}
+
 uint32_t LoginAttemptLimiter::accountFailureThreshold()
 {
 	const int64_t configured = ConfigManager::getInteger(ConfigManager::BRUTEFORCE_ACCOUNT_FAILURES);
@@ -276,6 +291,26 @@ bool LoginAttemptLimiter::reserveLogin(uint32_t ip, std::string_view accountName
 	if (accountInfo) {
 		++accountInfo->pending;
 	}
+	return true;
+}
+
+bool LoginAttemptLimiter::reserveAccount(uint32_t ip, std::string_view accountName)
+{
+	std::scoped_lock lock(mu);
+	const int64_t now = OTSYS_TIME();
+	cleanup(now);
+
+	const std::string account = normalizeAccountName(accountName);
+	if (account.empty()) {
+		return true;
+	}
+
+	AttemptInfo& accountInfo = accountAttempts[AccountKey{ip, account}];
+	if (!hasCapacity(accountInfo, now, accountFailureThreshold())) {
+		return false;
+	}
+
+	++accountInfo.pending;
 	return true;
 }
 
@@ -397,22 +432,22 @@ void ProtocolLogin::disconnectClient(std::string_view message)
 }
 
 void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_view password, bool isAstraClient,
-                                     bool includeDailyReward, uint32_t clientIP)
+                                     bool includeDailyReward, uint32_t clientIP, std::string_view accountLimiterKey)
 {
 	Account account;
 	const auto authentication = IOLoginData::loginserverAuthentication(accountName, password, account);
 	if (authentication == IOLoginData::AuthenticationResult::Rejected) {
-		LoginAttemptLimiter::getInstance().commitFailure(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().commitFailure(clientIP, accountLimiterKey);
 		disconnectClient("Account name or password is not correct.");
 		return;
 	}
 	if (authentication == IOLoginData::AuthenticationResult::DatabaseError) {
-		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
+		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountLimiterKey);
 		disconnectClient("The login service is temporarily unavailable. Please try again later.");
 		return;
 	}
 
-	LoginAttemptLimiter::getInstance().commitSuccess(clientIP, accountName);
+	LoginAttemptLimiter::getInstance().commitSuccess(clientIP, accountLimiterKey);
 
 	auto output = OutputMessagePool::getOutputMessage();
 
@@ -793,7 +828,8 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// watching a stream still works while one account on the same address is
 	// locked out.
 	uint32_t clientIP = connection ? connection->getIP() : 0;
-	if (!LoginAttemptLimiter::getInstance().reserveLogin(clientIP, accountName)) {
+	std::string accountLimiterKey;
+	if (!reserveBruteForceLogin(clientIP, accountName, accountLimiterKey)) {
 		disconnectClient("Too many failed login attempts. Please try again later.");
 		return;
 	}
@@ -801,13 +837,14 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	g_dispatcher.addTask([=, thisPtr = std::static_pointer_cast<ProtocolLogin>(shared_from_this()),
 	                      accountName = std::string{accountName},
 	                      password = std::string{password},
+	                      accountLimiterKey = accountLimiterKey,
 	                      astraCastListRequest = isAstraCastListRequest,
 	                      fonticakBoostedRequest = isFonticakBoostedRequest]() {
 		if (astraCastListRequest) {
-			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
+			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountLimiterKey);
 			thisPtr->getAstraCastList();
 		} else if (fonticakBoostedRequest) {
-			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountName);
+			LoginAttemptLimiter::getInstance().releaseReservation(clientIP, accountLimiterKey);
 			thisPtr->getFonticakBoostedInfo();
 		} else if (accountName.empty()) {
 			thisPtr->getCastList(password, clientIP);
@@ -816,7 +853,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 			    (thisPtr->astraLoginCapabilities_ & ASTRA_LOGIN_CAPABILITY_DAILY_REWARD) != 0;
 			thisPtr->getCharacterList(accountName, password,
 			                              thisPtr->isAstraClient_ || thisPtr->isFonticakClient_,
-			                              includeDailyReward, clientIP);
+			                              includeDailyReward, clientIP, accountLimiterKey);
 		}
 	});
 }
