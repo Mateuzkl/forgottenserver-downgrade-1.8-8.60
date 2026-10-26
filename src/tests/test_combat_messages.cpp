@@ -93,7 +93,7 @@ void checkObservers(int kind)
 			auto monster = std::make_shared<Monster>(type);
 			Creature* attacker = source == 0 ? nullptr : source == 1 ? f.players[1].get() : source == 2 ? f.players[0].get() : static_cast<Creature*>(monster.get());
 			CombatDamage damage;
-			damage.primary.type = kind == 2 ? COMBAT_MANADRAIN : COMBAT_PHYSICALDAMAGE;
+			damage.primary.type = kind == 0 ? COMBAT_HEALING : kind == 2 ? COMBAT_MANADRAIN : COMBAT_PHYSICALDAMAGE;
 			damage.primary.value = kind == 0 ? 25 : -25;
 			if (kind == 1) {
 				CHECK(f.players[1]->addCondition(Condition::createCondition(CONDITIONID_COMBAT, CONDITION_MANASHIELD, -1, 0)));

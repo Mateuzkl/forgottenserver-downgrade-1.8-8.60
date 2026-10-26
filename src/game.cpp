@@ -7082,7 +7082,6 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 		if (damage.resetDamageBonusesApplied) {
 			return;
 		}
-		damage.resetDamageBonusesApplied = true;
 	}
 	if (!ConfigManager::getBoolean(ConfigManager::RESET_SYSTEM_ENABLED)) {
 		return;
@@ -7099,6 +7098,7 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 			if (damage.secondary.value != 0) {
 				damage.secondary.value += static_cast<int32_t>(damage.secondary.value * dmgPct / 100.0f);
 			}
+			damage.resetDamageBonusesApplied = true;
 		}
 	}
 
@@ -7111,6 +7111,7 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 			if (damage.secondary.value != 0) {
 				damage.secondary.value -= static_cast<int32_t>(damage.secondary.value * defPct / 100.0f);
 			}
+			damage.resetDamageBonusesApplied = true;
 		}
 	}
 
@@ -7175,6 +7176,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 				Player* attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
 				Player* targetPlayer = target->getPlayer();
+				std::string observerMessage;
 				for (const auto& spectator : spectators) {
 					Player* tmpPlayer = static_cast<Player*>(spectator.get());
 					if (tmpPlayer == attackerPlayer && attackerPlayer != targetPlayer) {
@@ -7187,6 +7189,18 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 						} else {
 							tmpPlayer->sendTextMessage(MESSAGE_STATUS_DEFAULT, fmt::format("You were healed by {:s} for {:d} hitpoints.", attacker->getNameDescription(), realHeal));
 						}
+					} else {
+						if (observerMessage.empty()) {
+							if (!attacker) {
+								observerMessage = fmt::format("{} was healed for {} hitpoints.", target->getNameDescription(), realHeal);
+							} else if (attacker == target) {
+								observerMessage = fmt::format("{} healed {} for {} hitpoints.", target->getName(), targetPlayer && targetPlayer->getSex() == PLAYERSEX_FEMALE ? "herself" : "himself", realHeal);
+							} else {
+								observerMessage = fmt::format("{} healed {} for {} hitpoints.", attacker->getNameDescription(), target->getNameDescription(), realHeal);
+							}
+							observerMessage[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(observerMessage[0])));
+						}
+						tmpPlayer->sendTextMessage(MESSAGE_STATUS_DEFAULT, observerMessage);
 					}
 				}
 
@@ -7327,13 +7341,13 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		}
 
 		if (!damage.monsterLevelBonusApplied) {
-			damage.monsterLevelBonusApplied = true;
 			Monster* monster = attacker ? attacker->getMonster() : nullptr;
 			if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED) && monster && monster->getLevel() > 0) {
 				float bonusDmg = monster_level::getBonusDamage() * monster->getLevel();
 				if (bonusDmg != 0.0f) {
 					damage.primary.value += static_cast<int32_t>(std::round(damage.primary.value * bonusDmg));
 					damage.secondary.value += static_cast<int32_t>(std::round(damage.secondary.value * bonusDmg));
+					damage.monsterLevelBonusApplied = true;
 				}
 			}
 		}
@@ -7357,10 +7371,10 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		applyResetSystemBonuses(damage, attackerPlayer, targetPlayer);
 
 		if (!damage.avatarReductionApplied) {
-			damage.avatarReductionApplied = true;
 			if (targetPlayer && targetPlayer->isAvatarActive()) {
 				damage.primary.value -= static_cast<int32_t>(std::ceil(damage.primary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
 				damage.secondary.value -= static_cast<int32_t>(std::ceil(damage.secondary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+				damage.avatarReductionApplied = true;
 			}
 		}
 
@@ -7690,17 +7704,17 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 	}
 
 	if (!damage.monsterLevelBonusApplied) {
-		damage.monsterLevelBonusApplied = true;
 		Monster* monster = attacker ? attacker->getMonster() : nullptr;
 		if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED) && monster && monster->getLevel() > 0) {
 			float bonusDmg = monster_level::getBonusDamage() * monster->getLevel();
-			if (bonusDmg != 0.0f) {
+			if (bonusDmg != 0.0f && (damage.primary.value < 0 || damage.secondary.value < 0)) {
 				if (damage.primary.value < 0) {
 					damage.primary.value += static_cast<int32_t>(std::round(damage.primary.value * bonusDmg));
 				}
 				if (damage.secondary.value < 0) {
 					damage.secondary.value += static_cast<int32_t>(std::round(damage.secondary.value * bonusDmg));
 				}
+				damage.monsterLevelBonusApplied = true;
 			}
 		}
 	}
@@ -8812,6 +8826,11 @@ void Game::playerInviteToParty(uint32_t playerId, uint32_t invitedId)
 		return;
 	}
 
+	// The Lua callback can dissolve the group and release its self owner.
+	const auto partyRef = party->weak_from_this().lock();
+	if (!partyRef) {
+		return;
+	}
 	if (!g_events->eventPartyOnInvite(party, invitedPlayer)) {
 		if (party->empty()) {
 			party->disband();
@@ -8819,6 +8838,10 @@ void Game::playerInviteToParty(uint32_t playerId, uint32_t invitedId)
 		return;
 	}
 
+	if (player->isRemoved() || invitedPlayer->isRemoved() || player->getParty() != party ||
+	    party->getLeader().get() != player || invitedPlayer->getParty()) {
+		return;
+	}
 	party->invitePlayer(*invitedPlayer);
 }
 

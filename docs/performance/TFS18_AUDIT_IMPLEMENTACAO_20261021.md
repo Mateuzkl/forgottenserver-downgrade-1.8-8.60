@@ -1,5 +1,7 @@
 # Auditoria incremental TFS 1.8 / 8.60 — 21/10/2026
 
+Complemento de 26/10/2026: [lifetime de party, reentrada e concorrência de configuração](TFS18_PR337_COMPLEMENTO_20261026.md).
+
 Baseline confirmado por fetch: `49db3276becc1d60ce35ee3c4d861fdc49385d77`.
 SHA final de código/testes: `9ca057c1933cfdf9d55ab8b63a508bf46794716c`.
 O commit seguinte registra somente scripts e relatórios, sem alterar produção.

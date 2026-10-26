@@ -719,6 +719,7 @@ public:
 private:
 	friend struct LootHighlightTestAccess;
 	friend struct PartyLifetimeTestAccess;
+	friend struct CombatReentryTestAccess;
 
 	StorageMap storageMap;
 

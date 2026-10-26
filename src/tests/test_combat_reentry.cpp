@@ -2,6 +2,7 @@
 
 #include "../condition.h"
 #include "../creatureevent.h"
+#include "../events.h"
 #include "../game.h"
 #include "../monster.h"
 #include "../player.h"
@@ -9,6 +10,21 @@
 #include "test_support.h"
 
 extern LuaEnvironment g_luaEnvironment;
+
+struct CombatReentryTestAccess
+{
+	static void add(const std::shared_ptr<Creature>& creature)
+	{
+		creature->setID();
+		std::unique_lock lock(g_game.creatureRefsMutex);
+		g_game.creatureSharedRefs[creature->getID()] = creature;
+	}
+	static void remove(const Creature& creature)
+	{
+		std::unique_lock lock(g_game.creatureRefsMutex);
+		g_game.creatureSharedRefs.erase(creature.getID());
+	}
+};
 
 namespace {
 
@@ -18,14 +34,24 @@ struct Fixture
 	bool previousLevel = ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED);
 	float previousBonus = monster_level::getBonusDamage();
 	CreatureEvents* previousEvents = g_creatureEvents;
+	Events* previousCallbacks = g_events;
 	std::unique_ptr<LuaScriptInterface> script;
 	std::unique_ptr<CreatureEvents> events;
+	std::unique_ptr<Events> callbacks;
+	std::vector<std::shared_ptr<Creature>> creatures;
+	void track(const std::shared_ptr<Creature>& creature)
+	{
+		CombatReentryTestAccess::add(creature);
+		creatures.push_back(creature);
+	}
 
 	Fixture()
 	{
 		CHECK(g_luaEnvironment.initState());
 		script = std::make_unique<LuaScriptInterface>("Combat reentry regression");
 		CHECK(script->initState());
+		callbacks = std::make_unique<Events>();
+		g_events = callbacks.get();
 		events = std::make_unique<CreatureEvents>();
 		g_creatureEvents = events.get();
 		ConfigManager::setBoolean(ConfigManager::RESET_SYSTEM_ENABLED, true);
@@ -34,7 +60,10 @@ struct Fixture
 	}
 	~Fixture()
 	{
+		for (const auto& creature : creatures) CombatReentryTestAccess::remove(*creature);
 		g_creatureEvents = previousEvents;
+		g_events = previousCallbacks;
+		callbacks.reset();
 		events.reset();
 		script.reset();
 		g_luaEnvironment.closeState();
@@ -42,12 +71,12 @@ struct Fixture
 		ConfigManager::setBoolean(ConfigManager::MONSTER_LEVEL_ENABLED, previousLevel);
 		monster_level::setBonus("damage", previousBonus);
 	}
-	void hook(Creature& target, bool mana = false, bool changeDamage = false)
+	void hook(Creature& target, bool mana = false, bool changeDamage = false, std::string mutation = {})
 	{
 		lua_State* L = script->getLuaState();
 		const std::string code = std::string{
 		    "auditCalls = 0; return function(target, attacker, primary, primaryType, secondary, secondaryType, origin) "
-		    "auditCalls = auditCalls + 1; auditPrimary = primary; auditSecondary = secondary; "} +
+		    "auditCalls = auditCalls + 1; auditPrimary = primary; auditSecondary = secondary; "} + mutation +
 		    (changeDamage ? "return 7, primaryType, 3, secondaryType end" : "return primary, primaryType, secondary, secondaryType end");
 		CHECK(luaL_dostring(L, code.c_str()) == LUA_OK);
 		auto event = std::make_unique<CreatureEvent>(script.get());
@@ -164,6 +193,48 @@ TEST_CASE(lua_damage_override_is_not_boosted_again_by_reset_system)
 	CHECK(target->getHealth() == 990);
 }
 
+TEST_CASE(reset_bonus_first_enabled_by_health_callback_is_not_skipped)
+{
+	Fixture f;
+	auto attacker = player();
+	auto target = monster();
+	f.track(attacker);
+	f.track(target);
+	f.hook(*target, false, false, "attacker:setResetDamageBonus(20); ");
+	auto damage = hit();
+	CHECK(g_game.combatChangeHealth(attacker, target, damage));
+	CHECK(f.value("auditCalls") == 1 && f.value("auditPrimary") == 100);
+	CHECK(damage.primary.value == 120 && damage.secondary.value == 60);
+}
+
+TEST_CASE(reset_defense_first_enabled_by_health_callback_is_not_skipped)
+{
+	Fixture f;
+	auto attacker = monster();
+	auto target = player();
+	f.track(target);
+	f.hook(*target, false, false, "target:setResetDefenseBonus(25); ");
+	auto damage = hit();
+	CHECK(g_game.combatChangeHealth(attacker, target, damage));
+	CHECK(f.value("auditCalls") == 1 && f.value("auditPrimary") == 100);
+	CHECK(damage.primary.value == 75 && damage.secondary.value == 38);
+}
+
+TEST_CASE(avatar_first_activated_by_health_callback_is_not_skipped)
+{
+	Fixture f;
+	auto attacker = monster();
+	auto target = player();
+	f.track(target);
+	f.hook(*target, false, false,
+	       fmt::format("target:setStorageValue({}, {}); ", AVATAR_TIMER_STORAGE, OTSYS_TIME() + 60000));
+	auto damage = hit();
+	CHECK(g_game.combatChangeHealth(attacker, target, damage));
+	CHECK(f.value("auditCalls") == 1 && f.value("auditPrimary") == 100);
+	CHECK(target->isAvatarActive());
+	CHECK(damage.primary.value == 90 && damage.secondary.value == 45);
+}
+
 TEST_CASE(healing_keeps_post_heal_callback_order_and_single_reset_bonus)
 {
 	Fixture f;
@@ -204,6 +275,22 @@ TEST_CASE(noop_mana_callback_does_not_repeat_monster_level_multiplier)
 	CHECK(g_game.combatChangeMana(attacker.get(), hooked.get(), after));
 	CHECK(f.value("auditCalls") == 1 && f.value("auditPrimary") == -120);
 	CHECK(plain->getMana() == 820 && hooked->getMana() == 820);
+}
+
+TEST_CASE(mana_gain_converted_to_drain_by_callback_receives_monster_bonus_once)
+{
+	Fixture f;
+	auto attacker = monster(2);
+	auto target = player();
+	f.hook(*target, true, false, "primary = -100; secondary = 0; ");
+	auto damage = hit();
+	damage.primary.type = COMBAT_MANADRAIN;
+	damage.primary.value = 100;
+	damage.secondary.value = 0;
+	CHECK(g_game.combatChangeMana(attacker.get(), target.get(), damage));
+	CHECK(f.value("auditCalls") == 1 && f.value("auditPrimary") == 100);
+	CHECK(damage.primary.value == -120);
+	CHECK(target->getMana() == 880);
 }
 
 TFS_TEST_MAIN()

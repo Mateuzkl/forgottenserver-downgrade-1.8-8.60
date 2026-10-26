@@ -535,7 +535,10 @@ void Npc::reload()
 
 	SpectatorVec players;
 	g_game.map.getSpectators(players, getPosition(), true, true);
-	const bool hasSpectators = !players.empty();
+	const bool hasSpectators = std::ranges::any_of(players, [this](const auto& player) {
+		return !player->isRemoved() && compareInstance(player->getInstanceID()) &&
+		       Creature::canSee(getPosition(), player->getPosition(), Map::maxViewportX, Map::maxViewportY);
+	});
 	setIdle(!hasSpectators);
 
 	if (hasSpectators && walkTicks > 0) {
@@ -874,7 +877,10 @@ std::vector<std::shared_ptr<Player>> Npc::getSpectators() const
 	std::vector<std::shared_ptr<Player>> result;
 	result.reserve(players.players().size());
 	for (const auto& player : players.players()) {
-		result.emplace_back(std::static_pointer_cast<Player>(player));
+		if (!player->isRemoved() && compareInstance(player->getInstanceID()) &&
+		    Creature::canSee(getPosition(), player->getPosition(), Npcs::ViewportX, Npcs::ViewportY)) {
+			result.emplace_back(std::static_pointer_cast<Player>(player));
+		}
 	}
 
 	return result;

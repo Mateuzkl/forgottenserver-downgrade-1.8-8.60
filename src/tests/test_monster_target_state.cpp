@@ -8,6 +8,7 @@
 #include "../groups.h"
 #include "../item.h"
 #include "../monster.h"
+#include "../npc.h"
 #include "../movement.h"
 #include "../player.h"
 #include "../scriptmanager.h"
@@ -575,6 +576,55 @@ TEST_CASE(moving_monster_discovers_new_stationary_target)
 	CHECK(monster->canSee(stationaryTarget->getPosition()));
 	CHECK(hasTarget(monster, followedTarget.get()));
 	CHECK(hasTarget(monster, stationaryTarget.get()));
+}
+
+TEST_CASE(monster_player_proximity_uses_viewer_floors_and_native_instance)
+{
+	for (const auto& [floor, instance, expected] : {
+	         std::tuple<uint8_t, uint32_t, bool>{7, 0, true}, {8, 0, false}, {4, 0, false}, {7, 2, false}}) {
+		WorldFixture world;
+		auto player = makePlayer();
+		player->setInstanceID(instance);
+		world.place(player, Position{1000, 700, floor});
+		auto monster = makeMonster();
+		world.place(monster, Position{1000, 700, 7});
+		CHECK(monster->hasPlayerNearby() == expected);
+	}
+}
+
+TEST_CASE(monster_player_proximity_preserves_its_configured_horizontal_range)
+{
+	WorldFixture world;
+	auto player = makePlayer();
+	world.place(player, Position{1081, 700, 7});
+	auto monster = makeMonster();
+	world.place(monster, Position{1100, 700, 7});
+	CHECK(monster->hasPlayerNearby(20));
+}
+
+TEST_CASE(npc_activity_spectators_preserve_local_floor_range_and_instance)
+{
+	for (const auto& [floor, instance, expected] : {
+	         std::tuple<uint8_t, uint32_t, bool>{7, 0, true}, {6, 0, true}, {4, 0, false}, {8, 0, false}, {7, 2, false}}) {
+		WorldFixture world;
+		auto player = makePlayer();
+		player->setInstanceID(instance);
+		world.place(player, Position{1200, 700, floor});
+		auto npc = std::make_shared<Npc>("Proximity regression");
+		world.place(npc, Position{1200, 700, 7});
+		CHECK(!npc->getSpectators().empty() == expected);
+	}
+}
+
+TEST_CASE(npc_activity_spectators_preserve_the_existing_horizontal_viewport)
+{
+	WorldFixture world;
+	auto player = makePlayer();
+	world.place(player, Position{static_cast<uint16_t>(1300 + Npcs::ViewportX - 1), 700, 7});
+	auto npc = std::make_shared<Npc>("Proximity range regression");
+	world.place(npc, Position{1300, 700, 7});
+	CHECK(!npc->canSee(player->getPosition()));
+	CHECK(npc->getSpectators().size() == 1);
 }
 
 TFS_TEST_MAIN()

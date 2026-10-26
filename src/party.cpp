@@ -22,10 +22,17 @@ std::shared_ptr<Party> Party::create(Player* leader)
 	return party;
 }
 
-void Party::disband()
+bool Party::disband()
 {
+	// Lua can reenter disband, and self.reset() can release the last owner.
+	const auto lifetime = weak_from_this().lock();
+	if (disbanding) {
+		return false;
+	}
+	disbanding = true;
 	if (!g_events->eventPartyOnDisband(this)) {
-		return;
+		disbanding = false;
+		return false;
 	}
 
 	auto currentLeader = leader.lock();
@@ -76,10 +83,12 @@ void Party::disband()
 	}
 	memberList.clear();
 	self.reset();
+	return true;
 }
 
 bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 {
+	const auto lifetime = weak_from_this().lock();
 	if (!player) {
 		return false;
 	}
@@ -91,7 +100,7 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 	}
 
 	bool canRemove = g_events->eventPartyOnLeave(this, player);
-	if (!forceRemove && !canRemove) {
+	if (disbanding || (!forceRemove && !canRemove)) {
 		return false;
 	}
 
@@ -172,13 +181,15 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 
 bool Party::passPartyLeadership(Player* player, bool forceRemove /* = false*/)
 {
+	const auto lifetime = weak_from_this().lock();
 	auto currentLeader = leader.lock();
 
 	if (!player || currentLeader.get() == player || player->getParty() != this) {
 		return false;
 	}
 
-	if (!g_events->eventPartyOnPassLeadership(this, player) && !forceRemove) {
+	const bool canPass = g_events->eventPartyOnPassLeadership(this, player);
+	if (disbanding || (!canPass && !forceRemove)) {
 		return false;
 	}
 
@@ -227,10 +238,11 @@ bool Party::passPartyLeadership(Player* player, bool forceRemove /* = false*/)
 
 bool Party::joinParty(Player& player)
 {
+	const auto lifetime = weak_from_this().lock();
 	auto currentLeader = leader.lock();
 	if (!currentLeader) return false;
 
-	if (!g_events->eventPartyOnJoin(this, &player)) {
+	if (!g_events->eventPartyOnJoin(this, &player) || disbanding) {
 		return false;
 	}
 
@@ -311,7 +323,8 @@ bool Party::removeInvite(Player& player, bool removeFromPlayer /* = true*/)
 
 void Party::revokeInvitation(Player& player)
 {
-	if (!g_events->eventPartyOnRevokeInvitation(this, &player)) {
+	const auto lifetime = weak_from_this().lock();
+	if (!g_events->eventPartyOnRevokeInvitation(this, &player) || disbanding) {
 		return;
 	}
 
@@ -478,16 +491,28 @@ bool Party::setSharedExperience(Player* player, bool sharedExpActive)
 
 void Party::shareExperience(uint64_t experience, const std::shared_ptr<Creature>& source /* = nullptr*/)
 {
+	const auto lifetime = weak_from_this().lock();
 	uint64_t shareExperience = experience;
 	g_events->eventPartyOnShareExperience(this, shareExperience);
+	if (disbanding) {
+		return;
+	}
 
-	for (auto& memberWeak : memberList) {
-		if (auto member = memberWeak.lock()) {
+	// Per-player XP callbacks may change leadership, remove members or disband.
+	// Keep stable recipients instead of iterating a vector that Lua can mutate.
+	const auto currentLeader = leader.lock();
+	const auto members = memberList;
+	for (const auto& memberWeak : members) {
+		if (disbanding) {
+			return;
+		}
+		if (auto member = memberWeak.lock(); member && member != currentLeader &&
+		    !member->isRemoved() && member->getParty() == this) {
 			member->onGainSharedExperience(shareExperience, source);
 		}
 	}
 	
-	if (auto currentLeader = leader.lock()) {
+	if (!disbanding && currentLeader && !currentLeader->isRemoved() && currentLeader->getParty() == this) {
 		currentLeader->onGainSharedExperience(shareExperience, source);
 	}
 }
