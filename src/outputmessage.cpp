@@ -23,10 +23,9 @@ inline constexpr auto AUTOSEND_DELAY_DEFAULT = 10ms;
 
 void OutputMessagePool::scheduleSendAll(std::chrono::milliseconds delay) noexcept
 {
-	sendScheduled = true;
-	g_scheduler.addEvent(createSchedulerTask(static_cast<int>(delay.count()), []() {
+	sendScheduled = g_scheduler.addEvent(createSchedulerTask(static_cast<int>(delay.count()), []() {
 		OutputMessagePool::getInstance().sendAll();
-	}));
+	})) != 0;
 }
 
 void OutputMessagePool::sendAll() noexcept
@@ -37,18 +36,19 @@ void OutputMessagePool::sendAll() noexcept
 		return;
 	}
 
-	std::vector<Protocol_ptr> protocols;
-	protocols.swap(bufferedProtocols);
+	flushingProtocols.swap(bufferedProtocols);
 
-	for (auto& protocol : protocols) {
+	for (auto& protocol : flushingProtocols) {
 		protocol->inAutosend = false;
 		auto& msg = protocol->getCurrentBuffer();
 		if (msg) [[likely]] {
 			protocol->send(std::move(msg));
 		}
 	}
+	// Release every protocol reference, while retaining the allocation for reuse.
+	flushingProtocols.clear();
 
-	if (!bufferedProtocols.empty()) [[likely]] {
+	if (!bufferedProtocols.empty() && !sendScheduled) [[likely]] {
 		scheduleSendAll(AUTOSEND_DELAY_DEFAULT);
 	}
 }
@@ -57,12 +57,11 @@ void OutputMessagePool::addProtocolToAutosend(Protocol_ptr protocol)
 {
 	// THREAD-SAFETY: Must be called from dispatcher thread only
 	// dispatcher thread
-	if (protocol->inAutosend) {
-		return;
+	if (!protocol->inAutosend) {
+		auto& bufferedProtocol = bufferedProtocols.emplace_back(std::move(protocol));
+		bufferedProtocol->inAutosend = true;
 	}
 
-	auto& bufferedProtocol = bufferedProtocols.emplace_back(std::move(protocol));
-	bufferedProtocol->inAutosend = true;
 	if (!sendScheduled) [[unlikely]] {
 		scheduleSendAll(AUTOSEND_DELAY_DEFAULT);
 	}

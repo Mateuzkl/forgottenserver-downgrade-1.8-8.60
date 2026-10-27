@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <charconv>
+#include <atomic>
 
 #if LUA_VERSION_NUM >= 502
 #undef lua_strlen
@@ -28,9 +29,12 @@ extern Game g_game;
 namespace {
 
 std::array<std::string, ConfigManager::String::LAST_STRING> strings = {};
-std::array<int64_t, ConfigManager::Integer::LAST_INTEGER> integers = {};
-std::array<bool, ConfigManager::Boolean::LAST_BOOLEAN> booleans = {};
-std::array<float, ConfigManager::LAST_FLOAT_CONFIG> floats = {};
+// Workers (e.g. Stats) read these while the dispatcher updates settings.
+// Independent scalar options do not publish other objects, so relaxed access
+// provides race-free values without a mutex on every hot-path config lookup.
+std::array<std::atomic<int64_t>, ConfigManager::Integer::LAST_INTEGER> integers{};
+std::array<std::atomic<bool>, ConfigManager::Boolean::LAST_BOOLEAN> booleans{};
+std::array<std::atomic<float>, ConfigManager::LAST_FLOAT_CONFIG> floats{};
 
 using ExperienceStages = std::vector<std::tuple<uint32_t, uint32_t, float>>;
 ExperienceStages expStages;
@@ -720,7 +724,7 @@ bool ConfigManager::load()
 	if (floats[POWER_LAW_EXPONENT] <= 0.0f) {
 		LOG_WARN(fmt::format(
 		    "[Warning - ConfigManager::load] powerLawExponent ({}) is <= 0, using default 0.3f",
-		    floats[POWER_LAW_EXPONENT]));
+		    floats[POWER_LAW_EXPONENT].load(std::memory_order_relaxed)));
 		floats[POWER_LAW_EXPONENT] = 0.3f;
 	}
 
@@ -827,7 +831,7 @@ bool ConfigManager::getBoolean(Boolean what)
 		    fmt::format("[Warning - ConfigManager::getBoolean] Accessing invalid index: {}", static_cast<int>(what)));
 		return false;
 	}
-	return booleans[what];
+	return booleans[what].load(std::memory_order_relaxed);
 }
 
 std::string_view ConfigManager::getString(String what)
@@ -847,7 +851,7 @@ int64_t ConfigManager::getInteger(Integer what)
 		    fmt::format("[Warning - ConfigManager::getInteger] Accessing invalid index: {}", static_cast<int>(what)));
 		return 0;
 	}
-	return integers[what];
+	return integers[what].load(std::memory_order_relaxed);
 }
 
 float ConfigManager::getExperienceStage(uint32_t level)
@@ -900,7 +904,7 @@ bool ConfigManager::setBoolean(Boolean what, bool value)
 		return false;
 	}
 
-	booleans[what] = value;
+	booleans[what].store(value, std::memory_order_relaxed);
 	return true;
 }
 
@@ -927,7 +931,7 @@ bool ConfigManager::setInteger(Integer what, int64_t value)
 		return false;
 	}
 
-	integers[what] = value;
+	integers[what].store(value, std::memory_order_relaxed);
 	return true;
 }
 
@@ -938,7 +942,7 @@ float ConfigManager::getFloat(float_config_t what)
 		    fmt::format("[Warning - ConfigManager::getFloat] Accessing invalid index: {}", static_cast<int>(what)));
 		return 0.0f;
 	}
-	return floats[what];
+	return floats[what].load(std::memory_order_relaxed);
 }
 
 bool ConfigManager::setFloat(float_config_t what, float value)
@@ -948,7 +952,7 @@ bool ConfigManager::setFloat(float_config_t what, float value)
 		    fmt::format("[Warning - ConfigManager::setFloat] Accessing invalid index: {}", static_cast<int>(what)));
 		return false;
 	}
-	floats[what] = value;
+	floats[what].store(value, std::memory_order_relaxed);
 	return true;
 }
 

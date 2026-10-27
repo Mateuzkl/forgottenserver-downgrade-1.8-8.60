@@ -7020,13 +7020,14 @@ void Game::combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColo
 	}
 }
 
-static uint16_t getPreyDamageBoostPercent(const std::shared_ptr<Player>& player, const std::shared_ptr<Creature>& target)
+static uint16_t getPreyDamageBoostPercent(Player* player, const std::shared_ptr<Creature>& target)
 {
 	if (!player || !target) {
 		return 0;
 	}
 
-	auto targetMonster = std::dynamic_pointer_cast<Monster>(target);
+	// The shared target keeps this borrowed monster pointer alive.
+	Monster* const targetMonster = target->getMonster();
 	if (!targetMonster || targetMonster->getMaster()) {
 		return 0;
 	}
@@ -7034,13 +7035,14 @@ static uint16_t getPreyDamageBoostPercent(const std::shared_ptr<Player>& player,
 	return player->getPreyDamageBoost(targetMonster->getName());
 }
 
-static uint16_t getPreyDamageReductionPercent(const std::shared_ptr<Player>& player, const std::shared_ptr<Creature>& attacker)
+static uint16_t getPreyDamageReductionPercent(Player* player, const std::shared_ptr<Creature>& attacker)
 {
 	if (!player || !attacker) {
 		return 0;
 	}
 
-	auto attackerMonster = std::dynamic_pointer_cast<Monster>(attacker);
+	// The shared attacker keeps this borrowed monster pointer alive.
+	Monster* const attackerMonster = attacker->getMonster();
 	if (!attackerMonster || attackerMonster->getMaster()) {
 		return 0;
 	}
@@ -7055,7 +7057,7 @@ static void applyPreyCombatBonuses(CombatDamage& damage, const std::shared_ptr<C
 	}
 	damage.preyApplied = true;
 
-	auto attackerPlayer = std::dynamic_pointer_cast<Player>(attacker);
+	Player* const attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
 	if (attackerPlayer) {
 		const uint16_t boost = getPreyDamageBoostPercent(attackerPlayer, target);
 		damage.primary.value = EquipmentCombatBonus::increaseDamageByPercent(damage.primary.value, boost);
@@ -7063,7 +7065,7 @@ static void applyPreyCombatBonuses(CombatDamage& damage, const std::shared_ptr<C
 		return;
 	}
 
-	auto targetPlayer = std::dynamic_pointer_cast<Player>(target);
+	Player* const targetPlayer = target ? target->getPlayer() : nullptr;
 	if (targetPlayer) {
 		const uint16_t reduction = getPreyDamageReductionPercent(targetPlayer, attacker);
 		damage.primary.value = EquipmentCombatBonus::reduceDamageByPercent(damage.primary.value, reduction);
@@ -7073,11 +7075,17 @@ static void applyPreyCombatBonuses(CombatDamage& damage, const std::shared_ptr<C
 
 void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer, Player* targetPlayer)
 {
+	const bool isHeal = (damage.primary.type == COMBAT_HEALING);
+	// Healing returns without recursive reentry and area leech reuses its
+	// CombatDamage for separate heals. Only the damage stage needs this guard.
+	if (!isHeal) {
+		if (damage.resetDamageBonusesApplied) {
+			return;
+		}
+	}
 	if (!ConfigManager::getBoolean(ConfigManager::RESET_SYSTEM_ENABLED)) {
 		return;
 	}
-
-	const bool isHeal = (damage.primary.type == COMBAT_HEALING);
 
 	// Damage bonus: Attacker is player, target is NOT a player (PvE only)
 	if (!isHeal && attackerPlayer && !targetPlayer) {
@@ -7090,6 +7098,7 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 			if (damage.secondary.value != 0) {
 				damage.secondary.value += static_cast<int32_t>(damage.secondary.value * dmgPct / 100.0f);
 			}
+			damage.resetDamageBonusesApplied = true;
 		}
 	}
 
@@ -7102,6 +7111,7 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 			if (damage.secondary.value != 0) {
 				damage.secondary.value -= static_cast<int32_t>(damage.secondary.value * defPct / 100.0f);
 			}
+			damage.resetDamageBonusesApplied = true;
 		}
 	}
 
@@ -7166,6 +7176,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 				Player* attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
 				Player* targetPlayer = target->getPlayer();
+				std::string observerMessage;
 				for (const auto& spectator : spectators) {
 					Player* tmpPlayer = static_cast<Player*>(spectator.get());
 					if (tmpPlayer == attackerPlayer && attackerPlayer != targetPlayer) {
@@ -7178,6 +7189,18 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 						} else {
 							tmpPlayer->sendTextMessage(MESSAGE_STATUS_DEFAULT, fmt::format("You were healed by {:s} for {:d} hitpoints.", attacker->getNameDescription(), realHeal));
 						}
+					} else {
+						if (observerMessage.empty()) {
+							if (!attacker) {
+								observerMessage = fmt::format("{} was healed for {} hitpoints.", target->getNameDescription(), realHeal);
+							} else if (attacker == target) {
+								observerMessage = fmt::format("{} healed {} for {} hitpoints.", target->getName(), targetPlayer && targetPlayer->getSex() == PLAYERSEX_FEMALE ? "herself" : "himself", realHeal);
+							} else {
+								observerMessage = fmt::format("{} healed {} for {} hitpoints.", attacker->getNameDescription(), target->getNameDescription(), realHeal);
+							}
+							observerMessage[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(observerMessage[0])));
+						}
+						tmpPlayer->sendTextMessage(MESSAGE_STATUS_DEFAULT, observerMessage);
 					}
 				}
 
@@ -7291,6 +7314,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 						spectatorMessage[0] = static_cast<char>(std::toupper(spectatorMessage[0]));
 					}
 					message.type = MESSAGE_STATUS_DEFAULT;
+					message.text = spectatorMessage;
 				}
 				tmpPlayer->sendTextMessage(message);
 			}
@@ -7316,13 +7340,14 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			return false;
 		}
 
-		if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED)) {
+		if (!damage.monsterLevelBonusApplied) {
 			Monster* monster = attacker ? attacker->getMonster() : nullptr;
-			if (monster && monster->getLevel() > 0) {
+			if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED) && monster && monster->getLevel() > 0) {
 				float bonusDmg = monster_level::getBonusDamage() * monster->getLevel();
 				if (bonusDmg != 0.0f) {
 					damage.primary.value += static_cast<int32_t>(std::round(damage.primary.value * bonusDmg));
 					damage.secondary.value += static_cast<int32_t>(std::round(damage.secondary.value * bonusDmg));
+					damage.monsterLevelBonusApplied = true;
 				}
 			}
 		}
@@ -7345,9 +7370,12 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		// Reset system: apply damage/defense bonuses (PvE only)
 		applyResetSystemBonuses(damage, attackerPlayer, targetPlayer);
 
-		if (targetPlayer && targetPlayer->isAvatarActive()) {
-			damage.primary.value -= static_cast<int32_t>(std::ceil(damage.primary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
-			damage.secondary.value -= static_cast<int32_t>(std::ceil(damage.secondary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+		if (!damage.avatarReductionApplied) {
+			if (targetPlayer && targetPlayer->isAvatarActive()) {
+				damage.primary.value -= static_cast<int32_t>(std::ceil(damage.primary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+				damage.secondary.value -= static_cast<int32_t>(std::ceil(damage.secondary.value * AVATAR_DAMAGE_REDUCTION_PERCENT / 100.0));
+				damage.avatarReductionApplied = true;
+			}
 		}
 
 		applyPreyCombatBonuses(damage, attackerRef, targetRef);
@@ -7400,8 +7428,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 				addAnimatedText(spectators, fmt::format("{:+d}", -manaDamage), targetPos,
 				                static_cast<TextColor_t>(getInteger(ConfigManager::MANA_LOSS_COLOUR)));
 
-				const uint16_t preyBoost = getPreyDamageBoostPercent(std::dynamic_pointer_cast<Player>(attackerRef), targetRef);
-				const uint16_t preyReduction = getPreyDamageReductionPercent(std::dynamic_pointer_cast<Player>(targetRef), attackerRef);
+				const uint16_t preyBoost = getPreyDamageBoostPercent(attackerPlayer, targetRef);
+				const uint16_t preyReduction = getPreyDamageReductionPercent(targetPlayer, attackerRef);
 
 				for (const auto& spectator : spectators) {
 					Player* tmpPlayer = static_cast<Player*>(spectator.get());
@@ -7447,6 +7475,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 							}
 							spectatorMessage[0] = static_cast<char>(std::toupper(spectatorMessage[0]));
 						}
+						message.text = spectatorMessage;
 					}
 					tmpPlayer->sendTextMessage(message);
 				}
@@ -7545,8 +7574,8 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 			auto damageString = getHitpointStatusString(realDamage);
 
 			std::string spectatorMessage;
-			const uint16_t preyBoost = getPreyDamageBoostPercent(std::dynamic_pointer_cast<Player>(attackerRef), targetRef);
-			const uint16_t preyReduction = getPreyDamageReductionPercent(std::dynamic_pointer_cast<Player>(targetRef), attackerRef);
+			const uint16_t preyBoost = getPreyDamageBoostPercent(attackerPlayer, targetRef);
+			const uint16_t preyReduction = getPreyDamageReductionPercent(targetPlayer, attackerRef);
 
 			for (const auto& spectator : spectators) {
 				Player* tmpPlayer = static_cast<Player*>(spectator.get());
@@ -7674,17 +7703,18 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 		}
 	}
 
-	if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED)) {
+	if (!damage.monsterLevelBonusApplied) {
 		Monster* monster = attacker ? attacker->getMonster() : nullptr;
-		if (monster && monster->getLevel() > 0) {
+		if (ConfigManager::getBoolean(ConfigManager::MONSTER_LEVEL_ENABLED) && monster && monster->getLevel() > 0) {
 			float bonusDmg = monster_level::getBonusDamage() * monster->getLevel();
-			if (bonusDmg != 0.0f) {
+			if (bonusDmg != 0.0f && (damage.primary.value < 0 || damage.secondary.value < 0)) {
 				if (damage.primary.value < 0) {
 					damage.primary.value += static_cast<int32_t>(std::round(damage.primary.value * bonusDmg));
 				}
 				if (damage.secondary.value < 0) {
 					damage.secondary.value += static_cast<int32_t>(std::round(damage.secondary.value * bonusDmg));
 				}
+				damage.monsterLevelBonusApplied = true;
 			}
 		}
 	}
@@ -7842,6 +7872,7 @@ bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& 
 					}
 					spectatorMessage[0] = static_cast<char>(std::toupper(spectatorMessage[0]));
 				}
+				message.text = spectatorMessage;
 			}
 			tmpPlayer->sendTextMessage(message);
 		}
@@ -8795,6 +8826,11 @@ void Game::playerInviteToParty(uint32_t playerId, uint32_t invitedId)
 		return;
 	}
 
+	// The Lua callback can dissolve the group and release its self owner.
+	const auto partyRef = party->weak_from_this().lock();
+	if (!partyRef) {
+		return;
+	}
 	if (!g_events->eventPartyOnInvite(party, invitedPlayer)) {
 		if (party->empty()) {
 			party->disband();
@@ -8802,6 +8838,10 @@ void Game::playerInviteToParty(uint32_t playerId, uint32_t invitedId)
 		return;
 	}
 
+	if (player->isRemoved() || invitedPlayer->isRemoved() || player->getParty() != party ||
+	    party->getLeader().get() != player || invitedPlayer->getParty()) {
+		return;
+	}
 	party->invitePlayer(*invitedPlayer);
 }
 

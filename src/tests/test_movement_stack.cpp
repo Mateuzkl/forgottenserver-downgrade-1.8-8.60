@@ -7,7 +7,9 @@
 #include "../outputmessage.h"
 #include "../astraclient.h"
 #include "../tile.h"
+#include "../tasks.h"
 #include "test_support.h"
+#include "protocolgame_owned_fixture.h"
 
 struct ProtocolGameMovementTestAccess {
 	static void setup(ProtocolGame& protocol, const std::shared_ptr<Player>& viewer)
@@ -27,6 +29,7 @@ struct ProtocolGameMovementTestAccess {
 	}
 	static void emblem(ProtocolGame& protocol, const Creature* actor) { protocol.sendCreatureEmblem(actor); }
 	static void remember(ProtocolGame& protocol, uint32_t id) { protocol.knownCreatureSet.insert(id); }
+	static void setOtc(ProtocolGame& protocol, bool value) { protocol.isOTC = value; }
 	static bool knows(ProtocolGame& protocol, uint32_t id) { return protocol.knownCreatureSet.contains(id); }
 	static bool pendingEmblem(ProtocolGame& protocol, uint32_t id) { return protocol.pendingCreatureEmblems.contains(id); }
 	static void cacheEchoVisual(ProtocolGame& protocol, uint32_t id)
@@ -167,7 +170,8 @@ TEST_CASE(movement_from_dense_own_tile_uses_the_same_stack_as_map_description)
 	destination->internalAddThing(std::make_shared<Item>(100).get());
 	f.tile->removeThing(f.player.get(), 0);
 	destination->internalAddThing(f.player.get());
-	ProtocolGame protocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 	ProtocolGameMovementTestAccess::move(protocol, f.player, oldPos, oldStack, destination->getPosition(),
 	                                   destination->getClientIndexOfCreature(f.player.get(), f.player.get()));
 	auto& msg = *protocol.getCurrentBuffer();
@@ -195,7 +199,8 @@ TEST_CASE(detached_viewer_is_not_injected_from_a_stale_parent_pointer)
 TEST_CASE(moving_into_an_omitted_destination_refreshes_both_tiles_instead_of_0x6d)
 {
 	Fixture f(12);
-	ProtocolGame protocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 	ProtocolGameMovementTestAccess::setup(protocol, f.player);
 	ProtocolGameMovementTestAccess::cacheEchoVisual(protocol, f.npc->getID());
 	const auto pos = f.tile->getPosition();
@@ -220,7 +225,8 @@ TEST_CASE(moving_from_an_omitted_stack_sends_followups_even_at_the_same_position
 {
 	for (bool samePosition : {false, true}) {
 		Fixture f(2);
-		ProtocolGame protocol(nullptr);
+		ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 		ProtocolGameMovementTestAccess::setup(protocol, f.player);
 		ProtocolGameMovementTestAccess::cacheEchoVisual(protocol, f.npc->getID());
 		const auto pos = f.tile->getPosition();
@@ -248,7 +254,9 @@ TEST_CASE(overflow_removal_sends_post_removal_tile_contents)
 	tile->internalAddThing(std::make_shared<Item>(101).get());
 	g_game.map.setTile(pos, std::move(tile));
 	struct Cleanup { Position pos; ~Cleanup() { g_game.map.removeTile(pos); } } cleanup{pos};
-	ProtocolGame protocol(nullptr), expectedProtocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture, expectedProtocolFixture;
+	auto& protocol = *protocolFixture.owner;
+	auto& expectedProtocol = *expectedProtocolFixture.owner;
 	ProtocolGameMovementTestAccess::setup(protocol, f.player);
 	ProtocolGameMovementTestAccess::remove(protocol, pos, MAX_STACKPOS_THINGS);
 	const auto expected = ProtocolGameMovementTestAccess::describe(expectedProtocol, f.player, g_game.map.getTile(pos));
@@ -264,7 +272,8 @@ TEST_CASE(overflow_removal_sends_post_removal_tile_contents)
 TEST_CASE(overflow_emblem_preserves_known_cache_and_replaces_description_once)
 {
 	Fixture f(12);
-	ProtocolGame protocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 	ProtocolGameMovementTestAccess::setup(protocol, f.player);
 	ProtocolGameMovementTestAccess::remember(protocol, f.npc->getID());
 	ProtocolGameMovementTestAccess::emblem(protocol, f.npc.get());
@@ -290,7 +299,8 @@ TEST_CASE(overflow_emblem_preserves_known_cache_and_replaces_description_once)
 TEST_CASE(overflow_emblem_for_unknown_creatures_keeps_normal_cache_insertion)
 {
 	Fixture f(12);
-	ProtocolGame protocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 	ProtocolGameMovementTestAccess::setup(protocol, f.player);
 	ProtocolGameMovementTestAccess::emblem(protocol, f.npc.get());
 	CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, f.npc->getID()));
@@ -303,29 +313,34 @@ TEST_CASE(overflow_emblem_for_unknown_creatures_keeps_normal_cache_insertion)
 
 TEST_CASE(pending_emblems_are_pruned_on_cache_eviction_and_world_refresh)
 {
-	Fixture f(2);
-	ProtocolGame protocol(nullptr);
-	ProtocolGameMovementTestAccess::setup(protocol, f.player);
-	for (uint32_t id = 1; id <= 250; ++id) {
-		ProtocolGameMovementTestAccess::remember(protocol, id);
-		ProtocolGameMovementTestAccess::pendEmblem(protocol, id);
-	}
-	const auto [known, removed] = ProtocolGameMovementTestAccess::know(protocol, 251);
-	CHECK(!known);
-	CHECK(removed != 0);
-	CHECK(!ProtocolGameMovementTestAccess::knows(protocol, removed));
-	CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, removed));
-	ProtocolGameMovementTestAccess::refresh(protocol);
-	for (uint32_t id = 1; id <= 251; ++id) {
-		CHECK(!ProtocolGameMovementTestAccess::knows(protocol, id));
-		CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, id));
+	for (const uint32_t budget : {250U, 1300U}) {
+		Fixture f(2);
+		ProtocolGameOwnedFixture protocolFixture;
+		auto& protocol = *protocolFixture.owner;
+		ProtocolGameMovementTestAccess::setup(protocol, f.player);
+		ProtocolGameMovementTestAccess::setOtc(protocol, budget == 1300);
+		for (uint32_t id = 1; id <= budget; ++id) {
+			ProtocolGameMovementTestAccess::remember(protocol, id);
+			ProtocolGameMovementTestAccess::pendEmblem(protocol, id);
+		}
+		const auto [known, removed] = ProtocolGameMovementTestAccess::know(protocol, budget + 1);
+		CHECK(!known);
+		CHECK(removed != 0);
+		CHECK(!ProtocolGameMovementTestAccess::knows(protocol, removed));
+		CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, removed));
+		ProtocolGameMovementTestAccess::refresh(protocol);
+		for (uint32_t id = 1; id <= budget + 1; ++id) {
+			CHECK(!ProtocolGameMovementTestAccess::knows(protocol, id));
+			CHECK(!ProtocolGameMovementTestAccess::pendingEmblem(protocol, id));
+		}
 	}
 }
 
 TEST_CASE(ordinary_emblems_keep_legacy_remove_add_stack)
 {
 	Fixture f(2);
-	ProtocolGame protocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 	ProtocolGameMovementTestAccess::setup(protocol, f.player);
 	ProtocolGameMovementTestAccess::emblem(protocol, f.npc.get());
 	auto& msg = *protocol.getCurrentBuffer();
@@ -341,7 +356,8 @@ TEST_CASE(ordinary_emblems_keep_legacy_remove_add_stack)
 TEST_CASE(local_movement_into_reserved_last_slot_uses_a_full_map_description)
 {
 	Fixture f(12);
-	ProtocolGame protocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 	ProtocolGameMovementTestAccess::setup(protocol, f.player);
 	const auto pos = f.tile->getPosition();
 	const Position oldPos{uint16_t(pos.x - 1), pos.y, pos.z};
@@ -369,5 +385,14 @@ int main()
 	top.group = ITEM_GROUP_NONE;
 	top.alwaysOnTop = true;
 	top.alwaysOnTopOrder = 1;
-	return tfs::tests::run();
+	// Packet senders require the real dispatcher context, including in Debug
+	// sanitizer builds where the production affinity assertion is enabled.
+	g_dispatcher.start();
+	int result = EXIT_FAILURE;
+	g_dispatcher.addTask([&result] {
+		result = tfs::tests::run();
+		g_dispatcher.shutdown();
+	});
+	g_reactor.runLoop();
+	return result;
 }

@@ -16,4 +16,16 @@ foreach(test_src ${tests_SRC})
             INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO FALSE)
     endif()
     add_test(NAME ${test_name} COMMAND ${test_name})
+    set_tests_properties(${test_name} PROPERTIES
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+        ENVIRONMENT "TFS_TEST_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+    )
 endforeach()
+
+find_program(TFS_LUA_TEST_EXECUTABLE NAMES lua5.5 lua luajit)
+if (TFS_LUA_TEST_EXECUTABLE)
+    add_test(NAME test_step_tile_callbacks
+        COMMAND ${TFS_LUA_TEST_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/tools/test_step_tile_callbacks.lua
+            ${PROJECT_SOURCE_DIR}/data/events/scripts/player.lua)
+endif()

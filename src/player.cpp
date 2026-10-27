@@ -3626,8 +3626,8 @@ void Player::onThink(uint32_t interval)
 			if (item->decayImbuements(hasCondition(CONDITION_INFIGHT))) {
 				imbuementDecayed = true;
 			}
-			sendSkills();
-			sendStats();
+			// A timer tick does not change bonuses. Expiration already calls
+			// removeImbuementEffect(), which sends the changed skills and stats.
 		}
 	}
 	if (imbuementDecayed) {

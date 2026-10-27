@@ -70,11 +70,15 @@ OutputMessage_ptr Protocol::getOutputBuffer(int32_t size)
 	assert(g_dispatcher.isDispatcherThread() && "Protocol::getOutputBuffer must run on the dispatcher thread");
 	if (!outputBuffer) {
 		outputBuffer = OutputMessagePool::getOutputMessage();
-		OutputMessagePool::getInstance().addProtocolToAutosend(shared_from_this());
 	} else if ((outputBuffer->getLength() + size) > NetworkMessage::MAX_PROTOCOL_BODY_LENGTH) {
 		send(outputBuffer);
 		outputBuffer = OutputMessagePool::getOutputMessage();
-		OutputMessagePool::getInstance().addProtocolToAutosend(shared_from_this());
+	}
+	auto& pool = OutputMessagePool::getInstance();
+	if (!inAutosend || pool.needsAutosendRetry()) {
+		// Retry an event rejected under backpressure even when this buffer already
+		// existed. Never flush here: the caller has not appended its payload yet.
+		pool.addProtocolToAutosend(shared_from_this());
 	}
 	return outputBuffer;
 }

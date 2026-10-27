@@ -303,7 +303,17 @@ void Creature::onWalk()
 		Direction dir;
 		uint32_t flags = FLAG_IGNOREFIELDDAMAGE;
 		if (getNextStep(dir, flags)) {
-			ReturnValue ret = g_game.internalMoveCreature(this, dir, flags);
+			ReturnValue ret;
+			{
+				struct PathStepScope {
+					std::optional<PlannedPathStep>& active;
+					std::optional<PlannedPathStep> previous;
+					PathStepScope(std::optional<PlannedPathStep>& value, const Position& from, const Position& to) :
+					    active(value), previous(value) { active = PlannedPathStep{from, to}; }
+					~PathStepScope() { active = previous; }
+				} stepScope(followingPathStep, getPosition(), getNextPosition(dir, getPosition()));
+				ret = g_game.internalMoveCreature(this, dir, flags);
+			}
 			if (ret != RETURNVALUE_NOERROR) {
 				if (Player* player = getPlayer()) {
 					player->sendCancelMessage(ret);
@@ -486,7 +496,13 @@ void Creature::onAttackedCreatureChangeZone(ZoneType_t zone)
 void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Position& newPos, const Tile* oldTile,
                               const Position& oldPos, bool teleport)
 {
+	const bool plannedPathStep = creature == this && followingPathStep &&
+	                             followingPathStep->from == oldPos && followingPathStep->to == newPos &&
+	                             getPosition() == newPos;
 	if (creature == this) {
+		// Consume before invoking callbacks. Nested moves, including a later
+		// replay of the same positions, must not inherit this step's permission.
+		followingPathStep.reset();
 		lastStep = OTSYS_TIME();
 		lastStepCost = 1;
 
@@ -559,7 +575,10 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 					if (forceUpdateFollowPath || monster->shouldRepathAfterTargetStep()) {
 						requestFollowPathUpdate();
 					}
-				} else if (listWalkDir.empty() || forceUpdateFollowPath) {
+				} else if (!plannedPathStep || teleport || oldPos.z != newPos.z || listWalkDir.empty() ||
+				           forceUpdateFollowPath || hasCondition(CONDITION_DRUNK)) {
+					// Reuse only normal steps from this monster's own planned route.
+					// Keep this branch's target-step throttle and walk-generation guards.
 					requestFollowPathUpdate();
 				}
 			} else {

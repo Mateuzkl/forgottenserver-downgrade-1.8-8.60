@@ -18,6 +18,13 @@
 #include <malloc.h>
 #endif
 
+#if defined(__clang__)
+#if __has_feature(thread_sanitizer)
+#define TFS_STATS_TEST_TSAN_ALLOCATOR_HOOK
+#include <sanitizer/allocator_interface.h>
+#endif
+#endif
+
 extern LuaEnvironment g_luaEnvironment;
 
 namespace allocation_probe {
@@ -77,6 +84,19 @@ struct Window
 };
 } // namespace allocation_probe
 
+#ifdef TFS_STATS_TEST_TSAN_ALLOCATOR_HOOK
+// Clang TSan supplies strong operator new/delete definitions. Observe its
+// allocator instead of replacing those symbols or disabling instrumentation.
+// The hook only updates this thread's counters and must not reenter TSan.
+extern "C" __attribute__((no_sanitize("thread")))
+void __sanitizer_malloc_hook(const volatile void*, size_t size)
+{
+	if (allocation_probe::active) {
+		++allocation_probe::calls;
+		allocation_probe::bytes += size;
+	}
+}
+#else
 void* operator new(size_t size) { return allocation_probe::allocate(size); }
 void* operator new[](size_t size) { return allocation_probe::allocate(size); }
 void operator delete(void* pointer) noexcept { std::free(pointer); }
@@ -137,6 +157,7 @@ void operator delete[](void* pointer, std::align_val_t, const std::nothrow_t&) n
 {
 	allocation_probe::releaseAligned(pointer);
 }
+#endif
 
 namespace {
 using Clock = std::chrono::steady_clock;
@@ -268,6 +289,20 @@ void checkInactive(bool enabled, bool running)
 	CHECK(calls == 1);
 }
 } // namespace
+
+TEST_CASE(allocation_probe_observes_cpp_allocations)
+{
+	uint64_t calls = 0, bytes = 0;
+	void* memory;
+	{
+		allocation_probe::Window window;
+		memory = ::operator new(128);
+		calls = allocation_probe::calls;
+		bytes = allocation_probe::bytes;
+	}
+	::operator delete(memory);
+	CHECK(calls >= 1 && bytes >= 128);
+}
 
 TEST_CASE(disabled_stats_do_not_allocate_or_time_unobserved_scopes) { checkInactive(false, false); }
 TEST_CASE(disabled_running_stats_do_not_allocate_or_time_unobserved_scopes) { checkInactive(false, true); }

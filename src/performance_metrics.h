@@ -122,6 +122,27 @@ struct AreaCombatMetricsSample
 	bool hasTargetCallback = false;
 };
 
+struct NetworkOpcodeTraffic
+{
+	uint64_t messages = 0;
+	uint64_t bytes = 0;
+};
+
+struct NetworkTrafficSnapshot
+{
+	std::array<NetworkOpcodeTraffic, 256> incoming{};
+	// A serialized chunk can contain more than one opcode (e.g. login/map).
+	// Its bucket identifies the FIRST opcode, never a parsed count of all opcodes.
+	std::array<NetworkOpcodeTraffic, 256> outgoing{};
+	uint64_t writeCompletions = 0;
+	uint64_t writtenBytes = 0;
+	uint64_t writeErrors = 0;
+	uint64_t pendingWriteMaximum = 0;
+	uint64_t pendingWriteRejections = 0;
+	uint64_t packetBacklogRejections = 0;
+	uint64_t packetRateRejections = 0;
+};
+
 class PerformanceMetrics
 {
 public:
@@ -144,6 +165,14 @@ public:
 	void recordNetworkRateLimitRejection() noexcept;
 	void recordNetworkIpLimitRejection() noexcept;
 	void recordNetworkConnectionCount(size_t current) noexcept;
+	void recordIncomingGamePacket(uint8_t opcode, size_t bytes) noexcept;
+	void recordOutgoingGameChunk(uint8_t firstOpcode, size_t bytes) noexcept;
+	void recordNetworkWrite(size_t bytes, bool error) noexcept;
+	void recordPendingWrite(size_t queued, bool rejected = false) noexcept;
+	void recordPacketBacklogRejection() noexcept;
+	void recordPacketRateRejection() noexcept;
+	// Drains interval counters. Called by the periodic reporter (one consumer).
+	[[nodiscard]] NetworkTrafficSnapshot takeNetworkTrafficSnapshot() noexcept;
 
 	void recordReactorCallbackSource(
 	    uint64_t nanoseconds,
@@ -230,6 +259,20 @@ private:
 
 	struct NetworkData
 	{
+		struct OpcodeData
+		{
+			std::atomic<uint64_t> messages{0};
+			std::atomic<uint64_t> bytes{0};
+		};
+		std::array<OpcodeData, 256> incoming{};
+		std::array<OpcodeData, 256> outgoing{};
+		std::atomic<uint64_t> writeCompletions{0};
+		std::atomic<uint64_t> writtenBytes{0};
+		std::atomic<uint64_t> writeErrors{0};
+		std::atomic<uint64_t> pendingWriteMaximum{0};
+		std::atomic<uint64_t> pendingWriteRejections{0};
+		std::atomic<uint64_t> packetBacklogRejections{0};
+		std::atomic<uint64_t> packetRateRejections{0};
 		std::atomic<uint64_t> acceptStarted{0};
 		std::atomic<uint64_t> accepted{0};
 		std::atomic<uint64_t> acceptErrors{0};

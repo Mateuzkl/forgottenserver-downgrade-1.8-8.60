@@ -227,6 +227,7 @@ void Connection::parseHeader(const asio::error_code& error)
 
 	uint32_t timePassed = std::max<uint32_t>(1, (time(nullptr) - timeConnected) + 1);
 	if ((++packetsSent / timePassed) > getInteger(ConfigManager::MAX_PACKETS_PER_SECOND)) {
+		g_performanceMetrics.recordPacketRateRejection();
 		LOG_NETWORK(fmt::format("{} disconnected for exceeding packet per second limit.", convertIPToString(getIPLocked())));
 		closeLocked(false);
 		return;
@@ -337,6 +338,7 @@ void Connection::send(const OutputMessage_ptr& msg)
 	}
 
 	if (messageQueue.size() >= MAX_PENDING_WRITE_MESSAGES) {
+		g_performanceMetrics.recordPendingWrite(messageQueue.size(), true);
 		LOG_NETWORK(fmt::format("{} disconnected for exceeding the pending write limit ({} messages).",
 		                        convertIPToString(getIPLocked()), MAX_PENDING_WRITE_MESSAGES));
 		// Deliberately does NOT clear messageQueue. The front message may be the
@@ -351,6 +353,7 @@ void Connection::send(const OutputMessage_ptr& msg)
 
 	bool noPendingWrite = messageQueue.empty();
 	messageQueue.emplace_back(msg);
+	g_performanceMetrics.recordPendingWrite(messageQueue.size());
 	if (noPendingWrite) {
 		try {
 			asio::post(socket.get_executor(),
@@ -393,7 +396,8 @@ void Connection::internalSend(OutputMessage_ptr msg)
 		// queue is a scheduling structure, not the owner of the in-flight buffer.
 		asio::async_write(
 		    socket, asio::buffer(msg->getOutputBuffer(), msg->getLength()),
-		    [thisPtr = shared_from_this(), msg](const asio::error_code& error, auto /*bytes_transferred*/) {
+		    [thisPtr = shared_from_this(), msg](const asio::error_code& error, size_t bytesTransferred) {
+			    g_performanceMetrics.recordNetworkWrite(bytesTransferred, static_cast<bool>(error));
 			    thisPtr->onWriteOperation(error);
 		    });
 	} catch (std::system_error& e) {

@@ -19,6 +19,7 @@
 #include "matrixarea.h"
 #include "monster.h"
 #include "npc.h"
+#include "party.h"
 #include "player.h"
 #include "protocolstatus.h"
 #include "scheduler.h"
@@ -1117,14 +1118,24 @@ int32_t Lua::popCallback(lua_State* L) { return luaL_ref(L, LUA_REGISTRYINDEX); 
 // Metatables
 void Lua::setMetatable(lua_State* L, int32_t index, std::string_view name)
 {
+	const int userdataIndex = lua_absindex(L, index);
 	luaL_getmetatable(L, name.data());
-	lua_setmetatable(L, index - 1);
-	if (name == "Tile") {
-		if (Tile** userdata = static_cast<Tile**>(lua_touserdata(L, index))) {
+	lua_setmetatable(L, userdataIndex);
+	if (name == "Party") {
+		auto** userdata = static_cast<Party**>(lua_touserdata(L, userdataIndex));
+		if (userdata && *userdata) {
+			new (lua_newuserdatauv(L, sizeof(std::weak_ptr<Party>), 0))
+			    std::weak_ptr<Party>((*userdata)->weak_from_this());
+			luaL_getmetatable(L, "_tfs_party_lifetime");
+			lua_setmetatable(L, -2);
+			lua_setiuservalue(L, userdataIndex, 1);
+		}
+	} else if (name == "Tile") {
+		if (Tile** userdata = static_cast<Tile**>(lua_touserdata(L, userdataIndex))) {
 			if (*userdata) {
 				new (lua_newuserdatauv(L, sizeof(std::weak_ptr<Tile>), 0))
 				    std::weak_ptr<Tile>((*userdata)->weak_from_this());
-				lua_setiuservalue(L, index - 1, 1);
+				lua_setiuservalue(L, userdataIndex, 1);
 			}
 		}
 	}

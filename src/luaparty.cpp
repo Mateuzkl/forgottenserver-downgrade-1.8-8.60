@@ -12,6 +12,28 @@ extern Game g_game;
 namespace {
 using namespace Lua;
 
+std::shared_ptr<Party> getLuaParty(lua_State* L, int32_t arg)
+{
+	Party** userdata = getRawUserdata<Party>(L, arg);
+	if (!userdata || !*userdata) {
+		return nullptr;
+	}
+	lua_getiuservalue(L, arg, 1);
+	auto* lifetime = static_cast<std::weak_ptr<Party>*>(luaL_testudata(L, -1, "_tfs_party_lifetime"));
+	auto party = lifetime ? lifetime->lock() : std::shared_ptr<Party>{};
+	lua_pop(L, 1);
+	return party;
+}
+
+int luaPartyLifetimeGc(lua_State* L)
+{
+	if (auto* lifetime = static_cast<std::weak_ptr<Party>*>(luaL_testudata(L, 1, "_tfs_party_lifetime"))) {
+		// Idempotent, including an explicit finalizer call followed by Lua GC.
+		lifetime->reset();
+	}
+	return 0;
+}
+
 // Party
 int32_t luaPartyCreate(lua_State* L)
 {
@@ -39,12 +61,13 @@ int32_t luaPartyCreate(lua_State* L)
 int luaPartyDisband(lua_State* L)
 {
 	// party:disband()
-	Party** partyPtr = getRawUserdata<Party>(L, 1);
-	if (partyPtr && *partyPtr) {
-		Party*& party = *partyPtr;
-		party->disband();
-		party = nullptr;
-		pushBoolean(L, true);
+	const auto party = getLuaParty(L, 1);
+	if (party) {
+		const bool disbanded = party->disband();
+		if (disbanded) {
+			*getRawUserdata<Party>(L, 1) = nullptr;
+		}
+		pushBoolean(L, disbanded);
 	} else {
 		lua_pushnil(L);
 	}
@@ -54,7 +77,7 @@ int luaPartyDisband(lua_State* L)
 int luaPartyGetLeader(lua_State* L)
 {
 	// party:getLeader()
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (!party) {
 		lua_pushnil(L);
 		return 1;
@@ -74,7 +97,7 @@ int luaPartySetLeader(lua_State* L)
 {
 	// party:setLeader(player[, force = false])
 	Player* player = getPlayer(L, 2);
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party && player) {
 		pushBoolean(L, party->passPartyLeadership(player, getBoolean(L, 3, false)));
 	} else {
@@ -86,7 +109,7 @@ int luaPartySetLeader(lua_State* L)
 int luaPartyGetMembers(lua_State* L)
 {
 	// party:getMembers()
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (!party) {
 		lua_pushnil(L);
 		return 1;
@@ -95,7 +118,7 @@ int luaPartyGetMembers(lua_State* L)
 	int index = 0;
 	lua_createtable(L, party->getMemberCount(), 0);
 	for (auto& weakMember : party->getMembers()) {
-		if (Player* player = weakMember.lock().get()) {
+		if (const auto playerRef = weakMember.lock(); Player* player = playerRef.get()) {
 			pushUserdata<Player>(L, player);
 			setMetatable(L, -1, "Player");
 			lua_rawseti(L, -2, ++index);
@@ -107,7 +130,7 @@ int luaPartyGetMembers(lua_State* L)
 int luaPartyGetMemberCount(lua_State* L)
 {
 	// party:getMemberCount()
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party) {
 		lua_pushinteger(L, party->getMemberCount());
 	} else {
@@ -119,13 +142,13 @@ int luaPartyGetMemberCount(lua_State* L)
 int luaPartyGetInvitees(lua_State* L)
 {
 	// party:getInvitees()
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party) {
 		lua_createtable(L, party->getInvitationCount(), 0);
 
 		int index = 0;
 		for (auto& weakInvitee : party->getInvitees()) {
-			if (Player* player = weakInvitee.lock().get()) {
+			if (const auto playerRef = weakInvitee.lock(); Player* player = playerRef.get()) {
 				pushUserdata<Player>(L, player);
 				setMetatable(L, -1, "Player");
 				lua_rawseti(L, -2, ++index);
@@ -140,7 +163,7 @@ int luaPartyGetInvitees(lua_State* L)
 int luaPartyGetInviteeCount(lua_State* L)
 {
 	// party:getInviteeCount()
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party) {
 		lua_pushinteger(L, party->getInvitationCount());
 	} else {
@@ -153,7 +176,7 @@ int luaPartyAddInvite(lua_State* L)
 {
 	// party:addInvite(player)
 	Player* player = getPlayer(L, 2);
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party && player) {
 		pushBoolean(L, party->invitePlayer(*player));
 	} else {
@@ -166,7 +189,7 @@ int luaPartyRemoveInvite(lua_State* L)
 {
 	// party:removeInvite(player)
 	Player* player = getPlayer(L, 2);
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party && player) {
 		pushBoolean(L, party->removeInvite(*player));
 	} else {
@@ -179,7 +202,7 @@ int luaPartyAddMember(lua_State* L)
 {
 	// party:addMember(player)
 	Player* player = getPlayer(L, 2);
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party && player) {
 		pushBoolean(L, party->joinParty(*player));
 	} else {
@@ -192,7 +215,7 @@ int luaPartyRemoveMember(lua_State* L)
 {
 	// party:removeMember(player)
 	Player* player = getPlayer(L, 2);
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party && player) {
 		pushBoolean(L, party->leaveParty(player));
 	} else {
@@ -204,7 +227,7 @@ int luaPartyRemoveMember(lua_State* L)
 int luaPartyIsSharedExperienceActive(lua_State* L)
 {
 	// party:isSharedExperienceActive()
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party) {
 		pushBoolean(L, party->isSharedExperienceActive());
 	} else {
@@ -216,7 +239,7 @@ int luaPartyIsSharedExperienceActive(lua_State* L)
 int luaPartyIsSharedExperienceEnabled(lua_State* L)
 {
 	// party:isSharedExperienceEnabled()
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party) {
 		pushBoolean(L, party->isSharedExperienceEnabled());
 	} else {
@@ -229,7 +252,7 @@ int luaPartyShareExperience(lua_State* L)
 {
 	// party:shareExperience(experience)
 	uint64_t experience = getInteger<uint64_t>(L, 2);
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party) {
 		party->shareExperience(experience);
 		pushBoolean(L, true);
@@ -243,7 +266,7 @@ int luaPartySetSharedExperience(lua_State* L)
 {
 	// party:setSharedExperience(active)
 	bool active = getBoolean(L, 2);
-	Party* party = getUserdata<Party>(L, 1);
+	const auto party = getLuaParty(L, 1);
 	if (party) {
 		pushBoolean(L, party->setSharedExperience(party->getLeader().get(), active));
 	} else {
@@ -255,6 +278,12 @@ int luaPartySetSharedExperience(lua_State* L)
 
 void LuaScriptInterface::registerParty()
 {
+	lua_State* L = getLuaState();
+	luaL_newmetatable(L, "_tfs_party_lifetime");
+	lua_pushcfunction(L, luaPartyLifetimeGc);
+	lua_setfield(L, -2, "__gc");
+	lua_pop(L, 1);
+
 	// Party
 	registerClass("Party", "", luaPartyCreate);
 	registerMetaMethod("Party", "__eq", LuaScriptInterface::luaUserdataCompare);
