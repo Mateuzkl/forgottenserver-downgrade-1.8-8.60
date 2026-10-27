@@ -41,8 +41,14 @@ struct SenderFixture
 	std::vector<uint8_t> body() const
 	{
 		const auto& output = protocol->getCurrentBuffer();
-		const auto* begin = output->getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION;
-		return {begin, begin + output->getLength()};
+		CHECK(output != nullptr);
+		const size_t length = output->getLength();
+		CHECK(length <= NetworkMessage::MAX_PROTOCOL_BODY_LENGTH);
+		std::vector<uint8_t> result(length);
+		if (length != 0) {
+			std::memcpy(result.data(), output->getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, length);
+		}
+		return result;
 	}
 	void reset() { protocol->getCurrentBuffer()->reset(); }
 };
@@ -65,8 +71,13 @@ void onDispatcher(Function function)
 
 std::vector<uint8_t> body(const NetworkMessage& message)
 {
-	const auto* begin = message.getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION;
-	return {begin, begin + message.getLength()};
+	const size_t length = message.getLength();
+	CHECK(length <= NetworkMessage::MAX_PROTOCOL_BODY_LENGTH);
+	std::vector<uint8_t> result(length);
+	if (length != 0) {
+		std::memcpy(result.data(), message.getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, length);
+	}
+	return result;
 }
 }
 
@@ -145,9 +156,9 @@ TEST_CASE(combat_effect_and_animated_text_keep_visibility_filters)
 {
 	onDispatcher([] {
 		SenderFixture f;
-		const Position far{1500,1500,7};
-		ProtocolGameAuditTestAccess::effect(*f.protocol, far, 1);
-		ProtocolGameAuditTestAccess::animated(*f.protocol, "100", far, TEXTCOLOR_RED);
+		const Position outsideViewport{1500,1500,7};
+		ProtocolGameAuditTestAccess::effect(*f.protocol, outsideViewport, 1);
+		ProtocolGameAuditTestAccess::animated(*f.protocol, "100", outsideViewport, TEXTCOLOR_RED);
 		CHECK(f.body().empty());
 		// A visible position without ground still cannot receive a magic effect.
 		ProtocolGameAuditTestAccess::effect(*f.protocol, destination, 1);

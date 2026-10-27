@@ -306,11 +306,12 @@ void Creature::onWalk()
 			ReturnValue ret;
 			{
 				struct PathStepScope {
-					bool& active;
-					bool previous;
-					explicit PathStepScope(bool& value) : active(value), previous(value) { active = true; }
+					std::optional<PlannedPathStep>& active;
+					std::optional<PlannedPathStep> previous;
+					PathStepScope(std::optional<PlannedPathStep>& value, const Position& from, const Position& to) :
+					    active(value), previous(value) { active = PlannedPathStep{from, to}; }
 					~PathStepScope() { active = previous; }
-				} stepScope(followingPathStep);
+				} stepScope(followingPathStep, getPosition(), getNextPosition(dir, getPosition()));
 				ret = g_game.internalMoveCreature(this, dir, flags);
 			}
 			if (ret != RETURNVALUE_NOERROR) {
@@ -495,7 +496,13 @@ void Creature::onAttackedCreatureChangeZone(ZoneType_t zone)
 void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Position& newPos, const Tile* oldTile,
                               const Position& oldPos, bool teleport)
 {
+	const bool plannedPathStep = creature == this && followingPathStep &&
+	                             followingPathStep->from == oldPos && followingPathStep->to == newPos &&
+	                             getPosition() == newPos;
 	if (creature == this) {
+		// Consume before invoking callbacks. Nested moves, including a later
+		// replay of the same positions, must not inherit this step's permission.
+		followingPathStep.reset();
 		lastStep = OTSYS_TIME();
 		lastStepCost = 1;
 
@@ -568,7 +575,7 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 					if (forceUpdateFollowPath || monster->shouldRepathAfterTargetStep()) {
 						requestFollowPathUpdate();
 					}
-				} else if (!followingPathStep || teleport || oldPos.z != newPos.z || listWalkDir.empty() ||
+				} else if (!plannedPathStep || teleport || oldPos.z != newPos.z || listWalkDir.empty() ||
 				           forceUpdateFollowPath || hasCondition(CONDITION_DRUNK)) {
 					// Reuse only normal steps from this monster's own planned route.
 					// Keep this branch's target-step throttle and walk-generation guards.

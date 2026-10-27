@@ -11,7 +11,7 @@ if [[ ! -d "$regression_source" ]]; then cp -a "$audit_root/baseline-source" "$r
 for relative in src/tests/test_combat_messages.cpp src/tests/test_map_spectators.cpp \
   src/tests/test_combat_reentry.cpp \
   src/tests/test_lua_callback_contract.cpp src/tests/test_networkmessage_wire.cpp \
-  src/tests/protocolgame_audit_support.h src/benchs/bench_networkmessage.cpp \
+  src/benchs/bench_networkmessage.cpp \
   src/benchs/small_packet_probe.h; do
   cp "$repo_root/$relative" "$regression_source/$relative"
 done
@@ -19,6 +19,8 @@ done
 # Use the baseline API fixture without modifying any production header/layout.
 cp "$repo_root/scripts/profiling/fixtures/party_lifetime.cpp" \
   "$regression_source/src/tests/test_party_lifetime.cpp"
+cp "$repo_root/scripts/profiling/fixtures/protocolgame_audit_support.h" \
+  "$regression_source/src/tests/protocolgame_audit_support.h"
 mkdir -p "$audit_root/red-tests"
 cd "$audit_root/baseline-build"
 read -r -a original <<< "$(ninja -t commands test_combat | tail -1)"
@@ -58,4 +60,7 @@ for test_name in "$@"; do
   "$audit_root/red-tests/$test_name" "${run_args[@]}" > "$audit_root/red-tests/$test_name.log" 2>&1 || status=$?
   printf '%s exit=%s\n' "$test_name" "$status"
   tail -15 "$audit_root/red-tests/$test_name.log"
+  if [[ "$test_name" == bench_* && "$status" -ne 0 ]]; then
+    exit "$status"
+  fi
 done

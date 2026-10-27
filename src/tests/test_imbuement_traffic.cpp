@@ -58,8 +58,14 @@ struct Fixture
 	std::vector<uint8_t> output() const
 	{
 		const auto& msg = protocol->getCurrentBuffer();
-		const auto* begin = msg->getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION;
-		return {begin, begin + msg->getLength()};
+		CHECK(msg != nullptr);
+		const size_t length = msg->getLength();
+		CHECK(length <= NetworkMessage::MAX_PROTOCOL_BODY_LENGTH);
+		std::vector<uint8_t> result(length);
+		if (length != 0) {
+			std::memcpy(result.data(), msg->getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, length);
+		}
+		return result;
 	}
 };
 

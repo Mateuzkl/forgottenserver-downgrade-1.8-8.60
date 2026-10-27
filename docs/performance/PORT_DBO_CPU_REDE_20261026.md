@@ -84,10 +84,11 @@ asserções de poda, limpeza e refresh. O assert de produção foi preservado.
 ## Repetir
 
 ```sh
-cmake --build /home/mateus/tfs18-pr337-dbo-qa --parallel 3
+QA_BUILD_DIR="${QA_BUILD_DIR:-$HOME/tfs18-pr337-dbo-qa}"
+cmake --build "$QA_BUILD_DIR" --parallel 3
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
-ctest --test-dir /home/mateus/tfs18-pr337-dbo-qa \
+ctest --test-dir "$QA_BUILD_DIR" \
   --output-on-failure --timeout 120 -j 1
 ```
 
@@ -111,3 +112,55 @@ desta base. Este port precisa de nova comparação de carga para quantificar seu
 efeito no servidor oficial; não estabelece capacidade para determinado número
 de jogadores. As melhorias de battle list/renderização foram feitas no cliente
 DBOBR e não fazem parte deste repositório de servidor.
+
+## Correções de revisão e CI do PR 337
+
+Revisão do head `7bcf673`, incluindo os logs reais dos jobs
+[Windows](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/actions/runs/40437145584/job/121968434651) e
+[GCC Release](https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/actions/runs/40437145620/job/121968434620).
+
+| Achado confirmado | Correção |
+|---|---|
+| CodeRabbit: um callback de piso pode mover o monstro novamente enquanto a flag de passo está ativa. | A autorização de reuso guarda origem/destino, confere a posição atual e é consumida na primeira notificação do próprio movimento, antes de callbacks. Movimentos aninhados e repetição posterior das mesmas coordenadas provocam atualização. |
+| Windows: `far` é um macro dos headers Windows e invalida a declaração usada no teste. | Variável renomeada para `outsideViewport`. |
+| GCC 13/O3: diagnóstico `free-nonheap-object` ao otimizar snapshots vazios das fixtures de combate e imbuements. | Cópia por comprimento validado, com vetor dimensionado e `memcpy` somente para comprimento não nulo. As comparações de todos os bytes foram mantidas; nenhum warning foi desativado. |
+| Greptile: o candidato isolado não contém os dois arquivos do novo teste Lua. | Copiados explicitamente `tools/test_step_tile_callbacks.lua` e `data/events/scripts/player.lua`, inclusive ao atualizar uma árvore candidata existente. |
+| CodeRabbit: falha de `bench_*` era impressa e ignorada pelo script de baseline. | Após imprimir o log, o script retorna o status do benchmark. Testes vermelhos continuam podendo retornar não zero sem interromper a auditoria. |
+| O helper de protocolo cresceu e passou a referenciar membros ausentes do baseline. | A auditoria vermelha usa uma fixture mínima própria, sem alterar headers ou layout da engine antiga. |
+| Windows: `WIN32_LEAN_AND_MEAN` redefinido quando fornecido pelo build. | Definição protegida por `#ifndef`. |
+
+Os comentários antigos sobre ccache opcional, compatibilidade de `unpack`/`pack`
+com LuaJIT e redação/comandos do relatório já estavam corrigidos em `f05aea4`;
+foram conferidos sem repetir alterações.
+
+### Validação desta revisão
+
+- Falha de movimento aninhado reproduzida contra a engine de `7bcf673`, antes
+  da correção. Após o fix, `test_monster_target_state` passa em **27 casos**,
+  incluindo passos aninhados ao norte/leste/oeste, retorno pelas mesmas
+  coordenadas e o cenário de 100 monstros/500 passos sem recálculos redundantes.
+- Servidor e testes compilados com Clang 18, ASan/UBSan: **72/72 alvos CTest,
+  zero falhas, 41,51 s**, sem diagnósticos dos sanitizers.
+  Após ajustar também o snapshot da fixture de imbuements, seu alvo foi
+  recompilado e repetido com sanitizers: quatro casos aprovados, 0,07 s.
+- GCC 13 com `-O3 -Werror`: a unidade que falhava no CI compila sem avisos.
+  Engine e 66 executáveis nativos compilados em Release; **72/72 alvos CTest
+  aprovados, zero falhas, 15,63 s**.
+- O conflito do macro `far` também foi reproduzido com a definição equivalente
+  na compilação Linux; o teste corrigido passa nessa configuração. Isso não
+  substitui o job MSVC real do GitHub.
+- `python3 tools/test_audit_scripts.py`: **cinco testes aprovados**, incluindo
+  candidato novo/existente, Release/ASan com e sem ccache, execução dos dois
+  arquivos Lua reais, status de benchmark e preservação dos headers do baseline.
+  CMake, CTest e compilador são simulados nesse harness; não são quatro builds.
+- Quatro fontes de regressão passaram pela compilação sintática estrita com
+  headers reais de `49db3276`; hashes de `game.h`, `party.h` e `events.h` foram
+  preservados. A biblioteca antiga não foi recompilada nem executada aqui.
+- `bash -n` aprovado nos dois scripts alterados. Round trip SQL opcional sem
+  execução, pois `TFS_TEST_DB_*` não foi fornecido. Nenhum banco vivo foi usado.
+
+Logs locais desta rodada em `/home/mateus/tfs18-pr337-review3-*`: reprodução de
+reentrada, compilação e CTest ASan, compilação/CTest GCC, sintaxe das fixtures de
+baseline e reprodução/correção do macro Windows. O build com sanitizers reutiliza
+`/home/mateus/tfs18-pr337-dbo-qa`; o build GCC reutiliza
+`/home/mateus/tfs18-stress-release`. Nenhum servidor em uso foi reiniciado.

@@ -37,7 +37,9 @@ inline constexpr unsigned int AUTHENTICATOR_PERIOD = 30;
 #define NOMINMAX
 #endif
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 
 #ifndef STATS_ENABLED
 #define STATS_ENABLED

@@ -5,10 +5,15 @@ mode=${2:-release}
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 source_dir="$audit_root/candidate-source"
 if [[ ! -d "$source_dir" ]]; then cp -a "$audit_root/baseline-source" "$source_dir"; fi
-# Only source and tests; never copy the developer's live map/config/logs.
+# Copy code and its test inputs, never the developer's live map/config/logs.
 rsync -a "$repo_root/src/" "$source_dir/src/"
 rsync -a "$repo_root/data/scripts/eventcallbacks/creature/default_onTargetCombat.lua" \
   "$source_dir/data/scripts/eventcallbacks/creature/default_onTargetCombat.lua"
+mkdir -p "$source_dir/tools" "$source_dir/data/events/scripts"
+rsync -a "$repo_root/tools/test_step_tile_callbacks.lua" \
+  "$source_dir/tools/test_step_tile_callbacks.lua"
+rsync -a "$repo_root/data/events/scripts/player.lua" \
+  "$source_dir/data/events/scripts/player.lua"
 build_dir="$audit_root/candidate-$mode"
 printf 'Candidate mode=%s source=%s build=%s\n' "$mode" "$source_dir" "$build_dir"
 flags=(-DCMAKE_BUILD_TYPE=Release -DENABLE_TEST_LTO=OFF)

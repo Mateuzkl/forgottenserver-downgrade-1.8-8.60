@@ -19,6 +19,7 @@
 #include <cassert>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -488,7 +489,11 @@ protected:
 	bool cancelNextWalk = false;
 	bool hasFollowPath = false;
 	bool forceUpdateFollowPath = false;
-	bool followingPathStep = false;
+	struct PlannedPathStep {
+		Position from;
+		Position to;
+	};
+	std::optional<PlannedPathStep> followingPathStep;
 
 	std::weak_ptr<Creature> lastAttacker;
 	bool hiddenHealth = false;

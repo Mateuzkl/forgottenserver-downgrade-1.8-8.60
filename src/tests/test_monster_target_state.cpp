@@ -705,6 +705,75 @@ TEST_CASE(monster_keeps_periodic_follow_refresh)
 	CHECK(CreatureWalkTestAccess::pending(*monster));
 }
 
+TEST_CASE(monster_refreshes_after_a_step_event_moves_it_again)
+{
+	for (const auto direction : {DIRECTION_NORTH, DIRECTION_EAST, DIRECTION_WEST}) {
+		WorldFixture world;
+		auto monster = makeMonster();
+		auto target = makeMonster(true);
+		const Position start{1800, 1500, 7};
+		const Position planned{1801, 1500, 7};
+		const Position redirected = getNextPosition(direction, planned);
+		world.place(monster, start);
+		world.place(target, Position{1808, 1500, 7});
+		selectTarget(monster, target);
+		CreatureWalkTestAccess::pathReady(*monster);
+		ensureTile(planned);
+		ensureTile(redirected);
+		bool callbackRan = false;
+		auto movement = std::make_unique<MoveEvent>(g_moveEvents->getScriptInterfacePtr());
+		movement->setEventType(MOVE_EVENT_STEP_IN);
+		movement->addPosList(planned);
+		movement->stepFunction = [&](Creature* creature, Item*, const Position&) -> uint32_t {
+			CHECK(creature == monster.get());
+			CHECK(!callbackRan);
+			callbackRan = true;
+			CHECK(!CreatureWalkTestAccess::pending(*monster));
+			CHECK(g_game.internalMoveCreature(creature, direction, FLAG_NOLIMIT) == RETURNVALUE_NOERROR);
+			return 1;
+		};
+		CHECK(g_moveEvents->registerLuaEvent(movement.release()));
+		CreatureWalkTestAccess::walkStep(*monster);
+		CHECK(callbackRan);
+		CHECK(monster->getPosition() == redirected);
+		CHECK(monster->getFollowCreatureShared() == target);
+		CHECK(CreatureWalkTestAccess::pending(*monster));
+	}
+}
+
+TEST_CASE(monster_does_not_reuse_a_planned_notification_for_a_nested_round_trip)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{1840, 1500, 7});
+	world.place(target, Position{1848, 1500, 7});
+	selectTarget(monster, target);
+	CreatureWalkTestAccess::pathReady(*monster);
+	const Position planned{1841, 1500, 7};
+	ensureTile(planned);
+	bool callbackRan = false;
+	auto movement = std::make_unique<MoveEvent>(g_moveEvents->getScriptInterfacePtr());
+	movement->setEventType(MOVE_EVENT_STEP_IN);
+	movement->addPosList(planned);
+	movement->stepFunction = [&](Creature* creature, Item*, const Position&) -> uint32_t {
+		if (callbackRan) return 1;
+		callbackRan = true;
+		CHECK(g_game.internalMoveCreature(creature, DIRECTION_WEST, FLAG_NOLIMIT) == RETURNVALUE_NOERROR);
+		CHECK(CreatureWalkTestAccess::pending(*monster));
+		// Observe the second notification independently of the first request.
+		CreatureWalkTestAccess::clearPending(*monster);
+		CHECK(g_game.internalMoveCreature(creature, DIRECTION_EAST, FLAG_NOLIMIT) == RETURNVALUE_NOERROR);
+		CHECK(CreatureWalkTestAccess::pending(*monster));
+		return 1;
+	};
+	CHECK(g_moveEvents->registerLuaEvent(movement.release()));
+	CreatureWalkTestAccess::walkStep(*monster);
+	CHECK(callbackRan);
+	CHECK(monster->getPosition() == planned);
+	CHECK(monster->getFollowCreatureShared() == target);
+}
+
 TEST_CASE(crowd_100_monsters_does_not_request_500_redundant_paths)
 {
 	WorldFixture world;
