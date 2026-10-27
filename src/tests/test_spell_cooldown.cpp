@@ -8,6 +8,7 @@
 #include "../protocolgame.h"
 #include "../tasks.h"
 #include "test_support.h"
+#include "protocolgame_owned_fixture.h"
 
 struct ProtocolGameSpellCooldownTestAccess
 {
@@ -20,7 +21,7 @@ struct ProtocolGameSpellCooldownTestAccess
 		protocol.isFonticakClient = fonticak;
 		protocol.supportsAstraExtendedSpellIds = extended;
 		protocol.version = version;
-		// Preallocate to avoid registering a disconnected test protocol for autosend.
+		// Keep a stable buffer for byte-level assertions.
 		protocol.getCurrentBuffer() = std::make_shared<OutputMessage>();
 	}
 
@@ -45,7 +46,8 @@ void checkBytes(ProtocolGame& protocol, std::initializer_list<uint8_t> expected)
 void checkSpellPacket(bool astra, bool extended, uint16_t id, uint32_t time, std::initializer_list<uint8_t> expected,
                       bool fonticak = false, uint16_t version = 860)
 {
-	ProtocolGame protocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 	ProtocolGameSpellCooldownTestAccess::configure(protocol, astra, extended, fonticak, version);
 	ProtocolGameSpellCooldownTestAccess::send(protocol, id, time);
 	checkBytes(protocol, expected);
@@ -89,7 +91,8 @@ TEST_CASE(spell_group_cooldown_remains_u8_with_either_capability)
 {
 	static_assert(sizeof(SpellGroup_t) == sizeof(uint8_t));
 	for (const bool extended : {false, true}) {
-		ProtocolGame protocol(nullptr);
+		ProtocolGameOwnedFixture protocolFixture;
+		auto& protocol = *protocolFixture.owner;
 		ProtocolGameSpellCooldownTestAccess::configure(protocol, true, extended);
 		ProtocolGameSpellCooldownTestAccess::sendGroup(protocol, SPELLGROUP_STANCE, 1000);
 		checkBytes(protocol, {0xA5, 0x0B, 0xE8, 0x03, 0x00, 0x00});
@@ -101,7 +104,8 @@ TEST_CASE(spell_cooldown_feature_is_advertised_only_to_capable_astra)
 	CHECK(static_cast<uint8_t>(AstraClient::ExtendedSpellIds) == (1U << 6));
 	CHECK(static_cast<uint8_t>(GameFeature::AstraExtendedSpellIds) == 152);
 	for (const bool extended : {false, true}) {
-		ProtocolGame protocol(nullptr);
+		ProtocolGameOwnedFixture protocolFixture;
+		auto& protocol = *protocolFixture.owner;
 		ProtocolGameSpellCooldownTestAccess::configure(protocol, true, extended);
 		CHECK(ProtocolGameSpellCooldownTestAccess::spellListIsWide(protocol));
 		ProtocolGameSpellCooldownTestAccess::sendFeatures(protocol);

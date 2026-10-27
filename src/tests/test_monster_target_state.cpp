@@ -18,6 +18,25 @@
 
 #include <filesystem>
 
+struct CreatureWalkTestAccess
+{
+	static void pathReady(Creature& creature, size_t steps = 7)
+	{
+		creature.hasFollowPath = true;
+		creature.listWalkDir.assign(steps, DIRECTION_EAST);
+		creature.isUpdatingPath = false;
+		creature.forceUpdateFollowPath = false;
+	}
+	static bool pending(const Creature& creature) { return creature.isUpdatingPath; }
+	static void walkStep(Creature& creature)
+	{
+		creature.lastStep = OTSYS_TIME() - static_cast<uint64_t>(std::max<int64_t>(1, creature.getStepDuration()) + 1);
+		creature.onWalk();
+	}
+	static void clearPending(Creature& creature) { creature.isUpdatingPath = false; }
+	static void forceRefresh(Creature& creature) { creature.forceUpdateFollowPath = true; }
+};
+
 namespace {
 
 class TestCreature final : public Creature
@@ -625,6 +644,91 @@ TEST_CASE(npc_activity_spectators_preserve_the_existing_horizontal_viewport)
 	world.place(npc, Position{1300, 700, 7});
 	CHECK(!npc->canSee(player->getPosition()));
 	CHECK(npc->getSpectators().size() == 1);
+}
+
+TEST_CASE(monster_reuses_remaining_follow_steps_between_its_own_moves)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{1500, 1500, 7});
+	world.place(target, Position{1508, 1500, 7});
+	selectTarget(monster, target);
+	CreatureWalkTestAccess::pathReady(*monster);
+	ensureTile(Position{1501, 1500, 7});
+	CreatureWalkTestAccess::walkStep(*monster);
+	CHECK(monster->getPosition() == (Position{1501,1500,7}));
+	CHECK(!CreatureWalkTestAccess::pending(*monster));
+	CHECK(monster->getFollowCreatureShared() == target);
+}
+
+TEST_CASE(monster_refreshes_path_when_target_moves)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{1540, 1500, 7});
+	world.place(target, Position{1548, 1500, 7});
+	selectTarget(monster, target);
+	CreatureWalkTestAccess::pathReady(*monster);
+	moveCreatureForMonster(target, Position{1548, 1501, 7});
+	CHECK(CreatureWalkTestAccess::pending(*monster));
+}
+
+TEST_CASE(monster_refreshes_invalidated_or_externally_moved_paths)
+{
+	for (int kind = 0; kind < 4; ++kind) {
+		WorldFixture world;
+		auto monster = makeMonster();
+		auto target = makeMonster(true);
+		const auto x = static_cast<uint16_t>(1580 + kind * 40);
+		world.place(monster, Position{x, 1500, 7});
+		world.place(target, Position{static_cast<uint16_t>(x + 8), 1500, 7});
+		selectTarget(monster, target);
+		CreatureWalkTestAccess::pathReady(*monster, kind == 0 ? 0 : 8);
+		if (kind == 1) CreatureWalkTestAccess::forceRefresh(*monster);
+		moveCreatureForMonster(monster, Position{static_cast<uint16_t>(x + (kind == 2 ? 2 : 1)), 1500, 7});
+		CHECK(CreatureWalkTestAccess::pending(*monster));
+	}
+}
+
+TEST_CASE(monster_keeps_periodic_follow_refresh)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{1700, 1500, 7});
+	world.place(target, Position{1708, 1500, 7});
+	selectTarget(monster, target);
+	CreatureWalkTestAccess::pathReady(*monster);
+	monster->onThink(2000);
+	CHECK(CreatureWalkTestAccess::pending(*monster));
+}
+
+TEST_CASE(crowd_100_monsters_does_not_request_500_redundant_paths)
+{
+	WorldFixture world;
+	size_t redundant = 0;
+	for (uint16_t i = 0; i < 100; ++i) {
+		auto monster = makeMonster();
+		auto target = makeMonster(true);
+		const auto x = static_cast<uint16_t>(2000 + (i % 10) * 40);
+		const auto y = static_cast<uint16_t>(2000 + (i / 10) * 40);
+		world.place(monster, Position{x, y, 7});
+		world.place(target, Position{static_cast<uint16_t>(x + 8), y, 7});
+		selectTarget(monster, target);
+		CreatureWalkTestAccess::pathReady(*monster);
+		for (uint16_t step = 1; step <= 5; ++step) {
+			const Position expected{static_cast<uint16_t>(x + step), y, 7};
+			ensureTile(expected);
+			CreatureWalkTestAccess::walkStep(*monster);
+			CHECK(monster->getPosition() == expected);
+			if (CreatureWalkTestAccess::pending(*monster)) ++redundant;
+			CreatureWalkTestAccess::clearPending(*monster);
+		}
+	}
+	std::cout << "CROWD_FOLLOW monsters=100 moves=500 redundant_path_requests=" << redundant << '\n';
+	CHECK(redundant == 0);
 }
 
 TFS_TEST_MAIN()

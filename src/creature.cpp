@@ -303,7 +303,16 @@ void Creature::onWalk()
 		Direction dir;
 		uint32_t flags = FLAG_IGNOREFIELDDAMAGE;
 		if (getNextStep(dir, flags)) {
-			ReturnValue ret = g_game.internalMoveCreature(this, dir, flags);
+			ReturnValue ret;
+			{
+				struct PathStepScope {
+					bool& active;
+					bool previous;
+					explicit PathStepScope(bool& value) : active(value), previous(value) { active = true; }
+					~PathStepScope() { active = previous; }
+				} stepScope(followingPathStep);
+				ret = g_game.internalMoveCreature(this, dir, flags);
+			}
 			if (ret != RETURNVALUE_NOERROR) {
 				if (Player* player = getPlayer()) {
 					player->sendCancelMessage(ret);
@@ -559,7 +568,10 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 					if (forceUpdateFollowPath || monster->shouldRepathAfterTargetStep()) {
 						requestFollowPathUpdate();
 					}
-				} else if (listWalkDir.empty() || forceUpdateFollowPath) {
+				} else if (!followingPathStep || teleport || oldPos.z != newPos.z || listWalkDir.empty() ||
+				           forceUpdateFollowPath || hasCondition(CONDITION_DRUNK)) {
+					// Reuse only normal steps from this monster's own planned route.
+					// Keep this branch's target-step throttle and walk-generation guards.
 					requestFollowPathUpdate();
 				}
 			} else {

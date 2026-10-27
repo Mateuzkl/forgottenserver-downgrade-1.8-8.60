@@ -488,6 +488,7 @@ protected:
 	bool cancelNextWalk = false;
 	bool hasFollowPath = false;
 	bool forceUpdateFollowPath = false;
+	bool followingPathStep = false;
 
 	std::weak_ptr<Creature> lastAttacker;
 	bool hiddenHealth = false;

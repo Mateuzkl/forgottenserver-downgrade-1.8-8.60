@@ -26,6 +26,7 @@
 #include "monster.h"
 #include "monsters.h"
 #include "outputmessage.h"
+#include "performance_metrics.h"
 #include "player.h"
 #include "protocolgame.h"
 #include "protocollogin.h"
@@ -34,6 +35,7 @@
 #include "familiar.h"
 #include "logger.h"
 #include "scheduler.h"
+#include "smallnetworkmessage.h"
 #include "scriptmanager.h"
 #include "spells.h"
 #include "thread_pool.h"
@@ -1379,15 +1381,26 @@ void ProtocolGame::dispatchCancelMessage(ReturnValue message) const
 
 void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 {
-	auto out = getOutputBuffer(msg.getLength());
-	if (msg.getLength() != 0 && traceMovementFor(player.get())) {
-		const auto opcode = msg.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
+	writeToOutputBuffer(std::span<const uint8_t>{
+	    msg.getBuffer() + NetworkMessage::INITIAL_BUFFER_POSITION, msg.getLength()});
+}
+
+void ProtocolGame::writeToOutputBuffer(std::span<const uint8_t> bytes)
+{
+	if (bytes.empty()) {
+		return;
+	}
+	g_performanceMetrics.recordOutgoingGameChunk(bytes.front(), bytes.size());
+	auto out = getOutputBuffer(static_cast<int32_t>(bytes.size()));
+	if (traceMovementFor(player.get())) {
+		const auto opcode = bytes.front();
 		if ((opcode >= 0x64 && opcode <= 0x6D) || opcode == 0xC6 || opcode == 0xC7) {
 			LOG_INFO("[NetworkWalkTrace] ms={} viewer={} opcode=0x{:02x} output_offset={} bytes={}",
-			         OTSYS_TIME(), player->getID(), opcode, out->getLength(), msg.getLength());
+			         OTSYS_TIME(), player->getID(), opcode, out->getLength(), bytes.size());
 		}
 	}
-	out->append(msg);
+	// Own a copy before the sender's stack buffer goes out of scope.
+	out->append(bytes);
 }
 
 void ProtocolGame::parsePacket(NetworkMessage& msg)
@@ -1399,6 +1412,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 	const uint8_t opcode = msg.getBuffer()[msg.getBufferPosition()];
 	auto admission = packetBacklog.tryAcquire();
 	if (!admission) {
+		g_performanceMetrics.recordPacketBacklogRejection();
 		if (admission.requestDisconnect) {
 			LOG_NETWORK("[ProtocolGame] Packet backlog limit exceeded. Closing connection. pending={} limit={}",
 			            admission.observedPending, packetBacklog.limit());
@@ -1444,6 +1458,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 	}
 
 	uint8_t recvbyte = msg.getByte();
+	g_performanceMetrics.recordIncomingGamePacket(recvbyte, msg.getLength());
 
 	if (!player) {
 		if (recvbyte == 0x0F) {
@@ -2185,8 +2200,12 @@ std::pair<bool, uint32_t> ProtocolGame::isKnownCreature(uint32_t id)
 		return {true, 0};
 	}
 
-	if (knownCreatureSet.size() > 250) {
-		auto unseenIt = std::find_if(knownCreatureSet.begin(), knownCreatureSet.end(), [this](uint32_t creatureId) {
+	const size_t knownCreatureBudget = isOTC ? 1300 : 250;
+	if (knownCreatureSet.size() > knownCreatureBudget) {
+		auto unseenIt = std::find_if(knownCreatureSet.begin(), knownCreatureSet.end(), [this, id](uint32_t creatureId) {
+			if (creatureId == id || (player && creatureId == player->getID())) {
+				return false;
+			}
 			auto creatureRef = g_game.getCreatureByIDShared(creatureId);
 			Creature* creature = creatureRef.get();
 			return !canSee(creature);
@@ -2198,15 +2217,24 @@ std::pair<bool, uint32_t> ProtocolGame::isKnownCreature(uint32_t id)
 			return {false, removedCreatureId};
 		}
 
-		auto it = knownCreatureSet.begin();
-		if (*it == id) {
-			++it;
+		// An OTC viewport can contain more creatures than the pruning budget.
+		// Evicting a visible ID makes the client forget it while it remains on
+		// screen, invalidating later known-creature and outfit/passability updates.
+		if (isOTC) {
+			return {false, 0};
 		}
 
-		uint32_t removedId = *it;
-		knownCreatureSet.erase(it);
-		pendingCreatureEmblems.erase(removedId);
-		return {false, removedId};
+		// Preserve the legacy CIP cache bound, without evicting the local player
+		// or the ID being introduced by this packet.
+		auto it = std::find_if(knownCreatureSet.begin(), knownCreatureSet.end(), [this, id](uint32_t creatureId) {
+			return creatureId != id && (!player || creatureId != player->getID());
+		});
+		if (it != knownCreatureSet.end()) {
+			uint32_t removedId = *it;
+			knownCreatureSet.erase(it);
+			pendingCreatureEmblems.erase(removedId);
+			return {false, removedId};
+		}
 	}
 	return {false, 0};
 }
@@ -3019,7 +3047,7 @@ void ProtocolGame::sendOpenPrivateChannel(std::string_view receiver)
 
 void ProtocolGame::sendCreatureOutfit(const Creature* creature, const Outfit_t& outfit)
 {
-	if (!canSee(creature)) {
+	if (!canSee(creature) || !knownCreatureSet.contains(creature->getID())) {
 		return;
 	}
 
@@ -3256,7 +3284,7 @@ void ProtocolGame::sendImpactTracker(uint8_t analyzerType, uint32_t amount, Comb
 
 void ProtocolGame::sendCreatureWalkthrough(const Creature* creature, bool walkthrough)
 {
-	if (!canSee(creature)) {
+	if (!canSee(creature) || !knownCreatureSet.contains(creature->getID())) {
 		return;
 	}
 
@@ -3429,15 +3457,19 @@ void ProtocolGame::sendBasicData()
 
 void ProtocolGame::sendTextMessage(const TextMessage& message)
 {
-	NetworkMessage msg;
-	msg.addByte(0xB4);
-	msg.addByte(message.type);
-	msg.addString(message.text);
-	writeToOutputBuffer(msg);
+	sendTextMessage(message.type, message.text);
 }
 
 void ProtocolGame::sendTextMessage(MessageClasses mclass, const std::string& message)
 {
+	if (message.size() <= 256) {
+		SmallNetworkMessage<260> msg;
+		msg.addByte(0xB4);
+		msg.addByte(mclass);
+		msg.addString(message);
+		writeToOutputBuffer(msg.bytes());
+		return;
+	}
 	NetworkMessage msg;
 	msg.addByte(0xB4);
 	msg.addByte(mclass);
@@ -4275,12 +4307,12 @@ ProtocolGame::CustomPongResult ProtocolGame::receiveCustomPong(uint32_t id, int6
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
 {
-	NetworkMessage msg;
+	SmallNetworkMessage<13> msg;
 	msg.addByte(0x85);
 	msg.addPosition(from);
 	msg.addPosition(to);
 	msg.add<uint16_t>(type);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
@@ -4294,16 +4326,16 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 		return;
 	}
 
-	NetworkMessage msg;
+	SmallNetworkMessage<8> msg;
 	msg.addByte(0x83);
 	msg.addPosition(pos);
 	msg.add<uint16_t>(type);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendCreatureHealth(const Creature* creature)
 {
-	NetworkMessage msg;
+	SmallNetworkMessage<6> msg;
 	msg.addByte(0x8C);
 	msg.add<uint32_t>(creature->getID());
 
@@ -4313,7 +4345,7 @@ void ProtocolGame::sendCreatureHealth(const Creature* creature)
 		msg.addByte(std::ceil(
 		    (static_cast<double>(creature->getHealth()) / std::max<int32_t>(creature->getMaxHealth(), 1)) * 100));
 	}
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendFYIBox(std::string_view message)
@@ -5968,6 +6000,15 @@ void ProtocolGame::sendVIP(uint32_t guid, std::string_view name, VipStatus_t sta
 void ProtocolGame::sendAnimatedText(std::string_view message, const Position& pos, TextColor_t color)
 {
 	if (!canSee(pos)) {
+		return;
+	}
+	if (message.size() <= 256) {
+		SmallNetworkMessage<265> msg;
+		msg.addByte(0x84);
+		msg.addPosition(pos);
+		msg.addByte(color);
+		msg.addString(message);
+		writeToOutputBuffer(msg.bytes());
 		return;
 	}
 

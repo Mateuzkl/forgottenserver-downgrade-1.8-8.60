@@ -8,6 +8,7 @@
 #include "logger.h"
 
 #include <bit>
+#include <numeric>
 
 PerformanceMetrics g_performanceMetrics;
 
@@ -158,6 +159,66 @@ void PerformanceMetrics::recordNetworkConnectionCount(size_t current) noexcept
 	}
 	network.connectionsCurrent.store(current, std::memory_order_relaxed);
 	updateMaximum(network.connectionsMaximum, current);
+}
+
+void PerformanceMetrics::recordIncomingGamePacket(uint8_t opcode, size_t bytes) noexcept
+{
+	if (!isEnabled()) return;
+	auto& data = network.incoming[opcode];
+	data.messages.fetch_add(1, std::memory_order_relaxed);
+	data.bytes.fetch_add(bytes, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordOutgoingGameChunk(uint8_t firstOpcode, size_t bytes) noexcept
+{
+	if (!isEnabled()) return;
+	auto& data = network.outgoing[firstOpcode];
+	data.messages.fetch_add(1, std::memory_order_relaxed);
+	data.bytes.fetch_add(bytes, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordNetworkWrite(size_t bytes, bool error) noexcept
+{
+	if (!isEnabled()) return;
+	network.writeCompletions.fetch_add(1, std::memory_order_relaxed);
+	network.writtenBytes.fetch_add(bytes, std::memory_order_relaxed);
+	if (error) network.writeErrors.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordPendingWrite(size_t queued, bool rejected) noexcept
+{
+	if (!isEnabled()) return;
+	updateMaximum(network.pendingWriteMaximum, queued);
+	if (rejected) network.pendingWriteRejections.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordPacketBacklogRejection() noexcept
+{
+	if (isEnabled()) network.packetBacklogRejections.fetch_add(1, std::memory_order_relaxed);
+}
+
+void PerformanceMetrics::recordPacketRateRejection() noexcept
+{
+	if (isEnabled()) network.packetRateRejections.fetch_add(1, std::memory_order_relaxed);
+}
+
+NetworkTrafficSnapshot PerformanceMetrics::takeNetworkTrafficSnapshot() noexcept
+{
+	NetworkTrafficSnapshot result;
+	for (size_t i = 0; i < result.incoming.size(); ++i) {
+		result.incoming[i] = {network.incoming[i].messages.exchange(0, std::memory_order_relaxed),
+		                      network.incoming[i].bytes.exchange(0, std::memory_order_relaxed)};
+		result.outgoing[i] = {network.outgoing[i].messages.exchange(0, std::memory_order_relaxed),
+		                      network.outgoing[i].bytes.exchange(0, std::memory_order_relaxed)};
+	}
+	result.writeCompletions = network.writeCompletions.exchange(0, std::memory_order_relaxed);
+	result.writtenBytes = network.writtenBytes.exchange(0, std::memory_order_relaxed);
+	result.writeErrors = network.writeErrors.exchange(0, std::memory_order_relaxed);
+	result.pendingWriteMaximum = network.pendingWriteMaximum.exchange(0, std::memory_order_relaxed);
+	result.pendingWriteRejections = network.pendingWriteRejections.exchange(0, std::memory_order_relaxed);
+	result.packetBacklogRejections = network.packetBacklogRejections.exchange(0, std::memory_order_relaxed);
+	result.packetRateRejections = network.packetRateRejections.exchange(0, std::memory_order_relaxed);
+	return result;
 }
 
 void PerformanceMetrics::recordReactorCallbackSource(uint64_t nanoseconds, std::string_view description,
@@ -445,6 +506,36 @@ void PerformanceMetrics::maybeReport()
 		network.acceptErrors.exchange(0, std::memory_order_relaxed),
 		network.rateLimitRejections.exchange(0, std::memory_order_relaxed),
 		network.ipLimitRejections.exchange(0, std::memory_order_relaxed), currentConnections, maximumConnections);
+	const auto traffic = takeNetworkTrafficSnapshot();
+	uint64_t inMessages = 0, inBytes = 0, outChunks = 0, outBytes = 0;
+	for (size_t i = 0; i < traffic.incoming.size(); ++i) {
+		inMessages += traffic.incoming[i].messages;
+		inBytes += traffic.incoming[i].bytes;
+		outChunks += traffic.outgoing[i].messages;
+		outBytes += traffic.outgoing[i].bytes;
+	}
+	report += fmt::format(
+		"\n[Perf] traffic in_game={} in_body_bytes={} out_chunks={} out_body_bytes={} "
+		"write_completions={} written_bytes={} write_errors={} pending_write_max={} "
+		"write_rejected={} backlog_rejected={} packet_rate_rejected={}",
+		inMessages, inBytes, outChunks, outBytes, traffic.writeCompletions, traffic.writtenBytes,
+		traffic.writeErrors, traffic.pendingWriteMaximum, traffic.pendingWriteRejections,
+		traffic.packetBacklogRejections, traffic.packetRateRejections);
+	// Bounded aggregate logging: five busiest buckets per direction, once per report.
+	const auto appendTop = [&](const auto& buckets, std::string_view label) {
+		std::array<size_t, 256> indices;
+		std::iota(indices.begin(), indices.end(), 0);
+		std::partial_sort(indices.begin(), indices.begin() + 5, indices.end(), [&](size_t a, size_t b) {
+			return buckets[a].messages > buckets[b].messages;
+		});
+		report += fmt::format("\n[Perf] {}", label);
+		for (size_t i = 0; i < 5 && buckets[indices[i]].messages != 0; ++i) {
+			const auto& bucket = buckets[indices[i]];
+			report += fmt::format(" 0x{:02X}:{}msg/{}B", indices[i], bucket.messages, bucket.bytes);
+		}
+	};
+	appendTop(traffic.incoming, "in_game_opcode_top");
+	appendTop(traffic.outgoing, "out_chunk_first_opcode_top");
 	LOG_INFO("{}", report);
 }
 

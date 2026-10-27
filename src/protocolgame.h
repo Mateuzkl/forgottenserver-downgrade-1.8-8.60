@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -105,6 +106,7 @@ private:
 	void disconnectClient(std::string_view message) const;
 	void dispatchCancelMessage(ReturnValue message) const;
 	void writeToOutputBuffer(const NetworkMessage& msg);
+	void writeToOutputBuffer(std::span<const uint8_t> bytes);
 
 	void release() override;
 

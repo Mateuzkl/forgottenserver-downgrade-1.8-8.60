@@ -123,15 +123,25 @@ public:
 	void addProtocolToAutosend(Protocol_ptr protocol);
 
 	void removeProtocolFromAutosend(const Protocol_ptr& protocol);
+	// Dispatcher-only. A stopped scheduler or exhausted IDs can reject its timer.
+	bool needsAutosendRetry() const noexcept { return !sendScheduled; }
 
 private:
-	OutputMessagePool() { bufferedProtocols.reserve(256); }
+	OutputMessagePool()
+	{
+		bufferedProtocols.reserve(256);
+		flushingProtocols.reserve(256);
+	}
 
 	void scheduleSendAll(std::chrono::milliseconds delay) noexcept;
 	void sendAll() noexcept;
 
 	std::vector<Protocol_ptr> bufferedProtocols;
+	// Keep both batches' storage between flushes. A local swapped vector used to
+	// free the reserved capacity after every 10 ms batch, then allocate it again.
+	std::vector<Protocol_ptr> flushingProtocols;
 	bool sendScheduled = false;
+	friend struct OutputMessagePoolTestAccess;
 };
 
 #endif // FS_OUTPUTMESSAGE_H
