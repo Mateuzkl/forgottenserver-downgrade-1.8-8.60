@@ -592,13 +592,13 @@ bool Market::processDeliveries(Player* player)
 		for (const auto& delivery : deliveries) {
 			if (delivery.inbox) {
 				const Town* town = g_game.map.towns.getTown(delivery.depotId);
-				const std::string name = town ? town->getName() : fmt::format("town {}", delivery.depotId);
-				player->sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, fmt::format(
-				    "Market: {}x {} entregue(s) no Inbox de {} (town/depot ID {}). Oferta #{}.",
-				    delivery.amount, delivery.items.front()->getName(), name, delivery.depotId, delivery.offerId));
+				const std::string destination = town ? "your inbox in " + town->getName() : "your legacy Market inbox";
+				player->sendTextMessage(MESSAGE_EVENT_ADVANCE, fmt::format(
+				    "Market: {}x {} delivered to {}. Offer #{}.",
+				    delivery.amount, delivery.items.front()->getName(), destination, delivery.offerId));
 			} else {
-				player->sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, fmt::format(
-				    "Market: {} gold creditado(s) no banco. Oferta #{}.", delivery.bankCredit, delivery.offerId));
+				player->sendTextMessage(MESSAGE_EVENT_ADVANCE, fmt::format(
+				    "Market: {} gold credited to your bank account. Offer #{}.", delivery.bankCredit, delivery.offerId));
 			}
 			LOG_INFO(fmt::format("[Market] delivery={} guid={} offer={} depot={} amount={} bank={} state=applied",
 			    delivery.id, guid, delivery.offerId, delivery.depotId, delivery.amount, delivery.bankCredit));

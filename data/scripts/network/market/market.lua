@@ -304,23 +304,22 @@ end
 local function describeMarketDelivery(player, offerId, prefix, verb)
 	local status = Game.getMarketDeliveryStatus(player:getGuid(), offerId)
 	if not status then
-		return prefix .. " Nao foi possivel consultar a entrega. Confira o log do Market."
+		return prefix .. " Delivery status is unavailable. Please check again shortly."
 	end
 	if status.itemId == 0 then
 		return prefix .. " " .. status.bankCredit .. " gold " ..
-			(status.applied and "creditados no banco." or "registrados; aguardando credito no banco.")
+			(status.applied and "credited to your bank account." or "reserved; awaiting payment to your bank account.")
 	end
 	local town = Town(status.depotId)
-	local name = town and town:getName() or ("Town " .. status.depotId)
-	local destination = "Inbox de " .. name .. " (town/depot ID " .. status.depotId .. ")"
+	local destination = town and ("your inbox in " .. town:getName()) or "your legacy Market inbox"
 	local itemType = ItemType(status.itemId)
 	local itemName = itemType and itemType:getName() or ("item " .. status.itemId)
 	local item = status.amount .. "x " .. itemName
 	if status.applied then
-		return prefix .. " " .. item .. ": " .. (verb or "entregue") .. " no " .. destination .. "."
+		return prefix .. " " .. item .. ": " .. (verb or "delivered") .. " to " .. destination .. "."
 	end
-	return prefix .. " " .. item .. ": aguardando entrega para o " .. destination ..
-		". Voce sera avisado quando a entrega for salva."
+	return prefix .. " " .. item .. " is awaiting delivery to " .. destination ..
+		". You will be notified once delivery is complete."
 end
 
 local function sendMarketLeave(player)
@@ -334,7 +333,7 @@ local function sendMarketLeave(player)
 	return out:sendToPlayer(player)
 end
 
-local function tileHasMarketAccess(tile)
+local function tileHasMarketAccess(tile, allowStandaloneMarket)
 	if not tile then
 		return false
 	end
@@ -342,7 +341,7 @@ local function tileHasMarketAccess(tile)
 	if tile:getItemByType(ITEM_TYPE_DEPOT) then
 		return true
 	end
-	if tile.getItemById and tile:getItemById(MARKET_ITEM_ID) then
+	if allowStandaloneMarket and tile.getItemById and tile:getItemById(MARKET_ITEM_ID) then
 		return true
 	end
 	return false
@@ -354,11 +353,15 @@ local function hasMarketAccessAtPosition(player, position)
 	end
 
 	local playerTile = Tile(position)
-	if not playerTile or not playerTile:hasFlag(TILESTATE_PROTECTIONZONE) then
+	if not playerTile then
 		return false
 	end
 
-	if tileHasMarketAccess(playerTile) then
+	-- A physical depot is usable even if a city's tiles are not marked PZ.
+	-- Keep the PZ requirement for standalone market objects and keep all access
+	-- limited to the current floor and adjacent tiles, including after movement.
+	local allowStandaloneMarket = playerTile:hasFlag(TILESTATE_PROTECTIONZONE)
+	if tileHasMarketAccess(playerTile, allowStandaloneMarket) then
 		return true
 	end
 
@@ -366,7 +369,7 @@ local function hasMarketAccessAtPosition(player, position)
 		for y = -1, 1 do
 			if x ~= 0 or y ~= 0 then
 				local tile = Tile(Position(position.x + x, position.y + y, position.z))
-				if tileHasMarketAccess(tile) then
+				if tileHasMarketAccess(tile, allowStandaloneMarket) then
 					return true
 				end
 			end
@@ -2123,7 +2126,7 @@ function cancelHandler.onReceive(player, msg)
 	offerCountCache[player:getGuid()] = nil
 	Game.processMarketDeliveries(player:getGuid())
 	releaseMultipleLocks({ offerKey, playerKey })
-	sendMarketMessage(player, describeMarketDelivery(player, offer.id, "Oferta #" .. offer.id .. " cancelada.", "devolvido"))
+	sendMarketMessage(player, describeMarketDelivery(player, offer.id, "Offer #" .. offer.id .. " cancelled.", "returned"))
 	refreshMarket(player, MARKET_REQUEST_MY_OFFERS)
 end
 cancelHandler:register()
@@ -2253,15 +2256,15 @@ function acceptHandler.onReceive(player, msg)
 	releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 
 	if offer.sale == MARKET_ACTION_SELL then
-		sendMarketMessage(player, describeMarketDelivery(player, offer.id, "Oferta #" .. offer.id .. " aceita."))
+		sendMarketMessage(player, describeMarketDelivery(player, offer.id, "Offer #" .. offer.id .. " accepted."))
 	else
-		sendMarketMessage(player, "Oferta #" .. offer.id .. " aceita. " .. totalPrice .. " gold creditados no seu banco.")
+		sendMarketMessage(player, "Offer #" .. offer.id .. " accepted. " .. totalPrice .. " gold credited to your bank account.")
 	end
 	refreshMarket(player, offer.itemId, depotMap)
 
 	local owner = Player(offer.playerName)
 	if owner then
-		sendMarketMessage(owner, describeMarketDelivery(owner, offer.id, "Sua oferta #" .. offer.id .. " foi atendida."))
+		sendMarketMessage(owner, describeMarketDelivery(owner, offer.id, "Your offer #" .. offer.id .. " has been fulfilled."))
 		if marketOpenSessions[owner:getId()] then
 			sendMarketBrowse(owner, MARKET_REQUEST_MY_OFFERS)
 		end

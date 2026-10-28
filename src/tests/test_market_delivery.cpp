@@ -11,6 +11,8 @@
 #include "../tile.h"
 #include "test_support.h"
 
+#include <fstream>
+
 extern LuaEnvironment g_luaEnvironment;
 extern Game g_game;
 
@@ -133,6 +135,60 @@ TEST_CASE(current_depot_overrides_home_town_and_stale_last_depot)
 	CHECK(Market::getInboxDepotId(player) == 2); // no nearby locker: last visited city
 	player.setLastDepotId(-1);
 	CHECK(Market::getInboxDepotId(player) == 1); // offline/new character fallback
+}
+
+TEST_CASE(market_access_accepts_non_pz_depots_but_rechecks_distance_and_floor)
+{
+	// Execute the actual Lua access check with map tiles as its input. Timberport
+	// has physical depots without PZ flags; it must behave like a normal depot.
+	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+	std::ifstream input(root / "data/scripts/network/market/market.lua");
+	const std::string source{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+	const auto first = source.find("local function tileHasMarketAccess(");
+	const auto last = source.find("local function hasCurrentMarketAccess(", first);
+	CHECK(first != std::string::npos && last != std::string::npos);
+	LuaStatePtr state{luaL_newstate()};
+	CHECK(state != nullptr);
+	auto L = state.get();
+	luaL_openlibs(L);
+	CHECK(luaL_dostring(L, R"lua(
+        ITEM_TYPE_DEPOT = 1
+        TILESTATE_PROTECTIONZONE = 2
+        MARKET_ITEM_ID = 12903
+        local tiles = {}
+        local function key(x,y,z) return x..':'..y..':'..z end
+        function Position(x,y,z) return {x=x,y=y,z=z} end
+        function Tile(p) return tiles[key(p.x,p.y,p.z)] end
+        function place(x,y,z,pz,depot,market)
+            tiles[key(x,y,z)] = {
+                hasFlag = function(self, flag) return flag == TILESTATE_PROTECTIONZONE and pz end,
+                getItemByType = function(self, kind) return kind == ITEM_TYPE_DEPOT and depot or nil end,
+                getItemById = function(self, id) return id == MARKET_ITEM_ID and market or nil end
+            }
+        end
+    )lua") == LUA_OK);
+	const auto chunk = source.substr(first, last - first) + "\nreturn hasMarketAccessAtPosition";
+	CHECK(luaL_loadbuffer(L, chunk.data(), chunk.size(), "market-access") == LUA_OK);
+	CHECK(lua_pcall(L, 0, 1, 0) == LUA_OK);
+	lua_setglobal(L, "hasAccess");
+	CHECK(luaL_dostring(L, R"lua(
+        local player = {}
+        place(10,10,7,false,false,false)
+        place(11,10,7,false,true,false)
+        assert(hasAccess(player, Position(10,10,7))) -- town 2: no PZ, adjacent depot
+        place(10,10,7,true,false,false)
+        assert(hasAccess(player, Position(10,10,7))) -- towns 1/3: PZ and depot
+        place(14,10,7,true,false,false)
+        assert(not hasAccess(player, Position(14,10,7))) -- walking away closes access
+        place(10,10,6,true,false,false)
+        assert(not hasAccess(player, Position(10,10,6))) -- depot on a different floor
+        place(20,20,7,false,false,false)
+        place(21,20,7,false,false,true)
+        assert(not hasAccess(player, Position(20,20,7))) -- standalone object still requires PZ
+        place(20,20,7,true,false,false)
+        assert(hasAccess(player, Position(20,20,7)))
+        assert(not hasAccess(player, Position(99,99,7))) -- missing tile
+    )lua") == LUA_OK);
 }
 
 TFS_TEST_MAIN()
