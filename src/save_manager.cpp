@@ -127,7 +127,7 @@ bool SaveManager::savePlayer(Player* player)
 
 bool SaveManager::savePlayerSync(Player* player)
 {
-	if (!player) {
+	if (!player || hasFailedRecovery(player->getGUID())) {
 		return false;
 	}
 
@@ -256,9 +256,120 @@ bool SaveManager::savePlayersSync(const std::vector<Player*>& players)
 	return true;
 }
 
+bool SaveManager::canSavePlayersSync(const std::vector<Player*>& players) const
+{
+	if (!g_dispatcher.isDispatcherThread() || Database::getInstance().isInTransaction()) {
+		return false;
+	}
+	for (const Player* player : players) {
+		if (!player || !player->getSaveFlag() || hasPendingPlayerSave(player->getGUID()) ||
+		    hasFailedRecovery(player->getGUID())) {
+			return false;
+		}
+		// A failed flush can leave durable WAL even after its in-memory queue drained.
+		auto result = Database::getInstance().storeQuery(fmt::format(
+		    "SELECT COUNT(*) AS `total` FROM `player_save_async_pending` WHERE `guid` = {}", player->getGUID()));
+		if (!result || result->getNumber<uint64_t>("total") != 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+SaveManager::AtomicSaveResult SaveManager::savePlayersAtomic(
+    const std::vector<Player*>& players, const std::function<bool()>& transactionQueries)
+{
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[SaveManager] savePlayersAtomic must be called on the dispatcher thread.");
+		return AtomicSaveResult::Failed;
+	}
+	Database& db = Database::getInstance();
+	if (!canSavePlayersSync(players)) {
+		return AtomicSaveResult::Failed;
+	}
+
+	std::unordered_set<uint32_t> guids;
+	std::vector<IOLoginData::PlayerSaveSnapshot> saves;
+	saves.reserve(players.size());
+	for (Player* player : players) {
+		if (!player || hasPendingPlayerSave(player->getGUID()) || hasFailedRecovery(player->getGUID()) ||
+		    !guids.insert(player->getGUID()).second) {
+			return AtomicSaveResult::Failed;
+		}
+		auto save = IOLoginData::buildPlayerSave(player);
+		if (!save) {
+			return AtomicSaveResult::Failed;
+		}
+		saves.push_back(std::move(*save));
+	}
+
+	struct FlushGuard {
+		std::unordered_set<uint32_t>& inFlight;
+		const std::unordered_set<uint32_t>& guids;
+		~FlushGuard()
+		{
+			for (uint32_t guid : guids) {
+				inFlight.erase(guid);
+			}
+		}
+	} guard{flushInFlight, guids};
+	flushInFlight.insert(guids.begin(), guids.end());
+
+	// Do not nest flushPlayerSave: snapshots and the Market outbox must commit together.
+	DBTransaction transaction;
+	if (!transaction.begin()) {
+		return AtomicSaveResult::Failed;
+	}
+	const auto quarantine = [&] {
+		for (uint32_t guid : guids) {
+			failedRecoveryGuids.insert(guid);
+		}
+		LOG_CRITICAL("[SaveManager] Atomic commit outcome unknown; affected players must reconnect after restart.");
+		return AtomicSaveResult::Indeterminate;
+	};
+	const auto execute = [&]() {
+		if (!transactionQueries()) {
+			return false;
+		}
+		for (const auto& save : saves) {
+			for (const auto& query : save.queries) {
+				if (!db.executeQuery(query)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	};
+	try {
+		if (!execute()) {
+			return transaction.rollback() ? AtomicSaveResult::Failed : quarantine();
+		}
+	} catch (const std::exception& e) {
+		LOG_ERROR(fmt::format("[SaveManager] Atomic save failed: {}", e.what()));
+		return transaction.rollback() ? AtomicSaveResult::Failed : quarantine();
+	}
+	if (!transaction.commit()) {
+		// A lost COMMIT acknowledgement does not prove rollback. Never refund RAM
+		// or let a later snapshot overwrite the database in this state.
+		return quarantine();
+	}
+	for (size_t i = 0; i < players.size(); ++i) {
+		const auto& save = saves[i];
+		players[i]->acknowledgeStorageDirty(Player::StorageDirtySnapshot{
+		    save.storageSnapshotId, save.snapshotModifiedKeys, save.snapshotRemovedKeys});
+		players[i]->acknowledgeBestiaryDirty(Player::BestiaryDirtySnapshot{
+		    save.bestiarySnapshotId, save.snapshotModifiedBestiaryRaceIds});
+	}
+	return AtomicSaveResult::Committed;
+}
+
 void SaveManager::drainPlayerFlushAsync(uint32_t guid, std::function<void(bool)> callback)
 {
 	g_dispatcher.addTask([this, guid, callback = std::move(callback)]() mutable {
+		if (hasFailedRecovery(guid)) {
+			callback(false);
+			return;
+		}
 		if (flushInFlight.contains(guid) || pendingFlushes.contains(guid)) {
 			flushChainCallbacks[guid].push_back(std::move(callback));
 		} else {
@@ -272,7 +383,7 @@ void SaveManager::drainPlayerFlushAsync(uint32_t guid, std::function<void(bool)>
 
 bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = false */)
 {
-	if (!player) {
+	if (!player || hasFailedRecovery(player->getGUID())) {
 		return false;
 	}
 
@@ -333,6 +444,7 @@ void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll, bool suc
 			deletePendingFlushFromDB(guid);
 		} else {
 			LOG_ERROR(fmt::format("[SaveManager] Flush failed for guid={}, WAL entry preserved for recovery", guid));
+			failedRecoveryGuids.insert(guid);
 		}
 
 		// Invoke all registered callbacks for this flush chain
@@ -502,6 +614,7 @@ void SaveManager::recoverPendingFlushes()
 		DBTransaction transaction;
 		if (!transaction.begin()) {
 			LOG_ERROR(fmt::format("[SaveManager] Failed to begin recovery transaction for guid={}", guid));
+			failedRecoveryGuids.insert(guid);
 			continue;
 		}
 		for (const auto& q : queries) {
@@ -518,6 +631,7 @@ void SaveManager::recoverPendingFlushes()
 			} else {
 				transaction.rollback();
 				LOG_ERROR(fmt::format("[SaveManager] Recovery commit failed for guid={}", guid));
+				failedRecoveryGuids.insert(guid);
 			}
 		} else {
 			transaction.rollback();

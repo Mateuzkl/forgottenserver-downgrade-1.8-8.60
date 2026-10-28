@@ -352,14 +352,14 @@ int luaPlayerGetRewardChest(lua_State* L)
 
 int luaPlayerGetInbox(lua_State* L)
 {
-	// player:getInbox()
+	// player:getInbox([depotId]) -- omitted keeps the home-town inbox.
 	Player* player = getUserdata<Player>(L, 1);
 	if (!player) {
 		lua_pushnil(L);
 		return 1;
 	}
 
-	Inbox* inbox = player->getInbox();
+	Inbox* inbox = isInteger(L, 2) ? player->getInbox(getInteger<uint32_t>(L, 2)) : player->getInbox();
 	if (inbox) {
 		pushItem(L, inbox);
 	} else {

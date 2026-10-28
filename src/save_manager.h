@@ -29,6 +29,12 @@ public:
 	// All-or-nothing synchronous batch. Never queues behind another save.
 	bool savePlayersSync(const std::vector<Player*>& players);
 
+	enum class AtomicSaveResult { Failed, Committed, Indeterminate };
+	// Dispatcher only. Refuses stale snapshots/WAL; the callback must contain SQL only.
+	[[nodiscard]] bool canSavePlayersSync(const std::vector<Player*>& players) const;
+	AtomicSaveResult savePlayersAtomic(const std::vector<Player*>& players,
+	                                  const std::function<bool()>& transactionQueries);
+
 	// Dispatcher-thread only, like the save queue bookkeeping itself.
 	[[nodiscard]] bool hasPendingPlayerSave(uint32_t guid) const noexcept
 	{

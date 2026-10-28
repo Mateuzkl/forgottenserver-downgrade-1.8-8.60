@@ -2,6 +2,7 @@
 // Use of this source code is governed by the GPL-2.0 License that can be found in the LICENSE file.
 
 #include "otpch.h"
+#include "market.h"
 
 #include "actions.h"
 #include "astraclient.h"
@@ -928,6 +929,13 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
+	// Loading ran only after SaveManager drained this GUID. Deliver on the dispatcher,
+	// after world/login hooks, so the item and receipt can share a player snapshot.
+	(void)Market::processDeliveries(player.get());
+	if (g_saveManager.hasFailedRecovery(player->getGUID())) {
+		g_game.releaseLogin(reservedGuid);
+		return;
+	}
 	acceptPackets = true;
 	logPlayerSession(*player, player->lastIP, true);
 	g_game.releaseLogin(reservedGuid);
