@@ -84,6 +84,7 @@ public:
 
 private:
 	friend struct SaveManagerTestAccess;
+	static bool normalizeLegacyOnlineTimeQuery(std::string& query);
 	struct PendingPlayerFlush
 	{
 		std::string name;

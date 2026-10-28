@@ -2205,6 +2205,12 @@ function acceptHandler.onReceive(player, msg)
 			return
 		end
 	else
+		-- Lua bank balances use signed integers; reject before reserving items.
+		if oldBalance < 0 or totalPrice > math.maxinteger - oldBalance then
+			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
+			sendMarketMessage(player, "Your bank balance is too high to accept this offer.")
+			return
+		end
 		local removed, attributes, removeError, reservedItems = removeDepotItemsWithAttributes(player, offer.itemId, amount, acceptedTier)
 		if not removed then
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })

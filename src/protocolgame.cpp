@@ -929,6 +929,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
+	player->onlineTimeSessionStart = time(nullptr);
 	// Loading ran only after SaveManager drained this GUID. Deliver on the dispatcher,
 	// after world/login hooks, so the item and receipt can share a player snapshot.
 	(void)Market::processDeliveries(player.get());

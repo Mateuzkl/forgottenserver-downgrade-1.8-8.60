@@ -2,10 +2,12 @@
 
 #include "../configmanager.h"
 #include "../game.h"
+#include "../globalevent.h"
 #include "../inbox.h"
 #include "../item.h"
 #include "../luascript.h"
 #include "../market.h"
+#include "../save_manager.h"
 #include "../player.h"
 #include "../depotlocker.h"
 #include "../tile.h"
@@ -15,6 +17,22 @@
 
 extern LuaEnvironment g_luaEnvironment;
 extern Game g_game;
+extern GlobalEvents* g_globalEvents;
+
+struct PlayerOnlineTimeTestAccess
+{
+	static void initialize(Player& player, uint64_t baseline, time_t sessionStart, time_t lastLogin)
+	{
+		player.onlineTimeAtLogin = baseline;
+		player.onlineTimeSessionStart = sessionStart;
+		player.lastLoginSaved = lastLogin;
+	}
+};
+
+struct SaveManagerTestAccess
+{
+	static bool normalize(std::string& query) { return SaveManager::normalizeLegacyOnlineTimeQuery(query); }
+};
 
 namespace {
 void loadItems()
@@ -109,6 +127,16 @@ TEST_CASE(lua_inbox_zero_is_explicit_and_default_keeps_home_town)
 		CHECK(luaL_loadfile(L, (root / file).string().c_str()) == LUA_OK);
 		lua_pop(L, 1);
 	}
+	GlobalEvents events;
+	struct GlobalEventsGuard {
+		GlobalEvents* previous = g_globalEvents;
+		~GlobalEventsGuard() { g_globalEvents = previous; }
+	} guard;
+	g_globalEvents = &events;
+	CHECK(script.loadFile((root / "data/scripts/globalevents/market_deliveries.lua").string()) == 0);
+	const auto registered = events.getEventMap(GLOBALEVENT_NONE);
+	CHECK(registered.contains("MarketDeliveries"));
+	CHECK(registered.at("MarketDeliveries").getInterval() == 5000);
 }
 
 TEST_CASE(current_depot_overrides_home_town_and_stale_last_depot)
@@ -222,6 +250,84 @@ TEST_CASE(persistence_failure_freezes_the_session_before_logout_cleanup)
 	player.disconnectForPersistenceFailure();
 	CHECK(player.isPersistenceQuarantined());
 	CHECK(player.isMovementBlocked());
+}
+
+TEST_CASE(market_bank_credit_stays_in_lua_integer_range_without_blocking_items)
+{
+	const uint64_t limit = INT64_MAX;
+	CHECK(Market::canCreditBank(limit - 1, 1));
+	CHECK(!Market::canCreditBank(limit - 1, 2));
+	CHECK(!Market::canCreditBank(limit, 1));
+	CHECK(!Market::canCreditBank(limit + 1, 1));
+	CHECK(Market::canCreditBank(UINT64_MAX, 0));
+	CHECK(Market::canCreditBank(limit - 3, 1, 2));
+	CHECK(!Market::canCreditBank(limit - 3, 2, 2));
+	CHECK(!Market::canCreditBank(0, 1, UINT64_MAX));
+}
+
+TEST_CASE(legacy_inbox_can_be_opened_at_a_city_depot_without_moving_its_items)
+{
+	loadItems();
+	Player player(nullptr);
+	auto group = std::make_shared<Group>();
+	group->id = 1;
+	player.setGroup(group);
+	player.setTown(std::make_shared<Town>(1));
+	CHECK(!Market::openLegacyInbox(&player));
+	const Position position(2200, 2200, 7), depotPosition(2201, 2200, 7);
+	g_game.map.setTile(position, std::make_unique<StaticTile>(position.x, position.y, position.z));
+	g_game.map.setTile(depotPosition, std::make_unique<StaticTile>(depotPosition.x, depotPosition.y, depotPosition.z));
+	auto physicalDepot = std::make_shared<DepotLocker>(ITEM_LOCKER);
+	physicalDepot->setDepotId(2);
+	g_game.map.getTile(depotPosition)->internalAddThing(physicalDepot.get());
+	player.setParent(g_game.map.getTile(position));
+	auto item = Item::CreateItem(ITEM_BAG);
+	auto inbox = player.getInbox(0);
+	inbox->internalAddThing(item.get());
+	CHECK(Market::openLegacyInbox(&player));
+	CHECK(player.getContainerID(inbox) >= 0);
+	CHECK(inbox->getPosition() == depotPosition);
+	CHECK(item->getParent() == inbox);
+	CHECK(player.getInbox(2)->empty());
+	CHECK(Market::getInboxDepotId(player) == 2);
+	CHECK(Market::openLegacyInbox(&player)); // no second window / replacement items
+	CHECK(inbox->size() == 1);
+	player.setParent(nullptr);
+}
+
+TEST_CASE(reconnect_does_not_reset_the_online_time_baseline)
+{
+	Player player(nullptr);
+	PlayerOnlineTimeTestAccess::initialize(player, 500, 100, 100);
+	CHECK(player.getOnlineTimeAt(150) == 550);
+	PlayerOnlineTimeTestAccess::initialize(player, 500, 100, 160); // reconnect changes lastlogin only
+	CHECK(player.getOnlineTimeAt(170) == 570);
+	CHECK(player.getOnlineTimeAt(170) == 570); // repeatable save
+	CHECK(player.getOnlineTimeAt(90) == 500); // clock adjustment
+	PlayerOnlineTimeTestAccess::initialize(player, UINT64_MAX - 1, 100, 100);
+	CHECK(player.getOnlineTimeAt(105) == UINT64_MAX);
+}
+
+TEST_CASE(legacy_online_time_normalization_never_changes_quoted_item_payloads)
+{
+	const std::string text = "`onlinetime` = `onlinetime` + 123";
+	std::string insert = "INSERT INTO `player_inboxitems` VALUES (1,'" + text + "')";
+	const auto originalInsert = insert;
+	CHECK(!SaveManagerTestAccess::normalize(insert));
+	CHECK(insert == originalInsert);
+	std::string update = "UPDATE `players` SET `conditions`='" + text +
+	    "',`onlinetime` = `onlinetime` + 456,`level`=10 WHERE `id`=1";
+	CHECK(SaveManagerTestAccess::normalize(update));
+	CHECK(update == "UPDATE `players` SET `conditions`='" + text +
+	    "',`onlinetime` = `onlinetime`,`level`=10 WHERE `id`=1");
+	std::string escaped = R"sql(UPDATE `players` SET `conditions`='escaped \' and '' quote `onlinetime` = `onlinetime` + 123,',`level`=10)sql";
+	const auto originalEscaped = escaped;
+	CHECK(!SaveManagerTestAccess::normalize(escaped));
+	CHECK(escaped == originalEscaped);
+	std::string quoted = "UPDATE `players` SET `conditions`=\"" + text + "\",`level`=10";
+	const auto originalQuoted = quoted;
+	CHECK(!SaveManagerTestAccess::normalize(quoted));
+	CHECK(quoted == originalQuoted);
 }
 
 TFS_TEST_MAIN()

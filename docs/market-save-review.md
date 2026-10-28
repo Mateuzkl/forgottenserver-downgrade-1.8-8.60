@@ -45,3 +45,23 @@ Emergency `.sql`/`.tmp` files require offline reconciliation. Check them against
 ## Remaining acceptance gates
 
 Native build and all updated tests must pass. ASan/LSan or equivalent must exercise repeated create/cancel/accept, script failure and logout, plus shutdown with outstanding workers. The injected unknown-worker-completion test is not a network fault test of a real lost COMMIT acknowledgement. Physical insertion failure, actual live-client quarantine, online/offline reload and performance under load still need execution. The hard delivery budgets limit allocation/work counts; full player serialization and synchronous SQL remain a latency risk. No review thread was marked resolved without runtime evidence, and no merge was performed.
+
+## Review follow-up after 5723e303
+
+Reviewed CodeRabbit, Greptile and Sourcery inline comments plus CodeRabbit's follow-up/nitpick sections. Confirmed Linux, ThreadSanitizer and Docker logs all stopped at the omitted `walClearQuery` initializer; it now has an explicit empty value.
+
+| Finding | Disposition |
+| --- | --- |
+| Missing snapshot member initializer (CI / CodeRabbit) | Explicit final empty member; preserves `-Werror` rather than suppressing it |
+| Reconnect lowers online time (Greptile 4403225270) | Separate session-start clock survives reconnect; repeatable elapsed-time regression added |
+| WAL changes written item text (Greptile 4403225291) | Normalize only generated `UPDATE players SET` assignments outside quoted values; inserts/binary attributes remain byte-for-byte unchanged; quoted-text and DB replay regressions added |
+| Coins need change but no bag (Greptile 4403225303 / CodeRabbit 4403310639) | Place prepared change in released coin slots or valid empty slots; bank-only fallback if no slot is available and the bank covers the entire payment; restore/success/fallback cases added |
+| Emergency SQL privacy (CodeRabbit 4403310651) | On POSIX, directory permissions 0700 are set before file creation and temporary file permissions 0600 before writing/rename. Windows retains its existing NTFS ACL inheritance; no claim of POSIX permission enforcement on Windows |
+| Credited balance exceeds Lua integer range (CodeRabbit follow-up) | Reject credits above INT64_MAX; retain item-only delivery even with a legacy unsigned balance; guard direct BUY-accept credit before removing items; boundary and DB regressions added |
+| Legacy Inbox 0 has no world locker (CodeRabbit follow-up) | `!marketstatus legacy` opens the existing owned inbox at a nearby physical depot. Its locker is attached to that depot for normal item-distance/close checks. No automatic relocation or replacement deliveries |
+| Event test checked syntax only (CodeRabbit) | Execute and assert actual C++ event registration; executable Lua test also verifies name, interval, registration and callback |
+| Payment success / actual reload / deferred removal coverage (CodeRabbit nitpicks) | Added restore=false debit/weak-reference check, fresh DB-loaded Player assertions, and registered online-player deferred-removal integration scenario |
+| Older refund, work-budget, expiry, tier and full-inbox comments | Current source already has exact money restoration, rotating count budgets, accept-expiry guard, serialized attributes and verified inbox ownership; retained those fixes |
+| Older suggestion to simply remove runtime quarantine | Not adopted: unknown commits require quarantine; current code freezes/disconnects the player and has controlled recovery, addressing the underlying lost-progress report |
+
+The 7-file Lua syntax check and expanded Lua regressions passed locally through the existing Lua 5.5 DLL. Source-list/ownership checks and `git diff --check` passed. Repeated isolated MariaDB migration/WAL/progress SQL checks passed after the interruption. Native regressions above were added but **not compiled or executed locally**. Build/TSan/ASan results are pending the pushed revision; no leak-free claim or merge approval is made.

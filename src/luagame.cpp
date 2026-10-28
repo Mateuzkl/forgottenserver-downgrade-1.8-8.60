@@ -1385,6 +1385,13 @@ void pushMarketResult(lua_State* L, const std::optional<bool>& result)
 	}
 }
 
+int luaGameOpenLegacyMarketInbox(lua_State* L)
+{
+	auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	pushBoolean(L, Market::openLegacyInbox(player.get()));
+	return 1;
+}
+
 int luaGameReserveMarketMoney(lua_State* L)
 {
 	auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
@@ -1974,6 +1981,7 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "createMarketOffer", luaGameCreateMarketOffer);
 	registerMethod("Game", "isMarketPlayerReady", luaGameIsMarketPlayerReady);
 	registerMethod("Game", "reserveMarketMoney", luaGameReserveMarketMoney);
+	registerMethod("Game", "openLegacyMarketInbox", luaGameOpenLegacyMarketInbox);
 	registerMethod("Game", "finishMarketMoney", luaGameFinishMarketMoney);
 	registerMethod("Game", "settleMarketOffer", luaGameSettleMarketOffer);
 	registerMethod("Game", "processMarketDeliveries", luaGameProcessMarketDeliveries);

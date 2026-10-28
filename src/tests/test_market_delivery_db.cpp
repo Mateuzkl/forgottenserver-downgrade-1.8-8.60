@@ -2,6 +2,9 @@
 
 #include "../configmanager.h"
 #include "../container.h"
+#include "../chat.h"
+#include "../globalevent.h"
+#include "../tile.h"
 #include "../database.h"
 #include "../databasemanager.h"
 #include "../game.h"
@@ -19,6 +22,8 @@
 
 extern Game g_game;
 extern Vocations g_vocations;
+extern Chat* g_chat;
+extern GlobalEvents* g_globalEvents;
 
 struct TaskReactorTestAccess
 {
@@ -99,6 +104,27 @@ uint64_t inboxCount(uint32_t guid, uint32_t depot)
 {
 	return number(fmt::format("SELECT COUNT(*) AS `value` FROM `player_inboxitems` WHERE `player_id`={} AND `pid`={}", guid, depot));
 }
+
+struct QuarantinePlayer final : Player
+{
+	QuarantinePlayer() : Player(nullptr) {}
+	bool removedWithoutLogout = false;
+	void onRemoveCreature(Creature* creature, bool isLogout) override
+	{
+		if (creature == this) { removedWithoutLogout = !isLogout; }
+		Player::onRemoveCreature(creature, isLogout);
+	}
+};
+
+struct WorldEvents
+{
+	GlobalEvents events;
+	Chat chat;
+	GlobalEvents* previousEvents = g_globalEvents;
+	Chat* previousChat = g_chat;
+	WorldEvents() { g_globalEvents = &events; g_chat = &chat; }
+	~WorldEvents() { g_globalEvents = previousEvents; g_chat = previousChat; }
+};
 
 struct Runtime
 {
@@ -185,6 +211,39 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		CHECK(Market::createOfferAndSave(&seller, invalid) == std::optional<bool>{false});
 		CHECK(seller.getMoney() == 200);
 		CHECK(!Market::finishMoney(&seller, true)); // native guard already released the reservation
+		Player noBackpack(nullptr);
+		initialize(noBackpack, SELLER, 1);
+		noBackpack.setBankBalance(0);
+		auto heldPlatinum = Item::CreateItem(ITEM_PLATINUM_COIN, 1);
+		static_cast<Cylinder&>(noBackpack).internalAddThing(CONST_SLOT_LEFT, heldPlatinum.get());
+		CHECK(Market::reserveMoney(&noBackpack, 20));
+		CHECK(noBackpack.getMoney() == 80);
+		CHECK(noBackpack.getBankBalance() == 0);
+		CHECK(Market::finishMoney(&noBackpack, true));
+		CHECK(noBackpack.getMoney() == 100);
+		CHECK(noBackpack.getInventoryItem(CONST_SLOT_LEFT) == heldPlatinum.get());
+		std::weak_ptr<Item> paidCoin = heldPlatinum;
+		CHECK(Market::reserveMoney(&noBackpack, 20));
+		CHECK(Market::finishMoney(&noBackpack, false));
+		CHECK(noBackpack.getMoney() == 80); // success keeps the debit
+		CHECK(noBackpack.getBankBalance() == 0);
+		heldPlatinum.reset();
+		CHECK(paidCoin.expired()); // reservation no longer retains a consumed coin
+		Player bankFallback(nullptr);
+		initialize(bankFallback, SELLER, 1);
+		bankFallback.setBankBalance(100);
+		auto crystal = Item::CreateItem(ITEM_CRYSTAL_COIN, 1);
+		for (uint32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+			auto item = slot == CONST_SLOT_LEFT ? crystal : Item::CreateItem(3388);
+			static_cast<Cylinder&>(bankFallback).internalAddThing(slot, item.get());
+		}
+		CHECK(Market::reserveMoney(&bankFallback, 20));
+		CHECK(bankFallback.getBankBalance() == 80);
+		CHECK(bankFallback.getInventoryItem(CONST_SLOT_LEFT) == crystal.get());
+		CHECK(Market::finishMoney(&bankFallback, true));
+		CHECK(bankFallback.getBankBalance() == 100);
+
+
 		// Each current town receives its own return; another town inbox stays intact.
 		for (Player* player : {&seller, &buyer}) {
 			auto mail = Item::CreateItem(ITEM_GOLD_COIN, 7);
@@ -292,7 +351,7 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		// claim transaction. Unique instance bytes and tier survive materialization.
 		auto unique = Item::CreateItem(ITEM_BAG);
 		unique->setTier(4);
-		unique->setStrAttr(ITEM_ATTRIBUTE_TEXT, "Market unique instance");
+		unique->setStrAttr(ITEM_ATTRIBUTE_TEXT, "Book text: `onlinetime` = `onlinetime` + 123");
 		PropWriteStream stream;
 		unique->serializeAttr(stream);
 		const std::string attributes{stream.getStream()};
@@ -302,6 +361,18 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		CHECK(Market::processDeliveries(&buyer));
 		CHECK(buyer.getInbox(2)->getItemByIndex(0)->getTier() == 4);
 		CHECK(inboxCount(BUYER, 2) == 11);
+		auto bookSnapshot = IOLoginData::buildPlayerSave(&buyer);
+		CHECK(bookSnapshot.has_value());
+		for (size_t i = 0; i < bookSnapshot->queries.size(); ++i) {
+			sql(fmt::format("INSERT INTO player_save_async_pending(guid,query_index,query_text,created_at) VALUES({},{},{},1)",
+			    BUYER, i, Database::getInstance().escapeString(bookSnapshot->queries[i])));
+		}
+		g_saveManager.recoverPendingFlushes();
+		auto recoveredBook = Database::getInstance().storeQuery(fmt::format(
+		    "SELECT attributes FROM player_inboxitems WHERE player_id={} AND pid=2 ORDER BY sid LIMIT 1", BUYER));
+		CHECK(recoveredBook != nullptr);
+		CHECK(recoveredBook->getString("attributes").find("`onlinetime` = `onlinetime` + 123") != std::string_view::npos);
+
 
 		// Durable but un-recovered WAL blocks mutations even when no in-memory job
 		// remains. Recovery replays the old snapshot before applying the new right.
@@ -437,6 +508,34 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 			    "WHERE player_id={} AND itemtype={}", SELLER, static_cast<uint16_t>(ITEM_GOLD_COIN))) == previous + count);
 		}
 
+		// The Lua signed balance ceiling must defer bank credits without blocking
+		// item-only receipts in the same batch, including legacy unsigned balances.
+		const auto previousBalance = seller.getBankBalance();
+		seller.setBankBalance(static_cast<uint64_t>(INT64_MAX) - 1);
+		const auto cappedCredit = offer(SELLER, 0, 1);
+		sql(fmt::format("UPDATE market_offers SET price=2 WHERE id={}", cappedCredit));
+		CHECK(Market::settleOffer(&seller, cappedCredit, 1, 1, 1, 30).value_or(false));
+		const auto itemAfterCredit = offer(SELLER, 1, 1);
+		CHECK(Market::settleOffer(&seller, itemAfterCredit, 1, 1, 1, 30).value_or(false));
+		CHECK(Market::processDeliveries(&seller));
+		CHECK(seller.getBankBalance() == static_cast<uint64_t>(INT64_MAX) - 1);
+		CHECK(!Market::getDeliveryStatus(SELLER, cappedCredit)->applied);
+		CHECK(Market::getDeliveryStatus(SELLER, itemAfterCredit)->applied);
+		seller.setBankBalance(UINT64_MAX);
+		const auto unsignedItem = offer(SELLER, 1, 1);
+		CHECK(Market::settleOffer(&seller, unsignedItem, 1, 1, 1, 30).value_or(false));
+		CHECK(Market::processDeliveries(&seller));
+		CHECK(Market::getDeliveryStatus(SELLER, unsignedItem)->applied);
+		CHECK(seller.getBankBalance() == UINT64_MAX);
+		seller.setBankBalance(static_cast<uint64_t>(INT64_MAX) - 2);
+		const auto exactCredit = offer(SELLER, 0, 1);
+		sql(fmt::format("UPDATE market_offers SET price=2 WHERE id={}", exactCredit));
+		CHECK(Market::settleOffer(&seller, exactCredit, 1, 1, 1, 30).value_or(false));
+		CHECK(Market::processDeliveries(&seller));
+		CHECK(seller.getBankBalance() == static_cast<uint64_t>(INT64_MAX));
+		CHECK(Market::getDeliveryStatus(SELLER, exactCredit)->applied);
+		seller.setBankBalance(previousBalance);
+
 		// Checked flush: rollback is confirmed and a later retry applies once.
 		auto rollbackSnapshot = IOLoginData::buildPlayerSave(&seller);
 		CHECK(rollbackSnapshot.has_value());
@@ -481,12 +580,50 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		CHECK(!g_saveManager.savePlayerSync(&seller));
 		CHECK(!Market::reserveMoney(&seller, 1));
 		CHECK(number(fmt::format("SELECT balance AS value FROM players WHERE id={}", SELLER)) == 22222);
-		// Restart re-entry loads the committed DB state. A fresh manager has no
-		// old worker or WAL to replay; the uncertain runtime manager stays blocked.
+		// Re-entry hydrates a fresh player from the committed DB state; readiness
+		// alone cannot detect an item or bank load regression.
 		SaveManager afterRestart;
-		CHECK(afterRestart.canSavePlayersSync({&seller}));
+		Player reloaded(nullptr);
+		CHECK(IOLoginData::loadPlayerById(&reloaded, SELLER));
+		CHECK(reloaded.getBankBalance() == 22222);
+		for (uint32_t depot : {0, 1, 2}) {
+			CHECK(reloaded.getInbox(depot)->size() == seller.getInbox(depot)->size());
+		}
+		CHECK(afterRestart.canSavePlayersSync({&reloaded}));
 
 	});
+
+	// Exercise actual online lookup and deferred structural removal. Ordinary
+	// logout/de-equip save paths must not run after the GUID was quarantined.
+	WorldEvents world;
+	auto online = std::make_shared<QuarantinePlayer>();
+	initialize(*online, BUYER, 2);
+	const Position quarantinePosition(2300, 2300, 7);
+	auto tile = std::make_unique<StaticTile>(quarantinePosition.x, quarantinePosition.y, quarantinePosition.z);
+	for (size_t id = 1; id < Item::items.size(); ++id) {
+		const auto& type = Item::items[static_cast<uint16_t>(id)];
+		if (type.isGroundTile() && !type.blockSolid) {
+			tile->internalAddThing(Item::CreateItem(static_cast<uint16_t>(id)).get());
+			break;
+		}
+	}
+	g_game.map.setTile(quarantinePosition, std::move(tile));
+	dispatch([&] {
+		CHECK(g_game.internalPlaceCreature(online.get(), quarantinePosition, false, true));
+		CHECK(g_game.getPlayerByGUID(BUYER) == online);
+		const auto bankBefore = number(fmt::format("SELECT balance AS value FROM players WHERE id={}", BUYER));
+		online->setBankBalance(777);
+		g_saveManager.quarantinePlayer(BUYER, "integration-test", true);
+		CHECK(online->isPersistenceQuarantined());
+		CHECK(online->isMovementBlocked());
+		CHECK(!online->isRemoved()); // the current handler still owns its Player
+		CHECK(number(fmt::format("SELECT balance AS value FROM players WHERE id={}", BUYER)) == bankBefore);
+	});
+	TaskReactorTestAccess::runOnceAsOwner(g_reactor);
+	CHECK(online->isRemoved());
+	CHECK(online->removedWithoutLogout);
+	CHECK(!g_game.getPlayerByGUID(BUYER));
+	CHECK(!g_saveManager.hasPendingPlayerSave(BUYER));
 }
 
 int main()

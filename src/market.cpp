@@ -340,6 +340,55 @@ uint32_t Market::getInboxDepotId(const Player& player)
 	return 0; // no known physical depot: deterministic legacy Inbox, never home town
 }
 
+bool Market::openLegacyInbox(Player* player)
+{
+	if (!player || !player->getTile() || player->isPersistenceQuarantined() ||
+	    g_saveManager.hasFailedRecovery(player->getGUID())) { return false; }
+	// Attach the owner's legacy locker to a nearby physical depot, just as the
+	// normal depot action does. This makes its items retrievable and preserves
+	// normal distance checks/automatic closing when the character walks away.
+	const Position& position = player->getPosition();
+	Tile* depotTile = nullptr;
+	for (int dx = -1; dx <= 1 && !depotTile; ++dx) {
+		for (int dy = -1; dy <= 1 && !depotTile; ++dy) {
+			const int x = position.x + dx, y = position.y + dy;
+			if (x < 0 || y < 0 || x > UINT16_MAX || y > UINT16_MAX) { continue; }
+			auto tile = g_game.map.getTile(static_cast<uint16_t>(x), static_cast<uint16_t>(y), position.z);
+			const auto* items = tile ? tile->getItemList() : nullptr;
+			if (!items) { continue; }
+			for (const auto& item : *items) {
+				const auto container = item->getContainer();
+				if (container && container->getDepotLocker()) { depotTile = tile; break; }
+			}
+		}
+	}
+	if (!depotTile) { return false; }
+	auto locker = player->getDepotLocker(0);
+	auto inbox = player->getInbox(0);
+	if (!locker || !inbox) { return false; }
+	int32_t id = player->getContainerID(inbox);
+	if (id == -1) {
+		for (uint8_t candidate = 0; candidate <= 0xF; ++candidate) {
+			if (!player->getOpenContainers().contains(candidate)) { id = candidate; break; }
+		}
+		if (id == -1) { return false; }
+		player->addContainer(static_cast<uint8_t>(id), inbox);
+	}
+	locker->setParent(depotTile);
+	player->onSendContainer(inbox);
+	return true;
+}
+
+bool Market::canCreditBank(uint64_t balance, uint64_t credit, uint64_t pendingCredit)
+{
+	if (credit > UINT64_MAX - pendingCredit) { return false; }
+	const uint64_t total = pendingCredit + credit;
+	// Lua exposes balances as signed integers. Item-only rows remain valid even
+	// when an older database contains a balance outside that signed range.
+	return total == 0 || (balance <= static_cast<uint64_t>(INT64_MAX) &&
+	    total <= static_cast<uint64_t>(INT64_MAX) - balance);
+}
+
 std::optional<MarketDeliveryStatus> Market::getDeliveryStatus(uint32_t playerId, uint32_t offerId)
 {
 	auto row = Database::getInstance().storeQuery(fmt::format(
@@ -445,7 +494,8 @@ bool Market::reserveMoney(Player* player, uint64_t amount)
 			}
 		}
 	}
-	const uint64_t fromInventory = std::min(inventory, amount), fromBank = amount - fromInventory;
+	const uint64_t fromInventory = std::min(inventory, amount);
+	uint64_t fromBank = amount - fromInventory;
 	if (fromBank > player->getBankBalance()) { return false; }
 	MoneyReservation reservation{player->getBankBalance(), {}, {}};
 	uint64_t selected = 0;
@@ -456,17 +506,54 @@ bool Market::reserveMoney(Player* player, uint64_t amount)
 		selected += worth;
 	}
 	uint64_t change = selected - fromInventory;
-	// Prepare all change before mutation; never drop change/refunds on the floor.
+	std::unordered_set<uint32_t> changeSlots;
+	bool bankOnly = false;
+	// Prepare every change item and its parent before mutation. A player holding
+	// coins without a bag can use a released coin slot or another valid free slot.
 	for (const auto& [worth, itemId] : Item::items.currencyItems) {
 		uint64_t count = change / worth;
 		change %= worth;
 		while (count) {
 			const uint16_t stack = static_cast<uint16_t>(std::min<uint64_t>(count, 100));
 			auto item = Item::CreateItem(itemId, stack);
-			if (!item || !changeContainer || reservation.change.size() >= 64) { return false; }
-			reservation.change.push_back({std::move(item), changeContainer, 0});
+			if (!item || reservation.change.size() >= 64) { return false; }
+			Cylinder* parent = changeContainer;
+			uint32_t index = 0;
+			if (!parent) {
+				for (const auto& coin : reservation.removed) {
+					if (coin.parent == static_cast<Cylinder*>(player) && !changeSlots.contains(coin.index)) {
+						parent = player;
+						index = coin.index;
+						break;
+					}
+				}
+				if (!parent) {
+					for (uint32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+						if (!changeSlots.contains(slot) && !player->getInventoryItem(slot) &&
+						    static_cast<const Cylinder&>(*player).queryAdd(slot, *item, stack, FLAG_NOLIMIT) == RETURNVALUE_NOERROR) {
+							parent = player;
+							index = slot;
+							break;
+						}
+					}
+				}
+				if (!parent) {
+					if (amount > reservation.bank) { return false; }
+					// Paying from bank leaves the original inventory untouched when
+					// there is genuinely no safe slot for all change denominations.
+					bankOnly = true;
+					reservation.removed.clear();
+					reservation.change.clear();
+					fromBank = amount;
+					change = 0;
+					break;
+				}
+				changeSlots.insert(index);
+			}
+			reservation.change.push_back({std::move(item), parent, index});
 			count -= stack;
 		}
+		if (bankOnly) { break; }
 	}
 	if (change != 0) { return false; }
 	const auto guid = player->getGUID();
@@ -474,7 +561,7 @@ bool Market::reserveMoney(Player* player, uint64_t amount)
 	auto& payment = moneyReservations.at(guid);
 	for (const auto& coin : payment.removed) { coin.parent->removeThing(coin.item.get(), coin.item->getItemCount()); }
 	for (const auto& coin : payment.change) {
-		coin.parent->internalAddThing(coin.item.get());
+		coin.parent->internalAddThing(coin.index, coin.item.get());
 		if (coin.item->getParent() != coin.parent || coin.parent->getThingIndex(coin.item.get()) < 0) {
 			(void)finishMoney(player, true);
 			return false;
@@ -686,7 +773,7 @@ bool Market::processDeliveryBatch(Player* player, size_t& rowsLeft, size_t& item
 		    (itemId == 0 ? (total != 0 || prior != 0 || credit == 0 || !attributes.empty()) :
 		                    (credit != 0 || prior >= total || total > MAX_DELIVERY_AMOUNT || Item::items[itemId].id == 0 ||
 		                     attributes.size() > MAX_DELIVERY_ATTRIBUTES || (!attributes.empty() && total != 1))) ||
-		    credit > UINT64_MAX - bankCredit || bankCredit + credit > UINT64_MAX - player->getBankBalance()) {
+		    !canCreditBank(player->getBankBalance(), credit, bankCredit)) {
 			deferInvalid();
 			continue;
 		}

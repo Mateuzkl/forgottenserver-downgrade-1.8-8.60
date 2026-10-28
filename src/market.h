@@ -69,6 +69,8 @@ public:
 	// nullopt means the COMMIT acknowledgement was lost: do not refund RAM.
 	[[nodiscard]] static bool isPlayerReady(Player* player);
 	[[nodiscard]] static uint32_t getInboxDepotId(const Player& player);
+	[[nodiscard]] static bool openLegacyInbox(Player* player);
+	[[nodiscard]] static bool canCreditBank(uint64_t balance, uint64_t credit, uint64_t pendingCredit = 0);
 	[[nodiscard]] static std::optional<MarketDeliveryStatus> getDeliveryStatus(uint32_t playerId, uint32_t offerId);
 	[[nodiscard]] static std::optional<bool> createOfferAndSave(Player* player, const MarketOfferRecord& offer);
 	[[nodiscard]] static std::optional<bool> settleOffer(Player* actor, uint32_t offerId, uint32_t expectedAmount,

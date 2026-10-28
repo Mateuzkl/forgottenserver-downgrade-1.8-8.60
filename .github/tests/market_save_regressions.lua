@@ -42,6 +42,55 @@ for _, mode in ipairs({"open", "close", "shutdown"}) do
     assert(clean == (mode == "shutdown" and 0 or 1))
 end
 
+-- Execute the real delivery event: syntax alone would miss a removed register().
+do
+    local registered, interval, calls = false, nil, 0
+    local event = {
+        interval = function(_, value) interval = value end,
+        register = function() registered = true end
+    }
+    local environment = setmetatable({
+        GlobalEvent = function(name) assert(name == "MarketDeliveries"); return event end,
+        Game = {processMarketDeliveries = function() calls = calls + 1 end}
+    }, {__index = _G})
+    assert(load(read("data/scripts/globalevents/market_deliveries.lua"), "deliveries", "t", environment))()
+    assert(registered and interval == 5000)
+    assert(event.onThink(5000) == true and calls == 1)
+end
+
+-- The legacy command must open existing rights through the native depot check,
+-- without silently moving or issuing replacement items.
+do
+    local opened, registered, messages = 0, false, {}
+    local event = {
+        separator = function(_, separator) assert(separator == " ") end,
+        register = function() registered = true end
+    }
+    local allowed = true
+    local environment = setmetatable({
+        MESSAGE_EVENT_ADVANCE = 19,
+        TalkAction = function(name) assert(name == "!marketstatus"); return event end,
+        Game = {
+            openLegacyMarketInbox = function(guid) assert(guid == 42); opened = opened + 1; return allowed end,
+            getTowns = function() return {} end
+        }
+    }, {__index = _G})
+    local player = {
+        getGuid = function() return 42 end,
+        getInbox = function(_, id) assert(id == 0); return {getSize = function() return 3 end} end,
+        sendTextMessage = function(_, kind, message) assert(kind == 19); messages[#messages + 1] = message end
+    }
+    assert(load(read("data/scripts/talkactions/player/misc/marketstatus.lua"), "marketstatus", "t", environment))()
+    assert(registered)
+    assert(event.onSay(player, "!marketstatus", "legacy"))
+    assert(opened == 1 and messages[1]:find("now open", 1, true))
+    allowed = false
+    assert(event.onSay(player, "!marketstatus", "legacy"))
+    assert(opened == 2 and messages[2]:find("next to a depot", 1, true))
+    assert(event.onSay(player, "!marketstatus", ""))
+    assert(opened == 2 and messages[3]:find("Legacy Market Inbox: 3", 1, true))
+end
+
 local source = read("data/scripts/network/market/market.lua")
 local first = assert(source:find("local function removePlayerMarketMoney", 1, true))
 local last = assert(source:find("local function normalizeDepotId", first, true))
@@ -71,4 +120,4 @@ allow = false
 assert(remove(player, 25) == nil)
 refund(player, nil)
 assert(calls == 2 and #restores == 2)
-print("PASS: periodic open/close/shutdown each saves once; payment helper delegates exact restoration")
+print("PASS: single scheduled save; delivery event registration/tick; legacy inbox command; exact payment helper delegation")

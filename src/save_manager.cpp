@@ -523,11 +523,21 @@ void SaveManager::preserveRejectedSnapshot(uint32_t guid, IOLoginData::PlayerSav
 	try {
 		const auto directory = std::filesystem::path("data/save-quarantine");
 		std::filesystem::create_directories(directory);
+#ifndef _WIN32
+		// Restrict traversal before creating a file containing private player SQL.
+		std::filesystem::permissions(directory, std::filesystem::perms::owner_all,
+		    std::filesystem::perm_options::replace);
+#endif
 		const auto destination = directory / (std::to_string(guid) + ".sql");
 		const auto temporary = directory / (std::to_string(guid) + ".tmp");
 		if (std::filesystem::exists(destination)) { throw std::runtime_error("quarantine file already exists"); }
 		std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
 		output.exceptions(std::ios::failbit | std::ios::badbit);
+#ifndef _WIN32
+		std::filesystem::permissions(temporary,
+		    std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+		    std::filesystem::perm_options::replace);
+#endif
 		output << "-- Emergency player snapshot; reconcile offline with SQL WAL before deleting.\n";
 		for (const auto& query : retainedFailures.at(guid).queries) { output << query << ";\n"; }
 		output.flush();
@@ -578,6 +588,36 @@ bool SaveManager::savePendingFlushToDB(uint32_t guid, IOLoginData::PlayerSaveSna
 	return insert.execute() && transaction.commit();
 }
 
+bool SaveManager::normalizeLegacyOnlineTimeQuery(std::string& query)
+{
+	constexpr std::string_view prefix = "UPDATE `players` SET ";
+	constexpr std::string_view additive = "`onlinetime` = `onlinetime` + ";
+	if (!query.starts_with(prefix)) { return false; }
+	char quote = 0;
+	for (size_t i = prefix.size(); i < query.size(); ++i) {
+		const char c = query[i];
+		if (quote) {
+			if (c == '\\') { ++i; }
+			else if (c == quote) {
+				if (i + 1 < query.size() && query[i + 1] == quote) { ++i; }
+				else { quote = 0; }
+			}
+			continue;
+		}
+		if (std::string_view(query).substr(i).starts_with(additive)) {
+			const size_t digits = i + additive.size();
+			const size_t end = query.find_first_not_of("0123456789", digits);
+			// Captured player snapshots always separate this assignment with a comma.
+			if (end != digits && end != std::string::npos && query[end] == ',') {
+				query.replace(i, end - i, "`onlinetime` = `onlinetime`");
+				return true;
+			}
+		}
+		if (c == '\'' || c == '"' || c == '`') { quote = c; }
+	}
+	return false;
+}
+
 void SaveManager::recoverPendingFlushes()
 {
 	std::unordered_set<uint32_t> diskQuarantine;
@@ -609,11 +649,7 @@ void SaveManager::recoverPendingFlushes()
 	do {
 		const uint32_t guid = rows->getNumber<uint32_t>("guid");
 		std::string query{rows->getString("query_text")};
-		const std::string additive = "`onlinetime` = `onlinetime` + ";
-		if (const auto offset = query.find(additive); offset != std::string::npos) {
-			auto end = query.find_first_not_of("0123456789", offset + additive.size());
-			query.replace(offset, end == std::string::npos ? query.size() - offset : end - offset,
-			    "`onlinetime` = `onlinetime`");
+		if (normalizeLegacyOnlineTimeQuery(query)) {
 			LOG_WARN(fmt::format("[SaveManager] guid={} legacy online-time increment omitted during idempotent recovery", guid));
 		}
 		if (rows->getNumber<uint32_t>("query_index") != 0 || !query.starts_with("-- tfs-save:")) {

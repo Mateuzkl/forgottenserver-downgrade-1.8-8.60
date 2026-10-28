@@ -651,6 +651,7 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 
 	player->lastLoginSaved = result->getNumber<time_t>("lastlogin");
 	player->onlineTimeAtLogin = result->getNumber<uint64_t>("onlinetime");
+	player->onlineTimeSessionStart = 0;
 	player->lastLogout = result->getNumber<time_t>("lastlogout");
 
 	player->offlineTrainingTime = result->getNumber<int32_t>("offlinetraining_time") * 1000;
@@ -1209,7 +1210,8 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 		storageSnapshot.modifiedKeys,
 		storageSnapshot.removedKeys,
 		bestiarySnapshot.snapshotId,
-		bestiarySnapshot.modifiedRaceIds
+		bestiarySnapshot.modifiedRaceIds,
+		{} // walClearQuery is assigned when the SaveManager records this generation.
 	};
 }
 
@@ -1392,8 +1394,7 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 
 	if (!player->isOffline()) {
 		// A captured snapshot must be replayable without adding session time twice.
-		query << "`onlinetime` = " << (player->onlineTimeAtLogin +
-		    static_cast<uint64_t>(std::max<time_t>(0, time(nullptr) - player->lastLoginSaved))) << ',';
+		query << "`onlinetime` = " << player->getOnlineTimeAt(time(nullptr)) << ',';
 	}
 	for (int i = 1; i <= 8; i++) {
 		query << "`blessings" << i << "` = " << static_cast<uint16_t>(player->getBlessingCount(i)) << ',';
