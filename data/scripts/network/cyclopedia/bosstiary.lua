@@ -361,6 +361,7 @@ local function toggleTracker(player, raceId, enabled)
 	local tracker = loadTracker(playerGuid)
 	if enabled then
 		if contains(tracker, raceId) or #tracker >= MAX_TRACKER_SLOTS then
+			sendWindow(player)
 			return
 		end
 		db.query("INSERT INTO `player_bosstiary_tracker` (`player_id`, `bossid`, `slot`) VALUES (" ..

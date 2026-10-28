@@ -954,6 +954,7 @@ local function toggleTracker(player, raceId)
 
 	if #tracker >= MAX_TRACKER_SLOTS then
 		sendMessage(player, "Your bestiary tracker is full.")
+		sendTracker(player)
 		return
 	end
 
