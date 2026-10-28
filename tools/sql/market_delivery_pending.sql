@@ -2,6 +2,11 @@
 -- Select the game database first (for the reported error: database `860`).
 -- Stop the server, back up the database, run this file, then restart with updated code/data.
 -- CREATE TABLE IF NOT EXISTS preserves an existing table and its deliveries.
+-- This script adds only the three migration-69 columns to existing tables.
+-- If other columns are missing, stop and reconcile the table definitions AND
+-- existing records with schema.sql and a verified backup before restarting.
+-- Do not invent event_key, player_id, state, amounts or other lost delivery data:
+-- their original values must be recovered before deliveries can safely resume.
 -- Do not change server_config.db_version: other migrations may still be required.
 
 CREATE TABLE IF NOT EXISTS `market_delivery_pending` (
@@ -62,6 +67,5 @@ EXECUTE market_schema_repair;
 DEALLOCATE PREPARE market_schema_repair;
 
 SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
-WHERE TABLE_SCHEMA = DATABASE() AND
-	((TABLE_NAME = 'market_offers' AND COLUMN_NAME = 'delivery_depot_id') OR
-	(TABLE_NAME = 'market_delivery_pending' AND COLUMN_NAME IN ('delivered_amount', 'retry_after')));
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('market_offers', 'market_delivery_pending')
+ORDER BY TABLE_NAME, ORDINAL_POSITION;

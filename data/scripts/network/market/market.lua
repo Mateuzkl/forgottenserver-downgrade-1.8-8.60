@@ -60,6 +60,8 @@ local MARKET_MAX_OFFERS = 100
 local MARKET_MAX_AMOUNT = 2000
 local MARKET_MAX_AMOUNT_STACKABLE = 64000
 local MARKET_MAX_PRICE = 999999999
+-- LuaJIT stores numbers as doubles; credits must stay exactly representable.
+local MARKET_MAX_BANK_BALANCE = math.maxinteger or 9007199254740991
 local MARKET_MAX_PACKET_OFFERS = 250
 local MARKET_CATALOG_CHUNK_SIZE = 350
 local MARKET_ACTION_DELAY = 1
@@ -2205,8 +2207,8 @@ function acceptHandler.onReceive(player, msg)
 			return
 		end
 	else
-		-- Lua bank balances use signed integers; reject before reserving items.
-		if oldBalance < 0 or totalPrice > math.maxinteger - oldBalance then
+		-- Reject overflow or lost precision before reserving any items.
+		if oldBalance < 0 or totalPrice > MARKET_MAX_BANK_BALANCE - oldBalance then
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 			sendMarketMessage(player, "Your bank balance is too high to accept this offer.")
 			return

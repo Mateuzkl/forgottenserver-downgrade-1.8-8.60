@@ -120,4 +120,75 @@ allow = false
 assert(remove(player, 25) == nil)
 refund(player, nil)
 assert(calls == 2 and #restores == 2)
-print("PASS: single scheduled save; delivery event registration/tick; legacy inbox command; exact payment helper delegation")
+-- Run the actual acceptance handler with both integer and double-only math APIs.
+-- Rejected balances must release locks before touching the seller's items.
+do
+    local handlerStart = assert(source:find("local acceptHandler = PacketHandler", 1, true))
+    local handlerEnd = assert(source:find("acceptHandler:register()", handlerStart, true))
+    local handlerSource = assert(source:match("local MARKET_MAX_BANK_BALANCE = [^\r\n]+")) .. "\n" ..
+        source:sub(handlerStart, handlerEnd + #"acceptHandler:register()" - 1)
+    for _, runtimeMath in ipairs({math, {}}) do
+        local limit = runtimeMath.maxinteger or 9007199254740991
+        for _, case in ipairs({
+            {balance = 100, allowed = true},
+            {balance = limit - 25, allowed = true},
+            {balance = limit - 24, allowed = false},
+            {balance = limit, allowed = false},
+            {balance = -1, allowed = false}
+        }) do
+            local balance, reserved, settled, released = case.balance, 0, 0, 0
+            local handler, reservation = {register = function() end}, {}
+            local offer = {id = 9, playerId = 7, playerName = "Buyer", sale = 0, amount = 1, price = 25, itemId = 3388, tier = 0}
+            local seller = {
+                getGuid = function() return 42 end,
+                getBankBalance = function() return balance end,
+                setBankBalance = function(_, value) balance = value end
+            }
+            local env = setmetatable({
+                math = runtimeMath,
+                MARKET_ACTION_SELL = 1,
+                MARKET_STATE_ACCEPTED = 3,
+                OPCODE_MARKET_ACCEPT = 0xE1,
+                offerCountCache = {},
+                PacketHandler = function(opcode) assert(opcode == 0xE1); return handler end,
+                ensureMarketAccess = function() return true end,
+                isOnCooldown = function() return false end,
+                expireOffers = function() end,
+                fetchOfferById = function(id) assert(id == 9); return offer end,
+                acquireMultipleLocks = function() return true end,
+                releaseMultipleLocks = function() released = released + 1 end,
+                clamp = function(value) return value end,
+                hasSerializedAttributes = function() return false end,
+                getOfferTier = function() return 0 end,
+                getOfferDuration = function() return 30 end,
+                removeDepotItemsWithAttributes = function()
+                    reserved = reserved + 1
+                    return true, "attributes", nil, reservation
+                end,
+                finishReservation = function(value, restore) assert(value == reservation and restore == false) end,
+                finishPlayerMarketMoney = function(_, payment, restore) assert(payment == nil and restore == false) end,
+                sendMarketMessage = function() end,
+                refreshMarket = function() end,
+                Player = function() return nil end,
+                Game = {
+                    isMarketPlayerReady = function() return true end,
+                    settleMarketOffer = function(guid, id, original, amount, state)
+                        assert(guid == 42 and id == 9 and original == 1 and amount == 1 and state == 3)
+                        settled = settled + 1
+                        return true
+                    end,
+                    processMarketDeliveries = function() end
+                }
+            }, {__index = _G})
+            assert(load(handlerSource, "accept", "t", env))()
+            handler.onReceive(seller, {
+                len = function() return 6 end, tell = function() return 0 end,
+                getU32 = function() return 9 end, getU16 = function() return 1 end
+            })
+            assert(released == 1, "accept handler leaked its locks")
+            assert(reserved == (case.allowed and 1 or 0) and settled == reserved)
+            assert(balance == (case.allowed and case.balance + 25 or case.balance), "incorrect bank credit")
+        end
+    end
+end
+print("PASS: single scheduled save; delivery event; legacy inbox; payment delegation; Lua/LuaJIT buy-offer balance limits")

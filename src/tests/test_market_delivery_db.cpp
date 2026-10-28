@@ -150,13 +150,31 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	CHECK(initLogger());
 	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
 	std::filesystem::current_path(root);
+	// Reset only this disposable fixture's migration baseline. All migrations
+	// from schema.sql's version are resumable, including an interrupted prior run.
+	DatabaseManager::registerDatabaseConfig("db_version", 63);
+	DatabaseManager::updateDatabase();
+	CHECK(DatabaseManager::isMarketSchemaReady());
 	// Reproduce an older Market schema; migration 69 must add all three columns.
+	DatabaseManager::registerDatabaseConfig("db_version", 69);
 	sql("ALTER TABLE `market_offers` DROP COLUMN `delivery_depot_id`");
 	sql("ALTER TABLE `market_delivery_pending` DROP COLUMN `delivered_amount`, DROP COLUMN `retry_after`");
 	CHECK(!DatabaseManager::isMarketSchemaReady());
 	DatabaseManager::updateDatabase();
 	CHECK(number("SELECT `value` FROM `server_config` WHERE `config`='db_version'") == 70);
 	CHECK(DatabaseManager::isMarketSchemaReady());
+	// A partial table must fail even when all three migration-69 columns exist.
+	for (const auto& [table, column] : {
+	         std::pair{"market_delivery_pending", "event_key"},
+	         std::pair{"market_delivery_pending", "state"},
+	         std::pair{"market_offers", "price"}}) {
+		sql(fmt::format("ALTER TABLE `{}` RENAME COLUMN `{}` TO `market_test_missing`", table, column));
+		const bool incomplete = !DatabaseManager::isMarketSchemaReady();
+		// Restore before asserting, so an assertion failure leaves the fixture usable.
+		sql(fmt::format("ALTER TABLE `{}` RENAME COLUMN `market_test_missing` TO `{}`", table, column));
+		CHECK(incomplete);
+		CHECK(DatabaseManager::isMarketSchemaReady());
+	}
 	// The item XML registers native equipment/movement events while parsing.
 	CHECK(ScriptingManager::getInstance().loadPreItems());
 	CHECK(Item::items.loadFromOtb("data/items/items.otb"));
