@@ -102,6 +102,11 @@ TEST_CASE(lua_inbox_zero_is_explicit_and_default_keeps_home_town)
 {
 	loadItems();
 	CHECK(initLogger());
+	struct LoggerGuard {
+		// Stop logging before static destruction: ThreadPool's destructor logs,
+		// and its destruction order relative to the logger differs by platform.
+		~LoggerGuard() { shutdownLogger(); }
+	} loggerGuard;
 	struct WorkingDirectoryGuard {
 		std::filesystem::path previous = std::filesystem::current_path();
 		~WorkingDirectoryGuard() { std::filesystem::current_path(previous); }
