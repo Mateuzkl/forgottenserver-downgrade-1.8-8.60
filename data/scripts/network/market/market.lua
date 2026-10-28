@@ -300,6 +300,29 @@ local function sendMarketMessage(player, message)
 	return out:sendToPlayer(player)
 end
 
+-- Describe the committed receipt, not a guessed home town or a successful enqueue.
+local function describeMarketDelivery(player, offerId, prefix, verb)
+	local status = Game.getMarketDeliveryStatus(player:getGuid(), offerId)
+	if not status then
+		return prefix .. " Nao foi possivel consultar a entrega. Confira o log do Market."
+	end
+	if status.itemId == 0 then
+		return prefix .. " " .. status.bankCredit .. " gold " ..
+			(status.applied and "creditados no banco." or "registrados; aguardando credito no banco.")
+	end
+	local town = Town(status.depotId)
+	local name = town and town:getName() or ("Town " .. status.depotId)
+	local destination = "Inbox de " .. name .. " (town/depot ID " .. status.depotId .. ")"
+	local itemType = ItemType(status.itemId)
+	local itemName = itemType and itemType:getName() or ("item " .. status.itemId)
+	local item = status.amount .. "x " .. itemName
+	if status.applied then
+		return prefix .. " " .. item .. ": " .. (verb or "entregue") .. " no " .. destination .. "."
+	end
+	return prefix .. " " .. item .. ": aguardando entrega para o " .. destination ..
+		". Voce sera avisado quando a entrega for salva."
+end
+
 local function sendMarketLeave(player)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -1096,13 +1119,6 @@ local function buildMarketEnterEntries(depotMap)
 	return entries
 end
 
--- Adds the specified item(s) into the player's depot boxes if space and requirements allow.
--- Attempts to place items across the player's depot boxes and respects stackability and serialized attributes rules.
--- @param player The player whose depot will receive the items.
--- @param itemId The item type id to add.
--- @param amount The number of items to add; for items with serialized attributes this must be 1.
--- @param attributes Optional serialized attributes string for the item instance; when present the function will add a single serialized item using no-limit placement.
--- @return `true` if the full requested amount was added to the depot, `false` otherwise.
 -- Collects up to `amount` removable items matching `itemId` (and optional `tier`) from the player's depot and returns the removal plan.
 -- The returned plan is an array of tables `{ item = <Item>, count = <number> }` describing which depot item instances to remove and how many units from each.
 -- @param player The player whose depot will be scanned.
@@ -2105,9 +2121,9 @@ function cancelHandler.onReceive(player, msg)
 	end
 
 	offerCountCache[player:getGuid()] = nil
-	local delivered = Game.processMarketDeliveries(player:getGuid())
+	Game.processMarketDeliveries(player:getGuid())
 	releaseMultipleLocks({ offerKey, playerKey })
-	sendMarketMessage(player, delivered and "Market offer cancelled." or "Market offer cancelled. Your return is saved and awaiting delivery.")
+	sendMarketMessage(player, describeMarketDelivery(player, offer.id, "Oferta #" .. offer.id .. " cancelada.", "devolvido"))
 	refreshMarket(player, MARKET_REQUEST_MY_OFFERS)
 end
 cancelHandler:register()
@@ -2232,20 +2248,20 @@ function acceptHandler.onReceive(player, msg)
 
 	finishReservation(reservation, false)
 	offerCountCache[offer.playerId] = nil
-	local delivered = Game.processMarketDeliveries(player:getGuid())
-	local ownerDelivered = Game.processMarketDeliveries(offer.playerId)
+	Game.processMarketDeliveries(player:getGuid())
+	Game.processMarketDeliveries(offer.playerId)
 	releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 
-	sendMarketMessage(player, delivered and "Market offer accepted." or "Market offer accepted. Your delivery is saved and awaiting processing.")
+	if offer.sale == MARKET_ACTION_SELL then
+		sendMarketMessage(player, describeMarketDelivery(player, offer.id, "Oferta #" .. offer.id .. " aceita."))
+	else
+		sendMarketMessage(player, "Oferta #" .. offer.id .. " aceita. " .. totalPrice .. " gold creditados no seu banco.")
+	end
 	refreshMarket(player, offer.itemId, depotMap)
 
 	local owner = Player(offer.playerName)
 	if owner then
-		if offer.sale == MARKET_ACTION_BUY then
-			sendMarketMessage(owner, ownerDelivered and "Your market buy offer has been fulfilled. The purchased item was delivered to your Market Inbox." or "Your market buy offer has been fulfilled. Item delivery is saved and awaiting processing.")
-		else
-			sendMarketMessage(owner, ownerDelivered and "Your market sell offer has been fulfilled. The payment was credited to your bank balance." or "Your market sell offer has been fulfilled. Payment is saved and awaiting processing.")
-		end
+		sendMarketMessage(owner, describeMarketDelivery(owner, offer.id, "Sua oferta #" .. offer.id .. " foi atendida."))
 		if marketOpenSessions[owner:getId()] then
 			sendMarketBrowse(owner, MARKET_REQUEST_MY_OFFERS)
 		end

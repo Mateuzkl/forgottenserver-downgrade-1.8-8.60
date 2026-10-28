@@ -39,6 +39,16 @@ struct MarketStatisticRecord
 	uint32_t lowestPrice = 0;
 };
 
+struct MarketDeliveryStatus
+{
+	uint64_t id = 0;
+	uint32_t depotId = 0;
+	uint16_t itemId = 0;
+	uint32_t amount = 0;
+	uint64_t bankCredit = 0;
+	bool applied = false;
+};
+
 class Market
 {
 public:
@@ -46,12 +56,15 @@ public:
 	static constexpr uint32_t MAX_EXPIRED_OFFERS = 100;
 	static constexpr uint32_t MAX_STATISTIC_DAYS = 30;
 	static constexpr uint8_t MAX_ITEM_TIER = 10;
-	static constexpr uint32_t INBOX_DEPOT_ID = 0;
+	// Inbox root PIDs must stay below the container SID range (100+).
+	static constexpr uint32_t MAX_INBOX_DEPOT_ID = 99;
 	static constexpr uint32_t MAX_DELIVERY_AMOUNT = 64000;
 	static constexpr size_t MAX_DELIVERY_ATTRIBUTES = 1024 * 1024;
 
 	// nullopt means the COMMIT acknowledgement was lost: do not refund RAM.
 	[[nodiscard]] static bool isPlayerReady(Player* player);
+	[[nodiscard]] static uint32_t getInboxDepotId(const Player& player);
+	[[nodiscard]] static std::optional<MarketDeliveryStatus> getDeliveryStatus(uint32_t playerId, uint32_t offerId);
 	[[nodiscard]] static std::optional<bool> createOfferAndSave(Player* player, const MarketOfferRecord& offer);
 	[[nodiscard]] static std::optional<bool> settleOffer(Player* actor, uint32_t offerId, uint32_t expectedAmount,
 	    uint32_t amount, uint8_t state, uint32_t duration, uint8_t tier = 0, const std::string& attributes = {});

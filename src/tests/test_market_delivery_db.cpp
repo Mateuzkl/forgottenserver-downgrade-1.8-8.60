@@ -13,10 +13,22 @@
 #include "../tasks.h"
 #include "../thread_pool.h"
 #include "../vocation.h"
+#include "../logger.h"
 #include "test_support.h"
 
 extern Game g_game;
 extern Vocations g_vocations;
+
+struct TaskReactorTestAccess
+{
+	static void runOnceAsOwner(TaskReactor& reactor)
+	{
+		const auto previous = TaskReactor::currentReactor;
+		TaskReactor::currentReactor = &reactor;
+		reactor.runOnce();
+		TaskReactor::currentReactor = previous;
+	}
+};
 
 namespace {
 constexpr uint32_t SELLER = 900001;
@@ -39,7 +51,7 @@ void dispatch(const std::function<void()>& callback)
 		ran = true;
 		try { callback(); } catch (...) { failure = std::current_exception(); }
 	}));
-	g_reactor.runOnce();
+	TaskReactorTestAccess::runOnceAsOwner(g_reactor);
 	CHECK(ran);
 	if (failure) { std::rethrow_exception(failure); }
 }
@@ -106,11 +118,15 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	ConfigManager::setInteger(ConfigManager::SQL_PORT, port ? std::atoi(port) : 3306);
 	ConfigManager::setBoolean(ConfigManager::FORGE_SYSTEM_ENABLED, true);
 	CHECK(Database::getInstance().connect());
+	CHECK(initLogger());
 	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
 	std::filesystem::current_path(root);
 	DatabaseManager::updateDatabase();
 	CHECK(number("SELECT `value` FROM `server_config` WHERE `config`='db_version'") == 69);
 	CHECK(Item::items.loadFromOtb("data/items/items.otb"));
+	// Reproduce the silent Container::addThing refusal: Market must still insert
+	// and persist into an unlimited inbox whose display capacity is zero.
+	Item::items.getItemType(ITEM_INBOX).maxItems = 0;
 	CHECK(g_game.groups.load());
 	CHECK(g_vocations.loadFromXml());
 	for (uint32_t town : {1, 2}) {
@@ -130,23 +146,27 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	initialize(buyer, BUYER, 2);
 
 	dispatch([&] {
-		// Town 1 and 2 both return to Inbox 0, preserving unrelated town inboxes.
+		// Each current town receives its own return; another town inbox stays intact.
 		for (Player* player : {&seller, &buyer}) {
 			auto mail = Item::CreateItem(ITEM_GOLD_COIN, 7);
-			player->getInbox()->internalAddThing(mail.get());
+			const uint32_t depot = player->getTown()->getID();
+			const uint32_t otherDepot = depot == 1 ? 2 : 1;
+			player->getInbox(otherDepot)->internalAddThing(mail.get());
 			const uint32_t id = offer(player->getGUID(), 1);
 			CHECK(Market::settleOffer(player, id, 5, 5, 1, 30).value_or(false));
 			CHECK(player->getInbox(0)->empty());
 			CHECK(pending(player->getGUID()) == 1);
 			CHECK(Market::processDeliveries(player));
-			CHECK(player->getInbox(0)->size() == 5);
-			CHECK(player->getInbox()->size() == 1);
-			CHECK(inboxCount(player->getGUID(), 0) == 5);
-			CHECK(inboxCount(player->getGUID(), player->getTown()->getID()) == 1);
+			CHECK(player->getInbox(depot)->size() == 5);
+			CHECK(player->getInbox(otherDepot)->size() == 1);
+			CHECK(inboxCount(player->getGUID(), depot) == 5);
+			CHECK(inboxCount(player->getGUID(), otherDepot) == 1);
+			CHECK(Market::getDeliveryStatus(player->getGUID(), id)->depotId == depot);
+			CHECK(Market::getDeliveryStatus(player->getGUID(), id)->applied);
 			CHECK(Market::processDeliveries(player));
 			CHECK(Market::settleOffer(player, id, 5, 5, 1, 30).value_or(false));
 			CHECK(pending(player->getGUID()) == 0);
-			CHECK(player->getInbox(0)->size() == 5);
+			CHECK(player->getInbox(depot)->size() == 5);
 		}
 
 		// Expiration records the right while the recipient is offline. An old save
@@ -160,13 +180,13 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	});
 	// Completion callback is delivered on the next dispatcher cycle, as at login.
 	for (size_t tries = 0; tries < 1000 && g_saveManager.hasPendingPlayerSave(SELLER); ++tries) {
-		g_reactor.runOnce();
+		TaskReactorTestAccess::runOnceAsOwner(g_reactor);
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	CHECK(!g_saveManager.hasPendingPlayerSave(SELLER));
 	dispatch([&] {
 		CHECK(Market::processDeliveries(&seller));
-		CHECK(inboxCount(SELLER, 0) == 7);
+		CHECK(inboxCount(SELLER, 1) == 7);
 		CHECK(pending(SELLER) == 0);
 
 		// Failed history must roll back claim AND outbox.
@@ -184,12 +204,12 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		sql("CREATE TRIGGER market_test_fail_inbox BEFORE INSERT ON player_inboxitems FOR EACH ROW "
 		    "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected inbox failure'");
 		CHECK(!Market::processDeliveries(&seller));
-		CHECK(seller.getInbox(0)->size() == 7);
-		CHECK(inboxCount(SELLER, 0) == 7);
+		CHECK(seller.getInbox(1)->size() == 7);
+		CHECK(inboxCount(SELLER, 1) == 7);
 		CHECK(pending(SELLER) == 1);
 		sql("DROP TRIGGER market_test_fail_inbox");
 		CHECK(Market::processDeliveries(&seller));
-		CHECK(inboxCount(SELLER, 0) == 8);
+		CHECK(inboxCount(SELLER, 1) == 8);
 
 		// A missing receipt confirmation cannot commit any new item.
 		const auto receipt = offer(SELLER, 1, 1);
@@ -197,7 +217,7 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		sql("CREATE TRIGGER market_test_fail_receipt BEFORE UPDATE ON market_delivery_pending FOR EACH ROW "
 		    "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected receipt failure'");
 		CHECK(!Market::processDeliveries(&seller));
-		CHECK(seller.getInbox(0)->size() == 8);
+		CHECK(seller.getInbox(1)->size() == 8);
 		CHECK(pending(SELLER) == 1);
 		sql("DROP TRIGGER market_test_fail_receipt");
 		CHECK(Market::processDeliveries(&seller));
@@ -210,7 +230,7 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		CHECK(buyer.getBankBalance() == balance + 300);
 		CHECK(Market::processDeliveries(&buyer));
 		CHECK(buyer.getBankBalance() == balance + 300);
-		CHECK(inboxCount(BUYER, 0) == 5);
+		CHECK(inboxCount(BUYER, 2) == 5);
 
 		// Distinct partial accepts have distinct stable keys. Stale accepts do not
 		// create new rights. Buyer debit and offline seller credit remain consistent.
@@ -226,7 +246,7 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		CHECK(Market::processDeliveries(&buyer));
 		CHECK(Market::processDeliveries(&seller));
 		CHECK(seller.getBankBalance() == sellerBalance + 500);
-		CHECK(inboxCount(BUYER, 0) == 10);
+		CHECK(inboxCount(BUYER, 2) == 10);
 
 		// Accept a buy offer: source inventory save and buyer entitlement share the
 		// claim transaction. Unique instance bytes and tier survive materialization.
@@ -240,8 +260,8 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		seller.setBankBalance(seller.getBankBalance() + 100);
 		CHECK(Market::settleOffer(&seller, order, 1, 1, 3, 30, 4, attributes).value_or(false));
 		CHECK(Market::processDeliveries(&buyer));
-		CHECK(buyer.getInbox(0)->getItemByIndex(0)->getTier() == 4);
-		CHECK(inboxCount(BUYER, 0) == 11);
+		CHECK(buyer.getInbox(2)->getItemByIndex(0)->getTier() == 4);
+		CHECK(inboxCount(BUYER, 2) == 11);
 
 		// Durable but un-recovered WAL blocks mutations even when no in-memory job
 		// remains. Recovery replays the old snapshot before applying the new right.
@@ -258,7 +278,71 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		g_saveManager.recoverPendingFlushes();
 		CHECK(Market::processDeliveries(&seller));
 		CHECK(pending(SELLER) == 0);
-		CHECK(inboxCount(SELLER, 0) == 10);
+		CHECK(inboxCount(SELLER, 1) == 10);
+
+		// A queued return keeps the destination captured at cancellation, even
+		// if the character moves back to its home town before materialization.
+		seller.setLastDepotId(2);
+		const auto travelling = offer(SELLER, 1, 1);
+		CHECK(Market::settleOffer(&seller, travelling, 1, 1, 1, 30).value_or(false));
+		CHECK(Market::getDeliveryStatus(SELLER, travelling)->depotId == 2);
+		CHECK(!Market::getDeliveryStatus(SELLER, travelling)->applied);
+		seller.setLastDepotId(1);
+		CHECK(Market::processDeliveries(&seller));
+		CHECK(Market::getDeliveryStatus(SELLER, travelling)->depotId == 2);
+		CHECK(Market::getDeliveryStatus(SELLER, travelling)->applied);
+		CHECK(inboxCount(SELLER, 1) == 10);
+		CHECK(inboxCount(SELLER, 2) == 2); // existing mail plus returned bag
+
+		// Legacy pending rights at Inbox 0 stay addressable and are not lost just
+		// because new deliveries follow the character's town.
+		sql(fmt::format("INSERT INTO market_delivery_pending (event_key,offer_id,player_id,depot_id,itemtype,amount,attributes,created_at) "
+		    "VALUES ('legacy-pending',999999,{},0,{},1,'',1)", SELLER, static_cast<uint16_t>(ITEM_BAG)));
+		CHECK(Market::processDeliveries(&seller));
+		CHECK(inboxCount(SELLER, 0) == 1);
+		CHECK(Market::getDeliveryStatus(SELLER, 999999)->depotId == 0);
+		CHECK(Market::getDeliveryStatus(SELLER, 999999)->applied);
+
+		// The exact reported flow: reserve a real item, create the sale, then
+		// cancel in town 2 while the character's home town is still 1.
+		auto helmet = Item::CreateItem(3388);
+		CHECK(helmet != nullptr);
+		helmet->setStrAttr(ITEM_ATTRIBUTE_TEXT, "Reserved helmet for cancellation");
+		PropWriteStream helmetStream;
+		helmet->serializeAttr(helmetStream);
+		const std::string helmetAttributes{helmetStream.getStream()};
+		static_cast<Cylinder&>(seller).internalAddThing(CONST_SLOT_HEAD, helmet.get());
+		CHECK(g_saveManager.savePlayersSync({&seller}));
+		CHECK(number(fmt::format("SELECT COUNT(*) AS value FROM player_items WHERE player_id={} AND itemtype=3388", SELLER)) == 1);
+		static_cast<Cylinder&>(seller).removeThing(helmet.get(), 1);
+		seller.setBankBalance(seller.getBankBalance() - 20);
+		MarketOfferRecord created;
+		created.playerId = SELLER;
+		created.sale = 1;
+		created.itemId = 3388;
+		created.amount = 1;
+		created.price = 100;
+		created.created = static_cast<uint32_t>(time(nullptr));
+		created.attributes = helmetAttributes;
+		CHECK(Market::createOfferAndSave(&seller, created).value_or(false));
+		CHECK(number(fmt::format("SELECT COUNT(*) AS value FROM player_items WHERE player_id={} AND itemtype=3388", SELLER)) == 0);
+		const auto createdOffers = Market::getOwnOffers(SELLER, 1);
+		CHECK(createdOffers.size() == 1);
+		seller.setLastDepotId(2);
+		const auto createdId = createdOffers.front().id;
+		CHECK(Market::settleOffer(&seller, createdId, 1, 1, 1, 30).value_or(false));
+		CHECK(Market::processDeliveries(&seller));
+		CHECK(Market::getDeliveryStatus(SELLER, createdId)->depotId == 2);
+		CHECK(Market::getDeliveryStatus(SELLER, createdId)->applied);
+		CHECK(seller.getInbox(2)->getItemByIndex(0)->getID() == 3388);
+		PropWriteStream returnedStream;
+		seller.getInbox(2)->getItemByIndex(0)->serializeAttr(returnedStream);
+		CHECK(returnedStream.getStream() == helmetAttributes);
+		CHECK(inboxCount(SELLER, 2) == 3);
+		CHECK(inboxCount(SELLER, 1) == 10);
+		CHECK(Market::processDeliveries(&seller));
+		CHECK(inboxCount(SELLER, 2) == 3);
+
 	});
 }
 

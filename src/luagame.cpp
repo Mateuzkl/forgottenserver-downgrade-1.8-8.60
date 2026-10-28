@@ -1418,6 +1418,24 @@ int luaGameProcessMarketDeliveries(lua_State* L)
 	return 1;
 }
 
+int luaGameGetMarketDeliveryStatus(lua_State* L)
+{
+	// Game.getMarketDeliveryStatus(playerGuid, offerId): persisted destination and state.
+	const auto status = Market::getDeliveryStatus(getInteger<uint32_t>(L, 1), getInteger<uint32_t>(L, 2));
+	if (!status) {
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_createtable(L, 0, 6);
+	setField(L, "depotId", status->depotId);
+	setField(L, "itemId", status->itemId);
+	setField(L, "amount", status->amount);
+	setField(L, "bankCredit", status->bankCredit);
+	pushBoolean(L, status->applied);
+	lua_setfield(L, -2, "applied");
+	return 1;
+}
+
 int luaGameCreateMarketOffer(lua_State* L)
 {
 	// Game.createMarketOffer(playerId, sale, itemId, amount, created, anonymous, price, tier[, attributes])
@@ -1943,6 +1961,7 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "isMarketPlayerReady", luaGameIsMarketPlayerReady);
 	registerMethod("Game", "settleMarketOffer", luaGameSettleMarketOffer);
 	registerMethod("Game", "processMarketDeliveries", luaGameProcessMarketDeliveries);
+	registerMethod("Game", "getMarketDeliveryStatus", luaGameGetMarketDeliveryStatus);
 	registerMethod("Game", "refreshMarketStatistics", luaGameRefreshMarketStatistics);
 	registerMethod("Game", "getSupplyStashRows", luaGameGetSupplyStashRows);
 	registerMethod("Game", "addSupplyStashAmount", luaGameAddSupplyStashAmount);

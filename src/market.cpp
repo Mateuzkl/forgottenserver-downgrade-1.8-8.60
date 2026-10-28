@@ -12,6 +12,11 @@
 #include "player.h"
 #include "save_manager.h"
 #include "tasks.h"
+#include "depotlocker.h"
+#include "tile.h"
+
+#include <tuple>
+#include <unordered_set>
 
 extern Game g_game;
 
@@ -265,14 +270,18 @@ std::optional<bool> marketResult(SaveManager::AtomicSaveResult result, Player* p
 }
 
 bool enqueueDelivery(const std::string& eventKey, uint32_t offerId, uint32_t playerId,
-                     uint16_t itemId, uint32_t amount, const std::string& attributes, uint64_t bankCredit)
+                     uint32_t depotId, uint16_t itemId, uint32_t amount, const std::string& attributes, uint64_t bankCredit)
 {
+	if (depotId > Market::MAX_INBOX_DEPOT_ID) {
+		LOG_ERROR(fmt::format("[Market] Invalid inbox depot={} guid={}; offer unchanged", depotId, playerId));
+		return false;
+	}
 	Database& db = Database::getInstance();
 	const auto query = fmt::format(
 	    "INSERT INTO `market_delivery_pending` (`event_key`, `offer_id`, `player_id`, `depot_id`, "
 	    "`itemtype`, `amount`, `attributes`, `bank_credit`, `created_at`) "
 	    "VALUES ({}, {}, {}, {}, {}, {}, {}, {}, UNIX_TIMESTAMP())",
-	    db.escapeString(eventKey), offerId, playerId, Market::INBOX_DEPOT_ID, itemId, amount,
+	    db.escapeString(eventKey), offerId, playerId, depotId, itemId, amount,
 	    escapedAttributes(db, attributes), bankCredit);
 	// Include the protocol command byte and leave space for packet framing.
 	return query.size() + 1024 < db.getMaxPacketSize() && db.executeQuery(query);
@@ -283,6 +292,62 @@ bool enqueueDelivery(const std::string& eventKey, uint32_t offerId, uint32_t pla
 bool Market::isPlayerReady(Player* player)
 {
 	return player && g_saveManager.canSavePlayersSync({player});
+}
+
+uint32_t Market::getInboxDepotId(const Player& player)
+{
+	// The home town is not the player's current city. Read the actual nearby
+	// map locker, even when the player moved cities without opening it first.
+	const Position& position = player.getPosition();
+	std::optional<std::tuple<int, int, uint32_t>> best;
+	for (int dx = -1; dx <= 1; ++dx) {
+		for (int dy = -1; dy <= 1; ++dy) {
+			const int x = position.x + dx;
+			const int y = position.y + dy;
+			if (x < 0 || y < 0 || x > UINT16_MAX || y > UINT16_MAX) {
+				continue;
+			}
+			const Tile* tile = player.getTile() ?
+			    g_game.map.getTile(static_cast<uint16_t>(x), static_cast<uint16_t>(y), position.z) : nullptr;
+			const auto* items = tile ? tile->getItemList() : nullptr;
+			if (!items) {
+				continue;
+			}
+			for (const auto& item : *items) {
+				const Container* container = item->getContainer();
+				const DepotLocker* depot = container ? container->getDepotLocker() : nullptr;
+				if (!depot) {
+					continue;
+				}
+				const uint32_t id = depot->getDepotId();
+				const auto candidate = std::tuple{std::abs(dx) + std::abs(dy),
+				    player.getLastDepotId() == static_cast<int32_t>(id) ? 0 : 1, id};
+				if (!best || candidate < *best) {
+					best = candidate;
+				}
+			}
+		}
+	}
+	if (best) {
+		return std::get<2>(*best);
+	}
+	if (player.getLastDepotId() >= 0) {
+		return static_cast<uint32_t>(player.getLastDepotId());
+	}
+	return player.getTown() ? player.getTown()->getID() : 0;
+}
+
+std::optional<MarketDeliveryStatus> Market::getDeliveryStatus(uint32_t playerId, uint32_t offerId)
+{
+	auto row = Database::getInstance().storeQuery(fmt::format(
+	    "SELECT `id`, `depot_id`, `itemtype`, `amount`, `bank_credit`, `state` FROM `market_delivery_pending` "
+	    "WHERE `player_id` = {} AND `offer_id` = {} ORDER BY `id` DESC LIMIT 1", playerId, offerId));
+	if (!row) {
+		return std::nullopt;
+	}
+	return MarketDeliveryStatus{row->getNumber<uint64_t>("id"), row->getNumber<uint32_t>("depot_id"),
+	    row->getNumber<uint16_t>("itemtype"), row->getNumber<uint32_t>("amount"),
+	    row->getNumber<uint64_t>("bank_credit"), row->getString("state") == "applied"};
 }
 
 bool Market::buildDeliveryItems(uint16_t itemId, uint32_t amount, const std::string& attributes,
@@ -342,6 +407,7 @@ std::optional<bool> Market::settleOffer(Player* actor, uint32_t offerId, uint32_
 	const uint32_t actorId = actor ? actor->getGUID() : 0;
 	const auto key = fmt::format("offer:{}:remaining:{}:amount:{}:actor:{}:state:{}",
 	    offerId, expectedAmount, amount, actorId, state);
+	std::optional<uint32_t> destination;
 	const std::vector<Player*> players = state == 3 ? std::vector<Player*>{actor} : std::vector<Player*>{};
 	const auto result = g_saveManager.savePlayersAtomic(players, [&] {
 		Database& db = Database::getInstance();
@@ -355,10 +421,26 @@ std::optional<bool> Market::settleOffer(Player* actor, uint32_t offerId, uint32_
 				return false;
 			}
 			auto prior = db.storeQuery(fmt::format(
-			    "SELECT `id` FROM `market_delivery_pending` WHERE `event_key` = {}", db.escapeString(key)));
+			    "SELECT `id`, `depot_id` FROM `market_delivery_pending` WHERE `event_key` = {}", db.escapeString(key)));
+			if (prior) {
+				destination = prior->getNumber<uint32_t>("depot_id");
+			}
 			return prior != nullptr;
 		}
 		const MarketOfferRecord offer = readOffer(row);
+		if (offer.playerId == actorId) {
+			destination = getInboxDepotId(*actor);
+		} else if (auto owner = g_game.getPlayerByGUID(offer.playerId)) {
+			destination = getInboxDepotId(*owner);
+		} else {
+			// An offline character has no current position/depot session. Persist
+			// its home town now so subsequent login/movement cannot change delivery.
+			auto ownerRow = db.storeQuery(fmt::format("SELECT `town_id` FROM `players` WHERE `id` = {}", offer.playerId));
+			if (!ownerRow) {
+				return false;
+			}
+			destination = ownerRow->getNumber<uint32_t>("town_id");
+		}
 		if (offer.amount != expectedAmount || offer.sale > 1 ||
 		    (state == 1 && offer.playerId != actorId) || (state == 3 && offer.playerId == actorId) ||
 		    (state == 2 && uint64_t{offer.created} + duration > static_cast<uint64_t>(time(nullptr)))) {
@@ -371,8 +453,7 @@ std::optional<bool> Market::settleOffer(Player* actor, uint32_t offerId, uint32_
 		const bool deliversItem = state == 3 || offer.sale == 1;
 		const std::string& deliveryAttributes = state == 3 && offer.sale == 0 ? attributes : offer.attributes;
 		std::vector<std::shared_ptr<Item>> items;
-		if (deliversItem && (!buildDeliveryItems(offer.itemId, amount, deliveryAttributes, items) ||
-		    (!deliveryAttributes.empty() && items.front()->getTier() != normalizeTier(state == 3 ? tier : offer.tier)))) {
+		if (deliversItem && !buildDeliveryItems(offer.itemId, amount, deliveryAttributes, items)) {
 			return false;
 		}
 		if (!claimOffer(offer.id, expectedAmount, amount, state == 1 ? actorId : 0)) {
@@ -380,22 +461,22 @@ std::optional<bool> Market::settleOffer(Player* actor, uint32_t offerId, uint32_
 		}
 		bool queued = false;
 		if (state != 3) {
-			queued = enqueueDelivery(key, offer.id, offer.playerId,
+			queued = enqueueDelivery(key, offer.id, offer.playerId, *destination,
 			    offer.sale == 1 ? offer.itemId : 0, offer.sale == 1 ? amount : 0,
 			    offer.sale == 1 ? offer.attributes : std::string{}, offer.sale == 0 ? total : 0);
 		} else if (offer.sale == 1) {
-			queued = enqueueDelivery(key + ":item", offer.id, actorId, offer.itemId, amount, offer.attributes, 0) &&
-			         enqueueDelivery(key + ":bank", offer.id, offer.playerId, 0, 0, {}, total);
+			queued = enqueueDelivery(key + ":item", offer.id, actorId, getInboxDepotId(*actor), offer.itemId, amount, offer.attributes, 0) &&
+			         enqueueDelivery(key + ":bank", offer.id, offer.playerId, *destination, 0, 0, {}, total);
 		} else {
-			queued = enqueueDelivery(key + ":item", offer.id, offer.playerId, offer.itemId, amount, attributes, 0);
+			queued = enqueueDelivery(key + ":item", offer.id, offer.playerId, *destination, offer.itemId, amount, attributes, 0);
 		}
 		return queued && addHistory(offer.playerId, offer.sale, offer.itemId, amount, offer.price,
 		    state == 3 ? normalizeTier(tier) : offer.tier,
 		    static_cast<uint32_t>(std::min<uint64_t>(uint64_t{offer.created} + duration, UINT32_MAX)),
 		    static_cast<uint32_t>(time(nullptr)), state);
 	});
-	LOG_INFO(fmt::format("[Market] event={} offer={} actor={} depot={} result={}",
-	    key, offerId, actorId, INBOX_DEPOT_ID, static_cast<int>(result)));
+	LOG_INFO(fmt::format("[Market] event={} offer={} actor={} owner_depot={} result={}",
+	    key, offerId, actorId, destination.value_or(0), static_cast<int>(result)));
 	return marketResult(result, state == 3 ? actor : nullptr);
 }
 
@@ -407,66 +488,122 @@ bool Market::processDeliveries(Player* player)
 	Database& db = Database::getInstance();
 	const uint32_t guid = player->getGUID();
 	auto rows = db.storeQuery(fmt::format(
-	    "SELECT `id`, `event_key`, `depot_id`, `itemtype`, `amount`, `attributes`, `bank_credit` "
+	    "SELECT `id`, `event_key`, `offer_id`, `depot_id`, `itemtype`, `amount`, `attributes`, `bank_credit` "
 	    "FROM `market_delivery_pending` WHERE `player_id` = {} AND `state` = 'pending' ORDER BY `id` LIMIT 100", guid));
 	if (!rows) {
 		return db.getLastErrno() == 0;
 	}
+	struct Delivery {
+		uint64_t id;
+		uint32_t offerId;
+		uint32_t depotId;
+		uint32_t amount;
+		uint64_t bankCredit;
+		Inbox* inbox;
+		std::vector<std::shared_ptr<Item>> items;
+	};
+	std::vector<Delivery> deliveries;
+	std::unordered_set<Inbox*> inboxes;
 	std::string ids;
-	size_t deliveryCount = 0;
 	uint64_t bankCredit = 0;
-	std::vector<std::shared_ptr<Item>> items;
+	size_t itemCount = 0;
 	do {
 		const uint16_t itemId = rows->getNumber<uint16_t>("itemtype");
 		const uint32_t amount = rows->getNumber<uint32_t>("amount");
+		const uint32_t depotId = rows->getNumber<uint32_t>("depot_id");
 		const uint64_t credit = rows->getNumber<uint64_t>("bank_credit");
 		const std::string attributes{rows->getString("attributes")};
 		std::vector<std::shared_ptr<Item>> batch;
-		if (rows->getNumber<uint32_t>("depot_id") != INBOX_DEPOT_ID ||
+		if (depotId > MAX_INBOX_DEPOT_ID ||
 		    (itemId == 0 ? (amount != 0 || credit == 0 || !attributes.empty()) :
 		                    (credit != 0 || !buildDeliveryItems(itemId, amount, attributes, batch))) ||
 		    credit > UINT64_MAX - bankCredit || bankCredit + credit > UINT64_MAX - player->getBankBalance()) {
-			LOG_ERROR(fmt::format("[Market] Invalid pending delivery event={} guid={}; preserved for recovery",
-			    rows->getString("event_key"), guid));
+			LOG_ERROR(fmt::format("[Market] Invalid pending delivery event={} guid={} depot={}; preserved for recovery",
+			    rows->getString("event_key"), guid, depotId));
 			return false;
 		}
-		// Bound the dispatcher work even when many large offers are waiting.
-		if (deliveryCount != 0 && items.size() + batch.size() > MAX_DELIVERY_AMOUNT) {
+		if (!deliveries.empty() && itemCount + batch.size() > MAX_DELIVERY_AMOUNT) {
 			break;
 		}
-		items.insert(items.end(), std::make_move_iterator(batch.begin()), std::make_move_iterator(batch.end()));
+		Inbox* inbox = batch.empty() ? nullptr : player->getInbox(depotId);
+		if (!batch.empty() && !inbox) {
+			LOG_ERROR(fmt::format("[Market] Inbox unavailable guid={} depot={}; delivery still pending", guid, depotId));
+			return false;
+		}
+		const uint64_t id = rows->getNumber<uint64_t>("id");
+		itemCount += batch.size();
 		bankCredit += credit;
 		if (!ids.empty()) {
 			ids += ',';
 		}
-		ids += std::to_string(rows->getNumber<uint64_t>("id"));
-		++deliveryCount;
+		ids += std::to_string(id);
+		if (inbox) {
+			inboxes.insert(inbox);
+		}
+		deliveries.push_back(Delivery{id, rows->getNumber<uint32_t>("offer_id"), depotId,
+		    amount, credit, inbox, std::move(batch)});
 	} while (rows->next());
 
-	Inbox* inbox = player->getInbox(INBOX_DEPOT_ID);
-	if (!inbox) {
-		return false;
-	}
 	const uint64_t oldBalance = player->getBankBalance();
-	// No merging: a failed save can remove these exact instances, never pre-existing stacks.
-	for (const auto& item : items) {
-		inbox->addThing(item.get());
+	const auto rollback = [&] {
+		for (const auto& delivery : deliveries) {
+			for (const auto& item : delivery.items) {
+				if (item->getParent() == delivery.inbox && delivery.inbox->getThingIndex(item.get()) >= 0) {
+					delivery.inbox->removeThing(item.get(), item->getItemCount());
+				}
+			}
+		}
+		player->setBankBalance(oldBalance);
+		for (Inbox* inbox : inboxes) {
+			player->onSendContainer(inbox);
+		}
+	};
+	for (const auto& delivery : deliveries) {
+		for (const auto& item : delivery.items) {
+			// Container::addThing can silently refuse insertion when its configured
+			// capacity is zero. Inbox delivery is unlimited: verify actual ownership
+			// before allowing any receipt to become applied. Never merge old stacks.
+			delivery.inbox->internalAddThing(item.get());
+			if (item->getParent() != delivery.inbox || delivery.inbox->getThingIndex(item.get()) < 0) {
+				rollback();
+				LOG_ERROR(fmt::format("[Market] Item insertion failed guid={} delivery={} depot={}; still pending",
+				    guid, delivery.id, delivery.depotId));
+				return false;
+			}
+		}
 	}
 	player->setBankBalance(oldBalance + bankCredit);
 	const auto result = g_saveManager.savePlayersAtomic({player}, [&] {
 		return db.executeQuery(fmt::format(
 		    "UPDATE `market_delivery_pending` SET `state` = 'applied', `applied_at` = UNIX_TIMESTAMP() "
 		    "WHERE `player_id` = {} AND `state` = 'pending' AND `id` IN ({})", guid, ids)) &&
-		    db.getAffectedRows() == deliveryCount;
+		    db.getAffectedRows() == deliveries.size();
 	});
 	if (result == SaveManager::AtomicSaveResult::Failed) {
-		for (const auto& item : items) {
-			inbox->removeThing(item.get(), item->getItemCount());
-		}
-		player->setBankBalance(oldBalance);
+		rollback();
+		LOG_ERROR(fmt::format("[Market] Player save failed guid={} delivery_ids={}; items/payment still pending", guid, ids));
 	}
-	LOG_INFO(fmt::format("[Market] delivery_ids={} guid={} depot={} items={} bank={} save_result={}",
-	    ids, guid, INBOX_DEPOT_ID, items.size(), bankCredit, static_cast<int>(result)));
+	if (result == SaveManager::AtomicSaveResult::Committed) {
+		// Refresh the owner's open inbox directly; its locker need not be parented
+		// to a visible map tile for the client to receive the updated contents.
+		for (Inbox* inbox : inboxes) {
+			player->onSendContainer(inbox);
+		}
+		for (const auto& delivery : deliveries) {
+			if (delivery.inbox) {
+				const Town* town = g_game.map.towns.getTown(delivery.depotId);
+				const std::string name = town ? town->getName() : fmt::format("town {}", delivery.depotId);
+				player->sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, fmt::format(
+				    "Market: {}x {} entregue(s) no Inbox de {} (town/depot ID {}). Oferta #{}.",
+				    delivery.amount, delivery.items.front()->getName(), name, delivery.depotId, delivery.offerId));
+			} else {
+				player->sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, fmt::format(
+				    "Market: {} gold creditado(s) no banco. Oferta #{}.", delivery.bankCredit, delivery.offerId));
+			}
+			LOG_INFO(fmt::format("[Market] delivery={} guid={} offer={} depot={} amount={} bank={} state=applied",
+			    delivery.id, guid, delivery.offerId, delivery.depotId, delivery.amount, delivery.bankCredit));
+		}
+	}
 	return marketResult(result, player).value_or(false);
 }
 

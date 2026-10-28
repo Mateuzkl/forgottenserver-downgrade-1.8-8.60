@@ -7,9 +7,12 @@
 #include "../luascript.h"
 #include "../market.h"
 #include "../player.h"
+#include "../depotlocker.h"
+#include "../tile.h"
 #include "test_support.h"
 
 extern LuaEnvironment g_luaEnvironment;
+extern Game g_game;
 
 namespace {
 void loadItems()
@@ -100,10 +103,36 @@ TEST_CASE(lua_inbox_zero_is_explicit_and_default_keeps_home_town)
 	                      "assert(marketTestPlayer:getInbox(0) ~= marketTestPlayer:getInbox())") == LUA_OK);
 	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
 	for (const auto file : {"data/scripts/network/market/market.lua", "data/scripts/globalevents/market_deliveries.lua",
-	                        "data/migrations/68.lua"}) {
+	                        "data/migrations/68.lua", "data/scripts/talkactions/player/misc/marketstatus.lua"}) {
 		CHECK(luaL_loadfile(L, (root / file).string().c_str()) == LUA_OK);
 		lua_pop(L, 1);
 	}
+}
+
+TEST_CASE(current_depot_overrides_home_town_and_stale_last_depot)
+{
+	loadItems();
+	Player player(nullptr);
+	player.setTown(std::make_shared<Town>(1));
+	player.setLastDepotId(1);
+	const Position position(2100, 2100, 7);
+	g_game.map.setTile(position, std::make_unique<StaticTile>(position.x, position.y, position.z));
+	const Position depotPosition(2101, 2100, 7);
+	g_game.map.setTile(depotPosition, std::make_unique<StaticTile>(depotPosition.x, depotPosition.y, depotPosition.z));
+	auto depot = std::make_shared<DepotLocker>(ITEM_LOCKER);
+	depot->setDepotId(2);
+	g_game.map.getTile(depotPosition)->internalAddThing(depot.get());
+	player.setParent(g_game.map.getTile(position));
+	CHECK(Market::getInboxDepotId(player) == 2);
+	depot->setDepotId(1);
+	player.setLastDepotId(2);
+	CHECK(Market::getInboxDepotId(player) == 1);
+	depot->setDepotId(0);
+	CHECK(Market::getInboxDepotId(player) == 0); // explicit map ID 0 is valid
+	player.setParent(nullptr);
+	CHECK(Market::getInboxDepotId(player) == 2); // no nearby locker: last visited city
+	player.setLastDepotId(-1);
+	CHECK(Market::getInboxDepotId(player) == 1); // offline/new character fallback
 }
 
 TFS_TEST_MAIN()
