@@ -13,6 +13,7 @@ public:
 
 	static int32_t getDatabaseVersion();
 	static bool isDatabaseSetup();
+	static bool isMarketSchemaReady();
 
 	static bool optimizeTables();
 	static void updateDatabase();

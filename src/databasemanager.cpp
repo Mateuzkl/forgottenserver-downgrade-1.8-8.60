@@ -52,6 +52,16 @@ bool DatabaseManager::isDatabaseSetup()
 	           .get() != nullptr;
 }
 
+bool DatabaseManager::isMarketSchemaReady()
+{
+	Database& db = Database::getInstance();
+	const auto result = db.storeQuery(
+	    "SELECT COUNT(*) AS `count` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND "
+	    "((`TABLE_NAME` = 'market_offers' AND `COLUMN_NAME` = 'delivery_depot_id') OR "
+	    "(`TABLE_NAME` = 'market_delivery_pending' AND `COLUMN_NAME` IN ('delivered_amount', 'retry_after')))");
+	return result && result->getNumber<uint32_t>("count") == 3;
+}
+
 int32_t DatabaseManager::getDatabaseVersion()
 {
 	if (!tableExists("server_config")) {

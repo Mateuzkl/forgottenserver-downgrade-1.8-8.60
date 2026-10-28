@@ -6,8 +6,11 @@
 #include "../inbox.h"
 #include "../item.h"
 #include "../luascript.h"
+#include "../logger.h"
 #include "../market.h"
 #include "../save_manager.h"
+#include "../script.h"
+#include "../scriptmanager.h"
 #include "../player.h"
 #include "../depotlocker.h"
 #include "../tile.h"
@@ -98,6 +101,7 @@ TEST_CASE(market_rejects_corrupt_or_oversized_delivery_before_applying_any_item)
 TEST_CASE(lua_inbox_zero_is_explicit_and_default_keeps_home_town)
 {
 	loadItems();
+	CHECK(initLogger());
 	struct WorkingDirectoryGuard {
 		std::filesystem::path previous = std::filesystem::current_path();
 		~WorkingDirectoryGuard() { std::filesystem::current_path(previous); }
@@ -106,8 +110,12 @@ TEST_CASE(lua_inbox_zero_is_explicit_and_default_keeps_home_town)
 	// the source tree even when these tests run from the repository root.
 	std::filesystem::current_path(std::filesystem::temp_directory_path());
 	CHECK(g_luaEnvironment.initState());
-	LuaScriptInterface script("market-inbox-test");
-	CHECK(script.initState());
+	struct ScriptsGuard {
+		std::unique_ptr<Scripts> previous = std::move(g_scripts);
+		~ScriptsGuard() { g_scripts = std::move(previous); }
+	} scriptsGuard;
+	g_scripts = std::make_unique<Scripts>();
+	auto& script = g_scripts->getScriptInterface();
 	auto L = script.getLuaState();
 	Player player(nullptr);
 	auto group = std::make_shared<Group>();
@@ -133,6 +141,7 @@ TEST_CASE(lua_inbox_zero_is_explicit_and_default_keeps_home_town)
 		~GlobalEventsGuard() { g_globalEvents = previous; }
 	} guard;
 	g_globalEvents = &events;
+	CHECK(script.loadFile((root / "data/lib/compat/compat.lua").string()) == 0);
 	CHECK(script.loadFile((root / "data/scripts/globalevents/market_deliveries.lua").string()) == 0);
 	const auto registered = events.getEventMap(GLOBALEVENT_NONE);
 	CHECK(registered.contains("MarketDeliveries"));

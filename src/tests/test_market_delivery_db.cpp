@@ -14,6 +14,7 @@
 #include "../market.h"
 #include "../player.h"
 #include "../save_manager.h"
+#include "../scriptmanager.h"
 #include "../tasks.h"
 #include "../thread_pool.h"
 #include "../vocation.h"
@@ -105,17 +106,6 @@ uint64_t inboxCount(uint32_t guid, uint32_t depot)
 	return number(fmt::format("SELECT COUNT(*) AS `value` FROM `player_inboxitems` WHERE `player_id`={} AND `pid`={}", guid, depot));
 }
 
-struct QuarantinePlayer final : Player
-{
-	QuarantinePlayer() : Player(nullptr) {}
-	bool removedWithoutLogout = false;
-	void onRemoveCreature(Creature* creature, bool isLogout) override
-	{
-		if (creature == this) { removedWithoutLogout = !isLogout; }
-		Player::onRemoveCreature(creature, isLogout);
-	}
-};
-
 struct WorldEvents
 {
 	GlobalEvents events;
@@ -160,8 +150,15 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	CHECK(initLogger());
 	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
 	std::filesystem::current_path(root);
+	// Reproduce an older Market schema; migration 69 must add all three columns.
+	sql("ALTER TABLE `market_offers` DROP COLUMN `delivery_depot_id`");
+	sql("ALTER TABLE `market_delivery_pending` DROP COLUMN `delivered_amount`, DROP COLUMN `retry_after`");
+	CHECK(!DatabaseManager::isMarketSchemaReady());
 	DatabaseManager::updateDatabase();
 	CHECK(number("SELECT `value` FROM `server_config` WHERE `config`='db_version'") == 70);
+	CHECK(DatabaseManager::isMarketSchemaReady());
+	// The item XML registers native equipment/movement events while parsing.
+	CHECK(ScriptingManager::getInstance().loadPreItems());
 	CHECK(Item::items.loadFromOtb("data/items/items.otb"));
 	CHECK(Item::items.loadFromXml());
 	// Reproduce the silent Container::addThing refusal: Market must still insert
@@ -583,9 +580,15 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		// Re-entry hydrates a fresh player from the committed DB state; readiness
 		// alone cannot detect an item or bank load regression.
 		SaveManager afterRestart;
+		sql(fmt::format("UPDATE players SET onlinetime=54321 WHERE id={}", SELLER));
 		Player reloaded(nullptr);
 		CHECK(IOLoginData::loadPlayerById(&reloaded, SELLER));
 		CHECK(reloaded.getBankBalance() == 22222);
+		const auto savedOnlineTime = number(fmt::format("SELECT onlinetime AS value FROM players WHERE id={}", SELLER));
+		CHECK(reloaded.getOnlineTimeAt(time(nullptr)) == savedOnlineTime);
+		Player reloadedByName(nullptr);
+		CHECK(IOLoginData::loadPlayerByName(&reloadedByName, seller.getName()));
+		CHECK(reloadedByName.getOnlineTimeAt(time(nullptr)) == savedOnlineTime);
 		for (uint32_t depot : {0, 1, 2}) {
 			CHECK(reloaded.getInbox(depot)->size() == seller.getInbox(depot)->size());
 		}
@@ -596,8 +599,9 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	// Exercise actual online lookup and deferred structural removal. Ordinary
 	// logout/de-equip save paths must not run after the GUID was quarantined.
 	WorldEvents world;
-	auto online = std::make_shared<QuarantinePlayer>();
+	auto online = std::make_shared<Player>(nullptr);
 	initialize(*online, BUYER, 2);
+	const auto savedLoginPosition = online->getLoginPosition();
 	const Position quarantinePosition(2300, 2300, 7);
 	auto tile = std::make_unique<StaticTile>(quarantinePosition.x, quarantinePosition.y, quarantinePosition.z);
 	for (size_t id = 1; id < Item::items.size(); ++id) {
@@ -621,7 +625,8 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	});
 	TaskReactorTestAccess::runOnceAsOwner(g_reactor);
 	CHECK(online->isRemoved());
-	CHECK(online->removedWithoutLogout);
+	// An ordinary logout would replace loginPosition with quarantinePosition.
+	CHECK(online->getLoginPosition() == savedLoginPosition);
 	CHECK(!g_game.getPlayerByGUID(BUYER));
 	CHECK(!g_saveManager.hasPendingPlayerSave(BUYER));
 }
