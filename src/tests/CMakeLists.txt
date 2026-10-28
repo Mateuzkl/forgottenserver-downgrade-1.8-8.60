@@ -17,3 +17,6 @@ foreach(test_src ${tests_SRC})
     endif()
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
+
+# Missing DB credentials are a real CTest skip, never an apparent pass.
+set_tests_properties(test_market_delivery_db PROPERTIES SKIP_RETURN_CODE 77)

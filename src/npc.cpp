@@ -913,7 +913,7 @@ void Npc::onPlayerEndTrade(Player* player, int32_t buyCallback, int32_t sellCall
 
 	removeShopPlayer(std::static_pointer_cast<Player>(g_game.getCreatureSharedRef(player)));
 
-	if (npcEventHandler) {
+	if (npcEventHandler && !player->isPersistenceQuarantined()) {
 		npcEventHandler->onPlayerEndTrade(player);
 	}
 }

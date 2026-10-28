@@ -709,35 +709,21 @@ local function getPlayerTotalMoney(player)
 end
 
 local function removePlayerMarketMoney(player, amount)
-	amount = tonumber(amount) or 0
-	if amount <= 0 then
-		return { inventory = 0, bank = 0 }
+	-- C++ retains the exact original coins/parents and bank balance for this handler.
+	if Game.reserveMarketMoney(player:getGuid(), math.max(0, tonumber(amount) or 0)) then
+		return true
 	end
+	return nil
+end
 
-	local inventoryMoney = math.max(0, tonumber(player:getMoney()) or 0)
-	local bankBalance = math.max(0, tonumber(player:getBankBalance()) or 0)
-	if inventoryMoney + bankBalance < amount then
-		return nil
+local function finishPlayerMarketMoney(player, payment, restore)
+	if payment then
+		Game.finishMarketMoney(player:getGuid(), restore)
 	end
-
-	local fromInventory = math.min(inventoryMoney, amount)
-	if fromInventory > 0 and not player:removeMoney(fromInventory) then
-		return nil
-	end
-
-	local fromBank = amount - fromInventory
-	if fromBank > 0 then
-		player:setBankBalance(bankBalance - fromBank)
-	end
-
-	return { inventory = fromInventory, bank = fromBank }
 end
 
 local function refundPlayerMarketMoney(player, payment)
-	if not payment then
-		return
-	end
-	player:setBankBalance(player:getBankBalance() + (payment.inventory or 0) + (payment.bank or 0))
+	finishPlayerMarketMoney(player, payment, true)
 end
 
 local function normalizeDepotId(depotId)
@@ -2050,6 +2036,7 @@ function createHandler.onReceive(player, msg)
 		math.max(0, math.min(10, tonumber(offerTier) or 0)), offerAttributes
 	)
 	if ok == nil then
+		finishPlayerMarketMoney(player, payment, false)
 		finishReservation(reservation, false)
 		-- COMMIT outcome unknown. C++ disconnected the player and blocked saves.
 		releaseLock(playerKey)
@@ -2067,6 +2054,7 @@ function createHandler.onReceive(player, msg)
 		return
 	end
 
+	finishPlayerMarketMoney(player, payment, false)
 	finishReservation(reservation, false)
 	offerCountCache[player:getGuid()] = nil
 	releaseLock(playerKey)
@@ -2232,6 +2220,7 @@ function acceptHandler.onReceive(player, msg)
 	local settled = Game.settleMarketOffer(player:getGuid(), offer.id, offer.amount, amount,
 		MARKET_STATE_ACCEPTED, getOfferDuration(), acceptedTier, deliveryAttributes)
 	if settled == nil then
+		finishPlayerMarketMoney(player, payment, false)
 		finishReservation(reservation, false)
 		-- Never compensate an uncertain commit; C++ has quarantined this player.
 		releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
@@ -2249,6 +2238,7 @@ function acceptHandler.onReceive(player, msg)
 		return
 	end
 
+	finishPlayerMarketMoney(player, payment, false)
 	finishReservation(reservation, false)
 	offerCountCache[offer.playerId] = nil
 	Game.processMarketDeliveries(player:getGuid())

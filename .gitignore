@@ -232,3 +232,6 @@ compile_commands.json
 /VEQUE_CONDITION_DAMAGE_BENCHMARK.html
 /stress-test-results.html
 /tools/tfs18_static_analysis_report.html
+
+# Emergency snapshots can contain private player data; retain locally for recovery.
+/data/save-quarantine/

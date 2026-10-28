@@ -28,6 +28,7 @@ struct MarketOfferRecord
 	std::string attributes;
 	std::string playerName;
 	uint8_t state = 0;
+	std::optional<uint32_t> deliveryDepotId;
 };
 
 struct MarketStatisticRecord
@@ -58,7 +59,11 @@ public:
 	static constexpr uint8_t MAX_ITEM_TIER = 10;
 	// Inbox root PIDs must stay below the container SID range (100+).
 	static constexpr uint32_t MAX_INBOX_DEPOT_ID = 99;
-	static constexpr uint32_t MAX_DELIVERY_AMOUNT = 64000;
+	static constexpr uint32_t MAX_DELIVERY_AMOUNT = 65535;
+	static constexpr size_t DELIVERY_PLAYERS_PER_TICK = 2;
+	static constexpr size_t DELIVERY_ROWS_PER_TICK = 8;
+	static constexpr size_t DELIVERY_ITEMS_PER_TICK = 128;
+	static constexpr size_t DELIVERY_ITEMS_PER_PLAYER = 64;
 	static constexpr size_t MAX_DELIVERY_ATTRIBUTES = 1024 * 1024;
 
 	// nullopt means the COMMIT acknowledgement was lost: do not refund RAM.
@@ -70,6 +75,11 @@ public:
 	    uint32_t amount, uint8_t state, uint32_t duration, uint8_t tier = 0, const std::string& attributes = {});
 	[[nodiscard]] static bool processDeliveries(Player* player);
 	static void processOnlineDeliveries();
+	// A reservation lives only across one synchronous Lua Market handler.
+	[[nodiscard]] static bool reserveMoney(Player* player, uint64_t amount);
+	[[nodiscard]] static bool finishMoney(Player* player, bool restore);
+	[[nodiscard]] static bool validateDelivery(uint16_t itemId, uint32_t amount, const std::string& attributes);
+	[[nodiscard]] static bool isExpired(uint32_t created, uint32_t duration, uint64_t now);
 	// Shared validation for enqueue and materialization, before touching the player.
 	[[nodiscard]] static bool buildDeliveryItems(uint16_t itemId, uint32_t amount,
 	    const std::string& attributes, std::vector<std::shared_ptr<Item>>& items);
@@ -87,6 +97,7 @@ public:
 	[[nodiscard]] static bool refreshStatistics(uint32_t firstDay, uint8_t acceptedState);
 
 private:
+	[[nodiscard]] static bool processDeliveryBatch(Player* player, size_t& rowsLeft, size_t& itemsLeft);
 	[[nodiscard]] static bool createOffer(const MarketOfferRecord& offer);
 	[[nodiscard]] static bool claimOffer(uint32_t offerId, uint32_t expectedAmount, uint32_t acceptedAmount,
 	                                     uint32_t ownerId = 0);

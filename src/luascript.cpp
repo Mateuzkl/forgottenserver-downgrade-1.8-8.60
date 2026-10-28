@@ -4231,9 +4231,9 @@ int LuaScriptInterface::luaStopEvent(lua_State* L)
 
 int LuaScriptInterface::luaSaveServer(lua_State* L)
 {
-	// saveServer()
+	// saveServer([reason = "manual"])
 	g_globalEvents->save();
-	g_game.saveGameState();
+	g_game.saveGameState(false, lua_isstring(L, 1) ? Lua::getString(L, 1) : "manual");
 	Lua::pushBoolean(L, true);
 	return 1;
 }

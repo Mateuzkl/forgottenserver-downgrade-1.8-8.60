@@ -1,6 +1,7 @@
 #include "../otpch.h"
 
 #include "../configmanager.h"
+#include "../container.h"
 #include "../database.h"
 #include "../databasemanager.h"
 #include "../game.h"
@@ -27,6 +28,19 @@ struct TaskReactorTestAccess
 		TaskReactor::currentReactor = &reactor;
 		reactor.runOnce();
 		TaskReactor::currentReactor = previous;
+	}
+};
+
+// Inject the worker completion boundary without adding production DB fault hooks.
+// The unknown case below first performs a real COMMIT, then loses its acknowledgement.
+struct SaveManagerTestAccess
+{
+	static void lostAcknowledgement(SaveManager& manager, uint32_t guid, IOLoginData::PlayerSaveSnapshot snapshot)
+	{
+		auto save = std::make_shared<IOLoginData::PlayerSaveSnapshot>(std::move(snapshot));
+		manager.flushInFlight.insert(guid);
+		manager.activeFlushes.emplace(guid, SaveManager::ActiveFlush{save, {}, false});
+		manager.onPlayerFlushed(guid, IOLoginData::FlushResult::Indeterminate, save);
 	}
 };
 
@@ -64,13 +78,15 @@ void initialize(Player& player, uint32_t guid, uint32_t town)
 	player.setTown(g_game.map.towns.getSharedTown(town));
 	CHECK(player.setVocation(0));
 	player.setBankBalance(10000);
+	player.setLastDepotId(town);
 }
 
 uint32_t offer(uint32_t owner, uint8_t sale, uint32_t amount = 5, const std::string& attributes = {}, uint8_t tier = 0)
 {
 	auto& db = Database::getInstance();
-	sql(fmt::format("INSERT INTO `market_offers` (`player_id`,`sale`,`itemtype`,`amount`,`created`,`price`,`tier`,`attributes`) "
-	    "VALUES ({},{},{},{},1,100,{}, {})", owner, sale, static_cast<uint16_t>(ITEM_BAG), amount, tier, db.escapeString(attributes)));
+	sql(fmt::format("INSERT INTO `market_offers` (`player_id`,`sale`,`itemtype`,`amount`,`created`,`price`,`tier`,`attributes`,`delivery_depot_id`) "
+	    "VALUES ({},{},{},{},{},100,{}, {},{})", owner, sale, static_cast<uint16_t>(ITEM_BAG), amount,
+	    time(nullptr), tier, db.escapeString(attributes), owner == SELLER ? 1 : 2));
 	return static_cast<uint32_t>(db.getLastInsertId());
 }
 
@@ -101,10 +117,7 @@ struct Runtime
 TEST_CASE(market_atomic_delivery_database_regressions)
 {
 	const char* name = std::getenv("TFS_TEST_DB_NAME");
-	if (!name) {
-		std::cout << "[skip] TFS_TEST_DB_NAME not set; Market database faults not exercised\n";
-		return;
-	}
+	CHECK(name != nullptr);
 	CHECK(std::string_view{name}.starts_with("tfs_market_test_"));
 	const char* host = std::getenv("TFS_TEST_DB_HOST");
 	const char* user = std::getenv("TFS_TEST_DB_USER");
@@ -122,8 +135,9 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
 	std::filesystem::current_path(root);
 	DatabaseManager::updateDatabase();
-	CHECK(number("SELECT `value` FROM `server_config` WHERE `config`='db_version'") == 69);
+	CHECK(number("SELECT `value` FROM `server_config` WHERE `config`='db_version'") == 70);
 	CHECK(Item::items.loadFromOtb("data/items/items.otb"));
+	CHECK(Item::items.loadFromXml());
 	// Reproduce the silent Container::addThing refusal: Market must still insert
 	// and persist into an unlimited inbox whose display capacity is zero.
 	Item::items.getItemType(ITEM_INBOX).maxItems = 0;
@@ -146,6 +160,31 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	initialize(buyer, BUYER, 2);
 
 	dispatch([&] {
+		// Reserve fractional coins without floor fallback. Known failure restores
+		// the original objects/parents and bank even at UINT64_MAX boundaries.
+		auto purse = Item::CreateItem(ITEM_BAG);
+		auto platinum = Item::CreateItem(ITEM_PLATINUM_COIN, 2);
+		static_cast<Cylinder&>(seller).internalAddThing(CONST_SLOT_BACKPACK, purse.get());
+		purse->getContainer()->internalAddThing(platinum.get());
+		CHECK(Market::reserveMoney(&seller, 25));
+		CHECK(seller.getMoney() == 175);
+		CHECK(Market::finishMoney(&seller, true));
+		CHECK(seller.getMoney() == 200);
+		CHECK(platinum->getParent() == purse->getContainer());
+		CHECK(platinum->getItemCount() == 2);
+		seller.setBankBalance(UINT64_MAX - 5);
+		CHECK(Market::reserveMoney(&seller, 201));
+		CHECK(seller.getBankBalance() == UINT64_MAX - 6);
+		CHECK(Market::finishMoney(&seller, true));
+		CHECK(seller.getBankBalance() == UINT64_MAX - 5);
+		CHECK(seller.getMoney() == 200);
+		seller.setBankBalance(10000);
+		CHECK(Market::reserveMoney(&seller, 25));
+		MarketOfferRecord invalid;
+		invalid.playerId = SELLER;
+		CHECK(Market::createOfferAndSave(&seller, invalid) == std::optional<bool>{false});
+		CHECK(seller.getMoney() == 200);
+		CHECK(!Market::finishMoney(&seller, true)); // native guard already released the reservation
 		// Each current town receives its own return; another town inbox stays intact.
 		for (Player* player : {&seller, &buyer}) {
 			auto mail = Item::CreateItem(ITEM_GOLD_COIN, 7);
@@ -172,6 +211,7 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		// Expiration records the right while the recipient is offline. An old save
 		// may still finish before materialization without deleting that right.
 		const auto expired = offer(SELLER, 1, 2);
+		sql(fmt::format("UPDATE market_offers SET created=1 WHERE id={}", expired));
 		CHECK(Market::settleOffer(nullptr, expired, 2, 2, 2, 30).value_or(false));
 		CHECK(g_saveManager.savePlayer(&seller));
 		CHECK(g_saveManager.hasPendingPlayerSave(SELLER));
@@ -256,7 +296,7 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		PropWriteStream stream;
 		unique->serializeAttr(stream);
 		const std::string attributes{stream.getStream()};
-		const auto order = offer(BUYER, 0, 1, {}, 4);
+		const auto order = offer(BUYER, 0, 1, {}, 1); // legacy tier disagrees with serialized tier=4
 		seller.setBankBalance(seller.getBankBalance() + 100);
 		CHECK(Market::settleOffer(&seller, order, 1, 1, 3, 30, 4, attributes).value_or(false));
 		CHECK(Market::processDeliveries(&buyer));
@@ -343,7 +383,117 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 		CHECK(Market::processDeliveries(&seller));
 		CHECK(inboxCount(SELLER, 2) == 3);
 
+		// Creation destination survives movement for automatic expiry, while a
+		// manual cancellation above deliberately follows the current city.
+		seller.setLastDepotId(0);
+		created.created = 1;
+		CHECK(Market::createOfferAndSave(&seller, created).value_or(false));
+		const auto fixed = Market::getOwnOffers(SELLER, 1).front();
+		CHECK(fixed.deliveryDepotId == std::optional<uint32_t>{0});
+		seller.setLastDepotId(2);
+		CHECK(Market::settleOffer(nullptr, fixed.id, 1, 1, 2, 30).value_or(false));
+		CHECK(Market::getDeliveryStatus(SELLER, fixed.id)->depotId == 0);
+		CHECK(Market::processDeliveries(&seller));
+
+		// Legacy offers have no recorded city: deterministic Inbox 0, regardless
+		// of the owner's residence or online session's last depot.
+		const auto legacy = offer(SELLER, 1, 1);
+		sql(fmt::format("UPDATE market_offers SET created=1,delivery_depot_id=NULL WHERE id={}", legacy));
+		CHECK(Market::settleOffer(nullptr, legacy, 1, 1, 2, 30).value_or(false));
+		CHECK(Market::getDeliveryStatus(SELLER, legacy)->depotId == 0);
+		CHECK(Market::processDeliveries(&seller));
+
+		// A past-due offer is rejected even before the periodic expiry event.
+		const auto stale = offer(SELLER, 1, 1);
+		sql(fmt::format("UPDATE market_offers SET created=1 WHERE id={}", stale));
+		CHECK(Market::settleOffer(&buyer, stale, 1, 1, 3, 30) == std::optional<bool>{false});
+		CHECK(Market::getOffer(stale).has_value());
+
+		// Invalid first row is backed off; a later valid entitlement still runs.
+		sql(fmt::format("INSERT INTO market_delivery_pending (event_key,offer_id,player_id,itemtype,amount,attributes,created_at) "
+		    "VALUES ('invalid-head',123456,{},0,1,'',1),('valid-after-invalid',123457,{},0,0,'',1)", SELLER, SELLER));
+		sql("UPDATE market_delivery_pending SET bank_credit=7 WHERE event_key='valid-after-invalid'");
+		const auto beforeCredit = seller.getBankBalance();
+		CHECK(Market::processDeliveries(&seller));
+		CHECK(seller.getBankBalance() == beforeCredit + 7);
+		CHECK(number("SELECT retry_after AS value FROM market_delivery_pending WHERE event_key='invalid-head'") > 0);
+
+		// Real DB commits preserve partial progress; a second delivery call cannot
+		// reapply the same slice. Stackables keep this integration fixture small.
+		for (uint32_t count : {64000, 64001, 65535}) {
+			const auto large = offer(SELLER, 1, count);
+			sql(fmt::format("UPDATE market_offers SET itemtype={},price=1 WHERE id={}", static_cast<uint16_t>(ITEM_GOLD_COIN), large));
+			CHECK(Market::settleOffer(&seller, large, count, count, 1, 30).value_or(false));
+			const auto previous = number(fmt::format("SELECT COALESCE(SUM(count),0) AS value FROM player_inboxitems "
+			    "WHERE player_id={} AND itemtype={}", SELLER, static_cast<uint16_t>(ITEM_GOLD_COIN)));
+			CHECK(Market::processDeliveries(&seller));
+			CHECK(!Market::getDeliveryStatus(SELLER, large)->applied);
+			for (size_t pass = 0; pass < 20 && !Market::getDeliveryStatus(SELLER, large)->applied; ++pass) {
+				CHECK(Market::processDeliveries(&seller));
+			}
+			CHECK(Market::getDeliveryStatus(SELLER, large)->applied);
+			CHECK(Market::processDeliveries(&seller)); // no due rows is a successful no-op
+			CHECK(number(fmt::format("SELECT COALESCE(SUM(count),0) AS value FROM player_inboxitems "
+			    "WHERE player_id={} AND itemtype={}", SELLER, static_cast<uint16_t>(ITEM_GOLD_COIN))) == previous + count);
+		}
+
+		// Checked flush: rollback is confirmed and a later retry applies once.
+		auto rollbackSnapshot = IOLoginData::buildPlayerSave(&seller);
+		CHECK(rollbackSnapshot.has_value());
+		const auto balanceBeforeFailure = number(fmt::format("SELECT balance AS value FROM players WHERE id={}", SELLER));
+		rollbackSnapshot->queries.push_back("UPDATE tfs_market_test_missing_table SET value=1");
+		CHECK(IOLoginData::flushPlayerSaveChecked(*rollbackSnapshot) == IOLoginData::FlushResult::Failed);
+		CHECK(number(fmt::format("SELECT balance AS value FROM players WHERE id={}", SELLER)) == balanceBeforeFailure);
+		rollbackSnapshot->queries.pop_back();
+		CHECK(IOLoginData::flushPlayerSaveChecked(*rollbackSnapshot) == IOLoginData::FlushResult::Committed);
+		const auto onlineTime = number(fmt::format("SELECT onlinetime AS value FROM players WHERE id={}", SELLER));
+		CHECK(IOLoginData::flushPlayerSaveChecked(*rollbackSnapshot) == IOLoginData::FlushResult::Committed);
+		CHECK(number(fmt::format("SELECT onlinetime AS value FROM players WHERE id={}", SELLER)) == onlineTime);
+	});
+
+	// Queue two generations behind a busy worker; the newest durable WAL must
+	// survive the older worker's completion and win in FIFO order.
+	std::promise<void> releaseWorker;
+	auto gate = releaseWorker.get_future().share();
+	auto blocked = g_threadPool.submit_task([gate] { gate.wait(); });
+	dispatch([&] {
+		seller.setBankBalance(11111);
+		CHECK(g_saveManager.savePlayer(&seller));
+		seller.setBankBalance(22222);
+		CHECK(g_saveManager.savePlayer(&seller));
+	});
+	releaseWorker.set_value();
+	blocked.get();
+	for (size_t i = 0; i < 2000 && g_saveManager.hasPendingPlayerSave(SELLER); ++i) {
+		TaskReactorTestAccess::runOnceAsOwner(g_reactor);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	CHECK(!g_saveManager.hasPendingPlayerSave(SELLER));
+	dispatch([&] {
+		CHECK(number(fmt::format("SELECT balance AS value FROM players WHERE id={}", SELLER)) == 22222);
+		CHECK(number(fmt::format("SELECT COUNT(*) AS value FROM player_save_async_pending WHERE guid={}", SELLER)) == 0);
+		auto committed = IOLoginData::buildPlayerSave(&seller);
+		CHECK(committed.has_value());
+		CHECK(IOLoginData::flushPlayerSaveChecked(*committed) == IOLoginData::FlushResult::Committed);
+		SaveManagerTestAccess::lostAcknowledgement(g_saveManager, SELLER, std::move(*committed));
+		CHECK(g_saveManager.hasFailedRecovery(SELLER));
+		CHECK(!Market::isPlayerReady(&seller));
+		CHECK(!g_saveManager.savePlayerSync(&seller));
+		CHECK(!Market::reserveMoney(&seller, 1));
+		CHECK(number(fmt::format("SELECT balance AS value FROM players WHERE id={}", SELLER)) == 22222);
+		// Restart re-entry loads the committed DB state. A fresh manager has no
+		// old worker or WAL to replay; the uncertain runtime manager stays blocked.
+		SaveManager afterRestart;
+		CHECK(afterRestart.canSavePlayersSync({&seller}));
+
 	});
 }
 
-TFS_TEST_MAIN()
+int main()
+{
+	if (!std::getenv("TFS_TEST_DB_NAME")) {
+		std::cout << "[SKIP] TFS_TEST_DB_NAME is required for real MySQL integration tests\n";
+		return 77;
+	}
+	return tfs::tests::run();
+}

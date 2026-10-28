@@ -105,7 +105,7 @@ TEST_CASE(lua_inbox_zero_is_explicit_and_default_keeps_home_town)
 	                      "assert(marketTestPlayer:getInbox(0) ~= marketTestPlayer:getInbox())") == LUA_OK);
 	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
 	for (const auto file : {"data/scripts/network/market/market.lua", "data/scripts/globalevents/market_deliveries.lua",
-	                        "data/migrations/68.lua", "data/scripts/talkactions/player/misc/marketstatus.lua"}) {
+	                        "data/migrations/68.lua", "data/migrations/69.lua", "data/scripts/globalevents/serversave.lua", "data/scripts/talkactions/player/misc/marketstatus.lua"}) {
 		CHECK(luaL_loadfile(L, (root / file).string().c_str()) == LUA_OK);
 		lua_pop(L, 1);
 	}
@@ -134,7 +134,7 @@ TEST_CASE(current_depot_overrides_home_town_and_stale_last_depot)
 	player.setParent(nullptr);
 	CHECK(Market::getInboxDepotId(player) == 2); // no nearby locker: last visited city
 	player.setLastDepotId(-1);
-	CHECK(Market::getInboxDepotId(player) == 1); // offline/new character fallback
+	CHECK(Market::getInboxDepotId(player) == 0); // unknown physical depot: legacy Inbox
 }
 
 TEST_CASE(market_access_accepts_non_pz_depots_but_rechecks_distance_and_floor)
@@ -189,6 +189,39 @@ TEST_CASE(market_access_accepts_non_pz_depots_but_rechecks_distance_and_floor)
         assert(hasAccess(player, Position(20,20,7)))
         assert(not hasAccess(player, Position(99,99,7))) -- missing tile
     )lua") == LUA_OK);
+}
+
+TEST_CASE(market_legacy_amount_validation_does_not_materialize_an_unbounded_batch)
+{
+	loadItems();
+	for (uint32_t amount : {64000, 64001, 65535}) {
+		CHECK(Market::validateDelivery(ITEM_BAG, amount, {}));
+		std::vector<std::shared_ptr<Item>> items;
+		CHECK(!Market::buildDeliveryItems(ITEM_BAG, amount, {}, items));
+		CHECK(items.empty());
+		CHECK(Market::buildDeliveryItems(ITEM_BAG, Market::DELIVERY_ITEMS_PER_PLAYER, {}, items));
+		CHECK(items.size() == Market::DELIVERY_ITEMS_PER_PLAYER);
+	}
+	CHECK(!Market::validateDelivery(ITEM_BAG, 65536, {}));
+}
+
+TEST_CASE(market_expiration_boundary_uses_wide_arithmetic)
+{
+	CHECK(!Market::isExpired(100, 30, 129));
+	CHECK(Market::isExpired(100, 30, 130));
+	CHECK(Market::isExpired(100, 30, 131));
+	CHECK(!Market::isExpired(UINT32_MAX, 30, UINT32_MAX));
+	CHECK(Market::isExpired(UINT32_MAX, 30, uint64_t{UINT32_MAX} + 30));
+}
+
+TEST_CASE(persistence_failure_freezes_the_session_before_logout_cleanup)
+{
+	Player player(nullptr);
+	CHECK(!player.isPersistenceQuarantined());
+	CHECK(!player.isMovementBlocked());
+	player.disconnectForPersistenceFailure();
+	CHECK(player.isPersistenceQuarantined());
+	CHECK(player.isMovementBlocked());
 }
 
 TFS_TEST_MAIN()

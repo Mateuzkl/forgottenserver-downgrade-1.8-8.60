@@ -1461,6 +1461,10 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 		return;
 	}
 
+	if (player->isPersistenceQuarantined() || g_saveManager.hasFailedRecovery(player->getGUID())) {
+		disconnect();
+		return; // including logout: no Lua or new snapshot after an uncertain commit
+	}
 	// a dead player can not performs actions
 	if (player->isRemoved() || player->isDead()) {
 		if (recvbyte == 0x0F) {

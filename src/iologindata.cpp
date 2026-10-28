@@ -650,6 +650,7 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	player->loginPosition.z = result->getNumber<uint16_t>("posz");
 
 	player->lastLoginSaved = result->getNumber<time_t>("lastlogin");
+	player->onlineTimeAtLogin = result->getNumber<uint64_t>("onlinetime");
 	player->lastLogout = result->getNumber<time_t>("lastlogout");
 
 	player->offlineTrainingTime = result->getNumber<int32_t>("offlinetraining_time") * 1000;
@@ -1214,15 +1215,41 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 
 bool IOLoginData::flushPlayerSave(const PlayerSaveSnapshot& snapshot)
 {
-	return DBTransaction::executeWithinTransactionRollbackOnFailure([&snapshot]() {
-		Database& db = Database::getInstance();
+	return flushPlayerSaveChecked(snapshot) == FlushResult::Committed;
+}
+
+IOLoginData::FlushResult IOLoginData::flushPlayerSaveChecked(const PlayerSaveSnapshot& snapshot)
+{
+	Database& db = Database::getInstance();
+	for (uint8_t attempt = 0; attempt < DBTransaction::TRANSACTION_MAX_ATTEMPTS; ++attempt) {
+		DBTransaction transaction;
+		if (!transaction.begin()) {
+			return FlushResult::Failed;
+		}
+		bool executed = true;
 		for (const auto& query : snapshot.queries) {
 			if (!db.executeQuery(query)) {
-				return false;
+				executed = false;
+				break;
 			}
 		}
-		return true;
-	});
+		if (executed && !snapshot.walClearQuery.empty()) {
+			executed = db.executeQuery(snapshot.walClearQuery);
+		}
+		if (!executed) {
+			const bool retryable = db.lastQueryWasDeadlock();
+			if (!transaction.rollback()) {
+				return FlushResult::Indeterminate;
+			}
+			if (retryable && attempt + 1 < DBTransaction::TRANSACTION_MAX_ATTEMPTS) {
+				continue;
+			}
+			return FlushResult::Failed;
+		}
+		// Never retry a lost COMMIT acknowledgement on the worker.
+		return transaction.commit() ? FlushResult::Committed : FlushResult::Indeterminate;
+	}
+	return FlushResult::Failed;
 }
 
 bool IOLoginData::savePlayer(Player* player)
@@ -1364,7 +1391,9 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 	query << "`protection_time` = " << ConfigManager::getInteger(ConfigManager::PROTECTION_TIME) << ',';
 
 	if (!player->isOffline()) {
-		query << "`onlinetime` = `onlinetime` + " << (time(nullptr) - player->lastLoginSaved) << ',';
+		// A captured snapshot must be replayable without adding session time twice.
+		query << "`onlinetime` = " << (player->onlineTimeAtLogin +
+		    static_cast<uint64_t>(std::max<time_t>(0, time(nullptr) - player->lastLoginSaved))) << ',';
 	}
 	for (int i = 1; i <= 8; i++) {
 		query << "`blessings" << i << "` = " << static_cast<uint16_t>(player->getBlessingCount(i)) << ',';

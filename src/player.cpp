@@ -26,6 +26,7 @@
 #include "rewardchest.h"
 #include "databasetasks.h"
 #include "save_manager.h"
+#include "market.h"
 #include "scriptmanager.h"
 #include "scheduler.h"
 #include "spells.h"
@@ -3131,7 +3132,11 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 	Creature::onRemoveCreature(creature, isLogout);
 
 	if (creature == this) {
-		for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		removalInProgress = true;
+		// A Lua handler may abort before calling the native settlement API.
+		// Release that reservation while its original container parents still exist.
+		(void)Market::finishMoney(this, !persistenceQuarantined);
+		for (int32_t slot = CONST_SLOT_FIRST; !persistenceQuarantined && slot <= CONST_SLOT_LAST; ++slot) {
 			Item* item = inventory[slot].get();
 			if (item) {
 				g_moveEvents->onPlayerDeEquip(this, item, static_cast<slots_t>(slot));
@@ -3184,6 +3189,11 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 		}
 
 		IOLoginData::removeOnlineStatus(guid);
+		if (persistenceQuarantined) {
+			// Structural world cleanup above is required, but logout/de-equip Lua,
+			// familiar writes and a new player snapshot must not overwrite the WAL.
+			return;
+		}
 
 		Familiar::onPlayerLogout(this);
 
@@ -3199,14 +3209,19 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 		}
 
 		bool saved = false;
+		bool queued = false;
 		for (uint32_t tries = 0; tries < 3; ++tries) {
 			if (g_saveManager.savePlayerSync(this)) {
 				saved = true;
 				break;
 			}
+			if (g_saveManager.hasFailedRecovery(guid)) { break; }
+			if (g_saveManager.hasPendingPlayerSave(guid)) { queued = true; break; }
 		}
 
-		if (!saved) {
+		if (queued) {
+			LOG_INFO(fmt::format("[SaveManager] guid={} stage=logout latest_state=wal flush=pending", guid));
+		} else if (!saved) {
 			LOG_ERROR(fmt::format("Error while saving player: {}", getName()));
 		}
 	}
@@ -4559,11 +4574,38 @@ void Player::addList()
 
 void Player::kickPlayer(bool displayEffect)
 {
+	if (persistenceQuarantined) {
+		if (!isRemoved() && !removalInProgress) { g_game.removeCreature(this, false); }
+		return;
+	}
 	g_creatureEvents->playerLogout(this);
 	if (client) {
 		client->logout(displayEffect, true);
 	}
 	g_game.removeCreature(this);
+}
+
+void Player::disconnectForPersistenceFailure()
+{
+	persistenceQuarantined = true;
+	setMovementBlocked(true);
+	setNextActionTask(nullptr);
+	if (client) {
+		client->disconnectClient("Your character's save could not be confirmed. Please contact support before reconnecting.");
+		client->disconnect();
+	}
+	// Deliberately bypass playerLogout() scripts. onRemoveCreature performs only
+	// structural cleanup when quarantined and never creates another player save.
+	if (!isRemoved() && !removalInProgress) {
+		// Retain the session until this Lua/dispatcher task unwinds. The packet
+		// guard rejects all actions immediately; removing now could invalidate
+		// the handler's Player userdata before it releases its reservations.
+		if (auto self = g_game.getPlayerByGUID(guid)) {
+			g_dispatcher.addTask([self] {
+				if (!self->isRemoved() && !self->removalInProgress) { g_game.removeCreature(self.get(), false); }
+			});
+		}
+	}
 }
 
 void Player::notifyStatusChange(Player* loginPlayer, VipStatus_t status)

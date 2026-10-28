@@ -510,7 +510,7 @@ public:
 
 	GameState_t getGameState() const;
 	void setGameState(GameState_t newState);
-	void saveGameState(bool crash = false);
+	void saveGameState(bool crash = false, std::string_view reason = "manual");
 
 	// Events
 	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration);

@@ -64,7 +64,11 @@ public:
 		std::unordered_set<uint32_t> snapshotRemovedKeys;
 		uint64_t bestiarySnapshotId = 0;
 		std::unordered_set<uint16_t> snapshotModifiedBestiaryRaceIds;
+		// Executed in the same commit as the snapshot; matches this WAL generation.
+		std::string walClearQuery;
 	};
+	enum class FlushResult { Failed, Committed, Indeterminate };
+	static FlushResult flushPlayerSaveChecked(const PlayerSaveSnapshot& snapshot);
 	static std::optional<PlayerSaveSnapshot> buildPlayerSave(Player* player);
 	static bool flushPlayerSave(const PlayerSaveSnapshot& snapshot);
 	static bool addRewardItems(uint32_t playerId, const ItemBlockList& itemList, DBInsert& query_insert, PropWriteStream& propWriteStream);

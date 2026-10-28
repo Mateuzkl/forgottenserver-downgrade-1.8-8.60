@@ -89,7 +89,7 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 		return false;
 	}
 
-	bool canRemove = g_events->eventPartyOnLeave(this, player);
+	bool canRemove = player->isPersistenceQuarantined() || g_events->eventPartyOnLeave(this, player);
 	if (!forceRemove && !canRemove) {
 		return false;
 	}

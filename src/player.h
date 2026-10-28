@@ -261,6 +261,8 @@ public:
 	void removeList() override;
 	void addList() override;
 	void kickPlayer(bool displayEffect);
+	void disconnectForPersistenceFailure();
+	bool isPersistenceQuarantined() const { return persistenceQuarantined; }
 
 	static uint64_t getExpForLevel(const uint64_t lv)
 	{
@@ -1427,6 +1429,11 @@ public:
 	}
 	void sendPing();
 	void sendStats();
+	void refreshInventoryStats()
+	{
+		updateInventoryWeight();
+		sendStats();
+	}
 	void sendBasicData() const
 	{
 		if (client) {
@@ -1837,6 +1844,9 @@ private:
 	std::map<ObjectCategory_t, ManagedLootContainer> managedLootContainers;
 
 	time_t lastLoginSaved = 0;
+	uint64_t onlineTimeAtLogin = 0;
+	bool persistenceQuarantined = false;
+	bool removalInProgress = false;
 	time_t lastLogout = 0;
 	time_t premiumEndsAt = 0;
 

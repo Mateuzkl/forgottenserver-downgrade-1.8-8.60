@@ -1081,7 +1081,7 @@ void Game::setGameState(GameState_t newState)
 	}
 }
 
-void Game::saveGameState(bool crash /* = false */)
+void Game::saveGameState(bool crash /* = false */, std::string_view reason)
 {
 	AutoStat stat("Game::saveGameState", crash ? "crash" : "full");
 	if (gameState == GAME_STATE_NORMAL) {
@@ -1107,8 +1107,21 @@ void Game::saveGameState(bool crash /* = false */)
 		++savedCount;
 	}
 
-	g_saveManager.saveAll();
+	const bool mandatory = crash || gameState == GAME_STATE_SHUTDOWN || gameState == GAME_STATE_CLOSED;
+	if (crash) {
+		reason = "crash-recovery";
+	} else if (gameState == GAME_STATE_SHUTDOWN) {
+		reason = "shutdown";
+	} else if (gameState == GAME_STATE_CLOSED) {
+		reason = "scheduled-close";
+	}
+	g_saveManager.saveAll(reason, mandatory);
 	g_databaseTasks.flush();
+	if (gameState == GAME_STATE_SHUTDOWN || crash) {
+		if (!g_saveManager.drainForShutdown()) {
+			LOG_CRITICAL("[Game] Final player flush incomplete; unresolved WAL must be recovered before login.");
+		}
+	}
 
 	if (crash && savedCount > 0) {
 		LOG_WARN(fmt::format("[Anti-Rollback] Emergency save completed — {} player(s) saved at temple.", savedCount));
