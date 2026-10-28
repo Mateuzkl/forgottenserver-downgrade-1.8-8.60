@@ -9,6 +9,7 @@ on:
       - ".github/workflows/lua-check.yml"
       - ".github/tests/npc_travel_keywords.lua"
       - ".github/tests/npc_conversation_timeout.lua"
+      - ".github/tests/bestiary_kill_cache.lua"
       - "config.lua.dist"
       - "data/**/*.lua"
 
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/lua-check.yml"
       - ".github/tests/npc_travel_keywords.lua"
       - ".github/tests/npc_conversation_timeout.lua"
+      - ".github/tests/bestiary_kill_cache.lua"
       - "config.lua.dist"
       - "data/**/*.lua"
 
@@ -60,6 +62,9 @@ jobs:
             data/npc/lib/revnpcsys/handler.lua \
             data/npc/lib/revnpcsys/requirements.lua \
             data/npc/lib/revnpcsys/modules.lua
+
+      - name: Test Bestiary kill cache recovery
+        run: lua5.4 .github/tests/bestiary_kill_cache.lua
 
       - name: Test NPC conversation timeout signaling
         run: |
