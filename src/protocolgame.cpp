@@ -5547,6 +5547,8 @@ void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
 		sendCyclopediaItemSummary();
 	} else if (infoType == 7) {
 		sendCyclopediaCharacterAppearances();
+	} else if (infoType == 8) {
+		sendCyclopediaStoreSummary();
 	}
 }
 
@@ -5708,6 +5710,112 @@ void ProtocolGame::sendCyclopediaCharacterAppearances()
 		msg.add<uint32_t>(currentOutfit.lookFamiliar == familiar->lookType ? 1000 : 0);
 	}
 
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaStoreSummary()
+{
+	if (!player) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(8);   // CYCLOPEDIA_CHARACTERINFO_STORESUMMARY
+	msg.addByte(0);   // no error
+	msg.add<uint32_t>(player->getXpBoostTime());
+	msg.add<uint32_t>(0); // This server has no separate daily-reward XP boost timer.
+
+	static constexpr std::array<std::string_view, PLAYER_MAX_BLESSINGS + 1> blessingNames = {
+		"", "The Spiritual Shielding", "The Embrace of Tibia", "The Fire of the Suns",
+		"The Wisdom of Solitude", "The Spark of the Phoenix", "Blessing 6", "Blessing 7", "Blessing 8"
+	};
+	uint8_t blessingCount = 0;
+	for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+		if (player->getBlessingCount(id) > 0) {
+			++blessingCount;
+		}
+	}
+	msg.addByte(blessingCount);
+	for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+		const uint8_t count = player->getBlessingCount(id);
+		if (count == 0) {
+			continue;
+		}
+		msg.addString(blessingNames[id]);
+		msg.addByte(count);
+	}
+
+	constexpr uint32_t PERMANENT_PREY_SLOT_STORAGE = 780200;
+	const auto permanentPreySlot = player->getStorageValue(PERMANENT_PREY_SLOT_STORAGE);
+	msg.addByte(permanentPreySlot && permanentPreySlot.value() == 1 ? 1 : 0);
+	msg.addByte(static_cast<uint8_t>(std::min<uint64_t>(player->getPreyWildcards(), std::numeric_limits<uint8_t>::max())));
+	if (getVersion() >= 1521) {
+		msg.addByte(player->hasWeeklyExpansion() ? 1 : 0);
+	}
+
+	constexpr uint32_t DAILY_REWARD_INSTANT_TOKENS_STORAGE = 90724;
+	const auto instantRewardTokens = player->getStorageValue(DAILY_REWARD_INSTANT_TOKENS_STORAGE);
+	msg.addByte(static_cast<uint8_t>(std::clamp<int64_t>(instantRewardTokens.value_or(0), 0, std::numeric_limits<uint8_t>::max())));
+	msg.addByte(0); // Charm expansion is not persisted by this server.
+	msg.addByte(0); // Hireling ownership is managed outside the player record.
+	msg.addByte(0); // Hireling skills
+	msg.addByte(0); // Hireling outfits
+	std::map<uint16_t, uint32_t> purchasedHouseItems;
+	const auto addPurchasedItem = [&purchasedHouseItems](uint16_t itemId, uint32_t count) {
+		if (itemId > 0 && itemId < Item::items.size() && !Item::items[itemId].name.empty() && count > 0) {
+			purchasedHouseItems[itemId] += count;
+		}
+	};
+	const auto scanStoreItems = [&addPurchasedItem](const ItemVector& items) {
+		for (const auto& item : items) {
+			if (!item || !item->hasAttribute(ITEM_ATTRIBUTE_WRAPID)) {
+				continue;
+			}
+			const auto wrappedId = static_cast<uint16_t>(item->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
+			if (item->getID() == ITEM_DECORATION_KIT) {
+				addPurchasedItem(wrappedId, item->getItemCount());
+			} else if (wrappedId == ITEM_DECORATION_KIT) {
+				addPurchasedItem(item->getID(), item->getItemCount());
+			}
+		}
+	};
+
+	// Unopened decoration kits remain in the Store Inbox; installed decorations
+	// retain the kit ID in WRAPID and are found on the player's owned house tiles.
+	if (const StoreInbox* inbox = player->getStoreInbox()) {
+		scanStoreItems(inbox->getItems(true));
+	}
+	for (const auto& [houseId, house] : g_game.map.houses.getHouses()) {
+		(void)houseId;
+		if (!house || house->getOwner() != player->getGUID()) {
+			continue;
+		}
+		for (const auto& weakTile : house->getTiles()) {
+			const auto tile = weakTile.lock();
+			if (!tile) {
+				continue;
+			}
+			if (const TileItemVector* items = tile->getItemList()) {
+				ItemVector tileItems(items->begin(), items->end());
+				scanStoreItems(tileItems);
+				for (const auto& item : tileItems) {
+					if (!item) {
+						continue;
+					}
+					if (const auto container = item->getContainer()) {
+						scanStoreItems(container->getItems(true));
+					}
+				}
+			}
+		}
+	}
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(purchasedHouseItems.size(), std::numeric_limits<uint16_t>::max())));
+	for (const auto& [itemId, count] : purchasedHouseItems) {
+		msg.add<uint16_t>(itemId);
+		msg.addString(Item::items[itemId].name);
+		msg.addByte(static_cast<uint8_t>(std::min<uint32_t>(count, std::numeric_limits<uint8_t>::max())));
+	}
 	writeToOutputBuffer(msg);
 }
 

@@ -249,6 +249,7 @@ private:
 	                        uint8_t inspectionType = INSPECT_NORMALOBJECT);
 	void sendCyclopediaItemSummary();
 	void sendCyclopediaCharacterAppearances();
+	void sendCyclopediaStoreSummary();
 	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos);
 
 	void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus);
