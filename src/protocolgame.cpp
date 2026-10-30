@@ -5567,6 +5567,14 @@ void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
 		return;
 	}
 
+	if (infoType == 3 || infoType == 4) {
+		const int64_t now = OTSYS_TIME();
+		if (now - lastCharacterHistoryRequest < 500) {
+			return;
+		}
+		lastCharacterHistoryRequest = now;
+	}
+
 	if (infoType == 3) {
 		sendCyclopediaRecentDeaths(entriesPerPage, page);
 	} else if (infoType == 4) {
@@ -5590,14 +5598,22 @@ void ProtocolGame::sendCyclopediaRecentDeaths(uint16_t entriesPerPage, uint16_t 
 	entriesPerPage = std::clamp<uint16_t>(entriesPerPage, 1, 100);
 	page = std::max<uint16_t>(page, 1);
 	const auto totalResult = db.storeQuery(fmt::format(
-	    "SELECT COUNT(DISTINCT `time`, `level`, `killed_by`, `mostdamage_by`) AS `total` "
+	    "SELECT COUNT(*) AS `total` "
 	    "FROM `player_deaths` WHERE `player_id` = {:d}", player->getGUID()));
-	const uint32_t totalEntries = totalResult ? totalResult->getNumber<uint32_t>("total") : 0;
+	if (!totalResult) {
+		NetworkMessage error;
+		error.addByte(218);
+		error.addByte(3);
+		error.addByte(1);
+		writeToOutputBuffer(error);
+		return;
+	}
+	const uint32_t totalEntries = totalResult->getNumber<uint32_t>("total");
 	const uint16_t totalPages = static_cast<uint16_t>(std::min<uint32_t>(
 	    (totalEntries + entriesPerPage - 1) / entriesPerPage, std::numeric_limits<uint16_t>::max()));
 	const uint32_t offset = static_cast<uint32_t>(page - 1) * entriesPerPage;
 	const auto result = db.storeQuery(fmt::format(
-	    "SELECT DISTINCT `time`, `level`, `killed_by`, `mostdamage_by` FROM `player_deaths` "
+	    "SELECT `time`, `level`, `killed_by`, `mostdamage_by` FROM `player_deaths` "
 	    "WHERE `player_id` = {:d} ORDER BY `time` DESC LIMIT {:d} OFFSET {:d}",
 	    player->getGUID(), entriesPerPage, offset));
 	std::vector<std::pair<uint32_t, std::string>> entries;
@@ -5642,13 +5658,21 @@ void ProtocolGame::sendCyclopediaRecentPvPKills(uint16_t entriesPerPage, uint16_
 	const std::string where = fmt::format(
 	    "FROM `player_deaths` AS d WHERE d.`killed_by` = {:s} AND d.`is_player` = 1", escapedName);
 	const auto totalResult = db.storeQuery(fmt::format(
-	    "SELECT COUNT(DISTINCT d.`time`, d.`player_id`, d.`level`, d.`unjustified`) AS `total` {:s}", where));
-	const uint32_t totalEntries = totalResult ? totalResult->getNumber<uint32_t>("total") : 0;
+	    "SELECT COUNT(*) AS `total` {:s}", where));
+	if (!totalResult) {
+		NetworkMessage error;
+		error.addByte(218);
+		error.addByte(4);
+		error.addByte(1);
+		writeToOutputBuffer(error);
+		return;
+	}
+	const uint32_t totalEntries = totalResult->getNumber<uint32_t>("total");
 	const uint16_t totalPages = static_cast<uint16_t>(std::min<uint32_t>(
 	    (totalEntries + entriesPerPage - 1) / entriesPerPage, std::numeric_limits<uint16_t>::max()));
 	const uint32_t offset = static_cast<uint32_t>(page - 1) * entriesPerPage;
 	const auto result = db.storeQuery(fmt::format(
-	    "SELECT DISTINCT d.`time`, d.`level`, d.`unjustified`, p.`name` AS `victim_name` FROM `player_deaths` AS d "
+	    "SELECT d.`time`, d.`level`, d.`unjustified`, p.`name` AS `victim_name` FROM `player_deaths` AS d "
 	    "LEFT JOIN `players` AS p ON p.`id` = d.`player_id` WHERE d.`killed_by` = {:s} AND d.`is_player` = 1 "
 	    "ORDER BY d.`time` DESC LIMIT {:d} OFFSET {:d}",
 	    escapedName, entriesPerPage, offset));
@@ -5775,22 +5799,21 @@ void ProtocolGame::sendCyclopediaCharacterAppearances()
 
 	const Outfit_t currentOutfit = player->getDefaultOutfit();
 	const auto& availableOutfits = Outfits::getInstance().getOutfits(player->getSex());
-	std::vector<const Outfit*> outfits;
+	const bool monkVocationEnabled = ConfigManager::getBoolean(ConfigManager::MONK_VOCATION_ENABLED);
+	std::vector<std::pair<const Outfit*, uint8_t>> outfits;
 	for (const Outfit* outfit : availableOutfits) {
-		if (!outfit) {
+		if (!outfit || (!monkVocationEnabled && outfit->name == "Monk")) {
 			continue;
 		}
 		uint8_t addons = 0;
 		if (player->getOutfitAddons(*outfit, addons)) {
-			outfits.push_back(outfit);
+			outfits.emplace_back(outfit, addons);
 		}
 	}
 
 	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(outfits.size(), std::numeric_limits<uint16_t>::max())));
 	for (size_t i = 0; i < outfits.size() && i < std::numeric_limits<uint16_t>::max(); ++i) {
-		const Outfit* outfit = outfits[i];
-		uint8_t addons = 0;
-		player->getOutfitAddons(*outfit, addons);
+		const auto& [outfit, addons] = outfits[i];
 		msg.add<uint16_t>(outfit->lookType);
 		msg.addString(outfit->name);
 		msg.addByte(addons);
@@ -5858,8 +5881,8 @@ void ProtocolGame::sendCyclopediaStoreSummary()
 	msg.add<uint32_t>(0); // This server has no separate daily-reward XP boost timer.
 
 	static constexpr std::array<std::string_view, PLAYER_MAX_BLESSINGS + 1> blessingNames = {
-		"", "The Spiritual Shielding", "The Embrace of Tibia", "The Fire of the Suns",
-		"The Wisdom of Solitude", "The Spark of the Phoenix", "Blessing 6", "Blessing 7", "Blessing 8"
+		"", "Twist of Fate", "The Spiritual Shielding", "The Embrace of Tibia",
+		"The Fire of the Suns", "The Wisdom of Solitude", "The Spark of the Phoenix", "Blessing 7", "Blessing 8"
 	};
 	uint8_t blessingCount = 0;
 	for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
@@ -5917,11 +5940,13 @@ void ProtocolGame::sendCyclopediaStoreSummary()
 	if (const StoreInbox* inbox = player->getStoreInbox()) {
 		scanStoreItems(inbox->getItems(true));
 	}
-	for (const auto& [houseId, house] : g_game.map.houses.getHouses()) {
-		(void)houseId;
-		if (!house || house->getOwner() != player->getGUID()) {
-			continue;
+	for (const auto& [depotId, chest] : player->depotChests) {
+		(void)depotId;
+		if (chest) {
+			scanStoreItems(chest->getItems(true));
 		}
+	}
+	if (const auto house = g_game.map.houses.getHouseByPlayerId(player->getGUID())) {
 		for (const auto& weakTile : house->getTiles()) {
 			const auto tile = weakTile.lock();
 			if (!tile) {
