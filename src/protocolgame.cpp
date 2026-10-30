@@ -17,6 +17,7 @@
 #include "store/store_service.h"
 #include "store/store_types.h"
 #include "configmanager.h"
+#include "depotchest.h"
 #include "creatureevent.h"
 #include "echo_raid.h"
 #include "game.h"
@@ -27,6 +28,7 @@
 #include "monsters.h"
 #include "outputmessage.h"
 #include "player.h"
+#include "stash.h"
 #include "protocolgame.h"
 #include "protocollogin.h"
 #include "protocolspectator.h"
@@ -1841,6 +1843,10 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 		case 0xE6:
 			parseBugReport(msg);
+			break;
+
+		case 0xE5: // Cyclopedia character info request
+			parseCyclopediaCharacterInfo(msg);
 			break;
 
 		case 0xE7: /* thank you / custom wheel gem action */
@@ -5525,6 +5531,95 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
+{
+	const uint32_t characterId = msg.get<uint32_t>();
+	const uint8_t infoType = msg.getByte();
+	// Character id 0 means the logged-in character. Item Summary is type 6.
+	if (characterId == 0 && infoType == 6 && player) {
+		sendCyclopediaItemSummary();
+	}
+}
+
+void ProtocolGame::sendCyclopediaItemSummary()
+{
+	if (!player) {
+		return;
+	}
+
+	using ItemKey = std::pair<uint16_t, uint8_t>;
+	using ItemCounts = std::map<ItemKey, uint64_t>;
+	std::array<ItemCounts, 5> categories;
+
+	const auto addItem = [](ItemCounts& counts, const Item* item) {
+		if (!item || item->getID() == 0) {
+			return;
+		}
+		const uint8_t tier = item->getClassification() > 0 ? item->getTier() : 0;
+		counts[{item->getID(), tier}] += std::max<uint32_t>(1, item->getItemCount());
+	};
+	const auto addContainer = [&addItem](ItemCounts& counts, const Container* container) {
+		if (!container) {
+			return;
+		}
+		for (const auto& item : container->getItems(true)) {
+			addItem(counts, item.get());
+		}
+	};
+
+	// Inventory: equipment and everything inside carried containers.
+	for (const auto& item : player->getEquippedItems()) {
+		addItem(categories[0], item.get());
+		if (const Container* container = item ? item->getContainer() : nullptr) {
+			addContainer(categories[0], container);
+		}
+	}
+
+	// Store inbox.
+	addContainer(categories[1], player->getStoreInbox());
+
+	// Supply stash rows are persisted separately from normal item containers.
+	for (const StashRecord& row : Stash::getRows(player->getGUID())) {
+		if (row.itemId != 0 && row.itemId < Item::items.size() && row.amount != 0) {
+			categories[2][{row.itemId, row.tier}] += row.amount;
+		}
+	}
+
+	// Depot chests may contain nested containers.
+	for (const auto& [depotId, chest] : player->depotChests) {
+		(void)depotId;
+		addContainer(categories[3], chest.get());
+	}
+
+	// Mail inboxes are attached to depot lockers, one per town.
+	for (const auto& [depotId, locker] : player->depotLockerMap) {
+		(void)locker;
+		addContainer(categories[4], player->getInbox(depotId));
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(6);   // CYCLOPEDIA_CHARACTERINFO_ITEMSUMMARY
+	msg.addByte(0);   // no error
+	for (const ItemCounts& counts : categories) {
+		const uint16_t count = static_cast<uint16_t>(std::min<size_t>(counts.size(), std::numeric_limits<uint16_t>::max()));
+		msg.add<uint16_t>(count);
+		size_t written = 0;
+		for (const auto& [key, amount] : counts) {
+			if (written++ >= count) {
+				break;
+			}
+			const auto [itemId, tier] = key;
+			msg.add<uint16_t>(itemId);
+			// The client consumes a fixed-width tier field for each summary item.
+			msg.addByte(tier);
+			msg.add<uint32_t>(static_cast<uint32_t>(std::min<uint64_t>(amount, std::numeric_limits<uint32_t>::max())));
+			msg.addString(Item::items[itemId].name);
+		}
+	}
 	writeToOutputBuffer(msg);
 }
 
