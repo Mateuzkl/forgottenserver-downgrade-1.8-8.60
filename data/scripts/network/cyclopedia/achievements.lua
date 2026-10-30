@@ -3,7 +3,13 @@ local SERVER_PACKET_CHARACTER_INFO = 0xDA
 local CHARACTER_INFO_ACHIEVEMENTS = 5
 
 local function supportsAchievements(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	if not player then
+		return false
+	end
+	if player.isUsingFonticakClient and player:isUsingFonticakClient() then
+		return true
+	end
+	return player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function sendAchievements(player)
@@ -21,6 +27,7 @@ local function sendAchievements(player)
 	local msg = NetworkMessage(player)
 	msg:addByte(SERVER_PACKET_CHARACTER_INFO)
 	msg:addByte(CHARACTER_INFO_ACHIEVEMENTS)
+	msg:addByte(0) -- no error
 	msg:addU16(math.min(player:getAchievementPoints(), 0xFFFF))
 	msg:addU16(math.min(secretUnlocked, 0xFFFF))
 	msg:addU16(math.min(#unlocked, 0xFFFF))

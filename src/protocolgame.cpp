@@ -1846,7 +1846,21 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			break;
 
 		case 0xE5: // Cyclopedia character info request
-			parseCyclopediaCharacterInfo(msg);
+			{
+				// Achievement requests are handled by the Lua PacketHandler. Rewind the
+				// payload after checking its type so the handler can read it normally.
+				const auto requestPosition = msg.getBufferPosition();
+				if (msg.getRemainingBufferLength() >= sizeof(uint32_t) + sizeof(uint8_t)) {
+					msg.get<uint32_t>();
+					const uint8_t infoType = msg.getByte();
+					msg.setBufferPosition(requestPosition - NetworkMessage::INITIAL_BUFFER_POSITION);
+					if (infoType == 5) {
+						handlePlayerNetworkMessage(recvbyte);
+						break;
+					}
+				}
+				parseCyclopediaCharacterInfo(msg);
+			}
 			break;
 
 		case 0xE7: /* thank you / custom wheel gem action */
