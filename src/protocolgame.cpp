@@ -5539,8 +5539,14 @@ void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
 	const uint32_t characterId = msg.get<uint32_t>();
 	const uint8_t infoType = msg.getByte();
 	// Character id 0 means the logged-in character. Item Summary is type 6.
-	if (characterId == 0 && infoType == 6 && player) {
+	if (characterId != 0 || !player) {
+		return;
+	}
+
+	if (infoType == 6) {
 		sendCyclopediaItemSummary();
+	} else if (infoType == 7) {
+		sendCyclopediaCharacterAppearances();
 	}
 }
 
@@ -5620,6 +5626,88 @@ void ProtocolGame::sendCyclopediaItemSummary()
 			msg.addString(Item::items[itemId].name);
 		}
 	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaCharacterAppearances()
+{
+	if (!player) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(7);   // CYCLOPEDIA_CHARACTERINFO_OUTFITSMOUNTS
+	msg.addByte(0);   // no error
+
+	const Outfit_t currentOutfit = player->getDefaultOutfit();
+	const auto& availableOutfits = Outfits::getInstance().getOutfits(player->getSex());
+	std::vector<const Outfit*> outfits;
+	for (const Outfit* outfit : availableOutfits) {
+		if (!outfit) {
+			continue;
+		}
+		uint8_t addons = 0;
+		if (player->getOutfitAddons(*outfit, addons)) {
+			outfits.push_back(outfit);
+		}
+	}
+
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(outfits.size(), std::numeric_limits<uint16_t>::max())));
+	for (size_t i = 0; i < outfits.size() && i < std::numeric_limits<uint16_t>::max(); ++i) {
+		const Outfit* outfit = outfits[i];
+		uint8_t addons = 0;
+		player->getOutfitAddons(*outfit, addons);
+		msg.add<uint16_t>(outfit->lookType);
+		msg.addString(outfit->name);
+		msg.addByte(addons);
+		msg.addByte(1); // unlocked outfit
+		msg.add<uint32_t>(outfit->lookType == currentOutfit.lookType ? 1000 : 0);
+	}
+
+	if (!outfits.empty()) {
+		msg.addByte(currentOutfit.lookHead);
+		msg.addByte(currentOutfit.lookBody);
+		msg.addByte(currentOutfit.lookLegs);
+		msg.addByte(currentOutfit.lookFeet);
+	}
+
+	std::vector<const Mount*> mounts;
+	for (const auto& [id, mount] : g_game.mounts.getMounts()) {
+		(void)id;
+		if (player->hasMount(&mount)) {
+			mounts.push_back(&mount);
+		}
+	}
+	std::sort(mounts.begin(), mounts.end(), [](const Mount* left, const Mount* right) {
+		return left->name < right->name;
+	});
+
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(mounts.size(), std::numeric_limits<uint16_t>::max())));
+	for (size_t i = 0; i < mounts.size() && i < std::numeric_limits<uint16_t>::max(); ++i) {
+		const Mount* mount = mounts[i];
+		msg.add<uint16_t>(mount->clientId);
+		msg.addString(mount->name);
+		msg.addByte(1); // unlocked mount
+		msg.add<uint32_t>(mount->id == player->getCurrentMount() ? 1000 : 0);
+	}
+
+	if (!mounts.empty()) {
+		msg.addByte(currentOutfit.lookHead);
+		msg.addByte(currentOutfit.lookBody);
+		msg.addByte(currentOutfit.lookLegs);
+		msg.addByte(currentOutfit.lookFeet);
+	}
+
+	const auto familiar = Familiar::getFamiliarInfo(player.get());
+	msg.add<uint16_t>(familiar ? 1 : 0);
+	if (familiar) {
+		msg.add<uint16_t>(familiar->lookType);
+		msg.addString(familiar->name);
+		msg.addByte(1);
+		msg.add<uint32_t>(currentOutfit.lookFamiliar == familiar->lookType ? 1000 : 0);
+	}
+
 	writeToOutputBuffer(msg);
 }
 
