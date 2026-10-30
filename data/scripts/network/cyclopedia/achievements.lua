@@ -54,13 +54,24 @@ end
 
 local achievementsHandler = PacketHandler(CLIENT_PACKET_CHARACTER_INFO)
 function achievementsHandler.onReceive(player, msg)
-	if not supportsAchievements(player) or not NetworkGuard.cooldown(player, "character-achievements", 250) then
+	if not supportsAchievements(player) then
 		return
 	end
 
 	local characterId = NetworkGuard.readU32(msg)
 	local informationType = NetworkGuard.readByte(msg)
-	if characterId == nil or informationType ~= CHARACTER_INFO_ACHIEVEMENTS then
+	if characterId == nil then
+		return
+	end
+
+	if informationType == 11 and CharacterTitles then
+		CharacterTitles.send(player, characterId)
+		return
+	end
+	if informationType ~= CHARACTER_INFO_ACHIEVEMENTS then
+		return
+	end
+	if not NetworkGuard.cooldown(player, "character-achievements", 250) then
 		return
 	end
 

@@ -1854,13 +1854,17 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 					msg.get<uint32_t>();
 					const uint8_t infoType = msg.getByte();
 					msg.setBufferPosition(requestPosition - NetworkMessage::INITIAL_BUFFER_POSITION);
-					if (infoType == 5) {
+					if (infoType == 5 || infoType == 11) {
 						handlePlayerNetworkMessage(recvbyte);
 						break;
 					}
 				}
 				parseCyclopediaCharacterInfo(msg);
 			}
+			break;
+
+		case 0x81: // Character title selection
+			handlePlayerNetworkMessage(recvbyte);
 			break;
 
 		case 0xE7: /* thank you / custom wheel gem action */
