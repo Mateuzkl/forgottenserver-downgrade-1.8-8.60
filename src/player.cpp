@@ -4458,6 +4458,39 @@ void Player::death(Creature* lastHitCreature)
 bool Player::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreature, bool lastHitUnjustified,
                         bool mostDamageUnjustified)
 {
+	// Persist death details so the Cyclopedia's Recent Deaths and Recent PvP
+	// Kills pages remain available after the player logs out.
+	const auto getResponsibleCreature = [](Creature* creature, std::shared_ptr<Creature>& masterRef) {
+		if (creature && !creature->getPlayer()) {
+			masterRef = creature->getMasterShared();
+			if (masterRef && masterRef->getPlayer()) {
+				return masterRef.get();
+			}
+		}
+		return creature;
+	};
+	std::shared_ptr<Creature> killerMaster;
+	std::shared_ptr<Creature> mostDamageMaster;
+	Creature* killer = getResponsibleCreature(lastHitCreature, killerMaster);
+	Creature* mostDamage = getResponsibleCreature(mostDamageCreature, mostDamageMaster);
+	std::string killedBy = killer ? killer->getNameDescription() : "an unknown creature";
+	std::string mostDamageBy = mostDamage ? mostDamage->getNameDescription() : "";
+	if (killedBy.size() > 255) {
+		killedBy.resize(255);
+	}
+	if (mostDamageBy.size() > 100) {
+		mostDamageBy.resize(100);
+	}
+	Database& db = Database::getInstance();
+	const auto query = fmt::format(
+	    "INSERT INTO `player_deaths` (`player_id`, `time`, `level`, `killed_by`, `is_player`, `mostdamage_by`, "
+	    "`mostdamage_is_player`, `unjustified`, `mostdamage_unjustified`) VALUES ({:d}, {:d}, {:d}, {:s}, {:d}, {:s}, {:d}, {:d}, {:d})",
+	    getGUID(), static_cast<uint32_t>(std::time(nullptr)), getLevel(), db.escapeString(killedBy),
+	    Player::lastHitIsPlayer(lastHitCreature) ? 1 : 0, db.escapeString(mostDamageBy),
+	    Player::lastHitIsPlayer(mostDamageCreature) ? 1 : 0, lastHitUnjustified ? 1 : 0,
+	    mostDamageUnjustified ? 1 : 0);
+	(void)g_databaseTasks.addTask(query);
+
 	if (getZone() != ZONE_PVP || !Player::lastHitIsPlayer(lastHitCreature)) {
 		return Creature::dropCorpse(lastHitCreature, mostDamageCreature, lastHitUnjustified, mostDamageUnjustified);
 	}

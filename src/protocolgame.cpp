@@ -5538,18 +5538,131 @@ void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
 {
 	const uint32_t characterId = msg.get<uint32_t>();
 	const uint8_t infoType = msg.getByte();
+	uint16_t entriesPerPage = 23;
+	uint16_t page = 1;
+	if (infoType == 3 || infoType == 4) {
+		entriesPerPage = msg.get<uint16_t>();
+		page = msg.get<uint16_t>();
+	}
 	// Character id 0 means the logged-in character. Item Summary is type 6.
 	if (characterId != 0 || !player) {
 		return;
 	}
 
-	if (infoType == 6) {
+	if (infoType == 3) {
+		sendCyclopediaRecentDeaths(entriesPerPage, page);
+	} else if (infoType == 4) {
+		sendCyclopediaRecentPvPKills(entriesPerPage, page);
+	} else if (infoType == 6) {
 		sendCyclopediaItemSummary();
 	} else if (infoType == 7) {
 		sendCyclopediaCharacterAppearances();
 	} else if (infoType == 8) {
 		sendCyclopediaStoreSummary();
 	}
+}
+
+void ProtocolGame::sendCyclopediaRecentDeaths(uint16_t entriesPerPage, uint16_t page)
+{
+	if (!player) {
+		return;
+	}
+
+	Database& db = Database::getInstance();
+	entriesPerPage = std::clamp<uint16_t>(entriesPerPage, 1, 100);
+	page = std::max<uint16_t>(page, 1);
+	const auto totalResult = db.storeQuery(fmt::format(
+	    "SELECT COUNT(DISTINCT `time`, `level`, `killed_by`, `mostdamage_by`) AS `total` "
+	    "FROM `player_deaths` WHERE `player_id` = {:d}", player->getGUID()));
+	const uint32_t totalEntries = totalResult ? totalResult->getNumber<uint32_t>("total") : 0;
+	const uint16_t totalPages = static_cast<uint16_t>(std::min<uint32_t>(
+	    (totalEntries + entriesPerPage - 1) / entriesPerPage, std::numeric_limits<uint16_t>::max()));
+	const uint32_t offset = static_cast<uint32_t>(page - 1) * entriesPerPage;
+	const auto result = db.storeQuery(fmt::format(
+	    "SELECT DISTINCT `time`, `level`, `killed_by`, `mostdamage_by` FROM `player_deaths` "
+	    "WHERE `player_id` = {:d} ORDER BY `time` DESC LIMIT {:d} OFFSET {:d}",
+	    player->getGUID(), entriesPerPage, offset));
+	std::vector<std::pair<uint32_t, std::string>> entries;
+	if (result) {
+		do {
+			const uint32_t timestamp = result->getNumber<uint32_t>("time");
+			const uint32_t level = result->getNumber<uint32_t>("level");
+			const std::string_view killedBy = result->getString("killed_by");
+			std::string cause = fmt::format("Died at Level {} by {}", level, killedBy);
+			const std::string_view mostDamageBy = result->getString("mostdamage_by");
+			if (!mostDamageBy.empty() && mostDamageBy != killedBy) {
+				cause += fmt::format(" and {}", mostDamageBy);
+			}
+			entries.emplace_back(timestamp, std::move(cause));
+		} while (result->next());
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(3);   // CYCLOPEDIA_CHARACTERINFO_RECENTDEATHS
+	msg.addByte(0);   // no error
+	msg.add<uint16_t>(page);
+	msg.add<uint16_t>(totalPages);
+	msg.add<uint16_t>(static_cast<uint16_t>(entries.size()));
+	for (const auto& [timestamp, cause] : entries) {
+		msg.add<uint32_t>(timestamp);
+		msg.addString(cause);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaRecentPvPKills(uint16_t entriesPerPage, uint16_t page)
+{
+	if (!player) {
+		return;
+	}
+
+	Database& db = Database::getInstance();
+	entriesPerPage = std::clamp<uint16_t>(entriesPerPage, 1, 100);
+	page = std::max<uint16_t>(page, 1);
+	const std::string escapedName = db.escapeString(player->getName());
+	const std::string where = fmt::format(
+	    "FROM `player_deaths` AS d WHERE d.`killed_by` = {:s} AND d.`is_player` = 1", escapedName);
+	const auto totalResult = db.storeQuery(fmt::format(
+	    "SELECT COUNT(DISTINCT d.`time`, d.`player_id`, d.`level`, d.`unjustified`) AS `total` {:s}", where));
+	const uint32_t totalEntries = totalResult ? totalResult->getNumber<uint32_t>("total") : 0;
+	const uint16_t totalPages = static_cast<uint16_t>(std::min<uint32_t>(
+	    (totalEntries + entriesPerPage - 1) / entriesPerPage, std::numeric_limits<uint16_t>::max()));
+	const uint32_t offset = static_cast<uint32_t>(page - 1) * entriesPerPage;
+	const auto result = db.storeQuery(fmt::format(
+	    "SELECT DISTINCT d.`time`, d.`level`, d.`unjustified`, p.`name` AS `victim_name` FROM `player_deaths` AS d "
+	    "LEFT JOIN `players` AS p ON p.`id` = d.`player_id` WHERE d.`killed_by` = {:s} AND d.`is_player` = 1 "
+	    "ORDER BY d.`time` DESC LIMIT {:d} OFFSET {:d}",
+	    escapedName, entriesPerPage, offset));
+	struct RecentKill {
+		uint32_t timestamp;
+		std::string description;
+		uint8_t status;
+	};
+	std::vector<RecentKill> entries;
+	if (result) {
+		do {
+			const uint32_t timestamp = result->getNumber<uint32_t>("time");
+			const uint32_t level = result->getNumber<uint32_t>("level");
+			const std::string_view victimName = result->getString("victim_name");
+			entries.push_back({timestamp, fmt::format("Killed {} at Level {}", victimName, level),
+			                   static_cast<uint8_t>(result->getNumber<uint8_t>("unjustified") ? 1 : 0)});
+		} while (result->next());
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(4);   // CYCLOPEDIA_CHARACTERINFO_RECENTPVPKILLS
+	msg.addByte(0);   // no error
+	msg.add<uint16_t>(page);
+	msg.add<uint16_t>(totalPages);
+	msg.add<uint16_t>(static_cast<uint16_t>(entries.size()));
+	for (const auto& entry : entries) {
+		msg.add<uint32_t>(entry.timestamp);
+		msg.addString(entry.description);
+		msg.addByte(entry.status);
+	}
+	writeToOutputBuffer(msg);
 }
 
 void ProtocolGame::sendCyclopediaItemSummary()

@@ -250,6 +250,8 @@ private:
 	void sendCyclopediaItemSummary();
 	void sendCyclopediaCharacterAppearances();
 	void sendCyclopediaStoreSummary();
+	void sendCyclopediaRecentDeaths(uint16_t entriesPerPage, uint16_t page);
+	void sendCyclopediaRecentPvPKills(uint16_t entriesPerPage, uint16_t page);
 	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos);
 
 	void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus);
