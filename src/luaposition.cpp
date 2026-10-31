@@ -139,6 +139,15 @@ int luaPositionSendDistanceEffect(lua_State* L)
 int luaPositionSendSingleSoundEffect(lua_State* L)
 {
 	// position:sendSingleSoundEffect(soundId[, actor])
+	const Position& position = getPosition(L, 1);
+	const uint16_t soundId = getInteger<uint16_t>(L, 2);
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, position, false, true);
+	for (const auto& spectator : spectators) {
+		if (const auto& player = spectator->getPlayer()) {
+			player->sendSingleSoundEffect(position, soundId);
+		}
+	}
 	pushBoolean(L, true);
 	return 1;
 }
@@ -146,6 +155,16 @@ int luaPositionSendSingleSoundEffect(lua_State* L)
 int luaPositionSendDoubleSoundEffect(lua_State* L)
 {
 	// position:sendDoubleSoundEffect(mainSoundId, secondarySoundId[, actor])
+	const Position& position = getPosition(L, 1);
+	const uint16_t mainSoundId = getInteger<uint16_t>(L, 2);
+	const uint16_t secondarySoundId = getInteger<uint16_t>(L, 3);
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, position, false, true);
+	for (const auto& spectator : spectators) {
+		if (const auto& player = spectator->getPlayer()) {
+			player->sendDoubleSoundEffect(position, mainSoundId, secondarySoundId);
+		}
+	}
 	pushBoolean(L, true);
 	return 1;
 }

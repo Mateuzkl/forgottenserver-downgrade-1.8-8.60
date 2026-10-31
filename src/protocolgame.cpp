@@ -4338,6 +4338,30 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source)
+{
+	NetworkMessage msg;
+	msg.addByte(0x46); // OTC-Fonticak custom sound opcode
+	msg.addPosition(pos);
+	msg.addByte(source);
+	msg.add<uint16_t>(soundId);
+	msg.addByte(0); // no secondary effect
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source)
+{
+	NetworkMessage msg;
+	msg.addByte(0x46); // OTC-Fonticak custom sound opcode
+	msg.addPosition(pos);
+	msg.addByte(source);
+	msg.add<uint16_t>(mainSoundId);
+	msg.addByte(1); // secondary effect follows
+	msg.addByte(source);
+	msg.add<uint16_t>(secondarySoundId);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendCreatureHealth(const Creature* creature)
 {
 	NetworkMessage msg;

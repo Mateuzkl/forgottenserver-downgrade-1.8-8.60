@@ -1974,6 +1974,7 @@ void LuaScriptInterface::registerFunctions()
 	     }) {
 		registerGlobalVariable(soundEffectName, 0);
 	}
+	registerGlobalVariable("SOUND_EFFECT_TYPE_SPELL_ETERNAL_WINTER", 1118);
 
 	registerEnum(CONDITION_NONE);
 	registerEnum(CONDITION_POISON);

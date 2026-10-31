@@ -2768,6 +2768,36 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		}
 	}
 
+	if (actorPlayer) {
+		uint16_t soundId = 2794; // default item movement
+		const int32_t slot = item->getSlotPosition();
+		if ((toCylinder->getItem() && toCylinder->getItem()->getContainer()) || item->getContainer()) {
+			soundId = 2786;
+		} else if (item->isStackable()) {
+			soundId = 2793;
+		} else if (item->getWeaponType() == WEAPON_DISTANCE) {
+			soundId = 2791;
+		} else if (item->getWeaponType() == WEAPON_SWORD || item->getWeaponType() == WEAPON_AXE || item->getWeaponType() == WEAPON_CLUB) {
+			soundId = 2790;
+		} else if (item->getWeaponType() == WEAPON_SHIELD || item->getWeaponType() == WEAPON_WAND) {
+			soundId = 2792;
+		} else if (slot != SLOTP_WHEREEVER) {
+			if (slot & SLOTP_HEAD) soundId = 2796;
+			else if (slot & SLOTP_NECKLACE) soundId = 2788;
+			else if (slot & SLOTP_ARMOR) soundId = 2789;
+			else if (slot & SLOTP_LEGS) soundId = 2795;
+			else if (slot & SLOTP_FEET) soundId = 2801;
+			else if (slot & SLOTP_RING) soundId = 2798;
+		}
+		const bool personalDestination = toCylinder->getCreature() ||
+			(toCylinder->getItem() && toCylinder->getItem()->getContainer());
+		if (!personalDestination && toCylinder->getTile()) {
+			addSoundEffect(toCylinder->getPosition(), soundId, actorPlayer->getInstanceID(), actorPlayer);
+		} else {
+			actorPlayer->sendSingleSoundEffect(actorPlayer->getPosition(), soundId, 1);
+		}
+	}
+
 	// we could not move all, inform the player
 	if (item->isStackable() && maxQueryCount < count) {
 		return retMaxCount;
@@ -7912,6 +7942,21 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 	map.getSpectators(spectators, pos, true, true);
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	addMagicEffect(spectators, pos, effect);
+}
+
+void Game::addSoundEffect(const Position& pos, uint16_t soundId, uint32_t instanceId, Player* actor)
+{
+	if (soundId == 0) {
+		return;
+	}
+	SpectatorVec spectators;
+	map.getSpectators(spectators, pos, true, true);
+	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
+	for (const auto& spectator : spectators) {
+		if (Player* player = spectator ? spectator->getPlayer() : nullptr) {
+			player->sendSingleSoundEffect(pos, soundId, player == actor ? 1 : 0);
+		}
+	}
 }
 
 void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect)

@@ -1171,7 +1171,11 @@ bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 
 	Lua::pushVariant(L, var);
 
-	return scriptInterface->callFunction(2);
+	const bool cast = scriptInterface->callFunction(2);
+	if (cast && getCastSound() != 0) {
+		g_game.addSoundEffect(creature->getPosition(), getCastSound(), creature->getInstanceID(), creature->getPlayer());
+	}
+	return cast;
 }
 
 bool InstantSpell::canCast(const Player* player) const

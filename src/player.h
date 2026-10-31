@@ -1386,6 +1386,22 @@ public:
 			client->sendMagicEffect(pos, type);
 		}
 	}
+	void sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source = 0) const
+	{
+		if (client) {
+			if (const auto protocol = client->protocol()) {
+				protocol->sendSingleSoundEffect(pos, soundId, source);
+			}
+		}
+	}
+	void sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source = 0) const
+	{
+		if (client) {
+			if (const auto protocol = client->protocol()) {
+				protocol->sendDoubleSoundEffect(pos, mainSoundId, secondarySoundId, source);
+			}
+		}
+	}
 	void sendCharmActivated(uint8_t charmId) const
 	{
 		if (client) {
