@@ -1975,6 +1975,10 @@ void LuaScriptInterface::registerFunctions()
 		registerGlobalVariable(soundEffectName, 0);
 	}
 	registerGlobalVariable("SOUND_EFFECT_TYPE_SPELL_ETERNAL_WINTER", 1118);
+	registerGlobalVariable("SOUND_EFFECT_TYPE_ACTION_OPEN_DOOR", 2674);
+	registerGlobalVariable("SOUND_EFFECT_TYPE_ACTION_CLOSE_DOOR", 2675);
+	registerGlobalVariable("SOUND_EFFECT_TYPE_ITEM_USE_POTION", 2787);
+	registerGlobalVariable("SOUND_EFFECT_TYPE_ACTION_EAT", 2803);
 
 	registerEnum(CONDITION_NONE);
 	registerEnum(CONDITION_POISON);

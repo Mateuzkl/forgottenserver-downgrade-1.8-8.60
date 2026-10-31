@@ -828,6 +828,34 @@ int luaMonsterTypeAddVoice(lua_State* L)
 	return 1;
 }
 
+int luaMonsterTypeAddSound(lua_State* L)
+{
+	// monsterType:addSound(soundId, interval, chance)
+	MonsterType* monsterType = getUserdata<MonsterType>(L, 1);
+	if (!monsterType) {
+		lua_pushnil(L);
+		return 1;
+	}
+	monsterType->info.soundVector.push_back(getInteger<uint16_t>(L, 2));
+	monsterType->info.soundSpeedTicks = getInteger<uint32_t>(L, 3, 5000);
+	monsterType->info.soundChance = getInteger<uint32_t>(L, 4, 10);
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaMonsterTypeDeathSound(lua_State* L)
+{
+	// monsterType:deathSound(soundId)
+	MonsterType* monsterType = getUserdata<MonsterType>(L, 1);
+	if (!monsterType) {
+		lua_pushnil(L);
+		return 1;
+	}
+	monsterType->info.deathSound = getInteger<uint16_t>(L, 2);
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaMonsterTypeGetLoot(lua_State* L)
 {
 	// monsterType:getLoot()
@@ -1578,6 +1606,8 @@ void LuaScriptInterface::registerMonsterType()
 
 	registerMethod("MonsterType", "getVoices", luaMonsterTypeGetVoices);
 	registerMethod("MonsterType", "addVoice", luaMonsterTypeAddVoice);
+	registerMethod("MonsterType", "addSound", luaMonsterTypeAddSound);
+	registerMethod("MonsterType", "deathSound", luaMonsterTypeDeathSound);
 
 	registerMethod("MonsterType", "getLoot", luaMonsterTypeGetLoot);
 	registerMethod("MonsterType", "addLoot", luaMonsterTypeAddLoot);

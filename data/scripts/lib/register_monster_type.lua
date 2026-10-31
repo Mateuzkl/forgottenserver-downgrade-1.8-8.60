@@ -226,6 +226,13 @@ registerMonsterType.voices = function(mtype, mask)
 		end
 	end
 end
+registerMonsterType.sounds = function(mtype, mask)
+	if type(mask.sounds) ~= "table" then return end
+	if mask.sounds.death then mtype:deathSound(mask.sounds.death) end
+	for _, soundId in ipairs(mask.sounds.ids or mask.sounds) do
+		mtype:addSound(soundId, mask.sounds.ticks or mask.sounds.interval or 5000, mask.sounds.chance or 10)
+	end
+end
 registerMonsterType.summons = function(mtype, mask)
 	local summonData = mask.summons or (mask.summon and mask.summon.summons)
 	if type(summonData) == "table" then
@@ -354,6 +361,8 @@ registerMonsterType.immunities = function(mtype, mask)
 end
 local function AbilityTableToSpell(ability)
 	local spell = MonsterSpell()
+	if ability.soundCast then spell:castSound(ability.soundCast) end
+	if ability.soundImpact then spell:impactSound(ability.soundImpact) end
 	if ability.name then
 		if ability.name == "melee" then
 			spell:setType("melee")

@@ -6940,6 +6940,9 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 	applyBossDifficultyDamage(damage, attacker, target);
 
 	damage.blockType = primaryBlockType;
+	if (primaryBlockType != BLOCK_NONE || secondaryBlockType != BLOCK_NONE) {
+		addSoundEffect(target->getPosition(), 20, target->getInstanceID(), attacker ? attacker->getPlayer() : nullptr);
+	}
 
 	return (primaryBlockType != BLOCK_NONE) && (secondaryBlockType != BLOCK_NONE);
 }
@@ -7955,6 +7958,22 @@ void Game::addSoundEffect(const Position& pos, uint16_t soundId, uint32_t instan
 	for (const auto& spectator : spectators) {
 		if (Player* player = spectator ? spectator->getPlayer() : nullptr) {
 			player->sendSingleSoundEffect(pos, soundId, player == actor ? 1 : 0);
+		}
+	}
+}
+
+void Game::addDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId,
+                                uint32_t instanceId, Player* actor)
+{
+	if (mainSoundId == 0 && secondarySoundId == 0) {
+		return;
+	}
+	SpectatorVec spectators;
+	map.getSpectators(spectators, pos, true, true);
+	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
+	for (const auto& spectator : spectators) {
+		if (Player* player = spectator ? spectator->getPlayer() : nullptr) {
+			player->sendDoubleSoundEffect(pos, mainSoundId, secondarySoundId, player == actor ? 1 : 0);
 		}
 	}
 }

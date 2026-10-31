@@ -158,6 +158,7 @@ function potionsAction.onUse(player, item, fromPosition, target, toPosition, isH
 		player:say(potion.description, TALKTYPE_MONSTER_SAY)
 		return true
 	end
+	player:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ITEM_USE_POTION, player)
 
 	if potion.condition then
 		player:addCondition(potion.condition)

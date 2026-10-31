@@ -904,6 +904,10 @@ int luaGameCreateMonsterType(lua_State* L)
 		monsterType->info.defenseSpells.clear();
 		monsterType->info.summons.clear();
 		monsterType->info.voiceVector.clear();
+		monsterType->info.soundVector.clear();
+		monsterType->info.deathSound = 2632;
+		monsterType->info.soundChance = 0;
+		monsterType->info.soundSpeedTicks = 0;
 		monsterType->info.elementMap.clear();
 		monsterType->info.scripts.clear();
 		monsterType->info.enemyFactions.clear();

@@ -1047,6 +1047,12 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 			return;
 		}
 	}
+	if (target && params.soundCastEffect != 0 && caster) {
+		g_game.addSoundEffect(caster->getPosition(), params.soundCastEffect, caster->getInstanceID(), caster->getPlayer());
+	}
+	if (target && params.soundImpactEffect != 0) {
+		g_game.addSoundEffect(target->getPosition(), params.soundImpactEffect, target->getInstanceID(), caster ? caster->getPlayer() : nullptr);
+	}
 
 	// target combat callback function
 	if (params.combatType != COMBAT_NONE) {
@@ -1118,6 +1124,12 @@ void Combat::doCombat(Creature* caster, const Position& position, std::string_vi
 		if (doCombatChain(caster, nullptr, params.aggressive, std::string(instantSpellName))) {
 			return;
 		}
+	}
+	if (params.soundCastEffect != 0 && caster) {
+		g_game.addSoundEffect(caster->getPosition(), params.soundCastEffect, caster->getInstanceID(), caster->getPlayer());
+	}
+	if (params.soundImpactEffect != 0) {
+		g_game.addSoundEffect(position, params.soundImpactEffect, caster ? caster->getInstanceID() : 0, caster ? caster->getPlayer() : nullptr);
 	}
 
 	// area combat callback function

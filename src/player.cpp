@@ -3712,6 +3712,9 @@ void Player::removeMessageBuffer()
 
 void Player::drainHealth(const std::shared_ptr<Creature>& attacker, int32_t damage)
 {
+	if (damage > 0 && uniform_random(1, 100) <= 10) {
+		g_game.addSoundEffect(getPosition(), sex == PLAYERSEX_FEMALE ? 2518 : 2519, getInstanceID(), this);
+	}
 	Creature::drainHealth(attacker, damage);
 	sendStats();
 }
@@ -4273,6 +4276,7 @@ uint32_t Player::getIP() const
 
 void Player::death(Creature* lastHitCreature)
 {
+	g_game.addSoundEffect(getPosition(), sex == PLAYERSEX_FEMALE ? 2618 : 2619, getInstanceID(), this);
 	loginPosition = town->getTemplePosition();
 	setInstanceID(0);
 

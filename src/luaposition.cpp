@@ -141,13 +141,9 @@ int luaPositionSendSingleSoundEffect(lua_State* L)
 	// position:sendSingleSoundEffect(soundId[, actor])
 	const Position& position = getPosition(L, 1);
 	const uint16_t soundId = getInteger<uint16_t>(L, 2);
-	SpectatorVec spectators;
-	g_game.map.getSpectators(spectators, position, false, true);
-	for (const auto& spectator : spectators) {
-		if (const auto& player = spectator->getPlayer()) {
-			player->sendSingleSoundEffect(position, soundId);
-		}
-	}
+	Creature* actor = lua_gettop(L) >= 3 && lua_isuserdata(L, 3) ? getUserdata<Creature>(L, 3) : nullptr;
+	g_game.addSoundEffect(position, soundId, actor ? actor->getInstanceID() : getPositionInstanceId(L, 1),
+	                      actor ? actor->getPlayer() : nullptr);
 	pushBoolean(L, true);
 	return 1;
 }
@@ -158,13 +154,10 @@ int luaPositionSendDoubleSoundEffect(lua_State* L)
 	const Position& position = getPosition(L, 1);
 	const uint16_t mainSoundId = getInteger<uint16_t>(L, 2);
 	const uint16_t secondarySoundId = getInteger<uint16_t>(L, 3);
-	SpectatorVec spectators;
-	g_game.map.getSpectators(spectators, position, false, true);
-	for (const auto& spectator : spectators) {
-		if (const auto& player = spectator->getPlayer()) {
-			player->sendDoubleSoundEffect(position, mainSoundId, secondarySoundId);
-		}
-	}
+	Creature* actor = lua_gettop(L) >= 4 && lua_isuserdata(L, 4) ? getUserdata<Creature>(L, 4) : nullptr;
+	g_game.addDoubleSoundEffect(position, mainSoundId, secondarySoundId,
+	                            actor ? actor->getInstanceID() : getPositionInstanceId(L, 1),
+	                            actor ? actor->getPlayer() : nullptr);
 	pushBoolean(L, true);
 	return 1;
 }
