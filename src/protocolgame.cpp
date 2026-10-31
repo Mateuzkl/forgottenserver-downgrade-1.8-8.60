@@ -3844,7 +3844,7 @@ void ProtocolGame::sendShop(const ShopInfoList& itemList)
 
 		msg.add<uint16_t>(itemsToSend);
 
-		uint16_t written = 0;
+		size_t written = 0;
 		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
 			AddShopItem(msg, *it);
 		}
@@ -5809,10 +5809,29 @@ void ProtocolGame::sendCyclopediaItemSummary()
 	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
 	msg.addByte(6);   // CYCLOPEDIA_CHARACTERINFO_ITEMSUMMARY
 	msg.addByte(0);   // no error
-	for (const ItemCounts& counts : categories) {
-		const uint16_t count = static_cast<uint16_t>(std::min<size_t>(counts.size(), std::numeric_limits<uint16_t>::max()));
+	// Keep room for every remaining category header. NetworkMessage silently
+	// rejects writes past its fixed buffer, so the count must be chosen first.
+	constexpr size_t maxPayload = NetworkMessage::MAX_BODY_LENGTH - NetworkMessage::INITIAL_BUFFER_POSITION - 1;
+	for (size_t categoryIndex = 0; categoryIndex < categories.size(); ++categoryIndex) {
+		const ItemCounts& counts = categories[categoryIndex];
+		size_t available = maxPayload - msg.getLength() -
+		                   (categories.size() - categoryIndex) * sizeof(uint16_t);
+		uint16_t count = 0;
+		for (const auto& [key, amount] : counts) {
+			(void)amount;
+			if (count == std::numeric_limits<uint16_t>::max()) {
+				break;
+			}
+			const size_t entrySize = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint32_t) +
+			                         sizeof(uint16_t) + Item::items[key.first].name.size();
+			if (entrySize > available) {
+				break;
+			}
+			available -= entrySize;
+			++count;
+		}
 		msg.add<uint16_t>(count);
-		size_t written = 0;
+		uint16_t written = 0;
 		for (const auto& [key, amount] : counts) {
 			if (written++ >= count) {
 				break;
@@ -5823,6 +5842,10 @@ void ProtocolGame::sendCyclopediaItemSummary()
 			msg.addByte(tier);
 			msg.add<uint32_t>(static_cast<uint32_t>(std::min<uint64_t>(amount, std::numeric_limits<uint32_t>::max())));
 			msg.addString(Item::items[itemId].name);
+		}
+		if (count < counts.size()) {
+			LOG_WARN("[Cyclopedia] Item summary for player {} was truncated in category {} ({} of {} items)",
+			         player->getGUID(), categoryIndex, count, counts.size());
 		}
 	}
 	writeToOutputBuffer(msg);
