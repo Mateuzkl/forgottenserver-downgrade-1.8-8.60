@@ -10,8 +10,8 @@ PartyVitals = PartyVitals or {}
 local pendingPartyBroadcast = {}
 local vitalCache = {}
 
-local function isOTC(player)
-	return player and player.isUsingOtClient and player:isUsingOtClient()
+local function isFonticakClient(player)
+	return player and player.isUsingFonticakClient and player:isUsingFonticakClient()
 end
 
 local function getPartyRoster(anchorPlayer)
@@ -48,7 +48,7 @@ local function memberVitals(player)
 end
 
 function PartyVitals.sendToPlayer(recipient, roster)
-	if not isOTC(recipient) or not roster then
+	if not isFonticakClient(recipient) or not roster then
 		return
 	end
 
