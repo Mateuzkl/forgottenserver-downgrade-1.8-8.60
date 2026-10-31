@@ -5580,6 +5580,11 @@ void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
 	} else if (infoType == 4) {
 		sendCyclopediaRecentPvPKills(entriesPerPage, page);
 	} else if (infoType == 6) {
+		const int64_t now = OTSYS_TIME();
+		if (now - lastCharacterItemSummaryRequest < 125) {
+			return;
+		}
+		lastCharacterItemSummaryRequest = now;
 		sendCyclopediaItemSummary();
 	} else if (infoType == 7) {
 		sendCyclopediaCharacterAppearances();
@@ -5764,7 +5769,7 @@ void ProtocolGame::sendCyclopediaItemSummary()
 			return;
 		}
 		const uint8_t tier = item->getClassification() > 0 ? item->getTier() : 0;
-		counts[{item->getID(), tier}] += std::max<uint32_t>(1, item->getItemCount());
+		counts[{item->getID(), tier}] += getPlayerInventoryItemAmount(item);
 	};
 	const auto addContainer = [&addItem](ItemCounts& counts, const Container* container) {
 		if (!container) {
@@ -5779,6 +5784,12 @@ void ProtocolGame::sendCyclopediaItemSummary()
 	for (const auto& item : player->getEquippedItems()) {
 		addItem(categories[0], item.get());
 		if (const Container* container = item ? item->getContainer() : nullptr) {
+			addContainer(categories[0], container);
+		}
+	}
+	if (const Item* ammo = player->getInventoryItem(CONST_SLOT_AMMO)) {
+		addItem(categories[0], ammo);
+		if (const Container* container = ammo->getContainer()) {
 			addContainer(categories[0], container);
 		}
 	}

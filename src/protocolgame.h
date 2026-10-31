@@ -444,6 +444,7 @@ private:
 
 	uint32_t eventConnect = 0;
 	int64_t lastCharacterHistoryRequest = 0;
+	int64_t lastCharacterItemSummaryRequest = 0;
 	uint32_t challengeTimestamp = 0;
 	uint16_t version = CLIENT_VERSION_MIN;
 
