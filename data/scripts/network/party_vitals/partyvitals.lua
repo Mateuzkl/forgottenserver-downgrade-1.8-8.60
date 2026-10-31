@@ -1,8 +1,8 @@
--- Party member HP/mana sync for OTC-Fonticak (S2C opcode 0x3E)
+-- Party member HP/mana sync for OTC-Fonticak (S2C opcode 0x3F)
 -- Sends vitals to all OTC party members even when they are far from each other.
 -- Do not use 0x34: OTC client handles that as attached spell effects.
 
-local OPCODE_PARTY_VITALS = 0x3E
+local OPCODE_PARTY_VITALS = 0x3F
 local PARTY_VITALS_PROTOCOL_VERSION = 2
 
 PartyVitals = PartyVitals or {}
