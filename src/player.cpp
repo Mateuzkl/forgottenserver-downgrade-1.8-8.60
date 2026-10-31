@@ -4476,6 +4476,63 @@ bool Player::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreature,
 	if (getZone() != ZONE_PVP || !Player::lastHitIsPlayer(lastHitCreature)) {
 		return Creature::dropCorpse(lastHitCreature, mostDamageCreature, lastHitUnjustified, mostDamageUnjustified);
 	}
+	// Persist death details so the Cyclopedia's Recent Deaths and Recent PvP
+	// Kills pages remain available after the player logs out.
+	const auto getResponsibleCreature = [](Creature* creature, std::shared_ptr<Creature>& masterRef) {
+		if (creature && !creature->getPlayer()) {
+			masterRef = creature->getMasterShared();
+			if (masterRef && masterRef->getPlayer()) {
+				return masterRef.get();
+			}
+		}
+		return creature;
+	};
+	std::shared_ptr<Creature> killerMaster;
+	std::shared_ptr<Creature> mostDamageMaster;
+	Creature* killer = getResponsibleCreature(lastHitCreature, killerMaster);
+	Creature* mostDamage = getResponsibleCreature(mostDamageCreature, mostDamageMaster);
+	std::string killedBy = killer ? killer->getNameDescription() : "an unknown creature";
+	std::string mostDamageBy = mostDamage ? mostDamage->getNameDescription() : "";
+	const auto truncateUtf8 = [](std::string& value, size_t limit) {
+		if (value.size() <= limit) {
+			return;
+		}
+		while (limit > 0 && (static_cast<unsigned char>(value[limit]) & 0xC0) == 0x80) {
+			--limit;
+		}
+		value.resize(limit);
+	};
+	truncateUtf8(killedBy, 255);
+	truncateUtf8(mostDamageBy, 100);
+	Database& db = Database::getInstance();
+	const auto query = fmt::format(
+	    "INSERT INTO `player_deaths` (`player_id`, `time`, `level`, `killed_by`, `is_player`, `mostdamage_by`, "
+	    "`mostdamage_is_player`, `unjustified`, `mostdamage_unjustified`) VALUES ({:d}, {:d}, {:d}, {:s}, {:d}, {:s}, {:d}, {:d}, {:d})",
+	    getGUID(), static_cast<uint32_t>(std::time(nullptr)), getLevel(), db.escapeString(killedBy),
+	    Player::lastHitIsPlayer(lastHitCreature) ? 1 : 0, db.escapeString(mostDamageBy),
+	    Player::lastHitIsPlayer(mostDamageCreature) ? 1 : 0, lastHitUnjustified ? 1 : 0,
+	    mostDamageUnjustified ? 1 : 0);
+	const uint32_t playerGuid = getGUID();
+	(void)g_databaseTasks.addTask(query, [playerGuid](DBResult_ptr, bool success, uint64_t) {
+		if (!success) {
+			LOG_ERROR("[Cyclopedia] Failed to record PvP death for player {}", playerGuid);
+			return;
+		}
+		const auto countQuery = fmt::format(
+		    "SELECT COUNT(*) AS `total` FROM `player_deaths` WHERE `player_id` = {:d}", playerGuid);
+		(void)g_databaseTasks.addTask(countQuery, [playerGuid](DBResult_ptr result, bool countSuccess, uint64_t) {
+			if (!countSuccess || !result) {
+				LOG_ERROR("[Cyclopedia] Failed to count death records for player {}", playerGuid);
+				return;
+			}
+			const uint32_t count = result->getNumber<uint32_t>("total");
+			if (count > 5) {
+				(void)g_databaseTasks.addTask(fmt::format(
+				    "DELETE FROM `player_deaths` WHERE `player_id` = {:d} ORDER BY `time` ASC LIMIT {:d}",
+				    playerGuid, count - 5));
+			}
+		}, true);
+	});
 
 	setDropLoot(true);
 	return false;

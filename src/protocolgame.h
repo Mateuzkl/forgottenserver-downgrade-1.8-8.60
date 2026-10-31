@@ -123,6 +123,7 @@ private:
 	void parseAutoWalk(NetworkMessage& msg);
 	void parseSetOutfit(NetworkMessage& msg);
 	void parseInspectionObject(NetworkMessage& msg);
+	void parseCyclopediaCharacterInfo(NetworkMessage& msg);
 	void parseSetMonsterPodium(NetworkMessage& msg);
 	void parseSay(NetworkMessage& msg);
 	void parseSelectSpellAim(NetworkMessage& msg);
@@ -246,6 +247,12 @@ private:
 	void sendOutfitWindow();
 	void sendItemInspection(std::shared_ptr<Item> item = nullptr, uint16_t itemId = 0, uint8_t itemCount = 1,
 	                        uint8_t inspectionType = INSPECT_NORMALOBJECT);
+	void sendCyclopediaItemSummary();
+	void sendCyclopediaCharacterAppearances();
+	void sendCyclopediaStoreSummary();
+	void sendCyclopediaCharacterStats(uint8_t type);
+	void sendCyclopediaRecentDeaths(uint16_t entriesPerPage, uint16_t page);
+	void sendCyclopediaRecentPvPKills(uint16_t entriesPerPage, uint16_t page);
 	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos);
 
 	void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus);
@@ -436,6 +443,8 @@ private:
 	tfs::net::PacketBacklog packetBacklog;
 
 	uint32_t eventConnect = 0;
+	int64_t lastCharacterHistoryRequest = 0;
+	int64_t lastCharacterItemSummaryRequest = 0;
 	uint32_t challengeTimestamp = 0;
 	uint16_t version = CLIENT_VERSION_MIN;
 

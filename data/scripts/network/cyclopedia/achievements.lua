@@ -3,7 +3,13 @@ local SERVER_PACKET_CHARACTER_INFO = 0xDA
 local CHARACTER_INFO_ACHIEVEMENTS = 5
 
 local function supportsAchievements(player)
-	return player and player.isUsingAstraClient and player:isUsingAstraClient()
+	if not player then
+		return false
+	end
+	if player.isUsingFonticakClient and player:isUsingFonticakClient() then
+		return true
+	end
+	return player.isUsingAstraClient and player:isUsingAstraClient()
 end
 
 local function sendAchievements(player)
@@ -21,6 +27,7 @@ local function sendAchievements(player)
 	local msg = NetworkMessage(player)
 	msg:addByte(SERVER_PACKET_CHARACTER_INFO)
 	msg:addByte(CHARACTER_INFO_ACHIEVEMENTS)
+	msg:addByte(0) -- no error
 	msg:addU16(math.min(player:getAchievementPoints(), 0xFFFF))
 	msg:addU16(math.min(secretUnlocked, 0xFFFF))
 	msg:addU16(math.min(#unlocked, 0xFFFF))
@@ -47,13 +54,24 @@ end
 
 local achievementsHandler = PacketHandler(CLIENT_PACKET_CHARACTER_INFO)
 function achievementsHandler.onReceive(player, msg)
-	if not supportsAchievements(player) or not NetworkGuard.cooldown(player, "character-achievements", 250) then
+	if not supportsAchievements(player) then
 		return
 	end
 
 	local characterId = NetworkGuard.readU32(msg)
 	local informationType = NetworkGuard.readByte(msg)
-	if characterId == nil or informationType ~= CHARACTER_INFO_ACHIEVEMENTS then
+	if characterId == nil then
+		return
+	end
+
+	if informationType == 11 and CharacterTitles then
+		CharacterTitles.send(player, characterId)
+		return
+	end
+	if informationType ~= CHARACTER_INFO_ACHIEVEMENTS then
+		return
+	end
+	if not NetworkGuard.cooldown(player, "character-achievements", 250) then
 		return
 	end
 

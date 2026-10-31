@@ -18,6 +18,7 @@
 #include "store/store_service.h"
 #include "store/store_types.h"
 #include "configmanager.h"
+#include "depotchest.h"
 #include "creatureevent.h"
 #include "echo_raid.h"
 #include "game.h"
@@ -28,6 +29,7 @@
 #include "monsters.h"
 #include "outputmessage.h"
 #include "player.h"
+#include "stash.h"
 #include "protocolgame.h"
 #include "protocollogin.h"
 #include "protocolspectator.h"
@@ -1854,6 +1856,28 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 		case 0xE6:
 			parseBugReport(msg);
+			break;
+
+		case 0xE5: // Cyclopedia character info request
+			{
+				// Achievement requests are handled by the Lua PacketHandler. Rewind the
+				// payload after checking its type so the handler can read it normally.
+				const auto requestPosition = msg.getBufferPosition();
+				if (msg.getRemainingBufferLength() >= sizeof(uint32_t) + sizeof(uint8_t)) {
+					msg.get<uint32_t>();
+					const uint8_t infoType = msg.getByte();
+					msg.setBufferPosition(requestPosition - NetworkMessage::INITIAL_BUFFER_POSITION);
+					if (infoType == 5 || infoType == 11) {
+						handlePlayerNetworkMessage(recvbyte);
+						break;
+					}
+				}
+				parseCyclopediaCharacterInfo(msg);
+			}
+			break;
+
+		case 0x81: // Character title selection
+			handlePlayerNetworkMessage(recvbyte);
 			break;
 
 		case 0xE7: /* thank you / custom wheel gem action */
@@ -3833,7 +3857,7 @@ void ProtocolGame::sendShop(const ShopInfoList& itemList)
 
 		msg.add<uint16_t>(itemsToSend);
 
-		uint16_t written = 0;
+		size_t written = 0;
 		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
 			AddShopItem(msg, *it);
 		}
@@ -5538,6 +5562,505 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
+{
+	const uint32_t characterId = msg.get<uint32_t>();
+	const uint8_t infoType = msg.getByte();
+	uint16_t entriesPerPage = 23;
+	uint16_t page = 1;
+	if (infoType == 3 || infoType == 4) {
+		entriesPerPage = msg.get<uint16_t>();
+		page = msg.get<uint16_t>();
+	}
+	// Character id 0 means the logged-in character. Item Summary is type 6.
+	if (characterId != 0 || !player) {
+		return;
+	}
+
+	if (infoType == 3 || infoType == 4) {
+		const int64_t now = OTSYS_TIME();
+		if (now - lastCharacterHistoryRequest < 500) {
+			return;
+		}
+		lastCharacterHistoryRequest = now;
+	}
+
+	if (infoType == 3) {
+		sendCyclopediaRecentDeaths(entriesPerPage, page);
+	} else if (infoType == 4) {
+		sendCyclopediaRecentPvPKills(entriesPerPage, page);
+	} else if (infoType == 6) {
+		const int64_t now = OTSYS_TIME();
+		if (now - lastCharacterItemSummaryRequest < 125) {
+			return;
+		}
+		lastCharacterItemSummaryRequest = now;
+		sendCyclopediaItemSummary();
+	} else if (infoType == 7) {
+		sendCyclopediaCharacterAppearances();
+	} else if (infoType == 8) {
+		sendCyclopediaStoreSummary();
+	} else if (infoType >= 13 && infoType <= 15) {
+		if (isAstraClient) {
+			sendCyclopediaCharacterStats(infoType);
+		} else {
+			NetworkMessage unavailable;
+			unavailable.addByte(218);
+			unavailable.addByte(infoType);
+			unavailable.addByte(1); // This compact stats format is specific to Astra.
+			writeToOutputBuffer(unavailable);
+		}
+	}
+}
+
+void ProtocolGame::sendCyclopediaCharacterStats(uint8_t type)
+{
+	if (!player) {
+		return;
+	}
+	NetworkMessage msg;
+	msg.addByte(218);
+	msg.addByte(type);
+	msg.addByte(0);
+	if (type == 13) {
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT));
+	} else if (type == 14) {
+		msg.add<uint16_t>(static_cast<uint16_t>(std::max<int32_t>(0, player->getArmor())));
+		msg.add<uint16_t>(static_cast<uint16_t>(std::max<int32_t>(0, player->getDefense())));
+		msg.add<uint16_t>(static_cast<uint16_t>(std::clamp<float>(player->getMitigation() * 100, 0, 65535)));
+		msg.add<uint16_t>(player->getSkillLevel(SKILL_SHIELD));
+	} else {
+		uint8_t blessings = 0;
+		for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+			if (player->getBlessingCount(id) > 0) {
+				++blessings;
+			}
+		}
+		msg.addByte(blessings);
+		msg.addByte(PLAYER_MAX_BLESSINGS);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaRecentDeaths(uint16_t entriesPerPage, uint16_t page)
+{
+	if (!player) {
+		return;
+	}
+
+	Database& db = Database::getInstance();
+	entriesPerPage = std::clamp<uint16_t>(entriesPerPage, 1, 100);
+	page = std::max<uint16_t>(page, 1);
+	const auto totalResult = db.storeQuery(fmt::format(
+	    "SELECT COUNT(*) AS `total` "
+	    "FROM `player_deaths` WHERE `player_id` = {:d}", player->getGUID()));
+	if (!totalResult) {
+		NetworkMessage error;
+		error.addByte(218);
+		error.addByte(3);
+		error.addByte(1);
+		writeToOutputBuffer(error);
+		return;
+	}
+	const uint32_t totalEntries = totalResult->getNumber<uint32_t>("total");
+	const uint16_t totalPages = static_cast<uint16_t>(std::min<uint32_t>(
+	    (totalEntries + entriesPerPage - 1) / entriesPerPage, std::numeric_limits<uint16_t>::max()));
+	const uint32_t offset = static_cast<uint32_t>(page - 1) * entriesPerPage;
+	const auto result = db.storeQuery(fmt::format(
+	    "SELECT `time`, `level`, `killed_by`, `mostdamage_by` FROM `player_deaths` "
+	    "WHERE `player_id` = {:d} ORDER BY `time` DESC LIMIT {:d} OFFSET {:d}",
+	    player->getGUID(), entriesPerPage, offset));
+	std::vector<std::pair<uint32_t, std::string>> entries;
+	if (result) {
+		do {
+			const uint32_t timestamp = result->getNumber<uint32_t>("time");
+			const uint32_t level = result->getNumber<uint32_t>("level");
+			const std::string_view killedBy = result->getString("killed_by");
+			std::string cause = fmt::format("Died at Level {} by {}", level, killedBy);
+			const std::string_view mostDamageBy = result->getString("mostdamage_by");
+			if (!mostDamageBy.empty() && mostDamageBy != killedBy) {
+				cause += fmt::format(" and {}", mostDamageBy);
+			}
+			entries.emplace_back(timestamp, std::move(cause));
+		} while (result->next());
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(3);   // CYCLOPEDIA_CHARACTERINFO_RECENTDEATHS
+	msg.addByte(0);   // no error
+	msg.add<uint16_t>(page);
+	msg.add<uint16_t>(totalPages);
+	msg.add<uint16_t>(static_cast<uint16_t>(entries.size()));
+	for (const auto& [timestamp, cause] : entries) {
+		msg.add<uint32_t>(timestamp);
+		msg.addString(cause);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaRecentPvPKills(uint16_t entriesPerPage, uint16_t page)
+{
+	if (!player) {
+		return;
+	}
+
+	Database& db = Database::getInstance();
+	entriesPerPage = std::clamp<uint16_t>(entriesPerPage, 1, 100);
+	page = std::max<uint16_t>(page, 1);
+	const std::string escapedName = db.escapeString(player->getName());
+	const std::string where = fmt::format(
+	    "FROM `player_deaths` AS d WHERE d.`killed_by` = {:s} AND d.`is_player` = 1", escapedName);
+	const auto totalResult = db.storeQuery(fmt::format(
+	    "SELECT COUNT(*) AS `total` {:s}", where));
+	if (!totalResult) {
+		NetworkMessage error;
+		error.addByte(218);
+		error.addByte(4);
+		error.addByte(1);
+		writeToOutputBuffer(error);
+		return;
+	}
+	const uint32_t totalEntries = totalResult->getNumber<uint32_t>("total");
+	const uint16_t totalPages = static_cast<uint16_t>(std::min<uint32_t>(
+	    (totalEntries + entriesPerPage - 1) / entriesPerPage, std::numeric_limits<uint16_t>::max()));
+	const uint32_t offset = static_cast<uint32_t>(page - 1) * entriesPerPage;
+	const auto result = db.storeQuery(fmt::format(
+	    "SELECT d.`time`, d.`level`, d.`unjustified`, p.`name` AS `victim_name` FROM `player_deaths` AS d "
+	    "LEFT JOIN `players` AS p ON p.`id` = d.`player_id` WHERE d.`killed_by` = {:s} AND d.`is_player` = 1 "
+	    "ORDER BY d.`time` DESC LIMIT {:d} OFFSET {:d}",
+	    escapedName, entriesPerPage, offset));
+	struct RecentKill {
+		uint32_t timestamp;
+		std::string description;
+		uint8_t status;
+	};
+	std::vector<RecentKill> entries;
+	if (result) {
+		do {
+			const uint32_t timestamp = result->getNumber<uint32_t>("time");
+			const uint32_t level = result->getNumber<uint32_t>("level");
+			const std::string_view victimName = result->getString("victim_name");
+			entries.push_back({timestamp, fmt::format("Killed {} at Level {}", victimName, level),
+			                   static_cast<uint8_t>(result->getNumber<uint8_t>("unjustified") ? 1 : 0)});
+		} while (result->next());
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(4);   // CYCLOPEDIA_CHARACTERINFO_RECENTPVPKILLS
+	msg.addByte(0);   // no error
+	msg.add<uint16_t>(page);
+	msg.add<uint16_t>(totalPages);
+	msg.add<uint16_t>(static_cast<uint16_t>(entries.size()));
+	for (const auto& entry : entries) {
+		msg.add<uint32_t>(entry.timestamp);
+		msg.addString(entry.description);
+		msg.addByte(entry.status);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaItemSummary()
+{
+	if (!player) {
+		return;
+	}
+
+	using ItemKey = std::pair<uint16_t, uint8_t>;
+	using ItemCounts = std::map<ItemKey, uint64_t>;
+	std::array<ItemCounts, 5> categories;
+
+	const auto addItem = [](ItemCounts& counts, const Item* item) {
+		if (!item || item->getID() == 0) {
+			return;
+		}
+		const uint8_t tier = item->getClassification() > 0 ? item->getTier() : 0;
+		counts[{item->getID(), tier}] += getPlayerInventoryItemAmount(item);
+	};
+	const auto addContainer = [&addItem](ItemCounts& counts, const Container* container) {
+		if (!container) {
+			return;
+		}
+		for (const auto& item : container->getItems(true)) {
+			addItem(counts, item.get());
+		}
+	};
+
+	// Inventory: equipment and everything inside carried containers.
+	for (const auto& item : player->getEquippedItems()) {
+		addItem(categories[0], item.get());
+		if (const Container* container = item ? item->getContainer() : nullptr) {
+			addContainer(categories[0], container);
+		}
+	}
+	if (const Item* ammo = player->getInventoryItem(CONST_SLOT_AMMO)) {
+		addItem(categories[0], ammo);
+		if (const Container* container = ammo->getContainer()) {
+			addContainer(categories[0], container);
+		}
+	}
+
+	// Store inbox.
+	addContainer(categories[1], player->getStoreInbox());
+
+	// Supply stash rows are persisted separately from normal item containers.
+	for (const StashRecord& row : Stash::getRows(player->getGUID())) {
+		if (row.itemId != 0 && row.itemId < Item::items.size() && row.amount != 0) {
+			categories[2][{row.itemId, row.tier}] += row.amount;
+		}
+	}
+
+	// Depot chests may contain nested containers.
+	for (const auto& [depotId, chest] : player->depotChests) {
+		(void)depotId;
+		addContainer(categories[3], chest.get());
+	}
+
+	// Mail inboxes are attached to depot lockers, one per town.
+	for (const auto& [depotId, locker] : player->depotLockerMap) {
+		(void)locker;
+		addContainer(categories[4], player->getInbox(depotId));
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(6);   // CYCLOPEDIA_CHARACTERINFO_ITEMSUMMARY
+	msg.addByte(0);   // no error
+	// Keep room for every remaining category header. NetworkMessage silently
+	// rejects writes past its fixed buffer, so the count must be chosen first.
+	constexpr size_t maxPayload = NetworkMessage::MAX_BODY_LENGTH - NetworkMessage::INITIAL_BUFFER_POSITION - 1;
+	for (size_t categoryIndex = 0; categoryIndex < categories.size(); ++categoryIndex) {
+		const ItemCounts& counts = categories[categoryIndex];
+		size_t available = maxPayload - msg.getLength() -
+		                   (categories.size() - categoryIndex) * sizeof(uint16_t);
+		uint16_t count = 0;
+		for (const auto& [key, amount] : counts) {
+			(void)amount;
+			if (count == std::numeric_limits<uint16_t>::max()) {
+				break;
+			}
+			const size_t entrySize = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint32_t) +
+			                         sizeof(uint16_t) + Item::items[key.first].name.size();
+			if (entrySize > available) {
+				break;
+			}
+			available -= entrySize;
+			++count;
+		}
+		msg.add<uint16_t>(count);
+		uint16_t written = 0;
+		for (const auto& [key, amount] : counts) {
+			if (written++ >= count) {
+				break;
+			}
+			const auto [itemId, tier] = key;
+			msg.add<uint16_t>(itemId);
+			// The client consumes a fixed-width tier field for each summary item.
+			msg.addByte(tier);
+			msg.add<uint32_t>(static_cast<uint32_t>(std::min<uint64_t>(amount, std::numeric_limits<uint32_t>::max())));
+			msg.addString(Item::items[itemId].name);
+		}
+		if (count < counts.size()) {
+			LOG_WARN("[Cyclopedia] Item summary for player {} was truncated in category {} ({} of {} items)",
+			         player->getGUID(), categoryIndex, count, counts.size());
+		}
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaCharacterAppearances()
+{
+	if (!player) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(7);   // CYCLOPEDIA_CHARACTERINFO_OUTFITSMOUNTS
+	msg.addByte(0);   // no error
+
+	const Outfit_t currentOutfit = player->getDefaultOutfit();
+	const auto& availableOutfits = Outfits::getInstance().getOutfits(player->getSex());
+	const bool monkVocationEnabled = ConfigManager::getBoolean(ConfigManager::MONK_VOCATION_ENABLED);
+	std::vector<std::pair<const Outfit*, uint8_t>> outfits;
+	for (const Outfit* outfit : availableOutfits) {
+		if (!outfit || (!monkVocationEnabled && outfit->name == "Monk")) {
+			continue;
+		}
+		uint8_t addons = 0;
+		if (player->getOutfitAddons(*outfit, addons)) {
+			outfits.emplace_back(outfit, addons);
+		}
+	}
+
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(outfits.size(), std::numeric_limits<uint16_t>::max())));
+	for (size_t i = 0; i < outfits.size() && i < std::numeric_limits<uint16_t>::max(); ++i) {
+		const auto& [outfit, addons] = outfits[i];
+		msg.add<uint16_t>(outfit->lookType);
+		msg.addString(outfit->name);
+		msg.addByte(addons);
+		msg.addByte(1); // unlocked outfit
+		msg.add<uint32_t>(outfit->lookType == currentOutfit.lookType ? 1000 : 0);
+	}
+
+	if (!outfits.empty()) {
+		msg.addByte(currentOutfit.lookHead);
+		msg.addByte(currentOutfit.lookBody);
+		msg.addByte(currentOutfit.lookLegs);
+		msg.addByte(currentOutfit.lookFeet);
+	}
+
+	std::vector<const Mount*> mounts;
+	for (const auto& [id, mount] : g_game.mounts.getMounts()) {
+		(void)id;
+		if (player->hasMount(&mount)) {
+			mounts.push_back(&mount);
+		}
+	}
+	std::sort(mounts.begin(), mounts.end(), [](const Mount* left, const Mount* right) {
+		return left->name < right->name;
+	});
+
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(mounts.size(), std::numeric_limits<uint16_t>::max())));
+	for (size_t i = 0; i < mounts.size() && i < std::numeric_limits<uint16_t>::max(); ++i) {
+		const Mount* mount = mounts[i];
+		msg.add<uint16_t>(mount->clientId);
+		msg.addString(mount->name);
+		msg.addByte(1); // unlocked mount
+		msg.add<uint32_t>(mount->id == player->getCurrentMount() ? 1000 : 0);
+	}
+
+	if (!mounts.empty()) {
+		msg.addByte(currentOutfit.lookHead);
+		msg.addByte(currentOutfit.lookBody);
+		msg.addByte(currentOutfit.lookLegs);
+		msg.addByte(currentOutfit.lookFeet);
+	}
+
+	const auto familiar = Familiar::getFamiliarInfo(player.get());
+	msg.add<uint16_t>(familiar ? 1 : 0);
+	if (familiar) {
+		msg.add<uint16_t>(familiar->lookType);
+		msg.addString(familiar->name);
+		msg.addByte(1);
+		msg.add<uint32_t>(currentOutfit.lookFamiliar == familiar->lookType ? 1000 : 0);
+	}
+
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaStoreSummary()
+{
+	if (!player) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(8);   // CYCLOPEDIA_CHARACTERINFO_STORESUMMARY
+	msg.addByte(0);   // no error
+	msg.add<uint32_t>(player->getXpBoostTime());
+	msg.add<uint32_t>(0); // This server has no separate daily-reward XP boost timer.
+
+	static constexpr std::array<std::string_view, PLAYER_MAX_BLESSINGS + 1> blessingNames = {
+		"", "Twist of Fate", "The Spiritual Shielding", "The Embrace of Tibia",
+		"The Fire of the Suns", "The Wisdom of Solitude", "The Spark of the Phoenix", "Blessing 7", "Blessing 8"
+	};
+	uint8_t blessingCount = 0;
+	for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+		if (player->getBlessingCount(id) > 0) {
+			++blessingCount;
+		}
+	}
+	msg.addByte(blessingCount);
+	for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+		const uint8_t count = player->getBlessingCount(id);
+		if (count == 0) {
+			continue;
+		}
+		msg.addString(blessingNames[id]);
+		msg.addByte(count);
+	}
+
+	constexpr uint32_t PERMANENT_PREY_SLOT_STORAGE = 780200;
+	const auto permanentPreySlot = player->getStorageValue(PERMANENT_PREY_SLOT_STORAGE);
+	msg.addByte(permanentPreySlot && permanentPreySlot.value() == 1 ? 1 : 0);
+	msg.addByte(static_cast<uint8_t>(std::min<uint64_t>(player->getPreyWildcards(), std::numeric_limits<uint8_t>::max())));
+	if (getVersion() >= 1521) {
+		msg.addByte(player->hasWeeklyExpansion() ? 1 : 0);
+	}
+
+	constexpr uint32_t DAILY_REWARD_INSTANT_TOKENS_STORAGE = 90724;
+	const auto instantRewardTokens = player->getStorageValue(DAILY_REWARD_INSTANT_TOKENS_STORAGE);
+	msg.addByte(static_cast<uint8_t>(std::clamp<int64_t>(instantRewardTokens.value_or(0), 0, std::numeric_limits<uint8_t>::max())));
+	msg.addByte(0); // Charm expansion is not persisted by this server.
+	msg.addByte(0); // Hireling ownership is managed outside the player record.
+	msg.addByte(0); // Hireling skills
+	msg.addByte(0); // Hireling outfits
+	std::map<uint16_t, uint32_t> purchasedHouseItems;
+	const auto addPurchasedItem = [&purchasedHouseItems](uint16_t itemId, uint32_t count) {
+		if (itemId > 0 && itemId < Item::items.size() && !Item::items[itemId].name.empty() && count > 0) {
+			purchasedHouseItems[itemId] += count;
+		}
+	};
+	const auto scanStoreItems = [&addPurchasedItem](const ItemVector& items) {
+		for (const auto& item : items) {
+			if (!item || !item->hasAttribute(ITEM_ATTRIBUTE_WRAPID)) {
+				continue;
+			}
+			const auto wrappedId = static_cast<uint16_t>(item->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
+			if (item->getID() == ITEM_DECORATION_KIT) {
+				addPurchasedItem(wrappedId, item->getItemCount());
+			} else if (wrappedId == ITEM_DECORATION_KIT) {
+				addPurchasedItem(item->getID(), item->getItemCount());
+			}
+		}
+	};
+
+	// Unopened decoration kits remain in the Store Inbox; installed decorations
+	// retain the kit ID in WRAPID and are found on the player's owned house tiles.
+	if (const StoreInbox* inbox = player->getStoreInbox()) {
+		scanStoreItems(inbox->getItems(true));
+	}
+	for (const auto& [depotId, chest] : player->depotChests) {
+		(void)depotId;
+		if (chest) {
+			scanStoreItems(chest->getItems(true));
+		}
+	}
+	if (const auto house = g_game.map.houses.getHouseByPlayerId(player->getGUID())) {
+		for (const auto& weakTile : house->getTiles()) {
+			const auto tile = weakTile.lock();
+			if (!tile) {
+				continue;
+			}
+			if (const TileItemVector* items = tile->getItemList()) {
+				ItemVector tileItems(items->begin(), items->end());
+				scanStoreItems(tileItems);
+				for (const auto& item : tileItems) {
+					if (!item) {
+						continue;
+					}
+					if (const auto container = item->getContainer()) {
+						scanStoreItems(container->getItems(true));
+					}
+				}
+			}
+		}
+	}
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(purchasedHouseItems.size(), std::numeric_limits<uint16_t>::max())));
+	for (const auto& [itemId, count] : purchasedHouseItems) {
+		msg.add<uint16_t>(itemId);
+		msg.addString(Item::items[itemId].name);
+		msg.addByte(static_cast<uint8_t>(std::min<uint32_t>(count, std::numeric_limits<uint8_t>::max())));
+	}
 	writeToOutputBuffer(msg);
 }
 
