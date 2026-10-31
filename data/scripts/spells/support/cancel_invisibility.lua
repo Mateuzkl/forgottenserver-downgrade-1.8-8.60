@@ -10,6 +10,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("support")
 spell:id(130)
 spell:name("Cancel Invisibility")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CANCEL_INVISIBILITY)
 spell:words("exana ina")
 spell:level(26)
 spell:mana(200)

@@ -8,6 +8,7 @@ end
 spell:group("support")
 spell:id(spellId)
 spell:name("Monk Familiar")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_SUMMON_MONK_FAMILIAR)
 spell:words("utevo gran res tio")
 spell:level(200)
 spell:mana(1500)

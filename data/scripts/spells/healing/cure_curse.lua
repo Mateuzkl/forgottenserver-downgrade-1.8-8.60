@@ -10,6 +10,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Cure Curse")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CURE_CURSE)
 spell:words("exana mort")
 spell:group("healing")
 spell:vocation("paladin;true", "royal paladin;true")

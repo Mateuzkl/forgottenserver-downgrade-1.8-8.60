@@ -23,6 +23,27 @@ extern Monsters g_monsters;
 extern LuaEnvironment g_luaEnvironment;
 
 namespace {
+void playSpellSounds(Creature* caster, const LuaVariant& variant, uint16_t castSound, uint16_t impactSound)
+{
+	if (castSound != 0) {
+		g_game.addSoundEffect(caster->getPosition(), castSound, caster->getInstanceID(), caster->getPlayer());
+	}
+
+	if (impactSound != 0) {
+		Position position = caster->getPosition();
+		if (variant.isNumber()) {
+			if (Creature* target = g_game.getCreatureByID(variant.getNumber())) {
+				position = target->getPosition();
+			}
+		} else if (variant.isPosition()) {
+			position = variant.getPosition();
+		} else if (variant.isTargetPosition()) {
+			position = variant.getTargetPosition();
+		}
+		g_game.addSoundEffect(position, impactSound, caster->getInstanceID(), caster->getPlayer());
+	}
+}
+
 // Set from wheel applyWheelBonuses (Lua); fallback when wheelSpellAugments map is empty.
 constexpr uint32_t WHEEL_SPELL_CD_STORAGE_BASE = 8600000;
 constexpr uint32_t WHEEL_SPELL_FLAT_MANA_STORAGE_BASE = 8611000;
@@ -1172,8 +1193,8 @@ bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 	Lua::pushVariant(L, var);
 
 	const bool cast = scriptInterface->callFunction(2);
-	if (cast && getCastSound() != 0) {
-		g_game.addSoundEffect(creature->getPosition(), getCastSound(), creature->getInstanceID(), creature->getPlayer());
+	if (cast) {
+		playSpellSounds(creature, var, getCastSound(), getImpactSound());
 	}
 	return cast;
 }
@@ -1334,5 +1355,9 @@ bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool
 
 	Lua::pushBoolean(L, isHotkey);
 
-	return scriptInterface->callFunction(3);
+	const bool cast = scriptInterface->callFunction(3);
+	if (cast) {
+		playSpellSounds(creature, var, getCastSound(), getImpactSound());
+	}
+	return cast;
 }

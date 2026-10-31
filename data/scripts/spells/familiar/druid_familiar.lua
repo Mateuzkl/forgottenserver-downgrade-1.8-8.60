@@ -8,6 +8,7 @@ end
 spell:group("support")
 spell:id(spellId)
 spell:name("Druid Familiar")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_SUMMON_DRUID_FAMILIAR)
 spell:words("utevo gran res dru")
 spell:level(200)
 spell:mana(3000)

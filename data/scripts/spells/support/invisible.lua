@@ -13,6 +13,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("support", "focus")
 spell:id(138)
 spell:name("Invisibility")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_INVISIBLE)
 spell:words("utana vid")
 spell:level(35)
 spell:mana(440)

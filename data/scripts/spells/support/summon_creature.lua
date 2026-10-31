@@ -56,6 +56,7 @@ end
 spell:group("support")
 spell:id(146)
 spell:name("Summon Creature")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_SUMMON_CREATURE)
 spell:words("utevo res")
 spell:level(25)
 spell:cooldown(2 * 1000)

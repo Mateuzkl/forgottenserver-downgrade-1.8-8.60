@@ -14,6 +14,7 @@ end
 spell:group("support")
 spell:id(199)
 spell:name("House Kick")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_KICK_GUEST)
 spell:words("alana sio")
 spell:cooldown(2 * 1000)
 spell:groupCooldown(2 * 1000)

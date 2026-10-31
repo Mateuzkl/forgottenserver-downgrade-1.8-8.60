@@ -18,6 +18,7 @@ end
 spell:group("attack")
 spell:id(167)
 spell:name("Practise Fire Wave")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_PRACTISE_FIRE_WAVE)
 spell:words("exevo dis flam hur")
 spell:level(1)
 spell:mana(5)

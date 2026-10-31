@@ -12,6 +12,7 @@ end
 spell:group("support")
 spell:id(245)
 spell:name("Cancel Magic Shield")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CANCEL_MAGIC_SHIELD)
 spell:words("exana vita")
 spell:level(14)
 spell:mana(50)

@@ -17,6 +17,7 @@ end
 spell:group("support")
 spell:id(150)
 spell:name("Heal Party")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_HEAL_PARTY)
 spell:words("utura mas sio")
 spell:level(32)
 spell:isPremium(true)

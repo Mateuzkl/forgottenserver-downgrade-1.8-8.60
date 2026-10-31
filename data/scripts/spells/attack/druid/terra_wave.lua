@@ -18,6 +18,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("attack")
 spell:id(119)
 spell:name("Terra Wave")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_TERRA_WAVE)
 spell:words("exevo tera hur")
 spell:level(38)
 spell:mana(210)

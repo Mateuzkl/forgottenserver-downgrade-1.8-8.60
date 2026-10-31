@@ -48,6 +48,7 @@ end
 spell:group("support")
 spell:id(139)
 spell:name("Levitate")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_LEVITATE)
 spell:words("exani hur")
 spell:level(12)
 spell:mana(50)

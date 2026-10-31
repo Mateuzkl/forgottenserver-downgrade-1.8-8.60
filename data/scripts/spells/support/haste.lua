@@ -14,6 +14,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("support", "focus")
 spell:id(137)
 spell:name("Haste")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_HASTE)
 spell:words("utani hur")
 spell:level(14)
 spell:mana(60)

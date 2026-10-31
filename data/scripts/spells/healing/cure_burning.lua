@@ -10,6 +10,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Cure Burning")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CURE_BURNING)
 spell:words("exana flam")
 spell:group("healing")
 spell:vocation("druid;true", "elder druid;true")

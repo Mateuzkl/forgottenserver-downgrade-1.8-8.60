@@ -7,6 +7,7 @@ end
 spell:group("support")
 spell:id(92)
 spell:name("Conjure Wand of Darkness")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CONJURE_WAND_OF_DARKNESS)
 spell:words("exevo gran mort")
 spell:cooldown(30 * 60 * 1000)
 spell:groupCooldown(2 * 1000)

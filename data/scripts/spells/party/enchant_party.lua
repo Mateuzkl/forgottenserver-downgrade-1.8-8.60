@@ -16,6 +16,7 @@ end
 spell:group("support")
 spell:id(149)
 spell:name("Enchant Party")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_ENCHANT_PARTY)
 spell:words("utori mas sio")
 spell:level(32)
 spell:isPremium(true)

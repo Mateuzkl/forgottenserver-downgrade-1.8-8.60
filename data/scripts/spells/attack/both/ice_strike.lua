@@ -18,6 +18,8 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("attack")
 spell:id(115)
 spell:name("Ice Strike")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_ICE_STRIKE)
 spell:words("exori frigo")
 spell:level(15)
 spell:mana(20)
