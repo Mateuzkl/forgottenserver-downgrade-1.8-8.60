@@ -5585,7 +5585,49 @@ void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
 		sendCyclopediaCharacterAppearances();
 	} else if (infoType == 8) {
 		sendCyclopediaStoreSummary();
+	} else if (infoType >= 13 && infoType <= 15) {
+		if (isAstraClient) {
+			sendCyclopediaCharacterStats(infoType);
+		} else {
+			NetworkMessage unavailable;
+			unavailable.addByte(218);
+			unavailable.addByte(infoType);
+			unavailable.addByte(1); // This compact stats format is specific to Astra.
+			writeToOutputBuffer(unavailable);
+		}
 	}
+}
+
+void ProtocolGame::sendCyclopediaCharacterStats(uint8_t type)
+{
+	if (!player) {
+		return;
+	}
+	NetworkMessage msg;
+	msg.addByte(218);
+	msg.addByte(type);
+	msg.addByte(0);
+	if (type == 13) {
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT));
+	} else if (type == 14) {
+		msg.add<uint16_t>(static_cast<uint16_t>(std::max<int32_t>(0, player->getArmor())));
+		msg.add<uint16_t>(static_cast<uint16_t>(std::max<int32_t>(0, player->getDefense())));
+		msg.add<uint16_t>(static_cast<uint16_t>(std::clamp<float>(player->getMitigation() * 100, 0, 65535)));
+		msg.add<uint16_t>(player->getSkillLevel(SKILL_SHIELD));
+	} else {
+		uint8_t blessings = 0;
+		for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+			if (player->getBlessingCount(id) > 0) {
+				++blessings;
+			}
+		}
+		msg.addByte(blessings);
+		msg.addByte(PLAYER_MAX_BLESSINGS);
+	}
+	writeToOutputBuffer(msg);
 }
 
 void ProtocolGame::sendCyclopediaRecentDeaths(uint16_t entriesPerPage, uint16_t page)
