@@ -68,5 +68,8 @@ function talk.onSay(player, words, param)
 	return false
 end
 
-talk:separator(" ")
-talk:register()
+promote:separator(" ")
+promote:accountType(ACCOUNT_TYPE_GAMEMASTER)
+promote:access(true)
+promote:register()
+
