@@ -226,8 +226,21 @@ registerMonsterType.voices = function(mtype, mask)
 		end
 	end
 end
+-- Use catalog families where the Bestiary class gives an unambiguous match.
+local soundFamilies = {
+	Dragon = "DRAGON", Demon = "DEMON", Undead = "UNDEAD", Slime = "SLIME",
+	Plant = "PLANT", Giant = "GIANT", Construct = "CONSTRUCT", Bird = "BIRD",
+	Fey = "FEY", Lycanthrope = "LYCANTHROPE",
+}
 registerMonsterType.sounds = function(mtype, mask)
-	if type(mask.sounds) ~= "table" then return end
+	if type(mask.sounds) ~= "table" then
+		local family = mask.Bestiary and soundFamilies[mask.Bestiary.class]
+		local bark = family and _G["SOUND_EFFECT_TYPE_" .. family .. "_BARK"] or SOUND_EFFECT_TYPE_MONSTER_BARK
+		local death = family and _G["SOUND_EFFECT_TYPE_" .. family .. "_DEATH"] or SOUND_EFFECT_TYPE_MONSTER_DEATH
+		mtype:deathSound(death)
+		mtype:addSound(bark, 10000, 10)
+		return
+	end
 	if mask.sounds.death then mtype:deathSound(mask.sounds.death) end
 	for _, soundId in ipairs(mask.sounds.ids or mask.sounds) do
 		mtype:addSound(soundId, mask.sounds.ticks or mask.sounds.interval or 5000, mask.sounds.chance or 10)
@@ -359,10 +372,289 @@ registerMonsterType.immunities = function(mtype, mask)
 		end
 	end
 end
-local function AbilityTableToSpell(ability)
+local smallAreaRadius, superDrunkDuration = 3, 4000
+local function loadcastSound(effect, incomingLua, mtype)
+	-- Throw shoottype
+	if
+		effect == CONST_ANI_SPEAR
+		or effect == CONST_ANI_THROWINGSTAR
+		or effect == CONST_ANI_THROWINGKNIFE
+		or effect == CONST_ANI_SMALLSTONE
+		or effect == CONST_ANI_LARGEROCK
+		or effect == CONST_ANI_SNOWBALL
+		or effect == CONST_ANI_HUNTINGSPEAR
+		or effect == CONST_ANI_ENCHANTEDSPEAR
+		or effect == CONST_ANI_REDSTAR
+		or effect == CONST_ANI_GREENSTAR
+		or effect == CONST_ANI_ROYALSPEAR
+		or effect == CONST_ANI_WHIRLWINDSWORD
+		or effect == CONST_ANI_WHIRLWINDAXE
+		or effect == CONST_ANI_WHIRLWINDCLUB
+		or effect == CONST_ANI_CAKE
+		or effect == CONST_ANI_GLOOTHSPEAR
+		or effect == CONST_ANI_LEAFSTAR
+		or effect == CONST_ANI_ROYALSTAR
+	then
+		return SOUND_EFFECT_TYPE_DIST_ATK_THROW
+
+		-- Crossbow shoottype
+	elseif effect == CONST_ANI_BOLT or effect == CONST_ANI_POWERBOLT or effect == CONST_ANI_INFERNALBOLT or effect == CONST_ANI_PIERCINGBOLT or effect == CONST_ANI_VORTEXBOLT or effect == CONST_ANI_PRISMATICBOLT or effect == CONST_ANI_DRILLBOLT or effect == CONST_ANI_SPECTRALBOLT then
+		return SOUND_EFFECT_TYPE_DIST_ATK_CROSSBOW
+
+		-- Bow shoottype
+	elseif
+		effect == CONST_ANI_POISONARROW
+		or effect == CONST_ANI_BURSTARROW
+		or effect == CONST_ANI_SNIPERARROW
+		or effect == CONST_ANI_ONYXARROW
+		or effect == CONST_ANI_FLASHARROW
+		or effect == CONST_ANI_FLAMMINGARROW
+		or effect == CONST_ANI_SHIVERARROW
+		or effect == CONST_ANI_EARTHARROW
+		or effect == CONST_ANI_TARSALARROW
+		or effect == CONST_ANI_CRYSTALLINEARROW
+		or effect == CONST_ANI_ENVENOMEDARROW
+		or effect == CONST_ANI_SIMPLEARROW
+		or effect == CONST_ANI_DIAMONDARROW
+	then
+		return SOUND_EFFECT_TYPE_DIST_ATK_BOW
+
+		-- Magical shoottype
+	elseif
+		effect == CONST_ANI_FIRE
+		or effect == CONST_ANI_ENERGY
+		or effect == CONST_ANI_DEATH
+		or effect == CONST_ANI_POISON
+		or effect == CONST_ANI_ETHEREALSPEAR
+		or effect == CONST_ANI_ICE
+		or effect == CONST_ANI_EARTH
+		or effect == CONST_ANI_HOLY
+		or effect == CONST_ANI_SUDDENDEATH
+		or effect == CONST_ANI_ENERGYBALL
+		or effect == CONST_ANI_SMALLICE
+		or effect == CONST_ANI_SMALLHOLY
+		or effect == CONST_ANI_SMALLEARTH
+		or effect == CONST_ANI_EXPLOSION
+	then
+		return SOUND_EFFECT_TYPE_MAGICAL_RANGE_ATK
+	end
+
+	return SOUND_EFFECT_TYPE_SILENCE
+end
+
+local function loadImpactSound(incomingLua, mtype)
+	local nameType = "physical"
+	if incomingLua.name == "melee" then
+		local meleeSoundTable = {}
+		if mtype:targetDistance() <= 1 then
+			meleeSoundTable = {
+				[1] = SOUND_EFFECT_TYPE_MONSTER_MELEE_ATK_FIST,
+				[2] = SOUND_EFFECT_TYPE_MONSTER_MELEE_ATK_CLAW,
+				[3] = SOUND_EFFECT_TYPE_MONSTER_MELEE_ATK_BITE,
+			}
+		else
+			meleeSoundTable = {
+				[1] = SOUND_EFFECT_TYPE_MONSTER_MELEE_ATK_RIP,
+				--[2] = SOUND_EFFECT_TYPE_MONSTER_MELEE_ATK_ACID,
+				[2] = SOUND_EFFECT_TYPE_MONSTER_MELEE_ATK_MAGIC,
+				--[4] = SOUND_EFFECT_TYPE_MONSTER_MELEE_ATK_ETHEREAL,
+				--[5] = SOUND_EFFECT_TYPE_MONSTER_MELEE_ATK_CONSTRUCT,
+			}
+		end
+		return meleeSoundTable[math.random(1, #meleeSoundTable)]
+	elseif incomingLua.name == "combat" then
+		if incomingLua.type == COMBAT_PHYSICALDAMAGE then
+			nameType = "physical"
+		elseif incomingLua.type == COMBAT_ENERGYDAMAGE then
+			nameType = "energy"
+		elseif incomingLua.type == COMBAT_EARTHDAMAGE then
+			nameType = "earth"
+		elseif incomingLua.type == COMBAT_FIREDAMAGE then
+			nameType = "fire"
+		elseif incomingLua.type == COMBAT_UNDEFINEDDAMAGE then
+			nameType = "bleeding"
+		elseif incomingLua.type == COMBAT_LIFEDRAIN then
+			nameType = "lifedrain"
+		elseif incomingLua.type == COMBAT_MANADRAIN then
+			nameType = "manadrain"
+		elseif incomingLua.type == COMBAT_HEALING then
+			nameType = "healing"
+		elseif incomingLua.type == COMBAT_DROWNDAMAGE then
+			nameType = "drown"
+		elseif incomingLua.type == COMBAT_ICEDAMAGE then
+			nameType = "ice"
+		elseif incomingLua.type == COMBAT_HOLYDAMAGE then
+			nameType = "holy"
+		elseif incomingLua.type == COMBAT_DEATHDAMAGE then
+			nameType = "death"
+		end
+	elseif incomingLua.name == "drunk" then
+		if incomingLua.duration and incomingLua.duration > superDrunkDuration then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SUPER_DRUNKEN
+		end
+		return SOUND_EFFECT_TYPE_MONSTER_SPELL_DRUNKEN
+	elseif incomingLua.name == "speed" then
+		return SOUND_EFFECT_TYPE_MONSTER_SPELL_SPEED
+	elseif incomingLua.name == "outfit" then
+		return SOUND_EFFECT_TYPE_MONSTER_SPELL_OUTFIT
+	elseif incomingLua.name == "strength" then
+		return SOUND_EFFECT_TYPE_MONSTER_SPELL_STRENGTH
+	elseif incomingLua.name == "firefield" then
+		return SOUND_EFFECT_TYPE_SPELL_FIRE_FIELD_RUNE
+	elseif incomingLua.name == "energyfield" then
+		return SOUND_EFFECT_TYPE_SPELL_ENERGY_FIELD_RUNE
+	elseif incomingLua.name == "earthfield" or incomingLua.name == "poisonfield" then
+		return SOUND_EFFECT_TYPE_SPELL_POISON_FIELD_RUNE
+	elseif incomingLua.name == "condition" then
+		-- To-Do
+	end
+
+	-- Waves
+	if incomingLua.length and incomingLua.spread then
+		if nameType == "bleeding" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_BLEEDING
+		elseif nameType == "energy" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_ENERGY
+		elseif nameType == "earth" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_EARTH
+		elseif nameType == "fire" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_FIRE
+		elseif nameType == "lifedrain" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_LIFEDRAIN
+		elseif nameType == "manadrain" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_MANADRAIN
+		elseif nameType == "healing" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_HEALING
+		elseif nameType == "drown" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_DROWNING
+		elseif nameType == "ice" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_ICE
+		elseif nameType == "holy" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_HOLY
+		elseif nameType == "death" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_DEATH
+		elseif nameType == "physical" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_WAVE_HIT
+		end
+
+		-- Bombs area (not field)
+	elseif incomingLua.radius then
+		if nameType == "bleeding" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_BLEEDING
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_BLEEDING
+			end
+		elseif nameType == "energy" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_ENERGY
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_ENERGY
+			end
+		elseif nameType == "earth" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_EARTH
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_EARTH
+			end
+		elseif nameType == "fire" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_FIRE
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_FIRE
+			end
+		elseif nameType == "lifedrain" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_LIFEDRAIN
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_LIFEDRAIN
+			end
+		elseif nameType == "manadrain" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_MANADRAIN
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_MANADRAIN
+			end
+		elseif nameType == "healing" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_HEALING
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_HEALING
+			end
+		elseif nameType == "drown" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_DROWNING
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_DROWNING
+			end
+		elseif nameType == "ice" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_ICE
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_ICE
+			end
+		elseif nameType == "holy" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_HOLY
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_HOLY
+			end
+		elseif nameType == "death" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_DEATH
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_DEATH
+			end
+		elseif nameType == "physical" then
+			if incomingLua.radius <= smallAreaRadius then
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_HIT
+			else
+				return SOUND_EFFECT_TYPE_MONSTER_SPELL_LARGE_AREA_HIT
+			end
+		end
+
+		-- Since all failed, im assuming its a single target spell
+	else
+		if nameType == "bleeding" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_BLEEDING
+		elseif nameType == "energy" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_ENERGY
+		elseif nameType == "earth" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_EARTH
+		elseif nameType == "fire" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_FIRE
+		elseif nameType == "lifedrain" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_LIFEDRAIN
+		elseif nameType == "manadrain" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_MANADRAIN
+		elseif nameType == "healing" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_HEALING
+		elseif nameType == "drown" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_DROWNING
+		elseif nameType == "ice" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_ICE
+		elseif nameType == "holy" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_HOLY
+		elseif nameType == "death" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_DEATH
+		elseif nameType == "physical" then
+			return SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_HIT
+		end
+	end
+
+	return SOUND_EFFECT_TYPE_SILENCE
+end
+
+
+local function AbilityTableToSpell(ability, mtype)
 	local spell = MonsterSpell()
-	if ability.soundCast then spell:castSound(ability.soundCast) end
-	if ability.soundImpact then spell:impactSound(ability.soundImpact) end
+	local projectile = ability.shootEffect or ability.shooteffect
+	local castSound = ability.soundCast
+	if castSound == nil and projectile then castSound = loadcastSound(projectile, ability, mtype) end
+	local impactSound = ability.soundImpact or ability.impactCast
+	if impactSound == nil then impactSound = loadImpactSound(ability, mtype) end
+	if castSound then spell:castSound(castSound) end
+	if impactSound then spell:impactSound(impactSound) end
 	if ability.name then
 		if ability.name == "melee" then
 			spell:setType("melee")
@@ -461,7 +753,7 @@ end
 registerMonsterType.attacks = function(mtype, mask)
 	if type(mask.attacks) == "table" then
 		for _, attack in pairs(mask.attacks) do
-			local spell <close> = AbilityTableToSpell(attack)
+			local spell <close> = AbilityTableToSpell(attack, mtype)
 			mtype:addAttack(spell)
 		end
 	end
@@ -473,7 +765,7 @@ registerMonsterType.defenses = function(mtype, mask)
 		if mask.defenses.mitigation then mtype:mitigation(mask.defenses.mitigation) end
 		for _, defense in pairs(mask.defenses) do
 			if type(defense) == "table" then
-				local spell <close> = AbilityTableToSpell(defense)
+				local spell <close> = AbilityTableToSpell(defense, mtype)
 				mtype:addDefense(spell)
 			end
 		end

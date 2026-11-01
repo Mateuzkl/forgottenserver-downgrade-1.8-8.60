@@ -146,8 +146,7 @@ bool Monsters::deserializeSpell(MonsterSpell* spell, spellBlock_t& sb, const std
 		}
 
 		combatSpell->getCombat()->setProfileContext(spell->scriptName, true);
-		if (spell->soundCast != 0) combatSpell->getCombat()->setParam(COMBAT_PARAM_CASTSOUND, spell->soundCast);
-		if (spell->soundImpact != 0) combatSpell->getCombat()->setParam(COMBAT_PARAM_IMPACTSOUND, spell->soundImpact);
+		combatSpell->setSoundEffects(spell->soundCast, spell->soundImpact);
 		combatSpell->getCombat()->setPlayerCombatValues(COMBAT_FORMULA_DAMAGE, sb.minCombatValue, 0, sb.maxCombatValue, 0);
 		sb.ownedSpell = std::move(combatSpell);
 	} else {

@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "bed.h"
+#include "bestiary_charm.h"
 #include "chat.h"
 #include "combat.h"
 #include "configmanager.h"
@@ -9969,4 +9970,17 @@ void Player::clearCooldowns()
 			}
 		}
 	}
+}
+
+void Player::sendCharmActivated(uint8_t charmId, const Position* soundPosition) const
+{
+	if (client) client->sendCharmActivated(charmId);
+	const auto* sounds = g_bestiaryCharmSystem.getCharmSounds(charmId);
+	if (!sounds || (sounds->castSound == 0 && sounds->impactSound == 0)) return;
+	Position impactPosition = soundPosition ? *soundPosition : getPosition();
+	if (!soundPosition) {
+		if (auto target = getAttackedCreatureShared(); target && !target->isRemoved()) impactPosition = target->getPosition();
+	}
+	if (sounds->castSound != 0) g_game.addSoundEffect(getPosition(), sounds->castSound, getInstanceID(), const_cast<Player*>(this));
+	if (sounds->impactSound != 0) g_game.addSoundEffect(impactPosition, sounds->impactSound, getInstanceID(), const_cast<Player*>(this));
 }

@@ -26,7 +26,7 @@ namespace {
 void playSpellSounds(Creature* caster, const LuaVariant& variant, uint16_t castSound, uint16_t impactSound)
 {
 	if (castSound != 0) {
-		g_game.addSoundEffect(caster->getPosition(), castSound, caster->getInstanceID(), caster->getPlayer());
+		g_game.addSoundEffect(caster->getPosition(), castSound, caster->getInstanceID(), caster);
 	}
 
 	if (impactSound != 0) {
@@ -40,7 +40,7 @@ void playSpellSounds(Creature* caster, const LuaVariant& variant, uint16_t castS
 		} else if (variant.isTargetPosition()) {
 			position = variant.getTargetPosition();
 		}
-		g_game.addSoundEffect(position, impactSound, caster->getInstanceID(), caster->getPlayer());
+		g_game.addSoundEffect(position, impactSound, caster->getInstanceID(), caster);
 	}
 }
 
@@ -404,7 +404,9 @@ bool CombatSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 
 	Lua::pushVariant(L, var);
 
-	return scriptInterface->callFunction(2);
+	const bool cast = scriptInterface->callFunction(2);
+	if (cast) playSpellSounds(creature, var, castSound, impactSound);
+	return cast;
 }
 
 bool Spell::playerSpellCheck(Player* player) const

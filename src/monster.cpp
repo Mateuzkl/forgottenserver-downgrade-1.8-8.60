@@ -2062,9 +2062,7 @@ void Monster::doAttacking(uint32_t interval)
 				minCombatValue = minVal;
 				maxCombatValue = maxVal;
 
-				if (spellBlock.spell->castSpell(this, victim.get()) && spellBlock.isMelee) {
-					g_game.addSoundEffect(getPosition(), 2, getInstanceID());
-				}
+				spellBlock.spell->castSpell(this, victim.get());
 
 				// Check after cast — this is the only place state can actually change
 				auto currentTarget = attackedCreature.lock();
@@ -2297,7 +2295,7 @@ void Monster::onThinkDefense(uint32_t interval)
 					summonRef->setDropLoot(false);
 					summonRef->setSkillLoss(false);
 					summonRef->setMaster(this);
-					g_game.addSoundEffect(summonRef->getPosition(), 2060, getInstanceID());
+					g_game.addSoundEffect(summonRef->getPosition(), 2060, getInstanceID(), this);
 					if (summonBlock.masterEffect != CONST_ME_NONE) {
 						g_game.addMagicEffect(getPosition(), summonBlock.masterEffect, getInstanceID());
 					}
@@ -2346,7 +2344,7 @@ void Monster::onThinkSound(uint32_t interval)
 		soundTicks = 0;
 		if (mType->info.soundChance >= static_cast<uint32_t>(uniform_random(1, 100))) {
 			const size_t index = uniform_random(0, static_cast<int32_t>(mType->info.soundVector.size() - 1));
-			g_game.addSoundEffect(getPosition(), mType->info.soundVector[index], getInstanceID());
+			g_game.addSoundEffect(getPosition(), mType->info.soundVector[index], getInstanceID(), this);
 		}
 	}
 }
@@ -3031,7 +3029,7 @@ bool Monster::tryMonsterChaseStep(const Position& targetPos, const FindPathParam
 
 void Monster::death(Creature*)
 {
-	g_game.addSoundEffect(getPosition(), mType ? mType->info.deathSound : 2632, getInstanceID());
+	g_game.addSoundEffect(getPosition(), mType ? mType->info.deathSound : 2632, getInstanceID(), this);
 	// rewardboss
 	if (getMonster()->isRewardBoss()) {
 		uint32_t monsterId = getMonster()->getID();
@@ -3394,7 +3392,7 @@ void Monster::changeHealth(int32_t healthChange, bool sendHealthChange /* = true
 	if (healthChange < 0 && !mType->info.soundVector.empty() &&
 	    mType->info.soundChance >= static_cast<uint32_t>(uniform_random(1, 100))) {
 		const size_t index = uniform_random(0, static_cast<int32_t>(mType->info.soundVector.size() - 1));
-		g_game.addSoundEffect(getPosition(), mType->info.soundVector[index], getInstanceID());
+		g_game.addSoundEffect(getPosition(), mType->info.soundVector[index], getInstanceID(), this);
 	}
 	// In case a player with ignore flag set attacks the monster
 	setIdle(false);

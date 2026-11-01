@@ -367,8 +367,8 @@ int luaMonsterSpellCastSound(lua_State* L)
 {
 	MonsterSpell* spell = getUserdata<MonsterSpell>(L, 1);
 	if (!spell) { lua_pushnil(L); return 1; }
-	spell->soundCast = getInteger<uint16_t>(L, 2);
-	pushBoolean(L, true);
+	if (lua_gettop(L) == 1) lua_pushinteger(L, spell->soundCast);
+	else { spell->soundCast = getInteger<uint16_t>(L, 2); pushBoolean(L, true); }
 	return 1;
 }
 
@@ -376,8 +376,8 @@ int luaMonsterSpellImpactSound(lua_State* L)
 {
 	MonsterSpell* spell = getUserdata<MonsterSpell>(L, 1);
 	if (!spell) { lua_pushnil(L); return 1; }
-	spell->soundImpact = getInteger<uint16_t>(L, 2);
-	pushBoolean(L, true);
+	if (lua_gettop(L) == 1) lua_pushinteger(L, spell->soundImpact);
+	else { spell->soundImpact = getInteger<uint16_t>(L, 2); pushBoolean(L, true); }
 	return 1;
 }
 } // namespace

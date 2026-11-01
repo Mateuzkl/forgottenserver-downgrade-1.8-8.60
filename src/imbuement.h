@@ -127,6 +127,7 @@ struct ImbuementDefinition {
     uint16_t categoryId = 0;
     uint16_t iconId = 0;
     uint16_t scrollId = 0;
+    uint16_t soundEffect = 0;
     uint32_t storage = 0;
     bool premium = false;
 
@@ -160,6 +161,7 @@ public:
     }
 
     bool loadFromXml();
+    uint16_t getSoundEffect(ImbuementType type, uint16_t baseId) const;
 
     const ImbuementBase* getBaseById(uint16_t id) const;
     const ImbuementCategory* getCategoryById(uint16_t id) const;

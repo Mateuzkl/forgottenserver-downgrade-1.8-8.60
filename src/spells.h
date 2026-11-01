@@ -91,11 +91,14 @@ public:
 
 	bool loadScriptCombat();
 	Combat_ptr getCombat() { return combat; }
+	void setSoundEffects(uint16_t cast, uint16_t impact) { castSound = cast; impactSound = impact; }
 
 private:
 	std::string_view getScriptEventName() const override { return "onCastSpell"; }
 
 	Combat_ptr combat;
+	uint16_t castSound = 0;
+	uint16_t impactSound = 0;
 
 	bool needDirection;
 	bool needTarget;

@@ -1386,6 +1386,12 @@ public:
 			client->sendMagicEffect(pos, type);
 		}
 	}
+	void sendAmbientSound(uint32_t ambientId) const
+	{
+		if (client) {
+			if (const auto protocol = client->protocol()) protocol->sendAmbientSound(ambientId);
+		}
+	}
 	void sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source = 0) const
 	{
 		if (client) {
@@ -1402,12 +1408,7 @@ public:
 			}
 		}
 	}
-	void sendCharmActivated(uint8_t charmId) const
-	{
-		if (client) {
-			client->sendCharmActivated(charmId);
-		}
-	}
+	void sendCharmActivated(uint8_t charmId, const Position* soundPosition = nullptr) const;
 	void updateKillTracker(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Container>& corpse) const;
 	void updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
 	                         std::string_view targetName = {}) const;

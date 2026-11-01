@@ -4338,6 +4338,14 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendAmbientSound(uint32_t ambientId)
+{
+	NetworkMessage msg;
+	msg.addByte(0x47); // OTC-Fonticak location ambience; 0 stops the current ambience.
+	msg.add<uint32_t>(ambientId);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source)
 {
 	NetworkMessage msg;

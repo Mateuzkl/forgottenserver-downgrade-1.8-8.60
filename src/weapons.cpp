@@ -423,6 +423,7 @@ bool Weapon::useFist(Player* player, Creature* target)
 		return false;
 	}
 
+	g_game.addSoundEffect(player->getPosition(), 1, player->getInstanceID(), player);
 	float attackFactor = player->getAttackFactor();
 	int32_t attackSkill = player->getSkillLevel(SKILL_FIST);
 	int32_t attackValue = 7;
@@ -475,11 +476,11 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 		case WEAPON_WAND: attackSound = 9; hitSound = 17; break;
 		default: break;
 	}
-	if (params.soundCastEffect != 0) {
-		attackSound = params.soundCastEffect;
-		hitSound = params.soundImpactEffect;
+	if (params.soundCastEffect != 0 || params.soundImpactEffect != 0) {
+		g_game.addDoubleSoundEffect(player->getPosition(), params.soundCastEffect, params.soundImpactEffect, player->getInstanceID(), player);
+	} else {
+		g_game.addDoubleSoundEffect(player->getPosition(), hitSound, attackSound, player->getInstanceID(), player);
 	}
-	g_game.addDoubleSoundEffect(player->getPosition(), hitSound, attackSound, player->getInstanceID(), player);
 
 	sendMeleeAttackMark(player, target, item);
 
@@ -567,6 +568,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 					elemDamage.primary.value = -(basePhysDamage * static_cast<int32_t>(imbue->value) / 100);
 					CombatParams elemParams;
 					elemParams.combatType = elemType;
+					g_game.addSoundEffect(target->getPosition(), Imbuements::getInstance().getSoundEffect(imbue->imbuetype, imbue->baseId), target->getInstanceID(), player);
 					Combat::doTargetCombat(player, target, elemDamage, elemParams);
 				}
 			}
