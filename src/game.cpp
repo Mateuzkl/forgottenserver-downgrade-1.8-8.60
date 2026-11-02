@@ -2784,7 +2784,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		} else if (item->getWeaponType() == WEAPON_SHIELD || item->getWeaponType() == WEAPON_WAND ||
 		           item->getWeaponType() == WEAPON_AMMO || Item::items[item->getID()].type == ITEM_TYPE_TOOL) {
 			soundId = 2792;
-		} else if (slot != SLOTP_WHEREEVER) {
+		} else if (slot != static_cast<int32_t>(SLOTP_WHEREEVER)) {
 			if (slot & SLOTP_HEAD) soundId = 2796;
 			else if (slot & SLOTP_NECKLACE) soundId = 2788;
 			else if (slot & SLOTP_ARMOR) soundId = 2789;
