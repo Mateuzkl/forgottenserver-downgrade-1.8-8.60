@@ -4340,7 +4340,7 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 
 void ProtocolGame::sendAmbientSound(uint32_t ambientId)
 {
-	if (!isFonticakClient) {
+	if (!isFonticakClient || isAstraClient) {
 		return;
 	}
 
@@ -4352,7 +4352,7 @@ void ProtocolGame::sendAmbientSound(uint32_t ambientId)
 
 void ProtocolGame::sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source)
 {
-	if (!isFonticakClient) {
+	if (!isFonticakClient || isAstraClient) {
 		return;
 	}
 
@@ -4367,7 +4367,7 @@ void ProtocolGame::sendSingleSoundEffect(const Position& pos, uint16_t soundId, 
 
 void ProtocolGame::sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source)
 {
-	if (!isFonticakClient) {
+	if (!isFonticakClient || isAstraClient) {
 		return;
 	}
 
