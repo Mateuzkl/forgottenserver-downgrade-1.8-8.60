@@ -43,6 +43,34 @@ assert(spell({name = "combat", type = COMBAT_FIREDAMAGE, soundCast = 123, soundI
 assert(spell({name = "combat", type = COMBAT_FIREDAMAGE, soundCast = 0, soundImpact = 0}).impact == 0)
 assert(spell({name = "combat", type = COMBAT_FIREDAMAGE, impactCast = 789}).impact == 789)
 assert(spell({name = "melee"}).impact ~= 0)
+
+-- Verify every element/shape against the catalog IDs used before the cleanup.
+local impactCases = {
+	{COMBAT_PHYSICALDAMAGE, 2008, 2047, 2021, 2034},
+	{COMBAT_ENERGYDAMAGE, 2003, 2042, 2016, 2029},
+	{COMBAT_EARTHDAMAGE, 2004, 2043, 2017, 2030},
+	{COMBAT_FIREDAMAGE, 2002, 2041, 2015, 2028},
+	{COMBAT_UNDEFINEDDAMAGE, 2012, 2051, 2025, 2038},
+	{COMBAT_LIFEDRAIN, 2009, 2048, 2022, 2035},
+	{COMBAT_MANADRAIN, 2010, 2049, 2023, 2036},
+	{COMBAT_HEALING, 2013, 2052, 2026, 2039},
+	{COMBAT_DROWNDAMAGE, 2011, 2050, 2024, 2037},
+	{COMBAT_ICEDAMAGE, 2005, 2044, 2018, 2031},
+	{COMBAT_HOLYDAMAGE, 2007, 2046, 2020, 2033},
+	{COMBAT_DEATHDAMAGE, 2006, 2045, 2019, 2032},
+}
+for _, case in ipairs(impactCases) do
+	assert(spell({name = "combat", type = case[1]}).impact == case[2])
+	assert(spell({name = "combat", type = case[1], length = 8, spread = 3, radius = 5}).impact == case[3])
+	assert(spell({name = "combat", type = case[1], radius = 3}).impact == case[4])
+	assert(spell({name = "combat", type = case[1], radius = 4}).impact == case[5])
+end
+assert(spell({name = "combat", type = -1}).impact == SOUND_EFFECT_TYPE_MONSTER_SPELL_SINGLE_TARGET_HIT)
+assert(spell({name = "condition", radius = 3}).impact == SOUND_EFFECT_TYPE_MONSTER_SPELL_SMALL_AREA_HIT)
+assert(spell({name = "drunk", duration = 4000}).impact == SOUND_EFFECT_TYPE_MONSTER_SPELL_DRUNKEN)
+assert(spell({name = "drunk", duration = 4001}).impact == SOUND_EFFECT_TYPE_MONSTER_SPELL_SUPER_DRUNKEN)
+assert(spell({name = "combat", type = COMBAT_FIREDAMAGE, soundImpact = 0, impactCast = 789}).impact == 0)
+
 registerMonsterType.sounds(mtype, {Bestiary = {class = "Dragon"}})
 assert(mtype.death == SOUND_EFFECT_TYPE_DRAGON_DEATH)
 assert(mtype.voices[#mtype.voices][1] == SOUND_EFFECT_TYPE_DRAGON_BARK)

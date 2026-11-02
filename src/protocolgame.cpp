@@ -4340,6 +4340,10 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 
 void ProtocolGame::sendAmbientSound(uint32_t ambientId)
 {
+	if (!isFonticakClient) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x47); // OTC-Fonticak location ambience; 0 stops the current ambience.
 	msg.add<uint32_t>(ambientId);
@@ -4348,6 +4352,10 @@ void ProtocolGame::sendAmbientSound(uint32_t ambientId)
 
 void ProtocolGame::sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source)
 {
+	if (!isFonticakClient) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x46); // OTC-Fonticak custom sound opcode
 	msg.addPosition(pos);
@@ -4359,6 +4367,10 @@ void ProtocolGame::sendSingleSoundEffect(const Position& pos, uint16_t soundId, 
 
 void ProtocolGame::sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source)
 {
+	if (!isFonticakClient) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0x46); // OTC-Fonticak custom sound opcode
 	msg.addPosition(pos);

@@ -1,7 +1,7 @@
 # Sound port (CrystalServer to 8.60)
 
 Reference: local CrystalServer ad5510a2. Client: OTC-Fonticak, branch implement-sounds.
-The custom protocol requires the corresponding client build.
+The custom protocol requires the corresponding client build. Sound packets (0x46/0x47) are sent only when the login handshake identifies `isFonticakClient`; other clients receive no sound packets.
 
 ## Implemented
 

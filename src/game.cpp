@@ -7951,17 +7951,7 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 
 void Game::addSoundEffect(const Position& pos, uint16_t soundId, uint32_t instanceId, Creature* actor)
 {
-	if (soundId == 0) {
-		return;
-	}
-	SpectatorVec spectators;
-	map.getSpectators(spectators, pos, true, true);
-	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
-	for (const auto& spectator : spectators) {
-		if (Player* player = spectator ? spectator->getPlayer() : nullptr) {
-			player->sendSingleSoundEffect(pos, soundId, actor ? (actor == player ? 1 : (actor->getPlayer() ? 2 : 3)) : 0);
-		}
-	}
+	addDoubleSoundEffect(pos, soundId, 0, instanceId, actor);
 }
 
 void Game::addDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId,
@@ -7975,7 +7965,12 @@ void Game::addDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint1
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	for (const auto& spectator : spectators) {
 		if (Player* player = spectator ? spectator->getPlayer() : nullptr) {
-			player->sendDoubleSoundEffect(pos, mainSoundId, secondarySoundId, actor ? (actor == player ? 1 : (actor->getPlayer() ? 2 : 3)) : 0);
+			const uint8_t source = actor ? (actor == player ? 1 : (actor->getPlayer() ? 2 : 3)) : 0;
+			if (secondarySoundId == 0) {
+				player->sendSingleSoundEffect(pos, mainSoundId, source);
+			} else {
+				player->sendDoubleSoundEffect(pos, mainSoundId, secondarySoundId, source);
+			}
 		}
 	}
 }
