@@ -125,7 +125,7 @@ TEST_CASE(spell_cooldown_feature_is_advertised_only_to_capable_astra)
 
 TEST_CASE(sound_packets_are_exclusive_to_fonticak)
 {
-	for (const auto flags : {std::pair{false, false}, std::pair{true, false}, std::pair{true, true}}) {
+	for (const auto& flags : {std::pair{false, false}, std::pair{true, false}, std::pair{true, true}}) {
 		ProtocolGame protocol(nullptr);
 		ProtocolGameSpellCooldownTestAccess::configure(protocol, flags.first, false, flags.second);
 		protocol.sendSingleSoundEffect(Position(100, 200, 7), 2005, 1);
