@@ -423,6 +423,7 @@ bool Weapon::useFist(Player* player, Creature* target)
 		return false;
 	}
 
+	g_game.addSoundEffect(player->getPosition(), 1, player->getInstanceID(), player);
 	float attackFactor = player->getAttackFactor();
 	int32_t attackSkill = player->getSkillLevel(SKILL_FIST);
 	int32_t attackValue = 7;
@@ -459,6 +460,27 @@ bool Weapon::useFist(Player* player, Creature* target)
 void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const
 {
 	WeaponType_t weaponType = item ? item->getWeaponType() : WEAPON_FIST;
+	uint16_t attackSound = 0;
+	uint16_t hitSound = 0;
+	switch (weaponType) {
+		case WEAPON_FIST: attackSound = 1; break;
+		case WEAPON_SWORD: attackSound = 3; break;
+		case WEAPON_CLUB: attackSound = 4; break;
+		case WEAPON_AXE: attackSound = 5; break;
+		case WEAPON_AMMO:
+		case WEAPON_DISTANCE:
+			if (item && item->getAmmoType() == AMMO_BOLT) { attackSound = 7; hitSound = 14; }
+			else if (item && item->getAmmoType() == AMMO_ARROW) { attackSound = 6; hitSound = 13; }
+			else { attackSound = 8; hitSound = 15; }
+			break;
+		case WEAPON_WAND: attackSound = 9; hitSound = 17; break;
+		default: break;
+	}
+	if (params.soundCastEffect != 0 || params.soundImpactEffect != 0) {
+		g_game.addDoubleSoundEffect(player->getPosition(), params.soundCastEffect, params.soundImpactEffect, player->getInstanceID(), player);
+	} else {
+		g_game.addDoubleSoundEffect(player->getPosition(), hitSound, attackSound, player->getInstanceID(), player);
+	}
 
 	sendMeleeAttackMark(player, target, item);
 
@@ -546,6 +568,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 					elemDamage.primary.value = -(basePhysDamage * static_cast<int32_t>(imbue->value) / 100);
 					CombatParams elemParams;
 					elemParams.combatType = elemType;
+					g_game.addSoundEffect(target->getPosition(), Imbuements::getInstance().getSoundEffect(imbue->imbuetype, imbue->baseId), target->getInstanceID(), player);
 					Combat::doTargetCombat(player, target, elemDamage, elemParams);
 				}
 			}
@@ -559,6 +582,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 
 void Weapon::internalUseWeapon(Player* player, Item* item, Tile* tile) const
 {
+	g_game.addSoundEffect(tile->getPosition(), 12, player->getInstanceID(), player);
 	if (scripted) {
 		LuaVariant var;
 		var.setTargetPosition(tile->getPosition());

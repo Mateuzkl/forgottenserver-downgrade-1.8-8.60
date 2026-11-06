@@ -17,6 +17,8 @@ end
 spell:group("attack")
 spell:id(142)
 spell:name("Envenom")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_ENVENOM)
 spell:words("utori pox")
 spell:level(50)
 spell:mana(30)

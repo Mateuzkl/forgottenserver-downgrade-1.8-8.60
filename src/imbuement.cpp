@@ -132,6 +132,7 @@ bool Imbuements::loadFromXml()
 			def.premium = node.attribute("premium").as_bool();
 			def.storage = pugi::cast<uint32_t>(node.attribute("storage").value());
 			def.scrollId = pugi::cast<uint16_t>(node.attribute("scrollid").value());
+			def.soundEffect = node.attribute("sound").as_uint();
 
 			// Resolve base data
 			auto baseIt = bases.find(def.baseId);
@@ -257,4 +258,12 @@ const ImbuementDefinition* Imbuements::getDefinitionByScrollId(uint16_t scrollId
 		return &definitions[it->second];
 	}
 	return nullptr;
+}
+
+uint16_t Imbuements::getSoundEffect(ImbuementType type, uint16_t baseId) const
+{
+	for (const auto& definition : definitions) {
+		if (definition.imbuementType == type && definition.baseId == baseId) return definition.soundEffect;
+	}
+	return 0;
 }

@@ -506,6 +506,7 @@ bool Npc::load()
 void Npc::reset(bool reload)
 {
 	loaded = false;
+	soundTicks = 0;
 	isIdle = true;
 	walkTicks = 1500;
 	pushable = true;
@@ -550,6 +551,7 @@ void Npc::reload()
 
 void Npc::loadNpcTypeInfo()
 {
+	soundTicks = 0;
 	speechBubble = npcType->speechBubble;
 	walkTicks = npcType->walkTicks;
 	baseSpeed = npcType->baseSpeed;
@@ -666,6 +668,14 @@ bool NpcType::loadFromXml()
 
 	if ((attr = npcNode.attribute("money"))) {
 		moneyType = pugi::cast<uint16_t>(attr.value());
+	}
+
+	soundVector.clear();
+	soundSpeedTicks = soundChance = 0;
+	if (auto sounds = npcNode.child("sounds")) {
+		soundSpeedTicks = sounds.attribute("interval").as_uint(sounds.attribute("ticks").as_uint(5000));
+		soundChance = std::min<uint32_t>(100, sounds.attribute("chance").as_uint(10));
+		for (auto sound : sounds.children("sound")) soundVector.push_back(sound.attribute("id").as_uint());
 	}
 
 	for (auto& parameterNode : npcNode.child("parameters").children()) {
@@ -849,6 +859,15 @@ void Npc::onThink(uint32_t interval)
 	}
 
 	Creature::onThink(interval);
+	if (npcType && npcType->soundSpeedTicks != 0 && !npcType->soundVector.empty()) {
+		soundTicks += interval;
+		if (soundTicks >= npcType->soundSpeedTicks) {
+			soundTicks = 0;
+			if (npcType->soundChance >= static_cast<uint32_t>(uniform_random(1, 100))) {
+				g_game.addSoundEffect(getPosition(), npcType->soundVector[uniform_random(0, static_cast<int32_t>(npcType->soundVector.size() - 1))], getInstanceID(), this);
+			}
+		}
+	}
 
 	if (npcEventHandler) {
 		npcEventHandler->onThink();

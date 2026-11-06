@@ -527,6 +527,7 @@ int LuaScriptInterface::luaGameGetImbuementDefinitions(lua_State* L)
 		setField(L, "categoryId", def.categoryId);
 		setField(L, "iconId", def.iconId);
 		setField(L, "scrollId", def.scrollId);
+		setField(L, "sound", def.soundEffect);
 		setField(L, "premium", def.premium);
 		setField(L, "storage", def.storage);
 		setField(L, "price", def.price);

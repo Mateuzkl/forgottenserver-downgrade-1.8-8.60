@@ -28,6 +28,7 @@ end
 spell:group("support")
 spell:id(133)
 spell:name("Creature Illusion")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CREATURE_ILLUSION)
 spell:words("utevo res ina")
 spell:level(23)
 spell:mana(100)

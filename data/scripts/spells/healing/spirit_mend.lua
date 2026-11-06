@@ -19,6 +19,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Spirit Mend")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_SPIRIT_MEND)
 spell:words("exura gran tio")
 spell:group("healing")
 spell:vocation("monk", "exalted monk")

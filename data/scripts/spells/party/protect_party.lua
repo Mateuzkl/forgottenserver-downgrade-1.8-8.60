@@ -16,6 +16,7 @@ end
 spell:group("support")
 spell:id(151)
 spell:name("Protect Party")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_PROTECT_PARTY)
 spell:words("utamo mas sio")
 spell:level(32)
 spell:isPremium(true)

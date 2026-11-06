@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "bed.h"
+#include "bestiary_charm.h"
 #include "chat.h"
 #include "combat.h"
 #include "configmanager.h"
@@ -3712,6 +3713,9 @@ void Player::removeMessageBuffer()
 
 void Player::drainHealth(const std::shared_ptr<Creature>& attacker, int32_t damage)
 {
+	if (damage > 0 && uniform_random(1, 100) <= 10) {
+		g_game.addSoundEffect(getPosition(), sex == PLAYERSEX_FEMALE ? 2518 : 2519, getInstanceID(), this);
+	}
 	Creature::drainHealth(attacker, damage);
 	sendStats();
 }
@@ -4273,6 +4277,7 @@ uint32_t Player::getIP() const
 
 void Player::death(Creature* lastHitCreature)
 {
+	g_game.addSoundEffect(getPosition(), sex == PLAYERSEX_FEMALE ? 2618 : 2619, getInstanceID(), this);
 	loginPosition = town->getTemplePosition();
 	setInstanceID(0);
 
@@ -9965,4 +9970,17 @@ void Player::clearCooldowns()
 			}
 		}
 	}
+}
+
+void Player::sendCharmActivated(uint8_t charmId, const Position* soundPosition) const
+{
+	if (client) client->sendCharmActivated(charmId);
+	const auto* sounds = g_bestiaryCharmSystem.getCharmSounds(charmId);
+	if (!sounds || (sounds->castSound == 0 && sounds->impactSound == 0)) return;
+	Position impactPosition = soundPosition ? *soundPosition : getPosition();
+	if (!soundPosition) {
+		if (auto target = getAttackedCreatureShared(); target && !target->isRemoved()) impactPosition = target->getPosition();
+	}
+	if (sounds->castSound != 0) g_game.addSoundEffect(getPosition(), sounds->castSound, getInstanceID(), const_cast<Player*>(this));
+	if (sounds->impactSound != 0) g_game.addSoundEffect(impactPosition, sounds->impactSound, getInstanceID(), const_cast<Player*>(this));
 }

@@ -20,6 +20,8 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("attack")
 spell:id(108)
 spell:name("Ethereal Spear")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_ETHEREAL_SPEAR)
 spell:words("exori con")
 spell:level(23)
 spell:mana(25)

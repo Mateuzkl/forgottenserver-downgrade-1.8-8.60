@@ -91,6 +91,7 @@ end
 spell:group("support")
 spell:id(134)
 spell:name("Find Person")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_FIND_PERSON)
 spell:words("exiva")
 spell:level(8)
 spell:mana(20)

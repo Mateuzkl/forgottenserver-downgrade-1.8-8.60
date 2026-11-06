@@ -13,6 +13,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("support", "focus")
 spell:id(142)
 spell:name("Magic Shield")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_MAGIC_SHIELD)
 spell:words("utamo vita")
 spell:level(14)
 spell:mana(50)

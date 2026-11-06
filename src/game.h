@@ -537,6 +537,9 @@ public:
 	static void addAnimatedText(const SpectatorVec& list, std::string_view message, const Position& pos,
 	                            TextColor_t color);
 	void addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanceId = 0);
+	void addSoundEffect(const Position& pos, uint16_t soundId, uint32_t instanceId = 0, Creature* actor = nullptr);
+	void addDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId,
+	                          uint32_t instanceId = 0, Creature* actor = nullptr);
 	static void addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect);
 	void addDistanceEffect(const Position& fromPos, const Position& toPos, uint16_t effect, uint32_t instanceId = 0);
 	static void addDistanceEffect(const SpectatorVec& spectators, const Position& fromPos, const Position& toPos,

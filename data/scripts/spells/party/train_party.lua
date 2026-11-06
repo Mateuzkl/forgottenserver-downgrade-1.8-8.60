@@ -18,6 +18,7 @@ end
 spell:group("support")
 spell:id(152)
 spell:name("Train Party")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_TRAIN_PARTY)
 spell:words("utito mas sio")
 spell:level(32)
 spell:isPremium(true)

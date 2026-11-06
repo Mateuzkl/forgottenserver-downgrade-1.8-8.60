@@ -103,6 +103,11 @@ uint32_t getMinorEchoRewardForMajorTier(uint8_t tier)
 
 BestiaryCharmSystem g_bestiaryCharmSystem;
 
+CharmSoundConfig* BestiaryCharmSystem::getCharmSounds(uint8_t id)
+{
+	return id < charmSounds.size() ? &charmSounds[id] : nullptr;
+}
+
 void BestiaryCharmSystem::registerMonster(BestiaryCreatureInfo info)
 {
 	if (!isEnabled()) {

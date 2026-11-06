@@ -18,6 +18,8 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("attack")
 spell:id(116)
 spell:name("Ice Wave")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_ICE_WAVE)
 spell:words("exevo frigo hur")
 spell:level(18)
 spell:mana(25)

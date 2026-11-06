@@ -20,6 +20,8 @@ end
 spell:group("attack")
 spell:id(172)
 spell:name("Mud Attack")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_MUD_ATTACK)
 spell:words("exori infir tera")
 spell:level(1)
 spell:mana(6)

@@ -236,15 +236,15 @@ local function roll(chancePercent)
 	return (math.random() * 100) <= (tonumber(chancePercent) or 0)
 end
 
-local function notifyCharmActivated(player, charmId)
+local function notifyCharmActivated(player, charmId, position)
 	if not player or not charmId then
 		return
 	end
-	if MiscAnalyzer and MiscAnalyzer.sendCharm and MiscAnalyzer.sendCharm(player, charmId) then
+	if MiscAnalyzer and MiscAnalyzer.sendCharm and MiscAnalyzer.sendCharm(player, charmId, position) then
 		return
 	end
 	if player.sendCharmActivated then
-		player:sendCharmActivated(charmId)
+		player:sendCharmActivated(charmId, position)
 	end
 end
 
@@ -344,26 +344,26 @@ function charmHealth.onHealthChange(creature, attacker, primaryDamage, primaryTy
 				local baseHealth = entry and entry.health or creature:getMaxHealth()
 				local capByLevel = math.ceil(player:getLevel() * 2)
 				local damage = math.min(capByLevel, math.ceil(baseHealth * (getCharmPercent(majorCharmId, 5) / 100)))
-				notifyCharmActivated(player, majorCharmId)
+				notifyCharmActivated(player, majorCharmId, creature:getPosition())
 				doCharmDamage(player, creature, combatType, math.max(1, damage), CONST_ME_DRAWBLOOD)
 			elseif player and majorCharmId == CHARM.OVERPOWER and roll(getCharmChance(majorCharmId, majorTier, 5)) then
 				local targetCap = math.ceil(creature:getMaxHealth() * 0.08)
 				local damage = math.min(targetCap, math.ceil(player:getMaxHealth() * (getCharmPercent(majorCharmId, 5) / 100)))
-				notifyCharmActivated(player, majorCharmId)
+				notifyCharmActivated(player, majorCharmId, creature:getPosition())
 				doCharmDamage(player, creature, COMBAT_PHYSICALDAMAGE, math.max(1, damage), CONST_ME_DRAWBLOOD)
 			elseif player and majorCharmId == CHARM.OVERFLUX and roll(getCharmChance(majorCharmId, majorTier, 5)) then
 				local targetCap = math.ceil(creature:getMaxHealth() * 0.08)
 				local damage = math.min(targetCap, math.ceil(player:getMaxMana() * (getCharmPercent(majorCharmId, 2.5) / 100)))
-				notifyCharmActivated(player, majorCharmId)
+				notifyCharmActivated(player, majorCharmId, creature:getPosition())
 				doCharmDamage(player, creature, COMBAT_ENERGYDAMAGE, math.max(1, damage), CONST_ME_ENERGYHIT)
 			end
 
 			local minorCharmId, minorTier = getCharmForRace(player, raceId, CHARM_CATEGORY.MINOR)
 			if minorCharmId == CHARM.CRIPPLE and roll(getCharmChance(minorCharmId, minorTier, 6)) then
-				notifyCharmActivated(player, minorCharmId)
+				notifyCharmActivated(player, minorCharmId, creature:getPosition())
 				addParalyze(creature, 10000)
 			elseif minorCharmId == CHARM.FATAL_HOLD and roll(getCharmChance(minorCharmId, minorTier, 30)) and creature.blockFleeing then
-				notifyCharmActivated(player, minorCharmId)
+				notifyCharmActivated(player, minorCharmId, creature:getPosition())
 				creature:blockFleeing(30000)
 				creature:getPosition():sendMagicEffect(CONST_ME_WHITE_TIGERCLASH)
 			end
@@ -434,7 +434,7 @@ function charmDeath.onDeath(creature, corpse, killer, mostDamageKiller, lastHitU
 		local damage = math.max(1, math.min(capByLevel, math.ceil(creature:getMaxHealth() * (getCharmPercent(charmId, 15) / 100))))
 		local position = creature:getPosition()
 		local spectators = Game.getSpectators(position, false, false, 1, 1, 1, 1)
-		notifyCharmActivated(player, charmId)
+		notifyCharmActivated(player, charmId, position)
 		creature:getPosition():sendMagicEffect(CONST_ME_EXPLOSIONAREA)
 		for _, spectator in ipairs(spectators) do
 			local spectatorPosition = spectator:getPosition()

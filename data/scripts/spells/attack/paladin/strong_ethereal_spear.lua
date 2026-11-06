@@ -29,6 +29,8 @@ end
 spell:group("attack")
 spell:id(57)
 spell:name("Strong Ethereal Spear")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_STRONG_ETHEREAL_SPEAR)
 spell:words("exori gran con")
 spell:level(90)
 spell:mana(55)

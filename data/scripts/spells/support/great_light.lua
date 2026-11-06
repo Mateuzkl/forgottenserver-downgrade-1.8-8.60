@@ -15,6 +15,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("support")
 spell:id(136)
 spell:name("Great Light")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_GREAT_LIGHT)
 spell:words("utevo gran lux")
 spell:level(13)
 spell:mana(60)

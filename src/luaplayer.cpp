@@ -471,12 +471,39 @@ int luaPlayerSetTemporaryDeathLossReduction(lua_State* L)
 	return 1;
 }
 
+
+int luaPlayerSendAmbientSound(lua_State* L)
+{
+	auto* player = getUserdata<Player>(L, 1);
+	if (!player) { lua_pushnil(L); return 1; }
+	player->sendAmbientSound(getInteger<uint32_t>(L, 2));
+	pushBoolean(L, true); return 1;
+}
+
+int luaPlayerSendSingleSoundEffect(lua_State* L)
+{
+	auto* player = getUserdata<Player>(L, 1);
+	if (!player) { lua_pushnil(L); return 1; }
+	player->sendSingleSoundEffect(player->getPosition(), getInteger<uint16_t>(L, 2), getBoolean(L, 3, true) ? 1 : 0);
+	pushBoolean(L, true); return 1;
+}
+int luaPlayerSendDoubleSoundEffect(lua_State* L)
+{
+	auto* player = getUserdata<Player>(L, 1);
+	if (!player) { lua_pushnil(L); return 1; }
+	player->sendDoubleSoundEffect(player->getPosition(), getInteger<uint16_t>(L, 2), getInteger<uint16_t>(L, 3), getBoolean(L, 4, true) ? 1 : 0);
+	pushBoolean(L, true); return 1;
+}
+
 int luaPlayerSendCharmActivated(lua_State* L)
 {
 	// player:sendCharmActivated(charmId)
 	const Player* player = getUserdata<const Player>(L, 1);
 	if (player) {
-		player->sendCharmActivated(getInteger<uint8_t>(L, 2));
+		Position position;
+		const Position* soundPosition = nullptr;
+		if (lua_gettop(L) >= 3 && !lua_isnil(L, 3)) { position = getPosition(L, 3); soundPosition = &position; }
+		player->sendCharmActivated(getInteger<uint8_t>(L, 2), soundPosition);
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -4967,6 +4994,9 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "getDropBonus", luaPlayerGetDropBonus);
 	registerMethod("Player", "setTemporaryDeathLossReduction", luaPlayerSetTemporaryDeathLossReduction);
 	registerMethod("Player", "sendCharmActivated", luaPlayerSendCharmActivated);
+	registerMethod("Player", "sendAmbientSound", luaPlayerSendAmbientSound);
+	registerMethod("Player", "sendSingleSoundEffect", luaPlayerSendSingleSoundEffect);
+	registerMethod("Player", "sendDoubleSoundEffect", luaPlayerSendDoubleSoundEffect);
 	registerMethod("Player", "updateKillTracker", luaPlayerUpdateKillTracker);
 	registerMethod("Player", "addConditionSuppressions", luaPlayerAddConditionSuppressions);
 	registerMethod("Player", "removeConditionSuppressions", luaPlayerRemoveConditionSuppressions);

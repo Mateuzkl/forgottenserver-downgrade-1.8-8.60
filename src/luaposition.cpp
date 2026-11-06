@@ -139,6 +139,11 @@ int luaPositionSendDistanceEffect(lua_State* L)
 int luaPositionSendSingleSoundEffect(lua_State* L)
 {
 	// position:sendSingleSoundEffect(soundId[, actor])
+	const Position& position = getPosition(L, 1);
+	const uint16_t soundId = getInteger<uint16_t>(L, 2);
+	Creature* actor = lua_gettop(L) >= 3 && lua_isuserdata(L, 3) ? getUserdata<Creature>(L, 3) : nullptr;
+	g_game.addSoundEffect(position, soundId, actor ? actor->getInstanceID() : getPositionInstanceId(L, 1),
+	                      actor);
 	pushBoolean(L, true);
 	return 1;
 }
@@ -146,6 +151,13 @@ int luaPositionSendSingleSoundEffect(lua_State* L)
 int luaPositionSendDoubleSoundEffect(lua_State* L)
 {
 	// position:sendDoubleSoundEffect(mainSoundId, secondarySoundId[, actor])
+	const Position& position = getPosition(L, 1);
+	const uint16_t mainSoundId = getInteger<uint16_t>(L, 2);
+	const uint16_t secondarySoundId = getInteger<uint16_t>(L, 3);
+	Creature* actor = lua_gettop(L) >= 4 && lua_isuserdata(L, 4) ? getUserdata<Creature>(L, 4) : nullptr;
+	g_game.addDoubleSoundEffect(position, mainSoundId, secondarySoundId,
+	                            actor ? actor->getInstanceID() : getPositionInstanceId(L, 1),
+	                            actor);
 	pushBoolean(L, true);
 	return 1;
 }

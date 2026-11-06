@@ -2768,6 +2768,38 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		}
 	}
 
+	if (actorPlayer) {
+		uint16_t soundId = 2794; // default item movement
+		const int32_t slot = item->getSlotPosition();
+		const Item* destinationItem = toCylinder->getItem();
+		const bool personalContainer = destinationItem && destinationItem->getContainer() && destinationItem->getHoldingPlayer();
+		if (personalContainer || item->getContainer()) {
+			soundId = 2786;
+		} else if (Item::items[item->getID()].type == ITEM_TYPE_VALUABLE) {
+			soundId = 2793;
+		} else if (item->getWeaponType() == WEAPON_DISTANCE) {
+			soundId = 2791;
+		} else if (item->getWeaponType() == WEAPON_SWORD || item->getWeaponType() == WEAPON_AXE || item->getWeaponType() == WEAPON_CLUB) {
+			soundId = 2790;
+		} else if (item->getWeaponType() == WEAPON_SHIELD || item->getWeaponType() == WEAPON_WAND ||
+		           item->getWeaponType() == WEAPON_AMMO || Item::items[item->getID()].type == ITEM_TYPE_TOOL) {
+			soundId = 2792;
+		} else if (slot != static_cast<int32_t>(SLOTP_WHEREEVER)) {
+			if (slot & SLOTP_HEAD) soundId = 2796;
+			else if (slot & SLOTP_NECKLACE) soundId = 2788;
+			else if (slot & SLOTP_ARMOR) soundId = 2789;
+			else if (slot & SLOTP_LEGS) soundId = 2795;
+			else if (slot & SLOTP_FEET) soundId = 2801;
+			else if (slot & SLOTP_RING) soundId = 2798;
+		}
+		const bool personalDestination = toCylinder->getCreature() || personalContainer;
+		if (!personalDestination && toCylinder->getTile()) {
+			addSoundEffect(toCylinder->getPosition(), soundId, actorPlayer->getInstanceID(), actorPlayer);
+		} else {
+			actorPlayer->sendSingleSoundEffect(actorPlayer->getPosition(), soundId, 1);
+		}
+	}
+
 	// we could not move all, inform the player
 	if (item->isStackable() && maxQueryCount < count) {
 		return retMaxCount;
@@ -6910,6 +6942,9 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 	applyBossDifficultyDamage(damage, attacker, target);
 
 	damage.blockType = primaryBlockType;
+	if (primaryBlockType != BLOCK_NONE || secondaryBlockType != BLOCK_NONE) {
+		addSoundEffect(target->getPosition(), 20, target->getInstanceID(), attacker);
+	}
 
 	return (primaryBlockType != BLOCK_NONE) && (secondaryBlockType != BLOCK_NONE);
 }
@@ -7912,6 +7947,32 @@ void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanc
 	map.getSpectators(spectators, pos, true, true);
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
 	addMagicEffect(spectators, pos, effect);
+}
+
+void Game::addSoundEffect(const Position& pos, uint16_t soundId, uint32_t instanceId, Creature* actor)
+{
+	addDoubleSoundEffect(pos, soundId, 0, instanceId, actor);
+}
+
+void Game::addDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId,
+                                uint32_t instanceId, Creature* actor)
+{
+	if (mainSoundId == 0 && secondarySoundId == 0) {
+		return;
+	}
+	SpectatorVec spectators;
+	map.getSpectators(spectators, pos, true, true);
+	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
+	for (const auto& spectator : spectators) {
+		if (Player* player = spectator ? spectator->getPlayer() : nullptr) {
+			const uint8_t source = actor ? (actor == player ? 1 : (actor->getPlayer() ? 2 : 3)) : 0;
+			if (secondarySoundId == 0) {
+				player->sendSingleSoundEffect(pos, mainSoundId, source);
+			} else {
+				player->sendDoubleSoundEffect(pos, mainSoundId, secondarySoundId, source);
+			}
+		}
+	}
 }
 
 void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect)

@@ -16,6 +16,7 @@ end
 spell:group("support")
 spell:id(198)
 spell:name("House Guest List")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_INVITE_GUESTS)
 spell:words("aleta sio")
 spell:cooldown(2 * 1000)
 spell:groupCooldown(2 * 1000)

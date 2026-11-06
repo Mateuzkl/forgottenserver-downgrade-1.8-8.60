@@ -7,6 +7,7 @@ end
 spell:group("support")
 spell:id(159)
 spell:name("Conjure Bolt")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CONJURE_ARROW)
 spell:words("exevo con mort")
 spell:level(17)
 spell:mana(140)

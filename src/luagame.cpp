@@ -904,6 +904,10 @@ int luaGameCreateMonsterType(lua_State* L)
 		monsterType->info.defenseSpells.clear();
 		monsterType->info.summons.clear();
 		monsterType->info.voiceVector.clear();
+		monsterType->info.soundVector.clear();
+		monsterType->info.deathSound = 2632;
+		monsterType->info.soundChance = 0;
+		monsterType->info.soundSpeedTicks = 0;
 		monsterType->info.elementMap.clear();
 		monsterType->info.scripts.clear();
 		monsterType->info.enemyFactions.clear();
@@ -1941,6 +1945,34 @@ int luaGameGetBosstiaryPoints(lua_State* L)
 	return 1;
 }
 
+
+int pushCharmSoundConfig(lua_State* L, uint8_t id)
+{
+	auto* charm = g_bestiaryCharmSystem.getCharmSounds(id);
+	if (!charm) { lua_pushnil(L); return 1; }
+	pushUserdata<CharmSoundConfig>(L, charm);
+	setMetatable(L, -1, "Charm");
+	return 1;
+}
+int luaGameCreateBestiaryCharm(lua_State* L) { return pushCharmSoundConfig(L, getInteger<uint8_t>(L, 1)); }
+int luaCharmCreate(lua_State* L) { return pushCharmSoundConfig(L, getInteger<uint8_t>(L, 2)); }
+int luaCharmCastSound(lua_State* L)
+{
+	auto* charm = getUserdata<CharmSoundConfig>(L, 1);
+	if (!charm) { lua_pushnil(L); return 1; }
+	if (lua_gettop(L) == 1) lua_pushinteger(L, charm->castSound);
+	else { charm->castSound = getInteger<uint16_t>(L, 2); pushBoolean(L, true); }
+	return 1;
+}
+int luaCharmImpactSound(lua_State* L)
+{
+	auto* charm = getUserdata<CharmSoundConfig>(L, 1);
+	if (!charm) { lua_pushnil(L); return 1; }
+	if (lua_gettop(L) == 1) lua_pushinteger(L, charm->impactSound);
+	else { charm->impactSound = getInteger<uint16_t>(L, 2); pushBoolean(L, true); }
+	return 1;
+}
+
 int luaGameAddBosstiaryPoints(lua_State* L)
 {
 	// Game.addBosstiaryPoints(playerGuid, amount) -> oldPoints, newPoints
@@ -1967,6 +1999,9 @@ int luaGameAddBosstiaryPoints(lua_State* L)
 
 void LuaScriptInterface::registerGame()
 {
+	registerClass("Charm", "", luaCharmCreate);
+	registerMethod("Charm", "castSound", luaCharmCastSound);
+	registerMethod("Charm", "impactSound", luaCharmImpactSound);
 	// Game
 	registerTable("Game");
 	registerMethod("Game", "getLightState", luaGameGetLightState);
@@ -2057,6 +2092,7 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "createTile", luaGameCreateTile);
 	registerMethod("Game", "createMonsterType", luaGameCreateMonsterType);
 	registerMethod("Game", "createNpcType", luaGameCreateNpcType);
+	registerMethod("Game", "createBestiaryCharm", luaGameCreateBestiaryCharm);
 
 	registerMethod("Game", "startRaid", luaGameStartRaid);
 

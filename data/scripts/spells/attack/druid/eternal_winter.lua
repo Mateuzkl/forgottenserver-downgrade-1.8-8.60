@@ -12,12 +12,15 @@ end
 combat:setCallback(CallBackParam.LEVELMAGICVALUE, callback)
 
 local spell = Spell("instant")
-function spell.onCastSpell(creature, variant) return combat:execute(creature, variant) end
+function spell.onCastSpell(creature, variant)
+	return combat:execute(creature, variant)
+end
 
 
 spell:group("attack")
 spell:id(107)
 spell:name("Eternal Winter")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_ETERNAL_WINTER)
 spell:words("exevo gran mas frigo")
 spell:level(60)
 spell:mana(1050)

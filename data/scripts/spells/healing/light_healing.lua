@@ -21,6 +21,7 @@ end
 spell:group("healing")
 spell:id(126)
 spell:name("Light Healing")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_LIGHT_HEALING)
 spell:words("exura")
 spell:level(8)
 spell:mana(20)

@@ -61,6 +61,10 @@ inline constexpr auto OTCV8_LENGTH = 5;
 class ProtocolGame final : public Protocol
 {
 public:
+	void sendAmbientSound(uint32_t ambientId);
+	void sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source = 0);
+	void sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source = 0);
+
 	// static protocol information
 	enum
 	{

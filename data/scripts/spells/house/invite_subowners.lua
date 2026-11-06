@@ -16,6 +16,7 @@ end
 spell:group("support")
 spell:id(200)
 spell:name("House Subowner List")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_INVITE_SUBOWNERS)
 spell:words("aleta som")
 spell:cooldown(2 * 1000)
 spell:groupCooldown(2 * 1000)

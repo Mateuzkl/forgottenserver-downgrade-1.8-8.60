@@ -5,6 +5,7 @@
 #define FS_BESTIARY_CHARM_H
 
 #include <cstdint>
+#include <array>
 #include <functional>
 #include <optional>
 #include <string>
@@ -46,6 +47,13 @@ struct BestiaryCharmActionResult
 	std::string message;
 };
 
+struct CharmSoundConfig
+{
+	uint8_t id = 0;
+	uint16_t castSound = 0;
+	uint16_t impactSound = 0;
+};
+
 class BestiaryCharmSystem
 {
 public:
@@ -55,6 +63,7 @@ public:
 		return ConfigManager::getBoolean(ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	}
 
+	CharmSoundConfig* getCharmSounds(uint8_t id);
 	void registerMonster(BestiaryCreatureInfo info);
 	[[nodiscard]] std::optional<std::reference_wrapper<const BestiaryCreatureInfo>> getMonster(uint16_t raceId) const;
 	[[nodiscard]] static uint8_t getProgress(const BestiaryCreatureInfo& info, uint32_t kills);
@@ -67,6 +76,19 @@ public:
 	[[nodiscard]] double getCharmBonus(uint8_t charmId, uint8_t tier) const;
 
 private:
+	std::array<CharmSoundConfig, 25> charmSounds = [] {
+		std::array<CharmSoundConfig, 25> sounds{};
+		for (uint8_t id = 0; id < sounds.size(); ++id) sounds[id].id = id;
+		// Elemental defaults use existing catalog sounds; no dedicated charm IDs exist in CrystalServer.
+		const uint16_t offensive[] = {2008, 2002, 2004, 2005, 2003, 2006};
+		for (uint8_t id = 0; id < 6; ++id) sounds[id].impactSound = offensive[id];
+		sounds[7].impactSound = 2008;
+		sounds[16].impactSound = 2007;
+		sounds[22].impactSound = 2034;
+		sounds[23].impactSound = 2008;
+		sounds[24].impactSound = 2010;
+		return sounds;
+	}();
 	struct CharmState
 	{
 		bool unlocked = false;

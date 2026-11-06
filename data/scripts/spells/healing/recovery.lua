@@ -16,6 +16,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Recovery")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_RECOVERY)
 spell:words("utura")
 spell:group("healing")
 spell:id(159)

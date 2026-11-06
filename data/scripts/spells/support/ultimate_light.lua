@@ -15,6 +15,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("support")
 spell:id(148)
 spell:name("Ultimate Light")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_ULTIMATE_LIGHT)
 spell:words("utevo vis lux")
 spell:level(26)
 spell:mana(140)

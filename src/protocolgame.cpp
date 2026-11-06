@@ -4338,6 +4338,50 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::sendAmbientSound(uint32_t ambientId)
+{
+	if (!isFonticakClient || isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x47); // OTC-Fonticak location ambience; 0 stops the current ambience.
+	msg.add<uint32_t>(ambientId);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source)
+{
+	if (!isFonticakClient || isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x46); // OTC-Fonticak custom sound opcode
+	msg.addPosition(pos);
+	msg.addByte(source);
+	msg.add<uint16_t>(soundId);
+	msg.addByte(0); // no secondary effect
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source)
+{
+	if (!isFonticakClient || isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x46); // OTC-Fonticak custom sound opcode
+	msg.addPosition(pos);
+	msg.addByte(source);
+	msg.add<uint16_t>(mainSoundId);
+	msg.addByte(1); // secondary effect follows
+	msg.addByte(source);
+	msg.add<uint16_t>(secondarySoundId);
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendCreatureHealth(const Creature* creature)
 {
 	NetworkMessage msg;

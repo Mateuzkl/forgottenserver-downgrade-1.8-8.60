@@ -26,6 +26,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("attack")
 spell:id(61)
 spell:name("Brutal Strike")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_BRUTAL_STRIKE)
 spell:words("exori ico")
 spell:level(16)
 spell:mana(30)

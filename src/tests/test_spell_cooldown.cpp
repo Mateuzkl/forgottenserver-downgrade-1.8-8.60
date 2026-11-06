@@ -123,6 +123,30 @@ TEST_CASE(spell_cooldown_feature_is_advertised_only_to_capable_astra)
 	}
 }
 
+TEST_CASE(sound_packets_are_exclusive_to_fonticak)
+{
+	for (const auto& flags : {std::pair{false, false}, std::pair{true, false}, std::pair{true, true}}) {
+		ProtocolGame protocol(nullptr);
+		ProtocolGameSpellCooldownTestAccess::configure(protocol, flags.first, false, flags.second);
+		protocol.sendSingleSoundEffect(Position(100, 200, 7), 2005, 1);
+		protocol.sendDoubleSoundEffect(Position(100, 200, 7), 2005, 2006, 1);
+		protocol.sendAmbientSound(42);
+		checkBytes(protocol, {});
+	}
+}
+
+TEST_CASE(fonticak_sound_packets_keep_the_expected_wire_format)
+{
+	ProtocolGame protocol(nullptr);
+	ProtocolGameSpellCooldownTestAccess::configure(protocol, false, false, true);
+	protocol.sendSingleSoundEffect(Position(100, 200, 7), 2005, 1);
+	protocol.sendDoubleSoundEffect(Position(100, 200, 7), 2005, 2006, 1);
+	protocol.sendAmbientSound(42);
+	checkBytes(protocol, {0x46, 100, 0, 200, 0, 7, 1, 0xD5, 7, 0,
+	                      0x46, 100, 0, 200, 0, 7, 1, 0xD5, 7, 1, 1, 0xD6, 7,
+	                      0x47, 42, 0, 0, 0});
+}
+
 int main()
 {
 	// Run real send methods in the dispatcher context required by getOutputBuffer().
