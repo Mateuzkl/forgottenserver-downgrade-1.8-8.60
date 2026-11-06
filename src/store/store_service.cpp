@@ -171,6 +171,11 @@ bool StoreService::isOfferAvailable(const Player& player, const StoreOffer& offe
 			return false;
 		}
 	}
+	if (offer.type == StoreOfferType::LunarAscensionOrb) {
+		if (!astra || !ConfigManager::getBoolean(ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED)) {
+			return false;
+		}
+	}
 
 	return true;
 }
@@ -378,6 +383,7 @@ std::string StoreService::deliverOffer(Player& player, const StoreOffer& offer,
 		// Types that must be delivered via Lua callback (subsystems only in Lua).
 		case StoreOfferType::BattlePass:
 		case StoreOfferType::PreyWildcard:
+		case StoreOfferType::LunarAscensionOrb:
 		case StoreOfferType::BountyKillBoost:
 		case StoreOfferType::WeeklyKillBoost:
 		case StoreOfferType::WeeklyReducedItems:

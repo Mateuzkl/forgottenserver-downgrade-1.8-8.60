@@ -40,6 +40,7 @@ PlayerStorageKeys = {
     -- The detailed state is persisted in player KV under the "battlepass" scope.
     -- This numeric storage is reserved for the active reward timer.
     battlePassDoubleSkillUntil = 90731,
+    lunarAscensionOrbs = 90760, -- virtual balance, per character
 
     -- Forge system
     forgeDust = 10000,

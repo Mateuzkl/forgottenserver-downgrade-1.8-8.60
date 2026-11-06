@@ -51,12 +51,15 @@ local MAX_MODIFIED_SLOTS = 2
 local MAX_MODIFIER_RANK = 10
 local MIN_SHAPING_UNLOCKED_LEVELS = 3
 local FIRST_MODIFY_DUST_COST = 250
-local SECOND_MODIFY_DUST_COST = 1000
+-- The normally attainable Forge Dust limit is 325.
+local SECOND_MODIFY_DUST_COST = 325
 local RESHAPE_DUST_COST = 250
 local RESHAPE_OFFER_COUNT = 3
 local RESHAPE_OFFER_TTL_MS = 30000
 local RESOURCE_FORGE_DUST = 23
 local RESOURCE_PROFICIENCY_DUST_LIMIT = 88
+local RESOURCE_LUNAR_ASCENSION_ORBS = 73
+local MAX_LUNAR_ASCENSION_ORBS = 1000000
 
 -- The first MAX_PERK_LEVEL thresholds unlock perk slots. The remaining
 -- thresholds keep mastery progression active until the final experience cap.
@@ -957,6 +960,42 @@ local function getForgeDustLimit(player)
 	return value
 end
 
+local function getLunarOrbBalance(player)
+	local value = player:getStorageValue(PlayerStorageKeys.lunarAscensionOrbs)
+	return math.max(0, tonumber(value) or 0)
+end
+
+local function sendLunarOrbBalance(player)
+	if not supportsCustomNetwork(player) then return false end
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_RESOURCE_BALANCE)
+	out:addByte(RESOURCE_LUNAR_ASCENSION_ORBS)
+	out:addU64(getLunarOrbBalance(player))
+	return out:sendToPlayer(player)
+end
+
+local previousStoreDeliverLuaOffer = StoreDeliverLuaOffer
+function StoreDeliverLuaOffer(player, offerType, value, displayId, extraName, extraSex)
+	if offerType ~= "lunar_ascension_orb" then
+		if previousStoreDeliverLuaOffer then
+			return previousStoreDeliverLuaOffer(player, offerType, value, displayId, extraName, extraSex)
+		end
+		return "This offer type is not available."
+	end
+	if not supportsCustomNetwork(player) or value ~= 1 then
+		return "Lunar Ascension Orbs are only available in AstraClient."
+	end
+	local balance = getLunarOrbBalance(player)
+	if balance >= MAX_LUNAR_ASCENSION_ORBS then
+		return "Your Lunar Ascension Orb balance is full."
+	end
+	if player:setStorageValue(PlayerStorageKeys.lunarAscensionOrbs, balance + 1) ~= true then
+		return "Could not credit your Lunar Ascension Orb."
+	end
+	sendLunarOrbBalance(player)
+	return nil
+end
+
 local function sendForgeDustBalance(player)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -972,7 +1011,8 @@ local function sendForgeDustBalance(player)
 	limitOut:addByte(RESOURCE_PROFICIENCY_DUST_LIMIT)
 	limitOut:addU64(getForgeDustLimit(player))
 	local limitSent = limitOut:sendToPlayer(player)
-	return balanceSent and limitSent
+	local orbSent = sendLunarOrbBalance(player)
+	return balanceSent and limitSent and orbSent
 end
 
 local function removeForgeDust(player, amount)
@@ -1177,7 +1217,7 @@ local function getModifyDustCost(state)
 end
 
 local function getRefineDustCost(refineLevel)
-	return 125 + math.max(0, tonumber(refineLevel) or 0) * 75
+	return math.min(325, 125 + math.max(0, tonumber(refineLevel) or 0) * 75)
 end
 
 local function finishShapeChange(player, itemId)
@@ -1236,9 +1276,16 @@ local function maximiseSlot(player, itemId, level, position)
 	if modifier.refineLevel >= MAX_MODIFIER_RANK then
 		return sendShapeFailure(player, "This modifier is already at maximum rank.")
 	end
-	-- The official action consumes a Lunar Ascension Orb. That item is not part of this
-	-- server's current OTB, so never grant a free maximum-rank upgrade.
-	return sendShapeFailure(player, "Maximise requires a Lunar Ascension Orb, which is not available yet.")
+	local balance = getLunarOrbBalance(player)
+	if balance < 1 then
+		return sendShapeFailure(player, "You need one Lunar Ascension Orb to maximise this perk.")
+	end
+	if player:setStorageValue(PlayerStorageKeys.lunarAscensionOrbs, balance - 1) ~= true then
+		return sendShapeFailure(player, "Could not use your Lunar Ascension Orb. Try again.")
+	end
+	modifier.refineLevel = MAX_MODIFIER_RANK
+	sendLunarOrbBalance(player)
+	finishShapeChange(player, itemId)
 end
 
 local function clearSlot(player, itemId, level, position)

@@ -125,11 +125,17 @@ end
 function Player:addForgeDust(amount)
     if not isForgeEnabled() then return 0 end
 
+    if type(amount) ~= "number" or amount <= 0 then return 0 end
     local cur = self:getForgeDust()
     local limit = self:getForgeDustLimit()
     local new = math.min(cur + amount, limit)
-    self:setStorageValue(FORGE_STORAGE.dust, new)
+    if new <= cur then return 0 end
+    if self:setStorageValue(FORGE_STORAGE.dust, new) ~= true then return nil end
     self:sendForgeDustBalance()
+    if cur < limit and new >= limit then
+        self:sendTextMessage(MESSAGE_STATUS_CONSOLE_RED,
+            string.format("[Forge] Seu Dust atingiu o limite (%d/%d). Use-o na Forja ou na Proficiencia para continuar acumulando.", new, limit))
+    end
     return new - cur
 end
 
@@ -147,7 +153,7 @@ function Player:removeForgeDust(amount)
 
     local cur = self:getForgeDust()
     if cur < amount then return false end
-    self:setStorageValue(FORGE_STORAGE.dust, cur - amount)
+    if self:setStorageValue(FORGE_STORAGE.dust, cur - amount) ~= true then return false end
     self:sendForgeDustBalance()
     return true
 end
@@ -356,6 +362,25 @@ resetStone:id(RESET_STONE_ID)
 resetStone:register()
 
 -- ====== Conversions: /forge dust | /forge sliver | /forge info ======
+local function addConversionReward(player, itemId, count)
+    local added = player:addItem(itemId, count, false)
+    if not added then return false end
+
+    local received = 0
+    if type(added) == "table" then
+        for _, item in ipairs(added) do
+            received = received + item:getCount()
+        end
+    else
+        received = added:getCount()
+    end
+    if received ~= count then
+        if received > 0 then player:removeItem(itemId, received) end
+        return false
+    end
+    return true
+end
+
 local forgeTalk = TalkAction("/forge", "!forge")
 function forgeTalk.onSay(player, words, param)
     if not isForgeEnabled() then
@@ -386,8 +411,15 @@ function forgeTalk.onSay(player, words, param)
         local dustUsed = batches * 60
         local sliversGained = batches * 3
 
-        player:removeForgeDust(dustUsed)
-        player:addItem(FORGE_ITEM_IDS.sliver, sliversGained)
+        if not addConversionReward(player, FORGE_ITEM_IDS.sliver, sliversGained) then
+            player:popupFYI("[Forge]\n\nNot enough room to receive the Slivers.")
+            return false
+        end
+        if not player:removeForgeDust(dustUsed) then
+            player:removeItem(FORGE_ITEM_IDS.sliver, sliversGained)
+            player:popupFYI("[Forge]\n\nDust debit failed; conversion cancelled.")
+            return false
+        end
         player:popupFYI(string.format("[Forge]\n\nConverted %d Dust into %d sliver(s).", dustUsed, sliversGained))
         return false
     end
@@ -400,8 +432,15 @@ function forgeTalk.onSay(player, words, param)
             player:popupFYI("[Forge]\n\nYou need at least 50 sliver to convert.")
             return false
         end
-        player:removeItem(FORGE_ITEM_IDS.sliver, cores * 50)
-        player:addItem(FORGE_ITEM_IDS.exaltedCore, cores)
+        if not addConversionReward(player, FORGE_ITEM_IDS.exaltedCore, cores) then
+            player:popupFYI("[Forge]\n\nNot enough room to receive the Exalted Cores.")
+            return false
+        end
+        if not player:removeItem(FORGE_ITEM_IDS.sliver, cores * 50) then
+            player:removeItem(FORGE_ITEM_IDS.exaltedCore, cores)
+            player:popupFYI("[Forge]\n\nSliver debit failed; conversion cancelled.")
+            return false
+        end
         player:popupFYI(string.format("[Forge]\n\nConverted %d sliver into %d Exalted Core(s).", cores * 50, cores))
         return false
     end
