@@ -390,28 +390,28 @@ class ProtocolSpectator {
                 o->sendExtendedOpcode(opcode, data);
         }
 
-        void sendDistanceShoot(const Position &from, const Position &to, uint16_t type) {
+        void sendDistanceShoot(const Position &from, const Position &to, uint16_t type, Creature* actor = nullptr) {
             auto o = owner.lock();
             if (o)
-                o->sendDistanceShoot(from, to, type);
+                o->sendDistanceShoot(from, to, type, actor);
 
             for (auto &it : spectators)
-                it->sendDistanceShoot(from, to, type);
+                it->sendDistanceShoot(from, to, type, actor);
 
             for (auto &spy : spyClients_)
-                spy->sendDistanceShoot(from, to, type);
+                spy->sendDistanceShoot(from, to, type, actor);
         }
 
-        void sendMagicEffect(const Position &pos, uint16_t type) {
+        void sendMagicEffect(const Position &pos, uint16_t type, Creature* actor = nullptr) {
             auto o = owner.lock();
             if (o)
-                o->sendMagicEffect(pos, type);
+                o->sendMagicEffect(pos, type, actor);
 
             for (auto &it : spectators)
-                it->sendMagicEffect(pos, type);
+                it->sendMagicEffect(pos, type, actor);
 
             for (auto &spy : spyClients_)
-                spy->sendMagicEffect(pos, type);
+                spy->sendMagicEffect(pos, type, actor);
         }
 
         void sendCreatureHealth(const Creature *creature) {

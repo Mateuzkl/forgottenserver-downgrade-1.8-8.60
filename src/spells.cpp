@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "spells.h"
+#include "spell_effect_source.h"
 
 #include "combat.h"
 #include "configmanager.h"
@@ -386,6 +387,7 @@ bool CombatSpell::castSpell(Creature* creature, Creature* target)
 
 bool CombatSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 {
+	SpellEffectSourceScope effectSource(creature);
 	// onCastSpell(creature, var)
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - CombatSpell::executeCastSpell] Call stack overflow");
@@ -1176,6 +1178,7 @@ bool InstantSpell::internalCastSpell(Creature* creature, const LuaVariant& var)
 
 bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 {
+	SpellEffectSourceScope effectSource(creature);
 	// onCastSpell(creature, var)
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - InstantSpell::executeCastSpell] Call stack overflow");
@@ -1337,6 +1340,7 @@ bool RuneSpell::internalCastSpell(Creature* creature, const LuaVariant& var, boo
 
 bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool isHotkey)
 {
+	SpellEffectSourceScope effectSource(creature);
 	// onCastSpell(creature, var, isHotkey)
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - RuneSpell::executeCastSpell] Call stack overflow");

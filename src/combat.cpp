@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "combat.h"
+#include "spell_effect_source.h"
 
 #include "bestiary_charm.h"
 #include "configmanager.h"
@@ -965,7 +966,7 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 				}
 			}
 			InstanceUtils::sendMagicEffectToInstance(
-			    spectators, tile->getPosition(), params.impactEffect, caster->getInstanceID());
+			    spectators, tile->getPosition(), params.impactEffect, caster->getInstanceID(), caster);
 		} else {
 			if (metrics) {
 				for (const auto& spectator : spectators.players()) {
@@ -1032,7 +1033,7 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 					filtered.emplace_back(s);
 				}
 			}
-			g_game.addDistanceEffect(filtered, fromPos, toPos, effect);
+			g_game.addDistanceEffect(filtered, fromPos, toPos, effect, caster);
 		} else {
 			g_game.addDistanceEffect(fromPos, toPos, effect, 0);
 		}
@@ -1041,6 +1042,7 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 
 void Combat::doCombat(Creature* caster, Creature* target, std::string_view instantSpellName) const
 {
+	SpellEffectSourceScope effectSource(caster);
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
 	if (params.chainCallback) {
 		if (doCombatChain(caster, target, params.aggressive, std::string(instantSpellName))) {
@@ -1070,7 +1072,7 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 					filtered.emplace_back(s);
 				}
 			}
-			Game::addMagicEffect(filtered, target->getPosition(), params.impactEffect);
+			Game::addMagicEffect(filtered, target->getPosition(), params.impactEffect, caster);
 		}
 
 		if (canCombat) {
@@ -1119,6 +1121,7 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 
 void Combat::doCombat(Creature* caster, const Position& position, std::string_view instantSpellName) const
 {
+	SpellEffectSourceScope effectSource(caster);
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
 	if (params.chainCallback) {
 		if (doCombatChain(caster, nullptr, params.aggressive, std::string(instantSpellName))) {

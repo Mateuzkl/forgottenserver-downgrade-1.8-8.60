@@ -1365,10 +1365,10 @@ public:
 			client->sendCreatureHealth(creature);
 		}
 	}
-	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type) const
+	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type, Creature* actor = nullptr) const
 	{
 		if (client) {
-			client->sendDistanceShoot(from, to, type);
+			client->sendDistanceShoot(from, to, type, actor);
 		}
 	}
 	void sendHouseWindow(House* house, uint32_t listId) const;
@@ -1380,10 +1380,10 @@ public:
 	}
 	void sendClosePrivate(uint16_t channelId);
 	void sendIcons() const;
-	void sendMagicEffect(const Position& pos, uint16_t type) const
+	void sendMagicEffect(const Position& pos, uint16_t type, Creature* actor = nullptr) const
 	{
 		if (client) {
-			client->sendMagicEffect(pos, type);
+			client->sendMagicEffect(pos, type, actor);
 		}
 	}
 	void sendAmbientSound(uint32_t ambientId) const

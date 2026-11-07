@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "game.h"
+#include "spell_effect_source.h"
 
 #include "actions.h"
 #include "bed.h"
@@ -7164,6 +7165,7 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 
 bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage& damage)
 {
+	SpellEffectSourceScope effectSource(attacker);
 	if (!target || target->isDead() || target->isRemoved()) {
 		return false;
 	}
@@ -7700,6 +7702,7 @@ bool Game::combatChangeHealth(const std::shared_ptr<Creature>& attacker, const s
 
 bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& damage)
 {
+	SpellEffectSourceScope effectSource(attacker);
 	Player* targetPlayer = target->getPlayer();
 	if (!targetPlayer) {
 		return true;
@@ -7941,12 +7944,12 @@ void Game::addAnimatedText(const SpectatorVec& spectators, std::string_view mess
 	}
 }
 
-void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanceId)
+void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanceId, Creature* actor)
 {
 	SpectatorVec spectators;
 	map.getSpectators(spectators, pos, true, true);
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
-	addMagicEffect(spectators, pos, effect);
+	addMagicEffect(spectators, pos, effect, actor);
 }
 
 void Game::addSoundEffect(const Position& pos, uint16_t soundId, uint32_t instanceId, Creature* actor)
@@ -7975,14 +7978,14 @@ void Game::addDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint1
 	}
 }
 
-void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect)
+void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect, Creature* actor)
 {
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
-		player->sendMagicEffect(pos, effect);
+		player->sendMagicEffect(pos, effect, actor ? actor : SpellEffectSourceScope::getActor());
 	}
 }
 
@@ -7993,7 +7996,7 @@ void InstanceUtils::sendMagicEffectToInstance(const Position &pos, uint32_t inst
 	sendMagicEffectToInstance(spectators, pos, effect, instanceId);
 }
 
-void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uint16_t effect, uint32_t instanceId)
+void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uint16_t effect, uint32_t instanceId, Creature* actor)
 {
 	SpectatorVec spectators, toPosSpectators;
 	map.getSpectators(spectators, fromPos, true, true);
@@ -8001,18 +8004,18 @@ void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uin
 	spectators.addSpectators(toPosSpectators);
 
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
-	addDistanceEffect(spectators, fromPos, toPos, effect);
+	addDistanceEffect(spectators, fromPos, toPos, effect, actor);
 }
 
 void Game::addDistanceEffect(const SpectatorVec& spectators, const Position& fromPos, const Position& toPos,
-                             uint16_t effect)
+                             uint16_t effect, Creature* actor)
 {
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
-		player->sendDistanceShoot(fromPos, toPos, effect);
+		player->sendDistanceShoot(fromPos, toPos, effect, actor ? actor : SpellEffectSourceScope::getActor());
 	}
 }
 
