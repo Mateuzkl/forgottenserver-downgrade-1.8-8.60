@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "luascript.h"
+#include "spell_effect_source.h"
 
 #include "bed.h"
 #include "chat.h"
@@ -4620,6 +4621,9 @@ int LuaScriptInterface::luaAddEvent(lua_State* L)
 	}
 
 	LuaTimerEventDesc eventDesc;
+	if (const auto actor = SpellEffectSourceScope::getActor()) {
+		eventDesc.effectSourceId = actor->getID();
+	}
 	eventDesc.parameters.reserve(parameters -
 	                             2); // safe to use -2 since we garanteed that there is at least two parameters
 	for (int i = 0; i < parameters - 2; ++i) {
@@ -5359,6 +5363,11 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 
 	LuaTimerEventDesc timerEventDesc = std::move(timerEvents[eventIndex]);
 	timerEvents.erase(eventIndex);
+	// Resolve at execution time: scheduled effects must not retain raw pointers
+	// to creatures that may have logged out or died in the meantime.
+	const auto actor = timerEventDesc.effectSourceId ? g_game.getCreatureByID(timerEventDesc.effectSourceId) : nullptr;
+	const auto actorRef = actor ? actor->shared_from_this() : nullptr;
+	SpellEffectSourceScope effectSource(actorRef.get());
 
 	// Everything below pushes onto the shared Lua stack. Only callVoidFunction()
 	// unwinds those pushes, so remember where the stack started and restore it on
