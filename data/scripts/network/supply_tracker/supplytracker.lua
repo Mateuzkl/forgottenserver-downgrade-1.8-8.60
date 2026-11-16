@@ -7,6 +7,9 @@ end
 
 function sendSupplyTracker(player, item)
     if not player or not item then return end
+    if PartyAnalyzer then
+        PartyAnalyzer.trackSupply(player, item)
+    end
     if not player:isUsingOtClient() then return end
     
     local out = NetworkMessage(player)

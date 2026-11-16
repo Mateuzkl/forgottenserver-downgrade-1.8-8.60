@@ -60,11 +60,23 @@ public:
 	void updatePlayerTicks(Player* player, uint32_t points);
 	void clearPlayerPoints(Player* player);
 
+	struct AnalyzerCombatStats {
+		uint64_t damage = 0;
+		uint64_t healing = 0;
+	};
+
+	uint64_t getAnalyzerId() const { return analyzerId; }
+	AnalyzerCombatStats& analyzerCombatStats(uint32_t playerId) { return analyzerStats[playerId]; }
+	AnalyzerCombatStats getAnalyzerCombatStats(uint32_t playerId) const;
+	void resetAnalyzerCombatStats() { analyzerStats.clear(); }
+
 private:
 	bool canEnableSharedExperience();
 	SharedExpStatus_t getSharedExperienceStatus();
 
 	std::unordered_map<uint32_t, int64_t> ticksMap;
+	const uint64_t analyzerId;
+	std::unordered_map<uint32_t, AnalyzerCombatStats> analyzerStats;
 
 	PlayerVector memberList;
 	PlayerVector inviteList;

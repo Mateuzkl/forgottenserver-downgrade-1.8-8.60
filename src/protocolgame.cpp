@@ -3261,7 +3261,7 @@ void ProtocolGame::invalidateItemValuesCache()
 void ProtocolGame::sendImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
                                      std::string_view targetName)
 {
-	if (!isAstraClient || amount == 0) {
+	if ((!isAstraClient && !isFonticakClient) || amount == 0) {
 		return;
 	}
 

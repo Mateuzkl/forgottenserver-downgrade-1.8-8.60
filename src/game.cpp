@@ -7216,6 +7216,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 				Player* attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
 				Player* targetPlayer = target->getPlayer();
+				if (attackerPlayer) {
+					if (Party* party = attackerPlayer->getParty()) {
+						party->analyzerCombatStats(attackerPlayer->getID()).healing += realHeal;
+					}
+				}
 				for (const auto& spectator : spectators) {
 					Player* tmpPlayer = static_cast<Player*>(spectator.get());
 					if (tmpPlayer == attackerPlayer && attackerPlayer != targetPlayer) {
@@ -7681,6 +7686,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		}
 
 		target->drainHealth(attackerRef, realDamage);
+		if (attackerPlayer) {
+			if (Party* party = attackerPlayer->getParty()) {
+				party->analyzerCombatStats(attackerPlayer->getID()).damage += realDamage;
+			}
+		}
 		addCreatureHealth(spectators, target);
 
 		// onPlayerAttack callback
