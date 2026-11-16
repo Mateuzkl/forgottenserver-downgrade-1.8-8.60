@@ -1165,6 +1165,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	// OTCv8 version detection
+	bool requestedEffectSource = false;
 	if (msg.getBufferPosition() < msg.getLength()) {
 		uint16_t otcV8StringLength = msg.get<uint16_t>();
 		if (otcV8StringLength == 5 && msg.getString(5) == "OTCv8") {
@@ -1230,7 +1231,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    FonticakClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
 				} else if (marker == "ES") {
-					supportsEffectSource = isFonticakClient && !isAstraClient;
+					requestedEffectSource = true;
 				} else if (marker == FonticakClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isFonticakClient;
 				} else {
@@ -1239,6 +1240,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 			}
 		}
 	}
+
+	supportsEffectSource = requestedEffectSource && isFonticakClient && !isAstraClient;
 
 	// mehah detect
 	if (operatingSystem == CLIENTOS_OTCLIENT_WINDOWS) {

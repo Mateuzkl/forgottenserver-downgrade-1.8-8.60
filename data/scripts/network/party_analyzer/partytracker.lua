@@ -12,20 +12,10 @@ local function getSession(party)
 	local id = party:getAnalyzerId()
 	local session = sessions[id]
 	if not session then
-		session = { startTime = os.time(), lootType = 0, members = {} }
+		session = { startTime = os.time(), lootType = 0 }
 		sessions[id] = session
 	end
 	return session
-end
-
-local function getMemberStats(session, player)
-	local id = player:getId()
-	local stats = session.members[id]
-	if not stats then
-		stats = { loot = 0, supplies = 0 }
-		session.members[id] = stats
-	end
-	return stats
 end
 
 local function sendPartyAnalyzer(player)
@@ -58,12 +48,11 @@ local function sendPartyAnalyzer(player)
 		for index = 1, count do
 			local member = members[index]
 			local memberId = member:getId()
-			local data = getMemberStats(session, member)
-			local damage, healing = party:getAnalyzerCombatStats(memberId)
+			local loot, supplies, damage, healing = party:getAnalyzerMemberStats(memberId)
 			out:addU32(memberId)
 			out:addByte(0)
-			out:addU64(data.loot)
-			out:addU64(data.supplies)
+			out:addU64(loot)
+			out:addU64(supplies)
 			out:addU64(damage)
 			out:addU64(healing)
 		end
@@ -87,19 +76,6 @@ local function sendPartyAnalyzerToAll(leader)
 	end
 end
 
-local function trackSupply(player, item)
-	local party = player:getParty()
-	if not party then return end
-	local itemType = ItemType(item:getId())
-	if not itemType then return end
-	local price = itemType:getBuyPrice()
-	if price == 0 then
-		price = itemType:getDefaultPrice()
-	end
-	local data = getMemberStats(getSession(party), player)
-	data.supplies = data.supplies + price
-end
-
 local partyLootDrop = Event()
 function partyLootDrop.onDropLoot(monster, corpse)
 	local owner = Player(corpse:getCorpseOwner())
@@ -113,8 +89,7 @@ function partyLootDrop.onDropLoot(monster, corpse)
 			value = value + itemType:getDefaultPrice() * math.max(1, item:getCount())
 		end
 	end
-	local data = getMemberStats(getSession(party), owner)
-	data.loot = data.loot + value
+	party:addAnalyzerLoot(owner, value)
 end
 partyLootDrop:register(100)
 
@@ -149,12 +124,12 @@ local function handlePartyAnalyzerAction(player, msg)
 	local party = player:getParty()
 	if not party or party:getLeader() ~= player then return true end
 
-	local action = msg:getByte()
+	local action = NetworkGuard.readByte(msg)
 	if action == 0 then
 		local session = getSession(party)
-		session.members = {}
 		session.startTime = os.time()
-		party:resetAnalyzerCombatStats()
+		session.lootType = 0
+		party:resetAnalyzerStats()
 	elseif action == 1 then
 		local session = getSession(party)
 		session.lootType = 1 - session.lootType
@@ -165,15 +140,6 @@ local function handlePartyAnalyzerAction(player, msg)
 	return true
 end
 
--- Fonticak sends 0x2B. Keep the existing 0x2E action for compatible clients.
-for _, opcode in ipairs({ 0x2B, 0x2E }) do
-	local handler = PacketHandler(opcode)
-	handler.onReceive = handlePartyAnalyzerAction
-	handler:register()
-end
-
-PartyAnalyzer = {
-	send = sendPartyAnalyzer,
-	sendToAll = sendPartyAnalyzerToAll,
-	trackSupply = trackSupply,
-}
+local handler = PacketHandler(OPCODE_PARTY_ANALYZER)
+handler.onReceive = handlePartyAnalyzerAction
+handler:register()

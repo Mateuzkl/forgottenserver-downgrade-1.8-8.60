@@ -1072,6 +1072,15 @@ void Player::updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatTy
 	}
 }
 
+void Player::recordPartySupply(uint16_t itemId, uint32_t count) const
+{
+	if (Party* party = getParty()) {
+		const ItemType& type = Item::items[itemId];
+		const uint64_t price = type.buyPrice > 0 ? type.buyPrice : (type.sellPrice > 0 ? type.sellPrice : type.worth);
+		party->analyzerMemberStats(getID()).supplies += price * count;
+	}
+}
+
 void Player::sendItemValues() const
 {
 	if (!client) {

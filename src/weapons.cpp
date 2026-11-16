@@ -629,6 +629,7 @@ void Weapon::onUsedWeapon(Player* player, Item* item, Tile* destTile) const
 	}
 
 	if (getBoolean(ConfigManager::REMOVE_WEAPON_AMMO) && breakChance != 0 && uniform_random(1, 100) <= breakChance) {
+		player->recordPartySupply(item->getID());
 		Weapon::decrementItemCount(item);
 		return;
 	}
@@ -636,6 +637,7 @@ void Weapon::onUsedWeapon(Player* player, Item* item, Tile* destTile) const
 	switch (action) {
 		case WEAPONACTION_REMOVECOUNT:
 			if (getBoolean(ConfigManager::REMOVE_WEAPON_AMMO)) {
+				player->recordPartySupply(item->getID());
 				Weapon::decrementItemCount(item);
 			}
 			break;
@@ -643,6 +645,7 @@ void Weapon::onUsedWeapon(Player* player, Item* item, Tile* destTile) const
 		case WEAPONACTION_REMOVECHARGE: {
 			uint16_t charges = item->getCharges();
 			if (charges != 0 && getBoolean(ConfigManager::REMOVE_WEAPON_CHARGES)) {
+				player->recordPartySupply(item->getID());
 				g_game.transformItem(item, item->getID(), charges - 1);
 			}
 			break;

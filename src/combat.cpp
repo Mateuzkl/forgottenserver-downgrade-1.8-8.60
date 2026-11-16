@@ -2508,6 +2508,7 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 				if (!nextTarget) {
 					return;
 				}
+				SpellEffectSourceScope effectSource(resolvedCaster);
 				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect, nextTarget->getInstanceID());
 				if (resolvedCaster) {
 					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget, instantSpellName);

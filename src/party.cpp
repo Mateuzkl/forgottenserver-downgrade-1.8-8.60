@@ -18,10 +18,10 @@ uint64_t nextAnalyzerId = 0;
 
 Party::Party(Player* leader) : analyzerId(++nextAnalyzerId), leader(g_game.getPlayerWeakRef(leader)) {}
 
-Party::AnalyzerCombatStats Party::getAnalyzerCombatStats(uint32_t playerId) const
+Party::AnalyzerMemberStats Party::getAnalyzerMemberStats(uint32_t playerId) const
 {
 	const auto it = analyzerStats.find(playerId);
-	return it != analyzerStats.end() ? it->second : AnalyzerCombatStats{};
+	return it != analyzerStats.end() ? it->second : AnalyzerMemberStats{};
 }
 
 std::shared_ptr<Party> Party::create(Player* leader)

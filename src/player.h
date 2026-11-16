@@ -18,6 +18,7 @@
 #include "protocolgame.h"
 #include "protocolspectator.h"
 #include "rewardchest.h"
+#include "spell_effect_source.h"
 #include "storeinbox.h"
 #include "town.h"
 #include "vocation.h"
@@ -1368,7 +1369,7 @@ public:
 	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type, Creature* actor = nullptr) const
 	{
 		if (client) {
-			client->sendDistanceShoot(from, to, type, actor);
+			client->sendDistanceShoot(from, to, type, actor ? actor : SpellEffectSourceScope::getActor());
 		}
 	}
 	void sendHouseWindow(House* house, uint32_t listId) const;
@@ -1383,7 +1384,7 @@ public:
 	void sendMagicEffect(const Position& pos, uint16_t type, Creature* actor = nullptr) const
 	{
 		if (client) {
-			client->sendMagicEffect(pos, type, actor);
+			client->sendMagicEffect(pos, type, actor ? actor : SpellEffectSourceScope::getActor());
 		}
 	}
 	void sendAmbientSound(uint32_t ambientId) const
@@ -1412,6 +1413,7 @@ public:
 	void updateKillTracker(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Container>& corpse) const;
 	void updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
 	                         std::string_view targetName = {}) const;
+	void recordPartySupply(uint16_t itemId, uint32_t count = 1) const;
 	void sendItemValues() const;
 	void sendBannerType(Banner_t bannerType) const
 	{

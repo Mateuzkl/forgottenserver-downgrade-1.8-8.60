@@ -7218,7 +7218,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 				Player* targetPlayer = target->getPlayer();
 				if (attackerPlayer) {
 					if (Party* party = attackerPlayer->getParty()) {
-						party->analyzerCombatStats(attackerPlayer->getID()).healing += realHeal;
+						party->analyzerMemberStats(attackerPlayer->getID()).healing += realHeal;
 					}
 				}
 				for (const auto& spectator : spectators) {
@@ -7688,7 +7688,7 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		target->drainHealth(attackerRef, realDamage);
 		if (attackerPlayer) {
 			if (Party* party = attackerPlayer->getParty()) {
-				party->analyzerCombatStats(attackerPlayer->getID()).damage += realDamage;
+				party->analyzerMemberStats(attackerPlayer->getID()).damage += realDamage;
 			}
 		}
 		addCreatureHealth(spectators, target);
