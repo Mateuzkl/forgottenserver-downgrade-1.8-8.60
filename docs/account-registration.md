@@ -1,0 +1,44 @@
+# OTC-Fonticak registration API
+
+Create `otc-registration.php` in the local Apache document root. Point its
+wrapper at the server checkout outside that document root.
+
+```php
+<?php
+require '/path/to/server/tools/registration/endpoint.php';
+```
+
+Set `Services.createAccount` in the client's `init.lua` to
+`http://127.0.0.1/otc-registration.php`.
+Restart the client after changing the URL. Apache and MySQL must be running.
+No game server rebuild is necessary.
+
+The service reads database credentials and new player settings from `config.lua`.
+It does not execute Lua. Values must be literal strings or numbers.
+When new player X/Y are zero, it uses the Account Manager's saved position.
+Configured positions default to ground floor (7) when Z is omitted.
+Accounts receive a generated internal name, the supplied email, normal permissions,
+and a SHA-1 password hash matching this TFS engine. Players start with vocation 0
+and the configured level, health, mana, capacity and town. Use the email to log in.
+
+Supported JSON POST types match the existing Fonticak form:
+`getaccountcreationstatus`, `generatecharactername`, `checkemail`,
+`checkcharactername`, `checkpassword`, `createaccountandcharacter`.
+Creation requires `EMail`, `Password`, `CharacterName`, `CharacterSex`
+(`male`/`female`) and boolean `AcceptedTerms: true`.
+Success returns `{"Success":true}`; errors include `errorMessage`.
+The `createcharacter` request authenticates `Account` and `Password`, then creates
+`CharacterName`/`CharacterSex` in that account. It requires the configured `World`
+and `PlayTutorial: false`. Accounts with two-factor authentication are currently
+rejected by this endpoint. The client reloads the character list after creation.
+Creation validates all fields again and inserts account/player in a transaction.
+A database advisory lock serializes registrations from this endpoint.
+
+This endpoint accepts loopback requests only and rejects browser Origin headers.
+Keep the endpoint on loopback. Other account creation
+systems must coordinate email uniqueness too; the TFS schema has no unique email key.
+Never place `config.lua` or `service.php` in the public web directory.
+
+Run `php tools/registration/smoke.php` to exercise the HTTP API.
+It creates a temporary account/character, verifies the database values and duplicate
+rejection, and deletes its temporary records in a finally block.

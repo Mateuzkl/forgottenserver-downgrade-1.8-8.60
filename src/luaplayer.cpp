@@ -511,6 +511,14 @@ int luaPlayerSendCharmActivated(lua_State* L)
 	return 1;
 }
 
+int luaPlayerRecordPartySupply(lua_State* L)
+{
+	if (const auto player = getPlayer(L, 1)) {
+		player->recordPartySupply(getInteger<uint16_t>(L, 2), getInteger<uint32_t>(L, 3, 1));
+	}
+	return 0;
+}
+
 int luaPlayerUpdateKillTracker(lua_State* L)
 {
 	// player:updateKillTracker(monster, corpse)
@@ -4998,6 +5006,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "sendSingleSoundEffect", luaPlayerSendSingleSoundEffect);
 	registerMethod("Player", "sendDoubleSoundEffect", luaPlayerSendDoubleSoundEffect);
 	registerMethod("Player", "updateKillTracker", luaPlayerUpdateKillTracker);
+	registerMethod("Player", "recordPartySupply", luaPlayerRecordPartySupply);
 	registerMethod("Player", "addConditionSuppressions", luaPlayerAddConditionSuppressions);
 	registerMethod("Player", "removeConditionSuppressions", luaPlayerRemoveConditionSuppressions);
 

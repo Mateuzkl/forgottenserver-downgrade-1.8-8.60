@@ -207,8 +207,8 @@ private:
 	void sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon = IconBakragore_None);
 	void sendFYIBox(std::string_view message);
 
-	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type);
-	void sendMagicEffect(const Position& pos, uint16_t type);
+	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type, Creature* actor = nullptr);
+	void sendMagicEffect(const Position& pos, uint16_t type, Creature* actor = nullptr);
 	void sendCreatureHealth(const Creature* creature);
 	void sendSkills();
 	void sendPing();
@@ -471,6 +471,7 @@ private:
 	bool isAstraClient = false;
 	bool isFonticakClient = false;
 	bool supportsGameStoreHighlights = false;
+	bool supportsEffectSource = false;
 	bool supportsContainerTypes = false;
 	bool supportsAstraSingleCreatureMarks = false;
 	bool supportsAstraEchoRaidVisuals = false;
@@ -485,6 +486,10 @@ private:
 	std::unordered_map<uint32_t, EchoRaidVisualState> echoRaidVisualCache;
 	uint32_t dllWeatherSequence = 0;
 	bool isUsingFonticakClient() const { return isFonticakClient; }
+	bool shouldSendEffectSource() const
+	{
+		return isFonticakClient && !isAstraClient && supportsEffectSource;
+	}
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }
 	bool supportsCreatureIcons() const { return supportsAstraCreatureIcons(); }
 	bool supportsNativeZoneWeather() const

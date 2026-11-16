@@ -995,6 +995,7 @@ enum class GameFeature : uint8_t {
 	ItemTierByte = 131,
 	Proficiency = 132, // OTC GameProficiency: catalog proficiencyId + shaped perk slots in info payload
 	AstraCreatureIcons = 133,
+	EffectSource = 133, // Fonticak only; negotiated by the ES login marker
 	PlayerFamiliars = 138,
 	DisplayItemCharges = 139,
 	PackedPlayerInventory = 140,

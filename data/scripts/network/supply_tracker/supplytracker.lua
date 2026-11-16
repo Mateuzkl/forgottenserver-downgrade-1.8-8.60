@@ -7,6 +7,7 @@ end
 
 function sendSupplyTracker(player, item)
     if not player or not item then return end
+    player:recordPartySupply(item:getId())
     if not player:isUsingOtClient() then return end
     
     local out = NetworkMessage(player)

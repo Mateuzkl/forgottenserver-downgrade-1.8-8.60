@@ -83,7 +83,7 @@ int luaPositionIsSightClear(lua_State* L)
 
 int luaPositionSendMagicEffect(lua_State* L)
 {
-	// position:sendMagicEffect(magicEffect[, players = {}|instanceId])
+	// position:sendMagicEffect(magicEffect[, players = {}|instanceId[, actor]])
 	SpectatorVec spectators;
 	const bool hasExplicitAudience = hasAudienceArgument(L, 3);
 	uint32_t instanceId = hasExplicitAudience ? 0 : getPositionInstanceId(L, 1);
@@ -101,10 +101,11 @@ int luaPositionSendMagicEffect(lua_State* L)
 	}
 
 	const Position& position = getPosition(L, 1);
+	Creature* actor = lua_gettop(L) >= 4 ? getCreature(L, 4) : nullptr;
 	if (!spectators.empty()) {
-		Game::addMagicEffect(spectators, position, magicEffect);
+		Game::addMagicEffect(spectators, position, magicEffect, actor);
 	} else {
-		g_game.addMagicEffect(position, magicEffect, instanceId);
+		g_game.addMagicEffect(position, magicEffect, instanceId, actor);
 	}
 
 	pushBoolean(L, true);
@@ -113,7 +114,7 @@ int luaPositionSendMagicEffect(lua_State* L)
 
 int luaPositionSendDistanceEffect(lua_State* L)
 {
-	// position:sendDistanceEffect(positionEx, distanceEffect[, players = {}|instanceId])
+	// position:sendDistanceEffect(positionEx, distanceEffect[, players = {}|instanceId[, actor]])
 	SpectatorVec spectators;
 	const bool hasExplicitAudience = hasAudienceArgument(L, 4);
 	uint32_t instanceId = hasExplicitAudience ? 0 : getPositionInstanceId(L, 1);
@@ -126,10 +127,11 @@ int luaPositionSendDistanceEffect(lua_State* L)
 	ShootType_t distanceEffect = getInteger<ShootType_t>(L, 3);
 	const Position& positionEx = getPosition(L, 2);
 	const Position& position = getPosition(L, 1);
+	Creature* actor = lua_gettop(L) >= 5 ? getCreature(L, 5) : nullptr;
 	if (!spectators.empty()) {
-		Game::addDistanceEffect(spectators, position, positionEx, distanceEffect);
+		Game::addDistanceEffect(spectators, position, positionEx, distanceEffect, actor);
 	} else {
-		g_game.addDistanceEffect(position, positionEx, distanceEffect, instanceId);
+		g_game.addDistanceEffect(position, positionEx, distanceEffect, instanceId, actor);
 	}
 
 	pushBoolean(L, true);

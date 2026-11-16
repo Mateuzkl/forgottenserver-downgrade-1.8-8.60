@@ -9,6 +9,7 @@
 #include "item.h"
 #include "player.h"
 #include "spectators.h"
+#include "spell_effect_source.h"
 
 #include <cstdint>
 
@@ -77,12 +78,12 @@ inline bool canInteract(const Creature *a, const Creature *b)
 
 inline void sendMagicEffectToInstance(const SpectatorVec &spectators,
                                        const Position &pos, uint8_t effect,
-                                       uint32_t instanceId)
+                                       uint32_t instanceId, Creature* actor = nullptr)
 {
     for (const auto& spectator : spectators.players()) {
         Player *p = static_cast<Player*>(spectator.get());
         if (p->compareInstance(instanceId)) {
-            p->sendMagicEffect(pos, effect);
+            p->sendMagicEffect(pos, effect, actor ? actor : SpellEffectSourceScope::getActor());
         }
     }
 }
@@ -93,12 +94,12 @@ void sendMagicEffectToInstance(const Position &pos, uint32_t instanceId,
 inline void sendDistanceEffectToInstance(const SpectatorVec &spectators,
                                          const Position &from,
                                          const Position &to, uint8_t effect,
-                                         uint32_t instanceId)
+                                         uint32_t instanceId, Creature* actor = nullptr)
 {
     for (const auto& spectator : spectators.players()) {
         Player *p = static_cast<Player*>(spectator.get());
         if (p->compareInstance(instanceId)) {
-            p->sendDistanceShoot(from, to, effect);
+            p->sendDistanceShoot(from, to, effect, actor ? actor : SpellEffectSourceScope::getActor());
         }
     }
 }

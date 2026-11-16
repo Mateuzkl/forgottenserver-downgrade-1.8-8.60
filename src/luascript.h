@@ -205,6 +205,7 @@ struct LuaTimerEventDesc
 	int32_t function = -1;
 	std::vector<int32_t> parameters;
 	uint32_t eventId = 0;
+	uint32_t effectSourceId = 0;
 	std::string origin;
 
 	LuaTimerEventDesc() = default;

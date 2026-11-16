@@ -1165,6 +1165,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	// OTCv8 version detection
+	bool requestedEffectSource = false;
 	if (msg.getBufferPosition() < msg.getLength()) {
 		uint16_t otcV8StringLength = msg.get<uint16_t>();
 		if (otcV8StringLength == 5 && msg.getString(5) == "OTCv8") {
@@ -1229,6 +1230,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    FonticakClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == "ES") {
+					requestedEffectSource = true;
 				} else if (marker == FonticakClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isFonticakClient;
 				} else {
@@ -1237,6 +1240,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 			}
 		}
 	}
+
+	supportsEffectSource = requestedEffectSource && isFonticakClient && !isAstraClient;
 
 	// mehah detect
 	if (operatingSystem == CLIENTOS_OTCLIENT_WINDOWS) {
@@ -3259,7 +3264,7 @@ void ProtocolGame::invalidateItemValuesCache()
 void ProtocolGame::sendImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
                                      std::string_view targetName)
 {
-	if (!isAstraClient || amount == 0) {
+	if ((!isAstraClient && !isFonticakClient) || amount == 0) {
 		return;
 	}
 
@@ -4310,17 +4315,20 @@ ProtocolGame::CustomPongResult ProtocolGame::receiveCustomPong(uint32_t id, int6
 	return CustomPongResult::Unknown;
 }
 
-void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
+void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type, Creature* actor)
 {
 	NetworkMessage msg;
 	msg.addByte(0x85);
 	msg.addPosition(from);
 	msg.addPosition(to);
 	msg.add<uint16_t>(type);
+	if (shouldSendEffectSource()) {
+		msg.addByte(actor ? (actor == player.get() ? 1 : (actor->getPlayer() ? 2 : 3)) : 0);
+	}
 	writeToOutputBuffer(msg);
 }
 
-void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
+void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type, Creature* actor)
 {
 	if (!canSee(pos)) {
 		return;
@@ -4335,6 +4343,9 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 	msg.addByte(0x83);
 	msg.addPosition(pos);
 	msg.add<uint16_t>(type);
+	if (shouldSendEffectSource()) {
+		msg.addByte(actor ? (actor == player.get() ? 1 : (actor->getPlayer() ? 2 : 3)) : 0);
+	}
 	writeToOutputBuffer(msg);
 }
 
@@ -7299,6 +7310,11 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
 		features[GameFeature::DoubleShopSellAmount] = true;
+	}
+	// ID 133 means creature icons in Astra. Never overwrite its feature or
+	// append Fonticak's source byte to Astra/CIP effect packets.
+	if (shouldSendEffectSource()) {
+		features[GameFeature::EffectSource] = true;
 	}
 	// Loot highlight container types (OTC GameContainerTypes) — negotiated per client.
 	if (isAstraClient || isFonticakClient) {

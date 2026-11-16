@@ -726,7 +726,7 @@ bool ConfigManager::load()
 
 	integers[Integer::NEW_PLAYER_SPAWN_POS_X] = getGlobalInteger(L, "newPlayerSpawnPosX", 0);
 	integers[Integer::NEW_PLAYER_SPAWN_POS_Y] = getGlobalInteger(L, "newPlayerSpawnPosY", 0);
-	integers[Integer::NEW_PLAYER_SPAWN_POS_Z] = getGlobalInteger(L, "newPlayerSpawnPosZ", 0);
+	integers[Integer::NEW_PLAYER_SPAWN_POS_Z] = getGlobalInteger(L, "newPlayerSpawnPosZ", 7);
 	integers[Integer::NEW_PLAYER_TOWN_ID] = getGlobalInteger(L, "newPlayerTownId", 1);
 	integers[Integer::NEW_PLAYER_LEVEL] = getGlobalInteger(L, "newPlayerLevel", 1);
 	integers[Integer::NEW_PLAYER_MAGIC_LEVEL] = getGlobalInteger(L, "newPlayerMagicLevel", 0);

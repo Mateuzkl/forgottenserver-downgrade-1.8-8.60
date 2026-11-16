@@ -12,7 +12,17 @@
 
 extern Game g_game;
 
-Party::Party(Player* leader) : leader(g_game.getPlayerWeakRef(leader)) {}
+namespace {
+uint64_t nextAnalyzerId = 0;
+}
+
+Party::Party(Player* leader) : analyzerId(++nextAnalyzerId), leader(g_game.getPlayerWeakRef(leader)) {}
+
+Party::AnalyzerMemberStats Party::getAnalyzerMemberStats(uint32_t playerId) const
+{
+	const auto it = analyzerStats.find(playerId);
+	return it != analyzerStats.end() ? it->second : AnalyzerMemberStats{};
+}
 
 std::shared_ptr<Party> Party::create(Player* leader)
 {
@@ -159,6 +169,7 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 	updateSharedExperience();
 
 	clearPlayerPoints(player);
+	analyzerStats.erase(player->getID());
 
 	broadcastPartyMessage(MESSAGE_INFO_DESCR, fmt::format("{:s} has left the party.", player->getName()));
 
