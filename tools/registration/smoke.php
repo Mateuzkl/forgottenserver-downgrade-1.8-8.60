@@ -2,7 +2,8 @@
 // Run with PHP CLI. Creates one temporary account/character and removes it in finally.
 declare(strict_types=1);
 require __DIR__ . '/service.php';
-$db = registrationDatabase(registrationConfig());
+$config = registrationConfig();
+$db = registrationDatabase($config);
 $suffix = substr(strtr(bin2hex(random_bytes(8)), '0123456789', 'abcdefghij'), 0, 12);
 $email = 'codex-registration-' . $suffix . '@example.invalid';
 $name = 'Codex ' . ucfirst($suffix);
@@ -17,7 +18,7 @@ function checkRegistration(bool $ok, string $label): void {
     echo 'PASS: ', $label, PHP_EOL;
 }
 try {
-    checkRegistration(isset(callRegistration(['type' => 'getaccountcreationstatus'])['Worlds'][0]['Name']), 'world status');
+    checkRegistration((callRegistration(['type' => 'getaccountcreationstatus'])['Worlds'][0]['Name'] ?? null) === $config['world'], 'world status');
     checkRegistration(callRegistration(['type' => 'checkemail', 'Email' => 'invalid'])['IsValid'] === false, 'invalid email rejected');
     checkRegistration(callRegistration(['type' => 'checkpassword', 'Password1' => 'weak'])['PasswordValid'] === false, 'weak password rejected');
     $data = ['type' => 'createaccountandcharacter', 'EMail' => $email, 'Password' => $password,
@@ -31,7 +32,7 @@ try {
     checkRegistration(callRegistration($data)['Success'] === false, 'duplicate registration rejected');
     $character = ['type' => 'createcharacter', 'Account' => $email, 'Password' => $password,
         'CharacterName' => 'Second ' . ucfirst($suffix), 'CharacterSex' => 'female',
-        'World' => registrationConfig()['world'], 'PlayTutorial' => false];
+        'World' => $config['world'], 'PlayTutorial' => false];
     checkRegistration(callRegistration(array_merge($character, ['Password' => 'WrongPassword9']))['Success'] === false, 'character creation rejects wrong credentials');
     checkRegistration(callRegistration(array_merge($character, ['World' => 'InvalidWorld']))['Success'] === false, 'character creation rejects wrong world');
     checkRegistration(callRegistration($character)['Success'] === true, 'character created on existing account');

@@ -2,26 +2,39 @@
 declare(strict_types=1);
 
 function registrationConfig(): array {
-    $lua = file_get_contents(dirname(__DIR__, 2) . '/config.lua');
+    $lua = @file_get_contents(dirname(__DIR__, 2) . '/config.lua');
+    if ($lua === false) {
+        throw new RuntimeException('Unable to read config.lua.');
+    }
     $get = static function (string $key, $default) use ($lua) {
         if (preg_match('/^' . preg_quote($key, '/') . '\s*=\s*"([^"\r\n]*)"/m', $lua, $m)) return $m[1];
         if (preg_match('/^' . preg_quote($key, '/') . '\s*=\s*(\d+)/m', $lua, $m)) return (int)$m[1];
         return $default;
     };
+    $env = static function (string $key, string $default): string {
+        $value = getenv($key);
+        return $value === false ? $default : $value;
+    };
     return [
-        'host' => $get('mysqlHost', '127.0.0.1'), 'port' => $get('mysqlPort', 3306),
-        'database' => $get('mysqlDatabase', ''), 'user' => $get('mysqlUser', ''), 'password' => $get('mysqlPass', ''),
+        'host' => $get('mysqlHost', $env('MYSQL_HOST', '127.0.0.1')),
+        'port' => $get('mysqlPort', (int)$env('MYSQL_PORT', '3306')),
+        'socket' => $get('mysqlSock', $env('MYSQL_SOCK', '')),
+        'database' => $get('mysqlDatabase', $env('MYSQL_DATABASE', 'forgottenserver')),
+        'user' => $get('mysqlUser', $env('MYSQL_USER', 'forgottenserver')),
+        'password' => $get('mysqlPass', $env('MYSQL_PASSWORD', '')),
         'world' => $get('serverName', 'Forgotten'), 'worldType' => $get('worldType', 'pvp'), 'level' => $get('newPlayerLevel', 8),
         'magic' => $get('newPlayerMagicLevel', 0), 'health' => $get('newPlayerHealth', 185),
         'mana' => $get('newPlayerMana', 90), 'cap' => $get('newPlayerCap', 470),
         'town' => $get('newPlayerTownId', 1), 'x' => $get('newPlayerSpawnPosX', 0),
-        'y' => $get('newPlayerSpawnPosY', 0), 'z' => $get('newPlayerSpawnPosZ', 0)
+        'y' => $get('newPlayerSpawnPosY', 0), 'z' => $get('newPlayerSpawnPosZ', 7)
     ];
 }
 
 function registrationDatabase(array $c): PDO {
-    return new PDO("mysql:host={$c['host']};port={$c['port']};dbname={$c['database']};charset=utf8", $c['user'], $c['password'],
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+    $address = $c['socket'] !== '' ? "unix_socket={$c['socket']}" : "host={$c['host']};port={$c['port']}";
+    return new PDO("mysql:{$address};dbname={$c['database']};charset=utf8", $c['user'], $c['password'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_TIMEOUT => 5]);
 }
 
 function registrationPassword(string $password): array {
@@ -118,6 +131,9 @@ function registrationHandle(array $data, PDO $db, array $c): array {
                     $spawn = $db->query("SELECT posx,posy,posz FROM players WHERE name = 'Account Manager' LIMIT 1")->fetch();
                     if (!$spawn || !$spawn['posx'] || !$spawn['posy']) throw new RuntimeException('Configure new player spawn coordinates.');
                     $x = $spawn['posx']; $y = $spawn['posy']; $z = $spawn['posz'];
+                }
+                if ($z < 0 || $z >= 16) {
+                    throw new RuntimeException('New player spawn floor must be between 0 and 15.');
                 }
                 if (!$existing) {
                     $q = $db->prepare('INSERT INTO accounts (name,password,email,creation,type) VALUES (?,?,?,?,1)');

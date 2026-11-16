@@ -13,7 +13,10 @@ if (!in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true) || isse
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') registrationReply(['Success' => false, 'errorMessage' => 'POST required.'], 405);
 if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 8192) registrationReply(['Success' => false, 'errorMessage' => 'Request too large.'], 413);
 try {
-    $data = json_decode(file_get_contents('php://input', false, null, 0, 8193), true, 16, JSON_THROW_ON_ERROR);
+    $body = file_get_contents('php://input', false, null, 0, 8193);
+    if ($body === false) throw new RuntimeException('Unable to read the registration request.');
+    if (strlen($body) > 8192) registrationReply(['Success' => false, 'errorMessage' => 'Request too large.'], 413);
+    $data = json_decode($body, true, 16, JSON_THROW_ON_ERROR);
     if (!is_array($data)) throw new InvalidArgumentException('Expected JSON object.');
     foreach ($data as $value) if (!is_scalar($value) && $value !== null) throw new InvalidArgumentException('Invalid field.');
     require_once __DIR__ . '/service.php';
@@ -23,5 +26,5 @@ try {
     registrationReply(['Success' => false, 'errorMessage' => 'Invalid registration request.'], 400);
 } catch (Throwable $e) {
     error_log('OTC registration: ' . $e->getMessage());
-    registrationReply(['Success' => false, 'errorMessage' => 'Registration is unavailable. Please try again later.']);
+    registrationReply(['Success' => false, 'errorMessage' => 'Registration is unavailable. Please try again later.'], 503);
 }

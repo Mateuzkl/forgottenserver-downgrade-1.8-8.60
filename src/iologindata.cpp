@@ -2069,6 +2069,10 @@ bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint
 	int32_t posX = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::NEW_PLAYER_SPAWN_POS_X));
 	int32_t posY = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::NEW_PLAYER_SPAWN_POS_Y));
 	int32_t posZ = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::NEW_PLAYER_SPAWN_POS_Z));
+	if (posZ < 0 || posZ >= MAP_MAX_LAYERS) {
+		LOG_ERROR("Invalid newPlayerSpawnPosZ: {}", posZ);
+		return false;
+	}
 
 	uint64_t experience = Player::getExpForLevel(level);
 	
