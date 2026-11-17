@@ -5074,6 +5074,10 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	writeToOutputBuffer(msg);
 
 	sendMapDescription(pos);
+	if (!acceptPackets && !isSpectator && ConfigManager::getBoolean(ConfigManager::COLORIZED_LOOT_VALUE)) {
+		// Load rarity values before the initial inventory and containers are drawn.
+		sendItemValues();
+	}
 	for (const auto& visiblePlayer : g_game.getPlayers()) {
 		if (visiblePlayer->getInstanceID() == player->getInstanceID() && canSee(visiblePlayer->getPosition()) &&
 		    player->canSeeCreature(visiblePlayer.get())) {

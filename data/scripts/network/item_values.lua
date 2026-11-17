@@ -28,10 +28,6 @@ local function supportsCustomNetwork(player)
 	return player and player.supportsCustomItemNetwork and player:supportsCustomItemNetwork()
 end
 
-local function colorizedLootEnabled()
-	return configManager.getBoolean(configKeys.COLORIZED_LOOT_VALUE)
-end
-
 local function safeCall(object, method)
 	if not object or type(object[method]) ~= "function" then
 		return nil
@@ -231,25 +227,6 @@ local function getDefaultBuyPrice(itemId)
 	return 0
 end
 
-local function sendItemValues(playerId, attempt)
-	attempt = tonumber(attempt) or 1
-	local player = Player(playerId)
-	if not player or not player.sendItemValues then
-		return
-	end
-	if not supportsCustomNetwork(player) then
-		if attempt < 6 then
-			addEvent(sendItemValues, 1000, playerId, attempt + 1)
-		end
-		return
-	end
-	if not colorizedLootEnabled() then
-		return
-	end
-
-	player:sendItemValues()
-end
-
 local function sendItemDetails(player, itemId)
 	itemId = tonumber(itemId) or 0
 	if itemId <= 0 or not supportsCustomNetwork(player) then
@@ -289,24 +266,6 @@ local function sendItemDetails(player, itemId)
 	end
 	return msg:sendToPlayer(player)
 end
-
-local loginEvent = CreatureEvent("ItemValuesLogin")
-
-function loginEvent.onLogin(player)
-	addEvent(sendItemValues, 1000, player:getId(), 1)
-	return true
-end
-
-loginEvent:register()
-
-local reconnectEvent = CreatureEvent("ItemValuesReconnect")
-
-function reconnectEvent.onReconnect(player)
-	addEvent(sendItemValues, 250, player:getId(), 1)
-	return true
-end
-
-reconnectEvent:register()
 
 local itemDetailsHandler = PacketHandler(OPCODE_ITEM_DETAILS)
 
