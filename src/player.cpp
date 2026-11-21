@@ -9429,6 +9429,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 
 void Player::handleNewAccountManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
+	static constexpr uint8_t MAX_RECOVERY_ATTEMPTS = 5;
 	msg << "Account Manager: ";
 
 	if (checkText(text, "cancel") && managerData.accountId == 0) {
@@ -9436,7 +9437,6 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 		managerData.string1.clear();
 		managerData.string2.clear();
 		managerData.accountName.clear();
-		managerData.recoveryAttempts = 0;
 		msg << "Alright, let's start over. Type 'account' to create a new account or 'recover' to recover an existing one.";
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
@@ -9451,15 +9451,28 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (checkText(text, "recover") && !managerTalkState[1]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+			LOG_WARN("[Security] Blocked recovery restart after reaching max failed attempts in session.");
+			msg << "Too many failed recovery key attempts in this session. Please reconnect later or contact an administrator.";
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
 		msg << "What is your account name or email?";
 		managerTalkState[1] = true;
 		managerTalkState[6] = true;
-		managerData.recoveryAttempts = 0;
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
 	}
 
 	if (managerTalkState[6]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+			msg << "Too many failed recovery key attempts in this session. Please reconnect later or contact an administrator.";
+			managerTalkState[6] = false;
+			managerTalkState[1] = false;
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		std::string tmp = text;
 		trimString(tmp);
 
@@ -9477,7 +9490,6 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 		}
 
 		managerData.accountName = *resolvedAccount;
-		managerData.recoveryAttempts = 0;
 		managerTalkState[6] = false;
 		managerTalkState[7] = true;
 		msg << "What is your recovery key?";
@@ -9486,6 +9498,15 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (managerTalkState[7]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+			msg << "Too many failed recovery key attempts in this session. Please reconnect later or contact an administrator.";
+			managerTalkState[7] = false;
+			managerTalkState[1] = false;
+			managerData.accountName.clear();
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		std::string recoveryKey = text;
 		trimString(recoveryKey);
 
@@ -9525,15 +9546,13 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 		std::string inputKeyHash = transformToSHA1Hex(recoveryKey);
 		if (storedKeyHash != inputKeyHash) {
 			++managerData.recoveryAttempts;
-			static constexpr uint8_t MAX_RECOVERY_ATTEMPTS = 5;
 			if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
 				LOG_WARN("[Security] Too many failed recovery key attempts for account '{}' (account={}).",
 				         managerData.accountName, accId);
-				msg << "Too many failed recovery key attempts. Recovery cancelled.";
+				msg << "Too many failed recovery key attempts in this session. Recovery has been disabled for this session.";
 				managerTalkState[7] = false;
 				managerTalkState[1] = false;
 				managerData.accountName.clear();
-				managerData.recoveryAttempts = 0;
 			} else {
 				msg << "The recovery key you entered is incorrect. Please try again or type 'cancel' to start over.";
 			}
@@ -9548,12 +9567,13 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			    << ". Please write it down before you logout.";
 			managerTalkState[7] = false;
 			managerTalkState[1] = false;
+			managerData.accountName.clear();
 			managerData.recoveryAttempts = 0;
 		} else {
 			msg << "Sorry, an error occurred while recovering your account. Please try again later.";
 			managerTalkState[7] = false;
 			managerTalkState[1] = false;
-			managerData.recoveryAttempts = 0;
+			managerData.accountName.clear();
 		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;

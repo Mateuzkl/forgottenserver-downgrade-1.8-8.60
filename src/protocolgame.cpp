@@ -934,7 +934,9 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->onlineTimeSessionStart = time(nullptr);
 	// Loading ran only after SaveManager drained this GUID. Deliver on the dispatcher,
 	// after world/login hooks, so the item and receipt can share a player snapshot.
-	(void)Market::processDeliveries(player.get());
+	if (!player->isAccountManager()) {
+		(void)Market::processDeliveries(player.get());
+	}
 	if (g_saveManager.hasFailedRecovery(player->getGUID())) {
 		g_game.releaseLogin(reservedGuid);
 		return;
@@ -1499,6 +1501,22 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 		}
 	}
 
+	// Account Manager sessions may only talk, ping, and logout.
+	// Block all gameplay, Store, Market, Character Bazaar, VIP, extended opcodes, and Lua packet handlers.
+	if (player->isAccountManager()) {
+		switch (recvbyte) {
+			case 0x14: // logout
+			case 0x1E: // ping
+			case 0x40: // extended ping (OTC)
+			case 0x96: // say (Account Manager dialogue)
+				break; // allowed — fall through to normal processing
+			default:
+				skipUnreadBytes(msg);
+				sendCancelWalk();
+				return;
+		}
+	}
+
 	if (isSpectator) {
 		switch (recvbyte) {
 			case 0x14: disconnect(); break;
@@ -1944,8 +1962,8 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 {
-	if (!player || !isAstraClient || !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) ||
-	    !requireUnreadBytes(msg, 1)) {
+	if (!player || player->isAccountManager() || !isAstraClient ||
+	    !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) || !requireUnreadBytes(msg, 1)) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -1981,7 +1999,7 @@ void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreOpen(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2004,7 +2022,7 @@ void ProtocolGame::parseStoreOpen(NetworkMessage& msg)
 
 void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2084,7 +2102,7 @@ void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreHistory(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2107,7 +2125,7 @@ void ProtocolGame::parseStoreHistory(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}

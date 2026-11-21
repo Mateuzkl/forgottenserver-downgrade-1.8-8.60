@@ -2,6 +2,9 @@
 -- failures, logout and restarts; C++ defers players with an async save in flight.
 local deliveries = GlobalEvent("MarketDeliveries")
 function deliveries.onThink(interval)
+	if not configManager.getBoolean(configKeys.MARKET_SYSTEM_ENABLED) then
+		return true
+	end
 	Game.processMarketDeliveries()
 	return true
 end
