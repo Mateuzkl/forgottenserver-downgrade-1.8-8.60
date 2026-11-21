@@ -24,6 +24,7 @@
 #include "movement.h"
 #include "npc.h"
 #include "party.h"
+#include "protocollogin.h"
 #include "rewardchest.h"
 #include "databasetasks.h"
 #include "save_manager.h"
@@ -9149,9 +9150,9 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		return;
 	} else if (checkText(text, "yes") && managerTalkState[3]) {
 		uint32_t playerId = IOLoginData::getGuidByName(managerData.string1);
-		if (playerId > 1) {
+		if (playerId > 0) {
 			const uint32_t ownerAccountId = IOLoginData::getAccountIdByPlayerId(playerId);
-			if (ownerAccountId != managerData.accountId) {
+			if (!canAccountDeleteCharacter(managerData.accountId, playerId, ownerAccountId)) {
 				LOG_WARN("[Security] Account {} attempted to delete character '{}' (guid={}, owner={}) - BLOCKED.",
 				         managerData.accountId, managerData.string1, playerId, ownerAccountId);
 				playerId = 0;
@@ -9427,9 +9428,101 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 	}
 }
 
+bool Player::canAccountDeleteCharacter(uint32_t sessionAccountId, uint32_t targetPlayerId, uint32_t ownerAccountId)
+{
+	return sessionAccountId > 1 && targetPlayerId > 1 && ownerAccountId == sessionAccountId;
+}
+
+std::string Player::makeAccountRecoveryLimiterKey(std::string_view canonicalAccountName)
+{
+	std::string normalized = asTrimmedString(canonicalAccountName);
+	if (normalized.empty()) {
+		return {};
+	}
+	toLowerCaseString(normalized);
+	return "recover:" + normalized;
+}
+
+bool Player::isAccountRecoveryAllowed(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	if (clientIp == 0) {
+		return true;
+	}
+	return LoginAttemptLimiter::getInstance().allowLogin(clientIp,
+	                                                     makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+void Player::recordAccountRecoveryFailure(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	if (clientIp == 0) {
+		return;
+	}
+	LoginAttemptLimiter::getInstance().recordFailure(clientIp, makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+void Player::recordAccountRecoverySuccess(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	if (clientIp == 0) {
+		return;
+	}
+	LoginAttemptLimiter::getInstance().recordSuccess(clientIp, makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+bool Player::verifyAccountRecoveryAttempt(uint32_t accId, std::string_view storedKeyHash, std::string_view recoveryKey,
+                                          uint32_t clientIp, std::ostringstream& msg)
+{
+	if (accId <= 1) {
+		LOG_WARN("[Security] Blocked recovery attempt on protected account (account={}).", accId);
+		msg << "This account cannot be recovered.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+	    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+		LOG_WARN("[Security] Blocked recovery attempt due to rate limit for account '{}' (account={}).",
+		         managerData.accountName, accId);
+		msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	if (storedKeyHash.empty()) {
+		msg << "This account does not have a recovery key set. Please contact an administrator.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	const std::string inputKeyHash = transformToSHA1Hex(recoveryKey);
+	if (storedKeyHash != inputKeyHash) {
+		++managerData.recoveryAttempts;
+		recordAccountRecoveryFailure(clientIp, managerData.accountName);
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+		    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+			LOG_WARN("[Security] Too many failed recovery key attempts for account '{}' (account={}).",
+			         managerData.accountName, accId);
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			managerTalkState[7] = false;
+			managerTalkState[1] = false;
+			managerData.accountName.clear();
+		} else {
+			msg << "The recovery key you entered is incorrect. Please try again or type 'cancel' to start over.";
+		}
+		return false;
+	}
+
+	return true;
+}
+
 void Player::handleNewAccountManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
-	static constexpr uint8_t MAX_RECOVERY_ATTEMPTS = 5;
+	const uint32_t clientIp = getIP() != 0 ? getIP() : lastIP;
 	msg << "Account Manager: ";
 
 	if (checkText(text, "cancel") && managerData.accountId == 0) {
@@ -9451,9 +9544,9 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (checkText(text, "recover") && !managerTalkState[1]) {
-		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-			LOG_WARN("[Security] Blocked recovery restart after reaching max failed attempts in session.");
-			msg << "Too many failed recovery key attempts in this session. Please reconnect later or contact an administrator.";
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION || !isAccountRecoveryAllowed(clientIp)) {
+			LOG_WARN("[Security] Blocked recovery restart after reaching max failed attempts.");
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
 			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 			return;
 		}
@@ -9465,8 +9558,8 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (managerTalkState[6]) {
-		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-			msg << "Too many failed recovery key attempts in this session. Please reconnect later or contact an administrator.";
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION || !isAccountRecoveryAllowed(clientIp)) {
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
 			managerTalkState[6] = false;
 			managerTalkState[1] = false;
 			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
@@ -9489,6 +9582,15 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			return;
 		}
 
+		if (!isAccountRecoveryAllowed(clientIp, *resolvedAccount)) {
+			LOG_WARN("[Security] Blocked recovery start for rate-limited account '{}'.", *resolvedAccount);
+			msg << "Too many failed recovery key attempts for this account. Please try again later or contact an administrator.";
+			managerTalkState[6] = false;
+			managerTalkState[1] = false;
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		managerData.accountName = *resolvedAccount;
 		managerTalkState[6] = false;
 		managerTalkState[7] = true;
@@ -9498,8 +9600,9 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (managerTalkState[7]) {
-		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-			msg << "Too many failed recovery key attempts in this session. Please reconnect later or contact an administrator.";
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+		    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
 			managerTalkState[7] = false;
 			managerTalkState[1] = false;
 			managerData.accountName.clear();
@@ -9522,40 +9625,9 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			return;
 		}
 
-		uint32_t accId = result->getNumber<uint32_t>("id");
-		if (accId <= 1) {
-			LOG_WARN("[Security] Blocked recovery attempt on protected account (account={}).", accId);
-			msg << "This account cannot be recovered.";
-			managerTalkState[7] = false;
-			managerTalkState[1] = false;
-			managerData.accountName.clear();
-			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
-			return;
-		}
-
-		std::string storedKeyHash = std::string{result->getString("secret")};
-
-		if (storedKeyHash.empty()) {
-			msg << "This account does not have a recovery key set. Please contact an administrator.";
-			managerTalkState[7] = false;
-			managerTalkState[1] = false;
-			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
-			return;
-		}
-
-		std::string inputKeyHash = transformToSHA1Hex(recoveryKey);
-		if (storedKeyHash != inputKeyHash) {
-			++managerData.recoveryAttempts;
-			if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-				LOG_WARN("[Security] Too many failed recovery key attempts for account '{}' (account={}).",
-				         managerData.accountName, accId);
-				msg << "Too many failed recovery key attempts in this session. Recovery has been disabled for this session.";
-				managerTalkState[7] = false;
-				managerTalkState[1] = false;
-				managerData.accountName.clear();
-			} else {
-				msg << "The recovery key you entered is incorrect. Please try again or type 'cancel' to start over.";
-			}
+		const uint32_t accId = result->getNumber<uint32_t>("id");
+		const std::string storedKeyHash = std::string{result->getString("secret")};
+		if (!verifyAccountRecoveryAttempt(accId, storedKeyHash, recoveryKey, clientIp, msg)) {
 			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 			return;
 		}
@@ -9567,6 +9639,7 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			    << ". Please write it down before you logout.";
 			managerTalkState[7] = false;
 			managerTalkState[1] = false;
+			recordAccountRecoverySuccess(clientIp, managerData.accountName);
 			managerData.accountName.clear();
 			managerData.recoveryAttempts = 0;
 		} else {

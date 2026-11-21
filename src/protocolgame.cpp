@@ -1503,18 +1503,10 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 	// Account Manager sessions may only talk, ping, and logout.
 	// Block all gameplay, Store, Market, Character Bazaar, VIP, extended opcodes, and Lua packet handlers.
-	if (player->isAccountManager()) {
-		switch (recvbyte) {
-			case 0x14: // logout
-			case 0x1E: // ping
-			case 0x40: // extended ping (OTC)
-			case 0x96: // say (Account Manager dialogue)
-				break; // allowed — fall through to normal processing
-			default:
-				skipUnreadBytes(msg);
-				sendCancelWalk();
-				return;
-		}
+	if (player->isAccountManager() && !isOpcodeAllowedForAccountManager(recvbyte)) {
+		skipUnreadBytes(msg);
+		sendCancelWalk();
+		return;
 	}
 
 	if (isSpectator) {

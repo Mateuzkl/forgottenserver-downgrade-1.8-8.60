@@ -86,6 +86,10 @@ public:
 	void login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem);
 	void spectate(const std::string& name, const std::string& password, uint32_t clientIP);
 	static void recordRejectedCastPassword(uint32_t ip);
+	static constexpr bool isOpcodeAllowedForAccountManager(uint8_t recvbyte) noexcept
+	{
+		return recvbyte == 0x14 || recvbyte == 0x1E || recvbyte == 0x40 || recvbyte == 0x96;
+	}
 	void logout(bool displayEffect, bool forced);
 
 	uint16_t getVersion() const { return version; }
