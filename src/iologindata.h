@@ -105,7 +105,7 @@ public:
 	static bool setPassword(uint32_t accountId, const std::string& newPassword);
 	static bool setRecoveryKey(uint32_t accountId, const std::string& recoveryKey);
 	static bool createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex);
-	static bool deletePlayer(uint32_t playerId);
+	static bool deletePlayer(uint32_t playerId, uint32_t accountId);
 	static std::vector<std::string> getPlayersByAccountId(uint32_t accountId);
 	static bool playerNameExists(const std::string& name);
 	static bool accountNameExists(const std::string& name);

@@ -2058,6 +2058,7 @@ private:
 		uint32_t accountId{0};
 		uint32_t vocationId{0};
 		uint32_t townId{0};
+		uint8_t recoveryAttempts{0};
 		std::string string1;
 		std::string string2;
 		std::string accountName;

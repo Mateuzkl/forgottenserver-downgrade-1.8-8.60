@@ -2008,6 +2008,11 @@ void IOLoginData::updateTibiaCoins(uint32_t accountId, uint64_t tibiaCoins)
 
 bool IOLoginData::setAccountEmail(uint32_t accountId, const std::string& email)
 {
+	if (accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to set email on protected account (account={}).", accountId);
+		return false;
+	}
+
 	Database& db = Database::getInstance();
 	return db.executeQuery(
 	    fmt::format("UPDATE `accounts` SET `email` = {:s} WHERE `id` = {:d}", db.escapeString(email), accountId));
@@ -2043,6 +2048,11 @@ bool IOLoginData::createAccount(const std::string& name, const std::string& pass
 
 bool IOLoginData::setPassword(uint32_t accountId, const std::string& newPassword)
 {
+	if (accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to change password on protected account (account={}).", accountId);
+		return false;
+	}
+
 	Database& db = Database::getInstance();
 	std::string hashedPassword = transformToSHA1Hex(newPassword);
 	return db.executeQuery(fmt::format("UPDATE `accounts` SET `password` = {:s} WHERE `id` = {:d}", db.escapeString(hashedPassword), accountId));
@@ -2050,13 +2060,28 @@ bool IOLoginData::setPassword(uint32_t accountId, const std::string& newPassword
 
 bool IOLoginData::setRecoveryKey(uint32_t accountId, const std::string& recoveryKey)
 {
+	if (accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to set recovery key on protected account (account={}).", accountId);
+		return false;
+	}
+
 	Database& db = Database::getInstance();
 	std::string hashedKey = transformToSHA1Hex(recoveryKey);
-	return db.executeQuery(fmt::format("UPDATE `accounts` SET `secret` = {:s} WHERE `id` = {:d}", db.escapeString(hashedKey), accountId));
+	if (!db.executeQuery(fmt::format(
+	        "UPDATE `accounts` SET `secret` = {:s} WHERE `id` = {:d} AND (`secret` IS NULL OR `secret` = '')",
+	        db.escapeString(hashedKey), accountId))) {
+		return false;
+	}
+	return db.getAffectedRows() == 1;
 }
 
 bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex)
 {
+	if (accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to create character on protected account (account={}).", accountId);
+		return false;
+	}
+
 	Database& db = Database::getInstance();
 
 	if (playerNameExists(name)) {
@@ -2100,15 +2125,30 @@ bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint
 	return db.executeQuery(query.str());
 }
 
-bool IOLoginData::deletePlayer(uint32_t playerId)
+bool IOLoginData::deletePlayer(uint32_t playerId, uint32_t accountId)
 {
-	if (playerId == 1) {
-		LOG_WARN("[Security] Attempted to delete Account Manager (guid=1) - BLOCKED");
+	if (playerId <= 1 || accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to delete protected character (guid={}, account={}).", playerId,
+		         accountId);
+		return false;
+	}
+
+	if (g_game.getPlayerByGUID(playerId)) {
 		return false;
 	}
 
 	Database& db = Database::getInstance();
-	return db.executeQuery(fmt::format("UPDATE `players` SET `deletion` = {:d} WHERE `id` = {:d}", static_cast<uint64_t>(time(nullptr) + 86400), playerId));
+	if (!db.executeQuery(fmt::format(
+	        "UPDATE `players` SET `deletion` = {:d} "
+	        "WHERE `id` = {:d} AND `account_id` = {:d} AND `deletion` = 0 AND `name` != 'Account Manager' "
+	        "AND NOT EXISTS (SELECT 1 FROM `character_auctions` "
+	        "WHERE `character_auctions`.`player_id` = `players`.`id` AND `character_auctions`.`status` = {:d})",
+	        static_cast<uint64_t>(time(nullptr) + 86400), playerId, accountId,
+	        CharacterBazaar::AUCTION_STATUS_ACTIVE))) {
+		return false;
+	}
+
+	return db.getAffectedRows() == 1;
 }
 
 std::vector<std::string> IOLoginData::getPlayersByAccountId(uint32_t accountId)
