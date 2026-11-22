@@ -8,6 +8,7 @@
 #include "astraclient.h"
 #include "fonticakclient.h"
 #include "ban.h"
+#include "character_bazaar.h"
 #include "configmanager.h"
 #include "database.h"
 #include "game.h"
@@ -263,7 +264,7 @@ bool LoginAttemptLimiter::allowLogin(uint32_t ip, std::string_view accountName)
 		return true;
 	}
 
-	auto it = accountAttempts.find(AccountKey{ip, account});
+	auto it = accountAttempts.find(accountKey(ip, account));
 	return it == accountAttempts.end() || hasCapacity(it->second, now, accountFailureThreshold());
 }
 
@@ -281,7 +282,7 @@ bool LoginAttemptLimiter::reserveLogin(uint32_t ip, std::string_view accountName
 	const std::string account = normalizeAccountName(accountName);
 	AttemptInfo* accountInfo = nullptr;
 	if (!account.empty()) {
-		accountInfo = &accountAttempts[AccountKey{ip, account}];
+		accountInfo = &accountAttempts[accountKey(ip, account)];
 		if (!hasCapacity(*accountInfo, now, accountFailureThreshold())) {
 			return false;
 		}
@@ -305,7 +306,7 @@ bool LoginAttemptLimiter::reserveAccount(uint32_t ip, std::string_view accountNa
 		return true;
 	}
 
-	AttemptInfo& accountInfo = accountAttempts[AccountKey{ip, account}];
+	AttemptInfo& accountInfo = accountAttempts[accountKey(ip, account)];
 	if (!hasCapacity(accountInfo, now, accountFailureThreshold())) {
 		return false;
 	}
@@ -321,7 +322,7 @@ void LoginAttemptLimiter::releaseReservationLocked(uint32_t ip, const std::strin
 	}
 
 	if (!account.empty()) {
-		auto accountIt = accountAttempts.find(AccountKey{ip, account});
+		auto accountIt = accountAttempts.find(accountKey(ip, account));
 		if (accountIt != accountAttempts.end() && accountIt->second.pending > 0) {
 			--accountIt->second.pending;
 		}
@@ -345,11 +346,11 @@ void LoginAttemptLimiter::recordFailureLocked(uint32_t ip, const std::string& ac
 	}
 
 	blockedAfter = 0;
-	registerFailure(accountAttempts[AccountKey{ip, account}], now, accountFailureThreshold(), blockDuration,
+	registerFailure(accountAttempts[accountKey(ip, account)], now, accountFailureThreshold(), blockDuration,
 	                blockedAfter);
 	if (blockedAfter != 0) {
-		LOG_WARN(fmt::format("[Anti-BruteForce] IP {} blocked for {} seconds after {} failed login attempts on one "
-		                     "account.",
+		LOG_WARN(fmt::format("[Anti-BruteForce] Account attempt limit reached (last IP {}, block {} seconds, "
+		                     "{} failures).",
 		                     convertIPToString(ip), blockDuration / 1000, blockedAfter));
 	}
 }
@@ -364,7 +365,7 @@ void LoginAttemptLimiter::recordSuccessLocked(uint32_t ip, const std::string& ac
 		return;
 	}
 
-	auto it = accountAttempts.find(AccountKey{ip, account});
+	auto it = accountAttempts.find(accountKey(ip, account));
 	if (it == accountAttempts.end()) {
 		return;
 	}
@@ -473,9 +474,7 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 
 	std::vector<CharacterListEntry> characters;
 	bool hasAccountManager = ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER);
-	bool hasNamelock = ConfigManager::getBoolean(ConfigManager::NAMELOCK_MANAGER) && IOBan::accountHasNamelockedPlayer(account.id);
-
-	if ((hasAccountManager && account.id != 1) || hasNamelock) {
+	if (hasAccountManager && account.id != 1) {
 		CharacterListEntry accountManager;
 		accountManager.name = "Account Manager";
 		accountManager.vocation = "Account Manager";
@@ -490,8 +489,10 @@ void ProtocolLogin::getCharacterList(std::string_view accountName, std::string_v
 	    "COALESCE(s.`value`, 0) AS `daily_storage` "
 	    "FROM `players` p "
 	    "LEFT JOIN `player_storage` s ON s.`player_id` = p.`id` AND s.`key` = {:d} "
-	    "WHERE p.`account_id` = {:d} AND p.`deletion` = 0 ORDER BY p.`name` ASC",
-	    STORAGE_DAILY_REWARD_LAST_DAY, account.id));
+	    "WHERE p.`account_id` = {:d} AND p.`deletion` = 0 AND (p.`account_id` <> 1 OR p.`name` = 'Account Manager') "
+	    "AND NOT EXISTS (SELECT 1 FROM `character_auctions` a WHERE a.`player_id` = p.`id` AND a.`status` = {}) "
+	    "ORDER BY p.`name` ASC",
+	    STORAGE_DAILY_REWARD_LAST_DAY, account.id, CharacterBazaar::AUCTION_STATUS_ACTIVE));
 	if (result) {
 		do {
 			CharacterListEntry character;

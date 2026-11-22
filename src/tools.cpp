@@ -9,6 +9,7 @@
 
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/rand.h>
 #include "logger.h"
 
 void printXMLError(std::string_view where, std::string_view fileName, const pugi::xml_parse_result& result)
@@ -137,58 +138,67 @@ std::string generateToken(std::string_view key, uint64_t counter, size_t length 
 	return token.substr(token.size() - length);
 }
 
-std::string generateRecoveryKey(int32_t fieldCount, int32_t fieldLength, bool mixCase/* = false*/)
+namespace {
+std::string randomCredential(std::string_view alphabet, size_t length)
 {
+	std::string value;
+	value.reserve(length);
+	const size_t limit = 256 - (256 % alphabet.size());
+	while (value.size() < length) {
+		std::array<unsigned char, 32> bytes;
+		if (RAND_priv_bytes(bytes.data(), bytes.size()) != 1) {
+			LOG_ERROR("Failed to generate Account Manager credentials.");
+			return {};
+		}
+		for (auto byte : bytes) {
+			if (byte < limit) {
+				value.push_back(alphabet[byte % alphabet.size()]);
+				if (value.size() == length) {
+					break;
+				}
+			}
+		}
+	}
+	return value;
+}
+} // namespace
+
+std::string generateRecoveryKey(int32_t fieldCount, int32_t fieldLength, bool mixCase)
+{
+	if (fieldCount <= 0 || fieldLength <= 0) {
+		return {};
+	}
+	const auto characters = randomCredential(mixCase ? "23456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" :
+	                                                  "23456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+	                                         static_cast<size_t>(fieldCount) * fieldLength);
+	if (characters.empty()) {
+		return {};
+	}
 	std::string key;
-	key.reserve(fieldCount * (fieldLength + 1));
 	for (int32_t i = 0; i < fieldCount; ++i) {
 		if (i > 0) {
 			key += '-';
 		}
-		for (int32_t j = 0; j < fieldLength; ++j) {
-			char ch;
-			int32_t charType = uniform_random(0, mixCase ? 2 : 1);
-			if (charType == 0) {
-				ch = '0' + uniform_random(2, 9);
-			} else if (charType == 1 || !mixCase) {
-				ch = 'A' + uniform_random(0, 25);
-			} else {
-				ch = 'a' + uniform_random(0, 25);
-			}
-			key += ch;
-		}
+		key.append(characters, static_cast<size_t>(i) * fieldLength, fieldLength);
 	}
 	return key;
 }
 
-std::string generateSecurePassword(int32_t length/*= 12*/)
+std::string generateSecurePassword(int32_t length)
 {
-	const char* uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	const char* lowercase = "abcdefghijklmnopqrstuvwxyz";
-	const char* numbers = "0123456789";
-	const char* symbols = "!@#$%^&*-_+=";
-
-	std::string password;
-	password.reserve(length);
-
-	password += uppercase[uniform_random(0, 25)];
-	password += lowercase[uniform_random(0, 25)];
-	password += numbers[uniform_random(0, 9)];
-	password += symbols[uniform_random(0, 11)];
-
-	const char* allChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*-_+=";
-	const int32_t allCharsLen = 74;
-
-	for (int32_t i = 4; i < length; ++i) {
-		password += allChars[uniform_random(0, allCharsLen - 1)];
+	if (length < 4) {
+		return {};
 	}
-
-	for (int32_t i = length - 1; i > 0; --i) {
-		int32_t j = uniform_random(0, i);
-		std::swap(password[i], password[j]);
+	constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*-_+=";
+	for (;;) {
+		auto password = randomCredential(alphabet, length);
+		if (password.empty() || (password.find_first_of(alphabet.substr(0, 26)) != std::string::npos &&
+		    password.find_first_of(alphabet.substr(26, 26)) != std::string::npos &&
+		    password.find_first_of(alphabet.substr(52, 10)) != std::string::npos &&
+		    password.find_first_of(alphabet.substr(62)) != std::string::npos)) {
+			return password;
+		}
 	}
-
-	return password;
 }
 
 bool validateAndFormatPlayerName(std::string& name)

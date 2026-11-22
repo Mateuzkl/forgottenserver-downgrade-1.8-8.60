@@ -4,17 +4,39 @@
 #include "../otpch.h"
 
 #include "../character_bazaar.h"
+#include "../configmanager.h"
 #include "../game.h"
 #include "../iologindata.h"
+#include "../outputmessage.h"
 #include "../player.h"
 #include "../protocolgame.h"
 #include "../protocollogin.h"
+#include "../reactor.h"
 #include "../tools.h"
 
 #include "test_support.h"
 
+struct TaskReactorTestAccess
+{
+	const TaskReactor* previous = TaskReactor::currentReactor;
+	TaskReactorTestAccess() { TaskReactor::currentReactor = &g_reactor; }
+	~TaskReactorTestAccess() { TaskReactor::currentReactor = previous; }
+};
+
 struct AccountManagerSecurityTestAccess
 {
+	static void dispatch(ProtocolGame& protocol, const std::shared_ptr<Player>& session, NetworkMessage& message)
+	{
+		protocol.player = session;
+		protocol.acceptPackets = true;
+		CHECK(message.setBufferPosition(0));
+		auto packet = tfs::net::make_network_message(message);
+		TaskReactorTestAccess dispatcher;
+		protocol.parsePacketOnDispatcher(packet);
+		CHECK(!packet->isOverrun());
+		CHECK(packet->getBufferPosition() == NetworkMessage::INITIAL_BUFFER_POSITION + packet->getLength());
+	}
+
 	static void configureNewAccountSession(Player& player, uint32_t ip)
 	{
 		player.setAccountManagerMode(ACCOUNT_MANAGER_NEW);
@@ -298,6 +320,65 @@ TEST_CASE(account_manager_protocol_opcode_allowlist)
 	                        uint8_t{0xFC}, uint8_t{0xFF}}) {
 		CHECK(!ProtocolGame::isOpcodeAllowedForAccountManager(blocked));
 	}
+}
+
+TEST_CASE(account_manager_dispatches_dialogue_and_discards_other_messages)
+{
+	auto session = std::make_shared<Player>(nullptr);
+	AccountManagerSecurityTestAccess::configureAccountSession(*session, 25, IP_IN_SESSION);
+	ProtocolGame protocol(nullptr);
+	protocol.getCurrentBuffer() = std::make_shared<OutputMessage>();
+	for (const auto opcode : {0x32, 0x65, 0x78, 0xA1, 0xDC, 0xFF}) {
+		NetworkMessage message;
+		message.addByte(opcode);
+		message.addByte(0);
+		AccountManagerSecurityTestAccess::dispatch(protocol, session, message);
+	}
+	for (const auto type : {TALKTYPE_PRIVATE, TALKTYPE_SAY}) {
+		NetworkMessage message;
+		message.addByte(0x96);
+		message.addByte(type);
+		if (type == TALKTYPE_PRIVATE) { message.addString("Fixture"); }
+		message.addString("delete");
+		AccountManagerSecurityTestAccess::dispatch(protocol, session, message);
+		CHECK(AccountManagerSecurityTestAccess::talkState(*session, 2) == (type == TALKTYPE_SAY));
+	}
+}
+
+TEST_CASE(account_manager_recovery_account_limit_follows_account_and_expires)
+{
+	const auto previous = ConfigManager::getInteger(ConfigManager::BRUTEFORCE_BLOCK_SECONDS);
+	ConfigManager::setInteger(ConfigManager::BRUTEFORCE_BLOCK_SECONDS, 1);
+	for (uint32_t ip = 0; ip < 5; ++ip) {
+		Player::recordAccountRecoveryFailure(ip, "CanonicalFixture");
+	}
+	CHECK(!Player::isAccountRecoveryAllowed(0, "canonicalfixture"));
+	CHECK(!Player::isAccountRecoveryAllowed(30, " CANONICALFIXTURE "));
+	CHECK(Player::isAccountRecoveryAllowed(0, "another-account"));
+	CHECK(LoginAttemptLimiter::getInstance().allowLogin(0, "CanonicalFixture"));
+	CHECK(LoginAttemptLimiter::getInstance().allowLogin(IP_SPRAY_RECONNECT, ""));
+	std::this_thread::sleep_for(std::chrono::milliseconds(1050));
+	CHECK(Player::isAccountRecoveryAllowed(30, "CanonicalFixture"));
+	ConfigManager::setInteger(ConfigManager::BRUTEFORCE_BLOCK_SECONDS, previous);
+}
+
+TEST_CASE(account_manager_replies_are_private_to_session_owner)
+{
+	auto owner = std::make_shared<ProtocolGame>(nullptr);
+	auto viewer = std::make_shared<ProtocolGame>(nullptr);
+	auto spy = std::make_shared<ProtocolGame>(nullptr);
+	for (auto& protocol : {owner, viewer, spy}) {
+		protocol->getCurrentBuffer() = std::make_shared<OutputMessage>();
+	}
+	TaskReactorTestAccess dispatcher;
+	Player session(owner);
+	session.client->addSpectator(viewer);
+	session.client->addSpyClient(spy);
+	AccountManagerSecurityTestAccess::configureNewAccountSession(session, IP_IN_SESSION);
+	session.manageAccount("account");
+	CHECK(owner->getCurrentBuffer()->getLength() > 0);
+	CHECK(viewer->getCurrentBuffer()->getLength() == 0);
+	CHECK(spy->getCurrentBuffer()->getLength() == 0);
 }
 
 TFS_TEST_MAIN()

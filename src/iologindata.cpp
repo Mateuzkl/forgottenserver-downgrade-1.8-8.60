@@ -158,6 +158,10 @@ IOLoginData::AuthenticationResult IOLoginData::loginserverAuthentication(std::st
 		return failedQueryAuthenticationResult(db);
 	}
 
+    if (lookup.accountId == 1 && !ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+        return AuthenticationResult::Rejected;
+    }
+
     DBResult_ptr result = db.storeQuery(fmt::format(
         "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret`, `type`, `premium_ends_at`, `tibia_coins` FROM `accounts` WHERE `id` = {:d}",
         lookup.accountId));
@@ -214,6 +218,9 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
 	}
 
 	const uint32_t resolvedAccountId = lookup.accountId;
+	if (resolvedAccountId == 1 && !ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+		return {AuthenticationResult::Rejected};
+	}
 
     std::string query = fmt::format(
         "SELECT `a`.`id` AS `account_id`, UNHEX(`a`.`password`) AS `password`, `a`.`secret`, `p`.`id` AS `character_id` FROM `accounts` `a` JOIN `players` `p` ON `a`.`id` = `p`.`account_id` WHERE `a`.`id` = {:d} AND LOWER(`p`.`name`) = LOWER({:s}) AND `p`.`deletion` = 0",
@@ -265,6 +272,9 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
 
 	uint32_t accountId = result->getNumber<uint32_t>("account_id");
 	uint32_t characterId = result->getNumber<uint32_t>("character_id");
+	if (accountId == 1 && !caseInsensitiveEqual(characterName, "Account Manager")) {
+		return {AuthenticationResult::Success, accountId, 0};
+	}
 
 	if (ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER) && characterName == "Account Manager" && accountId != 1) {
         result = db.storeQuery("SELECT `id` FROM `players` WHERE `name` = 'Account Manager' AND `account_id` = 1 AND `deletion` = 0");
@@ -2014,8 +2024,8 @@ bool IOLoginData::setAccountEmail(uint32_t accountId, const std::string& email)
 	}
 
 	Database& db = Database::getInstance();
-	return db.executeQuery(
-	    fmt::format("UPDATE `accounts` SET `email` = {:s} WHERE `id` = {:d}", db.escapeString(email), accountId));
+	return db.executeQuery(fmt::format("UPDATE `accounts` SET `email` = {:s} WHERE `id` = {:d}",
+	                                   db.escapeString(email), accountId)) && db.getAffectedRows() == 1;
 }
 
 bool IOLoginData::accountEmailExists(std::string_view email)
@@ -2026,24 +2036,18 @@ bool IOLoginData::accountEmailExists(std::string_view email)
 	return result != nullptr;
 }
 
-bool IOLoginData::createAccount(const std::string& name, const std::string& password, uint32_t& accountId)
+bool IOLoginData::createAccount(const std::string& name, const std::string& password, uint32_t& accountId,
+                                std::string_view email)
 {
 	Database& db = Database::getInstance();
-    DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})", db.escapeString(name)));
-    if (result) {
-        return false;
-    }
-    std::string hashedPassword = transformToSHA1Hex(password);
-    if (!db.executeQuery(fmt::format("INSERT INTO `accounts` (`name`, `password`, `type`, `premium_ends_at`, `email`, `creation`) VALUES ({:s}, {:s}, 1, 0, '', {:d})",
-        db.escapeString(name), db.escapeString(hashedPassword), static_cast<uint32_t>(time(nullptr))))) {
-        return false;
-    }
-    result = db.storeQuery(fmt::format("SELECT `id` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})", db.escapeString(name)));
-    if (!result) {
-        return false;
-    }
-    accountId = result->getNumber<uint32_t>("id");
-    return true;
+	accountId = 0;
+	if (!db.executeQuery(fmt::format(
+	        "INSERT INTO `accounts` (`name`, `password`, `email`, `creation`) VALUES ({}, {}, {}, {})",
+	        db.escapeString(name), db.escapeString(transformToSHA1Hex(password)), db.escapeString(email), time(nullptr)))) {
+		return false;
+	}
+	accountId = static_cast<uint32_t>(db.getLastInsertId());
+	return accountId > 1;
 }
 
 bool IOLoginData::setPassword(uint32_t accountId, const std::string& newPassword)
@@ -2055,11 +2059,20 @@ bool IOLoginData::setPassword(uint32_t accountId, const std::string& newPassword
 
 	Database& db = Database::getInstance();
 	std::string hashedPassword = transformToSHA1Hex(newPassword);
-	return db.executeQuery(fmt::format("UPDATE `accounts` SET `password` = {:s} WHERE `id` = {:d}", db.escapeString(hashedPassword), accountId));
+	if (!db.executeQuery(fmt::format("UPDATE `accounts` SET `password` = {:s} WHERE `id` = {:d}",
+	                                 db.escapeString(hashedPassword), accountId))) {
+		return false;
+	}
+	// MariaDB also reports zero changed rows when the existing password already matches.
+	return db.getAffectedRows() == 1 || db.storeQuery(fmt::format(
+	    "SELECT 1 FROM `accounts` WHERE `id` = {} AND `password` = {}", accountId, db.escapeString(hashedPassword)));
 }
 
 bool IOLoginData::setRecoveryKey(uint32_t accountId, const std::string& recoveryKey)
 {
+	if (recoveryKey.empty()) {
+		return false;
+	}
 	if (accountId <= 1) {
 		LOG_WARN("[Security] Blocked attempt to set recovery key on protected account (account={}).", accountId);
 		return false;
@@ -2068,11 +2081,22 @@ bool IOLoginData::setRecoveryKey(uint32_t accountId, const std::string& recovery
 	Database& db = Database::getInstance();
 	std::string hashedKey = transformToSHA1Hex(recoveryKey);
 	if (!db.executeQuery(fmt::format(
-	        "UPDATE `accounts` SET `secret` = {:s} WHERE `id` = {:d} AND (`secret` IS NULL OR `secret` = '')",
+	        "UPDATE `accounts` SET `recovery_key_hash` = {:s} WHERE `id` = {:d} AND `recovery_key_hash` IS NULL",
 	        db.escapeString(hashedKey), accountId))) {
 		return false;
 	}
 	return db.getAffectedRows() == 1;
+}
+
+bool IOLoginData::resetPasswordWithRecoveryKey(uint32_t accountId, std::string_view verifiedHash, std::string_view password)
+{
+	if (accountId <= 1 || verifiedHash.size() != 40 || password.empty()) {
+		return false;
+	}
+	Database& db = Database::getInstance();
+	return db.executeQuery(fmt::format(
+	    "UPDATE `accounts` SET `password` = {} WHERE `id` = {} AND `recovery_key_hash` = {}",
+	    db.escapeString(transformToSHA1Hex(password)), accountId, db.escapeString(verifiedHash))) && db.getAffectedRows() == 1;
 }
 
 bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex)
@@ -2084,7 +2108,7 @@ bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint
 
 	Database& db = Database::getInstance();
 
-	if (playerNameExists(name)) {
+	if (caseInsensitiveEqual(name, "Account Manager") || playerNameExists(name)) {
 		return false;
 	}
 
@@ -2133,8 +2157,15 @@ bool IOLoginData::deletePlayer(uint32_t playerId, uint32_t accountId)
 		return false;
 	}
 
-	if (g_game.getPlayerByGUID(playerId)) {
+	if (g_game.isLoginPending(playerId) || g_game.getPlayerByGUID(playerId)) {
 		return false;
+	}
+	if (getBoolean(ConfigManager::ALLOW_CLONES)) {
+		for (const auto& online : g_game.getPlayers()) {
+			if (online->getGUID() == playerId) {
+				return false;
+			}
+		}
 	}
 
 	Database& db = Database::getInstance();
@@ -2149,6 +2180,21 @@ bool IOLoginData::deletePlayer(uint32_t playerId, uint32_t accountId)
 	}
 
 	return db.getAffectedRows() == 1;
+}
+
+bool IOLoginData::renameNamelockedPlayer(uint32_t playerId, uint32_t accountId, std::string_view newName)
+{
+	if (playerId <= 1 || accountId <= 1 || caseInsensitiveEqual(newName, "Account Manager")) {
+		return false;
+	}
+	Database& db = Database::getInstance();
+	return DBTransaction::executeWithinTransactionRollbackOnFailure([&] {
+		return db.executeQuery(fmt::format(
+		    "UPDATE `players` SET `name` = {} WHERE `id` = {} AND `account_id` = {} AND `deletion` = 0",
+		    db.escapeString(newName), playerId, accountId)) && db.getAffectedRows() == 1 &&
+		    db.executeQuery(fmt::format("DELETE FROM `player_namelocks` WHERE `player_id` = {}", playerId)) &&
+		    db.getAffectedRows() == 1;
+	});
 }
 
 std::vector<std::string> IOLoginData::getPlayersByAccountId(uint32_t accountId)

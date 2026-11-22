@@ -1473,15 +1473,21 @@ public:
 	}
 	void sendTextMessage(MessageClasses mclass, std::string_view message) const
 	{
-		if (client) {
-			client->sendTextMessage(TextMessage(mclass, message));
-		}
+		sendTextMessage(TextMessage(mclass, message));
 	}
 	void sendTextMessage(const TextMessage& message) const
 	{
-		if (client) {
-			client->sendTextMessage(message);
+		if (!client) {
+			return;
 		}
+		if (isAccountManager()) {
+			// Dialogues can contain a newly issued password or recovery key.
+			if (auto owner = client->protocol()) {
+				owner->sendTextMessage(message);
+			}
+			return;
+		}
+		client->sendTextMessage(message);
 	}
 	void sendReLoginWindow() const
 	{

@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS `accounts` (
   `name` varchar(32) NOT NULL,
   `password` char(40) NOT NULL,
   `secret` char(16) DEFAULT NULL,
+  `recovery_key_hash` char(40) DEFAULT NULL,
   `type` int NOT NULL DEFAULT '1',
   `premium_ends_at` int unsigned NOT NULL DEFAULT '0',
   `email` varchar(255) NOT NULL DEFAULT '',

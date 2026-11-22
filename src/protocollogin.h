@@ -18,6 +18,12 @@ public:
 		return instance;
 	}
 
+	static LoginAttemptLimiter& forRecovery()
+	{
+		static LoginAttemptLimiter instance(true);
+		return instance;
+	}
+
 	// Failures are tracked per (IP, account) so a successful login to one account
 	// cannot clear the failures recorded against another. A separate per-IP counter
 	// with a higher threshold still catches account spraying, where each individual
@@ -39,7 +45,8 @@ public:
 	void recordSuccess(uint32_t ip, std::string_view accountName);
 
 private:
-	LoginAttemptLimiter() = default;
+	explicit LoginAttemptLimiter(bool globalAccountLimit = false) : globalAccountLimit(globalAccountLimit) {}
+	const bool globalAccountLimit;
 	void cleanup(int64_t now);
 
 	struct AttemptInfo
@@ -51,6 +58,11 @@ private:
 	};
 
 	using AccountKey = std::pair<uint32_t, std::string>;
+	AccountKey accountKey(uint32_t ip, const std::string& account) const
+	{
+		// Recovery follows the account across addresses. Login retains its per-IP policy.
+		return {globalAccountLimit ? 0u : ip, account};
+	}
 
 	struct AccountKeyHash
 	{

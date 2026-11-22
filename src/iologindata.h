@@ -99,11 +99,14 @@ public:
 	static uint64_t getTibiaCoins(uint32_t accountId);
 	static void updateTibiaCoins(uint32_t accountId, uint64_t tibiaCoins);
 
-	static bool createAccount(const std::string& name, const std::string& password, uint32_t& accountId);
+	static bool createAccount(const std::string& name, const std::string& password, uint32_t& accountId,
+	                          std::string_view email = {});
+	static bool renameNamelockedPlayer(uint32_t playerId, uint32_t accountId, std::string_view newName);
 	static bool setAccountEmail(uint32_t accountId, const std::string& email);
 	static bool accountEmailExists(std::string_view email);
 	static bool setPassword(uint32_t accountId, const std::string& newPassword);
 	static bool setRecoveryKey(uint32_t accountId, const std::string& recoveryKey);
+	static bool resetPasswordWithRecoveryKey(uint32_t accountId, std::string_view verifiedHash, std::string_view password);
 	static bool createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex);
 	static bool deletePlayer(uint32_t playerId, uint32_t accountId);
 	static std::vector<std::string> getPlayersByAccountId(uint32_t accountId);

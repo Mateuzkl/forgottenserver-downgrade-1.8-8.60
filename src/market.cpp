@@ -294,7 +294,7 @@ bool enqueueDelivery(const std::string& eventKey, uint32_t offerId, uint32_t pla
 
 bool Market::isPlayerReady(Player* player)
 {
-	return player && g_saveManager.canSavePlayersSync({player});
+	return player && !player->isAccountManager() && g_saveManager.canSavePlayersSync({player});
 }
 
 uint32_t Market::getInboxDepotId(const Player& player)

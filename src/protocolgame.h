@@ -413,6 +413,7 @@ private:
 	friend class ProtocolSpectator;
 	friend class SpySystem;
 	friend struct ProtocolGameCustomPingTestAccess;
+	friend struct AccountManagerSecurityTestAccess;
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
 	friend struct ProtocolGameMovementTestAccess;
