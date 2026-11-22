@@ -294,7 +294,7 @@ bool enqueueDelivery(const std::string& eventKey, uint32_t offerId, uint32_t pla
 
 bool Market::isPlayerReady(Player* player)
 {
-	return player && g_saveManager.canSavePlayersSync({player});
+	return player && !player->isAccountManager() && g_saveManager.canSavePlayersSync({player});
 }
 
 uint32_t Market::getInboxDepotId(const Player& player)
@@ -907,7 +907,7 @@ void Market::processOnlineDeliveries()
 		auto ordered = samples;
 		std::sort(ordered.begin(), ordered.end());
 		const auto percentile = [&](double fraction) { return ordered[static_cast<size_t>((ordered.size() - 1) * fraction)]; };
-		LOG_INFO(fmt::format("[MarketDeliveries] players={} rows={} items={} pending_players_sample={} "
+		LOG_DEBUG(fmt::format("[MarketDeliveries] players={} rows={} items={} pending_players_sample={} "
 		    "scan_limit=256 elapsed_ms={:.3f} p50_ms={:.3f} p95_ms={:.3f} p99_ms={:.3f}",
 		    processed, DELIVERY_ROWS_PER_TICK - rowsLeft, DELIVERY_ITEMS_PER_TICK - itemsLeft, pending.size(),
 		    elapsed, percentile(.50), percentile(.95), percentile(.99)));

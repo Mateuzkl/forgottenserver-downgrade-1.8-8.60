@@ -20,6 +20,7 @@
 #include "../vocation.h"
 #include "../logger.h"
 #include "test_support.h"
+#include "disposable_database.h"
 
 extern Game g_game;
 extern Vocations g_vocations;
@@ -132,21 +133,8 @@ struct Runtime
 // a connection/migration error once the explicit test environment is configured.
 TEST_CASE(market_atomic_delivery_database_regressions)
 {
-	const char* name = std::getenv("TFS_TEST_DB_NAME");
-	CHECK(name != nullptr);
-	CHECK(std::string_view{name}.starts_with("tfs_market_test_"));
-	const char* host = std::getenv("TFS_TEST_DB_HOST");
-	const char* user = std::getenv("TFS_TEST_DB_USER");
-	const char* pass = std::getenv("TFS_TEST_DB_PASS");
-	const char* port = std::getenv("TFS_TEST_DB_PORT");
-	ConfigManager::setString(ConfigManager::MYSQL_HOST, host ? host : "127.0.0.1");
-	ConfigManager::setString(ConfigManager::MYSQL_USER, user ? user : "root");
-	ConfigManager::setString(ConfigManager::MYSQL_PASS, pass ? pass : "");
-	ConfigManager::setString(ConfigManager::MYSQL_DB, name);
-	ConfigManager::setString(ConfigManager::MYSQL_SOCK, "");
-	ConfigManager::setInteger(ConfigManager::SQL_PORT, port ? std::atoi(port) : 3306);
+	connectDisposableDatabase();
 	ConfigManager::setBoolean(ConfigManager::FORGE_SYSTEM_ENABLED, true);
-	CHECK(Database::getInstance().connect());
 	CHECK(initLogger());
 	const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
 	std::filesystem::current_path(root);
@@ -161,7 +149,7 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	sql("ALTER TABLE `market_delivery_pending` DROP COLUMN `delivered_amount`, DROP COLUMN `retry_after`");
 	CHECK(!DatabaseManager::isMarketSchemaReady());
 	DatabaseManager::updateDatabase();
-	CHECK(number("SELECT `value` FROM `server_config` WHERE `config`='db_version'") == 70);
+	CHECK(number("SELECT `value` FROM `server_config` WHERE `config`='db_version'") == 71);
 	CHECK(DatabaseManager::isMarketSchemaReady());
 	// A partial table must fail even when all three migration-69 columns exist.
 	for (const auto& [table, column] : {
@@ -633,6 +621,24 @@ TEST_CASE(market_atomic_delivery_database_regressions)
 	dispatch([&] {
 		CHECK(g_game.internalPlaceCreature(online.get(), quarantinePosition, false, true));
 		CHECK(g_game.getPlayerByGUID(BUYER) == online);
+		ConfigManager::setBoolean(ConfigManager::MARKET_SYSTEM_ENABLED, false);
+		sql(fmt::format("INSERT INTO market_delivery_pending (event_key,offer_id,player_id,bank_credit,attributes,created_at) "
+		                "VALUES ('disabled-offers-credit',1,{},17,'',1)", BUYER));
+		online->setAccountManagerMode(ACCOUNT_MANAGER_ACCOUNT);
+		Market::processOnlineDeliveries();
+		CHECK(number("SELECT COUNT(*) AS value FROM market_delivery_pending WHERE event_key='disabled-offers-credit' AND state='pending'") == 1);
+		online->setAccountManagerMode(ACCOUNT_MANAGER_NONE);
+		Market::processOnlineDeliveries();
+		CHECK(number("SELECT COUNT(*) AS value FROM market_delivery_pending WHERE event_key='disabled-offers-credit' AND state='applied'") == 1);
+		uint32_t owner = 0;
+		const auto testName = fmt::format("online_owner_{}", BUYER);
+		sql(fmt::format("DELETE FROM accounts WHERE name = '{}'", testName));
+		CHECK(IOLoginData::createAccount(testName, "fixture-password", owner));
+		sql(fmt::format("UPDATE players SET account_id={} WHERE id={}", owner, BUYER));
+		CHECK(!IOLoginData::deletePlayer(BUYER, owner));
+		CHECK(number(fmt::format("SELECT deletion AS value FROM players WHERE id={}", BUYER)) == 0);
+		sql(fmt::format("UPDATE players SET account_id=1 WHERE id={}", BUYER));
+		sql(fmt::format("DELETE FROM accounts WHERE id={}", owner));
 		const auto bankBefore = number(fmt::format("SELECT balance AS value FROM players WHERE id={}", BUYER));
 		online->setBankBalance(777);
 		g_saveManager.quarantinePlayer(BUYER, "integration-test", true);

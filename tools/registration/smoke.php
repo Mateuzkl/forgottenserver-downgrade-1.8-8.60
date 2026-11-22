@@ -34,6 +34,7 @@ try {
         'CharacterName' => 'Second ' . ucfirst($suffix), 'CharacterSex' => 'female',
         'World' => $config['world'], 'PlayTutorial' => false];
     checkRegistration(callRegistration(array_merge($character, ['Password' => 'WrongPassword9']))['Success'] === false, 'character creation rejects wrong credentials');
+    checkRegistration(callRegistration(array_merge($character, ['Account' => '1', 'Password' => '1']))['Success'] === false, 'reserved account cannot create characters');
     checkRegistration(callRegistration(array_merge($character, ['World' => 'InvalidWorld']))['Success'] === false, 'character creation rejects wrong world');
     checkRegistration(callRegistration($character)['Success'] === true, 'character created on existing account');
     $q = $db->prepare('SELECT COUNT(*) FROM players p JOIN accounts a ON a.id=p.account_id WHERE a.email=?');

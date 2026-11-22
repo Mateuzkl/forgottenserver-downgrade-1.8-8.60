@@ -96,7 +96,8 @@ function registrationHandle(array $data, PDO $db, array $c): array {
                 $q = $db->prepare('SELECT id,password,secret FROM accounts WHERE LOWER(name)=LOWER(?) OR (email <> ? AND LOWER(email)=LOWER(?))');
                 $q->execute([$login, '', $login]);
                 $accounts = $q->fetchAll();
-                if (count($accounts) !== 1 || !hash_equals($accounts[0]['password'], sha1($password)) || !empty($accounts[0]['secret'])) {
+                if (count($accounts) !== 1 || (int)$accounts[0]['id'] <= 1
+                    || !hash_equals($accounts[0]['password'], sha1($password)) || !empty($accounts[0]['secret'])) {
                     return ['Success' => false, 'errorMessage' => 'Account authentication failed or account requires two-factor authentication.'];
                 }
                 $accountId = (int)$accounts[0]['id'];

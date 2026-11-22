@@ -24,6 +24,7 @@
 #include "movement.h"
 #include "npc.h"
 #include "party.h"
+#include "protocollogin.h"
 #include "rewardchest.h"
 #include "databasetasks.h"
 #include "save_manager.h"
@@ -34,6 +35,7 @@
 #include "vocation.h"
 #include "logger.h"
 #include <fmt/format.h>
+#include <openssl/crypto.h>
 #include <cstdlib>
 #include "tools.h"
 #include "weapons.h"
@@ -9030,6 +9032,12 @@ void Player::resetTalkState(size_t from, size_t to)
 
 void Player::handleNamelockManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
+	if (checkText(text, "cancel")) {
+		resetTalkState();
+		managerData.string1.clear();
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Account Manager: Rename cancelled. Tell me your new character name.");
+		return;
+	}
 	if (!managerTalkState[1]) {
 		std::string newName = text;
 		trimString(newName);
@@ -9044,7 +9052,8 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 			msg << "Account Manager: A player with that name already exists, please choose another name.";
 		} else {
 			std::string tmp = asLowerCaseString(newName);
-			if (tmp.substr(0, std::min(static_cast<size_t>(4), tmp.length())) != "god " &&
+			if (tmp != "account manager" &&
+			    tmp.substr(0, std::min(static_cast<size_t>(4), tmp.length())) != "god " &&
 			    tmp.substr(0, std::min(static_cast<size_t>(3), tmp.length())) != "cm " &&
 			    tmp.substr(0, std::min(static_cast<size_t>(3), tmp.length())) != "gm ") {
 				managerData.string1 = newName;
@@ -9071,11 +9080,7 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 	if (checkText(text, "yes") && managerTalkState[2]) {
 		if (!IOLoginData::playerNameExists(managerData.string1)) {
 			uint32_t guid = getGUID();
-			if (Database::getInstance().executeQuery(
-			        fmt::format("UPDATE `players` SET `name` = {:s} WHERE `id` = {:d}",
-			                    Database::getInstance().escapeString(managerData.string1), guid))) {
-				Database::getInstance().executeQuery(
-				    fmt::format("DELETE FROM `player_namelocks` WHERE `player_id` = {:d}", guid));
+			if (IOLoginData::renameNamelockedPlayer(guid, managerData.accountId, managerData.string1)) {
 				if (auto house = g_game.map.houses.getHouseByPlayerId(guid)) {
 					house->updateOwnerName(managerData.string1);
 				}
@@ -9105,6 +9110,14 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 void Player::handleAccountManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
 	msg << "Account Manager: ";
+
+	if (managerData.accountId <= 1) {
+		LOG_WARN("[Security] Blocked account management request for protected account (account={}).",
+		         managerData.accountId);
+		msg << "This account cannot be managed.";
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+		return;
+	}
 
 	if (checkText(text, "cancel") || checkText(text, "account")) {
 		managerTalkState[1] = true;
@@ -9137,11 +9150,19 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		return;
 	} else if (checkText(text, "yes") && managerTalkState[3]) {
 		uint32_t playerId = IOLoginData::getGuidByName(managerData.string1);
+		if (playerId > 0) {
+			const uint32_t ownerAccountId = IOLoginData::getAccountIdByPlayerId(playerId);
+			if (!canAccountDeleteCharacter(managerData.accountId, playerId, ownerAccountId)) {
+				LOG_WARN("[Security] Denied character deletion (account={}, guid={}, owner={}).",
+				         managerData.accountId, playerId, ownerAccountId);
+				playerId = 0;
+			}
+		}
 
-		if (playerId && IOLoginData::deletePlayer(playerId)) {
+		if (playerId > 1 && IOLoginData::deletePlayer(playerId, managerData.accountId)) {
 			msg << "Your character has been deleted.";
 		} else {
-			msg << "An error occured while deleting your character. Either the character does not belong to you or it doesn't exist.";
+			msg << "An error occurred while deleting your character. Either the character does not belong to you, is currently online, or does not exist.";
 		}
 
 		managerTalkState[1] = true;
@@ -9152,10 +9173,10 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
 	} else if (checkText(text, "no") && managerTalkState[3]) {
-		managerTalkState[1] = true;
+		managerTalkState[2] = true;
 		managerTalkState[3] = false;
 
-		msg << "Tell me what character you want to delete.";
+		msg << "Tell me what character you want to delete, or type 'cancel' to go back.";
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 
 		return;
@@ -9184,8 +9205,11 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 			managerTalkState[i] = false;
 		}
 
-		IOLoginData::setPassword(managerData.accountId, managerData.string1);
-		msg << "Your password has been changed.";
+		if (IOLoginData::setPassword(managerData.accountId, managerData.string1)) {
+			msg << "Your password has been changed.";
+		} else {
+			msg << "Sorry, an error occurred while changing your password. Please try again later.";
+		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
 	} else if (checkText(text, "no") && managerTalkState[5]) {
@@ -9196,7 +9220,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		msg << "Then not.";
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
-	} else if (checkText(text, "character")) {
+	} else if (checkText(text, "character") && managerTalkState[1]) {
 		std::vector<std::string> characters = IOLoginData::getPlayersByAccountId(managerData.accountId);
 		if (characters.size() >= 15) {
 			managerTalkState[1] = true;
@@ -9225,7 +9249,8 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		} else {
 			std::string tmp = managerData.string1;
 			toLowerCaseString(tmp);
-			if (tmp.substr(0, 4) != "god " && tmp.substr(0, 3) != "cm " && tmp.substr(0, 3) != "gm ") {
+			if (tmp != "account manager" && tmp.substr(0, 4) != "god " && tmp.substr(0, 3) != "cm " &&
+			    tmp.substr(0, 3) != "gm ") {
 				managerTalkState[6] = false;
 				managerTalkState[7] = true;
 				msg << managerData.string1 << ", are you sure? Type 'yes' or 'no'.";
@@ -9375,11 +9400,11 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		return;
 	} else if (checkText(text, "yes") && managerTalkState[10]) {
 		std::string recoveryKey = generateRecoveryKey(4, 4);
-		if (IOLoginData::setRecoveryKey(managerData.accountId, recoveryKey)) {
+		if (!recoveryKey.empty() && IOLoginData::setRecoveryKey(managerData.accountId, recoveryKey)) {
 			msg << "Your recovery key is: " << recoveryKey
 			    << ". IMPORTANT: Write this down, it will be hashed and cannot be recovered!";
 		} else {
-			msg << "Sorry, you already have a recovery key, for security reasons I may not give you a new one.";
+			msg << "A recovery key could not be issued. An existing key cannot be replaced.";
 		}
 
 		managerTalkState[1] = true;
@@ -9403,9 +9428,109 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 	}
 }
 
+bool Player::canAccountDeleteCharacter(uint32_t sessionAccountId, uint32_t targetPlayerId, uint32_t ownerAccountId)
+{
+	return sessionAccountId > 1 && targetPlayerId > 1 && ownerAccountId == sessionAccountId;
+}
+
+std::string Player::makeAccountRecoveryLimiterKey(std::string_view canonicalAccountName)
+{
+	std::string normalized = asTrimmedString(canonicalAccountName);
+	if (normalized.empty()) {
+		return {};
+	}
+	toLowerCaseString(normalized);
+	return "recover:" + normalized;
+}
+
+bool Player::isAccountRecoveryAllowed(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	return LoginAttemptLimiter::forRecovery().allowLogin(clientIp, makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+void Player::recordAccountRecoveryFailure(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	LoginAttemptLimiter::forRecovery().recordFailure(clientIp, makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+void Player::recordAccountRecoverySuccess(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	LoginAttemptLimiter::forRecovery().recordSuccess(clientIp, makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+bool Player::verifyAccountRecoveryAttempt(uint32_t accId, std::string_view storedKeyHash, std::string_view recoveryKey,
+                                          uint32_t clientIp, std::ostringstream& msg)
+{
+	if (accId <= 1) {
+		LOG_WARN("[Security] Blocked recovery attempt on protected account (account={}).", accId);
+		msg << "This account cannot be recovered.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+	    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+		LOG_WARN("[Security] Denied rate-limited account recovery (account={}).", accId);
+		msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	if (storedKeyHash.empty()) {
+		msg << "This account does not have a recovery key set. Please contact an administrator.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	const std::string inputKeyHash = transformToSHA1Hex(recoveryKey);
+	if (storedKeyHash.size() != inputKeyHash.size() ||
+	    CRYPTO_memcmp(storedKeyHash.data(), inputKeyHash.data(), inputKeyHash.size()) != 0) {
+		++managerData.recoveryAttempts;
+		recordAccountRecoveryFailure(clientIp, managerData.accountName);
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+		    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+			LOG_WARN("[Security] Too many failed recovery key attempts (account={}).", accId);
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			managerTalkState[7] = false;
+			managerTalkState[1] = false;
+			managerData.accountName.clear();
+		} else {
+			msg << "The recovery key you entered is incorrect. Please try again or type 'cancel' to start over.";
+		}
+		return false;
+	}
+
+	return true;
+}
+
 void Player::handleNewAccountManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
+	const uint32_t clientIp = getIP() != 0 ? getIP() : lastIP;
 	msg << "Account Manager: ";
+
+	if (checkText(text, "cancel")) {
+		resetTalkState(0, 0);
+		if (managerData.accountId > 1) {
+			// A generated account number has already been issued. Resume its email prompt.
+			managerTalkState[1] = true;
+			managerTalkState[13] = true;
+			msg << "Your account number is '" << managerData.accountName << "'. What is your email address?";
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+		managerData.string1.clear();
+		managerData.string2.clear();
+		managerData.accountName.clear();
+		msg << "Alright, let's start over. Type 'account' to create a new account or 'recover' to recover an existing one.";
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+		return;
+	}
 
 	if (checkText(text, "account") && !managerTalkState[1]) {
 		msg << "What would you like your password to be?";
@@ -9416,6 +9541,12 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (checkText(text, "recover") && !managerTalkState[1]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION || !isAccountRecoveryAllowed(clientIp)) {
+			LOG_WARN("[Security] Blocked recovery restart after reaching max failed attempts.");
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
 		msg << "What is your account name or email?";
 		managerTalkState[1] = true;
 		managerTalkState[6] = true;
@@ -9424,6 +9555,14 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (managerTalkState[6]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION || !isAccountRecoveryAllowed(clientIp)) {
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			managerTalkState[6] = false;
+			managerTalkState[1] = false;
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		std::string tmp = text;
 		trimString(tmp);
 
@@ -9440,6 +9579,15 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			return;
 		}
 
+		if (!isAccountRecoveryAllowed(clientIp, *resolvedAccount)) {
+			LOG_WARN("[Security] Denied rate-limited account recovery.");
+			msg << "Too many failed recovery key attempts for this account. Please try again later or contact an administrator.";
+			managerTalkState[6] = false;
+			managerTalkState[1] = false;
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		managerData.accountName = *resolvedAccount;
 		managerTalkState[6] = false;
 		managerTalkState[7] = true;
@@ -9449,11 +9597,21 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (managerTalkState[7]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+		    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			managerTalkState[7] = false;
+			managerTalkState[1] = false;
+			managerData.accountName.clear();
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		std::string recoveryKey = text;
 		trimString(recoveryKey);
 
 		Database& db = Database::getInstance();
-		DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id`, `secret` FROM `accounts` WHERE `name` = {:s}",
+		DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id`, `recovery_key_hash` FROM `accounts` WHERE `name` = {:s}",
 		                                                db.escapeString(managerData.accountName)));
 
 		if (!result) {
@@ -9464,35 +9622,28 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			return;
 		}
 
-		uint32_t accId = result->getNumber<uint32_t>("id");
-		std::string storedKeyHash = std::string{result->getString("secret")};
-
-		if (storedKeyHash.empty()) {
-			msg << "This account does not have a recovery key set. Please contact an administrator.";
-			managerTalkState[7] = false;
-			managerTalkState[1] = false;
-			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
-			return;
-		}
-
-		std::string inputKeyHash = transformToSHA1Hex(recoveryKey);
-		if (storedKeyHash != inputKeyHash) {
-			msg << "The recovery key you entered is incorrect. Please try again or type 'cancel' to start over.";
+		const uint32_t accId = result->getNumber<uint32_t>("id");
+		const std::string storedKeyHash = std::string{result->getString("recovery_key_hash")};
+		if (!verifyAccountRecoveryAttempt(accId, storedKeyHash, recoveryKey, clientIp, msg)) {
 			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 			return;
 		}
 
 		std::string newPassword = generateSecurePassword(12);
 
-		if (IOLoginData::setPassword(accId, newPassword)) {
+		if (!newPassword.empty() && IOLoginData::resetPasswordWithRecoveryKey(accId, storedKeyHash, newPassword)) {
 			msg << "Your account has been recovered! Your new password is: " << newPassword
 			    << ". Please write it down before you logout.";
 			managerTalkState[7] = false;
 			managerTalkState[1] = false;
+			recordAccountRecoverySuccess(clientIp, managerData.accountName);
+			managerData.accountName.clear();
+			managerData.recoveryAttempts = 0;
 		} else {
 			msg << "Sorry, an error occurred while recovering your account. Please try again later.";
 			managerTalkState[7] = false;
 			managerTalkState[1] = false;
+			managerData.accountName.clear();
 		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
@@ -9630,7 +9781,8 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 					return;
 				}
 
-				msg << "Your account was created but the email could not be saved. Please contact an administrator.";
+				managerTalkState[13] = true;
+				msg << "Your account was created but the email could not be saved. Please try again.";
 			} else {
 				managerTalkState[5] = true;
 				msg << "Account name '" << managerData.accountName << "' with email '" << managerData.string2
@@ -9643,8 +9795,7 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 
 	if (checkText(text, "yes") && managerTalkState[5]) {
 		uint32_t newAccountId = 0;
-		if (IOLoginData::createAccount(managerData.accountName, managerData.string1, newAccountId) &&
-		    IOLoginData::setAccountEmail(newAccountId, managerData.string2)) {
+		if (IOLoginData::createAccount(managerData.accountName, managerData.string1, newAccountId, managerData.string2)) {
 			accountManager = ACCOUNT_MANAGER_ACCOUNT;
 			managerData.accountId = newAccountId;
 			accountNumber = newAccountId;
@@ -9665,11 +9816,8 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			return;
 		}
 
-		if (newAccountId != 0) {
-			msg << "Your account was created but the email could not be saved. Please contact an administrator.";
-		} else {
-			msg << "Your account could not be created, please try again.";
-		}
+		msg << "Your account could not be created, please try again.";
+		managerTalkState[1] = false;
 		for (int8_t i = 2; i <= 13; i++) {
 			managerTalkState[i] = false;
 		}
@@ -9687,7 +9835,7 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 
 	// Allow "character" command even in NEW mode if account already exists
 	if (checkText(text, "character")) {
-		if (managerData.accountId != 0) {
+		if (managerData.accountId > 1) {
 			// Account already exists, switch to ACCOUNT mode
 			accountManager = ACCOUNT_MANAGER_ACCOUNT;
 			managerTalkState[1] = true;

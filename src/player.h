@@ -1473,15 +1473,21 @@ public:
 	}
 	void sendTextMessage(MessageClasses mclass, std::string_view message) const
 	{
-		if (client) {
-			client->sendTextMessage(TextMessage(mclass, message));
-		}
+		sendTextMessage(TextMessage(mclass, message));
 	}
 	void sendTextMessage(const TextMessage& message) const
 	{
-		if (client) {
-			client->sendTextMessage(message);
+		if (!client) {
+			return;
 		}
+		if (isAccountManager()) {
+			// Dialogues can contain a newly issued password or recovery key.
+			if (auto owner = client->protocol()) {
+				owner->sendTextMessage(message);
+			}
+			return;
+		}
+		client->sendTextMessage(message);
 	}
 	void sendReLoginWindow() const
 	{
@@ -1688,6 +1694,13 @@ public:
 	void setAccountManagerMode(AccountManagerMode mode) { accountManager = mode; }
 	void setAccountManagerData(uint32_t accId) { managerData.accountId = accId; }
 
+	static constexpr uint8_t MAX_RECOVERY_ATTEMPTS_PER_SESSION = 5;
+	static bool canAccountDeleteCharacter(uint32_t sessionAccountId, uint32_t targetPlayerId, uint32_t ownerAccountId);
+	static std::string makeAccountRecoveryLimiterKey(std::string_view canonicalAccountName);
+	static bool isAccountRecoveryAllowed(uint32_t clientIp, std::string_view canonicalAccountName = {});
+	static void recordAccountRecoveryFailure(uint32_t clientIp, std::string_view canonicalAccountName);
+	static void recordAccountRecoverySuccess(uint32_t clientIp, std::string_view canonicalAccountName);
+
 	// for lua module
 	void setAccountType(AccountType_t newType) { accountType = newType; }
 
@@ -1782,9 +1795,13 @@ private:
 	void handleNamelockManager(const std::string& text, std::ostringstream& msg, bool& shouldShowHelp);
 	void handleAccountManager(const std::string& text, std::ostringstream& msg, bool& shouldShowHelp);
 	void handleNewAccountManager(const std::string& text, std::ostringstream& msg, bool& shouldShowHelp);
+	bool verifyAccountRecoveryAttempt(uint32_t accId, std::string_view storedKeyHash, std::string_view recoveryKey,
+	                                  uint32_t clientIp, std::ostringstream& msg);
 	bool checkText(std::string_view text, std::string_view match) const;
 	void resetTalkState(size_t from = 0, size_t to = 15);
 	void setManagerTalkState(size_t index, bool value) { managerTalkState[index] = value; }
+
+	friend struct AccountManagerSecurityTestAccess;
 
 	void gainExperience(uint64_t gainExp, const std::shared_ptr<Creature>& source);
 	void updateSkullAfterPzLockEnded();
@@ -2058,6 +2075,7 @@ private:
 		uint32_t accountId{0};
 		uint32_t vocationId{0};
 		uint32_t townId{0};
+		uint8_t recoveryAttempts{0};
 		std::string string1;
 		std::string string2;
 		std::string accountName;

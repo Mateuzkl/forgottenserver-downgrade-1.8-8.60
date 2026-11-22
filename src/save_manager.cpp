@@ -146,7 +146,7 @@ bool SaveManager::savePlayer(Player* player)
 	auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
 	if (queued) {
-		LOG_INFO(fmt::format(">> {}: Player {} save queued in {}",
+		LOG_DEBUG(fmt::format(">> {}: Player {} save queued in {}",
 			fmt::format(fg(fmt::color::magenta), "SaveManager"),
 			fmt::format(fg(fmt::color::lime_green), "{}", player->getName()),
 			fmt::format(fg(fmt::color::cyan), "{}ms", durationMs)));
@@ -461,7 +461,7 @@ void SaveManager::dispatchPlayerFlush(uint32_t guid, PendingPlayerFlush pending)
 			auto result = IOLoginData::FlushResult::Indeterminate;
 			try { result = IOLoginData::flushPlayerSaveChecked(*save); }
 			catch (const std::exception&) { LOG_ERROR("[SaveManager] Worker exception; commit outcome treated as unknown"); }
-			LOG_INFO(fmt::format("[SaveManager] guid={} stage=worker-flush result={} elapsed_ms={}", guid,
+			LOG_DEBUG(fmt::format("[SaveManager] guid={} stage=worker-flush result={} elapsed_ms={}", guid,
 			    static_cast<int>(result), std::chrono::duration_cast<std::chrono::milliseconds>(
 			    std::chrono::steady_clock::now() - start).count()));
 			g_dispatcher.addTask([this, guid, result, save] { onPlayerFlushed(guid, result, save); });

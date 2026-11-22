@@ -716,11 +716,19 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 		}
 
 		name = player->getName();
-		bool isAccountManager =
-		    (name == "Account Manager" && ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER));
-
-		if (isAccountManager && accountId != 1) {
-			player->accountNumber = accountId;
+		if (name == "Account Manager") {
+			if (player->getAccount() != 1 || !getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+				disconnectClient("The Account Manager is unavailable.");
+				return;
+			}
+			player->setAccountManagerMode(accountId == 1 ? ACCOUNT_MANAGER_NEW : ACCOUNT_MANAGER_ACCOUNT);
+			if (accountId != 1) {
+				player->setAccountManagerData(accountId);
+				player->setManagerTalkState(1, true);
+			}
+		} else if (accountId == 1 || player->getAccount() != accountId) {
+			disconnectClient("Your character could not be loaded.");
+			return;
 		}
 
 		if (IOBan::isPlayerNamelocked(player->getGUID()) && accountId != 1) {
@@ -848,6 +856,10 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 		});
 		return;
 	} else {
+		if (accountId == 1 || foundPlayer->getAccount() != accountId) {
+			disconnectClient("Your character could not be loaded.");
+			return;
+		}
 		if (eventConnect != 0 || !getBoolean(ConfigManager::REPLACE_KICK_ON_LOGIN)) {
 			// Already trying to connect
 			disconnectClient("You are already logged in.");
@@ -884,6 +896,23 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 		return;
 	}
 
+	// The worker reloaded the character after the login reservation was made.
+	const auto mode = player->getAccountManagerMode();
+	if (mode == ACCOUNT_MANAGER_NEW || mode == ACCOUNT_MANAGER_ACCOUNT) {
+		if (player->getName() != "Account Manager" || player->getAccount() != 1 || !getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+			g_game.releaseLogin(reservedGuid);
+			disconnectClient("The Account Manager is unavailable.");
+			return;
+		}
+		player->accountNumber = accountId;
+	} else if (accountId == 1 || player->getAccount() != accountId) {
+		g_game.releaseLogin(reservedGuid);
+		disconnectClient("Your character could not be loaded.");
+		return;
+	}
+	if (player->isAccountManager()) {
+		player->setMovementBlocked(true);
+	}
 	IOLoginData::loadPlayerWorldData(player.get());
 
 	player->client->setOwner(getThis());
@@ -906,27 +935,14 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 		player->registerCreatureEvent("ExtendedOpcode");
 	}
 
-	const std::string& name = player->getName();
-	if (ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER) && name == "Account Manager" &&
-	    player->getAccountManagerMode() == ACCOUNT_MANAGER_NONE) {
-		if (accountId == 1) {
-			player->setAccountManagerMode(ACCOUNT_MANAGER_NEW);
-			player->sendTextMessage(
-			    MESSAGE_STATUS_CONSOLE_ORANGE,
-			    "Account Manager: Welcome! You are now speaking with the Account Manager. To create a new account, type {account}. If you already have one and need to recover it, type {recover}. Type {cancel} anytime to restart this conversation.");
-		} else {
-			player->setAccountManagerMode(ACCOUNT_MANAGER_ACCOUNT);
-			player->setAccountManagerData(accountId);
-			player->resetTalkState(0, 0);
-			player->setManagerTalkState(1, true);
-			player->sendTextMessage(
-			    MESSAGE_STATUS_CONSOLE_ORANGE,
-			    "Account Manager: Welcome back. Type {account} to manage your account, {character} to create a new character, or {cancel} to start over.");
-		}
-	}
-
-	if (player->isAccountManager()) {
-		player->setMovementBlocked(true);
+	if (mode == ACCOUNT_MANAGER_NEW) {
+		player->sendTextMessage(
+		    MESSAGE_STATUS_CONSOLE_ORANGE,
+		    "Account Manager: Welcome! You are now speaking with the Account Manager. To create a new account, type {account}. If you already have one and need to recover it, type {recover}. Type {cancel} anytime to restart this conversation.");
+	} else if (mode == ACCOUNT_MANAGER_ACCOUNT) {
+		player->sendTextMessage(
+		    MESSAGE_STATUS_CONSOLE_ORANGE,
+		    "Account Manager: Welcome back. Type {account} to manage your account, {character} to create a new character, or {cancel} to start over.");
 	}
 
 	player->lastIP = player->getIP();
@@ -934,7 +950,9 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->onlineTimeSessionStart = time(nullptr);
 	// Loading ran only after SaveManager drained this GUID. Deliver on the dispatcher,
 	// after world/login hooks, so the item and receipt can share a player snapshot.
-	(void)Market::processDeliveries(player.get());
+	if (!player->isAccountManager()) {
+		(void)Market::processDeliveries(player.get());
+	}
 	if (g_saveManager.hasFailedRecovery(player->getGUID())) {
 		g_game.releaseLogin(reservedGuid);
 		return;
@@ -964,7 +982,7 @@ void ProtocolGame::spectate(const std::string& name, const std::string& password
 
 	auto foundPlayer = g_game.getPlayerByName(name);
 	auto castClient = foundPlayer ? foundPlayer->client : nullptr;
-	if (!foundPlayer || !castClient || !castClient->isBroadcasting()) {
+	if (!foundPlayer || foundPlayer->isAccountManager() || !castClient || !castClient->isBroadcasting()) {
 		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, "");
 		disconnectClient("That cast is not available anymore.");
 		return;
@@ -1499,6 +1517,14 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 		}
 	}
 
+	// Account Manager sessions may only talk, ping, and logout.
+	// Block all gameplay, Store, Market, Character Bazaar, VIP, extended opcodes, and Lua packet handlers.
+	if (player->isAccountManager() && !isOpcodeAllowedForAccountManager(recvbyte)) {
+		skipUnreadBytes(msg);
+		sendCancelWalk();
+		return;
+	}
+
 	if (isSpectator) {
 		switch (recvbyte) {
 			case 0x14: disconnect(); break;
@@ -1944,8 +1970,8 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 {
-	if (!player || !isAstraClient || !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) ||
-	    !requireUnreadBytes(msg, 1)) {
+	if (!player || player->isAccountManager() || !isAstraClient ||
+	    !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) || !requireUnreadBytes(msg, 1)) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -1981,7 +2007,7 @@ void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreOpen(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2004,7 +2030,7 @@ void ProtocolGame::parseStoreOpen(NetworkMessage& msg)
 
 void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2084,7 +2110,7 @@ void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreHistory(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2107,7 +2133,7 @@ void ProtocolGame::parseStoreHistory(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2799,6 +2825,16 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 	uint16_t channelId;
 
 	SpeakClasses type = static_cast<SpeakClasses>(msg.getByte());
+	if (player->isAccountManager()) {
+		if (type == TALKTYPE_SAY) {
+			const auto dialogue = msg.getString();
+			if (!msg.isOverrun() && !dialogue.empty() && dialogue.size() <= 255) {
+				player->manageAccount(dialogue);
+			}
+		}
+		skipUnreadBytes(msg);
+		return;
+	}
 	switch (type) {
 		case TALKTYPE_PRIVATE:
 		case TALKTYPE_PRIVATE_RED:
@@ -2829,11 +2865,6 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 		}
 	}
 	if (text.length() > 255) {
-		return;
-	}
-
-	if (player->isAccountManager()) {
-		player->manageAccount(text);
 		return;
 	}
 
