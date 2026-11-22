@@ -92,6 +92,9 @@ maxPacketsPerSecond = 25
 --   catches spraying; keep it well above what a person mistyping their own
 --   password reaches, or shared addresses (NAT) get punished
 -- bruteForceBlockSeconds: how long a block lasts
+-- Recovery uses the same thresholds in separate in-memory counters. Its account
+-- limit follows the canonical account across addresses. Failures share a 60s
+-- counting window. A recovery session also stops after five incorrect keys.
 bruteForceAccountFailures = 5
 bruteForceIpFailures = 20
 bruteForceBlockSeconds = 300

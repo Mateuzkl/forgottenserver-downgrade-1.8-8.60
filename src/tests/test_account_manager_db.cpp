@@ -82,6 +82,19 @@ TEST_CASE(account_manager_mariadb_dialogues_and_ownership)
 	uint32_t other = 0;
 	CHECK(IOLoginData::createAccount("FixtureOther", "other-password", other));
 	CHECK(other != ownerId && other > 1);
+	uint32_t duplicate = 0;
+	CHECK(!IOLoginData::createAccount("FixtureDuplicate", "other-password", duplicate, "OWNER@example.test"));
+	CHECK(duplicate == 0);
+	CHECK(!IOLoginData::setAccountEmail(other, "owner@example.test"));
+	CHECK(field("SELECT GET_LOCK('otc_account_registration',0) AS value") == "1");
+	auto busyRegistration = std::async(std::launch::async, [] {
+		uint32_t id = 0;
+		return IOLoginData::createAccount("FixtureBusy", "fixture-password", id);
+	});
+	const bool createdWhileBusy = busyRegistration.get();
+	CHECK(field("SELECT RELEASE_LOCK('otc_account_registration') AS value") == "1");
+	CHECK(!createdWhileBusy);
+	CHECK(field("SELECT COUNT(*) AS value FROM accounts WHERE name='FixtureBusy'") == "0");
 	CHECK(IOLoginData::createPlayer(other, "Other Hero", 1, PLAYERSEX_FEMALE));
 	const auto otherHero = IOLoginData::getGuidByName("Other Hero");
 	CHECK(otherHero > 1);

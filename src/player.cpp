@@ -9032,6 +9032,12 @@ void Player::resetTalkState(size_t from, size_t to)
 
 void Player::handleNamelockManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
+	if (checkText(text, "cancel")) {
+		resetTalkState();
+		managerData.string1.clear();
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Account Manager: Rename cancelled. Tell me your new character name.");
+		return;
+	}
 	if (!managerTalkState[1]) {
 		std::string newName = text;
 		trimString(newName);

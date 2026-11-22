@@ -2016,6 +2016,29 @@ void IOLoginData::updateTibiaCoins(uint32_t accountId, uint64_t tibiaCoins)
 	    fmt::format("UPDATE `accounts` SET `tibia_coins` = {:d} WHERE `id` = {:d}", tibiaCoins, accountId));
 }
 
+namespace {
+// The HTTP registration service uses the same MariaDB connection lock. A busy
+// registration can be retried without waiting on the game dispatcher.
+class RegistrationLock
+{
+public:
+	explicit RegistrationLock(Database& db) : db(db)
+	{
+		auto result = db.storeQuery("SELECT GET_LOCK('otc_account_registration', 0) AS acquired");
+		acquired = result && result->getNumber<uint32_t>("acquired") == 1;
+	}
+	~RegistrationLock()
+	{
+		if (acquired) {
+			db.storeQuery("SELECT RELEASE_LOCK('otc_account_registration')");
+		}
+	}
+	bool acquired = false;
+private:
+	Database& db;
+};
+} // namespace
+
 bool IOLoginData::setAccountEmail(uint32_t accountId, const std::string& email)
 {
 	if (accountId <= 1) {
@@ -2024,7 +2047,18 @@ bool IOLoginData::setAccountEmail(uint32_t accountId, const std::string& email)
 	}
 
 	Database& db = Database::getInstance();
-	return db.executeQuery(fmt::format("UPDATE `accounts` SET `email` = {:s} WHERE `id` = {:d}",
+	RegistrationLock lock(db);
+	if (!lock.acquired) {
+		return false;
+	}
+	const auto matches = db.storeQuery(fmt::format("SELECT COUNT(*) AS used FROM `accounts` WHERE `id` <> {} AND {}",
+	                                               accountId, accountIdentifierMatches(db, email)));
+	if (!matches || matches->getNumber<uint32_t>("used") != 0) {
+		return false;
+	}
+	// A reconnect loses the advisory lock. Verify ownership in the write itself.
+	return db.executeQuery(fmt::format("UPDATE `accounts` SET `email` = {} WHERE `id` = {} "
+	                                   "AND IS_USED_LOCK('otc_account_registration') = CONNECTION_ID()",
 	                                   db.escapeString(email), accountId)) && db.getAffectedRows() == 1;
 }
 
@@ -2041,9 +2075,20 @@ bool IOLoginData::createAccount(const std::string& name, const std::string& pass
 {
 	Database& db = Database::getInstance();
 	accountId = 0;
+	RegistrationLock lock(db);
+	if (!lock.acquired) {
+		return false;
+	}
+	auto identifiers = accountIdentifierMatches(db, name);
+	if (!email.empty()) {
+		identifiers += " OR " + accountIdentifierMatches(db, email);
+	}
 	if (!db.executeQuery(fmt::format(
-	        "INSERT INTO `accounts` (`name`, `password`, `email`, `creation`) VALUES ({}, {}, {}, {})",
-	        db.escapeString(name), db.escapeString(transformToSHA1Hex(password)), db.escapeString(email), time(nullptr)))) {
+	        "INSERT INTO `accounts` (`name`, `password`, `type`, `premium_ends_at`, `email`, `creation`) "
+	        "SELECT {}, {}, 1, 0, {}, {} FROM DUAL WHERE IS_USED_LOCK('otc_account_registration') = CONNECTION_ID() "
+	        "AND NOT EXISTS (SELECT 1 FROM `accounts` WHERE {})",
+	        db.escapeString(name), db.escapeString(transformToSHA1Hex(password)), db.escapeString(email), time(nullptr),
+	        identifiers)) || db.getAffectedRows() != 1) {
 		return false;
 	}
 	accountId = static_cast<uint32_t>(db.getLastInsertId());
