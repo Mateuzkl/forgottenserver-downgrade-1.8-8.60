@@ -6,6 +6,7 @@
 #include "../game.h"
 #include "../iologindata.h"
 #include "../player.h"
+#include "../tools.h"
 #include "disposable_database.h"
 
 extern Game g_game;
@@ -121,6 +122,7 @@ TEST_CASE(account_manager_mariadb_dialogues_and_ownership)
 	owner.manageAccount("recovery key");
 	auto key = displayedCredential(owner, "yes", "Your recovery key is: ");
 	CHECK(key.size() == 19);
+	CHECK(IOLoginData::setRecoveryKey(ownerId, key));
 	CHECK(!IOLoginData::setRecoveryKey(ownerId, "replacement"));
 	CHECK(field(fmt::format("SELECT secret AS value FROM accounts WHERE id={}", ownerId)) == "ABCDEFGHIJKLMNOP");
 	Player recovery(nullptr);
@@ -129,6 +131,10 @@ TEST_CASE(account_manager_mariadb_dialogues_and_ownership)
 		recovery.manageAccount(line);
 	}
 	auto password = displayedCredential(recovery, key, "Your new password is: ");
+	const auto verifiedHash = transformToSHA1Hex(key);
+	CHECK(IOLoginData::resetPasswordWithRecoveryKey(ownerId, verifiedHash, password));
+	CHECK(!IOLoginData::resetPasswordWithRecoveryKey(ownerId, transformToSHA1Hex("replacement"), password));
+	CHECK(!IOLoginData::resetPasswordWithRecoveryKey(other, verifiedHash, password));
 	CHECK(IOLoginData::loginserverAuthentication("FixtureOwner", password, account) == Auth::Success);
 	CHECK(IOLoginData::loginserverAuthentication("FixtureOwner", "updated-password", account) == Auth::Rejected);
 	ConfigManager::setBoolean(ConfigManager::GENERATE_ACCOUNT_NUMBER, true);
@@ -155,14 +161,16 @@ TEST_CASE(account_manager_namelock_commits_both_changes)
 	CHECK(db.executeQuery("CREATE TEMPORARY TABLE players (id INT PRIMARY KEY, name VARCHAR(255) UNIQUE, "
 	                      "account_id INT NOT NULL, deletion BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB"));
 	CHECK(db.executeQuery("CREATE TEMPORARY TABLE player_namelocks (player_id INT PRIMARY KEY) ENGINE=InnoDB"));
-	CHECK(db.executeQuery("INSERT INTO players (id,name,account_id) VALUES (100,'Old Hero',25)"));
-	CHECK(db.executeQuery("INSERT INTO player_namelocks VALUES (100)"));
+	CHECK(db.executeQuery("INSERT INTO players (id,name,account_id) VALUES (100,'Old Hero',25),(101,'Other Hero',26)"));
+	CHECK(db.executeQuery("INSERT INTO player_namelocks VALUES (100),(101)"));
 	CHECK(!IOLoginData::renameNamelockedPlayer(100, 26, "New Hero"));
 	CHECK(field("SELECT name AS value FROM players WHERE id=100") == "Old Hero");
 	CHECK(IOLoginData::renameNamelockedPlayer(100, 25, "New Hero"));
 	CHECK(!IOLoginData::renameNamelockedPlayer(100, 25, "Unrequested Hero"));
 	CHECK(field("SELECT name AS value FROM players WHERE id=100") == "New Hero");
-	CHECK(field("SELECT COUNT(*) AS value FROM player_namelocks") == "0");
+	CHECK(field("SELECT name AS value FROM players WHERE id=101") == "Other Hero");
+	CHECK(field("SELECT COUNT(*) AS value FROM player_namelocks WHERE player_id=100") == "0");
+	CHECK(field("SELECT COUNT(*) AS value FROM player_namelocks WHERE player_id=101") == "1");
 	CHECK(db.executeQuery("DROP TEMPORARY TABLE player_namelocks, players"));
 }
 

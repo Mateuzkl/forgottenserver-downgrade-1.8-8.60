@@ -2124,13 +2124,14 @@ bool IOLoginData::setRecoveryKey(uint32_t accountId, const std::string& recovery
 	}
 
 	Database& db = Database::getInstance();
-	std::string hashedKey = transformToSHA1Hex(recoveryKey);
+	const auto hashedKey = db.escapeString(transformToSHA1Hex(recoveryKey));
 	if (!db.executeQuery(fmt::format(
 	        "UPDATE `accounts` SET `recovery_key_hash` = {:s} WHERE `id` = {:d} AND `recovery_key_hash` IS NULL",
-	        db.escapeString(hashedKey), accountId))) {
+	        hashedKey, accountId))) {
 		return false;
 	}
-	return db.getAffectedRows() == 1;
+	return db.getAffectedRows() == 1 || db.storeQuery(fmt::format(
+	    "SELECT 1 FROM `accounts` WHERE `id` = {} AND `recovery_key_hash` = {}", accountId, hashedKey));
 }
 
 bool IOLoginData::resetPasswordWithRecoveryKey(uint32_t accountId, std::string_view verifiedHash, std::string_view password)
@@ -2139,9 +2140,16 @@ bool IOLoginData::resetPasswordWithRecoveryKey(uint32_t accountId, std::string_v
 		return false;
 	}
 	Database& db = Database::getInstance();
-	return db.executeQuery(fmt::format(
-	    "UPDATE `accounts` SET `password` = {} WHERE `id` = {} AND `recovery_key_hash` = {}",
-	    db.escapeString(transformToSHA1Hex(password)), accountId, db.escapeString(verifiedHash))) && db.getAffectedRows() == 1;
+	const auto hashedPassword = db.escapeString(transformToSHA1Hex(password));
+	const auto recoveryHash = db.escapeString(verifiedHash);
+	if (!db.executeQuery(fmt::format(
+	        "UPDATE `accounts` SET `password` = {} WHERE `id` = {} AND `recovery_key_hash` = {}",
+	        hashedPassword, accountId, recoveryHash))) {
+		return false;
+	}
+	return db.getAffectedRows() == 1 || db.storeQuery(fmt::format(
+	    "SELECT 1 FROM `accounts` WHERE `id` = {} AND `recovery_key_hash` = {} AND `password` = {}",
+	    accountId, recoveryHash, hashedPassword));
 }
 
 bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex)
