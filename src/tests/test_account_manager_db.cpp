@@ -152,10 +152,11 @@ TEST_CASE(account_manager_namelock_commits_both_changes)
 {
 	// Connection-local InnoDB tables exercise commit and rollback independently of the other fixtures.
 	auto& db = Database::getInstance();
-	CHECK(db.executeQuery("CREATE TEMPORARY TABLE players LIKE players"));
-	CHECK(db.executeQuery("CREATE TEMPORARY TABLE player_namelocks LIKE player_namelocks"));
+	CHECK(db.executeQuery("CREATE TEMPORARY TABLE players (id INT PRIMARY KEY, name VARCHAR(255) UNIQUE, "
+	                      "account_id INT NOT NULL, deletion BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB"));
+	CHECK(db.executeQuery("CREATE TEMPORARY TABLE player_namelocks (player_id INT PRIMARY KEY) ENGINE=InnoDB"));
 	CHECK(db.executeQuery("INSERT INTO players (id,name,account_id) VALUES (100,'Old Hero',25)"));
-	CHECK(db.executeQuery("INSERT INTO player_namelocks VALUES (100,'fixture',1,1)"));
+	CHECK(db.executeQuery("INSERT INTO player_namelocks VALUES (100)"));
 	CHECK(!IOLoginData::renameNamelockedPlayer(100, 26, "New Hero"));
 	CHECK(field("SELECT name AS value FROM players WHERE id=100") == "Old Hero");
 	CHECK(IOLoginData::renameNamelockedPlayer(100, 25, "New Hero"));
