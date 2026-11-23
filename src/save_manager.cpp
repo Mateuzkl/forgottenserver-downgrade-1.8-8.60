@@ -23,14 +23,72 @@ extern Game g_game;
 
 SaveManager g_saveManager;
 
+void SaveManager::saveWorldState(uint32_t& failures)
+{
+	// Save game storage values (on dispatcher thread - fast)
+	if (!g_game.saveGameStorageValues()) {
+		++failures;
+		LOG_ERROR("[SaveManager] Failed to save game storage values.");
+	}
+
+	if (!g_game.saveAccountStorageValues()) {
+		++failures;
+		LOG_ERROR("[SaveManager] Failed to save account storage values.");
+	}
+
+	// Save KV store
+	if (!KVStore::getInstance().saveAll()) {
+		++failures;
+		LOG_ERROR("[SaveManager] Failed to save KV store.");
+	}
+
+	// Save map synchronously on the dispatcher thread (reads g_game.map.houses — not thread-safe).
+	const auto mapStart = std::chrono::steady_clock::now();
+	bool mapSaved = false;
+	for (uint32_t tries = 0; tries < 3; tries++) {
+		if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
+			mapSaved = true;
+			break;
+		}
+	}
+	if (!mapSaved) {
+		++failures;
+		LOG_ERROR("[SaveManager] Failed to save map data after 3 retries.");
+	}
+	LOG_INFO(fmt::format("[SaveManager] stage=map elapsed_ms={} result={}",
+	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-mapStart).count(), mapSaved));
+}
+
 void SaveManager::saveAll(std::string_view reason, bool mandatory)
 {
-	if (mandatory && !drainForShutdown() && isSaving()) {
-		// A timeout cannot justify skipping the final state. Register each live
-		// player's latest generation in WAL before the dispatcher stops.
-		for (const auto& player : g_game.getPlayers()) { (void)schedulePlayerFlush(player.get(), true); }
-		LOG_CRITICAL("[SaveManager] mandatory save: latest player snapshots queued; earlier workers still unresolved");
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[SaveManager] saveAll must be called on the dispatcher thread.");
 		return;
+	}
+
+	if (mandatory) {
+		(void)drainForShutdown();
+		if (isSaving()) {
+			// Earlier cycle is still unresolved even after drainForShutdown(), so we cannot
+			// start a fresh tracked cycle. Still persist synchronous world state (storages,
+			// KV, houses/map) and record every live player's latest generation in durable WAL
+			// without mutating the unresolved cycle's tracked flush count.
+			uint32_t degradedFailures = 0;
+			saveWorldState(degradedFailures);
+			uint32_t queuedCount = 0;
+			uint32_t rejectedCount = 0;
+			for (const auto& player : g_game.getPlayers()) {
+				if (schedulePlayerFlush(player.get(), false)) {
+					++queuedCount;
+				} else {
+					++rejectedCount;
+				}
+			}
+			LOG_CRITICAL(fmt::format(
+			    "[SaveManager] mandatory save (degraded): world_failures={} queued_players={} rejected_players={}; earlier cycle still unresolved",
+			    degradedFailures, queuedCount, rejectedCount));
+			return;
+		}
 	}
 	if (isSaving() || saving.exchange(true)) {
 		followupSaveRequested |= reason != "periodic";
@@ -64,23 +122,6 @@ void SaveManager::saveAll(std::string_view reason, bool mandatory)
 		fmt::format(fg(fmt::color::magenta), "SaveManager"),
 		fmt::format(fg(fmt::color::cyan), "Saving server state...")));
 
-	// Save game storage values (on dispatcher thread - fast)
-	if (!g_game.saveGameStorageValues()) {
-		++cycleFailures;
-		LOG_ERROR("[SaveManager] Failed to save game storage values.");
-	}
-
-	if (!g_game.saveAccountStorageValues()) {
-		++cycleFailures;
-		LOG_ERROR("[SaveManager] Failed to save account storage values.");
-	}
-
-	// Save KV store
-	if (!KVStore::getInstance().saveAll()) {
-		++cycleFailures;
-		LOG_ERROR("[SaveManager] Failed to save KV store.");
-	}
-
 	// Build all online players on dispatcher and flush SQL on the thread pool.
 	uint32_t playerCount = 0;
 	uint32_t rejectedCount = 0;
@@ -94,22 +135,9 @@ void SaveManager::saveAll(std::string_view reason, bool mandatory)
 		}
 	}
 
-	// Save map synchronously on the dispatcher thread (reads g_game.map.houses — not thread-safe).
+	// Persist global storages, account storages, KV store, and house/map state on dispatcher.
 	beginTrackedFlush();
-	const auto mapStart = std::chrono::steady_clock::now();
-	bool mapSaved = false;
-	for (uint32_t tries = 0; tries < 3; tries++) {
-		if (IOMapSerialize::saveHouseInfo() && IOMapSerialize::saveHouseItems()) {
-			mapSaved = true;
-			break;
-		}
-	}
-	if (!mapSaved) {
-		++cycleFailures;
-		LOG_ERROR("[SaveManager] Failed to save map data after 3 retries.");
-	}
-	LOG_INFO(fmt::format("[SaveManager] stage=map elapsed_ms={} result={}",
-	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-mapStart).count(), mapSaved));
+	saveWorldState(cycleFailures);
 	completeTrackedFlush();
 
 	auto endTime = std::chrono::high_resolution_clock::now();
@@ -162,7 +190,12 @@ bool SaveManager::savePlayerSync(Player* player)
 	}
 	const uint32_t guid = player->getGUID();
 	if (flushInFlight.contains(guid)) {
-		(void)schedulePlayerFlush(player); // latest state is durable in the ordered WAL queue
+		if (!player->isOffline()) {
+			(void)schedulePlayerFlush(player); // latest live state is durable in the ordered WAL queue
+		} else {
+			LOG_WARN(fmt::format(
+			    "[SaveManager] Rejected offline savePlayerSync for guid={} while an async flush is in flight.", guid));
+		}
 		return false;
 	}
 	auto save = IOLoginData::buildPlayerSave(player);
@@ -202,6 +235,10 @@ void SaveManager::quarantinePlayer(uint32_t guid, std::string_view stage, bool c
 
 bool SaveManager::drainForShutdown()
 {
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[SaveManager] drainForShutdown must be called on the dispatcher thread.");
+		return false;
+	}
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
 	while (!activeFlushes.empty()) {
 		const uint32_t guid = activeFlushes.begin()->first;
@@ -379,14 +416,14 @@ bool SaveManager::schedulePlayerFlush(Player* player, bool trackSaveAll /* = fal
 		if (trackNext && !oldTracked) {
 			beginTrackedFlush();
 		}
-		pendingFlushes[guid] = PendingPlayerFlush{player->getName(), std::move(*save), trackNext};
+		pendingFlushes[guid] = PendingPlayerFlush{player->getName(), std::move(*save), trackNext, true};
 		return true;
 	}
 	flushInFlight.insert(guid);
 	if (trackSaveAll) {
 		beginTrackedFlush();
 	}
-	dispatchPlayerFlush(guid, PendingPlayerFlush{player->getName(), std::move(*save), trackSaveAll});
+	dispatchPlayerFlush(guid, PendingPlayerFlush{player->getName(), std::move(*save), trackSaveAll, false});
 	return !hasFailedRecovery(guid);
 }
 
@@ -439,7 +476,7 @@ void SaveManager::onPlayerFlushed(uint32_t guid, IOLoginData::FlushResult result
 
 void SaveManager::dispatchPlayerFlush(uint32_t guid, PendingPlayerFlush pending)
 {
-	if (!savePendingFlushToDB(guid, pending.save)) {
+	if (!pending.walPersisted && !savePendingFlushToDB(guid, pending.save)) {
 		preserveRejectedSnapshot(guid, std::move(pending.save));
 		flushInFlight.erase(guid);
 		if (pending.trackedBySaveAll) {
@@ -565,8 +602,9 @@ bool SaveManager::savePendingFlushToDB(uint32_t guid, IOLoginData::PlayerSaveSna
 	for (const auto& query : save.queries) {
 		fingerprint += std::to_string(query.size()) + ":" + query;
 	}
-	const auto header = db.escapeString("-- tfs-save:" + transformToSHA1Hex(fingerprint));
-	// A worker for an older generation must never delete a newer queued WAL.
+	const uint64_t generation = ++nextWalGeneration;
+	const auto header = db.escapeString(fmt::format("-- tfs-save:{:d}:{}", generation, transformToSHA1Hex(fingerprint)));
+	// A worker for an older generation must never delete a newer queued WAL, even under ABA state transitions.
 	save.walClearQuery = fmt::format(
 	    "DELETE w FROM `player_save_async_pending` w INNER JOIN `player_save_async_pending` h ON h.`guid`=w.`guid` "
 	    "AND h.`query_index`=0 AND h.`query_text`={} WHERE w.`guid`={}", header, guid);

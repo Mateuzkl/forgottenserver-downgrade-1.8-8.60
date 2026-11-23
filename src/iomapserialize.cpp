@@ -219,10 +219,7 @@ bool IOMapSerialize::saveHouseItems()
 		return false;
 	}
 
-	std::ostringstream query;
-	query << "INSERT INTO `tile_store` (`house_id`, `data`) VALUES ";
-
-	bool notEmpty = false;
+	DBInsert stmt("INSERT INTO `tile_store` (`house_id`, `data`) VALUES ");
 	{
 		AutoStat statBuild("saveHouseItems", "build_query");
 		PropWriteStream stream;
@@ -234,11 +231,9 @@ bool IOMapSerialize::saveHouseItems()
 					saveTile(stream, tile.get());
 
 					if (auto attributes = stream.getStream(); !attributes.empty()) {
-						if (notEmpty) {
-							query << ",";
+						if (!stmt.addRow(fmt::format("{:d}, {:s}", house->getId(), db.escapeString(attributes)))) {
+							return false;
 						}
-						query << "(" << house->getId() << "," << db.escapeString(attributes) << ")";
-						notEmpty = true;
 						stream.clear();
 					}
 				}
@@ -246,9 +241,9 @@ bool IOMapSerialize::saveHouseItems()
 		}
 	}
 
-	if (notEmpty) {
+	{
 		AutoStat statExec("saveHouseItems", "execute_query");
-		if (!db.executeQuery(query.str())) {
+		if (!stmt.execute()) {
 			return false;
 		}
 	}
@@ -606,38 +601,23 @@ bool IOMapSerialize::saveHouseInfo()
 		return false;
 	}
 
-	std::ostringstream query;
-	query << "INSERT INTO `houses` (`id`, `type`, `owner`, `paid`, `warnings`, `is_protected`, `name`, `town_id`, `rent`, `size`, `beds`) VALUES ";
+	DBInsert housesQuery("INSERT INTO `houses` (`id`, `type`, `owner`, `paid`, `warnings`, `is_protected`, `name`, `town_id`, `rent`, `size`, `beds`) VALUES ");
+	housesQuery.upsert({"owner", "type", "paid", "warnings", "is_protected", "name", "town_id", "rent", "size", "beds"});
 
-	bool notEmpty = false;
 	for (const auto& it : g_game.map.houses.getHouses()) {
 		House* house = it.second.get();
-		if (notEmpty) {
-			query << ",";
-		}
-		query << fmt::format("({:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d})",
-		                     house->getId(), static_cast<uint32_t>(house->getType()), house->getOwner(), house->getPaidUntil(), house->getPayRentWarnings(),
-		                     (house->getProtected() ? 1 : 0), db.escapeString(house->getName()), house->getTownId(), house->getRent(), house->getTileCount(),
-		                     house->getBedCount());
-		notEmpty = true;
-	}
-
-	if (notEmpty) {
-		query << " ON DUPLICATE KEY UPDATE "
-		      << "`owner` = VALUES(`owner`), "
-		      << "`type` = VALUES(`type`), "
-		      << "`paid` = VALUES(`paid`), "
-		      << "`warnings` = VALUES(`warnings`), "
-		      << "`is_protected` = VALUES(`is_protected`), "
-		      << "`name` = VALUES(`name`), "
-		      << "`town_id` = VALUES(`town_id`), "
-		      << "`rent` = VALUES(`rent`), "
-		      << "`size` = VALUES(`size`), "
-		      << "`beds` = VALUES(`beds`)";
-
-		if (!db.executeQuery(query.str())) {
+		if (!housesQuery.addRow(fmt::format("{:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d}",
+		                                    house->getId(), static_cast<uint32_t>(house->getType()), house->getOwner(),
+		                                    house->getPaidUntil(), house->getPayRentWarnings(),
+		                                    (house->getProtected() ? 1 : 0), db.escapeString(house->getName()),
+		                                    house->getTownId(), house->getRent(), house->getTileCount(),
+		                                    house->getBedCount()))) {
 			return false;
 		}
+	}
+
+	if (!housesQuery.execute()) {
+		return false;
 	}
 
 	DBInsert stmt("INSERT INTO `house_lists` (`house_id`, `listid` , `list`) VALUES ");

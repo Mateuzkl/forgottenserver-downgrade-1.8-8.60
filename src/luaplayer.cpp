@@ -3215,6 +3215,7 @@ int luaPlayerDrainAsyncSave(lua_State* L)
 				if (lua_pcall(luaState, 1, 0, 0) != LUA_OK) {
 					LOG_ERROR(fmt::format("[luaPlayerDrainAsyncSave] callback error: {}",
 						lua_tostring(luaState, -1)));
+					lua_pop(luaState, 1);
 				}
 				luaL_unref(luaState, LUA_REGISTRYINDEX, cbRef);
 			});

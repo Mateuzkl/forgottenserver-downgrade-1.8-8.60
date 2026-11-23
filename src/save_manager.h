@@ -90,11 +90,13 @@ private:
 		std::string name;
 		IOLoginData::PlayerSaveSnapshot save;
 		bool trackedBySaveAll = false;
+		bool walPersisted = false;
 	};
 
 	using FlushCallback = std::function<void(bool)>;
 
 	// Player state snapshots and flush queue bookkeeping must run on the dispatcher thread.
+	void saveWorldState(uint32_t& failures);
 	bool schedulePlayerFlush(Player* player, bool trackSaveAll = false);
 	void onPlayerFlushed(uint32_t guid, IOLoginData::FlushResult result,
 	                     const std::shared_ptr<IOLoginData::PlayerSaveSnapshot>& save);
@@ -116,6 +118,7 @@ private:
 	std::chrono::steady_clock::time_point cycleStarted;
 	uint64_t cycleSnapshotUs = 0, cycleWalUs = 0;
 	uint32_t cycleFailures = 0;
+	uint64_t nextWalGeneration = 0;
 	std::unordered_set<uint32_t> flushInFlight;
 	std::unordered_map<uint32_t, PendingPlayerFlush> pendingFlushes;
 	struct ActiveFlush {
