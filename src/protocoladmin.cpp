@@ -225,8 +225,7 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 						if (g_game.getGameState() == GAME_STATE_SHUTDOWN || g_game.isSavingGameState()) {
 							return;
 						}
-						g_globalEvents->save();
-						g_game.saveGameState(false, "admin");
+						g_game.saveGameState(false, "admin", true);
 					});
 					output->addByte(AP_MSG_COMMAND_OK);
 					break;

@@ -54,6 +54,7 @@ protected:
 	virtual bool saveOfflineSleepers(const std::vector<Player*>& players) const;
 
 private:
+	friend class House;
 	void updateAppearance(const Player* player);
 	static void regeneratePlayer(Player* player, uint64_t sleepStart);
 	void internalSetSleeper(const Player* player);

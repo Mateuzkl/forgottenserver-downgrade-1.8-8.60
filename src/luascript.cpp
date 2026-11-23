@@ -4708,8 +4708,7 @@ int LuaScriptInterface::luaSaveServer(lua_State* L)
 		Lua::pushBoolean(L, false);
 		return 1;
 	}
-	g_globalEvents->save();
-	g_game.saveGameState(false, lua_isstring(L, 1) ? Lua::getString(L, 1) : "manual");
+	g_game.saveGameState(false, lua_isstring(L, 1) ? Lua::getString(L, 1) : "manual", true);
 	Lua::pushBoolean(L, true);
 	return 1;
 }

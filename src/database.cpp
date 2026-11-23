@@ -612,6 +612,7 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 	res.reset(mysql_store_result(ctx.handle.get()));
 
 	if (!res) {
+		ctx.lastErrno = mysql_errno(ctx.handle.get());
 		logQueryError(ctx.handle, query, "mysql_store_result");
 		return nullptr;
 	}

@@ -1735,7 +1735,7 @@ bool IOLoginData::savePlayerDailyRewardStorages(Player* player)
 	if (g_saveManager.hasPendingPlayerSave(playerId)) {
 		// Never write directly to player_storage or clear dirty flags while an older async save
 		// is in flight: that worker could overwrite these rows with stale values.
-		return g_saveManager.savePlayer(player);
+		return !player->isOffline() && g_saveManager.savePlayer(player);
 	}
 	const Player::StorageDirtySnapshot storageSnapshot = player->getStorageDirtySnapshot();
 

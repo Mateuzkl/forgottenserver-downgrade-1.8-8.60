@@ -263,6 +263,32 @@ int luaHouseSetOwnerGuid(lua_State* L)
 	return 1;
 }
 
+int luaHousePurchaseGuildhall(lua_State* L)
+{
+	// house:purchaseGuildhall(player, price)
+	House* house = getSharedUserdata<House>(L, 1);
+	Player* buyer = getUserdata<Player>(L, 2);
+	const auto price = getInteger<uint64_t>(L, 3);
+	const auto result = house ? house->purchaseGuildhall(buyer, price) : House::GuildhallPurchase::Failed;
+	switch (result) {
+		case House::GuildhallPurchase::GuildBank:
+			lua_pushliteral(L, "guild bank");
+			break;
+		case House::GuildhallPurchase::PersonalFunds:
+			lua_pushliteral(L, "your personal funds");
+			break;
+		case House::GuildhallPurchase::InsufficientFunds:
+			lua_pushliteral(L, "insufficient funds");
+			break;
+		case House::GuildhallPurchase::Indeterminate:
+			lua_pushliteral(L, "pending confirmation");
+			break;
+		default:
+			lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaHouseStartTrade(lua_State* L)
 {
 	// house:startTrade(player, tradePartner)
@@ -761,6 +787,7 @@ void LuaScriptInterface::registerHouse()
 	registerMethod("House", "getOwnerAccountId", luaHouseGetOwnerAccountId);
 	registerMethod("House", "getType", luaHouseGetType);
 	registerMethod("House", "getOwnerGuild", luaHouseGetOwnerGuild);
+	registerMethod("House", "purchaseGuildhall", luaHousePurchaseGuildhall);
 	registerMethod("House", "startTrade", luaHouseStartTrade);
 
 	registerMethod("House", "getBeds", luaHouseGetBeds);

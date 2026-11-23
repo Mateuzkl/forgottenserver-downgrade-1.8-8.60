@@ -60,8 +60,7 @@ void sigusr1Handler()
 		return;
 	}
 	LOG_INFO("SIGUSR1 received, saving the game state...");
-	g_globalEvents->save();
-	g_game.saveGameState(false, "signal-usr1");
+	g_game.saveGameState(false, "signal-usr1", true);
 }
 
 void sighupHandler()

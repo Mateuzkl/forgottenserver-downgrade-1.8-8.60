@@ -233,7 +233,7 @@ void Guild::setBankBalance(uint64_t balance)
 Guild_ptr IOGuild::loadGuild(uint32_t guildId)
 {
 	Database& db = Database::getInstance();
-	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name`, `balance` FROM `guilds` WHERE `id` = {:d}", guildId));
+	DBResult_ptr result = db.storeQuery(fmt::format("SELECT `name`, `balance`, `ownerid` FROM `guilds` WHERE `id` = {:d}", guildId));
 	if (!result) {
 		return nullptr;
 	}
@@ -241,6 +241,7 @@ Guild_ptr IOGuild::loadGuild(uint32_t guildId)
 	const auto& guild = std::make_shared<Guild>(guildId, result->getString("name"));
 
 	guild->loadBankBalance(result->getNumber<uint64_t>("balance"));
+	guild->setOwnerGUID(result->getNumber<uint32_t>("ownerid"));
 
 	if (auto ranksResult = db.storeQuery(
 	        fmt::format("SELECT `id`, `name`, `level` FROM `guild_ranks` WHERE `guild_id` = {:d}", guildId))) {
