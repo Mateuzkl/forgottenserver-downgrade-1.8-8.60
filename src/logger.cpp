@@ -3,8 +3,11 @@
 
 #include "otpch.h"
 
+#include "console_styles.h"
 #include "logger.h"
+#include "startup_progress.h"
 
+#include <fmt/color.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #ifdef _WIN32
@@ -322,7 +325,7 @@ public:
 		try {
 			if (!shutdownInProgress.load()) {
 				if (consoleLogger_) {
-					consoleLogger_->info("[INFO    ] === TFS Logger Shutdown ===");
+					consoleLogger_->info("    [INFO    ] === TFS Logger Shutdown ===");
 				}
 				if (fileLogger_) {
 					fileLogger_->info("[INFO    ] === TFS Logger Shutdown ===");
@@ -346,6 +349,7 @@ public:
 
 	void setConsoleLevel(LogLevel level) override
 	{
+		consoleLevel_ = level;
 		if (consoleSink_) {
 			consoleSink_->set_level(toSpd(level));
 		}
@@ -353,6 +357,7 @@ public:
 
 	void setConsoleColors(bool enabled) override
 	{
+		consoleColors_ = enabled;
 		if (consoleSink_) {
 			consoleSink_->set_color_mode(enabled ? spdlog::color_mode::automatic : spdlog::color_mode::never);
 		}
@@ -373,6 +378,7 @@ public:
 
 		try {
 			std::scoped_lock lock(outputMutex_);
+			startupProgress().breakConsoleLine();
 			writer();
 			std::fflush(stdout);
 
@@ -472,26 +478,45 @@ protected:
 			}
 
 			const std::string_view consoleMessage = normalizeConsoleMessage(msg);
-			if (category == "LOGIN") {
-				consoleLogger_->log(toSpd(level), "   ♟[LOGIN ] {}", consoleMessage);
-			} else if (category == "LOGOUT") {
-				consoleLogger_->log(toSpd(level), "   ♟[LOGOUT] {}", consoleMessage);
-			} else if (level >= LogLevel::ERRORR) {
-				consoleLogger_->log(toSpd(level), "    [ERROR   ] {}", consoleMessage);
-			} else if (level >= LogLevel::WARNING) {
-				consoleLogger_->log(toSpd(level), "    [WARNING ] {}", consoleMessage);
-			} else if (category == "STATS") {
-				consoleLogger_->log(toSpd(level), "    [STATS] {}", consoleMessage);
-			} else if (category == "DATABASE") {
-				consoleLogger_->log(toSpd(level), "    [DATABASE] {}", consoleMessage);
-			} else if (category == "NETWORK") {
-				consoleLogger_->log(toSpd(level), "    [NETWORK ] {}", consoleMessage);
-			} else if ((consoleMessage.starts_with("SIG") &&
-			            consoleMessage.find("shutting game server down") != std::string_view::npos) ||
-			           consoleMessage.starts_with("Saving game state")) {
-				consoleLogger_->log(toSpd(level), "   ⚠[INFO  ] {}", consoleMessage);
-			} else {
-				consoleLogger_->log(toSpd(level), "    [INFO    ] {}", consoleMessage);
+			if (level >= consoleLevel_) {
+				startupProgress().breakConsoleLine();
+				using namespace ConsoleStyle;
+				const auto printStyledLine = [&](fmt::text_style badgeStyle, std::string_view badge,
+				                                 fmt::text_style textStyle, std::string_view body) {
+					if (consoleColors_) {
+						fmt::print(badgeStyle, "{}", badge);
+						fmt::print(textStyle, "{}\n", body);
+					} else {
+						fmt::print("{}{}\n", badge, body);
+					}
+					std::fflush(stdout);
+				};
+
+				if (category == "LOGIN") {
+					printStyledLine(green_b, "    [LOGIN   ] ", white_b, consoleMessage);
+				} else if (category == "LOGOUT") {
+					printStyledLine(gray, "    [LOGOUT  ] ", gray, consoleMessage);
+				} else if (level >= LogLevel::ERRORR) {
+					printStyledLine(red_b, "    [ERROR   ] ", white_b, consoleMessage);
+				} else if (level >= LogLevel::WARNING) {
+					printStyledLine(yellow_b, "    [WARNING ] ", gray, consoleMessage);
+				} else if (category == "STATS") {
+					printStyledLine(cyan_b, "    [STATS   ] ", gray, consoleMessage);
+				} else if (category == "DATABASE") {
+					printStyledLine(cyan_b, "    [DATABASE] ", gray, consoleMessage);
+				} else if (category == "NETWORK") {
+					printStyledLine(cyan_b, "    [NETWORK ] ", gray, consoleMessage);
+				} else if (level == LogLevel::DEBUG) {
+					printStyledLine(dark_gray, "    [DEBUG   ] ", dark_gray, consoleMessage);
+				} else if (level == LogLevel::TRACE) {
+					printStyledLine(dark_gray, "    [TRACE   ] ", dark_gray, consoleMessage);
+				} else if ((consoleMessage.starts_with("SIG") &&
+				            consoleMessage.find("shutting game server down") != std::string_view::npos) ||
+				           consoleMessage.starts_with("Saving game state")) {
+					printStyledLine(yellow_b, "    [INFO    ] ", white_b, consoleMessage);
+				} else {
+					printStyledLine(cyan_b, "    [INFO    ] ", gray, consoleMessage);
+				}
 			}
 
 			if (fileLogger_) {
@@ -512,6 +537,8 @@ private:
 	std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> consoleSink_;
 	std::string timestampedPath_;
 	std::mutex outputMutex_;
+	LogLevel consoleLevel_ = LogLevel::INFO;
+	bool consoleColors_ = true;
 };
 
 static std::unique_ptr<Logger> loggerInstance;

@@ -298,27 +298,6 @@ void printStatsStatus()
 }
 #endif
 
-std::string formatFeatureStatus(std::string_view name, ConfigManager::Boolean key)
-{
-	return fmt::format("{} [{}]", name, ConfigManager::getBoolean(key) ? "ON" : "OFF");
-}
-
-void printFeatureStatus()
-{
-	LOG_INFO(">> Systems: {} | {} | {} | {} | {}", formatFeatureStatus("Forge", ConfigManager::FORGE_SYSTEM_ENABLED),
-	         formatFeatureStatus("Imbuements", ConfigManager::IMBUEMENT_SYSTEM_ENABLED),
-	         formatFeatureStatus("Wheel", ConfigManager::WHEEL_SYSTEM_ENABLED),
-	         formatFeatureStatus("Augments", ConfigManager::AUGMENT_SYSTEM_ENABLED),
-	         formatFeatureStatus("Proficiency", ConfigManager::WEAPON_PROFICIENCY_SYSTEM_ENABLED));
-	LOG_INFO(">> Modules: {} | {} | {} | {} | {} | {}",
-	         formatFeatureStatus("Bestiary", ConfigManager::BESTIARY_SYSTEM_ENABLED),
-	         formatFeatureStatus("Prey", ConfigManager::PREY_SYSTEM_ENABLED),
-	         formatFeatureStatus("Market", ConfigManager::MARKET_SYSTEM_ENABLED),
-	         formatFeatureStatus("Familiar", ConfigManager::FAMILIAR_SYSTEM_ENABLED),
-	         formatFeatureStatus("Monk", ConfigManager::MONK_VOCATION_ENABLED),
-	         formatFeatureStatus("Monster levels", ConfigManager::MONSTER_LEVEL_ENABLED));
-}
-
 constexpr std::string_view getPlatformName()
 {
 #if defined(__amd64__) || defined(_M_X64)
@@ -431,7 +410,6 @@ bool mainLoader(const std::shared_ptr<ServiceManager>& services, StartupRuntimeS
 #ifdef STATS_ENABLED
 	g_stats.prepareFileLogging();
 #endif
-	printFeatureStatus();
 	startupProgress().complete("configuration loaded");
 	startupProgress().begin(StartupStage::RUNTIME, "map cache fingerprint");
 	if (caseInsensitiveEqual(getString(ConfigManager::MAP_CACHE_MODE), "auto")) {

@@ -102,7 +102,10 @@ static bool argumentsHandler(const std::vector<std::string_view>& args)
 
 int main(int argc, const char** argv)
 {
-#ifndef _WIN32
+#ifdef _WIN32
+	SetConsoleOutputCP(CP_UTF8);
+	SetConsoleCP(CP_UTF8);
+#else
 	if (!ignoreSigPipe()) {
 		return EXIT_FAILURE;
 	}
