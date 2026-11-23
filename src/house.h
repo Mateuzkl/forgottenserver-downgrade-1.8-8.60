@@ -336,6 +336,7 @@ public:
 
 	bool loadHousesXML(const std::string& filename);
 
+	void settleAuctions() const;
 	void payHouses(RentPeriod_t rentPeriod) const;
 	time_t increasePaidUntil(RentPeriod_t rentPeriod, time_t paidUntil) const;
 	std::string getRentPeriod(RentPeriod_t rentPeriod) const;

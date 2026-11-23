@@ -738,7 +738,7 @@ int startServer()
 	g_dispatcher.start();
 	g_scheduler.start();
 
-	const bool startupLoaded = mainLoader(serviceManager, runtimeState);
+	const bool startupLoaded = g_reactor.runStartup([&] { return mainLoader(serviceManager, runtimeState); });
 
 	std::jthread serviceThread;
 

@@ -13,6 +13,9 @@ extern Game g_game;
 
 namespace {
 
+std::mutex blockedGuildBanksMutex;
+std::unordered_set<uint32_t> blockedGuildBanks;
+
 int32_t parseInt32OrZero(std::string_view value)
 {
 	try {
@@ -221,13 +224,31 @@ GuildRank_ptr Guild::getRankByLevel(uint8_t level) const
 	return nullptr;
 }
 
-void Guild::setBankBalance(uint64_t balance)
+void IOGuild::blockBankBalance(uint32_t guildId)
 {
-	bankBalance = balance;
+	std::scoped_lock lock{blockedGuildBanksMutex};
+	if (blockedGuildBanks.insert(guildId).second) {
+		LOG_CRITICAL("[Guild] Commit outcome unknown for guild {}. Bank writes are blocked until restart.", guildId);
+	}
+}
+
+bool IOGuild::isBankBalanceBlocked(uint32_t guildId)
+{
+	std::scoped_lock lock{blockedGuildBanksMutex};
+	return blockedGuildBanks.contains(guildId);
+}
+
+bool Guild::setBankBalance(uint64_t balance)
+{
+	if (IOGuild::isBankBalanceBlocked(id)) {
+		return false;
+	}
 	Database& db = Database::getInstance();
-	std::ostringstream query;
-	query << "UPDATE `guilds` SET `balance`=" << bankBalance << " WHERE `id`=" << id;
-	db.executeQuery(query.str());
+	if (!db.executeQuery(fmt::format("UPDATE `guilds` SET `balance` = {} WHERE `id` = {}", balance, id))) {
+		return false;
+	}
+	bankBalance = balance;
+	return true;
 }
 
 Guild_ptr IOGuild::loadGuild(uint32_t guildId)
@@ -482,6 +503,10 @@ void IOGuild::guildBalance(Player* player, const std::string& param)
 		return;
 	}
 
+	if (isBankBalanceBlocked(guild->getId())) {
+		player->sendChannelMessage("", "The guild bank is temporarily unavailable.", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
+		return;
+	}
 	std::vector<std::string_view> t = explodeString(param, " ");
 	if (t.empty()) {
 		player->sendChannelMessage("", "Invalid param.", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
@@ -503,8 +528,11 @@ void IOGuild::guildBalance(Player* player, const std::string& param)
 			return;
 		}
 
+		if (!guild->setBankBalance(guild->getBankBalance() + amount)) {
+			player->sendChannelMessage("", "The guild bank is temporarily unavailable.", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
+			return;
+		}
 		player->setBankBalance(player->getBankBalance() - amount);
-		guild->setBankBalance(guild->getBankBalance() + amount);
 		player->sendChannelMessage("", fmt::format("You have donated {:d} gold to the guild balance.", amount), TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
 		
 	} else if (action == "pick") {
@@ -524,7 +552,10 @@ void IOGuild::guildBalance(Player* player, const std::string& param)
 			return;
 		}
 
-		guild->setBankBalance(guild->getBankBalance() - amount);
+		if (!guild->setBankBalance(guild->getBankBalance() - amount)) {
+			player->sendChannelMessage("", "The guild bank is temporarily unavailable.", TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
+			return;
+		}
 		player->setBankBalance(player->getBankBalance() + amount);
 		player->sendChannelMessage("", fmt::format("You have picked {:d} gold from the guild balance.", amount), TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
 

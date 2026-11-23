@@ -109,6 +109,11 @@ function yesAnswer:callback(npc, player, message, handler)
     local currentState = state[pid] or TOPIC.NONE
     local guild = player:getGuild()
     
+    if (currentState == TOPIC.DEPOSIT_CONSENT or currentState == TOPIC.WITHDRAW_CONSENT) and
+        (not guild or guild:isBankBalanceBlocked()) then
+        state[pid] = TOPIC.NONE
+        return true, "The guild bank is temporarily unavailable."
+    end
     if currentState == TOPIC.DEPOSIT_CONSENT then
         local dep = amount[pid] or 0
         if dep > 0 and player:getBankBalance() >= dep then
@@ -307,6 +312,10 @@ function depositYes:callback(npc, player, message, handler)
     local pid = player:getGuid()
     if state[pid] ~= TOPIC.DEPOSIT_CONSENT then return false end
     local guild = player:getGuild()
+    if not guild or guild:isBankBalanceBlocked() then
+        state[pid] = TOPIC.NONE
+        return true, "The guild bank is temporarily unavailable."
+    end
     local dep = amount[pid] or 0
     if dep > 0 and player:getBankBalance() >= dep then
         player:setBankBalance(player:getBankBalance() - dep)
@@ -352,6 +361,10 @@ function withdrawYes:callback(npc, player, message, handler)
     local pid = player:getGuid()
     if state[pid] ~= TOPIC.WITHDRAW_CONSENT then return false end
     local guild = player:getGuild()
+    if not guild or guild:isBankBalanceBlocked() then
+        state[pid] = TOPIC.NONE
+        return true, "The guild bank is temporarily unavailable."
+    end
     local wd = amount[pid] or 0
     local bal = getGuildBalance(guild:getId())
     if wd < 1 or wd > bal then
@@ -428,13 +441,25 @@ function transferYes:callback(npc, player, message, handler)
     local guild = player:getGuild()
     local t = target[pid]
     local amt = amount[pid] or 0
+    if (state[pid] == TOPIC.TRANSFER_GUILD_CONSENT or state[pid] == TOPIC.TRANSFER_PLAYER_CONSENT) and
+        (not guild or guild:isBankBalanceBlocked()) then
+        state[pid] = TOPIC.NONE
+        return true, "The guild bank is temporarily unavailable."
+    end
 
     if state[pid] == TOPIC.TRANSFER_GUILD_CONSENT then
+        if t and Guild.isBankBalanceBlocked(t.id) then
+            state[pid] = TOPIC.NONE
+            return true, "The recipient's guild bank is temporarily unavailable."
+        end
         if not t or amt < 1 or amt > guild:getBankBalance() then
             state[pid] = TOPIC.NONE
             return true, "Your guild account cannot afford this transfer."
         end
-        guild:setBankBalance(guild:getBankBalance() - amt)
+        if not guild:setBankBalance(guild:getBankBalance() - amt) then
+            state[pid] = TOPIC.NONE
+            return true, "The guild bank is temporarily unavailable."
+        end
         local tGuild = Guild(t.name)
         if tGuild then
             tGuild:setBankBalance(tGuild:getBankBalance() + amt)
@@ -452,7 +477,10 @@ function transferYes:callback(npc, player, message, handler)
             state[pid] = TOPIC.NONE
             return true, "Your guild account cannot afford this transfer."
         end
-        guild:setBankBalance(guild:getBankBalance() - amt)
+        if not guild:setBankBalance(guild:getBankBalance() - amt) then
+            state[pid] = TOPIC.NONE
+            return true, "The guild bank is temporarily unavailable."
+        end
         if not player:transferMoneyTo(t, amt) then
             guild:setBankBalance(guild:getBankBalance() + amt)
             state[pid] = TOPIC.NONE

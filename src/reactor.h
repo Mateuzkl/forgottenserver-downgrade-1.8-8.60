@@ -47,6 +47,7 @@ public:
 	                  std::string origin = {});
 	void cancel(uint32_t taskIdentifier);
 
+	bool runStartup(const std::function<bool()>& initialize);
 	void runLoop();
 	void runOnce();
 	void shutdown() noexcept;

@@ -1009,6 +1009,7 @@ void Game::setGameState(GameState_t newState)
 			startupProgress().update(5, 6, "storage");
 
 			phaseStart = std::chrono::steady_clock::now();
+			map.houses.settleAuctions();
 			g_globalEvents->startup();
 			logStartupPhase("global events", phaseStart);
 			startupProgress().update(6, 6, "global events");

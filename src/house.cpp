@@ -377,6 +377,9 @@ bool House::changeOwners(const std::vector<OwnerChange>& changes, std::vector<Pl
 	}
 
 	const auto result = g_saveManager.savePlayersAtomic(players, [&] {
+		if (extraQueries && !extraQueries()) {
+			return false;
+		}
 		for (const auto& transition : transitions) {
 			House* house = transition->change.house;
 			if (!lockHouseOwner(db, house->id, house->owner) ||
@@ -388,7 +391,7 @@ bool House::changeOwners(const std::vector<OwnerChange>& changes, std::vector<Pl
 				return false;
 			}
 		}
-		return !extraQueries || extraQueries();
+		return true;
 	});
 
 	if (result == SaveManager::AtomicSaveResult::Failed) {
@@ -449,6 +452,9 @@ House::GuildhallPurchase House::purchaseGuildhall(Player* buyer, uint64_t price)
 	}
 
 	const auto guildId = guild->getId();
+	if (IOGuild::isBankBalanceBlocked(guildId)) {
+		return Purchase::Indeterminate;
+	}
 	Database& db = Database::getInstance();
 	auto row = db.storeQuery(fmt::format("SELECT `balance` FROM `guilds` WHERE `id` = {}", guildId));
 	if (!row) {
@@ -479,6 +485,9 @@ House::GuildhallPurchase House::purchaseGuildhall(Player* buyer, uint64_t price)
 		if (purchased) {
 			guild->loadBankBalance(guildBalance - price);
 			return Purchase::GuildBank;
+		}
+		if (persistenceBlocked) {
+			IOGuild::blockBankBalance(guildId);
 		}
 	} else {
 		const auto cash = std::min(price, buyer->getMoney());
@@ -1537,6 +1546,71 @@ std::string Houses::getRentPeriod(RentPeriod_t rentPeriod) const
 	}
 }
 
+void Houses::settleAuctions() const
+{
+	const auto now = time(nullptr);
+	Database& db = Database::getInstance();
+	const auto expiredAuctions = fmt::format(
+	    "`owner` = 0 AND `bid_end` > 0 AND `bid_end` <= {}", now);
+	auto rows = db.storeQuery(fmt::format(
+	    "SELECT `id`, `highest_bidder`, `last_bid` FROM `houses` WHERE {}", expiredAuctions));
+	if (!rows) {
+		return;
+	}
+
+	do {
+		const auto houseId = rows->getNumber<uint32_t>("id");
+		const auto bidder = rows->getNumber<uint32_t>("highest_bidder");
+		const auto price = rows->getNumber<uint64_t>("last_bid");
+		const auto house = houseMap.find(houseId);
+		if (house == houseMap.end() || house->second->getOwner() != 0 ||
+		    house->second->isPersistenceBlocked() || g_saveManager.hasFailedRecovery(bidder)) {
+			continue;
+		}
+
+		const auto auction = fmt::format("{} AND `id` = {} AND `highest_bidder` = {} AND `last_bid` = {}",
+		                                 expiredAuctions, houseId, bidder, price);
+		auto player = db.storeQuery(fmt::format("SELECT `balance` FROM `players` WHERE `id` = {}", bidder));
+		if (!player && db.getLastErrno() != 0) {
+			continue;
+		}
+
+		uint32_t owner = bidder;
+		if (house->second->getType() == HOUSE_TYPE_GUILDHALL) {
+			auto membership = db.storeQuery(fmt::format(
+			    "SELECT `guild_id` FROM `guild_membership` WHERE `player_id` = {}", bidder));
+			if (!membership && db.getLastErrno() != 0) {
+				continue;
+			}
+			owner = membership ? membership->getNumber<uint32_t>("guild_id") : 0;
+		}
+
+		if (!owner || !player || player->getNumber<uint64_t>("balance") < price) {
+			db.executeQuery(fmt::format(
+			    "UPDATE `houses` SET `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0 WHERE {}",
+			    auction));
+			continue;
+		}
+
+		// Startup runs after WAL recovery and before players can log in.
+		const bool settled = House::changeOwners({{house->second.get(), owner, nullptr}}, {}, nullptr, [&] {
+			if (!db.storeQuery(fmt::format("SELECT `id` FROM `houses` WHERE {} FOR UPDATE", auction))) {
+				return false;
+			}
+			if (!price) {
+				return true;
+			}
+			return db.executeQuery(fmt::format(
+			           "UPDATE `players` SET `balance` = `balance` - {} WHERE `id` = {} AND `balance` >= {}",
+			           price, bidder, price)) &&
+			       db.getAffectedRows() == 1;
+		});
+		if (!settled) {
+			LOG_WARN("[House] Could not settle the auction for house {}.", houseId);
+		}
+	} while (rows->next());
+}
+
 void Houses::payHouses(RentPeriod_t rentPeriod) const
 {
 	if (rentPeriod == RENTPERIOD_NEVER) {
@@ -1572,6 +1646,9 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 		const bool guildhall = house.getType() == HOUSE_TYPE_GUILDHALL;
 		uint32_t playerId = owner;
 		if (guildhall) {
+			if (IOGuild::isBankBalanceBlocked(owner)) {
+				continue;
+			}
 			const auto row = db.storeQuery(fmt::format("SELECT `ownerid`, `balance` FROM `guilds` WHERE `id` = {}", owner));
 			if (!row) {
 				if (db.getLastErrno() == 0) {
@@ -1598,6 +1675,7 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 					house.setPaidUntil(nextPayment);
 					house.setPayRentWarnings(0);
 				} else if (result == Result::Indeterminate) {
+					IOGuild::blockBankBalance(owner);
 					house.blockPersistence();
 				}
 				continue;
