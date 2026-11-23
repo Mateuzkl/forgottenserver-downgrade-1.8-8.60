@@ -55,9 +55,13 @@ void sigtermHandler()
 void sigusr1Handler()
 {
 	// Dispatcher thread
+	if (g_game.getGameState() == GAME_STATE_SHUTDOWN || g_game.isSavingGameState()) {
+		LOG_WARN("SIGUSR1 ignored: server is already shutting down or saving.");
+		return;
+	}
 	LOG_INFO("SIGUSR1 received, saving the game state...");
 	g_globalEvents->save();
-	g_game.saveGameState();
+	g_game.saveGameState(false, "signal-usr1");
 }
 
 void sighupHandler()

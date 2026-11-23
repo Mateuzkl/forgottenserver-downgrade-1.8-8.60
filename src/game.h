@@ -511,6 +511,7 @@ public:
 	GameState_t getGameState() const;
 	void setGameState(GameState_t newState);
 	void saveGameState(bool crash = false, std::string_view reason = "manual");
+	bool isSavingGameState() const noexcept { return saveGameStateInProgress; }
 
 	// Events
 	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration);
@@ -818,6 +819,7 @@ private:
 	LightState_t lastLightState = LIGHT_STATE_NIGHT;
 
 	std::atomic<GameState_t> gameState{GAME_STATE_NORMAL};
+	bool saveGameStateInProgress = false;
 	WorldType_t worldType = WORLD_TYPE_PVP;
 
 	// Atomic counters for thread-safe reads from protocol/status threads

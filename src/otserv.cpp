@@ -1122,9 +1122,18 @@ void printServerVersion()
 }
 
 #ifndef _WIN32
-// Called by GDB on crash — must be extern "C" and __attribute__((used)) to prevent stripping
+// Retained for compatibility with external tooling, but never executes an unsafe
+// save from a crashed or non-dispatcher thread. Durable recovery relies on
+// player_save_async_pending WAL + SaveManager::recoverPendingFlushes() on restart.
 extern "C" __attribute__((used)) void saveServer()
 {
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_CRITICAL("[CrashSafety] Refused saveServer() call outside dispatcher thread; rely on WAL recovery on restart.");
+		return;
+	}
+	if (g_game.getGameState() == GAME_STATE_SHUTDOWN || g_game.isSavingGameState()) {
+		return;
+	}
 	if (g_game.getPlayersOnline() > 0) {
 		g_game.saveGameState(true);
 	}

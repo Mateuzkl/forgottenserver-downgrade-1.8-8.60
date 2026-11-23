@@ -7,12 +7,14 @@
 #include "admin.h"
 #include "configmanager.h"
 #include "game.h"
+#include "globalevent.h"
 #include "scheduler.h"
 #include "outputmessage.h"
 #include "tasks.h"
 #include "tools.h" // For convertIPToString
 
 extern Game g_game;
+extern GlobalEvents* g_globalEvents;
 
 enum
 {
@@ -219,7 +221,13 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 				case CMD_SHALLOW_SAVE_SERVER: {
 					addLogLine("saving server");
 					g_game.broadcastMessage("Server is saving...", MESSAGE_STATUS_WARNING);
-					g_dispatcher.addTask([]() { g_game.saveGameState(); });
+					g_dispatcher.addTask([]() {
+						if (g_game.getGameState() == GAME_STATE_SHUTDOWN || g_game.isSavingGameState()) {
+							return;
+						}
+						g_globalEvents->save();
+						g_game.saveGameState(false, "admin");
+					});
 					output->addByte(AP_MSG_COMMAND_OK);
 					break;
 				}
@@ -240,7 +248,7 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 
 				case CMD_SHUTDOWN_SERVER: {
 					addLogLine("shutting down server");
-					g_dispatcher.addTask([]() { g_game.shutdown(); });
+					g_dispatcher.addTask([]() { g_game.setGameState(GAME_STATE_SHUTDOWN); });
 					output->addByte(AP_MSG_COMMAND_OK);
 					break;
 				}
@@ -259,7 +267,7 @@ void ProtocolAdmin::parsePacket(NetworkMessage& msg)
 					// Schedule standard shutdown
 					// Convert minutes to milliseconds
 					uint32_t delay = minutes * 60 * 1000;
-					g_scheduler.addEvent(delay, []() { g_game.shutdown(); });
+					g_scheduler.addEvent(delay, []() { g_game.setGameState(GAME_STATE_SHUTDOWN); });
 
 					output->addByte(AP_MSG_COMMAND_OK);
 					break;

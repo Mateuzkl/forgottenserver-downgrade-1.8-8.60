@@ -4703,6 +4703,11 @@ int LuaScriptInterface::luaStopEvent(lua_State* L)
 int LuaScriptInterface::luaSaveServer(lua_State* L)
 {
 	// saveServer([reason = "manual"])
+	if (g_game.getGameState() == GAME_STATE_SHUTDOWN || g_game.isSavingGameState()) {
+		LOG_WARN("[LuaScriptInterface::luaSaveServer] Ignored recursive or post-shutdown saveServer() call.");
+		Lua::pushBoolean(L, false);
+		return 1;
+	}
 	g_globalEvents->save();
 	g_game.saveGameState(false, lua_isstring(L, 1) ? Lua::getString(L, 1) : "manual");
 	Lua::pushBoolean(L, true);

@@ -1084,6 +1084,20 @@ void Game::setGameState(GameState_t newState)
 
 void Game::saveGameState(bool crash /* = false */, std::string_view reason)
 {
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[Game::saveGameState] Must be called on the dispatcher thread.");
+		return;
+	}
+	if (saveGameStateInProgress) {
+		LOG_WARN("[Game::saveGameState] Reentrant saveGameState call ignored.");
+		return;
+	}
+	saveGameStateInProgress = true;
+	struct SaveStateGuard {
+		bool& active;
+		~SaveStateGuard() { active = false; }
+	} saveGuard{saveGameStateInProgress};
+
 	AutoStat stat("Game::saveGameState", crash ? "crash" : "full");
 	if (gameState == GAME_STATE_NORMAL) {
 		setGameState(GAME_STATE_MAINTAIN);
@@ -5427,15 +5441,39 @@ void Game::playerAcceptTrade(uint32_t playerId)
 				playerRet = internalRemoveItem(playerTradeItem, playerTradeItem->getItemCount(), true);
 				tradePartnerRet = internalRemoveItem(partnerTradeItem, partnerTradeItem->getItemCount(), true);
 				if (tradePartnerRet == RETURNVALUE_NOERROR && playerRet == RETURNVALUE_NOERROR) {
-					tradePartnerRet = internalMoveItem(playerTradeItem->getParent(), tradePartner, INDEX_WHEREEVER,
-					                                   playerTradeItem, playerTradeItem->getItemCount(), nullptr,
-					                                   FLAG_IGNOREAUTOSTACK, nullptr, partnerTradeItem);
-					if (tradePartnerRet == RETURNVALUE_NOERROR) {
-						internalMoveItem(partnerTradeItem->getParent(), player, INDEX_WHEREEVER, partnerTradeItem,
-						                 partnerTradeItem->getItemCount(), nullptr, FLAG_IGNOREAUTOSTACK);
-						playerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, tradePartner);
-						partnerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, player);
-						isSuccess = true;
+					HouseTransferItem* playerHouseTransfer = dynamic_cast<HouseTransferItem*>(playerTradeItem);
+					HouseTransferItem* partnerHouseTransfer = dynamic_cast<HouseTransferItem*>(partnerTradeItem);
+					bool houseTransferOk = true;
+					if (playerHouseTransfer) {
+						houseTransferOk = playerHouseTransfer->tryExecuteTransfer(tradePartner);
+					}
+					if (houseTransferOk && partnerHouseTransfer) {
+						houseTransferOk = partnerHouseTransfer->tryExecuteTransfer(player);
+					}
+					if (houseTransferOk) {
+						Cylinder* playerOriginalParent = playerTradeItem->getParent();
+						const int32_t playerOriginalIndex =
+						    playerOriginalParent ? playerOriginalParent->getThingIndex(playerTradeItem) : INDEX_WHEREEVER;
+						tradePartnerRet = internalMoveItem(playerOriginalParent, tradePartner, INDEX_WHEREEVER,
+						                                   playerTradeItem, playerTradeItem->getItemCount(), nullptr,
+						                                   FLAG_IGNOREAUTOSTACK, nullptr, partnerTradeItem);
+						if (tradePartnerRet == RETURNVALUE_NOERROR) {
+							playerRet = internalMoveItem(partnerTradeItem->getParent(), player, INDEX_WHEREEVER,
+							                             partnerTradeItem, partnerTradeItem->getItemCount(), nullptr,
+							                             FLAG_IGNOREAUTOSTACK);
+							if (playerRet == RETURNVALUE_NOERROR) {
+								playerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, tradePartner);
+								partnerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, player);
+								isSuccess = true;
+							} else if (!playerHouseTransfer && playerOriginalParent && !playerTradeItem->isRemoved()) {
+								internalMoveItem(playerTradeItem->getParent(), playerOriginalParent, playerOriginalIndex,
+								                 playerTradeItem, playerTradeItem->getItemCount(), nullptr,
+								                 FLAG_IGNOREAUTOSTACK | FLAG_NOLIMIT);
+							}
+						}
+					} else {
+						tradePartnerRet = RETURNVALUE_NOTPOSSIBLE;
+						playerRet = RETURNVALUE_NOTPOSSIBLE;
 					}
 				}
 			}
@@ -8079,7 +8117,7 @@ bool Game::saveAccountStorageValues() const
 
 	for (const auto& accountIt : g_game.accountStorageMap) {
 		if (accountIt.second.empty()) {
-			break;
+			continue;
 		}
 
 		DBInsert accountStorageQuery("INSERT INTO `account_storage` (`account_id`, `key`, `value`) VALUES");
@@ -9621,15 +9659,15 @@ bool Game::saveGameStorageValues() const
 		return false;
 	}
 
+	DBInsert gameStorageQuery("INSERT INTO `game_storage` (`key`, `value`) VALUES");
 	for (const auto& [key, value] : g_game.storageMap) {
-		DBInsert gameStorageQuery("INSERT INTO `game_storage` (`key`, `value`) VALUES");
 		if (!gameStorageQuery.addRow(fmt::format("{:d}, {:d}", key, value))) {
 			return false;
 		}
+	}
 
-		if (!gameStorageQuery.execute()) {
-			return false;
-		}
+	if (!gameStorageQuery.execute()) {
+		return false;
 	}
 
 	return transaction.commit();
