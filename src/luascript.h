@@ -529,6 +529,7 @@ private:
 	static int luaDoChallengeCreature(lua_State* L);
 
 	static int luaDebugPrint(lua_State* L);
+	static int luaLogDebug(lua_State* L);
 	static int luaLogInfo(lua_State* L);
 	static int luaLogWarning(lua_State* L);
 	static int luaLogError(lua_State* L);

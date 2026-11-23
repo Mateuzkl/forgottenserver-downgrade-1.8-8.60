@@ -1729,6 +1729,9 @@ void LuaScriptInterface::registerFunctions()
 	// debugPrint(text)
 	lua_register(luaState, "debugPrint", LuaScriptInterface::luaDebugPrint);
 
+	// logDebug(text)
+	lua_register(luaState, "logDebug", LuaScriptInterface::luaLogDebug);
+
 	// logInfo(text)
 	lua_register(luaState, "logInfo", LuaScriptInterface::luaLogInfo);
 
@@ -4077,6 +4080,12 @@ int LuaScriptInterface::luaDebugPrint(lua_State* L)
 {
 	// debugPrint(text)
 	reportErrorFunc(L, Lua::getString(L, 1));
+	return 0;
+}
+
+int LuaScriptInterface::luaLogDebug(lua_State* L)
+{
+	g_logger().debug(Lua::getString(L, 1));
 	return 0;
 }
 

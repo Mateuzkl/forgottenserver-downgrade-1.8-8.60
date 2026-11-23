@@ -16,37 +16,82 @@ local ANSI_BOLD_CYAN  = "\27[1;36m"
 local ANSI_BOLD_WHITE = "\27[1;97m"
 
 logger.colors = {
-    reset      = ANSI_RESET,
-    red        = ANSI_RED,
-    green      = ANSI_GREEN,
-    yellow     = ANSI_YELLOW,
-    blue       = ANSI_BLUE,
-    magenta    = ANSI_MAGENTA,
-    cyan       = ANSI_CYAN,
-    white      = ANSI_WHITE,
-    bold       = ANSI_BOLD,
-    lime_green = ANSI_LIME_GREEN,
-    orange_red = ANSI_ORANGE_RED,
-    bold_cyan  = ANSI_BOLD_CYAN,
-    bold_white = ANSI_BOLD_WHITE,
+	reset      = ANSI_RESET,
+	red        = ANSI_RED,
+	green      = ANSI_GREEN,
+	yellow     = ANSI_YELLOW,
+	blue       = ANSI_BLUE,
+	magenta    = ANSI_MAGENTA,
+	cyan       = ANSI_CYAN,
+	white      = ANSI_WHITE,
+	bold       = ANSI_BOLD,
+	lime_green = ANSI_LIME_GREEN,
+	orange_red = ANSI_ORANGE_RED,
+	bold_cyan  = ANSI_BOLD_CYAN,
+	bold_white = ANSI_BOLD_WHITE,
 }
 
-local function getTimestamp()
-    return os.date("%Y-%m-%d %H:%M:%S") .. string.format(".%03d", math.random(1, 999)) -- Emulating ms for visual consistency
+local function formatMessage(message, ...)
+	local text = tostring(message or "")
+	local argCount = select("#", ...)
+	if argCount == 0 then
+		return text
+	end
+
+	if text:find("{}", 1, true) then
+		local args = {...}
+		local index = 0
+		text = text:gsub("{}", function()
+			index = index + 1
+			if index <= argCount then
+				return tostring(args[index])
+			end
+			return "{}"
+		end)
+		return text
+	end
+
+	local ok, formatted = pcall(string.format, text, ...)
+	if ok then
+		return formatted
+	end
+	return text
 end
 
 function logger.info(message, ...)
-    print(string.format("[%s] [%sinfo%s] " .. message, getTimestamp(), ANSI_GREEN, ANSI_RESET, ...))
+	local formatted = formatMessage(message, ...)
+	if logInfo then
+		logInfo(formatted)
+	else
+		print(formatted)
+	end
 end
 
 function logger.warn(message, ...)
-    print(string.format("[%s] [%swarning%s] " .. message, getTimestamp(), ANSI_YELLOW, ANSI_RESET, ...))
+	local formatted = formatMessage(message, ...)
+	if logWarning then
+		logWarning(formatted)
+	else
+		print(formatted)
+	end
 end
 
 function logger.error(message, ...)
-    print(string.format("[%s] [%serror%s] " .. message, getTimestamp(), ANSI_RED, ANSI_RESET, ...))
+	local formatted = formatMessage(message, ...)
+	if logError then
+		logError(formatted)
+	else
+		print(formatted)
+	end
 end
 
 function logger.debug(message, ...)
-    print(string.format("[%s] [%sdebug%s] " .. message, getTimestamp(), ANSI_CYAN, ANSI_RESET, ...))
+	local formatted = formatMessage(message, ...)
+	if logDebug then
+		logDebug(formatted)
+	elseif logInfo then
+		logInfo(formatted)
+	else
+		print(formatted)
+	end
 end

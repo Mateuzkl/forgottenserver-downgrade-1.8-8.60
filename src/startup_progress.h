@@ -48,6 +48,7 @@ public:
 	void complete(std::string_view detail = {});
 	void finish();
 	void fail(std::string_view reason);
+	void breakConsoleLine();
 
 	bool isActive() const;
 	bool isCurrentStage(StartupStage stage) const;
