@@ -284,6 +284,29 @@ std::string_view normalizeConsoleMessage(std::string_view message)
 	return message;
 }
 
+bool stdoutSupportsAnsiColors()
+{
+#ifdef _WIN32
+	if (_isatty(_fileno(stdout)) == 0) {
+		return false;
+	}
+	HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (output == nullptr || output == INVALID_HANDLE_VALUE) {
+		return false;
+	}
+	DWORD mode = 0;
+	if (GetConsoleMode(output, &mode) == 0) {
+		return false;
+	}
+	if ((mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0) {
+		return true;
+	}
+	return SetConsoleMode(output, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0;
+#else
+	return isatty(fileno(stdout)) != 0;
+#endif
+}
+
 class LogWithSpdLog final : public Logger
 {
 public:
@@ -349,7 +372,7 @@ public:
 
 	void setConsoleLevel(LogLevel level) override
 	{
-		consoleLevel_ = level;
+		consoleLevel_.store(level, std::memory_order_release);
 		if (consoleSink_) {
 			consoleSink_->set_level(toSpd(level));
 		}
@@ -357,7 +380,7 @@ public:
 
 	void setConsoleColors(bool enabled) override
 	{
-		consoleColors_ = enabled;
+		consoleColors_.store(enabled && stdoutSupportsAnsiColors(), std::memory_order_release);
 		if (consoleSink_) {
 			consoleSink_->set_color_mode(enabled ? spdlog::color_mode::automatic : spdlog::color_mode::never);
 		}
@@ -478,12 +501,13 @@ protected:
 			}
 
 			const std::string_view consoleMessage = normalizeConsoleMessage(msg);
-			if (level >= consoleLevel_) {
+			if (level >= consoleLevel_.load(std::memory_order_acquire)) {
 				startupProgress().breakConsoleLine();
+				const bool useColors = consoleColors_.load(std::memory_order_acquire);
 				using namespace ConsoleStyle;
 				const auto printStyledLine = [&](fmt::text_style badgeStyle, std::string_view badge,
 				                                 fmt::text_style textStyle, std::string_view body) {
-					if (consoleColors_) {
+					if (useColors) {
 						fmt::print(badgeStyle, "{}", badge);
 						fmt::print(textStyle, "{}\n", body);
 					} else {
@@ -537,8 +561,8 @@ private:
 	std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> consoleSink_;
 	std::string timestampedPath_;
 	std::mutex outputMutex_;
-	LogLevel consoleLevel_ = LogLevel::INFO;
-	bool consoleColors_ = true;
+	std::atomic<LogLevel> consoleLevel_{LogLevel::INFO};
+	std::atomic<bool> consoleColors_{stdoutSupportsAnsiColors()};
 };
 
 static std::unique_ptr<Logger> loggerInstance;
