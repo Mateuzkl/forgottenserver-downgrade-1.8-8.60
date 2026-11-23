@@ -185,7 +185,27 @@ function talkaction.onSay(player, words, param)
         end
     end
 
-    house:setOwnerGuid(player:getGuid())
+    if not house:setOwnerGuid(player:getGuid()) then
+        if fromGuild then
+            db.query("UPDATE `guilds` SET `balance` = `balance` + " .. price .. " WHERE `id` = " .. guild:getId())
+        elseif fromPlayer then
+            if playerInventoryMoney >= price then
+                player:addMoney(price)
+            else
+                if playerInventoryMoney > 0 then
+                    player:addMoney(playerInventoryMoney)
+                end
+                local remaining = price - playerInventoryMoney
+                player:setBankBalance(player:getBankBalance() + remaining)
+            end
+        end
+        if receipt then
+            receipt:remove(1)
+        end
+        player:sendCancelMessage("Could not complete the guildhall purchase. Your payment has been returned.")
+        return false
+    end
+    player:saveAsync()
     local paymentSource = fromGuild and "guild bank" or "your personal funds"
     player:sendTextMessage(MESSAGE_INFO_DESCR, "You have successfully bought this guildhall for " .. price .. " gold from " .. paymentSource .. ". Be sure to have the money for rent in the guild bank.")
     return false

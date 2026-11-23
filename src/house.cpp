@@ -9,6 +9,7 @@
 #include "configmanager.h"
 #include "game.h"
 #include "iologindata.h"
+#include "iomapserialize.h"
 #include "save_manager.h"
 #include "pugicast.h"
 #include "logger.h"
@@ -160,6 +161,38 @@ bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 	if (owner != 0 && updateDatabase && !BedItem::wakeUpAll(getBeds())) {
 		return false;
 	}
+
+	// Persist and move house items to the previous owner's depot BEFORE mutating
+	// house ownership in the database. If the previous owner has an in-flight async
+	// save, failed recovery, or save failure, abort without losing items or changing owner.
+	bool itemsTransferred = false;
+	if (owner != 0 && updateDatabase && townId != 0) {
+		if (previousPlayer) {
+			const uint32_t prevGuid = previousPlayer->getGUID();
+			if (g_saveManager.hasFailedRecovery(prevGuid) ||
+			    (previousPlayer->isOffline() && g_saveManager.hasPendingPlayerSave(prevGuid))) {
+				LOG_WARN(fmt::format("[House::setOwner] Aborted house {} transfer: previous owner {} has active persistence barrier.",
+				                     id, prevGuid));
+				return false;
+			}
+			if (!transferToDepot(previousPlayer)) {
+				return false;
+			}
+			if (previousPlayer->isOffline() && !g_saveManager.savePlayerSync(previousPlayer)) {
+				LOG_ERROR(fmt::format("[House::setOwner] Failed to save offline previous owner {} for house {}.",
+				                      previousPlayer->getName(), id));
+				return false;
+			}
+			itemsTransferred = true;
+		} else {
+			const DepotTransferResult transferResult = transferToDepotChecked();
+			if (transferResult == DepotTransferResult::Failed) {
+				return false;
+			}
+			itemsTransferred = (transferResult == DepotTransferResult::Transferred);
+		}
+	}
+
 	if (updateDatabase && owner != guid_guild) {
 		const bool resetProtection = (guid_guild == 0 || owner == 0);
 		if (!updateOwnerInDatabase(guid_guild, resetProtection)) {
@@ -173,11 +206,8 @@ bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 	isLoaded = true;
 
 	if (owner != 0 && updateDatabase) {
-		// send items to depot
-		if (previousPlayer) {
-			transferToDepot(previousPlayer);
-		} else {
-			transferToDepot();
+		if (itemsTransferred && !IOMapSerialize::saveHouse(this)) {
+			LOG_WARN(fmt::format("[House::setOwner] Could not immediately persist cleared tile_store for house {}.", id));
 		}
 
 		// Kicking a player runs movement callbacks, which may remove other
@@ -365,8 +395,13 @@ void House::setAccessList(uint32_t listId, std::string_view textlist)
 
 bool House::transferToDepot() const
 {
+	return transferToDepotChecked() == DepotTransferResult::Transferred;
+}
+
+House::DepotTransferResult House::transferToDepotChecked() const
+{
 	if (townId == 0 || owner == 0) {
-		return false;
+		return DepotTransferResult::Failed;
 	}
 
 	std::shared_ptr<Player> onlinePlayerRef;
@@ -375,45 +410,68 @@ bool House::transferToDepot() const
 	Player* targetPlayer = nullptr;
 	bool needsSave = false;
 
+	uint32_t targetGuid = 0;
 	if (type == HOUSE_TYPE_NORMAL) {
-		onlinePlayerRef = g_game.getPlayerByGUID(owner);
-		onlinePlayer = onlinePlayerRef.get();
-		if (onlinePlayer) {
-			targetPlayer = onlinePlayer;
-		} else if (IOLoginData::loadPlayerById(&tmpPlayer, owner)) {
-			targetPlayer = &tmpPlayer;
-			needsSave = true;
-		}
+		targetGuid = owner;
 	} else { // HOUSE_TYPE_GUILDHALL
 		auto guild = g_game.getGuild(owner);
 		if (!guild) {
 			guild = IOGuild::loadGuild(owner);
 		}
 		if (guild) {
-			onlinePlayerRef = g_game.getPlayerByGUID(guild->getOwnerGUID());
-			onlinePlayer = onlinePlayerRef.get();
-			if (onlinePlayer) {
-				targetPlayer = onlinePlayer;
-			} else if (IOLoginData::loadPlayerById(&tmpPlayer, guild->getOwnerGUID())) {
-				targetPlayer = &tmpPlayer;
-				needsSave = true;
-			}
+			targetGuid = guild->getOwnerGUID();
+		}
+	}
+
+	if (targetGuid == 0) {
+		LOG_WARN(fmt::format("[House::transferToDepot] Could not find owner for house {}. Items remain on tiles.", id));
+		return DepotTransferResult::OwnerMissing;
+	}
+
+	if (g_saveManager.hasFailedRecovery(targetGuid)) {
+		LOG_WARN(fmt::format("[House::transferToDepot] Blocked house {} transfer: owner {} is quarantined.", id, targetGuid));
+		return DepotTransferResult::Failed;
+	}
+
+	onlinePlayerRef = g_game.getPlayerByGUID(targetGuid);
+	onlinePlayer = onlinePlayerRef.get();
+	if (onlinePlayer) {
+		targetPlayer = onlinePlayer;
+	} else {
+		if (g_saveManager.hasPendingPlayerSave(targetGuid)) {
+			LOG_WARN(fmt::format(
+			    "[House::transferToDepot] Deferred house {} transfer: offline owner {} still has an async save in flight.",
+			    id, targetGuid));
+			return DepotTransferResult::Failed;
+		}
+		if (IOLoginData::loadPlayerById(&tmpPlayer, targetGuid)) {
+			targetPlayer = &tmpPlayer;
+			needsSave = true;
+		} else if (Database::getInstance().getLastErrno() != 0) {
+			LOG_ERROR(fmt::format(
+			    "[House::transferToDepot] Database error loading offline owner {} for house {}; aborting transfer.",
+			    targetGuid, id));
+			return DepotTransferResult::Failed;
 		}
 	}
 
 	if (!targetPlayer) {
 		LOG_WARN(fmt::format("[House::transferToDepot] Could not find owner for house {}. Items remain on tiles.", id));
-		return false;
+		return DepotTransferResult::OwnerMissing;
 	}
 
-	transferToDepot(targetPlayer);
+	if (!transferToDepot(targetPlayer)) {
+		return DepotTransferResult::Failed;
+	}
 	if (needsSave) {
 		if (!g_saveManager.savePlayerSync(&tmpPlayer)) {
 			LOG_ERROR(fmt::format("[House::transferToDepot] Failed to save temporary player {} data.", tmpPlayer.getName()));
-			return false;
+			return DepotTransferResult::Failed;
 		}
+	} else if (onlinePlayer) {
+		(void)g_saveManager.savePlayer(onlinePlayer);
 	}
-	return true;
+	return DepotTransferResult::Transferred;
 }
 
 bool House::transferToDepot(Player* player) const
@@ -778,22 +836,33 @@ std::shared_ptr<HouseTransferItem> HouseTransferItem::createHouseTransferItem(Ho
 	return transferItem;
 }
 
+bool HouseTransferItem::tryExecuteTransfer(Player* owner)
+{
+	if (transferExecuted) {
+		return true;
+	}
+	auto h = house.lock();
+	if (!h) {
+		return false;
+	}
+	if (!h->executeTransfer(this, owner)) {
+		h->resetTransferItem();
+		if (owner) {
+			owner->sendTextMessage(MESSAGE_EVENT_ADVANCE,
+			                       "The house transfer could not be completed. No ownership was changed.");
+		}
+		return false;
+	}
+	transferExecuted = true;
+	return true;
+}
+
 void HouseTransferItem::onTradeEvent(TradeEvents_t event, Player* owner)
 {
 	if (event == ON_TRADE_TRANSFER) {
-		if (auto h = house.lock()) {
-			if (!h->executeTransfer(this, owner)) {
-				// The trade engine has already moved this virtual document. Do not
-				// leave a removed/stale document cached as the house transfer item.
-				h->resetTransferItem();
-				if (owner) {
-					owner->sendTextMessage(MESSAGE_EVENT_ADVANCE,
-					                       "The house transfer could not be completed. No ownership was changed.");
-				}
-				return;
-			}
+		if (!transferExecuted) {
+			(void)tryExecuteTransfer(owner);
 		}
-
 		g_game.internalRemoveItem(this, 1);
 	} else if (event == ON_TRADE_CANCEL) {
 		if (auto h = house.lock()) {
@@ -1162,46 +1231,86 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 		}
 
 		if (house->getType() == HOUSE_TYPE_NORMAL) {
+			if (g_saveManager.hasFailedRecovery(ownerId)) {
+				LOG_WARN(fmt::format("[Houses::payHouses] Skipping house {} rent: owner {} is quarantined.", house->getId(), ownerId));
+				continue;
+			}
+
+			if (auto onlinePlayer = g_game.getPlayerByGUID(ownerId)) {
+				if (onlinePlayer->getBankBalance() >= rent) {
+					onlinePlayer->setBankBalance(onlinePlayer->getBankBalance() - rent);
+					time_t paidUntil = increasePaidUntil(rentPeriod, currentTime);
+					house->setPaidUntil(paidUntil);
+					house->setPayRentWarnings(0);
+					(void)g_saveManager.savePlayer(onlinePlayer.get());
+				} else if (house->getPayRentWarnings() < 7) {
+					int32_t daysLeft = 7 - house->getPayRentWarnings();
+					auto letterPtr = Item::CreateItem(ITEM_LETTER_STAMPED);
+					std::string period = getRentPeriod(rentPeriod);
+					letterPtr->setText(fmt::format(
+					    "Warning! \nThe {:s} rent of {:d} gold for your house \"{:s}\" is payable. Have it within {:d} days or you will lose this house.",
+					    period, house->getRent(), house->getName(), daysLeft));
+					g_game.internalAddItem(onlinePlayer->getInbox(), letterPtr.get(), INDEX_WHEREEVER, FLAG_NOLIMIT);
+					house->setPayRentWarnings(house->getPayRentWarnings() + 1);
+					(void)g_saveManager.savePlayer(onlinePlayer.get());
+				} else {
+					if (house->setOwner(0, true, onlinePlayer.get())) {
+						(void)g_saveManager.savePlayer(onlinePlayer.get());
+					}
+				}
+				continue;
+			}
+
+			if (g_saveManager.hasPendingPlayerSave(ownerId)) {
+				LOG_WARN(fmt::format("[Houses::payHouses] Skipping house {} rent: offline owner {} has async save in flight.",
+				                     house->getId(), ownerId));
+				continue;
+			}
+
 			Player player(nullptr);
 			if (!IOLoginData::loadPlayerById(&player, ownerId)) {
-				// Player doesn't exist, reset house owner
-				house->setOwner(0);
+				if (Database::getInstance().getLastErrno() == 0) {
+					// Player doesn't exist, reset house owner
+					house->setOwner(0);
+				}
 				continue;
 			}
 
 			if (player.getBankBalance() >= rent) {
 				player.setBankBalance(player.getBankBalance() - rent);
-
+				if (!g_saveManager.savePlayerSync(&player)) {
+					LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
+					continue;
+				}
 				time_t paidUntil = increasePaidUntil(rentPeriod, currentTime);
 				house->setPaidUntil(paidUntil);
 				house->setPayRentWarnings(0);
-			} else {
-				if (house->getPayRentWarnings() < 7) {
-					int32_t daysLeft = 7 - house->getPayRentWarnings();
+			} else if (house->getPayRentWarnings() < 7) {
+				int32_t daysLeft = 7 - house->getPayRentWarnings();
 
-					auto letterPtr = Item::CreateItem(ITEM_LETTER_STAMPED);
+				auto letterPtr = Item::CreateItem(ITEM_LETTER_STAMPED);
 				std::string period = getRentPeriod(rentPeriod);
 
 				letterPtr->setText(fmt::format(
 				    "Warning! \nThe {:s} rent of {:d} gold for your house \"{:s}\" is payable. Have it within {:d} days or you will lose this house.",
 				    period, house->getRent(), house->getName(), daysLeft));
 				g_game.internalAddItem(player.getInbox(), letterPtr.get(), INDEX_WHEREEVER, FLAG_NOLIMIT);
-				house->setPayRentWarnings(house->getPayRentWarnings() + 1);
-				} else {
-					house->setOwner(0, true, &player);
+				if (!g_saveManager.savePlayerSync(&player)) {
+					LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent warning.", player.getName()));
+					continue;
 				}
-			}
-
-			if (!g_saveManager.savePlayerSync(&player)) {
-				LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
-				continue;
+				house->setPayRentWarnings(house->getPayRentWarnings() + 1);
+			} else {
+				(void)house->setOwner(0, true);
 			}
 		} else { // HOUSE_TYPE_GUILDHALL
 			auto guild = g_game.getGuild(ownerId);
 			if (!guild) {
 				guild = IOGuild::loadGuild(ownerId);
 				if (!guild) {
-					house->setOwner(0);
+					if (Database::getInstance().getLastErrno() == 0) {
+						house->setOwner(0);
+					}
 					continue;
 				}
 			}
@@ -1219,13 +1328,49 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 				time_t paidUntil = increasePaidUntil(rentPeriod, currentTime);
 				house->setPaidUntil(paidUntil);
 			} else {
+				const uint32_t guildOwnerGuid = guild->getOwnerGUID();
+				if (g_saveManager.hasFailedRecovery(guildOwnerGuid)) {
+					LOG_WARN(fmt::format("[Houses::payHouses] Skipping guildhall {} rent: guild owner {} is quarantined.",
+					                     house->getId(), guildOwnerGuid));
+					continue;
+				}
+
+				if (auto onlineOwner = g_game.getPlayerByGUID(guildOwnerGuid)) {
+					if (house->getPayRentWarnings() < 7) {
+						int32_t daysLeft = 7 - house->getPayRentWarnings();
+						auto letterPtr = Item::CreateItem(ITEM_LETTER_STAMPED);
+						std::string period = getRentPeriod(rentPeriod);
+						letterPtr->setText(fmt::format(
+						    "Warning! \nThe {:s} rent of {:d} gold for your guildhall \"{:s}\" is payable. Have it within {:d} days or you will lose this guildhall.",
+						    period, house->getRent(), house->getName(), daysLeft));
+						if (DepotLocker* depot = onlineOwner->getDepotLocker(town->getID())) {
+							g_game.internalAddItem(depot, letterPtr.get(), INDEX_WHEREEVER, FLAG_NOLIMIT);
+						}
+						house->setPayRentWarnings(house->getPayRentWarnings() + 1);
+						(void)g_saveManager.savePlayer(onlineOwner.get());
+					} else {
+						if (house->setOwner(0, true, onlineOwner.get())) {
+							(void)g_saveManager.savePlayer(onlineOwner.get());
+						}
+					}
+					continue;
+				}
+
+				if (g_saveManager.hasPendingPlayerSave(guildOwnerGuid)) {
+					LOG_WARN(fmt::format("[Houses::payHouses] Skipping guildhall {} rent: offline guild owner {} has async save in flight.",
+					                     house->getId(), guildOwnerGuid));
+					continue;
+				}
+
 				Player player(nullptr);
-				if (!IOLoginData::loadPlayerById(&player, guild->getOwnerGUID())) {
-					// Player doesn't exist, reset house owner
-					house->setOwner(0);
-					std::ostringstream ss;
-					ss << "Error: Guild " << guild->getName() << " has an owner that does not exist: " << guild->getOwnerGUID();
-					LOG_ERROR(ss.str());
+				if (!IOLoginData::loadPlayerById(&player, guildOwnerGuid)) {
+					if (Database::getInstance().getLastErrno() == 0) {
+						// Player doesn't exist, reset house owner
+						house->setOwner(0);
+						std::ostringstream ss;
+						ss << "Error: Guild " << guild->getName() << " has an owner that does not exist: " << guildOwnerGuid;
+						LOG_ERROR(ss.str());
+					}
 					continue;
 				}
 
@@ -1233,24 +1378,23 @@ void Houses::payHouses(RentPeriod_t rentPeriod) const
 					int32_t daysLeft = 7 - house->getPayRentWarnings();
 
 					auto letterPtr = Item::CreateItem(ITEM_LETTER_STAMPED);
-				std::string period = getRentPeriod(rentPeriod);
+					std::string period = getRentPeriod(rentPeriod);
 
-				letterPtr->setText(fmt::format(
-				    "Warning! \nThe {:s} rent of {:d} gold for your guildhall \"{:s}\" is payable. Have it within {:d} days or you will lose this guildhall.",
-				    period, house->getRent(), house->getName(), daysLeft));
-				DepotLocker* depot = player.getDepotLocker(town->getID());
-				if (depot) {
-					g_game.internalAddItem(depot, letterPtr.get(), INDEX_WHEREEVER, FLAG_NOLIMIT);
-				}
-				house->setPayRentWarnings(house->getPayRentWarnings() + 1);
+					letterPtr->setText(fmt::format(
+					    "Warning! \nThe {:s} rent of {:d} gold for your guildhall \"{:s}\" is payable. Have it within {:d} days or you will lose this guildhall.",
+					    period, house->getRent(), house->getName(), daysLeft));
+					DepotLocker* depot = player.getDepotLocker(town->getID());
+					if (depot) {
+						g_game.internalAddItem(depot, letterPtr.get(), INDEX_WHEREEVER, FLAG_NOLIMIT);
+					}
+					if (!g_saveManager.savePlayerSync(&player)) {
+						LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after guildhall rent warning.", player.getName()));
+						continue;
+					}
+					house->setPayRentWarnings(house->getPayRentWarnings() + 1);
 				} else {
-					house->setOwner(0, true, &player);
+					(void)house->setOwner(0, true);
 				}
-
-			if (!g_saveManager.savePlayerSync(&player)) {
-				LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
-				continue;
-			}
 			}
 		}
 	}

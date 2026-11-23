@@ -106,10 +106,12 @@ public:
 	explicit HouseTransferItem(std::shared_ptr<House> house);
 
 	void onTradeEvent(TradeEvents_t event, Player* owner) override;
+	bool tryExecuteTransfer(Player* owner);
 	bool canTransform() const override { return false; }
 
 private:
 	std::weak_ptr<House> house;
+	bool transferExecuted = false;
 };
 
 class House : public std::enable_shared_from_this<House>
@@ -207,6 +209,8 @@ protected:
 	virtual bool updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection);
 
 private:
+	enum class DepotTransferResult { Transferred, OwnerMissing, Failed };
+	DepotTransferResult transferToDepotChecked() const;
 	bool transferToDepot() const;
 	bool transferToDepot(Player* player) const;
 	void updateDoorDescription() const;
