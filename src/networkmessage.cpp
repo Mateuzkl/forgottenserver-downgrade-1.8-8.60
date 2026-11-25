@@ -91,7 +91,8 @@ NetworkMessage::NetworkMessage(const NetworkMessage& other, ActiveBytesCopyTag) 
 {
 	const size_t activeEnd = std::min<size_t>(
 	    buffer.size(),
-	    std::max<size_t>(other.info.position, static_cast<size_t>(other.info.length) + INITIAL_BUFFER_POSITION));
+	    std::max<size_t>(other.info.position,
+	                     static_cast<size_t>(other.info.basePosition) + static_cast<size_t>(other.info.length)));
 	if (activeEnd > 0) {
 		std::memcpy(buffer.data(), other.buffer.data(), activeEnd);
 	}

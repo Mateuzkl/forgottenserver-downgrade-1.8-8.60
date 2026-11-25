@@ -55,7 +55,7 @@ bool XTEA_decrypt(NetworkMessage& msg, const xtea::round_keys& key)
 		return false;
 	}
 
-	msg.setLength(innerLength);
+	msg.setPayloadLength(innerLength);
 	return true;
 }
 
@@ -72,10 +72,12 @@ void Protocol::onSendMessage(const OutputMessage_ptr& msg) const
 		    static_cast<size_t>(NetworkMessage::HEADER_LENGTH) +
 		    (checksumEnabled ? static_cast<size_t>(NetworkMessage::CHECKSUM_LENGTH) : 0) +
 		    static_cast<size_t>(NetworkMessage::HEADER_LENGTH);
-		if (msg->getLength() > OutputMessage::MAX_PAYLOAD_LENGTH ||
+		const size_t maxPayloadLength = std::min<size_t>(
+		    getMaxOutgoingPayloadLength(), static_cast<size_t>(OutputMessage::MAX_PAYLOAD_LENGTH));
+		if (msg->getLength() > maxPayloadLength ||
 		    msg->getOutputBufferStart() < requiredHeaderSpace) {
-			LOG_ERROR("[Protocol] Refusing to frame oversized or misaligned encrypted OutputMessage (len={}, start={}).",
-			          msg->getLength(), msg->getOutputBufferStart());
+			LOG_ERROR("[Protocol] Refusing to frame oversized or misaligned encrypted OutputMessage (len={}, max={}, start={}).",
+			          msg->getLength(), maxPayloadLength, msg->getOutputBufferStart());
 			msg->setLength(0);
 			return;
 		}
@@ -102,7 +104,9 @@ bool Protocol::validateOutgoingFrame(const OutputMessage& msg) const noexcept
 {
 	const size_t totalLength = msg.getLength();
 	const size_t start = msg.getOutputBufferStart();
-	if (totalLength == 0 || start > NETWORKMESSAGE_MAXSIZE || totalLength > NETWORKMESSAGE_MAXSIZE - start) {
+	const size_t maxWireLength = std::min<size_t>(getMaxOutgoingWireLength(), NETWORKMESSAGE_MAXSIZE);
+	if (totalLength == 0 || start > NETWORKMESSAGE_MAXSIZE || totalLength > NETWORKMESSAGE_MAXSIZE - start ||
+	    totalLength > maxWireLength) {
 		return false;
 	}
 
@@ -141,7 +145,8 @@ OutputMessage_ptr Protocol::getOutputBuffer(int32_t size)
 	assert(g_dispatcher.isDispatcherThread() && "Protocol::getOutputBuffer must run on the dispatcher thread");
 	const size_t requestedSize = size > 0 ? static_cast<size_t>(size) : 0;
 	const size_t maxCoalescedLength = std::min<size_t>(
-	    getMaxCoalescedBodyLength(), static_cast<size_t>(OutputMessage::MAX_PAYLOAD_LENGTH));
+	    getMaxCoalescedBodyLength(),
+	    std::min<size_t>(getMaxOutgoingPayloadLength(), static_cast<size_t>(OutputMessage::MAX_PAYLOAD_LENGTH)));
 	if (!outputBuffer) {
 		outputBuffer = OutputMessagePool::getOutputMessage();
 	} else if (outputBuffer->getLength() > 0 &&

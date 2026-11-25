@@ -81,6 +81,13 @@ bool canSendLuaNetworkMessageToPlayer(const NetworkMessage& message, const Playe
 		return true;
 	}
 
+	const size_t maxPayloadLength = player.isOTC()
+	                                    ? static_cast<size_t>(NetworkMessage::MAX_ENCRYPTED_PAYLOAD_LENGTH)
+	                                    : static_cast<size_t>(NetworkMessage::CIPSOFT_MAX_PAYLOAD_LENGTH);
+	if (message.getLength() > maxPayloadLength) {
+		return false;
+	}
+
 	const uint8_t opcode = message.getBuffer()[NetworkMessage::INITIAL_BUFFER_POSITION];
 	if (isExtendedClientLuaOpcode(opcode)) {
 		return player.isAstraClient() || player.isFonticakClient();

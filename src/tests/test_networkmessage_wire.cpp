@@ -4,9 +4,11 @@
 #include "../networkmessage.h"
 #include "../outputmessage.h"
 #include "../protocol.h"
+#include "../protocolgame.h"
 #include "../scheduler.h"
 #include "../tasks.h"
 #include "../tools.h"
+#include "protocolgame_audit_support.h"
 #include "test_support.h"
 
 #include <cstring>
@@ -17,8 +19,10 @@ namespace {
 class WireProtocol final : public Protocol
 {
 public:
-	WireProtocol(bool encrypted, bool checksum, uint32_t maxCoalesced = NetworkMessage::MAX_PROTOCOL_BODY_LENGTH) :
-	    Protocol(nullptr), maxCoalescedBody(maxCoalesced)
+	WireProtocol(bool encrypted, bool checksum, uint32_t maxCoalesced = NetworkMessage::MAX_PROTOCOL_BODY_LENGTH,
+	             uint32_t maxPayload = NetworkMessage::MAX_ENCRYPTED_PAYLOAD_LENGTH,
+	             size_t maxWire = NETWORKMESSAGE_MAXSIZE) :
+	    Protocol(nullptr), maxCoalescedBody(maxCoalesced), maxOutgoingPayload(maxPayload), maxOutgoingWire(maxWire)
 	{
 		if (encrypted) {
 			setXTEAKey({0x12345678, 0x87654321, 0xAABBCCDD, 0x10203040});
@@ -29,15 +33,30 @@ public:
 	void onRecvFirstMessage(NetworkMessage&) override {}
 	void parsePacket(NetworkMessage& msg) override
 	{
-		parsedPayloads.emplace_back(msg.getBuffer() + msg.getBufferPosition(),
-		                            msg.getBuffer() + msg.getBufferPosition() + msg.getLength());
+		CHECK(msg.getReadableBytes() == msg.getLength());
+		std::vector<uint8_t> extracted;
+		extracted.reserve(msg.getLength());
+		for (uint16_t i = 0; i < msg.getLength(); ++i) {
+			extracted.push_back(msg.getByte());
+		}
+		CHECK(!msg.isOverrun());
+		CHECK(msg.getReadableBytes() == 0);
+		// Reading even 1 byte past the decrypted payload must trigger overrun,
+		// regardless of whether checksum was enabled (base=8) or disabled (base=4).
+		(void)msg.getByte();
+		CHECK(msg.isOverrun());
+		parsedPayloads.push_back(std::move(extracted));
 	}
 	uint32_t getMaxCoalescedBodyLength() const noexcept override { return maxCoalescedBody; }
+	uint32_t getMaxOutgoingPayloadLength() const noexcept override { return maxOutgoingPayload; }
+	size_t getMaxOutgoingWireLength() const noexcept override { return maxOutgoingWire; }
 
 	std::vector<std::vector<uint8_t>> parsedPayloads;
 
 private:
 	uint32_t maxCoalescedBody;
+	uint32_t maxOutgoingPayload;
+	size_t maxOutgoingWire;
 };
 
 void verifyEncryptedRoundTrip(uint16_t payloadLength, bool checksum)
@@ -283,6 +302,126 @@ TEST_CASE(protocol_coalescing_flushes_at_protocol_and_cipsoft_limits)
 
 			OutputMessagePool::getInstance().removeProtocolFromAutosend(cipProtocol);
 			OutputMessagePool::getInstance().removeProtocolFromAutosend(otcProtocol);
+			verified = true;
+		} catch (...) {
+			failure = std::current_exception();
+		}
+		g_dispatcher.shutdown();
+	});
+
+	g_reactor.runLoop();
+	if (failure) std::rethrow_exception(failure);
+	CHECK(verified);
+}
+
+// Regression for Point 3: NetworkMessage::canRead() and getReadableBytes() must track
+// exact payload bounds without hardcoded +8 overshoot, off-by-one at NETWORKMESSAGE_MAXSIZE,
+// or unsigned wraparound in skipBytes().
+TEST_CASE(network_message_read_bounds_respect_exact_wire_and_decrypted_offsets)
+{
+	// Unencrypted incoming wire message (getBodyBuffer sets position=2, base=0, clears overrun).
+	NetworkMessage wire;
+	std::memset(wire.getBuffer(), 0xEE, NETWORKMESSAGE_MAXSIZE);
+	wire.setLength(7); // 2B header + 5B body
+	uint8_t* body = wire.getBodyBuffer();
+	for (uint8_t i = 0; i < 5; ++i) {
+		body[i] = static_cast<uint8_t>(0x10 + i);
+	}
+	CHECK(wire.getReadableBytes() == 5);
+	for (uint8_t i = 0; i < 5; ++i) {
+		CHECK(wire.getByte() == static_cast<uint8_t>(0x10 + i));
+	}
+	CHECK(!wire.isOverrun());
+	CHECK(wire.getReadableBytes() == 0);
+	// Previously canRead() allowed reading 8 stale 0xEE bytes past info.length!
+	CHECK(wire.getByte() == 0);
+	CHECK(wire.isOverrun());
+
+	// Next packet on the reused Connection::msg must clear the overrun flag via getBodyBuffer().
+	wire.setLength(3);
+	(void)wire.getBodyBuffer();
+	CHECK(!wire.isOverrun());
+	CHECK(wire.getReadableBytes() == 1);
+
+	// Exact end of buffer (NETWORKMESSAGE_MAXSIZE): last byte must be readable (no >= off-by-one).
+	NetworkMessage full;
+	full.setLength(NETWORKMESSAGE_MAXSIZE);
+	(void)full.getBodyBuffer();
+	full.getBuffer()[NETWORKMESSAGE_MAXSIZE - 1] = 0x7A;
+	full.skipBytes(static_cast<int16_t>(30000));
+	full.skipBytes(static_cast<int16_t>(30000));
+	full.skipBytes(static_cast<int16_t>(NETWORKMESSAGE_MAXSIZE - 1 - full.getBufferPosition()));
+	CHECK(full.getReadableBytes() == 1);
+	CHECK(full.getByte() == 0x7A);
+	CHECK(!full.isOverrun());
+	CHECK(full.getByte() == 0);
+	CHECK(full.isOverrun());
+
+	// skipBytes() must never wrap uint16_t below 0 or past NETWORKMESSAGE_MAXSIZE.
+	NetworkMessage bounds;
+	bounds.reset();
+	bounds.skipBytes(-100);
+	CHECK(bounds.isOverrun());
+	CHECK(bounds.getBufferPosition() == NetworkMessage::INITIAL_BUFFER_POSITION);
+}
+
+// Regression for Point 5: single outgoing messages for classic CipSoft 8.60 clients
+// must be capped at CIPSOFT_MAX_PAYLOAD_LENGTH (16374 B / 16384 B wire) while OTClient
+// preserves full 65486 B capacity.
+TEST_CASE(cipsoft_single_message_limit_enforced_by_protocol_and_protocolgame)
+{
+	WireProtocol cipProto(true, true, NetworkMessage::CIPSOFT_MAX_COALESCED_BODY_LENGTH,
+	                      NetworkMessage::CIPSOFT_MAX_PAYLOAD_LENGTH, NetworkMessage::CIPSOFT_MAX_WIRE_LENGTH);
+
+	auto okMsg = std::make_shared<OutputMessage>();
+	std::vector<uint8_t> maxCipPayload(NetworkMessage::CIPSOFT_MAX_PAYLOAD_LENGTH, 0x33);
+	CHECK(okMsg->append(std::span<const uint8_t>{maxCipPayload}));
+	cipProto.onSendMessage(okMsg);
+	CHECK(cipProto.validateOutgoingFrame(*okMsg));
+	CHECK(okMsg->getLength() <= NetworkMessage::CIPSOFT_MAX_WIRE_LENGTH);
+
+	auto tooBigForCip = std::make_shared<OutputMessage>();
+	std::vector<uint8_t> oversizedCipPayload(NetworkMessage::CIPSOFT_MAX_PAYLOAD_LENGTH + 1, 0x44);
+	CHECK(tooBigForCip->append(std::span<const uint8_t>{oversizedCipPayload}));
+	cipProto.onSendMessage(tooBigForCip);
+	CHECK(tooBigForCip->getLength() == 0);
+	CHECK(!cipProto.validateOutgoingFrame(*tooBigForCip));
+
+	// Verify real ProtocolGame::writeToOutputBuffer() enforces CipSoft vs OTC single-message limits.
+	struct Cleanup
+	{
+		~Cleanup()
+		{
+			g_scheduler.shutdown();
+			g_dispatcher.shutdown();
+			g_reactor.drain();
+		}
+	} cleanup;
+	g_dispatcher.start();
+	g_scheduler.start();
+
+	bool verified = false;
+	std::exception_ptr failure;
+	g_dispatcher.addTask([&] {
+		try {
+			auto cipGame = std::make_shared<ProtocolGame>(nullptr);
+			auto otcGame = std::make_shared<ProtocolGame>(nullptr);
+			ProtocolGameAuditTestAccess::otc(*cipGame, false);
+			ProtocolGameAuditTestAccess::otc(*otcGame, true);
+
+			ProtocolGameAuditTestAccess::writeChunk(*cipGame, std::span<const uint8_t>{oversizedCipPayload});
+			CHECK(!cipGame->getCurrentBuffer() || cipGame->getCurrentBuffer()->getLength() == 0);
+
+			ProtocolGameAuditTestAccess::writeChunk(*cipGame, std::span<const uint8_t>{maxCipPayload});
+			CHECK(cipGame->getCurrentBuffer() != nullptr);
+			CHECK(cipGame->getCurrentBuffer()->getLength() == NetworkMessage::CIPSOFT_MAX_PAYLOAD_LENGTH);
+
+			ProtocolGameAuditTestAccess::writeChunk(*otcGame, std::span<const uint8_t>{oversizedCipPayload});
+			CHECK(otcGame->getCurrentBuffer() != nullptr);
+			CHECK(otcGame->getCurrentBuffer()->getLength() == oversizedCipPayload.size());
+
+			OutputMessagePool::getInstance().removeProtocolFromAutosend(cipGame);
+			OutputMessagePool::getInstance().removeProtocolFromAutosend(otcGame);
 			verified = true;
 		} catch (...) {
 			failure = std::current_exception();

@@ -19,7 +19,7 @@ constexpr auto AREA_COMBAT_SLOW_SAMPLE_THRESHOLD = std::chrono::milliseconds(1);
 constexpr std::array<std::string_view, static_cast<size_t>(PerformanceMetric::Count)> METRIC_NAMES = {
 	"TaskReactor::runOnce", "TaskReactor::drainInbox", "TaskReactor::drainReadyTasks",
 	"TaskReactor::sort", "TaskReactor::callbacks", "TaskReactor::callback",
-	"TaskReactor::queueLatency", "Game::checkCreatures", "Game::checkCreatureWalk",
+	"TaskReactor::queueLatency", "ProtocolGame::incomingQueueLatency", "Game::checkCreatures", "Game::checkCreatureWalk",
 	"Game::updateCreatureWalk", "Creature::goToFollowCreature", "Creature::onAttacking",
 	"Game::internalMoveCreature", "Map::getPathMatching", "Map::moveCreature", "Map::getSpectators",
 	"Monster::onThink",
@@ -315,6 +315,16 @@ void PerformanceMetrics::recordMonsterActiveReason(MonsterActiveReason reason, u
 	if (isEnabled()) {
 		monsterActiveReasons[static_cast<size_t>(reason)].fetch_add(count, std::memory_order_relaxed);
 	}
+}
+
+uint64_t PerformanceMetrics::getMetricCalls(PerformanceMetric metric) const noexcept
+{
+	return metrics[static_cast<size_t>(metric)].calls.load(std::memory_order_relaxed);
+}
+
+uint64_t PerformanceMetrics::getMetricTotalNanoseconds(PerformanceMetric metric) const noexcept
+{
+	return metrics[static_cast<size_t>(metric)].totalNanoseconds.load(std::memory_order_relaxed);
 }
 
 uint64_t PerformanceMetrics::getMonsterIdleMetric(MonsterIdleMetric metric) const noexcept

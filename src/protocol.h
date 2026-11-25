@@ -21,10 +21,16 @@ public:
 
 	virtual void onSendMessage(const OutputMessage_ptr& msg) const;
 	[[nodiscard]] bool validateOutgoingFrame(const OutputMessage& msg) const noexcept;
+	[[nodiscard]] bool isChecksumEnabled() const noexcept { return checksumEnabled; }
 	[[nodiscard]] virtual uint32_t getMaxCoalescedBodyLength() const noexcept
 	{
 		return NetworkMessage::MAX_PROTOCOL_BODY_LENGTH;
 	}
+	[[nodiscard]] virtual uint32_t getMaxOutgoingPayloadLength() const noexcept
+	{
+		return NetworkMessage::MAX_ENCRYPTED_PAYLOAD_LENGTH;
+	}
+	[[nodiscard]] virtual size_t getMaxOutgoingWireLength() const noexcept { return NETWORKMESSAGE_MAXSIZE; }
 	void onRecvMessage(NetworkMessage& msg);
 	virtual void onRecvFirstMessage(NetworkMessage& msg) = 0;
 	virtual void onConnect() {}

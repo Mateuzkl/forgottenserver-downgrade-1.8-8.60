@@ -22,6 +22,7 @@ enum class PerformanceMetric : uint8_t
 	ReactorCallbacks,
 	ReactorCallback,
 	ReactorQueueLatency,
+	ProtocolGameQueueLatency,
 	GameCheckCreatures,
 	GameCheckCreatureWalk,
 	GameUpdateCreatureWalk,
@@ -198,6 +199,8 @@ public:
 	    MonsterActiveReason reason,
 	    uint64_t count = 1) noexcept;
 
+	[[nodiscard]] uint64_t getMetricCalls(PerformanceMetric metric) const noexcept;
+	[[nodiscard]] uint64_t getMetricTotalNanoseconds(PerformanceMetric metric) const noexcept;
 	[[nodiscard]] uint64_t getMonsterIdleMetric(
 	    MonsterIdleMetric metric) const noexcept;
 	[[nodiscard]] uint64_t getPathSteps() const noexcept;

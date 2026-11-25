@@ -119,9 +119,7 @@ uint64_t customPingProcessEntropy() noexcept
 
 std::size_t getReadableBytes(const NetworkMessage& msg)
 {
-	const std::size_t end = static_cast<std::size_t>(msg.getLength()) + NetworkMessage::INITIAL_BUFFER_POSITION;
-	const std::size_t position = msg.getBufferPosition();
-	return position <= end ? end - position : 0;
+	return msg.getReadableBytes();
 }
 
 std::deque<std::pair<int64_t, uint32_t>> waitList; // (timeout, player guid)
@@ -1429,9 +1427,11 @@ void ProtocolGame::writeToOutputBuffer(std::span<const uint8_t> bytes)
 	if (bytes.empty()) {
 		return;
 	}
-	if (bytes.size() > OutputMessage::MAX_PAYLOAD_LENGTH) [[unlikely]] {
+	const size_t maxPayloadLength = std::min<size_t>(
+	    getMaxOutgoingPayloadLength(), static_cast<size_t>(OutputMessage::MAX_PAYLOAD_LENGTH));
+	if (bytes.size() > maxPayloadLength) [[unlikely]] {
 		LOG_ERROR("[ProtocolGame] Refusing to enqueue oversized outgoing chunk (opcode=0x{:02x}, bytes={}, max={}).",
-		          bytes.front(), bytes.size(), static_cast<size_t>(OutputMessage::MAX_PAYLOAD_LENGTH));
+		          bytes.front(), bytes.size(), maxPayloadLength);
 		return;
 	}
 	g_performanceMetrics.recordOutgoingGameChunk(bytes.front(), bytes.size());
@@ -1482,15 +1482,18 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 	// slice and keep at most one drain task per connection in the reactor so a
 	// flooding client cannot monopolize the dispatcher ahead of legitimate players.
 	auto packet = tfs::net::clone_incoming_packet(msg);
-	const auto deadline = tfs::net::shouldExpireQueuedGamePacket(opcode)
-	                          ? (std::chrono::steady_clock::now() +
-	                             std::chrono::milliseconds(DISPATCHER_TASK_EXPIRATION))
-	                          : std::chrono::steady_clock::time_point::max();
+	const bool expiring = tfs::net::shouldExpireQueuedGamePacket(opcode);
+	const bool metricsEnabled = g_performanceMetrics.isEnabled();
+	const auto now = (expiring || metricsEnabled) ? std::chrono::steady_clock::now()
+	                                              : std::chrono::steady_clock::time_point{};
+	const auto deadline = expiring ? (now + std::chrono::milliseconds(DISPATCHER_TASK_EXPIRATION))
+	                               : std::chrono::steady_clock::time_point::max();
+	const auto enqueuedAt = metricsEnabled ? now : std::chrono::steady_clock::time_point{};
 
 	bool shouldSchedule = false;
 	{
 		std::scoped_lock lock(incomingPacketsMutex);
-		incomingPackets.push_back(QueuedGamePacket{std::move(packet), std::move(admission.ticket), deadline});
+		incomingPackets.push_back(QueuedGamePacket{std::move(packet), std::move(admission.ticket), deadline, enqueuedAt});
 		if (!incomingDrainScheduled) {
 			incomingDrainScheduled = true;
 			shouldSchedule = true;
@@ -1520,9 +1523,9 @@ void ProtocolGame::drainIncomingPacketsOnDispatcher()
 	QueuedGamePacket next;
 	bool hasMore = false;
 	uint64_t expiredCount = 0;
+	const auto now = std::chrono::steady_clock::now();
 	{
 		std::scoped_lock lock(incomingPacketsMutex);
-		const auto now = std::chrono::steady_clock::now();
 		while (!incomingPackets.empty()) {
 			auto candidate = std::move(incomingPackets.front());
 			incomingPackets.pop_front();
@@ -1562,6 +1565,13 @@ void ProtocolGame::drainIncomingPacketsOnDispatcher()
 	} rescheduleGuard{this, hasMore};
 
 	if (next.packet && !isConnectionExpired()) {
+		if (next.enqueuedAt != std::chrono::steady_clock::time_point{} && g_performanceMetrics.isEnabled()) {
+			const auto waitDuration = now > next.enqueuedAt ? (now - next.enqueuedAt)
+			                                                : std::chrono::steady_clock::duration::zero();
+			g_performanceMetrics.record(
+			    PerformanceMetric::ProtocolGameQueueLatency,
+			    static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(waitDuration).count()));
+		}
 		parsePacketOnDispatcher(next.packet);
 	}
 }
@@ -1996,7 +2006,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 				if (getReadableBytes(msg) >= sizeof(uint32_t) + sizeof(uint8_t)) {
 					msg.get<uint32_t>();
 					const uint8_t infoType = msg.getByte();
-					msg.setBufferPosition(requestPosition - NetworkMessage::INITIAL_BUFFER_POSITION);
+					msg.skipBytes(-static_cast<int16_t>(msg.getBufferPosition() - requestPosition));
 					if (infoType == 5 || infoType == 11) {
 						handlePlayerNetworkMessage(recvbyte);
 						break;
@@ -4014,6 +4024,7 @@ void ProtocolGame::sendShop(const ShopInfoList& itemList)
 			AddShopItem(msg, *it);
 		}
 	} else {
+		const size_t shopMaxPayloadBytes = std::min<size_t>(maxPayloadBytes, getMaxOutgoingPayloadLength());
 		const size_t maxCount = std::min<size_t>(itemList.size(), std::numeric_limits<uint8_t>::max());
 		uint8_t itemsToSend = 0;
 		size_t currentBytes = sizeof(uint8_t) + sizeof(uint8_t); // 0x7A opcode + uint8 count
@@ -4024,7 +4035,7 @@ void ProtocolGame::sendShop(const ShopInfoList& itemList)
 			}
 			const size_t itemBytes = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint16_t) + item.realName.size() +
 			                         sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-			if (currentBytes + itemBytes > maxPayloadBytes) {
+			if (currentBytes + itemBytes > shopMaxPayloadBytes) {
 				break;
 			}
 			currentBytes += itemBytes;

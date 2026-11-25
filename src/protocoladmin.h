@@ -19,6 +19,7 @@ class ProtocolAdmin : public Protocol
 
 		ProtocolAdmin(Connection_ptr connection) : Protocol(connection)
 		{
+			disableChecksum();
 			state = NO_CONNECTED;
 			loginTries = 0;
 			lastCommand = 0;

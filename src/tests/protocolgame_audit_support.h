@@ -46,4 +46,27 @@ struct ProtocolGameAuditTestAccess
 		protocol.acceptPackets = true;
 		protocol.parsePacketOnDispatcher(packet);
 	}
+	static void parsePacket(ProtocolGame& protocol, NetworkMessage& msg) { protocol.parsePacket(msg); }
+	static void setAcceptPackets(ProtocolGame& protocol, bool value) { protocol.acceptPackets = value; }
+	static void writeChunk(ProtocolGame& protocol, std::span<const uint8_t> bytes)
+	{
+		protocol.writeToOutputBuffer(bytes);
+	}
+	static void release(ProtocolGame& protocol) { protocol.release(); }
+	static size_t incomingQueueSize(ProtocolGame& protocol)
+	{
+		std::scoped_lock lock(protocol.incomingPacketsMutex);
+		return protocol.incomingPackets.size();
+	}
+	static size_t backlogCount(const ProtocolGame& protocol) { return protocol.packetBacklog.current(); }
+	static size_t backlogLimit(const ProtocolGame& protocol) { return protocol.packetBacklog.limit(); }
+	static void backdateExpiringDeadlines(ProtocolGame& protocol, std::chrono::steady_clock::time_point deadline)
+	{
+		std::scoped_lock lock(protocol.incomingPacketsMutex);
+		for (auto& queued : protocol.incomingPackets) {
+			if (queued.deadline != std::chrono::steady_clock::time_point::max()) {
+				queued.deadline = deadline;
+			}
+		}
+	}
 };

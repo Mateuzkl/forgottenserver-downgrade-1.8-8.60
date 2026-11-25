@@ -125,6 +125,16 @@ private:
 		return isOTC ? static_cast<uint32_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH)
 		             : static_cast<uint32_t>(NetworkMessage::CIPSOFT_MAX_COALESCED_BODY_LENGTH);
 	}
+	[[nodiscard]] uint32_t getMaxOutgoingPayloadLength() const noexcept override
+	{
+		return isOTC ? static_cast<uint32_t>(NetworkMessage::MAX_ENCRYPTED_PAYLOAD_LENGTH)
+		             : static_cast<uint32_t>(NetworkMessage::CIPSOFT_MAX_PAYLOAD_LENGTH);
+	}
+	[[nodiscard]] size_t getMaxOutgoingWireLength() const noexcept override
+	{
+		return isOTC ? static_cast<size_t>(NETWORKMESSAGE_MAXSIZE)
+		             : static_cast<size_t>(NetworkMessage::CIPSOFT_MAX_WIRE_LENGTH);
+	}
 
 	std::pair<bool, uint32_t> isKnownCreature(uint32_t id);
 
@@ -468,6 +478,7 @@ private:
 		NetworkMessage_ptr packet;
 		tfs::net::PacketBacklog::Ticket ticket;
 		std::chrono::steady_clock::time_point deadline;
+		std::chrono::steady_clock::time_point enqueuedAt{};
 	};
 	std::mutex incomingPacketsMutex;
 	std::deque<QueuedGamePacket> incomingPackets;
