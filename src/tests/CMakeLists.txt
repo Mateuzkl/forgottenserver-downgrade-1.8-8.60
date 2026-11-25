@@ -14,6 +14,8 @@ foreach(test_src ${tests_SRC})
             INTERPROCEDURAL_OPTIMIZATION FALSE
             INTERPROCEDURAL_OPTIMIZATION_RELEASE FALSE
             INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO FALSE)
+    elseif (TFS_LTO_LINK_OPTIONS)
+        target_link_options(${test_name} PRIVATE ${TFS_LTO_LINK_OPTIONS})
     endif()
     add_test(NAME ${test_name} COMMAND ${test_name})
     set_tests_properties(${test_name} PROPERTIES

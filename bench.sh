@@ -1,33 +1,46 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BUILD_DIR="build-bench"
-JOBS="${JOBS:-$(nproc 2>/dev/null || printf '2')}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+PROFILE="${TFS_BUILD_PROFILE:-balanced}"
+BUILD_DIR="${TFS_BENCH_BUILD_DIR:-}"
+JOBS="${JOBS:-}"
 CLEAN_BUILD=0
 FILTER=""
-
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+LTO_MODE="off"
+EXTRA_ARGS=()
 
 usage() {
 	cat <<'EOF'
 Usage: ./bench.sh [options]
 
 Options:
-  --clean                Remove build-bench before configuring
+  --profile PROFILE      Build profile: low-memory|balanced|full-performance (default: balanced)
+  --clean                Remove benchmark build directory before configuring
   --filter PATTERN       Run only benchmarks matching PATTERN (passed to ctest -R)
-  --jobs N               Parallel build jobs (default: nproc)
+  --jobs N               Override adaptive parallel build jobs
+  --build-dir PATH       Override benchmark build directory
+  --lto on|off           Enable/disable LTO for benchmarks (default: off)
+  --reconfigure          Force CMake reconfigure
   -h, --help             Show this help
 
 Examples:
-  ./bench.sh                        # Build and run all benchmarks
-  ./bench.sh --clean                # Clean rebuild
-  ./bench.sh --filter bench_tools   # Run only bench_tools
+  ./bench.sh                              # Build and run all benchmarks (adaptive WSL2-safe)
+  ./bench.sh --profile low-memory         # Minimal RAM usage
+  ./bench.sh --clean                      # Clean rebuild
+  ./bench.sh --filter bench_networkmessage
 EOF
 }
 
 parse_args() {
 	while (($#)); do
 		case "$1" in
+			--profile)
+				[[ $# -ge 2 ]] || { echo "--profile requires a value"; exit 1; }
+				PROFILE="$2"
+				shift 2
+				;;
 			--clean)
 				CLEAN_BUILD=1
 				shift
@@ -41,6 +54,20 @@ parse_args() {
 				[[ $# -ge 2 ]] || { echo "--jobs requires a value"; exit 1; }
 				JOBS="$2"
 				shift 2
+				;;
+			--build-dir)
+				[[ $# -ge 2 ]] || { echo "--build-dir requires a value"; exit 1; }
+				BUILD_DIR="$2"
+				shift 2
+				;;
+			--lto)
+				[[ $# -ge 2 ]] || { echo "--lto requires a value"; exit 1; }
+				LTO_MODE="${2,,}"
+				shift 2
+				;;
+			--reconfigure)
+				EXTRA_ARGS+=(--reconfigure)
+				shift
 				;;
 			-h|--help)
 				usage
@@ -57,47 +84,36 @@ parse_args() {
 
 main() {
 	parse_args "$@"
-
 	cd "${SCRIPT_DIR}"
 	[[ -f "CMakeLists.txt" ]] || { echo "CMakeLists.txt not found in $(pwd)"; exit 1; }
 
-	echo "=== Benchmark Build ==="
+	local -a args=(
+		--non-interactive
+		--skip-deps
+		--profile "${PROFILE}"
+		--benchmarks
+		--stats off
+		--portable
+		--lto "${LTO_MODE}"
+	)
 
+	if [[ -n "${BUILD_DIR}" ]]; then
+		args+=(--build-dir "${BUILD_DIR}")
+	fi
+	if [[ -n "${JOBS}" ]]; then
+		args+=(--jobs "${JOBS}")
+	fi
 	if [[ "${CLEAN_BUILD}" -eq 1 ]]; then
-		echo "Cleaning build directory: ${BUILD_DIR}"
-		rm -rf "${BUILD_DIR}"
+		args+=(--clean)
 	fi
-
-	echo "Configuring CMake with BUILD_BENCHMARKING=ON..."
-	cmake -S . -B "${BUILD_DIR}" \
-		-DCMAKE_BUILD_TYPE=Release \
-		-DBUILD_BENCHMARKING=ON \
-		-DCMAKE_PREFIX_PATH="/usr/local;${HOME}/.local" \
-		-DLUA_INCLUDE_DIR=/usr/local/include \
-		-DLUA_LIBRARY=/usr/local/lib/liblua.a \
-		-DLUA_LIBRARIES='/usr/local/lib/liblua.a;m;dl' \
-		-DLUA_VERSION_STRING=5.5.0 \
-		-DDISABLE_STATS=1 \
-		-DENABLE_NATIVE_OPTIMIZATIONS=OFF \
-		-DCMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE=OFF \
-		-Wno-dev
-
-	echo "Building benchmarks..."
-	cmake --build "${BUILD_DIR}" --parallel "${JOBS}"
-
-	echo ""
-	echo "=== Running Benchmarks ==="
-
-	local ctest_args=(--test-dir "${BUILD_DIR}" --output-on-failure)
 	if [[ -n "${FILTER}" ]]; then
-		ctest_args+=(-R "${FILTER}")
-		echo "Filter: ${FILTER}"
+		args+=(--test-filter "${FILTER}")
+	fi
+	if ((${#EXTRA_ARGS[@]} > 0)); then
+		args+=("${EXTRA_ARGS[@]}")
 	fi
 
-	ctest "${ctest_args[@]}"
-
-	echo ""
-	echo "=== Done ==="
+	exec "${SCRIPT_DIR}/build.sh" "${args[@]}"
 }
 
 main "$@"

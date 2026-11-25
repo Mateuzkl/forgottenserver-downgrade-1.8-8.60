@@ -81,19 +81,16 @@ ValueWrapper::ValueWrapper(const MapType &value, uint64_t timestamp) :
 	data_(value), timestamp_(resolveTimestamp(timestamp)) { }
 
 ValueWrapper::ValueWrapper(const std::initializer_list<std::pair<const std::string, ValueWrapper>> &init_list, uint64_t timestamp) :
-	timestamp_(resolveTimestamp(timestamp)) {
-	MapType map;
+	data_(std::in_place_type<MapType>), timestamp_(resolveTimestamp(timestamp)) {
+	auto &map = std::get<MapType>(data_);
+	map.reserve(init_list.size());
 	for (const auto &[key, val] : init_list) {
 		map[key] = std::make_shared<ValueWrapper>(val);
 	}
-	data_ = map;
 }
 
 ValueWrapper::ValueWrapper(const std::initializer_list<ValueWrapper> &init_list, uint64_t timestamp) :
-	timestamp_(resolveTimestamp(timestamp)) {
-	ArrayType arr(init_list);
-	data_ = arr;
-}
+	data_(std::in_place_type<ArrayType>, init_list), timestamp_(resolveTimestamp(timestamp)) { }
 
 std::optional<ValueWrapper> ValueWrapper::get(const std::string &key) const {
 	const auto pval = std::get_if<MapType>(&data_);
