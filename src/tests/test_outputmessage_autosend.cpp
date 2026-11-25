@@ -18,7 +18,12 @@ struct OutputMessagePoolTestAccess
 	static size_t size(const OutputMessagePool& pool) { return pool.bufferedProtocols.size(); }
 	static size_t capacity(const OutputMessagePool& pool) { return pool.bufferedProtocols.capacity(); }
 	static bool scheduled(const OutputMessagePool& pool) { return pool.sendScheduled; }
-	static void resetSchedule(OutputMessagePool& pool) { pool.sendScheduled = false; }
+	static void resetSchedule(OutputMessagePool& pool)
+	{
+		++pool.sendGeneration;
+		pool.sendScheduled = false;
+		pool.firstBufferedAt = {};
+	}
 	static size_t flushingCapacity(const OutputMessagePool& pool) { return pool.flushingProtocols.capacity(); }
 	static bool released(const OutputMessagePool& pool)
 	{
@@ -167,20 +172,36 @@ TEST_CASE(autosend_flush_if_due_prevents_starvation_under_time_budget_deferral)
 	g_reactor.setPostCycleHook([&pool] { pool.flushIfDue(); });
 
 	bool flushedAfterBusyCycle = false;
+	bool survivedStaleTimer = false;
+	bool flushedSecondBatchOnTime = false;
+	OutputMessage_ptr secondBatch;
 	g_dispatcher.addTask([&] {
 		auto out = protocol->getOutputBuffer(1);
 		out->addByte(0x6D);
 		// Simulate a busy gameplay slice exceeding both 10ms autosend delay and 15ms budget.
 		std::this_thread::sleep_for(std::chrono::milliseconds(20));
 	});
-	// Queue a second task that gets deferred by timeBudget — postCycleHook must still flush!
+	// Queue a second task that gets deferred by timeBudget — postCycleHook must flush Batch 1,
+	// and Batch 1's overdue timer (running later in the next cycle) must not flush Batch 2 early.
 	g_dispatcher.addTask([&] {
 		flushedAfterBusyCycle = !protocol->getCurrentBuffer();
-		g_dispatcher.shutdown();
+		secondBatch = protocol->getOutputBuffer(1);
+		secondBatch->addByte(0xAA);
+		g_dispatcher.addTask([&] {
+			survivedStaleTimer = (protocol->getCurrentBuffer() == secondBatch) &&
+			                     OutputMessagePoolTestAccess::scheduled(pool);
+			g_scheduler.addEvent(20, [&] {
+				flushedSecondBatchOnTime = !protocol->getCurrentBuffer() &&
+				                           OutputMessagePoolTestAccess::released(pool);
+				g_dispatcher.shutdown();
+			});
+		});
 	});
 
 	g_reactor.runLoop();
 	CHECK(flushedAfterBusyCycle);
+	CHECK(survivedStaleTimer);
+	CHECK(flushedSecondBatchOnTime);
 }
 
 TFS_TEST_MAIN()

@@ -171,6 +171,7 @@ private:
 	}
 
 	void scheduleSendAll(std::chrono::milliseconds delay) noexcept;
+	void sendAllIfGeneration(uint64_t expectedGeneration) noexcept;
 	void sendAll() noexcept;
 
 	std::vector<Protocol_ptr> bufferedProtocols;
@@ -178,6 +179,7 @@ private:
 	// free the reserved capacity after every 10 ms batch, then allocate it again.
 	std::vector<Protocol_ptr> flushingProtocols;
 	std::chrono::steady_clock::time_point firstBufferedAt{};
+	uint64_t sendGeneration = 0;
 	bool sendScheduled = false;
 	friend struct OutputMessagePoolTestAccess;
 };

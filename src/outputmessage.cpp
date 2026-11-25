@@ -23,14 +23,25 @@ inline constexpr auto AUTOSEND_DELAY_DEFAULT = 10ms;
 
 void OutputMessagePool::scheduleSendAll(std::chrono::milliseconds delay) noexcept
 {
-	sendScheduled = g_scheduler.addEvent(createSchedulerTask(static_cast<int>(delay.count()), []() {
-		OutputMessagePool::getInstance().sendAll();
+	const uint64_t expectedGeneration = ++sendGeneration;
+	sendScheduled = g_scheduler.addEvent(createSchedulerTask(static_cast<int>(delay.count()), [expectedGeneration]() {
+		OutputMessagePool::getInstance().sendAllIfGeneration(expectedGeneration);
 	})) != 0;
+}
+
+void OutputMessagePool::sendAllIfGeneration(uint64_t expectedGeneration) noexcept
+{
+	// THREAD-SAFETY: Must be called from dispatcher thread only.
+	if (!sendScheduled || sendGeneration != expectedGeneration) {
+		return;
+	}
+	sendAll();
 }
 
 void OutputMessagePool::sendAll() noexcept
 {
 	// THREAD-SAFETY: Must be called from dispatcher thread only.
+	++sendGeneration;
 	sendScheduled = false;
 	if (bufferedProtocols.empty()) [[unlikely]] {
 		firstBufferedAt = {};
@@ -96,6 +107,8 @@ void OutputMessagePool::removeProtocolFromAutosend(const Protocol_ptr& protocol)
 		bufferedProtocols.pop_back();
 		if (bufferedProtocols.empty()) {
 			firstBufferedAt = {};
+			++sendGeneration;
+			sendScheduled = false;
 		}
 	}
 }
