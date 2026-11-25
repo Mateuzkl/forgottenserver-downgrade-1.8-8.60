@@ -65,6 +65,13 @@ private:
 	bool previousValue;
 };
 
+// Account Manager SQL contains identifiers and credential hashes. Database error
+// strings can repeat the same values (for example on a duplicate-key failure).
+bool isAccountQuery(std::string_view query)
+{
+	return query.find("`accounts`") != std::string_view::npos;
+}
+
 #ifdef STATS_ENABLED
 void recordSqlStats(std::string_view query, std::chrono::steady_clock::time_point start)
 {
@@ -72,6 +79,9 @@ void recordSqlStats(std::string_view query, std::chrono::steady_clock::time_poin
 		return;
 	}
 
+	if (isAccountQuery(query)) {
+		query = "[account query]";
+	}
 	uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
 	g_stats.addSqlStats(std::make_unique<Stat>(ns, std::string(query.substr(0, 100)), std::string(query.substr(0, 256))));
 }
@@ -242,9 +252,13 @@ static bool isValidSqlIdentifier(std::string_view identifier)
 	});
 }
 
-static void logQueryError(tfs::detail::Mysql_ptr& handle, std::string_view query)
+static void logQueryError(tfs::detail::Mysql_ptr& handle, std::string_view query, std::string_view operation = "mysql_real_query")
 {
-	LOG_ERROR(fmt::format("[Error - mysql_real_query] Query: {}\nMessage: {}", query.substr(0, 256), mysql_error(handle.get())));
+	if (isAccountQuery(query)) {
+		LOG_ERROR("[Error - {}] Account query failed (SQL error {}).", operation, mysql_errno(handle.get()));
+	} else {
+		LOG_ERROR(fmt::format("[Error - {}] Query: {}\nMessage: {}", operation, query.substr(0, 256), mysql_error(handle.get())));
+	}
 }
 
 // Single-attempt query execution. Reconnect/retry is handled by the Database member methods.
@@ -598,7 +612,7 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 	res.reset(mysql_store_result(ctx.handle.get()));
 
 	if (!res) {
-		LOG_ERROR(fmt::format("[Error - mysql_store_result] Query: {}\nMessage: {}", query, mysql_error(ctx.handle.get())));
+		logQueryError(ctx.handle, query, "mysql_store_result");
 		return nullptr;
 	}
 

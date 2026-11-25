@@ -158,6 +158,10 @@ IOLoginData::AuthenticationResult IOLoginData::loginserverAuthentication(std::st
 		return failedQueryAuthenticationResult(db);
 	}
 
+    if (lookup.accountId == 1 && !ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+        return AuthenticationResult::Rejected;
+    }
+
     DBResult_ptr result = db.storeQuery(fmt::format(
         "SELECT `id`, `name`, UNHEX(`password`) AS `password`, `secret`, `type`, `premium_ends_at`, `tibia_coins` FROM `accounts` WHERE `id` = {:d}",
         lookup.accountId));
@@ -214,6 +218,9 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
 	}
 
 	const uint32_t resolvedAccountId = lookup.accountId;
+	if (resolvedAccountId == 1 && !ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+		return {AuthenticationResult::Rejected};
+	}
 
     std::string query = fmt::format(
         "SELECT `a`.`id` AS `account_id`, UNHEX(`a`.`password`) AS `password`, `a`.`secret`, `p`.`id` AS `character_id` FROM `accounts` `a` JOIN `players` `p` ON `a`.`id` = `p`.`account_id` WHERE `a`.`id` = {:d} AND LOWER(`p`.`name`) = LOWER({:s}) AND `p`.`deletion` = 0",
@@ -265,6 +272,9 @@ IOLoginData::GameworldAuthenticationResult IOLoginData::gameworldAuthentication(
 
 	uint32_t accountId = result->getNumber<uint32_t>("account_id");
 	uint32_t characterId = result->getNumber<uint32_t>("character_id");
+	if (accountId == 1 && !caseInsensitiveEqual(characterName, "Account Manager")) {
+		return {AuthenticationResult::Success, accountId, 0};
+	}
 
 	if (ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER) && characterName == "Account Manager" && accountId != 1) {
         result = db.storeQuery("SELECT `id` FROM `players` WHERE `name` = 'Account Manager' AND `account_id` = 1 AND `deletion` = 0");
@@ -382,7 +392,7 @@ bool IOLoginData::loadPlayerById(Player* player, uint32_t id, bool deferWorldDat
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `onlinetime`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `id` = {:d}",
 	        id)), deferWorldData);
 }
 
@@ -392,7 +402,7 @@ bool IOLoginData::loadPlayerByName(Player* player, std::string_view name)
 	return loadPlayer(
 	    player,
 	    db.storeQuery(fmt::format(
-	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
+	        "SELECT `id`, `name`, `account_id`, `group_id`, `sex`, `vocation`, `experience`, `level`, `reset`, `maglevel`, `health`, `healthmax`, `blessings`, `blessings1`, `blessings2`, `blessings3`, `blessings4`, `blessings5`, `blessings6`, `blessings7`, `blessings8`, `mana`, `manamax`, `manaspent`, `soul`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons`, `lookmount`, `currentmount`, `randomizemount`, `posx`, `posy`, `posz`, `cap`, `lastlogin`, `onlinetime`, `lastlogout`, `lastip`, `conditions`, `skulltime`, `skull`, `town_id`, `balance`, `bonus_rerolls`, `charmpoints`, `task_hunting_points`, `bounty_points`, `soulseals_points`, `has_weekly_expansion`, `xpboost_value`, `xpboost_stamina`, `stamina`, `skill_fist`, `skill_fist_tries`, `skill_club`, `skill_club_tries`, `skill_sword`, `skill_sword_tries`, `skill_axe`, `skill_axe_tries`, `skill_dist`, `skill_dist_tries`, `skill_shielding`, `skill_shielding_tries`, `skill_fishing`, `skill_fishing_tries`, `direction`, `protection_time`, `offlinetraining_time`, `offlinetraining_skill`, `token_protected`, `token_hash`, `save` FROM `players` WHERE `name` = {:s}",
 	        db.escapeString(name))));
 }
 
@@ -650,6 +660,8 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result, bool deferWorl
 	player->loginPosition.z = result->getNumber<uint16_t>("posz");
 
 	player->lastLoginSaved = result->getNumber<time_t>("lastlogin");
+	player->onlineTimeAtLogin = result->getNumber<uint64_t>("onlinetime");
+	player->onlineTimeSessionStart = 0;
 	player->lastLogout = result->getNumber<time_t>("lastlogout");
 
 	player->offlineTrainingTime = result->getNumber<int32_t>("offlinetraining_time") * 1000;
@@ -1208,21 +1220,48 @@ std::optional<IOLoginData::PlayerSaveSnapshot> IOLoginData::buildPlayerSave(Play
 		storageSnapshot.modifiedKeys,
 		storageSnapshot.removedKeys,
 		bestiarySnapshot.snapshotId,
-		bestiarySnapshot.modifiedRaceIds
+		bestiarySnapshot.modifiedRaceIds,
+		{} // walClearQuery is assigned when the SaveManager records this generation.
 	};
 }
 
 bool IOLoginData::flushPlayerSave(const PlayerSaveSnapshot& snapshot)
 {
-	return DBTransaction::executeWithinTransactionRollbackOnFailure([&snapshot]() {
-		Database& db = Database::getInstance();
+	return flushPlayerSaveChecked(snapshot) == FlushResult::Committed;
+}
+
+IOLoginData::FlushResult IOLoginData::flushPlayerSaveChecked(const PlayerSaveSnapshot& snapshot)
+{
+	Database& db = Database::getInstance();
+	for (uint8_t attempt = 0; attempt < DBTransaction::TRANSACTION_MAX_ATTEMPTS; ++attempt) {
+		DBTransaction transaction;
+		if (!transaction.begin()) {
+			return FlushResult::Failed;
+		}
+		bool executed = true;
 		for (const auto& query : snapshot.queries) {
 			if (!db.executeQuery(query)) {
-				return false;
+				executed = false;
+				break;
 			}
 		}
-		return true;
-	});
+		if (executed && !snapshot.walClearQuery.empty()) {
+			executed = db.executeQuery(snapshot.walClearQuery);
+		}
+		if (!executed) {
+			const bool retryable = db.lastQueryWasDeadlock();
+			if (!transaction.rollback()) {
+				return FlushResult::Indeterminate;
+			}
+			if (retryable && attempt + 1 < DBTransaction::TRANSACTION_MAX_ATTEMPTS) {
+				continue;
+			}
+			return FlushResult::Failed;
+		}
+		// Never retry a lost COMMIT acknowledgement on the worker.
+		return transaction.commit() ? FlushResult::Committed : FlushResult::Indeterminate;
+	}
+	return FlushResult::Failed;
 }
 
 bool IOLoginData::savePlayer(Player* player)
@@ -1364,7 +1403,8 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 	query << "`protection_time` = " << ConfigManager::getInteger(ConfigManager::PROTECTION_TIME) << ',';
 
 	if (!player->isOffline()) {
-		query << "`onlinetime` = `onlinetime` + " << (time(nullptr) - player->lastLoginSaved) << ',';
+		// A captured snapshot must be replayable without adding session time twice.
+		query << "`onlinetime` = " << player->getOnlineTimeAt(time(nullptr)) << ',';
 	}
 	for (int i = 1; i <= 8; i++) {
 		query << "`blessings" << i << "` = " << static_cast<uint16_t>(player->getBlessingCount(i)) << ',';
@@ -1976,11 +2016,50 @@ void IOLoginData::updateTibiaCoins(uint32_t accountId, uint64_t tibiaCoins)
 	    fmt::format("UPDATE `accounts` SET `tibia_coins` = {:d} WHERE `id` = {:d}", tibiaCoins, accountId));
 }
 
+namespace {
+// The HTTP registration service uses the same MariaDB connection lock. A busy
+// registration can be retried without waiting on the game dispatcher.
+class RegistrationLock
+{
+public:
+	explicit RegistrationLock(Database& db) : db(db)
+	{
+		auto result = db.storeQuery("SELECT GET_LOCK('otc_account_registration', 0) AS acquired");
+		acquired = result && result->getNumber<uint32_t>("acquired") == 1;
+	}
+	~RegistrationLock()
+	{
+		if (acquired) {
+			db.storeQuery("SELECT RELEASE_LOCK('otc_account_registration')");
+		}
+	}
+	bool acquired = false;
+private:
+	Database& db;
+};
+} // namespace
+
 bool IOLoginData::setAccountEmail(uint32_t accountId, const std::string& email)
 {
+	if (accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to set email on protected account (account={}).", accountId);
+		return false;
+	}
+
 	Database& db = Database::getInstance();
-	return db.executeQuery(
-	    fmt::format("UPDATE `accounts` SET `email` = {:s} WHERE `id` = {:d}", db.escapeString(email), accountId));
+	RegistrationLock lock(db);
+	if (!lock.acquired) {
+		return false;
+	}
+	const auto matches = db.storeQuery(fmt::format("SELECT COUNT(*) AS used FROM `accounts` WHERE `id` <> {} AND {}",
+	                                               accountId, accountIdentifierMatches(db, email)));
+	if (!matches || matches->getNumber<uint32_t>("used") != 0) {
+		return false;
+	}
+	// A reconnect loses the advisory lock. Verify ownership in the write itself.
+	return db.executeQuery(fmt::format("UPDATE `accounts` SET `email` = {} WHERE `id` = {} "
+	                                   "AND IS_USED_LOCK('otc_account_registration') = CONNECTION_ID()",
+	                                   db.escapeString(email), accountId)) && db.getAffectedRows() == 1;
 }
 
 bool IOLoginData::accountEmailExists(std::string_view email)
@@ -1991,45 +2070,98 @@ bool IOLoginData::accountEmailExists(std::string_view email)
 	return result != nullptr;
 }
 
-bool IOLoginData::createAccount(const std::string& name, const std::string& password, uint32_t& accountId)
+bool IOLoginData::createAccount(const std::string& name, const std::string& password, uint32_t& accountId,
+                                std::string_view email)
 {
 	Database& db = Database::getInstance();
-    DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})", db.escapeString(name)));
-    if (result) {
-        return false;
-    }
-    std::string hashedPassword = transformToSHA1Hex(password);
-    if (!db.executeQuery(fmt::format("INSERT INTO `accounts` (`name`, `password`, `type`, `premium_ends_at`, `email`, `creation`) VALUES ({:s}, {:s}, 1, 0, '', {:d})",
-        db.escapeString(name), db.escapeString(hashedPassword), static_cast<uint32_t>(time(nullptr))))) {
-        return false;
-    }
-    result = db.storeQuery(fmt::format("SELECT `id` FROM `accounts` WHERE LOWER(`name`) = LOWER({:s})", db.escapeString(name)));
-    if (!result) {
-        return false;
-    }
-    accountId = result->getNumber<uint32_t>("id");
-    return true;
+	accountId = 0;
+	RegistrationLock lock(db);
+	if (!lock.acquired) {
+		return false;
+	}
+	auto identifiers = accountIdentifierMatches(db, name);
+	if (!email.empty()) {
+		identifiers += " OR " + accountIdentifierMatches(db, email);
+	}
+	if (!db.executeQuery(fmt::format(
+	        "INSERT INTO `accounts` (`name`, `password`, `type`, `premium_ends_at`, `email`, `creation`) "
+	        "SELECT {}, {}, 1, 0, {}, {} FROM DUAL WHERE IS_USED_LOCK('otc_account_registration') = CONNECTION_ID() "
+	        "AND NOT EXISTS (SELECT 1 FROM `accounts` WHERE {})",
+	        db.escapeString(name), db.escapeString(transformToSHA1Hex(password)), db.escapeString(email), time(nullptr),
+	        identifiers)) || db.getAffectedRows() != 1) {
+		return false;
+	}
+	accountId = static_cast<uint32_t>(db.getLastInsertId());
+	return accountId > 1;
 }
 
 bool IOLoginData::setPassword(uint32_t accountId, const std::string& newPassword)
 {
+	if (accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to change password on protected account (account={}).", accountId);
+		return false;
+	}
+
 	Database& db = Database::getInstance();
 	std::string hashedPassword = transformToSHA1Hex(newPassword);
-	return db.executeQuery(fmt::format("UPDATE `accounts` SET `password` = {:s} WHERE `id` = {:d}", db.escapeString(hashedPassword), accountId));
+	if (!db.executeQuery(fmt::format("UPDATE `accounts` SET `password` = {:s} WHERE `id` = {:d}",
+	                                 db.escapeString(hashedPassword), accountId))) {
+		return false;
+	}
+	// MariaDB also reports zero changed rows when the existing password already matches.
+	return db.getAffectedRows() == 1 || db.storeQuery(fmt::format(
+	    "SELECT 1 FROM `accounts` WHERE `id` = {} AND `password` = {}", accountId, db.escapeString(hashedPassword)));
 }
 
 bool IOLoginData::setRecoveryKey(uint32_t accountId, const std::string& recoveryKey)
 {
+	if (recoveryKey.empty()) {
+		return false;
+	}
+	if (accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to set recovery key on protected account (account={}).", accountId);
+		return false;
+	}
+
 	Database& db = Database::getInstance();
-	std::string hashedKey = transformToSHA1Hex(recoveryKey);
-	return db.executeQuery(fmt::format("UPDATE `accounts` SET `secret` = {:s} WHERE `id` = {:d}", db.escapeString(hashedKey), accountId));
+	const auto hashedKey = db.escapeString(transformToSHA1Hex(recoveryKey));
+	if (!db.executeQuery(fmt::format(
+	        "UPDATE `accounts` SET `recovery_key_hash` = {:s} WHERE `id` = {:d} AND `recovery_key_hash` IS NULL",
+	        hashedKey, accountId))) {
+		return false;
+	}
+	return db.getAffectedRows() == 1 || db.storeQuery(fmt::format(
+	    "SELECT 1 FROM `accounts` WHERE `id` = {} AND `recovery_key_hash` = {}", accountId, hashedKey));
+}
+
+bool IOLoginData::resetPasswordWithRecoveryKey(uint32_t accountId, std::string_view verifiedHash, std::string_view password)
+{
+	if (accountId <= 1 || verifiedHash.size() != 40 || password.empty()) {
+		return false;
+	}
+	Database& db = Database::getInstance();
+	const auto hashedPassword = db.escapeString(transformToSHA1Hex(password));
+	const auto recoveryHash = db.escapeString(verifiedHash);
+	if (!db.executeQuery(fmt::format(
+	        "UPDATE `accounts` SET `password` = {} WHERE `id` = {} AND `recovery_key_hash` = {}",
+	        hashedPassword, accountId, recoveryHash))) {
+		return false;
+	}
+	return db.getAffectedRows() == 1 || db.storeQuery(fmt::format(
+	    "SELECT 1 FROM `accounts` WHERE `id` = {} AND `recovery_key_hash` = {} AND `password` = {}",
+	    accountId, recoveryHash, hashedPassword));
 }
 
 bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint16_t vocationId, PlayerSex_t sex)
 {
+	if (accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to create character on protected account (account={}).", accountId);
+		return false;
+	}
+
 	Database& db = Database::getInstance();
 
-	if (playerNameExists(name)) {
+	if (caseInsensitiveEqual(name, "Account Manager") || playerNameExists(name)) {
 		return false;
 	}
 
@@ -2039,6 +2171,10 @@ bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint
 	int32_t posX = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::NEW_PLAYER_SPAWN_POS_X));
 	int32_t posY = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::NEW_PLAYER_SPAWN_POS_Y));
 	int32_t posZ = static_cast<int32_t>(ConfigManager::getInteger(ConfigManager::NEW_PLAYER_SPAWN_POS_Z));
+	if (posZ < 0 || posZ >= MAP_MAX_LAYERS) {
+		LOG_ERROR("Invalid newPlayerSpawnPosZ: {}", posZ);
+		return false;
+	}
 
 	uint64_t experience = Player::getExpForLevel(level);
 	
@@ -2066,15 +2202,52 @@ bool IOLoginData::createPlayer(uint32_t accountId, const std::string& name, uint
 	return db.executeQuery(query.str());
 }
 
-bool IOLoginData::deletePlayer(uint32_t playerId)
+bool IOLoginData::deletePlayer(uint32_t playerId, uint32_t accountId)
 {
-	if (playerId == 1) {
-		LOG_WARN("[Security] Attempted to delete Account Manager (guid=1) - BLOCKED");
+	if (playerId <= 1 || accountId <= 1) {
+		LOG_WARN("[Security] Blocked attempt to delete protected character (guid={}, account={}).", playerId,
+		         accountId);
 		return false;
 	}
 
+	if (g_game.isLoginPending(playerId) || g_game.getPlayerByGUID(playerId)) {
+		return false;
+	}
+	if (getBoolean(ConfigManager::ALLOW_CLONES)) {
+		for (const auto& online : g_game.getPlayers()) {
+			if (online->getGUID() == playerId) {
+				return false;
+			}
+		}
+	}
+
 	Database& db = Database::getInstance();
-	return db.executeQuery(fmt::format("UPDATE `players` SET `deletion` = {:d} WHERE `id` = {:d}", static_cast<uint64_t>(time(nullptr) + 86400), playerId));
+	if (!db.executeQuery(fmt::format(
+	        "UPDATE `players` SET `deletion` = {:d} "
+	        "WHERE `id` = {:d} AND `account_id` = {:d} AND `deletion` = 0 AND `name` != 'Account Manager' "
+	        "AND NOT EXISTS (SELECT 1 FROM `character_auctions` "
+	        "WHERE `character_auctions`.`player_id` = `players`.`id` AND `character_auctions`.`status` = {:d})",
+	        static_cast<uint64_t>(time(nullptr) + 86400), playerId, accountId,
+	        CharacterBazaar::AUCTION_STATUS_ACTIVE))) {
+		return false;
+	}
+
+	return db.getAffectedRows() == 1;
+}
+
+bool IOLoginData::renameNamelockedPlayer(uint32_t playerId, uint32_t accountId, std::string_view newName)
+{
+	if (playerId <= 1 || accountId <= 1 || caseInsensitiveEqual(newName, "Account Manager")) {
+		return false;
+	}
+	Database& db = Database::getInstance();
+	return DBTransaction::executeWithinTransactionRollbackOnFailure([&] {
+		return db.executeQuery(fmt::format(
+		    "UPDATE `players` SET `name` = {} WHERE `id` = {} AND `account_id` = {} AND `deletion` = 0",
+		    db.escapeString(newName), playerId, accountId)) && db.getAffectedRows() == 1 &&
+		    db.executeQuery(fmt::format("DELETE FROM `player_namelocks` WHERE `player_id` = {}", playerId)) &&
+		    db.getAffectedRows() == 1;
+	});
 }
 
 std::vector<std::string> IOLoginData::getPlayersByAccountId(uint32_t accountId)

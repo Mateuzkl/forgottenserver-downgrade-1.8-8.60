@@ -60,6 +60,8 @@ local MARKET_MAX_OFFERS = 100
 local MARKET_MAX_AMOUNT = 2000
 local MARKET_MAX_AMOUNT_STACKABLE = 64000
 local MARKET_MAX_PRICE = 999999999
+-- LuaJIT stores numbers as doubles; credits must stay exactly representable.
+local MARKET_MAX_BANK_BALANCE = math.maxinteger or 9007199254740991
 local MARKET_MAX_PACKET_OFFERS = 250
 local MARKET_CATALOG_CHUNK_SIZE = 350
 local MARKET_ACTION_DELAY = 1
@@ -220,21 +222,6 @@ local function hasSerializedAttributes(attributes)
 	return type(attributes) == "string" and #attributes > 0
 end
 
--- Rollback a DB-claimed offer (used when delivery fails after DB claim).
--- For full-amount offers (deleted): tries to re-INSERT with original data.
--- Restores a market offer in the database after a previously claimed (deleted or reduced) offer.
--- If `acceptedAmount` is greater than or equal to `offer.amount`, the full offer row is reinserted;
--- otherwise the stored offer's `amount` is increased by `acceptedAmount`.
--- @param offer Table representing the offer row (must include `id`, `playerId`, `sale`, `itemId`, `amount`, `created`, `anonymous`, `price`, `tier`, `attributes`).
--- @param acceptedAmount Number of units to restore to the offer.
--- @return The result of the database query (truthy on success, `false` on failure).
-local function rollbackOfferClaim(offer, acceptedAmount)
-	return Game.restoreMarketOffer(
-		offer.id, offer.playerId, offer.sale, offer.itemId, offer.amount, offer.created,
-		offer.anonymous, offer.price, offer.tier, offer.attributes, acceptedAmount
-	)
-end
-
 -- Shown in cyclopedia/market catalog, but players cannot create buy/sell offers.
 local marketTradeBlockedItems = {}
 for _, itemId in ipairs({
@@ -315,6 +302,28 @@ local function sendMarketMessage(player, message)
 	return out:sendToPlayer(player)
 end
 
+-- Describe the committed receipt, not a guessed home town or a successful enqueue.
+local function describeMarketDelivery(player, offerId, prefix, verb)
+	local status = Game.getMarketDeliveryStatus(player:getGuid(), offerId)
+	if not status then
+		return prefix .. " Delivery status is unavailable. Please check again shortly."
+	end
+	if status.itemId == 0 then
+		return prefix .. " " .. status.bankCredit .. " gold " ..
+			(status.applied and "credited to your bank account." or "reserved; awaiting payment to your bank account.")
+	end
+	local town = Town(status.depotId)
+	local destination = town and ("your inbox in " .. town:getName()) or "your legacy Market inbox"
+	local itemType = ItemType(status.itemId)
+	local itemName = itemType and itemType:getName() or ("item " .. status.itemId)
+	local item = status.amount .. "x " .. itemName
+	if status.applied then
+		return prefix .. " " .. item .. ": " .. (verb or "delivered") .. " to " .. destination .. "."
+	end
+	return prefix .. " " .. item .. " is awaiting delivery to " .. destination ..
+		". You will be notified once delivery is complete."
+end
+
 local function sendMarketLeave(player)
 	if not supportsCustomNetwork(player) then
 		return false
@@ -326,7 +335,7 @@ local function sendMarketLeave(player)
 	return out:sendToPlayer(player)
 end
 
-local function tileHasMarketAccess(tile)
+local function tileHasMarketAccess(tile, allowStandaloneMarket)
 	if not tile then
 		return false
 	end
@@ -334,7 +343,7 @@ local function tileHasMarketAccess(tile)
 	if tile:getItemByType(ITEM_TYPE_DEPOT) then
 		return true
 	end
-	if tile.getItemById and tile:getItemById(MARKET_ITEM_ID) then
+	if allowStandaloneMarket and tile.getItemById and tile:getItemById(MARKET_ITEM_ID) then
 		return true
 	end
 	return false
@@ -346,11 +355,15 @@ local function hasMarketAccessAtPosition(player, position)
 	end
 
 	local playerTile = Tile(position)
-	if not playerTile or not playerTile:hasFlag(TILESTATE_PROTECTIONZONE) then
+	if not playerTile then
 		return false
 	end
 
-	if tileHasMarketAccess(playerTile) then
+	-- A physical depot is usable even if a city's tiles are not marked PZ.
+	-- Keep the PZ requirement for standalone market objects and keep all access
+	-- limited to the current floor and adjacent tiles, including after movement.
+	local allowStandaloneMarket = playerTile:hasFlag(TILESTATE_PROTECTIONZONE)
+	if tileHasMarketAccess(playerTile, allowStandaloneMarket) then
 		return true
 	end
 
@@ -358,7 +371,7 @@ local function hasMarketAccessAtPosition(player, position)
 		for y = -1, 1 do
 			if x ~= 0 or y ~= 0 then
 				local tile = Tile(Position(position.x + x, position.y + y, position.z))
-				if tileHasMarketAccess(tile) then
+				if tileHasMarketAccess(tile, allowStandaloneMarket) then
 					return true
 				end
 			end
@@ -698,40 +711,21 @@ local function getPlayerTotalMoney(player)
 end
 
 local function removePlayerMarketMoney(player, amount)
-	amount = tonumber(amount) or 0
-	if amount <= 0 then
-		return { inventory = 0, bank = 0 }
+	-- C++ retains the exact original coins/parents and bank balance for this handler.
+	if Game.reserveMarketMoney(player:getGuid(), math.max(0, tonumber(amount) or 0)) then
+		return true
 	end
+	return nil
+end
 
-	local inventoryMoney = math.max(0, tonumber(player:getMoney()) or 0)
-	local bankBalance = math.max(0, tonumber(player:getBankBalance()) or 0)
-	if inventoryMoney + bankBalance < amount then
-		return nil
+local function finishPlayerMarketMoney(player, payment, restore)
+	if payment then
+		Game.finishMarketMoney(player:getGuid(), restore)
 	end
-
-	local fromInventory = math.min(inventoryMoney, amount)
-	if fromInventory > 0 and not player:removeMoney(fromInventory) then
-		return nil
-	end
-
-	local fromBank = amount - fromInventory
-	if fromBank > 0 then
-		player:setBankBalance(bankBalance - fromBank)
-	end
-
-	return { inventory = fromInventory, bank = fromBank }
 end
 
 local function refundPlayerMarketMoney(player, payment)
-	if not payment then
-		return
-	end
-	if payment.inventory and payment.inventory > 0 then
-		player:addMoney(payment.inventory)
-	end
-	if payment.bank and payment.bank > 0 then
-		player:setBankBalance(player:getBankBalance() + payment.bank)
-	end
+	finishPlayerMarketMoney(player, payment, true)
 end
 
 local function normalizeDepotId(depotId)
@@ -814,10 +808,18 @@ local function getMarketItemAttributes(item, itemType)
 		return nil
 	end
 
-	-- Stackable market items are stored as quantity. Their normal count is
-	-- serialized too, so only non-stackable instance data is kept per offer.
+	-- Ignore only the ordinary stack count. Custom stack attributes must never
+	-- silently disappear when an offer is converted to a quantity payload.
 	if itemType and itemType:isStackable() then
-		return nil
+		local normal = Game.createItem(item:getId(), item:getCount())
+		if not normal then
+			return attributes
+		end
+		local ordinary = normal:serializeAttributes() == attributes
+		normal:remove()
+		if ordinary then
+			return nil
+		end
 	end
 	return attributes
 end
@@ -1108,55 +1110,6 @@ local function buildMarketEnterEntries(depotMap)
 	return entries
 end
 
--- Adds the specified item(s) into the player's depot boxes if space and requirements allow.
--- Attempts to place items across the player's depot boxes and respects stackability and serialized attributes rules.
--- @param player The player whose depot will receive the items.
--- @param itemId The item type id to add.
--- @param amount The number of items to add; for items with serialized attributes this must be 1.
--- @param attributes Optional serialized attributes string for the item instance; when present the function will add a single serialized item using no-limit placement.
--- @return `true` if the full requested amount was added to the depot, `false` otherwise.
-local function addDepotItems(player, itemId, amount, attributes)
-	local itemType = ItemType(itemId)
-	if not itemType or itemType:getId() == 0 or amount <= 0 then
-		return false
-	end
-
-	if hasSerializedAttributes(attributes) then
-		if amount ~= 1 then
-			return false
-		end
-
-		for _, box in ipairs(getDepotBoxes(player)) do
-			local item = createMarketItem(itemId, 1, attributes)
-			if item then
-				local ret = box:addItemEx(item, INDEX_WHEREEVER, FLAG_NOLIMIT)
-				if ret == RETURNVALUE_NOERROR then
-					return true
-				end
-				item:remove()
-			end
-		end
-		return false
-	end
-
-	local stackSize = math.max(1, itemType:getStackSize())
-	local remaining = amount
-	for _, box in ipairs(getDepotBoxes(player)) do
-		while remaining > 0 do
-			local count = itemType:isStackable() and math.min(remaining, stackSize) or 1
-			local added = box:addItem(itemId, count)
-			if not added then
-				break
-			end
-			remaining = remaining - count
-		end
-		if remaining <= 0 then
-			return true
-		end
-	end
-	return false
-end
-
 -- Collects up to `amount` removable items matching `itemId` (and optional `tier`) from the player's depot and returns the removal plan.
 -- The returned plan is an array of tables `{ item = <Item>, count = <number> }` describing which depot item instances to remove and how many units from each.
 -- @param player The player whose depot will be scanned.
@@ -1207,35 +1160,65 @@ end
 -- @param tier Optional numeric tier to restrict removals to (0..10); pass nil to ignore tier.
 -- @return `true` and the stored serialized attributes (string) if removal succeeded.
 -- @return `false`, `nil`, and an error message string if removal failed or trading rules were violated.
+-- Keep exact rollback copies, including parent container, subtype and attributes.
+-- All clones are made before removing anything. Non-empty containers cannot be
+-- represented by the Market's single-item attributes payload.
+local function finishReservation(reservation, restore)
+	if not reservation then
+		return
+	end
+	for _, entry in ipairs(reservation) do
+		if restore and entry.removed then
+			local ret = entry.parent:addItemEx(entry.backup, INDEX_WHEREEVER, FLAG_NOLIMIT)
+			if ret ~= RETURNVALUE_NOERROR then
+				error("Could not restore Market reservation to its original container")
+			end
+		else
+			entry.backup:remove()
+		end
+	end
+end
+
 local function removeDepotItemsWithAttributes(player, itemId, amount, tier)
 	local removals = collectDepotRemovals(player, itemId, amount, tier)
 	if not removals then
-		return false, nil, tier ~= nil and "You do not have enough items for this tier." or nil
+		return false, nil, "You do not have enough items for this tier."
 	end
-
 	local itemType = ItemType(itemId)
 	local storedAttributes = nil
 	for _, entry in ipairs(removals) do
+		if entry.item:isContainer() and entry.item:getSize() ~= 0 then
+			return false, nil, "Empty containers before trading them on the Market."
+		end
 		local attributes = getMarketItemAttributes(entry.item, itemType)
 		if hasSerializedAttributes(attributes) then
-			if amount ~= 1 or entry.count ~= 1 then
+			if amount ~= 1 or entry.count ~= 1 or (itemType:isStackable() and entry.item:getCount() ~= 1) then
 				return false, nil, "Tiered/custom items must be traded one at a time."
 			end
 			storedAttributes = attributes
 		end
 	end
-
-	local removed = 0
+	local reservation = {}
 	for _, entry in ipairs(removals) do
-		if not entry.item:remove(entry.count) then
-			if removed > 0 then
-				addDepotItems(player, itemId, removed)
-			end
-			return false, nil
+		local backup = entry.item:clone()
+		if not backup then
+			finishReservation(reservation, false)
+			return false, nil, "Could not reserve the items."
 		end
-		removed = removed + entry.count
+		if itemType:isStackable() and entry.count ~= backup:getCount() then
+			backup:transform(itemId, entry.count)
+		end
+		reservation[#reservation + 1] = { item = entry.item, count = entry.count,
+			backup = backup, parent = entry.item:getParent() }
 	end
-	return true, storedAttributes
+	for _, entry in ipairs(reservation) do
+		if not entry.item:remove(entry.count) then
+			finishReservation(reservation, true)
+			return false, nil, "Could not reserve the items."
+		end
+		entry.removed = true
+	end
+	return true, storedAttributes, nil, reservation
 end
 
 -- Calculates the one-percent market fee, clamped to the protocol's 20..1000 range.
@@ -1247,162 +1230,6 @@ local function calculateFee(price, amount)
 		return 1000
 	end
 	return fee
-end
-
--- Adds the specified item(s) into the provided inbox container, honoring stack sizes and serialized attributes.
--- When `attributes` are serialized, a single unique item is created and inserted (requires `amount == 1`).
--- @param inbox The inbox container object (must support `addItem`/`addItemEx` operations).
--- @param itemId The item type id to add.
--- @param amount The quantity to add (for serialized attributes this must be 1).
--- @param attributes Serialized item attributes or `nil`. When present, attributes are applied to a single created item.
--- @return `true` on success, `false` otherwise.
-local function addItemToInbox(inbox, itemId, amount, attributes)
-	local itemType = ItemType(itemId)
-	if not inbox or not itemType or itemType:getId() == 0 or amount <= 0 then
-		return false
-	end
-
-	if hasSerializedAttributes(attributes) then
-		if amount ~= 1 then
-			return false
-		end
-
-		local item = createMarketItem(itemId, 1, attributes)
-		if not item then
-			return false
-		end
-
-		local ret = inbox:addItemEx(item, INDEX_WHEREEVER, FLAG_NOLIMIT)
-		if ret ~= RETURNVALUE_NOERROR then
-			item:remove()
-			return false
-		end
-		return true
-	end
-
-	local stackSize = math.max(1, itemType:getStackSize())
-	local remaining = amount
-	local addedItems = {}
-	while remaining > 0 do
-		local count = itemType:isStackable() and math.min(remaining, stackSize) or 1
-		local item = inbox:addItem(itemId, count, INDEX_WHEREEVER, FLAG_NOLIMIT)
-		if not item then
-			for index = #addedItems, 1, -1 do
-				local added = addedItems[index]
-				added.item:remove(added.count)
-			end
-			return false
-		end
-		addedItems[#addedItems + 1] = { item = item, count = count }
-		remaining = remaining - count
-	end
-	return true
-end
-
--- Checks whether an item’s serialized attributes match the given serialized attributes.
--- @param item Item object to compare; may be nil.
--- @param attributes Serialized attribute string (or empty/non-serialized).
--- @return `true` if `attributes` is not serialized or if `item` exists, supports `serializeAttributes`, and its serialized attributes equal `attributes`, `false` otherwise.
-local function itemMatchesAttributes(item, attributes)
-	if not hasSerializedAttributes(attributes) then
-		return true
-	end
-	return item and item.serializeAttributes and item:serializeAttributes() == attributes
-end
-
--- Remove up to `amount` of the specified item from the player's inbox, matching both item ID and optional serialized `attributes`.
--- Matches stackable counts and non-stackable items as needed; removal fails if the inbox does not contain the requested total.
--- @param player The Player whose inbox will be scanned and modified.
--- @param itemId The numeric item type ID to remove.
--- @param amount The total quantity to remove (must be > 0).
--- @param attributes Optional serialized attributes string to match specific item instances; pass `nil` to ignore attributes.
--- @return `true` if the requested amount was successfully removed, `false` otherwise.
-local function removeInboxItems(player, itemId, amount, attributes)
-	local inbox = player:getInbox()
-	local itemType = ItemType(itemId)
-	if not inbox or not itemType or itemType:getId() == 0 or amount <= 0 then
-		return false
-	end
-
-	local removals = {}
-	local found = 0
-	for _, item in ipairs(inbox:getItems(true)) do
-		if item:getId() == itemId and itemMatchesAttributes(item, attributes) then
-			local count = math.min(amount - found, getItemTradeCount(item, itemType))
-			if count > 0 then
-				removals[#removals + 1] = { item = item, count = count }
-				found = found + count
-				if found >= amount then
-					break
-				end
-			end
-		end
-	end
-
-	if found < amount then
-		return false
-	end
-
-	for _, entry in ipairs(removals) do
-		if not entry.item:remove(entry.count) then
-			return false
-		end
-	end
-	return true
-end
-
--- Delivers items to a player by adding them to their in-memory inbox when online or inserting them into the persistent DB inbox when offline.
--- @param playerId The target player's numeric ID (used for DB insertion when the player is offline).
--- @param playerName The target player's current name (used to resolve an online Player object); may be nil.
--- @param itemId The item type ID to deliver.
--- @param amount The quantity to deliver.
--- @param attributes Serialized attributes string for the item when applicable, or nil.
--- @return `true` if the items were successfully delivered (either added to the player's inbox or inserted into the DB), `false` otherwise.
-local function deliverItemToPlayer(playerId, playerName, itemId, amount, attributes)
-	local target = playerName and Player(playerName) or nil
-	if target then
-		local inbox = target:getInbox()
-		if addItemToInbox(inbox, itemId, amount, attributes) then
-			return true
-		end
-	end
-	return Game.insertMarketInboxItem(playerId, itemId, amount, attributes)
-end
-
--- Credits `amount` to a player's bank balance, preferring an online player object when available.
--- @param playerId Numeric player id used for the database update when the player is offline.
--- @param playerName Optional player name; when provided and the player is online, updates their in-memory bank balance.
--- @param amount The amount to credit; values less than or equal to 0 are treated as no-op and succeed.
--- @return `true` on success; otherwise returns the database query result (truthy on success, falsy on failure).
-local function creditPlayerBank(playerId, playerName, amount)
-	if amount <= 0 then
-		return true
-	end
-
-	local target = playerName and Player(playerName) or nil
-	if target then
-		target:setBankBalance(target:getBankBalance() + amount)
-		return true
-	end
-
-	return Game.creditMarketBank(playerId, amount)
-end
-
--- Records a market offer event in the `market_history` table.
--- Computes `expires_at` as `(created or now) + offerDuration` and delegates the typed insert to C++.
--- @param playerId Numeric id of the player who created or was affected by the offer.
--- @param sale Numeric action code indicating buy or sell (e.g., `MARKET_ACTION_BUY` / `MARKET_ACTION_SELL`).
--- @param itemId Numeric item type id involved in the offer.
--- @param amount Number of items in the recorded event.
--- @param price Price per item (used to record the total value in history rows).
--- @param state Numeric history state code (e.g., `MARKET_STATE_ACCEPTED`, `MARKET_STATE_EXPIRED`, `MARKET_STATE_CANCELLED`).
--- @param created Optional timestamp to use as the offer creation time; when omitted, the current time is used.
--- @param tier Optional numeric tier for the item; will be coerced to an integer and clamped between 0 and 10.
-local function addHistory(playerId, sale, itemId, amount, price, state, created, tier)
-	local now = os.time()
-	local expiresAt = (created or now) + getOfferDuration()
-	tier = math.max(0, math.min(10, tonumber(tier) or 0))
-	return Game.addMarketHistory(playerId, sale, itemId, amount, price, tier, expiresAt, now, state)
 end
 
 -- Retrieves a market offer by its database ID, resolving stored attributes and deriving the effective tier from those attributes when present.
@@ -2005,41 +1832,22 @@ local function refreshMarket(player, browseId, depotMap)
 	end
 end
 
--- Expires market offers whose lifetime has elapsed, atomically claims them from the database, returns funds or items to the offer owners, and records the expiration in market history.
--- Skips execution if the configured expire-check interval has not passed. For each claimed offer this function attempts to credit the seller/buyer, clears the per-player offer count cache on success, and restores the offer on delivery failure.
+-- Claim, history and the durable return are one SQL transaction. Offline recipients
+-- keep their pending delivery until login; no SQL is written directly to their inbox.
 local function expireOffers()
 	local now = os.time()
 	if now - lastExpireCheck < MARKET_EXPIRE_CHECK_INTERVAL then
 		return
 	end
 	lastExpireCheck = now
-
-	local expiredBefore = now - getOfferDuration()
-	local offers = resolveOfferTiers(Game.getExpiredMarketOffers(expiredBefore, 100))
-	for _, offer in ipairs(offers) do
+	for _, offer in ipairs(Game.getExpiredMarketOffers(now - getOfferDuration(), 100)) do
 		local offerKey = "offer:" .. offer.id
-		-- Skip offers currently being processed by another handler
-		if not acquireLock(offerKey) then
-			logInfo("[CustomMarket] Skipping expire for locked offer " .. offer.id)
-		else
-			-- Atomically claim the offer before returning goods
-			local claimed = Game.claimMarketOffer(offer.id, offer.amount, offer.amount)
-			if claimed then
-				local returned = true
-				if offer.sale == MARKET_ACTION_BUY then
-					returned = creditPlayerBank(offer.playerId, offer.playerName, offer.price * offer.amount)
-				else
-					returned = deliverItemToPlayer(offer.playerId, offer.playerName, offer.itemId, offer.amount, offer.attributes)
-				end
-
-				if returned then
-					offerCountCache[offer.playerId] = nil
-					addHistory(offer.playerId, offer.sale, offer.itemId, offer.amount, offer.price, MARKET_STATE_EXPIRED, offer.created, offer.tier)
-				else
-					-- Delivery failed: restore the offer so it can be retried
-					rollbackOfferClaim(offer, offer.amount)
-					logError("[CustomMarket] Failed to return expired offer " .. offer.id .. " — restored to DB")
-				end
+		if acquireLock(offerKey) then
+			local settled = Game.settleMarketOffer(0, offer.id, offer.amount, offer.amount,
+				MARKET_STATE_EXPIRED, getOfferDuration(), offer.tier)
+			if settled then
+				offerCountCache[offer.playerId] = nil
+				Game.processMarketDeliveries(offer.playerId)
 			end
 			releaseLock(offerKey)
 		end
@@ -2159,11 +1967,18 @@ function createHandler.onReceive(player, msg)
 		return
 	end
 
+	if not Game.isMarketPlayerReady(player:getGuid()) then
+		releaseLock(playerKey)
+		sendMarketMessage(player, "Your items are being saved. Please try again shortly.")
+		return
+	end
+
 	local totalPrice = price * amount
 	local fee = calculateFee(price, amount)
 	local payment = nil
 	local depotMap = nil
 	local offerAttributes = nil
+	local reservation = nil
 	local offerTier = requestedTier or 0
 
 	if actionType == MARKET_ACTION_BUY then
@@ -2194,12 +2009,13 @@ function createHandler.onReceive(player, msg)
 			sendMarketMessage(player, "You do not have enough money to pay the market fee.")
 			return
 		end
-		local reserved, attributes, reserveError = removeDepotItemsWithAttributes(player, itemId, amount, requestedTier)
+		local reserved, attributes, reserveError, reservedItems = removeDepotItemsWithAttributes(player, itemId, amount, requestedTier)
 		if not reserved then
 			releaseLock(playerKey)
 			sendMarketMessage(player, reserveError or "Could not reserve the items for this sell offer.")
 			return
 		end
+		reservation = reservedItems
 		offerAttributes = attributes
 		offerTier = getOfferTier(itemId, offerTier, offerAttributes)
 		depotMap[itemId] = math.max(0, (depotMap[itemId] or 0) - amount)
@@ -2209,7 +2025,7 @@ function createHandler.onReceive(player, msg)
 		end
 		payment = removePlayerMarketMoney(player, fee)
 		if not payment then
-			addDepotItems(player, itemId, amount, offerAttributes)
+			finishReservation(reservation, true)
 			releaseLock(playerKey)
 			sendMarketMessage(player, "Could not pay the market fee.")
 			return
@@ -2221,11 +2037,18 @@ function createHandler.onReceive(player, msg)
 		player:getGuid(), actionType, itemId, amount, now, anonymous, price,
 		math.max(0, math.min(10, tonumber(offerTier) or 0)), offerAttributes
 	)
+	if ok == nil then
+		finishPlayerMarketMoney(player, payment, false)
+		finishReservation(reservation, false)
+		-- COMMIT outcome unknown. C++ disconnected the player and blocked saves.
+		releaseLock(playerKey)
+		return
+	end
 	if not ok then
 		if actionType == MARKET_ACTION_BUY then
 			refundPlayerMarketMoney(player, payment)
 		else
-			addDepotItems(player, itemId, amount, offerAttributes)
+			finishReservation(reservation, true)
 			refundPlayerMarketMoney(player, payment)
 		end
 		releaseLock(playerKey)
@@ -2233,6 +2056,8 @@ function createHandler.onReceive(player, msg)
 		return
 	end
 
+	finishPlayerMarketMoney(player, payment, false)
+	finishReservation(reservation, false)
 	offerCountCache[player:getGuid()] = nil
 	releaseLock(playerKey)
 	sendMarketMessage(player, "Market offer created.")
@@ -2242,7 +2067,7 @@ createHandler:register()
 
 local cancelHandler = PacketHandler(OPCODE_MARKET_CANCEL)
 -- Cancels a market offer owned by the calling player, returns the reserved goods or funds, records the cancellation in market history, and refreshes the player's offers view.
--- The handler ensures the player still has market access, enforces action cooldowns, acquires locks to prevent concurrent races, atomically claims the offer from persistent storage, and attempts to deliver refunded items or restore bank balance. On failure to return items it logs an error; on success it notifies the player and updates the market listing.
+-- The offer, history and return entitlement commit together; materialization may be deferred while the player is saving.
 function cancelHandler.onReceive(player, msg)
 	if not ensureMarketAccess(player) then
 		return
@@ -2280,40 +2105,24 @@ function cancelHandler.onReceive(player, msg)
 		return
 	end
 
-	-- Atomically claim (delete) the offer BEFORE returning goods
-	if not Game.claimMarketOffer(offer.id, offer.amount, offer.amount, player:getGuid()) then
+	local settled = Game.settleMarketOffer(player:getGuid(), offer.id, offer.amount, offer.amount,
+		MARKET_STATE_CANCELLED, getOfferDuration(), offer.tier)
+	if not settled then
 		releaseMultipleLocks({ offerKey, playerKey })
-		sendMarketMessage(player, "Could not cancel the market offer.")
-		return
-	end
-
-	-- Return goods after safe DB claim
-	local returned = true
-	if offer.sale == MARKET_ACTION_BUY then
-		player:setBankBalance(player:getBankBalance() + offer.price * offer.amount)
-	else
-		-- Use deliverItemToPlayer (inbox/depot) instead of raw addItem
-		returned = deliverItemToPlayer(player:getGuid(), player:getName(), offer.itemId, offer.amount, offer.attributes)
-	end
-
-	if not returned then
-		rollbackOfferClaim(offer, offer.amount)
-		releaseMultipleLocks({ offerKey, playerKey })
-		logError("[CustomMarket] Failed to return cancelled sell offer " .. offer.id .. " items to player " .. player:getName())
-		sendMarketMessage(player, "Could not return the market offer items.")
+		sendMarketMessage(player, settled == nil and "Cancellation confirmation is pending." or "Could not cancel the market offer.")
 		return
 	end
 
 	offerCountCache[player:getGuid()] = nil
-	addHistory(player:getGuid(), offer.sale, offer.itemId, offer.amount, offer.price, MARKET_STATE_CANCELLED, offer.created, offer.tier)
+	Game.processMarketDeliveries(player:getGuid())
 	releaseMultipleLocks({ offerKey, playerKey })
-	sendMarketMessage(player, "Market offer cancelled.")
+	sendMarketMessage(player, describeMarketDelivery(player, offer.id, "Offer #" .. offer.id .. " cancelled.", "returned"))
 	refreshMarket(player, MARKET_REQUEST_MY_OFFERS)
 end
 cancelHandler:register()
 
 local acceptHandler = PacketHandler(OPCODE_MARKET_ACCEPT)
--- Handle an incoming "accept offer" request from a client: validate access and cooldown, claim the requested market offer atomically, perform the required item and/or money transfers with rollback on failure, record the accepted offer in history, clear related caches, and notify both parties.
+-- Reserve the acceptor resources, then commit their snapshot, offer claim, history and durable deliveries together.
 -- Performs pre-checks (offer existence and ownership), acquires locks (offer, acceptor, and owner) to avoid races, and enforces rules for tiered/custom-attribute offers.
 -- @param player The Player object that sent the accept request (the acceptor).
 -- @param msg The incoming network message; expected payload: offerId (u32) followed by amount (u16).
@@ -2374,119 +2183,86 @@ function acceptHandler.onReceive(player, msg)
 		return
 	end
 
-	local totalPrice = amount * offer.price
-	local depotMap = nil
-	local acceptedTier = tonumber(offer.tier) or 0
-
-	-- ================================================================
-	-- STEP 1: Atomically claim the offer in DB BEFORE any item/money
-	-- transfer. This is the core anti-dupe guarantee.
-	-- ================================================================
-	local dbClaimed = Game.claimMarketOffer(offer.id, offer.amount, amount)
-
-	if not dbClaimed then
+	if not Game.isMarketPlayerReady(player:getGuid()) then
 		releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
-		sendMarketMessage(player, "Market offer is no longer available.")
+		sendMarketMessage(player, "Your items are being saved. Please try again shortly.")
 		return
 	end
 
-	-- ================================================================
-	-- STEP 2: Transfer money / items. On any failure, rollback the DB
-	-- claim so the offer is restored and the player is not cheated.
-	-- ================================================================
+	local totalPrice = amount * offer.price
+	local depotMap = nil
+	local acceptedTier = tonumber(offer.tier) or 0
+	local payment = nil
+	local deliveryAttributes = nil
+	local reservation = nil
+	local oldBalance = player:getBankBalance()
+
+	-- Reserve only the acceptor's resources. C++ persists this snapshot together
+	-- with the offer claim, recipient deliveries and history, or rolls it all back.
 	if offer.sale == MARKET_ACTION_SELL then
-		-- Acceptor (buyer) pays money, receives item
-		if getPlayerTotalMoney(player) < totalPrice then
-			rollbackOfferClaim(offer, amount)
-			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
-			sendMarketMessage(player, "You do not have enough money.")
-			return
-		end
-
-		local payment = removePlayerMarketMoney(player, totalPrice)
+		payment = removePlayerMarketMoney(player, totalPrice)
 		if not payment then
-			rollbackOfferClaim(offer, amount)
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 			sendMarketMessage(player, "You do not have enough money.")
 			return
 		end
-
-		if not deliverItemToPlayer(player:getGuid(), player:getName(), offer.itemId, amount, offer.attributes) then
-			refundPlayerMarketMoney(player, payment)
-			rollbackOfferClaim(offer, amount)
-			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
-			sendMarketMessage(player, "Could not deliver the item.")
-			return
-		end
-
-		if not creditPlayerBank(offer.playerId, offer.playerName, totalPrice) then
-			-- Critical: item already delivered to buyer — attempt to take it back
-			if not removeInboxItems(player, offer.itemId, amount, offer.attributes) then
-				logError("[CustomMarket] CRITICAL: Could not rollback inbox delivery for offer " ..
-					offer.id .. " player " .. player:getName())
-			end
-			refundPlayerMarketMoney(player, payment)
-			rollbackOfferClaim(offer, amount)
-			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
-			sendMarketMessage(player, "Could not credit the seller.")
-			return
-		end
-
 	else
-		-- Acceptor (seller) provides item, receives money; buyer gets item
-		local deliveryAttributes = nil
-		depotMap = buildDepotItemMap(player)
-		local requestedOfferTier = math.max(0, math.min(10, tonumber(offer.tier) or 0))
-		if (depotMap[getDepotItemKey(offer.itemId, requestedOfferTier)] or 0) < amount then
-			rollbackOfferClaim(offer, amount)
+		-- Reject overflow or lost precision before reserving any items.
+		if oldBalance < 0 or totalPrice > MARKET_MAX_BANK_BALANCE - oldBalance then
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
-			sendMarketMessage(player, "You do not have enough items.")
+			sendMarketMessage(player, "Your bank balance is too high to accept this offer.")
 			return
 		end
-
-		local removed, attributes, removeError = removeDepotItemsWithAttributes(player, offer.itemId, amount, requestedOfferTier)
+		local removed, attributes, removeError, reservedItems = removeDepotItemsWithAttributes(player, offer.itemId, amount, acceptedTier)
 		if not removed then
-			rollbackOfferClaim(offer, amount)
 			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 			sendMarketMessage(player, removeError or "Could not remove the items.")
 			return
 		end
+		reservation = reservedItems
 		deliveryAttributes = attributes
-		acceptedTier = getOfferTier(offer.itemId, acceptedTier, deliveryAttributes)
-
-		depotMap[offer.itemId] = math.max(0, (depotMap[offer.itemId] or 0) - amount)
-		local acceptedTierKey = getDepotItemKey(offer.itemId, acceptedTier)
-		depotMap[acceptedTierKey] = math.max(0, (depotMap[acceptedTierKey] or 0) - amount)
-
-		if not deliverItemToPlayer(offer.playerId, offer.playerName, offer.itemId, amount, deliveryAttributes) then
-			addDepotItems(player, offer.itemId, amount, deliveryAttributes)
-			rollbackOfferClaim(offer, amount)
-			releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
-			sendMarketMessage(player, "Could not deliver the item to the buyer.")
-			return
-		end
-
-		player:setBankBalance(player:getBankBalance() + totalPrice)
+		acceptedTier = getOfferTier(offer.itemId, acceptedTier, attributes)
+		player:setBankBalance(oldBalance + totalPrice)
 	end
 
-	-- ================================================================
-	-- STEP 3: All transfers succeeded — record history and notify.
-	-- ================================================================
-	offerCountCache[offer.playerId] = nil
-	addHistory(offer.playerId, offer.sale, offer.itemId, amount, offer.price, MARKET_STATE_ACCEPTED, offer.created, acceptedTier)
+	local settled = Game.settleMarketOffer(player:getGuid(), offer.id, offer.amount, amount,
+		MARKET_STATE_ACCEPTED, getOfferDuration(), acceptedTier, deliveryAttributes)
+	if settled == nil then
+		finishPlayerMarketMoney(player, payment, false)
+		finishReservation(reservation, false)
+		-- Never compensate an uncertain commit; C++ has quarantined this player.
+		releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
+		return
+	end
+	if not settled then
+		if offer.sale == MARKET_ACTION_SELL then
+			refundPlayerMarketMoney(player, payment)
+		else
+			player:setBankBalance(oldBalance)
+			finishReservation(reservation, true)
+		end
+		releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
+		sendMarketMessage(player, "Could not accept the market offer. Please try again shortly.")
+		return
+	end
 
+	finishPlayerMarketMoney(player, payment, false)
+	finishReservation(reservation, false)
+	offerCountCache[offer.playerId] = nil
+	Game.processMarketDeliveries(player:getGuid())
+	Game.processMarketDeliveries(offer.playerId)
 	releaseMultipleLocks({ offerKey, buyerKey, ownerKey })
 
-	sendMarketMessage(player, "Market offer accepted.")
+	if offer.sale == MARKET_ACTION_SELL then
+		sendMarketMessage(player, describeMarketDelivery(player, offer.id, "Offer #" .. offer.id .. " accepted."))
+	else
+		sendMarketMessage(player, "Offer #" .. offer.id .. " accepted. " .. totalPrice .. " gold credited to your bank account.")
+	end
 	refreshMarket(player, offer.itemId, depotMap)
 
 	local owner = Player(offer.playerName)
 	if owner then
-		if offer.sale == MARKET_ACTION_BUY then
-			sendMarketMessage(owner, "Your market buy offer has been fulfilled. The purchased item was delivered to your Market Inbox.")
-		else
-			sendMarketMessage(owner, "Your market sell offer has been fulfilled. The payment was credited to your bank balance.")
-		end
+		sendMarketMessage(owner, describeMarketDelivery(owner, offer.id, "Your offer #" .. offer.id .. " has been fulfilled."))
 		if marketOpenSessions[owner:getId()] then
 			sendMarketBrowse(owner, MARKET_REQUEST_MY_OFFERS)
 		end

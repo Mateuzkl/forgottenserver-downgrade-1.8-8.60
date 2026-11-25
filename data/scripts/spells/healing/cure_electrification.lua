@@ -10,6 +10,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Cure Electrification")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CURE_ELECTRIFICATION)
 spell:words("exana vis")
 spell:group("healing")
 spell:vocation("druid;true", "elder druid;true")

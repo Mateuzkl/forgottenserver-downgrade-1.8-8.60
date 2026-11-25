@@ -463,6 +463,39 @@ int luaNpcTypeEmblem(lua_State* L)
 	return 1;
 }
 
+
+int luaNpcTypeSoundChance(lua_State* L)
+{
+	auto* type = getUserdata<NpcType>(L, 1);
+	if (!type) { lua_pushnil(L); return 1; }
+	if (lua_gettop(L) == 1) lua_pushinteger(L, type->soundChance);
+	else { type->soundChance = std::min<uint32_t>(100, getInteger<uint32_t>(L, 2)); pushBoolean(L, true); }
+	return 1;
+}
+int luaNpcTypeSoundSpeedTicks(lua_State* L)
+{
+	auto* type = getUserdata<NpcType>(L, 1);
+	if (!type) { lua_pushnil(L); return 1; }
+	if (lua_gettop(L) == 1) lua_pushinteger(L, type->soundSpeedTicks);
+	else { type->soundSpeedTicks = getInteger<uint32_t>(L, 2); pushBoolean(L, true); }
+	return 1;
+}
+int luaNpcTypeAddSound(lua_State* L)
+{
+	auto* type = getUserdata<NpcType>(L, 1);
+	if (!type) { lua_pushnil(L); return 1; }
+	type->soundVector.push_back(getInteger<uint16_t>(L, 2)); pushBoolean(L, true); return 1;
+}
+int luaNpcTypeGetSounds(lua_State* L)
+{
+	auto* type = getUserdata<NpcType>(L, 1);
+	if (!type) { lua_pushnil(L); return 1; }
+	lua_createtable(L, static_cast<int>(type->soundVector.size()), 0);
+	int i = 1;
+	for (auto id : type->soundVector) { lua_pushinteger(L, id); lua_rawseti(L, -2, i++); }
+	return 1;
+}
+
 int luaNpcTypeOnCallback(lua_State* L)
 {
 	// npcType:onSay(callback) / onAppear / onDisappear / onMove / onPlayerCloseChannel / onPlayerEndTrade / onThink
@@ -504,6 +537,10 @@ void LuaScriptInterface::registerNpcType()
 	registerMethod("NpcType", "health", luaNpcTypeHealth);
 	registerMethod("NpcType", "maxHealth", luaNpcTypeMaxHealth);
 	registerMethod("NpcType", "emblem", luaNpcTypeEmblem);
+	registerMethod("NpcType", "soundChance", luaNpcTypeSoundChance);
+	registerMethod("NpcType", "soundSpeedTicks", luaNpcTypeSoundSpeedTicks);
+	registerMethod("NpcType", "addSound", luaNpcTypeAddSound);
+	registerMethod("NpcType", "getSounds", luaNpcTypeGetSounds);
 
 	registerMethod("NpcType", "onSay", luaNpcTypeOnCallback);
 	registerMethod("NpcType", "onDisappear", luaNpcTypeOnCallback);

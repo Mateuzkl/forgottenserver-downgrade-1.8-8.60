@@ -20,6 +20,7 @@ end
 spell:group("attack")
 spell:id(173)
 spell:name("Chill Out")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CHILL_OUT)
 spell:words("exevo infir frigo hur")
 spell:level(1)
 spell:mana(8)

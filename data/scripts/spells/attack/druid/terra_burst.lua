@@ -27,6 +27,7 @@ end
 spell:group("attack", "burstsofnature")
 spell:id(263)
 spell:name("Terra Burst")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_WRATH_OF_NATURE)
 spell:words("exevo ulus tera")
 spell:level(300)
 spell:mana(230)

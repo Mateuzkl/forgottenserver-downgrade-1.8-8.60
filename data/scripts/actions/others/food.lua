@@ -103,6 +103,7 @@ function action.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 		player:sendTextMessage(MESSAGE_STATUS_SMALL, "You are full.")
 	else
 		player:feed(food[1] * 12)
+		player:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_EAT, player)
 		player:say(food[2], TALKTYPE_MONSTER_SAY)
 		item:remove(1)
 	end

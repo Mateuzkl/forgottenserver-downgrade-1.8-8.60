@@ -52,6 +52,19 @@ bool DatabaseManager::isDatabaseSetup()
 	           .get() != nullptr;
 }
 
+bool DatabaseManager::isMarketSchemaReady()
+{
+	Database& db = Database::getInstance();
+	const auto result = db.storeQuery(
+	    "SELECT COUNT(*) AS `count` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND "
+	    "((`TABLE_NAME` = 'market_offers' AND `COLUMN_NAME` IN "
+	    "('id', 'player_id', 'sale', 'itemtype', 'amount', 'created', 'anonymous', 'price', 'tier', 'attributes', 'delivery_depot_id')) OR "
+	    "(`TABLE_NAME` = 'market_delivery_pending' AND `COLUMN_NAME` IN "
+	    "('id', 'event_key', 'offer_id', 'player_id', 'depot_id', 'itemtype', 'amount', 'delivered_amount', 'retry_after', "
+	    "'attributes', 'bank_credit', 'state', 'created_at', 'applied_at')))");
+	return result && result->getNumber<uint32_t>("count") == 25;
+}
+
 int32_t DatabaseManager::getDatabaseVersion()
 {
 	if (!tableExists("server_config")) {

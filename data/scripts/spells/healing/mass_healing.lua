@@ -72,6 +72,7 @@ end
 spell:group("healing")
 spell:id(127)
 spell:name("Mass Healing")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_MASS_HEALING)
 spell:words("exura gran mas res")
 spell:level(36)
 spell:mana(150)

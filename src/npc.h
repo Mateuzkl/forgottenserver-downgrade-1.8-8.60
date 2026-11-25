@@ -113,6 +113,10 @@ public:
 
 	uint8_t speechBubble = 0;
 
+	uint32_t soundChance = 0;
+	uint32_t soundSpeedTicks = 0;
+	std::vector<uint16_t> soundVector;
+
 	uint32_t walkTicks = 1500;
 	uint32_t baseSpeed = 100;
 
@@ -275,6 +279,8 @@ private:
 	std::string filename;
 
 	Position masterPos;
+
+	uint32_t soundTicks = 0;
 
 	uint32_t walkTicks;
 	uint32_t baseSpeed;

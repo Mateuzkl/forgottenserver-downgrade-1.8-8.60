@@ -8,7 +8,9 @@ on:
     paths:
       - ".github/workflows/lua-check.yml"
       - ".github/tests/npc_travel_keywords.lua"
+      - ".github/tests/market_save_regressions.lua"
       - ".github/tests/npc_conversation_timeout.lua"
+      - ".github/tests/bestiary_kill_cache.lua"
       - "config.lua.dist"
       - "data/**/*.lua"
 
@@ -19,7 +21,9 @@ on:
     paths:
       - ".github/workflows/lua-check.yml"
       - ".github/tests/npc_travel_keywords.lua"
+      - ".github/tests/market_save_regressions.lua"
       - ".github/tests/npc_conversation_timeout.lua"
+      - ".github/tests/bestiary_kill_cache.lua"
       - "config.lua.dist"
       - "data/**/*.lua"
 
@@ -54,12 +58,18 @@ jobs:
           luac5.4 -p config.lua.dist
           find data/ -type f -name '*.lua' -print0 | xargs -0 -r -n1 luac5.4 -p
 
+      - name: Test Market payment and single scheduled save
+        run: lua5.4 .github/tests/market_save_regressions.lua
+
       - name: Test NPC travel keyword and equipped-item policy
         run: |
           lua5.4 .github/tests/npc_travel_keywords.lua \
             data/npc/lib/revnpcsys/handler.lua \
             data/npc/lib/revnpcsys/requirements.lua \
             data/npc/lib/revnpcsys/modules.lua
+
+      - name: Test Bestiary kill cache recovery
+        run: lua5.4 .github/tests/bestiary_kill_cache.lua
 
       - name: Test NPC conversation timeout signaling
         run: |

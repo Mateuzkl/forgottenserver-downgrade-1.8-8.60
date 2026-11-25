@@ -8,6 +8,7 @@ end
 spell:group("support")
 spell:id(spellId)
 spell:name("Paladin Familiar")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_SUMMON_PALADIN_FAMILIAR)
 spell:words("utevo gran res sac")
 spell:level(200)
 spell:mana(2000)

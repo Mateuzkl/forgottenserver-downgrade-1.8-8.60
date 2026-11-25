@@ -139,6 +139,50 @@ int luaPartyGetMemberCount(lua_State* L)
 	return 1;
 }
 
+int luaPartyGetAnalyzerId(lua_State* L)
+{
+	const auto party = getLuaParty(L, 1);
+	if (!party) {
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_pushinteger(L, party->getAnalyzerId());
+	return 1;
+}
+
+int luaPartyGetAnalyzerMemberStats(lua_State* L)
+{
+	const auto party = getLuaParty(L, 1);
+	if (!party) {
+		lua_pushnil(L);
+		return 1;
+	}
+	const auto stats = party->getAnalyzerMemberStats(getInteger<uint32_t>(L, 2));
+	lua_pushinteger(L, stats.loot);
+	lua_pushinteger(L, stats.supplies);
+	lua_pushinteger(L, stats.damage);
+	lua_pushinteger(L, stats.healing);
+	return 4;
+}
+
+int luaPartyAddAnalyzerLoot(lua_State* L)
+{
+	if (const auto player = getPlayer(L, 2)) {
+		if (const auto party = getLuaParty(L, 1); party && player->getParty() == party.get()) {
+			party->analyzerMemberStats(player->getID()).loot += getInteger<uint64_t>(L, 3);
+		}
+	}
+	return 0;
+}
+
+int luaPartyResetAnalyzerStats(lua_State* L)
+{
+	if (const auto party = getLuaParty(L, 1)) {
+		party->resetAnalyzerStats();
+	}
+	return 0;
+}
+
 int luaPartyGetInvitees(lua_State* L)
 {
 	// party:getInvitees()
@@ -295,6 +339,10 @@ void LuaScriptInterface::registerParty()
 
 	registerMethod("Party", "getMembers", luaPartyGetMembers);
 	registerMethod("Party", "getMemberCount", luaPartyGetMemberCount);
+	registerMethod("Party", "getAnalyzerId", luaPartyGetAnalyzerId);
+	registerMethod("Party", "getAnalyzerMemberStats", luaPartyGetAnalyzerMemberStats);
+	registerMethod("Party", "addAnalyzerLoot", luaPartyAddAnalyzerLoot);
+	registerMethod("Party", "resetAnalyzerStats", luaPartyResetAnalyzerStats);
 
 	registerMethod("Party", "getInvitees", luaPartyGetInvitees);
 	registerMethod("Party", "getInviteeCount", luaPartyGetInviteeCount);

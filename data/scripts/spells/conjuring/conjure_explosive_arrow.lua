@@ -7,6 +7,7 @@ end
 spell:group("support")
 spell:id(160)
 spell:name("Conjure Explosive Arrow")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CONJURE_EXPLOSIVE_ARROW)
 spell:words("exevo con flam")
 spell:level(25)
 spell:mana(290)

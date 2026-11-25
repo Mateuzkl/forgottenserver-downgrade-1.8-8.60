@@ -29,3 +29,7 @@ if (TFS_LUA_TEST_EXECUTABLE)
             ${PROJECT_SOURCE_DIR}/tools/test_step_tile_callbacks.lua
             ${PROJECT_SOURCE_DIR}/data/events/scripts/player.lua)
 endif()
+
+# Missing DB credentials are a real CTest skip, never an apparent pass.
+set_tests_properties(test_market_delivery_db test_account_manager_db PROPERTIES
+    SKIP_RETURN_CODE 77 RESOURCE_LOCK disposable_database)

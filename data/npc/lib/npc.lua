@@ -1049,6 +1049,12 @@ do
 
 	function NpcType:register(npcConfig)
 		npcConfig = npcConfig or {}
+		if type(npcConfig.sounds) == "table" then
+			local sounds = npcConfig.sounds
+			self:soundSpeedTicks(sounds.ticks or sounds.interval or 5000)
+			self:soundChance(sounds.chance or 10)
+			for _, id in ipairs(sounds.ids or {}) do self:addSound(id) end
+		end
 
 		local npcName = npcConfig.name or self:name()
 		local compatData = RevNpcTypeCompatGetData and RevNpcTypeCompatGetData(self) or {}

@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS `accounts` (
   `name` varchar(32) NOT NULL,
   `password` char(40) NOT NULL,
   `secret` char(16) DEFAULT NULL,
+  `recovery_key_hash` char(40) DEFAULT NULL,
   `type` int NOT NULL DEFAULT '1',
   `premium_ends_at` int unsigned NOT NULL DEFAULT '0',
   `email` varchar(255) NOT NULL DEFAULT '',
@@ -311,12 +312,35 @@ CREATE TABLE IF NOT EXISTS `market_offers` (
   `price` int unsigned NOT NULL DEFAULT '0',
   `tier` tinyint unsigned NOT NULL DEFAULT '0',
   `attributes` mediumblob DEFAULT NULL,
+  `delivery_depot_id` smallint unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_market_offers_item_sale_price` (`itemtype`, `sale`, `price`, `created`),
   KEY `idx_market_offers_player_created` (`player_id`, `created`),
   KEY `idx_market_offers_created` (`created`),
   FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8;
+
+CREATE TABLE IF NOT EXISTS `market_delivery_pending` (
+			`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			`event_key` VARCHAR(128) NOT NULL,
+			`offer_id` INT UNSIGNED NOT NULL,
+			`player_id` INT NOT NULL,
+			`depot_id` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+			`itemtype` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+			`amount` INT UNSIGNED NOT NULL DEFAULT 0,
+			`delivered_amount` INT UNSIGNED NOT NULL DEFAULT 0,
+			`retry_after` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			`attributes` LONGBLOB NOT NULL,
+			`bank_credit` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			`state` ENUM('pending', 'applied') NOT NULL DEFAULT 'pending',
+			`created_at` BIGINT UNSIGNED NOT NULL,
+			`applied_at` BIGINT UNSIGNED NULL,
+			PRIMARY KEY (`id`),
+			UNIQUE KEY `uq_market_delivery_event` (`event_key`),
+			KEY `idx_market_delivery_player_state` (`player_id`, `state`, `id`),
+			CONSTRAINT `fk_market_delivery_player`
+				FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_bin;
 
 CREATE TABLE IF NOT EXISTS `market_statistics` (
   `itemtype` smallint unsigned NOT NULL,

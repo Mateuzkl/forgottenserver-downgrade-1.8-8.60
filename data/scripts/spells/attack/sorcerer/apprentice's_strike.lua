@@ -20,6 +20,8 @@ end
 spell:group("attack")
 spell:id(169)
 spell:name("Apprentice's Strike")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_FLAME_STRIKE)
 spell:words("exori min flam")
 spell:level(8)
 spell:mana(6)

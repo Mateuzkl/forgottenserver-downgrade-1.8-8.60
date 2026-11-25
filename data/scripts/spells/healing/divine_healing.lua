@@ -19,6 +19,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("healing")
 spell:id(123)
 spell:name("Divine Healing")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_DIVINE_HEALING)
 spell:words("exura san")
 spell:level(35)
 spell:mana(160)

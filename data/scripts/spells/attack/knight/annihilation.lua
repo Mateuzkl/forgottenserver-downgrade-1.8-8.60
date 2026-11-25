@@ -22,6 +22,8 @@ end
 spell:group("attack")
 spell:id(62)
 spell:name("Annihilation")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_ANNIHILATION)
 spell:words("exori gran ico")
 spell:level(110)
 spell:mana(300)

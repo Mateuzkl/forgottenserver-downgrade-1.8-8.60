@@ -8,6 +8,7 @@ end
 spell:group("support")
 spell:id(spellId)
 spell:name("Sorcerer familiar")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_SUMMON_SORCERER_FAMILIAR)
 spell:words("utevo gran res ven")
 spell:level(200)
 spell:mana(3000)

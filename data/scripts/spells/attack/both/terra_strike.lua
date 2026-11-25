@@ -18,6 +18,8 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("attack")
 spell:id(118)
 spell:name("Terra Strike")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_TERRA_STRIKE)
 spell:words("exori tera")
 spell:level(13)
 spell:mana(20)

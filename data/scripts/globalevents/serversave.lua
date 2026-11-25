@@ -13,9 +13,9 @@ local function ServerSave()
         local closeAtServerSave = configManager.getBoolean(configKeys.SERVER_SAVE_CLOSE)
         if closeAtServerSave then
             Game.setGameState(GAME_STATE_CLOSED)
+        else
+            saveServer("periodic")
         end
-
-        saveServer()
 
         if configManager.getBoolean(configKeys.SERVER_SAVE_CLEAN_MAP) then
             cleanMap()

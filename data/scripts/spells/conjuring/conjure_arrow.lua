@@ -7,6 +7,7 @@ end
 spell:group("support")
 spell:id(158)
 spell:name("Conjure Arrow")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CONJURE_ARROW)
 spell:words("exevo con")
 spell:level(13)
 spell:mana(100)

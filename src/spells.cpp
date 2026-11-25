@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "spells.h"
+#include "spell_effect_source.h"
 
 #include "combat.h"
 #include "configmanager.h"
@@ -23,6 +24,27 @@ extern Monsters g_monsters;
 extern LuaEnvironment g_luaEnvironment;
 
 namespace {
+void playSpellSounds(Creature* caster, const LuaVariant& variant, uint16_t castSound, uint16_t impactSound)
+{
+	if (castSound != 0) {
+		g_game.addSoundEffect(caster->getPosition(), castSound, caster->getInstanceID(), caster);
+	}
+
+	if (impactSound != 0) {
+		Position position = caster->getPosition();
+		if (variant.isNumber()) {
+			if (Creature* target = g_game.getCreatureByID(variant.getNumber())) {
+				position = target->getPosition();
+			}
+		} else if (variant.isPosition()) {
+			position = variant.getPosition();
+		} else if (variant.isTargetPosition()) {
+			position = variant.getTargetPosition();
+		}
+		g_game.addSoundEffect(position, impactSound, caster->getInstanceID(), caster);
+	}
+}
+
 // Set from wheel applyWheelBonuses (Lua); fallback when wheelSpellAugments map is empty.
 constexpr uint32_t WHEEL_SPELL_CD_STORAGE_BASE = 8600000;
 constexpr uint32_t WHEEL_SPELL_FLAT_MANA_STORAGE_BASE = 8611000;
@@ -365,6 +387,7 @@ bool CombatSpell::castSpell(Creature* creature, Creature* target)
 
 bool CombatSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 {
+	SpellEffectSourceScope effectSource(creature);
 	// onCastSpell(creature, var)
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - CombatSpell::executeCastSpell] Call stack overflow");
@@ -383,7 +406,9 @@ bool CombatSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 
 	Lua::pushVariant(L, var);
 
-	return scriptInterface->callFunction(2);
+	const bool cast = scriptInterface->callFunction(2);
+	if (cast) playSpellSounds(creature, var, castSound, impactSound);
+	return cast;
 }
 
 bool Spell::playerSpellCheck(Player* player) const
@@ -1153,6 +1178,7 @@ bool InstantSpell::internalCastSpell(Creature* creature, const LuaVariant& var)
 
 bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 {
+	SpellEffectSourceScope effectSource(creature);
 	// onCastSpell(creature, var)
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - InstantSpell::executeCastSpell] Call stack overflow");
@@ -1171,7 +1197,11 @@ bool InstantSpell::executeCastSpell(Creature* creature, const LuaVariant& var)
 
 	Lua::pushVariant(L, var);
 
-	return scriptInterface->callFunction(2);
+	const bool cast = scriptInterface->callFunction(2);
+	if (cast) {
+		playSpellSounds(creature, var, getCastSound(), getImpactSound());
+	}
+	return cast;
 }
 
 bool InstantSpell::canCast(const Player* player) const
@@ -1276,6 +1306,7 @@ bool RuneSpell::executeUse(Player* player, const std::shared_ptr<Item>& item, co
 	}
 
 	if (hasCharges && item && getBoolean(ConfigManager::REMOVE_RUNE_CHARGES)) {
+		player->recordPartySupply(item->getID());
 		int32_t newCount = std::max<int32_t>(0, item->getItemCount() - 1);
 		g_game.transformItem(item.get(), item->getID(), newCount);
 	}
@@ -1310,6 +1341,7 @@ bool RuneSpell::internalCastSpell(Creature* creature, const LuaVariant& var, boo
 
 bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool isHotkey)
 {
+	SpellEffectSourceScope effectSource(creature);
 	// onCastSpell(creature, var, isHotkey)
 	if (!scriptInterface->reserveScriptEnv()) {
 		LOG_ERROR("[Error - RuneSpell::executeCastSpell] Call stack overflow");
@@ -1330,5 +1362,9 @@ bool RuneSpell::executeCastSpell(Creature* creature, const LuaVariant& var, bool
 
 	Lua::pushBoolean(L, isHotkey);
 
-	return scriptInterface->callFunction(3);
+	const bool cast = scriptInterface->callFunction(3);
+	if (cast) {
+		playSpellSounds(creature, var, getCastSound(), getImpactSound());
+	}
+	return cast;
 }

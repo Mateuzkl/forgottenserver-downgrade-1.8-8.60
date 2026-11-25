@@ -904,6 +904,10 @@ int luaGameCreateMonsterType(lua_State* L)
 		monsterType->info.defenseSpells.clear();
 		monsterType->info.summons.clear();
 		monsterType->info.voiceVector.clear();
+		monsterType->info.soundVector.clear();
+		monsterType->info.deathSound = 2632;
+		monsterType->info.soundChance = 0;
+		monsterType->info.soundSpeedTicks = 0;
 		monsterType->info.elementMap.clear();
 		monsterType->info.scripts.clear();
 		monsterType->info.enemyFactions.clear();
@@ -1376,6 +1380,87 @@ int luaGameGetMarketStatistics(lua_State* L)
 	return 1;
 }
 
+void pushMarketResult(lua_State* L, const std::optional<bool>& result)
+{
+	if (result) {
+		pushBoolean(L, *result);
+	} else {
+		lua_pushnil(L); // uncertain commit; player was disconnected, never compensate RAM
+	}
+}
+
+int luaGameOpenLegacyMarketInbox(lua_State* L)
+{
+	auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	pushBoolean(L, Market::openLegacyInbox(player.get()));
+	return 1;
+}
+
+int luaGameReserveMarketMoney(lua_State* L)
+{
+	auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	pushBoolean(L, Market::reserveMoney(player.get(), getInteger<uint64_t>(L, 2)));
+	return 1;
+}
+
+int luaGameFinishMarketMoney(lua_State* L)
+{
+	auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	pushBoolean(L, Market::finishMoney(player.get(), getBoolean(L, 2)));
+	return 1;
+}
+
+int luaGameIsMarketPlayerReady(lua_State* L)
+{
+	auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	pushBoolean(L, Market::isPlayerReady(player.get()));
+	return 1;
+}
+
+int luaGameSettleMarketOffer(lua_State* L)
+{
+	// Game.settleMarketOffer(actorGuid, offerId, expectedAmount, amount, state, duration, tier[, attributes])
+	auto actor = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	std::string attributes;
+	if (lua_isstring(L, 8)) {
+		attributes = getString(L, 8);
+	}
+	pushMarketResult(L, Market::settleOffer(actor.get(), getInteger<uint32_t>(L, 2),
+	    getInteger<uint32_t>(L, 3), getInteger<uint32_t>(L, 4), getInteger<uint8_t>(L, 5),
+	    getInteger<uint32_t>(L, 6), getInteger<uint8_t>(L, 7, 0), attributes));
+	return 1;
+}
+
+int luaGameProcessMarketDeliveries(lua_State* L)
+{
+	if (lua_gettop(L) == 0) {
+		Market::processOnlineDeliveries();
+		pushBoolean(L, true);
+		return 1;
+	}
+	auto player = g_game.getPlayerByGUID(getInteger<uint32_t>(L, 1));
+	pushBoolean(L, Market::processDeliveries(player.get()));
+	return 1;
+}
+
+int luaGameGetMarketDeliveryStatus(lua_State* L)
+{
+	// Game.getMarketDeliveryStatus(playerGuid, offerId): persisted destination and state.
+	const auto status = Market::getDeliveryStatus(getInteger<uint32_t>(L, 1), getInteger<uint32_t>(L, 2));
+	if (!status) {
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_createtable(L, 0, 6);
+	setField(L, "depotId", status->depotId);
+	setField(L, "itemId", status->itemId);
+	setField(L, "amount", status->amount);
+	setField(L, "bankCredit", status->bankCredit);
+	pushBoolean(L, status->applied);
+	lua_setfield(L, -2, "applied");
+	return 1;
+}
+
 int luaGameCreateMarketOffer(lua_State* L)
 {
 	// Game.createMarketOffer(playerId, sale, itemId, amount, created, anonymous, price, tier[, attributes])
@@ -1391,47 +1476,8 @@ int luaGameCreateMarketOffer(lua_State* L)
 	if (lua_isstring(L, 9)) {
 		offer.attributes = getString(L, 9);
 	}
-	pushBoolean(L, Market::createOffer(offer));
-	return 1;
-}
-
-int luaGameClaimMarketOffer(lua_State* L)
-{
-	// Game.claimMarketOffer(offerId, expectedAmount, acceptedAmount[, ownerId = 0])
-	pushBoolean(L, Market::claimOffer(
-		getInteger<uint32_t>(L, 1), getInteger<uint32_t>(L, 2), getInteger<uint32_t>(L, 3),
-		getInteger<uint32_t>(L, 4, 0)));
-	return 1;
-}
-
-int luaGameRestoreMarketOffer(lua_State* L)
-{
-	// Game.restoreMarketOffer(id, playerId, sale, itemId, amount, created, anonymous, price, tier, attributes,
-	//                         acceptedAmount)
-	MarketOfferRecord offer;
-	offer.id = getInteger<uint32_t>(L, 1);
-	offer.playerId = getInteger<uint32_t>(L, 2);
-	offer.sale = getInteger<uint8_t>(L, 3);
-	offer.itemId = getInteger<uint16_t>(L, 4);
-	offer.amount = getInteger<uint32_t>(L, 5);
-	offer.created = getInteger<uint32_t>(L, 6);
-	offer.anonymous = getBoolean(L, 7);
-	offer.price = getInteger<uint32_t>(L, 8);
-	offer.tier = Market::normalizeTier(getInteger<uint32_t>(L, 9));
-	if (lua_isstring(L, 10)) {
-		offer.attributes = getString(L, 10);
-	}
-	pushBoolean(L, Market::restoreOffer(offer, getInteger<uint32_t>(L, 11)));
-	return 1;
-}
-
-int luaGameAddMarketHistory(lua_State* L)
-{
-	// Game.addMarketHistory(playerId, sale, itemId, amount, price, tier, expiresAt, inserted, state)
-	pushBoolean(L, Market::addHistory(
-		getInteger<uint32_t>(L, 1), getInteger<uint8_t>(L, 2), getInteger<uint16_t>(L, 3),
-		getInteger<uint32_t>(L, 4), getInteger<uint32_t>(L, 5), getInteger<uint8_t>(L, 6),
-		getInteger<uint32_t>(L, 7), getInteger<uint32_t>(L, 8), getInteger<uint8_t>(L, 9)));
+	auto player = g_game.getPlayerByGUID(offer.playerId);
+	pushMarketResult(L, Market::createOfferAndSave(player.get(), offer));
 	return 1;
 }
 
@@ -1440,26 +1486,6 @@ int luaGameRefreshMarketStatistics(lua_State* L)
 	// Game.refreshMarketStatistics(firstDay, acceptedState)
 	pushBoolean(L, Market::refreshStatistics(
 		getInteger<uint32_t>(L, 1), getInteger<uint8_t>(L, 2)));
-	return 1;
-}
-
-int luaGameCreditMarketBank(lua_State* L)
-{
-	// Game.creditMarketBank(playerId, amount)
-	pushBoolean(L, Market::creditBank(
-		getInteger<uint32_t>(L, 1), getInteger<uint64_t>(L, 2)));
-	return 1;
-}
-
-int luaGameInsertMarketInboxItem(lua_State* L)
-{
-	// Game.insertMarketInboxItem(playerId, itemId, amount[, attributes])
-	std::string attributes;
-	if (lua_isstring(L, 4)) {
-		attributes = getString(L, 4);
-	}
-	pushBoolean(L, Market::insertInboxItems(
-		getInteger<uint32_t>(L, 1), getInteger<uint16_t>(L, 2), getInteger<uint32_t>(L, 3), attributes));
 	return 1;
 }
 
@@ -1919,6 +1945,34 @@ int luaGameGetBosstiaryPoints(lua_State* L)
 	return 1;
 }
 
+
+int pushCharmSoundConfig(lua_State* L, uint8_t id)
+{
+	auto* charm = g_bestiaryCharmSystem.getCharmSounds(id);
+	if (!charm) { lua_pushnil(L); return 1; }
+	pushUserdata<CharmSoundConfig>(L, charm);
+	setMetatable(L, -1, "Charm");
+	return 1;
+}
+int luaGameCreateBestiaryCharm(lua_State* L) { return pushCharmSoundConfig(L, getInteger<uint8_t>(L, 1)); }
+int luaCharmCreate(lua_State* L) { return pushCharmSoundConfig(L, getInteger<uint8_t>(L, 2)); }
+int luaCharmCastSound(lua_State* L)
+{
+	auto* charm = getUserdata<CharmSoundConfig>(L, 1);
+	if (!charm) { lua_pushnil(L); return 1; }
+	if (lua_gettop(L) == 1) lua_pushinteger(L, charm->castSound);
+	else { charm->castSound = getInteger<uint16_t>(L, 2); pushBoolean(L, true); }
+	return 1;
+}
+int luaCharmImpactSound(lua_State* L)
+{
+	auto* charm = getUserdata<CharmSoundConfig>(L, 1);
+	if (!charm) { lua_pushnil(L); return 1; }
+	if (lua_gettop(L) == 1) lua_pushinteger(L, charm->impactSound);
+	else { charm->impactSound = getInteger<uint16_t>(L, 2); pushBoolean(L, true); }
+	return 1;
+}
+
 int luaGameAddBosstiaryPoints(lua_State* L)
 {
 	// Game.addBosstiaryPoints(playerGuid, amount) -> oldPoints, newPoints
@@ -1945,6 +1999,9 @@ int luaGameAddBosstiaryPoints(lua_State* L)
 
 void LuaScriptInterface::registerGame()
 {
+	registerClass("Charm", "", luaCharmCreate);
+	registerMethod("Charm", "castSound", luaCharmCastSound);
+	registerMethod("Charm", "impactSound", luaCharmImpactSound);
 	// Game
 	registerTable("Game");
 	registerMethod("Game", "getLightState", luaGameGetLightState);
@@ -1957,12 +2014,14 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "getMarketHistory", luaGameGetMarketHistory);
 	registerMethod("Game", "getMarketStatistics", luaGameGetMarketStatistics);
 	registerMethod("Game", "createMarketOffer", luaGameCreateMarketOffer);
-	registerMethod("Game", "claimMarketOffer", luaGameClaimMarketOffer);
-	registerMethod("Game", "restoreMarketOffer", luaGameRestoreMarketOffer);
-	registerMethod("Game", "addMarketHistory", luaGameAddMarketHistory);
+	registerMethod("Game", "isMarketPlayerReady", luaGameIsMarketPlayerReady);
+	registerMethod("Game", "reserveMarketMoney", luaGameReserveMarketMoney);
+	registerMethod("Game", "openLegacyMarketInbox", luaGameOpenLegacyMarketInbox);
+	registerMethod("Game", "finishMarketMoney", luaGameFinishMarketMoney);
+	registerMethod("Game", "settleMarketOffer", luaGameSettleMarketOffer);
+	registerMethod("Game", "processMarketDeliveries", luaGameProcessMarketDeliveries);
+	registerMethod("Game", "getMarketDeliveryStatus", luaGameGetMarketDeliveryStatus);
 	registerMethod("Game", "refreshMarketStatistics", luaGameRefreshMarketStatistics);
-	registerMethod("Game", "creditMarketBank", luaGameCreditMarketBank);
-	registerMethod("Game", "insertMarketInboxItem", luaGameInsertMarketInboxItem);
 	registerMethod("Game", "getSupplyStashRows", luaGameGetSupplyStashRows);
 	registerMethod("Game", "addSupplyStashAmount", luaGameAddSupplyStashAmount);
 	registerMethod("Game", "removeSupplyStashAmount", luaGameRemoveSupplyStashAmount);
@@ -2033,6 +2092,7 @@ void LuaScriptInterface::registerGame()
 	registerMethod("Game", "createTile", luaGameCreateTile);
 	registerMethod("Game", "createMonsterType", luaGameCreateMonsterType);
 	registerMethod("Game", "createNpcType", luaGameCreateNpcType);
+	registerMethod("Game", "createBestiaryCharm", luaGameCreateBestiaryCharm);
 
 	registerMethod("Game", "startRaid", luaGameStartRaid);
 

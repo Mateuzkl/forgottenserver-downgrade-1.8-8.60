@@ -17,6 +17,7 @@ end
 spell:group("support")
 spell:id(197)
 spell:name("House Door List")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_EDIT_DOOR)
 spell:words("aleta grav")
 spell:needCasterTargetOrDirection(true)
 spell:cooldown(2 * 1000)

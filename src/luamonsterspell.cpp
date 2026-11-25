@@ -362,6 +362,24 @@ int luaMonsterSpellSetOutfitItem(lua_State* L)
 	}
 	return 1;
 }
+
+int luaMonsterSpellCastSound(lua_State* L)
+{
+	MonsterSpell* spell = getUserdata<MonsterSpell>(L, 1);
+	if (!spell) { lua_pushnil(L); return 1; }
+	if (lua_gettop(L) == 1) lua_pushinteger(L, spell->soundCast);
+	else { spell->soundCast = getInteger<uint16_t>(L, 2); pushBoolean(L, true); }
+	return 1;
+}
+
+int luaMonsterSpellImpactSound(lua_State* L)
+{
+	MonsterSpell* spell = getUserdata<MonsterSpell>(L, 1);
+	if (!spell) { lua_pushnil(L); return 1; }
+	if (lua_gettop(L) == 1) lua_pushinteger(L, spell->soundImpact);
+	else { spell->soundImpact = getInteger<uint16_t>(L, 2); pushBoolean(L, true); }
+	return 1;
+}
 } // namespace
 
 void LuaScriptInterface::registerMonsterSpell()
@@ -373,6 +391,8 @@ void LuaScriptInterface::registerMonsterSpell()
 	registerMethod("MonsterSpell", "delete", luaDeleteMonsterSpell);
 
 	registerMethod("MonsterSpell", "setType", luaMonsterSpellSetType);
+	registerMethod("MonsterSpell", "castSound", luaMonsterSpellCastSound);
+	registerMethod("MonsterSpell", "impactSound", luaMonsterSpellImpactSound);
 	registerMethod("MonsterSpell", "setScriptName", luaMonsterSpellSetScriptName);
 	registerMethod("MonsterSpell", "setChance", luaMonsterSpellSetChance);
 	registerMethod("MonsterSpell", "setInterval", luaMonsterSpellSetInterval);

@@ -70,6 +70,7 @@ end
 spell:group("support", "crippling")
 spell:id(244)
 spell:name("Sap Strength")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_SAP_STRENGTH)
 spell:words("exori kor")
 spell:level(275)
 spell:mana(300)

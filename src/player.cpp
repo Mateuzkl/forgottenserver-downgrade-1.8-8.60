@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "bed.h"
+#include "bestiary_charm.h"
 #include "chat.h"
 #include "combat.h"
 #include "configmanager.h"
@@ -23,15 +24,18 @@
 #include "movement.h"
 #include "npc.h"
 #include "party.h"
+#include "protocollogin.h"
 #include "rewardchest.h"
 #include "databasetasks.h"
 #include "save_manager.h"
+#include "market.h"
 #include "scriptmanager.h"
 #include "scheduler.h"
 #include "spells.h"
 #include "vocation.h"
 #include "logger.h"
 #include <fmt/format.h>
+#include <openssl/crypto.h>
 #include <cstdlib>
 #include "tools.h"
 #include "weapons.h"
@@ -1067,6 +1071,15 @@ void Player::updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatTy
 
 	if (const auto protocol = client->protocol()) {
 		protocol->sendImpactTracker(analyzerType, amount, combatType, targetName);
+	}
+}
+
+void Player::recordPartySupply(uint16_t itemId, uint32_t count) const
+{
+	if (Party* party = getParty()) {
+		const ItemType& type = Item::items[itemId];
+		const uint64_t price = type.buyPrice > 0 ? type.buyPrice : (type.sellPrice > 0 ? type.sellPrice : type.worth);
+		party->analyzerMemberStats(getID()).supplies += price * count;
 	}
 }
 
@@ -3131,7 +3144,11 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 	Creature::onRemoveCreature(creature, isLogout);
 
 	if (creature == this) {
-		for (int32_t slot = CONST_SLOT_FIRST; slot <= CONST_SLOT_LAST; ++slot) {
+		removalInProgress = true;
+		// A Lua handler may abort before calling the native settlement API.
+		// Release that reservation while its original container parents still exist.
+		(void)Market::finishMoney(this, !persistenceQuarantined);
+		for (int32_t slot = CONST_SLOT_FIRST; !persistenceQuarantined && slot <= CONST_SLOT_LAST; ++slot) {
 			Item* item = inventory[slot].get();
 			if (item) {
 				g_moveEvents->onPlayerDeEquip(this, item, static_cast<slots_t>(slot));
@@ -3184,6 +3201,11 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 		}
 
 		IOLoginData::removeOnlineStatus(guid);
+		if (persistenceQuarantined) {
+			// Structural world cleanup above is required, but logout/de-equip Lua,
+			// familiar writes and a new player snapshot must not overwrite the WAL.
+			return;
+		}
 
 		Familiar::onPlayerLogout(this);
 
@@ -3199,14 +3221,19 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 		}
 
 		bool saved = false;
+		bool queued = false;
 		for (uint32_t tries = 0; tries < 3; ++tries) {
 			if (g_saveManager.savePlayerSync(this)) {
 				saved = true;
 				break;
 			}
+			if (g_saveManager.hasFailedRecovery(guid)) { break; }
+			if (g_saveManager.hasPendingPlayerSave(guid)) { queued = true; break; }
 		}
 
-		if (!saved) {
+		if (queued) {
+			LOG_INFO(fmt::format("[SaveManager] guid={} stage=logout latest_state=wal flush=pending", guid));
+		} else if (!saved) {
 			LOG_ERROR(fmt::format("Error while saving player: {}", getName()));
 		}
 	}
@@ -3697,6 +3724,9 @@ void Player::removeMessageBuffer()
 
 void Player::drainHealth(const std::shared_ptr<Creature>& attacker, int32_t damage)
 {
+	if (damage > 0 && uniform_random(1, 100) <= 10) {
+		g_game.addSoundEffect(getPosition(), sex == PLAYERSEX_FEMALE ? 2518 : 2519, getInstanceID(), this);
+	}
 	Creature::drainHealth(attacker, damage);
 	sendStats();
 }
@@ -4258,6 +4288,7 @@ uint32_t Player::getIP() const
 
 void Player::death(Creature* lastHitCreature)
 {
+	g_game.addSoundEffect(getPosition(), sex == PLAYERSEX_FEMALE ? 2618 : 2619, getInstanceID(), this);
 	loginPosition = town->getTemplePosition();
 	setInstanceID(0);
 
@@ -4461,6 +4492,63 @@ bool Player::dropCorpse(Creature* lastHitCreature, Creature* mostDamageCreature,
 	if (getZone() != ZONE_PVP || !Player::lastHitIsPlayer(lastHitCreature)) {
 		return Creature::dropCorpse(lastHitCreature, mostDamageCreature, lastHitUnjustified, mostDamageUnjustified);
 	}
+	// Persist death details so the Cyclopedia's Recent Deaths and Recent PvP
+	// Kills pages remain available after the player logs out.
+	const auto getResponsibleCreature = [](Creature* creature, std::shared_ptr<Creature>& masterRef) {
+		if (creature && !creature->getPlayer()) {
+			masterRef = creature->getMasterShared();
+			if (masterRef && masterRef->getPlayer()) {
+				return masterRef.get();
+			}
+		}
+		return creature;
+	};
+	std::shared_ptr<Creature> killerMaster;
+	std::shared_ptr<Creature> mostDamageMaster;
+	Creature* killer = getResponsibleCreature(lastHitCreature, killerMaster);
+	Creature* mostDamage = getResponsibleCreature(mostDamageCreature, mostDamageMaster);
+	std::string killedBy = killer ? killer->getNameDescription() : "an unknown creature";
+	std::string mostDamageBy = mostDamage ? mostDamage->getNameDescription() : "";
+	const auto truncateUtf8 = [](std::string& value, size_t limit) {
+		if (value.size() <= limit) {
+			return;
+		}
+		while (limit > 0 && (static_cast<unsigned char>(value[limit]) & 0xC0) == 0x80) {
+			--limit;
+		}
+		value.resize(limit);
+	};
+	truncateUtf8(killedBy, 255);
+	truncateUtf8(mostDamageBy, 100);
+	Database& db = Database::getInstance();
+	const auto query = fmt::format(
+	    "INSERT INTO `player_deaths` (`player_id`, `time`, `level`, `killed_by`, `is_player`, `mostdamage_by`, "
+	    "`mostdamage_is_player`, `unjustified`, `mostdamage_unjustified`) VALUES ({:d}, {:d}, {:d}, {:s}, {:d}, {:s}, {:d}, {:d}, {:d})",
+	    getGUID(), static_cast<uint32_t>(std::time(nullptr)), getLevel(), db.escapeString(killedBy),
+	    Player::lastHitIsPlayer(lastHitCreature) ? 1 : 0, db.escapeString(mostDamageBy),
+	    Player::lastHitIsPlayer(mostDamageCreature) ? 1 : 0, lastHitUnjustified ? 1 : 0,
+	    mostDamageUnjustified ? 1 : 0);
+	const uint32_t playerGuid = getGUID();
+	(void)g_databaseTasks.addTask(query, [playerGuid](DBResult_ptr, bool success, uint64_t) {
+		if (!success) {
+			LOG_ERROR("[Cyclopedia] Failed to record PvP death for player {}", playerGuid);
+			return;
+		}
+		const auto countQuery = fmt::format(
+		    "SELECT COUNT(*) AS `total` FROM `player_deaths` WHERE `player_id` = {:d}", playerGuid);
+		(void)g_databaseTasks.addTask(countQuery, [playerGuid](DBResult_ptr result, bool countSuccess, uint64_t) {
+			if (!countSuccess || !result) {
+				LOG_ERROR("[Cyclopedia] Failed to count death records for player {}", playerGuid);
+				return;
+			}
+			const uint32_t count = result->getNumber<uint32_t>("total");
+			if (count > 5) {
+				(void)g_databaseTasks.addTask(fmt::format(
+				    "DELETE FROM `player_deaths` WHERE `player_id` = {:d} ORDER BY `time` ASC LIMIT {:d}",
+				    playerGuid, count - 5));
+			}
+		}, true);
+	});
 
 	setDropLoot(true);
 	return false;
@@ -4559,11 +4647,38 @@ void Player::addList()
 
 void Player::kickPlayer(bool displayEffect)
 {
+	if (persistenceQuarantined) {
+		if (!isRemoved() && !removalInProgress) { g_game.removeCreature(this, false); }
+		return;
+	}
 	g_creatureEvents->playerLogout(this);
 	if (client) {
 		client->logout(displayEffect, true);
 	}
 	g_game.removeCreature(this);
+}
+
+void Player::disconnectForPersistenceFailure()
+{
+	persistenceQuarantined = true;
+	setMovementBlocked(true);
+	setNextActionTask(nullptr);
+	if (client) {
+		client->disconnectClient("Your character's save could not be confirmed. Please contact support before reconnecting.");
+		client->disconnect();
+	}
+	// Deliberately bypass playerLogout() scripts. onRemoveCreature performs only
+	// structural cleanup when quarantined and never creates another player save.
+	if (!isRemoved() && !removalInProgress) {
+		// Retain the session until this Lua/dispatcher task unwinds. The packet
+		// guard rejects all actions immediately; removing now could invalidate
+		// the handler's Player userdata before it releases its reservations.
+		if (auto self = g_game.getPlayerByGUID(guid)) {
+			g_dispatcher.addTask([self] {
+				if (!self->isRemoved() && !self->removalInProgress) { g_game.removeCreature(self.get(), false); }
+			});
+		}
+	}
 }
 
 void Player::notifyStatusChange(Player* loginPlayer, VipStatus_t status)
@@ -8917,6 +9032,12 @@ void Player::resetTalkState(size_t from, size_t to)
 
 void Player::handleNamelockManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
+	if (checkText(text, "cancel")) {
+		resetTalkState();
+		managerData.string1.clear();
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, "Account Manager: Rename cancelled. Tell me your new character name.");
+		return;
+	}
 	if (!managerTalkState[1]) {
 		std::string newName = text;
 		trimString(newName);
@@ -8931,7 +9052,8 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 			msg << "Account Manager: A player with that name already exists, please choose another name.";
 		} else {
 			std::string tmp = asLowerCaseString(newName);
-			if (tmp.substr(0, std::min(static_cast<size_t>(4), tmp.length())) != "god " &&
+			if (tmp != "account manager" &&
+			    tmp.substr(0, std::min(static_cast<size_t>(4), tmp.length())) != "god " &&
 			    tmp.substr(0, std::min(static_cast<size_t>(3), tmp.length())) != "cm " &&
 			    tmp.substr(0, std::min(static_cast<size_t>(3), tmp.length())) != "gm ") {
 				managerData.string1 = newName;
@@ -8958,11 +9080,7 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 	if (checkText(text, "yes") && managerTalkState[2]) {
 		if (!IOLoginData::playerNameExists(managerData.string1)) {
 			uint32_t guid = getGUID();
-			if (Database::getInstance().executeQuery(
-			        fmt::format("UPDATE `players` SET `name` = {:s} WHERE `id` = {:d}",
-			                    Database::getInstance().escapeString(managerData.string1), guid))) {
-				Database::getInstance().executeQuery(
-				    fmt::format("DELETE FROM `player_namelocks` WHERE `player_id` = {:d}", guid));
+			if (IOLoginData::renameNamelockedPlayer(guid, managerData.accountId, managerData.string1)) {
 				if (auto house = g_game.map.houses.getHouseByPlayerId(guid)) {
 					house->updateOwnerName(managerData.string1);
 				}
@@ -8992,6 +9110,14 @@ void Player::handleNamelockManager(const std::string& text, std::ostringstream& 
 void Player::handleAccountManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
 	msg << "Account Manager: ";
+
+	if (managerData.accountId <= 1) {
+		LOG_WARN("[Security] Blocked account management request for protected account (account={}).",
+		         managerData.accountId);
+		msg << "This account cannot be managed.";
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+		return;
+	}
 
 	if (checkText(text, "cancel") || checkText(text, "account")) {
 		managerTalkState[1] = true;
@@ -9024,11 +9150,19 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		return;
 	} else if (checkText(text, "yes") && managerTalkState[3]) {
 		uint32_t playerId = IOLoginData::getGuidByName(managerData.string1);
+		if (playerId > 0) {
+			const uint32_t ownerAccountId = IOLoginData::getAccountIdByPlayerId(playerId);
+			if (!canAccountDeleteCharacter(managerData.accountId, playerId, ownerAccountId)) {
+				LOG_WARN("[Security] Denied character deletion (account={}, guid={}, owner={}).",
+				         managerData.accountId, playerId, ownerAccountId);
+				playerId = 0;
+			}
+		}
 
-		if (playerId && IOLoginData::deletePlayer(playerId)) {
+		if (playerId > 1 && IOLoginData::deletePlayer(playerId, managerData.accountId)) {
 			msg << "Your character has been deleted.";
 		} else {
-			msg << "An error occured while deleting your character. Either the character does not belong to you or it doesn't exist.";
+			msg << "An error occurred while deleting your character. Either the character does not belong to you, is currently online, or does not exist.";
 		}
 
 		managerTalkState[1] = true;
@@ -9039,10 +9173,10 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
 	} else if (checkText(text, "no") && managerTalkState[3]) {
-		managerTalkState[1] = true;
+		managerTalkState[2] = true;
 		managerTalkState[3] = false;
 
-		msg << "Tell me what character you want to delete.";
+		msg << "Tell me what character you want to delete, or type 'cancel' to go back.";
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 
 		return;
@@ -9071,8 +9205,11 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 			managerTalkState[i] = false;
 		}
 
-		IOLoginData::setPassword(managerData.accountId, managerData.string1);
-		msg << "Your password has been changed.";
+		if (IOLoginData::setPassword(managerData.accountId, managerData.string1)) {
+			msg << "Your password has been changed.";
+		} else {
+			msg << "Sorry, an error occurred while changing your password. Please try again later.";
+		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
 	} else if (checkText(text, "no") && managerTalkState[5]) {
@@ -9083,7 +9220,7 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		msg << "Then not.";
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
-	} else if (checkText(text, "character")) {
+	} else if (checkText(text, "character") && managerTalkState[1]) {
 		std::vector<std::string> characters = IOLoginData::getPlayersByAccountId(managerData.accountId);
 		if (characters.size() >= 15) {
 			managerTalkState[1] = true;
@@ -9112,7 +9249,8 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		} else {
 			std::string tmp = managerData.string1;
 			toLowerCaseString(tmp);
-			if (tmp.substr(0, 4) != "god " && tmp.substr(0, 3) != "cm " && tmp.substr(0, 3) != "gm ") {
+			if (tmp != "account manager" && tmp.substr(0, 4) != "god " && tmp.substr(0, 3) != "cm " &&
+			    tmp.substr(0, 3) != "gm ") {
 				managerTalkState[6] = false;
 				managerTalkState[7] = true;
 				msg << managerData.string1 << ", are you sure? Type 'yes' or 'no'.";
@@ -9262,11 +9400,11 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 		return;
 	} else if (checkText(text, "yes") && managerTalkState[10]) {
 		std::string recoveryKey = generateRecoveryKey(4, 4);
-		if (IOLoginData::setRecoveryKey(managerData.accountId, recoveryKey)) {
+		if (!recoveryKey.empty() && IOLoginData::setRecoveryKey(managerData.accountId, recoveryKey)) {
 			msg << "Your recovery key is: " << recoveryKey
 			    << ". IMPORTANT: Write this down, it will be hashed and cannot be recovered!";
 		} else {
-			msg << "Sorry, you already have a recovery key, for security reasons I may not give you a new one.";
+			msg << "A recovery key could not be issued. An existing key cannot be replaced.";
 		}
 
 		managerTalkState[1] = true;
@@ -9290,9 +9428,109 @@ void Player::handleAccountManager(const std::string& text, std::ostringstream& m
 	}
 }
 
+bool Player::canAccountDeleteCharacter(uint32_t sessionAccountId, uint32_t targetPlayerId, uint32_t ownerAccountId)
+{
+	return sessionAccountId > 1 && targetPlayerId > 1 && ownerAccountId == sessionAccountId;
+}
+
+std::string Player::makeAccountRecoveryLimiterKey(std::string_view canonicalAccountName)
+{
+	std::string normalized = asTrimmedString(canonicalAccountName);
+	if (normalized.empty()) {
+		return {};
+	}
+	toLowerCaseString(normalized);
+	return "recover:" + normalized;
+}
+
+bool Player::isAccountRecoveryAllowed(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	return LoginAttemptLimiter::forRecovery().allowLogin(clientIp, makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+void Player::recordAccountRecoveryFailure(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	LoginAttemptLimiter::forRecovery().recordFailure(clientIp, makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+void Player::recordAccountRecoverySuccess(uint32_t clientIp, std::string_view canonicalAccountName)
+{
+	LoginAttemptLimiter::forRecovery().recordSuccess(clientIp, makeAccountRecoveryLimiterKey(canonicalAccountName));
+}
+
+bool Player::verifyAccountRecoveryAttempt(uint32_t accId, std::string_view storedKeyHash, std::string_view recoveryKey,
+                                          uint32_t clientIp, std::ostringstream& msg)
+{
+	if (accId <= 1) {
+		LOG_WARN("[Security] Blocked recovery attempt on protected account (account={}).", accId);
+		msg << "This account cannot be recovered.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+	    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+		LOG_WARN("[Security] Denied rate-limited account recovery (account={}).", accId);
+		msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	if (storedKeyHash.empty()) {
+		msg << "This account does not have a recovery key set. Please contact an administrator.";
+		managerTalkState[7] = false;
+		managerTalkState[1] = false;
+		managerData.accountName.clear();
+		return false;
+	}
+
+	const std::string inputKeyHash = transformToSHA1Hex(recoveryKey);
+	if (storedKeyHash.size() != inputKeyHash.size() ||
+	    CRYPTO_memcmp(storedKeyHash.data(), inputKeyHash.data(), inputKeyHash.size()) != 0) {
+		++managerData.recoveryAttempts;
+		recordAccountRecoveryFailure(clientIp, managerData.accountName);
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+		    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+			LOG_WARN("[Security] Too many failed recovery key attempts (account={}).", accId);
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			managerTalkState[7] = false;
+			managerTalkState[1] = false;
+			managerData.accountName.clear();
+		} else {
+			msg << "The recovery key you entered is incorrect. Please try again or type 'cancel' to start over.";
+		}
+		return false;
+	}
+
+	return true;
+}
+
 void Player::handleNewAccountManager(const std::string& text, std::ostringstream& msg, bool& /*shouldShowHelp*/)
 {
+	const uint32_t clientIp = getIP() != 0 ? getIP() : lastIP;
 	msg << "Account Manager: ";
+
+	if (checkText(text, "cancel")) {
+		resetTalkState(0, 0);
+		if (managerData.accountId > 1) {
+			// A generated account number has already been issued. Resume its email prompt.
+			managerTalkState[1] = true;
+			managerTalkState[13] = true;
+			msg << "Your account number is '" << managerData.accountName << "'. What is your email address?";
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+		managerData.string1.clear();
+		managerData.string2.clear();
+		managerData.accountName.clear();
+		msg << "Alright, let's start over. Type 'account' to create a new account or 'recover' to recover an existing one.";
+		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+		return;
+	}
 
 	if (checkText(text, "account") && !managerTalkState[1]) {
 		msg << "What would you like your password to be?";
@@ -9303,6 +9541,12 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (checkText(text, "recover") && !managerTalkState[1]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION || !isAccountRecoveryAllowed(clientIp)) {
+			LOG_WARN("[Security] Blocked recovery restart after reaching max failed attempts.");
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
 		msg << "What is your account name or email?";
 		managerTalkState[1] = true;
 		managerTalkState[6] = true;
@@ -9311,6 +9555,14 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (managerTalkState[6]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION || !isAccountRecoveryAllowed(clientIp)) {
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			managerTalkState[6] = false;
+			managerTalkState[1] = false;
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		std::string tmp = text;
 		trimString(tmp);
 
@@ -9327,6 +9579,15 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			return;
 		}
 
+		if (!isAccountRecoveryAllowed(clientIp, *resolvedAccount)) {
+			LOG_WARN("[Security] Denied rate-limited account recovery.");
+			msg << "Too many failed recovery key attempts for this account. Please try again later or contact an administrator.";
+			managerTalkState[6] = false;
+			managerTalkState[1] = false;
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		managerData.accountName = *resolvedAccount;
 		managerTalkState[6] = false;
 		managerTalkState[7] = true;
@@ -9336,11 +9597,21 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 	}
 
 	if (managerTalkState[7]) {
+		if (managerData.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS_PER_SESSION ||
+		    !isAccountRecoveryAllowed(clientIp, managerData.accountName)) {
+			msg << "Too many failed recovery key attempts. Recovery is temporarily locked; please try again later or contact an administrator.";
+			managerTalkState[7] = false;
+			managerTalkState[1] = false;
+			managerData.accountName.clear();
+			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
+			return;
+		}
+
 		std::string recoveryKey = text;
 		trimString(recoveryKey);
 
 		Database& db = Database::getInstance();
-		DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id`, `secret` FROM `accounts` WHERE `name` = {:s}",
+		DBResult_ptr result = db.storeQuery(fmt::format("SELECT `id`, `recovery_key_hash` FROM `accounts` WHERE `name` = {:s}",
 		                                                db.escapeString(managerData.accountName)));
 
 		if (!result) {
@@ -9351,35 +9622,28 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			return;
 		}
 
-		uint32_t accId = result->getNumber<uint32_t>("id");
-		std::string storedKeyHash = std::string{result->getString("secret")};
-
-		if (storedKeyHash.empty()) {
-			msg << "This account does not have a recovery key set. Please contact an administrator.";
-			managerTalkState[7] = false;
-			managerTalkState[1] = false;
-			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
-			return;
-		}
-
-		std::string inputKeyHash = transformToSHA1Hex(recoveryKey);
-		if (storedKeyHash != inputKeyHash) {
-			msg << "The recovery key you entered is incorrect. Please try again or type 'cancel' to start over.";
+		const uint32_t accId = result->getNumber<uint32_t>("id");
+		const std::string storedKeyHash = std::string{result->getString("recovery_key_hash")};
+		if (!verifyAccountRecoveryAttempt(accId, storedKeyHash, recoveryKey, clientIp, msg)) {
 			sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 			return;
 		}
 
 		std::string newPassword = generateSecurePassword(12);
 
-		if (IOLoginData::setPassword(accId, newPassword)) {
+		if (!newPassword.empty() && IOLoginData::resetPasswordWithRecoveryKey(accId, storedKeyHash, newPassword)) {
 			msg << "Your account has been recovered! Your new password is: " << newPassword
 			    << ". Please write it down before you logout.";
 			managerTalkState[7] = false;
 			managerTalkState[1] = false;
+			recordAccountRecoverySuccess(clientIp, managerData.accountName);
+			managerData.accountName.clear();
+			managerData.recoveryAttempts = 0;
 		} else {
 			msg << "Sorry, an error occurred while recovering your account. Please try again later.";
 			managerTalkState[7] = false;
 			managerTalkState[1] = false;
+			managerData.accountName.clear();
 		}
 		sendTextMessage(MESSAGE_STATUS_CONSOLE_BLUE, msg.str());
 		return;
@@ -9517,7 +9781,8 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 					return;
 				}
 
-				msg << "Your account was created but the email could not be saved. Please contact an administrator.";
+				managerTalkState[13] = true;
+				msg << "Your account was created but the email could not be saved. Please try again.";
 			} else {
 				managerTalkState[5] = true;
 				msg << "Account name '" << managerData.accountName << "' with email '" << managerData.string2
@@ -9530,8 +9795,7 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 
 	if (checkText(text, "yes") && managerTalkState[5]) {
 		uint32_t newAccountId = 0;
-		if (IOLoginData::createAccount(managerData.accountName, managerData.string1, newAccountId) &&
-		    IOLoginData::setAccountEmail(newAccountId, managerData.string2)) {
+		if (IOLoginData::createAccount(managerData.accountName, managerData.string1, newAccountId, managerData.string2)) {
 			accountManager = ACCOUNT_MANAGER_ACCOUNT;
 			managerData.accountId = newAccountId;
 			accountNumber = newAccountId;
@@ -9552,11 +9816,8 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 			return;
 		}
 
-		if (newAccountId != 0) {
-			msg << "Your account was created but the email could not be saved. Please contact an administrator.";
-		} else {
-			msg << "Your account could not be created, please try again.";
-		}
+		msg << "Your account could not be created, please try again.";
+		managerTalkState[1] = false;
 		for (int8_t i = 2; i <= 13; i++) {
 			managerTalkState[i] = false;
 		}
@@ -9574,7 +9835,7 @@ void Player::handleNewAccountManager(const std::string& text, std::ostringstream
 
 	// Allow "character" command even in NEW mode if account already exists
 	if (checkText(text, "character")) {
-		if (managerData.accountId != 0) {
+		if (managerData.accountId > 1) {
 			// Account already exists, switch to ACCOUNT mode
 			accountManager = ACCOUNT_MANAGER_ACCOUNT;
 			managerTalkState[1] = true;
@@ -9866,4 +10127,17 @@ void Player::clearCooldowns()
 			}
 		}
 	}
+}
+
+void Player::sendCharmActivated(uint8_t charmId, const Position* soundPosition) const
+{
+	if (client) client->sendCharmActivated(charmId);
+	const auto* sounds = g_bestiaryCharmSystem.getCharmSounds(charmId);
+	if (!sounds || (sounds->castSound == 0 && sounds->impactSound == 0)) return;
+	Position impactPosition = soundPosition ? *soundPosition : getPosition();
+	if (!soundPosition) {
+		if (auto target = getAttackedCreatureShared(); target && !target->isRemoved()) impactPosition = target->getPosition();
+	}
+	if (sounds->castSound != 0) g_game.addSoundEffect(getPosition(), sounds->castSound, getInstanceID(), const_cast<Player*>(this));
+	if (sounds->impactSound != 0) g_game.addSoundEffect(impactPosition, sounds->impactSound, getInstanceID(), const_cast<Player*>(this));
 }

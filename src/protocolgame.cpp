@@ -2,6 +2,7 @@
 // Use of this source code is governed by the GPL-2.0 License that can be found in the LICENSE file.
 
 #include "otpch.h"
+#include "market.h"
 
 #include "actions.h"
 #include "astraclient.h"
@@ -17,6 +18,7 @@
 #include "store/store_service.h"
 #include "store/store_types.h"
 #include "configmanager.h"
+#include "depotchest.h"
 #include "creatureevent.h"
 #include "echo_raid.h"
 #include "game.h"
@@ -28,6 +30,7 @@
 #include "outputmessage.h"
 #include "performance_metrics.h"
 #include "player.h"
+#include "stash.h"
 #include "protocolgame.h"
 #include "protocollogin.h"
 #include "protocolspectator.h"
@@ -715,11 +718,19 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 		}
 
 		name = player->getName();
-		bool isAccountManager =
-		    (name == "Account Manager" && ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER));
-
-		if (isAccountManager && accountId != 1) {
-			player->accountNumber = accountId;
+		if (name == "Account Manager") {
+			if (player->getAccount() != 1 || !getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+				disconnectClient("The Account Manager is unavailable.");
+				return;
+			}
+			player->setAccountManagerMode(accountId == 1 ? ACCOUNT_MANAGER_NEW : ACCOUNT_MANAGER_ACCOUNT);
+			if (accountId != 1) {
+				player->setAccountManagerData(accountId);
+				player->setManagerTalkState(1, true);
+			}
+		} else if (accountId == 1 || player->getAccount() != accountId) {
+			disconnectClient("Your character could not be loaded.");
+			return;
 		}
 
 		if (IOBan::isPlayerNamelocked(player->getGUID()) && accountId != 1) {
@@ -847,6 +858,10 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 		});
 		return;
 	} else {
+		if (accountId == 1 || foundPlayer->getAccount() != accountId) {
+			disconnectClient("Your character could not be loaded.");
+			return;
+		}
 		if (eventConnect != 0 || !getBoolean(ConfigManager::REPLACE_KICK_ON_LOGIN)) {
 			// Already trying to connect
 			disconnectClient("You are already logged in.");
@@ -883,6 +898,23 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 		return;
 	}
 
+	// The worker reloaded the character after the login reservation was made.
+	const auto mode = player->getAccountManagerMode();
+	if (mode == ACCOUNT_MANAGER_NEW || mode == ACCOUNT_MANAGER_ACCOUNT) {
+		if (player->getName() != "Account Manager" || player->getAccount() != 1 || !getBoolean(ConfigManager::ACCOUNT_MANAGER)) {
+			g_game.releaseLogin(reservedGuid);
+			disconnectClient("The Account Manager is unavailable.");
+			return;
+		}
+		player->accountNumber = accountId;
+	} else if (accountId == 1 || player->getAccount() != accountId) {
+		g_game.releaseLogin(reservedGuid);
+		disconnectClient("Your character could not be loaded.");
+		return;
+	}
+	if (player->isAccountManager()) {
+		player->setMovementBlocked(true);
+	}
 	IOLoginData::loadPlayerWorldData(player.get());
 
 	player->client->setOwner(getThis());
@@ -905,31 +937,28 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 		player->registerCreatureEvent("ExtendedOpcode");
 	}
 
-	const std::string& name = player->getName();
-	if (ConfigManager::getBoolean(ConfigManager::ACCOUNT_MANAGER) && name == "Account Manager" &&
-	    player->getAccountManagerMode() == ACCOUNT_MANAGER_NONE) {
-		if (accountId == 1) {
-			player->setAccountManagerMode(ACCOUNT_MANAGER_NEW);
-			player->sendTextMessage(
-			    MESSAGE_STATUS_CONSOLE_ORANGE,
-			    "Account Manager: Welcome! You are now speaking with the Account Manager. To create a new account, type {account}. If you already have one and need to recover it, type {recover}. Type {cancel} anytime to restart this conversation.");
-		} else {
-			player->setAccountManagerMode(ACCOUNT_MANAGER_ACCOUNT);
-			player->setAccountManagerData(accountId);
-			player->resetTalkState(0, 0);
-			player->setManagerTalkState(1, true);
-			player->sendTextMessage(
-			    MESSAGE_STATUS_CONSOLE_ORANGE,
-			    "Account Manager: Welcome back. Type {account} to manage your account, {character} to create a new character, or {cancel} to start over.");
-		}
-	}
-
-	if (player->isAccountManager()) {
-		player->setMovementBlocked(true);
+	if (mode == ACCOUNT_MANAGER_NEW) {
+		player->sendTextMessage(
+		    MESSAGE_STATUS_CONSOLE_ORANGE,
+		    "Account Manager: Welcome! You are now speaking with the Account Manager. To create a new account, type {account}. If you already have one and need to recover it, type {recover}. Type {cancel} anytime to restart this conversation.");
+	} else if (mode == ACCOUNT_MANAGER_ACCOUNT) {
+		player->sendTextMessage(
+		    MESSAGE_STATUS_CONSOLE_ORANGE,
+		    "Account Manager: Welcome back. Type {account} to manage your account, {character} to create a new character, or {cancel} to start over.");
 	}
 
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
+	player->onlineTimeSessionStart = time(nullptr);
+	// Loading ran only after SaveManager drained this GUID. Deliver on the dispatcher,
+	// after world/login hooks, so the item and receipt can share a player snapshot.
+	if (!player->isAccountManager()) {
+		(void)Market::processDeliveries(player.get());
+	}
+	if (g_saveManager.hasFailedRecovery(player->getGUID())) {
+		g_game.releaseLogin(reservedGuid);
+		return;
+	}
 	acceptPackets = true;
 	logPlayerSession(*player, player->lastIP, true);
 	g_game.releaseLogin(reservedGuid);
@@ -955,7 +984,7 @@ void ProtocolGame::spectate(const std::string& name, const std::string& password
 
 	auto foundPlayer = g_game.getPlayerByName(name);
 	auto castClient = foundPlayer ? foundPlayer->client : nullptr;
-	if (!foundPlayer || !castClient || !castClient->isBroadcasting()) {
+	if (!foundPlayer || foundPlayer->isAccountManager() || !castClient || !castClient->isBroadcasting()) {
 		LoginAttemptLimiter::getInstance().releaseReservation(clientIP, "");
 		disconnectClient("That cast is not available anymore.");
 		return;
@@ -1156,6 +1185,7 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	// OTCv8 version detection
+	bool requestedEffectSource = false;
 	if (msg.getBufferPosition() < msg.getLength()) {
 		uint16_t otcV8StringLength = msg.get<uint16_t>();
 		if (otcV8StringLength == 5 && msg.getString(5) == "OTCv8") {
@@ -1220,6 +1250,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    FonticakClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == "ES") {
+					requestedEffectSource = true;
 				} else if (marker == FonticakClient::STORE_HIGHLIGHTS_MARKER) {
 					supportsGameStoreHighlights = isFonticakClient;
 				} else {
@@ -1228,6 +1260,8 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 			}
 		}
 	}
+
+	supportsEffectSource = requestedEffectSource && isFonticakClient && !isAstraClient;
 
 	// mehah detect
 	if (operatingSystem == CLIENTOS_OTCLIENT_WINDOWS) {
@@ -1468,6 +1502,10 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 		return;
 	}
 
+	if (player->isPersistenceQuarantined() || g_saveManager.hasFailedRecovery(player->getGUID())) {
+		disconnect();
+		return; // including logout: no Lua or new snapshot after an uncertain commit
+	}
 	// a dead player can not performs actions
 	if (player->isRemoved() || player->isDead()) {
 		if (recvbyte == 0x0F) {
@@ -1492,6 +1530,14 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 				sendCancelWalk();
 				return; // block all other actions
 		}
+	}
+
+	// Account Manager sessions may only talk, ping, and logout.
+	// Block all gameplay, Store, Market, Character Bazaar, VIP, extended opcodes, and Lua packet handlers.
+	if (player->isAccountManager() && !isOpcodeAllowedForAccountManager(recvbyte)) {
+		skipUnreadBytes(msg);
+		sendCancelWalk();
+		return;
 	}
 
 	if (isSpectator) {
@@ -1858,6 +1904,28 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 			parseBugReport(msg);
 			break;
 
+		case 0xE5: // Cyclopedia character info request
+			{
+				// Achievement requests are handled by the Lua PacketHandler. Rewind the
+				// payload after checking its type so the handler can read it normally.
+				const auto requestPosition = msg.getBufferPosition();
+				if (msg.getRemainingBufferLength() >= sizeof(uint32_t) + sizeof(uint8_t)) {
+					msg.get<uint32_t>();
+					const uint8_t infoType = msg.getByte();
+					msg.setBufferPosition(requestPosition - NetworkMessage::INITIAL_BUFFER_POSITION);
+					if (infoType == 5 || infoType == 11) {
+						handlePlayerNetworkMessage(recvbyte);
+						break;
+					}
+				}
+				parseCyclopediaCharacterInfo(msg);
+			}
+			break;
+
+		case 0x81: // Character title selection
+			handlePlayerNetworkMessage(recvbyte);
+			break;
+
 		case 0xE7: /* thank you / custom wheel gem action */
 			handlePlayerNetworkMessage(recvbyte);
 			break;
@@ -1917,8 +1985,8 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 
 void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 {
-	if (!player || !isAstraClient || !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) ||
-	    !requireUnreadBytes(msg, 1)) {
+	if (!player || player->isAccountManager() || !isAstraClient ||
+	    !ConfigManager::getBoolean(ConfigManager::CHARACTER_BAZAAR_ENABLED) || !requireUnreadBytes(msg, 1)) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -1954,7 +2022,7 @@ void ProtocolGame::parseCharacterBazaar(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreOpen(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -1977,7 +2045,7 @@ void ProtocolGame::parseStoreOpen(NetworkMessage& msg)
 
 void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2057,7 +2125,7 @@ void ProtocolGame::parseStorePurchase(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreHistory(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2080,7 +2148,7 @@ void ProtocolGame::parseStoreHistory(NetworkMessage& msg)
 
 void ProtocolGame::parseStoreTransfer(NetworkMessage& msg)
 {
-	if (!player || !isOTC) {
+	if (!player || player->isAccountManager() || !isOTC) {
 		skipUnreadBytes(msg);
 		return;
 	}
@@ -2785,6 +2853,16 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 	uint16_t channelId;
 
 	SpeakClasses type = static_cast<SpeakClasses>(msg.getByte());
+	if (player->isAccountManager()) {
+		if (type == TALKTYPE_SAY) {
+			const auto dialogue = msg.getString();
+			if (!msg.isOverrun() && !dialogue.empty() && dialogue.size() <= 255) {
+				player->manageAccount(dialogue);
+			}
+		}
+		skipUnreadBytes(msg);
+		return;
+	}
 	switch (type) {
 		case TALKTYPE_PRIVATE:
 		case TALKTYPE_PRIVATE_RED:
@@ -2815,11 +2893,6 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 		}
 	}
 	if (text.length() > 255) {
-		return;
-	}
-
-	if (player->isAccountManager()) {
-		player->manageAccount(text);
 		return;
 	}
 
@@ -3250,7 +3323,7 @@ void ProtocolGame::invalidateItemValuesCache()
 void ProtocolGame::sendImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
                                      std::string_view targetName)
 {
-	if (!isAstraClient || amount == 0) {
+	if ((!isAstraClient && !isFonticakClient) || amount == 0) {
 		return;
 	}
 
@@ -3852,7 +3925,7 @@ void ProtocolGame::sendShop(const ShopInfoList& itemList)
 
 		msg.add<uint16_t>(itemsToSend);
 
-		uint16_t written = 0;
+		size_t written = 0;
 		for (auto it = itemList.begin(); it != itemList.end() && written < itemsToSend; ++it, ++written) {
 			AddShopItem(msg, *it);
 		}
@@ -4305,17 +4378,20 @@ ProtocolGame::CustomPongResult ProtocolGame::receiveCustomPong(uint32_t id, int6
 	return CustomPongResult::Unknown;
 }
 
-void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type)
+void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint16_t type, Creature* actor)
 {
-	SmallNetworkMessage<13> msg;
+	SmallNetworkMessage<14> msg;
 	msg.addByte(0x85);
 	msg.addPosition(from);
 	msg.addPosition(to);
 	msg.add<uint16_t>(type);
+	if (shouldSendEffectSource()) {
+		msg.addByte(actor ? (actor == player.get() ? 1 : (actor->getPlayer() ? 2 : 3)) : 0);
+	}
 	writeToOutputBuffer(msg.bytes());
 }
 
-void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
+void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type, Creature* actor)
 {
 	if (!canSee(pos)) {
 		return;
@@ -4326,11 +4402,58 @@ void ProtocolGame::sendMagicEffect(const Position& pos, uint16_t type)
 		return;
 	}
 
-	SmallNetworkMessage<8> msg;
+	SmallNetworkMessage<9> msg;
 	msg.addByte(0x83);
 	msg.addPosition(pos);
 	msg.add<uint16_t>(type);
+	if (shouldSendEffectSource()) {
+		msg.addByte(actor ? (actor == player.get() ? 1 : (actor->getPlayer() ? 2 : 3)) : 0);
+	}
 	writeToOutputBuffer(msg.bytes());
+}
+
+void ProtocolGame::sendAmbientSound(uint32_t ambientId)
+{
+	if (!isFonticakClient || isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x47); // OTC-Fonticak location ambience; 0 stops the current ambience.
+	msg.add<uint32_t>(ambientId);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source)
+{
+	if (!isFonticakClient || isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x46); // OTC-Fonticak custom sound opcode
+	msg.addPosition(pos);
+	msg.addByte(source);
+	msg.add<uint16_t>(soundId);
+	msg.addByte(0); // no secondary effect
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source)
+{
+	if (!isFonticakClient || isAstraClient) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x46); // OTC-Fonticak custom sound opcode
+	msg.addPosition(pos);
+	msg.addByte(source);
+	msg.add<uint16_t>(mainSoundId);
+	msg.addByte(1); // secondary effect follows
+	msg.addByte(source);
+	msg.add<uint16_t>(secondarySoundId);
+	writeToOutputBuffer(msg);
 }
 
 void ProtocolGame::sendCreatureHealth(const Creature* creature)
@@ -5560,6 +5683,505 @@ void ProtocolGame::sendOutfitWindow()
 	writeToOutputBuffer(msg);
 }
 
+void ProtocolGame::parseCyclopediaCharacterInfo(NetworkMessage& msg)
+{
+	const uint32_t characterId = msg.get<uint32_t>();
+	const uint8_t infoType = msg.getByte();
+	uint16_t entriesPerPage = 23;
+	uint16_t page = 1;
+	if (infoType == 3 || infoType == 4) {
+		entriesPerPage = msg.get<uint16_t>();
+		page = msg.get<uint16_t>();
+	}
+	// Character id 0 means the logged-in character. Item Summary is type 6.
+	if (characterId != 0 || !player) {
+		return;
+	}
+
+	if (infoType == 3 || infoType == 4) {
+		const int64_t now = OTSYS_TIME();
+		if (now - lastCharacterHistoryRequest < 500) {
+			return;
+		}
+		lastCharacterHistoryRequest = now;
+	}
+
+	if (infoType == 3) {
+		sendCyclopediaRecentDeaths(entriesPerPage, page);
+	} else if (infoType == 4) {
+		sendCyclopediaRecentPvPKills(entriesPerPage, page);
+	} else if (infoType == 6) {
+		const int64_t now = OTSYS_TIME();
+		if (now - lastCharacterItemSummaryRequest < 125) {
+			return;
+		}
+		lastCharacterItemSummaryRequest = now;
+		sendCyclopediaItemSummary();
+	} else if (infoType == 7) {
+		sendCyclopediaCharacterAppearances();
+	} else if (infoType == 8) {
+		sendCyclopediaStoreSummary();
+	} else if (infoType >= 13 && infoType <= 15) {
+		if (isAstraClient) {
+			sendCyclopediaCharacterStats(infoType);
+		} else {
+			NetworkMessage unavailable;
+			unavailable.addByte(218);
+			unavailable.addByte(infoType);
+			unavailable.addByte(1); // This compact stats format is specific to Astra.
+			writeToOutputBuffer(unavailable);
+		}
+	}
+}
+
+void ProtocolGame::sendCyclopediaCharacterStats(uint8_t type)
+{
+	if (!player) {
+		return;
+	}
+	NetworkMessage msg;
+	msg.addByte(218);
+	msg.addByte(type);
+	msg.addByte(0);
+	if (type == 13) {
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_CRITICALHITCHANCE));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_CRITICALHITAMOUNT));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_LIFELEECHAMOUNT));
+		msg.add<uint16_t>(player->getSpecialSkill(SPECIALSKILL_MANALEECHAMOUNT));
+	} else if (type == 14) {
+		msg.add<uint16_t>(static_cast<uint16_t>(std::max<int32_t>(0, player->getArmor())));
+		msg.add<uint16_t>(static_cast<uint16_t>(std::max<int32_t>(0, player->getDefense())));
+		msg.add<uint16_t>(static_cast<uint16_t>(std::clamp<float>(player->getMitigation() * 100, 0, 65535)));
+		msg.add<uint16_t>(player->getSkillLevel(SKILL_SHIELD));
+	} else {
+		uint8_t blessings = 0;
+		for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+			if (player->getBlessingCount(id) > 0) {
+				++blessings;
+			}
+		}
+		msg.addByte(blessings);
+		msg.addByte(PLAYER_MAX_BLESSINGS);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaRecentDeaths(uint16_t entriesPerPage, uint16_t page)
+{
+	if (!player) {
+		return;
+	}
+
+	Database& db = Database::getInstance();
+	entriesPerPage = std::clamp<uint16_t>(entriesPerPage, 1, 100);
+	page = std::max<uint16_t>(page, 1);
+	const auto totalResult = db.storeQuery(fmt::format(
+	    "SELECT COUNT(*) AS `total` "
+	    "FROM `player_deaths` WHERE `player_id` = {:d}", player->getGUID()));
+	if (!totalResult) {
+		NetworkMessage error;
+		error.addByte(218);
+		error.addByte(3);
+		error.addByte(1);
+		writeToOutputBuffer(error);
+		return;
+	}
+	const uint32_t totalEntries = totalResult->getNumber<uint32_t>("total");
+	const uint16_t totalPages = static_cast<uint16_t>(std::min<uint32_t>(
+	    (totalEntries + entriesPerPage - 1) / entriesPerPage, std::numeric_limits<uint16_t>::max()));
+	const uint32_t offset = static_cast<uint32_t>(page - 1) * entriesPerPage;
+	const auto result = db.storeQuery(fmt::format(
+	    "SELECT `time`, `level`, `killed_by`, `mostdamage_by` FROM `player_deaths` "
+	    "WHERE `player_id` = {:d} ORDER BY `time` DESC LIMIT {:d} OFFSET {:d}",
+	    player->getGUID(), entriesPerPage, offset));
+	std::vector<std::pair<uint32_t, std::string>> entries;
+	if (result) {
+		do {
+			const uint32_t timestamp = result->getNumber<uint32_t>("time");
+			const uint32_t level = result->getNumber<uint32_t>("level");
+			const std::string_view killedBy = result->getString("killed_by");
+			std::string cause = fmt::format("Died at Level {} by {}", level, killedBy);
+			const std::string_view mostDamageBy = result->getString("mostdamage_by");
+			if (!mostDamageBy.empty() && mostDamageBy != killedBy) {
+				cause += fmt::format(" and {}", mostDamageBy);
+			}
+			entries.emplace_back(timestamp, std::move(cause));
+		} while (result->next());
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(3);   // CYCLOPEDIA_CHARACTERINFO_RECENTDEATHS
+	msg.addByte(0);   // no error
+	msg.add<uint16_t>(page);
+	msg.add<uint16_t>(totalPages);
+	msg.add<uint16_t>(static_cast<uint16_t>(entries.size()));
+	for (const auto& [timestamp, cause] : entries) {
+		msg.add<uint32_t>(timestamp);
+		msg.addString(cause);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaRecentPvPKills(uint16_t entriesPerPage, uint16_t page)
+{
+	if (!player) {
+		return;
+	}
+
+	Database& db = Database::getInstance();
+	entriesPerPage = std::clamp<uint16_t>(entriesPerPage, 1, 100);
+	page = std::max<uint16_t>(page, 1);
+	const std::string escapedName = db.escapeString(player->getName());
+	const std::string where = fmt::format(
+	    "FROM `player_deaths` AS d WHERE d.`killed_by` = {:s} AND d.`is_player` = 1", escapedName);
+	const auto totalResult = db.storeQuery(fmt::format(
+	    "SELECT COUNT(*) AS `total` {:s}", where));
+	if (!totalResult) {
+		NetworkMessage error;
+		error.addByte(218);
+		error.addByte(4);
+		error.addByte(1);
+		writeToOutputBuffer(error);
+		return;
+	}
+	const uint32_t totalEntries = totalResult->getNumber<uint32_t>("total");
+	const uint16_t totalPages = static_cast<uint16_t>(std::min<uint32_t>(
+	    (totalEntries + entriesPerPage - 1) / entriesPerPage, std::numeric_limits<uint16_t>::max()));
+	const uint32_t offset = static_cast<uint32_t>(page - 1) * entriesPerPage;
+	const auto result = db.storeQuery(fmt::format(
+	    "SELECT d.`time`, d.`level`, d.`unjustified`, p.`name` AS `victim_name` FROM `player_deaths` AS d "
+	    "LEFT JOIN `players` AS p ON p.`id` = d.`player_id` WHERE d.`killed_by` = {:s} AND d.`is_player` = 1 "
+	    "ORDER BY d.`time` DESC LIMIT {:d} OFFSET {:d}",
+	    escapedName, entriesPerPage, offset));
+	struct RecentKill {
+		uint32_t timestamp;
+		std::string description;
+		uint8_t status;
+	};
+	std::vector<RecentKill> entries;
+	if (result) {
+		do {
+			const uint32_t timestamp = result->getNumber<uint32_t>("time");
+			const uint32_t level = result->getNumber<uint32_t>("level");
+			const std::string_view victimName = result->getString("victim_name");
+			entries.push_back({timestamp, fmt::format("Killed {} at Level {}", victimName, level),
+			                   static_cast<uint8_t>(result->getNumber<uint8_t>("unjustified") ? 1 : 0)});
+		} while (result->next());
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(4);   // CYCLOPEDIA_CHARACTERINFO_RECENTPVPKILLS
+	msg.addByte(0);   // no error
+	msg.add<uint16_t>(page);
+	msg.add<uint16_t>(totalPages);
+	msg.add<uint16_t>(static_cast<uint16_t>(entries.size()));
+	for (const auto& entry : entries) {
+		msg.add<uint32_t>(entry.timestamp);
+		msg.addString(entry.description);
+		msg.addByte(entry.status);
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaItemSummary()
+{
+	if (!player) {
+		return;
+	}
+
+	using ItemKey = std::pair<uint16_t, uint8_t>;
+	using ItemCounts = std::map<ItemKey, uint64_t>;
+	std::array<ItemCounts, 5> categories;
+
+	const auto addItem = [](ItemCounts& counts, const Item* item) {
+		if (!item || item->getID() == 0) {
+			return;
+		}
+		const uint8_t tier = item->getClassification() > 0 ? item->getTier() : 0;
+		counts[{item->getID(), tier}] += getPlayerInventoryItemAmount(item);
+	};
+	const auto addContainer = [&addItem](ItemCounts& counts, const Container* container) {
+		if (!container) {
+			return;
+		}
+		for (const auto& item : container->getItems(true)) {
+			addItem(counts, item.get());
+		}
+	};
+
+	// Inventory: equipment and everything inside carried containers.
+	for (const auto& item : player->getEquippedItems()) {
+		addItem(categories[0], item.get());
+		if (const Container* container = item ? item->getContainer() : nullptr) {
+			addContainer(categories[0], container);
+		}
+	}
+	if (const Item* ammo = player->getInventoryItem(CONST_SLOT_AMMO)) {
+		addItem(categories[0], ammo);
+		if (const Container* container = ammo->getContainer()) {
+			addContainer(categories[0], container);
+		}
+	}
+
+	// Store inbox.
+	addContainer(categories[1], player->getStoreInbox());
+
+	// Supply stash rows are persisted separately from normal item containers.
+	for (const StashRecord& row : Stash::getRows(player->getGUID())) {
+		if (row.itemId != 0 && row.itemId < Item::items.size() && row.amount != 0) {
+			categories[2][{row.itemId, row.tier}] += row.amount;
+		}
+	}
+
+	// Depot chests may contain nested containers.
+	for (const auto& [depotId, chest] : player->depotChests) {
+		(void)depotId;
+		addContainer(categories[3], chest.get());
+	}
+
+	// Mail inboxes are attached to depot lockers, one per town.
+	for (const auto& [depotId, locker] : player->depotLockerMap) {
+		(void)locker;
+		addContainer(categories[4], player->getInbox(depotId));
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(6);   // CYCLOPEDIA_CHARACTERINFO_ITEMSUMMARY
+	msg.addByte(0);   // no error
+	// Keep room for every remaining category header. NetworkMessage silently
+	// rejects writes past its fixed buffer, so the count must be chosen first.
+	constexpr size_t maxPayload = NetworkMessage::MAX_BODY_LENGTH - NetworkMessage::INITIAL_BUFFER_POSITION - 1;
+	for (size_t categoryIndex = 0; categoryIndex < categories.size(); ++categoryIndex) {
+		const ItemCounts& counts = categories[categoryIndex];
+		size_t available = maxPayload - msg.getLength() -
+		                   (categories.size() - categoryIndex) * sizeof(uint16_t);
+		uint16_t count = 0;
+		for (const auto& [key, amount] : counts) {
+			(void)amount;
+			if (count == std::numeric_limits<uint16_t>::max()) {
+				break;
+			}
+			const size_t entrySize = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint32_t) +
+			                         sizeof(uint16_t) + Item::items[key.first].name.size();
+			if (entrySize > available) {
+				break;
+			}
+			available -= entrySize;
+			++count;
+		}
+		msg.add<uint16_t>(count);
+		uint16_t written = 0;
+		for (const auto& [key, amount] : counts) {
+			if (written++ >= count) {
+				break;
+			}
+			const auto [itemId, tier] = key;
+			msg.add<uint16_t>(itemId);
+			// The client consumes a fixed-width tier field for each summary item.
+			msg.addByte(tier);
+			msg.add<uint32_t>(static_cast<uint32_t>(std::min<uint64_t>(amount, std::numeric_limits<uint32_t>::max())));
+			msg.addString(Item::items[itemId].name);
+		}
+		if (count < counts.size()) {
+			LOG_WARN("[Cyclopedia] Item summary for player {} was truncated in category {} ({} of {} items)",
+			         player->getGUID(), categoryIndex, count, counts.size());
+		}
+	}
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaCharacterAppearances()
+{
+	if (!player) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(7);   // CYCLOPEDIA_CHARACTERINFO_OUTFITSMOUNTS
+	msg.addByte(0);   // no error
+
+	const Outfit_t currentOutfit = player->getDefaultOutfit();
+	const auto& availableOutfits = Outfits::getInstance().getOutfits(player->getSex());
+	const bool monkVocationEnabled = ConfigManager::getBoolean(ConfigManager::MONK_VOCATION_ENABLED);
+	std::vector<std::pair<const Outfit*, uint8_t>> outfits;
+	for (const Outfit* outfit : availableOutfits) {
+		if (!outfit || (!monkVocationEnabled && outfit->name == "Monk")) {
+			continue;
+		}
+		uint8_t addons = 0;
+		if (player->getOutfitAddons(*outfit, addons)) {
+			outfits.emplace_back(outfit, addons);
+		}
+	}
+
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(outfits.size(), std::numeric_limits<uint16_t>::max())));
+	for (size_t i = 0; i < outfits.size() && i < std::numeric_limits<uint16_t>::max(); ++i) {
+		const auto& [outfit, addons] = outfits[i];
+		msg.add<uint16_t>(outfit->lookType);
+		msg.addString(outfit->name);
+		msg.addByte(addons);
+		msg.addByte(1); // unlocked outfit
+		msg.add<uint32_t>(outfit->lookType == currentOutfit.lookType ? 1000 : 0);
+	}
+
+	if (!outfits.empty()) {
+		msg.addByte(currentOutfit.lookHead);
+		msg.addByte(currentOutfit.lookBody);
+		msg.addByte(currentOutfit.lookLegs);
+		msg.addByte(currentOutfit.lookFeet);
+	}
+
+	std::vector<const Mount*> mounts;
+	for (const auto& [id, mount] : g_game.mounts.getMounts()) {
+		(void)id;
+		if (player->hasMount(&mount)) {
+			mounts.push_back(&mount);
+		}
+	}
+	std::sort(mounts.begin(), mounts.end(), [](const Mount* left, const Mount* right) {
+		return left->name < right->name;
+	});
+
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(mounts.size(), std::numeric_limits<uint16_t>::max())));
+	for (size_t i = 0; i < mounts.size() && i < std::numeric_limits<uint16_t>::max(); ++i) {
+		const Mount* mount = mounts[i];
+		msg.add<uint16_t>(mount->clientId);
+		msg.addString(mount->name);
+		msg.addByte(1); // unlocked mount
+		msg.add<uint32_t>(mount->id == player->getCurrentMount() ? 1000 : 0);
+	}
+
+	if (!mounts.empty()) {
+		msg.addByte(currentOutfit.lookHead);
+		msg.addByte(currentOutfit.lookBody);
+		msg.addByte(currentOutfit.lookLegs);
+		msg.addByte(currentOutfit.lookFeet);
+	}
+
+	const auto familiar = Familiar::getFamiliarInfo(player.get());
+	msg.add<uint16_t>(familiar ? 1 : 0);
+	if (familiar) {
+		msg.add<uint16_t>(familiar->lookType);
+		msg.addString(familiar->name);
+		msg.addByte(1);
+		msg.add<uint32_t>(currentOutfit.lookFamiliar == familiar->lookType ? 1000 : 0);
+	}
+
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCyclopediaStoreSummary()
+{
+	if (!player) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(218); // GameServerCyclopediaCharacterInfoData
+	msg.addByte(8);   // CYCLOPEDIA_CHARACTERINFO_STORESUMMARY
+	msg.addByte(0);   // no error
+	msg.add<uint32_t>(player->getXpBoostTime());
+	msg.add<uint32_t>(0); // This server has no separate daily-reward XP boost timer.
+
+	static constexpr std::array<std::string_view, PLAYER_MAX_BLESSINGS + 1> blessingNames = {
+		"", "Twist of Fate", "The Spiritual Shielding", "The Embrace of Tibia",
+		"The Fire of the Suns", "The Wisdom of Solitude", "The Spark of the Phoenix", "Blessing 7", "Blessing 8"
+	};
+	uint8_t blessingCount = 0;
+	for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+		if (player->getBlessingCount(id) > 0) {
+			++blessingCount;
+		}
+	}
+	msg.addByte(blessingCount);
+	for (uint8_t id = 1; id <= PLAYER_MAX_BLESSINGS; ++id) {
+		const uint8_t count = player->getBlessingCount(id);
+		if (count == 0) {
+			continue;
+		}
+		msg.addString(blessingNames[id]);
+		msg.addByte(count);
+	}
+
+	constexpr uint32_t PERMANENT_PREY_SLOT_STORAGE = 780200;
+	const auto permanentPreySlot = player->getStorageValue(PERMANENT_PREY_SLOT_STORAGE);
+	msg.addByte(permanentPreySlot && permanentPreySlot.value() == 1 ? 1 : 0);
+	msg.addByte(static_cast<uint8_t>(std::min<uint64_t>(player->getPreyWildcards(), std::numeric_limits<uint8_t>::max())));
+	if (getVersion() >= 1521) {
+		msg.addByte(player->hasWeeklyExpansion() ? 1 : 0);
+	}
+
+	constexpr uint32_t DAILY_REWARD_INSTANT_TOKENS_STORAGE = 90724;
+	const auto instantRewardTokens = player->getStorageValue(DAILY_REWARD_INSTANT_TOKENS_STORAGE);
+	msg.addByte(static_cast<uint8_t>(std::clamp<int64_t>(instantRewardTokens.value_or(0), 0, std::numeric_limits<uint8_t>::max())));
+	msg.addByte(0); // Charm expansion is not persisted by this server.
+	msg.addByte(0); // Hireling ownership is managed outside the player record.
+	msg.addByte(0); // Hireling skills
+	msg.addByte(0); // Hireling outfits
+	std::map<uint16_t, uint32_t> purchasedHouseItems;
+	const auto addPurchasedItem = [&purchasedHouseItems](uint16_t itemId, uint32_t count) {
+		if (itemId > 0 && itemId < Item::items.size() && !Item::items[itemId].name.empty() && count > 0) {
+			purchasedHouseItems[itemId] += count;
+		}
+	};
+	const auto scanStoreItems = [&addPurchasedItem](const ItemVector& items) {
+		for (const auto& item : items) {
+			if (!item || !item->hasAttribute(ITEM_ATTRIBUTE_WRAPID)) {
+				continue;
+			}
+			const auto wrappedId = static_cast<uint16_t>(item->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
+			if (item->getID() == ITEM_DECORATION_KIT) {
+				addPurchasedItem(wrappedId, item->getItemCount());
+			} else if (wrappedId == ITEM_DECORATION_KIT) {
+				addPurchasedItem(item->getID(), item->getItemCount());
+			}
+		}
+	};
+
+	// Unopened decoration kits remain in the Store Inbox; installed decorations
+	// retain the kit ID in WRAPID and are found on the player's owned house tiles.
+	if (const StoreInbox* inbox = player->getStoreInbox()) {
+		scanStoreItems(inbox->getItems(true));
+	}
+	for (const auto& [depotId, chest] : player->depotChests) {
+		(void)depotId;
+		if (chest) {
+			scanStoreItems(chest->getItems(true));
+		}
+	}
+	if (const auto house = g_game.map.houses.getHouseByPlayerId(player->getGUID())) {
+		for (const auto& weakTile : house->getTiles()) {
+			const auto tile = weakTile.lock();
+			if (!tile) {
+				continue;
+			}
+			if (const TileItemVector* items = tile->getItemList()) {
+				ItemVector tileItems(items->begin(), items->end());
+				scanStoreItems(tileItems);
+				for (const auto& item : tileItems) {
+					if (!item) {
+						continue;
+					}
+					if (const auto container = item->getContainer()) {
+						scanStoreItems(container->getItems(true));
+					}
+				}
+			}
+		}
+	}
+	msg.add<uint16_t>(static_cast<uint16_t>(std::min<size_t>(purchasedHouseItems.size(), std::numeric_limits<uint16_t>::max())));
+	for (const auto& [itemId, count] : purchasedHouseItems) {
+		msg.add<uint16_t>(itemId);
+		msg.addString(Item::items[itemId].name);
+		msg.addByte(static_cast<uint8_t>(std::min<uint32_t>(count, std::numeric_limits<uint8_t>::max())));
+	}
+	writeToOutputBuffer(msg);
+}
+
 void ProtocolGame::sendItemInspection(std::shared_ptr<Item> item, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType)
 {
 	if (!isAstraClient && !isFonticakClient) {
@@ -6760,6 +7382,11 @@ void ProtocolGame::sendFeatures(bool advertiseAstraItemState)
 		features[GameFeature::AstraQuiverCountU16] = true;
 		features[GameFeature::AstraOutfitStoreMode] = true;
 		features[GameFeature::DoubleShopSellAmount] = true;
+	}
+	// ID 133 means creature icons in Astra. Never overwrite its feature or
+	// append Fonticak's source byte to Astra/CIP effect packets.
+	if (shouldSendEffectSource()) {
+		features[GameFeature::EffectSource] = true;
 	}
 	// Loot highlight container types (OTC GameContainerTypes) — negotiated per client.
 	if (isAstraClient || isFonticakClient) {

@@ -10,6 +10,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Cure Bleeding")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CURE_BLEEDING)
 spell:words("exana kor")
 spell:group("healing")
 spell:vocation("druid;true", "elder druid;true", "knight;true", "elite knight;true")

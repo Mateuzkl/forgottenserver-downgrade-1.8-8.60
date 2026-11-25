@@ -21,6 +21,8 @@ end
 spell:group("attack")
 spell:id(148)
 spell:name("Physical Strike")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_PHYSICAL_STRIKE)
 spell:words("exori moe ico")
 spell:level(16)
 spell:mana(20)

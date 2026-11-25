@@ -29,6 +29,8 @@ bool stdoutIsTerminal()
 #ifdef _WIN32
 bool enableVirtualTerminalProcessing()
 {
+	SetConsoleOutputCP(CP_UTF8);
+	SetConsoleCP(CP_UTF8);
 	HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (output == nullptr || output == INVALID_HANDLE_VALUE) {
 		return false;
@@ -171,6 +173,22 @@ void StartupProgress::fail(std::string_view)
 	active = false;
 }
 
+void StartupProgress::breakConsoleLine()
+{
+	std::scoped_lock lock(mutex);
+	if (!active || !displayEnabled || !terminal || !consoleLineOpen) {
+		return;
+	}
+	if (colors) {
+		fmt::print("\r\x1b[2K");
+	} else {
+		fmt::print("\n");
+	}
+	std::fflush(stdout);
+	consoleLineOpen = false;
+	lastVisualPercent = -1;
+}
+
 void StartupProgress::startVisualPhaseLocked(VisualPhase phase)
 {
 	visualPhase = phase;
@@ -220,7 +238,11 @@ void StartupProgress::renderVisualLocked(bool force)
 	const std::string_view completed = percent == 100 ? " ✔" : "";
 
 	if (terminal) {
-		fmt::print("\r    [{}] {:3}%{}", bar, percent, completed);
+		if (colors) {
+			fmt::print("\r\x1b[2K    [{}] {:3}%{}", bar, percent, completed);
+		} else {
+			fmt::print("\r    [{}] {:3}%{}", bar, percent, completed);
+		}
 		consoleLineOpen = percent != 100;
 		if (!consoleLineOpen) {
 			fmt::print("{}", visualPhase == VisualPhase::MAP ? "\n\n" : "\n");

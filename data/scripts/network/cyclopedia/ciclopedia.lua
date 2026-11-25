@@ -249,12 +249,15 @@ local function loadKillMap(playerGuid)
 
 	local kills = {}
 	local resultId = db.storeQuery("SELECT `raceid`, `kills` FROM `player_bestiary_kills` WHERE `player_id` = " .. playerGuid)
-	if resultId ~= false then
-		repeat
-			kills[result.getDataInt(resultId, "raceid")] = result.getDataInt(resultId, "kills")
-		until not result.next(resultId)
-		result.free(resultId)
+	if resultId == false then
+		-- No rows and query failures share this result. Leave both uncached so
+		-- a transient database error cannot pin kill progress at zero.
+		return kills
 	end
+	repeat
+		kills[result.getDataInt(resultId, "raceid")] = result.getDataInt(resultId, "kills")
+	until not result.next(resultId)
+	result.free(resultId)
 
 	killCache[playerGuid] = kills
 	rebuildEarnedPoints(playerGuid, kills)
@@ -954,6 +957,7 @@ local function toggleTracker(player, raceId)
 
 	if #tracker >= MAX_TRACKER_SLOTS then
 		sendMessage(player, "Your bestiary tracker is full.")
+		sendTracker(player)
 		return
 	end
 

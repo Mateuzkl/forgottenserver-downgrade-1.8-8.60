@@ -7,6 +7,7 @@ end
 spell:group("support")
 spell:id(154)
 spell:name("Arrow Call")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_ARROW_CALL)
 spell:words("exevo infir con")
 spell:level(1)
 spell:mana(10)

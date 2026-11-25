@@ -7,6 +7,7 @@ end
 spell:group("support")
 spell:id(169)
 spell:name("Enchant Spear")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_ENCHANT_SPEAR)
 spell:words("exeta con")
 spell:level(45)
 spell:mana(350)

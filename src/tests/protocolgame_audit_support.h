@@ -23,11 +23,17 @@ struct ProtocolGameAuditTestAccess
 	{
 		return protocol.pendingCreatureEmblems.contains(id);
 	}
+	static void effectSource(ProtocolGame& protocol, bool fonticak, bool astra, bool supported)
+	{
+		protocol.isFonticakClient = fonticak;
+		protocol.isAstraClient = astra;
+		protocol.supportsEffectSource = supported;
+	}
 	static void outfit(ProtocolGame& protocol, const Creature* creature, const Outfit_t& outfit) { protocol.sendCreatureOutfit(creature,outfit); }
 	static void walkthrough(ProtocolGame& protocol, const Creature* creature, bool value) { protocol.sendCreatureWalkthrough(creature,value); }
-	static void effect(ProtocolGame& protocol, const Position& pos, uint16_t value) { protocol.sendMagicEffect(pos,value); }
+	static void effect(ProtocolGame& protocol, const Position& pos, uint16_t value, Creature* actor = nullptr) { protocol.sendMagicEffect(pos,value,actor); }
 	static void health(ProtocolGame& protocol, const Creature* creature) { protocol.sendCreatureHealth(creature); }
-	static void distance(ProtocolGame& protocol, const Position& from, const Position& to, uint16_t value) { protocol.sendDistanceShoot(from,to,value); }
+	static void distance(ProtocolGame& protocol, const Position& from, const Position& to, uint16_t value, Creature* actor = nullptr) { protocol.sendDistanceShoot(from,to,value,actor); }
 	static void animated(ProtocolGame& protocol, std::string_view text, const Position& pos, TextColor_t color) { protocol.sendAnimatedText(text,pos,color); }
 	static void text(ProtocolGame& protocol, MessageClasses type, const std::string& text) { protocol.sendTextMessage(type,text); }
 	static void text(ProtocolGame& protocol, const TextMessage& text) { protocol.sendTextMessage(text); }

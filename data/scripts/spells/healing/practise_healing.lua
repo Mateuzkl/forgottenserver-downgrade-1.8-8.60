@@ -18,6 +18,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Practise Healing")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_PRACTISE_HEALING)
 spell:words("exura dis")
 spell:group("healing")
 spell:vocation("none")

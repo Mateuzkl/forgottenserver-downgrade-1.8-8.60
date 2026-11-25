@@ -364,4 +364,37 @@ TEST_CASE(lua_party_lifetime_handles_survive_1000_disband_and_gc_cycles)
 	}
 }
 
+TEST_CASE(disbanded_lua_party_analyzer_methods_stay_safe)
+{
+	Fixture f;
+	auto leader = player("Leader");
+	f.track(leader);
+	auto party = Party::create(leader.get());
+	std::weak_ptr<Party> weak = party;
+	lua_State* L = g_luaEnvironment.getLuaState();
+	Lua::pushUserdata<Party>(L, party.get());
+	Lua::setMetatable(L, -1, "Party");
+	lua_setglobal(L, "auditParty");
+	Lua::pushUserdata<Player>(L, leader.get());
+	Lua::setMetatable(L, -1, "Player");
+	lua_setglobal(L, "auditLeader");
+	CHECK(luaL_dostring(L,
+	    "assert(auditParty:getAnalyzerId() > 0); "
+	    "auditParty:addAnalyzerLoot(auditLeader, 50); "
+	    "local loot, supplies, damage, healing = auditParty:getAnalyzerMemberStats(auditLeader:getId()); "
+	    "assert(loot == 50 and supplies == 0 and damage == 0 and healing == 0); "
+	    "auditParty:resetAnalyzerStats(); "
+	    "local lootAfter = auditParty:getAnalyzerMemberStats(auditLeader:getId()); "
+	    "assert(lootAfter == 0)") == LUA_OK);
+	CHECK(party->disband());
+	party.reset();
+	CHECK(weak.expired());
+	CHECK(luaL_dostring(L,
+	    "assert(auditParty:getAnalyzerId() == nil); "
+	    "assert(auditParty:getAnalyzerMemberStats(auditLeader:getId()) == nil); "
+	    "auditParty:addAnalyzerLoot(auditLeader, 99); "
+	    "auditParty:resetAnalyzerStats(); "
+	    "auditParty = nil; auditLeader = nil; collectgarbage('collect')") == LUA_OK);
+}
+
 TFS_TEST_MAIN()

@@ -1,6 +1,7 @@
 #include "../otpch.h"
 
 #include "../game.h"
+#include "../monster.h"
 #include "../performance_metrics.h"
 #include "../player.h"
 #include "../smallnetworkmessage.h"
@@ -101,6 +102,43 @@ TEST_CASE(combat_fixed_packets_keep_the_existing_wire_bytes)
 		f.player->setHiddenHealth(true);
 		ProtocolGameAuditTestAccess::health(*f.protocol, f.player.get());
 		CHECK(f.body().size() == 6 && f.body().back() == 0);
+	});
+}
+
+TEST_CASE(combat_effect_and_distance_packets_include_fonticak_effect_source)
+{
+	onDispatcher([] {
+		SenderFixture f;
+		auto otherPlayer = std::make_shared<Player>(nullptr);
+		auto monsterType = std::make_shared<MonsterType>();
+		auto monster = std::make_shared<Monster>(monsterType);
+		ProtocolGameAuditTestAccess::effectSource(*f.protocol, true, false, true);
+
+		const std::array<std::pair<Creature*, uint8_t>, 4> cases = {{
+		    {nullptr, 0},
+		    {f.player.get(), 1},
+		    {otherPlayer.get(), 2},
+		    {monster.get(), 3},
+		}};
+		for (const auto& [actor, expectedSource] : cases) {
+			f.reset();
+			ProtocolGameAuditTestAccess::effect(*f.protocol, origin, 0xabcd, actor);
+			CHECK(f.body() == (std::vector<uint8_t>{0x83, 0x78, 0x05, 0x78, 0x05, 7, 0xcd, 0xab, expectedSource}));
+
+			f.reset();
+			ProtocolGameAuditTestAccess::distance(*f.protocol, origin, destination, 0xabcd, actor);
+			CHECK(f.body() == (std::vector<uint8_t>{0x85, 0x78, 0x05, 0x78, 0x05, 7,
+			                                        0x79, 0x05, 0x7a, 0x05, 7, 0xcd, 0xab, expectedSource}));
+		}
+
+		ProtocolGameAuditTestAccess::effectSource(*f.protocol, true, true, true);
+		f.reset();
+		ProtocolGameAuditTestAccess::effect(*f.protocol, origin, 0xabcd, f.player.get());
+		CHECK(f.body() == (std::vector<uint8_t>{0x83, 0x78, 0x05, 0x78, 0x05, 7, 0xcd, 0xab}));
+		f.reset();
+		ProtocolGameAuditTestAccess::distance(*f.protocol, origin, destination, 0xabcd, f.player.get());
+		CHECK(f.body() == (std::vector<uint8_t>{0x85, 0x78, 0x05, 0x78, 0x05, 7,
+		                                        0x79, 0x05, 0x7a, 0x05, 7, 0xcd, 0xab}));
 	});
 }
 

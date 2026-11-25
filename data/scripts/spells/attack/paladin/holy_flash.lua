@@ -16,6 +16,8 @@ end
 spell:group("attack")
 spell:id(143)
 spell:name("Holy Flash")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_HOLY_FLASH)
 spell:words("utori san")
 spell:level(70)
 spell:mana(30)

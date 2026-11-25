@@ -121,6 +121,7 @@ function keyDoor.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 			for _, value in ipairs(KeyDoorTable) do
 				if value.lockedDoor == item.itemid then
 					item:transform(value.openDoor)
+					item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_OPEN_DOOR, player)
 					return true
 				end
 			end
@@ -134,6 +135,7 @@ function keyDoor.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 	for _, value in ipairs(KeyDoorTable) do
 		if value.closedDoor == item.itemid then
 			item:transform(value.openDoor)
+			item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_OPEN_DOOR, player)
 			return true
 		end
 	end
@@ -145,6 +147,7 @@ function keyDoor.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 				return true
 			end
 			item:transform(value.closedDoor)
+			item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_CLOSE_DOOR, player)
 			return true
 		end
 	end
@@ -159,9 +162,11 @@ function keyDoor.onUse(player, item, fromPosition, target, toPosition, isHotkey)
 			if item.actionid == target.actionid then
 				if value.lockedDoor == target.itemid then
 					target:transform(value.openDoor)
+					target:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_OPEN_DOOR, player)
 					return true
 				elseif value.openDoor == target.itemid or value.closedDoor == target.itemid then
 					target:transform(value.lockedDoor)
+					target:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_CLOSE_DOOR, player)
 					return true
 				end
 			end
@@ -195,6 +200,7 @@ function customDoor.onUse(player, item, fromPosition, target, toPosition, isHotk
 	for _, value in ipairs(CustomDoorTable) do
 		if value.closedDoor == item.itemid then
 			item:transform(value.openDoor)
+			item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_OPEN_DOOR, player)
 			return true
 		end
 	end
@@ -206,6 +212,7 @@ function customDoor.onUse(player, item, fromPosition, target, toPosition, isHotk
 				return true
 			end
 			item:transform(value.closedDoor)
+			item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_CLOSE_DOOR, player)
 			return true
 		end
 	end
@@ -238,6 +245,7 @@ function questDoor.onUse(player, item, fromPosition, target, toPosition, isHotke
 			if item.actionid > 0 and (player:getStorageValue(item.actionid) ~= -1 or
 				player:getGroup():getAccess()) then
 				item:transform(value.openDoor)
+				item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_OPEN_DOOR, player)
 				player:teleportTo(toPosition, true, CONST_ME_NONE)
 				return true
 			else
@@ -255,6 +263,7 @@ function questDoor.onUse(player, item, fromPosition, target, toPosition, isHotke
 				return true
 			end
 			item:transform(value.closedDoor)
+			item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_CLOSE_DOOR, player)
 			return true
 		end
 	end
@@ -287,6 +296,7 @@ function levelDoor.onUse(player, item, fromPosition, target, toPosition, isHotke
 			if item.actionid > 0 and (player:getLevel() >= item.actionid -
 				actionIds.levelDoor or player:getGroup():getAccess()) then
 				item:transform(value.openDoor)
+				item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_OPEN_DOOR, player)
 				player:teleportTo(toPosition, true, CONST_ME_NONE)
 				return true
 			else
@@ -303,6 +313,7 @@ function levelDoor.onUse(player, item, fromPosition, target, toPosition, isHotke
 				return true
 			end
 			item:transform(value.closedDoor)
+			item:getPosition():sendSingleSoundEffect(SOUND_EFFECT_TYPE_ACTION_CLOSE_DOOR, player)
 			return true
 		end
 	end

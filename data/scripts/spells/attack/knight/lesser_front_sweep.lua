@@ -22,6 +22,7 @@ end
 spell:group("attack")
 spell:id(271)
 spell:name("Lesser Front Sweep")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_FRONT_SWEEP)
 spell:words("exori infir min")
 spell:level(1)
 spell:mana(6)

@@ -63,6 +63,10 @@ inline constexpr auto OTCV8_LENGTH = 5;
 class ProtocolGame final : public Protocol
 {
 public:
+	void sendAmbientSound(uint32_t ambientId);
+	void sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source = 0);
+	void sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source = 0);
+
 	// static protocol information
 	enum
 	{
@@ -84,6 +88,10 @@ public:
 	void login(uint32_t characterId, uint32_t accountId, OperatingSystem_t operatingSystem);
 	void spectate(const std::string& name, const std::string& password, uint32_t clientIP);
 	static void recordRejectedCastPassword(uint32_t ip);
+	static constexpr bool isOpcodeAllowedForAccountManager(uint8_t recvbyte) noexcept
+	{
+		return recvbyte == 0x14 || recvbyte == 0x1E || recvbyte == 0x40 || recvbyte == 0x96;
+	}
 	void logout(bool displayEffect, bool forced);
 
 	uint16_t getVersion() const { return version; }
@@ -126,6 +134,7 @@ private:
 	void parseAutoWalk(NetworkMessage& msg);
 	void parseSetOutfit(NetworkMessage& msg);
 	void parseInspectionObject(NetworkMessage& msg);
+	void parseCyclopediaCharacterInfo(NetworkMessage& msg);
 	void parseSetMonsterPodium(NetworkMessage& msg);
 	void parseSay(NetworkMessage& msg);
 	void parseSelectSpellAim(NetworkMessage& msg);
@@ -205,8 +214,8 @@ private:
 	void sendIcons(uint64_t icons, IconBakragore_t bakragoreIcon = IconBakragore_None);
 	void sendFYIBox(std::string_view message);
 
-	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type);
-	void sendMagicEffect(const Position& pos, uint16_t type);
+	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type, Creature* actor = nullptr);
+	void sendMagicEffect(const Position& pos, uint16_t type, Creature* actor = nullptr);
 	void sendCreatureHealth(const Creature* creature);
 	void sendSkills();
 	void sendPing();
@@ -249,6 +258,12 @@ private:
 	void sendOutfitWindow();
 	void sendItemInspection(std::shared_ptr<Item> item = nullptr, uint16_t itemId = 0, uint8_t itemCount = 1,
 	                        uint8_t inspectionType = INSPECT_NORMALOBJECT);
+	void sendCyclopediaItemSummary();
+	void sendCyclopediaCharacterAppearances();
+	void sendCyclopediaStoreSummary();
+	void sendCyclopediaCharacterStats(uint8_t type);
+	void sendCyclopediaRecentDeaths(uint16_t entriesPerPage, uint16_t page);
+	void sendCyclopediaRecentPvPKills(uint16_t entriesPerPage, uint16_t page);
 	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos);
 
 	void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus);
@@ -401,6 +416,7 @@ private:
 	friend class ProtocolSpectator;
 	friend class SpySystem;
 	friend struct ProtocolGameCustomPingTestAccess;
+	friend struct AccountManagerSecurityTestAccess;
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
 	friend struct ProtocolGameAuditTestAccess;
@@ -440,6 +456,8 @@ private:
 	tfs::net::PacketBacklog packetBacklog;
 
 	uint32_t eventConnect = 0;
+	int64_t lastCharacterHistoryRequest = 0;
+	int64_t lastCharacterItemSummaryRequest = 0;
 	uint32_t challengeTimestamp = 0;
 	uint16_t version = CLIENT_VERSION_MIN;
 
@@ -462,6 +480,7 @@ private:
 	bool isAstraClient = false;
 	bool isFonticakClient = false;
 	bool supportsGameStoreHighlights = false;
+	bool supportsEffectSource = false;
 	bool supportsContainerTypes = false;
 	bool supportsAstraSingleCreatureMarks = false;
 	bool supportsAstraEchoRaidVisuals = false;
@@ -476,6 +495,10 @@ private:
 	std::unordered_map<uint32_t, EchoRaidVisualState> echoRaidVisualCache;
 	uint32_t dllWeatherSequence = 0;
 	bool isUsingFonticakClient() const { return isFonticakClient; }
+	bool shouldSendEffectSource() const
+	{
+		return isFonticakClient && !isAstraClient && supportsEffectSource;
+	}
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }
 	bool supportsCreatureIcons() const { return supportsAstraCreatureIcons(); }
 	bool supportsNativeZoneWeather() const

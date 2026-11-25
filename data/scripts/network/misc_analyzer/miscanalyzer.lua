@@ -37,7 +37,11 @@ local function sendOpcode(player, opcode)
 	return out
 end
 
-local function sendCharmActivated(player, charmId)
+local function sendCharmActivated(player, charmId, position)
+	if player.sendCharmActivated then
+		player:sendCharmActivated(charmId, position)
+		return true
+	end
 	local out = sendOpcode(player, OPCODE_CHARM_ACTIVATED)
 	if not out then return false end
 	out:addByte(charmId)

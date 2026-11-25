@@ -19,6 +19,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("healing")
 spell:id(128)
 spell:name("Ultimate Healing")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_ULTIMATE_HEALING)
 spell:words("exura vita")
 spell:level(30)
 spell:mana(160)

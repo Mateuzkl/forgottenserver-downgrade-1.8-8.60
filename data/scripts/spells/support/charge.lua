@@ -14,6 +14,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("support")
 spell:id(132)
 spell:name("Charge")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CHARGE)
 spell:words("utani tempo hur")
 spell:level(25)
 spell:mana(100)

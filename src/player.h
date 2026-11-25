@@ -18,6 +18,7 @@
 #include "protocolgame.h"
 #include "protocolspectator.h"
 #include "rewardchest.h"
+#include "spell_effect_source.h"
 #include "storeinbox.h"
 #include "town.h"
 #include "vocation.h"
@@ -261,6 +262,8 @@ public:
 	void removeList() override;
 	void addList() override;
 	void kickPlayer(bool displayEffect);
+	void disconnectForPersistenceFailure();
+	bool isPersistenceQuarantined() const { return persistenceQuarantined; }
 
 	static uint64_t getExpForLevel(const uint64_t lv)
 	{
@@ -660,6 +663,12 @@ public:
 	uint64_t getExperience() const { return experience; }
 
 	time_t getLastLoginSaved() const { return lastLoginSaved; }
+	uint64_t getOnlineTimeAt(time_t now) const
+	{
+		const uint64_t elapsed = onlineTimeSessionStart && now > onlineTimeSessionStart ?
+		    static_cast<uint64_t>(now - onlineTimeSessionStart) : 0;
+		return elapsed > UINT64_MAX - onlineTimeAtLogin ? UINT64_MAX : onlineTimeAtLogin + elapsed;
+	}
 
 	time_t getLastLogout() const { return lastLogout; }
 
@@ -1357,10 +1366,10 @@ public:
 			client->sendCreatureHealth(creature);
 		}
 	}
-	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type) const
+	void sendDistanceShoot(const Position& from, const Position& to, uint16_t type, Creature* actor = nullptr) const
 	{
 		if (client) {
-			client->sendDistanceShoot(from, to, type);
+			client->sendDistanceShoot(from, to, type, actor ? actor : SpellEffectSourceScope::getActor());
 		}
 	}
 	void sendHouseWindow(House* house, uint32_t listId) const;
@@ -1372,21 +1381,39 @@ public:
 	}
 	void sendClosePrivate(uint16_t channelId);
 	void sendIcons() const;
-	void sendMagicEffect(const Position& pos, uint16_t type) const
+	void sendMagicEffect(const Position& pos, uint16_t type, Creature* actor = nullptr) const
 	{
 		if (client) {
-			client->sendMagicEffect(pos, type);
+			client->sendMagicEffect(pos, type, actor ? actor : SpellEffectSourceScope::getActor());
 		}
 	}
-	void sendCharmActivated(uint8_t charmId) const
+	void sendAmbientSound(uint32_t ambientId) const
 	{
 		if (client) {
-			client->sendCharmActivated(charmId);
+			if (const auto protocol = client->protocol()) protocol->sendAmbientSound(ambientId);
 		}
 	}
+	void sendSingleSoundEffect(const Position& pos, uint16_t soundId, uint8_t source = 0) const
+	{
+		if (client) {
+			if (const auto protocol = client->protocol()) {
+				protocol->sendSingleSoundEffect(pos, soundId, source);
+			}
+		}
+	}
+	void sendDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId, uint8_t source = 0) const
+	{
+		if (client) {
+			if (const auto protocol = client->protocol()) {
+				protocol->sendDoubleSoundEffect(pos, mainSoundId, secondarySoundId, source);
+			}
+		}
+	}
+	void sendCharmActivated(uint8_t charmId, const Position* soundPosition = nullptr) const;
 	void updateKillTracker(const std::shared_ptr<Monster>& monster, const std::shared_ptr<Container>& corpse) const;
 	void updateImpactTracker(uint8_t analyzerType, uint32_t amount, CombatType_t combatType,
 	                         std::string_view targetName = {}) const;
+	void recordPartySupply(uint16_t itemId, uint32_t count = 1) const;
 	void sendItemValues() const;
 	void sendBannerType(Banner_t bannerType) const
 	{
@@ -1427,6 +1454,11 @@ public:
 	}
 	void sendPing();
 	void sendStats();
+	void refreshInventoryStats()
+	{
+		updateInventoryWeight();
+		sendStats();
+	}
 	void sendBasicData() const
 	{
 		if (client) {
@@ -1441,15 +1473,21 @@ public:
 	}
 	void sendTextMessage(MessageClasses mclass, std::string_view message) const
 	{
-		if (client) {
-			client->sendTextMessage(TextMessage(mclass, message));
-		}
+		sendTextMessage(TextMessage(mclass, message));
 	}
 	void sendTextMessage(const TextMessage& message) const
 	{
-		if (client) {
-			client->sendTextMessage(message);
+		if (!client) {
+			return;
 		}
+		if (isAccountManager()) {
+			// Dialogues can contain a newly issued password or recovery key.
+			if (auto owner = client->protocol()) {
+				owner->sendTextMessage(message);
+			}
+			return;
+		}
+		client->sendTextMessage(message);
 	}
 	void sendReLoginWindow() const
 	{
@@ -1656,6 +1694,13 @@ public:
 	void setAccountManagerMode(AccountManagerMode mode) { accountManager = mode; }
 	void setAccountManagerData(uint32_t accId) { managerData.accountId = accId; }
 
+	static constexpr uint8_t MAX_RECOVERY_ATTEMPTS_PER_SESSION = 5;
+	static bool canAccountDeleteCharacter(uint32_t sessionAccountId, uint32_t targetPlayerId, uint32_t ownerAccountId);
+	static std::string makeAccountRecoveryLimiterKey(std::string_view canonicalAccountName);
+	static bool isAccountRecoveryAllowed(uint32_t clientIp, std::string_view canonicalAccountName = {});
+	static void recordAccountRecoveryFailure(uint32_t clientIp, std::string_view canonicalAccountName);
+	static void recordAccountRecoverySuccess(uint32_t clientIp, std::string_view canonicalAccountName);
+
 	// for lua module
 	void setAccountType(AccountType_t newType) { accountType = newType; }
 
@@ -1750,9 +1795,13 @@ private:
 	void handleNamelockManager(const std::string& text, std::ostringstream& msg, bool& shouldShowHelp);
 	void handleAccountManager(const std::string& text, std::ostringstream& msg, bool& shouldShowHelp);
 	void handleNewAccountManager(const std::string& text, std::ostringstream& msg, bool& shouldShowHelp);
+	bool verifyAccountRecoveryAttempt(uint32_t accId, std::string_view storedKeyHash, std::string_view recoveryKey,
+	                                  uint32_t clientIp, std::ostringstream& msg);
 	bool checkText(std::string_view text, std::string_view match) const;
 	void resetTalkState(size_t from = 0, size_t to = 15);
 	void setManagerTalkState(size_t index, bool value) { managerTalkState[index] = value; }
+
+	friend struct AccountManagerSecurityTestAccess;
 
 	void gainExperience(uint64_t gainExp, const std::shared_ptr<Creature>& source);
 	void updateSkullAfterPzLockEnded();
@@ -1837,6 +1886,10 @@ private:
 	std::map<ObjectCategory_t, ManagedLootContainer> managedLootContainers;
 
 	time_t lastLoginSaved = 0;
+	time_t onlineTimeSessionStart = 0;
+	uint64_t onlineTimeAtLogin = 0;
+	bool persistenceQuarantined = false;
+	bool removalInProgress = false;
 	time_t lastLogout = 0;
 	time_t premiumEndsAt = 0;
 
@@ -2022,6 +2075,7 @@ private:
 		uint32_t accountId{0};
 		uint32_t vocationId{0};
 		uint32_t townId{0};
+		uint8_t recoveryAttempts{0};
 		std::string string1;
 		std::string string2;
 		std::string accountName;
@@ -2063,6 +2117,7 @@ private:
 	friend class ProtocolSpectator;
 	friend struct CreatureWalkTestAccess;
 	friend struct QuickLootTestAccess;
+	friend struct PlayerOnlineTimeTestAccess;
 };
 
 #endif

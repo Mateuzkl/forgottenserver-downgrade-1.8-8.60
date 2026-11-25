@@ -20,6 +20,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Restore Balance")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_RESTORE_BALANCE)
 spell:words("exura tio sio")
 spell:group("healing")
 spell:vocation("monk", "exalted monk")

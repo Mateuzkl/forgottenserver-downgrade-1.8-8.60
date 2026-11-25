@@ -15,6 +15,7 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("support")
 spell:id(131)
 spell:name("Challenge")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_CHALLENGE)
 spell:words("exeta res")
 spell:level(20)
 spell:mana(30)

@@ -24,6 +24,7 @@ end
 spell:group("support")
 spell:id(141)
 spell:name("Magic Rope")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_MAGIC_ROPE)
 spell:words("exani tera")
 spell:level(9)
 spell:mana(20)

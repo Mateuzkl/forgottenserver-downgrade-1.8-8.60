@@ -24,7 +24,7 @@
 //   TFS_TEST_DB_HOST=127.0.0.1 TFS_TEST_DB_USER=root TFS_TEST_DB_PASS=secret
 //   TFS_TEST_DB_NAME=tfs_inbox_test ./test_inbox_db_roundtrip
 //
-// The schema only needs player_inboxitems; see the test plan in the pull request.
+// Load schema.sql into the disposable schema, including account/player foreign keys.
 
 namespace {
 
@@ -54,6 +54,24 @@ bool configureTestDatabase()
 	ConfigManager::setInteger(ConfigManager::SQL_PORT, port ? std::atoi(port) : 3306);
 	return true;
 }
+
+// Keep foreign keys enabled and roll back the entire fixture, including inbox rows.
+struct InboxDatabaseFixture
+{
+	DBTransaction transaction;
+	uint32_t guid = 0;
+
+	explicit InboxDatabaseFixture(Database& db)
+	{
+		CHECK(transaction.begin());
+		CHECK(db.executeQuery("INSERT INTO accounts (name, password) VALUES ('Inbox Roundtrip Test', '')"));
+		const auto accountId = db.getLastInsertId();
+		CHECK(db.executeQuery(fmt::format(
+		    "INSERT INTO players (name, account_id) VALUES ('Inbox Roundtrip Test', {})", accountId)));
+		guid = static_cast<uint32_t>(db.getLastInsertId());
+		CHECK(guid != 0);
+	}
+};
 
 void ensureItemTypesLoaded()
 {
@@ -142,11 +160,14 @@ TEST_CASE(inbox_rows_survive_a_real_database_round_trip)
 		return;
 	}
 
+	InboxDatabaseFixture fixture(db);
+
 	std::cout << "[db] items | rows after save | rows after re-save | save ms\n";
 
 	for (const size_t count : {size_t{0}, size_t{1}, size_t{99}, size_t{100}, size_t{101}, size_t{255},
 	                           size_t{256}, size_t{500}, size_t{1000}, size_t{2500}, size_t{5000}}) {
 		Player player(nullptr);
+		player.setGUID(fixture.guid);
 		giveGroup(player);
 		fillInbox(attachInbox(player, 1), count);
 
@@ -178,7 +199,9 @@ TEST_CASE(inbox_rows_keep_their_town_pid_in_the_database)
 		return;
 	}
 
+	InboxDatabaseFixture fixture(db);
 	Player player(nullptr);
+	player.setGUID(fixture.guid);
 	giveGroup(player);
 	fillInbox(attachInbox(player, 1), 150);
 	fillInbox(attachInbox(player, 2), 200);
@@ -212,7 +235,9 @@ TEST_CASE(nested_inbox_containers_are_expanded_into_rows)
 		return;
 	}
 
+	InboxDatabaseFixture fixture(db);
 	Player player(nullptr);
+	player.setGUID(fixture.guid);
 	giveGroup(player);
 	Inbox* inbox = attachInbox(player, 1);
 

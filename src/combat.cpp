@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "combat.h"
+#include "spell_effect_source.h"
 
 #include "bestiary_charm.h"
 #include "configmanager.h"
@@ -970,7 +971,7 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 				}
 			}
 			InstanceUtils::sendMagicEffectToInstance(
-			    spectators, tile->getPosition(), params.impactEffect, caster->getInstanceID());
+			    spectators, tile->getPosition(), params.impactEffect, caster->getInstanceID(), caster);
 		} else {
 			if (metrics) {
 				for (const auto& spectator : spectators.players()) {
@@ -1037,7 +1038,7 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 					filtered.emplace_back(s);
 				}
 			}
-			g_game.addDistanceEffect(filtered, fromPos, toPos, effect);
+			g_game.addDistanceEffect(filtered, fromPos, toPos, effect, caster);
 		} else {
 			g_game.addDistanceEffect(fromPos, toPos, effect, 0);
 		}
@@ -1046,11 +1047,18 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 
 void Combat::doCombat(Creature* caster, Creature* target, std::string_view instantSpellName) const
 {
+	SpellEffectSourceScope effectSource(caster);
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
 	if (params.chainCallback) {
 		if (doCombatChain(caster, target, params.aggressive, std::string(instantSpellName))) {
 			return;
 		}
+	}
+	if (target && params.soundCastEffect != 0 && caster) {
+		g_game.addSoundEffect(caster->getPosition(), params.soundCastEffect, caster->getInstanceID(), caster);
+	}
+	if (target && params.soundImpactEffect != 0) {
+		g_game.addSoundEffect(target->getPosition(), params.soundImpactEffect, target->getInstanceID(), caster);
 	}
 
 	// target combat callback function
@@ -1069,7 +1077,7 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 					filtered.emplace_back(s);
 				}
 			}
-			Game::addMagicEffect(filtered, target->getPosition(), params.impactEffect);
+			Game::addMagicEffect(filtered, target->getPosition(), params.impactEffect, caster);
 		}
 
 		if (canCombat) {
@@ -1118,11 +1126,18 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 
 void Combat::doCombat(Creature* caster, const Position& position, std::string_view instantSpellName) const
 {
+	SpellEffectSourceScope effectSource(caster);
 	PerformanceScope performanceScope(PerformanceMetric::CombatDoCombat);
 	if (params.chainCallback) {
 		if (doCombatChain(caster, nullptr, params.aggressive, std::string(instantSpellName))) {
 			return;
 		}
+	}
+	if (params.soundCastEffect != 0 && caster) {
+		g_game.addSoundEffect(caster->getPosition(), params.soundCastEffect, caster->getInstanceID(), caster);
+	}
+	if (params.soundImpactEffect != 0) {
+		g_game.addSoundEffect(position, params.soundImpactEffect, caster ? caster->getInstanceID() : 0, caster);
 	}
 
 	// area combat callback function
@@ -1304,10 +1319,10 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 					damage.secondary.value += std::round(damage.secondary.value * (skill / 10000.));
 					damage.critical = true;
 					if (lowBlowBonus > 0 && roll > baseChance) {
-						casterPlayer->sendCharmActivated(CHARM_LOW_BLOW);
+						casterPlayer->sendCharmActivated(CHARM_LOW_BLOW, &target->getPosition());
 					}
 					if (savageBonus > 0) {
-						casterPlayer->sendCharmActivated(CHARM_SAVAGE);
+						casterPlayer->sendCharmActivated(CHARM_SAVAGE, &target->getPosition());
 					}
 				}
 			}
@@ -1486,7 +1501,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 					g_game.combatChangeHealth(nullptr, casterPlayer, leechCombat);
 					casterPlayer->sendMagicEffect(casterPlayer->getPosition(), CONST_ME_MAGIC_RED);
 					if (vampiricBonus > 0) {
-						casterPlayer->sendCharmActivated(CHARM_VAMPIRIC);
+						casterPlayer->sendCharmActivated(CHARM_VAMPIRIC, &target->getPosition());
 					}
 				}
 			}
@@ -1507,7 +1522,7 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 					g_game.combatChangeMana(nullptr, casterPlayer, leechCombat);
 					casterPlayer->sendMagicEffect(casterPlayer->getPosition(), CONST_ME_MAGIC_BLUE);
 					if (voidCallBonus > 0) {
-						casterPlayer->sendCharmActivated(CHARM_VOID_CALL);
+						casterPlayer->sendCharmActivated(CHARM_VOID_CALL, &target->getPosition());
 					}
 				}
 			}
@@ -1708,7 +1723,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 				targetCriticalPrimary = std::round(damageCopy.primary.value * (skill / 10000.));
 				targetCriticalSecondary = std::round(damageCopy.secondary.value * (skill / 10000.));
 				damageCopy.critical = true;
-				casterPlayer->sendCharmActivated(CHARM_LOW_BLOW);
+				casterPlayer->sendCharmActivated(CHARM_LOW_BLOW, &creature->getPosition());
 			}
 		}
 
@@ -1717,7 +1732,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			if (savageBonus > 0) {
 				targetCriticalPrimary += std::round(damageCopy.primary.value * (savageBonus / 10000.));
 				targetCriticalSecondary += std::round(damageCopy.secondary.value * (savageBonus / 10000.));
-				casterPlayer->sendCharmActivated(CHARM_SAVAGE);
+				casterPlayer->sendCharmActivated(CHARM_SAVAGE, &creature->getPosition());
 			}
 		}
 
@@ -1825,7 +1840,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 						g_game.combatChangeHealth(nullptr, casterPlayer, leechCombat);
 						casterPlayer->sendMagicEffect(casterPlayer->getPosition(), CONST_ME_MAGIC_RED);
 						if (vampiricBonus > 0) {
-							casterPlayer->sendCharmActivated(CHARM_VAMPIRIC);
+							casterPlayer->sendCharmActivated(CHARM_VAMPIRIC, &creature->getPosition());
 						}
 					}
 				}
@@ -1848,7 +1863,7 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 						g_game.combatChangeMana(nullptr, casterPlayer, leechCombat);
 						casterPlayer->sendMagicEffect(casterPlayer->getPosition(), CONST_ME_MAGIC_BLUE);
 						if (voidCallBonus > 0) {
-							casterPlayer->sendCharmActivated(CHARM_VOID_CALL);
+							casterPlayer->sendCharmActivated(CHARM_VOID_CALL, &creature->getPosition());
 						}
 					}
 				}
@@ -2497,6 +2512,7 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 				if (!nextTarget) {
 					return;
 				}
+				SpellEffectSourceScope effectSource(resolvedCaster);
 				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect, nextTarget->getInstanceID());
 				if (resolvedCaster) {
 					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget, instantSpellName);

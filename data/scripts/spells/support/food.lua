@@ -21,6 +21,7 @@ end
 spell:group("support")
 spell:id(135)
 spell:name("Food")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_FOOD)
 spell:words("exevo pan")
 spell:level(14)
 spell:mana(120)

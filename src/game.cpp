@@ -4,6 +4,7 @@
 #include "otpch.h"
 
 #include "game.h"
+#include "spell_effect_source.h"
 
 #include "actions.h"
 #include "bed.h"
@@ -1081,7 +1082,7 @@ void Game::setGameState(GameState_t newState)
 	}
 }
 
-void Game::saveGameState(bool crash /* = false */)
+void Game::saveGameState(bool crash /* = false */, std::string_view reason)
 {
 	AutoStat stat("Game::saveGameState", crash ? "crash" : "full");
 	if (gameState == GAME_STATE_NORMAL) {
@@ -1107,8 +1108,21 @@ void Game::saveGameState(bool crash /* = false */)
 		++savedCount;
 	}
 
-	g_saveManager.saveAll();
+	const bool mandatory = crash || gameState == GAME_STATE_SHUTDOWN || gameState == GAME_STATE_CLOSED;
+	if (crash) {
+		reason = "crash-recovery";
+	} else if (gameState == GAME_STATE_SHUTDOWN) {
+		reason = "shutdown";
+	} else if (gameState == GAME_STATE_CLOSED) {
+		reason = "scheduled-close";
+	}
+	g_saveManager.saveAll(reason, mandatory);
 	g_databaseTasks.flush();
+	if (gameState == GAME_STATE_SHUTDOWN || crash) {
+		if (!g_saveManager.drainForShutdown()) {
+			LOG_CRITICAL("[Game] Final player flush incomplete; unresolved WAL must be recovered before login.");
+		}
+	}
 
 	if (crash && savedCount > 0) {
 		LOG_WARN(fmt::format("[Anti-Rollback] Emergency save completed — {} player(s) saved at temple.", savedCount));
@@ -2752,6 +2766,38 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 			*_moveItem = moveItem;
 		} else {
 			*_moveItem = item;
+		}
+	}
+
+	if (actorPlayer) {
+		uint16_t soundId = 2794; // default item movement
+		const int32_t slot = item->getSlotPosition();
+		const Item* destinationItem = toCylinder->getItem();
+		const bool personalContainer = destinationItem && destinationItem->getContainer() && destinationItem->getHoldingPlayer();
+		if (personalContainer || item->getContainer()) {
+			soundId = 2786;
+		} else if (Item::items[item->getID()].type == ITEM_TYPE_VALUABLE) {
+			soundId = 2793;
+		} else if (item->getWeaponType() == WEAPON_DISTANCE) {
+			soundId = 2791;
+		} else if (item->getWeaponType() == WEAPON_SWORD || item->getWeaponType() == WEAPON_AXE || item->getWeaponType() == WEAPON_CLUB) {
+			soundId = 2790;
+		} else if (item->getWeaponType() == WEAPON_SHIELD || item->getWeaponType() == WEAPON_WAND ||
+		           item->getWeaponType() == WEAPON_AMMO || Item::items[item->getID()].type == ITEM_TYPE_TOOL) {
+			soundId = 2792;
+		} else if (slot != static_cast<int32_t>(SLOTP_WHEREEVER)) {
+			if (slot & SLOTP_HEAD) soundId = 2796;
+			else if (slot & SLOTP_NECKLACE) soundId = 2788;
+			else if (slot & SLOTP_ARMOR) soundId = 2789;
+			else if (slot & SLOTP_LEGS) soundId = 2795;
+			else if (slot & SLOTP_FEET) soundId = 2801;
+			else if (slot & SLOTP_RING) soundId = 2798;
+		}
+		const bool personalDestination = toCylinder->getCreature() || personalContainer;
+		if (!personalDestination && toCylinder->getTile()) {
+			addSoundEffect(toCylinder->getPosition(), soundId, actorPlayer->getInstanceID(), actorPlayer);
+		} else {
+			actorPlayer->sendSingleSoundEffect(actorPlayer->getPosition(), soundId, 1);
 		}
 	}
 
@@ -6897,6 +6943,9 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 	applyBossDifficultyDamage(damage, attacker, target);
 
 	damage.blockType = primaryBlockType;
+	if (primaryBlockType != BLOCK_NONE || secondaryBlockType != BLOCK_NONE) {
+		addSoundEffect(target->getPosition(), 20, target->getInstanceID(), attacker);
+	}
 
 	return (primaryBlockType != BLOCK_NONE) && (secondaryBlockType != BLOCK_NONE);
 }
@@ -7126,6 +7175,7 @@ void Game::applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer,
 
 bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage& damage)
 {
+	SpellEffectSourceScope effectSource(attacker);
 	if (!target || target->isDead() || target->isRemoved()) {
 		return false;
 	}
@@ -7176,6 +7226,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 
 				Player* attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
 				Player* targetPlayer = target->getPlayer();
+				if (attackerPlayer) {
+					if (Party* party = attackerPlayer->getParty()) {
+						party->analyzerMemberStats(attackerPlayer->getID()).healing += realHeal;
+					}
+				}
 				std::string observerMessage;
 				for (const auto& spectator : spectators) {
 					Player* tmpPlayer = static_cast<Player*>(spectator.get());
@@ -7660,6 +7715,11 @@ bool Game::combatChangeHealth(Creature* attacker, Creature* target, CombatDamage
 		}
 
 		target->drainHealth(attackerRef, realDamage);
+		if (attackerPlayer) {
+			if (Party* party = attackerPlayer->getParty()) {
+				party->analyzerMemberStats(attackerPlayer->getID()).damage += realDamage;
+			}
+		}
 		addCreatureHealth(spectators, target);
 
 		// onPlayerAttack callback
@@ -7681,6 +7741,7 @@ bool Game::combatChangeHealth(const std::shared_ptr<Creature>& attacker, const s
 
 bool Game::combatChangeMana(Creature* attacker, Creature* target, CombatDamage& damage)
 {
+	SpellEffectSourceScope effectSource(attacker);
 	Player* targetPlayer = target->getPlayer();
 	if (!targetPlayer) {
 		return true;
@@ -7924,22 +7985,48 @@ void Game::addAnimatedText(const SpectatorVec& spectators, std::string_view mess
 	}
 }
 
-void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanceId)
+void Game::addMagicEffect(const Position& pos, uint16_t effect, uint32_t instanceId, Creature* actor)
 {
 	SpectatorVec spectators;
 	map.getSpectators(spectators, pos, true, true);
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
-	addMagicEffect(spectators, pos, effect);
+	addMagicEffect(spectators, pos, effect, actor);
 }
 
-void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect)
+void Game::addSoundEffect(const Position& pos, uint16_t soundId, uint32_t instanceId, Creature* actor)
+{
+	addDoubleSoundEffect(pos, soundId, 0, instanceId, actor);
+}
+
+void Game::addDoubleSoundEffect(const Position& pos, uint16_t mainSoundId, uint16_t secondarySoundId,
+                                uint32_t instanceId, Creature* actor)
+{
+	if (mainSoundId == 0 && secondarySoundId == 0) {
+		return;
+	}
+	SpectatorVec spectators;
+	map.getSpectators(spectators, pos, true, true);
+	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
+	for (const auto& spectator : spectators) {
+		if (Player* player = spectator ? spectator->getPlayer() : nullptr) {
+			const uint8_t source = actor ? (actor == player ? 1 : (actor->getPlayer() ? 2 : 3)) : 0;
+			if (secondarySoundId == 0) {
+				player->sendSingleSoundEffect(pos, mainSoundId, source);
+			} else {
+				player->sendDoubleSoundEffect(pos, mainSoundId, secondarySoundId, source);
+			}
+		}
+	}
+}
+
+void Game::addMagicEffect(const SpectatorVec& spectators, const Position& pos, uint16_t effect, Creature* actor)
 {
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
-		player->sendMagicEffect(pos, effect);
+		player->sendMagicEffect(pos, effect, actor ? actor : SpellEffectSourceScope::getActor());
 	}
 }
 
@@ -7950,7 +8037,7 @@ void InstanceUtils::sendMagicEffectToInstance(const Position &pos, uint32_t inst
 	sendMagicEffectToInstance(spectators, pos, effect, instanceId);
 }
 
-void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uint16_t effect, uint32_t instanceId)
+void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uint16_t effect, uint32_t instanceId, Creature* actor)
 {
 	SpectatorVec spectators, toPosSpectators;
 	map.getSpectators(spectators, fromPos, true, true);
@@ -7958,18 +8045,18 @@ void Game::addDistanceEffect(const Position& fromPos, const Position& toPos, uin
 	spectators.addSpectators(toPosSpectators);
 
 	InstanceUtils::filterByInstanceInPlace(spectators, instanceId);
-	addDistanceEffect(spectators, fromPos, toPos, effect);
+	addDistanceEffect(spectators, fromPos, toPos, effect, actor);
 }
 
 void Game::addDistanceEffect(const SpectatorVec& spectators, const Position& fromPos, const Position& toPos,
-                             uint16_t effect)
+                             uint16_t effect, Creature* actor)
 {
 	for (const auto& spectator : spectators) {
 		Player* player = spectator ? spectator->getPlayer() : nullptr;
 		if (!player) {
 			continue;
 		}
-		player->sendDistanceShoot(fromPos, toPos, effect);
+		player->sendDistanceShoot(fromPos, toPos, effect, actor ? actor : SpellEffectSourceScope::getActor());
 	}
 }
 

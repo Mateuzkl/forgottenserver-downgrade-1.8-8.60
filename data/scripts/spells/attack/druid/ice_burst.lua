@@ -27,6 +27,7 @@ end
 spell:group("attack", "burstsofnature")
 spell:id(262)
 spell:name("Ice Burst")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_ETERNAL_WINTER)
 spell:words("exevo ulus frigo")
 spell:level(300)
 spell:mana(230)

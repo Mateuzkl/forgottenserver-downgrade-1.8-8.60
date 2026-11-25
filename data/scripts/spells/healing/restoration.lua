@@ -21,6 +21,7 @@ end
 spell:group("healing")
 spell:id(241)
 spell:name("Restoration")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_RESTORATION)
 spell:words("exura max vita")
 spell:level(300)
 spell:mana(260)

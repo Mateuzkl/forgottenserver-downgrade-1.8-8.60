@@ -19,6 +19,7 @@ function spell.onCastSpell(creature, variant)
 end
 
 spell:name("Magic Patch")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_MAGIC_PATCH)
 spell:words("exura infir")
 spell:group("healing")
 spell:vocation("druid;true", "elder druid;true", "paladin;true", "royal paladin;true", "sorcerer;true", "master sorcerer;true", "monk;true", "exalted monk;true")

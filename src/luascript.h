@@ -205,6 +205,7 @@ struct LuaTimerEventDesc
 	int32_t function = -1;
 	std::vector<int32_t> parameters;
 	uint32_t eventId = 0;
+	uint32_t effectSourceId = 0;
 	std::string origin;
 
 	LuaTimerEventDesc() = default;
@@ -528,6 +529,7 @@ private:
 	static int luaDoChallengeCreature(lua_State* L);
 
 	static int luaDebugPrint(lua_State* L);
+	static int luaLogDebug(lua_State* L);
 	static int luaLogInfo(lua_State* L);
 	static int luaLogWarning(lua_State* L);
 	static int luaLogError(lua_State* L);

@@ -20,6 +20,8 @@ function spell.onCastSpell(creature, variant) return combat:execute(creature, va
 spell:group("attack")
 spell:id(120)
 spell:name("Whirlwind Throw")
+spell:castSound(SOUND_EFFECT_TYPE_SPELL_OR_RUNE)
+spell:impactSound(SOUND_EFFECT_TYPE_SPELL_WHIRLWIND_THROW)
 spell:words("exori hur")
 spell:level(28)
 spell:mana(40)
