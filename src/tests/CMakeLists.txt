@@ -1,4 +1,4 @@
-file(GLOB tests_SRC ${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp)
+file(GLOB tests_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp)
 
 foreach(test_src ${tests_SRC})
     get_filename_component(test_name ${test_src} NAME_WE)

@@ -394,7 +394,7 @@ Testing, Sanitizers & Benchmarks:
   --db-tests             Build and run full CTest suite with disposable MariaDB
   --test-filter REGEX    Filter CTest/benchmark cases (passed to ctest -R)
   --test-jobs N          Override adaptive CTest parallelism
-  --sanitizer MODE       none|asan|ubsan|asan-ubsan|tsan (default: none)
+  --sanitizer MODE       none|asan|ubsan|asan-ubsan (default: none)
   --benchmarks           Build and run Google Benchmarks (BUILD_BENCHMARKING=ON)
 
 Platform & Legacy Options:
@@ -426,7 +426,7 @@ Environment:
   TFS_ENABLE_UNITY=auto|ON|OFF
   TFS_UNITY_BATCH=N
   TFS_ENABLE_PCH=auto|ON|OFF
-  TFS_SANITIZER=none|asan|ubsan|asan-ubsan|tsan
+  TFS_SANITIZER=none|asan|ubsan|asan-ubsan
   TFS_LINK_JOBS=N
   TFS_LTO_JOBS=N
   TFS_TEST_JOBS=N
@@ -474,7 +474,6 @@ normalize_sanitizer() {
     asan) printf 'asan' ;;
     ubsan) printf 'ubsan' ;;
     asan-ubsan|asan+ubsan|ubsan-asan|ubsan+asan) printf 'asan-ubsan' ;;
-    tsan) printf 'tsan' ;;
     *) return 1 ;;
   esac
 }
@@ -559,7 +558,7 @@ parse_args() {
         ;;
       --sanitizer)
         [[ $# -ge 2 ]] || die "--sanitizer requires a value"
-        SANITIZER="$(normalize_sanitizer "$2")" || die "invalid --sanitizer: $2 (expected none|asan|ubsan|asan-ubsan|tsan)"
+        SANITIZER="$(normalize_sanitizer "$2")" || die "invalid --sanitizer: $2 (expected none|asan|ubsan|asan-ubsan)"
         shift 2
         ;;
       --tests)
@@ -1597,11 +1596,25 @@ resolve_build_plan() {
     if [[ "${SANITIZER}" == "ubsan" || "${SANITIZER}" == "asan-ubsan" ]]; then
       export UBSAN_OPTIONS="${UBSAN_OPTIONS:-halt_on_error=1:print_stacktrace=1}"
     fi
-    if [[ "${SANITIZER}" == "tsan" ]]; then
-      export TSAN_OPTIONS="${TSAN_OPTIONS:-halt_on_error=1}"
-    fi
   else
     [[ -n "${BUILD_TYPE}" ]] || BUILD_TYPE="Release"
+  fi
+
+  if [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
+    if [[ "${SANITIZER}" != "none" ]]; then
+      die "Debian 11/12 portable builds use the bundled Zig/vcpkg release-only toolchain, which does not support --sanitizer ${SANITIZER}. Run sanitizers on Ubuntu 22.04/24.04 or Debian 13."
+    fi
+    if [[ "${COMPILER_PREF}" != "auto" ]]; then
+      die "Debian 11/12 portable builds require the bundled Zig C++ toolchain and cannot be combined with --compiler ${COMPILER_PREF}."
+    fi
+    if [[ "${GENERATOR}" == "make" ]]; then
+      die "Debian 11/12 portable builds require Ninja and cannot be combined with --generator make."
+    fi
+    if [[ "${BUILD_TYPE}" == "Debug" ]]; then
+      die "Debian 11/12 portable vcpkg triplets (VCPKG_BUILD_TYPE=release) only provide release dependencies and do not support --build-type Debug. Use Release or RelWithDebInfo, or build Debug on Ubuntu 22.04/24.04 or Debian 13."
+    fi
+    USE_MIMALLOC="OFF"
+    ENABLE_NATIVE_OPT="OFF"
   fi
 
   if [[ "${DISABLE_STATS}" == "auto" ]]; then
@@ -1716,7 +1729,9 @@ resolve_build_plan() {
     fi
   fi
 
-  if [[ "${GENERATOR}" == "ninja" ]]; then
+  if [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
+    RESOLVED_GENERATOR="Ninja"
+  elif [[ "${GENERATOR}" == "ninja" ]]; then
     command -v ninja >/dev/null 2>&1 || die "Ninja generator requested (--generator ninja), but ninja was not found"
     RESOLVED_GENERATOR="Ninja"
   elif [[ "${GENERATOR}" == "make" ]]; then
@@ -1731,7 +1746,7 @@ resolve_build_plan() {
 
   if [[ "${BUILD_DIR_EXPLICIT}" -eq 0 && -z "${BUILD_DIR}" ]]; then
     if [[ "${TARGET_DISTRO}" == "debian" ]]; then
-      BUILD_DIR="build-release-debian-${TARGET_VERSION}"
+      BUILD_DIR="build-${BUILD_TYPE,,}-debian-${TARGET_VERSION}"
     else
       local suffix="${RESOLVED_PROFILE}"
       if [[ "${SANITIZER}" != "none" ]]; then
@@ -1817,12 +1832,62 @@ select_cxx_compiler() {
   info "$(printf "$(msg compiler_selected)" "Ubuntu 22.04" "${TFS_CXX_COMPILER}")"
 }
 
+compute_build_signature() {
+  {
+    printf '%s\n' "${SCRIPT_DIR}"
+    printf '%s\n' "$@"
+    if [[ "${RUN_TESTS}" -eq 1 ]]; then
+      printf 'TESTS:\n'
+      find "${SCRIPT_DIR}/src/tests" -maxdepth 1 -type f -name 'test_*.cpp' -printf '%f\n' 2>/dev/null | LC_ALL=C sort
+    fi
+    if [[ "${RUN_BENCHMARKS}" -eq 1 ]]; then
+      printf 'BENCHS:\n'
+      find "${SCRIPT_DIR}/src/benchs" -maxdepth 1 -type f -name 'bench_*.cpp' -printf '%f\n' 2>/dev/null | LC_ALL=C sort
+    fi
+  } | sha256sum | awk '{print $1}'
+}
+
+run_cmake_configure() {
+  local -a args=("$@")
+  local sig_file="${BUILD_DIR}/.tfs-build-signature"
+  local current_sig build_file
+
+  current_sig="$(compute_build_signature "${args[@]}")"
+  if [[ "${RESOLVED_GENERATOR}" == "Ninja" ]]; then
+    build_file="${BUILD_DIR}/build.ninja"
+  else
+    build_file="${BUILD_DIR}/Makefile"
+  fi
+
+  if [[ "${FORCE_RECONFIGURE}" -eq 0 && -f "${BUILD_DIR}/CMakeCache.txt" && -f "${build_file}" && -f "${sig_file}" ]]; then
+    if [[ "$(cat "${sig_file}")" == "${current_sig}" ]]; then
+      info "Incremental build: CMake configuration unchanged, skipping reconfigure."
+      return
+    fi
+  fi
+
+  mkdir -p "${BUILD_DIR}"
+  if ! run_throttled cmake -Wno-dev "${args[@]}"; then
+    warn "$(msg configure_retry)"
+    safe_remove_build_dir "${BUILD_DIR}"
+    mkdir -p "${BUILD_DIR}"
+    run_throttled cmake -Wno-dev "${args[@]}"
+  fi
+  printf '%s\n' "${current_sig}" > "${sig_file}"
+}
+
 configure_portable_tfs() {
+  command -v ninja >/dev/null 2>&1 || die "Debian 11/12 portable builds require Ninja (ninja-build)."
+
+  local build_testing="OFF" build_bench="OFF"
+  [[ "${RUN_TESTS}" -eq 0 ]] || build_testing="ON"
+  [[ "${RUN_BENCHMARKS}" -eq 0 ]] || build_bench="ON"
+
   local -a args=(
     -S .
     -B "${BUILD_DIR}"
     -G Ninja
-    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
     -DCMAKE_CXX_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cxx"
     -DCMAKE_AR="${SCRIPT_DIR}/tools/toolchains/zig-ar"
     -DCMAKE_RANLIB="${SCRIPT_DIR}/tools/toolchains/zig-ranlib"
@@ -1832,20 +1897,29 @@ configure_portable_tfs() {
     -DVCPKG_OVERLAY_TRIPLETS="${SCRIPT_DIR}/tools/triplets"
     -DVCPKG_TARGET_TRIPLET="${TFS_VCPKG_TRIPLET}"
     -DHTTP="${HTTP}"
-    -DDISABLE_STATS=1
+    -DDISABLE_STATS="${DISABLE_STATS}"
     -DENABLE_NATIVE_OPTIMIZATIONS=OFF
     -DENABLE_SLOW_TASK_DETECTION=OFF
     -DUSE_MIMALLOC=OFF
+    -DENABLE_CCACHE="${ENABLE_CCACHE}"
+    -DENABLE_LTO="${ENABLE_LTO}"
+    -DENABLE_TEST_LTO=OFF
+    -DENABLE_BENCHMARK_LTO=OFF
+    -DENABLE_UNITY_BUILD="${ENABLE_UNITY}"
+    -DUNITY_BUILD_BATCH_SIZE="${UNITY_BATCH}"
+    -DENABLE_PCH="${ENABLE_PCH}"
+    -DENABLE_LOW_MEMORY_LINKER="${ENABLE_LOW_MEM_LINKER}"
+    -DTFS_COMPILE_JOBS="${JOBS}"
+    -DTFS_LINK_JOBS="${LINK_JOBS}"
+    -DTFS_LTO_JOBS="${LTO_JOBS}"
+    -DBUILD_TESTING="${build_testing}"
+    -DBUILD_BENCHMARKING="${build_bench}"
   )
 
   TFS_CXX_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cxx"
+  RESOLVED_GENERATOR="Ninja"
   reset_build_dir_if_compiler_changed
-
-  if ! cmake -Wno-dev "${args[@]}"; then
-    warn "$(msg configure_retry)"
-    safe_remove_build_dir "${BUILD_DIR}"
-    cmake -Wno-dev "${args[@]}"
-  fi
+  run_cmake_configure "${args[@]}"
 }
 
 reset_build_dir_if_compiler_changed() {
@@ -1892,11 +1966,10 @@ configure_tfs() {
   fi
 
   case "${SANITIZER}" in
-    asan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=OFF -DENABLE_TSAN=OFF) ;;
-    ubsan) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=ON -DENABLE_TSAN=OFF) ;;
-    asan-ubsan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=ON -DENABLE_TSAN=OFF) ;;
-    tsan) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=OFF -DENABLE_TSAN=ON) ;;
-    *) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=OFF -DENABLE_TSAN=OFF) ;;
+    asan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=OFF) ;;
+    ubsan) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=ON) ;;
+    asan-ubsan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=ON) ;;
+    *) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=OFF) ;;
   esac
 
   local build_testing="OFF" build_bench="OFF"
@@ -1934,30 +2007,7 @@ configure_tfs() {
     -DCMAKE_PREFIX_PATH="${prefix_path}"
   )
 
-  local sig_file="${BUILD_DIR}/.tfs-build-signature"
-  local current_sig build_file
-  current_sig="$(printf '%s\n' "${SCRIPT_DIR}" "${args[@]}" | sha256sum | awk '{print $1}')"
-  if [[ "${RESOLVED_GENERATOR}" == "Ninja" ]]; then
-    build_file="${BUILD_DIR}/build.ninja"
-  else
-    build_file="${BUILD_DIR}/Makefile"
-  fi
-
-  if [[ "${FORCE_RECONFIGURE}" -eq 0 && -f "${BUILD_DIR}/CMakeCache.txt" && -f "${build_file}" && -f "${sig_file}" ]]; then
-    if [[ "$(cat "${sig_file}")" == "${current_sig}" ]]; then
-      info "Incremental build: CMake configuration unchanged, skipping reconfigure."
-      return
-    fi
-  fi
-
-  mkdir -p "${BUILD_DIR}"
-  if ! run_throttled cmake -Wno-dev "${args[@]}"; then
-    warn "$(msg configure_retry)"
-    safe_remove_build_dir "${BUILD_DIR}"
-    mkdir -p "${BUILD_DIR}"
-    run_throttled cmake -Wno-dev "${args[@]}"
-  fi
-  printf '%s\n' "${current_sig}" > "${sig_file}"
+  run_cmake_configure "${args[@]}"
 }
 
 verify_binary_links() {
@@ -2098,6 +2148,7 @@ main() {
   elif [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
     install_portable_debian_bootstrap
     ensure_portable_debian_toolchain
+    resolve_build_plan
   else
     install_common_deps
     # Re-evaluate Ninja/ccache availability after installing apt packages

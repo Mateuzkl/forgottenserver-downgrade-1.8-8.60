@@ -304,6 +304,15 @@ function(add_tfs_library target)
 	endif()
 endfunction()
 
+if (NOT ENABLE_UNITY_BUILD AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	# GCC 12/13 -O3 emits a known false-positive -Wfree-nonheap-object inside
+	# libstdc++ std::variant<std::string, ...> destruction in ValueWrapper::deserialize
+	# when compiled as a standalone translation unit (GCC PR 104336 / 105562).
+	set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/kv/value_wrapper.cpp PROPERTIES
+		COMPILE_OPTIONS "-Wno-error=free-nonheap-object"
+	)
+endif()
+
 add_tfs_library(tfslib)
 
 add_custom_target(format COMMAND /usr/bin/clang-format -style=file -i ${tfs_HDR} ${tfs_SRC} ${tfs_MAIN})

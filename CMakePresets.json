@@ -238,28 +238,6 @@
 			}
 		},
 		{
-			"name": "linux-tsan",
-			"generator": "Ninja",
-			"description": "ThreadSanitizer profile for WSL2/Ubuntu with bounded CPU/RAM",
-			"binaryDir": "${sourceDir}/build-tsan",
-			"cacheVariables": {
-				"CMAKE_BUILD_TYPE": "Debug",
-				"CMAKE_PREFIX_PATH": "/usr/local;$env{HOME}/.local",
-				"LUA_INCLUDE_DIR": "/usr/local/include",
-				"LUA_LIBRARY": "/usr/local/lib/liblua.a",
-				"LUA_LIBRARIES": "/usr/local/lib/liblua.a;m;dl",
-				"BUILD_TESTING": "ON",
-				"ENABLE_CCACHE": "ON",
-				"ENABLE_TSAN": "ON",
-				"ENABLE_LTO": "OFF",
-				"ENABLE_UNITY_BUILD": "OFF",
-				"ENABLE_PCH": "ON",
-				"TFS_COMPILE_JOBS": "2",
-				"TFS_LINK_JOBS": "1",
-				"USE_MIMALLOC": "OFF"
-			}
-		},
-		{
 			"name": "linux-benchmarks",
 			"generator": "Ninja",
 			"description": "Google Benchmark profile for WSL2/Ubuntu with Ninja, ccache, and bounded parallelism",
@@ -363,12 +341,6 @@
 		{
 			"name": "linux-asan-ubsan",
 			"configurePreset": "linux-asan-ubsan",
-			"configuration": "Debug",
-			"jobs": 2
-		},
-		{
-			"name": "linux-tsan",
-			"configurePreset": "linux-tsan",
 			"configuration": "Debug",
 			"jobs": 2
 		},
@@ -489,18 +461,6 @@
 		{
 			"name": "linux-asan-ubsan",
 			"configurePreset": "linux-asan-ubsan",
-			"configuration": "Debug",
-			"output": {
-				"outputOnFailure": true
-			},
-			"execution": {
-				"jobs": 1,
-				"noTestsAction": "error"
-			}
-		},
-		{
-			"name": "linux-tsan",
-			"configurePreset": "linux-tsan",
 			"configuration": "Debug",
 			"output": {
 				"outputOnFailure": true

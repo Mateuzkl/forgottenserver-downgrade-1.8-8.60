@@ -93,9 +93,7 @@ if (NOT WIN32)
 endif ()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    # GCC 12/13 -O3 emits false-positive free-nonheap-object inside libstdc++ std::variant/std::string
-    # in non-unity translation units (GCC PR 104336 / 105562).
-    add_compile_options(-fno-strict-aliasing -Wno-error=free-nonheap-object)
+    add_compile_options(-fno-strict-aliasing)
 endif ()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
@@ -300,8 +298,8 @@ endif()
 
 ### MIMALLOC ALLOCATOR ###
 option(USE_MIMALLOC "Use mimalloc allocator for better performance on Linux" OFF)
-if (USE_MIMALLOC AND (ENABLE_ASAN OR ENABLE_TSAN))
-    message(STATUS "mimalloc disabled automatically because a memory/thread sanitizer is enabled")
+if (USE_MIMALLOC AND ENABLE_ASAN)
+    message(STATUS "mimalloc disabled automatically because ENABLE_ASAN is enabled")
     set(USE_MIMALLOC OFF)
 endif()
 if (USE_MIMALLOC AND NOT WIN32)
@@ -387,7 +385,7 @@ endif()
 
 ### INTERPROCEDURAL OPTIMIZATION ###
 set(TFS_IPO_ACTIVE OFF)
-if (ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
+if (ENABLE_ASAN OR ENABLE_UBSAN)
     message(STATUS "IPO/LTO disabled because a sanitizer is enabled")
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE FALSE)
