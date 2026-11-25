@@ -1535,22 +1535,20 @@ resolve_build_plan() {
     RESOLVED_PROFILE="${PROFILE}"
   fi
 
-  local prof_lto="OFF" prof_unity="OFF" prof_unity_batch=4 prof_pch="ON" prof_low_mem_ld="OFF"
+  local prof_lto="OFF" prof_unity="ON" prof_unity_batch=8 prof_low_mem_ld="OFF"
   case "${RESOLVED_PROFILE}" in
     low-memory)
       prof_lto="OFF"
       prof_unity="OFF"
       prof_unity_batch=4
-      prof_pch="ON"
       prof_low_mem_ld="ON"
       NICE_LEVEL=15
       IONICE_ARGS=(-c 3)
       ;;
     balanced)
       prof_lto="OFF"
-      prof_unity="OFF"
-      prof_unity_batch=4
-      prof_pch="ON"
+      prof_unity="ON"
+      prof_unity_batch=8
       if (( MEM_TOTAL_MB <= 8192 )); then
         prof_low_mem_ld="ON"
       else
@@ -1563,7 +1561,6 @@ resolve_build_plan() {
       prof_lto="ON"
       prof_unity="ON"
       prof_unity_batch=8
-      prof_pch="OFF"
       if (( MEM_TOTAL_MB <= 6144 )); then
         prof_low_mem_ld="ON"
       else
@@ -1579,16 +1576,10 @@ resolve_build_plan() {
       ;;
   esac
 
-  [[ "${ENABLE_LTO}" != "auto" ]] || ENABLE_LTO="${prof_lto}"
-  [[ "${ENABLE_UNITY}" != "auto" ]] || ENABLE_UNITY="${prof_unity}"
-  [[ -n "${UNITY_BATCH}" ]] || UNITY_BATCH="${prof_unity_batch}"
-  [[ "${ENABLE_PCH}" != "auto" ]] || ENABLE_PCH="${prof_pch}"
-  [[ "${ENABLE_LOW_MEM_LINKER}" != "auto" ]] || ENABLE_LOW_MEM_LINKER="${prof_low_mem_ld}"
-
   if [[ "${SANITIZER}" != "none" ]]; then
     [[ -n "${BUILD_TYPE}" ]] || BUILD_TYPE="Debug"
+    prof_unity="OFF"
     ENABLE_LTO="OFF"
-    ENABLE_UNITY="OFF"
     USE_MIMALLOC="OFF"
     if [[ "${SANITIZER}" == "asan" || "${SANITIZER}" == "asan-ubsan" ]]; then
       export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1:halt_on_error=1}"
@@ -1599,6 +1590,18 @@ resolve_build_plan() {
   else
     [[ -n "${BUILD_TYPE}" ]] || BUILD_TYPE="Release"
   fi
+
+  [[ "${ENABLE_LTO}" != "auto" ]] || ENABLE_LTO="${prof_lto}"
+  [[ "${ENABLE_UNITY}" != "auto" ]] || ENABLE_UNITY="${prof_unity}"
+  [[ -n "${UNITY_BATCH}" ]] || UNITY_BATCH="${prof_unity_batch}"
+  if [[ "${ENABLE_PCH}" == "auto" ]]; then
+    if [[ "${ENABLE_UNITY}" == "ON" ]]; then
+      ENABLE_PCH="OFF"
+    else
+      ENABLE_PCH="ON"
+    fi
+  fi
+  [[ "${ENABLE_LOW_MEM_LINKER}" != "auto" ]] || ENABLE_LOW_MEM_LINKER="${prof_low_mem_ld}"
 
   if [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
     if [[ "${SANITIZER}" != "none" ]]; then

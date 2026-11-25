@@ -168,7 +168,7 @@
 		{
 			"name": "linux-balanced",
 			"generator": "Ninja",
-			"description": "Balanced profile for WSL2/Ubuntu dev & tests: incremental non-unity + PCH + ccache, no LTO, reserves CPU/RAM for Windows and IDE",
+			"description": "Balanced profile for WSL2/Ubuntu dev & tests: Unity Build + ccache, no LTO, reserves CPU/RAM for Windows and IDE",
 			"binaryDir": "${sourceDir}/build-balanced",
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": "Release",
@@ -180,8 +180,9 @@
 				"ENABLE_CCACHE": "ON",
 				"ENABLE_LTO": "OFF",
 				"ENABLE_TEST_LTO": "OFF",
-				"ENABLE_UNITY_BUILD": "OFF",
-				"ENABLE_PCH": "ON",
+				"ENABLE_UNITY_BUILD": "ON",
+				"UNITY_BUILD_BATCH_SIZE": "8",
+				"ENABLE_PCH": "OFF",
 				"ENABLE_LOW_MEMORY_LINKER": "ON",
 				"TFS_COMPILE_JOBS": "4",
 				"TFS_LINK_JOBS": "1",
@@ -254,8 +255,9 @@
 				"ENABLE_CCACHE": "ON",
 				"ENABLE_LTO": "OFF",
 				"ENABLE_BENCHMARK_LTO": "OFF",
-				"ENABLE_UNITY_BUILD": "OFF",
-				"ENABLE_PCH": "ON",
+				"ENABLE_UNITY_BUILD": "ON",
+				"UNITY_BUILD_BATCH_SIZE": "8",
+				"ENABLE_PCH": "OFF",
 				"TFS_COMPILE_JOBS": "4",
 				"TFS_LINK_JOBS": "1"
 			}

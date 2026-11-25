@@ -20,8 +20,8 @@ This file defines mandatory rules for all AI assistants and automated tooling op
 
 | Profile | Command | LTO | Unity Build | PCH | Linker / Pools | CPU & RAM Policy (WSL2) | Best For |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Low Memory** | `./build.sh --non-interactive --skip-deps --profile low-memory` | `OFF` | `OFF` | `ON` | `compile<=2`, `link=1`, GNU ld low-mem flags, `nice -n 15`, `ionice -c 3` | Reserves >=75% CPU & >=2 GiB RAM | <=8 GB RAM, heavy IDE load, sanitizers |
-| **Balanced** *(default on WSL2)* | `./build.sh --non-interactive --skip-deps --profile balanced` | `OFF` | `OFF` | `ON` | Adaptive `compile` (<=50% CPU on WSL2), `link=1`, `ctest<=2`, `nice -n 10` | Reserves >=40-50% CPU & >=2 GiB RAM | Daily dev, incremental rebuilds, unit tests |
+| **Low Memory** | `./build.sh --non-interactive --skip-deps --profile low-memory` | `OFF` | `OFF` *(override: `--unity on`)* | `ON` | `compile<=2`, `link=1`, GNU ld low-mem flags, `nice -n 15`, `ionice -c 3` | Reserves >=75% CPU & >=2 GiB RAM | <=8 GB RAM, heavy IDE load, sanitizers |
+| **Balanced** *(default on WSL2)* | `./build.sh --non-interactive --skip-deps --profile balanced` | `OFF` | `ON` (batch 8; *override: `--unity off`*) | `OFF` *(auto `ON` if `--unity off`)* | Adaptive `compile` (<=50% CPU on WSL2), `link=1`, `ctest<=2`, `nice -n 10` | Reserves >=40-50% CPU & >=2 GiB RAM | Daily dev, fast rebuilds, unit tests |
 | **Full Performance** *(production)* | `./build.sh --non-interactive --skip-deps --profile full-performance` | `ON` | `ON` (batch 8) | `OFF` | `-O3`, `-march=native`, `USE_MIMALLOC=ON`, bounded `TFS_LTO_JOBS`, `link<=2` | Still caps RAM (~1.45 GiB/job) & reserves >=25% CPU on WSL2 | Production `tfs` binary & release verification |
 
 To inspect the exact adaptive plan (detected CPUs, RAM, WSL2 status, build dir, job limits, and flags) without building:
@@ -52,7 +52,7 @@ To inspect the exact adaptive plan (detected CPUs, RAM, WSL2 status, build dir, 
 ```
 
 ### Sanitizers (ASan + UBSan)
-Sanitizers automatically disable LTO and `USE_MIMALLOC`, enforce `ENABLE_UNITY_BUILD=OFF`, and cap parallelism to avoid memory exhaustion:
+Sanitizers automatically disable LTO and `USE_MIMALLOC`, default to `ENABLE_UNITY_BUILD=OFF` (manually overrideable via `--unity on`), and cap parallelism to avoid memory exhaustion:
 ```bash
 ./build.sh --non-interactive --skip-deps --profile low-memory --sanitizer asan-ubsan --tests --test-filter 'test_party_lifetime|test_combat'
 ```
@@ -92,7 +92,7 @@ If invoking `cmake` directly, AI agents MUST follow these rules:
    -DLUA_LIBRARIES="/usr/local/lib/liblua.a;m;dl"
    ```
 4. Always cap Ninja pools and LTO workers on WSL2 (e.g., `-DTFS_COMPILE_JOBS=4 -DTFS_LINK_JOBS=1 -DTFS_LTO_JOBS=4`) and run under `nice -n 10`.
-5. Use `-DENABLE_LTO=OFF -DENABLE_UNITY_BUILD=OFF` for incremental dev/test builds; keep `-DENABLE_LTO=ON -DCMAKE_BUILD_TYPE=Release` for production verification.
+5. Use `-DENABLE_LTO=OFF` with Unity Build (`-DENABLE_UNITY_BUILD=ON`, default) for fast dev/test builds, or `-DENABLE_UNITY_BUILD=OFF` for `low-memory`, sanitizers, and single-TU debugging; keep `-DENABLE_LTO=ON -DCMAKE_BUILD_TYPE=Release` for production verification.
 6. Run timing-sensitive CTest suites with bounded concurrency (`ctest -j 2` or `-j 1` under sanitizers).
 7. Prefer `CMakePresets.json` profiles (`linux-low-memory`, `linux-balanced`, `linux-full-performance`, `linux-asan-ubsan`, `linux-benchmarks`).
 
