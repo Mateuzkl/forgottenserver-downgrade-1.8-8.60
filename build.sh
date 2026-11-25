@@ -1904,6 +1904,9 @@ configure_portable_tfs() {
     -DENABLE_NATIVE_OPTIMIZATIONS=OFF
     -DENABLE_SLOW_TASK_DETECTION=OFF
     -DUSE_MIMALLOC=OFF
+    -DENABLE_ASAN=OFF
+    -DENABLE_UBSAN=OFF
+    -DENABLE_TSAN=OFF
     -DENABLE_CCACHE="${ENABLE_CCACHE}"
     -DENABLE_LTO="${ENABLE_LTO}"
     -DENABLE_TEST_LTO=OFF
@@ -1969,10 +1972,10 @@ configure_tfs() {
   fi
 
   case "${SANITIZER}" in
-    asan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=OFF) ;;
-    ubsan) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=ON) ;;
-    asan-ubsan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=ON) ;;
-    *) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=OFF) ;;
+    asan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=OFF -DENABLE_TSAN=OFF) ;;
+    ubsan) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=ON -DENABLE_TSAN=OFF) ;;
+    asan-ubsan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=ON -DENABLE_TSAN=OFF) ;;
+    *) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=OFF -DENABLE_TSAN=OFF) ;;
   esac
 
   local build_testing="OFF" build_bench="OFF"
