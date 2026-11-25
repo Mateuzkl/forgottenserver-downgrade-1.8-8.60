@@ -87,14 +87,31 @@ void NetworkMessage::addBytes(const char* bytes, size_t size)
 	info.length += size;
 }
 
-void NetworkMessage::addPaddingBytes(size_t n)
+NetworkMessage::NetworkMessage(const NetworkMessage& other, ActiveBytesCopyTag) noexcept : info(other.info)
 {
-	if (!canAdd(n)) {
-		return;
+	const size_t activeEnd = std::min<size_t>(
+	    buffer.size(),
+	    std::max<size_t>(other.info.position, static_cast<size_t>(other.info.length) + INITIAL_BUFFER_POSITION));
+	if (activeEnd > 0) {
+		std::memcpy(buffer.data(), other.buffer.data(), activeEnd);
+	}
+}
+
+bool NetworkMessage::addPaddingBytes(size_t n)
+{
+	if (n == 0) {
+		return true;
+	}
+
+	if (info.position > buffer.size() || n > buffer.size() - info.position ||
+	    n > static_cast<size_t>(std::numeric_limits<MsgSize_t>::max() - info.length)) {
+		return false;
 	}
 
 	std::fill_n(buffer.data() + info.position, n, 0x33);
-	info.length += n;
+	info.position += static_cast<MsgSize_t>(n);
+	info.length += static_cast<MsgSize_t>(n);
+	return true;
 }
 
 void NetworkMessage::addPosition(const Position& pos)
@@ -279,4 +296,10 @@ std::shared_ptr<NetworkMessage> tfs::net::make_network_message(const NetworkMess
 {
 	return std::allocate_shared<NetworkMessage>(LockfreePoolingAllocator<void, NETWORKMESSAGE_FREE_LIST_CAPACITY>(),
 	                                            other);
+}
+
+std::shared_ptr<NetworkMessage> tfs::net::clone_incoming_packet(const NetworkMessage& other)
+{
+	return std::allocate_shared<NetworkMessage>(LockfreePoolingAllocator<void, NETWORKMESSAGE_FREE_LIST_CAPACITY>(),
+	                                            other, NetworkMessage::ActiveBytesCopyTag{});
 }

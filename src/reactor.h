@@ -56,6 +56,7 @@ public:
 	void setTimeBudget(std::chrono::milliseconds budget) noexcept { timeBudget = budget; }
 	void setMaxInboxSize(size_t maxSize) noexcept { maxInboxSize = maxSize; }
 	void setMaxInboxDrainPerCycle(size_t maxTasks) noexcept { maxInboxDrainPerCycle = maxTasks; }
+	void setPostCycleHook(std::function<void()> hook) { postCycleHook = std::move(hook); }
 
 	[[nodiscard]] bool isReactorThread() const noexcept;
 	[[nodiscard]] ThreadState getState() const noexcept;
@@ -138,6 +139,7 @@ private:
 	std::chrono::milliseconds timeBudget{0};
 	size_t maxInboxSize = REACTOR_MAX_INBOX_SIZE;
 	size_t maxInboxDrainPerCycle = REACTOR_MAX_INBOX_DRAIN_PER_CYCLE;
+	std::function<void()> postCycleHook;
 
 	friend struct TaskReactorTestAccess;
 };

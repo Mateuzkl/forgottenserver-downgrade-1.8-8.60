@@ -150,4 +150,93 @@ TEST_CASE(packet_expiration_policy_matches_legacy_gameplay_actions)
 	}
 }
 
+TEST_CASE(clone_incoming_packet_preserves_active_payload_and_parser_state)
+{
+	NetworkMessage original;
+	original.addByte(0x65);
+	original.add<uint32_t>(0xCAFEBABE);
+	original.addString("exura");
+	CHECK(original.setBufferPosition(0));
+	CHECK(original.getByte() == 0x65);
+
+	auto cloned = tfs::net::clone_incoming_packet(original);
+	CHECK(cloned->getLength() == original.getLength());
+	CHECK(cloned->getBufferPosition() == original.getBufferPosition());
+	CHECK(!cloned->isOverrun());
+	CHECK(cloned->get<uint32_t>() == 0xCAFEBABE);
+	CHECK(cloned->getString() == "exura");
+	CHECK(!cloned->isOverrun());
+	(void)cloned->getByte();
+	CHECK(cloned->isOverrun());
+}
+
+TEST_CASE(packet_rate_limiter_enforces_monotonic_token_bucket_without_boundary_bursts)
+{
+	tfs::net::PacketRateLimiter limiter;
+	const auto t0 = tfs::net::PacketRateLimiter::Clock::now();
+
+	// Unlimited when <= 0
+	for (int i = 0; i < 200; ++i) {
+		CHECK(limiter.allow(t0, 0));
+		CHECK(limiter.allow(t0, -5));
+	}
+
+	// Fresh limiter with max 10 packets/sec: allows burst of 10, rejects 11th immediately.
+	tfs::net::PacketRateLimiter strict;
+	for (int i = 0; i < 10; ++i) {
+		CHECK(strict.allow(t0, 10));
+	}
+	CHECK(!strict.allow(t0, 10));
+	// 50ms later only 0.5 token refilled -> still rejected.
+	CHECK(!strict.allow(t0 + std::chrono::milliseconds(50), 10));
+	// 100ms later 1 full token refilled -> allows exactly 1, then rejects.
+	CHECK(strict.allow(t0 + std::chrono::milliseconds(100), 10));
+	CHECK(!strict.allow(t0 + std::chrono::milliseconds(100), 10));
+	// Full 1000ms later -> refills full bucket of 10.
+	for (int i = 0; i < 10; ++i) {
+		CHECK(strict.allow(t0 + std::chrono::milliseconds(1100), 10));
+	}
+	CHECK(!strict.allow(t0 + std::chrono::milliseconds(1100), 10));
+}
+
+TEST_CASE(round_robin_per_connection_draining_prevents_flooder_starvation)
+{
+	TaskReactor reactor;
+	reactor.start();
+	reactor.setMaxTasksPerCycle(2);
+
+	std::deque<int> flooderQueue;
+	for (int i = 0; i < 50; ++i) {
+		flooderQueue.push_back(i);
+	}
+	std::deque<int> playerQueue{999};
+	std::vector<int> executed;
+
+	std::function<void()> drainFlooder;
+	drainFlooder = [&] {
+		if (flooderQueue.empty()) return;
+		executed.push_back(flooderQueue.front());
+		flooderQueue.pop_front();
+		if (!flooderQueue.empty()) {
+			reactor.send([&] { drainFlooder(); });
+		}
+	};
+
+	// Flooder schedules only ONE drain task regardless of its 50 queued packets.
+	reactor.send([&] { drainFlooder(); });
+	// Legitimate player arrives after the flooder's 50-packet burst.
+	reactor.send([&] {
+		executed.push_back(playerQueue.front());
+		playerQueue.pop_front();
+	});
+
+	// In the very first cycle, the legitimate player executes right after the
+	// flooder's first packet instead of waiting behind all 50 flood packets.
+	reactor.runOnce();
+	CHECK(executed.size() == 2);
+	CHECK(executed[0] == 0);
+	CHECK(executed[1] == 999);
+	reactor.shutdown();
+}
+
 TFS_TEST_MAIN()

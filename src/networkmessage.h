@@ -6,6 +6,7 @@
 
 #include "const.h"
 
+#include <limits>
 #include <memory>
 
 class Item;
@@ -46,9 +47,45 @@ public:
 	{
 		MAX_PROTOCOL_BODY_LENGTH = MAX_BODY_LENGTH - 10
 	};
+	// Maximum XTEA-aligned encrypted region (2-byte inner length + payload + padding)
+	// that fits in buffer[HEADER_LENGTH + CHECKSUM_LENGTH .. NETWORKMESSAGE_MAXSIZE).
+	static constexpr MsgSize_t MAX_ENCRYPTED_LENGTH = static_cast<MsgSize_t>(
+	    ((static_cast<size_t>(NETWORKMESSAGE_MAXSIZE) - static_cast<size_t>(HEADER_LENGTH) -
+	      static_cast<size_t>(CHECKSUM_LENGTH)) /
+	     static_cast<size_t>(XTEA_MULTIPLE)) *
+	    static_cast<size_t>(XTEA_MULTIPLE));
+	static constexpr MsgSize_t MAX_ENCRYPTED_PAYLOAD_LENGTH =
+	    static_cast<MsgSize_t>(MAX_ENCRYPTED_LENGTH - static_cast<MsgSize_t>(HEADER_LENGTH));
+	// Classic CipSoft 8.60 clients use a 16 KiB receive buffer; flush coalesced
+	// multi-packet batches below that boundary for non-OTC sessions.
+	static constexpr MsgSize_t CIPSOFT_MAX_COALESCED_BODY_LENGTH = 16352;
 	static constexpr size_t MAX_STRING_LENGTH = 8192;
 
-	NetworkMessage() = default;
+	static_assert(static_cast<size_t>(INITIAL_BUFFER_POSITION) ==
+	              static_cast<size_t>(HEADER_LENGTH) + static_cast<size_t>(CHECKSUM_LENGTH) +
+	                  static_cast<size_t>(HEADER_LENGTH));
+	static_assert((static_cast<size_t>(MAX_ENCRYPTED_LENGTH) % static_cast<size_t>(XTEA_MULTIPLE)) == 0);
+	static_assert(static_cast<size_t>(HEADER_LENGTH) + static_cast<size_t>(CHECKSUM_LENGTH) +
+	                  static_cast<size_t>(MAX_ENCRYPTED_LENGTH) <=
+	              static_cast<size_t>(NETWORKMESSAGE_MAXSIZE));
+	static_assert(static_cast<size_t>(CHECKSUM_LENGTH) + static_cast<size_t>(MAX_ENCRYPTED_LENGTH) <=
+	              std::numeric_limits<MsgSize_t>::max());
+	static_assert(static_cast<size_t>(MAX_PROTOCOL_BODY_LENGTH) <= static_cast<size_t>(MAX_ENCRYPTED_PAYLOAD_LENGTH));
+	static_assert(static_cast<size_t>(CIPSOFT_MAX_COALESCED_BODY_LENGTH) <=
+	              static_cast<size_t>(MAX_PROTOCOL_BODY_LENGTH));
+	static_assert(static_cast<size_t>(INITIAL_BUFFER_POSITION) + static_cast<size_t>(MAX_PROTOCOL_BODY_LENGTH) +
+	                  (static_cast<size_t>(XTEA_MULTIPLE) - 1) <=
+	              static_cast<size_t>(NETWORKMESSAGE_MAXSIZE));
+
+	struct ActiveBytesCopyTag
+	{};
+
+	NetworkMessage() : buffer{} {}
+	NetworkMessage(const NetworkMessage&) = default;
+	NetworkMessage& operator=(const NetworkMessage&) = default;
+	NetworkMessage(NetworkMessage&&) noexcept = default;
+	NetworkMessage& operator=(NetworkMessage&&) noexcept = default;
+	NetworkMessage(const NetworkMessage& other, ActiveBytesCopyTag) noexcept;
 
 	void reset()
 	{
@@ -125,7 +162,7 @@ public:
 	}
 
 	void addBytes(const char* bytes, size_t size);
-	void addPaddingBytes(size_t n);
+	[[nodiscard]] bool addPaddingBytes(size_t n);
 
 	void addString(std::string_view value);
 
@@ -149,7 +186,10 @@ public:
 
 	MsgSize_t getBufferPosition() const { return info.position; }
 
-	MsgSize_t getRemainingBufferLength() const { return info.length - info.position; }
+	MsgSize_t getRemainingBufferLength() const
+	{
+		return info.position <= info.length ? static_cast<MsgSize_t>(info.length - info.position) : 0;
+	}
 
 	bool setBufferPosition(MsgSize_t pos)
 	{
@@ -184,7 +224,7 @@ protected:
 	};
 
 	NetworkMessageInfo info = {};
-	std::array<uint8_t, NETWORKMESSAGE_MAXSIZE> buffer = {};
+	std::array<uint8_t, NETWORKMESSAGE_MAXSIZE> buffer;
 
 private:
 	bool canAdd(size_t size) const { return (size + info.position) < MAX_BODY_LENGTH; }
@@ -203,6 +243,7 @@ namespace tfs::net {
 
 std::shared_ptr<NetworkMessage> make_network_message();
 std::shared_ptr<NetworkMessage> make_network_message(const NetworkMessage& other);
+std::shared_ptr<NetworkMessage> clone_incoming_packet(const NetworkMessage& other);
 
 } // namespace tfs::net
 

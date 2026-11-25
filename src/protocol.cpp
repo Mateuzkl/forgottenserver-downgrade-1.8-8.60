@@ -5,36 +5,53 @@
 
 #include "protocol.h"
 
+#include "logger.h"
 #include "outputmessage.h"
 #include "rsa.h"
 #include "tasks.h"
 #include "xtea.h"
 
+#include <cstring>
+
 namespace {
 
-void XTEA_encrypt(OutputMessage& msg, const xtea::round_keys& key)
+bool XTEA_encrypt(OutputMessage& msg, const xtea::round_keys& key)
 {
-	// The message must be a multiple of 8
-	size_t paddingBytes = msg.getLength() % 8u;
-	if (paddingBytes != 0) {
-		msg.addPaddingBytes(8 - paddingBytes);
+	// The encrypted message (2-byte inner length + payload + padding) must be a
+	// non-zero multiple of 8 bytes and fit strictly within the inline buffer.
+	if (!msg.padToXteaBlock()) {
+		return false;
+	}
+
+	const size_t length = msg.getLength();
+	if (length == 0 || (length % NetworkMessage::XTEA_MULTIPLE) != 0) {
+		return false;
 	}
 
 	uint8_t* buffer = msg.getOutputBuffer();
-	xtea::encrypt(buffer, msg.getLength(), key);
+	xtea::encrypt(buffer, length, key);
+	return true;
 }
 
 bool XTEA_decrypt(NetworkMessage& msg, const xtea::round_keys& key)
 {
-	if (((msg.getLength() - 6) & 7) != 0) {
+	const uint16_t position = msg.getBufferPosition();
+	const uint16_t length = msg.getLength();
+	if (position > length || length > NETWORKMESSAGE_MAXSIZE) {
 		return false;
 	}
 
-	uint8_t* buffer = msg.getBuffer() + msg.getBufferPosition();
-	xtea::decrypt(buffer, msg.getLength() - 6, key);
+	const size_t encryptedLength = static_cast<size_t>(length) - static_cast<size_t>(position);
+	if (encryptedLength < NetworkMessage::XTEA_MULTIPLE ||
+	    (encryptedLength % NetworkMessage::XTEA_MULTIPLE) != 0) {
+		return false;
+	}
 
-	uint16_t innerLength = msg.get<uint16_t>();
-	if (innerLength + 8 > msg.getLength()) {
+	uint8_t* buffer = msg.getBuffer() + position;
+	xtea::decrypt(buffer, encryptedLength, key);
+
+	const uint16_t innerLength = msg.get<uint16_t>();
+	if (innerLength > encryptedLength - NetworkMessage::HEADER_LENGTH) {
 		return false;
 	}
 
@@ -46,14 +63,68 @@ bool XTEA_decrypt(NetworkMessage& msg, const xtea::round_keys& key)
 
 void Protocol::onSendMessage(const OutputMessage_ptr& msg) const
 {
-	if (!rawMessages) {
-		msg->writeMessageLength();
+	if (!msg || rawMessages) {
+		return;
+	}
 
-		if (encryptionEnabled) {
-			XTEA_encrypt(*msg, key);
-			msg->addCryptoHeader(checksumEnabled);
+	if (encryptionEnabled) {
+		const size_t requiredHeaderSpace =
+		    static_cast<size_t>(NetworkMessage::HEADER_LENGTH) +
+		    (checksumEnabled ? static_cast<size_t>(NetworkMessage::CHECKSUM_LENGTH) : 0) +
+		    static_cast<size_t>(NetworkMessage::HEADER_LENGTH);
+		if (msg->getLength() > OutputMessage::MAX_PAYLOAD_LENGTH ||
+		    msg->getOutputBufferStart() < requiredHeaderSpace) {
+			LOG_ERROR("[Protocol] Refusing to frame oversized or misaligned encrypted OutputMessage (len={}, start={}).",
+			          msg->getLength(), msg->getOutputBufferStart());
+			msg->setLength(0);
+			return;
 		}
 	}
+
+	if (!msg->writeMessageLength()) {
+		LOG_ERROR("[Protocol] Failed to write message length header (len={}, start={}).",
+		          msg->getLength(), msg->getOutputBufferStart());
+		msg->setLength(0);
+		return;
+	}
+
+	if (encryptionEnabled) {
+		if (!XTEA_encrypt(*msg, key) || !msg->addCryptoHeader(checksumEnabled)) {
+			LOG_ERROR("[Protocol] Failed to pad/encrypt outgoing frame (len={}, start={}).",
+			          msg->getLength(), msg->getOutputBufferStart());
+			msg->setLength(0);
+			return;
+		}
+	}
+}
+
+bool Protocol::validateOutgoingFrame(const OutputMessage& msg) const noexcept
+{
+	const size_t totalLength = msg.getLength();
+	const size_t start = msg.getOutputBufferStart();
+	if (totalLength == 0 || start > NETWORKMESSAGE_MAXSIZE || totalLength > NETWORKMESSAGE_MAXSIZE - start) {
+		return false;
+	}
+
+	if (rawMessages || !encryptionEnabled) {
+		return true;
+	}
+
+	const size_t prefixLength =
+	    static_cast<size_t>(NetworkMessage::HEADER_LENGTH) +
+	    (checksumEnabled ? static_cast<size_t>(NetworkMessage::CHECKSUM_LENGTH) : 0);
+	if (totalLength < prefixLength + static_cast<size_t>(NetworkMessage::XTEA_MULTIPLE)) {
+		return false;
+	}
+
+	uint16_t wireFrameLength = 0;
+	std::memcpy(&wireFrameLength, msg.getOutputBuffer(), sizeof(wireFrameLength));
+	if (static_cast<size_t>(wireFrameLength) + static_cast<size_t>(NetworkMessage::HEADER_LENGTH) != totalLength) {
+		return false;
+	}
+
+	const size_t encryptedLength = totalLength - prefixLength;
+	return (encryptedLength % static_cast<size_t>(NetworkMessage::XTEA_MULTIPLE)) == 0;
 }
 
 void Protocol::onRecvMessage(NetworkMessage& msg)
@@ -68,9 +139,13 @@ void Protocol::onRecvMessage(NetworkMessage& msg)
 OutputMessage_ptr Protocol::getOutputBuffer(int32_t size)
 {
 	assert(g_dispatcher.isDispatcherThread() && "Protocol::getOutputBuffer must run on the dispatcher thread");
+	const size_t requestedSize = size > 0 ? static_cast<size_t>(size) : 0;
+	const size_t maxCoalescedLength = std::min<size_t>(
+	    getMaxCoalescedBodyLength(), static_cast<size_t>(OutputMessage::MAX_PAYLOAD_LENGTH));
 	if (!outputBuffer) {
 		outputBuffer = OutputMessagePool::getOutputMessage();
-	} else if ((outputBuffer->getLength() + size) > NetworkMessage::MAX_PROTOCOL_BODY_LENGTH) {
+	} else if (outputBuffer->getLength() > 0 &&
+	           (static_cast<size_t>(outputBuffer->getLength()) + requestedSize) > maxCoalescedLength) {
 		send(outputBuffer);
 		outputBuffer = OutputMessagePool::getOutputMessage();
 	}

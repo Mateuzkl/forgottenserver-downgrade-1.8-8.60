@@ -12,6 +12,9 @@
 #include "zoneweather.h"
 
 #include <array>
+#include <chrono>
+#include <deque>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -117,6 +120,11 @@ private:
 	void writeToOutputBuffer(std::span<const uint8_t> bytes);
 
 	void release() override;
+	[[nodiscard]] uint32_t getMaxCoalescedBodyLength() const noexcept override
+	{
+		return isOTC ? static_cast<uint32_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH)
+		             : static_cast<uint32_t>(NetworkMessage::CIPSOFT_MAX_COALESCED_BODY_LENGTH);
+	}
 
 	std::pair<bool, uint32_t> isKnownCreature(uint32_t id);
 
@@ -126,6 +134,7 @@ private:
 
 	// we have all the parse methods
 	void parsePacket(NetworkMessage& msg) override;
+	void drainIncomingPacketsOnDispatcher();
 	void parsePacketOnDispatcher(NetworkMessage_ptr& packet);
 	void onRecvFirstMessage(NetworkMessage& msg) override;
 	void onConnect() override;
@@ -454,6 +463,15 @@ private:
 	std::unordered_set<uint32_t> pendingCreatureEmblems;
 	std::shared_ptr<Player> player;
 	tfs::net::PacketBacklog packetBacklog;
+	struct QueuedGamePacket
+	{
+		NetworkMessage_ptr packet;
+		tfs::net::PacketBacklog::Ticket ticket;
+		std::chrono::steady_clock::time_point deadline;
+	};
+	std::mutex incomingPacketsMutex;
+	std::deque<QueuedGamePacket> incomingPackets;
+	bool incomingDrainScheduled = false;
 
 	uint32_t eventConnect = 0;
 	int64_t lastCharacterHistoryRequest = 0;

@@ -141,4 +141,46 @@ TEST_CASE(autosend_recovers_after_scheduler_rejects_its_timer)
 	CHECK(completed);
 }
 
+TEST_CASE(autosend_flush_if_due_prevents_starvation_under_time_budget_deferral)
+{
+	auto& pool = OutputMessagePool::getInstance();
+	auto protocol = std::make_shared<TestProtocol>();
+	struct Cleanup
+	{
+		OutputMessagePool& pool;
+		Protocol_ptr protocol;
+		~Cleanup()
+		{
+			g_reactor.setPostCycleHook(nullptr);
+			g_reactor.setTimeBudget(std::chrono::milliseconds(0));
+			pool.removeProtocolFromAutosend(protocol);
+			OutputMessagePoolTestAccess::resetSchedule(pool);
+			g_scheduler.shutdown();
+			g_dispatcher.shutdown();
+			g_reactor.drain();
+		}
+	} cleanup{pool, protocol};
+
+	g_dispatcher.start();
+	g_scheduler.start();
+	g_reactor.setTimeBudget(std::chrono::milliseconds(15));
+	g_reactor.setPostCycleHook([&pool] { pool.flushIfDue(); });
+
+	bool flushedAfterBusyCycle = false;
+	g_dispatcher.addTask([&] {
+		auto out = protocol->getOutputBuffer(1);
+		out->addByte(0x6D);
+		// Simulate a busy gameplay slice exceeding both 10ms autosend delay and 15ms budget.
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	});
+	// Queue a second task that gets deferred by timeBudget — postCycleHook must still flush!
+	g_dispatcher.addTask([&] {
+		flushedAfterBusyCycle = !protocol->getCurrentBuffer();
+		g_dispatcher.shutdown();
+	});
+
+	g_reactor.runLoop();
+	CHECK(flushedAfterBusyCycle);
+}
+
 TFS_TEST_MAIN()

@@ -33,9 +33,11 @@ void OutputMessagePool::sendAll() noexcept
 	// THREAD-SAFETY: Must be called from dispatcher thread only.
 	sendScheduled = false;
 	if (bufferedProtocols.empty()) [[unlikely]] {
+		firstBufferedAt = {};
 		return;
 	}
 
+	firstBufferedAt = {};
 	flushingProtocols.swap(bufferedProtocols);
 
 	for (auto& protocol : flushingProtocols) {
@@ -53,11 +55,26 @@ void OutputMessagePool::sendAll() noexcept
 	}
 }
 
+void OutputMessagePool::flushIfDue() noexcept
+{
+	// THREAD-SAFETY: Must be called from dispatcher thread only.
+	if (bufferedProtocols.empty() || firstBufferedAt == std::chrono::steady_clock::time_point{}) {
+		return;
+	}
+
+	if (std::chrono::steady_clock::now() - firstBufferedAt >= AUTOSEND_DELAY_DEFAULT) {
+		sendAll();
+	}
+}
+
 void OutputMessagePool::addProtocolToAutosend(Protocol_ptr protocol)
 {
 	// THREAD-SAFETY: Must be called from dispatcher thread only
 	// dispatcher thread
 	if (!protocol->inAutosend) {
+		if (bufferedProtocols.empty()) {
+			firstBufferedAt = std::chrono::steady_clock::now();
+		}
 		auto& bufferedProtocol = bufferedProtocols.emplace_back(std::move(protocol));
 		bufferedProtocol->inAutosend = true;
 	}
@@ -77,6 +94,9 @@ void OutputMessagePool::removeProtocolFromAutosend(const Protocol_ptr& protocol)
 		(*it)->inAutosend = false;
 		std::swap(*it, bufferedProtocols.back());
 		bufferedProtocols.pop_back();
+		if (bufferedProtocols.empty()) {
+			firstBufferedAt = {};
+		}
 	}
 }
 

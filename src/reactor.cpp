@@ -282,6 +282,9 @@ void TaskReactor::runOnce()
 		PerformanceScope scope(PerformanceMetric::ReactorCallbacks);
 		executeReadyTasks(readyTasks, cycleStart);
 	}
+	if (postCycleHook) {
+		postCycleHook();
+	}
 	{
 		std::scoped_lock lock(mutex);
 		g_performanceMetrics.recordQueueSize(sendInbox.size() + scheduleInbox.size() + cancelInbox.size() +

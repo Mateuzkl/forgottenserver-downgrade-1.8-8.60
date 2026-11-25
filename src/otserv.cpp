@@ -977,7 +977,9 @@ int startServer()
 		}
 #endif
 		startupCompleted = true;
+		g_reactor.setPostCycleHook([]() { OutputMessagePool::getInstance().flushIfDue(); });
 		g_reactor.runLoop();
+		g_reactor.setPostCycleHook(nullptr);
 		}
 	} else {
 		if (startupLoaded) {

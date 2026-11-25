@@ -576,6 +576,11 @@ void ProtocolGame::release()
 		player.reset();
 	}
 
+	{
+		std::scoped_lock lock(incomingPacketsMutex);
+		incomingPackets.clear();
+	}
+
 	OutputMessagePool::getInstance().removeProtocolFromAutosend(shared_from_this());
 	Protocol::release();
 }
@@ -1424,6 +1429,11 @@ void ProtocolGame::writeToOutputBuffer(std::span<const uint8_t> bytes)
 	if (bytes.empty()) {
 		return;
 	}
+	if (bytes.size() > OutputMessage::MAX_PAYLOAD_LENGTH) [[unlikely]] {
+		LOG_ERROR("[ProtocolGame] Refusing to enqueue oversized outgoing chunk (opcode=0x{:02x}, bytes={}, max={}).",
+		          bytes.front(), bytes.size(), static_cast<size_t>(OutputMessage::MAX_PAYLOAD_LENGTH));
+		return;
+	}
 	g_performanceMetrics.recordOutgoingGameChunk(bytes.front(), bytes.size());
 	auto out = getOutputBuffer(static_cast<int32_t>(bytes.size()));
 	if (traceMovementFor(player.get())) {
@@ -1434,7 +1444,10 @@ void ProtocolGame::writeToOutputBuffer(std::span<const uint8_t> bytes)
 		}
 	}
 	// Own a copy before the sender's stack buffer goes out of scope.
-	out->append(bytes);
+	if (!out->append(bytes)) [[unlikely]] {
+		LOG_ERROR("[ProtocolGame] Failed to append outgoing chunk (opcode=0x{:02x}, bytes={}, out_len={}).",
+		          bytes.front(), bytes.size(), out->getLength());
+	}
 }
 
 void ProtocolGame::parsePacket(NetworkMessage& msg)
@@ -1450,7 +1463,9 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		if (admission.requestDisconnect) {
 			LOG_NETWORK("[ProtocolGame] Packet backlog limit exceeded. Closing connection. pending={} limit={}",
 			            admission.observedPending, packetBacklog.limit());
-			g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->disconnect(); });
+			// Close directly from the network strand so flooding peers stop reading
+			// and decrypting immediately instead of waiting behind the dispatcher queue.
+			disconnect();
 		}
 		return;
 	}
@@ -1463,22 +1478,91 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 	}
 #endif
 
-	// The ASIO thread only owns the incoming bytes. Protocol and player state
-	// are read exclusively by the dispatcher task below.
-	auto packet = tfs::net::make_network_message(msg);
-	auto task = [thisPtr = getThis(), packet = std::move(packet), ticket = std::move(admission.ticket)]() mutable {
-		(void)ticket;
-		if (thisPtr->isConnectionExpired()) {
-			return;
+	// The ASIO thread only owns the incoming bytes. Copy only the active payload
+	// slice and keep at most one drain task per connection in the reactor so a
+	// flooding client cannot monopolize the dispatcher ahead of legitimate players.
+	auto packet = tfs::net::clone_incoming_packet(msg);
+	const auto deadline = tfs::net::shouldExpireQueuedGamePacket(opcode)
+	                          ? (std::chrono::steady_clock::now() +
+	                             std::chrono::milliseconds(DISPATCHER_TASK_EXPIRATION))
+	                          : std::chrono::steady_clock::time_point::max();
+
+	bool shouldSchedule = false;
+	{
+		std::scoped_lock lock(incomingPacketsMutex);
+		incomingPackets.push_back(QueuedGamePacket{std::move(packet), std::move(admission.ticket), deadline});
+		if (!incomingDrainScheduled) {
+			incomingDrainScheduled = true;
+			shouldSchedule = true;
 		}
+	}
 
-		thisPtr->parsePacketOnDispatcher(packet);
-	};
+	if (shouldSchedule) {
+		if (!g_dispatcher.addTask([thisPtr = getThis()]() { thisPtr->drainIncomingPacketsOnDispatcher(); })) {
+			std::scoped_lock lock(incomingPacketsMutex);
+			incomingPackets.clear();
+			incomingDrainScheduled = false;
+		}
+	}
+}
 
-	if (tfs::net::shouldExpireQueuedGamePacket(opcode)) {
-		g_dispatcher.addTask(DISPATCHER_TASK_EXPIRATION, std::move(task));
-	} else {
-		g_dispatcher.addTask(std::move(task));
+void ProtocolGame::drainIncomingPacketsOnDispatcher()
+{
+	assert(g_dispatcher.isDispatcherThread() && "ProtocolGame packet state must be handled by the dispatcher");
+
+	if (isConnectionExpired()) {
+		std::scoped_lock lock(incomingPacketsMutex);
+		incomingPackets.clear();
+		incomingDrainScheduled = false;
+		return;
+	}
+
+	QueuedGamePacket next;
+	bool hasMore = false;
+	uint64_t expiredCount = 0;
+	{
+		std::scoped_lock lock(incomingPacketsMutex);
+		const auto now = std::chrono::steady_clock::now();
+		while (!incomingPackets.empty()) {
+			auto candidate = std::move(incomingPackets.front());
+			incomingPackets.pop_front();
+			if (candidate.deadline != std::chrono::steady_clock::time_point::max() && candidate.deadline <= now) {
+				++expiredCount;
+				continue;
+			}
+			next = std::move(candidate);
+			break;
+		}
+		hasMore = !incomingPackets.empty();
+		if (!hasMore) {
+			incomingDrainScheduled = false;
+		}
+	}
+
+	if (expiredCount > 0) {
+		g_performanceMetrics.recordTaskExpired(expiredCount);
+	}
+
+	struct RescheduleGuard
+	{
+		ProtocolGame* self;
+		bool active;
+		~RescheduleGuard()
+		{
+			if (!active) {
+				return;
+			}
+			if (self->isConnectionExpired() ||
+			    !g_dispatcher.addTask([thisPtr = self->getThis()]() { thisPtr->drainIncomingPacketsOnDispatcher(); })) {
+				std::scoped_lock lock(self->incomingPacketsMutex);
+				self->incomingPackets.clear();
+				self->incomingDrainScheduled = false;
+			}
+		}
+	} rescheduleGuard{this, hasMore};
+
+	if (next.packet && !isConnectionExpired()) {
+		parsePacketOnDispatcher(next.packet);
 	}
 }
 
@@ -1909,7 +1993,7 @@ void ProtocolGame::parsePacketOnDispatcher(NetworkMessage_ptr& packet)
 				// Achievement requests are handled by the Lua PacketHandler. Rewind the
 				// payload after checking its type so the handler can read it normally.
 				const auto requestPosition = msg.getBufferPosition();
-				if (msg.getRemainingBufferLength() >= sizeof(uint32_t) + sizeof(uint8_t)) {
+				if (getReadableBytes(msg) >= sizeof(uint32_t) + sizeof(uint8_t)) {
 					msg.get<uint32_t>();
 					const uint8_t infoType = msg.getByte();
 					msg.setBufferPosition(requestPosition - NetworkMessage::INITIAL_BUFFER_POSITION);
@@ -3033,16 +3117,16 @@ void ProtocolGame::parseRuleViolationReport(NetworkMessage& msg)
 	std::string comment;
 	std::string translation;
 
-	if (looksLikeLegacyRuleViolationReport(msg.getRemainingBuffer(), msg.getRemainingBufferLength())) {
+	if (looksLikeLegacyRuleViolationReport(msg.getRemainingBuffer(), getReadableBytes(msg))) {
 		targetName = msg.getString();
 		reportReason = msg.getByte();
 		reportType = getRuleViolationTypeFromLegacyAction(msg.getByte());
 		comment = msg.getString();
 		translation = msg.getString();
-		if (msg.getRemainingBufferLength() >= sizeof(uint16_t)) {
+		if (getReadableBytes(msg) >= sizeof(uint16_t)) {
 			msg.get<uint16_t>(); // legacy statement id
 		}
-		if (msg.getRemainingBufferLength() >= 1) {
+		if (getReadableBytes(msg) >= 1) {
 			msg.getByte(); // legacy IP banishment flag
 		}
 	} else {
@@ -3410,11 +3494,11 @@ void ProtocolGame::sendCreatureSquare(const Creature* creature, SquareColor_t co
 		return;
 	}
 
-	NetworkMessage msg;
+	SmallNetworkMessage<6> msg;
 	msg.addByte(0x86);
 	msg.add<uint32_t>(creature->getID());
 	msg.addByte(color);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendCreatureWeaponAttackMark(const Creature* target, uint8_t weaponType)
@@ -4131,7 +4215,7 @@ void ProtocolGame::sendCreatureTurn(const Creature* creature, uint32_t stackpos)
 		return;
 	}
 
-	NetworkMessage msg;
+	SmallNetworkMessage<14> msg;
 	msg.addByte(0x6B);
 	msg.addPosition(creature->getPosition());
 	msg.addByte(static_cast<uint8_t>(stackpos));
@@ -4139,7 +4223,7 @@ void ProtocolGame::sendCreatureTurn(const Creature* creature, uint32_t stackpos)
 	msg.add<uint16_t>(0x63);
 	msg.add<uint32_t>(creature->getID());
 	msg.addByte(dir);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendCreatureSay(const Creature* creature, SpeakClasses type, std::string_view text,
@@ -4149,30 +4233,35 @@ void ProtocolGame::sendCreatureSay(const Creature* creature, SpeakClasses type, 
 		return;
 	}
 
+	const std::string& speakerName = creature->getName();
+	uint16_t speakerLevel = 0x00;
+	if (const Player* speaker = creature->getPlayer()) {
+		if (!speaker->isAccessPlayer()) {
+			speakerLevel = static_cast<uint16_t>(speaker->getLevel());
+		}
+	}
+	const Position& targetPos = pos ? *pos : creature->getPosition();
+
+	if (speakerName.size() + text.size() <= 280) {
+		SmallNetworkMessage<320> msg;
+		msg.addByte(0xAA);
+		msg.add<uint32_t>(0x00);
+		msg.addString(speakerName);
+		msg.add<uint16_t>(speakerLevel);
+		msg.addByte(type);
+		msg.addPosition(targetPos);
+		msg.addString(text);
+		writeToOutputBuffer(msg.bytes());
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0xAA);
 	msg.add<uint32_t>(0x00);
-
-	msg.addString(creature->getName());
-
-	// Add level only for players
-	if (const Player* speaker = creature->getPlayer()) {
-		if (!speaker->isAccessPlayer()) {
-			msg.add<uint16_t>(static_cast<uint16_t>(speaker->getLevel()));
-		} else {
-			msg.add<uint16_t>(0x00);
-		}
-	} else {
-		msg.add<uint16_t>(0x00);
-	}
-
+	msg.addString(speakerName);
+	msg.add<uint16_t>(speakerLevel);
 	msg.addByte(type);
-	if (pos) {
-		msg.addPosition(*pos);
-	} else {
-		msg.addPosition(creature->getPosition());
-	}
-
+	msg.addPosition(targetPos);
 	msg.addString(text);
 	writeToOutputBuffer(msg);
 }
@@ -4233,27 +4322,27 @@ void ProtocolGame::sendPrivateMessage(const Player* speaker, SpeakClasses type, 
 
 void ProtocolGame::sendCancelTarget()
 {
-	NetworkMessage msg;
+	SmallNetworkMessage<5> msg;
 	msg.addByte(0xA3);
 	msg.add<uint32_t>(0x00);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendChangeSpeed(const Creature* creature, uint32_t speed)
 {
-	NetworkMessage msg;
+	SmallNetworkMessage<7> msg;
 	msg.addByte(0x8F);
 	msg.add<uint32_t>(creature->getID());
 	msg.add<uint16_t>(static_cast<uint16_t>(speed));
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendCancelWalk()
 {
-	NetworkMessage msg;
+	SmallNetworkMessage<2> msg;
 	msg.addByte(0xB5);
 	msg.addByte(player->getDirection());
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendSkills()
@@ -4277,17 +4366,17 @@ void ProtocolGame::sendPing()
 		return;
 	}
 
-	NetworkMessage msg;
+	SmallNetworkMessage<1> msg;
 	msg.addByte(0x1E);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendCustomClientPing(uint32_t pingId)
 {
-	NetworkMessage msg;
+	SmallNetworkMessage<5> msg;
 	msg.addByte(0x1E);
 	msg.add<uint32_t>(pingId);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 uint32_t ProtocolGame::nextCustomPingId(uint32_t current)
@@ -5031,9 +5120,11 @@ void ProtocolGame::sendRemoveTileThing(const Position& pos, uint32_t stackpos)
 		return;
 	}
 
-	NetworkMessage msg;
-	RemoveTileThing(msg, pos, stackpos);
-	writeToOutputBuffer(msg);
+	SmallNetworkMessage<7> msg;
+	msg.addByte(0x6C);
+	msg.addPosition(pos);
+	msg.addByte(static_cast<uint8_t>(stackpos));
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendUpdateTileCreature(const Position& pos, uint32_t stackpos, const Creature* creature)
@@ -5063,7 +5154,10 @@ void ProtocolGame::sendUpdateTile(const Tile* tile, const Position& pos)
 		return;
 	}
 
-	NetworkMessage msg;
+	// Reuse a dispatcher-thread scratch buffer instead of zero-initializing 64 KiB
+	// on the stack for every spectator tile update in dense crowds.
+	static thread_local NetworkMessage msg;
+	msg.reset();
 	msg.addByte(0x69);
 	msg.addPosition(pos);
 
@@ -5328,12 +5422,12 @@ void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& ne
 			sendRemoveTileThing(oldPos, oldStackPos);
 			sendAddCreature(creature, newPos, newStackPos);
 		} else {
-			NetworkMessage msg;
+			SmallNetworkMessage<12> msg;
 			msg.addByte(0x6D);
 			msg.addPosition(oldPos);
 			msg.addByte(static_cast<uint8_t>(oldStackPos));
 			msg.addPosition(creature->getPosition());
-			writeToOutputBuffer(msg);
+			writeToOutputBuffer(msg.bytes());
 		}
 	} else if (canSee(oldPos)) {
 		sendRemoveTileThing(oldPos, oldStackPos);
@@ -7255,10 +7349,10 @@ void ProtocolGame::sendNewPing(uint32_t pingId)
 {
 	// if (!isOTCv8) return;
 
-	NetworkMessage msg;
+	SmallNetworkMessage<5> msg;
 	msg.addByte(0x40);
 	msg.add<uint32_t>(pingId);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg.bytes());
 }
 
 void ProtocolGame::sendExtendedOpcode(uint8_t opcode, std::string_view data)

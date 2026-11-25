@@ -20,6 +20,11 @@ public:
 	virtual void parsePacket(NetworkMessage&) {}
 
 	virtual void onSendMessage(const OutputMessage_ptr& msg) const;
+	[[nodiscard]] bool validateOutgoingFrame(const OutputMessage& msg) const noexcept;
+	[[nodiscard]] virtual uint32_t getMaxCoalescedBodyLength() const noexcept
+	{
+		return NetworkMessage::MAX_PROTOCOL_BODY_LENGTH;
+	}
 	void onRecvMessage(NetworkMessage& msg);
 	virtual void onRecvFirstMessage(NetworkMessage& msg) = 0;
 	virtual void onConnect() {}

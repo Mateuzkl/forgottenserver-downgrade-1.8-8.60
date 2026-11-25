@@ -225,17 +225,12 @@ void Connection::parseHeader(const asio::error_code& error)
 		return;
 	}
 
-	uint32_t timePassed = std::max<uint32_t>(1, (time(nullptr) - timeConnected) + 1);
-	if ((++packetsSent / timePassed) > getInteger(ConfigManager::MAX_PACKETS_PER_SECOND)) {
+	if (!packetRateLimiter.allow(std::chrono::steady_clock::now(),
+	                             getInteger(ConfigManager::MAX_PACKETS_PER_SECOND))) {
 		g_performanceMetrics.recordPacketRateRejection();
 		LOG_NETWORK(fmt::format("{} disconnected for exceeding packet per second limit.", convertIPToString(getIPLocked())));
-		closeLocked(false);
+		closeLocked(FORCE_CLOSE);
 		return;
-	}
-
-	if (timePassed > 2) {
-		timeConnected = time(nullptr);
-		packetsSent = 0;
 	}
 
 	uint16_t size = msg.getLengthHeader();
@@ -307,8 +302,31 @@ void Connection::parsePacket(const asio::error_code& error)
 		}
 
 		protocol->onRecvFirstMessage(msg);
+		if (closed) {
+			return;
+		}
 	} else {
-		protocol->onRecvMessage(msg); // Send the packet to the current protocol
+		Protocol_ptr localProtocol = protocol;
+		if (!localProtocol) {
+			closeLocked(FORCE_CLOSE);
+			return;
+		}
+
+		// Decrypt and enqueue on the connection strand without holding connectionLock.
+		// Connection::msg is owned exclusively by this serialized read loop, so releasing
+		// the lock avoids blocking the dispatcher's Connection::send() on incoming XTEA
+		// decryption or reactor mutex acquisition.
+		connectionLock.unlock();
+		try {
+			localProtocol->onRecvMessage(msg);
+		} catch (...) {
+			connectionLock.lock();
+			throw;
+		}
+		connectionLock.lock();
+		if (closed) {
+			return;
+		}
 	}
 
 	try {
@@ -371,18 +389,47 @@ void Connection::send(const OutputMessage_ptr& msg)
 // paths can erase, leaving msg dangling before async_write() reads it.
 void Connection::internalSend(OutputMessage_ptr msg)
 {
-	std::scoped_lock lockClass(connectionLock);
+	Protocol_ptr localProtocol;
+	{
+		std::scoped_lock lockClass(connectionLock);
 
-	// releaseAllProtocols() clears protocol during shutdown, and this runs on the
-	// strand, so the pointer can legitimately be gone by the time a queued send
-	// gets here. Nothing can serialise the message without a protocol; tear the
-	// connection down instead of dereferencing null.
-	if (!protocol) {
-		closeLocked(FORCE_CLOSE);
+		// releaseAllProtocols() clears protocol during shutdown, and this runs on the
+		// strand, so the pointer can legitimately be gone by the time a queued send
+		// gets here. Nothing can serialise the message without a protocol; tear the
+		// connection down instead of dereferencing null.
+		if (!protocol) {
+			closeLocked(FORCE_CLOSE);
+			return;
+		}
+
+		if (!socket.is_open()) {
+			messageQueue.clear();
+			return;
+		}
+
+		localProtocol = protocol;
+	}
+
+	// Perform XTEA encryption and Adler-32 checksum outside connectionLock so
+	// dispatcher-thread Connection::send() never stalls behind 64 KiB crypto work.
+	localProtocol->onSendMessage(msg);
+	if (!localProtocol->validateOutgoingFrame(*msg)) {
+		LOG_ERROR(fmt::format("[Network] Refusing to transmit invalid framed message (len={}, start={}); closing connection.",
+		                      msg ? msg->getLength() : 0, msg ? msg->getOutputBufferStart() : 0));
+		close(FORCE_CLOSE);
 		return;
 	}
 
-	protocol->onSendMessage(msg);
+	std::scoped_lock lockClass(connectionLock);
+	if (!protocol || !socket.is_open()) {
+		if (!socket.is_open()) {
+			messageQueue.clear();
+		} else {
+			closeLocked(FORCE_CLOSE);
+		}
+		return;
+	}
+
 	try {
 		writeTimer.expires_after(std::chrono::seconds(CONNECTION_WRITE_TIMEOUT));
 		writeTimer.async_wait(
