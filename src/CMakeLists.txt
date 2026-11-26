@@ -296,28 +296,56 @@ function(add_tfs_library target)
 		)
 	target_compile_definitions(${target} PUBLIC ASIO_STANDALONE)
 	set_target_properties(${target} PROPERTIES UNITY_BUILD ${ENABLE_UNITY_BUILD})
+	if (ENABLE_UNITY_BUILD AND UNITY_BUILD_BATCH_SIZE MATCHES "^[1-9][0-9]*$")
+		set_target_properties(${target} PROPERTIES UNITY_BUILD_BATCH_SIZE ${UNITY_BUILD_BATCH_SIZE})
+	endif()
+	if (ENABLE_PCH AND NOT ENABLE_UNITY_BUILD)
+		target_precompile_headers(${target} PRIVATE "${CMAKE_SOURCE_DIR}/src/otpch.h")
+	endif()
 endfunction()
+
+if (NOT ENABLE_UNITY_BUILD AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	# GCC 12/13 -O3 emits a known false-positive -Wfree-nonheap-object inside
+	# libstdc++ std::variant<std::string, ...> destruction in ValueWrapper::deserialize
+	# when compiled as a standalone translation unit (GCC PR 104336 / 105562).
+	set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/kv/value_wrapper.cpp PROPERTIES
+		COMPILE_OPTIONS "-Wno-error=free-nonheap-object"
+	)
+endif()
 
 add_tfs_library(tfslib)
 
 add_custom_target(format COMMAND /usr/bin/clang-format -style=file -i ${tfs_HDR} ${tfs_SRC} ${tfs_MAIN})
 
+set(tfs_NON_LTO_NEEDED OFF)
+if (TFS_IPO_ACTIVE AND (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo)$"))
+	if ((BUILD_TESTING AND NOT ENABLE_TEST_LTO) OR (BUILD_BENCHMARKING AND NOT ENABLE_BENCHMARK_LTO))
+		set(tfs_NON_LTO_NEEDED ON)
+	endif()
+endif()
+
+if (tfs_NON_LTO_NEEDED)
+	# Avoid repeating whole-program optimization for every test/benchmark executable.
+	# The production library and tfs retain their original IPO settings.
+	add_tfs_library(tfs_testlib)
+	set_target_properties(tfs_testlib PROPERTIES
+		INTERPROCEDURAL_OPTIMIZATION FALSE
+		INTERPROCEDURAL_OPTIMIZATION_RELEASE FALSE
+		INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO FALSE)
+endif()
+
 if (BUILD_TESTING)
 	set(tfs_TEST_LIBRARY tfslib)
-	if (NOT ENABLE_TEST_LTO AND (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo)$")
-		AND (CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OR CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO))
-		# Avoid repeating whole-program optimization for every test executable.
-		# The production library and tfs retain their original IPO settings.
-		add_tfs_library(tfs_testlib)
-		set_target_properties(tfs_testlib PROPERTIES
-			INTERPROCEDURAL_OPTIMIZATION FALSE
-			INTERPROCEDURAL_OPTIMIZATION_RELEASE FALSE
-			INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO FALSE)
+	if (NOT ENABLE_TEST_LTO AND TARGET tfs_testlib)
 		set(tfs_TEST_LIBRARY tfs_testlib)
 	endif()
 	add_subdirectory(tests)
 endif()
 
 if (BUILD_BENCHMARKING)
+	set(tfs_BENCH_LIBRARY tfslib)
+	if (NOT ENABLE_BENCHMARK_LTO AND TARGET tfs_testlib)
+		set(tfs_BENCH_LIBRARY tfs_testlib)
+	endif()
 	add_subdirectory(benchs)
 endif()

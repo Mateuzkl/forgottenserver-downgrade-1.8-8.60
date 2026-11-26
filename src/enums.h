@@ -866,6 +866,9 @@ struct CombatDamage
 	bool initialOriginCaptured = false;
 	bool equipmentDamageBonusApplied = false;
 	bool equipmentDamageReductionApplied = false;
+	bool monsterLevelBonusApplied = false;
+	bool resetDamageBonusesApplied = false;
+	bool avatarReductionApplied = false;
 	int32_t criticalDamage = 0;
 	int32_t criticalChance = 0;
 	int32_t perfectShotDamage = 0;

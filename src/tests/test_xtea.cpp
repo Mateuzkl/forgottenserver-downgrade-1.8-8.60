@@ -41,4 +41,22 @@ TEST_CASE(test_xtea_decrypt)
 	CHECK(data == expected);
 }
 
+TEST_CASE(test_xtea_roundtrip_large_aligned_buffers)
+{
+	const auto key = xtea::expand_key({0x01234567, 0x89abcdef, 0xfedcba98, 0x76543210});
+	for (const size_t size : {size_t{0}, size_t{8}, size_t{16}, size_t{16360}, size_t{65480}, size_t{65488}}) {
+		std::vector<uint8_t> plain(size);
+		for (size_t i = 0; i < size; ++i) {
+			plain[i] = static_cast<uint8_t>((i * 73u + 19u) & 0xFFu);
+		}
+		auto buffer = plain;
+		xtea::encrypt(buffer.data(), buffer.size(), key);
+		if (size > 0) {
+			CHECK(buffer != plain);
+		}
+		xtea::decrypt(buffer.data(), buffer.size(), key);
+		CHECK(buffer == plain);
+	}
+}
+
 TFS_TEST_MAIN()

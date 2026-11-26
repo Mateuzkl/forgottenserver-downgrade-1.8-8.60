@@ -5,6 +5,7 @@
 #define FS_CONNECTION_H
 
 #include "networkmessage.h"
+#include "packet_backlog.h"
 
 inline constexpr int32_t CONNECTION_WRITE_TIMEOUT = 30;
 inline constexpr int32_t CONNECTION_READ_TIMEOUT = 30;
@@ -78,8 +79,7 @@ public:
 	    readTimer(strand),
 	    writeTimer(strand),
 	    service_port(std::move(service_port)),
-	    socket(strand),
-	    timeConnected(time(nullptr))
+	    socket(strand)
 	{}
 	~Connection();
 
@@ -131,8 +131,7 @@ private:
 
 	asio::ip::tcp::socket socket;
 
-	time_t timeConnected;
-	uint32_t packetsSent = 0;
+	tfs::net::PacketRateLimiter packetRateLimiter;
 	uint32_t trackedIp = 0;
 	uint32_t cachedPeerIp = 0;
 

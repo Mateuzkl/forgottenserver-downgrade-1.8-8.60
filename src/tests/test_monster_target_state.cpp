@@ -8,6 +8,7 @@
 #include "../groups.h"
 #include "../item.h"
 #include "../monster.h"
+#include "../npc.h"
 #include "../movement.h"
 #include "../player.h"
 #include "../scriptmanager.h"
@@ -16,6 +17,25 @@
 #include "test_support.h"
 
 #include <filesystem>
+
+struct CreatureWalkTestAccess
+{
+	static void pathReady(Creature& creature, size_t steps = 7)
+	{
+		creature.hasFollowPath = true;
+		creature.listWalkDir.assign(steps, DIRECTION_EAST);
+		creature.isUpdatingPath = false;
+		creature.forceUpdateFollowPath = false;
+	}
+	static bool pending(const Creature& creature) { return creature.isUpdatingPath; }
+	static void walkStep(Creature& creature)
+	{
+		creature.lastStep = OTSYS_TIME() - static_cast<uint64_t>(std::max<int64_t>(1, creature.getStepDuration()) + 1);
+		creature.onWalk();
+	}
+	static void clearPending(Creature& creature) { creature.isUpdatingPath = false; }
+	static void forceRefresh(Creature& creature) { creature.forceUpdateFollowPath = true; }
+};
 
 namespace {
 
@@ -575,6 +595,209 @@ TEST_CASE(moving_monster_discovers_new_stationary_target)
 	CHECK(monster->canSee(stationaryTarget->getPosition()));
 	CHECK(hasTarget(monster, followedTarget.get()));
 	CHECK(hasTarget(monster, stationaryTarget.get()));
+}
+
+TEST_CASE(monster_player_proximity_uses_viewer_floors_and_native_instance)
+{
+	for (const auto& [floor, instance, expected] : {
+	         std::tuple<uint8_t, uint32_t, bool>{7, 0, true}, {8, 0, false}, {4, 0, false}, {7, 2, false}}) {
+		WorldFixture world;
+		auto player = makePlayer();
+		player->setInstanceID(instance);
+		world.place(player, Position{1000, 700, floor});
+		auto monster = makeMonster();
+		world.place(monster, Position{1000, 700, 7});
+		CHECK(monster->hasPlayerNearby() == expected);
+	}
+}
+
+TEST_CASE(monster_player_proximity_preserves_its_configured_horizontal_range)
+{
+	WorldFixture world;
+	auto player = makePlayer();
+	world.place(player, Position{1081, 700, 7});
+	auto monster = makeMonster();
+	world.place(monster, Position{1100, 700, 7});
+	CHECK(monster->hasPlayerNearby(20));
+}
+
+TEST_CASE(npc_activity_spectators_preserve_local_floor_range_and_instance)
+{
+	for (const auto& [floor, instance, expected] : {
+	         std::tuple<uint8_t, uint32_t, bool>{7, 0, true}, {6, 0, true}, {4, 0, false}, {8, 0, false}, {7, 2, false}}) {
+		WorldFixture world;
+		auto player = makePlayer();
+		player->setInstanceID(instance);
+		world.place(player, Position{1200, 700, floor});
+		auto npc = std::make_shared<Npc>("Proximity regression");
+		world.place(npc, Position{1200, 700, 7});
+		CHECK(!npc->getSpectators().empty() == expected);
+	}
+}
+
+TEST_CASE(npc_activity_spectators_preserve_the_existing_horizontal_viewport)
+{
+	WorldFixture world;
+	auto player = makePlayer();
+	world.place(player, Position{static_cast<uint16_t>(1300 + Npcs::ViewportX - 1), 700, 7});
+	auto npc = std::make_shared<Npc>("Proximity range regression");
+	world.place(npc, Position{1300, 700, 7});
+	CHECK(!npc->canSee(player->getPosition()));
+	CHECK(npc->getSpectators().size() == 1);
+}
+
+TEST_CASE(monster_reuses_remaining_follow_steps_between_its_own_moves)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{1500, 1500, 7});
+	world.place(target, Position{1508, 1500, 7});
+	selectTarget(monster, target);
+	CreatureWalkTestAccess::pathReady(*monster);
+	ensureTile(Position{1501, 1500, 7});
+	CreatureWalkTestAccess::walkStep(*monster);
+	CHECK(monster->getPosition() == (Position{1501,1500,7}));
+	CHECK(!CreatureWalkTestAccess::pending(*monster));
+	CHECK(monster->getFollowCreatureShared() == target);
+}
+
+TEST_CASE(monster_refreshes_path_when_target_moves)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{1540, 1500, 7});
+	world.place(target, Position{1548, 1500, 7});
+	selectTarget(monster, target);
+	CreatureWalkTestAccess::pathReady(*monster);
+	moveCreatureForMonster(target, Position{1548, 1501, 7});
+	CHECK(CreatureWalkTestAccess::pending(*monster));
+}
+
+TEST_CASE(monster_refreshes_invalidated_or_externally_moved_paths)
+{
+	for (int kind = 0; kind < 4; ++kind) {
+		WorldFixture world;
+		auto monster = makeMonster();
+		auto target = makeMonster(true);
+		const auto x = static_cast<uint16_t>(1580 + kind * 40);
+		world.place(monster, Position{x, 1500, 7});
+		world.place(target, Position{static_cast<uint16_t>(x + 8), 1500, 7});
+		selectTarget(monster, target);
+		CreatureWalkTestAccess::pathReady(*monster, kind == 0 ? 0 : 8);
+		if (kind == 1) CreatureWalkTestAccess::forceRefresh(*monster);
+		moveCreatureForMonster(monster, Position{static_cast<uint16_t>(x + (kind == 2 ? 2 : 1)), 1500, 7});
+		CHECK(CreatureWalkTestAccess::pending(*monster));
+	}
+}
+
+TEST_CASE(monster_keeps_periodic_follow_refresh)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{1700, 1500, 7});
+	world.place(target, Position{1708, 1500, 7});
+	selectTarget(monster, target);
+	CreatureWalkTestAccess::pathReady(*monster);
+	monster->onThink(2000);
+	CHECK(CreatureWalkTestAccess::pending(*monster));
+}
+
+TEST_CASE(monster_refreshes_after_a_step_event_moves_it_again)
+{
+	for (const auto direction : {DIRECTION_NORTH, DIRECTION_EAST, DIRECTION_WEST}) {
+		WorldFixture world;
+		auto monster = makeMonster();
+		auto target = makeMonster(true);
+		const Position start{1800, 1500, 7};
+		const Position planned{1801, 1500, 7};
+		const Position redirected = getNextPosition(direction, planned);
+		world.place(monster, start);
+		world.place(target, Position{1808, 1500, 7});
+		selectTarget(monster, target);
+		CreatureWalkTestAccess::pathReady(*monster);
+		ensureTile(planned);
+		ensureTile(redirected);
+		bool callbackRan = false;
+		auto movement = std::make_unique<MoveEvent>(g_moveEvents->getScriptInterfacePtr());
+		movement->setEventType(MOVE_EVENT_STEP_IN);
+		movement->addPosList(planned);
+		movement->stepFunction = [&](Creature* creature, Item*, const Position&) -> uint32_t {
+			CHECK(creature == monster.get());
+			CHECK(!callbackRan);
+			callbackRan = true;
+			CHECK(!CreatureWalkTestAccess::pending(*monster));
+			CHECK(g_game.internalMoveCreature(creature, direction, FLAG_NOLIMIT) == RETURNVALUE_NOERROR);
+			return 1;
+		};
+		CHECK(g_moveEvents->registerLuaEvent(movement.release()));
+		CreatureWalkTestAccess::walkStep(*monster);
+		CHECK(callbackRan);
+		CHECK(monster->getPosition() == redirected);
+		CHECK(monster->getFollowCreatureShared() == target);
+		CHECK(CreatureWalkTestAccess::pending(*monster));
+	}
+}
+
+TEST_CASE(monster_does_not_reuse_a_planned_notification_for_a_nested_round_trip)
+{
+	WorldFixture world;
+	auto monster = makeMonster();
+	auto target = makeMonster(true);
+	world.place(monster, Position{1840, 1500, 7});
+	world.place(target, Position{1848, 1500, 7});
+	selectTarget(monster, target);
+	CreatureWalkTestAccess::pathReady(*monster);
+	const Position planned{1841, 1500, 7};
+	ensureTile(planned);
+	bool callbackRan = false;
+	auto movement = std::make_unique<MoveEvent>(g_moveEvents->getScriptInterfacePtr());
+	movement->setEventType(MOVE_EVENT_STEP_IN);
+	movement->addPosList(planned);
+	movement->stepFunction = [&](Creature* creature, Item*, const Position&) -> uint32_t {
+		if (callbackRan) return 1;
+		callbackRan = true;
+		CHECK(g_game.internalMoveCreature(creature, DIRECTION_WEST, FLAG_NOLIMIT) == RETURNVALUE_NOERROR);
+		CHECK(CreatureWalkTestAccess::pending(*monster));
+		// Observe the second notification independently of the first request.
+		CreatureWalkTestAccess::clearPending(*monster);
+		CHECK(g_game.internalMoveCreature(creature, DIRECTION_EAST, FLAG_NOLIMIT) == RETURNVALUE_NOERROR);
+		CHECK(CreatureWalkTestAccess::pending(*monster));
+		return 1;
+	};
+	CHECK(g_moveEvents->registerLuaEvent(movement.release()));
+	CreatureWalkTestAccess::walkStep(*monster);
+	CHECK(callbackRan);
+	CHECK(monster->getPosition() == planned);
+	CHECK(monster->getFollowCreatureShared() == target);
+}
+
+TEST_CASE(crowd_100_monsters_does_not_request_500_redundant_paths)
+{
+	WorldFixture world;
+	size_t redundant = 0;
+	for (uint16_t i = 0; i < 100; ++i) {
+		auto monster = makeMonster();
+		auto target = makeMonster(true);
+		const auto x = static_cast<uint16_t>(2000 + (i % 10) * 40);
+		const auto y = static_cast<uint16_t>(2000 + (i / 10) * 40);
+		world.place(monster, Position{x, y, 7});
+		world.place(target, Position{static_cast<uint16_t>(x + 8), y, 7});
+		selectTarget(monster, target);
+		CreatureWalkTestAccess::pathReady(*monster);
+		for (uint16_t step = 1; step <= 5; ++step) {
+			const Position expected{static_cast<uint16_t>(x + step), y, 7};
+			ensureTile(expected);
+			CreatureWalkTestAccess::walkStep(*monster);
+			CHECK(monster->getPosition() == expected);
+			if (CreatureWalkTestAccess::pending(*monster)) ++redundant;
+			CreatureWalkTestAccess::clearPending(*monster);
+		}
+	}
+	std::cout << "CROWD_FOLLOW monsters=100 moves=500 redundant_path_requests=" << redundant << '\n';
+	CHECK(redundant == 0);
 }
 
 TFS_TEST_MAIN()

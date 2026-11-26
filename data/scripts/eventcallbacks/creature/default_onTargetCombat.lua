@@ -1,9 +1,9 @@
 local event = Event()
 function event.onTargetCombat(self, target)
     if not self then
-        return true
+        return RETURNVALUE_NOERROR
     end
-    return true
+    return RETURNVALUE_NOERROR
 end
 
 event:register()

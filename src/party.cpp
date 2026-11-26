@@ -32,10 +32,17 @@ std::shared_ptr<Party> Party::create(Player* leader)
 	return party;
 }
 
-void Party::disband()
+bool Party::disband()
 {
+	// Lua can reenter disband, and self.reset() can release the last owner.
+	const auto lifetime = weak_from_this().lock();
+	if (disbanding) {
+		return false;
+	}
+	disbanding = true;
 	if (!g_events->eventPartyOnDisband(this)) {
-		return;
+		disbanding = false;
+		return false;
 	}
 
 	auto currentLeader = leader.lock();
@@ -50,7 +57,7 @@ void Party::disband()
 	}
 
 	for (auto& inviteeWeak : inviteList) {
-		if (Player* invitee = inviteeWeak.lock().get()) {
+		if (const auto inviteeRef = inviteeWeak.lock(); Player* invitee = inviteeRef.get()) {
 			invitee->removePartyInvitation(this);
 			if (currentLeader) {
 				currentLeader->sendCreatureShield(invitee);
@@ -60,7 +67,7 @@ void Party::disband()
 	inviteList.clear();
 
 	for (auto& memberWeak : memberList) {
-		if (Player* member = memberWeak.lock().get()) {
+		if (const auto memberRef = memberWeak.lock(); Player* member = memberRef.get()) {
 			member->setParty(nullptr);
 			member->sendClosePrivate(CHANNEL_PARTY);
 			member->sendTextMessage(MESSAGE_INFO_DESCR, "Your party has been disbanded.");
@@ -68,12 +75,13 @@ void Party::disband()
 	}
 
 	for (auto& memberWeak : memberList) {
-		Player* member = memberWeak.lock().get();
+		auto memberRef = memberWeak.lock();
+		Player* member = memberRef.get();
 		if (!member) continue;
 		g_game.updatePlayerShield(member);
 
 		for (auto& otherMemberWeak : memberList) {
-			if (Player* otherMember = otherMemberWeak.lock().get()) {
+			if (const auto otherMemberRef = otherMemberWeak.lock(); Player* otherMember = otherMemberRef.get()) {
 				otherMember->sendCreatureSkull(member);
 			}
 		}
@@ -85,10 +93,12 @@ void Party::disband()
 	}
 	memberList.clear();
 	self.reset();
+	return true;
 }
 
 bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 {
+	const auto lifetime = weak_from_this().lock();
 	if (!player) {
 		return false;
 	}
@@ -100,20 +110,20 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 	}
 
 	bool canRemove = player->isPersistenceQuarantined() || g_events->eventPartyOnLeave(this, player);
-	if (!forceRemove && !canRemove) {
+	if (disbanding || (!forceRemove && !canRemove)) {
 		return false;
 	}
 
 	bool missingLeader = false;
 	if (currentLeader.get() == player || !currentLeader) {
 		if (!memberList.empty()) {
-			Player* nextLeader = nullptr;
+			std::shared_ptr<Player> nextLeader;
 			size_t validMembersCount = 0;
 			
 			for (auto& memberWeak : memberList) {
-				if (Player* validMember = memberWeak.lock().get()) {
+				if (const auto validMemberRef = memberWeak.lock(); Player* validMember = validMemberRef.get()) {
 					if (validMember != player) {
-						if (!nextLeader) nextLeader = validMember;
+						if (!nextLeader) nextLeader = validMemberRef;
 						validMembersCount++;
 					}
 				}
@@ -122,7 +132,10 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 			if (validMembersCount == 0 || (validMembersCount == 1 && inviteList.empty() && currentLeader.get() == player)) {
 				missingLeader = true;
 			} else if (nextLeader) {
-				passPartyLeadership(nextLeader, true);
+				passPartyLeadership(nextLeader.get(), true);
+				if (disbanding) {
+					return false;
+				}
 				currentLeader = leader.lock();
 			} else {
 				missingLeader = true;
@@ -145,7 +158,7 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 	g_game.updatePlayerShield(player);
 
 	for (auto& memberWeak : memberList) {
-		if (Player* member = memberWeak.lock().get()) {
+		if (const auto memberRef = memberWeak.lock(); Player* member = memberRef.get()) {
 			member->sendCreatureSkull(player);
 			player->sendPlayerPartyIcons(member);
 		}
@@ -159,7 +172,7 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 	player->sendCreatureSkull(player);
 
 	for (auto& inviteeWeak : inviteList) {
-		if (Player* invitee = inviteeWeak.lock().get()) {
+		if (const auto inviteeRef = inviteeWeak.lock(); Player* invitee = inviteeRef.get()) {
 			player->sendCreatureShield(invitee);
 		}
 	}
@@ -182,13 +195,15 @@ bool Party::leaveParty(Player* player, bool forceRemove /* = false */)
 
 bool Party::passPartyLeadership(Player* player, bool forceRemove /* = false*/)
 {
+	const auto lifetime = weak_from_this().lock();
 	auto currentLeader = leader.lock();
 
 	if (!player || currentLeader.get() == player || player->getParty() != this) {
 		return false;
 	}
 
-	if (!g_events->eventPartyOnPassLeadership(this, player) && !forceRemove) {
+	const bool canPass = g_events->eventPartyOnPassLeadership(this, player);
+	if (disbanding || (!canPass && !forceRemove)) {
 		return false;
 	}
 
@@ -213,14 +228,14 @@ bool Party::passPartyLeadership(Player* player, bool forceRemove /* = false*/)
 	updateSharedExperience();
 
 	for (auto& memberWeak : memberList) {
-		if (Player* member = memberWeak.lock().get()) {
+		if (const auto memberRef = memberWeak.lock(); Player* member = memberRef.get()) {
 			if (oldLeader) member->sendCreatureShield(oldLeader.get());
 			member->sendCreatureShield(player);
 		}
 	}
 
 	for (auto& inviteeWeak : inviteList) {
-		if (Player* invitee = inviteeWeak.lock().get()) {
+		if (const auto inviteeRef = inviteeWeak.lock(); Player* invitee = inviteeRef.get()) {
 			if (oldLeader) invitee->sendCreatureShield(oldLeader.get());
 			invitee->sendCreatureShield(player);
 		}
@@ -237,10 +252,11 @@ bool Party::passPartyLeadership(Player* player, bool forceRemove /* = false*/)
 
 bool Party::joinParty(Player& player)
 {
+	const auto lifetime = weak_from_this().lock();
 	auto currentLeader = leader.lock();
 	if (!currentLeader) return false;
 
-	if (!g_events->eventPartyOnJoin(this, &player)) {
+	if (!g_events->eventPartyOnJoin(this, &player) || disbanding) {
 		return false;
 	}
 
@@ -257,7 +273,7 @@ bool Party::joinParty(Player& player)
 	g_game.updatePlayerShield(&player);
 
 	for (auto& memberWeak : memberList) {
-		if (Player* member = memberWeak.lock().get()) {
+		if (const auto memberRef = memberWeak.lock(); Player* member = memberRef.get()) {
 			member->sendCreatureSkull(&player);
 			player.sendPlayerPartyIcons(member);
 		}
@@ -269,7 +285,7 @@ bool Party::joinParty(Player& player)
 	player.sendCreatureSkull(&player);
 
 	for (auto& inviteeWeak : inviteList) {
-		if (Player* invitee = inviteeWeak.lock().get()) {
+		if (const auto inviteeRef = inviteeWeak.lock(); Player* invitee = inviteeRef.get()) {
 			player.sendCreatureShield(invitee);
 		}
 	}
@@ -321,7 +337,8 @@ bool Party::removeInvite(Player& player, bool removeFromPlayer /* = true*/)
 
 void Party::revokeInvitation(Player& player)
 {
-	if (!g_events->eventPartyOnRevokeInvitation(this, &player)) {
+	const auto lifetime = weak_from_this().lock();
+	if (!g_events->eventPartyOnRevokeInvitation(this, &player) || disbanding) {
 		return;
 	}
 
@@ -361,7 +378,7 @@ bool Party::invitePlayer(Player& player)
 	player.sendCreatureShield(currentLeader.get());
 
 	for (auto& memberWeak : memberList) {
-		if (Player* member = memberWeak.lock().get()) {
+		if (const auto memberRef = memberWeak.lock(); Player* member = memberRef.get()) {
 			member->sendCreatureShield(&player);
 		}
 	}
@@ -386,11 +403,12 @@ void Party::updateAllPartyIcons()
 	auto currentLeader = leader.lock();
 	
 	for (auto& memberWeak : memberList) {
-		Player* member = memberWeak.lock().get();
+		auto memberRef = memberWeak.lock();
+		Player* member = memberRef.get();
 		if (!member) continue;
 		
 		for (auto& otherMemberWeak : memberList) {
-			if (Player* otherMember = otherMemberWeak.lock().get()) {
+			if (const auto otherMemberRef = otherMemberWeak.lock(); Player* otherMember = otherMemberRef.get()) {
 				member->sendCreatureShield(otherMember);
 			}
 		}
@@ -409,7 +427,7 @@ void Party::updateAllPartyIcons()
 void Party::broadcastPartyMessage(MessageClasses msgClass, std::string_view msg, bool sendToInvitations /*= false*/)
 {
 	for (auto& memberWeak : memberList) {
-		if (Player* member = memberWeak.lock().get()) {
+		if (const auto memberRef = memberWeak.lock(); Player* member = memberRef.get()) {
 			member->sendTextMessage(msgClass, msg);
 		}
 	}
@@ -420,7 +438,7 @@ void Party::broadcastPartyMessage(MessageClasses msgClass, std::string_view msg,
 
 	if (sendToInvitations) {
 		for (auto& inviteeWeak : inviteList) {
-			if (Player* invitee = inviteeWeak.lock().get()) {
+			if (const auto inviteeRef = inviteeWeak.lock(); Player* invitee = inviteeRef.get()) {
 				invitee->sendTextMessage(msgClass, msg);
 			}
 		}
@@ -487,16 +505,28 @@ bool Party::setSharedExperience(Player* player, bool sharedExpActive)
 
 void Party::shareExperience(uint64_t experience, const std::shared_ptr<Creature>& source /* = nullptr*/)
 {
+	const auto lifetime = weak_from_this().lock();
 	uint64_t shareExperience = experience;
 	g_events->eventPartyOnShareExperience(this, shareExperience);
+	if (disbanding) {
+		return;
+	}
 
-	for (auto& memberWeak : memberList) {
-		if (auto member = memberWeak.lock()) {
+	// Per-player XP callbacks may change leadership, remove members or disband.
+	// Keep stable recipients instead of iterating a vector that Lua can mutate.
+	const auto currentLeader = leader.lock();
+	const auto members = memberList;
+	for (const auto& memberWeak : members) {
+		if (disbanding) {
+			return;
+		}
+		if (auto member = memberWeak.lock(); member && member != currentLeader &&
+		    !member->isRemoved() && member->getParty() == this) {
 			member->onGainSharedExperience(shareExperience, source);
 		}
 	}
 	
-	if (auto currentLeader = leader.lock()) {
+	if (!disbanding && currentLeader && !currentLeader->isRemoved() && currentLeader->getParty() == this) {
 		currentLeader->onGainSharedExperience(shareExperience, source);
 	}
 }
@@ -517,7 +547,7 @@ SharedExpStatus_t Party::getMemberSharedExperienceStatus(const Player* player) c
 
 	uint32_t highestLevel = currentLeader->getLevel();
 	for (const auto& memberWeak : memberList) {
-		if (Player* member = memberWeak.lock().get()) {
+		if (const auto memberRef = memberWeak.lock(); Player* member = memberRef.get()) {
 			if (member->getLevel() > highestLevel) {
 				highestLevel = member->getLevel();
 			}
@@ -562,7 +592,7 @@ SharedExpStatus_t Party::getSharedExperienceStatus()
 	}
 
 	for (auto& memberWeak : memberList) {
-		if (Player* member = memberWeak.lock().get()) {
+		if (const auto memberRef = memberWeak.lock(); Player* member = memberRef.get()) {
 			SharedExpStatus_t memberStatus = getMemberSharedExperienceStatus(member);
 			if (memberStatus != SHAREDEXP_OK) {
 				return memberStatus;

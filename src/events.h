@@ -151,6 +151,7 @@ public:
 	};
 
 private:
+	friend struct PartyLifetimeTestAccess;
 	LuaScriptInterface scriptInterface;
 	EventsInfo info;
 };

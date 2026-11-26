@@ -25,7 +25,7 @@ public:
 	};
 	static const char* protocol_name() { return "status protocol"; }
 
-	explicit ProtocolStatus(Connection_ptr connection) : Protocol(connection) {}
+	explicit ProtocolStatus(Connection_ptr connection) : Protocol(connection) { disableChecksum(); }
 
 	void onRecvFirstMessage(NetworkMessage& msg) override;
 

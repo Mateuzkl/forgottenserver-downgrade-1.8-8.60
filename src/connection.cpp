@@ -143,6 +143,9 @@ void Connection::closeLocked(bool force)
 {
 	// Must be called with connectionLock held.
 	if (closed) {
+		if (force) {
+			closeSocket();
+		}
 		return;
 	}
 	closed = true;
@@ -225,16 +228,12 @@ void Connection::parseHeader(const asio::error_code& error)
 		return;
 	}
 
-	uint32_t timePassed = std::max<uint32_t>(1, (time(nullptr) - timeConnected) + 1);
-	if ((++packetsSent / timePassed) > getInteger(ConfigManager::MAX_PACKETS_PER_SECOND)) {
+	if (!packetRateLimiter.allow(std::chrono::steady_clock::now(),
+	                             getInteger(ConfigManager::MAX_PACKETS_PER_SECOND))) {
+		g_performanceMetrics.recordPacketRateRejection();
 		LOG_NETWORK(fmt::format("{} disconnected for exceeding packet per second limit.", convertIPToString(getIPLocked())));
-		closeLocked(false);
+		closeLocked(FORCE_CLOSE);
 		return;
-	}
-
-	if (timePassed > 2) {
-		timeConnected = time(nullptr);
-		packetsSent = 0;
 	}
 
 	uint16_t size = msg.getLengthHeader();
@@ -275,39 +274,80 @@ void Connection::parsePacket(const asio::error_code& error)
 		return;
 	}
 
-	// Check packet checksum
-	uint32_t checksum;
-	int32_t len = msg.getLength() - msg.getBufferPosition() - NetworkMessage::CHECKSUM_LENGTH;
-	if (len > 0) {
-		checksum = adlerChecksum(msg.getBuffer() + msg.getBufferPosition() + NetworkMessage::CHECKSUM_LENGTH, len);
-	} else {
-		checksum = 0;
-	}
-
-	uint32_t recvChecksum = msg.get<uint32_t>();
-	if (recvChecksum != checksum) {
-		// it might not have been the checksum, step back
-		msg.skipBytes(-NetworkMessage::CHECKSUM_LENGTH);
-	}
+	auto verifyChecksum = [&]() -> bool {
+		const size_t readable = msg.getReadableBytes();
+		if (readable <= NetworkMessage::CHECKSUM_LENGTH) {
+			return false;
+		}
+		const uint8_t* ptr = msg.getRemainingBuffer();
+		uint32_t recvChecksum = 0;
+		std::memcpy(&recvChecksum, ptr, sizeof(recvChecksum));
+		const uint32_t expectedChecksum =
+		    adlerChecksum(ptr + NetworkMessage::CHECKSUM_LENGTH, readable - NetworkMessage::CHECKSUM_LENGTH);
+		return recvChecksum == expectedChecksum;
+	};
 
 	if (!receivedFirst) {
 		// First message received
 		receivedFirst = true;
 
 		if (!protocol) {
-			// Game protocol has already been created at this point
-			protocol = service_port->make_protocol(recvChecksum == checksum, msg, shared_from_this());
+			// Multi-protocol listener (e.g. login vs status): probe checksum before selecting service.
+			const bool checksumMatched = verifyChecksum();
+			if (checksumMatched) {
+				msg.skipBytes(NetworkMessage::CHECKSUM_LENGTH);
+			}
+
+			protocol = service_port->make_protocol(checksumMatched, msg, shared_from_this());
 			if (!protocol) {
 				closeLocked(FORCE_CLOSE);
 				return;
 			}
 		} else {
+			if (protocol->isChecksumEnabled()) {
+				if (!verifyChecksum()) {
+					closeLocked(FORCE_CLOSE);
+					return;
+				}
+				msg.skipBytes(NetworkMessage::CHECKSUM_LENGTH);
+			}
 			msg.skipBytes(1); // Skip protocol ID
 		}
 
 		protocol->onRecvFirstMessage(msg);
+		if (closed) {
+			return;
+		}
 	} else {
-		protocol->onRecvMessage(msg); // Send the packet to the current protocol
+		Protocol_ptr localProtocol = protocol;
+		if (!localProtocol) {
+			closeLocked(FORCE_CLOSE);
+			return;
+		}
+
+		if (localProtocol->isChecksumEnabled()) {
+			if (!verifyChecksum()) {
+				closeLocked(FORCE_CLOSE);
+				return;
+			}
+			msg.skipBytes(NetworkMessage::CHECKSUM_LENGTH);
+		}
+
+		// Decrypt and enqueue on the connection strand without holding connectionLock.
+		// Connection::msg is owned exclusively by this serialized read loop, so releasing
+		// the lock avoids blocking the dispatcher's Connection::send() on incoming XTEA
+		// decryption or reactor mutex acquisition.
+		connectionLock.unlock();
+		try {
+			localProtocol->onRecvMessage(msg);
+		} catch (...) {
+			connectionLock.lock();
+			throw;
+		}
+		connectionLock.lock();
+		if (closed) {
+			return;
+		}
 	}
 
 	try {
@@ -337,6 +377,7 @@ void Connection::send(const OutputMessage_ptr& msg)
 	}
 
 	if (messageQueue.size() >= MAX_PENDING_WRITE_MESSAGES) {
+		g_performanceMetrics.recordPendingWrite(messageQueue.size(), true);
 		LOG_NETWORK(fmt::format("{} disconnected for exceeding the pending write limit ({} messages).",
 		                        convertIPToString(getIPLocked()), MAX_PENDING_WRITE_MESSAGES));
 		// Deliberately does NOT clear messageQueue. The front message may be the
@@ -351,6 +392,7 @@ void Connection::send(const OutputMessage_ptr& msg)
 
 	bool noPendingWrite = messageQueue.empty();
 	messageQueue.emplace_back(msg);
+	g_performanceMetrics.recordPendingWrite(messageQueue.size());
 	if (noPendingWrite) {
 		try {
 			asio::post(socket.get_executor(),
@@ -368,18 +410,49 @@ void Connection::send(const OutputMessage_ptr& msg)
 // paths can erase, leaving msg dangling before async_write() reads it.
 void Connection::internalSend(OutputMessage_ptr msg)
 {
-	std::scoped_lock lockClass(connectionLock);
+	Protocol_ptr localProtocol;
+	{
+		std::scoped_lock lockClass(connectionLock);
 
-	// releaseAllProtocols() clears protocol during shutdown, and this runs on the
-	// strand, so the pointer can legitimately be gone by the time a queued send
-	// gets here. Nothing can serialise the message without a protocol; tear the
-	// connection down instead of dereferencing null.
-	if (!protocol) {
+		// releaseAllProtocols() clears protocol during shutdown, and this runs on the
+		// strand, so the pointer can legitimately be gone by the time a queued send
+		// gets here. Nothing can serialise the message without a protocol; tear the
+		// connection down instead of dereferencing null.
+		if (!protocol) {
+			messageQueue.clear();
+			closeLocked(FORCE_CLOSE);
+			return;
+		}
+
+		if (!socket.is_open()) {
+			messageQueue.clear();
+			return;
+		}
+
+		localProtocol = protocol;
+	}
+
+	// Perform XTEA encryption and Adler-32 checksum outside connectionLock so
+	// dispatcher-thread Connection::send() never stalls behind 64 KiB crypto work.
+	localProtocol->onSendMessage(msg);
+	if (!localProtocol->validateOutgoingFrame(*msg)) {
+		LOG_ERROR(fmt::format("[Network] Refusing to transmit invalid framed message (len={}, start={}); closing connection.",
+		                      msg ? msg->getLength() : 0, msg ? msg->getOutputBufferStart() : 0));
+		std::scoped_lock lockClass(connectionLock);
+		messageQueue.clear();
 		closeLocked(FORCE_CLOSE);
 		return;
 	}
 
-	protocol->onSendMessage(msg);
+	std::scoped_lock lockClass(connectionLock);
+	if (!protocol || !socket.is_open()) {
+		messageQueue.clear();
+		if (socket.is_open()) {
+			closeLocked(FORCE_CLOSE);
+		}
+		return;
+	}
+
 	try {
 		writeTimer.expires_after(std::chrono::seconds(CONNECTION_WRITE_TIMEOUT));
 		writeTimer.async_wait(
@@ -393,11 +466,13 @@ void Connection::internalSend(OutputMessage_ptr msg)
 		// queue is a scheduling structure, not the owner of the in-flight buffer.
 		asio::async_write(
 		    socket, asio::buffer(msg->getOutputBuffer(), msg->getLength()),
-		    [thisPtr = shared_from_this(), msg](const asio::error_code& error, auto /*bytes_transferred*/) {
+		    [thisPtr = shared_from_this(), msg](const asio::error_code& error, size_t bytesTransferred) {
+			    g_performanceMetrics.recordNetworkWrite(bytesTransferred, static_cast<bool>(error));
 			    thisPtr->onWriteOperation(error);
 		    });
 	} catch (std::system_error& e) {
 		LOG_NETWORK(fmt::format("Error - Connection::internalSend: {}", e.what()));
+		messageQueue.clear();
 		closeLocked(FORCE_CLOSE);
 	}
 }
@@ -427,7 +502,7 @@ uint32_t Connection::getIPLocked()
 
 void Connection::onWriteOperation(const asio::error_code& error)
 {
-	std::scoped_lock lockClass(connectionLock);
+	std::unique_lock<std::recursive_mutex> lock(connectionLock);
 	writeTimer.cancel();
 
 	// This completion owns the message it wrote, so the queue is allowed to be empty
@@ -449,8 +524,12 @@ void Connection::onWriteOperation(const asio::error_code& error)
 	if (!messageQueue.empty()) {
 		if (socket.is_open()) {
 			// Keeps the graceful-close drain working: closeLocked(false) leaves the
-			// socket open so queued messages still flush.
-			internalSend(messageQueue.front());
+			// socket open so queued messages still flush. Release connectionLock before
+			// internalSend() so crypto/framing work does not keep the recursive mutex
+			// locked across queued writes.
+			OutputMessage_ptr nextMsg = messageQueue.front();
+			lock.unlock();
+			internalSend(std::move(nextMsg));
 		} else {
 			// A forced close cancelled the socket while this write was pending.
 			// Nothing left can be flushed, and no write is in flight, so release the

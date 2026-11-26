@@ -141,6 +141,126 @@
 			"cacheVariables": {
 				"ENABLE_TEST_LTO": "ON"
 			}
+		},
+		{
+			"name": "linux-low-memory",
+			"generator": "Ninja",
+			"description": "Low Memory profile for WSL2/Ubuntu (<=8 GB RAM): no LTO, no unity, low-memory linker, ccache, 2 compile / 1 link",
+			"binaryDir": "${sourceDir}/build-low-memory",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_PREFIX_PATH": "/usr/local;$env{HOME}/.local",
+				"LUA_INCLUDE_DIR": "/usr/local/include",
+				"LUA_LIBRARY": "/usr/local/lib/liblua.a",
+				"LUA_LIBRARIES": "/usr/local/lib/liblua.a;m;dl",
+				"BUILD_TESTING": "ON",
+				"ENABLE_CCACHE": "ON",
+				"ENABLE_LTO": "OFF",
+				"ENABLE_TEST_LTO": "OFF",
+				"ENABLE_UNITY_BUILD": "OFF",
+				"ENABLE_PCH": "ON",
+				"ENABLE_LOW_MEMORY_LINKER": "ON",
+				"TFS_COMPILE_JOBS": "2",
+				"TFS_LINK_JOBS": "1",
+				"USE_MIMALLOC": "ON"
+			}
+		},
+		{
+			"name": "linux-balanced",
+			"generator": "Ninja",
+			"description": "Balanced profile for WSL2/Ubuntu dev & tests: Unity Build + ccache, no LTO, reserves CPU/RAM for Windows and IDE",
+			"binaryDir": "${sourceDir}/build-balanced",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_PREFIX_PATH": "/usr/local;$env{HOME}/.local",
+				"LUA_INCLUDE_DIR": "/usr/local/include",
+				"LUA_LIBRARY": "/usr/local/lib/liblua.a",
+				"LUA_LIBRARIES": "/usr/local/lib/liblua.a;m;dl",
+				"BUILD_TESTING": "ON",
+				"ENABLE_CCACHE": "ON",
+				"ENABLE_LTO": "OFF",
+				"ENABLE_TEST_LTO": "OFF",
+				"ENABLE_UNITY_BUILD": "ON",
+				"UNITY_BUILD_BATCH_SIZE": "8",
+				"ENABLE_PCH": "OFF",
+				"ENABLE_LOW_MEMORY_LINKER": "ON",
+				"TFS_COMPILE_JOBS": "4",
+				"TFS_LINK_JOBS": "1",
+				"USE_MIMALLOC": "ON"
+			}
+		},
+		{
+			"name": "linux-full-performance",
+			"generator": "Ninja",
+			"description": "Full Performance production profile: -O3, -march=native, LTO ON (bounded workers), Unity Build, mimalloc, ccache",
+			"binaryDir": "${sourceDir}/build-full-performance",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_PREFIX_PATH": "/usr/local;$env{HOME}/.local",
+				"LUA_INCLUDE_DIR": "/usr/local/include",
+				"LUA_LIBRARY": "/usr/local/lib/liblua.a",
+				"LUA_LIBRARIES": "/usr/local/lib/liblua.a;m;dl",
+				"BUILD_TESTING": "OFF",
+				"DISABLE_STATS": "1",
+				"ENABLE_CCACHE": "ON",
+				"ENABLE_LTO": "ON",
+				"ENABLE_TEST_LTO": "OFF",
+				"ENABLE_UNITY_BUILD": "ON",
+				"UNITY_BUILD_BATCH_SIZE": "8",
+				"ENABLE_NATIVE_OPTIMIZATIONS": "ON",
+				"ENABLE_SLOW_TASK_DETECTION": "OFF",
+				"TFS_COMPILE_JOBS": "4",
+				"TFS_LINK_JOBS": "1",
+				"TFS_LTO_JOBS": "4",
+				"USE_MIMALLOC": "ON"
+			}
+		},
+		{
+			"name": "linux-asan-ubsan",
+			"generator": "Ninja",
+			"description": "AddressSanitizer + UndefinedBehaviorSanitizer profile for WSL2/Ubuntu with bounded CPU/RAM",
+			"binaryDir": "${sourceDir}/build-asan-ubsan",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_PREFIX_PATH": "/usr/local;$env{HOME}/.local",
+				"LUA_INCLUDE_DIR": "/usr/local/include",
+				"LUA_LIBRARY": "/usr/local/lib/liblua.a",
+				"LUA_LIBRARIES": "/usr/local/lib/liblua.a;m;dl",
+				"BUILD_TESTING": "ON",
+				"ENABLE_CCACHE": "ON",
+				"ENABLE_ASAN": "ON",
+				"ENABLE_UBSAN": "ON",
+				"ENABLE_LTO": "OFF",
+				"ENABLE_UNITY_BUILD": "OFF",
+				"ENABLE_PCH": "ON",
+				"TFS_COMPILE_JOBS": "2",
+				"TFS_LINK_JOBS": "1",
+				"USE_MIMALLOC": "OFF"
+			}
+		},
+		{
+			"name": "linux-benchmarks",
+			"generator": "Ninja",
+			"description": "Google Benchmark profile for WSL2/Ubuntu with Ninja, ccache, and bounded parallelism",
+			"binaryDir": "${sourceDir}/build-bench",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_PREFIX_PATH": "/usr/local;$env{HOME}/.local",
+				"LUA_INCLUDE_DIR": "/usr/local/include",
+				"LUA_LIBRARY": "/usr/local/lib/liblua.a",
+				"LUA_LIBRARIES": "/usr/local/lib/liblua.a;m;dl",
+				"BUILD_BENCHMARKING": "ON",
+				"BUILD_TESTING": "OFF",
+				"DISABLE_STATS": "1",
+				"ENABLE_CCACHE": "ON",
+				"ENABLE_LTO": "OFF",
+				"ENABLE_BENCHMARK_LTO": "OFF",
+				"ENABLE_UNITY_BUILD": "ON",
+				"UNITY_BUILD_BATCH_SIZE": "8",
+				"ENABLE_PCH": "OFF",
+				"TFS_COMPILE_JOBS": "4",
+				"TFS_LINK_JOBS": "1"
+			}
 		}
 	],
 	"buildPresets": [
@@ -201,6 +321,36 @@
 			"name": "release-tests-vcpkg-lto",
 			"configurePreset": "release-tests-vcpkg-lto",
 			"configuration": "Release"
+		},
+		{
+			"name": "linux-low-memory",
+			"configurePreset": "linux-low-memory",
+			"configuration": "Release",
+			"jobs": 2
+		},
+		{
+			"name": "linux-balanced",
+			"configurePreset": "linux-balanced",
+			"configuration": "Release",
+			"jobs": 4
+		},
+		{
+			"name": "linux-full-performance",
+			"configurePreset": "linux-full-performance",
+			"configuration": "Release",
+			"jobs": 4
+		},
+		{
+			"name": "linux-asan-ubsan",
+			"configurePreset": "linux-asan-ubsan",
+			"configuration": "Debug",
+			"jobs": 2
+		},
+		{
+			"name": "linux-benchmarks",
+			"configurePreset": "linux-benchmarks",
+			"configuration": "Release",
+			"jobs": 4
 		}
 	],
 	"testPresets": [
@@ -283,6 +433,54 @@
 				"outputOnFailure": true
 			},
 			"execution": {
+				"noTestsAction": "error"
+			}
+		},
+		{
+			"name": "linux-low-memory",
+			"configurePreset": "linux-low-memory",
+			"configuration": "Release",
+			"output": {
+				"outputOnFailure": true
+			},
+			"execution": {
+				"jobs": 1,
+				"noTestsAction": "error"
+			}
+		},
+		{
+			"name": "linux-balanced",
+			"configurePreset": "linux-balanced",
+			"configuration": "Release",
+			"output": {
+				"outputOnFailure": true
+			},
+			"execution": {
+				"jobs": 2,
+				"noTestsAction": "error"
+			}
+		},
+		{
+			"name": "linux-asan-ubsan",
+			"configurePreset": "linux-asan-ubsan",
+			"configuration": "Debug",
+			"output": {
+				"outputOnFailure": true
+			},
+			"execution": {
+				"jobs": 1,
+				"noTestsAction": "error"
+			}
+		},
+		{
+			"name": "linux-benchmarks",
+			"configurePreset": "linux-benchmarks",
+			"configuration": "Release",
+			"output": {
+				"outputOnFailure": true
+			},
+			"execution": {
+				"jobs": 1,
 				"noTestsAction": "error"
 			}
 		}

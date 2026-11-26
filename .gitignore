@@ -20,9 +20,15 @@
 x64/
 build/
 build-release/
+build-release-*/
 build-debug/
+build-low-memory/
+build-balanced/
+build-full-performance/
+build-bench/
 build-asan*/
 build-tsan*/
+build-ubsan*/
 build-tests*/
 build-callgrind/
 [Bb]in/

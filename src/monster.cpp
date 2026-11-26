@@ -1074,7 +1074,11 @@ bool Monster::hasPlayerNearby(int32_t range /* = 20*/) const
 
 	SpectatorVec spectators;
 	g_game.map.getSpectators(spectators, position, true, true, range, range, range, range);
-	cachedPlayerNearby = !spectators.empty();
+	// Event spectators are a superset of this monster's activity proximity.
+	cachedPlayerNearby = std::ranges::any_of(spectators, [this, range](const auto& spectator) {
+		return spectator && !spectator->isRemoved() && compareInstance(spectator->getInstanceID()) &&
+		       Creature::canSee(position, spectator->getPosition(), range, range);
+	});
 	lastPlayerNearbyCheck = currentTime;
 	return cachedPlayerNearby;
 }

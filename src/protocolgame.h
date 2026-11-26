@@ -12,7 +12,11 @@
 #include "zoneweather.h"
 
 #include <array>
+#include <chrono>
+#include <deque>
+#include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -29,6 +33,7 @@ struct BestiaryCreatureInfo;
 struct ProtocolGameCustomPingTestAccess;
 struct ProtocolGameAstraRegenerationTestAccess;
 struct ProtocolGameSpellCooldownTestAccess;
+struct ProtocolGameAuditTestAccess;
 using ProtocolGame_ptr = std::shared_ptr<ProtocolGame>;
 class ProtocolSpectator;
 
@@ -112,8 +117,24 @@ private:
 	void disconnectClient(std::string_view message) const;
 	void dispatchCancelMessage(ReturnValue message) const;
 	void writeToOutputBuffer(const NetworkMessage& msg);
+	void writeToOutputBuffer(std::span<const uint8_t> bytes);
 
 	void release() override;
+	[[nodiscard]] uint32_t getMaxCoalescedBodyLength() const noexcept override
+	{
+		return isOTC ? static_cast<uint32_t>(NetworkMessage::MAX_PROTOCOL_BODY_LENGTH)
+		             : static_cast<uint32_t>(NetworkMessage::CIPSOFT_MAX_COALESCED_BODY_LENGTH);
+	}
+	[[nodiscard]] uint32_t getMaxOutgoingPayloadLength() const noexcept override
+	{
+		return isOTC ? static_cast<uint32_t>(NetworkMessage::MAX_ENCRYPTED_PAYLOAD_LENGTH)
+		             : static_cast<uint32_t>(NetworkMessage::CIPSOFT_MAX_PAYLOAD_LENGTH);
+	}
+	[[nodiscard]] size_t getMaxOutgoingWireLength() const noexcept override
+	{
+		return isOTC ? static_cast<size_t>(NETWORKMESSAGE_MAXSIZE)
+		             : static_cast<size_t>(NetworkMessage::CIPSOFT_MAX_WIRE_LENGTH);
+	}
 
 	std::pair<bool, uint32_t> isKnownCreature(uint32_t id);
 
@@ -123,6 +144,7 @@ private:
 
 	// we have all the parse methods
 	void parsePacket(NetworkMessage& msg) override;
+	void drainIncomingPacketsOnDispatcher();
 	void parsePacketOnDispatcher(NetworkMessage_ptr& packet);
 	void onRecvFirstMessage(NetworkMessage& msg) override;
 	void onConnect() override;
@@ -416,6 +438,7 @@ private:
 	friend struct AccountManagerSecurityTestAccess;
 	friend struct ProtocolGameAstraRegenerationTestAccess;
 	friend struct ProtocolGameSpellCooldownTestAccess;
+	friend struct ProtocolGameAuditTestAccess;
 	friend struct ProtocolGameMovementTestAccess;
 
 	//cast
@@ -450,6 +473,16 @@ private:
 	std::unordered_set<uint32_t> pendingCreatureEmblems;
 	std::shared_ptr<Player> player;
 	tfs::net::PacketBacklog packetBacklog;
+	struct QueuedGamePacket
+	{
+		NetworkMessage_ptr packet;
+		tfs::net::PacketBacklog::Ticket ticket;
+		std::chrono::steady_clock::time_point deadline;
+		std::chrono::steady_clock::time_point enqueuedAt{};
+	};
+	std::mutex incomingPacketsMutex;
+	std::deque<QueuedGamePacket> incomingPackets;
+	bool incomingDrainScheduled = false;
 
 	uint32_t eventConnect = 0;
 	int64_t lastCharacterHistoryRequest = 0;

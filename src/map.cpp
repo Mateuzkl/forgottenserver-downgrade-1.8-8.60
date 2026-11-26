@@ -577,9 +577,10 @@ void Map::getSpectators(SpectatorVec& spectators, const Position& centerPos, boo
 			minRangeZ = std::max(centerPos.getZ() - 2, 0);
 			maxRangeZ = std::min(centerPos.getZ() + 2, MAP_MAX_LAYERS - 1);
 		} else {
-			// above ground — limit to ±2 floors
-			minRangeZ = std::max(centerPos.getZ() - 2, 0);
-			maxRangeZ = std::min(centerPos.getZ() + 2, 7);
+			// This is centered on the event, not on the viewer. Surface clients
+			// see all floors 0..7; viewers on 8/9 can also see events on 6/7.
+			minRangeZ = 0;
+			maxRangeZ = centerPos.z < 6 ? 7 : centerPos.getZ() + 2;
 		}
 	} else {
 		minRangeZ = centerPos.z;

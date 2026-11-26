@@ -14,6 +14,7 @@
 #include "../reactor.h"
 #include "../tools.h"
 
+#include "protocolgame_owned_fixture.h"
 #include "test_support.h"
 
 struct TaskReactorTestAccess
@@ -326,7 +327,8 @@ TEST_CASE(account_manager_dispatches_dialogue_and_discards_other_messages)
 {
 	auto session = std::make_shared<Player>(nullptr);
 	AccountManagerSecurityTestAccess::configureAccountSession(*session, 25, IP_IN_SESSION);
-	ProtocolGame protocol(nullptr);
+	ProtocolGameOwnedFixture protocolFixture;
+	auto& protocol = *protocolFixture.owner;
 	protocol.getCurrentBuffer() = std::make_shared<OutputMessage>();
 	for (const auto opcode : {0x32, 0x65, 0x78, 0xA1, 0xDC, 0xFF}) {
 		NetworkMessage message;
@@ -364,9 +366,12 @@ TEST_CASE(account_manager_recovery_account_limit_follows_account_and_expires)
 
 TEST_CASE(account_manager_replies_are_private_to_session_owner)
 {
-	auto owner = std::make_shared<ProtocolGame>(nullptr);
-	auto viewer = std::make_shared<ProtocolGame>(nullptr);
-	auto spy = std::make_shared<ProtocolGame>(nullptr);
+	ProtocolGameOwnedFixture ownerFixture;
+	ProtocolGameOwnedFixture viewerFixture;
+	ProtocolGameOwnedFixture spyFixture;
+	const auto& owner = ownerFixture.owner;
+	const auto& viewer = viewerFixture.owner;
+	const auto& spy = spyFixture.owner;
 	for (auto& protocol : {owner, viewer, spy}) {
 		protocol->getCurrentBuffer() = std::make_shared<OutputMessage>();
 	}

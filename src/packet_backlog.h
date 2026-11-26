@@ -4,8 +4,10 @@
 #ifndef FS_PACKET_BACKLOG_H
 #define FS_PACKET_BACKLOG_H
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -167,6 +169,55 @@ private:
 	}
 
 	std::shared_ptr<State> state;
+};
+
+// Monotonic per-connection token bucket replacing coarse time(nullptr) division.
+// Allows legitimate short bursts up to maxPacketsPerSecond while blocking
+// second-boundary double/triple floods.
+class PacketRateLimiter
+{
+public:
+	using Clock = std::chrono::steady_clock;
+
+	[[nodiscard]] bool allow(Clock::time_point now, int64_t maxPacketsPerSecond) noexcept
+	{
+		if (maxPacketsPerSecond <= 0) {
+			return true;
+		}
+
+		const uint64_t rate = static_cast<uint64_t>(maxPacketsPerSecond);
+		const uint64_t capacityMilliTokens = rate * 1000ULL;
+
+		if (!initialized) {
+			initialized = true;
+			lastRefill = now;
+			milliTokens = capacityMilliTokens;
+		} else if (now > lastRefill) {
+			const auto elapsedMs =
+			    static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - lastRefill).count());
+			if (elapsedMs > 0) {
+				lastRefill += std::chrono::milliseconds(elapsedMs);
+				const uint64_t refill = elapsedMs >= 1000ULL ? capacityMilliTokens : elapsedMs * rate;
+				milliTokens = std::min(capacityMilliTokens, milliTokens + refill);
+			}
+		}
+
+		if (milliTokens > capacityMilliTokens) {
+			milliTokens = capacityMilliTokens;
+		}
+
+		if (milliTokens < 1000ULL) {
+			return false;
+		}
+
+		milliTokens -= 1000ULL;
+		return true;
+	}
+
+private:
+	Clock::time_point lastRefill{};
+	uint64_t milliTokens = 0;
+	bool initialized = false;
 };
 
 } // namespace tfs::net

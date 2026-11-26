@@ -16,15 +16,21 @@
 #include "../connection.h"
 #include "../outputmessage.h"
 #include "../protocol.h"
+#include "../tools.h"
 #include "test_support.h"
+
+#include <cstring>
+#include <thread>
 
 // Grants the tests access to Connection internals. Declared as a friend in
 // connection.h; see the note there.
 struct ConnectionTestAccess
 {
 	static asio::ip::tcp::socket& socket(Connection& connection) { return connection.socket; }
+	static std::recursive_mutex& lock(Connection& connection) { return connection.connectionLock; }
 	static size_t queueSize(Connection& connection) { return connection.messageQueue.size(); }
 	static bool isClosed(Connection& connection) { return connection.closed; }
+	static bool isSocketOpen(Connection& connection) { return connection.socket.is_open(); }
 	static void setProtocol(Connection& connection, Protocol_ptr protocol)
 	{
 		connection.protocol = std::move(protocol);
@@ -266,6 +272,213 @@ TEST_CASE(test_normal_send_below_limit_is_unaffected)
 	CHECK(!ConnectionTestAccess::isClosed(connection));
 
 	connection.close(Connection::FORCE_CLOSE);
+	resetConnectionManager();
+}
+
+// Regression for Point 1: onWriteOperation() must release the recursive connectionLock
+// before calling internalSend(), so queued back-to-back writes do not hold connectionLock
+// across XTEA/Adler-32 encryption and stall dispatcher-thread Connection::send().
+TEST_CASE(test_on_write_operation_releases_connection_lock_during_internal_send)
+{
+	class LockProbingProtocol final : public Protocol
+	{
+	public:
+		explicit LockProbingProtocol(Connection_ptr connection) : Protocol(std::move(connection)) {}
+		void onRecvFirstMessage(NetworkMessage&) override {}
+		void onSendMessage(const OutputMessage_ptr&) const override
+		{
+			auto conn = getConnection();
+			CHECK(conn != nullptr);
+			bool acquiredFromOtherThread = false;
+			std::thread probe([&] {
+				std::unique_lock<std::recursive_mutex> guard(ConnectionTestAccess::lock(*conn), std::try_to_lock);
+				acquiredFromOtherThread = guard.owns_lock();
+			});
+			probe.join();
+			++sendCount;
+			allUnlocked = allUnlocked && acquiredFromOtherThread;
+		}
+		mutable size_t sendCount = 0;
+		mutable bool allUnlocked = true;
+	};
+
+	resetConnectionManager();
+	ConnectedPair pair;
+	auto& connection = *pair.connection;
+	auto proto = std::make_shared<LockProbingProtocol>(pair.connection);
+	ConnectionTestAccess::setProtocol(connection, proto);
+
+	const auto firstInFlight = pair.startPendingWrite();
+	CHECK(!firstInFlight.expired());
+	CHECK(proto->sendCount == 1);
+	CHECK(proto->allUnlocked);
+
+	// Queue a second message so it is dispatched from onWriteOperation() -> internalSend().
+	connection.send(makeMessage(64));
+	CHECK(ConnectionTestAccess::queueSize(connection) == 2);
+
+	// Drain peer socket so the first write completes and chains into the second write.
+	pair.peer.non_blocking(true);
+	std::vector<uint8_t> sink(64 * 1024);
+	for (int attempt = 0; attempt < 200 && proto->sendCount < 2; ++attempt) {
+		asio::error_code readErr;
+		while (pair.peer.read_some(asio::buffer(sink), readErr) > 0 && !readErr) {}
+		pair.ioContext.poll();
+		pair.ioContext.restart();
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
+
+	CHECK(proto->sendCount == 2);
+	CHECK(proto->allUnlocked);
+
+	connection.close(Connection::FORCE_CLOSE);
+	pair.drain();
+	resetConnectionManager();
+}
+
+// Regression for Point 4: escalating a graceful close (closed=true, socket still draining)
+// to FORCE_CLOSE (e.g. write timeout or error) must actually close the socket without
+// freeing the in-flight write buffer prematurely.
+TEST_CASE(test_graceful_close_transitions_to_force_close_with_pending_write)
+{
+	resetConnectionManager();
+	ConnectedPair pair;
+	auto& connection = *pair.connection;
+
+	const auto inFlight = pair.startPendingWrite();
+	connection.send(makeMessage(32));
+	CHECK(ConnectionTestAccess::queueSize(connection) == 2);
+
+	// Graceful close leaves the socket open while the queued messages drain.
+	connection.close(false);
+	CHECK(ConnectionTestAccess::isClosed(connection));
+	CHECK(ConnectionTestAccess::isSocketOpen(connection));
+	CHECK(!inFlight.expired());
+
+	// Escalation to FORCE_CLOSE must close the socket immediately while keeping the
+	// in-flight OutputMessage alive until the aborted write completion runs.
+	connection.close(Connection::FORCE_CLOSE);
+	CHECK(!ConnectionTestAccess::isSocketOpen(connection));
+	CHECK(!inFlight.expired());
+
+	pair.drain();
+	CHECK(ConnectionTestAccess::queueSize(connection) == 0);
+	CHECK(inFlight.expired());
+
+	resetConnectionManager();
+}
+
+// Regression for Point 2: checksummed protocols must reject missing/corrupted checksums
+// (including 4-byte zero payloads) both on single-socket handshake and after handshake,
+// while checksum-disabled protocols remain unaffected.
+TEST_CASE(test_connection_enforces_mandatory_checksum_after_handshake)
+{
+	class RecvCountingProtocol final : public Protocol
+	{
+	public:
+		RecvCountingProtocol(Connection_ptr connection, bool useChecksum) : Protocol(std::move(connection))
+		{
+			if (!useChecksum) {
+				disableChecksum();
+			}
+		}
+		void onRecvFirstMessage(NetworkMessage&) override { ++firstCount; }
+		void parsePacket(NetworkMessage&) override { ++followUpCount; }
+		size_t firstCount = 0;
+		size_t followUpCount = 0;
+	};
+
+	auto buildFrame = [](std::span<const uint8_t> body, bool addChecksum, bool corruptChecksum = false) {
+		std::vector<uint8_t> wire;
+		const uint16_t outerLen =
+		    static_cast<uint16_t>(body.size() + (addChecksum ? NetworkMessage::CHECKSUM_LENGTH : 0));
+		wire.resize(NetworkMessage::HEADER_LENGTH + outerLen);
+		std::memcpy(wire.data(), &outerLen, sizeof(outerLen));
+		size_t offset = NetworkMessage::HEADER_LENGTH;
+		if (addChecksum) {
+			uint32_t csum = adlerChecksum(body.data(), body.size());
+			if (corruptChecksum) {
+				csum ^= 0x00FF00FFu;
+			}
+			std::memcpy(wire.data() + offset, &csum, sizeof(csum));
+			offset += NetworkMessage::CHECKSUM_LENGTH;
+		}
+		std::memcpy(wire.data() + offset, body.data(), body.size());
+		return wire;
+	};
+
+	auto pumpUntil = [](ConnectedPair& pair, auto&& predicate) {
+		for (int i = 0; i < 200 && !predicate(); ++i) {
+			pair.ioContext.poll();
+			pair.ioContext.restart();
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+	};
+
+	resetConnectionManager();
+
+	// Case 1: Checksummed protocol accepts valid handshake + valid follow-up, then rejects bad checksum.
+	{
+		ConnectedPair pair;
+		auto proto = std::make_shared<RecvCountingProtocol>(pair.connection, true);
+		pair.connection->accept(proto);
+
+		const std::array<uint8_t, 5> firstBody{0x0A, 1, 2, 3, 4};
+		asio::write(pair.peer, asio::buffer(buildFrame(firstBody, true)));
+		pumpUntil(pair, [&] { return proto->firstCount == 1; });
+		CHECK(proto->firstCount == 1);
+		CHECK(!ConnectionTestAccess::isClosed(*pair.connection));
+
+		const std::array<uint8_t, 4> validBody{0x1E, 0xAA, 0xBB, 0xCC};
+		asio::write(pair.peer, asio::buffer(buildFrame(validBody, true)));
+		pumpUntil(pair, [&] { return proto->followUpCount == 1; });
+		CHECK(proto->followUpCount == 1);
+		CHECK(!ConnectionTestAccess::isClosed(*pair.connection));
+
+		// Corrupted checksum after handshake must force-close without calling parsePacket.
+		asio::write(pair.peer, asio::buffer(buildFrame(validBody, true, true)));
+		pumpUntil(pair, [&] { return ConnectionTestAccess::isClosed(*pair.connection); });
+		CHECK(ConnectionTestAccess::isClosed(*pair.connection));
+		CHECK(!ConnectionTestAccess::isSocketOpen(*pair.connection));
+		CHECK(proto->followUpCount == 1);
+	}
+
+	// Case 2: 4-byte all-zero follow-up packet must not pass as checksum==0.
+	{
+		ConnectedPair pair;
+		auto proto = std::make_shared<RecvCountingProtocol>(pair.connection, true);
+		pair.connection->accept(proto);
+
+		const std::array<uint8_t, 5> firstBody{0x0A, 1, 2, 3, 4};
+		asio::write(pair.peer, asio::buffer(buildFrame(firstBody, true)));
+		pumpUntil(pair, [&] { return proto->firstCount == 1; });
+		CHECK(proto->firstCount == 1);
+
+		const std::array<uint8_t, 6> zeroChecksumOnly{0x04, 0x00, 0x00, 0x00, 0x00, 0x00};
+		asio::write(pair.peer, asio::buffer(zeroChecksumOnly));
+		pumpUntil(pair, [&] { return ConnectionTestAccess::isClosed(*pair.connection); });
+		CHECK(ConnectionTestAccess::isClosed(*pair.connection));
+		CHECK(proto->followUpCount == 0);
+	}
+
+	// Case 3: Unchecksummed protocol (e.g. ProtocolAdmin) accepts packets without checksum.
+	{
+		ConnectedPair pair;
+		auto proto = std::make_shared<RecvCountingProtocol>(pair.connection, false);
+		pair.connection->accept(proto);
+
+		const std::array<uint8_t, 5> firstBody{0xFE, 1, 2, 3, 4};
+		asio::write(pair.peer, asio::buffer(buildFrame(firstBody, false)));
+		pumpUntil(pair, [&] { return proto->firstCount == 1; });
+		CHECK(proto->firstCount == 1);
+
+		const std::array<uint8_t, 4> followBody{0x05, 0x11, 0x22, 0x33};
+		asio::write(pair.peer, asio::buffer(buildFrame(followBody, false)));
+		pumpUntil(pair, [&] { return proto->followUpCount == 1; });
+		CHECK(proto->followUpCount == 1);
+		CHECK(!ConnectionTestAccess::isClosed(*pair.connection));
+	}
+
 	resetConnectionManager();
 }
 

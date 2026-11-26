@@ -23,8 +23,10 @@ round_keys expand_key(const key& k)
 
 void encrypt(uint8_t* data, size_t length, const round_keys& k)
 {
+	assert((length % 8) == 0 && "xtea::encrypt requires a multiple of 8 bytes");
+	const size_t alignedLength = length & ~size_t{7};
 	for (auto i = 0u; i < k.size(); i += 2) {
-		for (auto it = data, last = data + length; it < last; it += 8) {
+		for (auto it = data, last = data + alignedLength; it < last; it += 8) {
 			uint32_t left, right;
 			std::memcpy(&left, it, 4);
 			std::memcpy(&right, it + 4, 4);
@@ -40,8 +42,10 @@ void encrypt(uint8_t* data, size_t length, const round_keys& k)
 
 void decrypt(uint8_t* data, size_t length, const round_keys& k)
 {
+	assert((length % 8) == 0 && "xtea::decrypt requires a multiple of 8 bytes");
+	const size_t alignedLength = length & ~size_t{7};
 	for (auto i = k.size(); i > 0; i -= 2) {
-		for (auto it = data, last = data + length; it < last; it += 8) {
+		for (auto it = data, last = data + alignedLength; it < last; it += 8) {
 			uint32_t left, right;
 			std::memcpy(&left, it, 4);
 			std::memcpy(&right, it + 4, 4);

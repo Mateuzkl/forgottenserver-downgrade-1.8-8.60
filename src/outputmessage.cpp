@@ -23,33 +23,58 @@ inline constexpr auto AUTOSEND_DELAY_DEFAULT = 10ms;
 
 void OutputMessagePool::scheduleSendAll(std::chrono::milliseconds delay) noexcept
 {
-	sendScheduled = true;
-	g_scheduler.addEvent(createSchedulerTask(static_cast<int>(delay.count()), []() {
-		OutputMessagePool::getInstance().sendAll();
-	}));
+	const uint64_t expectedGeneration = ++sendGeneration;
+	sendScheduled = g_scheduler.addEvent(createSchedulerTask(static_cast<int>(delay.count()), [expectedGeneration]() {
+		OutputMessagePool::getInstance().sendAllIfGeneration(expectedGeneration);
+	})) != 0;
+}
+
+void OutputMessagePool::sendAllIfGeneration(uint64_t expectedGeneration) noexcept
+{
+	// THREAD-SAFETY: Must be called from dispatcher thread only.
+	if (!sendScheduled || sendGeneration != expectedGeneration) {
+		return;
+	}
+	sendAll();
 }
 
 void OutputMessagePool::sendAll() noexcept
 {
 	// THREAD-SAFETY: Must be called from dispatcher thread only.
+	++sendGeneration;
 	sendScheduled = false;
 	if (bufferedProtocols.empty()) [[unlikely]] {
+		firstBufferedAt = {};
 		return;
 	}
 
-	std::vector<Protocol_ptr> protocols;
-	protocols.swap(bufferedProtocols);
+	firstBufferedAt = {};
+	flushingProtocols.swap(bufferedProtocols);
 
-	for (auto& protocol : protocols) {
+	for (auto& protocol : flushingProtocols) {
 		protocol->inAutosend = false;
 		auto& msg = protocol->getCurrentBuffer();
 		if (msg) [[likely]] {
 			protocol->send(std::move(msg));
 		}
 	}
+	// Release every protocol reference, while retaining the allocation for reuse.
+	flushingProtocols.clear();
 
-	if (!bufferedProtocols.empty()) [[likely]] {
+	if (!bufferedProtocols.empty() && !sendScheduled) [[likely]] {
 		scheduleSendAll(AUTOSEND_DELAY_DEFAULT);
+	}
+}
+
+void OutputMessagePool::flushIfDue() noexcept
+{
+	// THREAD-SAFETY: Must be called from dispatcher thread only.
+	if (bufferedProtocols.empty() || firstBufferedAt == std::chrono::steady_clock::time_point{}) {
+		return;
+	}
+
+	if (std::chrono::steady_clock::now() - firstBufferedAt >= AUTOSEND_DELAY_DEFAULT) {
+		sendAll();
 	}
 }
 
@@ -57,12 +82,14 @@ void OutputMessagePool::addProtocolToAutosend(Protocol_ptr protocol)
 {
 	// THREAD-SAFETY: Must be called from dispatcher thread only
 	// dispatcher thread
-	if (protocol->inAutosend) {
-		return;
+	if (!protocol->inAutosend) {
+		if (bufferedProtocols.empty()) {
+			firstBufferedAt = std::chrono::steady_clock::now();
+		}
+		auto& bufferedProtocol = bufferedProtocols.emplace_back(std::move(protocol));
+		bufferedProtocol->inAutosend = true;
 	}
 
-	auto& bufferedProtocol = bufferedProtocols.emplace_back(std::move(protocol));
-	bufferedProtocol->inAutosend = true;
 	if (!sendScheduled) [[unlikely]] {
 		scheduleSendAll(AUTOSEND_DELAY_DEFAULT);
 	}
@@ -78,6 +105,11 @@ void OutputMessagePool::removeProtocolFromAutosend(const Protocol_ptr& protocol)
 		(*it)->inAutosend = false;
 		std::swap(*it, bufferedProtocols.back());
 		bufferedProtocols.pop_back();
+		if (bufferedProtocols.empty()) {
+			firstBufferedAt = {};
+			++sendGeneration;
+			sendScheduled = false;
+		}
 	}
 }
 

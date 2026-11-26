@@ -34,7 +34,7 @@ public:
 	size_t getMemberCount() const { return memberList.size(); }
 	size_t getInvitationCount() const { return inviteList.size(); }
 
-	void disband();
+	bool disband();
 	bool invitePlayer(Player& player);
 	bool joinParty(Player& player);
 	void revokeInvitation(Player& player);
@@ -87,6 +87,7 @@ private:
 
 	bool sharedExpActive = false;
 	bool sharedExpEnabled = false;
+	bool disbanding = false;
 
 	std::shared_ptr<Party> self;
 };

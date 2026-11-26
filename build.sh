@@ -15,7 +15,12 @@ SIMDUTF_PREFIX="${HOME}/.local"
 MIO_DIR="${HOME}/.cache/tfs-build/mio"
 
 BUILD_DIR="${TFS_BUILD_DIR:-}"
+BUILD_DIR_EXPLICIT=0
+if [[ -n "${BUILD_DIR}" ]]; then
+  BUILD_DIR_EXPLICIT=1
+fi
 OUTPUT_BIN=""
+OUTPUT_BIN_EXPLICIT=0
 TARGET_DISTRO="${TFS_DISTRO_TARGET:-auto}"
 TARGET_VERSION="auto"
 if [[ -n "${TFS_DEBIAN_TARGET:-}" ]]; then
@@ -26,15 +31,55 @@ elif [[ -n "${TFS_UBUNTU_TARGET:-}" ]]; then
   TARGET_VERSION="${TFS_UBUNTU_TARGET}"
 fi
 UI_LANG="${TFS_BUILD_LANG:-}"
+PROFILE="${TFS_BUILD_PROFILE:-auto}"
+RESOLVED_PROFILE=""
+BUILD_TYPE="${TFS_BUILD_TYPE:-}"
+GENERATOR="${TFS_GENERATOR:-auto}"
+RESOLVED_GENERATOR=""
+COMPILER_PREF="${TFS_COMPILER:-auto}"
 JOBS="${JOBS:-}"
+JOBS_EXPLICIT=0
+if [[ -n "${JOBS}" ]]; then
+  JOBS_EXPLICIT=1
+fi
+LINK_JOBS="${TFS_LINK_JOBS:-}"
+LTO_JOBS="${TFS_LTO_JOBS:-}"
+TEST_JOBS="${TFS_TEST_JOBS:-}"
 HTTP="ON"
 USE_MIMALLOC="ON"
+MIMALLOC_EXPLICIT=0
+ENABLE_CCACHE="${TFS_ENABLE_CCACHE:-ON}"
+ENABLE_LTO="${TFS_ENABLE_LTO:-auto}"
+ENABLE_UNITY="${TFS_ENABLE_UNITY:-auto}"
+UNITY_BATCH="${TFS_UNITY_BATCH:-}"
+ENABLE_PCH="${TFS_ENABLE_PCH:-auto}"
+ENABLE_LOW_MEM_LINKER="auto"
+ENABLE_NATIVE_OPT="ON"
+DISABLE_STATS="auto"
+SANITIZER="${TFS_SANITIZER:-none}"
+RUN_TESTS=0
+RUN_DB_TESTS=0
+RUN_BENCHMARKS=0
+TEST_FILTER=""
+TARGETS=()
+FORCE_RECONFIGURE=0
+NO_THROTTLE=0
+PRINT_PLAN=0
 TFS_CXX_COMPILER=""
+TFS_C_COMPILER=""
 CLEAN_BUILD=0
 SKIP_DEPS=0
 SKIP_BUILD=0
 NONINTERACTIVE=0
 PORTABLE_DEBIAN=0
+IS_WSL=0
+HOST_CPUS=2
+MEM_TOTAL_MB=4096
+MEM_AVAIL_MB=2048
+NICE_LEVEL=0
+IONICE_ARGS=()
+CCACHE_ENABLED_ACTIVE=0
+BUILD_CACHE_ROOT="${TFS_BUILD_CACHE_ROOT:-${XDG_CACHE_HOME:-${HOME}/.cache}/tfs-build}"
 
 ZIG_VERSION="0.15.2"
 CMAKE_PORTABLE_VERSION="3.31.12"
@@ -318,14 +363,45 @@ usage() {
   cat <<'EOF'
 Usage: ./build.sh [options]
 
-Options:
+Profiles & Optimization:
+  --profile MODE         auto|low-memory|balanced|full-performance (default: auto)
+                         auto -> balanced on WSL2 / tests, low-memory if <6 GiB RAM,
+                                 full-performance on native Linux production builds
+  --build-type TYPE      Release|RelWithDebInfo|Debug (default: Release, Debug for sanitizers)
+  --generator GEN        auto|ninja|make (default: auto -> Ninja when installed)
+  --compiler CC          auto|gcc|clang (default: auto)
+  --ccache on|off        Enable/disable ccache (default: on)
+  --lto on|off|auto      Control Link-Time Optimization (default: profile-defined)
+  --unity on|off|auto    Control Unity Build (default: profile-defined)
+  --unity-batch N        Source files per Unity Build batch
+  --pch on|off|auto      Control precompiled headers for non-unity builds
+  --portable             Disable -march=native/-mtune=native (ENABLE_NATIVE_OPTIMIZATIONS=OFF)
+  --stats on|off         Control OTS stats (default: off for release, on with --tests)
+  --no-throttle          Disable nice/ionice CPU and I/O priority lowering
+  --print-plan           Print adaptive hardware/profile plan and exit without building
+
+Parallelism & Incremental Builds:
+  --jobs N               Override adaptive parallel compile jobs
+  --link-jobs N          Override Ninja concurrent link job pool
+  --lto-jobs N           Override GCC/Clang LTO worker threads
+  --target NAME          Build only specific CMake target(s); repeatable (e.g. --target tfs)
+  --reconfigure          Force CMake reconfigure even when build signature matches
+  --clean                Remove the selected build directory before configuring
+  --build-dir PATH       Override CMake build directory (WSL2 defaults to native ext4 ~/.cache/tfs-build)
+
+Testing, Sanitizers & Benchmarks:
+  --tests                Build and run unit tests via CTest
+  --db-tests             Build and run full CTest suite with disposable MariaDB
+  --test-filter REGEX    Filter CTest/benchmark cases (passed to ctest -R)
+  --test-jobs N          Override adaptive CTest parallelism
+  --sanitizer MODE       none|asan|ubsan|asan-ubsan (default: none)
+  --benchmarks           Build and run Google Benchmarks (BUILD_BENCHMARKING=ON)
+
+Platform & Legacy Options:
   --lang pt|en|es        Select language without prompt
   --debian 11|12|13      Select Debian dependency strategy
   --ubuntu 22.04|24.04|26.04
                           Select Ubuntu dependency strategy
-  --jobs N               Parallel build jobs
-  --build-dir PATH       CMake build directory
-  --clean                Remove the selected build directory before configuring
   --output PATH          Copy the final binary to PATH (default: target-specific)
   --http on|off          Configure CMake HTTP option (default: on)
   --no-mimalloc          Disable mimalloc in CMake
@@ -335,11 +411,25 @@ Options:
   -h, --help             Show this help
 
 Environment:
+  TFS_BUILD_PROFILE=auto|low-memory|balanced|full-performance
+  TFS_BUILD_TYPE=Release|RelWithDebInfo|Debug
   TFS_BUILD_LANG=pt|en|es
   TFS_DISTRO_TARGET=debian|ubuntu
   TFS_DEBIAN_TARGET=11|12|13
   TFS_UBUNTU_TARGET=22.04|24.04|26.04
   TFS_BUILD_DIR=PATH
+  TFS_BUILD_CACHE_ROOT=PATH
+  TFS_GENERATOR=auto|ninja|make
+  TFS_COMPILER=auto|gcc|clang
+  TFS_ENABLE_CCACHE=ON|OFF
+  TFS_ENABLE_LTO=auto|ON|OFF
+  TFS_ENABLE_UNITY=auto|ON|OFF
+  TFS_UNITY_BATCH=N
+  TFS_ENABLE_PCH=auto|ON|OFF
+  TFS_SANITIZER=none|asan|ubsan|asan-ubsan
+  TFS_LINK_JOBS=N
+  TFS_LTO_JOBS=N
+  TFS_TEST_JOBS=N
   TFS_TOOLCHAIN_CACHE=PATH
   TFS_VCPKG_ROOT=PATH
   JOBS=N
@@ -356,6 +446,38 @@ normalize_lang() {
   esac
 }
 
+normalize_profile() {
+  local value="${1,,}"
+  case "${value}" in
+    auto) printf 'auto' ;;
+    low|low-mem|low-memory|low_memory) printf 'low-memory' ;;
+    balanced|bal|dev|default) printf 'balanced' ;;
+    full|full-perf|full-performance|full_performance|prod|production|release) printf 'full-performance' ;;
+    *) return 1 ;;
+  esac
+}
+
+normalize_tri_bool() {
+  local value="${1,,}"
+  case "${value}" in
+    auto) printf 'auto' ;;
+    on|yes|true|1) printf 'ON' ;;
+    off|no|false|0) printf 'OFF' ;;
+    *) return 1 ;;
+  esac
+}
+
+normalize_sanitizer() {
+  local value="${1,,}"
+  case "${value}" in
+    none|off|no|0) printf 'none' ;;
+    asan) printf 'asan' ;;
+    ubsan) printf 'ubsan' ;;
+    asan-ubsan|asan+ubsan|ubsan-asan|ubsan+asan) printf 'asan-ubsan' ;;
+    *) return 1 ;;
+  esac
+}
+
 parse_args() {
   while (($#)); do
     case "$1" in
@@ -363,6 +485,132 @@ parse_args() {
         [[ $# -ge 2 ]] || die "--lang requires a value"
         UI_LANG="$(normalize_lang "$2")" || die "invalid language: $2"
         shift 2
+        ;;
+      --profile)
+        [[ $# -ge 2 ]] || die "--profile requires a value"
+        PROFILE="$(normalize_profile "$2")" || die "invalid profile: $2 (expected auto|low-memory|balanced|full-performance)"
+        shift 2
+        ;;
+      --build-type)
+        [[ $# -ge 2 ]] || die "--build-type requires a value"
+        case "${2,,}" in
+          release) BUILD_TYPE="Release" ;;
+          relwithdebinfo) BUILD_TYPE="RelWithDebInfo" ;;
+          debug) BUILD_TYPE="Debug" ;;
+          *) die "invalid --build-type: $2 (expected Release|RelWithDebInfo|Debug)" ;;
+        esac
+        shift 2
+        ;;
+      --generator)
+        [[ $# -ge 2 ]] || die "--generator requires a value"
+        case "${2,,}" in
+          auto|ninja|make) GENERATOR="${2,,}" ;;
+          *) die "invalid --generator: $2 (expected auto|ninja|make)" ;;
+        esac
+        shift 2
+        ;;
+      --compiler)
+        [[ $# -ge 2 ]] || die "--compiler requires a value"
+        case "${2,,}" in
+          auto|gcc|clang) COMPILER_PREF="${2,,}" ;;
+          *) die "invalid --compiler: $2 (expected auto|gcc|clang)" ;;
+        esac
+        shift 2
+        ;;
+      --ccache)
+        [[ $# -ge 2 ]] || die "--ccache requires a value"
+        ENABLE_CCACHE="$(normalize_tri_bool "$2")" || die "--ccache must be on or off"
+        [[ "${ENABLE_CCACHE}" != "auto" ]] || ENABLE_CCACHE="ON"
+        shift 2
+        ;;
+      --lto)
+        [[ $# -ge 2 ]] || die "--lto requires a value"
+        ENABLE_LTO="$(normalize_tri_bool "$2")" || die "--lto must be on, off, or auto"
+        shift 2
+        ;;
+      --unity)
+        [[ $# -ge 2 ]] || die "--unity requires a value"
+        ENABLE_UNITY="$(normalize_tri_bool "$2")" || die "--unity must be on, off, or auto"
+        shift 2
+        ;;
+      --unity-batch)
+        [[ $# -ge 2 && "$2" =~ ^[1-9][0-9]*$ ]] || die "--unity-batch requires a positive integer"
+        UNITY_BATCH="$2"
+        shift 2
+        ;;
+      --pch)
+        [[ $# -ge 2 ]] || die "--pch requires a value"
+        ENABLE_PCH="$(normalize_tri_bool "$2")" || die "--pch must be on, off, or auto"
+        shift 2
+        ;;
+      --portable)
+        ENABLE_NATIVE_OPT="OFF"
+        shift
+        ;;
+      --stats)
+        [[ $# -ge 2 ]] || die "--stats requires a value"
+        case "${2,,}" in
+          on|yes|true|1) DISABLE_STATS="0" ;;
+          off|no|false|0) DISABLE_STATS="1" ;;
+          *) die "--stats must be on or off" ;;
+        esac
+        shift 2
+        ;;
+      --sanitizer)
+        [[ $# -ge 2 ]] || die "--sanitizer requires a value"
+        SANITIZER="$(normalize_sanitizer "$2")" || die "invalid --sanitizer: $2 (expected none|asan|ubsan|asan-ubsan)"
+        shift 2
+        ;;
+      --tests)
+        RUN_TESTS=1
+        shift
+        ;;
+      --db-tests)
+        RUN_TESTS=1
+        RUN_DB_TESTS=1
+        shift
+        ;;
+      --test-filter)
+        [[ $# -ge 2 ]] || die "--test-filter requires a value"
+        TEST_FILTER="$2"
+        shift 2
+        ;;
+      --test-jobs)
+        [[ $# -ge 2 && "$2" =~ ^[1-9][0-9]*$ ]] || die "--test-jobs requires a positive integer"
+        TEST_JOBS="$2"
+        shift 2
+        ;;
+      --benchmarks)
+        RUN_BENCHMARKS=1
+        shift
+        ;;
+      --target)
+        [[ $# -ge 2 ]] || die "--target requires a value"
+        TARGETS+=("$2")
+        shift 2
+        ;;
+      --link-jobs)
+        [[ $# -ge 2 && "$2" =~ ^[1-9][0-9]*$ ]] || die "--link-jobs requires a positive integer"
+        LINK_JOBS="$2"
+        shift 2
+        ;;
+      --lto-jobs)
+        [[ $# -ge 2 && "$2" =~ ^[1-9][0-9]*$ ]] || die "--lto-jobs requires a positive integer"
+        LTO_JOBS="$2"
+        shift 2
+        ;;
+      --reconfigure)
+        FORCE_RECONFIGURE=1
+        shift
+        ;;
+      --no-throttle)
+        NO_THROTTLE=1
+        shift
+        ;;
+      --print-plan)
+        PRINT_PLAN=1
+        NONINTERACTIVE=1
+        shift
         ;;
       --ubuntu)
         [[ $# -ge 2 ]] || die "--ubuntu requires a value"
@@ -377,13 +625,15 @@ parse_args() {
         shift 2
         ;;
       --jobs)
-        [[ $# -ge 2 ]] || die "--jobs requires a value"
+        [[ $# -ge 2 && "$2" =~ ^[1-9][0-9]*$ ]] || die "--jobs requires a positive integer"
         JOBS="$2"
+        JOBS_EXPLICIT=1
         shift 2
         ;;
       --build-dir)
         [[ $# -ge 2 ]] || die "--build-dir requires a value"
         BUILD_DIR="$2"
+        BUILD_DIR_EXPLICIT=1
         shift 2
         ;;
       --clean)
@@ -393,6 +643,7 @@ parse_args() {
       --output)
         [[ $# -ge 2 ]] || die "--output requires a value"
         OUTPUT_BIN="$2"
+        OUTPUT_BIN_EXPLICIT=1
         shift 2
         ;;
       --http)
@@ -406,6 +657,7 @@ parse_args() {
         ;;
       --no-mimalloc)
         USE_MIMALLOC="OFF"
+        MIMALLOC_EXPLICIT=1
         shift
         ;;
       --skip-deps)
@@ -512,14 +764,6 @@ choose_platform() {
 
   if [[ "${TARGET_DISTRO}" != "${detected_id}" || "${TARGET_VERSION}" != "${detected_version}" ]]; then
     die "Selected ${TARGET_DISTRO} ${TARGET_VERSION}, but this host is ${detected_id} ${detected_version}. Run each target inside its matching WSL distribution or container."
-  fi
-
-  if [[ -z "${BUILD_DIR}" ]]; then
-    if [[ "${TARGET_DISTRO}" == "debian" ]]; then
-      BUILD_DIR="build-release-debian-${TARGET_VERSION}"
-    else
-      BUILD_DIR="build-release"
-    fi
   fi
 
   if [[ "${TARGET_DISTRO}:${TARGET_VERSION}" == "debian:11" || "${TARGET_DISTRO}:${TARGET_VERSION}" == "debian:12" ]]; then
@@ -662,6 +906,8 @@ install_common_deps() {
     gzip
     xz-utils
     cmake
+    ninja-build
+    ccache
     build-essential
     patch
     pkg-config
@@ -1198,8 +1444,10 @@ absolute_path() {
 
 safe_remove_build_dir() {
   local target="$1"
-  local project_root target_abs
+  local project_root cache_root target_abs
   project_root="$(pwd -P)"
+  mkdir -p "${BUILD_CACHE_ROOT}"
+  cache_root="$(cd "${BUILD_CACHE_ROOT}" && pwd -P)"
 
   if [[ -d "${target}" ]]; then
     target_abs="$(cd "${target}" && pwd -P)"
@@ -1210,7 +1458,7 @@ safe_remove_build_dir() {
   fi
 
   case "${target_abs}" in
-    "${project_root}"/*)
+    "${project_root}"/*|"${cache_root}"/*)
       sayf clean_build "${target_abs}"
       rm -rf -- "${target_abs}"
       ;;
@@ -1218,6 +1466,339 @@ safe_remove_build_dir() {
       die "$(printf "$(msg safe_delete_refused)" "${target_abs}")"
       ;;
   esac
+}
+
+detect_hardware() {
+  if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    IS_WSL=1
+  else
+    IS_WSL=0
+  fi
+
+  HOST_CPUS="$(nproc 2>/dev/null || printf '2')"
+  [[ "${HOST_CPUS}" =~ ^[1-9][0-9]*$ ]] || HOST_CPUS=2
+
+  if [[ -r /proc/meminfo ]]; then
+    MEM_TOTAL_MB="$(awk '/^MemTotal:/ { printf "%d", $2 / 1024; exit }' /proc/meminfo)"
+    MEM_AVAIL_MB="$(awk '/^MemAvailable:/ { printf "%d", $2 / 1024; exit }' /proc/meminfo)"
+  fi
+  [[ "${MEM_TOTAL_MB}" =~ ^[1-9][0-9]*$ ]] || MEM_TOTAL_MB=4096
+  [[ "${MEM_AVAIL_MB}" =~ ^[1-9][0-9]*$ ]] || MEM_AVAIL_MB="${MEM_TOTAL_MB}"
+}
+
+repo_cache_slug() {
+  local repo_abs base hash
+  repo_abs="$(cd "${SCRIPT_DIR}" && pwd -P)"
+  base="$(basename "${repo_abs}" | tr -d '\r\n' | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//; s/-$//')"
+  hash="$(printf '%s' "${repo_abs}" | sha256sum | cut -c1-8)"
+  printf '%s-%s' "${base}" "${hash}"
+}
+
+configure_ccache_env() {
+  CCACHE_ENABLED_ACTIVE=0
+  if [[ "${ENABLE_CCACHE}" != "ON" ]]; then
+    return
+  fi
+  if ! command -v ccache >/dev/null 2>&1; then
+    return
+  fi
+
+  CCACHE_ENABLED_ACTIVE=1
+  export CCACHE_DIR="${CCACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/ccache}"
+  export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-5G}"
+  export CCACHE_COMPRESS="${CCACHE_COMPRESS:-1}"
+  export CCACHE_COMPRESSLEVEL="${CCACHE_COMPRESSLEVEL:-3}"
+  export CCACHE_SLOPPINESS="${CCACHE_SLOPPINESS:-pch_defines,time_macros,include_file_mtime,include_file_ctime}"
+  # Keep CCACHE_BASEDIR unset: rewriting source paths into relative paths breaks
+  # unit tests that resolve repository data/ paths from __FILE__ when BUILD_DIR
+  # lives outside the repo (e.g. ~/.cache/tfs-build on WSL2 ext4).
+  unset CCACHE_BASEDIR
+  export CCACHE_NOHASHDIR="${CCACHE_NOHASHDIR:-1}"
+  mkdir -p "${CCACHE_DIR}"
+}
+
+resolve_build_plan() {
+  detect_hardware
+
+  PROFILE="$(normalize_profile "${PROFILE}")" || die "invalid profile: ${PROFILE}"
+  SANITIZER="$(normalize_sanitizer "${SANITIZER}")" || die "invalid sanitizer: ${SANITIZER}"
+
+  if [[ "${PROFILE}" == "auto" ]]; then
+    if (( MEM_TOTAL_MB < 6144 )) || [[ "${SANITIZER}" != "none" ]]; then
+      RESOLVED_PROFILE="low-memory"
+    elif [[ "${IS_WSL}" -eq 1 || "${RUN_TESTS}" -eq 1 || "${RUN_BENCHMARKS}" -eq 1 ]]; then
+      RESOLVED_PROFILE="balanced"
+    else
+      RESOLVED_PROFILE="full-performance"
+    fi
+  else
+    RESOLVED_PROFILE="${PROFILE}"
+  fi
+
+  local prof_lto="OFF" prof_unity="ON" prof_unity_batch=8 prof_low_mem_ld="OFF"
+  case "${RESOLVED_PROFILE}" in
+    low-memory)
+      prof_lto="OFF"
+      prof_unity="OFF"
+      prof_unity_batch=4
+      prof_low_mem_ld="ON"
+      NICE_LEVEL=15
+      IONICE_ARGS=(-c 3)
+      ;;
+    balanced)
+      prof_lto="OFF"
+      prof_unity="ON"
+      prof_unity_batch=8
+      if (( MEM_TOTAL_MB <= 8192 )); then
+        prof_low_mem_ld="ON"
+      else
+        prof_low_mem_ld="OFF"
+      fi
+      NICE_LEVEL=10
+      IONICE_ARGS=(-c 2 -n 7)
+      ;;
+    full-performance)
+      prof_lto="ON"
+      prof_unity="ON"
+      prof_unity_batch=8
+      if (( MEM_TOTAL_MB <= 6144 )); then
+        prof_low_mem_ld="ON"
+      else
+        prof_low_mem_ld="OFF"
+      fi
+      if [[ "${IS_WSL}" -eq 1 ]]; then
+        NICE_LEVEL=5
+        IONICE_ARGS=(-c 2 -n 5)
+      else
+        NICE_LEVEL=0
+        IONICE_ARGS=()
+      fi
+      ;;
+  esac
+
+  if [[ "${SANITIZER}" != "none" ]]; then
+    [[ -n "${BUILD_TYPE}" ]] || BUILD_TYPE="Debug"
+    prof_unity="OFF"
+    ENABLE_LTO="OFF"
+    USE_MIMALLOC="OFF"
+    if [[ "${SANITIZER}" == "asan" || "${SANITIZER}" == "asan-ubsan" ]]; then
+      export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1:halt_on_error=1}"
+    fi
+    if [[ "${SANITIZER}" == "ubsan" || "${SANITIZER}" == "asan-ubsan" ]]; then
+      export UBSAN_OPTIONS="${UBSAN_OPTIONS:-halt_on_error=1:print_stacktrace=1}"
+    fi
+  else
+    [[ -n "${BUILD_TYPE}" ]] || BUILD_TYPE="Release"
+  fi
+
+  [[ "${ENABLE_LTO}" != "auto" ]] || ENABLE_LTO="${prof_lto}"
+  [[ "${ENABLE_UNITY}" != "auto" ]] || ENABLE_UNITY="${prof_unity}"
+  [[ -n "${UNITY_BATCH}" ]] || UNITY_BATCH="${prof_unity_batch}"
+  if [[ "${ENABLE_PCH}" == "auto" ]]; then
+    if [[ "${ENABLE_UNITY}" == "ON" ]]; then
+      ENABLE_PCH="OFF"
+    else
+      ENABLE_PCH="ON"
+    fi
+  fi
+  [[ "${ENABLE_LOW_MEM_LINKER}" != "auto" ]] || ENABLE_LOW_MEM_LINKER="${prof_low_mem_ld}"
+
+  if [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
+    if [[ "${SANITIZER}" != "none" ]]; then
+      die "Debian 11/12 portable builds use the bundled Zig/vcpkg release-only toolchain, which does not support --sanitizer ${SANITIZER}. Run sanitizers on Ubuntu 22.04/24.04 or Debian 13."
+    fi
+    if [[ "${COMPILER_PREF}" != "auto" ]]; then
+      die "Debian 11/12 portable builds require the bundled Zig C++ toolchain and cannot be combined with --compiler ${COMPILER_PREF}."
+    fi
+    if [[ "${GENERATOR}" == "make" ]]; then
+      die "Debian 11/12 portable builds require Ninja and cannot be combined with --generator make."
+    fi
+    if [[ "${BUILD_TYPE}" == "Debug" ]]; then
+      die "Debian 11/12 portable vcpkg triplets (VCPKG_BUILD_TYPE=release) only provide release dependencies and do not support --build-type Debug. Use Release or RelWithDebInfo, or build Debug on Ubuntu 22.04/24.04 or Debian 13."
+    fi
+    USE_MIMALLOC="OFF"
+    ENABLE_NATIVE_OPT="OFF"
+  fi
+
+  if [[ "${DISABLE_STATS}" == "auto" ]]; then
+    if [[ "${RUN_TESTS}" -eq 1 ]]; then
+      DISABLE_STATS="0"
+    else
+      DISABLE_STATS="1"
+    fi
+  fi
+
+  # Adaptive CPU & RAM parallelism with explicit Windows/IDE headroom on WSL2
+  local cpu_reserve cpu_budget ram_reserve_mb mb_per_job effective_ram_mb ram_budget auto_jobs
+  case "${RESOLVED_PROFILE}" in
+    low-memory)
+      cpu_budget=$(( HOST_CPUS / 4 ))
+      (( cpu_budget >= 1 )) || cpu_budget=1
+      (( cpu_budget <= 2 )) || cpu_budget=2
+      ram_reserve_mb=$(( IS_WSL ? 2048 : 1024 ))
+      mb_per_job=1536
+      ;;
+    balanced)
+      if [[ "${IS_WSL}" -eq 1 ]]; then
+        cpu_reserve=$(( (HOST_CPUS * 40 + 99) / 100 ))
+        (( cpu_reserve >= 2 )) || cpu_reserve=2
+      else
+        cpu_reserve=$(( HOST_CPUS / 4 ))
+        (( cpu_reserve >= 1 )) || cpu_reserve=1
+      fi
+      cpu_budget=$(( HOST_CPUS - cpu_reserve ))
+      (( cpu_budget >= 1 )) || cpu_budget=1
+      ram_reserve_mb=$(( IS_WSL ? 2048 : 1536 ))
+      mb_per_job=900
+      ;;
+    full-performance)
+      if [[ "${IS_WSL}" -eq 1 ]]; then
+        cpu_reserve=$(( (HOST_CPUS * 25 + 99) / 100 ))
+        (( cpu_reserve >= 2 )) || cpu_reserve=2
+        cpu_budget=$(( HOST_CPUS - cpu_reserve ))
+      elif (( HOST_CPUS >= 4 )); then
+        cpu_budget=$(( HOST_CPUS - 1 ))
+      else
+        cpu_budget="${HOST_CPUS}"
+      fi
+      (( cpu_budget >= 1 )) || cpu_budget=1
+      ram_reserve_mb=$(( IS_WSL ? 1536 : 1024 ))
+      mb_per_job=1000
+      ;;
+  esac
+
+  if [[ "${ENABLE_UNITY}" == "ON" ]]; then
+    mb_per_job=$(( mb_per_job + 300 ))
+  fi
+  if [[ "${ENABLE_LTO}" == "ON" ]]; then
+    mb_per_job=$(( mb_per_job + 200 ))
+  fi
+  if [[ "${SANITIZER}" != "none" ]]; then
+    mb_per_job=$(( mb_per_job + 400 ))
+    (( cpu_budget <= 2 )) || cpu_budget=2
+  fi
+
+  if (( MEM_TOTAL_MB < 6144 && ram_reserve_mb > 1024 )); then
+    ram_reserve_mb=1024
+  fi
+
+  effective_ram_mb="${MEM_TOTAL_MB}"
+  if (( MEM_AVAIL_MB < (MEM_TOTAL_MB * 60 / 100) )); then
+    effective_ram_mb="${MEM_AVAIL_MB}"
+  fi
+  if (( effective_ram_mb > ram_reserve_mb )); then
+    ram_budget=$(( (effective_ram_mb - ram_reserve_mb) / mb_per_job ))
+  else
+    ram_budget=1
+  fi
+  (( ram_budget >= 1 )) || ram_budget=1
+
+  auto_jobs="${cpu_budget}"
+  if (( ram_budget < auto_jobs )); then
+    auto_jobs="${ram_budget}"
+  fi
+
+  if [[ "${JOBS_EXPLICIT}" -eq 0 || -z "${JOBS}" ]]; then
+    JOBS="${auto_jobs}"
+  fi
+
+  if [[ -z "${LINK_JOBS}" ]]; then
+    if [[ "${RESOLVED_PROFILE}" == "low-memory" || "${IS_WSL}" -eq 1 || "${SANITIZER}" != "none" ]] || (( MEM_TOTAL_MB < 12288 )); then
+      LINK_JOBS=1
+    else
+      LINK_JOBS=2
+    fi
+  fi
+
+  if [[ -z "${LTO_JOBS}" ]]; then
+    if [[ "${ENABLE_LTO}" == "ON" ]]; then
+      if [[ "${IS_WSL}" -eq 1 ]]; then
+        LTO_JOBS=$(( JOBS < 4 ? JOBS : 4 ))
+      else
+        LTO_JOBS=$(( JOBS < 8 ? JOBS : 8 ))
+      fi
+    else
+      LTO_JOBS=0
+    fi
+  fi
+
+  if [[ -z "${TEST_JOBS}" ]]; then
+    if [[ "${RESOLVED_PROFILE}" == "low-memory" || "${SANITIZER}" != "none" ]]; then
+      TEST_JOBS=1
+    elif [[ "${IS_WSL}" -eq 1 ]]; then
+      TEST_JOBS=$(( JOBS < 2 ? JOBS : 2 ))
+    else
+      TEST_JOBS=$(( JOBS < 4 ? JOBS : 4 ))
+    fi
+  fi
+
+  if [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
+    RESOLVED_GENERATOR="Ninja"
+  elif [[ "${GENERATOR}" == "ninja" ]]; then
+    command -v ninja >/dev/null 2>&1 || die "Ninja generator requested (--generator ninja), but ninja was not found"
+    RESOLVED_GENERATOR="Ninja"
+  elif [[ "${GENERATOR}" == "make" ]]; then
+    RESOLVED_GENERATOR="Unix Makefiles"
+  else
+    if command -v ninja >/dev/null 2>&1; then
+      RESOLVED_GENERATOR="Ninja"
+    else
+      RESOLVED_GENERATOR="Unix Makefiles"
+    fi
+  fi
+
+  if [[ "${BUILD_DIR_EXPLICIT}" -eq 0 && -z "${BUILD_DIR}" ]]; then
+    if [[ "${TARGET_DISTRO}" == "debian" ]]; then
+      BUILD_DIR="build-${BUILD_TYPE,,}-debian-${TARGET_VERSION}"
+    else
+      local suffix="${RESOLVED_PROFILE}"
+      if [[ "${SANITIZER}" != "none" ]]; then
+        suffix+="-${SANITIZER}"
+      fi
+      if [[ "${COMPILER_PREF}" != "auto" ]]; then
+        suffix+="-${COMPILER_PREF}"
+      fi
+      if [[ "${RUN_BENCHMARKS}" -eq 1 && "${RUN_TESTS}" -eq 0 ]]; then
+        suffix+="-bench"
+      fi
+      if [[ "${IS_WSL}" -eq 1 && "${SCRIPT_DIR}" == /mnt/* ]]; then
+        BUILD_DIR="${BUILD_CACHE_ROOT}/$(repo_cache_slug)-${suffix}"
+      else
+        BUILD_DIR="build-${suffix}"
+      fi
+    fi
+  fi
+
+  configure_ccache_env
+}
+
+print_build_plan() {
+  info "Build profile: ${RESOLVED_PROFILE} (requested=${PROFILE}, type=${BUILD_TYPE}, sanitizer=${SANITIZER})"
+  info "Host resources: cpus=${HOST_CPUS}, ram_total=${MEM_TOTAL_MB}MiB, ram_avail=${MEM_AVAIL_MB}MiB, wsl2=${IS_WSL}"
+  info "Adaptive parallelism: compile_jobs=${JOBS}, link_jobs=${LINK_JOBS}, lto_jobs=${LTO_JOBS}, ctest_jobs=${TEST_JOBS}, nice=${NICE_LEVEL}"
+  info "Pipeline: generator=${RESOLVED_GENERATOR}, ccache=${CCACHE_ENABLED_ACTIVE} (${CCACHE_DIR:-disabled}), lto=${ENABLE_LTO}, unity=${ENABLE_UNITY}(batch=${UNITY_BATCH}), pch=${ENABLE_PCH}, low_mem_ld=${ENABLE_LOW_MEM_LINKER}, mimalloc=${USE_MIMALLOC}, native_opt=${ENABLE_NATIVE_OPT}"
+  info "Build directory: ${BUILD_DIR}"
+}
+
+run_throttled() {
+  if [[ "${NO_THROTTLE}" -eq 1 || "${NICE_LEVEL}" -le 0 ]]; then
+    "$@"
+    return
+  fi
+
+  local -a prefix=()
+  if command -v ionice >/dev/null 2>&1 && ((${#IONICE_ARGS[@]} > 0)); then
+    prefix+=(ionice "${IONICE_ARGS[@]}")
+  fi
+  if command -v nice >/dev/null 2>&1; then
+    prefix+=(nice -n "${NICE_LEVEL}")
+  fi
+
+  if ((${#prefix[@]} > 0)); then
+    "${prefix[@]}" "$@"
+  else
+    "$@"
+  fi
 }
 
 cmake_prefix_path() {
@@ -1229,23 +1810,87 @@ cmake_prefix_path() {
 
 select_cxx_compiler() {
   TFS_CXX_COMPILER=""
+  TFS_C_COMPILER=""
+
+  if [[ "${COMPILER_PREF}" == "clang" ]]; then
+    TFS_CXX_COMPILER="$(command -v clang++ || true)"
+    TFS_C_COMPILER="$(command -v clang || true)"
+    [[ -n "${TFS_CXX_COMPILER}" ]] || die "clang++ not found. Install clang or pass --compiler gcc."
+    info "$(printf "$(msg compiler_selected)" "${TARGET_DISTRO} ${TARGET_VERSION}" "${TFS_CXX_COMPILER}")"
+    return
+  fi
 
   if [[ "${TARGET_DISTRO}:${TARGET_VERSION}" != "ubuntu:22.04" ]]; then
+    if [[ "${COMPILER_PREF}" == "gcc" ]]; then
+      TFS_CXX_COMPILER="$(command -v g++ || true)"
+      TFS_C_COMPILER="$(command -v gcc || true)"
+    fi
     return
   fi
 
   TFS_CXX_COMPILER="$(command -v g++-12 || true)"
+  TFS_C_COMPILER="$(command -v gcc-12 || true)"
   [[ -n "${TFS_CXX_COMPILER}" ]] || die "$(printf "$(msg compiler_missing)" "g++-12")"
 
   info "$(printf "$(msg compiler_selected)" "Ubuntu 22.04" "${TFS_CXX_COMPILER}")"
 }
 
+compute_build_signature() {
+  {
+    printf '%s\n' "${SCRIPT_DIR}"
+    printf '%s\n' "$@"
+    if [[ "${RUN_TESTS}" -eq 1 ]]; then
+      printf 'TESTS:\n'
+      find "${SCRIPT_DIR}/src/tests" -maxdepth 1 -type f -name 'test_*.cpp' -printf '%f\n' 2>/dev/null | LC_ALL=C sort
+    fi
+    if [[ "${RUN_BENCHMARKS}" -eq 1 ]]; then
+      printf 'BENCHS:\n'
+      find "${SCRIPT_DIR}/src/benchs" -maxdepth 1 -type f -name 'bench_*.cpp' -printf '%f\n' 2>/dev/null | LC_ALL=C sort
+    fi
+  } | sha256sum | awk '{print $1}'
+}
+
+run_cmake_configure() {
+  local -a args=("$@")
+  local sig_file="${BUILD_DIR}/.tfs-build-signature"
+  local current_sig build_file
+
+  current_sig="$(compute_build_signature "${args[@]}")"
+  if [[ "${RESOLVED_GENERATOR}" == "Ninja" ]]; then
+    build_file="${BUILD_DIR}/build.ninja"
+  else
+    build_file="${BUILD_DIR}/Makefile"
+  fi
+
+  if [[ "${FORCE_RECONFIGURE}" -eq 0 && -f "${BUILD_DIR}/CMakeCache.txt" && -f "${build_file}" && -f "${sig_file}" ]]; then
+    if [[ "$(cat "${sig_file}")" == "${current_sig}" ]]; then
+      info "Incremental build: CMake configuration unchanged, skipping reconfigure."
+      return
+    fi
+  fi
+
+  mkdir -p "${BUILD_DIR}"
+  if ! run_throttled cmake -Wno-dev "${args[@]}"; then
+    warn "$(msg configure_retry)"
+    safe_remove_build_dir "${BUILD_DIR}"
+    mkdir -p "${BUILD_DIR}"
+    run_throttled cmake -Wno-dev "${args[@]}"
+  fi
+  printf '%s\n' "${current_sig}" > "${sig_file}"
+}
+
 configure_portable_tfs() {
+  command -v ninja >/dev/null 2>&1 || die "Debian 11/12 portable builds require Ninja (ninja-build)."
+
+  local build_testing="OFF" build_bench="OFF"
+  [[ "${RUN_TESTS}" -eq 0 ]] || build_testing="ON"
+  [[ "${RUN_BENCHMARKS}" -eq 0 ]] || build_bench="ON"
+
   local -a args=(
     -S .
     -B "${BUILD_DIR}"
     -G Ninja
-    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
     -DCMAKE_CXX_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cxx"
     -DCMAKE_AR="${SCRIPT_DIR}/tools/toolchains/zig-ar"
     -DCMAKE_RANLIB="${SCRIPT_DIR}/tools/toolchains/zig-ranlib"
@@ -1255,37 +1900,59 @@ configure_portable_tfs() {
     -DVCPKG_OVERLAY_TRIPLETS="${SCRIPT_DIR}/tools/triplets"
     -DVCPKG_TARGET_TRIPLET="${TFS_VCPKG_TRIPLET}"
     -DHTTP="${HTTP}"
-    -DDISABLE_STATS=1
+    -DDISABLE_STATS="${DISABLE_STATS}"
     -DENABLE_NATIVE_OPTIMIZATIONS=OFF
     -DENABLE_SLOW_TASK_DETECTION=OFF
     -DUSE_MIMALLOC=OFF
+    -DENABLE_ASAN=OFF
+    -DENABLE_UBSAN=OFF
+    -DENABLE_TSAN=OFF
+    -DENABLE_CCACHE="${ENABLE_CCACHE}"
+    -DENABLE_LTO="${ENABLE_LTO}"
+    -DENABLE_TEST_LTO=OFF
+    -DENABLE_BENCHMARK_LTO=OFF
+    -DENABLE_UNITY_BUILD="${ENABLE_UNITY}"
+    -DUNITY_BUILD_BATCH_SIZE="${UNITY_BATCH}"
+    -DENABLE_PCH="${ENABLE_PCH}"
+    -DENABLE_LOW_MEMORY_LINKER="${ENABLE_LOW_MEM_LINKER}"
+    -DTFS_COMPILE_JOBS="${JOBS}"
+    -DTFS_LINK_JOBS="${LINK_JOBS}"
+    -DTFS_LTO_JOBS="${LTO_JOBS}"
+    -DBUILD_TESTING="${build_testing}"
+    -DBUILD_BENCHMARKING="${build_bench}"
   )
 
   TFS_CXX_COMPILER="${SCRIPT_DIR}/tools/toolchains/zig-cxx"
+  RESOLVED_GENERATOR="Ninja"
   reset_build_dir_if_compiler_changed
-
-  if ! cmake -Wno-dev "${args[@]}"; then
-    warn "$(msg configure_retry)"
-    safe_remove_build_dir "${BUILD_DIR}"
-    cmake -Wno-dev "${args[@]}"
-  fi
+  run_cmake_configure "${args[@]}"
 }
 
 reset_build_dir_if_compiler_changed() {
   local cache_file="${BUILD_DIR}/CMakeCache.txt"
-  local cached_compiler=""
+  local cached_compiler="" cached_generator=""
 
-  [[ -n "${TFS_CXX_COMPILER}" && -f "${cache_file}" ]] || return 0
+  [[ -f "${cache_file}" ]] || return 0
 
-  cached_compiler="$(awk -F= '$1 ~ /^CMAKE_CXX_COMPILER:/ { print $2; exit }' "${cache_file}")"
-  if [[ -n "${cached_compiler}" && "${cached_compiler}" != "${TFS_CXX_COMPILER}" ]]; then
-    safe_remove_build_dir "${BUILD_DIR}"
+  if [[ -n "${TFS_CXX_COMPILER}" ]]; then
+    cached_compiler="$(awk -F= '$1 ~ /^CMAKE_CXX_COMPILER:/ { print $2; exit }' "${cache_file}")"
+    if [[ -n "${cached_compiler}" && "${cached_compiler}" != "${TFS_CXX_COMPILER}" ]]; then
+      safe_remove_build_dir "${BUILD_DIR}"
+      return 0
+    fi
+  fi
+
+  if [[ -n "${RESOLVED_GENERATOR}" ]]; then
+    cached_generator="$(awk -F= '$1 ~ /^CMAKE_GENERATOR:/ { print $2; exit }' "${cache_file}")"
+    if [[ -n "${cached_generator}" && "${cached_generator}" != "${RESOLVED_GENERATOR}" ]]; then
+      safe_remove_build_dir "${BUILD_DIR}"
+    fi
   fi
 }
 
 configure_tfs() {
   local prefix_path
-  local -a compiler_args=()
+  local -a compiler_args=() sanitizer_args=()
 
   if [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
     configure_portable_tfs
@@ -1300,27 +1967,53 @@ configure_tfs() {
   if [[ -n "${TFS_CXX_COMPILER}" ]]; then
     compiler_args+=("-DCMAKE_CXX_COMPILER=${TFS_CXX_COMPILER}")
   fi
+  if [[ -n "${TFS_C_COMPILER}" ]]; then
+    compiler_args+=("-DCMAKE_C_COMPILER=${TFS_C_COMPILER}")
+  fi
+
+  case "${SANITIZER}" in
+    asan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=OFF -DENABLE_TSAN=OFF) ;;
+    ubsan) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=ON -DENABLE_TSAN=OFF) ;;
+    asan-ubsan) sanitizer_args=(-DENABLE_ASAN=ON -DENABLE_UBSAN=ON -DENABLE_TSAN=OFF) ;;
+    *) sanitizer_args=(-DENABLE_ASAN=OFF -DENABLE_UBSAN=OFF -DENABLE_TSAN=OFF) ;;
+  esac
+
+  local build_testing="OFF" build_bench="OFF"
+  [[ "${RUN_TESTS}" -eq 0 ]] || build_testing="ON"
+  [[ "${RUN_BENCHMARKS}" -eq 0 ]] || build_bench="ON"
 
   local -a args=(
     -S .
     -B "${BUILD_DIR}"
-    -DCMAKE_BUILD_TYPE=Release
+    -G "${RESOLVED_GENERATOR}"
+    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
     "${compiler_args[@]}"
+    "${sanitizer_args[@]}"
     -DHTTP="${HTTP}"
-    -DDISABLE_STATS=1
+    -DDISABLE_STATS="${DISABLE_STATS}"
     -DENABLE_SLOW_TASK_DETECTION=OFF
+    -DENABLE_NATIVE_OPTIMIZATIONS="${ENABLE_NATIVE_OPT}"
     -DUSE_MIMALLOC="${USE_MIMALLOC}"
+    -DENABLE_CCACHE="${ENABLE_CCACHE}"
+    -DENABLE_LTO="${ENABLE_LTO}"
+    -DENABLE_TEST_LTO=OFF
+    -DENABLE_BENCHMARK_LTO=OFF
+    -DENABLE_UNITY_BUILD="${ENABLE_UNITY}"
+    -DUNITY_BUILD_BATCH_SIZE="${UNITY_BATCH}"
+    -DENABLE_PCH="${ENABLE_PCH}"
+    -DENABLE_LOW_MEMORY_LINKER="${ENABLE_LOW_MEM_LINKER}"
+    -DTFS_COMPILE_JOBS="${JOBS}"
+    -DTFS_LINK_JOBS="${LINK_JOBS}"
+    -DTFS_LTO_JOBS="${LTO_JOBS}"
+    -DBUILD_TESTING="${build_testing}"
+    -DBUILD_BENCHMARKING="${build_bench}"
     -DLUA_INCLUDE_DIR="${LUA_PREFIX}/include"
     -DLUA_LIBRARY="${LUA_PREFIX}/lib/liblua.a"
     -DLUA_LIBRARIES="${LUA_PREFIX}/lib/liblua.a;m;dl"
     -DCMAKE_PREFIX_PATH="${prefix_path}"
   )
 
-  if ! cmake -Wno-dev "${args[@]}"; then
-    warn "$(msg configure_retry)"
-    safe_remove_build_dir "${BUILD_DIR}"
-    cmake -Wno-dev "${args[@]}"
-  fi
+  run_cmake_configure "${args[@]}"
 }
 
 verify_binary_links() {
@@ -1331,6 +2024,49 @@ verify_binary_links() {
       die "$(msg ldd_missing)"
     fi
     ok "$(msg ldd_ok)"
+  fi
+}
+
+should_install_tfs_binary() {
+  if [[ "${RUN_BENCHMARKS}" -eq 1 && "${OUTPUT_BIN_EXPLICIT}" -eq 0 ]]; then
+    return 1
+  fi
+  if ((${#TARGETS[@]} == 0)); then
+    return 0
+  fi
+  local t
+  for t in "${TARGETS[@]}"; do
+    if [[ "${t}" == "tfs" || "${t}" == "all" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_post_build_suites() {
+  if [[ "${RUN_TESTS}" -eq 1 ]]; then
+    local -a ctest_args=(--output-on-failure --no-tests=error --timeout 180 -j "${TEST_JOBS}")
+    if [[ -n "${TEST_FILTER}" ]]; then
+      ctest_args+=(-R "${TEST_FILTER}")
+    fi
+
+    info "Running CTest suite (jobs=${TEST_JOBS}, db_tests=${RUN_DB_TESTS})..."
+    if [[ "${RUN_DB_TESTS}" -eq 1 ]]; then
+      run_throttled bash "${SCRIPT_DIR}/tools/test-disposable-mariadb.sh" "${BUILD_DIR}" "${ctest_args[@]}"
+    else
+      run_throttled ctest --test-dir "${BUILD_DIR}" "${ctest_args[@]}"
+    fi
+  fi
+
+  if [[ "${RUN_BENCHMARKS}" -eq 1 ]]; then
+    local -a bench_args=(--test-dir "${BUILD_DIR}" --output-on-failure --no-tests=error --verbose -j 1)
+    if [[ -n "${TEST_FILTER}" ]]; then
+      bench_args+=(-R "${TEST_FILTER}")
+    else
+      bench_args+=(-R "^bench_")
+    fi
+    info "Running Google Benchmarks sequentially (-j 1)..."
+    run_throttled ctest "${bench_args[@]}"
   fi
 }
 
@@ -1349,43 +2085,64 @@ build_tfs() {
   fi
   OUTPUT_BIN="$(absolute_path "${OUTPUT_BIN}")"
 
-  if [[ "${CLEAN_BUILD}" -eq 1 ]]; then
+  if [[ "${CLEAN_BUILD}" -eq 1 && -d "${BUILD_DIR}" ]]; then
     safe_remove_build_dir "${BUILD_DIR}"
   fi
 
+  print_build_plan
   configure_tfs
-  cmake --build "${BUILD_DIR}" --parallel "${JOBS}"
 
-  if [[ ! -f "${BUILD_DIR}/tfs" ]]; then
-    die "Build finished, but ${BUILD_DIR}/tfs was not found"
+  local -a build_args=(--build "${BUILD_DIR}" --parallel "${JOBS}")
+  if ((${#TARGETS[@]} > 0)); then
+    build_args+=(--target "${TARGETS[@]}")
   fi
 
-  local built_binary
-  built_binary="$(absolute_path "${BUILD_DIR}/tfs")"
+  run_throttled cmake "${build_args[@]}"
 
-  mkdir -p "$(dirname "${OUTPUT_BIN}")"
-  if [[ "${OUTPUT_BIN}" != "${built_binary}" ]]; then
-    rm -f "${OUTPUT_BIN}"
-    cp -f "${built_binary}" "${OUTPUT_BIN}"
+  if [[ "${CCACHE_ENABLED_ACTIVE}" -eq 1 ]]; then
+    info "ccache summary:"
+    ccache --show-stats --verbose=0 2>/dev/null || ccache -s | grep -E 'Cacheable|Hits|Misses|Cache size|Direct|Preprocessed' || true
   fi
-  chmod +x "${OUTPUT_BIN}"
 
-  verify_binary_links "${OUTPUT_BIN}"
-  say build_done
-  sayf binary_path "${OUTPUT_BIN}"
-  sayf run_hint "$(dirname "${OUTPUT_BIN}")" "$(basename "${OUTPUT_BIN}")"
+  if should_install_tfs_binary; then
+    if [[ ! -f "${BUILD_DIR}/tfs" ]]; then
+      die "Build finished, but ${BUILD_DIR}/tfs was not found"
+    fi
+
+    local built_binary
+    built_binary="$(absolute_path "${BUILD_DIR}/tfs")"
+
+    mkdir -p "$(dirname "${OUTPUT_BIN}")"
+    if [[ "${OUTPUT_BIN}" != "${built_binary}" ]]; then
+      rm -f "${OUTPUT_BIN}"
+      cp -f "${built_binary}" "${OUTPUT_BIN}"
+    fi
+    chmod +x "${OUTPUT_BIN}"
+
+    verify_binary_links "${OUTPUT_BIN}"
+    say build_done
+    sayf binary_path "${OUTPUT_BIN}"
+    sayf run_hint "$(dirname "${OUTPUT_BIN}")" "$(basename "${OUTPUT_BIN}")"
+  else
+    ok "Targeted build completed: ${TARGETS[*]}"
+  fi
+
+  run_post_build_suites
 }
 
 main() {
   parse_args "$@"
   choose_language
 
-  if [[ -z "${JOBS}" ]]; then
-    JOBS="$(nproc 2>/dev/null || printf '2')"
-  fi
-
   banner
   choose_platform
+  resolve_build_plan
+
+  if [[ "${PRINT_PLAN}" -eq 1 ]]; then
+    print_build_plan
+    exit 0
+  fi
+
   preflight
   prepare_repo
 
@@ -1397,8 +2154,11 @@ main() {
   elif [[ "${PORTABLE_DEBIAN}" -eq 1 ]]; then
     install_portable_debian_bootstrap
     ensure_portable_debian_toolchain
+    resolve_build_plan
   else
     install_common_deps
+    # Re-evaluate Ninja/ccache availability after installing apt packages
+    resolve_build_plan
     ensure_lua_55
     ensure_simdutf
     ensure_mio

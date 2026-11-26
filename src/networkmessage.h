@@ -6,6 +6,7 @@
 
 #include "const.h"
 
+#include <limits>
 #include <memory>
 
 class Item;
@@ -46,14 +47,65 @@ public:
 	{
 		MAX_PROTOCOL_BODY_LENGTH = MAX_BODY_LENGTH - 10
 	};
+	// Maximum XTEA-aligned encrypted region (2-byte inner length + payload + padding)
+	// that fits in buffer[HEADER_LENGTH + CHECKSUM_LENGTH .. NETWORKMESSAGE_MAXSIZE).
+	static constexpr MsgSize_t MAX_ENCRYPTED_LENGTH = static_cast<MsgSize_t>(
+	    ((static_cast<size_t>(NETWORKMESSAGE_MAXSIZE) - static_cast<size_t>(HEADER_LENGTH) -
+	      static_cast<size_t>(CHECKSUM_LENGTH)) /
+	     static_cast<size_t>(XTEA_MULTIPLE)) *
+	    static_cast<size_t>(XTEA_MULTIPLE));
+	static constexpr MsgSize_t MAX_ENCRYPTED_PAYLOAD_LENGTH =
+	    static_cast<MsgSize_t>(MAX_ENCRYPTED_LENGTH - static_cast<MsgSize_t>(HEADER_LENGTH));
+	// Classic CipSoft 8.60 clients use a 16 KiB receive buffer (16384 bytes wire
+	// total: 2-byte outer length + 4-byte checksum + 8-byte-aligned XTEA region).
+	static constexpr MsgSize_t CIPSOFT_MAX_WIRE_LENGTH = 16384;
+	static constexpr MsgSize_t CIPSOFT_MAX_ENCRYPTED_LENGTH = static_cast<MsgSize_t>(
+	    ((static_cast<size_t>(CIPSOFT_MAX_WIRE_LENGTH) - static_cast<size_t>(HEADER_LENGTH) -
+	      static_cast<size_t>(CHECKSUM_LENGTH)) /
+	     static_cast<size_t>(XTEA_MULTIPLE)) *
+	    static_cast<size_t>(XTEA_MULTIPLE));
+	static constexpr MsgSize_t CIPSOFT_MAX_PAYLOAD_LENGTH =
+	    static_cast<MsgSize_t>(CIPSOFT_MAX_ENCRYPTED_LENGTH - static_cast<MsgSize_t>(HEADER_LENGTH));
+	static constexpr MsgSize_t CIPSOFT_MAX_COALESCED_BODY_LENGTH = 16352;
 	static constexpr size_t MAX_STRING_LENGTH = 8192;
 
-	NetworkMessage() = default;
+	static_assert(static_cast<size_t>(INITIAL_BUFFER_POSITION) ==
+	              static_cast<size_t>(HEADER_LENGTH) + static_cast<size_t>(CHECKSUM_LENGTH) +
+	                  static_cast<size_t>(HEADER_LENGTH));
+	static_assert((static_cast<size_t>(MAX_ENCRYPTED_LENGTH) % static_cast<size_t>(XTEA_MULTIPLE)) == 0);
+	static_assert(static_cast<size_t>(HEADER_LENGTH) + static_cast<size_t>(CHECKSUM_LENGTH) +
+	                  static_cast<size_t>(MAX_ENCRYPTED_LENGTH) <=
+	              static_cast<size_t>(NETWORKMESSAGE_MAXSIZE));
+	static_assert(static_cast<size_t>(CHECKSUM_LENGTH) + static_cast<size_t>(MAX_ENCRYPTED_LENGTH) <=
+	              std::numeric_limits<MsgSize_t>::max());
+	static_assert(static_cast<size_t>(MAX_PROTOCOL_BODY_LENGTH) <= static_cast<size_t>(MAX_ENCRYPTED_PAYLOAD_LENGTH));
+	static_assert((static_cast<size_t>(CIPSOFT_MAX_ENCRYPTED_LENGTH) % static_cast<size_t>(XTEA_MULTIPLE)) == 0);
+	static_assert(static_cast<size_t>(HEADER_LENGTH) + static_cast<size_t>(CHECKSUM_LENGTH) +
+	                  static_cast<size_t>(CIPSOFT_MAX_ENCRYPTED_LENGTH) <=
+	              static_cast<size_t>(CIPSOFT_MAX_WIRE_LENGTH));
+	static_assert(static_cast<size_t>(CIPSOFT_MAX_COALESCED_BODY_LENGTH) <=
+	              static_cast<size_t>(CIPSOFT_MAX_PAYLOAD_LENGTH));
+	static_assert(static_cast<size_t>(CIPSOFT_MAX_PAYLOAD_LENGTH) <=
+	              static_cast<size_t>(MAX_ENCRYPTED_PAYLOAD_LENGTH));
+	static_assert(static_cast<size_t>(INITIAL_BUFFER_POSITION) + static_cast<size_t>(MAX_PROTOCOL_BODY_LENGTH) +
+	                  (static_cast<size_t>(XTEA_MULTIPLE) - 1) <=
+	              static_cast<size_t>(NETWORKMESSAGE_MAXSIZE));
+
+	struct ActiveBytesCopyTag
+	{};
+
+	NetworkMessage() : buffer{} {}
+	NetworkMessage(const NetworkMessage&) = default;
+	NetworkMessage& operator=(const NetworkMessage&) = default;
+	NetworkMessage(NetworkMessage&&) noexcept = default;
+	NetworkMessage& operator=(NetworkMessage&&) noexcept = default;
+	NetworkMessage(const NetworkMessage& other, ActiveBytesCopyTag) noexcept;
 
 	void reset()
 	{
 		info.length = 0;
 		info.position = INITIAL_BUFFER_POSITION;
+		info.basePosition = INITIAL_BUFFER_POSITION;
 		info.overrun = false;
 	}
 
@@ -99,7 +151,15 @@ public:
 	Position getPosition();
 
 	// skips count unknown/unused bytes in an incoming message
-	void skipBytes(int16_t count) { info.position += count; }
+	void skipBytes(int16_t count)
+	{
+		const int32_t next = static_cast<int32_t>(info.position) + static_cast<int32_t>(count);
+		if (next < 0 || next > static_cast<int32_t>(NETWORKMESSAGE_MAXSIZE)) {
+			info.overrun = true;
+			return;
+		}
+		info.position = static_cast<MsgSize_t>(next);
+	}
 
 	// simply write functions for outgoing message
 	void addByte(uint8_t value)
@@ -125,7 +185,7 @@ public:
 	}
 
 	void addBytes(const char* bytes, size_t size);
-	void addPaddingBytes(size_t n);
+	[[nodiscard]] bool addPaddingBytes(size_t n);
 
 	void addString(std::string_view value);
 
@@ -147,9 +207,27 @@ public:
 
 	void setLength(MsgSize_t newLength) { info.length = newLength; }
 
+	void setPayloadLength(MsgSize_t payloadLength) noexcept
+	{
+		info.basePosition = info.position;
+		info.length = payloadLength;
+	}
+
 	MsgSize_t getBufferPosition() const { return info.position; }
 
-	MsgSize_t getRemainingBufferLength() const { return info.length - info.position; }
+	MsgSize_t getRemainingBufferLength() const
+	{
+		return info.position <= info.length ? static_cast<MsgSize_t>(info.length - info.position) : 0;
+	}
+
+	[[nodiscard]] MsgSize_t getReadableBytes() const noexcept
+	{
+		const size_t end = std::min<size_t>(
+		    buffer.size(), static_cast<size_t>(info.basePosition) + static_cast<size_t>(info.length));
+		return static_cast<size_t>(info.position) <= end
+		           ? static_cast<MsgSize_t>(end - static_cast<size_t>(info.position))
+		           : 0;
+	}
 
 	bool setBufferPosition(MsgSize_t pos)
 	{
@@ -169,7 +247,9 @@ public:
 
 	uint8_t* getBodyBuffer()
 	{
-		info.position = 2;
+		info.position = HEADER_LENGTH;
+		info.basePosition = 0;
+		info.overrun = false;
 		return &buffer[HEADER_LENGTH];
 	}
 
@@ -180,18 +260,26 @@ protected:
 	{
 		MsgSize_t length = 0;
 		MsgSize_t position = INITIAL_BUFFER_POSITION;
+		MsgSize_t basePosition = INITIAL_BUFFER_POSITION;
 		bool overrun = false;
 	};
 
 	NetworkMessageInfo info = {};
-	std::array<uint8_t, NETWORKMESSAGE_MAXSIZE> buffer = {};
+	std::array<uint8_t, NETWORKMESSAGE_MAXSIZE> buffer;
 
 private:
 	bool canAdd(size_t size) const { return (size + info.position) < MAX_BODY_LENGTH; }
 
 	bool canRead(int32_t size)
 	{
-		if ((info.position + size) > (info.length + 8) || size >= (NETWORKMESSAGE_MAXSIZE - info.position)) {
+		if (size < 0) {
+			info.overrun = true;
+			return false;
+		}
+		const size_t end = std::min<size_t>(
+		    buffer.size(), static_cast<size_t>(info.basePosition) + static_cast<size_t>(info.length));
+		if (static_cast<size_t>(info.position) > end ||
+		    static_cast<size_t>(size) > end - static_cast<size_t>(info.position)) {
 			info.overrun = true;
 			return false;
 		}
@@ -203,6 +291,7 @@ namespace tfs::net {
 
 std::shared_ptr<NetworkMessage> make_network_message();
 std::shared_ptr<NetworkMessage> make_network_message(const NetworkMessage& other);
+std::shared_ptr<NetworkMessage> clone_incoming_packet(const NetworkMessage& other);
 
 } // namespace tfs::net
 
