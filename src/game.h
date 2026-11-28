@@ -320,6 +320,8 @@ public:
 	 * \returns true if the removal was successful
 	 */
 	bool removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags = 0);
+	bool removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags, HouseItemMoves* moves,
+	                 uint64_t* bankChange);
 
 	/**
 	 * Add item(s) with monetary value
@@ -336,7 +338,7 @@ public:
 	 * \param newCount is the new count value, use default value (-1) to not change it
 	 * \returns true if the transformation was successful
 	 */
-	Item* transformItem(Item* item, uint16_t newId, int32_t newCount = -1);
+	Item* transformItem(Item* item, uint16_t newId, int32_t newCount = -1, bool notify = true);
 
 	/**
 	 * Re-sends an item after one of its runtime attributes changes without a
@@ -510,7 +512,8 @@ public:
 
 	GameState_t getGameState() const;
 	void setGameState(GameState_t newState);
-	void saveGameState(bool crash = false, std::string_view reason = "manual");
+	void saveGameState(bool crash = false, std::string_view reason = "manual", bool notifyGlobalEvents = false);
+	bool isSavingGameState() const noexcept { return saveGameStateInProgress || saveGlobalEventsInProgress; }
 
 	// Events
 	void checkCreatureWalk(uint32_t creatureId, uint32_t walkGeneration);
@@ -818,6 +821,9 @@ private:
 	LightState_t lastLightState = LIGHT_STATE_NIGHT;
 
 	std::atomic<GameState_t> gameState{GAME_STATE_NORMAL};
+	void saveGlobalEvents();
+	bool saveGameStateInProgress = false;
+	bool saveGlobalEventsInProgress = false;
 	WorldType_t worldType = WORLD_TYPE_PVP;
 
 	// Atomic counters for thread-safe reads from protocol/status threads

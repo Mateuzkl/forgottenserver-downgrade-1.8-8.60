@@ -164,6 +164,12 @@ bool Mailbox::sendItem(Item* item) const
 			return false;
 		}
 
+		// Never mutate/save an offline copy while a live async flush or recovery quarantine is active for this GUID.
+		const uint32_t targetGuid = tmpPlayer.getGUID();
+		if (g_saveManager.hasPendingPlayerSave(targetGuid) || g_saveManager.hasFailedRecovery(targetGuid)) {
+			return false;
+		}
+
 		Inbox* inbox = getDestinationInbox(tmpPlayer, town);
 		if (!inbox) {
 			return false;

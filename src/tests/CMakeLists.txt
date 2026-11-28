@@ -19,5 +19,5 @@ foreach(test_src ${tests_SRC})
 endforeach()
 
 # Missing DB credentials are a real CTest skip, never an apparent pass.
-set_tests_properties(test_market_delivery_db test_account_manager_db PROPERTIES
+set_tests_properties(test_market_delivery_db test_account_manager_db test_save_system_db PROPERTIES
     SKIP_RETURN_CODE 77 RESOURCE_LOCK disposable_database)

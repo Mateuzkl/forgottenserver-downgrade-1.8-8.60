@@ -60,21 +60,35 @@ function talkaction.onSay(player, words, param)
         return false
     end
 
+    local paidInventory = 0
+    local paidBank = 0
     if inventoryMoney >= price then
         if not player:removeMoney(price) then
             player:sendCancelMessage("Error removing money from inventory.")
             return false
         end
+        paidInventory = price
     else
-        if not player:removeMoney(inventoryMoney) then
+        if inventoryMoney > 0 and not player:removeMoney(inventoryMoney) then
             player:sendCancelMessage("Error removing money from inventory.")
             return false
         end
-        local remaining = price - inventoryMoney
-        player:setBankBalance(bankBalance - remaining)
+        paidInventory = inventoryMoney
+        paidBank = price - inventoryMoney
+        player:setBankBalance(bankBalance - paidBank)
     end
 
-    house:setOwnerGuid(player:getGuid())
+    if not house:setOwnerGuid(player:getGuid()) then
+        if paidBank > 0 then
+            player:setBankBalance(player:getBankBalance() + paidBank)
+        end
+        if paidInventory > 0 then
+            player:addMoney(paidInventory)
+        end
+        player:sendCancelMessage("Could not complete the house purchase. Your gold has been returned.")
+        return false
+    end
+    player:saveAsync()
     player:sendTextMessage(MESSAGE_INFO_DESCR, "You have successfully bought this house for " .. price .. " gold. Be sure to have the money for rent in the bank.")
     return false
 end

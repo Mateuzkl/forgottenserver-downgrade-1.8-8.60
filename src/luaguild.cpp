@@ -183,8 +183,20 @@ int luaGuildSetBankBalance(lua_State* L)
 	// guild:setBankBalance(balance)
 	if (const auto& guild = getSharedPtr<Guild>(L, 1)) {
 		uint64_t balance = getInteger<uint64_t>(L, 2);
-		guild->setBankBalance(balance);
-		pushBoolean(L, true);
+		pushBoolean(L, guild->setBankBalance(balance));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaGuildIsBankBalanceBlocked(lua_State* L)
+{
+	// guild:isBankBalanceBlocked() or Guild.isBankBalanceBlocked(id)
+	if (lua_type(L, 1) == LUA_TNUMBER) {
+		pushBoolean(L, IOGuild::isBankBalanceBlocked(getInteger<uint32_t>(L, 1)));
+	} else if (const auto& guild = getSharedPtr<const Guild>(L, 1)) {
+		pushBoolean(L, IOGuild::isBankBalanceBlocked(guild->getId()));
 	} else {
 		lua_pushnil(L);
 	}
@@ -249,6 +261,7 @@ void LuaScriptInterface::registerGuild()
 
 	registerMethod("Guild", "getBankBalance", luaGuildGetBankBalance);
 	registerMethod("Guild", "setBankBalance", luaGuildSetBankBalance);
+	registerMethod("Guild", "isBankBalanceBlocked", luaGuildIsBankBalanceBlocked);
 	registerMethod("Guild", "getOwnerGUID", luaGuildGetOwnerGUID);
 	registerMethod("Guild", "getHouseId", luaGuildGetHouseId);
 }

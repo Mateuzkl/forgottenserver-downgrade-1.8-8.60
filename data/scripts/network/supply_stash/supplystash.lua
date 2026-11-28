@@ -608,6 +608,7 @@ local function stowAll(player)
 		end
 	end
 
+	player:saveAsync()
 	player:sendTextMessage(MESSAGE_STATUS_SMALL, "Supplies stowed.")
 	sendStash(player)
 	return true
@@ -714,6 +715,7 @@ local function withdraw(player, itemId, amount, tier)
 	end
 
 	cleanupEmptyRows(player)
+	player:saveAsync()
 	sendStash(player)
 	return true
 end

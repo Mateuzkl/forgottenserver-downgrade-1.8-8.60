@@ -17,6 +17,7 @@ public:
 	static bool saveHouseInfo();
 
 	static bool saveHouse(const House* house);
+	static bool saveHouseInTransaction(const House* house, const std::unordered_set<const BedItem*>& releasedBeds);
 
 	// Exact IDs always match. Different IDs only match when item metadata
 	// proves that they are transform states of the same static fixture.
@@ -24,8 +25,10 @@ public:
 
 private:
 	friend struct IOMapSerializeTestAccess;
-	static void saveItem(PropWriteStream& stream, const Item* item);
-	static void saveTile(PropWriteStream& stream, const Tile* tile);
+	static void saveItem(PropWriteStream& stream, const Item* item,
+	                     const std::unordered_set<const BedItem*>* releasedBeds = nullptr);
+	static void saveTile(PropWriteStream& stream, const Tile* tile,
+	                     const std::unordered_set<const BedItem*>* releasedBeds = nullptr);
 
 	static bool loadContainer(PropStream& propStream, Container* container);
 	static bool loadItem(PropStream& propStream, Cylinder* parent, std::vector<Item*>* restoredMapBeds = nullptr);

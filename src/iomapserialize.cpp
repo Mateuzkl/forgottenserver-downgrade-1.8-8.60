@@ -202,6 +202,22 @@ void IOMapSerialize::loadHouseItems(Map* map)
                          (OTSYS_TIME() - start) / 1000., tileCount, itemCount));
 }
 
+static bool clearSavedHouseRows(Database& db, std::string_view table)
+{
+	std::string query = fmt::format("DELETE FROM `{}`", table);
+	std::string_view separator = " WHERE `house_id` NOT IN (";
+	for (const auto& [id, house] : g_game.map.houses.getHouses()) {
+		if (house->isPersistenceBlocked()) {
+			query += fmt::format("{}{}", separator, id);
+			separator = ", ";
+		}
+	}
+	if (separator == ", ") {
+		query += ')';
+	}
+	return db.executeQuery(query);
+}
+
 bool IOMapSerialize::saveHouseItems()
 {
 	AutoStat stat("saveHouseItems", "full");
@@ -214,31 +230,29 @@ bool IOMapSerialize::saveHouseItems()
 		return false;
 	}
 
-	// clear old tile data
-	if (!db.executeQuery("DELETE FROM `tile_store`")) {
+	// Preserve the database's version of houses with an unconfirmed commit.
+	if (!clearSavedHouseRows(db, "tile_store")) {
 		return false;
 	}
 
-	std::ostringstream query;
-	query << "INSERT INTO `tile_store` (`house_id`, `data`) VALUES ";
-
-	bool notEmpty = false;
+	DBInsert stmt("INSERT INTO `tile_store` (`house_id`, `data`) VALUES ");
 	{
 		AutoStat statBuild("saveHouseItems", "build_query");
 		PropWriteStream stream;
 		for (const auto& it : g_game.map.houses.getHouses()) {
 			// save house items
 			House* house = it.second.get();
+			if (house->isPersistenceBlocked()) {
+				continue;
+			}
 			for (const auto& weakTile : house->getTiles()) {
 				if (auto tile = weakTile.lock()) {
 					saveTile(stream, tile.get());
 
 					if (auto attributes = stream.getStream(); !attributes.empty()) {
-						if (notEmpty) {
-							query << ",";
+						if (!stmt.addRow(fmt::format("{:d}, {:s}", house->getId(), db.escapeString(attributes)))) {
+							return false;
 						}
-						query << "(" << house->getId() << "," << db.escapeString(attributes) << ")";
-						notEmpty = true;
 						stream.clear();
 					}
 				}
@@ -246,9 +260,9 @@ bool IOMapSerialize::saveHouseItems()
 		}
 	}
 
-	if (notEmpty) {
+	{
 		AutoStat statExec("saveHouseItems", "execute_query");
-		if (!db.executeQuery(query.str())) {
+		if (!stmt.execute()) {
 			return false;
 		}
 	}
@@ -474,34 +488,41 @@ bool IOMapSerialize::loadItem(PropStream& propStream, Cylinder* parent, std::vec
 	return true;
 }
 
-void IOMapSerialize::saveItem(PropWriteStream& stream, const Item* item)
+void IOMapSerialize::saveItem(PropWriteStream& stream, const Item* item,
+                              const std::unordered_set<const BedItem*>* releasedBeds)
 {
 	const Container* container = item->getContainer();
 
 	// Write ID & props
-	stream.write<uint16_t>(item->getID());
-	if (item->getBed()) {
+	const auto bed = item->getBed();
+	const bool release = bed && releasedBeds && releasedBeds->contains(bed.get());
+	const auto freeId = release ? Item::items[item->getID()].transformToFree : 0;
+	stream.write<uint16_t>(freeId && Item::items[freeId].isBed() ? freeId : item->getID());
+	if (bed) {
 		stream.write<uint8_t>(ATTR_CUSTOM_ATTRIBUTES);
 		stream.write<uint64_t>(1);
 		stream.writeString(bedOriginKey);
 		const bool mapFixture = item->isLoadedFromMap() && item->getParent() == item->getTile();
 		ItemAttributes::CustomAttribute(int64_t{mapFixture ? 1 : 0}).serialize(stream);
 	}
-	item->serializeAttr(stream);
+	if (!release) {
+		item->serializeAttr(stream);
+	}
 
 	if (container) {
 		// Hack our way into the attributes
 		stream.write<uint8_t>(ATTR_CONTAINER_ITEMS);
 		stream.write<uint32_t>(container->size());
 		for (auto it = container->getReversedItems(), end = container->getReversedEnd(); it != end; ++it) {
-			saveItem(stream, it->get());
+			saveItem(stream, it->get(), releasedBeds);
 		}
 	}
 
 	stream.write<uint8_t>(0x00); // attr end
 }
 
-void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile)
+void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile,
+                              const std::unordered_set<const BedItem*>* releasedBeds)
 {
 	const TileItemVector* tileItems = tile->getItemList();
 	if (!tileItems) {
@@ -531,7 +552,7 @@ void IOMapSerialize::saveTile(PropWriteStream& stream, const Tile* tile)
 
 		stream.write<uint32_t>(count);
 		for (const Item* item : items) {
-			saveItem(stream, item);
+			saveItem(stream, item, releasedBeds);
 		}
 	}
 }
@@ -602,48 +623,39 @@ bool IOMapSerialize::saveHouseInfo()
 		return false;
 	}
 
-	if (!db.executeQuery("DELETE FROM `house_lists`")) {
+	if (!clearSavedHouseRows(db, "house_lists")) {
 		return false;
 	}
 
-	std::ostringstream query;
-	query << "INSERT INTO `houses` (`id`, `type`, `owner`, `paid`, `warnings`, `is_protected`, `name`, `town_id`, `rent`, `size`, `beds`) VALUES ";
+	DBInsert housesQuery("INSERT INTO `houses` (`id`, `type`, `owner`, `paid`, `warnings`, `is_protected`, `name`, `town_id`, `rent`, `size`, `beds`) VALUES ");
+	housesQuery.upsert({"owner", "type", "paid", "warnings", "is_protected", "name", "town_id", "rent", "size", "beds"});
 
-	bool notEmpty = false;
 	for (const auto& it : g_game.map.houses.getHouses()) {
 		House* house = it.second.get();
-		if (notEmpty) {
-			query << ",";
+		if (house->isPersistenceBlocked()) {
+			continue;
 		}
-		query << fmt::format("({:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d})",
-		                     house->getId(), static_cast<uint32_t>(house->getType()), house->getOwner(), house->getPaidUntil(), house->getPayRentWarnings(),
-		                     (house->getProtected() ? 1 : 0), db.escapeString(house->getName()), house->getTownId(), house->getRent(), house->getTileCount(),
-		                     house->getBedCount());
-		notEmpty = true;
-	}
-
-	if (notEmpty) {
-		query << " ON DUPLICATE KEY UPDATE "
-		      << "`owner` = VALUES(`owner`), "
-		      << "`type` = VALUES(`type`), "
-		      << "`paid` = VALUES(`paid`), "
-		      << "`warnings` = VALUES(`warnings`), "
-		      << "`is_protected` = VALUES(`is_protected`), "
-		      << "`name` = VALUES(`name`), "
-		      << "`town_id` = VALUES(`town_id`), "
-		      << "`rent` = VALUES(`rent`), "
-		      << "`size` = VALUES(`size`), "
-		      << "`beds` = VALUES(`beds`)";
-
-		if (!db.executeQuery(query.str())) {
+		if (!housesQuery.addRow(fmt::format("{:d}, {:d}, {:d}, {:d}, {:d}, {:d}, {:s}, {:d}, {:d}, {:d}, {:d}",
+		                                    house->getId(), static_cast<uint32_t>(house->getType()), house->getOwner(),
+		                                    house->getPaidUntil(), house->getPayRentWarnings(),
+		                                    (house->getProtected() ? 1 : 0), db.escapeString(house->getName()),
+		                                    house->getTownId(), house->getRent(), house->getTileCount(),
+		                                    house->getBedCount()))) {
 			return false;
 		}
+	}
+
+	if (!housesQuery.execute()) {
+		return false;
 	}
 
 	DBInsert stmt("INSERT INTO `house_lists` (`house_id`, `listid` , `list`) VALUES ");
 
 	for (const auto& it : g_game.map.houses.getHouses()) {
 		House* house = it.second.get();
+		if (house->isPersistenceBlocked()) {
+			continue;
+		}
 
 		auto listText = house->getAccessList(GUEST_LIST).value_or("");
 
@@ -682,11 +694,16 @@ bool IOMapSerialize::saveHouseInfo()
 
 bool IOMapSerialize::saveHouse(const House* house)
 {
-	Database& db = Database::getInstance();
-
-	// Start the transaction
 	DBTransaction transaction;
-	if (!transaction.begin()) {
+	return !house->isPersistenceBlocked() && transaction.begin() &&
+	       saveHouseInTransaction(house, {}) && transaction.commit();
+}
+
+bool IOMapSerialize::saveHouseInTransaction(const House* house,
+                                           const std::unordered_set<const BedItem*>& releasedBeds)
+{
+	Database& db = Database::getInstance();
+	if (!db.isInTransaction() || house->isPersistenceBlocked()) {
 		return false;
 	}
 
@@ -702,9 +719,9 @@ bool IOMapSerialize::saveHouse(const House* house)
 	PropWriteStream stream;
 	for (const auto& weakTile : house->getTiles()) {
 		if (auto tile = weakTile.lock()) {
-			saveTile(stream, tile.get());
+			saveTile(stream, tile.get(), &releasedBeds);
 
-			if (auto attributes = stream.getStream(); attributes.size() > 0) {
+			if (auto attributes = stream.getStream(); !attributes.empty()) {
 				if (!stmt.addRow(fmt::format("{:d}, {:s}", houseId, db.escapeString(attributes)))) {
 					return false;
 				}
@@ -713,10 +730,5 @@ bool IOMapSerialize::saveHouse(const House* house)
 		}
 	}
 
-	if (!stmt.execute()) {
-		return false;
-	}
-
-	// End the transaction
-	return transaction.commit();
+	return stmt.execute();
 }

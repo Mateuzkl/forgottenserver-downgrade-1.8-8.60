@@ -15,6 +15,33 @@ class House;
 class BedItem;
 class Player;
 
+class HouseItemMoves
+{
+public:
+	~HouseItemMoves();
+	ReturnValue move(Item* item, Cylinder* destination, uint32_t flags, Item* tradeItem = nullptr);
+	ReturnValue remove(Item* item, uint32_t count);
+	std::shared_ptr<Item> wrap(const std::shared_ptr<Item>& item, uint16_t wrapId);
+	void commit();
+	void discard() { changes.clear(); }
+
+private:
+	struct Change {
+		std::shared_ptr<Item> original;
+		std::shared_ptr<Item> replacement;
+		std::shared_ptr<Thing> sourceRef;
+		Cylinder* source;
+		int32_t index;
+		uint32_t instanceId;
+		uint16_t id;
+		uint16_t subtype;
+		bool notify = false;
+		bool moved = false;
+	};
+	Change record(const std::shared_ptr<Item>& item) const;
+	std::vector<Change> changes;
+};
+
 class AccessList
 {
 public:
@@ -106,6 +133,8 @@ public:
 	explicit HouseTransferItem(std::shared_ptr<House> house);
 
 	void onTradeEvent(TradeEvents_t event, Player* owner) override;
+	static bool executeTrade(HouseTransferItem* first, HouseTransferItem* second, Player* seller,
+	                         Player* buyer, HouseItemMoves& tradeMoves);
 	bool canTransform() const override { return false; }
 
 private:
@@ -141,7 +170,10 @@ public:
 
 	std::string_view getOwnerName() const { return ownerName; }
 	bool setOwner(uint32_t guid_guild, bool updateDatabase = true, Player* previousPlayer = nullptr);
+	enum class GuildhallPurchase { Failed, GuildBank, PersonalFunds, InsufficientFunds, Indeterminate };
+	GuildhallPurchase purchaseGuildhall(Player* buyer, uint64_t price);
 	uint32_t getOwner() const { return owner; }
+	bool isPersistenceBlocked() const { return persistenceBlocked; }
 	uint32_t getOwnerAccountId() const { return ownerAccountId; }
 
 	void updateOwnerName(const std::string& newName) {
@@ -177,7 +209,6 @@ public:
 
 	std::shared_ptr<HouseTransferItem> getTransferItem();
 	void resetTransferItem();
-	bool executeTransfer(HouseTransferItem* item, Player* newOwner);
 
 	const HouseTileList& getTiles() const { return houseTiles; }
 	size_t getTileCount() const;
@@ -207,8 +238,18 @@ protected:
 	virtual bool updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection);
 
 private:
-	bool transferToDepot() const;
-	bool transferToDepot(Player* player) const;
+	friend class HouseTransferItem;
+	friend class Houses;
+	struct OwnerChange {
+		House* house;
+		uint32_t ownerId;
+		Player* previousPlayer;
+	};
+	static bool changeOwners(const std::vector<OwnerChange>& changes, std::vector<Player*> players,
+	                         HouseItemMoves* tradeMoves = nullptr, const std::function<bool()>& extraQueries = {});
+	void applyOwner(uint32_t ownerId, const OwnerData& newOwnerData, bool updateDatabase);
+	bool transferToDepot(Player* player, HouseItemMoves* moves) const;
+	void blockPersistence();
 	void updateDoorDescription() const;
 	std::vector<std::shared_ptr<HouseTile>> getTilesSnapshot() const;
 
@@ -240,6 +281,7 @@ private:
 
 	bool isLoaded = false;
 	bool ownerTransitionInProgress = false;
+	bool persistenceBlocked = false;
 
 	// Protection state and guest list
 	bool isProtected = false;
@@ -294,6 +336,7 @@ public:
 
 	bool loadHousesXML(const std::string& filename);
 
+	void settleAuctions() const;
 	void payHouses(RentPeriod_t rentPeriod) const;
 	time_t increasePaidUntil(RentPeriod_t rentPeriod, time_t paidUntil) const;
 	std::string getRentPeriod(RentPeriod_t rentPeriod) const;

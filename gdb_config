@@ -1,5 +1,7 @@
-# Anti-Rollback GDB Configuration
-# On crash: prints full backtrace, saves all players at temple, then exits.
+# Crash Diagnostic GDB Configuration
+# On crash: prints full backtrace and exits with non-zero crash code so start.sh
+# creates a database backup and restarts cleanly. Durable player state is recovered
+# on startup via player_save_async_pending WAL (SaveManager::recoverPendingFlushes).
 # Usage: gdb --batch -return-child-result --command=gdb_config --args ./tfs
 
 set $_exitcode = 999
@@ -11,9 +13,6 @@ handle SIGINT nostop noprint pass
 run
 
 if $_exitcode == 999
-    # Preserve the crash status before calling saveServer(). The emergency
-    # save path may call exit(0), which would otherwise overwrite $_exitcode
-    # and make the launcher think the crash was a clean shutdown.
     set $_crashcode = $_exitcode
 
     printf "\n=== SERVER CRASH DETECTED ===\n"
@@ -22,9 +21,11 @@ if $_exitcode == 999
     printf "\n--- Backtrace (all threads) ---\n"
     thread apply all bt full
 
-    printf "\n--- Emergency Save (Anti-Rollback) ---\n"
-    call (void)saveServer()
-    printf "Anti-rollback save completed. Players sent to temple.\n"
+    # Do NOT invoke saveServer() inside a crashed process: heap/mutexes/MySQL state
+    # may be corrupted and the crashing thread may not be the dispatcher thread,
+    # risking corrupted writes over clean SQL WAL rows. Let restart run WAL recovery.
+    printf "\n--- Crash Recovery Note ---\n"
+    printf "In-process GDB save disabled for memory/DB safety; pending WAL will be recovered on restart.\n"
     printf "=== END CRASH REPORT ===\n\n"
     quit $_crashcode
 end

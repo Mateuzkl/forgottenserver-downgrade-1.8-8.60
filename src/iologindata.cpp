@@ -12,6 +12,7 @@
 #include "game.h"
 #include "inbox.h"
 #include "player.h"
+#include "save_manager.h"
 #include "vocation.h"
 #include "logger.h"
 #include "tools.h"
@@ -1470,6 +1471,15 @@ bool IOLoginData::savePlayerQueries(Player* player, const Player::BestiaryDirtyS
 		}
 	}
 
+	if (!needsSave) {
+		for (const auto& it : player->depotChests) {
+			if (it.second->needsSave()) {
+				needsSave = true;
+				break;
+			}
+		}
+	}
+
 	if (needsSave) {
 		AutoStat statDepot("savePlayer", "items_depot");
 		if (!db.executeQuery(
@@ -1719,6 +1729,14 @@ bool IOLoginData::savePlayerDailyRewardStorages(Player* player)
 	};
 
 	const uint32_t playerId = player->getGUID();
+	if (g_saveManager.hasFailedRecovery(playerId)) {
+		return false;
+	}
+	if (g_saveManager.hasPendingPlayerSave(playerId)) {
+		// Never write directly to player_storage or clear dirty flags while an older async save
+		// is in flight: that worker could overwrite these rows with stale values.
+		return !player->isOffline() && g_saveManager.savePlayer(player);
+	}
 	const Player::StorageDirtySnapshot storageSnapshot = player->getStorageDirtySnapshot();
 
 	DBInsert storageQuery("INSERT INTO `player_storage` (`player_id`, `key`, `value`) VALUES ");

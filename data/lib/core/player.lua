@@ -556,12 +556,18 @@ do
 		if not guild then
 			return false, "You are not in a guild."
 		end
+		if guild:isBankBalanceBlocked() then
+			return false, "The guild bank is temporarily unavailable."
+		end
 
 		if not self:removeMoney(amount) then
 			return false, "You don't have enough money."
 		end
 
-		guild:setBankBalance(guild:getBankBalance() + amount)
+		if not guild:setBankBalance(guild:getBankBalance() + amount) then
+			self:addMoney(amount)
+			return false, "The guild bank is temporarily unavailable."
+		end
 		return true, "Successfully deposited " .. amount .. " gold to guild bank."
 	end
 
@@ -569,6 +575,9 @@ do
 		local guild = self:getGuild()
 		if not guild then
 			return false, "You are not in a guild."
+		end
+		if guild:isBankBalanceBlocked() then
+			return false, "The guild bank is temporarily unavailable."
 		end
 
 		-- Check if player has permission (Leader or Vice-Leader)
@@ -580,11 +589,10 @@ do
 			return false, "Guild doesn't have enough money."
 		end
 
-		if not self:addMoney(amount) then
-			return false, "You can't carry that much money."
+		if not guild:setBankBalance(guild:getBankBalance() - amount) then
+			return false, "The guild bank is temporarily unavailable."
 		end
-
-		guild:setBankBalance(guild:getBankBalance() - amount)
+		self:addMoney(amount)
 		return true, "Successfully withdrew " .. amount .. " gold from guild bank."
 	end
 
@@ -592,6 +600,9 @@ do
 		local guild = self:getGuild()
 		if not guild then
 			return false, "You are not in a guild."
+		end
+		if guild:isBankBalanceBlocked() then
+			return false, "The guild bank is temporarily unavailable."
 		end
 
 		-- Check if player has permission (Leader or Vice-Leader)
@@ -608,7 +619,9 @@ do
 			return false, "Target player not found."
 		end
 
-		guild:setBankBalance(guild:getBankBalance() - amount)
+		if not guild:setBankBalance(guild:getBankBalance() - amount) then
+			return false, "The guild bank is temporarily unavailable."
+		end
 		target:setBankBalance(target:getBankBalance() + amount)
 		return true, "Successfully transferred " .. amount .. " gold to " .. target:getName() .. "."
 	end

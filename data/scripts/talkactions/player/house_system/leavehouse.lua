@@ -28,7 +28,11 @@ function talkaction.onSay(player, words, param)
             return false
         end
 
-        house:setOwnerGuid(0, true, player)
+        if not house:setOwnerGuid(0, true, player) then
+            player:sendCancelMessage("Could not leave this house right now. Please try again shortly.")
+            position:sendMagicEffect(CONST_ME_POFF)
+            return false
+        end
 
     elseif houseType == HOUSE_TYPE_GUILDHALL then
         local guild = player:getGuild()
@@ -130,8 +134,12 @@ function talkaction.onSay(player, words, param)
             return false
         end
 
+        if not house:setOwnerGuid(0, true, player) then
+            player:sendCancelMessage("Could not leave this guildhall right now. Please try again shortly.")
+            position:sendMagicEffect(CONST_ME_POFF)
+            return false
+        end
         validReceipt:remove(1)
-        house:setOwnerGuid(0, true, player)
 
     else
         player:sendCancelMessage("You cannot leave this property.")

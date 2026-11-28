@@ -9,6 +9,7 @@
 #include "configmanager.h"
 #include "game.h"
 #include "iologindata.h"
+#include "iomapserialize.h"
 #include "save_manager.h"
 #include "pugicast.h"
 #include "logger.h"
@@ -120,6 +121,9 @@ std::tuple<uint32_t, uint32_t, std::string, uint32_t, std::string> House::initia
 bool House::updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection)
 {
 	Database& db = Database::getInstance();
+	if (!db.isInTransaction()) {
+		return false;
+	}
 	if (resetProtection) {
 		return db.executeQuery(fmt::format(
 		    "UPDATE `houses` SET `owner` = {:d}, `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0, `is_protected` = 0 WHERE `id` = {:d}",
@@ -130,56 +134,392 @@ bool House::updateOwnerInDatabase(uint32_t guid_guild, bool resetProtection)
 	    guid_guild, id));
 }
 
-bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Player* previousPlayer /* = nullptr*/)
+namespace {
+enum class OwnerLookup { Found, Missing, Failed };
+
+OwnerLookup findOwnerPlayer(uint32_t guid, std::shared_ptr<Player>& player)
 {
-	if (ownerTransitionInProgress) {
+	if (g_saveManager.hasFailedRecovery(guid) || g_saveManager.hasPendingPlayerSave(guid)) {
+		return OwnerLookup::Failed;
+	}
+	player = g_game.getPlayerByGUID(guid);
+	if (player) {
+		return OwnerLookup::Found;
+	}
+	player = std::make_shared<Player>(nullptr);
+	if (IOLoginData::loadPlayerById(player.get(), guid)) {
+		return OwnerLookup::Found;
+	}
+
+	// An existing player can fail to load if the group or vocation is invalid.
+	Database& db = Database::getInstance();
+	auto row = db.storeQuery(fmt::format("SELECT 1 FROM `players` WHERE `id` = {}", guid));
+	const bool missing = !row && db.getLastErrno() == 0;
+	player.reset();
+	return missing ? OwnerLookup::Missing : OwnerLookup::Failed;
+}
+
+bool lockHouseOwner(Database& db, uint32_t houseId, uint32_t owner)
+{
+	auto row = db.storeQuery(fmt::format("SELECT `owner` FROM `houses` WHERE `id` = {} FOR UPDATE", houseId));
+	return row && row->getNumber<uint32_t>("owner") == owner;
+}
+
+time_t initialPaidUntil()
+{
+	const auto period = asLowerCaseString(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
+	const auto now = time(nullptr);
+	if (period == "annual" || period == "yearly") {
+		return now + 365 * 24 * 60 * 60;
+	}
+	if (period == "monthly") {
+		return now + 30 * 24 * 60 * 60;
+	}
+	if (period == "weekly") {
+		return now + 7 * 24 * 60 * 60;
+	}
+	if (period == "daily") {
+		return now + 24 * 60 * 60;
+	}
+	return period == "dev" ? now + 5 * 60 : 0;
+}
+}
+
+bool House::setOwner(uint32_t ownerId, bool updateDatabase, Player* previousPlayer)
+{
+	if (ownerTransitionInProgress || persistenceBlocked) {
 		return false;
 	}
-	if (isLoaded && owner == guid_guild) {
+	if (isLoaded && owner == ownerId) {
 		return true;
 	}
+
+	if (updateDatabase && (g_dispatcher.isDispatcherThread() || g_game.map.houses.getHouse(id).get() == this)) {
+		return changeOwners({{this, ownerId, previousPlayer}}, {});
+	}
+
 	const auto houseRef = weak_from_this().lock();
 	ownerTransitionInProgress = true;
 	struct TransitionGuard {
-		bool& inProgress;
-		~TransitionGuard() { inProgress = false; }
-	} transitionGuard{ownerTransitionInProgress};
-
-	OwnerData newOwnerData;
-	if (guid_guild != 0) {
-		try {
-			newOwnerData = initializeOwnerDataFromDatabase(guid_guild, type);
-		} catch (const std::runtime_error& err) {
-			LOG_ERROR("{}", err.what());
-			return false;
+		bool& active;
+		~TransitionGuard() { active = false; }
+	} guard{ownerTransitionInProgress};
+	try {
+		const auto details = ownerId ? initializeOwnerDataFromDatabase(ownerId, type) : OwnerData{};
+		// Detached, synchronous houses can supply their own persistence implementation.
+		if (updateDatabase) {
+			if ((owner && !BedItem::wakeUpAll(getBeds())) ||
+			    (owner && townId && previousPlayer && !transferToDepot(previousPlayer, nullptr)) ||
+			    !updateOwnerInDatabase(ownerId, ownerId == 0 || owner == 0)) {
+				return false;
+			}
 		}
-	}
-
-	// Do this before owner SQL, depot moves, kicks or access-list changes.
-	// A failed offline load/save must preserve every occupied sleep session.
-	if (owner != 0 && updateDatabase && !BedItem::wakeUpAll(getBeds())) {
+		if (!owner || !updateDatabase) {
+			paidUntil = initialPaidUntil();
+		}
+		applyOwner(ownerId, details, updateDatabase);
+		return true;
+	} catch (const std::runtime_error& err) {
+		LOG_ERROR("{}", err.what());
 		return false;
 	}
-	if (updateDatabase && owner != guid_guild) {
-		const bool resetProtection = (guid_guild == 0 || owner == 0);
-		if (!updateOwnerInDatabase(guid_guild, resetProtection)) {
+}
+
+void House::blockPersistence()
+{
+	persistenceBlocked = true;
+	LOG_CRITICAL("[House] Commit outcome unknown for house {}. House persistence is blocked until restart.", id);
+}
+
+bool House::changeOwners(const std::vector<OwnerChange>& changes, std::vector<Player*> players,
+                         HouseItemMoves* tradeMoves, const std::function<bool()>& extraQueries)
+{
+	struct Transition {
+		const OwnerChange& change;
+		std::shared_ptr<House> houseRef;
+		OwnerData details = {};
+		Player* recipient = nullptr;
+		time_t paidUntil = 0;
+		~Transition() { change.house->ownerTransitionInProgress = false; }
+	};
+	struct Sleeper {
+		Player* player;
+		uint64_t sleepStart;
+	};
+	std::vector<std::unique_ptr<Transition>> transitions;
+	std::unordered_map<uint32_t, std::shared_ptr<Player>> loadedPlayers;
+	std::unordered_map<uint32_t, Player*> activePlayers;
+	std::unordered_map<uint32_t, Sleeper> sleepers;
+	std::vector<std::shared_ptr<BedItem>> beds;
+	std::unordered_set<const BedItem*> releasedBeds;
+	HouseItemMoves depotMoves;
+	Database& db = Database::getInstance();
+
+	for (auto* player : players) {
+		activePlayers.emplace(player->getGUID(), player);
+	}
+	const auto includePlayer = [&](Player* player) {
+		if (activePlayers.emplace(player->getGUID(), player).second) {
+			players.push_back(player);
+		}
+	};
+	const auto retainPlayer = [&](std::shared_ptr<Player> player) {
+		const auto guid = player->getGUID();
+		includePlayer(player.get());
+		loadedPlayers.emplace(guid, std::move(player));
+	};
+
+	for (const auto& change : changes) {
+		House* house = change.house;
+		if (house->ownerTransitionInProgress || house->persistenceBlocked) {
 			return false;
 		}
-		if (resetProtection) {
-			setProtected(false);
+		if (house->owner == change.ownerId) {
+			continue;
+		}
+		auto transition = std::make_unique<Transition>(change, house->weak_from_this().lock());
+		house->ownerTransitionInProgress = true;
+		transition->paidUntil = house->owner == 0 ? initialPaidUntil() : house->paidUntil;
+
+		if (change.ownerId != 0) {
+			try {
+				transition->details = house->initializeOwnerDataFromDatabase(change.ownerId, house->type);
+			} catch (const std::runtime_error& err) {
+				LOG_ERROR("{}", err.what());
+				return false;
+			}
+		}
+
+		if (house->owner != 0 && house->townId != 0) {
+			uint32_t recipientId = house->owner;
+			if (house->type == HOUSE_TYPE_GUILDHALL) {
+				auto guild = db.storeQuery(fmt::format("SELECT `ownerid` FROM `guilds` WHERE `id` = {}", house->owner));
+				if (!guild && db.getLastErrno() != 0) {
+					return false;
+				}
+				recipientId = guild ? guild->getNumber<uint32_t>("ownerid") : 0;
+				if (guild && change.previousPlayer && change.previousPlayer->getGuild() &&
+				    change.previousPlayer->getGuild()->getId() == house->owner) {
+					recipientId = change.previousPlayer->getGUID();
+				}
+			}
+
+			if (recipientId != 0) {
+				if (const auto it = activePlayers.find(recipientId); it != activePlayers.end()) {
+					transition->recipient = it->second;
+				} else if (change.previousPlayer && change.previousPlayer->getGUID() == recipientId) {
+					transition->recipient = change.previousPlayer;
+					includePlayer(transition->recipient);
+				} else {
+					std::shared_ptr<Player> recipient;
+					if (findOwnerPlayer(recipientId, recipient) == OwnerLookup::Failed) {
+						return false;
+					}
+					if (recipient) {
+						transition->recipient = recipient.get();
+						retainPlayer(std::move(recipient));
+					}
+				}
+			}
+		}
+		transitions.push_back(std::move(transition));
+	}
+
+	for (const auto& transition : transitions) {
+		House* house = transition->change.house;
+		if (house->owner == 0) {
+			continue;
+		}
+		for (const auto& bed : house->getBeds()) {
+			if (!bed || bed->isRemoved() || bed->getSleeper() == 0) {
+				continue;
+			}
+			const uint32_t guid = bed->getSleeper();
+			const auto includeBed = [&](const std::shared_ptr<BedItem>& candidate) {
+				if (candidate && candidate->getHouse().get() == house && candidate->getSleeper() == guid &&
+				    releasedBeds.insert(candidate.get()).second) {
+					beds.push_back(candidate);
+				}
+			};
+			includeBed(bed);
+			includeBed(bed->getNextBedItem());
+			if (sleepers.contains(guid)) {
+				continue;
+			}
+			if (!activePlayers.contains(guid)) {
+				auto player = g_game.getPlayerByGUID(guid);
+				if (!player) {
+					player = std::make_shared<Player>(nullptr);
+					if (!bed->loadOfflineSleeper(player.get(), guid)) {
+						return false;
+					}
+				}
+				retainPlayer(std::move(player));
+			}
+			sleepers.emplace(guid, Sleeper{activePlayers.at(guid), bed->sleepStart});
 		}
 	}
 
+	if (!g_saveManager.canSavePlayersSync(players)) {
+		return false;
+	}
+	for (const auto& transition : transitions) {
+		if (transition->recipient && !transition->change.house->transferToDepot(transition->recipient, &depotMoves)) {
+			return false;
+		}
+	}
+	// Offline objects are disposable on rollback. Defer live regeneration until commit.
+	for (const auto& entry : sleepers) {
+		const auto& sleeper = entry.second;
+		if (sleeper.player->isOffline()) {
+			BedItem::regeneratePlayer(sleeper.player, sleeper.sleepStart);
+		}
+	}
+
+	const auto result = g_saveManager.savePlayersAtomic(players, [&] {
+		if (extraQueries && !extraQueries()) {
+			return false;
+		}
+		for (const auto& transition : transitions) {
+			House* house = transition->change.house;
+			if (!lockHouseOwner(db, house->id, house->owner) ||
+			    !house->updateOwnerInDatabase(transition->change.ownerId, true) ||
+			    !db.executeQuery(fmt::format("UPDATE `houses` SET `paid` = {}, `warnings` = 0 WHERE `id` = {}",
+			                                 transition->paidUntil, house->id)) ||
+			    !db.executeQuery(fmt::format("DELETE FROM `house_lists` WHERE `house_id` = {}", house->id)) ||
+			    !IOMapSerialize::saveHouseInTransaction(house, releasedBeds)) {
+				return false;
+			}
+		}
+		return true;
+	});
+
+	if (result == SaveManager::AtomicSaveResult::Failed) {
+		return false;
+	}
+	if (result == SaveManager::AtomicSaveResult::Indeterminate) {
+		depotMoves.discard();
+		if (tradeMoves) {
+			tradeMoves->discard();
+		}
+		for (const auto& transition : transitions) {
+			transition->change.house->blockPersistence();
+		}
+		return false;
+	}
+
+	for (const auto& entry : sleepers) {
+		g_game.removeBedSleeper(entry.first);
+	}
+	for (const auto& bed : beds) {
+		bed->internalRemoveSleeper();
+	}
+	for (const auto& entry : sleepers) {
+		const auto& sleeper = entry.second;
+		if (!sleeper.player->isOffline()) {
+			BedItem::regeneratePlayer(sleeper.player, sleeper.sleepStart);
+			g_game.addCreatureHealth(sleeper.player);
+		}
+	}
+	for (const auto& bed : beds) {
+		if (!bed->isRemoved() && bed->getSleeper() == 0) {
+			bed->updateAppearance(nullptr);
+		}
+	}
+	for (const auto& transition : transitions) {
+		House& house = *transition->change.house;
+		house.paidUntil = transition->paidUntil;
+		house.setProtected(false);
+		house.applyOwner(transition->change.ownerId, transition->details, true);
+	}
+	depotMoves.commit();
+	if (tradeMoves) {
+		tradeMoves->commit();
+	}
+	return true;
+}
+
+House::GuildhallPurchase House::purchaseGuildhall(Player* buyer, uint64_t price)
+{
+	using Purchase = GuildhallPurchase;
+	if (!buyer || type != HOUSE_TYPE_GUILDHALL || owner || persistenceBlocked || ownerTransitionInProgress) {
+		return Purchase::Failed;
+	}
+	const auto guild = buyer->getGuild();
+	const auto rank = buyer->getGuildRank();
+	if (!guild || !rank || (rank->level != GUILDLEVEL_VICE && rank->level != GUILDLEVEL_LEADER)) {
+		return Purchase::Failed;
+	}
+
+	const auto guildId = guild->getId();
+	if (IOGuild::isBankBalanceBlocked(guildId)) {
+		return Purchase::Indeterminate;
+	}
+	Database& db = Database::getInstance();
+	auto row = db.storeQuery(fmt::format("SELECT `balance` FROM `guilds` WHERE `id` = {}", guildId));
+	if (!row) {
+		return Purchase::Failed;
+	}
+	const auto guildBalance = row->getNumber<uint64_t>("balance");
+	const bool fromGuild = guildBalance >= price;
+	const auto verifyGuild = [&] {
+		auto current = db.storeQuery(fmt::format("SELECT `balance` FROM `guilds` WHERE `id` = {} FOR UPDATE", guildId));
+		if (!current || current->getNumber<uint64_t>("balance") != guildBalance) {
+			return false;
+		}
+		auto other = db.storeQuery(fmt::format(
+		    "SELECT `id` FROM `houses` WHERE `owner` = {} AND `type` IN ('2', 'Guildhall') AND `id` <> {} LIMIT 1",
+		    guildId, id));
+		return !other && db.getLastErrno() == 0;
+	};
+
+	if (fromGuild) {
+		const bool purchased = changeOwners({{this, guildId, nullptr}}, {}, nullptr, [&] {
+			return verifyGuild() &&
+			       (!price || (db.executeQuery(fmt::format("UPDATE `guilds` SET `balance` = `balance` - {} WHERE `id` = {}",
+			                                              price, guildId)) && db.getAffectedRows() == 1)) &&
+			       db.executeQuery(fmt::format(
+			           "INSERT INTO `guild_transactions` (`guild_id`, `player_associated`, `type`, `category`, `balance`, `time`) "
+			           "VALUES ({}, {}, 'WITHDRAW', 'RENT', {}, {})", guildId, buyer->getGUID(), price, time(nullptr)));
+		});
+		if (purchased) {
+			guild->loadBankBalance(guildBalance - price);
+			return Purchase::GuildBank;
+		}
+		if (persistenceBlocked) {
+			IOGuild::blockBankBalance(guildId);
+		}
+	} else {
+		const auto cash = std::min(price, buyer->getMoney());
+		const auto balance = buyer->getBankBalance();
+		const auto debit = price - cash;
+		if (balance < debit) {
+			return Purchase::InsufficientFunds;
+		}
+		if (!g_saveManager.canSavePlayersSync({buyer})) {
+			return Purchase::Failed;
+		}
+		HouseItemMoves cashMoves;
+		uint64_t change = 0;
+		if (!g_game.removeMoney(buyer, cash, 0, &cashMoves, &change)) {
+			return Purchase::Failed;
+		}
+		buyer->setBankBalance(balance - debit + change);
+		if (changeOwners({{this, guildId, nullptr}}, {buyer}, &cashMoves, verifyGuild)) {
+			return Purchase::PersonalFunds;
+		}
+		if (!persistenceBlocked) {
+			buyer->setBankBalance(balance);
+		}
+	}
+	return persistenceBlocked ? Purchase::Indeterminate : Purchase::Failed;
+}
+
+void House::applyOwner(uint32_t guid_guild, const OwnerData& newOwnerData, bool updateDatabase)
+{
 	isLoaded = true;
 
 	if (owner != 0 && updateDatabase) {
-		// send items to depot
-		if (previousPlayer) {
-			transferToDepot(previousPlayer);
-		} else {
-			transferToDepot();
-		}
-
 		// Kicking a player runs movement callbacks, which may remove other
 		// creatures or unregister this tile from the house.
 		for (const auto& tile : getTilesSnapshot()) {
@@ -210,25 +550,6 @@ bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 				door->setAccessList("");
 			}
 		}
-	} else {
-		auto strRentPeriod =
-		    asLowerCaseString(std::string{getString(ConfigManager::HOUSE_RENT_PERIOD)});
-		time_t currentTime = time(nullptr);
-		if (strRentPeriod == "yearly" || strRentPeriod == "annual") {
-			currentTime += 24 * 60 * 60 * 365;
-		} else if (strRentPeriod == "monthly") {
-			currentTime += 24 * 60 * 60 * 30;
-		} else if (strRentPeriod == "weekly") {
-			currentTime += 24 * 60 * 60 * 7;
-		} else if (strRentPeriod == "daily") {
-			currentTime += 24 * 60 * 60;
-		} else if (strRentPeriod == "dev") {
-			currentTime += 5 * 60;
-		} else {
-			currentTime = 0;
-		}
-
-		paidUntil = currentTime;
 	}
 
 	rentWarnings = 0;
@@ -252,11 +573,13 @@ bool House::setOwner(uint32_t guid_guild, bool updateDatabase /* = true*/, Playe
 		ownerName.clear();
 		updateDoorDescription();
 	}
-	return true;
 }
 
 AccessHouseLevel_t House::getHouseAccessLevel(const Player* player) const
 {
+    if (player && persistenceBlocked) {
+        return HOUSE_NOT_INVITED;
+    }
     if (!player) {
         return HOUSE_OWNER;
     }
@@ -363,60 +686,132 @@ void House::setAccessList(uint32_t listId, std::string_view textlist)
 	}
 }
 
-bool House::transferToDepot() const
+HouseItemMoves::Change HouseItemMoves::record(const std::shared_ptr<Item>& item) const
 {
-	if (townId == 0 || owner == 0) {
-		return false;
+	Cylinder* source = item->getParent();
+	std::shared_ptr<Thing> sourceRef;
+	if (auto* container = source->getItem()) {
+		sourceRef = container->weak_from_this().lock();
+	} else if (auto* creature = source->getCreature()) {
+		sourceRef = creature->weak_from_this().lock();
+	} else if (auto* tile = dynamic_cast<Tile*>(source)) {
+		sourceRef = tile->weak_from_this().lock();
 	}
-
-	std::shared_ptr<Player> onlinePlayerRef;
-	Player* onlinePlayer = nullptr;
-	Player tmpPlayer(nullptr);
-	Player* targetPlayer = nullptr;
-	bool needsSave = false;
-
-	if (type == HOUSE_TYPE_NORMAL) {
-		onlinePlayerRef = g_game.getPlayerByGUID(owner);
-		onlinePlayer = onlinePlayerRef.get();
-		if (onlinePlayer) {
-			targetPlayer = onlinePlayer;
-		} else if (IOLoginData::loadPlayerById(&tmpPlayer, owner)) {
-			targetPlayer = &tmpPlayer;
-			needsSave = true;
-		}
-	} else { // HOUSE_TYPE_GUILDHALL
-		auto guild = g_game.getGuild(owner);
-		if (!guild) {
-			guild = IOGuild::loadGuild(owner);
-		}
-		if (guild) {
-			onlinePlayerRef = g_game.getPlayerByGUID(guild->getOwnerGUID());
-			onlinePlayer = onlinePlayerRef.get();
-			if (onlinePlayer) {
-				targetPlayer = onlinePlayer;
-			} else if (IOLoginData::loadPlayerById(&tmpPlayer, guild->getOwnerGUID())) {
-				targetPlayer = &tmpPlayer;
-				needsSave = true;
-			}
-		}
-	}
-
-	if (!targetPlayer) {
-		LOG_WARN(fmt::format("[House::transferToDepot] Could not find owner for house {}. Items remain on tiles.", id));
-		return false;
-	}
-
-	transferToDepot(targetPlayer);
-	if (needsSave) {
-		if (!g_saveManager.savePlayerSync(&tmpPlayer)) {
-			LOG_ERROR(fmt::format("[House::transferToDepot] Failed to save temporary player {} data.", tmpPlayer.getName()));
-			return false;
-		}
-	}
-	return true;
+	return {item, item, std::move(sourceRef), source, source->getThingIndex(item.get()),
+	        item->getInstanceID(), item->getID(), item->getSubType()};
 }
 
-bool House::transferToDepot(Player* player) const
+ReturnValue HouseItemMoves::move(Item* item, Cylinder* destination, uint32_t flags, Item* tradeItem)
+{
+	auto ref = g_game.getItemSharedRef(item);
+	if (!ref || !item->getParent()) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+	auto change = record(ref);
+	const auto result = g_game.internalMoveItem(change.source, destination, INDEX_WHEREEVER, item,
+	    item->getItemCount(), nullptr, flags | FLAG_IGNOREAUTOSTACK | FLAG_MOVEWHOLE, nullptr, tradeItem);
+	bool moved = false;
+	for (Cylinder* parent = item->getParent(); parent; parent = parent->getParent()) {
+		if (parent == destination) {
+			moved = item->getParent() != change.source;
+			break;
+		}
+	}
+	if (item->getParent() != change.source || item->getInstanceID() != change.instanceId) {
+		change.notify = moved;
+		change.moved = moved;
+		changes.push_back(std::move(change));
+	}
+	if (result != RETURNVALUE_NOERROR) {
+		return result;
+	}
+	return moved ? RETURNVALUE_NOERROR : RETURNVALUE_NOTPOSSIBLE;
+}
+
+ReturnValue HouseItemMoves::remove(Item* item, uint32_t count)
+{
+	auto ref = g_game.getItemSharedRef(item);
+	if (!ref || !item->getParent()) {
+		return RETURNVALUE_NOTPOSSIBLE;
+	}
+	auto change = record(ref);
+	const auto result = g_game.internalRemoveItem(item, count, false, FLAG_MOVEWHOLE);
+	if (result == RETURNVALUE_NOERROR) {
+		change.notify = true;
+		changes.push_back(std::move(change));
+	}
+	return result;
+}
+
+std::shared_ptr<Item> HouseItemMoves::wrap(const std::shared_ptr<Item>& item, uint16_t wrapId)
+{
+	auto change = record(item);
+	change.replacement = g_game.getItemSharedRef(g_game.transformItem(item.get(), wrapId, -1, false));
+	const auto wrapped = change.replacement;
+	changes.push_back(std::move(change));
+	if (!wrapped || wrapped->isRemoved() || wrapped->getID() != wrapId ||
+	    (wrapped != item && item->getContainer() && !item->getContainer()->empty())) {
+		return nullptr;
+	}
+	return wrapped;
+}
+
+void HouseItemMoves::commit()
+{
+	auto committed = std::exchange(changes, {});
+	for (const auto& change : committed) {
+		if (!change.notify) {
+			continue;
+		}
+		Item* item = change.original.get();
+		Cylinder* destination = change.moved ? item->getParent() : nullptr;
+		const auto instanceId = item->getInstanceID();
+		item->setInstanceID(change.instanceId);
+		change.source->postRemoveNotification(item, destination, change.index);
+		item->setInstanceID(instanceId);
+		if (destination && item->getParent() == destination) {
+			const auto index = destination->getThingIndex(item);
+			if (index != -1) {
+				destination->postAddNotification(item, change.source, index);
+			}
+			item->startDecaying();
+		}
+	}
+}
+
+HouseItemMoves::~HouseItemMoves()
+{
+	for (auto it = changes.rbegin(); it != changes.rend(); ++it) {
+		auto& change = *it;
+		Item* current = change.replacement.get();
+		Item* original = change.original.get();
+		if ((current == original || !current) && original->getParent() == change.source &&
+		    change.source->getThingIndex(original) != -1) {
+			if (original->getID() != change.id || original->getSubType() != change.subtype) {
+				change.source->updateThing(original, change.id, change.subtype);
+			}
+			original->setInstanceID(change.instanceId);
+			continue;
+		}
+		Cylinder* parent = current ? current->getParent() : nullptr;
+		if (parent) {
+			parent->removeThing(current, current->getItemCount());
+		}
+		original->setID(change.id);
+		original->setSubType(change.subtype);
+		original->setInstanceID(change.instanceId);
+		const auto sourceIndex = change.source->getItem() ? INDEX_WHEREEVER : change.index;
+		change.source->addThing(sourceIndex, original);
+		const int32_t index = change.source->getThingIndex(original);
+		if (index == -1) {
+			LOG_CRITICAL("[House] Failed to restore item {} to its original cylinder.", change.id);
+		} else {
+			original->startDecaying();
+		}
+	}
+}
+
+bool House::transferToDepot(Player* player, HouseItemMoves* moves) const
 {
 	if (townId == 0 || owner == 0) {
 		return false;
@@ -433,7 +828,16 @@ bool House::transferToDepot(Player* player) const
 		}
 	}
 
-	// Moving items also runs callbacks that can mutate the house tile registry.
+	const auto wrap = [&](const std::shared_ptr<Item>& item, uint16_t wrapId) {
+		return moves ? moves->wrap(item, wrapId) : g_game.getItemSharedRef(g_game.transformItem(item.get(), wrapId));
+	};
+	const auto move = [&](Item* item) {
+		return (moves ? moves->move(item, targetInbox, FLAG_NOLIMIT) :
+		                g_game.internalMoveItem(item->getParent(), targetInbox, INDEX_WHEREEVER,
+		                    item, item->getItemCount(), nullptr, FLAG_NOLIMIT)) == RETURNVALUE_NOERROR;
+	};
+
+	// Detached-house callbacks may mutate the house tile registry.
 	for (const auto& tile : getTilesSnapshot()) {
 		const TileItemVector* items = tile->getItemList();
 		if (!items) {
@@ -470,7 +874,10 @@ bool House::transferToDepot(Player* player) const
 						if (child->hasAttribute(ITEM_ATTRIBUTE_WRAPID)) {
 							uint16_t wrapId = static_cast<uint16_t>(child->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
 							if (wrapId != 0) {
-								processedChild = g_game.getItemSharedRef(g_game.transformItem(child.get(), wrapId));
+								processedChild = wrap(child, wrapId);
+								if (!processedChild) {
+									return false;
+								}
 							}
 						}
 
@@ -480,7 +887,9 @@ bool House::transferToDepot(Player* player) const
 						if (Container* sub = processedChild->getContainer()) {
 							subContainers.push_back(g_game.getContainerSharedRef(sub));
 						} else if (processedChild->isPickupable()) {
-							g_game.internalMoveItem(processedChild->getParent(), targetInbox, INDEX_WHEREEVER, processedChild.get(), processedChild->getItemCount(), nullptr, FLAG_NOLIMIT);
+							if (!move(processedChild.get())) {
+								return false;
+							}
 						}
 					}
 				}
@@ -493,8 +902,9 @@ bool House::transferToDepot(Player* player) const
 			if (processedItem->hasAttribute(ITEM_ATTRIBUTE_WRAPID)) {
 				uint16_t wrapId = static_cast<uint16_t>(processedItem->getIntAttr(ITEM_ATTRIBUTE_WRAPID));
 				if (wrapId != 0) {
-					if (Item* newItem = g_game.transformItem(processedItem.get(), wrapId)) {
-						processedItem = g_game.getItemSharedRef(newItem);
+					processedItem = wrap(processedItem, wrapId);
+					if (!processedItem) {
+						return false;
 					}
 				}
 			}
@@ -503,7 +913,9 @@ bool House::transferToDepot(Player* player) const
 				continue;
 			}
 			if (processedItem->isPickupable()) {
-				g_game.internalMoveItem(processedItem->getParent(), targetInbox, INDEX_WHEREEVER, processedItem.get(), processedItem->getItemCount(), nullptr, FLAG_NOLIMIT);
+				if (!move(processedItem.get())) {
+					return false;
+				}
 			} else if (Container* container = processedItem->getContainer()) {
 				std::vector<std::shared_ptr<Item>> contents;
 				for (const auto& content : container->getItemList()) {
@@ -511,7 +923,9 @@ bool House::transferToDepot(Player* player) const
 				}
 				for (const auto& content : contents) {
 					if (content && !content->isRemoved() && content->getParent() == container) {
-						g_game.internalMoveItem(content->getParent(), targetInbox, INDEX_WHEREEVER, content.get(), content->getItemCount(), nullptr, FLAG_NOLIMIT);
+						if (!move(content.get())) {
+							return false;
+						}
 					}
 				}
 			}
@@ -778,52 +1192,47 @@ std::shared_ptr<HouseTransferItem> HouseTransferItem::createHouseTransferItem(Ho
 	return transferItem;
 }
 
-void HouseTransferItem::onTradeEvent(TradeEvents_t event, Player* owner)
+bool HouseTransferItem::executeTrade(HouseTransferItem* first, HouseTransferItem* second, Player* seller,
+                                     Player* buyer, HouseItemMoves& tradeMoves)
 {
-	if (event == ON_TRADE_TRANSFER) {
-		if (auto h = house.lock()) {
-			if (!h->executeTransfer(this, owner)) {
-				// The trade engine has already moved this virtual document. Do not
-				// leave a removed/stale document cached as the house transfer item.
-				h->resetTransferItem();
-				if (owner) {
-					owner->sendTextMessage(MESSAGE_EVENT_ADVANCE,
-					                       "The house transfer could not be completed. No ownership was changed.");
-				}
-				return;
+	std::vector<House::OwnerChange> changes;
+	std::vector<std::shared_ptr<House>> houses;
+	const auto addChange = [&](HouseTransferItem* item, Player* previousOwner, Player* newOwner) {
+		if (!item) {
+			return true;
+		}
+		auto house = item->house.lock();
+		if (!house || house->transferItem.lock().get() != item || item->getParent() != &house->transfer_container) {
+			return false;
+		}
+		uint32_t target = newOwner->getGUID();
+		if (house->getType() == HOUSE_TYPE_GUILDHALL) {
+			const auto& oldGuild = previousOwner->getGuild();
+			const auto& newGuild = newOwner->getGuild();
+			if (!oldGuild || !newGuild || oldGuild->getId() != house->getOwner()) {
+				return false;
 			}
+			target = newGuild->getId();
+		} else if (previousOwner->getGUID() != house->getOwner()) {
+			return false;
 		}
-
-		g_game.internalRemoveItem(this, 1);
-	} else if (event == ON_TRADE_CANCEL) {
-		if (auto h = house.lock()) {
-			h->resetTransferItem();
+		if (!target || target == house->getOwner()) {
+			return false;
 		}
-	}
+		changes.push_back({house.get(), target, previousOwner});
+		houses.push_back(std::move(house));
+		return true;
+	};
+	return addChange(first, seller, buyer) && addChange(second, buyer, seller) &&
+	       House::changeOwners(changes, {seller, buyer}, &tradeMoves);
 }
 
-bool House::executeTransfer(HouseTransferItem* item, Player* newOwner)
+void HouseTransferItem::onTradeEvent(TradeEvents_t, Player*)
 {
-	if (!newOwner) {
-		return false;
+	// Deeds represent ownership and never enter a player's inventory.
+	if (auto h = house.lock()) {
+		h->resetTransferItem();
 	}
-	auto currentItem = transferItem.lock();
-	if (!currentItem || currentItem.get() != item) {
-		return false;
-	}
-
-	if (type == HOUSE_TYPE_NORMAL) {
-		if (!setOwner(newOwner->getGUID())) {
-			return false;
-		}
-	} else {
-		const auto& newOwnerGuild = newOwner->getGuild();
-		if (!newOwnerGuild || !setOwner(newOwnerGuild->getId())) {
-			return false;
-		}
-	}
-	transferItem.reset();
-	return true;
 }
 
 void AccessList::parseList(std::string_view list)
@@ -1137,121 +1546,191 @@ std::string Houses::getRentPeriod(RentPeriod_t rentPeriod) const
 	}
 }
 
+void Houses::settleAuctions() const
+{
+	const auto now = time(nullptr);
+	Database& db = Database::getInstance();
+	const auto expiredAuctions = fmt::format(
+	    "`owner` = 0 AND `bid_end` > 0 AND `bid_end` <= {}", now);
+	auto rows = db.storeQuery(fmt::format(
+	    "SELECT `id`, `highest_bidder`, `last_bid` FROM `houses` WHERE {}", expiredAuctions));
+	if (!rows) {
+		return;
+	}
+
+	do {
+		const auto houseId = rows->getNumber<uint32_t>("id");
+		const auto bidder = rows->getNumber<uint32_t>("highest_bidder");
+		const auto price = rows->getNumber<uint64_t>("last_bid");
+		const auto house = houseMap.find(houseId);
+		if (house == houseMap.end() || house->second->getOwner() != 0 ||
+		    house->second->isPersistenceBlocked() || g_saveManager.hasFailedRecovery(bidder)) {
+			continue;
+		}
+
+		const auto auction = fmt::format("{} AND `id` = {} AND `highest_bidder` = {} AND `last_bid` = {}",
+		                                 expiredAuctions, houseId, bidder, price);
+		auto player = db.storeQuery(fmt::format("SELECT `balance` FROM `players` WHERE `id` = {}", bidder));
+		if (!player && db.getLastErrno() != 0) {
+			continue;
+		}
+
+		uint32_t owner = bidder;
+		if (house->second->getType() == HOUSE_TYPE_GUILDHALL) {
+			auto membership = db.storeQuery(fmt::format(
+			    "SELECT `guild_id` FROM `guild_membership` WHERE `player_id` = {}", bidder));
+			if (!membership && db.getLastErrno() != 0) {
+				continue;
+			}
+			owner = membership ? membership->getNumber<uint32_t>("guild_id") : 0;
+		}
+
+		if (!owner || !player || player->getNumber<uint64_t>("balance") < price) {
+			db.executeQuery(fmt::format(
+			    "UPDATE `houses` SET `bid` = 0, `bid_end` = 0, `last_bid` = 0, `highest_bidder` = 0 WHERE {}",
+			    auction));
+			continue;
+		}
+
+		// Startup runs after WAL recovery and before players can log in.
+		const bool settled = House::changeOwners({{house->second.get(), owner, nullptr}}, {}, nullptr, [&] {
+			if (!db.storeQuery(fmt::format("SELECT `id` FROM `houses` WHERE {} FOR UPDATE", auction))) {
+				return false;
+			}
+			if (!price) {
+				return true;
+			}
+			return db.executeQuery(fmt::format(
+			           "UPDATE `players` SET `balance` = `balance` - {} WHERE `id` = {} AND `balance` >= {}",
+			           price, bidder, price)) &&
+			       db.getAffectedRows() == 1;
+		});
+		if (!settled) {
+			LOG_WARN("[House] Could not settle the auction for house {}.", houseId);
+		}
+	} while (rows->next());
+}
+
 void Houses::payHouses(RentPeriod_t rentPeriod) const
 {
 	if (rentPeriod == RENTPERIOD_NEVER) {
 		return;
 	}
 
-	time_t currentTime = time(nullptr);
-	for (const auto& it : houseMap) {
-		House* house = it.second.get();
-		if (house->getOwner() == 0) {
+	const auto currentTime = time(nullptr);
+	const auto nextPayment = increasePaidUntil(rentPeriod, currentTime);
+	Database& db = Database::getInstance();
+	using Result = SaveManager::AtomicSaveResult;
+	for (const auto& entry : houseMap) {
+		auto& house = *entry.second;
+		const uint32_t owner = house.getOwner();
+		const uint32_t rent = house.getRent();
+		const auto paid = house.getPaidUntil();
+		const uint32_t warnings = house.getPayRentWarnings();
+		if (!owner || !rent || paid > currentTime || house.persistenceBlocked || house.ownerTransitionInProgress) {
 			continue;
 		}
 
-		const uint32_t rent = house->getRent();
-		if (rent == 0 || house->getPaidUntil() > currentTime) {
-			continue;
-		}
-
-		const uint32_t ownerId = house->getOwner();
-		Town* town = g_game.map.towns.getTown(house->getTownId());
+		const Town* town = g_game.map.towns.getTown(house.getTownId());
 		if (!town) {
 			continue;
 		}
-
-		if (house->getType() == HOUSE_TYPE_NORMAL) {
-			Player player(nullptr);
-			if (!IOLoginData::loadPlayerById(&player, ownerId)) {
-				// Player doesn't exist, reset house owner
-				house->setOwner(0);
+		const auto updateRent = [&](time_t newPaid, uint32_t newWarnings) {
+			auto row = db.storeQuery(fmt::format(
+			    "SELECT `owner`, `paid`, `warnings` FROM `houses` WHERE `id` = {} FOR UPDATE", house.getId()));
+			return row && row->getNumber<uint32_t>("owner") == owner && row->getNumber<time_t>("paid") == paid &&
+			       row->getNumber<uint32_t>("warnings") == warnings &&
+			       db.executeQuery(fmt::format("UPDATE `houses` SET `paid` = {}, `warnings` = {} WHERE `id` = {}",
+			                                   newPaid, newWarnings, house.getId()));
+		};
+		const bool guildhall = house.getType() == HOUSE_TYPE_GUILDHALL;
+		uint32_t playerId = owner;
+		if (guildhall) {
+			if (IOGuild::isBankBalanceBlocked(owner)) {
 				continue;
 			}
+			const auto row = db.storeQuery(fmt::format("SELECT `ownerid`, `balance` FROM `guilds` WHERE `id` = {}", owner));
+			if (!row) {
+				if (db.getLastErrno() == 0) {
+					house.setOwner(0);
+				}
+				continue;
+			}
+			playerId = row->getNumber<uint32_t>("ownerid");
+			const uint64_t balance = row->getNumber<uint64_t>("balance");
+			if (balance >= rent) {
+				const auto result = g_saveManager.savePlayersAtomic({}, [&] {
+					return updateRent(nextPayment, 0) &&
+					       db.executeQuery(fmt::format("UPDATE `guilds` SET `balance` = `balance` - {} WHERE `id` = {} AND `balance` = {}",
+					                                   rent, owner, balance)) &&
+					       db.getAffectedRows() == 1 &&
+					       db.executeQuery(fmt::format(
+					           "INSERT INTO `guild_transactions` (`guild_id`, `type`, `category`, `balance`, `time`) "
+					           "VALUES ({}, 'WITHDRAW', 'RENT', {}, {})", owner, rent, currentTime));
+				});
+				if (result == Result::Committed) {
+					if (auto guild = g_game.getGuild(owner)) {
+						guild->loadBankBalance(balance - rent);
+					}
+					house.setPaidUntil(nextPayment);
+					house.setPayRentWarnings(0);
+				} else if (result == Result::Indeterminate) {
+					IOGuild::blockBankBalance(owner);
+					house.blockPersistence();
+				}
+				continue;
+			}
+		}
 
-			if (player.getBankBalance() >= rent) {
-				player.setBankBalance(player.getBankBalance() - rent);
+		std::shared_ptr<Player> player;
+		const auto lookup = findOwnerPlayer(playerId, player);
+		if (lookup != OwnerLookup::Found) {
+			if (lookup == OwnerLookup::Missing) {
+				house.setOwner(0);
+			}
+			continue;
+		}
 
-				time_t paidUntil = increasePaidUntil(rentPeriod, currentTime);
-				house->setPaidUntil(paidUntil);
-				house->setPayRentWarnings(0);
+		const auto balance = player->getBankBalance();
+		if (!guildhall && balance >= rent) {
+			player->setBankBalance(balance - rent);
+			const auto result = g_saveManager.savePlayersAtomic({player.get()}, [&] { return updateRent(nextPayment, 0); });
+			if (result == Result::Committed) {
+				house.setPaidUntil(nextPayment);
+				house.setPayRentWarnings(0);
+			} else if (result == Result::Failed) {
+				player->setBankBalance(balance);
 			} else {
-				if (house->getPayRentWarnings() < 7) {
-					int32_t daysLeft = 7 - house->getPayRentWarnings();
-
-					auto letterPtr = Item::CreateItem(ITEM_LETTER_STAMPED);
-				std::string period = getRentPeriod(rentPeriod);
-
-				letterPtr->setText(fmt::format(
-				    "Warning! \nThe {:s} rent of {:d} gold for your house \"{:s}\" is payable. Have it within {:d} days or you will lose this house.",
-				    period, house->getRent(), house->getName(), daysLeft));
-				g_game.internalAddItem(player.getInbox(), letterPtr.get(), INDEX_WHEREEVER, FLAG_NOLIMIT);
-				house->setPayRentWarnings(house->getPayRentWarnings() + 1);
-				} else {
-					house->setOwner(0, true, &player);
-				}
+				house.blockPersistence();
 			}
+			continue;
+		}
 
-			if (!g_saveManager.savePlayerSync(&player)) {
-				LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
-				continue;
-			}
-		} else { // HOUSE_TYPE_GUILDHALL
-			auto guild = g_game.getGuild(ownerId);
-			if (!guild) {
-				guild = IOGuild::loadGuild(ownerId);
-				if (!guild) {
-					house->setOwner(0);
-					continue;
-				}
-			}
+		if (warnings >= 7) {
+			house.setOwner(0, true, player.get());
+			continue;
+		}
 
-			if (guild->getBankBalance() >= rent) {
-				LOG_INFO(fmt::format("[Info - Houses::payHouses] Paying rent info - Name: {} - Guild: {} - Balance {} - Rent {} - New balance {}",
-					house->getName(), guild->getName(), guild->getBankBalance(), rent, guild->getBankBalance() - rent));
-				guild->setBankBalance(guild->getBankBalance() - rent);
-
-				Database& db = Database::getInstance();
-				std::ostringstream query;
-				query << "INSERT INTO `guild_transactions` (`guild_id`,`type`,`category`,`balance`,`time`) VALUES (" << ownerId << ",\"WITHDRAW\",\"RENT\"," << rent << "," << currentTime << ");";
-				db.executeQuery(query.str());
-
-				time_t paidUntil = increasePaidUntil(rentPeriod, currentTime);
-				house->setPaidUntil(paidUntil);
-			} else {
-				Player player(nullptr);
-				if (!IOLoginData::loadPlayerById(&player, guild->getOwnerGUID())) {
-					// Player doesn't exist, reset house owner
-					house->setOwner(0);
-					std::ostringstream ss;
-					ss << "Error: Guild " << guild->getName() << " has an owner that does not exist: " << guild->getOwnerGUID();
-					LOG_ERROR(ss.str());
-					continue;
-				}
-
-				if (house->getPayRentWarnings() < 7) {
-					int32_t daysLeft = 7 - house->getPayRentWarnings();
-
-					auto letterPtr = Item::CreateItem(ITEM_LETTER_STAMPED);
-				std::string period = getRentPeriod(rentPeriod);
-
-				letterPtr->setText(fmt::format(
-				    "Warning! \nThe {:s} rent of {:d} gold for your guildhall \"{:s}\" is payable. Have it within {:d} days or you will lose this guildhall.",
-				    period, house->getRent(), house->getName(), daysLeft));
-				DepotLocker* depot = player.getDepotLocker(town->getID());
-				if (depot) {
-					g_game.internalAddItem(depot, letterPtr.get(), INDEX_WHEREEVER, FLAG_NOLIMIT);
-				}
-				house->setPayRentWarnings(house->getPayRentWarnings() + 1);
-				} else {
-					house->setOwner(0, true, &player);
-				}
-
-			if (!g_saveManager.savePlayerSync(&player)) {
-				LOG_ERROR(fmt::format("[House::payHouses] Failed to save player {} after rent payment.", player.getName()));
-				continue;
-			}
-			}
+		Cylinder* inbox = guildhall ? static_cast<Cylinder*>(player->getDepotLocker(town->getID())) :
+		                              static_cast<Cylinder*>(player->getInbox());
+		auto letter = Item::CreateItem(ITEM_LETTER_STAMPED);
+		if (!inbox || !letter) {
+			continue;
+		}
+		const std::string_view property = guildhall ? "guildhall" : "house";
+		letter->setText(fmt::format(
+		    "Warning! \nThe {} rent of {} gold for your {} \"{}\" is payable. Have it within {} days or you will lose this {}.",
+		    getRentPeriod(rentPeriod), rent, property, house.getName(), 7 - warnings, property));
+		if (g_game.internalAddItem(inbox, letter.get(), INDEX_WHEREEVER, FLAG_NOLIMIT) != RETURNVALUE_NOERROR) {
+			continue;
+		}
+		const auto result = g_saveManager.savePlayersAtomic({player.get()}, [&] { return updateRent(paid, warnings + 1); });
+		if (result == Result::Committed) {
+			house.setPayRentWarnings(warnings + 1);
+		} else if (result == Result::Failed) {
+			g_game.internalRemoveItem(letter.get(), 1);
+		} else {
+			house.blockPersistence();
 		}
 	}
 }
@@ -1305,7 +1784,7 @@ void House::clearProtectionGuests()
 
 bool House::canModifyItems(const Player* player) const
 {
-	if (!player) {
+	if (!player || persistenceBlocked) {
 		return false;
 	}
 

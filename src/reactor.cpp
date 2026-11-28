@@ -233,6 +233,18 @@ void TaskReactor::cancel(uint32_t taskIdentifier)
 	conditionVariable.notify_one();
 }
 
+bool TaskReactor::runStartup(const std::function<bool()>& initialize)
+{
+	// Startup owns game state on the same thread that will drive runLoop().
+	// Keep queued work pending until startup has finished.
+	struct ReactorScope {
+		const TaskReactor* previous;
+		~ReactorScope() { currentReactor = previous; }
+	} scope{currentReactor};
+	currentReactor = this;
+	return initialize();
+}
+
 void TaskReactor::runLoop()
 {
 	currentReactor = this;

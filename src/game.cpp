@@ -1009,6 +1009,7 @@ void Game::setGameState(GameState_t newState)
 			startupProgress().update(5, 6, "storage");
 
 			phaseStart = std::chrono::steady_clock::now();
+			map.houses.settleAuctions();
 			g_globalEvents->startup();
 			logStartupPhase("global events", phaseStart);
 			startupProgress().update(6, 6, "global events");
@@ -1025,7 +1026,7 @@ void Game::setGameState(GameState_t newState)
 
 			LOG_INFO(">> Starting shutdown sequence...");
 
-			g_globalEvents->save();
+			saveGlobalEvents();
 			g_globalEvents->shutdown();
 			LOG_INFO(">> Global events saved and shutdown.");
 			g_echoRaidManager.cleanupAll();
@@ -1064,7 +1065,7 @@ void Game::setGameState(GameState_t newState)
 		}
 
 		case GAME_STATE_CLOSED: {
-			g_globalEvents->save();
+			saveGlobalEvents();
 
 			/* kick all players without the CanAlwaysLogin flag */
 			for (const auto& player : getPlayers()) {
@@ -1082,8 +1083,38 @@ void Game::setGameState(GameState_t newState)
 	}
 }
 
-void Game::saveGameState(bool crash /* = false */, std::string_view reason)
+void Game::saveGlobalEvents()
 {
+	if (saveGlobalEventsInProgress) {
+		return;
+	}
+	saveGlobalEventsInProgress = true;
+	struct SaveEventsGuard {
+		bool& active;
+		~SaveEventsGuard() { active = false; }
+	} guard{saveGlobalEventsInProgress};
+	g_globalEvents->save();
+}
+
+void Game::saveGameState(bool crash, std::string_view reason, bool notifyGlobalEvents)
+{
+	if (!g_dispatcher.isDispatcherThread()) {
+		LOG_ERROR("[Game::saveGameState] Must be called on the dispatcher thread.");
+		return;
+	}
+	if (saveGameStateInProgress || saveGlobalEventsInProgress) {
+		LOG_WARN("[Game::saveGameState] Reentrant saveGameState call ignored.");
+		return;
+	}
+	saveGameStateInProgress = true;
+	struct SaveStateGuard {
+		bool& active;
+		~SaveStateGuard() { active = false; }
+	} saveGuard{saveGameStateInProgress};
+	if (notifyGlobalEvents) {
+		saveGlobalEvents();
+	}
+
 	AutoStat stat("Game::saveGameState", crash ? "crash" : "full");
 	if (gameState == GAME_STATE_NORMAL) {
 		setGameState(GAME_STATE_MAINTAIN);
@@ -2515,7 +2546,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	while ((subCylinder = toCylinder->queryDestination(index, *item, &toItem, flags,
 	                                                    destinationInstanceId)) != toCylinder) {
 		toCylinder = subCylinder;
-		flags = 0;
+		flags = hasBitSet(FLAG_MOVEWHOLE, flags) ? FLAG_MOVEWHOLE | FLAG_IGNOREAUTOSTACK : 0;
 		destinationInstanceId = getDestinationInstanceId(actorPlayer, toCylinder, sourceInstanceId);
 
 		// to prevent infinite loop
@@ -2596,8 +2627,9 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	}
 
 	// check if we can add this item
+	const bool moveWhole = hasBitSet(FLAG_MOVEWHOLE, flags);
 	ReturnValue ret = toCylinder->queryAdd(index, *item, count, flags, actor);
-	if (ret == RETURNVALUE_NEEDEXCHANGE) {
+	if (ret == RETURNVALUE_NEEDEXCHANGE && !moveWhole) {
 		// Reward containers are read-only destinations. An equipment swap would
 		// otherwise move the currently equipped item back into the reward container.
 		if (isInsideRewardContainer(fromCylinder)) {
@@ -2665,11 +2697,16 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		return retMaxCount;
 	}
 
+	if (moveWhole && (count != item->getItemCount() || maxQueryCount < count ||
+	                  (item->isStackable() && toItem))) {
+		return retMaxCount != RETURNVALUE_NOERROR ? retMaxCount : RETURNVALUE_NOTENOUGHROOM;
+	}
+
 	uint32_t m;
-	if (item->isStackable()) {
+	if (item->isStackable() && !moveWhole) {
 		m = std::min<uint32_t>(count, maxQueryCount);
 	} else {
-		m = maxQueryCount;
+		m = moveWhole ? count : maxQueryCount;
 	}
 
 	Item* moveItem = item;
@@ -2702,7 +2739,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 	fromCylinder->removeThing(item, m);
 
 	// update item(s)
-	if (item->isStackable()) {
+	if (item->isStackable() && !moveWhole) {
 		uint32_t n;
 
 		if (toItem && toItem->getInstanceID() == destinationInstanceId &&
@@ -2735,7 +2772,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		toCylinder->addThing(index, moveItem);
 	}
 
-	if (itemIndex != -1) {
+	if (!moveWhole && itemIndex != -1) {
 		if (moveItem == item) {
 			item->setInstanceID(sourceInstanceId);
 			fromCylinder->postRemoveNotification(item, toCylinder, itemIndex);
@@ -2745,7 +2782,7 @@ ReturnValue Game::internalMoveItem(Cylinder* fromCylinder, Cylinder* toCylinder,
 		}
 	}
 
-	if (moveItem) {
+	if (moveItem && !moveWhole) {
 		int32_t moveItemIndex = toCylinder->getThingIndex(moveItem);
 		if (moveItemIndex != -1) {
 			toCylinder->postAddNotification(moveItem, fromCylinder, moveItemIndex);
@@ -2986,7 +3023,9 @@ ReturnValue Game::internalRemoveItem(Item* item, int32_t count /*= -1*/, bool te
 			ReleaseItem(item);
 		}
 
-		cylinder->postRemoveNotification(item, nullptr, index);
+		if (!hasBitSet(FLAG_MOVEWHOLE, flags)) {
+			cylinder->postRemoveNotification(item, nullptr, index);
+		}
 	}
 
 	return RETURNVALUE_NOERROR;
@@ -3079,7 +3118,13 @@ Item* Game::findItemOfType(Cylinder* cylinder, uint16_t itemId, bool depthSearch
 	return nullptr;
 }
 
-bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
+bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags)
+{
+	return removeMoney(cylinder, money, flags, nullptr, nullptr);
+}
+
+bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags, HouseItemMoves* moves,
+                      uint64_t* bankChange)
 {
 	if (cylinder == nullptr) {
 		return false;
@@ -3138,21 +3183,32 @@ bool Game::removeMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*
 		return false;
 	}
 
+	const auto remove = [&](Item* item, uint32_t count) {
+		return (moves ? moves->remove(item, count) : internalRemoveItem(item, count)) == RETURNVALUE_NOERROR;
+	};
 	for (const auto& moneyEntry : moneyMap) {
 		Item* item = moneyEntry.second;
 		if (moneyEntry.first < money) {
-			internalRemoveItem(item);
+			if (!remove(item, item->getItemCount())) {
+				return false;
+			}
 			money -= moneyEntry.first;
 		} else if (moneyEntry.first > money) {
 			const uint32_t worth = moneyEntry.first / item->getItemCount();
 			const uint32_t removeCount = std::ceil(money / static_cast<double>(worth));
 
-			addMoney(cylinder, static_cast<uint64_t>(worth * removeCount) - money, flags);
-			internalRemoveItem(item, removeCount);
+			const auto change = static_cast<uint64_t>(worth) * removeCount - money;
+			if (!remove(item, removeCount)) {
+				return false;
+			}
+			if (bankChange) {
+				*bankChange = change;
+			} else {
+				addMoney(cylinder, change, flags);
+			}
 			break;
 		} else {
-			internalRemoveItem(item);
-			break;
+			return remove(item, item->getItemCount());
 		}
 	}
 	return true;
@@ -3188,7 +3244,7 @@ void Game::addMoney(Cylinder* cylinder, uint64_t money, uint32_t flags /*= 0*/)
 	}
 }
 
-Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
+Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount, bool notify)
 {
 	if (item->getID() == newId && (newCount == -1 || (newCount == item->getSubType() &&
 	                                                  newCount != 0))) { // chargeless item placed on map = infinite
@@ -3229,7 +3285,9 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 		// This only occurs when you transform items on tiles from a downItem to a topItem (or vice versa)
 		// Remove the old, and add the new
 		cylinder->removeThing(item, item->getItemCount());
-		cylinder->postRemoveNotification(item, cylinder, itemIndex);
+		if (notify) {
+			cylinder->postRemoveNotification(item, cylinder, itemIndex);
+		}
 
 		item->setID(newId);
 		if (newCount != -1) {
@@ -3244,7 +3302,9 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 			return nullptr;
 		}
 
-		newParent->postAddNotification(item, cylinder, newParent->getThingIndex(item));
+		if (notify) {
+			newParent->postAddNotification(item, cylinder, newParent->getThingIndex(item));
+		}
 		if (!item->isRemoved()) {
 			// Same Container/itemlist safety as the updateThing branch below.
 			if (item->getContainer()) {
@@ -3303,7 +3363,9 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 				return transformItem(item, static_cast<uint16_t>(newItemId));
 			}
 		} else {
-			cylinder->postRemoveNotification(item, cylinder, itemIndex);
+			if (notify) {
+				cylinder->postRemoveNotification(item, cylinder, itemIndex);
+			}
 			uint16_t itemId = item->getID();
 			int32_t count = item->getSubType();
 
@@ -3320,7 +3382,9 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 			}
 
 			cylinder->updateThing(item, itemId, count);
-			cylinder->postAddNotification(item, cylinder, itemIndex);
+			if (notify) {
+				cylinder->postAddNotification(item, cylinder, itemIndex);
+			}
 			if (!item->isRemoved()) {
 				if (item->getContainer()) {
 					g_game.startDecay(item);
@@ -3345,10 +3409,14 @@ Item* Game::transformItem(Item* item, uint16_t newId, int32_t newCount /*= -1*/)
 	}
 
 	cylinder->replaceThing(itemIndex, newItem.get());
-	cylinder->postAddNotification(newItem.get(), cylinder, itemIndex);
+	if (notify) {
+		cylinder->postAddNotification(newItem.get(), cylinder, itemIndex);
+	}
 
 	item->setParent(nullptr);
-	cylinder->postRemoveNotification(item, cylinder, itemIndex);
+	if (notify) {
+		cylinder->postRemoveNotification(item, cylinder, itemIndex);
+	}
 	item->stopDecaying();
 	ReleaseItem(item);
 
@@ -5421,21 +5489,36 @@ void Game::playerAcceptTrade(uint32_t playerId)
 		}
 
 		if (tradePartnerRet == RETURNVALUE_NOERROR && playerRet == RETURNVALUE_NOERROR) {
-			tradePartnerRet = internalAddItem(tradePartner, playerTradeItem, INDEX_WHEREEVER, 0, true);
-			playerRet = internalAddItem(player, partnerTradeItem, INDEX_WHEREEVER, 0, true);
+			auto* playerDeed = dynamic_cast<HouseTransferItem*>(playerTradeItem);
+			auto* partnerDeed = dynamic_cast<HouseTransferItem*>(partnerTradeItem);
+			constexpr uint32_t tradeFlags = FLAG_IGNOREAUTOSTACK;
+			if (!playerDeed) {
+				tradePartnerRet = internalAddItem(tradePartner, playerTradeItem, INDEX_WHEREEVER, tradeFlags, true);
+			}
+			if (!partnerDeed) {
+				playerRet = internalAddItem(player, partnerTradeItem, INDEX_WHEREEVER, tradeFlags, true);
+			}
 			if (tradePartnerRet == RETURNVALUE_NOERROR && playerRet == RETURNVALUE_NOERROR) {
 				playerRet = internalRemoveItem(playerTradeItem, playerTradeItem->getItemCount(), true);
 				tradePartnerRet = internalRemoveItem(partnerTradeItem, partnerTradeItem->getItemCount(), true);
+			}
+			if (tradePartnerRet == RETURNVALUE_NOERROR && playerRet == RETURNVALUE_NOERROR) {
+				HouseItemMoves moves;
+				if (!playerDeed) {
+					tradePartnerRet = moves.move(playerTradeItem, tradePartner, tradeFlags, partnerTradeItem);
+				}
+				if (tradePartnerRet == RETURNVALUE_NOERROR && !partnerDeed) {
+					playerRet = moves.move(partnerTradeItem, player, tradeFlags);
+				}
 				if (tradePartnerRet == RETURNVALUE_NOERROR && playerRet == RETURNVALUE_NOERROR) {
-					tradePartnerRet = internalMoveItem(playerTradeItem->getParent(), tradePartner, INDEX_WHEREEVER,
-					                                   playerTradeItem, playerTradeItem->getItemCount(), nullptr,
-					                                   FLAG_IGNOREAUTOSTACK, nullptr, partnerTradeItem);
-					if (tradePartnerRet == RETURNVALUE_NOERROR) {
-						internalMoveItem(partnerTradeItem->getParent(), player, INDEX_WHEREEVER, partnerTradeItem,
-						                 partnerTradeItem->getItemCount(), nullptr, FLAG_IGNOREAUTOSTACK);
+					if ((!playerDeed && !partnerDeed) ||
+					    HouseTransferItem::executeTrade(playerDeed, partnerDeed, player, tradePartner, moves)) {
+						moves.commit();
 						playerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, tradePartner);
 						partnerTradeItem->onTradeEvent(ON_TRADE_TRANSFER, player);
 						isSuccess = true;
+					} else {
+						tradePartnerRet = playerRet = RETURNVALUE_NOTPOSSIBLE;
 					}
 				}
 			}
@@ -8079,7 +8162,7 @@ bool Game::saveAccountStorageValues() const
 
 	for (const auto& accountIt : g_game.accountStorageMap) {
 		if (accountIt.second.empty()) {
-			break;
+			continue;
 		}
 
 		DBInsert accountStorageQuery("INSERT INTO `account_storage` (`account_id`, `key`, `value`) VALUES");
@@ -9621,15 +9704,15 @@ bool Game::saveGameStorageValues() const
 		return false;
 	}
 
+	DBInsert gameStorageQuery("INSERT INTO `game_storage` (`key`, `value`) VALUES");
 	for (const auto& [key, value] : g_game.storageMap) {
-		DBInsert gameStorageQuery("INSERT INTO `game_storage` (`key`, `value`) VALUES");
 		if (!gameStorageQuery.addRow(fmt::format("{:d}, {:d}", key, value))) {
 			return false;
 		}
+	}
 
-		if (!gameStorageQuery.execute()) {
-			return false;
-		}
+	if (!gameStorageQuery.execute()) {
+		return false;
 	}
 
 	return transaction.commit();

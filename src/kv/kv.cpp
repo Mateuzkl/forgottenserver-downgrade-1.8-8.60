@@ -194,6 +194,7 @@ void KVStore::flush() {
 	if (allSaved) {
 		std::scoped_lock lock(mutex_);
 		store_.clear();
+		lruQueue_.clear();
 		pendingEvictions_.clear();
 	}
 }
@@ -322,8 +323,7 @@ bool KVStore::prepareSave(const std::string &key, const ValueWrapper &value, DBI
 	}
 
 	const auto serialized = value.serialize();
-	update.addRow(fmt::format("{}, {}, {}", db.escapeString(key), value.getTimestamp(), db.escapeBlob(serialized.data(), static_cast<uint32_t>(serialized.size()))));
-	return true;
+	return update.addRow(fmt::format("{}, {}, {}", db.escapeString(key), value.getTimestamp(), db.escapeBlob(serialized.data(), static_cast<uint32_t>(serialized.size()))));
 }
 
 bool KVStore::saveAll() {

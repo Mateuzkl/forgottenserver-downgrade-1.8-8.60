@@ -38,7 +38,7 @@ public:
 	void setMemberCount(uint32_t count) { memberCount = count; }
 
 	uint64_t getBankBalance() const { return bankBalance; }
-	void setBankBalance(uint64_t balance);
+	bool setBankBalance(uint64_t balance);
 	void loadBankBalance(uint64_t balance) { bankBalance = balance; }
 
 	uint32_t getHouseId() const { return houseId; }
@@ -72,6 +72,8 @@ private:
 using Guild_ptr = std::shared_ptr<Guild>;
 
 namespace IOGuild {
+void blockBankBalance(uint32_t guildId);
+bool isBankBalanceBlocked(uint32_t guildId);
 Guild_ptr loadGuild(uint32_t guildId);
 uint32_t getGuildIdByName(std::string_view name);
 std::string getGuildNameById(uint32_t id);

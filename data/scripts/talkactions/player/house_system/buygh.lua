@@ -50,13 +50,6 @@ function talkaction.onSay(player, words, param)
         return false
     end
 
-    local guildHouseQuery = db.storeQuery("SELECT `id` FROM `houses` WHERE `owner` = " .. guild:getId() .. " LIMIT 1")
-    if guildHouseQuery then
-        result.free(guildHouseQuery)
-        player:sendCancelMessage("Your guild already owns a guildhall.")
-        return false
-    end
-
     local isLeader = player:isGuildLeader()
     local isVice = player:isGuildVice()
     if not (isLeader or isVice) then
@@ -66,58 +59,19 @@ function talkaction.onSay(player, words, param)
 
     local price = house:getTileCount() * housePrice
 
-    local query = db.storeQuery("SELECT `balance` FROM `guilds` WHERE `id` = " .. guild:getId())
-    local guildBalance = 0
-    if query then
-        guildBalance = result.getNumber(query, "balance")
-        result.free(query)
-    end
-
-    local fromGuild = false
-    local fromPlayer = false
-    local playerInventoryMoney = player:getMoney()
-    local playerBankBalance = player:getBankBalance()
-    local playerTotalMoney = playerInventoryMoney + playerBankBalance
-
-    if guildBalance >= price then
-        fromGuild = true
-    elseif playerTotalMoney >= price then
-        fromPlayer = true
-    else
-        player:sendCancelMessage("Neither your guild bank nor you have enough money. Guild bank: " .. guildBalance .. " gold. You have " .. playerTotalMoney .. " gold (inventory: " .. playerInventoryMoney .. ", bank: " .. playerBankBalance .. "). Price: " .. price .. " gold.")
+    local paymentSource = house:purchaseGuildhall(player, price)
+    if paymentSource == "insufficient funds" then
+        player:sendCancelMessage("Neither the guild bank nor you can cover the price of " .. price .. " gold.")
+        return false
+    elseif paymentSource == "pending confirmation" then
+        player:sendCancelMessage("The purchase could not be confirmed. Contact an administrator before trying again.")
+        return false
+    elseif not paymentSource then
+        player:sendCancelMessage("Could not complete the guildhall purchase.")
         return false
     end
 
-    if fromGuild then
-        local newBalance = guildBalance - price
-        db.query("UPDATE `guilds` SET `balance` = " .. newBalance .. " WHERE `id` = " .. guild:getId())
-
-        local currentTime = os.time()
-        db.query(string.format(
-            "INSERT INTO `guild_transactions` (`guild_id`, `player_associated`, `type`, `category`, `balance`, `time`) VALUES (%d, %d, 'WITHDRAW', 'RENT', %d, %d)",
-            guild:getId(),
-            player:getGuid(),
-            price,
-            currentTime
-        ))
-    elseif fromPlayer then
-        if playerInventoryMoney >= price then
-            if not player:removeMoney(price) then
-                player:sendCancelMessage("Error removing money from inventory.")
-                return false
-            end
-        else
-            if not player:removeMoney(playerInventoryMoney) then
-                player:sendCancelMessage("Error removing money from inventory.")
-                return false
-            end
-            local remaining = price - playerInventoryMoney
-            player:setBankBalance(playerBankBalance - remaining)
-        end
-    end
-
     local currentTime = os.time()
-
     local receipt = Game.createItem(ITEM_RECEIPT_SUCCESS, 1)
     if receipt then
         local purchaseDate = os.date("%d %B %Y, %H:%M:%S", currentTime)
@@ -174,8 +128,7 @@ function talkaction.onSay(player, words, param)
         if ret ~= RETURNVALUE_NOERROR then
             local playerPos = player:getPosition()
             local groundTile = Tile(playerPos)
-            if groundTile then
-                groundTile:addItem(receipt)
+            if groundTile and groundTile:addItemEx(receipt, FLAG_NOLIMIT) == RETURNVALUE_NOERROR then
                 player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "The receipt has been placed on the floor because your inventory is full.")
             else
                 player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "Could not create receipt. Please contact an administrator.")
@@ -185,8 +138,7 @@ function talkaction.onSay(player, words, param)
         end
     end
 
-    house:setOwnerGuid(player:getGuid())
-    local paymentSource = fromGuild and "guild bank" or "your personal funds"
+    player:saveAsync()
     player:sendTextMessage(MESSAGE_INFO_DESCR, "You have successfully bought this guildhall for " .. price .. " gold from " .. paymentSource .. ". Be sure to have the money for rent in the guild bank.")
     return false
 end
